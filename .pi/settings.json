@@ -10,5 +10,9 @@
   },
   "packages": [
     "../"
+  ],
+  "skills": [
+    ".claude/skills",
+    ".codex/skills"
   ]
 }

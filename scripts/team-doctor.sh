@@ -11,6 +11,8 @@ Checks:
   - Root package Pi manifest
   - MCP adapter/baseline visibility
   - Subagents package/config visibility
+  - Foreign skill directories wired into .pi/settings.json skills
+  - Agent instruction files this platform does not read
   - Project .pi/settings.json package source
   - Project company profile
   - No local-machine paths in share-critical files when --strict-share is used
@@ -256,8 +258,10 @@ if (subagentConfig && subagentConfig.toolDescriptionMode !== "compact") {
 
 const projectSettingsPath = path.join(projectPath, ".pi", "settings.json");
 let projectPackageSource = "workspace";
+let projectSkillPaths = [];
 if (fs.existsSync(projectSettingsPath)) {
   const settings = readJson(projectSettingsPath);
+  projectSkillPaths = Array.isArray(settings.skills) ? settings.skills.filter((entry) => typeof entry === "string") : [];
   const packages = Array.isArray(settings.packages) ? settings.packages : [];
   if (packages.length === 0) errors.push("project .pi/settings.json has no packages");
   const declaredSource = packages.find((source) => typeof source === "string" && source.length > 0);
@@ -272,6 +276,38 @@ if (fs.existsSync(projectSettingsPath)) {
   }
 } else {
   warnings.push("project has no .pi/settings.json");
+}
+
+// Pi already scans ~/.pi/agent/skills, ~/.agents/skills, .pi/skills, .agents/skills,
+// and package.json entries. Only foreign-agent locations need an explicit settings entry,
+// so re-declaring the native ones would only produce name-collision warnings.
+function countSkillDirs(dir) {
+  if (!fs.existsSync(dir)) return 0;
+  try {
+    return fs.readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && fs.existsSync(path.join(dir, entry.name, "SKILL.md")))
+      .length;
+  } catch {
+    return 0;
+  }
+}
+
+const skillWiring = [".claude/skills", ".codex/skills"].map((rel) => {
+  const absolute = path.join(projectPath, rel);
+  const skillCount = countSkillDirs(absolute);
+  const wired = projectSkillPaths.includes(rel);
+  if (skillCount > 0 && !wired) {
+    warnings.push(`${skillCount} skill(s) exist in ${rel} but it is not listed in .pi/settings.json skills; Pi will not load them`);
+  }
+  return { path: rel, exists: fs.existsSync(absolute), skillCount, wired };
+});
+
+// Instruction files written for other agents. Onboarding reads AGENTS.md and README.md,
+// so these are currently ignored; report them instead of skipping silently.
+const foreignAgentConfig = ["CLAUDE.md", ".claude/rules", ".claude/agents", ".cursor/rules", ".github/copilot-instructions.md"]
+  .filter((rel) => fs.existsSync(path.join(projectPath, rel)));
+if (foreignAgentConfig.length > 0) {
+  warnings.push(`project has agent instruction files this platform does not read: ${foreignAgentConfig.join(", ")}; onboarding uses AGENTS.md, so their rules are not enforced`);
 }
 
 const projectProfilePath = path.join(projectPath, ".pi", "company-profile.json");
@@ -408,6 +444,8 @@ const report = {
   piHasMcpAdapter,
   piHasSubagents,
   mcp,
+  skillWiring,
+  foreignAgentConfig,
   subagents: {
     configPath: subagentConfigPath,
     configExists: Boolean(subagentConfig),
