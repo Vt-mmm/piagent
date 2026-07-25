@@ -115,13 +115,13 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:e68016d32f2261846b01cda1c97028dbce7a535c318abfb2172feb36e02d28a2",
+    "packageDigest": "sha256:3f5c2f0abe7784ce9ec5e15cd9b38236a7b9ed8d529ad366380b22cf53aae2f6",
     "packageSource": "../",
     "packageVersion": "0.4.8",
     "runtimeFiles": [
       {
-        "byteSize": 3619,
-        "digest": "sha256:aebda8a16649edf1fabd80b4d7ad30e4900eba0db0fdb96351655dbd7d294f4a",
+        "byteSize": 3669,
+        "digest": "sha256:9c9a6d03177827c988edc37832a56e425639e8888b6dee1a10d8b21ce4770829",
         "path": "package.json"
       },
       {
@@ -145,8 +145,8 @@
         "path": "packages/piagent-core/security/sensitive-data.js"
       },
       {
-        "byteSize": 279353,
-        "digest": "sha256:8aa1a2f109a2664d0b62d886cf6d56c4c06669a486c8052742b00815dc468cf8",
+        "byteSize": 280608,
+        "digest": "sha256:59a3386e3e76856d5961e795b00d5eb93ee7ed1c17253f263c6b372cdeadb4f7",
         "path": "packages/piagent-core/extensions/piagent-guard.ts"
       },
       {

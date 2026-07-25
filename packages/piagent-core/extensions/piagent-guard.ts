@@ -821,6 +821,24 @@ function loadProfileFromContext(ctx: ExtensionContext): ProjectProfile {
   return loadProfile(ctx.cwd, ctx.isProjectTrusted());
 }
 
+// A project written against the previous namespace has no working path forward:
+// nothing reads .pi/company-profile.json any more, so its protected paths and
+// verify commands would silently stop being enforced. Detect it and say so.
+function findLegacyProjectState(cwd: string): string[] {
+  return [".pi/company-profile.json", ".pi/company-profile.lock.json", ".pi/company-state"]
+    .filter((relative) => fs.existsSync(path.join(cwd, relative)));
+}
+
+function legacyProjectStateWarning(cwd: string): string | undefined {
+  const legacy = findLegacyProjectState(cwd);
+  if (legacy.length === 0) return undefined;
+  const current = fs.existsSync(path.join(cwd, ".pi", "piagent-profile.json"));
+  const detail = `Found pre-piagent project state: ${legacy.join(", ")}.`;
+  return current
+    ? `${detail} The current profile is active, so these are leftovers; remove them with \`piagent-migrate . --apply --remove-old\`.`
+    : `${detail} No .pi/piagent-profile.json exists, so this project is running unprofiled and its protected paths and verify commands are NOT enforced. Convert it with \`piagent-migrate . --apply\`.`;
+}
+
 function normalizeRelative(cwd: string, candidate: unknown): string | undefined {
   if (typeof candidate !== "string" || candidate.trim().length === 0) return undefined;
   let raw = candidate.trim();
@@ -4601,6 +4619,8 @@ export default function piagentGuard(pi: ExtensionAPI) {
     const permissionHint = ` permission=${permissionProfile.mode}`;
     ctx.ui.notify(`Piagent Pi guard loaded: ${name}${profileHint}${permissionHint}${contextHint}`, preflight.recommendation === "fresh-session" ? "warning" : "info");
     if (!capabilityState.ok) ctx.ui.notify(capabilityState.reason ?? "Capability validation failed.", "warning");
+    const legacyWarning = legacyProjectStateWarning(ctx.cwd);
+    if (legacyWarning) ctx.ui.notify(legacyWarning, "warning");
     if (permissionProfile.warning) ctx.ui.notify(permissionProfile.warning, "warning");
     if (permissionProfile.mode === "trusted-full-access") {
       ctx.ui.notify("Piagent permission profile trusted-full-access is active; protected paths, secret redaction, and destructive/external confirmations remain enforced.", "warning");

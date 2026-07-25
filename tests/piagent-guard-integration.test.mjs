@@ -254,6 +254,54 @@ describe("piagent guard integration", () => {
     assert.match(ctx.ui.notices[0].message, /permission=workspace-write/);
   });
 
+  it("warns that an unconverted project is running without enforcement", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const profilePath = path.join(cwd, ".pi", "piagent-profile.json");
+    fs.renameSync(profilePath, path.join(cwd, ".pi", "company-profile.json"));
+    fs.mkdirSync(path.join(cwd, ".pi", "company-state"), { recursive: true });
+    const ctx = createContext(cwd, { confirm: true });
+    const harness = createPiHarness();
+
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+
+    const warning = ctx.ui.notices.find((notice) => /pre-piagent project state/.test(notice.message));
+    assert.ok(warning, "expected a warning about unconverted project state");
+    assert.equal(warning.level, "warning");
+    assert.match(warning.message, /NOT enforced/);
+    assert.match(warning.message, /piagent-migrate \. --apply/);
+  });
+
+  it("treats leftover legacy files as cleanup once the current profile exists", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    fs.writeFileSync(path.join(cwd, ".pi", "company-profile.json"), "{}\n");
+    const ctx = createContext(cwd, { confirm: true });
+    const harness = createPiHarness();
+
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+
+    const warning = ctx.ui.notices.find((notice) => /pre-piagent project state/.test(notice.message));
+    assert.ok(warning, "expected a leftover-state warning");
+    assert.match(warning.message, /leftovers/);
+    assert.match(warning.message, /--remove-old/);
+    assert.doesNotMatch(warning.message, /NOT enforced/);
+  });
+
+  it("stays quiet when no legacy state is present", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const ctx = createContext(cwd, { confirm: true });
+    const harness = createPiHarness();
+
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+
+    assert.equal(ctx.ui.notices.some((notice) => /pre-piagent project state/.test(notice.message)), false);
+  });
+
   it("ignores project-local profiles until the project is trusted", async () => {
     const { root, piagentGuard } = await loadGuardFixture();
     const cwd = createProject(root);

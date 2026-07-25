@@ -50,6 +50,7 @@
     "piagent-mcp": "scripts/piagent-cli.mjs",
     "piagent-subagents": "scripts/piagent-cli.mjs",
     "piagent-capabilities": "scripts/piagent-cli.mjs",
+    "piagent-migrate": "scripts/piagent-cli.mjs",
     "piagent-auto": "scripts/piagent-cli.mjs"
   },
   "pi": {
