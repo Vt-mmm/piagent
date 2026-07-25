@@ -312,6 +312,15 @@ if grep -R -E '^[[:space:]]*uses:[[:space:]]+[^@[:space:]]+@(main|master|v[0-9]+
   echo "GitHub Actions workflow contains a mutable action reference" >&2
   exit 1
 fi
+# A single-line `run:` whose value contains ": " ends the plain scalar early and
+# makes the whole workflow unparseable. GitHub reports that as an instant
+# failure with no job, so the gate stops running while still looking present.
+# Use a block scalar or quote the value.
+if grep -R -n -E '^[[:space:]]*run:[[:space:]]+[^|>"'"'"'].*:[[:space:]]' "$ROOT/.github/workflows" >/dev/null; then
+  echo "GitHub Actions workflow has an unquoted run: value containing a colon-space; use a block scalar" >&2
+  grep -R -n -E '^[[:space:]]*run:[[:space:]]+[^|>"'"'"'].*:[[:space:]]' "$ROOT/.github/workflows" >&2
+  exit 1
+fi
 grep -F 'p.peerDependencies?.["@earendil-works/pi-coding-agent"]' "$ROOT/scripts/setup.sh" >/dev/null
 grep -F 'run_cmd npm install -g --ignore-scripts "@earendil-works/pi-coding-agent@$expected_pi_version"' "$ROOT/scripts/setup.sh" >/dev/null
 grep -F 'validate-source --package-source "$PACKAGE_SOURCE"' "$ROOT/scripts/install-global.sh" >/dev/null
