@@ -264,7 +264,13 @@ Re-running the workflow from a branch instead skips publishing, because the publ
    ```
 
    The open release pull request should then resolve against the same commit history. This bypass exists only to reconcile reviewed PR checks with tag-first Vercel promotion; it must never be used for an unreviewed commit or a force-push. If Vercel auto-deploys `main`, this exact fast-forward is the production promotion. For an explicit CLI deploy instead, check out the exact tag, run `vercel link --cwd docs-site --project pi-agent`, require `npm run vercel:preflight` to pass, then deploy with `vercel --cwd docs-site --prod`.
-8. Verify the live docs version, links, canonical domain, and install commands.
+8. Verify the live docs site at every address it resolves to, then read the page for links and install commands.
+
+   ```bash
+   npm run site:check
+   ```
+
+   Opening the site in a browser does not answer this. The domain has several address records, so one can be dead or looping while every manual look lands on a healthy one. This resolves both hosts, asks each address directly with the right `Host` header and SNI, and requires each to return the released version. A redirect from an address back to its own host is reported as a loop rather than followed. An address the machine has no route to is reported as unverified, not as a pass.
 9. Publish the already-reviewed draft only after production verification passes:
 
    ```bash

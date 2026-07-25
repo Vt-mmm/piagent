@@ -2,6 +2,16 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## Unreleased
+
+### Added
+
+- Added `npm run site:check`, which verifies the published documentation site at every address it resolves to instead of once through whichever address a browser happened to pick. It requires each address to return the released version, reports a redirect from an address back to its own host as a loop rather than following it, and reports an address the machine cannot route to as unverified rather than as a pass. Release checklist step 8 was a manual look, and a manual look cannot see a partial outage.
+
+### Fixed
+
+- Folded a stale `Unreleased` section into v1.0.0, where its contents actually shipped. It had been left behind by the namespace rename and still described tools as `company_orchestration_policy`, `company_profile_tech_options`, `company_profile_tech_apply`, `company_profile_tech_context_record`, and `/company-orchestration`, none of which exist.
+
 ## v1.0.2 - 2026-07-25
 
 Install and uninstall become two commands each. The five-command sequence was never the shortest path; it was the only one that produced a project configuration a teammate could use.
@@ -43,6 +53,8 @@ Breaking release. The `company` namespace is replaced by `piagent` with no alias
 - Added a golden enforcement suite covering protected paths, protected paths reached through the shell, destructive shell decisions, verification evidence, context budget ceilings, and secret redaction, with a valid and an invalid fixture for every shipped schema.
 - Added contributor documentation: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, pull-request and issue templates.
 - Added a tag-driven publish workflow with npm provenance and pinned action revisions.
+- Added a solo-first orchestration policy covering bounded subagent usage, review lenses, Field Guide status, and model-role guidance, surfaced by `piagent_orchestration_policy` and `/piagent-orchestration` so status reads without a model follow-up. Task contracts gained `workPlan`, `reviewLenses`, and `orchestration` snapshots to record it.
+- Added select-style profile tech setup through `/profile setup` and `/profile tech setup`, including fullstack frontend, backend, and database selections. `piagent_profile_tech_options`, `piagent_profile_tech_apply`, and `piagent_profile_tech_context_record` produce Context7-ready stack manifests and per-tech snapshots.
 
 ### Changed
 
@@ -52,6 +64,9 @@ Breaking release. The `company` namespace is replaced by `piagent` with no alias
 - The package is now published rather than private, scoped as `@piagent/platform` with public access and provenance.
 - Split shell and external-action classification, shared types, and filesystem helpers out of the guard into their own modules. Behaviour is unchanged.
 - Onboarding now names instruction files written for other agents, states plainly that their rules are not in effect, and offers the import; anything inside them is treated as data.
+- `/task`, `/plan`, `/review`, the subagent prompts, and the team docs now prefer one parent agent plus bounded scout, planner, and reviewer usage instead of broad swarm-style delegation.
+- Onboarding and docs treat profile family and project tech stack as explicit operator selections rather than long model explanations, and `/profile` status and list output stay compact around the single namespace and the next exact command.
+- Runtime support is stated across macOS Apple Silicon, macOS Intel, Linux x64 and ARM64, native Windows, and WSL2, and the installer and doctor report the runtime surface they are actually on.
 
 ### Fixed
 
@@ -60,33 +75,13 @@ Breaking release. The `company` namespace is replaced by `piagent` with no alias
 - Excluded maintainer working notes from the published tarball. The `files` allowlist takes precedence over `.npmignore`, so the exclusions live in `files`.
 - Fixed the package manifest declaring its extension entry points as a directory glob. Pi calls the default export of every path the field matches, so once the guard's helpers moved into modules beside it, the glob offered Pi two modules that export helpers and no extension factory. The manifest now names the guard, and the package still carried the old `@pi-agent/core` name the namespace rename was meant to retire.
 - Fixed the verify workflow, which had been unparseable since the runtime-platform step was added and so had not run at all. A single-line `run:` value containing `": "` ends the YAML scalar early; GitHub reports that as an instant failure with no job, so the gate was absent while still appearing present. The local gate now refuses that shape.
+- Fixed orchestration config normalization so a malformed numeric setting falls back to a safe value instead of producing invalid policy state.
+- Fixed tag CI verification, which checked tag object type and peeled commit identity without first fetching the annotated release tag ref.
+- Profile doctor and team doctor now warn on entries that appear only in `shellProtectedPaths`. Those paths block shell access alone; write protection requires `protectedPaths` or `readOnlyPaths`, and the warning names the move.
 
 ### Security
 
 - The runtime host audit now names the one advisory it accepts instead of running at a blanket severity threshold. `GHSA-mh99-v99m-4gvg` (`brace-expansion`, denial of service) is accepted with its reasoning recorded in `scripts/check-runtime-advisories.mjs`: the Pi host publishes an `npm-shrinkwrap.json` that pins the affected version, a published shrinkwrap takes precedence over consumer overrides, and every released host carries a high `brace-expansion` advisory, so no host version and no change in this repository can resolve it. Every other high or critical advisory still fails the audit, the entry expires on a review date, and it fails once the advisory stops being reported so it cannot outlive the problem.
-
-## Unreleased
-
-### Added
-
-- Added solo-first orchestration policy for bounded subagent usage, review lenses, Field Guide status, and model-role guidance.
-- Added `company_orchestration_policy` and `/company-orchestration` for compact local orchestration status without a model follow-up.
-- Added task-contract fields for `workPlan`, `reviewLenses`, and `orchestration` snapshots.
-- Added select-style profile tech setup via `/profile setup` and `/profile tech setup`, including fullstack FE/BE/database selections.
-- Added `company_profile_tech_options`, `company_profile_tech_apply`, and `company_profile_tech_context_record` for Context7-ready tech stack manifests and concise per-tech snapshots.
-
-### Changed
-
-- Updated `/task`, `/plan`, `/review`, subagent prompts, and team docs to prefer one parent agent plus bounded scout/planner/reviewer usage instead of broad swarm-style delegation.
-- Updated onboarding/docs to treat profile family and project tech stack as explicit operator selections instead of long model explanations.
-- Tightened `/profile` status/list output around the single namespace and next exact command so the default path stays compact.
-- Clarified runtime support across macOS Apple Silicon, macOS Intel, Linux x64/ARM64, native Windows, and WSL2, and made installer/doctor output report the current runtime surface.
-
-### Fixed
-
-- Hardened orchestration config normalization so malformed numeric settings fall back safely instead of producing invalid policy state.
-- Fixed tag CI verification by fetching the annotated release tag ref before checking tag object type and peeled commit identity.
-- Added profile-doctor and team-doctor warnings for legacy `shellProtectedPaths`-only entries, clarifying that those paths block shell access only and must move to `protectedPaths` or `readOnlyPaths` for write protection.
 
 ## v0.4.8 - 2026-07-22
 

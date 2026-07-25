@@ -116,6 +116,7 @@
     "audit:runtime": "bash scripts/audit-runtime-host.sh",
     "release:identity": "node scripts/verify-release-identity.mjs",
     "vercel:preflight": "node scripts/verify-vercel-link.mjs",
+    "site:check": "node scripts/check-published-site.mjs",
     "smoke": "bash scripts/runtime-policy-smoke.sh",
     "usage": "bash scripts/pi-session-stats.sh",
     "auto": "bash scripts/pi-auto.sh",

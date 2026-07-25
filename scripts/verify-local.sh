@@ -146,6 +146,7 @@ required_files=(
   "$ROOT/scripts/audit-runtime-host.sh"
   "$ROOT/scripts/verify-release-identity.mjs"
   "$ROOT/scripts/verify-vercel-link.mjs"
+  "$ROOT/scripts/check-published-site.mjs"
   "$ROOT/scripts/piagent-cli.mjs"
   "$ROOT/scripts/init-project.sh"
   "$ROOT/scripts/uninstall-global.sh"
@@ -465,6 +466,7 @@ node --check "$ROOT/scripts/piagent-cli.mjs" >/dev/null
 node --check "$ROOT/scripts/migrate-project-state.mjs" >/dev/null
 node --check "$ROOT/scripts/import-agent-instructions.mjs" >/dev/null
 node --check "$ROOT/scripts/check-runtime-advisories.mjs" >/dev/null
+node --check "$ROOT/scripts/check-published-site.mjs" >/dev/null
 (cd "$ROOT" && npm test) >/dev/null
 if [[ -x "$ROOT/node_modules/.bin/tsc" ]]; then
   (cd "$ROOT" && npm run typecheck) >/dev/null
