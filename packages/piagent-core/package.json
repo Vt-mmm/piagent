@@ -1,6 +1,6 @@
 {
   "name": "@pi-agent/core",
-  "version": "0.4.8",
+  "version": "1.0.0",
   "type": "module",
   "private": true,
   "license": "MIT",

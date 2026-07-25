@@ -114,7 +114,7 @@ Node.js `>=22.19.0` and Pi Coding Agent `0.81.1` are required. Pi Coding Agent i
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
-npm install -g --ignore-scripts github:Vt-mmm/piagent#v0.4.8
+npm install -g --ignore-scripts github:Vt-mmm/piagent#v1.0.0
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -124,7 +124,7 @@ The npm command installs the `piagent-*` terminal helpers. `piagent-install --st
 If you only need to install the Pi package and do not need the `piagent-*` terminal commands, pin the current release tag or a reviewed commit directly:
 
 ```bash
-pi install git:github.com/Vt-mmm/piagent@v0.4.8
+pi install git:github.com/Vt-mmm/piagent@v1.0.0
 ```
 
 From a checked-out platform repo, the same helper is available as a script:
@@ -423,7 +423,7 @@ Most projects do not need shell init. Use this only when you want to pre-create 
 ```bash
 bash /path/to/piagent/scripts/setup.sh /path/to/project \
   --profile be-readonly-fe \
-  --package-source git:github.com/Vt-mmm/piagent@v0.4.8 \
+  --package-source git:github.com/Vt-mmm/piagent@v1.0.0 \
   --mcp-preset core \
   --subagents-preset safe
 ```
@@ -538,7 +538,7 @@ This repository intentionally excludes:
 
 ## Maturity
 
-The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v0.4.8` or a reviewed commit.
+The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.0.0` or a reviewed commit.
 
 Ready for:
 

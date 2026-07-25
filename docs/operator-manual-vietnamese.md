@@ -18,12 +18,12 @@ Support matrix release hiện tại: macOS Apple Silicon + Bash và Linux x64 + 
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
-npm install -g --ignore-scripts github:Vt-mmm/piagent#v0.4.8
+npm install -g --ignore-scripts github:Vt-mmm/piagent#v1.0.0
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
 
-Khi seed `.pi/settings.json` cho team/repo cần audit lặp lại, giữ package source dạng pinned tag như `git:github.com/Vt-mmm/piagent@v0.4.8`. Máy cá nhân có thể dùng `git:github.com/Vt-mmm/piagent` để theo latest.
+Khi seed `.pi/settings.json` cho team/repo cần audit lặp lại, giữ package source dạng pinned tag như `git:github.com/Vt-mmm/piagent@v1.0.0`. Máy cá nhân có thể dùng `git:github.com/Vt-mmm/piagent` để theo latest.
 
 Nếu đang ở source checkout của platform, dùng helper theo channel để preview trước khi đổi:
 
@@ -99,7 +99,7 @@ install package once
 
 ```bash
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
-npm install -g --ignore-scripts github:Vt-mmm/piagent#v0.4.8
+npm install -g --ignore-scripts github:Vt-mmm/piagent#v1.0.0
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -269,7 +269,7 @@ Không phải daily default. Dùng khi muốn tạo sẵn `.pi` files cho projec
 bash /path/to/piagent/scripts/setup.sh /path/to/project \
   --project-only \
   --profile auto \
-  --package-source git:github.com/Vt-mmm/piagent@v0.4.8 \
+  --package-source git:github.com/Vt-mmm/piagent@v1.0.0 \
   --mcp-preset core \
   --subagents-preset safe
 ```
@@ -842,10 +842,10 @@ Watchdog là optional adversarial reviewer ở cuối turn, không bật mặc �
 
 | Command | Dùng để |
 |---|---|
-| `npm install -g --ignore-scripts github:Vt-mmm/piagent#v0.4.8` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
-| `pi install git:github.com/Vt-mmm/piagent@v0.4.8` | Install pinned release cho reproducible team setup. |
+| `npm install -g --ignore-scripts github:Vt-mmm/piagent#v1.0.0` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
+| `pi install git:github.com/Vt-mmm/piagent@v1.0.0` | Install pinned release cho reproducible team setup. |
 | `pi install git:github.com/Vt-mmm/piagent` | Install latest platform package cho máy cá nhân/sandbox. |
-| Cài exact Pi host của release, rồi `npm install -g --ignore-scripts github:Vt-mmm/piagent#vX.Y.Z` và `piagent-install --stable` | Full update: đồng bộ host, terminal helper và Pi package. v0.4.8 yêu cầu Pi `0.81.1`. |
+| Cài exact Pi host của release, rồi `npm install -g --ignore-scripts github:Vt-mmm/piagent#vX.Y.Z` và `piagent-install --stable` | Full update: đồng bộ host, terminal helper và Pi package. v1.0.0 yêu cầu Pi `0.81.1`. |
 | Cài exact Pi host ghi trong release cũ, rồi helper `vPREVIOUS` và `piagent-install --stable` | Full rollback; đánh giá lại dependency findings của host cũ trước khi hạ version. |
 | `piagent-install --stable --dry-run` | Preview Pi package matching với helper hiện tại; stable resolve tag → commit SHA. |
 | `piagent-install --stable` | Apply Pi package matching với helper hiện tại bằng resolved commit SHA. |
@@ -936,7 +936,7 @@ Mở lại Pi session sau khi install.
 Cài lại terminal helper đúng release rồi kiểm tra `PATH`:
 
 ```bash
-npm install -g --ignore-scripts github:Vt-mmm/piagent#v0.4.8
+npm install -g --ignore-scripts github:Vt-mmm/piagent#v1.0.0
 command -v piagent-install
 ```
 

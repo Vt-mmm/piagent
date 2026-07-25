@@ -138,7 +138,7 @@ describe("package distribution", () => {
       path.join(repositoryRoot, "scripts", "init-project.sh"),
       root,
       "--profile", "generic",
-      "--package-source", "git:github.com/Vt-mmm/piagent@v0.4.8",
+      "--package-source", "git:github.com/Vt-mmm/piagent@v1.0.0",
       "--skip-agents",
       "--skip-review-guidelines"
     ], { cwd: repositoryRoot, encoding: "utf8" });

@@ -43,7 +43,7 @@ body:
     attributes:
       label: Versions
       description: Platform release tag or commit SHA, Pi version, Node version, OS and arch.
-      placeholder: "v0.4.8 / pi 0.81.1 / node 22.19.0 / darwin arm64"
+      placeholder: "v1.0.0 / pi 0.81.1 / node 22.19.0 / darwin arm64"
     validations:
       required: true
 

@@ -380,10 +380,10 @@ Các lệnh này chạy ngoài Pi.
 | Command | Dùng khi nào |
 |---|---|
 | `npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1` | Cài Pi CLI tương thích với release hiện tại. |
-| `npm install -g --ignore-scripts github:Vt-mmm/piagent#v0.4.8` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
-| `pi install git:github.com/Vt-mmm/piagent@v0.4.8` | Cài pinned release khi cần reproducible team setup. |
+| `npm install -g --ignore-scripts github:Vt-mmm/piagent#v1.0.0` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
+| `pi install git:github.com/Vt-mmm/piagent@v1.0.0` | Cài pinned release khi cần reproducible team setup. |
 | `pi install git:github.com/Vt-mmm/piagent` | Cài latest package platform cho máy cá nhân/sandbox. |
-| Cài exact Pi host của release, rồi `npm install -g --ignore-scripts github:Vt-mmm/piagent#vX.Y.Z` và `piagent-install --stable` | Full update: đồng bộ host, npm-global helper và Pi package. v0.4.8 yêu cầu Pi `0.81.1`. |
+| Cài exact Pi host của release, rồi `npm install -g --ignore-scripts github:Vt-mmm/piagent#vX.Y.Z` và `piagent-install --stable` | Full update: đồng bộ host, npm-global helper và Pi package. v1.0.0 yêu cầu Pi `0.81.1`. |
 | Cài exact Pi host ghi trong release cũ, rồi helper `vPREVIOUS` và `piagent-install --stable` | Full rollback; đánh giá dependency risk của host cũ trước khi hạ version. |
 | `piagent-install --stable --dry-run` | Preview Pi package matching với helper hiện tại; stable resolve tag → commit SHA. |
 | `piagent-install --stable` | Cài Pi package matching với helper hiện tại bằng resolved commit SHA. |
