@@ -1,0 +1,82 @@
+{
+  "apiVersion": "piagent/v1alpha1",
+  "kind": "CapabilityRecipe",
+  "metadata": {
+    "name": "bounded-change",
+    "version": "0.1.0",
+    "owner": "platform-maintainers",
+    "lifecycle": "experimental",
+    "license": "MIT",
+    "description": "A governed workflow for a bounded repository change with observed verification.",
+    "tags": [
+      "engineering",
+      "verification"
+    ]
+  },
+  "spec": {
+    "inputs": [
+      {
+        "name": "task",
+        "description": "Expected outcome and acceptance criteria.",
+        "required": true
+      }
+    ],
+    "steps": [
+      {
+        "id": "context",
+        "uses": "capability:piagent-context",
+        "mode": "read-only",
+        "needs": [],
+        "timeoutSeconds": 300,
+        "retries": 0,
+        "outputs": [
+          "context-manifest"
+        ]
+      },
+      {
+        "id": "plan",
+        "uses": "capability:piagent-planner",
+        "mode": "read-only",
+        "needs": [
+          "context"
+        ],
+        "timeoutSeconds": 600,
+        "retries": 0,
+        "outputs": [
+          "implementation-plan"
+        ]
+      },
+      {
+        "id": "implement",
+        "uses": "capability:piagent-worker",
+        "mode": "workspace-write",
+        "needs": [
+          "plan"
+        ],
+        "timeoutSeconds": 1800,
+        "retries": 1,
+        "outputs": [
+          "workspace-diff"
+        ]
+      },
+      {
+        "id": "verify",
+        "uses": "capability:piagent-reviewer",
+        "mode": "read-only",
+        "needs": [
+          "implement"
+        ],
+        "timeoutSeconds": 900,
+        "retries": 1,
+        "outputs": [
+          "verification-evidence"
+        ]
+      }
+    ],
+    "gates": {
+      "context": true,
+      "verification": true,
+      "humanApproval": false
+    }
+  }
+}

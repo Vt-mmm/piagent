@@ -103,6 +103,7 @@
     "verify": "bash scripts/verify-local.sh",
     "test": "node --test tests/*.test.mjs",
     "test:policy": "node --test tests/policy-core.test.mjs",
+    "test:golden": "node --test tests/golden-enforcement.test.mjs",
     "typecheck": "tsc --noEmit",
     "setup": "bash scripts/setup.sh",
     "bootstrap": "bash scripts/bootstrap-local.sh",

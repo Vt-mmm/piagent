@@ -1,0 +1,34 @@
+{
+  "apiVersion": "piagent/v1alpha1",
+  "kind": "ExternalActionProposal",
+  "metadata": {
+    "name": "publish-release",
+    "createdAt": "{{now}}",
+    "expiresAt": "{{now+1h}}"
+  },
+  "spec": {
+    "actionType": "git-push",
+    "target": {
+      "provider": "github",
+      "resource": "Vt-mmm/piagent",
+      "environment": "production"
+    },
+    "summary": "Push the reviewed release branch for human confirmation.",
+    "riskLane": "high-risk",
+    "requestedPermissions": [
+      "git:push"
+    ],
+    "artifacts": [
+      {
+        "path": "CHANGELOG.md",
+        "digest": "sha256:48b1a29e44eeff814abc6250e43395bf8ac81827f5791261378cb13b6699e37f",
+        "mediaType": "text/markdown",
+        "byteSize": 14
+      }
+    ],
+    "dryRun": true,
+    "security": {
+      "containsSecrets": false
+    }
+  }
+}

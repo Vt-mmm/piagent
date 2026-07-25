@@ -1,0 +1,73 @@
+{
+  "summary": "Replace with one-sentence task outcome.",
+  "riskLane": "normal",
+  "expectedOutput": "Replace with exact artifact or behavior expected.",
+  "acceptanceCriteria": [
+    "Replace with pass/fail criterion."
+  ],
+  "scope": [
+    "replace/with/allowed/path/**"
+  ],
+  "outOfScope": [
+    "Replace with explicit non-goal."
+  ],
+  "protectedPaths": [],
+  "requiredContext": [],
+  "contextManifest": [],
+  "memoryCitations": [],
+  "mcpCapabilities": [],
+  "verifyCommands": [
+    "Replace with verify command."
+  ],
+  "workPlan": [
+    {
+      "id": "plan",
+      "title": "Confirm scope, context, acceptance criteria, and verify gate before editing.",
+      "role": "parent",
+      "mode": "read-only",
+      "status": "pending"
+    },
+    {
+      "id": "implement",
+      "title": "Implement the approved bounded change.",
+      "role": "parent",
+      "mode": "single-writer",
+      "status": "pending",
+      "dependsOn": [
+        "plan"
+      ]
+    },
+    {
+      "id": "review",
+      "title": "Run explicit review lenses against the diff and verify evidence.",
+      "role": "piagent-reviewer",
+      "mode": "review",
+      "status": "pending",
+      "dependsOn": [
+        "implement"
+      ]
+    }
+  ],
+  "reviewLenses": [
+    "correctness",
+    "tests",
+    "scope"
+  ],
+  "orchestration": {
+    "mode": "solo-first",
+    "subagents": "not-used",
+    "reason": "Task starts in solo-first mode; use bounded subagents only for independent scout, planning, or review work.",
+    "fieldGuidePath": ".pi/memory/MEMORY.md",
+    "modelRoles": {
+      "planner": "Use the strongest available model for decomposition, architecture, risk, and acceptance criteria.",
+      "worker": "Use the fastest reliable model for a bounded, already-planned single write set.",
+      "reviewer": "Use a model or thinking setting decorrelated from the worker when review quality matters.",
+      "watchdog": "Use a strong model only for final risk review, security, release, or high-impact changes."
+    }
+  },
+  "changedFiles": [],
+  "verifyEvidence": [],
+  "trace": {
+    "outcome": "pending"
+  }
+}

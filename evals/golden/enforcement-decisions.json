@@ -1,0 +1,329 @@
+{
+  "name": "enforcement-decisions",
+  "description": "Golden decisions for the rules the guard exists to enforce. Cases run against the shipped base policy rather than a copy, so weakening the policy fails here. Each case names the invariant it protects so a future change has to argue with the rule rather than with a recorded output.",
+  "policySource": "packages/piagent-core/policies/base-policy.json",
+  "requiredPolicyEntries": {
+    "protectedPaths": [
+      ".git/**",
+      "**/auth.json",
+      "**/.env",
+      "**/.env.*",
+      "**/node_modules/**",
+      ".pi/piagent-state/**",
+      ".pi/piagent-profile.json"
+    ],
+    "shellProtectedPaths": [
+      ".git/**",
+      "**/auth.json",
+      "**/.env",
+      "**/.env.*",
+      ".pi/piagent-state/**",
+      ".pi/piagent-profile.json"
+    ],
+    "blockedCommandPatterns": [
+      "rm -rf /",
+      "rm -rf ~",
+      "rm -rf $HOME",
+      "git reset --hard",
+      "git clean -fd",
+      "sudo ",
+      "chmod -R 777"
+    ],
+    "requireConfirmationPatterns": [
+      "deploy",
+      "release",
+      "publish",
+      "migration",
+      "terraform apply",
+      "kubectl apply",
+      "gh pr merge",
+      "git push"
+    ]
+  },
+  "protectedPathCases": [
+    {
+      "invariant": "credential files are protected wherever they sit",
+      "path": "src/config/.env",
+      "expectProtected": true
+    },
+    {
+      "invariant": "dotenv variants are protected too",
+      "path": ".env.production",
+      "expectProtected": true
+    },
+    {
+      "invariant": "git internals are never writable",
+      "path": ".git/config",
+      "expectProtected": true
+    },
+    {
+      "invariant": "auth tokens are protected at any depth",
+      "path": "packages/app/auth.json",
+      "expectProtected": true
+    },
+    {
+      "invariant": "the profile cannot rewrite itself",
+      "path": ".pi/piagent-profile.json",
+      "expectProtected": true
+    },
+    {
+      "invariant": "guard state is not editable by the agent",
+      "path": ".pi/piagent-state/tasks/one.json",
+      "expectProtected": true
+    },
+    {
+      "invariant": "ordinary source stays writable",
+      "path": "src/index.ts",
+      "expectProtected": false
+    },
+    {
+      "invariant": "documentation stays writable",
+      "path": "docs/architecture.md",
+      "expectProtected": false
+    },
+    {
+      "invariant": "a filename merely containing env is not protected",
+      "path": "src/environment.ts",
+      "expectProtected": false
+    }
+  ],
+  "shellCommandCases": [
+    {
+      "invariant": "reading a protected file through the shell is still a protected-path access",
+      "command": "cat .env",
+      "expectProtectedPath": ".env",
+      "via": "literal"
+    },
+    {
+      "invariant": "redirection into a protected file is caught",
+      "command": "echo x > .env.local",
+      "expectProtectedPath": ".env.local",
+      "via": "literal"
+    },
+    {
+      "invariant": "a glob that would reach credentials is caught",
+      "command": "cat ./*.env",
+      "expectProtectedPath": "*.env",
+      "via": "glob"
+    },
+    {
+      "invariant": "protected paths behind a pipe are still seen",
+      "command": "grep TOKEN .env | head",
+      "expectProtectedPath": ".env",
+      "via": "literal"
+    },
+    {
+      "invariant": "chained commands do not hide a protected read",
+      "command": "ls && cat packages/app/auth.json",
+      "expectProtectedPath": "packages/app/auth.json",
+      "via": "literal"
+    },
+    {
+      "invariant": "unrelated commands are left alone",
+      "command": "npm run build",
+      "expectProtectedPath": null,
+      "via": "literal"
+    },
+    {
+      "invariant": "reading ordinary source is not a protected access",
+      "command": "cat src/index.ts",
+      "expectProtectedPath": null,
+      "via": "literal"
+    }
+  ],
+  "execDecisionCases": [
+    {
+      "invariant": "recursive removal of the filesystem root is refused",
+      "command": "rm -rf /",
+      "expectDecision": "forbid"
+    },
+    {
+      "invariant": "recursive removal of the home directory is refused even when spelled as a variable",
+      "command": "rm -rf $HOME",
+      "expectDecision": "forbid"
+    },
+    {
+      "invariant": "privilege escalation is refused",
+      "command": "sudo rm file",
+      "expectDecision": "forbid"
+    },
+    {
+      "invariant": "discarding uncommitted work is refused",
+      "command": "git reset --hard HEAD~1",
+      "expectDecision": "forbid"
+    },
+    {
+      "invariant": "deleting untracked files is refused",
+      "command": "git clean -fd",
+      "expectDecision": "forbid"
+    },
+    {
+      "invariant": "world-writable recursive permissions are refused",
+      "command": "chmod -R 777 .",
+      "expectDecision": "forbid"
+    },
+    {
+      "invariant": "pruning docker volumes is refused because the data is unrecoverable",
+      "command": "docker volume prune -f",
+      "expectDecision": "forbid"
+    },
+    {
+      "invariant": "a destructive command nested inside another shell is still refused",
+      "command": "bash -c 'rm -rf /'",
+      "expectDecision": "forbid"
+    },
+    {
+      "invariant": "a destructive command after a harmless one is still refused",
+      "command": "echo hi && rm -rf /",
+      "expectDecision": "forbid"
+    },
+    {
+      "invariant": "pushing to a remote needs human confirmation",
+      "command": "git push origin main",
+      "expectDecision": "prompt"
+    },
+    {
+      "invariant": "deploying needs human confirmation",
+      "command": "npm run deploy",
+      "expectDecision": "prompt"
+    },
+    {
+      "invariant": "database migrations need human confirmation",
+      "command": "npx prisma migrate deploy",
+      "expectDecision": "prompt"
+    },
+    {
+      "invariant": "broad staging needs confirmation because it can sweep in unrelated changes",
+      "command": "git add -A",
+      "expectDecision": "prompt"
+    },
+    {
+      "invariant": "building is ordinary work and is not gated",
+      "command": "npm run build",
+      "expectDecision": "allow"
+    },
+    {
+      "invariant": "running tests is ordinary work and is not gated",
+      "command": "npm test",
+      "expectDecision": "allow"
+    },
+    {
+      "invariant": "listing files is ordinary work and is not gated",
+      "command": "ls -la",
+      "expectDecision": "allow"
+    }
+  ],
+  "verificationEvidenceCases": [
+    {
+      "invariant": "a command in the verify plan counts as verification",
+      "command": "npm test",
+      "verifyCommands": ["npm test", "npm run verify"],
+      "expectMatch": true
+    },
+    {
+      "invariant": "a command outside the verify plan does not count as verification",
+      "command": "npm run build",
+      "verifyCommands": ["npm test", "npm run verify"],
+      "expectMatch": false
+    },
+    {
+      "invariant": "appending arguments produces a different command and does not count",
+      "command": "npm test -- --watch",
+      "verifyCommands": ["npm test"],
+      "expectMatch": false
+    },
+    {
+      "invariant": "echoing the verify command does not count as running it",
+      "command": "echo npm test",
+      "verifyCommands": ["npm test"],
+      "expectMatch": false
+    },
+    {
+      "invariant": "an empty verify plan verifies nothing",
+      "command": "npm test",
+      "verifyCommands": [],
+      "expectMatch": false
+    }
+  ],
+  "exitCodeCases": [
+    {
+      "invariant": "a claimed success matching the observed run is accepted",
+      "claimedExitCode": 0,
+      "observed": { "exitCode": 0 },
+      "expectMatch": true
+    },
+    {
+      "invariant": "claiming success over a failed run is rejected",
+      "claimedExitCode": 0,
+      "observed": { "exitCode": 1 },
+      "expectMatch": false
+    },
+    {
+      "invariant": "claiming success over an errored run is rejected",
+      "claimedExitCode": 0,
+      "observed": { "isError": true },
+      "expectMatch": false
+    },
+    {
+      "invariant": "a claimed failure matching an errored run is accepted",
+      "claimedExitCode": 1,
+      "observed": { "isError": true },
+      "expectMatch": true
+    },
+    {
+      "invariant": "an absent claim is never treated as verified",
+      "claimedExitCode": null,
+      "observed": { "exitCode": 0 },
+      "expectMatch": false
+    }
+  ],
+  "contextBudgetCases": [
+    {
+      "invariant": "context files stay bounded so a large file cannot crowd out the task",
+      "key": "maxContextFileChars",
+      "maximum": 50000
+    },
+    {
+      "invariant": "memory files stay bounded and smaller than context files",
+      "key": "maxMemoryFileChars",
+      "maximum": 20000
+    },
+    {
+      "invariant": "the manifest stays small enough to read",
+      "key": "maxManifestFiles",
+      "maximum": 80
+    }
+  ],
+  "redactionCases": [
+    {
+      "invariant": "bearer tokens never reach storage",
+      "text": "Authorization: Bearer sk-live-0123456789abcdefghij",
+      "expectRedacted": true
+    },
+    {
+      "invariant": "assigned secrets are redacted",
+      "text": "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEY",
+      "expectRedacted": true
+    },
+    {
+      "invariant": "a complete private key block is redacted",
+      "text": "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA0Z3VS5JJcds3xfn\n-----END RSA PRIVATE KEY-----",
+      "expectRedacted": true
+    },
+    {
+      "invariant": "ordinary prose is left intact",
+      "text": "The build finished in 12 seconds.",
+      "expectRedacted": false
+    },
+    {
+      "invariant": "naming a variable is not the same as leaking it",
+      "text": "Set API_KEY in your shell before running.",
+      "expectRedacted": false
+    },
+    {
+      "invariant": "a bare private-key header without a body is not treated as key material",
+      "text": "-----BEGIN RSA PRIVATE KEY-----",
+      "expectRedacted": false
+    }
+  ]
+}

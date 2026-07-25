@@ -1,0 +1,123 @@
+{
+  "apiVersion": "piagent/v0",
+  "kind": "CapabilityPack",
+  "metadata": {
+    "name": "engineering-base",
+    "version": "0.1.1",
+    "owner": "platform-maintainers",
+    "lifecycle": "experimental",
+    "license": "MIT",
+    "description": "Core engineering workflow, policy, verification, and task coordination capabilities.",
+    "tags": [
+      "engineering",
+      "governance"
+    ]
+  },
+  "spec": {
+    "coreApiVersion": 1,
+    "requires": {
+      "packs": []
+    },
+    "provides": {
+      "prompts": [
+        {
+          "id": "task",
+          "path": "packages/piagent-core/prompts/task.md"
+        },
+        {
+          "id": "plan",
+          "path": "packages/piagent-core/prompts/plan.md"
+        },
+        {
+          "id": "review",
+          "path": "packages/piagent-core/prompts/review.md"
+        },
+        {
+          "id": "commit",
+          "path": "packages/piagent-core/prompts/commit.md"
+        },
+        {
+          "id": "pr",
+          "path": "packages/piagent-core/prompts/pr.md"
+        }
+      ],
+      "skills": [
+        {
+          "id": "piagent-ops",
+          "path": "packages/piagent-core/skills/piagent-ops/SKILL.md"
+        }
+      ],
+      "subagents": [
+        {
+          "id": "piagent-scout",
+          "path": "packages/piagent-core/subagents/piagent-scout.md"
+        },
+        {
+          "id": "piagent-planner",
+          "path": "packages/piagent-core/subagents/piagent-planner.md"
+        },
+        {
+          "id": "piagent-worker",
+          "path": "packages/piagent-core/subagents/piagent-worker.md"
+        },
+        {
+          "id": "piagent-reviewer",
+          "path": "packages/piagent-core/subagents/piagent-reviewer.md"
+        }
+      ],
+      "policies": [
+        {
+          "id": "base-policy",
+          "path": "packages/piagent-core/policies/base-policy.json"
+        }
+      ],
+      "adapters": [
+        {
+          "id": "generic",
+          "path": "adapters/generic/profile.json"
+        }
+      ],
+      "recipes": [
+        {
+          "id": "bounded-change",
+          "path": "packs/engineering-base/recipes/bounded-change.json"
+        }
+      ],
+      "evals": [
+        {
+          "id": "capability-resolution",
+          "path": "evals/scenarios/capability-resolution.json"
+        }
+      ]
+    },
+    "permissions": {
+      "capabilities": [
+        "filesystem-readonly",
+        "filesystem-write",
+        "memory",
+        "shell"
+      ],
+      "filesystemRead": [
+        "**/*"
+      ],
+      "filesystemWrite": [
+        "**/*"
+      ],
+      "networkDomains": [],
+      "externalActions": []
+    },
+    "activation": {
+      "mode": "profile",
+      "profiles": [
+        "generic",
+        "platform-development"
+      ],
+      "triggers": []
+    },
+    "verification": {
+      "evalScenarios": [
+        "capability-resolution"
+      ]
+    }
+  }
+}

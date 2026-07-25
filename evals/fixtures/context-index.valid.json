@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "projectId": "replace-me",
+  "profileMode": "generic",
+  "source": "manual",
+  "summary": "Pending. Run /onboard-project after login/model selection to generate the compact project context index.",
+  "generatedAt": "not-configured",
+  "updatedAt": "not-configured",
+  "policy": {
+    "enabled": true,
+    "path": ".pi/context-index.json",
+    "writePolicy": "onboarding-record",
+    "requireCitations": true,
+    "maxNodes": 120,
+    "maxEdges": 240,
+    "includeTechStack": true,
+    "includeMemoryPointers": true
+  },
+  "nodes": [],
+  "edges": [],
+  "citations": [],
+  "warnings": [
+    "context index pending; run /onboard-project"
+  ]
+}

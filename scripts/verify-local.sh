@@ -161,6 +161,8 @@ required_files=(
   "$ROOT/scripts/configure-mcp.sh"
   "$ROOT/scripts/configure-subagents.sh"
   "$ROOT/scripts/capability-catalog.mjs"
+  "$ROOT/scripts/migrate-project-state.mjs"
+  "$ROOT/scripts/import-agent-instructions.mjs"
   "$ROOT/tests/capability-core.test.mjs"
   "$ROOT/tests/piagent-guard-integration.test.mjs"
   "$ROOT/tests/install-global.test.mjs"
@@ -169,6 +171,10 @@ required_files=(
   "$ROOT/tests/policy-core.test.mjs"
   "$ROOT/tests/redaction-core.test.mjs"
   "$ROOT/tests/runtime-evidence.test.mjs"
+  "$ROOT/tests/golden-enforcement.test.mjs"
+  "$ROOT/tests/migrate-project-state.test.mjs"
+  "$ROOT/tests/import-agent-instructions.test.mjs"
+  "$ROOT/evals/golden/enforcement-decisions.json"
 )
 
 for file in "${required_files[@]}"; do
@@ -426,6 +432,8 @@ node --check "$ROOT/packages/piagent-core/security/sensitive-data.js" >/dev/null
 node --check "$ROOT/packages/piagent-core/capabilities/capability-core.js" >/dev/null
 node --check "$ROOT/scripts/capability-catalog.mjs" >/dev/null
 node --check "$ROOT/scripts/piagent-cli.mjs" >/dev/null
+node --check "$ROOT/scripts/migrate-project-state.mjs" >/dev/null
+node --check "$ROOT/scripts/import-agent-instructions.mjs" >/dev/null
 (cd "$ROOT" && npm test) >/dev/null
 if [[ -x "$ROOT/node_modules/.bin/tsc" ]]; then
   (cd "$ROOT" && npm run typecheck) >/dev/null
