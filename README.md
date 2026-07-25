@@ -182,6 +182,8 @@ Git stays a capability rather than a `/git-*` namespace, so natural language wor
 
 Paste a local screenshot path straight into a task and the guard attaches it as `[image1]` before the model sees the prompt: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`, up to 4 images at 8 MB each. The guard also collapses pasted mandatory-flow boilerplate, so there is no need to paste a checklist into every task.
 
+A spec that lives outside the project — the one just downloaded to `~/Downloads` — is read with `piagent_document_read` once its directory is listed in the profile's `additionalReadRoots`. The grant is read-only, covers `.md`, `.txt`, `.csv`, `.json`, `.yaml`, `.pdf`, and `.docx` only, and does not open anything `protectedPaths` covers. See [command reference](docs/command-reference-vietnamese.md).
+
 ## Model selection
 
 Handled by Pi's native UI: `/model` or `Ctrl+L` to pick, `Ctrl+P` to cycle the scoped set, `Shift+Tab` to cycle thinking level where the model supports it. Global setup seeds `enabledModels`; see [Model options](docs/model-options.md) to inspect or re-apply it.
@@ -266,6 +268,7 @@ This repository intentionally excludes:
 - [Subagent orchestration capabilities](docs/subagent-orchestration-capabilities.md)
 - [Context-window policy](docs/context-window-policy.md)
 - [Memory policy](docs/memory-policy.md)
+- [Task lifecycle tiếng Việt](docs/task-lifecycle-vietnamese.md)
 - [Task implementation contract](docs/task-implementation-contract.md)
 - [Runtime quality baseline](docs/runtime-quality-baseline.md)
 - [Usage observability](docs/usage-observability.md)

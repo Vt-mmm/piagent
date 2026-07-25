@@ -177,7 +177,9 @@ required_files=(
   "$ROOT/tests/capability-sources.test.mjs"
   "$ROOT/packages/piagent-core/capabilities/capability-sources.js"
   "$ROOT/packages/piagent-core/extensions/guard-shell-analysis.ts"
+  "$ROOT/packages/piagent-core/extensions/document-intake.ts"
   "$ROOT/tests/guard-shell-analysis.test.mjs"
+  "$ROOT/tests/document-intake.test.mjs"
   "$ROOT/tests/runtime-advisories.test.mjs"
   "$ROOT/scripts/check-runtime-advisories.mjs"
   "$ROOT/tests/migrate-project-state.test.mjs"
@@ -293,6 +295,20 @@ require_documented() {
   fi
 }
 
+# Long-running repo commands stay quiet on success so the gate output stays
+# readable, but discarding their output on failure leaves this script exiting 1
+# with nothing to read. Capture, then replay only when the command fails.
+run_quietly() {
+  local label="$1"
+  shift
+  local output
+  if ! output="$(cd "$ROOT" && "$@" 2>&1)"; then
+    printf '%s\n' "$output" >&2
+    echo "$label failed; the output above is why" >&2
+    exit 1
+  fi
+}
+
 require_documented "auth.json" "$ROOT/docs" "$ROOT/packages/piagent-core" "$ROOT/templates"
 require_documented "piagent_context" "$ROOT/packages/piagent-core"
 require_documented "piagent_permission_status" "$ROOT/packages/piagent-core" "$ROOT/docs" "$ROOT/README.md"
@@ -303,6 +319,8 @@ require_documented "piagent_tool_policy_check" "$ROOT/packages/piagent-core" "$R
 require_documented "piagent_task_gate_check" "$ROOT/packages/piagent-core" "$ROOT/docs" "$ROOT/templates/project/AGENTS.md"
 require_documented "piagent_usage_snapshot" "$ROOT/packages/piagent-core" "$ROOT/docs" "$ROOT/templates/project/AGENTS.md"
 require_documented "/piagent-usage" "$ROOT/packages/piagent-core" "$ROOT/docs" "$ROOT/README.md"
+require_documented "piagent_document_read" "$ROOT/packages/piagent-core" "$ROOT/docs"
+require_documented "additionalReadRoots" "$ROOT/docs" "$ROOT/schemas/project-profile.schema.json"
 require_documented "/piagent-commands" "$ROOT/README.md" "$ROOT/docs" "$ROOT/packages/piagent-core/prompts"
 require_documented "auto-delegation" "$ROOT/README.md" "$ROOT/docs" "$ROOT/packages/piagent-core/prompts" "$ROOT/templates/project/AGENTS.md"
 require_documented "Subagents used/not used" "$ROOT/packages/piagent-core/prompts" "$ROOT/docs/auto-delegation-policy.md"
@@ -491,9 +509,9 @@ node --check "$ROOT/scripts/migrate-project-state.mjs" >/dev/null
 node --check "$ROOT/scripts/import-agent-instructions.mjs" >/dev/null
 node --check "$ROOT/scripts/check-runtime-advisories.mjs" >/dev/null
 node --check "$ROOT/scripts/check-published-site.mjs" >/dev/null
-(cd "$ROOT" && npm test) >/dev/null
+run_quietly "npm test" npm test
 if [[ -x "$ROOT/node_modules/.bin/tsc" ]]; then
-  (cd "$ROOT" && npm run typecheck) >/dev/null
+  run_quietly "npm run typecheck" npm run typecheck
 fi
 bash -n "$ROOT/scripts/quality-benchmark.sh"
 bash -n "$ROOT/scripts/runtime-policy-smoke.sh"

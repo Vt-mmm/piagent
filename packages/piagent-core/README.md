@@ -64,6 +64,7 @@ Inside Pi, slash commands can switch the current session without writing the pro
 - `piagent_project_onboarding_record`
 - `piagent_task_start`
 - `piagent_source_checkout`
+- `piagent_document_read` — reads `.md`/`.txt`/`.csv`/`.json`/`.yaml`/`.pdf`/`.docx` from the project or a granted `additionalReadRoots` directory; read-only, and `protectedPaths` still wins
 - `piagent_context_record`
 - `piagent_verify_record` — records verify evidence only after matching an observed bash tool result after task start
 - `piagent_trace_record`

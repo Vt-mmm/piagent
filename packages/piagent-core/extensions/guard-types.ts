@@ -10,6 +10,7 @@ export type ProjectProfile = {
   protectedPaths?: string[];
   shellProtectedPaths?: string[];
   readOnlyPaths?: string[];
+  additionalReadRoots?: string[];
   requiredContext?: string[];
   verifyCommands?: Record<string, string[]>;
   mcpCapabilities?: string[];

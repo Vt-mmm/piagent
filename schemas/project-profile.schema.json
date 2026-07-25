@@ -71,6 +71,14 @@
         "minLength": 1
       }
     },
+    "additionalReadRoots": {
+      "type": "array",
+      "description": "Directories outside the project that piagent_document_read may read documents from. Read-only, document extensions only, and protectedPaths still win.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
     "requiredContext": {
       "type": "array",
       "items": {

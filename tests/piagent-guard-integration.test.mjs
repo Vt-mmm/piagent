@@ -242,7 +242,8 @@ describe("piagent guard integration", () => {
     piagentGuard(harness.pi);
     await harness.handlers.get("session_start")({}, ctx);
 
-    assert.equal(harness.tools.size, 27);
+    assert.equal(harness.tools.size, 28);
+    assert.equal(harness.tools.has("piagent_document_read"), true);
     assert.equal(harness.commands.size, 15);
     assert.equal(harness.commands.has("profile"), true);
     assert.equal(harness.commands.has("context-index"), true);
@@ -2237,5 +2238,61 @@ describe("piagent guard integration", () => {
     assert.equal(verify.details.task.verifyEvidence[0].matchedProfileCommand, true);
     assert.ok(fs.existsSync(path.join(cwd, ".pi", "piagent-state", "observed-bash.jsonl")));
     assert.ok(fs.existsSync(path.join(cwd, ".pi", "piagent-state", "tasks", "integration-task.json")));
+  });
+
+  it("reads a granted document, redacts it, and still refuses what the project protects", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+
+    const granted = path.join(root, "downloads");
+    fs.mkdirSync(granted, { recursive: true });
+    fs.writeFileSync(path.join(granted, "spec.md"), "# Spec\n\nkey sk-ant-api03-aaaaaaaaaaaaaaaaaaaaaaaa\n");
+    fs.writeFileSync(path.join(granted, "installer.sh"), "#!/bin/sh\necho hi\n");
+    fs.writeFileSync(path.join(root, "elsewhere.md"), "# Not granted\n");
+
+    const profilePath = path.join(cwd, ".pi", "piagent-profile.json");
+    const profile = JSON.parse(fs.readFileSync(profilePath, "utf8"));
+    profile.additionalReadRoots = [granted];
+    fs.writeFileSync(profilePath, `${JSON.stringify(profile, null, 2)}\n`);
+
+    const ctx = createContext(cwd, { confirm: true });
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+    const documentRead = harness.tools.get("piagent_document_read");
+    const read = (id, target) => documentRead.execute(id, { path: target }, undefined, () => {}, ctx);
+
+    const spec = await read("doc-granted", path.join(granted, "spec.md"));
+    assert.equal(spec.isError, undefined);
+    assert.equal(spec.details.format, "text");
+    assert.match(spec.content[0].text, /# Spec/);
+    assert.equal(
+      spec.content[0].text.includes("sk-ant-api03-aaaaaaaaaaaaaaaaaaaaaaaa"),
+      false,
+      "a key sitting in a downloaded document must not reach the model"
+    );
+
+    // The data region is delimited by a marker the document cannot predict, so
+    // its own text cannot end the region and continue at instruction level.
+    const fence = spec.content[0].text.match(/BEGIN (PIAGENT-DOCUMENT-[0-9a-f-]{36})/);
+    assert.ok(fence, "the returned content must open an unpredictable data region");
+    assert.ok(spec.content[0].text.trimEnd().endsWith(`END ${fence[1]}`), "the data region must be closed by the same marker");
+
+    // A granted root widens where documents may come from, never what may be
+    // read. Protected patterns are project-relative, so this only holds if both
+    // path forms are checked.
+    const protectedFile = await read("doc-protected", path.join(cwd, ".pi", "piagent-profile.json"));
+    assert.equal(protectedFile.isError, true);
+    assert.match(protectedFile.content[0].text, /matches protected path/);
+
+    // The grant is a directory grant plus an extension filter, not a directory
+    // grant on its own.
+    const script = await read("doc-script", path.join(granted, "installer.sh"));
+    assert.equal(script.isError, true);
+    assert.match(script.content[0].text, /only document files/);
+
+    const ungranted = await read("doc-ungranted", path.join(root, "elsewhere.md"));
+    assert.equal(ungranted.isError, true);
+    assert.match(ungranted.content[0].text, /outside every readable root/);
   });
 });

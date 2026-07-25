@@ -177,6 +177,45 @@ Tech stack option theo profile:
 
 Sau khi chọn tech, platform tạo `.pi/tech-stack.json` và các file `.pi/tech-context/<tech>.json`. `/onboard-project` sẽ đưa các pointer này vào `.pi/context-index.json`. File context chỉ nên chứa tóm tắt ngắn/citation từ Context7, không lưu nguyên văn docs dài, token, session, hoặc secret.
 
+## Đọc tài liệu ngoài project
+
+Tài liệu tải về `~/Downloads` rồi kéo vào CLI thường không đọc được, vì mặc định agent chỉ làm việc trong project. Tool `piagent_document_read` mở đúng một khe: đọc **tài liệu**, **chỉ đọc**, trong các folder đã cấp trước.
+
+| Thành phần | Giá trị |
+|---|---|
+| Tool | `piagent_document_read` |
+| Input | `path` — absolute, `~/...`, hoặc relative theo project |
+| Định dạng | `.md`, `.markdown`, `.txt`, `.text`, `.csv`, `.tsv`, `.json`, `.yaml`, `.yml`, `.pdf`, `.docx` |
+| Giới hạn | 12 MB/file; 400.000 ký tự sau khi trích, dài hơn thì cắt và báo `truncated` |
+| Cấp quyền | `additionalReadRoots` trong `.pi/piagent-profile.json`, hoặc biến môi trường `PIAGENT_ADDITIONAL_READ_ROOTS` |
+
+Cấp folder cố định trong profile:
+
+```json
+{
+  "additionalReadRoots": ["~/Downloads", "~/Documents/specs"]
+}
+```
+
+Cấp tạm cho một session, ngăn cách bằng `:` giống `PATH`:
+
+```bash
+PIAGENT_ADDITIONAL_READ_ROOTS="$HOME/Downloads:$HOME/Documents/specs" pi
+```
+
+Sau đó nói thẳng path là được: `Đọc ~/Downloads/spec-v2.docx rồi tóm tắt yêu cầu`.
+
+Bốn ràng buộc không đổi khi cấp thêm root:
+
+- **Chỉ đọc.** Root được cấp không mở quyền ghi, xoá, hay chạy lệnh trong đó.
+- **Chỉ tài liệu.** File nằm trong root được cấp nhưng sai đuôi — `.pem`, `.sh`, `.env` — vẫn bị từ chối.
+- **`protectedPaths` luôn thắng.** Root được cấp không mở được path mà project đang bảo vệ.
+- **Nội dung là dữ liệu, không phải lệnh.** Text trả về đã qua redaction và có header nói rõ đây là dữ liệu người dùng; câu lệnh viết trong tài liệu không được thi hành.
+
+Cả hai kiểm tra — nằm trong root và đúng đuôi — đều chạy trên path đã canonical hoá. Nên symlink trong root mà trỏ ra ngoài bị chặn, và symlink tên `notes.md` trỏ vào `id_rsa` cũng bị chặn.
+
+`.docx` đọc trực tiếp, không cần cài gì; text bị xoá bởi tracked change chưa accept sẽ không lẫn vào nội dung. `.pdf` cần `pdftotext` (macOS `brew install poppler`, Debian/Ubuntu `apt install poppler-utils`); thiếu binary thì tool báo thiếu chứ không trả tài liệu rỗng.
+
 ## Command native của Pi
 
 Các command này thuộc Pi core hoặc package Pi chính. Tên/availability có thể phụ thuộc version Pi.
