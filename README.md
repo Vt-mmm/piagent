@@ -15,7 +15,14 @@ piagent-setup
 
 `piagent-setup` installs the exact Pi Coding Agent host this release pins, installs the Pi package, initializes the current directory, and runs the doctor. It also installs the MCP baseline, the subagents, and — when `herdr` is already on `PATH` — the Herdr Pi integration; pass `--no-mcp`, `--no-subagents`, `--no-herdr`, or `--global-only` to skip those.
 
-Install [Herdr](https://herdr.dev/docs/install/) *before* `piagent-setup` if you want it. The integration step is skipped with a warning when `herdr` is not on `PATH`, so installing Herdr afterwards means running `piagent-setup --global-only` again.
+If you want [Herdr](https://herdr.dev/docs/install/), install it *before* `piagent-setup`:
+
+```bash
+brew install herdr                            # macOS
+curl -fsSL https://herdr.dev/install.sh | sh  # macOS or Linux
+```
+
+The integration step is skipped with a warning when `herdr` is not on `PATH`, so installing Herdr afterwards means running `piagent-setup --global-only` again. The `curl` form runs a script fetched at install time; `brew` and the [GitHub releases](https://github.com/ogulcancelik/herdr/releases) are the reviewable alternatives. Stable Herdr covers macOS and Linux — Windows builds are preview only, which is outside this platform's rollout matrix either way.
 
 Because it runs from an installed package, the source it writes into `.pi/settings.json` is `npm:@piagent/platform@<version>` — which means the same thing on a teammate's machine, so the file can be committed.
 

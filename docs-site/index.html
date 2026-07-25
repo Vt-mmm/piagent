@@ -935,7 +935,6 @@
                 <div>
                   <h3>Cài — hai lệnh</h3>
                   <p>Cần Node.js 22.19.0 trở lên. Không cần cài Pi Coding Agent trước: <span class="inline-code">piagent-setup</span> tự cài đúng bản <span class="inline-code">0.81.1</span> mà release <span class="inline-code">v1.0.2</span> đang pin. Chạy nó ngay trong thư mục project — nó cài Pi package, khởi tạo <span class="inline-code">.pi/</span>, cài MCP baseline cùng subagents, rồi chạy doctor. Thêm <span class="inline-code">--no-mcp</span>, <span class="inline-code">--no-subagents</span>, <span class="inline-code">--no-herdr</span> hoặc <span class="inline-code">--global-only</span> để bỏ bớt.</p>
-                  <p>Dùng <a href="https://herdr.dev/docs/install/">Herdr</a> thì cài Herdr <strong>trước</strong>: <span class="inline-code">piagent-setup</span> tự cài luôn Herdr Pi integration khi thấy <span class="inline-code">herdr</span> trên <span class="inline-code">PATH</span>, còn không thì bỏ qua kèm cảnh báo — cài Herdr sau phải chạy lại <span class="inline-code">piagent-setup --global-only</span>.</p>
                   <div class="table-wrap compact-table">
                     <table>
                       <thead>
@@ -970,6 +969,13 @@
 piagent-setup</code></pre>
                   </div>
                   <p>Vì chạy từ package đã cài, source ghi vào <span class="inline-code">.pi/settings.json</span> là <span class="inline-code">npm:@piagent/platform@&lt;version&gt;</span> — giá trị này có nghĩa như nhau trên máy đồng đội, nên commit được cho cả team.</p>
+                  <p>Dùng <a href="https://herdr.dev/docs/install/">Herdr</a> thì cài Herdr <strong>trước</strong>: <span class="inline-code">piagent-setup</span> tự cài luôn Herdr Pi integration khi thấy <span class="inline-code">herdr</span> trên <span class="inline-code">PATH</span>, còn không thì bỏ qua kèm cảnh báo — cài Herdr sau phải chạy lại <span class="inline-code">piagent-setup --global-only</span>.</p>
+                  <div class="command-card">
+                    <header><span>Herdr (tuỳ chọn, cài trước)</span><button class="clip-btn" data-clip="brew install herdr">Lấy lệnh</button></header>
+                    <pre><code>brew install herdr                            # macOS
+curl -fsSL https://herdr.dev/install.sh | sh  # macOS hoặc Linux</code></pre>
+                  </div>
+                  <p>Bản <span class="inline-code">curl</span> chạy script tải về lúc cài; muốn kiểm tra được thì dùng <span class="inline-code">brew</span> hoặc tải từ <a href="https://github.com/ogulcancelik/herdr/releases">GitHub releases</a>. Herdr stable hỗ trợ macOS và Linux, Windows mới ở mức preview.</p>
                   <p>Rollout pin từng bước, update, rollback, và channel latest cho máy cá nhân nằm trong <a href="https://github.com/Vt-mmm/piagent/blob/main/docs/release-install-policy.md">release &amp; install policy</a>.</p>
                 </div>
               </article>

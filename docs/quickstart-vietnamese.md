@@ -35,7 +35,14 @@ piagent-setup
 
 Chạy `piagent-setup` ngay trong thư mục project. Nó tự cài đúng Pi Coding Agent `0.81.1` mà release này pin, cài Pi package, khởi tạo `.pi/`, rồi chạy doctor. Nó cũng cài MCP baseline, subagents, và Herdr Pi integration nếu `herdr` đã có sẵn trên `PATH`; thêm `--no-mcp`, `--no-subagents`, `--no-herdr` nếu không cần, hoặc `--global-only` nếu chưa muốn đụng project nào.
 
-Nếu dùng [Herdr](https://herdr.dev/docs/install/) thì cài Herdr **trước** `piagent-setup`. Không có `herdr` trên `PATH` thì bước integration bị bỏ qua kèm cảnh báo, cài Herdr sau phải chạy lại `piagent-setup --global-only`.
+Nếu dùng [Herdr](https://herdr.dev/docs/install/) thì cài Herdr **trước** `piagent-setup`:
+
+```bash
+brew install herdr                            # macOS
+curl -fsSL https://herdr.dev/install.sh | sh  # macOS hoặc Linux
+```
+
+Không có `herdr` trên `PATH` thì bước integration bị bỏ qua kèm cảnh báo, cài Herdr sau phải chạy lại `piagent-setup --global-only`. Bản `curl` chạy script tải về lúc cài; muốn kiểm tra được thì dùng `brew` hoặc tải từ [GitHub releases](https://github.com/ogulcancelik/herdr/releases). Herdr bản stable hỗ trợ macOS và Linux; Windows mới ở mức preview, mà cũng nằm ngoài runtime matrix của platform này.
 
 Vì chạy từ package đã cài, source ghi vào `.pi/settings.json` là `npm:@piagent/platform@<version>` — portable, commit được.
 
