@@ -4,20 +4,20 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  pi-company-auto [--read-only|--workspace-write|--full-access] [--no-approve] [--] [pi args...]
+  piagent-auto [--read-only|--workspace-write|--full-access] [--no-approve] [--] [pi args...]
 
 Purpose:
   Launch Pi with project-local trust approved for this run.
 
 Examples:
-  pi-company-auto
-  pi-company-auto --name "payment scout"
-  pi-company-auto --read-only -p "Scout payment mapping. Do not edit source."
-  pi-company-auto --full-access -p "Run the trusted local benchmark suite."
-  pi-company-auto -- --model openai-codex/gpt-5.5:xhigh
+  piagent-auto
+  piagent-auto --name "payment scout"
+  piagent-auto --read-only -p "Scout payment mapping. Do not edit source."
+  piagent-auto --full-access -p "Run the trusted local benchmark suite."
+  piagent-auto -- --model openai-codex/gpt-5.5:xhigh
 
 Notes:
-  - This wraps `pi --approve`; it does not disable Company guardrails.
+  - This wraps `pi --approve`; it does not disable Piagent guardrails.
   - Protected paths, destructive shell checks, task gates, and verify evidence still run.
   - Use `--read-only` for guard-enforced read-only mode.
   - Use `--full-access` only for trusted projects in an externally safe environment.
@@ -68,12 +68,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 if ! command -v pi >/dev/null 2>&1; then
-  echo "FAIL: pi is not on PATH. Run pi-company-setup or follow the exact-version install flow in docs/release-install-policy.md." >&2
+  echo "FAIL: pi is not on PATH. Run piagent-setup or follow the exact-version install flow in docs/release-install-policy.md." >&2
   exit 1
 fi
 
 if [[ "$PERMISSION_PROFILE" == "read-only" ]]; then
-  exec env PI_COMPANY_PERMISSION_PROFILE="$PERMISSION_PROFILE" pi "$APPROVE_FLAG" --exclude-tools bash,write,edit "${ARGS[@]}"
+  exec env PIAGENT_PERMISSION_PROFILE="$PERMISSION_PROFILE" pi "$APPROVE_FLAG" --exclude-tools bash,write,edit "${ARGS[@]}"
 fi
 
-exec env PI_COMPANY_PERMISSION_PROFILE="$PERMISSION_PROFILE" pi "$APPROVE_FLAG" "${ARGS[@]}"
+exec env PIAGENT_PERMISSION_PROFILE="$PERMISSION_PROFILE" pi "$APPROVE_FLAG" "${ARGS[@]}"

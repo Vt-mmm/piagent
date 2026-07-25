@@ -41,7 +41,7 @@
     {
       "id": "review",
       "title": "Run explicit review lenses against the diff and verify evidence.",
-      "role": "company-reviewer",
+      "role": "piagent-reviewer",
       "mode": "review",
       "status": "pending",
       "dependsOn": [

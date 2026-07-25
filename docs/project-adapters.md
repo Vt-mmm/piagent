@@ -92,7 +92,7 @@ Default UX không bắt buộc chạy bash để set profile. Sau global install
 /onboard-project
 ```
 
-Nếu chưa có `.pi/company-profile.json`, onboarding nên dùng select-style setup: chọn profile trước, rồi chọn tech theo role. Native command là:
+Nếu chưa có `.pi/piagent-profile.json`, onboarding nên dùng select-style setup: chọn profile trước, rồi chọn tech theo role. Native command là:
 
 ```text
 /profile setup
@@ -107,12 +107,12 @@ Nếu Pi host chưa expose select UI, command trả về card compact và lệnh
 
 Kết quả ghi:
 
-- `.pi/company-profile.json`;
-- `.pi/company-profile.lock.json`;
+- `.pi/piagent-profile.json`;
+- `.pi/piagent-profile.lock.json`;
 - `.pi/tech-stack.json`;
 - `.pi/tech-context/<tech>.json` placeholder.
 
-Sau khi agent đọc Context7 cho tech tương ứng, chỉ record snapshot ngắn bằng `company_profile_tech_context_record`; không lưu nguyên văn docs dài.
+Sau khi agent đọc Context7 cho tech tương ứng, chỉ record snapshot ngắn bằng `piagent_profile_tech_context_record`; không lưu nguyên văn docs dài.
 
 `/onboard-project` cũng tạo `.pi/context-index.json`. Đây là advisory node/edge/citation map cho profile, tech, verify command, docs, risk và memory pointer; không dùng thay thế source hiện tại hoặc guard policy.
 
@@ -139,7 +139,7 @@ Sau khi agent đọc Context7 cho tech tương ứng, chỉ record snapshot ng�
 - docs: docs portal markers;
 - fallback: `generic`.
 
-Auto detect là bootstrap convenience, không phải policy cuối cùng. Sau init, `.pi/company-profile.json` là source of truth của project.
+Auto detect là bootstrap convenience, không phải policy cuối cùng. Sau init, `.pi/piagent-profile.json` là source of truth của project.
 
 Mọi built-in adapter đều đưa `.pi/project-context.md` vào `requiredContext`. File này được tạo dạng placeholder khi init project, rồi được model thay bằng snapshot thật sau `/onboard-project`.
 
@@ -154,7 +154,7 @@ Custom profile khi project có ít nhất một điểm sau:
 - runtime policy riêng;
 - rule domain hoặc compliance riêng.
 
-Không sửa core extension chỉ để phục vụ một repo. Sửa `.pi/company-profile.json` của repo đó trước.
+Không sửa core extension chỉ để phục vụ một repo. Sửa `.pi/piagent-profile.json` của repo đó trước.
 
 ## Adapter BE readonly → FE write
 

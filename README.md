@@ -17,43 +17,43 @@ For a trusted project where you want Pi to load project-local `.pi` resources wi
 
 ```bash
 cd /path/to/project
-pi-company-auto
+piagent-auto
 ```
 
 Read-only scout mode:
 
 ```bash
-pi-company-auto --read-only -p "Scout payment mapping. Do not edit source."
+piagent-auto --read-only -p "Scout payment mapping. Do not edit source."
 ```
 
 Trusted full-access style run:
 
 ```bash
-pi-company-auto --full-access -p "Run the trusted local benchmark suite."
+piagent-auto --full-access -p "Run the trusted local benchmark suite."
 ```
 
-`pi-company-auto` is a convenience wrapper for Pi project trust (`pi --approve`). It does not bypass protected-path checks, destructive shell checks, task gates, or verification evidence.
+`piagent-auto` is a convenience wrapper for Pi project trust (`pi --approve`). It does not bypass protected-path checks, destructive shell checks, task gates, or verification evidence.
 
 ## What it provides
 
-- Global Pi package with prompts, skills, guard extensions, and company subagents.
+- Global Pi package with prompts, skills, guard extensions, and piagent subagents.
 - Runtime onboarding via `/onboard-project`.
 - Runtime profile selection via `/profile`, plus select-style tech stack setup via `/profile setup` and `/profile tech`.
-- Explicit project memory via `/memory-policy` and `company_memory_*` tools.
-- Compact project context index via `/context-index` and `company_context_index_*` tools. This is an advisory navigation graph, not a security boundary or source of truth.
+- Explicit project memory via `/memory-policy` and `piagent_memory_*` tools.
+- Compact project context index via `/context-index` and `piagent_context_index_*` tools. This is an advisory navigation graph, not a security boundary or source of truth.
 - MCP setup helpers for Context7, Chrome DevTools, GitHub, Playwright, and Figma.
 - Subagent setup helpers for read-only scouting, planning, implementation, review, and risk challenge.
 - Chat image-path intake: paste a local screenshot path into the Pi chat box and the guard attaches it as `[image1]` before the model sees the prompt.
-- Trusted-run wrapper: `pi-company-auto` launches Pi with `--approve` for the current run while keeping company guardrails active.
+- Trusted-run wrapper: `piagent-auto` launches Pi with `--approve` for the current run while keeping piagent guardrails active.
 - Runtime policy tools:
-  - `company_permission_status`
-  - `company_exec_policy_check`
-  - `company_context_budget`
-  - `company_tool_policy_check`
-  - `company_task_gate_check`
-  - `company_usage_snapshot`
-  - `company_context_preflight`
-  - `company_orchestration_policy`
+  - `piagent_permission_status`
+  - `piagent_exec_policy_check`
+  - `piagent_context_budget`
+  - `piagent_tool_policy_check`
+  - `piagent_task_gate_check`
+  - `piagent_usage_snapshot`
+  - `piagent_context_preflight`
+  - `piagent_orchestration_policy`
 - Context7-ready tech stack manifest and concise `.pi/tech-context/*` snapshots for selected profile roles.
 - Accident-brake guardrails for protected paths, destructive shell commands, task contracts, context manifests, observed verification evidence, and trace records.
 - Quality benchmark recorder for comparing approved agent surfaces, models, and workflow presets on the same task scenarios.
@@ -66,11 +66,11 @@ Project profiles can declare a runtime `permissionProfile`:
 
 | Profile | Use when | Guard behavior |
 |---|---|---|
-| `read-only` | Scout, audit, review | Allows `read`, `grep`, `find`, `ls`, and company state tools; blocks shell, write/edit, and unknown tools. |
+| `read-only` | Scout, audit, review | Allows `read`, `grep`, `find`, `ls`, and piagent state tools; blocks shell, write/edit, and unknown tools. |
 | `workspace-write` | Normal implementation | Default profile. Keeps current protected-path, shell, capability, task, and verify gates. |
 | `trusted-full-access` | Trusted local automation | Expands workspace tool/scope autonomy, but still enforces protected paths, secret redaction, capability lock integrity, and destructive/external confirmation. |
 
-For one run, set `PI_COMPANY_PERMISSION_PROFILE=read-only|workspace-write|trusted-full-access`, or use `pi-company-auto --read-only`, `--workspace-write`, or `--full-access`.
+For one run, set `PIAGENT_PERMISSION_PROFILE=read-only|workspace-write|trusted-full-access`, or use `piagent-auto --read-only`, `--workspace-write`, or `--full-access`.
 
 Inside an active Pi session, use slash commands for a session-local switch:
 
@@ -86,12 +86,12 @@ Inside an active Pi session, use slash commands for a session-local switch:
 
 ## Solo-first orchestration
 
-Pi Company Platform supports subagents, but the default operating model is solo-first: one parent agent owns the task contract, uses explicit review lenses, and only calls bounded subagents when scout/planning/review work is independent enough to justify the extra token/tool cost.
+Pi Agent Platform supports subagents, but the default operating model is solo-first: one parent agent owns the task contract, uses explicit review lenses, and only calls bounded subagents when scout/planning/review work is independent enough to justify the extra token/tool cost.
 
 Inside Pi:
 
 ```text
-/company-orchestration
+/piagent-orchestration
 ```
 
 This shows the active mode, max subagents, review lenses, Field Guide path, and writer policy without triggering a model follow-up.
@@ -104,8 +104,8 @@ Supported for this release:
 |---|---|
 | macOS Apple Silicon (`darwin/arm64`) + Bash | Verified for this release. |
 | Linux x64 + Bash | Verified in CI for this release. |
-| macOS Intel (`darwin/x64`) + Bash | Supported target, but run `pi-company-doctor` and project smoke tests before wide rollout. |
-| Linux ARM64 + Bash | Supported target, but run `pi-company-doctor` and project smoke tests before wide rollout. |
+| macOS Intel (`darwin/x64`) + Bash | Supported target, but run `piagent-doctor` and project smoke tests before wide rollout. |
+| Linux ARM64 + Bash | Supported target, but run `piagent-doctor` and project smoke tests before wide rollout. |
 | Native Windows | Not a team-rollout target yet; terminal helpers and shell policy rely on Bash/POSIX semantics. |
 | WSL2 | Experimental and not release-gated yet. |
 
@@ -114,17 +114,17 @@ Node.js `>=22.19.0` and Pi Coding Agent `0.81.1` are required. Pi Coding Agent i
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
-npm install -g --ignore-scripts github:Vt-mmm/pi_agent#v0.4.8
-pi-company-install --stable --dry-run
-pi-company-install --stable
+npm install -g --ignore-scripts github:Vt-mmm/piagent#v0.4.8
+piagent-install --stable --dry-run
+piagent-install --stable
 ```
 
-The npm command installs the `pi-company-*` terminal helpers. `pi-company-install --stable` then resolves the helper's release tag to a commit SHA and installs the matching Pi package. In its output, `currentRelease` is the version of the terminal helper currently executing.
+The npm command installs the `piagent-*` terminal helpers. `piagent-install --stable` then resolves the helper's release tag to a commit SHA and installs the matching Pi package. In its output, `currentRelease` is the version of the terminal helper currently executing.
 
-If you only need to install the Pi package and do not need the `pi-company-*` terminal commands, pin the current release tag or a reviewed commit directly:
+If you only need to install the Pi package and do not need the `piagent-*` terminal commands, pin the current release tag or a reviewed commit directly:
 
 ```bash
-pi install git:github.com/Vt-mmm/pi_agent@v0.4.8
+pi install git:github.com/Vt-mmm/piagent@v0.4.8
 ```
 
 From a checked-out platform repo, the same helper is available as a script:
@@ -138,16 +138,16 @@ For a full update, update the exact Pi host first, then the npm-global helper, t
 
 ```bash
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
-npm install -g --ignore-scripts github:Vt-mmm/pi_agent#vX.Y.Z
-pi-company-install --stable --dry-run
-pi-company-install --stable
+npm install -g --ignore-scripts github:Vt-mmm/piagent#vX.Y.Z
+piagent-install --stable --dry-run
+piagent-install --stable
 ```
 
 For rollback, read the target release's compatibility section and install its exact Pi host before changing the helper to `vPREVIOUS`; older hosts may reintroduce known dependency findings. If you intentionally want to change only the Pi package while keeping the terminal helper at its current version:
 
 ```bash
-pi-company-install --version vX.Y.Z --resolve-tag --dry-run
-pi-company-install --version vX.Y.Z --resolve-tag
+piagent-install --version vX.Y.Z --resolve-tag --dry-run
+piagent-install --version vX.Y.Z --resolve-tag
 ```
 
 Use latest only for a personal machine or sandbox where fast updates are acceptable:
@@ -176,7 +176,7 @@ First run inside a project:
 /login
 /model
 /scoped-models      # optional: customize Ctrl+P model cycle
-/company-commands
+/piagent-commands
 /mcp                # inspect MCP servers
 /subagents-doctor   # health check
 /onboard-project
@@ -185,8 +185,8 @@ First run inside a project:
 
 `/onboard-project` will inspect the repository with bounded context, recommend a profile, explain tradeoffs, ask before applying, then write:
 
-- `.pi/company-profile.json`
-- `.pi/company-profile.lock.json`
+- `.pi/piagent-profile.json`
+- `.pi/piagent-profile.lock.json`
 - `.pi/tech-stack.json`
 - `.pi/tech-context/*`
 - `.pi/project-context.md`
@@ -218,13 +218,13 @@ The setup flow prefers native select UI. If the Pi host does not expose a select
 Capability packs group governed prompts, skills, subagents, policies, adapters, recipes, and eval scenarios behind a declarative manifest. Project profiles select exact pack versions and explicitly grant owner, lifecycle, filesystem, network, and external-action boundaries.
 
 ```bash
-pi-company-capabilities catalog --check
-pi-company-capabilities doctor \
-  --profile .pi/company-profile.json \
-  --lock .pi/company-profile.lock.json
-pi-company-capabilities resolve \
-  --profile .pi/company-profile.json \
-  --output .pi/company-profile.lock.json \
+piagent-capabilities catalog --check
+piagent-capabilities doctor \
+  --profile .pi/piagent-profile.json \
+  --lock .pi/piagent-profile.lock.json
+piagent-capabilities resolve \
+  --profile .pi/piagent-profile.json \
+  --output .pi/piagent-profile.lock.json \
   --package-source ../
 ```
 
@@ -258,7 +258,7 @@ Use `/task` when the requirement is clear enough to implement.
 
 ### Guarded Git workflows
 
-Pi Company intentionally keeps Git as a capability instead of adding a `/git-*` namespace. Use short workflow commands or natural language:
+Pi Agent intentionally keeps Git as a capability instead of adding a `/git-*` namespace. Use short workflow commands or natural language:
 
 ```text
 /commit docs: update onboarding notes
@@ -287,7 +287,7 @@ When the current session is already heavy, use the fresh workflow commands. They
 /fresh-be-to-fe <backend-readonly/frontend request>
 ```
 
-The input guard also collapses pasted mandatory-flow boilerplate automatically. Users should not paste the full company checklist into every task.
+The input guard also collapses pasted mandatory-flow boilerplate automatically. Users should not paste the full piagent checklist into every task.
 
 ### Screenshots and local images
 
@@ -345,8 +345,8 @@ Shift+Tab       # cycle thinking level when supported by the selected model
 Global setup can seed `enabledModels`. To inspect or re-apply:
 
 ```bash
-pi-company-models
-pi-company-model-scope --preset full
+piagent-models
+piagent-model-scope --preset full
 ```
 
 ## MCP setup
@@ -354,16 +354,16 @@ pi-company-model-scope --preset full
 Global setup installs `pi-mcp-adapter` and seeds the `core` MCP preset unless disabled.
 
 ```bash
-pi-company-mcp --preset core --scope global --replace
-pi-company-mcp --preset popular --scope global --replace
-pi-company-mcp --preset design --scope project --project /path/to/project
-pi-company-mcp --list
+piagent-mcp --preset core --scope global --replace
+piagent-mcp --preset popular --scope global --replace
+piagent-mcp --preset design --scope project --project /path/to/project
+piagent-mcp --list
 ```
 
 If the repo is cloned from Git and npm bins are not linked yet:
 
 ```bash
-bash /path/to/pi_agent/scripts/configure-mcp.sh --preset core --scope global --replace
+bash /path/to/piagent/scripts/configure-mcp.sh --preset core --scope global --replace
 ```
 
 Preset summary:
@@ -386,13 +386,13 @@ export GITHUB_PERSONAL_ACCESS_TOKEN=<github-token>
 Global setup installs `pi-subagents` and applies the `safe` preset unless disabled.
 
 ```bash
-pi-company-subagents --preset safe
+piagent-subagents --preset safe
 ```
 
 Fallback when cloned from Git without npm bins:
 
 ```bash
-bash /path/to/pi_agent/scripts/configure-subagents.sh --preset safe
+bash /path/to/piagent/scripts/configure-subagents.sh --preset safe
 ```
 
 Common Pi commands:
@@ -402,10 +402,10 @@ Common Pi commands:
 /subagents-models
 /subagents-fleet
 /subagent-cost
-/run company-scout "Map the auth flow. Read-only."
-/run company-planner "Plan implementation from context.md."
-/run company-worker "Implement the approved plan."
-/run company-reviewer "Review current diff."
+/run piagent-scout "Map the auth flow. Read-only."
+/run piagent-planner "Plan implementation from context.md."
+/run piagent-worker "Implement the approved plan."
+/run piagent-reviewer "Review current diff."
 ```
 
 Daily task prompts are solo-first: they can delegate bounded scout/planning/review work when useful, and the final handoff should state whether subagents were used and why.
@@ -421,9 +421,9 @@ pi install npm:pi-web-access@0.13.0
 Most projects do not need shell init. Use this only when you want to pre-create `.pi` files in a repo or bootstrap team templates:
 
 ```bash
-bash /path/to/pi_agent/scripts/setup.sh /path/to/project \
+bash /path/to/piagent/scripts/setup.sh /path/to/project \
   --profile be-readonly-fe \
-  --package-source git:github.com/Vt-mmm/pi_agent@v0.4.8 \
+  --package-source git:github.com/Vt-mmm/piagent@v0.4.8 \
   --mcp-preset core \
   --subagents-preset safe
 ```
@@ -431,14 +431,14 @@ bash /path/to/pi_agent/scripts/setup.sh /path/to/project \
 ## Repository layout
 
 ```text
-pi_agent/
+piagent/
 ├─ adapters/                         reusable project profiles
 ├─ catalog/                          deterministic capability index
 ├─ docs/                             Vietnamese documentation and operating notes
 ├─ evals/                            governed evaluation scenarios
 ├─ packs/                            versioned capability manifests and recipes
 ├─ packages/
-│  └─ pi-company-core/               Pi package: extensions, prompts, skills
+│  └─ piagent-core/               Pi package: extensions, prompts, skills
 ├─ schemas/                          JSON schemas
 ├─ scripts/                          setup, doctor, verification helpers
 └─ templates/                        project/global templates
@@ -479,14 +479,14 @@ Usage / token follow-up:
 ```text
 /task-preflight
 /task-preflight compact
-/company-usage
+/piagent-usage
 /session
 ```
 
 From another terminal:
 
 ```bash
-pi-company-usage /path/to/project
+piagent-usage /path/to/project
 bash scripts/pi-session-stats.sh /path/to/project
 ```
 
@@ -560,12 +560,12 @@ Application-level policy layer:
 - Protected paths are matched case-insensitively, existing aliases are resolved to their canonical repository path, and scope-aware filesystem tools reject repository escape or symbolic-link traversal.
 - Path-like strings are percent-decoded once before matching. Excessively nested tool input fails closed instead of being silently skipped.
 - Known content fields such as `content`, `query`, `pattern`, `text`, and `command` are excluded from generic path extraction to preserve normal search/edit behavior. Tool-specific checks still validate `grep.glob` and `find.pattern` when they explicitly target protected paths.
-- The ambiguous `source` field remains metadata for configured external providers and company tools, but is treated as a filesystem path for file-oriented tools and unknown/local tools; protected-path and read-scope checks then apply before execution.
+- The ambiguous `source` field remains metadata for configured external providers and piagent tools, but is treated as a filesystem path for file-oriented tools and unknown/local tools; protected-path and read-scope checks then apply before execution.
 - Broad `grep`, `find`, and `ls` sweeps get result-filter backstops: protected file content lines or protected path metadata are redacted before the model sees output. Text tool results and JSON-like result details also pass through shared sensitive-data redaction; image, audio, and resource payloads are left intact.
 - The redaction release gate is a synthetic/internal benchmark for contextual recall, benign preservation, structured fields, and bounded large output. The public security threat model maps current assumptions, attack vectors, controls, and residual risks; it is not an independent audit. Stronger assurance still requires a broader OS/shell matrix, more parser fuzzing, continued symlink/path-traversal testing, third-party review, and an LTS/backport policy. Opaque entropy without a credential-bearing context and transformed output such as base64-encoded content remain outside the redaction guarantee.
-- Raw `bash` access to protected paths is blocked through shell operand extraction. The guard covers partial shell globs, bare filenames, canonical symbolic-link aliases, and attached input/output redirections. `.pi/company-state/**` and `.pi/company-profile.json` are self-protected; use `company_context` and company task tools instead.
+- Raw `bash` access to protected paths is blocked through shell operand extraction. The guard covers partial shell globs, bare filenames, canonical symbolic-link aliases, and attached input/output redirections. `.pi/piagent-state/**` and `.pi/piagent-profile.json` are self-protected; use `piagent_context` and piagent task tools instead.
 - External writes launched through guarded shell tools are confirmation-gated as well as direct provider tools. This includes GitHub CLI write actions and non-read-only `curl`/`wget` forms, including common execution wrappers; known read/list/GET forms remain non-interactive.
-- Verify evidence is accepted only when it matches an observed Pi bash tool result after task start. The observed ledger is persisted under `.pi/company-state/observed-bash.jsonl`, so parent agents can validate bash results produced by guarded subagent processes.
+- Verify evidence is accepted only when it matches an observed Pi bash tool result after task start. The observed ledger is persisted under `.pi/piagent-state/observed-bash.jsonl`, so parent agents can validate bash results produced by guarded subagent processes.
 - Observed command identity is retained as a SHA-256 hash while sensitive command text is redacted at both the in-memory and persisted evidence boundaries.
 - Passing final gates require an observed exit `0` command that exactly matches one of the task/profile `verifyCommands`; ad-hoc commands such as `true`, `echo ok`, or `npm test || true` are advisory only.
 - Project memory files are private-by-default in generated projects; opt in to shared memory only after review/redaction.

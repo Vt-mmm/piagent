@@ -130,7 +130,7 @@ if (format === "json") {
 }
 
 const number = (value) => value === null || value === undefined ? "?" : Number(value).toLocaleString("en-US");
-console.log(`# Pi Company model catalog`);
+console.log(`# Pi Agent model catalog`);
 console.log();
 console.log(`Source: ${catalogPath}`);
 console.log(`Tip: run \`pi update --models\` before checking latest model versions.`);

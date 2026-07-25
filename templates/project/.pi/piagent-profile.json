@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "projectId": "replace-me",
+  "displayName": "Replace Me",
+  "mode": "generic",
+  "rootMarkers": [
+    "AGENTS.md",
+    "README.md"
+  ],
+  "protectedPaths": [
+    ".git/**",
+    "**/auth.json",
+    "**/.env",
+    "**/.env.*"
+  ],
+  "requiredContext": [
+    "AGENTS.md",
+    ".pi/project-context.md",
+    "README.md"
+  ],
+  "verifyCommands": {
+    "docsOnly": [
+      "test -s README.md"
+    ],
+    "source": [
+      "echo 'Configure verify command in .pi/piagent-profile.json'"
+    ]
+  },
+  "mcpCapabilities": [
+    "filesystem-readonly",
+    "filesystem-write",
+    "shell",
+    "memory"
+  ],
+  "capabilityPacks": [
+    {
+      "name": "engineering-base",
+      "version": "0.1.0"
+    }
+  ],
+  "capabilityPolicy": {
+    "allowedOwners": [
+      "platform-maintainers"
+    ],
+    "allowedLifecycles": [
+      "experimental"
+    ],
+    "allowedFilesystemRead": [
+      "**/*"
+    ],
+    "allowedFilesystemWrite": [
+      "**/*"
+    ],
+    "allowedNetworkDomains": [],
+    "allowedExternalActions": []
+  },
+  "memory": {
+    "enabled": true,
+    "mode": "manual",
+    "scope": "project",
+    "summaryFile": ".pi/memory/memory_summary.md",
+    "handbookFile": ".pi/memory/MEMORY.md",
+    "localDir": ".pi/memory/local",
+    "readBeforeTask": true,
+    "writePolicy": "explicit-only",
+    "maxInjectedChars": 4000,
+    "externalPackages": []
+  },
+  "contextIndex": {
+    "enabled": true,
+    "path": ".pi/context-index.json",
+    "writePolicy": "onboarding-record",
+    "requireCitations": true,
+    "maxNodes": 120,
+    "maxEdges": 240,
+    "includeTechStack": true,
+    "includeMemoryPointers": true
+  },
+  "orchestration": {
+    "defaultMode": "solo-first",
+    "maxConcurrentSubagents": 2,
+    "defaultReviewLenses": [
+      "correctness",
+      "tests",
+      "scope"
+    ],
+    "fieldGuide": {
+      "enabled": true,
+      "path": ".pi/memory/MEMORY.md",
+      "maxLines": 80,
+      "writePolicy": "explicit-only",
+      "readBeforeTask": true
+    }
+  },
+  "techStack": {
+    "provider": "context7",
+    "manifest": ".pi/tech-stack.json",
+    "contextDir": ".pi/tech-context",
+    "roles": {}
+  },
+  "runtimePolicy": {
+    "execPolicy": "enforce",
+    "contextBudget": "enforce",
+    "toolRegistry": "advisory",
+    "finalGate": "enforce"
+  }
+}

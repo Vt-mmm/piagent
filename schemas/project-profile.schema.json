@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/Vt-mmm/pi_agent/schemas/project-profile.schema.json",
-  "title": "Pi Company Project Profile",
+  "$id": "https://github.com/Vt-mmm/piagent/schemas/project-profile.schema.json",
+  "title": "Pi Agent Project Profile",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -33,7 +33,7 @@
       "minLength": 1
     },
     "permissionProfile": {
-      "description": "Runtime permission profile. workspace-write is the default; trusted-full-access still keeps Company protected-path and destructive/external confirmation gates.",
+      "description": "Runtime permission profile. workspace-write is the default; trusted-full-access still keeps Piagent protected-path and destructive/external confirmation gates.",
       "enum": [
         "read-only",
         "workspace-write",

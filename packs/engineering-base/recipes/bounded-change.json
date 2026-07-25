@@ -1,5 +1,5 @@
 {
-  "apiVersion": "pi.company/v1alpha1",
+  "apiVersion": "piagent/v1alpha1",
   "kind": "CapabilityRecipe",
   "metadata": {
     "name": "bounded-change",
@@ -24,7 +24,7 @@
     "steps": [
       {
         "id": "context",
-        "uses": "capability:company-context",
+        "uses": "capability:piagent-context",
         "mode": "read-only",
         "needs": [],
         "timeoutSeconds": 300,
@@ -35,7 +35,7 @@
       },
       {
         "id": "plan",
-        "uses": "capability:company-planner",
+        "uses": "capability:piagent-planner",
         "mode": "read-only",
         "needs": [
           "context"
@@ -48,7 +48,7 @@
       },
       {
         "id": "implement",
-        "uses": "capability:company-worker",
+        "uses": "capability:piagent-worker",
         "mode": "workspace-write",
         "needs": [
           "plan"
@@ -61,7 +61,7 @@
       },
       {
         "id": "verify",
-        "uses": "capability:company-reviewer",
+        "uses": "capability:piagent-reviewer",
         "mode": "read-only",
         "needs": [
           "implement"

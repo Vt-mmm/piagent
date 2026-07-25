@@ -9,8 +9,8 @@ Một thành viên mới không cần biết local path của maintainer. Luồn
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
-npm install -g --ignore-scripts github:Vt-mmm/pi_agent#v0.4.8
-pi-company-install --stable
+npm install -g --ignore-scripts github:Vt-mmm/piagent#v0.4.8
+piagent-install --stable
 cd /path/to/project
 pi
 /login
@@ -41,9 +41,9 @@ Mặc định team dùng stable helper:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
-npm install -g --ignore-scripts github:Vt-mmm/pi_agent#v0.4.8
-pi-company-install --stable --dry-run
-pi-company-install --stable
+npm install -g --ignore-scripts github:Vt-mmm/piagent#v0.4.8
+piagent-install --stable --dry-run
+piagent-install --stable
 ```
 
 `currentRelease` trong output là version của npm-global helper đang chạy. Stable resolve tag cùng version đó thành commit SHA trước khi cài Pi package.
@@ -51,13 +51,13 @@ pi-company-install --stable
 Khi seed `.pi/settings.json` cho team/repo cần audit lặp lại, dùng tag cố định:
 
 ```bash
-pi install git:github.com/Vt-mmm/pi_agent@vX.Y.Z
+pi install git:github.com/Vt-mmm/piagent@vX.Y.Z
 ```
 
 Máy cá nhân/sandbox có thể theo moving source nếu chấp nhận cập nhật nhanh:
 
 ```bash
-pi install git:github.com/Vt-mmm/pi_agent
+pi install git:github.com/Vt-mmm/piagent
 ```
 
 ## Update và rollback cho team
@@ -66,19 +66,19 @@ Full update phải đồng bộ exact Pi host trước, sau đó terminal helper
 
 ```bash
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
-npm install -g --ignore-scripts github:Vt-mmm/pi_agent#vX.Y.Z
-pi-company-install --stable --dry-run
-pi-company-install --stable
-pi-company-doctor /path/to/project --strict-share
+npm install -g --ignore-scripts github:Vt-mmm/piagent#vX.Y.Z
+piagent-install --stable --dry-run
+piagent-install --stable
+piagent-doctor /path/to/project --strict-share
 ```
 
-Full rollback dùng cùng sequence với `vPREVIOUS`, nhưng exact Pi host phải lấy từ release policy của target và dependency risk phải được đánh giá lại trước khi hạ host. `pi-company-install --version vX.Y.Z --resolve-tag` chỉ đổi Pi package, không đổi Pi host hay npm-global helper. Checklist chi tiết nằm tại [release/install policy](release-install-policy.md).
+Full rollback dùng cùng sequence với `vPREVIOUS`, nhưng exact Pi host phải lấy từ release policy của target và dependency risk phải được đánh giá lại trước khi hạ host. `piagent-install --version vX.Y.Z --resolve-tag` chỉ đổi Pi package, không đổi Pi host hay npm-global helper. Checklist chi tiết nằm tại [release/install policy](release-install-policy.md).
 
 Nếu team publish npm private:
 
 ```bash
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
-pi install npm:@company/pi-agent-platform@x.y.z
+pi install npm:@your-scope/platform@x.y.z
 ```
 
 Không cần chạy bash để set profile cho từng project.
@@ -121,11 +121,11 @@ Output chính:
 
 - `.pi/project-context.md`
 - `.pi/context-index.json`
-- `.pi/company-profile.json`
-- `.pi/company-profile.lock.json`
+- `.pi/piagent-profile.json`
+- `.pi/piagent-profile.lock.json`
 - `.pi/tech-stack.json`
 - `.pi/tech-context/*.json`
-- `.pi/company-state/project-onboarding.json`
+- `.pi/piagent-state/project-onboarding.json`
 
 Memory files are created locally but ignored by default:
 
@@ -162,9 +162,9 @@ Memory mặc định là project-scoped và explicit-only. Chạy `/memory-polic
 Các script setup/init vẫn tồn tại cho case preseed config vào repo hoặc CI bootstrap, nhưng không phải default UX:
 
 ```bash
-bash /path/to/pi_agent/scripts/setup.sh /path/to/project \
+bash /path/to/piagent/scripts/setup.sh /path/to/project \
   --profile be-readonly-fe \
-  --package-source git:github.com/Vt-mmm/pi_agent@vX.Y.Z \
+  --package-source git:github.com/Vt-mmm/piagent@vX.Y.Z \
   --mcp-preset core \
   --subagents-preset safe
 ```
@@ -172,7 +172,7 @@ bash /path/to/pi_agent/scripts/setup.sh /path/to/project \
 Nếu cần override profile:
 
 ```bash
-bash /path/to/pi_agent/scripts/setup.sh /path/to/project --project-only --profile backend-api --package-source git:github.com/Vt-mmm/pi_agent@vX.Y.Z --mcp-preset core --subagents-preset safe
+bash /path/to/piagent/scripts/setup.sh /path/to/project --project-only --profile backend-api --package-source git:github.com/Vt-mmm/piagent@vX.Y.Z --mcp-preset core --subagents-preset safe
 ```
 
 Profile built-in trong Pi:
@@ -193,7 +193,7 @@ Profile built-in trong Pi:
 Project init tạo:
 
 - `.pi/settings.json`
-- `.pi/company-profile.json`
+- `.pi/piagent-profile.json`
 - `.pi/context-index.json`
 - `.mcp.json`
 - `.pi/mcp.json`
@@ -218,16 +218,16 @@ Trong Pi, nếu project trust prompt hiện ra, chỉ approve khi đúng repo. P
 Sau khi team đã hiểu repo và muốn giảm prompt trust cho từng lần chạy, dùng:
 
 ```bash
-pi-company-auto
+piagent-auto
 ```
 
 Read-only auto-run cho scout/audit:
 
 ```bash
-pi-company-auto --read-only -p "Scout module mapping. Do not edit source."
+piagent-auto --read-only -p "Scout module mapping. Do not edit source."
 ```
 
-Lệnh này wrap `pi --approve`; nó không bypass company guard.
+Lệnh này wrap `pi --approve`; nó không bypass piagent guard.
 
 ## Bước 5 — task workflow
 
@@ -262,10 +262,10 @@ Không paste full mandatory flow hằng ngày. Platform prompts/tools đã chứ
 Runtime gate tools:
 
 ```text
-company_exec_policy_check
-company_context_budget
-company_tool_policy_check
-company_task_gate_check
+piagent_exec_policy_check
+piagent_context_budget
+piagent_tool_policy_check
+piagent_task_gate_check
 ```
 
 Task cải tiến platform:
@@ -290,7 +290,7 @@ Remember: this repo uses pnpm, never npm.
 External source repo:
 
 ```text
-Use company_source_checkout for github.com/org/repo, inspect only relevant files, then summarize applicable patterns.
+Use piagent_source_checkout for github.com/org/repo, inspect only relevant files, then summarize applicable patterns.
 ```
 
 ## Doctor
@@ -304,16 +304,16 @@ bash scripts/verify-local.sh
 Chạy trên project:
 
 ```bash
-bash /path/to/pi_agent/scripts/profile-doctor.sh /path/to/project
-bash /path/to/pi_agent/scripts/team-doctor.sh /path/to/project --strict-share
-bash /path/to/pi_agent/scripts/quality-benchmark.sh /path/to/project --init
+bash /path/to/piagent/scripts/profile-doctor.sh /path/to/project
+bash /path/to/piagent/scripts/team-doctor.sh /path/to/project --strict-share
+bash /path/to/piagent/scripts/quality-benchmark.sh /path/to/project --init
 ```
 
 Nếu doctor cảnh báo `project onboarding snapshot is still pending`, mở Pi trong project và chạy `/onboard-project`.
 
 ## Không commit
 
-- `.pi/company-state/`
+- `.pi/piagent-state/`
 - `.pi/benchmarks/`
 - `.pi/memory/local/`
 - `.pi/memory/state.sqlite`

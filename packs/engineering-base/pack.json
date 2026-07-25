@@ -1,5 +1,5 @@
 {
-  "apiVersion": "pi.company/v1alpha1",
+  "apiVersion": "piagent/v1alpha1",
   "kind": "CapabilityPack",
   "metadata": {
     "name": "engineering-base",
@@ -22,53 +22,53 @@
       "prompts": [
         {
           "id": "task",
-          "path": "packages/pi-company-core/prompts/task.md"
+          "path": "packages/piagent-core/prompts/task.md"
         },
         {
           "id": "plan",
-          "path": "packages/pi-company-core/prompts/plan.md"
+          "path": "packages/piagent-core/prompts/plan.md"
         },
         {
           "id": "review",
-          "path": "packages/pi-company-core/prompts/review.md"
+          "path": "packages/piagent-core/prompts/review.md"
         },
         {
           "id": "commit",
-          "path": "packages/pi-company-core/prompts/commit.md"
+          "path": "packages/piagent-core/prompts/commit.md"
         },
         {
           "id": "pr",
-          "path": "packages/pi-company-core/prompts/pr.md"
+          "path": "packages/piagent-core/prompts/pr.md"
         }
       ],
       "skills": [
         {
-          "id": "company-ops",
-          "path": "packages/pi-company-core/skills/company-ops/SKILL.md"
+          "id": "piagent-ops",
+          "path": "packages/piagent-core/skills/piagent-ops/SKILL.md"
         }
       ],
       "subagents": [
         {
-          "id": "company-scout",
-          "path": "packages/pi-company-core/subagents/company-scout.md"
+          "id": "piagent-scout",
+          "path": "packages/piagent-core/subagents/piagent-scout.md"
         },
         {
-          "id": "company-planner",
-          "path": "packages/pi-company-core/subagents/company-planner.md"
+          "id": "piagent-planner",
+          "path": "packages/piagent-core/subagents/piagent-planner.md"
         },
         {
-          "id": "company-worker",
-          "path": "packages/pi-company-core/subagents/company-worker.md"
+          "id": "piagent-worker",
+          "path": "packages/piagent-core/subagents/piagent-worker.md"
         },
         {
-          "id": "company-reviewer",
-          "path": "packages/pi-company-core/subagents/company-reviewer.md"
+          "id": "piagent-reviewer",
+          "path": "packages/piagent-core/subagents/piagent-reviewer.md"
         }
       ],
       "policies": [
         {
           "id": "base-policy",
-          "path": "packages/pi-company-core/policies/base-policy.json"
+          "path": "packages/piagent-core/policies/base-policy.json"
         }
       ],
       "adapters": [

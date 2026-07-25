@@ -1,6 +1,6 @@
 # Project Review Guidelines
 
-Use this file as project-local review policy for Pi `/review` or company review prompts.
+Use this file as project-local review policy for Pi `/review` or piagent review prompts.
 
 ## Review priorities
 

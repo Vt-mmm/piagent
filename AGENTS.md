@@ -1,4 +1,4 @@
-# Pi Company Platform — Agent Instructions
+# Pi Agent Platform — Agent Instructions
 
 ## Mission
 
@@ -7,7 +7,7 @@ This repository builds reusable Pi agent infrastructure for multiple projects an
 ## Non-negotiables
 
 - Do not commit OAuth tokens, API keys, `auth.json`, sessions, caches, or local trust files.
-- Keep project-specific business logic out of `packages/pi-company-core`.
+- Keep project-specific business logic out of `packages/piagent-core`.
 - Put reusable profile families in `adapters/<profile>/profile.json`.
 - Keep project-specific/private examples out of public commits; put them in the target project's own repo or `examples/private/`.
 - Prefer docs and policy schemas over prompt-only enforcement.
@@ -16,7 +16,7 @@ This repository builds reusable Pi agent infrastructure for multiple projects an
 
 ## File ownership
 
-- Core Pi package: `packages/pi-company-core/`
+- Core Pi package: `packages/piagent-core/`
 - Global docs: `docs/`
 - Reusable profiles: `adapters/`
 - Project-specific examples: `examples/`

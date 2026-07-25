@@ -17,26 +17,26 @@ Runtime policy là lớp kiểm soát cách agent đọc context, gọi tool, s�
 
 | Module | Tool/hook | Purpose |
 |---|---|---|
-| Project context | `company_context` | Load profile, settings, policy, and local state summary. |
-| Context index | `company_context_index_status/search/record` | Maintain a compact advisory node/edge/citation map for profile/project/tech/task navigation. |
-| Permission profile | `company_permission_status` | Show active `read-only`, `workspace-write`, or `trusted-full-access` boundary. |
-| Exec policy | `company_exec_policy_check` | Evaluate shell command risk before execution. |
-| Context budget | `company_context_budget` | Enforce size/count limits for context files. |
-| Tool registry | `company_tool_policy_check` | Check external tool capability against profile. |
-| Task contract | `company_task_start` | Persist scope, acceptance criteria, risk lane, and verify plan. |
-| Context manifest | `company_context_record` | Record files read for a task. |
-| Verify evidence | `company_verify_record` | Record command result only after matching an observed Pi `bash` tool result after task start. |
-| Final gate | `company_task_gate_check` | Validate readiness before final handoff. |
-| Trace | `company_trace_record` | Persist changed files, outcome, and handoff state. |
-| Usage | `company_usage_snapshot` | Show session/context/token usage when available. |
+| Project context | `piagent_context` | Load profile, settings, policy, and local state summary. |
+| Context index | `piagent_context_index_status/search/record` | Maintain a compact advisory node/edge/citation map for profile/project/tech/task navigation. |
+| Permission profile | `piagent_permission_status` | Show active `read-only`, `workspace-write`, or `trusted-full-access` boundary. |
+| Exec policy | `piagent_exec_policy_check` | Evaluate shell command risk before execution. |
+| Context budget | `piagent_context_budget` | Enforce size/count limits for context files. |
+| Tool registry | `piagent_tool_policy_check` | Check external tool capability against profile. |
+| Task contract | `piagent_task_start` | Persist scope, acceptance criteria, risk lane, and verify plan. |
+| Context manifest | `piagent_context_record` | Record files read for a task. |
+| Verify evidence | `piagent_verify_record` | Record command result only after matching an observed Pi `bash` tool result after task start. |
+| Final gate | `piagent_task_gate_check` | Validate readiness before final handoff. |
+| Trace | `piagent_trace_record` | Persist changed files, outcome, and handoff state. |
+| Usage | `piagent_usage_snapshot` | Show session/context/token usage when available. |
 
 ## Policy precedence
 
 Effective policy is derived from:
 
-1. safe defaults in `packages/pi-company-core/policies/base-policy.json`;
+1. safe defaults in `packages/piagent-core/policies/base-policy.json`;
 2. installed package prompts/skills/extensions;
-3. project `.pi/company-profile.json`;
+3. project `.pi/piagent-profile.json`;
 4. explicit user instruction in the active session.
 
 User instruction can narrow scope or raise safety requirements. It should not silently bypass protected paths, destructive command checks, or final task gates.
@@ -69,11 +69,11 @@ The runtime separates the active autonomy profile from the project profile:
 
 | Profile | Meaning |
 |---|---|
-| `read-only` | Allows source inspection through `read`, `grep`, `find`, `ls`, plus company state tools. Blocks shell, write/edit, and unknown non-company tools before execution. |
+| `read-only` | Allows source inspection through `read`, `grep`, `find`, `ls`, plus piagent state tools. Blocks shell, write/edit, and unknown non-piagent tools before execution. |
 | `workspace-write` | Default governed implementation mode. Existing protected-path, shell, capability, context, verify, and final gates remain active. |
 | `trusted-full-access` | Trusted automation mode for known repos. It can relax tool-registry blocks and capability filesystem scopes inside the guard, but protected paths, secret redaction, capability-lock integrity, and destructive/external confirmation still apply. |
 
-`PI_COMPANY_PERMISSION_PROFILE` can override the profile for a single run. Invalid values fail closed to `read-only`. Inside Pi, `/read-only`, `/workspace-write`, and `/full-access` set a session-local override without writing the project profile. Precedence is launch env, then session command, then project profile, then policy default. `permissionProfiles.allowedModes` in base policy acts like a managed allowlist; removing `trusted-full-access` from that list disables it for the installation.
+`PIAGENT_PERMISSION_PROFILE` can override the profile for a single run. Invalid values fail closed to `read-only`. Inside Pi, `/read-only`, `/workspace-write`, and `/full-access` set a session-local override without writing the project profile. Precedence is launch env, then session command, then project profile, then policy default. `permissionProfiles.allowedModes` in base policy acts like a managed allowlist; removing `trusted-full-access` from that list disables it for the installation.
 
 ## Task lifecycle
 
@@ -97,25 +97,25 @@ This lifecycle is intentionally explicit. It makes task quality auditable and av
 Pi `bash` results are observed through the runtime `tool_result` hook and appended to:
 
 ```text
-.pi/company-state/observed-bash.jsonl
+.pi/piagent-state/observed-bash.jsonl
 ```
 
-The ledger stores cwd, timestamp, status, a hash of the normalized command, and redacted command text for audit. It does not need the raw command text to validate a later `company_verify_record` call.
+The ledger stores cwd, timestamp, status, a hash of the normalized command, and redacted command text for audit. It does not need the raw command text to validate a later `piagent_verify_record` call.
 
 This file-based ledger is intentionally shared by parent and subagent processes that run in the same project cwd. If a worker subagent runs `npm test`, the parent can later record that exact verify command without depending on process-local memory.
 
 The ledger and task/profile control files are self-protected:
 
-- raw path-like tool access to `.pi/company-state/**` is blocked before execution;
-- raw path-like tool access to `.pi/company-profile.json` is blocked before execution;
+- raw path-like tool access to `.pi/piagent-state/**` is blocked before execution;
+- raw path-like tool access to `.pi/piagent-profile.json` is blocked before execution;
 - the same protected-path gate covers Pi built-ins such as `read`, `write`, `edit`, `grep`, `find`, `ls`;
 - custom/MCP tools are also blocked when a tool call contains path-like strings pointing at a protected path, including nested objects, arrays, and `file://` URIs;
 - path-like strings are percent-decoded once before matching;
 - input nesting above `MAX_TOOL_INPUT_INSPECTION_DEPTH=32` fails closed because an uninspectable input cannot be safely classified;
 - generic extraction skips known leaf content fields such as `content`, `query`, `pattern`, `text`, and `command`, so normal search/edit strings do not become path false positives;
-- `grep.glob` and `find.pattern` are checked when they explicitly name protected targets such as `.env*`, `auth.json`, `.pi/company-state/**`, or `company-profile.json`;
+- `grep.glob` and `find.pattern` are checked when they explicitly name protected targets such as `.env*`, `auth.json`, `.pi/piagent-state/**`, or `piagent-profile.json`;
 - broad `grep`, `find`, and `ls` results are filtered through the `tool_result` hook so protected content lines or protected path metadata are redacted before the model sees them;
-- company tools still write/read these files through internal extension code, so normal task evidence and profile workflows continue to work.
+- piagent tools still write/read these files through internal extension code, so normal task evidence and profile workflows continue to work.
 
 This gate is independent from the tool registry. The registry can stay `advisory` for compatibility with changing Pi/MCP tool names, while protected-path access remains fail-closed whenever the event exposes a path-like input.
 

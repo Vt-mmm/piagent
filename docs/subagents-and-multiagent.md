@@ -8,7 +8,7 @@ Pi core không có subagents built-in. Theo design của Pi, subagents là exten
 - foreground/background runs;
 - `/run`, `/parallel`, `/chain`;
 - builtin agents `scout`, `planner`, `worker`, `reviewer`, `oracle`, `researcher`, `context-builder`, `delegate`;
-- custom package agents từ `packages/pi-company-core/subagents`;
+- custom package agents từ `packages/piagent-core/subagents`;
 - status/fleet/cost/doctor commands;
 - bounded recursion/concurrency;
 - optional worktree isolation cho parallel writers.
@@ -18,15 +18,15 @@ Pi core không có subagents built-in. Theo design của Pi, subagents là exten
 
 Từ `v0.3.7`, `scripts/setup.sh` mặc định cài `pi-subagents` và chạy config preset `safe`.
 
-Workflow prompts của platform dùng **solo-first orchestration policy**: khi anh chạy `/task`, `/be-to-fe`, `/platform-improve`, `/plan`, hoặc `/review`, parent agent đọc `company_orchestration_policy`, lập task tree/review lenses, rồi mới cân nhắc subagent cho phần việc độc lập. Anh không bắt buộc phải gọi `/run` nếu chỉ muốn task hoàn chỉnh, và platform cũng không spawn swarm khi task nhỏ.
+Workflow prompts của platform dùng **solo-first orchestration policy**: khi anh chạy `/task`, `/be-to-fe`, `/platform-improve`, `/plan`, hoặc `/review`, parent agent đọc `piagent_orchestration_policy`, lập task tree/review lenses, rồi mới cân nhắc subagent cho phần việc độc lập. Anh không bắt buộc phải gọi `/run` nếu chỉ muốn task hoàn chỉnh, và platform cũng không spawn swarm khi task nhỏ.
 
 Kiểm tra nhanh policy trong Pi:
 
 ```text
-/company-orchestration
+/piagent-orchestration
 ```
 
-Guard extension vẫn load trong subagent process. Bash verify results do not stay in process-local memory only; they are appended to `.pi/company-state/observed-bash.jsonl`. Because parent and child share the same project cwd, parent can validate an exact verify command that a guarded worker subagent ran.
+Guard extension vẫn load trong subagent process. Bash verify results do not stay in process-local memory only; they are appended to `.pi/piagent-state/observed-bash.jsonl`. Because parent and child share the same project cwd, parent can validate an exact verify command that a guarded worker subagent ran.
 
 Xem chi tiết: `docs/auto-delegation-policy.md`.
 
@@ -37,9 +37,9 @@ Capability notes chi tiết: `docs/subagent-orchestration-capabilities.md`.
 Một lệnh setup đầy đủ:
 
 ```bash
-bash /path/to/pi_agent/scripts/setup.sh . \
+bash /path/to/piagent/scripts/setup.sh . \
   --profile auto \
-  --package-source git:github.com/Vt-mmm/pi_agent@vX.Y.Z \
+  --package-source git:github.com/Vt-mmm/piagent@vX.Y.Z \
   --mcp-preset core \
   --subagents-preset safe
 ```
@@ -47,17 +47,17 @@ bash /path/to/pi_agent/scripts/setup.sh . \
 Nếu chỉ cài global:
 
 ```bash
-pi install git:github.com/Vt-mmm/pi_agent
+pi install git:github.com/Vt-mmm/piagent
 pi install npm:pi-subagents@0.35.1
-bash /path/to/pi_agent/scripts/configure-subagents.sh --preset safe
+bash /path/to/piagent/scripts/configure-subagents.sh --preset safe
 ```
 
 Nếu package đã cài nhưng muốn re-apply config:
 
 ```bash
-pi-company-subagents --preset safe
+piagent-subagents --preset safe
 # hoặc nếu chưa link npm bin:
-bash /path/to/pi_agent/scripts/configure-subagents.sh --preset safe
+bash /path/to/piagent/scripts/configure-subagents.sh --preset safe
 ```
 
 ## Safe preset
@@ -86,7 +86,7 @@ Nội dung chính:
 Không ép `subagents.modelScope` mặc định. Anh chọn model parent bằng `/model`; builtin subagents sẽ inherit model nếu không override. Nếu muốn ép chỉ provider:
 
 ```bash
-bash /path/to/pi_agent/scripts/configure-subagents.sh --preset safe --model-scope company
+bash /path/to/piagent/scripts/configure-subagents.sh --preset safe --model-scope piagent
 ```
 
 ## Kiểm tra trong Pi
@@ -108,7 +108,7 @@ Optional research support:
 ```bash
 pi install npm:pi-web-access@0.13.0
 # hoặc
-bash /path/to/pi_agent/scripts/setup.sh . --with-web-access
+bash /path/to/piagent/scripts/setup.sh . --with-web-access
 ```
 
 `researcher` builtin cần web/search/fetch tools từ package này. Không bật mặc định để tránh tăng tool surface cho team không cần web research.
@@ -119,7 +119,7 @@ Giải nghĩa nhanh:
 |---|---|---|
 | `/subagents-doctor` | Health check subagent | Kiểm package/config/agent files/runtime readiness. |
 | `/subagents-models` | Bản đồ model/thinking của subagents | Xem agent nào inherit model parent, agent nào override. |
-| `/subagents` | Catalog/admin agents | Xem builtin agents và `company-*` agents. |
+| `/subagents` | Catalog/admin agents | Xem builtin agents và `piagent-*` agents. |
 | `/subagents-fleet` | Dashboard đội child sessions | Follow background/parallel runs, xem active/done/result. |
 | `/subagent-cost` | Token/cost subagents | Xem usage của child runs nếu package/provider expose stats. |
 | `/run` | Chạy một agent | Dùng cho scout/planner/worker/reviewer riêng context. |
@@ -129,7 +129,7 @@ Giải nghĩa nhanh:
 Nếu cần bản tổng hợp cho team mới:
 
 ```text
-/company-commands subagents
+/piagent-commands subagents
 ```
 
 ## Gọi subagent tự nhiên
@@ -155,9 +155,9 @@ Với workflow platform, còn có thể chỉ gọi:
 Parent agent sẽ tự quyết định:
 
 - không spawn nếu task nhỏ;
-- spawn bounded `company-scout` nếu cần map source/spec;
-- spawn bounded `company-planner` nếu cần plan medium/high-risk;
-- spawn bounded `company-reviewer` trước final nếu diff không nhỏ;
+- spawn bounded `piagent-scout` nếu cần map source/spec;
+- spawn bounded `piagent-planner` nếu cần plan medium/high-risk;
+- spawn bounded `piagent-reviewer` trước final nếu diff không nhỏ;
 - dùng builtin `researcher` nếu task cần external evidence và web tools available;
 - dùng builtin `context-builder` nếu task lớn cần handoff context;
 - dùng review lenses (`correctness`, `tests`, `scope`, optional `security/docs/release/package`) thay vì gọi review swarm chung chung;
@@ -181,29 +181,29 @@ Single agent:
 
 ```text
 /run scout "Map the auth flow and identify entry points."
-/run company-scout "Map FE routes related to listing search. Read-only."
-/run company-planner "Create implementation plan from context.md."
-/run company-worker "Implement the approved plan. Do not touch backend."
-/run company-reviewer "Review current diff against the task and verify evidence."
-/run company-oracle "Challenge this architecture choice before implementation."
+/run piagent-scout "Map FE routes related to listing search. Read-only."
+/run piagent-planner "Create implementation plan from context.md."
+/run piagent-worker "Implement the approved plan. Do not touch backend."
+/run piagent-reviewer "Review current diff against the task and verify evidence."
+/run piagent-oracle "Challenge this architecture choice before implementation."
 ```
 
 Parallel:
 
 ```text
-/parallel company-reviewer "Review correctness" -> company-reviewer "Review tests" -> company-reviewer "Review scope drift"
+/parallel piagent-reviewer "Review correctness" -> piagent-reviewer "Review tests" -> piagent-reviewer "Review scope drift"
 ```
 
 Chain:
 
 ```text
-/chain company-scout "Scout the target area" -> company-planner "Plan from {previous}" -> company-worker "Implement from {previous}" -> company-reviewer "Review the implementation"
+/chain piagent-scout "Scout the target area" -> piagent-planner "Plan from {previous}" -> piagent-worker "Implement from {previous}" -> piagent-reviewer "Review the implementation"
 ```
 
 Background:
 
 ```text
-/run company-scout "Map this module" --bg
+/run piagent-scout "Map this module" --bg
 /subagents-fleet
 ```
 
@@ -212,13 +212,13 @@ Background:
 Khi muốn chính xác:
 
 ```text
-subagent({ agent: "company-scout", task: "Map the auth flow. Read-only.", context: "fresh" })
+subagent({ agent: "piagent-scout", task: "Map the auth flow. Read-only.", context: "fresh" })
 ```
 
 Background:
 
 ```text
-subagent({ agent: "company-reviewer", task: "Review current diff", async: true })
+subagent({ agent: "piagent-reviewer", task: "Review current diff", async: true })
 subagent({ action: "status" })
 ```
 
@@ -244,25 +244,25 @@ Output/file controls:
 
 Use `outputMode=file-only` khi report dài để parent không bị nhồi full output vào context.
 
-## Company subagents
+## Piagent subagents
 
 Platform package exposes these package-level agents:
 
 | Agent | Role | Write? |
 |---|---|---|
-| `company-scout` | bounded repo mapping | no |
-| `company-planner` | implementation plan + verify gates | no |
-| `company-worker` | single-writer implementation | yes |
-| `company-reviewer` | review diff/policy/tests/scope | review-first, edit only if asked |
-| `company-oracle` | second opinion/risk challenge | no |
+| `piagent-scout` | bounded repo mapping | no |
+| `piagent-planner` | implementation plan + verify gates | no |
+| `piagent-worker` | single-writer implementation | yes |
+| `piagent-reviewer` | review diff/policy/tests/scope | review-first, edit only if asked |
+| `piagent-oracle` | second opinion/risk challenge | no |
 
 Default rule:
 
-- Use `company-scout` before touching unfamiliar code.
-- Use `company-planner` before medium/high-risk changes.
-- Use `company-worker` only for approved, bounded write tasks.
-- Use `company-reviewer` before final handoff.
-- Use `company-oracle` when architecture/product/risk is uncertain.
+- Use `piagent-scout` before touching unfamiliar code.
+- Use `piagent-planner` before medium/high-risk changes.
+- Use `piagent-worker` only for approved, bounded write tasks.
+- Use `piagent-reviewer` before final handoff.
+- Use `piagent-oracle` when architecture/product/risk is uncertain.
 
 ## Worktree isolation
 
@@ -278,14 +278,14 @@ Example:
 ```text
 subagent({
   tasks: [
-    { agent: "company-worker", task: "Implement feature A" },
-    { agent: "company-worker", task: "Implement feature B" }
+    { agent: "piagent-worker", task: "Implement feature A" },
+    { agent: "piagent-worker", task: "Implement feature B" }
   ],
   worktree: true
 })
 ```
 
-For normal solo/internal workflow, prefer one `company-worker` plus parallel read-only reviewers.
+For normal solo/internal workflow, prefer one `piagent-worker` plus parallel read-only reviewers.
 
 ## Watchdog opt-in
 
@@ -315,7 +315,7 @@ Khi team có nhiều provider/quota:
 Model scope platform vẫn có thể enforce bằng:
 
 ```bash
-pi-company-subagents --preset safe --model-scope company
+piagent-subagents --preset safe --model-scope piagent
 ```
 
 ## Cost/token controls
@@ -324,7 +324,7 @@ Use:
 
 ```text
 /subagent-cost
-/company-usage
+/piagent-usage
 /session
 ```
 
@@ -332,10 +332,10 @@ Recommended token policy:
 
 - default `safe` preset;
 - do not set `asyncByDefault` unless anh intentionally wants background-heavy workflow;
-- keep `/company-orchestration` at `solo-first` unless team has a measured reason to change it;
+- keep `/piagent-orchestration` at `solo-first` unless team has a measured reason to change it;
 - one writer at a time;
 - parallel reviewers/scouts are OK;
-- use `company-scout`/`company-planner` to compress context before handing off to `company-worker`;
+- use `piagent-scout`/`piagent-planner` to compress context before handing off to `piagent-worker`;
 - run `/subagents-fleet` to inspect background runs instead of asking parent model to recall everything.
 
 ## Nguồn

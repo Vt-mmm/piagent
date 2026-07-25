@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import {
   redactForStorage,
   redactSensitiveText
-} from "../packages/pi-company-core/extensions/redaction-core.js";
+} from "../packages/piagent-core/extensions/redaction-core.js";
 
 describe("sensitive text redaction", () => {
   const joined = (...parts) => parts.join("");

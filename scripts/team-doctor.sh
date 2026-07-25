@@ -14,7 +14,7 @@ Checks:
   - Foreign skill directories wired into .pi/settings.json skills
   - Agent instruction files this platform does not read
   - Project .pi/settings.json package source
-  - Project company profile
+  - Project piagent profile
   - No local-machine paths in share-critical files when --strict-share is used
 USAGE
 }
@@ -58,7 +58,7 @@ const [platformRoot, projectPath, strictShareRaw] = process.argv.slice(2);
 const strictShare = strictShareRaw === "true";
 const errors = [];
 const warnings = [];
-const { verifyCapabilityLock } = await import(pathToFileURL(path.join(platformRoot, "packages", "pi-company-core", "capabilities", "capability-core.js")).href);
+const { verifyCapabilityLock } = await import(pathToFileURL(path.join(platformRoot, "packages", "piagent-core", "capabilities", "capability-core.js")).href);
 
 function exists(rel) {
   return fs.existsSync(path.join(platformRoot, rel));
@@ -148,20 +148,20 @@ if (!runtime.teamRolloutReady) {
 
 for (const rel of [
   "package.json",
-  "packages/pi-company-core/extensions/company-guard.ts",
-  "packages/pi-company-core/prompts/onboard-project.md",
-  "packages/pi-company-core/prompts/memory-policy.md",
-  "packages/pi-company-core/prompts/platform-improve.md",
-  "packages/pi-company-core/prompts/be-to-fe.md",
-  "packages/pi-company-core/prompts/task.md",
-  "packages/pi-company-core/prompts/discuss.md",
-  "packages/pi-company-core/subagents/company-scout.md",
-  "packages/pi-company-core/subagents/company-planner.md",
-  "packages/pi-company-core/subagents/company-worker.md",
-  "packages/pi-company-core/subagents/company-reviewer.md",
-  "packages/pi-company-core/subagents/company-oracle.md",
+  "packages/piagent-core/extensions/piagent-guard.ts",
+  "packages/piagent-core/prompts/onboard-project.md",
+  "packages/piagent-core/prompts/memory-policy.md",
+  "packages/piagent-core/prompts/platform-improve.md",
+  "packages/piagent-core/prompts/be-to-fe.md",
+  "packages/piagent-core/prompts/task.md",
+  "packages/piagent-core/prompts/discuss.md",
+  "packages/piagent-core/subagents/piagent-scout.md",
+  "packages/piagent-core/subagents/piagent-planner.md",
+  "packages/piagent-core/subagents/piagent-worker.md",
+  "packages/piagent-core/subagents/piagent-reviewer.md",
+  "packages/piagent-core/subagents/piagent-oracle.md",
   "templates/project/.pi/settings.json",
-  "templates/project/.pi/company-profile.json",
+  "templates/project/.pi/piagent-profile.json",
   "templates/project/.mcp.json",
   "templates/project/.pi/mcp.json",
   "templates/project/.pi/project-context.md",
@@ -244,13 +244,13 @@ const mcpFiles = [
 const mcp = mcpFiles.map(mcpSummary);
 const totalMcpServers = mcp.reduce((sum, item) => sum + item.serverCount, 0);
 if (piHasMcpAdapter && totalMcpServers === 0) {
-  warnings.push("Pi MCP adapter is installed but no MCP servers are configured; run `pi-company-mcp --preset core --scope global` or `/mcp setup`");
+  warnings.push("Pi MCP adapter is installed but no MCP servers are configured; run `piagent-mcp --preset core --scope global` or `/mcp setup`");
 }
 
 const subagentConfigPath = path.join(process.env.PI_CODING_AGENT_DIR || path.join(process.env.HOME || "", ".pi", "agent"), "extensions", "subagent", "config.json");
 const subagentConfig = readJsonIfPresent(subagentConfigPath);
 if (piHasSubagents && !subagentConfig) {
-  warnings.push("Pi subagents package is installed but config is missing; run `pi-company-subagents --preset safe`");
+  warnings.push("Pi subagents package is installed but config is missing; run `piagent-subagents --preset safe`");
 }
 if (subagentConfig && subagentConfig.toolDescriptionMode !== "compact") {
   warnings.push("Pi subagents toolDescriptionMode is not compact; token use may be higher");
@@ -267,7 +267,7 @@ if (fs.existsSync(projectSettingsPath)) {
   const declaredSource = packages.find((source) => typeof source === "string" && source.length > 0);
   if (declaredSource) projectPackageSource = declaredSource;
   for (const source of packages) {
-    if (typeof source === "string" && source.includes("__PI_COMPANY_PACKAGE_SOURCE__")) {
+    if (typeof source === "string" && source.includes("__PIAGENT_PACKAGE_SOURCE__")) {
       errors.push("project .pi/settings.json still has package source placeholder");
     }
     if (strictShare && typeof source === "string" && source.startsWith("/")) {
@@ -310,7 +310,7 @@ if (foreignAgentConfig.length > 0) {
   warnings.push(`project has agent instruction files this platform does not read: ${foreignAgentConfig.join(", ")}; onboarding uses AGENTS.md, so their rules are not enforced`);
 }
 
-const projectProfilePath = path.join(projectPath, ".pi", "company-profile.json");
+const projectProfilePath = path.join(projectPath, ".pi", "piagent-profile.json");
 let projectProfile = null;
 if (fs.existsSync(projectProfilePath)) {
   const profile = readJson(projectProfilePath);
@@ -326,7 +326,7 @@ if (fs.existsSync(projectProfilePath)) {
     warnings.push("project profile does not require .pi/project-context.md");
   }
   if (Array.isArray(profile.capabilityPacks)) {
-    const projectLockPath = path.join(projectPath, ".pi", "company-profile.lock.json");
+    const projectLockPath = path.join(projectPath, ".pi", "piagent-profile.lock.json");
     if (!fs.existsSync(projectLockPath)) {
       errors.push("project capability lock is missing");
     } else {
@@ -342,7 +342,7 @@ if (fs.existsSync(projectProfilePath)) {
     warnings.push("project profile uses the legacy capability contract; apply a current profile to create a capability lock");
   }
 } else {
-  warnings.push("project has no .pi/company-profile.json");
+  warnings.push("project has no .pi/piagent-profile.json");
 }
 
 const projectContextPath = path.join(projectPath, ".pi", "project-context.md");
@@ -408,7 +408,7 @@ if (strictShare) {
     "templates/project/.pi/settings.json",
     "templates/project/.pi/context-index.json",
     "templates/global/settings.json",
-    "packages/pi-company-core/skills/company-source-cache/SKILL.md"
+    "packages/piagent-core/skills/piagent-source-cache/SKILL.md"
   ];
   const forbidden = [
     /\/Users\/[^/\s]+\/Documents\/Working\b/,

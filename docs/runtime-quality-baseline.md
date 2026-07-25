@@ -21,12 +21,12 @@ Trạng thái hiện tại: platform đã có runtime modules đủ cho guarded 
 Tool:
 
 ```text
-company_permission_status
+piagent_permission_status
 ```
 
 Runtime behavior:
 
-- `read-only` chặn shell, write/edit, và unknown non-company tools;
+- `read-only` chặn shell, write/edit, và unknown non-piagent tools;
 - `workspace-write` là default cho implementation có guard;
 - `trusted-full-access` nới tool/scope autonomy trong môi trường trusted nhưng không tắt protected paths, redaction, capability lock, hoặc human gate cho destructive/external action.
 - `/full-access <task>` bật `trusted-full-access` cho session hiện tại rồi gửi phần task còn lại cho agent; `/permission-status` hiển thị mode và boundary đang active.
@@ -36,7 +36,7 @@ Runtime behavior:
 Tool:
 
 ```text
-company_exec_policy_check
+piagent_exec_policy_check
 ```
 
 Runtime behavior:
@@ -54,7 +54,7 @@ Runtime behavior:
 Config:
 
 ```text
-packages/pi-company-core/policies/base-policy.json
+packages/piagent-core/policies/base-policy.json
 ```
 
 Mục tiêu không phải cấm mọi command mạnh hoặc thay thế sandbox OS. Đây là lớp phanh chống tai nạn: giảm rủi ro agent tự ý chạy lệnh có tác động cao, đọc secret, hoặc đụng protected path mà thiếu policy/human gate.
@@ -64,7 +64,7 @@ Mục tiêu không phải cấm mọi command mạnh hoặc thay thế sandbox O
 Tool:
 
 ```text
-company_context_budget
+piagent_context_budget
 ```
 
 Runtime behavior:
@@ -92,13 +92,13 @@ Context nên được chọn theo profile/task, không đọc tràn toàn repo.
 Tool:
 
 ```text
-company_tool_policy_check
+piagent_tool_policy_check
 ```
 
 Runtime behavior:
 
 - map tools sang capability như `filesystem-readonly`, `filesystem-write`, `shell`, `github`, `browser`;
-- `company_*` tools luôn allowed;
+- `piagent_*` tools luôn allowed;
 - default `advisory` để không phá Pi runtime khi tool names thay đổi;
 - project ổn định có thể nâng `toolRegistry=enforce`.
 
@@ -122,7 +122,7 @@ Profile capability ví dụ:
 Tool:
 
 ```text
-company_task_gate_check
+piagent_task_gate_check
 ```
 
 Runtime behavior:
@@ -131,11 +131,11 @@ Runtime behavior:
 - kiểm tra context manifest;
 - kiểm tra verify evidence đã đối chiếu với Pi `bash` `tool_result` thật;
 - yêu cầu observed passing verify khớp exact `task.verifyCommands` khi task có source changes;
-- block `company_trace_record completed` nếu final gate đang enforce và proof chưa đủ.
+- block `piagent_trace_record completed` nếu final gate đang enforce và proof chưa đủ.
 
-Agent vẫn phải gọi `company_task_gate_check` trước final handoff.
+Agent vẫn phải gọi `piagent_task_gate_check` trước final handoff.
 
-`company_verify_record` không còn tin `exitCode` tự khai báo. Lệnh verify phải khớp một bash tool result đã quan sát sau `task.createdAt`, và claimed `exitCode` phải khớp trạng thái `isError` của Pi. Observed result được ghi vào `.pi/company-state/observed-bash.jsonl` để parent/subagent process có thể share evidence trong cùng project cwd.
+`piagent_verify_record` không còn tin `exitCode` tự khai báo. Lệnh verify phải khớp một bash tool result đã quan sát sau `task.createdAt`, và claimed `exitCode` phải khớp trạng thái `isError` của Pi. Observed result được ghi vào `.pi/piagent-state/observed-bash.jsonl` để parent/subagent process có thể share evidence trong cùng project cwd.
 
 Gate phân biệt hai mức:
 
@@ -146,19 +146,19 @@ Gate phân biệt hai mức:
 
 Guard state tự bảo vệ:
 
-- raw path-like access vào `.pi/company-state/**` bị block trước khi tool chạy;
-- raw path-like access vào `.pi/company-profile.json` bị block trước khi tool chạy;
+- raw path-like access vào `.pi/piagent-state/**` bị block trước khi tool chạy;
+- raw path-like access vào `.pi/piagent-profile.json` bị block trước khi tool chạy;
 - Pi built-ins `read`, `write`, `edit`, `grep`, `find`, `ls` đi qua cùng protected-path gate;
 - custom/MCP tools cũng bị block nếu tool call chứa path-like string trỏ vào protected path, kể cả nested object, array, và `file://` URI;
 - path-like string được percent-decode một lần trước khi match, nên `%2Eenv` và `.%65nv` không đi vòng qua guard;
 - tool input lồng quá sâu vượt `MAX_TOOL_INPUT_INSPECTION_DEPTH=32` sẽ fail-closed;
 - generic extractor chỉ skip leaf field nội dung đã biết như `content`, `query`, `pattern`, `text`, và `command`;
-- `grep.glob` và `find.pattern` bị block khi pattern nhắm protected path rõ ràng như `.env*`, `auth.json`, `.pi/company-state/**`, hoặc `company-profile.json`; broad glob như `*.json` được phép và để result backstop xử lý;
+- `grep.glob` và `find.pattern` bị block khi pattern nhắm protected path rõ ràng như `.env*`, `auth.json`, `.pi/piagent-state/**`, hoặc `piagent-profile.json`; broad glob như `*.json` được phép và để result backstop xử lý;
 - broad `grep`, `find`, và `ls` sweep có thêm `tool_result` backstop để redact content line hoặc path metadata từ protected files;
 - mọi text block trong `tool_result` và string leaf trong JSON-like `details` có thêm shared sensitive-data redaction; key như `password`, `token`, `credential` được dùng làm context phát hiện;
 - `npm run benchmark:redaction` gate contextual recall, benign preservation, structured objects/arrays, và large-output correctness bằng synthetic data; opaque entropy không có credential context được báo riêng và không gate release;
 - bash evidence chỉ giữ command text đã redact ở memory/disk; raw command hash vẫn dùng để exact-match verify evidence;
-- `company_task_start`, `company_verify_record`, và `tool_result` hook vẫn ghi state được qua internal extension path.
+- `piagent_task_start`, `piagent_verify_record`, và `tool_result` hook vẫn ghi state được qua internal extension path.
 
 ## 5. Local verification
 

@@ -7,7 +7,7 @@ Usage:
   scripts/install-global.sh [--stable|--dev|--local|--channel <stable|dev|local>] [--version <tag>] [--resolve-tag] [--package-source <source>] [--dry-run] [--with-mcp] [--mcp-preset <preset>] [--with-subagents] [--subagents-preset <preset>] [--with-web-access] [--with-herdr] [--model-scope <preset>]
 
 Purpose:
-  Install the company Pi package into the current user's global Pi settings.
+  Install the piagent Pi package into the current user's global Pi settings.
 
 Package source examples:
   # Recommended stable install: exact current release tag
@@ -21,10 +21,10 @@ Package source examples:
   scripts/install-global.sh --stable --dry-run
 
   # Exact sources for reviewed/team rollout:
-  git:github.com/Vt-mmm/pi_agent@vX.Y.Z
-  https://github.com/Vt-mmm/pi_agent/archive/refs/tags/vX.Y.Z.tar.gz
-  npm:@company/pi-agent-platform@x.y.z
-  /absolute/path/to/pi_agent
+  git:github.com/Vt-mmm/piagent@vX.Y.Z
+  https://github.com/Vt-mmm/piagent/archive/refs/tags/vX.Y.Z.tar.gz
+  npm:@your-scope/platform@x.y.z
+  /absolute/path/to/piagent
 
   # Personal/sandbox moving source:
   scripts/install-global.sh --dev
@@ -44,12 +44,12 @@ USAGE
 PLATFORM_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CURRENT_RELEASE_TAG=""
 EXPECTED_PI_VERSION=""
-EXPECTED_RELEASE_COMMIT="${PI_COMPANY_EXPECTED_RELEASE_COMMIT:-}"
-DEFAULT_REPO_SOURCE="git:github.com/Vt-mmm/pi_agent"
-DEFAULT_REPO_REMOTE_URL="https://github.com/Vt-mmm/pi_agent.git"
-PACKAGE_SOURCE="${PI_COMPANY_PACKAGE_SOURCE:-}"
-PACKAGE_VERSION="${PI_COMPANY_PACKAGE_VERSION:-}"
-RELEASE_CHANNEL="${PI_COMPANY_RELEASE_CHANNEL:-}"
+EXPECTED_RELEASE_COMMIT="${PIAGENT_EXPECTED_RELEASE_COMMIT:-}"
+DEFAULT_REPO_SOURCE="git:github.com/Vt-mmm/piagent"
+DEFAULT_REPO_REMOTE_URL="https://github.com/Vt-mmm/piagent.git"
+PACKAGE_SOURCE="${PIAGENT_PACKAGE_SOURCE:-}"
+PACKAGE_VERSION="${PIAGENT_PACKAGE_VERSION:-}"
+RELEASE_CHANNEL="${PIAGENT_RELEASE_CHANNEL:-}"
 WITH_MCP=false
 MCP_PRESET="core"
 WITH_SUBAGENTS=false
@@ -133,7 +133,7 @@ warn_runtime_surface_if_needed() {
   case "$surface" in
     *"supported target"*|*"experimental"*|*"not release-gated"*|*"outside v0.4.8 release matrix"*)
       echo "WARN: runtime surface is $surface." >&2
-      echo "WARN: For team rollout, run pi-company-doctor plus the project smoke/verify suite on this machine before relying on it." >&2
+      echo "WARN: For team rollout, run piagent-doctor plus the project smoke/verify suite on this machine before relying on it." >&2
       ;;
   esac
 }
@@ -153,7 +153,7 @@ claim_cli_package_selector() {
   RELEASE_CHANNEL=""
 }
 
-case "${PI_COMPANY_DRY_RUN:-}" in
+case "${PIAGENT_DRY_RUN:-}" in
   1|true|TRUE|yes|YES)
     DRY_RUN=true
     ;;
@@ -401,7 +401,7 @@ resolve_package_source() {
       PACKAGE_SOURCE="$PLATFORM_ROOT"
       RESOLVED_CHANNEL_LABEL="local"
       echo "WARN: No exact package source provided. Installing from local path." >&2
-      echo "WARN: For team rollout, pass --stable, --version vX.Y.Z, or --package-source git:github.com/Vt-mmm/pi_agent@TAG." >&2
+      echo "WARN: For team rollout, pass --stable, --version vX.Y.Z, or --package-source git:github.com/Vt-mmm/piagent@TAG." >&2
       ;;
     *)
       echo "FAIL: unsupported release channel: $RELEASE_CHANNEL" >&2
@@ -415,7 +415,7 @@ resolve_package_source
 
 if [[ -n "$EXPECTED_RELEASE_COMMIT" ]]; then
   if [[ ! "$EXPECTED_RELEASE_COMMIT" =~ ^[0-9a-fA-F]{40}$ ]]; then
-    echo "FAIL: PI_COMPANY_EXPECTED_RELEASE_COMMIT must be a 40-character commit SHA." >&2
+    echo "FAIL: PIAGENT_EXPECTED_RELEASE_COMMIT must be a 40-character commit SHA." >&2
     exit 2
   fi
   normalized_resolved_commit="$(printf '%s' "$RESOLVED_PACKAGE_COMMIT" | tr '[:upper:]' '[:lower:]')"
@@ -454,7 +454,7 @@ else
   fi
 fi
 
-echo "Installing Pi Company Platform package:"
+echo "Installing Pi Agent Platform package:"
 echo "  channel: $RESOLVED_CHANNEL_LABEL"
 echo "  currentRelease: $CURRENT_RELEASE_TAG (helper package version)"
 echo "  runtime: $CURRENT_RUNTIME_SURFACE"

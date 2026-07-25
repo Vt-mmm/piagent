@@ -20,12 +20,12 @@ cat > "$PROJECT/AGENTS.md" <<'AGENTS'
 Use project profile and verify before done.
 AGENTS
 
-bash "$ROOT/scripts/init-project.sh" "$PROJECT" --profile generic --package-source "git:github.com/Vt-mmm/pi_agent@v${PLATFORM_VERSION}" >/dev/null
+bash "$ROOT/scripts/init-project.sh" "$PROJECT" --profile generic --package-source "git:github.com/Vt-mmm/piagent@v${PLATFORM_VERSION}" >/dev/null
 bash "$ROOT/scripts/profile-doctor.sh" "$PROJECT" >/dev/null
 bash "$ROOT/scripts/quality-benchmark.sh" "$PROJECT" --init >/dev/null
 bash "$ROOT/scripts/quality-benchmark.sh" "$PROJECT" --record --scenario smoke --surface pi --result pass --tokens 1 --verify "test -s README.md" >/dev/null
 
-node --input-type=module - "$PROJECT/.pi/company-profile.json" "$PROJECT/.pi/benchmarks/quality-runs.jsonl" <<'NODE'
+node --input-type=module - "$PROJECT/.pi/piagent-profile.json" "$PROJECT/.pi/benchmarks/quality-runs.jsonl" <<'NODE'
 import fs from "node:fs";
 
 const [profilePath, benchmarkPath] = process.argv.slice(2);

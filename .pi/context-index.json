@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "projectId": "pi-company-platform",
+  "projectId": "piagent-platform",
   "profileMode": "platform-development",
   "source": "manual",
-  "summary": "Compact advisory context index for the Pi Company Platform repository. Use it to navigate profile, runtime package, docs, scripts, verification, and release surfaces; verify cited files before editing.",
+  "summary": "Compact advisory context index for the Pi Agent Platform repository. Use it to navigate profile, runtime package, docs, scripts, verification, and release surfaces; verify cited files before editing.",
   "generatedAt": "2026-07-23T16:38:30Z",
   "updatedAt": "2026-07-23T16:38:30Z",
   "policy": {
@@ -21,15 +21,15 @@
       "id": "profile:platform-development",
       "kind": "profile",
       "label": "platform-development",
-      "summary": "Repository-local profile for Pi Company Platform development and release verification.",
-      "path": ".pi/company-profile.json",
+      "summary": "Repository-local profile for Pi Agent Platform development and release verification.",
+      "path": ".pi/piagent-profile.json",
       "tags": [
         "profile",
         "platform"
       ],
       "citations": [
         {
-          "path": ".pi/company-profile.json",
+          "path": ".pi/piagent-profile.json",
           "reason": "Active project profile"
         }
       ],
@@ -56,9 +56,9 @@
     {
       "id": "module:runtime-package",
       "kind": "module",
-      "label": "packages/pi-company-core",
+      "label": "packages/piagent-core",
       "summary": "Reusable Pi package content: guard extension, prompts, skills, subagents, policies, and capability logic.",
-      "path": "packages/pi-company-core",
+      "path": "packages/piagent-core",
       "tags": [
         "runtime",
         "package",
@@ -66,7 +66,7 @@
       ],
       "citations": [
         {
-          "path": "packages/pi-company-core/README.md",
+          "path": "packages/piagent-core/README.md",
           "reason": "Package tool/prompt overview"
         }
       ],
@@ -119,7 +119,7 @@
       ],
       "citations": [
         {
-          "path": ".pi/company-profile.json",
+          "path": ".pi/piagent-profile.json",
           "reason": "verifyCommands.source"
         }
       ],
@@ -136,7 +136,7 @@
       ],
       "citations": [
         {
-          "path": ".pi/company-profile.json",
+          "path": ".pi/piagent-profile.json",
           "reason": "protectedPaths"
         },
         {
@@ -187,7 +187,7 @@
   ],
   "citations": [
     {
-      "path": ".pi/company-profile.json",
+      "path": ".pi/piagent-profile.json",
       "reason": "Active profile and verify policy"
     },
     {

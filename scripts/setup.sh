@@ -28,7 +28,7 @@ Options:
                                   Install/skip pi-subagents during global install (default: install)
   --subagents-preset <minimal|safe|async|parallel>
                                   Configure pi-subagents runtime baseline (default: safe)
-  --subagents-model-scope <none|company|codex|claude>
+  --subagents-model-scope <none|piagent|codex|claude>
                                   Optional subagent model allowlist (default: none)
   --with-web-access               Install pi-web-access for builtin `researcher` subagent (default: skip)
   --with-herdr / --no-herdr      Install/skip Herdr Pi integration if herdr exists (default: install)
@@ -38,7 +38,7 @@ Options:
                                   Configure default provider/model/thinking (default: openai-codex/gpt-5.5:xhigh)
   --no-model-scope               Skip global model-scope configuration
   --install-pi / --no-install-pi Install/skip Pi CLI with npm if `pi` is missing (default: install)
-  --force-profile                Replace existing project .pi/company-profile.json
+  --force-profile                Replace existing project .pi/piagent-profile.json
   --force-settings               Replace existing project .pi/settings.json
   --force                        Replace both profile and settings
   --skip-agents                  Do not create AGENTS.md
@@ -48,23 +48,23 @@ Options:
 
 Package source examples:
   # Moving latest for a personal machine or sandbox only:
-  pi install git:github.com/Vt-mmm/pi_agent
+  pi install git:github.com/Vt-mmm/piagent
 
   # Exact sources for .pi/settings.json and capability lock:
-  git:github.com/Vt-mmm/pi_agent@vX.Y.Z
-  https://github.com/Vt-mmm/pi_agent/archive/refs/tags/vX.Y.Z.tar.gz
-  npm:@company/pi-agent-platform@x.y.z
-  /absolute/path/to/pi_agent
+  git:github.com/Vt-mmm/piagent@vX.Y.Z
+  https://github.com/Vt-mmm/piagent/archive/refs/tags/vX.Y.Z.tar.gz
+  npm:@your-scope/platform@x.y.z
+  /absolute/path/to/piagent
 
 One-command team setup example:
-  bash /path/to/pi_agent/scripts/setup.sh . --profile auto --package-source git:github.com/Vt-mmm/pi_agent@vX.Y.Z
+  bash /path/to/piagent/scripts/setup.sh . --profile auto --package-source git:github.com/Vt-mmm/piagent@vX.Y.Z
 USAGE
 }
 
 PLATFORM_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT_PATH=""
 PROFILE_INPUT="auto"
-PACKAGE_SOURCE="${PI_COMPANY_PACKAGE_SOURCE:-}"
+PACKAGE_SOURCE="${PIAGENT_PACKAGE_SOURCE:-}"
 DO_GLOBAL=true
 DO_PROJECT=true
 WITH_MCP=true
@@ -350,7 +350,7 @@ fi
 
 PACKAGE_SOURCE="$(resolve_package_source)"
 
-echo "Pi Company Platform setup"
+echo "Pi Agent Platform setup"
 echo "  platform: $PLATFORM_ROOT"
 echo "  packageSource: $PACKAGE_SOURCE"
 echo "  globalInstall: $DO_GLOBAL"

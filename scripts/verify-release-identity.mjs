@@ -42,20 +42,20 @@ function parseArguments(values) {
 
 const options = parseArguments(process.argv.slice(2));
 const rootPackage = readJson("package.json");
-const corePackage = readJson("packages/pi-company-core/package.json");
+const corePackage = readJson("packages/piagent-core/package.json");
 const packageLock = readJson("package-lock.json");
-const capabilityLock = readJson(".pi/company-profile.lock.json");
+const capabilityLock = readJson(".pi/piagent-profile.lock.json");
 const version = rootPackage.version;
 const expectedTag = `v${version}`;
 
-if (rootPackage.name !== "pi-agent-platform" || rootPackage.private !== true) fail("root package identity must remain private pi-agent-platform");
-if (rootPackage.repository?.url !== "https://github.com/Vt-mmm/pi_agent.git") fail("root package repository URL is not canonical");
+if (rootPackage.name !== "@piagent/platform" || rootPackage.private !== true) fail("root package identity must remain private @piagent/platform");
+if (rootPackage.repository?.url !== "https://github.com/Vt-mmm/piagent.git") fail("root package repository URL is not canonical");
 if (rootPackage.dependencies && Object.keys(rootPackage.dependencies).length > 0) fail("root package has unexpected runtime dependencies");
 if (packageLock.name !== rootPackage.name || packageLock.packages?.[""]?.name !== rootPackage.name) fail("package-lock root identity does not match package.json");
 if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version ?? "")) fail("package.json version is not a supported release version");
 if (corePackage.version !== version) fail("root and core package versions do not match");
 if (packageLock.packages?.[""]?.version !== version) fail("package-lock root version does not match package.json");
-if (packageLock.packages?.["packages/pi-company-core"]?.version !== version) fail("package-lock core version does not match package.json");
+if (packageLock.packages?.["packages/piagent-core"]?.version !== version) fail("package-lock core version does not match package.json");
 if (capabilityLock.core?.packageVersion !== version) fail("capability lock packageVersion does not match package.json");
 
 const changelog = fs.readFileSync(path.join(root, "CHANGELOG.md"), "utf8");

@@ -6,7 +6,7 @@ Security fixes are provided for the latest published release only. Older release
 
 ## Report a vulnerability privately
 
-Do not open a public issue for a suspected vulnerability. Use [GitHub private vulnerability reporting](https://github.com/Vt-mmm/pi_agent/security/advisories/new) so maintainers can investigate before details are disclosed.
+Do not open a public issue for a suspected vulnerability. Use [GitHub private vulnerability reporting](https://github.com/Vt-mmm/piagent/security/advisories/new) so maintainers can investigate before details are disclosed.
 
 Include:
 
@@ -29,7 +29,7 @@ In scope:
 - installer, release identity, packaged-artifact, or dependency provenance issues;
 - unintended publication of credentials or local runtime state by project templates or package output.
 
-The Company guard is an application-level policy enforcement layer, not an operating-system security boundary. Pi packages and trusted repository code run with the operator's OS permissions. A process, dependency, interpreter payload, or tool path outside the guard's observation can access anything allowed by those permissions. Untrusted repositories, prompts, and workloads require a separate container or VM with filesystem, process, network, and credential isolation.
+The Piagent guard is an application-level policy enforcement layer, not an operating-system security boundary. Pi packages and trusted repository code run with the operator's OS permissions. A process, dependency, interpreter payload, or tool path outside the guard's observation can access anything allowed by those permissions. Untrusted repositories, prompts, and workloads require a separate container or VM with filesystem, process, network, and credential isolation.
 
 Reports that apply only to an upstream dependency should also be coordinated with that upstream maintainer. Public feature requests, documentation corrections without security impact, and attacks that already require full control of the trusted operating-system account are normally outside this policy.
 

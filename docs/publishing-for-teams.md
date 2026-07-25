@@ -11,7 +11,7 @@ Team khác có thể cài cùng một Pi platform mà không lấy secret của 
 Dùng tag hoặc reviewed commit cho team/repo cần reproducible lock:
 
 ```bash
-pi install git:github.com/Vt-mmm/pi_agent@vX.Y.Z
+pi install git:github.com/Vt-mmm/piagent@vX.Y.Z
 ```
 
 Pin tag hoặc commit cho `.pi/settings.json` đã commit vào project. Luồng cài host, terminal helper, Pi package, update và rollback canonical nằm tại [release/install policy](release-install-policy.md).
@@ -19,7 +19,7 @@ Pin tag hoặc commit cho `.pi/settings.json` đã commit vào project. Luồng 
 Moving latest chỉ dành cho máy cá nhân hoặc sandbox chấp nhận thay đổi không đồng bộ:
 
 ```bash
-pi install git:github.com/Vt-mmm/pi_agent
+pi install git:github.com/Vt-mmm/piagent
 ```
 
 ### npm private package
@@ -27,7 +27,7 @@ pi install git:github.com/Vt-mmm/pi_agent
 Dùng khi muốn version/publish chuẩn:
 
 ```bash
-pi install npm:@company/pi-agent-platform@x.y.z
+pi install npm:@your-scope/platform@x.y.z
 ```
 
 ### Local path
@@ -35,7 +35,7 @@ pi install npm:@company/pi-agent-platform@x.y.z
 Dùng khi dev platform trên một máy, không commit source này vào project team:
 
 ```bash
-pi install /path/to/pi_agent
+pi install /path/to/piagent
 ```
 
 ## Versioning

@@ -6,7 +6,7 @@ Pi core không hard-code MCP. Platform của mình cài `pi-mcp-adapter` để P
 
 Từ `v0.3.7`, repo có thêm:
 
-- `pi-company-mcp` / `scripts/configure-mcp.sh`;
+- `piagent-mcp` / `scripts/configure-mcp.sh`;
 - MCP preset `core`, `popular`, `all`, `design`, `design-local`, `browser`, `docs`, `github`;
 - template `.mcp.json` project-shared;
 - doctor warning khi adapter có nhưng không có MCP server nào.
@@ -16,25 +16,25 @@ Từ `v0.3.7`, repo có thêm:
 Global install mặc định sẽ cài adapter và seed preset `core` nếu dùng `scripts/setup.sh` hoặc `scripts/install-global.sh --with-mcp`:
 
 ```bash
-bash /path/to/pi_agent/scripts/setup.sh . \
+bash /path/to/piagent/scripts/setup.sh . \
   --profile auto \
-  --package-source git:github.com/Vt-mmm/pi_agent@vX.Y.Z \
+  --package-source git:github.com/Vt-mmm/piagent@vX.Y.Z \
   --mcp-preset core
 ```
 
 Chỉnh MCP sau này:
 
 ```bash
-pi-company-mcp --preset popular --scope global --replace
-pi-company-mcp --preset design --scope global --replace
-pi-company-mcp --preset all --scope project --project /path/to/project
-pi-company-mcp --list
+piagent-mcp --preset popular --scope global --replace
+piagent-mcp --preset design --scope global --replace
+piagent-mcp --preset all --scope project --project /path/to/project
+piagent-mcp --list
 ```
 
 Nếu clone repo GitHub và chưa link npm bin:
 
 ```bash
-bash /path/to/pi_agent/scripts/configure-mcp.sh --preset popular --scope global --replace
+bash /path/to/piagent/scripts/configure-mcp.sh --preset popular --scope global --replace
 ```
 
 `--replace` cập nhật các server ID thuộc preset về baseline đã pin và vẫn giữ nguyên server ID khác. Luồng install/upgrade toàn cục luôn dùng chế độ này để không duy trì dependency động từ cấu hình cũ.
@@ -229,15 +229,15 @@ Preset mặc định chạy GitHub MCP ở read-only và lockdown mode. Bất k�
 
 ## Tool policy
 
-Runtime tool registry nằm trong `packages/pi-company-core/policies/base-policy.json`.
+Runtime tool registry nằm trong `packages/piagent-core/policies/base-policy.json`.
 
 Tool:
 
 ```text
-company_tool_policy_check
+piagent_tool_policy_check
 ```
 
-Default `toolRegistry=advisory`: agent nhận warning khi tool chưa map capability. Project ổn định có thể bật `toolRegistry=enforce` trong `.pi/company-profile.json`.
+Default `toolRegistry=advisory`: agent nhận warning khi tool chưa map capability. Project ổn định có thể bật `toolRegistry=enforce` trong `.pi/piagent-profile.json`.
 
 Protected-path gate độc lập với registry mode. Dù tool registry đang `advisory`, mọi raw tool call có path-like string trỏ vào protected path sẽ bị block trước khi tool chạy. Cơ chế này áp dụng cho Pi built-ins (`read`, `write`, `edit`, `grep`, `find`, `ls`) và custom/MCP tools nếu tool call đi qua Pi `tool_call` hook.
 
@@ -245,7 +245,7 @@ Extractor walk nested object/array và `file://` URI. Path-like string được 
 
 Search/list channels cũng được kiểm:
 
-- `grep.glob` bị block nếu glob nhắm protected path rõ ràng như `.env*`, `auth.json`, `.pi/company-state/**`, hoặc `company-profile.json`;
+- `grep.glob` bị block nếu glob nhắm protected path rõ ràng như `.env*`, `auth.json`, `.pi/piagent-state/**`, hoặc `piagent-profile.json`;
 - `find.pattern` bị block nếu pattern nhắm protected path rõ ràng;
 - broad pattern như `*.json` được phép để không phá search workflow phổ biến;
 - broad `grep/find/ls` được phép chạy khi không target trực tiếp, nhưng `tool_result` sẽ redact content line hoặc path metadata từ protected files trước khi model thấy output.
@@ -272,27 +272,27 @@ Search/list channels cũng được kiểm:
 
 | Tool | Intent |
 |---|---|
-| `company_context` | Active profile/context/verify/MCP/memory overview. |
-| `company_exec_policy_check` | Evaluate shell command before running. |
-| `company_context_budget` | Check candidate context files against hard caps. |
-| `company_tool_policy_check` | Check tool capability registration. |
-| `company_task_gate_check` | Check task readiness before final DONE. |
-| `company_memory_status` | Project memory policy/files/rules. |
-| `company_memory_search` | Keyword search `.pi/memory` markdown. |
-| `company_memory_note` | Append explicit durable memory note. |
-| `company_memory_citation_record` | Record memory evidence in task contract. |
-| `company_context_index_status` | Inspect the compact advisory project context index. |
-| `company_context_index_search` | Search context-index nodes before broad re-scouting. |
-| `company_context_index_record` | Record cited project/profile/tech/task context after onboarding or approved handoff. |
-| `company_profile_options` | Return reusable project profile choices. |
-| `company_profile_apply` | Apply a selected profile and deterministic capability lock. |
-| `company_profile_tech_options` | Return select-style tech options for a profile family. |
-| `company_profile_tech_apply` | Apply profile + selected role tech stack and Context7 placeholders. |
-| `company_profile_tech_context_record` | Record a concise Context7 evidence snapshot for a selected tech. |
-| `company_task_start` | Create Task Implementation Contract. |
-| `company_context_record` | Record context manifest for task. |
-| `company_verify_record` | Record verify evidence only when it matches an observed Pi bash result after task start. Passing gate also requires exact match with `task.verifyCommands`. |
-| `company_trace_record` | Record handoff/final trace. |
+| `piagent_context` | Active profile/context/verify/MCP/memory overview. |
+| `piagent_exec_policy_check` | Evaluate shell command before running. |
+| `piagent_context_budget` | Check candidate context files against hard caps. |
+| `piagent_tool_policy_check` | Check tool capability registration. |
+| `piagent_task_gate_check` | Check task readiness before final DONE. |
+| `piagent_memory_status` | Project memory policy/files/rules. |
+| `piagent_memory_search` | Keyword search `.pi/memory` markdown. |
+| `piagent_memory_note` | Append explicit durable memory note. |
+| `piagent_memory_citation_record` | Record memory evidence in task contract. |
+| `piagent_context_index_status` | Inspect the compact advisory project context index. |
+| `piagent_context_index_search` | Search context-index nodes before broad re-scouting. |
+| `piagent_context_index_record` | Record cited project/profile/tech/task context after onboarding or approved handoff. |
+| `piagent_profile_options` | Return reusable project profile choices. |
+| `piagent_profile_apply` | Apply a selected profile and deterministic capability lock. |
+| `piagent_profile_tech_options` | Return select-style tech options for a profile family. |
+| `piagent_profile_tech_apply` | Apply profile + selected role tech stack and Context7 placeholders. |
+| `piagent_profile_tech_context_record` | Record a concise Context7 evidence snapshot for a selected tech. |
+| `piagent_task_start` | Create Task Implementation Contract. |
+| `piagent_context_record` | Record context manifest for task. |
+| `piagent_verify_record` | Record verify evidence only when it matches an observed Pi bash result after task start. Passing gate also requires exact match with `task.verifyCommands`. |
+| `piagent_trace_record` | Record handoff/final trace. |
 
 ## Core capabilities
 

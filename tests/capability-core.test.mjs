@@ -16,7 +16,7 @@ import {
   verifyCapabilityLock,
   writeJsonAtomic,
   writeProfileLockAtomic
-} from "../packages/pi-company-core/capabilities/capability-core.js";
+} from "../packages/piagent-core/capabilities/capability-core.js";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const actionValidationNow = Date.parse("2026-07-21T01:30:00.000Z");
@@ -36,7 +36,7 @@ function writeJson(file, value) {
 
 function baseManifest(name = "test-pack") {
   return {
-    apiVersion: "pi.company/v1alpha1",
+    apiVersion: "piagent/v1alpha1",
     kind: "CapabilityPack",
     metadata: {
       name,
@@ -103,7 +103,7 @@ function createPlatformFixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-capability-"));
   temporaryRoots.add(root);
   writeJson(path.join(root, "package.json"), { name: "fixture", version: "1.0.0" });
-  fs.cpSync(path.join(repositoryRoot, "packages", "pi-company-core"), path.join(root, "packages", "pi-company-core"), { recursive: true });
+  fs.cpSync(path.join(repositoryRoot, "packages", "piagent-core"), path.join(root, "packages", "piagent-core"), { recursive: true });
   fs.writeFileSync(path.join(root, "artifact.txt"), "bounded artifact\n");
   writeJson(path.join(root, "packs", "test-pack", "pack.json"), baseManifest());
   writeJson(path.join(root, "profile.json"), baseProfile());
@@ -112,7 +112,7 @@ function createPlatformFixture() {
 
 function validActionProposal() {
   return {
-    apiVersion: "pi.company/v1alpha1",
+    apiVersion: "piagent/v1alpha1",
     kind: "ExternalActionProposal",
     metadata: {
       name: "publish-change",
@@ -155,17 +155,17 @@ describe("capability catalog and profile lock", () => {
     const lock = resolveCapabilityProfile(repositoryRoot, profile);
     assert.deepEqual(lock.packs.map((pack) => pack.name), ["engineering-base", "web-delivery"]);
     assert.equal(verifyCapabilityLock(repositoryRoot, profile, lock).ok, true);
-    assert.equal(lock.permissions.protectedPaths.includes(".pi/company-profile.lock.json"), true);
+    assert.equal(lock.permissions.protectedPaths.includes(".pi/piagent-profile.lock.json"), true);
     assert.equal(lock.permissions.protectedPaths.includes(".pi/context-index.json"), true);
-    assert.equal(lock.permissions.shellProtectedPaths.includes(".pi/company-state/**"), true);
+    assert.equal(lock.permissions.shellProtectedPaths.includes(".pi/piagent-state/**"), true);
     assert.equal(lock.permissions.shellProtectedPaths.includes(".pi/context-index.json"), true);
   });
 
   it("binds a lock to its declared package source", () => {
     const profile = path.join(repositoryRoot, "adapters", "generic", "profile.json");
-    const lock = resolveCapabilityProfile(repositoryRoot, profile, { packageSource: "npm:pi-agent-platform@0.3.23" });
-    assert.equal(verifyCapabilityLock(repositoryRoot, profile, lock, { packageSource: "npm:pi-agent-platform@0.3.23" }).ok, true);
-    assert.equal(verifyCapabilityLock(repositoryRoot, profile, lock, { packageSource: "npm:pi-agent-platform@0.3.24" }).ok, false);
+    const lock = resolveCapabilityProfile(repositoryRoot, profile, { packageSource: "npm:@piagent/platform@0.3.23" });
+    assert.equal(verifyCapabilityLock(repositoryRoot, profile, lock, { packageSource: "npm:@piagent/platform@0.3.23" }).ok, true);
+    assert.equal(verifyCapabilityLock(repositoryRoot, profile, lock, { packageSource: "npm:@piagent/platform@0.3.24" }).ok, false);
   });
 
   it("detects a stale profile lock", () => {
@@ -182,7 +182,7 @@ describe("capability catalog and profile lock", () => {
     const root = createPlatformFixture();
     const profilePath = path.join(root, "profile.json");
     const lock = resolveCapabilityProfile(root, profilePath);
-    fs.appendFileSync(path.join(root, "packages", "pi-company-core", "extensions", "policy-core.js"), "\n// integrity change\n");
+    fs.appendFileSync(path.join(root, "packages", "piagent-core", "extensions", "policy-core.js"), "\n// integrity change\n");
     assert.equal(verifyCapabilityLock(root, profilePath, lock).ok, false);
   });
 
@@ -190,19 +190,19 @@ describe("capability catalog and profile lock", () => {
     const root = createPlatformFixture();
     const profilePath = path.join(root, "profile.json");
     const lock = resolveCapabilityProfile(root, profilePath);
-    fs.appendFileSync(path.join(root, "packages", "pi-company-core", "policies", "base-policy.json"), "\n");
+    fs.appendFileSync(path.join(root, "packages", "piagent-core", "policies", "base-policy.json"), "\n");
     assert.equal(verifyCapabilityLock(root, profilePath, lock).ok, false);
   });
 });
 
 describe("capability input boundaries", () => {
   it("requires exact references for remote package sources", () => {
-    assert.equal(validateCapabilityPackageSource("git:github.com/Vt-mmm/pi_agent@v0.3.23"), "git:github.com/Vt-mmm/pi_agent@v0.3.23");
-    assert.equal(validateCapabilityPackageSource("npm:@company/pi-agent@0.3.23"), "npm:@company/pi-agent@0.3.23");
-    assert.equal(validateCapabilityPackageSource("https://github.com/Vt-mmm/pi_agent/archive/refs/tags/v0.3.23.tar.gz"), "https://github.com/Vt-mmm/pi_agent/archive/refs/tags/v0.3.23.tar.gz");
-    assert.throws(() => validateCapabilityPackageSource("https://github.com/Vt-mmm/pi_agent"), /exact tag/);
-    assert.throws(() => validateCapabilityPackageSource("git:github.com/Vt-mmm/pi_agent"), /exact tag/);
-    assert.throws(() => validateCapabilityPackageSource("npm:@company/pi-agent@latest"), /exact version/);
+    assert.equal(validateCapabilityPackageSource("git:github.com/Vt-mmm/piagent@v0.3.23"), "git:github.com/Vt-mmm/piagent@v0.3.23");
+    assert.equal(validateCapabilityPackageSource("npm:@example-org/platform@0.3.23"), "npm:@example-org/platform@0.3.23");
+    assert.equal(validateCapabilityPackageSource("https://github.com/Vt-mmm/piagent/archive/refs/tags/v0.3.23.tar.gz"), "https://github.com/Vt-mmm/piagent/archive/refs/tags/v0.3.23.tar.gz");
+    assert.throws(() => validateCapabilityPackageSource("https://github.com/Vt-mmm/piagent"), /exact tag/);
+    assert.throws(() => validateCapabilityPackageSource("git:github.com/Vt-mmm/piagent"), /exact tag/);
+    assert.throws(() => validateCapabilityPackageSource("npm:@example-org/platform@latest"), /exact version/);
     assert.throws(() => validateCapabilityPackageSource("npm:..@1.2.3"), /valid lowercase/);
     assert.throws(() => validateCapabilityPackageSource("npm:@../pkg@1.2.3"), /valid lowercase/);
     assert.throws(() => validateCapabilityPackageSource("npm:--help@1.2.3"), /valid lowercase/);
@@ -352,8 +352,8 @@ describe("capability input boundaries", () => {
 
   it("does not replace a profile when its lock target is unsafe", () => {
     const root = createPlatformFixture();
-    const profileTarget = path.join(root, "company-profile.json");
-    const lockTarget = path.join(root, "company-profile.lock.json");
+    const profileTarget = path.join(root, "piagent-profile.json");
+    const lockTarget = path.join(root, "piagent-profile.lock.json");
     writeJson(profileTarget, { state: "original" });
     fs.symlinkSync(path.join(root, "artifact.txt"), lockTarget);
     assert.throws(() => writeProfileLockAtomic(profileTarget, { state: "updated" }, lockTarget, { state: "lock" }), /symbolic link/);
@@ -362,8 +362,8 @@ describe("capability input boundaries", () => {
 
   it("repairs a malformed existing lock during a profile update", () => {
     const root = createPlatformFixture();
-    const profileTarget = path.join(root, "company-profile.json");
-    const lockTarget = path.join(root, "company-profile.lock.json");
+    const profileTarget = path.join(root, "piagent-profile.json");
+    const lockTarget = path.join(root, "piagent-profile.lock.json");
     writeJson(profileTarget, { state: "original" });
     fs.writeFileSync(lockTarget, "{malformed\n");
     writeProfileLockAtomic(profileTarget, { state: "updated" }, lockTarget, { state: "current" });
@@ -380,7 +380,7 @@ describe("capability input boundaries", () => {
     profile.capabilityPolicy.allowedLifecycles = 5;
     profile.verifyCommands = { source: 5 };
     profile.runtimePolicy = 5;
-    writeJson(path.join(project, ".pi", "company-profile.json"), profile);
+    writeJson(path.join(project, ".pi", "piagent-profile.json"), profile);
     const result = spawnSync("bash", [path.join(repositoryRoot, "scripts", "profile-doctor.sh"), project], { encoding: "utf8" });
     assert.equal(result.status, 1);
     const report = JSON.parse(result.stdout);
@@ -399,7 +399,7 @@ describe("capability input boundaries", () => {
     const profile = baseProfile();
     profile.shellProtectedPaths = [".git/**", "legacy-backend/**", "review-only/**"];
     profile.readOnlyPaths = ["review-only/**"];
-    writeJson(path.join(project, ".pi", "company-profile.json"), profile);
+    writeJson(path.join(project, ".pi", "piagent-profile.json"), profile);
 
     const result = spawnSync("bash", [path.join(repositoryRoot, "scripts", "profile-doctor.sh"), project], { encoding: "utf8" });
     assert.equal(result.status, 0, result.stderr);
@@ -427,7 +427,7 @@ describe("capability input boundaries", () => {
     delete profile.capabilityPacks;
     delete profile.capabilityPolicy;
     profile.shellProtectedPaths = ["legacy-backend/**"];
-    writeJson(path.join(project, ".pi", "company-profile.json"), profile);
+    writeJson(path.join(project, ".pi", "piagent-profile.json"), profile);
 
     const result = spawnSync("bash", [path.join(repositoryRoot, "scripts", "team-doctor.sh"), project], { encoding: "utf8" });
     assert.equal(result.status, 0, result.stderr);
@@ -443,7 +443,7 @@ describe("capability input boundaries", () => {
 describe("recipe and action proposal validation", () => {
   it("rejects cyclic recipe steps", () => {
     const recipe = {
-      apiVersion: "pi.company/v1alpha1",
+      apiVersion: "piagent/v1alpha1",
       kind: "CapabilityRecipe",
       metadata: {
         name: "cyclic-recipe",

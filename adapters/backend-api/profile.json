@@ -56,7 +56,7 @@
       "test -s README.md"
     ],
     "source": [
-      "if test -f package.json; then npm run type-check --if-present && npm run lint --if-present && npm test --if-present; elif test -x ./mvnw; then ./mvnw test; elif test -x ./gradlew; then ./gradlew test; elif test -f pyproject.toml && command -v uv >/dev/null 2>&1; then uv run pytest; elif test -f pyproject.toml; then python -m pytest; else echo 'No backend verify command configured; update .pi/company-profile.json'; fi"
+      "if test -f package.json; then npm run type-check --if-present && npm run lint --if-present && npm test --if-present; elif test -x ./mvnw; then ./mvnw test; elif test -x ./gradlew; then ./gradlew test; elif test -f pyproject.toml && command -v uv >/dev/null 2>&1; then uv run pytest; elif test -f pyproject.toml; then python -m pytest; else echo 'No backend verify command configured; update .pi/piagent-profile.json'; fi"
     ]
   },
   "mcpCapabilities": [

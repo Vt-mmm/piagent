@@ -7,7 +7,7 @@ import { describe, it } from "node:test";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 function readPrompt(name) {
-  return fs.readFileSync(path.join(repoRoot, "packages", "pi-company-core", "prompts", `${name}.md`), "utf8");
+  return fs.readFileSync(path.join(repoRoot, "packages", "piagent-core", "prompts", `${name}.md`), "utf8");
 }
 
 describe("git workflow prompts", () => {

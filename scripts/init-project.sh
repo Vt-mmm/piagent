@@ -9,7 +9,7 @@ Usage:
 Options:
   --profile <name-or-json>       auto | generic | web-frontend | backend-api | be-readonly-fe | fullstack | node-typescript | python | data | devops | mobile | docs | path/to/profile.json
   --package-source <source>      Pi package source committed into .pi/settings.json
-  --force-profile                Replace existing .pi/company-profile.json
+  --force-profile                Replace existing .pi/piagent-profile.json
   --force-settings               Replace existing .pi/settings.json
   --skip-agents                  Do not create AGENTS.md
   --skip-review-guidelines       Do not create REVIEW_GUIDELINES.md
@@ -17,13 +17,13 @@ Options:
 
 Package source examples:
   # Exact sources are required here because init writes .pi/settings.json and a capability lock:
-  git:github.com/Vt-mmm/pi_agent@vX.Y.Z
-  https://github.com/Vt-mmm/pi_agent/archive/refs/tags/vX.Y.Z.tar.gz
-  npm:@company/pi-agent-platform@x.y.z
+  git:github.com/Vt-mmm/piagent@vX.Y.Z
+  https://github.com/Vt-mmm/piagent/archive/refs/tags/vX.Y.Z.tar.gz
+  npm:@your-scope/platform@x.y.z
 
 Default package source:
   1. --package-source
-  2. PI_COMPANY_PACKAGE_SOURCE
+  2. PIAGENT_PACKAGE_SOURCE
   3. local platform path (warn; do not commit for team)
 USAGE
 }
@@ -43,7 +43,7 @@ shift
 
 PLATFORM_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROFILE_INPUT="auto"
-PACKAGE_SOURCE="${PI_COMPANY_PACKAGE_SOURCE:-}"
+PACKAGE_SOURCE="${PIAGENT_PACKAGE_SOURCE:-}"
 FORCE_PROFILE=false
 FORCE_SETTINGS=false
 SKIP_AGENTS=false
@@ -272,8 +272,8 @@ else
   echo "SKIP: .pi/settings.json exists. Use --force-settings to replace."
 fi
 
-PROFILE_TARGET="$PROJECT_PATH/.pi/company-profile.json"
-CAPABILITY_LOCK_TARGET="$PROJECT_PATH/.pi/company-profile.lock.json"
+PROFILE_TARGET="$PROJECT_PATH/.pi/piagent-profile.json"
+CAPABILITY_LOCK_TARGET="$PROJECT_PATH/.pi/piagent-profile.lock.json"
 if [[ "$FORCE_PROFILE" == true || ! -f "$PROFILE_TARGET" ]]; then
   apply_profile_args=(
     "$PLATFORM_ROOT/scripts/capability-catalog.mjs"
@@ -287,7 +287,7 @@ if [[ "$FORCE_PROFILE" == true || ! -f "$PROFILE_TARGET" ]]; then
   fi
   node "${apply_profile_args[@]}" >/dev/null
 else
-  echo "SKIP: .pi/company-profile.json exists. Use --force-profile to replace."
+  echo "SKIP: .pi/piagent-profile.json exists. Use --force-profile to replace."
   node "$PLATFORM_ROOT/scripts/capability-catalog.mjs" resolve \
     --profile "$PROFILE_TARGET" \
     --output "$CAPABILITY_LOCK_TARGET" \
@@ -310,10 +310,10 @@ PROJECT_GITIGNORE="$PROJECT_PATH/.gitignore"
 if [[ ! -f "$PROJECT_GITIGNORE" ]]; then
   : > "$PROJECT_GITIGNORE"
 fi
-if ! grep -F "# Pi Company Platform runtime" "$PROJECT_GITIGNORE" >/dev/null 2>&1; then
+if ! grep -F "# Pi Agent Platform runtime" "$PROJECT_GITIGNORE" >/dev/null 2>&1; then
   {
     echo
-    echo "# Pi Company Platform runtime"
+    echo "# Pi Agent Platform runtime"
     echo ".pi-subagents/"
     echo "progress.md"
   } >> "$PROJECT_GITIGNORE"

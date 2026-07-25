@@ -1,0 +1,249 @@
+{
+  "schemaVersion": 1,
+  "name": "piagent-base-policy",
+  "protectedPaths": [
+    ".git/**",
+    "**/auth.json",
+    "**/.env",
+    "**/.env.*",
+    "**/node_modules/**",
+    "**/dist/**",
+    ".pi/piagent-state/**",
+    ".pi/settings.json",
+    ".pi/piagent-profile.json",
+    ".pi/piagent-profile.lock.json",
+    ".pi/context-index.json"
+  ],
+  "shellProtectedPaths": [
+    ".git/**",
+    "**/auth.json",
+    "**/.env",
+    "**/.env.*",
+    ".pi/piagent-state/**",
+    ".pi/settings.json",
+    ".pi/piagent-profile.json",
+    ".pi/piagent-profile.lock.json",
+    ".pi/context-index.json"
+  ],
+  "blockedCommandPatterns": [
+    "rm -rf /",
+    "rm -rf ~",
+    "rm -rf $HOME",
+    "git reset --hard",
+    "git clean -fd",
+    "sudo ",
+    "chmod -R 777"
+  ],
+  "requireConfirmationPatterns": [
+    "deploy",
+    "release",
+    "publish",
+    "migration",
+    "terraform apply",
+    "kubectl apply",
+    "gh pr merge",
+    "git push"
+  ],
+  "defaultRequiredContext": [
+    "AGENTS.md",
+    "README.md"
+  ],
+  "permissionProfiles": {
+    "defaultMode": "workspace-write",
+    "allowedModes": [
+      "read-only",
+      "workspace-write",
+      "trusted-full-access"
+    ]
+  },
+  "execPolicy": {
+    "defaultMode": "enforce",
+    "bannedPrefixSuggestions": [
+      ["python"],
+      ["python3"],
+      ["node"],
+      ["node", "-e"],
+      ["bash"],
+      ["bash", "-lc"],
+      ["sh"],
+      ["sh", "-c"],
+      ["zsh"],
+      ["zsh", "-lc"],
+      ["git"],
+      ["sudo"],
+      ["env"]
+    ],
+    "rules": [
+      {
+        "id": "prompt-git-add-broad",
+        "action": "prompt",
+        "match": "regex",
+        "value": "(?:^|\\s)git\\s+(?:-C\\s+\\S+\\s+)?add\\s+(?:(?:--all|-A)(?:\\s+(?:\\.|:/))?|--\\s+(?:\\.|:/)|(?:\\.|:/))(?:\\s|$)",
+        "reason": "Broad git staging can include unrelated or sensitive changes; inspect git status/diff and confirm the exact scope first."
+      },
+      {
+        "id": "forbid-docker-volume-prune",
+        "action": "forbid",
+        "match": "contains",
+        "value": "docker volume prune",
+        "reason": "Volume prune can delete unrecoverable local data."
+      },
+      {
+        "id": "prompt-docker-compose-down-volume",
+        "action": "prompt",
+        "match": "regex",
+        "value": "docker\\s+compose\\s+down\\s+.*-v",
+        "reason": "docker compose down -v removes volumes."
+      },
+      {
+        "id": "prompt-database-migration",
+        "action": "prompt",
+        "match": "contains",
+        "value": "migrate",
+        "reason": "Database migrations require explicit human confirmation."
+      }
+    ]
+  },
+  "contextBudget": {
+    "defaultMode": "enforce",
+    "maxContextFileChars": 50000,
+    "maxMemoryFileChars": 20000,
+    "maxManifestFiles": 80,
+    "warnFragmentChars": 4000
+  },
+  "toolRegistry": {
+    "defaultMode": "advisory",
+    "alwaysAllowedTools": [
+      "piagent_context",
+      "piagent_permission_status",
+      "piagent_exec_policy_check",
+      "piagent_context_budget",
+      "piagent_tool_policy_check",
+      "piagent_task_gate_check",
+      "piagent_usage_snapshot",
+      "piagent_orchestration_policy",
+      "piagent_memory_status",
+      "piagent_memory_note",
+      "piagent_memory_search",
+      "piagent_memory_citation_record",
+      "piagent_context_index_status",
+      "piagent_context_index_record",
+      "piagent_context_index_search",
+      "piagent_profile_options",
+      "piagent_profile_apply",
+      "piagent_profile_tech_options",
+      "piagent_profile_tech_apply",
+      "piagent_profile_tech_context_record",
+      "piagent_project_onboarding_record",
+      "piagent_task_start",
+      "piagent_source_checkout",
+      "piagent_context_record",
+      "piagent_verify_record",
+      "piagent_trace_record"
+    ],
+    "toolCapabilities": {
+      "bash": ["shell"],
+      "shell": ["shell"],
+      "exec": ["shell"],
+      "read": ["filesystem-readonly"],
+      "grep": ["filesystem-readonly"],
+      "find": ["filesystem-readonly"],
+      "ls": ["filesystem-readonly"],
+      "write": ["filesystem-write"],
+      "edit": ["filesystem-write"],
+      "browser": ["browser"],
+      "github": ["github"]
+    }
+  },
+  "externalActionPolicy": {
+    "defaultMode": "enforce",
+    "providerKeywords": [
+      "github",
+      "gitlab",
+      "bitbucket",
+      "vercel",
+      "netlify",
+      "cloudflare",
+      "aws",
+      "gcp",
+      "azure",
+      "slack",
+      "teams",
+      "jira",
+      "linear",
+      "notion",
+      "figma",
+      "stripe",
+      "supabase",
+      "firebase"
+    ],
+    "writeVerbs": [
+      "add",
+      "approve",
+      "archive",
+      "assign",
+      "close",
+      "comment",
+      "create",
+      "delete",
+      "deploy",
+      "dispatch",
+      "merge",
+      "open",
+      "post",
+      "publish",
+      "push",
+      "release",
+      "remove",
+      "reopen",
+      "run",
+      "send",
+      "submit",
+      "trigger",
+      "update",
+      "upload",
+      "write"
+    ],
+    "safeVerbs": [
+      "fetch",
+      "find",
+      "get",
+      "inspect",
+      "list",
+      "read",
+      "search",
+      "show",
+      "view"
+    ]
+  },
+  "finalGate": {
+    "defaultMode": "enforce",
+    "requireTaskContract": true,
+    "requireContextManifest": true,
+    "requireVerifyEvidence": true,
+    "requireTrace": true,
+    "requirePassingVerify": true
+  },
+  "orchestrationPolicy": {
+    "defaultMode": "solo-first",
+    "maxConcurrentSubagents": 2,
+    "defaultReviewLenses": [
+      "correctness",
+      "tests",
+      "scope"
+    ],
+    "roleModelGuidance": {
+      "planner": "Use the strongest available model for decomposition, architecture, risk, and acceptance criteria.",
+      "worker": "Use the fastest reliable model for a bounded, already-planned single write set.",
+      "reviewer": "Use a model or thinking setting decorrelated from the worker when review quality matters.",
+      "watchdog": "Use a strong model only for final risk review, security, release, or high-impact changes."
+    },
+    "fieldGuide": {
+      "enabled": true,
+      "path": ".pi/memory/MEMORY.md",
+      "maxLines": 80,
+      "writePolicy": "explicit-only",
+      "readBeforeTask": true
+    }
+  }
+}

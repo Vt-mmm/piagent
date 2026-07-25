@@ -1,0 +1,46 @@
+{
+  "name": "@pi-agent/core",
+  "version": "0.4.8",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "description": "Pi agent package: guard extension, prompts, skills, and policy defaults.",
+  "homepage": "https://piagent.io.vn",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Vt-mmm/piagent.git",
+    "directory": "packages/piagent-core"
+  },
+  "keywords": [
+    "pi-package",
+    "coding-agent",
+    "agent-harness"
+  ],
+  "pi": {
+    "extensions": [
+      "extensions/**/*.ts"
+    ],
+    "skills": [
+      "skills"
+    ],
+    "prompts": [
+      "prompts"
+    ],
+    "subagents": {
+      "agents": [
+        "subagents"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "0.81.1",
+    "typebox": "1.1.38"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": { "optional": true },
+    "typebox": { "optional": true }
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}

@@ -14,19 +14,19 @@ import {
   verifyCapabilityLock,
   writeJsonAtomic,
   writeProfileLockAtomic
-} from "../packages/pi-company-core/capabilities/capability-core.js";
+} from "../packages/piagent-core/capabilities/capability-core.js";
 
 const platformRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const catalogPath = path.join(platformRoot, "catalog", "capabilities.json");
 
 function usage() {
   process.stdout.write(`Usage:
-  pi-company-capabilities catalog [--check | --write]
-  pi-company-capabilities resolve --profile <profile.json> [--output <lock.json>] [--package-source <source>]
-  pi-company-capabilities apply-profile --profile <source.json> --target <company-profile.json> [--package-source <source>] [--force]
-  pi-company-capabilities doctor [--profile <profile.json>] [--lock <lock.json>] [--package-source <source>]
-  pi-company-capabilities validate-source --package-source <source>
-  pi-company-capabilities validate-action --file <proposal.json>
+  piagent-capabilities catalog [--check | --write]
+  piagent-capabilities resolve --profile <profile.json> [--output <lock.json>] [--package-source <source>]
+  piagent-capabilities apply-profile --profile <source.json> --target <piagent-profile.json> [--package-source <source>] [--force]
+  piagent-capabilities doctor [--profile <profile.json>] [--lock <lock.json>] [--package-source <source>]
+  piagent-capabilities validate-source --package-source <source>
+  piagent-capabilities validate-action --file <proposal.json>
 
 Commands:
   catalog          Build the deterministic capability catalog.
@@ -90,7 +90,7 @@ function assertOutputBesideProfile(output, profile) {
   const profileDirectory = path.dirname(profile);
   const outputDirectory = fs.realpathSync(path.dirname(absolute));
   if (outputDirectory !== profileDirectory) throw new CapabilityValidationError("--output must be in the same directory as --profile");
-  if (path.basename(absolute) !== "company-profile.lock.json") throw new CapabilityValidationError("--output filename must be company-profile.lock.json");
+  if (path.basename(absolute) !== "piagent-profile.lock.json") throw new CapabilityValidationError("--output filename must be piagent-profile.lock.json");
   return path.join(outputDirectory, path.basename(absolute));
 }
 
@@ -141,7 +141,7 @@ function runApplyProfile(flags) {
   const targetValue = flags.get("--target");
   if (!targetValue) throw new CapabilityValidationError("--target is required");
   const target = path.resolve(targetValue);
-  if (path.basename(target) !== "company-profile.json") throw new CapabilityValidationError("--target filename must be company-profile.json");
+  if (path.basename(target) !== "piagent-profile.json") throw new CapabilityValidationError("--target filename must be piagent-profile.json");
   const parent = fs.realpathSync(path.dirname(target));
   const normalizedTarget = path.join(parent, path.basename(target));
   if (fs.existsSync(normalizedTarget) && !flags.has("--force")) throw new CapabilityValidationError("target profile already exists; pass --force to replace it");
@@ -151,7 +151,7 @@ function runApplyProfile(flags) {
     profileFile: path.basename(normalizedTarget),
     packageSource
   });
-  const lockTarget = path.join(parent, "company-profile.lock.json");
+  const lockTarget = path.join(parent, "piagent-profile.lock.json");
   writeProfileLockAtomic(normalizedTarget, profile, lockTarget, lock);
   process.stdout.write(`${JSON.stringify({ ok: true, profile: normalizedTarget, lock: lockTarget, packs: lock.packs.length })}\n`);
 }

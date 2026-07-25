@@ -6,11 +6,11 @@ import {
   findProtectedPathInCommand,
   matchesAnyPath,
   matchesProtectedPath
-} from "../packages/pi-company-core/extensions/policy-core.js";
+} from "../packages/piagent-core/extensions/policy-core.js";
 
 const policy = {
-  protectedPaths: [".git/**", "**/auth.json", "**/.env", "**/.env.*", "**/node_modules/**", "**/dist/**", ".pi/company-state/**", ".pi/company-profile.json"],
-  shellProtectedPaths: [".git/**", "**/auth.json", "**/.env", "**/.env.*", ".pi/company-state/**", ".pi/company-profile.json"],
+  protectedPaths: [".git/**", "**/auth.json", "**/.env", "**/.env.*", "**/node_modules/**", "**/dist/**", ".pi/piagent-state/**", ".pi/piagent-profile.json"],
+  shellProtectedPaths: [".git/**", "**/auth.json", "**/.env", "**/.env.*", ".pi/piagent-state/**", ".pi/piagent-profile.json"],
   blockedCommandPatterns: ["rm -rf /", "rm -rf ~", "rm -rf $HOME", "git reset --hard", "git clean -fd", "sudo ", "chmod -R 777"],
   requireConfirmationPatterns: ["deploy", "release", "publish", "migration", "terraform apply", "kubectl apply", "gh pr merge", "git push"],
   execPolicy: {
@@ -36,7 +36,7 @@ const policy = {
 };
 
 describe("protected path glob matching", () => {
-  for (const target of [".env", ".env.local", "auth.json", "src/.env", "src/.env.local", "src/auth.json", ".git/config", ".pi/company-state/observed-bash.jsonl", ".pi/company-state/tasks/x.json", ".pi/company-profile.json"]) {
+  for (const target of [".env", ".env.local", "auth.json", "src/.env", "src/.env.local", "src/auth.json", ".git/config", ".pi/piagent-state/observed-bash.jsonl", ".pi/piagent-state/tasks/x.json", ".pi/piagent-profile.json"]) {
     it(`blocks ${target}`, () => {
       assert.ok(matchesAnyPath(target, policy.protectedPaths), `${target} should match protected paths`);
     });
@@ -48,7 +48,7 @@ describe("protected path glob matching", () => {
     });
   }
 
-  for (const target of [".ENV", ".Env.Local", "AUTH.JSON", ".PI/COMPANY-PROFILE.JSON"]) {
+  for (const target of [".ENV", ".Env.Local", "AUTH.JSON", ".PI/PIAGENT-PROFILE.JSON"]) {
     it(`blocks protected case variant ${target}`, () => {
       assert.ok(matchesProtectedPath(target, policy.protectedPaths), `${target} should match protected paths`);
     });
@@ -71,9 +71,9 @@ describe("protected path extraction from shell", () => {
     "cat ~/.pi/agent/auth.json",
     "cat /Users/example/.pi/agent/auth.json",
     "git config --local --get user.email < .git/config",
-    "cat .pi/company-profile.json",
-    "cat .pi/company-state/observed-bash.jsonl",
-    "echo forged >> .pi/company-state/observed-bash.jsonl",
+    "cat .pi/piagent-profile.json",
+    "cat .pi/piagent-state/observed-bash.jsonl",
+    "echo forged >> .pi/piagent-state/observed-bash.jsonl",
     "cat .ENV",
     "printf x > .Env.Local"
   ];
@@ -237,7 +237,7 @@ describe("exec policy git workflow confirmations", () => {
 
   const targetedStageCommands = [
     "git add README.md",
-    "git add packages/pi-company-core/extensions/company-guard.ts",
+    "git add packages/piagent-core/extensions/piagent-guard.ts",
     "git add -p",
     "git status"
   ];

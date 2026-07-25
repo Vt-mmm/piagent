@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Do not report security vulnerabilities here — use [private vulnerability reporting](https://github.com/Vt-mmm/pi_agent/security/advisories/new).
+        Do not report security vulnerabilities here — use [private vulnerability reporting](https://github.com/Vt-mmm/piagent/security/advisories/new).
 
         Never paste real tokens, `auth.json`, or `.env` contents. Use synthetic values.
 
@@ -33,7 +33,7 @@ body:
     id: doctor
     attributes:
       label: Doctor output
-      description: Output of `pi-company-doctor` or `npm run doctor`. Redact paths you do not want public.
+      description: Output of `piagent-doctor` or `npm run doctor`. Redact paths you do not want public.
       render: json
     validations:
       required: false

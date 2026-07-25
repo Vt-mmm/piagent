@@ -1,6 +1,6 @@
 # Model selector and scope
 
-Pi Company Platform không khóa vào một provider. OpenAI Codex và Claude/Anthropic đều là first-class option.
+Pi Agent Platform không khóa vào một provider. OpenAI Codex và Claude/Anthropic đều là first-class option.
 
 Quan trọng: flow chính là user chọn model bằng native Pi selector, không phải hỏi agent recommend.
 
@@ -43,9 +43,9 @@ pi --list-models
 pi --list-models openai-codex
 pi --list-models claude
 pi --list-models anthropic
-pi-company-models
-pi-company-models --provider openai-codex
-pi-company-models --provider anthropic
+piagent-models
+piagent-models --provider openai-codex
+piagent-models --provider anthropic
 ```
 
 Lưu ý: `--list-models` chỉ hiện model mà Pi xem là available với credential/provider hiện tại. Nếu chưa login Anthropic, Claude có thể chưa hiện dù model catalog local có metadata.
@@ -68,7 +68,7 @@ pi --thinking medium
 
 ## Current latest-family catalog
 
-Đừng giới hạn vào vài ví dụ. Sau `pi update --models`, kiểm tra catalog local bằng `pi-company-models`. Ở release hiện tại, các family/presets chính cần nhớ:
+Đừng giới hạn vào vài ví dụ. Sau `pi update --models`, kiểm tra catalog local bằng `piagent-models`. Ở release hiện tại, các family/presets chính cần nhớ:
 
 ### OpenAI Codex
 
@@ -117,7 +117,7 @@ Tên model có thể đổi theo Pi model catalog. Khi không chắc, ưu tiên 
 Global setup mặc định:
 
 ```bash
-pi-company-model-scope --preset full --default-model openai-codex/gpt-5.5:xhigh
+piagent-model-scope --preset full --default-model openai-codex/gpt-5.5:xhigh
 ```
 
 Scope này ghi vào settings:
@@ -138,8 +138,8 @@ Shift+Tab
 Nếu muốn đặt default khác:
 
 ```bash
-pi-company-model-scope --preset full --default-model openai-codex/gpt-5.6-sol:xhigh
-pi-company-model-scope --preset full --default-model anthropic/claude-sonnet-5:xhigh
+piagent-model-scope --preset full --default-model openai-codex/gpt-5.6-sol:xhigh
+piagent-model-scope --preset full --default-model anthropic/claude-sonnet-5:xhigh
 ```
 
 ## Benchmark rule
@@ -147,7 +147,7 @@ pi-company-model-scope --preset full --default-model anthropic/claude-sonnet-5:x
 Không claim “Pi + provider X tiết kiệm hơn provider Y” bằng cảm giác. Chạy cùng scenario rồi ghi bằng:
 
 ```bash
-pi-company-usage /path/to/project
+piagent-usage /path/to/project
 bash scripts/quality-benchmark.sh /path/to/project --record \
   --scenario bounded-source-fix \
   --surface pi \

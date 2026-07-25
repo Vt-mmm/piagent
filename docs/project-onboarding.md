@@ -2,7 +2,7 @@
 
 ## Mục tiêu
 
-Lần đầu gắn một project vào Pi Company Platform, không nên nhảy thẳng vào `/task`.
+Lần đầu gắn một project vào Pi Agent Platform, không nên nhảy thẳng vào `/task`.
 
 Luồng chuẩn là:
 
@@ -17,8 +17,8 @@ pi
 Sau khi `/onboard-project` chạy xong, project có file:
 
 ```text
-.pi/company-profile.json
-.pi/company-profile.lock.json
+.pi/piagent-profile.json
+.pi/piagent-profile.lock.json
 .pi/tech-stack.json
 .pi/tech-context/*.json
 .pi/project-context.md
@@ -40,7 +40,7 @@ Nếu Pi host chưa có native select, command trả card compact và lệnh det
 
 `.pi/context-index.json` là compact advisory index dạng node/edge/citation cho profile, tech stack, verify command, docs, risk, memory pointer và task handoff đã được duyệt. Nó giúp agent tìm đúng điểm vào repo nhanh hơn, nhưng không phải source of truth hoặc security boundary.
 
-Context index là Pi runtime state. Không đọc/ghi raw file này trong workflow thường ngày; dùng `/context-index`, `company_context_index_status`, `company_context_index_search`, `/onboard-project` hoặc `company_context_index_record` để runtime có thể kiểm soát path và sanitize dữ liệu advisory trước khi đưa vào model.
+Context index là Pi runtime state. Không đọc/ghi raw file này trong workflow thường ngày; dùng `/context-index`, `piagent_context_index_status`, `piagent_context_index_search`, `/onboard-project` hoặc `piagent_context_index_record` để runtime có thể kiểm soát path và sanitize dữ liệu advisory trước khi đưa vào model.
 
 Memory markdown là local/private mặc định và bị ignore bởi `.pi/.gitignore`. Chỉ commit memory nếu team quyết định opt-in sau khi review/redact.
 
@@ -76,7 +76,7 @@ Khác biệt quan trọng:
 
 Không đọc toàn bộ source. Đọc theo lớp:
 
-1. `.pi/company-profile.json`
+1. `.pi/piagent-profile.json`
 2. `AGENTS.md`
 3. `.pi/project-context.md` hiện tại
 4. `.pi/context-index.json` nếu đã được generate
@@ -105,7 +105,7 @@ Mục tiêu là hiểu cấu trúc và policy, không nhồi full repo vào cont
 - memory policy;
 - update triggers.
 
-`company_project_onboarding_record` sẽ tự ghi thêm `.pi/context-index.json` khi tool có sẵn. Nếu cần kiểm tra nhanh, dùng:
+`piagent_project_onboarding_record` sẽ tự ghi thêm `.pi/context-index.json` khi tool có sẵn. Nếu cần kiểm tra nhanh, dùng:
 
 ```text
 /context-index

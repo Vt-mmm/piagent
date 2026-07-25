@@ -1,5 +1,5 @@
 {
-  "apiVersion": "pi.company/v1alpha1",
+  "apiVersion": "piagent/v1alpha1",
   "kind": "EvalScenario",
   "metadata": {
     "name": "capability-resolution",

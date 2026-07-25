@@ -22,10 +22,10 @@ describe("package distribution", () => {
     const bins = Object.entries(pkg.bin);
     assert.ok(bins.length > 0);
     for (const [name, target] of bins) {
-      assert.match(name, /^pi-company-/);
-      assert.equal(target, "scripts/pi-company-cli.mjs");
+      assert.match(name, /^piagent-/);
+      assert.equal(target, "scripts/piagent-cli.mjs");
     }
-    assert.equal(fs.statSync(path.join(repositoryRoot, "scripts", "pi-company-cli.mjs")).mode & 0o111, 0o111);
+    assert.equal(fs.statSync(path.join(repositoryRoot, "scripts", "piagent-cli.mjs")).mode & 0o111, 0o111);
   });
 
   it("includes runtime templates that npm may otherwise omit as dotfiles", () => {
@@ -37,7 +37,7 @@ describe("package distribution", () => {
     const pack = JSON.parse(result.stdout)[0];
     const files = new Set(pack.files.map((file) => file.path));
     assert.equal(files.has("SECURITY.md"), true);
-    assert.equal(files.has("scripts/pi-company-cli.mjs"), true);
+    assert.equal(files.has("scripts/piagent-cli.mjs"), true);
     assert.equal(files.has("scripts/verify-vercel-link.mjs"), true);
     assert.equal(files.has("templates/project/.pi/gitignore.template"), true);
     assert.equal(files.has("templates/project/.pi/context-index.json"), true);
@@ -49,14 +49,14 @@ describe("package distribution", () => {
   it("resolves package root correctly when invoked through a global-bin style symlink", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-package-bin-"));
     temporaryRoots.add(root);
-    const link = path.join(root, "pi-company-capabilities");
-    fs.symlinkSync(path.join(repositoryRoot, "scripts", "pi-company-cli.mjs"), link);
+    const link = path.join(root, "piagent-capabilities");
+    fs.symlinkSync(path.join(repositoryRoot, "scripts", "piagent-cli.mjs"), link);
     const result = spawnSync(link, ["--help"], {
       cwd: repositoryRoot,
       encoding: "utf8"
     });
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /pi-company-capabilities catalog/);
+    assert.match(result.stdout, /piagent-capabilities catalog/);
   });
 
   it("shows help successfully for every global command without requiring project state", () => {
@@ -66,7 +66,7 @@ describe("package distribution", () => {
 
     for (const name of Object.keys(pkg.bin)) {
       const link = path.join(root, name);
-      fs.symlinkSync(path.join(repositoryRoot, "scripts", "pi-company-cli.mjs"), link);
+      fs.symlinkSync(path.join(repositoryRoot, "scripts", "piagent-cli.mjs"), link);
       const result = spawnSync(link, ["--help"], {
         cwd: root,
         encoding: "utf8"
@@ -80,8 +80,8 @@ describe("package distribution", () => {
   it("reports a controlled error when a command runner is unavailable", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-package-bin-"));
     temporaryRoots.add(root);
-    const link = path.join(root, "pi-company-install");
-    fs.symlinkSync(path.join(repositoryRoot, "scripts", "pi-company-cli.mjs"), link);
+    const link = path.join(root, "piagent-install");
+    fs.symlinkSync(path.join(repositoryRoot, "scripts", "piagent-cli.mjs"), link);
     const result = spawnSync(process.execPath, [link, "--help"], {
       cwd: repositoryRoot,
       env: {
@@ -105,7 +105,7 @@ describe("package distribution", () => {
       path.join(repositoryRoot, "scripts", "init-project.sh"),
       root,
       "--profile", "generic",
-      "--package-source", "git:github.com/Vt-mmm/pi_agent@v0.4.8",
+      "--package-source", "git:github.com/Vt-mmm/piagent@v0.4.8",
       "--skip-agents",
       "--skip-review-guidelines"
     ], { cwd: repositoryRoot, encoding: "utf8" });
@@ -118,7 +118,7 @@ describe("package distribution", () => {
     const sensitivePaths = [
       ".pi/auth.json",
       ".pi/trust.json",
-      ".pi/company-state/observed-bash.jsonl",
+      ".pi/piagent-state/observed-bash.jsonl",
       ".pi/memory/state.sqlite"
     ];
     for (const relative of sensitivePaths) {

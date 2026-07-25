@@ -12,7 +12,7 @@ import {
   normalizeEvidenceCommand,
   observedBashResultFromToolResultEvent,
   readObservedBashResults
-} from "../packages/pi-company-core/extensions/runtime-evidence.js";
+} from "../packages/piagent-core/extensions/runtime-evidence.js";
 
 const temporaryRoots = new Set();
 

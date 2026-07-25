@@ -64,7 +64,7 @@ Runtime/experimental files không commit:
 
 ## Profile config
 
-Mỗi `.pi/company-profile.json` có block:
+Mỗi `.pi/piagent-profile.json` có block:
 
 ```json
 {
@@ -96,13 +96,13 @@ Mode hiện tại:
 
 | Tool | Mục đích |
 |---|---|
-| `company_memory_status` | Xem memory config/files/rules. |
-| `company_memory_note` | Ghi durable note khi user explicit ask. Có redaction cho token/key/connection-string phổ biến. |
-| `company_memory_search` | Keyword-search memory markdown. |
-| `company_memory_citation_record` | Ghi memory file đã ảnh hưởng task contract. |
-| `company_context_index_status` | Kiểm tra `.pi/context-index.json` có tồn tại/fresh/có citation không. |
-| `company_context_index_search` | Tìm node/edge/citation trong context index trước khi scout rộng. |
-| `company_context_index_record` | Ghi compact context graph sau onboarding hoặc approved handoff; không ghi transcript thô. |
+| `piagent_memory_status` | Xem memory config/files/rules. |
+| `piagent_memory_note` | Ghi durable note khi user explicit ask. Có redaction cho token/key/connection-string phổ biến. |
+| `piagent_memory_search` | Keyword-search memory markdown. |
+| `piagent_memory_citation_record` | Ghi memory file đã ảnh hưởng task contract. |
+| `piagent_context_index_status` | Kiểm tra `.pi/context-index.json` có tồn tại/fresh/có citation không. |
+| `piagent_context_index_search` | Tìm node/edge/citation trong context index trước khi scout rộng. |
+| `piagent_context_index_record` | Ghi compact context graph sau onboarding hoặc approved handoff; không ghi transcript thô. |
 
 ## Workflow khuyến nghị
 
@@ -120,14 +120,14 @@ Mode hiện tại:
 Remember: this repo uses pnpm, never npm.
 ```
 
-Agent nên gọi `company_memory_note` với category `preference`.
+Agent nên gọi `piagent_memory_note` với category `preference`.
 
 ### Trước implementation
 
-1. `company_context`
-2. `company_context_index_status` hoặc `/context-index` để lấy điểm vào repo nếu đã onboard
-3. `company_memory_status`
-4. `company_memory_search` nếu task có keyword liên quan
+1. `piagent_context`
+2. `piagent_context_index_status` hoặc `/context-index` để lấy điểm vào repo nếu đã onboard
+3. `piagent_memory_status`
+4. `piagent_memory_search` nếu task có keyword liên quan
 5. đọc repo files hiện tại để verify
 6. implement
 
