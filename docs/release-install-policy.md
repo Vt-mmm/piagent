@@ -154,6 +154,24 @@ Before broad team access, a repository administrator must enable these external 
 
 Verify these settings in GitHub **Settings → Rules** and **Settings → Code security and analysis**. Treat any missing control as an explicit rollout blocker, not as a passing source-code gate. Repository rules also close the remaining mutability risk of bootstrap-by-tag; tag-to-SHA resolution inside `piagent-install` alone cannot protect the helper package before it starts.
 
+### Required npm publishing controls
+
+The publish workflow authenticates with the `NPM_TOKEN` repository secret. That token needs three things, and read-and-write access alone is not enough:
+
+1. Read and write access to the `@piagent` scope.
+2. **Bypass two-factor authentication** enabled on the token. When the npm account requires 2FA for publishing, the registry rejects the upload with `E403 ... two-factor authentication or granular access token with bypass 2fa enabled is required`. CI cannot answer a 2FA prompt, so this is the only way a workflow can publish.
+3. An expiry date the maintainer tracks. An expired token fails as an authentication error that does not say the token expired.
+
+The workflow reaches the registry only at its final step, so every gate can pass and the release can still stop there. A failed upload publishes nothing, but the provenance attestation is signed and written to the public transparency log first, so a failed attempt still leaves a public record of the repository, commit, and workflow.
+
+Fix the token, then re-run the failed job on the same tag so the publish step still sees a tag ref:
+
+```bash
+gh run rerun <run-id> --failed
+```
+
+Re-running the workflow from a branch instead skips publishing, because the publish step requires a tag ref.
+
 1. Update package versions, `CHANGELOG.md`, install examples, and docs metadata on a release-candidate branch.
 2. Verify the exact release-candidate source:
 
