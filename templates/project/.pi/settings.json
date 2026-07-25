@@ -9,5 +9,9 @@
   },
   "packages": [
     "__PI_COMPANY_PACKAGE_SOURCE__"
+  ],
+  "skills": [
+    ".claude/skills",
+    ".codex/skills"
   ]
 }

@@ -1,0 +1,56 @@
+name: Bug report
+description: Something behaves differently than documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not report security vulnerabilities here — use [private vulnerability reporting](https://github.com/Vt-mmm/pi_agent/security/advisories/new).
+
+        Never paste real tokens, `auth.json`, or `.env` contents. Use synthetic values.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Observed behavior, and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction
+      description: Smallest sequence that shows the problem. Include the slash command or tool name if one is involved.
+      placeholder: |
+        1. cd into a repo with ...
+        2. run /task ...
+        3. guard reports ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Doctor output
+      description: Output of `pi-company-doctor` or `npm run doctor`. Redact paths you do not want public.
+      render: json
+    validations:
+      required: false
+
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Platform release tag or commit SHA, Pi version, Node version, OS and arch.
+      placeholder: "v0.4.8 / pi 0.81.1 / node 22.19.0 / darwin arm64"
+    validations:
+      required: true
+
+  - type: input
+    id: profile
+    attributes:
+      label: Profile and permission profile
+      placeholder: "fullstack / workspace-write"
+    validations:
+      required: false

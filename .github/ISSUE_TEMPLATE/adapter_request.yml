@@ -1,0 +1,55 @@
+name: Adapter profile request
+description: Propose support for a project type that has no adapter yet
+labels: ["adapter"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Adapters describe how the agent should behave in one kind of repository. See the adapter section of [CONTRIBUTING.md](https://github.com/Vt-mmm/pi_agent/blob/main/CONTRIBUTING.md) — most adapters are a single JSON file, and contributing one yourself is usually faster than waiting.
+
+  - type: input
+    id: ecosystem
+    attributes:
+      label: Ecosystem
+      placeholder: "Django, Rails, Laravel, Spring Boot, Go modules, Unity, ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: root-markers
+    attributes:
+      label: Root markers
+      description: Files that identify this project type at the repository root.
+      placeholder: "manage.py, pyproject.toml"
+    validations:
+      required: true
+
+  - type: textarea
+    id: verify-commands
+    attributes:
+      label: Verification commands
+      description: Commands that actually fail on a broken change. Separate docs-only, source, and runtime if they differ.
+      placeholder: |
+        source: python -m pytest, ruff check .
+        runtime: python manage.py check
+    validations:
+      required: true
+
+  - type: textarea
+    id: protected-paths
+    attributes:
+      label: Paths that must not be rewritten
+      description: Lockfiles, generated code, migration history, credential files.
+      placeholder: |
+        **/migrations/**
+        poetry.lock
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything unusual
+      description: Conventions that trip up agents in this ecosystem — ordering rules, generated files that look hand-written, commands that pass while broken.
+    validations:
+      required: false
