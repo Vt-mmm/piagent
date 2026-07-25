@@ -305,10 +305,22 @@ for (const [sourceName, versionName, packageName] of pins) {
   }
 }
 NODE
-grep -F 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262' "$ROOT/.github/workflows/verify.yml" "$ROOT/.github/workflows/codeql.yml" >/dev/null
-grep -F 'actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020' "$ROOT/.github/workflows/verify.yml" >/dev/null
-grep -F 'github/codeql-action/init@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81' "$ROOT/.github/workflows/codeql.yml" >/dev/null
-grep -F 'github/codeql-action/analyze@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81' "$ROOT/.github/workflows/codeql.yml" >/dev/null
+# Each reviewed action revision is asserted by hand so that a swapped action is
+# a verification failure rather than a silent change. A dependency bot updating
+# an action therefore needs the pin here updated in the same change; without a
+# message naming the pin, that failure reads as an unexplained exit.
+require_action_pin() {
+  local pin="$1"
+  shift
+  if ! grep -F "$pin" "$@" >/dev/null; then
+    echo "reviewed GitHub Actions pin $pin is missing from ${*#"$ROOT/"}; update this pin in the same change that bumps the action" >&2
+    exit 1
+  fi
+}
+require_action_pin 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' "$ROOT/.github/workflows/verify.yml" "$ROOT/.github/workflows/codeql.yml"
+require_action_pin 'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020' "$ROOT/.github/workflows/verify.yml"
+require_action_pin 'github/codeql-action/init@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81' "$ROOT/.github/workflows/codeql.yml"
+require_action_pin 'github/codeql-action/analyze@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81' "$ROOT/.github/workflows/codeql.yml"
 grep -F 'git cat-file -t "refs/tags/$RELEASE_TAG"' "$ROOT/.github/workflows/verify.yml" >/dev/null
 if grep -R -E '^[[:space:]]*uses:[[:space:]]+[^@[:space:]]+@(main|master|v[0-9]+([.][0-9]+)*)[[:space:]]*(#.*)?$' "$ROOT/.github/workflows" >/dev/null; then
   echo "GitHub Actions workflow contains a mutable action reference" >&2
