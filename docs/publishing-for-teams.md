@@ -42,7 +42,7 @@ pi install /path/to/piagent
 
 - `0.1.x`: local/internal pilot.
 - `0.2.x`: có guard ổn định và docs team.
-- `1.0.1`: đủ security review, MCP registry, adapter schema versioned.
+- `1.0.2`: đủ security review, MCP registry, adapter schema versioned.
 
 ## Không publish
 

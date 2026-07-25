@@ -798,7 +798,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.0.1 docs</span>
+        <span class="pill"><span class="pill-dot"></span>v1.0.2 docs</span>
         <a class="button social" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer" aria-label="Mở GitHub repository">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
@@ -934,7 +934,7 @@
               <article class="step">
                 <div>
                   <h3>Chuẩn bị runtime</h3>
-                  <p>Dùng Node.js 22.19.0 trở lên và Pi Coding Agent <span class="inline-code">0.81.1</span>. Pi Agent Platform <span class="inline-code">v1.0.1</span> đang pin compatibility với runtime này và công bố support matrix theo OS/CPU riêng cho platform helper.</p>
+                  <p>Dùng Node.js 22.19.0 trở lên và Pi Coding Agent <span class="inline-code">0.81.1</span>. Pi Agent Platform <span class="inline-code">v1.0.2</span> đang pin compatibility với runtime này và công bố support matrix theo OS/CPU riêng cho platform helper.</p>
                   <div class="table-wrap compact-table">
                     <table>
                       <thead>
@@ -984,14 +984,14 @@ piagent-setup</code></pre>
                   <p>Muốn kiểm soát từng lớp thì cài tay: helper trước, rồi dùng helper đó resolve stable tag thành commit SHA và cài Pi package matching. Trong output, <span class="inline-code">currentRelease</span> là version của terminal helper đang chạy. Direct Pi install chỉ dùng khi không cần command <span class="inline-code">piagent-*</span>.</p>
                   <p>Hai thành phần này lấy từ hai nguồn khác nhau, và đó là chủ ý. Helper là tarball đã publish nên npm verify được provenance attestation gắn với commit build ra nó. Pi package thì dựa vào việc resolve tag thành commit SHA rồi đối chiếu với <span class="inline-code">PIAGENT_EXPECTED_RELEASE_COMMIT</span> — một phép kiểm mà version range của registry không diễn đạt được. Trỏ <span class="inline-code">stable</span> sang npm là bỏ phép kiểm đó chứ không phải thay nó, nên nguồn <span class="inline-code">git:</span> được giữ nguyên. Máy không có quyền Git tới repo này thì dùng channel <span class="inline-code">npm:@piagent/platform@x.y.z</span>.</p>
                   <div class="command-card">
-                    <header><span>Stable helper install</span><button class="clip-btn" data-clip="npm install -g --ignore-scripts @piagent/platform@1.0.1&#10;piagent-install --stable --dry-run&#10;piagent-install --stable">Lấy lệnh</button></header>
-                    <pre><code>npm install -g --ignore-scripts @piagent/platform@1.0.1
+                    <header><span>Stable helper install</span><button class="clip-btn" data-clip="npm install -g --ignore-scripts @piagent/platform@1.0.2&#10;piagent-install --stable --dry-run&#10;piagent-install --stable">Lấy lệnh</button></header>
+                    <pre><code>npm install -g --ignore-scripts @piagent/platform@1.0.2
 piagent-install --stable --dry-run
 piagent-install --stable</code></pre>
                   </div>
                   <div class="command-card">
-                    <header><span>Direct Pi package only</span><button class="clip-btn" data-clip="pi install git:github.com/Vt-mmm/piagent@v1.0.1">Lấy lệnh</button></header>
-                    <pre><code>pi install git:github.com/Vt-mmm/piagent@v1.0.1</code></pre>
+                    <header><span>Direct Pi package only</span><button class="clip-btn" data-clip="pi install git:github.com/Vt-mmm/piagent@v1.0.2">Lấy lệnh</button></header>
+                    <pre><code>pi install git:github.com/Vt-mmm/piagent@v1.0.2</code></pre>
                   </div>
                 </div>
               </article>

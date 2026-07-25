@@ -2,7 +2,9 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
-## Unreleased
+## v1.0.2 - 2026-07-25
+
+Install and uninstall become two commands each. The five-command sequence was never the shortest path; it was the only one that produced a project configuration a teammate could use.
 
 ### Added
 

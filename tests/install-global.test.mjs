@@ -30,21 +30,21 @@ if [[ "\${PI_INSTALL_FAKE_GIT_MODE:-}" == "missing" ]]; then
 fi
 if [[ "$1" == "ls-remote" ]]; then
   for arg in "$@"; do
-    if [[ "$arg" == "refs/tags/v1.0.1" ]]; then
-      printf '${resolvedCommit}\\trefs/tags/v1.0.1\\n'
+    if [[ "$arg" == "refs/tags/v1.0.2" ]]; then
+      printf '${resolvedCommit}\\trefs/tags/v1.0.2\\n'
       exit 0
     fi
-    if [[ "$arg" == "refs/tags/v1.0.1^{}" ]]; then
-      printf '${resolvedCommit}\\trefs/tags/v1.0.1^{}\\n'
+    if [[ "$arg" == "refs/tags/v1.0.2^{}" ]]; then
+      printf '${resolvedCommit}\\trefs/tags/v1.0.2^{}\\n'
       exit 0
     fi
-    if [[ "$arg" == "refs/tags/v1.0.1-annotated" ]]; then
-      printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\trefs/tags/v1.0.1-annotated\\n'
-      printf '${annotatedCommit}\\trefs/tags/v1.0.1-annotated^{}\\n'
+    if [[ "$arg" == "refs/tags/v1.0.2-annotated" ]]; then
+      printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\trefs/tags/v1.0.2-annotated\\n'
+      printf '${annotatedCommit}\\trefs/tags/v1.0.2-annotated^{}\\n'
       exit 0
     fi
-    if [[ "$arg" == "refs/tags/v1.0.1-annotated^{}" ]]; then
-      printf '${annotatedCommit}\\trefs/tags/v1.0.1-annotated^{}\\n'
+    if [[ "$arg" == "refs/tags/v1.0.2-annotated^{}" ]]; then
+      printf '${annotatedCommit}\\trefs/tags/v1.0.2-annotated^{}\\n'
       exit 0
     fi
   done
@@ -95,24 +95,24 @@ describe("install-global release channels", () => {
     const result = runInstaller(["--stable", "--dry-run", "--no-model-scope"]);
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /channel: stable/);
-    assert.match(result.stdout, /currentRelease: v1\.0\.1 \(helper package version\)/);
+    assert.match(result.stdout, /currentRelease: v1\.0\.2 \(helper package version\)/);
     assert.match(result.stdout, /runtime: .+/);
-    assert.match(result.stdout, /tag: v1\.0\.1/);
+    assert.match(result.stdout, /tag: v1\.0\.2/);
     assert.match(result.stdout, new RegExp(`resolvedCommit: ${resolvedCommit}`));
     assert.match(result.stdout, new RegExp(`source: git:github.com/Vt-mmm/piagent@${resolvedCommit}`));
     assert.match(result.stdout, new RegExp(`\\+ pi install git:github.com/Vt-mmm/piagent@${resolvedCommit}`));
   });
 
   it("resolves exact version tags when requested", () => {
-    const result = runInstaller(["--version", "v1.0.1", "--resolve-tag", "--dry-run", "--no-model-scope"]);
+    const result = runInstaller(["--version", "v1.0.2", "--resolve-tag", "--dry-run", "--no-model-scope"]);
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /channel: exact/);
-    assert.match(result.stdout, /tag: v1\.0\.1/);
+    assert.match(result.stdout, /tag: v1\.0\.2/);
     assert.match(result.stdout, new RegExp(`resolvedCommit: ${resolvedCommit}`));
   });
 
   it("uses annotated tag dereference when available", () => {
-    const result = runInstaller(["--version", "v1.0.1-annotated", "--resolve-tag", "--dry-run", "--no-model-scope"]);
+    const result = runInstaller(["--version", "v1.0.2-annotated", "--resolve-tag", "--dry-run", "--no-model-scope"]);
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, new RegExp(`resolvedCommit: ${annotatedCommit}`));
     assert.match(result.stdout, new RegExp(`source: git:github.com/Vt-mmm/piagent@${annotatedCommit}`));
@@ -121,7 +121,7 @@ describe("install-global release channels", () => {
   it("fails closed when stable tag cannot be resolved", () => {
     const result = runInstaller(["--stable", "--dry-run", "--no-model-scope"], { PI_INSTALL_FAKE_GIT_MODE: "missing" });
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /could not resolve release tag v1\.0\.1/);
+    assert.match(result.stderr, /could not resolve release tag v1\.0\.2/);
     assert.doesNotMatch(result.stdout, /\+ pi install/);
   });
 
@@ -130,8 +130,8 @@ describe("install-global release channels", () => {
       PIAGENT_CURRENT_RELEASE_TAG: "v9.9.9-missing"
     });
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /currentRelease: v1\.0\.1/);
-    assert.match(result.stdout, /tag: v1\.0\.1/);
+    assert.match(result.stdout, /currentRelease: v1\.0\.2/);
+    assert.match(result.stdout, /tag: v1\.0\.2/);
   });
 
   it("can require stable resolution to match the release commit", () => {
@@ -162,7 +162,7 @@ describe("install-global release channels", () => {
   it("setup upgrades an old Pi host or fails when auto-install is disabled", () => {
     const common = [
       "--global-only",
-      "--package-source", "git:github.com/Vt-mmm/piagent@v1.0.1",
+      "--package-source", "git:github.com/Vt-mmm/piagent@v1.0.2",
       "--dry-run",
       "--no-mcp",
       "--no-subagents",
@@ -181,7 +181,7 @@ describe("install-global release channels", () => {
   it("rejects --resolve-tag outside stable or exact version channels", () => {
     const dev = runInstaller(["--dev", "--resolve-tag", "--dry-run", "--no-model-scope"]);
     const local = runInstaller(["--local", "--resolve-tag", "--dry-run", "--no-model-scope"]);
-    const custom = runInstaller(["--package-source", "git:github.com/Vt-mmm/piagent@v1.0.1", "--resolve-tag", "--dry-run", "--no-model-scope"]);
+    const custom = runInstaller(["--package-source", "git:github.com/Vt-mmm/piagent@v1.0.2", "--resolve-tag", "--dry-run", "--no-model-scope"]);
     assert.equal(dev.status, 2);
     assert.match(dev.stderr, /cannot be used with the floating dev\/latest channel/);
     assert.equal(local.status, 2);
@@ -192,13 +192,13 @@ describe("install-global release channels", () => {
 
   it("rejects every second CLI package selector before install", () => {
     const selectors = [
-      { name: "package-source", args: ["--package-source", "git:github.com/Vt-mmm/piagent@v1.0.1"] },
+      { name: "package-source", args: ["--package-source", "git:github.com/Vt-mmm/piagent@v1.0.2"] },
       { name: "channel", args: ["--channel", "stable"] },
       { name: "stable", args: ["--stable"] },
       { name: "dev", args: ["--dev"] },
       { name: "local", args: ["--local"] },
-      { name: "version", args: ["--version", "v1.0.1"] },
-      { name: "tag", args: ["--tag", "v1.0.1"] }
+      { name: "version", args: ["--version", "v1.0.2"] },
+      { name: "tag", args: ["--tag", "v1.0.2"] }
     ];
 
     for (const first of selectors) {
@@ -230,12 +230,12 @@ describe("install-global release channels", () => {
     assert.match(dev.stdout, /channel: dev/);
     assert.match(dev.stdout, /source: git:github.com\/Vt-mmm\/piagent$/m);
 
-    const exact = runInstaller(["--version", "v1.0.1", "--dry-run", "--no-model-scope"], {
+    const exact = runInstaller(["--version", "v1.0.2", "--dry-run", "--no-model-scope"], {
       PIAGENT_RELEASE_CHANNEL: "dev"
     });
     assert.equal(exact.status, 0, exact.stderr);
     assert.match(exact.stdout, /channel: exact/);
-    assert.match(exact.stdout, /source: git:github.com\/Vt-mmm\/piagent@v1\.0\.1/);
+    assert.match(exact.stdout, /source: git:github.com\/Vt-mmm\/piagent@v1\.0\.2/);
   });
 
   it("fails closed on missing option values", () => {

@@ -58,12 +58,12 @@ describe("uninstall", () => {
     // Uninstall touches Pi state other tools also write to, so the default has
     // to be a report.
     const root = scratch();
-    const agent = agentDir(root, ["npm:@piagent/platform@1.0.1"]);
+    const agent = agentDir(root, ["npm:@piagent/platform@1.0.2"]);
     const result = run([], { root, agent });
 
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /mode: dry run/);
-    assert.match(result.stdout, /\+ pi remove npm:@piagent\/platform@1\.0\.1/);
+    assert.match(result.stdout, /\+ pi remove npm:@piagent\/platform@1\.0\.2/);
     assert.match(result.stdout, /Nothing was removed/);
     assert.equal(fs.existsSync(path.join(root, "pi-calls.log")), false, "dry run must not invoke pi");
   });
@@ -72,8 +72,8 @@ describe("uninstall", () => {
     // An install from an earlier release registered a different source, and it
     // still has to come out.
     const shapes = [
-      "npm:@piagent/platform@1.0.1",
-      "git:github.com/Vt-mmm/piagent@v1.0.1",
+      "npm:@piagent/platform@1.0.2",
+      "git:github.com/Vt-mmm/piagent@v1.0.2",
       "git:github.com/Vt-mmm/piagent",
       "/Users/someone/Documents/pi-company-platform",
       "../../Documents/pi-company-platform/packages/pi-company-core"
@@ -99,7 +99,7 @@ describe("uninstall", () => {
   });
 
   it("removes the pinned add-ons only when asked", () => {
-    const packages = ["npm:@piagent/platform@1.0.1", "npm:pi-mcp-adapter@2.11.0", "npm:pi-subagents@0.35.1"];
+    const packages = ["npm:@piagent/platform@1.0.2", "npm:pi-mcp-adapter@2.11.0", "npm:pi-subagents@0.35.1"];
 
     const without = scratch();
     run(["--apply"], { root: without, agent: agentDir(without, packages) });
@@ -130,7 +130,7 @@ describe("uninstall", () => {
     }
     fs.writeFileSync(path.join(project, ".pi", "settings.json"), JSON.stringify({
       defaultProjectTrust: "ask",
-      packages: ["npm:@piagent/platform@1.0.1", "npm:someone-elses-extension@2.0.0"]
+      packages: ["npm:@piagent/platform@1.0.2", "npm:someone-elses-extension@2.0.0"]
     }, null, 2));
 
     const result = run(["--apply", "--project", project], { root, agent });
@@ -170,7 +170,7 @@ describe("uninstall", () => {
 
   it("has side-effect-free help and rejects unknown arguments", () => {
     const root = scratch();
-    const agent = agentDir(root, ["npm:@piagent/platform@1.0.1"]);
+    const agent = agentDir(root, ["npm:@piagent/platform@1.0.2"]);
 
     const help = run(["--help"], { root, agent });
     assert.equal(help.status, 0);
@@ -186,7 +186,7 @@ describe("uninstall", () => {
     // Removing the host first is a normal order of operations; the script has
     // to say what is left rather than fail.
     const root = scratch();
-    const agent = agentDir(root, ["npm:@piagent/platform@1.0.1"]);
+    const agent = agentDir(root, ["npm:@piagent/platform@1.0.2"]);
     const empty = path.join(root, "empty-bin");
     fs.mkdirSync(empty, { recursive: true });
     const result = spawnSync("bash", [script, "--apply"], {

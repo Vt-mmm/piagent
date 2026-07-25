@@ -28,7 +28,7 @@ function writeJson(file, value) {
 function writeExternalPack(root, overrides = {}) {
   const metadata = {
     name: "acme-delivery",
-    version: "1.0.1",
+    version: "1.0.2",
     owner: "acme",
     lifecycle: "experimental",
     license: "MIT",
@@ -80,7 +80,7 @@ function baseProfile(overrides = {}) {
     requiredContext: [],
     verifyCommands: [],
     mcpCapabilities: [],
-    capabilityPacks: [{ name: "acme-delivery", version: "1.0.1" }],
+    capabilityPacks: [{ name: "acme-delivery", version: "1.0.2" }],
     capabilityPolicy: {
       allowedOwners: ["acme"],
       allowedLifecycles: ["experimental"],
@@ -122,7 +122,7 @@ describe("capability source declarations", () => {
   });
 
   it("refuses a remote source carrying credentials", () => {
-    assert.throws(() => validateCapabilitySources([{ name: "acme", source: "git:user:token@github.com/acme/packs@1.0.1" }]));
+    assert.throws(() => validateCapabilitySources([{ name: "acme", source: "git:user:token@github.com/acme/packs@1.0.2" }]));
   });
 
   it("refuses a path that climbs out of the project", () => {
@@ -139,7 +139,7 @@ describe("capability source declarations", () => {
 
   it("refuses an unsupported scheme", () => {
     assert.throws(() => validateCapabilitySources([{ name: "acme", source: "file:///etc/passwd" }]));
-    assert.throws(() => validateCapabilitySources([{ name: "acme", source: "https://example.com/packs/archive/refs/tags/v1.0.1.tar.gz" }]));
+    assert.throws(() => validateCapabilitySources([{ name: "acme", source: "https://example.com/packs/archive/refs/tags/v1.0.2.tar.gz" }]));
   });
 });
 
@@ -234,7 +234,7 @@ describe("resolving packs from an external source", () => {
     writeExternalPack(path.join(project, ".pi", "packs"));
     const roots = resolveCapabilitySourceRoots(project, [{ name: "team", path: ".pi/packs" }]);
     const records = scanCapabilityPacks(platformRoot, { extraRoots: roots });
-    const external = records.find((record) => record.key === "acme-delivery@1.0.1");
+    const external = records.find((record) => record.key === "acme-delivery@1.0.2");
     assert.ok(external, "the external pack must appear in the scan");
     assert.equal(external.origin, "team");
     assert.ok(records.some((record) => record.origin === "workspace"), "platform packs must still resolve");

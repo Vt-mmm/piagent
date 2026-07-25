@@ -42,17 +42,17 @@ Muốn cài tay từng lớp để kiểm soát chặt hơn:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
-npm install -g --ignore-scripts @piagent/platform@1.0.1
+npm install -g --ignore-scripts @piagent/platform@1.0.2
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
 
-Lệnh trên cài Pi CLI, cài terminal command `piagent-*`, rồi install Pi Agent Platform bằng stable release đã resolve tag thành commit SHA. Trong output installer, `currentRelease` là version của terminal helper đang chạy. `v1.0.1` là release hiện tại của docs này.
+Lệnh trên cài Pi CLI, cài terminal command `piagent-*`, rồi install Pi Agent Platform bằng stable release đã resolve tag thành commit SHA. Trong output installer, `currentRelease` là version của terminal helper đang chạy. `v1.0.2` là release hiện tại của docs này.
 
 Nếu chỉ cần cài package vào Pi và không cần terminal command helper:
 
 ```bash
-pi install git:github.com/Vt-mmm/piagent@v1.0.1
+pi install git:github.com/Vt-mmm/piagent@v1.0.2
 ```
 
 Nếu đang ở source checkout của platform, có thể preview và áp stable bằng helper:
@@ -229,7 +229,7 @@ Nếu chưa có profile/tech stack, dùng select-style flow để tránh agent t
 bash /path/to/piagent/scripts/setup.sh /path/to/project \
   --project-only \
   --profile auto \
-  --package-source git:github.com/Vt-mmm/piagent@v1.0.1 \
+  --package-source git:github.com/Vt-mmm/piagent@v1.0.2 \
   --mcp-preset core \
   --subagents-preset safe
 ```
@@ -252,7 +252,7 @@ Script bash chỉ dùng khi muốn preseed config vào repo:
 ```bash
 bash /path/to/piagent/scripts/setup.sh /path/to/project \
   --profile be-readonly-fe \
-  --package-source git:github.com/Vt-mmm/piagent@v1.0.1 \
+  --package-source git:github.com/Vt-mmm/piagent@v1.0.2 \
   --mcp-preset core \
   --subagents-preset safe
 ```

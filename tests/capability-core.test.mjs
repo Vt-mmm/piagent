@@ -102,7 +102,7 @@ function baseProfile() {
 function createPlatformFixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-capability-"));
   temporaryRoots.add(root);
-  writeJson(path.join(root, "package.json"), { name: "fixture", version: "1.0.1" });
+  writeJson(path.join(root, "package.json"), { name: "fixture", version: "1.0.2" });
   fs.cpSync(path.join(repositoryRoot, "packages", "piagent-core"), path.join(root, "packages", "piagent-core"), { recursive: true });
   fs.writeFileSync(path.join(root, "artifact.txt"), "bounded artifact\n");
   writeJson(path.join(root, "packs", "test-pack", "pack.json"), baseManifest());
