@@ -38,6 +38,7 @@ import {
   verifyCapabilityLock,
   writeProfileLockAtomic
 } from "../capabilities/capability-core.js";
+import { resolveCapabilitySourceRoots } from "../capabilities/capability-sources.js";
 
 import type {
   BasePolicy,
@@ -494,6 +495,21 @@ function projectPackageSource(cwd: string): string {
   return source ?? "workspace";
 }
 
+// A project may use capability packs it does not own by declaring them in its
+// profile. Resolution reads only what is already on disk under the project;
+// fetching happens in an explicit maintainer command, never here. A source that
+// is declared but not present throws, and every caller treats that as a
+// refusal — an unresolvable source must not silently resolve to fewer packs
+// than the profile asked for.
+function capabilitySourceRoots(
+  cwd: string,
+  profile: ProjectProfile
+): ReturnType<typeof resolveCapabilitySourceRoots> | undefined {
+  const declared = (profile as { capabilitySources?: unknown }).capabilitySources;
+  if (declared === undefined) return undefined;
+  return resolveCapabilitySourceRoots(cwd, declared as Parameters<typeof resolveCapabilitySourceRoots>[1]);
+}
+
 type ProjectCapabilityState = {
   ok: boolean;
   reason?: string;
@@ -514,7 +530,8 @@ function verifyProjectCapabilityState(extensionDir: string, cwd: string, project
   if (!lock) return { ok: false, reason: "Capability lock is unreadable. Reapply the project profile." };
   try {
     const verification = verifyCapabilityLock(findPlatformRoot(extensionDir), profilePath, lock, {
-      packageSource: projectPackageSource(cwd)
+      packageSource: projectPackageSource(cwd),
+      extraRoots: capabilitySourceRoots(cwd, profile)
     });
     return verification.ok
       ? {
@@ -3434,7 +3451,8 @@ function writeProfileDocumentWithLock(extensionDir: string, cwd: string, profile
   const target = projectProfilePath(cwd);
   const capabilityLock = resolveCapabilityProfileDocument(findPlatformRoot(extensionDir), profile, {
     profileFile: "piagent-profile.json",
-    packageSource: projectPackageSource(cwd)
+    packageSource: projectPackageSource(cwd),
+    extraRoots: capabilitySourceRoots(cwd, profile)
   });
   fs.mkdirSync(path.dirname(target), { recursive: true });
   writeProfileLockAtomic(target, profile, path.join(cwd, ".pi", "piagent-profile.lock.json"), capabilityLock);

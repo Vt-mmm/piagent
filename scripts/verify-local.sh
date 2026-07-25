@@ -172,6 +172,8 @@ required_files=(
   "$ROOT/tests/redaction-core.test.mjs"
   "$ROOT/tests/runtime-evidence.test.mjs"
   "$ROOT/tests/golden-enforcement.test.mjs"
+  "$ROOT/tests/capability-sources.test.mjs"
+  "$ROOT/packages/piagent-core/capabilities/capability-sources.js"
   "$ROOT/tests/migrate-project-state.test.mjs"
   "$ROOT/tests/import-agent-instructions.test.mjs"
   "$ROOT/evals/golden/enforcement-decisions.json"
@@ -430,6 +432,7 @@ node --check "$ROOT/packages/piagent-core/extensions/redaction-core.js" >/dev/nu
 node --check "$ROOT/packages/piagent-core/extensions/runtime-evidence.js" >/dev/null
 node --check "$ROOT/packages/piagent-core/security/sensitive-data.js" >/dev/null
 node --check "$ROOT/packages/piagent-core/capabilities/capability-core.js" >/dev/null
+node --check "$ROOT/packages/piagent-core/capabilities/capability-sources.js" >/dev/null
 node --check "$ROOT/scripts/capability-catalog.mjs" >/dev/null
 node --check "$ROOT/scripts/piagent-cli.mjs" >/dev/null
 node --check "$ROOT/scripts/migrate-project-state.mjs" >/dev/null

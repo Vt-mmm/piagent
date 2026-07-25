@@ -36,7 +36,7 @@ function writeJson(file, value) {
 
 function baseManifest(name = "test-pack") {
   return {
-    apiVersion: "piagent/v1alpha1",
+    apiVersion: "piagent/v1",
     kind: "CapabilityPack",
     metadata: {
       name,
@@ -112,7 +112,7 @@ function createPlatformFixture() {
 
 function validActionProposal() {
   return {
-    apiVersion: "piagent/v1alpha1",
+    apiVersion: "piagent/v1",
     kind: "ExternalActionProposal",
     metadata: {
       name: "publish-change",
@@ -443,7 +443,7 @@ describe("capability input boundaries", () => {
 describe("recipe and action proposal validation", () => {
   it("rejects cyclic recipe steps", () => {
     const recipe = {
-      apiVersion: "piagent/v1alpha1",
+      apiVersion: "piagent/v1",
       kind: "CapabilityRecipe",
       metadata: {
         name: "cyclic-recipe",

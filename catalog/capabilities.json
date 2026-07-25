@@ -19,8 +19,8 @@
           "path": "adapters/generic/profile.json"
         },
         {
-          "byteSize": 1140,
-          "digest": "sha256:6c8a7b3f1d8407b1d6fbc50673dfb91a41ffad866ddc45786a154def77538c56",
+          "byteSize": 1134,
+          "digest": "sha256:8e3bbe4c8ab19ab46f02e02b0763b78fa4784160b11210b7350a35730b02ee81",
           "id": "capability-resolution",
           "kind": "evals",
           "path": "evals/scenarios/capability-resolution.json"
@@ -68,8 +68,8 @@
           "path": "packages/piagent-core/prompts/task.md"
         },
         {
-          "byteSize": 1796,
-          "digest": "sha256:ffc1b0bd7a17b543be617916552029406e4007ebc7d939dbf8f55e8d1c11a17d",
+          "byteSize": 1790,
+          "digest": "sha256:1f4262cf53cf527ea1b5f89a938f3aafb5006e1b091ad49132d810c13489db2c",
           "id": "bounded-change",
           "kind": "recipes",
           "path": "packs/engineering-base/recipes/bounded-change.json"
@@ -112,10 +112,11 @@
       ],
       "dependencies": [],
       "description": "Core engineering workflow, policy, verification, and task coordination capabilities.",
-      "digest": "sha256:33d88c8a7e43378b3f3ee4053dc28e960e6b8e7da96bdb7e761ae9b1d32d8523",
+      "digest": "sha256:b9671f0c2da79012b8638c98459d5bbe9e444fd39fdabe17f54477ec18cc9fdf",
       "license": "MIT",
       "lifecycle": "experimental",
       "name": "engineering-base",
+      "origin": "workspace",
       "owner": "platform-maintainers",
       "permissions": {
         "capabilities": [
@@ -133,6 +134,7 @@
         ],
         "networkDomains": []
       },
+      "source": "workspace",
       "tags": [
         "engineering",
         "governance"
@@ -156,8 +158,8 @@
           "path": "adapters/web-frontend/profile.json"
         },
         {
-          "byteSize": 1282,
-          "digest": "sha256:977be3575786416ce93760e264e582faf9ca19241dcd1891015b3c5210dfe60a",
+          "byteSize": 1276,
+          "digest": "sha256:96959d1f93a01c8e100d0ab72d1b820046491ba6220bc1361263c3258e2224c5",
           "id": "verified-web-change",
           "kind": "recipes",
           "path": "packs/web-delivery/recipes/verified-web-change.json"
@@ -170,10 +172,11 @@
         }
       ],
       "description": "Web application delivery capabilities with browser-assisted verification.",
-      "digest": "sha256:54072e1f9587e0458c23649e8f834691dd789fc76cf35b5a9a7f07ac31d463ec",
+      "digest": "sha256:b5a74b3ef869fe777a870b4b450ae9dc91d30e3370ce369a03d939abef8606cf",
       "license": "MIT",
       "lifecycle": "experimental",
       "name": "web-delivery",
+      "origin": "workspace",
       "owner": "platform-maintainers",
       "permissions": {
         "capabilities": [
@@ -191,6 +194,7 @@
         ],
         "networkDomains": []
       },
+      "source": "workspace",
       "tags": [
         "frontend",
         "web"

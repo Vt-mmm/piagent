@@ -191,9 +191,43 @@ Pack không thể cấp thêm quyền cho chính nó:
 5. Chạy `npm test` và `npm run capabilities:catalog`.
 6. Chạy `npm run verify` trước handoff.
 
+## Capability source (pack ngoài platform)
+
+Project dùng được pack không thuộc repo này mà không cần fork. Khai trong `.pi/piagent-profile.json`:
+
+```json
+{
+  "capabilitySources": [
+    { "name": "team", "path": ".pi/packs" },
+    { "name": "acme", "source": "npm:@acme/piagent-packs@1.2.3" }
+  ]
+}
+```
+
+Mỗi entry khai đúng một trong hai:
+
+- `path` — thư mục nằm trong project. Không cần network, không cần publish.
+- `source` — npm hoặc git ở version/tag/commit chính xác. Range (`^1.2.3`, `latest`, `main`) bị từ chối vì lock mất ý nghĩa nếu code đổi mà lock không đổi.
+
+Thư mục nguồn phải chứa `packs/`, nằm trong project, và không chứa symlink.
+
+### Vendor
+
+`source` được fetch bằng một lệnh riêng, chạy có chủ đích:
+
+```bash
+piagent-capabilities vendor --profile .pi/piagent-profile.json
+```
+
+Lệnh này ghi vào `.pi/capability-vendor/<name>/` và in digest để review trước khi commit. Đây là chỗ duy nhất chạm network. Resolve và guard chỉ đọc thứ đã có trên đĩa, nên pack không đổi được giữa lúc review và lúc chạy. Nguồn khai mà chưa vendor thì resolve fail — không im lặng chạy với ít pack hơn profile yêu cầu.
+
+### Vẫn deny by default
+
+Khai source không cấp quyền gì. Pack ngoài vẫn phải qua `capabilityPolicy` như pack nội bộ: owner lạ bị từ chối chứ không phải cảnh báo, và `allowedOwners` phải liệt kê owner đó trước. Lock ghi cả `origin` và `source` của từng pack, nên pack đổi nguồn là thay thế chứ không phải update.
+
 ## Giới hạn hiện tại
 
-- Catalog là local file, chưa có remote discovery service.
+- Catalog là local file, chưa có remote discovery service. Catalog chỉ chứa pack của platform; pack ngoài xuất hiện trong lock của project.
 - Lock là preflight và integrity contract; runtime guard xác minh lại trước mỗi tool call đối với profile hiện hành. `PIAGENT_PROFILE` trusted override và legacy profile chưa khai `capabilityPacks` nằm ngoài lock gate; khi lock lỗi chỉ nhóm recovery/read-only tool giới hạn được phép hoạt động.
 - Eval scenario mới có schema và validation; execution matrix được triển khai ở phase tiếp theo.
 - Recipe binding nội bộ và eval scenario ID được kiểm tra trong exact dependency graph; capability binding vẫn do runtime tool registry giải quyết.

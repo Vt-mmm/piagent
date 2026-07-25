@@ -9,8 +9,8 @@
       "path": "adapters/generic/profile.json"
     },
     {
-      "byteSize": 1140,
-      "digest": "sha256:6c8a7b3f1d8407b1d6fbc50673dfb91a41ffad866ddc45786a154def77538c56",
+      "byteSize": 1134,
+      "digest": "sha256:8e3bbe4c8ab19ab46f02e02b0763b78fa4784160b11210b7350a35730b02ee81",
       "id": "capability-resolution",
       "kind": "evals",
       "pack": "engineering-base@0.1.1",
@@ -65,8 +65,8 @@
       "path": "packages/piagent-core/prompts/task.md"
     },
     {
-      "byteSize": 1796,
-      "digest": "sha256:ffc1b0bd7a17b543be617916552029406e4007ebc7d939dbf8f55e8d1c11a17d",
+      "byteSize": 1790,
+      "digest": "sha256:1f4262cf53cf527ea1b5f89a938f3aafb5006e1b091ad49132d810c13489db2c",
       "id": "bounded-change",
       "kind": "recipes",
       "pack": "engineering-base@0.1.1",
@@ -115,7 +115,7 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:fec8cf7d6edaf3c45dc211aea99682c5f02fc26538d32f571eec2874df4c2f4a",
+    "packageDigest": "sha256:272385b300739137cd998462a966785965ac76019152f48beebbb6335afb7cb1",
     "packageSource": "../",
     "packageVersion": "0.4.8",
     "runtimeFiles": [
@@ -135,9 +135,14 @@
         "path": "packages/piagent-core/policies/base-policy.json"
       },
       {
-        "byteSize": 53158,
-        "digest": "sha256:4b5c5d3cbb89f59643d86ff5ced7313d35f28d76611dd80d885687faedb1571c",
+        "byteSize": 55940,
+        "digest": "sha256:52c447f470f3fceb4b31fa7e24bd589d43898c92df69fa06a02e06888a6efccc",
         "path": "packages/piagent-core/capabilities/capability-core.js"
+      },
+      {
+        "byteSize": 12079,
+        "digest": "sha256:e355dc0336071bbf2ac9a96da3fe427affda4345fa153820b2c1524839acc6d3",
+        "path": "packages/piagent-core/capabilities/capability-sources.js"
       },
       {
         "byteSize": 7082,
@@ -145,8 +150,8 @@
         "path": "packages/piagent-core/security/sensitive-data.js"
       },
       {
-        "byteSize": 270346,
-        "digest": "sha256:5e562e85580be887ec27a4ffa975ad826ede8e6024e39cd424585ab63480e44b",
+        "byteSize": 271340,
+        "digest": "sha256:689f344d48febd3356daf321454f0ff7b282d5a163933e79e54c966410e6f578",
         "path": "packages/piagent-core/extensions/piagent-guard.ts"
       },
       {
@@ -173,10 +178,12 @@
   },
   "packs": [
     {
-      "digest": "sha256:33d88c8a7e43378b3f3ee4053dc28e960e6b8e7da96bdb7e761ae9b1d32d8523",
+      "digest": "sha256:b9671f0c2da79012b8638c98459d5bbe9e444fd39fdabe17f54477ec18cc9fdf",
       "lifecycle": "experimental",
       "name": "engineering-base",
+      "origin": "workspace",
       "owner": "platform-maintainers",
+      "source": "workspace",
       "version": "0.1.1"
     }
   ],

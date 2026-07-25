@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { containsSensitiveText } from "../security/sensitive-data.js";
 
-const API_VERSION = "piagent/v1alpha1";
+const API_VERSION = "piagent/v1";
 const CORE_API_VERSION = 1;
 const MAX_JSON_BYTES = 256 * 1024;
 const MAX_ARTIFACT_BYTES = 2 * 1024 * 1024;
@@ -483,7 +483,12 @@ function validateEvalResources(root, file, document) {
   }
 }
 
-export function scanCapabilityPacks(root) {
+/**
+ * Scan one pack root. Every root — the platform's own and any external source —
+ * goes through this same function, so an external tree gets exactly the
+ * containment and validation the platform's own packs get.
+ */
+function scanPackRoot(root, { origin, source, records, keys }) {
   const rootReal = fs.realpathSync(root);
   const packsDirectory = path.join(rootReal, "packs");
   const packsStat = fs.lstatSync(packsDirectory);
@@ -492,8 +497,6 @@ export function scanCapabilityPacks(root) {
     .filter((entry) => !entry.name.startsWith("."))
     .sort((left, right) => compareCodePoints(left.name, right.name));
   if (entries.length > 256) throw new CapabilityValidationError("packs must contain at most 256 entries");
-  const records = [];
-  const keys = new Set();
   for (const entry of entries) {
     if (!entry.isDirectory() || entry.isSymbolicLink?.()) throw new CapabilityValidationError(`packs/${entry.name} must be a regular directory`);
     if (!NAME_PATTERN.test(entry.name)) throw new CapabilityValidationError(`packs/${entry.name} has an invalid directory name`);
@@ -503,8 +506,13 @@ export function scanCapabilityPacks(root) {
     validateCapabilityPack(manifest, { source: manifestPath });
     if (manifest.metadata.name !== entry.name) throw new CapabilityValidationError(`${manifestPath} metadata.name must match its directory name`);
     const key = `${manifest.metadata.name}@${manifest.metadata.version}`;
-    if (keys.has(key)) throw new CapabilityValidationError(`duplicate capability pack ${key}`);
-    keys.add(key);
+    // Uniqueness spans every root, not just this one. Two sources shipping the
+    // same name@version would otherwise let load order decide which code runs.
+    const previousOrigin = keys.get(key);
+    if (previousOrigin !== undefined) {
+      throw new CapabilityValidationError(`duplicate capability pack ${key} provided by both ${previousOrigin} and ${origin}`);
+    }
+    keys.set(key, origin);
     const artifacts = [];
     const recipes = [];
     for (const kind of [...PACK_KINDS].sort()) {
@@ -539,6 +547,8 @@ export function scanCapabilityPacks(root) {
     }
     records.push({
       key,
+      origin,
+      source,
       manifest,
       manifestPath,
       digest: sha256(stableJson(manifest)),
@@ -546,8 +556,35 @@ export function scanCapabilityPacks(root) {
       recipes
     });
   }
+}
+
+/**
+ * Scan the platform's own packs plus any external roots the caller resolved.
+ * External roots are produced by capability-sources, which is what verifies
+ * they sit inside the project and carry no symbolic links; this function is
+ * given directories and treats them all alike.
+ *
+ * @param {string} root
+ * @param {{extraRoots?: Array<{origin: string, root: string, source: string}>}} [options]
+ */
+export function scanCapabilityPacks(root, options = {}) {
+  const records = [];
+  const keys = new Map();
+  scanPackRoot(root, { origin: "workspace", source: "workspace", records, keys });
+  for (const extra of options.extraRoots ?? []) {
+    if (extra.origin === "workspace") throw new CapabilityValidationError("workspace is a reserved capability source name");
+    scanPackRoot(extra.root, { origin: extra.origin, source: extra.source, records, keys });
+  }
+  // The dependency graph spans every root: an external pack may depend on a
+  // platform pack, so it can only be checked once they are all present.
   validatePackGraph(records);
   return records;
+}
+
+// Manifest paths are root-relative, so the same string names a different file
+// in each root. Errors say which source a pack came from.
+function packLocation(record) {
+  return record.origin === "workspace" ? record.manifestPath : `${record.origin}:${record.manifestPath}`;
 }
 
 function validatePackGraph(records) {
@@ -558,10 +595,10 @@ function validatePackGraph(records) {
   for (const record of records) {
     const dependencies = record.manifest.spec.requires.packs.map((item) => `${item.name}@${item.version}`);
     graph.set(record.key, dependencies);
-    for (const dependency of dependencies) if (!byKey.has(dependency)) pushError(errors, record.manifestPath, `missing dependency ${dependency}`);
+    for (const dependency of dependencies) if (!byKey.has(dependency)) pushError(errors, packLocation(record), `missing dependency ${dependency}`);
     for (const artifact of record.artifacts) {
       const previous = artifactOwners.get(artifact.id);
-      if (previous) pushError(errors, record.manifestPath, `artifact id ${artifact.id} conflicts with ${previous}; artifact ids must be globally unique`);
+      if (previous) pushError(errors, packLocation(record), `artifact id ${artifact.id} conflicts with ${previous}; artifact ids must be globally unique`);
       else artifactOwners.set(artifact.id, `${record.key}/${artifact.kind}`);
     }
   }
@@ -584,11 +621,11 @@ function validatePackGraph(records) {
     const evals = new Set(available.filter((artifact) => artifact.kind === "evals").map((artifact) => artifact.id));
     for (const recipe of record.recipes) {
       for (const binding of recipe.uses) {
-        if (!recipes.has(binding)) pushError(errors, record.manifestPath, `recipe binding ${binding} is not provided by this pack or an exact dependency`);
+        if (!recipes.has(binding)) pushError(errors, packLocation(record), `recipe binding ${binding} is not provided by this pack or an exact dependency`);
       }
     }
     for (const scenario of record.manifest.spec.verification.evalScenarios) {
-      if (!evals.has(scenario)) pushError(errors, record.manifestPath, `eval scenario ${scenario} is not provided by this pack or an exact dependency`);
+      if (!evals.has(scenario)) pushError(errors, packLocation(record), `eval scenario ${scenario} is not provided by this pack or an exact dependency`);
     }
   }
   if (errors.length > 0) throw new CapabilityValidationError("capability dependency graph is invalid", errors);
@@ -598,14 +635,16 @@ function compareArtifact(left, right) {
   return compareCodePoints(`${left.kind}:${left.id}:${left.path}`, `${right.kind}:${right.id}:${right.path}`);
 }
 
-export function buildCapabilityCatalog(root) {
-  const records = scanCapabilityPacks(root);
+export function buildCapabilityCatalog(root, options = {}) {
+  const records = scanCapabilityPacks(root, options);
   return {
     schemaVersion: 1,
     coreApiVersion: CORE_API_VERSION,
     packs: records.map((record) => ({
       name: record.manifest.metadata.name,
       version: record.manifest.metadata.version,
+      origin: record.origin,
+      source: record.source,
       owner: record.manifest.metadata.owner,
       lifecycle: record.manifest.metadata.lifecycle,
       license: record.manifest.metadata.license,
@@ -743,6 +782,9 @@ function buildCoreIntegrity(root) {
     "packages/piagent-core/package.json",
     "packages/piagent-core/policies/base-policy.json",
     "packages/piagent-core/capabilities/capability-core.js",
+    // capability-sources.js decides which external trees become readable packs,
+    // so tampering with it changes which code the profile can grant.
+    "packages/piagent-core/capabilities/capability-sources.js",
     "packages/piagent-core/security/sensitive-data.js",
     "packages/piagent-core/extensions/piagent-guard.ts",
     // guard-io.js loads the project profile, so tampering with it changes what
@@ -768,7 +810,7 @@ export function resolveCapabilityProfileDocument(root, profile, options = {}) {
   const profileFile = options.profileFile ?? "piagent-profile.json";
   const packageSource = validateCapabilityPackageSource(options.packageSource);
   validateProfileSelection(profile, profileFile);
-  const catalog = buildCapabilityCatalog(rootReal);
+  const catalog = buildCapabilityCatalog(rootReal, { extraRoots: options.extraRoots });
   const byKey = new Map(catalog.packs.map((pack) => [`${pack.name}@${pack.version}`, pack]));
   const selected = new Map();
   const visiting = new Set();
@@ -790,14 +832,15 @@ export function resolveCapabilityProfileDocument(root, profile, options = {}) {
     select(key);
   }
 
-  const policy = profile.capabilityPolicy ?? {
-    allowedOwners: [],
-    allowedLifecycles: [],
-    allowedFilesystemRead: [],
-    allowedFilesystemWrite: [],
-    allowedNetworkDomains: [],
-    allowedExternalActions: []
-  };
+  // Every list defaults to empty, so a profile that declares only some of them
+  // denies the rest. Reading a missing list directly would throw a TypeError
+  // instead of refusing, which is the same outcome by accident rather than by
+  // rule.
+  const declaredPolicy = profile.capabilityPolicy ?? {};
+  const policy = Object.fromEntries(
+    ["allowedOwners", "allowedLifecycles", "allowedFilesystemRead", "allowedFilesystemWrite", "allowedNetworkDomains", "allowedExternalActions"]
+      .map((key) => [key, Array.isArray(declaredPolicy[key]) ? declaredPolicy[key] : []])
+  );
   const profileCapabilities = new Set(profile.mcpCapabilities ?? []);
   const basePolicy = readBasePolicyRestrictions(rootReal);
   const permissions = {
@@ -860,6 +903,10 @@ export function resolveCapabilityProfileDocument(root, profile, options = {}) {
     packs: [...selected.values()].map((pack) => ({
       name: pack.name,
       version: pack.version,
+      // Where the pack came from is part of what the lock pins. A pack that
+      // silently moves between sources is a substitution, not an update.
+      origin: pack.origin,
+      source: pack.source,
       owner: pack.owner,
       lifecycle: pack.lifecycle,
       digest: pack.digest
@@ -877,12 +924,16 @@ export function resolveCapabilityProfile(root, profilePath, options = {}) {
   const profile = readJsonFile(profileAbsolute);
   return resolveCapabilityProfileDocument(root, profile, {
     profileFile: path.basename(profileAbsolute),
-    packageSource: options.packageSource
+    packageSource: options.packageSource,
+    extraRoots: options.extraRoots
   });
 }
 
 export function verifyCapabilityLock(root, profilePath, lockDocument, options = {}) {
-  const expected = resolveCapabilityProfile(root, profilePath, { packageSource: options.packageSource });
+  const expected = resolveCapabilityProfile(root, profilePath, {
+    packageSource: options.packageSource,
+    extraRoots: options.extraRoots
+  });
   const expectedText = stableJson(expected);
   const actualText = stableJson(lockDocument);
   return {

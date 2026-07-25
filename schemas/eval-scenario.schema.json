@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": ["apiVersion", "kind", "metadata", "spec"],
   "properties": {
-    "apiVersion": { "const": "piagent/v1alpha1" },
+    "apiVersion": { "const": "piagent/v1" },
     "kind": { "const": "EvalScenario" },
     "metadata": { "$ref": "capability-pack.schema.json#/$defs/metadata" },
     "spec": {
