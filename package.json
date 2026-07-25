@@ -55,7 +55,7 @@
   },
   "pi": {
     "extensions": [
-      "packages/piagent-core/extensions/**/*.ts"
+      "packages/piagent-core/extensions/piagent-guard.ts"
     ],
     "skills": [
       "packages/piagent-core/skills"
