@@ -26,7 +26,18 @@ Support matrix của release hiện tại:
 | Native Windows | Chưa phải target rollout team; helper/shell policy cần Bash/POSIX semantics. |
 | WSL2 | Experimental, chưa release-gate. |
 
-Node.js phải từ `22.19.0` trở lên và Pi Coding Agent phải là `0.81.1`.
+Node.js phải từ `22.19.0` trở lên. Hai lệnh:
+
+```bash
+npm install -g @piagent/platform
+piagent-setup
+```
+
+Chạy `piagent-setup` ngay trong thư mục project. Nó tự cài đúng Pi Coding Agent `0.81.1` mà release này pin, cài Pi package, khởi tạo `.pi/`, rồi chạy doctor. Nó cũng cài MCP baseline và subagents; thêm `--no-mcp`, `--no-subagents` nếu không cần, hoặc `--global-only` nếu chưa muốn đụng project nào.
+
+Vì chạy từ package đã cài, source ghi vào `.pi/settings.json` là `npm:@piagent/platform@<version>` — portable, commit được.
+
+Muốn cài tay từng lớp để kiểm soát chặt hơn:
 
 ```bash
 node --version  # >= 22.19.0

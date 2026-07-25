@@ -244,6 +244,20 @@ NODE
     fi
   fi
 
+  # Running from an installed package rather than a checkout. The name and
+  # version on disk are exactly what a teammate resolves from the registry, so
+  # they are a portable source; the install path is not, and project settings
+  # are meant to be committed.
+  if [[ "$PLATFORM_ROOT" == */node_modules/* ]]; then
+    local installed_name installed_version
+    installed_name="$(node -e 'const fs=require("node:fs"); process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1], "utf8")).name ?? "");' "$PLATFORM_ROOT/package.json")"
+    installed_version="$(node -e 'const fs=require("node:fs"); process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1], "utf8")).version ?? "");' "$PLATFORM_ROOT/package.json")"
+    if [[ -n "$installed_name" && "$installed_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+      printf 'npm:%s@%s\n' "$installed_name" "$installed_version"
+      return
+    fi
+  fi
+
   echo "WARN: No exact package source provided." >&2
   echo "WARN: using local platform path; do not commit project .pi/settings.json with this value for team rollout." >&2
   printf '%s\n' "$PLATFORM_ROOT"

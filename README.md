@@ -109,7 +109,18 @@ Supported for this release:
 | Native Windows | Not a team-rollout target yet; terminal helpers and shell policy rely on Bash/POSIX semantics. |
 | WSL2 | Experimental and not release-gated yet. |
 
-Node.js `>=22.19.0` and Pi Coding Agent `0.81.1` are required. Pi Coding Agent is installed as a Node CLI; the project release matrix above defines which OS/CPU surfaces this platform has verified.
+Node.js `>=22.19.0` is required. Two commands:
+
+```bash
+npm install -g @piagent/platform
+piagent-setup
+```
+
+`piagent-setup` installs the exact Pi Coding Agent host this release pins, installs the Pi package, initializes the current directory, and runs the doctor. Run it from the project you want to set up. It also installs the MCP baseline and subagents; pass `--no-mcp` and `--no-subagents` to skip them, or `--global-only` to install nothing into a project.
+
+Because it is running from an installed package, the source it writes into `.pi/settings.json` is `npm:@piagent/platform@<version>`, which means the same thing on a teammate's machine.
+
+To install each component explicitly instead — for a pinned team rollout where every step is reviewed:
 
 ```bash
 node --version  # >= 22.19.0
@@ -119,7 +130,7 @@ piagent-install --stable --dry-run
 piagent-install --stable
 ```
 
-The npm command installs the `piagent-*` terminal helpers. `piagent-install --stable` then resolves the helper's release tag to a commit SHA and installs the matching Pi package. In its output, `currentRelease` is the version of the terminal helper currently executing.
+`piagent-install --stable` resolves the helper's release tag to a commit SHA and installs the matching Pi package. In its output, `currentRelease` is the version of the terminal helper currently executing. The project release matrix above defines which OS/CPU surfaces this platform has verified.
 
 If you only need to install the Pi package and do not need the `piagent-*` terminal commands, pin the current release tag or a reviewed commit directly:
 

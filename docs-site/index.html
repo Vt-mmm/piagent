@@ -974,7 +974,14 @@ pi --version</code></pre>
               <article class="step">
                 <div>
                   <h3>Cài Pi Agent Platform có pin</h3>
-                  <p>Team nên cài npm-global helper trước, rồi dùng helper đó resolve stable tag thành commit SHA và cài Pi package matching. Trong output, <span class="inline-code">currentRelease</span> là version của terminal helper đang chạy. Direct Pi install chỉ dùng khi không cần command <span class="inline-code">piagent-*</span>.</p>
+                  <p>Đường ngắn nhất là hai lệnh: cài helper từ npm, rồi chạy <span class="inline-code">piagent-setup</span> ngay trong thư mục project. Lệnh đó tự cài đúng Pi host mà release này pin, cài Pi package, khởi tạo <span class="inline-code">.pi/</span> và chạy doctor. Nó cũng cài sẵn MCP baseline và subagents; thêm <span class="inline-code">--no-mcp</span>, <span class="inline-code">--no-subagents</span> nếu không muốn, hoặc <span class="inline-code">--global-only</span> nếu chưa đụng tới project nào.</p>
+                  <div class="command-card">
+                    <header><span>Hai lệnh</span><button class="clip-btn" data-clip="npm install -g @piagent/platform&#10;piagent-setup">Lấy lệnh</button></header>
+                    <pre><code>npm install -g @piagent/platform
+piagent-setup</code></pre>
+                  </div>
+                  <p>Vì chạy từ package đã cài, source ghi vào <span class="inline-code">.pi/settings.json</span> là <span class="inline-code">npm:@piagent/platform@&lt;version&gt;</span> — giá trị này có nghĩa như nhau trên máy đồng đội, nên commit được.</p>
+                  <p>Muốn kiểm soát từng lớp thì cài tay: helper trước, rồi dùng helper đó resolve stable tag thành commit SHA và cài Pi package matching. Trong output, <span class="inline-code">currentRelease</span> là version của terminal helper đang chạy. Direct Pi install chỉ dùng khi không cần command <span class="inline-code">piagent-*</span>.</p>
                   <p>Hai thành phần này lấy từ hai nguồn khác nhau, và đó là chủ ý. Helper là tarball đã publish nên npm verify được provenance attestation gắn với commit build ra nó. Pi package thì dựa vào việc resolve tag thành commit SHA rồi đối chiếu với <span class="inline-code">PIAGENT_EXPECTED_RELEASE_COMMIT</span> — một phép kiểm mà version range của registry không diễn đạt được. Trỏ <span class="inline-code">stable</span> sang npm là bỏ phép kiểm đó chứ không phải thay nó, nên nguồn <span class="inline-code">git:</span> được giữ nguyên. Máy không có quyền Git tới repo này thì dùng channel <span class="inline-code">npm:@piagent/platform@x.y.z</span>.</p>
                   <div class="command-card">
                     <header><span>Stable helper install</span><button class="clip-btn" data-clip="npm install -g --ignore-scripts @piagent/platform@1.0.1&#10;piagent-install --stable --dry-run&#10;piagent-install --stable">Lấy lệnh</button></header>

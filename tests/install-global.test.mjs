@@ -256,3 +256,48 @@ describe("install-global release channels", () => {
     assert.doesNotMatch(result.stdout, /resolvedCommit:/);
   });
 });
+
+describe("setup package source default", () => {
+  // Project .pi/settings.json is meant to be committed, so whatever setup puts
+  // in it has to mean the same thing on someone else's machine.
+  function installedCopy() {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-install-bin-"));
+    temporaryRoots.add(root);
+    const platform = path.join(root, "node_modules", "@piagent", "platform");
+    fs.mkdirSync(platform, { recursive: true });
+    // A dry run reads the manifest and prints the commands it would run, so the
+    // manifest and scripts are all an installed copy needs here.
+    fs.cpSync(path.join(repositoryRoot, "package.json"), path.join(platform, "package.json"));
+    fs.cpSync(path.join(repositoryRoot, "scripts"), path.join(platform, "scripts"), { recursive: true });
+    return platform;
+  }
+
+  it("uses a registry source when running from an installed package", () => {
+    const platform = installedCopy();
+    const project = fs.mkdtempSync(path.join(os.tmpdir(), "pi-install-bin-"));
+    temporaryRoots.add(project);
+    const result = spawnSync("bash", [path.join(platform, "scripts", "setup.sh"), project, "--dry-run", "--no-model-scope", "--profile", "generic"], {
+      env: { ...process.env, PATH: `${makeFakeBin()}${path.delimiter}${process.env.PATH ?? ""}` },
+      encoding: "utf8"
+    });
+
+    const version = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "package.json"), "utf8")).version;
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, new RegExp(`packageSource: npm:@piagent/platform@${version.replace(/\./g, "\\.")}`));
+    // An install path is correct for nobody but the machine that produced it.
+    assert.doesNotMatch(result.stdout, /packageSource: \//);
+    assert.doesNotMatch(result.stderr, /No exact package source provided/);
+  });
+
+  it("still warns when running from a working checkout", () => {
+    // A checkout has no published identity to point at, so the local path is
+    // the honest answer there, and it has to say so.
+    const project = fs.mkdtempSync(path.join(os.tmpdir(), "pi-install-bin-"));
+    temporaryRoots.add(project);
+    const result = runSetup([project, "--dry-run", "--no-model-scope", "--profile", "generic"]);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stderr, /No exact package source provided/);
+    assert.match(result.stdout, new RegExp(`packageSource: ${repositoryRoot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+  });
+});

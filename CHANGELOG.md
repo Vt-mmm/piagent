@@ -2,6 +2,16 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## Unreleased
+
+### Fixed
+
+- `piagent-setup` running from an installed package now writes `npm:@piagent/platform@<version>` into project settings instead of the directory it happens to be installed in. Project settings are meant to be committed, and an install path means nothing on a teammate's machine. A working checkout has no published identity to point at, so it still falls back to the local path and still says so.
+
+### Changed
+
+- Documentation now leads with `npm install -g @piagent/platform` followed by `piagent-setup`, which installs the pinned Pi host itself. The five-command sequence remains, described as the explicit path for a reviewed team rollout rather than as the only way in.
+
 ## v1.0.1 - 2026-07-25
 
 Documentation release. v1.0.0 reached the npm registry but no document told anyone it was there, so every install instruction still pointed at the Git source.
