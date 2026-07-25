@@ -13,7 +13,9 @@ npm install -g @piagent/platform
 piagent-setup
 ```
 
-`piagent-setup` installs the exact Pi Coding Agent host this release pins, installs the Pi package, initializes the current directory, and runs the doctor. It also installs the MCP baseline and subagents; pass `--no-mcp`, `--no-subagents`, or `--global-only` to skip those.
+`piagent-setup` installs the exact Pi Coding Agent host this release pins, installs the Pi package, initializes the current directory, and runs the doctor. It also installs the MCP baseline, the subagents, and — when `herdr` is already on `PATH` — the Herdr Pi integration; pass `--no-mcp`, `--no-subagents`, `--no-herdr`, or `--global-only` to skip those.
+
+Install [Herdr](https://herdr.dev/docs/install/) *before* `piagent-setup` if you want it. The integration step is skipped with a warning when `herdr` is not on `PATH`, so installing Herdr afterwards means running `piagent-setup --global-only` again.
 
 Because it runs from an installed package, the source it writes into `.pi/settings.json` is `npm:@piagent/platform@<version>` — which means the same thing on a teammate's machine, so the file can be committed.
 
@@ -36,6 +38,8 @@ pi
 ```
 
 That is the daily flow. Pi onboards the project, selects an operating profile, uses the right tools, records task evidence, and hands off verified implementation work.
+
+Running several agents side by side — one implementing, one reviewing read-only, one verifying — start `herdr` from the project instead of `pi` and open a Pi pane per role. Herdr orchestrates terminals and sessions; it is not a security boundary, so every gate still lives in the Pi extension and OAuth is still a `/login` inside Pi. See [Herdr workflow](docs/herdr-workflow.md).
 
 First run in a new project, type `/onboard-project`. It inspects the repository with bounded context, recommends a profile, explains the tradeoffs, asks before applying, then writes `.pi/piagent-profile.json`, its lock, `.pi/tech-stack.json`, `.pi/tech-context/*`, `.pi/project-context.md`, and `.pi/memory/*`.
 

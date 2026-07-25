@@ -6,9 +6,19 @@ Herdr dùng để quản lý nhiều session/pane agent. Pi core không cần t�
 
 ## Setup integration
 
+`piagent-setup` đã chạy `herdr integration install pi` giùm, với điều kiện `herdr` có sẵn trên `PATH` lúc đó. Không có thì nó bỏ qua kèm cảnh báo ra stderr — nên thứ tự đúng là cài Herdr trước, rồi mới `piagent-setup`.
+
+Cài Herdr sau khi đã setup thì chạy lại:
+
 ```bash
-herdr integration install pi
+piagent-setup --global-only
+```
+
+Kiểm tra hoặc cài tay:
+
+```bash
 herdr integration status
+herdr integration install pi
 ```
 
 Nếu dùng custom Pi agent dir:

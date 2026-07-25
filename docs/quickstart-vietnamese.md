@@ -33,7 +33,9 @@ npm install -g @piagent/platform
 piagent-setup
 ```
 
-Chạy `piagent-setup` ngay trong thư mục project. Nó tự cài đúng Pi Coding Agent `0.81.1` mà release này pin, cài Pi package, khởi tạo `.pi/`, rồi chạy doctor. Nó cũng cài MCP baseline và subagents; thêm `--no-mcp`, `--no-subagents` nếu không cần, hoặc `--global-only` nếu chưa muốn đụng project nào.
+Chạy `piagent-setup` ngay trong thư mục project. Nó tự cài đúng Pi Coding Agent `0.81.1` mà release này pin, cài Pi package, khởi tạo `.pi/`, rồi chạy doctor. Nó cũng cài MCP baseline, subagents, và Herdr Pi integration nếu `herdr` đã có sẵn trên `PATH`; thêm `--no-mcp`, `--no-subagents`, `--no-herdr` nếu không cần, hoặc `--global-only` nếu chưa muốn đụng project nào.
+
+Nếu dùng [Herdr](https://herdr.dev/docs/install/) thì cài Herdr **trước** `piagent-setup`. Không có `herdr` trên `PATH` thì bước integration bị bỏ qua kèm cảnh báo, cài Herdr sau phải chạy lại `piagent-setup --global-only`.
 
 Vì chạy từ package đã cài, source ghi vào `.pi/settings.json` là `npm:@piagent/platform@<version>` — portable, commit được.
 
@@ -114,6 +116,8 @@ pi
 ```
 
 Rồi mô tả việc cần làm bằng tiếng Việt hoặc tiếng Anh. Không cần paste checklist — input guard tự collapse boilerplate, và `/task` tự cân nhắc gọi scout/planner/reviewer khi task đủ lớn.
+
+Muốn chạy nhiều agent song song thì gõ `herdr` thay vì `pi`, rồi mở mỗi pane một vai: implement, review read-only, verify, notes. Herdr chỉ điều phối terminal/session, không phải security boundary — gate vẫn nằm ở Pi extension và OAuth vẫn `/login` trong Pi. Chi tiết: [herdr-workflow.md](herdr-workflow.md).
 
 | Gõ | Khi nào |
 |---|---|

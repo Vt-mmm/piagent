@@ -934,7 +934,8 @@
               <article class="step">
                 <div>
                   <h3>Cài — hai lệnh</h3>
-                  <p>Cần Node.js 22.19.0 trở lên. Không cần cài Pi Coding Agent trước: <span class="inline-code">piagent-setup</span> tự cài đúng bản <span class="inline-code">0.81.1</span> mà release <span class="inline-code">v1.0.2</span> đang pin. Chạy nó ngay trong thư mục project — nó cài Pi package, khởi tạo <span class="inline-code">.pi/</span>, cài MCP baseline cùng subagents, rồi chạy doctor. Thêm <span class="inline-code">--no-mcp</span>, <span class="inline-code">--no-subagents</span> hoặc <span class="inline-code">--global-only</span> để bỏ bớt.</p>
+                  <p>Cần Node.js 22.19.0 trở lên. Không cần cài Pi Coding Agent trước: <span class="inline-code">piagent-setup</span> tự cài đúng bản <span class="inline-code">0.81.1</span> mà release <span class="inline-code">v1.0.2</span> đang pin. Chạy nó ngay trong thư mục project — nó cài Pi package, khởi tạo <span class="inline-code">.pi/</span>, cài MCP baseline cùng subagents, rồi chạy doctor. Thêm <span class="inline-code">--no-mcp</span>, <span class="inline-code">--no-subagents</span>, <span class="inline-code">--no-herdr</span> hoặc <span class="inline-code">--global-only</span> để bỏ bớt.</p>
+                  <p>Dùng <a href="https://herdr.dev/docs/install/">Herdr</a> thì cài Herdr <strong>trước</strong>: <span class="inline-code">piagent-setup</span> tự cài luôn Herdr Pi integration khi thấy <span class="inline-code">herdr</span> trên <span class="inline-code">PATH</span>, còn không thì bỏ qua kèm cảnh báo — cài Herdr sau phải chạy lại <span class="inline-code">piagent-setup --global-only</span>.</p>
                   <div class="table-wrap compact-table">
                     <table>
                       <thead>
@@ -982,6 +983,7 @@ piagent-setup</code></pre>
                     <pre><code>cd /path/to/project
 pi</code></pre>
                   </div>
+                  <p>Cần nhiều agent chạy song song thì gõ <span class="inline-code">herdr</span> thay cho <span class="inline-code">pi</span>, mỗi pane một vai: implement, review read-only, verify, notes. Herdr chỉ điều phối terminal và session — nó không phải security boundary, gate vẫn nằm ở Pi extension và OAuth vẫn login trong Pi. Cách dựng pane: <a href="https://github.com/Vt-mmm/piagent/blob/main/docs/herdr-workflow.md">Herdr workflow</a>.</p>
                 </div>
               </article>
 
