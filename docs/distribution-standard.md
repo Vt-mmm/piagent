@@ -45,7 +45,7 @@ Stable and resolved exact installs fail closed when the release tag cannot be re
 
 Root `package.json` có `pi` manifest trỏ tới:
 
-- `packages/piagent-core/extensions/**/*.ts`
+- `packages/piagent-core/extensions/piagent-guard.ts`
 - `packages/piagent-core/skills`
 - `packages/piagent-core/prompts`
 

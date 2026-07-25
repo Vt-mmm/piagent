@@ -50,6 +50,54 @@ describe("package distribution", () => {
     assert.equal(pkg.publishConfig?.provenance, true);
   });
 
+  it("declares only real extension entry points in every pi manifest", () => {
+    // Pi loads every path pi.extensions matches and calls its default export as
+    // an extension factory. The modules the guard imports live beside it in
+    // extensions/, so a directory glob would hand Pi a module that exports
+    // helpers and no factory, and the pack would fail to load.
+    const manifests = [
+      { root: repositoryRoot, name: "package.json" },
+      { root: path.join(repositoryRoot, "packages", "piagent-core"), name: "packages/piagent-core/package.json" }
+    ];
+
+    for (const manifest of manifests) {
+      const pkg = JSON.parse(fs.readFileSync(path.join(manifest.root, "package.json"), "utf8"));
+      const patterns = pkg.pi?.extensions ?? [];
+      assert.ok(patterns.length > 0, `${manifest.name} declares no extensions`);
+
+      const matched = patterns.flatMap((pattern) => fs.globSync(pattern, { cwd: manifest.root }));
+      assert.ok(matched.length > 0, `${manifest.name} matches no files`);
+
+      for (const relative of matched) {
+        const source = fs.readFileSync(path.join(manifest.root, relative), "utf8");
+        assert.match(
+          source,
+          /^export default /m,
+          `${manifest.name} declares ${relative} as an extension, but it has no default export for Pi to call`
+        );
+      }
+    }
+  });
+
+  it("keeps the guard's own modules out of the extension entry points", () => {
+    // The inverse of the check above: proving the manifest is narrow, not just
+    // that everything it currently happens to match is loadable.
+    const packageRoot = path.join(repositoryRoot, "packages", "piagent-core");
+    const pkg = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"));
+    const matched = new Set(pkg.pi.extensions.flatMap((pattern) => fs.globSync(pattern, { cwd: packageRoot })));
+
+    const libraryModules = fs
+      .readdirSync(path.join(packageRoot, "extensions"))
+      .filter((entry) => entry !== "piagent-guard.ts")
+      .map((entry) => path.join("extensions", entry));
+
+    assert.ok(libraryModules.length > 0, "the guard should still have modules beside it");
+    for (const relative of libraryModules) {
+      assert.equal(matched.has(relative), false, `${relative} is a library module, not an extension entry point`);
+    }
+    assert.equal(matched.has(path.join("extensions", "piagent-guard.ts")), true);
+  });
+
   it("routes all global bin commands through the package-root dispatcher", () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "package.json"), "utf8"));
     const bins = Object.entries(pkg.bin);

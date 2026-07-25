@@ -11,7 +11,13 @@ packages/piagent-core/
 ├─ capabilities/
 │  └─ capability-core.js
 ├─ extensions/
-│  └─ piagent-guard.ts
+│  ├─ piagent-guard.ts      ← extension entry point
+│  ├─ guard-shell-analysis.ts
+│  ├─ guard-types.ts
+│  ├─ guard-io.js
+│  ├─ policy-core.js
+│  ├─ redaction-core.js
+│  └─ runtime-evidence.js
 ├─ prompts/
 ├─ skills/
 ├─ subagents/
@@ -25,6 +31,12 @@ Root `package.json` expose:
 - `pi.skills`
 - `pi.prompts`
 - `pi.subagents.agents`
+
+`pi.extensions` names `piagent-guard.ts` explicitly instead of globbing the
+directory. Pi loads every path the field matches and calls its default export as
+an extension factory, so a glob would sweep in the modules the guard imports —
+they export helpers, not a factory, and would fail to load. Anything added to
+`extensions/` is a library module until it is named in the manifest.
 
 Root CLI additionally exposes `piagent-capabilities` for catalog validation, profile resolution, lock verification, and dry-run action proposal validation.
 

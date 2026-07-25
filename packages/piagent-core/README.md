@@ -1,4 +1,4 @@
-# @pi-agent/core
+# @piagent/core
 
 Shared Pi package for reusable project workflows.
 

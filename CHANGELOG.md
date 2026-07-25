@@ -31,6 +31,7 @@ Breaking release. The `company` namespace is replaced by `piagent` with no alias
 - Fixed a capability policy that declares only some of its allow-lists: the missing lists now deny, instead of failing with an internal error.
 - Fixed capability source resolution under a symlinked project parent, where a contained directory could be misread as escaping the project.
 - Excluded maintainer working notes from the published tarball. The `files` allowlist takes precedence over `.npmignore`, so the exclusions live in `files`.
+- Fixed the package manifest declaring its extension entry points as a directory glob. Pi calls the default export of every path the field matches, so once the guard's helpers moved into modules beside it, the glob offered Pi two modules that export helpers and no extension factory. The manifest now names the guard, and the package still carried the old `@pi-agent/core` name the namespace rename was meant to retire.
 - Fixed the verify workflow, which had been unparseable since the runtime-platform step was added and so had not run at all. A single-line `run:` value containing `": "` ends the YAML scalar early; GitHub reports that as an instant failure with no job, so the gate was absent while still appearing present. The local gate now refuses that shape.
 
 ### Security

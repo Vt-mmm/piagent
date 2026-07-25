@@ -1,5 +1,5 @@
 {
-  "name": "@pi-agent/core",
+  "name": "@piagent/core",
   "version": "1.0.0",
   "type": "module",
   "private": true,
@@ -18,7 +18,7 @@
   ],
   "pi": {
     "extensions": [
-      "extensions/**/*.ts"
+      "extensions/piagent-guard.ts"
     ],
     "skills": [
       "skills"
