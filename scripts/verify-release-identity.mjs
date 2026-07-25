@@ -48,7 +48,13 @@ const capabilityLock = readJson(".pi/piagent-profile.lock.json");
 const version = rootPackage.version;
 const expectedTag = `v${version}`;
 
-if (rootPackage.name !== "@piagent/platform" || rootPackage.private !== true) fail("root package identity must remain private @piagent/platform");
+// The package is published now, so the old private-forever rule is gone. What
+// still has to hold is that a scoped package cannot reach the registry as
+// restricted by accident, and cannot ship without provenance.
+if (rootPackage.name !== "@piagent/platform") fail("root package must be named @piagent/platform");
+if (rootPackage.private) fail("root package must not be private; publishing is intended");
+if (rootPackage.publishConfig?.access !== "public") fail("scoped package must declare publishConfig.access=public");
+if (rootPackage.publishConfig?.provenance !== true) fail("root package must publish with provenance");
 if (rootPackage.repository?.url !== "https://github.com/Vt-mmm/piagent.git") fail("root package repository URL is not canonical");
 if (rootPackage.dependencies && Object.keys(rootPackage.dependencies).length > 0) fail("root package has unexpected runtime dependencies");
 if (packageLock.name !== rootPackage.name || packageLock.packages?.[""]?.name !== rootPackage.name) fail("package-lock root identity does not match package.json");

@@ -17,6 +17,39 @@ after(() => {
 });
 
 describe("package distribution", () => {
+  it("keeps maintainer working notes out of the published tarball", () => {
+    // npm packs from the working directory, so these stay on disk even though
+    // they are untracked. The files allowlist takes precedence over .npmignore
+    // for top-level entries, which is why the exclusions live in package.json.
+    const packed = spawnSync("npm", ["pack", "--dry-run", "--json"], {
+      cwd: repositoryRoot,
+      encoding: "utf8"
+    });
+    assert.equal(packed.status, 0, packed.stderr);
+    const entries = JSON.parse(packed.stdout)[0].files.map((file) => file.path);
+
+    const shipsInternalNotes = entries.filter((entry) =>
+      /^plans\//.test(entry)
+      || /^docs\/journals\//.test(entry)
+      || /^docs\/decisions\//.test(entry)
+      || /^docs\/readiness-assessment\.md$/.test(entry));
+    assert.deepEqual(shipsInternalNotes, []);
+
+    // The exclusions must not swallow the documentation users install for.
+    assert.ok(entries.includes("docs/capability-packs.md"));
+    assert.ok(entries.some((entry) => entry.startsWith("templates/project/")));
+    assert.ok(entries.some((entry) => entry.startsWith("adapters/")));
+  });
+
+  it("declares a publishable package", () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "package.json"), "utf8"));
+    assert.equal(pkg.private, undefined, "private would block publishing entirely");
+    assert.equal(pkg.name, "@piagent/platform");
+    // A scoped package defaults to restricted; publishing publicly is explicit.
+    assert.equal(pkg.publishConfig?.access, "public");
+    assert.equal(pkg.publishConfig?.provenance, true);
+  });
+
   it("routes all global bin commands through the package-root dispatcher", () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "package.json"), "utf8"));
     const bins = Object.entries(pkg.bin);

@@ -1,8 +1,11 @@
 {
   "name": "@piagent/platform",
   "version": "0.4.8",
-  "private": true,
   "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "type": "module",
   "description": "Reusable Pi agent platform, project adapters, MCP/tool policy, and coding workflow harness.",
   "homepage": "https://piagent.io.vn",
@@ -29,6 +32,9 @@
     "adapters/",
     "catalog/",
     "docs/",
+    "!docs/journals/",
+    "!docs/decisions/",
+    "!docs/readiness-assessment.md",
     "docs-site/",
     "evals/",
     "packs/",

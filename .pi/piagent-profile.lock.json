@@ -115,13 +115,13 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:040df7d47791cba898938533fff379ea4db8aaaa74ea2464e42f1bde2887fce7",
+    "packageDigest": "sha256:cd8afbc71dff8ddd325f59fb7bbd23e6a4e8551a22206b6d707ef33fc882b6eb",
     "packageSource": "../",
     "packageVersion": "0.4.8",
     "runtimeFiles": [
       {
-        "byteSize": 3678,
-        "digest": "sha256:4e0fc63d6dcac3f39c308e76501818766e1c36e27f379b429b931be1baed4b01",
+        "byteSize": 3816,
+        "digest": "sha256:c402bd0b4f530bb4f0f42b019726516e0f4ffab77129cc0c585b6ec41509c599",
         "path": "package.json"
       },
       {
