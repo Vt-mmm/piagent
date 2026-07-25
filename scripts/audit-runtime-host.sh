@@ -70,5 +70,9 @@ echo "Auditing Pi host ${PI_CODING_VERSION} and pinned add-ons at severity high 
     "pi-mcp-adapter@${PI_MCP_ADAPTER_VERSION}" \
     "pi-subagents@${PI_SUBAGENTS_VERSION}" \
     "pi-web-access@${PI_WEB_ACCESS_VERSION}" >/dev/null
-  npm audit --audit-level=high
+  # npm audit exits non-zero when it finds anything, so its status says nothing
+  # about whether the finding is one this project has accepted. The policy check
+  # decides that, and its exit status is the one that counts.
+  npm audit --json > audit.json || true
+  node "$ROOT/scripts/check-runtime-advisories.mjs" < audit.json
 )

@@ -176,6 +176,8 @@ required_files=(
   "$ROOT/packages/piagent-core/capabilities/capability-sources.js"
   "$ROOT/packages/piagent-core/extensions/guard-shell-analysis.ts"
   "$ROOT/tests/guard-shell-analysis.test.mjs"
+  "$ROOT/tests/runtime-advisories.test.mjs"
+  "$ROOT/scripts/check-runtime-advisories.mjs"
   "$ROOT/tests/migrate-project-state.test.mjs"
   "$ROOT/tests/import-agent-instructions.test.mjs"
   "$ROOT/evals/golden/enforcement-decisions.json"
@@ -448,6 +450,7 @@ node --check "$ROOT/scripts/capability-catalog.mjs" >/dev/null
 node --check "$ROOT/scripts/piagent-cli.mjs" >/dev/null
 node --check "$ROOT/scripts/migrate-project-state.mjs" >/dev/null
 node --check "$ROOT/scripts/import-agent-instructions.mjs" >/dev/null
+node --check "$ROOT/scripts/check-runtime-advisories.mjs" >/dev/null
 (cd "$ROOT" && npm test) >/dev/null
 if [[ -x "$ROOT/node_modules/.bin/tsc" ]]; then
   (cd "$ROOT" && npm run typecheck) >/dev/null

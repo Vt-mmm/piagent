@@ -31,6 +31,11 @@ Breaking release. The `company` namespace is replaced by `piagent` with no alias
 - Fixed a capability policy that declares only some of its allow-lists: the missing lists now deny, instead of failing with an internal error.
 - Fixed capability source resolution under a symlinked project parent, where a contained directory could be misread as escaping the project.
 - Excluded maintainer working notes from the published tarball. The `files` allowlist takes precedence over `.npmignore`, so the exclusions live in `files`.
+- Fixed the verify workflow, which had been unparseable since the runtime-platform step was added and so had not run at all. A single-line `run:` value containing `": "` ends the YAML scalar early; GitHub reports that as an instant failure with no job, so the gate was absent while still appearing present. The local gate now refuses that shape.
+
+### Security
+
+- The runtime host audit now names the one advisory it accepts instead of running at a blanket severity threshold. `GHSA-mh99-v99m-4gvg` (`brace-expansion`, denial of service) is accepted with its reasoning recorded in `scripts/check-runtime-advisories.mjs`: the Pi host publishes an `npm-shrinkwrap.json` that pins the affected version, a published shrinkwrap takes precedence over consumer overrides, and every released host carries a high `brace-expansion` advisory, so no host version and no change in this repository can resolve it. Every other high or critical advisory still fails the audit, the entry expires on a review date, and it fails once the advisory stops being reported so it cannot outlive the problem.
 
 ## Unreleased
 
