@@ -55,7 +55,11 @@ if (rootPackage.name !== "@piagent/platform") fail("root package must be named @
 if (rootPackage.private) fail("root package must not be private; publishing is intended");
 if (rootPackage.publishConfig?.access !== "public") fail("scoped package must declare publishConfig.access=public");
 if (rootPackage.publishConfig?.provenance !== true) fail("root package must publish with provenance");
-if (rootPackage.repository?.url !== "https://github.com/Vt-mmm/piagent.git") fail("root package repository URL is not canonical");
+// The git+ prefix is npm's own normalization. Publishing without it succeeds
+// but rewrites the field, which leaves the manifest in the repository saying
+// something different from the manifest on the registry.
+if (rootPackage.repository?.url !== "git+https://github.com/Vt-mmm/piagent.git") fail("root package repository URL is not canonical");
+if (corePackage.repository?.url !== rootPackage.repository.url) fail("core package repository URL does not match the root package");
 if (rootPackage.dependencies && Object.keys(rootPackage.dependencies).length > 0) fail("root package has unexpected runtime dependencies");
 if (packageLock.name !== rootPackage.name || packageLock.packages?.[""]?.name !== rootPackage.name) fail("package-lock root identity does not match package.json");
 if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version ?? "")) fail("package.json version is not a supported release version");

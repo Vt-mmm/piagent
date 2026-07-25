@@ -8,7 +8,7 @@
   "homepage": "https://piagent.io.vn",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Vt-mmm/piagent.git",
+    "url": "git+https://github.com/Vt-mmm/piagent.git",
     "directory": "packages/piagent-core"
   },
   "keywords": [
