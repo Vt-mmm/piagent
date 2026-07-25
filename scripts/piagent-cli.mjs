@@ -16,6 +16,7 @@ const scriptByCommand = {
   "piagent-subagents": "scripts/configure-subagents.sh",
   "piagent-capabilities": "scripts/capability-catalog.mjs",
   "piagent-migrate": "scripts/migrate-project-state.mjs",
+  "piagent-import-instructions": "scripts/import-agent-instructions.mjs",
   "piagent-auto": "scripts/pi-auto.sh"
 };
 
