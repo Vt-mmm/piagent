@@ -927,14 +927,14 @@
             <p class="section-kicker">Quickstart</p>
             <h2>Step by step cho thành viên mới</h2>
             <p class="section-lead">
-              Luồng dưới đây là đường đi chuẩn cho team: chuẩn bị Node.js và Pi Coding Agent, cài Pi Agent Platform từ npm registry theo version đã pin, kiểm tra compatibility, mở repo, chọn profile, bật quyền phù hợp, chạy task, rồi verify bằng command thật. Bản latest chỉ nên dùng cho máy cá nhân hoặc sandbox chấp nhận cập nhật nhanh.
+              Hai lệnh để cài, rồi mở repo, chọn profile, bật quyền phù hợp, chạy task, và verify bằng command thật. Gỡ cũng chỉ hai lệnh khi không dùng nữa.
             </p>
 
             <div class="steps">
               <article class="step">
                 <div>
-                  <h3>Chuẩn bị runtime</h3>
-                  <p>Dùng Node.js 22.19.0 trở lên và Pi Coding Agent <span class="inline-code">0.81.1</span>. Pi Agent Platform <span class="inline-code">v1.0.2</span> đang pin compatibility với runtime này và công bố support matrix theo OS/CPU riêng cho platform helper.</p>
+                  <h3>Cài — hai lệnh</h3>
+                  <p>Cần Node.js 22.19.0 trở lên. Không cần cài Pi Coding Agent trước: <span class="inline-code">piagent-setup</span> tự cài đúng bản <span class="inline-code">0.81.1</span> mà release <span class="inline-code">v1.0.2</span> đang pin. Chạy nó ngay trong thư mục project — nó cài Pi package, khởi tạo <span class="inline-code">.pi/</span>, cài MCP baseline cùng subagents, rồi chạy doctor. Thêm <span class="inline-code">--no-mcp</span>, <span class="inline-code">--no-subagents</span> hoặc <span class="inline-code">--global-only</span> để bỏ bớt.</p>
                   <div class="table-wrap compact-table">
                     <table>
                       <thead>
@@ -964,86 +964,12 @@
                     </table>
                   </div>
                   <div class="command-card">
-                    <header><span>Runtime prerequisites</span><button class="clip-btn" data-clip="node --version&#10;npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1&#10;pi --version">Lấy lệnh</button></header>
-                    <pre><code>node --version  # &gt;= 22.19.0
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
-pi --version</code></pre>
-                  </div>
-                </div>
-              </article>
-              <article class="step">
-                <div>
-                  <h3>Cài Pi Agent Platform có pin</h3>
-                  <p>Đường ngắn nhất là hai lệnh: cài helper từ npm, rồi chạy <span class="inline-code">piagent-setup</span> ngay trong thư mục project. Lệnh đó tự cài đúng Pi host mà release này pin, cài Pi package, khởi tạo <span class="inline-code">.pi/</span> và chạy doctor. Nó cũng cài sẵn MCP baseline và subagents; thêm <span class="inline-code">--no-mcp</span>, <span class="inline-code">--no-subagents</span> nếu không muốn, hoặc <span class="inline-code">--global-only</span> nếu chưa đụng tới project nào.</p>
-                  <div class="command-card">
                     <header><span>Hai lệnh</span><button class="clip-btn" data-clip="npm install -g @piagent/platform&#10;piagent-setup">Lấy lệnh</button></header>
                     <pre><code>npm install -g @piagent/platform
 piagent-setup</code></pre>
                   </div>
-                  <p>Vì chạy từ package đã cài, source ghi vào <span class="inline-code">.pi/settings.json</span> là <span class="inline-code">npm:@piagent/platform@&lt;version&gt;</span> — giá trị này có nghĩa như nhau trên máy đồng đội, nên commit được.</p>
-                  <p>Muốn kiểm soát từng lớp thì cài tay: helper trước, rồi dùng helper đó resolve stable tag thành commit SHA và cài Pi package matching. Trong output, <span class="inline-code">currentRelease</span> là version của terminal helper đang chạy. Direct Pi install chỉ dùng khi không cần command <span class="inline-code">piagent-*</span>.</p>
-                  <p>Hai thành phần này lấy từ hai nguồn khác nhau, và đó là chủ ý. Helper là tarball đã publish nên npm verify được provenance attestation gắn với commit build ra nó. Pi package thì dựa vào việc resolve tag thành commit SHA rồi đối chiếu với <span class="inline-code">PIAGENT_EXPECTED_RELEASE_COMMIT</span> — một phép kiểm mà version range của registry không diễn đạt được. Trỏ <span class="inline-code">stable</span> sang npm là bỏ phép kiểm đó chứ không phải thay nó, nên nguồn <span class="inline-code">git:</span> được giữ nguyên. Máy không có quyền Git tới repo này thì dùng channel <span class="inline-code">npm:@piagent/platform@x.y.z</span>.</p>
-                  <div class="command-card">
-                    <header><span>Stable helper install</span><button class="clip-btn" data-clip="npm install -g --ignore-scripts @piagent/platform@1.0.2&#10;piagent-install --stable --dry-run&#10;piagent-install --stable">Lấy lệnh</button></header>
-                    <pre><code>npm install -g --ignore-scripts @piagent/platform@1.0.2
-piagent-install --stable --dry-run
-piagent-install --stable</code></pre>
-                  </div>
-                  <div class="command-card">
-                    <header><span>Direct Pi package only</span><button class="clip-btn" data-clip="pi install git:github.com/Vt-mmm/piagent@v1.0.2">Lấy lệnh</button></header>
-                    <pre><code>pi install git:github.com/Vt-mmm/piagent@v1.0.2</code></pre>
-                  </div>
-                </div>
-              </article>
-
-              <article class="step">
-                <div>
-                  <h3>Update hoặc rollback đúng cả ba thành phần</h3>
-                  <p>Full update/rollback phải dùng exact Pi host của release target, đổi npm-global helper, rồi apply stable Pi package từ chính helper đó. Lệnh <span class="inline-code">--version ... --resolve-tag</span> chỉ đổi Pi package và giữ host/helper hiện tại.</p>
-                  <div class="command-card">
-                    <header><span>Full platform target</span><button class="clip-btn" data-clip="npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1&#10;npm install -g --ignore-scripts @piagent/platform@X.Y.Z&#10;piagent-install --stable --dry-run&#10;piagent-install --stable">Lấy lệnh</button></header>
-                    <pre><code>npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
-npm install -g --ignore-scripts @piagent/platform@X.Y.Z
-piagent-install --stable --dry-run
-piagent-install --stable</code></pre>
-                  </div>
-                  <div class="command-card">
-                    <header><span>Pi package only</span><button class="clip-btn" data-clip="piagent-install --version vX.Y.Z --resolve-tag --dry-run&#10;piagent-install --version vX.Y.Z --resolve-tag">Lấy lệnh</button></header>
-                    <pre><code>piagent-install --version vX.Y.Z --resolve-tag --dry-run
-piagent-install --version vX.Y.Z --resolve-tag</code></pre>
-                  </div>
-                </div>
-              </article>
-
-              <article class="step">
-                <div>
-                  <h3>Latest chỉ cho cá nhân/sandbox</h3>
-                  <p>Dùng latest khi muốn nhận thay đổi nhanh trên máy riêng. Khi đưa vào repo/team, đổi sang tag hoặc commit đã review để mọi developer nhận cùng một cấu hình.</p>
-                  <div class="command-card">
-                    <header><span>Personal latest</span><button class="clip-btn" data-clip="pi install git:github.com/Vt-mmm/piagent&#10;pi update --extensions">Lấy lệnh</button></header>
-                    <pre><code>pi install git:github.com/Vt-mmm/piagent
-pi update --extensions</code></pre>
-                  </div>
-                </div>
-              </article>
-
-              <article class="step">
-                <div>
-                  <h3>Gỡ cài đặt khi không dùng nữa</h3>
-                  <p><span class="inline-code">piagent-uninstall</span> mặc định chỉ in ra sẽ gỡ những gì rồi thoát; phải thêm <span class="inline-code">--apply</span> nó mới thực hiện, vì nó sửa Pi settings mà công cụ khác cũng ghi vào. Mặc định chỉ gỡ Pi package của platform; add-on, Pi host và state trong project đều là opt-in.</p>
-                  <div class="command-card">
-                    <header><span>Gỡ</span><button class="clip-btn" data-clip="piagent-uninstall&#10;piagent-uninstall --apply&#10;npm uninstall -g @piagent/platform">Lấy lệnh</button></header>
-                    <pre><code>piagent-uninstall                                     # chỉ báo cáo
-piagent-uninstall --apply                             # gỡ Pi package của platform
-piagent-uninstall --apply --with-addons --with-host   # + add-on và Pi host
-piagent-uninstall --apply --project /path/to/project  # + state trong project
-npm uninstall -g @piagent/platform                    # helper npm-global</code></pre>
-                  </div>
-                  <p>Nó gỡ theo những gì đang đăng ký trong Pi settings chứ không theo những gì bản hiện tại cài, nên package do release cũ đăng ký vẫn ra được.</p>
-                  <div class="callout ok-callout">
-                    <strong>Không bao giờ bị xoá</strong>
-                    <p>Credential, trust, session, todo và <span class="inline-code">.pi/memory/</span> được giữ nguyên ở mọi tổ hợp cờ — đó là dữ liệu của người dùng, không phải state của platform. Các file sinh từ template rồi sửa tiếp như <span class="inline-code">AGENTS.md</span>, <span class="inline-code">.pi/settings.json</span>, <span class="inline-code">project-context.md</span> chỉ được liệt kê để tự quyết. Với <span class="inline-code">.pi/settings.json</span>, chỉ đúng entry trỏ tới platform bị bỏ khỏi <span class="inline-code">packages</span>.</p>
-                  </div>
+                  <p>Vì chạy từ package đã cài, source ghi vào <span class="inline-code">.pi/settings.json</span> là <span class="inline-code">npm:@piagent/platform@&lt;version&gt;</span> — giá trị này có nghĩa như nhau trên máy đồng đội, nên commit được cho cả team.</p>
+                  <p>Rollout pin từng bước, update, rollback, và channel latest cho máy cá nhân nằm trong <a href="https://github.com/Vt-mmm/piagent/blob/main/docs/release-install-policy.md">release &amp; install policy</a>.</p>
                 </div>
               </article>
 
@@ -1110,18 +1036,32 @@ pi</code></pre>
               <article class="step">
                 <div>
                   <h3>Verify trước khi handoff</h3>
-                  <p>Final gate chỉ tin kết quả command đã chạy thật, exit 0, và khớp verify plan. Với setup team, chạy doctor và smoke test sau khi pin hoặc nâng version.</p>
+                  <p>Final gate chỉ tin kết quả command đã chạy thật, exit 0, và khớp verify plan. Sau khi pin hoặc nâng version, chạy doctor trên project:</p>
                   <div class="command-card">
-                    <header><span>Doctor + smoke</span><button class="clip-btn" data-clip="piagent-doctor /path/to/project --strict-share&#10;npm run smoke&#10;npm run verify&#10;npm test&#10;npm run typecheck">Lấy lệnh</button></header>
-                    <pre><code>piagent-doctor /path/to/project --strict-share
-# in piagent source repo:
-npm run smoke
-npm run verify
-npm test
-npm run typecheck</code></pre>
+                    <header><span>Doctor</span><button class="clip-btn" data-clip="piagent-doctor">Lấy lệnh</button></header>
+                    <pre><code>piagent-doctor</code></pre>
+                  </div>
+                  <p>Người phát triển chính platform còn có <span class="inline-code">npm run verify</span> trong source repo; chi tiết ở <a href="https://github.com/Vt-mmm/piagent/blob/main/CONTRIBUTING.md">CONTRIBUTING</a>.</p>
+                </div>
+              </article>
+
+              <article class="step">
+                <div>
+                  <h3>Gỡ cài đặt khi không dùng nữa</h3>
+                  <p><span class="inline-code">piagent-uninstall</span> mặc định chỉ in ra sẽ gỡ những gì rồi thoát; phải thêm <span class="inline-code">--apply</span> nó mới thực hiện, vì nó sửa Pi settings mà công cụ khác cũng ghi vào. Mặc định chỉ gỡ Pi package của platform; add-on, Pi host và state trong project đều là opt-in.</p>
+                  <div class="command-card">
+                    <header><span>Gỡ — hai lệnh</span><button class="clip-btn" data-clip="piagent-uninstall&#10;piagent-uninstall --apply">Lấy lệnh</button></header>
+                    <pre><code>piagent-uninstall
+piagent-uninstall --apply</code></pre>
+                  </div>
+                  <p>Add-on, Pi host, state trong project và helper npm-global đều tách riêng và là opt-in — <span class="inline-code">piagent-uninstall --help</span> liệt kê đủ. Nó gỡ theo những gì đang đăng ký trong Pi settings chứ không theo những gì bản hiện tại cài, nên package do release cũ đăng ký vẫn ra được.</p>
+                  <div class="callout ok-callout">
+                    <strong>Không bao giờ bị xoá</strong>
+                    <p>Credential, trust, session, todo và <span class="inline-code">.pi/memory/</span> được giữ nguyên ở mọi tổ hợp cờ — đó là dữ liệu của người dùng, không phải state của platform. Các file sinh từ template rồi sửa tiếp như <span class="inline-code">AGENTS.md</span>, <span class="inline-code">.pi/settings.json</span>, <span class="inline-code">project-context.md</span> chỉ được liệt kê để tự quyết. Với <span class="inline-code">.pi/settings.json</span>, chỉ đúng entry trỏ tới platform bị bỏ khỏi <span class="inline-code">packages</span>.</p>
                   </div>
                 </div>
               </article>
+
             </div>
           </section>
 

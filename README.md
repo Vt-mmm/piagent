@@ -4,35 +4,55 @@ Reusable Pi package for project onboarding, profile-based coding workflows, guar
 
 Public docs: [piagent.io.vn](https://piagent.io.vn)
 
-The goal is a simple daily flow:
+## Install
+
+Node.js `>=22.19.0`. Two commands, run from the project you want to set up:
+
+```bash
+npm install -g @piagent/platform
+piagent-setup
+```
+
+`piagent-setup` installs the exact Pi Coding Agent host this release pins, installs the Pi package, initializes the current directory, and runs the doctor. It also installs the MCP baseline and subagents; pass `--no-mcp`, `--no-subagents`, or `--global-only` to skip those.
+
+Because it runs from an installed package, the source it writes into `.pi/settings.json` is `npm:@piagent/platform@<version>` — which means the same thing on a teammate's machine, so the file can be committed.
+
+| Runtime surface | Team rollout status |
+|---|---|
+| macOS Apple Silicon (`darwin/arm64`) + Bash | Verified for this release. |
+| Linux x64 + Bash | Verified in CI for this release. |
+| macOS Intel (`darwin/x64`) + Bash | Supported target, but run `piagent-doctor` and project smoke tests before wide rollout. |
+| Linux ARM64 + Bash | Supported target, but run `piagent-doctor` and project smoke tests before wide rollout. |
+| Native Windows | Not a team-rollout target yet; terminal helpers and shell policy rely on Bash/POSIX semantics. |
+| WSL2 | Experimental and not release-gated yet. |
+
+Pinned step-by-step rollouts, updates, rollback, and the fast-moving `--dev` channel are in [Release and install policy](docs/release-install-policy.md).
+
+## Daily use
 
 ```bash
 cd /path/to/project
 pi
 ```
 
-From there, Pi can onboard the project, select an operating profile, use the right tools, record task evidence, and hand off verified implementation work.
+That is the daily flow. Pi onboards the project, selects an operating profile, uses the right tools, records task evidence, and hands off verified implementation work.
 
-For a trusted project where you want Pi to load project-local `.pi` resources without another trust prompt on that run:
+First run in a new project, type `/onboard-project`. It inspects the repository with bounded context, recommends a profile, explains the tradeoffs, asks before applying, then writes `.pi/piagent-profile.json`, its lock, `.pi/tech-stack.json`, `.pi/tech-context/*`, `.pi/project-context.md`, and `.pi/memory/*`.
 
-```bash
-cd /path/to/project
-piagent-auto
-```
+`/piagent-commands` lists everything else. For trusted local runs, `piagent-auto` wraps `pi --approve` and sets a permission profile for that run — it does not bypass protected-path checks, destructive shell checks, task gates, or verification evidence. See the [command reference](docs/command-reference-vietnamese.md).
 
-Read-only scout mode:
+## Uninstall
 
-```bash
-piagent-auto --read-only -p "Scout payment mapping. Do not edit source."
-```
-
-Trusted full-access style run:
+`piagent-uninstall` reports what it would remove and exits. It only acts with `--apply`, because it edits Pi settings that other tools also write to.
 
 ```bash
-piagent-auto --full-access -p "Run the trusted local benchmark suite."
+piagent-uninstall
+piagent-uninstall --apply
 ```
 
-`piagent-auto` is a convenience wrapper for Pi project trust (`pi --approve`). It does not bypass protected-path checks, destructive shell checks, task gates, or verification evidence.
+That removes the Pi package this platform registered. Add-ons, the Pi host, a project's state, and the npm-global helper are each opt-in and separate — `piagent-uninstall --help` lists them.
+
+Removal targets what is registered in Pi's settings rather than what the current version installs, so a package registered by an older release still comes out. Credentials, trust decisions, sessions, todos, and project memory are never removed, at any flag combination. Files written from a template and then edited — `AGENTS.md`, `.pi/settings.json`, `.pi/project-context.md` and the like — are listed for review rather than deleted.
 
 ## What it provides
 
@@ -96,172 +116,23 @@ Inside Pi:
 
 This shows the active mode, max subagents, review lenses, Field Guide path, and writer policy without triggering a model follow-up.
 
-## Install
+## Profiles
 
-Supported for this release:
-
-| Runtime surface | Team rollout status |
-|---|---|
-| macOS Apple Silicon (`darwin/arm64`) + Bash | Verified for this release. |
-| Linux x64 + Bash | Verified in CI for this release. |
-| macOS Intel (`darwin/x64`) + Bash | Supported target, but run `piagent-doctor` and project smoke tests before wide rollout. |
-| Linux ARM64 + Bash | Supported target, but run `piagent-doctor` and project smoke tests before wide rollout. |
-| Native Windows | Not a team-rollout target yet; terminal helpers and shell policy rely on Bash/POSIX semantics. |
-| WSL2 | Experimental and not release-gated yet. |
-
-Node.js `>=22.19.0` is required. Two commands:
-
-```bash
-npm install -g @piagent/platform
-piagent-setup
-```
-
-`piagent-setup` installs the exact Pi Coding Agent host this release pins, installs the Pi package, initializes the current directory, and runs the doctor. Run it from the project you want to set up. It also installs the MCP baseline and subagents; pass `--no-mcp` and `--no-subagents` to skip them, or `--global-only` to install nothing into a project.
-
-Because it is running from an installed package, the source it writes into `.pi/settings.json` is `npm:@piagent/platform@<version>`, which means the same thing on a teammate's machine.
-
-To install each component explicitly instead — for a pinned team rollout where every step is reviewed:
-
-```bash
-node --version  # >= 22.19.0
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
-npm install -g --ignore-scripts @piagent/platform@1.0.2
-piagent-install --stable --dry-run
-piagent-install --stable
-```
-
-`piagent-install --stable` resolves the helper's release tag to a commit SHA and installs the matching Pi package. In its output, `currentRelease` is the version of the terminal helper currently executing. The project release matrix above defines which OS/CPU surfaces this platform has verified.
-
-If you only need to install the Pi package and do not need the `piagent-*` terminal commands, pin the current release tag or a reviewed commit directly:
-
-```bash
-pi install git:github.com/Vt-mmm/piagent@v1.0.2
-```
-
-From a checked-out platform repo, the same helper is available as a script:
-
-```bash
-bash scripts/install-global.sh --stable --dry-run
-bash scripts/install-global.sh --stable
-```
-
-For a full update, update the exact Pi host first, then the npm-global helper, then apply its matching stable Pi package:
-
-```bash
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
-npm install -g --ignore-scripts @piagent/platform@X.Y.Z
-piagent-install --stable --dry-run
-piagent-install --stable
-```
-
-For rollback, read the target release's compatibility section and install its exact Pi host before changing the helper to `vPREVIOUS`; older hosts may reintroduce known dependency findings. If you intentionally want to change only the Pi package while keeping the terminal helper at its current version:
-
-```bash
-piagent-install --version vX.Y.Z --resolve-tag --dry-run
-piagent-install --version vX.Y.Z --resolve-tag
-```
-
-Use latest only for a personal machine or sandbox where fast updates are acceptable:
-
-```bash
-bash scripts/install-global.sh --dev --dry-run
-bash scripts/install-global.sh --dev
-```
-
-Optional Herdr integration:
-
-```bash
-herdr integration install pi
-```
-
-## Uninstall
-
-`piagent-uninstall` reports what it would remove and exits. It only acts with `--apply`, because it edits Pi settings that other tools also write to.
-
-```bash
-piagent-uninstall
-piagent-uninstall --apply
-```
-
-That removes the Pi package this platform registered. Everything beyond it is opt-in:
-
-```bash
-piagent-uninstall --apply --with-addons              # pi-mcp-adapter, pi-subagents, pi-web-access
-piagent-uninstall --apply --with-host                # the Pi Coding Agent host
-piagent-uninstall --apply --project /path/to/project # a project's profile, lock, and runtime state
-npm uninstall -g @piagent/platform                   # the npm-global helper, removed separately
-```
-
-Removal targets what is registered in Pi's settings rather than what the current version installs, so a package registered by an older release still comes out.
-
-Credentials, trust decisions, sessions, todos, and project memory are never removed, at any flag combination. Files written from a template and then edited — `AGENTS.md`, `.pi/settings.json`, `.pi/project-context.md` and the like — are listed for review rather than deleted. A project's `.pi/settings.json` keeps every setting except the package entry pointing at this platform.
-
-## Daily use
-
-```bash
-cd /path/to/project
-pi
-```
-
-First run inside a project:
+Switching profile is one command inside Pi:
 
 ```text
-/login
-/model
-/scoped-models      # optional: customize Ctrl+P model cycle
-/piagent-commands
-/mcp                # inspect MCP servers
-/subagents-doctor   # health check
-/onboard-project
-/memory-policy
+/profile             # status
+/profile fullstack   # apply
+/profile setup       # select profile, then select the tech for each role
 ```
 
-`/onboard-project` will inspect the repository with bounded context, recommend a profile, explain tradeoffs, ask before applying, then write:
-
-- `.pi/piagent-profile.json`
-- `.pi/piagent-profile.lock.json`
-- `.pi/tech-stack.json`
-- `.pi/tech-context/*`
-- `.pi/project-context.md`
-- `.pi/memory/*`
-
-Switch profiles later:
-
-```text
-/profile                 # short status, no model follow-up
-/profile list            # compact profile list
-/profile fullstack       # apply immediately
-/profile be-readonly-fe  # apply immediately
-/profile web-frontend    # apply immediately
-/profile backend-api     # apply immediately
-/profile auto            # apply detected recommendation
-/profile fe              # alias for web-frontend
-/profile be-fe           # alias for be-readonly-fe
-/profile setup           # select profile, then select role tech
-/profile setup fullstack # select FE, BE, and database tech
-/profile tech            # short tech stack status
-/profile tech setup fullstack
-/profile tech apply fullstack frontend=nextjs backend=nestjs database=prisma
-```
-
-The setup flow prefers native select UI. If the Pi host does not expose a select control yet, it falls back to a compact options card and an exact `/profile tech apply ...` command instead of asking the model to explain every option.
+`/profile list` shows every profile and its aliases. The setup flow prefers a native select UI; where the Pi host has no select control, it falls back to a compact options card and an exact `/profile tech apply ...` line rather than asking the model to explain every option.
 
 ## Capability packs
 
-Capability packs group governed prompts, skills, subagents, policies, adapters, recipes, and eval scenarios behind a declarative manifest. Project profiles select exact pack versions and explicitly grant owner, lifecycle, filesystem, network, and external-action boundaries.
+Capability packs group governed prompts, skills, subagents, policies, adapters, recipes, and eval scenarios behind a declarative manifest. Project profiles select exact pack versions and explicitly grant owner, lifecycle, filesystem, network, and external-action boundaries. The generated lock is deterministic and records profile, pack, artifact, and permission digests.
 
-```bash
-piagent-capabilities catalog --check
-piagent-capabilities doctor \
-  --profile .pi/piagent-profile.json \
-  --lock .pi/piagent-profile.lock.json
-piagent-capabilities resolve \
-  --profile .pi/piagent-profile.json \
-  --output .pi/piagent-profile.lock.json \
-  --package-source ../
-```
-
-The generated lock is deterministic and records profile, pack, artifact, and permission digests. See [Capability packs](docs/capability-packs.md).
+Commands and lock format: [Capability packs](docs/capability-packs.md).
 
 ## Built-in profiles
 
@@ -281,125 +152,32 @@ The generated lock is deterministic and records profile, pack, artifact, and per
 
 ## Main workflows
 
-### General implementation
+Everything below is typed inside a Pi session. `/piagent-commands` lists the full set; [command reference](docs/command-reference-vietnamese.md) explains each one.
 
-```text
-/task Implement <bounded task>. Follow profile, required context, protected paths, verify commands, and trace.
-```
+| Command | Use when |
+|---|---|
+| `/task <request>` | The requirement is clear enough to implement. |
+| `/scout <request>` | Read-only investigation — payment, auth, data, or backend-contract mapping — before deciding whether to implement. |
+| `/discuss <rough request>` | The requirement is not clear yet. |
+| `/plan <goal>` | You want a plan before any edit. |
+| `/review current diff` | Reviewing work already done. |
+| `/commit <message>` | Governed local commit: inspect status and diff, stage only the intended files, run verification, commit. Never pushes. |
+| `/pr <title>` | Governed pull request: confirms before any `git push` or GitHub write. Draft by default. |
+| `/be-to-fe <request>` | Backend or spec is read-only and the implementation target is frontend. Pair with `/profile be-readonly-fe`. |
+| `/platform-improve <request>` | Package-level work: setup, MCP, model scope, memory, runtime policy, prompts, skills, subagents. |
+| `/fresh-task`, `/fresh-scout`, `/fresh-be-to-fe` | The current session is already heavy. Opens a new governed session and replays the compact workflow prompt. |
 
-Use `/task` when the requirement is clear enough to implement.
+Git stays a capability rather than a `/git-*` namespace, so natural language works too. Broad staging — `git add .`, `git add -A`, `git add --all`, `git add -- .`, `git add :/` — requires confirmation, so unrelated or private files are not swept into a commit silently.
 
-### Guarded Git workflows
-
-Pi Agent intentionally keeps Git as a capability instead of adding a `/git-*` namespace. Use short workflow commands or natural language:
-
-```text
-/commit docs: update onboarding notes
-/pr Add guarded git workflow
-```
-
-`/commit` starts a governed local-commit workflow: inspect status/diff, stage only the intended files, run relevant verification, then commit locally. It does not push.
-
-`/pr` starts a governed pull-request workflow: inspect branch/status/commits, handle uncommitted changes explicitly, then ask for confirmation before any `git push` or GitHub PR create/update action. Draft PRs are the default unless the user asks for ready-for-review.
-
-Broad staging commands such as `git add .`, `git add -A`, `git add --all`, `git add -- .`, and `git add :/` require confirmation so unrelated or private files are not swept into a commit silently.
-
-For read-only investigation:
-
-```text
-/scout Scout <module/spec/contract/risk>. Do not edit source.
-```
-
-Use `/scout` for payment/auth/data/BE-contract mapping before deciding whether to implement.
-
-When the current session is already heavy, use the fresh workflow commands. They open a new governed Pi session and replay the compact workflow prompt automatically:
-
-```text
-/fresh-task <request>
-/fresh-scout <read-only request>
-/fresh-be-to-fe <backend-readonly/frontend request>
-```
-
-The input guard also collapses pasted mandatory-flow boilerplate automatically. Users should not paste the full piagent checklist into every task.
-
-### Screenshots and local images
-
-If a chat box paste or screen capture produces a local image path instead of a native Pi image attachment, paste the path directly in the task:
-
-```text
-/scout Check this UI state from screenshot /var/folders/.../screenshot.png
-```
-
-The input guard converts supported local image paths (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`) into Pi image attachments and rewrites the prompt to:
-
-```text
-/scout Check this UI state from screenshot [image1]
-```
-
-Limits: up to 4 chat images, 8 MB each. For oversized images, use Pi's `read` tool on the file so Pi can resize it.
-
-### Project improvement
-
-```text
-/platform-improve Improve <platform/setup/workflow behavior>. Update docs and verification.
-```
-
-Use `/platform-improve` for package-level work such as setup, MCP, model scope, memory, runtime policy, prompts, skills, or subagent workflows.
-
-### Backend spec to frontend
-
-```text
-/profile be-readonly-fe
-/be-to-fe Implement frontend support for <backend endpoint/spec>. Backend is read-only.
-```
-
-Use `/be-to-fe` when the backend/spec must be inspected read-only and the implementation target is frontend.
-
-### Planning and clarification
-
-```text
-/discuss <rough request>
-/plan <goal>
-/review current diff
-```
+Paste a local screenshot path straight into a task and the guard attaches it as `[image1]` before the model sees the prompt: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`, up to 4 images at 8 MB each. The guard also collapses pasted mandatory-flow boilerplate, so there is no need to paste a checklist into every task.
 
 ## Model selection
 
-Model selection is handled by Pi’s native UI.
-
-```text
-/model          # selector
-Ctrl+L          # selector hotkey
-/scoped-models  # edit model cycle scope
-Ctrl+P          # cycle scoped models
-Shift+Tab       # cycle thinking level when supported by the selected model
-```
-
-Global setup can seed `enabledModels`. To inspect or re-apply:
-
-```bash
-piagent-models
-piagent-model-scope --preset full
-```
+Handled by Pi's native UI: `/model` or `Ctrl+L` to pick, `Ctrl+P` to cycle the scoped set, `Shift+Tab` to cycle thinking level where the model supports it. Global setup seeds `enabledModels`; see [Model options](docs/model-options.md) to inspect or re-apply it.
 
 ## MCP setup
 
-Global setup installs `pi-mcp-adapter` and seeds the `core` MCP preset unless disabled.
-
-```bash
-piagent-mcp --preset core --scope global --replace
-piagent-mcp --preset popular --scope global --replace
-piagent-mcp --preset design --scope project --project /path/to/project
-piagent-mcp --list
-```
-
-If the repo is cloned from Git and npm bins are not linked yet:
-
-```bash
-bash /path/to/piagent/scripts/configure-mcp.sh --preset core --scope global --replace
-```
-
-Preset summary:
+`piagent-setup` installs `pi-mcp-adapter` and seeds the `core` preset unless disabled.
 
 | Preset | Includes |
 |---|---|
@@ -407,59 +185,13 @@ Preset summary:
 | `popular` | core + Playwright + Figma remote |
 | `all` | popular + Figma desktop/local |
 
-Keep secrets in environment variables, never in committed config:
-
-```bash
-export CONTEXT7_API_KEY=ctx7sk_...
-export GITHUB_PERSONAL_ACCESS_TOKEN=<github-token>
-```
+Keep provider keys in environment variables, never in committed config. Switching presets and per-project scoping: [MCP and tools](docs/mcp-and-tools.md).
 
 ## Subagents
 
-Global setup installs `pi-subagents` and applies the `safe` preset unless disabled.
+`piagent-setup` installs `pi-subagents` with the `safe` preset unless disabled. Daily task prompts stay solo-first: they delegate bounded scout, planning, and review work only when it is independent enough to be worth the cost, and the final handoff states whether subagents were used and why.
 
-```bash
-piagent-subagents --preset safe
-```
-
-Fallback when cloned from Git without npm bins:
-
-```bash
-bash /path/to/piagent/scripts/configure-subagents.sh --preset safe
-```
-
-Common Pi commands:
-
-```text
-/subagents-doctor
-/subagents-models
-/subagents-fleet
-/subagent-cost
-/run piagent-scout "Map the auth flow. Read-only."
-/run piagent-planner "Plan implementation from context.md."
-/run piagent-worker "Implement the approved plan."
-/run piagent-reviewer "Review current diff."
-```
-
-Daily task prompts are solo-first: they can delegate bounded scout/planning/review work when useful, and the final handoff should state whether subagents were used and why.
-
-Optional web/docs research support:
-
-```bash
-pi install npm:pi-web-access@0.13.0
-```
-
-## Optional preseed setup
-
-Most projects do not need shell init. Use this only when you want to pre-create `.pi` files in a repo or bootstrap team templates:
-
-```bash
-bash /path/to/piagent/scripts/setup.sh /path/to/project \
-  --profile be-readonly-fe \
-  --package-source git:github.com/Vt-mmm/piagent@v1.0.2 \
-  --mcp-preset core \
-  --subagents-preset safe
-```
+`/subagents-doctor` runs a health check; `/run piagent-scout "…"` and its planner, worker, and reviewer counterparts dispatch work. See [Subagents and multi-agent](docs/subagents-and-multiagent.md).
 
 ## Repository layout
 
@@ -479,49 +211,13 @@ piagent/
 
 ## Verification
 
-```bash
-npm ci --ignore-scripts --legacy-peer-deps
-npm run typecheck
-npm test
-npm run benchmark:redaction
-bash scripts/verify-local.sh
-bash scripts/team-doctor.sh . --strict-share
-pi list --approve
-```
-
-Quality benchmark:
+One command runs the full local gate — typecheck, tests, capability catalog, doctor, and the scaffold check:
 
 ```bash
-bash scripts/quality-benchmark.sh /path/to/project --init
-bash scripts/quality-benchmark.sh /path/to/project --record \
-  --scenario bounded-source-fix \
-  --surface pi \
-  --result pass \
-  --tokens 12345 \
-  --verify "npm test"
+npm run verify
 ```
 
-Sensitive-data redaction benchmark:
-
-```bash
-npm run benchmark:redaction
-```
-
-Usage / token follow-up:
-
-```text
-/task-preflight
-/task-preflight compact
-/piagent-usage
-/session
-```
-
-From another terminal:
-
-```bash
-piagent-usage /path/to/project
-bash scripts/pi-session-stats.sh /path/to/project
-```
+Individual checks and the contributor flow are in [CONTRIBUTING.md](CONTRIBUTING.md). Token and session follow-up is `/piagent-usage` inside Pi; see [Usage observability](docs/usage-observability.md). Comparing agent surfaces and models on the same scenarios: [Quality benchmark guide](docs/quality-benchmark.md).
 
 ## Public safety
 

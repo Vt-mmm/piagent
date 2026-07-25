@@ -269,21 +269,45 @@ if (!pkg.pi.subagents?.agents?.length) {
 }
 NODE
 
-grep -R "auth.json" "$ROOT/docs" "$ROOT/packages/piagent-core" "$ROOT/templates" >/dev/null
-grep -R "piagent_context" "$ROOT/packages/piagent-core" >/dev/null
-grep -R "piagent_permission_status" "$ROOT/packages/piagent-core" "$ROOT/docs" "$ROOT/README.md" >/dev/null
-grep -R "/full-access" "$ROOT/docs" "$ROOT/README.md" "$ROOT/packages/piagent-core/README.md" >/dev/null
-grep -R "piagent_exec_policy_check" "$ROOT/packages/piagent-core" "$ROOT/docs" "$ROOT/templates/project/AGENTS.md" >/dev/null
-grep -R "piagent_context_budget" "$ROOT/packages/piagent-core" "$ROOT/docs" "$ROOT/templates/project/AGENTS.md" >/dev/null
-grep -R "piagent_tool_policy_check" "$ROOT/packages/piagent-core" "$ROOT/docs" "$ROOT/templates/project/AGENTS.md" >/dev/null
-grep -R "piagent_task_gate_check" "$ROOT/packages/piagent-core" "$ROOT/docs" "$ROOT/templates/project/AGENTS.md" >/dev/null
-grep -R "piagent_usage_snapshot" "$ROOT/packages/piagent-core" "$ROOT/docs" "$ROOT/templates/project/AGENTS.md" >/dev/null
-grep -R "/piagent-usage" "$ROOT/packages/piagent-core" "$ROOT/docs" "$ROOT/README.md" >/dev/null
-grep -R "/piagent-commands" "$ROOT/README.md" "$ROOT/docs" "$ROOT/packages/piagent-core/prompts" >/dev/null
-grep -R "auto-delegation" "$ROOT/README.md" "$ROOT/docs" "$ROOT/packages/piagent-core/prompts" "$ROOT/templates/project/AGENTS.md" >/dev/null
-grep -R "Subagents used/not used" "$ROOT/packages/piagent-core/prompts" "$ROOT/docs/auto-delegation-policy.md" >/dev/null
-grep -R "Subagent orchestration capabilities" "$ROOT/README.md" "$ROOT/docs/subagent-orchestration-capabilities.md" >/dev/null
-grep -R "pi-web-access" "$ROOT/README.md" "$ROOT/docs" "$ROOT/scripts/install-global.sh" "$ROOT/scripts/setup.sh" >/dev/null
+# Documentation-coverage gates: a name that ships has to be findable in the docs
+# that teach it. Each of these was a bare `grep >/dev/null` under `set -e`, which
+# fails with exit 1 and no output, so a doc edit that dropped a term produced an
+# unexplained failure and a bisect. Naming the term and the files searched turns
+# that into a one-line fix.
+# Repository-relative paths, so the message reads the same on every machine.
+# Word-by-word because prefix removal on "$*" only strips the first word.
+relative_paths() {
+  local out=""
+  for path in "$@"; do
+    out+="${path#"$ROOT/"} "
+  done
+  printf '%s' "${out% }"
+}
+
+require_documented() {
+  local term="$1"
+  shift
+  if ! grep -R "$term" "$@" >/dev/null; then
+    echo "documentation gate: \"$term\" is no longer mentioned in $(relative_paths "$@"); restore it or update this gate in the same change" >&2
+    exit 1
+  fi
+}
+
+require_documented "auth.json" "$ROOT/docs" "$ROOT/packages/piagent-core" "$ROOT/templates"
+require_documented "piagent_context" "$ROOT/packages/piagent-core"
+require_documented "piagent_permission_status" "$ROOT/packages/piagent-core" "$ROOT/docs" "$ROOT/README.md"
+require_documented "/full-access" "$ROOT/docs" "$ROOT/README.md" "$ROOT/packages/piagent-core/README.md"
+require_documented "piagent_exec_policy_check" "$ROOT/packages/piagent-core" "$ROOT/docs" "$ROOT/templates/project/AGENTS.md"
+require_documented "piagent_context_budget" "$ROOT/packages/piagent-core" "$ROOT/docs" "$ROOT/templates/project/AGENTS.md"
+require_documented "piagent_tool_policy_check" "$ROOT/packages/piagent-core" "$ROOT/docs" "$ROOT/templates/project/AGENTS.md"
+require_documented "piagent_task_gate_check" "$ROOT/packages/piagent-core" "$ROOT/docs" "$ROOT/templates/project/AGENTS.md"
+require_documented "piagent_usage_snapshot" "$ROOT/packages/piagent-core" "$ROOT/docs" "$ROOT/templates/project/AGENTS.md"
+require_documented "/piagent-usage" "$ROOT/packages/piagent-core" "$ROOT/docs" "$ROOT/README.md"
+require_documented "/piagent-commands" "$ROOT/README.md" "$ROOT/docs" "$ROOT/packages/piagent-core/prompts"
+require_documented "auto-delegation" "$ROOT/README.md" "$ROOT/docs" "$ROOT/packages/piagent-core/prompts" "$ROOT/templates/project/AGENTS.md"
+require_documented "Subagents used/not used" "$ROOT/packages/piagent-core/prompts" "$ROOT/docs/auto-delegation-policy.md"
+require_documented "Subagent orchestration capabilities" "$ROOT/README.md" "$ROOT/docs/subagent-orchestration-capabilities.md"
+require_documented "pi-web-access" "$ROOT/README.md" "$ROOT/docs" "$ROOT/scripts/install-global.sh" "$ROOT/scripts/setup.sh"
 grep -F 'PI_MCP_ADAPTER_SOURCE="npm:pi-mcp-adapter@2.11.0"' "$ROOT/scripts/install-global.sh" >/dev/null
 grep -F 'PI_SUBAGENTS_SOURCE="npm:pi-subagents@0.35.1"' "$ROOT/scripts/install-global.sh" >/dev/null
 grep -F 'PI_WEB_ACCESS_SOURCE="npm:pi-web-access@0.13.0"' "$ROOT/scripts/install-global.sh" >/dev/null
@@ -316,7 +340,7 @@ require_action_pin() {
   local pin="$1"
   shift
   if ! grep -F "$pin" "$@" >/dev/null; then
-    echo "reviewed GitHub Actions pin $pin is missing from ${*#"$ROOT/"}; update this pin in the same change that bumps the action" >&2
+    echo "reviewed GitHub Actions pin $pin is missing from $(relative_paths "$@"); update this pin in the same change that bumps the action" >&2
     exit 1
   fi
 }
@@ -344,47 +368,47 @@ grep -F 'validate-source --package-source "$PACKAGE_SOURCE"' "$ROOT/scripts/inst
 grep -F 'verify_npm_integrity "$PI_MCP_ADAPTER_SOURCE" "$PI_MCP_ADAPTER_INTEGRITY"' "$ROOT/scripts/install-global.sh" >/dev/null
 grep -F 'verify_npm_integrity "$PI_SUBAGENTS_SOURCE" "$PI_SUBAGENTS_INTEGRITY"' "$ROOT/scripts/install-global.sh" >/dev/null
 grep -F 'verify_npm_integrity "$PI_WEB_ACCESS_SOURCE" "$PI_WEB_ACCESS_INTEGRITY"' "$ROOT/scripts/install-global.sh" >/dev/null
-grep -R "parallel-review" "$ROOT/docs" "$ROOT/README.md" >/dev/null
-grep -R "intercomBridge" "$ROOT/scripts/configure-subagents.sh" "$ROOT/docs/subagents-and-multiagent.md" >/dev/null
-grep -R "waitTool" "$ROOT/scripts/configure-subagents.sh" "$ROOT/docs/subagents-and-multiagent.md" >/dev/null
-grep -R "piagent_profile_options" "$ROOT/packages/piagent-core" "$ROOT/docs" >/dev/null
-grep -R "piagent_profile_apply" "$ROOT/packages/piagent-core" "$ROOT/docs" >/dev/null
-grep -R "/profile auto" "$ROOT/README.md" "$ROOT/docs" "$ROOT/packages/piagent-core" >/dev/null
-grep -R "piagent_profile_tech_context_record" "$ROOT/packages/piagent-core" "$ROOT/docs" "$ROOT/README.md" >/dev/null
-grep -R "/profile tech" "$ROOT/README.md" "$ROOT/docs" "$ROOT/packages/piagent-core/prompts" >/dev/null
-grep -R "/commit" "$ROOT/README.md" "$ROOT/docs" "$ROOT/packages/piagent-core/prompts" >/dev/null
-grep -R "/pr" "$ROOT/README.md" "$ROOT/docs" "$ROOT/packages/piagent-core/prompts" >/dev/null
-grep -R "piagent_project_onboarding_record" "$ROOT/packages/piagent-core" "$ROOT/docs" >/dev/null
-grep -R "piagent_memory_status" "$ROOT/packages/piagent-core" "$ROOT/docs" "$ROOT/templates/project/AGENTS.md" >/dev/null
-grep -R "piagent_memory_note" "$ROOT/packages/piagent-core" "$ROOT/docs" >/dev/null
-grep -R "piagent_memory_search" "$ROOT/packages/piagent-core" "$ROOT/docs" >/dev/null
-grep -R "piagent_memory_citation_record" "$ROOT/packages/piagent-core" "$ROOT/docs" >/dev/null
-grep -R "piagent_context_index_status" "$ROOT/packages/piagent-core" "$ROOT/docs" >/dev/null
-grep -R "piagent_context_index_record" "$ROOT/packages/piagent-core" "$ROOT/docs" >/dev/null
-grep -R "piagent_context_index_search" "$ROOT/packages/piagent-core" "$ROOT/docs" >/dev/null
-grep -R "/context-index" "$ROOT/README.md" "$ROOT/docs" "$ROOT/packages/piagent-core/prompts" >/dev/null
-grep -R "/onboard-project" "$ROOT/README.md" "$ROOT/docs" "$ROOT/templates/project/AGENTS.md" >/dev/null
-grep -R "/memory-policy" "$ROOT/README.md" "$ROOT/docs" "$ROOT/packages/piagent-core/prompts" >/dev/null
-grep -R "/model-options" "$ROOT/README.md" "$ROOT/docs" "$ROOT/packages/piagent-core/prompts" >/dev/null
-grep -R "anthropic/claude" "$ROOT/README.md" "$ROOT/docs/model-options.md" "$ROOT/packages/piagent-core/prompts/model-options.md" >/dev/null
-grep -R "gpt-5.6" "$ROOT/README.md" "$ROOT/docs/model-options.md" "$ROOT/packages/piagent-core/prompts/model-options.md" >/dev/null
-grep -R "claude-fable-5" "$ROOT/README.md" "$ROOT/docs/model-options.md" "$ROOT/packages/piagent-core/prompts/model-options.md" >/dev/null
-grep -R "piagent-models" "$ROOT/README.md" "$ROOT/docs/model-options.md" >/dev/null
-grep -R "enabledModels" "$ROOT/templates/global/settings.json" "$ROOT/docs/model-options.md" "$ROOT/scripts/configure-model-scope.sh" >/dev/null
-grep -R "piagent-mcp" "$ROOT/README.md" "$ROOT/docs/mcp-and-tools.md" "$ROOT/scripts/configure-mcp.sh" >/dev/null
-grep -R "pi-mcp-adapter" "$ROOT/README.md" "$ROOT/docs/mcp-and-tools.md" "$ROOT/scripts/install-global.sh" >/dev/null
-grep -R "piagent-subagents" "$ROOT/README.md" "$ROOT/docs/subagents-and-multiagent.md" "$ROOT/scripts/configure-subagents.sh" >/dev/null
-grep -R "subagents-fleet" "$ROOT/docs/command-reference-vietnamese.md" "$ROOT/docs/subagents-and-multiagent.md" "$ROOT/README.md" >/dev/null
-grep -R "health check" "$ROOT/docs/command-reference-vietnamese.md" "$ROOT/docs/subagents-and-multiagent.md" "$ROOT/README.md" >/dev/null
-grep -R "pi-subagents" "$ROOT/README.md" "$ROOT/docs/subagents-and-multiagent.md" "$ROOT/scripts/install-global.sh" "$ROOT/scripts/setup.sh" >/dev/null
-grep -R "piagent-scout" "$ROOT/README.md" "$ROOT/docs/subagents-and-multiagent.md" "$ROOT/packages/piagent-core/subagents" >/dev/null
+require_documented "parallel-review" "$ROOT/docs" "$ROOT/README.md"
+require_documented "intercomBridge" "$ROOT/scripts/configure-subagents.sh" "$ROOT/docs/subagents-and-multiagent.md"
+require_documented "waitTool" "$ROOT/scripts/configure-subagents.sh" "$ROOT/docs/subagents-and-multiagent.md"
+require_documented "piagent_profile_options" "$ROOT/packages/piagent-core" "$ROOT/docs"
+require_documented "piagent_profile_apply" "$ROOT/packages/piagent-core" "$ROOT/docs"
+require_documented "/profile auto" "$ROOT/README.md" "$ROOT/docs" "$ROOT/packages/piagent-core"
+require_documented "piagent_profile_tech_context_record" "$ROOT/packages/piagent-core" "$ROOT/docs" "$ROOT/README.md"
+require_documented "/profile tech" "$ROOT/README.md" "$ROOT/docs" "$ROOT/packages/piagent-core/prompts"
+require_documented "/commit" "$ROOT/README.md" "$ROOT/docs" "$ROOT/packages/piagent-core/prompts"
+require_documented "/pr" "$ROOT/README.md" "$ROOT/docs" "$ROOT/packages/piagent-core/prompts"
+require_documented "piagent_project_onboarding_record" "$ROOT/packages/piagent-core" "$ROOT/docs"
+require_documented "piagent_memory_status" "$ROOT/packages/piagent-core" "$ROOT/docs" "$ROOT/templates/project/AGENTS.md"
+require_documented "piagent_memory_note" "$ROOT/packages/piagent-core" "$ROOT/docs"
+require_documented "piagent_memory_search" "$ROOT/packages/piagent-core" "$ROOT/docs"
+require_documented "piagent_memory_citation_record" "$ROOT/packages/piagent-core" "$ROOT/docs"
+require_documented "piagent_context_index_status" "$ROOT/packages/piagent-core" "$ROOT/docs"
+require_documented "piagent_context_index_record" "$ROOT/packages/piagent-core" "$ROOT/docs"
+require_documented "piagent_context_index_search" "$ROOT/packages/piagent-core" "$ROOT/docs"
+require_documented "/context-index" "$ROOT/README.md" "$ROOT/docs" "$ROOT/packages/piagent-core/prompts"
+require_documented "/onboard-project" "$ROOT/README.md" "$ROOT/docs" "$ROOT/templates/project/AGENTS.md"
+require_documented "/memory-policy" "$ROOT/README.md" "$ROOT/docs" "$ROOT/packages/piagent-core/prompts"
+require_documented "/model-options" "$ROOT/README.md" "$ROOT/docs" "$ROOT/packages/piagent-core/prompts"
+require_documented "anthropic/claude" "$ROOT/README.md" "$ROOT/docs/model-options.md" "$ROOT/packages/piagent-core/prompts/model-options.md"
+require_documented "gpt-5.6" "$ROOT/README.md" "$ROOT/docs/model-options.md" "$ROOT/packages/piagent-core/prompts/model-options.md"
+require_documented "claude-fable-5" "$ROOT/README.md" "$ROOT/docs/model-options.md" "$ROOT/packages/piagent-core/prompts/model-options.md"
+require_documented "piagent-models" "$ROOT/README.md" "$ROOT/docs/model-options.md"
+require_documented "enabledModels" "$ROOT/templates/global/settings.json" "$ROOT/docs/model-options.md" "$ROOT/scripts/configure-model-scope.sh"
+require_documented "piagent-mcp" "$ROOT/README.md" "$ROOT/docs/mcp-and-tools.md" "$ROOT/scripts/configure-mcp.sh"
+require_documented "pi-mcp-adapter" "$ROOT/README.md" "$ROOT/docs/mcp-and-tools.md" "$ROOT/scripts/install-global.sh"
+require_documented "piagent-subagents" "$ROOT/README.md" "$ROOT/docs/subagents-and-multiagent.md" "$ROOT/scripts/configure-subagents.sh"
+require_documented "subagents-fleet" "$ROOT/docs/command-reference-vietnamese.md" "$ROOT/docs/subagents-and-multiagent.md" "$ROOT/README.md"
+require_documented "health check" "$ROOT/docs/command-reference-vietnamese.md" "$ROOT/docs/subagents-and-multiagent.md" "$ROOT/README.md"
+require_documented "pi-subagents" "$ROOT/README.md" "$ROOT/docs/subagents-and-multiagent.md" "$ROOT/scripts/install-global.sh" "$ROOT/scripts/setup.sh"
+require_documented "piagent-scout" "$ROOT/README.md" "$ROOT/docs/subagents-and-multiagent.md" "$ROOT/packages/piagent-core/subagents"
 grep -F "@upstash/context7-mcp@3.2.4" "$ROOT/scripts/configure-mcp.sh" >/dev/null
 grep -F "@upstash/context7-mcp@3.2.4" "$ROOT/docs/mcp-and-tools.md" >/dev/null
 grep -F "chrome-devtools-mcp@1.6.0" "$ROOT/scripts/configure-mcp.sh" >/dev/null
 grep -F "chrome-devtools-mcp@1.6.0" "$ROOT/docs/mcp-and-tools.md" >/dev/null
 grep -F "@playwright/mcp@0.0.78" "$ROOT/scripts/configure-mcp.sh" >/dev/null
 grep -F "@playwright/mcp@0.0.78" "$ROOT/docs/mcp-and-tools.md" >/dev/null
-grep -R "https://mcp.figma.com/mcp" "$ROOT/scripts/configure-mcp.sh" "$ROOT/docs/mcp-and-tools.md" >/dev/null
+require_documented "https://mcp.figma.com/mcp" "$ROOT/scripts/configure-mcp.sh" "$ROOT/docs/mcp-and-tools.md"
 grep -F "ghcr.io/github/github-mcp-server@sha256:2b0c48b070f61e9d3969269ead600f62d00fb237b60ac849ef3d166ee7de9ad3" "$ROOT/scripts/configure-mcp.sh" >/dev/null
 grep -F "ghcr.io/github/github-mcp-server@sha256:2b0c48b070f61e9d3969269ead600f62d00fb237b60ac849ef3d166ee7de9ad3" "$ROOT/docs/mcp-and-tools.md" >/dev/null
 grep -F '"GITHUB_READ_ONLY=1"' "$ROOT/scripts/configure-mcp.sh" >/dev/null
@@ -401,20 +425,20 @@ if grep -E '@latest|"@upstash/context7-mcp"|"chrome-devtools-mcp"|"@playwright/m
   echo "MCP production presets contain a mutable dependency source"
   exit 1
 fi
-grep -R "Ctrl+L" "$ROOT/README.md" "$ROOT/docs/model-options.md" "$ROOT/docs/team-onboarding.md" "$ROOT/docs/quickstart-vietnamese.md" >/dev/null
-grep -R "/platform-improve" "$ROOT/packages/piagent-core/prompts" "$ROOT/docs" >/dev/null
-grep -R "/be-to-fe" "$ROOT/packages/piagent-core/prompts" "$ROOT/docs" >/dev/null
-grep -R "/scout" "$ROOT/packages/piagent-core/prompts" "$ROOT/docs" "$ROOT/README.md" >/dev/null
-grep -R "piagent_context_preflight" "$ROOT/packages/piagent-core" "$ROOT/docs" >/dev/null
-grep -R ".pi/task-inbox" "$ROOT/.gitignore" "$ROOT/templates/project/.pi/.gitignore" "$ROOT/docs" >/dev/null
-grep -R "Task Implementation Contract" "$ROOT/docs" "$ROOT/packages/piagent-core/prompts" >/dev/null
-grep -R "piagent-task-trace" "$ROOT/packages/piagent-core/extensions/piagent-guard.ts" "$ROOT/docs" >/dev/null
-grep -R "piagent-source-cache" "$ROOT/packages/piagent-core/skills" "$ROOT/templates/project/AGENTS.md" >/dev/null
-grep -R "piagent_source_checkout" "$ROOT/packages/piagent-core" >/dev/null
-grep -R "scripts/setup.sh" "$ROOT/README.md" "$ROOT/docs" >/dev/null
-grep -R "quality-benchmark.sh" "$ROOT/README.md" "$ROOT/docs" >/dev/null
-grep -R "piagent-capabilities" "$ROOT/README.md" "$ROOT/docs/capability-packs.md" >/dev/null
-grep -R ".pi-subagents/" "$ROOT/.gitignore" "$ROOT/docs/subagents-and-multiagent.md" "$ROOT/docs/distribution-standard.md" "$ROOT/scripts/init-project.sh" >/dev/null
+require_documented "Ctrl+L" "$ROOT/README.md" "$ROOT/docs/model-options.md" "$ROOT/docs/team-onboarding.md" "$ROOT/docs/quickstart-vietnamese.md"
+require_documented "/platform-improve" "$ROOT/packages/piagent-core/prompts" "$ROOT/docs"
+require_documented "/be-to-fe" "$ROOT/packages/piagent-core/prompts" "$ROOT/docs"
+require_documented "/scout" "$ROOT/packages/piagent-core/prompts" "$ROOT/docs" "$ROOT/README.md"
+require_documented "piagent_context_preflight" "$ROOT/packages/piagent-core" "$ROOT/docs"
+require_documented ".pi/task-inbox" "$ROOT/.gitignore" "$ROOT/templates/project/.pi/.gitignore" "$ROOT/docs"
+require_documented "Task Implementation Contract" "$ROOT/docs" "$ROOT/packages/piagent-core/prompts"
+require_documented "piagent-task-trace" "$ROOT/packages/piagent-core/extensions/piagent-guard.ts" "$ROOT/docs"
+require_documented "piagent-source-cache" "$ROOT/packages/piagent-core/skills" "$ROOT/templates/project/AGENTS.md"
+require_documented "piagent_source_checkout" "$ROOT/packages/piagent-core"
+require_documented "scripts/setup.sh" "$ROOT/README.md" "$ROOT/docs"
+require_documented "quality-benchmark.sh" "$ROOT/README.md" "$ROOT/docs"
+require_documented "piagent-capabilities" "$ROOT/README.md" "$ROOT/docs/capability-packs.md"
+require_documented ".pi-subagents/" "$ROOT/.gitignore" "$ROOT/docs/subagents-and-multiagent.md" "$ROOT/docs/distribution-standard.md" "$ROOT/scripts/init-project.sh"
 test -s "$ROOT/tests/policy-core.test.mjs"
 
 public_wording_pattern="$(

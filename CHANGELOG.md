@@ -10,7 +10,13 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ### Fixed
 
+- `piagent-init` running from an installed package now writes `npm:@piagent/platform@<version>` into project settings, matching what `piagent-setup` already did. It is the second way a project gets its settings written, and it still wrote the directory the platform happened to be installed in — a value that means nothing on a teammate's machine, in a file meant to be committed.
+- Documentation-coverage checks in the local gate now name the term that went missing and the files searched. They were bare `grep >/dev/null` calls under `set -e`, so dropping a term from a document failed the gate with exit 1 and no output at all.
 - Folded a stale `Unreleased` section into v1.0.0, where its contents actually shipped. It had been left behind by the namespace rename and still described tools as `company_orchestration_policy`, `company_profile_tech_options`, `company_profile_tech_apply`, `company_profile_tech_context_record`, and `/company-orchestration`, none of which exist.
+
+### Changed
+
+- Cut the command count in the three places a new user actually lands. The README went from 28 shell blocks to 4 and now opens with install rather than four variants of a wrapper for software the reader has not installed yet; the Vietnamese quickstart went from 23 to 7 and its install step from 120 lines to 28; the documentation site's onboarding flow went from eight install command cards to one. Pinned rollouts, updates, rollback, the `--dev` channel, and per-tool command lists were not deleted — every one of them already had a dedicated document, and each is now linked from where it used to be inlined.
 
 ## v1.0.2 - 2026-07-25
 

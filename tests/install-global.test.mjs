@@ -300,4 +300,29 @@ describe("setup package source default", () => {
     assert.match(result.stderr, /No exact package source provided/);
     assert.match(result.stdout, new RegExp(`packageSource: ${repositoryRoot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
   });
+
+  // piagent-init is the second way a project gets its settings written, so it
+  // has to reach the same answer. A portable source through one entry point and
+  // an install path through the other is the same defect, just harder to find.
+  it("writes the same registry source through piagent-init", () => {
+    const platform = installedCopy();
+    for (const directory of ["adapters", "catalog", "packs", "schemas", "templates", "packages", "evals"]) {
+      const source = path.join(repositoryRoot, directory);
+      if (fs.existsSync(source)) fs.cpSync(source, path.join(platform, directory), { recursive: true });
+    }
+    const project = fs.mkdtempSync(path.join(os.tmpdir(), "pi-install-bin-"));
+    temporaryRoots.add(project);
+    fs.writeFileSync(path.join(project, "package.json"), '{"name":"demo"}\n');
+
+    const result = spawnSync("bash", [path.join(platform, "scripts", "init-project.sh"), project, "--profile", "generic"], {
+      env: { ...process.env, PATH: `${makeFakeBin()}${path.delimiter}${process.env.PATH ?? ""}` },
+      encoding: "utf8"
+    });
+    assert.equal(result.status, 0, result.stderr);
+
+    const version = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "package.json"), "utf8")).version;
+    const settings = JSON.parse(fs.readFileSync(path.join(project, ".pi", "settings.json"), "utf8"));
+    assert.deepEqual(settings.packages, [`npm:@piagent/platform@${version}`]);
+    assert.doesNotMatch(result.stderr, /No exact package source provided/);
+  });
 });
