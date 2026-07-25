@@ -174,6 +174,28 @@ Optional Herdr integration:
 herdr integration install pi
 ```
 
+## Uninstall
+
+`piagent-uninstall` reports what it would remove and exits. It only acts with `--apply`, because it edits Pi settings that other tools also write to.
+
+```bash
+piagent-uninstall
+piagent-uninstall --apply
+```
+
+That removes the Pi package this platform registered. Everything beyond it is opt-in:
+
+```bash
+piagent-uninstall --apply --with-addons              # pi-mcp-adapter, pi-subagents, pi-web-access
+piagent-uninstall --apply --with-host                # the Pi Coding Agent host
+piagent-uninstall --apply --project /path/to/project # a project's profile, lock, and runtime state
+npm uninstall -g @piagent/platform                   # the npm-global helper, removed separately
+```
+
+Removal targets what is registered in Pi's settings rather than what the current version installs, so a package registered by an older release still comes out.
+
+Credentials, trust decisions, sessions, todos, and project memory are never removed, at any flag combination. Files written from a template and then edited — `AGENTS.md`, `.pi/settings.json`, `.pi/project-context.md` and the like — are listed for review rather than deleted. A project's `.pi/settings.json` keeps every setting except the package entry pointing at this platform.
+
 ## Daily use
 
 ```bash

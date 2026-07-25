@@ -847,6 +847,10 @@ Watchdog là optional adversarial reviewer ở cuối turn, không bật mặc �
 | `pi install git:github.com/Vt-mmm/piagent` | Install latest platform package cho máy cá nhân/sandbox. |
 | Cài exact Pi host của release, rồi `npm install -g --ignore-scripts @piagent/platform@X.Y.Z` và `piagent-install --stable` | Full update: đồng bộ host, terminal helper và Pi package. v1.0.1 yêu cầu Pi `0.81.1`. |
 | Cài exact Pi host ghi trong release cũ, rồi helper `vPREVIOUS` và `piagent-install --stable` | Full rollback; đánh giá lại dependency findings của host cũ trước khi hạ version. |
+| `piagent-uninstall` | Báo cáo sẽ gỡ những gì. Dry run, không đụng gì. |
+| `piagent-uninstall --apply` | Gỡ Pi package của platform khỏi Pi settings global. |
+| `piagent-uninstall --apply --with-addons --with-host` | Gỡ thêm add-on đã pin và Pi host. |
+| `piagent-uninstall --apply --project <path>` | Gỡ thêm profile, lock và `piagent-state/` của project. Không đụng credential, trust, session, todo, `.pi/memory/`. |
 | `piagent-install --stable --dry-run` | Preview Pi package matching với helper hiện tại; stable resolve tag → commit SHA. |
 | `piagent-install --stable` | Apply Pi package matching với helper hiện tại bằng resolved commit SHA. |
 | `piagent-install --version vX.Y.Z --resolve-tag` | Chỉ đổi Pi package; terminal helper giữ nguyên version. |

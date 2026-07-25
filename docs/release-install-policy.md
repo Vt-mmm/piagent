@@ -141,6 +141,44 @@ piagent-install --version vPREVIOUS --resolve-tag
 piagent-doctor /path/to/project --strict-share
 ```
 
+## Uninstall
+
+Rollback moves between releases. Uninstall leaves entirely, and it is the flow a team member or an external user reaches for when this platform is no longer wanted on their machine.
+
+`piagent-uninstall` reports and exits; `--apply` performs the removal. The default is a report because the command edits Pi's global settings, which other tools also write to.
+
+```bash
+piagent-uninstall
+piagent-uninstall --apply
+```
+
+Each additional layer is opt-in, so leaving the platform never takes the Pi host or a project's history with it by surprise:
+
+```bash
+piagent-uninstall --apply --with-addons               # pi-mcp-adapter, pi-subagents, pi-web-access
+piagent-uninstall --apply --with-host                 # the exact Pi Coding Agent host
+piagent-uninstall --apply --project /path/to/project  # a project's profile, lock, and runtime state
+npm uninstall -g @piagent/platform                    # the npm-global helper, removed separately
+```
+
+Removal reads the package entries registered in Pi's settings rather than assuming what the running version installs. A machine that first installed the platform before the namespace rename still has that older entry removed.
+
+### What uninstall will not remove
+
+These are operator data, not platform state, and no flag combination deletes them:
+
+| Kept | Why |
+|---|---|
+| `.pi/auth.json`, `.pi/trust.json` | Credentials and trust decisions. Re-earning them is not a cleanup step. |
+| `.pi/sessions/`, `.pi/todos/` | Work history that predates and outlives the platform. |
+| `.pi/memory/` | Accumulated project memory. Deleting it destroys work the platform only stored. |
+
+Files written from a template and then edited in place — `AGENTS.md`, `REVIEW_GUIDELINES.md`, `.mcp.json`, `.pi/settings.json`, `.pi/mcp.json`, `.pi/project-context.md`, `.pi/context-index.json`, `.pi/tech-stack.json` — are listed rather than deleted, because by the time uninstall runs they hold project content rather than template content.
+
+`.pi/settings.json` is Pi's file, not this platform's. Uninstall drops only the `packages` entry pointing here and leaves every other setting untouched.
+
+The global MCP baseline at `$PI_CODING_AGENT_DIR/mcp.json` and the subagent config beside it are shared files that may have been edited after install. `--with-addons` reports their paths instead of resetting them.
+
 ## Canonical release checklist
 
 Production docs must never advertise a tag that cannot yet be installed.

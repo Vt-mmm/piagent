@@ -83,6 +83,20 @@ pi install npm:@your-scope/platform@x.y.z
 
 Không cần chạy bash để set profile cho từng project.
 
+### Rời platform
+
+Thành viên rời team hoặc máy không dùng platform nữa thì gỡ bằng `piagent-uninstall`. Mặc định nó chỉ báo cáo; `--apply` mới thực hiện:
+
+```bash
+piagent-uninstall
+piagent-uninstall --apply
+piagent-uninstall --apply --with-addons --with-host    # gỡ luôn add-on và Pi host
+piagent-uninstall --apply --project /path/to/project   # gỡ state platform trong project
+npm uninstall -g @piagent/platform
+```
+
+Credential, trust, session, todo và `.pi/memory/` không bị xoá ở bất kỳ tổ hợp cờ nào. `.pi/settings.json` chỉ mất đúng entry trỏ tới platform. Chi tiết trong [release/install policy](release-install-policy.md).
+
 ## Bước 2 — mở project và login OAuth
 
 ```bash

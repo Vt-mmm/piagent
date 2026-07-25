@@ -1029,6 +1029,26 @@ pi update --extensions</code></pre>
 
               <article class="step">
                 <div>
+                  <h3>Gỡ cài đặt khi không dùng nữa</h3>
+                  <p><span class="inline-code">piagent-uninstall</span> mặc định chỉ in ra sẽ gỡ những gì rồi thoát; phải thêm <span class="inline-code">--apply</span> nó mới thực hiện, vì nó sửa Pi settings mà công cụ khác cũng ghi vào. Mặc định chỉ gỡ Pi package của platform; add-on, Pi host và state trong project đều là opt-in.</p>
+                  <div class="command-card">
+                    <header><span>Gỡ</span><button class="clip-btn" data-clip="piagent-uninstall&#10;piagent-uninstall --apply&#10;npm uninstall -g @piagent/platform">Lấy lệnh</button></header>
+                    <pre><code>piagent-uninstall                                     # chỉ báo cáo
+piagent-uninstall --apply                             # gỡ Pi package của platform
+piagent-uninstall --apply --with-addons --with-host   # + add-on và Pi host
+piagent-uninstall --apply --project /path/to/project  # + state trong project
+npm uninstall -g @piagent/platform                    # helper npm-global</code></pre>
+                  </div>
+                  <p>Nó gỡ theo những gì đang đăng ký trong Pi settings chứ không theo những gì bản hiện tại cài, nên package do release cũ đăng ký vẫn ra được.</p>
+                  <div class="callout ok-callout">
+                    <strong>Không bao giờ bị xoá</strong>
+                    <p>Credential, trust, session, todo và <span class="inline-code">.pi/memory/</span> được giữ nguyên ở mọi tổ hợp cờ — đó là dữ liệu của người dùng, không phải state của platform. Các file sinh từ template rồi sửa tiếp như <span class="inline-code">AGENTS.md</span>, <span class="inline-code">.pi/settings.json</span>, <span class="inline-code">project-context.md</span> chỉ được liệt kê để tự quyết. Với <span class="inline-code">.pi/settings.json</span>, chỉ đúng entry trỏ tới platform bị bỏ khỏi <span class="inline-code">packages</span>.</p>
+                  </div>
+                </div>
+              </article>
+
+              <article class="step">
+                <div>
                   <h3>Mở repo dự án</h3>
                   <p>Chạy Pi từ thư mục repo. Với repo đã tin cậy, dùng wrapper trusted-run khi cần tự động hoá có kiểm soát.</p>
                   <div class="command-card">
