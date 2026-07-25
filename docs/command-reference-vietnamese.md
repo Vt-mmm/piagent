@@ -2,7 +2,7 @@
 
 > Nếu cần flow đầy đủ theo thứ tự dùng thật, đọc `docs/operator-manual-vietnamese.md`. File này chỉ là bảng tra cứu command.
 
-File này là bảng tra cứu command chính cho Pi Company Platform. Mục tiêu là khi anh/team mở Herdr, `cd` vào project, chạy `pi`, thì biết rõ lệnh nào dùng cho việc gì.
+File này là bảng tra cứu command chính cho Pi Agent Platform. Mục tiêu là khi anh/team mở Herdr, `cd` vào project, chạy `pi`, thì biết rõ lệnh nào dùng cho việc gì.
 
 ## Cách đọc command
 
@@ -10,7 +10,7 @@ Có 4 loại command khác nhau:
 
 | Loại | Gõ ở đâu | Ví dụ | Ý nghĩa |
 |---|---|---|---|
-| Terminal command | Terminal đã có Bash | `pi-company-mcp --preset core` | Cài, kiểm tra, hoặc cấu hình máy/project từ bên ngoài Pi. macOS Apple Silicon và Linux x64 đã verify; macOS Intel/Linux ARM64 cần smoke trước rollout; native Windows chưa là target team; WSL2 experimental. |
+| Terminal command | Terminal đã có Bash | `piagent-mcp --preset core` | Cài, kiểm tra, hoặc cấu hình máy/project từ bên ngoài Pi. macOS Apple Silicon và Linux x64 đã verify; macOS Intel/Linux ARM64 cần smoke trước rollout; native Windows chưa là target team; WSL2 experimental. |
 | Pi slash command | Bên trong Pi TUI | `/onboard-project` | Gọi workflow/prompt/package command trong Pi session hiện tại. |
 | Pi hotkey | Bên trong Pi TUI | `Ctrl+L` | Mở UI nhanh, thường dùng cho model/session. |
 | Tool syntax | Bên trong Pi, khi cần chính xác | `subagent({ action: "status" })` | Gọi đúng tool/action, dùng khi slash command hoặc natural prompt chưa đủ rõ. |
@@ -31,7 +31,7 @@ Trong Pi:
 ```text
 /login
 /model
-/company-commands
+/piagent-commands
 /onboard-project
 /context-index
 /memory-policy
@@ -73,32 +73,32 @@ Nếu task còn mơ hồ:
 
 ## Nguyên tắc command/UX
 
-Pi Company dùng ít namespace nhưng mỗi namespace có subcommand rõ:
+Pi Agent dùng ít namespace nhưng mỗi namespace có subcommand rõ:
 
 - `/profile` là namespace duy nhất cho profile và tech stack; không dùng `/profiles` hoặc `/profile-tech` riêng.
-- Status command như `/profile`, `/permission-status`, `/context-index`, `/company-orchestration` phải ngắn và không gọi model follow-up.
+- Status command như `/profile`, `/permission-status`, `/context-index`, `/piagent-orchestration` phải ngắn và không gọi model follow-up.
 - Khi user cần chọn, ưu tiên select option. Khi UI select không khả dụng, trả về exact apply command để chạy ngay.
-- Long list chỉ hiện khi gõ `list`, `options`, hoặc `/company-commands <topic>`.
+- Long list chỉ hiện khi gõ `list`, `options`, hoặc `/piagent-commands <topic>`.
 - Hành động rủi ro như stage rộng, push, PR write, deploy, publish, thay đổi database hoặc external-provider write vẫn cần xác nhận người vận hành.
 
 ## Command của platform mình
 
-Các command này đến từ package `pi-company-core`.
+Các command này đến từ package `piagent-core`.
 
 | Command | Dịch nghĩa | Dùng khi nào | Kết quả mong đợi |
 |---|---|---|---|
-| `/company-commands` | Bảng hướng dẫn command | Khi không nhớ command hoặc muốn giải thích cho team mới. | Agent tóm tắt command theo đúng ngữ cảnh project. |
+| `/piagent-commands` | Bảng hướng dẫn command | Khi không nhớ command hoặc muốn giải thích cho team mới. | Agent tóm tắt command theo đúng ngữ cảnh project. |
 | `/permission-status` | Xem quyền runtime | Khi muốn biết session đang là read-only, workspace-write, hay full-access. | Hiện active permission profile và guard boundary còn giữ. |
 | `/read-only` | Chuyển session sang read-only | Khi chỉ muốn scout/audit/review, không sửa source. | Shell/write/unknown tool bị chặn trước execution. |
 | `/workspace-write` | Chuyển session sang write chuẩn | Khi quay về mode implement bình thường. | Guard trở về profile implementation mặc định. |
 | `/full-access` | Bật trusted full-access | Khi repo đã trusted và muốn agent có quyền workspace rộng hơn. | Tool/scope autonomy được nới trong session; protected paths/redaction/human gates vẫn bật. |
 | `/full-access <task>` | Bật full-access rồi chạy task | Khi muốn một lệnh vừa cấp quyền vừa giao việc. | Session chuyển sang `trusted-full-access`, phần `<task>` được gửi tiếp cho agent. |
-| `/onboard-project` | Đọc project lần đầu | Lần đầu gắn repo vào Pi, sau `/login` và `/model`. | Tạo/cập nhật `.pi/company-profile.json`, `.pi/project-context.md`, `.pi/context-index.json`, `.pi/memory/*`. |
+| `/onboard-project` | Đọc project lần đầu | Lần đầu gắn repo vào Pi, sau `/login` và `/model`. | Tạo/cập nhật `.pi/piagent-profile.json`, `.pi/project-context.md`, `.pi/context-index.json`, `.pi/memory/*`. |
 | `/context-index` | Xem bản đồ context | Khi muốn biết context index đã generate chưa mà không burn token. | Hiện node/edge/citation/warning ngắn, không gọi model follow-up. |
 | `/context-index search <keyword>` | Tìm trong bản đồ context | Khi cần điểm vào module/tech/risk trước khi scout rộng. | Trả các node khớp keyword; vẫn phải đọc file được cite trước khi sửa. |
 | `/profile` | Xem profile ngắn | Khi muốn biết mode hiện tại mà không burn token. | Hiện status ngắn, không gọi model follow-up. |
 | `/profile list` | Xem profile có sẵn | Khi chưa nhớ tên profile. | Hiện list compact. |
-| `/profile <profile>` | Áp profile ngay | Khi đã biết profile muốn dùng. | Ghi `.pi/company-profile.json` và lock ngay, không hỏi vòng. |
+| `/profile <profile>` | Áp profile ngay | Khi đã biết profile muốn dùng. | Ghi `.pi/piagent-profile.json` và lock ngay, không hỏi vòng. |
 | `/profile auto` | Áp profile recommend | Khi muốn auto-detect và apply luôn. | Detect profile rồi ghi profile/lock ngay. |
 | `/profile setup` | Chọn profile + tech bằng option | Khi onboarding hoặc muốn đổi profile/stack mà không chat dài. | Mở select profile, rồi select tech theo role; fallback là card ngắn + lệnh apply chính xác nếu UI select chưa có. |
 | `/profile setup fullstack` | Chọn tech cho fullstack | Khi đã biết profile là fullstack. | Chọn frontend, backend, database rồi ghi `.pi/tech-stack.json` và `.pi/tech-context/*` placeholder. |
@@ -109,11 +109,11 @@ Các command này đến từ package `pi-company-core`.
 | `/profile tech apply fullstack frontend=nextjs backend=nestjs database=prisma` | Apply trực tiếp | Khi team muốn một lệnh deterministic, không chat dài. | Ghi profile, lock, tech manifest, Context7 placeholders. |
 | `/profile tech refresh` | Xem Context7 cần record | Sau khi chọn tech stack. | Hiện các query Context7 cần đọc và record bằng tool runtime. |
 | `/memory-policy` | Kiểm tra memory | Khi muốn biết Pi đang nhớ gì, hoặc muốn lưu memory explicit. | Hiện chính sách memory và file `.pi/memory/*`. |
-| `/company-orchestration` | Xem policy solo/subagent | Khi muốn biết task sẽ chạy solo-first, lens nào, Field Guide nào. | Hiện status compact, không gọi model follow-up. |
+| `/piagent-orchestration` | Xem policy solo/subagent | Khi muốn biết task sẽ chạy solo-first, lens nào, Field Guide nào. | Hiện status compact, không gọi model follow-up. |
 | `/model-options` | Giải thích model | Khi chưa rõ chọn provider model nào, thinking nào. | Giải thích selector, scope, thinking, benchmark rule. |
 | `/task-preflight` | Kiểm context trước task | Trước task lớn/risk cao hoặc khi session đã dài. | Báo nên chạy trực tiếp, compact, hay fresh session. |
 | `/task-preflight compact` | Compact có hướng dẫn | Khi context 70%+ hoặc trước task dài tiếp theo. | Pi compact session, giữ quyết định/open blockers/verify cần thiết. |
-| `/company-usage` | Snapshot token/context | Khi muốn biết session đang ăn context/token như nào. | Hiện session file, model, live context, lệnh lấy exact stats. |
+| `/piagent-usage` | Snapshot token/context | Khi muốn biết session đang ăn context/token như nào. | Hiện session file, model, live context, lệnh lấy exact stats. |
 | `/platform-improve` | Cải tiến platform/workflow | Khi cần cập nhật setup, prompt, MCP, model scope, memory, runtime policy, docs, hoặc subagent workflow. | Có implementation matrix, source changes, docs, và verify. |
 | `/be-to-fe` | Map BE spec sang FE | Khi BE là source-of-truth/read-only, chỉ implement FE. | Scout BE read-only, map contract, implement FE, verify FE. |
 | `/scout` | Scout/audit read-only | Khi cần evidence matrix trước khi chốt task, đặc biệt payment/auth/data/BE contract. | Không sửa source; trả context manifest, verify, gaps, risks. |
@@ -190,7 +190,7 @@ Các command này thuộc Pi core hoặc package Pi chính. Tên/availability c�
 | `Ctrl+P` | Cycle model | Đổi model trong scope nhanh. | Dùng sau khi đã setup `enabledModels`. |
 | `Shift+Ctrl+P` | Cycle model ngược | Quay lại model trước trong scope. | Tiện khi test provider. |
 | `Shift+Tab` | Đổi thinking level | Chọn effort như `medium`, `high`, `xhigh`, `max` nếu model hỗ trợ. | Model không hỗ trợ level nào thì Pi có thể clamp. |
-| `/session` | Xem session hiện tại | Cần session id/name/token/cost/context. | Dùng cùng `/company-usage`. |
+| `/session` | Xem session hiện tại | Cần session id/name/token/cost/context. | Dùng cùng `/piagent-usage`. |
 | `/resume` | Resume session | Khi tắt nhầm Pi hoặc muốn nối lại work cũ. | Dựa vào session list/id/name của Pi. |
 | `/compact` | Nén context | Khi context usage cao trước task dài. | Chỉ dùng khi cần; đọc lại context quan trọng sau compact. |
 | `/mcp` | Xem MCP | Kiểm tra server/tool MCP trong Pi. | Cần `pi-mcp-adapter` hoặc MCP config tương ứng. |
@@ -209,7 +209,7 @@ Quan trọng: daily flow không bắt anh phải nhớ các lệnh này. Các wo
 |---|---|---|---|
 | `/subagents-doctor` | Health check subagent | Khi mới setup, sau update, hoặc subagent không chạy. | Kiểm tra package, config, agent files, runtime readiness. |
 | `/subagents-models` | Bản đồ model của subagent | Khi muốn biết mỗi agent đang inherit model nào hoặc override gì. | Hiện model/thinking/routing đang áp dụng cho subagents. |
-| `/subagents` | Catalog/admin agents | Khi muốn xem agent nào có sẵn. | List builtin + company agents, có thể inspect metadata. |
+| `/subagents` | Catalog/admin agents | Khi muốn xem agent nào có sẵn. | List builtin + piagent agents, có thể inspect metadata. |
 | `/subagents-fleet` | Dashboard đội agent đang chạy | Khi có background/parallel subagents. | Hiện active/done runs, id, status, transcript/result nếu hỗ trợ. |
 | `/subagent-cost` | Chi phí/token subagents | Khi muốn biết parent + child agents tiêu hao ra sao. | Hiện usage/cost theo runs nếu package/provider expose stats. |
 | `/subagents-watchdog` | Giám sát run bị treo | Khi background agents có nguy cơ stuck/timeout. | Theo dõi/nhắc trạng thái tùy package. |
@@ -254,22 +254,22 @@ Glossary:
 | `watchdog` | Opt-in adversarial reviewer ở cuối turn; không phải `reviewer` subagent. |
 | `worktree` | Checkout riêng cho parallel writers để tránh đè file nhau. |
 
-Company subagents:
+Piagent subagents:
 
 | Agent | Khi dùng | Write policy |
 |---|---|---|
-| `company-scout` | Map repo/module/spec trước khi sửa. | Read-only. |
-| `company-planner` | Lập implementation plan. | Read-only. |
-| `company-worker` | Implement task đã rõ/đã approve. | Có thể write trong scope. |
-| `company-reviewer` | Review diff, verify coverage, scope drift. | Review-first. |
-| `company-oracle` | Challenge architecture/risk. | Read-only. |
+| `piagent-scout` | Map repo/module/spec trước khi sửa. | Read-only. |
+| `piagent-planner` | Lập implementation plan. | Read-only. |
+| `piagent-worker` | Implement task đã rõ/đã approve. | Có thể write trong scope. |
+| `piagent-reviewer` | Review diff, verify coverage, scope drift. | Review-first. |
+| `piagent-oracle` | Challenge architecture/risk. | Read-only. |
 
 ## Exact subagent control syntax
 
 Dùng khi muốn chính xác hơn slash command:
 
 ```text
-subagent({ agent: "company-scout", task: "Map the auth flow. Read-only.", context: "fresh" })
+subagent({ agent: "piagent-scout", task: "Map the auth flow. Read-only.", context: "fresh" })
 ```
 
 Status:
@@ -326,7 +326,7 @@ Default của platform là an toàn:
 - `maxSubagentDepth: 1`: parent spawn child, child không fan-out tiếp.
 - `parallel.concurrency: 3`: không mở quá nhiều child cùng lúc.
 - `asyncByDefault: false`: không tự chạy background nếu anh không yêu cầu.
-- Một `company-worker` tại một thời điểm; parallel chủ yếu dùng cho scout/reviewer.
+- Một `piagent-worker` tại một thời điểm; parallel chủ yếu dùng cho scout/reviewer.
 
 Nếu anh không gọi gì thêm, `/task` vẫn chạy solo-first và chỉ tự dùng subagent theo `docs/auto-delegation-policy.md` khi có scout/planning/review độc lập đáng làm.
 
@@ -341,11 +341,11 @@ Nếu anh không gọi gì thêm, `/task` vẫn chạy solo-first và chỉ tự
 Khi muốn tách rõ agents:
 
 ```text
-Use company-scout to map current platform docs/scripts read-only.
-Use company-scout to inspect relevant external source context read-only when the user provides it.
-Then use company-planner to produce an implementation plan.
-Only after plan is clear, use company-worker for implementation.
-Use company-reviewer before final.
+Use piagent-scout to map current platform docs/scripts read-only.
+Use piagent-scout to inspect relevant external source context read-only when the user provides it.
+Then use piagent-planner to produce an implementation plan.
+Only after plan is clear, use piagent-worker for implementation.
+Use piagent-reviewer before final.
 ```
 
 ### BE spec lên FE, không sửa BE
@@ -358,7 +358,7 @@ Use company-reviewer before final.
 Nếu muốn parallel read-only:
 
 ```text
-Run parallel company-scout agents: one maps backend contract read-only, one maps frontend route/state usage. Wait for both, then plan FE implementation.
+Run parallel piagent-scout agents: one maps backend contract read-only, one maps frontend route/state usage. Wait for both, then plan FE implementation.
 ```
 
 ### Review trước khi ship
@@ -370,7 +370,7 @@ Run parallel company-scout agents: one maps backend contract read-only, one maps
 Hoặc chia reviewer:
 
 ```text
-/parallel company-reviewer "Review correctness and edge cases" -> company-reviewer "Review tests and verification gaps" -> company-reviewer "Review scope drift and protected paths"
+/parallel piagent-reviewer "Review correctness and edge cases" -> piagent-reviewer "Review tests and verification gaps" -> piagent-reviewer "Review scope drift and protected paths"
 ```
 
 ## Terminal commands
@@ -380,45 +380,45 @@ Các lệnh này chạy ngoài Pi.
 | Command | Dùng khi nào |
 |---|---|
 | `npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1` | Cài Pi CLI tương thích với release hiện tại. |
-| `npm install -g --ignore-scripts github:Vt-mmm/pi_agent#v0.4.8` | Cài terminal helper `pi-company-*` từ release tag hiện tại. |
-| `pi install git:github.com/Vt-mmm/pi_agent@v0.4.8` | Cài pinned release khi cần reproducible team setup. |
-| `pi install git:github.com/Vt-mmm/pi_agent` | Cài latest package platform cho máy cá nhân/sandbox. |
-| Cài exact Pi host của release, rồi `npm install -g --ignore-scripts github:Vt-mmm/pi_agent#vX.Y.Z` và `pi-company-install --stable` | Full update: đồng bộ host, npm-global helper và Pi package. v0.4.8 yêu cầu Pi `0.81.1`. |
-| Cài exact Pi host ghi trong release cũ, rồi helper `vPREVIOUS` và `pi-company-install --stable` | Full rollback; đánh giá dependency risk của host cũ trước khi hạ version. |
-| `pi-company-install --stable --dry-run` | Preview Pi package matching với helper hiện tại; stable resolve tag → commit SHA. |
-| `pi-company-install --stable` | Cài Pi package matching với helper hiện tại bằng resolved commit SHA. |
-| `pi-company-install --version vX.Y.Z --resolve-tag` | Chỉ đổi Pi package; npm-global helper giữ nguyên version. |
-| `pi-company-install --version vX.Y.Z` | Chỉ đổi Pi package theo exact tag literal khi cần giữ behavior cũ. |
-| `pi-company-install --dev` | Theo moving source cho máy cá nhân/sandbox; không commit vào `.pi/settings.json`. |
+| `npm install -g --ignore-scripts github:Vt-mmm/piagent#v1.0.0` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
+| `pi install git:github.com/Vt-mmm/piagent@v1.0.0` | Cài pinned release khi cần reproducible team setup. |
+| `pi install git:github.com/Vt-mmm/piagent` | Cài latest package platform cho máy cá nhân/sandbox. |
+| Cài exact Pi host của release, rồi `npm install -g --ignore-scripts github:Vt-mmm/piagent#vX.Y.Z` và `piagent-install --stable` | Full update: đồng bộ host, npm-global helper và Pi package. v1.0.0 yêu cầu Pi `0.81.1`. |
+| Cài exact Pi host ghi trong release cũ, rồi helper `vPREVIOUS` và `piagent-install --stable` | Full rollback; đánh giá dependency risk của host cũ trước khi hạ version. |
+| `piagent-install --stable --dry-run` | Preview Pi package matching với helper hiện tại; stable resolve tag → commit SHA. |
+| `piagent-install --stable` | Cài Pi package matching với helper hiện tại bằng resolved commit SHA. |
+| `piagent-install --version vX.Y.Z --resolve-tag` | Chỉ đổi Pi package; npm-global helper giữ nguyên version. |
+| `piagent-install --version vX.Y.Z` | Chỉ đổi Pi package theo exact tag literal khi cần giữ behavior cũ. |
+| `piagent-install --dev` | Theo moving source cho máy cá nhân/sandbox; không commit vào `.pi/settings.json`. |
 | `pi update --extensions` | Refresh package đã cài; với pinned tag/commit, muốn nâng version thì chạy lại install bằng ref mới. |
 | `pi list --approve` | Xem package Pi đã install. |
-| `pi-company-auto` | Mở Pi với project trust `--approve` cho lần chạy hiện tại; guard vẫn bật. |
-| `pi-company-auto --read-only -p "<task>"` | Auto-run scout/read-only; guard chặn shell/write/unknown tool. |
-| `pi-company-auto --full-access -p "<task>"` | Trusted automation style; không tắt protected paths/redaction/human gates. |
+| `piagent-auto` | Mở Pi với project trust `--approve` cho lần chạy hiện tại; guard vẫn bật. |
+| `piagent-auto --read-only -p "<task>"` | Auto-run scout/read-only; guard chặn shell/write/unknown tool. |
+| `piagent-auto --full-access -p "<task>"` | Trusted automation style; không tắt protected paths/redaction/human gates. |
 | `pi` rồi `/full-access <task>` | Một lệnh trong Pi để bật full-access cho session và giao task. |
 | `pi --list-models` | Xem model Pi thấy được theo credentials hiện tại. |
-| `pi-company-install --with-mcp --with-subagents` | Cài global package + MCP + subagent baseline từ package bin. |
-| `pi-company-setup <project> --profile auto` | Setup đầy đủ cho một project khi muốn preseed bằng bin. |
-| `pi-company-init <project> --profile generic` | Init project files tối thiểu. |
-| `pi-company-models` | Xem catalog model seeded bởi platform. |
-| `pi-company-model-scope --preset full` | Re-apply full provider model scope. |
-| `pi-company-mcp --preset core --scope global --replace` | Apply the governed MCP core baseline: Context7, Chrome DevTools, GitHub. |
-| `pi-company-mcp --preset popular --scope global --replace` | Apply the governed MCP popular baseline: core + Playwright + Figma remote. |
-| `pi-company-mcp --list` | List MCP presets. |
-| `pi-company-subagents --preset safe` | Re-apply subagent safe config. |
+| `piagent-install --with-mcp --with-subagents` | Cài global package + MCP + subagent baseline từ package bin. |
+| `piagent-setup <project> --profile auto` | Setup đầy đủ cho một project khi muốn preseed bằng bin. |
+| `piagent-init <project> --profile generic` | Init project files tối thiểu. |
+| `piagent-models` | Xem catalog model seeded bởi platform. |
+| `piagent-model-scope --preset full` | Re-apply full provider model scope. |
+| `piagent-mcp --preset core --scope global --replace` | Apply the governed MCP core baseline: Context7, Chrome DevTools, GitHub. |
+| `piagent-mcp --preset popular --scope global --replace` | Apply the governed MCP popular baseline: core + Playwright + Figma remote. |
+| `piagent-mcp --list` | List MCP presets. |
+| `piagent-subagents --preset safe` | Re-apply subagent safe config. |
 | `pi install npm:pi-web-access@0.13.0` | Optional: cấp web/search/fetch tools cho builtin `researcher`. |
-| `pi-company-setup <project> --with-web-access` | Setup project + optional web access cho research subagents. |
-| `pi-company-usage /path/to/project` | Lấy exact session usage từ terminal khác. |
-| `pi-company-doctor /path/to/project --strict-share` | Kiểm tra project có share/open-source được không. |
-| `pi-company-benchmark ...` | Ghi quality benchmark bằng package bin. |
+| `piagent-setup <project> --with-web-access` | Setup project + optional web access cho research subagents. |
+| `piagent-usage /path/to/project` | Lấy exact session usage từ terminal khác. |
+| `piagent-doctor /path/to/project --strict-share` | Kiểm tra project có share/open-source được không. |
+| `piagent-benchmark ...` | Ghi quality benchmark bằng package bin. |
 | `bash scripts/verify-local.sh` | Verify repo platform trước khi commit/tag. |
 | `bash scripts/verify-local.sh --offline` | Verify trong CI/máy sạch, bỏ qua local Pi model catalog. |
 | `bash scripts/setup.sh <project> ...` | Preseed setup project; không bắt buộc cho daily flow. |
 | `bash scripts/quality-benchmark.sh ...` | Ghi quality benchmark theo scenario thật. |
 
-Trong output `pi-company-install`, `currentRelease` là version của terminal helper đang chạy, không phải lời xác nhận rằng npm-global helper vừa được update. Checklist đầy đủ nằm tại [release/install policy](release-install-policy.md).
+Trong output `piagent-install`, `currentRelease` là version của terminal helper đang chạy, không phải lời xác nhận rằng npm-global helper vừa được update. Checklist đầy đủ nằm tại [release/install policy](release-install-policy.md).
 
-Khi đang develop chính repo `pi_agent`, có thể dùng npm scripts tương ứng:
+Khi đang develop chính repo `piagent`, có thể dùng npm scripts tương ứng:
 
 | Command | Tương đương |
 |---|---|
@@ -441,9 +441,9 @@ Khi đang develop chính repo `pi_agent`, có thể dùng npm scripts tương �
 | Kiểm tra MCP trong Pi | `/mcp` |
 | Xem tool MCP | `/mcp tools` |
 | Reconnect sau khi đổi config/env | `/mcp reconnect` |
-| Apply global Context7/Chrome/GitHub baseline | `pi-company-mcp --preset core --scope global --replace` |
-| Apply Figma/Playwright baseline | `pi-company-mcp --preset popular --scope global --replace` |
-| Xem preset | `pi-company-mcp --list` |
+| Apply global Context7/Chrome/GitHub baseline | `piagent-mcp --preset core --scope global --replace` |
+| Apply Figma/Playwright baseline | `piagent-mcp --preset popular --scope global --replace` |
+| Xem preset | `piagent-mcp --list` |
 
 Secret phải để trong env, không commit:
 
@@ -456,9 +456,9 @@ export GITHUB_PERSONAL_ACCESS_TOKEN=<github-token>
 
 | Câu hỏi | Lệnh |
 |---|---|
-| Session này đang dùng model gì? | `/session` hoặc `/company-usage` |
-| Context window đang còn bao nhiêu? | `/company-usage` |
-| Exact token/cost từ terminal khác? | `pi-company-usage /path/to/project` |
+| Session này đang dùng model gì? | `/session` hoặc `/piagent-usage` |
+| Context window đang còn bao nhiêu? | `/piagent-usage` |
+| Exact token/cost từ terminal khác? | `piagent-usage /path/to/project` |
 | Subagents tốn bao nhiêu? | `/subagent-cost` |
 | Có nên compact chưa? | Xem `contextUsage.percent`; trên 75% mới cân nhắc `/compact`. |
 
@@ -475,7 +475,7 @@ Mental model chuẩn:
 5. Writer song song chỉ dùng khi có worktree isolation và write set không overlap.
 6. Agent custom tốt phải có role hẹp, tool surface rõ, output contract rõ.
 
-Đây là lý do platform mình có `company-scout`, `company-planner`, `company-worker`, `company-reviewer`, `company-oracle` thay vì một agent tổng quát làm tất cả.
+Đây là lý do platform mình có `piagent-scout`, `piagent-planner`, `piagent-worker`, `piagent-reviewer`, `piagent-oracle` thay vì một agent tổng quát làm tất cả.
 
 ## Tài liệu chính
 

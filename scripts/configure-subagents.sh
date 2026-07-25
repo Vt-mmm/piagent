@@ -14,14 +14,14 @@ Options:
                                   Runtime preset (default: safe)
   --config <path>                 Subagent config path (default: ~/.pi/agent/extensions/subagent/config.json)
   --settings <path>               Pi settings path (default: ~/.pi/agent/settings.json)
-  --model-scope <none|company|codex|claude>
+  --model-scope <none|piagent|codex|claude>
                                   Optional subagent model allowlist written to settings (default: none)
   --dry-run                       Print merged config/settings summary without writing
   --list                          Print available presets
   -h, --help
 
 Recommended:
-  pi-company-subagents --preset safe
+  piagent-subagents --preset safe
 
 After installing/configuring:
   pi
@@ -157,7 +157,7 @@ const presets = {
 
 const modelScopes = {
   none: null,
-  company: { enforce: true, allow: ["openai-codex/*", "anthropic/*"] },
+  piagent: { enforce: true, allow: ["openai-codex/*", "anthropic/*"] },
   codex: { enforce: true, allow: ["openai-codex/*"] },
   claude: { enforce: true, allow: ["anthropic/*"] }
 };

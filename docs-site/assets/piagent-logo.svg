@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Pi Agent Platform logo</title>
+  <desc id="desc">Rounded dark monogram mark with Pi letters and guarded runtime lines.</desc>
+  <defs>
+    <linearGradient id="shell" x1="17" y1="8" x2="111" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1c2116"/>
+      <stop offset="0.5" stop-color="#0b0d0f"/>
+      <stop offset="1" stop-color="#131917"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="28" y1="24" x2="100" y2="108" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e6ff8c"/>
+      <stop offset="1" stop-color="#8be9c8"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="38" cy="30" r="86" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#d8ff7a" stop-opacity="0.34"/>
+      <stop offset="0.58" stop-color="#8be9c8" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#8be9c8" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft" x="-24" y="-24" width="176" height="176" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="14" stdDeviation="13" flood-color="#000000" flood-opacity="0.45"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="6" flood-color="#d8ff7a" flood-opacity="0.2"/>
+    </filter>
+  </defs>
+  <rect width="128" height="128" rx="32" fill="#050505"/>
+  <rect x="10" y="10" width="108" height="108" rx="28" fill="url(#shell)" filter="url(#soft)"/>
+  <rect x="10.75" y="10.75" width="106.5" height="106.5" rx="27.25" fill="none" stroke="url(#accent)" stroke-opacity="0.72" stroke-width="1.5"/>
+  <path d="M26 76c19-1 23-19 38-22 15-2 20 10 38 8" fill="none" stroke="url(#accent)" stroke-width="6" stroke-linecap="round" stroke-opacity="0.88"/>
+  <path d="M26 90c22 1 30-14 43-15 15-1 20 10 33 7" fill="none" stroke="#f4f4ef" stroke-width="2.5" stroke-linecap="round" stroke-opacity="0.22"/>
+  <circle cx="34" cy="34" r="4" fill="#d8ff7a"/>
+  <circle cx="96" cy="35" r="3" fill="#8be9c8" opacity="0.85"/>
+  <circle cx="94" cy="95" r="2.5" fill="#d8ff7a" opacity="0.72"/>
+  <rect x="25" y="25" width="78" height="78" rx="20" fill="url(#glow)" opacity="0.8"/>
+  <text x="64" y="78" text-anchor="middle" font-family="JetBrains Mono, IBM Plex Mono, ui-monospace, monospace" font-size="42" font-weight="700" letter-spacing="-3" fill="#f4f4ef">Pi</text>
+  <path d="M37 93h54" stroke="#d8ff7a" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+</svg>

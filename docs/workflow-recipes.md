@@ -33,16 +33,16 @@ Verify chuẩn:
 
 ```bash
 bash scripts/verify-local.sh
-bash scripts/team-doctor.sh /path/to/pi_agent --strict-share
+bash scripts/team-doctor.sh /path/to/piagent --strict-share
 pi list --approve
 ```
 
 Memory note:
 
 - Nếu task tạo decision/lesson bền vững, user có thể yêu cầu `Remember: ...`.
-- Agent dùng `company_memory_note` để ghi note explicit.
+- Agent dùng `piagent_memory_note` để ghi note explicit.
 - Không tự ghi toàn bộ transcript vào memory.
-- Nếu task tạo context điều hướng bền vững cho repo, dùng `company_context_index_record` để ghi node/edge/citation ngắn sau khi đã verify.
+- Nếu task tạo context điều hướng bền vững cho repo, dùng `piagent_context_index_record` để ghi node/edge/citation ngắn sau khi đã verify.
 
 ## Recipe 2 — Backend spec to frontend
 
@@ -122,4 +122,4 @@ Rule:
 1. Context index là advisory map, không phải source of truth.
 2. Node/edge phải ngắn và có citation tới file/doc/task đã verify.
 3. Không lưu raw transcript, secret, token, session, hoặc source excerpt dài.
-4. Nếu index stale so với profile/tech/onboarding snapshot, chạy lại `/onboard-project` hoặc record lại bằng `company_context_index_record`.
+4. Nếu index stale so với profile/tech/onboarding snapshot, chạy lại `/onboard-project` hoặc record lại bằng `piagent_context_index_record`.

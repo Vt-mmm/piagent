@@ -2,7 +2,7 @@
 
 ## Scope and objective
 
-Pi Company Platform adds application-level policy enforcement to Pi tool calls used in a trusted project. Its objective is to reduce accidental damage, common prompt-injection impact, secret exposure, unauthorized external mutations, and non-reproducible team installs. It is not an operating-system sandbox and does not claim to contain hostile code running with the operator's account permissions.
+Pi Agent Platform adds application-level policy enforcement to Pi tool calls used in a trusted project. Its objective is to reduce accidental damage, common prompt-injection impact, secret exposure, unauthorized external mutations, and non-reproducible team installs. It is not an operating-system sandbox and does not claim to contain hostile code running with the operator's account permissions.
 
 This document covers the packaged guard, project profiles, capability locks, installer, release workflow, and packaged artifact. Project-specific applications, provider infrastructure, the Pi host implementation, third-party add-ons, and the operating system remain separate security domains.
 
@@ -21,7 +21,7 @@ This document covers the packaged guard, project profiles, capability locks, ins
 - The operator, operating-system account, Pi host, and explicitly trusted project repository are trusted to execute code.
 - Project-local Pi resources are loaded only after Pi project trust or an explicit operator override.
 - A human remains available to approve destructive and external-provider actions.
-- Supported release verification covers macOS Apple Silicon + Bash, Linux x64 + Bash, Node.js `>=22.19.0`, and the exact Pi host version declared by the release. macOS Intel + Bash and Linux ARM64 + Bash are supported targets that need local smoke verification before broad rollout. Native Windows is not a team-rollout target for v0.4.8, and WSL2 is experimental/unverified.
+- Supported release verification covers macOS Apple Silicon + Bash, Linux x64 + Bash, Node.js `>=22.19.0`, and the exact Pi host version declared by the release. macOS Intel + Bash and Linux ARM64 + Bash are supported targets that need local smoke verification before broad rollout. Native Windows is not a team-rollout target for v1.0.0, and WSL2 is experimental/unverified.
 - Registry, GitHub, model-provider, MCP-provider, and Vercel controls are external dependencies. Their account security and platform guarantees are not replaced by this repository.
 
 ## Threat actors and failure modes
@@ -33,7 +33,7 @@ This document covers the packaged guard, project profiles, capability locks, ins
 - a moved release tag, unexpected package content, or vulnerable transitive dependency;
 - an untrusted repository, dependency install script, interpreter payload, binary, or process executing with the operator's OS permissions.
 
-The final category is outside the containment capability of the Company guard. It requires isolation at the filesystem, process, network, and credential layers.
+The final category is outside the containment capability of the Piagent guard. It requires isolation at the filesystem, process, network, and credential layers.
 
 ## Attack-vector and control map
 

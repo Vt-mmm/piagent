@@ -13,109 +13,110 @@
       "artifacts": [
         {
           "byteSize": 1901,
-          "digest": "sha256:ea26f605974fdc2605d4d6d6b97cbb67e35b07e352038dbba6e29f585d90c4f8",
+          "digest": "sha256:4cf593f5ae8d2806d5d1262ea31f7814e087b0d599e66fc064467b8c22a6a075",
           "id": "generic",
           "kind": "adapters",
           "path": "adapters/generic/profile.json"
         },
         {
-          "byteSize": 1143,
-          "digest": "sha256:f4674f0cf76ecfecf66d8af2377c9fe34fbf21b99bf2b7ae5e524276938a7f08",
+          "byteSize": 1134,
+          "digest": "sha256:8e3bbe4c8ab19ab46f02e02b0763b78fa4784160b11210b7350a35730b02ee81",
           "id": "capability-resolution",
           "kind": "evals",
           "path": "evals/scenarios/capability-resolution.json"
         },
         {
           "byteSize": 6146,
-          "digest": "sha256:75ee5d8063ba161cc1505b3c99e7c03a347f996436fe23247165f2ed64d2ceab",
+          "digest": "sha256:a7a975b99ed2f45881d110582fb6990c500f7e081f865230bf9e4ae242cdd81e",
           "id": "base-policy",
           "kind": "policies",
-          "path": "packages/pi-company-core/policies/base-policy.json"
+          "path": "packages/piagent-core/policies/base-policy.json"
         },
         {
-          "byteSize": 1749,
-          "digest": "sha256:eaaf6a16d7c000adbdcf83a8e887904112f4cab48a39250d92765e58a16ec7e0",
+          "byteSize": 1746,
+          "digest": "sha256:e18426ee2b4ac2b9bb089789f146b43f1e0c2c5001327860ed583eb14cc08df7",
           "id": "commit",
           "kind": "prompts",
-          "path": "packages/pi-company-core/prompts/commit.md"
+          "path": "packages/piagent-core/prompts/commit.md"
         },
         {
           "byteSize": 1601,
-          "digest": "sha256:1caadcefc17070a646d5000c2c9ddd23d87955fe1c08eb5d2deb7403e3c379ac",
+          "digest": "sha256:bd00d48ba9272a721f58b406944917e5f4a44162c621d722bb5e9c8528f87eb5",
           "id": "plan",
           "kind": "prompts",
-          "path": "packages/pi-company-core/prompts/plan.md"
+          "path": "packages/piagent-core/prompts/plan.md"
         },
         {
           "byteSize": 1532,
-          "digest": "sha256:ce1df78ef4f32526294013efd6f0c938d078981fd0f4fd4da1dab6ca6c4cea39",
+          "digest": "sha256:bd66fccbdf9f1f9a518aab4b9bc9bb001f0ec3b0f35d52a64229dbd31d8dd8a0",
           "id": "pr",
           "kind": "prompts",
-          "path": "packages/pi-company-core/prompts/pr.md"
+          "path": "packages/piagent-core/prompts/pr.md"
         },
         {
           "byteSize": 1528,
-          "digest": "sha256:48e7c6968d8c8d801aea25e9f27bfe93c447bd51936fb7a8d0182929bbdd09bd",
+          "digest": "sha256:046b91dd920eed4da920132e4f563fedd0a73603a206896a078536a75906335c",
           "id": "review",
           "kind": "prompts",
-          "path": "packages/pi-company-core/prompts/review.md"
+          "path": "packages/piagent-core/prompts/review.md"
         },
         {
-          "byteSize": 4837,
-          "digest": "sha256:faf71b77b917ef2e29585b3d6123d6f8a5406e063e6d516a362b5a34278361fe",
+          "byteSize": 4834,
+          "digest": "sha256:1e20fdfbf55ec71ec6f7a780aaf567556329571dcb1774831570e143e9d2b114",
           "id": "task",
           "kind": "prompts",
-          "path": "packages/pi-company-core/prompts/task.md"
+          "path": "packages/piagent-core/prompts/task.md"
         },
         {
-          "byteSize": 1799,
-          "digest": "sha256:9d06e24da61671508e2e84d4e33c668029de6ca9fd3a0f474a546b6ad7086034",
+          "byteSize": 1790,
+          "digest": "sha256:1f4262cf53cf527ea1b5f89a938f3aafb5006e1b091ad49132d810c13489db2c",
           "id": "bounded-change",
           "kind": "recipes",
           "path": "packs/engineering-base/recipes/bounded-change.json"
         },
         {
-          "byteSize": 1358,
-          "digest": "sha256:3b1824fa2ce0d248ccec583db069f4d0c3d71cb6339180368a1a3b676a4a597f",
-          "id": "company-ops",
+          "byteSize": 1356,
+          "digest": "sha256:8ee63773b66386fb1e278e178842d4bd2a725b73d60e1114529df4aa3bc628f4",
+          "id": "piagent-ops",
           "kind": "skills",
-          "path": "packages/pi-company-core/skills/company-ops/SKILL.md"
+          "path": "packages/piagent-core/skills/piagent-ops/SKILL.md"
         },
         {
-          "byteSize": 1692,
-          "digest": "sha256:27a9d0901b66f124c378ee8269e48ad8f22ae6b47808a9052828613f7adb8cf5",
-          "id": "company-planner",
+          "byteSize": 1690,
+          "digest": "sha256:5916fcab12154317430cb40eb7861b807b07911835653a8eae7d3ca79a562e77",
+          "id": "piagent-planner",
           "kind": "subagents",
-          "path": "packages/pi-company-core/subagents/company-planner.md"
+          "path": "packages/piagent-core/subagents/piagent-planner.md"
         },
         {
-          "byteSize": 1603,
-          "digest": "sha256:1dc6ba1b2477e368f27c0753c52087cac4ef2908ea9b351739f775dfd3ab78fc",
-          "id": "company-reviewer",
+          "byteSize": 1601,
+          "digest": "sha256:be1ec2282db3038717c1e66e91e3890b8d0d665fed039c903cc1e4a3c427f69e",
+          "id": "piagent-reviewer",
           "kind": "subagents",
-          "path": "packages/pi-company-core/subagents/company-reviewer.md"
+          "path": "packages/piagent-core/subagents/piagent-reviewer.md"
         },
         {
-          "byteSize": 1246,
-          "digest": "sha256:15f5f435bde78b233aaf10c987b323f14d82584889383d746ca90392dc908f36",
-          "id": "company-scout",
+          "byteSize": 1244,
+          "digest": "sha256:ef11c88d37d4d2f760c9bd5fe66e7b4ce81cb5f2afd2dc1ce9df62749554dbe3",
+          "id": "piagent-scout",
           "kind": "subagents",
-          "path": "packages/pi-company-core/subagents/company-scout.md"
+          "path": "packages/piagent-core/subagents/piagent-scout.md"
         },
         {
-          "byteSize": 1733,
-          "digest": "sha256:11e0602bef7babf0176b75827a5e03e16b8f0ba4c2c8264a2578b9ec2924bb50",
-          "id": "company-worker",
+          "byteSize": 1731,
+          "digest": "sha256:551b9722940b9e2ebd9053fcf520ebf22e7478f7286615683776e9d989bb7d89",
+          "id": "piagent-worker",
           "kind": "subagents",
-          "path": "packages/pi-company-core/subagents/company-worker.md"
+          "path": "packages/piagent-core/subagents/piagent-worker.md"
         }
       ],
       "dependencies": [],
       "description": "Core engineering workflow, policy, verification, and task coordination capabilities.",
-      "digest": "sha256:719967ae944d8e4101da6f9eee6ebcb13ff2894207cf479f4e8a5b1b47b9062a",
+      "digest": "sha256:b9671f0c2da79012b8638c98459d5bbe9e444fd39fdabe17f54477ec18cc9fdf",
       "license": "MIT",
       "lifecycle": "experimental",
       "name": "engineering-base",
+      "origin": "workspace",
       "owner": "platform-maintainers",
       "permissions": {
         "capabilities": [
@@ -133,6 +134,7 @@
         ],
         "networkDomains": []
       },
+      "source": "workspace",
       "tags": [
         "engineering",
         "governance"
@@ -156,8 +158,8 @@
           "path": "adapters/web-frontend/profile.json"
         },
         {
-          "byteSize": 1285,
-          "digest": "sha256:e0cd687df2e81856020d2cf75eb553fe23e6aa6c7d6a22e3312c8e787613f7a9",
+          "byteSize": 1276,
+          "digest": "sha256:96959d1f93a01c8e100d0ab72d1b820046491ba6220bc1361263c3258e2224c5",
           "id": "verified-web-change",
           "kind": "recipes",
           "path": "packs/web-delivery/recipes/verified-web-change.json"
@@ -170,10 +172,11 @@
         }
       ],
       "description": "Web application delivery capabilities with browser-assisted verification.",
-      "digest": "sha256:5961855868d19f4d1f053a1be3e91f2fa49ea2cdc07551bea94b741eb62dad8b",
+      "digest": "sha256:b5a74b3ef869fe777a870b4b450ae9dc91d30e3370ce369a03d939abef8606cf",
       "license": "MIT",
       "lifecycle": "experimental",
       "name": "web-delivery",
+      "origin": "workspace",
       "owner": "platform-maintainers",
       "permissions": {
         "capabilities": [
@@ -191,6 +194,7 @@
         ],
         "networkDomains": []
       },
+      "source": "workspace",
       "tags": [
         "frontend",
         "web"

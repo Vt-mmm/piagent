@@ -1,0 +1,243 @@
+{
+  "artifacts": [
+    {
+      "byteSize": 1901,
+      "digest": "sha256:4cf593f5ae8d2806d5d1262ea31f7814e087b0d599e66fc064467b8c22a6a075",
+      "id": "generic",
+      "kind": "adapters",
+      "pack": "engineering-base@0.1.1",
+      "path": "adapters/generic/profile.json"
+    },
+    {
+      "byteSize": 1134,
+      "digest": "sha256:8e3bbe4c8ab19ab46f02e02b0763b78fa4784160b11210b7350a35730b02ee81",
+      "id": "capability-resolution",
+      "kind": "evals",
+      "pack": "engineering-base@0.1.1",
+      "path": "evals/scenarios/capability-resolution.json"
+    },
+    {
+      "byteSize": 6146,
+      "digest": "sha256:a7a975b99ed2f45881d110582fb6990c500f7e081f865230bf9e4ae242cdd81e",
+      "id": "base-policy",
+      "kind": "policies",
+      "pack": "engineering-base@0.1.1",
+      "path": "packages/piagent-core/policies/base-policy.json"
+    },
+    {
+      "byteSize": 1746,
+      "digest": "sha256:e18426ee2b4ac2b9bb089789f146b43f1e0c2c5001327860ed583eb14cc08df7",
+      "id": "commit",
+      "kind": "prompts",
+      "pack": "engineering-base@0.1.1",
+      "path": "packages/piagent-core/prompts/commit.md"
+    },
+    {
+      "byteSize": 1601,
+      "digest": "sha256:bd00d48ba9272a721f58b406944917e5f4a44162c621d722bb5e9c8528f87eb5",
+      "id": "plan",
+      "kind": "prompts",
+      "pack": "engineering-base@0.1.1",
+      "path": "packages/piagent-core/prompts/plan.md"
+    },
+    {
+      "byteSize": 1532,
+      "digest": "sha256:bd66fccbdf9f1f9a518aab4b9bc9bb001f0ec3b0f35d52a64229dbd31d8dd8a0",
+      "id": "pr",
+      "kind": "prompts",
+      "pack": "engineering-base@0.1.1",
+      "path": "packages/piagent-core/prompts/pr.md"
+    },
+    {
+      "byteSize": 1528,
+      "digest": "sha256:046b91dd920eed4da920132e4f563fedd0a73603a206896a078536a75906335c",
+      "id": "review",
+      "kind": "prompts",
+      "pack": "engineering-base@0.1.1",
+      "path": "packages/piagent-core/prompts/review.md"
+    },
+    {
+      "byteSize": 4834,
+      "digest": "sha256:1e20fdfbf55ec71ec6f7a780aaf567556329571dcb1774831570e143e9d2b114",
+      "id": "task",
+      "kind": "prompts",
+      "pack": "engineering-base@0.1.1",
+      "path": "packages/piagent-core/prompts/task.md"
+    },
+    {
+      "byteSize": 1790,
+      "digest": "sha256:1f4262cf53cf527ea1b5f89a938f3aafb5006e1b091ad49132d810c13489db2c",
+      "id": "bounded-change",
+      "kind": "recipes",
+      "pack": "engineering-base@0.1.1",
+      "path": "packs/engineering-base/recipes/bounded-change.json"
+    },
+    {
+      "byteSize": 1356,
+      "digest": "sha256:8ee63773b66386fb1e278e178842d4bd2a725b73d60e1114529df4aa3bc628f4",
+      "id": "piagent-ops",
+      "kind": "skills",
+      "pack": "engineering-base@0.1.1",
+      "path": "packages/piagent-core/skills/piagent-ops/SKILL.md"
+    },
+    {
+      "byteSize": 1690,
+      "digest": "sha256:5916fcab12154317430cb40eb7861b807b07911835653a8eae7d3ca79a562e77",
+      "id": "piagent-planner",
+      "kind": "subagents",
+      "pack": "engineering-base@0.1.1",
+      "path": "packages/piagent-core/subagents/piagent-planner.md"
+    },
+    {
+      "byteSize": 1601,
+      "digest": "sha256:be1ec2282db3038717c1e66e91e3890b8d0d665fed039c903cc1e4a3c427f69e",
+      "id": "piagent-reviewer",
+      "kind": "subagents",
+      "pack": "engineering-base@0.1.1",
+      "path": "packages/piagent-core/subagents/piagent-reviewer.md"
+    },
+    {
+      "byteSize": 1244,
+      "digest": "sha256:ef11c88d37d4d2f760c9bd5fe66e7b4ce81cb5f2afd2dc1ce9df62749554dbe3",
+      "id": "piagent-scout",
+      "kind": "subagents",
+      "pack": "engineering-base@0.1.1",
+      "path": "packages/piagent-core/subagents/piagent-scout.md"
+    },
+    {
+      "byteSize": 1731,
+      "digest": "sha256:551b9722940b9e2ebd9053fcf520ebf22e7478f7286615683776e9d989bb7d89",
+      "id": "piagent-worker",
+      "kind": "subagents",
+      "pack": "engineering-base@0.1.1",
+      "path": "packages/piagent-core/subagents/piagent-worker.md"
+    }
+  ],
+  "core": {
+    "apiVersion": 1,
+    "packageDigest": "sha256:34d61b6ad1c121491de28f5698fead356055c5bb57d16e12ff39a7a41e270ce4",
+    "packageSource": "../",
+    "packageVersion": "1.0.0",
+    "runtimeFiles": [
+      {
+        "byteSize": 3946,
+        "digest": "sha256:513e81bec2038e0e43d86495645d65f22b22b0a883e0bc18b6545befee171494",
+        "path": "package.json"
+      },
+      {
+        "byteSize": 952,
+        "digest": "sha256:78e6bc2ffacaaa1e5508b6f2cd6cfdadca8342824d3904374b93276ccbe154aa",
+        "path": "packages/piagent-core/package.json"
+      },
+      {
+        "byteSize": 6146,
+        "digest": "sha256:a7a975b99ed2f45881d110582fb6990c500f7e081f865230bf9e4ae242cdd81e",
+        "path": "packages/piagent-core/policies/base-policy.json"
+      },
+      {
+        "byteSize": 56084,
+        "digest": "sha256:8aa646875032759501e8ca2f8d79a4a204e5a60768f9f91a09292964295ca56b",
+        "path": "packages/piagent-core/capabilities/capability-core.js"
+      },
+      {
+        "byteSize": 12079,
+        "digest": "sha256:e355dc0336071bbf2ac9a96da3fe427affda4345fa153820b2c1524839acc6d3",
+        "path": "packages/piagent-core/capabilities/capability-sources.js"
+      },
+      {
+        "byteSize": 7082,
+        "digest": "sha256:9fd0f0334c1b247ae2baf111b2d5b700cbb98820f3659152ee02120ec19d1d83",
+        "path": "packages/piagent-core/security/sensitive-data.js"
+      },
+      {
+        "byteSize": 249779,
+        "digest": "sha256:cd9958a5d6d9dfb3d3bd62f9fef20c3d752a5e19e7cacc633754232aa5070057",
+        "path": "packages/piagent-core/extensions/piagent-guard.ts"
+      },
+      {
+        "byteSize": 1481,
+        "digest": "sha256:743641e38ab4e86f2280f11c515d41a09c48a6fd32e14851ff035040ef658b79",
+        "path": "packages/piagent-core/extensions/guard-io.js"
+      },
+      {
+        "byteSize": 22838,
+        "digest": "sha256:4dd5d01143b9c5587891a31c1983725db32d0ded7d0162045093a1b0a96055b7",
+        "path": "packages/piagent-core/extensions/guard-shell-analysis.ts"
+      },
+      {
+        "byteSize": 38753,
+        "digest": "sha256:b373532e718070ffdef066f209a69471b617aa0e5858f4177357aad3359d20a2",
+        "path": "packages/piagent-core/extensions/policy-core.js"
+      },
+      {
+        "byteSize": 91,
+        "digest": "sha256:54830a43d1bc4e2b1b7d5732ab43c076b7e047420873c05e400e782f16214bc9",
+        "path": "packages/piagent-core/extensions/redaction-core.js"
+      },
+      {
+        "byteSize": 7938,
+        "digest": "sha256:793083d3e89e3aa39162bfffe4ac38d55cda87d9707a22fb1b36fda6ff06f5a3",
+        "path": "packages/piagent-core/extensions/runtime-evidence.js"
+      }
+    ]
+  },
+  "packs": [
+    {
+      "digest": "sha256:b9671f0c2da79012b8638c98459d5bbe9e444fd39fdabe17f54477ec18cc9fdf",
+      "lifecycle": "experimental",
+      "name": "engineering-base",
+      "origin": "workspace",
+      "owner": "platform-maintainers",
+      "source": "workspace",
+      "version": "0.1.1"
+    }
+  ],
+  "permissions": {
+    "capabilities": [
+      "filesystem-readonly",
+      "filesystem-write",
+      "memory",
+      "shell"
+    ],
+    "externalActions": [],
+    "filesystemRead": [
+      "**/*"
+    ],
+    "filesystemWrite": [
+      "**/*"
+    ],
+    "networkDomains": [],
+    "protectedPaths": [
+      "**/.env",
+      "**/.env.*",
+      "**/auth.json",
+      "**/dist/**",
+      "**/node_modules/**",
+      ".git/**",
+      ".pi/context-index.json",
+      ".pi/piagent-profile.json",
+      ".pi/piagent-profile.lock.json",
+      ".pi/piagent-state/**",
+      ".pi/settings.json"
+    ],
+    "readOnlyPaths": [],
+    "shellProtectedPaths": [
+      "**/.env",
+      "**/.env.*",
+      "**/auth.json",
+      ".git/**",
+      ".pi/context-index.json",
+      ".pi/piagent-profile.json",
+      ".pi/piagent-profile.lock.json",
+      ".pi/piagent-state/**",
+      ".pi/settings.json"
+    ]
+  },
+  "profile": {
+    "digest": "sha256:0a66f640d581cc73153de728895a4eab4299900001cf243711dac01a4a1a625e",
+    "file": "piagent-profile.json",
+    "mode": "platform-development",
+    "projectId": "piagent-platform"
+  },
+  "schemaVersion": 1
+}

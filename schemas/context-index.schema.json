@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/Vt-mmm/pi_agent/schemas/context-index.schema.json",
-  "title": "Pi Company Context Index",
+  "$id": "https://github.com/Vt-mmm/piagent/schemas/context-index.schema.json",
+  "title": "Pi Agent Context Index",
   "description": "Compact advisory context graph for profile/project/tech/task navigation. It is not a security boundary or source of truth.",
   "type": "object",
   "additionalProperties": false,

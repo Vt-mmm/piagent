@@ -23,10 +23,10 @@ Project cụ thể chỉ cần adapter/profile riêng. Core package giữ lifecy
 | Module | Pi Agent Platform target | Lý do |
 |---|---|---|
 | Risk lane | `riskLane` + profile `hardGates` | Chặn auth, release, provider config, destructive action, database migration. |
-| Intake | `company_task_start` | Mỗi task có scope, output, acceptance criteria trước khi edit. |
+| Intake | `piagent_task_start` | Mỗi task có scope, output, acceptance criteria trước khi edit. |
 | Context rules | `/onboard-project`, `.pi/project-context.md`, `requiredContext`, context manifest | Giảm token và tránh đọc toàn repo. |
 | Test matrix | `verifyCommands` + observed verify evidence | DONE phải có exact verify command thực chạy qua Pi bash hoặc `N/A` rõ lý do. |
-| Trace | `company_trace_record`, `.pi/company-state/traces.jsonl`, session entry | Có audit trail cho task. |
+| Trace | `piagent_trace_record`, `.pi/piagent-state/traces.jsonl`, session entry | Có audit trail cho task. |
 | Protected paths | `protectedPaths` trong profile + extension guard | Mỗi project có vùng cấm riêng. |
 | Tool registry | `mcpCapabilities` + `.mcp.json` | Không tự đoán tool/MCP. |
 | Domain contract | Project docs/profile | Chỉ project cần UX/form/data strict mới bật. |
@@ -61,10 +61,10 @@ Project cụ thể chỉ cần adapter/profile riêng. Core package giữ lifecy
    - protected paths
 
 2. Context
-   - load company_context
+   - load piagent_context
    - read `.pi/project-context.md`
    - read requiredContext
-   - check large files with company_context_budget
+   - check large files with piagent_context_budget
    - record context manifest
 
 3. Plan
@@ -73,8 +73,8 @@ Project cụ thể chỉ cần adapter/profile riêng. Core package giữ lifecy
    - rollback/handoff if high-risk
 
 4. Implement
-   - check risky shell with company_exec_policy_check
-   - check non-company tools with company_tool_policy_check
+   - check risky shell with piagent_exec_policy_check
+   - check non-piagent tools with piagent_tool_policy_check
    - edit only in scope
    - avoid protected paths
 
@@ -89,7 +89,7 @@ Project cụ thể chỉ cần adapter/profile riêng. Core package giữ lifecy
    - result
    - friction
    - next step
-   - company_task_gate_check before DONE
+   - piagent_task_gate_check before DONE
 ```
 
 ## Maturity phases

@@ -14,25 +14,32 @@ import {
   verifyCapabilityLock,
   writeJsonAtomic,
   writeProfileLockAtomic
-} from "../packages/pi-company-core/capabilities/capability-core.js";
+} from "../packages/piagent-core/capabilities/capability-core.js";
+import {
+  resolveCapabilitySourceRoots,
+  validateCapabilitySources,
+  vendorRemoteSource
+} from "../packages/piagent-core/capabilities/capability-sources.js";
 
 const platformRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const catalogPath = path.join(platformRoot, "catalog", "capabilities.json");
 
 function usage() {
   process.stdout.write(`Usage:
-  pi-company-capabilities catalog [--check | --write]
-  pi-company-capabilities resolve --profile <profile.json> [--output <lock.json>] [--package-source <source>]
-  pi-company-capabilities apply-profile --profile <source.json> --target <company-profile.json> [--package-source <source>] [--force]
-  pi-company-capabilities doctor [--profile <profile.json>] [--lock <lock.json>] [--package-source <source>]
-  pi-company-capabilities validate-source --package-source <source>
-  pi-company-capabilities validate-action --file <proposal.json>
+  piagent-capabilities catalog [--check | --write]
+  piagent-capabilities resolve --profile <profile.json> [--output <lock.json>] [--package-source <source>]
+  piagent-capabilities apply-profile --profile <source.json> --target <piagent-profile.json> [--package-source <source>] [--force]
+  piagent-capabilities doctor [--profile <profile.json>] [--lock <lock.json>] [--package-source <source>]
+  piagent-capabilities vendor --profile <profile.json> [--source <name>]
+  piagent-capabilities validate-source --package-source <source>
+  piagent-capabilities validate-action --file <proposal.json>
 
 Commands:
   catalog          Build the deterministic capability catalog.
   resolve          Resolve a profile to an auditable lock document.
   apply-profile    Validate and update a profile with its lock as one fail-closed operation.
   doctor           Validate packs, profile grants, and an optional lock document.
+  vendor           Fetch remote capability sources into the project. The only command that uses the network.
   validate-source  Require a local source or an exact remote version, tag, or commit.
   validate-action  Validate a dry-run external action proposal.
 `);
@@ -51,7 +58,7 @@ function parseArguments(values) {
       output.flags.set(value, true);
       continue;
     }
-    if (!["--profile", "--output", "--target", "--lock", "--file", "--package-source"].includes(value)) throw new CapabilityValidationError(`unknown option ${value}`);
+    if (!["--profile", "--output", "--target", "--lock", "--file", "--package-source", "--source"].includes(value)) throw new CapabilityValidationError(`unknown option ${value}`);
     if (output.flags.has(value)) throw new CapabilityValidationError(`duplicate option ${value}`);
     const next = values[index + 1];
     if (!next || next.startsWith("--")) throw new CapabilityValidationError(`${value} requires a value`);
@@ -90,7 +97,7 @@ function assertOutputBesideProfile(output, profile) {
   const profileDirectory = path.dirname(profile);
   const outputDirectory = fs.realpathSync(path.dirname(absolute));
   if (outputDirectory !== profileDirectory) throw new CapabilityValidationError("--output must be in the same directory as --profile");
-  if (path.basename(absolute) !== "company-profile.lock.json") throw new CapabilityValidationError("--output filename must be company-profile.lock.json");
+  if (path.basename(absolute) !== "piagent-profile.lock.json") throw new CapabilityValidationError("--output filename must be piagent-profile.lock.json");
   return path.join(outputDirectory, path.basename(absolute));
 }
 
@@ -100,6 +107,20 @@ function packageSourceBesideProfile(profile) {
   const settings = readJson(settingsPath);
   const source = Array.isArray(settings.packages) ? settings.packages.find((item) => typeof item === "string" && item.length > 0) : undefined;
   return source ?? "workspace";
+}
+
+// A profile lives at <project>/.pi/piagent-profile.json, so its project root is
+// two levels up. Local source paths and the vendor directory are resolved from
+// there, never from the platform, which is the whole point: a project uses its
+// own packs without forking this repository.
+function projectRootForProfile(profileFile) {
+  return path.dirname(path.dirname(profileFile));
+}
+
+function sourceRootsForProfile(profileFile) {
+  const declared = readJson(profileFile).capabilitySources;
+  if (declared === undefined) return undefined;
+  return resolveCapabilitySourceRoots(projectRootForProfile(profileFile), declared);
 }
 
 function runCatalog(flags) {
@@ -125,7 +146,7 @@ function runResolve(flags) {
   assertAllowedFlags(flags, new Set(["--profile", "--output", "--package-source"]));
   const profile = requireExistingFile(flags.get("--profile"), "--profile");
   const packageSource = flags.get("--package-source") ?? "workspace";
-  const lock = resolveCapabilityProfile(platformRoot, profile, { packageSource });
+  const lock = resolveCapabilityProfile(platformRoot, profile, { packageSource, extraRoots: sourceRootsForProfile(profile) });
   if (flags.has("--output")) {
     const output = assertOutputBesideProfile(flags.get("--output"), profile);
     writeJsonAtomic(output, lock);
@@ -141,7 +162,7 @@ function runApplyProfile(flags) {
   const targetValue = flags.get("--target");
   if (!targetValue) throw new CapabilityValidationError("--target is required");
   const target = path.resolve(targetValue);
-  if (path.basename(target) !== "company-profile.json") throw new CapabilityValidationError("--target filename must be company-profile.json");
+  if (path.basename(target) !== "piagent-profile.json") throw new CapabilityValidationError("--target filename must be piagent-profile.json");
   const parent = fs.realpathSync(path.dirname(target));
   const normalizedTarget = path.join(parent, path.basename(target));
   if (fs.existsSync(normalizedTarget) && !flags.has("--force")) throw new CapabilityValidationError("target profile already exists; pass --force to replace it");
@@ -149,9 +170,12 @@ function runApplyProfile(flags) {
   const packageSource = flags.get("--package-source") ?? "workspace";
   const lock = resolveCapabilityProfileDocument(platformRoot, profile, {
     profileFile: path.basename(normalizedTarget),
-    packageSource
+    packageSource,
+    extraRoots: profile.capabilitySources === undefined
+      ? undefined
+      : resolveCapabilitySourceRoots(projectRootForProfile(normalizedTarget), profile.capabilitySources)
   });
-  const lockTarget = path.join(parent, "company-profile.lock.json");
+  const lockTarget = path.join(parent, "piagent-profile.lock.json");
   writeProfileLockAtomic(normalizedTarget, profile, lockTarget, lock);
   process.stdout.write(`${JSON.stringify({ ok: true, profile: normalizedTarget, lock: lockTarget, packs: lock.packs.length })}\n`);
 }
@@ -171,17 +195,19 @@ function runDoctor(flags) {
   if (flags.has("--profile")) {
     const profile = requireExistingFile(flags.get("--profile"), "--profile");
     const packageSource = flags.get("--package-source") ?? packageSourceBesideProfile(profile);
-    const resolved = resolveCapabilityProfile(platformRoot, profile, { packageSource });
+    const extraRoots = sourceRootsForProfile(profile);
+    const resolved = resolveCapabilityProfile(platformRoot, profile, { packageSource, extraRoots });
     report.profile = {
       path: profile,
       projectId: resolved.profile.projectId,
       packs: resolved.packs.map((pack) => `${pack.name}@${pack.version}`),
+      sources: (extraRoots ?? []).map((entry) => ({ name: entry.origin, source: entry.source })),
       permissions: resolved.permissions
     };
     if (flags.has("--lock")) {
       const lockFile = requireExistingFile(flags.get("--lock"), "--lock");
       if (path.dirname(lockFile) !== path.dirname(profile)) throw new CapabilityValidationError("--lock must be in the same directory as --profile");
-      const verification = verifyCapabilityLock(platformRoot, profile, readJson(lockFile), { packageSource });
+      const verification = verifyCapabilityLock(platformRoot, profile, readJson(lockFile), { packageSource, extraRoots });
       report.lock = {
         path: lockFile,
         current: verification.ok,
@@ -194,6 +220,33 @@ function runDoctor(flags) {
     throw new CapabilityValidationError("--lock requires --profile");
   }
   process.stdout.write(stableJson(report));
+}
+
+function runVendor(flags) {
+  assertAllowedFlags(flags, new Set(["--profile", "--source"]));
+  const profileFile = requireExistingFile(flags.get("--profile"), "--profile");
+  const projectRoot = projectRootForProfile(profileFile);
+  const declared = validateCapabilitySources(readJson(profileFile).capabilitySources, profileFile);
+  const remote = declared.filter((entry) => entry.source !== undefined);
+  const only = flags.get("--source");
+  if (only && !declared.some((entry) => entry.name === only)) {
+    throw new CapabilityValidationError(`${profileFile} declares no capability source named ${only}`);
+  }
+  const selected = only ? remote.filter((entry) => entry.name === only) : remote;
+
+  // Fetching replaces the vendored tree, so the digests are reported for the
+  // maintainer to compare against the commit they are about to make. This is
+  // the review step; nothing downstream reaches the network.
+  const vendored = selected.map((entry) => {
+    const result = vendorRemoteSource(projectRoot, entry);
+    return { name: result.name, source: result.source, digest: result.digest };
+  });
+  process.stdout.write(`${JSON.stringify({
+    ok: true,
+    projectRoot,
+    vendored,
+    localSources: declared.filter((entry) => entry.path !== undefined).map((entry) => entry.name)
+  })}\n`);
 }
 
 function runValidateAction(flags) {
@@ -223,6 +276,7 @@ try {
   else if (command === "resolve") runResolve(parsed.flags);
   else if (command === "apply-profile") runApplyProfile(parsed.flags);
   else if (command === "doctor") runDoctor(parsed.flags);
+  else if (command === "vendor") runVendor(parsed.flags);
   else if (command === "validate-source") runValidateSource(parsed.flags);
   else if (command === "validate-action") runValidateAction(parsed.flags);
   else throw new CapabilityValidationError(`unknown command ${command}`);

@@ -78,7 +78,7 @@ if [[ -z "$SESSION_FILE" || ! -f "$SESSION_FILE" ]]; then
 fi
 
 RPC_OUTPUT="$(
-  printf '%s\n' '{"type":"get_session_stats","id":"company-usage"}' \
+  printf '%s\n' '{"type":"get_session_stats","id":"piagent-usage"}' \
     | pi --mode rpc --session "$SESSION_FILE" --offline --approve
 )"
 

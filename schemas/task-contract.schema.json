@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/Vt-mmm/pi_agent/schemas/task-contract.schema.json",
-  "title": "Pi Company Task Implementation Contract",
+  "$id": "https://github.com/Vt-mmm/piagent/schemas/task-contract.schema.json",
+  "title": "Pi Agent Task Implementation Contract",
   "type": "object",
   "required": [
     "taskId",
@@ -157,11 +157,11 @@
           "role": {
             "enum": [
               "parent",
-              "company-scout",
-              "company-planner",
-              "company-worker",
-              "company-reviewer",
-              "company-oracle"
+              "piagent-scout",
+              "piagent-planner",
+              "piagent-worker",
+              "piagent-reviewer",
+              "piagent-oracle"
             ]
           },
           "mode": {

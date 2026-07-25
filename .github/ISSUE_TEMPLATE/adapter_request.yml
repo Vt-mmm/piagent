@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Adapters describe how the agent should behave in one kind of repository. See the adapter section of [CONTRIBUTING.md](https://github.com/Vt-mmm/pi_agent/blob/main/CONTRIBUTING.md) — most adapters are a single JSON file, and contributing one yourself is usually faster than waiting.
+        Adapters describe how the agent should behave in one kind of repository. See the adapter section of [CONTRIBUTING.md](https://github.com/Vt-mmm/piagent/blob/main/CONTRIBUTING.md) — most adapters are a single JSON file, and contributing one yourself is usually faster than waiting.
 
   - type: input
     id: ecosystem

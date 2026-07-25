@@ -10,10 +10,10 @@ Pi có sẵn footer hiển thị token/cache usage, cost, context usage, model h
 /session
 ```
 
-Company package thêm command:
+Piagent package thêm command:
 
 ```text
-/company-usage
+/piagent-usage
 /task-preflight
 /task-preflight compact
 ```
@@ -21,11 +21,11 @@ Company package thêm command:
 Agent cũng có thể gọi tool:
 
 ```text
-company_usage_snapshot
-company_context_preflight
+piagent_usage_snapshot
+piagent_context_preflight
 ```
 
-`/company-usage` hiển thị:
+`/piagent-usage` hiển thị:
 
 - session file;
 - session id/name;
@@ -53,7 +53,7 @@ Giới hạn kỹ thuật: extension command context expose `ctx.getContextUsage
 Nếu đang có một Pi session chạy ở project khác, mở terminal mới:
 
 ```bash
-pi-company-usage /path/to/project
+piagent-usage /path/to/project
 ```
 
 Hoặc dùng script trực tiếp:
@@ -122,9 +122,9 @@ bash scripts/quality-benchmark.sh /path/to/project --record \
   --scenario bounded-source-fix \
   --surface pi \
   --result pass \
-  --tokens <total-from-pi-company-usage> \
-  --cost <cost-from-pi-company-usage> \
+  --tokens <total-from-piagent-usage> \
+  --cost <cost-from-piagent-usage> \
   --verify "<verify-command>"
 ```
 
-Không dùng ước lượng ký tự để claim tiết kiệm token. Dùng `/session`, RPC `get_session_stats`, hoặc `pi-company-usage`.
+Không dùng ước lượng ký tự để claim tiết kiệm token. Dùng `/session`, RPC `get_session_stats`, hoặc `piagent-usage`.

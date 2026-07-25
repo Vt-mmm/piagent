@@ -1,11 +1,11 @@
 # Solo-first orchestration policy
 
-Mục tiêu: user không phải nhớ `/run`, `/parallel`, `/chain` cho workflow hằng ngày, nhưng platform cũng không tự biến mọi task thành swarm tốn token. Khi anh gõ `/task`, `/be-to-fe`, `/platform-improve`, `/plan`, hoặc `/review`, parent agent đọc `company_orchestration_policy`, giữ mặc định **solo-first**, rồi chỉ dùng subagents nếu việc đó giúp giảm nhiễu context, tăng tốc read-heavy work, hoặc tăng chất lượng review.
+Mục tiêu: user không phải nhớ `/run`, `/parallel`, `/chain` cho workflow hằng ngày, nhưng platform cũng không tự biến mọi task thành swarm tốn token. Khi anh gõ `/task`, `/be-to-fe`, `/platform-improve`, `/plan`, hoặc `/review`, parent agent đọc `piagent_orchestration_policy`, giữ mặc định **solo-first**, rồi chỉ dùng subagents nếu việc đó giúp giảm nhiễu context, tăng tốc read-heavy work, hoặc tăng chất lượng review.
 
 Kiểm tra policy hiện tại trong Pi:
 
 ```text
-/company-orchestration
+/piagent-orchestration
 ```
 
 Slash command này chỉ hiện status compact, không gửi follow-up cho model.
@@ -69,13 +69,13 @@ Không spawn nếu:
 
 | Need | Agent | Mode |
 |---|---|---|
-| Map unfamiliar repo/module/spec | `company-scout` | read-only |
-| Build implementation plan | `company-planner` | read-only |
-| Implement approved bounded change | `company-worker` | single writer |
-| Review current diff | `company-reviewer` | review-first |
-| Challenge architecture/risk | `company-oracle` | read-only |
+| Map unfamiliar repo/module/spec | `piagent-scout` | read-only |
+| Build implementation plan | `piagent-planner` | read-only |
+| Implement approved bounded change | `piagent-worker` | single writer |
+| Review current diff | `piagent-reviewer` | review-first |
+| Challenge architecture/risk | `piagent-oracle` | read-only |
 | External docs/web research | builtin `researcher` | read-only; requires web tools |
-| Large context handoff | builtin `context-builder` or `company-scout` | writes handoff artifact only |
+| Large context handoff | builtin `context-builder` or `piagent-scout` | writes handoff artifact only |
 
 Default rule: parallel read-only is OK; parallel writers are not default.
 
@@ -85,9 +85,9 @@ Default rule: parallel read-only is OK; parallel writers are not default.
 
 Parent should:
 
-1. load company context/profile/memory/project context;
-2. load `company_orchestration_policy`;
-3. create a compact task tree/workPlan and review lenses in `company_task_start`;
+1. load piagent context/profile/memory/project context;
+2. load `piagent_orchestration_policy`;
+3. create a compact task tree/workPlan and review lenses in `piagent_task_start`;
 4. decide whether subagents are useful enough to justify extra token cost;
 5. if useful, spawn bounded read-only scout/planner/reviewer before or after implementation;
 6. keep implementation single-writer unless user explicitly approves otherwise;
@@ -97,33 +97,33 @@ Parent should:
 
 Recommended auto-delegation:
 
-- `company-scout`: map backend contract read-only;
-- `company-scout`: map frontend touchpoints read-only;
-- `company-planner`: produce FE implementation plan;
-- parent or `company-worker`: implement FE only;
-- `company-reviewer`: review diff and verify coverage.
+- `piagent-scout`: map backend contract read-only;
+- `piagent-scout`: map frontend touchpoints read-only;
+- `piagent-planner`: produce FE implementation plan;
+- parent or `piagent-worker`: implement FE only;
+- `piagent-reviewer`: review diff and verify coverage.
 
 ### `/platform-improve`
 
 Recommended auto-delegation:
 
-- `company-scout`: inspect current platform source/docs;
+- `piagent-scout`: inspect current platform source/docs;
 - builtin `researcher`: inspect official docs/web evidence when `pi-web-access` is installed;
 - builtin `context-builder`: create handoff context/meta-prompt for large platform changes;
-- `company-scout`: inspect official docs/external source repo targeted evidence;
-- `company-planner`: produce implementation matrix;
-- parent or `company-worker`: implement bounded changes;
-- `company-reviewer`: review docs/runtime behavior.
+- `piagent-scout`: inspect official docs/external source repo targeted evidence;
+- `piagent-planner`: produce implementation matrix;
+- parent or `piagent-worker`: implement bounded changes;
+- `piagent-reviewer`: review docs/runtime behavior.
 
 ### `/review`
 
 Recommended auto-delegation:
 
 - select explicit review lenses first;
-- optional parallel `company-reviewer` for correctness;
-- optional parallel `company-reviewer` for tests/verification;
-- optional parallel `company-reviewer` for scope/protected-path drift;
-- optional `company-oracle` for architecture/high-risk concerns.
+- optional parallel `piagent-reviewer` for correctness;
+- optional parallel `piagent-reviewer` for tests/verification;
+- optional parallel `piagent-reviewer` for scope/protected-path drift;
+- optional `piagent-oracle` for architecture/high-risk concerns.
 
 If the user explicitly asks for a review loop, use `/review-loop` or an equivalent parent-controlled loop with max rounds. Do not blindly apply all reviewer suggestions.
 
@@ -132,25 +132,25 @@ If the user explicitly asks for a review loop, use `/review-loop` or an equivale
 Single scout:
 
 ```text
-Use company-scout to map the target module read-only. Return files, ownership, invariants, and likely change points only.
+Use piagent-scout to map the target module read-only. Return files, ownership, invariants, and likely change points only.
 ```
 
 Parallel scout:
 
 ```text
-Run parallel company-scout agents: one maps backend contract read-only, one maps frontend touchpoints read-only. Wait for both and summarize the contract-to-FE map.
+Run parallel piagent-scout agents: one maps backend contract read-only, one maps frontend touchpoints read-only. Wait for both and summarize the contract-to-FE map.
 ```
 
 Parallel review:
 
 ```text
-Run parallel company-reviewer agents for correctness, tests/verification, and scope/protected-path drift. Wait for all and summarize findings by severity.
+Run parallel piagent-reviewer agents for correctness, tests/verification, and scope/protected-path drift. Wait for all and summarize findings by severity.
 ```
 
 Tool syntax fallback:
 
 ```text
-subagent({ agent: "company-scout", task: "Map target area read-only. Return concise findings.", context: "fresh" })
+subagent({ agent: "piagent-scout", task: "Map target area read-only. Return concise findings.", context: "fresh" })
 ```
 
 ## Reporting requirement
@@ -158,7 +158,7 @@ subagent({ agent: "company-scout", task: "Map target area read-only. Return conc
 Final response should include one line:
 
 ```text
-Subagents: <not used / unavailable / used: company-scout, company-reviewer>
+Subagents: <not used / unavailable / used: piagent-scout, piagent-reviewer>
 ```
 
 If not used, give the reason briefly:

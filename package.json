@@ -1,14 +1,17 @@
 {
-  "name": "pi-agent-platform",
-  "version": "0.4.8",
-  "private": true,
+  "name": "@piagent/platform",
+  "version": "1.0.0",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "type": "module",
   "description": "Reusable Pi agent platform, project adapters, MCP/tool policy, and coding workflow harness.",
   "homepage": "https://piagent.io.vn",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Vt-mmm/pi_agent.git"
+    "url": "https://github.com/Vt-mmm/piagent.git"
   },
   "keywords": [
     "pi-package",
@@ -29,42 +32,47 @@
     "adapters/",
     "catalog/",
     "docs/",
+    "!docs/journals/",
+    "!docs/decisions/",
+    "!docs/readiness-assessment.md",
     "docs-site/",
     "evals/",
     "packs/",
-    "packages/pi-company-core/",
+    "packages/piagent-core/",
     "schemas/",
     "scripts/",
     "templates/",
     "types/"
   ],
   "bin": {
-    "pi-company-setup": "scripts/pi-company-cli.mjs",
-    "pi-company-install": "scripts/pi-company-cli.mjs",
-    "pi-company-init": "scripts/pi-company-cli.mjs",
-    "pi-company-doctor": "scripts/pi-company-cli.mjs",
-    "pi-company-benchmark": "scripts/pi-company-cli.mjs",
-    "pi-company-usage": "scripts/pi-company-cli.mjs",
-    "pi-company-models": "scripts/pi-company-cli.mjs",
-    "pi-company-model-scope": "scripts/pi-company-cli.mjs",
-    "pi-company-mcp": "scripts/pi-company-cli.mjs",
-    "pi-company-subagents": "scripts/pi-company-cli.mjs",
-    "pi-company-capabilities": "scripts/pi-company-cli.mjs",
-    "pi-company-auto": "scripts/pi-company-cli.mjs"
+    "piagent-setup": "scripts/piagent-cli.mjs",
+    "piagent-install": "scripts/piagent-cli.mjs",
+    "piagent-init": "scripts/piagent-cli.mjs",
+    "piagent-doctor": "scripts/piagent-cli.mjs",
+    "piagent-benchmark": "scripts/piagent-cli.mjs",
+    "piagent-usage": "scripts/piagent-cli.mjs",
+    "piagent-models": "scripts/piagent-cli.mjs",
+    "piagent-model-scope": "scripts/piagent-cli.mjs",
+    "piagent-mcp": "scripts/piagent-cli.mjs",
+    "piagent-subagents": "scripts/piagent-cli.mjs",
+    "piagent-capabilities": "scripts/piagent-cli.mjs",
+    "piagent-migrate": "scripts/piagent-cli.mjs",
+    "piagent-import-instructions": "scripts/piagent-cli.mjs",
+    "piagent-auto": "scripts/piagent-cli.mjs"
   },
   "pi": {
     "extensions": [
-      "packages/pi-company-core/extensions/**/*.ts"
+      "packages/piagent-core/extensions/piagent-guard.ts"
     ],
     "skills": [
-      "packages/pi-company-core/skills"
+      "packages/piagent-core/skills"
     ],
     "prompts": [
-      "packages/pi-company-core/prompts"
+      "packages/piagent-core/prompts"
     ],
     "subagents": {
       "agents": [
-        "packages/pi-company-core/subagents"
+        "packages/piagent-core/subagents"
       ]
     }
   },
@@ -95,6 +103,7 @@
     "verify": "bash scripts/verify-local.sh",
     "test": "node --test tests/*.test.mjs",
     "test:policy": "node --test tests/policy-core.test.mjs",
+    "test:golden": "node --test tests/golden-enforcement.test.mjs",
     "typecheck": "tsc --noEmit",
     "setup": "bash scripts/setup.sh",
     "bootstrap": "bash scripts/bootstrap-local.sh",

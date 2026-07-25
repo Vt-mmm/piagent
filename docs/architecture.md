@@ -1,4 +1,4 @@
-# Kiến trúc Pi Company Platform
+# Kiến trúc Pi Agent Platform
 
 ## Mục tiêu
 
@@ -13,7 +13,7 @@ User machine
 ├─ ~/.config/mcp/mcp.json        shared global MCP config
 └─ <platform-repo>/
    ├─ package.json               root Pi package manifest
-   ├─ packages/pi-company-core   reusable Pi package internals
+   ├─ packages/piagent-core   reusable Pi package internals
    ├─ adapters/*/profile.json    project/domain profiles
    └─ templates/project          files copied into target projects
 
@@ -22,7 +22,7 @@ Any project
 ├─ .mcp.json                     shared MCP config
 └─ .pi/
    ├─ settings.json              project Pi settings
-   ├─ company-profile.json       project adapter
+   ├─ piagent-profile.json       project adapter
    ├─ memory/                    project-scoped explicit memory
    └─ mcp.json                   Pi project MCP override
 ```
@@ -33,7 +33,7 @@ Any project
 |---|---|---:|---|
 | OAuth/auth | user machine | Không | `auth.json`, API token, trust state. |
 | Pi global settings | user machine | Không, chỉ template | provider/model, installed packages, telemetry/proxy. |
-| Company core | platform repo | Có | extension guard, prompt, skill, policy engine. |
+| Piagent core | platform repo | Có | extension guard, prompt, skill, policy engine. |
 | Domain pack | platform repo | Có | frontend/backend/data profile chung. |
 | Project adapter | project repo hoặc platform repo | Có | paths, context, verify, MCP capabilities. |
 | Project memory | user/project machine | Không mặc định | `.pi/memory/MEMORY.md` và summary là private-by-default; team chỉ opt-in commit sau review/redaction. |
@@ -43,8 +43,8 @@ Any project
 1. User `cd <project>`.
 2. User chạy `pi`.
 3. Pi đọc global settings và package đã cài.
-4. Nếu project trusted, Pi đọc `.pi/settings.json` và `.pi/company-profile.json`.
-5. `pi-company-core` extension intercept tool calls.
+4. Nếu project trusted, Pi đọc `.pi/settings.json` và `.pi/piagent-profile.json`.
+5. `piagent-core` extension intercept tool calls.
 6. Agent dùng prompts/skills, MCP registry, context policy, và memory policy.
 7. Memory được đọc/search như advisory context; source hiện tại vẫn là authority.
 8. Trước khi DONE, agent chạy verify theo profile.

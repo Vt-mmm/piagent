@@ -8,7 +8,7 @@ auth.json
 
 # Pi local runtime
 .pi/sessions/
-.pi/company-state/
+.pi/piagent-state/
 .pi/task-inbox/
 .pi/benchmarks/
 .pi/todos/

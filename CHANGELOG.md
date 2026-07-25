@@ -2,6 +2,36 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.0.0 - 2026-07-25
+
+Breaking release. The `company` namespace is replaced by `piagent` with no alias layer, and `apiVersion` becomes a stable contract. Existing projects convert their local state with one migration command; both names never work at once.
+
+### Added
+
+- Added `capabilitySources` to project profiles so a project can use capability packs it does not own without forking the platform. A source is either a directory inside the project or an exact npm or git release vendored into it.
+- Added `piagent-capabilities vendor`, the only command that reaches the network. It fetches a declared remote source into `.pi/capability-vendor/`, refuses a tree containing symbolic links or no packs, and reports digests for review before the result is committed.
+- Added `piagent-migrate` to convert `.pi/company-profile.json`, its lock, and `.pi/company-state/` to the new names. Dry-run by default, with an explicit flag to write and a separate flag to remove the old files.
+- Added `piagent-import-instructions` to import `CLAUDE.md`, `.claude/rules/`, `.cursor/rules/`, and `.github/copilot-instructions.md` into `AGENTS.md`. Dry-run by default, with a deterministic conflict report; imported text is quoted as data and never alters protected paths, permission profile, or verify commands.
+- Added skill wiring for `.claude/skills` and `.codex/skills` at project scope and their home-directory equivalents at global scope, plus doctor checks that report skill directories present on disk but not declared, and instruction files written for other agents.
+- Added a golden enforcement suite covering protected paths, protected paths reached through the shell, destructive shell decisions, verification evidence, context budget ceilings, and secret redaction, with a valid and an invalid fixture for every shipped schema.
+- Added contributor documentation: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, pull-request and issue templates.
+- Added a tag-driven publish workflow with npm provenance and pinned action revisions.
+
+### Changed
+
+- **Breaking.** Renamed the namespace to `piagent` throughout: tools `company_*` to `piagent_*`, commands `pi-company-*` to `piagent-*`, package `pi-agent-platform` to `@piagent/platform`, `packages/pi-company-core/` to `packages/piagent-core/`, environment variables `PI_COMPANY_*` to `PIAGENT_*`, and project state to `.pi/piagent-profile.json`, `.pi/piagent-profile.lock.json`, and `.pi/piagent-state/`. There is no alias layer; a session started against unconverted state warns and names the migration command.
+- **Breaking.** Promoted the manifest `apiVersion` from `piagent/v1alpha1` to `piagent/v1`. This is the point at which external packs can pin it, so it is a contract from here on.
+- The capability lock now records where each pack came from, so a pack that moves between sources reads as a substitution rather than an update.
+- The package is now published rather than private, scoped as `@piagent/platform` with public access and provenance.
+- Split shell and external-action classification, shared types, and filesystem helpers out of the guard into their own modules. Behaviour is unchanged.
+- Onboarding now names instruction files written for other agents, states plainly that their rules are not in effect, and offers the import; anything inside them is treated as data.
+
+### Fixed
+
+- Fixed a capability policy that declares only some of its allow-lists: the missing lists now deny, instead of failing with an internal error.
+- Fixed capability source resolution under a symlinked project parent, where a contained directory could be misread as escaping the project.
+- Excluded maintainer working notes from the published tarball. The `files` allowlist takes precedence over `.npmignore`, so the exclusions live in `files`.
+
 ## Unreleased
 
 ### Added

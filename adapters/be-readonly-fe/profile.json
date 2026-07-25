@@ -85,10 +85,10 @@
       "test -s README.md"
     ],
     "frontendSource": [
-      "if test -f frontend/package.json; then cd frontend && npm run type-check --if-present && npm run lint --if-present && npm test --if-present; elif test -f apps/web/package.json; then cd apps/web && npm run type-check --if-present && npm run lint --if-present && npm test --if-present; elif test -f package.json; then npm run type-check --if-present && npm run lint --if-present && npm test --if-present; else echo 'No frontend verify command configured; update .pi/company-profile.json'; fi"
+      "if test -f frontend/package.json; then cd frontend && npm run type-check --if-present && npm run lint --if-present && npm test --if-present; elif test -f apps/web/package.json; then cd apps/web && npm run type-check --if-present && npm run lint --if-present && npm test --if-present; elif test -f package.json; then npm run type-check --if-present && npm run lint --if-present && npm test --if-present; else echo 'No frontend verify command configured; update .pi/piagent-profile.json'; fi"
     ],
     "frontendRuntime": [
-      "if test -f frontend/package.json; then cd frontend && npm run test:e2e --if-present; elif test -f apps/web/package.json; then cd apps/web && npm run test:e2e --if-present; elif test -f package.json; then npm run test:e2e --if-present; else echo 'No frontend runtime verify command configured; update .pi/company-profile.json'; fi"
+      "if test -f frontend/package.json; then cd frontend && npm run test:e2e --if-present; elif test -f apps/web/package.json; then cd apps/web && npm run test:e2e --if-present; elif test -f package.json; then npm run test:e2e --if-present; else echo 'No frontend runtime verify command configured; update .pi/piagent-profile.json'; fi"
     ]
   },
   "mcpCapabilities": [

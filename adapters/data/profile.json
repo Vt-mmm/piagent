@@ -56,7 +56,7 @@
       "test -s README.md"
     ],
     "source": [
-      "if test -f pyproject.toml && command -v uv >/dev/null 2>&1; then uv run pytest; elif test -f pyproject.toml; then python -m pytest; elif test -f dbt_project.yml && command -v dbt >/dev/null 2>&1; then dbt compile; else echo 'No data verify command configured; update .pi/company-profile.json'; fi"
+      "if test -f pyproject.toml && command -v uv >/dev/null 2>&1; then uv run pytest; elif test -f pyproject.toml; then python -m pytest; elif test -f dbt_project.yml && command -v dbt >/dev/null 2>&1; then dbt compile; else echo 'No data verify command configured; update .pi/piagent-profile.json'; fi"
     ]
   },
   "mcpCapabilities": [

@@ -7,11 +7,11 @@ Pi Agent Platform được đóng gói như một reusable Pi package để dùn
 ## Package shape
 
 ```text
-packages/pi-company-core/
+packages/piagent-core/
 ├─ capabilities/
 │  └─ capability-core.js
 ├─ extensions/
-│  └─ company-guard.ts
+│  └─ piagent-guard.ts
 ├─ prompts/
 ├─ skills/
 ├─ subagents/
@@ -26,13 +26,13 @@ Root `package.json` expose:
 - `pi.prompts`
 - `pi.subagents.agents`
 
-Root CLI additionally exposes `pi-company-capabilities` for catalog validation, profile resolution, lock verification, and dry-run action proposal validation.
+Root CLI additionally exposes `piagent-capabilities` for catalog validation, profile resolution, lock verification, and dry-run action proposal validation.
 
 ## Design decisions
 
 ### 1. Prompts stay short
 
-Workflow prompts define phase, required tools, output contract, and verification. Project-specific detail lives in `.pi/company-profile.json`, `.pi/project-context.md`, memory, and required context files.
+Workflow prompts define phase, required tools, output contract, and verification. Project-specific detail lives in `.pi/piagent-profile.json`, `.pi/project-context.md`, memory, and required context files.
 
 ### 2. Profile is the project adapter
 
@@ -40,11 +40,11 @@ Profiles hold protected paths, required context, verify commands, MCP capabiliti
 
 ### 3. Runtime state is local and auditable
 
-Task state is stored under `.pi/company-state/` and also mirrored into Pi session custom entries when possible. This gives a file-based audit trail without requiring a database.
+Task state is stored under `.pi/piagent-state/` and also mirrored into Pi session custom entries when possible. This gives a file-based audit trail without requiring a database.
 
 ### 4. Source cache is read-only shared state
 
-`company-source-cache` stores user-provided external repositories in a stable local cache. Agents read targeted files from the cache and never edit it directly.
+`piagent-source-cache` stores user-provided external repositories in a stable local cache. Agents read targeted files from the cache and never edit it directly.
 
 ### 5. Review guidance is project-local
 
@@ -60,7 +60,7 @@ Token/cost/quality improvements must be measured on repeatable project scenarios
 
 ### 8. Capability selection is deterministic
 
-Capability packs declare exact dependencies, owners, lifecycle, artifacts, permissions, activation, and eval identifiers. Project profiles grant the allowed boundary. Resolver output is stored in `company-profile.lock.json` with profile, pack, and artifact digests.
+Capability packs declare exact dependencies, owners, lifecycle, artifacts, permissions, activation, and eval identifiers. Project profiles grant the allowed boundary. Resolver output is stored in `piagent-profile.lock.json` with profile, pack, and artifact digests.
 
 Manifest data never executes code. Invalid paths, symbolic links, dependency cycles, stale locks, and permission expansion fail validation.
 
@@ -68,18 +68,18 @@ Manifest data never executes code. Invalid paths, symbolic links, dependency cyc
 
 | Capability | Implementation |
 |---|---|
-| Project onboarding | `/onboard-project` + `company_project_onboarding_record` |
-| Project context index | `/context-index` + `company_context_index_*` |
-| Profile switching | `/profile` + `company_profile_options` / `company_profile_apply` |
-| Explicit memory | `/memory-policy` + `company_memory_*` |
+| Project onboarding | `/onboard-project` + `piagent_project_onboarding_record` |
+| Project context index | `/context-index` + `piagent_context_index_*` |
+| Profile switching | `/profile` + `piagent_profile_options` / `piagent_profile_apply` |
+| Explicit memory | `/memory-policy` + `piagent_memory_*` |
 | Task lifecycle | `/task` + task/context/verify/trace tools |
 | Platform workflow | `/platform-improve` |
 | Backend-readonly to frontend | `/be-to-fe` |
-| Source cache | `company-source-cache` + `company_source_checkout` |
-| Subagent roles | `company-scout`, `company-planner`, `company-worker`, `company-reviewer`, `company-oracle` |
+| Source cache | `piagent-source-cache` + `piagent_source_checkout` |
+| Subagent roles | `piagent-scout`, `piagent-planner`, `piagent-worker`, `piagent-reviewer`, `piagent-oracle` |
 | Quality benchmark | `scripts/quality-benchmark.sh` |
 | Capability catalog | `packs/*/pack.json` + `catalog/capabilities.json` |
-| Capability resolver | `capability-core.js` + `pi-company-capabilities` |
+| Capability resolver | `capability-core.js` + `piagent-capabilities` |
 
 ## Deferred capabilities
 

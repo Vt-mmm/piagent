@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/Vt-mmm/pi_agent/schemas/eval-scenario.schema.json",
-  "title": "Pi Company Eval Scenario",
+  "$id": "https://github.com/Vt-mmm/piagent/schemas/eval-scenario.schema.json",
+  "title": "Pi Agent Eval Scenario",
   "type": "object",
   "additionalProperties": false,
   "required": ["apiVersion", "kind", "metadata", "spec"],
   "properties": {
-    "apiVersion": { "const": "pi.company/v1alpha1" },
+    "apiVersion": { "const": "piagent/v1" },
     "kind": { "const": "EvalScenario" },
     "metadata": { "$ref": "capability-pack.schema.json#/$defs/metadata" },
     "spec": {

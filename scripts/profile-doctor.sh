@@ -7,7 +7,7 @@ if [[ $# -lt 1 ]]; then
 fi
 
 PROJECT_PATH="$1"
-PROFILE_PATH="${2:-"$PROJECT_PATH/.pi/company-profile.json"}"
+PROFILE_PATH="${2:-"$PROJECT_PATH/.pi/piagent-profile.json"}"
 
 if [[ ! -d "$PROJECT_PATH" ]]; then
   echo "FAIL: project path does not exist: $PROJECT_PATH"
@@ -188,7 +188,7 @@ if (contextIndex.enabled && contextIndex.writePolicy !== "off") {
   if (relativeIndexPath.startsWith("..") || path.isAbsolute(relativeIndexPath)) {
     errors.push(`contextIndex.path escapes project root: ${contextIndex.path}`);
   } else if (!fs.existsSync(indexPath)) {
-    warnings.push(`context index missing: ${contextIndex.path}; run /onboard-project or record company_context_index_record`);
+    warnings.push(`context index missing: ${contextIndex.path}; run /onboard-project or record piagent_context_index_record`);
   }
 }
 

@@ -81,7 +81,7 @@
     {
       "id": "implement",
       "title": "Apply the bounded source change.",
-      "role": "company-worker",
+      "role": "piagent-worker",
       "mode": "single-writer",
       "status": "pending",
       "dependsOn": [
@@ -127,18 +127,18 @@
 Pi task prompt phải bắt buộc:
 
 ```text
-Use company_context first.
-Use company_orchestration_policy; default to solo-first, create a compact task tree, and choose review lenses before spawning subagents.
-Use company_context_index_status/search as advisory navigation when available; verify cited files before editing.
-Use company_memory_status and search memory when relevant; memory is advisory only.
+Use piagent_context first.
+Use piagent_orchestration_policy; default to solo-first, create a compact task tree, and choose review lenses before spawning subagents.
+Use piagent_context_index_status/search as advisory navigation when available; verify cited files before editing.
+Use piagent_memory_status and search memory when relevant; memory is advisory only.
 Read .pi/project-context.md; if it is pending, stop and request /onboard-project.
-Create a Task Implementation Contract with company_task_start.
-Check large context with company_context_budget.
-Check complex/high-impact shell with company_exec_policy_check.
-Check non-company tools with company_tool_policy_check.
+Create a Task Implementation Contract with piagent_task_start.
+Check large context with piagent_context_budget.
+Check complex/high-impact shell with piagent_exec_policy_check.
+Check non-piagent tools with piagent_tool_policy_check.
 Do not edit before scope + verify command are known.
 Before final, run the exact verify command from task.verifyCommands through Pi bash, record observed verify evidence, and trace.
-Call company_task_gate_check before DONE.
+Call piagent_task_gate_check before DONE.
 If verify cannot run, final outcome is blocked/partial, not done.
 ```
 
@@ -155,30 +155,30 @@ If verify cannot run, final outcome is blocked/partial, not done.
 
 Hiện platform đang ở mức “P3-baseline runtime policy”:
 
-- `company_task_start`
-- `company_exec_policy_check`
-- `company_context_budget`
-- `company_context_index_status`
-- `company_context_index_search`
-- `company_context_index_record`
-- `company_tool_policy_check`
-- `company_context_record`
-- `company_verify_record`
-- `company_trace_record`
-- `company_task_gate_check`
-- local task/trace/observed-bash state trong `.pi/company-state/`
-- session trace qua Pi custom entry `company-task-trace`
+- `piagent_task_start`
+- `piagent_exec_policy_check`
+- `piagent_context_budget`
+- `piagent_context_index_status`
+- `piagent_context_index_search`
+- `piagent_context_index_record`
+- `piagent_tool_policy_check`
+- `piagent_context_record`
+- `piagent_verify_record`
+- `piagent_trace_record`
+- `piagent_task_gate_check`
+- local task/trace/observed-bash state trong `.pi/piagent-state/`
+- session trace qua Pi custom entry `piagent-task-trace`
 
-`company_trace_record` có thể block completion nếu profile bật `finalGate=enforce`. Nếu Pi runtime chưa expose hard final assistant stop hook, agent vẫn phải gọi `company_task_gate_check` và final phải nêu gate result.
+`piagent_trace_record` có thể block completion nếu profile bật `finalGate=enforce`. Nếu Pi runtime chưa expose hard final assistant stop hook, agent vẫn phải gọi `piagent_task_gate_check` và final phải nêu gate result.
 
 ## Verify evidence rules
 
-`company_verify_record` is not a free-form self-report. It accepts evidence only when the same normalized command was observed through a Pi `bash` `tool_result` after `task.createdAt`.
+`piagent_verify_record` is not a free-form self-report. It accepts evidence only when the same normalized command was observed through a Pi `bash` `tool_result` after `task.createdAt`.
 
 Observed bash results are persisted to:
 
 ```text
-.pi/company-state/observed-bash.jsonl
+.pi/piagent-state/observed-bash.jsonl
 ```
 
 This lets parent agents validate verify commands executed by guarded subagent processes in the same cwd.

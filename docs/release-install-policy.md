@@ -2,20 +2,20 @@
 
 ## Purpose
 
-Pi Company Platform uses explicit release sources for team rollout. Personal machines may follow a moving source when fast iteration matters, but team environments and committed project settings use exact tags or reviewed commits so every developer receives the same platform package.
+Pi Agent Platform uses explicit release sources for team rollout. Personal machines may follow a moving source when fast iteration matters, but team environments and committed project settings use exact tags or reviewed commits so every developer receives the same platform package.
 
 This file is the canonical install, update, rollback, and release checklist. Other docs link here instead of maintaining a second release procedure.
 
 ## Supported runtime matrix
 
-All supported environments require Node.js `>=22.19.0` and Pi Coding Agent `0.81.1`. The Pi host is installed as a Node CLI; Pi Company Platform still defines its own release matrix because the terminal helpers and shell policy rely on Bash/POSIX behavior.
+All supported environments require Node.js `>=22.19.0` and Pi Coding Agent `0.81.1`. The Pi host is installed as a Node CLI; Pi Agent Platform still defines its own release matrix because the terminal helpers and shell policy rely on Bash/POSIX behavior.
 
-| Surface | Status for v0.4.8 | Rollout guidance |
+| Surface | Status for v1.0.0 | Rollout guidance |
 |---|---|---|
 | macOS Apple Silicon (`darwin/arm64`) + Bash | Verified for this release. | Safe default for team rollout after normal project smoke tests. |
 | Linux x64 + Bash | Verified in GitHub Actions. | Safe default for CI/server usage after normal project smoke tests. |
-| macOS Intel (`darwin/x64`) + Bash | Supported target; not currently a dedicated release-gate runner. | Run `pi-company-doctor` plus the target project's smoke/verify suite before broad rollout. |
-| Linux ARM64 + Bash | Supported target; not currently a dedicated release-gate runner. | Run `pi-company-doctor` plus the target project's smoke/verify suite before broad rollout. |
+| macOS Intel (`darwin/x64`) + Bash | Supported target; not currently a dedicated release-gate runner. | Run `piagent-doctor` plus the target project's smoke/verify suite before broad rollout. |
+| Linux ARM64 + Bash | Supported target; not currently a dedicated release-gate runner. | Run `piagent-doctor` plus the target project's smoke/verify suite before broad rollout. |
 | Native Windows x64/ARM64 | Not supported for team rollout in this release. | Node is available on Windows, but platform helper scripts and shell parsing assume Bash/POSIX semantics. Use a verified macOS/Linux surface for release-critical work. |
 | WSL2 | Experimental and not release-gated. | Treat as local/personal until a WSL lane and smoke suite are added. |
 
@@ -24,22 +24,22 @@ All supported environments require Node.js `>=22.19.0` and Pi Coding Agent `0.81
 | Component | Installed by | Provides |
 |---|---|---|
 | Pi host runtime | `npm install -g --ignore-scripts @earendil-works/pi-coding-agent@<exact-version>` | The compatible `pi` executable. |
-| Terminal helper | `npm install -g --ignore-scripts github:Vt-mmm/pi_agent#vX.Y.Z` | `pi-company-*` commands on `PATH`. |
-| Pi package | `pi-company-install`, or `pi install ...` | Extensions, prompts, skills, and subagents loaded by Pi. |
+| Terminal helper | `npm install -g --ignore-scripts github:Vt-mmm/piagent#vX.Y.Z` | `piagent-*` commands on `PATH`. |
+| Pi package | `piagent-install`, or `pi install ...` | Extensions, prompts, skills, and subagents loaded by Pi. |
 
-These three components are versioned independently. A full install, update, or rollback must use the exact Pi host declared by the target release, then install the target terminal helper, then let that helper install its matching Pi package. `pi-company-install` changes only the Pi package; it does not replace the Pi host or the npm-global terminal helper currently executing. In installer output, `currentRelease` is the terminal helper package version.
+These three components are versioned independently. A full install, update, or rollback must use the exact Pi host declared by the target release, then install the target terminal helper, then let that helper install its matching Pi package. `piagent-install` changes only the Pi package; it does not replace the Pi host or the npm-global terminal helper currently executing. In installer output, `currentRelease` is the terminal helper package version.
 
 ## Release channels
 
 | Channel | Source shape | Mutability | Use when |
 |---|---|---:|---|
-| `stable` | `git:github.com/Vt-mmm/pi_agent@<resolved-commit-sha>` from `v0.4.8` | Fixed after resolution | Default for team rollout. |
+| `stable` | `git:github.com/Vt-mmm/piagent@<resolved-commit-sha>` from `v1.0.0` | Fixed after resolution | Default for team rollout. |
 | `exact` | Tag, reviewed commit, or a tag resolved with `--resolve-tag` | Fixed when using a commit SHA | Pi-package-only roll forward, rollback, or reproduction. |
-| `dev` | `git:github.com/Vt-mmm/pi_agent` | Moving | Personal machine or sandbox only. |
-| `local` | `/path/to/pi_agent` | Local workspace | Platform development and dry-run validation. |
-| `enterprise-npm` | `npm:@company/pi-agent-platform@x.y.z` | Fixed | Private registry distribution when available. |
+| `dev` | `git:github.com/Vt-mmm/piagent` | Moving | Personal machine or sandbox only. |
+| `local` | `/path/to/piagent` | Local workspace | Platform development and dry-run validation. |
+| `enterprise-npm` | `npm:@your-scope/platform@x.y.z` | Fixed | Private registry distribution when available. |
 
-`--stable` reads the helper package version from its own `package.json`, resolves that release tag through GitHub, and installs the resulting commit SHA. If the tag cannot be resolved, install fails closed. Release CI additionally sets `PI_COMPANY_EXPECTED_RELEASE_COMMIT`; the installer then rejects a tag that resolves anywhere except the commit being verified.
+`--stable` reads the helper package version from its own `package.json`, resolves that release tag through GitHub, and installs the resulting commit SHA. If the tag cannot be resolved, install fails closed. Release CI additionally sets `PIAGENT_EXPECTED_RELEASE_COMMIT`; the installer then rejects a tag that resolves anywhere except the commit being verified.
 
 Exactly one CLI package selector is accepted: `--package-source`, `--channel`, `--stable`, `--dev`, `--local`, `--version`, or `--tag`. The first CLI selector may replace environment defaults; a second CLI selector is rejected before any install command is printed or executed.
 
@@ -50,18 +50,18 @@ Use this flow when the team needs both terminal commands and the Pi package:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
-npm install -g --ignore-scripts github:Vt-mmm/pi_agent#v0.4.8
-pi-company-install --stable --dry-run
-pi-company-install --stable
+npm install -g --ignore-scripts github:Vt-mmm/piagent#v1.0.0
+piagent-install --stable --dry-run
+piagent-install --stable
 ```
 
 The stable preview and apply output includes:
 
 ```text
-currentRelease: v0.4.8 (helper package version)
-tag: v0.4.8
+currentRelease: v1.0.0 (helper package version)
+tag: v1.0.0
 resolvedCommit: <40-char-sha>
-source: git:github.com/Vt-mmm/pi_agent@<40-char-sha>
+source: git:github.com/Vt-mmm/piagent@<40-char-sha>
 ```
 
 From a checked-out platform repository, the same Pi-package install is available as:
@@ -76,10 +76,10 @@ bash scripts/install-global.sh --stable
 Use this only when terminal commands are not needed:
 
 ```bash
-pi install git:github.com/Vt-mmm/pi_agent@v0.4.8
+pi install git:github.com/Vt-mmm/piagent@v1.0.0
 ```
 
-Direct `pi install` does not create `pi-company-*` commands on `PATH`.
+Direct `pi install` does not create `piagent-*` commands on `PATH`.
 
 ## Full platform update
 
@@ -87,10 +87,10 @@ Update the exact supported Pi host first, then the npm-global helper, then let t
 
 ```bash
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
-npm install -g --ignore-scripts github:Vt-mmm/pi_agent#vX.Y.Z
-pi-company-install --stable --dry-run
-pi-company-install --stable
-pi-company-doctor /path/to/project --strict-share
+npm install -g --ignore-scripts github:Vt-mmm/piagent#vX.Y.Z
+piagent-install --stable --dry-run
+piagent-install --stable
+piagent-doctor /path/to/project --strict-share
 ```
 
 Review the target `CHANGELOG.md` before applying the update. Confirm that `currentRelease`, `tag`, and `resolvedCommit` all describe the intended release.
@@ -100,15 +100,15 @@ Review the target `CHANGELOG.md` before applying the update. Confirm that `curre
 This flow changes the Pi package but intentionally leaves the npm-global helper unchanged:
 
 ```bash
-pi-company-install --version vX.Y.Z --resolve-tag --dry-run
-pi-company-install --version vX.Y.Z --resolve-tag
-pi-company-doctor /path/to/project --strict-share
+piagent-install --version vX.Y.Z --resolve-tag --dry-run
+piagent-install --version vX.Y.Z --resolve-tag
+piagent-doctor /path/to/project --strict-share
 ```
 
 Alternatively, install a reviewed Pi source directly:
 
 ```bash
-pi install git:github.com/Vt-mmm/pi_agent@vX.Y.Z
+pi install git:github.com/Vt-mmm/piagent@vX.Y.Z
 ```
 
 `pi update --extensions` refreshes configured package refs. It does not move a pinned project from one tag or commit to a different target; install the new reviewed ref explicitly.
@@ -120,10 +120,10 @@ Rollback the host, helper, and Pi package together. Determine the exact host ver
 ```bash
 TARGET_PI_VERSION=x.y.z  # replace from vPREVIOUS release policy before execution
 npm install -g --ignore-scripts "@earendil-works/pi-coding-agent@$TARGET_PI_VERSION"
-npm install -g --ignore-scripts github:Vt-mmm/pi_agent#vPREVIOUS
-pi-company-install --stable --dry-run
-pi-company-install --stable
-pi-company-doctor /path/to/project --strict-share
+npm install -g --ignore-scripts github:Vt-mmm/piagent#vPREVIOUS
+piagent-install --stable --dry-run
+piagent-install --stable
+piagent-doctor /path/to/project --strict-share
 ```
 
 Older host versions may reintroduce dependency findings fixed by the current release; treat that as an explicit rollback risk. Restore project state only if the older package cannot read a newer profile, lock, or runtime-state format. Preserve the current state separately before restoring a project snapshot.
@@ -133,9 +133,9 @@ Older host versions may reintroduce dependency findings fixed by the current rel
 Use this when terminal helpers must remain at their current version:
 
 ```bash
-pi-company-install --version vPREVIOUS --resolve-tag --dry-run
-pi-company-install --version vPREVIOUS --resolve-tag
-pi-company-doctor /path/to/project --strict-share
+piagent-install --version vPREVIOUS --resolve-tag --dry-run
+piagent-install --version vPREVIOUS --resolve-tag
+piagent-doctor /path/to/project --strict-share
 ```
 
 ## Canonical release checklist
@@ -152,7 +152,7 @@ Before broad team access, a repository administrator must enable these external 
 4. Enable GitHub private vulnerability reporting so the form linked by `SECURITY.md` works before public rollout.
 5. Keep secret scanning and push protection enabled. Review CodeQL results after the workflow's first successful run.
 
-Verify these settings in GitHub **Settings → Rules** and **Settings → Code security and analysis**. Treat any missing control as an explicit rollout blocker, not as a passing source-code gate. Repository rules also close the remaining mutability risk of bootstrap-by-tag; tag-to-SHA resolution inside `pi-company-install` alone cannot protect the helper package before it starts.
+Verify these settings in GitHub **Settings → Rules** and **Settings → Code security and analysis**. Treat any missing control as an explicit rollout blocker, not as a passing source-code gate. Repository rules also close the remaining mutability risk of bootstrap-by-tag; tag-to-SHA resolution inside `piagent-install` alone cannot protect the helper package before it starts.
 
 1. Update package versions, `CHANGELOG.md`, install examples, and docs metadata on a release-candidate branch.
 2. Verify the exact release-candidate source:
@@ -167,7 +167,7 @@ Verify these settings in GitHub **Settings → Rules** and **Settings → Code s
    npm run audit:runtime
    npm run release:identity
    npm pack --dry-run --json
-   bash scripts/setup.sh --global-only --package-source git:github.com/Vt-mmm/pi_agent@vX.Y.Z --dry-run
+   bash scripts/setup.sh --global-only --package-source git:github.com/Vt-mmm/piagent@vX.Y.Z --dry-run
    ```
 
 3. Push the release-candidate branch, open a pull request to `main`, and wait for both Ubuntu/macOS verify jobs and both CodeQL matrix jobs to pass. Record the exact PR-head commit SHA that passed; do not merge it into the Vercel production branch yet, and do not tag a later unverified edit.
@@ -175,7 +175,7 @@ Verify these settings in GitHub **Settings → Rules** and **Settings → Code s
 
    ```bash
    RC_COMMIT=<verified-40-char-pr-head-sha>
-   git tag -a vX.Y.Z "$RC_COMMIT" -m "Pi Company Platform vX.Y.Z"
+   git tag -a vX.Y.Z "$RC_COMMIT" -m "Pi Agent Platform vX.Y.Z"
    git push origin vX.Y.Z
    ```
 
@@ -186,7 +186,7 @@ Verify these settings in GitHub **Settings → Rules** and **Settings → Code s
    ```bash
    git ls-remote --tags origin refs/tags/vX.Y.Z 'refs/tags/vX.Y.Z^{}'
    RELEASE_COMMIT="$(git rev-parse vX.Y.Z^{})"
-   PI_COMPANY_EXPECTED_RELEASE_COMMIT="$RELEASE_COMMIT" bash scripts/install-global.sh --stable --dry-run --no-model-scope
+   PIAGENT_EXPECTED_RELEASE_COMMIT="$RELEASE_COMMIT" bash scripts/install-global.sh --stable --dry-run --no-model-scope
    ```
 
 6. Create a draft GitHub release from the matching `CHANGELOG.md` section. Keep it unpublished until production docs are verified:

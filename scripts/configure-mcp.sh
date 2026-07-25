@@ -28,9 +28,9 @@ Recommended presets:
   all        popular + Figma desktop/local MCP
 
 Examples:
-  pi-company-mcp --preset core --scope global --replace
-  pi-company-mcp --preset popular --scope project --project /path/to/repo
-  pi-company-mcp --preset design-local --scope project
+  piagent-mcp --preset core --scope global --replace
+  piagent-mcp --preset popular --scope project --project /path/to/repo
+  piagent-mcp --preset design-local --scope project
 
 After writing config:
   pi

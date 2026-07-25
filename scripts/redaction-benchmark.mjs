@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url";
 import {
   redactForStorage,
   redactSensitiveText
-} from "../packages/pi-company-core/security/sensitive-data.js";
+} from "../packages/piagent-core/security/sensitive-data.js";
 
 const REDACTION = "[REDACTED_SECRET]";
 const join = (...parts) => parts.join("");

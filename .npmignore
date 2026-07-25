@@ -4,6 +4,13 @@
 .DS_Store
 node_modules/
 coverage/
-plans/
 *.tgz
 npm-debug.log*
+
+# Working notes kept on the maintainer's disk. npm packs from the working
+# directory rather than from git, so untracking these is not enough to keep
+# them out of a published tarball.
+plans/
+docs/journals/
+docs/decisions/
+docs/readiness-assessment.md

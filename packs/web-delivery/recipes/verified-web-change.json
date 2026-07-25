@@ -1,5 +1,5 @@
 {
-  "apiVersion": "pi.company/v1alpha1",
+  "apiVersion": "piagent/v1",
   "kind": "CapabilityRecipe",
   "metadata": {
     "name": "verified-web-change",

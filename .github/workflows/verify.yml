@@ -70,4 +70,4 @@ jobs:
           test "$(git cat-file -t "refs/tags/$RELEASE_TAG")" = "tag"
           test "$(git rev-parse "refs/tags/$RELEASE_TAG^{}")" = "$RELEASE_COMMIT"
           npm run release:identity -- --tag "$RELEASE_TAG" --commit "$RELEASE_COMMIT"
-          PI_COMPANY_EXPECTED_RELEASE_COMMIT="$RELEASE_COMMIT" bash scripts/install-global.sh --stable --dry-run --no-model-scope
+          PIAGENT_EXPECTED_RELEASE_COMMIT="$RELEASE_COMMIT" bash scripts/install-global.sh --stable --dry-run --no-model-scope

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/Vt-mmm/pi_agent/schemas/project-profile.schema.json",
-  "title": "Pi Company Project Profile",
+  "$id": "https://github.com/Vt-mmm/piagent/schemas/project-profile.schema.json",
+  "title": "Pi Agent Project Profile",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -33,7 +33,7 @@
       "minLength": 1
     },
     "permissionProfile": {
-      "description": "Runtime permission profile. workspace-write is the default; trusted-full-access still keeps Company protected-path and destructive/external confirmation gates.",
+      "description": "Runtime permission profile. workspace-write is the default; trusted-full-access still keeps Piagent protected-path and destructive/external confirmation gates.",
       "enum": [
         "read-only",
         "workspace-write",
@@ -123,6 +123,48 @@
         }
       }
     },
+    "capabilitySources": {
+      "description": "Directories outside the platform that provide capability packs. Each source declares exactly one of path (a directory inside this project) or source (an exact npm or git release vendored into .pi/capability-vendor). Declaring a source does not grant anything: its packs still have to pass capabilityPolicy.",
+      "type": "array",
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "oneOf": [
+          {
+            "required": [
+              "path"
+            ]
+          },
+          {
+            "required": [
+              "source"
+            ]
+          }
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512,
+            "pattern": "^(?:npm|git):"
+          }
+        }
+      }
+    },
     "capabilityPolicy": {
       "type": "object",
       "additionalProperties": false,
@@ -158,13 +200,21 @@
           "type": "array",
           "maxItems": 128,
           "uniqueItems": true,
-          "items": { "type": "string", "minLength": 1, "maxLength": 256 }
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
         },
         "allowedFilesystemWrite": {
           "type": "array",
           "maxItems": 128,
           "uniqueItems": true,
-          "items": { "type": "string", "minLength": 1, "maxLength": 256 }
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
         },
         "allowedNetworkDomains": {
           "type": "array",
@@ -323,10 +373,22 @@
         "roleModelGuidance": {
           "type": "object",
           "properties": {
-            "planner": { "type": "string", "minLength": 1 },
-            "worker": { "type": "string", "minLength": 1 },
-            "reviewer": { "type": "string", "minLength": 1 },
-            "watchdog": { "type": "string", "minLength": 1 }
+            "planner": {
+              "type": "string",
+              "minLength": 1
+            },
+            "worker": {
+              "type": "string",
+              "minLength": 1
+            },
+            "reviewer": {
+              "type": "string",
+              "minLength": 1
+            },
+            "watchdog": {
+              "type": "string",
+              "minLength": 1
+            }
           },
           "additionalProperties": false
         },
@@ -386,42 +448,66 @@
           "properties": {
             "frontend": {
               "type": "array",
-              "items": { "type": "string", "minLength": 1 },
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
               "uniqueItems": true
             },
             "backend": {
               "type": "array",
-              "items": { "type": "string", "minLength": 1 },
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
               "uniqueItems": true
             },
             "database": {
               "type": "array",
-              "items": { "type": "string", "minLength": 1 },
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
               "uniqueItems": true
             },
             "mobile": {
               "type": "array",
-              "items": { "type": "string", "minLength": 1 },
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
               "uniqueItems": true
             },
             "devops": {
               "type": "array",
-              "items": { "type": "string", "minLength": 1 },
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
               "uniqueItems": true
             },
             "data": {
               "type": "array",
-              "items": { "type": "string", "minLength": 1 },
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
               "uniqueItems": true
             },
             "docs": {
               "type": "array",
-              "items": { "type": "string", "minLength": 1 },
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
               "uniqueItems": true
             },
             "runtime": {
               "type": "array",
-              "items": { "type": "string", "minLength": 1 },
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
               "uniqueItems": true
             }
           },

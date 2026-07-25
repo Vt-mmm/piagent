@@ -27,7 +27,7 @@ This applies in project spaces — issues, pull requests, discussions — and wh
 
 ## Enforcement
 
-Report unacceptable behavior to the maintainer through [GitHub private vulnerability reporting](https://github.com/Vt-mmm/pi_agent/security/advisories/new) or a direct message. Reports will be reviewed and investigated, and the reporter's identity will be kept confidential.
+Report unacceptable behavior to the maintainer through [GitHub private vulnerability reporting](https://github.com/Vt-mmm/piagent/security/advisories/new) or a direct message. Reports will be reviewed and investigated, and the reporter's identity will be kept confidential.
 
 Maintainers may remove, edit, or reject contributions that violate this code, and may temporarily or permanently ban any contributor for behavior they consider inappropriate, threatening, offensive, or harmful.
 

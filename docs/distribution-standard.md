@@ -7,17 +7,17 @@ Repo này phải chạy được cho nhiều project/domain khác nhau. Vì vậ
 - default adapter không chứa domain riêng;
 - `.pi/settings.json` trong project phải dùng package source portable: `git:` hoặc `npm:`;
 - local absolute path chỉ dùng khi dev platform;
-- OAuth, trust, sessions, cache, company-state không commit;
+- OAuth, trust, sessions, cache, piagent-state không commit;
 - project-specific/private profiles không nằm trong default `adapters/`.
 
 ## Package source chuẩn
 
 | Use case | Package source |
 |---|---|
-| Team pinned release | `git:github.com/Vt-mmm/pi_agent@v0.4.8` |
-| Personal/sandbox dev | `git:github.com/Vt-mmm/pi_agent` |
-| Enterprise npm | `npm:@company/pi-agent-platform@x.y.z` |
-| Local platform dev | `/path/to/pi_agent` |
+| Team pinned release | `git:github.com/Vt-mmm/piagent@v1.0.0` |
+| Personal/sandbox dev | `git:github.com/Vt-mmm/piagent` |
+| Enterprise npm | `npm:@your-scope/platform@x.y.z` |
+| Local platform dev | `/path/to/piagent` |
 
 Latest tiện cho máy cá nhân muốn nhận cập nhật nhanh. Pin tag/commit cho `.pi/settings.json` trong project nghiêm túc để tránh workflow đổi bất ngờ giữa các developer.
 
@@ -25,7 +25,7 @@ Latest tiện cho máy cá nhân muốn nhận cập nhật nhanh. Pin tag/commi
 
 | Channel | Command | Target | Policy |
 |---|---|---|---|
-| `stable` | `bash scripts/install-global.sh --stable` | Helper release tag resolved to commit SHA, currently `v0.4.8` | Install the Pi package matching the helper. |
+| `stable` | `bash scripts/install-global.sh --stable` | Helper release tag resolved to commit SHA, currently `v1.0.0` | Install the Pi package matching the helper. |
 | `exact` | `bash scripts/install-global.sh --version vX.Y.Z --resolve-tag` | Requested tag resolved to commit SHA | Pi-package-only rollout, rollback, and incident recovery. |
 | `dev` | `bash scripts/install-global.sh --dev` | Moving Git source | Personal/sandbox only; do not commit into project settings. |
 | `local` | `bash scripts/install-global.sh --local` | Current checkout path | Platform development only. |
@@ -39,23 +39,23 @@ bash scripts/install-global.sh --version vX.Y.Z --resolve-tag --dry-run
 
 Stable and resolved exact installs fail closed when the release tag cannot be resolved from GitHub. The install output prints the tag, resolved commit, and final `git:` package source before running `pi install`.
 
-`currentRelease` trong output là version của npm-global helper đang chạy. `--version` chỉ đổi Pi package; nó không tự thay binary `pi-company-*` trên `PATH`.
+`currentRelease` trong output là version của npm-global helper đang chạy. `--version` chỉ đổi Pi package; nó không tự thay binary `piagent-*` trên `PATH`.
 
 ## Repo root là Pi package
 
 Root `package.json` có `pi` manifest trỏ tới:
 
-- `packages/pi-company-core/extensions/**/*.ts`
-- `packages/pi-company-core/skills`
-- `packages/pi-company-core/prompts`
+- `packages/piagent-core/extensions/**/*.ts`
+- `packages/piagent-core/skills`
+- `packages/piagent-core/prompts`
 
 Do đó team có thể:
 
 ```bash
-pi install git:github.com/Vt-mmm/pi_agent@v0.4.8
+pi install git:github.com/Vt-mmm/piagent@v1.0.0
 ```
 
-Không cần biết internal folder `packages/pi-company-core`. Source không pin chỉ dành cho personal/sandbox như bảng channel ở trên.
+Không cần biết internal folder `packages/piagent-core`. Source không pin chỉ dành cho personal/sandbox như bảng channel ở trên.
 
 ## Default team setup
 
@@ -64,12 +64,12 @@ Team nên install global package một lần:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
-npm install -g --ignore-scripts github:Vt-mmm/pi_agent#v0.4.8
-pi-company-install --stable --dry-run
-pi-company-install --stable
+npm install -g --ignore-scripts github:Vt-mmm/piagent#v1.0.0
+piagent-install --stable --dry-run
+piagent-install --stable
 ```
 
-`pi install git:github.com/Vt-mmm/pi_agent@v0.4.8` vẫn hợp lệ nếu chỉ cần cài Pi package. Lệnh đó không tự tạo các binary terminal `pi-company-*`; muốn có helper global thì dùng `npm install -g --ignore-scripts github:Vt-mmm/pi_agent#v0.4.8`.
+`pi install git:github.com/Vt-mmm/piagent@v1.0.0` vẫn hợp lệ nếu chỉ cần cài Pi package. Lệnh đó không tự tạo các binary terminal `piagent-*`; muốn có helper global thì dùng `npm install -g --ignore-scripts github:Vt-mmm/piagent#v1.0.0`.
 
 Support matrix hiện tại: macOS Apple Silicon + Bash và Linux x64 + Bash đã được verify; macOS Intel + Bash và Linux ARM64 + Bash là supported target cần chạy smoke trước rollout; native Windows chưa phải target rollout team; WSL2 experimental. Chi tiết và version runtime nằm trong [release/install policy](release-install-policy.md).
 
@@ -97,12 +97,12 @@ Nó cũng ghi `.pi/context-index.json`; đây là compact advisory map có citat
 
 ## Optional preseed setup
 
-Nếu muốn commit sẵn `.pi/company-profile.json` vào repo hoặc bootstrap bằng CI:
+Nếu muốn commit sẵn `.pi/piagent-profile.json` vào repo hoặc bootstrap bằng CI:
 
 ```bash
 bash scripts/setup.sh /path/to/project \
   --profile be-readonly-fe \
-  --package-source git:github.com/Vt-mmm/pi_agent@v0.4.8 \
+  --package-source git:github.com/Vt-mmm/piagent@v1.0.0 \
   --mcp-preset core \
   --subagents-preset safe
 ```
@@ -125,7 +125,7 @@ project/
 ├─ .mcp.json
 └─ .pi/
    ├─ settings.json
-   ├─ company-profile.json
+   ├─ piagent-profile.json
    ├─ project-context.md
    ├─ context-index.json
    ├─ memory/
@@ -142,7 +142,7 @@ Files nên commit:
 - `REVIEW_GUIDELINES.md`
 - `.mcp.json`
 - `.pi/settings.json`
-- `.pi/company-profile.json`
+- `.pi/piagent-profile.json`
 - `.pi/project-context.md`
 - `.pi/context-index.json`
 - `.pi/mcp.json`
@@ -150,7 +150,7 @@ Files nên commit:
 
 Files không commit:
 
-- `.pi/company-state/`
+- `.pi/piagent-state/`
 - `.pi/task-inbox/`
 - `.pi/benchmarks/`
 - `.pi/memory/memory_summary.md`
@@ -175,10 +175,10 @@ Full platform update phải đồng bộ Pi host, npm-global helper và Pi packa
 
 ```bash
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
-npm install -g --ignore-scripts github:Vt-mmm/pi_agent#vX.Y.Z
-pi-company-install --stable --dry-run
-pi-company-install --stable
-pi-company-doctor /path/to/project --strict-share
+npm install -g --ignore-scripts github:Vt-mmm/piagent#vX.Y.Z
+piagent-install --stable --dry-run
+piagent-install --stable
+piagent-doctor /path/to/project --strict-share
 ```
 
 Full rollback dùng cùng flow với target trước đó. Lấy exact host version từ release policy của target; không giả định host hiện tại tương thích với release cũ:
@@ -186,17 +186,17 @@ Full rollback dùng cùng flow với target trước đó. Lấy exact host vers
 ```bash
 TARGET_PI_VERSION=x.y.z
 npm install -g --ignore-scripts "@earendil-works/pi-coding-agent@$TARGET_PI_VERSION"
-npm install -g --ignore-scripts github:Vt-mmm/pi_agent#vPREVIOUS
-pi-company-install --stable --dry-run
-pi-company-install --stable
-pi-company-doctor /path/to/project --strict-share
+npm install -g --ignore-scripts github:Vt-mmm/piagent#vPREVIOUS
+piagent-install --stable --dry-run
+piagent-install --stable
+piagent-doctor /path/to/project --strict-share
 ```
 
 Nếu chủ ý chỉ đổi Pi package và giữ terminal helper hiện tại:
 
 ```bash
-pi-company-install --version vX.Y.Z --resolve-tag --dry-run
-pi-company-install --version vX.Y.Z --resolve-tag
+piagent-install --version vX.Y.Z --resolve-tag --dry-run
+piagent-install --version vX.Y.Z --resolve-tag
 ```
 
 ## Security review

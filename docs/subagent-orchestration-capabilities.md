@@ -15,7 +15,7 @@ Core decisions:
 
 1. natural-language delegation is preferred over requiring users to remember `/run`;
 2. parent agent should decide whether independent read-only work deserves subagents;
-3. company roles remain narrow and policy-aware;
+3. piagent roles remain narrow and policy-aware;
 4. background, watchdog, scheduled, and parallel-writer behavior stays opt-in;
 5. long child output should use file handoff when possible.
 
@@ -25,7 +25,7 @@ Core decisions:
 |---|---|---|
 | Natural language delegation | User can ask for scout/review/planning without exact syntax. | Covered by auto-delegation policy and workflow prompts. |
 | Builtin agents | General roles such as researcher, planner, reviewer, and context-builder. | Use when they fit the task and installed tools are available. |
-| Company agents | `company-scout`, `company-planner`, `company-worker`, `company-reviewer`, `company-oracle`. | Default roles for governed project work. |
+| Piagent agents | `piagent-scout`, `piagent-planner`, `piagent-worker`, `piagent-reviewer`, `piagent-oracle`. | Default roles for governed project work. |
 | Prompt shortcuts | `/parallel-review`, `/review-loop`, `/parallel-research`, `/parallel-context-build`, `/parallel-handoff-plan`. | Documented for explicit orchestration. |
 | Supervisor channel | Child can ask parent for a decision. | Allowed for blocked or high-context child work. |
 | Output controls | `output`, `outputMode=file-only`, `reads`, `outputSchema`, `acceptance`. | Recommended for large reports and handoff context. |

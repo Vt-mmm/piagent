@@ -28,7 +28,7 @@
     "keepRecentTokens": 20000
   },
   "packages": [
-    "__PI_COMPANY_PACKAGE_SOURCE__"
+    "__PIAGENT_PACKAGE_SOURCE__"
   ],
   "skills": [
     "~/.claude/skills",

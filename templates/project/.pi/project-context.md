@@ -3,13 +3,13 @@
 ## Status
 
 - Generated: not yet
-- Profile: see `.pi/company-profile.json`
+- Profile: see `.pi/piagent-profile.json`
 - Model/pass: run `/onboard-project` after Pi login and model selection
 - Scope: pending
 
 ## Purpose
 
-This file is the reusable project context snapshot for Pi Company Platform.
+This file is the reusable project context snapshot for Pi Agent Platform.
 
 Before the first real implementation task in this project:
 

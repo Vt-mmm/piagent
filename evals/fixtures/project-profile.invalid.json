@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "projectId": "generic-project",
+  "displayName": "Generic Project",
+  "mode": "generic",
+  "permissionProfile": "workspace-write",
+  "rootMarkers": [
+    "AGENTS.md",
+    "README.md",
+    "package.json",
+    "pyproject.toml",
+    "go.mod"
+  ],
+  "protectedPaths": "not-an-array",
+  "requiredContext": [
+    "AGENTS.md",
+    ".pi/project-context.md",
+    "README.md"
+  ],
+  "taskModes": {
+    "readOnly": {
+      "tools": [
+        "read",
+        "grep",
+        "find",
+        "ls"
+      ]
+    },
+    "sourceWrite": {
+      "requiresPlan": true,
+      "requiresVerify": true
+    }
+  },
+  "verifyCommands": {
+    "docsOnly": [
+      "test -s README.md"
+    ],
+    "source": [
+      "echo 'No project verify command configured; update .pi/piagent-profile.json'"
+    ]
+  },
+  "mcpCapabilities": [
+    "filesystem-readonly",
+    "filesystem-write",
+    "shell",
+    "memory"
+  ],
+  "capabilityPacks": [
+    {
+      "name": "engineering-base",
+      "version": "0.1.1"
+    }
+  ],
+  "capabilityPolicy": {
+    "allowedOwners": [
+      "platform-maintainers"
+    ],
+    "allowedLifecycles": [
+      "experimental"
+    ],
+    "allowedFilesystemRead": [
+      "**/*"
+    ],
+    "allowedFilesystemWrite": [
+      "**/*"
+    ],
+    "allowedNetworkDomains": [],
+    "allowedExternalActions": []
+  },
+  "memory": {
+    "enabled": true,
+    "mode": "manual",
+    "scope": "project",
+    "summaryFile": ".pi/memory/memory_summary.md",
+    "handbookFile": ".pi/memory/MEMORY.md",
+    "localDir": ".pi/memory/local",
+    "readBeforeTask": true,
+    "writePolicy": "explicit-only",
+    "maxInjectedChars": 4000,
+    "externalPackages": []
+  },
+  "runtimePolicy": {
+    "execPolicy": "enforce",
+    "contextBudget": "enforce",
+    "toolRegistry": "advisory",
+    "finalGate": "enforce"
+  }
+}

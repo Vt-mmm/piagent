@@ -36,7 +36,7 @@ if [[ "$PI_CODING_VERSION" != "$PI_AI_VERSION" ]]; then
   exit 1
 fi
 
-AUDIT_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/pi-company-runtime-audit.XXXXXX")"
+AUDIT_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/piagent-runtime-audit.XXXXXX")"
 cleanup() {
   node --input-type=module - "$AUDIT_ROOT" <<'NODE'
 import fs from "node:fs";
@@ -46,7 +46,7 @@ import path from "node:path";
 const target = path.resolve(process.argv[2]);
 const tempRoot = fs.realpathSync(os.tmpdir());
 const targetParent = fs.realpathSync(path.dirname(target));
-if (targetParent !== tempRoot || !/^pi-company-runtime-audit\.[A-Za-z0-9]+$/.test(path.basename(target))) {
+if (targetParent !== tempRoot || !/^piagent-runtime-audit\.[A-Za-z0-9]+$/.test(path.basename(target))) {
   throw new Error(`refusing to remove unexpected audit directory: ${target}`);
 }
 fs.rmSync(target, { recursive: true, force: true });
@@ -57,7 +57,7 @@ trap cleanup EXIT
 node --input-type=module - "$AUDIT_ROOT/package.json" <<'NODE'
 import fs from "node:fs";
 const target = process.argv[2];
-fs.writeFileSync(target, `${JSON.stringify({ name: "pi-company-runtime-audit", version: "0.0.0", private: true }, null, 2)}\n`);
+fs.writeFileSync(target, `${JSON.stringify({ name: "piagent-runtime-audit", version: "0.0.0", private: true }, null, 2)}\n`);
 NODE
 
 echo "Auditing Pi host ${PI_CODING_VERSION} and pinned add-ons at severity high and above..."
