@@ -787,10 +787,12 @@ function buildCoreIntegrity(root) {
     "packages/piagent-core/capabilities/capability-sources.js",
     "packages/piagent-core/security/sensitive-data.js",
     "packages/piagent-core/extensions/piagent-guard.ts",
-    // guard-io.js loads the project profile, so tampering with it changes what
+    // guard-io.js loads the project profile and guard-shell-analysis.ts decides
+    // what a command is about to reach, so tampering with either changes what
     // the guard enforces. guard-types.ts is deliberately absent: it is erased
     // before execution and cannot alter runtime behaviour.
     "packages/piagent-core/extensions/guard-io.js",
+    "packages/piagent-core/extensions/guard-shell-analysis.ts",
     "packages/piagent-core/extensions/policy-core.js",
     "packages/piagent-core/extensions/redaction-core.js",
     "packages/piagent-core/extensions/runtime-evidence.js"
