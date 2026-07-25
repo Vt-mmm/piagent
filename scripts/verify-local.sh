@@ -175,6 +175,7 @@ required_files=(
   "$ROOT/tests/capability-sources.test.mjs"
   "$ROOT/packages/piagent-core/capabilities/capability-sources.js"
   "$ROOT/packages/piagent-core/extensions/guard-shell-analysis.ts"
+  "$ROOT/tests/guard-shell-analysis.test.mjs"
   "$ROOT/tests/migrate-project-state.test.mjs"
   "$ROOT/tests/import-agent-instructions.test.mjs"
   "$ROOT/evals/golden/enforcement-decisions.json"
