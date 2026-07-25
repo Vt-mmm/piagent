@@ -351,6 +351,28 @@ bash "$PIAGENT_PLATFORM_HOME/packages/piagent-core/skills/piagent-source-cache/c
 
 Các việc này là credential/trust boundary, không nên automation mù.
 
+## Gỡ cài đặt
+
+`piagent-uninstall` mặc định là dry run: nó in ra sẽ gỡ những gì rồi thoát, không đụng vào đâu cả. Thêm `--apply` mới thực hiện.
+
+```bash
+piagent-uninstall
+piagent-uninstall --apply
+```
+
+Mặc định chỉ gỡ Pi package của platform khỏi Pi settings global. Muốn gỡ rộng hơn:
+
+```bash
+piagent-uninstall --apply --with-addons                    # + pi-mcp-adapter, pi-subagents, pi-web-access
+piagent-uninstall --apply --with-host                      # + Pi Coding Agent host
+piagent-uninstall --apply --project /path/to/project       # + profile, lock, piagent-state/ của project
+npm uninstall -g @piagent/platform                         # helper npm-global, gỡ riêng
+```
+
+Có những thứ nó **không bao giờ** xoá, kể cả khi bật hết cờ: `auth.json`, `trust.json`, `sessions/`, `todos/`, và `.pi/memory/`. Đó là dữ liệu của anh chứ không phải state của platform. `AGENTS.md`, `.pi/settings.json`, `project-context.md` cũng được giữ vì sinh ra từ template rồi anh sửa tiếp — script liệt kê chúng ra để anh tự quyết.
+
+Với `.pi/settings.json` nó chỉ bỏ đúng entry trỏ tới platform trong `packages`, phần còn lại giữ nguyên.
+
 ## Tài liệu chính
 
 - Command reference: `docs/command-reference-vietnamese.md`

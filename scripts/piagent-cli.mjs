@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 const scriptByCommand = {
   "piagent-setup": "scripts/setup.sh",
   "piagent-install": "scripts/install-global.sh",
+  "piagent-uninstall": "scripts/uninstall-global.sh",
   "piagent-init": "scripts/init-project.sh",
   "piagent-doctor": "scripts/team-doctor.sh",
   "piagent-benchmark": "scripts/quality-benchmark.sh",

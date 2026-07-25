@@ -47,6 +47,7 @@
   "bin": {
     "piagent-setup": "scripts/piagent-cli.mjs",
     "piagent-install": "scripts/piagent-cli.mjs",
+    "piagent-uninstall": "scripts/piagent-cli.mjs",
     "piagent-init": "scripts/piagent-cli.mjs",
     "piagent-doctor": "scripts/piagent-cli.mjs",
     "piagent-benchmark": "scripts/piagent-cli.mjs",

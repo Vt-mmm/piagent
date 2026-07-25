@@ -410,6 +410,10 @@ Các lệnh này chạy ngoài Pi.
 | `piagent-setup <project> --with-web-access` | Setup project + optional web access cho research subagents. |
 | `piagent-usage /path/to/project` | Lấy exact session usage từ terminal khác. |
 | `piagent-doctor /path/to/project --strict-share` | Kiểm tra project có share/open-source được không. |
+| `piagent-uninstall` | Báo cáo những gì sẽ được gỡ. Dry run, không đụng gì. |
+| `piagent-uninstall --apply` | Gỡ Pi package của platform khỏi Pi settings global. |
+| `piagent-uninstall --apply --with-addons --with-host` | Gỡ thêm pi-mcp-adapter, pi-subagents, pi-web-access và Pi host. |
+| `piagent-uninstall --apply --project /path/to/project` | Gỡ thêm state của platform trong project: profile, lock, `piagent-state/`. |
 | `piagent-benchmark ...` | Ghi quality benchmark bằng package bin. |
 | `bash scripts/verify-local.sh` | Verify repo platform trước khi commit/tag. |
 | `bash scripts/verify-local.sh --offline` | Verify trong CI/máy sạch, bỏ qua local Pi model catalog. |

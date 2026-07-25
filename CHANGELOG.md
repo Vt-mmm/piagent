@@ -4,6 +4,10 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
+### Added
+
+- Added `piagent-uninstall`, which removes the Pi package this platform registered and nothing else. It reports by default and only acts on `--apply`, matching how install and migration already work. `--with-addons` also removes the pinned add-ons, `--with-host` the Pi host, and `--project <path>` a project's profile, lock, and runtime state. It recognises every source shape the platform has been installed as, including installs from before the namespace rename, so an old registration still comes out. Credentials, trust decisions, sessions, todos, and project memory are never removed at any flag combination; files written from templates and then edited are reported rather than deleted, and only the entry pointing at this platform is dropped from a project's `.pi/settings.json`.
+
 ### Fixed
 
 - `piagent-setup` running from an installed package now writes `npm:@piagent/platform@<version>` into project settings instead of the directory it happens to be installed in. Project settings are meant to be committed, and an install path means nothing on a teammate's machine. A working checkout has no published identity to point at, so it still falls back to the local path and still says so.

@@ -148,6 +148,7 @@ required_files=(
   "$ROOT/scripts/verify-vercel-link.mjs"
   "$ROOT/scripts/piagent-cli.mjs"
   "$ROOT/scripts/init-project.sh"
+  "$ROOT/scripts/uninstall-global.sh"
   "$ROOT/scripts/setup.sh"
   "$ROOT/scripts/team-doctor.sh"
   "$ROOT/scripts/link-project.sh"
@@ -179,6 +180,7 @@ required_files=(
   "$ROOT/tests/runtime-advisories.test.mjs"
   "$ROOT/scripts/check-runtime-advisories.mjs"
   "$ROOT/tests/migrate-project-state.test.mjs"
+  "$ROOT/tests/uninstall-global.test.mjs"
   "$ROOT/tests/import-agent-instructions.test.mjs"
   "$ROOT/evals/golden/enforcement-decisions.json"
 )
@@ -477,6 +479,7 @@ bash -n "$ROOT/scripts/configure-mcp.sh"
 bash -n "$ROOT/scripts/configure-subagents.sh"
 bash -n "$ROOT/scripts/install-global.sh"
 bash -n "$ROOT/scripts/init-project.sh"
+bash -n "$ROOT/scripts/uninstall-global.sh"
 bash -n "$ROOT/scripts/setup.sh"
 if [[ "$OFFLINE" == true || "${PIAGENT_VERIFY_OFFLINE:-}" == "1" || "${CI:-}" == "true" ]]; then
   echo "WARN: skipping local Pi model catalog check in offline/CI mode" >&2
