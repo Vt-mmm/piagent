@@ -2,6 +2,17 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.0.1 - 2026-07-25
+
+Documentation release. v1.0.0 reached the npm registry but no document told anyone it was there, so every install instruction still pointed at the Git source.
+
+### Changed
+
+- The terminal helper now installs from the registry: `npm install -g --ignore-scripts @piagent/platform@1.0.1`. This replaces the `github:Vt-mmm/piagent#vX.Y.Z` form in the README, the docs site, and every install, update, and rollback flow. Installing from Git still works and produces the same files; the registry path additionally carries a provenance attestation npm can verify.
+- Added an `npm` release channel with a real source, and narrowed `enterprise-npm` to what it actually describes: a fork published under a different scope.
+- Recorded why `stable` still resolves the Pi package to a commit SHA rather than an npm version. Tag-to-SHA resolution is checked against `PIAGENT_EXPECTED_RELEASE_COMMIT`, and a registry version range cannot express that check, so pointing `stable` at npm would remove it rather than replace it.
+- Aligned `repository.url` in both manifests with the form npm stores. Publishing rewrote the field and warned, which left the manifest in the repository disagreeing with the manifest on the registry.
+
 ## v1.0.0 - 2026-07-25
 
 Breaking release. The `company` namespace is replaced by `piagent` with no alias layer, and `apiVersion` becomes a stable contract. Existing projects convert their local state with one migration command; both names never work at once.

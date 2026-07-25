@@ -10,7 +10,7 @@ This file is the canonical install, update, rollback, and release checklist. Oth
 
 All supported environments require Node.js `>=22.19.0` and Pi Coding Agent `0.81.1`. The Pi host is installed as a Node CLI; Pi Agent Platform still defines its own release matrix because the terminal helpers and shell policy rely on Bash/POSIX behavior.
 
-| Surface | Status for v1.0.0 | Rollout guidance |
+| Surface | Status for v1.0.1 | Rollout guidance |
 |---|---|---|
 | macOS Apple Silicon (`darwin/arm64`) + Bash | Verified for this release. | Safe default for team rollout after normal project smoke tests. |
 | Linux x64 + Bash | Verified in GitHub Actions. | Safe default for CI/server usage after normal project smoke tests. |
@@ -24,7 +24,7 @@ All supported environments require Node.js `>=22.19.0` and Pi Coding Agent `0.81
 | Component | Installed by | Provides |
 |---|---|---|
 | Pi host runtime | `npm install -g --ignore-scripts @earendil-works/pi-coding-agent@<exact-version>` | The compatible `pi` executable. |
-| Terminal helper | `npm install -g --ignore-scripts github:Vt-mmm/piagent#vX.Y.Z` | `piagent-*` commands on `PATH`. |
+| Terminal helper | `npm install -g --ignore-scripts @piagent/platform@X.Y.Z` | `piagent-*` commands on `PATH`. |
 | Pi package | `piagent-install`, or `pi install ...` | Extensions, prompts, skills, and subagents loaded by Pi. |
 
 These three components are versioned independently. A full install, update, or rollback must use the exact Pi host declared by the target release, then install the target terminal helper, then let that helper install its matching Pi package. `piagent-install` changes only the Pi package; it does not replace the Pi host or the npm-global terminal helper currently executing. In installer output, `currentRelease` is the terminal helper package version.
@@ -33,13 +33,16 @@ These three components are versioned independently. A full install, update, or r
 
 | Channel | Source shape | Mutability | Use when |
 |---|---|---:|---|
-| `stable` | `git:github.com/Vt-mmm/piagent@<resolved-commit-sha>` from `v1.0.0` | Fixed after resolution | Default for team rollout. |
+| `stable` | `git:github.com/Vt-mmm/piagent@<resolved-commit-sha>` from `v1.0.1` | Fixed after resolution | Default for team rollout. |
 | `exact` | Tag, reviewed commit, or a tag resolved with `--resolve-tag` | Fixed when using a commit SHA | Pi-package-only roll forward, rollback, or reproduction. |
 | `dev` | `git:github.com/Vt-mmm/piagent` | Moving | Personal machine or sandbox only. |
 | `local` | `/path/to/piagent` | Local workspace | Platform development and dry-run validation. |
-| `enterprise-npm` | `npm:@your-scope/platform@x.y.z` | Fixed | Private registry distribution when available. |
+| `npm` | `npm:@piagent/platform@x.y.z` | Fixed | Registry distribution. Use when the machine has no Git access to this repository. |
+| `enterprise-npm` | `npm:@your-scope/platform@x.y.z` | Fixed | Private registry distribution when a fork is published under another scope. |
 
 `--stable` reads the helper package version from its own `package.json`, resolves that release tag through GitHub, and installs the resulting commit SHA. If the tag cannot be resolved, install fails closed. Release CI additionally sets `PIAGENT_EXPECTED_RELEASE_COMMIT`; the installer then rejects a tag that resolves anywhere except the commit being verified.
+
+The terminal helper installs from the registry while `stable` still resolves the Pi package to a commit SHA. That difference is deliberate. The helper is a published tarball whose provenance attestation is what ties it back to a commit, and npm verifies that. The Pi package instead relies on tag-to-SHA resolution checked against `PIAGENT_EXPECTED_RELEASE_COMMIT`, which is a separate chain that a registry version range cannot express. Pointing `stable` at an npm version would drop that check rather than replace it, so the `npm` channel exists for machines without Git access to this repository, not as the default.
 
 Exactly one CLI package selector is accepted: `--package-source`, `--channel`, `--stable`, `--dev`, `--local`, `--version`, or `--tag`. The first CLI selector may replace environment defaults; a second CLI selector is rejected before any install command is printed or executed.
 
@@ -50,7 +53,7 @@ Use this flow when the team needs both terminal commands and the Pi package:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
-npm install -g --ignore-scripts github:Vt-mmm/piagent#v1.0.0
+npm install -g --ignore-scripts @piagent/platform@1.0.1
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -58,8 +61,8 @@ piagent-install --stable
 The stable preview and apply output includes:
 
 ```text
-currentRelease: v1.0.0 (helper package version)
-tag: v1.0.0
+currentRelease: v1.0.1 (helper package version)
+tag: v1.0.1
 resolvedCommit: <40-char-sha>
 source: git:github.com/Vt-mmm/piagent@<40-char-sha>
 ```
@@ -76,7 +79,7 @@ bash scripts/install-global.sh --stable
 Use this only when terminal commands are not needed:
 
 ```bash
-pi install git:github.com/Vt-mmm/piagent@v1.0.0
+pi install git:github.com/Vt-mmm/piagent@v1.0.1
 ```
 
 Direct `pi install` does not create `piagent-*` commands on `PATH`.
@@ -87,7 +90,7 @@ Update the exact supported Pi host first, then the npm-global helper, then let t
 
 ```bash
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
-npm install -g --ignore-scripts github:Vt-mmm/piagent#vX.Y.Z
+npm install -g --ignore-scripts @piagent/platform@X.Y.Z
 piagent-install --stable --dry-run
 piagent-install --stable
 piagent-doctor /path/to/project --strict-share
@@ -120,7 +123,7 @@ Rollback the host, helper, and Pi package together. Determine the exact host ver
 ```bash
 TARGET_PI_VERSION=x.y.z  # replace from vPREVIOUS release policy before execution
 npm install -g --ignore-scripts "@earendil-works/pi-coding-agent@$TARGET_PI_VERSION"
-npm install -g --ignore-scripts github:Vt-mmm/piagent#vPREVIOUS
+npm install -g --ignore-scripts @piagent/platform@PREVIOUS
 piagent-install --stable --dry-run
 piagent-install --stable
 piagent-doctor /path/to/project --strict-share

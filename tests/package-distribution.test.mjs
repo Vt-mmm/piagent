@@ -180,13 +180,13 @@ describe("package distribution", () => {
   it("does not create a project npmignore that re-includes local Pi runtime state", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-package-bin-"));
     temporaryRoots.add(root);
-    fs.writeFileSync(path.join(root, "package.json"), `${JSON.stringify({ name: "package-fixture", version: "1.0.0" }, null, 2)}\n`);
+    fs.writeFileSync(path.join(root, "package.json"), `${JSON.stringify({ name: "package-fixture", version: "1.0.1" }, null, 2)}\n`);
 
     const initialized = spawnSync("bash", [
       path.join(repositoryRoot, "scripts", "init-project.sh"),
       root,
       "--profile", "generic",
-      "--package-source", "git:github.com/Vt-mmm/piagent@v1.0.0",
+      "--package-source", "git:github.com/Vt-mmm/piagent@v1.0.1",
       "--skip-agents",
       "--skip-review-guidelines"
     ], { cwd: repositoryRoot, encoding: "utf8" });

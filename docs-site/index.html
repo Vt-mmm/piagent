@@ -798,7 +798,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.0.0 docs</span>
+        <span class="pill"><span class="pill-dot"></span>v1.0.1 docs</span>
         <a class="button social" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer" aria-label="Mở GitHub repository">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
@@ -934,7 +934,7 @@
               <article class="step">
                 <div>
                   <h3>Chuẩn bị runtime</h3>
-                  <p>Dùng Node.js 22.19.0 trở lên và Pi Coding Agent <span class="inline-code">0.81.1</span>. Pi Agent Platform <span class="inline-code">v1.0.0</span> đang pin compatibility với runtime này và công bố support matrix theo OS/CPU riêng cho platform helper.</p>
+                  <p>Dùng Node.js 22.19.0 trở lên và Pi Coding Agent <span class="inline-code">0.81.1</span>. Pi Agent Platform <span class="inline-code">v1.0.1</span> đang pin compatibility với runtime này và công bố support matrix theo OS/CPU riêng cho platform helper.</p>
                   <div class="table-wrap compact-table">
                     <table>
                       <thead>
@@ -976,14 +976,14 @@ pi --version</code></pre>
                   <h3>Cài Pi Agent Platform có pin</h3>
                   <p>Team nên cài npm-global helper trước, rồi dùng helper đó resolve stable tag thành commit SHA và cài Pi package matching. Trong output, <span class="inline-code">currentRelease</span> là version của terminal helper đang chạy. Direct Pi install chỉ dùng khi không cần command <span class="inline-code">piagent-*</span>.</p>
                   <div class="command-card">
-                    <header><span>Stable helper install</span><button class="clip-btn" data-clip="npm install -g --ignore-scripts github:Vt-mmm/piagent#v1.0.0&#10;piagent-install --stable --dry-run&#10;piagent-install --stable">Lấy lệnh</button></header>
-                    <pre><code>npm install -g --ignore-scripts github:Vt-mmm/piagent#v1.0.0
+                    <header><span>Stable helper install</span><button class="clip-btn" data-clip="npm install -g --ignore-scripts @piagent/platform@1.0.1&#10;piagent-install --stable --dry-run&#10;piagent-install --stable">Lấy lệnh</button></header>
+                    <pre><code>npm install -g --ignore-scripts @piagent/platform@1.0.1
 piagent-install --stable --dry-run
 piagent-install --stable</code></pre>
                   </div>
                   <div class="command-card">
-                    <header><span>Direct Pi package only</span><button class="clip-btn" data-clip="pi install git:github.com/Vt-mmm/piagent@v1.0.0">Lấy lệnh</button></header>
-                    <pre><code>pi install git:github.com/Vt-mmm/piagent@v1.0.0</code></pre>
+                    <header><span>Direct Pi package only</span><button class="clip-btn" data-clip="pi install git:github.com/Vt-mmm/piagent@v1.0.1">Lấy lệnh</button></header>
+                    <pre><code>pi install git:github.com/Vt-mmm/piagent@v1.0.1</code></pre>
                   </div>
                 </div>
               </article>
@@ -993,9 +993,9 @@ piagent-install --stable</code></pre>
                   <h3>Update hoặc rollback đúng cả ba thành phần</h3>
                   <p>Full update/rollback phải dùng exact Pi host của release target, đổi npm-global helper, rồi apply stable Pi package từ chính helper đó. Lệnh <span class="inline-code">--version ... --resolve-tag</span> chỉ đổi Pi package và giữ host/helper hiện tại.</p>
                   <div class="command-card">
-                    <header><span>Full platform target</span><button class="clip-btn" data-clip="npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1&#10;npm install -g --ignore-scripts github:Vt-mmm/piagent#vX.Y.Z&#10;piagent-install --stable --dry-run&#10;piagent-install --stable">Lấy lệnh</button></header>
+                    <header><span>Full platform target</span><button class="clip-btn" data-clip="npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1&#10;npm install -g --ignore-scripts @piagent/platform@X.Y.Z&#10;piagent-install --stable --dry-run&#10;piagent-install --stable">Lấy lệnh</button></header>
                     <pre><code>npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
-npm install -g --ignore-scripts github:Vt-mmm/piagent#vX.Y.Z
+npm install -g --ignore-scripts @piagent/platform@X.Y.Z
 piagent-install --stable --dry-run
 piagent-install --stable</code></pre>
                   </div>
@@ -1474,9 +1474,9 @@ npm run typecheck</code></pre>
                 <pre><code>piagent-setup --mcp-preset core --subagents-preset safe</code></pre>
               </article>
               <article class="command-card">
-                <header><span>Full update</span><button class="clip-btn" data-clip="npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1&#10;npm install -g --ignore-scripts github:Vt-mmm/piagent#vX.Y.Z&#10;piagent-install --stable --dry-run&#10;piagent-install --stable">Lấy lệnh</button></header>
+                <header><span>Full update</span><button class="clip-btn" data-clip="npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1&#10;npm install -g --ignore-scripts @piagent/platform@X.Y.Z&#10;piagent-install --stable --dry-run&#10;piagent-install --stable">Lấy lệnh</button></header>
                 <pre><code>npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
-npm install -g --ignore-scripts github:Vt-mmm/piagent#vX.Y.Z
+npm install -g --ignore-scripts @piagent/platform@X.Y.Z
 piagent-install --stable --dry-run
 piagent-install --stable</code></pre>
               </article>

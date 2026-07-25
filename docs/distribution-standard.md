@@ -14,9 +14,10 @@ Repo này phải chạy được cho nhiều project/domain khác nhau. Vì vậ
 
 | Use case | Package source |
 |---|---|
-| Team pinned release | `git:github.com/Vt-mmm/piagent@v1.0.0` |
+| Team pinned release | `git:github.com/Vt-mmm/piagent@v1.0.1` |
 | Personal/sandbox dev | `git:github.com/Vt-mmm/piagent` |
-| Enterprise npm | `npm:@your-scope/platform@x.y.z` |
+| Registry distribution | `npm:@piagent/platform@1.0.1` |
+| Enterprise npm (fork under another scope) | `npm:@your-scope/platform@x.y.z` |
 | Local platform dev | `/path/to/piagent` |
 
 Latest tiện cho máy cá nhân muốn nhận cập nhật nhanh. Pin tag/commit cho `.pi/settings.json` trong project nghiêm túc để tránh workflow đổi bất ngờ giữa các developer.
@@ -25,7 +26,7 @@ Latest tiện cho máy cá nhân muốn nhận cập nhật nhanh. Pin tag/commi
 
 | Channel | Command | Target | Policy |
 |---|---|---|---|
-| `stable` | `bash scripts/install-global.sh --stable` | Helper release tag resolved to commit SHA, currently `v1.0.0` | Install the Pi package matching the helper. |
+| `stable` | `bash scripts/install-global.sh --stable` | Helper release tag resolved to commit SHA, currently `v1.0.1` | Install the Pi package matching the helper. |
 | `exact` | `bash scripts/install-global.sh --version vX.Y.Z --resolve-tag` | Requested tag resolved to commit SHA | Pi-package-only rollout, rollback, and incident recovery. |
 | `dev` | `bash scripts/install-global.sh --dev` | Moving Git source | Personal/sandbox only; do not commit into project settings. |
 | `local` | `bash scripts/install-global.sh --local` | Current checkout path | Platform development only. |
@@ -52,7 +53,7 @@ Root `package.json` có `pi` manifest trỏ tới:
 Do đó team có thể:
 
 ```bash
-pi install git:github.com/Vt-mmm/piagent@v1.0.0
+pi install git:github.com/Vt-mmm/piagent@v1.0.1
 ```
 
 Không cần biết internal folder `packages/piagent-core`. Source không pin chỉ dành cho personal/sandbox như bảng channel ở trên.
@@ -64,12 +65,12 @@ Team nên install global package một lần:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
-npm install -g --ignore-scripts github:Vt-mmm/piagent#v1.0.0
+npm install -g --ignore-scripts @piagent/platform@1.0.1
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
 
-`pi install git:github.com/Vt-mmm/piagent@v1.0.0` vẫn hợp lệ nếu chỉ cần cài Pi package. Lệnh đó không tự tạo các binary terminal `piagent-*`; muốn có helper global thì dùng `npm install -g --ignore-scripts github:Vt-mmm/piagent#v1.0.0`.
+`pi install git:github.com/Vt-mmm/piagent@v1.0.1` vẫn hợp lệ nếu chỉ cần cài Pi package. Lệnh đó không tự tạo các binary terminal `piagent-*`; muốn có helper global thì dùng `npm install -g --ignore-scripts @piagent/platform@1.0.1`.
 
 Support matrix hiện tại: macOS Apple Silicon + Bash và Linux x64 + Bash đã được verify; macOS Intel + Bash và Linux ARM64 + Bash là supported target cần chạy smoke trước rollout; native Windows chưa phải target rollout team; WSL2 experimental. Chi tiết và version runtime nằm trong [release/install policy](release-install-policy.md).
 
@@ -102,7 +103,7 @@ Nếu muốn commit sẵn `.pi/piagent-profile.json` vào repo hoặc bootstrap 
 ```bash
 bash scripts/setup.sh /path/to/project \
   --profile be-readonly-fe \
-  --package-source git:github.com/Vt-mmm/piagent@v1.0.0 \
+  --package-source git:github.com/Vt-mmm/piagent@v1.0.1 \
   --mcp-preset core \
   --subagents-preset safe
 ```
@@ -175,7 +176,7 @@ Full platform update phải đồng bộ Pi host, npm-global helper và Pi packa
 
 ```bash
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
-npm install -g --ignore-scripts github:Vt-mmm/piagent#vX.Y.Z
+npm install -g --ignore-scripts @piagent/platform@X.Y.Z
 piagent-install --stable --dry-run
 piagent-install --stable
 piagent-doctor /path/to/project --strict-share
@@ -186,7 +187,7 @@ Full rollback dùng cùng flow với target trước đó. Lấy exact host vers
 ```bash
 TARGET_PI_VERSION=x.y.z
 npm install -g --ignore-scripts "@earendil-works/pi-coding-agent@$TARGET_PI_VERSION"
-npm install -g --ignore-scripts github:Vt-mmm/piagent#vPREVIOUS
+npm install -g --ignore-scripts @piagent/platform@PREVIOUS
 piagent-install --stable --dry-run
 piagent-install --stable
 piagent-doctor /path/to/project --strict-share
