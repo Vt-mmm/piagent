@@ -3701,6 +3701,10 @@ export default function piagentGuard(pi: ExtensionAPI) {
   const extensionDir = path.dirname(fileURLToPath(import.meta.url));
   const policy = loadPolicy(extensionDir);
   const bashResults = createBashResultLedger({ maxEntries: 300 });
+  // Advisory tool-registry verdicts are surfaced once per tool per session. A
+  // notice on every call would be constant noise for a tool used all day, and
+  // noise that is always present is read as background rather than as a warning.
+  const advisedTools = new Set<string>();
 
   pi.on("session_start", async (_event, ctx) => {
     const projectTrusted = ctx.isProjectTrusted();
@@ -3863,6 +3867,18 @@ export default function piagentGuard(pi: ExtensionAPI) {
     const toolDecision = evaluateToolPolicy(event.toolName, profile, policy);
     if (toolDecision.decision === "block" && permissionProfile.mode !== "trusted-full-access") {
       return { block: true, reason: `Tool registry blocked ${event.toolName}: ${toolDecision.reason}` };
+    }
+    // An advisory verdict that is computed and discarded makes advisory mode
+    // indistinguishable from off, which is not what the mode is for.
+    if (toolDecision.decision === "warn" && !advisedTools.has(event.toolName)) {
+      advisedTools.add(event.toolName);
+      const missing = toolDecision.requiredCapabilities.length > 0
+        ? ` Declare ${toolDecision.requiredCapabilities.join(", ")} in profile mcpCapabilities to clear this.`
+        : "";
+      ctx.ui.notify(
+        `Tool registry (advisory): ${event.toolName} — ${toolDecision.reason}${missing} Allowed to run; set runtimePolicy.toolRegistry to enforce to block instead.`,
+        "warning"
+      );
     }
     const toolInput = event.input && typeof event.input === "object"
       ? event.input as Record<string, unknown>

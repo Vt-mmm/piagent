@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  scripts/install-global.sh [--stable|--dev|--local|--channel <stable|dev|local>] [--version <tag>] [--resolve-tag] [--package-source <source>] [--dry-run] [--with-mcp] [--mcp-preset <preset>] [--with-subagents] [--subagents-preset <preset>] [--with-web-access] [--with-herdr] [--model-scope <preset>]
+  scripts/install-global.sh [--stable|--dev|--local|--channel <stable|dev|local>] [--version <tag>] [--resolve-tag] [--package-source <source>] [--dry-run] [--with-mcp|--no-mcp] [--mcp-preset <preset>] [--with-subagents] [--subagents-preset <preset>] [--with-web-access] [--with-herdr] [--model-scope <preset>]
 
 Purpose:
   Install the piagent Pi package into the current user's global Pi settings.
@@ -35,7 +35,10 @@ Notes:
   - OAuth is intentionally not automated. Run `pi` then `/login`.
   - Model scope is configured with Pi's native `enabledModels` so users choose via `/model`, Ctrl+L, `/scoped-models`, and Ctrl+P.
   - Herdr integration is optional and modifies user-level Herdr/Pi config.
-  - MCP preset defaults to core: Context7 docs, Chrome DevTools, GitHub.
+  - MCP is installed by default with the core preset: Context7 docs, Chrome DevTools, GitHub.
+    Skip it with --no-mcp. Writing the config does not start or authenticate anything:
+    the GitHub server additionally needs Docker running and GITHUB_PERSONAL_ACCESS_TOKEN
+    exported, and Chrome DevTools needs a local Chrome.
   - Subagents preset defaults to safe: compact tool description, bounded concurrency/depth.
   - Web access is optional. Install it only when you want the builtin `researcher` subagent to browse/fetch web sources inside Pi.
 USAGE
@@ -50,8 +53,9 @@ DEFAULT_REPO_REMOTE_URL="https://github.com/Vt-mmm/piagent.git"
 PACKAGE_SOURCE="${PIAGENT_PACKAGE_SOURCE:-}"
 PACKAGE_VERSION="${PIAGENT_PACKAGE_VERSION:-}"
 RELEASE_CHANNEL="${PIAGENT_RELEASE_CHANNEL:-}"
-WITH_MCP=false
+WITH_MCP=true
 MCP_PRESET="core"
+MCP_PRESET_EXPLICIT=false
 WITH_SUBAGENTS=false
 SUBAGENTS_PRESET="safe"
 SUBAGENTS_MODEL_SCOPE="none"
@@ -275,9 +279,14 @@ while [[ $# -gt 0 ]]; do
       WITH_MCP=true
       shift
       ;;
+    --no-mcp)
+      WITH_MCP=false
+      shift
+      ;;
     --mcp-preset)
       require_value "$1" "${2:-}"
       MCP_PRESET="$2"
+      MCP_PRESET_EXPLICIT=true
       shift 2
       ;;
     --with-subagents)
@@ -327,6 +336,13 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+# A preset chosen alongside --no-mcp used to be accepted and then quietly
+# dropped, which reads as "the preset was applied".
+if [[ "$WITH_MCP" == false && "$MCP_PRESET_EXPLICIT" == true ]]; then
+  echo "FAIL: --mcp-preset has no effect with --no-mcp. Drop one of them." >&2
+  exit 2
+fi
 
 require_node_version
 CURRENT_RUNTIME_SURFACE="$(detect_runtime_surface)"
@@ -527,6 +543,8 @@ echo "  pi"
 echo "  /login"
 echo "  /model          # or Ctrl+L: select provider/model from Pi selector"
 echo "  /scoped-models  # optional: edit Ctrl+P model cycle scope"
-echo "  /mcp            # inspect MCP servers; authenticate Figma/GitHub only when needed"
+if [[ "$WITH_MCP" == true ]]; then
+  echo "  /mcp            # inspect MCP servers; authenticate Figma/GitHub only when needed"
+fi
 echo "  /subagents-doctor"
 echo "  /task Implement <task>  # parent may auto-delegate scout/planner/reviewer"

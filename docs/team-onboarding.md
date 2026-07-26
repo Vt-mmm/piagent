@@ -31,6 +31,7 @@ pi
   - chưa dùng làm target rollout team: native Windows; WSL2 chỉ experimental.
 - `pi` có trên `PATH`.
 - `herdr` optional nhưng nên có nếu team chạy nhiều agent pane.
+- MCP: `piagent-install` seed preset `core` mặc định (bỏ qua bằng `--no-mcp`). Server connect lazy nên trước lần gọi đầu còn cần Chrome cho `chrome-devtools`, và **Docker đang chạy + `export GITHUB_PERSONAL_ACCESS_TOKEN`** cho `github`. Chi tiết: [MCP và tool policy](mcp-and-tools.md).
 - Git access tới repo platform nếu dùng `git:` package source.
 - OAuth/API access riêng của từng người. Không share token.
 

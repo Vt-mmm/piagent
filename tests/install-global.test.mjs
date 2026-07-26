@@ -247,6 +247,30 @@ describe("install-global release channels", () => {
     assert.match(mcpPreset.stderr, /Missing value for --mcp-preset/);
   });
 
+  // The two documented entry points used to disagree: piagent-setup installed
+  // MCP by default and piagent-install did not, so following the team document
+  // produced a machine with no MCP and a next-steps block advertising /mcp.
+  it("installs the MCP baseline by default and only advertises it when installed", () => {
+    const withDefault = runInstaller(["--stable", "--dry-run", "--no-model-scope"]);
+    assert.equal(withDefault.status, 0, withDefault.stderr);
+    assert.match(withDefault.stdout, /pi install npm:pi-mcp-adapter@/);
+    assert.match(withDefault.stdout, /configure-mcp\.sh --scope global --preset core --replace/);
+    assert.match(withDefault.stdout, /\/mcp {2,}# inspect MCP servers/);
+
+    const skipped = runInstaller(["--stable", "--dry-run", "--no-model-scope", "--no-mcp"]);
+    assert.equal(skipped.status, 0, skipped.stderr);
+    assert.doesNotMatch(skipped.stdout, /pi-mcp-adapter/);
+    assert.doesNotMatch(skipped.stdout, /configure-mcp\.sh/);
+    assert.doesNotMatch(skipped.stdout, /\/mcp {2,}# inspect MCP servers/);
+  });
+
+  // A preset that is accepted and then dropped reads as a preset that was applied.
+  it("refuses a preset that cannot take effect", () => {
+    const conflict = runInstaller(["--stable", "--dry-run", "--no-mcp", "--mcp-preset", "popular"]);
+    assert.equal(conflict.status, 2);
+    assert.match(conflict.stderr, /--mcp-preset has no effect with --no-mcp/);
+  });
+
   it("keeps dev channel floating and explicit", () => {
     const result = runInstaller(["--dev", "--dry-run", "--no-model-scope"]);
     assert.equal(result.status, 0, result.stderr);

@@ -155,8 +155,11 @@ else
     fi
     # The MCP baseline and subagent config are shared files that the operator
     # may have edited after install, so they are reported rather than reset.
+    # Install writes the shared global scope; the Pi-global file is the override
+    # scope and is listed too, because an operator who used it will look there.
     echo "Left in place, review by hand if no longer wanted:"
-    echo "  $PI_AGENT_DIR/mcp.json"
+    echo "  ${XDG_CONFIG_HOME:-"${HOME}/.config"}/mcp/mcp.json   # written by install"
+    echo "  $PI_AGENT_DIR/mcp.json                               # Pi-global override scope, only if you created it"
     echo "  $PI_AGENT_DIR/extensions/subagent/config.json"
   fi
 fi

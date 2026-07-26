@@ -1,6 +1,9 @@
 {
   "settings": {
-    "toolPrefix": "mcp"
+    "toolPrefix": "server",
+    "directTools": false,
+    "idleTimeout": 10,
+    "outputGuard": true
   },
   "mcpServers": {}
 }

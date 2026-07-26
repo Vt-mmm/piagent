@@ -211,6 +211,22 @@ const servers = {
   }
 };
 
+// Writing a server definition does not make it usable. What each one still
+// needs from the operator is stated here so it can be printed at the moment the
+// definition is written, rather than living only in a description string that
+// shows up under --list.
+const prerequisites = {
+  context7: ["optional: export CONTEXT7_API_KEY for a higher documentation quota"],
+  "chrome-devtools": ["a local Chrome installation"],
+  github: [
+    "Docker running",
+    "export GITHUB_PERSONAL_ACCESS_TOKEN with the scopes you intend to use"
+  ],
+  playwright: ["browsers installed on first use (npx playwright install)"],
+  figma: ["Figma OAuth, completed from the Pi MCP panel on first use"],
+  "figma-desktop": ["Figma desktop running with Dev Mode MCP enabled"]
+};
+
 const presets = {
   minimal: [],
   docs: ["context7"],
@@ -227,7 +243,10 @@ const presets = {
 if (listOnly) {
   console.log(JSON.stringify({
     presets,
-    servers: Object.fromEntries(Object.entries(servers).map(([name, value]) => [name, value.description]))
+    servers: Object.fromEntries(Object.entries(servers).map(([name, value]) => [
+      name,
+      { description: value.description, requires: prerequisites[name] ?? [] }
+    ]))
   }, null, 2));
   process.exit(0);
 }
@@ -290,6 +309,19 @@ const report = {
   serverCount: Object.keys(current.mcpServers).length
 };
 
+// stdout stays machine-readable; the operator note goes to stderr.
+function reportPrerequisites() {
+  const lines = [];
+  for (const name of presets[presetName]) {
+    for (const item of prerequisites[name] ?? []) lines.push(`  ${name}: ${item}`);
+  }
+  if (lines.length === 0) return;
+  console.error("");
+  console.error("Server definitions are written. Each still needs this before it can connect:");
+  for (const line of lines) console.error(line);
+  console.error("Servers connect lazily, so nothing above is checked until the first call.");
+}
+
 if (dryRun) {
   console.log(JSON.stringify(report, null, 2));
   console.log(output);
@@ -297,5 +329,6 @@ if (dryRun) {
   fs.mkdirSync(path.dirname(configPath), { recursive: true });
   fs.writeFileSync(configPath, output);
   console.log(JSON.stringify(report, null, 2));
+  reportPrerequisites();
 }
 NODE

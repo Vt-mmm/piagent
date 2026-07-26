@@ -2,7 +2,19 @@
 
 ## Kết luận hiện tại
 
-Pi core không hard-code MCP. Platform của mình cài `pi-mcp-adapter` để Pi dùng MCP theo kiểu token-efficient: một proxy tool `mcp(...)`, server lazy-connect, metadata cache, output guard. Project profile chỉ khai báo capability được phép; MCP config mới khai báo server thật.
+Pi core không hard-code MCP. Platform của mình cài `pi-mcp-adapter` để Pi dùng MCP theo kiểu token-efficient: một proxy tool tên `mcp`, server lazy-connect, metadata cache, output guard. Project profile chỉ khai báo capability được phép; MCP config mới khai báo server thật.
+
+**Ba thứ tên giống nhau nhưng không liên quan nhau** — chỗ này gây nhầm nhiều nhất:
+
+| Thứ | Ở đâu | Là gì |
+|---|---|---|
+| `mcpCapabilities: ["github", ...]` | `.pi/piagent-profile.json` | Nhãn capability dùng cho tool registry |
+| `toolCapabilities: { "github": ["github"] }` | `base-policy.json` | Map một tool **tên là `github`** sang capability |
+| server `github` | `~/.config/mcp/mcp.json` | Server MCP thật, chạy qua Docker |
+
+Không có dòng code nào map capability name sang MCP server id. Khai `"github"` trong `mcpCapabilities` **không** bật server MCP `github`, và ngược lại.
+
+`toolPrefix` trong MCP config (`"server" | "none" | "short"`) chỉ đặt tên cho **direct tools** khi bật `directTools: true`. Nó không đổi tên proxy tool — proxy luôn là `mcp`.
 
 Từ `v0.3.7`, repo có thêm:
 
@@ -13,7 +25,17 @@ Từ `v0.3.7`, repo có thêm:
 
 ## Cấu hình một lần cho máy cá nhân/team
 
-Global install mặc định sẽ cài adapter và seed preset `core` nếu dùng `scripts/setup.sh` hoặc `scripts/install-global.sh --with-mcp`:
+Cả `piagent-setup` và `piagent-install` đều cài adapter và seed preset `core` **mặc định**. Muốn bỏ qua thì thêm `--no-mcp`.
+
+Ghi config **không** bằng dùng được ngay. Server connect lazy, nên mỗi server còn cần thứ của nó trước lần gọi đầu:
+
+| Server (preset `core`) | Còn cần gì |
+|---|---|
+| `context7` | Không bắt buộc. `CONTEXT7_API_KEY` chỉ để tăng quota |
+| `chrome-devtools` | Chrome cài sẵn trên máy |
+| `github` | **Docker đang chạy** + `export GITHUB_PERSONAL_ACCESS_TOKEN` |
+
+`piagent-mcp --list` in ra yêu cầu của từng server; lệnh apply cũng in danh sách này ra stderr ngay sau khi ghi config.
 
 ```bash
 bash /path/to/piagent/scripts/setup.sh . \
@@ -237,7 +259,9 @@ Tool:
 piagent_tool_policy_check
 ```
 
-Default `toolRegistry=advisory`: agent nhận warning khi tool chưa map capability. Project ổn định có thể bật `toolRegistry=enforce` trong `.pi/piagent-profile.json`.
+Default `toolRegistry=advisory`: tool chưa map capability vẫn chạy, nhưng guard phát một notice mức `warning` — **một lần cho mỗi tool trong mỗi session**, không phải mỗi lần gọi.
+
+`toolRegistry=enforce` thì đổi notice đó thành block. Cân nhắc trước khi bật: proxy tool của MCP tên là `mcp`, không nằm trong `alwaysAllowedTools` cũng không có trong `toolCapabilities`, nên **enforce sẽ chặn toàn bộ MCP**. Khai thêm `mcpCapabilities` không gỡ được, vì không có mapping nào từ capability name sang MCP server. Ngoại lệ duy nhất là permission profile `trusted-full-access`.
 
 Protected-path gate độc lập với registry mode. Dù tool registry đang `advisory`, mọi raw tool call có path-like string trỏ vào protected path sẽ bị block trước khi tool chạy. Cơ chế này áp dụng cho Pi built-ins (`read`, `write`, `edit`, `grep`, `find`, `ls`) và custom/MCP tools nếu tool call đi qua Pi `tool_call` hook.
 

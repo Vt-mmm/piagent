@@ -2240,6 +2240,37 @@ describe("piagent guard integration", () => {
     assert.ok(fs.existsSync(path.join(cwd, ".pi", "piagent-state", "tasks", "integration-task.json")));
   });
 
+  // An advisory verdict that produces no output is indistinguishable from the
+  // mode being off, which is what the MCP proxy tool used to get.
+  it("surfaces an advisory tool-registry verdict once per tool per session", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const ctx = createContext(cwd, { confirm: true });
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+    const toolCall = harness.handlers.get("tool_call");
+
+    const first = await callToolCall(toolCall, ctx, "mcp", { tool: "context7__query", args: "{}" });
+    const second = await callToolCall(toolCall, ctx, "mcp", { tool: "context7__query", args: "{}" });
+    assert.equal(first.block, undefined, "advisory mode must not block");
+    assert.equal(second.block, undefined);
+
+    const advisories = ctx.ui.notices.filter((notice) => /Tool registry \(advisory\)/.test(notice.message));
+    assert.equal(advisories.length, 1, "a notice on every call would be noise, not a warning");
+    assert.equal(advisories[0].level, "warning");
+    assert.match(advisories[0].message, /not registered in piagent tool registry/);
+    assert.match(advisories[0].message, /enforce to block instead/);
+
+    // A different unregistered tool is a different fact and gets its own notice.
+    await callToolCall(toolCall, ctx, "some_other_tool", {});
+    assert.equal(ctx.ui.notices.filter((notice) => /Tool registry \(advisory\)/.test(notice.message)).length, 2);
+
+    // Platform tools are always allowed, so they never produce one.
+    await callToolCall(toolCall, ctx, "piagent_context", { detail: "full" });
+    assert.equal(ctx.ui.notices.filter((notice) => /Tool registry \(advisory\)/.test(notice.message)).length, 2);
+  });
+
   it("reads a granted document, redacts it, and still refuses what the project protects", async () => {
     const { root, piagentGuard } = await loadGuardFixture();
     const cwd = createProject(root);

@@ -190,13 +190,15 @@ Handled by Pi's native UI: `/model` or `Ctrl+L` to pick, `Ctrl+P` to cycle the s
 
 ## MCP setup
 
-`piagent-setup` installs `pi-mcp-adapter` and seeds the `core` preset unless disabled.
+`piagent-setup` and `piagent-install` both install `pi-mcp-adapter` and seed the `core` preset. Pass `--no-mcp` to skip it.
 
 | Preset | Includes |
 |---|---|
 | `core` | Context7, Chrome DevTools, GitHub |
 | `popular` | core + Playwright + Figma remote |
 | `all` | popular + Figma desktop/local |
+
+Seeding writes server definitions; it does not start or authenticate anything. Servers connect lazily, so each one needs its own prerequisite before its first call: Chrome DevTools needs a local Chrome, and GitHub needs Docker running plus `GITHUB_PERSONAL_ACCESS_TOKEN` exported. `piagent-mcp --list` prints what each server requires. Project-scope `.mcp.json` files ship empty on purpose — the shared baseline is the global config, not the project one.
 
 Keep provider keys in environment variables, never in committed config. Switching presets and per-project scoping: [MCP and tools](docs/mcp-and-tools.md).
 
