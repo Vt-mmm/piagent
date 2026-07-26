@@ -2,6 +2,13 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.1.4 - 2026-07-27
+
+### Fixed
+
+- A credential passed as a command-line option is recognised as one. `--token=abc123`, `--token abc123`, `--password`, `--api-key`, `--client-secret` and the rest went unrecognised because the assignment patterns require a key that starts with a letter, and `-` is not one. v1.1.3 made the redactor's verdict the gate that decides whether a command may serve as verify evidence, so anything it missed was stored in the clear *and* accepted as proof — the same invariant v1.1.3 was written to enforce, defeated by the syntax most command-line tools actually use. Env-style assignments were the only shape covered.
+- An `Authorization` header is redacted wherever it sits among the arguments. The value ran to the end of the line, so the same credential survived or not depending on how much text happened to follow it: `curl URL -H "Authorization: Token abc123"` left the header value one character under the length bar, while moving the header ahead of the URL swept the URL into the value and pushed it over. The value is now the single whitespace-free token that follows the scheme, and under a known authentication scheme its length is not consulted at all. Prose such as `Authorization: not required for local runs` is still left alone.
+
 ## v1.1.3 - 2026-07-27
 
 Fixes for defects found reviewing v1.1.2 after it shipped, including two introduced by v1.1.2 itself. Every fix was reproduced first.

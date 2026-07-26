@@ -137,7 +137,7 @@ function runtimeMatrixStatus() {
     surface: `${platform}/${arch}`,
     status: "outside-release-matrix",
     teamRolloutReady: false,
-    note: "This runtime is outside the documented v1.1.3 support matrix."
+    note: "This runtime is outside the documented v1.1.4 support matrix."
   };
 }
 

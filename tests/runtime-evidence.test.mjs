@@ -246,6 +246,34 @@ describe("runtime verify evidence ledger", () => {
     assert.equal(stored.filter((record) => record.commandHash === "").length, 2, "both secret-bearing commands must carry no digest");
   });
 
+  // The gate decides "does this command carry a secret" by asking the redactor, so
+  // whatever the redactor misses is stored in the clear and accepted as proof. An
+  // env assignment was covered; the shape most CLIs actually use was not.
+  it("refuses a command whose credential is passed as an option or a header", () => {
+    const commands = [
+      joined("tool --", "token", "=", "abc123"),
+      joined("tool --", "password", " ", "short7"),
+      joined("curl https://x.test -H \"Authorization: Token ", "abc123", "\"")
+    ];
+
+    for (const command of commands) {
+      const { file } = createLedgerFixture();
+      appendObservedBashResult(file, { cwd: "/repo", command, isError: false, recordedAtMs: Date.parse("2026-07-19T01:00:01.000Z") });
+
+      const stored = JSON.parse(fs.readFileSync(file, "utf8").trim());
+      assert.equal(stored.command.includes("abc123") || stored.command.includes("short7"), false, `${command} must not reach the file`);
+      assert.equal(stored.commandHash, "", `${command} must carry no digest`);
+
+      const result = findMatchingObservedBashResult(readObservedBashResults(file), {
+        cwd: "/repo",
+        command,
+        notBefore: "2026-07-19T01:00:00.000Z",
+        exitCode: 0
+      });
+      assert.equal(result.ok, false, `${command} must not stand as evidence`);
+    }
+  });
+
   // The gate promises the observed command matches the plan's verify command
   // exactly. A digest over redacted text gives every secret the same identity, so
   // a run against one database would satisfy a claim about another.

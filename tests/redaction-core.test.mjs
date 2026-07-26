@@ -93,6 +93,59 @@ describe("sensitive text redaction", () => {
     }
   });
 
+  // Most CLIs take a credential as an option, and the assignment patterns require
+  // a key starting with a letter, so every one of these walked straight past them
+  // — into the ledger in the clear, and past the gate that refuses secret-bearing
+  // commands as evidence.
+  const cliOptionSecrets = [
+    joined("tool --", "token", "=", "abc123"),
+    joined("tool --", "token", " ", "abc123"),
+    joined("tool --", "password", "=", "short7"),
+    joined("tool --", "password", " ", "short7"),
+    joined("tool --", "api-key", "=", "abc123"),
+    joined("tool --", "client-secret", "=", "abc123"),
+    joined("tool --", "credential", "=", "abc123"),
+    joined("tool --", "auth-token", "=", "abc123"),
+    joined("tool --", "token", ' "', "abc123", '"'),
+    joined("tool --", "token", " '", "abc123", "'")
+  ];
+
+  for (const text of cliOptionSecrets) {
+    it(`redacts a credential passed as a command-line option: ${text}`, () => {
+      const result = redactSensitiveText(text);
+      assert.equal(result.redacted, true);
+      assert.match(result.text, /\[REDACTED_SECRET\]/);
+      assert.equal(result.text.includes("abc123") || result.text.includes("short7"), false);
+    });
+  }
+
+  // An option with no argument, or followed by the next option, has no value to
+  // redact — and a flag name that merely contains a secret word is not one.
+  it("keeps command-line options that carry no credential", () => {
+    for (const text of [
+      "tool --token",
+      "tool --token --verbose",
+      "git commit --amend --no-verify",
+      "npm run verify -- --reporter dot",
+      "docker build --no-cache --tag app:latest ."
+    ]) {
+      assert.equal(redactSensitiveText(text).redacted, false, text);
+    }
+  });
+
+  // The header value used to run to the end of the line, so the same credential
+  // survived or not depending on how much text happened to follow it.
+  it("redacts an Authorization header wherever it sits among the arguments", () => {
+    const trailing = redactSensitiveText('curl https://x.test -H "Authorization: Token abc123"');
+    const leading = redactSensitiveText('curl -H "Authorization: Token abc123" https://x.test');
+    for (const result of [trailing, leading]) {
+      assert.equal(result.redacted, true);
+      assert.match(result.text, /Authorization: Token \[REDACTED_SECRET\]/);
+      assert.equal(result.text.includes("abc123"), false);
+    }
+    assert.equal(redactSensitiveText("Authorization: not required for local runs").redacted, false);
+  });
+
   it("recursively redacts storage payloads", () => {
     const result = redactForStorage({
       summary: joined("DATABASE", "_PASSWORD", "=", "CorrectHorse42"),

@@ -15,7 +15,27 @@ const TOKEN_PATTERNS = [
 const CONNECTION_URL_PATTERN = /\b((?:https?|ftp|postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|redis):\/\/[^:\s/"']+:)([^@\s/"']+)(@[^\s"'<>]+)/gi;
 const BEARER_PATTERN = /\b(Bearer\s+)([A-Za-z0-9._~+/=-]{20,})\b/gi;
 const BASIC_AUTH_PATTERN = /\b(Basic\s+)([A-Za-z0-9+/]{12,}={0,2})(?=$|[\s,;}])/gi;
-const AUTHORIZATION_HEADER_PATTERN = /\b(Authorization\s*:\s*)([A-Za-z][A-Za-z0-9_-]{0,31})(\s+)([^\r\n]+)/gi;
+// The value is one whitespace-free token, not the rest of the line. Taking the
+// rest of the line made the result depend on where the header sat among the
+// arguments: `curl URL -H "Authorization: Token abc123"` yielded `abc123"`, short
+// enough to keep, while moving the header before the URL swept the URL into the
+// value and pushed it past the length bar. Same header, same credential, opposite
+// outcome. Credentials carry no spaces, so stopping at the first one also keeps
+// prose like "Authorization: not required for local runs" intact.
+const AUTHORIZATION_HEADER_PATTERN = /\b(Authorization\s*:\s*)([A-Za-z][A-Za-z0-9_-]{0,31})(\s+)([^\s\r\n"'`]+)/gi;
+
+// A credential passed as a command-line option, which is how most CLIs take one.
+// The assignment patterns below require a key starting with a letter, so every
+// `--token=...` and `--token ...` walked straight past them.
+const CLI_OPTION_SECRET_PATTERN = /(^|[\s({[])(--[A-Za-z][A-Za-z0-9_.-]{0,80})(=|\s+)("[^"\r\n]*"|'[^'\r\n]*'|[^\s"'`;,)}]+)/g;
+
+// Under one of these schemes the header carries an opaque credential, so its
+// length says nothing. Anything else after `Authorization:` is more likely prose
+// — "Authorization: not required" — and keeps the ambiguous-syntax length bar.
+const AUTHORIZATION_SCHEMES = new Set([
+  "bearer", "basic", "token", "digest", "negotiate", "ntlm",
+  "oauth", "hawk", "signature", "apikey", "jwt", "aws4-hmac-sha256"
+]);
 const QUERY_SECRET_PATTERN = /([?&])([A-Za-z][A-Za-z0-9_.-]{0,80})(=)([^&#\s]+)/gi;
 const DOUBLE_QUOTED_SECRET_ASSIGNMENT_PATTERN = /(^|[\s{[,(;])((?:"|')?[A-Za-z][A-Za-z0-9_.-]{0,80}(?:"|')?\s*)(:|=(?!=))\s*"((?:\\.|[^"\\\r\n])*)"/gim;
 const SINGLE_QUOTED_SECRET_ASSIGNMENT_PATTERN = /(^|[\s{[,(;])((?:"|')?[A-Za-z][A-Za-z0-9_.-]{0,80}(?:"|')?\s*)(:|=(?!=))\s*'((?:\\.|[^'\\\r\n])*)'/gim;
@@ -144,8 +164,20 @@ export function redactSensitiveText(input) {
   text = text.replace(BEARER_PATTERN, (_match, prefix) => `${prefix}${REDACTION}`);
   text = text.replace(BASIC_AUTH_PATTERN, (_match, prefix) => `${prefix}${REDACTION}`);
   text = text.replace(AUTHORIZATION_HEADER_PATTERN, (match, prefix, scheme, spacing, value) => {
-    if (!valueLooksSensitive("authorization", value)) return match;
+    const syntax = AUTHORIZATION_SCHEMES.has(scheme.toLowerCase()) ? "assignment" : "unquoted-colon";
+    if (!valueLooksSensitive("authorization", value, syntax)) return match;
     return `${prefix}${scheme}${spacing}${REDACTION}`;
+  });
+
+  // Over-redaction is the safe direction here: a flag whose name says "secret"
+  // and whose argument is a plain name — `docker service create --secret build` —
+  // loses that name from the record and cannot serve as verify evidence. Reading
+  // the name as the credential it is called is the cheaper mistake.
+  text = text.replace(CLI_OPTION_SECRET_PATTERN, (match, prefix, flag, separator, value) => {
+    // A following option is the next flag, not this flag's argument.
+    if (separator !== "=" && value.startsWith("-")) return match;
+    if (!keyLooksSensitive(flag) || !valueLooksSensitive(flag, value, "assignment")) return match;
+    return `${prefix}${flag}${separator === "=" ? "= " : " "}${REDACTION}`;
   });
 
   for (const pattern of TOKEN_PATTERNS) text = text.replace(pattern, REDACTION);
