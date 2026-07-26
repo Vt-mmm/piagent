@@ -247,6 +247,14 @@ describe("runtime verify evidence ledger", () => {
       assert.notEqual(digest, stored.commandHash, `hashing the raw command with ${guess} must not match the stored digest`);
     }
 
+    // The digest carries nothing the record does not already show: anyone holding
+    // the record can recompute it from the redacted command stored beside it.
+    assert.equal(
+      stored.commandHash,
+      crypto.createHash("sha256").update(stored.command).digest("hex"),
+      "the stored digest must be derivable from the stored redacted command alone"
+    );
+
     // Matching still works, because both sides redact before hashing.
     const result = findMatchingObservedBashResult(readObservedBashResults(file), {
       cwd: "/repo",
