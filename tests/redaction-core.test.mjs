@@ -64,6 +64,35 @@ describe("sensitive text redaction", () => {
     });
   }
 
+  // A short value under one of these keys used to be kept in the clear, so a
+  // command like these went into the evidence ledger verbatim. Under an `=` the
+  // syntax is not ambiguous and the length says nothing about whether it is a
+  // secret; the prose cases above cover the `:` side of the same rule.
+  const shortSecretAssignments = [
+    joined("TOKEN", "=", "hunter2", " npm test"),
+    joined("PASSWORD", "=", "short7", " npm test"),
+    joined("API", "_KEY", "=", "abc", " npm test"),
+    joined("DATABASE", "_PASSWORD", "=", "pw1", " npm test")
+  ];
+
+  for (const text of shortSecretAssignments) {
+    it(`redacts a short value assigned with =: ${text}`, () => {
+      const result = redactSensitiveText(text);
+      assert.equal(result.redacted, true);
+      assert.match(result.text, /\[REDACTED_SECRET\]/);
+      assert.equal(result.text.includes("hunter2") || result.text.includes("short7")
+        || result.text.includes("=abc") || result.text.includes("pw1"), false);
+    });
+  }
+
+  // Name-based exclusions do the work that length was mistakenly credited with:
+  // these read as configuration whatever their value is.
+  it("keeps values whose key only resembles a secret name", () => {
+    for (const text of ["passwordPolicy=minimum-length", "semanticTokenType=namespace-declaration", "NODE_ENV=production"]) {
+      assert.equal(redactSensitiveText(text).redacted, false, text);
+    }
+  });
+
   it("recursively redacts storage payloads", () => {
     const result = redactForStorage({
       summary: joined("DATABASE", "_PASSWORD", "=", "CorrectHorse42"),

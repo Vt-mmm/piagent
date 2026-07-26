@@ -510,14 +510,24 @@ export type ResolvedDocument = Extract<DocumentResolution, { status: "ok" }>;
 
 const DOCUMENT_CHANGED = "document changed between the safety checks and the read, so nothing was read";
 
+// Opening blocks until a writer appears when the name has become a FIFO, and the
+// identity check below never runs — the read hangs instead of being refused.
+// O_NONBLOCK returns a descriptor immediately for any file type, and has no
+// effect on reads from a regular file, which is the only type that gets past the
+// check. O_NOFOLLOW refuses a symbolic link at the final component: the path was
+// already canonicalised, so a link there means the name was swapped after it was
+// checked, which is the substitution this open exists to defeat.
+const OPEN_FLAGS = fs.constants.O_RDONLY | fs.constants.O_NONBLOCK | fs.constants.O_NOFOLLOW;
+
 function openVerifiedDocument(
   resolution: ResolvedDocument
 ): { status: "ok"; fd: number; size: number } | { status: "error"; reason: string } {
   let fd: number;
   try {
-    fd = fs.openSync(resolution.absolutePath, "r");
+    fd = fs.openSync(resolution.absolutePath, OPEN_FLAGS);
   } catch (error) {
     const code = error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code) : "";
+    if (code === "ELOOP") return { status: "error", reason: DOCUMENT_CHANGED };
     return {
       status: "error",
       reason: code === "ENOENT"

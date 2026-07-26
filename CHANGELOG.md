@@ -2,6 +2,22 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.1.3 - 2026-07-27
+
+Fixes for defects found reviewing v1.1.2 after it shipped, including two introduced by v1.1.2 itself. Every fix was reproduced first.
+
+### Fixed
+
+- Verify evidence identifies the command exactly again. v1.1.2 moved the digest onto the redacted text to stop it confirming guesses at a secret, and in doing so gave every secret the same identity: an observation of `DATABASE_PASSWORD=CorrectHorse42 npm test` satisfied a claim about `DATABASE_PASSWORD=DifferentHorse99 npm test`, so a run against one database could be recorded as proof for another. That contradicts the exact-match rule the gate is built on. Neither text is safe to hash, so a command with anything to redact now gets no digest at all and cannot be evidence; the gate says so instead of matching loosely. Commands with no secret in them — every legitimate verify command — are identified by their own text as before.
+- A document replaced by a named pipe is refused instead of hanging. The identity check that would have rejected it runs after the file is opened, and opening a pipe waits for a writer, so the substitution did not have to defeat the check — it only had to stop it from running. The read blocked indefinitely. The file is now opened without blocking and without following a symbolic link at the final component.
+- Short credentials are redacted. Values under a key that names a secret outright were kept in the clear below eight or twelve characters, so `TOKEN=hunter2` was stored verbatim in the evidence ledger. Length is only ambiguous after a bare `:`, where English uses the same shape — `password: short` is prose, and `Authorization: Token abc` puts a scheme name where a value would go. Under `=`, inside quotes, in a query string, or as a field in a structure, any value that is not a placeholder is now redacted at any length.
+- A redirect must land on the page being verified. `npm run site:check` compared the hostname, scheme, port and credentials of the redirect target but not its path, so `/missing` or `/?release=old` passed while the run only ever fetched `/`.
+- `piagent-install` reports a missing Node runtime as a missing Node runtime. Validating the MCP preset early, added in v1.1.2, put a Node script ahead of the Node version check, so on a machine without Node the installer failed with `node: command not found` and blamed the preset.
+
+### Changed
+
+- `docs/release-install-policy.md` named the wrong release for the code-scanning gap. A pull request last merged with a failing CodeQL check and an open high alert on `v1.1.0`; on `v1.1.2` the results gate blocked the pull request until the alerts were cleared.
+
 ## v1.1.2 - 2026-07-26
 
 Security and release-gating fixes found reviewing v1.1.1 after it shipped. Every fix in this release was reproduced as a working exploit or failure first.

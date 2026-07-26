@@ -9,24 +9,27 @@ export function normalizeEvidenceCommand(command) {
     .trim();
 }
 
-// The digest is taken over the redacted command, never the raw one.
+// A command that carries a secret gets no digest at all, and cannot be evidence.
 //
-// The ledger stores a redacted command beside its hash. Hashing the raw text
-// meant the stored pair was `export TOKEN= [REDACTED_SECRET] && npm test`
-// alongside a SHA-256 of the real line — the redaction published the template
-// and the hash confirmed guesses against it, so the only unknown left was the
-// secret itself and SHA-256 is fast enough to walk a candidate list offline.
-// Redacting first makes the digest cover exactly what the file already shows.
+// Neither text is safe to hash. Hashing the raw command published a template:
+// the ledger stored `export TOKEN= [REDACTED_SECRET] && npm test` beside a
+// SHA-256 of the real line, so the only unknown left was the secret, and SHA-256
+// is fast enough to walk a candidate list offline. Hashing the redacted text
+// instead gives every secret the same digest, which is worse in a different
+// direction: the gate promises the observed command matches `verifyCommands`
+// exactly, and two runs differing only in a credential would satisfy each
+// other's claim. Verifying against database A and recording it as proof for
+// database B is exactly what the exact-match rule exists to prevent.
 //
-// Both sides of a lookup redact, so matching is unaffected: the verify command
-// from the task plan and the observed command normalise and redact the same way
-// before being compared.
+// So the digest covers the raw command and is withheld when there is anything to
+// redact. Withholding it costs nothing real: a verify command in a task plan has
+// no business carrying an inline credential, and a command that does gets refused
+// rather than matched loosely.
 export function hashEvidenceCommand(command) {
   const normalized = normalizeEvidenceCommand(command);
-  return crypto
-    .createHash("sha256")
-    .update(redactSensitiveText(normalized).text)
-    .digest("hex");
+  if (!normalized) return "";
+  if (redactSensitiveText(normalized).redacted) return "";
+  return crypto.createHash("sha256").update(normalized).digest("hex");
 }
 
 export function commandMatchesVerifyPlan(command, verifyCommands) {
@@ -88,8 +91,14 @@ export function observedBashResultFromToolResultEvent(event, cwd, nowMs = Date.n
 
 function canonicalObservedEntry(entry) {
   const rawNormalizedCommand = normalizeEvidenceCommand(entry?.normalizedCommand ?? entry?.command);
-  const commandHash = entry?.commandHash || (rawNormalizedCommand ? hashEvidenceCommand(rawNormalizedCommand) : "");
-  if (!commandHash) return undefined;
+  if (!rawNormalizedCommand) return undefined;
+  // `??`, not `||`: an entry read back from the ledger carries an empty digest
+  // when its command held a secret, and that emptiness has to survive. Recomputing
+  // it here would hash the stored text, which is redacted, and hand the entry the
+  // one digest this module refuses to produce.
+  const commandHash = typeof entry?.commandHash === "string"
+    ? entry.commandHash
+    : hashEvidenceCommand(rawNormalizedCommand);
   const command = typeof entry?.command === "string" ? redactSensitiveText(entry.command).text : "";
   const normalizedCommand = redactSensitiveText(rawNormalizedCommand).text;
   const recordedAtMs = parseTimeMs(entry?.recordedAtMs ?? entry?.recordedAt);
@@ -106,9 +115,11 @@ function canonicalObservedEntry(entry) {
   };
 }
 
-function observedCommandsMatch(entry, normalizedCommand, commandHash) {
-  if (entry.commandHash) return entry.commandHash === commandHash;
-  return normalizeEvidenceCommand(entry.normalizedCommand ?? entry.command) === normalizedCommand;
+// Identity is the digest and nothing else. Falling back to comparing the stored
+// text would compare redacted text, which is the collision this module refuses.
+function observedCommandsMatch(entry, commandHash) {
+  if (!commandHash || !entry.commandHash) return false;
+  return entry.commandHash === commandHash;
 }
 
 export function findMatchingObservedBashResult(entries, { cwd, command, notBefore, exitCode }) {
@@ -119,12 +130,19 @@ export function findMatchingObservedBashResult(entries, { cwd, command, notBefor
   if (!normalizedCommand) {
     return { ok: false, reason: "Verify command is empty after normalization." };
   }
+  if (!commandHash) {
+    return {
+      ok: false,
+      reason: "Verify command carries a secret, so it cannot be matched against observed evidence. "
+        + "Move the credential into the environment and keep it out of the command."
+    };
+  }
 
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = canonicalObservedEntry(entries[index]);
     if (!entry) continue;
     if (entry.cwd !== normalizedCwd) continue;
-    if (!observedCommandsMatch(entry, normalizedCommand, commandHash)) continue;
+    if (!observedCommandsMatch(entry, commandHash)) continue;
     if (entry.recordedAtMs < notBeforeMs) continue;
     if (!claimedExitMatchesObserved(exitCode, entry)) {
       return {

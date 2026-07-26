@@ -219,6 +219,14 @@ describe("published site check", () => {
     assert.equal(verdict({ status: 308, location: "https://www.example.test/" }), null);
   });
 
+  // Only `/` of the other host is ever fetched, so a redirect anywhere else sends
+  // the run to report a version it read on a page it did not visit.
+  it("rejects a same-host redirect that lands anywhere but the page being verified", () => {
+    assert.match(verdict({ status: 301, location: "https://www.example.test/missing" }), /not the page being verified/);
+    assert.match(verdict({ status: 301, location: "https://www.example.test/?release=old" }), /not the page being verified/);
+    assert.match(verdict({ status: 301, location: "https://www.example.test/#old" }), /not the page being verified/);
+  });
+
   it("reports a cut-short body as cut short rather than as a page missing the version", () => {
     const result = verdict({ status: 200, body: "x".repeat(64), truncated: true });
     assert.match(result, /exceeded .* bytes and the part read does not mention 1\.0\.2/);

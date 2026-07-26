@@ -185,6 +185,12 @@ export function judge(host, hosts, expect, result, family) {
     if (target.protocol !== "https:") return `HTTP ${result.status} redirecting away from HTTPS to ${target.href}`;
     if (target.port !== "" && target.port !== "443") return `HTTP ${result.status} redirecting to a non-standard port at ${target.href}`;
     if (target.username !== "" || target.password !== "") return `HTTP ${result.status} redirecting to a URL carrying credentials`;
+    // The check that follows a redirect is the check of the other host's `/`, which
+    // is the only page this run verifies. A redirect to `/missing` or to `/?release=old`
+    // was accepted on the strength of the hostname alone, so the run reported the
+    // version served at a page it never fetched.
+    if (target.pathname !== "/") return `HTTP ${result.status} redirecting to ${target.pathname}, which is not the page being verified`;
+    if (target.search !== "" || target.hash !== "") return `HTTP ${result.status} redirecting to ${target.href}, which is not the page being verified`;
     return null;
   }
   if (result.status !== 200) return `HTTP ${result.status}`;

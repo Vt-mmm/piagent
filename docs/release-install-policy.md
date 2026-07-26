@@ -10,7 +10,7 @@ This file is the canonical install, update, rollback, and release checklist. Oth
 
 All supported environments require Node.js `>=22.19.0` and Pi Coding Agent `0.82.0`. The Pi host is installed as a Node CLI; Pi Agent Platform still defines its own release matrix because the terminal helpers and shell policy rely on Bash/POSIX behavior.
 
-| Surface | Status for v1.1.2 | Rollout guidance |
+| Surface | Status for v1.1.3 | Rollout guidance |
 |---|---|---|
 | macOS Apple Silicon (`darwin/arm64`) + Bash | Verified for this release. | Safe default for team rollout after normal project smoke tests. |
 | Linux x64 + Bash | Verified in GitHub Actions. | Safe default for CI/server usage after normal project smoke tests. |
@@ -33,7 +33,7 @@ These three components are versioned independently. A full install, update, or r
 
 | Channel | Source shape | Mutability | Use when |
 |---|---|---:|---|
-| `stable` | `git:github.com/Vt-mmm/piagent@<resolved-commit-sha>` from `v1.1.2` | Fixed after resolution | Default for team rollout. |
+| `stable` | `git:github.com/Vt-mmm/piagent@<resolved-commit-sha>` from `v1.1.3` | Fixed after resolution | Default for team rollout. |
 | `exact` | Tag, reviewed commit, or a tag resolved with `--resolve-tag` | Fixed when using a commit SHA | Pi-package-only roll forward, rollback, or reproduction. |
 | `dev` | `git:github.com/Vt-mmm/piagent` | Moving | Personal machine or sandbox only. |
 | `local` | `/path/to/piagent` | Local workspace | Platform development and dry-run validation. |
@@ -53,7 +53,7 @@ Use this flow when the team needs both terminal commands and the Pi package:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.1.2
+npm install -g --ignore-scripts @piagent/platform@1.1.3
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -61,8 +61,8 @@ piagent-install --stable
 The stable preview and apply output includes:
 
 ```text
-currentRelease: v1.1.2 (helper package version)
-tag: v1.1.2
+currentRelease: v1.1.3 (helper package version)
+tag: v1.1.3
 resolvedCommit: <40-char-sha>
 source: git:github.com/Vt-mmm/piagent@<40-char-sha>
 ```
@@ -79,7 +79,7 @@ bash scripts/install-global.sh --stable
 Use this only when terminal commands are not needed:
 
 ```bash
-pi install git:github.com/Vt-mmm/piagent@v1.1.2
+pi install git:github.com/Vt-mmm/piagent@v1.1.3
 ```
 
 Direct `pi install` does not create `piagent-*` commands on `PATH`.
@@ -192,7 +192,7 @@ Before broad team access, a repository administrator must enable these external 
 3. Enable Dependency graph, Dependabot alerts, and Dependabot security updates. Keep `.github/dependabot.yml` enabled for scheduled npm and GitHub Actions update pull requests.
 4. Enable GitHub private vulnerability reporting so the form linked by `SECURITY.md` works before public rollout.
 5. Keep secret scanning and push protection enabled. Review CodeQL results after the workflow's first successful run.
-6. Add the **Code scanning results** check to the `main` branch ruleset and set its alert threshold so that a new high-severity CodeQL alert blocks the merge. The `analyze (...)` jobs required above only prove the analysis ran and uploaded its SARIF; they succeed just as well when the analysis found new high-severity alerts. Without this separate check, a pull request merges green with open high alerts, which is what happened on `v1.1.2`. Requiring the `analyze` jobs is still necessary — it catches an analysis that failed to run — but it is not the results gate and must not be mistaken for one.
+6. Add the **Code scanning results** check to the `main` branch ruleset and set its alert threshold so that a new high-severity CodeQL alert blocks the merge. The `analyze (...)` jobs required above only prove the analysis ran and uploaded its SARIF; they succeed just as well when the analysis found new high-severity alerts. Without this separate check, a pull request merges green with open high alerts, which is what happened on `v1.1.0`: its pull request carried a failing `CodeQL` check run and a high alert open since the day before, and merged anyway because the rule did not yet require the result. Requiring the `analyze` jobs is still necessary — it catches an analysis that failed to run — but it is not the results gate and must not be mistaken for one.
 
 Verify these settings in GitHub **Settings → Rules** and **Settings → Code security and analysis**. Treat any missing control as an explicit rollout blocker, not as a passing source-code gate. Repository rules also close the remaining mutability risk of bootstrap-by-tag; tag-to-SHA resolution inside `piagent-install` alone cannot protect the helper package before it starts.
 

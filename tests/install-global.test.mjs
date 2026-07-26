@@ -300,6 +300,22 @@ describe("install-global release channels", () => {
     assert.match(good.stdout, /pi install npm:pi-mcp-adapter@/);
   });
 
+  // Validating the preset early put a Node script ahead of the Node check, so on a
+  // machine without Node the installer blamed the preset for a missing interpreter.
+  it("reports a missing Node runtime rather than blaming the preset", () => {
+    const fakeBin = makeFakeBin();
+    const withoutNode = spawnSync("bash", ["scripts/install-global.sh", "--stable", "--dry-run", "--no-model-scope", "--mcp-preset", "core"], {
+      cwd: repositoryRoot,
+      env: { ...process.env, PATH: [fakeBin, "/usr/bin", "/bin"].join(path.delimiter) },
+      encoding: "utf8"
+    });
+    assert.equal(spawnSync("bash", ["-c", "command -v node"], {
+      env: { PATH: "/usr/bin:/bin" }
+    }).status !== 0, true, "the test needs a PATH with no Node on it");
+    assert.match(withoutNode.stderr, /Node\.js >=/);
+    assert.doesNotMatch(withoutNode.stderr, /preset/);
+  });
+
   // setup never forwards --mcp-preset alongside --no-mcp, so the installer's own
   // check for that pair never sees it and the preset vanished without a word.
   it("rejects the same contradictory pair from setup", () => {

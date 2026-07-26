@@ -54,14 +54,6 @@ const SENSITIVE_PLURAL_KEYS = new Set([
   "signing_keys",
   "authorizations"
 ]);
-const LOWER_THRESHOLD_PLURAL_KEYS = new Set([
-  "passwords",
-  "secrets",
-  "credentials",
-  "passphrases",
-  "private_keys",
-  "signing_keys"
-]);
 
 function normalizeSecretValue(value) {
   return String(value ?? "")
@@ -97,13 +89,6 @@ function keyLooksSensitive(key) {
     || normalized.endsWith(`_${term}`));
 }
 
-function keyRequiresLowerThreshold(key) {
-  const normalized = normalizeSecretKey(key);
-  return LOWER_THRESHOLD_PLURAL_KEYS.has(normalized)
-    || ["password", "passwd", "pwd", "secret", "credential", "passphrase", "private_key", "signing_key"]
-      .some((term) => normalized === term || normalized.endsWith(`_${term}`));
-}
-
 function valueLooksPlaceholder(value) {
   const clean = normalizeSecretValue(value);
   if (!clean) return true;
@@ -115,12 +100,40 @@ function valueLooksPlaceholder(value) {
   return false;
 }
 
-function valueLooksSensitive(key, value) {
+// Length is only evidence where the syntax is ambiguous, and `=` is not.
+//
+// A short value used to be kept in the clear whatever the syntax, so `TOKEN=hunter2`
+// and `PASSWORD=short7` went into the ledger verbatim. Every name in
+// SENSITIVE_KEY_TERMS states outright what it holds — there is no `key` or `id`
+// among them — so under an `=`, or inside quotes, a non-placeholder value is the
+// secret the key says it is, at any length.
+//
+// A bare `:` is the ambiguous case, because English uses it too: `password: short`
+// and `The secret: always run tests` are prose, and `Authorization: Token abc123`
+// puts the scheme name where a value would go. Those keep a length bar.
+const SHORT_VALUE_MIN_LENGTH = 8;
+const AMBIGUOUS_VALUE_MIN_LENGTH = 12;
+
+function valueLooksSensitive(key, value, syntax = "unquoted-colon") {
   const clean = normalizeSecretValue(value);
   if (!clean || valueLooksPlaceholder(clean)) return false;
   if (looksLikeKnownSecret(clean)) return true;
-  if (keyRequiresLowerThreshold(key)) return clean.length >= 8;
-  return keyLooksSensitive(key) && clean.length >= 12;
+  if (!keyLooksSensitive(key)) return false;
+  if (syntax !== "unquoted-colon") return true;
+  return clean.length >= (keyNamesASecretOutright(key) ? SHORT_VALUE_MIN_LENGTH : AMBIGUOUS_VALUE_MIN_LENGTH);
+}
+
+// Under a bare `:`, these names carry enough intent on their own to redact a short
+// value; the broader terms wait for length before touching prose.
+function keyNamesASecretOutright(key) {
+  const normalized = normalizeSecretKey(key);
+  return ["password", "passwd", "pwd", "secret", "credential", "passphrase", "private_key", "signing_key"]
+    .some((term) => normalized === term || normalized.endsWith(`_${term}`))
+    || ["passwords", "secrets", "credentials", "passphrases", "private_keys", "signing_keys"].includes(normalized);
+}
+
+function assignmentSyntax(separator) {
+  return separator === "=" ? "assignment" : "unquoted-colon";
 }
 
 export function redactSensitiveText(input) {
@@ -138,22 +151,22 @@ export function redactSensitiveText(input) {
   for (const pattern of TOKEN_PATTERNS) text = text.replace(pattern, REDACTION);
 
   text = text.replace(QUERY_SECRET_PATTERN, (match, prefix, key, separator, value) => {
-    if (!keyLooksSensitive(key) || !valueLooksSensitive(key, value)) return match;
+    if (!keyLooksSensitive(key) || !valueLooksSensitive(key, value, "assignment")) return match;
     return `${prefix}${key}${separator}${REDACTION}`;
   });
 
   text = text.replace(DOUBLE_QUOTED_SECRET_ASSIGNMENT_PATTERN, (match, prefix, key, separator, value) => {
-    if (!keyLooksSensitive(key) || !valueLooksSensitive(key, value)) return match;
+    if (!keyLooksSensitive(key) || !valueLooksSensitive(key, value, "quoted")) return match;
     return `${prefix}${key}${separator} "${REDACTION}"`;
   });
 
   text = text.replace(SINGLE_QUOTED_SECRET_ASSIGNMENT_PATTERN, (match, prefix, key, separator, value) => {
-    if (!keyLooksSensitive(key) || !valueLooksSensitive(key, value)) return match;
+    if (!keyLooksSensitive(key) || !valueLooksSensitive(key, value, "quoted")) return match;
     return `${prefix}${key}${separator} '${REDACTION}'`;
   });
 
   text = text.replace(SECRET_ASSIGNMENT_PATTERN, (match, prefix, key, separator, value) => {
-    if (!keyLooksSensitive(key) || !valueLooksSensitive(key, value)) return match;
+    if (!keyLooksSensitive(key) || !valueLooksSensitive(key, value, assignmentSyntax(separator))) return match;
     return `${prefix}${key}${separator} ${REDACTION}`;
   });
 
@@ -173,7 +186,9 @@ function redactStorageValue(value, key) {
   if (typeof value === "string") {
     const redacted = redactSensitiveText(value);
     if (redacted.redacted) return redacted.text;
-    return key && keyLooksSensitive(key) && valueLooksSensitive(key, value) ? REDACTION : value;
+    // A field name in a structure is machine syntax, never prose, so length says
+    // nothing here either.
+    return key && keyLooksSensitive(key) && valueLooksSensitive(key, value, "assignment") ? REDACTION : value;
   }
   if (Array.isArray(value)) return value.map((item) => redactStorageValue(item, key));
   if (!value || typeof value !== "object") return value;

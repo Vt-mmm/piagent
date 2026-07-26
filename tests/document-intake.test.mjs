@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import zlib from "node:zlib";
+import { spawnSync } from "node:child_process";
 import { after, describe, it } from "node:test";
 
 import {
@@ -652,6 +653,25 @@ describe("document extraction", () => {
     assert.equal(extracted.status, "error", JSON.stringify(extracted));
     assert.match(extracted.reason, /changed between the safety checks and the read/);
     assert.doesNotMatch(extracted.reason, /OUTSIDE THE GRANTED ROOT/);
+  });
+
+  // Opening a FIFO waits for a writer. The identity check that would have refused
+  // it sits after the open, so the substitution did not have to defeat the check —
+  // it only had to stop the check from ever running.
+  it("refuses a file replaced by a pipe instead of waiting for a writer", () => {
+    const project = temporaryDirectory();
+    write(project, "notes.md", "harmless in-root note\n");
+    const resolution = resolveIn(project, "notes.md");
+
+    fs.unlinkSync(path.join(project, "notes.md"));
+    const madeFifo = spawnSync("mkfifo", [path.join(project, "notes.md")]).status === 0;
+    assert.equal(madeFifo, true, "the test needs mkfifo to build the replacement");
+
+    const started = Date.now();
+    const extracted = extractDocument(resolution);
+    assert.equal(extracted.status, "error", JSON.stringify(extracted));
+    assert.match(extracted.reason, /changed between the safety checks and the read/);
+    assert.ok(Date.now() - started < 2000, "the read must refuse rather than block on a writer");
   });
 
   it("reads the file it checked when nothing changed underneath it", () => {

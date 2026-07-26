@@ -198,23 +198,20 @@ describe("runtime verify evidence ledger", () => {
 
   it("persists command hashes while keeping redacted command text for audit", () => {
     const { file } = createLedgerFixture();
-    const rawCommand = joined("DATABASE", "_PASSWORD", "=", "CorrectHorse42", " npm test");
 
     appendObservedBashResult(file, {
       cwd: "/repo",
-      command: rawCommand,
-      redactedCommand: joined("DATABASE", "_PASSWORD", "= [REDACTED_SECRET] npm test"),
+      command: "npm run verify",
       isError: false,
       recordedAtMs: Date.parse("2026-07-19T01:00:01.000Z")
     });
 
     const raw = fs.readFileSync(file, "utf8");
-    assert.equal(raw.includes("CorrectHorse42"), false);
     assert.match(raw, /commandHash/);
 
     const result = findMatchingObservedBashResult(readObservedBashResults(file), {
       cwd: "/repo",
-      command: rawCommand,
+      command: "npm run verify",
       notBefore: "2026-07-19T01:00:00.000Z",
       exitCode: 0
     });
@@ -222,10 +219,35 @@ describe("runtime verify evidence ledger", () => {
     assert.equal(result.ok, true);
   });
 
+  // The gate promises the observed command matches the plan's verify command
+  // exactly. A digest over redacted text gives every secret the same identity, so
+  // a run against one database would satisfy a claim about another.
+  it("refuses to treat two commands differing only in a secret as the same evidence", () => {
+    const { file } = createLedgerFixture();
+    const observedCommand = joined("DATABASE", "_PASSWORD", "=", "CorrectHorse42", " npm test");
+    const claimedCommand = joined("DATABASE", "_PASSWORD", "=", "DifferentHorse99", " npm test");
+
+    appendObservedBashResult(file, {
+      cwd: "/repo",
+      command: observedCommand,
+      isError: false,
+      recordedAtMs: Date.parse("2026-07-19T01:00:01.000Z")
+    });
+
+    const result = findMatchingObservedBashResult(readObservedBashResults(file), {
+      cwd: "/repo",
+      command: claimedCommand,
+      notBefore: "2026-07-19T01:00:00.000Z",
+      exitCode: 0
+    });
+
+    assert.equal(result.ok, false, "a different secret must not satisfy the claim");
+  });
+
   // Redacting the text and hashing the raw line publishes the template and a
   // way to confirm guesses against it, so the only unknown left is the secret
-  // and SHA-256 is fast enough to walk a candidate list offline. The digest has
-  // to cover exactly what the file already shows.
+  // and SHA-256 is fast enough to walk a candidate list offline. A command whose
+  // text had to be redacted gets no digest, and so cannot be evidence at all.
   it("does not store a hash that confirms guesses at the redacted secret", () => {
     const { file } = createLedgerFixture();
     const secret = "CorrectHorse42";
@@ -239,7 +261,8 @@ describe("runtime verify evidence ledger", () => {
     });
 
     const stored = JSON.parse(fs.readFileSync(file, "utf8").trim());
-    assert.equal(stored.command.includes(secret), false);
+    assert.equal(stored.command.includes(secret), false, "the secret must not reach the file");
+    assert.equal(stored.commandHash, "", "a secret-bearing command must carry no digest");
 
     for (const guess of ["hunter2", secret, "password1"]) {
       const candidate = joined("DATABASE", "_PASSWORD", "=", guess, " npm test");
@@ -247,22 +270,16 @@ describe("runtime verify evidence ledger", () => {
       assert.notEqual(digest, stored.commandHash, `hashing the raw command with ${guess} must not match the stored digest`);
     }
 
-    // The digest carries nothing the record does not already show: anyone holding
-    // the record can recompute it from the redacted command stored beside it.
-    assert.equal(
-      stored.commandHash,
-      crypto.createHash("sha256").update(stored.command).digest("hex"),
-      "the stored digest must be derivable from the stored redacted command alone"
-    );
-
-    // Matching still works, because both sides redact before hashing.
+    // Even the true command cannot claim this observation: with no identity to
+    // compare, the gate fails closed rather than accepting a looser match.
     const result = findMatchingObservedBashResult(readObservedBashResults(file), {
       cwd: "/repo",
       command: rawCommand,
       notBefore: "2026-07-19T01:00:00.000Z",
       exitCode: 0
     });
-    assert.equal(result.ok, true);
+    assert.equal(result.ok, false);
+    assert.match(result.reason, /carries a secret/);
   });
 
   it("redacts command text at the in-memory and persistence boundaries", () => {
@@ -285,18 +302,30 @@ describe("runtime verify evidence ledger", () => {
 
     assert.equal(JSON.stringify(ledger.list()).includes("CorrectHorse42"), false);
     assert.equal(fs.readFileSync(file, "utf8").includes("CorrectHorse42"), false);
+
+    // The observation is still kept for audit at both boundaries, and neither
+    // will let it stand as proof.
+    assert.equal(ledger.list().length, 1);
+    assert.equal(readObservedBashResults(file).length, 1);
     assert.equal(ledger.findMatching({
       cwd: "/repo",
       command: rawCommand,
       notBefore: "2026-07-19T01:00:00.000Z",
       exitCode: 0
-    }).ok, true);
+    }).ok, false);
     assert.equal(findMatchingObservedBashResult(readObservedBashResults(file), {
       cwd: "/repo",
       command: rawCommand,
       notBefore: "2026-07-19T01:00:00.000Z",
       exitCode: 0
-    }).ok, true);
+    }).ok, false);
+
+    // A command with nothing to redact still matches at both boundaries.
+    ledger.record({ cwd: "/repo", command: "npm test", isError: false, recordedAtMs: Date.parse("2026-07-19T01:00:02.000Z") });
+    appendObservedBashResult(file, { cwd: "/repo", command: "npm test", isError: false, recordedAtMs: Date.parse("2026-07-19T01:00:02.000Z") });
+    const plain = { cwd: "/repo", command: "npm test", notBefore: "2026-07-19T01:00:00.000Z", exitCode: 0 };
+    assert.equal(ledger.findMatching(plain).ok, true);
+    assert.equal(findMatchingObservedBashResult(readObservedBashResults(file), plain).ok, true);
   });
 
   it("requires exact verify-plan command match for final-gate evidence", () => {
