@@ -454,7 +454,7 @@ if ! command -v pi >/dev/null 2>&1; then
   else
   echo "FAIL: pi is not on PATH." >&2
   echo "Install Pi first, then rerun this script." >&2
-    echo "Expected command on npm-based installs: npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1" >&2
+    echo "Expected command on npm-based installs: npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0" >&2
   exit 1
   fi
 else

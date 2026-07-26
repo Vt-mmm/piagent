@@ -12,6 +12,7 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ### Changed
 
+- Raised the pinned Pi Coding Agent and Pi AI host from `0.81.1` to `0.82.0`. `typebox` stays exactly `1.1.38` across both, so the pin moves without a compatibility change. `npm run audit:runtime` on the `0.82.0` tree reports one high advisory, the same already-accepted `GHSA-mh99-v99m-4gvg` under review by 2026-08-25, and no critical. Verified against a real `0.82.0` host: runtime policy smoke and `team-doctor --strict-share` both pass with no warnings.
 - `piagent-install` now installs the MCP baseline by default, the same as `piagent-setup` already did, and both accept `--no-mcp` to skip it. The two documented entry points disagreed: `piagent-setup` defaulted to installing MCP and `piagent-install` defaulted to not installing it, so a newcomer who followed the team onboarding document ended up with no MCP at all — and was then told to run `/mcp`, because the installer printed that next step whether or not it had installed anything. That next step is now printed only when MCP was installed, and `--mcp-preset` combined with `--no-mcp` fails instead of being accepted and quietly dropped.
 
 ### Fixed

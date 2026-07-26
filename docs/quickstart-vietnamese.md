@@ -33,7 +33,7 @@ npm install -g @piagent/platform
 piagent-setup
 ```
 
-Chạy `piagent-setup` ngay trong thư mục project. Nó tự cài đúng Pi Coding Agent `0.81.1` mà release này pin, cài Pi package, khởi tạo `.pi/`, rồi chạy doctor. Nó cũng cài MCP baseline, subagents, và Herdr Pi integration nếu `herdr` đã có sẵn trên `PATH`; thêm `--no-mcp`, `--no-subagents`, `--no-herdr` nếu không cần, hoặc `--global-only` nếu chưa muốn đụng project nào.
+Chạy `piagent-setup` ngay trong thư mục project. Nó tự cài đúng Pi Coding Agent `0.82.0` mà release này pin, cài Pi package, khởi tạo `.pi/`, rồi chạy doctor. Nó cũng cài MCP baseline, subagents, và Herdr Pi integration nếu `herdr` đã có sẵn trên `PATH`; thêm `--no-mcp`, `--no-subagents`, `--no-herdr` nếu không cần, hoặc `--global-only` nếu chưa muốn đụng project nào.
 
 Nếu dùng [Herdr](https://herdr.dev/docs/install/) thì cài Herdr **trước** `piagent-setup`:
 

@@ -54,7 +54,7 @@ exit 2
 `);
   fs.writeFileSync(pi, `#!/usr/bin/env bash
 if [[ "\${1:-}" == "--version" ]]; then
-  printf '%s\\n' "\${PI_INSTALL_FAKE_PI_VERSION:-0.81.1}"
+  printf '%s\\n' "\${PI_INSTALL_FAKE_PI_VERSION:-0.82.0}"
   exit 0
 fi
 printf 'pi %s\\n' "$*"
@@ -154,7 +154,7 @@ describe("install-global release channels", () => {
         PI_INSTALL_FAKE_PI_VERSION: version
       });
       assert.equal(result.status, 1);
-      assert.match(result.stderr, /Pi Coding Agent 0\.81\.1 is required/);
+      assert.match(result.stderr, /Pi Coding Agent 0\.82\.0 is required/);
       assert.doesNotMatch(result.stdout, /\+ pi install/);
     }
   });
@@ -171,11 +171,11 @@ describe("install-global release channels", () => {
     ];
     const upgrade = runSetup(common, { PI_INSTALL_FAKE_PI_VERSION: "0.80.10" });
     assert.equal(upgrade.status, 0, upgrade.stderr);
-    assert.match(upgrade.stdout, /npm install -g --ignore-scripts @earendil-works\/pi-coding-agent@0\.81\.1/);
+    assert.match(upgrade.stdout, /npm install -g --ignore-scripts @earendil-works\/pi-coding-agent@0\.82\.0/);
 
     const disabled = runSetup([...common, "--no-install-pi"], { PI_INSTALL_FAKE_PI_VERSION: "0.80.10" });
     assert.equal(disabled.status, 1);
-    assert.match(disabled.stderr, /Pi Coding Agent 0\.81\.1 is required/);
+    assert.match(disabled.stderr, /Pi Coding Agent 0\.82\.0 is required/);
   });
 
   it("rejects --resolve-tag outside stable or exact version channels", () => {

@@ -64,7 +64,7 @@ Team nên install global package một lần:
 
 ```bash
 node --version  # >= 22.19.0
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
 npm install -g --ignore-scripts @piagent/platform@1.0.2
 piagent-install --stable --dry-run
 piagent-install --stable
@@ -175,7 +175,7 @@ Files không commit:
 Full platform update phải đồng bộ Pi host, npm-global helper và Pi package:
 
 ```bash
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
 npm install -g --ignore-scripts @piagent/platform@X.Y.Z
 piagent-install --stable --dry-run
 piagent-install --stable

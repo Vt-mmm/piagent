@@ -8,7 +8,7 @@ This file is the canonical install, update, rollback, and release checklist. Oth
 
 ## Supported runtime matrix
 
-All supported environments require Node.js `>=22.19.0` and Pi Coding Agent `0.81.1`. The Pi host is installed as a Node CLI; Pi Agent Platform still defines its own release matrix because the terminal helpers and shell policy rely on Bash/POSIX behavior.
+All supported environments require Node.js `>=22.19.0` and Pi Coding Agent `0.82.0`. The Pi host is installed as a Node CLI; Pi Agent Platform still defines its own release matrix because the terminal helpers and shell policy rely on Bash/POSIX behavior.
 
 | Surface | Status for v1.0.2 | Rollout guidance |
 |---|---|---|
@@ -52,7 +52,7 @@ Use this flow when the team needs both terminal commands and the Pi package:
 
 ```bash
 node --version  # >= 22.19.0
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
 npm install -g --ignore-scripts @piagent/platform@1.0.2
 piagent-install --stable --dry-run
 piagent-install --stable
@@ -89,7 +89,7 @@ Direct `pi install` does not create `piagent-*` commands on `PATH`.
 Update the exact supported Pi host first, then the npm-global helper, then let that target helper resolve and install its matching stable Pi package:
 
 ```bash
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
 npm install -g --ignore-scripts @piagent/platform@X.Y.Z
 piagent-install --stable --dry-run
 piagent-install --stable

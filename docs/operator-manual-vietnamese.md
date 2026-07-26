@@ -13,11 +13,11 @@ Từ đó Pi có thể login provider, chọn model, onboard project, chạy tas
 
 Runtime team nên pin release tag hoặc commit đã review. Latest chỉ dùng cho máy cá nhân/sandbox khi chấp nhận cập nhật nhanh.
 
-Support matrix release hiện tại: macOS Apple Silicon + Bash và Linux x64 + Bash đã được verify; macOS Intel + Bash và Linux ARM64 + Bash là supported target cần chạy `piagent-doctor` + smoke test trước khi rollout rộng; native Windows chưa phải target rollout team; WSL2 experimental/chưa release-gate. Node.js tối thiểu là `22.19.0`, Pi Coding Agent là `0.81.1`.
+Support matrix release hiện tại: macOS Apple Silicon + Bash và Linux x64 + Bash đã được verify; macOS Intel + Bash và Linux ARM64 + Bash là supported target cần chạy `piagent-doctor` + smoke test trước khi rollout rộng; native Windows chưa phải target rollout team; WSL2 experimental/chưa release-gate. Node.js tối thiểu là `22.19.0`, Pi Coding Agent là `0.82.0`.
 
 ```bash
 node --version  # >= 22.19.0
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
 npm install -g --ignore-scripts @piagent/platform@1.0.2
 piagent-install --stable --dry-run
 piagent-install --stable
@@ -37,7 +37,7 @@ bash scripts/install-global.sh --stable
 Full update phải đồng bộ exact Pi host trước, rồi npm-global helper và Pi package matching:
 
 ```bash
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
 npm install -g --ignore-scripts @piagent/platform@X.Y.Z
 piagent-install --stable --dry-run
 piagent-install --stable
@@ -98,7 +98,7 @@ install package once
 ### Cài Pi và package platform
 
 ```bash
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
 npm install -g --ignore-scripts @piagent/platform@1.0.2
 piagent-install --stable --dry-run
 piagent-install --stable
@@ -845,7 +845,7 @@ Watchdog là optional adversarial reviewer ở cuối turn, không bật mặc �
 | `npm install -g --ignore-scripts @piagent/platform@1.0.2` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
 | `pi install git:github.com/Vt-mmm/piagent@v1.0.2` | Install pinned release cho reproducible team setup. |
 | `pi install git:github.com/Vt-mmm/piagent` | Install latest platform package cho máy cá nhân/sandbox. |
-| Cài exact Pi host của release, rồi `npm install -g --ignore-scripts @piagent/platform@X.Y.Z` và `piagent-install --stable` | Full update: đồng bộ host, terminal helper và Pi package. v1.0.2 yêu cầu Pi `0.81.1`. |
+| Cài exact Pi host của release, rồi `npm install -g --ignore-scripts @piagent/platform@X.Y.Z` và `piagent-install --stable` | Full update: đồng bộ host, terminal helper và Pi package. Mỗi release pin một Pi host chính xác; lấy đúng version của release đang cài trong [release/install policy](release-install-policy.md). |
 | Cài exact Pi host ghi trong release cũ, rồi helper `vPREVIOUS` và `piagent-install --stable` | Full rollback; đánh giá lại dependency findings của host cũ trước khi hạ version. |
 | `piagent-uninstall` | Báo cáo sẽ gỡ những gì. Dry run, không đụng gì. |
 | `piagent-uninstall --apply` | Gỡ Pi package của platform khỏi Pi settings global. |

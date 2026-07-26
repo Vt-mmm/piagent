@@ -8,7 +8,7 @@ Một thành viên mới không cần biết local path của maintainer. Luồn
 
 ```bash
 node --version  # >= 22.19.0
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
 npm install -g --ignore-scripts @piagent/platform@1.0.2
 piagent-install --stable
 cd /path/to/project
@@ -24,7 +24,7 @@ pi
 ## Prerequisites
 
 - Node.js >=22.19.0.
-- Pi Coding Agent `0.81.1`.
+- Pi Coding Agent `0.82.0`.
 - Runtime rollout:
   - verified: macOS Apple Silicon + Bash, Linux x64 + Bash;
   - supported target cần smoke trước khi rollout rộng: macOS Intel + Bash, Linux ARM64 + Bash;
@@ -41,7 +41,7 @@ Mặc định team dùng stable helper:
 
 ```bash
 node --version  # >= 22.19.0
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
 npm install -g --ignore-scripts @piagent/platform@1.0.2
 piagent-install --stable --dry-run
 piagent-install --stable
@@ -66,7 +66,7 @@ pi install git:github.com/Vt-mmm/piagent
 Full update phải đồng bộ exact Pi host trước, sau đó terminal helper và Pi package matching:
 
 ```bash
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
 npm install -g --ignore-scripts @piagent/platform@X.Y.Z
 piagent-install --stable --dry-run
 piagent-install --stable
@@ -78,7 +78,7 @@ Full rollback dùng cùng sequence với `vPREVIOUS`, nhưng exact Pi host phả
 Nếu team publish npm private:
 
 ```bash
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.81.1
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
 pi install npm:@your-scope/platform@x.y.z
 ```
 
