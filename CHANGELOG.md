@@ -2,7 +2,9 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
-## Unreleased
+## v1.1.0 - 2026-07-26
+
+A document downloaded outside the repository can now be read by the agent, and the two documented install commands stop disagreeing about MCP.
 
 ### Added
 
@@ -14,6 +16,7 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 - Raised the pinned Pi Coding Agent and Pi AI host from `0.81.1` to `0.82.0`. `typebox` stays exactly `1.1.38` across both, so the pin moves without a compatibility change. `npm run audit:runtime` on the `0.82.0` tree reports one high advisory, the same already-accepted `GHSA-mh99-v99m-4gvg` under review by 2026-08-25, and no critical. Verified against a real `0.82.0` host: runtime policy smoke and `team-doctor --strict-share` both pass with no warnings.
 - `piagent-install` now installs the MCP baseline by default, the same as `piagent-setup` already did, and both accept `--no-mcp` to skip it. The two documented entry points disagreed: `piagent-setup` defaulted to installing MCP and `piagent-install` defaulted to not installing it, so a newcomer who followed the team onboarding document ended up with no MCP at all — and was then told to run `/mcp`, because the installer printed that next step whether or not it had installed anything. That next step is now printed only when MCP was installed, and `--mcp-preset` combined with `--no-mcp` fails instead of being accepted and quietly dropped.
+- Cut the command count in the three places a new user actually lands. The README went from 28 shell blocks to 4 and now opens with install rather than four variants of a wrapper for software the reader has not installed yet; the Vietnamese quickstart went from 23 to 7 and its install step from 120 lines to 28; the documentation site's onboarding flow went from eight install command cards to one. Pinned rollouts, updates, rollback, the `--dev` channel, and per-tool command lists were not deleted — every one of them already had a dedicated document, and each is now linked from where it used to be inlined.
 
 ### Fixed
 
@@ -26,10 +29,6 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 - Documentation-coverage checks in the local gate now name the term that went missing and the files searched. They were bare `grep >/dev/null` calls under `set -e`, so dropping a term from a document failed the gate with exit 1 and no output at all. The gate's `npm test` and `npm run typecheck` steps had the same defect from the other direction — their output went to `/dev/null` on every run, so a failing test ended the gate with no indication of which test failed. Both now stay quiet on success and print what they captured on failure.
 - Documented that `piagent-setup` installs the Herdr Pi integration when `herdr` is on `PATH`, and that installing Herdr afterwards needs `piagent-setup --global-only` to pick it up. The behaviour has always been the default and the skip is only a warning on stderr, so the ordering was discoverable only by reading the installer. Herdr is also now named as the way to run several Pi panes at once in the README, the quickstart, and the documentation site, none of which mentioned it, and every one of those places now carries the install command itself rather than a link to go find it. The `brew` form is listed beside the `curl` form that herdr.dev leads with, because piping a fetched script to a shell is worth an alternative in a project that pins everything else it installs.
 - Folded a stale `Unreleased` section into v1.0.0, where its contents actually shipped. It had been left behind by the namespace rename and still described tools as `company_orchestration_policy`, `company_profile_tech_options`, `company_profile_tech_apply`, `company_profile_tech_context_record`, and `/company-orchestration`, none of which exist.
-
-### Changed
-
-- Cut the command count in the three places a new user actually lands. The README went from 28 shell blocks to 4 and now opens with install rather than four variants of a wrapper for software the reader has not installed yet; the Vietnamese quickstart went from 23 to 7 and its install step from 120 lines to 28; the documentation site's onboarding flow went from eight install command cards to one. Pinned rollouts, updates, rollback, the `--dev` channel, and per-tool command lists were not deleted — every one of them already had a dedicated document, and each is now linked from where it used to be inlined.
 
 ## v1.0.2 - 2026-07-25
 

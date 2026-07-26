@@ -9,6 +9,11 @@ import { after, describe, it } from "node:test";
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const resolvedCommit = "ef7883a2c3ffa3129047db61528230ab2c32bd99";
 const annotatedCommit = "3e7df37915b06575ec347b714669ec48fec8215d";
+// --stable reads the release tag out of this repository's own package.json, so
+// assertions about it have to follow the version instead of pinning it. Tags
+// passed as explicit arguments further down are fixtures and stay literal.
+const releaseTag = `v${JSON.parse(fs.readFileSync(path.join(repositoryRoot, "package.json"), "utf8")).version}`;
+const releaseTagPattern = releaseTag.replace(/\./g, "\\.");
 const temporaryRoots = new Set();
 
 after(() => {
@@ -29,22 +34,17 @@ if [[ "\${PI_INSTALL_FAKE_GIT_MODE:-}" == "missing" ]]; then
   exit 0
 fi
 if [[ "$1" == "ls-remote" ]]; then
+  # The installer asks for the plain ref and its peeled form in one call, so the
+  # plain ref is matched first and answers for both. Any tag resolves, so a
+  # version bump does not have to be mirrored here.
   for arg in "$@"; do
-    if [[ "$arg" == "refs/tags/v1.0.2" ]]; then
-      printf '${resolvedCommit}\\trefs/tags/v1.0.2\\n'
+    if [[ "$arg" == refs/tags/*-annotated ]]; then
+      printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\t%s\\n' "$arg"
+      printf '${annotatedCommit}\\t%s^{}\\n' "$arg"
       exit 0
     fi
-    if [[ "$arg" == "refs/tags/v1.0.2^{}" ]]; then
-      printf '${resolvedCommit}\\trefs/tags/v1.0.2^{}\\n'
-      exit 0
-    fi
-    if [[ "$arg" == "refs/tags/v1.0.2-annotated" ]]; then
-      printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\trefs/tags/v1.0.2-annotated\\n'
-      printf '${annotatedCommit}\\trefs/tags/v1.0.2-annotated^{}\\n'
-      exit 0
-    fi
-    if [[ "$arg" == "refs/tags/v1.0.2-annotated^{}" ]]; then
-      printf '${annotatedCommit}\\trefs/tags/v1.0.2-annotated^{}\\n'
+    if [[ "$arg" == refs/tags/* ]]; then
+      printf '${resolvedCommit}\\t%s\\n' "$arg"
       exit 0
     fi
   done
@@ -95,9 +95,9 @@ describe("install-global release channels", () => {
     const result = runInstaller(["--stable", "--dry-run", "--no-model-scope"]);
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /channel: stable/);
-    assert.match(result.stdout, /currentRelease: v1\.0\.2 \(helper package version\)/);
+    assert.match(result.stdout, new RegExp(`currentRelease: ${releaseTagPattern} \\(helper package version\\)`));
     assert.match(result.stdout, /runtime: .+/);
-    assert.match(result.stdout, /tag: v1\.0\.2/);
+    assert.match(result.stdout, new RegExp(`tag: ${releaseTagPattern}`));
     assert.match(result.stdout, new RegExp(`resolvedCommit: ${resolvedCommit}`));
     assert.match(result.stdout, new RegExp(`source: git:github.com/Vt-mmm/piagent@${resolvedCommit}`));
     assert.match(result.stdout, new RegExp(`\\+ pi install git:github.com/Vt-mmm/piagent@${resolvedCommit}`));
@@ -121,7 +121,7 @@ describe("install-global release channels", () => {
   it("fails closed when stable tag cannot be resolved", () => {
     const result = runInstaller(["--stable", "--dry-run", "--no-model-scope"], { PI_INSTALL_FAKE_GIT_MODE: "missing" });
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /could not resolve release tag v1\.0\.2/);
+    assert.match(result.stderr, new RegExp(`could not resolve release tag ${releaseTagPattern}`));
     assert.doesNotMatch(result.stdout, /\+ pi install/);
   });
 
@@ -130,8 +130,8 @@ describe("install-global release channels", () => {
       PIAGENT_CURRENT_RELEASE_TAG: "v9.9.9-missing"
     });
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /currentRelease: v1\.0\.2/);
-    assert.match(result.stdout, /tag: v1\.0\.2/);
+    assert.match(result.stdout, new RegExp(`currentRelease: ${releaseTagPattern}`));
+    assert.match(result.stdout, new RegExp(`tag: ${releaseTagPattern}`));
   });
 
   it("can require stable resolution to match the release commit", () => {
