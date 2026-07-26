@@ -378,8 +378,13 @@ echo
 if [[ "$DO_GLOBAL" == true ]]; then
   ensure_pi_cli
   install_args=("$PLATFORM_ROOT/scripts/install-global.sh" "--package-source" "$PACKAGE_SOURCE")
+  # The opt-out has to be passed explicitly. The installer defaults MCP on, so
+  # saying nothing here would install it against the operator's choice; the
+  # flags below can stay one-sided only because the installer defaults them off.
   if [[ "$WITH_MCP" == true ]]; then
     install_args+=("--with-mcp" "--mcp-preset" "$MCP_PRESET")
+  else
+    install_args+=("--no-mcp")
   fi
   if [[ "$WITH_SUBAGENTS" == true ]]; then
     install_args+=("--with-subagents" "--subagents-preset" "$SUBAGENTS_PRESET" "--subagents-model-scope" "$SUBAGENTS_MODEL_SCOPE")

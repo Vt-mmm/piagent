@@ -13,7 +13,6 @@ const annotatedCommit = "3e7df37915b06575ec347b714669ec48fec8215d";
 // assertions about it have to follow the version instead of pinning it. Tags
 // passed as explicit arguments further down are fixtures and stay literal.
 const releaseTag = `v${JSON.parse(fs.readFileSync(path.join(repositoryRoot, "package.json"), "utf8")).version}`;
-const releaseTagPattern = releaseTag.replace(/\./g, "\\.");
 const temporaryRoots = new Set();
 
 after(() => {
@@ -95,9 +94,9 @@ describe("install-global release channels", () => {
     const result = runInstaller(["--stable", "--dry-run", "--no-model-scope"]);
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /channel: stable/);
-    assert.match(result.stdout, new RegExp(`currentRelease: ${releaseTagPattern} \\(helper package version\\)`));
+    assert.ok(result.stdout.includes(`currentRelease: ${releaseTag} (helper package version)`), result.stdout);
     assert.match(result.stdout, /runtime: .+/);
-    assert.match(result.stdout, new RegExp(`tag: ${releaseTagPattern}`));
+    assert.ok(result.stdout.includes(`tag: ${releaseTag}`), result.stdout);
     assert.match(result.stdout, new RegExp(`resolvedCommit: ${resolvedCommit}`));
     assert.match(result.stdout, new RegExp(`source: git:github.com/Vt-mmm/piagent@${resolvedCommit}`));
     assert.match(result.stdout, new RegExp(`\\+ pi install git:github.com/Vt-mmm/piagent@${resolvedCommit}`));
@@ -121,7 +120,7 @@ describe("install-global release channels", () => {
   it("fails closed when stable tag cannot be resolved", () => {
     const result = runInstaller(["--stable", "--dry-run", "--no-model-scope"], { PI_INSTALL_FAKE_GIT_MODE: "missing" });
     assert.equal(result.status, 1);
-    assert.match(result.stderr, new RegExp(`could not resolve release tag ${releaseTagPattern}`));
+    assert.ok(result.stderr.includes(`could not resolve release tag ${releaseTag}`), result.stderr);
     assert.doesNotMatch(result.stdout, /\+ pi install/);
   });
 
@@ -130,8 +129,8 @@ describe("install-global release channels", () => {
       PIAGENT_CURRENT_RELEASE_TAG: "v9.9.9-missing"
     });
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, new RegExp(`currentRelease: ${releaseTagPattern}`));
-    assert.match(result.stdout, new RegExp(`tag: ${releaseTagPattern}`));
+    assert.ok(result.stdout.includes(`currentRelease: ${releaseTag}`), result.stdout);
+    assert.ok(result.stdout.includes(`tag: ${releaseTag}`), result.stdout);
   });
 
   it("can require stable resolution to match the release commit", () => {
@@ -264,6 +263,28 @@ describe("install-global release channels", () => {
     assert.doesNotMatch(skipped.stdout, /\/mcp {2,}# inspect MCP servers/);
   });
 
+  // setup only ever appended --with-mcp, relying on the installer defaulting MCP
+  // off. Once the installer defaulted it on, saying nothing meant installing it,
+  // so --no-mcp reached the installer as silence and the operator's explicit
+  // choice was overridden by the default it was meant to override.
+  it("passes the MCP opt-out through setup instead of relying on an installer default", () => {
+    const common = ["--global-only", "--dry-run", "--no-subagents", "--no-herdr", "--no-model-scope"];
+
+    // setup only prints the installer command it would run, so what this layer
+    // has to get right is the flag it hands over. Whether that flag then skips
+    // the adapter is the installer's own test above.
+    const skipped = runSetup([...common, "--no-mcp"]);
+    assert.equal(skipped.status, 0, skipped.stderr);
+    assert.ok(skipped.stdout.includes("install-global.sh"), skipped.stdout);
+    assert.ok(skipped.stdout.includes("--no-mcp"), skipped.stdout);
+    assert.ok(!skipped.stdout.includes("--with-mcp"), skipped.stdout);
+
+    const included = runSetup(common);
+    assert.equal(included.status, 0, included.stderr);
+    assert.ok(included.stdout.includes("--with-mcp --mcp-preset core"), included.stdout);
+    assert.ok(!included.stdout.includes("--no-mcp"), included.stdout);
+  });
+
   // A preset that is accepted and then dropped reads as a preset that was applied.
   it("refuses a preset that cannot take effect", () => {
     const conflict = runInstaller(["--stable", "--dry-run", "--no-mcp", "--mcp-preset", "popular"]);
@@ -307,7 +328,7 @@ describe("setup package source default", () => {
 
     const version = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "package.json"), "utf8")).version;
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, new RegExp(`packageSource: npm:@piagent/platform@${version.replace(/\./g, "\\.")}`));
+    assert.ok(result.stdout.includes(`packageSource: npm:@piagent/platform@${version}`), result.stdout);
     // An install path is correct for nobody but the machine that produced it.
     assert.doesNotMatch(result.stdout, /packageSource: \//);
     assert.doesNotMatch(result.stderr, /No exact package source provided/);

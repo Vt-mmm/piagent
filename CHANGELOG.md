@@ -2,6 +2,22 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.1.1 - 2026-07-26
+
+Fixes for defects found reviewing v1.1.0 after it shipped.
+
+### Fixed
+
+- `piagent-setup --no-mcp` installs no MCP again. Setup only ever appended `--with-mcp` and relied on the installer defaulting MCP off; v1.1.0 changed that default to on, so the opt-out reached the installer as silence and the installer's default overrode the operator's explicit choice. It now passes `--no-mcp` through. The other install flags stay one-sided because the installer still defaults them off, which is the condition that made the pattern safe in the first place.
+- `npm run site:check` no longer hangs when a response exceeds the 4 MB body cap. Hitting the cap destroys the response, and a destroyed response emits neither `end` nor `error` — it goes to `aborted` and `close` — so the promise stayed pending forever, and the request timeout could not rescue it because the socket was already gone. A release gate that hangs is worse than one that fails, because nothing reports it. A body cut short is also now reported as cut short rather than as a page that does not mention the version, which is a different claim.
+- `npm run site:check` no longer exits `0` when it could not check an address. Unreachable addresses were printed as `UNVERIFIED` and then the run still ended in `PASS`, so a gate that verified fewer addresses than it resolved reported that it had verified them all. An unchecked address now ends the run; `--allow-unverified` accepts the gap deliberately and names it in the summary.
+- `piagent_document_read` refuses bytes that are not valid UTF-8 or UTF-16 instead of decoding them into replacement characters. The binary check was a scan for a NUL byte, which plenty of binary formats do not carry in their first bytes, and everything past it was decoded leniently — so a binary file renamed to `.txt` came back as content-shaped garbage and was handed to the model. Decoding is now strict in both encodings, which is what the surrounding code already claimed to do.
+- Two CodeQL high alerts came from building a regular expression out of a version string and escaping only `.`. Those assertions were comparing literal text, so they are substring checks now and need no escaping at all. Two further alerts were reviewed and dismissed with written reasons: extracting `&lt;script&gt;` from a document as `<script>` is the required result and the sink is a terminal tool result, not HTML; and the SHA-256 over a normalised shell command is a content identifier, not a password hash.
+
+### Changed
+
+- The release checklist now requires the **Code scanning results** check on the `main` ruleset, separately from the `analyze (...)` jobs. Requiring those jobs proves only that the analysis ran and uploaded its results — they succeed just as well when the analysis found new high-severity alerts, which is how v1.1.0 merged green with open ones.
+
 ## v1.1.0 - 2026-07-26
 
 A document downloaded outside the repository can now be read by the agent, and the two documented install commands stop disagreeing about MCP.

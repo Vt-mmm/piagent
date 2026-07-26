@@ -10,7 +10,7 @@ This file is the canonical install, update, rollback, and release checklist. Oth
 
 All supported environments require Node.js `>=22.19.0` and Pi Coding Agent `0.82.0`. The Pi host is installed as a Node CLI; Pi Agent Platform still defines its own release matrix because the terminal helpers and shell policy rely on Bash/POSIX behavior.
 
-| Surface | Status for v1.1.0 | Rollout guidance |
+| Surface | Status for v1.1.1 | Rollout guidance |
 |---|---|---|
 | macOS Apple Silicon (`darwin/arm64`) + Bash | Verified for this release. | Safe default for team rollout after normal project smoke tests. |
 | Linux x64 + Bash | Verified in GitHub Actions. | Safe default for CI/server usage after normal project smoke tests. |
@@ -33,7 +33,7 @@ These three components are versioned independently. A full install, update, or r
 
 | Channel | Source shape | Mutability | Use when |
 |---|---|---:|---|
-| `stable` | `git:github.com/Vt-mmm/piagent@<resolved-commit-sha>` from `v1.1.0` | Fixed after resolution | Default for team rollout. |
+| `stable` | `git:github.com/Vt-mmm/piagent@<resolved-commit-sha>` from `v1.1.1` | Fixed after resolution | Default for team rollout. |
 | `exact` | Tag, reviewed commit, or a tag resolved with `--resolve-tag` | Fixed when using a commit SHA | Pi-package-only roll forward, rollback, or reproduction. |
 | `dev` | `git:github.com/Vt-mmm/piagent` | Moving | Personal machine or sandbox only. |
 | `local` | `/path/to/piagent` | Local workspace | Platform development and dry-run validation. |
@@ -53,7 +53,7 @@ Use this flow when the team needs both terminal commands and the Pi package:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.1.0
+npm install -g --ignore-scripts @piagent/platform@1.1.1
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -61,8 +61,8 @@ piagent-install --stable
 The stable preview and apply output includes:
 
 ```text
-currentRelease: v1.1.0 (helper package version)
-tag: v1.1.0
+currentRelease: v1.1.1 (helper package version)
+tag: v1.1.1
 resolvedCommit: <40-char-sha>
 source: git:github.com/Vt-mmm/piagent@<40-char-sha>
 ```
@@ -79,7 +79,7 @@ bash scripts/install-global.sh --stable
 Use this only when terminal commands are not needed:
 
 ```bash
-pi install git:github.com/Vt-mmm/piagent@v1.1.0
+pi install git:github.com/Vt-mmm/piagent@v1.1.1
 ```
 
 Direct `pi install` does not create `piagent-*` commands on `PATH`.
@@ -192,8 +192,11 @@ Before broad team access, a repository administrator must enable these external 
 3. Enable Dependency graph, Dependabot alerts, and Dependabot security updates. Keep `.github/dependabot.yml` enabled for scheduled npm and GitHub Actions update pull requests.
 4. Enable GitHub private vulnerability reporting so the form linked by `SECURITY.md` works before public rollout.
 5. Keep secret scanning and push protection enabled. Review CodeQL results after the workflow's first successful run.
+6. Add the **Code scanning results** check to the `main` branch ruleset and set its alert threshold so that a new high-severity CodeQL alert blocks the merge. The `analyze (...)` jobs required above only prove the analysis ran and uploaded its SARIF; they succeed just as well when the analysis found new high-severity alerts. Without this separate check, a pull request merges green with open high alerts, which is what happened on `v1.1.1`. Requiring the `analyze` jobs is still necessary — it catches an analysis that failed to run — but it is not the results gate and must not be mistaken for one.
 
 Verify these settings in GitHub **Settings → Rules** and **Settings → Code security and analysis**. Treat any missing control as an explicit rollout blocker, not as a passing source-code gate. Repository rules also close the remaining mutability risk of bootstrap-by-tag; tag-to-SHA resolution inside `piagent-install` alone cannot protect the helper package before it starts.
+
+Alerts dismissed as false positives carry their reason in the dismissal comment, and the reason belongs in the source as well when the flagged shape is deliberate. An alert dismissed without a written reason is indistinguishable from an alert nobody read.
 
 ### Required npm publishing controls
 
@@ -270,7 +273,9 @@ Re-running the workflow from a branch instead skips publishing, because the publ
    npm run site:check
    ```
 
-   Opening the site in a browser does not answer this. The domain has several address records, so one can be dead or looping while every manual look lands on a healthy one. This resolves both hosts, asks each address directly with the right `Host` header and SNI, and requires each to return the released version. A redirect from an address back to its own host is reported as a loop rather than followed. An address the machine has no route to is reported as unverified, not as a pass.
+   Opening the site in a browser does not answer this. The domain has several address records, so one can be dead or looping while every manual look lands on a healthy one. This resolves both hosts, asks each address directly with the right `Host` header and SNI, and requires each to return the released version. A redirect from an address back to its own host is reported as a loop rather than followed.
+
+   An address the machine has no route to ends the run. It is reported separately from a site failure, because the machine is what is missing rather than the site, but it is not a pass either — the release gate must not report that it verified every address in a run where it verified fewer. Run the check from a machine with routes to every address family the domain publishes. `--allow-unverified` accepts the gap deliberately and names it in the summary; use it only when the missing route is understood and the remaining addresses were verified.
 9. Publish the already-reviewed draft only after production verification passes:
 
    ```bash

@@ -345,6 +345,36 @@ describe("document extraction", () => {
     assert.match(extracted.reason, /binary/);
   });
 
+  // A NUL scan only catches the binaries that happen to carry a NUL early.
+  // Decoding leniently turns everything else into replacement characters, which
+  // is content-shaped garbage handed to the model — the outcome the extension
+  // gate exists to prevent.
+  it("refuses bytes that are not valid UTF-8 rather than substituting replacement characters", () => {
+    for (const bytes of [
+      [0xc3, 0x28], // a lead byte followed by an invalid continuation
+      [0xe2, 0x82], // a three-byte sequence cut short
+      [0xa0, 0xa1], // continuation bytes with no lead
+      [0xf8, 0x88, 0x80, 0x80, 0x80], // five-byte sequence, never legal
+      [0xed, 0xa0, 0x80] // a surrogate half encoded as UTF-8
+    ]) {
+      const extracted = extractTextDocument(Buffer.from(bytes));
+      assert.equal(extracted.status, "error", `${bytes.map((b) => b.toString(16)).join(" ")} should be refused`);
+      assert.doesNotMatch(extracted.reason ?? "", /�/);
+    }
+
+    const valid = extractTextDocument(Buffer.from("xin chào — ok\n"));
+    assert.equal(valid.status, "ok");
+    assert.equal(valid.text, "xin chào — ok\n");
+  });
+
+  it("refuses byte-order-marked text whose body is not valid in that encoding", () => {
+    const badUtf16 = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from([0x00, 0xd8, 0x41, 0x00])]);
+    assert.equal(extractTextDocument(badUtf16).status, "error");
+
+    const badUtf8Bom = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from([0xc3, 0x28])]);
+    assert.equal(extractTextDocument(badUtf8Bom).status, "error");
+  });
+
   it("truncates rather than returning an unbounded string", () => {
     const extracted = extractTextDocument(Buffer.from("a".repeat(MAX_EXTRACTED_CHARS + 100)));
     assert.equal(extracted.status, "ok");

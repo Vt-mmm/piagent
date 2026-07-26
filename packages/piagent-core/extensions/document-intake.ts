@@ -288,6 +288,17 @@ function decodeXmlEntities(value: string): string {
     .replace(/&amp;/g, "&");
 }
 
+// Stripping markup and then decoding entities is the shape of an incomplete
+// sanitizer, and static analysis flags it as one: a document containing the
+// literal text `&lt;script&gt;` comes out as `<script>`. That is not a defect
+// here, it is the required result — the document shows those characters to a
+// reader, so extraction has to reproduce them. What makes it safe is the sink.
+// This text becomes a Pi tool result, `{ type: "text" }`, rendered in a
+// terminal; the shipped package contains no HTML sink at all. Untrusted
+// document content is separately redacted and wrapped in a region delimited by
+// a marker the document cannot predict. If any renderer that interprets markup
+// is ever added downstream, escaping belongs at that boundary, not here, where
+// it would corrupt the extracted text for every existing caller.
 export function extractDocxText(buffer: Buffer): DocumentExtraction {
   const document = readZipEntry(buffer, "word/document.xml");
   if (document.status === "error") return document;
@@ -337,6 +348,20 @@ function finish(text: string, kind: "text" | "docx" | "pdf"): DocumentExtraction
 // UTF-16 is half NUL bytes by design, so the binary check has to know about it
 // before it runs, and a byte-order mark is the only signal available without
 // guessing. Everything without a mark is treated as UTF-8.
+//
+// Decoding is strict in both encodings. Buffer.toString substitutes U+FFFD for
+// anything it cannot decode, which turns a binary file renamed to .txt into
+// "text" made of replacement characters — the exact outcome the extension gate
+// exists to prevent. A NUL scan does not catch it either: plenty of binary
+// formats carry no NUL in their first bytes.
+function decodeStrict(bytes: Buffer, encoding: "utf-8" | "utf-16le"): string | undefined {
+  try {
+    return new TextDecoder(encoding, { fatal: true }).decode(bytes);
+  } catch {
+    return undefined;
+  }
+}
+
 function decodeTextBuffer(buffer: Buffer): string | undefined {
   if (buffer.length >= 4 && buffer[0] === 0xff && buffer[1] === 0xfe && buffer[2] === 0x00 && buffer[3] === 0x00) {
     return undefined;
@@ -346,13 +371,13 @@ function decodeTextBuffer(buffer: Buffer): string | undefined {
   if (utf16Little || utf16Big) {
     const body = buffer.subarray(2);
     if (body.length % 2 !== 0) return undefined;
-    return utf16Big ? Buffer.from(body).swap16().toString("utf16le") : body.toString("utf16le");
+    return decodeStrict(utf16Big ? Buffer.from(body).swap16() : body, "utf-16le");
   }
   if (buffer.includes(0)) return undefined;
   if (buffer.length >= 3 && buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf) {
-    return buffer.subarray(3).toString("utf8");
+    return decodeStrict(buffer.subarray(3), "utf-8");
   }
-  return buffer.toString("utf8");
+  return decodeStrict(buffer, "utf-8");
 }
 
 export function extractTextDocument(buffer: Buffer): DocumentExtraction {
@@ -360,7 +385,10 @@ export function extractTextDocument(buffer: Buffer): DocumentExtraction {
   // otherwise rather than emit replacement characters that read like content.
   const decoded = decodeTextBuffer(buffer);
   if (decoded === undefined) {
-    return { status: "error", reason: "file has a text extension but contains binary data" };
+    return {
+      status: "error",
+      reason: "file has a text extension but its bytes are not valid UTF-8 or UTF-16 text; it is binary or in some other encoding"
+    };
   }
   return finish(decoded.replace(/\r\n?/g, "\n"), "text");
 }

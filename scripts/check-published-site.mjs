@@ -30,14 +30,19 @@ function fail(message) {
 }
 
 function parseArguments(values) {
-  const options = { hosts: [], expect: null };
+  const options = { hosts: [], expect: null, allowUnverified: false };
   for (let index = 0; index < values.length; index += 1) {
     const option = values[index];
     if (option === "-h" || option === "--help") {
-      process.stdout.write("Usage: node scripts/check-published-site.mjs [--host <name>]... [--expect <text>]\n");
+      process.stdout.write("Usage: node scripts/check-published-site.mjs [--host <name>]... [--expect <text>] [--allow-unverified]\n");
       process.stdout.write("Verify every resolved address of the docs site serves the released version.\n");
       process.stdout.write("Defaults to piagent.io.vn and www.piagent.io.vn, expecting the root package version.\n");
+      process.stdout.write("--allow-unverified downgrades addresses this machine cannot route to from a failure to a note.\n");
       process.exit(0);
+    }
+    if (option === "--allow-unverified") {
+      options.allowUnverified = true;
+      continue;
     }
     const value = values[index + 1];
     if (option === "--host") {
@@ -76,14 +81,30 @@ async function resolveAddresses(host) {
   return addresses;
 }
 
-function request(host, { address, family }) {
+// `port` and `tlsOptions` exist so the body-cap path can be driven against a
+// local server in a test. Nothing on the command line reaches them, and the
+// defaults are what every real run uses: port 443 and Node's own trust store.
+export function request(host, { address, family, port = 443 }, tlsOptions = {}) {
   return new Promise((resolve) => {
+    // Every path out of here has to settle exactly once. Capping the body
+    // destroys the response, and a destroyed response emits neither `end` nor
+    // `error` — it goes straight to `aborted` and `close`. Without a `close`
+    // handler the promise stays pending forever, and the request timeout cannot
+    // rescue it because the socket is already gone. That is a hung release gate,
+    // not a failed one.
+    let settled = false;
+    const settle = (value) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
     const call = https.request(
       {
+        ...tlsOptions,
         host: address,
         family,
         servername: host,
-        port: 443,
+        port,
         path: "/",
         method: "GET",
         headers: { Host: host, "User-Agent": "piagent-site-check" },
@@ -92,24 +113,31 @@ function request(host, { address, family }) {
       (response) => {
         let body = "";
         let bytes = 0;
+        let truncated = false;
         response.setEncoding("utf8");
         response.on("data", (chunk) => {
           bytes += Buffer.byteLength(chunk, "utf8");
           if (bytes > MAX_BODY_BYTES) {
+            truncated = true;
             response.destroy();
             return;
           }
           body += chunk;
         });
-        response.on("end", () => resolve({ status: response.statusCode, location: response.headers.location, body }));
-        response.on("error", (error) => resolve({ error: error.message, code: error.code }));
+        response.on("end", () =>
+          settle({ status: response.statusCode, location: response.headers.location, body, truncated })
+        );
+        response.on("error", (error) => settle({ error: error.message, code: error.code }));
+        response.on("close", () =>
+          settle({ status: response.statusCode, location: response.headers.location, body, truncated })
+        );
       }
     );
     call.on("timeout", () => {
       call.destroy();
-      resolve({ error: `no response within ${REQUEST_TIMEOUT_MS}ms` });
+      settle({ error: `no response within ${REQUEST_TIMEOUT_MS}ms` });
     });
-    call.on("error", (error) => resolve({ error: error.message, code: error.code }));
+    call.on("error", (error) => settle({ error: error.message, code: error.code }));
     call.end();
   });
 }
@@ -137,8 +165,13 @@ export function judge(host, hosts, expect, result, family) {
     return null;
   }
   if (result.status !== 200) return `HTTP ${result.status}`;
-  if (!result.body.includes(expect)) return `HTTP 200 but the page does not mention ${expect}`;
-  return null;
+  if (result.body.includes(expect)) return null;
+  // Not finding the version in a body that was cut short is not the same claim
+  // as not finding it in the page.
+  if (result.truncated) {
+    return `HTTP 200 but the response exceeded ${MAX_BODY_BYTES} bytes and the part read does not mention ${expect}`;
+  }
+  return `HTTP 200 but the page does not mention ${expect}`;
 }
 
 async function main() {
@@ -170,18 +203,38 @@ async function main() {
     }
   }
 
-  for (const entry of unverified) process.stdout.write(`UNVERIFIED: ${entry}\n`);
+  const summary = summarize({ checked, failures, unverified, expect: options.expect, allowUnverified: options.allowUnverified });
+  process.stdout.write(summary.out);
+  process.stderr.write(summary.err);
+  process.exit(summary.code);
+}
+
+// An address nobody checked is not an address that passed. Reporting it as
+// unverified and then exiting 0 makes the gate say "verified every address"
+// about a run that did not, so an unchecked address ends the run unless the
+// operator accepts the gap deliberately.
+export function summarize({ checked, failures, unverified, expect, allowUnverified }) {
+  let out = "";
+  for (const entry of unverified) out += `UNVERIFIED: ${entry}\n`;
 
   if (failures.length > 0) {
-    process.stderr.write(`FAIL: ${failures.length} of ${checked} addresses do not serve ${options.expect}\n`);
-    for (const failure of failures) process.stderr.write(`  ${failure}\n`);
-    process.stderr.write("Each address is a real path users take. Fix the DNS records or the deployment behind them.\n");
-    process.exit(1);
+    let err = `FAIL: ${failures.length} of ${checked} addresses do not serve ${expect}\n`;
+    for (const failure of failures) err += `  ${failure}\n`;
+    err += "Each address is a real path users take. Fix the DNS records or the deployment behind them.\n";
+    return { code: 1, out, err };
+  }
+
+  if (unverified.length > 0 && !allowUnverified) {
+    let err = `FAIL: ${unverified.length} of ${checked} addresses could not be checked from this machine\n`;
+    for (const entry of unverified) err += `  ${entry}\n`;
+    err += "Run the check from a machine with a route to them, or pass --allow-unverified to accept the gap.\n";
+    return { code: 1, out, err };
   }
 
   const verified = checked - unverified.length;
-  const note = unverified.length > 0 ? ` (${unverified.length} not reachable from this machine)` : "";
-  process.stdout.write(`PASS: ${verified} of ${checked} addresses serve ${options.expect}${note}\n`);
+  const note = unverified.length > 0 ? ` (${unverified.length} accepted as not reachable from this machine)` : "";
+  out += `PASS: ${verified} of ${checked} addresses serve ${expect}${note}\n`;
+  return { code: 0, out, err: "" };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
