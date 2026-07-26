@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -218,6 +219,41 @@ describe("runtime verify evidence ledger", () => {
       exitCode: 0
     });
 
+    assert.equal(result.ok, true);
+  });
+
+  // Redacting the text and hashing the raw line publishes the template and a
+  // way to confirm guesses against it, so the only unknown left is the secret
+  // and SHA-256 is fast enough to walk a candidate list offline. The digest has
+  // to cover exactly what the file already shows.
+  it("does not store a hash that confirms guesses at the redacted secret", () => {
+    const { file } = createLedgerFixture();
+    const secret = "CorrectHorse42";
+    const rawCommand = joined("DATABASE", "_PASSWORD", "=", secret, " npm test");
+
+    appendObservedBashResult(file, {
+      cwd: "/repo",
+      command: rawCommand,
+      isError: false,
+      recordedAtMs: Date.parse("2026-07-19T01:00:01.000Z")
+    });
+
+    const stored = JSON.parse(fs.readFileSync(file, "utf8").trim());
+    assert.equal(stored.command.includes(secret), false);
+
+    for (const guess of ["hunter2", secret, "password1"]) {
+      const candidate = joined("DATABASE", "_PASSWORD", "=", guess, " npm test");
+      const digest = crypto.createHash("sha256").update(candidate).digest("hex");
+      assert.notEqual(digest, stored.commandHash, `hashing the raw command with ${guess} must not match the stored digest`);
+    }
+
+    // Matching still works, because both sides redact before hashing.
+    const result = findMatchingObservedBashResult(readObservedBashResults(file), {
+      cwd: "/repo",
+      command: rawCommand,
+      notBefore: "2026-07-19T01:00:00.000Z",
+      exitCode: 0
+    });
     assert.equal(result.ok, true);
   });
 

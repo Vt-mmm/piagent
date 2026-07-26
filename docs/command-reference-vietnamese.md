@@ -419,8 +419,8 @@ Các lệnh này chạy ngoài Pi.
 | Command | Dùng khi nào |
 |---|---|
 | `npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0` | Cài Pi CLI tương thích với release hiện tại. |
-| `npm install -g --ignore-scripts @piagent/platform@1.1.1` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
-| `pi install git:github.com/Vt-mmm/piagent@v1.1.1` | Cài pinned release khi cần reproducible team setup. |
+| `npm install -g --ignore-scripts @piagent/platform@1.1.2` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
+| `pi install git:github.com/Vt-mmm/piagent@v1.1.2` | Cài pinned release khi cần reproducible team setup. |
 | `pi install git:github.com/Vt-mmm/piagent` | Cài latest package platform cho máy cá nhân/sandbox. |
 | Cài exact Pi host của release, rồi `npm install -g --ignore-scripts @piagent/platform@X.Y.Z` và `piagent-install --stable` | Full update: đồng bộ host, npm-global helper và Pi package. Mỗi release pin một Pi host chính xác; lấy đúng version của release đang cài trong [release/install policy](release-install-policy.md). |
 | Cài exact Pi host ghi trong release cũ, rồi helper `vPREVIOUS` và `piagent-install --stable` | Full rollback; đánh giá dependency risk của host cũ trước khi hạ version. |

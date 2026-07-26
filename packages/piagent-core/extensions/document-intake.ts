@@ -39,8 +39,12 @@ export type DocumentRoot = {
   source: DocumentRootSource;
 };
 
+// Device and inode of the file that was checked, so a later open can prove it
+// got the same file rather than whatever the name points at by then.
+export type DocumentIdentity = { dev: number; ino: number; size: number };
+
 export type DocumentResolution =
-  | { status: "ok"; absolutePath: string; extension: string; root: DocumentRoot }
+  | { status: "ok"; absolutePath: string; extension: string; root: DocumentRoot; identity: DocumentIdentity }
   | { status: "error"; reason: string };
 
 export type DocumentExtraction =
@@ -105,6 +109,16 @@ export function resolveDocumentRoots(options: {
   return roots;
 }
 
+// Written as a scan rather than a regular expression so the control characters
+// it rejects appear as numbers here instead of as invisible bytes in the source.
+function hasControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code < 0x20 || code === 0x7f) return true;
+  }
+  return false;
+}
+
 function containedBy(root: string, candidate: string): boolean {
   if (candidate === root) return true;
   const relative = path.relative(root, candidate);
@@ -131,6 +145,13 @@ export function resolveDocumentPath(
   }
   const trimmed = rawPath.trim();
   if (trimmed.includes("\0")) return { status: "error", reason: "document path contains a null byte" };
+  // Refusal messages and the read header quote the path back, and both sit
+  // outside the data region. A newline in a filename would write its own line
+  // there, at instruction level. The header escapes what it prints as well, but
+  // a path carrying control characters has no legitimate caller.
+  if (hasControlCharacter(trimmed)) {
+    return { status: "error", reason: "document path contains a control character" };
+  }
 
   const expanded = expandHome(trimmed, options.home ?? os.homedir());
   // A relative path means relative to the project. The process working
@@ -183,7 +204,16 @@ export function resolveDocumentPath(
     };
   }
 
-  return { status: "ok", absolutePath: canonical, extension, root };
+  return {
+    status: "ok",
+    absolutePath: canonical,
+    extension,
+    root,
+    // Identity of the file every check above was made against. Reading by path
+    // afterwards re-resolves the name and can land somewhere else entirely, so
+    // the reader has to prove the bytes it opened came from this exact file.
+    identity: { dev: stat.dev, ino: stat.ino, size: stat.size }
+  };
 }
 
 // --- .docx ---------------------------------------------------------------
@@ -302,7 +332,13 @@ function decodeXmlEntities(value: string): string {
 export function extractDocxText(buffer: Buffer): DocumentExtraction {
   const document = readZipEntry(buffer, "word/document.xml");
   if (document.status === "error") return document;
-  const xml = document.data.toString("utf8");
+  // Same rule as a plain text file: decoding leniently would turn undecodable
+  // bytes into replacement characters and hand them over as if they were text.
+  // OOXML declares UTF-8, so anything else in here is a corrupt or forged part.
+  const xml = decodeStrict(document.data, "utf-8");
+  if (xml === undefined) {
+    return { status: "error", reason: "not a readable .docx: word/document.xml is not valid UTF-8" };
+  }
   if (xml.includes("\0")) return { status: "error", reason: "not a readable .docx: word/document.xml holds binary data" };
   const text = xml
     // Paragraph properties declare tab *stops*, and a tab character per declared
@@ -397,9 +433,9 @@ export function extractTextDocument(buffer: Buffer): DocumentExtraction {
 // not a side quest worth taking, so this delegates to pdftotext when the host
 // has it and says so plainly when it does not. Reporting "no text found" for a
 // missing tool would be a lie in the direction that wastes the most time.
-export function extractPdfWithPdftotext(
-  absolutePath: string,
-  run: (command: string, args: string[]) => { status: number | null; stdout: string; stderr: string; error?: Error } = defaultRun
+export function extractPdfFromDescriptor(
+  fd: number,
+  run: (command: string, args: string[], input?: number) => { status: number | null; stdout: string; stderr: string; error?: Error } = defaultRun
 ): DocumentExtraction {
   const probe = run("command", ["-v", "pdftotext"]);
   if (probe.error || probe.status !== 0) {
@@ -408,8 +444,11 @@ export function extractPdfWithPdftotext(
       reason: "reading .pdf needs pdftotext, which is not on PATH; install poppler (macOS: brew install poppler, Debian/Ubuntu: apt install poppler-utils) or convert the file to .txt"
     };
   }
-  // `-layout` keeps table columns readable, `-` writes to stdout.
-  const result = run("pdftotext", ["-layout", "-enc", "UTF-8", absolutePath, "-"]);
+  // `-layout` keeps table columns readable, and the two `-` are stdin in and
+  // stdout out. The converter is handed the already-open descriptor rather than
+  // a path, so it reads the file whose identity was verified and cannot be
+  // pointed somewhere else by a name that changed in the meantime.
+  const result = run("pdftotext", ["-layout", "-enc", "UTF-8", "-", "-"], fd);
   if (result.error) {
     return {
       status: "error",
@@ -432,10 +471,19 @@ export function extractPdfWithPdftotext(
 // returns would hang the session rather than fail the read.
 const PDF_TIMEOUT_MS = 20_000;
 
-function defaultRun(command: string, args: string[]): { status: number | null; stdout: string; stderr: string; error?: Error } {
+function defaultRun(
+  command: string,
+  args: string[],
+  input?: number
+): { status: number | null; stdout: string; stderr: string; error?: Error } {
   const result = command === "command"
     ? spawnSync("/bin/sh", ["-c", `command -v ${args[1]}`], { encoding: "utf8", timeout: PDF_TIMEOUT_MS })
-    : spawnSync(command, args, { encoding: "utf8", maxBuffer: MAX_DOCUMENT_BYTES, timeout: PDF_TIMEOUT_MS });
+    : spawnSync(command, args, {
+      encoding: "utf8",
+      maxBuffer: MAX_DOCUMENT_BYTES,
+      timeout: PDF_TIMEOUT_MS,
+      stdio: [input ?? "ignore", "pipe", "pipe"]
+    });
   return {
     status: result.status,
     stdout: result.stdout ?? "",
@@ -444,21 +492,85 @@ function defaultRun(command: string, args: string[]): { status: number | null; s
   };
 }
 
-export function extractDocument(
-  absolutePath: string,
-  extension: string,
-  options: { readFile?: (target: string) => Buffer; extractPdf?: (target: string) => DocumentExtraction } = {}
-): DocumentExtraction {
-  const readFile = options.readFile ?? ((target: string) => fs.readFileSync(target));
-  if (extension === "pdf") {
-    return (options.extractPdf ?? ((target: string) => extractPdfWithPdftotext(target)))(absolutePath);
-  }
-  let buffer: Buffer;
+// --- reading -------------------------------------------------------------
+//
+// Everything resolveDocumentPath decided — containment in a granted root, the
+// extension, the size limit, and the guard's protected-path check on top of it
+// — was decided about one specific file. Re-opening by path afterwards resolves
+// the name again, and a name can point somewhere else by then: replacing the
+// checked file with a symbolic link between the check and the read returned the
+// contents of a file outside every granted root. So the file is opened once and
+// the descriptor is what gets read, after proving it is the same file.
+//
+// Identity is device plus inode plus size. An attacker who deletes and recreates
+// the file cannot choose which inode they get, so a match means the descriptor
+// refers to the file that passed the checks.
+
+export type ResolvedDocument = Extract<DocumentResolution, { status: "ok" }>;
+
+const DOCUMENT_CHANGED = "document changed between the safety checks and the read, so nothing was read";
+
+function openVerifiedDocument(
+  resolution: ResolvedDocument
+): { status: "ok"; fd: number; size: number } | { status: "error"; reason: string } {
+  let fd: number;
   try {
-    buffer = readFile(absolutePath);
+    fd = fs.openSync(resolution.absolutePath, "r");
+  } catch (error) {
+    const code = error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code) : "";
+    return {
+      status: "error",
+      reason: code === "ENOENT"
+        ? `document does not exist: ${resolution.absolutePath}`
+        : `document cannot be opened: ${resolution.absolutePath}`
+    };
+  }
+  let stat: fs.Stats;
+  try {
+    stat = fs.fstatSync(fd);
+  } catch {
+    fs.closeSync(fd);
+    return { status: "error", reason: `document cannot be inspected: ${resolution.absolutePath}` };
+  }
+  const { dev, ino, size } = resolution.identity;
+  if (!stat.isFile() || stat.dev !== dev || stat.ino !== ino || stat.size !== size) {
+    fs.closeSync(fd);
+    return { status: "error", reason: DOCUMENT_CHANGED };
+  }
+  return { status: "ok", fd, size: stat.size };
+}
+
+function readAllFromDescriptor(fd: number, size: number): Buffer {
+  const buffer = Buffer.alloc(size);
+  let offset = 0;
+  while (offset < size) {
+    const read = fs.readSync(fd, buffer, offset, size - offset, offset);
+    if (read <= 0) break;
+    offset += read;
+  }
+  return offset === size ? buffer : buffer.subarray(0, offset);
+}
+
+export function extractDocument(
+  resolution: ResolvedDocument,
+  options: { extractPdf?: (fd: number) => DocumentExtraction } = {}
+): DocumentExtraction {
+  const opened = openVerifiedDocument(resolution);
+  if (opened.status === "error") return opened;
+  try {
+    if (resolution.extension === "pdf") {
+      return (options.extractPdf ?? ((fd: number) => extractPdfFromDescriptor(fd)))(opened.fd);
+    }
+    const buffer = readAllFromDescriptor(opened.fd, opened.size);
+    if (resolution.extension === "docx") return extractDocxText(buffer);
+    return extractTextDocument(buffer);
   } catch (error) {
     return { status: "error", reason: error instanceof Error ? error.message : String(error) };
+  } finally {
+    try {
+      fs.closeSync(opened.fd);
+    } catch {
+      // The read already produced its result; a failing close cannot change it.
+    }
   }
-  if (extension === "docx") return extractDocxText(buffer);
-  return extractTextDocument(buffer);
 }

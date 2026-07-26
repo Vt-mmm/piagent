@@ -48,6 +48,9 @@ PRESET="core"
 REPLACE=false
 DRY_RUN=false
 LIST=false
+# Answers "is this preset name real?" and writes nothing, so a caller can reject
+# a bad preset before it installs anything.
+VALIDATE_PRESET=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -77,6 +80,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --list)
       LIST=true
+      shift
+      ;;
+    --validate-preset)
+      VALIDATE_PRESET=true
       shift
       ;;
     -h|--help)
@@ -118,14 +125,15 @@ if [[ -z "$CONFIG_PATH" ]]; then
   esac
 fi
 
-node --input-type=module - "$CONFIG_PATH" "$PRESET" "$REPLACE" "$DRY_RUN" "$LIST" <<'NODE'
+node --input-type=module - "$CONFIG_PATH" "$PRESET" "$REPLACE" "$DRY_RUN" "$LIST" "$VALIDATE_PRESET" <<'NODE'
 import fs from "node:fs";
 import path from "node:path";
 
-const [configPath, presetName, replaceRaw, dryRunRaw, listRaw] = process.argv.slice(2);
+const [configPath, presetName, replaceRaw, dryRunRaw, listRaw, validateRaw] = process.argv.slice(2);
 const replace = replaceRaw === "true";
 const dryRun = dryRunRaw === "true";
 const listOnly = listRaw === "true";
+const validateOnly = validateRaw === "true";
 
 const baselineSettings = {
   toolPrefix: "server",
@@ -255,6 +263,13 @@ if (!Object.hasOwn(presets, presetName)) {
   console.error(`FAIL: unknown preset: ${presetName}`);
   console.error(`Available presets: ${Object.keys(presets).join(", ")}`);
   process.exit(2);
+}
+
+// Answering the name question and stopping, so a caller can ask before it
+// installs rather than discovering the typo after two packages have landed.
+if (validateOnly) {
+  process.stdout.write(`${presetName}\n`);
+  process.exit(0);
 }
 
 let current = {};

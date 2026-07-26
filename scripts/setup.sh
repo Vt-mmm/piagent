@@ -69,6 +69,7 @@ DO_GLOBAL=true
 DO_PROJECT=true
 WITH_MCP=true
 MCP_PRESET="core"
+MCP_PRESET_EXPLICIT=false
 WITH_SUBAGENTS=true
 SUBAGENTS_PRESET="safe"
 SUBAGENTS_MODEL_SCOPE="none"
@@ -124,6 +125,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --mcp-preset)
       MCP_PRESET="${2:-}"
+      MCP_PRESET_EXPLICIT=true
       shift 2
       ;;
     --with-subagents)
@@ -220,6 +222,14 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+# setup never forwards --mcp-preset alongside --no-mcp, so the installer's own
+# check for that pair never sees it and the preset was accepted and dropped in
+# silence. The contradiction is rejected here, whatever the install mode.
+if [[ "$WITH_MCP" == false && "$MCP_PRESET_EXPLICIT" == true ]]; then
+  echo "FAIL: --mcp-preset has no effect with --no-mcp. Drop one of them." >&2
+  exit 2
+fi
 
 resolve_package_source() {
   if [[ -n "$PACKAGE_SOURCE" ]]; then
@@ -381,6 +391,7 @@ if [[ "$DO_GLOBAL" == true ]]; then
   # The opt-out has to be passed explicitly. The installer defaults MCP on, so
   # saying nothing here would install it against the operator's choice; the
   # flags below can stay one-sided only because the installer defaults them off.
+  #
   if [[ "$WITH_MCP" == true ]]; then
     install_args+=("--with-mcp" "--mcp-preset" "$MCP_PRESET")
   else

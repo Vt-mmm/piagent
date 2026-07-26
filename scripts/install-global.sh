@@ -15,7 +15,7 @@ Package source examples:
   # Installs the stable tag after resolving it to a commit SHA.
 
   # Pin a specific release:
-  scripts/install-global.sh --version v1.1.1 --resolve-tag
+  scripts/install-global.sh --version v1.1.2 --resolve-tag
 
   # Preview the planned install/update without changing user config:
   scripts/install-global.sh --stable --dry-run
@@ -127,7 +127,7 @@ detect_runtime_surface() {
       printf 'native-windows/%s (not release-gated; terminal helpers require Bash semantics)' "$arch_name"
       ;;
     *)
-      printf '%s/%s (outside v1.1.1 release matrix)' "$os_name" "$arch_name"
+      printf '%s/%s (outside v1.1.2 release matrix)' "$os_name" "$arch_name"
       ;;
   esac
 }
@@ -135,7 +135,7 @@ detect_runtime_surface() {
 warn_runtime_surface_if_needed() {
   local surface="$1"
   case "$surface" in
-    *"supported target"*|*"experimental"*|*"not release-gated"*|*"outside v1.1.1 release matrix"*)
+    *"supported target"*|*"experimental"*|*"not release-gated"*|*"outside v1.1.2 release matrix"*)
       echo "WARN: runtime surface is $surface." >&2
       echo "WARN: For team rollout, run piagent-doctor plus the project smoke/verify suite on this machine before relying on it." >&2
       ;;
@@ -342,6 +342,18 @@ done
 if [[ "$WITH_MCP" == false && "$MCP_PRESET_EXPLICIT" == true ]]; then
   echo "FAIL: --mcp-preset has no effect with --no-mcp. Drop one of them." >&2
   exit 2
+fi
+
+# The preset is only read at the very last step, after the platform package and
+# the MCP adapter are already installed. A name with a typo therefore failed
+# after two installs had landed, leaving a half-configured machine, and the
+# dry-run still exited 0 because it never reached the check. Validating here
+# costs one process and makes a bad preset cost nothing.
+if [[ "$WITH_MCP" == true ]]; then
+  if ! bash "$PLATFORM_ROOT/scripts/configure-mcp.sh" --scope global --preset "$MCP_PRESET" --validate-preset >/dev/null; then
+    echo "Nothing was installed." >&2
+    exit 2
+  fi
 fi
 
 require_node_version

@@ -11,7 +11,7 @@ import {
   MAX_EXTRACTED_CHARS,
   extractDocument,
   extractDocxText,
-  extractPdfWithPdftotext,
+  extractPdfFromDescriptor,
   extractTextDocument,
   parseRootList,
   resolveDocumentPath,
@@ -31,6 +31,15 @@ function temporaryDirectory() {
   const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "pi-doc-")));
   temporaryRoots.add(root);
   return root;
+}
+
+// extractDocument now takes the resolution, not a path, so a caller cannot read
+// a file that was never checked. Tests go through the real resolver for the same
+// reason.
+function resolveIn(root, name) {
+  const resolved = resolveDocumentPath(path.join(root, name), [{ path: root, source: "profile" }], { cwd: root });
+  assert.equal(resolved.status, "ok", resolved.reason);
+  return resolved;
 }
 
 function write(root, name, contents) {
@@ -219,6 +228,19 @@ describe("document path resolution", () => {
     const contained = resolveDocumentPath(link, rootsFor(project, granted, outside));
     assert.equal(contained.status, "ok", "the same link resolves once its target is granted");
     assert.equal(contained.absolutePath, real);
+  });
+
+  // Refusal messages and the read header quote the path back outside the data
+  // region, so a newline in a name would write its own line at instruction level.
+  it("refuses a path carrying a control character", () => {
+    const project = temporaryDirectory();
+    const roots = rootsFor(project);
+    for (const code of [10, 13, 27, 127]) {
+      const candidate = `notes${String.fromCharCode(code)}injected.md`;
+      const resolved = resolveDocumentPath(path.join(project, candidate), roots, { cwd: project });
+      assert.equal(resolved.status, "error", `char ${code} should be refused`);
+      assert.match(resolved.reason, /control character/);
+    }
   });
 
   it("refuses a directory, a missing file, an empty file, and a null byte", () => {
@@ -518,6 +540,19 @@ describe("document extraction", () => {
     assert.equal(extracted.text, "Ship on Friday");
   });
 
+  // OOXML declares UTF-8. Decoding it leniently put replacement characters into
+  // extracted prose, the same defect the plain-text path had.
+  it("refuses a docx whose document.xml is not valid UTF-8", () => {
+    const broken = Buffer.concat([
+      Buffer.from('<?xml version="1.0"?><w:document><w:body><w:p><w:t>'),
+      Buffer.from([0xc3, 0x28]),
+      Buffer.from("</w:t></w:p></w:body></w:document>")
+    ]);
+    const extracted = extractDocxText(buildDocx(broken, true));
+    assert.equal(extracted.status, "error");
+    assert.match(extracted.reason, /not valid UTF-8/);
+  });
+
   it("refuses a docx whose document.xml holds binary data", () => {
     const extracted = extractDocxText(buildDocx("<w:t>a\0b</w:t>", true));
     assert.equal(extracted.status, "error");
@@ -540,14 +575,14 @@ describe("document extraction", () => {
   });
 
   it("reports a missing pdftotext as a missing tool, not as an empty document", () => {
-    const extracted = extractPdfWithPdftotext("/tmp/whatever.pdf", () => ({ status: 1, stdout: "", stderr: "" }));
+    const extracted = extractPdfFromDescriptor(-1, () => ({ status: 1, stdout: "", stderr: "" }));
     assert.equal(extracted.status, "error");
     assert.match(extracted.reason, /pdftotext/);
     assert.match(extracted.reason, /brew install poppler/);
   });
 
   it("reports a converter that fails or never returns rather than reporting no text", () => {
-    const timedOut = extractPdfWithPdftotext("/tmp/slow.pdf", (command) => (
+    const timedOut = extractPdfFromDescriptor(-1, (command) => (
       command === "command"
         ? { status: 0, stdout: "/usr/bin/pdftotext", stderr: "" }
         : { status: null, stdout: "", stderr: "", error: new Error("spawnSync pdftotext ETIMEDOUT") }
@@ -555,7 +590,7 @@ describe("document extraction", () => {
     assert.equal(timedOut.status, "error");
     assert.match(timedOut.reason, /did not finish within/);
 
-    const failed = extractPdfWithPdftotext("/tmp/broken.pdf", (command) => (
+    const failed = extractPdfFromDescriptor(-1, (command) => (
       command === "command"
         ? { status: 0, stdout: "/usr/bin/pdftotext", stderr: "" }
         : { status: 1, stdout: "", stderr: "Syntax Error: Couldn't find trailer dictionary" }
@@ -566,7 +601,7 @@ describe("document extraction", () => {
   });
 
   it("returns converted pdf text when the converter succeeds", () => {
-    const extracted = extractPdfWithPdftotext("/tmp/spec.pdf", (command) => (
+    const extracted = extractPdfFromDescriptor(-1, (command) => (
       command === "command"
         ? { status: 0, stdout: "/usr/bin/pdftotext", stderr: "" }
         : { status: 0, stdout: "Title\r\n\r\n\r\n\r\nBody\r\n", stderr: "" }
@@ -577,7 +612,7 @@ describe("document extraction", () => {
   });
 
   it("reports a scanned pdf as needing OCR rather than as success", () => {
-    const extracted = extractPdfWithPdftotext("/tmp/scan.pdf", (command) => (
+    const extracted = extractPdfFromDescriptor(-1, (command) => (
       command === "command" ? { status: 0, stdout: "/usr/bin/pdftotext", stderr: "" } : { status: 0, stdout: "  \n\n ", stderr: "" }
     ));
     assert.equal(extracted.status, "error");
@@ -586,19 +621,44 @@ describe("document extraction", () => {
 
   it("dispatches by extension and reports read failures", () => {
     const project = temporaryDirectory();
-    const target = write(project, "notes.md", "hello\n");
-    assert.equal(extractDocument(target, "md").kind, "text");
-    assert.equal(extractDocument(path.join(project, "gone.md"), "md").status, "error");
-    assert.equal(
-      extractDocument("/tmp/x.pdf", "pdf", { extractPdf: () => ({ status: "ok", text: "pdf text", truncated: false, kind: "pdf" }) }).text,
-      "pdf text"
-    );
+    write(project, "notes.md", "hello\n");
+    assert.equal(extractDocument(resolveIn(project, "notes.md")).kind, "text");
 
     // The docx branch has to be reached through the dispatcher, not only by
     // calling the extractor directly.
-    const docx = write(project, "spec.docx", buildDocx(paragraph("<w:t>From dispatch</w:t>"), true));
-    const fromDispatch = extractDocument(docx, "docx");
+    write(project, "spec.docx", buildDocx(paragraph("<w:t>From dispatch</w:t>"), true));
+    const fromDispatch = extractDocument(resolveIn(project, "spec.docx"));
     assert.equal(fromDispatch.kind, "docx");
     assert.equal(fromDispatch.text, "From dispatch");
+
+    write(project, "spec.pdf", "%PDF-1.4 placeholder\n");
+    const pdf = extractDocument(resolveIn(project, "spec.pdf"), {
+      extractPdf: () => ({ status: "ok", text: "pdf text", truncated: false, kind: "pdf" })
+    });
+    assert.equal(pdf.text, "pdf text");
+  });
+
+  it("refuses to read a file that is gone or replaced after it was checked", () => {
+    const project = temporaryDirectory();
+    write(project, "notes.md", "harmless in-root note\n");
+    const resolution = resolveIn(project, "notes.md");
+
+    const outside = temporaryDirectory();
+    const secret = write(outside, "secret.md", "CONTENT FROM OUTSIDE THE GRANTED ROOT\n");
+    fs.unlinkSync(path.join(project, "notes.md"));
+    fs.symlinkSync(secret, path.join(project, "notes.md"));
+
+    const extracted = extractDocument(resolution);
+    assert.equal(extracted.status, "error", JSON.stringify(extracted));
+    assert.match(extracted.reason, /changed between the safety checks and the read/);
+    assert.doesNotMatch(extracted.reason, /OUTSIDE THE GRANTED ROOT/);
+  });
+
+  it("reads the file it checked when nothing changed underneath it", () => {
+    const project = temporaryDirectory();
+    write(project, "notes.md", "stable content\n");
+    const extracted = extractDocument(resolveIn(project, "notes.md"));
+    assert.equal(extracted.status, "ok");
+    assert.equal(extracted.text, "stable content\n");
   });
 });

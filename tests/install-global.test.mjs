@@ -285,6 +285,30 @@ describe("install-global release channels", () => {
     assert.ok(!included.stdout.includes("--no-mcp"), included.stdout);
   });
 
+  // The preset used to be read only at the last step, after the platform package
+  // and the MCP adapter had already been installed, so a typo failed with a
+  // half-configured machine behind it.
+  it("rejects an unknown preset before installing anything", () => {
+    const result = runInstaller(["--stable", "--dry-run", "--no-model-scope", "--mcp-preset", "nonsense"]);
+    assert.equal(result.status, 2, result.stdout);
+    assert.match(result.stderr, /unknown preset: nonsense/);
+    assert.match(result.stderr, /Nothing was installed/);
+    assert.doesNotMatch(result.stdout, /pi install/);
+
+    const good = runInstaller(["--stable", "--dry-run", "--no-model-scope", "--mcp-preset", "core"]);
+    assert.equal(good.status, 0, good.stderr);
+    assert.match(good.stdout, /pi install npm:pi-mcp-adapter@/);
+  });
+
+  // setup never forwards --mcp-preset alongside --no-mcp, so the installer's own
+  // check for that pair never sees it and the preset vanished without a word.
+  it("rejects the same contradictory pair from setup", () => {
+    const result = runSetup(["--global-only", "--dry-run", "--no-mcp", "--mcp-preset", "popular"]);
+    assert.equal(result.status, 2, result.stdout);
+    assert.match(result.stderr, /--mcp-preset has no effect with --no-mcp/);
+    assert.doesNotMatch(result.stdout, /install-global\.sh/);
+  });
+
   // A preset that is accepted and then dropped reads as a preset that was applied.
   it("refuses a preset that cannot take effect", () => {
     const conflict = runInstaller(["--stable", "--dry-run", "--no-mcp", "--mcp-preset", "popular"]);

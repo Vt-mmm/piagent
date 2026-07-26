@@ -5,8 +5,11 @@ on:
   push:
     branches:
       - main
-    tags:
-      - "v*"
+  # Tag runs arrive through publish.yml, which calls this workflow and will not
+  # publish until it passes. Keeping a separate tag trigger here would run the
+  # matrix twice and, worse, make it look like the tag was gated when the
+  # publish job was in fact racing it.
+  workflow_call:
 
 jobs:
   verify:

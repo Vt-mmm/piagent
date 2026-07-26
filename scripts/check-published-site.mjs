@@ -22,6 +22,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const REQUEST_TIMEOUT_MS = 15_000;
+// Whole-request budget. REQUEST_TIMEOUT_MS above only measures silence, so it
+// bounds a stalled peer but not a slow one.
+const REQUEST_DEADLINE_MS = 30_000;
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 
 function fail(message) {
@@ -81,10 +84,11 @@ async function resolveAddresses(host) {
   return addresses;
 }
 
-// `port` and `tlsOptions` exist so the body-cap path can be driven against a
-// local server in a test. Nothing on the command line reaches them, and the
-// defaults are what every real run uses: port 443 and Node's own trust store.
-export function request(host, { address, family, port = 443 }, tlsOptions = {}) {
+// `port`, `tls`, and `deadlineMs` exist so the body-cap and deadline paths can
+// be driven against a local server in a test. Nothing on the command line
+// reaches them, and the defaults are what every real run uses: port 443, Node's
+// own trust store, and the deadline declared above.
+export function request(host, { address, family, port = 443 }, { tls = {}, deadlineMs = REQUEST_DEADLINE_MS } = {}) {
   return new Promise((resolve) => {
     // Every path out of here has to settle exactly once. Capping the body
     // destroys the response, and a destroyed response emits neither `end` nor
@@ -93,14 +97,16 @@ export function request(host, { address, family, port = 443 }, tlsOptions = {}) 
     // rescue it because the socket is already gone. That is a hung release gate,
     // not a failed one.
     let settled = false;
+    let deadline;
     const settle = (value) => {
       if (settled) return;
       settled = true;
+      clearTimeout(deadline);
       resolve(value);
     };
     const call = https.request(
       {
-        ...tlsOptions,
+        ...tls,
         host: address,
         family,
         servername: host,
@@ -133,6 +139,16 @@ export function request(host, { address, family, port = 443 }, tlsOptions = {}) 
         );
       }
     );
+    // `timeout` on the request is socket inactivity, not a deadline. A peer that
+    // sends one byte a second keeps resetting it and never trips it, so the
+    // check waited indefinitely on a server that was technically still talking.
+    // This is the wall clock, and it is the only thing that bounds the run.
+    deadline = setTimeout(() => {
+      call.destroy();
+      settle({ error: `did not complete within ${deadlineMs}ms` });
+    }, deadlineMs);
+    // A timer must not keep the process alive after every address has answered.
+    deadline.unref?.();
     call.on("timeout", () => {
       call.destroy();
       settle({ error: `no response within ${REQUEST_TIMEOUT_MS}ms` });
@@ -162,6 +178,13 @@ export function judge(host, hosts, expect, result, family) {
     }
     if (target.hostname === host) return `HTTP ${result.status} redirecting to itself at ${target.href}`;
     if (!hosts.includes(target.hostname)) return `HTTP ${result.status} redirecting off the site to ${target.href}`;
+    // Matching the hostname alone accepts a redirect that keeps the name and
+    // changes everything else: back to plaintext, onto another port, or through
+    // embedded credentials. Each of those is a different destination than the
+    // one being verified.
+    if (target.protocol !== "https:") return `HTTP ${result.status} redirecting away from HTTPS to ${target.href}`;
+    if (target.port !== "" && target.port !== "443") return `HTTP ${result.status} redirecting to a non-standard port at ${target.href}`;
+    if (target.username !== "" || target.password !== "") return `HTTP ${result.status} redirecting to a URL carrying credentials`;
     return null;
   }
   if (result.status !== 200) return `HTTP ${result.status}`;

@@ -44,6 +44,7 @@ pi install /path/to/piagent
 - `0.2.x`: có guard ổn định và docs team.
 - `1.0.2`: đủ security review, MCP registry, adapter schema versioned.
 - `1.1.0`: đọc document ngoài project qua `additionalReadRoots`, MCP baseline bật mặc định ở cả hai lệnh install, pin Pi host `0.82.0`.
+- `1.1.2`: đóng TOCTOU của document reader, hash evidence tính trên text đã redact, publish chờ đủ verify matrix.
 
 ## Không publish
 

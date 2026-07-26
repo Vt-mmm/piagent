@@ -2,6 +2,25 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.1.2 - 2026-07-26
+
+Security and release-gating fixes found reviewing v1.1.1 after it shipped. Every fix in this release was reproduced as a working exploit or failure first.
+
+### Fixed
+
+- `piagent_document_read` no longer re-opens the file by name after checking it. Containment in a granted root, the extension, the size limit, and the guard's protected-path check were all decided from one `realpath` and `stat`, and then `readFileSync` resolved the name a second time. Replacing the checked file with a symbolic link in between returned the contents of a file outside every granted root — reproduced end to end. The file is now opened once and read from the descriptor, and the descriptor's device and inode must equal the file that passed the checks or nothing is read. `pdftotext` is handed the same descriptor on standard input instead of a path, so the converter cannot be pointed elsewhere either.
+- The evidence ledger no longer stores a digest of the unredacted command. It wrote a redacted command such as `export TOKEN= [REDACTED_SECRET] && npm test` beside a SHA-256 of the real line, so the redaction published the template and the hash confirmed guesses against it: the only unknown left was the secret, and SHA-256 is fast enough to walk a candidate list offline. A three-candidate list recovered the test secret. The digest now covers the redacted text, which is exactly what the file already shows, and command matching is unaffected because both sides redact before hashing. The CodeQL alert covering this line was dismissed as a false positive in v1.1.1; that dismissal was wrong and has been reversed.
+- `npm run site:check` no longer waits indefinitely on a peer that answers slowly. The request timeout measures socket inactivity, not elapsed time, so a server sending one byte per second reset it forever — a probe was still pending after 40 seconds and would have held the release gate open indefinitely. There is now a wall-clock deadline for the whole request.
+- A redirect that keeps the hostname is no longer accepted whatever else it changes. Only the hostname was compared, so a redirect to plaintext HTTP, to another port, or to a URL carrying credentials passed as if it were the site being verified.
+- A document path containing a control character is refused. Refusal messages and the read header quote the path back outside the data region, so a file named with an embedded newline wrote its own lines there, at instruction level. Paths in the header are additionally escaped when printed.
+- `.docx` text is decoded strictly. The strict decoding added in v1.1.1 covered plain text only, so a `.docx` whose `word/document.xml` was not valid UTF-8 still returned `ok` with replacement characters in the extracted prose.
+
+### Changed
+
+- Publishing now waits for the full release matrix. `publish.yml` and `verify.yml` were independent workflows triggered by the same tag and raced: v1.1.1 finished publishing at 08:03:43Z while the Ubuntu verify job ran to 08:03:48Z and macOS to 08:03:54Z. A macOS-only failure, a runtime audit finding, or a release-identity mismatch would have been reported after the version was already on the registry, where it cannot be withdrawn. `verify.yml` is now a reusable workflow that `publish.yml` calls and depends on.
+- An unknown `--mcp-preset` is rejected before anything is installed. The preset was read only at the final configuration step, so a typo failed after the platform package and the MCP adapter had already been installed, leaving a half-configured machine — and the dry run exited `0` because it never reached the check.
+- `piagent-setup --no-mcp --mcp-preset <name>` fails instead of succeeding with the preset dropped. `piagent-install` already rejected that pair, but setup never forwarded both flags, so the check could not see it.
+
 ## v1.1.1 - 2026-07-26
 
 Fixes for defects found reviewing v1.1.0 after it shipped.

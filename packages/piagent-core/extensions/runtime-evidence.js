@@ -9,10 +9,23 @@ export function normalizeEvidenceCommand(command) {
     .trim();
 }
 
+// The digest is taken over the redacted command, never the raw one.
+//
+// The ledger stores a redacted command beside its hash. Hashing the raw text
+// meant the stored pair was `export TOKEN= [REDACTED_SECRET] && npm test`
+// alongside a SHA-256 of the real line — the redaction published the template
+// and the hash confirmed guesses against it, so the only unknown left was the
+// secret itself and SHA-256 is fast enough to walk a candidate list offline.
+// Redacting first makes the digest cover exactly what the file already shows.
+//
+// Both sides of a lookup redact, so matching is unaffected: the verify command
+// from the task plan and the observed command normalise and redact the same way
+// before being compared.
 export function hashEvidenceCommand(command) {
+  const normalized = normalizeEvidenceCommand(command);
   return crypto
     .createHash("sha256")
-    .update(normalizeEvidenceCommand(command))
+    .update(redactSensitiveText(normalized).text)
     .digest("hex");
 }
 

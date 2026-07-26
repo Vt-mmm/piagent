@@ -21,7 +21,19 @@ permissions:
   id-token: write
 
 jobs:
+  # The full release matrix runs first and publishing waits for it. These used
+  # to be two independent workflows racing the same tag: v1.1.1 finished
+  # publishing at 08:03:43Z while the Ubuntu matrix job was still running until
+  # 08:03:48Z and macOS until 08:03:54Z. A macOS-only failure, a runtime audit
+  # finding, or a release-identity mismatch would have been reported after the
+  # version was already on the registry, where it cannot be withdrawn.
+  verify:
+    uses: ./.github/workflows/verify.yml
+    permissions:
+      contents: read
+
   publish:
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

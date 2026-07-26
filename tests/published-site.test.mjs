@@ -48,6 +48,28 @@ function selfSignedCertificate() {
   return { key: fs.readFileSync(key), cert: fs.readFileSync(cert) };
 }
 
+// Answers, then sends one byte a second and never ends. Each byte resets a
+// socket inactivity timeout, so only a wall-clock deadline stops this.
+function startDribblingServer(credentials) {
+  const server = https.createServer({ key: credentials.key, cert: credentials.cert }, (_request, response) => {
+    response.writeHead(200, { "Content-Type": "text/html" });
+    const timer = setInterval(() => response.write("x"), 1000);
+    response.on("close", () => clearInterval(timer));
+  });
+  server.on("clientError", () => {});
+  return new Promise((resolve) => {
+    server.listen(0, "127.0.0.1", () => {
+      resolve({
+        port: server.address().port,
+        close: () => {
+          server.closeAllConnections?.();
+          server.close();
+        }
+      });
+    });
+  });
+}
+
 // Streams more than the 4 MB cap, so the client hits the cap and destroys the
 // response mid-stream.
 function startOversizedServer(credentials) {
@@ -70,7 +92,13 @@ function startOversizedServer(credentials) {
   server.on("clientError", () => {});
   return new Promise((resolve) => {
     server.listen(0, "127.0.0.1", () => {
-      resolve({ port: server.address().port, close: () => server.close() });
+      resolve({
+        port: server.address().port,
+        close: () => {
+          server.closeAllConnections?.();
+          server.close();
+        }
+      });
     });
   });
 }
@@ -141,7 +169,7 @@ describe("published site check", () => {
     const server = await startOversizedServer(credentials);
     try {
       const result = await withTimeout(
-        request("localhost", { address: "127.0.0.1", family: 4, port: server.port }, { ca: credentials.cert }),
+        request("localhost", { address: "127.0.0.1", family: 4, port: server.port }, { tls: { ca: credentials.cert } }),
         20_000
       );
       assert.notEqual(result, TIMED_OUT, "request() never settled on a capped response");
@@ -149,6 +177,46 @@ describe("published site check", () => {
     } finally {
       server.close();
     }
+  });
+
+  // The request timeout measures silence, not elapsed time. A peer sending one
+  // byte a second resets it forever, so the gate waited indefinitely on a server
+  // that was technically still talking. The deadline is what bounds the run.
+  it("gives up on a peer that dribbles bytes forever", async (t) => {
+    let credentials;
+    try {
+      credentials = selfSignedCertificate();
+    } catch {
+      t.skip("openssl is not available to mint a test certificate");
+      return;
+    }
+    const server = await startDribblingServer(credentials);
+    try {
+      const result = await withTimeout(
+        request("localhost", { address: "127.0.0.1", family: 4, port: server.port }, { tls: { ca: credentials.cert }, deadlineMs: 2_000 }),
+        20_000
+      );
+      assert.notEqual(result, TIMED_OUT, "request() outlived its own deadline");
+      assert.match(result.error ?? "", /did not complete within 2000ms/);
+    } finally {
+      server.close();
+    }
+  });
+
+  // Matching only the hostname accepts a redirect that keeps the name and
+  // changes the destination: plaintext, another port, or embedded credentials.
+  it("rejects a same-host redirect that changes scheme, port, or carries credentials", () => {
+    const downgrade = verdict({ status: 308, location: "http://www.example.test/" });
+    assert.match(downgrade, /away from HTTPS/);
+
+    const port = verdict({ status: 308, location: "https://www.example.test:8443/" });
+    assert.match(port, /non-standard port/);
+
+    const credentials = verdict({ status: 308, location: "https://user:pw@www.example.test/" });
+    assert.match(credentials, /credentials/);
+
+    assert.equal(verdict({ status: 308, location: "https://www.example.test:443/" }), null);
+    assert.equal(verdict({ status: 308, location: "https://www.example.test/" }), null);
   });
 
   it("reports a cut-short body as cut short rather than as a page missing the version", () => {
