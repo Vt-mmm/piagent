@@ -219,6 +219,33 @@ describe("runtime verify evidence ledger", () => {
     assert.equal(result.ok, true);
   });
 
+  // The digest is a content identifier, never a credential check: whatever the
+  // ledger holds, the digest beside it is recomputable from the record's own text,
+  // so it discloses nothing the file does not already print. A command whose text
+  // had to be redacted carries no digest at all.
+  it("never stores a digest that the record itself cannot reproduce", () => {
+    const { file } = createLedgerFixture();
+    const commands = [
+      "  npm run verify  ",
+      "npm test\r\nsecond line",
+      joined("DATABASE", "_PASSWORD", "=", "CorrectHorse42", " npm test"),
+      joined("TOKEN", "=", "hunter2", " npm test")
+    ];
+    for (const command of commands) {
+      appendObservedBashResult(file, { cwd: "/repo", command, isError: false, recordedAtMs: 1 });
+    }
+
+    const stored = fs.readFileSync(file, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+    assert.equal(stored.length, commands.length);
+    for (const record of stored) {
+      const derived = record.commandHash === ""
+        ? ""
+        : crypto.createHash("sha256").update(normalizeEvidenceCommand(record.command)).digest("hex");
+      assert.equal(derived, record.commandHash, `digest for ${JSON.stringify(record.command)} must follow from the record`);
+    }
+    assert.equal(stored.filter((record) => record.commandHash === "").length, 2, "both secret-bearing commands must carry no digest");
+  });
+
   // The gate promises the observed command matches the plan's verify command
   // exactly. A digest over redacted text gives every secret the same identity, so
   // a run against one database would satisfy a claim about another.
