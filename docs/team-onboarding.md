@@ -108,6 +108,8 @@ pi
 
 Credential nằm trong user Pi dir, không commit.
 
+Nếu browser login của OpenAI trông như treo, xem [login provider](operator-manual-vietnamese.md#login-provider). Tóm tắt: paste callback URL xong phải bấm **Enter** (màn hình không nhắc), và nếu sau Enter terminal khoá luôn thì login bằng `pi --offline` một lần. Cả hai là lỗi Pi host `0.82.0`/`0.82.1`, không phải platform.
+
 ## Bước 3 — chọn model và onboard project
 
 Sau login, chọn provider/model intended cho project understanding bằng native Pi selector. OpenAI Codex và Claude/Anthropic đều là supported option.

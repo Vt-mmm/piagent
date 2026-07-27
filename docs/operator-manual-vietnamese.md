@@ -156,6 +156,18 @@ Trong Pi:
 
 Chọn provider/account như OpenAI/Codex hoặc Anthropic/Claude. Credential nằm trong Pi user dir, không nằm trong repo và không được commit.
 
+Browser login của OpenAI có hai chỗ trông như treo. Cả hai là lỗi Pi host, không phải platform, và còn nguyên ở `0.82.0` lẫn `0.82.1`.
+
+Paste xong callback URL mà màn hình đứng im: **bấm Enter**. Ô nhập callback chỉ hiện hint `to cancel`, không hiện `to submit`, nên nó đang chờ submit chứ không đơ.
+
+Đã Enter rồi mà terminal khoá luôn, Esc không thoát được: Pi lưu credential xong mới refresh model catalog từ `pi.dev`, và request đó không có timeout. Firewall hoặc proxy giữ connection im lặng thì `/login` chờ mãi. Credential thực tế đã lưu rồi, nên mở tab mới vẫn dùng được. Login bằng đường này để tránh hẳn:
+
+```bash
+pi --offline
+```
+
+Rồi `/login` → browser → paste → Enter. `--offline` chỉ chặn bước refresh catalog gây treo, OAuth vẫn chạy. Xong thì thoát và mở `pi` bình thường.
+
 ### Chọn model và thinking
 
 Trong Pi:
