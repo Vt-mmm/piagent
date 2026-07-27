@@ -39,6 +39,7 @@ import {
   redactForStorage,
   redactSensitiveText
 } from "./redaction-core.js";
+import { detectProfileName } from "./project-shape.js";
 import {
   resolveCapabilityProfileDocument,
   verifyCapabilityLock,
@@ -2634,75 +2635,6 @@ function readAdapterProfiles(extensionDir: string): Array<{ name: string; profil
     })
     .filter((entry): entry is { name: string; profile: ProjectProfile } => Boolean(entry))
     .sort((a, b) => a.name.localeCompare(b.name));
-}
-
-function packageHasAny(cwd: string, pattern: RegExp): boolean {
-  try {
-    return pattern.test(fs.readFileSync(path.join(cwd, "package.json"), "utf8"));
-  } catch {
-    return false;
-  }
-}
-
-function detectProfileName(cwd: string, intent?: string): { name: string; reason: string } {
-  const normalizedIntent = intent?.trim().toLowerCase();
-  if (normalizedIntent === "be-readonly-fe") return { name: "be-readonly-fe", reason: "User intent says backend should be read-only while frontend is the write target." };
-  if (normalizedIntent === "frontend-only") return { name: "web-frontend", reason: "User intent says frontend-only." };
-  if (normalizedIntent === "backend-only") return { name: "backend-api", reason: "User intent says backend-only." };
-  if (normalizedIntent === "docs") return { name: "docs", reason: "User intent says docs/docs-only." };
-
-  const hasPackage = fs.existsSync(path.join(cwd, "package.json"));
-  let frontend = false;
-  let backend = false;
-  let data = false;
-  let mobile = false;
-  let infra = false;
-  let docs = false;
-
-  if (fs.existsSync(path.join(cwd, "pubspec.yaml")) || (fs.existsSync(path.join(cwd, "android")) && fs.existsSync(path.join(cwd, "ios")))) mobile = true;
-  if (fs.existsSync(path.join(cwd, "dbt_project.yml")) || fs.existsSync(path.join(cwd, "dvc.yaml")) || fs.existsSync(path.join(cwd, "notebooks")) || fs.existsSync(path.join(cwd, "data"))) data = true;
-  if (fs.existsSync(path.join(cwd, "Dockerfile")) || fs.existsSync(path.join(cwd, "docker-compose.yml")) || fs.existsSync(path.join(cwd, "compose.yml")) || fs.existsSync(path.join(cwd, "compose.yaml")) || fs.existsSync(path.join(cwd, "terraform")) || fs.existsSync(path.join(cwd, "infra")) || fs.existsSync(path.join(cwd, "k8s")) || fs.existsSync(path.join(cwd, "helm"))) infra = true;
-  if (fs.existsSync(path.join(cwd, "docs")) || fs.existsSync(path.join(cwd, "mkdocs.yml")) || fs.existsSync(path.join(cwd, "mint.json")) || fs.existsSync(path.join(cwd, "docusaurus.config.js"))) docs = true;
-
-  if (hasPackage) {
-    if (fs.existsSync(path.join(cwd, "frontend")) || fs.existsSync(path.join(cwd, "apps/web")) || fs.existsSync(path.join(cwd, "apps/frontend"))) frontend = true;
-    if (fs.existsSync(path.join(cwd, "backend")) || fs.existsSync(path.join(cwd, "apps/api")) || fs.existsSync(path.join(cwd, "apps/server"))) backend = true;
-    if (packageHasAny(cwd, /"(next|react|vite|vue|svelte|astro|@angular\/core|remix)"/i)
-      || fs.existsSync(path.join(cwd, "next.config.js"))
-      || fs.existsSync(path.join(cwd, "next.config.mjs"))
-      || fs.existsSync(path.join(cwd, "next.config.ts"))
-      || fs.existsSync(path.join(cwd, "vite.config.js"))
-      || fs.existsSync(path.join(cwd, "vite.config.ts"))
-      || fs.existsSync(path.join(cwd, "src/app"))
-      || fs.existsSync(path.join(cwd, "pages"))
-      || fs.existsSync(path.join(cwd, "public"))) frontend = true;
-    if (packageHasAny(cwd, /"(@nestjs|express|fastify|hono|koa|apollo-server|graphql-yoga|prisma|typeorm|sequelize|drizzle-orm)"/i)
-      || fs.existsSync(path.join(cwd, "nest-cli.json"))
-      || fs.existsSync(path.join(cwd, "prisma"))
-      || fs.existsSync(path.join(cwd, "src/server"))
-      || fs.existsSync(path.join(cwd, "src/api"))) backend = true;
-  }
-
-  if (fs.existsSync(path.join(cwd, "pom.xml")) || fs.existsSync(path.join(cwd, "build.gradle")) || fs.existsSync(path.join(cwd, "build.gradle.kts")) || fs.existsSync(path.join(cwd, "src/main/java")) || fs.existsSync(path.join(cwd, "src/main/kotlin"))) backend = true;
-
-  if (fs.existsSync(path.join(cwd, "pyproject.toml"))) {
-    try {
-      if (/(fastapi|flask|django|litestar|starlite)/i.test(fs.readFileSync(path.join(cwd, "pyproject.toml"), "utf8"))) backend = true;
-    } catch {
-      // ignore unreadable pyproject for recommendation
-    }
-  }
-
-  if (mobile) return { name: "mobile", reason: "Mobile markers found." };
-  if (frontend && backend) return { name: "fullstack", reason: "Frontend and backend markers both found. Pick be-readonly-fe instead if backend must be read-only." };
-  if (frontend) return { name: "web-frontend", reason: "Frontend framework markers found." };
-  if (backend) return { name: "backend-api", reason: "Backend/API markers found." };
-  if (data) return { name: "data", reason: "Data/ETL markers found." };
-  if (fs.existsSync(path.join(cwd, "pyproject.toml"))) return { name: "python", reason: "Python pyproject.toml found." };
-  if (hasPackage && fs.existsSync(path.join(cwd, "tsconfig.json"))) return { name: "node-typescript", reason: "Node TypeScript markers found." };
-  if (infra) return { name: "devops", reason: "Infrastructure markers found." };
-  if (docs) return { name: "docs", reason: "Documentation markers found." };
-  return { name: "generic", reason: "No stronger project markers found." };
 }
 
 function profileDescription(name: string): string {

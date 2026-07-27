@@ -48,6 +48,7 @@ pi install /path/to/piagent
 - `1.1.3`: command mang secret không còn được dùng làm verify evidence, document reader từ chối FIFO thay vì treo, redact secret ngắn, redirect phải về đúng trang được kiểm.
 - `1.1.4`: nhận diện secret dạng CLI option (`--token`, `--password`, `--api-key`) và Authorization header ở mọi vị trí argument.
 - `1.1.5`: thêm `piagent-update` — một lệnh update cả Pi host, terminal helper và Pi package đúng thứ tự.
+- `1.1.6`: `be-readonly-fe` giữ được backend read-only trong monorepo, detect FE/BE đọc cả workspace, và rule detect gộp về một chỗ.
 
 ## Không publish
 

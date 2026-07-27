@@ -2,6 +2,26 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.1.6 - 2026-07-27
+
+Monorepo fixes found auditing how the platform scopes itself to a project. Every case was reproduced against a real directory tree before it was changed.
+
+### Fixed
+
+- `be-readonly-fe` keeps the backend read-only in a monorepo. Its `readOnlyPaths` and `shellProtectedPaths` were anchored at the repository root, so `backend/**` and `apps/api/**` covered a backend sitting at the top of the tree and nothing else. Choosing the profile on a repository whose backend lives in `packages/api`, `apps/backend` or `services/payments` produced a profile that announced the backend was read-only while leaving every file in it writable — the one guarantee the profile exists to make. The backend directories under `apps/`, `packages/` and all of `services/*` are covered now.
+
+  They are enumerated rather than matched with `**/api/**`, which would have swept in `packages/web/src/api/` — the frontend's own HTTP client — and frozen the half of the repository the profile is meant to leave writable.
+
+- The frontend verify command finds a frontend that is not at `frontend/` or `apps/web/`. It fell through to the repository root, where a workspace root has no `type-check` script, so verification reported success having run nothing. `apps/frontend`, `packages/web`, `packages/frontend` and `client` are looked at too.
+
+- `apps/backend` is read as a backend. `apps/frontend` counted as a frontend marker while only `apps/api` and `apps/server` counted as backend ones, so a repository that named both halves symmetrically was detected as frontend-only and offered `web-frontend`. `client/` and `server/` at the root were not markers either.
+
+- Frontend and backend are detected inside declared workspaces. Nothing read the `workspaces` field or `pnpm-workspace.yaml`, and nothing looked under `packages/`, so a pnpm monorepo fell through every marker to `generic`. Each declared package is now read through its own manifest and layout, which is what identifies `packages/storefront` and `packages/gateway` as the two halves of a fullstack repository. Only a trailing wildcard is expanded, absolute and `..` patterns are refused, and at most 64 packages are read.
+
+### Changed
+
+- Profile detection lives in `packages/piagent-core/extensions/project-shape.js`. `piagent_profile_options` and `scripts/init-project.sh` each carried their own copy of the rules and had drifted; the `apps/backend` gap above was present in both, and a fix to either would have left the other wrong. The file is covered by the capability lock, because steering which profile a project is offered is a way to choose what the guard ends up enforcing.
+
 ## v1.1.5 - 2026-07-27
 
 ### Added

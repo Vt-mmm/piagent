@@ -795,7 +795,11 @@ function buildCoreIntegrity(root) {
     "packages/piagent-core/extensions/guard-shell-analysis.ts",
     "packages/piagent-core/extensions/policy-core.js",
     "packages/piagent-core/extensions/redaction-core.js",
-    "packages/piagent-core/extensions/runtime-evidence.js"
+    "packages/piagent-core/extensions/runtime-evidence.js",
+    // project-shape.js picks the profile a project is offered, and the profile is
+    // the document that carries protectedPaths and readOnlyPaths. Steering the
+    // recommendation is a way to choose what the guard will end up enforcing.
+    "packages/piagent-core/extensions/project-shape.js"
   ];
   return files.map((relativePath) => {
     const resolved = resolveRegularFile(root, relativePath, MAX_ARTIFACT_BYTES);

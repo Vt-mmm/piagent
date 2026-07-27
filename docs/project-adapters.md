@@ -68,6 +68,22 @@ Path policy fields have distinct meanings:
 - `readOnlyPaths`: allow `read`/`grep`/`find`/`ls`, but block `write`/`edit` and shell access.
 - `shellProtectedPaths`: block shell access only. Do not rely on this field to block write/edit; `profile-doctor` and `team-doctor` warn when a path is present only here.
 
+Glob trong các field này neo từ project root, nên `backend/**` chỉ khớp backend nằm ở root. Với monorepo, phải liệt kê đúng vị trí thật (`packages/api/**`, `services/*/**`). Không dùng `**/api/**`: nó khớp luôn `packages/web/src/api/` — thư mục HTTP client của frontend — và biến chính phần được phép sửa thành read-only.
+
+## Monorepo và workspace
+
+Một project = một thư mục mở `pi`. Guard đọc profile tại `<cwd>/.pi/piagent-profile.json` và không đi ngược lên tìm, nên mở `pi` ở thư mục cha chứa nhiều project sẽ bỏ qua profile của từng project con và chạy unprofiled.
+
+Detect FE/BE đọc theo thứ tự:
+
+1. Tên thư mục ở root: `frontend`, `web`, `client`, `ui` cho FE; `backend`, `server`, `api` cho BE.
+2. Cùng các tên đó ở một cấp dưới `apps/`, `packages/`, `services/`.
+3. Package khai báo trong `workspaces` (package.json, cả dạng mảng lẫn `{ "packages": [...] }`) hoặc `pnpm-workspace.yaml` — mỗi package đọc dependency và config của chính nó, nên `packages/storefront` + `packages/gateway` vẫn ra `fullstack` dù tên không gợi ý gì.
+
+Chỉ wildcard ở segment cuối được mở rộng (`packages/*`, `apps/**`); pattern tuyệt đối, pattern có `..`, và pattern loại trừ `!` bị bỏ qua. Số package đọc tối đa 64.
+
+Rule nằm ở `packages/piagent-core/extensions/project-shape.js`. Cả `piagent_profile_options` lẫn `scripts/init-project.sh` cùng gọi file này; trước đây mỗi bên giữ một bản riêng và đã lệch nhau.
+
 ## Built-in adapters
 
 | Profile | Dùng cho | Verify mặc định |
@@ -83,6 +99,8 @@ Path policy fields have distinct meanings:
 | `devops` | Docker/Terraform/K8s/GitHub Actions | diff check, compose/terraform validate nếu tool có |
 | `mobile` | React Native/Flutter | npm test / flutter test nếu tool có |
 | `docs` | Docs portal/manual | markdown diff check + test nếu project có |
+
+`be-readonly-fe` giữ read-only cho backend ở root (`backend`, `server`, `api`), ở một cấp dưới `apps/` và `packages/` (`api`, `server`, `backend`), toàn bộ `services/*`, và mọi `**/migrations/**`. Layout đặt tên khác thì thêm path vào `readOnlyPaths` **và** `shellProtectedPaths` của `.pi/piagent-profile.json`; profile built-in là điểm khởi đầu, không phải danh sách đầy đủ.
 
 ## Runtime profile selection
 
