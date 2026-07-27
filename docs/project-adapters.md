@@ -100,7 +100,10 @@ Rule nằm ở `packages/piagent-core/extensions/project-shape.js`. Cả `piagen
 | `mobile` | React Native/Flutter | npm test / flutter test nếu tool có |
 | `docs` | Docs portal/manual | markdown diff check + test nếu project có |
 
-`be-readonly-fe` giữ read-only cho backend ở root (`backend`, `server`, `api`), ở một cấp dưới `apps/` và `packages/` (`api`, `server`, `backend`), toàn bộ `services/*`, và mọi `**/migrations/**`. Layout đặt tên khác thì thêm path vào `readOnlyPaths` **và** `shellProtectedPaths` của `.pi/piagent-profile.json`; profile built-in là điểm khởi đầu, không phải danh sách đầy đủ.
+`be-readonly-fe` giữ read-only cho backend ở root (`backend`, `server`, `api`), ở một cấp dưới `apps/` và `packages/` (`api`, `server`, `backend`), toàn bộ `services/*`, và mọi `**/migrations/**`. Profile built-in là điểm khởi đầu, không phải danh sách đầy đủ — sửa `readOnlyPaths` **và** `shellProtectedPaths` trong `.pi/piagent-profile.json` cho đúng repo:
+
+- backend đặt tên khác (`apps/gateway`, `packages/core-service`): thêm path vào cả hai field.
+- frontend nằm trong `services/` (ví dụ `services/web`): `services/*/**` sẽ khoá nhầm nó. Thay pattern đó bằng danh sách service backend cụ thể. Triệu chứng là một write bị chặn kèm lý do trỏ tới `readOnlyPaths`, không phải lỗi im lặng.
 
 ## Runtime profile selection
 
