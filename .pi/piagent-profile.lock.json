@@ -115,7 +115,7 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:3b4f9224c9124efd8d088db82e0c86f3dbd11eeeb361cea07de5b44795d7ec09",
+    "packageDigest": "sha256:c5cea7c37f0af14db7b23d08f96f5d6c2e71aa0947d85a01e231384d53c20613",
     "packageSource": "../",
     "packageVersion": "1.1.6",
     "runtimeFiles": [
@@ -180,8 +180,8 @@
         "path": "packages/piagent-core/extensions/runtime-evidence.js"
       },
       {
-        "byteSize": 10890,
-        "digest": "sha256:8b71b7ca82cfeded842e4060617e215c648c1ce34c992a10996cabbc0cfe3282",
+        "byteSize": 11171,
+        "digest": "sha256:e26921477639816a4abcf9192dd7c00e9db78426d4f6cdb728d9c7b93ce54b66",
         "path": "packages/piagent-core/extensions/project-shape.js"
       }
     ]

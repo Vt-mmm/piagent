@@ -183,6 +183,11 @@ describe("detection that must not widen", () => {
     assert.equal(detectProfileName(root).name, "python");
   });
 
+  it("does not read a file named like a stack directory as one", () => {
+    const root = repository({ "package.json": { name: "r" }, frontend: null, backend: "not a directory" });
+    assert.equal(detectProfileName(root).name, "web-frontend");
+  });
+
   it("still prefers mobile over everything else", () => {
     const root = repository({ "package.json": { name: "r" }, "pubspec.yaml": "name: app\n", frontend: null, backend: null });
     assert.equal(detectProfileName(root).name, "mobile");

@@ -52,6 +52,16 @@ function exists(dir, relative) {
   }
 }
 
+// The stack-naming markers are directories. A file called `api` says nothing
+// about a repository having a backend in it.
+function isDirectory(dir, relative) {
+  try {
+    return fs.statSync(path.join(dir, relative)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
 function readFile(dir, relative) {
   try {
     return fs.readFileSync(path.join(dir, relative), "utf8");
@@ -226,9 +236,9 @@ export function detectProjectShape(cwd) {
   // manifest at all; gating this on package.json used to hide both sides of it.
   for (const name of [...FRONTEND_DIR_NAMES, ...BACKEND_DIR_NAMES]) {
     const side = shapeFromDirName(name);
-    if (exists(cwd, name)) shape[side] = true;
+    if (isDirectory(cwd, name)) shape[side] = true;
     for (const root of WORKSPACE_ROOTS) {
-      if (exists(cwd, `${root}/${name}`)) shape[side] = true;
+      if (isDirectory(cwd, `${root}/${name}`)) shape[side] = true;
     }
   }
 
