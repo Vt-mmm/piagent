@@ -102,97 +102,20 @@ fi
 
 PROJECT_PATH="$(cd "$PROJECT_PATH" && pwd)"
 
-package_has_any() {
-  local project="$1"
-  local pattern="$2"
-  [[ -f "$project/package.json" ]] && grep -Eiq "$pattern" "$project/package.json"
-}
-
+# Profile detection lives in packages/piagent-core/extensions/project-shape.js so
+# that this script and the runtime `piagent_profile_options` tool recommend the
+# same profile. They used to hold separate copies of the rules and drifted apart.
 detect_profile() {
   local project="$1"
-  local has_package=false
-  local frontend=false
-  local backend=false
-  local data=false
-  local mobile=false
-  local devops=false
-  local infra=false
-  local docs=false
+  node --input-type=module - "$PLATFORM_ROOT" "$project" <<'NODE'
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 
-  [[ -f "$project/package.json" ]] && has_package=true
-
-  if [[ -f "$project/pubspec.yaml" ]] || { [[ -d "$project/android" ]] && [[ -d "$project/ios" ]]; }; then
-    mobile=true
-  fi
-
-  if [[ -f "$project/dbt_project.yml" ]] || [[ -f "$project/dvc.yaml" ]] || [[ -d "$project/notebooks" ]] || [[ -d "$project/data" ]]; then
-    data=true
-  fi
-
-  if [[ -f "$project/Dockerfile" ]] || [[ -f "$project/docker-compose.yml" ]] || [[ -f "$project/compose.yml" ]] || [[ -f "$project/compose.yaml" ]] || [[ -d "$project/terraform" ]] || [[ -d "$project/infra" ]] || [[ -d "$project/k8s" ]] || [[ -d "$project/helm" ]]; then
-    infra=true
-    devops=true
-  elif [[ -d "$project/.github/workflows" ]]; then
-    devops=true
-  fi
-
-  if [[ -d "$project/docs" ]] || [[ -f "$project/mkdocs.yml" ]] || [[ -f "$project/mint.json" ]] || [[ -f "$project/docusaurus.config.js" ]]; then
-    docs=true
-  fi
-
-  if [[ "$has_package" == true ]]; then
-    if [[ -d "$project/frontend" ]] || [[ -d "$project/apps/web" ]] || [[ -d "$project/apps/frontend" ]]; then
-      frontend=true
-    fi
-
-    if [[ -d "$project/backend" ]] || [[ -d "$project/apps/api" ]] || [[ -d "$project/apps/server" ]]; then
-      backend=true
-    fi
-
-    if package_has_any "$project" '"(next|react|vite|vue|svelte|astro|@angular/core|remix)"' \
-      || [[ -f "$project/next.config.js" ]] || [[ -f "$project/next.config.mjs" ]] || [[ -f "$project/next.config.ts" ]] \
-      || [[ -f "$project/vite.config.js" ]] || [[ -f "$project/vite.config.ts" ]] \
-      || [[ -d "$project/src/app" ]] || [[ -d "$project/pages" ]] || [[ -d "$project/public" ]]; then
-      frontend=true
-    fi
-
-    if package_has_any "$project" '"(@nestjs|express|fastify|hono|koa|apollo-server|graphql-yoga|prisma|typeorm|sequelize|drizzle-orm)"' \
-      || [[ -f "$project/nest-cli.json" ]] || [[ -d "$project/prisma" ]] || [[ -d "$project/src/server" ]] || [[ -d "$project/src/api" ]]; then
-      backend=true
-    fi
-  fi
-
-  if [[ -f "$project/pom.xml" ]] || [[ -f "$project/build.gradle" ]] || [[ -f "$project/build.gradle.kts" ]] || [[ -d "$project/src/main/java" ]] || [[ -d "$project/src/main/kotlin" ]]; then
-    backend=true
-  fi
-
-  if [[ -f "$project/pyproject.toml" ]] && grep -Eiq "(fastapi|flask|django|litestar|starlite)" "$project/pyproject.toml"; then
-    backend=true
-  fi
-
-  if [[ "$mobile" == true ]]; then
-    printf '%s\n' "mobile"
-  elif [[ "$frontend" == true && "$backend" == true ]]; then
-    printf '%s\n' "fullstack"
-  elif [[ "$frontend" == true ]]; then
-    printf '%s\n' "web-frontend"
-  elif [[ "$backend" == true ]]; then
-    printf '%s\n' "backend-api"
-  elif [[ "$data" == true ]]; then
-    printf '%s\n' "data"
-  elif [[ -f "$project/pyproject.toml" ]]; then
-    printf '%s\n' "python"
-  elif [[ "$has_package" == true && -f "$project/tsconfig.json" ]]; then
-    printf '%s\n' "node-typescript"
-  elif [[ "$infra" == true ]]; then
-    printf '%s\n' "devops"
-  elif [[ "$docs" == true ]]; then
-    printf '%s\n' "docs"
-  elif [[ "$devops" == true ]]; then
-    printf '%s\n' "devops"
-  else
-    printf '%s\n' "generic"
-  fi
+const [platformRoot, project] = process.argv.slice(2);
+const modulePath = path.join(platformRoot, "packages/piagent-core/extensions/project-shape.js");
+const { detectProfileName } = await import(pathToFileURL(modulePath).href);
+process.stdout.write(`${detectProfileName(project).name}\n`);
+NODE
 }
 
 resolve_profile_path() {

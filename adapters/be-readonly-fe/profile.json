@@ -32,7 +32,11 @@
     "api/**",
     "apps/api/**",
     "apps/server/**",
-    "services/backend/**",
+    "apps/backend/**",
+    "packages/api/**",
+    "packages/server/**",
+    "packages/backend/**",
+    "services/*/**",
     "**/migrations/**"
   ],
   "shellProtectedPaths": [
@@ -47,7 +51,11 @@
     "api/**",
     "apps/api/**",
     "apps/server/**",
-    "services/backend/**",
+    "apps/backend/**",
+    "packages/api/**",
+    "packages/server/**",
+    "packages/backend/**",
+    "services/*/**",
     "**/migrations/**",
     "**/node_modules/**",
     "**/dist/**",
@@ -85,10 +93,10 @@
       "test -s README.md"
     ],
     "frontendSource": [
-      "if test -f frontend/package.json; then cd frontend && npm run type-check --if-present && npm run lint --if-present && npm test --if-present; elif test -f apps/web/package.json; then cd apps/web && npm run type-check --if-present && npm run lint --if-present && npm test --if-present; elif test -f package.json; then npm run type-check --if-present && npm run lint --if-present && npm test --if-present; else echo 'No frontend verify command configured; update .pi/piagent-profile.json'; fi"
+      "if test -f frontend/package.json; then cd frontend; elif test -f apps/web/package.json; then cd apps/web; elif test -f apps/frontend/package.json; then cd apps/frontend; elif test -f packages/web/package.json; then cd packages/web; elif test -f packages/frontend/package.json; then cd packages/frontend; elif test -f client/package.json; then cd client; elif test -f package.json; then :; else echo 'No frontend verify command configured; update .pi/piagent-profile.json'; exit 0; fi; npm run type-check --if-present && npm run lint --if-present && npm test --if-present"
     ],
     "frontendRuntime": [
-      "if test -f frontend/package.json; then cd frontend && npm run test:e2e --if-present; elif test -f apps/web/package.json; then cd apps/web && npm run test:e2e --if-present; elif test -f package.json; then npm run test:e2e --if-present; else echo 'No frontend runtime verify command configured; update .pi/piagent-profile.json'; fi"
+      "if test -f frontend/package.json; then cd frontend; elif test -f apps/web/package.json; then cd apps/web; elif test -f apps/frontend/package.json; then cd apps/frontend; elif test -f packages/web/package.json; then cd packages/web; elif test -f packages/frontend/package.json; then cd packages/frontend; elif test -f client/package.json; then cd client; elif test -f package.json; then :; else echo 'No frontend runtime verify command configured; update .pi/piagent-profile.json'; exit 0; fi; npm run test:e2e --if-present"
     ]
   },
   "mcpCapabilities": [
