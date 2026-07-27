@@ -2,6 +2,20 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.1.5 - 2026-07-27
+
+### Added
+
+- `piagent-update` moves a machine from one release to the next in one command. A release is three independently versioned things — the Pi host, the npm-global terminal helper, and the Pi package — and they have to move in that order, because `piagent-install` refuses to run against a host that does not match the version its own package.json pins and does not install one itself. Doing it by hand is three commands and one ordering rule that fails late when it is got wrong.
+
+  Every version the run needs is resolved from the registry before anything is installed, including the host version taken from the *target* helper's published metadata rather than the running one, so `--check` and `--dry-run` describe exactly what a real run would do. After the helper replaces itself the run confirms that the version on disk is the one it asked for, and stops before touching the Pi package if it is not. Running it from a git checkout is refused rather than replacing that checkout's commands with a published build.
+
+  `--check`, `--dry-run`, `--version X.Y.Z`, `--force`, `--project <path>`, `--no-host`, `--no-package`, and pass-through to `piagent-install` after `--`.
+
+### Fixed
+
+- `docs/release-install-policy.md`, `docs/team-onboarding.md` and `docs/command-reference-vietnamese.md` described the manual update sequence without saying why its order is mandatory. `piagent-install` fails on a host mismatch; the auto-install of a matching host lives in `setup.sh` and does not apply to that flow.
+
 ## v1.1.4 - 2026-07-27
 
 ### Fixed

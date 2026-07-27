@@ -10,7 +10,7 @@ This file is the canonical install, update, rollback, and release checklist. Oth
 
 All supported environments require Node.js `>=22.19.0` and Pi Coding Agent `0.82.0`. The Pi host is installed as a Node CLI; Pi Agent Platform still defines its own release matrix because the terminal helpers and shell policy rely on Bash/POSIX behavior.
 
-| Surface | Status for v1.1.4 | Rollout guidance |
+| Surface | Status for v1.1.5 | Rollout guidance |
 |---|---|---|
 | macOS Apple Silicon (`darwin/arm64`) + Bash | Verified for this release. | Safe default for team rollout after normal project smoke tests. |
 | Linux x64 + Bash | Verified in GitHub Actions. | Safe default for CI/server usage after normal project smoke tests. |
@@ -33,7 +33,7 @@ These three components are versioned independently. A full install, update, or r
 
 | Channel | Source shape | Mutability | Use when |
 |---|---|---:|---|
-| `stable` | `git:github.com/Vt-mmm/piagent@<resolved-commit-sha>` from `v1.1.4` | Fixed after resolution | Default for team rollout. |
+| `stable` | `git:github.com/Vt-mmm/piagent@<resolved-commit-sha>` from `v1.1.5` | Fixed after resolution | Default for team rollout. |
 | `exact` | Tag, reviewed commit, or a tag resolved with `--resolve-tag` | Fixed when using a commit SHA | Pi-package-only roll forward, rollback, or reproduction. |
 | `dev` | `git:github.com/Vt-mmm/piagent` | Moving | Personal machine or sandbox only. |
 | `local` | `/path/to/piagent` | Local workspace | Platform development and dry-run validation. |
@@ -53,7 +53,7 @@ Use this flow when the team needs both terminal commands and the Pi package:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.1.4
+npm install -g --ignore-scripts @piagent/platform@1.1.5
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -61,8 +61,8 @@ piagent-install --stable
 The stable preview and apply output includes:
 
 ```text
-currentRelease: v1.1.4 (helper package version)
-tag: v1.1.4
+currentRelease: v1.1.5 (helper package version)
+tag: v1.1.5
 resolvedCommit: <40-char-sha>
 source: git:github.com/Vt-mmm/piagent@<40-char-sha>
 ```
@@ -79,14 +79,26 @@ bash scripts/install-global.sh --stable
 Use this only when terminal commands are not needed:
 
 ```bash
-pi install git:github.com/Vt-mmm/piagent@v1.1.4
+pi install git:github.com/Vt-mmm/piagent@v1.1.5
 ```
 
 Direct `pi install` does not create `piagent-*` commands on `PATH`.
 
 ## Full platform update
 
-Update the exact supported Pi host first, then the npm-global helper, then let that target helper resolve and install its matching stable Pi package:
+`piagent-update` does the whole sequence in one command:
+
+```bash
+piagent-update --check
+piagent-update --dry-run
+piagent-update --project /path/to/project
+```
+
+It resolves the target helper version and, from that version's published metadata, the exact Pi host that version pins — both before installing anything, so `--check` and `--dry-run` describe a real run. It then installs the host, replaces the helper, verifies that the version now on disk is the one it asked for, and only then runs the new helper's installer for the Pi package. `--version X.Y.Z` targets an exact release instead of latest, `--no-host` and `--no-package` narrow the run, and anything after `--` is passed to `piagent-install`.
+
+Running it from a git checkout is refused rather than replacing that checkout's commands with a published build; update a checkout with `git pull` and `install-global.sh --local`.
+
+The same sequence by hand, which must keep this order because `piagent-install` fails against a host that does not match the version it pins and does not install one itself:
 
 ```bash
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0

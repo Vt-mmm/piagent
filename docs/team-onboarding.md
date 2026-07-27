@@ -9,7 +9,7 @@ Một thành viên mới không cần biết local path của maintainer. Luồn
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.1.4
+npm install -g --ignore-scripts @piagent/platform@1.1.5
 piagent-install --stable
 cd /path/to/project
 pi
@@ -42,7 +42,7 @@ Mặc định team dùng stable helper:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.1.4
+npm install -g --ignore-scripts @piagent/platform@1.1.5
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -63,7 +63,16 @@ pi install git:github.com/Vt-mmm/piagent
 
 ## Update và rollback cho team
 
-Full update phải đồng bộ exact Pi host trước, sau đó terminal helper và Pi package matching:
+Một lệnh, đúng thứ tự, cho cả ba thành phần:
+
+```bash
+piagent-update --check
+piagent-update --project /path/to/project
+```
+
+`--check` chỉ báo version, không đụng gì. Lên đúng một bản cụ thể thì `piagent-update --version 1.1.5`.
+
+Sequence thủ công vẫn dùng được, và bắt buộc theo thứ tự này — `piagent-install` **fail** nếu Pi host lệch bản pin, nó không tự nâng host:
 
 ```bash
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
