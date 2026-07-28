@@ -209,6 +209,28 @@ describe("capability source resolution", () => {
     assert.equal(fs.readFileSync(path.join(bystander, "keep.txt"), "utf8"), "operator data\n");
   });
 
+  // Fetching into place meant deleting the working tree first, so a fetch that
+  // failed left the project with no vendored source at all — a network blip
+  // turning into lost capabilities on a machine that had been fine a moment ago.
+  it("keeps the vendored tree that is already there when a fetch fails", () => {
+    const project = makeProject();
+    const vendored = vendorDirectoryFor(project, "acme");
+    writeExternalPack(vendored);
+    fs.writeFileSync(path.join(vendored, "KEEP.txt"), "operator data\n");
+
+    assert.throws(
+      () => vendorRemoteSource(project, { name: "acme", source: "npm:@piagent-absent/nothing@1.0.0" })
+    );
+
+    assert.equal(fs.readFileSync(path.join(vendored, "KEEP.txt"), "utf8"), "operator data\n");
+    const roots = resolveCapabilitySourceRoots(project, [{ name: "acme", source: "npm:@acme/packs@1.2.3" }]);
+    assert.equal(roots.length, 1);
+
+    // And the half-written tree does not survive to be mistaken for the real one.
+    const siblings = fs.readdirSync(path.dirname(vendored));
+    assert.deepEqual(siblings.filter((entry) => entry.includes(".incoming.")), []);
+  });
+
   it("refuses a missing vendored source rather than resolving without it", () => {
     // Silently resolving fewer packs than the profile asked for would look like
     // success while the agent runs with capabilities nobody reviewed.

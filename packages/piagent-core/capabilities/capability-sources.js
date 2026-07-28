@@ -255,28 +255,45 @@ export function vendorRemoteSource(projectRoot, entry) {
   // after this line writes or deletes, and the point of the check is to have
   // happened first.
   assertContainedWritePath(rootReal, destination, label);
-  fs.mkdirSync(path.dirname(destination), { recursive: true, mode: 0o755 });
+  const parent = path.dirname(destination);
+  fs.mkdirSync(parent, { recursive: true, mode: 0o755 });
   // Re-checked after the directories exist. The first pass ran against a path
   // that was mostly absent, so it proved nothing about the components this call
   // just created or about one swapped underneath in between.
   assertContainedWritePath(rootReal, destination, label);
-  fs.rmSync(destination, { recursive: true, force: true });
-  fs.mkdirSync(destination, { mode: 0o755 });
+
+  // Fetched beside the destination and moved into place at the end, so a fetch
+  // that fails leaves the reviewed tree that was already there. Emptying the
+  // destination first meant a network error or a hostile archive destroyed a
+  // working vendor directory and left the project with neither version.
+  const staging = `${destination}.incoming.${process.pid}`;
+  assertContainedWritePath(rootReal, staging, label);
+  for (const sibling of fs.readdirSync(parent)) {
+    // Debris from a run that died between creating this and moving it.
+    if (sibling.startsWith(`${validated.name}.incoming.`)) fs.rmSync(path.join(parent, sibling), { recursive: true, force: true });
+  }
+  fs.mkdirSync(staging, { mode: 0o755 });
 
   try {
-    if (validated.source.startsWith("npm:")) fetchNpmSource(validated.source.slice("npm:".length), destination);
-    else fetchGitSource(validated.source, destination);
+    if (validated.source.startsWith("npm:")) fetchNpmSource(validated.source.slice("npm:".length), staging);
+    else fetchGitSource(validated.source, staging);
 
     // The fetched tree is untrusted until this passes. Checking here means a
-    // hostile archive is rejected before anything reads a manifest out of it.
-    assertNoSymbolicLinks(destination, `capability source ${validated.name}`);
-    if (!fs.existsSync(path.join(destination, "packs"))) {
+    // hostile archive is rejected before anything reads a manifest out of it,
+    // and before it can replace the tree already in place.
+    assertNoSymbolicLinks(staging, `capability source ${validated.name}`);
+    if (!fs.existsSync(path.join(staging, "packs"))) {
       fail(`capability source ${validated.name} provides no packs directory`);
     }
-  } catch (error) {
-    // A half-written vendor directory would resolve on the next run and hide
-    // the failure, so remove it.
+
+    // Everything above succeeded, so the old tree can go.
     fs.rmSync(destination, { recursive: true, force: true });
+    fs.renameSync(staging, destination);
+  } catch (error) {
+    // Only the half-written fetch is removed. The destination is either
+    // untouched, because the failure happened before the swap, or already
+    // replaced by a tree that passed every check.
+    fs.rmSync(staging, { recursive: true, force: true });
     throw error;
   }
 
