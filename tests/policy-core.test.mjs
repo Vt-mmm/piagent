@@ -203,6 +203,33 @@ describe("protected path extraction from shell", () => {
     assert.equal(findProtectedPathInCommand("cat ${MISSING}", policy.shellProtectedPaths), undefined);
     assert.equal(findProtectedPathInCommand("cat ${MISSING:-notes.txt}", policy.shellProtectedPaths), undefined);
   });
+
+  // `$'...'` is ANSI-C quoting, and the escapes inside it are the whole point of
+  // the syntax. Reading it as a plain single quote dropped the backslashes, so
+  // the path arrived as `x2eenv` while the shell opened `.env`. A redirection
+  // target is a word like any other and was missing the handling entirely.
+  for (const command of [
+    "cat $'.env'",
+    "cat $'\\x2eenv'",
+    "cat $'\\056env'",
+    "cat $'\\u002eenv'",
+    "cat $'\\x2e'env",
+    "cat $'.en'$'v'",
+    "cat $'\\x2eenv\\'",
+    "printf x >$'.env'",
+    "printf x 2>$'\\x2eenv'",
+    "cat <$'.env'",
+    "bash -c $'cat .env'"
+  ]) {
+    it(`decodes ANSI-C quoting the shell would decode: ${command}`, () => {
+      assert.ok(findProtectedPathInCommand(command, policy.shellProtectedPaths), command);
+    });
+  }
+
+  it("does not invent a path out of ANSI-C text that names none", () => {
+    assert.equal(findProtectedPathInCommand("cat $'\\x6eotes.txt'", policy.shellProtectedPaths), undefined);
+    assert.equal(findProtectedPathInCommand("echo $'\\n'", policy.shellProtectedPaths), undefined);
+  });
 });
 
 describe("exec policy semantic shell safety", () => {
@@ -229,7 +256,15 @@ describe("exec policy semantic shell safety", () => {
     "rm -rf /*",
     "rm -rf //",
     "find / -delete",
-    "dd if=/dev/zero of=/dev/sda"
+    "dd if=/dev/zero of=/dev/sda",
+    // The target written so no rule reading plain words can see it. Every one of
+    // these is `rm -rf /` or `rm -rf ~` by the time the shell runs it.
+    "rm -rf $'/'",
+    "rm -rf $'\\x2f'",
+    "rm -rf $'\\057'",
+    "rm -rf $'\\u002f'",
+    "rm -rf $'\\x7e'",
+    "rm -rf $'\\x2f'*"
   ];
 
   for (const command of forbidden) {

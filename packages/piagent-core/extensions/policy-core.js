@@ -153,6 +153,39 @@ export function splitShellSegments(command) {
   return segments.length ? segments : [command.trim()].filter(Boolean);
 }
 
+/**
+ * Reads one `$'...'` ANSI-C quote and returns what the shell would pass along.
+ *
+ * Treating it as an ordinary single quote is not enough: the escapes inside are
+ * the point of the syntax, and leaving them raw means `$'\x2eenv'` is read as
+ * the literal `x2eenv` while the shell opens `.env`. The same trick reaches
+ * `rm -rf $'\x2f'`, which nothing recognised as root.
+ *
+ * A backslash escapes the next character, the closing quote included, so `\'`
+ * does not end the quote.
+ *
+ * @param {string[]|string} chars the segment, indexed the same way the caller
+ *   indexes it, so the returned endIndex can be assigned straight back
+ * @param {number} openIndex index of the `$`
+ * @returns {{value: string, endIndex: number}} decoded content, and the index of
+ *   the closing quote (or the last character when the quote never closes)
+ */
+function readAnsiCQuote(chars, openIndex) {
+  let raw = "";
+  let index = openIndex + 2;
+  for (; index < chars.length; index += 1) {
+    const char = chars[index];
+    if (char === "\\" && index + 1 < chars.length) {
+      raw += char + chars[index + 1];
+      index += 1;
+      continue;
+    }
+    if (char === "'") break;
+    raw += char;
+  }
+  return { value: decodeShellDataEscapes(raw), endIndex: Math.min(index, chars.length - 1) };
+}
+
 function shellWordTokens(segment) {
   const tokens = [];
   let current = "";
@@ -182,12 +215,15 @@ function shellWordTokens(segment) {
       continue;
     }
     // `$'...'` is ANSI-C quoting: the dollar opens the quote rather than naming
-    // a variable. Reading it as a variable left the dollar glued to the value,
-    // so `cat $'.env'` produced the candidate `$.env` and matched no protected
-    // path while the shell happily opened `.env`.
+    // a variable, and the escapes inside it are decoded before the word is
+    // passed on. Reading it as a variable left the dollar glued to the value, so
+    // `cat $'.env'` produced the candidate `$.env`; reading it as a plain single
+    // quote dropped the backslashes, so `cat $'\x2eenv'` produced `x2eenv`.
+    // Either way the shell opened `.env` and nothing here saw a protected path.
     if (char === "$" && chars[index + 1] === "'" && !quote) {
-      quote = "'";
-      index += 1;
+      const ansiC = readAnsiCQuote(chars, index);
+      current += ansiC.value;
+      index = ansiC.endIndex;
       continue;
     }
     if ((char === "'" || char === "\"") && !quote) {
@@ -914,6 +950,15 @@ function extractAttachedRedirectionPaths(segment) {
       }
       if (targetChar === "\\") {
         targetEscaped = true;
+        continue;
+      }
+      // A redirection target is a word like any other, so it can be written in
+      // ANSI-C quoting too. `printf x >$'.env'` used to yield the target
+      // `$.env`, which matches nothing, while the shell truncated `.env`.
+      if (targetChar === "$" && segment[cursor + 1] === "'" && !targetQuote) {
+        const ansiC = readAnsiCQuote(segment, cursor);
+        target += ansiC.value;
+        cursor = ansiC.endIndex;
         continue;
       }
       if ((targetChar === "'" || targetChar === '"') && !targetQuote) {
