@@ -144,7 +144,10 @@ Trong sáu kind, chỉ `vscode` trỏ vào đường dẫn **trong project** (`.
 - Server đến từ một kind repo-relative luôn phải duyệt, **bất kể layer nào khai báo import** — kể cả `global`.
 - Repo scope khai báo `imports` với kind nào thì server của kind đó cũng phải duyệt: repo đang chọn hộ máy này chạy server nào.
 - Kind `codex` giữ server trong TOML, không bên nào parse được. Liệt kê server của năm kind đọc được không nói gì về kind thứ sáu, nên repo khai báo `codex` làm **mọi tool call bị chặn** — từ chối ngay ở dòng khai báo, không phải từ chối theo nội dung.
+- Cột `SCOPE` trong `list` là **layer khai báo `imports`**, không phải nơi định nghĩa server. Global khai báo `imports: ["vscode"]` thì server hiện `scope: global` nhưng định nghĩa nằm trong clone — vẫn phải duyệt, và `detail` nêu đúng kind nó đến từ đâu.
 - `piagent-mcp doctor` nêu tên file có `imports` và các kind của nó.
+
+Hai trạng thái làm gate không kiểm được gì (`toolPrefix: "none"`, và import kind không enumerate được) thì `doctor` và `list` **in ra và exit 1**, không im lặng báo "No MCP servers configured". Điều kiện được quyết ở một chỗ duy nhất mà cả guard lẫn CLI cùng đọc — hai bên lệch nhau chính là cách một session bị chặn biến thành một session hỏng không rõ lý do.
 
 Bảng dưới là đường dẫn và key **thật** của từng công cụ, đối chiếu với thứ adapter đang đọc. Ba dòng lệch nhau, nên platform đọc hợp của cả hai phía: liệt kê thừa một server chỉ tốn một lần duyệt, liệt kê thiếu thì mất gate.
 

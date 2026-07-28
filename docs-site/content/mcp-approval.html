@@ -74,6 +74,10 @@
   </div>
 
   <p><span class="inline-code">piagent-mcp doctor</span> nêu tên file có <span class="inline-code">imports</span> và các kind của nó, và nêu cả layer không parse được — trước đây một layer hỏng đọc ra rỗng, không phân biệt được với layer không có server nào.</p>
+
+  <p>Với hai trạng thái chặn-toàn-bộ ở trên, <span class="inline-code">doctor</span> và <span class="inline-code">list</span> in ra lý do và exit 1. Trước đây chỉ guard biết, còn CLI báo &ldquo;No MCP servers configured&rdquo; rồi exit 0 đúng lúc không gì chạy được — câu trả lời đẩy người vận hành đi tìm ở mọi chỗ trừ file gây ra nó.</p>
+
+  <p>Cột <span class="inline-code">SCOPE</span> là layer khai báo <span class="inline-code">imports</span>, không phải nơi server được định nghĩa. Server import qua config <span class="inline-code">global</span> vẫn cần duyệt, vì file đọc lại nằm trong clone.</p>
 </section>
 
 <section class="section">

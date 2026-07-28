@@ -16,6 +16,10 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
   One kind cannot be enumerated at all: `codex` keeps its servers in TOML, and nothing here parses TOML. Listing the servers of the five readable kinds says nothing about that one, so a repository declaring it has every tool call refused rather than the servers that happened to be readable gated and the rest let through.
 
+- `piagent-mcp doctor` and `list` reported "No MCP servers configured" and exited 0 in exactly the states where the guard was refusing every tool call, and `list` went on to suggest seeding a baseline. Both now report the config that stopped the session and exit 1. The condition is decided in one place that the guard and the CLI both read, because the two disagreeing is what turned a blocked session into an unexplained one.
+
+- A server imported from a repository-relative file was reported `ready` when a global config declared the import, while the gate treated it as a repository server awaiting approval. Scope answers which layer named the import, not where the definitions came from; a `global` config importing `vscode` reads them out of the clone. Whether a server needs approval is now decided where servers are collected, so both surfaces give the same answer, and the reason names the file the definition actually came from.
+
 - `piagent-capability vendor` emptied its destination before checking containment and only tested the immediate parent for a symlink. A repository shipping `.pi` as a symlink had the recursive delete and the fetch land outside the project. The whole path is now verified against the resolved project root before anything is created or removed.
 
   Emptying the destination first was also not recoverable: a fetch that failed for any reason — no network, a hostile archive rejected by the symlink check — left the project with neither the new source nor the reviewed one it had been running on. The fetch now lands beside the destination and moves into place only once it has passed every check, so a failed re-vendor leaves the working tree exactly as it was.
@@ -35,6 +39,8 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 - Every script that takes `--flag <value>` read the next argument without checking it was a value. `--preset full --settings --dry-run` wrote a settings file named `--dry-run`, exited 0 and reported success, having skipped the dry run it was asked for and never touched the real settings file. `init-project.sh` and `setup.sh` checked only that an argument was present, which catches a flag at the end of the line and nothing else. All eight scripts now refuse a flag-shaped value, and the suite asserts it for every value-taking option in `scripts/`, including ones added later.
 
 - The shell guard did not see a path reached through an inline interpreter script, an unbalanced quote, or a shell variable with a default. `node -e "require('fs').readFileSync('.env')"`, `cat .env'` and `cat .${X:-env}` all read a protected path without matching one. Literals inside an inline script are now extracted, tokenizing survives a quote with no partner, and a variable's default value is expanded when nothing else defines it.
+
+- ANSI-C quoting hid a path from the guard entirely. `$'...'` decodes its escapes before the word is passed on, so `cat $'\x2eenv'` opens `.env` while the guard saw the literal `x2eenv`; a redirection target was not handled at all, so `printf x >$'.env'` truncated a protected file. The same trick reached the exec policy: `rm -rf $'\x2f'` was permitted, having been read as a removal of something called `x2f`. Escapes are decoded — hex, octal, short and long unicode, and the named ones — in tokenizing and in redirection targets alike.
 
 ### Changed
 
