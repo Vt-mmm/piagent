@@ -2,6 +2,14 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.1.9 - 2026-07-28
+
+### Fixed
+
+- The update notice reaches the install path people actually use. v1.1.8 decided a platform tree was a maintainer's working copy when it found a `.git` directory in it — but `pi install git:...` clones the repository, so an ordinary install carries a `.git` and every other file a working copy carries. There is no mark inside the tree that separates them, which meant the notice never appeared for anyone who installed the documented way.
+
+  What separates them is where they sit: Pi puts packages it installed under its own agent directory, and npm puts the global helper under `node_modules`. A tree anywhere else is a working copy and is still told nothing. `PI_CODING_AGENT_DIR` is honoured, and both paths are resolved before comparison, because a home reached through a symlink is ordinary — macOS reaches `/var` that way — and comparing a real path against a symlinked one made an install look like it was somewhere else.
+
 ## v1.1.8 - 2026-07-28
 
 ### Added

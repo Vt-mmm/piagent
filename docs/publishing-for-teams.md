@@ -51,6 +51,7 @@ pi install /path/to/piagent
 - `1.1.6`: `be-readonly-fe` giữ được backend read-only trong monorepo, detect FE/BE đọc cả workspace, và rule detect gộp về một chỗ.
 - `1.1.7`: update global không còn chặn project đang chạy — lock chỉ block khi grant thật sự đổi, và profile dạng `extends` nhận policy từ platform đang cài thay vì giữ bản copy lúc onboard.
 - `1.1.8`: Pi báo ngay ở đầu session khi có release mới, kèm lệnh chạy update.
+- `1.1.9`: notice update hiện đúng trên bản cài bằng `pi install git:` — bản cài nhận diện theo vị trí thư mục, không theo `.git`.
 
 ## Không publish
 
