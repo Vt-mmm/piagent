@@ -122,7 +122,7 @@ describe("global platform update", () => {
 
     assert.notEqual(write.block, true);
     assert.equal(readLock(cwd).core.packageVersion, AFTER);
-    assert.match(noticeMatching(session.notices, /Capability lock re-pinned/).message, new RegExp(AFTER.replace(/\./g, "\\.")));
+    assert.equal(noticeMatching(session.notices, /Capability lock re-pinned/).message.includes(AFTER), true);
     assert.equal(noticeMatching(session.notices, /Reapply the project profile/), undefined);
   });
 
