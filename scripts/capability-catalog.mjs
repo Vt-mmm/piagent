@@ -20,6 +20,10 @@ import {
   validateCapabilitySources,
   vendorRemoteSource
 } from "../packages/piagent-core/capabilities/capability-sources.js";
+import {
+  buildExtendingProfile,
+  resolveProjectProfileDocument
+} from "../packages/piagent-core/capabilities/project-profile.js";
 
 const platformRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const catalogPath = path.join(platformRoot, "catalog", "capabilities.json");
@@ -28,7 +32,7 @@ function usage() {
   process.stdout.write(`Usage:
   piagent-capabilities catalog [--check | --write]
   piagent-capabilities resolve --profile <profile.json> [--output <lock.json>] [--package-source <source>]
-  piagent-capabilities apply-profile --profile <source.json> --target <piagent-profile.json> [--package-source <source>] [--force]
+  piagent-capabilities apply-profile --profile <source.json> --target <piagent-profile.json> [--extends <adapter>] [--package-source <source>] [--force]
   piagent-capabilities doctor [--profile <profile.json>] [--lock <lock.json>] [--package-source <source>]
   piagent-capabilities vendor --profile <profile.json> [--source <name>]
   piagent-capabilities validate-source --package-source <source>
@@ -58,7 +62,7 @@ function parseArguments(values) {
       output.flags.set(value, true);
       continue;
     }
-    if (!["--profile", "--output", "--target", "--lock", "--file", "--package-source", "--source"].includes(value)) throw new CapabilityValidationError(`unknown option ${value}`);
+    if (!["--profile", "--extends", "--output", "--target", "--lock", "--file", "--package-source", "--source"].includes(value)) throw new CapabilityValidationError(`unknown option ${value}`);
     if (output.flags.has(value)) throw new CapabilityValidationError(`duplicate option ${value}`);
     const next = values[index + 1];
     if (!next || next.startsWith("--")) throw new CapabilityValidationError(`${value} requires a value`);
@@ -157,7 +161,7 @@ function runResolve(flags) {
 }
 
 function runApplyProfile(flags) {
-  assertAllowedFlags(flags, new Set(["--profile", "--target", "--package-source", "--force"]));
+  assertAllowedFlags(flags, new Set(["--profile", "--extends", "--target", "--package-source", "--force"]));
   const source = requireExistingFile(flags.get("--profile"), "--profile");
   const targetValue = flags.get("--target");
   if (!targetValue) throw new CapabilityValidationError("--target is required");
@@ -166,17 +170,27 @@ function runApplyProfile(flags) {
   const parent = fs.realpathSync(path.dirname(target));
   const normalizedTarget = path.join(parent, path.basename(target));
   if (fs.existsSync(normalizedTarget) && !flags.has("--force")) throw new CapabilityValidationError("target profile already exists; pass --force to replace it");
-  const profile = readJson(source);
+  const adapter = readJson(source);
+  const base = flags.get("--extends");
+  // With --extends the project records which adapter it follows and keeps only
+  // its own identity, so a later platform correction reaches it. Without it the
+  // source document is copied whole, which is what a caller supplying its own
+  // profile file wants.
+  const stored = base === undefined
+    ? adapter
+    : buildExtendingProfile(base, adapter.projectId, adapter.displayName);
+  const profile = resolveProjectProfileDocument(platformRoot, stored).profile;
   const packageSource = flags.get("--package-source") ?? "workspace";
   const lock = resolveCapabilityProfileDocument(platformRoot, profile, {
     profileFile: path.basename(normalizedTarget),
+    storedProfile: stored,
     packageSource,
     extraRoots: profile.capabilitySources === undefined
       ? undefined
       : resolveCapabilitySourceRoots(projectRootForProfile(normalizedTarget), profile.capabilitySources)
   });
   const lockTarget = path.join(parent, "piagent-profile.lock.json");
-  writeProfileLockAtomic(normalizedTarget, profile, lockTarget, lock);
+  writeProfileLockAtomic(normalizedTarget, stored, lockTarget, lock);
   process.stdout.write(`${JSON.stringify({ ok: true, profile: normalizedTarget, lock: lockTarget, packs: lock.packs.length })}\n`);
 }
 
@@ -210,11 +224,18 @@ function runDoctor(flags) {
       const verification = verifyCapabilityLock(platformRoot, profile, readJson(lockFile), { packageSource, extraRoots });
       report.lock = {
         path: lockFile,
-        current: verification.ok,
+        current: verification.status === "current",
+        status: verification.status,
+        reasons: verification.reasons,
         expectedDigest: verification.expectedDigest,
         actualDigest: verification.actualDigest
       };
-      if (!verification.ok) throw new CapabilityValidationError("capability lock is stale or has been modified");
+      // A re-pinnable lock is behind the installed build but grants exactly what
+      // it agreed to, so it is reported rather than treated as a failure. The
+      // guard rewrites it on the next session.
+      if (verification.status === "blocked") {
+        throw new CapabilityValidationError(`capability lock no longer matches what the project agreed to: ${verification.reasons.join("; ")}`);
+      }
     }
   } else if (flags.has("--lock")) {
     throw new CapabilityValidationError("--lock requires --profile");

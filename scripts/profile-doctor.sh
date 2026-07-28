@@ -19,12 +19,22 @@ if [[ ! -f "$PROFILE_PATH" ]]; then
   exit 1
 fi
 
-node --input-type=module - "$PROJECT_PATH" "$PROFILE_PATH" <<'NODE'
+PLATFORM_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+node --input-type=module - "$PROJECT_PATH" "$PROFILE_PATH" "$PLATFORM_ROOT" <<'NODE'
 import fs from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
-const [projectPath, profilePath] = process.argv.slice(2);
-const profile = JSON.parse(fs.readFileSync(profilePath, "utf8"));
+const [projectPath, profilePath, platformRoot] = process.argv.slice(2);
+const stored = JSON.parse(fs.readFileSync(profilePath, "utf8"));
+
+// A profile that names an adapter is checked as the document that will actually
+// be enforced, not as the few lines the project happens to store.
+const { resolveProjectProfileDocument } = await import(
+  pathToFileURL(path.join(platformRoot, "packages", "piagent-core", "capabilities", "project-profile.js")).href
+);
+const profile = resolveProjectProfileDocument(platformRoot, stored).profile;
 
 const errors = [];
 const warnings = [];

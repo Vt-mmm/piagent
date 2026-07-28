@@ -153,6 +153,7 @@ Pack không thể cấp thêm quyền cho chính nó:
 - Doctor phát hiện catalog hoặc lock stale.
 - Generated output dùng temporary file cùng thư mục, `fsync`, rồi atomic rename.
 - Lock gắn với declared package-source identifier, package version, catalog và digest của các runtime enforcement file đang cài. Đây là integrity binding của runtime quan sát được, không phải chứng minh nguồn gốc cryptographic của package archive.
+- Lock drift được phân loại hai nhánh, xem `## Lock drift` bên dưới.
 - Optional runtime package được cài bằng exact version; installer đối chiếu registry integrity với digest đã phê duyệt trước khi cài.
 - Khi cập nhật profile, lock được ghi trước; nếu profile không thể ghi thì lock được rollback. Process interruption tạo trạng thái mismatch fail-closed thay vì áp dụng profile thiếu lock.
 
@@ -165,6 +166,26 @@ Pack không thể cấp thêm quyền cho chính nó:
 - Proposal dùng canonical UTC timestamp, chưa hết hạn, có hiệu lực tối đa 24 giờ và không chứa raw payload hay credential.
 - `validate-action` chỉ kiểm tra contract, thời hạn và secret indicator; không authorize action, không đối chiếu requested permission với profile/lock và không đọc artifact để xác minh digest/size.
 - External action vẫn cần human confirmation và executor riêng trước khi có side effect.
+
+## Lock drift
+
+Lock pin hai thứ khác nhau, và khi lệch thì câu trả lời cũng khác nhau.
+
+**Consent — project phải đồng ý lại, session bị chặn (`blocked`):**
+
+- `schemaVersion` của lock, `core.apiVersion`, `core.packageSource`;
+- `profile` — `projectId`, `mode`, tên file, digest của document project tự lưu;
+- `packs` — name, version, origin, source, owner, lifecycle và digest của manifest. Manifest khai luôn `provides`, nên artifact xuất hiện thêm, biến mất hoặc đổi path đều nằm ở nhánh này;
+- permission theo hướng: granting key (`capabilities`, `filesystemRead`, `filesystemWrite`, `networkDomains`, `externalActions`) chặn khi **thêm**; restricting key (`protectedPaths`, `readOnlyPaths`, `shellProtectedPaths`) chặn khi **mất**.
+
+**Build — platform đổi bản, lock được ghi lại và báo, session chạy tiếp (`repin`):**
+
+- `core.packageVersion`, `core.runtimeFiles`, `core.packageDigest`;
+- nội dung artifact (`artifacts[].digest`).
+
+Vì sao nội dung artifact nằm ở nhánh build: adapter policy file, base policy, prompt, skill, subagent và recipe đều ship dạng artifact. Pin bytes của chúng nghĩa là bản sửa policy không bao giờ tới được project đang tham chiếu — đúng thứ mà việc ship policy tập trung tồn tại để làm. Không mất gì khi bỏ pin: danh sách artifact nằm trong manifest và manifest digest vẫn được pin ở `packs`, còn policy artifact bị nới lỏng vẫn chặn vì permission sau resolve được so trực tiếp theo hướng.
+
+Việc pin build cũng chưa bao giờ chống được trường hợp nó trông giống: code kiểm tra lock chính là một trong các file mà lock pin, nên thứ gì sửa được platform đã cài thì sửa luôn được checker.
 
 ## Lifecycle
 

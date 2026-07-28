@@ -219,6 +219,13 @@ if [[ "$FORCE_PROFILE" == true || ! -f "$PROFILE_TARGET" ]]; then
     --target "$PROFILE_TARGET"
     --package-source "$PACKAGE_SOURCE"
   )
+  # A built-in adapter is referenced, not copied, so a later platform correction
+  # reaches this project. A caller supplying its own profile file still gets that
+  # file written whole.
+  if [[ "$PROFILE_PATH" == "$PLATFORM_ROOT/adapters/"*"/profile.json" ]]; then
+    adapter_name="${PROFILE_PATH#"$PLATFORM_ROOT/adapters/"}"
+    apply_profile_args+=(--extends "${adapter_name%/profile.json}")
+  fi
   if [[ "$FORCE_PROFILE" == true ]]; then
     apply_profile_args+=(--force)
   fi

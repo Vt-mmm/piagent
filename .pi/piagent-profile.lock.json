@@ -115,18 +115,18 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:c5cea7c37f0af14db7b23d08f96f5d6c2e71aa0947d85a01e231384d53c20613",
+    "packageDigest": "sha256:208386b85f36f08180267a0e591c9934bc54d8074d8cb8f9c1e03fff6b7389a8",
     "packageSource": "../",
-    "packageVersion": "1.1.6",
+    "packageVersion": "1.1.7",
     "runtimeFiles": [
       {
         "byteSize": 4108,
-        "digest": "sha256:741461ba1e8bf67267caa004764d9b1c919421593af832702baaa7bac27165ff",
+        "digest": "sha256:a647fd85c7a1a5a4ecf09cc14f5385e5bba62703a95cfd6060ab6194be009a13",
         "path": "package.json"
       },
       {
         "byteSize": 964,
-        "digest": "sha256:7f988076df851e8deafe19413e30cc94b3847c5f32d418df3c35fd0659adce7f",
+        "digest": "sha256:38c677e25f3d2672f9c09db682c5fe7f268f288edecacd8e7fee8909baf68abb",
         "path": "packages/piagent-core/package.json"
       },
       {
@@ -135,8 +135,8 @@
         "path": "packages/piagent-core/policies/base-policy.json"
       },
       {
-        "byteSize": 56383,
-        "digest": "sha256:9282c679f95e8552de5e4f5880cd8379761d597c06d8d821d4dce1d0fd5564ce",
+        "byteSize": 61123,
+        "digest": "sha256:c6c1d64038688e0c99d124162dc171ff691080ecd8359f138838d0bf4aba0209",
         "path": "packages/piagent-core/capabilities/capability-core.js"
       },
       {
@@ -145,13 +145,18 @@
         "path": "packages/piagent-core/capabilities/capability-sources.js"
       },
       {
+        "byteSize": 3159,
+        "digest": "sha256:deaeb00a7afcbc8ee6aeb26b7cf92f63dff1e0c9beff160e15aaa72915f6c4ec",
+        "path": "packages/piagent-core/capabilities/project-profile.js"
+      },
+      {
         "byteSize": 10479,
         "digest": "sha256:499a1f6a2355f1a201808c85bb9c7afdb1a4762ffd3e5bf7c3631b6e7b87af7c",
         "path": "packages/piagent-core/security/sensitive-data.js"
       },
       {
-        "byteSize": 251645,
-        "digest": "sha256:233a3960bd4d22d48ca7f4e666bd964d08c44426130b97876f7939b78cdd2af3",
+        "byteSize": 255392,
+        "digest": "sha256:720edf76f7efad636bad002901efdcc51d7039ecbc850551ba6da96e2a02fe87",
         "path": "packages/piagent-core/extensions/piagent-guard.ts"
       },
       {

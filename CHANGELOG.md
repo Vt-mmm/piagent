@@ -2,6 +2,20 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.1.7 - 2026-07-28
+
+A platform update is one global install. It was not behaving like one: every project that selected capability packs stopped working after a release until its profile was reapplied by hand, and the policy a release corrected never reached a project that had already onboarded.
+
+### Changed
+
+- A capability lock that is behind the installed platform is re-pinned instead of refusing the session. The lock pinned two different things and gave them one answer. What the project consented to — which packs, from where, and how far they may reach — still blocks: a grant that widens, a protection that disappears, a pack that changes identity. Which build produced the resolution — package version, runtime file digests, artifact content — moves on every release, and blocking on it put a per-project chore behind a global update while not defending against the case it resembles, since the code that verifies the lock is itself one of the files the lock pins. A build move with an unchanged grant is recorded and reported.
+
+- Artifact content is part of the build, not part of consent. Adapter policy files, base policy, prompts, skills, subagents and recipes all ship as pack artifacts, so pinning their bytes meant a corrected policy could never reach a project referencing it. Nothing is given up: which artifacts a pack provides is declared in its manifest and the manifest digest is still pinned, so an artifact that appears, disappears or moves still blocks — and a policy artifact that weakens still blocks, because the permissions it resolves to are compared directionally.
+
+- A project profile can name the adapter it takes its policy from instead of copying it. `{"extends": "web-frontend", "projectId": ..., "displayName": ...}` keeps the project's identity and overrides in the project, and resolves the rest from the installed platform at runtime. Any key the project states replaces the adapter's key whole; a profile without `extends` keeps working exactly as before, self-contained. `init-project.sh` and `/onboard-project` write this form when the profile comes from a built-in adapter, so onboarding stays the one per-project step and updating stays global.
+
+  A profile naming an adapter that is not installed refuses rather than falling back to something weaker.
+
 ## v1.1.6 - 2026-07-27
 
 Monorepo fixes found auditing how the platform scopes itself to a project. Every case was reproduced against a real directory tree before it was changed.

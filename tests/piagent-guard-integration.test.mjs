@@ -4,9 +4,27 @@ import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { after, describe, it } from "node:test";
+import {
+  callToolCall,
+  callToolResult,
+  createContext,
+  createPiHarness,
+  writeModule,
+  writeRuntimeStubs
+} from "./helpers/guard-harness.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const temporaryRoots = new Set();
+
+const { resolveProjectProfileDocument } = await import(
+  pathToFileURL(path.join(repoRoot, "packages", "piagent-core", "capabilities", "project-profile.js")).href
+);
+
+// A stored profile that names an adapter is only meaningful once resolved
+// against the platform the fixture installed.
+function resolveProfile(platformRoot, stored) {
+  return resolveProjectProfileDocument(platformRoot, stored).profile;
+}
 
 after(() => {
   for (const root of temporaryRoots) {
@@ -14,52 +32,6 @@ after(() => {
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
-
-function writeModule(target, source) {
-  fs.mkdirSync(path.dirname(target), { recursive: true });
-  fs.writeFileSync(target, source);
-}
-
-function writeRuntimeStubs(root) {
-  writeModule(path.join(root, "node_modules", "@earendil-works", "pi-coding-agent", "package.json"), JSON.stringify({
-    type: "module",
-    exports: "./index.js"
-  }));
-  writeModule(path.join(root, "node_modules", "@earendil-works", "pi-coding-agent", "index.js"), [
-    "export function isToolCallEventType(name, event) {",
-    "  return event?.toolName === name;",
-    "}",
-    ""
-  ].join("\n"));
-
-  writeModule(path.join(root, "node_modules", "@earendil-works", "pi-ai", "package.json"), JSON.stringify({
-    type: "module",
-    exports: "./index.js"
-  }));
-  writeModule(path.join(root, "node_modules", "@earendil-works", "pi-ai", "index.js"), [
-    "export function StringEnum(values) {",
-    "  return { enum: values };",
-    "}",
-    ""
-  ].join("\n"));
-
-  writeModule(path.join(root, "node_modules", "typebox", "package.json"), JSON.stringify({
-    type: "module",
-    exports: "./index.js"
-  }));
-  writeModule(path.join(root, "node_modules", "typebox", "index.js"), [
-    "const passthrough = (schema = {}) => schema;",
-    "export const Type = {",
-    "  Object: (properties = {}, options = {}) => ({ type: 'object', properties, ...options }),",
-    "  Optional: passthrough,",
-    "  String: (options = {}) => ({ type: 'string', ...options }),",
-    "  Number: (options = {}) => ({ type: 'number', ...options }),",
-    "  Boolean: (options = {}) => ({ type: 'boolean', ...options }),",
-    "  Array: (items = {}, options = {}) => ({ type: 'array', items, ...options })",
-    "};",
-    ""
-  ].join("\n"));
-}
 
 function copyPiagentPackage(root) {
   const packageRoot = path.join(root, "packages", "piagent-core");
@@ -116,96 +88,12 @@ function createProject(root) {
   return cwd;
 }
 
-function createPiHarness() {
-  const handlers = new Map();
-  const tools = new Map();
-  const commands = new Map();
-  const entries = [];
-  let sessionName = "";
-  const pi = {
-    on(name, handler) {
-      handlers.set(name, handler);
-    },
-    registerTool(tool) {
-      tools.set(tool.name, tool);
-    },
-    registerCommand(name, command) {
-      commands.set(name, command);
-    },
-    sendUserMessage(message, options) {
-      entries.push({ type: "user-message", payload: { message, options } });
-    },
-    sendMessage(message) {
-      entries.push({ type: "message", payload: message });
-    },
-    appendEntry(type, payload) {
-      entries.push({ type, payload });
-    },
-    setSessionName(name) {
-      sessionName = name;
-    },
-    getThinkingLevel() {
-      return "xhigh";
-    }
-  };
-  return { pi, handlers, tools, commands, entries, getSessionName: () => sessionName };
-}
-
-function createContext(cwd, options = {}) {
-  const notices = [];
-  const confirmations = [];
-  const selections = Array.isArray(options.select) ? [...options.select] : [];
-  const selectCalls = [];
-  return {
-    cwd,
-    mode: "test",
-    model: { provider: "test", id: "model" },
-    ui: {
-      notices,
-      notify(message, level) {
-        notices.push({ message, level });
-      },
-      confirm: async (message, title) => {
-        confirmations.push({ message, title });
-        return options.confirm ?? false;
-      },
-      select: async (...args) => {
-        selectCalls.push(args);
-        if (typeof options.select === "function") return options.select(...args);
-        return selections.shift();
-      }
-    },
-    isProjectTrusted: () => options.projectTrusted ?? true,
-    getContextUsage: () => options.contextUsage ?? ({ tokens: 0, contextWindow: 1000, percent: 0 }),
-    compact: () => {
-      notices.push({ message: "compact called", level: "info" });
-    },
-    sessionManager: {
-      getSessionFile: () => path.join(cwd, ".pi", "session.jsonl"),
-      getSessionId: () => "session-test",
-      getSessionName: () => "session",
-      getEntries: () => [],
-      getBranch: () => []
-    },
-    confirmations,
-    selectCalls
-  };
-}
-
 function nestedInput(depth, leaf) {
   let value = leaf;
   for (let index = 0; index < depth; index += 1) {
     value = { nest: value };
   }
   return value;
-}
-
-async function callToolCall(handler, ctx, toolName, input) {
-  return await handler({ toolName, input }, ctx) ?? {};
-}
-
-async function callToolResult(handler, ctx, toolName, input, content) {
-  return await handler({ toolName, input, content, isError: false }, ctx) ?? {};
 }
 
 describe("piagent guard integration", () => {
@@ -420,18 +308,24 @@ describe("piagent guard integration", () => {
 
     await harness.commands.get("profile").handler("apply web-frontend", ctx);
 
-    const profile = JSON.parse(fs.readFileSync(path.join(cwd, ".pi", "piagent-profile.json"), "utf8"));
-    assert.equal(profile.mode, "web-frontend");
-    assert.equal(profile.projectId, "integration-project");
-    assert.equal(profile.displayName, "Integration Project");
+    // The project records which adapter it follows; the policy itself stays in
+    // the platform so a later correction reaches this project untouched.
+    const stored = JSON.parse(fs.readFileSync(path.join(cwd, ".pi", "piagent-profile.json"), "utf8"));
+    assert.equal(stored.extends, "web-frontend");
+    assert.equal(stored.protectedPaths, undefined);
+    assert.equal(stored.projectId, "integration-project");
+    assert.equal(stored.displayName, "Integration Project");
+    assert.equal(resolveProfile(root, stored).mode, "web-frontend");
+    assert.ok(resolveProfile(root, stored).protectedPaths.length > 0);
     assert.equal(fs.existsSync(path.join(cwd, ".pi", "piagent-profile.lock.json")), true);
     assert.equal(harness.entries.some((entry) => entry.type === "user-message"), false);
     assert.equal(harness.entries.some((entry) => entry.payload?.customType === "piagent-profile-applied"), true);
 
     await harness.commands.get("profile").handler("be-fe", ctx);
-    const aliasedProfile = JSON.parse(fs.readFileSync(path.join(cwd, ".pi", "piagent-profile.json"), "utf8"));
-    assert.equal(aliasedProfile.mode, "be-readonly-fe");
-    assert.equal(aliasedProfile.projectId, "integration-project");
+    const aliased = JSON.parse(fs.readFileSync(path.join(cwd, ".pi", "piagent-profile.json"), "utf8"));
+    assert.equal(aliased.extends, "be-readonly-fe");
+    assert.equal(resolveProfile(root, aliased).mode, "be-readonly-fe");
+    assert.equal(aliased.projectId, "integration-project");
   });
 
   it("selects fullstack profile tech with option-style UI and records Context7 placeholders", async () => {
@@ -451,7 +345,7 @@ describe("piagent guard integration", () => {
       assert.equal(choiceList.some((choice) => choice.includes("[object Object]")), false);
     }
 
-    const profile = JSON.parse(fs.readFileSync(path.join(cwd, ".pi", "piagent-profile.json"), "utf8"));
+    const profile = resolveProfile(root, JSON.parse(fs.readFileSync(path.join(cwd, ".pi", "piagent-profile.json"), "utf8")));
     const manifest = JSON.parse(fs.readFileSync(path.join(cwd, ".pi", "tech-stack.json"), "utf8"));
     assert.equal(profile.mode, "fullstack");
     assert.deepEqual(profile.techStack.roles, {
