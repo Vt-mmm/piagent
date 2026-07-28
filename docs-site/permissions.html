@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Một command để đổi quyền theo task · Pi Agent Platform Docs</title>
+    <meta name="description" content="Permission mode là session-local override. Đổi mode không sửa project profile." />
+    <meta name="theme-color" content="#050505" />
+    <link rel="canonical" href="https://piagent.io.vn/permissions" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta property="og:title" content="Một command để đổi quyền theo task · Pi Agent Platform Docs" />
+    <meta property="og:description" content="Permission mode là session-local override. Đổi mode không sửa project profile." />
+    <meta property="og:url" content="https://piagent.io.vn/permissions" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/docs.css" />
+    <script src="/assets/docs.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Pi Agent Platform">
+        <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" /></span>
+        <span>Pi Agent Platform</span>
+      </a>
+      <div class="top-actions">
+        <span class="pill"><span class="pill-dot"></span>v1.2.0 docs</span>
+        <a class="button social" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer" aria-label="Mở GitHub repository">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          GitHub
+        </a>
+        <button class="button mobile-menu" type="button" data-menu>Lộ trình</button>
+        <a class="button" href="/commands">Commands</a>
+      </div>
+    </header>
+
+    <div class="layout with-toc">
+      <aside class="sidebar" data-sidebar>
+        <div class="sidebar-search" aria-label="Tìm trong tài liệu">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M10.8 18.1a7.3 7.3 0 1 1 0-14.6 7.3 7.3 0 0 1 0 14.6Zm5.3-1.7 4.4 4.4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          <input type="search" placeholder="Tìm trang" data-filter />
+        </div>
+
+        <nav aria-label="Tài liệu">
+          <div class="nav-group">
+            <p class="nav-title">Get started</p>
+            <a class="nav-link" href="/">Overview</a>
+            <a class="nav-link" href="/quickstart">Quickstart</a>
+            <a class="nav-link" href="/scope">Phạm vi platform</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Build</p>
+            <a class="nav-link" href="/profiles">Project profile</a>
+            <a class="nav-link current" href="/permissions" aria-current="page">Permission modes</a>
+            <a class="nav-link" href="/commands">Command catalog</a>
+            <a class="nav-link" href="/workflows">Workflows</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">MCP</p>
+            <a class="nav-link" href="/mcp">MCP overview</a>
+            <a class="nav-link" href="/mcp-servers">Quản lý server</a>
+            <a class="nav-link" href="/mcp-auth">Auth và readiness</a>
+            <a class="nav-link" href="/mcp-approval">Approval gate</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Operate</p>
+            <a class="nav-link" href="/security">Security model</a>
+            <a class="nav-link" href="/architecture">Architecture</a>
+            <a class="nav-link" href="/runtime">Runtime tools</a>
+            <a class="nav-link" href="/team">Team usage</a>
+          </div>
+        </nav>
+      </aside>
+
+      <main>
+        <div class="content-shell" data-article>
+            <nav class="breadcrumb" aria-label="Breadcrumb">
+              <a href="/">Docs</a>
+              <span aria-hidden="true">/</span>
+              <span>Build</span>
+              <span aria-hidden="true">/</span>
+              <span>Permission modes</span>
+            </nav>
+            <div class="page-head">
+              <h1>Một command để đổi quyền theo task</h1>
+              <p>Permission mode là session-local override. Đổi mode không sửa project profile.</p>
+            </div>
+<section class="section">
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Mode</th>
+          <th>Dùng khi nào</th>
+          <th>Ranh giới</th>
+          <th>Command</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="inline-code">read-only</span></td>
+          <td>Scout, audit, mapping, review không chỉnh source.</td>
+          <td>Cho read, grep, find, ls và piagent tools; chặn shell/write/unknown tools.</td>
+          <td><span class="inline-code">/read-only</span></td>
+        </tr>
+        <tr>
+          <td><span class="inline-code">workspace-write</span></td>
+          <td>Implementation bình thường trong repo.</td>
+          <td>Default guarded mode; giữ protected path, shell policy, capability và verify gate.</td>
+          <td><span class="inline-code">/workspace-write</span></td>
+        </tr>
+        <tr>
+          <td><span class="inline-code">trusted-full-access</span></td>
+          <td>Automation trên repo đã tin và task đã rõ.</td>
+          <td>Nới autonomy trong guard, nhưng vẫn giữ protected path, redaction, lock và confirmation.</td>
+          <td><span class="inline-code">/full-access</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="command-grid">
+    <article class="command-card">
+      <header><span>Xem permission</span><button class="clip-btn" data-clip="/permission-status">Lấy lệnh</button></header>
+      <pre><code>/permission-status</code></pre>
+    </article>
+    <article class="command-card">
+      <header><span>Read-only session</span><button class="clip-btn" data-clip="/read-only">Lấy lệnh</button></header>
+      <pre><code>/read-only</code></pre>
+    </article>
+    <article class="command-card">
+      <header><span>Workspace write</span><button class="clip-btn" data-clip="/workspace-write">Lấy lệnh</button></header>
+      <pre><code>/workspace-write</code></pre>
+    </article>
+    <article class="command-card">
+      <header><span>Full-access + task</span><button class="clip-btn" data-clip="/full-access Run the trusted local verification suite.">Lấy lệnh</button></header>
+      <pre><code>/full-access Run the trusted local verification suite.</code></pre>
+    </article>
+  </div>
+</section>
+            <nav class="pager" aria-label="Trang kế tiếp">
+              <a class="pager-prev" href="/profiles">
+                <span class="pager-label">Trước</span>
+                <span class="pager-title">Project profile</span>
+              </a>
+              <a class="pager-next" href="/commands">
+                <span class="pager-label">Tiếp</span>
+                <span class="pager-title">Command catalog</span>
+              </a>
+            </nav>
+
+            <footer class="footer">
+              <p>Pi Agent Platform docs · static HTML · governed agent workflow</p>
+              <div class="footer-links" aria-label="External links">
+                <a href="https://piagent.io.vn" target="_blank" rel="noopener noreferrer">piagent.io.vn</a>
+                <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub repository</a>
+                <a href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer">Facebook profile</a>
+              </div>
+            </footer>
+        </div>
+      </main>
+
+      <aside class="toc" aria-label="Mục lục trang">
+        <p class="toc-title">Trên trang này</p>
+        <nav data-toc></nav>
+      </aside>
+    </div>
+  </body>
+</html>

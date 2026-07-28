@@ -1,0 +1,76 @@
+<section class="section">
+  <h2 id="khong-giu-token">Platform không giữ token</h2>
+  <p>Token MCP đã có chỗ ở: luồng OAuth thuộc về <span class="inline-code">pi-mcp-adapter</span> — chính nó đăng ký <span class="inline-code">/mcp</span> và <span class="inline-code">/mcp-auth</span>, và chính nó lưu, refresh, thu hồi. Dựng thêm một kho credential nữa để giữ credential của bên thứ ba chỉ tạo thêm một chỗ để token rò ra. Việc của platform vì vậy là <strong>phát hiện và chỉ đường</strong>.</p>
+
+  <pre><code>/mcp-auth figma</code></pre>
+
+  <div class="callout ok-callout">
+    <strong>Ranh giới</strong>
+    <p>Platform không chạy OAuth, không lưu token, không refresh. Nó biết một server <em>cần</em> đăng nhập, nhưng không biết phiên đăng nhập còn hạn hay không — và nó nói đúng như vậy thay vì đoán.</p>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="tu-choi-secret">Secret bị từ chối ngay khi ghi config</h2>
+  <p>MCP config được nhiều client đọc, nằm trong home hoặc trong repo, và ở scope <span class="inline-code">project</span> thì được commit. Một token gõ vào <span class="inline-code">--env</span> sẽ đi tới tất cả những chỗ đó. Nên <span class="inline-code">add</span> từ chối, và nói luôn dạng cần dùng:</p>
+
+  <pre><code>$ piagent-mcp add gh --env GITHUB_PERSONAL_ACCESS_TOKEN=ghp_xxx -- npx -y @acme/gh-mcp
+FAIL: GITHUB_PERSONAL_ACCESS_TOKEN names a credential, so its value cannot be
+written into MCP config. Export it in your shell and reference it instead:
+--env 'GITHUB_PERSONAL_ACCESS_TOKEN=${GITHUB_PERSONAL_ACCESS_TOKEN}'</code></pre>
+
+  <div class="split">
+    <div class="card">
+      <h3 id="theo-ten">Theo tên field</h3>
+      <p>Tên chứa <span class="inline-code">token</span>, <span class="inline-code">secret</span>, <span class="inline-code">password</span>, <span class="inline-code">api_key</span>, <span class="inline-code">authorization</span>… thì giá trị bắt buộc phải là tham chiếu biến môi trường.</p>
+    </div>
+    <div class="card">
+      <h3 id="theo-gia-tri">Theo giá trị</h3>
+      <p>Tên không nói gì thì giá trị vẫn được đọc riêng, nên <span class="inline-code">--env CONFIG=ghp_...</span> cũng bị bắt.</p>
+    </div>
+  </div>
+
+  <p>Áp dụng cho cả <span class="inline-code">--header</span>. <span class="inline-code">--url</span> chỉ nhận <span class="inline-code">https</span>, hoặc <span class="inline-code">http</span> khi host là loopback — Figma desktop MCP đúng là trường hợp đó. <span class="inline-code">list</span> và <span class="inline-code">get</span> mask giá trị nhưng in nguyên <span class="inline-code">${VAR}</span>, vì đó là tên biến chứ không phải nội dung.</p>
+</section>
+
+<section class="section">
+  <h2 id="trang-thai">Trạng thái sẵn sàng</h2>
+  <p>Đếm số server không nói được server nào trả lời được. <span class="inline-code">/piagent-mcp doctor</span> phân loại từng cái:</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>State</th><th>Nghĩa</th><th>Cách xử lý</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="inline-code">ready</span></td><td>Đủ điều kiện, gọi được</td><td>—</td></tr>
+        <tr><td><span class="inline-code">needs-env</span></td><td>Config tham chiếu <span class="inline-code">${VAR}</span> mà biến chưa export</td><td>Export biến trong shell profile</td></tr>
+        <tr><td><span class="inline-code">needs-command</span></td><td>Executable không có trên PATH</td><td>Cài, hoặc sửa lại server</td></tr>
+        <tr><td><span class="inline-code">pending-approval</span></td><td>Repo khai server này, chưa ai duyệt trên máy này</td><td><span class="inline-code">/piagent-mcp approve &lt;name&gt;</span></td></tr>
+        <tr><td><span class="inline-code">approval-changed</span></td><td>Đã duyệt nhưng định nghĩa đã đổi</td><td>Đọc lại rồi duyệt lại</td></tr>
+        <tr><td><span class="inline-code">rejected</span></td><td>Đã từ chối cho project này</td><td><span class="inline-code">reset</span> nếu đổi ý</td></tr>
+        <tr><td><span class="inline-code">disabled</span></td><td>Tắt bằng <span class="inline-code">disable</span></td><td><span class="inline-code">/piagent-mcp enable &lt;name&gt;</span></td></tr>
+        <tr><td><span class="inline-code">oauth</span></td><td>Đăng nhập do Pi giữ</td><td><span class="inline-code">/mcp-auth &lt;name&gt;</span> nếu chưa login</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>Chỉ báo cái biết chắc. <span class="inline-code">needs-env</span> in ra <strong>tên biến</strong>, không bao giờ in giá trị.</p>
+
+  <p>Trong session là <span class="inline-code">/piagent-mcp doctor</span> — cùng báo cáo, và remedy in ra dạng slash command vì đó là thứ chạy được ngay tại chỗ. Ngoài terminal:</p>
+
+  <pre><code>$ piagent-mcp doctor
+OK   context7 (global): ready
+OK   chrome-devtools (global): ready
+NEED github (global): GITHUB_PERSONAL_ACCESS_TOKEN is referenced but not set
+       -> export GITHUB_PERSONAL_ACCESS_TOKEN=... in your shell profile
+NEED docker: installed but the daemon is not responding
+       -> start Docker Desktop, then re-run piagent-mcp doctor</code></pre>
+
+  <div class="callout">
+    <strong>Vì sao <span class="inline-code">oauth</span> không phải lỗi</strong>
+    <p>Nó không xuất hiện trong notice đầu session. Platform không phân biệt được đã login hay chưa, nên báo mỗi session sẽ thành nhiễu và hết được đọc. Notice chỉ nêu những state chặn chắc chắn; tắt bằng <span class="inline-code">PIAGENT_NO_MCP_NOTICE=1</span>.</p>
+  </div>
+
+  <p><span class="inline-code">doctor</span> chạy thêm <span class="inline-code">docker info</span> — chậm, nên chỉ có ở doctor chứ không ở session start. <span class="inline-code">piagent-doctor</span> cũng đưa các state chặn vào <span class="inline-code">warnings</span>.</p>
+</section>

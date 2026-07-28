@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
@@ -41,6 +42,10 @@ import {
 } from "./redaction-core.js";
 import { detectProfileName } from "./project-shape.js";
 import { evaluateUpdateCheck, isInstalledPlatform, readUpdateCache, startUpdateProbe } from "./update-check.js";
+import { REPOSITORY_SCOPES, collectServers } from "../mcp/mcp-config-layers.js";
+import { approvalState } from "../mcp/mcp-approval-store.js";
+import { evaluateServerReadiness, readinessNotice } from "../mcp/mcp-auth-readiness.js";
+import * as mcpActions from "../mcp/mcp-command-actions.js";
 import { buildExtendingProfile, resolveProjectProfileDocument } from "../capabilities/project-profile.js";
 import {
   resolveCapabilityProfileDocument,
@@ -439,6 +444,22 @@ function updateAvailabilityNotice(): string | undefined {
   const decision = evaluateUpdateCheck({ installed, cache: readUpdateCache(), now: Date.now() });
   if (decision.probe) startUpdateProbe(UPDATE_CHECK_MODULE);
   return decision.notice;
+}
+
+// What the operator would otherwise find out when a call fails: a server that is
+// configured but cannot answer. Computed from files and environment variables
+// this process already has, with no network and no child process, because it runs
+// on every session start.
+function mcpReadinessNotice(cwd: string): string | undefined {
+  if (process.env.PIAGENT_NO_MCP_NOTICE?.trim()) return undefined;
+  try {
+    const servers = collectServers({ projectPath: cwd });
+    if (servers.length === 0) return undefined;
+    return readinessNotice(servers.map((server) => evaluateServerReadiness(server, { projectPath: cwd })));
+  } catch {
+    // Reporting on MCP is not worth failing a session start over.
+    return undefined;
+  }
 }
 
 function loadPolicy(extensionDir: string): BasePolicy {
@@ -1969,6 +1990,82 @@ function prepareToolInputForPolicy(
     proxyTool,
     proxyToolName: `${provider}_${proxyTool}`,
     proxyAction: classifyActionTokenSequence(actionTokens(proxyTool), externalActionPolicyConfig(policy))
+  };
+}
+
+// Which MCP server a tool call is addressed to. The adapter exposes one proxy
+// tool named `mcp` that carries the server in `input.server`, and, when a server
+// runs with directTools, individual tools named `mcp__<server>__<tool>`. Both
+// forms are read, because a gate that only covers the proxy is bypassed by
+// turning directTools on.
+function mcpServerFromToolCall(toolName: string, input: Record<string, unknown>): string | undefined {
+  if (normalizeActionToken(toolName) === "mcp") {
+    return typeof input.server === "string" && input.server.trim() ? input.server.trim() : undefined;
+  }
+  const direct = toolName.match(/^mcp(?:__|[-_:]+)([^_:.-]+)/i);
+  return direct?.[1];
+}
+
+// Servers a repository defines are not usable until somebody on this machine has
+// approved them. This is the enforcement point: the adapter owns the connection
+// and this extension cannot prevent one being opened, but no tool call reaches an
+// unapproved server. The residual exposure is the connection itself, which is
+// worth stating plainly rather than describing this as a full block.
+//
+// Recomputed only when one of the files behind the decision changes, because
+// this runs on every tool call.
+const mcpApprovalCache = new Map<string, { signature: string; blocked: Map<string, string> }>();
+
+function unapprovedMcpServers(cwd: string): Map<string, string> {
+  const servers = collectServers({ projectPath: cwd, scopes: [...REPOSITORY_SCOPES] });
+  const signature = [
+    ...servers.map((server) => `${server.scope}:${server.name}:${fileSignature(server.file)}`),
+    `store:${fileSignature(path.join(os.homedir(), ".pi", "piagent-mcp-approvals.json"))}`
+  ].join("|");
+  const cached = mcpApprovalCache.get(cwd);
+  if (cached?.signature === signature) return cached.blocked;
+
+  const blocked = new Map<string, string>();
+  for (const server of servers) {
+    const state = approvalState({ projectPath: cwd, name: server.name, entry: server.entry });
+    if (state.state === "approved") continue;
+    blocked.set(server.name, state.state);
+  }
+  mcpApprovalCache.set(cwd, { signature, blocked });
+  return blocked;
+}
+
+function fileSignature(file: string): string {
+  try {
+    const stat = fs.statSync(file);
+    return `${stat.mtimeMs}:${stat.size}`;
+  } catch {
+    return "absent";
+  }
+}
+
+function evaluateMcpApproval(
+  cwd: string,
+  toolName: string,
+  input: Record<string, unknown>
+): { block: boolean; reason?: string } {
+  const server = mcpServerFromToolCall(toolName, input);
+  if (!server) return { block: false };
+  const state = unapprovedMcpServers(cwd).get(server);
+  if (!state) return { block: false };
+  const explanation = state === "rejected"
+    ? "it was rejected for this project"
+    : state === "changed"
+      ? "its definition changed since it was approved"
+      : "this repository defines it and nobody on this machine has approved it";
+  return {
+    block: true,
+    // Named as commands, because this is read inside a session: the reader can
+    // run these where they already are, without shelling out.
+    reason:
+      `Blocked MCP server ${server}: ${explanation}. ` +
+      `Review it with \`/piagent-mcp get ${server}\`, then \`/piagent-mcp approve ${server}\` to allow it ` +
+      `or \`/piagent-mcp reject ${server}\` to refuse it.`
   };
 }
 
@@ -3751,6 +3848,10 @@ export default function piagentGuard(pi: ExtensionAPI) {
     if (permissionProfile.mode === "trusted-full-access") {
       ctx.ui.notify("Piagent permission profile trusted-full-access is active; protected paths, secret redaction, and destructive/external confirmations remain enforced.", "warning");
     }
+    // A server this repository defines and nobody approved is a decision waiting
+    // on the operator, so it is a warning and it comes before the release news.
+    const mcpNotice = mcpReadinessNotice(ctx.cwd);
+    if (mcpNotice) ctx.ui.notify(mcpNotice, "warning");
     // Last, so a release announcement never pushes a security warning out of
     // the first thing the operator reads.
     const updateNotice = updateAvailabilityNotice();
@@ -3908,6 +4009,13 @@ export default function piagentGuard(pi: ExtensionAPI) {
     const preparedInput = prepareToolInputForPolicy(event.toolName, toolInput, policy);
     if (preparedInput.reason) {
       return { block: true, reason: `Blocked ${event.toolName}: ${preparedInput.reason}.` };
+    }
+
+    // Before anything is asked of an MCP server, whether this machine agreed to
+    // that server at all.
+    const approvalDecision = evaluateMcpApproval(ctx.cwd, event.toolName, toolInput);
+    if (approvalDecision.block) {
+      return { block: true, reason: approvalDecision.reason };
     }
 
     if (SHELL_TOOL_NAMES.has(event.toolName)) {
@@ -5719,6 +5827,214 @@ export default function piagentGuard(pi: ExtensionAPI) {
       );
     }
   });
+
+  /**
+   * MCP management as a command, not as a request to the model.
+   *
+   * Everything here is also reachable from the `piagent-mcp` terminal CLI. The
+   * difference is where you are standing: inside a session, typing the shell
+   * command means asking the model to run bash, read the output and tell you
+   * what it said — three model turns to answer a question this process can
+   * answer from files it has already read. So the same reports are bound to a
+   * command, which pi dispatches without involving the model at all.
+   *
+   * Bare `/piagent-mcp` opens a menu built from what this project actually has,
+   * because the surface only helps if you can find it without already knowing
+   * the subcommand you want. Every entry in that menu is also typeable, so the
+   * menu teaches the direct form rather than replacing it.
+   */
+  function registerMcpCommand(): void {
+    const ACTIONS = new Set([...mcpActions.READ_ACTIONS, ...mcpActions.SERVER_ACTIONS]);
+
+    /** Report without a model turn: the text is shown, nothing is asked. */
+    function emit(customType: string, report: { notify: { message: string; level: string }, lines: string[], details: Record<string, unknown> }, ctx: ExtensionContext): void {
+      ctx.ui.notify(report.notify.message, report.notify.level as "info" | "warning" | "error");
+      pi.sendMessage(
+        { customType, content: report.lines.join("\n"), display: true, details: report.details },
+        { triggerTurn: false }
+      );
+    }
+
+    function fail(ctx: ExtensionContext, message: string): void {
+      ctx.ui.notify(`piagent-mcp: ${message}`, "error");
+      pi.sendMessage(
+        { customType: "piagent-mcp-error", content: message, display: true, details: { error: message } },
+        { triggerTurn: false }
+      );
+    }
+
+    /**
+     * Approval decisions live outside the repository, so writing one changes no
+     * config file the gate's cache is keyed on. Drop the entry so the next tool
+     * call re-reads the decision instead of the one it replaced.
+     */
+    function forgetApprovalCache(cwd: string): void {
+      mcpApprovalCache.delete(cwd);
+    }
+
+    /** Runs one action and shows it. Both the menu and a typed subcommand land here. */
+    function runAction(ctx: ExtensionContext, action: string, name: string | undefined, scope: string | undefined): void {
+      const project = ctx.cwd;
+      switch (action) {
+        case "status":
+          emit("piagent-mcp-status", mcpActions.status({ projectPath: project, scope }), ctx);
+          return;
+        case "get":
+          emit("piagent-mcp-detail", mcpActions.detail({ projectPath: project, name: name as string, scope }), ctx);
+          return;
+        case "doctor":
+          emit("piagent-mcp-doctor", mcpActions.doctor({ projectPath: project }), ctx);
+          return;
+        case "approve":
+        case "reject": {
+          const report = mcpActions.decide({
+            projectPath: project,
+            name: name as string,
+            decision: action === "approve" ? "approved" : "rejected"
+          });
+          forgetApprovalCache(project);
+          emit("piagent-mcp-decision", report, ctx);
+          return;
+        }
+        case "reset": {
+          const report = mcpActions.reset({ projectPath: project, name });
+          forgetApprovalCache(project);
+          emit("piagent-mcp-decision", report, ctx);
+          return;
+        }
+        case "enable":
+        case "disable":
+          emit("piagent-mcp-toggle", mcpActions.toggle({
+            projectPath: project,
+            name: name as string,
+            scope,
+            enabled: action === "enable"
+          }), ctx);
+          return;
+        default:
+          fail(ctx, `unknown subcommand: ${action}. Run /piagent-mcp help.`);
+      }
+    }
+
+    /**
+     * The menu. Falls back to the plain status report when there is no select UI
+     * — print mode and JSON mode have no way to answer a prompt, and blocking
+     * there would hang a non-interactive run.
+     */
+    async function runMenu(ctx: ExtensionContext): Promise<void> {
+      const menu = mcpActions.menuOptions({ projectPath: ctx.cwd });
+      const chosen = ctx.hasUI === false
+        ? undefined
+        : await selectValueFromUi(ctx, "MCP", menu.entries, menu.entries.find((entry) => entry.recommended)?.value);
+      if (!chosen) {
+        emit("piagent-mcp-status", mcpActions.status({ projectPath: ctx.cwd }), ctx);
+        pi.sendMessage(
+          { customType: "piagent-mcp-help", content: mcpActions.HELP_LINES.join("\n"), display: true, details: {} },
+          { triggerTurn: false }
+        );
+        return;
+      }
+      if (chosen === "help") {
+        emit("piagent-mcp-help", mcpActions.help(), ctx);
+        return;
+      }
+      const terminal = mcpActions.terminalOnly(chosen);
+      if (terminal) {
+        emit("piagent-mcp-terminal", terminal, ctx);
+        return;
+      }
+      if (!mcpActions.SERVER_ACTIONS.has(chosen) || chosen === "reset") {
+        // `reset` without a name forgets everything, which is a bigger answer
+        // than the menu asked for, so it still picks a server here.
+        if (chosen !== "reset") {
+          runAction(ctx, chosen, undefined, undefined);
+          return;
+        }
+      }
+      const choices = mcpActions.serverChoices({ projectPath: ctx.cwd, action: chosen });
+      if (choices.length === 0) {
+        fail(ctx, `no server here can be ${chosen === "get" ? "inspected" : `${chosen}d`}.`);
+        return;
+      }
+      const server = choices.length === 1
+        ? choices[0].value
+        : await selectValueFromUi(ctx, `Which server to ${chosen}?`, choices);
+      if (!server) {
+        fail(ctx, `no server chosen. Run \`/piagent-mcp ${chosen} <name>\` directly.`);
+        return;
+      }
+      runAction(ctx, chosen, server, undefined);
+    }
+
+    pi.registerCommand("piagent-mcp", {
+      description: "Show and manage MCP servers, scopes and approvals without a model follow-up",
+      getArgumentCompletions: (prefix: string) => {
+        const typed = String(prefix ?? "");
+        const parts = typed.split(/\s+/);
+        if (parts.length <= 1) {
+          const items = [...ACTIONS, "help"]
+            .filter((name) => name.startsWith(parts[0] ?? ""))
+            .map((name) => ({ value: name, label: name }));
+          return items.length > 0 ? items : null;
+        }
+        if (!mcpActions.SERVER_ACTIONS.has(parts[0])) return null;
+        let names: string[] = [];
+        try {
+          names = collectServers({ projectPath: process.cwd() }).map((server) => server.name);
+        } catch {
+          return null;
+        }
+        const seen = [...new Set(names)].filter((name) => name.startsWith(parts[parts.length - 1] ?? ""));
+        return seen.length > 0 ? seen.map((name) => ({ value: name, label: name })) : null;
+      },
+      handler: async (args, ctx) => {
+        const tokens = String(args ?? "").trim().split(/\s+/).filter(Boolean);
+        const flags = new Map<string, string>();
+        const positionals: string[] = [];
+        for (let i = 0; i < tokens.length; i += 1) {
+          if (tokens[i] === "--scope" && tokens[i + 1]) {
+            flags.set("scope", tokens[i + 1]);
+            i += 1;
+            continue;
+          }
+          positionals.push(tokens[i]);
+        }
+        const requested = (positionals.shift() ?? "").toLowerCase();
+        // `list` is what the terminal calls it, and muscle memory arrives here.
+        const action = requested === "list" ? "status" : requested;
+        const name = positionals[0];
+        const scope = flags.get("scope");
+
+        try {
+          if (action === "") {
+            await runMenu(ctx);
+            return;
+          }
+          if (action === "help" || action === "--help") {
+            emit("piagent-mcp-help", mcpActions.help(), ctx);
+            return;
+          }
+          const terminal = mcpActions.terminalOnly(action);
+          if (terminal) {
+            emit("piagent-mcp-terminal", terminal, ctx);
+            return;
+          }
+          if (!ACTIONS.has(action)) {
+            fail(ctx, `unknown subcommand: ${action}. Run /piagent-mcp help.`);
+            return;
+          }
+          if (mcpActions.SERVER_ACTIONS.has(action) && action !== "reset" && !name) {
+            fail(ctx, `${action} needs a server name.`);
+            return;
+          }
+          runAction(ctx, action, name, scope);
+        } catch (error) {
+          fail(ctx, error instanceof Error ? error.message : String(error));
+        }
+      }
+    });
+  }
+  registerMcpCommand();
 
   pi.registerCommand("context-index", {
     description: "Show or search the compact project context index without a model follow-up",

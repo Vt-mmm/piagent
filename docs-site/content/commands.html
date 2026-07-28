@@ -1,0 +1,80 @@
+<section class="section">
+
+  <div class="grid cols-2">
+    <article class="card">
+      <h3 id="session-basics">Session basics</h3>
+      <div class="tag-list">
+        <span class="tag">/login</span>
+        <span class="tag">/model</span>
+        <span class="tag">/piagent-commands</span>
+        <span class="tag">/piagent-status</span>
+        <span class="tag">/piagent-orchestration</span>
+        <span class="tag">/piagent-usage</span>
+        <span class="tag">/task-preflight</span>
+      </div>
+      <p>Dùng để setup session, chọn model, xem profile/usage/orchestration và quyết định có cần fresh session trước task lớn không.</p>
+    </article>
+    <article class="card">
+      <h3 id="project-profile">Project profile</h3>
+      <div class="tag-list">
+        <span class="tag">/profile</span>
+        <span class="tag">/profile list</span>
+        <span class="tag">/profile auto</span>
+        <span class="tag">/profile setup</span>
+        <span class="tag">/profile tech</span>
+        <span class="tag">/profile tech setup</span>
+        <span class="tag">/profile fullstack</span>
+        <span class="tag">/profile be-fe</span>
+      </div>
+      <p>Áp profile trực tiếp hoặc mở select option để chọn profile/tech stack. Output ngắn, không yêu cầu model giải thích dài.</p>
+    </article>
+    <article class="card">
+      <h3 id="implementation-workflow">Implementation workflow</h3>
+      <div class="tag-list">
+        <span class="tag">/task</span>
+        <span class="tag">/plan</span>
+        <span class="tag">/review</span>
+        <span class="tag">/scout</span>
+        <span class="tag">/discuss</span>
+      </div>
+      <p>Gói sẵn read context, task contract, implementation, verify evidence và final handoff.</p>
+    </article>
+    <article class="card">
+      <h3 id="git-handoff">Git handoff</h3>
+      <div class="tag-list">
+        <span class="tag">/commit</span>
+        <span class="tag">/pr</span>
+        <span class="tag">git status</span>
+        <span class="tag">git diff</span>
+      </div>
+      <p>Không cần namespace <span class="inline-code">/git</span>. Commit/PR đi qua shell guard; push và stage rộng như <span class="inline-code">git add -A</span> cần xác nhận.</p>
+    </article>
+    <article class="card">
+      <h3 id="fresh-sessions">Fresh sessions</h3>
+      <div class="tag-list">
+        <span class="tag">/fresh-task</span>
+        <span class="tag">/fresh-scout</span>
+        <span class="tag">/fresh-be-to-fe</span>
+      </div>
+      <p>Dùng khi context đã nặng hoặc cần một session sạch cho workflow mới.</p>
+    </article>
+    <article class="card">
+      <h3 id="mcp">MCP</h3>
+      <div class="tag-list">
+        <span class="tag">/mcp</span>
+        <span class="tag">piagent-mcp</span>
+      </div>
+      <p>Kiểm tra và cấu hình tool servers theo preset core, popular hoặc design.</p>
+    </article>
+    <article class="card">
+      <h3 id="subagents">Subagents</h3>
+      <div class="tag-list">
+        <span class="tag">/subagents-doctor</span>
+        <span class="tag">/subagents-models</span>
+        <span class="tag">/subagents-fleet</span>
+        <span class="tag">/subagent-cost</span>
+      </div>
+      <p>Kiểm tra runtime, model routing, background runs và cost. Daily flow vẫn solo-first; subagents dùng cho scout/planning/review độc lập.</p>
+    </article>
+  </div>
+</section>

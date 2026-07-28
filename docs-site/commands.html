@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Command ngắn, rõ, ít token burn · Pi Agent Platform Docs</title>
+    <meta name="description" content="Ưu tiên dùng slash command vì mỗi command đã gói sẵn policy và flow. Thành viên không cần nhớ lại quy trình trong prompt." />
+    <meta name="theme-color" content="#050505" />
+    <link rel="canonical" href="https://piagent.io.vn/commands" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta property="og:title" content="Command ngắn, rõ, ít token burn · Pi Agent Platform Docs" />
+    <meta property="og:description" content="Ưu tiên dùng slash command vì mỗi command đã gói sẵn policy và flow. Thành viên không cần nhớ lại quy trình trong prompt." />
+    <meta property="og:url" content="https://piagent.io.vn/commands" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/docs.css" />
+    <script src="/assets/docs.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Pi Agent Platform">
+        <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" /></span>
+        <span>Pi Agent Platform</span>
+      </a>
+      <div class="top-actions">
+        <span class="pill"><span class="pill-dot"></span>v1.2.0 docs</span>
+        <a class="button social" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer" aria-label="Mở GitHub repository">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          GitHub
+        </a>
+        <button class="button mobile-menu" type="button" data-menu>Lộ trình</button>
+        <a class="button" href="/commands">Commands</a>
+      </div>
+    </header>
+
+    <div class="layout with-toc">
+      <aside class="sidebar" data-sidebar>
+        <div class="sidebar-search" aria-label="Tìm trong tài liệu">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M10.8 18.1a7.3 7.3 0 1 1 0-14.6 7.3 7.3 0 0 1 0 14.6Zm5.3-1.7 4.4 4.4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          <input type="search" placeholder="Tìm trang" data-filter />
+        </div>
+
+        <nav aria-label="Tài liệu">
+          <div class="nav-group">
+            <p class="nav-title">Get started</p>
+            <a class="nav-link" href="/">Overview</a>
+            <a class="nav-link" href="/quickstart">Quickstart</a>
+            <a class="nav-link" href="/scope">Phạm vi platform</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Build</p>
+            <a class="nav-link" href="/profiles">Project profile</a>
+            <a class="nav-link" href="/permissions">Permission modes</a>
+            <a class="nav-link current" href="/commands" aria-current="page">Command catalog</a>
+            <a class="nav-link" href="/workflows">Workflows</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">MCP</p>
+            <a class="nav-link" href="/mcp">MCP overview</a>
+            <a class="nav-link" href="/mcp-servers">Quản lý server</a>
+            <a class="nav-link" href="/mcp-auth">Auth và readiness</a>
+            <a class="nav-link" href="/mcp-approval">Approval gate</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Operate</p>
+            <a class="nav-link" href="/security">Security model</a>
+            <a class="nav-link" href="/architecture">Architecture</a>
+            <a class="nav-link" href="/runtime">Runtime tools</a>
+            <a class="nav-link" href="/team">Team usage</a>
+          </div>
+        </nav>
+      </aside>
+
+      <main>
+        <div class="content-shell" data-article>
+            <nav class="breadcrumb" aria-label="Breadcrumb">
+              <a href="/">Docs</a>
+              <span aria-hidden="true">/</span>
+              <span>Build</span>
+              <span aria-hidden="true">/</span>
+              <span>Command catalog</span>
+            </nav>
+            <div class="page-head">
+              <h1>Command ngắn, rõ, ít token burn</h1>
+              <p>Ưu tiên dùng slash command vì mỗi command đã gói sẵn policy và flow. Thành viên không cần nhớ lại quy trình trong prompt.</p>
+            </div>
+<section class="section">
+
+  <div class="grid cols-2">
+    <article class="card">
+      <h3 id="session-basics">Session basics</h3>
+      <div class="tag-list">
+        <span class="tag">/login</span>
+        <span class="tag">/model</span>
+        <span class="tag">/piagent-commands</span>
+        <span class="tag">/piagent-status</span>
+        <span class="tag">/piagent-orchestration</span>
+        <span class="tag">/piagent-usage</span>
+        <span class="tag">/task-preflight</span>
+      </div>
+      <p>Dùng để setup session, chọn model, xem profile/usage/orchestration và quyết định có cần fresh session trước task lớn không.</p>
+    </article>
+    <article class="card">
+      <h3 id="project-profile">Project profile</h3>
+      <div class="tag-list">
+        <span class="tag">/profile</span>
+        <span class="tag">/profile list</span>
+        <span class="tag">/profile auto</span>
+        <span class="tag">/profile setup</span>
+        <span class="tag">/profile tech</span>
+        <span class="tag">/profile tech setup</span>
+        <span class="tag">/profile fullstack</span>
+        <span class="tag">/profile be-fe</span>
+      </div>
+      <p>Áp profile trực tiếp hoặc mở select option để chọn profile/tech stack. Output ngắn, không yêu cầu model giải thích dài.</p>
+    </article>
+    <article class="card">
+      <h3 id="implementation-workflow">Implementation workflow</h3>
+      <div class="tag-list">
+        <span class="tag">/task</span>
+        <span class="tag">/plan</span>
+        <span class="tag">/review</span>
+        <span class="tag">/scout</span>
+        <span class="tag">/discuss</span>
+      </div>
+      <p>Gói sẵn read context, task contract, implementation, verify evidence và final handoff.</p>
+    </article>
+    <article class="card">
+      <h3 id="git-handoff">Git handoff</h3>
+      <div class="tag-list">
+        <span class="tag">/commit</span>
+        <span class="tag">/pr</span>
+        <span class="tag">git status</span>
+        <span class="tag">git diff</span>
+      </div>
+      <p>Không cần namespace <span class="inline-code">/git</span>. Commit/PR đi qua shell guard; push và stage rộng như <span class="inline-code">git add -A</span> cần xác nhận.</p>
+    </article>
+    <article class="card">
+      <h3 id="fresh-sessions">Fresh sessions</h3>
+      <div class="tag-list">
+        <span class="tag">/fresh-task</span>
+        <span class="tag">/fresh-scout</span>
+        <span class="tag">/fresh-be-to-fe</span>
+      </div>
+      <p>Dùng khi context đã nặng hoặc cần một session sạch cho workflow mới.</p>
+    </article>
+    <article class="card">
+      <h3 id="mcp">MCP</h3>
+      <div class="tag-list">
+        <span class="tag">/mcp</span>
+        <span class="tag">piagent-mcp</span>
+      </div>
+      <p>Kiểm tra và cấu hình tool servers theo preset core, popular hoặc design.</p>
+    </article>
+    <article class="card">
+      <h3 id="subagents">Subagents</h3>
+      <div class="tag-list">
+        <span class="tag">/subagents-doctor</span>
+        <span class="tag">/subagents-models</span>
+        <span class="tag">/subagents-fleet</span>
+        <span class="tag">/subagent-cost</span>
+      </div>
+      <p>Kiểm tra runtime, model routing, background runs và cost. Daily flow vẫn solo-first; subagents dùng cho scout/planning/review độc lập.</p>
+    </article>
+  </div>
+</section>
+            <nav class="pager" aria-label="Trang kế tiếp">
+              <a class="pager-prev" href="/permissions">
+                <span class="pager-label">Trước</span>
+                <span class="pager-title">Permission modes</span>
+              </a>
+              <a class="pager-next" href="/workflows">
+                <span class="pager-label">Tiếp</span>
+                <span class="pager-title">Workflows</span>
+              </a>
+            </nav>
+
+            <footer class="footer">
+              <p>Pi Agent Platform docs · static HTML · governed agent workflow</p>
+              <div class="footer-links" aria-label="External links">
+                <a href="https://piagent.io.vn" target="_blank" rel="noopener noreferrer">piagent.io.vn</a>
+                <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub repository</a>
+                <a href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer">Facebook profile</a>
+              </div>
+            </footer>
+        </div>
+      </main>
+
+      <aside class="toc" aria-label="Mục lục trang">
+        <p class="toc-title">Trên trang này</p>
+        <nav data-toc></nav>
+      </aside>
+    </div>
+  </body>
+</html>

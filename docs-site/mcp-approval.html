@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Server đến từ repo phải được duyệt · Pi Agent Platform Docs</title>
+    <meta name="description" content="Clone một repo lạ rồi mở session không được phép cho tác giả repo đó một process trên máy mình. Quyết định lưu ngoài repo và pin theo digest." />
+    <meta name="theme-color" content="#050505" />
+    <link rel="canonical" href="https://piagent.io.vn/mcp-approval" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta property="og:title" content="Server đến từ repo phải được duyệt · Pi Agent Platform Docs" />
+    <meta property="og:description" content="Clone một repo lạ rồi mở session không được phép cho tác giả repo đó một process trên máy mình. Quyết định lưu ngoài repo và pin theo digest." />
+    <meta property="og:url" content="https://piagent.io.vn/mcp-approval" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/docs.css" />
+    <script src="/assets/docs.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Pi Agent Platform">
+        <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" /></span>
+        <span>Pi Agent Platform</span>
+      </a>
+      <div class="top-actions">
+        <span class="pill"><span class="pill-dot"></span>v1.2.0 docs</span>
+        <a class="button social" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer" aria-label="Mở GitHub repository">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          GitHub
+        </a>
+        <button class="button mobile-menu" type="button" data-menu>Lộ trình</button>
+        <a class="button" href="/commands">Commands</a>
+      </div>
+    </header>
+
+    <div class="layout with-toc">
+      <aside class="sidebar" data-sidebar>
+        <div class="sidebar-search" aria-label="Tìm trong tài liệu">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M10.8 18.1a7.3 7.3 0 1 1 0-14.6 7.3 7.3 0 0 1 0 14.6Zm5.3-1.7 4.4 4.4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          <input type="search" placeholder="Tìm trang" data-filter />
+        </div>
+
+        <nav aria-label="Tài liệu">
+          <div class="nav-group">
+            <p class="nav-title">Get started</p>
+            <a class="nav-link" href="/">Overview</a>
+            <a class="nav-link" href="/quickstart">Quickstart</a>
+            <a class="nav-link" href="/scope">Phạm vi platform</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Build</p>
+            <a class="nav-link" href="/profiles">Project profile</a>
+            <a class="nav-link" href="/permissions">Permission modes</a>
+            <a class="nav-link" href="/commands">Command catalog</a>
+            <a class="nav-link" href="/workflows">Workflows</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">MCP</p>
+            <a class="nav-link" href="/mcp">MCP overview</a>
+            <a class="nav-link" href="/mcp-servers">Quản lý server</a>
+            <a class="nav-link" href="/mcp-auth">Auth và readiness</a>
+            <a class="nav-link current" href="/mcp-approval" aria-current="page">Approval gate</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Operate</p>
+            <a class="nav-link" href="/security">Security model</a>
+            <a class="nav-link" href="/architecture">Architecture</a>
+            <a class="nav-link" href="/runtime">Runtime tools</a>
+            <a class="nav-link" href="/team">Team usage</a>
+          </div>
+        </nav>
+      </aside>
+
+      <main>
+        <div class="content-shell" data-article>
+            <nav class="breadcrumb" aria-label="Breadcrumb">
+              <a href="/">Docs</a>
+              <span aria-hidden="true">/</span>
+              <span>MCP</span>
+              <span aria-hidden="true">/</span>
+              <span>Approval gate</span>
+            </nav>
+            <div class="page-head">
+              <h1>Server đến từ repo phải được duyệt</h1>
+              <p>Clone một repo lạ rồi mở session không được phép cho tác giả repo đó một process trên máy mình. Quyết định lưu ngoài repo và pin theo digest.</p>
+            </div>
+<section class="section">
+  <h2 id="van-de">Vấn đề</h2>
+  <p>Repo mang theo được <span class="inline-code">.mcp.json</span> và <span class="inline-code">.pi/mcp.json</span>. Clone một repo lạ rồi mở session <strong>không</strong> được phép cho tác giả repo đó một process trên máy mình, với credential của mình. Nên server ở hai scope này không dùng được cho tới khi có người trên máy này duyệt.</p>
+
+  <pre><code>/piagent-mcp get internal        # đọc trước
+/piagent-mcp approve internal    # hoặc reject, hoặc reset</code></pre>
+
+  <p>Trong terminal thì bỏ dấu <span class="inline-code">/</span>: <span class="inline-code">piagent-mcp get internal</span>. Cùng một quyết định, cùng một file.</p>
+
+  <p><span class="inline-code">approve</span> in ra định nghĩa trước khi ghi quyết định — duyệt mà không đọc chính là thứ gate này sinh ra để ngăn.</p>
+</section>
+
+<section class="section">
+  <h2 id="ba-tinh-chat">Ba tính chất</h2>
+
+  <div class="grid">
+    <div class="card">
+      <h3 id="ngoai-repo">Quyết định nằm ngoài repo</h3>
+      <p>Ghi vào <span class="inline-code">~/.pi/piagent-mcp-approvals.json</span>. Repo tự duyệt được cho chính nó thì gate coi như không tồn tại. Fork, đổi tên, checkout thứ hai — tất cả bắt đầu lại từ <span class="inline-code">pending</span>.</p>
+    </div>
+    <div class="card">
+      <h3 id="pin-digest">Pin theo digest</h3>
+      <p>Duyệt là đồng ý với <em>thứ server đó chạy</em>. Đổi command, URL hay args là một câu hỏi mới, state về <span class="inline-code">approval-changed</span>. Cùng cách tách consent với build mà capability lock đang dùng.</p>
+    </div>
+    <div class="card">
+      <h3 id="enforce-tool-call">Enforce ở tool call</h3>
+      <p>Guard chặn cả proxy (<span class="inline-code">mcp</span> với <span class="inline-code">input.server</span>) lẫn dạng direct tool (<span class="inline-code">mcp__&lt;server&gt;__&lt;tool&gt;</span>). Gate chỉ đọc proxy sẽ bị đi vòng bằng cách bật <span class="inline-code">directTools</span>.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="gioi-han">Giới hạn</h2>
+
+  <div class="callout">
+    <strong>Không chặn được connection</strong>
+    <p>Adapter sở hữu kết nối; extension không ngăn được việc một kết nối được mở. Cái bị chặn là <strong>mọi tool call</strong>, không phải bản thân kết nối. Phần rủi ro còn lại là chính kết nối đó, và việc server phía kia ghi log rằng có người kết nối tới.</p>
+  </div>
+
+  <p>Server ở <span class="inline-code">global</span> và <span class="inline-code">pi-global</span> không qua gate. Hai layer đó nằm ngoài mọi repo — không repo nào đặt được server vào đó — và bắt người dùng duyệt config của chính mình trên từng máy là vô nghĩa.</p>
+</section>
+
+<section class="section">
+  <h2 id="thiet-ke">Bốn quyết định thiết kế</h2>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Quyết định</th><th>Vì sao</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Chỉ gate server đến từ repo</td>
+          <td>Chỉ <span class="inline-code">.mcp.json</span> và <span class="inline-code">.pi/mcp.json</span> đi theo clone. Server người dùng tự đặt trên máy mình không cần ai duyệt.</td>
+        </tr>
+        <tr>
+          <td>Quyết định lưu ngoài repo</td>
+          <td><span class="inline-code">~/.pi/piagent-mcp-approvals.json</span>. Nếu lưu trong repo thì repo tự duyệt cho chính nó — gate mất nghĩa ngay từ đầu.</td>
+        </tr>
+        <tr>
+          <td>Pin theo digest của định nghĩa</td>
+          <td>Duyệt là duyệt <em>đúng</em> command và URL đó. Đổi command, đổi args, đổi URL thì server quay về <span class="inline-code">pending</span> chứ không kế thừa quyết định cũ.</td>
+        </tr>
+        <tr>
+          <td>Chặn ở <span class="inline-code">tool_call</span></td>
+          <td>Cả dạng proxy <span class="inline-code">mcp</span> lẫn dạng direct <span class="inline-code">mcp__&lt;server&gt;__&lt;tool&gt;</span>, để không có đường vòng.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>Điểm chặn lý tưởng là trước khi connect, nhưng chặn được ở đó thì phải sở hữu connection. Platform chạy trong Pi và không sở hữu nó, nên nó chọn điểm chặn xa nhất mà nó thật sự kiểm soát được — rồi nói rõ phần còn thừa thay vì để người đọc tự suy ra.</p>
+</section>
+
+<section class="section">
+  <h2 id="migration">Migration</h2>
+  <div class="callout">
+    <strong>Project đã có server từ trước</strong>
+    <p>Project nào đã có server trong <span class="inline-code">.mcp.json</span> hoặc <span class="inline-code">.pi/mcp.json</span> sẽ chuyển sang <span class="inline-code">pending-approval</span> sau khi update. Chạy <span class="inline-code">/piagent-mcp approve &lt;name&gt;</span> một lần cho mỗi project. Template ship rỗng nên đa số project không bị ảnh hưởng; notice đầu session và <span class="inline-code">doctor</span> đều nêu tên server cần duyệt.</p>
+  </div>
+</section>
+            <nav class="pager" aria-label="Trang kế tiếp">
+              <a class="pager-prev" href="/mcp-auth">
+                <span class="pager-label">Trước</span>
+                <span class="pager-title">Auth và readiness</span>
+              </a>
+              <a class="pager-next" href="/security">
+                <span class="pager-label">Tiếp</span>
+                <span class="pager-title">Security model</span>
+              </a>
+            </nav>
+
+            <footer class="footer">
+              <p>Pi Agent Platform docs · static HTML · governed agent workflow</p>
+              <div class="footer-links" aria-label="External links">
+                <a href="https://piagent.io.vn" target="_blank" rel="noopener noreferrer">piagent.io.vn</a>
+                <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub repository</a>
+                <a href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer">Facebook profile</a>
+              </div>
+            </footer>
+        </div>
+      </main>
+
+      <aside class="toc" aria-label="Mục lục trang">
+        <p class="toc-title">Trên trang này</p>
+        <nav data-toc></nav>
+      </aside>
+    </div>
+  </body>
+</html>

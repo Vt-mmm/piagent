@@ -1,0 +1,23 @@
+<section class="section">
+
+  <div class="split">
+    <article class="card">
+      <h3 id="viec-nen-lam">Việc nên làm</h3>
+      <p>Chạy <span class="inline-code">/onboard-project</span>, áp <span class="inline-code">/profile auto</span>, dùng workflow command, verify thật và ghi blockers rõ ràng.</p>
+    </article>
+    <article class="card">
+      <h3 id="viec-nen-tranh">Việc nên tránh</h3>
+      <p>Đưa token, auth file, cache, session, private examples hoặc business logic riêng vào core package public.</p>
+    </article>
+  </div>
+
+  <div class="callout ok-callout">
+    <strong>Chuẩn handoff</strong>
+    <p>Final response nên nói ngắn: đã đổi gì, verify nào đã chạy, có dùng subagent không, và còn rủi ro hoặc next step nào cần người review.</p>
+  </div>
+
+  <div class="callout">
+    <strong>Release docs gate</strong>
+    <p>Version docs mới chỉ được promote lên Vercel sau khi tag-triggered CI pass và stable dry-run resolve đúng commit SHA. Phải promote đúng tagged commit, không chèn merge commit hay docs-only edit khác. Domain canonical là <span class="inline-code">piagent.io.vn</span>; apex phải là Vercel primary và <span class="inline-code">www</span> redirect về apex.</p>
+  </div>
+</section>

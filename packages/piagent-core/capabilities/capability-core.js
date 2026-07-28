@@ -808,7 +808,23 @@ function buildCoreIntegrity(root) {
     // for a different reason: it starts a process on session start and puts a
     // line in the operator's terminal, so tampering with it buys code execution
     // and a message the operator has been trained to trust.
-    "packages/piagent-core/extensions/update-check.js"
+    "packages/piagent-core/extensions/update-check.js",
+    // The MCP files decide which servers a session may call. mcp-approval-store.js
+    // holds the decision itself, mcp-auth-readiness.js turns it into the verdict
+    // the guard acts on, and mcp-config-layers.js says which layers a repository
+    // can reach and therefore which servers the gate covers at all. Editing any of
+    // the three turns off the gate that stops a cloned repository from running its
+    // own MCP server here.
+    "packages/piagent-core/mcp/mcp-approval-store.js",
+    "packages/piagent-core/mcp/mcp-auth-readiness.js",
+    "packages/piagent-core/mcp/mcp-config-layers.js",
+    // mcp-session-view.js reports which servers are approved and which are not,
+    // and mcp-command-actions.js is what `/piagent-mcp approve` runs. An
+    // operator decides based on the definition these two put in front of them,
+    // so a file that can lie about what a server runs is a way to collect a
+    // decision that was never really made.
+    "packages/piagent-core/mcp/mcp-session-view.js",
+    "packages/piagent-core/mcp/mcp-command-actions.js"
   ];
   return files.map((relativePath) => {
     const resolved = resolveRegularFile(root, relativePath, MAX_ARTIFACT_BYTES);

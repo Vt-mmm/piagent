@@ -1,0 +1,80 @@
+<section class="hero">
+  <p class="eyebrow">Team operating docs</p>
+  <h1>Pi runtime được đóng gói như một nền tảng dùng lại cho nhiều dự án.</h1>
+  <p>
+    Tài liệu này gom phần cài đặt, profile, quyền chạy, MCP, bảo mật và workflow vào một nơi duy nhất. Mục tiêu là thành viên mới chỉ cần mở trang này, chọn đúng command, chạy đúng chế độ và biết ranh giới an toàn.
+  </p>
+  <div class="owner-strip" aria-label="Thông tin dự án">
+    <span class="owner-label">Project links</span>
+    <a href="https://piagent.io.vn" target="_blank" rel="noopener noreferrer">Docs · piagent.io.vn</a>
+    <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub · Vt-mmm/piagent</a>
+    <a href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer">Facebook · Vĩnh Tâm</a>
+  </div>
+  <div class="hero-actions">
+    <a class="button primary" href="/quickstart">Bắt đầu</a>
+    <a class="button" href="/commands">Xem command</a>
+    <a class="button" href="/mcp">MCP</a>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="cai-dat">Cài trong hai lệnh</h2>
+  <p>Node.js <span class="inline-code">&gt;=22.19.0</span>. Chạy từ đúng project muốn set up.</p>
+  <pre><code>npm install -g @piagent/platform
+piagent-setup</code></pre>
+  <p><span class="inline-code">piagent-setup</span> cài đúng Pi Coding Agent host mà release này pin, cài Pi package, khởi tạo thư mục hiện tại, rồi chạy doctor. Nó cũng cài MCP baseline và subagents — bỏ qua bằng <span class="inline-code">--no-mcp</span>, <span class="inline-code">--no-subagents</span> hoặc <span class="inline-code">--global-only</span>. Chi tiết ở <a href="/quickstart">Quickstart</a>.</p>
+</section>
+
+<section class="section">
+  <h2 id="bat-dau-tu-dau">Bắt đầu từ đâu</h2>
+  <div class="card-grid">
+    <a class="doc-card" href="/quickstart">
+      <span class="card-kicker">Get started</span>
+      <h3>Quickstart</h3>
+      <p>Cài, mở repo, onboard context, chọn profile và permission, chạy task đầu tiên, verify trước khi handoff.</p>
+    </a>
+    <a class="doc-card" href="/scope">
+      <span class="card-kicker">Get started</span>
+      <h3>Phạm vi platform</h3>
+      <p>Vì sao repo này tồn tại khi đã có agent coding tổng quát, và ranh giới nó nhận về mình.</p>
+    </a>
+    <a class="doc-card" href="/profiles">
+      <span class="card-kicker">Build</span>
+      <h3>Project profile</h3>
+      <p>Chọn đường ray cho repo: protected path, verify command, capability được cấp.</p>
+    </a>
+    <a class="doc-card" href="/mcp">
+      <span class="card-kicker">MCP</span>
+      <h3>MCP</h3>
+      <p>Bốn layer config, preset đã pin, quản lý server, trạng thái auth, và approval gate cho server đến từ repo.</p>
+    </a>
+    <a class="doc-card" href="/security">
+      <span class="card-kicker">Operate</span>
+      <h3>Security model</h3>
+      <p>Policy enforcement layer chứ không phải OS sandbox — nói rõ chặn được gì và không chặn được gì.</p>
+    </a>
+    <a class="doc-card" href="/commands">
+      <span class="card-kicker">Build</span>
+      <h3>Command catalog</h3>
+      <p>Slash command và terminal command, nhóm theo việc cần làm.</p>
+    </a>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="ba-nhom">Tài liệu chia làm ba nhóm</h2>
+  <div class="split">
+    <div class="card">
+      <h3 id="get-started-nhom">Get started</h3>
+      <p>Dành cho người chưa chạy lần nào: cài, quickstart, và vị trí của platform so với các agent CLI khác.</p>
+    </div>
+    <div class="card">
+      <h3 id="build-nhom">Build</h3>
+      <p>Dùng hằng ngày: profile, permission, command, workflow — và MCP tách riêng vì có bề mặt lệnh của nó.</p>
+    </div>
+    <div class="card">
+      <h3 id="operate-nhom">Operate</h3>
+      <p>Người vận hành và review: security model, kiến trúc repo, terminal tool, cách team dùng như một chuẩn.</p>
+    </div>
+  </div>
+</section>

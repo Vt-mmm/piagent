@@ -1,0 +1,120 @@
+<section class="section">
+  <h2 id="bat-dau">Bắt đầu ở đâu</h2>
+  <p>Gõ <span class="inline-code">/piagent-mcp</span> là ra menu — không cần nhớ subcommand nào:</p>
+
+  <pre><code>MCP
+  Servers — 2/3 ready
+  Doctor — 1 need attention          (recommended)
+  Inspect a server
+  Approve a repository server — 1 waiting
+  Turn a server off
+  Add a server
+  All subcommands</code></pre>
+
+  <p>Menu dựng theo đúng thứ project đang có: chưa server nào bị tắt thì không hiện "turn back on", không server nào chờ duyệt thì không hiện "approve". Chọn việc cần server thì nó hỏi tiếp server nào — trừ khi chỉ có đúng một lựa chọn.</p>
+
+  <p>Mọi mục trong menu đều gõ thẳng được:</p>
+
+  <pre><code>/piagent-mcp doctor     cái nào chưa chạy được và còn thiếu gì
+/piagent-mcp status     bảng đầy đủ
+/mcp                    trạng thái kết nối live, do adapter giữ
+/mcp-auth &lt;name&gt;        đăng nhập OAuth cho một server</code></pre>
+
+  <p>Ngoài terminal thì cùng bộ lệnh đó bỏ dấu <span class="inline-code">/</span>: <span class="inline-code">piagent-mcp list</span>, <span class="inline-code">piagent-mcp doctor</span>. Thêm và xoá server chỉ có ở terminal. Chi tiết ở <a href="/mcp-servers">Quản lý server</a>.</p>
+</section>
+
+<section class="section">
+  <h2 id="ba-thu-trung-ten">Ba thứ trùng tên, không nối với nhau</h2>
+  <p>Đây là chỗ gây nhầm nhiều nhất. Không có dòng code nào map capability name sang MCP server id — khai <span class="inline-code">"github"</span> trong <span class="inline-code">mcpCapabilities</span> <strong>không</strong> bật server MCP tên <span class="inline-code">github</span>, và ngược lại.</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Thứ</th><th>Ở đâu</th><th>Là gì</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="inline-code">mcpCapabilities: ["github"]</span></td>
+          <td><span class="inline-code">.pi/piagent-profile.json</span></td>
+          <td>Nhãn capability cho tool registry</td>
+        </tr>
+        <tr>
+          <td><span class="inline-code">toolCapabilities</span></td>
+          <td><span class="inline-code">base-policy.json</span></td>
+          <td>Map một tool <strong>tên là</strong> <span class="inline-code">github</span> sang capability</td>
+        </tr>
+        <tr>
+          <td>server <span class="inline-code">github</span></td>
+          <td><span class="inline-code">~/.config/mcp/mcp.json</span></td>
+          <td>Server MCP thật, chạy qua Docker</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="bon-layer-config">Bốn layer config</h2>
+  <p>Cả bốn file đều được đọc. <span class="inline-code">--scope</span> của <span class="inline-code">piagent-mcp</span> chính là bốn tên này.</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Scope</th><th>File</th><th>Dùng khi nào</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="inline-code">global</span></td><td><span class="inline-code">~/.config/mcp/mcp.json</span></td><td>Mặc định. Dùng chung cho nhiều agent và nhiều project</td></tr>
+        <tr><td><span class="inline-code">pi-global</span></td><td><span class="inline-code">~/.pi/agent/mcp.json</span></td><td>Chỉ khi cần override riêng cho Pi</td></tr>
+        <tr><td><span class="inline-code">project</span></td><td><span class="inline-code">.mcp.json</span></td><td>Server đặc thù repo, commit được</td></tr>
+        <tr><td><span class="inline-code">pi-project</span></td><td><span class="inline-code">.pi/mcp.json</span></td><td>Override riêng Pi trong một repo</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <strong>Hai layer cuối đi theo repo</strong>
+    <p>Clone một repo về là mang theo cả <span class="inline-code">.mcp.json</span> của nó. Vì vậy server ở hai scope đó phải qua <a href="/mcp-approval">approval gate</a> trước khi dùng được.</p>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="preset">Preset seed sẵn</h2>
+  <p><span class="inline-code">piagent-setup</span> và <span class="inline-code">piagent-install</span> đều cài <span class="inline-code">pi-mcp-adapter</span> và seed preset <span class="inline-code">core</span> mặc định. Bỏ qua bằng <span class="inline-code">--no-mcp</span>.</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Preset</th><th>Server</th><th>Mục đích</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="inline-code">minimal</span></td><td>—</td><td>Chỉ seed settings an toàn</td></tr>
+        <tr><td><span class="inline-code">docs</span></td><td>Context7</td><td>Docs mới của framework/library</td></tr>
+        <tr><td><span class="inline-code">browser</span></td><td>Chrome DevTools, Playwright</td><td>Inspect UI/runtime, browser automation</td></tr>
+        <tr><td><span class="inline-code">github</span></td><td>GitHub MCP</td><td>Issue/PR/repo/release workflow</td></tr>
+        <tr><td><span class="inline-code">design</span></td><td>Figma remote</td><td>Design-to-code qua Figma OAuth</td></tr>
+        <tr><td><span class="inline-code">design-local</span></td><td>Figma desktop</td><td>Dev Mode MCP chạy local</td></tr>
+        <tr><td><span class="inline-code">web</span></td><td>Context7, Chrome DevTools, Playwright</td><td>FE/web workflow</td></tr>
+        <tr><td><span class="inline-code">core</span></td><td>Context7, Chrome DevTools, GitHub</td><td>Baseline mặc định của team</td></tr>
+        <tr><td><span class="inline-code">popular</span></td><td>core + Playwright + Figma</td><td>Baseline nhiều team dev dùng</td></tr>
+        <tr><td><span class="inline-code">all</span></td><td>popular + Figma desktop</td><td>Đầy đủ</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>Mọi server đều pin theo version hoặc digest. MCP server là code chạy trên máy operator với credential của operator, nên tag trôi nổi sẽ biến mỗi session thành một quyết định supply-chain không ai có mặt để duyệt.</p>
+
+  <div class="callout">
+    <strong>Ghi config không bằng dùng được</strong>
+    <p>Server connect lazy — không có gì được kiểm tra cho tới lần gọi đầu tiên. <a href="/mcp-auth">Trạng thái auth</a> cho biết server nào thật sự sẵn sàng.</p>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="token">Token efficiency</h2>
+  <p><span class="inline-code">pi-mcp-adapter</span> đưa mọi server qua một proxy tool duy nhất tên <span class="inline-code">mcp</span>, thay vì nạp toàn bộ tool schema vào context lúc start. Mặc định <span class="inline-code">directTools: false</span>, cộng với <span class="inline-code">outputGuard</span> và <span class="inline-code">idleTimeout</span>.</p>
+
+  <div class="callout">
+    <strong>Bẫy khi bật <span class="inline-code">toolRegistry: enforce</span></strong>
+    <p>Proxy tool tên <span class="inline-code">mcp</span> không nằm trong <span class="inline-code">alwaysAllowedTools</span> và không có trong <span class="inline-code">toolCapabilities</span>, nên <span class="inline-code">enforce</span> sẽ chặn <strong>toàn bộ</strong> MCP. Khai thêm <span class="inline-code">mcpCapabilities</span> không cứu được vì block xảy ra trước khi capability được đọc. Ngoại lệ duy nhất là permission profile <span class="inline-code">trusted-full-access</span>.</p>
+  </div>
+</section>

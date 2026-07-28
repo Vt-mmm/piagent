@@ -115,18 +115,18 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:47b7ecf2900fd103c2697336aa2199d2d928ef1d815e4d5e93a18e18b40beb89",
+    "packageDigest": "sha256:4688e7ab41feda64e940516db73e9691ff3d2e3755fbb82de61de4c3238161e9",
     "packageSource": "../",
-    "packageVersion": "1.1.9",
+    "packageVersion": "1.2.0",
     "runtimeFiles": [
       {
-        "byteSize": 4134,
-        "digest": "sha256:342e4d13719f77d57e62e9985327fc1e98066496069a7337c61aa5593eafd732",
+        "byteSize": 4244,
+        "digest": "sha256:0df417cce72ea5363951ea97d40434171890c51132bc9e68c4ed324c488e762a",
         "path": "package.json"
       },
       {
-        "byteSize": 964,
-        "digest": "sha256:a692b258989bd636b05f09a6a558473aa43a289e8816e9f7c1c27baf5b97e4a5",
+        "byteSize": 984,
+        "digest": "sha256:b87717e4857400e374d6e5bc14d6ce1f93cba35e1f7db1bd885b1cbd7bfaf788",
         "path": "packages/piagent-core/package.json"
       },
       {
@@ -135,8 +135,8 @@
         "path": "packages/piagent-core/policies/base-policy.json"
       },
       {
-        "byteSize": 61480,
-        "digest": "sha256:6ed2c5321332642fb922830b195ad9625abb25b1c88f6bfa42305d45cb191a4c",
+        "byteSize": 62553,
+        "digest": "sha256:82f17ede1dd7293b28df0a53f29aee986603fb22a31cd53cc56b5fbb7e4321dc",
         "path": "packages/piagent-core/capabilities/capability-core.js"
       },
       {
@@ -155,8 +155,8 @@
         "path": "packages/piagent-core/security/sensitive-data.js"
       },
       {
-        "byteSize": 256607,
-        "digest": "sha256:3814fb1b094de2651ad986198625bdd96dac096d2ba167849c790a6211efc6fb",
+        "byteSize": 270097,
+        "digest": "sha256:914dd690b044b3c19d3bc6bf6b434a6dbe751744b6f65f298163935bb7f49a65",
         "path": "packages/piagent-core/extensions/piagent-guard.ts"
       },
       {
@@ -193,6 +193,31 @@
         "byteSize": 8502,
         "digest": "sha256:f6e02e91f520843d500db21ae9671d0b8f5a5c18a540c6defdb13d1f6975f6ae",
         "path": "packages/piagent-core/extensions/update-check.js"
+      },
+      {
+        "byteSize": 6745,
+        "digest": "sha256:ce9a6c3f70be839412fde4d407e71e3b1cf965bc26e5771d3241bbbaff178565",
+        "path": "packages/piagent-core/mcp/mcp-approval-store.js"
+      },
+      {
+        "byteSize": 7284,
+        "digest": "sha256:481abd531a92a8bb602e343a044bd1dfa09831512d058da736b8ef4955025ef3",
+        "path": "packages/piagent-core/mcp/mcp-auth-readiness.js"
+      },
+      {
+        "byteSize": 5064,
+        "digest": "sha256:09e44758cb3eb04eab048eb7c25b72eee63f120f7a2651971fec1a8d07684e34",
+        "path": "packages/piagent-core/mcp/mcp-config-layers.js"
+      },
+      {
+        "byteSize": 7555,
+        "digest": "sha256:a842a1002cefca2122effa33904e6e1c01e93e75dc2d64a836c01a8db72ca19f",
+        "path": "packages/piagent-core/mcp/mcp-session-view.js"
+      },
+      {
+        "byteSize": 12915,
+        "digest": "sha256:ff2505d35a578da61f0203fb2c9421b6236337ff7da4ab4cd9a436a8aea3cb04",
+        "path": "packages/piagent-core/mcp/mcp-command-actions.js"
       }
     ]
   },

@@ -14,7 +14,7 @@ const scriptByCommand = {
   "piagent-usage": "scripts/pi-session-stats.sh",
   "piagent-models": "scripts/pi-model-catalog.sh",
   "piagent-model-scope": "scripts/configure-model-scope.sh",
-  "piagent-mcp": "scripts/configure-mcp.sh",
+  "piagent-mcp": "scripts/mcp-manage.mjs",
   "piagent-subagents": "scripts/configure-subagents.sh",
   "piagent-capabilities": "scripts/capability-catalog.mjs",
   "piagent-migrate": "scripts/migrate-project-state.mjs",

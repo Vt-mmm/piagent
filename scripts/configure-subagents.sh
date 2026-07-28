@@ -14,7 +14,7 @@ Options:
                                   Runtime preset (default: safe)
   --config <path>                 Subagent config path (default: ~/.pi/agent/extensions/subagent/config.json)
   --settings <path>               Pi settings path (default: ~/.pi/agent/settings.json)
-  --model-scope <none|piagent|codex|claude>
+  --model-scope <none|piagent|codex|claude>   model family for subagents
                                   Optional subagent model allowlist written to settings (default: none)
   --dry-run                       Print merged config/settings summary without writing
   --list                          Print available presets

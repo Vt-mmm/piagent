@@ -1,0 +1,51 @@
+<section class="section">
+
+  <div class="grid cols-2">
+    <article class="card">
+      <h3 id="protected-paths">Protected paths</h3>
+      <p>Chặn đọc/ghi qua controlled tools đối với file như <span class="inline-code">.env</span>, <span class="inline-code">auth.json</span>, local trust files, profile lock và settings nhạy cảm.</p>
+    </article>
+    <article class="card">
+      <h3 id="shell-hardening">Shell hardening</h3>
+      <p>Guard dựa vào shell parser và rule cho command được kiểm soát để bắt glob, brace, redirection, bare-word symlink và xargs composition trước khi shell mở rộng runtime.</p>
+    </article>
+    <article class="card">
+      <h3 id="secret-redaction">Secret redaction</h3>
+      <p>Tool output text đi qua redactor để che token, provider keys, secret keyword patterns và giá trị nhạy cảm phổ biến. Benchmark hiện là synthetic/internal và model vẫn đang hoàn thiện.</p>
+    </article>
+    <article class="card">
+      <h3 id="capability-lock">Capability lock</h3>
+      <p>Pack lock có digest và tamper detection. Lock hỏng thì fail-closed, không tự nới quyền.</p>
+    </article>
+    <article class="card">
+      <h3 id="human-action-gate">Human-action gate</h3>
+      <p>Destructive hoặc external-provider action vẫn cần operator xác nhận rõ, kể cả khi full-access đang bật. Gate áp dụng cho direct tool, MCP proxy đã decode và các shell form như GitHub CLI write hoặc HTTP non-GET.</p>
+    </article>
+    <article class="card">
+      <h3 id="verify-evidence">Verify evidence</h3>
+      <p>Handoff hoàn tất cần bằng chứng verify từ bash result đã quan sát, không nhận câu trả lời “đã test” suông.</p>
+    </article>
+  </div>
+
+  <div class="callout">
+    <strong>Ranh giới quan trọng</strong>
+    <p>Guard phụ thuộc vào tool path, controlled tools và shell parser mà platform quan sát được. Nó không ngăn một process khác chạy cùng quyền OS đọc/ghi ngoài guard, và không thay thế sandbox của hệ điều hành.</p>
+    <ul>
+      <li>Có thể bị ảnh hưởng bởi symlink, encoding, nested payload, shell expansion hoặc tool mới chưa được policy hoá.</li>
+      <li>Redaction là backstop giảm rò rỉ, không phải giấy phép để đưa secret thật vào prompt/output.</li>
+      <li>Workload không tin cậy cần container/VM với giới hạn filesystem, process, network và credential.</li>
+    </ul>
+  </div>
+
+  <div class="callout">
+    <strong>Redaction cần kiểm toán độc lập</strong>
+    <p>Các benchmark hiện tại là kiểm thử synthetic/internal cho regression và release gate, chưa tương đương external security audit. Dự án công khai <a href="https://github.com/Vt-mmm/piagent/blob/main/docs/security-threat-model.md" target="_blank" rel="noopener noreferrer">threat model và attack-vector map</a>; phạm vi OS/shell rộng hơn, parser fuzzing, third-party audit và LTS vẫn là các mức bảo đảm cao hơn chưa được claim. Signed provenance thì đã có: mỗi bản publish lên npm mang attestation ký qua sigstore từ GitHub Actions, buộc tarball về đúng commit và workflow tạo ra nó.</p>
+  </div>
+
+  <div class="callout">
+    <strong>Dependency gate tách hai lớp</strong>
+    <p>Release kiểm toán riêng dependency tree nhỏ của terminal helper và cây exact Pi host + pinned add-on. Helper tree hiện sạch hoàn toàn. Cây Pi host có 1 high và 11 moderate, và dự án nói thẳng con số đó thay vì gọi runtime là “0 vulnerability”.</p>
+    <p>Bản high là <span class="inline-code">GHSA-mh99-v99m-4gvg</span> trong <span class="inline-code">brace-expansion</span> — DoS, không leo quyền, không lộ dữ liệu. Repo này không sửa được: Pi host publish kèm <span class="inline-code">npm-shrinkwrap.json</span> ghim version dính lỗi, mà shrinkwrap đã publish thì thắng <span class="inline-code">overrides</span> của consumer. Mọi bản Pi đã phát hành đều dính một advisory brace-expansion, nên pin bản cũ chỉ đổi lỗi này lấy lỗi khác. Vì vậy gate miễn trừ đúng một advisory có tên, kèm lý do ghi trong mã nguồn, và tự đỏ lại khi hết hạn rà soát <span class="inline-code">2026-08-25</span> hoặc ngay khi upstream vá xong. Mọi high/critical khác vẫn chặn.</p>
+    <p>11 moderate còn lại thuộc hai advisory upstream: encoded-backslash path traversal trên Windows trong Hono adapter, và protobuf parser DoS. Native Windows/WSL2 chưa nằm trong matrix rollout team, nhưng dự án vẫn theo dõi cả hai.</p>
+  </div>
+</section>

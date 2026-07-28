@@ -1,0 +1,71 @@
+<section class="section">
+  <h2 id="khong-phai-agent-moi">Đây không phải một agent mới</h2>
+  <p>Platform này không có model riêng, không có runtime riêng, không có vòng lặp agent riêng. Nó chạy như extension của Pi và chỉ thêm đúng một thứ: <strong>một cách vận hành cố định</strong> mà mọi repo trong team dùng lại được.</p>
+  <p>Agent coding CLI tổng quát nào cũng đã có sandbox, approval và cơ chế cấu hình theo project. Câu hỏi đáng hỏi không phải "cái nào mạnh hơn" mà là "cái đó cấu hình được, nhưng ai cấu hình, và cấu hình đó có giống nhau giữa 20 repo không".</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Hạng mục</th>
+          <th>Agent CLI tổng quát đã có</th>
+          <th>Platform này thêm</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Vai trò</td>
+          <td>Coding agent chạy trên local repo, tự chọn tool và tự chạy lệnh.</td>
+          <td>Lớp governance cho Pi: policy, profile và workflow vận hành được ghi thành file, không nằm trong prompt.</td>
+        </tr>
+        <tr>
+          <td>Tuỳ biến team</td>
+          <td>File hướng dẫn, settings, permission, hooks, skills, MCP — mỗi repo tự khai.</td>
+          <td>Adapter profile, base policy, command guard, capability pack, docs và scripts — khai một lần, <span class="inline-code">piagent-init</span> rải sang repo mới.</td>
+        </tr>
+        <tr>
+          <td>Quyền chạy</td>
+          <td>Sandbox ở mức OS hoặc process, approval theo lượt, giới hạn thư mục làm việc.</td>
+          <td>Ba mode đặt tên sẵn — <span class="inline-code">read-only</span>, <span class="inline-code">workspace-write</span>, <span class="inline-code">trusted-full-access</span> — đổi bằng một command, không sửa file nào.</td>
+        </tr>
+        <tr>
+          <td>Bảo mật secret</td>
+          <td>Sandbox, approval và network policy ở lớp dưới tool.</td>
+          <td>Policy ở lớp application, chạy sau khi tool được gọi: protected path, shell check, symlink alias, output redaction, integrity lock.</td>
+        </tr>
+        <tr>
+          <td>Điểm mạnh riêng</td>
+          <td>Trải nghiệm agent hoàn chỉnh, hệ sinh thái tool rộng.</td>
+          <td>Tính lặp lại: mọi repo cùng profile, cùng guard, cùng kỷ luật verify — và khác biệt thì thấy được vì nó nằm trong file.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="hai-lop-khong-thay-the-nhau">Hai lớp không thay thế nhau</h2>
+  <p>Sandbox của host chặn ở mức process: tiến trình không mở được file ngoài phạm vi cho phép. Guard của platform chặn ở mức lời gọi tool: nó đọc được <em>tham số</em> mà agent định dùng, nên biết lệnh đang đọc file nào, đang ghi ở đâu, đang gửi gì ra ngoài.</p>
+
+  <div class="split">
+    <div class="card">
+      <h3 id="lop-duoi">Lớp dưới thấy process</h3>
+      <p>Biết một tiến trình đang cố ghi ra ngoài workspace. Không biết tiến trình đó là <span class="inline-code">npm test</span> hay là một script vừa được sinh ra trong lượt này.</p>
+    </div>
+    <div class="card">
+      <h3 id="lop-tren">Lớp trên thấy ý định</h3>
+      <p>Biết tool nào, tham số nào, capability nào. Đủ để chặn <span class="inline-code">.env</span> theo tên, redact token trong output, và từ chối một MCP server mà repo mang theo.</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>Bỏ lớp nào cũng hụt</strong>
+    <p>Guard ở lớp application không thay được sandbox: một tiến trình đã chạy rồi thì guard không với tới nữa. Ngược lại sandbox không biết <span class="inline-code">.env</span> khác gì <span class="inline-code">.env.example</span>. Platform này giả định lớp dưới vẫn bật.</p>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="khi-nao-khong-can">Khi nào không cần</h2>
+  <p>Một repo, một người, không secret nào đáng kể, không có ai khác phải làm theo cùng cách — thì cấu hình sẵn của Pi là đủ, và thêm một lớp nữa chỉ tốn thời gian đọc.</p>
+  <p>Platform này bắt đầu có lãi khi số repo đủ nhiều để không ai nhớ nổi repo nào đang mở quyền gì, hoặc khi câu "đã verify chưa" cần một câu trả lời giống nhau ở mọi repo.</p>
+</section>

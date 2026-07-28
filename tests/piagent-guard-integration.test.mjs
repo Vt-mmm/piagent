@@ -132,9 +132,10 @@ describe("piagent guard integration", () => {
 
     assert.equal(harness.tools.size, 28);
     assert.equal(harness.tools.has("piagent_document_read"), true);
-    assert.equal(harness.commands.size, 15);
+    assert.equal(harness.commands.size, 16);
     assert.equal(harness.commands.has("profile"), true);
     assert.equal(harness.commands.has("context-index"), true);
+    assert.equal(harness.commands.has("piagent-mcp"), true);
     assert.equal(harness.commands.has("profiles"), false);
     assert.equal(harness.commands.has("profile-tech"), false);
     assert.deepEqual([...harness.handlers.keys()].sort(), ["input", "session_start", "tool_call", "tool_result"]);

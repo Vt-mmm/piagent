@@ -248,7 +248,7 @@ This repository intentionally excludes:
 ## Documentation
 
 - [Public docs site](https://piagent.io.vn)
-- [Static team docs site](docs-site/index.html)
+- [Static team docs site](docs-site/index.html) — generated from `docs-site/content/`, preview with `npm run site:preview`
 - [Changelog](CHANGELOG.md)
 - [Vercel docs site deploy](docs/vercel-docs-site.md)
 - [Operator manual tiếng Việt](docs/operator-manual-vietnamese.md)
@@ -283,7 +283,7 @@ This repository intentionally excludes:
 
 ## Maturity
 
-The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.1.9` or a reviewed commit.
+The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.2.0` or a reviewed commit.
 
 Ready for:
 

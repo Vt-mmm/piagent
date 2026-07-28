@@ -253,13 +253,13 @@ describe("install-global release channels", () => {
     const withDefault = runInstaller(["--stable", "--dry-run", "--no-model-scope"]);
     assert.equal(withDefault.status, 0, withDefault.stderr);
     assert.match(withDefault.stdout, /pi install npm:pi-mcp-adapter@/);
-    assert.match(withDefault.stdout, /configure-mcp\.sh --scope global --preset core --replace/);
+    assert.match(withDefault.stdout, /mcp-manage\.mjs --scope global --preset core --replace/);
     assert.match(withDefault.stdout, /\/mcp {2,}# inspect MCP servers/);
 
     const skipped = runInstaller(["--stable", "--dry-run", "--no-model-scope", "--no-mcp"]);
     assert.equal(skipped.status, 0, skipped.stderr);
     assert.doesNotMatch(skipped.stdout, /pi-mcp-adapter/);
-    assert.doesNotMatch(skipped.stdout, /configure-mcp\.sh/);
+    assert.doesNotMatch(skipped.stdout, /mcp-manage\.mjs/);
     assert.doesNotMatch(skipped.stdout, /\/mcp {2,}# inspect MCP servers/);
   });
 

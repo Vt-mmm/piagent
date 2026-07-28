@@ -28,11 +28,11 @@ Options:
                                   Install/skip pi-subagents during global install (default: install)
   --subagents-preset <minimal|safe|async|parallel>
                                   Configure pi-subagents runtime baseline (default: safe)
-  --subagents-model-scope <none|piagent|codex|claude>
+  --subagents-model-scope <none|piagent|codex|claude>   model family for subagents
                                   Optional subagent model allowlist (default: none)
   --with-web-access               Install pi-web-access for builtin `researcher` subagent (default: skip)
   --with-herdr / --no-herdr      Install/skip Herdr Pi integration if herdr exists (default: install)
-  --model-scope <full|codex|claude>
+  --model-scope <full|codex|claude>   model families to enable
                                   Configure Pi enabledModels for selector/cycling (default: full)
   --default-model <provider/model[:thinking]>
                                   Configure default provider/model/thinking (default: openai-codex/gpt-5.5:xhigh)

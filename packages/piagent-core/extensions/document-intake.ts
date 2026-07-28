@@ -13,11 +13,11 @@ import zlib from "node:zlib";
 // operator has to copy files into the repository just to be read, which is how
 // vendor PDFs end up committed.
 //
-// Both reference CLIs treat read as the permissive axis and write as the scoped
-// one: Claude Code grants extra directories through `additionalDirectories` and
-// `--add-dir` and then reads them without prompting, and Codex scopes
-// `writable_roots` while leaving reads broad. This follows that shape with one
-// extra restriction — inside a granted root only document extensions open, so
+// The established shape for agent CLIs is to treat read as the permissive axis
+// and write as the scoped one: extra directories are granted and then read
+// without prompting, while the set of writable roots stays narrow. This follows
+// that shape with one extra restriction — inside a granted root only document
+// extensions open, so
 // granting ~/Downloads does not also hand over an installer or a key file that
 // happens to be sitting there.
 //

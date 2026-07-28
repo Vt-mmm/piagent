@@ -19,6 +19,30 @@ Lý do:
 
 Tách repository chỉ nên dùng khi docs cần domain, quyền truy cập, hoặc lịch phát hành riêng.
 
+## Cấu trúc site
+
+Site là nhiều trang tĩnh, mỗi topic một trang, sinh ra từ một shell dùng chung:
+
+```text
+docs-site/
+  content/<slug>.html   # nội dung riêng của từng trang, không có header/sidebar/footer
+  assets/docs.css       # style dùng chung
+  assets/docs.js        # sidebar filter, TOC, active-section, copy button
+  <slug>.html           # output đã generate, được commit
+  vercel.json
+scripts/build-docs-site.mjs
+```
+
+Sidebar chia theo bốn nhóm — Get started, Build, MCP, Operate. Thứ tự nhóm và thứ tự trang nằm trong hằng `NAV` của `scripts/build-docs-site.mjs`; đó cũng là thứ tự của link prev/next ở cuối mỗi trang. Thêm một trang = thêm `docs-site/content/<slug>.html` + một entry trong `NAV`, rồi build lại.
+
+```bash
+npm run site:build
+```
+
+Output HTML được commit, vì Vercel serve file tĩnh và không có build step. `npm run verify` chạy `build-docs-site.mjs --check`, fail khi output đã commit không còn khớp source — cùng cách `catalog/capabilities.json` đang dùng. Không sửa tay `docs-site/<slug>.html`; sửa fragment trong `content/` hoặc sửa shell trong script.
+
+Version badge xuất hiện trên mọi trang, nên `npm run release:identity` kiểm tra tất cả `docs-site/*.html` chứ không riêng `index.html`.
+
 ## Production promotion policy
 
 Production docs không được advertise một release tag chưa tồn tại.
@@ -96,16 +120,22 @@ curl -I https://www.piagent.io.vn/
 curl -sSL https://piagent.io.vn/ | grep 'vX.Y.Z docs'
 ```
 
-Xác nhận thêm favicon/logo, GitHub/Facebook links, install commands, sidebar anchors và mobile layout.
+Xác nhận thêm favicon/logo, GitHub/Facebook links, install commands, sidebar anchors và mobile layout. Vì site giờ là nhiều trang, kiểm tra thêm clean URL và asset dùng chung:
+
+```bash
+curl -o /dev/null -s -w '%{http_code}\n' https://piagent.io.vn/mcp
+curl -o /dev/null -s -w '%{http_code}\n' https://piagent.io.vn/assets/docs.css
+```
 
 ## Local preview
 
 ```bash
-cd docs-site
-python3 -m http.server 4173
+npm run site:preview
 ```
 
-Mở `http://localhost:4173`.
+Mở `http://localhost:4321`. Đổi port bằng `npm run site:preview -- --port 4173`.
+
+Dùng script này thay vì một static server bất kỳ: `vercel.json` bật `cleanUrls`, nên link nội bộ trỏ tới `/quickstart` chứ không phải `/quickstart.html`. `python3 -m http.server` trả 404 cho tất cả các link đó và preview thành vô dụng để kiểm tra navigation. Script bind loopback và resolve extensionless path đúng như production.
 
 ## Security notes
 

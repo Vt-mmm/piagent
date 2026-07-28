@@ -1,0 +1,47 @@
+<section class="section">
+  <div class="callout ok-callout">
+    <strong>Git trong Pi Agent</strong>
+    <p>Không có namespace <span class="inline-code">/git</span> riêng. Dùng <span class="inline-code">/commit</span> để commit local đã review, dùng <span class="inline-code">/pr</span> để chuẩn bị PR. Các hành động như <span class="inline-code">git push</span> hoặc stage rộng <span class="inline-code">git add -A</span> vẫn cần operator xác nhận.</p>
+  </div>
+
+  <div class="callout">
+    <strong>Solo-first orchestration</strong>
+    <p>Dùng <span class="inline-code">/piagent-orchestration</span> để xem mode, max subagents, review lenses, Field Guide và writer policy. Mặc định parent agent tự làm chính; subagents chỉ dùng khi scout, planning hoặc review có lane độc lập đáng token.</p>
+  </div>
+
+  <div class="command-grid">
+    <article class="command-card">
+      <header><span>Implementation bounded</span><button class="clip-btn" data-clip="/task Fix the failing checkout test and verify.">Lấy lệnh</button></header>
+      <pre><code>/task Fix the failing checkout test and verify.</code></pre>
+    </article>
+    <article class="command-card">
+      <header><span>Read-only scout</span><button class="clip-btn" data-clip="/scout Map the auth flow and risk areas.">Lấy lệnh</button></header>
+      <pre><code>/scout Map the auth flow and risk areas.</code></pre>
+    </article>
+    <article class="command-card">
+      <header><span>Plan trước khi code</span><button class="clip-btn" data-clip="/plan Add multi-tenant billing support.">Lấy lệnh</button></header>
+      <pre><code>/plan Add multi-tenant billing support.</code></pre>
+    </article>
+    <article class="command-card">
+      <header><span>Review diff</span><button class="clip-btn" data-clip="/review">Lấy lệnh</button></header>
+      <pre><code>/review</code></pre>
+    </article>
+    <article class="command-card">
+      <header><span>Commit local có guard</span><button class="clip-btn" data-clip="/commit &quot;feat: add guarded git workflow&quot;">Lấy lệnh</button></header>
+      <pre><code>/commit "feat: add guarded git workflow"</code></pre>
+    </article>
+    <article class="command-card">
+      <header><span>Chuẩn bị pull request</span><button class="clip-btn" data-clip="/pr &quot;Prepare PR for guarded git workflow&quot;">Lấy lệnh</button></header>
+      <pre><code>/pr "Prepare PR for guarded git workflow"</code></pre>
+    </article>
+    <article class="command-card">
+      <header><span>Backend spec sang frontend</span><button class="clip-btn" data-clip="/be-to-fe Implement frontend support for the new user status endpoint.">Lấy lệnh</button></header>
+      <pre><code>/profile be-readonly-fe
+/be-to-fe Implement frontend support for the new user status endpoint.</code></pre>
+    </article>
+    <article class="command-card">
+      <header><span>Cải thiện platform</span><button class="clip-btn" data-clip="/platform-improve Harden command docs and run verification.">Lấy lệnh</button></header>
+      <pre><code>/platform-improve Harden command docs and run verification.</code></pre>
+    </article>
+  </div>
+</section>

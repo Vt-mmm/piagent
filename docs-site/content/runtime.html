@@ -1,0 +1,45 @@
+<section class="section">
+
+  <div class="command-grid">
+    <article class="command-card">
+      <header><span>Setup global</span><button class="clip-btn" data-clip="piagent-setup --mcp-preset core --subagents-preset safe">Lấy lệnh</button></header>
+      <pre><code>piagent-setup --mcp-preset core --subagents-preset safe</code></pre>
+    </article>
+    <article class="command-card">
+      <header><span>Full update</span><button class="clip-btn" data-clip="npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0&#10;npm install -g --ignore-scripts @piagent/platform@X.Y.Z&#10;piagent-install --stable --dry-run&#10;piagent-install --stable">Lấy lệnh</button></header>
+      <pre><code>npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
+npm install -g --ignore-scripts @piagent/platform@X.Y.Z
+piagent-install --stable --dry-run
+piagent-install --stable</code></pre>
+    </article>
+    <article class="command-card">
+      <header><span>Pi package only</span><button class="clip-btn" data-clip="piagent-install --version vX.Y.Z --resolve-tag --dry-run&#10;piagent-install --version vX.Y.Z --resolve-tag">Lấy lệnh</button></header>
+      <pre><code>piagent-install --version vX.Y.Z --resolve-tag --dry-run
+piagent-install --version vX.Y.Z --resolve-tag</code></pre>
+    </article>
+    <article class="command-card">
+      <header><span>Init project</span><button class="clip-btn" data-clip="piagent-init /path/to/project">Lấy lệnh</button></header>
+      <pre><code>piagent-init /path/to/project</code></pre>
+    </article>
+    <article class="command-card">
+      <header><span>Doctor</span><button class="clip-btn" data-clip="piagent-doctor /path/to/project">Lấy lệnh</button></header>
+      <pre><code>piagent-doctor /path/to/project</code></pre>
+    </article>
+    <article class="command-card">
+      <header><span>Trusted run</span><button class="clip-btn" data-clip="piagent-auto --full-access -p &quot;Run the trusted local benchmark suite.&quot;">Lấy lệnh</button></header>
+      <pre><code>piagent-auto --read-only -p "Scout payment mapping. Do not edit source."
+piagent-auto --full-access -p "Run the trusted local benchmark suite."</code></pre>
+    </article>
+    <article class="command-card">
+      <header><span>Capabilities</span><button class="clip-btn" data-clip="piagent-capabilities catalog --check&#10;piagent-capabilities doctor --profile .pi/piagent-profile.json">Lấy lệnh</button></header>
+      <pre><code>piagent-capabilities catalog --check
+piagent-capabilities doctor --profile .pi/piagent-profile.json</code></pre>
+    </article>
+    <article class="command-card">
+      <header><span>Verification</span><button class="clip-btn" data-clip="npm run verify&#10;npm test&#10;npm run typecheck">Lấy lệnh</button></header>
+      <pre><code>npm run verify
+npm test
+npm run typecheck</code></pre>
+    </article>
+  </div>
+</section>

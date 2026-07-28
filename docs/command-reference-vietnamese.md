@@ -222,7 +222,7 @@ Các command này thuộc Pi core hoặc package Pi chính. Tên/availability c�
 
 | Command/hotkey | Dịch nghĩa | Dùng khi nào | Ghi chú |
 |---|---|---|---|
-| `/login` | Đăng nhập provider | Lần đầu dùng OpenAI/Codex hoặc Anthropic/Claude. | OAuth/session lưu local trong Pi, không commit repo. |
+| `/login` | Đăng nhập provider | Lần đầu dùng model OpenAI Codex hoặc model Anthropic Claude. | OAuth/session lưu local trong Pi, không commit repo. |
 | `/model` | Chọn model | Muốn chọn OpenAI provider bằng native selector. | Đây là flow chính, không phải hỏi agent tự chọn thay. |
 | `Ctrl+L` | Mở model selector | Đổi model nhanh. | Tương đương UI selector của Pi. |
 | `/scoped-models` | Chỉnh danh sách model cycle | Muốn `Ctrl+P` chỉ xoay quanh vài model hay dùng. | Global setup seed sẵn provider model families. |
@@ -237,6 +237,15 @@ Các command này thuộc Pi core hoặc package Pi chính. Tên/availability c�
 | `/mcp tools` | List MCP tools | Muốn biết server expose tool nào. | Dùng trước khi bảo agent gọi tool ngoài. |
 | `/mcp reconnect` | Kết nối lại MCP | Khi server lỗi, token mới, hoặc config đổi. | Không thay thế việc export secret env. |
 | `/mcp-auth figma` | OAuth Figma MCP | Khi dùng Figma remote MCP. | Có thể khác theo Figma/Pi MCP package version. |
+| `/piagent-mcp` | Menu MCP | Không nhớ subcommand, hoặc muốn xem có việc gì cần làm. | Menu dựng theo project; không có select UI thì in thẳng bảng trạng thái. |
+| `/piagent-mcp status` | Danh sách MCP server + state | Muốn biết server nào đang có, ở scope nào, sẵn sàng chưa. | Đọc config, không kiểm tra kết nối live — cái đó là `/mcp`. |
+| `/piagent-mcp get <name>` | Chi tiết một server | Trước khi duyệt, hoặc khi không rõ scope nào đang có hiệu lực. | Giá trị credential bị mask; `${VAR}` in nguyên vì là tên biến. |
+| `/piagent-mcp doctor` | Server nào chưa chạy được và thiếu gì | Sau khi cài, hoặc khi tool call MCP bị chặn. | Không probe Docker daemon; chạy `piagent-mcp doctor` ở terminal cho việc đó. |
+| `/piagent-mcp approve <name>` | Duyệt server repo khai | Khi mở một repo có `.mcp.json`. | In định nghĩa ra trước khi ghi quyết định. Pin theo digest. |
+| `/piagent-mcp reject <name>` | Từ chối | Không tin server repo khai. | `reset` để quên quyết định. |
+| `/piagent-mcp enable\|disable <name>` | Bật/tắt server | Tắt tạm mà không mất định nghĩa. | Cần `/reload` để adapter nhận thay đổi. |
+
+`/piagent-mcp` chạy thẳng trong session, không qua model. Thêm/xoá server và preset ở terminal: `piagent-mcp add|remove|--preset`.
 
 ## Command subagent
 
@@ -419,8 +428,8 @@ Các lệnh này chạy ngoài Pi.
 | Command | Dùng khi nào |
 |---|---|
 | `npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0` | Cài Pi CLI tương thích với release hiện tại. |
-| `npm install -g --ignore-scripts @piagent/platform@1.1.9` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
-| `pi install git:github.com/Vt-mmm/piagent@v1.1.9` | Cài pinned release khi cần reproducible team setup. |
+| `npm install -g --ignore-scripts @piagent/platform@1.2.0` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
+| `pi install git:github.com/Vt-mmm/piagent@v1.2.0` | Cài pinned release khi cần reproducible team setup. |
 | `pi install git:github.com/Vt-mmm/piagent` | Cài latest package platform cho máy cá nhân/sandbox. |
 | `piagent-update --check` | Báo version hiện tại vs version sẽ lên cho cả ba thành phần; không cài gì. |
 | `piagent-update` | Full update một lệnh: Pi host → npm-global helper → Pi package, đúng thứ tự release yêu cầu. Thêm `--project <path>` để chạy doctor sau. |
@@ -478,7 +487,7 @@ Khi đang develop chính repo `piagent`, có thể dùng npm scripts tương ứ
 | `npm run usage -- <project>` | `bash scripts/pi-session-stats.sh <project>` |
 | `npm run models` | `bash scripts/pi-model-catalog.sh` |
 | `npm run model-scope -- --preset full` | `bash scripts/configure-model-scope.sh --preset full` |
-| `npm run mcp -- --preset core --scope global --replace` | `bash scripts/configure-mcp.sh --preset core --scope global --replace` |
+| `npm run mcp -- --preset core --scope global --replace` | `node scripts/mcp-manage.mjs --preset core --scope global --replace` |
 | `npm run subagents -- --preset safe` | `bash scripts/configure-subagents.sh --preset safe` |
 
 ## MCP command quick map

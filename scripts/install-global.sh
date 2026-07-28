@@ -15,7 +15,7 @@ Package source examples:
   # Installs the stable tag after resolving it to a commit SHA.
 
   # Pin a specific release:
-  scripts/install-global.sh --version v1.1.9 --resolve-tag
+  scripts/install-global.sh --version v1.2.0 --resolve-tag
 
   # Preview the planned install/update without changing user config:
   scripts/install-global.sh --stable --dry-run
@@ -127,7 +127,7 @@ detect_runtime_surface() {
       printf 'native-windows/%s (not release-gated; terminal helpers require Bash semantics)' "$arch_name"
       ;;
     *)
-      printf '%s/%s (outside v1.1.9 release matrix)' "$os_name" "$arch_name"
+      printf '%s/%s (outside v1.2.0 release matrix)' "$os_name" "$arch_name"
       ;;
   esac
 }
@@ -135,7 +135,7 @@ detect_runtime_surface() {
 warn_runtime_surface_if_needed() {
   local surface="$1"
   case "$surface" in
-    *"supported target"*|*"experimental"*|*"not release-gated"*|*"outside v1.1.9 release matrix"*)
+    *"supported target"*|*"experimental"*|*"not release-gated"*|*"outside v1.2.0 release matrix"*)
       echo "WARN: runtime surface is $surface." >&2
       echo "WARN: For team rollout, run piagent-doctor plus the project smoke/verify suite on this machine before relying on it." >&2
       ;;
@@ -354,7 +354,7 @@ require_node_version
 # Node check, not before: the validator is a Node script, so on a machine without
 # Node it reported a missing interpreter as a bad preset.
 if [[ "$WITH_MCP" == true ]]; then
-  if ! bash "$PLATFORM_ROOT/scripts/configure-mcp.sh" --scope global --preset "$MCP_PRESET" --validate-preset >/dev/null; then
+  if ! node "$PLATFORM_ROOT/scripts/mcp-manage.mjs" --scope global --preset "$MCP_PRESET" --validate-preset >/dev/null; then
     echo "Nothing was installed." >&2
     exit 2
   fi
@@ -508,7 +508,7 @@ if [[ "$WITH_MCP" == true ]]; then
     pi-mcp-adapter init || true
   fi
   echo "Configuring shared global MCP baseline:"
-  run_cmd bash "$PLATFORM_ROOT/scripts/configure-mcp.sh" --scope global --preset "$MCP_PRESET" --replace
+  run_cmd node "$PLATFORM_ROOT/scripts/mcp-manage.mjs" --scope global --preset "$MCP_PRESET" --replace
 fi
 
 if [[ "$WITH_SUBAGENTS" == true ]]; then

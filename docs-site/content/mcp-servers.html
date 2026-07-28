@@ -1,0 +1,111 @@
+<section class="section">
+  <h2 id="hai-be-mat">Hai bề mặt, chọn theo chỗ đang đứng</h2>
+  <p>Trong session Pi thì gõ <strong>slash command</strong>. Ngoài terminal thì gõ <strong>CLI</strong>. Cùng một dữ liệu, cùng một cách đọc trạng thái — khác nhau ở chỗ ai chạy.</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Việc</th><th>Trong session</th><th>Trong terminal</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Mở menu</td><td><span class="inline-code">/piagent-mcp</span></td><td>—</td></tr>
+        <tr><td>Xem toàn bộ server + state</td><td><span class="inline-code">/piagent-mcp status</span></td><td><span class="inline-code">piagent-mcp list</span></td></tr>
+        <tr><td>Chi tiết một server</td><td><span class="inline-code">/piagent-mcp get &lt;name&gt;</span></td><td><span class="inline-code">piagent-mcp get &lt;name&gt;</span></td></tr>
+        <tr><td>Thiếu gì để chạy được</td><td><span class="inline-code">/piagent-mcp doctor</span></td><td><span class="inline-code">piagent-mcp doctor</span></td></tr>
+        <tr><td>Duyệt server của repo</td><td><span class="inline-code">/piagent-mcp approve &lt;name&gt;</span></td><td><span class="inline-code">piagent-mcp approve &lt;name&gt;</span></td></tr>
+        <tr><td>Bật / tắt</td><td><span class="inline-code">/piagent-mcp enable|disable &lt;name&gt;</span></td><td><span class="inline-code">piagent-mcp enable|disable &lt;name&gt;</span></td></tr>
+        <tr><td>Thêm, xoá, preset</td><td>—</td><td><span class="inline-code">piagent-mcp add|remove|--preset</span></td></tr>
+        <tr><td>Trạng thái kết nối, OAuth</td><td><span class="inline-code">/mcp</span>, <span class="inline-code">/mcp-auth</span></td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout ok-callout">
+    <strong>Vì sao slash command chứ không phải gõ CLI trong session</strong>
+    <p>Gõ <span class="inline-code">piagent-mcp list</span> giữa session là nhờ model chạy bash, đọc output rồi thuật lại — ba lượt model cho một câu hỏi mà chính process này trả lời được từ file nó đã đọc. Slash command do Pi dispatch thẳng tới handler, <strong>không đi qua model</strong>: không tốn token, không diễn giải lại, và cùng một câu hỏi luôn ra cùng một câu trả lời.</p>
+  </div>
+
+  <div class="callout">
+    <strong>Thêm server vẫn ở terminal</strong>
+    <p><span class="inline-code">add</span> mang theo shell quoting, tham chiếu <span class="inline-code">${VAR}</span> và một command line sau <span class="inline-code">--</span>. Ba thứ đó đã có một bộ parse đúng là chính shell; viết lại nó bên trong slash command chỉ tạo ra bộ parse thứ hai, tệ hơn. Vì vậy ranh giới là: đọc trạng thái thì ở trong session, ghi định nghĩa server thì ở terminal. Gọi <span class="inline-code">/piagent-mcp add</span> sẽ in ra đúng lệnh terminal cần chạy chứ không đoán.</p>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="lenh">Lệnh</h2>
+
+  <div class="command-grid">
+    <article class="command-card">
+      <h3 id="trong-session">Trong session</h3>
+      <p>Không tham số là menu. Biết rồi thì gõ thẳng — Tab auto-complete cả subcommand lẫn tên server.</p>
+      <pre><code>/piagent-mcp                 menu
+/piagent-mcp status          bảng đầy đủ
+/piagent-mcp get sentry
+/piagent-mcp doctor
+/piagent-mcp approve internal</code></pre>
+    </article>
+
+    <article class="command-card">
+      <h3 id="them-server">Thêm server</h3>
+      <p><span class="inline-code">--url</span> cho server remote, <span class="inline-code">--</span> rồi command cho server chạy local. Chạy ở terminal.</p>
+      <pre><code>piagent-mcp add sentry --url https://mcp.sentry.dev/mcp --scope global
+piagent-mcp add internal --scope project -- npx -y @acme/internal-mcp</code></pre>
+    </article>
+
+    <article class="command-card">
+      <h3 id="xem">Xem</h3>
+      <p><span class="inline-code">list</span> cho toàn bộ server nhìn thấy được từ project hiện tại, kèm state. <span class="inline-code">get</span> cho chi tiết một server.</p>
+      <pre><code>piagent-mcp list
+piagent-mcp get sentry</code></pre>
+    </article>
+
+    <article class="command-card">
+      <h3 id="tat-xoa">Tắt và xoá</h3>
+      <p><span class="inline-code">disable</span> giữ nguyên định nghĩa, chỉ ngừng dùng. <span class="inline-code">remove</span> xoá hẳn khỏi scope.</p>
+      <pre><code>piagent-mcp disable sentry
+piagent-mcp enable sentry
+piagent-mcp remove sentry --scope global</code></pre>
+    </article>
+
+    <article class="command-card">
+      <h3 id="preset-lenh">Preset</h3>
+      <p>Seed một nhóm server đã pin sẵn. <span class="inline-code">--replace</span> đưa các server thuộc preset về baseline.</p>
+      <pre><code>piagent-mcp --preset core --scope global --replace
+piagent-mcp --list</code></pre>
+    </article>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="output">Output nói rõ đã sửa file nào</h2>
+  <p>Bốn layer config cùng được đọc, nên câu hỏi đầu tiên khi có gì đó không đúng luôn là "file nào đang có hiệu lực". <span class="inline-code">add</span> trả lời sẵn:</p>
+
+  <pre><code>$ piagent-mcp add internal --scope project -- npx -y @acme/internal-mcp
+Added local MCP server internal with command: npx -y @acme/internal-mcp in project scope
+File modified: /Users/you/repo/.mcp.json
+This scope is part of the repository, so the server is not usable until approved: piagent-mcp approve internal</code></pre>
+
+  <p><span class="inline-code">list</span> hiển thị dạng bảng, cột <span class="inline-code">STATE</span> cho biết server nào dùng được ngay:</p>
+
+  <pre><code>NAME             SCOPE    TRANSPORT  TARGET                                  STATE
+context7         global   stdio      npx -y @upstash/context7-mcp@3.2.4       ready
+chrome-devtools  global   stdio      npx -y chrome-devtools-mcp@1.6.0 ...     ready
+github           global   stdio      docker run -i --rm -e GITHUB_PERSON...   needs-env
+internal         project  stdio      npx -y @acme/internal-mcp               pending-approval</code></pre>
+</section>
+
+<section class="section">
+  <h2 id="update">Server tự thêm và luồng update</h2>
+  <p>Mỗi lần <span class="inline-code">piagent-update</span> chạy, preset được apply lại với <span class="inline-code">--replace</span>. Vòng merge chỉ đi qua đúng những server ID mà preset sở hữu:</p>
+
+  <div class="split">
+    <div class="card">
+      <h3 id="giu-nguyen">Giữ nguyên</h3>
+      <p>Server có ID riêng — <span class="inline-code">my-internal</span>, <span class="inline-code">sentry</span>, bất cứ tên nào không thuộc preset — sống qua mọi lần update.</p>
+    </div>
+    <div class="card">
+      <h3 id="bi-ghi-de">Bị ghi đè</h3>
+      <p>Sửa tay một server thuộc preset (<span class="inline-code">github</span>, <span class="inline-code">context7</span>…) sẽ bị đưa về baseline ở lần update kế tiếp. Muốn giữ bản riêng thì đặt tên khác.</p>
+    </div>
+  </div>
+</section>

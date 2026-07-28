@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Đăng nhập và trạng thái sẵn sàng · Pi Agent Platform Docs</title>
+    <meta name="description" content="Platform không giữ token và không tự chạy OAuth. Nó từ chối ghi secret vào config, và cho biết server nào thật sự gọi được." />
+    <meta name="theme-color" content="#050505" />
+    <link rel="canonical" href="https://piagent.io.vn/mcp-auth" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta property="og:title" content="Đăng nhập và trạng thái sẵn sàng · Pi Agent Platform Docs" />
+    <meta property="og:description" content="Platform không giữ token và không tự chạy OAuth. Nó từ chối ghi secret vào config, và cho biết server nào thật sự gọi được." />
+    <meta property="og:url" content="https://piagent.io.vn/mcp-auth" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/docs.css" />
+    <script src="/assets/docs.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Pi Agent Platform">
+        <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" /></span>
+        <span>Pi Agent Platform</span>
+      </a>
+      <div class="top-actions">
+        <span class="pill"><span class="pill-dot"></span>v1.2.0 docs</span>
+        <a class="button social" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer" aria-label="Mở GitHub repository">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          GitHub
+        </a>
+        <button class="button mobile-menu" type="button" data-menu>Lộ trình</button>
+        <a class="button" href="/commands">Commands</a>
+      </div>
+    </header>
+
+    <div class="layout with-toc">
+      <aside class="sidebar" data-sidebar>
+        <div class="sidebar-search" aria-label="Tìm trong tài liệu">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M10.8 18.1a7.3 7.3 0 1 1 0-14.6 7.3 7.3 0 0 1 0 14.6Zm5.3-1.7 4.4 4.4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          <input type="search" placeholder="Tìm trang" data-filter />
+        </div>
+
+        <nav aria-label="Tài liệu">
+          <div class="nav-group">
+            <p class="nav-title">Get started</p>
+            <a class="nav-link" href="/">Overview</a>
+            <a class="nav-link" href="/quickstart">Quickstart</a>
+            <a class="nav-link" href="/scope">Phạm vi platform</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Build</p>
+            <a class="nav-link" href="/profiles">Project profile</a>
+            <a class="nav-link" href="/permissions">Permission modes</a>
+            <a class="nav-link" href="/commands">Command catalog</a>
+            <a class="nav-link" href="/workflows">Workflows</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">MCP</p>
+            <a class="nav-link" href="/mcp">MCP overview</a>
+            <a class="nav-link" href="/mcp-servers">Quản lý server</a>
+            <a class="nav-link current" href="/mcp-auth" aria-current="page">Auth và readiness</a>
+            <a class="nav-link" href="/mcp-approval">Approval gate</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Operate</p>
+            <a class="nav-link" href="/security">Security model</a>
+            <a class="nav-link" href="/architecture">Architecture</a>
+            <a class="nav-link" href="/runtime">Runtime tools</a>
+            <a class="nav-link" href="/team">Team usage</a>
+          </div>
+        </nav>
+      </aside>
+
+      <main>
+        <div class="content-shell" data-article>
+            <nav class="breadcrumb" aria-label="Breadcrumb">
+              <a href="/">Docs</a>
+              <span aria-hidden="true">/</span>
+              <span>MCP</span>
+              <span aria-hidden="true">/</span>
+              <span>Auth và readiness</span>
+            </nav>
+            <div class="page-head">
+              <h1>Đăng nhập và trạng thái sẵn sàng</h1>
+              <p>Platform không giữ token và không tự chạy OAuth. Nó từ chối ghi secret vào config, và cho biết server nào thật sự gọi được.</p>
+            </div>
+<section class="section">
+  <h2 id="khong-giu-token">Platform không giữ token</h2>
+  <p>Token MCP đã có chỗ ở: luồng OAuth thuộc về <span class="inline-code">pi-mcp-adapter</span> — chính nó đăng ký <span class="inline-code">/mcp</span> và <span class="inline-code">/mcp-auth</span>, và chính nó lưu, refresh, thu hồi. Dựng thêm một kho credential nữa để giữ credential của bên thứ ba chỉ tạo thêm một chỗ để token rò ra. Việc của platform vì vậy là <strong>phát hiện và chỉ đường</strong>.</p>
+
+  <pre><code>/mcp-auth figma</code></pre>
+
+  <div class="callout ok-callout">
+    <strong>Ranh giới</strong>
+    <p>Platform không chạy OAuth, không lưu token, không refresh. Nó biết một server <em>cần</em> đăng nhập, nhưng không biết phiên đăng nhập còn hạn hay không — và nó nói đúng như vậy thay vì đoán.</p>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="tu-choi-secret">Secret bị từ chối ngay khi ghi config</h2>
+  <p>MCP config được nhiều client đọc, nằm trong home hoặc trong repo, và ở scope <span class="inline-code">project</span> thì được commit. Một token gõ vào <span class="inline-code">--env</span> sẽ đi tới tất cả những chỗ đó. Nên <span class="inline-code">add</span> từ chối, và nói luôn dạng cần dùng:</p>
+
+  <pre><code>$ piagent-mcp add gh --env GITHUB_PERSONAL_ACCESS_TOKEN=ghp_xxx -- npx -y @acme/gh-mcp
+FAIL: GITHUB_PERSONAL_ACCESS_TOKEN names a credential, so its value cannot be
+written into MCP config. Export it in your shell and reference it instead:
+--env 'GITHUB_PERSONAL_ACCESS_TOKEN=${GITHUB_PERSONAL_ACCESS_TOKEN}'</code></pre>
+
+  <div class="split">
+    <div class="card">
+      <h3 id="theo-ten">Theo tên field</h3>
+      <p>Tên chứa <span class="inline-code">token</span>, <span class="inline-code">secret</span>, <span class="inline-code">password</span>, <span class="inline-code">api_key</span>, <span class="inline-code">authorization</span>… thì giá trị bắt buộc phải là tham chiếu biến môi trường.</p>
+    </div>
+    <div class="card">
+      <h3 id="theo-gia-tri">Theo giá trị</h3>
+      <p>Tên không nói gì thì giá trị vẫn được đọc riêng, nên <span class="inline-code">--env CONFIG=ghp_...</span> cũng bị bắt.</p>
+    </div>
+  </div>
+
+  <p>Áp dụng cho cả <span class="inline-code">--header</span>. <span class="inline-code">--url</span> chỉ nhận <span class="inline-code">https</span>, hoặc <span class="inline-code">http</span> khi host là loopback — Figma desktop MCP đúng là trường hợp đó. <span class="inline-code">list</span> và <span class="inline-code">get</span> mask giá trị nhưng in nguyên <span class="inline-code">${VAR}</span>, vì đó là tên biến chứ không phải nội dung.</p>
+</section>
+
+<section class="section">
+  <h2 id="trang-thai">Trạng thái sẵn sàng</h2>
+  <p>Đếm số server không nói được server nào trả lời được. <span class="inline-code">/piagent-mcp doctor</span> phân loại từng cái:</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>State</th><th>Nghĩa</th><th>Cách xử lý</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="inline-code">ready</span></td><td>Đủ điều kiện, gọi được</td><td>—</td></tr>
+        <tr><td><span class="inline-code">needs-env</span></td><td>Config tham chiếu <span class="inline-code">${VAR}</span> mà biến chưa export</td><td>Export biến trong shell profile</td></tr>
+        <tr><td><span class="inline-code">needs-command</span></td><td>Executable không có trên PATH</td><td>Cài, hoặc sửa lại server</td></tr>
+        <tr><td><span class="inline-code">pending-approval</span></td><td>Repo khai server này, chưa ai duyệt trên máy này</td><td><span class="inline-code">/piagent-mcp approve &lt;name&gt;</span></td></tr>
+        <tr><td><span class="inline-code">approval-changed</span></td><td>Đã duyệt nhưng định nghĩa đã đổi</td><td>Đọc lại rồi duyệt lại</td></tr>
+        <tr><td><span class="inline-code">rejected</span></td><td>Đã từ chối cho project này</td><td><span class="inline-code">reset</span> nếu đổi ý</td></tr>
+        <tr><td><span class="inline-code">disabled</span></td><td>Tắt bằng <span class="inline-code">disable</span></td><td><span class="inline-code">/piagent-mcp enable &lt;name&gt;</span></td></tr>
+        <tr><td><span class="inline-code">oauth</span></td><td>Đăng nhập do Pi giữ</td><td><span class="inline-code">/mcp-auth &lt;name&gt;</span> nếu chưa login</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>Chỉ báo cái biết chắc. <span class="inline-code">needs-env</span> in ra <strong>tên biến</strong>, không bao giờ in giá trị.</p>
+
+  <p>Trong session là <span class="inline-code">/piagent-mcp doctor</span> — cùng báo cáo, và remedy in ra dạng slash command vì đó là thứ chạy được ngay tại chỗ. Ngoài terminal:</p>
+
+  <pre><code>$ piagent-mcp doctor
+OK   context7 (global): ready
+OK   chrome-devtools (global): ready
+NEED github (global): GITHUB_PERSONAL_ACCESS_TOKEN is referenced but not set
+       -> export GITHUB_PERSONAL_ACCESS_TOKEN=... in your shell profile
+NEED docker: installed but the daemon is not responding
+       -> start Docker Desktop, then re-run piagent-mcp doctor</code></pre>
+
+  <div class="callout">
+    <strong>Vì sao <span class="inline-code">oauth</span> không phải lỗi</strong>
+    <p>Nó không xuất hiện trong notice đầu session. Platform không phân biệt được đã login hay chưa, nên báo mỗi session sẽ thành nhiễu và hết được đọc. Notice chỉ nêu những state chặn chắc chắn; tắt bằng <span class="inline-code">PIAGENT_NO_MCP_NOTICE=1</span>.</p>
+  </div>
+
+  <p><span class="inline-code">doctor</span> chạy thêm <span class="inline-code">docker info</span> — chậm, nên chỉ có ở doctor chứ không ở session start. <span class="inline-code">piagent-doctor</span> cũng đưa các state chặn vào <span class="inline-code">warnings</span>.</p>
+</section>
+            <nav class="pager" aria-label="Trang kế tiếp">
+              <a class="pager-prev" href="/mcp-servers">
+                <span class="pager-label">Trước</span>
+                <span class="pager-title">Quản lý server</span>
+              </a>
+              <a class="pager-next" href="/mcp-approval">
+                <span class="pager-label">Tiếp</span>
+                <span class="pager-title">Approval gate</span>
+              </a>
+            </nav>
+
+            <footer class="footer">
+              <p>Pi Agent Platform docs · static HTML · governed agent workflow</p>
+              <div class="footer-links" aria-label="External links">
+                <a href="https://piagent.io.vn" target="_blank" rel="noopener noreferrer">piagent.io.vn</a>
+                <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub repository</a>
+                <a href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer">Facebook profile</a>
+              </div>
+            </footer>
+        </div>
+      </main>
+
+      <aside class="toc" aria-label="Mục lục trang">
+        <p class="toc-title">Trên trang này</p>
+        <nav data-toc></nav>
+      </aside>
+    </div>
+  </body>
+</html>

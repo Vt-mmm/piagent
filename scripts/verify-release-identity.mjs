@@ -71,8 +71,14 @@ if (capabilityLock.core?.packageVersion !== version) fail("capability lock packa
 const changelog = fs.readFileSync(path.join(root, "CHANGELOG.md"), "utf8");
 if (!changelog.includes(`## ${expectedTag} -`)) fail(`CHANGELOG.md has no ${expectedTag} release section`);
 
-const docsSite = fs.readFileSync(path.join(root, "docs-site/index.html"), "utf8");
-if (!docsSite.includes(`${expectedTag} docs`)) fail(`docs-site version badge does not identify ${expectedTag}`);
+// The badge is generated onto every page, so a stale build shows up as one page
+// still carrying the previous version rather than as a single missed edit.
+const docsPages = fs.readdirSync(path.join(root, "docs-site")).filter((name) => name.endsWith(".html"));
+if (docsPages.length === 0) fail("docs-site has no generated pages");
+for (const page of docsPages) {
+  const html = fs.readFileSync(path.join(root, "docs-site", page), "utf8");
+  if (!html.includes(`${expectedTag} docs`)) fail(`docs-site/${page} version badge does not identify ${expectedTag}`);
+}
 
 if (options.tag) {
   if (options.tag !== expectedTag) fail(`release tag ${options.tag} does not match package version ${expectedTag}`);

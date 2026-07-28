@@ -2,6 +2,48 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.2.0 - 2026-07-28
+
+### Added
+
+- `piagent-mcp` manages servers instead of only seeding presets: `add`, `remove`, `get`, `list`, `enable`, `disable` and `doctor`, across the four config layers via `--scope`. `add` reports which scope it wrote and the exact file it changed, so nobody has to guess which layer is in effect. A server added by hand keeps surviving `piagent-update`, because a preset only rewrites the server IDs it owns.
+
+- A server a repository defines is not usable until somebody on this machine approves it. `.mcp.json` and `.pi/mcp.json` travel with a clone, and opening a session in one should not hand its author a process here with this operator's credentials. `piagent-mcp approve` prints the definition before recording the decision, `reject` and `reset` are the other two answers, and the decision is stored in `~/.pi/piagent-mcp-approvals.json` rather than in the repository — a repository that can approve its own servers has not been gated.
+
+  The record pins the digest of what was approved. Approval is consent to what the server runs, so changing its command, URL or arguments returns it to pending, which is the same split the capability lock draws between consent and build.
+
+  Enforcement is in the guard's `tool_call` hook, covering both the `mcp` proxy and the `mcp__<server>__<tool>` form that `directTools` produces. The adapter owns the connection and the extension cannot prevent one being opened, so what is stopped is every tool call, not the connection itself. Servers in the global layers are not gated: nothing a repository contains can put a server there.
+
+- MCP is a command inside a session, not a request to the model. `/piagent-mcp` on its own opens a menu, because a surface only helps if it can be found without already knowing the subcommand. The menu is built from what the project has: approving is not offered when nothing is waiting on a decision, and each entry carries its own count. Picking an action that needs a server asks which one, unless there is only one it could be.
+
+  Every entry is also typeable — `status`, `get`, `doctor`, `approve`, `reject`, `reset`, `enable`, `disable` — and both paths run the same code, so the menu teaches the direct form instead of replacing it. Subcommands and server names autocomplete. Where no prompt can be answered, in print and JSON mode, the report and the subcommand list are printed rather than blocking on a question nobody can answer.
+
+  Typing the shell command mid-session asked the model to run bash, read the output and report back — three model turns for a question this process answers from files it has already read, and a different summary each time. Pi dispatches a registered command straight to its handler, so the model is not involved at all.
+
+  Adding and removing a server stay in the terminal: `add` carries shell quoting, `${VAR}` references and a `--` command line. Those already have one correct parser, and it is the shell; a slash command that re-implemented it would be a second, worse one. `/piagent-mcp add` prints the terminal command rather than guessing at one.
+
+  Both surfaces read the same module, so the two cannot disagree about whether a server is usable. Remedies name the form that works where they are read: the session prints `/piagent-mcp approve <name>`, the terminal prints `piagent-mcp approve <name>`.
+
+- `piagent-mcp doctor` and `piagent-doctor` say what each configured server still needs — a referenced variable that is not exported, an executable that is not on PATH, a decision that has not been made, the Docker daemon not answering. Counting configured servers, which is what the doctor did before, says nothing about whether any of them can answer. A session start names the ones that are definitely stuck; `PIAGENT_NO_MCP_NOTICE=1` switches that off.
+
+### Changed
+
+- `piagent-mcp add` refuses to write a credential into MCP config and prints the reference form to use instead. The check reads both the field name and the value, so `--env CONFIG=ghp_...` is caught as well as `--env GITHUB_TOKEN=...`, and it covers `--header` too. `--url` accepts https, or http only on loopback. `list` and `get` mask values while leaving `${VAR}` readable, because that is a variable name rather than its contents.
+
+  OAuth is not automated and no token is stored by this platform. Pi already owns that flow — `/mcp-auth <server>` — and a third credential store holding other people's credentials would be worse than either of the two that already exist.
+
+- `scripts/configure-mcp.sh` is replaced by `scripts/mcp-manage.mjs`; the pinned server catalog moved into `packages/piagent-core/mcp/`, where the capability lock pins it. The `piagent-mcp` command is unchanged. The three MCP files that decide which servers a session may call are now part of the locked runtime set.
+
+- The docs site is one page per topic instead of a single file, grouped in the sidebar as Get started, Build, MCP and Operate. MCP has four pages of its own, since it now has a command surface, an approval decision and an auth story to explain. Each page carries a table of contents and previous/next links.
+
+  Pages are generated by `scripts/build-docs-site.mjs` from a content fragment each, plus shared `docs-site/assets/docs.css` and `docs-site/assets/docs.js`. The generated HTML is committed, because the site is served as static files with no build step, and `npm run verify` fails when the committed output no longer matches its source. `npm run site:preview` serves the result the way the deployment does — the site relies on clean URLs, so an ordinary static server answers 404 for every internal link.
+
+- Public text describes this platform on its own terms rather than against named competing products. The page that compared feature tables now states what the platform takes on and what it leaves to the host, and is called Phạm vi platform rather than carrying two other products' names in the sidebar of every page. The same wording pass covers the MCP pages, `docs/mcp-and-tools.md` and a design-rationale comment in `document-intake.ts`.
+
+  Where "Codex" and "Claude" mean model families they are now labelled as such, with their provider ids, so a reader cannot mistake a model choice for a different tool. `--model-scope` and `--preset` say "model families" in their help text for the same reason.
+
+  The wording gate in `npm run verify` only read `README.md`, `docs/`, the prompts and the project template, which is why the site and the runtime strings were never checked. It now also reads `docs-site/content`, the site builder — navigation labels live there, not in a fragment — and the `mcp` and `extensions` directories that print to an operator.
+
 ## v1.1.9 - 2026-07-28
 
 ### Fixed
@@ -241,7 +283,7 @@ Breaking release. The `company` namespace is replaced by `piagent` with no alias
 
 ### Changed
 
-- Clarified public docs comparison with Codex CLI and Claude Code: Pi Company Platform brings similar governance concepts into Pi and packages them for team workflows.
+- Clarified in the public docs where this platform sits relative to a general agent coding CLI: Pi Company Platform brings similar governance concepts into Pi and packages them for team workflows.
 - Reworded security docs to describe the guard as an application-level policy enforcement layer, not a complete security boundary or OS sandbox.
 - Split install guidance so production/team setup uses pinned `v0.4.8` or resolved commit sources, while latest is reserved for personal/sandbox use.
 - Clarified that redaction benchmarks and internal review are not equivalent to an external security audit.

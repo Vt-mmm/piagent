@@ -4,15 +4,12 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Pi Agent Platform Docs</title>
-    <meta
-      name="description"
-      content="Tài liệu vận hành Pi Agent Platform: cài đặt, profile, permission, workflow, bảo mật và triển khai tài liệu tĩnh."
-    />
+    <meta name="description" content="Nền tảng dùng lại cho nhiều dự án: cài đặt, profile, quyền chạy, MCP, bảo mật và workflow trong một tài liệu." />
     <meta name="theme-color" content="#050505" />
     <link rel="canonical" href="https://piagent.io.vn/" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <meta property="og:title" content="Pi Agent Platform Docs" />
-    <meta property="og:description" content="Team docs for Pi profiles, permissions, security workflow, and command usage." />
+    <meta property="og:description" content="Nền tảng dùng lại cho nhiều dự án: cài đặt, profile, quyền chạy, MCP, bảo mật và workflow trong một tài liệu." />
     <meta property="og:url" content="https://piagent.io.vn/" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -20,1572 +17,172 @@
       href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <style>
-      :root {
-        color-scheme: dark;
-        --bg: #050505;
-        --bg-soft: #0b0b0d;
-        --panel: #101114;
-        --panel-strong: #15171b;
-        --text: #f4f4ef;
-        --muted: #a4a6ad;
-        --muted-2: #71747d;
-        --line: #24262d;
-        --line-soft: #191b20;
-        --accent: #d8ff7a;
-        --accent-2: #8be9c8;
-        --danger: #ff8f8f;
-        --warning: #ffd166;
-        --ok: #8be9c8;
-        --shadow: 0 24px 90px rgba(0, 0, 0, 0.45);
-        --radius: 22px;
-        --sidebar: 294px;
-        --content: 1260px;
-      }
-
-      * {
-        box-sizing: border-box;
-      }
-
-      html {
-        scroll-behavior: smooth;
-      }
-
-      body {
-        margin: 0;
-        min-height: 100vh;
-        background:
-          radial-gradient(circle at 18% -10%, rgba(216, 255, 122, 0.12), transparent 34rem),
-          radial-gradient(circle at 88% 8%, rgba(139, 233, 200, 0.1), transparent 30rem),
-          linear-gradient(180deg, #050505 0%, #07080a 55%, #050505 100%);
-        color: var(--text);
-        font-family: "Be Vietnam Pro", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        line-height: 1.65;
-      }
-
-      a {
-        color: inherit;
-        text-decoration: none;
-      }
-
-      a:hover {
-        color: var(--accent);
-      }
-
-      code,
-      pre {
-        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      }
-
-      .topbar {
-        position: sticky;
-        top: 0;
-        z-index: 30;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        height: 62px;
-        padding: 0 28px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-        background: rgba(5, 5, 5, 0.78);
-        backdrop-filter: blur(20px);
-      }
-
-      .brand {
-        display: inline-flex;
-        align-items: center;
-        gap: 12px;
-        min-width: 0;
-        font-weight: 700;
-        letter-spacing: -0.03em;
-      }
-
-      .brand-mark {
-        display: grid;
-        place-items: center;
-        width: 34px;
-        height: 34px;
-        border: 1px solid rgba(216, 255, 122, 0.32);
-        border-radius: 11px;
-        background:
-          linear-gradient(135deg, rgba(216, 255, 122, 0.12), transparent),
-          #0d0f12;
-        color: var(--accent);
-        font-family: "JetBrains Mono", monospace;
-        font-size: 13px;
-        overflow: hidden;
-        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
-      }
-
-      .brand-mark img {
-        display: block;
-        width: 100%;
-        height: 100%;
-      }
-
-      .brand span:last-child {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-
-      .top-actions {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-      }
-
-      .pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        min-height: 34px;
-        padding: 6px 12px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.035);
-        color: var(--muted);
-        font-size: 12px;
-        font-weight: 600;
-      }
-
-      .pill-dot {
-        width: 7px;
-        height: 7px;
-        border-radius: 999px;
-        background: var(--ok);
-        box-shadow: 0 0 18px rgba(139, 233, 200, 0.6);
-      }
-
-      .layout {
-        display: grid;
-        grid-template-columns: var(--sidebar) minmax(0, 1fr);
-        gap: 0;
-        width: 100%;
-      }
-
-      .sidebar {
-        position: sticky;
-        top: 62px;
-        align-self: start;
-        height: calc(100vh - 62px);
-        padding: 28px 22px 28px 28px;
-        overflow-y: auto;
-        border-right: 1px solid rgba(255, 255, 255, 0.08);
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0));
-      }
-
-      .sidebar-search {
-        position: relative;
-        margin-bottom: 26px;
-      }
-
-      .sidebar-search input {
-        width: 100%;
-        height: 42px;
-        padding: 0 14px 0 38px;
-        border: 1px solid var(--line);
-        border-radius: 14px;
-        outline: none;
-        background: rgba(255, 255, 255, 0.04);
-        color: var(--text);
-        font: inherit;
-        font-size: 13px;
-      }
-
-      .sidebar-search input:focus {
-        border-color: rgba(216, 255, 122, 0.5);
-        box-shadow: 0 0 0 4px rgba(216, 255, 122, 0.08);
-      }
-
-      .sidebar-search svg {
-        position: absolute;
-        left: 13px;
-        top: 50%;
-        width: 15px;
-        height: 15px;
-        color: var(--muted-2);
-        transform: translateY(-50%);
-      }
-
-      .nav-group {
-        margin: 0 0 22px;
-      }
-
-      .nav-title {
-        margin: 0 0 9px;
-        color: var(--muted-2);
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.11em;
-        text-transform: uppercase;
-      }
-
-      .nav-link {
-        display: flex;
-        align-items: center;
-        min-height: 34px;
-        padding: 7px 10px;
-        border-radius: 11px;
-        color: var(--muted);
-        font-size: 13px;
-        font-weight: 500;
-        transition: background 160ms ease, color 160ms ease, transform 160ms ease;
-      }
-
-      .nav-link:hover,
-      .nav-link.active {
-        background: rgba(255, 255, 255, 0.06);
-        color: var(--text);
-      }
-
-      .nav-link.active {
-        box-shadow: inset 2px 0 0 var(--accent);
-      }
-
-      main {
-        min-width: 0;
-        display: flex;
-        justify-content: center;
-      }
-
-      .content-shell {
-        width: min(100%, var(--content));
-        padding: 58px 56px 96px;
-      }
-
-      .hero {
-        position: relative;
-        overflow: hidden;
-        padding: 42px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 30px;
-        background:
-          linear-gradient(135deg, rgba(216, 255, 122, 0.13), transparent 38%),
-          linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018)),
-          var(--panel);
-        box-shadow: var(--shadow);
-      }
-
-      .hero::after {
-        content: "";
-        position: absolute;
-        inset: auto -18% -58% 32%;
-        height: 280px;
-        border-radius: 50%;
-        background: radial-gradient(circle, rgba(139, 233, 200, 0.16), transparent 64%);
-        pointer-events: none;
-      }
-
-      .eyebrow {
-        display: inline-flex;
-        align-items: center;
-        gap: 9px;
-        margin: 0 0 18px;
-        color: var(--accent);
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-      }
-
-      .eyebrow::before {
-        content: "";
-        width: 8px;
-        height: 8px;
-        border-radius: 999px;
-        background: var(--accent);
-        box-shadow: 0 0 24px rgba(216, 255, 122, 0.8);
-      }
-
-      h1,
-      h2,
-      h3 {
-        margin: 0;
-        line-height: 1.12;
-        letter-spacing: -0.055em;
-      }
-
-      h1 {
-        max-width: 860px;
-        font-size: clamp(42px, 8vw, 82px);
-        font-weight: 800;
-      }
-
-      h2 {
-        font-size: clamp(30px, 4vw, 48px);
-        font-weight: 800;
-      }
-
-      h3 {
-        font-size: 20px;
-        font-weight: 700;
-        letter-spacing: -0.035em;
-      }
-
-      p {
-        margin: 0;
-        color: var(--muted);
-      }
-
-      .hero p {
-        position: relative;
-        z-index: 1;
-        max-width: 760px;
-        margin-top: 20px;
-        color: #d6d7dc;
-        font-size: 17px;
-      }
-
-      .hero-actions {
-        position: relative;
-        z-index: 1;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        margin-top: 28px;
-      }
-
-      .button {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 9px;
-        min-height: 42px;
-        padding: 10px 16px;
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.055);
-        color: var(--text);
-        font-size: 13px;
-        font-weight: 700;
-        cursor: pointer;
-        transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
-      }
-
-      .button:hover,
-      .button:focus-visible {
-        border-color: rgba(216, 255, 122, 0.45);
-        background: rgba(216, 255, 122, 0.1);
-        color: var(--accent);
-      }
-
-      .button.primary {
-        border-color: transparent;
-        background: var(--accent);
-        color: #111300;
-      }
-
-      .button.primary:hover,
-      .button.primary:focus-visible {
-        background: #e5ff98;
-        color: #111300;
-      }
-
-      .button.social {
-        min-height: 34px;
-        padding: 7px 12px;
-        color: #d6d7dc;
-      }
-
-      .button.social svg {
-        width: 14px;
-        height: 14px;
-      }
-
-      .owner-strip {
-        position: relative;
-        z-index: 1;
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 10px;
-        margin-top: 18px;
-      }
-
-      .owner-label {
-        color: var(--muted-2);
-        font-size: 12px;
-        font-weight: 800;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-      }
-
-      .owner-strip a {
-        display: inline-flex;
-        align-items: center;
-        gap: 7px;
-        padding: 7px 11px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.04);
-        color: #d6d7dc;
-        font-size: 12px;
-        font-weight: 700;
-      }
-
-      .owner-strip a:hover,
-      .owner-strip a:focus-visible {
-        border-color: rgba(216, 255, 122, 0.42);
-        color: var(--accent);
-      }
-
-      .section {
-        padding-top: 86px;
-        scroll-margin-top: 86px;
-      }
-
-      .section-kicker {
-        margin-bottom: 12px;
-        color: var(--accent-2);
-        font-size: 12px;
-        font-weight: 800;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-      }
-
-      .section-lead {
-        max-width: 820px;
-        margin-top: 18px;
-        font-size: 16px;
-      }
-
-      .grid {
-        display: grid;
-        gap: 16px;
-        margin-top: 28px;
-      }
-
-      .grid.cols-2 {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
-      .grid.cols-3 {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }
-
-      .card {
-        padding: 22px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: var(--radius);
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.018));
-      }
-
-      .card strong {
-        color: var(--text);
-      }
-
-      .card p {
-        margin-top: 10px;
-        font-size: 14px;
-      }
-
-      .steps {
-        display: grid;
-        gap: 14px;
-        margin-top: 28px;
-        counter-reset: steps;
-      }
-
-      .step {
-        counter-increment: steps;
-        display: grid;
-        grid-template-columns: 44px minmax(0, 1fr);
-        gap: 16px;
-        padding: 20px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: var(--radius);
-        background: rgba(255, 255, 255, 0.028);
-      }
-
-      .step::before {
-        content: counter(steps, decimal-leading-zero);
-        display: grid;
-        place-items: center;
-        width: 42px;
-        height: 42px;
-        border-radius: 14px;
-        background: rgba(216, 255, 122, 0.12);
-        color: var(--accent);
-        font-family: "JetBrains Mono", monospace;
-        font-size: 13px;
-        font-weight: 800;
-      }
-
-      .step p {
-        margin-top: 8px;
-        font-size: 14px;
-      }
-
-      .command-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 14px;
-        margin-top: 28px;
-      }
-
-      .command-card {
-        overflow: hidden;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: var(--radius);
-        background: #08090b;
-      }
-
-      .command-card header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-        padding: 14px 16px;
-        border-bottom: 1px solid var(--line-soft);
-        background: rgba(255, 255, 255, 0.025);
-      }
-
-      .command-card header span {
-        color: var(--text);
-        font-size: 13px;
-        font-weight: 700;
-      }
-
-      .clip-btn {
-        min-width: 74px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.05);
-        color: var(--muted);
-        font: inherit;
-        font-size: 12px;
-        font-weight: 700;
-        cursor: pointer;
-        padding: 6px 10px;
-      }
-
-      .clip-btn:hover,
-      .clip-btn:focus-visible {
-        color: var(--accent);
-        border-color: rgba(216, 255, 122, 0.45);
-      }
-
-      pre {
-        margin: 0;
-        padding: 16px;
-        overflow-x: auto;
-        color: #e9e9e3;
-        font-size: 13px;
-        line-height: 1.65;
-      }
-
-      code {
-        color: #f5f5f0;
-      }
-
-      .inline-code {
-        padding: 2px 6px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 7px;
-        background: rgba(255, 255, 255, 0.05);
-        color: var(--accent-2);
-        font-family: "JetBrains Mono", monospace;
-        font-size: 0.91em;
-      }
-
-      .table-wrap {
-        margin-top: 28px;
-        overflow: hidden;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: var(--radius);
-      }
-
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        background: rgba(255, 255, 255, 0.02);
-      }
-
-      th,
-      td {
-        padding: 16px;
-        border-bottom: 1px solid var(--line-soft);
-        text-align: left;
-        vertical-align: top;
-        font-size: 14px;
-      }
-
-      th {
-        color: var(--text);
-        font-size: 12px;
-        letter-spacing: 0.09em;
-        text-transform: uppercase;
-      }
-
-      td {
-        color: var(--muted);
-      }
-
-      tr:last-child td {
-        border-bottom: 0;
-      }
-
-      .tag-list {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-top: 16px;
-      }
-
-      .tag {
-        padding: 6px 10px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 999px;
-        color: var(--muted);
-        font-family: "JetBrains Mono", monospace;
-        font-size: 12px;
-      }
-
-      .callout {
-        margin-top: 28px;
-        padding: 20px;
-        border: 1px solid rgba(255, 209, 102, 0.26);
-        border-radius: var(--radius);
-        background: rgba(255, 209, 102, 0.07);
-      }
-
-      .callout strong {
-        color: var(--warning);
-      }
-
-      .callout p {
-        margin-top: 8px;
-      }
-
-      .callout ul {
-        margin: 12px 0 0;
-        padding-left: 20px;
-        color: var(--muted);
-      }
-
-      .ok-callout {
-        border-color: rgba(139, 233, 200, 0.22);
-        background: rgba(139, 233, 200, 0.065);
-      }
-
-      .ok-callout strong {
-        color: var(--ok);
-      }
-
-      .split {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 16px;
-        margin-top: 28px;
-      }
-
-      .footer {
-        margin-top: 90px;
-        padding-top: 28px;
-        border-top: 1px solid rgba(255, 255, 255, 0.1);
-        color: var(--muted-2);
-        font-size: 13px;
-      }
-
-      .footer-links {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        margin-top: 14px;
-      }
-
-      .footer-links a {
-        color: var(--muted);
-        font-weight: 700;
-      }
-
-      .footer-links a:hover,
-      .footer-links a:focus-visible {
-        color: var(--accent);
-      }
-
-      .mobile-menu {
-        display: none;
-      }
-
-      @media (max-width: 1020px) {
-        .layout {
-          grid-template-columns: 1fr;
-        }
-
-        .sidebar {
-          position: fixed;
-          inset: 62px 0 auto;
-          z-index: 25;
-          display: none;
-          height: calc(100vh - 62px);
-          padding: 22px;
-          background: rgba(5, 5, 5, 0.96);
-        }
-
-        .sidebar.open {
-          display: block;
-        }
-
-        .mobile-menu {
-          display: inline-flex;
-        }
-
-        .content-shell {
-          width: min(100%, 980px);
-          padding: 38px 22px 76px;
-        }
-
-        .hero {
-          padding: 30px;
-        }
-      }
-
-      @media (max-width: 760px) {
-        .topbar {
-          padding: 0 16px;
-        }
-
-        .top-actions .pill {
-          display: none;
-        }
-
-        .button.social {
-          display: none;
-        }
-
-        .grid.cols-2,
-        .grid.cols-3,
-        .command-grid,
-        .split {
-          grid-template-columns: 1fr;
-        }
-
-        th,
-        td {
-          display: block;
-          width: 100%;
-        }
-
-        th {
-          border-bottom: 0;
-          padding-bottom: 4px;
-        }
-
-        td {
-          padding-top: 4px;
-        }
-      }
-
-      @media (prefers-reduced-motion: reduce) {
-        html {
-          scroll-behavior: auto;
-        }
-
-        *,
-        *::before,
-        *::after {
-          transition: none !important;
-        }
-      }
-    </style>
+    <link rel="stylesheet" href="/assets/docs.css" />
+    <script src="/assets/docs.js" defer></script>
   </head>
   <body>
     <header class="topbar">
-      <a class="brand" href="#overview" aria-label="Pi Agent Platform">
+      <a class="brand" href="/" aria-label="Pi Agent Platform">
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" /></span>
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.1.9 docs</span>
+        <span class="pill"><span class="pill-dot"></span>v1.2.0 docs</span>
         <a class="button social" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer" aria-label="Mở GitHub repository">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
           GitHub
         </a>
-        <a class="button social" href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer" aria-label="Mở Facebook">
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-          Facebook
-        </a>
         <button class="button mobile-menu" type="button" data-menu>Lộ trình</button>
-        <a class="button" href="#commands">Commands</a>
+        <a class="button" href="/commands">Commands</a>
       </div>
     </header>
 
-    <div class="layout">
+    <div class="layout with-toc">
       <aside class="sidebar" data-sidebar>
-        <div class="sidebar-search" aria-label="Tìm trong trang">
+        <div class="sidebar-search" aria-label="Tìm trong tài liệu">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M10.8 18.1a7.3 7.3 0 1 1 0-14.6 7.3 7.3 0 0 1 0 14.6Zm5.3-1.7 4.4 4.4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
           </svg>
-          <input type="search" placeholder="Tìm section hoặc command" data-filter />
+          <input type="search" placeholder="Tìm trang" data-filter />
         </div>
 
         <nav aria-label="Tài liệu">
           <div class="nav-group">
-            <p class="nav-title">Start</p>
-            <a class="nav-link" href="#overview">Overview</a>
-            <a class="nav-link" href="#positioning">Pi vs Codex vs Claude</a>
-            <a class="nav-link" href="#quickstart">Step by step</a>
+            <p class="nav-title">Get started</p>
+            <a class="nav-link current" href="/" aria-current="page">Overview</a>
+            <a class="nav-link" href="/quickstart">Quickstart</a>
+            <a class="nav-link" href="/scope">Phạm vi platform</a>
           </div>
           <div class="nav-group">
-            <p class="nav-title">Core</p>
-            <a class="nav-link" href="#architecture">Architecture</a>
-            <a class="nav-link" href="#security">Security model</a>
-            <a class="nav-link" href="#profiles">Profiles</a>
-            <a class="nav-link" href="#permissions">Permission modes</a>
+            <p class="nav-title">Build</p>
+            <a class="nav-link" href="/profiles">Project profile</a>
+            <a class="nav-link" href="/permissions">Permission modes</a>
+            <a class="nav-link" href="/commands">Command catalog</a>
+            <a class="nav-link" href="/workflows">Workflows</a>
           </div>
           <div class="nav-group">
-            <p class="nav-title">Commands</p>
-            <a class="nav-link" href="#commands">Command catalog</a>
-            <a class="nav-link" href="#workflow">Workflows</a>
-            <a class="nav-link" href="#runtime">Runtime tools</a>
-            <a class="nav-link" href="#team">Team usage</a>
+            <p class="nav-title">MCP</p>
+            <a class="nav-link" href="/mcp">MCP overview</a>
+            <a class="nav-link" href="/mcp-servers">Quản lý server</a>
+            <a class="nav-link" href="/mcp-auth">Auth và readiness</a>
+            <a class="nav-link" href="/mcp-approval">Approval gate</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Operate</p>
+            <a class="nav-link" href="/security">Security model</a>
+            <a class="nav-link" href="/architecture">Architecture</a>
+            <a class="nav-link" href="/runtime">Runtime tools</a>
+            <a class="nav-link" href="/team">Team usage</a>
           </div>
         </nav>
       </aside>
 
       <main>
-        <div class="content-shell">
-          <section class="hero" id="overview">
-            <p class="eyebrow">Team operating docs</p>
-            <h1>Pi runtime được đóng gói như một nền tảng dùng lại cho nhiều dự án.</h1>
-            <p>
-              Tài liệu này gom phần cài đặt, profile, quyền chạy, bảo mật và workflow vào một nơi duy nhất. Mục tiêu là thành viên mới chỉ cần mở trang này, chọn đúng command, chạy đúng chế độ và biết ranh giới an toàn.
-            </p>
-            <div class="owner-strip" aria-label="Thông tin dự án">
-              <span class="owner-label">Project links</span>
-              <a href="https://piagent.io.vn" target="_blank" rel="noopener noreferrer">Docs · piagent.io.vn</a>
-              <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub · Vt-mmm/piagent</a>
-              <a href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer">Facebook · Vĩnh Tâm</a>
-            </div>
-            <div class="hero-actions">
-              <a class="button primary" href="#quickstart">Bắt đầu</a>
-              <a class="button" href="#commands">Xem command</a>
-              <a class="button" href="#security">Kiểm tra bảo mật</a>
-            </div>
-          </section>
+        <div class="content-shell" data-article>
+<section class="hero">
+  <p class="eyebrow">Team operating docs</p>
+  <h1>Pi runtime được đóng gói như một nền tảng dùng lại cho nhiều dự án.</h1>
+  <p>
+    Tài liệu này gom phần cài đặt, profile, quyền chạy, MCP, bảo mật và workflow vào một nơi duy nhất. Mục tiêu là thành viên mới chỉ cần mở trang này, chọn đúng command, chạy đúng chế độ và biết ranh giới an toàn.
+  </p>
+  <div class="owner-strip" aria-label="Thông tin dự án">
+    <span class="owner-label">Project links</span>
+    <a href="https://piagent.io.vn" target="_blank" rel="noopener noreferrer">Docs · piagent.io.vn</a>
+    <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub · Vt-mmm/piagent</a>
+    <a href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer">Facebook · Vĩnh Tâm</a>
+  </div>
+  <div class="hero-actions">
+    <a class="button primary" href="/quickstart">Bắt đầu</a>
+    <a class="button" href="/commands">Xem command</a>
+    <a class="button" href="/mcp">MCP</a>
+  </div>
+</section>
 
-          <section class="section" id="positioning">
-            <p class="section-kicker">Positioning</p>
-            <h2>Khác gì Codex CLI và Claude Code?</h2>
-            <p class="section-lead">
-              Codex CLI và Claude Code là agent coding tổng quát và đều có cơ chế governance native như permission, approval, sandbox/trust, hooks, subagents, MCP hoặc managed settings tuỳ bề mặt sử dụng. Pi Agent Platform đưa các cơ chế governance tương tự vào Pi, rồi đóng gói thành workflow đội nhóm: profile, policy guard, capability lock, MCP, subagents, memory và verify gate dùng lại được trên nhiều repo.
-            </p>
-
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Hạng mục</th>
-                    <th>Codex CLI</th>
-                    <th>Claude Code</th>
-                    <th>Pi Agent Platform</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>Vai trò chính</td>
-                    <td>Coding agent chạy trong terminal, làm việc trực tiếp trên local repo.</td>
-                    <td>Agent coding đa bề mặt: terminal, IDE, desktop, web và tích hợp dev tools.</td>
-                    <td>Governance layer cho Pi: chuẩn hoá cách team dùng agent theo policy, profile và workflow vận hành.</td>
-                  </tr>
-                  <tr>
-                    <td>Tuỳ biến team</td>
-                    <td>Dùng AGENTS.md, config, skills, plugins, MCP và command native.</td>
-                    <td>Dùng CLAUDE.md, settings, permissions, hooks, skills và MCP.</td>
-                    <td>Dùng adapter profile, base policy, command guard, capability pack, docs và scripts.</td>
-                  </tr>
-                  <tr>
-                    <td>Quyền chạy</td>
-                    <td>Có sandbox, approval policy, permission profiles, network controls và workflow read-only/workspace-write tuỳ môi trường.</td>
-                    <td>Có permissions, working-directory boundary, sandboxed bash option, hooks và managed settings cho team.</td>
-                    <td>Có <span class="inline-code">read-only</span>, <span class="inline-code">workspace-write</span>, <span class="inline-code">trusted-full-access</span> ở lớp policy extension của Pi.</td>
-                  </tr>
-                  <tr>
-                    <td>Bảo mật secret</td>
-                    <td>Dựa trên OS-enforced sandbox, approval, network policy và bề mặt Codex đang dùng.</td>
-                    <td>Dựa trên permission architecture, sandbox option, trust verification, allowlist và security best practices.</td>
-                    <td>Application-level policy layer cho controlled tools: protected paths, shell checks, symlink alias, output redaction và integrity lock.</td>
-                  </tr>
-                  <tr>
-                    <td>Điểm mạnh riêng</td>
-                    <td>Trải nghiệm terminal gọn, tích hợp Git và local tooling.</td>
-                    <td>Hệ sinh thái command, hooks, memory, multi-surface mạnh.</td>
-                    <td>Tạo chuẩn nội bộ: mọi repo dùng cùng profile, cùng guard, cùng verify discipline.</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <section class="section" id="quickstart">
-            <p class="section-kicker">Quickstart</p>
-            <h2>Step by step cho thành viên mới</h2>
-            <p class="section-lead">
-              Hai lệnh để cài, rồi mở repo, chọn profile, bật quyền phù hợp, chạy task, và verify bằng command thật. Gỡ cũng chỉ hai lệnh khi không dùng nữa.
-            </p>
-
-            <div class="steps">
-              <article class="step">
-                <div>
-                  <h3>Cài — hai lệnh</h3>
-                  <p>Cần Node.js 22.19.0 trở lên. Không cần cài Pi Coding Agent trước: <span class="inline-code">piagent-setup</span> tự cài đúng bản <span class="inline-code">0.82.0</span> mà release <span class="inline-code">v1.1.9</span> đang pin. Chạy nó ngay trong thư mục project — nó cài Pi package, khởi tạo <span class="inline-code">.pi/</span>, cài MCP baseline cùng subagents, rồi chạy doctor. Thêm <span class="inline-code">--no-mcp</span>, <span class="inline-code">--no-subagents</span>, <span class="inline-code">--no-herdr</span> hoặc <span class="inline-code">--global-only</span> để bỏ bớt.</p>
-                  <div class="table-wrap compact-table">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Runtime</th>
-                          <th>Trạng thái rollout</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr>
-                          <td>macOS Apple Silicon + Bash</td>
-                          <td>Đã verify cho release này.</td>
-                        </tr>
-                        <tr>
-                          <td>Linux x64 + Bash</td>
-                          <td>Đã verify trong CI.</td>
-                        </tr>
-                        <tr>
-                          <td>macOS Intel / Linux ARM64 + Bash</td>
-                          <td>Supported target; chạy doctor + smoke test trước khi rollout rộng.</td>
-                        </tr>
-                        <tr>
-                          <td>Native Windows / WSL2</td>
-                          <td>Chưa là target rollout team; WSL2 chỉ experimental.</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                  <div class="command-card">
-                    <header><span>Hai lệnh</span><button class="clip-btn" data-clip="npm install -g @piagent/platform&#10;piagent-setup">Lấy lệnh</button></header>
-                    <pre><code>npm install -g @piagent/platform
+<section class="section">
+  <h2 id="cai-dat">Cài trong hai lệnh</h2>
+  <p>Node.js <span class="inline-code">&gt;=22.19.0</span>. Chạy từ đúng project muốn set up.</p>
+  <pre><code>npm install -g @piagent/platform
 piagent-setup</code></pre>
-                  </div>
-                  <p>Vì chạy từ package đã cài, source ghi vào <span class="inline-code">.pi/settings.json</span> là <span class="inline-code">npm:@piagent/platform@&lt;version&gt;</span> — giá trị này có nghĩa như nhau trên máy đồng đội, nên commit được cho cả team.</p>
-                  <p>Dùng <a href="https://herdr.dev/docs/install/">Herdr</a> thì cài Herdr <strong>trước</strong>: <span class="inline-code">piagent-setup</span> tự cài luôn Herdr Pi integration khi thấy <span class="inline-code">herdr</span> trên <span class="inline-code">PATH</span>, còn không thì bỏ qua kèm cảnh báo — cài Herdr sau phải chạy lại <span class="inline-code">piagent-setup --global-only</span>.</p>
-                  <div class="command-card">
-                    <header><span>Herdr (tuỳ chọn, cài trước)</span><button class="clip-btn" data-clip="brew install herdr">Lấy lệnh</button></header>
-                    <pre><code>brew install herdr                            # macOS
-curl -fsSL https://herdr.dev/install.sh | sh  # macOS hoặc Linux</code></pre>
-                  </div>
-                  <p>Bản <span class="inline-code">curl</span> chạy script tải về lúc cài; muốn kiểm tra được thì dùng <span class="inline-code">brew</span> hoặc tải từ <a href="https://github.com/ogulcancelik/herdr/releases">GitHub releases</a>. Herdr stable hỗ trợ macOS và Linux, Windows mới ở mức preview.</p>
-                  <p>Rollout pin từng bước, update, rollback, và channel latest cho máy cá nhân nằm trong <a href="https://github.com/Vt-mmm/piagent/blob/main/docs/release-install-policy.md">release &amp; install policy</a>.</p>
-                </div>
-              </article>
+  <p><span class="inline-code">piagent-setup</span> cài đúng Pi Coding Agent host mà release này pin, cài Pi package, khởi tạo thư mục hiện tại, rồi chạy doctor. Nó cũng cài MCP baseline và subagents — bỏ qua bằng <span class="inline-code">--no-mcp</span>, <span class="inline-code">--no-subagents</span> hoặc <span class="inline-code">--global-only</span>. Chi tiết ở <a href="/quickstart">Quickstart</a>.</p>
+</section>
 
-              <article class="step">
-                <div>
-                  <h3>Mở repo dự án</h3>
-                  <p>Chạy Pi từ thư mục repo. Với repo đã tin cậy, dùng wrapper trusted-run khi cần tự động hoá có kiểm soát.</p>
-                  <div class="command-card">
-                    <header><span>Start</span><button class="clip-btn" data-clip="cd /path/to/project && pi">Lấy lệnh</button></header>
-                    <pre><code>cd /path/to/project
-pi</code></pre>
-                  </div>
-                  <p>Cần nhiều agent chạy song song thì gõ <span class="inline-code">herdr</span> thay cho <span class="inline-code">pi</span>, mỗi pane một vai: implement, review read-only, verify, notes. Herdr chỉ điều phối terminal và session — nó không phải security boundary, gate vẫn nằm ở Pi extension và OAuth vẫn login trong Pi. Cách dựng pane: <a href="https://github.com/Vt-mmm/piagent/blob/main/docs/herdr-workflow.md">Herdr workflow</a>.</p>
-                </div>
-              </article>
+<section class="section">
+  <h2 id="bat-dau-tu-dau">Bắt đầu từ đâu</h2>
+  <div class="card-grid">
+    <a class="doc-card" href="/quickstart">
+      <span class="card-kicker">Get started</span>
+      <h3>Quickstart</h3>
+      <p>Cài, mở repo, onboard context, chọn profile và permission, chạy task đầu tiên, verify trước khi handoff.</p>
+    </a>
+    <a class="doc-card" href="/scope">
+      <span class="card-kicker">Get started</span>
+      <h3>Phạm vi platform</h3>
+      <p>Vì sao repo này tồn tại khi đã có agent coding tổng quát, và ranh giới nó nhận về mình.</p>
+    </a>
+    <a class="doc-card" href="/profiles">
+      <span class="card-kicker">Build</span>
+      <h3>Project profile</h3>
+      <p>Chọn đường ray cho repo: protected path, verify command, capability được cấp.</p>
+    </a>
+    <a class="doc-card" href="/mcp">
+      <span class="card-kicker">MCP</span>
+      <h3>MCP</h3>
+      <p>Bốn layer config, preset đã pin, quản lý server, trạng thái auth, và approval gate cho server đến từ repo.</p>
+    </a>
+    <a class="doc-card" href="/security">
+      <span class="card-kicker">Operate</span>
+      <h3>Security model</h3>
+      <p>Policy enforcement layer chứ không phải OS sandbox — nói rõ chặn được gì và không chặn được gì.</p>
+    </a>
+    <a class="doc-card" href="/commands">
+      <span class="card-kicker">Build</span>
+      <h3>Command catalog</h3>
+      <p>Slash command và terminal command, nhóm theo việc cần làm.</p>
+    </a>
+  </div>
+</section>
 
-              <article class="step">
-                <div>
-                  <h3>Onboard context</h3>
-                  <p>Chạy một lần ở repo mới để ghi context, verify matrix và protected areas vào <span class="inline-code">.pi/</span>.</p>
-                  <div class="command-card">
-                    <header><span>Onboard</span><button class="clip-btn" data-clip="/onboard-project">Lấy lệnh</button></header>
-                    <pre><code>/onboard-project</code></pre>
-                  </div>
-                </div>
-              </article>
+<section class="section">
+  <h2 id="ba-nhom">Tài liệu chia làm ba nhóm</h2>
+  <div class="split">
+    <div class="card">
+      <h3 id="get-started-nhom">Get started</h3>
+      <p>Dành cho người chưa chạy lần nào: cài, quickstart, và vị trí của platform so với các agent CLI khác.</p>
+    </div>
+    <div class="card">
+      <h3 id="build-nhom">Build</h3>
+      <p>Dùng hằng ngày: profile, permission, command, workflow — và MCP tách riêng vì có bề mặt lệnh của nó.</p>
+    </div>
+    <div class="card">
+      <h3 id="operate-nhom">Operate</h3>
+      <p>Người vận hành và review: security model, kiến trúc repo, terminal tool, cách team dùng như một chuẩn.</p>
+    </div>
+  </div>
+</section>
+            <nav class="pager" aria-label="Trang kế tiếp">
+              <a class="pager-next" href="/quickstart">
+                <span class="pager-label">Tiếp</span>
+                <span class="pager-title">Quickstart</span>
+              </a>
+            </nav>
 
-              <article class="step">
-                <div>
-                  <h3>Chọn profile + tech</h3>
-                  <p>Dùng <span class="inline-code">/profile setup</span> để mở select option: chọn profile trước, rồi chọn tech theo role. Fullstack sẽ chọn frontend, backend và database.</p>
-                  <div class="command-card">
-                    <header><span>Profile tech setup</span><button class="clip-btn" data-clip="/profile setup&#10;/profile tech setup fullstack">Lấy lệnh</button></header>
-                    <pre><code>/profile setup
-/profile tech setup fullstack</code></pre>
-                  </div>
-                </div>
-              </article>
-
-              <article class="step">
-                <div>
-                  <h3>Chọn permission</h3>
-                  <p>Scout thì read-only, code bình thường thì workspace-write, automation tin cậy thì full-access có guard.</p>
-                  <div class="command-card">
-                    <header><span>Permission</span><button class="clip-btn" data-clip="/workspace-write">Lấy lệnh</button></header>
-                    <pre><code>/permission-status
-/workspace-write</code></pre>
-                  </div>
-                </div>
-              </article>
-
-              <article class="step">
-                <div>
-                  <h3>Chạy workflow</h3>
-                  <p>Dùng command đúng mục tiêu để agent không phải diễn giải quá dài. Task nào nặng context thì dùng fresh session.</p>
-                  <div class="command-card">
-                    <header><span>Workflow</span><button class="clip-btn" data-clip="/task Implement the requested bounded change.">Lấy lệnh</button></header>
-                    <pre><code>/task Implement the requested bounded change.
-/review
-/fresh-task Implement the requested bounded change.</code></pre>
-                  </div>
-                </div>
-              </article>
-
-              <article class="step">
-                <div>
-                  <h3>Verify trước khi handoff</h3>
-                  <p>Final gate chỉ tin kết quả command đã chạy thật, exit 0, và khớp verify plan. Sau khi pin hoặc nâng version, chạy doctor trên project:</p>
-                  <div class="command-card">
-                    <header><span>Doctor</span><button class="clip-btn" data-clip="piagent-doctor">Lấy lệnh</button></header>
-                    <pre><code>piagent-doctor</code></pre>
-                  </div>
-                  <p>Người phát triển chính platform còn có <span class="inline-code">npm run verify</span> trong source repo; chi tiết ở <a href="https://github.com/Vt-mmm/piagent/blob/main/CONTRIBUTING.md">CONTRIBUTING</a>.</p>
-                </div>
-              </article>
-
-              <article class="step">
-                <div>
-                  <h3>Gỡ cài đặt khi không dùng nữa</h3>
-                  <p><span class="inline-code">piagent-uninstall</span> mặc định chỉ in ra sẽ gỡ những gì rồi thoát; phải thêm <span class="inline-code">--apply</span> nó mới thực hiện, vì nó sửa Pi settings mà công cụ khác cũng ghi vào. Mặc định chỉ gỡ Pi package của platform; add-on, Pi host và state trong project đều là opt-in.</p>
-                  <div class="command-card">
-                    <header><span>Gỡ — hai lệnh</span><button class="clip-btn" data-clip="piagent-uninstall&#10;piagent-uninstall --apply">Lấy lệnh</button></header>
-                    <pre><code>piagent-uninstall
-piagent-uninstall --apply</code></pre>
-                  </div>
-                  <p>Add-on, Pi host, state trong project và helper npm-global đều tách riêng và là opt-in — <span class="inline-code">piagent-uninstall --help</span> liệt kê đủ. Nó gỡ theo những gì đang đăng ký trong Pi settings chứ không theo những gì bản hiện tại cài, nên package do release cũ đăng ký vẫn ra được.</p>
-                  <div class="callout ok-callout">
-                    <strong>Không bao giờ bị xoá</strong>
-                    <p>Credential, trust, session, todo và <span class="inline-code">.pi/memory/</span> được giữ nguyên ở mọi tổ hợp cờ — đó là dữ liệu của người dùng, không phải state của platform. Các file sinh từ template rồi sửa tiếp như <span class="inline-code">AGENTS.md</span>, <span class="inline-code">.pi/settings.json</span>, <span class="inline-code">project-context.md</span> chỉ được liệt kê để tự quyết. Với <span class="inline-code">.pi/settings.json</span>, chỉ đúng entry trỏ tới platform bị bỏ khỏi <span class="inline-code">packages</span>.</p>
-                  </div>
-                </div>
-              </article>
-
-            </div>
-          </section>
-
-          <section class="section" id="architecture">
-            <p class="section-kicker">Architecture</p>
-            <h2>Kiến trúc repo</h2>
-            <p class="section-lead">
-              Repo này không nhét business logic vào core. Core chỉ giữ policy, prompts, guard, skills, subagents và scripts đủ chung để áp cho nhiều dự án.
-            </p>
-
-            <div class="grid cols-3">
-              <article class="card">
-                <h3>Core package</h3>
-                <p><span class="inline-code">packages/piagent-core</span> chứa extension guard, prompts, skills và subagent roles.</p>
-              </article>
-              <article class="card">
-                <h3>Adapters</h3>
-                <p><span class="inline-code">adapters/</span> chứa profile dùng lại: frontend, backend, fullstack, data, devops, docs.</p>
-              </article>
-              <article class="card">
-                <h3>Capability packs</h3>
-                <p><span class="inline-code">packs/</span> gom policy, lifecycle, recipes và eval scenarios theo manifest có lock.</p>
-              </article>
-              <article class="card">
-                <h3>Policies</h3>
-                <p>Base policy định nghĩa protected paths, command rules, permission modes và human-action gates.</p>
-              </article>
-              <article class="card">
-                <h3>Scripts</h3>
-                <p>Setup, doctor, model scope, MCP, subagents, benchmark và trusted-run wrapper đều có CLI riêng.</p>
-              </article>
-              <article class="card">
-                <h3>Docs</h3>
-                <p><span class="inline-code">docs/</span> giữ manual dài. <span class="inline-code">docs-site/</span> là trang HTML gọn cho team.</p>
-              </article>
-            </div>
-          </section>
-
-          <section class="section" id="security">
-            <p class="section-kicker">Security model</p>
-            <h2>Policy enforcement layer, không phải OS sandbox</h2>
-            <p class="section-lead">
-              Platform ưu tiên fail-closed trong bề mặt tool được kiểm soát: khi lock sai, profile sai hoặc command đụng vùng nhạy cảm, guard cố gắng chặn trước khi tool chạy. Đây là application-level policy enforcement layer, không phải lớp cách ly hoàn chỉnh; với code hoặc prompt không tin cậy vẫn cần container/VM và giới hạn credential, filesystem, process, network.
-            </p>
-
-            <div class="grid cols-2">
-              <article class="card">
-                <h3>Protected paths</h3>
-                <p>Chặn đọc/ghi qua controlled tools đối với file như <span class="inline-code">.env</span>, <span class="inline-code">auth.json</span>, local trust files, profile lock và settings nhạy cảm.</p>
-              </article>
-              <article class="card">
-                <h3>Shell hardening</h3>
-                <p>Guard dựa vào shell parser và rule cho command được kiểm soát để bắt glob, brace, redirection, bare-word symlink và xargs composition trước khi shell mở rộng runtime.</p>
-              </article>
-              <article class="card">
-                <h3>Secret redaction</h3>
-                <p>Tool output text đi qua redactor để che token, provider keys, secret keyword patterns và giá trị nhạy cảm phổ biến. Benchmark hiện là synthetic/internal và model vẫn đang hoàn thiện.</p>
-              </article>
-              <article class="card">
-                <h3>Capability lock</h3>
-                <p>Pack lock có digest và tamper detection. Lock hỏng thì fail-closed, không tự nới quyền.</p>
-              </article>
-              <article class="card">
-                <h3>Human-action gate</h3>
-                <p>Destructive hoặc external-provider action vẫn cần operator xác nhận rõ, kể cả khi full-access đang bật. Gate áp dụng cho direct tool, MCP proxy đã decode và các shell form như GitHub CLI write hoặc HTTP non-GET.</p>
-              </article>
-              <article class="card">
-                <h3>Verify evidence</h3>
-                <p>Handoff hoàn tất cần bằng chứng verify từ bash result đã quan sát, không nhận câu trả lời “đã test” suông.</p>
-              </article>
-            </div>
-
-            <div class="callout">
-              <strong>Ranh giới quan trọng</strong>
-              <p>Guard phụ thuộc vào tool path, controlled tools và shell parser mà platform quan sát được. Nó không ngăn một process khác chạy cùng quyền OS đọc/ghi ngoài guard, và không thay thế sandbox của hệ điều hành.</p>
-              <ul>
-                <li>Có thể bị ảnh hưởng bởi symlink, encoding, nested payload, shell expansion hoặc tool mới chưa được policy hoá.</li>
-                <li>Redaction là backstop giảm rò rỉ, không phải giấy phép để đưa secret thật vào prompt/output.</li>
-                <li>Workload không tin cậy cần container/VM với giới hạn filesystem, process, network và credential.</li>
-              </ul>
-            </div>
-
-            <div class="callout">
-              <strong>Redaction cần kiểm toán độc lập</strong>
-              <p>Các benchmark hiện tại là kiểm thử synthetic/internal cho regression và release gate, chưa tương đương external security audit. Dự án công khai <a href="https://github.com/Vt-mmm/piagent/blob/main/docs/security-threat-model.md" target="_blank" rel="noopener noreferrer">threat model và attack-vector map</a>; phạm vi OS/shell rộng hơn, parser fuzzing, third-party audit và LTS vẫn là các mức bảo đảm cao hơn chưa được claim. Signed provenance thì đã có: mỗi bản publish lên npm mang attestation ký qua sigstore từ GitHub Actions, buộc tarball về đúng commit và workflow tạo ra nó.</p>
-            </div>
-
-            <div class="callout">
-              <strong>Dependency gate tách hai lớp</strong>
-              <p>Release kiểm toán riêng dependency tree nhỏ của terminal helper và cây exact Pi host + pinned add-on. Helper tree hiện sạch hoàn toàn. Cây Pi host có 1 high và 11 moderate, và dự án nói thẳng con số đó thay vì gọi runtime là “0 vulnerability”.</p>
-              <p>Bản high là <span class="inline-code">GHSA-mh99-v99m-4gvg</span> trong <span class="inline-code">brace-expansion</span> — DoS, không leo quyền, không lộ dữ liệu. Repo này không sửa được: Pi host publish kèm <span class="inline-code">npm-shrinkwrap.json</span> ghim version dính lỗi, mà shrinkwrap đã publish thì thắng <span class="inline-code">overrides</span> của consumer. Mọi bản Pi đã phát hành đều dính một advisory brace-expansion, nên pin bản cũ chỉ đổi lỗi này lấy lỗi khác. Vì vậy gate miễn trừ đúng một advisory có tên, kèm lý do ghi trong mã nguồn, và tự đỏ lại khi hết hạn rà soát <span class="inline-code">2026-08-25</span> hoặc ngay khi upstream vá xong. Mọi high/critical khác vẫn chặn.</p>
-              <p>11 moderate còn lại thuộc hai advisory upstream: encoded-backslash path traversal trên Windows trong Hono adapter, và protobuf parser DoS. Native Windows/WSL2 chưa nằm trong matrix rollout team, nhưng dự án vẫn theo dõi cả hai.</p>
-            </div>
-          </section>
-
-          <section class="section" id="profiles">
-            <p class="section-kicker">Profiles</p>
-            <h2>Project profile: chọn đúng đường ray cho repo</h2>
-            <p class="section-lead">
-              Profile ghi vào <span class="inline-code">.pi/piagent-profile.json</span> và lock tương ứng. Command profile hiện chạy trực tiếp, ưu tiên UI select cho profile/tech stack, không kích thêm câu trả lời dài từ model.
-            </p>
-
-            <div class="command-grid">
-              <article class="command-card">
-                <header><span>Xem status ngắn</span><button class="clip-btn" data-clip="/profile">Lấy lệnh</button></header>
-                <pre><code>/profile</code></pre>
-              </article>
-              <article class="command-card">
-                <header><span>Liệt kê options</span><button class="clip-btn" data-clip="/profile list">Lấy lệnh</button></header>
-                <pre><code>/profile list</code></pre>
-              </article>
-              <article class="command-card">
-                <header><span>Áp profile detect</span><button class="clip-btn" data-clip="/profile auto">Lấy lệnh</button></header>
-                <pre><code>/profile auto</code></pre>
-              </article>
-              <article class="command-card">
-                <header><span>Setup bằng select</span><button class="clip-btn" data-clip="/profile setup&#10;/profile tech setup fullstack">Lấy lệnh</button></header>
-                <pre><code>/profile setup
-/profile tech setup fullstack</code></pre>
-              </article>
-              <article class="command-card">
-                <header><span>Apply tech deterministic</span><button class="clip-btn" data-clip="/profile tech apply fullstack frontend=nextjs backend=nestjs database=prisma">Lấy lệnh</button></header>
-                <pre><code>/profile tech apply fullstack frontend=nextjs backend=nestjs database=prisma</code></pre>
-              </article>
-              <article class="command-card">
-                <header><span>Frontend</span><button class="clip-btn" data-clip="/profile web-frontend">Lấy lệnh</button></header>
-                <pre><code>/profile web-frontend
-/profile fe</code></pre>
-              </article>
-              <article class="command-card">
-                <header><span>Backend/API</span><button class="clip-btn" data-clip="/profile backend-api">Lấy lệnh</button></header>
-                <pre><code>/profile backend-api</code></pre>
-              </article>
-              <article class="command-card">
-                <header><span>Backend read-only, frontend write</span><button class="clip-btn" data-clip="/profile be-readonly-fe">Lấy lệnh</button></header>
-                <pre><code>/profile be-readonly-fe
-/profile be-fe</code></pre>
-              </article>
-              <article class="command-card">
-                <header><span>Fullstack</span><button class="clip-btn" data-clip="/profile fullstack">Lấy lệnh</button></header>
-                <pre><code>/profile fullstack
-/profile full</code></pre>
-              </article>
-              <article class="command-card">
-                <header><span>Docs-only</span><button class="clip-btn" data-clip="/profile docs">Lấy lệnh</button></header>
-                <pre><code>/profile docs</code></pre>
-              </article>
-            </div>
-
-            <div class="tag-list">
-              <span class="tag">generic</span>
-              <span class="tag">node-typescript</span>
-              <span class="tag">python</span>
-              <span class="tag">web-frontend</span>
-              <span class="tag">backend-api</span>
-              <span class="tag">fullstack</span>
-              <span class="tag">be-readonly-fe</span>
-              <span class="tag">data</span>
-              <span class="tag">devops</span>
-              <span class="tag">mobile</span>
-              <span class="tag">docs</span>
-            </div>
-
-            <div class="callout">
-              <strong>Tech stack theo role</strong>
-              <p>Frontend profile chọn FE + database optional; backend profile chọn BE + database optional; fullstack chọn đủ FE, BE và database. Sau đó platform tạo <span class="inline-code">.pi/tech-stack.json</span> và snapshot Context7 ngắn trong <span class="inline-code">.pi/tech-context/*</span>.</p>
-            </div>
-          </section>
-
-          <section class="section" id="permissions">
-            <p class="section-kicker">Permissions</p>
-            <h2>Một command để đổi quyền theo task</h2>
-            <p class="section-lead">
-              Permission mode là session-local override. Đổi mode không sửa project profile. Nếu truyền thêm nội dung sau command, Pi đổi quyền rồi gửi phần còn lại thành task kế tiếp.
-            </p>
-
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Mode</th>
-                    <th>Dùng khi nào</th>
-                    <th>Ranh giới</th>
-                    <th>Command</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td><span class="inline-code">read-only</span></td>
-                    <td>Scout, audit, mapping, review không chỉnh source.</td>
-                    <td>Cho read, grep, find, ls và piagent tools; chặn shell/write/unknown tools.</td>
-                    <td><span class="inline-code">/read-only</span></td>
-                  </tr>
-                  <tr>
-                    <td><span class="inline-code">workspace-write</span></td>
-                    <td>Implementation bình thường trong repo.</td>
-                    <td>Default guarded mode; giữ protected path, shell policy, capability và verify gate.</td>
-                    <td><span class="inline-code">/workspace-write</span></td>
-                  </tr>
-                  <tr>
-                    <td><span class="inline-code">trusted-full-access</span></td>
-                    <td>Automation trên repo đã tin và task đã rõ.</td>
-                    <td>Nới autonomy trong guard, nhưng vẫn giữ protected path, redaction, lock và confirmation.</td>
-                    <td><span class="inline-code">/full-access</span></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div class="command-grid">
-              <article class="command-card">
-                <header><span>Xem permission</span><button class="clip-btn" data-clip="/permission-status">Lấy lệnh</button></header>
-                <pre><code>/permission-status</code></pre>
-              </article>
-              <article class="command-card">
-                <header><span>Read-only session</span><button class="clip-btn" data-clip="/read-only">Lấy lệnh</button></header>
-                <pre><code>/read-only</code></pre>
-              </article>
-              <article class="command-card">
-                <header><span>Workspace write</span><button class="clip-btn" data-clip="/workspace-write">Lấy lệnh</button></header>
-                <pre><code>/workspace-write</code></pre>
-              </article>
-              <article class="command-card">
-                <header><span>Full-access + task</span><button class="clip-btn" data-clip="/full-access Run the trusted local verification suite.">Lấy lệnh</button></header>
-                <pre><code>/full-access Run the trusted local verification suite.</code></pre>
-              </article>
-            </div>
-          </section>
-
-          <section class="section" id="commands">
-            <p class="section-kicker">Command catalog</p>
-            <h2>Command ngắn, rõ, ít token burn</h2>
-            <p class="section-lead">
-              Ưu tiên dùng slash command vì mỗi command đã gói policy và flow. Thành viên không cần paste lại hướng dẫn dài trong từng prompt.
-            </p>
-
-            <div class="grid cols-2">
-              <article class="card">
-                <h3>Session basics</h3>
-                <div class="tag-list">
-                  <span class="tag">/login</span>
-                  <span class="tag">/model</span>
-                  <span class="tag">/piagent-commands</span>
-	                  <span class="tag">/piagent-status</span>
-	                  <span class="tag">/piagent-orchestration</span>
-	                  <span class="tag">/piagent-usage</span>
-	                  <span class="tag">/task-preflight</span>
-	                </div>
-	                <p>Dùng để setup session, chọn model, xem profile/usage/orchestration và quyết định có cần fresh session trước task lớn không.</p>
-              </article>
-              <article class="card">
-                <h3>Project profile</h3>
-                <div class="tag-list">
-                  <span class="tag">/profile</span>
-                  <span class="tag">/profile list</span>
-                  <span class="tag">/profile auto</span>
-                  <span class="tag">/profile setup</span>
-                  <span class="tag">/profile tech</span>
-                  <span class="tag">/profile tech setup</span>
-                  <span class="tag">/profile fullstack</span>
-                  <span class="tag">/profile be-fe</span>
-                </div>
-                <p>Áp profile trực tiếp hoặc mở select option để chọn profile/tech stack. Output ngắn, không yêu cầu model giải thích dài.</p>
-              </article>
-              <article class="card">
-                <h3>Implementation workflow</h3>
-                <div class="tag-list">
-                  <span class="tag">/task</span>
-                  <span class="tag">/plan</span>
-                  <span class="tag">/review</span>
-                  <span class="tag">/scout</span>
-                  <span class="tag">/discuss</span>
-                </div>
-                <p>Gói sẵn read context, task contract, implementation, verify evidence và final handoff.</p>
-              </article>
-              <article class="card">
-                <h3>Git handoff</h3>
-                <div class="tag-list">
-                  <span class="tag">/commit</span>
-                  <span class="tag">/pr</span>
-                  <span class="tag">git status</span>
-                  <span class="tag">git diff</span>
-                </div>
-                <p>Không cần namespace <span class="inline-code">/git</span>. Commit/PR đi qua shell guard; push và stage rộng như <span class="inline-code">git add -A</span> cần xác nhận.</p>
-              </article>
-              <article class="card">
-                <h3>Fresh sessions</h3>
-                <div class="tag-list">
-                  <span class="tag">/fresh-task</span>
-                  <span class="tag">/fresh-scout</span>
-                  <span class="tag">/fresh-be-to-fe</span>
-                </div>
-                <p>Dùng khi context đã nặng hoặc cần một session sạch cho workflow mới.</p>
-              </article>
-              <article class="card">
-                <h3>MCP</h3>
-                <div class="tag-list">
-                  <span class="tag">/mcp</span>
-                  <span class="tag">piagent-mcp</span>
-                </div>
-                <p>Kiểm tra và cấu hình tool servers theo preset core, popular hoặc design.</p>
-              </article>
-              <article class="card">
-                <h3>Subagents</h3>
-                <div class="tag-list">
-                  <span class="tag">/subagents-doctor</span>
-                  <span class="tag">/subagents-models</span>
-	                  <span class="tag">/subagents-fleet</span>
-	                  <span class="tag">/subagent-cost</span>
-	                </div>
-	                <p>Kiểm tra runtime, model routing, background runs và cost. Daily flow vẫn solo-first; subagents dùng cho scout/planning/review độc lập.</p>
-	              </article>
-	            </div>
-          </section>
-
-          <section class="section" id="workflow">
-            <p class="section-kicker">Workflows</p>
-            <h2>Các luồng chính</h2>
-            <p class="section-lead">
-              Chọn workflow theo intent thay vì mô tả lại policy trong prompt. Cách này giảm context lặp và giữ output tập trung hơn.
-            </p>
-
-	            <div class="callout ok-callout">
-	              <strong>Git trong Pi Agent</strong>
-	              <p>Không có namespace <span class="inline-code">/git</span> riêng. Dùng <span class="inline-code">/commit</span> để commit local đã review, dùng <span class="inline-code">/pr</span> để chuẩn bị PR. Các hành động như <span class="inline-code">git push</span> hoặc stage rộng <span class="inline-code">git add -A</span> vẫn cần operator xác nhận.</p>
-	            </div>
-
-	            <div class="callout">
-	              <strong>Solo-first orchestration</strong>
-	              <p>Dùng <span class="inline-code">/piagent-orchestration</span> để xem mode, max subagents, review lenses, Field Guide và writer policy. Mặc định parent agent tự làm chính; subagents chỉ dùng khi scout, planning hoặc review có lane độc lập đáng token.</p>
-	            </div>
-
-            <div class="command-grid">
-              <article class="command-card">
-                <header><span>Implementation bounded</span><button class="clip-btn" data-clip="/task Fix the failing checkout test and verify.">Lấy lệnh</button></header>
-                <pre><code>/task Fix the failing checkout test and verify.</code></pre>
-              </article>
-              <article class="command-card">
-                <header><span>Read-only scout</span><button class="clip-btn" data-clip="/scout Map the auth flow and risk areas.">Lấy lệnh</button></header>
-                <pre><code>/scout Map the auth flow and risk areas.</code></pre>
-              </article>
-              <article class="command-card">
-                <header><span>Plan trước khi code</span><button class="clip-btn" data-clip="/plan Add multi-tenant billing support.">Lấy lệnh</button></header>
-                <pre><code>/plan Add multi-tenant billing support.</code></pre>
-              </article>
-              <article class="command-card">
-                <header><span>Review diff</span><button class="clip-btn" data-clip="/review">Lấy lệnh</button></header>
-                <pre><code>/review</code></pre>
-              </article>
-              <article class="command-card">
-                <header><span>Commit local có guard</span><button class="clip-btn" data-clip="/commit &quot;feat: add guarded git workflow&quot;">Lấy lệnh</button></header>
-                <pre><code>/commit "feat: add guarded git workflow"</code></pre>
-              </article>
-              <article class="command-card">
-                <header><span>Chuẩn bị pull request</span><button class="clip-btn" data-clip="/pr &quot;Prepare PR for guarded git workflow&quot;">Lấy lệnh</button></header>
-                <pre><code>/pr "Prepare PR for guarded git workflow"</code></pre>
-              </article>
-              <article class="command-card">
-                <header><span>Backend spec sang frontend</span><button class="clip-btn" data-clip="/be-to-fe Implement frontend support for the new user status endpoint.">Lấy lệnh</button></header>
-                <pre><code>/profile be-readonly-fe
-/be-to-fe Implement frontend support for the new user status endpoint.</code></pre>
-              </article>
-              <article class="command-card">
-                <header><span>Cải thiện platform</span><button class="clip-btn" data-clip="/platform-improve Harden command docs and run verification.">Lấy lệnh</button></header>
-                <pre><code>/platform-improve Harden command docs and run verification.</code></pre>
-              </article>
-            </div>
-          </section>
-
-          <section class="section" id="runtime">
-            <p class="section-kicker">Runtime tools</p>
-            <h2>Terminal commands cho operator</h2>
-            <p class="section-lead">
-              Nhóm command này chạy ngoài slash command, dùng cho setup, doctor, benchmark, capability lock và automation.
-            </p>
-
-            <div class="command-grid">
-              <article class="command-card">
-                <header><span>Setup global</span><button class="clip-btn" data-clip="piagent-setup --mcp-preset core --subagents-preset safe">Lấy lệnh</button></header>
-                <pre><code>piagent-setup --mcp-preset core --subagents-preset safe</code></pre>
-              </article>
-              <article class="command-card">
-                <header><span>Full update</span><button class="clip-btn" data-clip="npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0&#10;npm install -g --ignore-scripts @piagent/platform@X.Y.Z&#10;piagent-install --stable --dry-run&#10;piagent-install --stable">Lấy lệnh</button></header>
-                <pre><code>npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@X.Y.Z
-piagent-install --stable --dry-run
-piagent-install --stable</code></pre>
-              </article>
-              <article class="command-card">
-                <header><span>Pi package only</span><button class="clip-btn" data-clip="piagent-install --version vX.Y.Z --resolve-tag --dry-run&#10;piagent-install --version vX.Y.Z --resolve-tag">Lấy lệnh</button></header>
-                <pre><code>piagent-install --version vX.Y.Z --resolve-tag --dry-run
-piagent-install --version vX.Y.Z --resolve-tag</code></pre>
-              </article>
-              <article class="command-card">
-                <header><span>Init project</span><button class="clip-btn" data-clip="piagent-init /path/to/project">Lấy lệnh</button></header>
-                <pre><code>piagent-init /path/to/project</code></pre>
-              </article>
-              <article class="command-card">
-                <header><span>Doctor</span><button class="clip-btn" data-clip="piagent-doctor /path/to/project">Lấy lệnh</button></header>
-                <pre><code>piagent-doctor /path/to/project</code></pre>
-              </article>
-              <article class="command-card">
-                <header><span>Trusted run</span><button class="clip-btn" data-clip="piagent-auto --full-access -p &quot;Run the trusted local benchmark suite.&quot;">Lấy lệnh</button></header>
-                <pre><code>piagent-auto --read-only -p "Scout payment mapping. Do not edit source."
-piagent-auto --full-access -p "Run the trusted local benchmark suite."</code></pre>
-              </article>
-              <article class="command-card">
-                <header><span>Capabilities</span><button class="clip-btn" data-clip="piagent-capabilities catalog --check&#10;piagent-capabilities doctor --profile .pi/piagent-profile.json">Lấy lệnh</button></header>
-                <pre><code>piagent-capabilities catalog --check
-piagent-capabilities doctor --profile .pi/piagent-profile.json</code></pre>
-              </article>
-              <article class="command-card">
-                <header><span>Verification</span><button class="clip-btn" data-clip="npm run verify&#10;npm test&#10;npm run typecheck">Lấy lệnh</button></header>
-                <pre><code>npm run verify
-npm test
-npm run typecheck</code></pre>
-              </article>
-            </div>
-          </section>
-
-          <section class="section" id="team">
-            <p class="section-kicker">Team usage</p>
-            <h2>Team nên dùng như một chuẩn vận hành</h2>
-            <p class="section-lead">
-              Mỗi repo chỉ cần link package, chọn profile đúng và giữ tài liệu project-specific ở repo của dự án đó. Core vẫn sạch, nhỏ và audit được.
-            </p>
-
-            <div class="split">
-              <article class="card">
-                <h3>Việc nên làm</h3>
-                <p>Chạy <span class="inline-code">/onboard-project</span>, áp <span class="inline-code">/profile auto</span>, dùng workflow command, verify thật và ghi blockers rõ ràng.</p>
-              </article>
-              <article class="card">
-                <h3>Việc nên tránh</h3>
-                <p>Đưa token, auth file, cache, session, private examples hoặc business logic riêng vào core package public.</p>
-              </article>
-            </div>
-
-            <div class="callout ok-callout">
-              <strong>Chuẩn handoff</strong>
-              <p>Final response nên nói ngắn: đã đổi gì, verify nào đã chạy, có dùng subagent không, và còn rủi ro hoặc next step nào cần người review.</p>
-            </div>
-
-            <div class="callout">
-              <strong>Release docs gate</strong>
-              <p>Version docs mới chỉ được promote lên Vercel sau khi tag-triggered CI pass và stable dry-run resolve đúng commit SHA. Phải promote đúng tagged commit, không chèn merge commit hay docs-only edit khác. Domain canonical là <span class="inline-code">piagent.io.vn</span>; apex phải là Vercel primary và <span class="inline-code">www</span> redirect về apex.</p>
-            </div>
-          </section>
-
-          <footer class="footer">
-            <p>Pi Agent Platform docs · static HTML · governed agent workflow</p>
-            <div class="footer-links" aria-label="External links">
-              <a href="https://piagent.io.vn" target="_blank" rel="noopener noreferrer">piagent.io.vn</a>
-              <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub repository</a>
-              <a href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer">Facebook profile</a>
-            </div>
-          </footer>
+            <footer class="footer">
+              <p>Pi Agent Platform docs · static HTML · governed agent workflow</p>
+              <div class="footer-links" aria-label="External links">
+                <a href="https://piagent.io.vn" target="_blank" rel="noopener noreferrer">piagent.io.vn</a>
+                <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub repository</a>
+                <a href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer">Facebook profile</a>
+              </div>
+            </footer>
         </div>
       </main>
+
+      <aside class="toc" aria-label="Mục lục trang">
+        <p class="toc-title">Trên trang này</p>
+        <nav data-toc></nav>
+      </aside>
     </div>
-
-    <script>
-      const sidebar = document.querySelector("[data-sidebar]");
-      const menuButton = document.querySelector("[data-menu]");
-      const filterInput = document.querySelector("[data-filter]");
-      const navLinks = Array.from(document.querySelectorAll(".nav-link"));
-      const sections = navLinks
-        .map((link) => document.querySelector(link.getAttribute("href")))
-        .filter(Boolean);
-
-      menuButton?.addEventListener("click", () => {
-        sidebar?.classList.toggle("open");
-      });
-
-      navLinks.forEach((link) => {
-        link.addEventListener("click", () => sidebar?.classList.remove("open"));
-      });
-
-      filterInput?.addEventListener("input", (event) => {
-        const value = event.target.value.trim().toLowerCase();
-        navLinks.forEach((link) => {
-          const text = link.textContent.toLowerCase();
-          link.style.display = !value || text.includes(value) ? "flex" : "none";
-        });
-      });
-
-      const observer = new IntersectionObserver(
-        (entries) => {
-          const visible = entries
-            .filter((entry) => entry.isIntersecting)
-            .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-          if (!visible) return;
-          navLinks.forEach((link) => {
-            link.classList.toggle("active", link.getAttribute("href") === `#${visible.target.id}`);
-          });
-        },
-        { rootMargin: "-18% 0px -68% 0px", threshold: [0.1, 0.35, 0.7] }
-      );
-
-      sections.forEach((section) => observer.observe(section));
-
-      document.querySelectorAll("[data-clip]").forEach((button) => {
-        button.addEventListener("click", async () => {
-          const text = button.getAttribute("data-clip") || "";
-          try {
-            await navigator.clipboard.writeText(text);
-            const old = button.textContent;
-            button.textContent = "Đã lấy";
-            setTimeout(() => {
-              button.textContent = old;
-            }, 1200);
-          } catch {
-            button.textContent = "Chọn lệnh";
-          }
-        });
-      });
-    </script>
   </body>
 </html>

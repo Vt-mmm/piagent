@@ -18,10 +18,116 @@ Không có dòng code nào map capability name sang MCP server id. Khai `"github
 
 Từ `v0.3.7`, repo có thêm:
 
-- `piagent-mcp` / `scripts/configure-mcp.sh`;
+- `piagent-mcp` / `scripts/mcp-manage.mjs`;
 - MCP preset `core`, `popular`, `all`, `design`, `design-local`, `browser`, `docs`, `github`;
 - template `.mcp.json` project-shared;
 - doctor warning khi adapter có nhưng không có MCP server nào.
+
+## Hai bề mặt
+
+Trong session Pi thì dùng slash command, ngoài terminal thì dùng CLI. Cùng module đọc config, cùng cách phân loại trạng thái.
+
+| Việc | Trong session | Trong terminal |
+|---|---|---|
+| Mở menu | `/piagent-mcp` | — |
+| Danh sách + state | `/piagent-mcp status` | `piagent-mcp list` |
+| Chi tiết một server | `/piagent-mcp get <name>` | `piagent-mcp get <name>` |
+| Thiếu gì để chạy | `/piagent-mcp doctor` | `piagent-mcp doctor` |
+| Duyệt server của repo | `/piagent-mcp approve <name>` | `piagent-mcp approve <name>` |
+| Bật/tắt | `/piagent-mcp enable\|disable <name>` | `piagent-mcp enable\|disable <name>` |
+| Thêm/xoá/preset | — | `piagent-mcp add\|remove\|--preset` |
+| Kết nối live, OAuth | `/mcp`, `/mcp-auth <name>` | — |
+
+Slash command do Pi dispatch thẳng tới handler và **không đi qua model**: gõ `piagent-mcp list` giữa session là nhờ model chạy bash, đọc output rồi thuật lại — ba lượt model cho một câu hỏi process này trả lời được từ file nó đã đọc.
+
+Thêm và xoá server ở lại terminal: `add` mang shell quoting, tham chiếu `${VAR}` và một command line sau `--` — ba thứ đã có sẵn một bộ parse đúng là chính shell, viết lại bên trong slash command chỉ tạo ra bộ parse thứ hai tệ hơn. Gọi `/piagent-mcp add` sẽ in ra lệnh terminal tương ứng chứ không đoán.
+
+Gõ `/piagent-mcp` không tham số sẽ mở menu dựng theo đúng thứ project đang có — chưa server nào bị tắt thì không hiện "bật lại", không server nào chờ duyệt thì không hiện "approve". Chọn một việc cần server thì nó hỏi tiếp server nào, trừ khi chỉ có đúng một lựa chọn. Mọi mục trong menu đều gõ thẳng được, nên menu dạy dạng trực tiếp chứ không thay thế.
+
+Không có select UI (print mode `-p`, JSON mode) thì in thẳng bảng trạng thái + danh sách subcommand, không treo chờ trả lời.
+
+`/piagent-mcp` có auto-complete cho subcommand và tên server.
+
+## Quản lý server
+
+`piagent-mcp` có subcommand đầy đủ, không chỉ preset:
+
+```bash
+piagent-mcp add sentry --url https://mcp.sentry.dev/mcp --scope global
+piagent-mcp add internal --scope project -- npx -y @acme/internal-mcp
+piagent-mcp list
+piagent-mcp get sentry
+piagent-mcp disable sentry          # giữ định nghĩa, chỉ tắt
+piagent-mcp remove sentry --scope global
+piagent-mcp doctor
+```
+
+`--scope` nhận `global`, `pi-global`, `project`, `pi-project` — ứng với 4 file ở bảng bên dưới. Mặc định `global`. `add` in ra scope và **đường dẫn file vừa sửa**, để không phải đoán config nào đang có hiệu lực.
+
+Server tự thêm sống sót qua mọi lần `piagent-update`: preset chỉ ghi đè đúng những server ID nó sở hữu. Ngược lại, sửa tay một server thuộc preset (`github`, `context7`…) sẽ bị `--replace` đưa về baseline ở lần update kế tiếp — muốn giữ bản riêng thì đặt tên khác.
+
+## Secret không bao giờ nằm trong config
+
+`add` **từ chối** giá trị trông giống credential và in ra dạng cần dùng:
+
+```bash
+$ piagent-mcp add gh --env GITHUB_PERSONAL_ACCESS_TOKEN=ghp_xxx -- npx -y @acme/gh-mcp
+FAIL: GITHUB_PERSONAL_ACCESS_TOKEN names a credential, so its value cannot be
+written into MCP config. Export it in your shell and reference it instead:
+--env 'GITHUB_PERSONAL_ACCESS_TOKEN=${GITHUB_PERSONAL_ACCESS_TOKEN}'
+```
+
+Chặn theo hai lớp: tên field nghe như credential, và giá trị tự nó trông như secret (bắt được cả `--env CONFIG=ghp_...`). Áp dụng cho cả `--env` lẫn `--header`.
+
+`--url` chỉ nhận `https`, hoặc `http` khi host là loopback — Figma desktop MCP là đúng trường hợp đó.
+
+`list` và `get` mask giá trị; riêng `${VAR}` được in nguyên vì đó là **tên biến**, không phải nội dung.
+
+## Login vào account MCP
+
+Platform **không tự chạy OAuth và không giữ token**. `pi-mcp-adapter` đã sở hữu luồng đó — nó đăng ký `/mcp` và `/mcp-auth`, giữ callback server và OAuth provider — và dựng kho credential thứ ba cho credential của bên khác là lựa chọn tệ hơn. Việc của platform là phát hiện và chỉ đường:
+
+```text
+/mcp-auth figma
+```
+
+`/piagent-mcp doctor` (hoặc `piagent-mcp doctor` ngoài terminal) phân loại từng server:
+
+| State | Nghĩa |
+|---|---|
+| `ready` | đủ điều kiện, gọi được |
+| `needs-env` | config tham chiếu `${VAR}` mà biến chưa export (chỉ in **tên biến**) |
+| `needs-command` | executable không có trên PATH |
+| `pending-approval` | repo khai server này, chưa ai duyệt trên máy này |
+| `approval-changed` | đã duyệt nhưng định nghĩa đã đổi |
+| `rejected` | đã từ chối cho project này |
+| `disabled` | tắt bằng `/piagent-mcp disable` |
+| `oauth` | đăng nhập do Pi giữ; platform không biết còn hạn hay không |
+
+`oauth` **không** bị coi là lỗi, và không xuất hiện trong notice đầu session — platform không phân biệt được đã login hay chưa, nên báo mỗi session sẽ thành nhiễu.
+
+`doctor` chạy thêm `docker info` (chậm, nên chỉ ở doctor chứ không ở session start). `piagent-doctor` cũng đưa các state chặn vào `warnings`.
+
+## Approval gate cho server đến từ repo
+
+Repo mang theo được `.mcp.json` và `.pi/mcp.json`. Clone một repo lạ rồi mở session **không** được phép cho tác giả repo đó một process trên máy mình với credential của mình. Nên server ở hai scope này không dùng được cho tới khi có người trên máy này duyệt.
+
+```bash
+piagent-mcp get internal        # đọc trước
+piagent-mcp approve internal    # hoặc reject / remove
+```
+
+Ba tính chất quan trọng:
+
+- **Quyết định nằm ngoài repo** — `~/.pi/piagent-mcp-approvals.json`. Repo tự duyệt được cho mình thì gate coi như không có. Fork, đổi tên, checkout thứ hai đều bắt đầu lại từ `pending`.
+- **Pin theo digest của định nghĩa.** Duyệt là đồng ý với *thứ server đó chạy*; đổi command, URL hay args là câu hỏi mới, state quay về `approval-changed`. Cùng cách tách consent/build mà capability lock đang dùng.
+- **Enforce ở `tool_call`**, không phải ở config. Guard chặn cả proxy (`mcp` với `input.server`) lẫn dạng direct tool (`mcp__<server>__<tool>`) — gate chỉ đọc proxy sẽ bị đi vòng bằng cách bật `directTools`.
+
+Giới hạn cần nói thẳng: extension **không chặn được adapter mở connection**, chỉ chặn tool call. Phần còn lại là bản thân kết nối, và việc server phía kia ghi log rằng có người kết nối.
+
+Server ở `global` / `pi-global` không qua gate — hai layer đó nằm ngoài mọi repo, không repo nào đặt được server vào đó, và bắt duyệt config của chính mình trên từng máy là vô nghĩa.
+
+Notice đầu session nêu tên server đang chờ quyết định hoặc thiếu setup. Tắt bằng `PIAGENT_NO_MCP_NOTICE=1`.
 
 ## Cấu hình một lần cho máy cá nhân/team
 
@@ -56,7 +162,7 @@ piagent-mcp --list
 Nếu clone repo GitHub và chưa link npm bin:
 
 ```bash
-bash /path/to/piagent/scripts/configure-mcp.sh --preset popular --scope global --replace
+node /path/to/piagent/scripts/mcp-manage.mjs --preset popular --scope global --replace
 ```
 
 `--replace` cập nhật các server ID thuộc preset về baseline đã pin và vẫn giữ nguyên server ID khác. Luồng install/upgrade toàn cục luôn dùng chế độ này để không duy trì dependency động từ cấu hình cũ.

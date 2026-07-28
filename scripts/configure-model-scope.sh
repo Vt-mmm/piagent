@@ -7,7 +7,7 @@ Usage:
   scripts/configure-model-scope.sh [options]
 
 Options:
-  --preset <full|codex|claude>       Model scope to write (default: full)
+  --preset <full|codex|claude>       Model families to enable (default: full = both)
   --default-model <provider/model[:thinking]>
                                      Default model (default: openai-codex/gpt-5.5:xhigh)
   --settings <path>                  Pi settings file (default: ~/.pi/agent/settings.json)
@@ -67,7 +67,7 @@ done
 case "$PRESET" in
   full|codex|claude) ;;
   *)
-    echo "FAIL: --preset must be full, codex, or claude" >&2
+    echo "FAIL: --preset must be full, codex, or claude (model families)" >&2
     exit 2
     ;;
 esac

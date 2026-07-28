@@ -137,7 +137,7 @@ function runtimeMatrixStatus() {
     surface: `${platform}/${arch}`,
     status: "outside-release-matrix",
     teamRolloutReady: false,
-    note: "This runtime is outside the documented v1.1.9 support matrix."
+    note: "This runtime is outside the documented v1.2.0 support matrix."
   };
 }
 
@@ -169,7 +169,7 @@ for (const rel of [
   "templates/project/.pi/memory/memory_summary.md",
   "templates/project/.pi/memory/MEMORY.md",
   "scripts/setup.sh",
-  "scripts/configure-mcp.sh",
+  "scripts/mcp-manage.mjs",
   "scripts/configure-subagents.sh"
 ]) {
   if (!exists(rel)) errors.push(`missing platform file: ${rel}`);
@@ -245,6 +245,22 @@ const mcp = mcpFiles.map(mcpSummary);
 const totalMcpServers = mcp.reduce((sum, item) => sum + item.serverCount, 0);
 if (piHasMcpAdapter && totalMcpServers === 0) {
   warnings.push("Pi MCP adapter is installed but no MCP servers are configured; run `piagent-mcp --preset core --scope global` or `/mcp setup`");
+}
+
+// Counting servers says nothing about whether any of them can answer. A server
+// whose token is not exported, or which this repository defines and nobody
+// approved, is configured and unusable, and finding that out when a call fails
+// is the thing this check exists to prevent.
+try {
+  const { collectServers } = await import(pathToFileURL(path.join(platformRoot, "packages", "piagent-core", "mcp", "mcp-config-layers.js")).href);
+  const { evaluateServerReadiness, BLOCKING_STATES } = await import(pathToFileURL(path.join(platformRoot, "packages", "piagent-core", "mcp", "mcp-auth-readiness.js")).href);
+  for (const server of collectServers({ projectPath })) {
+    const readiness = evaluateServerReadiness(server, { projectPath });
+    if (!BLOCKING_STATES.has(readiness.state)) continue;
+    warnings.push(`MCP server ${server.name} (${server.scope}) is configured but not usable: ${readiness.detail}${readiness.remedy ? `; ${readiness.remedy}` : ""}`);
+  }
+} catch (error) {
+  warnings.push(`MCP readiness check could not run: ${error instanceof Error ? error.message : String(error)}`);
 }
 
 const subagentConfigPath = path.join(process.env.PI_CODING_AGENT_DIR || path.join(process.env.HOME || "", ".pi", "agent"), "extensions", "subagent", "config.json");

@@ -1,5 +1,5 @@
 ---
-description: Explain native Pi model selector/scope options for Codex and Claude
+description: Explain native Pi model selector/scope options across model families
 argument-hint: "[task type, budget, or provider preference]"
 ---
 
@@ -18,15 +18,15 @@ Mandatory flow:
    - `/scoped-models` for cycle scope;
    - Ctrl+P / Shift+Ctrl+P for model cycling;
    - Shift+Tab for thinking level.
-4. Include both OpenAI Codex and Claude/Anthropic options unless the user explicitly restricts provider.
-5. Do not limit the answer to one or two legacy examples. Include the current latest-family options for Codex 5.5/5.6 and Claude Sonnet/Opus/Fable where relevant.
+4. Include both model families — the OpenAI Codex models and the Anthropic Claude models — unless the user explicitly restricts the provider. Name them as model families, never as another tool.
+5. Do not limit the answer to one or two legacy examples. Include the current latest-family options: the Codex 5.5/5.6 models and the Claude Sonnet/Opus/Fable models, where relevant.
 6. If the user needs available model versions, recommend `piagent-models`, `/model`, or `pi --list-models`.
 7. Explain thinking levels as task effort, not as quality guarantee.
 8. Do not claim token/cost savings without benchmark evidence.
 
 Current latest-family catalog to consider:
 
-OpenAI Codex:
+OpenAI Codex models (provider `openai-codex`):
 
 - `openai-codex/gpt-5.3-codex-spark`
 - `openai-codex/gpt-5.4-mini`
@@ -36,7 +36,7 @@ OpenAI Codex:
 - `openai-codex/gpt-5.6-sol`
 - `openai-codex/gpt-5.6-terra`
 
-Claude/Anthropic:
+Anthropic Claude models (provider `anthropic`):
 
 - `anthropic/claude-haiku-4-5`
 - `anthropic/claude-sonnet-4-5`
@@ -50,7 +50,7 @@ Claude/Anthropic:
 
 Default selector scope seeded by setup:
 
-| Preset | OpenAI Codex | Claude/Anthropic | Use when |
+| Preset | OpenAI Codex model | Anthropic Claude model | Use when |
 |---|---|---|---|
 | Fast scout | `openai-codex/gpt-5.4-mini:low` | `anthropic/claude-haiku-4-5:low` | quick reads, simple Q&A |
 | Balanced implement | `openai-codex/gpt-5.5:medium` | `anthropic/claude-sonnet-5:medium` | normal source tasks |
@@ -63,6 +63,6 @@ Output:
 - Current model/context if available.
 - How to open/select/change model in Pi UI.
 - What `enabledModels`/scope contains.
-- Codex family options.
-- Claude family options.
+- Codex model family options.
+- Claude model family options.
 - How to inspect/re-apply model scope from terminal.

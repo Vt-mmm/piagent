@@ -126,9 +126,16 @@ required_files=(
   "$ROOT/docs/capability-packs.md"
   "$ROOT/docs/runtime-policy-design.md"
   "$ROOT/docs-site/index.html"
+  "$ROOT/docs-site/mcp.html"
   "$ROOT/docs-site/favicon.svg"
   "$ROOT/docs-site/assets/piagent-logo.svg"
+  "$ROOT/docs-site/assets/docs.css"
+  "$ROOT/docs-site/assets/docs.js"
+  "$ROOT/docs-site/content/index.html"
+  "$ROOT/docs-site/content/mcp.html"
   "$ROOT/docs-site/vercel.json"
+  "$ROOT/scripts/build-docs-site.mjs"
+  "$ROOT/scripts/preview-docs-site.mjs"
   "$ROOT/schemas/project-profile.schema.json"
   "$ROOT/schemas/task-contract.schema.json"
   "$ROOT/schemas/capability-pack.schema.json"
@@ -160,7 +167,7 @@ required_files=(
   "$ROOT/scripts/pi-auto.sh"
   "$ROOT/scripts/pi-model-catalog.sh"
   "$ROOT/scripts/configure-model-scope.sh"
-  "$ROOT/scripts/configure-mcp.sh"
+  "$ROOT/scripts/mcp-manage.mjs"
   "$ROOT/scripts/configure-subagents.sh"
   "$ROOT/scripts/capability-catalog.mjs"
   "$ROOT/scripts/migrate-project-state.mjs"
@@ -182,6 +189,9 @@ required_files=(
   "$ROOT/tests/document-intake.test.mjs"
   "$ROOT/tests/runtime-advisories.test.mjs"
   "$ROOT/scripts/check-runtime-advisories.mjs"
+  "$ROOT/packages/piagent-core/mcp/mcp-session-view.js"
+  "$ROOT/packages/piagent-core/mcp/mcp-command-actions.js"
+  "$ROOT/tests/mcp-session-command.test.mjs"
   "$ROOT/tests/migrate-project-state.test.mjs"
   "$ROOT/tests/uninstall-global.test.mjs"
   "$ROOT/tests/import-agent-instructions.test.mjs"
@@ -413,33 +423,33 @@ require_documented "gpt-5.6" "$ROOT/README.md" "$ROOT/docs/model-options.md" "$R
 require_documented "claude-fable-5" "$ROOT/README.md" "$ROOT/docs/model-options.md" "$ROOT/packages/piagent-core/prompts/model-options.md"
 require_documented "piagent-models" "$ROOT/README.md" "$ROOT/docs/model-options.md"
 require_documented "enabledModels" "$ROOT/templates/global/settings.json" "$ROOT/docs/model-options.md" "$ROOT/scripts/configure-model-scope.sh"
-require_documented "piagent-mcp" "$ROOT/README.md" "$ROOT/docs/mcp-and-tools.md" "$ROOT/scripts/configure-mcp.sh"
+require_documented "piagent-mcp" "$ROOT/README.md" "$ROOT/docs/mcp-and-tools.md" "$ROOT/scripts/mcp-manage.mjs"
 require_documented "pi-mcp-adapter" "$ROOT/README.md" "$ROOT/docs/mcp-and-tools.md" "$ROOT/scripts/install-global.sh"
 require_documented "piagent-subagents" "$ROOT/README.md" "$ROOT/docs/subagents-and-multiagent.md" "$ROOT/scripts/configure-subagents.sh"
 require_documented "subagents-fleet" "$ROOT/docs/command-reference-vietnamese.md" "$ROOT/docs/subagents-and-multiagent.md" "$ROOT/README.md"
 require_documented "health check" "$ROOT/docs/command-reference-vietnamese.md" "$ROOT/docs/subagents-and-multiagent.md" "$ROOT/README.md"
 require_documented "pi-subagents" "$ROOT/README.md" "$ROOT/docs/subagents-and-multiagent.md" "$ROOT/scripts/install-global.sh" "$ROOT/scripts/setup.sh"
 require_documented "piagent-scout" "$ROOT/README.md" "$ROOT/docs/subagents-and-multiagent.md" "$ROOT/packages/piagent-core/subagents"
-grep -F "@upstash/context7-mcp@3.2.4" "$ROOT/scripts/configure-mcp.sh" >/dev/null
+grep -F "@upstash/context7-mcp@3.2.4" "$ROOT/packages/piagent-core/mcp/mcp-server-catalog.js" >/dev/null
 grep -F "@upstash/context7-mcp@3.2.4" "$ROOT/docs/mcp-and-tools.md" >/dev/null
-grep -F "chrome-devtools-mcp@1.6.0" "$ROOT/scripts/configure-mcp.sh" >/dev/null
+grep -F "chrome-devtools-mcp@1.6.0" "$ROOT/packages/piagent-core/mcp/mcp-server-catalog.js" >/dev/null
 grep -F "chrome-devtools-mcp@1.6.0" "$ROOT/docs/mcp-and-tools.md" >/dev/null
-grep -F "@playwright/mcp@0.0.78" "$ROOT/scripts/configure-mcp.sh" >/dev/null
+grep -F "@playwright/mcp@0.0.78" "$ROOT/packages/piagent-core/mcp/mcp-server-catalog.js" >/dev/null
 grep -F "@playwright/mcp@0.0.78" "$ROOT/docs/mcp-and-tools.md" >/dev/null
-require_documented "https://mcp.figma.com/mcp" "$ROOT/scripts/configure-mcp.sh" "$ROOT/docs/mcp-and-tools.md"
-grep -F "ghcr.io/github/github-mcp-server@sha256:2b0c48b070f61e9d3969269ead600f62d00fb237b60ac849ef3d166ee7de9ad3" "$ROOT/scripts/configure-mcp.sh" >/dev/null
+require_documented "https://mcp.figma.com/mcp" "$ROOT/packages/piagent-core/mcp/mcp-server-catalog.js" "$ROOT/docs/mcp-and-tools.md"
+grep -F "ghcr.io/github/github-mcp-server@sha256:2b0c48b070f61e9d3969269ead600f62d00fb237b60ac849ef3d166ee7de9ad3" "$ROOT/packages/piagent-core/mcp/mcp-server-catalog.js" >/dev/null
 grep -F "ghcr.io/github/github-mcp-server@sha256:2b0c48b070f61e9d3969269ead600f62d00fb237b60ac849ef3d166ee7de9ad3" "$ROOT/docs/mcp-and-tools.md" >/dev/null
-grep -F '"GITHUB_READ_ONLY=1"' "$ROOT/scripts/configure-mcp.sh" >/dev/null
+grep -F '"GITHUB_READ_ONLY=1"' "$ROOT/packages/piagent-core/mcp/mcp-server-catalog.js" >/dev/null
 grep -F '"GITHUB_READ_ONLY=1"' "$ROOT/docs/mcp-and-tools.md" >/dev/null
-grep -F '"GITHUB_LOCKDOWN_MODE=1"' "$ROOT/scripts/configure-mcp.sh" >/dev/null
+grep -F '"GITHUB_LOCKDOWN_MODE=1"' "$ROOT/packages/piagent-core/mcp/mcp-server-catalog.js" >/dev/null
 grep -F '"GITHUB_LOCKDOWN_MODE=1"' "$ROOT/docs/mcp-and-tools.md" >/dev/null
-grep -F 'CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: "1"' "$ROOT/scripts/configure-mcp.sh" >/dev/null
+grep -F 'CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: "1"' "$ROOT/packages/piagent-core/mcp/mcp-server-catalog.js" >/dev/null
 grep -F '"CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS": "1"' "$ROOT/docs/mcp-and-tools.md" >/dev/null
-grep -F 'CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS: "1"' "$ROOT/scripts/configure-mcp.sh" >/dev/null
+grep -F 'CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS: "1"' "$ROOT/packages/piagent-core/mcp/mcp-server-catalog.js" >/dev/null
 grep -F '"CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS": "1"' "$ROOT/docs/mcp-and-tools.md" >/dev/null
-grep -F 'configure-mcp.sh" --scope global --preset "$MCP_PRESET" --replace' "$ROOT/scripts/install-global.sh" >/dev/null
-grep -F 'piagent-mcp --preset core --scope global --replace' "$ROOT/scripts/configure-mcp.sh" >/dev/null
-if grep -E '@latest|"@upstash/context7-mcp"|"chrome-devtools-mcp"|"@playwright/mcp"|"ghcr\.io/github/github-mcp-server"' "$ROOT/scripts/configure-mcp.sh" >/dev/null; then
+grep -F 'mcp-manage.mjs" --scope global --preset "$MCP_PRESET" --replace' "$ROOT/scripts/install-global.sh" >/dev/null
+grep -F 'piagent-mcp --preset core --scope global --replace' "$ROOT/scripts/mcp-manage.mjs" >/dev/null
+if grep -E '@latest|"@upstash/context7-mcp"|"chrome-devtools-mcp"|"@playwright/mcp"|"ghcr\.io/github/github-mcp-server"' "$ROOT/packages/piagent-core/mcp/mcp-server-catalog.js" >/dev/null; then
   echo "MCP production presets contain a mutable dependency source"
   exit 1
 fi
@@ -471,6 +481,9 @@ const terms = [
   ["mit", "suhiko"].join(""),
   ["Cod", "ex CLI"].join(""),
   ["Claude", " CLI"].join(""),
+  ["Claude", " Code"].join(""),
+  ["claude", " mcp"].join(""),
+  ["codex", " mcp"].join(""),
   ["Cod", "ex-inspired"].join(""),
   ["Cod", "ex-grade"].join(""),
   ["Pi vs ", "Codex"].join(""),
@@ -485,12 +498,21 @@ console.log(terms.map(escapeRegex).join("|"));
 NODE
 )"
 
+# Every surface an outsider reads: the published docs, the site, and the strings
+# the runtime prints back at an operator. The site is checked at its source,
+# since `build-docs-site.mjs --check` separately proves the committed pages match
+# it; the builder itself is listed too, because navigation labels and page titles
+# live there rather than in a content fragment.
 if grep -R -E -i \
   "$public_wording_pattern" \
   "$ROOT/README.md" \
   "$ROOT/docs" \
+  "$ROOT/docs-site/content" \
+  "$ROOT/scripts/build-docs-site.mjs" \
   "$ROOT/packages/piagent-core/README.md" \
   "$ROOT/packages/piagent-core/prompts" \
+  "$ROOT/packages/piagent-core/mcp" \
+  "$ROOT/packages/piagent-core/extensions" \
   "$ROOT/templates/project/AGENTS.md" >/dev/null; then
   echo "Public docs contain non-neutral platform wording"
   exit 1
@@ -509,6 +531,8 @@ node --check "$ROOT/scripts/migrate-project-state.mjs" >/dev/null
 node --check "$ROOT/scripts/import-agent-instructions.mjs" >/dev/null
 node --check "$ROOT/scripts/check-runtime-advisories.mjs" >/dev/null
 node --check "$ROOT/scripts/check-published-site.mjs" >/dev/null
+node --check "$ROOT/scripts/build-docs-site.mjs" >/dev/null
+node --check "$ROOT/scripts/preview-docs-site.mjs" >/dev/null
 run_quietly "npm test" npm test
 if [[ -x "$ROOT/node_modules/.bin/tsc" ]]; then
   run_quietly "npm run typecheck" npm run typecheck
@@ -519,7 +543,9 @@ bash -n "$ROOT/scripts/pi-session-stats.sh"
 bash -n "$ROOT/scripts/pi-auto.sh"
 bash -n "$ROOT/scripts/pi-model-catalog.sh"
 bash -n "$ROOT/scripts/configure-model-scope.sh"
-bash -n "$ROOT/scripts/configure-mcp.sh"
+node --check "$ROOT/scripts/mcp-manage.mjs"
+node --check "$ROOT/packages/piagent-core/mcp/mcp-session-view.js"
+node --check "$ROOT/packages/piagent-core/mcp/mcp-command-actions.js"
 bash -n "$ROOT/scripts/configure-subagents.sh"
 bash -n "$ROOT/scripts/install-global.sh"
 bash -n "$ROOT/scripts/init-project.sh"
@@ -531,8 +557,8 @@ else
   bash "$ROOT/scripts/pi-model-catalog.sh" --json >/dev/null
 fi
 bash "$ROOT/scripts/configure-model-scope.sh" --dry-run --preset full --default-model openai-codex/gpt-5.5:xhigh >/dev/null
-bash "$ROOT/scripts/configure-mcp.sh" --list >/dev/null
-bash "$ROOT/scripts/configure-mcp.sh" --dry-run --preset popular --scope project --project "$ROOT" >/dev/null
+node "$ROOT/scripts/mcp-manage.mjs" --list >/dev/null
+node "$ROOT/scripts/mcp-manage.mjs" --dry-run --preset popular --scope project --project "$ROOT" >/dev/null
 node --input-type=module - "$ROOT" <<'NODE'
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -553,8 +579,8 @@ try {
       internal: { url: "https://mcp.example.invalid/api" }
     }
   }, null, 2)}\n`);
-  execFileSync("bash", [
-    path.join(root, "scripts", "configure-mcp.sh"),
+  execFileSync(process.execPath, [
+    path.join(root, "scripts", "mcp-manage.mjs"),
     "--config", configPath,
     "--preset", "popular",
     "--replace"
@@ -577,6 +603,7 @@ bash "$ROOT/scripts/configure-subagents.sh" --list >/dev/null
 bash "$ROOT/scripts/configure-subagents.sh" --dry-run --preset safe >/dev/null
 bash "$ROOT/scripts/runtime-policy-smoke.sh" >/dev/null
 
+node "$ROOT/scripts/build-docs-site.mjs" --check >/dev/null
 node "$ROOT/scripts/capability-catalog.mjs" catalog --check >/dev/null
 node "$ROOT/scripts/capability-catalog.mjs" doctor --profile "$ROOT/.pi/piagent-profile.json" --lock "$ROOT/.pi/piagent-profile.lock.json" >/dev/null
 node "$ROOT/scripts/capability-catalog.mjs" doctor --profile "$ROOT/adapters/generic/profile.json" >/dev/null

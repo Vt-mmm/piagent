@@ -1,0 +1,81 @@
+<section class="section">
+  <h2 id="van-de">Vấn đề</h2>
+  <p>Repo mang theo được <span class="inline-code">.mcp.json</span> và <span class="inline-code">.pi/mcp.json</span>. Clone một repo lạ rồi mở session <strong>không</strong> được phép cho tác giả repo đó một process trên máy mình, với credential của mình. Nên server ở hai scope này không dùng được cho tới khi có người trên máy này duyệt.</p>
+
+  <pre><code>/piagent-mcp get internal        # đọc trước
+/piagent-mcp approve internal    # hoặc reject, hoặc reset</code></pre>
+
+  <p>Trong terminal thì bỏ dấu <span class="inline-code">/</span>: <span class="inline-code">piagent-mcp get internal</span>. Cùng một quyết định, cùng một file.</p>
+
+  <p><span class="inline-code">approve</span> in ra định nghĩa trước khi ghi quyết định — duyệt mà không đọc chính là thứ gate này sinh ra để ngăn.</p>
+</section>
+
+<section class="section">
+  <h2 id="ba-tinh-chat">Ba tính chất</h2>
+
+  <div class="grid">
+    <div class="card">
+      <h3 id="ngoai-repo">Quyết định nằm ngoài repo</h3>
+      <p>Ghi vào <span class="inline-code">~/.pi/piagent-mcp-approvals.json</span>. Repo tự duyệt được cho chính nó thì gate coi như không tồn tại. Fork, đổi tên, checkout thứ hai — tất cả bắt đầu lại từ <span class="inline-code">pending</span>.</p>
+    </div>
+    <div class="card">
+      <h3 id="pin-digest">Pin theo digest</h3>
+      <p>Duyệt là đồng ý với <em>thứ server đó chạy</em>. Đổi command, URL hay args là một câu hỏi mới, state về <span class="inline-code">approval-changed</span>. Cùng cách tách consent với build mà capability lock đang dùng.</p>
+    </div>
+    <div class="card">
+      <h3 id="enforce-tool-call">Enforce ở tool call</h3>
+      <p>Guard chặn cả proxy (<span class="inline-code">mcp</span> với <span class="inline-code">input.server</span>) lẫn dạng direct tool (<span class="inline-code">mcp__&lt;server&gt;__&lt;tool&gt;</span>). Gate chỉ đọc proxy sẽ bị đi vòng bằng cách bật <span class="inline-code">directTools</span>.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="gioi-han">Giới hạn</h2>
+
+  <div class="callout">
+    <strong>Không chặn được connection</strong>
+    <p>Adapter sở hữu kết nối; extension không ngăn được việc một kết nối được mở. Cái bị chặn là <strong>mọi tool call</strong>, không phải bản thân kết nối. Phần rủi ro còn lại là chính kết nối đó, và việc server phía kia ghi log rằng có người kết nối tới.</p>
+  </div>
+
+  <p>Server ở <span class="inline-code">global</span> và <span class="inline-code">pi-global</span> không qua gate. Hai layer đó nằm ngoài mọi repo — không repo nào đặt được server vào đó — và bắt người dùng duyệt config của chính mình trên từng máy là vô nghĩa.</p>
+</section>
+
+<section class="section">
+  <h2 id="thiet-ke">Bốn quyết định thiết kế</h2>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Quyết định</th><th>Vì sao</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Chỉ gate server đến từ repo</td>
+          <td>Chỉ <span class="inline-code">.mcp.json</span> và <span class="inline-code">.pi/mcp.json</span> đi theo clone. Server người dùng tự đặt trên máy mình không cần ai duyệt.</td>
+        </tr>
+        <tr>
+          <td>Quyết định lưu ngoài repo</td>
+          <td><span class="inline-code">~/.pi/piagent-mcp-approvals.json</span>. Nếu lưu trong repo thì repo tự duyệt cho chính nó — gate mất nghĩa ngay từ đầu.</td>
+        </tr>
+        <tr>
+          <td>Pin theo digest của định nghĩa</td>
+          <td>Duyệt là duyệt <em>đúng</em> command và URL đó. Đổi command, đổi args, đổi URL thì server quay về <span class="inline-code">pending</span> chứ không kế thừa quyết định cũ.</td>
+        </tr>
+        <tr>
+          <td>Chặn ở <span class="inline-code">tool_call</span></td>
+          <td>Cả dạng proxy <span class="inline-code">mcp</span> lẫn dạng direct <span class="inline-code">mcp__&lt;server&gt;__&lt;tool&gt;</span>, để không có đường vòng.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>Điểm chặn lý tưởng là trước khi connect, nhưng chặn được ở đó thì phải sở hữu connection. Platform chạy trong Pi và không sở hữu nó, nên nó chọn điểm chặn xa nhất mà nó thật sự kiểm soát được — rồi nói rõ phần còn thừa thay vì để người đọc tự suy ra.</p>
+</section>
+
+<section class="section">
+  <h2 id="migration">Migration</h2>
+  <div class="callout">
+    <strong>Project đã có server từ trước</strong>
+    <p>Project nào đã có server trong <span class="inline-code">.mcp.json</span> hoặc <span class="inline-code">.pi/mcp.json</span> sẽ chuyển sang <span class="inline-code">pending-approval</span> sau khi update. Chạy <span class="inline-code">/piagent-mcp approve &lt;name&gt;</span> một lần cho mỗi project. Template ship rỗng nên đa số project không bị ảnh hưởng; notice đầu session và <span class="inline-code">doctor</span> đều nêu tên server cần duyệt.</p>
+  </div>
+</section>

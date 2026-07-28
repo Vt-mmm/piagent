@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Platform này nhận phần nào về mình · Pi Agent Platform Docs</title>
+    <meta name="description" content="Agent coding CLI nào cũng đã có cơ chế governance riêng. Platform này không thay thế lớp đó — nó đóng gói một cách vận hành cụ thể trên Pi để mọi repo dùng lại." />
+    <meta name="theme-color" content="#050505" />
+    <link rel="canonical" href="https://piagent.io.vn/scope" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta property="og:title" content="Platform này nhận phần nào về mình · Pi Agent Platform Docs" />
+    <meta property="og:description" content="Agent coding CLI nào cũng đã có cơ chế governance riêng. Platform này không thay thế lớp đó — nó đóng gói một cách vận hành cụ thể trên Pi để mọi repo dùng lại." />
+    <meta property="og:url" content="https://piagent.io.vn/scope" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/docs.css" />
+    <script src="/assets/docs.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Pi Agent Platform">
+        <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" /></span>
+        <span>Pi Agent Platform</span>
+      </a>
+      <div class="top-actions">
+        <span class="pill"><span class="pill-dot"></span>v1.2.0 docs</span>
+        <a class="button social" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer" aria-label="Mở GitHub repository">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          GitHub
+        </a>
+        <button class="button mobile-menu" type="button" data-menu>Lộ trình</button>
+        <a class="button" href="/commands">Commands</a>
+      </div>
+    </header>
+
+    <div class="layout with-toc">
+      <aside class="sidebar" data-sidebar>
+        <div class="sidebar-search" aria-label="Tìm trong tài liệu">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M10.8 18.1a7.3 7.3 0 1 1 0-14.6 7.3 7.3 0 0 1 0 14.6Zm5.3-1.7 4.4 4.4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          <input type="search" placeholder="Tìm trang" data-filter />
+        </div>
+
+        <nav aria-label="Tài liệu">
+          <div class="nav-group">
+            <p class="nav-title">Get started</p>
+            <a class="nav-link" href="/">Overview</a>
+            <a class="nav-link" href="/quickstart">Quickstart</a>
+            <a class="nav-link current" href="/scope" aria-current="page">Phạm vi platform</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Build</p>
+            <a class="nav-link" href="/profiles">Project profile</a>
+            <a class="nav-link" href="/permissions">Permission modes</a>
+            <a class="nav-link" href="/commands">Command catalog</a>
+            <a class="nav-link" href="/workflows">Workflows</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">MCP</p>
+            <a class="nav-link" href="/mcp">MCP overview</a>
+            <a class="nav-link" href="/mcp-servers">Quản lý server</a>
+            <a class="nav-link" href="/mcp-auth">Auth và readiness</a>
+            <a class="nav-link" href="/mcp-approval">Approval gate</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Operate</p>
+            <a class="nav-link" href="/security">Security model</a>
+            <a class="nav-link" href="/architecture">Architecture</a>
+            <a class="nav-link" href="/runtime">Runtime tools</a>
+            <a class="nav-link" href="/team">Team usage</a>
+          </div>
+        </nav>
+      </aside>
+
+      <main>
+        <div class="content-shell" data-article>
+            <nav class="breadcrumb" aria-label="Breadcrumb">
+              <a href="/">Docs</a>
+              <span aria-hidden="true">/</span>
+              <span>Get started</span>
+              <span aria-hidden="true">/</span>
+              <span>Phạm vi platform</span>
+            </nav>
+            <div class="page-head">
+              <h1>Platform này nhận phần nào về mình</h1>
+              <p>Agent coding CLI nào cũng đã có cơ chế governance riêng. Platform này không thay thế lớp đó — nó đóng gói một cách vận hành cụ thể trên Pi để mọi repo dùng lại.</p>
+            </div>
+<section class="section">
+  <h2 id="khong-phai-agent-moi">Đây không phải một agent mới</h2>
+  <p>Platform này không có model riêng, không có runtime riêng, không có vòng lặp agent riêng. Nó chạy như extension của Pi và chỉ thêm đúng một thứ: <strong>một cách vận hành cố định</strong> mà mọi repo trong team dùng lại được.</p>
+  <p>Agent coding CLI tổng quát nào cũng đã có sandbox, approval và cơ chế cấu hình theo project. Câu hỏi đáng hỏi không phải "cái nào mạnh hơn" mà là "cái đó cấu hình được, nhưng ai cấu hình, và cấu hình đó có giống nhau giữa 20 repo không".</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Hạng mục</th>
+          <th>Agent CLI tổng quát đã có</th>
+          <th>Platform này thêm</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Vai trò</td>
+          <td>Coding agent chạy trên local repo, tự chọn tool và tự chạy lệnh.</td>
+          <td>Lớp governance cho Pi: policy, profile và workflow vận hành được ghi thành file, không nằm trong prompt.</td>
+        </tr>
+        <tr>
+          <td>Tuỳ biến team</td>
+          <td>File hướng dẫn, settings, permission, hooks, skills, MCP — mỗi repo tự khai.</td>
+          <td>Adapter profile, base policy, command guard, capability pack, docs và scripts — khai một lần, <span class="inline-code">piagent-init</span> rải sang repo mới.</td>
+        </tr>
+        <tr>
+          <td>Quyền chạy</td>
+          <td>Sandbox ở mức OS hoặc process, approval theo lượt, giới hạn thư mục làm việc.</td>
+          <td>Ba mode đặt tên sẵn — <span class="inline-code">read-only</span>, <span class="inline-code">workspace-write</span>, <span class="inline-code">trusted-full-access</span> — đổi bằng một command, không sửa file nào.</td>
+        </tr>
+        <tr>
+          <td>Bảo mật secret</td>
+          <td>Sandbox, approval và network policy ở lớp dưới tool.</td>
+          <td>Policy ở lớp application, chạy sau khi tool được gọi: protected path, shell check, symlink alias, output redaction, integrity lock.</td>
+        </tr>
+        <tr>
+          <td>Điểm mạnh riêng</td>
+          <td>Trải nghiệm agent hoàn chỉnh, hệ sinh thái tool rộng.</td>
+          <td>Tính lặp lại: mọi repo cùng profile, cùng guard, cùng kỷ luật verify — và khác biệt thì thấy được vì nó nằm trong file.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="hai-lop-khong-thay-the-nhau">Hai lớp không thay thế nhau</h2>
+  <p>Sandbox của host chặn ở mức process: tiến trình không mở được file ngoài phạm vi cho phép. Guard của platform chặn ở mức lời gọi tool: nó đọc được <em>tham số</em> mà agent định dùng, nên biết lệnh đang đọc file nào, đang ghi ở đâu, đang gửi gì ra ngoài.</p>
+
+  <div class="split">
+    <div class="card">
+      <h3 id="lop-duoi">Lớp dưới thấy process</h3>
+      <p>Biết một tiến trình đang cố ghi ra ngoài workspace. Không biết tiến trình đó là <span class="inline-code">npm test</span> hay là một script vừa được sinh ra trong lượt này.</p>
+    </div>
+    <div class="card">
+      <h3 id="lop-tren">Lớp trên thấy ý định</h3>
+      <p>Biết tool nào, tham số nào, capability nào. Đủ để chặn <span class="inline-code">.env</span> theo tên, redact token trong output, và từ chối một MCP server mà repo mang theo.</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>Bỏ lớp nào cũng hụt</strong>
+    <p>Guard ở lớp application không thay được sandbox: một tiến trình đã chạy rồi thì guard không với tới nữa. Ngược lại sandbox không biết <span class="inline-code">.env</span> khác gì <span class="inline-code">.env.example</span>. Platform này giả định lớp dưới vẫn bật.</p>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="khi-nao-khong-can">Khi nào không cần</h2>
+  <p>Một repo, một người, không secret nào đáng kể, không có ai khác phải làm theo cùng cách — thì cấu hình sẵn của Pi là đủ, và thêm một lớp nữa chỉ tốn thời gian đọc.</p>
+  <p>Platform này bắt đầu có lãi khi số repo đủ nhiều để không ai nhớ nổi repo nào đang mở quyền gì, hoặc khi câu "đã verify chưa" cần một câu trả lời giống nhau ở mọi repo.</p>
+</section>
+            <nav class="pager" aria-label="Trang kế tiếp">
+              <a class="pager-prev" href="/quickstart">
+                <span class="pager-label">Trước</span>
+                <span class="pager-title">Quickstart</span>
+              </a>
+              <a class="pager-next" href="/profiles">
+                <span class="pager-label">Tiếp</span>
+                <span class="pager-title">Project profile</span>
+              </a>
+            </nav>
+
+            <footer class="footer">
+              <p>Pi Agent Platform docs · static HTML · governed agent workflow</p>
+              <div class="footer-links" aria-label="External links">
+                <a href="https://piagent.io.vn" target="_blank" rel="noopener noreferrer">piagent.io.vn</a>
+                <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub repository</a>
+                <a href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer">Facebook profile</a>
+              </div>
+            </footer>
+        </div>
+      </main>
+
+      <aside class="toc" aria-label="Mục lục trang">
+        <p class="toc-title">Trên trang này</p>
+        <nav data-toc></nav>
+      </aside>
+    </div>
+  </body>
+</html>

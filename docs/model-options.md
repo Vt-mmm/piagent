@@ -1,6 +1,8 @@
 # Model selector and scope
 
-Pi Agent Platform không khóa vào một provider. OpenAI Codex và Claude/Anthropic đều là first-class option.
+Pi Agent Platform không khóa vào một provider. Hai họ model dưới đây đều là first-class option: **model OpenAI Codex** (provider id `openai-codex`) và **model Claude của Anthropic** (provider id `anthropic`).
+
+Lưu ý cách đọc: trong toàn bộ tài liệu này, "Codex" và "Claude" là **tên họ model** đứng sau các provider id ở trên. Chúng không phải tên CLI, và cũng không phải một agent nào khác — mọi thứ ở đây đều chạy trong Pi.
 
 Quan trọng: flow chính là user chọn model bằng native Pi selector, không phải hỏi agent recommend.
 
@@ -48,7 +50,7 @@ piagent-models --provider openai-codex
 piagent-models --provider anthropic
 ```
 
-Lưu ý: `--list-models` chỉ hiện model mà Pi xem là available với credential/provider hiện tại. Nếu chưa login Anthropic, Claude có thể chưa hiện dù model catalog local có metadata.
+Lưu ý: `--list-models` chỉ hiện model mà Pi xem là available với credential/provider hiện tại. Nếu chưa login Anthropic, các model Claude có thể chưa hiện dù model catalog local có metadata.
 
 ## Thinking levels
 
@@ -70,7 +72,7 @@ pi --thinking medium
 
 Đừng giới hạn vào vài ví dụ. Sau `pi update --models`, kiểm tra catalog local bằng `piagent-models`. Ở release hiện tại, các family/presets chính cần nhớ:
 
-### OpenAI Codex
+### Họ model OpenAI Codex
 
 | Model | Role gợi ý | Khi dùng |
 |---|---|---|
@@ -82,14 +84,14 @@ pi --thinking medium
 | `openai-codex/gpt-5.6-sol` | strategic/deep | architecture, large refactor, planning lớn |
 | `openai-codex/gpt-5.6-terra` | huge-context scout | đọc nhiều docs/source, tổng hợp repo lớn |
 
-### Claude / Anthropic
+### Họ model Claude (Anthropic)
 
 | Model | Role gợi ý | Khi dùng |
 |---|---|---|
 | `anthropic/claude-haiku-4-5` | fast/cheap | hỏi nhanh, docs/scout nhẹ |
 | `anthropic/claude-sonnet-4-5` | balanced | task source bình thường |
 | `anthropic/claude-sonnet-4-6` | balanced/deep | source task lớn hơn, max-capable |
-| `anthropic/claude-sonnet-5` | balanced/hard default | Claude default mạnh cho implement |
+| `anthropic/claude-sonnet-5` | balanced/hard default | model default mạnh cho implement |
 | `anthropic/claude-opus-4-5` | deep | review/refactor lớn |
 | `anthropic/claude-opus-4-6` | deep/max | architecture/reasoning nặng |
 | `anthropic/claude-opus-4-7` | deep/xhigh/max | high-risk/debug/architecture |
@@ -102,7 +104,7 @@ Pi catalog có thể có thêm dated variants như `*-2025xxxx`. Dùng alias lat
 
 Preset dưới đây là cách mình seed `enabledModels`, không phải giới hạn hard. User vẫn có thể mở `/model` để chọn bất kỳ model available nào trong provider catalog.
 
-| Preset | OpenAI Codex example | Claude/Anthropic example | Khi dùng |
+| Preset | Model OpenAI Codex | Model Claude (Anthropic) | Khi dùng |
 |---|---|---|---|
 | Fast scout | `openai-codex/gpt-5.4-mini:low` | `anthropic/claude-haiku-4-5:low` | đọc nhanh, hỏi đáp, grep/scout nhẹ |
 | Balanced implement | `openai-codex/gpt-5.5:medium` | `anthropic/claude-sonnet-5:medium` | task source bình thường |
@@ -160,6 +162,6 @@ bash scripts/quality-benchmark.sh /path/to/project --record \
 
 So sánh tối thiểu:
 
-- Pi + Codex fast/balanced/deep;
-- Pi + Claude fast/balanced/deep;
+- Pi + model Codex ở fast/balanced/deep;
+- Pi + model Claude ở fast/balanced/deep;
 - any other approved setup nếu team muốn so sánh bằng số liệu.
