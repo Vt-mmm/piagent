@@ -1123,6 +1123,54 @@ describe("piagent guard integration", () => {
     assert.match(unboundedArgs.reason, /too many args/);
   });
 
+  // `$(printf /)` is `/` by the time the shell runs it. The destructive checks
+  // read raw words, so the target was compared as the literal text and matched
+  // none of the catastrophic ones -- while `rm -rf /` itself was refused.
+  it("refuses a destructive target hidden behind a substitution", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const ctx = createContext(cwd);
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    const toolCall = harness.handlers.get("tool_call");
+
+    for (const command of [
+      "rm -rf /",
+      "rm -rf $(printf /)",
+      "rm -rf $(echo /)",
+      "rm -rf `printf /`",
+      "find $(printf /) -delete",
+      "rm -rf $(echo ~)"
+    ]) {
+      const decision = await callToolCall(toolCall, ctx, "bash", { command });
+      assert.equal(decision?.block, true, command);
+      assert.match(decision.reason, /Refusing/, command);
+    }
+  });
+
+  // A target only the shell can produce. `ctx.ui.confirm` answers no here, so
+  // the call is stopped -- what matters is that it is asked rather than run.
+  it("asks before a destructive target it cannot resolve", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const ctx = createContext(cwd);
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    const toolCall = harness.handlers.get("tool_call");
+
+    for (const command of ["rm -rf $(mktemp -d)", "find $(mktemp -d) -delete", "rm -rf $(printf '\\x2f')"]) {
+      const decision = await callToolCall(toolCall, ctx, "bash", { command });
+      assert.equal(decision?.block, true, command);
+      assert.match(decision.reason, /cannot resolve/, command);
+    }
+
+    // Nothing opaque, nothing destructive: no question asked.
+    const plain = await callToolCall(toolCall, ctx, "bash", { command: "rm -rf build" });
+    assert.notEqual(plain?.block, true);
+    const nested = await callToolCall(toolCall, ctx, "bash", { command: "rm -rf $(printf /)/sub" });
+    assert.notEqual(nested?.block, true);
+  });
+
   it("blocks a shell command whose filename it cannot resolve", async () => {
     const { root, piagentGuard } = await loadGuardFixture();
     const cwd = createProject(root);

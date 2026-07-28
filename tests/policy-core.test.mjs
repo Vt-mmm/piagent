@@ -379,7 +379,19 @@ describe("exec policy semantic shell safety", () => {
     "rm -rf $'\\057'",
     "rm -rf $'\\u002f'",
     "rm -rf $'\\x7e'",
-    "rm -rf $'\\x2f'*"
+    "rm -rf $'\\x2f'*",
+    // A substitution whose output this process can work out. `printf` and `echo`
+    // with literal arguments are pure text, so the target resolves and the same
+    // refusal applies -- reading the raw word compared the literal characters
+    // `$(printf /)` against the catastrophic targets and matched none of them.
+    "rm -rf $(printf /)",
+    "rm -rf $(echo /)",
+    "rm -rf `printf /`",
+    "rm -fr $(printf /)",
+    "rm -rf $(echo ~)",
+    "find $(printf /) -delete",
+    "D=/; rm -rf \"$D\"",
+    "bash -c 'rm -rf $(printf /)'"
   ];
 
   for (const command of forbidden) {
@@ -392,13 +404,43 @@ describe("exec policy semantic shell safety", () => {
   const allowed = [
     "rm -rf /tmp/build-cache",
     "rm -rf ~/proj/node_modules",
-    "echo 'never run rm -rf /'"
+    "echo 'never run rm -rf /'",
+    // A substitution nowhere near a destructive target.
+    "echo $(printf /)",
+    // Resolvable, and what it resolves to is not a catastrophic target.
+    "rm -rf $(printf /)/sub",
+    // No `-r` and no `-f`: one file, which is the threshold the refusal above
+    // already uses.
+    "rm $(mktemp)"
   ];
 
   for (const command of allowed) {
     it(`allows ${command}`, () => {
       const result = evaluateExecPolicyCore(command, { policy, mode: "enforce" });
       assert.equal(result.decision, "allow", JSON.stringify(result, null, 2));
+    });
+  }
+
+  // A target only the shell can produce. Refusing these outright would take a
+  // common idiom away; permitting them silently is how the refusal above was
+  // walked around. Neither, so the operator is asked.
+  const confirmed = [
+    "rm -rf $(mktemp -d)",
+    "rm -rf \"$(git rev-parse --show-toplevel)/dist\"",
+    "find $(mktemp -d) -delete",
+    // Quoting inside the substitution is gone by the time a word reaches this
+    // check, so evaluating what is left would produce a value the shell never
+    // had. `$(printf '\\x2f')` is `/`, and reading it as `x2f` and permitting
+    // on that is worse than not reading it at all.
+    "rm -rf $(printf '\\x2f')",
+    "rm -rf $(printf '/ /tmp')"
+  ];
+
+  for (const command of confirmed) {
+    it(`asks before ${command}`, () => {
+      const result = evaluateExecPolicyCore(command, { policy, mode: "enforce" });
+      assert.equal(result.decision, "prompt", JSON.stringify(result, null, 2));
+      assert.match(result.reasons.join("\n"), /cannot resolve/);
     });
   }
 });

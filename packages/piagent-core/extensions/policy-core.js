@@ -389,7 +389,77 @@ function stripWrapper(words) {
   return current;
 }
 
-function rmFinding(words) {
+// `$(printf /)` is `/`. The destructive checks read raw words, so an operand
+// nothing had expanded was compared as the literal text `$(printf /)` and
+// matched no catastrophic target -- while the shell ran the removal of `/`.
+//
+// Two answers, because the substitutions split cleanly in two. `printf` and
+// `echo` with literal arguments are pure text and can be evaluated here, so
+// those resolve and the existing refusal applies to the result. Anything else
+// (`$(mktemp -d)`, `$(git rev-parse --show-toplevel)`) names a path only the
+// shell can produce; refusing those outright would take a common idiom away,
+// and allowing them silently is how the check above was walked around. They
+// become a question instead.
+const STATIC_TEXT_PRODUCERS = new Set(["printf", "echo"]);
+
+/**
+ * Whether the substitutions in this segment can be re-read from a tokenized
+ * word at all.
+ *
+ * By the time a word reaches these checks its quotes are gone and its escapes
+ * are applied, so `$(printf '\x2f')` arrives as `$(printf x2f)` -- and
+ * evaluating that produces `x2f`, a value the shell never had. Resolving to a
+ * wrong value and then permitting on it is worse than not resolving, so a
+ * segment whose substitutions carry quoting or escapes gives up on evaluation
+ * and every substitution in it counts as unresolved.
+ *
+ * @param {string} segment
+ * @returns {boolean}
+ */
+function substitutionsAreLiteral(segment) {
+  if (typeof segment !== "string") return false;
+  for (const match of segment.matchAll(/\$\(([^()]*)\)|`([^`]*)`/g)) {
+    const body = match[1] ?? match[2] ?? "";
+    if (/['"\\]/.test(body)) return false;
+  }
+  return true;
+}
+
+/**
+ * @param {string} word
+ * @param {Map<string, string>} assignments
+ * @param {boolean} evaluable
+ * @returns {{value: string, resolved: boolean}}
+ */
+function resolveSubstitutionTarget(word, assignments, evaluable) {
+  const substitution = /\$\(([^()]*)\)|`([^`]*)`/g;
+  let resolved = true;
+  const value = expandKnownShellVariables(word, assignments).replace(substitution, (match, parenthesised, backticked) => {
+    const inner = (parenthesised ?? backticked ?? "").trim();
+    const producer = commandBasename(shellWords(inner)[0] ?? "");
+    if (!evaluable || !STATIC_TEXT_PRODUCERS.has(producer)) {
+      resolved = false;
+      return match;
+    }
+    const output = staticDataOutputCandidates(inner, assignments, producer);
+    // More than one word out of a substitution is more than one operand, and
+    // stitching them back into one is not what the shell does.
+    if (output.length !== 1) {
+      resolved = false;
+      return match;
+    }
+    return output[0];
+  });
+  return { value, resolved };
+}
+
+/** True when the word carries a substitution this process cannot evaluate. */
+function hasUnresolvedSubstitution(word, assignments, evaluable) {
+  if (!/\$\(|`/.test(word)) return false;
+  return !resolveSubstitutionTarget(word, assignments, evaluable).resolved;
+}
+
+function rmFinding(words, assignments, evaluable) {
   const command = commandBasename(words[0] ?? "");
   const dynamicCommand = command.startsWith("$");
   if (command !== "rm" && !dynamicCommand) return undefined;
@@ -415,18 +485,37 @@ function rmFinding(words) {
     targets.push(word);
   }
 
-  if (targets.some(isRootOrHomeTarget) && (recursive || force || dynamicCommand)) {
-    return "Refusing recursive/forced removal of root or home target.";
+  const resolvedTargets = targets.map((target) => resolveSubstitutionTarget(target, assignments, evaluable));
+  if (resolvedTargets.some((target) => isRootOrHomeTarget(target.value)) && (recursive || force || dynamicCommand)) {
+    return { action: "forbid", reason: "Refusing recursive/forced removal of root or home target." };
+  }
+  const opaque = targets.filter((target) => hasUnresolvedSubstitution(target, assignments, evaluable));
+  if (opaque.length > 0 && (recursive || force)) {
+    return {
+      action: "prompt",
+      reason: `Recursive/forced rm targets a path this policy cannot resolve: ${opaque.join(", ")}. `
+        + "Its value is produced at run time, so what would be deleted is not knowable here. "
+        + "Confirm, or run the substitution first and pass the result."
+    };
   }
   return undefined;
 }
 
-function findDeleteFinding(words) {
+function findDeleteFinding(words, assignments, evaluable) {
   if (commandBasename(words[0] ?? "") !== "find") return undefined;
   if (!words.includes("-delete")) return undefined;
   const firstTarget = words.slice(1).find((word) => !word.startsWith("-"));
-  if (firstTarget && isRootOrHomeTarget(firstTarget)) {
-    return "Refusing find -delete against root or home target.";
+  if (!firstTarget) return undefined;
+  if (isRootOrHomeTarget(resolveSubstitutionTarget(firstTarget, assignments, evaluable).value)) {
+    return { action: "forbid", reason: "Refusing find -delete against root or home target." };
+  }
+  if (hasUnresolvedSubstitution(firstTarget, assignments, evaluable)) {
+    return {
+      action: "prompt",
+      reason: `find -delete starts from a path this policy cannot resolve: ${firstTarget}. `
+        + "Its value is produced at run time, so what would be deleted is not knowable here. "
+        + "Confirm, or run the substitution first and pass the result."
+    };
   }
   return undefined;
 }
@@ -434,14 +523,21 @@ function findDeleteFinding(words) {
 function ddFinding(words) {
   if (commandBasename(words[0] ?? "") !== "dd") return undefined;
   const out = words.find((word) => /^of=\/dev\/(?:sd[a-z]\d*|hd[a-z]\d*|xvd[a-z]\d*|nvme\d+n\d+(?:p\d+)?|disk\d+|rdisk\d+|mapper\/.+)$/i.test(word));
-  return out ? `Refusing dd write to block device ${out}.` : undefined;
+  return out ? { action: "forbid", reason: `Refusing dd write to block device ${out}.` } : undefined;
 }
 
-function semanticCommandFindings(words) {
+/**
+ * @param {string[]} words
+ * @param {Map<string, string>} assignments
+ * @param {string} segment
+ * @returns {{action: "forbid"|"prompt", reason: string}[]}
+ */
+function semanticCommandFindings(words, assignments, segment) {
   const normalizedWords = stripWrapper(words);
+  const evaluable = substitutionsAreLiteral(segment);
   return [
-    rmFinding(normalizedWords),
-    findDeleteFinding(normalizedWords),
+    rmFinding(normalizedWords, assignments, evaluable),
+    findDeleteFinding(normalizedWords, assignments, evaluable),
     ddFinding(normalizedWords),
     xargsFinding(normalizedWords)
   ].filter(Boolean);
@@ -459,7 +555,9 @@ function xargsFinding(words) {
     const chars = flagChars(word);
     return chars.includes("r") || chars.includes("R") || chars.includes("f");
   });
-  return hasRecursiveOrForce ? "Refusing xargs with recursive/forced rm; input target is not visible to policy." : undefined;
+  return hasRecursiveOrForce
+    ? { action: "forbid", reason: "Refusing xargs with recursive/forced rm; input target is not visible to policy." }
+    : undefined;
 }
 
 function legacyPatternMatchesSegment(pattern, words) {
@@ -489,10 +587,14 @@ export function evaluateExecPolicyCore(command, options) {
   const reasons = [];
   const pending = splitShellSegments(command).map((segment) => ({ segment, depth: 0 }));
   const segments = [];
+  // Carried across segments so `D=/; rm -rf "$D"` resolves the same way the
+  // path checks already resolve it.
+  const assignments = new Map();
 
   while (pending.length > 0) {
     const { segment, depth } = pending.shift();
     const words = shellWords(segment);
+    rememberLeadingShellAssignments(words, assignments);
     const matches = [];
     const warnings = [];
 
@@ -509,9 +611,9 @@ export function evaluateExecPolicyCore(command, options) {
       if (rule.action === "prompt") reasons.push(`Prompt required by exec policy ${rule.id}: ${rule.reason}`);
     }
 
-    for (const finding of semanticCommandFindings(words)) {
-      matches.push("forbid:semantic-shell-safety");
-      reasons.push(finding);
+    for (const finding of semanticCommandFindings(words, assignments, segment)) {
+      matches.push(`${finding.action}:semantic-shell-safety`);
+      reasons.push(finding.reason);
     }
 
     for (const pattern of policy.blockedCommandPatterns ?? []) {
@@ -552,8 +654,16 @@ export function evaluateExecPolicyCore(command, options) {
     }
   }
 
-  const hasForbid = reasons.some((reason) => reason.startsWith("Forbidden") || reason.startsWith("Blocked") || reason.startsWith("Refusing"));
-  const hasPrompt = reasons.some((reason) => reason.startsWith("Prompt") || reason.startsWith("Confirmation"));
+  // The action a check decided, not how its sentence happens to start. Reading
+  // the prose meant a finding was only as strong as its first word: a new one
+  // whose reason did not begin with "Refusing" or "Prompt" was recorded, shown,
+  // and then counted as `allow`. The legacy confirmation patterns below push a
+  // reason without a match, so the prose test stays as well.
+  const actions = segments.flatMap((entry) => entry.matches);
+  const hasForbid = actions.some((action) => action.startsWith("forbid:"))
+    || reasons.some((reason) => reason.startsWith("Forbidden") || reason.startsWith("Blocked") || reason.startsWith("Refusing"));
+  const hasPrompt = actions.some((action) => action.startsWith("prompt:"))
+    || reasons.some((reason) => reason.startsWith("Prompt") || reason.startsWith("Confirmation"));
   return {
     mode,
     decision: mode === "off" ? "allow" : hasForbid ? "forbid" : hasPrompt ? "prompt" : "allow",
