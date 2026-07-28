@@ -7,6 +7,7 @@ import { after, describe, it } from "node:test";
 import {
   CapabilityValidationError,
   buildCapabilityCatalog,
+  classifyCapabilityLock,
   resolveCapabilityProfile,
   stableJson,
   validateCapabilityPack,
@@ -73,6 +74,24 @@ function baseManifest(name = "test-pack") {
       },
       verification: { evalScenarios: [] }
     }
+  };
+}
+
+/** A lock document reduced to the fields the classifier reads. */
+function lockDocument(origin, artifactDigest) {
+  return {
+    schemaVersion: 1,
+    core: { apiVersion: 1, packageSource: "npm:@piagent/platform@1.0.0", packageVersion: "1.0.0" },
+    profile: { projectId: "p", mode: "generic", file: "piagent-profile.json", digest: "sha256:profile" },
+    packs: [{
+      name: "acme", version: "0.1.0", origin, source: "src",
+      owner: "platform-maintainers", lifecycle: "stable", digest: "sha256:manifest"
+    }],
+    permissions: {
+      capabilities: [], filesystemRead: [], filesystemWrite: [], networkDomains: [], externalActions: [],
+      protectedPaths: [], readOnlyPaths: [], shellProtectedPaths: []
+    },
+    artifacts: [{ pack: "acme@0.1.0", kind: "prompts", id: "a", path: "a.txt", digest: artifactDigest }]
   };
 }
 
@@ -589,5 +608,51 @@ describe("recipe and action proposal validation", () => {
     const proposal = validActionProposal();
     proposal.spec.artifacts[0].mediaType = "abc";
     assert.throws(() => validateExternalActionProposal(proposal, { now: actionValidationNow }), /invalid/);
+  });
+});
+
+describe("what a capability lock treats as consent", () => {
+  it("requires a profile list when a pack activates by profile", () => {
+    const manifest = baseManifest();
+    manifest.spec.activation = { mode: "profile", profiles: [], triggers: [] };
+    // The trigger mode has always been checked for this. Profile mode was not,
+    // so resolution read `.includes` off an absent list and threw a TypeError
+    // where it should have refused with a reason.
+    const refusalReasons = () => {
+      try {
+        validateCapabilityPack(manifest);
+      } catch (error) {
+        assert.ok(error instanceof CapabilityValidationError);
+        return JSON.stringify(error.errors);
+      }
+      return assert.fail("expected the pack to be refused");
+    };
+
+    assert.match(refusalReasons(), /must not be empty for profile activation/);
+    delete manifest.spec.activation.profiles;
+    assert.match(refusalReasons(), /must not be empty for profile activation/);
+  });
+
+  // Artifact content deliberately sits on the build side for packs the platform
+  // ships: pinning those bytes would stop a policy correction from reaching the
+  // projects that reference it. A vendored source is not the platform, and none
+  // of that reasoning transfers to it.
+  it("blocks when a vendored pack's artifact content changes", () => {
+    const locked = lockDocument("team-sources", "sha256:one");
+    const resolved = lockDocument("team-sources", "sha256:two");
+    const verdict = classifyCapabilityLock(resolved, locked);
+    assert.equal(verdict.status, "blocked");
+    assert.match(verdict.reasons.join(" "), /vendored capability source changed content/);
+  });
+
+  it("re-pins rather than blocks when the platform's own artifact changes", () => {
+    const locked = lockDocument("workspace", "sha256:one");
+    const resolved = lockDocument("workspace", "sha256:two");
+    assert.equal(classifyCapabilityLock(resolved, locked).status, "repin");
+  });
+
+  it("still reports a lock that matches as current", () => {
+    const locked = lockDocument("team-sources", "sha256:one");
+    assert.equal(classifyCapabilityLock(lockDocument("team-sources", "sha256:one"), locked).status, "current");
   });
 });

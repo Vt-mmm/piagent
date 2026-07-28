@@ -8,7 +8,8 @@ import {
   digestDirectory,
   resolveCapabilitySourceRoots,
   validateCapabilitySources,
-  vendorDirectoryFor
+  vendorDirectoryFor,
+  vendorRemoteSource
 } from "../packages/piagent-core/capabilities/capability-sources.js";
 import { resolveCapabilityProfileDocument, scanCapabilityPacks } from "../packages/piagent-core/capabilities/capability-core.js";
 
@@ -185,6 +186,27 @@ describe("capability source resolution", () => {
       () => resolveCapabilitySourceRoots(project, [{ name: "team", path: ".pi/packs" }]),
       /must not contain symbolic links/
     );
+  });
+
+  // Vendoring empties its destination before fetching. Everything above this
+  // guards the path the resolver reads; this guards the path the vendor command
+  // deletes, which is the one that runs as the operator on the operator's disk.
+  it("refuses to vendor through an ancestor the repository made a symbolic link", () => {
+    const project = makeProject();
+    const outside = makeProject();
+    const bystander = path.join(outside, "capability-vendor", "team");
+    fs.mkdirSync(bystander, { recursive: true });
+    fs.writeFileSync(path.join(bystander, "keep.txt"), "operator data\n");
+    // `.pi` is the ancestor, not the destination: creating the vendor directory
+    // under it succeeds and looks ordinary, so only a check that walks the whole
+    // path catches this before the delete.
+    fs.symlinkSync(outside, path.join(project, ".pi"));
+
+    assert.throws(
+      () => vendorRemoteSource(project, { name: "team", source: "npm:@piagent-absent/nothing@1.0.0" }),
+      /must not resolve through a symbolic link/
+    );
+    assert.equal(fs.readFileSync(path.join(bystander, "keep.txt"), "utf8"), "operator data\n");
   });
 
   it("refuses a missing vendored source rather than resolving without it", () => {
