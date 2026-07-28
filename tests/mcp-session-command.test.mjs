@@ -43,14 +43,25 @@ function writeProjectServer(cwd, servers, file = ".mcp.json") {
   fs.writeFileSync(target, `${JSON.stringify({ mcpServers: servers }, null, 2)}\n`);
 }
 
+// Both global MCP layers have an environment variable that wins over HOME, so
+// overriding HOME alone leaves the fixture reading whatever config the machine
+// running the suite happens to have. It passes on a machine with none and
+// reports the operator's own servers on a machine with some.
 async function withHome(home, run) {
-  const previous = process.env.HOME;
-  process.env.HOME = home;
+  const overrides = {
+    HOME: home,
+    XDG_CONFIG_HOME: path.join(home, ".config"),
+    PI_CODING_AGENT_DIR: path.join(home, ".pi", "agent")
+  };
+  const previous = Object.fromEntries(Object.keys(overrides).map((name) => [name, process.env[name]]));
+  Object.assign(process.env, overrides);
   try {
     return await run();
   } finally {
-    if (previous === undefined) delete process.env.HOME;
-    else process.env.HOME = previous;
+    for (const [name, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
   }
 }
 
