@@ -118,6 +118,52 @@ async function startGuard(fixture) {
 describe("MCP approval gate", () => {
   const serverEntry = { command: "npx", args: ["-y", "@acme/repo-mcp"], lifecycle: "lazy" };
 
+  // The gate is cached and recomputed when a signature over the files behind it
+  // changes. That signature was written by hand from the repository layers,
+  // while the check it guards grew to read merged settings from every scope and
+  // to stat import targets outside the repository. An already-loaded guard went
+  // on permitting calls in exactly the states `piagent-mcp doctor` was
+  // reporting as blocked, until the module happened to be reloaded.
+  it("sees a global setting that blocks the gate after the first call", async () => {
+    const fixture = await loadFixture();
+    writeProjectConfig(fixture.cwd, { settings: { toolPrefix: "none" }, mcpServers: {} });
+
+    await withHome(fixture.home, async () => {
+      const { ctx, harness } = await startGuard(fixture);
+      const call = () => callToolCall(harness.handlers.get("tool_call"), ctx, "some_tool", { x: 1 });
+      assert.notEqual((await call())?.block, true);
+
+      // Neither half blocks alone; the adapter merges settings across layers, so
+      // together they are the state that leaves nothing to check.
+      const globalConfig = path.join(fixture.home, ".config", "mcp", "mcp.json");
+      fs.mkdirSync(path.dirname(globalConfig), { recursive: true });
+      fs.writeFileSync(globalConfig, `${JSON.stringify({ settings: { directTools: true }, mcpServers: {} })}\n`);
+
+      const after = await call();
+      assert.equal(after?.block, true);
+      assert.match(after.reason, /toolPrefix "none"/);
+    });
+  });
+
+  it("sees an import target that appears after the first call", async () => {
+    const fixture = await loadFixture();
+    writeProjectConfig(fixture.cwd, { imports: ["codex"], mcpServers: {} });
+
+    await withHome(fixture.home, async () => {
+      const { ctx, harness } = await startGuard(fixture);
+      const call = () => callToolCall(harness.handlers.get("tool_call"), ctx, "some_tool", { x: 1 });
+      // Declared but not installed, so nothing is hidden yet.
+      assert.notEqual((await call())?.block, true);
+
+      fs.mkdirSync(path.join(fixture.home, ".codex"), { recursive: true });
+      fs.writeFileSync(path.join(fixture.home, ".codex", "config.toml"), '[mcp_servers.exfil]\ncommand = "npx"\n');
+
+      const after = await call();
+      assert.equal(after?.block, true);
+      assert.match(after.reason, /cannot enumerate/);
+    });
+  });
+
   it("blocks a proxy call to a server the repository defines and nobody approved", async () => {
     const fixture = await loadFixture();
     writeProjectServer(fixture.cwd, "repo", serverEntry);

@@ -47,6 +47,7 @@ import {
   REPOSITORY_SCOPES,
   collectServers,
   configPathForScope,
+  mcpDecisionInputs,
   unverifiableMcpConfig
 } from "../mcp/mcp-config-layers.js";
 import { attributeDirectTool } from "../mcp/mcp-tool-naming.js";
@@ -2045,9 +2046,16 @@ function repositoryMcpGate(cwd: string): RepositoryMcpGate {
     scope,
     file: configPathForScope(scope, { projectPath: cwd })
   }));
+  // Every file the decision reads, listed by the module that reads them rather
+  // than restated here. Building this by hand is what went wrong: the scan grew
+  // to read merged settings from all four scopes and to stat import targets
+  // outside the repository, the hand-written list did not, and an already-loaded
+  // guard went on permitting calls after a personal global config had put the
+  // session in the state this gate exists to refuse.
   const signature = [
     ...servers.map((server) => `${server.origin}:${server.name}:${fileSignature(server.file)}`),
     ...repositoryFiles.map((layer) => `layer:${layer.scope}:${fileSignature(layer.file)}`),
+    ...mcpDecisionInputs({ projectPath: cwd }).map((file) => `input:${file}:${fileSignature(file)}`),
     `store:${fileSignature(path.join(os.homedir(), ".pi", "piagent-mcp-approvals.json"))}`
   ].join("|");
   const cached = mcpApprovalCache.get(cwd);

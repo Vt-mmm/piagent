@@ -175,6 +175,8 @@
 
   <p>Với hai trạng thái chặn-toàn-bộ ở trên, <span class="inline-code">doctor</span> và <span class="inline-code">list</span> in ra lý do và exit 1 — kể cả <span class="inline-code">list --json</span>, vốn trả <span class="inline-code">servers: []</span> với exit 0 đúng lúc không gì chạy được. Exit code trả lời &ldquo;MCP ở đây có chạy được không&rdquo;, không phải &ldquo;có in ra dòng nào không&rdquo;. Cả ba surface — guard, <span class="inline-code">/piagent-mcp</span>, CLI — đọc một state chung, vì hai bên lệch nhau chính là cách một session bị chặn biến thành một session hỏng không rõ lý do.</p>
 
+  <p>Gate được cache theo project và tính lại khi signature trên các file phía sau nó đổi. Danh sách file đó lấy từ chính đường đi mà các reader dùng, kể cả file đang không tồn tại — <span class="inline-code">imports: ["codex"]</span> thành chặn đúng lúc file codex xuất hiện, và <span class="inline-code">directTools</span> thêm vào config global cá nhân là thứ guard đã load phải thấy ngay. Viết tay danh sách đó là cách nó lệch.</p>
+
   <p>Adapter merge <span class="inline-code">settings</span> của cả bốn layer thành một block cho cả session. Nên <span class="inline-code">directTools</span> đặt ở file này và <span class="inline-code">toolPrefix: "none"</span> đặt ở file kia vẫn ra đúng tổ hợp làm gate mất chỗ bám, trong khi đọc riêng từng file thì không file nào có vấn đề. Settings được đọc sau merge, và báo cả hai file.</p>
 
   <p>Cột <span class="inline-code">SCOPE</span> là layer khai báo <span class="inline-code">imports</span>, không phải nơi server được định nghĩa. Server import qua config <span class="inline-code">global</span> vẫn cần duyệt, vì file đọc lại nằm trong clone.</p>

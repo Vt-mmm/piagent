@@ -152,6 +152,8 @@ Trong sáu kind, chỉ `vscode` trỏ vào đường dẫn **trong project** (`.
 
 Hai trạng thái làm gate không kiểm được gì (`toolPrefix: "none"`, và import kind không enumerate được) thì `doctor` và `list` **in ra và exit 1**, không im lặng báo "No MCP servers configured" — kể cả `list --json`, vốn trả `servers: []` với exit 0 đúng lúc không gì chạy được. Exit code trả lời "MCP ở đây có chạy được không", không phải "có in ra dòng nào không". Cả ba surface (guard, `/piagent-mcp`, CLI) đọc **một** state chung; hai bên lệch nhau chính là cách một session bị chặn biến thành một session hỏng không rõ lý do.
 
+Gate được cache theo project, tính lại khi signature trên các file phía sau nó đổi. Danh sách file đó **lấy từ chính đường đi mà các reader dùng**, kể cả file đang không tồn tại — vì `imports: ["codex"]` trở thành chặn đúng lúc `~/.codex/config.toml` xuất hiện, và `directTools` thêm vào config global cá nhân là thứ guard đã load phải thấy ngay chứ không đợi reload module. Viết tay danh sách đó là cách nó lệch: check thì mở rộng ra đọc settings merge của cả bốn scope và stat import target ngoài repo, còn signature thì không.
+
 ### Duyệt là duyệt cái gì
 
 Adapter merge server **trùng tên** theo từng key qua các layer. Repo khai `{"args": ["--evil"]}` thì `command` vẫn lấy từ layer dưới — nên preview lúc duyệt in ra **định nghĩa đã merge**, tức thứ sẽ chạy thật, thay vì mảnh mà layer repo đóng góp. Digest vẫn tính trên mảnh của repo: đó là phần repo kiểm soát, và băm cả bản merge sẽ đẩy server về `pending` mỗi lần người dùng sửa config global của chính mình.

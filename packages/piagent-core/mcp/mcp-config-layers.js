@@ -360,6 +360,46 @@ export function mergedSettings(options = {}) {
 }
 
 /**
+ * Every file any decision in this module can depend on, including the ones that
+ * matter by being absent.
+ *
+ * The guard caches its gate and recomputes when a signature over these changes.
+ * That signature used to be built by hand from the repository layers, and when
+ * the scan below grew to read merged settings from all four scopes and to stat
+ * import targets outside the repository, the signature did not grow with it —
+ * so adding `directTools` to a personal global config left an already-loaded
+ * guard permitting calls that `piagent-mcp doctor` was reporting as blocked.
+ *
+ * Derived from the same traversal the readers use, so a reader that starts
+ * consulting a new file is watched for that file without anything else being
+ * updated to match. An absent file is listed too: `imports: ["codex"]` becomes
+ * a block the moment `~/.codex/config.toml` appears.
+ *
+ * @param {{projectPath?: string, env?: Record<string, string|undefined>, home?: string}} [options]
+ * @returns {string[]}
+ */
+export function mcpDecisionInputs(options = {}) {
+  const inputs = [];
+  for (const scope of SCOPES) {
+    const file = configPathForScope(scope, options);
+    inputs.push(file);
+    let config;
+    try {
+      config = readMcpConfig(file);
+    } catch {
+      // Unreadable still counts: the file is watched, and becoming readable is
+      // a change the gate has to see.
+      continue;
+    }
+    // Every location the kind can be read from, whether or not it has one now.
+    // A kind that resolves to nothing today is exactly the kind whose file
+    // appearing tomorrow changes the answer.
+    for (const kind of config.imports) inputs.push(...importKindFiles(kind, options));
+  }
+  return [...new Set(inputs)];
+}
+
+/**
  * Config that leaves the gate with nothing to check, so the only sound answer is
  * to refuse every tool call.
  *
