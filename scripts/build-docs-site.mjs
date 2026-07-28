@@ -156,6 +156,28 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;");
 }
 
+/**
+ * A lead written with inline markup, as plain text for the meta description.
+ *
+ * Stripping once is not enough: removing `<b>` from `<<b>script>` leaves
+ * `<script>`, so a single pass can produce a tag it was meant to remove. The
+ * loop runs until the text stops changing. Safety does not rest on this —
+ * `escapeHtml` still runs on the result — but a meta description containing
+ * stray markup is wrong regardless of whether it is dangerous.
+ *
+ * @param {string} value
+ * @returns {string}
+ */
+function stripTags(value) {
+  let text = value;
+  let previous;
+  do {
+    previous = text;
+    text = text.replace(/<[^>]+>/g, "");
+  } while (text !== previous);
+  return text;
+}
+
 /** @param {string} currentSlug @returns {string} */
 function renderNav(currentSlug) {
   return NAV.map((section) => {
@@ -235,7 +257,7 @@ function renderPager(index) {
 function renderPage(page, index, body, version) {
   const canonical = page.slug === "index" ? `${SITE.origin}/` : `${SITE.origin}${hrefFor(page)}`;
   const documentTitle = page.slug === "index" ? SITE.title : `${page.title} · ${SITE.title}`;
-  const description = page.lead.replace(/<[^>]+>/g, "");
+  const description = stripTags(page.lead);
 
   return `<!doctype html>
 <html lang="vi">

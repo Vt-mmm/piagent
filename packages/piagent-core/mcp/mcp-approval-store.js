@@ -36,6 +36,16 @@ export function approvalStorePath(options = {}) {
  * The digest of a server entry, over the definition only. Two projects that
  * declare the same server produce the same digest, which is fine: the store is
  * keyed by project as well, so approving one does not approve the other.
+ *
+ * This is a content identifier, not a credential hash, and SHA-256 is the right
+ * primitive for it. The question it answers is "is this the same definition the
+ * operator approved", so it has to be fast, unsalted and stable across runs —
+ * every property a password hash is deliberately built to lack. Nothing is ever
+ * verified against it, and no secret reaches it: `add` refuses to write a
+ * credential value into MCP config and takes a `${VAR}` reference instead, so
+ * what gets hashed is a command line, a URL, variable names, and an OAuth client
+ * id and scope list, all of which are public identifiers.
+ *
  * @param {unknown} entry
  * @returns {string}
  */

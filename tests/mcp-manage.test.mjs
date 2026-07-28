@@ -40,6 +40,19 @@ function run(fixture, args, options = {}) {
   return { status: result.status, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
 }
 
+// Readiness answers the first thing that is wrong, and a missing executable
+// outranks a missing variable. A test about the environment therefore has to
+// supply the executable rather than assume the runner has it: the core preset
+// reaches GitHub through Docker, which a macOS runner does not install.
+function pathWithStub(fixture, name) {
+  const bin = path.join(fixture.root, "bin");
+  fs.mkdirSync(bin, { recursive: true });
+  const file = path.join(bin, name);
+  fs.writeFileSync(file, "#!/bin/sh\nexit 0\n");
+  fs.chmodSync(file, 0o755);
+  return `${bin}${path.delimiter}${process.env.PATH}`;
+}
+
 function readConfig(file) {
   return JSON.parse(fs.readFileSync(file, "utf8"));
 }
@@ -252,9 +265,10 @@ describe("piagent-mcp server management", () => {
 
   it("reports a referenced variable that is not set, and stays quiet about an optional one", () => {
     const fixture = createFixture();
+    const PATH = pathWithStub(fixture, "docker");
     run(fixture, ["--preset", "core", "--scope", "global"]);
 
-    const doctor = run(fixture, ["doctor", "--json"]);
+    const doctor = run(fixture, ["doctor", "--json"], { env: { PATH } });
     const report = JSON.parse(doctor.stdout);
     const byName = Object.fromEntries(report.servers.map((server) => [server.name, server]));
 
@@ -263,9 +277,9 @@ describe("piagent-mcp server management", () => {
     // Context7 answers without a key; the key only raises the quota.
     assert.equal(byName.context7.state, "ready");
 
-    const withToken = run(fixture, ["doctor", "--json"], { env: { GITHUB_PERSONAL_ACCESS_TOKEN: "value" } });
+    const withToken = run(fixture, ["doctor", "--json"], { env: { PATH, GITHUB_PERSONAL_ACCESS_TOKEN: "value" } });
     const resolved = JSON.parse(withToken.stdout).servers.find((server) => server.name === "github");
-    assert.notEqual(resolved.state, "needs-env");
+    assert.equal(resolved.state, "ready");
   });
 
   it("reports an executable that is not installed", () => {
