@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { containsSensitiveText } from "../security/sensitive-data.js";
+import { resolveProjectProfileDocument } from "./project-profile.js";
 
 const API_VERSION = "piagent/v1";
 const CORE_API_VERSION = 1;
@@ -785,6 +786,9 @@ function buildCoreIntegrity(root) {
     // capability-sources.js decides which external trees become readable packs,
     // so tampering with it changes which code the profile can grant.
     "packages/piagent-core/capabilities/capability-sources.js",
+    // project-profile.js decides which document is enforced when a project takes
+    // its policy from an adapter, so it selects the protected paths themselves.
+    "packages/piagent-core/capabilities/project-profile.js",
     "packages/piagent-core/security/sensitive-data.js",
     "packages/piagent-core/extensions/piagent-guard.ts",
     // guard-io.js loads the project profile and guard-shell-analysis.ts decides
@@ -904,7 +908,7 @@ export function resolveCapabilityProfileDocument(root, profile, options = {}) {
       projectId: profile.projectId,
       mode: profile.mode,
       file: profileFile,
-      digest: sha256(stableJson(profile))
+      digest: sha256(stableJson(options.storedProfile ?? profile))
     },
     packs: [...selected.values()].map((pack) => ({
       name: pack.name,
@@ -927,12 +931,102 @@ export function resolveCapabilityProfileDocument(root, profile, options = {}) {
 
 export function resolveCapabilityProfile(root, profilePath, options = {}) {
   const profileAbsolute = fs.realpathSync(profilePath);
-  const profile = readJsonFile(profileAbsolute);
+  const stored = readJsonFile(profileAbsolute);
+  const { profile } = resolveProjectProfileDocument(fs.realpathSync(root), stored);
   return resolveCapabilityProfileDocument(root, profile, {
     profileFile: path.basename(profileAbsolute),
+    // The lock records the document the project owns. A profile that takes its
+    // policy from an adapter is meant to follow that adapter, so digesting the
+    // resolved document instead would turn every platform correction into a
+    // lock the project has to re-agree to by hand.
+    storedProfile: stored,
     packageSource: options.packageSource,
     extraRoots: options.extraRoots
   });
+}
+
+// A lock pins two different things and they deserve different answers when they
+// stop matching.
+//
+// What the project consented to: which packs, from where, and how far they may
+// reach. Granting more than that, or covering less than that, is a change the
+// project has to agree to, so it blocks.
+//
+// Which build of the platform produced the resolution: its version, the digests
+// of its runtime files, and the content of the artifacts its packs ship. That
+// moves on every release. Blocking on it put a per-project chore behind a global
+// update — every project on a profile that selects packs stopped working until
+// its profile was reapplied — while not actually defending against the case it
+// resembles: the code that verifies the lock is itself one of the files the lock
+// pins, so anything able to rewrite the installed platform can rewrite the check
+// along with it. A build move with an unchanged grant is re-pinned and reported,
+// not refused.
+//
+// Artifact content sits on the build side deliberately. Adapter policy files,
+// base policy, prompts, skills, subagents, and recipes all ship as artifacts, so
+// pinning their bytes means a policy correction cannot reach a project that
+// references it — which is the whole point of shipping policy centrally. Nothing
+// is given up by that: which artifacts a pack provides is declared in its
+// manifest, and the manifest digest is pinned in `packs`, so an artifact that
+// appears, disappears, or moves still blocks. A policy artifact that weakens
+// blocks too, because the permissions it resolves to are compared directly
+// below.
+const GRANTING_PERMISSIONS = ["capabilities", "filesystemRead", "filesystemWrite", "networkDomains", "externalActions"];
+const RESTRICTING_PERMISSIONS = ["protectedPaths", "readOnlyPaths", "shellProtectedPaths"];
+
+function consentedShape(document) {
+  return {
+    schemaVersion: document?.schemaVersion,
+    apiVersion: document?.core?.apiVersion,
+    packageSource: document?.core?.packageSource,
+    profile: document?.profile,
+    packs: document?.packs
+  };
+}
+
+function consentDrift(expected, actual) {
+  const before = consentedShape(actual);
+  const after = consentedShape(expected);
+  return Object.keys(after)
+    .filter((key) => stableJson(after[key]) !== stableJson(before[key]))
+    .map((key) => `${key} no longer matches the locked value`);
+}
+
+function permissionDrift(expected, actual) {
+  const locked = actual?.permissions ?? {};
+  const resolved = expected?.permissions ?? {};
+  const drift = [];
+
+  for (const key of GRANTING_PERMISSIONS) {
+    const agreed = new Set(locked[key] ?? []);
+    const added = (resolved[key] ?? []).filter((item) => !agreed.has(item));
+    if (added.length > 0) drift.push(`${key} would grant ${added.join(", ")}`);
+  }
+  // A protection that disappears is a weakening even though the list shrank.
+  for (const key of RESTRICTING_PERMISSIONS) {
+    const kept = new Set(resolved[key] ?? []);
+    const dropped = (locked[key] ?? []).filter((item) => !kept.has(item));
+    if (dropped.length > 0) drift.push(`${key} would stop covering ${dropped.join(", ")}`);
+  }
+  return drift;
+}
+
+export function classifyCapabilityLock(expected, actual) {
+  const expectedDigest = sha256(stableJson(expected));
+  const actualDigest = sha256(stableJson(actual));
+  if (crypto.timingSafeEqual(Buffer.from(expectedDigest), Buffer.from(actualDigest))) {
+    return { status: "current", reasons: [], expectedDigest, actualDigest };
+  }
+
+  const reasons = [...consentDrift(expected, actual), ...permissionDrift(expected, actual)];
+  if (reasons.length > 0) return { status: "blocked", reasons, expectedDigest, actualDigest };
+
+  return {
+    status: "repin",
+    reasons: [`platform build moved to ${expected?.core?.packageVersion ?? "an unknown version"}`],
+    expectedDigest,
+    actualDigest
+  };
 }
 
 export function verifyCapabilityLock(root, profilePath, lockDocument, options = {}) {
@@ -940,12 +1034,15 @@ export function verifyCapabilityLock(root, profilePath, lockDocument, options = 
     packageSource: options.packageSource,
     extraRoots: options.extraRoots
   });
-  const expectedText = stableJson(expected);
-  const actualText = stableJson(lockDocument);
+  const classification = classifyCapabilityLock(expected, lockDocument);
   return {
-    ok: crypto.timingSafeEqual(Buffer.from(sha256(expectedText)), Buffer.from(sha256(actualText))),
-    expectedDigest: sha256(expectedText),
-    actualDigest: sha256(actualText),
+    // `ok` stays the question callers were already asking: may this project run?
+    // A re-pinnable lock may, and the caller is told so through `status`.
+    ok: classification.status !== "blocked",
+    status: classification.status,
+    reasons: classification.reasons,
+    expectedDigest: classification.expectedDigest,
+    actualDigest: classification.actualDigest,
     expected
   };
 }

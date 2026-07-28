@@ -25,11 +25,20 @@ bash "$ROOT/scripts/profile-doctor.sh" "$PROJECT" >/dev/null
 bash "$ROOT/scripts/quality-benchmark.sh" "$PROJECT" --init >/dev/null
 bash "$ROOT/scripts/quality-benchmark.sh" "$PROJECT" --record --scenario smoke --surface pi --result pass --tokens 1 --verify "test -s README.md" >/dev/null
 
-node --input-type=module - "$PROJECT/.pi/piagent-profile.json" "$PROJECT/.pi/benchmarks/quality-runs.jsonl" <<'NODE'
+node --input-type=module - "$PROJECT/.pi/piagent-profile.json" "$PROJECT/.pi/benchmarks/quality-runs.jsonl" "$ROOT" <<'NODE'
 import fs from "node:fs";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 
-const [profilePath, benchmarkPath] = process.argv.slice(2);
-const profile = JSON.parse(fs.readFileSync(profilePath, "utf8"));
+const [profilePath, benchmarkPath, platformRoot] = process.argv.slice(2);
+const stored = JSON.parse(fs.readFileSync(profilePath, "utf8"));
+
+// A project that names an adapter stores identity and overrides only. The policy
+// the runtime enforces is the resolved document, so that is what gets checked.
+const { resolveProjectProfileDocument } = await import(
+  pathToFileURL(path.join(platformRoot, "packages", "piagent-core", "capabilities", "project-profile.js")).href
+);
+const profile = resolveProjectProfileDocument(platformRoot, stored).profile;
 for (const capability of ["filesystem-readonly", "filesystem-write", "shell", "memory"]) {
   if (!profile.mcpCapabilities.includes(capability)) {
     throw new Error(`missing capability ${capability}`);

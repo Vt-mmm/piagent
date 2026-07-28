@@ -70,6 +70,29 @@ Path policy fields have distinct meanings:
 
 Glob trong các field này neo từ project root, nên `backend/**` chỉ khớp backend nằm ở root. Với monorepo, phải liệt kê đúng vị trí thật (`packages/api/**`, `services/*/**`). Không dùng `**/api/**`: nó khớp luôn `packages/web/src/api/` — thư mục HTTP client của frontend — và biến chính phần được phép sửa thành read-only.
 
+## Profile theo reference (`extends`)
+
+Profile ở trên là dạng self-contained: project ghi toàn bộ policy. Dạng này đóng băng policy tại thời điểm onboard — platform sửa adapter thì project cũ vẫn giữ bản copy cũ mãi.
+
+`extends` biến policy thành reference. Project chỉ giữ phần thuộc về project, phần còn lại lấy từ adapter trong platform đang cài:
+
+```json
+{
+  "schemaVersion": 1,
+  "extends": "web-frontend",
+  "projectId": "my-project",
+  "displayName": "My Project"
+}
+```
+
+Quy tắc:
+
+- `extends` trỏ tới một thư mục trong `adapters/` của platform đang cài. Tên không tồn tại → guard refuse, không fallback im lặng.
+- Mọi key project tự khai **thay thế nguyên key** của adapter, không merge từng phần tử. Khai `protectedPaths` nghĩa là project sở hữu list đó và không nhận thay đổi từ adapter nữa.
+- Không khai `extends` thì profile giữ nguyên hành vi cũ, self-contained.
+
+`scripts/init-project.sh` và `/onboard-project` ghi dạng `extends` khi profile đến từ built-in adapter. Update platform sau đó không cần chạm vào project nào.
+
 ## Monorepo và workspace
 
 Một project = một thư mục mở `pi`. Guard đọc profile tại `<cwd>/.pi/piagent-profile.json` và không đi ngược lên tìm, nên mở `pi` ở thư mục cha chứa nhiều project sẽ bỏ qua profile của từng project con và chạy unprofiled.

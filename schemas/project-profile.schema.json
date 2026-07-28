@@ -6,18 +6,36 @@
   "required": [
     "schemaVersion",
     "projectId",
-    "displayName",
-    "mode",
-    "rootMarkers",
-    "protectedPaths",
-    "requiredContext",
-    "verifyCommands",
-    "mcpCapabilities"
+    "displayName"
   ],
+  "if": {
+    "required": [
+      "extends"
+    ]
+  },
+  "then": {
+    "description": "A profile that names an adapter stores identity plus overrides. Every policy field it omits comes from the installed adapter at runtime, so none of them are required here."
+  },
+  "else": {
+    "required": [
+      "mode",
+      "rootMarkers",
+      "protectedPaths",
+      "requiredContext",
+      "verifyCommands",
+      "mcpCapabilities"
+    ]
+  },
   "properties": {
     "schemaVersion": {
       "type": "integer",
       "const": 1
+    },
+    "extends": {
+      "description": "Name of a built-in adapter under adapters/ in the installed platform. Its profile is the base; every other key in this file replaces the adapter's key of the same name.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
     },
     "projectId": {
       "type": "string",

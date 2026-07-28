@@ -40,9 +40,11 @@ import {
   redactSensitiveText
 } from "./redaction-core.js";
 import { detectProfileName } from "./project-shape.js";
+import { buildExtendingProfile, resolveProjectProfileDocument } from "../capabilities/project-profile.js";
 import {
   resolveCapabilityProfileDocument,
   verifyCapabilityLock,
+  writeJsonAtomic,
   writeProfileLockAtomic
 } from "../capabilities/capability-core.js";
 import { resolveCapabilitySourceRoots } from "../capabilities/capability-sources.js";
@@ -417,6 +419,10 @@ const DEFAULT_POLICY: BasePolicy = {
   orchestrationPolicy: DEFAULT_ORCHESTRATION_POLICY
 };
 
+// Which platform supplies the adapters is fixed by where this file is installed,
+// so it is resolved once here rather than threaded through every profile load.
+const PLATFORM_ROOT = findPlatformRoot(path.dirname(fileURLToPath(import.meta.url)));
+
 function loadPolicy(extensionDir: string): BasePolicy {
   const root = findPackageRoot(extensionDir);
   return readJsonFile<BasePolicy>(path.join(root, "policies", "base-policy.json")) ?? DEFAULT_POLICY;
@@ -433,17 +439,38 @@ function fallbackProfile(cwd: string, mode = "unprofiled"): ProjectProfile {
   };
 }
 
+// A profile that names an adapter this platform does not have cannot be
+// enforced, and the unprofiled shape carries no readOnlyPaths — falling back to
+// it would quietly hand write access to whatever the profile was protecting. The
+// session stays readable and says why instead.
+function unresolvedProfile(cwd: string, reason: string): ProjectProfile {
+  return {
+    ...fallbackProfile(cwd, "unresolved-profile-base"),
+    permissionProfile: "read-only",
+    unresolvedReason: reason
+  } as ProjectProfile;
+}
+
+function resolveStoredProfile(stored: ProjectProfile | undefined, cwd: string, missingMode: string): ProjectProfile {
+  if (!stored) return fallbackProfile(cwd, missingMode);
+  try {
+    return resolveProjectProfileDocument(PLATFORM_ROOT, stored).profile as ProjectProfile;
+  } catch (error) {
+    return unresolvedProfile(cwd, error instanceof Error ? error.message : String(error));
+  }
+}
+
 function loadProfile(cwd: string, projectTrusted = false): ProjectProfile {
   const explicit = process.env.PIAGENT_PROFILE;
   if (explicit && explicit.trim().length > 0) {
-    return readJsonFile<ProjectProfile>(explicit) ?? fallbackProfile(cwd, "explicit-profile-unreadable");
+    return resolveStoredProfile(readJsonFile<ProjectProfile>(explicit), cwd, "explicit-profile-unreadable");
   }
 
   if (!projectTrusted) {
     return fallbackProfile(cwd, "unprofiled-global-package");
   }
 
-  return readJsonFile<ProjectProfile>(path.join(cwd, ".pi", "piagent-profile.json")) ?? fallbackProfile(cwd, projectTrusted ? "unprofiled" : "unprofiled-global-package");
+  return resolveStoredProfile(readJsonFile<ProjectProfile>(path.join(cwd, ".pi", "piagent-profile.json")), cwd, "unprofiled");
 }
 
 function loadProfileFromContext(ctx: ExtensionContext): ProjectProfile {
@@ -530,6 +557,7 @@ function capabilitySourceRoots(
 type ProjectCapabilityState = {
   ok: boolean;
   reason?: string;
+  repinned?: string;
   filesystemRead?: string[];
   filesystemWrite?: string[];
 };
@@ -539,8 +567,18 @@ function verifyProjectCapabilityState(extensionDir: string, cwd: string, project
   if (!projectTrusted) return { ok: true };
   const profilePath = projectProfilePath(cwd);
   if (!fs.existsSync(profilePath)) return { ok: true };
-  const profile = readJsonFile<ProjectProfile>(profilePath);
-  if (!profile || !Array.isArray(profile.capabilityPacks)) return { ok: true };
+  // Which packs a project selects can come from the adapter it extends, so the
+  // question has to be asked of the resolved document. Asking the stored one
+  // would skip the lock entirely for every project that references an adapter.
+  const stored = readJsonFile<ProjectProfile>(profilePath);
+  if (!stored) return { ok: true };
+  let profile: ProjectProfile;
+  try {
+    profile = resolveProjectProfileDocument(PLATFORM_ROOT, stored).profile as ProjectProfile;
+  } catch (error) {
+    return { ok: false, reason: error instanceof Error ? error.message : String(error) };
+  }
+  if (!Array.isArray(profile.capabilityPacks)) return { ok: true };
   const lockPath = path.join(cwd, ".pi", "piagent-profile.lock.json");
   if (!fs.existsSync(lockPath)) return { ok: false, reason: "Capability lock is missing. Reapply the project profile." };
   const lock = readJsonFile<Record<string, unknown>>(lockPath);
@@ -550,13 +588,30 @@ function verifyProjectCapabilityState(extensionDir: string, cwd: string, project
       packageSource: projectPackageSource(cwd),
       extraRoots: capabilitySourceRoots(cwd, profile)
     });
-    return verification.ok
-      ? {
-          ok: true,
-          filesystemRead: verification.expected.permissions.filesystemRead,
-          filesystemWrite: verification.expected.permissions.filesystemWrite
-        }
-      : { ok: false, reason: "Capability lock does not match the active profile, package source, or installed platform." };
+    if (verification.status === "blocked") {
+      return {
+        ok: false,
+        reason: `Capability lock does not match what this project agreed to: ${verification.reasons.join("; ")}. Reapply the project profile.`
+      };
+    }
+    const granted = {
+      filesystemRead: verification.expected.permissions.filesystemRead,
+      filesystemWrite: verification.expected.permissions.filesystemWrite
+    };
+    if (verification.status !== "repin") return { ok: true, ...granted };
+
+    // The grant is unchanged and only the platform build moved. Record the new
+    // build instead of stopping the session, which is what turned every release
+    // into a chore in every project.
+    try {
+      writeJsonAtomic(lockPath, verification.expected);
+    } catch (error) {
+      return {
+        ok: false,
+        reason: `Capability lock is behind the installed platform and could not be rewritten: ${error instanceof Error ? error.message : String(error)}`
+      };
+    }
+    return { ok: true, repinned: verification.reasons.join("; "), ...granted };
   } catch (error) {
     return { ok: false, reason: `Capability validation failed: ${error instanceof Error ? error.message : String(error)}` };
   }
@@ -2854,12 +2909,18 @@ function buildTechStackManifest(profileName: string, selectedOptions: TechOption
   };
 }
 
+// `profile` is the document the project stores. When it names an adapter, the
+// lock is resolved against that adapter but still records the stored document,
+// so a later platform correction is not a lock the project has to re-agree to.
 function writeProfileDocumentWithLock(extensionDir: string, cwd: string, profile: ProjectProfile): ProjectProfile {
   const target = projectProfilePath(cwd);
-  const capabilityLock = resolveCapabilityProfileDocument(findPlatformRoot(extensionDir), profile, {
+  const platformRoot = findPlatformRoot(extensionDir);
+  const resolved = resolveProjectProfileDocument(platformRoot, profile).profile as ProjectProfile;
+  const capabilityLock = resolveCapabilityProfileDocument(platformRoot, resolved, {
     profileFile: "piagent-profile.json",
+    storedProfile: profile,
     packageSource: projectPackageSource(cwd),
-    extraRoots: capabilitySourceRoots(cwd, profile)
+    extraRoots: capabilitySourceRoots(cwd, resolved)
   });
   fs.mkdirSync(path.dirname(target), { recursive: true });
   writeProfileLockAtomic(target, profile, path.join(cwd, ".pi", "piagent-profile.lock.json"), capabilityLock);
@@ -2909,7 +2970,7 @@ function writeTechStackSelection(
   };
   writeProfileDocumentWithLock(extensionDir, cwd, profile);
   ensureProjectContextPlaceholder(cwd);
-  return { profile, manifest };
+  return { profile: resolveProjectProfileDocument(findPlatformRoot(extensionDir), profile).profile as ProjectProfile, manifest };
 }
 
 function normalizeTechSelections(cwd: string, profileName: string, selections: Record<string, unknown> = {}, fillRecommended = true): {
@@ -3033,20 +3094,24 @@ function buildProfileFromAdapter(extensionDir: string, cwd: string, profileName:
   const profile = readJsonFile<ProjectProfile>(source);
   if (!profile) throw new Error(`Profile unreadable: ${profileName}`);
   const projectName = path.basename(cwd);
-  return {
-    ...profile,
-    projectId: projectId ? slugify(projectId) : slugify(projectName),
-    displayName: displayName?.trim() || titleize(projectName)
-  };
+  // The project records which adapter it follows, not a copy of that adapter's
+  // rules. A copy stops receiving corrections the moment it is written.
+  return buildExtendingProfile(
+    profileName,
+    projectId ? slugify(projectId) : slugify(projectName),
+    displayName?.trim() || titleize(projectName)
+  ) as ProjectProfile;
 }
 
 function writeProfileFromAdapter(extensionDir: string, cwd: string, profileName: string, overwrite = false, projectId?: string, displayName?: string): ProjectProfile {
   const target = projectProfilePath(cwd);
   if (fs.existsSync(target) && !overwrite) throw new Error(".pi/piagent-profile.json already exists. Pass overwrite=true to replace it.");
-  const personalized = buildProfileFromAdapter(extensionDir, cwd, profileName, projectId, displayName);
-  writeProfileDocumentWithLock(extensionDir, cwd, personalized);
+  const stored = buildProfileFromAdapter(extensionDir, cwd, profileName, projectId, displayName);
+  writeProfileDocumentWithLock(extensionDir, cwd, stored);
   ensureProjectContextPlaceholder(cwd);
-  return personalized;
+  // Store the reference, hand back the document it resolves to: callers report
+  // and trace what is now in force, not the four lines that point at it.
+  return resolveProjectProfileDocument(findPlatformRoot(extensionDir), stored).profile as ProjectProfile;
 }
 
 function readTask(cwd: string, taskId: string): TaskContract | undefined {
@@ -3659,6 +3724,9 @@ export default function piagentGuard(pi: ExtensionAPI) {
     const permissionHint = ` permission=${permissionProfile.mode}`;
     ctx.ui.notify(`Piagent Pi guard loaded: ${name}${profileHint}${permissionHint}${contextHint}`, preflight.recommendation === "fresh-session" ? "warning" : "info");
     if (!capabilityState.ok) ctx.ui.notify(capabilityState.reason ?? "Capability validation failed.", "warning");
+    if (capabilityState.repinned) {
+      ctx.ui.notify(`Capability lock re-pinned: ${capabilityState.repinned}. The capabilities this project grants are unchanged.`, "info");
+    }
     const legacyWarning = legacyProjectStateWarning(ctx.cwd);
     if (legacyWarning) ctx.ui.notify(legacyWarning, "warning");
     if (permissionProfile.warning) ctx.ui.notify(permissionProfile.warning, "warning");
@@ -4675,10 +4743,12 @@ export default function piagentGuard(pi: ExtensionAPI) {
       entry.context7.digest = snapshot.digest;
       manifest.updatedAt = nowIso();
       fs.writeFileSync(techStackPath(ctx.cwd), `${JSON.stringify(manifest, null, 2)}\n`);
-      const profile = loadProfileFromContext(ctx);
-      if (profile.techStack) {
-        profile.techStack.updatedAt = manifest.updatedAt;
-        writeProfileDocumentWithLock(extensionDir, ctx.cwd, profile);
+      // Write back the document the project stores, not the resolved one: saving
+      // the resolved copy would inline the adapter and stop it following.
+      const stored = readJsonFile<ProjectProfile>(projectProfilePath(ctx.cwd));
+      if (stored?.techStack) {
+        stored.techStack.updatedAt = manifest.updatedAt;
+        writeProfileDocumentWithLock(extensionDir, ctx.cwd, stored);
       }
       appendTrace(ctx.cwd, { event: "profile_tech_context_record", techId, role: entry.role, libraryId: snapshot.resolvedLibraryId });
       appendSessionTrace(pi, { event: "profile_tech_context_record", techId, role: entry.role, libraryId: snapshot.resolvedLibraryId });

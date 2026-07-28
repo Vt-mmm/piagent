@@ -178,20 +178,84 @@ describe("capability catalog and profile lock", () => {
     assert.equal(verifyCapabilityLock(root, profilePath, lock).ok, false);
   });
 
-  it("detects a runtime enforcement file change", () => {
+  // A platform build moves on every release. When the grant it resolves to is
+  // the same, the lock records the new build rather than stopping the project,
+  // which is what put a per-project step behind a global update.
+  it("re-pins a runtime file change that grants nothing new", () => {
     const root = createPlatformFixture();
     const profilePath = path.join(root, "profile.json");
     const lock = resolveCapabilityProfile(root, profilePath);
     fs.appendFileSync(path.join(root, "packages", "piagent-core", "extensions", "policy-core.js"), "\n// integrity change\n");
-    assert.equal(verifyCapabilityLock(root, profilePath, lock).ok, false);
+    const verification = verifyCapabilityLock(root, profilePath, lock);
+    assert.equal(verification.status, "repin");
+    assert.equal(verification.ok, true);
   });
 
-  it("detects a base policy change", () => {
+  it("re-pins a base policy change that only reformats it", () => {
     const root = createPlatformFixture();
     const profilePath = path.join(root, "profile.json");
     const lock = resolveCapabilityProfile(root, profilePath);
     fs.appendFileSync(path.join(root, "packages", "piagent-core", "policies", "base-policy.json"), "\n");
-    assert.equal(verifyCapabilityLock(root, profilePath, lock).ok, false);
+    assert.equal(verifyCapabilityLock(root, profilePath, lock).status, "repin");
+  });
+
+  // The previous version of these two tests appended whitespace and asserted the
+  // lock refused. They passed because any byte anywhere refused, not because a
+  // weakened policy was noticed — the case below is the one that matters.
+  it("refuses a base policy that stops covering a protected path", () => {
+    const root = createPlatformFixture();
+    const profilePath = path.join(root, "profile.json");
+    const lock = resolveCapabilityProfile(root, profilePath);
+
+    const basePolicyPath = path.join(root, "packages", "piagent-core", "policies", "base-policy.json");
+    const basePolicy = JSON.parse(fs.readFileSync(basePolicyPath, "utf8"));
+    const dropped = basePolicy.protectedPaths.pop();
+    writeJson(basePolicyPath, basePolicy);
+
+    const verification = verifyCapabilityLock(root, profilePath, lock);
+    assert.equal(verification.status, "blocked");
+    assert.equal(verification.ok, false);
+    assert.ok(verification.reasons.some((reason) => reason.includes(dropped)), verification.reasons.join("; "));
+  });
+
+  it("refuses a platform that would grant more than the lock agreed to", () => {
+    const root = createPlatformFixture();
+    const profilePath = path.join(root, "profile.json");
+    const lock = resolveCapabilityProfile(root, profilePath);
+
+    // Drop one entry the fixture really grants, so the assertion cannot hold
+    // just because the list was empty.
+    const granted = ["capabilities", "filesystemRead", "filesystemWrite", "networkDomains", "externalActions"]
+      .find((key) => (lock.permissions[key] ?? []).length > 0);
+    assert.ok(granted, `the fixture grants nothing: ${stableJson(lock.permissions)}`);
+
+    const narrower = JSON.parse(JSON.stringify(lock));
+    const removed = narrower.permissions[granted].pop();
+    const verification = verifyCapabilityLock(root, profilePath, narrower);
+    assert.equal(verification.status, "blocked");
+    assert.ok(
+      verification.reasons.some((reason) => reason === `${granted} would grant ${removed}`),
+      verification.reasons.join("; ")
+    );
+  });
+
+  it("refuses a lock whose pack set no longer matches", () => {
+    const root = createPlatformFixture();
+    const profilePath = path.join(root, "profile.json");
+    const lock = resolveCapabilityProfile(root, profilePath);
+
+    const swapped = JSON.parse(JSON.stringify(lock));
+    swapped.packs[0].digest = `sha256:${"b".repeat(64)}`;
+    const verification = verifyCapabilityLock(root, profilePath, swapped);
+    assert.equal(verification.status, "blocked");
+    assert.ok(verification.reasons.some((reason) => reason.startsWith("packs")), verification.reasons.join("; "));
+  });
+
+  it("reports an untouched lock as current", () => {
+    const root = createPlatformFixture();
+    const profilePath = path.join(root, "profile.json");
+    const lock = resolveCapabilityProfile(root, profilePath);
+    assert.equal(verifyCapabilityLock(root, profilePath, lock).status, "current");
   });
 });
 

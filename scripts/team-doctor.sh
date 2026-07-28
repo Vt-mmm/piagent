@@ -137,7 +137,7 @@ function runtimeMatrixStatus() {
     surface: `${platform}/${arch}`,
     status: "outside-release-matrix",
     teamRolloutReady: false,
-    note: "This runtime is outside the documented v1.1.6 support matrix."
+    note: "This runtime is outside the documented v1.1.7 support matrix."
   };
 }
 
@@ -313,7 +313,12 @@ if (foreignAgentConfig.length > 0) {
 const projectProfilePath = path.join(projectPath, ".pi", "piagent-profile.json");
 let projectProfile = null;
 if (fs.existsSync(projectProfilePath)) {
-  const profile = readJson(projectProfilePath);
+  // Check the document that will be enforced. A profile that names an adapter
+  // stores only its own identity and overrides.
+  const { resolveProjectProfileDocument } = await import(
+    pathToFileURL(path.join(platformRoot, "packages", "piagent-core", "capabilities", "project-profile.js")).href
+  );
+  const profile = resolveProjectProfileDocument(platformRoot, readJson(projectProfilePath)).profile;
   projectProfile = profile;
   for (const field of ["schemaVersion", "projectId", "displayName", "mode"]) {
     if (profile[field] === undefined || profile[field] === "") errors.push(`project profile missing ${field}`);
@@ -333,7 +338,11 @@ if (fs.existsSync(projectProfilePath)) {
       try {
         const lock = readJson(projectLockPath);
         const verification = verifyCapabilityLock(platformRoot, projectProfilePath, lock, { packageSource: projectPackageSource });
-        if (!verification.ok) errors.push("project capability lock is stale or does not match the configured package source");
+        if (verification.status === "blocked") {
+          errors.push(`project capability lock no longer matches what the project agreed to: ${verification.reasons.join("; ")}`);
+        } else if (verification.status === "repin") {
+          warnings.push(`project capability lock is behind the installed platform and will be re-pinned on the next Pi session (${verification.reasons.join("; ")})`);
+        }
       } catch (error) {
         errors.push(`project capability lock validation failed: ${error instanceof Error ? error.message : String(error)}`);
       }
