@@ -115,18 +115,18 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:208386b85f36f08180267a0e591c9934bc54d8074d8cb8f9c1e03fff6b7389a8",
+    "packageDigest": "sha256:5e93a7517838c0e4ff9a1b5911cb93c455423418d82404dcc58efbfb9d61bf0b",
     "packageSource": "../",
-    "packageVersion": "1.1.7",
+    "packageVersion": "1.1.8",
     "runtimeFiles": [
       {
-        "byteSize": 4108,
-        "digest": "sha256:a647fd85c7a1a5a4ecf09cc14f5385e5bba62703a95cfd6060ab6194be009a13",
+        "byteSize": 4134,
+        "digest": "sha256:c81ca4042e2b4eaa8cc3386b1bcdb033a70025ab3460e4294748af172118e561",
         "path": "package.json"
       },
       {
         "byteSize": 964,
-        "digest": "sha256:38c677e25f3d2672f9c09db682c5fe7f268f288edecacd8e7fee8909baf68abb",
+        "digest": "sha256:24a447a55cbd62e8fcdc7d710537cc8384e77d1a2626040e51eaf236f6cb8441",
         "path": "packages/piagent-core/package.json"
       },
       {
@@ -135,8 +135,8 @@
         "path": "packages/piagent-core/policies/base-policy.json"
       },
       {
-        "byteSize": 61123,
-        "digest": "sha256:c6c1d64038688e0c99d124162dc171ff691080ecd8359f138838d0bf4aba0209",
+        "byteSize": 61480,
+        "digest": "sha256:6ed2c5321332642fb922830b195ad9625abb25b1c88f6bfa42305d45cb191a4c",
         "path": "packages/piagent-core/capabilities/capability-core.js"
       },
       {
@@ -155,8 +155,8 @@
         "path": "packages/piagent-core/security/sensitive-data.js"
       },
       {
-        "byteSize": 255392,
-        "digest": "sha256:720edf76f7efad636bad002901efdcc51d7039ecbc850551ba6da96e2a02fe87",
+        "byteSize": 256634,
+        "digest": "sha256:0a17d5817a936c6846dae9e086776fffedcaa7d9257534a4eee007ac3a703406",
         "path": "packages/piagent-core/extensions/piagent-guard.ts"
       },
       {
@@ -188,6 +188,11 @@
         "byteSize": 11171,
         "digest": "sha256:e26921477639816a4abcf9192dd7c00e9db78426d4f6cdb728d9c7b93ce54b66",
         "path": "packages/piagent-core/extensions/project-shape.js"
+      },
+      {
+        "byteSize": 6483,
+        "digest": "sha256:a30394e7ca86a8418ef485a96aaeecb85a49a34256356793e7ff03de7c9be47b",
+        "path": "packages/piagent-core/extensions/update-check.js"
       }
     ]
   },

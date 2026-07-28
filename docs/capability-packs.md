@@ -240,7 +240,7 @@ Thư mục nguồn phải chứa `packs/`, nằm trong project, và không chứ
 piagent-capabilities vendor --profile .pi/piagent-profile.json
 ```
 
-Lệnh này ghi vào `.pi/capability-vendor/<name>/` và in digest để review trước khi commit. Đây là chỗ duy nhất chạm network. Resolve và guard chỉ đọc thứ đã có trên đĩa, nên pack không đổi được giữa lúc review và lúc chạy. Nguồn khai mà chưa vendor thì resolve fail — không im lặng chạy với ít pack hơn profile yêu cầu.
+Lệnh này ghi vào `.pi/capability-vendor/<name>/` và in digest để review trước khi commit. Đây là chỗ duy nhất trong đường capability chạm network — update check là đường riêng, xem `docs/security-threat-model.md`. Resolve và guard chỉ đọc thứ đã có trên đĩa, nên pack không đổi được giữa lúc review và lúc chạy. Nguồn khai mà chưa vendor thì resolve fail — không im lặng chạy với ít pack hơn profile yêu cầu.
 
 ### Vẫn deny by default
 

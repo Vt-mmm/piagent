@@ -2,6 +2,14 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.1.8 - 2026-07-28
+
+### Added
+
+- Pi says when a release is out, and names the command that takes it. The notice appears in the session-start line as `Piagent update available: 1.1.7 -> 1.1.8. Run \`piagent-update\` to move this machine to it.` Nobody has to remember to go and check, which until now was the only way to find out.
+
+  It costs the session nothing. The session reads a cache and, when that cache is older than a day, leaves a detached `npm view` behind to refresh it — so the first session after a release may still be quiet and the next one carries the notice. This is the only network traffic the guard originates, it sends nothing about the project, and the registry's answer reaches the terminal only if it is exactly `MAJOR.MINOR.PATCH`, so neither a hostile registry nor an edited cache can put chosen text in front of an operator. A checkout is never told to update. `PIAGENT_NO_UPDATE_CHECK=1` switches it off.
+
 ## v1.1.7 - 2026-07-28
 
 A platform update is one global install. It was not behaving like one: every project that selected capability packs stopped working after a release until its profile was reapplied by hand, and the policy a release corrected never reached a project that had already onboarded.

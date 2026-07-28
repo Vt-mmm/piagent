@@ -50,6 +50,7 @@ pi install /path/to/piagent
 - `1.1.5`: thêm `piagent-update` — một lệnh update cả Pi host, terminal helper và Pi package đúng thứ tự.
 - `1.1.6`: `be-readonly-fe` giữ được backend read-only trong monorepo, detect FE/BE đọc cả workspace, và rule detect gộp về một chỗ.
 - `1.1.7`: update global không còn chặn project đang chạy — lock chỉ block khi grant thật sự đổi, và profile dạng `extends` nhận policy từ platform đang cài thay vì giữ bản copy lúc onboard.
+- `1.1.8`: Pi báo ngay ở đầu session khi có release mới, kèm lệnh chạy update.
 
 ## Không publish
 
