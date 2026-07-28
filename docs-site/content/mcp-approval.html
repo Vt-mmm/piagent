@@ -63,7 +63,11 @@
         </tr>
         <tr>
           <td>Repo scope import kind không đọc được nội dung (<span class="inline-code">codex</span>, TOML)</td>
-          <td>Chặn mọi tool call. Từ chối ở dòng khai báo: liệt kê được server của năm kind kia không nói gì về kind thứ sáu.</td>
+          <td>Chặn mọi tool call, khi file đó có thật trên máy. Từ chối ở dòng khai báo: liệt kê được server của năm kind kia không nói gì về kind thứ sáu. Khai một kind máy này không cài thì là config cần dọn, không phải session cần dừng.</td>
+        </tr>
+        <tr>
+          <td><span class="inline-code">remove</span> / <span class="inline-code">enable</span> / <span class="inline-code">disable</span> trên server đến qua <span class="inline-code">imports</span></td>
+          <td>Từ chối, kèm tên file thật cần sửa. File được định vị là config của công cụ kia; ghi ngược bằng writer của platform sẽ viết lại file Cursor/VS Code của người dùng theo format chính công cụ đó không dùng.</td>
         </tr>
         <tr>
           <td><span class="inline-code">directTools</span> + <span class="inline-code">toolPrefix: "none"</span> trong config repo mang theo</td>
@@ -73,9 +77,11 @@
     </table>
   </div>
 
-  <p><span class="inline-code">piagent-mcp doctor</span> nêu tên file có <span class="inline-code">imports</span> và các kind của nó, và nêu cả layer không parse được — trước đây một layer hỏng đọc ra rỗng, không phân biệt được với layer không có server nào.</p>
+  <p><span class="inline-code">piagent-mcp doctor</span> nêu tên file có <span class="inline-code">imports</span> và các kind của nó, nêu layer không parse được, và nêu cả import target <em>có thật nhưng không đọc được</em> — cả ba trạng thái trước đây đều đọc ra rỗng, không phân biệt được với &ldquo;không khai server nào&rdquo;.</p>
 
-  <p>Với hai trạng thái chặn-toàn-bộ ở trên, <span class="inline-code">doctor</span> và <span class="inline-code">list</span> in ra lý do và exit 1. Trước đây chỉ guard biết, còn CLI báo &ldquo;No MCP servers configured&rdquo; rồi exit 0 đúng lúc không gì chạy được — câu trả lời đẩy người vận hành đi tìm ở mọi chỗ trừ file gây ra nó.</p>
+  <p>Với hai trạng thái chặn-toàn-bộ ở trên, <span class="inline-code">doctor</span> và <span class="inline-code">list</span> in ra lý do và exit 1 — kể cả <span class="inline-code">list --json</span>, vốn trả <span class="inline-code">servers: []</span> với exit 0 đúng lúc không gì chạy được. Exit code trả lời &ldquo;MCP ở đây có chạy được không&rdquo;, không phải &ldquo;có in ra dòng nào không&rdquo;. Cả ba surface — guard, <span class="inline-code">/piagent-mcp</span>, CLI — đọc một state chung, vì hai bên lệch nhau chính là cách một session bị chặn biến thành một session hỏng không rõ lý do.</p>
+
+  <p>Adapter merge <span class="inline-code">settings</span> của cả bốn layer thành một block cho cả session. Nên <span class="inline-code">directTools</span> đặt ở file này và <span class="inline-code">toolPrefix: "none"</span> đặt ở file kia vẫn ra đúng tổ hợp làm gate mất chỗ bám, trong khi đọc riêng từng file thì không file nào có vấn đề. Settings được đọc sau merge, và báo cả hai file.</p>
 
   <p>Cột <span class="inline-code">SCOPE</span> là layer khai báo <span class="inline-code">imports</span>, không phải nơi server được định nghĩa. Server import qua config <span class="inline-code">global</span> vẫn cần duyệt, vì file đọc lại nằm trong clone.</p>
 </section>
@@ -100,6 +106,10 @@
         <tr>
           <td>Pin theo digest của định nghĩa</td>
           <td>Duyệt là duyệt <em>đúng</em> command và URL đó. Đổi command, đổi args, đổi URL thì server quay về <span class="inline-code">pending</span> chứ không kế thừa quyết định cũ.</td>
+        </tr>
+        <tr>
+          <td>Preview in ra bản đã merge, digest tính trên mảnh của repo</td>
+          <td>Adapter merge server trùng tên theo từng key qua các layer, nên repo khai mỗi <span class="inline-code">{"args": [...]}</span> vẫn lấy <span class="inline-code">command</span> từ layer dưới. Preview phải là thứ sẽ chạy thật. Digest thì giữ trên phần repo kiểm soát — băm cả bản merge sẽ đẩy server về <span class="inline-code">pending</span> mỗi lần người dùng sửa config global của chính mình.</td>
         </tr>
         <tr>
           <td>Chặn ở <span class="inline-code">tool_call</span></td>

@@ -133,7 +133,9 @@ Dạng tên của direct tool là thứ trước đây ghi sai trong tài liệu
 
 Nên guard truy server theo **tên server đang cấu hình**, không theo một pattern cố định. Với `toolPrefix: "none"` thì tên tool không còn dấu vết server nào cả — không truy được.
 
-Vì vậy một config **repo mang theo** đặt `directTools: true` cùng `toolPrefix: "none"` làm **mọi tool call trong session bị chặn**, không riêng lời gọi MCP, cho tới khi bỏ setting đó. Chặn riêng proxy `mcp` là vá nhầm chỗ: proxy là dạng duy nhất còn nêu tên server, còn đúng những cái tên trần cần chặn thì đi thẳng qua.
+Vì vậy một config đặt `directTools: true` cùng `toolPrefix: "none"` làm **mọi tool call trong session bị chặn**, không riêng lời gọi MCP, cho tới khi bỏ setting đó. Chặn riêng proxy `mcp` là vá nhầm chỗ: proxy là dạng duy nhất còn nêu tên server, còn đúng những cái tên trần cần chặn thì đi thẳng qua.
+
+Adapter **merge `settings` của cả bốn layer thành một block cho cả session**, layer sau ghi đè theo từng key — không phải per-server. Nên `directTools` đặt ở file này và `toolPrefix: "none"` đặt ở file kia vẫn ra đúng tổ hợp đó, trong khi đọc riêng từng file thì không file nào có vấn đề. Platform đọc settings đã merge, và báo cả hai file, vì sửa file nào cũng đủ.
 
 ### `imports` — server không nằm trong bốn scope
 
@@ -143,11 +145,16 @@ Trong sáu kind, chỉ `vscode` trỏ vào đường dẫn **trong project** (`.
 
 - Server đến từ một kind repo-relative luôn phải duyệt, **bất kể layer nào khai báo import** — kể cả `global`.
 - Repo scope khai báo `imports` với kind nào thì server của kind đó cũng phải duyệt: repo đang chọn hộ máy này chạy server nào.
-- Kind `codex` giữ server trong TOML, không bên nào parse được. Liệt kê server của năm kind đọc được không nói gì về kind thứ sáu, nên repo khai báo `codex` làm **mọi tool call bị chặn** — từ chối ngay ở dòng khai báo, không phải từ chối theo nội dung.
-- Cột `SCOPE` trong `list` là **layer khai báo `imports`**, không phải nơi định nghĩa server. Global khai báo `imports: ["vscode"]` thì server hiện `scope: global` nhưng định nghĩa nằm trong clone — vẫn phải duyệt, và `detail` nêu đúng kind nó đến từ đâu.
-- `piagent-mcp doctor` nêu tên file có `imports` và các kind của nó.
+- Kind `codex` giữ server trong TOML, không bên nào parse được. Liệt kê server của năm kind đọc được không nói gì về kind thứ sáu, nên repo khai báo `codex` làm **mọi tool call bị chặn** — từ chối ngay ở dòng khai báo, không phải từ chối theo nội dung. Chỉ chặn khi file đó **có thật trên máy**: khai báo một kind mà máy này không cài thì đó là config cần dọn, không phải session cần dừng.
+- Cột `SCOPE` trong `list` là **layer khai báo `imports`**, không phải nơi định nghĩa server. Global khai báo `imports: ["vscode"]` thì server hiện `scope: global` nhưng định nghĩa nằm trong clone — vẫn phải duyệt, và `detail` nêu đúng kind nó đến từ đâu. Menu `/piagent-mcp` và `get` cũng quyết theo đúng luật đó chứ không theo scope, nên server khó thấy nhất không còn là server không bao giờ được hỏi.
+- `piagent-mcp doctor` nêu tên file có `imports` và các kind của nó, và nêu cả import target **có thật nhưng không parse được** — trước đây trạng thái đó đọc ra rỗng, không phân biệt được với một công cụ không khai server nào.
+- `remove` / `enable` / `disable` trên server đến qua `imports` bị **từ chối**, kèm tên file thật cần sửa. File `list` chỉ ra là config của công cụ kia; ghi ngược lại bằng writer của platform sẽ viết lại file Cursor/VS Code của người dùng theo format mà chính công cụ đó không dùng.
 
-Hai trạng thái làm gate không kiểm được gì (`toolPrefix: "none"`, và import kind không enumerate được) thì `doctor` và `list` **in ra và exit 1**, không im lặng báo "No MCP servers configured". Điều kiện được quyết ở một chỗ duy nhất mà cả guard lẫn CLI cùng đọc — hai bên lệch nhau chính là cách một session bị chặn biến thành một session hỏng không rõ lý do.
+Hai trạng thái làm gate không kiểm được gì (`toolPrefix: "none"`, và import kind không enumerate được) thì `doctor` và `list` **in ra và exit 1**, không im lặng báo "No MCP servers configured" — kể cả `list --json`, vốn trả `servers: []` với exit 0 đúng lúc không gì chạy được. Exit code trả lời "MCP ở đây có chạy được không", không phải "có in ra dòng nào không". Cả ba surface (guard, `/piagent-mcp`, CLI) đọc **một** state chung; hai bên lệch nhau chính là cách một session bị chặn biến thành một session hỏng không rõ lý do.
+
+### Duyệt là duyệt cái gì
+
+Adapter merge server **trùng tên** theo từng key qua các layer. Repo khai `{"args": ["--evil"]}` thì `command` vẫn lấy từ layer dưới — nên preview lúc duyệt in ra **định nghĩa đã merge**, tức thứ sẽ chạy thật, thay vì mảnh mà layer repo đóng góp. Digest vẫn tính trên mảnh của repo: đó là phần repo kiểm soát, và băm cả bản merge sẽ đẩy server về `pending` mỗi lần người dùng sửa config global của chính mình.
 
 Bảng dưới là đường dẫn và key **thật** của từng công cụ, đối chiếu với thứ adapter đang đọc. Ba dòng lệch nhau, nên platform đọc hợp của cả hai phía: liệt kê thừa một server chỉ tốn một lần duyệt, liệt kê thiếu thì mất gate.
 

@@ -42,6 +42,26 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 - ANSI-C quoting hid a path from the guard entirely. `$'...'` decodes its escapes before the word is passed on, so `cat $'\x2eenv'` opens `.env` while the guard saw the literal `x2eenv`; a redirection target was not handled at all, so `printf x >$'.env'` truncated a protected file. The same trick reached the exec policy: `rm -rf $'\x2f'` was permitted, having been read as a removal of something called `x2f`. Escapes are decoded — hex, octal, short and long unicode, and the named ones — in tokenizing and in redirection targets alike.
 
+- The shell guard read `>|` as a pipe. Splitting there made the file being truncated the first word of a second command, where it read as an executable name, so `printf x >| .env` overwrote a protected path without matching one. `>&word` opens that word for writing unless a digit or `-` follows, and the whole form was skipped; a redirection can also precede its command, where it was read as the command name. Paths carried as an operand value (`dd if=`, `--file=`), inside an array literal, or rewritten by a parameter operator (`#`, `%`, `/`) were not resolved either, and a word was split at the space inside `$( )`, so the filename being assembled was never a single token.
+
+  Where a filename still cannot be resolved — literal text glued onto a substitution, as in `cat .en$(echo v)` — the command is refused and the word that caused it is named. Matching the literal half against the protected patterns answers a different question than the one being asked.
+
+- `piagent-mcp list --json` reported `servers: []` and exited 0 while the guard was refusing every tool call, so a caller scripting against it read the blocked state as an empty one. Its exit code now answers whether MCP can work here rather than whether any rows printed, and the JSON carries the reason. The in-session `/piagent-mcp status`, `doctor` and menu report it too: all three surfaces now read one shared state instead of assembling their own from a different subset of the same calls.
+
+- The adapter merges `settings` across all four config layers into one session-wide block. `directTools` set in one file and `toolPrefix: "none"` set in another therefore produced a session with neither property visible to a check that read either file on its own — the exact combination that leaves the approval gate nothing to check. Settings are now read merged, and the report names both files, since editing either one fixes it.
+
+- `remove`, `enable` and `disable` on a server reached through `imports` wrote to a file the adapter does not read for that server, so the command reported success and the next tool call still reached it. Worse, the file it located was the other tool's config: the write would have rewritten somebody's Cursor or VS Code file in this platform's format. All three now refuse and name the file that actually defines it.
+
+- The menu and the detail view decided whether a server needed approval from its scope. A repository-relative import declared by a `global` config carries the scope `global` and a definition read out of the clone, so the servers whose origin is hardest to see were the ones never offered a decision. Both now use the same rule the gate uses.
+
+- Approving showed the fragment the repository layer contributed rather than the definition that runs. The adapter merges a same-named server key by key across layers, so a repository declaring only `{"args": [...]}` inherits its command from a lower layer, and the operator was consenting to a command line they were never shown. The preview is now the merged entry; the digest stays over the repository's own fragment, so editing a personal global config does not return a server to pending.
+
+- A repository importing `codex` had every tool call refused whether or not that config existed on the machine. An import of a kind nothing here can parse is a hole only when the file it names is actually there; otherwise it is a config to clean up, not a session to stop.
+
+- An MCP config that parses but is not a JSON object was read as empty, so the next write replaced it with this tool's shape and destroyed whatever the document had been. It is now refused. A write also no longer follows a symlink at the config path, drops `imports` kinds this version does not recognise, or hides an import target that exists but cannot be parsed — that last one reported as no servers, which is indistinguishable from a tool that defines none.
+
+- The approval store could not tell absent from unreadable. Both read as pending, which is right for the gate and wrong for a write: recording one decision on top of a store this process could not parse discarded every decision in it, including the ones for other projects, whose only symptom would be returning to pending one at a time. Writes now refuse when the store could not be read.
+
 ### Changed
 
 - `docs/mcp-and-tools.md` records the config path and server key each supported import kind actually uses, against what the adapter reads. Three of the six disagree, so the platform reads the union: listing a server that never loads costs one approval, missing one costs the gate.
