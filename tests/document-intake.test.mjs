@@ -566,7 +566,7 @@ describe("document extraction", () => {
     for (const buffer of [
       Buffer.alloc(0),
       Buffer.from("not a zip at all"),
-      Buffer.from("PK" + " ".repeat(80)),
+      Buffer.from("PK\x03\x04" + "\u0000".repeat(80)),
       Buffer.alloc(64, 0xff)
     ]) {
       const extracted = extractDocxText(buffer);

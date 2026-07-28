@@ -469,6 +469,23 @@ require_documented "piagent-capabilities" "$ROOT/README.md" "$ROOT/docs/capabili
 require_documented ".pi-subagents/" "$ROOT/.gitignore" "$ROOT/docs/subagents-and-multiagent.md" "$ROOT/docs/distribution-standard.md" "$ROOT/scripts/init-project.sh"
 test -s "$ROOT/tests/policy-core.test.mjs"
 
+# Every gate below this line is a grep, and grep skips a file it decides is
+# binary. One control byte written into a string literal — a NUL used as a key
+# separator is the easy way to do it by accident — takes the whole file out of
+# every one of them, and out of the diff a reviewer reads on a pull request. The
+# file still runs, so nothing else notices. Escapes carry the same bytes and keep
+# the file readable.
+non_text_sources="$(
+  cd "$ROOT" && git ls-files -z -- '*.js' '*.mjs' '*.ts' '*.json' '*.md' '*.sh' '*.html' '*.css' \
+    | LC_ALL=C xargs -0 -I{} sh -c 'grep -qI "" "{}" 2>/dev/null || echo "{}"'
+)"
+if [[ -n "$non_text_sources" ]]; then
+  echo "Source files contain control bytes, so grep-based gates and diffs skip them:"
+  echo "$non_text_sources" | sed 's/^/  /'
+  echo "Write the byte as an escape (\\u0000, \\x03) instead of embedding it."
+  exit 1
+fi
+
 public_wording_pattern="$(
   node --input-type=module <<'NODE'
 const terms = [
