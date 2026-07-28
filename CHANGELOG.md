@@ -6,13 +6,19 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ### Fixed
 
-- The approval gate never covered direct MCP tools. It looked for a tool named `mcp__<server>__<tool>`; the adapter builds a name by joining the server's own name to the tool's, so `github` exposes `github_create_issue` and nothing ever matched. Every server was reachable with one `directTools` setting, which `piagent-mcp add --direct-tools` offers and the docs recommend for small servers. Attribution now runs against the configured server names across every prefixing mode. A repository-carried config that sets `directTools` with `toolPrefix: "none"` is refused outright rather than parsed: with no prefix the tool name holds no evidence of its server, so there is nothing to check a decision against.
+- The approval gate never covered direct MCP tools. It looked for a tool named `mcp__<server>__<tool>`; the adapter builds a name by joining the server's own name to the tool's, so `github` exposes `github_create_issue` and nothing ever matched. Every server was reachable with one `directTools` setting, which `piagent-mcp add --direct-tools` offers and the docs recommend for small servers. Attribution now runs against the configured server names across every prefixing mode.
+
+  A repository-carried config that sets `directTools` with `toolPrefix: "none"` leaves no evidence of a server in any tool name, so there is nothing to check a decision against. Every tool call in that session is refused while the setting stands. Refusing only the `mcp` proxy, as the first fix did, closed nothing: the proxy is the one form that still names its server, and the bare names it was protecting went straight through.
 
   The v1.2.0 notes, `docs/mcp-and-tools.md` and the documentation site all stated the direct form was covered. It was not, and the test that asserted it asserted the same invented name shape.
 
 - A repository could reach servers the gate never enumerated through the adapter's `imports` key. `.mcp.json` naming `vscode` pulls servers out of `.vscode/mcp.json`, which travels with the clone, while the gate reported no repository servers at all. Servers reachable through a repository-relative import are now collected and gated whichever layer declares the import, and a repository scope that imports any kind has those servers gated too. `piagent-mcp doctor` names the file and the kinds, and reports a config layer it cannot parse instead of counting it as empty.
 
+  One kind cannot be enumerated at all: `codex` keeps its servers in TOML, and nothing here parses TOML. Listing the servers of the five readable kinds says nothing about that one, so a repository declaring it has every tool call refused rather than the servers that happened to be readable gated and the rest let through.
+
 - `piagent-capability vendor` emptied its destination before checking containment and only tested the immediate parent for a symlink. A repository shipping `.pi` as a symlink had the recursive delete and the fetch land outside the project. The whole path is now verified against the resolved project root before anything is created or removed.
+
+  Emptying the destination first was also not recoverable: a fetch that failed for any reason — no network, a hostile archive rejected by the symlink check — left the project with neither the new source nor the reviewed one it had been running on. The fetch now lands beside the destination and moves into place only once it has passed every check, so a failed re-vendor leaves the working tree exactly as it was.
 
 - The shell guard followed nested interpreters four levels deep and then stopped looking, so a payload wrapped in five layers of `bash -c` was permitted on the strength of a level nobody read. The walk now goes to sixteen levels and refuses a command that nests past it, rather than falling silent.
 
@@ -26,11 +32,15 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 - A capability pack could declare `activation.mode: "profile"` with no profiles list and crash resolution with a TypeError. The validator requires the list, the same way it already required triggers for trigger activation.
 
-- `configure-model-scope.sh` and `quality-benchmark.sh` took the next argument as a flag's value without checking it was one. `--preset full --settings --dry-run` wrote a settings file named `--dry-run`, exited 0 and reported success, having skipped the dry run it was asked for and never touched the real settings file.
+- Every script that takes `--flag <value>` read the next argument without checking it was a value. `--preset full --settings --dry-run` wrote a settings file named `--dry-run`, exited 0 and reported success, having skipped the dry run it was asked for and never touched the real settings file. `init-project.sh` and `setup.sh` checked only that an argument was present, which catches a flag at the end of the line and nothing else. All eight scripts now refuse a flag-shaped value, and the suite asserts it for every value-taking option in `scripts/`, including ones added later.
+
+- The shell guard did not see a path reached through an inline interpreter script, an unbalanced quote, or a shell variable with a default. `node -e "require('fs').readFileSync('.env')"`, `cat .env'` and `cat .${X:-env}` all read a protected path without matching one. Literals inside an inline script are now extracted, tokenizing survives a quote with no partner, and a variable's default value is expanded when nothing else defines it.
 
 ### Changed
 
 - `docs/mcp-and-tools.md` records the config path and server key each supported import kind actually uses, against what the adapter reads. Three of the six disagree, so the platform reads the union: listing a server that never loads costs one approval, missing one costs the gate.
+
+- `verify` refuses a source file carrying a control byte. Three files held a raw NUL inside a string literal — used as a key separator, and as ZIP magic in a test fixture. They ran correctly, but Git classified them as binary, which took them out of every grep-based gate in `verify`, including the wording checks, and out of the diff a reviewer sees on a pull request. The bytes are written as escapes now.
 
 ## v1.2.0 - 2026-07-28
 

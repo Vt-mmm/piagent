@@ -131,7 +131,9 @@ Dạng tên của direct tool là thứ trước đây ghi sai trong tài liệu
 | `short` | như trên, bỏ đuôi `-mcp`/`mcp` | `repo_tools_search` |
 | `none` | không có prefix | `search` |
 
-Nên guard truy server theo **tên server đang cấu hình**, không theo một pattern cố định. Với `toolPrefix: "none"` thì tên tool không còn dấu vết server nào cả — không truy được. Vì vậy một config **repo mang theo** đặt `directTools: true` cùng `toolPrefix: "none"` bị từ chối thẳng: mọi lời gọi MCP bị chặn cho tới khi bỏ setting đó.
+Nên guard truy server theo **tên server đang cấu hình**, không theo một pattern cố định. Với `toolPrefix: "none"` thì tên tool không còn dấu vết server nào cả — không truy được.
+
+Vì vậy một config **repo mang theo** đặt `directTools: true` cùng `toolPrefix: "none"` làm **mọi tool call trong session bị chặn**, không riêng lời gọi MCP, cho tới khi bỏ setting đó. Chặn riêng proxy `mcp` là vá nhầm chỗ: proxy là dạng duy nhất còn nêu tên server, còn đúng những cái tên trần cần chặn thì đi thẳng qua.
 
 ### `imports` — server không nằm trong bốn scope
 
@@ -141,6 +143,7 @@ Trong sáu kind, chỉ `vscode` trỏ vào đường dẫn **trong project** (`.
 
 - Server đến từ một kind repo-relative luôn phải duyệt, **bất kể layer nào khai báo import** — kể cả `global`.
 - Repo scope khai báo `imports` với kind nào thì server của kind đó cũng phải duyệt: repo đang chọn hộ máy này chạy server nào.
+- Kind `codex` giữ server trong TOML, không bên nào parse được. Liệt kê server của năm kind đọc được không nói gì về kind thứ sáu, nên repo khai báo `codex` làm **mọi tool call bị chặn** — từ chối ngay ở dòng khai báo, không phải từ chối theo nội dung.
 - `piagent-mcp doctor` nêu tên file có `imports` và các kind của nó.
 
 Bảng dưới là đường dẫn và key **thật** của từng công cụ, đối chiếu với thứ adapter đang đọc. Ba dòng lệch nhau, nên platform đọc hợp của cả hai phía: liệt kê thừa một server chỉ tốn một lần duyệt, liệt kê thiếu thì mất gate.

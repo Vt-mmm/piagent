@@ -156,8 +156,12 @@
           <td>Server phải duyệt. Repo đang chọn hộ máy này chạy server nào.</td>
         </tr>
         <tr>
+          <td>Repo scope import kind không đọc được nội dung (<span class="inline-code">codex</span>, TOML)</td>
+          <td>Chặn mọi tool call. Từ chối ở dòng khai báo: liệt kê được server của năm kind kia không nói gì về kind thứ sáu.</td>
+        </tr>
+        <tr>
           <td><span class="inline-code">directTools</span> + <span class="inline-code">toolPrefix: "none"</span> trong config repo mang theo</td>
-          <td>Từ chối thẳng. Không prefix thì tên tool không còn dấu vết server, không truy được để đối chiếu quyết định.</td>
+          <td>Chặn mọi tool call, không riêng lời gọi MCP. Không prefix thì tên tool không còn dấu vết server, không truy được để đối chiếu quyết định — mà chặn riêng proxy <span class="inline-code">mcp</span> thì đúng những cái tên trần cần chặn lại đi thẳng qua.</td>
         </tr>
       </tbody>
     </table>
