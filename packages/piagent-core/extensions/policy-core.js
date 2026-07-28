@@ -336,6 +336,18 @@ function legacyPatternMatchesSegment(pattern, words) {
   return arrayStartsWith(words, patternWords);
 }
 
+// How far a command may nest interpreters before the policy stops reading, and
+// how many segments it may expand to in total.
+//
+// The previous limit was four, and stopping there meant *not looking* rather
+// than *refusing*: a payload wrapped in five layers of `bash -c` was inspected
+// at every level the walk reached and then permitted on the strength of a level
+// it never opened. The depth now goes far past anything a person writes by hand,
+// and reaching either limit is itself grounds to refuse, so the answer to a
+// command too convoluted to read is no rather than silence.
+const MAX_NESTED_DEPTH = 16;
+const MAX_INSPECTED_SEGMENTS = 512;
+
 export function evaluateExecPolicyCore(command, options) {
   const policy = options.policy ?? {};
   const mode = options.mode ?? policy.execPolicy?.defaultMode ?? "enforce";
@@ -377,14 +389,28 @@ export function evaluateExecPolicyCore(command, options) {
       reasons.push(`Blocked by legacy policy pattern: ${pattern}`);
     }
 
-    segments.push({ command: segment, words, matches, warnings });
-    if (depth < 4) {
-      for (const nestedCommand of extractNestedCommands(segment, words)) {
+    const nested = extractNestedCommands(segment, words);
+    if (nested.length > 0 && depth >= MAX_NESTED_DEPTH) {
+      matches.push("forbid:nesting-depth");
+      reasons.push(
+        `Forbidden by exec policy nesting-depth: interpreters nest more than ${MAX_NESTED_DEPTH} levels deep, ` +
+        "past the point this policy can read the command. Run it without wrapping it."
+      );
+    } else if (segments.length >= MAX_INSPECTED_SEGMENTS) {
+      matches.push("forbid:nesting-breadth");
+      reasons.push(
+        `Forbidden by exec policy nesting-breadth: the command expands past ${MAX_INSPECTED_SEGMENTS} segments, ` +
+        "past the point this policy can read it. Split it up."
+      );
+    } else {
+      for (const nestedCommand of nested) {
         for (const nestedSegment of splitShellSegments(nestedCommand)) {
           pending.push({ segment: nestedSegment, depth: depth + 1 });
         }
       }
     }
+
+    segments.push({ command: segment, words, matches, warnings });
   }
 
   const normalizedCommand = command.toLowerCase();
@@ -961,7 +987,7 @@ export function extractShellPathCandidates(command) {
         if (isFilesystemArgument(word)) addCandidate(word, argumentTokens[index].variableActive);
       }
     }
-    if (depth < 4) {
+    if (depth < MAX_NESTED_DEPTH) {
       for (const nestedCommand of extractNestedCommands(segment, words)) {
         for (const nestedSegment of splitShellSegments(nestedCommand)) {
           pending.push({ segment: nestedSegment, depth: depth + 1 });
@@ -1052,7 +1078,7 @@ export function extractShellGlobCandidates(command) {
         if (token.activeGlob || (token.unquotedVariable && /[*?{\[]/.test(expanded))) candidates.push(expanded);
       }
     }
-    if (depth < 4) {
+    if (depth < MAX_NESTED_DEPTH) {
       for (const nestedCommand of extractNestedCommands(segment, words)) {
         for (const nestedSegment of splitShellSegments(nestedCommand)) pending.push({ segment: nestedSegment, depth: depth + 1 });
       }
