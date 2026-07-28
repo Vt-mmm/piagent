@@ -1,6 +1,6 @@
 {
   "name": "@piagent/platform",
-  "version": "1.1.7",
+  "version": "1.1.8",
   "license": "MIT",
   "publishConfig": {
     "access": "public",
@@ -103,7 +103,7 @@
   ],
   "scripts": {
     "verify": "bash scripts/verify-local.sh",
-    "test": "node --test tests/*.test.mjs",
+    "test": "PIAGENT_NO_UPDATE_CHECK=1 node --test tests/*.test.mjs",
     "test:policy": "node --test tests/policy-core.test.mjs",
     "test:golden": "node --test tests/golden-enforcement.test.mjs",
     "typecheck": "tsc --noEmit",

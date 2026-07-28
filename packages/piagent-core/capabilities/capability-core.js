@@ -803,7 +803,12 @@ function buildCoreIntegrity(root) {
     // project-shape.js picks the profile a project is offered, and the profile is
     // the document that carries protectedPaths and readOnlyPaths. Steering the
     // recommendation is a way to choose what the guard will end up enforcing.
-    "packages/piagent-core/extensions/project-shape.js"
+    "packages/piagent-core/extensions/project-shape.js",
+    // update-check.js is the one file here that enforces nothing. It is pinned
+    // for a different reason: it starts a process on session start and puts a
+    // line in the operator's terminal, so tampering with it buys code execution
+    // and a message the operator has been trained to trust.
+    "packages/piagent-core/extensions/update-check.js"
   ];
   return files.map((relativePath) => {
     const resolved = resolveRegularFile(root, relativePath, MAX_ARTIFACT_BYTES);

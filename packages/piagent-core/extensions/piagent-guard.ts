@@ -40,6 +40,7 @@ import {
   redactSensitiveText
 } from "./redaction-core.js";
 import { detectProfileName } from "./project-shape.js";
+import { evaluateUpdateCheck, readUpdateCache, startUpdateProbe } from "./update-check.js";
 import { buildExtendingProfile, resolveProjectProfileDocument } from "../capabilities/project-profile.js";
 import {
   resolveCapabilityProfileDocument,
@@ -422,6 +423,24 @@ const DEFAULT_POLICY: BasePolicy = {
 // Which platform supplies the adapters is fixed by where this file is installed,
 // so it is resolved once here rather than threaded through every profile load.
 const PLATFORM_ROOT = findPlatformRoot(path.dirname(fileURLToPath(import.meta.url)));
+const UPDATE_CHECK_MODULE = fileURLToPath(new URL("./update-check.js", import.meta.url));
+
+// The installed version, read from the package this file ships in. A maintainer
+// working in the repository is not running a release and has nothing to update
+// to, so the checkout is recognised by the one thing a published copy never
+// carries and told nothing.
+function installedPlatformVersion(): string | undefined {
+  if (fs.existsSync(path.join(PLATFORM_ROOT, ".git"))) return undefined;
+  return readJsonFile<{ version?: string }>(path.join(PLATFORM_ROOT, "package.json"))?.version;
+}
+
+function updateAvailabilityNotice(): string | undefined {
+  const installed = installedPlatformVersion();
+  if (!installed) return undefined;
+  const decision = evaluateUpdateCheck({ installed, cache: readUpdateCache(), now: Date.now() });
+  if (decision.probe) startUpdateProbe(UPDATE_CHECK_MODULE);
+  return decision.notice;
+}
 
 function loadPolicy(extensionDir: string): BasePolicy {
   const root = findPackageRoot(extensionDir);
@@ -3733,6 +3752,10 @@ export default function piagentGuard(pi: ExtensionAPI) {
     if (permissionProfile.mode === "trusted-full-access") {
       ctx.ui.notify("Piagent permission profile trusted-full-access is active; protected paths, secret redaction, and destructive/external confirmations remain enforced.", "warning");
     }
+    // Last, so a release announcement never pushes a security warning out of
+    // the first thing the operator reads.
+    const updateNotice = updateAvailabilityNotice();
+    if (updateNotice) ctx.ui.notify(updateNotice, "info");
   });
 
   pi.on("input", async (event, ctx) => {
