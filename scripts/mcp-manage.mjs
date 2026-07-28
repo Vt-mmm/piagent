@@ -12,6 +12,7 @@ import {
   isRecord,
   readMcpConfig,
   repositoryImportDeclarations,
+  unverifiableRepositoryConfig,
   unreadableLayers,
   writeMcpConfig
 } from "../packages/piagent-core/mcp/mcp-config-layers.js";
@@ -338,7 +339,15 @@ function commandList(args) {
     return 0;
   }
 
+  // Listing nothing is the correct answer only when nothing is reaching the
+  // session. A config the gate cannot verify reaches it with an unknown set of
+  // servers, and telling somebody to seed a baseline in that state sends them
+  // to the wrong file entirely.
+  const unverifiable = unverifiableRepositoryConfig({ projectPath: project });
+  for (const problem of unverifiable) process.stdout.write(`BLOCKED every tool call: ${problem.detail}\n`);
+
   if (rows.length === 0) {
+    if (unverifiable.length > 0) return 1;
     process.stdout.write("No MCP servers configured.\n");
     process.stdout.write("Seed the pinned baseline with: piagent-mcp --preset core --scope global\n");
     return 0;
@@ -424,6 +433,10 @@ function commandDoctor(args) {
   // answer the question exactly backwards.
   const broken = unreadableLayers({ projectPath: project });
   const imports = repositoryImportDeclarations({ projectPath: project });
+  // The guard refuses every tool call under these, and this is where somebody
+  // comes to find out why. Reported first, because no per-server state below
+  // means anything while one of them stands.
+  const unverifiable = unverifiableRepositoryConfig({ projectPath: project });
 
   // The one check too slow for a session start: a daemon that is installed but
   // not running looks exactly like one that is running until something asks it.
@@ -439,16 +452,18 @@ function commandDoctor(args) {
       dockerRunning,
       servers: rows.map((row) => ({ name: row.name, scope: row.scope, state: row.readiness.state, detail: row.readiness.detail, remedy: row.readiness.remedy })),
       unreadableLayers: broken,
-      repositoryImports: imports.map((layer) => ({ scope: layer.scope, kinds: layer.kinds }))
+      repositoryImports: imports.map((layer) => ({ scope: layer.scope, kinds: layer.kinds })),
+      unverifiableConfig: unverifiable
     }, null, 2)}\n`);
-    return blockedRows(rows).length > 0 || broken.length > 0 ? 1 : 0;
+    return blockedRows(rows).length > 0 || broken.length > 0 || unverifiable.length > 0 ? 1 : 0;
   }
 
   for (const layer of broken) process.stdout.write(`Unreadable ${layer.scope} config: ${layer.detail}\n`);
+  for (const problem of unverifiable) process.stdout.write(`BLOCKED every tool call: ${problem.detail}\n`);
 
   if (rows.length === 0) {
-    if (broken.length > 0) {
-      process.stdout.write(`\n${broken.length} MCP config layer(s) need attention.\n`);
+    if (unverifiable.length > 0 || broken.length > 0) {
+      process.stdout.write(`\n${unverifiable.length + broken.length} MCP config problem(s) need attention.\n`);
       return 1;
     }
     process.stdout.write("No MCP servers configured.\n");
@@ -470,10 +485,10 @@ function commandDoctor(args) {
     );
   }
 
-  const problems = report.problems + broken.length;
+  const problems = report.problems + broken.length + unverifiable.length;
   process.stdout.write(problems === 0
     ? "\nPASS: every configured MCP server can be reached.\n"
-    : `\n${problems} MCP server(s) need attention.\n`);
+    : `\n${problems} MCP problem(s) need attention.\n`);
   return problems === 0 ? 0 : 1;
 }
 

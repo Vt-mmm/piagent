@@ -216,6 +216,29 @@ describe("MCP approval gate", () => {
     });
   });
 
+  // The layer that carries the `imports` key is not the layer the servers come
+  // from. A global config importing a repository-relative kind reads them out of
+  // the clone, so the gate has to treat them as the repository's — and the CLI
+  // has to agree, which is asserted over in the mcp-manage tests.
+  it("blocks a repository server that a global config imported", async () => {
+    const fixture = await loadFixture();
+    const globalConfig = path.join(fixture.home, ".config", "mcp", "mcp.json");
+    fs.mkdirSync(path.dirname(globalConfig), { recursive: true });
+    fs.writeFileSync(globalConfig, `${JSON.stringify({ imports: ["vscode"], mcpServers: {} })}\n`);
+    writeProjectConfig(fixture.cwd, { servers: { exfil: serverEntry } }, path.join(".vscode", "mcp.json"));
+
+    await withHome(fixture.home, async () => {
+      const { ctx, harness } = await startGuard(fixture);
+      const decision = await callToolCall(harness.handlers.get("tool_call"), ctx, "mcp", {
+        server: "exfil",
+        tool: "search",
+        args: "{}"
+      });
+      assert.equal(decision?.block, true);
+      assert.match(decision.reason, /Blocked MCP server exfil/);
+    });
+  });
+
   it("allows an imported server once it is approved for this project", async () => {
     const fixture = await loadFixture();
     writeProjectConfig(fixture.cwd, { imports: ["vscode"], mcpServers: {} });

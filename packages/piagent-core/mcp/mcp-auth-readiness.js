@@ -104,7 +104,17 @@ function isExecutable(file) {
  */
 
 /**
- * @param {{name: string, scope: string, entry: Record<string, unknown>}} server
+ * The import kind a server arrived through, or undefined when the layer named
+ * it directly.
+ * @param {{origin?: string}} server
+ * @returns {string|undefined}
+ */
+function importedFrom(server) {
+  return server.origin?.startsWith("import:") ? server.origin.slice("import:".length) : undefined;
+}
+
+/**
+ * @param {{name: string, scope: string, entry: Record<string, unknown>, requiresApproval?: boolean, origin?: string}} server
  * @param {{projectPath: string, env?: Record<string, string|undefined>, home?: string, store?: Record<string, unknown>}} options
  * @returns {ServerReadiness}
  */
@@ -116,7 +126,12 @@ export function evaluateServerReadiness(server, options) {
     return { ...base, state: "disabled", detail: "disabled in config", remedy: `piagent-mcp enable ${server.name} --scope ${server.scope}` };
   }
 
-  if (REPOSITORY_SCOPES.has(server.scope)) {
+  // `collectServers` decides this, because the scope a server is listed under
+  // is not the same question as who put it there: a `global` config importing
+  // a repository-relative kind reads its definitions out of the clone. Falling
+  // back to scope keeps a caller that builds a server record by hand working.
+  const needsApproval = server.requiresApproval ?? REPOSITORY_SCOPES.has(server.scope);
+  if (needsApproval) {
     const approval = approvalState({
       projectPath: options.projectPath,
       name: server.name,
@@ -139,7 +154,12 @@ export function evaluateServerReadiness(server, options) {
       return {
         ...base,
         state: "pending-approval",
-        detail: `defined by this repository in ${server.scope} scope and not approved here`,
+        // Naming the scope alone reads as a lie for an imported server: the
+        // scope is where the `imports` key sits, and the definition is in a
+        // different file entirely. Say which of the two it was.
+        detail: importedFrom(server)
+          ? `imported from ${importedFrom(server)} config by the ${server.scope} layer, and not approved here`
+          : `defined by this repository in ${server.scope} scope and not approved here`,
         remedy: `piagent-mcp approve ${server.name}`
       };
     }

@@ -46,10 +46,9 @@ import {
   REPOSITORY_SCOPES,
   collectServers,
   configPathForScope,
-  readMcpConfig
+  unverifiableRepositoryConfig
 } from "../mcp/mcp-config-layers.js";
-import { attributeDirectTool, erasesToolOrigin } from "../mcp/mcp-tool-naming.js";
-import { canEnumerateImportKind } from "../mcp/mcp-import-kinds.js";
+import { attributeDirectTool } from "../mcp/mcp-tool-naming.js";
 import { approvalState } from "../mcp/mcp-approval-store.js";
 import { evaluateServerReadiness, readinessNotice } from "../mcp/mcp-auth-readiness.js";
 import * as mcpActions from "../mcp/mcp-command-actions.js";
@@ -2075,30 +2074,10 @@ function repositoryMcpGate(cwd: string): RepositoryMcpGate {
   //
   // Both stop every tool call. A repository can make a session refuse to run;
   // it must not be able to make one run a server nobody approved.
-  const unverifiable = [];
-  for (const layer of repositoryFiles) {
-    let config;
-    try {
-      config = readMcpConfig(layer.file);
-    } catch {
-      // Unreadable here means unreadable for `doctor` too, which is where a
-      // broken layer is reported. Nothing is assumed about its contents.
-      continue;
-    }
-    if (erasesToolOrigin(config.settings)) {
-      unverifiable.push(
-        `${layer.file} turns on directTools with toolPrefix "none", which strips the server name off ` +
-        "every tool and leaves nothing to check an approval against. Remove that setting, then approve servers individually."
-      );
-    }
-    for (const kind of config.imports) {
-      if (canEnumerateImportKind(kind)) continue;
-      unverifiable.push(
-        `${layer.file} imports servers from ${kind} config, which this platform cannot enumerate, ` +
-        "so which servers reach this session is unknown. Remove the import and declare the servers you want directly."
-      );
-    }
-  }
+  // Read from the shared module rather than decided here, so `piagent-mcp
+  // doctor` reports exactly what this refuses. The two disagreeing is how an
+  // operator ends up reading "PASS" while every tool call is being stopped.
+  const unverifiable = unverifiableRepositoryConfig({ projectPath: cwd }).map((problem) => problem.detail);
 
   const gate = { blocked, unverifiable };
   mcpApprovalCache.set(cwd, { signature, gate });

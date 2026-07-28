@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { REPOSITORY_RELATIVE_KINDS, declaredImports, importedServers } from "./mcp-import-kinds.js";
+import { REPOSITORY_RELATIVE_KINDS, canEnumerateImportKind, declaredImports, importedServers } from "./mcp-import-kinds.js";
+import { erasesToolOrigin } from "./mcp-tool-naming.js";
 
 // Four files can define MCP servers, and which one a change belongs in is the
 // first thing anyone gets wrong. The scope names are the vocabulary the CLI
@@ -120,7 +121,15 @@ export function writeMcpConfig(file, config) {
  * `import:<kind>` for one reached through an `imports` key, so a caller can say
  * where a server came from rather than only which layer named it.
  *
- * @returns {{name: string, scope: string, file: string, entry: Record<string, unknown>, origin: string}[]}
+ * `requiresApproval` says whether this server is one a repository put into the
+ * session. Scope alone cannot answer that: a `global` config importing a
+ * repository-relative kind carries a scope of `global` and a definition that
+ * came out of the clone. Deciding it here keeps the gate and the listing on one
+ * rule — the listing reporting `ready` for a server the gate is blocking is
+ * worse than either answer alone, because it sends the operator looking
+ * anywhere but at the approval.
+ *
+ * @returns {{name: string, scope: string, file: string, entry: Record<string, unknown>, origin: string, requiresApproval: boolean}[]}
  */
 export function collectServers(options = {}) {
   const found = [];
@@ -144,7 +153,7 @@ export function collectServers(options = {}) {
       continue;
     }
     for (const [name, entry] of Object.entries(config.mcpServers)) {
-      if (isRecord(entry)) push({ name, scope, file, entry, origin: scope });
+      if (isRecord(entry)) push({ name, scope, file, entry, origin: scope, requiresApproval: REPOSITORY_SCOPES.has(scope) });
     }
   }
 
@@ -172,7 +181,10 @@ export function collectServers(options = {}) {
       for (const kind of config.imports) {
         if (!repositoryScoped && !REPOSITORY_RELATIVE_KINDS.has(kind)) continue;
         for (const server of importedServers(kind, options)) {
-          push({ name: server.name, scope, file: server.file, entry: server.entry, origin: `import:${kind}` });
+          // Both branches that reach here are the repository choosing a
+          // server: it either declared the import itself, or the file being
+          // read travels with the clone.
+          push({ name: server.name, scope, file: server.file, entry: server.entry, origin: `import:${kind}`, requiresApproval: true });
         }
       }
     }
@@ -228,6 +240,52 @@ export function repositoryImportDeclarations(options = {}) {
     if (kinds.length > 0) declarations.push({ scope, file, kinds });
   }
   return declarations;
+}
+
+/**
+ * Repository-carried settings that leave the gate with nothing to check, so the
+ * only sound answer is to refuse every tool call.
+ *
+ * Kept here rather than in the guard because two surfaces have to agree on it.
+ * The guard enforces it; `doctor` and `list` are where an operator goes to find
+ * out why a session stopped working. When only the guard knew, `doctor` reported
+ * "No MCP servers configured" and exited 0 while nothing could run — an answer
+ * that sends the operator looking anywhere but at the config that caused it.
+ *
+ * @param {{projectPath?: string, env?: Record<string, string|undefined>, home?: string}} [options]
+ * @returns {{scope: string, file: string, detail: string}[]}
+ */
+export function unverifiableRepositoryConfig(options = {}) {
+  const problems = [];
+  for (const scope of REPOSITORY_SCOPES) {
+    const file = configPathForScope(scope, options);
+    let config;
+    try {
+      config = readMcpConfig(file);
+    } catch {
+      // Unreadable is a different diagnosis with its own report, and nothing is
+      // assumed about the contents of a file nobody could read.
+      continue;
+    }
+    if (erasesToolOrigin(config.settings)) {
+      problems.push({
+        scope,
+        file,
+        detail: `${file} turns on directTools with toolPrefix "none", which strips the server name off ` +
+          "every tool and leaves nothing to check an approval against. Remove that setting, then approve servers individually."
+      });
+    }
+    for (const kind of config.imports) {
+      if (canEnumerateImportKind(kind)) continue;
+      problems.push({
+        scope,
+        file,
+        detail: `${file} imports servers from ${kind} config, which this platform cannot enumerate, ` +
+          "so which servers reach this session is unknown. Remove the import and declare the servers you want directly."
+      });
+    }
+  }
+  return problems;
 }
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */

