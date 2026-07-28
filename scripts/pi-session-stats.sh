@@ -22,6 +22,17 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   exit 0
 fi
 
+# Both arguments are positional and the project path comes first, so a flag in
+# either slot is a typo rather than a path. Saying so beats failing later with a
+# message about a directory that was never meant to be one.
+for argument in "${1:-}" "${2:-}"; do
+  if [[ "$argument" == -* ]]; then
+    echo "FAIL: this script takes <project-path> [session-file], not flags; received: $argument" >&2
+    usage >&2
+    exit 2
+  fi
+done
+
 PROJECT_PATH="${1:-.}"
 SESSION_FILE="${2:-}"
 

@@ -56,9 +56,10 @@ NOTES=""
 # A flag left without a value otherwise consumes the next flag as its value, and
 # the run continues on a record that says something nobody typed.
 require_value() {
-  local flag="$1" value="${2:-}"
+  local option="$1"
+  local value="${2:-}"
   if [[ -z "$value" || "$value" == --* ]]; then
-    echo "FAIL: $flag requires a value" >&2
+    echo "Missing value for $option" >&2
     exit 2
   fi
 }

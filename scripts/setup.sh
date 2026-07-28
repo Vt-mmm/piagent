@@ -85,21 +85,24 @@ SKIP_AGENTS=false
 SKIP_REVIEW=false
 DRY_RUN=false
 
+require_value() {
+  local option="$1"
+  local value="${2:-}"
+  if [[ -z "$value" || "$value" == --* ]]; then
+    echo "Missing value for $option" >&2
+    exit 2
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --profile)
-      if [[ $# -lt 2 ]]; then
-        echo "Missing value for --profile" >&2
-        exit 2
-      fi
+      require_value "$1" "${2:-}"
       PROFILE_INPUT="$2"
       shift 2
       ;;
     --package-source)
-      if [[ $# -lt 2 ]]; then
-        echo "Missing value for --package-source" >&2
-        exit 2
-      fi
+      require_value "$1" "${2:-}"
       PACKAGE_SOURCE="$2"
       shift 2
       ;;
@@ -124,7 +127,8 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --mcp-preset)
-      MCP_PRESET="${2:-}"
+      require_value "$1" "${2:-}"
+      MCP_PRESET="$2"
       MCP_PRESET_EXPLICIT=true
       shift 2
       ;;
@@ -137,11 +141,13 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --subagents-preset)
-      SUBAGENTS_PRESET="${2:-}"
+      require_value "$1" "${2:-}"
+      SUBAGENTS_PRESET="$2"
       shift 2
       ;;
     --subagents-model-scope)
-      SUBAGENTS_MODEL_SCOPE="${2:-}"
+      require_value "$1" "${2:-}"
+      SUBAGENTS_MODEL_SCOPE="$2"
       shift 2
       ;;
     --with-web-access)
@@ -157,11 +163,13 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --model-scope)
-      MODEL_SCOPE_PRESET="${2:-}"
+      require_value "$1" "${2:-}"
+      MODEL_SCOPE_PRESET="$2"
       shift 2
       ;;
     --default-model)
-      DEFAULT_MODEL="${2:-}"
+      require_value "$1" "${2:-}"
+      DEFAULT_MODEL="$2"
       shift 2
       ;;
     --no-model-scope)

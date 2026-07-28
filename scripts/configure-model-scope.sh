@@ -39,9 +39,10 @@ DRY_RUN=false
 # DRY_RUN false, then write a file by that name and report success — a run that
 # both skipped the dry run it was asked for and never touched the real settings.
 require_value() {
-  local flag="$1" value="${2:-}"
+  local option="$1"
+  local value="${2:-}"
   if [[ -z "$value" || "$value" == --* ]]; then
-    echo "FAIL: $flag requires a value" >&2
+    echo "Missing value for $option" >&2
     exit 2
   fi
 }

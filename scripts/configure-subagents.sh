@@ -38,22 +38,35 @@ MODEL_SCOPE="none"
 DRY_RUN=false
 LIST=false
 
+require_value() {
+  local option="$1"
+  local value="${2:-}"
+  if [[ -z "$value" || "$value" == --* ]]; then
+    echo "Missing value for $option" >&2
+    exit 2
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --preset)
-      PRESET="${2:-}"
+      require_value "$1" "${2:-}"
+      PRESET="$2"
       shift 2
       ;;
     --config)
-      CONFIG_PATH="${2:-}"
+      require_value "$1" "${2:-}"
+      CONFIG_PATH="$2"
       shift 2
       ;;
     --settings)
-      SETTINGS_PATH="${2:-}"
+      require_value "$1" "${2:-}"
+      SETTINGS_PATH="$2"
       shift 2
       ;;
     --model-scope)
-      MODEL_SCOPE="${2:-}"
+      require_value "$1" "${2:-}"
+      MODEL_SCOPE="$2"
       shift 2
       ;;
     --dry-run)
