@@ -83,14 +83,27 @@ let approvalDigest;
 }
 
 /** Runs a block with HOME pointed at the fixture, so the approval store is the fixture's. */
+// HOME alone does not decide where the global layers live: both have their own
+// environment variable that wins over it. A runner with XDG_CONFIG_HOME set —
+// which Linux runners have and macOS ones do not — resolved the global scope
+// outside the fixture, so a test writing there was reading a file the guard
+// never looked at. Pinning all three keeps the fixture sealed either way, and
+// keeps a real config on the machine running the suite out of it.
 async function withHome(home, run) {
-  const previous = process.env.HOME;
-  process.env.HOME = home;
+  const overrides = {
+    HOME: home,
+    XDG_CONFIG_HOME: path.join(home, ".config"),
+    PI_CODING_AGENT_DIR: path.join(home, ".pi", "agent")
+  };
+  const previous = Object.fromEntries(Object.keys(overrides).map((name) => [name, process.env[name]]));
+  Object.assign(process.env, overrides);
   try {
     return await run();
   } finally {
-    if (previous === undefined) delete process.env.HOME;
-    else process.env.HOME = previous;
+    for (const [name, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
   }
 }
 
