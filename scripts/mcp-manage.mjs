@@ -10,10 +10,8 @@ import {
   collectServers,
   configPathForScope,
   isRecord,
+  mergedServerEntry,
   readMcpConfig,
-  repositoryImportDeclarations,
-  unverifiableRepositoryConfig,
-  unreadableLayers,
   writeMcpConfig
 } from "../packages/piagent-core/mcp/mcp-config-layers.js";
 import {
@@ -38,12 +36,11 @@ import {
 import { evaluateServerReadiness } from "../packages/piagent-core/mcp/mcp-auth-readiness.js";
 import {
   McpViewError,
-  blockedRows,
-  collectServerRows,
   describeServer,
   formatDoctorReport,
   formatServerDetail,
   formatServerTable,
+  sessionMcpState,
   usesDocker
 } from "../packages/piagent-core/mcp/mcp-session-view.js";
 
@@ -218,6 +215,25 @@ function locateServer(name, flags) {
   return servers[0];
 }
 
+/**
+ * A server this command has no file of its own to edit: it was read out of
+ * another tool's config through `imports`. `located.file` is that other tool's
+ * config, and writing it back through `writeMcpConfig` would rewrite somebody's
+ * Cursor or VS Code file in this platform's format -- adding a `settings` block
+ * it does not use and dropping every key this shape does not carry.
+ *
+ * @param {{name: string, origin?: string, scope: string, file: string}} located
+ * @param {string} action
+ */
+function assertOwnedByThisTool(located, action) {
+  if (!located.origin?.startsWith("import:")) return;
+  const kind = located.origin.slice("import:".length);
+  throw new UsageError(
+    `${located.name} is not defined by any config this command owns. The ${located.scope} config imports ${kind}, ` +
+    `and the definition lives in ${located.file}. Edit that file to ${action} it, or drop "${kind}" from its imports list.`
+  );
+}
+
 // --- commands ---------------------------------------------------------------
 
 /** @param {ReturnType<typeof parseArgs>} args */
@@ -281,12 +297,21 @@ function commandRemove(args) {
   const name = args.positionals[0];
   if (!name) throw new UsageError("remove needs a server name");
   const located = locateServer(name, args.flags);
+  assertOwnedByThisTool(located, "remove");
   const config = readMcpConfig(located.file);
   delete config.mcpServers[name];
   writeMcpConfig(located.file, config);
-  clearApproval({ projectPath: projectPath(args.flags), name });
   process.stdout.write(`Removed MCP server ${name} from ${located.scope} scope\n`);
   process.stdout.write(`File modified: ${located.file}\n`);
+  // The definition is gone either way; the decision about it is a separate
+  // record, and leaving one behind for a name that no longer exists means a
+  // later server reusing the name would meet an approval nobody granted it.
+  if (!clearApproval({ projectPath: projectPath(args.flags), name })) {
+    process.stdout.write(
+      `Warning: could not update ${approvalStorePath() ?? "the approval store"}, ` +
+      `so the recorded decision for ${name} is still there. Run \`piagent-mcp reset ${name}\` once it is writable.\n`
+    );
+  }
   return 0;
 }
 
@@ -322,41 +347,51 @@ function commandGet(args) {
 function commandList(args) {
   const scopeFilter = value(args.flags, "--scope");
   const project = projectPath(args.flags);
-  const rows = collectServerRows({ projectPath: project, scopes: scopeFilter ? [scopeFilter] : undefined });
+  // Listing nothing is the correct answer only when nothing is reaching the
+  // session. A config the gate cannot verify reaches it with an unknown set of
+  // servers, and telling somebody to seed a baseline in that state sends them
+  // to the wrong file entirely.
+  const state = sessionMcpState({ projectPath: project, scopes: scopeFilter ? [scopeFilter] : undefined });
+  const { rows } = state;
 
   if (args.flags.get("--json") === true) {
+    // The same fields the human output carries. A caller scripting against this
+    // read `servers: []` as "nothing configured" while every tool call was being
+    // refused, and an exit code of 0 agreed with it.
     process.stdout.write(`${JSON.stringify({
       project,
+      usable: state.usable,
+      blockingConfig: state.blockingConfig,
       servers: rows.map((row) => ({
         name: row.name,
         scope: row.scope,
+        origin: row.origin,
+        requiresApproval: row.requiresApproval,
         file: row.file,
         state: row.readiness.state,
         detail: row.readiness.detail,
         entry: maskServerEntry(row.entry)
       }))
     }, null, 2)}\n`);
-    return 0;
+    return state.usable ? 0 : 1;
   }
 
-  // Listing nothing is the correct answer only when nothing is reaching the
-  // session. A config the gate cannot verify reaches it with an unknown set of
-  // servers, and telling somebody to seed a baseline in that state sends them
-  // to the wrong file entirely.
-  const unverifiable = unverifiableRepositoryConfig({ projectPath: project });
-  for (const problem of unverifiable) process.stdout.write(`BLOCKED every tool call: ${problem.detail}\n`);
+  for (const problem of state.blockingConfig) process.stdout.write(`BLOCKED every tool call: ${problem.detail}\n`);
 
   if (rows.length === 0) {
-    if (unverifiable.length > 0) return 1;
-    process.stdout.write("No MCP servers configured.\n");
-    process.stdout.write("Seed the pinned baseline with: piagent-mcp --preset core --scope global\n");
-    return 0;
+    if (state.usable) {
+      process.stdout.write("No MCP servers configured.\n");
+      process.stdout.write("Seed the pinned baseline with: piagent-mcp --preset core --scope global\n");
+    }
+  } else {
+    process.stdout.write(`${formatServerTable(rows)}\n`);
+    if (state.blocked.length > 0) {
+      process.stdout.write(`\n${state.blocked.length} server(s) not usable yet. Run \`piagent-mcp doctor\`.\n`);
+    }
   }
-
-  process.stdout.write(`${formatServerTable(rows)}\n`);
-  const blocked = blockedRows(rows);
-  if (blocked.length > 0) process.stdout.write(`\n${blocked.length} server(s) not usable yet. Run \`piagent-mcp doctor\`.\n`);
-  return 0;
+  // Out of the no-rows branch: the exit code answers "can MCP work here", and
+  // that question does not depend on how many rows happened to print.
+  return state.usable ? 0 : 1;
 }
 
 /** @param {ReturnType<typeof parseArgs>} args @param {boolean} enabled */
@@ -364,6 +399,7 @@ function commandToggle(args, enabled) {
   const name = args.positionals[0];
   if (!name) throw new UsageError(`${enabled ? "enable" : "disable"} needs a server name`);
   const located = locateServer(name, args.flags);
+  assertOwnedByThisTool(located, enabled ? "enable" : "disable");
   const config = readMcpConfig(located.file);
   const entry = { ...(isRecord(config.mcpServers[name]) ? config.mcpServers[name] : {}) };
   if (enabled) delete entry.enabled;
@@ -396,7 +432,12 @@ function commandDecide(args, decision) {
   if (decision === "approved" && before.state === "pending" && args.flags.get("--force") !== true) {
     // Approving without reading it is the failure this gate exists to prevent, so
     // the definition is put in front of the operator before the decision lands.
-    process.stdout.write(`${JSON.stringify(maskServerEntry(server.entry), null, 2)}\n`);
+    // The merged entry, not this layer's fragment: the adapter merges a
+    // same-named server key by key across layers, so a repository declaring only
+    // `{"args": [...]}` runs with a command it never showed the operator.
+    process.stdout.write(`${JSON.stringify(
+      maskServerEntry(mergedServerEntry({ projectPath: project, name, entry: server.entry })), null, 2
+    )}\n`);
   }
   // A decision that was not written is not a decision. Printing "Approved" while
   // the store rejected the write would leave the operator waiting for a gate that
@@ -427,16 +468,12 @@ function commandReset(args) {
 /** @param {ReturnType<typeof parseArgs>} args */
 function commandDoctor(args) {
   const project = projectPath(args.flags);
-  const rows = collectServerRows({ projectPath: project });
   // Resolved before the no-servers shortcut below. A layer nobody can parse
   // produces no rows, so reporting "no servers configured" and stopping would
-  // answer the question exactly backwards.
-  const broken = unreadableLayers({ projectPath: project });
-  const imports = repositoryImportDeclarations({ projectPath: project });
-  // The guard refuses every tool call under these, and this is where somebody
-  // comes to find out why. Reported first, because no per-server state below
-  // means anything while one of them stands.
-  const unverifiable = unverifiableRepositoryConfig({ projectPath: project });
+  // answer the question exactly backwards. The guard refuses every tool call
+  // under `blockingConfig`, and this is where somebody comes to find out why.
+  const state = sessionMcpState({ projectPath: project });
+  const { rows, unreadable: broken, imports, blockingConfig: unverifiable } = state;
 
   // The one check too slow for a session start: a daemon that is installed but
   // not running looks exactly like one that is running until something asks it.
@@ -455,7 +492,7 @@ function commandDoctor(args) {
       repositoryImports: imports.map((layer) => ({ scope: layer.scope, kinds: layer.kinds })),
       unverifiableConfig: unverifiable
     }, null, 2)}\n`);
-    return blockedRows(rows).length > 0 || broken.length > 0 || unverifiable.length > 0 ? 1 : 0;
+    return state.blocked.length > 0 || broken.length > 0 || unverifiable.length > 0 ? 1 : 0;
   }
 
   for (const layer of broken) process.stdout.write(`Unreadable ${layer.scope} config: ${layer.detail}\n`);

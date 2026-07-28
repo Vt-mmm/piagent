@@ -2,21 +2,20 @@ import {
   REPOSITORY_SCOPES,
   collectServers,
   isRecord,
+  mergedServerEntry,
   readMcpConfig,
-  repositoryImportDeclarations,
-  unreadableLayers,
   writeMcpConfig
 } from "./mcp-config-layers.js";
 import { approvalStorePath, approvalState, clearApproval, recordApproval } from "./mcp-approval-store.js";
 import { maskServerEntry } from "./mcp-server-entry.js";
 import {
   McpViewError,
-  blockedRows,
   collectServerRows,
   describeServer,
   formatDoctorReport,
   formatServerDetail,
-  formatServerTable
+  formatServerTable,
+  sessionMcpState
 } from "./mcp-session-view.js";
 
 // What `/piagent-mcp` does, separated from how a session shows it.
@@ -66,9 +65,14 @@ export const HELP_LINES = [
  * @param {{projectPath: string}} options
  */
 export function menuOptions(options) {
-  const rows = collectServerRows({ projectPath: options.projectPath });
-  const stuck = blockedRows(rows);
-  const repositoryRows = rows.filter((row) => REPOSITORY_SCOPES.has(row.scope));
+  const state = sessionMcpState({ projectPath: options.projectPath });
+  const { rows, blocked: stuck } = state;
+  // Not `REPOSITORY_SCOPES.has(row.scope)`: a repository-relative import
+  // declared by a `global` config produces a row whose scope is `global` and
+  // whose definition came out of the clone. Those were the rows the menu never
+  // offered to approve, so the only route to a decision was knowing to type the
+  // subcommand -- for exactly the servers whose origin is hardest to see.
+  const repositoryRows = rows.filter((row) => row.requiresApproval);
   const decisions = repositoryRows.map((row) => ({
     row,
     state: approvalState({ projectPath: options.projectPath, name: row.name, entry: row.entry }).state
@@ -81,11 +85,24 @@ export function menuOptions(options) {
   const entries = [
     {
       value: "status",
-      label: rows.length === 0 ? "Servers — none configured" : `Servers — ${rows.length - stuck.length}/${rows.length} ready`,
-      description: "Every server visible from this project, with its scope and state"
+      label: state.usable
+        ? (rows.length === 0 ? "Servers — none configured" : `Servers — ${rows.length - stuck.length}/${rows.length} ready`)
+        : "Servers — every tool call blocked",
+      description: state.usable
+        ? "Every server visible from this project, with its scope and state"
+        : "Config here leaves nothing to check an approval against"
     }
   ];
-  if (stuck.length > 0) {
+  // Ahead of everything per-server: while this stands, no decision about an
+  // individual server changes whether anything runs.
+  if (!state.usable) {
+    entries.push({
+      value: "doctor",
+      label: `Doctor — ${state.blockingConfig.length} config problem${state.blockingConfig.length === 1 ? "" : "s"} blocking every call`,
+      description: "Which file to edit before any server can answer",
+      recommended: true
+    });
+  } else if (stuck.length > 0) {
     entries.push({
       value: "doctor",
       label: `Doctor — ${stuck.length} need attention`,
@@ -133,7 +150,13 @@ export function serverChoices(options) {
   const { projectPath, action } = options;
   const rows = collectServerRows({ projectPath });
   const filtered = rows.filter((row) => {
-    if (action === "approve" || action === "reject" || action === "reset") return REPOSITORY_SCOPES.has(row.scope);
+    if (action === "approve" || action === "reject" || action === "reset") return row.requiresApproval;
+    // A server reached through `imports` lives in a file this command does not
+    // own. Offering it here produced a write against the declaring layer that
+    // reported success and changed nothing the adapter reads.
+    if (action === "enable" || action === "disable") {
+      if (row.origin?.startsWith("import:")) return false;
+    }
     if (action === "enable") return row.readiness.state === "disabled";
     if (action === "disable") return row.readiness.state !== "disabled";
     return true;
@@ -147,19 +170,43 @@ export function serverChoices(options) {
 
 /** @param {{projectPath: string, scope?: string}} options */
 export function status(options) {
-  const rows = collectServerRows({ projectPath: options.projectPath, scopes: options.scope ? [options.scope] : undefined });
-  const stuck = blockedRows(rows);
+  const state = sessionMcpState({
+    projectPath: options.projectPath,
+    scopes: options.scope ? [options.scope] : undefined
+  });
+  const { rows, blocked: stuck } = state;
+  // Reported before the per-server table, and it decides the headline. A status
+  // that says "0 servers configured" in a session where every tool call is being
+  // refused is not a smaller version of the truth, it points at the wrong file.
+  const blocking = state.blockingConfig.map((problem) => `BLOCKED every tool call: ${problem.detail}`);
+  const summary = !state.usable
+    ? "MCP: every tool call blocked by config"
+    : rows.length === 0
+      ? "MCP: no servers configured"
+      : `MCP: ${rows.length - stuck.length}/${rows.length} ready`;
   return {
-    notify: {
-      message: rows.length === 0 ? "MCP: no servers configured" : `MCP: ${rows.length - stuck.length}/${rows.length} ready`,
-      level: stuck.length > 0 ? "warning" : "info"
-    },
-    lines: rows.length === 0
-      ? ["No MCP servers configured.", "Seed the pinned baseline in a terminal: piagent-mcp --preset core --scope global"]
-      : [formatServerTable(rows), ...(stuck.length > 0 ? ["", `${stuck.length} not usable yet. Run /piagent-mcp doctor.`] : [])],
+    notify: { message: summary, level: state.usable && stuck.length === 0 ? "info" : "warning" },
+    lines: [
+      ...blocking,
+      ...(blocking.length > 0 ? [""] : []),
+      ...(rows.length === 0
+        ? (state.usable
+          ? ["No MCP servers configured.", "Seed the pinned baseline in a terminal: piagent-mcp --preset core --scope global"]
+          : [])
+        : [formatServerTable(rows), ...(stuck.length > 0 ? ["", `${stuck.length} not usable yet. Run /piagent-mcp doctor.`] : [])])
+    ],
     details: {
       project: options.projectPath,
-      servers: rows.map((row) => ({ name: row.name, scope: row.scope, state: row.readiness.state, detail: row.readiness.detail }))
+      usable: state.usable,
+      blockingConfig: state.blockingConfig,
+      servers: rows.map((row) => ({
+        name: row.name,
+        scope: row.scope,
+        origin: row.origin,
+        requiresApproval: row.requiresApproval,
+        state: row.readiness.state,
+        detail: row.readiness.detail
+      }))
     }
   };
 }
@@ -187,24 +234,26 @@ export function detail(options) {
  * @param {{projectPath: string}} options
  */
 export function doctor(options) {
-  const rows = collectServerRows({ projectPath: options.projectPath });
-  const report = formatDoctorReport(rows, { rerun: "/piagent-mcp doctor", inSession: true });
-  const broken = unreadableLayers({ projectPath: options.projectPath });
-  const imports = repositoryImportDeclarations({ projectPath: options.projectPath });
+  const state = sessionMcpState({ projectPath: options.projectPath });
+  const report = formatDoctorReport(state.rows, { rerun: "/piagent-mcp doctor", inSession: true });
   // A layer nobody can parse counts as a problem: it is hiding whatever it
   // defines. An import declaration does not — the servers it brings in are in
   // the table above with their own approval state — but it is named, because
   // reading the repository's config alone would not reveal where they came from.
-  const problems = report.problems + broken.length;
+  const problems = report.problems + state.unreadable.length + state.blockingConfig.length;
   return {
     notify: {
       message: problems === 0 ? "MCP: every server can be reached" : `MCP: ${problems} need attention`,
       level: problems === 0 ? "info" : "warning"
     },
     lines: [
+      // First. No per-server remedy below is worth acting on while one of these
+      // stands, because none of them makes a tool call succeed.
+      ...state.blockingConfig.map((problem) => `BLOCKED every tool call: ${problem.detail}`),
+      ...(state.blockingConfig.length > 0 ? [""] : []),
       ...report.lines,
-      ...broken.map((layer) => `Unreadable ${layer.scope} config: ${layer.detail}`),
-      ...imports.map((layer) =>
+      ...state.unreadable.map((layer) => `Unreadable ${layer.scope} config: ${layer.detail}`),
+      ...state.imports.map((layer) =>
         `${layer.file} imports servers from ${layer.kinds.join(", ")} config; ` +
         "they need approval here like any server the repository defines."),
       ...(problems === 0 ? [] : ["", "The Docker daemon check is terminal-only: piagent-mcp doctor"])
@@ -212,8 +261,10 @@ export function doctor(options) {
     details: {
       project: options.projectPath,
       problems,
-      unreadableLayers: broken.map((layer) => layer.scope),
-      repositoryImports: imports.map((layer) => ({ scope: layer.scope, kinds: layer.kinds }))
+      usable: state.usable,
+      blockingConfig: state.blockingConfig,
+      unreadableLayers: state.unreadable.map((layer) => layer.scope),
+      repositoryImports: state.imports.map((layer) => ({ scope: layer.scope, kinds: layer.kinds }))
     }
   };
 }
@@ -235,8 +286,14 @@ export function decide(options) {
   const before = approvalState({ projectPath, name, entry: server.entry });
   // Approving without reading it is the failure this gate exists to prevent, so
   // the definition is put in front of the operator alongside the decision.
+  //
+  // What is shown is the merged entry, not this layer's fragment. The adapter
+  // merges a same-named server key by key across layers, so a repository that
+  // declares only `{"args": ["--evil"]}` gets the command from a lower layer --
+  // and a preview of the fragment showed the operator an argument list with no
+  // command attached while consenting to a full command line.
   const preview = decision === "approved" && before.state !== "approved"
-    ? [JSON.stringify(maskServerEntry(server.entry), null, 2), ""]
+    ? [JSON.stringify(maskServerEntry(mergedServerEntry({ projectPath, name, entry: server.entry })), null, 2), ""]
     : [];
   // A decision that was not written is not a decision. Reporting success here
   // would leave the operator believing a server is approved while the gate keeps
@@ -274,10 +331,29 @@ export function reset(options) {
   };
 }
 
+/**
+ * A server this command has no file of its own to edit: it was read out of
+ * another tool's config through `imports`. The write used to land in whichever
+ * layer declared the import, where the adapter never looks for it, so the
+ * command reported the server disabled and the next tool call still reached it.
+ *
+ * @param {{name: string, origin?: string, scope: string, file: string}} found
+ * @param {string} action
+ */
+function assertOwnedByThisTool(found, action) {
+  if (!found.origin?.startsWith("import:")) return;
+  const kind = found.origin.slice("import:".length);
+  throw new McpViewError(
+    `${found.name} is not defined by any config this command owns. The ${found.scope} config imports ${kind}, ` +
+    `and the definition lives in ${found.file}. Edit that file to ${action} it, or drop "${kind}" from the imports list.`
+  );
+}
+
 /** @param {{projectPath: string, name: string, scope?: string, enabled: boolean}} options */
 export function toggle(options) {
   const { projectPath, name, scope, enabled } = options;
   const found = describeServer({ projectPath, name, scope, listHint: "/piagent-mcp", scopeHint: "--scope" });
+  assertOwnedByThisTool(found, enabled ? "enable" : "disable");
   const config = readMcpConfig(found.file);
   const entry = { ...(isRecord(config.mcpServers[name]) ? config.mcpServers[name] : {}) };
   if (enabled) delete entry.enabled;

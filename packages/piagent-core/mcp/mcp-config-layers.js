@@ -1,6 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
-import { REPOSITORY_RELATIVE_KINDS, canEnumerateImportKind, declaredImports, importedServers } from "./mcp-import-kinds.js";
+import {
+  REPOSITORY_RELATIVE_KINDS,
+  canEnumerateImportKind,
+  declaredImports,
+  importKindFiles,
+  importedServers,
+  unreadableImportTargets
+} from "./mcp-import-kinds.js";
 import { erasesToolOrigin } from "./mcp-tool-naming.js";
 
 // Four files can define MCP servers, and which one a change belongs in is the
@@ -63,7 +70,7 @@ export function readMcpConfig(file) {
     raw = fs.readFileSync(file, "utf8");
   } catch (error) {
     if (error && typeof error === "object" && error.code === "ENOENT") {
-      return { settings: {}, mcpServers: {}, imports: [], rest: {} };
+      return { settings: {}, mcpServers: {}, imports: [], rawImports: [], rest: {} };
     }
     throw new McpConfigError(`cannot read MCP config: ${file}`);
   }
@@ -73,7 +80,13 @@ export function readMcpConfig(file) {
   } catch (error) {
     throw new McpConfigError(`cannot parse MCP config: ${file}: ${error instanceof Error ? error.message : String(error)}`);
   }
-  if (!isRecord(document)) return { settings: {}, mcpServers: {}, imports: [], rest: {} };
+  // A JSON array, string or number parses fine and is not a config. Reading it
+  // as empty meant a later write replaced somebody's file with `{}` plus whatever
+  // the write added, so the document that could not be understood was destroyed
+  // rather than reported.
+  if (!isRecord(document)) {
+    throw new McpConfigError(`MCP config is not a JSON object: ${file}`);
+  }
   const { settings, mcpServers, imports, ...rest } = document;
   return {
     settings: isRecord(settings) ? settings : {},
@@ -82,6 +95,9 @@ export function readMcpConfig(file) {
     // was preserved by every write and read by nothing here, which is the exact
     // shape of a key that decides what loads without anything checking it.
     imports: declaredImports(imports),
+    // The list exactly as written, so a write can put back kinds this version
+    // does not recognise. Nothing reads this to decide behaviour.
+    rawImports: Array.isArray(imports) ? imports.filter((kind) => typeof kind === "string") : [],
     rest
   };
 }
@@ -92,18 +108,35 @@ export function readMcpConfig(file) {
  * @returns {void}
  */
 export function writeMcpConfig(file, config) {
-  const declared = declaredImports(config.imports);
+  // `declaredImports` keeps only the kinds this version knows. Writing that back
+  // deleted any kind a newer adapter understands and this one does not, turning
+  // an unrelated `add` into a silent downgrade of somebody's config. The raw list
+  // is preserved and the known kinds are what the rest of this module reads.
+  const raw = Array.isArray(config.rawImports) ? config.rawImports : declaredImports(config.imports);
   const document = {
     ...(config.rest ?? {}),
     // Written back rather than dropped. This key is refused at the gate when a
     // repository carries it, and deleting a line out of somebody's own config
     // as a side effect of an unrelated `add` is not a fix.
-    ...(declared.length > 0 ? { imports: declared } : {}),
+    ...(raw.length > 0 ? { imports: raw } : {}),
     settings: { ...BASELINE_SETTINGS, ...config.settings },
     mcpServers: config.mcpServers
   };
   const output = `${JSON.stringify(document, null, 2)}\n`;
   fs.mkdirSync(path.dirname(file), { recursive: true });
+  // A symlink here points the write somewhere the caller did not name. Renaming
+  // over it replaces the link itself, so the file the operator has been editing
+  // stops being the file this reads -- and following it would write through a
+  // link a repository could have planted.
+  let existing;
+  try {
+    existing = fs.lstatSync(file);
+  } catch (error) {
+    if (!error || typeof error !== "object" || error.code !== "ENOENT") throw error;
+  }
+  if (existing?.isSymbolicLink()) {
+    throw new McpConfigError(`refusing to write through a symlink: ${file}`);
+  }
   // Written beside the target and renamed, so a crash mid-write leaves the old
   // config rather than a truncated one that would read as "no servers".
   const temporary = `${file}.${process.pid}.tmp`;
@@ -194,6 +227,43 @@ export function collectServers(options = {}) {
 }
 
 /**
+ * The definition a same-named server actually runs under.
+ *
+ * The adapter merges server maps key by key in scope order, so a later layer
+ * that names an existing server overrides only the keys it sets. A repository
+ * declaring `{"args": ["--evil"]}` therefore inherits `command` from the
+ * operator's own global config, and reading that layer alone shows an argument
+ * list with no command attached — which is not what will run, and not what an
+ * operator should be asked to consent to.
+ *
+ * The digest deliberately stays over the repository's own fragment: that is the
+ * part the repository controls, and hashing the merge would return a server to
+ * pending every time the operator edited their own global config.
+ *
+ * @param {{projectPath?: string, name: string, entry?: Record<string, unknown>, env?: Record<string, string|undefined>, home?: string}} options
+ * @returns {Record<string, unknown>}
+ */
+export function mergedServerEntry(options) {
+  let merged = {};
+  let seen = false;
+  for (const scope of SCOPES) {
+    let config;
+    try {
+      config = readMcpConfig(configPathForScope(scope, options));
+    } catch {
+      continue;
+    }
+    const entry = config.mcpServers[options.name];
+    if (!isRecord(entry)) continue;
+    merged = { ...merged, ...entry };
+    seen = true;
+  }
+  // A server reached through `imports` is in no layer's `mcpServers`, so the
+  // entry the caller already has is the whole definition.
+  return seen ? merged : { ...(options.entry ?? {}) };
+}
+
+/**
  * Layers that exist but cannot be read. `collectServers` skips these so one bad
  * file does not take out the whole listing, which is the right call for a
  * listing and the wrong one for a diagnosis: a config nothing can parse
@@ -207,10 +277,25 @@ export function unreadableLayers(options = {}) {
   const problems = [];
   for (const scope of options.scopes ?? SCOPES) {
     const file = configPathForScope(scope, options);
+    let config;
     try {
-      readMcpConfig(file);
+      config = readMcpConfig(file);
     } catch (error) {
       problems.push({ scope, file, detail: error instanceof Error ? error.message : String(error) });
+      continue;
+    }
+    // A layer can also be unreadable one step removed: it parses, declares an
+    // import, and the file that import names is the one nothing can read. That
+    // layer contributes no servers for a reason the layer itself does not show,
+    // so the diagnosis has to follow the declaration to where it points.
+    for (const kind of config.imports) {
+      for (const target of unreadableImportTargets(kind, options)) {
+        problems.push({
+          scope,
+          file: target.file,
+          detail: `${file} imports ${kind}, and that config is present but unreadable: ${target.detail}`
+        });
+      }
     }
   }
   return problems;
@@ -243,10 +328,42 @@ export function repositoryImportDeclarations(options = {}) {
 }
 
 /**
- * Repository-carried settings that leave the gate with nothing to check, so the
- * only sound answer is to refuse every tool call.
+ * The `settings` block a session actually runs under.
  *
- * Kept here rather than in the guard because two surfaces have to agree on it.
+ * The adapter merges `settings` across all four layers in scope order, later
+ * layers winning key by key — it is one session-wide block, not a per-server
+ * one. Reading a single layer therefore answers a different question than the
+ * one that matters: `directTools` set in one file and `toolPrefix: "none"` set
+ * in another produce a session with neither property, and a check that looked at
+ * either file alone saw nothing wrong with it.
+ *
+ * @param {{projectPath?: string, env?: Record<string, string|undefined>, home?: string}} [options]
+ * @returns {{settings: Record<string, unknown>, contributors: Record<string, string>}}
+ */
+export function mergedSettings(options = {}) {
+  const settings = { ...BASELINE_SETTINGS };
+  /** @type {Record<string, string>} */
+  const contributors = {};
+  for (const scope of SCOPES) {
+    let config;
+    try {
+      config = readMcpConfig(configPathForScope(scope, options));
+    } catch {
+      continue;
+    }
+    for (const [key, item] of Object.entries(config.settings)) {
+      settings[key] = item;
+      contributors[key] = scope;
+    }
+  }
+  return { settings, contributors };
+}
+
+/**
+ * Config that leaves the gate with nothing to check, so the only sound answer is
+ * to refuse every tool call.
+ *
+ * Kept here rather than in the guard because three surfaces have to agree on it.
  * The guard enforces it; `doctor` and `list` are where an operator goes to find
  * out why a session stopped working. When only the guard knew, `doctor` reported
  * "No MCP servers configured" and exited 0 while nothing could run — an answer
@@ -255,8 +372,24 @@ export function repositoryImportDeclarations(options = {}) {
  * @param {{projectPath?: string, env?: Record<string, string|undefined>, home?: string}} [options]
  * @returns {{scope: string, file: string, detail: string}[]}
  */
-export function unverifiableRepositoryConfig(options = {}) {
+export function unverifiableMcpConfig(options = {}) {
   const problems = [];
+  const merged = mergedSettings(options);
+  if (erasesToolOrigin(merged.settings)) {
+    // Which files to edit, not just that something is wrong: the two keys can be
+    // set in different layers, and naming only one of them sends the operator to
+    // a file where the other half is not.
+    const scopes = [...new Set(["directTools", "toolPrefix"].map((key) => merged.contributors[key]).filter(Boolean))];
+    const files = scopes.map((scope) => configPathForScope(scope, options));
+    problems.push({
+      scope: scopes.join(" + ") || "global",
+      file: files[0] ?? configPathForScope("global", options),
+      detail: `${files.join(" and ")} together turn on directTools with toolPrefix "none", which strips the ` +
+        "server name off every tool and leaves nothing to check an approval against. " +
+        "Remove that setting, then approve servers individually."
+    });
+  }
+
   for (const scope of REPOSITORY_SCOPES) {
     const file = configPathForScope(scope, options);
     let config;
@@ -267,21 +400,20 @@ export function unverifiableRepositoryConfig(options = {}) {
       // assumed about the contents of a file nobody could read.
       continue;
     }
-    if (erasesToolOrigin(config.settings)) {
-      problems.push({
-        scope,
-        file,
-        detail: `${file} turns on directTools with toolPrefix "none", which strips the server name off ` +
-          "every tool and leaves nothing to check an approval against. Remove that setting, then approve servers individually."
-      });
-    }
     for (const kind of config.imports) {
       if (canEnumerateImportKind(kind)) continue;
+      // An import of a kind nothing here can parse is only a hole when the file
+      // it names exists. Refusing on the declaration alone blocked every session
+      // whose repository listed a tool the operator does not even have installed,
+      // which is a config to clean up rather than a session to stop.
+      const present = importKindFiles(kind, options).filter((candidate) => fs.existsSync(candidate));
+      if (present.length === 0) continue;
       problems.push({
         scope,
         file,
-        detail: `${file} imports servers from ${kind} config, which this platform cannot enumerate, ` +
-          "so which servers reach this session is unknown. Remove the import and declare the servers you want directly."
+        detail: `${file} imports servers from ${kind} config, which this platform cannot enumerate ` +
+          `(${present.join(", ")}), so which servers reach this session is unknown. ` +
+          "Remove the import and declare the servers you want directly."
       });
     }
   }

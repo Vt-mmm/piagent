@@ -47,7 +47,7 @@ import {
   REPOSITORY_SCOPES,
   collectServers,
   configPathForScope,
-  unverifiableRepositoryConfig
+  unverifiableMcpConfig
 } from "../mcp/mcp-config-layers.js";
 import { attributeDirectTool } from "../mcp/mcp-tool-naming.js";
 import { approvalState } from "../mcp/mcp-approval-store.js";
@@ -2078,7 +2078,7 @@ function repositoryMcpGate(cwd: string): RepositoryMcpGate {
   // Read from the shared module rather than decided here, so `piagent-mcp
   // doctor` reports exactly what this refuses. The two disagreeing is how an
   // operator ends up reading "PASS" while every tool call is being stopped.
-  const unverifiable = unverifiableRepositoryConfig({ projectPath: cwd }).map((problem) => problem.detail);
+  const unverifiable = unverifiableMcpConfig({ projectPath: cwd }).map((problem) => problem.detail);
 
   const gate = { blocked, unverifiable };
   mcpApprovalCache.set(cwd, { signature, gate });

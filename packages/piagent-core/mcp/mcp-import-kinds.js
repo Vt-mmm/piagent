@@ -141,10 +141,29 @@ export function declaredImports(value) {
 }
 
 /**
+ * Every file an import kind can be read from, adapter location and real location
+ * alike. Exported because "does this kind actually resolve to anything on this
+ * machine" is a question two callers ask, and each answering it from its own
+ * copy of the path list is how the two answers drift apart.
+ *
+ * @param {string} kindName
+ * @param {{projectPath?: string, home?: string}} [options]
+ * @returns {string[]}
+ */
+export function importKindFiles(kindName, options = {}) {
+  const kind = IMPORT_KINDS[kindName];
+  if (!kind) return [];
+  const home = options.home ?? os.homedir();
+  const projectPath = options.projectPath ?? process.cwd();
+  return [...new Set([...kind.adapterPaths(home, projectPath), ...kind.actualPaths(home, projectPath)])];
+}
+
+/**
  * Every server an import kind can put into a session, from either location and
- * under any of the keys that location might use. Files that are missing or
- * unparseable contribute nothing; a broken personal config is not this module's
- * problem to report.
+ * under any of the keys that location might use. Files that are missing
+ * contribute nothing; a file that exists but cannot be parsed is reported by
+ * `unreadableImportTargets`, because "no servers" and "servers nobody could
+ * read" are the two answers an operator most needs told apart.
  *
  * @param {string} kindName
  * @param {{projectPath?: string, home?: string}} [options]
@@ -153,9 +172,7 @@ export function declaredImports(value) {
 export function importedServers(kindName, options = {}) {
   const kind = IMPORT_KINDS[kindName];
   if (!kind) return [];
-  const home = options.home ?? os.homedir();
-  const projectPath = options.projectPath ?? process.cwd();
-  const files = [...new Set([...kind.adapterPaths(home, projectPath), ...kind.actualPaths(home, projectPath)])];
+  const files = importKindFiles(kindName, options);
 
   const found = [];
   const seen = new Set();
@@ -183,4 +200,41 @@ export function importedServers(kindName, options = {}) {
     }
   }
   return found;
+}
+
+/**
+ * Import targets that exist but cannot be read into servers. `importedServers`
+ * skips these, which is right for a listing and wrong for a diagnosis: the
+ * caller cannot otherwise tell a tool that defines no servers from a tool whose
+ * config nothing could parse, and only one of those two is a gap in the gate.
+ *
+ * @param {string} kindName
+ * @param {{projectPath?: string, home?: string}} [options]
+ * @returns {{kind: string, file: string, detail: string}[]}
+ */
+export function unreadableImportTargets(kindName, options = {}) {
+  const kind = IMPORT_KINDS[kindName];
+  if (!kind) return [];
+  const problems = [];
+  for (const file of importKindFiles(kindName, options)) {
+    if (!kind.parsedAsJson && !file.endsWith(".json")) continue;
+    let raw;
+    try {
+      raw = fs.readFileSync(file, "utf8");
+    } catch (error) {
+      // Absent is the normal case for five of six kinds and is not a problem.
+      if (error && typeof error === "object" && error.code === "ENOENT") continue;
+      problems.push({ kind: kindName, file, detail: `cannot read ${file}` });
+      continue;
+    }
+    let document;
+    try {
+      document = JSON.parse(raw);
+    } catch (error) {
+      problems.push({ kind: kindName, file, detail: `cannot parse ${file}: ${error instanceof Error ? error.message : String(error)}` });
+      continue;
+    }
+    if (!isRecord(document)) problems.push({ kind: kindName, file, detail: `${file} is not a JSON object` });
+  }
+  return problems;
 }
