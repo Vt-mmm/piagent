@@ -25,6 +25,47 @@ const PROBE_TIMEOUT_MS = 10_000;
 const MAX_CACHE_BYTES = 4096;
 const RELEASE_VERSION = /^(0|[1-9]\d{0,8})\.(0|[1-9]\d{0,8})\.(0|[1-9]\d{0,8})$/;
 
+/**
+ * Whether this platform tree is an install rather than somebody's working copy.
+ *
+ * Identified by where it sits, not by what it contains. `pi install git:...`
+ * clones the repository, so an install made the ordinary way carries a `.git`
+ * directory and every other file a maintainer's checkout carries — there is no
+ * mark inside the tree that separates them. What does separate them is that Pi
+ * puts packages it installed under its own agent directory, and npm puts the
+ * global helper under node_modules. A tree anywhere else is a working copy, and
+ * telling its owner to install over it is worse than saying nothing.
+ *
+ * @param {string} platformRoot
+ * @param {{home?: string, env?: Record<string, string|undefined>}} [options]
+ * @returns {boolean}
+ */
+export function isInstalledPlatform(platformRoot, options = {}) {
+  if (typeof platformRoot !== "string" || platformRoot.length === 0) return false;
+  if (platformRoot.split(path.sep).includes("node_modules")) return true;
+  const env = options.env ?? process.env;
+  const configured = env.PI_CODING_AGENT_DIR?.trim();
+  const base = options.home ?? os.homedir();
+  const agentDir = configured || (typeof base === "string" && base.length > 0 ? path.join(base, ".pi", "agent") : undefined);
+  if (!agentDir) return false;
+  // Both sides are resolved before comparing. A home reached through a symlink
+  // is ordinary — macOS reaches /var that way — and comparing one real path
+  // against one symlinked path makes an install look like it is somewhere else.
+  const relative = path.relative(realPath(agentDir), realPath(platformRoot));
+  // Empty means the same directory, which is not a package inside it; a leading
+  // `..` or an absolute result means the tree is somewhere else entirely.
+  return relative.length > 0 && !relative.startsWith("..") && !path.isAbsolute(relative);
+}
+
+/** @param {string} value @returns {string} */
+function realPath(value) {
+  try {
+    return fs.realpathSync(value);
+  } catch {
+    return value;
+  }
+}
+
 /** @param {string} [home] @returns {string|undefined} */
 export function updateCacheFile(home) {
   const base = home ?? os.homedir();

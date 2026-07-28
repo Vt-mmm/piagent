@@ -8,6 +8,7 @@ import { createContext, createPiHarness, writeRuntimeStubs } from "./helpers/gua
 import {
   compareReleaseVersions,
   evaluateUpdateCheck,
+  isInstalledPlatform,
   readUpdateCache,
   releaseVersion,
   runUpdateProbe,
@@ -156,6 +157,47 @@ describe("update availability check", () => {
     }), false);
   });
 
+  // `pi install git:...` clones, so an ordinary install carries a .git and every
+  // other file a working copy carries. v1.1.8 read that .git as "this is the
+  // maintainer's repository" and went silent on the default install path.
+  it("counts a cloned install under the agent directory as installed", () => {
+    const home = createHome();
+    const installed = path.join(home, ".pi", "agent", "git", "github.com", "Vt-mmm", "piagent");
+    fs.mkdirSync(path.join(installed, ".git"), { recursive: true });
+
+    assert.equal(isInstalledPlatform(installed, { home, env: {} }), true);
+  });
+
+  it("counts the npm-global helper as installed", () => {
+    const home = createHome();
+    assert.equal(isInstalledPlatform("/opt/homebrew/lib/node_modules/@piagent/platform", { home, env: {} }), true);
+  });
+
+  it("does not count a working copy that lives anywhere else", () => {
+    const home = createHome();
+    assert.equal(isInstalledPlatform(path.join(home, "Documents", "pi-company-platform"), { home, env: {} }), false);
+    assert.equal(isInstalledPlatform("/Users/someone/src/piagent", { home, env: {} }), false);
+  });
+
+  it("does not mistake a sibling of the agent directory for something inside it", () => {
+    const home = createHome();
+    const agentDir = path.join(home, ".pi", "agent");
+    fs.mkdirSync(agentDir, { recursive: true });
+
+    assert.equal(isInstalledPlatform(agentDir, { home, env: {} }), false);
+    assert.equal(isInstalledPlatform(path.join(home, ".pi", "agent-backup", "piagent"), { home, env: {} }), false);
+  });
+
+  it("follows a relocated agent directory", () => {
+    const home = createHome();
+    const relocated = path.join(home, "elsewhere", "agent");
+    const installed = path.join(relocated, "git", "github.com", "Vt-mmm", "piagent");
+    fs.mkdirSync(installed, { recursive: true });
+
+    assert.equal(isInstalledPlatform(installed, { home, env: { PI_CODING_AGENT_DIR: relocated } }), true);
+    assert.equal(isInstalledPlatform(installed, { home, env: {} }), false);
+  });
+
   it("records what the registry answered", () => {
     const home = createHome();
     assert.equal(runUpdateProbe({ home, now, fetch: () => NEWER }), true);
@@ -174,13 +216,17 @@ describe("update availability check", () => {
 const repoRoot = path.resolve(import.meta.dirname, "..");
 let sessionCount = 0;
 
-// The guard reports an update only for an installed platform, which is any copy
-// without a checkout attached to it — exactly what a temporary copy is.
-async function installedGuard(version, mutatePlatform) {
+// An installed platform is one Pi placed under its agent directory, which is
+// where `pi install git:...` puts a clone. The fixture reproduces that layout,
+// including the .git a clone carries, because that is what a real install is.
+async function installedGuard(version, options = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-update-check-session-"));
   temporaryRoots.add(root);
   writeRuntimeStubs(root);
-  const platformRoot = path.join(root, "platform");
+  const home = path.join(root, "home");
+  const platformRoot = options.platformRoot
+    ? path.join(root, options.platformRoot)
+    : path.join(home, ".pi", "agent", "git", "github.com", "Vt-mmm", "piagent");
   for (const directory of ["packages", "adapters", "packs", "evals", "policies"]) {
     const source = path.join(repoRoot, directory);
     if (fs.existsSync(source)) fs.cpSync(source, path.join(platformRoot, directory), { recursive: true });
@@ -189,7 +235,8 @@ async function installedGuard(version, mutatePlatform) {
   packageDocument.version = version;
   fs.mkdirSync(platformRoot, { recursive: true });
   fs.writeFileSync(path.join(platformRoot, "package.json"), `${JSON.stringify(packageDocument, null, 2)}\n`);
-  mutatePlatform?.(platformRoot);
+  // Installed the ordinary way means cloned, so the tree carries a .git.
+  fs.mkdirSync(path.join(platformRoot, ".git"), { recursive: true });
 
   const cwd = path.join(root, "project");
   fs.mkdirSync(cwd, { recursive: true });
@@ -198,15 +245,25 @@ async function installedGuard(version, mutatePlatform) {
   sessionCount += 1;
   const moduleUrl = pathToFileURL(path.join(platformRoot, "packages", "piagent-core", "extensions", "piagent-guard.ts")).href;
   const imported = await import(`${moduleUrl}?session=${sessionCount}`);
-  return { root, cwd, piagentGuard: imported.default };
+  return { root, cwd, home, piagentGuard: imported.default };
+}
+
+// The agent directory and the cache both hang off the same home, so the session
+// has to run against the home the fixture installed into.
+function cacheLatest(home, latest) {
+  fs.mkdirSync(path.join(home, ".pi"), { recursive: true });
+  fs.writeFileSync(
+    path.join(home, ".pi", "piagent-update-check.json"),
+    `${JSON.stringify({ schemaVersion: 1, latest, checkedAt: new Date().toISOString() }, null, 2)}\n`
+  );
 }
 
 // A cache stamped now keeps the session from starting a real registry probe.
-async function startSession(fixture, home) {
-  const previousHome = process.env.HOME;
-  const previousOff = process.env.PIAGENT_NO_UPDATE_CHECK;
-  process.env.HOME = home;
+async function startSession(fixture, env = {}) {
+  const previous = { HOME: process.env.HOME, PIAGENT_NO_UPDATE_CHECK: process.env.PIAGENT_NO_UPDATE_CHECK };
+  process.env.HOME = fixture.home;
   delete process.env.PIAGENT_NO_UPDATE_CHECK;
+  for (const [key, value] of Object.entries(env)) process.env[key] = value;
   try {
     const ctx = createContext(fixture.cwd);
     const harness = createPiHarness();
@@ -214,19 +271,25 @@ async function startSession(fixture, home) {
     await harness.handlers.get("session_start")({}, ctx);
     return ctx.ui.notices;
   } finally {
-    if (previousHome === undefined) delete process.env.HOME;
-    else process.env.HOME = previousHome;
-    if (previousOff !== undefined) process.env.PIAGENT_NO_UPDATE_CHECK = previousOff;
+    for (const key of Object.keys(env)) delete process.env[key];
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
   }
+}
+
+function updateNoticeIn(notices) {
+  return notices.find((notice) => /Piagent update available/.test(notice.message));
 }
 
 describe("update notice in a Pi session", () => {
   it("tells the operator a release is out and how to take it", async () => {
     const fixture = await installedGuard(OLD);
-    const home = createHome({ schemaVersion: 1, latest: NEW, checkedAt: new Date().toISOString() });
+    cacheLatest(fixture.home, NEW);
 
-    const notices = await startSession(fixture, home);
-    const update = notices.find((notice) => /Piagent update available/.test(notice.message));
+    const notices = await startSession(fixture);
+    const update = updateNoticeIn(notices);
 
     assert.notEqual(update, undefined);
     assert.equal(update.message.includes(`${OLD} -> ${NEW}`), true);
@@ -236,49 +299,33 @@ describe("update notice in a Pi session", () => {
     assert.match(notices[0].message, /Piagent Pi guard loaded/);
   });
 
-  // A maintainer working in the repository is not running a release, and telling
-  // them to install over their own working tree is worse than saying nothing.
-  it("stays quiet in a checkout even when a newer release exists", async () => {
-    const fixture = await installedGuard(OLD, (platformRoot) => {
-      fs.mkdirSync(path.join(platformRoot, ".git"), { recursive: true });
-    });
-    const home = createHome({ schemaVersion: 1, latest: NEW, checkedAt: new Date().toISOString() });
+  // A maintainer's working copy is not an install. It cannot be told apart by
+  // what the tree contains — `pi install git:` clones, so a real install carries
+  // a .git too — only by the fact that nothing put it under the agent directory.
+  it("stays quiet in a working copy even when a newer release exists", async () => {
+    const fixture = await installedGuard(OLD, { platformRoot: "Documents/pi-company-platform" });
+    cacheLatest(fixture.home, NEW);
 
-    const notices = await startSession(fixture, home);
+    const notices = await startSession(fixture);
 
-    assert.equal(notices.some((notice) => /Piagent update available/.test(notice.message)), false);
+    assert.equal(updateNoticeIn(notices), undefined);
   });
 
   it("stays quiet when the installed release is the latest one", async () => {
     const fixture = await installedGuard(NEW);
-    const home = createHome({ schemaVersion: 1, latest: NEW, checkedAt: new Date().toISOString() });
+    cacheLatest(fixture.home, NEW);
 
-    const notices = await startSession(fixture, home);
+    const notices = await startSession(fixture);
 
-    assert.equal(notices.some((notice) => /Piagent update available/.test(notice.message)), false);
+    assert.equal(updateNoticeIn(notices), undefined);
   });
 
   it("stays quiet when the check is switched off", async () => {
     const fixture = await installedGuard(OLD);
-    const home = createHome({ schemaVersion: 1, latest: NEW, checkedAt: new Date().toISOString() });
-    const previous = process.env.PIAGENT_NO_UPDATE_CHECK;
-    process.env.PIAGENT_NO_UPDATE_CHECK = "1";
-    try {
-      const ctx = createContext(fixture.cwd);
-      const harness = createPiHarness();
-      const previousHome = process.env.HOME;
-      process.env.HOME = home;
-      try {
-        fixture.piagentGuard(harness.pi);
-        await harness.handlers.get("session_start")({}, ctx);
-      } finally {
-        if (previousHome === undefined) delete process.env.HOME;
-        else process.env.HOME = previousHome;
-      }
-      assert.equal(ctx.ui.notices.some((notice) => /Piagent update available/.test(notice.message)), false);
-    } finally {
-      if (previous === undefined) delete process.env.PIAGENT_NO_UPDATE_CHECK;
-      else process.env.PIAGENT_NO_UPDATE_CHECK = previous;
-    }
+    cacheLatest(fixture.home, NEW);
+
+    const notices = await startSession(fixture, { PIAGENT_NO_UPDATE_CHECK: "1" });
+
+    assert.equal(updateNoticeIn(notices), undefined);
   });
 });

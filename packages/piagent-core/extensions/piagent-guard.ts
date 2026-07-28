@@ -40,7 +40,7 @@ import {
   redactSensitiveText
 } from "./redaction-core.js";
 import { detectProfileName } from "./project-shape.js";
-import { evaluateUpdateCheck, readUpdateCache, startUpdateProbe } from "./update-check.js";
+import { evaluateUpdateCheck, isInstalledPlatform, readUpdateCache, startUpdateProbe } from "./update-check.js";
 import { buildExtendingProfile, resolveProjectProfileDocument } from "../capabilities/project-profile.js";
 import {
   resolveCapabilityProfileDocument,
@@ -427,10 +427,9 @@ const UPDATE_CHECK_MODULE = fileURLToPath(new URL("./update-check.js", import.me
 
 // The installed version, read from the package this file ships in. A maintainer
 // working in the repository is not running a release and has nothing to update
-// to, so the checkout is recognised by the one thing a published copy never
-// carries and told nothing.
+// to, so only a tree Pi or npm placed is given a version to compare.
 function installedPlatformVersion(): string | undefined {
-  if (fs.existsSync(path.join(PLATFORM_ROOT, ".git"))) return undefined;
+  if (!isInstalledPlatform(PLATFORM_ROOT)) return undefined;
   return readJsonFile<{ version?: string }>(path.join(PLATFORM_ROOT, "package.json"))?.version;
 }
 
