@@ -12,6 +12,7 @@ import {
   extractShellGlobCandidates,
   extractShellPathCandidates,
   findProtectedPathInCommand,
+  unresolvedPathExpansions,
   globMatchesPath,
   matchesProtectedPath,
   normalizePathCandidate,
@@ -2129,6 +2130,18 @@ function evaluateMcpApproval(
   };
 }
 
+// A word whose final path segment glues literal text onto an expansion --
+// `.en$(echo v)`, `${D}.env` -- names a file this process cannot know without
+// running the substitution. Matching the literal half against the protected
+// patterns answers a different question than the one being asked, so refuse
+// rather than let an unknown filename through unchecked.
+function unresolvedExpansionReason(subject: string, words: string[]): string {
+  const listed = words.map((word) => `\`${word}\``).join(", ");
+  return `${subject} builds a filename this guard cannot resolve: ${listed}. `
+    + "The literal text around the expansion makes it a path, but its value is only known at run time, "
+    + "so it cannot be checked against the protected paths. Write the path out, or put the expansion in its own argument.";
+}
+
 function evaluateMcpProxyShellProtectedAccess(
   cwd: string,
   prepared: PreparedToolInput,
@@ -2171,6 +2184,10 @@ function evaluateMcpProxyShellProtectedAccess(
       block: true,
       reason: `MCP command resolves to protected path: ${resolvedProtectedHit.candidate} resolves to ${resolvedProtectedHit.resolved} matching ${resolvedProtectedHit.pattern}`
     };
+  }
+  const unresolved = protectedPaths.length > 0 ? unresolvedPathExpansions(command) : [];
+  if (unresolved.length > 0) {
+    return { block: true, reason: unresolvedExpansionReason("MCP command", unresolved) };
   }
   return { block: false };
 }
@@ -4106,6 +4123,12 @@ export default function piagentGuard(pi: ExtensionAPI) {
           block: true,
           reason: `Command resolves to protected path: ${resolvedProtectedHit.candidate} resolves to ${resolvedProtectedHit.resolved} matching ${resolvedProtectedHit.pattern}`
         };
+      }
+      const unresolvedExpansions = pathPolicy.shellProtectedPaths.length > 0
+        ? unresolvedPathExpansions(command)
+        : [];
+      if (unresolvedExpansions.length > 0) {
+        return { block: true, reason: unresolvedExpansionReason("Command", unresolvedExpansions) };
       }
 
       const confirmationReasons = execDecision.mode !== "off" && execDecision.decision === "prompt"

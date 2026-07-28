@@ -5,7 +5,8 @@ import {
   extractShellGlobCandidates,
   findProtectedPathInCommand,
   matchesAnyPath,
-  matchesProtectedPath
+  matchesProtectedPath,
+  unresolvedPathExpansions
 } from "../packages/piagent-core/extensions/policy-core.js";
 
 const policy = {
@@ -230,6 +231,120 @@ describe("protected path extraction from shell", () => {
     assert.equal(findProtectedPathInCommand("cat $'\\x6eotes.txt'", policy.shellProtectedPaths), undefined);
     assert.equal(findProtectedPathInCommand("echo $'\\n'", policy.shellProtectedPaths), undefined);
   });
+
+  // `>|` is one operator. Splitting it at the `|` turned the redirection target
+  // into the first word of a second command, where it read as an executable name
+  // rather than the file being overwritten. `>&` is descriptor duplication only
+  // when a digit or `-` follows it; `>&word` opens that word for writing.
+  for (const command of [
+    "cat >| .env",
+    "printf x >|.env",
+    "echo x >& .env",
+    "echo x >&.env",
+    "cat 2>&1 .env",
+    "> .env cat",
+    "2> .env printf x",
+    "bash -c '> .env cat'"
+  ]) {
+    it(`reads a redirection the shell would perform: ${command}`, () => {
+      assert.ok(findProtectedPathInCommand(command, policy.shellProtectedPaths), command);
+    });
+  }
+
+  it("leaves descriptor duplication and unprotected redirection alone", () => {
+    for (const command of ["echo x >&2", "echo x 2>&1", "exec 3>&-", "echo x >| notes.txt", "> notes.txt cat"]) {
+      assert.equal(findProtectedPathInCommand(command, policy.shellProtectedPaths), undefined, command);
+    }
+  });
+
+  // A redirection can precede the command it applies to. Reading it as the
+  // command name meant `echo` stopped being recognised as printing rather than
+  // opening, so its own text was reported as a file it reached.
+  it("still identifies the command when a redirection comes first", () => {
+    for (const command of ["> /dev/null echo .env", "2>/dev/null echo .env", "> log.txt printf .env"]) {
+      assert.equal(findProtectedPathInCommand(command, policy.shellProtectedPaths), undefined, command);
+    }
+  });
+
+  it("reads a glob used as a redirection target", () => {
+    assert.ok(extractShellGlobCandidates("cat > .en*").includes(".en*"));
+    assert.ok(extractShellGlobCandidates("cat >| .en*").includes(".en*"));
+    // `echo` is data-only, so its operands are text -- but its redirection target
+    // is still a file it creates.
+    assert.ok(extractShellGlobCandidates("echo x > .en*").includes(".en*"));
+    assert.deepEqual(extractShellGlobCandidates("echo .en*"), []);
+  });
+
+  // A path can arrive as the value of a `key=value` operand rather than as a bare
+  // word. `dd if=`/`of=` and `tar --file=` are the common shapes.
+  for (const command of ["dd if=.env of=/tmp/x", "dd if=/dev/zero of=.env", "tar cf x.tar --file=.env"]) {
+    it(`reads a path carried by an operand value: ${command}`, () => {
+      assert.ok(findProtectedPathInCommand(command, policy.shellProtectedPaths), command);
+    });
+  }
+
+  it("does not read every assignment-shaped operand as a path", () => {
+    assert.equal(findProtectedPathInCommand("make CFLAGS=-O2", policy.shellProtectedPaths), undefined);
+    assert.equal(findProtectedPathInCommand("docker run -e FOO=bar img", policy.shellProtectedPaths), undefined);
+  });
+
+  // An array literal is the value the shell later expands, and the parameter
+  // operators rewrite that value before it becomes a filename.
+  for (const command of [
+    "a=(.env); cat ${a[@]}",
+    "a=(.env); cat ${a[0]}",
+    "V=.xxx; cat ${V/xxx/env}",
+    "V=.xxxxx; cat ${V//xxxxx/env}",
+    "V=q/auth.json; cat ${V#q/}",
+    "V=.env.bak; cat ${V%.bak}",
+    "V=.env; cat ${V:+$V}"
+  ]) {
+    it(`applies the parameter expansion the shell would apply: ${command}`, () => {
+      assert.ok(findProtectedPathInCommand(command, policy.shellProtectedPaths), command);
+    });
+  }
+
+  it("does not manufacture a protected path out of parameter operators", () => {
+    assert.equal(findProtectedPathInCommand("V=notes; cat ${V/notes/readme}", policy.shellProtectedPaths), undefined);
+    assert.equal(findProtectedPathInCommand("V=x/notes.txt; cat ${V#x/}", policy.shellProtectedPaths), undefined);
+  });
+});
+
+// Everything above resolves a path and then matches it. This is what happens when
+// the path cannot be resolved at all: refuse, rather than match the literal half
+// of a filename and report the other half as absent.
+describe("unresolvable path expansions", () => {
+  for (const command of [
+    "cat .en$(echo v)",
+    "cat $(echo .)env",
+    "cat > .en$(echo v)",
+    "cat .en`echo v`",
+    "cat ${D}.env",
+    "cat dir/.en$(echo v)"
+  ]) {
+    it(`refuses a filename it cannot resolve: ${command}`, () => {
+      assert.deepEqual(unresolvedPathExpansions(command).length > 0, true, command);
+    });
+  }
+
+  // A substitution that is the whole word is a value, not a filename being
+  // assembled -- and a resolvable expansion is handled by the matcher above.
+  for (const command of [
+    "git commit -m \"$(date)\"",
+    "echo \"$(ls)\"",
+    "cat $(echo .env)",
+    "cat $HOME/notes.txt",
+    "grep -r \"$(cat pattern)\" src",
+    "npm run build",
+    "V=.env; cat $V",
+    "cat '$F'",
+    "echo .en$(echo v)",
+    "docker build --build-arg X=$(git rev-parse HEAD) ."
+  ]) {
+    it(`does not refuse a command with nothing unresolvable in a path: ${command}`, () => {
+      assert.deepEqual(unresolvedPathExpansions(command), [], command);
+    });
+  }
 });
 
 describe("exec policy semantic shell safety", () => {

@@ -1123,6 +1123,63 @@ describe("piagent guard integration", () => {
     assert.match(unboundedArgs.reason, /too many args/);
   });
 
+  it("blocks a shell command whose filename it cannot resolve", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const ctx = createContext(cwd);
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    const toolCall = harness.handlers.get("tool_call");
+
+    const assembled = await callToolCall(toolCall, ctx, "bash", { command: "cat .en$(echo v)" });
+    const prefix = await callToolCall(toolCall, ctx, "bash", { command: "cat $(echo .)env" });
+    const redirect = await callToolCall(toolCall, ctx, "bash", { command: "printf x > .en$(echo v)" });
+    const viaProxy = await callToolCall(toolCall, ctx, "mcp", {
+      server: "shell",
+      tool: "bash",
+      input: { command: "cat .en$(echo v)" }
+    });
+
+    for (const [label, decision] of [["assembled", assembled], ["prefix", prefix], ["redirect", redirect]]) {
+      assert.equal(decision.block, true, label);
+      assert.match(decision.reason, /cannot resolve/, label);
+    }
+    assert.equal(viaProxy.block, true);
+
+    // A substitution that is the whole word is a value, not a filename.
+    const wholeWord = await callToolCall(toolCall, ctx, "bash", { command: "echo \"$(pwd)\"" });
+    assert.notEqual(wholeWord.block, true);
+  });
+
+  it("applies redirections the shell would perform when checking protected paths", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const ctx = createContext(cwd);
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    const toolCall = harness.handlers.get("tool_call");
+
+    const clobber = await callToolCall(toolCall, ctx, "bash", { command: "printf x >| .env" });
+    const openForWrite = await callToolCall(toolCall, ctx, "bash", { command: "printf x >& .env" });
+    const leading = await callToolCall(toolCall, ctx, "bash", { command: "> .env cat" });
+    const operandValue = await callToolCall(toolCall, ctx, "bash", { command: "dd if=.env of=/tmp/x" });
+    const redirectGlob = await callToolCall(toolCall, ctx, "bash", { command: "printf x > .en*" });
+
+    for (const [label, decision] of [
+      ["clobber", clobber],
+      ["openForWrite", openForWrite],
+      ["leading", leading],
+      ["operandValue", operandValue],
+      ["redirectGlob", redirectGlob]
+    ]) {
+      assert.equal(decision.block, true, label);
+      assert.match(decision.reason, /protected path/, label);
+    }
+
+    const duplication = await callToolCall(toolCall, ctx, "bash", { command: "printf x >&2" });
+    assert.notEqual(duplication.block, true);
+  });
+
   it("requires confirmation for external-provider write tools", async () => {
     const { root, piagentGuard } = await loadGuardFixture();
     const cwd = createProject(root);

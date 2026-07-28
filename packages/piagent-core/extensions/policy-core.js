@@ -114,6 +114,12 @@ export function splitShellSegments(command) {
   let current = "";
   let quote;
   let escaped = false;
+  // A separator inside `$( )` or backticks belongs to the substitution, not to
+  // the command line around it. Splitting there cut `cat $(echo x; echo .env)`
+  // into two halves, and the half holding the path was re-read as a command of
+  // its own — so the path was never a path to anything here.
+  let substitutionDepth = 0;
+  let inBackticks = false;
   for (let index = 0; index < command.length; index += 1) {
     const char = command[index];
     const next = command[index + 1];
@@ -137,9 +143,34 @@ export function splitShellSegments(command) {
       current += char;
       continue;
     }
+    if (!quote) {
+      if (char === "$" && next === "(") {
+        substitutionDepth += 1;
+        current += char;
+        continue;
+      }
+      if (char === ")" && substitutionDepth > 0) {
+        substitutionDepth -= 1;
+        current += char;
+        continue;
+      }
+      if (char === "`") {
+        inBackticks = !inBackticks;
+        current += char;
+        continue;
+      }
+    }
     const previous = command[index - 1];
     const ampersandIsSeparator = char === "&" && next !== "&" && previous !== ">" && previous !== "<";
-    if (!quote && (char === "\n" || char === ";" || char === "|" || ampersandIsSeparator || (char === "&" && next === "&") || (char === "|" && next === "|"))) {
+    // `>|` is one operator: the noclobber override. Without the same lookbehind
+    // `&` already had, the `|` split the line and the redirection target became
+    // a command name, so `printf x >| .env` truncated a protected file against a
+    // candidate list that never contained it.
+    const pipeIsSeparator = char === "|" && previous !== ">";
+    const inSubstitution = substitutionDepth > 0 || inBackticks;
+    if (!quote && !inSubstitution
+      && (char === "\n" || char === ";" || pipeIsSeparator || ampersandIsSeparator
+        || (char === "&" && next === "&") || (char === "|" && next === "|"))) {
       const segment = current.trim();
       if (segment) segments.push(segment);
       current = "";
@@ -194,6 +225,11 @@ function shellWordTokens(segment) {
   let activeGlob = false;
   let unquotedVariable = false;
   let variableActive = false;
+  // A space inside `$( )`, `${ }` or backticks is part of one word, not a break
+  // between two. Splitting there tore `.en$(echo v)` into `.en$(echo` and `v)`,
+  // so the filename being assembled was never a single token to reason about.
+  let substitutionDepth = 0;
+  let inBackticks = false;
   const flush = () => {
     if (!current) return;
     tokens.push({ value: current, activeGlob, unquotedVariable, variableActive });
@@ -234,12 +270,17 @@ function shellWordTokens(segment) {
       quote = undefined;
       continue;
     }
-    if (!quote && /\s/.test(char)) {
+    if (!quote) {
+      if (char === "$" && (chars[index + 1] === "(" || chars[index + 1] === "{")) substitutionDepth += 1;
+      else if ((char === ")" || char === "}") && substitutionDepth > 0) substitutionDepth -= 1;
+      else if (char === "`") inBackticks = !inBackticks;
+    }
+    if (!quote && substitutionDepth === 0 && !inBackticks && /\s/.test(char)) {
       flush();
       continue;
     }
     if (!quote && /[*?{\[]/.test(char)) activeGlob = true;
-    if (char === "$" && quote !== "'") {
+    if ((char === "$" || char === "`") && quote !== "'") {
       variableActive = true;
       if (!quote) unquotedVariable = true;
     }
@@ -289,6 +330,19 @@ function isAssignment(word) {
   return /^[A-Za-z_][A-Za-z0-9_]*=.*/.test(word);
 }
 
+/**
+ * Whether a word is a redirection rather than a command or an argument.
+ *
+ * Covers the separated form (`>`, `2>`, `>|`) and the attached one (`>x`,
+ * `2>>x`), which is why the pattern is anchored but not terminated.
+ *
+ * @param {string} word
+ * @returns {boolean}
+ */
+function isLeadingRedirection(word) {
+  return /^[0-9]*(?:>>?\|?|<>?|>&|<&)/.test(word);
+}
+
 function stripWrapper(words) {
   let current = [...words];
   let changed = true;
@@ -297,6 +351,18 @@ function stripWrapper(words) {
     changed = false;
     while (current.length > 0 && isAssignment(current[0])) {
       current = current.slice(1);
+      changed = true;
+    }
+
+    // A redirection may precede the command word, and the shell still runs the
+    // command. Leaving it in place made `>x rm -rf /` read as a command called
+    // ">x", so every rule that decides from the command word — the recursive
+    // removal check, the legacy patterns — saw something it had no opinion
+    // about and said nothing.
+    while (current.length > 0 && isLeadingRedirection(current[0])) {
+      // `> file` puts the target in the next word; `>file` carries its own.
+      const attached = /^[0-9]*(?:>>?\|?|<>?|>&|<&)./.test(current[0]);
+      current = current.slice(attached ? 1 : 2);
       changed = true;
     }
 
@@ -638,14 +704,40 @@ function isFilesystemArgument(word) {
   if (!word || word === "-") return false;
   if (word.startsWith("http://") || word.startsWith("https://")) return false;
   if (PATH_REDIRECT_OPERATORS.has(word)) return false;
-  if (isAssignment(word)) return false;
   return isPathLike(word) || !word.startsWith("-");
+}
+
+/**
+ * The path inside a `key=value` operand.
+ *
+ * The shell treats `NAME=VALUE` as an assignment only before the command word;
+ * after it, the word is an operand and the command decides what it means. This
+ * is only ever asked about words after the command word, so rejecting them all
+ * as assignments hid `dd if=.env` and `dd of=.env` — which `ddFinding` already
+ * parses to catch block-device writes, so the module knew and never said.
+ *
+ * @param {string} word
+ * @returns {string|undefined}
+ */
+function operandValuePath(word) {
+  const match = word.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.+)$/);
+  if (!match) return undefined;
+  const value = match[2];
+  if (value.startsWith("http://") || value.startsWith("https://")) return undefined;
+  return value;
 }
 
 function rememberLeadingShellAssignments(words, assignments) {
   const remember = (word) => {
     const match = word.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
-    if (match) assignments.set(match[1], expandKnownShellVariables(match[2], assignments));
+    if (!match) return;
+    // `a=(.env)` is an array literal, and storing it whole left the parentheses
+    // glued to the value so `${a[@]}` resolved to a name no file has. Every
+    // element is a path this command may reach, so the whole set is kept and any
+    // subscript resolves to all of it — matching one of them is enough to refuse.
+    const array = match[2].match(/^\((.*)\)$/);
+    const value = array ? array[1].trim() : match[2];
+    assignments.set(match[1], expandKnownShellVariables(value, assignments));
   };
   let start = 0;
   while (start < words.length && isAssignment(words[start])) start += 1;
@@ -657,25 +749,84 @@ function rememberLeadingShellAssignments(words, assignments) {
   for (const word of words.slice(start + 1)) remember(word);
 }
 
+/**
+ * Applies one parameter-expansion operator to a value the assignments already
+ * resolved.
+ *
+ * These are the operators that rewrite a known value into a different string.
+ * Without them `V=q.env; cat ${V#q}` produced the candidate `${V#q}`, which
+ * matches no protected pattern while the shell opens `.env`. Patterns are
+ * treated as literals rather than as shell globs: matching less is safe here,
+ * because a word this cannot resolve is refused by `unresolvedPathExpansions`
+ * rather than assumed harmless.
+ *
+ * @param {string} operator the characters between the name and the argument
+ * @param {string} argument
+ * @param {string} value the resolved value of the variable
+ * @returns {string|undefined} the rewritten value, or undefined when this
+ *   operator is not modelled
+ */
+function applyParameterOperator(operator, argument, value) {
+  switch (operator) {
+    case ":+":
+    case "+":
+      return value ? argument : "";
+    case "#":
+      return value.startsWith(argument) ? value.slice(argument.length) : value;
+    case "##": {
+      return value.startsWith(argument) ? value.slice(argument.length) : value;
+    }
+    case "%":
+    case "%%":
+      return value.endsWith(argument) ? value.slice(0, -argument.length || undefined) : value;
+    default:
+      return undefined;
+  }
+}
+
 function expandKnownShellVariables(value, assignments, resolving = new Set(), depth = 0) {
   if (depth >= 8) return String(value ?? "");
   return String(value ?? "").replace(
-    /\$(?:\{([A-Za-z_][A-Za-z0-9_]*)(?::?[-=]([^{}]*))?\}|([A-Za-z_][A-Za-z0-9_]*))/g,
-    (match, braced, fallback, plain) => {
+    // Three shapes: `${NAME<op><arg>}`, `${NAME}` with the `:-`/`:=` default,
+    // and bare `$NAME`. The operator group is deliberately narrow — anything it
+    // does not name stays unexpanded, and unexpanded is what gets refused.
+    /\$(?:\{([A-Za-z_][A-Za-z0-9_]*)(?:\[[^\]]*\])?(?:(:?[-=+]|#{1,2}|%{1,2}|\/{1,2})([^{}]*))?\}|([A-Za-z_][A-Za-z0-9_]*))/g,
+    (match, braced, operator, argument, plain) => {
       const name = braced ?? plain;
       const resolved = assignments.get(name);
+      // The value is recursed with `name` marked so `F=$G; G=$F` terminates. An
+      // operator's argument is separate text that merely mentions the same name,
+      // so it keeps the outer set -- `${V:+$V}` is the value, not a cycle.
+      const recur = (next) => expandKnownShellVariables(next, assignments, resolving, depth + 1);
+
       if (resolved === undefined || resolving.has(name)) {
         // `${VAR:-default}` states what it becomes when the variable is unset,
         // which is the usual case here since nothing in the segment assigned it.
         // Leaving the expression whole meant `cat .${X:-env}` produced the
         // candidate `.${X:-env}` — the one form that says where it points was
         // the one form nothing read.
-        if (fallback !== undefined) return expandKnownShellVariables(fallback, assignments, resolving, depth + 1);
+        if (operator === ":-" || operator === "-" || operator === ":=" || operator === "=") {
+          return expandKnownShellVariables(argument, assignments, resolving, depth + 1);
+        }
         return match;
       }
-      const nextResolving = new Set(resolving);
-      nextResolving.add(name);
-      return expandKnownShellVariables(resolved, assignments, nextResolving, depth + 1);
+
+      const expanded = expandKnownShellVariables(resolved, assignments, new Set([...resolving, name]), depth + 1);
+      if (operator === undefined) return expanded;
+      if (operator === ":-" || operator === "-" || operator === ":=" || operator === "=") return expanded;
+
+      if (operator === "/" || operator === "//") {
+        const separator = argument.indexOf("/");
+        const pattern = separator >= 0 ? argument.slice(0, separator) : argument;
+        const replacement = separator >= 0 ? argument.slice(separator + 1) : "";
+        if (!pattern) return expanded;
+        return operator === "//"
+          ? expanded.split(pattern).join(recur(replacement))
+          : expanded.replace(pattern, recur(replacement));
+      }
+
+      const applied = applyParameterOperator(operator, recur(argument), expanded);
+      return applied === undefined ? match : applied;
     }
   );
 }
@@ -928,9 +1079,19 @@ function extractAttachedRedirectionPaths(segment) {
       while (segment[index + 1] === "<") index += 1;
       continue;
     }
+    // `>&` duplicates a file descriptor only when a digit or `-` follows it.
+    // `>&word` with anything else redirects both streams to a file called
+    // `word`, so skipping the whole form meant `printf x >& .env` truncated a
+    // protected file while the scan moved past it.
     if (next === "&") {
+      let after = index + 2;
+      while (/\s/.test(segment[after] ?? "")) after += 1;
+      const target = segment[after] ?? "";
+      if (target === "" || target === "-" || /[0-9]/.test(target)) {
+        index += 1;
+        continue;
+      }
       index += 1;
-      continue;
     }
 
     if ((char === ">" && (next === ">" || next === "|")) || (char === "<" && next === ">")) index += 1;
@@ -941,6 +1102,11 @@ function extractAttachedRedirectionPaths(segment) {
     let target = "";
     let targetQuote;
     let targetEscaped = false;
+    // Whitespace and `|` inside `$( )` or backticks belong to the target word.
+    // Ending at the first space split `> .en$(echo v)` into a target of
+    // `.en$(echo`, a name that matches nothing and hides the one being written.
+    let targetSubstitution = 0;
+    let targetBackticks = false;
     for (; cursor < segment.length; cursor += 1) {
       const targetChar = segment[cursor];
       if (targetEscaped) {
@@ -969,7 +1135,13 @@ function extractAttachedRedirectionPaths(segment) {
         targetQuote = undefined;
         continue;
       }
-      if (!targetQuote && (/\s/.test(targetChar) || /[;&|<>]/.test(targetChar))) break;
+      if (!targetQuote) {
+        if (targetChar === "$" && (segment[cursor + 1] === "(" || segment[cursor + 1] === "{")) targetSubstitution += 1;
+        else if ((targetChar === ")" || targetChar === "}") && targetSubstitution > 0) targetSubstitution -= 1;
+        else if (targetChar === "`") targetBackticks = !targetBackticks;
+      }
+      const insideSubstitution = targetSubstitution > 0 || targetBackticks;
+      if (!targetQuote && !insideSubstitution && (/\s/.test(targetChar) || /[;&|<>]/.test(targetChar))) break;
       target += targetChar;
     }
     if (target) paths.push(target);
@@ -1078,6 +1250,11 @@ export function extractShellPathCandidates(command) {
           searchPatternPending = false;
           continue;
         }
+        const operandPath = operandValuePath(word);
+        if (operandPath) {
+          addCandidate(operandPath, argumentTokens[index].variableActive);
+          continue;
+        }
         if (isFilesystemArgument(word)) addCandidate(word, argumentTokens[index].variableActive);
       }
     }
@@ -1102,6 +1279,18 @@ export function extractShellGlobCandidates(command) {
     const words = tokens.map((token) => token.value);
     rememberLeadingShellAssignments(words, assignments);
     const commandName = commandBasename(stripWrapper(words)[0] ?? "");
+
+    // A redirection target is a file whatever the command does with its
+    // arguments, so it is read before the data-only skip below rather than
+    // inside it: `printf pwned > .en*` truncates whatever `.en*` matches, and
+    // `printf` being a data-only command says nothing about that. Read through
+    // the same scanner the path candidates use, so the operator prefix is off
+    // and `>|`, `>&` and ANSI-C quoting are already handled.
+    for (const redirectPath of extractAttachedRedirectionPaths(segment)) {
+      const expanded = expandKnownShellVariables(redirectPath, assignments);
+      if (/[*?{\[]/.test(expanded)) candidates.push(expanded);
+    }
+
     if (!DATA_ONLY_COMMANDS.has(commandName) || depth > 0) {
       const argumentTokens = executableArgumentTokens(tokens, words, commandName);
       let searchPatternPending = SEARCH_COMMANDS.has(commandName);
@@ -1179,6 +1368,95 @@ export function extractShellGlobCandidates(command) {
     }
   }
   return [...new Set(candidates.map(normalizePathCandidate).filter(Boolean))];
+}
+
+/**
+ * Words in a file position whose final path segment this module could not
+ * resolve to a name.
+ *
+ * Modelling one more expansion operator each time one is reported is a losing
+ * game: bash has a dozen of them, plus arrays, plus command substitution, and
+ * each unmodelled form reads as "this word names no protected path" — the one
+ * answer that is never safe to guess. So the rule is inverted here. A word that
+ * still holds an expansion where its filename lives is *unresolved*, and an
+ * unresolved filename is refused rather than assumed harmless.
+ *
+ * Two conditions narrow it to words that are filenames being assembled, rather
+ * than to every word holding an expansion.
+ *
+ * Only the last path segment counts. `$HOME/notes.txt` names a known file in an
+ * unknown directory, and every protected pattern that could match it is anchored
+ * on the basename anyway, so flagging it would refuse ordinary work for nothing.
+ *
+ * And the expansion has to be *concatenated with literal text*. A word that is
+ * nothing but an expansion — `$(date)`, `${MESSAGE}` — is as likely to be a
+ * commit message as a path, and a pure substitution is already followed into by
+ * `extractNestedCommands`, which reads `cat $(echo .env)` correctly. What that
+ * cannot do is put the pieces back together: `.en$(echo v)` and `$(echo .)env`
+ * are filenames half-written in plain sight, and only a rule about the joining
+ * sees them.
+ *
+ * Quoting decides whether a `$` is an expansion at all, so this reads the
+ * tokenizer's own verdict rather than looking for the character — `cat '$F'`
+ * passes a literal and is not flagged.
+ *
+ * @param {string} command
+ * @returns {string[]} the unresolved words, in the order they appear
+ */
+// Strip the expansions out; whatever text is left is the literal part the author
+// wrote around them. Literal text plus an expansion is a filename being
+// assembled; an expansion on its own is a value.
+function hasLiteralAroundExpansion(basename) {
+  const literal = basename.replace(/\$\{[^{}]*\}|\$\([^()]*\)|`[^`]*`/g, "");
+  return literal.length > 0 && literal !== basename;
+}
+
+export function unresolvedPathExpansions(command) {
+  const unresolved = [];
+  const assignments = new Map();
+  const pending = splitShellSegments(command).map((segment) => ({ segment, depth: 0 }));
+
+  while (pending.length > 0) {
+    const { segment, depth } = pending.shift();
+    const tokens = shellWordTokens(segment);
+    const words = tokens.map((token) => token.value);
+    rememberLeadingShellAssignments(words, assignments);
+    const commandName = commandBasename(stripWrapper(words)[0] ?? "");
+    // A redirection target is a file the shell creates whatever the command is,
+    // so it is read before the data-only skip below.
+    for (const redirectPath of extractAttachedRedirectionPaths(segment)) {
+      const expanded = expandKnownShellVariables(redirectPath, assignments);
+      const basename = expanded.slice(expanded.lastIndexOf("/") + 1);
+      if (hasLiteralAroundExpansion(basename)) unresolved.push(redirectPath);
+    }
+    // `echo ${a[@]}` prints a name, it does not open one.
+    if (!DATA_ONLY_COMMANDS.has(commandName) || depth > 0) {
+      for (const token of executableArgumentTokens(tokens, words, commandName)) {
+        if (!token.variableActive) continue;
+        if (token.value.startsWith("-")) continue;
+        // `dd if=.en$(echo v)` hides a filename in an operand value. Reading the
+        // key as literal text would refuse every `TAG=build$(date +%s)` too, so
+        // the value is taken on its own and only when it is shaped like a path.
+        const operandValue = operandValuePath(token.value);
+        const word = operandValue ?? token.value;
+        if (operandValue !== undefined
+          && !operandValue.includes("/")
+          && !operandValue.startsWith(".")) continue;
+        if (word.startsWith("-")) continue;
+        const expanded = expandKnownShellVariables(word, assignments);
+        const basename = expanded.slice(expanded.lastIndexOf("/") + 1);
+        if (hasLiteralAroundExpansion(basename)) unresolved.push(token.value);
+      }
+    }
+    if (depth < MAX_NESTED_DEPTH) {
+      for (const nestedCommand of extractNestedCommands(segment, words)) {
+        for (const nestedSegment of splitShellSegments(nestedCommand)) {
+          pending.push({ segment: nestedSegment, depth: depth + 1 });
+        }
+      }
+    }
+  }
+  return unresolved;
 }
 
 export function findProtectedPathInCommand(command, protectedPatterns) {
