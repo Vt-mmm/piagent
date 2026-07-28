@@ -6,6 +6,24 @@ const SEARCH_GLOB_OPTIONS = new Set(["-g", "--glob", "--iglob", "--include", "--
 const SEARCH_PATTERN_OPTIONS = new Set(["-e", "--regexp", "--pattern"]);
 const ASSIGNMENT_BUILTINS = new Set(["export", "readonly", "declare", "typeset", "local"]);
 const SHELL_COMMANDS = new Set(["bash", "sh", "zsh"]);
+
+// Interpreters that take a program on the command line, and the flags that
+// introduce it. What follows such a flag is source code in another language, so
+// none of it tokenises as a shell path — `node -e "readFileSync('.env')"` is one
+// opaque argument to the shell parser. The filenames live in the string literals
+// inside it, which is where this looks.
+const INLINE_CODE_FLAGS = new Map([
+  ["node", new Set(["-e", "--eval", "-p", "--print"])],
+  ["nodejs", new Set(["-e", "--eval", "-p", "--print"])],
+  ["deno", new Set(["eval"])],
+  ["bun", new Set(["-e", "--eval"])],
+  ["python", new Set(["-c"])],
+  ["python2", new Set(["-c"])],
+  ["python3", new Set(["-c"])],
+  ["ruby", new Set(["-e"])],
+  ["perl", new Set(["-e", "-E"])],
+  ["php", new Set(["-r"])]
+]);
 const SIMPLE_WRAPPERS = new Set(["sudo", "nohup", "time", "nice", "ionice", "command"]);
 
 function escapeRegex(value) {
@@ -151,7 +169,9 @@ function shellWordTokens(segment) {
     unquotedVariable = false;
     variableActive = false;
   };
-  for (const char of segment.trim()) {
+  const chars = [...segment.trim()];
+  for (let index = 0; index < chars.length; index += 1) {
+    const char = chars[index];
     if (escaped) {
       current += char;
       escaped = false;
@@ -159,6 +179,15 @@ function shellWordTokens(segment) {
     }
     if (char === "\\") {
       escaped = true;
+      continue;
+    }
+    // `$'...'` is ANSI-C quoting: the dollar opens the quote rather than naming
+    // a variable. Reading it as a variable left the dollar glued to the value,
+    // so `cat $'.env'` produced the candidate `$.env` and matched no protected
+    // path while the shell happily opened `.env`.
+    if (char === "$" && chars[index + 1] === "'" && !quote) {
+      quote = "'";
+      index += 1;
       continue;
     }
     if ((char === "'" || char === "\"") && !quote) {
@@ -594,14 +623,25 @@ function rememberLeadingShellAssignments(words, assignments) {
 
 function expandKnownShellVariables(value, assignments, resolving = new Set(), depth = 0) {
   if (depth >= 8) return String(value ?? "");
-  return String(value ?? "").replace(/\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))/g, (match, braced, plain) => {
-    const name = braced ?? plain;
-    const resolved = assignments.get(name);
-    if (resolved === undefined || resolving.has(name)) return match;
-    const nextResolving = new Set(resolving);
-    nextResolving.add(name);
-    return expandKnownShellVariables(resolved, assignments, nextResolving, depth + 1);
-  });
+  return String(value ?? "").replace(
+    /\$(?:\{([A-Za-z_][A-Za-z0-9_]*)(?::?[-=]([^{}]*))?\}|([A-Za-z_][A-Za-z0-9_]*))/g,
+    (match, braced, fallback, plain) => {
+      const name = braced ?? plain;
+      const resolved = assignments.get(name);
+      if (resolved === undefined || resolving.has(name)) {
+        // `${VAR:-default}` states what it becomes when the variable is unset,
+        // which is the usual case here since nothing in the segment assigned it.
+        // Leaving the expression whole meant `cat .${X:-env}` produced the
+        // candidate `.${X:-env}` — the one form that says where it points was
+        // the one form nothing read.
+        if (fallback !== undefined) return expandKnownShellVariables(fallback, assignments, resolving, depth + 1);
+        return match;
+      }
+      const nextResolving = new Set(resolving);
+      nextResolving.add(name);
+      return expandKnownShellVariables(resolved, assignments, nextResolving, depth + 1);
+    }
+  );
 }
 
 function executableArgumentTokens(tokens, words, commandName) {
@@ -909,6 +949,15 @@ export function extractShellPathCandidates(command) {
     rememberLeadingShellAssignments(words, assignments);
     const commandName = commandBasename(stripWrapper(words)[0] ?? "");
     for (const redirectPath of extractAttachedRedirectionPaths(segment)) addCandidate(redirectPath);
+
+    const inlineFlags = INLINE_CODE_FLAGS.get(commandName);
+    if (inlineFlags) {
+      for (let index = 0; index < words.length - 1; index += 1) {
+        if (!inlineFlags.has(words[index])) continue;
+        for (const literal of quotedShellLiterals(words[index + 1])) addCandidate(literal);
+      }
+    }
+
     if (!DATA_ONLY_COMMANDS.has(commandName) || depth > 0) {
       const argumentTokens = executableArgumentTokens(tokens, words, commandName);
       let searchPatternPending = SEARCH_COMMANDS.has(commandName);

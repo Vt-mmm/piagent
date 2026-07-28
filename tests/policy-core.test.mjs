@@ -167,6 +167,42 @@ describe("protected path extraction from shell", () => {
     assert.equal(findProtectedPathInCommand("rm -rf ~/proj/node_modules", policy.shellProtectedPaths), undefined);
     assert.equal(findProtectedPathInCommand("cat dist/app.js", policy.shellProtectedPaths), undefined);
   });
+
+  // An interpreter invoked with an inline script reaches the file through its own
+  // runtime, so the path never appears as a shell word. The script body is the
+  // argument, and the literals inside it are the paths.
+  for (const command of [
+    "node -e \"require('fs').readFileSync('.env')\"",
+    "node --eval \"require('fs').readFileSync('.env')\"",
+    "python3 -c \"open('.env')\"",
+    "python -c 'open(\".env\")'",
+    "ruby -e 'File.read(\".env\")'",
+    "perl -e 'open(F, \".env\")'",
+    "deno eval \"Deno.readTextFileSync('.env')\"",
+    "bun -e \"require('fs').readFileSync('.env')\""
+  ]) {
+    it(`reads paths out of an inline interpreter script: ${command}`, () => {
+      assert.ok(findProtectedPathInCommand(command, policy.shellProtectedPaths), command);
+    });
+  }
+
+  it("leaves an inline script that names no protected path alone", () => {
+    assert.equal(findProtectedPathInCommand("node -e \"console.log('ok')\"", policy.shellProtectedPaths), undefined);
+    assert.equal(findProtectedPathInCommand("python3 -c \"print('dist/app.js')\"", policy.shellProtectedPaths), undefined);
+  });
+
+  // A quote with no partner used to end tokenization early and drop the word that
+  // carried the path, and an unset variable with a default used to stay literal.
+  for (const command of ["cat .env'", "cat \".env", "cat .${X:-env}", "cat ${SECRET:-.env}", "cat .${X:=env}"]) {
+    it(`resolves a path the shell would still reach: ${command}`, () => {
+      assert.ok(findProtectedPathInCommand(command, policy.shellProtectedPaths), command);
+    });
+  }
+
+  it("leaves a variable with nothing to resolve to unexpanded", () => {
+    assert.equal(findProtectedPathInCommand("cat ${MISSING}", policy.shellProtectedPaths), undefined);
+    assert.equal(findProtectedPathInCommand("cat ${MISSING:-notes.txt}", policy.shellProtectedPaths), undefined);
+  });
 });
 
 describe("exec policy semantic shell safety", () => {
