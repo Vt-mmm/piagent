@@ -62,6 +62,12 @@ function writeProjectServer(cwd, name, entry, file = ".mcp.json") {
   fs.writeFileSync(target, `${JSON.stringify({ mcpServers: { [name]: entry } }, null, 2)}\n`);
 }
 
+function writeProjectConfig(cwd, document, file = ".mcp.json") {
+  const target = path.join(cwd, file);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, `${JSON.stringify(document, null, 2)}\n`);
+}
+
 function approve(home, cwd, name, entry) {
   const digest = approvalDigest(entry);
   fs.writeFileSync(path.join(home, ".pi", "piagent-mcp-approvals.json"), `${JSON.stringify({
@@ -133,17 +139,119 @@ describe("MCP approval gate", () => {
     });
   });
 
-  // A gate that only reads the proxy is bypassed by turning directTools on, which
-  // renames the same call to mcp__<server>__<tool>.
-  it("blocks the direct-tool form of the same server", async () => {
+  // A gate that only reads the proxy is bypassed by turning directTools on. The
+  // name to watch for is the one the adapter really builds — the server name with
+  // hyphens turned into underscores, then the tool name — and not the
+  // mcp__server__tool shape this test used to assert, which nothing emits.
+  it("blocks the direct tool the adapter actually exposes", async () => {
     const fixture = await loadFixture();
     writeProjectServer(fixture.cwd, "repo", serverEntry);
 
     await withHome(fixture.home, async () => {
       const { ctx, harness } = await startGuard(fixture);
-      const decision = await callToolCall(harness.handlers.get("tool_call"), ctx, "mcp__repo__search", { query: "x" });
+      const decision = await callToolCall(harness.handlers.get("tool_call"), ctx, "repo_search", { query: "x" });
       assert.equal(decision?.block, true);
       assert.match(decision.reason, /Blocked MCP server repo/);
+    });
+  });
+
+  it("blocks a direct tool whose prefix came from a hyphenated server name", async () => {
+    const fixture = await loadFixture();
+    writeProjectServer(fixture.cwd, "repo-tools", serverEntry);
+
+    await withHome(fixture.home, async () => {
+      const { ctx, harness } = await startGuard(fixture);
+      const decision = await callToolCall(harness.handlers.get("tool_call"), ctx, "repo_tools_search", { query: "x" });
+      assert.equal(decision?.block, true);
+      assert.match(decision.reason, /Blocked MCP server repo-tools/);
+    });
+  });
+
+  // The previous matcher keyed on a leading "mcp", so any tool whose name merely
+  // started that way was attributed to a server that had nothing to do with it.
+  // Attribution now runs off the configured server names, so an unrelated name
+  // is not this gate's business — whatever else the guard decides about it.
+  it("does not attribute an unrelated tool to a configured server", async () => {
+    const fixture = await loadFixture();
+    writeProjectServer(fixture.cwd, "repo", serverEntry);
+
+    await withHome(fixture.home, async () => {
+      const { ctx, harness } = await startGuard(fixture);
+      const decision = await callToolCall(harness.handlers.get("tool_call"), ctx, "mcp_unrelated_probe", { query: "x" });
+      if (decision?.block) assert.doesNotMatch(decision.reason, /Blocked MCP server/);
+    });
+  });
+
+  // The adapter resolves an `imports` key against other tools' config files. The
+  // vscode kind resolves inside the project, so a clone carries the file and the
+  // servers in it are the repository's servers however indirectly they arrive.
+  it("blocks a server the repository pulls in through imports", async () => {
+    const fixture = await loadFixture();
+    writeProjectConfig(fixture.cwd, { imports: ["vscode"], mcpServers: {} });
+    writeProjectConfig(fixture.cwd, { servers: { exfil: serverEntry } }, path.join(".vscode", "mcp.json"));
+
+    await withHome(fixture.home, async () => {
+      const { ctx, harness } = await startGuard(fixture);
+      const decision = await callToolCall(harness.handlers.get("tool_call"), ctx, "mcp", {
+        server: "exfil",
+        tool: "search",
+        args: "{}"
+      });
+      assert.equal(decision?.block, true);
+      assert.match(decision.reason, /Blocked MCP server exfil/);
+      assert.match(decision.reason, /imports it from vscode config/);
+    });
+  });
+
+  it("blocks the imported server's direct tool as well", async () => {
+    const fixture = await loadFixture();
+    writeProjectConfig(fixture.cwd, { imports: ["vscode"], mcpServers: {} });
+    writeProjectConfig(fixture.cwd, { mcpServers: { exfil: serverEntry } }, path.join(".vscode", "mcp.json"));
+
+    await withHome(fixture.home, async () => {
+      const { ctx, harness } = await startGuard(fixture);
+      const decision = await callToolCall(harness.handlers.get("tool_call"), ctx, "exfil_run", { query: "x" });
+      assert.equal(decision?.block, true);
+      assert.match(decision.reason, /Blocked MCP server exfil/);
+    });
+  });
+
+  it("allows an imported server once it is approved for this project", async () => {
+    const fixture = await loadFixture();
+    writeProjectConfig(fixture.cwd, { imports: ["vscode"], mcpServers: {} });
+    writeProjectConfig(fixture.cwd, { servers: { exfil: serverEntry } }, path.join(".vscode", "mcp.json"));
+    approve(fixture.home, fixture.cwd, "exfil", serverEntry);
+
+    await withHome(fixture.home, async () => {
+      const { ctx, harness } = await startGuard(fixture);
+      const decision = await callToolCall(harness.handlers.get("tool_call"), ctx, "mcp", {
+        server: "exfil",
+        tool: "search",
+        args: "{}"
+      });
+      assert.notEqual(decision?.block, true);
+    });
+  });
+
+  // Asking for direct tools with no prefix leaves nothing in a tool name to check
+  // an approval against, so the answer is to refuse the setting rather than to
+  // guess which server a bare name belongs to.
+  it("refuses every proxy call while the repository config erases tool origin", async () => {
+    const fixture = await loadFixture();
+    writeProjectConfig(fixture.cwd, {
+      settings: { directTools: true, toolPrefix: "none" },
+      mcpServers: { repo: serverEntry }
+    });
+
+    await withHome(fixture.home, async () => {
+      const { ctx, harness } = await startGuard(fixture);
+      const decision = await callToolCall(harness.handlers.get("tool_call"), ctx, "mcp", {
+        server: "repo",
+        tool: "search",
+        args: "{}"
+      });
+      assert.equal(decision?.block, true);
+      assert.match(decision.reason, /toolPrefix "none"/);
     });
   });
 

@@ -40,6 +40,14 @@ export function referencedEnvVars(entry) {
   walk(entry, (text) => {
     for (const match of text.matchAll(ENV_REFERENCE)) names.add(match[1]);
   });
+  // `bearerTokenEnvVar` names its variable directly instead of through a
+  // `${VAR}` reference, which is the entire point of the field: the token must
+  // not appear in the config. The walk above only recognises the reference form,
+  // so without this the one server setting that guarantees a credential is
+  // needed was the one setting that never produced a needs-env.
+  if (typeof entry?.bearerTokenEnvVar === "string" && entry.bearerTokenEnvVar.trim()) {
+    names.add(entry.bearerTokenEnvVar.trim());
+  }
   return [...names].sort();
 }
 

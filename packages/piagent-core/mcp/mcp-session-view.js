@@ -1,6 +1,6 @@
 import { REPOSITORY_SCOPES, SCOPES, collectServers } from "./mcp-config-layers.js";
 import { approvalState } from "./mcp-approval-store.js";
-import { maskServerEntry } from "./mcp-server-entry.js";
+import { maskServerEntry, maskUrlCredentials } from "./mcp-server-entry.js";
 import { evaluateServerReadiness } from "./mcp-auth-readiness.js";
 import { CATALOG_PREREQUISITES } from "./mcp-server-catalog.js";
 
@@ -24,7 +24,9 @@ export class McpViewError extends Error {}
  * @returns {string}
  */
 export function describeTarget(entry, limit = 56) {
-  if (typeof entry.url === "string") return entry.url;
+  // Masked here as well as in the detail view. This is the string that goes in
+  // the `list` table, which is the output most likely to be screenshotted.
+  if (typeof entry.url === "string") return String(maskUrlCredentials(entry.url));
   const argv = [entry.command, ...(Array.isArray(entry.args) ? entry.args : [])].filter((item) => typeof item === "string");
   const text = argv.join(" ");
   return text.length > limit ? `${text.slice(0, limit - 3)}...` : text;

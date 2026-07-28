@@ -11,6 +11,8 @@ import {
   configPathForScope,
   isRecord,
   readMcpConfig,
+  repositoryImportDeclarations,
+  unreadableLayers,
   writeMcpConfig
 } from "../packages/piagent-core/mcp/mcp-config-layers.js";
 import {
@@ -28,6 +30,7 @@ import {
 } from "../packages/piagent-core/mcp/mcp-server-entry.js";
 import {
   approvalState,
+  approvalStorePath,
   clearApproval,
   recordApproval
 } from "../packages/piagent-core/mcp/mcp-approval-store.js";
@@ -386,7 +389,12 @@ function commandDecide(args, decision) {
     // the definition is put in front of the operator before the decision lands.
     process.stdout.write(`${JSON.stringify(maskServerEntry(server.entry), null, 2)}\n`);
   }
-  recordApproval({ projectPath: project, name, entry: server.entry, decision });
+  // A decision that was not written is not a decision. Printing "Approved" while
+  // the store rejected the write would leave the operator waiting for a gate that
+  // is still blocking, with nothing on screen to explain why.
+  if (!recordApproval({ projectPath: project, name, entry: server.entry, decision })) {
+    throw new UsageError(`could not write ${approvalStorePath() ?? "the approval store"}; ${name} is still ${before.state}`);
+  }
   const after = approvalState({ projectPath: project, name, entry: server.entry });
   process.stdout.write(`${decision === "approved" ? "Approved" : "Rejected"} MCP server ${name} (${server.scope}) for ${project}\n`);
   process.stdout.write(`Pinned to this definition: ${after.digest}\n`);
@@ -398,7 +406,9 @@ function commandDecide(args, decision) {
 function commandReset(args) {
   const project = projectPath(args.flags);
   const name = args.positionals[0];
-  clearApproval({ projectPath: project, name });
+  if (!clearApproval({ projectPath: project, name })) {
+    throw new UsageError(`could not write ${approvalStorePath() ?? "the approval store"}; nothing was forgotten`);
+  }
   process.stdout.write(name
     ? `Forgot the decision for ${name} in ${project}\n`
     : `Forgot every MCP approval decision for ${project}\n`);
@@ -409,6 +419,11 @@ function commandReset(args) {
 function commandDoctor(args) {
   const project = projectPath(args.flags);
   const rows = collectServerRows({ projectPath: project });
+  // Resolved before the no-servers shortcut below. A layer nobody can parse
+  // produces no rows, so reporting "no servers configured" and stopping would
+  // answer the question exactly backwards.
+  const broken = unreadableLayers({ projectPath: project });
+  const imports = repositoryImportDeclarations({ projectPath: project });
 
   // The one check too slow for a session start: a daemon that is installed but
   // not running looks exactly like one that is running until something asks it.
@@ -422,22 +437,44 @@ function commandDoctor(args) {
     process.stdout.write(`${JSON.stringify({
       project,
       dockerRunning,
-      servers: rows.map((row) => ({ name: row.name, scope: row.scope, state: row.readiness.state, detail: row.readiness.detail, remedy: row.readiness.remedy }))
+      servers: rows.map((row) => ({ name: row.name, scope: row.scope, state: row.readiness.state, detail: row.readiness.detail, remedy: row.readiness.remedy })),
+      unreadableLayers: broken,
+      repositoryImports: imports.map((layer) => ({ scope: layer.scope, kinds: layer.kinds }))
     }, null, 2)}\n`);
-    return blockedRows(rows).length > 0 ? 1 : 0;
+    return blockedRows(rows).length > 0 || broken.length > 0 ? 1 : 0;
   }
 
+  for (const layer of broken) process.stdout.write(`Unreadable ${layer.scope} config: ${layer.detail}\n`);
+
   if (rows.length === 0) {
+    if (broken.length > 0) {
+      process.stdout.write(`\n${broken.length} MCP config layer(s) need attention.\n`);
+      return 1;
+    }
     process.stdout.write("No MCP servers configured.\n");
     return 0;
   }
 
   const report = formatDoctorReport(rows, { dockerRunning, rerun: "piagent-mcp doctor" });
   for (const line of report.lines) process.stdout.write(`${line}\n`);
-  process.stdout.write(report.problems === 0
+
+  // A layer nothing can parse hides whatever it defines and reads as empty, so
+  // it is counted (and already printed above). An import is named but not
+  // counted: the servers it brings in are in the report above with their own
+  // state, and this line says where they came from, which reading the
+  // repository's own config would not reveal.
+  for (const layer of imports) {
+    process.stdout.write(
+      `${layer.file} imports servers from ${layer.kinds.join(", ")} config; ` +
+      "they need approval here like any server the repository defines.\n"
+    );
+  }
+
+  const problems = report.problems + broken.length;
+  process.stdout.write(problems === 0
     ? "\nPASS: every configured MCP server can be reached.\n"
-    : `\n${report.problems} MCP server(s) need attention.\n`);
-  return report.problems === 0 ? 0 : 1;
+    : `\n${problems} MCP server(s) need attention.\n`);
+  return problems === 0 ? 0 : 1;
 }
 
 /** @param {ReturnType<typeof parseArgs>} args */

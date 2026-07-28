@@ -121,11 +121,42 @@ Ba tính chất quan trọng:
 
 - **Quyết định nằm ngoài repo** — `~/.pi/piagent-mcp-approvals.json`. Repo tự duyệt được cho mình thì gate coi như không có. Fork, đổi tên, checkout thứ hai đều bắt đầu lại từ `pending`.
 - **Pin theo digest của định nghĩa.** Duyệt là đồng ý với *thứ server đó chạy*; đổi command, URL hay args là câu hỏi mới, state quay về `approval-changed`. Cùng cách tách consent/build mà capability lock đang dùng.
-- **Enforce ở `tool_call`**, không phải ở config. Guard chặn cả proxy (`mcp` với `input.server`) lẫn dạng direct tool (`mcp__<server>__<tool>`) — gate chỉ đọc proxy sẽ bị đi vòng bằng cách bật `directTools`.
+- **Enforce ở `tool_call`**, không phải ở config. Guard đọc cả hai dạng lời gọi: proxy (`mcp` với `input.server`), và direct tool khi bật `directTools`. Gate chỉ đọc proxy sẽ bị đi vòng bằng cách bật `directTools`.
 
-Giới hạn cần nói thẳng: extension **không chặn được adapter mở connection**, chỉ chặn tool call. Phần còn lại là bản thân kết nối, và việc server phía kia ghi log rằng có người kết nối.
+Dạng tên của direct tool là thứ trước đây ghi sai trong tài liệu này. Adapter **không** sinh ra `mcp__<server>__<tool>`. Nó ghép prefix lấy từ chính tên server:
 
-Server ở `global` / `pi-global` không qua gate — hai layer đó nằm ngoài mọi repo, không repo nào đặt được server vào đó, và bắt duyệt config của chính mình trên từng máy là vô nghĩa.
+| `toolPrefix` | prefix | server `repo-tools`, tool `search` |
+|---|---|---|
+| `server` (mặc định) | tên server, `-` đổi thành `_` | `repo_tools_search` |
+| `short` | như trên, bỏ đuôi `-mcp`/`mcp` | `repo_tools_search` |
+| `none` | không có prefix | `search` |
+
+Nên guard truy server theo **tên server đang cấu hình**, không theo một pattern cố định. Với `toolPrefix: "none"` thì tên tool không còn dấu vết server nào cả — không truy được. Vì vậy một config **repo mang theo** đặt `directTools: true` cùng `toolPrefix: "none"` bị từ chối thẳng: mọi lời gọi MCP bị chặn cho tới khi bỏ setting đó.
+
+### `imports` — server không nằm trong bốn scope
+
+Adapter nhận thêm key `imports` trong config MCP, để kéo định nghĩa server từ config của công cụ khác. Server vào session theo đường này **không** xuất hiện ở scope nào trong bốn scope trên, nên trước đây gate không thấy chúng.
+
+Trong sáu kind, chỉ `vscode` trỏ vào đường dẫn **trong project** (`.vscode/mcp.json`) — nghĩa là clone repo là mang theo file đó. Vì vậy:
+
+- Server đến từ một kind repo-relative luôn phải duyệt, **bất kể layer nào khai báo import** — kể cả `global`.
+- Repo scope khai báo `imports` với kind nào thì server của kind đó cũng phải duyệt: repo đang chọn hộ máy này chạy server nào.
+- `piagent-mcp doctor` nêu tên file có `imports` và các kind của nó.
+
+Bảng dưới là đường dẫn và key **thật** của từng công cụ, đối chiếu với thứ adapter đang đọc. Ba dòng lệch nhau, nên platform đọc hợp của cả hai phía: liệt kê thừa một server chỉ tốn một lần duyệt, liệt kê thiếu thì mất gate.
+
+| kind | file thật | key thật | adapter đang đọc |
+|---|---|---|---|
+| `cursor` | `~/.cursor/mcp.json` | `mcpServers` | khớp |
+| `claude-desktop` | `~/Library/Application Support/Claude/claude_desktop_config.json` | `mcpServers` | khớp |
+| `claude-code` | `~/.claude.json` | `mcpServers` | khớp ở user scope; local scope lồng theo project nên cả hai bên đều không đọc |
+| `vscode` | `.vscode/mcp.json` | **`servers`** | đọc `mcpServers` |
+| `codex` | `~/.codex/config.toml` | **`mcp_servers`** (TOML) | đọc `~/.codex/config.json` |
+| `windsurf` | `~/.codeium/windsurf/mcp_config.json` | `mcpServers` | đọc `~/.windsurf/mcp.json` |
+
+Giới hạn cần nói thẳng: extension **không chặn được adapter mở connection**, chỉ chặn tool call. Phần còn lại là bản thân kết nối, và việc server phía kia ghi log rằng có người kết nối. Riêng file TOML của `codex` thì không bên nào parse, nên platform không liệt kê được nội dung của nó.
+
+Server ở `global` / `pi-global` không qua gate — hai layer đó nằm ngoài mọi repo, không repo nào đặt được server vào đó, và bắt duyệt config của chính mình trên từng máy là vô nghĩa. Ngoại lệ duy nhất là `imports` trỏ vào kind repo-relative, vì lúc đó nội dung được đọc lại nằm trong repo.
 
 Notice đầu session nêu tên server đang chờ quyết định hoặc thiếu setup. Tắt bằng `PIAGENT_NO_MCP_NOTICE=1`.
 

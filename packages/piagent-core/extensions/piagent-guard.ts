@@ -42,7 +42,13 @@ import {
 } from "./redaction-core.js";
 import { detectProfileName } from "./project-shape.js";
 import { evaluateUpdateCheck, isInstalledPlatform, readUpdateCache, startUpdateProbe } from "./update-check.js";
-import { REPOSITORY_SCOPES, collectServers } from "../mcp/mcp-config-layers.js";
+import {
+  REPOSITORY_SCOPES,
+  collectServers,
+  configPathForScope,
+  readMcpConfig
+} from "../mcp/mcp-config-layers.js";
+import { attributeDirectTool, erasesToolOrigin } from "../mcp/mcp-tool-naming.js";
 import { approvalState } from "../mcp/mcp-approval-store.js";
 import { evaluateServerReadiness, readinessNotice } from "../mcp/mcp-auth-readiness.js";
 import * as mcpActions from "../mcp/mcp-command-actions.js";
@@ -1994,16 +2000,20 @@ function prepareToolInputForPolicy(
 }
 
 // Which MCP server a tool call is addressed to. The adapter exposes one proxy
-// tool named `mcp` that carries the server in `input.server`, and, when a server
-// runs with directTools, individual tools named `mcp__<server>__<tool>`. Both
-// forms are read, because a gate that only covers the proxy is bypassed by
-// turning directTools on.
-function mcpServerFromToolCall(toolName: string, input: Record<string, unknown>): string | undefined {
+// tool named `mcp` that carries the server in `input.server`, and, under
+// directTools, one tool per server tool named `<prefix>_<tool>` where the prefix
+// is derived from the server name. Direct names are matched against the servers
+// this gate is holding rather than against a fixed pattern, because the prefix
+// is the server's own name and there is nothing constant to anchor on.
+function mcpServerFromToolCall(
+  toolName: string,
+  input: Record<string, unknown>,
+  candidates: Iterable<string>
+): string | undefined {
   if (normalizeActionToken(toolName) === "mcp") {
     return typeof input.server === "string" && input.server.trim() ? input.server.trim() : undefined;
   }
-  const direct = toolName.match(/^mcp(?:__|[-_:]+)([^_:.-]+)/i);
-  return direct?.[1];
+  return attributeDirectTool(toolName, candidates);
 }
 
 // Servers a repository defines are not usable until somebody on this machine has
@@ -2014,25 +2024,56 @@ function mcpServerFromToolCall(toolName: string, input: Record<string, unknown>)
 //
 // Recomputed only when one of the files behind the decision changes, because
 // this runs on every tool call.
-const mcpApprovalCache = new Map<string, { signature: string; blocked: Map<string, string> }>();
+interface RepositoryMcpGate {
+  blocked: Map<string, { state: string; origin: string }>;
+  originErased: { scope: string; file: string }[];
+}
 
-function unapprovedMcpServers(cwd: string): Map<string, string> {
+const mcpApprovalCache = new Map<string, { signature: string; gate: RepositoryMcpGate }>();
+
+function repositoryMcpGate(cwd: string): RepositoryMcpGate {
+  // Repository scopes plus anything an `imports` key drags in from a file the
+  // clone carries. Collecting those here is the whole point: a server the gate
+  // never enumerates is a server it silently permits.
   const servers = collectServers({ projectPath: cwd, scopes: [...REPOSITORY_SCOPES] });
+  const repositoryFiles = [...REPOSITORY_SCOPES].map((scope) => ({
+    scope,
+    file: configPathForScope(scope, { projectPath: cwd })
+  }));
   const signature = [
-    ...servers.map((server) => `${server.scope}:${server.name}:${fileSignature(server.file)}`),
+    ...servers.map((server) => `${server.origin}:${server.name}:${fileSignature(server.file)}`),
+    ...repositoryFiles.map((layer) => `layer:${layer.scope}:${fileSignature(layer.file)}`),
     `store:${fileSignature(path.join(os.homedir(), ".pi", "piagent-mcp-approvals.json"))}`
   ].join("|");
   const cached = mcpApprovalCache.get(cwd);
-  if (cached?.signature === signature) return cached.blocked;
+  if (cached?.signature === signature) return cached.gate;
 
-  const blocked = new Map<string, string>();
+  const blocked = new Map<string, { state: string; origin: string }>();
   for (const server of servers) {
     const state = approvalState({ projectPath: cwd, name: server.name, entry: server.entry });
     if (state.state === "approved") continue;
-    blocked.set(server.name, state.state);
+    // A name defined more than once keeps its blocking entry: the approved copy
+    // does not vouch for the one nobody has looked at.
+    blocked.set(server.name, { state: state.state, origin: server.origin });
   }
-  mcpApprovalCache.set(cwd, { signature, blocked });
-  return blocked;
+
+  // A repository-carried config can ask for its tools to arrive with no prefix,
+  // which leaves nothing in the tool name to trace back to a server. That is not
+  // a case to parse harder — it is a config asking not to be attributable, so
+  // the proxy is refused outright while it is set.
+  const originErased = [];
+  for (const layer of repositoryFiles) {
+    try {
+      if (erasesToolOrigin(readMcpConfig(layer.file).settings)) originErased.push(layer);
+    } catch {
+      // Unreadable here means unreadable for `doctor` too, which is where a
+      // broken layer gets reported. Nothing is assumed about its contents.
+    }
+  }
+
+  const gate = { blocked, originErased };
+  mcpApprovalCache.set(cwd, { signature, gate });
+  return gate;
 }
 
 function fileSignature(file: string): string {
@@ -2049,15 +2090,30 @@ function evaluateMcpApproval(
   toolName: string,
   input: Record<string, unknown>
 ): { block: boolean; reason?: string } {
-  const server = mcpServerFromToolCall(toolName, input);
+  const gate = repositoryMcpGate(cwd);
+
+  if (gate.originErased.length > 0 && normalizeActionToken(toolName) === "mcp") {
+    const layer = gate.originErased[0];
+    return {
+      block: true,
+      reason:
+        `Blocked every MCP call: ${layer.file} turns on directTools with toolPrefix "none", ` +
+        `which strips the server name off every tool and leaves nothing to check approval against. ` +
+        `Remove that setting from the repository config, then approve servers individually.`
+    };
+  }
+
+  const server = mcpServerFromToolCall(toolName, input, gate.blocked.keys());
   if (!server) return { block: false };
-  const state = unapprovedMcpServers(cwd).get(server);
-  if (!state) return { block: false };
-  const explanation = state === "rejected"
+  const record = gate.blocked.get(server);
+  if (!record) return { block: false };
+  const explanation = record.state === "rejected"
     ? "it was rejected for this project"
-    : state === "changed"
+    : record.state === "changed"
       ? "its definition changed since it was approved"
-      : "this repository defines it and nobody on this machine has approved it";
+      : record.origin.startsWith("import:")
+        ? `this repository imports it from ${record.origin.slice("import:".length)} config and nobody on this machine has approved it here`
+        : "this repository defines it and nobody on this machine has approved it";
   return {
     block: true,
     // Named as commands, because this is read inside a session: the reader can

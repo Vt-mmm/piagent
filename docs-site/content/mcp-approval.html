@@ -24,7 +24,7 @@
     </div>
     <div class="card">
       <h3 id="enforce-tool-call">Enforce ở tool call</h3>
-      <p>Guard chặn cả proxy (<span class="inline-code">mcp</span> với <span class="inline-code">input.server</span>) lẫn dạng direct tool (<span class="inline-code">mcp__&lt;server&gt;__&lt;tool&gt;</span>). Gate chỉ đọc proxy sẽ bị đi vòng bằng cách bật <span class="inline-code">directTools</span>.</p>
+      <p>Guard đọc cả proxy (<span class="inline-code">mcp</span> với <span class="inline-code">input.server</span>) lẫn direct tool. Gate chỉ đọc proxy sẽ bị đi vòng bằng cách bật <span class="inline-code">directTools</span>.</p>
     </div>
   </div>
 </section>
@@ -38,6 +38,38 @@
   </div>
 
   <p>Server ở <span class="inline-code">global</span> và <span class="inline-code">pi-global</span> không qua gate. Hai layer đó nằm ngoài mọi repo — không repo nào đặt được server vào đó — và bắt người dùng duyệt config của chính mình trên từng máy là vô nghĩa.</p>
+</section>
+
+<section class="section">
+  <h2 id="imports">Server đến qua <span class="inline-code">imports</span></h2>
+
+  <p>Config MCP nhận thêm key <span class="inline-code">imports</span>, kéo định nghĩa server từ config của công cụ khác. Server vào session theo đường này không nằm trong bốn scope nào, nên nó là đường vòng thứ hai quanh gate — và không cần bật <span class="inline-code">directTools</span>.</p>
+
+  <p>Trong sáu kind, chỉ <span class="inline-code">vscode</span> trỏ vào đường dẫn <strong>trong project</strong> (<span class="inline-code">.vscode/mcp.json</span>). Clone repo là mang theo file đó, nên server của nó phải duyệt như mọi server repo khai báo thẳng.</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Tình huống</th><th>Xử lý</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Layer bất kỳ import kind repo-relative</td>
+          <td>Server phải duyệt, kể cả khi <span class="inline-code">global</span> khai báo — nội dung đọc lại vẫn nằm trong repo.</td>
+        </tr>
+        <tr>
+          <td>Repo scope import kind bất kỳ</td>
+          <td>Server phải duyệt. Repo đang chọn hộ máy này chạy server nào.</td>
+        </tr>
+        <tr>
+          <td><span class="inline-code">directTools</span> + <span class="inline-code">toolPrefix: "none"</span> trong config repo mang theo</td>
+          <td>Từ chối thẳng. Không prefix thì tên tool không còn dấu vết server, không truy được để đối chiếu quyết định.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p><span class="inline-code">piagent-mcp doctor</span> nêu tên file có <span class="inline-code">imports</span> và các kind của nó, và nêu cả layer không parse được — trước đây một layer hỏng đọc ra rỗng, không phân biệt được với layer không có server nào.</p>
 </section>
 
 <section class="section">
@@ -63,7 +95,7 @@
         </tr>
         <tr>
           <td>Chặn ở <span class="inline-code">tool_call</span></td>
-          <td>Cả dạng proxy <span class="inline-code">mcp</span> lẫn dạng direct <span class="inline-code">mcp__&lt;server&gt;__&lt;tool&gt;</span>, để không có đường vòng.</td>
+          <td>Cả dạng proxy <span class="inline-code">mcp</span> lẫn direct tool, để không có đường vòng. Direct tool được truy theo tên server đang cấu hình, vì prefix của nó chính là tên server.</td>
         </tr>
       </tbody>
     </table>

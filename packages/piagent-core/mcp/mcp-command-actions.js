@@ -1,5 +1,13 @@
-import { REPOSITORY_SCOPES, collectServers, isRecord, readMcpConfig, writeMcpConfig } from "./mcp-config-layers.js";
-import { approvalState, clearApproval, recordApproval } from "./mcp-approval-store.js";
+import {
+  REPOSITORY_SCOPES,
+  collectServers,
+  isRecord,
+  readMcpConfig,
+  repositoryImportDeclarations,
+  unreadableLayers,
+  writeMcpConfig
+} from "./mcp-config-layers.js";
+import { approvalStorePath, approvalState, clearApproval, recordApproval } from "./mcp-approval-store.js";
 import { maskServerEntry } from "./mcp-server-entry.js";
 import {
   McpViewError,
@@ -181,16 +189,32 @@ export function detail(options) {
 export function doctor(options) {
   const rows = collectServerRows({ projectPath: options.projectPath });
   const report = formatDoctorReport(rows, { rerun: "/piagent-mcp doctor", inSession: true });
+  const broken = unreadableLayers({ projectPath: options.projectPath });
+  const imports = repositoryImportDeclarations({ projectPath: options.projectPath });
+  // A layer nobody can parse counts as a problem: it is hiding whatever it
+  // defines. An import declaration does not — the servers it brings in are in
+  // the table above with their own approval state — but it is named, because
+  // reading the repository's config alone would not reveal where they came from.
+  const problems = report.problems + broken.length;
   return {
     notify: {
-      message: report.problems === 0 ? "MCP: every server can be reached" : `MCP: ${report.problems} need attention`,
-      level: report.problems === 0 ? "info" : "warning"
+      message: problems === 0 ? "MCP: every server can be reached" : `MCP: ${problems} need attention`,
+      level: problems === 0 ? "info" : "warning"
     },
     lines: [
       ...report.lines,
-      ...(report.problems === 0 ? [] : ["", "The Docker daemon check is terminal-only: piagent-mcp doctor"])
+      ...broken.map((layer) => `Unreadable ${layer.scope} config: ${layer.detail}`),
+      ...imports.map((layer) =>
+        `${layer.file} imports servers from ${layer.kinds.join(", ")} config; ` +
+        "they need approval here like any server the repository defines."),
+      ...(problems === 0 ? [] : ["", "The Docker daemon check is terminal-only: piagent-mcp doctor"])
     ],
-    details: { project: options.projectPath, problems: report.problems }
+    details: {
+      project: options.projectPath,
+      problems,
+      unreadableLayers: broken.map((layer) => layer.scope),
+      repositoryImports: imports.map((layer) => ({ scope: layer.scope, kinds: layer.kinds }))
+    }
   };
 }
 
@@ -214,7 +238,14 @@ export function decide(options) {
   const preview = decision === "approved" && before.state !== "approved"
     ? [JSON.stringify(maskServerEntry(server.entry), null, 2), ""]
     : [];
-  recordApproval({ projectPath, name, entry: server.entry, decision });
+  // A decision that was not written is not a decision. Reporting success here
+  // would leave the operator believing a server is approved while the gate keeps
+  // blocking it, or worse, believing one is rejected while nothing recorded it.
+  if (!recordApproval({ projectPath, name, entry: server.entry, decision })) {
+    throw new McpViewError(
+      `could not write ${approvalStorePath() ?? "the approval store"}; ${name} is still ${before.state}`
+    );
+  }
   const after = approvalState({ projectPath, name, entry: server.entry });
   return {
     notify: { message: `MCP ${name}: ${decision}`, level: "info" },
@@ -231,7 +262,9 @@ export function decide(options) {
 /** @param {{projectPath: string, name?: string}} options */
 export function reset(options) {
   const { projectPath, name } = options;
-  clearApproval({ projectPath, name });
+  if (!clearApproval({ projectPath, name })) {
+    throw new McpViewError(`could not write ${approvalStorePath() ?? "the approval store"}; nothing was forgotten`);
+  }
   return {
     notify: { message: name ? `MCP ${name}: decision forgotten` : "MCP: all decisions forgotten", level: "info" },
     lines: [name

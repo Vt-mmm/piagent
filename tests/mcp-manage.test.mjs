@@ -173,6 +173,90 @@ describe("piagent-mcp server management", () => {
     assert.match(shown.stdout, /\$\{REFERENCED\}/);
   });
 
+  // The same rule --env and --header enforce. An address is not a safer place
+  // for a token: it lands in the committed file and in request logs besides.
+  it("refuses a credential carried in the URL and masks one already on disk", () => {
+    const fixture = createFixture();
+
+    const userinfo = run(fixture, ["add", "a", "--scope", "global", "--url", "https://user:s3cret@mcp.example.com/mcp"]);
+    assert.equal(userinfo.status, 2);
+    assert.match(userinfo.stderr, /must not carry credentials in the address/);
+    assert.ok(!userinfo.stderr.includes("s3cret"), userinfo.stderr);
+
+    const query = run(fixture, ["add", "b", "--scope", "global", "--url", "https://mcp.example.com/mcp?api_key=live-value"]);
+    assert.equal(query.status, 2);
+    assert.match(query.stderr, /looks like a credential/);
+
+    fs.writeFileSync(projectConfigPath(fixture), `${JSON.stringify({
+      mcpServers: { legacy: { url: "https://user:s3cret@mcp.example.com/mcp?token=live-value" } }
+    }, null, 2)}\n`);
+    for (const command of [["get", "legacy"], ["list"]]) {
+      const shown = run(fixture, command);
+      assert.equal(shown.status, 0, shown.stderr);
+      assert.ok(!shown.stdout.includes("s3cret"), `${command[0]}: ${shown.stdout}`);
+      assert.ok(!shown.stdout.includes("live-value"), `${command[0]}: ${shown.stdout}`);
+    }
+  });
+
+  // Global scope, because approval outranks a missing variable on the readiness
+  // ladder and a repository-scoped server would report pending first.
+  it("reports a bearer token variable that is not set", () => {
+    const fixture = createFixture();
+    assert.equal(run(fixture, [
+      "add", "remote", "--scope", "global",
+      "--url", "https://mcp.example.com/mcp",
+      "--bearer-token-env-var", "REMOTE_TOKEN"
+    ]).status, 0);
+
+    // The field names its variable directly instead of through ${VAR}, which is
+    // why the reference scan never saw it and the server read as ready.
+    const missing = run(fixture, ["doctor"]);
+    assert.match(missing.stdout, /REMOTE_TOKEN/);
+
+    const present = run(fixture, ["doctor"], { env: { REMOTE_TOKEN: "value" } });
+    assert.ok(!present.stdout.includes("REMOTE_TOKEN is referenced but not set"), present.stdout);
+  });
+
+  it("fails loudly when the decision cannot be written", () => {
+    const fixture = createFixture();
+    fs.writeFileSync(projectConfigPath(fixture), `${JSON.stringify({
+      mcpServers: { repo: { command: "npx", args: ["-y", "@acme/repo"] } }
+    }, null, 2)}\n`);
+    // A file where the store's directory belongs, so the write cannot succeed.
+    fs.writeFileSync(path.join(fixture.home, ".pi"), "not a directory\n");
+
+    const approved = run(fixture, ["approve", "repo"]);
+    assert.notEqual(approved.status, 0);
+    assert.match(approved.stderr, /could not write/);
+  });
+
+  it("names a config layer it cannot parse instead of counting it as empty", () => {
+    const fixture = createFixture();
+    fs.writeFileSync(projectConfigPath(fixture), "{ not json\n");
+
+    const report = run(fixture, ["doctor"]);
+    assert.match(report.stdout, /Unreadable project config/);
+  });
+
+  it("names the import a repository config uses to reach other servers", () => {
+    const fixture = createFixture();
+    fs.writeFileSync(projectConfigPath(fixture), `${JSON.stringify({
+      imports: ["vscode"],
+      mcpServers: {}
+    }, null, 2)}\n`);
+    fs.mkdirSync(path.join(fixture.project, ".vscode"), { recursive: true });
+    fs.writeFileSync(path.join(fixture.project, ".vscode", "mcp.json"), `${JSON.stringify({
+      servers: { exfil: { command: "npx", args: ["-y", "@attacker/mcp"] } }
+    }, null, 2)}\n`);
+
+    const report = run(fixture, ["doctor"]);
+    assert.match(report.stdout, /imports servers from vscode config/);
+    // And the server itself is listed, holding at pending like any the
+    // repository declares outright.
+    const listed = run(fixture, ["list"]);
+    assert.match(listed.stdout, /exfil/);
+  });
+
   it("holds a server the repository defines until it is approved here", () => {
     const fixture = createFixture();
     const added = run(fixture, ["add", "repo", "--scope", "project", "--", "npx", "-y", "@acme/repo-mcp"]);

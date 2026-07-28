@@ -161,7 +161,10 @@ export function recordApproval(options) {
 export function clearApproval(options) {
   const store = readApprovalStore({ home: options.home });
   const key = projectKey(options.projectPath);
-  if (!store[key]) return false;
+  // Nothing recorded is the state this function exists to reach, so it succeeds.
+  // Returning false here would be indistinguishable from a failed write, and the
+  // caller has to be able to tell those apart.
+  if (!store[key]) return true;
   if (!options.name) {
     const { [key]: _removed, ...rest } = store;
     return writeApprovalStore(rest, { home: options.home });
