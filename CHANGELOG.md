@@ -2,6 +2,36 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.2.1 - 2026-07-28
+
+### Fixed
+
+- The approval gate never covered direct MCP tools. It looked for a tool named `mcp__<server>__<tool>`; the adapter builds a name by joining the server's own name to the tool's, so `github` exposes `github_create_issue` and nothing ever matched. Every server was reachable with one `directTools` setting, which `piagent-mcp add --direct-tools` offers and the docs recommend for small servers. Attribution now runs against the configured server names across every prefixing mode. A repository-carried config that sets `directTools` with `toolPrefix: "none"` is refused outright rather than parsed: with no prefix the tool name holds no evidence of its server, so there is nothing to check a decision against.
+
+  The v1.2.0 notes, `docs/mcp-and-tools.md` and the documentation site all stated the direct form was covered. It was not, and the test that asserted it asserted the same invented name shape.
+
+- A repository could reach servers the gate never enumerated through the adapter's `imports` key. `.mcp.json` naming `vscode` pulls servers out of `.vscode/mcp.json`, which travels with the clone, while the gate reported no repository servers at all. Servers reachable through a repository-relative import are now collected and gated whichever layer declares the import, and a repository scope that imports any kind has those servers gated too. `piagent-mcp doctor` names the file and the kinds, and reports a config layer it cannot parse instead of counting it as empty.
+
+- `piagent-capability vendor` emptied its destination before checking containment and only tested the immediate parent for a symlink. A repository shipping `.pi` as a symlink had the recursive delete and the fetch land outside the project. The whole path is now verified against the resolved project root before anything is created or removed.
+
+- The shell guard followed nested interpreters four levels deep and then stopped looking, so a payload wrapped in five layers of `bash -c` was permitted on the strength of a level nobody read. The walk now goes to sixteen levels and refuses a command that nests past it, rather than falling silent.
+
+- An artifact shipped by a vendored capability source could change content while the lock still classified as `repin`. Artifact bytes stay on the build side for packs the platform ships — pinning them would stop a policy correction reaching the projects that reference it — but that reasoning does not transfer to a source the project vendored in, whose manifest digest pins the artifact list rather than its contents.
+
+- A credential in an MCP server URL was stored and displayed in clear text. `add` now refuses userinfo and credential-shaped query parameters the same way it refuses them in `--env` and `--header`, and `list` and `get` mask a URL already on disk.
+
+- `piagent-mcp approve`, `reject` and `reset` reported success when the approval store could not be written, leaving the operator waiting on a gate that was still blocking. All three now fail with the path that could not be written.
+
+- A server using `bearerTokenEnvVar` reported `ready` with the variable unset. The field names its variable directly rather than through a `${VAR}` reference, so the scan that finds referenced variables never saw the one setting that guarantees a credential is needed.
+
+- A capability pack could declare `activation.mode: "profile"` with no profiles list and crash resolution with a TypeError. The validator requires the list, the same way it already required triggers for trigger activation.
+
+- `configure-model-scope.sh` and `quality-benchmark.sh` took the next argument as a flag's value without checking it was one. `--preset full --settings --dry-run` wrote a settings file named `--dry-run`, exited 0 and reported success, having skipped the dry run it was asked for and never touched the real settings file.
+
+### Changed
+
+- `docs/mcp-and-tools.md` records the config path and server key each supported import kind actually uses, against what the adapter reads. Three of the six disagree, so the platform reads the union: listing a server that never loads costs one approval, missing one costs the gate.
+
 ## v1.2.0 - 2026-07-28
 
 ### Added
@@ -12,7 +42,7 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
   The record pins the digest of what was approved. Approval is consent to what the server runs, so changing its command, URL or arguments returns it to pending, which is the same split the capability lock draws between consent and build.
 
-  Enforcement is in the guard's `tool_call` hook, covering both the `mcp` proxy and the `mcp__<server>__<tool>` form that `directTools` produces. The adapter owns the connection and the extension cannot prevent one being opened, so what is stopped is every tool call, not the connection itself. Servers in the global layers are not gated: nothing a repository contains can put a server there.
+  Enforcement is in the guard's `tool_call` hook. As shipped in this version it covered the `mcp` proxy only — the direct-tool branch matched a name shape the adapter does not emit, so it never fired. See v1.2.1. The adapter owns the connection and the extension cannot prevent one being opened, so what is stopped is every tool call, not the connection itself. Servers in the global layers are not gated: nothing a repository contains can put a server there.
 
 - MCP is a command inside a session, not a request to the model. `/piagent-mcp` on its own opens a menu, because a surface only helps if it can be found without already knowing the subcommand. The menu is built from what the project has: approving is not offered when nothing is waiting on a decision, and each entry carries its own count. Picking an action that needs a server asks which one, unless there is only one it could be.
 
