@@ -234,10 +234,16 @@ function shellWordTokens(segment) {
   // (`"{a,b}"` is one literal word), and `${NAME}` is a parameter reference
   // rather than a list, so neither marks the token.
   let braceActive = false;
+  // One flag per character of `value`: `1` where the character is text rather
+  // than brace syntax -- quoted, escaped, part of `${...}`, or inside a
+  // substitution. A single flag for the whole token cannot describe
+  // `"{.env,}"{,}`, where one group is literal and the next one expands.
+  let literalMask = "";
   const flush = () => {
     if (!current) return;
-    tokens.push({ value: current, activeGlob, unquotedVariable, variableActive, braceActive });
+    tokens.push({ value: current, activeGlob, unquotedVariable, variableActive, braceActive, literalMask });
     current = "";
+    literalMask = "";
     activeGlob = false;
     unquotedVariable = false;
     variableActive = false;
@@ -248,6 +254,8 @@ function shellWordTokens(segment) {
     const char = chars[index];
     if (escaped) {
       current += char;
+      // `\{a,b\}` is a filename, not a list.
+      literalMask += "1";
       escaped = false;
       continue;
     }
@@ -264,6 +272,7 @@ function shellWordTokens(segment) {
     if (char === "$" && chars[index + 1] === "'" && !quote) {
       const ansiC = readAnsiCQuote(chars, index);
       current += ansiC.value;
+      literalMask += "1".repeat(ansiC.value.length);
       index = ansiC.endIndex;
       continue;
     }
@@ -293,6 +302,7 @@ function shellWordTokens(segment) {
       if (!quote) unquotedVariable = true;
     }
     current += char;
+    literalMask += (quote || substitutionDepth > 0 || inBackticks || chars[index - 1] === "$") ? "1" : "0";
   }
   flush();
   return tokens;
@@ -350,28 +360,31 @@ function braceRangeAlternatives(body) {
   return members;
 }
 
-/** The alternatives of one brace group, split on the commas at its own level. */
-function splitBraceAlternatives(body) {
+/**
+ * The alternatives of one brace group, split on the commas at its own level.
+ * Returns the mask slices alongside, so a nested group keeps knowing which of
+ * its characters are syntax.
+ */
+function splitBraceAlternatives(body, mask) {
   const parts = [];
   let current = "";
+  let currentMask = "";
   let level = 0;
   for (let index = 0; index < body.length; index += 1) {
     const char = body[index];
-    if (char === "\\") {
-      current += char + (body[index + 1] ?? "");
-      index += 1;
-      continue;
-    }
-    if (char === "{") level += 1;
-    else if (char === "}") level -= 1;
-    else if (char === "," && level === 0) {
-      parts.push(current);
+    const literal = mask[index] === "1";
+    if (!literal && char === "{") level += 1;
+    else if (!literal && char === "}") level -= 1;
+    else if (!literal && char === "," && level === 0) {
+      parts.push({ value: current, mask: currentMask });
       current = "";
+      currentMask = "";
       continue;
     }
     current += char;
+    currentMask += mask[index];
   }
-  parts.push(current);
+  parts.push({ value: current, mask: currentMask });
   return parts;
 }
 
@@ -395,16 +408,14 @@ const MAX_BRACE_RESULTS = 64;
  * @returns {string[]} every word the shell would produce, the input itself when
  *   there is no expansion to do
  */
-function expandShellBraces(word, depth = 0) {
+function expandShellBraces(word, mask = "0".repeat(word.length), depth = 0) {
   if (depth >= 6 || !word.includes("{")) return [word];
+  const literalAt = (index) => mask[index] === "1";
   let open = -1;
   let level = 0;
   for (let index = 0; index < word.length; index += 1) {
     const char = word[index];
-    if (char === "\\") {
-      index += 1;
-      continue;
-    }
+    if (literalAt(index)) continue;
     if (char === "{") {
       if (level === 0) open = index;
       level += 1;
@@ -414,8 +425,11 @@ function expandShellBraces(word, depth = 0) {
     level -= 1;
     if (level > 0) continue;
     const body = word.slice(open + 1, index);
+    const bodyMask = mask.slice(open + 1, index);
     const range = braceRangeAlternatives(body);
-    const alternatives = range ?? splitBraceAlternatives(body);
+    const alternatives = range
+      ? range.map((value) => ({ value, mask: "0".repeat(value.length) }))
+      : splitBraceAlternatives(body, bodyMask);
     // A comma body needs two alternatives to be an expansion at all -- `{a}` is
     // literal to the shell. A *range* does not: `{m..m}` is one member and the
     // braces still come off, which is the whole of `r{m..m}`.
@@ -424,10 +438,14 @@ function expandShellBraces(word, depth = 0) {
       continue;
     }
     const prefix = word.slice(0, open);
+    const prefixMask = mask.slice(0, open);
     const suffix = word.slice(index + 1);
+    const suffixMask = mask.slice(index + 1);
     const results = [];
     for (const alternative of alternatives) {
-      for (const expanded of expandShellBraces(`${prefix}${alternative}${suffix}`, depth + 1)) {
+      const expandedWord = `${prefix}${alternative.value}${suffix}`;
+      const expandedMask = `${prefixMask}${alternative.mask}${suffixMask}`;
+      for (const expanded of expandShellBraces(expandedWord, expandedMask, depth + 1)) {
         if (results.length >= MAX_BRACE_RESULTS) return results;
         results.push(expanded);
       }
@@ -456,16 +474,32 @@ function expandShellBraces(word, depth = 0) {
  * @returns {{words: string[], text: string, tokens: ReturnType<typeof shellWordTokens>}}
  */
 function expandedSegment(segment) {
-  const tokens = shellWordTokens(segment);
-  if (!tokens.some((token) => token.braceActive)) {
-    return { words: tokens.map((token) => token.value), text: segment, tokens };
+  const rawTokens = shellWordTokens(segment);
+  if (!rawTokens.some((token) => token.braceActive)) {
+    return { words: rawTokens.map((token) => token.value), text: segment, tokens: rawTokens };
   }
+  // Expanded into *tokens*, not just into a word list. Taking the command name
+  // from the expanded words and the arguments from the raw ones read
+  // `{cat,.env}` as a `cat` with no operands at all, because both the command
+  // and its argument come out of that single word. Everything downstream takes
+  // command and arguments from this one stream.
+  //
   // An empty alternative expands to nothing rather than to an empty argument --
   // `rm {-rf,} /` reaches `rm` as two words, not three.
-  const words = tokens
-    .flatMap((token) => (token.braceActive ? expandShellBraces(token.value) : [token.value]))
-    .filter(Boolean);
-  return { words, text: words.join(" "), tokens };
+  const tokens = rawTokens.flatMap((token) => {
+    if (!token.braceActive) return [token];
+    const expansions = expandShellBraces(token.value, token.literalMask).filter(Boolean);
+    if (expansions.length === 1 && expansions[0] === token.value) return [token];
+    // The mask no longer describes the new text. `braceActive` is cleared below
+    // for every token alike, expanded or not.
+    return expansions.map((value) => ({ ...token, value, literalMask: undefined }));
+  });
+  // `braceActive` is cleared on every token, expanded or not. The expansion has
+  // already happened here, with the mask; a later reader that expanded again
+  // would be doing it without one, and `{.env","x}` -- whose comma is quoted,
+  // so the shell leaves the whole word alone -- came back as `.env`.
+  const words = tokens.map((token) => token.value);
+  return { words, text: words.join(" "), tokens: tokens.map((token) => ({ ...token, braceActive: false })) };
 }
 
 export function arrayStartsWith(items, prefix) {
@@ -1395,10 +1429,14 @@ function shellDataTokens(segment) {
   let quote;
   let tokenStarted = false;
   let variableActive = false;
+  // Same per-character flag the word tokenizer carries, for the same reason:
+  // the producer's arguments can come out of the brace word that names it.
+  let literalMask = "";
   const flush = () => {
     if (!tokenStarted) return;
-    tokens.push({ value: current, variableActive });
+    tokens.push({ value: current, variableActive, literalMask });
     current = "";
+    literalMask = "";
     tokenStarted = false;
     variableActive = false;
   };
@@ -1409,7 +1447,10 @@ function shellDataTokens(segment) {
     if (quote === "'") {
       tokenStarted = true;
       if (char === "'") quote = undefined;
-      else current += char;
+      else {
+        current += char;
+        literalMask += "1";
+      }
       continue;
     }
     if (quote === '"') {
@@ -1418,10 +1459,12 @@ function shellDataTokens(segment) {
         quote = undefined;
       } else if (char === "\\" && next !== undefined && /[$`"\\\n]/.test(next)) {
         current += next;
+        literalMask += "1";
         index += 1;
       } else {
         if (char === "$" && next !== undefined) variableActive = true;
         current += char;
+        literalMask += "1";
       }
       continue;
     }
@@ -1436,11 +1479,13 @@ function shellDataTokens(segment) {
     }
     if (char === "\\" && next !== undefined) {
       current += next;
+      literalMask += "1";
       index += 1;
       continue;
     }
     if (char === "$" && next !== undefined) variableActive = true;
     current += char;
+    literalMask += segment[index - 1] === "$" ? "1" : "0";
   }
   flush();
   return tokens;
@@ -1599,7 +1644,14 @@ function producerCommandIndex(words, producerCommand) {
 
 function staticDataOutput(segment, assignments, producerCommand) {
   const empty = { words: [], candidates: [], exact: false };
-  const tokens = shellDataTokens(segment);
+  // Expanded before the producer is located, so an argument that comes out of
+  // the same brace word as the name is an argument here too: `{printf,.e%.1sv}`
+  // is `printf` plus the format it prints.
+  const tokens = shellDataTokens(segment).flatMap((token) => {
+    const expansions = expandShellBraces(token.value, token.literalMask).filter(Boolean);
+    if (expansions.length === 1 && expansions[0] === token.value) return [token];
+    return expansions.map((value) => ({ ...token, value, literalMask: undefined }));
+  });
   const commandIndex = producerCommandIndex(tokens.map((token) => token.value), producerCommand);
   if (commandIndex < 0) return empty;
   const args = tokens.slice(commandIndex + 1).map((token) => token.variableActive
@@ -1672,28 +1724,24 @@ function xargsPipelineInputCandidates(command) {
   const candidates = [];
   const assignments = new Map();
   for (let index = 0; index < segments.length; index += 1) {
-    const producerTokens = shellWordTokens(segments[index]);
-    const producerWords = producerTokens.map((token) => token.value);
+    // The producer's arguments can come out of the same brace word as its name:
+    // `{printf,.e%.1sv} nv` is `printf .e%.1sv nv`, and reading the name from
+    // the expanded list while slicing arguments off the raw one dropped the
+    // format entirely.
+    const { tokens: producerTokens, words: producerWords } = expandedSegment(segments[index]);
     rememberLeadingShellAssignments(producerWords, assignments);
     if (index + 1 >= segments.length) continue;
     const consumerWords = shellWords(segments[index + 1]);
     const consumerCommand = commandBasename(stripWrapper(consumerWords)[0] ?? "");
     if (consumerCommand !== "xargs") continue;
-    // The producer's *name* is read from the expanded list, because the shell
-    // expands before it decides what to run. Its operands stay on the raw
-    // tokens, which are the only thing that still knows where the quotes were.
-    const { words: producerExpanded } = expandedSegment(segments[index]);
-    const producerCommand = commandBasename(stripWrapper(producerExpanded)[0] ?? "");
+    const producerCommand = commandBasename(stripWrapper(producerWords)[0] ?? "");
     if (!DATA_ONLY_COMMANDS.has(producerCommand)) continue;
     const commandIndex = producerCommandIndex(producerWords, producerCommand);
     for (const token of producerTokens.slice(commandIndex + 1)) {
       const word = token.variableActive ? expandKnownShellVariables(token.value, assignments) : token.value;
       if (word.startsWith("-") || word === "%s" || word === "%s\\n") continue;
-      // This branch reads the producer's own tokens rather than going through
-      // `addCandidate`, so the brace expansion done there never reached it:
-      // `printf {.env,} | xargs cat` prints `.env` and nothing here saw a name.
-      // The word as written is kept too, since quoting suspends the expansion.
-      candidates.push(word, ...(token.braceActive ? expandShellBraces(word) : []));
+      // Already brace-expanded by `expandedSegment`, mask and all.
+      candidates.push(word);
     }
     if (producerCommand === "printf" || (producerCommand === "echo" && echoEscapeMode(producerWords, commandIndex))) {
       candidates.push(...escapedLiteralCandidates(segments[index]));
@@ -1831,15 +1879,13 @@ export function extractShellPathCandidates(command) {
   const pending = splitShellSegments(command).map((segment) => ({ segment, depth: 0 }));
   while (pending.length > 0) {
     const { segment, depth } = pending.shift();
-    const tokens = shellWordTokens(segment);
-    const words = tokens.map((token) => token.value);
-    // Brace-expanded alongside, so a nested interpreter written as `{bash,} -c`
-    // is recognised as one and its payload read. The token list stays
-    // unexpanded because the loop below indexes into it; the operands it reads
-    // are expanded by `addCandidate` where they are added.
-    const { words: expandedWords, text } = expandedSegment(segment);
+    // One stream for the command name and for the operands alike: `{cat,.env}`
+    // is a `cat` whose only argument came out of the same word, and reading the
+    // name from one list and the arguments from another lost it.
+    const { words, text, tokens } = expandedSegment(segment);
+    const expandedWords = words;
     rememberLeadingShellAssignments(words, assignments);
-    const commandName = commandBasename(stripWrapper(expandedWords)[0] ?? "");
+    const commandName = commandBasename(stripWrapper(words)[0] ?? "");
     for (const redirect of extractAttachedRedirectionPaths(segment)) {
       addCandidate(redirect.value, true, redirect.braceActive);
     }
@@ -2122,13 +2168,11 @@ export function unresolvedPathExpansions(command) {
 
   while (pending.length > 0) {
     const { segment, depth } = pending.shift();
-    const tokens = shellWordTokens(segment);
-    const words = tokens.map((token) => token.value);
-    // The command name and the nested-interpreter scan read the expanded list,
-    // for the same reason the exec policy does: `{bash,} -c` is `bash -c`.
-    const { words: expandedWords, text } = expandedSegment(segment);
+    // The same single stream the exec policy and the path candidates read.
+    const { words, text, tokens } = expandedSegment(segment);
+    const expandedWords = words;
     rememberLeadingShellAssignments(words, assignments);
-    const commandName = commandBasename(stripWrapper(expandedWords)[0] ?? "");
+    const commandName = commandBasename(stripWrapper(words)[0] ?? "");
     // A redirection target is a file the shell creates whatever the command is,
     // so it is read before the data-only skip below.
     for (const redirect of extractAttachedRedirectionPaths(segment)) {

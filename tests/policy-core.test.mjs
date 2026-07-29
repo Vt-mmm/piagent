@@ -889,7 +889,18 @@ describe("brace expansion does not change the answer", () => {
     // brace-assembled one skipped it and the decoded name went unread.
     "cat $({echo,} -e '.en\\x76')",
     "cat $({printf,} %b '.en\\x76')",
-    "{echo,} -e '.en\\x76' | xargs cat"
+    "{echo,} -e '.en\\x76' | xargs cat",
+    // The command and its argument can come out of the *same* brace word.
+    // Reading the name from the expanded list and the arguments from the raw
+    // one saw a `cat` with no operands at all.
+    "{cat,.env}",
+    "{cat,auth.json}",
+    "{grep,-f,.env,README.md}",
+    "{rg,-f.env,README.md}",
+    "{printf,.e%.1sv} nv | xargs cat",
+    "{echo,.env} | xargs cat",
+    "cat $({echo,.env})",
+    "cat $({printf,.e%.1sv} nv)"
   ];
 
   // The other direction, which no expansion comparison can state: quoting
@@ -908,7 +919,28 @@ describe("brace expansion does not change the answer", () => {
       "cat '{.env,}'",
       "printf data > \"{.env,}\"",
       "printf data > '{.env,}'",
-      "cat \"{.env,}\" '{auth.json,}'"
+      "cat \"{.env,}\" '{auth.json,}'",
+      // Mixed: one group is quoted and the next one expands, so the word is
+      // `{.env,}` twice. A single brace flag for the whole token cannot say
+      // that, which is why the quote state is carried per character.
+      "cat \"{.env,}\"{,}",
+      "cat '{.env,}'{,}",
+      "cat {,}\"{.env,}\"",
+      // A parameter expansion is not a list either, whatever its default holds.
+      "cat ${X:-notes.txt}{,}",
+      // Quoting any one piece of the syntax is enough to stop the expansion,
+      // and each piece is a separate decision: the opening brace, the comma,
+      // and a backslash in front of either. `bash` prints the literal
+      // `{.env,x}` for all three.
+      "cat \"{\".env,x}",
+      "cat {.env\",\"x}",
+      "cat \\{.env,x\\}",
+      // The same three beside a group that *does* expand, so the word is being
+      // expanded and each quoted piece has to be skipped on its own. `bash`
+      // prints `{.env,x}` twice for all of these.
+      "cat \"{\".env,x}{,}",
+      "cat \\{.env,x\\}{,}",
+      "cat {.env\",\"x}{,}"
     ]) {
       assert.equal(findProtectedPathInCommand(command, policy.shellProtectedPaths), undefined, command);
     }
