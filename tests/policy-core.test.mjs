@@ -77,7 +77,13 @@ describe("protected path extraction from shell", () => {
     "cat .pi/piagent-state/observed-bash.jsonl",
     "echo forged >> .pi/piagent-state/observed-bash.jsonl",
     "cat .ENV",
-    "printf x > .Env.Local"
+    "printf x > .Env.Local",
+    // A brace group holding a parameter expansion. The scan for the closing
+    // brace stopped at the `}` belonging to `${...}`, so this expanded to
+    // `cat}` and `${X:-.env}` and neither word was a command or a path.
+    "{cat,${X:-.env}}",
+    "{head,-n,1,${X:-.env}}",
+    "cat ${X:-.e}{n..n}v"
   ];
 
   for (const command of blocked) {
@@ -353,7 +359,24 @@ describe("unresolvable path expansions", () => {
     "cat > .en$(echo v)",
     "cat .en`echo v`",
     "cat ${D}.env",
-    "cat dir/.en$(echo v)"
+    "cat dir/.en$(echo v)",
+    "cat .en$V",
+    // Two expansions with nothing between them assemble a name as surely as
+    // literal text does, and neither half holds it: this spells `.env`.
+    "cat $(printf %.1sen .Z)$(printf %.1s vZ)",
+    // A word that is nothing but a parameter expansion, where the command says
+    // the word is a file. `${HOME:+.env}` opens `.env` and used to read as a
+    // word naming nothing at all.
+    "cat ${HOME:+.env}",
+    "cat $F",
+    "head ${A:0:1}",
+    "cp $SRC dst",
+    "printf x > $OUT",
+    // The filename arrives on stdin, so neither segment shows it on its own:
+    // the producer only prints, and the consumer has no operand to read.
+    "echo $F | xargs cat",
+    "echo ${SET:+.env} | xargs cat",
+    "ls $DIR | xargs cat"
   ]) {
     it(`refuses a filename it cannot resolve: ${command}`, () => {
       assert.deepEqual(unresolvedPathExpansions(command).length > 0, true, command);
@@ -362,17 +385,35 @@ describe("unresolvable path expansions", () => {
 
   // A substitution that is the whole word is a value, not a filename being
   // assembled -- and a resolvable expansion is handled by the matcher above.
+  // It also carries a command, which the nested scan classifies: answering
+  // `cat $(gh issue create ...)` here would replace "external write" with a
+  // vaguer reason. A parameter expansion carries nothing for anyone else to
+  // read, which is why that one is refused and this one is not.
   for (const command of [
     "git commit -m \"$(date)\"",
     "echo \"$(ls)\"",
     "cat $(echo .env)",
+    "cat $(gh issue create --title x --body y)",
     "cat $HOME/notes.txt",
     "grep -r \"$(cat pattern)\" src",
     "npm run build",
     "V=.env; cat $V",
     "cat '$F'",
     "echo .en$(echo v)",
-    "docker build --build-arg X=$(git rev-parse HEAD) ."
+    "docker build --build-arg X=$(git rev-parse HEAD) .",
+    // The command that opens files decides whether a bare expansion is a path.
+    "git commit -m $MSG",
+    "npm run $SCRIPT",
+    "gh pr create --title $T",
+    "echo $FOO",
+    "D=/tmp; cat $D/notes.txt",
+    // A pipeline whose producer holds no expansion says nothing new, whatever
+    // is on the far end of the pipe.
+    "find . -name '*.js' | xargs grep -l TODO",
+    "git diff --name-only | xargs cat",
+    "git log --oneline | xargs echo",
+    // ...and one whose consumer opens nothing.
+    "echo $MESSAGE | xargs echo"
   ]) {
     it(`does not refuse a command with nothing unresolvable in a path: ${command}`, () => {
       assert.deepEqual(unresolvedPathExpansions(command), [], command);
@@ -849,6 +890,15 @@ describe("brace expansion does not change the answer", () => {
     "r{m..m} -rf /",
     "fi{n..n}d / -delete",
     "cat .e{n..n}v",
+    // a brace group holding a parameter expansion, where the closing brace of
+    // `${...}` was read as the end of the group
+    "{rm,-rf,${UNSET_FOR_TEST:-/}}",
+    "r{m,} -rf ${UNSET_FOR_TEST:-/}",
+    "{cat,${UNSET_FOR_TEST:-notes.txt}}",
+    "cat ${UNSET_FOR_TEST:-{a,b}}",
+    // an escaped dollar is literal text, and the group beside it still expands
+    // -- the dollar lands on every alternative, so no answer changes either way
+    "echo \\${a,b}",
     // and the ordinary uses, which have to keep their answer too
     "rm -rf build/{a,b}",
     "rm -rf {dist,coverage}",

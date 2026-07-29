@@ -7,6 +7,18 @@ const SEARCH_PATTERN_OPTIONS = new Set(["-e", "--regexp", "--pattern"]);
 const ASSIGNMENT_BUILTINS = new Set(["export", "readonly", "declare", "typeset", "local"]);
 const SHELL_COMMANDS = new Set(["bash", "sh", "zsh"]);
 
+// Commands whose non-flag operands are files by definition, rather than by
+// convention. The distinction matters because this set decides where a word
+// nobody can resolve is refused: `cat $F` names a file whatever `F` holds, so
+// not knowing it is worth a question, while `git commit -m $MSG` names a
+// message and asking about it would be noise with no answer behind it.
+const FILE_OPERAND_COMMANDS = new Set([
+  "cat", "tac", "head", "tail", "less", "more", "nl", "od", "xxd", "strings", "wc",
+  "base64", "md5sum", "shasum", "sha256sum", "cksum", "file", "stat", "readlink",
+  "cp", "mv", "ln", "touch", "install", "shred", "truncate", "chmod", "chown", "chgrp",
+  "source", ".", "open"
+]);
+
 // Interpreters that take a program on the command line, and the flags that
 // introduce it. What follows such a flag is source code in another language, so
 // none of it tokenises as a shell path — `node -e "readFileSync('.env')"` is one
@@ -284,17 +296,33 @@ function shellWordTokens(segment) {
       quote = undefined;
       continue;
     }
+    // The depth this character sits at before it can close the substitution it
+    // belongs to. Reading the depth afterwards left the `}` of `${...}` looking
+    // like brace syntax, so `{cat,${X:-.env}}` closed on the wrong brace and
+    // expanded to `cat}` and `${X:-.env}` instead of `cat` and `.env`.
+    const enclosingDepth = substitutionDepth;
     if (!quote) {
       if (char === "$" && (chars[index + 1] === "(" || chars[index + 1] === "{")) substitutionDepth += 1;
       else if ((char === ")" || char === "}") && substitutionDepth > 0) substitutionDepth -= 1;
       else if (char === "`") inBackticks = !inBackticks;
     }
+    const insideSubstitution = enclosingDepth > 0 || substitutionDepth > 0;
     if (!quote && substitutionDepth === 0 && !inBackticks && /\s/.test(char)) {
       flush();
       continue;
     }
     if (!quote && /[*?{\[]/.test(char)) activeGlob = true;
-    if (!quote && char === "{" && chars[index - 1] !== "$" && substitutionDepth === 0 && !inBackticks) {
+    // A brace the shell would expand, which is any brace not opening a parameter
+    // reference and not inside one. The dollar is counted rather than looked for
+    // behind the brace, because a dollar can be there without opening anything:
+    // in `\${a,b}` it is literal text and the shell still expands the group.
+    //
+    // No decision can currently tell the two readings apart -- the literal
+    // dollar is glued onto every alternative, so `\${a,.env}` produces `$a` and
+    // `$.env` and neither is a path or a command. This is the correct reading
+    // rather than a fix for anything, and it is written this way because the
+    // depth is already known here and looking backwards was never right.
+    if (!quote && char === "{" && enclosingDepth === 0 && !inBackticks) {
       braceActive = true;
     }
     if ((char === "$" || char === "`") && quote !== "'") {
@@ -302,7 +330,7 @@ function shellWordTokens(segment) {
       if (!quote) unquotedVariable = true;
     }
     current += char;
-    literalMask += (quote || substitutionDepth > 0 || inBackticks || chars[index - 1] === "$") ? "1" : "0";
+    literalMask += (quote || insideSubstitution || inBackticks) ? "1" : "0";
   }
   flush();
   return tokens;
@@ -2156,18 +2184,83 @@ export function extractShellGlobCandidates(command) {
 // Strip the expansions out; whatever text is left is the literal part the author
 // wrote around them. Literal text plus an expansion is a filename being
 // assembled; an expansion on its own is a value.
-function hasLiteralAroundExpansion(basename) {
-  const literal = basename.replace(/\$\{[^{}]*\}|\$\([^()]*\)|`[^`]*`/g, "");
-  return literal.length > 0 && literal !== basename;
+const EXPANSION_FORM = /\$\{[^{}]*\}|\$\([^()]*\)|`[^`]*`|\$[A-Za-z_][A-Za-z0-9_]*/g;
+
+/**
+ * True when the text still holds an expansion this module could not resolve.
+ *
+ * Only parameter expansions count. A command substitution carries a command,
+ * and the nested scan reads it -- `cat $(gh issue create ...)` is answered as
+ * an external write, and answering it here instead would replace that with a
+ * vaguer reason. A parameter expansion carries nothing for anyone else to read,
+ * so if it is not resolved here it is not resolved at all.
+ *
+ * @param {string} text
+ * @returns {boolean}
+ */
+function holdsUnresolvedParameter(text) {
+  return /\$\{|\$[A-Za-z_]/.test(text);
+}
+
+/**
+ * True when the name is being built out of pieces rather than named outright.
+ *
+ * Literal text beside an expansion is the obvious form. Two expansions with
+ * nothing between them is the same act -- `$(printf %.1sen .Z)$(printf %.1s vZ)`
+ * spells `.env` and neither half contains it -- and nobody writes a value that
+ * way, so the count is as good a signal as the literal.
+ *
+ * @param {string} basename
+ * @returns {boolean}
+ */
+function assemblesFilename(basename) {
+  const expansions = basename.match(EXPANSION_FORM) ?? [];
+  if (expansions.length > 1) return true;
+  const literal = basename.replace(EXPANSION_FORM, "");
+  return literal.length > 0 && expansions.length > 0;
+}
+
+/**
+ * True when this segment hands what it reads to a command that opens files.
+ *
+ * `echo $F | xargs cat` opens whatever `$F` names, and neither segment shows it:
+ * the producer is `echo`, which only prints, and the consumer's operand list is
+ * empty because the filename arrives on stdin. Judged one segment at a time the
+ * pipeline says nothing, so the producer is judged against the command at the
+ * far end of the pipe instead.
+ *
+ * Every word after `xargs` is examined rather than just the command word,
+ * because the option values are not modelled here and mistaking `-n 1 cat` for
+ * a command named `1` would lose the `cat`. The cost of reading one word too
+ * many is a question about a pipeline that already holds an expansion nobody
+ * can resolve.
+ *
+ * @param {string} segment
+ * @returns {boolean}
+ */
+function feedsFileOperandConsumer(segment) {
+  const words = stripWrapper(shellWords(segment));
+  if (commandBasename(words[0] ?? "") !== "xargs") return false;
+  return words.slice(1).some((word) => FILE_OPERAND_COMMANDS.has(commandBasename(word)));
 }
 
 export function unresolvedPathExpansions(command) {
   const unresolved = [];
   const assignments = new Map();
-  const pending = splitShellSegments(command).map((segment) => ({ segment, depth: 0 }));
+  const pending = [];
+  // Segments are queued in pipeline order so each one still knows what consumes
+  // it; read on their own they lose the only thing that says what they name.
+  const enqueue = (text, depth) => {
+    const segments = splitShellSegments(text);
+    for (let index = 0; index < segments.length; index += 1) {
+      const piped = segments[index + 1] !== undefined && feedsFileOperandConsumer(segments[index + 1]);
+      pending.push({ segment: segments[index], depth, piped });
+    }
+  };
+  enqueue(command, 0);
 
   while (pending.length > 0) {
-    const { segment, depth } = pending.shift();
+    const { segment, depth, piped } = pending.shift();
     // The same single stream the exec policy and the path candidates read.
     const { words, text, tokens } = expandedSegment(segment);
     const expandedWords = words;
@@ -2178,10 +2271,18 @@ export function unresolvedPathExpansions(command) {
     for (const redirect of extractAttachedRedirectionPaths(segment)) {
       const expanded = expandKnownShellVariables(redirect.value, assignments);
       const basename = expanded.slice(expanded.lastIndexOf("/") + 1);
-      if (hasLiteralAroundExpansion(basename)) unresolved.push(redirect.value);
+      // A redirection target is a file every time, so an expansion anywhere in
+      // it is enough -- there is no reading under which `> $OUT` is a message
+      // rather than a path. Command substitutions count here even though they
+      // do not as operands: whatever the inner command is classified as, its
+      // output still becomes a filename that gets truncated.
+      if (assemblesFilename(basename) || /\$\{|\$\(|`|\$[A-Za-z_]/.test(expanded)) {
+        unresolved.push(redirect.value);
+      }
     }
-    // `echo ${a[@]}` prints a name, it does not open one.
-    if (!DATA_ONLY_COMMANDS.has(commandName) || depth > 0) {
+    // `echo ${a[@]}` prints a name, it does not open one -- unless something
+    // downstream opens what it printed.
+    if (!DATA_ONLY_COMMANDS.has(commandName) || depth > 0 || piped) {
       for (const token of executableArgumentTokens(tokens, words, commandName)) {
         if (!token.variableActive) continue;
         if (token.value.startsWith("-")) continue;
@@ -2196,14 +2297,21 @@ export function unresolvedPathExpansions(command) {
         if (word.startsWith("-")) continue;
         const expanded = expandKnownShellVariables(word, assignments);
         const basename = expanded.slice(expanded.lastIndexOf("/") + 1);
-        if (hasLiteralAroundExpansion(basename)) unresolved.push(token.value);
+        // A name assembled out of pieces is a filename wherever it appears. A
+        // word that is *nothing but* one parameter expansion is a filename only
+        // where the command says so -- and there it is refused too, because the
+        // whole point of this net is that a form nobody has modelled yet should
+        // cost a question rather than a miss. Widening it to every command would
+        // ask about `git commit -m $MSG`. Words printed into an `xargs cat` are
+        // operands of that `cat`, whatever printed them.
+        const opensFiles = FILE_OPERAND_COMMANDS.has(commandName) || piped;
+        const bare = opensFiles && holdsUnresolvedParameter(basename);
+        if (assemblesFilename(basename) || bare) unresolved.push(token.value);
       }
     }
     if (depth < MAX_NESTED_DEPTH) {
       for (const nestedCommand of extractNestedCommands(text, expandedWords)) {
-        for (const nestedSegment of splitShellSegments(nestedCommand)) {
-          pending.push({ segment: nestedSegment, depth: depth + 1 });
-        }
+        enqueue(nestedCommand, depth + 1);
       }
     }
   }
