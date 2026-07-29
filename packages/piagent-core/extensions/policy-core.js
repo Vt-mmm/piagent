@@ -1582,10 +1582,25 @@ function printfFormatLiterals(format) {
  *
  * @returns {{words: string[], candidates: string[], exact: boolean}}
  */
+/**
+ * Where the producer sits in a word list, allowing for a name the shell
+ * assembles. `{printf,} .env | xargs cat` runs `printf`, and matching the word
+ * as written found no producer at all -- so the output was never rendered and
+ * the file it names was never offered.
+ *
+ * @param {string[]} words
+ * @param {string} producerCommand
+ * @returns {number}
+ */
+function producerCommandIndex(words, producerCommand) {
+  return words.findIndex((word) => commandBasename(word) === producerCommand
+    || expandShellBraces(word).some((expanded) => commandBasename(expanded) === producerCommand));
+}
+
 function staticDataOutput(segment, assignments, producerCommand) {
   const empty = { words: [], candidates: [], exact: false };
   const tokens = shellDataTokens(segment);
-  const commandIndex = tokens.findIndex((token) => commandBasename(token.value) === producerCommand);
+  const commandIndex = producerCommandIndex(tokens.map((token) => token.value), producerCommand);
   if (commandIndex < 0) return empty;
   const args = tokens.slice(commandIndex + 1).map((token) => token.variableActive
     ? expandKnownShellVariables(token.value, assignments)
@@ -1664,9 +1679,13 @@ function xargsPipelineInputCandidates(command) {
     const consumerWords = shellWords(segments[index + 1]);
     const consumerCommand = commandBasename(stripWrapper(consumerWords)[0] ?? "");
     if (consumerCommand !== "xargs") continue;
-    const producerCommand = commandBasename(stripWrapper(producerWords)[0] ?? "");
+    // The producer's *name* is read from the expanded list, because the shell
+    // expands before it decides what to run. Its operands stay on the raw
+    // tokens, which are the only thing that still knows where the quotes were.
+    const { words: producerExpanded } = expandedSegment(segments[index]);
+    const producerCommand = commandBasename(stripWrapper(producerExpanded)[0] ?? "");
     if (!DATA_ONLY_COMMANDS.has(producerCommand)) continue;
-    const commandIndex = producerWords.findIndex((word) => commandBasename(word) === producerCommand);
+    const commandIndex = producerCommandIndex(producerWords, producerCommand);
     for (const token of producerTokens.slice(commandIndex + 1)) {
       const word = token.variableActive ? expandKnownShellVariables(token.value, assignments) : token.value;
       if (word.startsWith("-") || word === "%s" || word === "%s\\n") continue;
@@ -1737,6 +1756,10 @@ function extractAttachedRedirectionPaths(segment) {
     let target = "";
     let targetQuote;
     let targetEscaped = false;
+    // Whether the shell would brace-expand this target. `> {.env,}` writes
+    // `.env`; `> "{.env,}"` writes a file with that literal name, and the
+    // quotes are gone by the time the target is a string.
+    let targetBrace = false;
     // Whitespace and `|` inside `$( )` or backticks belong to the target word.
     // Ending at the first space split `> .en$(echo v)` into a target of
     // `.en$(echo`, a name that matches nothing and hides the one being written.
@@ -1774,12 +1797,15 @@ function extractAttachedRedirectionPaths(segment) {
         if (targetChar === "$" && (segment[cursor + 1] === "(" || segment[cursor + 1] === "{")) targetSubstitution += 1;
         else if ((targetChar === ")" || targetChar === "}") && targetSubstitution > 0) targetSubstitution -= 1;
         else if (targetChar === "`") targetBackticks = !targetBackticks;
+        if (targetChar === "{" && segment[cursor - 1] !== "$" && targetSubstitution === 0 && !targetBackticks) {
+          targetBrace = true;
+        }
       }
       const insideSubstitution = targetSubstitution > 0 || targetBackticks;
       if (!targetQuote && !insideSubstitution && (/\s/.test(targetChar) || /[;&|<>]/.test(targetChar))) break;
       target += targetChar;
     }
-    if (target) paths.push(target);
+    if (target) paths.push({ value: target, braceActive: targetBrace });
     index = Math.max(index, cursor - 1);
   }
 
@@ -1789,14 +1815,18 @@ function extractAttachedRedirectionPaths(segment) {
 export function extractShellPathCandidates(command) {
   const candidates = [...xargsPipelineInputCandidates(command)];
   const assignments = new Map();
-  const addCandidate = (candidate, variableActive = true) => {
+  // `braceActive` is the tokenizer's verdict on whether the shell would expand
+  // this word's braces. Expanding unconditionally was the conservative choice
+  // and it refused work nobody asked about: `cat "{.env,}"` opens a file with
+  // that literal name, and offering `.env` for it blocked the command. Every
+  // caller that reads a token has the answer, so it is passed rather than
+  // guessed; the word as written stays a candidate either way.
+  const addCandidate = (candidate, variableActive = true, braceActive = false) => {
     if (typeof candidate !== "string" || !candidate) return;
     const expanded = variableActive ? expandKnownShellVariables(candidate, assignments) : candidate;
-    // The word as written stays a candidate alongside its expansions: quoting
-    // suspends brace expansion and that is not knowable from every call site
-    // here, so `"{a,b}"` keeps naming the file it literally names.
-    const expansions = expandShellBraces(expanded);
-    candidates.push(expanded, ...expansions.filter((word) => word !== expanded));
+    candidates.push(expanded);
+    if (!braceActive) return;
+    candidates.push(...expandShellBraces(expanded).filter((word) => word !== expanded));
   };
   const pending = splitShellSegments(command).map((segment) => ({ segment, depth: 0 }));
   while (pending.length > 0) {
@@ -1810,7 +1840,9 @@ export function extractShellPathCandidates(command) {
     const { words: expandedWords, text } = expandedSegment(segment);
     rememberLeadingShellAssignments(words, assignments);
     const commandName = commandBasename(stripWrapper(expandedWords)[0] ?? "");
-    for (const redirectPath of extractAttachedRedirectionPaths(segment)) addCandidate(redirectPath);
+    for (const redirect of extractAttachedRedirectionPaths(segment)) {
+      addCandidate(redirect.value, true, redirect.braceActive);
+    }
 
     const inlineFlags = INLINE_CODE_FLAGS.get(commandName);
     if (inlineFlags) {
@@ -1845,20 +1877,20 @@ export function extractShellPathCandidates(command) {
         if (word === "<<" || word === "<<<") {
           if (commandName === "xargs" && word === "<<<" && argumentTokens[index + 1]) {
             const input = argumentTokens[index + 1];
-            addCandidate(input.value, input.variableActive);
+            addCandidate(input.value, input.variableActive, input.braceActive);
           }
           index += 1;
           continue;
         }
         if (PATH_REDIRECT_OPERATORS.has(word) && argumentTokens[index + 1]) {
           const target = argumentTokens[index + 1];
-          addCandidate(target.value, target.variableActive);
+          addCandidate(target.value, target.variableActive, target.braceActive);
           index += 1;
           continue;
         }
         if (/^(?:\d*)>>?/.test(word) || /^&>>?/.test(word)) {
           const pathPart = word.replace(/^(?:\d*|&)>>?/, "");
-          if (pathPart) addCandidate(pathPart, argumentTokens[index].variableActive);
+          if (pathPart) addCandidate(pathPart, argumentTokens[index].variableActive, argumentTokens[index].braceActive);
           continue;
         }
         const optionEquals = word.indexOf("=");
@@ -1873,7 +1905,7 @@ export function extractShellPathCandidates(command) {
           ? word.slice(2)
           : undefined;
         if (attachedGrepFile) {
-          addCandidate(attachedGrepFile, argumentTokens[index].variableActive);
+          addCandidate(attachedGrepFile, argumentTokens[index].variableActive, argumentTokens[index].braceActive);
           searchPatternPending = false;
           continue;
         }
@@ -1883,20 +1915,20 @@ export function extractShellPathCandidates(command) {
           continue;
         }
         if (attachedRgOption?.option === "-f") {
-          addCandidate(attachedRgOption.value, argumentTokens[index].variableActive);
+          addCandidate(attachedRgOption.value, argumentTokens[index].variableActive, argumentTokens[index].braceActive);
           searchPatternPending = false;
           continue;
         }
         if (attachedRgOption?.option === "-g") {
-          addCandidate(attachedRgOption.value, argumentTokens[index].variableActive);
+          addCandidate(attachedRgOption.value, argumentTokens[index].variableActive, argumentTokens[index].braceActive);
           continue;
         }
         if (SEARCH_COMMANDS.has(commandName) && (SEARCH_FILE_OPTIONS.has(optionName) || SEARCH_GLOB_OPTIONS.has(optionName))) {
           if (inlineOptionValue !== undefined) {
-            addCandidate(inlineOptionValue, argumentTokens[index].variableActive);
+            addCandidate(inlineOptionValue, argumentTokens[index].variableActive, argumentTokens[index].braceActive);
           } else {
             const target = argumentTokens[index + 1];
-            if (target) addCandidate(target.value, target.variableActive);
+            if (target) addCandidate(target.value, target.variableActive, target.braceActive);
             index += 1;
           }
           if (SEARCH_FILE_OPTIONS.has(optionName) && (optionName === "-f" || optionName === "--file")) searchPatternPending = false;
@@ -1904,7 +1936,7 @@ export function extractShellPathCandidates(command) {
         }
         const optionPath = pathCandidateFromOption(word);
         if (optionPath) {
-          addCandidate(optionPath, argumentTokens[index].variableActive);
+          addCandidate(optionPath, argumentTokens[index].variableActive, argumentTokens[index].braceActive);
           continue;
         }
         if (word.startsWith("-")) continue;
@@ -1914,10 +1946,10 @@ export function extractShellPathCandidates(command) {
         }
         const operandPath = operandValuePath(word);
         if (operandPath) {
-          addCandidate(operandPath, argumentTokens[index].variableActive);
+          addCandidate(operandPath, argumentTokens[index].variableActive, argumentTokens[index].braceActive);
           continue;
         }
-        if (isFilesystemArgument(word)) addCandidate(word, argumentTokens[index].variableActive);
+        if (isFilesystemArgument(word)) addCandidate(word, argumentTokens[index].variableActive, argumentTokens[index].braceActive);
       }
     }
     if (depth < MAX_NESTED_DEPTH) {
@@ -1928,8 +1960,8 @@ export function extractShellPathCandidates(command) {
           // tokenized, so the escape is read back off the raw text -- the same
           // reading the `xargs` producer already gets.
           const nestedWords = shellWords(nestedSegment);
-          const nestedName = commandBasename(stripWrapper(nestedWords)[0] ?? "");
-          const nestedIndex = nestedWords.findIndex((word) => commandBasename(word) === nestedName);
+          const nestedName = commandBasename(stripWrapper(expandedSegment(nestedSegment).words)[0] ?? "");
+          const nestedIndex = producerCommandIndex(nestedWords, nestedName);
           if (nestedName === "printf" || (nestedName === "echo" && echoEscapeMode(nestedWords, nestedIndex))) {
             for (const literal of escapedLiteralCandidates(nestedSegment)) addCandidate(literal, false);
           }
@@ -1958,8 +1990,8 @@ export function extractShellGlobCandidates(command) {
     // `printf` being a data-only command says nothing about that. Read through
     // the same scanner the path candidates use, so the operator prefix is off
     // and `>|`, `>&` and ANSI-C quoting are already handled.
-    for (const redirectPath of extractAttachedRedirectionPaths(segment)) {
-      const expanded = expandKnownShellVariables(redirectPath, assignments);
+    for (const redirect of extractAttachedRedirectionPaths(segment)) {
+      const expanded = expandKnownShellVariables(redirect.value, assignments);
       if (/[*?{\[]/.test(expanded)) candidates.push(expanded);
     }
 
@@ -2099,10 +2131,10 @@ export function unresolvedPathExpansions(command) {
     const commandName = commandBasename(stripWrapper(expandedWords)[0] ?? "");
     // A redirection target is a file the shell creates whatever the command is,
     // so it is read before the data-only skip below.
-    for (const redirectPath of extractAttachedRedirectionPaths(segment)) {
-      const expanded = expandKnownShellVariables(redirectPath, assignments);
+    for (const redirect of extractAttachedRedirectionPaths(segment)) {
+      const expanded = expandKnownShellVariables(redirect.value, assignments);
       const basename = expanded.slice(expanded.lastIndexOf("/") + 1);
-      if (hasLiteralAroundExpansion(basename)) unresolved.push(redirectPath);
+      if (hasLiteralAroundExpansion(basename)) unresolved.push(redirect.value);
     }
     // `echo ${a[@]}` prints a name, it does not open one.
     if (!DATA_ONLY_COMMANDS.has(commandName) || depth > 0) {

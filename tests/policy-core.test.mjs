@@ -877,15 +877,39 @@ describe("brace expansion does not change the answer", () => {
     "cat notes{1,2}.txt",
     "cat .e{n..n}v",
     "cat auth.jso{n..n}",
-    "printf .e{n..n}v | xargs cat"
+    "printf .e{n..n}v | xargs cat",
+    // The producer's own name can be assembled by the shell too, and the
+    // `xargs` branch matched it as written -- so it found no producer, never
+    // rendered the output, and never offered the file it names.
+    "{printf,} .env | xargs cat",
+    "{printf,} .e%.1sv nv | xargs cat",
+    "{printf,} .e{n..n}v | xargs cat",
+    "cat $({printf,} .e%.1sv nv)",
+    // The escape decoding is gated on the producer's name as well, so a
+    // brace-assembled one skipped it and the decoded name went unread.
+    "cat $({echo,} -e '.en\\x76')",
+    "cat $({printf,} %b '.en\\x76')",
+    "{echo,} -e '.en\\x76' | xargs cat"
   ];
 
   // The other direction, which no expansion comparison can state: quoting
   // suspends brace expansion, so the producer prints the braces and the file it
   // names is called `{.env,}`. Expanding it anyway would refuse a command that
   // never opens a protected path.
-  it("leaves a quoted brace in an xargs producer alone", () => {
-    for (const command of ["printf \"{.env,}\" | xargs cat", "printf '{.env,}' | xargs cat"]) {
+  it("leaves a quoted brace alone wherever it appears", () => {
+    for (const command of [
+      "printf \"{.env,}\" | xargs cat",
+      "printf '{.env,}' | xargs cat",
+      // An operand and a redirection target: both name a file called `{.env,}`,
+      // and expanding them anyway refused a command that opens nothing
+      // protected. The quotes are gone by the time either is a string, so the
+      // tokenizer's verdict is carried rather than guessed at.
+      "cat \"{.env,}\"",
+      "cat '{.env,}'",
+      "printf data > \"{.env,}\"",
+      "printf data > '{.env,}'",
+      "cat \"{.env,}\" '{auth.json,}'"
+    ]) {
       assert.equal(findProtectedPathInCommand(command, policy.shellProtectedPaths), undefined, command);
     }
   });
