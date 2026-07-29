@@ -433,7 +433,20 @@ describe("exec policy semantic shell safety", () => {
     // does resolve stopped resolving and a refusal became a question.
     "rm -rf $(printf /) '$(a;b)'",
     "rm -rf '$(a;b)' $(printf /)",
-    "find $(printf /) -delete '$(a;b)'"
+    "find $(printf /) -delete '$(a;b)'",
+    // `--` is the end of printf's options, so the format is the argument after
+    // it. Reading `--` as the format produced the value `--`, which is not a
+    // catastrophic target, while the shell printed one that is.
+    "rm -rf $(printf -- /)",
+    "rm -rf `printf -- /`",
+    "find $(printf -- /) -delete",
+    // Brace expansion runs before everything else, and an empty alternative
+    // makes a one-word expansion out of a form that does not look like one.
+    "rm -rf {/,}",
+    "rm -rf {/,/tmp}",
+    "rm -rf /{,}",
+    "find {/,} -delete",
+    "rm -rf build {/,}"
   ];
 
   for (const command of forbidden) {
@@ -467,7 +480,24 @@ describe("exec policy semantic shell safety", () => {
     "rm -rf build '$(a;b)'",
     // The renderer reproduces a plain `%s`, and what it resolves to here is not
     // a catastrophic target.
-    "rm -rf $(printf %s build)"
+    "rm -rf $(printf %s build)",
+    // Quoting suspends brace expansion, so this removes one awkwardly named
+    // file. The braces are gone by the time a word is tokenized, so only the
+    // raw text can tell these apart.
+    "rm -rf \"{/,}\"",
+    "rm -rf '{/,}'",
+    // Ordinary brace use, which is most of it.
+    "rm -rf build/{a,b}",
+    "rm -rf {dist,coverage}",
+    "rm -rf node_modules/{a,b}/cache",
+    // A group with no top-level comma is literal to the shell too.
+    "rm -rf {/}",
+    // Not a destructive command.
+    "echo {/,}",
+    // An expansion this cannot resolve, but not one that could be root: the
+    // known part of the path says it is somewhere below a directory.
+    "rm -rf $TMPDIR/build",
+    "rm -rf ${BUILD_DIR}/dist"
   ];
 
   for (const command of allowed) {
@@ -526,7 +556,19 @@ describe("exec policy semantic shell safety", () => {
     // before, and bash reuses a format while arguments remain, which this does
     // not -- so neither is reproduced.
     "rm -rf $(printf %%s a)",
-    "rm -rf $(printf %s / /)"
+    "rm -rf $(printf %s / /)",
+    // A target that is nothing but an expansion can be any value, root
+    // included. `${HOME:0:1}` is `/`, and substring expansion is not modelled
+    // here -- naming one more operator each time one is reported is the game
+    // this file refuses to play, so the shape decides instead of the operator.
+    "rm -rf ${HOME:0:1}",
+    "rm -rf ${PWD:0:1}",
+    "rm -rf ${BUILD_DIR}",
+    "rm -rf $BUILD_DIR",
+    "find ${HOME:0:1} -delete",
+    // Every other printf option is one this does not model: `-v NAME` assigns
+    // the result and prints nothing at all.
+    "rm -rf $(printf -v x /)"
   ];
 
   for (const command of confirmed) {
@@ -611,6 +653,70 @@ describe("printf rendering against a real shell", () => {
       }
       // Printing a name is not opening it, whatever the name is.
       assert.equal(findProtectedPathInCommand(producer, policy.shellProtectedPaths), undefined, producer);
+    });
+  }
+});
+
+// The rounds before this one were each a single expansion form, found by hand
+// and fixed one at a time. `printf` was only ever the form that got reported --
+// the shell has a dozen ways to assemble a word, and reading one operand shape
+// per round is how the same class came back five times.
+//
+// So the corpus here is expansion *forms* rather than printf formats, and the
+// question asked of each is the general one: build the word list bash actually
+// builds, and require the policy to agree about what that word list contains.
+// Only the expansion is ever run -- never the command it would feed.
+describe("shell expansions against a real shell", () => {
+  const probe = spawnSync("bash", ["-c", "printf ok"], { encoding: "utf8" });
+  const available = probe.status === 0 && probe.stdout === "ok";
+
+  const operands = [
+    // command substitution, including the option terminator and the backtick form
+    "$(printf /)", "$(printf -- /)", "`printf -- /`", "$(printf '%s' /)",
+    "$(echo /)", "$(echo -n /)", "$(printf -- '%s' .env)", "$(printf .env)",
+    // escapes, which the tokenizer strips before the body can be read
+    "$(echo -e '.en\\x76')", "$(printf %b '.en\\x76')", "$(printf '\\x2f')",
+    "$'\\x2f'", "$'.env'", ".en\\v",
+    // brace expansion, which runs before every other expansion
+    "{/,}", "{/,/tmp}", "/{,}", "{.env,}", "{/}", "{a,b}", "file{,.bak}",
+    // parameter expansion, modelled and unmodelled
+    "${HOME:0:1}", "${PWD:0:1}", "${X:-/}", "${X:-.env}", "${X:+/}",
+    // and the plain spellings, which must keep working
+    "/", ".env", "./.env", "build"
+  ];
+
+  // Only the operand is expanded, so nothing destructive is ever executed.
+  const expand = (operand) => {
+    const result = spawnSync("bash", ["-c", `for a in ${operand}; do printf '[%s]' "$a"; done`], {
+      encoding: "utf8",
+      timeout: 5000
+    });
+    if (result.status !== 0) return undefined;
+    return [...result.stdout.matchAll(/\[([^\]]*)\]/g)].map((match) => match[1]);
+  };
+
+  // `/.` and `/..` are left out: rm refuses a `.` or `..` basename, so a word
+  // ending there is not the removal this is looking for.
+  const roots = new Set(["/", "//", "~"]);
+
+  for (const operand of operands) {
+    it(`agrees with bash about the words in ${operand}`, { skip: !available }, () => {
+      const words = expand(operand);
+      assert.ok(words, `bash rejected ${operand}`);
+
+      if (words.some((word) => roots.has(word))) {
+        const decision = evaluateExecPolicyCore(`rm -rf ${operand}`, { policy, mode: "enforce" }).decision;
+        assert.notEqual(decision, "allow", `bash builds ${JSON.stringify(words)} for ${operand}`);
+      }
+
+      if (words.some((word) => word && matchesProtectedPath(word, policy.shellProtectedPaths))) {
+        for (const command of [`cat ${operand}`, `printf data > ${operand}`]) {
+          assert.ok(
+            findProtectedPathInCommand(command, policy.shellProtectedPaths),
+            `bash builds ${JSON.stringify(words)} for ${command}`
+          );
+        }
+      }
     });
   }
 });

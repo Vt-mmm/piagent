@@ -1140,7 +1140,14 @@ describe("piagent guard integration", () => {
       "rm -rf $(echo /)",
       "rm -rf `printf /`",
       "find $(printf /) -delete",
-      "rm -rf $(echo ~)"
+      "rm -rf $(echo ~)",
+      // `--` ends printf's options, so the format is what follows it.
+      "rm -rf $(printf -- /)",
+      // Brace expansion, which the shell performs before all the rest. The
+      // empty alternative makes one word out of a form that does not look like
+      // a single-word expansion.
+      "rm -rf {/,}",
+      "find {/,} -delete"
     ]) {
       const decision = await callToolCall(toolCall, ctx, "bash", { command });
       assert.equal(decision?.block, true, command);
@@ -1240,13 +1247,24 @@ describe("piagent guard integration", () => {
     const leading = await callToolCall(toolCall, ctx, "bash", { command: "> .env cat" });
     const operandValue = await callToolCall(toolCall, ctx, "bash", { command: "dd if=.env of=/tmp/x" });
     const redirectGlob = await callToolCall(toolCall, ctx, "bash", { command: "printf x > .en*" });
+    // Brace expansion names the file, and an escape inside a substitution spells
+    // it. Both are performed by the shell and neither survives tokenizing, so
+    // each had to be read back off the raw text.
+    const braceRead = await callToolCall(toolCall, ctx, "bash", { command: "cat {.env,}" });
+    const braceWrite = await callToolCall(toolCall, ctx, "bash", { command: "printf x > {.env,}" });
+    const escapedEcho = await callToolCall(toolCall, ctx, "bash", { command: "cat $(echo -e '.en\\x76')" });
+    const escapedPrintf = await callToolCall(toolCall, ctx, "bash", { command: "cat $(printf %b '.en\\x76')" });
 
     for (const [label, decision] of [
       ["clobber", clobber],
       ["openForWrite", openForWrite],
       ["leading", leading],
       ["operandValue", operandValue],
-      ["redirectGlob", redirectGlob]
+      ["redirectGlob", redirectGlob],
+      ["braceRead", braceRead],
+      ["braceWrite", braceWrite],
+      ["escapedEcho", escapedEcho],
+      ["escapedPrintf", escapedPrintf]
     ]) {
       assert.equal(decision.block, true, label);
       assert.match(decision.reason, /protected path/, label);

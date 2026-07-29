@@ -230,13 +230,18 @@ function shellWordTokens(segment) {
   // so the filename being assembled was never a single token to reason about.
   let substitutionDepth = 0;
   let inBackticks = false;
+  // Set only for a brace the shell would expand. Quoting suspends the expansion
+  // (`"{a,b}"` is one literal word), and `${NAME}` is a parameter reference
+  // rather than a list, so neither marks the token.
+  let braceActive = false;
   const flush = () => {
     if (!current) return;
-    tokens.push({ value: current, activeGlob, unquotedVariable, variableActive });
+    tokens.push({ value: current, activeGlob, unquotedVariable, variableActive, braceActive });
     current = "";
     activeGlob = false;
     unquotedVariable = false;
     variableActive = false;
+    braceActive = false;
   };
   const chars = [...segment.trim()];
   for (let index = 0; index < chars.length; index += 1) {
@@ -280,6 +285,9 @@ function shellWordTokens(segment) {
       continue;
     }
     if (!quote && /[*?{\[]/.test(char)) activeGlob = true;
+    if (!quote && char === "{" && chars[index - 1] !== "$" && substitutionDepth === 0 && !inBackticks) {
+      braceActive = true;
+    }
     if ((char === "$" || char === "`") && quote !== "'") {
       variableActive = true;
       if (!quote) unquotedVariable = true;
@@ -292,6 +300,88 @@ function shellWordTokens(segment) {
 
 export function shellWords(segment) {
   return shellWordTokens(segment).map((token) => token.value);
+}
+
+/** The alternatives of one brace group, split on the commas at its own level. */
+function splitBraceAlternatives(body) {
+  const parts = [];
+  let current = "";
+  let level = 0;
+  for (let index = 0; index < body.length; index += 1) {
+    const char = body[index];
+    if (char === "\\") {
+      current += char + (body[index + 1] ?? "");
+      index += 1;
+      continue;
+    }
+    if (char === "{") level += 1;
+    else if (char === "}") level -= 1;
+    else if (char === "," && level === 0) {
+      parts.push(current);
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+  parts.push(current);
+  return parts;
+}
+
+const MAX_BRACE_RESULTS = 64;
+
+/**
+ * Brace expansion, which the shell performs before every other expansion.
+ *
+ * Nothing here modelled it, so a word was read as the single literal the author
+ * typed. `rm -rf {/,}` is `rm -rf /` by the time it runs, and `cat {.env,}`
+ * opens `.env`; both read as ordinary words holding no root and no protected
+ * path. The trailing empty alternative is the whole trick — it makes a one-word
+ * expansion out of a form that does not look like one.
+ *
+ * A group without a top-level comma is left alone, because the shell leaves it
+ * alone: `{/}` and `{a}` are literal. Numeric and character ranges (`{1..3}`)
+ * are not expanded either -- they enumerate counters rather than spell names,
+ * and a word this leaves whole is still offered as its own candidate.
+ *
+ * @param {string} word
+ * @returns {string[]} every word the shell would produce, the input itself when
+ *   there is no expansion to do
+ */
+function expandShellBraces(word, depth = 0) {
+  if (depth >= 6 || !word.includes("{")) return [word];
+  let open = -1;
+  let level = 0;
+  for (let index = 0; index < word.length; index += 1) {
+    const char = word[index];
+    if (char === "\\") {
+      index += 1;
+      continue;
+    }
+    if (char === "{") {
+      if (level === 0) open = index;
+      level += 1;
+      continue;
+    }
+    if (char !== "}" || level === 0) continue;
+    level -= 1;
+    if (level > 0) continue;
+    const alternatives = splitBraceAlternatives(word.slice(open + 1, index));
+    if (alternatives.length < 2) {
+      open = -1;
+      continue;
+    }
+    const prefix = word.slice(0, open);
+    const suffix = word.slice(index + 1);
+    const results = [];
+    for (const alternative of alternatives) {
+      for (const expanded of expandShellBraces(`${prefix}${alternative}${suffix}`, depth + 1)) {
+        if (results.length >= MAX_BRACE_RESULTS) return results;
+        results.push(expanded);
+      }
+    }
+    return results;
+  }
+  return [word];
 }
 
 export function arrayStartsWith(items, prefix) {
@@ -575,13 +665,39 @@ function resolveSubstitutionTarget(word, assignments, evaluable) {
   return { value, resolved };
 }
 
+const WHOLE_WORD_EXPANSION = /^\$\{[^{}]*\}$|^\$[A-Za-z_][A-Za-z0-9_]*$/;
+
+/**
+ * True when the entire target is one parameter expansion that came out the
+ * other side unresolved.
+ *
+ * `${HOME:0:1}` is `/`, and substring expansion is not modelled here -- the
+ * operator group in `expandKnownShellVariables` is deliberately narrow, so the
+ * word stayed exactly as written and matched none of the catastrophic targets.
+ * Naming one more operator each time one is reported is the losing game this
+ * file already refuses to play, so the shape is what decides: a target that is
+ * nothing but an expansion can be *any* value, root included, and a recursive
+ * removal of an unknown value is worth a question.
+ *
+ * Only the whole word counts. `$TMPDIR/build` cannot become root however
+ * `TMPDIR` resolves, and refusing it would stop ordinary work for nothing.
+ *
+ * @param {string} word
+ * @param {Map<string, string>} assignments
+ * @returns {boolean}
+ */
+function isUnresolvedWholeWordExpansion(word, assignments) {
+  if (!WHOLE_WORD_EXPANSION.test(word)) return false;
+  return WHOLE_WORD_EXPANSION.test(expandKnownShellVariables(word, assignments));
+}
+
 /** True when the word carries a substitution this process cannot evaluate. */
 function hasUnresolvedSubstitution(word, assignments, evaluable) {
   if (!/\$\(|`/.test(word)) return false;
   return !resolveSubstitutionTarget(word, assignments, evaluable).resolved;
 }
 
-function rmFinding(words, assignments, evaluable, substituting) {
+function rmFinding(words, assignments, evaluable, substituting, expandTarget = (word) => [word]) {
   const command = commandBasename(words[0] ?? "");
   const dynamicCommand = command.startsWith("$");
   if (command !== "rm" && !dynamicCommand) return undefined;
@@ -607,13 +723,15 @@ function rmFinding(words, assignments, evaluable, substituting) {
     targets.push(word);
   }
 
-  const resolvedTargets = targets.map((target) => resolveSubstitutionTarget(target, assignments, evaluable));
+  const expandedTargets = targets.flatMap(expandTarget);
+  const resolvedTargets = expandedTargets.map((target) => resolveSubstitutionTarget(target, assignments, evaluable));
   if (resolvedTargets.some((target) => isRootOrHomeTarget(target.value)) && (recursive || force || dynamicCommand)) {
     return { action: "forbid", reason: "Refusing recursive/forced removal of root or home target." };
   }
-  const opaque = substituting
-    ? targets.filter((target) => hasUnresolvedSubstitution(target, assignments, evaluable))
-    : [];
+  const opaque = [...new Set([
+    ...(substituting ? expandedTargets.filter((target) => hasUnresolvedSubstitution(target, assignments, evaluable)) : []),
+    ...expandedTargets.filter((target) => isUnresolvedWholeWordExpansion(target, assignments))
+  ])];
   if (opaque.length > 0 && (recursive || force)) {
     return {
       action: "prompt",
@@ -625,15 +743,16 @@ function rmFinding(words, assignments, evaluable, substituting) {
   return undefined;
 }
 
-function findDeleteFinding(words, assignments, evaluable, substituting) {
+function findDeleteFinding(words, assignments, evaluable, substituting, expandTarget = (word) => [word]) {
   if (commandBasename(words[0] ?? "") !== "find") return undefined;
   if (!words.includes("-delete")) return undefined;
   const firstTarget = words.slice(1).find((word) => !word.startsWith("-"));
   if (!firstTarget) return undefined;
-  if (isRootOrHomeTarget(resolveSubstitutionTarget(firstTarget, assignments, evaluable).value)) {
+  if (expandTarget(firstTarget).some((target) => isRootOrHomeTarget(resolveSubstitutionTarget(target, assignments, evaluable).value))) {
     return { action: "forbid", reason: "Refusing find -delete against root or home target." };
   }
-  if (substituting && hasUnresolvedSubstitution(firstTarget, assignments, evaluable)) {
+  if ((substituting && hasUnresolvedSubstitution(firstTarget, assignments, evaluable))
+    || isUnresolvedWholeWordExpansion(firstTarget, assignments)) {
     return {
       action: "prompt",
       reason: `find -delete starts from a path this policy cannot resolve: ${firstTarget}. `
@@ -665,9 +784,15 @@ function semanticCommandFindings(words, assignments, segment) {
   // text still knows.
   const substituting = segmentHasUnquotedSubstitution(segment);
   const evaluable = substituting && substitutionsAreLiteral(segment);
+  // Quoting suspends brace expansion, and that too is only in the raw text:
+  // `rm -rf {/,}` removes root, `rm -rf "{/,}"` removes a strangely named file.
+  const braceWords = new Set(shellWordTokens(segment)
+    .filter((token) => token.braceActive)
+    .map((token) => token.value));
+  const expandTarget = (word) => (braceWords.has(word) ? expandShellBraces(word) : [word]);
   return [
-    rmFinding(normalizedWords, assignments, evaluable, substituting),
-    findDeleteFinding(normalizedWords, assignments, evaluable, substituting),
+    rmFinding(normalizedWords, assignments, evaluable, substituting, expandTarget),
+    findDeleteFinding(normalizedWords, assignments, evaluable, substituting, expandTarget),
     ddFinding(normalizedWords),
     xargsFinding(normalizedWords)
   ].filter(Boolean);
@@ -1308,9 +1433,18 @@ function staticDataOutput(segment, assignments, producerCommand) {
     exact = !escapes;
     if (escapes) output = decodeShellDataEscapes(output);
   } else if (producerCommand === "printf" && args.length > 0) {
-    output = renderStaticPrintf(args[0], args.slice(1));
-    exact = printfFormatIsExact(args[0], args.slice(1));
-    extra.push(...printfFormatLiterals(args[0]), ...args.slice(1));
+    // `printf -- /` prints `/`: the builtin takes `--` as the end of its
+    // options, so the format is the argument after it. Reading `--` as the
+    // format produced the value `--`, which is no root and no protected path,
+    // while the shell printed one.
+    const printfArgs = args[0] === "--" ? args.slice(1) : args;
+    const format = printfArgs[0] ?? "";
+    output = renderStaticPrintf(format, printfArgs.slice(1));
+    // Any other option is one this does not model -- `-v NAME` assigns the
+    // result to a variable and prints nothing at all -- so the rendering is not
+    // claimed to be what bash would print.
+    exact = !format.startsWith("-") && printfFormatIsExact(format, printfArgs.slice(1));
+    extra.push(...printfFormatLiterals(format), ...printfArgs.slice(1));
   }
   const words = output.split(/\s+/).filter(Boolean);
   const candidates = [...words, ...extra.flatMap((item) => item.split(/\s+/)).filter(Boolean)];
@@ -1478,7 +1612,12 @@ export function extractShellPathCandidates(command) {
   const assignments = new Map();
   const addCandidate = (candidate, variableActive = true) => {
     if (typeof candidate !== "string" || !candidate) return;
-    candidates.push(variableActive ? expandKnownShellVariables(candidate, assignments) : candidate);
+    const expanded = variableActive ? expandKnownShellVariables(candidate, assignments) : candidate;
+    // The word as written stays a candidate alongside its expansions: quoting
+    // suspends brace expansion and that is not knowable from every call site
+    // here, so `"{a,b}"` keeps naming the file it literally names.
+    const expansions = expandShellBraces(expanded);
+    candidates.push(expanded, ...expansions.filter((word) => word !== expanded));
   };
   const pending = splitShellSegments(command).map((segment) => ({ segment, depth: 0 }));
   while (pending.length > 0) {
@@ -1592,6 +1731,16 @@ export function extractShellPathCandidates(command) {
     if (depth < MAX_NESTED_DEPTH) {
       for (const nestedCommand of extractNestedCommands(segment, words)) {
         for (const nestedSegment of splitShellSegments(nestedCommand)) {
+          // `$(echo -e '.en\x76')` prints `.env`, and `printf` decodes its
+          // format the same way. The backslash is gone by the time the body is
+          // tokenized, so the escape is read back off the raw text -- the same
+          // reading the `xargs` producer already gets.
+          const nestedWords = shellWords(nestedSegment);
+          const nestedName = commandBasename(stripWrapper(nestedWords)[0] ?? "");
+          const nestedIndex = nestedWords.findIndex((word) => commandBasename(word) === nestedName);
+          if (nestedName === "printf" || (nestedName === "echo" && echoEscapeMode(nestedWords, nestedIndex))) {
+            for (const literal of escapedLiteralCandidates(nestedSegment)) addCandidate(literal, false);
+          }
           pending.push({ segment: nestedSegment, depth: depth + 1 });
         }
       }
