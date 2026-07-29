@@ -2175,7 +2175,14 @@ describe("piagent guard integration", () => {
       "grep '.e??' README.md",
       "rg Makefile README.md",
       "F=.env; cat '$F'",
-      "grep --regexp=.env README.md"
+      "grep --regexp=.env README.md",
+      // A redirection whose target expands to two words is an ambiguous
+      // redirect: bash opens nothing, so blocking these blocked a command that
+      // writes no file at all. The glob reader was the last one still reading
+      // the target as typed, and it answered on the pattern it found inside.
+      "printf x > \"{.env,}\"{,}",
+      "printf x > \"{.env*,}\"{,}",
+      "printf x > \\{.env,x\\}{,}"
     ]) {
       const result = await callToolCall(toolCall, ctx, "bash", { command });
       assert.notEqual(result.block, true, `${command} should remain allowed`);

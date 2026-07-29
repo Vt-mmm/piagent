@@ -1064,6 +1064,52 @@ describe("brace expansion does not change the answer", () => {
     }
   });
 
+  it("opens no file for a redirection that names more than one", () => {
+    // Bash writes only where the target expands to exactly one word. Each of
+    // these expands to two and is answered with `ambiguous redirect`, so no
+    // file is touched and there is nothing to report -- the literal reader had
+    // stopped offering `.env` for them, but the glob reader was still reading
+    // the target as typed and blocking on the pattern inside it.
+    for (const command of [
+      "printf x > \"{.env,}\"{,}",
+      "printf x > \"{.env*,}\"{,}",
+      "printf x > \\{.env,x\\}{,}",
+      "printf x > \".e\"{,}nv",
+      // Two alternatives that are simply two different names. Neither is
+      // opened, protected or not.
+      "printf x > {.env,other}",
+      "printf x > {.env,x}"
+    ]) {
+      assert.equal(findProtectedPathInCommand(command, policy.shellProtectedPaths), undefined, command);
+      assert.deepEqual(extractShellGlobCandidates(command), [], command);
+      assert.equal(evaluateExecPolicyCore(command, { policy, mode: "enforce" }).decision, "allow", command);
+    }
+  });
+
+  it("still opens the file where one word is left", () => {
+    // The other side of the same rule, and the reason it cannot simply refuse
+    // every brace in a redirection: an empty alternative is dropped rather than
+    // counted, so `> {.env,}` is one word and really does truncate `.env`.
+    assert.ok(findProtectedPathInCommand("printf x > {.env,}", policy.shellProtectedPaths));
+    // A glob is one word until the filesystem answers, so it stays a candidate.
+    assert.deepEqual(extractShellGlobCandidates("printf x > .env*"), [".env*"]);
+    // Quoted, the same characters name one file. Reading the target as a
+    // pattern regardless matched `.env` and blocked a command that creates a
+    // file called `.env*` and touches nothing else.
+    assert.deepEqual(extractShellGlobCandidates("printf x > \".env*\""), []);
+    assert.equal(
+      evaluateExecPolicyCore("printf x > \".env*\"", { policy, mode: "enforce" }).decision,
+      "allow"
+    );
+    // And a word that can still vanish makes the count unknowable: `$X` unset
+    // leaves `.env` alone in the list, so both alternatives stay candidates.
+    assert.ok(findProtectedPathInCommand("printf x > {$X,.env}", policy.shellProtectedPaths));
+    // A pattern vanishes the same way under `nullglob`, which stock bash has
+    // off and a project can turn on. Two patterns are two words only while both
+    // match something, so this one is read rather than dismissed as ambiguous.
+    assert.ok(extractShellGlobCandidates("printf x > .en{v,w}*").includes(".env*"));
+  });
+
   for (const command of readers) {
     it(`sees in ${command} what it sees in the expansion`, { skip: !available }, () => {
       const expanded = expand(command);

@@ -496,6 +496,47 @@ function expandShellBraces(word, mask = "0".repeat(word.length), depth = 0) {
  * @param {string} mask
  * @returns {boolean}
  */
+/**
+ * The single file a redirection would open, or nothing when there is no single
+ * file for it to name.
+ *
+ * Bash writes only where the target expands to exactly one word, and calls
+ * everything else an ambiguous redirect and does nothing. `> {.env,x}`,
+ * `> "{.env,}"{,}` and `> .en{v,w}*` each expand to two words and open no file
+ * at all, so reporting a protected path for them blocked a command that writes
+ * nothing. `> {.env,}` is the other way round -- the empty alternative is
+ * dropped, one word is left, and it really does truncate `.env`.
+ *
+ * Expansion happens here rather than at the candidate, so it happens with the
+ * record of which characters were quoted, and in the order the shell uses:
+ * braces first, substitutions after.
+ *
+ * Whether to expand at all is the mask's decision and nothing else's. The
+ * scanner used to hand over a separate `braceActive` flag beside it, and a flag
+ * for a whole word is the thing that went wrong here in the first place: it can
+ * only say "expand it all" or "expand none of it", and it can disagree with the
+ * record next to it. The mask answers per character, so it answers both.
+ *
+ * @param {{value: string, literalMask?: string}} redirect
+ * @returns {{value: string, mask: string}[]}
+ */
+function redirectionTargetWords(redirect) {
+  // The scanner writes one mask character per target character, so the fallback
+  // is a defensive default rather than a reachable branch. Unmasked is the safe
+  // direction of the two: it expands, and expanding offers more to check.
+  const mask = redirect.literalMask?.length === redirect.value.length
+    ? redirect.literalMask
+    : "0".repeat(redirect.value.length);
+  const words = expandShellBraces(redirect.value, mask).filter((entry) => entry.value);
+  if (words.length === 1) return words;
+  // Two words are only two words while both survive. An unset variable expands
+  // to nothing, so `> {$X,.env}` leaves one word and truncates `.env`, and an
+  // unmatched glob does the same under `nullglob`. Where a word can still
+  // vanish the count is not knowable here, so every word stays a candidate.
+  const collapsible = words.some((entry) => /\$|`/.test(entry.value) || wordHasActiveGlob(entry.value, entry.mask));
+  return collapsible ? words : [];
+}
+
 function wordHasActiveGlob(value, mask) {
   for (let index = 0; index < value.length; index += 1) {
     if (mask[index] === "1") continue;
@@ -1954,15 +1995,14 @@ function extractAttachedRedirectionPaths(segment) {
     let target = "";
     let targetQuote;
     let targetEscaped = false;
-    // Whether the shell would brace-expand this target. `> {.env,}` writes
-    // `.env`; `> "{.env,}"` writes a file with that literal name, and the
-    // quotes are gone by the time the target is a string.
-    let targetBrace = false;
-    // The same per-character record the word tokenizer keeps, and for the same
-    // reason: one target can hold a quoted group beside an expanding one.
-    // `> "{.env,}"{,}` is an ambiguous redirect to bash, which writes nothing,
-    // and a single flag for the whole target could only say "expand it all" --
-    // which produced `.env` and refused a command that writes no such file.
+    // The same per-character record the word tokenizer keeps, and it is the
+    // whole answer on what expands: `> {.env,}` writes `.env`, `> "{.env,}"`
+    // writes a file with that literal name, and the quotes are gone by the time
+    // the target is a string. One target can also hold a quoted group beside an
+    // expanding one -- `> "{.env,}"{,}` expands to two copies of a literal
+    // `{.env,}`, an ambiguous redirect that writes nothing -- and a single flag
+    // for the whole target could only say "expand it all", which produced
+    // `.env` and refused a command that opens no such file.
     let targetMask = "";
     // Whitespace and `|` inside `$( )` or backticks belong to the target word.
     // Ending at the first space split `> .en$(echo v)` into a target of
@@ -1999,26 +2039,22 @@ function extractAttachedRedirectionPaths(segment) {
         targetQuote = undefined;
         continue;
       }
-      // Counted rather than looked for behind the brace, the way the word
-      // tokenizer does it and for the same reason -- an escaped dollar is
-      // literal text and the group beside it still expands. No decision can
-      // currently tell the two readings apart here either, since the literal
-      // dollar lands on every alternative and none of them is a path.
+      // The depth this character sits at before it can close the substitution
+      // it belongs to, the way the word tokenizer reads it and for the same
+      // reason: read afterwards, the `}` of `${...}` looked like brace syntax
+      // and left the target masked one character short.
       const enclosingDepth = targetSubstitution;
       if (!targetQuote) {
         if (targetChar === "$" && (segment[cursor + 1] === "(" || segment[cursor + 1] === "{")) targetSubstitution += 1;
         else if ((targetChar === ")" || targetChar === "}") && targetSubstitution > 0) targetSubstitution -= 1;
         else if (targetChar === "`") targetBackticks = !targetBackticks;
-        if (targetChar === "{" && enclosingDepth === 0 && !targetBackticks) {
-          targetBrace = true;
-        }
       }
       const insideSubstitution = enclosingDepth > 0 || targetSubstitution > 0 || targetBackticks;
       if (!targetQuote && !insideSubstitution && (/\s/.test(targetChar) || /[;&|<>]/.test(targetChar))) break;
       target += targetChar;
       targetMask += (targetQuote || insideSubstitution) ? "1" : "0";
     }
-    if (target) paths.push({ value: target, braceActive: targetBrace, literalMask: targetMask });
+    if (target) paths.push({ value: target, literalMask: targetMask });
     index = Math.max(index, cursor - 1);
   }
 
@@ -2064,10 +2100,9 @@ export function extractShellPathCandidates(command) {
     // `printf` writes to whatever `>` names whether or not `printf` itself opens
     // files -- so `printf x > .en$(echo v)` truncated `.env` while every reader
     // that could have resolved the name had been skipped.
-    for (const redirect of extractAttachedRedirectionPaths(segment)) {
-      const resolvedTarget = resolveSubstitutionTarget(redirect.value, assignments, evaluable);
-      addCandidate(resolvedTarget.value, true, redirect.braceActive,
-        resolvedTarget.value === redirect.value ? redirect.literalMask : undefined);
+    for (const word of extractAttachedRedirectionPaths(segment).flatMap(redirectionTargetWords)) {
+      const resolvedTarget = resolveSubstitutionTarget(word.value, assignments, evaluable);
+      addCandidate(resolvedTarget.value);
     }
 
     const inlineFlags = INLINE_CODE_FLAGS.get(commandName);
@@ -2230,9 +2265,18 @@ export function extractShellGlobCandidates(command) {
     // `printf` being a data-only command says nothing about that. Read through
     // the same scanner the path candidates use, so the operator prefix is off
     // and `>|`, `>&` and ANSI-C quoting are already handled.
-    for (const redirect of extractAttachedRedirectionPaths(segment)) {
-      const expanded = expandKnownShellVariables(redirect.value, assignments);
-      if (/[*?{\[]/.test(expanded)) candidates.push(expanded);
+    // Read through the same word rule as the path candidates, and for the same
+    // reason: a target that expands to two words is an ambiguous redirect that
+    // opens nothing, so `printf x > "{.env*,}"{,}` had no file to report. What
+    // survives that rule is matched against filenames only where the pattern is
+    // unquoted -- `> "{.env*,}"` names one oddly-spelled file -- while a glob
+    // that did survive stays a candidate, since it may still match exactly one.
+    for (const word of extractAttachedRedirectionPaths(segment).flatMap(redirectionTargetWords)) {
+      const expanded = expandKnownShellVariables(word.value, assignments);
+      const substituted = expanded !== word.value;
+      if (wordHasActiveGlob(word.value, word.mask) || (substituted && /[*?[]/.test(expanded))) {
+        candidates.push(expanded);
+      }
     }
 
     if (!DATA_ONLY_COMMANDS.has(commandName) || depth > 0 || piped) {
@@ -2440,8 +2484,8 @@ export function unresolvedPathExpansions(command) {
     const commandName = commandBasename(stripWrapper(words)[0] ?? "");
     // A redirection target is a file the shell creates whatever the command is,
     // so it is read before the data-only skip below.
-    for (const redirect of extractAttachedRedirectionPaths(segment)) {
-      const expanded = expandKnownShellVariables(redirect.value, assignments);
+    for (const word of extractAttachedRedirectionPaths(segment).flatMap(redirectionTargetWords)) {
+      const expanded = expandKnownShellVariables(word.value, assignments);
       const basename = expanded.slice(expanded.lastIndexOf("/") + 1);
       // A redirection target is a file every time, so an expansion anywhere in
       // it is enough -- there is no reading under which `> $OUT` is a message
@@ -2449,7 +2493,7 @@ export function unresolvedPathExpansions(command) {
       // do not as operands: whatever the inner command is classified as, its
       // output still becomes a filename that gets truncated.
       if (assemblesFilename(basename) || /\$\{|\$\(|`|\$[A-Za-z_]/.test(expanded)) {
-        unresolved.push(redirect.value);
+        unresolved.push(word.value);
       }
     }
     // `echo ${a[@]}` prints a name, it does not open one -- unless something

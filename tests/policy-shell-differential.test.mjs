@@ -206,6 +206,20 @@ function runSeed(seed) {
 
 const runs = bashAvailable ? SEEDS.map(runSeed) : [];
 
+/**
+ * Whether the spelling in this position opens the file bash expanded it to.
+ *
+ * Everywhere but a redirection, a word list of two is two operands and both are
+ * opened. A redirection is the exception: bash opens the target only where it
+ * expands to exactly one word, and answers `ambiguous redirect` otherwise. So
+ * `printf x > ".e"{,}nv` expands to `.env .env` and opens neither -- asserting
+ * off the word list alone demanded an answer for a command that writes nothing.
+ */
+function positionOpensTarget(job, targetWords) {
+  if (job.position.name !== "redirect-target") return true;
+  return targetWords.filter(Boolean).length === 1;
+}
+
 describe("shell spelling differential", () => {
   it("builds a word list for every generated spelling", { skip: !bashAvailable }, () => {
     // A spelling bash cannot parse ends the batch and takes every later case
@@ -231,6 +245,7 @@ describe("shell spelling differential", () => {
         if (!commandWords?.includes(job.commandWord)) continue;
         if (!targetWords?.includes(job.targetWord)) continue;
         if (!targetWords.some((word) => word && matchesProtectedPath(word, policy.shellProtectedPaths))) continue;
+        if (!positionOpensTarget(job, targetWords)) continue;
         checked += 1;
         const command = job.position.make(job.commandSpelling, job.targetSpelling);
         // Reading the path, refusing the command as unresolvable, or gating it
@@ -261,6 +276,7 @@ describe("shell spelling differential", () => {
         // one. A spelling that quoted the `*` comes back as the pattern itself,
         // and there is nothing to answer for.
         if (!targetWords?.some((word) => word && matchesProtectedPath(word, policy.shellProtectedPaths))) continue;
+        if (!positionOpensTarget(job, targetWords)) continue;
         checked += 1;
         const command = job.position.make(job.commandSpelling, job.targetSpelling);
         const globbed = extractShellGlobCandidates(command).length > 0;
