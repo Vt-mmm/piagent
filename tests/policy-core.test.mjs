@@ -219,6 +219,20 @@ describe("protected path extraction from shell", () => {
     });
   }
 
+  // A conversion that prints nothing lets the text on either side of it meet,
+  // so the name is in the format without being any one piece of it.
+  for (const command of [
+    "cat $(printf .e%.0snv x)",
+    "cat $(printf .%.0senv x)",
+    "printf data > $(printf .e%.0snv x)",
+    "printf .e%.0snv x | xargs cat",
+    "cat $(printf auth%.0s.json x)"
+  ]) {
+    it(`joins a printf format across a conversion that prints nothing: ${command}`, () => {
+      assert.ok(findProtectedPathInCommand(command, policy.shellProtectedPaths), command);
+    });
+  }
+
   it("does not treat printing a name as opening it", () => {
     assert.equal(findProtectedPathInCommand("printf %.0s.env x", policy.shellProtectedPaths), undefined);
     assert.equal(findProtectedPathInCommand("cat $(printf %s notes.txt)", policy.shellProtectedPaths), undefined);
@@ -413,7 +427,13 @@ describe("exec policy semantic shell safety", () => {
     "bash -c 'rm -rf $(printf /)'",
     "rm -rf $(printf %s /)",
     "rm -rf $(printf %s%s / /)",
-    "rm -rf \"$(printf /)\""
+    "rm -rf \"$(printf /)\"",
+    // A single-quoted literal beside a real substitution. Reading the literal as
+    // a substitution body made the whole segment unevaluable, so the target that
+    // does resolve stopped resolving and a refusal became a question.
+    "rm -rf $(printf /) '$(a;b)'",
+    "rm -rf '$(a;b)' $(printf /)",
+    "find $(printf /) -delete '$(a;b)'"
   ];
 
   for (const command of forbidden) {
@@ -444,6 +464,7 @@ describe("exec policy semantic shell safety", () => {
     "rm -rf '$(a;b)'",
     "find '$(a;b)' -delete",
     "find '$(printf /)' -delete",
+    "rm -rf build '$(a;b)'",
     // The renderer reproduces a plain `%s`, and what it resolves to here is not
     // a catastrophic target.
     "rm -rf $(printf %s build)"
@@ -560,14 +581,38 @@ describe("printf rendering against a real shell", () => {
     });
   }
 
-  it("finds a protected path the format itself carries", { skip: !available }, () => {
-    const printed = spawnSync("bash", ["-c", "printf %.0s.env x"], { encoding: "utf8" }).stdout;
-    assert.equal(printed, ".env");
-    assert.ok(findProtectedPathInCommand("cat $(printf %.0s.env x)", policy.shellProtectedPaths));
-    assert.ok(findProtectedPathInCommand("printf data > $(printf %.0s.env x)", policy.shellProtectedPaths));
-    // Printing it is not opening it.
-    assert.equal(findProtectedPathInCommand("printf %.0s.env x", policy.shellProtectedPaths), undefined);
-  });
+  // The same comparison for the reading side. A conversion that prints nothing
+  // lets the literal text on either side of it meet, so the format can spell a
+  // protected name without containing it as one piece.
+  const producers = [
+    "printf %.0s.env x",
+    "printf .e%.0snv x",
+    "printf .%.0senv x",
+    "printf .env%.0s x",
+    "printf auth%.0s.json x",
+    "printf au%.0sth.json x",
+    "printf .env",
+    "printf %s .env",
+    "printf %q .env",
+    "printf %s notes.txt",
+    "printf .e%snv x",
+    "printf notes%.0s.txt x"
+  ];
+
+  for (const producer of producers) {
+    it(`sees every protected path bash would print: ${producer}`, { skip: !available }, () => {
+      const printed = spawnSync("bash", ["-c", producer], { encoding: "utf8" }).stdout.trim();
+      const isProtected = Boolean(matchesProtectedPath(printed, policy.shellProtectedPaths));
+      for (const command of [`cat $(${producer})`, `printf data > $(${producer})`, `${producer} | xargs cat`]) {
+        const found = findProtectedPathInCommand(command, policy.shellProtectedPaths);
+        if (isProtected) {
+          assert.ok(found, `bash prints ${JSON.stringify(printed)} for ${command}`);
+        }
+      }
+      // Printing a name is not opening it, whatever the name is.
+      assert.equal(findProtectedPathInCommand(producer, policy.shellProtectedPaths), undefined, producer);
+    });
+  }
 });
 
 describe("exec policy git workflow confirmations", () => {

@@ -1180,6 +1180,14 @@ describe("piagent guard integration", () => {
       assert.match(decision.reason, /cannot resolve/, command);
     }
 
+    // A single-quoted literal beside a real substitution: the refusal must stay
+    // a refusal rather than drop to a question.
+    for (const command of ["rm -rf $(printf /) '$(a;b)'", "rm -rf '$(a;b)' $(printf /)"]) {
+      const decision = await callToolCall(toolCall, ctx, "bash", { command });
+      assert.equal(decision?.block, true, command);
+      assert.match(decision.reason, /Refusing/, command);
+    }
+
     // Nothing opaque, nothing destructive: no question asked.
     const plain = await callToolCall(toolCall, ctx, "bash", { command: "rm -rf build" });
     assert.notEqual(plain?.block, true);

@@ -462,7 +462,25 @@ function segmentHasUnquotedSubstitution(segment) {
  */
 function substitutionBodies(segment) {
   const bodies = [];
+  let quote;
   for (let index = 0; index < segment.length; index += 1) {
+    // Single quotes suspend substitution, so text inside them is not a body and
+    // reading it as one made a whole segment unevaluable on the strength of a
+    // filename. `rm -rf $(printf /) '$(a;b)'` really does remove `/`, and the
+    // literal beside it was enough to drop the refusal to a question. Double
+    // quotes do not suspend it, so those are scanned through.
+    if (segment[index] === "\\" && quote !== "'") {
+      index += 1;
+      continue;
+    }
+    if (quote) {
+      if (segment[index] === quote) quote = undefined;
+      else if (quote === "'") continue;
+    } else if (segment[index] === "'" || segment[index] === '"') {
+      quote = segment[index];
+      continue;
+    }
+    if (quote === "'") continue;
     if (segment[index] === "`") {
       const end = segment.indexOf("`", index + 1);
       if (end < 0) {
@@ -1221,9 +1239,34 @@ function printfFormatIsExact(format, values) {
   return values.length <= conversions.length;
 }
 
-/** The literal text of a printf format, with every conversion removed. */
+const PRINTF_CONVERSION = /%(?:\d+\$)?[-+#0 ']*(?:\d+|\*)?(?:\.(?:\d+|\*))?[hlL]?[A-Za-z]/g;
+
+/**
+ * The format's own literal text, with the conversions taken out and what is left
+ * closed up.
+ *
+ * Closed up rather than split, because a conversion that prints nothing lets the
+ * text on either side meet: `.e%.0snv` is `.env`, and splitting there produced
+ * `.e` and `nv`, neither of which is a file anybody protects, while the command
+ * opened one that is.
+ *
+ * Splitting as well adds nothing this misses: a protected path the output
+ * carries in literal text alone is contiguous here too, and one that spans an
+ * argument is covered by the arguments, which are candidates in their own
+ * right.
+ *
+ * This does name files a command sometimes does not open -- `%s.env` with `x`
+ * prints `x.env`, and `.env` is offered anyway. That is the accepted direction:
+ * the same format with an empty argument prints `.env` exactly, and which one
+ * it is cannot be known from the format. A candidate that never materialises
+ * costs one command refused with the reason on screen; a path that materialises
+ * with no candidate costs the check.
+ *
+ * @param {string} format
+ * @returns {string[]}
+ */
 function printfFormatLiterals(format) {
-  return format.replace(/%(?:\d+\$)?[-+#0 ']*(?:\d+|\*)?(?:\.(?:\d+|\*))?[hlL]?[A-Za-z]/g, " ");
+  return [format.replace(PRINTF_CONVERSION, "")].filter(Boolean);
 }
 
 /**
@@ -1267,7 +1310,7 @@ function staticDataOutput(segment, assignments, producerCommand) {
   } else if (producerCommand === "printf" && args.length > 0) {
     output = renderStaticPrintf(args[0], args.slice(1));
     exact = printfFormatIsExact(args[0], args.slice(1));
-    extra.push(printfFormatLiterals(args[0]), ...args.slice(1));
+    extra.push(...printfFormatLiterals(args[0]), ...args.slice(1));
   }
   const words = output.split(/\s+/).filter(Boolean);
   const candidates = [...words, ...extra.flatMap((item) => item.split(/\s+/)).filter(Boolean)];
@@ -1463,7 +1506,7 @@ export function extractShellPathCandidates(command) {
       // with everything else -- a `printf` of its own prints to stdout, and its
       // format is text until something downstream opens it.
       if (commandName === "printf") {
-        for (const literal of printfFormatLiterals(argumentTokens[0]?.value ?? "").split(/\s+/)) addCandidate(literal);
+        for (const literal of printfFormatLiterals(argumentTokens[0]?.value ?? "")) addCandidate(literal);
       }
       let searchPatternPending = SEARCH_COMMANDS.has(commandName);
       for (let index = 0; index < argumentTokens.length; index += 1) {
