@@ -403,26 +403,86 @@ function stripWrapper(words) {
 const STATIC_TEXT_PRODUCERS = new Set(["printf", "echo"]);
 
 /**
- * Whether the substitutions in this segment can be re-read from a tokenized
- * word at all.
+ * Every command-substitution body in the segment, located by balance rather than
+ * by pattern.
  *
- * By the time a word reaches these checks its quotes are gone and its escapes
- * are applied, so `$(printf '\x2f')` arrives as `$(printf x2f)` -- and
- * evaluating that produces `x2f`, a value the shell never had. Resolving to a
- * wrong value and then permitting on it is worse than not resolving, so a
- * segment whose substitutions carry quoting or escapes gives up on evaluation
- * and every substitution in it counts as unresolved.
+ * A regex for `$(...)` cannot see nesting: against `$(printf $(printf /))` it
+ * matches the inner half and reports a body of `printf /`, which is a true
+ * statement about a substitution nobody asked about. Scanning with the same
+ * balance rule the shell uses reports one body, `printf $(printf /)`, and that
+ * body is visibly not something this process should try to evaluate.
+ *
+ * It cannot currently change an outcome, and that is worth stating rather than
+ * leaving for the next reader to work out. Evaluation only ever succeeds for a
+ * body with no parentheses in it -- the replacement pattern requires that, and
+ * anything it leaves behind is caught as a substitution still present in the
+ * result. On a paren-free body a pattern scan and a balance scan agree. This is
+ * here so the extent of a body is right by construction rather than by that
+ * argument continuing to hold.
+ *
+ * An unterminated substitution yields the rest of the segment as its body. It
+ * needs no flag of its own: nothing replaces it, so it survives into the result
+ * and is caught there as text that is still a substitution.
+ *
+ * @param {string} segment
+ * @returns {string[]}
+ */
+function substitutionBodies(segment) {
+  const bodies = [];
+  for (let index = 0; index < segment.length; index += 1) {
+    if (segment[index] === "`") {
+      const end = segment.indexOf("`", index + 1);
+      if (end < 0) {
+        bodies.push(segment.slice(index + 1));
+        break;
+      }
+      bodies.push(segment.slice(index + 1, end));
+      index = end;
+      continue;
+    }
+    if (segment[index] === "$" && segment[index + 1] === "(") {
+      const found = findBalanced(segment, index + 1, "(", ")");
+      if (!found) {
+        bodies.push(segment.slice(index + 2));
+        break;
+      }
+      bodies.push(found.body);
+      index = found.end;
+      continue;
+    }
+  }
+  return bodies;
+}
+
+// What a substitution body may contain for this process to claim it knows the
+// output: one plain command and its literal operands, nothing else.
+//
+// Everything excluded here is a way for a body to produce output that reading
+// its first command does not describe. `;`, `&` and `|` put a second command
+// after the one being read, so `$(printf /; echo)` runs `printf /` and the
+// evaluation stops at a word that is not the output. A newline is another
+// separator. `$(` and a backtick nest. `<` and `>` move the output somewhere
+// else. A quote or a backslash is gone by the time the word is tokenized, so
+// the body being read is no longer the body the shell had. `$` on its own is a
+// value this cannot resolve.
+const SIMPLE_SUBSTITUTION_BODY = /^[^'"\\`;&|<>()$\n\r]*$/;
+
+/**
+ * Whether the substitutions in this segment can be evaluated here at all.
+ *
+ * Resolving to a wrong value and then permitting on it is worse than not
+ * resolving: `$(printf '\x2f')` reaches these checks as `$(printf x2f)`
+ * because quoting is applied before tokenizing, and `$(printf /; echo)` is `/`
+ * however little the first command says so. One body that this cannot read
+ * gives up the whole segment, because a target assembled from several of them
+ * is only as knowable as its least knowable part.
  *
  * @param {string} segment
  * @returns {boolean}
  */
 function substitutionsAreLiteral(segment) {
   if (typeof segment !== "string") return false;
-  for (const match of segment.matchAll(/\$\(([^()]*)\)|`([^`]*)`/g)) {
-    const body = match[1] ?? match[2] ?? "";
-    if (/['"\\]/.test(body)) return false;
-  }
-  return true;
+  return substitutionBodies(segment).every((body) => SIMPLE_SUBSTITUTION_BODY.test(body));
 }
 
 /**
@@ -450,6 +510,10 @@ function resolveSubstitutionTarget(word, assignments, evaluable) {
     }
     return output[0];
   });
+  // A substitution left in the result is one the replacement above did not
+  // reach -- a nested body, or one whose shape the scanner rejected. The value
+  // is not the target either way, so it is not a resolution.
+  if (/\$\(|`/.test(value)) return { value, resolved: false };
   return { value, resolved };
 }
 

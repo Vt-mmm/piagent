@@ -1158,7 +1158,18 @@ describe("piagent guard integration", () => {
     piagentGuard(harness.pi);
     const toolCall = harness.handlers.get("tool_call");
 
-    for (const command of ["rm -rf $(mktemp -d)", "find $(mktemp -d) -delete", "rm -rf $(printf '\\x2f')"]) {
+    for (const command of [
+      "rm -rf $(mktemp -d)",
+      "find $(mktemp -d) -delete",
+      "rm -rf $(printf '\\x2f')",
+      // `/` by the time the shell runs them, and the first command in the body
+      // says so for none of them.
+      "rm -rf $(printf /; echo)",
+      "rm -rf $(printf /; printf /)",
+      "rm -rf `printf /; echo`",
+      "rm -rf $(printf $(printf /))",
+      "find $(printf /; echo) -delete"
+    ]) {
       const decision = await callToolCall(toolCall, ctx, "bash", { command });
       assert.equal(decision?.block, true, command);
       assert.match(decision.reason, /cannot resolve/, command);

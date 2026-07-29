@@ -411,7 +411,10 @@ describe("exec policy semantic shell safety", () => {
     "rm -rf $(printf /)/sub",
     // No `-r` and no `-f`: one file, which is the threshold the refusal above
     // already uses.
-    "rm $(mktemp)"
+    "rm $(mktemp)",
+    // A separator inside a substitution is only a question when the command it
+    // feeds deletes something.
+    "echo $(printf /; echo)"
   ];
 
   for (const command of allowed) {
@@ -433,7 +436,26 @@ describe("exec policy semantic shell safety", () => {
     // had. `$(printf '\\x2f')` is `/`, and reading it as `x2f` and permitting
     // on that is worse than not reading it at all.
     "rm -rf $(printf '\\x2f')",
-    "rm -rf $(printf '/ /tmp')"
+    "rm -rf $(printf '/ /tmp')",
+    // A separator puts a second command after the one being read, so the first
+    // command stops describing the output. Every one of these is `/` or `//` by
+    // the time the shell has run it, and reading only `printf /` produced a
+    // word that is not the target.
+    "rm -rf $(printf /; echo)",
+    "rm -rf $(printf /; printf /)",
+    "rm -rf `printf /; echo`",
+    "rm -rf $(printf / && echo)",
+    "rm -rf $(printf /|cat)",
+    "find $(printf /; echo) -delete",
+    // Nested: a pattern for `$(...)` matches the inner half and reports a body
+    // about a substitution nobody asked about.
+    "rm -rf $(printf $(printf /))",
+    "find $(printf $(printf /)) -delete",
+    // Output redirected out of the substitution, a value this cannot resolve,
+    // and a body with no closing paren to read.
+    "rm -rf $(printf / > x)",
+    "rm -rf $(printf $HOME)",
+    "rm -rf $(printf /"
   ];
 
   for (const command of confirmed) {
