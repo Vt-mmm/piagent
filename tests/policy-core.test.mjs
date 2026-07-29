@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { describe, it } from "node:test";
 import {
   evaluateExecPolicyCore,
@@ -205,6 +206,24 @@ describe("protected path extraction from shell", () => {
     assert.equal(findProtectedPathInCommand("cat ${MISSING:-notes.txt}", policy.shellProtectedPaths), undefined);
   });
 
+  // The conversion consumes the argument and the rest of the format is what
+  // gets printed, so the file the command names is in the format string.
+  for (const command of [
+    "cat $(printf %.0s.env x)",
+    "printf data > $(printf %.0s.env x)",
+    "cat $(printf %q .env)",
+    "cat $(printf .env)"
+  ]) {
+    it(`reads a path a printf format carries: ${command}`, () => {
+      assert.ok(findProtectedPathInCommand(command, policy.shellProtectedPaths), command);
+    });
+  }
+
+  it("does not treat printing a name as opening it", () => {
+    assert.equal(findProtectedPathInCommand("printf %.0s.env x", policy.shellProtectedPaths), undefined);
+    assert.equal(findProtectedPathInCommand("cat $(printf %s notes.txt)", policy.shellProtectedPaths), undefined);
+  });
+
   // `$'...'` is ANSI-C quoting, and the escapes inside it are the whole point of
   // the syntax. Reading it as a plain single quote dropped the backslashes, so
   // the path arrived as `x2eenv` while the shell opened `.env`. A redirection
@@ -391,7 +410,10 @@ describe("exec policy semantic shell safety", () => {
     "rm -rf $(echo ~)",
     "find $(printf /) -delete",
     "D=/; rm -rf \"$D\"",
-    "bash -c 'rm -rf $(printf /)'"
+    "bash -c 'rm -rf $(printf /)'",
+    "rm -rf $(printf %s /)",
+    "rm -rf $(printf %s%s / /)",
+    "rm -rf \"$(printf /)\""
   ];
 
   for (const command of forbidden) {
@@ -414,7 +436,17 @@ describe("exec policy semantic shell safety", () => {
     "rm $(mktemp)",
     // A separator inside a substitution is only a question when the command it
     // feeds deletes something.
-    "echo $(printf /; echo)"
+    "echo $(printf /; echo)",
+    // Single quotes suspend substitution, so this removes a file with an
+    // awkward name. Quoting is gone by the time a word is tokenized, and
+    // reading the word alone made it indistinguishable from the real thing.
+    "rm -rf '$(printf /)'",
+    "rm -rf '$(a;b)'",
+    "find '$(a;b)' -delete",
+    "find '$(printf /)' -delete",
+    // The renderer reproduces a plain `%s`, and what it resolves to here is not
+    // a catastrophic target.
+    "rm -rf $(printf %s build)"
   ];
 
   for (const command of allowed) {
@@ -451,11 +483,29 @@ describe("exec policy semantic shell safety", () => {
     // about a substitution nobody asked about.
     "rm -rf $(printf $(printf /))",
     "find $(printf $(printf /)) -delete",
+    // Double quotes do not suspend it.
+    "rm -rf \"$(printf /; echo)\"",
     // Output redirected out of the substitution, a value this cannot resolve,
     // and a body with no closing paren to read.
     "rm -rf $(printf / > x)",
     "rm -rf $(printf $HOME)",
-    "rm -rf $(printf /"
+    "rm -rf $(printf /",
+    // Formats this renderer does not reproduce. Each prints `/` in bash: a
+    // precision truncates the argument away and leaves the rest of the format,
+    // `*` consumes an argument as the width instead of printing it, and `%q`
+    // requotes. Substituting the raw argument for any of them produces a value
+    // bash never printed, so none of them resolves.
+    "rm -rf $(printf %.0s/ x)",
+    "rm -rf $(printf %*s 0 /)",
+    "rm -rf $(printf %*s 2 /)",
+    "rm -rf $(printf %.*s 1 /)",
+    "rm -rf $(printf %q /)",
+    "find $(printf %*s 0 /) -delete",
+    // `%%` is a literal `%`, collapsed here after substitution rather than
+    // before, and bash reuses a format while arguments remain, which this does
+    // not -- so neither is reproduced.
+    "rm -rf $(printf %%s a)",
+    "rm -rf $(printf %s / /)"
   ];
 
   for (const command of confirmed) {
@@ -465,6 +515,59 @@ describe("exec policy semantic shell safety", () => {
       assert.match(result.reasons.join("\n"), /cannot resolve/);
     });
   }
+});
+
+// Three rounds of this class were found by someone running the command in a
+// shell and comparing. The comparison is the test: for each shape, whatever
+// `bash` prints is what the target is, and the policy has to either match it or
+// decline to claim it knows. Skipped where no `bash` is on PATH rather than
+// silently asserting nothing.
+describe("printf rendering against a real shell", () => {
+  const bash = spawnSync("bash", ["-c", "printf ok"], { encoding: "utf8" });
+  const available = bash.status === 0 && bash.stdout === "ok";
+
+  const formats = [
+    "printf /",
+    "printf %s /",
+    "printf %s%s / /",
+    "printf / /tmp",
+    "printf %.0s/ x",
+    "printf %*s 0 /",
+    "printf %*s 2 /",
+    "printf %.*s 1 /",
+    "printf %q /",
+    "printf %%s a",
+    "printf %s / /",
+    "printf %5s /",
+    "printf %.0s.env x"
+  ];
+
+  for (const producer of formats) {
+    it(`never claims a value bash did not print: ${producer}`, { skip: !available }, () => {
+      const printed = spawnSync("bash", ["-c", producer], { encoding: "utf8" }).stdout;
+      const target = printed.trim();
+      // What the shell would delete, decided by the shell.
+      const catastrophic = target === "/" || target === "//" || target === "~";
+      const result = evaluateExecPolicyCore(`rm -rf $(${producer})`, { policy, mode: "enforce" });
+      if (catastrophic) {
+        assert.notEqual(result.decision, "allow", `bash prints ${JSON.stringify(printed)}`);
+      }
+      // The other direction: a resolution that claims a catastrophic target the
+      // shell would not produce is a refusal of something nobody asked for.
+      if (!catastrophic && result.decision === "forbid") {
+        assert.fail(`refused as root/home while bash prints ${JSON.stringify(printed)}`);
+      }
+    });
+  }
+
+  it("finds a protected path the format itself carries", { skip: !available }, () => {
+    const printed = spawnSync("bash", ["-c", "printf %.0s.env x"], { encoding: "utf8" }).stdout;
+    assert.equal(printed, ".env");
+    assert.ok(findProtectedPathInCommand("cat $(printf %.0s.env x)", policy.shellProtectedPaths));
+    assert.ok(findProtectedPathInCommand("printf data > $(printf %.0s.env x)", policy.shellProtectedPaths));
+    // Printing it is not opening it.
+    assert.equal(findProtectedPathInCommand("printf %.0s.env x", policy.shellProtectedPaths), undefined);
+  });
 });
 
 describe("exec policy git workflow confirmations", () => {

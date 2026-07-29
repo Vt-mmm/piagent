@@ -403,6 +403,39 @@ function stripWrapper(words) {
 const STATIC_TEXT_PRODUCERS = new Set(["printf", "echo"]);
 
 /**
+ * Whether the segment contains a substitution the shell would actually run.
+ *
+ * Single quotes suspend it entirely, and that is lost by the time a word is
+ * tokenized: `rm -rf '$(printf /)'` removes a file with a strange name, and
+ * refusing it as a root removal is a refusal of something nobody asked for.
+ *
+ * @param {string} segment
+ * @returns {boolean}
+ */
+function segmentHasUnquotedSubstitution(segment) {
+  if (typeof segment !== "string") return false;
+  let quote;
+  for (let index = 0; index < segment.length; index += 1) {
+    const char = segment[index];
+    if (char === "\\" && quote !== "'") {
+      index += 1;
+      continue;
+    }
+    if (quote) {
+      if (char === quote) quote = undefined;
+      else if (quote === '"' && (char === "`" || (char === "$" && segment[index + 1] === "("))) return true;
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      continue;
+    }
+    if (char === "`" || (char === "$" && segment[index + 1] === "(")) return true;
+  }
+  return false;
+}
+
+/**
  * Every command-substitution body in the segment, located by balance rather than
  * by pattern.
  *
@@ -494,6 +527,10 @@ function substitutionsAreLiteral(segment) {
 function resolveSubstitutionTarget(word, assignments, evaluable) {
   const substitution = /\$\(([^()]*)\)|`([^`]*)`/g;
   let resolved = true;
+  // Always expanded: a variable is resolved from text in this same command and
+  // has nothing to do with whether a substitution would run. A word whose `$(`
+  // is inside single quotes arrives with `evaluable` unset, so the replacement
+  // below leaves it exactly as written.
   const value = expandKnownShellVariables(word, assignments).replace(substitution, (match, parenthesised, backticked) => {
     const inner = (parenthesised ?? backticked ?? "").trim();
     const producer = commandBasename(shellWords(inner)[0] ?? "");
@@ -501,14 +538,17 @@ function resolveSubstitutionTarget(word, assignments, evaluable) {
       resolved = false;
       return match;
     }
-    const output = staticDataOutputCandidates(inner, assignments, producer);
+    const output = staticDataOutput(inner, assignments, producer);
     // More than one word out of a substitution is more than one operand, and
-    // stitching them back into one is not what the shell does.
-    if (output.length !== 1) {
+    // stitching them back into one is not what the shell does. `exact` is the
+    // other half: a format this renderer does not reproduce yields a value bash
+    // never printed, and permitting on that is the failure this whole path is
+    // here to avoid.
+    if (!output.exact || output.words.length !== 1) {
       resolved = false;
       return match;
     }
-    return output[0];
+    return output.words[0];
   });
   // A substitution left in the result is one the replacement above did not
   // reach -- a nested body, or one whose shape the scanner rejected. The value
@@ -523,7 +563,7 @@ function hasUnresolvedSubstitution(word, assignments, evaluable) {
   return !resolveSubstitutionTarget(word, assignments, evaluable).resolved;
 }
 
-function rmFinding(words, assignments, evaluable) {
+function rmFinding(words, assignments, evaluable, substituting) {
   const command = commandBasename(words[0] ?? "");
   const dynamicCommand = command.startsWith("$");
   if (command !== "rm" && !dynamicCommand) return undefined;
@@ -553,7 +593,9 @@ function rmFinding(words, assignments, evaluable) {
   if (resolvedTargets.some((target) => isRootOrHomeTarget(target.value)) && (recursive || force || dynamicCommand)) {
     return { action: "forbid", reason: "Refusing recursive/forced removal of root or home target." };
   }
-  const opaque = targets.filter((target) => hasUnresolvedSubstitution(target, assignments, evaluable));
+  const opaque = substituting
+    ? targets.filter((target) => hasUnresolvedSubstitution(target, assignments, evaluable))
+    : [];
   if (opaque.length > 0 && (recursive || force)) {
     return {
       action: "prompt",
@@ -565,7 +607,7 @@ function rmFinding(words, assignments, evaluable) {
   return undefined;
 }
 
-function findDeleteFinding(words, assignments, evaluable) {
+function findDeleteFinding(words, assignments, evaluable, substituting) {
   if (commandBasename(words[0] ?? "") !== "find") return undefined;
   if (!words.includes("-delete")) return undefined;
   const firstTarget = words.slice(1).find((word) => !word.startsWith("-"));
@@ -573,7 +615,7 @@ function findDeleteFinding(words, assignments, evaluable) {
   if (isRootOrHomeTarget(resolveSubstitutionTarget(firstTarget, assignments, evaluable).value)) {
     return { action: "forbid", reason: "Refusing find -delete against root or home target." };
   }
-  if (hasUnresolvedSubstitution(firstTarget, assignments, evaluable)) {
+  if (substituting && hasUnresolvedSubstitution(firstTarget, assignments, evaluable)) {
     return {
       action: "prompt",
       reason: `find -delete starts from a path this policy cannot resolve: ${firstTarget}. `
@@ -598,10 +640,16 @@ function ddFinding(words) {
  */
 function semanticCommandFindings(words, assignments, segment) {
   const normalizedWords = stripWrapper(words);
-  const evaluable = substitutionsAreLiteral(segment);
+  // A word arrives here with its quotes already removed, so `'$(printf /)'` and
+  // `$(printf /)` are the same three-character-longer string -- and the first
+  // one is a filename with an awkward name, not a substitution. Whether the
+  // segment contains one the shell would actually run is the part only the raw
+  // text still knows.
+  const substituting = segmentHasUnquotedSubstitution(segment);
+  const evaluable = substituting && substitutionsAreLiteral(segment);
   return [
-    rmFinding(normalizedWords, assignments, evaluable),
-    findDeleteFinding(normalizedWords, assignments, evaluable),
+    rmFinding(normalizedWords, assignments, evaluable, substituting),
+    findDeleteFinding(normalizedWords, assignments, evaluable, substituting),
     ddFinding(normalizedWords),
     xargsFinding(normalizedWords)
   ].filter(Boolean);
@@ -1149,14 +1197,59 @@ function renderStaticPrintf(format, values) {
   return rendered.slice(0, 8192);
 }
 
-function staticDataOutputCandidates(segment, assignments, producerCommand) {
+// Whether this renderer reproduces what bash prints, for this format and this
+// many arguments.
+//
+// `%s` with no flags, width, precision or positional argument is the only
+// conversion whose output is its argument unchanged. A width pads it (`%5s /`
+// is four spaces and a slash), a precision truncates it (`%.0s` prints
+// nothing), `*` consumes an argument as the width instead of printing it, `%q`
+// requotes, `%b` decodes escapes, and every numeric conversion reformats. This
+// renderer substitutes the raw argument for all of them, so what it returns for
+// any of those is a value bash never printed.
+//
+// `%%` is excluded because the collapse happens after substitution here rather
+// than before, and bash reuses the format while arguments remain, which this
+// does not -- so more arguments than conversions is not reproduced either. A
+// format with no conversions at all is printed once with the extra arguments
+// ignored, which this does match.
+function printfFormatIsExact(format, values) {
+  if (!format.includes("%")) return true;
+  const conversions = format.match(/%s/g) ?? [];
+  if (conversions.length === 0) return false;
+  if ((format.match(/%/g) ?? []).length !== conversions.length) return false;
+  return values.length <= conversions.length;
+}
+
+/** The literal text of a printf format, with every conversion removed. */
+function printfFormatLiterals(format) {
+  return format.replace(/%(?:\d+\$)?[-+#0 ']*(?:\d+|\*)?(?:\.(?:\d+|\*))?[hlL]?[A-Za-z]/g, " ");
+}
+
+/**
+ * What a `printf` or `echo` prints, as far as this process can tell.
+ *
+ * `words` is what it prints and nothing else, so a caller deciding whether to
+ * permit a command can only use it when `exact` is set. `candidates` is wider on
+ * purpose: it adds the format's own literal text and the raw arguments, because
+ * a caller looking for a protected path wants every string that could reach the
+ * output. `printf %.0s.env x` prints `.env`, and reading only the substituted
+ * argument returned `x.env` -- a name matching no protected pattern, which is
+ * the wrong direction for that check to be wrong in.
+ *
+ * @returns {{words: string[], candidates: string[], exact: boolean}}
+ */
+function staticDataOutput(segment, assignments, producerCommand) {
+  const empty = { words: [], candidates: [], exact: false };
   const tokens = shellDataTokens(segment);
   const commandIndex = tokens.findIndex((token) => commandBasename(token.value) === producerCommand);
-  if (commandIndex < 0) return [];
+  if (commandIndex < 0) return empty;
   const args = tokens.slice(commandIndex + 1).map((token) => token.variableActive
     ? expandKnownShellVariables(token.value, assignments)
     : token.value);
   let output = "";
+  let exact = false;
+  const extra = [];
   if (producerCommand === "echo") {
     let argumentIndex = 0;
     let escapes = false;
@@ -1166,11 +1259,23 @@ function staticDataOutputCandidates(segment, assignments, producerCommand) {
       argumentIndex += 1;
     }
     output = args.slice(argumentIndex).join(" ");
+    // Whether `echo` interprets escapes without `-e` is shell- and
+    // build-dependent, so a command that turns them on is read but not trusted
+    // to the exact byte.
+    exact = !escapes;
     if (escapes) output = decodeShellDataEscapes(output);
   } else if (producerCommand === "printf" && args.length > 0) {
     output = renderStaticPrintf(args[0], args.slice(1));
+    exact = printfFormatIsExact(args[0], args.slice(1));
+    extra.push(printfFormatLiterals(args[0]), ...args.slice(1));
   }
-  return output.split(/\s+/).filter(Boolean);
+  const words = output.split(/\s+/).filter(Boolean);
+  const candidates = [...words, ...extra.flatMap((item) => item.split(/\s+/)).filter(Boolean)];
+  return { words, candidates: [...new Set(candidates)], exact };
+}
+
+function staticDataOutputCandidates(segment, assignments, producerCommand) {
+  return staticDataOutput(segment, assignments, producerCommand).candidates;
 }
 
 function echoEscapeMode(words, commandIndex) {
@@ -1351,6 +1456,15 @@ export function extractShellPathCandidates(command) {
 
     if (!DATA_ONLY_COMMANDS.has(commandName) || depth > 0) {
       const argumentTokens = executableArgumentTokens(tokens, words, commandName);
+      // `printf %.0s.env x` prints `.env`: the conversion eats the argument and
+      // the rest of the format is the output. Reading only the substituted
+      // argument produced `x.env`, a name matching no protected pattern, so the
+      // file the command actually names went unseen. Inside the data-only guard
+      // with everything else -- a `printf` of its own prints to stdout, and its
+      // format is text until something downstream opens it.
+      if (commandName === "printf") {
+        for (const literal of printfFormatLiterals(argumentTokens[0]?.value ?? "").split(/\s+/)) addCandidate(literal);
+      }
       let searchPatternPending = SEARCH_COMMANDS.has(commandName);
       for (let index = 0; index < argumentTokens.length; index += 1) {
         const word = argumentTokens[index].value;

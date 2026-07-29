@@ -1168,7 +1168,12 @@ describe("piagent guard integration", () => {
       "rm -rf $(printf /; printf /)",
       "rm -rf `printf /; echo`",
       "rm -rf $(printf $(printf /))",
-      "find $(printf /; echo) -delete"
+      "find $(printf /; echo) -delete",
+      // Formats this renderer does not reproduce; each prints `/` in bash.
+      "rm -rf $(printf %.0s/ x)",
+      "rm -rf $(printf %*s 0 /)",
+      "rm -rf $(printf %q /)",
+      "find $(printf %*s 0 /) -delete"
     ]) {
       const decision = await callToolCall(toolCall, ctx, "bash", { command });
       assert.equal(decision?.block, true, command);
@@ -1180,6 +1185,10 @@ describe("piagent guard integration", () => {
     assert.notEqual(plain?.block, true);
     const nested = await callToolCall(toolCall, ctx, "bash", { command: "rm -rf $(printf /)/sub" });
     assert.notEqual(nested?.block, true);
+    // Single quotes suspend substitution, so this is a file with an awkward
+    // name rather than a root removal.
+    const quoted = await callToolCall(toolCall, ctx, "bash", { command: "rm -rf '$(printf /)'" });
+    assert.notEqual(quoted?.block, true);
   });
 
   it("blocks a shell command whose filename it cannot resolve", async () => {
