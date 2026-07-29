@@ -1999,6 +1999,11 @@ function extractAttachedRedirectionPaths(segment) {
         targetQuote = undefined;
         continue;
       }
+      // Counted rather than looked for behind the brace, the way the word
+      // tokenizer does it and for the same reason -- an escaped dollar is
+      // literal text and the group beside it still expands. No decision can
+      // currently tell the two readings apart here either, since the literal
+      // dollar lands on every alternative and none of them is a path.
       const enclosingDepth = targetSubstitution;
       if (!targetQuote) {
         if (targetChar === "$" && (segment[cursor + 1] === "(" || segment[cursor + 1] === "{")) targetSubstitution += 1;
@@ -2301,6 +2306,11 @@ export function extractShellGlobCandidates(command) {
       }
     }
     if (depth < MAX_NESTED_DEPTH) {
+      // Brace-expanded text, the same as the other two readers take. No case
+      // currently distinguishes it from the raw segment here -- an interpreter
+      // payload is found in the word list rather than the text, and brace
+      // expansion does not move a substitution body -- but a reader deriving
+      // its own view of a segment is the whole of what went wrong before.
       for (const nestedCommand of extractNestedCommands(braceText, words)) {
         for (const nestedSegment of splitShellSegments(nestedCommand)) pending.push({ segment: nestedSegment, depth: depth + 1 });
       }

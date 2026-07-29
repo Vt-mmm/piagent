@@ -147,6 +147,40 @@ describe("protected path extraction from shell", () => {
     assert.ok(extractShellGlobCandidates("G='secr*'; rg -ug$G PROBE .").includes("secr*"));
   });
 
+  // A pattern is the one thing the literal reader cannot answer for -- `.env*`
+  // matches no protected literal -- so this reader has to see what the shell
+  // builds, and see it exactly. One brace word can produce a command and a
+  // pattern together, and whether a word globs then differs between the words
+  // that came out of it, so the verdict is taken per word rather than inherited.
+  it("reads globs out of the expanded word list, quoting and all", () => {
+    for (const command of [
+      "{cat,.env*}",
+      "{grep,-f,.env*,README.md}",
+      "cat $({echo,.env*})",
+      "{bash,} -c 'cat .env*'",
+      "bash -{c,} 'cat .env*'",
+      "echo .env* | xargs cat",
+      "{head,-n,1,.env*}",
+      "cat {.env*,x}"
+    ]) {
+      assert.ok(extractShellGlobCandidates(command).includes(".env*"), command);
+    }
+    // Quoting inside the group suspends the expansion for that alternative
+    // only. `bash` prints `.env* x` for the first two and `.env.local x` for
+    // the unquoted one, so the quoted spellings name a file and glob nothing.
+    for (const command of [
+      "cat {\".env*\",x}",
+      "cat {'.env*',x}",
+      "cat {\".env*\",x}{,}",
+      "cat {\"*\",x}"
+    ]) {
+      assert.deepEqual(extractShellGlobCandidates(command), [], command);
+    }
+    // A producer feeding something that opens files, and one that does not.
+    assert.deepEqual(extractShellGlobCandidates("echo .env* | xargs echo"), []);
+    assert.deepEqual(extractShellGlobCandidates("git diff --name-only | xargs cat"), []);
+  });
+
   it("keeps quote-aware shell glob candidates and nested substitutions distinct", () => {
     assert.deepEqual(extractShellGlobCandidates("cat .en*"), [".en*"]);
     assert.deepEqual(extractShellGlobCandidates("rg '.en*' README.md"), []);

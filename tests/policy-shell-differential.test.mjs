@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, it } from "node:test";
 import {
   evaluateExecPolicyCore,
+  extractShellGlobCandidates,
   findProtectedPathInCommand,
   matchesProtectedPath,
   unresolvedPathExpansions
@@ -107,12 +111,23 @@ function buildSpelling(word, random) {
   return spelling || word;
 }
 
+// Expansion runs in a scratch directory holding names a protected pattern
+// matches, because that is the only way to tell an active glob from a quoted
+// one: `for w in .env*` and `for w in '.env*'` both yield `.env*` where nothing
+// matches, and only the first becomes `.env.local` where something does. The
+// directory holds two empty files and never leaves the temp root.
+const globFixture = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-glob-"));
+fs.writeFileSync(path.join(globFixture, ".env.local"), "");
+fs.writeFileSync(path.join(globFixture, "auth.json"), "");
+fs.writeFileSync(path.join(globFixture, "README.md"), "");
+fs.writeFileSync(path.join(globFixture, "notes.txt"), "");
+
 /** One bash call per batch: the words each spelled fragment builds. */
 function wordListsFromBash(fragments) {
   const script = ["SET_FOR_TEST=x", ...fragments.map((fragment, index) =>
     `printf 'C${index}\\n'; for w in ${fragment}; do printf '[%s]' "$w"; done; printf '\\n'`)].join("\n");
   const result = spawnSync("bash", ["-c", script], {
-    encoding: "utf8", timeout: 120000, maxBuffer: 64 * 1024 * 1024
+    encoding: "utf8", timeout: 120000, maxBuffer: 64 * 1024 * 1024, cwd: globFixture
   });
   const lists = new Map();
   const lines = result.stdout.split("\n");
@@ -146,6 +161,12 @@ const DESTRUCTIVE_POSITIONS = [
 ];
 
 const BENIGN_TARGETS = ["notes.txt", "README.md"];
+// A pattern is the one thing the literal reader cannot answer for: `.env*`
+// matches no protected literal, so only the glob reader stands between it and
+// the file. This corpus had no `*` in it at all, which is why it reported clean
+// while `{cat,.env*}` read a secret -- a spelling axis missing from the grammar
+// is a class of defect the generator cannot reach.
+const GLOB_TARGETS = [".env*", "auth.js*"];
 const SEEDS = [0x5eed, 0xd00d, 0xbeef];
 const PER_POSITION = 22;
 
@@ -162,6 +183,12 @@ function runSeed(seed) {
         ? position.spell[1]
         : BENIGN_TARGETS[Math.floor(random() * BENIGN_TARGETS.length)];
       jobs.push({ position, commandWord: position.spell[0], targetWord: target, destructive: false });
+    }
+  }
+  for (const position of READ_POSITIONS) {
+    for (let index = 0; index < PER_POSITION; index += 1) {
+      const target = GLOB_TARGETS[Math.floor(random() * GLOB_TARGETS.length)];
+      jobs.push({ position, commandWord: position.spell[0], targetWord: target, glob: true });
     }
   }
   for (const position of DESTRUCTIVE_POSITIONS) {
@@ -220,6 +247,35 @@ describe("shell spelling differential", () => {
     assert.ok(checked >= 400, `only ${checked} protected spellings were exercised`);
   });
 
+  it("accounts for every pattern bash matches to a protected file", { skip: !bashAvailable }, () => {
+    const misses = [];
+    let checked = 0;
+    for (const run of runs) {
+      for (let index = 0; index < run.jobs.length; index += 1) {
+        const job = run.jobs[index];
+        if (!job.glob) continue;
+        const commandWords = run.lists.get(index * 2);
+        const targetWords = run.lists.get(index * 2 + 1);
+        if (!commandWords?.includes(job.commandWord)) continue;
+        // The pattern reached a protected name only if bash replaced it with
+        // one. A spelling that quoted the `*` comes back as the pattern itself,
+        // and there is nothing to answer for.
+        if (!targetWords?.some((word) => word && matchesProtectedPath(word, policy.shellProtectedPaths))) continue;
+        checked += 1;
+        const command = job.position.make(job.commandSpelling, job.targetSpelling);
+        const globbed = extractShellGlobCandidates(command).length > 0;
+        const seen = findProtectedPathInCommand(command, policy.shellProtectedPaths);
+        const refused = unresolvedPathExpansions(command).length > 0;
+        const gated = evaluateExecPolicyCore(command, { policy, mode: "enforce" }).decision !== "allow";
+        if (!globbed && !seen && !refused && !gated) {
+          misses.push(`${job.position.name}: ${command}\n      bash matches: ${targetWords.join(" ")}`);
+        }
+      }
+    }
+    assert.deepEqual(misses, [], `patterns reaching a protected file unseen:\n${misses.join("\n")}`);
+    assert.ok(checked >= 200, `only ${checked} glob spellings were exercised`);
+  });
+
   it("never permits a removal bash would aim at root, in any position", { skip: !bashAvailable }, () => {
     const permitted = [];
     let checked = 0;
@@ -246,6 +302,7 @@ describe("shell spelling differential", () => {
     // The other half of the invariant. A detector that answers for everything
     // would pass both tests above and be useless.
     const noise = [];
+    const knownOverApproximation = [];
     for (const run of runs) {
       for (let index = 0; index < run.jobs.length; index += 1) {
         const job = run.jobs[index];
@@ -255,10 +312,30 @@ describe("shell spelling differential", () => {
         if (targetWords.some((word) => word && matchesProtectedPath(word, policy.shellProtectedPaths))) continue;
         const command = job.position.make(job.commandSpelling, job.targetSpelling);
         const seen = findProtectedPathInCommand(command, policy.shellProtectedPaths);
-        if (seen) noise.push(`${job.position.name}: ${command}\n      reported ${seen.candidate}`);
+        if (!seen) continue;
+        // A producer's rendered output is offered as a candidate in its own
+        // right, because where the word *is* the substitution that output is
+        // the filename -- `cat $(printf .e%.1sv nv)` opens `.env` and no piece
+        // of it contains that name. The body cannot see what surrounds it, so
+        // where a quoted glob character is glued on, the same rule reports the
+        // output rather than the longer name bash builds: `$(printf .env)"*"`
+        // opens a file literally called `.env*` and this says `.env`.
+        //
+        // It over-reports, in the direction that costs a question rather than a
+        // miss, and only for a name that carries a quoted `*` or `?`. It is
+        // recorded here rather than excluded quietly, so the count is visible if
+        // it ever grows.
+        const literalGlob = targetWords.some((word) => /[*?]/.test(word) && word.startsWith(seen.candidate));
+        (literalGlob ? knownOverApproximation : noise)
+          .push(`${job.position.name}: ${command}\n      reported ${seen.candidate}`);
       }
     }
     assert.deepEqual(noise, [], `benign spellings reported as protected:\n${noise.join("\n")}`);
+    assert.ok(
+      knownOverApproximation.length <= 40,
+      `the producer-output over-approximation grew to ${knownOverApproximation.length} cases:\n`
+        + knownOverApproximation.slice(0, 5).join("\n")
+    );
   });
 });
 
