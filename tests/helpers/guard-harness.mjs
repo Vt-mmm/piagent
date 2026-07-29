@@ -53,12 +53,12 @@ export function writeRuntimeStubs(root) {
   ].join("\n"));
 }
 
-export function createPiHarness() {
+export function createPiHarness(options = {}) {
   const handlers = new Map();
   const tools = new Map();
   const commands = new Map();
   const entries = [];
-  let sessionName = "";
+  let sessionName = options.sessionName ?? "";
   const pi = {
     on(name, handler) {
       handlers.set(name, handler);
@@ -120,7 +120,7 @@ export function createContext(cwd, options = {}) {
     sessionManager: {
       getSessionFile: () => path.join(cwd, ".pi", "session.jsonl"),
       getSessionId: () => "session-test",
-      getSessionName: () => "session",
+      getSessionName: () => options.sessionName ?? "session",
       getEntries: () => [],
       getBranch: () => []
     },

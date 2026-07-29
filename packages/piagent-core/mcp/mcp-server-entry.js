@@ -202,11 +202,58 @@ export function parseRemoteUrl(value) {
   } catch {
     throw new McpEntryError(`--url is not a valid URL: ${value}`);
   }
+  // The same rule the rest of this file applies to `--env` and `--header`. An
+  // address is not a safer place to keep a token than a header is: it goes into
+  // the same committed file, and it additionally tends to reach request logs and
+  // shell history. The refusal is masked so the error itself does not repeat it.
+  if (url.username || url.password) {
+    throw new McpEntryError(
+      "--url must not carry credentials in the address. Use --bearer-token-env-var, " +
+      `or --header with a \${VAR} reference. Received: ${maskUrlCredentials(url.href)}`
+    );
+  }
+  for (const [name, item] of url.searchParams) {
+    if (credentialLikeName(name) && !ENV_REFERENCE.test(item)) {
+      throw new McpEntryError(
+        `--url query parameter ${name} looks like a credential. Use --bearer-token-env-var, ` +
+        `or give it a \${VAR} reference.`
+      );
+    }
+  }
   if (url.protocol === "https:") return url;
   if (url.protocol === "http:" && isLoopbackHost(url.hostname)) return url;
   throw new McpEntryError(
     `--url must be https, or http on localhost. Received: ${url.protocol}//${url.hostname}`
   );
+}
+
+/**
+ * A URL with anything credential-shaped in it replaced. `add` refuses to write
+ * such a URL, but a config written by hand or by an older version can still hold
+ * one, and display is exactly where it would leak: `list` and `get` output is
+ * meant to be pasteable into an issue.
+ *
+ * A value that does not parse as a URL is returned untouched. Guessing at the
+ * structure of something that is not a URL would be a way to mangle a value
+ * without protecting anything.
+ *
+ * @param {unknown} value
+ * @returns {unknown}
+ */
+export function maskUrlCredentials(value) {
+  if (typeof value !== "string") return value;
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    return value;
+  }
+  if (url.password) url.password = "*****";
+  if (url.username) url.username = "*****";
+  for (const [name, item] of [...url.searchParams]) {
+    if (credentialLikeName(name) && !ENV_REFERENCE.test(item)) url.searchParams.set(name, "*****");
+  }
+  return url.href;
 }
 
 /** @param {string} hostname @returns {boolean} */
@@ -234,6 +281,10 @@ export function maskServerEntry(entry) {
           typeof item === "string" && ENV_REFERENCE.test(item) ? item : "*****"
         ])
       );
+      continue;
+    }
+    if (key === "url") {
+      out[key] = maskUrlCredentials(value);
       continue;
     }
     out[key] = value;

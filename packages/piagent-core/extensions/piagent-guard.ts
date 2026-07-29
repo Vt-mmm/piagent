@@ -12,6 +12,7 @@ import {
   extractShellGlobCandidates,
   extractShellPathCandidates,
   findProtectedPathInCommand,
+  unresolvedPathExpansions,
   globMatchesPath,
   matchesProtectedPath,
   normalizePathCandidate,
@@ -42,7 +43,14 @@ import {
 } from "./redaction-core.js";
 import { detectProfileName } from "./project-shape.js";
 import { evaluateUpdateCheck, isInstalledPlatform, readUpdateCache, startUpdateProbe } from "./update-check.js";
-import { REPOSITORY_SCOPES, collectServers } from "../mcp/mcp-config-layers.js";
+import {
+  REPOSITORY_SCOPES,
+  collectServers,
+  configPathForScope,
+  mcpDecisionInputs,
+  unverifiableMcpConfig
+} from "../mcp/mcp-config-layers.js";
+import { attributeDirectTool } from "../mcp/mcp-tool-naming.js";
 import { approvalState } from "../mcp/mcp-approval-store.js";
 import { evaluateServerReadiness, readinessNotice } from "../mcp/mcp-auth-readiness.js";
 import * as mcpActions from "../mcp/mcp-command-actions.js";
@@ -1994,16 +2002,20 @@ function prepareToolInputForPolicy(
 }
 
 // Which MCP server a tool call is addressed to. The adapter exposes one proxy
-// tool named `mcp` that carries the server in `input.server`, and, when a server
-// runs with directTools, individual tools named `mcp__<server>__<tool>`. Both
-// forms are read, because a gate that only covers the proxy is bypassed by
-// turning directTools on.
-function mcpServerFromToolCall(toolName: string, input: Record<string, unknown>): string | undefined {
+// tool named `mcp` that carries the server in `input.server`, and, under
+// directTools, one tool per server tool named `<prefix>_<tool>` where the prefix
+// is derived from the server name. Direct names are matched against the servers
+// this gate is holding rather than against a fixed pattern, because the prefix
+// is the server's own name and there is nothing constant to anchor on.
+function mcpServerFromToolCall(
+  toolName: string,
+  input: Record<string, unknown>,
+  candidates: Iterable<string>
+): string | undefined {
   if (normalizeActionToken(toolName) === "mcp") {
     return typeof input.server === "string" && input.server.trim() ? input.server.trim() : undefined;
   }
-  const direct = toolName.match(/^mcp(?:__|[-_:]+)([^_:.-]+)/i);
-  return direct?.[1];
+  return attributeDirectTool(toolName, candidates);
 }
 
 // Servers a repository defines are not usable until somebody on this machine has
@@ -2014,25 +2026,71 @@ function mcpServerFromToolCall(toolName: string, input: Record<string, unknown>)
 //
 // Recomputed only when one of the files behind the decision changes, because
 // this runs on every tool call.
-const mcpApprovalCache = new Map<string, { signature: string; blocked: Map<string, string> }>();
+interface RepositoryMcpGate {
+  blocked: Map<string, { state: string; origin: string }>;
+  // Conditions under which no tool call can be checked at all, each with the
+  // sentence to show. These are not "a server is unapproved" — they are "this
+  // repository's config has put the gate in a state where it cannot tell which
+  // server a call belongs to", and the only sound answer to that is to stop.
+  unverifiable: string[];
+}
 
-function unapprovedMcpServers(cwd: string): Map<string, string> {
+const mcpApprovalCache = new Map<string, { signature: string; gate: RepositoryMcpGate }>();
+
+function repositoryMcpGate(cwd: string): RepositoryMcpGate {
+  // Repository scopes plus anything an `imports` key drags in from a file the
+  // clone carries. Collecting those here is the whole point: a server the gate
+  // never enumerates is a server it silently permits.
   const servers = collectServers({ projectPath: cwd, scopes: [...REPOSITORY_SCOPES] });
+  const repositoryFiles = [...REPOSITORY_SCOPES].map((scope) => ({
+    scope,
+    file: configPathForScope(scope, { projectPath: cwd })
+  }));
+  // Every file the decision reads, listed by the module that reads them rather
+  // than restated here. Building this by hand is what went wrong: the scan grew
+  // to read merged settings from all four scopes and to stat import targets
+  // outside the repository, the hand-written list did not, and an already-loaded
+  // guard went on permitting calls after a personal global config had put the
+  // session in the state this gate exists to refuse.
   const signature = [
-    ...servers.map((server) => `${server.scope}:${server.name}:${fileSignature(server.file)}`),
+    ...servers.map((server) => `${server.origin}:${server.name}:${fileSignature(server.file)}`),
+    ...repositoryFiles.map((layer) => `layer:${layer.scope}:${fileSignature(layer.file)}`),
+    ...mcpDecisionInputs({ projectPath: cwd }).map((file) => `input:${file}:${fileSignature(file)}`),
     `store:${fileSignature(path.join(os.homedir(), ".pi", "piagent-mcp-approvals.json"))}`
   ].join("|");
   const cached = mcpApprovalCache.get(cwd);
-  if (cached?.signature === signature) return cached.blocked;
+  if (cached?.signature === signature) return cached.gate;
 
-  const blocked = new Map<string, string>();
+  const blocked = new Map<string, { state: string; origin: string }>();
   for (const server of servers) {
     const state = approvalState({ projectPath: cwd, name: server.name, entry: server.entry });
     if (state.state === "approved") continue;
-    blocked.set(server.name, state.state);
+    // A name defined more than once keeps its blocking entry: the approved copy
+    // does not vouch for the one nobody has looked at.
+    blocked.set(server.name, { state: state.state, origin: server.origin });
   }
-  mcpApprovalCache.set(cwd, { signature, blocked });
-  return blocked;
+
+  // Two things a repository-carried config can do that leave nothing to check.
+  //
+  // It can ask for tools with no prefix, so a direct tool arrives under a bare
+  // name carrying no evidence of its server. Refusing only the proxy there was
+  // not a fix: the proxy is the one form that names its server, so blocking it
+  // and allowing the bare names left the hole exactly where it was.
+  //
+  // It can also import a kind whose config this platform cannot enumerate, and
+  // then the set of servers reaching the session is simply unknown. Blocking the
+  // servers that could be listed says nothing about the ones that could not.
+  //
+  // Both stop every tool call. A repository can make a session refuse to run;
+  // it must not be able to make one run a server nobody approved.
+  // Read from the shared module rather than decided here, so `piagent-mcp
+  // doctor` reports exactly what this refuses. The two disagreeing is how an
+  // operator ends up reading "PASS" while every tool call is being stopped.
+  const unverifiable = unverifiableMcpConfig({ projectPath: cwd }).map((problem) => problem.detail);
+
+  const gate = { blocked, unverifiable };
+  mcpApprovalCache.set(cwd, { signature, gate });
+  return gate;
 }
 
 function fileSignature(file: string): string {
@@ -2049,15 +2107,26 @@ function evaluateMcpApproval(
   toolName: string,
   input: Record<string, unknown>
 ): { block: boolean; reason?: string } {
-  const server = mcpServerFromToolCall(toolName, input);
+  const gate = repositoryMcpGate(cwd);
+
+  // Every tool call, not only the ones that look like MCP. Under either of these
+  // conditions a call cannot be traced to a server, so there is no such thing as
+  // a call this gate can clear.
+  if (gate.unverifiable.length > 0) {
+    return { block: true, reason: `Blocked every tool call: ${gate.unverifiable.join(" ")}` };
+  }
+
+  const server = mcpServerFromToolCall(toolName, input, gate.blocked.keys());
   if (!server) return { block: false };
-  const state = unapprovedMcpServers(cwd).get(server);
-  if (!state) return { block: false };
-  const explanation = state === "rejected"
+  const record = gate.blocked.get(server);
+  if (!record) return { block: false };
+  const explanation = record.state === "rejected"
     ? "it was rejected for this project"
-    : state === "changed"
+    : record.state === "changed"
       ? "its definition changed since it was approved"
-      : "this repository defines it and nobody on this machine has approved it";
+      : record.origin.startsWith("import:")
+        ? `this repository imports it from ${record.origin.slice("import:".length)} config and nobody on this machine has approved it here`
+        : "this repository defines it and nobody on this machine has approved it";
   return {
     block: true,
     // Named as commands, because this is read inside a session: the reader can
@@ -2067,6 +2136,18 @@ function evaluateMcpApproval(
       `Review it with \`/piagent-mcp get ${server}\`, then \`/piagent-mcp approve ${server}\` to allow it ` +
       `or \`/piagent-mcp reject ${server}\` to refuse it.`
   };
+}
+
+// A word whose final path segment glues literal text onto an expansion --
+// `.en$(echo v)`, `${D}.env` -- names a file this process cannot know without
+// running the substitution. Matching the literal half against the protected
+// patterns answers a different question than the one being asked, so refuse
+// rather than let an unknown filename through unchecked.
+function unresolvedExpansionReason(subject: string, words: string[]): string {
+  const listed = words.map((word) => `\`${word}\``).join(", ");
+  return `${subject} builds a filename this guard cannot resolve: ${listed}. `
+    + "The literal text around the expansion makes it a path, but its value is only known at run time, "
+    + "so it cannot be checked against the protected paths. Write the path out, or put the expansion in its own argument.";
 }
 
 function evaluateMcpProxyShellProtectedAccess(
@@ -2111,6 +2192,10 @@ function evaluateMcpProxyShellProtectedAccess(
       block: true,
       reason: `MCP command resolves to protected path: ${resolvedProtectedHit.candidate} resolves to ${resolvedProtectedHit.resolved} matching ${resolvedProtectedHit.pattern}`
     };
+  }
+  const unresolved = protectedPaths.length > 0 ? unresolvedPathExpansions(command) : [];
+  if (unresolved.length > 0) {
+    return { block: true, reason: unresolvedExpansionReason("MCP command", unresolved) };
   }
   return { block: false };
 }
@@ -3284,6 +3369,19 @@ function modelLabel(ctx: ExtensionContext): string {
   return model.name ?? model.id ?? "unknown";
 }
 
+function currentSessionName(ctx: ExtensionContext): string {
+  try {
+    return String(ctx.sessionManager.getSessionName() ?? "").trim();
+  } catch {
+    return "";
+  }
+}
+
+function hasOperatorSessionName(name: string): boolean {
+  const normalized = name.trim().toLowerCase();
+  return Boolean(normalized && normalized !== "session");
+}
+
 function buildUsageSnapshot(ctx: ExtensionContext, thinkingLevel?: string): UsageSnapshot {
   const contextUsage = ctx.getContextUsage();
   const contextWithThinking = ctx as ExtensionContext & { getThinkingLevel?: () => string };
@@ -3310,7 +3408,8 @@ function buildUsageSnapshot(ctx: ExtensionContext, thinkingLevel?: string): Usag
       availableInCommand: false,
       howToRead: [
         "Inside Pi TUI: run /session for exact tokens and cost.",
-        "Outside Pi: run piagent-usage /path/to/project or scripts/pi-session-stats.sh /path/to/project."
+        "Outside Pi: run piagent-usage /path/to/project or scripts/pi-session-stats.sh /path/to/project.",
+        "Historical totals: run piagent-usage --history /path/to/project --days 7."
       ]
     }
   };
@@ -3338,6 +3437,12 @@ function formatUsageSnapshot(snapshot: UsageSnapshot): string {
     "",
     "```bash",
     "piagent-usage /path/to/project",
+    "```",
+    "",
+    "Historical totals / weekly report:",
+    "",
+    "```bash",
+    "piagent-usage --history /path/to/project --days 7",
     "```"
   ].join("\n");
 }
@@ -3823,7 +3928,10 @@ export default function piagentGuard(pi: ExtensionAPI) {
     const explicitProfile = Boolean(process.env.PIAGENT_PROFILE?.trim());
     const profile = loadProfile(ctx.cwd, projectTrusted);
     const name = profile.displayName || profile.projectId || path.basename(ctx.cwd);
-    pi.setSessionName(`pi:${name}`);
+    const operatorSessionName = currentSessionName(ctx);
+    if (!hasOperatorSessionName(operatorSessionName)) {
+      pi.setSessionName(`pi:${name}`);
+    }
     const profileHint = explicitProfile || (projectTrusted && fs.existsSync(projectProfilePath(ctx.cwd)))
       ? ""
       : " (run /onboard-project to select a profile)";
@@ -4046,6 +4154,12 @@ export default function piagentGuard(pi: ExtensionAPI) {
           block: true,
           reason: `Command resolves to protected path: ${resolvedProtectedHit.candidate} resolves to ${resolvedProtectedHit.resolved} matching ${resolvedProtectedHit.pattern}`
         };
+      }
+      const unresolvedExpansions = pathPolicy.shellProtectedPaths.length > 0
+        ? unresolvedPathExpansions(command)
+        : [];
+      if (unresolvedExpansions.length > 0) {
+        return { block: true, reason: unresolvedExpansionReason("Command", unresolvedExpansions) };
       }
 
       const confirmationReasons = execDecision.mode !== "off" && execDecision.decision === "prompt"

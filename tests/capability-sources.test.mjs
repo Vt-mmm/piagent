@@ -8,7 +8,8 @@ import {
   digestDirectory,
   resolveCapabilitySourceRoots,
   validateCapabilitySources,
-  vendorDirectoryFor
+  vendorDirectoryFor,
+  vendorRemoteSource
 } from "../packages/piagent-core/capabilities/capability-sources.js";
 import { resolveCapabilityProfileDocument, scanCapabilityPacks } from "../packages/piagent-core/capabilities/capability-core.js";
 
@@ -185,6 +186,49 @@ describe("capability source resolution", () => {
       () => resolveCapabilitySourceRoots(project, [{ name: "team", path: ".pi/packs" }]),
       /must not contain symbolic links/
     );
+  });
+
+  // Vendoring empties its destination before fetching. Everything above this
+  // guards the path the resolver reads; this guards the path the vendor command
+  // deletes, which is the one that runs as the operator on the operator's disk.
+  it("refuses to vendor through an ancestor the repository made a symbolic link", () => {
+    const project = makeProject();
+    const outside = makeProject();
+    const bystander = path.join(outside, "capability-vendor", "team");
+    fs.mkdirSync(bystander, { recursive: true });
+    fs.writeFileSync(path.join(bystander, "keep.txt"), "operator data\n");
+    // `.pi` is the ancestor, not the destination: creating the vendor directory
+    // under it succeeds and looks ordinary, so only a check that walks the whole
+    // path catches this before the delete.
+    fs.symlinkSync(outside, path.join(project, ".pi"));
+
+    assert.throws(
+      () => vendorRemoteSource(project, { name: "team", source: "npm:@piagent-absent/nothing@1.0.0" }),
+      /must not resolve through a symbolic link/
+    );
+    assert.equal(fs.readFileSync(path.join(bystander, "keep.txt"), "utf8"), "operator data\n");
+  });
+
+  // Fetching into place meant deleting the working tree first, so a fetch that
+  // failed left the project with no vendored source at all — a network blip
+  // turning into lost capabilities on a machine that had been fine a moment ago.
+  it("keeps the vendored tree that is already there when a fetch fails", () => {
+    const project = makeProject();
+    const vendored = vendorDirectoryFor(project, "acme");
+    writeExternalPack(vendored);
+    fs.writeFileSync(path.join(vendored, "KEEP.txt"), "operator data\n");
+
+    assert.throws(
+      () => vendorRemoteSource(project, { name: "acme", source: "npm:@piagent-absent/nothing@1.0.0" })
+    );
+
+    assert.equal(fs.readFileSync(path.join(vendored, "KEEP.txt"), "utf8"), "operator data\n");
+    const roots = resolveCapabilitySourceRoots(project, [{ name: "acme", source: "npm:@acme/packs@1.2.3" }]);
+    assert.equal(roots.length, 1);
+
+    // And the half-written tree does not survive to be mistaken for the real one.
+    const siblings = fs.readdirSync(path.dirname(vendored));
+    assert.deepEqual(siblings.filter((entry) => entry.includes(".incoming.")), []);
   });
 
   it("refuses a missing vendored source rather than resolving without it", () => {

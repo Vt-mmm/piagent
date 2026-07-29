@@ -88,6 +88,35 @@ Ví dụ output:
 }
 ```
 
+## Usage lịch sử / report tuần
+
+`piagent-usage /path/to/project` chỉ trả exact stats của session mới nhất. Để xem tổng usage đã lưu trên máy, kể cả session đã end hoặc subagent runs:
+
+```bash
+piagent-usage --history /path/to/project
+piagent-usage --history /path/to/project --days 7
+piagent-usage --history --all-projects --days 7 --csv
+piagent-usage --history --all-projects --since 2026-07-20 --until 2026-07-26 --json
+```
+
+History mode đọc trực tiếp `~/.pi/agent/sessions/**/*.jsonl`, cộng usage từ từng assistant message:
+
+- `input`, `output`, `cacheRead`, `cacheWrite`, `reasoning`, `totalTokens`;
+- `cost.total`;
+- số user messages, assistant messages, tool calls, tool results;
+- breakdown theo project và top sessions.
+
+Mặc định history mode **bao gồm subagent session files** vì đó là usage thật của máy. Dùng `--no-subagents` khi chỉ muốn parent/main sessions.
+
+Format hỗ trợ:
+
+| Format | Lệnh |
+|---|---|
+| Human table | `piagent-usage --history <project>` |
+| JSON | `piagent-usage --history <project> --json` |
+| CSV | `piagent-usage --history <project> --csv` |
+| Markdown | `piagent-usage --history <project> --markdown` |
+
 ## Cách đọc số
 
 | Field | Ý nghĩa |

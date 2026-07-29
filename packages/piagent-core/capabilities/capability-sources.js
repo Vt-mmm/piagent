@@ -110,6 +110,39 @@ function assertContainedDirectory(projectRoot, target, label) {
   return targetReal;
 }
 
+/**
+ * Verify a path this code is about to create, empty or write sits inside the
+ * project, without requiring it to exist yet.
+ *
+ * The read path can lstat its target and be done with it. A write path cannot:
+ * the destination is normally absent, and the failure that matters is an
+ * *ancestor* leading somewhere else. A repository shipping `.pi` as a symlink is
+ * the whole attack — `mkdir -p` follows it, the directory that appears below is
+ * a real directory, so a check on the immediate parent sees nothing wrong, and
+ * the recursive delete that comes next lands outside the project.
+ *
+ * @param {string} rootReal a project root already through realpath
+ * @param {string} target
+ * @param {string} label
+ */
+function assertContainedWritePath(rootReal, target, label) {
+  const relative = path.relative(rootReal, path.resolve(rootReal, target));
+  if (relative.startsWith("..") || path.isAbsolute(relative)) fail(`${label} resolves outside the project`);
+  let current = rootReal;
+  for (const segment of relative.split(path.sep)) {
+    if (!segment) continue;
+    current = path.join(current, segment);
+    let stat;
+    try {
+      stat = fs.lstatSync(current);
+    } catch {
+      // Absent from here down, so there is nothing further to follow.
+      return;
+    }
+    if (stat.isSymbolicLink()) fail(`${label} must not resolve through a symbolic link (${segment})`);
+  }
+}
+
 function assertNoSymbolicLinks(root, label, budget = { remaining: MAX_VENDOR_ENTRIES }) {
   for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
     if (budget.remaining-- <= 0) fail(`${label} contains more than ${MAX_VENDOR_ENTRIES} entries`);
@@ -212,27 +245,55 @@ export function vendorRemoteSource(projectRoot, entry) {
   const [validated] = validateCapabilitySources([entry]);
   if (!validated.source) fail(`capability source ${validated.name} is a local path and does not need vendoring`);
 
-  const destination = vendorDirectoryFor(projectRoot, validated.name);
+  // Resolved the same way the read path resolves it, so the containment check
+  // below compares two paths of the same form.
+  const rootReal = fs.realpathSync(projectRoot);
+  const destination = vendorDirectoryFor(rootReal, validated.name);
+  const label = `capability source ${validated.name}`;
+
+  // Before anything is created and well before anything is removed: every call
+  // after this line writes or deletes, and the point of the check is to have
+  // happened first.
+  assertContainedWritePath(rootReal, destination, label);
   const parent = path.dirname(destination);
   fs.mkdirSync(parent, { recursive: true, mode: 0o755 });
-  if (fs.lstatSync(parent).isSymbolicLink()) fail(`${parent} must not be a symbolic link`);
-  fs.rmSync(destination, { recursive: true, force: true });
-  fs.mkdirSync(destination, { mode: 0o755 });
+  // Re-checked after the directories exist. The first pass ran against a path
+  // that was mostly absent, so it proved nothing about the components this call
+  // just created or about one swapped underneath in between.
+  assertContainedWritePath(rootReal, destination, label);
+
+  // Fetched beside the destination and moved into place at the end, so a fetch
+  // that fails leaves the reviewed tree that was already there. Emptying the
+  // destination first meant a network error or a hostile archive destroyed a
+  // working vendor directory and left the project with neither version.
+  const staging = `${destination}.incoming.${process.pid}`;
+  assertContainedWritePath(rootReal, staging, label);
+  for (const sibling of fs.readdirSync(parent)) {
+    // Debris from a run that died between creating this and moving it.
+    if (sibling.startsWith(`${validated.name}.incoming.`)) fs.rmSync(path.join(parent, sibling), { recursive: true, force: true });
+  }
+  fs.mkdirSync(staging, { mode: 0o755 });
 
   try {
-    if (validated.source.startsWith("npm:")) fetchNpmSource(validated.source.slice("npm:".length), destination);
-    else fetchGitSource(validated.source, destination);
+    if (validated.source.startsWith("npm:")) fetchNpmSource(validated.source.slice("npm:".length), staging);
+    else fetchGitSource(validated.source, staging);
 
     // The fetched tree is untrusted until this passes. Checking here means a
-    // hostile archive is rejected before anything reads a manifest out of it.
-    assertNoSymbolicLinks(destination, `capability source ${validated.name}`);
-    if (!fs.existsSync(path.join(destination, "packs"))) {
+    // hostile archive is rejected before anything reads a manifest out of it,
+    // and before it can replace the tree already in place.
+    assertNoSymbolicLinks(staging, `capability source ${validated.name}`);
+    if (!fs.existsSync(path.join(staging, "packs"))) {
       fail(`capability source ${validated.name} provides no packs directory`);
     }
-  } catch (error) {
-    // A half-written vendor directory would resolve on the next run and hide
-    // the failure, so remove it.
+
+    // Everything above succeeded, so the old tree can go.
     fs.rmSync(destination, { recursive: true, force: true });
+    fs.renameSync(staging, destination);
+  } catch (error) {
+    // Only the half-written fetch is removed. The destination is either
+    // untouched, because the failure happened before the swap, or already
+    // replaced by a tree that passed every check.
+    fs.rmSync(staging, { recursive: true, force: true });
     throw error;
   }
 

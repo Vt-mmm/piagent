@@ -49,21 +49,28 @@ FORCE_SETTINGS=false
 SKIP_AGENTS=false
 SKIP_REVIEW=false
 
+# Checking only that a value is present lets the next flag serve as the value.
+# `--profile --force-profile` used to name a profile "--force-profile" and leave
+# the force off, so init failed on an unknown profile while the flag the operator
+# actually typed went nowhere.
+require_value() {
+  local option="$1"
+  local value="${2:-}"
+  if [[ -z "$value" || "$value" == --* ]]; then
+    echo "Missing value for $option" >&2
+    exit 2
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --profile)
-      if [[ $# -lt 2 ]]; then
-        echo "Missing value for --profile" >&2
-        exit 2
-      fi
+      require_value "$1" "${2:-}"
       PROFILE_INPUT="$2"
       shift 2
       ;;
     --package-source)
-      if [[ $# -lt 2 ]]; then
-        echo "Missing value for --package-source" >&2
-        exit 2
-      fi
+      require_value "$1" "${2:-}"
       PACKAGE_SOURCE="$2"
       shift 2
       ;;

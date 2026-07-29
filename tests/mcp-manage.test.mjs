@@ -173,6 +173,90 @@ describe("piagent-mcp server management", () => {
     assert.match(shown.stdout, /\$\{REFERENCED\}/);
   });
 
+  // The same rule --env and --header enforce. An address is not a safer place
+  // for a token: it lands in the committed file and in request logs besides.
+  it("refuses a credential carried in the URL and masks one already on disk", () => {
+    const fixture = createFixture();
+
+    const userinfo = run(fixture, ["add", "a", "--scope", "global", "--url", "https://user:s3cret@mcp.example.com/mcp"]);
+    assert.equal(userinfo.status, 2);
+    assert.match(userinfo.stderr, /must not carry credentials in the address/);
+    assert.ok(!userinfo.stderr.includes("s3cret"), userinfo.stderr);
+
+    const query = run(fixture, ["add", "b", "--scope", "global", "--url", "https://mcp.example.com/mcp?api_key=live-value"]);
+    assert.equal(query.status, 2);
+    assert.match(query.stderr, /looks like a credential/);
+
+    fs.writeFileSync(projectConfigPath(fixture), `${JSON.stringify({
+      mcpServers: { legacy: { url: "https://user:s3cret@mcp.example.com/mcp?token=live-value" } }
+    }, null, 2)}\n`);
+    for (const command of [["get", "legacy"], ["list"]]) {
+      const shown = run(fixture, command);
+      assert.equal(shown.status, 0, shown.stderr);
+      assert.ok(!shown.stdout.includes("s3cret"), `${command[0]}: ${shown.stdout}`);
+      assert.ok(!shown.stdout.includes("live-value"), `${command[0]}: ${shown.stdout}`);
+    }
+  });
+
+  // Global scope, because approval outranks a missing variable on the readiness
+  // ladder and a repository-scoped server would report pending first.
+  it("reports a bearer token variable that is not set", () => {
+    const fixture = createFixture();
+    assert.equal(run(fixture, [
+      "add", "remote", "--scope", "global",
+      "--url", "https://mcp.example.com/mcp",
+      "--bearer-token-env-var", "REMOTE_TOKEN"
+    ]).status, 0);
+
+    // The field names its variable directly instead of through ${VAR}, which is
+    // why the reference scan never saw it and the server read as ready.
+    const missing = run(fixture, ["doctor"]);
+    assert.match(missing.stdout, /REMOTE_TOKEN/);
+
+    const present = run(fixture, ["doctor"], { env: { REMOTE_TOKEN: "value" } });
+    assert.ok(!present.stdout.includes("REMOTE_TOKEN is referenced but not set"), present.stdout);
+  });
+
+  it("fails loudly when the decision cannot be written", () => {
+    const fixture = createFixture();
+    fs.writeFileSync(projectConfigPath(fixture), `${JSON.stringify({
+      mcpServers: { repo: { command: "npx", args: ["-y", "@acme/repo"] } }
+    }, null, 2)}\n`);
+    // A file where the store's directory belongs, so the write cannot succeed.
+    fs.writeFileSync(path.join(fixture.home, ".pi"), "not a directory\n");
+
+    const approved = run(fixture, ["approve", "repo"]);
+    assert.notEqual(approved.status, 0);
+    assert.match(approved.stderr, /could not write/);
+  });
+
+  it("names a config layer it cannot parse instead of counting it as empty", () => {
+    const fixture = createFixture();
+    fs.writeFileSync(projectConfigPath(fixture), "{ not json\n");
+
+    const report = run(fixture, ["doctor"]);
+    assert.match(report.stdout, /Unreadable project config/);
+  });
+
+  it("names the import a repository config uses to reach other servers", () => {
+    const fixture = createFixture();
+    fs.writeFileSync(projectConfigPath(fixture), `${JSON.stringify({
+      imports: ["vscode"],
+      mcpServers: {}
+    }, null, 2)}\n`);
+    fs.mkdirSync(path.join(fixture.project, ".vscode"), { recursive: true });
+    fs.writeFileSync(path.join(fixture.project, ".vscode", "mcp.json"), `${JSON.stringify({
+      servers: { exfil: { command: "npx", args: ["-y", "@attacker/mcp"] } }
+    }, null, 2)}\n`);
+
+    const report = run(fixture, ["doctor"]);
+    assert.match(report.stdout, /imports servers from vscode config/);
+    // And the server itself is listed, holding at pending like any the
+    // repository declares outright.
+    const listed = run(fixture, ["list"]);
+    assert.match(listed.stdout, /exfil/);
+  });
+
   it("holds a server the repository defines until it is approved here", () => {
     const fixture = createFixture();
     const added = run(fixture, ["add", "repo", "--scope", "project", "--", "npx", "-y", "@acme/repo-mcp"]);
@@ -315,6 +399,238 @@ describe("piagent-mcp server management", () => {
     assert.match(run(fixture, ["add", "x", "--nonsense"]).stderr, /unknown option/);
     assert.match(run(fixture, ["add", "bad name", "--url", "https://x.example.com/mcp"]).stderr, /invalid server name/);
     assert.match(run(fixture, ["get", "absent"]).stderr, /no server named absent/);
+  });
+
+  // The guard and this CLI have to agree about a config that stops every tool
+  // call. When only the guard knew, `doctor` printed "No MCP servers configured"
+  // and exited 0 while nothing in the session could run — an answer that sends
+  // the operator to the wrong file, or to no file at all.
+  it("reports an import it cannot enumerate instead of reporting nothing", () => {
+    const fixture = createFixture();
+    fs.writeFileSync(path.join(fixture.project, ".mcp.json"), `${JSON.stringify({ imports: ["codex"], mcpServers: {} })}\n`);
+    fs.mkdirSync(path.join(fixture.home, ".codex"), { recursive: true });
+    fs.writeFileSync(path.join(fixture.home, ".codex", "config.toml"), '[mcp_servers.exfil]\ncommand = "npx"\n');
+
+    const doctor = run(fixture, ["doctor"]);
+    assert.equal(doctor.status, 1, doctor.stdout);
+    assert.match(doctor.stdout, /BLOCKED every tool call/);
+    assert.match(doctor.stdout, /cannot enumerate/);
+    assert.doesNotMatch(doctor.stdout, /No MCP servers configured/);
+
+    const list = run(fixture, ["list"]);
+    assert.equal(list.status, 1, list.stdout);
+    assert.match(list.stdout, /BLOCKED every tool call/);
+    // Telling somebody to seed a baseline here points them at the wrong file.
+    assert.doesNotMatch(list.stdout, /Seed the pinned baseline/);
+
+    const json = JSON.parse(run(fixture, ["doctor", "--json"]).stdout);
+    assert.equal(json.unverifiableConfig.length, 1);
+  });
+
+  it("reports a config that erases tool origin the same way", () => {
+    const fixture = createFixture();
+    fs.writeFileSync(path.join(fixture.project, ".mcp.json"), `${JSON.stringify({
+      settings: { directTools: true, toolPrefix: "none" },
+      mcpServers: {}
+    })}\n`);
+
+    const doctor = run(fixture, ["doctor"]);
+    assert.equal(doctor.status, 1, doctor.stdout);
+    assert.match(doctor.stdout, /toolPrefix "none"/);
+  });
+
+  // Scope says which layer named the import; it does not say where the servers
+  // came from. A global config importing a repository-relative kind reads them
+  // out of the clone, and the gate treats them as the repository's.
+  it("does not call a server ready because the layer that imported it is global", () => {
+    const fixture = createFixture();
+    const globalConfig = path.join(fixture.home, ".config", "mcp", "mcp.json");
+    fs.mkdirSync(path.dirname(globalConfig), { recursive: true });
+    fs.writeFileSync(globalConfig, `${JSON.stringify({ imports: ["vscode"], mcpServers: {} })}\n`);
+    fs.mkdirSync(path.join(fixture.project, ".vscode"), { recursive: true });
+    fs.writeFileSync(path.join(fixture.project, ".vscode", "mcp.json"), `${JSON.stringify({
+      servers: { exfil: { command: "npx", args: ["-y", "@attacker/mcp"] } }
+    })}\n`);
+
+    const list = run(fixture, ["list", "--json"]);
+    const server = JSON.parse(list.stdout).servers.find((row) => row.name === "exfil");
+    assert.equal(server.state, "pending-approval");
+    // The detail names the file the definition actually came from, not the
+    // layer that happened to carry the imports key.
+    assert.match(server.detail, /imported from vscode config/);
+
+    const doctor = run(fixture, ["doctor"]);
+    assert.equal(doctor.status, 1, doctor.stdout);
+    assert.doesNotMatch(doctor.stdout, /PASS: every configured MCP server/);
+
+    // The detail view has to show the decision too. Keying that line off the
+    // scope left it blank for exactly the servers whose need for approval is
+    // least visible from the config that names them.
+    const get = run(fixture, ["get", "exfil"]);
+    assert.match(get.stdout, /approval: pending/);
+    // And it says which file to edit, because `scope: global` plus a path
+    // inside the clone reads as a config this command owns, and it does not.
+    assert.match(get.stdout, /origin: import:vscode/);
+  });
+
+  // Every surface has to agree that nothing can run. `list --json` was the one
+  // that did not: a caller scripting against it read `servers: []` as "nothing
+  // configured", and an exit code of 0 agreed, while the guard was refusing
+  // every tool call.
+  it("reports a blocking config through list --json and its exit code", () => {
+    const fixture = createFixture();
+    fs.writeFileSync(path.join(fixture.project, ".mcp.json"), `${JSON.stringify({
+      settings: { directTools: true, toolPrefix: "none" },
+      mcpServers: {}
+    })}\n`);
+
+    const list = run(fixture, ["list", "--json"]);
+    assert.equal(list.status, 1, list.stdout);
+    const json = JSON.parse(list.stdout);
+    assert.equal(json.usable, false);
+    assert.equal(json.blockingConfig.length, 1);
+    assert.match(json.blockingConfig[0].detail, /toolPrefix "none"/);
+  });
+
+  // The two keys are one merged settings block in the adapter, so splitting them
+  // across layers used to produce a session with neither key set anywhere a
+  // single-layer check would look.
+  it("reads settings the way the adapter merges them, across layers", () => {
+    const fixture = createFixture();
+    const globalConfig = path.join(fixture.home, ".config", "mcp", "mcp.json");
+    fs.mkdirSync(path.dirname(globalConfig), { recursive: true });
+    fs.writeFileSync(globalConfig, `${JSON.stringify({ settings: { directTools: true }, mcpServers: {} })}\n`);
+    fs.writeFileSync(path.join(fixture.project, ".mcp.json"), `${JSON.stringify({
+      settings: { toolPrefix: "none" },
+      mcpServers: { repo: { command: "npx", args: ["-y", "@acme/mcp"] } }
+    })}\n`);
+
+    const doctor = run(fixture, ["doctor"]);
+    assert.equal(doctor.status, 1, doctor.stdout);
+    assert.match(doctor.stdout, /BLOCKED every tool call/);
+    // Both files, because editing either one alone fixes it and naming one
+    // sends the reader to a file the other half is not in.
+    assert.match(doctor.stdout, /mcp\.json and .*\.mcp\.json/);
+  });
+
+  // An import of a kind nothing here can parse is a hole only when the file it
+  // names is actually there. Refusing on the declaration alone stopped every
+  // session whose repository listed a tool the operator does not have.
+  it("ignores an unenumerable import whose config does not exist", () => {
+    const fixture = createFixture();
+    fs.writeFileSync(path.join(fixture.project, ".mcp.json"), `${JSON.stringify({ imports: ["codex"], mcpServers: {} })}\n`);
+
+    const list = run(fixture, ["list"]);
+    assert.equal(list.status, 0, list.stdout);
+    assert.doesNotMatch(list.stdout, /BLOCKED every tool call/);
+  });
+
+  // `located.file` for an imported server is the other tool's config. Writing it
+  // back through this tool's writer would rewrite somebody's Cursor file in a
+  // format Cursor does not use.
+  it("refuses to remove or disable a server that came through imports", () => {
+    const fixture = createFixture();
+    fs.writeFileSync(path.join(fixture.project, ".mcp.json"), `${JSON.stringify({ imports: ["cursor"], mcpServers: {} })}\n`);
+    const cursorConfig = path.join(fixture.home, ".cursor", "mcp.json");
+    fs.mkdirSync(path.dirname(cursorConfig), { recursive: true });
+    const original = `${JSON.stringify({ mcpServers: { personal: { command: "npx", args: ["-y", "@me/mcp"] } } }, null, 2)}\n`;
+    fs.writeFileSync(cursorConfig, original);
+
+    for (const argv of [["remove", "personal"], ["disable", "personal"], ["enable", "personal"]]) {
+      const result = run(fixture, argv);
+      assert.equal(result.status, 2, `${argv[0]}: ${result.stdout}${result.stderr}`);
+      assert.match(result.stderr, /not defined by any config this command owns/, argv[0]);
+      assert.match(result.stderr, /\.cursor/, argv[0]);
+    }
+    // The operator's own file is exactly as it was.
+    assert.equal(fs.readFileSync(cursorConfig, "utf8"), original);
+  });
+
+  // A JSON array parses fine and is not a config. Reading it as empty meant the
+  // next write replaced the file with this tool's shape, destroying whatever the
+  // document had been.
+  it("refuses a config that parses but is not an object", () => {
+    const fixture = createFixture();
+    fs.writeFileSync(path.join(fixture.project, ".mcp.json"), '["not", "a", "config"]\n');
+
+    const doctor = run(fixture, ["doctor"]);
+    assert.equal(doctor.status, 1, doctor.stdout);
+    assert.match(doctor.stdout, /not a JSON object/);
+  });
+
+  it("keeps import kinds it does not recognise when it writes", () => {
+    const fixture = createFixture();
+    fs.writeFileSync(path.join(fixture.project, ".mcp.json"), `${JSON.stringify({
+      imports: ["cursor", "some-future-tool"],
+      mcpServers: {}
+    }, null, 2)}\n`);
+
+    const added = run(fixture, ["add", "local", "--scope", "project", "--", "npx", "-y", "@acme/mcp"]);
+    assert.equal(added.status, 0, added.stdout + added.stderr);
+    assert.deepEqual(readConfig(projectConfigPath(fixture)).imports, ["cursor", "some-future-tool"]);
+  });
+
+  it("refuses to write through a symlinked config", () => {
+    const fixture = createFixture();
+    const real = path.join(fixture.root, "elsewhere.json");
+    fs.writeFileSync(real, `${JSON.stringify({ mcpServers: {} }, null, 2)}\n`);
+    fs.symlinkSync(real, projectConfigPath(fixture));
+
+    const added = run(fixture, ["add", "local", "--scope", "project", "--", "npx", "-y", "@acme/mcp"]);
+    assert.notEqual(added.status, 0);
+    assert.match(added.stderr, /refusing to write through a symlink/);
+    assert.deepEqual(readConfig(real).mcpServers, {});
+  });
+
+  // Absent and unreadable both read as pending, which is right for the gate and
+  // wrong for a write: overwriting a store nobody could parse discards every
+  // decision in it, including the ones for other projects.
+  it("refuses to write over an approval store it could not read", () => {
+    const fixture = createFixture();
+    fs.writeFileSync(path.join(fixture.project, ".mcp.json"), `${JSON.stringify({
+      mcpServers: { repo: { command: "npx", args: ["-y", "@acme/mcp"] } }
+    })}\n`);
+    fs.mkdirSync(path.join(fixture.home, ".pi"), { recursive: true });
+    fs.writeFileSync(path.join(fixture.home, ".pi", "piagent-mcp-approvals.json"), "{ this is not json\n");
+
+    const approved = run(fixture, ["approve", "repo", "--force"]);
+    assert.notEqual(approved.status, 0);
+    assert.match(approved.stderr, /could not write/);
+    // Untouched, so whatever it holds can still be recovered by hand.
+    assert.equal(fs.readFileSync(path.join(fixture.home, ".pi", "piagent-mcp-approvals.json"), "utf8"), "{ this is not json\n");
+  });
+
+  // The adapter merges a same-named server key by key across layers. A
+  // repository that declares only `args` runs with a command it never showed.
+  it("shows the merged definition when asking for approval", () => {
+    const fixture = createFixture();
+    const globalConfig = path.join(fixture.home, ".config", "mcp", "mcp.json");
+    fs.mkdirSync(path.dirname(globalConfig), { recursive: true });
+    fs.writeFileSync(globalConfig, `${JSON.stringify({
+      mcpServers: { shared: { command: "npx", args: ["-y", "@acme/safe"] } }
+    })}\n`);
+    fs.writeFileSync(path.join(fixture.project, ".mcp.json"), `${JSON.stringify({
+      mcpServers: { shared: { args: ["-y", "@attacker/mcp"] } }
+    })}\n`);
+
+    const approved = run(fixture, ["approve", "shared"]);
+    assert.equal(approved.status, 0, approved.stdout + approved.stderr);
+    // The command line the operator is consenting to, not the fragment.
+    assert.match(approved.stdout, /"command": "npx"/);
+    assert.match(approved.stdout, /@attacker\/mcp/);
+  });
+
+  it("names an import target that exists but cannot be parsed", () => {
+    const fixture = createFixture();
+    fs.writeFileSync(path.join(fixture.project, ".mcp.json"), `${JSON.stringify({ imports: ["cursor"], mcpServers: {} })}\n`);
+    const cursorConfig = path.join(fixture.home, ".cursor", "mcp.json");
+    fs.mkdirSync(path.dirname(cursorConfig), { recursive: true });
+    fs.writeFileSync(cursorConfig, "{ broken\n");
+
+    const doctor = run(fixture, ["doctor"]);
+    assert.equal(doctor.status, 1, doctor.stdout);
+    assert.match(doctor.stdout, /present but unreadable/);
+    assert.match(doctor.stdout, /\.cursor/);
   });
 
   it("is exposed as a command by the package and the dispatcher", () => {

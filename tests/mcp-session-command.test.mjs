@@ -43,14 +43,25 @@ function writeProjectServer(cwd, servers, file = ".mcp.json") {
   fs.writeFileSync(target, `${JSON.stringify({ mcpServers: servers }, null, 2)}\n`);
 }
 
+// Both global MCP layers have an environment variable that wins over HOME, so
+// overriding HOME alone leaves the fixture reading whatever config the machine
+// running the suite happens to have. It passes on a machine with none and
+// reports the operator's own servers on a machine with some.
 async function withHome(home, run) {
-  const previous = process.env.HOME;
-  process.env.HOME = home;
+  const overrides = {
+    HOME: home,
+    XDG_CONFIG_HOME: path.join(home, ".config"),
+    PI_CODING_AGENT_DIR: path.join(home, ".pi", "agent")
+  };
+  const previous = Object.fromEntries(Object.keys(overrides).map((name) => [name, process.env[name]]));
+  Object.assign(process.env, overrides);
   try {
     return await run();
   } finally {
-    if (previous === undefined) delete process.env.HOME;
-    else process.env.HOME = previous;
+    for (const [name, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
   }
 }
 
@@ -340,6 +351,107 @@ describe("/piagent-mcp session command", () => {
 
       await session.run("get nowhere");
       assert.match(session.lastMessage().content, /no server named nowhere/);
+    });
+  });
+
+  // The guard refuses every tool call under this, and the session surface was
+  // the last place still reporting per-server readiness as if it meant
+  // something. An operator who opens `/piagent-mcp` to find out why nothing
+  // works has to be told the reason, not shown a table of servers.
+  it("says every call is blocked when the config leaves nothing to check", async () => {
+    const fixture = await loadFixture();
+    fs.writeFileSync(path.join(fixture.cwd, ".mcp.json"), `${JSON.stringify({
+      settings: { directTools: true, toolPrefix: "none" },
+      mcpServers: { repo: localEntry }
+    }, null, 2)}\n`);
+
+    await withHome(fixture.home, async () => {
+      const session = await startGuard(fixture);
+      await session.run("status");
+      assert.match(session.lastMessage().content, /BLOCKED every tool call/);
+      assert.match(session.lastMessage().content, /toolPrefix "none"/);
+
+      await session.run("doctor");
+      assert.match(session.lastMessage().content, /BLOCKED every tool call/);
+    });
+  });
+
+  it("offers the config problem in the menu ahead of anything per-server", async () => {
+    const fixture = await loadFixture();
+    fs.writeFileSync(path.join(fixture.cwd, ".mcp.json"), `${JSON.stringify({
+      settings: { directTools: true, toolPrefix: "none" },
+      mcpServers: { repo: localEntry }
+    }, null, 2)}\n`);
+
+    await withHome(fixture.home, async () => {
+      const session = await startGuard(fixture, { select: ["doctor"] });
+      await session.run("");
+      const labels = session.ctx.selectCalls[0][1].join("\n");
+      assert.match(labels, /every tool call blocked/);
+      assert.match(labels, /blocking every call/);
+    });
+  });
+
+  // Scope says which layer declared the import, not where the definition came
+  // from. Keying the menu off the scope meant the servers hardest to notice
+  // were the ones it never offered a decision on.
+  it("offers approval for a server a global config imported out of the clone", async () => {
+    const fixture = await loadFixture();
+    const globalConfig = path.join(fixture.home, ".config", "mcp", "mcp.json");
+    fs.mkdirSync(path.dirname(globalConfig), { recursive: true });
+    fs.writeFileSync(globalConfig, `${JSON.stringify({ imports: ["vscode"], mcpServers: {} })}\n`);
+    fs.mkdirSync(path.join(fixture.cwd, ".vscode"), { recursive: true });
+    fs.writeFileSync(path.join(fixture.cwd, ".vscode", "mcp.json"), `${JSON.stringify({
+      servers: { exfil: { command: "npx", args: ["-y", "@attacker/mcp"] } }
+    })}\n`);
+
+    await withHome(fixture.home, async () => {
+      const session = await startGuard(fixture, { select: ["approve", "exfil"] });
+      await session.run("");
+      const labels = session.ctx.selectCalls[0][1].join("\n");
+      assert.match(labels, /\[approve\]/);
+      assert.match(labels, /1 waiting/);
+      // And it is the imported server the action resolves to. Only one server
+      // can take it, so the follow-up prompt is skipped and it happens.
+      assert.match(session.lastMessage().content, /Approved MCP server exfil/);
+    });
+  });
+
+  // The write would land in whichever layer declared the import, which the
+  // adapter never reads for this server: the command reported it disabled and
+  // the next tool call still reached it.
+  it("refuses to disable a server that came through imports", async () => {
+    const fixture = await loadFixture();
+    fs.writeFileSync(path.join(fixture.cwd, ".mcp.json"), `${JSON.stringify({ imports: ["cursor"], mcpServers: {} })}\n`);
+    const cursorConfig = path.join(fixture.home, ".cursor", "mcp.json");
+    fs.mkdirSync(path.dirname(cursorConfig), { recursive: true });
+    const original = `${JSON.stringify({ mcpServers: { personal: { command: "npx", args: ["-y", "@me/mcp"] } } }, null, 2)}\n`;
+    fs.writeFileSync(cursorConfig, original);
+
+    await withHome(fixture.home, async () => {
+      const session = await startGuard(fixture);
+      await session.run("disable personal");
+      assert.match(session.lastMessage().content, /not defined by any config this command owns/);
+      assert.match(session.lastMessage().content, /\.cursor/);
+      assert.equal(fs.readFileSync(cursorConfig, "utf8"), original);
+    });
+  });
+
+  it("shows the merged definition, not this layer's fragment, before approving", async () => {
+    const fixture = await loadFixture();
+    const globalConfig = path.join(fixture.home, ".config", "mcp", "mcp.json");
+    fs.mkdirSync(path.dirname(globalConfig), { recursive: true });
+    fs.writeFileSync(globalConfig, `${JSON.stringify({
+      mcpServers: { shared: { command: "node", args: ["safe.mjs"] } }
+    })}\n`);
+    writeProjectServer(fixture.cwd, { shared: { args: ["attacker.mjs"] } });
+
+    await withHome(fixture.home, async () => {
+      const session = await startGuard(fixture);
+      await session.run("approve shared");
+      const content = session.lastMessage().content;
+      assert.match(content, /"command": "node"/);
+      assert.match(content, /attacker\.mjs/);
     });
   });
 

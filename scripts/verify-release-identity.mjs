@@ -80,6 +80,35 @@ for (const page of docsPages) {
   if (!html.includes(`${expectedTag} docs`)) fail(`docs-site/${page} version badge does not identify ${expectedTag}`);
 }
 
+// A version written into an install command does not come from the build, so it
+// goes stale silently and keeps telling readers to install the previous release.
+// The badge check above cannot see these: they are sentences, not generated
+// markup.
+//
+// Only the command shapes are matched, not every version-looking string. Prose
+// naming an old release is usually saying something true about history — when a
+// behaviour arrived, which release a mistake shipped in — and rewriting those to
+// the current number would make them false. Files that exist to list past
+// versions are exempt outright.
+const VERSION_HISTORY_FILES = new Set(["CHANGELOG.md", "docs/publishing-for-teams.md"]);
+const RELEASE_TAG_MENTION = /(?:@piagent\/platform@|Vt-mmm\/piagent@v?|--version )(\d+\.\d+\.\d+)/g;
+
+function proseFiles() {
+  const files = fs.readdirSync(path.join(root, "docs")).filter((name) => name.endsWith(".md")).map((name) => `docs/${name}`);
+  files.push("README.md");
+  for (const name of fs.readdirSync(path.join(root, "docs-site", "content"))) {
+    if (name.endsWith(".html")) files.push(`docs-site/content/${name}`);
+  }
+  return files.filter((file) => !VERSION_HISTORY_FILES.has(file));
+}
+
+for (const file of proseFiles()) {
+  const text = fs.readFileSync(path.join(root, file), "utf8");
+  for (const [mention, named] of text.matchAll(RELEASE_TAG_MENTION)) {
+    if (named !== version) fail(`${file} tells the reader to install ${named} (${mention.trim()}), but this release is ${version}`);
+  }
+}
+
 if (options.tag) {
   if (options.tag !== expectedTag) fail(`release tag ${options.tag} does not match package version ${expectedTag}`);
   if (!/^[0-9a-fA-F]{40}$/.test(options.commit)) fail("--commit must be a 40-character commit SHA");

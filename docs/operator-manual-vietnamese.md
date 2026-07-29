@@ -18,12 +18,12 @@ Support matrix release hiện tại: macOS Apple Silicon + Bash và Linux x64 + 
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.2.0
+npm install -g --ignore-scripts @piagent/platform@1.2.1
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
 
-Khi seed `.pi/settings.json` cho team/repo cần audit lặp lại, giữ package source dạng pinned tag như `git:github.com/Vt-mmm/piagent@v1.2.0`. Máy cá nhân có thể dùng `git:github.com/Vt-mmm/piagent` để theo latest.
+Khi seed `.pi/settings.json` cho team/repo cần audit lặp lại, giữ package source dạng pinned tag như `git:github.com/Vt-mmm/piagent@v1.2.1`. Máy cá nhân có thể dùng `git:github.com/Vt-mmm/piagent` để theo latest.
 
 Nếu đang ở source checkout của platform, dùng helper theo channel để preview trước khi đổi:
 
@@ -99,7 +99,7 @@ install package once
 
 ```bash
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.2.0
+npm install -g --ignore-scripts @piagent/platform@1.2.1
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -281,7 +281,7 @@ Không phải daily default. Dùng khi muốn tạo sẵn `.pi` files cho projec
 bash /path/to/piagent/scripts/setup.sh /path/to/project \
   --project-only \
   --profile auto \
-  --package-source git:github.com/Vt-mmm/piagent@v1.2.0 \
+  --package-source git:github.com/Vt-mmm/piagent@v1.2.1 \
   --mcp-preset core \
   --subagents-preset safe
 ```
@@ -513,6 +513,16 @@ bash /path/to/piagent/scripts/pi-session-stats.sh \
   /path/to/project \
   /Users/<user>/.pi/agent/sessions/<project-key>/<session>.jsonl
 ```
+
+Để xem tổng usage lịch sử trên máy, kể cả session đã end:
+
+```bash
+piagent-usage --history /path/to/project --days 7
+piagent-usage --history --all-projects --days 7 --csv
+piagent-usage --history --all-projects --since 2026-07-20 --until 2026-07-26 --json
+```
+
+History mode đọc trực tiếp `~/.pi/agent/sessions/**/*.jsonl`. Mặc định có tính cả subagent session files vì đó là usage thật của máy; thêm `--no-subagents` nếu chỉ muốn parent/main sessions.
 
 ### Cách đọc số
 
@@ -854,8 +864,8 @@ Watchdog là optional adversarial reviewer ở cuối turn, không bật mặc �
 
 | Command | Dùng để |
 |---|---|
-| `npm install -g --ignore-scripts @piagent/platform@1.2.0` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
-| `pi install git:github.com/Vt-mmm/piagent@v1.2.0` | Install pinned release cho reproducible team setup. |
+| `npm install -g --ignore-scripts @piagent/platform@1.2.1` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
+| `pi install git:github.com/Vt-mmm/piagent@v1.2.1` | Install pinned release cho reproducible team setup. |
 | `pi install git:github.com/Vt-mmm/piagent` | Install latest platform package cho máy cá nhân/sandbox. |
 | Cài exact Pi host của release, rồi `npm install -g --ignore-scripts @piagent/platform@X.Y.Z` và `piagent-install --stable` | Full update: đồng bộ host, terminal helper và Pi package. Mỗi release pin một Pi host chính xác; lấy đúng version của release đang cài trong [release/install policy](release-install-policy.md). |
 | Cài exact Pi host ghi trong release cũ, rồi helper `vPREVIOUS` và `piagent-install --stable` | Full rollback; đánh giá lại dependency findings của host cũ trước khi hạ version. |
@@ -880,7 +890,9 @@ Watchdog là optional adversarial reviewer ở cuối turn, không bật mặc �
 | `pi --fork <id-or-file>` | Fork session cũ sang session mới. |
 | `pi --name "<name>"` | Đặt tên session. |
 | `pi --tools read,grep,find,ls -p "Review src"` | Read-only one-shot. |
-| `piagent-usage /path/to/project` | Exact token/cost stats. |
+| `piagent-usage /path/to/project` | Exact token/cost stats của session mới nhất. |
+| `piagent-usage --history /path/to/project --days 7` | Tổng usage lịch sử của project. |
+| `piagent-usage --history --all-projects --days 7 --csv` | CSV report cuối tuần toàn máy. |
 | `piagent-mcp --preset core --scope global --replace` | Setup or update the governed MCP baseline. |
 | `piagent-subagents --preset safe` | Setup subagents baseline. |
 | `bash scripts/verify-local.sh` | Verify platform repo. |
@@ -952,7 +964,7 @@ Mở lại Pi session sau khi install.
 Cài lại terminal helper đúng release rồi kiểm tra `PATH`:
 
 ```bash
-npm install -g --ignore-scripts @piagent/platform@1.2.0
+npm install -g --ignore-scripts @piagent/platform@1.2.1
 command -v piagent-install
 ```
 

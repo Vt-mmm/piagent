@@ -1,12 +1,49 @@
 {
-  "schemaVersion": 1,
-  "projectId": "piagent-platform",
-  "displayName": "Pi Agent Platform",
-  "mode": "platform-development",
-  "rootMarkers": [
-    "AGENTS.md",
-    "package.json"
+  "capabilityPacks": [
+    {
+      "name": "engineering-base",
+      "version": "0.1.1"
+    }
   ],
+  "capabilityPolicy": {
+    "allowedExternalActions": [],
+    "allowedFilesystemRead": [
+      "**/*"
+    ],
+    "allowedFilesystemWrite": [
+      "**/*"
+    ],
+    "allowedLifecycles": [
+      "experimental"
+    ],
+    "allowedNetworkDomains": [],
+    "allowedOwners": [
+      "platform-maintainers"
+    ]
+  },
+  "displayName": "Pi Agent Platform",
+  "mcpCapabilities": [
+    "filesystem-readonly",
+    "filesystem-write",
+    "shell",
+    "github",
+    "browser",
+    "memory"
+  ],
+  "memory": {
+    "enabled": true,
+    "externalPackages": [],
+    "handbookFile": ".pi/memory/MEMORY.md",
+    "localDir": ".pi/memory/local",
+    "maxInjectedChars": 4000,
+    "mode": "manual",
+    "readBeforeTask": true,
+    "scope": "project",
+    "summaryFile": ".pi/memory/memory_summary.md",
+    "writePolicy": "explicit-only"
+  },
+  "mode": "platform-development",
+  "projectId": "piagent-platform",
   "protectedPaths": [
     ".git/**",
     "**/auth.json",
@@ -20,6 +57,17 @@
     "docs/project-adapters.md",
     "docs/mcp-and-tools.md"
   ],
+  "rootMarkers": [
+    "AGENTS.md",
+    "package.json"
+  ],
+  "runtimePolicy": {
+    "contextBudget": "enforce",
+    "execPolicy": "enforce",
+    "finalGate": "enforce",
+    "toolRegistry": "advisory"
+  },
+  "schemaVersion": 1,
   "taskModes": {
     "readOnly": {
       "tools": [
@@ -41,53 +89,5 @@
     "source": [
       "bash scripts/verify-local.sh"
     ]
-  },
-  "mcpCapabilities": [
-    "filesystem-readonly",
-    "filesystem-write",
-    "shell",
-    "github",
-    "browser",
-    "memory"
-  ],
-  "capabilityPacks": [
-    {
-      "name": "engineering-base",
-      "version": "0.1.1"
-    }
-  ],
-  "capabilityPolicy": {
-    "allowedOwners": [
-      "platform-maintainers"
-    ],
-    "allowedLifecycles": [
-      "experimental"
-    ],
-    "allowedFilesystemRead": [
-      "**/*"
-    ],
-    "allowedFilesystemWrite": [
-      "**/*"
-    ],
-    "allowedNetworkDomains": [],
-    "allowedExternalActions": []
-  },
-  "memory": {
-    "enabled": true,
-    "mode": "manual",
-    "scope": "project",
-    "summaryFile": ".pi/memory/memory_summary.md",
-    "handbookFile": ".pi/memory/MEMORY.md",
-    "localDir": ".pi/memory/local",
-    "readBeforeTask": true,
-    "writePolicy": "explicit-only",
-    "maxInjectedChars": 4000,
-    "externalPackages": []
-  },
-  "runtimePolicy": {
-    "execPolicy": "enforce",
-    "contextBudget": "enforce",
-    "toolRegistry": "advisory",
-    "finalGate": "enforce"
   }
 }

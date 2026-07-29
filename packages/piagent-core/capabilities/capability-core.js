@@ -238,8 +238,13 @@ export function validateCapabilityPack(document, options = {}) {
 
     if (rejectUnknownKeys(spec.activation, new Set(["mode", "profiles", "triggers"]), `${source}.spec.activation`, errors)) {
       if (!ACTIVATION_MODES.has(spec.activation.mode)) pushError(errors, `${source}.spec.activation.mode`, "must be explicit, profile, or trigger");
-      validateStringArray(spec.activation.profiles ?? [], `${source}.spec.activation.profiles`, errors, { maxItems: 64, pattern: NAME_PATTERN });
+      const profiles = validateStringArray(spec.activation.profiles ?? [], `${source}.spec.activation.profiles`, errors, { maxItems: 64, pattern: NAME_PATTERN });
       const triggers = validateStringArray(spec.activation.triggers ?? [], `${source}.spec.activation.triggers`, errors, { maxItems: 64 });
+      // Both modes name the thing that switches them on, so both are checked for
+      // it. Only `trigger` was, which let a pack declare profile activation and
+      // list no profiles: resolution then read `.includes` off an absent array
+      // and died with a TypeError where it should have refused with a reason.
+      if (spec.activation.mode === "profile" && profiles.length === 0) pushError(errors, `${source}.spec.activation.profiles`, "must not be empty for profile activation");
       if (spec.activation.mode === "trigger" && triggers.length === 0) pushError(errors, `${source}.spec.activation.triggers`, "must not be empty for trigger activation");
     }
 
@@ -859,7 +864,10 @@ export function resolveCapabilityProfileDocument(root, profile, options = {}) {
     const key = `${selector.name}@${selector.version}`;
     const directPack = byKey.get(key);
     if (!directPack) throw new CapabilityValidationError(`profile selects unknown capability pack ${key}`);
-    if (directPack.activation.mode === "profile" && !directPack.activation.profiles.includes(profile.mode)) throw new CapabilityValidationError(`${key} is not enabled for profile mode ${profile.mode}`);
+    // Defaulted rather than assumed present. The validator now requires the list
+    // for this mode, but this line runs against whatever is on disk, and reading
+    // through to a TypeError would turn a refusal into a crash.
+    if (directPack.activation.mode === "profile" && !(directPack.activation.profiles ?? []).includes(profile.mode)) throw new CapabilityValidationError(`${key} is not enabled for profile mode ${profile.mode}`);
     select(key);
   }
 
@@ -995,22 +1003,51 @@ export function resolveCapabilityProfile(root, profilePath, options = {}) {
 const GRANTING_PERMISSIONS = ["capabilities", "filesystemRead", "filesystemWrite", "networkDomains", "externalActions"];
 const RESTRICTING_PERMISSIONS = ["protectedPaths", "readOnlyPaths", "shellProtectedPaths"];
 
+// Everything above is about artifacts the platform ships. A pack vendored from
+// somewhere else is a different question, and gets a different answer.
+//
+// None of the reasons for leaving artifact content on the build side apply to
+// it. Its bytes change when that source decides they change, not when this
+// project updates. The manifest digest pins which artifacts a pack declares, not
+// what is in them, so a rewritten prompt or policy file keeps the same manifest.
+// And the argument that the platform can rewrite its own verifier is an argument
+// about the platform: an external source cannot, which is exactly why its
+// content is worth pinning. Prompts and policy files are what a hostile source
+// would edit, and it would rather not be asked again.
+//
+// `workspace` is the platform's own origin and is a reserved source name, so a
+// vendored source cannot claim it.
+function externalArtifacts(document) {
+  const external = new Set(
+    (document?.packs ?? [])
+      .filter((pack) => pack?.origin && pack.origin !== "workspace")
+      .map((pack) => `${pack.name}@${pack.version}`)
+  );
+  if (external.size === 0) return undefined;
+  return (document?.artifacts ?? []).filter((artifact) => external.has(artifact?.pack));
+}
+
 function consentedShape(document) {
   return {
     schemaVersion: document?.schemaVersion,
     apiVersion: document?.core?.apiVersion,
     packageSource: document?.core?.packageSource,
     profile: document?.profile,
-    packs: document?.packs
+    packs: document?.packs,
+    externalArtifacts: externalArtifacts(document)
   };
 }
+
+const CONSENT_DRIFT_REASONS = {
+  externalArtifacts: "an artifact shipped by a vendored capability source changed content"
+};
 
 function consentDrift(expected, actual) {
   const before = consentedShape(actual);
   const after = consentedShape(expected);
   return Object.keys(after)
     .filter((key) => stableJson(after[key]) !== stableJson(before[key]))
-    .map((key) => `${key} no longer matches the locked value`);
+    .map((key) => CONSENT_DRIFT_REASONS[key] ?? `${key} no longer matches the locked value`);
 }
 
 function permissionDrift(expected, actual) {

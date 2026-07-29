@@ -31,6 +31,14 @@ if [[ -z "$PROJECT_PATH" ]]; then
   usage
   exit 2
 fi
+# The project path is positional and comes first, so omitting it hands the first
+# flag to `cd` and the run dies somewhere further down complaining about an
+# option. Say what is actually wrong instead.
+if [[ "$PROJECT_PATH" == -* ]]; then
+  echo "FAIL: the project path comes first, before any flag; received: $PROJECT_PATH" >&2
+  usage >&2
+  exit 2
+fi
 shift || true
 
 PROJECT_PATH="$(cd "$PROJECT_PATH" && pwd)"
@@ -45,6 +53,17 @@ COST=""
 DURATION=""
 NOTES=""
 
+# A flag left without a value otherwise consumes the next flag as its value, and
+# the run continues on a record that says something nobody typed.
+require_value() {
+  local option="$1"
+  local value="${2:-}"
+  if [[ -z "$value" || "$value" == --* ]]; then
+    echo "Missing value for $option" >&2
+    exit 2
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --init)
@@ -56,39 +75,48 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --scenario)
-      SCENARIO="${2:-}"
+      require_value "$1" "${2:-}"
+      SCENARIO="$2"
       shift 2
       ;;
     --surface|--agent)
-      SURFACE="${2:-}"
+      require_value "$1" "${2:-}"
+      SURFACE="$2"
       shift 2
       ;;
     --result)
-      RESULT="${2:-}"
+      require_value "$1" "${2:-}"
+      RESULT="$2"
       shift 2
       ;;
     --task-file)
-      TASK_FILE="${2:-}"
+      require_value "$1" "${2:-}"
+      TASK_FILE="$2"
       shift 2
       ;;
     --verify)
-      VERIFY_CMD="${2:-}"
+      require_value "$1" "${2:-}"
+      VERIFY_CMD="$2"
       shift 2
       ;;
     --tokens)
-      TOKENS="${2:-}"
+      require_value "$1" "${2:-}"
+      TOKENS="$2"
       shift 2
       ;;
     --cost)
-      COST="${2:-}"
+      require_value "$1" "${2:-}"
+      COST="$2"
       shift 2
       ;;
     --duration)
-      DURATION="${2:-}"
+      require_value "$1" "${2:-}"
+      DURATION="$2"
       shift 2
       ;;
     --notes)
-      NOTES="${2:-}"
+      require_value "$1" "${2:-}"
+      NOTES="$2"
       shift 2
       ;;
     -h|--help)

@@ -144,6 +144,20 @@ describe("piagent guard integration", () => {
     assert.match(ctx.ui.notices[0].message, /permission=workspace-write/);
   });
 
+  it("preserves an operator-provided Pi session name", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const operatorName = "ABC-123 Fix login callback";
+    const ctx = createContext(cwd, { confirm: true, sessionName: operatorName });
+    const harness = createPiHarness({ sessionName: operatorName });
+
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+
+    assert.equal(harness.getSessionName(), operatorName);
+    assert.match(ctx.ui.notices[0].message, /Piagent Pi guard loaded: Integration Project/);
+  });
+
   it("warns that an unconverted project is running without enforcement", async () => {
     const { root, piagentGuard } = await loadGuardFixture();
     const cwd = createProject(root);
@@ -1123,6 +1137,204 @@ describe("piagent guard integration", () => {
     assert.match(unboundedArgs.reason, /too many args/);
   });
 
+  // `$(printf /)` is `/` by the time the shell runs it. The destructive checks
+  // read raw words, so the target was compared as the literal text and matched
+  // none of the catastrophic ones -- while `rm -rf /` itself was refused.
+  it("refuses a destructive target hidden behind a substitution", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const ctx = createContext(cwd);
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    const toolCall = harness.handlers.get("tool_call");
+
+    for (const command of [
+      "rm -rf /",
+      "rm -rf $(printf /)",
+      "rm -rf $(echo /)",
+      "rm -rf `printf /`",
+      "find $(printf /) -delete",
+      "rm -rf $(echo ~)",
+      // `--` ends printf's options, so the format is what follows it.
+      "rm -rf $(printf -- /)",
+      // Brace expansion, which the shell performs before all the rest. The
+      // empty alternative makes one word out of a form that does not look like
+      // a single-word expansion.
+      "rm -rf {/,}",
+      "find {/,} -delete",
+      // A constant precision truncates the argument away and the rest of the
+      // format still prints, and bash reuses a format while arguments remain.
+      // Both are reproduced exactly, so both are refused rather than asked
+      // about: these are `/` and `//` in any shell.
+      "rm -rf $(printf %.0s/ x)",
+      "rm -rf $(printf %s / /)",
+      // Braces in the command name and in the flags, not only in the operand.
+      "rm {-rf,} /",
+      "r{m,} -rf /",
+      "fi{nd,} / -delete",
+      "echo / | xargs rm {-rf,}",
+      // A range spells a name too, and `{m..m}` is one letter.
+      "r{m..m} -rf /",
+      "fi{n..n}d / -delete",
+      // `find` reads its own options before the paths begin.
+      "find -H / -delete",
+      "find -- / -delete",
+      // An interpreter assembled by braces is still an interpreter, and a lone
+      // `-` between `-c` and the script ends the options without being it.
+      "{bash,} -c 'rm -rf /'",
+      "bash -{c,} 'rm -rf /'"
+    ]) {
+      const decision = await callToolCall(toolCall, ctx, "bash", { command });
+      assert.equal(decision?.block, true, command);
+      assert.match(decision.reason, /Refusing/, command);
+    }
+  });
+
+  // A target only the shell can produce. `ctx.ui.confirm` answers no here, so
+  // the call is stopped -- what matters is that it is asked rather than run.
+  it("asks before a destructive target it cannot resolve", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const ctx = createContext(cwd);
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    const toolCall = harness.handlers.get("tool_call");
+
+    for (const command of [
+      "rm -rf $(mktemp -d)",
+      "find $(mktemp -d) -delete",
+      "rm -rf $(printf '\\x2f')",
+      // `/` by the time the shell runs them, and the first command in the body
+      // says so for none of them.
+      "rm -rf $(printf /; echo)",
+      "rm -rf $(printf /; printf /)",
+      "rm -rf `printf /; echo`",
+      "rm -rf $(printf $(printf /))",
+      "find $(printf /; echo) -delete",
+      // Formats this renderer does not reproduce; each prints `/` in bash. `*`
+      // takes its width from the argument list and a negative one left-aligns,
+      // and `%q` requotes, so neither result is claimed.
+      "rm -rf $(printf %*s 0 /)",
+      "rm -rf $(printf %q /)",
+      "find $(printf %*s 0 /) -delete"
+    ]) {
+      const decision = await callToolCall(toolCall, ctx, "bash", { command });
+      assert.equal(decision?.block, true, command);
+      assert.match(decision.reason, /cannot resolve/, command);
+    }
+
+    // A single-quoted literal beside a real substitution: the refusal must stay
+    // a refusal rather than drop to a question.
+    for (const command of ["rm -rf $(printf /) '$(a;b)'", "rm -rf '$(a;b)' $(printf /)"]) {
+      const decision = await callToolCall(toolCall, ctx, "bash", { command });
+      assert.equal(decision?.block, true, command);
+      assert.match(decision.reason, /Refusing/, command);
+    }
+
+    // Nothing opaque, nothing destructive: no question asked.
+    const plain = await callToolCall(toolCall, ctx, "bash", { command: "rm -rf build" });
+    assert.notEqual(plain?.block, true);
+    const nested = await callToolCall(toolCall, ctx, "bash", { command: "rm -rf $(printf /)/sub" });
+    assert.notEqual(nested?.block, true);
+    // Single quotes suspend substitution, so this is a file with an awkward
+    // name rather than a root removal.
+    const quoted = await callToolCall(toolCall, ctx, "bash", { command: "rm -rf '$(printf /)'" });
+    assert.notEqual(quoted?.block, true);
+  });
+
+  it("blocks a shell command whose filename it cannot resolve", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const ctx = createContext(cwd);
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    const toolCall = harness.handlers.get("tool_call");
+
+    // `echo v` is pure text, so the name it helps spell is resolved outright
+    // and reported as the path it is. Refusing is what happens when the value
+    // is only knowable at run time, which is the second group.
+    const assembled = await callToolCall(toolCall, ctx, "bash", { command: "cat .en$(echo v)" });
+    const prefix = await callToolCall(toolCall, ctx, "bash", { command: "cat $(echo .)env" });
+    const redirect = await callToolCall(toolCall, ctx, "bash", { command: "printf x > .en$(echo v)" });
+    const viaProxy = await callToolCall(toolCall, ctx, "mcp", {
+      server: "shell",
+      tool: "bash",
+      input: { command: "cat .en$(echo v)" }
+    });
+
+    for (const [label, decision] of [["assembled", assembled], ["prefix", prefix], ["redirect", redirect]]) {
+      assert.equal(decision.block, true, label);
+      assert.match(decision.reason, /protected path/, label);
+    }
+    assert.equal(viaProxy.block, true);
+
+    const unresolvable = await callToolCall(toolCall, ctx, "bash", { command: "cat .en$(mktemp)" });
+    const unresolvableRedirect = await callToolCall(toolCall, ctx, "bash", { command: "printf x > .en$(mktemp)" });
+    for (const [label, decision] of [["operand", unresolvable], ["redirect", unresolvableRedirect]]) {
+      assert.equal(decision.block, true, label);
+      assert.match(decision.reason, /cannot resolve/, label);
+    }
+
+    // A substitution that is the whole word is a value, not a filename.
+    const wholeWord = await callToolCall(toolCall, ctx, "bash", { command: "echo \"$(pwd)\"" });
+    assert.notEqual(wholeWord.block, true);
+  });
+
+  it("applies redirections the shell would perform when checking protected paths", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const ctx = createContext(cwd);
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    const toolCall = harness.handlers.get("tool_call");
+
+    const clobber = await callToolCall(toolCall, ctx, "bash", { command: "printf x >| .env" });
+    const openForWrite = await callToolCall(toolCall, ctx, "bash", { command: "printf x >& .env" });
+    const leading = await callToolCall(toolCall, ctx, "bash", { command: "> .env cat" });
+    const operandValue = await callToolCall(toolCall, ctx, "bash", { command: "dd if=.env of=/tmp/x" });
+    const redirectGlob = await callToolCall(toolCall, ctx, "bash", { command: "printf x > .en*" });
+    // Brace expansion names the file, and an escape inside a substitution spells
+    // it. Both are performed by the shell and neither survives tokenizing, so
+    // each had to be read back off the raw text.
+    const braceRead = await callToolCall(toolCall, ctx, "bash", { command: "cat {.env,}" });
+    const braceWrite = await callToolCall(toolCall, ctx, "bash", { command: "printf x > {.env,}" });
+    const escapedEcho = await callToolCall(toolCall, ctx, "bash", { command: "cat $(echo -e '.en\\x76')" });
+    const escapedPrintf = await callToolCall(toolCall, ctx, "bash", { command: "cat $(printf %b '.en\\x76')" });
+    // The `xargs` producer reads its own tokens rather than going through the
+    // shared candidate path, so the brace expansion done there did not reach it.
+    const bracePipe = await callToolCall(toolCall, ctx, "bash", { command: "printf {.env,} | xargs cat" });
+    const bracePipeSplit = await callToolCall(toolCall, ctx, "bash", { command: "printf .{en,}v | xargs cat" });
+    const braceEchoPipe = await callToolCall(toolCall, ctx, "bash", { command: "echo auth{.json,} | xargs cat" });
+    const braceRange = await callToolCall(toolCall, ctx, "bash", { command: "cat .e{n..n}v" });
+    const braceRangeJson = await callToolCall(toolCall, ctx, "bash", { command: "cat auth.jso{n..n}" });
+    // A nested interpreter the brace assembled: its payload has to be read too.
+    const braceNested = await callToolCall(toolCall, ctx, "bash", { command: "{bash,} -c 'cat .env'" });
+
+    for (const [label, decision] of [
+      ["clobber", clobber],
+      ["openForWrite", openForWrite],
+      ["leading", leading],
+      ["operandValue", operandValue],
+      ["redirectGlob", redirectGlob],
+      ["braceRead", braceRead],
+      ["braceWrite", braceWrite],
+      ["escapedEcho", escapedEcho],
+      ["escapedPrintf", escapedPrintf],
+      ["bracePipe", bracePipe],
+      ["bracePipeSplit", bracePipeSplit],
+      ["braceEchoPipe", braceEchoPipe],
+      ["braceRange", braceRange],
+      ["braceRangeJson", braceRangeJson],
+      ["braceNested", braceNested]
+    ]) {
+      assert.equal(decision.block, true, label);
+      assert.match(decision.reason, /protected path/, label);
+    }
+
+    const duplication = await callToolCall(toolCall, ctx, "bash", { command: "printf x >&2" });
+    assert.notEqual(duplication.block, true);
+  });
+
   it("requires confirmation for external-provider write tools", async () => {
     const { root, piagentGuard } = await loadGuardFixture();
     const cwd = createProject(root);
@@ -1897,6 +2109,17 @@ describe("piagent guard integration", () => {
       "sh -c 'cat .en*'",
       "cat $(echo .en*)",
       "cat \"$(echo .en*)\"",
+      // A pattern is the one thing the literal layer cannot answer for: `.env*`
+      // matches no protected literal, so the glob reader has to see it -- and
+      // it was reading the words as typed while every other reader had moved on
+      // to the expanded stream.
+      "{cat,.env*}",
+      "{grep,-f,.env*,README.md}",
+      "cat $({echo,.env*})",
+      "{bash,} -c 'cat .env*'",
+      "bash -{c,} 'cat .env*'",
+      "echo .env* | xargs cat",
+      "{head,-n,1,.env*}",
       "xargs cat <<< .env",
       "F=.env; cat \"$F\"",
       "F=.env; cat \"$F\"; F=README.md",
@@ -1952,7 +2175,14 @@ describe("piagent guard integration", () => {
       "grep '.e??' README.md",
       "rg Makefile README.md",
       "F=.env; cat '$F'",
-      "grep --regexp=.env README.md"
+      "grep --regexp=.env README.md",
+      // A redirection whose target expands to two words is an ambiguous
+      // redirect: bash opens nothing, so blocking these blocked a command that
+      // writes no file at all. The glob reader was the last one still reading
+      // the target as typed, and it answered on the pattern it found inside.
+      "printf x > \"{.env,}\"{,}",
+      "printf x > \"{.env*,}\"{,}",
+      "printf x > \\{.env,x\\}{,}"
     ]) {
       const result = await callToolCall(toolCall, ctx, "bash", { command });
       assert.notEqual(result.block, true, `${command} should remain allowed`);

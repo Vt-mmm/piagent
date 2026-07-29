@@ -1,6 +1,12 @@
-import { REPOSITORY_SCOPES, SCOPES, collectServers } from "./mcp-config-layers.js";
+import {
+  SCOPES,
+  collectServers,
+  repositoryImportDeclarations,
+  unreadableLayers,
+  unverifiableMcpConfig
+} from "./mcp-config-layers.js";
 import { approvalState } from "./mcp-approval-store.js";
-import { maskServerEntry } from "./mcp-server-entry.js";
+import { maskServerEntry, maskUrlCredentials } from "./mcp-server-entry.js";
 import { evaluateServerReadiness } from "./mcp-auth-readiness.js";
 import { CATALOG_PREREQUISITES } from "./mcp-server-catalog.js";
 
@@ -24,7 +30,9 @@ export class McpViewError extends Error {}
  * @returns {string}
  */
 export function describeTarget(entry, limit = 56) {
-  if (typeof entry.url === "string") return entry.url;
+  // Masked here as well as in the detail view. This is the string that goes in
+  // the `list` table, which is the output most likely to be screenshotted.
+  if (typeof entry.url === "string") return String(maskUrlCredentials(entry.url));
   const argv = [entry.command, ...(Array.isArray(entry.args) ? entry.args : [])].filter((item) => typeof item === "string");
   const text = argv.join(" ");
   return text.length > limit ? `${text.slice(0, limit - 3)}...` : text;
@@ -59,6 +67,39 @@ export function blockedRows(rows) {
 }
 
 /**
+ * Everything any surface needs to answer "what is MCP doing here right now".
+ *
+ * The three surfaces — the guard, `/piagent-mcp`, and the terminal CLI — used to
+ * assemble this themselves out of four separate calls, and each one picked a
+ * different subset. That is how `list` came to print "No MCP servers configured"
+ * and exit 0 in a session where the guard was refusing every tool call: the
+ * listing was reading rows, and the thing that made the answer wrong was not a
+ * row. Everything that decides whether MCP works is gathered here once.
+ *
+ * `blockingConfig` is the part that outranks per-server state. While any of it
+ * stands, no server is usable whatever its own readiness says, so a caller that
+ * reports readiness without reporting this is giving an answer that is locally
+ * true and globally wrong.
+ *
+ * @param {{projectPath: string, scopes?: string[]}} options
+ */
+export function sessionMcpState(options) {
+  const { projectPath, scopes } = options;
+  const rows = collectServerRows({ projectPath, scopes });
+  const blockingConfig = unverifiableMcpConfig({ projectPath });
+  return {
+    rows,
+    blocked: blockedRows(rows),
+    blockingConfig,
+    unreadable: unreadableLayers({ projectPath }),
+    imports: repositoryImportDeclarations({ projectPath }),
+    // One boolean rather than each caller re-deriving the rule. `list --json`
+    // read `servers: []` as success while this was true.
+    usable: blockingConfig.length === 0
+  };
+}
+
+/**
  * One named server, resolved to a single scope. `listHint` is the caller's own
  * way of listing servers, so the error names a command the reader can actually
  * run from where they are.
@@ -81,7 +122,11 @@ export function describeServer(options) {
     );
   }
   const row = matches[0];
-  const approval = REPOSITORY_SCOPES.has(row.scope)
+  // `requiresApproval`, not the scope. A server imported into a `global` config
+  // from a repository-relative kind carries the scope of the file that declared
+  // the import and still needs a decision here, so keying off the scope showed
+  // no approval line for exactly the servers whose approval is least obvious.
+  const approval = row.requiresApproval
     ? approvalState({ projectPath, name, entry: row.entry })
     : undefined;
   return { ...row, masked: maskServerEntry(row.entry), approval };
@@ -134,6 +179,12 @@ export function formatServerDetail(detail, options = {}) {
     detail.name,
     `  scope: ${detail.scope}`,
     `  file: ${detail.file}`,
+    // Only for a server that came through `imports`. Without it the `scope` and
+    // `file` lines read as a config this tool can edit, and every write command
+    // suggested against them fails or edits the wrong file.
+    ...(detail.origin?.startsWith("import:")
+      ? [`  origin: ${detail.origin} (declared by the ${detail.scope} config; edit ${detail.file} directly)`]
+      : []),
     `  transport: ${detail.transport}`
   ];
   for (const key of DETAIL_FIELDS) {

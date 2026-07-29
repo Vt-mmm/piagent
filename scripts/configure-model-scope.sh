@@ -34,18 +34,34 @@ DEFAULT_MODEL="openai-codex/gpt-5.5:xhigh"
 SETTINGS_PATH="${PI_CODING_AGENT_DIR:-"${HOME}/.pi/agent"}/settings.json"
 DRY_RUN=false
 
+# A flag whose value is missing swallows the next flag instead. `--settings
+# --dry-run` used to set the settings path to the string "--dry-run", leave
+# DRY_RUN false, then write a file by that name and report success — a run that
+# both skipped the dry run it was asked for and never touched the real settings.
+require_value() {
+  local option="$1"
+  local value="${2:-}"
+  if [[ -z "$value" || "$value" == --* ]]; then
+    echo "Missing value for $option" >&2
+    exit 2
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --preset)
-      PRESET="${2:-}"
+      require_value "$1" "${2:-}"
+      PRESET="$2"
       shift 2
       ;;
     --default-model)
-      DEFAULT_MODEL="${2:-}"
+      require_value "$1" "${2:-}"
+      DEFAULT_MODEL="$2"
       shift 2
       ;;
     --settings)
-      SETTINGS_PATH="${2:-}"
+      require_value "$1" "${2:-}"
+      SETTINGS_PATH="$2"
       shift 2
       ;;
     --dry-run)

@@ -5,22 +5,48 @@ usage() {
   cat <<'USAGE'
 Usage:
   scripts/pi-session-stats.sh [project-path] [session-file]
+  scripts/pi-session-stats.sh --history [project-path] [history-options]
 
 Examples:
   scripts/pi-session-stats.sh .
   scripts/pi-session-stats.sh /path/to/project
   scripts/pi-session-stats.sh /path/to/project ~/.pi/agent/sessions/.../session.jsonl
+  scripts/pi-session-stats.sh --history . --days 7
+  scripts/pi-session-stats.sh --history --all-projects --csv
 
 Notes:
   - Reads exact Pi token/cache/cost totals via RPC get_session_stats.
   - If session-file is omitted, the newest persisted session whose header cwd matches project-path is used.
+  - Use --history for finished/old session totals read directly from Pi JSONL.
 USAGE
 }
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HISTORY_SCRIPT="$SCRIPT_DIR/pi-usage-history.mjs"
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   usage
   exit 0
 fi
+
+for argument in "$@"; do
+  case "$argument" in
+    --history|--all-projects|--days|--since|--until|--format|--json|--csv|--markdown|--include-subagents|--no-subagents|--limit|--sessions-dir)
+      exec node "$HISTORY_SCRIPT" "$@"
+      ;;
+  esac
+done
+
+# Both arguments are positional and the project path comes first, so a flag in
+# either slot is a typo rather than a path. Saying so beats failing later with a
+# message about a directory that was never meant to be one.
+for argument in "${1:-}" "${2:-}"; do
+  if [[ "$argument" == -* ]]; then
+    echo "FAIL: this script takes <project-path> [session-file], not flags; received: $argument" >&2
+    usage >&2
+    exit 2
+  fi
+done
 
 PROJECT_PATH="${1:-.}"
 SESSION_FILE="${2:-}"
@@ -79,7 +105,7 @@ fi
 
 RPC_OUTPUT="$(
   printf '%s\n' '{"type":"get_session_stats","id":"piagent-usage"}' \
-    | pi --mode rpc --session "$SESSION_FILE" --offline --approve
+    | pi -ne --mode rpc --session "$SESSION_FILE" --offline --approve
 )"
 
 node --input-type=module - "$RPC_OUTPUT" <<'NODE'

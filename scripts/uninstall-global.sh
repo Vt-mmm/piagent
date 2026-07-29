@@ -39,16 +39,22 @@ todos, and project memory. Those are operator data, not platform state.
 USAGE
 }
 
+require_value() {
+  local option="$1"
+  local value="${2:-}"
+  if [[ -z "$value" || "$value" == --* ]]; then
+    echo "Missing value for $option" >&2
+    exit 2
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --apply) APPLY=true; shift ;;
     --with-addons) WITH_ADDONS=true; shift ;;
     --with-host) WITH_HOST=true; shift ;;
     --project)
-      if [[ $# -lt 2 || -z "${2:-}" ]]; then
-        echo "Missing value for --project" >&2
-        exit 2
-      fi
+      require_value "$1" "${2:-}"
       PROJECT_PATH="$2"
       shift 2
       ;;

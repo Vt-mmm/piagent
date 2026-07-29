@@ -40,6 +40,14 @@ export function referencedEnvVars(entry) {
   walk(entry, (text) => {
     for (const match of text.matchAll(ENV_REFERENCE)) names.add(match[1]);
   });
+  // `bearerTokenEnvVar` names its variable directly instead of through a
+  // `${VAR}` reference, which is the entire point of the field: the token must
+  // not appear in the config. The walk above only recognises the reference form,
+  // so without this the one server setting that guarantees a credential is
+  // needed was the one setting that never produced a needs-env.
+  if (typeof entry?.bearerTokenEnvVar === "string" && entry.bearerTokenEnvVar.trim()) {
+    names.add(entry.bearerTokenEnvVar.trim());
+  }
   return [...names].sort();
 }
 
@@ -96,7 +104,17 @@ function isExecutable(file) {
  */
 
 /**
- * @param {{name: string, scope: string, entry: Record<string, unknown>}} server
+ * The import kind a server arrived through, or undefined when the layer named
+ * it directly.
+ * @param {{origin?: string}} server
+ * @returns {string|undefined}
+ */
+function importedFrom(server) {
+  return server.origin?.startsWith("import:") ? server.origin.slice("import:".length) : undefined;
+}
+
+/**
+ * @param {{name: string, scope: string, entry: Record<string, unknown>, requiresApproval?: boolean, origin?: string}} server
  * @param {{projectPath: string, env?: Record<string, string|undefined>, home?: string, store?: Record<string, unknown>}} options
  * @returns {ServerReadiness}
  */
@@ -108,7 +126,12 @@ export function evaluateServerReadiness(server, options) {
     return { ...base, state: "disabled", detail: "disabled in config", remedy: `piagent-mcp enable ${server.name} --scope ${server.scope}` };
   }
 
-  if (REPOSITORY_SCOPES.has(server.scope)) {
+  // `collectServers` decides this, because the scope a server is listed under
+  // is not the same question as who put it there: a `global` config importing
+  // a repository-relative kind reads its definitions out of the clone. Falling
+  // back to scope keeps a caller that builds a server record by hand working.
+  const needsApproval = server.requiresApproval ?? REPOSITORY_SCOPES.has(server.scope);
+  if (needsApproval) {
     const approval = approvalState({
       projectPath: options.projectPath,
       name: server.name,
@@ -131,7 +154,12 @@ export function evaluateServerReadiness(server, options) {
       return {
         ...base,
         state: "pending-approval",
-        detail: `defined by this repository in ${server.scope} scope and not approved here`,
+        // Naming the scope alone reads as a lie for an imported server: the
+        // scope is where the `imports` key sits, and the definition is in a
+        // different file entirely. Say which of the two it was.
+        detail: importedFrom(server)
+          ? `imported from ${importedFrom(server)} config by the ${server.scope} layer, and not approved here`
+          : `defined by this repository in ${server.scope} scope and not approved here`,
         remedy: `piagent-mcp approve ${server.name}`
       };
     }

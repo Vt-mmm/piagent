@@ -68,22 +68,53 @@ export function projectKey(projectPath) {
   }
 }
 
-/** @param {{home?: string}} [options] @returns {Record<string, Record<string, {digest?: string, decision?: string, decidedAt?: string}>>} */
-export function readApprovalStore(options = {}) {
+/**
+ * The store, and whether the empty case means "nothing decided" or "nobody could
+ * read it". Both read as pending, which is the right answer for a gate and the
+ * wrong one for a write: overwriting a store this process could not parse throws
+ * away every decision recorded in it, and the operator's only clue would be that
+ * their other projects silently returned to pending.
+ *
+ * @param {{home?: string}} [options]
+ * @returns {{projects: Record<string, Record<string, {digest?: string, decision?: string, decidedAt?: string}>>, readable: boolean, detail?: string}}
+ */
+export function loadApprovalStore(options = {}) {
   const file = approvalStorePath(options);
-  if (!file) return {};
+  if (!file) return { projects: {}, readable: false, detail: "no home directory to read an approval store from" };
+  let raw;
   try {
     // A store larger than this is not something this code wrote.
-    if (fs.statSync(file).size > MAX_STORE_BYTES) return {};
-    const document = JSON.parse(fs.readFileSync(file, "utf8"));
-    const projects = document?.projects;
-    if (!projects || typeof projects !== "object" || Array.isArray(projects)) return {};
-    return projects;
-  } catch {
-    // An unreadable store denies rather than permits: every server reads as
-    // undecided, which is the state that blocks.
-    return {};
+    if (fs.statSync(file).size > MAX_STORE_BYTES) {
+      return { projects: {}, readable: false, detail: `${file} is larger than ${MAX_STORE_BYTES} bytes` };
+    }
+    raw = fs.readFileSync(file, "utf8");
+  } catch (error) {
+    // Absent is the ordinary state before the first decision.
+    if (error && typeof error === "object" && error.code === "ENOENT") return { projects: {}, readable: true };
+    return { projects: {}, readable: false, detail: `cannot read ${file}` };
   }
+  let document;
+  try {
+    document = JSON.parse(raw);
+  } catch (error) {
+    return { projects: {}, readable: false, detail: `cannot parse ${file}: ${error instanceof Error ? error.message : String(error)}` };
+  }
+  const projects = document?.projects;
+  if (projects === undefined && document && typeof document === "object" && !Array.isArray(document)) {
+    // A document with no `projects` key is a store this code did not write.
+    return { projects: {}, readable: false, detail: `${file} has no projects object` };
+  }
+  if (!projects || typeof projects !== "object" || Array.isArray(projects)) {
+    return { projects: {}, readable: false, detail: `${file} has no projects object` };
+  }
+  return { projects, readable: true };
+}
+
+/** @param {{home?: string}} [options] @returns {Record<string, Record<string, {digest?: string, decision?: string, decidedAt?: string}>>} */
+export function readApprovalStore(options = {}) {
+  // An unreadable store denies rather than permits: every server reads as
+  // undecided, which is the state that blocks.
+  return loadApprovalStore(options).projects;
 }
 
 /**
@@ -139,7 +170,12 @@ export function approvalState(options) {
  * @returns {boolean}
  */
 export function recordApproval(options) {
-  const store = readApprovalStore({ home: options.home });
+  const loaded = loadApprovalStore({ home: options.home });
+  // Writing on top of a store nobody could parse would drop every decision it
+  // holds -- including the ones for other projects, which the operator would
+  // find out about only by watching them go back to pending one at a time.
+  if (!loaded.readable) return false;
+  const store = loaded.projects;
   const key = projectKey(options.projectPath);
   const project = { ...(store[key] ?? {}) };
   project[options.name] = {
@@ -159,9 +195,14 @@ export function recordApproval(options) {
  * @returns {boolean}
  */
 export function clearApproval(options) {
-  const store = readApprovalStore({ home: options.home });
+  const loaded = loadApprovalStore({ home: options.home });
+  if (!loaded.readable) return false;
+  const store = loaded.projects;
   const key = projectKey(options.projectPath);
-  if (!store[key]) return false;
+  // Nothing recorded is the state this function exists to reach, so it succeeds.
+  // Returning false here would be indistinguishable from a failed write, and the
+  // caller has to be able to tell those apart.
+  if (!store[key]) return true;
   if (!options.name) {
     const { [key]: _removed, ...rest } = store;
     return writeApprovalStore(rest, { home: options.home });
