@@ -454,7 +454,19 @@ describe("exec policy semantic shell safety", () => {
     "rm -rf $(printf %.0s/ x)",
     "rm -rf $(printf %s / /)",
     "rm -rf $(printf %5s /)",
-    "find $(printf %.0s/ x) -delete"
+    "find $(printf %.0s/ x) -delete",
+    // Brace expansion happens before the shell decides what the command is, so
+    // the command name and the flags can be assembled by it too. Expanding only
+    // the operands read these as a command called `r{m,}` and an `rm` with no
+    // `-rf` at all.
+    "rm {-rf,} /",
+    "rm {,-rf} /",
+    "r{m,} -rf /",
+    "find / {-delete,}",
+    "fi{nd,} / -delete",
+    "echo / | xargs rm {-rf,}",
+    // Every leading operand is a starting point for `find`, not just the first.
+    "find fi / -delete"
   ];
 
   for (const command of forbidden) {
@@ -502,6 +514,9 @@ describe("exec policy semantic shell safety", () => {
     "rm -rf {/}",
     // Not a destructive command.
     "echo {/,}",
+    "echo {a,b} | xargs echo",
+    "find . -name x -delete",
+    "find build dist -delete",
     // An expansion this cannot resolve, but not one that could be root: the
     // known part of the path says it is somewhere below a directory.
     "rm -rf $TMPDIR/build",
@@ -747,6 +762,97 @@ describe("shell expansions against a real shell", () => {
           );
         }
       }
+    });
+  }
+});
+
+// The invariant, rather than another list of shapes: the shell performs brace
+// expansion before it decides what the command is, what the flags are, or what
+// gets opened -- so the expanded command line and the one the author typed have
+// to get the same answer. Anything this module reads before expanding shows up
+// here as a disagreement with itself, wherever in the word list the braces sit.
+describe("brace expansion does not change the answer", () => {
+  const probe = spawnSync("bash", ["-c", "printf ok"], { encoding: "utf8" });
+  const available = probe.status === 0 && probe.stdout === "ok";
+
+  // Expanded a pipeline stage at a time, since `for w in` reads one command.
+  //
+  // This runs the operand text through a real shell, so a redirection in it
+  // would be *performed* -- `> .env` here creates `.env` in whatever directory
+  // the suite runs from. Nothing in the corpus may carry one, and the helper
+  // refuses rather than trusting that. The redirection direction is covered
+  // where it can be checked without a shell: the guard integration suite.
+  const expand = (command) => {
+    if (/[<>]/.test(command)) throw new Error(`refusing to expand a redirection: ${command}`);
+    const stages = [];
+    for (const stage of command.split("|")) {
+      const result = spawnSync("bash", ["-c", `for w in ${stage.trim()}; do printf '%s\\n' "$w"; done`], {
+        encoding: "utf8",
+        timeout: 5000
+      });
+      if (result.status !== 0) return undefined;
+      stages.push(result.stdout.split("\n").filter(Boolean).join(" "));
+    }
+    return stages.join(" | ");
+  };
+
+  const commands = [
+    // braces in the command name, in the flags, and in the operand
+    "r{m,} -rf /",
+    "rm {-rf,} /",
+    "rm {,-rf} /",
+    "rm -rf {/,}",
+    "fi{nd,} / -delete",
+    "find / {-delete,}",
+    "find {/,} -delete",
+    "echo / | xargs rm {-rf,}",
+    // and the ordinary uses, which have to keep their answer too
+    "rm -rf build/{a,b}",
+    "rm -rf {dist,coverage}",
+    "mkdir -p src/{a,b}",
+    "cp file{,.bak}",
+    "echo {a,b} | xargs echo"
+  ];
+
+  for (const command of commands) {
+    it(`decides ${command} the way it decides the expansion`, { skip: !available }, () => {
+      const expanded = expand(command);
+      assert.ok(expanded, `bash rejected ${command}`);
+      const before = evaluateExecPolicyCore(command, { policy, mode: "enforce" });
+      const after = evaluateExecPolicyCore(expanded, { policy, mode: "enforce" });
+      assert.equal(before.decision, after.decision, `bash expands it to \`${expanded}\``);
+    });
+  }
+
+  const readers = [
+    "cat {.env,}",
+    "printf {.env,} | xargs cat",
+    "printf {.,}env | xargs cat",
+    "printf .{en,}v | xargs cat",
+    "echo {.env,} | xargs cat",
+    "echo auth{.json,} | xargs cat",
+    "cat notes{1,2}.txt"
+  ];
+
+  // The other direction, which no expansion comparison can state: quoting
+  // suspends brace expansion, so the producer prints the braces and the file it
+  // names is called `{.env,}`. Expanding it anyway would refuse a command that
+  // never opens a protected path.
+  it("leaves a quoted brace in an xargs producer alone", () => {
+    for (const command of ["printf \"{.env,}\" | xargs cat", "printf '{.env,}' | xargs cat"]) {
+      assert.equal(findProtectedPathInCommand(command, policy.shellProtectedPaths), undefined, command);
+    }
+  });
+
+  for (const command of readers) {
+    it(`sees in ${command} what it sees in the expansion`, { skip: !available }, () => {
+      const expanded = expand(command);
+      assert.ok(expanded, `bash rejected ${command}`);
+      if (!findProtectedPathInCommand(expanded, policy.shellProtectedPaths)) return;
+      assert.ok(
+        findProtectedPathInCommand(command, policy.shellProtectedPaths),
+        `bash expands it to \`${expanded}\``
+      );
     });
   }
 });

@@ -697,7 +697,7 @@ function hasUnresolvedSubstitution(word, assignments, evaluable) {
   return !resolveSubstitutionTarget(word, assignments, evaluable).resolved;
 }
 
-function rmFinding(words, assignments, evaluable, substituting, expandTarget = (word) => [word]) {
+function rmFinding(words, assignments, evaluable, substituting) {
   const command = commandBasename(words[0] ?? "");
   const dynamicCommand = command.startsWith("$");
   if (command !== "rm" && !dynamicCommand) return undefined;
@@ -723,14 +723,13 @@ function rmFinding(words, assignments, evaluable, substituting, expandTarget = (
     targets.push(word);
   }
 
-  const expandedTargets = targets.flatMap(expandTarget);
-  const resolvedTargets = expandedTargets.map((target) => resolveSubstitutionTarget(target, assignments, evaluable));
+  const resolvedTargets = targets.map((target) => resolveSubstitutionTarget(target, assignments, evaluable));
   if (resolvedTargets.some((target) => isRootOrHomeTarget(target.value)) && (recursive || force || dynamicCommand)) {
     return { action: "forbid", reason: "Refusing recursive/forced removal of root or home target." };
   }
   const opaque = [...new Set([
-    ...(substituting ? expandedTargets.filter((target) => hasUnresolvedSubstitution(target, assignments, evaluable)) : []),
-    ...expandedTargets.filter((target) => isUnresolvedWholeWordExpansion(target, assignments))
+    ...(substituting ? targets.filter((target) => hasUnresolvedSubstitution(target, assignments, evaluable)) : []),
+    ...targets.filter((target) => isUnresolvedWholeWordExpansion(target, assignments))
   ])];
   if (opaque.length > 0 && (recursive || force)) {
     return {
@@ -743,19 +742,31 @@ function rmFinding(words, assignments, evaluable, substituting, expandTarget = (
   return undefined;
 }
 
-function findDeleteFinding(words, assignments, evaluable, substituting, expandTarget = (word) => [word]) {
+function findDeleteFinding(words, assignments, evaluable, substituting) {
   if (commandBasename(words[0] ?? "") !== "find") return undefined;
   if (!words.includes("-delete")) return undefined;
-  const firstTarget = words.slice(1).find((word) => !word.startsWith("-"));
-  if (!firstTarget) return undefined;
-  if (expandTarget(firstTarget).some((target) => isRootOrHomeTarget(resolveSubstitutionTarget(target, assignments, evaluable).value))) {
+  // `find` walks every path it is given before the expression starts, so all of
+  // the leading operands are starting points. Reading only the first one meant
+  // `find fi / -delete` was judged on `fi` -- and brace expansion produces
+  // exactly that shape, since `fi{nd,} / -delete` is `find fi / -delete` by the
+  // time the shell runs it.
+  const targets = [];
+  for (const word of words.slice(1)) {
+    if (word.startsWith("-")) break;
+    targets.push(word);
+  }
+  if (targets.length === 0) return undefined;
+  const resolvedTargets = targets.map((target) => resolveSubstitutionTarget(target, assignments, evaluable));
+  if (resolvedTargets.some((target) => isRootOrHomeTarget(target.value))) {
     return { action: "forbid", reason: "Refusing find -delete against root or home target." };
   }
-  if ((substituting && hasUnresolvedSubstitution(firstTarget, assignments, evaluable))
-    || isUnresolvedWholeWordExpansion(firstTarget, assignments)) {
+  const opaque = targets.filter((target) =>
+    (substituting && hasUnresolvedSubstitution(target, assignments, evaluable))
+    || isUnresolvedWholeWordExpansion(target, assignments));
+  if (opaque.length > 0) {
     return {
       action: "prompt",
-      reason: `find -delete starts from a path this policy cannot resolve: ${firstTarget}. `
+      reason: `find -delete starts from a path this policy cannot resolve: ${opaque.join(", ")}. `
         + "Its value is produced at run time, so what would be deleted is not knowable here. "
         + "Confirm, or run the substitution first and pass the result."
     };
@@ -776,7 +787,6 @@ function ddFinding(words) {
  * @returns {{action: "forbid"|"prompt", reason: string}[]}
  */
 function semanticCommandFindings(words, assignments, segment) {
-  const normalizedWords = stripWrapper(words);
   // A word arrives here with its quotes already removed, so `'$(printf /)'` and
   // `$(printf /)` are the same three-character-longer string -- and the first
   // one is a filename with an awkward name, not a substitution. Whether the
@@ -784,15 +794,27 @@ function semanticCommandFindings(words, assignments, segment) {
   // text still knows.
   const substituting = segmentHasUnquotedSubstitution(segment);
   const evaluable = substituting && substitutionsAreLiteral(segment);
-  // Quoting suspends brace expansion, and that too is only in the raw text:
-  // `rm -rf {/,}` removes root, `rm -rf "{/,}"` removes a strangely named file.
+  // Brace expansion happens before the shell decides what the command even is,
+  // so it is applied to the whole word list rather than to the operands.
+  // Expanding only the target left the command name and the flags written as
+  // the author typed them: `r{m,} -rf /` is `rm r -rf /` to the shell and read
+  // as a command called `r{m,}` here, and `rm {-rf,} /` lost the `-rf` the same
+  // way. Quoting suspends the expansion and that too is only in the raw text,
+  // so `rm -rf "{/,}"` stays one strangely named file.
   const braceWords = new Set(shellWordTokens(segment)
     .filter((token) => token.braceActive)
     .map((token) => token.value));
-  const expandTarget = (word) => (braceWords.has(word) ? expandShellBraces(word) : [word]);
+  // An empty alternative expands to nothing rather than to an empty argument --
+  // `rm {-rf,} /` reaches `rm` as two words, not three. Dropping it keeps the
+  // list the shape bash builds; no decision here turns on it, since an empty
+  // operand is neither a root nor a protected path.
+  const expandedWords = words
+    .flatMap((word) => (braceWords.has(word) ? expandShellBraces(word) : [word]))
+    .filter(Boolean);
+  const normalizedWords = stripWrapper(expandedWords);
   return [
-    rmFinding(normalizedWords, assignments, evaluable, substituting, expandTarget),
-    findDeleteFinding(normalizedWords, assignments, evaluable, substituting, expandTarget),
+    rmFinding(normalizedWords, assignments, evaluable, substituting),
+    findDeleteFinding(normalizedWords, assignments, evaluable, substituting),
     ddFinding(normalizedWords),
     xargsFinding(normalizedWords)
   ].filter(Boolean);
@@ -1544,7 +1566,11 @@ function xargsPipelineInputCandidates(command) {
     for (const token of producerTokens.slice(commandIndex + 1)) {
       const word = token.variableActive ? expandKnownShellVariables(token.value, assignments) : token.value;
       if (word.startsWith("-") || word === "%s" || word === "%s\\n") continue;
-      candidates.push(word);
+      // This branch reads the producer's own tokens rather than going through
+      // `addCandidate`, so the brace expansion done there never reached it:
+      // `printf {.env,} | xargs cat` prints `.env` and nothing here saw a name.
+      // The word as written is kept too, since quoting suspends the expansion.
+      candidates.push(word, ...(token.braceActive ? expandShellBraces(word) : []));
     }
     if (producerCommand === "printf" || (producerCommand === "echo" && echoEscapeMode(producerWords, commandIndex))) {
       candidates.push(...escapedLiteralCandidates(segments[index]));

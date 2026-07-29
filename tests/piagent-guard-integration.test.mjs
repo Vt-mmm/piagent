@@ -1153,7 +1153,12 @@ describe("piagent guard integration", () => {
       // Both are reproduced exactly, so both are refused rather than asked
       // about: these are `/` and `//` in any shell.
       "rm -rf $(printf %.0s/ x)",
-      "rm -rf $(printf %s / /)"
+      "rm -rf $(printf %s / /)",
+      // Braces in the command name and in the flags, not only in the operand.
+      "rm {-rf,} /",
+      "r{m,} -rf /",
+      "fi{nd,} / -delete",
+      "echo / | xargs rm {-rf,}"
     ]) {
       const decision = await callToolCall(toolCall, ctx, "bash", { command });
       assert.equal(decision?.block, true, command);
@@ -1261,6 +1266,11 @@ describe("piagent guard integration", () => {
     const braceWrite = await callToolCall(toolCall, ctx, "bash", { command: "printf x > {.env,}" });
     const escapedEcho = await callToolCall(toolCall, ctx, "bash", { command: "cat $(echo -e '.en\\x76')" });
     const escapedPrintf = await callToolCall(toolCall, ctx, "bash", { command: "cat $(printf %b '.en\\x76')" });
+    // The `xargs` producer reads its own tokens rather than going through the
+    // shared candidate path, so the brace expansion done there did not reach it.
+    const bracePipe = await callToolCall(toolCall, ctx, "bash", { command: "printf {.env,} | xargs cat" });
+    const bracePipeSplit = await callToolCall(toolCall, ctx, "bash", { command: "printf .{en,}v | xargs cat" });
+    const braceEchoPipe = await callToolCall(toolCall, ctx, "bash", { command: "echo auth{.json,} | xargs cat" });
 
     for (const [label, decision] of [
       ["clobber", clobber],
@@ -1271,7 +1281,10 @@ describe("piagent guard integration", () => {
       ["braceRead", braceRead],
       ["braceWrite", braceWrite],
       ["escapedEcho", escapedEcho],
-      ["escapedPrintf", escapedPrintf]
+      ["escapedPrintf", escapedPrintf],
+      ["bracePipe", bracePipe],
+      ["bracePipeSplit", bracePipeSplit],
+      ["braceEchoPipe", braceEchoPipe]
     ]) {
       assert.equal(decision.block, true, label);
       assert.match(decision.reason, /protected path/, label);
