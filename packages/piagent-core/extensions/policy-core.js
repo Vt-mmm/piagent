@@ -1320,48 +1320,97 @@ function shellDataTokens(segment) {
   return tokens;
 }
 
+const PRINTF_CONVERSION_PARTS = /%(?:\d+\$)?([-+#0 ']*)(\d+|\*)?(?:\.(\d+|\*))?[hlL]?([bcdeEfgGiosuxXaA])/g;
+
+/**
+ * What `printf` writes, as closely as this can model it.
+ *
+ * Substituting the raw argument for every conversion was the whole of it
+ * before, and that is not what the output looks like. A precision truncates
+ * the argument and the rest of the format still prints, so `.e%.1sv` with `nv`
+ * is `.env` rather than `.envv`; a width pads it; and bash reuses the format
+ * while arguments remain, so `%s` with `.e` and `nv` is also `.env`. Each of
+ * those assembled a name out of pieces that were individually harmless, which
+ * is exactly the shape the path checks are looking for.
+ *
+ * @param {string} format
+ * @param {string[]} values
+ * @returns {string}
+ */
 function renderStaticPrintf(format, values) {
-  let valueIndex = 0;
-  let rendered = "";
   const decodedFormat = decodeShellDataEscapes(format);
-  const conversion = /%(?:\d+\$)?[-+#0 ']*(?:\d+|\*)?(?:\.(?:\d+|\*))?[hlL]?[bcdeEfgGiosuxXaA]/g;
-  let cursor = 0;
-  for (const match of decodedFormat.matchAll(conversion)) {
-    if (rendered.length > 8192 || valueIndex >= 32) break;
-    const start = match.index ?? 0;
-    rendered += decodedFormat.slice(cursor, start).replace(/%%/g, "%");
-    const specifier = match[0].slice(-1);
-    const argument = values[valueIndex] ?? "";
-    rendered += specifier === "b" ? decodeShellDataEscapes(argument) : argument;
-    valueIndex += 1;
-    cursor = start + match[0].length;
+  let rendered = "";
+  let valueIndex = 0;
+  let passes = 0;
+  // A format with no conversion prints once and ignores the rest, so the reuse
+  // below has to stop on the pass that consumed nothing.
+  let consumed = true;
+  while (consumed && passes < 32 && rendered.length <= 8192 && valueIndex < 32) {
+    let cursor = 0;
+    consumed = false;
+    for (const match of decodedFormat.matchAll(PRINTF_CONVERSION_PARTS)) {
+      if (rendered.length > 8192 || valueIndex >= 32) break;
+      const [whole, flags, width, precision, specifier] = match;
+      const start = match.index ?? 0;
+      rendered += decodedFormat.slice(cursor, start).replace(/%%/g, "%");
+      cursor = start + whole.length;
+      // `*` takes its width or precision from the argument list, which is why
+      // `%*s 0 /` prints `/` and not the zero. Consuming it for a *precision*
+      // decides which argument gets truncated, and that changes the name
+      // (`%.*s 4 .envXX` is `.env`). Consuming it for a *width* changes no
+      // answer any check here asks: padding only inserts spaces, so it can
+      // split a name into words but never spell one, and the argument it would
+      // otherwise mistake for the value is a candidate in its own right. It is
+      // consumed anyway, so the rendering stays what bash prints rather than
+      // being right for the reason nobody is looking.
+      const widthValue = width === "*" ? values[valueIndex++] : width;
+      const precisionValue = precision === "*" ? values[valueIndex++] : precision;
+      const argument = values[valueIndex] ?? "";
+      valueIndex += 1;
+      consumed = true;
+      let text = specifier === "b" ? decodeShellDataEscapes(argument) : argument;
+      if (precisionValue !== undefined && /^\d+$/.test(String(precisionValue))) {
+        text = text.slice(0, Number(precisionValue));
+      }
+      const pad = Number(widthValue);
+      if (Number.isFinite(pad) && pad > text.length) {
+        text = flags.includes("-") ? text.padEnd(pad) : text.padStart(pad);
+      }
+      rendered += text;
+    }
+    rendered += decodedFormat.slice(cursor).replace(/%%/g, "%");
+    passes += 1;
+    if (valueIndex >= values.length) break;
   }
-  rendered += decodedFormat.slice(cursor).replace(/%%/g, "%");
   return rendered.slice(0, 8192);
 }
 
-// Whether this renderer reproduces what bash prints, for this format and this
-// many arguments.
+// A string conversion with a constant width and precision, which is the whole
+// of what the renderer above reproduces byte for byte.
+const EXACT_PRINTF_CONVERSION = /%-?\d*(?:\.\d+)?s/g;
+
+// Whether this renderer reproduces what bash prints for this format.
 //
-// `%s` with no flags, width, precision or positional argument is the only
-// conversion whose output is its argument unchanged. A width pads it (`%5s /`
-// is four spaces and a slash), a precision truncates it (`%.0s` prints
-// nothing), `*` consumes an argument as the width instead of printing it, `%q`
-// requotes, `%b` decodes escapes, and every numeric conversion reformats. This
-// renderer substitutes the raw argument for all of them, so what it returns for
-// any of those is a value bash never printed.
+// This is the gate on *refusing* a destructive target, so it answers a stricter
+// question than the rendering does. String conversions with a constant width or
+// precision are reproduced exactly, and so is format reuse, so a target built
+// out of those is refused rather than asked about: `$(printf %.0s/ x)` is `/`
+// and `$(printf %s / /)` is `//` in any shell.
 //
-// `%%` is excluded because the collapse happens after substitution here rather
-// than before, and bash reuses the format while arguments remain, which this
-// does not -- so more arguments than conversions is not reproduced either. A
-// format with no conversions at all is printed once with the extra arguments
-// ignored, which this does match.
-function printfFormatIsExact(format, values) {
+// `*` stays outside it even though the renderer now follows one, because the
+// width it consumes has its own rules -- a negative one left-aligns -- and a
+// modelling slip there turns into a refusal of something nobody asked for. `%q`
+// requotes, `%b` decodes escapes, every numeric conversion reformats, and `%%`
+// collapses after substitution here rather than before. None of those is
+// claimed; a target built out of them is confirmed instead, which costs a
+// question rather than a wrong answer.
+function printfFormatIsExact(format) {
   if (!format.includes("%")) return true;
-  const conversions = format.match(/%s/g) ?? [];
-  if (conversions.length === 0) return false;
-  if ((format.match(/%/g) ?? []).length !== conversions.length) return false;
-  return values.length <= conversions.length;
+  const withoutStringConversions = format.replace(EXACT_PRINTF_CONVERSION, "");
+  // Any `%` the string conversions did not account for is a form this does not
+  // reproduce.
+  if (withoutStringConversions.includes("%")) return false;
+  return withoutStringConversions.length !== format.length;
 }
 
 const PRINTF_CONVERSION = /%(?:\d+\$)?[-+#0 ']*(?:\d+|\*)?(?:\.(?:\d+|\*))?[hlL]?[A-Za-z]/g;
@@ -1443,7 +1492,7 @@ function staticDataOutput(segment, assignments, producerCommand) {
     // Any other option is one this does not model -- `-v NAME` assigns the
     // result to a variable and prints nothing at all -- so the rendering is not
     // claimed to be what bash would print.
-    exact = !format.startsWith("-") && printfFormatIsExact(format, printfArgs.slice(1));
+    exact = !format.startsWith("-") && printfFormatIsExact(format);
     extra.push(...printfFormatLiterals(format), ...printfArgs.slice(1));
   }
   const words = output.split(/\s+/).filter(Boolean);
@@ -1646,6 +1695,14 @@ export function extractShellPathCandidates(command) {
       // format is text until something downstream opens it.
       if (commandName === "printf") {
         for (const literal of printfFormatLiterals(argumentTokens[0]?.value ?? "")) addCandidate(literal);
+        // And the output itself. The literal text and the arguments were both
+        // offered as candidates, but never what they make when printf puts them
+        // together: `.e%.1sv nv` is `.env`, and the pieces on offer were `.ev`
+        // and `nv`. Whether the rendering is exact enough to *refuse* a
+        // destructive target is a separate question -- here an approximate name
+        // costs a refusal with the reason on screen, and a missing one costs the
+        // check.
+        for (const word of staticDataOutput(segment, assignments, "printf").words) addCandidate(word, false);
       }
       let searchPatternPending = SEARCH_COMMANDS.has(commandName);
       for (let index = 0; index < argumentTokens.length; index += 1) {

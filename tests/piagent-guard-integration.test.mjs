@@ -1147,7 +1147,13 @@ describe("piagent guard integration", () => {
       // empty alternative makes one word out of a form that does not look like
       // a single-word expansion.
       "rm -rf {/,}",
-      "find {/,} -delete"
+      "find {/,} -delete",
+      // A constant precision truncates the argument away and the rest of the
+      // format still prints, and bash reuses a format while arguments remain.
+      // Both are reproduced exactly, so both are refused rather than asked
+      // about: these are `/` and `//` in any shell.
+      "rm -rf $(printf %.0s/ x)",
+      "rm -rf $(printf %s / /)"
     ]) {
       const decision = await callToolCall(toolCall, ctx, "bash", { command });
       assert.equal(decision?.block, true, command);
@@ -1176,8 +1182,9 @@ describe("piagent guard integration", () => {
       "rm -rf `printf /; echo`",
       "rm -rf $(printf $(printf /))",
       "find $(printf /; echo) -delete",
-      // Formats this renderer does not reproduce; each prints `/` in bash.
-      "rm -rf $(printf %.0s/ x)",
+      // Formats this renderer does not reproduce; each prints `/` in bash. `*`
+      // takes its width from the argument list and a negative one left-aligns,
+      // and `%q` requotes, so neither result is claimed.
       "rm -rf $(printf %*s 0 /)",
       "rm -rf $(printf %q /)",
       "find $(printf %*s 0 /) -delete"

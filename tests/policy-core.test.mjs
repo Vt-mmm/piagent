@@ -446,7 +446,15 @@ describe("exec policy semantic shell safety", () => {
     "rm -rf {/,/tmp}",
     "rm -rf /{,}",
     "find {/,} -delete",
-    "rm -rf build {/,}"
+    "rm -rf build {/,}",
+    // A constant precision truncates the argument away and the rest of the
+    // format still prints; a constant width pads it; and bash reuses the format
+    // while arguments remain. All three are reproduced byte for byte, so the
+    // target is refused rather than asked about.
+    "rm -rf $(printf %.0s/ x)",
+    "rm -rf $(printf %s / /)",
+    "rm -rf $(printf %5s /)",
+    "find $(printf %.0s/ x) -delete"
   ];
 
   for (const command of forbidden) {
@@ -541,22 +549,18 @@ describe("exec policy semantic shell safety", () => {
     "rm -rf $(printf / > x)",
     "rm -rf $(printf $HOME)",
     "rm -rf $(printf /",
-    // Formats this renderer does not reproduce. Each prints `/` in bash: a
-    // precision truncates the argument away and leaves the rest of the format,
-    // `*` consumes an argument as the width instead of printing it, and `%q`
-    // requotes. Substituting the raw argument for any of them produces a value
-    // bash never printed, so none of them resolves.
-    "rm -rf $(printf %.0s/ x)",
+    // Formats this renderer does not claim. Each prints `/` in bash, but `*`
+    // takes its width from the argument list and a negative one left-aligns,
+    // and `%q` requotes -- a modelling slip in either turns into a refusal of
+    // something nobody asked for, so both are confirmed instead.
     "rm -rf $(printf %*s 0 /)",
     "rm -rf $(printf %*s 2 /)",
     "rm -rf $(printf %.*s 1 /)",
     "rm -rf $(printf %q /)",
     "find $(printf %*s 0 /) -delete",
     // `%%` is a literal `%`, collapsed here after substitution rather than
-    // before, and bash reuses a format while arguments remain, which this does
-    // not -- so neither is reproduced.
+    // before, so it is not reproduced.
     "rm -rf $(printf %%s a)",
-    "rm -rf $(printf %s / /)",
     // A target that is nothing but an expansion can be any value, root
     // included. `${HOME:0:1}` is `/`, and substring expansion is not modelled
     // here -- naming one more operator each time one is reported is the game
@@ -638,7 +642,19 @@ describe("printf rendering against a real shell", () => {
     "printf %q .env",
     "printf %s notes.txt",
     "printf .e%snv x",
-    "printf notes%.0s.txt x"
+    "printf notes%.0s.txt x",
+    // The name is assembled out of the format and an argument the conversion
+    // reshaped, so neither the literal text (`.ev`, `au.json`) nor the raw
+    // argument (`nv`, `thX`) is the file that gets opened.
+    "printf .e%.1sv nv",
+    "printf au%.2s.json thX",
+    "printf .e%.3sv nvXX",
+    // And out of several arguments, because bash reuses the format while any
+    // remain.
+    "printf %s .e nv",
+    "printf %s au th.json",
+    "printf %s . env",
+    "printf %s%s .e nv"
   ];
 
   for (const producer of producers) {
@@ -674,6 +690,20 @@ describe("shell expansions against a real shell", () => {
     // command substitution, including the option terminator and the backtick form
     "$(printf /)", "$(printf -- /)", "`printf -- /`", "$(printf '%s' /)",
     "$(echo /)", "$(echo -n /)", "$(printf -- '%s' .env)", "$(printf .env)",
+    // output assembled from a reshaped argument, or from several of them
+    "$(printf .e%.1sv nv)", "$(printf au%.2s.json thX)", "$(printf %s .e nv)",
+    "$(printf %s au th.json)", "$(printf %.0s/ x)", "$(printf %5s /)",
+    // A width pads with spaces, and a space is where the shell ends a word --
+    // so a padded conversion splits the output into operands, and the name in
+    // front of it is one of them. Rendering without the padding joined them
+    // into `.envax`, which names nothing.
+    "$(printf .env%2sx a)",
+    // `*` takes the width or the precision from the argument list, so the
+    // argument that follows is the one that gets printed -- truncated to `.env`
+    // here, and padded to `.env` there. Reading the `*` as the argument instead
+    // rendered the number.
+    "$(printf %.*s 4 .envXX)",
+    "$(printf %*s 6 .env)",
     // escapes, which the tokenizer strips before the body can be read
     "$(echo -e '.en\\x76')", "$(printf %b '.en\\x76')", "$(printf '\\x2f')",
     "$'\\x2f'", "$'.env'", ".en\\v",
