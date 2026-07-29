@@ -10,19 +10,25 @@ import {
 
 // Round after round, the same bug arrived wearing a different hat: a way of
 // spelling a word that the shell understands and this module did not. Every one
-// of them was found by a person typing into a shell and comparing, and every
-// fix came with cases chosen from near the last one -- so the next spelling was
-// always somewhere nobody had thought to look.
+// was found by a person typing into a shell, and every fix came with cases
+// chosen from near the last one -- so the next spelling was always somewhere
+// nobody had thought to look.
 //
-// This stops choosing. It assembles spellings out of the pieces the shell
-// composes -- quotes, escapes, ANSI-C, braces, ranges, `printf`, parameter
-// expansion -- asks `bash` which words they produce, and requires the policy to
-// account for what that word list contains, through several command shapes for
-// each spelling. The spellings nobody would have written down are the point.
+// The bug was never really the spelling, though. It was that a segment had a
+// dozen readers and each derived its own view of it, so closing a form for one
+// reader left it open for the other eleven: brace expansion reached the
+// destructive checks and not the rule matcher, substitution resolution reached
+// the destructive checks and nothing else at all. The shape of the bug space is
+// expansion form x position x reader, so that is the shape of this corpus. It
+// assembles spellings out of the pieces a shell composes, asks `bash` which
+// words each one builds, and puts every spelling in every position: the command
+// name, the operand, a flag's argument, a redirection target, a pipeline
+// producer, an `xargs` consumer, an interpreter payload.
 //
-// Nothing here is executed as a command. Only the operand is handed to a shell,
-// inside `for w in ...`, and the grammar emits no redirection, no separator and
-// no producer beyond `printf` and `echo`.
+// Nothing here is executed as a command. Only the spelled fragments go to a
+// shell, inside `for w in ...`; the assembled command only ever reaches the
+// policy. The grammar emits no redirection, no separator, and no producer
+// beyond `printf`, `echo` and `eval printf`.
 
 const policy = {
   protectedPaths: [".git/**", "**/auth.json", "**/.env", "**/.env.*"],
@@ -43,11 +49,10 @@ function randomSource(seed) {
   };
 }
 
-// Each of these rewrites one literal chunk into a shell fragment that produces
-// that chunk again. They only ever consume plain text, so any number of them can
-// be concatenated and the result still parses -- which is what lets the
-// generator build spellings deeper than anything written by hand without ever
-// emitting something bash refuses to read.
+// Each rewrites one literal chunk into a shell fragment that produces it again.
+// They only ever consume plain text, so any number of them can be concatenated
+// and the result still parses -- which is what lets this build spellings deeper
+// than anything written by hand without emitting something bash refuses to read.
 const CHUNK_SPELLINGS = [
   (chunk) => chunk,
   (chunk) => `"${chunk}"`,
@@ -58,6 +63,7 @@ const CHUNK_SPELLINGS = [
   (chunk) => `$'${[...chunk].map((c) => `\\x${c.charCodeAt(0).toString(16)}`).join("")}'`,
   (chunk) => `$(printf %s ${chunk})`,
   (chunk) => `$(echo -n ${chunk})`,
+  (chunk) => `\`printf %s ${chunk}\``,
   (chunk, cut) => `$(printf %s%s ${chunk.slice(0, cut) || "''"} ${chunk.slice(cut) || "''"})`,
   // A conversion printing nothing lets the literal text on either side meet.
   (chunk, cut) => `$(printf ${chunk.slice(0, cut)}%.0s${chunk.slice(cut)} x)`,
@@ -73,16 +79,23 @@ const CHUNK_SPELLINGS = [
     ? `${chunk.slice(0, cut)}{${chunk[cut]}..${chunk[cut]}}${chunk.slice(cut + 1)}`
     : chunk),
   (chunk) => `\${UNSET_FOR_TEST:-${chunk}}`,
-  // The alternate branch of a variable that is set: nothing about the value
-  // reaches the word, only the text written beside it.
-  (chunk) => `\${SET_FOR_TEST:+${chunk}}`
+  // The alternate branch of a variable that is set: nothing of the value reaches
+  // the word, only the text written beside it -- and nothing here can know the
+  // variable is set, so this is the form that has to fail closed.
+  (chunk) => `\${SET_FOR_TEST:+${chunk}}`,
+  // Bodies this module refuses to evaluate, for the same reason: a nested
+  // substitution and an `eval` are values known only at run time.
+  (chunk) => `$(printf %s $(printf %s ${chunk}))`,
+  (chunk) => `$(eval printf %s ${chunk})`
 ];
 
 /** Cut a word into pieces and spell each one independently. */
 function buildSpelling(word, random) {
   const cuts = new Set();
   const pieces = 1 + Math.floor(random() * 3);
-  for (let index = 0; index < pieces - 1; index += 1) cuts.add(1 + Math.floor(random() * Math.max(1, word.length - 1)));
+  for (let index = 0; index < pieces - 1; index += 1) {
+    cuts.add(1 + Math.floor(random() * Math.max(1, word.length - 1)));
+  }
   const bounds = [0, ...[...cuts].sort((a, b) => a - b), word.length];
   let spelling = "";
   for (let index = 0; index < bounds.length - 1; index += 1) {
@@ -94,120 +107,184 @@ function buildSpelling(word, random) {
   return spelling || word;
 }
 
-/** One bash call for the whole corpus: the words each spelling produces. */
-function wordListsFromBash(spellings) {
-  const script = ["SET_FOR_TEST=x", ...spellings.map((spelling, index) =>
-    `printf 'CASE${index}\\n'; for w in ${spelling}; do printf '[%s]' "$w"; done; printf '\\n'`)].join("\n");
-  const result = spawnSync("bash", ["-c", script], { encoding: "utf8", timeout: 60000, maxBuffer: 8 * 1024 * 1024 });
+/** One bash call per batch: the words each spelled fragment builds. */
+function wordListsFromBash(fragments) {
+  const script = ["SET_FOR_TEST=x", ...fragments.map((fragment, index) =>
+    `printf 'C${index}\\n'; for w in ${fragment}; do printf '[%s]' "$w"; done; printf '\\n'`)].join("\n");
+  const result = spawnSync("bash", ["-c", script], {
+    encoding: "utf8", timeout: 120000, maxBuffer: 64 * 1024 * 1024
+  });
   const lists = new Map();
   const lines = result.stdout.split("\n");
   for (let index = 0; index < lines.length; index += 1) {
-    const marker = /^CASE(\d+)$/.exec(lines[index]);
+    const marker = /^C(\d+)$/.exec(lines[index]);
     if (!marker) continue;
-    lists.set(Number(marker[1]), [...(lines[index + 1] ?? "").matchAll(/\[([^\]]*)\]/g)].map((match) => match[1]));
+    lists.set(Number(marker[1]), [...(lines[index + 1] ?? "").matchAll(/\[([^\]]*)\]/g)].map((m) => m[1]));
   }
   return { lists, stderr: result.stderr };
 }
 
+// Where the spelled word sits. `spell` names the two words the position needs:
+// the command and the target.
+const READ_POSITIONS = [
+  { name: "operand", spell: ["cat", ".env"], make: (c, t) => `${c} ${t}` },
+  { name: "operand-after-flag", spell: ["head", ".env"], make: (c, t) => `${c} -n 1 ${t}` },
+  { name: "redirect-target", spell: ["printf", ".env"], make: (c, t) => `${c} x > ${t}` },
+  { name: "pipeline-producer", spell: ["echo", ".env"], make: (c, t) => `${c} ${t} | xargs cat` },
+  { name: "xargs-consumer", spell: ["xargs", ".env"], make: (c, t) => `echo ${t} | ${c} cat` },
+  { name: "interpreter-payload", spell: ["cat", ".env"], make: (c, t) => `bash -c '${c} ${t}'` },
+  { name: "interpreter-name", spell: ["bash", ".env"], make: (c, t) => `${c} -c 'cat ${t}'` },
+  { name: "search-file-flag", spell: ["grep", ".env"], make: (c, t) => `${c} -f ${t} README.md` },
+  { name: "copy-source", spell: ["cp", ".env"], make: (c, t) => `${c} ${t} /tmp/x` }
+];
+
+const DESTRUCTIVE_POSITIONS = [
+  { name: "rm-target", spell: ["rm", "/"], make: (c, t) => `${c} -rf ${t}` },
+  { name: "find-target", spell: ["find", "/"], make: (c, t) => `${c} ${t} -delete` },
+  { name: "xargs-rm", spell: ["rm", "/"], make: (c, t) => `echo ${t} | xargs ${c} -rf` },
+  { name: "interpreter-rm", spell: ["rm", "/"], make: (c, t) => `bash -c '${c} -rf ${t}'` }
+];
+
+const BENIGN_TARGETS = ["notes.txt", "README.md"];
+const SEEDS = [0x5eed, 0xd00d, 0xbeef];
+const PER_POSITION = 22;
+
 const bashProbe = spawnSync("bash", ["-c", "printf ok"], { encoding: "utf8" });
 const bashAvailable = bashProbe.status === 0 && bashProbe.stdout === "ok";
 
-describe("shell spelling differential", () => {
-  const READ_TARGETS = [".env", "auth.json", ".env.local", "notes.txt", "README.md"];
-  // The same spelling put in front of several readers. A spelling understood as
-  // an operand and lost as a pipeline producer is still a hole.
-  const READ_SHAPES = [
-    (spelling) => `cat ${spelling}`,
-    (spelling) => `head -n 1 ${spelling}`,
-    (spelling) => `{cat,${spelling}}`,
-    (spelling) => `echo ${spelling} | xargs cat`
-  ];
-
-  const random = randomSource(0x5eed);
-  const spellings = [];
-  for (let index = 0; index < 200; index += 1) {
-    const target = READ_TARGETS[Math.floor(random() * READ_TARGETS.length)];
-    spellings.push({ target, spelling: buildSpelling(target, random) });
+/** Build one seed's jobs and resolve every fragment through bash at once. */
+function runSeed(seed) {
+  const random = randomSource(seed);
+  const jobs = [];
+  for (const position of READ_POSITIONS) {
+    for (let index = 0; index < PER_POSITION; index += 1) {
+      const target = random() < 0.75
+        ? position.spell[1]
+        : BENIGN_TARGETS[Math.floor(random() * BENIGN_TARGETS.length)];
+      jobs.push({ position, commandWord: position.spell[0], targetWord: target, destructive: false });
+    }
   }
+  for (const position of DESTRUCTIVE_POSITIONS) {
+    for (let index = 0; index < PER_POSITION; index += 1) {
+      jobs.push({ position, commandWord: position.spell[0], targetWord: "/", destructive: true });
+    }
+  }
+  for (const job of jobs) {
+    job.commandSpelling = buildSpelling(job.commandWord, random);
+    job.targetSpelling = buildSpelling(job.targetWord, random);
+  }
+  const fragments = jobs.flatMap((job) => [job.commandSpelling, job.targetSpelling]);
+  return { jobs, fragments, ...wordListsFromBash(fragments) };
+}
 
-  const read = bashAvailable ? wordListsFromBash(spellings.map((entry) => entry.spelling)) : undefined;
+const runs = bashAvailable ? SEEDS.map(runSeed) : [];
 
+describe("shell spelling differential", () => {
   it("builds a word list for every generated spelling", { skip: !bashAvailable }, () => {
     // A spelling bash cannot parse ends the batch and takes every later case
-    // with it. Without this the suite stays green while checking almost
-    // nothing, which is the failure this whole file exists to prevent.
-    assert.equal(read.lists.size, spellings.length, `bash rejected a generated spelling:\n${read.stderr}`);
+    // with it. Without this the suite stays green while checking a fraction of
+    // what it claims -- which is exactly what the first version of this file
+    // did, dying at case 36 of 240 and passing.
+    for (const run of runs) {
+      assert.equal(run.lists.size, run.fragments.length, `bash rejected a generated spelling:\n${run.stderr}`);
+    }
   });
 
-  it("accounts for every protected path bash builds", { skip: !bashAvailable }, () => {
+  it("accounts for every protected path bash builds, in every position", { skip: !bashAvailable }, () => {
     const misses = [];
     let checked = 0;
-    for (let index = 0; index < spellings.length; index += 1) {
-      const words = read.lists.get(index) ?? [];
-      const target = words.find((word) => word && matchesProtectedPath(word, policy.shellProtectedPaths));
-      if (!target) continue;
-      for (const shape of READ_SHAPES) {
-        const command = shape(spellings[index].spelling);
+    for (const run of runs) {
+      for (let index = 0; index < run.jobs.length; index += 1) {
+        const job = run.jobs[index];
+        if (job.destructive) continue;
+        const commandWords = run.lists.get(index * 2);
+        const targetWords = run.lists.get(index * 2 + 1);
+        // A spelling that did not round-trip to the word it claims has nothing
+        // to assert about.
+        if (!commandWords?.includes(job.commandWord)) continue;
+        if (!targetWords?.includes(job.targetWord)) continue;
+        if (!targetWords.some((word) => word && matchesProtectedPath(word, policy.shellProtectedPaths))) continue;
         checked += 1;
-        // Reading the path or refusing the command as unresolvable are both
-        // answers. Only saying nothing is a miss.
+        const command = job.position.make(job.commandSpelling, job.targetSpelling);
+        // Reading the path, refusing the command as unresolvable, or gating it
+        // on a decision are all answers. Only silence is a miss.
         const seen = findProtectedPathInCommand(command, policy.shellProtectedPaths);
         const refused = unresolvedPathExpansions(command).length > 0;
-        if (!seen && !refused) misses.push(`${command}\n    bash opens ${target}`);
+        const gated = evaluateExecPolicyCore(command, { policy, mode: "enforce" }).decision !== "allow";
+        if (!seen && !refused && !gated) {
+          misses.push(`${job.position.name}: ${command}\n      bash builds: ${targetWords.join(" ")}`);
+        }
       }
     }
     assert.deepEqual(misses, [], `spellings reaching a protected path unseen:\n${misses.join("\n")}`);
-    assert.ok(checked >= 200, `only ${checked} protected spellings were exercised`);
+    assert.ok(checked >= 400, `only ${checked} protected spellings were exercised`);
   });
 
-  it("does not answer for spellings that reach no protected path", { skip: !bashAvailable }, () => {
-    // The other half of the invariant. A detector that says yes to everything
-    // would pass the test above and be useless, so the benign targets in the
-    // corpus have to come back clean unless the spelling is genuinely
-    // unresolvable here.
+  it("never permits a removal bash would aim at root, in any position", { skip: !bashAvailable }, () => {
+    const permitted = [];
+    let checked = 0;
+    for (const run of runs) {
+      for (let index = 0; index < run.jobs.length; index += 1) {
+        const job = run.jobs[index];
+        if (!job.destructive) continue;
+        const commandWords = run.lists.get(index * 2);
+        const targetWords = run.lists.get(index * 2 + 1);
+        if (!commandWords?.includes(job.commandWord)) continue;
+        if (!targetWords?.some((word) => word === "/")) continue;
+        checked += 1;
+        const command = job.position.make(job.commandSpelling, job.targetSpelling);
+        if (evaluateExecPolicyCore(command, { policy, mode: "enforce" }).decision === "allow") {
+          permitted.push(`${job.position.name}: ${command}`);
+        }
+      }
+    }
+    assert.deepEqual(permitted, [], `removals of root that were permitted:\n${permitted.join("\n")}`);
+    assert.ok(checked >= 200, `only ${checked} root spellings were exercised`);
+  });
+
+  it("stays quiet about spellings that reach nothing protected", { skip: !bashAvailable }, () => {
+    // The other half of the invariant. A detector that answers for everything
+    // would pass both tests above and be useless.
     const noise = [];
-    for (let index = 0; index < spellings.length; index += 1) {
-      const words = read.lists.get(index) ?? [];
-      if (words.some((word) => word && matchesProtectedPath(word, policy.shellProtectedPaths))) continue;
-      const command = `cat ${spellings[index].spelling}`;
-      const seen = findProtectedPathInCommand(command, policy.shellProtectedPaths);
-      if (seen) noise.push(`${command}\n    reported ${seen}, bash opens ${words.join(" ")}`);
+    for (const run of runs) {
+      for (let index = 0; index < run.jobs.length; index += 1) {
+        const job = run.jobs[index];
+        if (job.destructive) continue;
+        const targetWords = run.lists.get(index * 2 + 1);
+        if (!targetWords?.includes(job.targetWord)) continue;
+        if (targetWords.some((word) => word && matchesProtectedPath(word, policy.shellProtectedPaths))) continue;
+        const command = job.position.make(job.commandSpelling, job.targetSpelling);
+        const seen = findProtectedPathInCommand(command, policy.shellProtectedPaths);
+        if (seen) noise.push(`${job.position.name}: ${command}\n      reported ${seen.candidate}`);
+      }
     }
     assert.deepEqual(noise, [], `benign spellings reported as protected:\n${noise.join("\n")}`);
   });
 });
 
-describe("shell spelling differential, destructive direction", () => {
-  const DESTRUCTIVE_SHAPES = [
-    (spelling) => `rm -rf ${spelling}`,
-    (spelling) => `rm -fr ${spelling}`,
-    (spelling) => `find ${spelling} -delete`,
-    (spelling) => `{rm,-rf,${spelling}}`
+// The fail-closed rules the corpus above forced into existence widen what gets
+// asked about, and a net that catches everything is not a net. These are the
+// commands a maintainer runs, and they have to stay out of the way.
+describe("everyday commands keep their answer", () => {
+  const everyday = [
+    "npm test", "npm run build", "git status", "git commit -m \"fix: thing\"",
+    "git commit -m \"$(date)\"", "rm -rf node_modules", "rm -rf dist build",
+    "rm -rf $TMPDIR/build", "mkdir -p src/{a,b}", "cp file{,.bak}",
+    "docker build --build-arg X=$(git rev-parse HEAD) .",
+    "find . -name '*.js' | xargs grep -l TODO", "git diff --name-only | xargs cat",
+    "cat README.md", "cat $HOME/notes.txt", "D=/tmp; cat $D/notes.txt",
+    "echo $FOO", "npm run $SCRIPT", "gh pr create --title $T", "tar czf backup.tgz src",
+    "node --test tests/", "find . -type f -name '*.log' -delete", "grep -r TODO src",
+    "grep -f patterns.txt README.md", "curl -o out.json https://example.invalid",
+    "git log --oneline | head -20", "ls -la", "echo \"$(pwd)\"",
+    "PATH=$PATH:/opt/bin npm run build"
   ];
 
-  const random = randomSource(0xd00d);
-  const spellings = [];
-  for (let index = 0; index < 60; index += 1) spellings.push(buildSpelling("/", random));
-
-  const removal = bashAvailable ? wordListsFromBash(spellings) : undefined;
-
-  it("builds a word list for every generated spelling", { skip: !bashAvailable }, () => {
-    assert.equal(removal.lists.size, spellings.length, `bash rejected a generated spelling:\n${removal.stderr}`);
-  });
-
-  it("never permits a removal bash would aim at root", { skip: !bashAvailable }, () => {
-    const permitted = [];
-    let checked = 0;
-    for (let index = 0; index < spellings.length; index += 1) {
-      const words = removal.lists.get(index) ?? [];
-      if (!words.some((word) => word === "/")) continue;
-      for (const shape of DESTRUCTIVE_SHAPES) {
-        const command = shape(spellings[index]);
-        checked += 1;
-        if (evaluateExecPolicyCore(command, { policy, mode: "enforce" }).decision === "allow") permitted.push(command);
-      }
-    }
-    assert.deepEqual(permitted, [], `removals of root that were permitted:\n${permitted.join("\n")}`);
-    assert.ok(checked >= 100, `only ${checked} root spellings were exercised`);
-  });
+  for (const command of everyday) {
+    it(`leaves alone: ${command}`, () => {
+      assert.equal(evaluateExecPolicyCore(command, { policy, mode: "enforce" }).decision, "allow", command);
+      assert.equal(findProtectedPathInCommand(command, policy.shellProtectedPaths), undefined, command);
+      assert.deepEqual(unresolvedPathExpansions(command), [], command);
+    });
+  }
 });

@@ -501,10 +501,10 @@ function expandShellBraces(word, mask = "0".repeat(word.length), depth = 0) {
  * @param {string} segment
  * @returns {{words: string[], text: string, tokens: ReturnType<typeof shellWordTokens>}}
  */
-function expandedSegment(segment) {
+function expandedSegment(segment, assignments = new Map()) {
   const rawTokens = shellWordTokens(segment);
   if (!rawTokens.some((token) => token.braceActive)) {
-    return { words: rawTokens.map((token) => token.value), text: segment, tokens: rawTokens };
+    return resolveExpandedTokens(segment, rawTokens, assignments, segment);
   }
   // Expanded into *tokens*, not just into a word list. Taking the command name
   // from the expanded words and the arguments from the raw ones read
@@ -526,8 +526,66 @@ function expandedSegment(segment) {
   // already happened here, with the mask; a later reader that expanded again
   // would be doing it without one, and `{.env","x}` -- whose comma is quoted,
   // so the shell leaves the whole word alone -- came back as `.env`.
-  const words = tokens.map((token) => token.value);
-  return { words, text: words.join(" "), tokens: tokens.map((token) => ({ ...token, braceActive: false })) };
+  // `braceActive` is cleared on every token below, expanded or not.
+  return resolveExpandedTokens(segment, tokens, assignments, undefined);
+}
+
+/**
+ * The rest of the expansion order, applied to an already brace-expanded stream.
+ *
+ * The shell expands braces, then parameters, then command substitutions, and
+ * only then decides what the command is. This module did the first of those
+ * here and left the other two to whichever reader happened to want them, which
+ * meant one reader had them and eleven did not: `rm -rf $(printf /)` was
+ * refused because the destructive check resolved its own target, while
+ * `r$(printf %s m) -rf /` -- the same removal with the name assembled the same
+ * way -- was permitted by every check in the file, and `echo .env | xa$(printf
+ * %s rgs) cat` opened a protected file because the consumer's name was read as
+ * written. Resolving here means a reader cannot be left behind: there is one
+ * word list, and it is the one the shell would build.
+ *
+ * A word is resolved only where resolving it is faithful. Single quotes suspend
+ * substitution, a body this cannot read exactly gives up rather than guess, and
+ * an unresolved word is passed through untouched with `resolved: false` so the
+ * checks that ask about it still see an expansion they could not evaluate.
+ *
+ * @param {string} segment
+ * @param {ReturnType<typeof shellWordTokens>} tokens
+ * @param {Map<string, string>} assignments
+ * @param {string | undefined} rawText text to keep when nothing resolves, so
+ *   quoting survives for the matchers that compare against the command string
+ * @returns {{words: string[], text: string, braceText: string,
+ *   tokens: ReturnType<typeof shellWordTokens>}}
+ */
+function resolveExpandedTokens(segment, tokens, assignments, rawText) {
+  const substituting = segmentHasUnquotedSubstitution(segment);
+  const evaluable = substituting && substitutionsAreLiteral(segment);
+  // The text as it stands after brace expansion and before anything is
+  // resolved. The nested scan reads substitution bodies and interpreter
+  // payloads out of it, and resolving first takes them away: rewrite
+  // `printf data > $(printf %s .env)` to `printf data > .env` and there is no
+  // body left to descend into, and the descent is what saw the file.
+  const braceText = rawText ?? tokens.map((token) => token.value).join(" ");
+  let changed = false;
+  const resolved = tokens.map((token) => {
+    const base = { ...token, braceActive: false };
+    if (!token.variableActive) return { ...base, resolved: true };
+    const outcome = resolveSubstitutionTarget(token.value, assignments, evaluable);
+    if (outcome.value !== token.value) changed = true;
+    // The mask described the text as written; it does not describe this.
+    return { ...base, value: outcome.value, literalMask: undefined, resolved: outcome.resolved };
+  });
+  const words = resolved.map((token) => token.value);
+  return {
+    words,
+    text: !changed && rawText !== undefined ? rawText : words.join(" "),
+    braceText,
+    tokens: resolved,
+    // Reported rather than recomputed. A reader deciding for itself whether a
+    // substitution would run is a second rule that can disagree with this one,
+    // and disagreeing rules are what put the holes here in the first place.
+    evaluable
+  };
 }
 
 export function arrayStartsWith(items, prefix) {
@@ -843,9 +901,29 @@ function hasUnresolvedSubstitution(word, assignments, evaluable) {
   return !resolveSubstitutionTarget(word, assignments, evaluable).resolved;
 }
 
+/**
+ * True when the command name is still being computed when the shell runs it.
+ *
+ * The word arrives here after every expansion this module can perform, so an
+ * expansion still in it is one nobody can evaluate -- and a name nobody can
+ * evaluate could be any command at all, including the one being looked for.
+ *
+ * Testing for a leading `$` was the old reading, and it only caught a name that
+ * was *entirely* an expansion. A name with one literal character in front of it
+ * ducked underneath: `r${X:+m} -rf /` and `$(echo -n r)${X:+m} -rf /` are both
+ * `rm -rf /` when the variable is set, and both read as an ordinary command
+ * called something other than `rm`.
+ *
+ * @param {string} name
+ * @returns {boolean}
+ */
+function commandNameIsDynamic(name) {
+  return /\$\{|\$\(|`|\$[A-Za-z_]/.test(name);
+}
+
 function rmFinding(words, assignments, evaluable, substituting) {
   const command = commandBasename(words[0] ?? "");
-  const dynamicCommand = command.startsWith("$");
+  const dynamicCommand = commandNameIsDynamic(command);
   if (command !== "rm" && !dynamicCommand) return undefined;
 
   let recursive = false;
@@ -889,7 +967,10 @@ function rmFinding(words, assignments, evaluable, substituting) {
 }
 
 function findDeleteFinding(words, assignments, evaluable, substituting) {
-  if (commandBasename(words[0] ?? "") !== "find") return undefined;
+  const command = commandBasename(words[0] ?? "");
+  // `-delete` with a root operand is the whole shape; a name still being
+  // computed does not make it something else.
+  if (command !== "find" && !commandNameIsDynamic(command)) return undefined;
   if (!words.includes("-delete")) return undefined;
   // `find` walks every path it is given before the expression starts, so all of
   // the leading operands are starting points. Reading only the first one meant
@@ -978,7 +1059,8 @@ function xargsFinding(words) {
   const commandIndex = words.findIndex((word, index) => index > 0 && !word.startsWith("-"));
   if (commandIndex < 0) return undefined;
   const nested = words.slice(commandIndex);
-  if (commandBasename(nested[0] ?? "") !== "rm") return undefined;
+  const nestedName = commandBasename(nested[0] ?? "");
+  if (nestedName !== "rm" && !commandNameIsDynamic(nestedName)) return undefined;
   const hasRecursiveOrForce = nested.slice(1).some((word) => {
     if (word === "--recursive" || word === "--force") return true;
     if (!word.startsWith("-") || word.startsWith("--")) return false;
@@ -1025,7 +1107,7 @@ export function evaluateExecPolicyCore(command, options) {
     const { segment, depth } = pending.shift();
     // Expanded once here, so every reader below is looking at the word list the
     // shell would build rather than at the text the author typed.
-    const { words, text } = expandedSegment(segment);
+    const { words, text, braceText } = expandedSegment(segment, assignments);
     rememberLeadingShellAssignments(words, assignments);
     const matches = [];
     const warnings = [];
@@ -1054,7 +1136,7 @@ export function evaluateExecPolicyCore(command, options) {
       reasons.push(`Blocked by legacy policy pattern: ${pattern}`);
     }
 
-    const nested = extractNestedCommands(text, words);
+    const nested = extractNestedCommands(braceText, words);
     if (nested.length > 0 && depth >= MAX_NESTED_DEPTH) {
       matches.push("forbid:nesting-depth");
       reasons.push(
@@ -1141,12 +1223,18 @@ function findBalanced(text, startIndex, openChar, closeChar) {
 function shellCPayloads(words) {
   const normalizedWords = stripWrapper(words);
   const rootCommand = commandBasename(normalizedWords[0] ?? "");
-  const carrier = SHELL_COMMANDS.has(rootCommand) || rootCommand === "xargs" || rootCommand === "find";
+  // A name still being computed when the shell runs it could be an interpreter,
+  // and `${X:+b}ash -c 'cat .env'` reads the file whenever the variable is set.
+  // The payload beside a `-c` is a script under that reading, so it is scanned
+  // rather than skipped on the strength of a name nobody can evaluate.
+  const carrier = SHELL_COMMANDS.has(rootCommand) || rootCommand === "xargs" || rootCommand === "find"
+    || commandNameIsDynamic(rootCommand);
   if (!carrier) return [];
 
   const payloads = [];
   for (let commandIndex = 0; commandIndex < normalizedWords.length; commandIndex += 1) {
-    if (!SHELL_COMMANDS.has(commandBasename(normalizedWords[commandIndex] ?? ""))) continue;
+    const name = commandBasename(normalizedWords[commandIndex] ?? "");
+    if (!SHELL_COMMANDS.has(name) && !commandNameIsDynamic(name)) continue;
     for (let index = commandIndex + 1; index < normalizedWords.length - 1; index += 1) {
       const word = normalizedWords[index];
       if (word === "-c" || (/^-[A-Za-z]+$/.test(word) && word.includes("c"))) {
@@ -1756,12 +1844,18 @@ function xargsPipelineInputCandidates(command) {
     // `{printf,.e%.1sv} nv` is `printf .e%.1sv nv`, and reading the name from
     // the expanded list while slicing arguments off the raw one dropped the
     // format entirely.
-    const { tokens: producerTokens, words: producerWords } = expandedSegment(segments[index]);
+    const { tokens: producerTokens, words: producerWords } = expandedSegment(segments[index], assignments);
     rememberLeadingShellAssignments(producerWords, assignments);
     if (index + 1 >= segments.length) continue;
-    const consumerWords = shellWords(segments[index + 1]);
+    // The consumer's name is assembled the same ways the producer's is, and
+    // reading it as written meant `echo .env | xa$(printf %s rgs) cat` had no
+    // `xargs` in it as far as this was concerned.
+    const consumerWords = expandedSegment(segments[index + 1], assignments).words;
     const consumerCommand = commandBasename(stripWrapper(consumerWords)[0] ?? "");
-    if (consumerCommand !== "xargs") continue;
+    // A consumer whose name is still being computed could be `xargs`, and if it
+    // is, whatever the producer prints is opened. `echo .env | $(eval printf %s
+    // xargs) cat` is that command whenever the substitution runs.
+    if (consumerCommand !== "xargs" && !commandNameIsDynamic(consumerCommand)) continue;
     const producerCommand = commandBasename(stripWrapper(producerWords)[0] ?? "");
     if (!DATA_ONLY_COMMANDS.has(producerCommand)) continue;
     const commandIndex = producerCommandIndex(producerWords, producerCommand);
@@ -1910,12 +2004,18 @@ export function extractShellPathCandidates(command) {
     // One stream for the command name and for the operands alike: `{cat,.env}`
     // is a `cat` whose only argument came out of the same word, and reading the
     // name from one list and the arguments from another lost it.
-    const { words, text, tokens } = expandedSegment(segment);
+    const { words, text, tokens, braceText, evaluable } = expandedSegment(segment, assignments);
     const expandedWords = words;
     rememberLeadingShellAssignments(words, assignments);
     const commandName = commandBasename(stripWrapper(words)[0] ?? "");
+    // Redirection targets are read off the raw segment, because that is the only
+    // text that still shows an operator glued to its path. They get the same
+    // resolution the words got: the data-only skip below never covers them --
+    // `printf` writes to whatever `>` names whether or not `printf` itself opens
+    // files -- so `printf x > .en$(echo v)` truncated `.env` while every reader
+    // that could have resolved the name had been skipped.
     for (const redirect of extractAttachedRedirectionPaths(segment)) {
-      addCandidate(redirect.value, true, redirect.braceActive);
+      addCandidate(resolveSubstitutionTarget(redirect.value, assignments, evaluable).value, true, redirect.braceActive);
     }
 
     const inlineFlags = INLINE_CODE_FLAGS.get(commandName);
@@ -2027,14 +2127,14 @@ export function extractShellPathCandidates(command) {
       }
     }
     if (depth < MAX_NESTED_DEPTH) {
-      for (const nestedCommand of extractNestedCommands(text, expandedWords)) {
+      for (const nestedCommand of extractNestedCommands(braceText, expandedWords)) {
         for (const nestedSegment of splitShellSegments(nestedCommand)) {
           // `$(echo -e '.en\x76')` prints `.env`, and `printf` decodes its
           // format the same way. The backslash is gone by the time the body is
           // tokenized, so the escape is read back off the raw text -- the same
           // reading the `xargs` producer already gets.
           const nestedWords = shellWords(nestedSegment);
-          const nestedName = commandBasename(stripWrapper(expandedSegment(nestedSegment).words)[0] ?? "");
+          const nestedName = commandBasename(stripWrapper(expandedSegment(nestedSegment, assignments).words)[0] ?? "");
           const nestedIndex = producerCommandIndex(nestedWords, nestedName);
           if (nestedName === "printf" || (nestedName === "echo" && echoEscapeMode(nestedWords, nestedIndex))) {
             for (const literal of escapedLiteralCandidates(nestedSegment)) addCandidate(literal, false);
@@ -2238,9 +2338,10 @@ function assemblesFilename(basename) {
  * @param {string} segment
  * @returns {boolean}
  */
-function feedsFileOperandConsumer(segment) {
-  const words = stripWrapper(shellWords(segment));
-  if (commandBasename(words[0] ?? "") !== "xargs") return false;
+function feedsFileOperandConsumer(segment, assignments) {
+  const words = stripWrapper(expandedSegment(segment, assignments).words);
+  const name = commandBasename(words[0] ?? "");
+  if (name !== "xargs" && !commandNameIsDynamic(name)) return false;
   return words.slice(1).some((word) => FILE_OPERAND_COMMANDS.has(commandBasename(word)));
 }
 
@@ -2253,7 +2354,7 @@ export function unresolvedPathExpansions(command) {
   const enqueue = (text, depth) => {
     const segments = splitShellSegments(text);
     for (let index = 0; index < segments.length; index += 1) {
-      const piped = segments[index + 1] !== undefined && feedsFileOperandConsumer(segments[index + 1]);
+      const piped = segments[index + 1] !== undefined && feedsFileOperandConsumer(segments[index + 1], assignments);
       pending.push({ segment: segments[index], depth, piped });
     }
   };
@@ -2262,7 +2363,7 @@ export function unresolvedPathExpansions(command) {
   while (pending.length > 0) {
     const { segment, depth, piped } = pending.shift();
     // The same single stream the exec policy and the path candidates read.
-    const { words, text, tokens } = expandedSegment(segment);
+    const { words, text, tokens, braceText, evaluable } = expandedSegment(segment, assignments);
     const expandedWords = words;
     rememberLeadingShellAssignments(words, assignments);
     const commandName = commandBasename(stripWrapper(words)[0] ?? "");
@@ -2283,9 +2384,17 @@ export function unresolvedPathExpansions(command) {
     // `echo ${a[@]}` prints a name, it does not open one -- unless something
     // downstream opens what it printed.
     if (!DATA_ONLY_COMMANDS.has(commandName) || depth > 0 || piped) {
-      for (const token of executableArgumentTokens(tokens, words, commandName)) {
+      const argumentTokens = executableArgumentTokens(tokens, words, commandName);
+      for (let index = 0; index < argumentTokens.length; index += 1) {
+        const token = argumentTokens[index];
         if (!token.variableActive) continue;
         if (token.value.startsWith("-")) continue;
+        // `grep`'s first bare operand is the pattern, so the command does not
+        // open files by name -- but the word after `-f` does, and
+        // `grep -f ${X:+.env} README.md` reads a protected file with the
+        // command sitting outside every list that says so.
+        const namedByFlag = SEARCH_COMMANDS.has(commandName)
+          && SEARCH_FILE_OPTIONS.has(argumentTokens[index - 1]?.value ?? "");
         // `dd if=.en$(echo v)` hides a filename in an operand value. Reading the
         // key as literal text would refuse every `TAG=build$(date +%s)` too, so
         // the value is taken on its own and only when it is shaped like a path.
@@ -2303,14 +2412,21 @@ export function unresolvedPathExpansions(command) {
         // whole point of this net is that a form nobody has modelled yet should
         // cost a question rather than a miss. Widening it to every command would
         // ask about `git commit -m $MSG`. Words printed into an `xargs cat` are
-        // operands of that `cat`, whatever printed them.
-        const opensFiles = FILE_OPERAND_COMMANDS.has(commandName) || piped;
+        // operands of that `cat`, whatever printed them. And a name nobody can
+        // evaluate could be a command that opens files: `${X:+cat} ${X:+.env}`
+        // reads a protected file whenever the variable is set, and both halves
+        // read as words naming nothing. This only fires when the operand is
+        // unresolved too, so a named command with a literal operand is untouched.
+        const opensFiles = FILE_OPERAND_COMMANDS.has(commandName)
+          || piped
+          || namedByFlag
+          || commandNameIsDynamic(commandName);
         const bare = opensFiles && holdsUnresolvedParameter(basename);
         if (assemblesFilename(basename) || bare) unresolved.push(token.value);
       }
     }
     if (depth < MAX_NESTED_DEPTH) {
-      for (const nestedCommand of extractNestedCommands(text, expandedWords)) {
+      for (const nestedCommand of extractNestedCommands(braceText, expandedWords)) {
         enqueue(nestedCommand, depth + 1);
       }
     }

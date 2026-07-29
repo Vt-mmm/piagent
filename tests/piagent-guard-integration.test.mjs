@@ -1236,6 +1236,9 @@ describe("piagent guard integration", () => {
     piagentGuard(harness.pi);
     const toolCall = harness.handlers.get("tool_call");
 
+    // `echo v` is pure text, so the name it helps spell is resolved outright
+    // and reported as the path it is. Refusing is what happens when the value
+    // is only knowable at run time, which is the second group.
     const assembled = await callToolCall(toolCall, ctx, "bash", { command: "cat .en$(echo v)" });
     const prefix = await callToolCall(toolCall, ctx, "bash", { command: "cat $(echo .)env" });
     const redirect = await callToolCall(toolCall, ctx, "bash", { command: "printf x > .en$(echo v)" });
@@ -1247,9 +1250,16 @@ describe("piagent guard integration", () => {
 
     for (const [label, decision] of [["assembled", assembled], ["prefix", prefix], ["redirect", redirect]]) {
       assert.equal(decision.block, true, label);
-      assert.match(decision.reason, /cannot resolve/, label);
+      assert.match(decision.reason, /protected path/, label);
     }
     assert.equal(viaProxy.block, true);
+
+    const unresolvable = await callToolCall(toolCall, ctx, "bash", { command: "cat .en$(mktemp)" });
+    const unresolvableRedirect = await callToolCall(toolCall, ctx, "bash", { command: "printf x > .en$(mktemp)" });
+    for (const [label, decision] of [["operand", unresolvable], ["redirect", unresolvableRedirect]]) {
+      assert.equal(decision.block, true, label);
+      assert.match(decision.reason, /cannot resolve/, label);
+    }
 
     // A substitution that is the whole word is a value, not a filename.
     const wholeWord = await callToolCall(toolCall, ctx, "bash", { command: "echo \"$(pwd)\"" });

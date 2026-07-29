@@ -353,17 +353,33 @@ describe("protected path extraction from shell", () => {
 // the path cannot be resolved at all: refuse, rather than match the literal half
 // of a filename and report the other half as absent.
 describe("unresolvable path expansions", () => {
+  // A substitution over a producer that is pure text is not unresolvable at
+  // all -- it is resolved, and the name it spells is reported as the path it
+  // is. These were refused before the resolution ran for every reader rather
+  // than only for the destructive checks, and a refusal with the name in hand
+  // is a worse answer than the name.
   for (const command of [
     "cat .en$(echo v)",
     "cat $(echo .)env",
-    "cat > .en$(echo v)",
     "cat .en`echo v`",
-    "cat ${D}.env",
     "cat dir/.en$(echo v)",
-    "cat .en$V",
-    // Two expansions with nothing between them assemble a name as surely as
-    // literal text does, and neither half holds it: this spells `.env`.
     "cat $(printf %.1sen .Z)$(printf %.1s vZ)",
+    "printf x > .en$(echo v)",
+    "cat .e$(printf %s n)$(echo -n v)",
+    "r$(printf %s m) -rf .env"
+  ]) {
+    it(`resolves a filename assembled from pure text: ${command}`, () => {
+      assert.ok(findProtectedPathInCommand(command, policy.shellProtectedPaths), command);
+    });
+  }
+
+  for (const command of [
+    "cat > .en$(echo v)",
+    "cat ${D}.env",
+    "cat .en$V",
+    // A producer whose value only exists at run time stays a refusal.
+    "cat .en$(mktemp)",
+    "printf x > .en$(mktemp)",
     // A word that is nothing but a parameter expansion, where the command says
     // the word is a file. `${HOME:+.env}` opens `.env` and used to read as a
     // word naming nothing at all.
@@ -376,7 +392,14 @@ describe("unresolvable path expansions", () => {
     // the producer only prints, and the consumer has no operand to read.
     "echo $F | xargs cat",
     "echo ${SET:+.env} | xargs cat",
-    "ls $DIR | xargs cat"
+    "ls $DIR | xargs cat",
+    // Both halves computed. Nothing here can say the command opens files,
+    // because nothing here can say what the command is -- and a name nobody can
+    // evaluate could be one that does. `${SET:+cat} ${SET:+.env}` reads a
+    // protected file whenever the variable is set.
+    "${SET:+cat} ${SET:+.env}",
+    "$X ${SET:+.env}",
+    "$X $F"
   ]) {
     it(`refuses a filename it cannot resolve: ${command}`, () => {
       assert.deepEqual(unresolvedPathExpansions(command).length > 0, true, command);
@@ -413,7 +436,11 @@ describe("unresolvable path expansions", () => {
     "git diff --name-only | xargs cat",
     "git log --oneline | xargs echo",
     // ...and one whose consumer opens nothing.
-    "echo $MESSAGE | xargs echo"
+    "echo $MESSAGE | xargs echo",
+    // A name nobody can evaluate only costs a question when the operand is
+    // unknown too. A literal operand says what is opened whatever runs.
+    "${SET:+cat} notes.txt",
+    "$X README.md"
   ]) {
     it(`does not refuse a command with nothing unresolvable in a path: ${command}`, () => {
       assert.deepEqual(unresolvedPathExpansions(command), [], command);
