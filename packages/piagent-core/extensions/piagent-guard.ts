@@ -3369,6 +3369,19 @@ function modelLabel(ctx: ExtensionContext): string {
   return model.name ?? model.id ?? "unknown";
 }
 
+function currentSessionName(ctx: ExtensionContext): string {
+  try {
+    return String(ctx.sessionManager.getSessionName() ?? "").trim();
+  } catch {
+    return "";
+  }
+}
+
+function hasOperatorSessionName(name: string): boolean {
+  const normalized = name.trim().toLowerCase();
+  return Boolean(normalized && normalized !== "session");
+}
+
 function buildUsageSnapshot(ctx: ExtensionContext, thinkingLevel?: string): UsageSnapshot {
   const contextUsage = ctx.getContextUsage();
   const contextWithThinking = ctx as ExtensionContext & { getThinkingLevel?: () => string };
@@ -3395,7 +3408,8 @@ function buildUsageSnapshot(ctx: ExtensionContext, thinkingLevel?: string): Usag
       availableInCommand: false,
       howToRead: [
         "Inside Pi TUI: run /session for exact tokens and cost.",
-        "Outside Pi: run piagent-usage /path/to/project or scripts/pi-session-stats.sh /path/to/project."
+        "Outside Pi: run piagent-usage /path/to/project or scripts/pi-session-stats.sh /path/to/project.",
+        "Historical totals: run piagent-usage --history /path/to/project --days 7."
       ]
     }
   };
@@ -3423,6 +3437,12 @@ function formatUsageSnapshot(snapshot: UsageSnapshot): string {
     "",
     "```bash",
     "piagent-usage /path/to/project",
+    "```",
+    "",
+    "Historical totals / weekly report:",
+    "",
+    "```bash",
+    "piagent-usage --history /path/to/project --days 7",
     "```"
   ].join("\n");
 }
@@ -3908,7 +3928,10 @@ export default function piagentGuard(pi: ExtensionAPI) {
     const explicitProfile = Boolean(process.env.PIAGENT_PROFILE?.trim());
     const profile = loadProfile(ctx.cwd, projectTrusted);
     const name = profile.displayName || profile.projectId || path.basename(ctx.cwd);
-    pi.setSessionName(`pi:${name}`);
+    const operatorSessionName = currentSessionName(ctx);
+    if (!hasOperatorSessionName(operatorSessionName)) {
+      pi.setSessionName(`pi:${name}`);
+    }
     const profileHint = explicitProfile || (projectTrusted && fs.existsSync(projectProfilePath(ctx.cwd)))
       ? ""
       : " (run /onboard-project to select a profile)";

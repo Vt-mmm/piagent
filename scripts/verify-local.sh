@@ -164,6 +164,7 @@ required_files=(
   "$ROOT/scripts/quality-benchmark.sh"
   "$ROOT/scripts/runtime-policy-smoke.sh"
   "$ROOT/scripts/pi-session-stats.sh"
+  "$ROOT/scripts/pi-usage-history.mjs"
   "$ROOT/scripts/pi-auto.sh"
   "$ROOT/scripts/pi-model-catalog.sh"
   "$ROOT/scripts/configure-model-scope.sh"
@@ -544,6 +545,7 @@ node --check "$ROOT/packages/piagent-core/capabilities/capability-core.js" >/dev
 node --check "$ROOT/packages/piagent-core/capabilities/capability-sources.js" >/dev/null
 node --check "$ROOT/scripts/capability-catalog.mjs" >/dev/null
 node --check "$ROOT/scripts/piagent-cli.mjs" >/dev/null
+node --check "$ROOT/scripts/pi-usage-history.mjs" >/dev/null
 node --check "$ROOT/scripts/migrate-project-state.mjs" >/dev/null
 node --check "$ROOT/scripts/import-agent-instructions.mjs" >/dev/null
 node --check "$ROOT/scripts/check-runtime-advisories.mjs" >/dev/null

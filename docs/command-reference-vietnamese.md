@@ -460,7 +460,9 @@ Các lệnh này chạy ngoài Pi.
 | `piagent-subagents --preset safe` | Re-apply subagent safe config. |
 | `pi install npm:pi-web-access@0.13.0` | Optional: cấp web/search/fetch tools cho builtin `researcher`. |
 | `piagent-setup <project> --with-web-access` | Setup project + optional web access cho research subagents. |
-| `piagent-usage /path/to/project` | Lấy exact session usage từ terminal khác. |
+| `piagent-usage /path/to/project` | Lấy exact usage của session mới nhất từ terminal khác. |
+| `piagent-usage --history /path/to/project --days 7` | Tổng usage lịch sử của project, gồm session đã end. |
+| `piagent-usage --history --all-projects --days 7 --csv` | Xuất usage tuần toàn máy để đưa vào report. |
 | `piagent-doctor /path/to/project --strict-share` | Kiểm tra project có share/open-source được không. |
 | `piagent-uninstall` | Báo cáo những gì sẽ được gỡ. Dry run, không đụng gì. |
 | `piagent-uninstall --apply` | Gỡ Pi package của platform khỏi Pi settings global. |
@@ -485,6 +487,7 @@ Khi đang develop chính repo `piagent`, có thể dùng npm scripts tương ứ
 | `npm run doctor -- <project> --strict-share` | `bash scripts/team-doctor.sh <project> --strict-share` |
 | `npm run benchmark -- ...` | `bash scripts/quality-benchmark.sh ...` |
 | `npm run usage -- <project>` | `bash scripts/pi-session-stats.sh <project>` |
+| `npm run usage -- --history <project> --days 7` | `bash scripts/pi-session-stats.sh --history <project> --days 7` |
 | `npm run models` | `bash scripts/pi-model-catalog.sh` |
 | `npm run model-scope -- --preset full` | `bash scripts/configure-model-scope.sh --preset full` |
 | `npm run mcp -- --preset core --scope global --replace` | `node scripts/mcp-manage.mjs --preset core --scope global --replace` |
@@ -515,6 +518,8 @@ export GITHUB_PERSONAL_ACCESS_TOKEN=<github-token>
 | Session này đang dùng model gì? | `/session` hoặc `/piagent-usage` |
 | Context window đang còn bao nhiêu? | `/piagent-usage` |
 | Exact token/cost từ terminal khác? | `piagent-usage /path/to/project` |
+| Tổng token/cost các session cũ? | `piagent-usage --history /path/to/project --days 7` |
+| CSV report cuối tuần toàn máy? | `piagent-usage --history --all-projects --days 7 --csv` |
 | Subagents tốn bao nhiêu? | `/subagent-cost` |
 | Có nên compact chưa? | Xem `contextUsage.percent`; trên 75% mới cân nhắc `/compact`. |
 

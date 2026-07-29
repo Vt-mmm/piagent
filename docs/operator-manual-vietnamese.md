@@ -514,6 +514,16 @@ bash /path/to/piagent/scripts/pi-session-stats.sh \
   /Users/<user>/.pi/agent/sessions/<project-key>/<session>.jsonl
 ```
 
+Để xem tổng usage lịch sử trên máy, kể cả session đã end:
+
+```bash
+piagent-usage --history /path/to/project --days 7
+piagent-usage --history --all-projects --days 7 --csv
+piagent-usage --history --all-projects --since 2026-07-20 --until 2026-07-26 --json
+```
+
+History mode đọc trực tiếp `~/.pi/agent/sessions/**/*.jsonl`. Mặc định có tính cả subagent session files vì đó là usage thật của máy; thêm `--no-subagents` nếu chỉ muốn parent/main sessions.
+
 ### Cách đọc số
 
 | Field | Ý nghĩa |
@@ -880,7 +890,9 @@ Watchdog là optional adversarial reviewer ở cuối turn, không bật mặc �
 | `pi --fork <id-or-file>` | Fork session cũ sang session mới. |
 | `pi --name "<name>"` | Đặt tên session. |
 | `pi --tools read,grep,find,ls -p "Review src"` | Read-only one-shot. |
-| `piagent-usage /path/to/project` | Exact token/cost stats. |
+| `piagent-usage /path/to/project` | Exact token/cost stats của session mới nhất. |
+| `piagent-usage --history /path/to/project --days 7` | Tổng usage lịch sử của project. |
+| `piagent-usage --history --all-projects --days 7 --csv` | CSV report cuối tuần toàn máy. |
 | `piagent-mcp --preset core --scope global --replace` | Setup or update the governed MCP baseline. |
 | `piagent-subagents --preset safe` | Setup subagents baseline. |
 | `bash scripts/verify-local.sh` | Verify platform repo. |
