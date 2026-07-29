@@ -54,15 +54,15 @@
           "path": "packages/piagent-core/prompts/pr.md"
         },
         {
-          "byteSize": 1528,
-          "digest": "sha256:046b91dd920eed4da920132e4f563fedd0a73603a206896a078536a75906335c",
+          "byteSize": 1733,
+          "digest": "sha256:abcd472bb25b17f49d10af0ad97ff3d9eea3fbde0dad935ec8c27e9279f19672",
           "id": "review",
           "kind": "prompts",
           "path": "packages/piagent-core/prompts/review.md"
         },
         {
-          "byteSize": 4834,
-          "digest": "sha256:1e20fdfbf55ec71ec6f7a780aaf567556329571dcb1774831570e143e9d2b114",
+          "byteSize": 5053,
+          "digest": "sha256:94255b4da108d0e1d37fb4930ba39963afe86819032089d6f725d41ec77ddfd5",
           "id": "task",
           "kind": "prompts",
           "path": "packages/piagent-core/prompts/task.md"

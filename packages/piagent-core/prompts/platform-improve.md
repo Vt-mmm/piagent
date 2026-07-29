@@ -42,6 +42,7 @@ Mandatory flow:
 12. Implement only the bounded target behavior.
 13. If runtime behavior changes, update README/docs and add/adjust a decision note when appropriate.
 14. For source-changing tasks, run the exact verify command from `task.verifyCommands` through Pi bash, record observed verify evidence, trace, then call `piagent_task_gate_check` before final.
+15. Do not paste full test/build/tool logs into chat or final output. Summarize the signal, quote only relevant failing lines, and use `/piagent-logs` or a narrower command when oversized output has been compacted.
 
 Default verification:
 

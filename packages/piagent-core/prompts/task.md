@@ -52,6 +52,7 @@ Mandatory flow:
 16. Call `piagent_task_gate_check`. If gate fails, final outcome is blocked/partial, not done.
 17. If the user asks about token/context/cost usage, call `piagent_usage_snapshot`; for exact token/cost totals, tell the user to run `/session` or `piagent-usage <project-path>`.
 18. If verify cannot run, stop and report the exact blocker. Do not call it done.
+19. Do not paste full test/build/tool logs into chat or final output. Summarize the signal, quote only the relevant failing lines, and use `/piagent-logs` or a narrower command when oversized output has been compacted.
 
 Do not ask the user to paste this mandatory flow. The platform prompt already contains it. If the user pasted the full flow, treat it as boilerplate and extract only the task request.
 

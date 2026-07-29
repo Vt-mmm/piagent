@@ -11,6 +11,7 @@ Shared Pi package for reusable project workflows.
 - `subagents/*.md`: piagent roles for `pi-subagents`.
 - `policies/base-policy.json`: default runtime policy, including protected path and shell protected path defaults.
 - input hook support for local screenshot/image paths pasted into chat; supported images are attached as `[image1]`, `[image2]`, ...
+- compact tool-result rendering: oversized redacted output is previewed in Pi and captured under `.pi/piagent-state/tool-results/` for offline audit/reporting.
 
 ## Trusted run wrapper
 
@@ -84,6 +85,7 @@ Inside Pi, slash commands can switch the current session without writing the pro
 - `/scout`: governed read-only scout/audit workflow.
 - `/task`: governed implementation lifecycle.
 - `/task-preflight`: check whether the active session should run, compact, or start fresh before large work.
+- `/piagent-logs`: show compact-log policy and recent oversized tool-output captures.
 - `/fresh-task`, `/fresh-scout`, `/fresh-be-to-fe`: start a fresh governed session and replay the compact workflow prompt.
 - `/commit`: create a guarded local commit from reviewed files only; no push.
 - `/pr`: prepare a pull request; push/PR creation still requires explicit operator confirmation.

@@ -9,7 +9,7 @@ Một thành viên mới không cần biết local path của maintainer. Luồn
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.2.1
+npm install -g --ignore-scripts @piagent/platform@1.2.2
 piagent-install --stable
 cd /path/to/project
 pi
@@ -42,7 +42,7 @@ Mặc định team dùng stable helper:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.2.1
+npm install -g --ignore-scripts @piagent/platform@1.2.2
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -70,7 +70,7 @@ piagent-update --check
 piagent-update --project /path/to/project
 ```
 
-`--check` chỉ báo version, không đụng gì. Lên đúng một bản cụ thể thì `piagent-update --version 1.2.1`.
+`--check` chỉ báo version, không đụng gì. Lên đúng một bản cụ thể thì `piagent-update --version 1.2.2`.
 
 Không cần ai nhớ đi kiểm tra: khi có release mới, Pi tự báo ngay ở dòng notice lúc mở session, kèm luôn lệnh chạy.
 

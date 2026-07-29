@@ -54,6 +54,7 @@ pi install /path/to/piagent
 - `1.1.9`: notice update hiện đúng trên bản cài bằng `pi install git:` — bản cài nhận diện theo vị trí thư mục, không theo `.git`.
 - `1.2.0`: `piagent-mcp` quản lý server đầy đủ, server do repo mang theo phải được duyệt mới dùng được, và `/piagent-mcp` là command trong session chứ không phải nhờ model chạy bash.
 - `1.2.1`: approval gate thật sự phủ direct tool và server đến qua `imports` — hai đường vòng mà bản `1.2.0` để hở; kèm một loạt fix về containment khi vendor, độ sâu shell guard, và credential trong URL.
+- `1.2.2`: tool output dài được compact vào preview trong Pi và capture local cho Agent Watch/report; thêm `/setname` và `/piagent-logs` cho session naming và log audit gọn.
 
 ## Không publish
 
