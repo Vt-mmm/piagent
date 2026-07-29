@@ -16,6 +16,7 @@ Piagent package thêm command:
 /piagent-usage
 /task-preflight
 /task-preflight compact
+/piagent-logs
 ```
 
 Agent cũng có thể gọi tool:
@@ -45,6 +46,8 @@ piagent_context_preflight
 - fresh workflow commands nếu session hiện tại quá nặng.
 
 `/task-preflight compact` gọi Pi compaction với hướng dẫn giữ lại decisions, blockers, changed files, verify command, và next action.
+
+`/piagent-logs` không tail realtime. Nó chỉ hiển thị policy compact và vài capture mới nhất khi tool output quá dài. Capture nằm trong `.pi/piagent-state/tool-results/`, đã qua redaction trước khi ghi, để Agent Watch/report đọc offline mà Pi TUI không phải nhồi full terminal log vào transcript.
 
 Giới hạn kỹ thuật: extension command context expose `ctx.getContextUsage()`, phù hợp để biết context window đang dùng bao nhiêu. Exact billed totals như `input`, `output`, `cacheRead`, `cacheWrite`, `cost` là API của Pi `/session` và RPC `get_session_stats`.
 
@@ -104,7 +107,22 @@ History mode đọc trực tiếp `~/.pi/agent/sessions/**/*.jsonl`, cộng usag
 - `input`, `output`, `cacheRead`, `cacheWrite`, `reasoning`, `totalTokens`;
 - `cost.total`;
 - số user messages, assistant messages, tool calls, tool results;
+- session name từ `session_info.name`, dùng để Agent Watch/report đối chiếu task;
 - breakdown theo project và top sessions.
+
+Để session name rõ ngay trong report, mở Pi bằng:
+
+```bash
+pi --name "ABC-123 Short task name"
+```
+
+Hoặc đổi tên phiên đang mở trong Pi:
+
+```text
+/setname ABC-123 Short task name
+```
+
+Nếu tắt nhầm terminal/app, vào lại project rồi dùng `pi --continue` cho phiên gần nhất, hoặc `pi --resume` để chọn theo session name/id.
 
 Mặc định history mode **bao gồm subagent session files** vì đó là usage thật của máy. Dùng `--no-subagents` khi chỉ muốn parent/main sessions.
 
@@ -141,6 +159,8 @@ Xem `contextUsage.percent`:
 - Sau compaction, `contextUsage.tokens` có thể là `null` cho đến khi có assistant response mới.
 
 Nếu user paste full mandatory-flow boilerplate, platform input guard sẽ collapse về workflow command ngắn. Nếu prompt quá dài thật, platform có thể lưu intake vào `.pi/task-inbox/` local gitignored rồi replay bằng fresh workflow command.
+
+Tool output dài cũng bị compact theo cùng triết lý: chat giữ preview, audit/report giữ capture local. Nếu verify fail và preview chưa đủ, chạy lại command targeted hơn thay vì đổ full log vào session.
 
 ## Khi nào ghi benchmark
 

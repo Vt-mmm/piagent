@@ -128,6 +128,13 @@ const BOILERPLATE_COLLAPSE_CHARS = 300;
 const MAX_INLINE_COLLAPSED_TASK_CHARS = 2200;
 const MAX_CHAT_IMAGE_ATTACHMENTS = 4;
 const MAX_CHAT_IMAGE_BYTES = 8 * 1024 * 1024;
+const TOOL_RESULT_COMPACT_CHAR_THRESHOLD = 12_000;
+const TOOL_RESULT_COMPACT_LINE_THRESHOLD = 180;
+const TOOL_RESULT_PREVIEW_HEAD_LINES = 24;
+const TOOL_RESULT_PREVIEW_TAIL_LINES = 24;
+const TOOL_RESULT_PREVIEW_INTERESTING_LINES = 24;
+const TOOL_RESULT_PREVIEW_MAX_CHARS = 6_000;
+const TOOL_RESULT_CAPTURE_MAX_CHARS = 500_000;
 const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp", "bmp"] as const;
 const ORCHESTRATION_MODES = ["solo-first", "bounded-subagents", "parallel-readonly"] as const;
 const REVIEW_LENSES = ["correctness", "tests", "scope", "security", "docs", "release", "package"] as const;
@@ -1486,6 +1493,14 @@ function traceFilePath(cwd: string): string {
 
 function observedBashLedgerPath(cwd: string): string {
   return path.join(stateRoot(cwd), "observed-bash.jsonl");
+}
+
+function toolResultCaptureRoot(cwd: string): string {
+  return path.join(stateRoot(cwd), "tool-results");
+}
+
+function toolResultCaptureIndexPath(cwd: string): string {
+  return path.join(toolResultCaptureRoot(cwd), "index.jsonl");
 }
 
 function safeTaskId(taskId: string): string {
@@ -3382,6 +3397,308 @@ function hasOperatorSessionName(name: string): boolean {
   return Boolean(normalized && normalized !== "session");
 }
 
+function cleanSessionNameInput(input: string): string {
+  let name = input.trim();
+  if ((name.startsWith("\"") && name.endsWith("\"")) || (name.startsWith("'") && name.endsWith("'"))) {
+    name = name.slice(1, -1).trim();
+  }
+  return name;
+}
+
+type ToolResultCaptureSummary = {
+  path?: string;
+  error?: string;
+  source: string;
+  toolName: string;
+  originalChars: number;
+  originalLines: number;
+  previewChars?: number;
+  storedChars?: number;
+  storedTruncated?: boolean;
+  sha256: string;
+};
+
+function normalizeToolResultText(text: string): string {
+  return text.replace(/\r\n/g, "\n");
+}
+
+function toolResultLineCount(text: string): number {
+  if (!text) return 0;
+  return normalizeToolResultText(text).split("\n").length;
+}
+
+function shouldCompactToolResultText(text: string): boolean {
+  return text.length > TOOL_RESULT_COMPACT_CHAR_THRESHOLD
+    || toolResultLineCount(text) > TOOL_RESULT_COMPACT_LINE_THRESHOLD;
+}
+
+function clipPreviewLine(line: string, maxChars = 260): string {
+  if (line.length <= maxChars) return line;
+  return `${line.slice(0, maxChars).trimEnd()} ... [line clipped]`;
+}
+
+function boundedPreview(text: string): string {
+  if (text.length <= TOOL_RESULT_PREVIEW_MAX_CHARS) return text;
+  const marker = "\n[Piagent preview shortened further to stay light.]\n";
+  const edge = Math.floor((TOOL_RESULT_PREVIEW_MAX_CHARS - marker.length) / 2);
+  return `${text.slice(0, edge).trimEnd()}${marker}${text.slice(-edge).trimStart()}`;
+}
+
+function interestingToolResultLines(lines: string[]): string[] {
+  const interesting = /\b(?:error|errors|err!|failed?|failure|warning|warn|exception|traceback|assert(?:ion)?|panic|fatal|timeout|timed out|denied|not found|cannot|eacces|enoent|ts\d{3,5}|err_[a-z0-9_]+)\b/i;
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!interesting.test(line)) continue;
+    const rendered = `${index + 1}: ${clipPreviewLine(line)}`;
+    if (seen.has(rendered)) continue;
+    seen.add(rendered);
+    result.push(rendered);
+    if (result.length >= TOOL_RESULT_PREVIEW_INTERESTING_LINES) break;
+  }
+  return result;
+}
+
+function storedToolResultText(text: string): { text: string; truncated: boolean } {
+  if (text.length <= TOOL_RESULT_CAPTURE_MAX_CHARS) return { text, truncated: false };
+  const marker = `\n\n[Piagent capture truncated: omitted ${formatCount(text.length - TOOL_RESULT_CAPTURE_MAX_CHARS)} chars from the middle.]\n\n`;
+  const edge = Math.floor((TOOL_RESULT_CAPTURE_MAX_CHARS - marker.length) / 2);
+  return {
+    text: `${text.slice(0, edge).trimEnd()}${marker}${text.slice(-edge).trimStart()}`,
+    truncated: true
+  };
+}
+
+function compactToolResultPreview(toolName: string, source: string, text: string, capture: ToolResultCaptureSummary): string {
+  const normalized = normalizeToolResultText(text);
+  const lines = normalized.split("\n");
+  const head = lines.slice(0, TOOL_RESULT_PREVIEW_HEAD_LINES).map((line) => clipPreviewLine(line));
+  const tailStart = Math.max(TOOL_RESULT_PREVIEW_HEAD_LINES, lines.length - TOOL_RESULT_PREVIEW_TAIL_LINES);
+  const tail = lines.slice(tailStart).map((line) => clipPreviewLine(line));
+  const omitted = Math.max(0, lines.length - head.length - tail.length);
+  const interesting = interestingToolResultLines(lines);
+  const captureLine = capture.path
+    ? `capture: ${capture.path}${capture.storedTruncated ? " (stored head/tail sample; original too large)" : ""}`
+    : `capture: unavailable (${capture.error ?? "write failed"})`;
+  const sections = [
+    `[Piagent compacted large ${toolName} output from ${source}: ${formatCount(capture.originalChars)} chars / ${formatCount(capture.originalLines)} lines.]`,
+    `[${captureLine}]`,
+    "[Preview keeps head, notable lines, and tail.]",
+    "",
+    "head:",
+    ...head
+  ];
+  if (interesting.length > 0) {
+    sections.push("", "notable:", ...interesting);
+  }
+  if (omitted > 0) {
+    sections.push("", `... ${formatCount(omitted)} middle line${omitted === 1 ? "" : "s"} omitted ...`);
+  }
+  sections.push("", "tail:", ...tail);
+  return boundedPreview(sections.join("\n"));
+}
+
+function maybeNumber(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && /^-?\d+$/.test(value.trim())) return Number.parseInt(value, 10);
+  return undefined;
+}
+
+function currentSessionField(ctx: ExtensionContext, field: "getSessionFile" | "getSessionId" | "getSessionName"): string | undefined {
+  try {
+    const value = ctx.sessionManager[field]?.();
+    return value === undefined || value === null ? undefined : redactText(String(value));
+  } catch {
+    return undefined;
+  }
+}
+
+function writeToolResultCapture(
+  cwd: string,
+  event: any,
+  ctx: ExtensionContext,
+  source: string,
+  text: string,
+  cache: Map<string, ToolResultCaptureSummary>
+): ToolResultCaptureSummary {
+  const normalized = normalizeToolResultText(text);
+  const sha256 = crypto.createHash("sha256").update(normalized).digest("hex");
+  const originalLines = toolResultLineCount(normalized);
+  const cached = cache.get(sha256);
+  if (cached?.path) return { ...cached, source };
+
+  const toolName = String(event?.toolName ?? "tool");
+  const recordedAt = nowIso();
+  const date = recordedAt.slice(0, 10);
+  const filename = `${recordedAt.replace(/[:.]/g, "-")}-${slugify(toolName)}-${sha256.slice(0, 12)}.log`;
+  const relativePath = [".pi", "piagent-state", "tool-results", date, filename].join("/");
+  const absolutePath = path.join(cwd, ".pi", "piagent-state", "tool-results", date, filename);
+  const capture = storedToolResultText(normalized);
+  const details = event?.details && typeof event.details === "object" ? event.details : {};
+  const exitCode = maybeNumber(details.exitCode ?? details.status ?? event?.exitCode);
+  const metadata = {
+    schemaVersion: 1,
+    recordedAt,
+    cwd: redactText(cwd),
+    sessionId: currentSessionField(ctx, "getSessionId"),
+    sessionName: currentSessionField(ctx, "getSessionName"),
+    sessionFile: currentSessionField(ctx, "getSessionFile"),
+    toolName,
+    source,
+    isError: event?.isError === true,
+    exitCode,
+    input: redactForStorage(event?.input),
+    path: relativePath,
+    originalChars: normalized.length,
+    originalLines,
+    storedChars: capture.text.length,
+    storedTruncated: capture.truncated,
+    sha256
+  };
+
+  try {
+    fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+    fs.writeFileSync(absolutePath, [
+      "# Piagent compacted tool result capture",
+      JSON.stringify(metadata),
+      "---",
+      capture.text
+    ].join("\n"));
+    fs.appendFileSync(toolResultCaptureIndexPath(cwd), `${JSON.stringify(metadata)}\n`);
+    const summary = {
+      path: relativePath,
+      source,
+      toolName,
+      originalChars: normalized.length,
+      originalLines,
+      storedChars: capture.text.length,
+      storedTruncated: capture.truncated,
+      sha256
+    };
+    cache.set(sha256, summary);
+    return summary;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const summary = {
+      error: message,
+      source,
+      toolName,
+      originalChars: normalized.length,
+      originalLines,
+      sha256
+    };
+    cache.set(sha256, summary);
+    return summary;
+  }
+}
+
+function compactToolResultTextContent(
+  cwd: string,
+  event: any,
+  ctx: ExtensionContext,
+  content: unknown,
+  cache: Map<string, ToolResultCaptureSummary>
+): { content: unknown; captures: ToolResultCaptureSummary[] } {
+  if (!Array.isArray(content)) return { content, captures: [] };
+  const captures: ToolResultCaptureSummary[] = [];
+  const compacted = content.map((block, index) => {
+    if (!block || typeof block !== "object") return block;
+    const typed = block as { type?: unknown; text?: unknown };
+    if (typed.type !== "text" || typeof typed.text !== "string" || !shouldCompactToolResultText(typed.text)) return block;
+    const source = `content[${index}].text`;
+    const capture = writeToolResultCapture(cwd, event, ctx, source, typed.text, cache);
+    captures.push(capture);
+    return {
+      ...block,
+      text: compactToolResultPreview(String(event?.toolName ?? "tool"), source, typed.text, capture)
+    };
+  });
+  return { content: compacted, captures };
+}
+
+function compactToolResultDetails(
+  cwd: string,
+  event: any,
+  ctx: ExtensionContext,
+  value: unknown,
+  cache: Map<string, ToolResultCaptureSummary>,
+  captures: ToolResultCaptureSummary[],
+  source = "details",
+  depth = 0
+): unknown {
+  if (typeof value === "string") {
+    if (!shouldCompactToolResultText(value)) return value;
+    const capture = writeToolResultCapture(cwd, event, ctx, source, value, cache);
+    captures.push(capture);
+    return compactToolResultPreview(String(event?.toolName ?? "tool"), source, value, capture);
+  }
+  if (Array.isArray(value)) {
+    if (depth >= 6) return value;
+    return value.map((item, index) => compactToolResultDetails(cwd, event, ctx, item, cache, captures, `${source}[${index}]`, depth + 1));
+  }
+  if (isPlainRecord(value)) {
+    if (depth >= 6) return value;
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        compactToolResultDetails(cwd, event, ctx, item, cache, captures, `${source}.${key}`, depth + 1)
+      ])
+    );
+  }
+  return value;
+}
+
+function attachToolResultCompactionDetails(details: unknown, captures: ToolResultCaptureSummary[]): unknown {
+  if (captures.length === 0) return details;
+  const compacted = captures.map((capture) => ({
+    path: capture.path,
+    error: capture.error,
+    source: capture.source,
+    toolName: capture.toolName,
+    originalChars: capture.originalChars,
+    originalLines: capture.originalLines,
+    storedChars: capture.storedChars,
+    storedTruncated: capture.storedTruncated,
+    sha256: capture.sha256
+  }));
+  if (isPlainRecord(details)) return { ...details, piagentCompactedToolResults: compacted };
+  if (details === undefined) return { piagentCompactedToolResults: compacted };
+  return { value: details, piagentCompactedToolResults: compacted };
+}
+
+function readRecentToolResultCaptures(cwd: string, limit = 5): Record<string, unknown>[] {
+  const indexPath = toolResultCaptureIndexPath(cwd);
+  if (!fs.existsSync(indexPath)) return [];
+  const lines = fs.readFileSync(indexPath, "utf8").trim().split(/\n/).filter(Boolean);
+  const captures: Record<string, unknown>[] = [];
+  for (const line of lines.slice(-Math.max(limit * 3, limit))) {
+    try {
+      const parsed = JSON.parse(line);
+      if (isPlainRecord(parsed)) captures.push(redactForStorage(parsed) as Record<string, unknown>);
+    } catch {
+      // A partial JSONL line should not make a status command noisy or unusable.
+    }
+  }
+  return captures.slice(-limit);
+}
+
+function formatToolResultCaptureStatus(cwd: string, captures: Record<string, unknown>[]): string {
+  const root = normalizeRelative(cwd, toolResultCaptureRoot(cwd)) ?? ".pi/piagent-state/tool-results";
+  const lines = [
+    `logPolicy: compact above ${formatCount(TOOL_RESULT_COMPACT_CHAR_THRESHOLD)} chars or ${formatCount(TOOL_RESULT_COMPACT_LINE_THRESHOLD)} lines`,
+    `captureRoot: ${root}`,
+    `recent: ${captures.length || "none"}`
+  ];
+  for (const capture of captures) {
+    const originalLines = typeof capture.originalLines === "number" ? formatCount(capture.originalLines) : "unknown";
+    const originalChars = typeof capture.originalChars === "number" ? formatCount(capture.originalChars) : "unknown";
+    const exit = capture.exitCode === undefined ? "" : ` exit=${capture.exitCode}`;
+    lines.push(`- ${capture.recordedAt ?? "unknown"} ${capture.toolName ?? "tool"}${exit}: ${originalLines} lines / ${originalChars} chars -> ${capture.path ?? "no capture path"}`);
+  }
+  return lines.join("\n");
+}
+
 function buildUsageSnapshot(ctx: ExtensionContext, thinkingLevel?: string): UsageSnapshot {
   const contextUsage = ctx.getContextUsage();
   const contextWithThinking = ctx as ExtensionContext & { getThinkingLevel?: () => string };
@@ -3420,30 +3737,13 @@ function formatUsageSnapshot(snapshot: UsageSnapshot): string {
     ? `${formatCount(snapshot.contextUsage.tokens)} / ${formatCount(snapshot.contextUsage.contextWindow)} tokens (${formatPercent(snapshot.contextUsage.percent)})`
     : "unavailable";
   return [
-    "# Piagent usage snapshot",
-    "",
-    `- Session: ${snapshot.sessionName ?? "unnamed"} (${snapshot.sessionId ?? "unknown"})`,
-    `- Session file: ${snapshot.sessionFile ?? "not persisted"}`,
-    `- CWD: ${snapshot.cwd}`,
-    `- Mode: ${snapshot.mode}`,
-    `- Model: ${snapshot.model}`,
-    `- Thinking: ${snapshot.thinkingLevel}`,
-    `- Entries: ${formatCount(snapshot.entries.branch)} on active branch / ${formatCount(snapshot.entries.total)} total`,
-    `- Live context: ${context}`,
-    "",
-    "Exact billed input/output/cache/cost totals are exposed by Pi via `/session` or RPC `get_session_stats`, not directly inside this command context.",
-    "",
-    "From another terminal:",
-    "",
-    "```bash",
-    "piagent-usage /path/to/project",
-    "```",
-    "",
-    "Historical totals / weekly report:",
-    "",
-    "```bash",
-    "piagent-usage --history /path/to/project --days 7",
-    "```"
+    `usage: ${context}`,
+    `session: ${snapshot.sessionName ?? "unnamed"} (${snapshot.sessionId ?? "unknown"})`,
+    `model: ${snapshot.model}; thinking: ${snapshot.thinkingLevel}`,
+    `entries: ${formatCount(snapshot.entries.branch)} active / ${formatCount(snapshot.entries.total)} total`,
+    `file: ${snapshot.sessionFile ?? "not persisted"}`,
+    "exact: /session | piagent-usage /path/to/project",
+    "history: piagent-usage --history /path/to/project --days 7"
   ].join("\n");
 }
 
@@ -3510,30 +3810,14 @@ function formatContextPreflight(preflight: ContextPreflight, snapshot: UsageSnap
     ? `${formatCount(preflight.projectedContext.tokens)} (${formatPercent(preflight.projectedContext.percent)})`
     : "unavailable";
   return [
-    "# Piagent task preflight",
-    "",
-    `- Workflow: ${preflight.workflow}`,
-    `- Session: ${snapshot.sessionName ?? "unnamed"} (${snapshot.sessionId ?? "unknown"})`,
-    `- Model: ${snapshot.model}`,
-    `- Thinking: ${snapshot.thinkingLevel}`,
-    `- Entries: ${formatCount(snapshot.entries.branch)} active / ${formatCount(snapshot.entries.total)} total`,
-    `- Live context: ${live}`,
-    `- Incoming input estimate: ${formatCount(preflight.inputTokenEstimate)} tokens from ${formatCount(preflight.inputChars)} chars`,
-    `- Projected context: ${projected}`,
-    `- Recommendation: ${preflight.recommendation}`,
-    `- Reason: ${preflight.reason}`,
-    "",
-    "Commands:",
-    "",
-    "```text",
-    ...preflight.commands,
-    "```",
-    "",
-    "Notes:",
-    "",
-    "- Do not paste the full mandatory flow into every task. Platform prompts and piagent tools already carry it.",
-    "- Use `/scout` for read-only risk mapping. Use `/fresh-scout` when the current session is already heavy.",
-    "- If exact billed token/cost totals are needed, run `/session` in Pi or `piagent-usage <project-path>` from another terminal."
+    `preflight: ${preflight.recommendation}`,
+    `workflow: ${preflight.workflow}`,
+    `session: ${snapshot.sessionName ?? "unnamed"} (${snapshot.sessionId ?? "unknown"})`,
+    `model: ${snapshot.model}; thinking: ${snapshot.thinkingLevel}`,
+    `context: ${live}; projected: ${projected}`,
+    `input: ~${formatCount(preflight.inputTokenEstimate)} tokens from ${formatCount(preflight.inputChars)} chars`,
+    `reason: ${preflight.reason}`,
+    `next: ${preflight.commands.join(" | ")}`
   ].join("\n");
 }
 
@@ -3601,7 +3885,7 @@ function isPiagentWorkflowInput(text: string): boolean {
 }
 
 function isFreshOrUtilityInput(text: string): boolean {
-  return /^\/(?:fresh-task|fresh-scout|fresh-be-to-fe|task-preflight|piagent-usage|session|compact)\b/i.test(text.trim());
+  return /^\/(?:fresh-task|fresh-scout|fresh-be-to-fe|task-preflight|piagent-usage|piagent-logs|setname|session|compact)\b/i.test(text.trim());
 }
 
 function taskInboxDir(cwd: string): string {
@@ -4073,6 +4357,24 @@ export default function piagentGuard(pi: ExtensionAPI) {
       resultChanged = true;
     }
 
+    const captureCache = new Map<string, ToolResultCaptureSummary>();
+    const compactedContent = compactToolResultTextContent(ctx.cwd, event, ctx, resultContent, captureCache);
+    const compactionCaptures = [...compactedContent.captures];
+    if (compactedContent.captures.length > 0) {
+      resultContent = compactedContent.content;
+      resultChanged = true;
+    }
+    if (resultDetails !== undefined) {
+      const compactedDetails = compactToolResultDetails(ctx.cwd, event, ctx, resultDetails, captureCache, compactionCaptures);
+      if (compactionCaptures.length > compactedContent.captures.length) {
+        resultDetails = compactedDetails;
+        resultChanged = true;
+      }
+    }
+    if (compactionCaptures.length > 0) {
+      resultDetails = attachToolResultCompactionDetails(resultDetails, compactionCaptures);
+    }
+
     if (resultChanged) {
       return resultDetails === undefined
         ? { content: resultContent }
@@ -4377,8 +4679,8 @@ export default function piagentGuard(pi: ExtensionAPI) {
     }
   });
 
-	  pi.registerTool({
-	    name: "piagent_exec_policy_check",
+  pi.registerTool({
+    name: "piagent_exec_policy_check",
     label: "Piagent Exec Policy Check",
     description: "Evaluate a shell command against piagent exec policy before running it.",
     promptSnippet: "Use this before high-impact, complex, generated, or unfamiliar shell commands.",
@@ -6255,6 +6557,59 @@ export default function piagentGuard(pi: ExtensionAPI) {
           content: formatUsageSnapshot(snapshot),
           display: true,
           details: snapshot
+        },
+        { triggerTurn: false }
+      );
+    }
+  });
+
+  pi.registerCommand("piagent-logs", {
+    description: "Show compact log policy and recent captured large tool outputs",
+    handler: async (_args, ctx) => {
+      const captures = readRecentToolResultCaptures(ctx.cwd, 5);
+      ctx.ui.notify(`Piagent logs: ${captures.length ? `${captures.length} recent capture(s)` : "no compacted captures yet"}`, "info");
+      pi.sendMessage(
+        {
+          customType: "piagent-log-captures",
+          content: formatToolResultCaptureStatus(ctx.cwd, captures),
+          display: true,
+          details: {
+            policy: {
+              compactAboveChars: TOOL_RESULT_COMPACT_CHAR_THRESHOLD,
+              compactAboveLines: TOOL_RESULT_COMPACT_LINE_THRESHOLD,
+              previewMaxChars: TOOL_RESULT_PREVIEW_MAX_CHARS,
+              captureMaxChars: TOOL_RESULT_CAPTURE_MAX_CHARS
+            },
+            captures
+          }
+        },
+        { triggerTurn: false }
+      );
+    }
+  });
+
+  pi.registerCommand("setname", {
+    description: "Set the current Pi session name for reports and resume lists",
+    handler: async (args, ctx) => {
+      const name = cleanSessionNameInput(String(args ?? ""));
+      if (!name) {
+        ctx.ui.notify("Usage: /setname <task/session name>", "warning");
+        return;
+      }
+      const previousName = currentSessionName(ctx);
+      pi.setSessionName(name);
+      appendSessionTrace(pi, {
+        event: "session_name_set",
+        previousName: previousName || undefined,
+        sessionName: name
+      });
+      ctx.ui.notify(`Session name set: ${name}`, "info");
+      pi.sendMessage(
+        {
+          customType: "piagent-session-name-set",
+          content: `sessionName: ${name}`,
+          display: true,
+          details: { sessionName: name, previousName: previousName || undefined }
         },
         { triggerTurn: false }
       );

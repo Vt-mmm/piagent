@@ -114,6 +114,8 @@ Các command này đến từ package `piagent-core`.
 | `/task-preflight` | Kiểm context trước task | Trước task lớn/risk cao hoặc khi session đã dài. | Báo nên chạy trực tiếp, compact, hay fresh session. |
 | `/task-preflight compact` | Compact có hướng dẫn | Khi context 70%+ hoặc trước task dài tiếp theo. | Pi compact session, giữ quyết định/open blockers/verify cần thiết. |
 | `/piagent-usage` | Snapshot token/context | Khi muốn biết session đang ăn context/token như nào. | Hiện session file, model, live context, lệnh lấy exact stats. |
+| `/piagent-logs` | Xem capture log compact | Khi verify/test/build trả output quá dài và Pi chỉ hiện preview. | Hiện policy compact và các capture mới nhất dưới `.pi/piagent-state/tool-results/`. |
+| `/setname <name>` | Đổi tên session hiện tại | Khi mở Pi quên `pi --name`, hoặc resume xong cần chỉnh tên task. | Set tên Pi session để Agent Watch/report map đúng task. |
 | `/platform-improve` | Cải tiến platform/workflow | Khi cần cập nhật setup, prompt, MCP, model scope, memory, runtime policy, docs, hoặc subagent workflow. | Có implementation matrix, source changes, docs, và verify. |
 | `/be-to-fe` | Map BE spec sang FE | Khi BE là source-of-truth/read-only, chỉ implement FE. | Scout BE read-only, map contract, implement FE, verify FE. |
 | `/scout` | Scout/audit read-only | Khi cần evidence matrix trước khi chốt task, đặc biệt payment/auth/data/BE contract. | Không sửa source; trả context manifest, verify, gaps, risks. |
@@ -229,7 +231,7 @@ Các command này thuộc Pi core hoặc package Pi chính. Tên/availability c�
 | `Ctrl+P` | Cycle model | Đổi model trong scope nhanh. | Dùng sau khi đã setup `enabledModels`. |
 | `Shift+Ctrl+P` | Cycle model ngược | Quay lại model trước trong scope. | Tiện khi test provider. |
 | `Shift+Tab` | Đổi thinking level | Chọn effort như `medium`, `high`, `xhigh`, `max` nếu model hỗ trợ. | Model không hỗ trợ level nào thì Pi có thể clamp. |
-| `/session` | Xem session hiện tại | Cần session id/name/token/cost/context. | Dùng cùng `/piagent-usage`. |
+| `/session` | Xem session hiện tại | Cần session id/name/token/cost/context. | Dùng sau `pi --name` hoặc `/setname` để kiểm tra tên. |
 | `/resume` | Resume session | Khi tắt nhầm Pi hoặc muốn nối lại work cũ. | Dựa vào session list/id/name của Pi. |
 | `/compact` | Nén context | Khi context usage cao trước task dài. | Chỉ dùng khi cần; đọc lại context quan trọng sau compact. |
 | `/mcp` | Xem MCP | Kiểm tra server/tool MCP trong Pi. | Cần `pi-mcp-adapter` hoặc MCP config tương ứng. |
@@ -428,8 +430,8 @@ Các lệnh này chạy ngoài Pi.
 | Command | Dùng khi nào |
 |---|---|
 | `npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0` | Cài Pi CLI tương thích với release hiện tại. |
-| `npm install -g --ignore-scripts @piagent/platform@1.2.1` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
-| `pi install git:github.com/Vt-mmm/piagent@v1.2.1` | Cài pinned release khi cần reproducible team setup. |
+| `npm install -g --ignore-scripts @piagent/platform@1.2.2` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
+| `pi install git:github.com/Vt-mmm/piagent@v1.2.2` | Cài pinned release khi cần reproducible team setup. |
 | `pi install git:github.com/Vt-mmm/piagent` | Cài latest package platform cho máy cá nhân/sandbox. |
 | `piagent-update --check` | Báo version hiện tại vs version sẽ lên cho cả ba thành phần; không cài gì. |
 | `piagent-update` | Full update một lệnh: Pi host → npm-global helper → Pi package, đúng thứ tự release yêu cầu. Thêm `--project <path>` để chạy doctor sau. |
@@ -516,7 +518,11 @@ export GITHUB_PERSONAL_ACCESS_TOKEN=<github-token>
 | Câu hỏi | Lệnh |
 |---|---|
 | Session này đang dùng model gì? | `/session` hoặc `/piagent-usage` |
+| Đặt/đổi tên session đang mở? | `/setname <task/session name>` |
+| Tắt nhầm, mở lại session gần nhất? | `pi --continue` |
+| Chọn lại session cũ theo tên/id? | `pi --resume` hoặc `pi --session <id-or-file>` |
 | Context window đang còn bao nhiêu? | `/piagent-usage` |
+| Output test/build dài bị nén thì xem ở đâu? | `/piagent-logs` |
 | Exact token/cost từ terminal khác? | `piagent-usage /path/to/project` |
 | Tổng token/cost các session cũ? | `piagent-usage --history /path/to/project --days 7` |
 | CSV report cuối tuần toàn máy? | `piagent-usage --history --all-projects --days 7 --csv` |

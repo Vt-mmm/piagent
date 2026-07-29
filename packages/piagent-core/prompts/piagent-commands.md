@@ -34,6 +34,7 @@ Mandatory flow:
 9. Explain context overflow prevention when relevant:
    - `/task-preflight` checks whether to proceed, compact, or fresh-session.
    - `/fresh-task`, `/fresh-scout`, and `/fresh-be-to-fe` open a new governed session and replay the compact workflow prompt.
+   - `/piagent-logs` shows compact-log policy and recent oversized tool-output captures without a model follow-up.
    - `/scout` is the read-only audit/scout workflow.
    - `/context-index` shows the compact advisory project context graph without a model follow-up.
    - `/context-index search <keyword>` searches profile/project/tech/task pointers before broad re-scouting.

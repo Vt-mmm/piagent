@@ -119,10 +119,10 @@ Nó ghi `npm:@piagent/platform@<version>` vào `.pi/settings.json` — portable,
 
 ```bash
 cd <project>
-pi
+pi --name "ABC-123 Short task name"
 ```
 
-Rồi mô tả việc cần làm bằng tiếng Việt hoặc tiếng Anh. Không cần paste checklist — input guard tự collapse boilerplate, và `/task` tự cân nhắc gọi scout/planner/reviewer khi task đủ lớn.
+Rồi mô tả việc cần làm bằng tiếng Việt hoặc tiếng Anh. Nếu quên đặt tên lúc mở Pi, gõ `/setname ABC-123 Short task name` trước khi làm tiếp; Agent Watch sẽ dùng tên session này trong report. Không cần paste checklist — input guard tự collapse boilerplate, và `/task` tự cân nhắc gọi scout/planner/reviewer khi task đủ lớn.
 
 Muốn chạy nhiều agent song song thì gõ `herdr` thay vì `pi`, rồi mở mỗi pane một vai: implement, review read-only, verify, notes. Herdr chỉ điều phối terminal/session, không phải security boundary — gate vẫn nằm ở Pi extension và OAuth vẫn `/login` trong Pi. Chi tiết: [herdr-workflow.md](herdr-workflow.md).
 
@@ -133,6 +133,8 @@ Muốn chạy nhiều agent song song thì gõ `herdr` thay vì `pi`, rồi mở
 | `/scout <việc>` | Chỉ đọc, không sửa — map payment/auth/BE contract. |
 | `/plan <mục tiêu>` | Muốn có plan trước khi đụng code. |
 | `/review current diff` | Review việc vừa làm. |
+| `/setname <task/session name>` | Đặt/đổi tên session để resume và report dễ đối chiếu. |
+| `/piagent-logs` | Xem các capture khi test/build output quá dài và Pi chỉ hiện preview. |
 | `/be-to-fe <việc>` | Backend read-only, làm FE. |
 | `/commit <message>` | Commit local có kiểm soát, không push. |
 | `/pr <title>` | Tạo PR, hỏi xác nhận trước khi push. |

@@ -34,6 +34,7 @@ Preflight first:
 12. Run the exact verify command from the task contract and record with `piagent_verify_record`.
 13. Record handoff with `piagent_trace_record`.
 14. Call `piagent_task_gate_check`. If the gate fails, report partial/blocked.
+15. Do not paste full tool/test logs into chat or final output. Summarize the signal, quote only relevant lines, and use `/piagent-logs` or a narrower command when oversized output has been compacted.
 
 Output:
 

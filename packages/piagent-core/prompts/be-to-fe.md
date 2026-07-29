@@ -63,6 +63,7 @@ Mandatory flow:
 16. Run the exact FE verify command from the profile/task through Pi bash and record the observed result with `piagent_verify_record`. Ad-hoc commands are advisory only and will not satisfy the passing gate.
 17. Record handoff with `piagent_trace_record`.
 18. Call `piagent_task_gate_check`; if it fails, report blocked/partial instead of done.
+19. Do not paste full test/build/tool logs into chat or final output. Summarize the signal, quote only relevant failing lines, and use `/piagent-logs` or a narrower command when oversized output has been compacted.
 
 For generic projects, use profile `be-readonly-fe` when the repo policy is “BE scout only, FE write allowed”.
 

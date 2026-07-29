@@ -2,6 +2,22 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.2.2 - 2026-07-29
+
+### Added
+
+- Added compact tool-result rendering for oversized Pi outputs. Small results still pass through unchanged; large redacted outputs now show a bounded preview in Pi and are captured under `.pi/piagent-state/tool-results/` with an `index.jsonl` for offline Agent Watch/reporting.
+
+- Added `/piagent-logs`, a local slash command that shows the compact-log policy and recent oversized output captures without calling the model or tailing logs in realtime.
+
+- Added `/setname <task/session name>` so an already-open Pi session can be renamed for resume lists, Agent Watch mapping, and weekly reports without restarting Pi.
+
+### Changed
+
+- `/piagent-usage` and `/task-preflight` now render concise status lines instead of long markdown reports while keeping structured details available to the runtime.
+
+- Workflow prompts and Vietnamese operator docs now tell agents and team members to summarize verify/build failures, quote only relevant lines, and use `/piagent-logs` or narrower commands instead of pasting full terminal dumps into the session.
+
 ## v1.2.1 - 2026-07-28
 
 ### Fixed

@@ -132,10 +132,12 @@ describe("piagent guard integration", () => {
 
     assert.equal(harness.tools.size, 28);
     assert.equal(harness.tools.has("piagent_document_read"), true);
-    assert.equal(harness.commands.size, 16);
+    assert.equal(harness.commands.size, 18);
     assert.equal(harness.commands.has("profile"), true);
     assert.equal(harness.commands.has("context-index"), true);
     assert.equal(harness.commands.has("piagent-mcp"), true);
+    assert.equal(harness.commands.has("piagent-logs"), true);
+    assert.equal(harness.commands.has("setname"), true);
     assert.equal(harness.commands.has("profiles"), false);
     assert.equal(harness.commands.has("profile-tech"), false);
     assert.deepEqual([...harness.handlers.keys()].sort(), ["input", "session_start", "tool_call", "tool_result"]);
@@ -156,6 +158,26 @@ describe("piagent guard integration", () => {
 
     assert.equal(harness.getSessionName(), operatorName);
     assert.match(ctx.ui.notices[0].message, /Piagent Pi guard loaded: Integration Project/);
+  });
+
+  it("sets the current Pi session name with a short command", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const ctx = createContext(cwd, { confirm: true });
+    const harness = createPiHarness();
+
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+    await harness.commands.get("setname").handler("ABC-456 Fix checkout totals", ctx);
+
+    assert.equal(harness.getSessionName(), "ABC-456 Fix checkout totals");
+    assert.equal(harness.entries.at(-2).type, "piagent-task-trace");
+    assert.equal(harness.entries.at(-2).payload.event, "session_name_set");
+    assert.equal(harness.entries.at(-1).payload.customType, "piagent-session-name-set");
+    assert.match(ctx.ui.notices.at(-1).message, /Session name set: ABC-456 Fix checkout totals/);
+
+    await harness.commands.get("setname").handler("   ", ctx);
+    assert.match(ctx.ui.notices.at(-1).message, /Usage: \/setname/);
   });
 
   it("warns that an unconverted project is running without enforcement", async () => {
@@ -2276,6 +2298,55 @@ describe("piagent guard integration", () => {
     }, ctx);
     assert.equal(Array.isArray(arrayDetails.details), true);
     assert.match(arrayDetails.details[0], /\[REDACTED_SECRET\]/);
+  });
+
+  it("compacts oversized tool output into a local capture without leaking secrets", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const ctx = createContext(cwd);
+    const harness = createPiHarness({ sessionName: "ABC-789 Noisy verify" });
+    piagentGuard(harness.pi);
+    const toolResult = harness.handlers.get("tool_result");
+    const secret = `sk-${"a".repeat(24)}`;
+    const lines = Array.from({ length: 240 }, (_item, index) => {
+      if (index === 120) return `ERROR failed migration because TOKEN=${secret}`;
+      return `line ${index + 1} ${"x".repeat(90)}`;
+    });
+    const text = lines.join("\n");
+
+    const result = await toolResult({
+      toolName: "bash",
+      input: { command: "npm test -- --verbose" },
+      content: [{ type: "text", text }],
+      details: { exitCode: 1, stdout: text },
+      isError: true
+    }, ctx);
+
+    assert.match(result.content[0].text, /Piagent compacted large bash output/);
+    assert.match(result.content[0].text, /notable:/);
+    assert.match(result.content[0].text, /ERROR failed migration/);
+    assert.doesNotMatch(result.content[0].text, new RegExp(secret));
+    assert.ok(result.content[0].text.length <= 6200);
+    assert.equal(result.details.exitCode, 1);
+    assert.match(result.details.stdout, /Piagent compacted large bash output/);
+    assert.ok(result.details.stdout.length <= 6200);
+    assert.equal(Array.isArray(result.details.piagentCompactedToolResults), true);
+    assert.equal(result.details.piagentCompactedToolResults.some((capture) => capture.source === "content[0].text"), true);
+    assert.equal(result.details.piagentCompactedToolResults.some((capture) => capture.source === "details.stdout"), true);
+
+    const capturePath = result.details.piagentCompactedToolResults[0].path;
+    assert.equal(typeof capturePath, "string");
+    const captureText = fs.readFileSync(path.join(cwd, capturePath), "utf8");
+    assert.match(captureText, /npm test -- --verbose/);
+    assert.match(captureText, /ERROR failed migration/);
+    assert.match(captureText, /\[REDACTED_SECRET\]/);
+    assert.doesNotMatch(captureText, new RegExp(secret));
+
+    await harness.commands.get("piagent-logs").handler("", ctx);
+    const status = harness.entries.findLast((entry) => entry.payload?.customType === "piagent-log-captures");
+    assert.match(status.payload.content, /recent: 1/);
+    assert.match(status.payload.content, /bash/);
+    assert.match(status.payload.content, /tool-results/);
   });
 
   it("redacts protected find and ls metadata from broad result output", async () => {

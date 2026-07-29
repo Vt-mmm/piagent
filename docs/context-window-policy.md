@@ -76,6 +76,7 @@ Pi settings template dùng:
 - File context vượt hard cap phải được summarize hoặc đọc targeted slices, không inject full.
 - Nếu input quá dài thật, lưu intake vào file project/local gitignored rồi reference file; không dán toàn bộ spec vào một turn.
 - Nếu input chứa local screenshot/image path, để input guard attach thành `[image1]` thay vì đọc ảnh như text context. Ảnh lớn hơn giới hạn chat nên dùng Pi `read` để resize.
+- Tool output dài chỉ nên hiện preview. Dùng `/piagent-logs` hoặc command targeted hơn để debug; không paste full test/build log vào chat/final.
 - Memory chỉ là hint. Phải verify bằng source hiện tại trước khi sửa code.
 - Context index cũng chỉ là hint. Nó có node/edge/citation để giảm scout lại, không phải security boundary hoặc source of truth.
 

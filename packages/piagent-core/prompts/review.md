@@ -26,6 +26,7 @@ Rules:
    - security/high-risk only when relevant.
    If the user asks for a loop, use `/review-loop` semantics or equivalent parent-controlled max-round loop. Continue single-agent for tiny diffs or unavailable subagent tooling.
 9. Report findings by severity.
+10. Do not paste full diff/test/tool logs into chat or final output. Summarize the signal, quote only relevant lines, and use `/piagent-logs` or narrower commands when oversized output has been compacted.
 
 Output:
 

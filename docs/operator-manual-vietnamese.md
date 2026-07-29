@@ -18,12 +18,12 @@ Support matrix release hiện tại: macOS Apple Silicon + Bash và Linux x64 + 
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.2.1
+npm install -g --ignore-scripts @piagent/platform@1.2.2
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
 
-Khi seed `.pi/settings.json` cho team/repo cần audit lặp lại, giữ package source dạng pinned tag như `git:github.com/Vt-mmm/piagent@v1.2.1`. Máy cá nhân có thể dùng `git:github.com/Vt-mmm/piagent` để theo latest.
+Khi seed `.pi/settings.json` cho team/repo cần audit lặp lại, giữ package source dạng pinned tag như `git:github.com/Vt-mmm/piagent@v1.2.2`. Máy cá nhân có thể dùng `git:github.com/Vt-mmm/piagent` để theo latest.
 
 Nếu đang ở source checkout của platform, dùng helper theo channel để preview trước khi đổi:
 
@@ -99,7 +99,7 @@ install package once
 
 ```bash
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.2.1
+npm install -g --ignore-scripts @piagent/platform@1.2.2
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -281,7 +281,7 @@ Không phải daily default. Dùng khi muốn tạo sẵn `.pi` files cho projec
 bash /path/to/piagent/scripts/setup.sh /path/to/project \
   --project-only \
   --profile auto \
-  --package-source git:github.com/Vt-mmm/piagent@v1.2.1 \
+  --package-source git:github.com/Vt-mmm/piagent@v1.2.2 \
   --mcp-preset core \
   --subagents-preset safe
 ```
@@ -477,6 +477,7 @@ High-risk action phải human-gate:
 /task-preflight
 /task-preflight compact
 /piagent-usage
+/piagent-logs
 /session
 ```
 
@@ -491,6 +492,17 @@ High-risk action phải human-gate:
 - command lấy exact token/cost từ terminal khác.
 
 Live context không phải billed tokens. Ví dụ `111k / 272k` là context đang giữ trong cửa sổ hiện tại, không phải tổng input/output/cost.
+
+### Log output gọn
+
+Piagent giữ nguyên output nhỏ. Khi `bash/grep/find/ls` hoặc tool result khác trả output quá dài, guard sẽ:
+
+- redact secret/protected content trước;
+- chỉ trả preview ngắn vào Pi TUI gồm head, các dòng lỗi/cảnh báo đáng chú ý, và tail;
+- ghi capture local vào `.pi/piagent-state/tool-results/YYYY-MM-DD/*.log`;
+- ghi index `.pi/piagent-state/tool-results/index.jsonl` để Agent Watch/report đọc theo session/tool.
+
+Trong Pi, chạy `/piagent-logs` để xem policy compact và các capture mới nhất. Không paste full test/build log vào chat trừ khi user thật sự cần một đoạn cụ thể; dùng command targeted hoặc đọc capture/report ở ngoài Pi để debug sâu.
 
 ### Từ terminal khác
 
@@ -611,10 +623,16 @@ Fork một session cũ sang session mới:
 pi --fork 019f7ad3-0ce3-77f3-b34d-72d8c37c5fb6
 ```
 
-Đặt tên session ngay từ đầu để dễ tìm:
+Đặt tên session ngay từ đầu để dễ tìm và để Agent Watch map đúng task/report:
 
 ```bash
-pi --name "V-Nexus header menu fix"
+pi --name "ABC-123 V-Nexus header menu fix"
+```
+
+Nếu đã vào Pi rồi mới nhớ cần đổi tên, dùng command ngắn trong Pi:
+
+```text
+/setname ABC-123 V-Nexus header menu fix
 ```
 
 Trong Pi:
@@ -624,7 +642,16 @@ Trong Pi:
 /piagent-usage
 ```
 
-`/piagent-usage` sẽ in session id và session file. Ghi lại khi task dài hoặc có nhiều pane Herdr.
+`/session` kiểm tra tên/id hiện tại. `/piagent-usage` in session id và session file. Ghi lại khi task dài hoặc có nhiều pane Herdr.
+
+Nếu tắt terminal/app rồi mở lại:
+
+```bash
+cd /path/to/project
+pi --continue
+```
+
+Nếu `--continue` không đúng phiên cần làm, mở selector bằng `pi --resume`, chọn theo session name đã đặt. Khi resume đúng session cũ, tên session vẫn là tên đã set; nếu cần chỉnh lại cho khớp task nội bộ thì chạy `/setname <new name>` ngay trước khi làm tiếp.
 
 ### Khi nào nên resume, continue, fork
 
@@ -634,6 +661,7 @@ Trong Pi:
 | Không nhớ phiên nào | `pi --resume` |
 | Có session id/file từ `/piagent-usage` | `pi --session <id-or-file>` |
 | Muốn thử hướng mới nhưng giữ history cũ | `pi --fork <id-or-file>` |
+| Muốn đổi tên phiên đang mở | `/setname <task/session name>` |
 | Muốn session mới sạch sau task quá dài | `pi --name "<new task>"` |
 
 ## 9. MCP setup và cách dùng
@@ -864,8 +892,8 @@ Watchdog là optional adversarial reviewer ở cuối turn, không bật mặc �
 
 | Command | Dùng để |
 |---|---|
-| `npm install -g --ignore-scripts @piagent/platform@1.2.1` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
-| `pi install git:github.com/Vt-mmm/piagent@v1.2.1` | Install pinned release cho reproducible team setup. |
+| `npm install -g --ignore-scripts @piagent/platform@1.2.2` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
+| `pi install git:github.com/Vt-mmm/piagent@v1.2.2` | Install pinned release cho reproducible team setup. |
 | `pi install git:github.com/Vt-mmm/piagent` | Install latest platform package cho máy cá nhân/sandbox. |
 | Cài exact Pi host của release, rồi `npm install -g --ignore-scripts @piagent/platform@X.Y.Z` và `piagent-install --stable` | Full update: đồng bộ host, terminal helper và Pi package. Mỗi release pin một Pi host chính xác; lấy đúng version của release đang cài trong [release/install policy](release-install-policy.md). |
 | Cài exact Pi host ghi trong release cũ, rồi helper `vPREVIOUS` và `piagent-install --stable` | Full rollback; đánh giá lại dependency findings của host cũ trước khi hạ version. |
@@ -889,6 +917,7 @@ Watchdog là optional adversarial reviewer ở cuối turn, không bật mặc �
 | `pi --session <id-or-file>` | Resume session cụ thể. |
 | `pi --fork <id-or-file>` | Fork session cũ sang session mới. |
 | `pi --name "<name>"` | Đặt tên session. |
+| `/setname <name>` | Đổi tên session đang mở, dùng cho Agent Watch/report. |
 | `pi --tools read,grep,find,ls -p "Review src"` | Read-only one-shot. |
 | `piagent-usage /path/to/project` | Exact token/cost stats của session mới nhất. |
 | `piagent-usage --history /path/to/project --days 7` | Tổng usage lịch sử của project. |
@@ -964,7 +993,7 @@ Mở lại Pi session sau khi install.
 Cài lại terminal helper đúng release rồi kiểm tra `PATH`:
 
 ```bash
-npm install -g --ignore-scripts @piagent/platform@1.2.1
+npm install -g --ignore-scripts @piagent/platform@1.2.2
 command -v piagent-install
 ```
 
