@@ -437,7 +437,7 @@ const MAX_BRACE_RESULTS = 64;
  *   there is no expansion to do
  */
 function expandShellBraces(word, mask = "0".repeat(word.length), depth = 0) {
-  if (depth >= 6 || !word.includes("{")) return [word];
+  if (depth >= 6 || !word.includes("{")) return [{ value: word, mask }];
   const literalAt = (index) => mask[index] === "1";
   let open = -1;
   let level = 0;
@@ -480,7 +480,28 @@ function expandShellBraces(word, mask = "0".repeat(word.length), depth = 0) {
     }
     return results;
   }
-  return [word];
+  return [{ value: word, mask }];
+}
+
+/**
+ * True when the word would be matched against filenames rather than used as
+ * one, judged per character so quoting counts where the shell counts it.
+ *
+ * The tokenizer decides this for a word as typed. After brace expansion the
+ * answer can differ for each word that comes out -- `{cat,.env*}` produces a
+ * command and a pattern from one token, and carrying the parent token's verdict
+ * onto both got one of them wrong.
+ *
+ * @param {string} value
+ * @param {string} mask
+ * @returns {boolean}
+ */
+function wordHasActiveGlob(value, mask) {
+  for (let index = 0; index < value.length; index += 1) {
+    if (mask[index] === "1") continue;
+    if (/[*?[]/.test(value[index])) return true;
+  }
+  return false;
 }
 
 /**
@@ -516,11 +537,18 @@ function expandedSegment(segment, assignments = new Map()) {
   // `rm {-rf,} /` reaches `rm` as two words, not three.
   const tokens = rawTokens.flatMap((token) => {
     if (!token.braceActive) return [token];
-    const expansions = expandShellBraces(token.value, token.literalMask).filter(Boolean);
-    if (expansions.length === 1 && expansions[0] === token.value) return [token];
-    // The mask no longer describes the new text. `braceActive` is cleared below
-    // for every token alike, expanded or not.
-    return expansions.map((value) => ({ ...token, value, literalMask: undefined }));
+    const expansions = expandShellBraces(token.value, token.literalMask).filter((entry) => entry.value);
+    if (expansions.length === 1 && expansions[0].value === token.value) return [token];
+    // The mask comes out of the expansion with the word, because one token can
+    // produce words that differ in what they are: `{cat,.env*}` is a command and
+    // a pattern, and deciding either from the parent's flags gets one of them
+    // wrong. `braceActive` is cleared below for every token alike.
+    return expansions.map((entry) => ({
+      ...token,
+      value: entry.value,
+      literalMask: entry.mask,
+      activeGlob: wordHasActiveGlob(entry.value, entry.mask)
+    }));
   });
   // `braceActive` is cleared on every token, expanded or not. The expansion has
   // already happened here, with the mask; a later reader that expanded again
@@ -1755,7 +1783,7 @@ function printfFormatLiterals(format) {
  */
 function producerCommandIndex(words, producerCommand) {
   return words.findIndex((word) => commandBasename(word) === producerCommand
-    || expandShellBraces(word).some((expanded) => commandBasename(expanded) === producerCommand));
+    || expandShellBraces(word).some((entry) => commandBasename(entry.value) === producerCommand));
 }
 
 function staticDataOutput(segment, assignments, producerCommand) {
@@ -1764,9 +1792,9 @@ function staticDataOutput(segment, assignments, producerCommand) {
   // the same brace word as the name is an argument here too: `{printf,.e%.1sv}`
   // is `printf` plus the format it prints.
   const tokens = shellDataTokens(segment).flatMap((token) => {
-    const expansions = expandShellBraces(token.value, token.literalMask).filter(Boolean);
-    if (expansions.length === 1 && expansions[0] === token.value) return [token];
-    return expansions.map((value) => ({ ...token, value, literalMask: undefined }));
+    const expansions = expandShellBraces(token.value, token.literalMask).filter((entry) => entry.value);
+    if (expansions.length === 1 && expansions[0].value === token.value) return [token];
+    return expansions.map((entry) => ({ ...token, value: entry.value, literalMask: entry.mask }));
   });
   const commandIndex = producerCommandIndex(tokens.map((token) => token.value), producerCommand);
   if (commandIndex < 0) return empty;
@@ -1930,6 +1958,12 @@ function extractAttachedRedirectionPaths(segment) {
     // `.env`; `> "{.env,}"` writes a file with that literal name, and the
     // quotes are gone by the time the target is a string.
     let targetBrace = false;
+    // The same per-character record the word tokenizer keeps, and for the same
+    // reason: one target can hold a quoted group beside an expanding one.
+    // `> "{.env,}"{,}` is an ambiguous redirect to bash, which writes nothing,
+    // and a single flag for the whole target could only say "expand it all" --
+    // which produced `.env` and refused a command that writes no such file.
+    let targetMask = "";
     // Whitespace and `|` inside `$( )` or backticks belong to the target word.
     // Ending at the first space split `> .en$(echo v)` into a target of
     // `.en$(echo`, a name that matches nothing and hides the one being written.
@@ -1939,6 +1973,7 @@ function extractAttachedRedirectionPaths(segment) {
       const targetChar = segment[cursor];
       if (targetEscaped) {
         target += targetChar;
+        targetMask += "1";
         targetEscaped = false;
         continue;
       }
@@ -1952,6 +1987,7 @@ function extractAttachedRedirectionPaths(segment) {
       if (targetChar === "$" && segment[cursor + 1] === "'" && !targetQuote) {
         const ansiC = readAnsiCQuote(segment, cursor);
         target += ansiC.value;
+        targetMask += "1".repeat(ansiC.value.length);
         cursor = ansiC.endIndex;
         continue;
       }
@@ -1963,19 +1999,21 @@ function extractAttachedRedirectionPaths(segment) {
         targetQuote = undefined;
         continue;
       }
+      const enclosingDepth = targetSubstitution;
       if (!targetQuote) {
         if (targetChar === "$" && (segment[cursor + 1] === "(" || segment[cursor + 1] === "{")) targetSubstitution += 1;
         else if ((targetChar === ")" || targetChar === "}") && targetSubstitution > 0) targetSubstitution -= 1;
         else if (targetChar === "`") targetBackticks = !targetBackticks;
-        if (targetChar === "{" && segment[cursor - 1] !== "$" && targetSubstitution === 0 && !targetBackticks) {
+        if (targetChar === "{" && enclosingDepth === 0 && !targetBackticks) {
           targetBrace = true;
         }
       }
-      const insideSubstitution = targetSubstitution > 0 || targetBackticks;
+      const insideSubstitution = enclosingDepth > 0 || targetSubstitution > 0 || targetBackticks;
       if (!targetQuote && !insideSubstitution && (/\s/.test(targetChar) || /[;&|<>]/.test(targetChar))) break;
       target += targetChar;
+      targetMask += (targetQuote || insideSubstitution) ? "1" : "0";
     }
-    if (target) paths.push({ value: target, braceActive: targetBrace });
+    if (target) paths.push({ value: target, braceActive: targetBrace, literalMask: targetMask });
     index = Math.max(index, cursor - 1);
   }
 
@@ -1991,12 +2029,19 @@ export function extractShellPathCandidates(command) {
   // that literal name, and offering `.env` for it blocked the command. Every
   // caller that reads a token has the answer, so it is passed rather than
   // guessed; the word as written stays a candidate either way.
-  const addCandidate = (candidate, variableActive = true, braceActive = false) => {
+  const addCandidate = (candidate, variableActive = true, braceActive = false, literalMask = undefined) => {
     if (typeof candidate !== "string" || !candidate) return;
     const expanded = variableActive ? expandKnownShellVariables(candidate, assignments) : candidate;
     candidates.push(expanded);
     if (!braceActive) return;
-    candidates.push(...expandShellBraces(expanded).filter((word) => word !== expanded));
+    // Expanded with the record the scanner kept, not without one. A target
+    // holding a quoted group beside an expanding one -- `"{.env,}"{,}` -- was
+    // expanded all the way through for want of it, and offered `.env` for a
+    // command that writes no such file.
+    const mask = literalMask?.length === expanded.length ? literalMask : undefined;
+    candidates.push(...expandShellBraces(expanded, mask)
+      .map((entry) => entry.value)
+      .filter((word) => word !== expanded));
   };
   const pending = splitShellSegments(command).map((segment) => ({ segment, depth: 0 }));
   while (pending.length > 0) {
@@ -2015,7 +2060,9 @@ export function extractShellPathCandidates(command) {
     // files -- so `printf x > .en$(echo v)` truncated `.env` while every reader
     // that could have resolved the name had been skipped.
     for (const redirect of extractAttachedRedirectionPaths(segment)) {
-      addCandidate(resolveSubstitutionTarget(redirect.value, assignments, evaluable).value, true, redirect.braceActive);
+      const resolvedTarget = resolveSubstitutionTarget(redirect.value, assignments, evaluable);
+      addCandidate(resolvedTarget.value, true, redirect.braceActive,
+        resolvedTarget.value === redirect.value ? redirect.literalMask : undefined);
     }
 
     const inlineFlags = INLINE_CODE_FLAGS.get(commandName);
@@ -2150,11 +2197,25 @@ export function extractShellPathCandidates(command) {
 export function extractShellGlobCandidates(command) {
   const candidates = [];
   const assignments = new Map();
-  const pending = splitShellSegments(command).map((segment) => ({ segment, depth: 0 }));
+  const segments = splitShellSegments(command);
+  // A pattern printed into an `xargs` that opens files is opened, and the
+  // producer that printed it only prints -- so `echo .env* | xargs cat` reads
+  // the secret with the glob sitting in a segment this would otherwise skip.
+  const pending = segments.map((segment, index) => ({
+    segment,
+    depth: 0,
+    piped: segments[index + 1] !== undefined && feedsFileOperandConsumer(segments[index + 1], assignments)
+  }));
   while (pending.length > 0) {
-    const { segment, depth } = pending.shift();
-    const tokens = shellWordTokens(segment);
-    const words = tokens.map((token) => token.value);
+    const { segment, depth, piped } = pending.shift();
+    // The same expanded, resolved stream every other reader takes. Reading the
+    // raw tokens here left the glob layer behind while the literal layer moved
+    // on -- and a pattern is precisely what the literal layer cannot answer for.
+    // `.env*` matches no protected literal, so `{cat,.env*}` had its command in
+    // one unexpanded word, produced no glob candidate at all, and read the
+    // secret. `{grep,-f,.env*,README.md}`, `cat $({echo,.env*})`,
+    // `{bash,} -c 'cat .env*'` and `echo .env* | xargs cat` went the same way.
+    const { words, tokens, braceText } = expandedSegment(segment, assignments);
     rememberLeadingShellAssignments(words, assignments);
     const commandName = commandBasename(stripWrapper(words)[0] ?? "");
 
@@ -2169,7 +2230,7 @@ export function extractShellGlobCandidates(command) {
       if (/[*?{\[]/.test(expanded)) candidates.push(expanded);
     }
 
-    if (!DATA_ONLY_COMMANDS.has(commandName) || depth > 0) {
+    if (!DATA_ONLY_COMMANDS.has(commandName) || depth > 0 || piped) {
       const argumentTokens = executableArgumentTokens(tokens, words, commandName);
       let searchPatternPending = SEARCH_COMMANDS.has(commandName);
       for (let index = 0; index < argumentTokens.length; index += 1) {
@@ -2240,7 +2301,7 @@ export function extractShellGlobCandidates(command) {
       }
     }
     if (depth < MAX_NESTED_DEPTH) {
-      for (const nestedCommand of extractNestedCommands(segment, words)) {
+      for (const nestedCommand of extractNestedCommands(braceText, words)) {
         for (const nestedSegment of splitShellSegments(nestedCommand)) pending.push({ segment: nestedSegment, depth: depth + 1 });
       }
     }

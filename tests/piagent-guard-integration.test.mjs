@@ -144,6 +144,20 @@ describe("piagent guard integration", () => {
     assert.match(ctx.ui.notices[0].message, /permission=workspace-write/);
   });
 
+  it("preserves an operator-provided Pi session name", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const operatorName = "ABC-123 Fix login callback";
+    const ctx = createContext(cwd, { confirm: true, sessionName: operatorName });
+    const harness = createPiHarness({ sessionName: operatorName });
+
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+
+    assert.equal(harness.getSessionName(), operatorName);
+    assert.match(ctx.ui.notices[0].message, /Piagent Pi guard loaded: Integration Project/);
+  });
+
   it("warns that an unconverted project is running without enforcement", async () => {
     const { root, piagentGuard } = await loadGuardFixture();
     const cwd = createProject(root);
@@ -2095,6 +2109,17 @@ describe("piagent guard integration", () => {
       "sh -c 'cat .en*'",
       "cat $(echo .en*)",
       "cat \"$(echo .en*)\"",
+      // A pattern is the one thing the literal layer cannot answer for: `.env*`
+      // matches no protected literal, so the glob reader has to see it -- and
+      // it was reading the words as typed while every other reader had moved on
+      // to the expanded stream.
+      "{cat,.env*}",
+      "{grep,-f,.env*,README.md}",
+      "cat $({echo,.env*})",
+      "{bash,} -c 'cat .env*'",
+      "bash -{c,} 'cat .env*'",
+      "echo .env* | xargs cat",
+      "{head,-n,1,.env*}",
       "xargs cat <<< .env",
       "F=.env; cat \"$F\"",
       "F=.env; cat \"$F\"; F=README.md",

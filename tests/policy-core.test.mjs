@@ -1003,6 +1003,13 @@ describe("brace expansion does not change the answer", () => {
       "cat \"{.env,}\"{,}",
       "cat '{.env,}'{,}",
       "cat {,}\"{.env,}\"",
+      // The redirection scanner kept the same flag and not the record behind
+      // it, so a mixed target was expanded all the way through and offered
+      // `.env` for a command that writes no such file -- bash calls this an
+      // ambiguous redirect and writes nothing at all.
+      "printf x > \"{.env,}\"{,}",
+      "printf x > '{.env,}'{,}",
+      "printf x > {,}\"{.env,}\"",
       // A parameter expansion is not a list either, whatever its default holds.
       "cat ${X:-notes.txt}{,}",
       // Quoting any one piece of the syntax is enough to stop the expansion,
