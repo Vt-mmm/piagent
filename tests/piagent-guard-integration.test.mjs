@@ -1158,7 +1158,17 @@ describe("piagent guard integration", () => {
       "rm {-rf,} /",
       "r{m,} -rf /",
       "fi{nd,} / -delete",
-      "echo / | xargs rm {-rf,}"
+      "echo / | xargs rm {-rf,}",
+      // A range spells a name too, and `{m..m}` is one letter.
+      "r{m..m} -rf /",
+      "fi{n..n}d / -delete",
+      // `find` reads its own options before the paths begin.
+      "find -H / -delete",
+      "find -- / -delete",
+      // An interpreter assembled by braces is still an interpreter, and a lone
+      // `-` between `-c` and the script ends the options without being it.
+      "{bash,} -c 'rm -rf /'",
+      "bash -{c,} 'rm -rf /'"
     ]) {
       const decision = await callToolCall(toolCall, ctx, "bash", { command });
       assert.equal(decision?.block, true, command);
@@ -1271,6 +1281,10 @@ describe("piagent guard integration", () => {
     const bracePipe = await callToolCall(toolCall, ctx, "bash", { command: "printf {.env,} | xargs cat" });
     const bracePipeSplit = await callToolCall(toolCall, ctx, "bash", { command: "printf .{en,}v | xargs cat" });
     const braceEchoPipe = await callToolCall(toolCall, ctx, "bash", { command: "echo auth{.json,} | xargs cat" });
+    const braceRange = await callToolCall(toolCall, ctx, "bash", { command: "cat .e{n..n}v" });
+    const braceRangeJson = await callToolCall(toolCall, ctx, "bash", { command: "cat auth.jso{n..n}" });
+    // A nested interpreter the brace assembled: its payload has to be read too.
+    const braceNested = await callToolCall(toolCall, ctx, "bash", { command: "{bash,} -c 'cat .env'" });
 
     for (const [label, decision] of [
       ["clobber", clobber],
@@ -1284,7 +1298,10 @@ describe("piagent guard integration", () => {
       ["escapedPrintf", escapedPrintf],
       ["bracePipe", bracePipe],
       ["bracePipeSplit", bracePipeSplit],
-      ["braceEchoPipe", braceEchoPipe]
+      ["braceEchoPipe", braceEchoPipe],
+      ["braceRange", braceRange],
+      ["braceRangeJson", braceRangeJson],
+      ["braceNested", braceNested]
     ]) {
       assert.equal(decision.block, true, label);
       assert.match(decision.reason, /protected path/, label);

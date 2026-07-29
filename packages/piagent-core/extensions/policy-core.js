@@ -302,6 +302,54 @@ export function shellWords(segment) {
   return shellWordTokens(segment).map((token) => token.value);
 }
 
+const BRACE_RANGE = /^(-?\d+|[A-Za-z])\.\.(-?\d+|[A-Za-z])(?:\.\.(-?\d+))?$/;
+
+/**
+ * The members of a `{a..z}` or `{1..9}` range, or undefined when the body is
+ * not one.
+ *
+ * Ranges were left literal on the reasoning that they enumerate counters rather
+ * than spell names. They spell names perfectly well: `{n..n}` is one letter, so
+ * `r{m..m}` is `rm`, `fi{n..n}d` is `find` and `.e{n..n}v` is `.env`. A range
+ * with a single member is the same trick the empty alternative was.
+ *
+ * @param {string} body
+ * @returns {string[]|undefined}
+ */
+function braceRangeAlternatives(body) {
+  const match = BRACE_RANGE.exec(body);
+  if (!match) return undefined;
+  const [, from, to, step] = match;
+  const increment = Math.abs(Number(step ?? 1)) || 1;
+  // The letter ranges are the ones that spell things. A digit range enumerates
+  // counters, and a protected pattern that would match what it produces matches
+  // the unexpanded word too, since the glob covers the braces -- so no decision
+  // here turns on the numeric branch. It is expanded anyway, because a word
+  // list that disagrees with the shell is the thing this whole file is for.
+  const numeric = /^-?\d+$/.test(from) && /^-?\d+$/.test(to);
+  if (!numeric && (from.length !== 1 || to.length !== 1 || /^-?\d+$/.test(from) || /^-?\d+$/.test(to))) {
+    return undefined;
+  }
+  const start = numeric ? Number(from) : from.codePointAt(0);
+  const end = numeric ? Number(to) : to.codePointAt(0);
+  // Bash keeps the zero padding when either endpoint is written with it.
+  const width = numeric && (/^-?0\d/.test(from) || /^-?0\d/.test(to))
+    ? Math.max(from.replace("-", "").length, to.replace("-", "").length)
+    : 0;
+  const members = [];
+  const direction = start <= end ? 1 : -1;
+  for (let value = start; direction > 0 ? value <= end : value >= end; value += direction * increment) {
+    if (members.length >= MAX_BRACE_RESULTS) break;
+    if (!numeric) {
+      members.push(String.fromCodePoint(value));
+      continue;
+    }
+    const text = String(Math.abs(value)).padStart(width, "0");
+    members.push(value < 0 ? `-${text}` : text);
+  }
+  return members;
+}
+
 /** The alternatives of one brace group, split on the commas at its own level. */
 function splitBraceAlternatives(body) {
   const parts = [];
@@ -339,9 +387,9 @@ const MAX_BRACE_RESULTS = 64;
  * expansion out of a form that does not look like one.
  *
  * A group without a top-level comma is left alone, because the shell leaves it
- * alone: `{/}` and `{a}` are literal. Numeric and character ranges (`{1..3}`)
- * are not expanded either -- they enumerate counters rather than spell names,
- * and a word this leaves whole is still offered as its own candidate.
+ * alone: `{/}` and `{a}` are literal. Ranges are expanded: they look like they
+ * only enumerate counters, but `{n..n}` is a single letter with the braces
+ * taken off, which is how `r{m..m}` spells `rm` and `.e{n..n}v` spells `.env`.
  *
  * @param {string} word
  * @returns {string[]} every word the shell would produce, the input itself when
@@ -365,8 +413,13 @@ function expandShellBraces(word, depth = 0) {
     if (char !== "}" || level === 0) continue;
     level -= 1;
     if (level > 0) continue;
-    const alternatives = splitBraceAlternatives(word.slice(open + 1, index));
-    if (alternatives.length < 2) {
+    const body = word.slice(open + 1, index);
+    const range = braceRangeAlternatives(body);
+    const alternatives = range ?? splitBraceAlternatives(body);
+    // A comma body needs two alternatives to be an expansion at all -- `{a}` is
+    // literal to the shell. A *range* does not: `{m..m}` is one member and the
+    // braces still come off, which is the whole of `r{m..m}`.
+    if (!range && alternatives.length < 2) {
       open = -1;
       continue;
     }
@@ -382,6 +435,37 @@ function expandShellBraces(word, depth = 0) {
     return results;
   }
   return [word];
+}
+
+/**
+ * The word list the shell builds for a segment, brace expansion included.
+ *
+ * Applying the expansion inside the destructive checks closed those checks and
+ * nothing else, which is not what the shell does -- it expands once, before it
+ * decides what the command is, and every reader downstream sees the result. So
+ * `git reset --har{d,}` sailed past a legacy pattern, `docker volume pr{une,}`
+ * past an exec-policy rule, and `{bash,} -c '...'` past the nested-interpreter
+ * scan, each of them reading the text as typed. This is the one place the word
+ * list is built, so a reader cannot be left behind again.
+ *
+ * `text` is the segment rewritten from those words, for the matchers that
+ * compare against the command as a string. It is the raw segment when there is
+ * no expansion to do, so quoting is preserved in the ordinary case.
+ *
+ * @param {string} segment
+ * @returns {{words: string[], text: string, tokens: ReturnType<typeof shellWordTokens>}}
+ */
+function expandedSegment(segment) {
+  const tokens = shellWordTokens(segment);
+  if (!tokens.some((token) => token.braceActive)) {
+    return { words: tokens.map((token) => token.value), text: segment, tokens };
+  }
+  // An empty alternative expands to nothing rather than to an empty argument --
+  // `rm {-rf,} /` reaches `rm` as two words, not three.
+  const words = tokens
+    .flatMap((token) => (token.braceActive ? expandShellBraces(token.value) : [token.value]))
+    .filter(Boolean);
+  return { words, text: words.join(" "), tokens };
 }
 
 export function arrayStartsWith(items, prefix) {
@@ -750,10 +834,31 @@ function findDeleteFinding(words, assignments, evaluable, substituting) {
   // `find fi / -delete` was judged on `fi` -- and brace expansion produces
   // exactly that shape, since `fi{nd,} / -delete` is `find fi / -delete` by the
   // time the shell runs it.
+  // `find` takes its own options before the paths start: `-H`, `-L`, `-P`,
+  // `-O<level>`, `-D <opts>`, and `--`. Stopping at the first `-` meant
+  // `find -H / -delete` had no target at all and passed with nothing read.
   const targets = [];
-  for (const word of words.slice(1)) {
-    if (word.startsWith("-")) break;
-    targets.push(word);
+  let index = 1;
+  while (index < words.length) {
+    const word = words[index];
+    if (word === "--") {
+      index += 1;
+      break;
+    }
+    if (/^-[HLP]$/.test(word) || /^-O\d*$/.test(word)) {
+      index += 1;
+      if (word === "-O" && /^\d+$/.test(words[index] ?? "")) index += 1;
+      continue;
+    }
+    if (word === "-D") {
+      index += 2;
+      continue;
+    }
+    break;
+  }
+  for (; index < words.length; index += 1) {
+    if (words[index].startsWith("-")) break;
+    targets.push(words[index]);
   }
   if (targets.length === 0) return undefined;
   const resolvedTargets = targets.map((target) => resolveSubstitutionTarget(target, assignments, evaluable));
@@ -794,24 +899,10 @@ function semanticCommandFindings(words, assignments, segment) {
   // text still knows.
   const substituting = segmentHasUnquotedSubstitution(segment);
   const evaluable = substituting && substitutionsAreLiteral(segment);
-  // Brace expansion happens before the shell decides what the command even is,
-  // so it is applied to the whole word list rather than to the operands.
-  // Expanding only the target left the command name and the flags written as
-  // the author typed them: `r{m,} -rf /` is `rm r -rf /` to the shell and read
-  // as a command called `r{m,}` here, and `rm {-rf,} /` lost the `-rf` the same
-  // way. Quoting suspends the expansion and that too is only in the raw text,
-  // so `rm -rf "{/,}"` stays one strangely named file.
-  const braceWords = new Set(shellWordTokens(segment)
-    .filter((token) => token.braceActive)
-    .map((token) => token.value));
-  // An empty alternative expands to nothing rather than to an empty argument --
-  // `rm {-rf,} /` reaches `rm` as two words, not three. Dropping it keeps the
-  // list the shape bash builds; no decision here turns on it, since an empty
-  // operand is neither a root nor a protected path.
-  const expandedWords = words
-    .flatMap((word) => (braceWords.has(word) ? expandShellBraces(word) : [word]))
-    .filter(Boolean);
-  const normalizedWords = stripWrapper(expandedWords);
+  // `words` arrives brace-expanded from `expandedSegment` -- the shell expands
+  // before it decides what the command is, so that has to happen before any
+  // reader here, not inside one of them.
+  const normalizedWords = stripWrapper(words);
   return [
     rmFinding(normalizedWords, assignments, evaluable, substituting),
     findDeleteFinding(normalizedWords, assignments, evaluable, substituting),
@@ -870,7 +961,9 @@ export function evaluateExecPolicyCore(command, options) {
 
   while (pending.length > 0) {
     const { segment, depth } = pending.shift();
-    const words = shellWords(segment);
+    // Expanded once here, so every reader below is looking at the word list the
+    // shell would build rather than at the text the author typed.
+    const { words, text } = expandedSegment(segment);
     rememberLeadingShellAssignments(words, assignments);
     const matches = [];
     const warnings = [];
@@ -882,7 +975,7 @@ export function evaluateExecPolicyCore(command, options) {
     }
 
     for (const rule of execPolicy.rules) {
-      if (!commandRuleMatches(rule, segment, words)) continue;
+      if (!commandRuleMatches(rule, text, words)) continue;
       matches.push(`${rule.action}:${rule.id}`);
       if (rule.action === "forbid") reasons.push(`Forbidden by exec policy ${rule.id}: ${rule.reason}`);
       if (rule.action === "prompt") reasons.push(`Prompt required by exec policy ${rule.id}: ${rule.reason}`);
@@ -899,7 +992,7 @@ export function evaluateExecPolicyCore(command, options) {
       reasons.push(`Blocked by legacy policy pattern: ${pattern}`);
     }
 
-    const nested = extractNestedCommands(segment, words);
+    const nested = extractNestedCommands(text, words);
     if (nested.length > 0 && depth >= MAX_NESTED_DEPTH) {
       matches.push("forbid:nesting-depth");
       reasons.push(
@@ -920,10 +1013,12 @@ export function evaluateExecPolicyCore(command, options) {
       }
     }
 
-    segments.push({ command: segment, words, matches, warnings });
+    segments.push({ command: segment, expanded: text, words, matches, warnings });
   }
 
-  const normalizedCommand = command.toLowerCase();
+  // The expanded text of every segment as well as the raw command, so a pattern
+  // written as `git push` still matches when the author typed `git p{ush,}`.
+  const normalizedCommand = [command, ...segments.map((entry) => entry.expanded)].join("\n").toLowerCase();
   for (const pattern of policy.requireConfirmationPatterns ?? []) {
     if (normalizedCommand.includes(String(pattern).toLowerCase())) {
       reasons.push(`Confirmation required by legacy policy pattern: ${pattern}`);
@@ -993,7 +1088,16 @@ function shellCPayloads(words) {
     for (let index = commandIndex + 1; index < normalizedWords.length - 1; index += 1) {
       const word = normalizedWords[index];
       if (word === "-c" || (/^-[A-Za-z]+$/.test(word) && word.includes("c"))) {
-        payloads.push(normalizedWords[index + 1]);
+        // A lone `-` or a `--` between `-c` and the script ends the option list
+        // without being the option's argument, so the payload is the word after
+        // them: `bash -c - 'rm -rf /'` runs the removal, and reading `-` as the
+        // script found nothing to inspect. Brace expansion produces exactly
+        // this shape, since `bash -{c,} '...'` is `bash -c - '...'`.
+        let payloadIndex = index + 1;
+        while (normalizedWords[payloadIndex] === "-" || normalizedWords[payloadIndex] === "--") {
+          payloadIndex += 1;
+        }
+        if (payloadIndex < normalizedWords.length) payloads.push(normalizedWords[payloadIndex]);
         break;
       }
     }
@@ -1699,8 +1803,13 @@ export function extractShellPathCandidates(command) {
     const { segment, depth } = pending.shift();
     const tokens = shellWordTokens(segment);
     const words = tokens.map((token) => token.value);
+    // Brace-expanded alongside, so a nested interpreter written as `{bash,} -c`
+    // is recognised as one and its payload read. The token list stays
+    // unexpanded because the loop below indexes into it; the operands it reads
+    // are expanded by `addCandidate` where they are added.
+    const { words: expandedWords, text } = expandedSegment(segment);
     rememberLeadingShellAssignments(words, assignments);
-    const commandName = commandBasename(stripWrapper(words)[0] ?? "");
+    const commandName = commandBasename(stripWrapper(expandedWords)[0] ?? "");
     for (const redirectPath of extractAttachedRedirectionPaths(segment)) addCandidate(redirectPath);
 
     const inlineFlags = INLINE_CODE_FLAGS.get(commandName);
@@ -1812,7 +1921,7 @@ export function extractShellPathCandidates(command) {
       }
     }
     if (depth < MAX_NESTED_DEPTH) {
-      for (const nestedCommand of extractNestedCommands(segment, words)) {
+      for (const nestedCommand of extractNestedCommands(text, expandedWords)) {
         for (const nestedSegment of splitShellSegments(nestedCommand)) {
           // `$(echo -e '.en\x76')` prints `.env`, and `printf` decodes its
           // format the same way. The backslash is gone by the time the body is
@@ -1983,8 +2092,11 @@ export function unresolvedPathExpansions(command) {
     const { segment, depth } = pending.shift();
     const tokens = shellWordTokens(segment);
     const words = tokens.map((token) => token.value);
+    // The command name and the nested-interpreter scan read the expanded list,
+    // for the same reason the exec policy does: `{bash,} -c` is `bash -c`.
+    const { words: expandedWords, text } = expandedSegment(segment);
     rememberLeadingShellAssignments(words, assignments);
-    const commandName = commandBasename(stripWrapper(words)[0] ?? "");
+    const commandName = commandBasename(stripWrapper(expandedWords)[0] ?? "");
     // A redirection target is a file the shell creates whatever the command is,
     // so it is read before the data-only skip below.
     for (const redirectPath of extractAttachedRedirectionPaths(segment)) {
@@ -2012,7 +2124,7 @@ export function unresolvedPathExpansions(command) {
       }
     }
     if (depth < MAX_NESTED_DEPTH) {
-      for (const nestedCommand of extractNestedCommands(segment, words)) {
+      for (const nestedCommand of extractNestedCommands(text, expandedWords)) {
         for (const nestedSegment of splitShellSegments(nestedCommand)) {
           pending.push({ segment: nestedSegment, depth: depth + 1 });
         }

@@ -466,7 +466,28 @@ describe("exec policy semantic shell safety", () => {
     "fi{nd,} / -delete",
     "echo / | xargs rm {-rf,}",
     // Every leading operand is a starting point for `find`, not just the first.
-    "find fi / -delete"
+    "find fi / -delete",
+    // A range spells a name as well as a comma list does: `{m..m}` is one
+    // letter with the braces taken off.
+    "r{m..m} -rf /",
+    "fi{n..n}d / -delete",
+    "echo / | xargs r{m..m} -rf",
+    // `find` takes its own options before the paths start, so stopping at the
+    // first `-` left it with no target to judge.
+    "find -H / -delete",
+    "find -L / -delete",
+    "find -P / -delete",
+    "find -- / -delete",
+    "find -O2 / -delete",
+    "find -H $(printf /) -delete",
+    // The nested-interpreter scan read the word list as typed, so an
+    // interpreter assembled by braces was not one. `bash -c - '...'` runs the
+    // script too: a lone `-` ends the option list without being the argument.
+    "{bash,} -c 'rm -rf /'",
+    "{sh,} -c 'rm -rf /'",
+    "bash -{c,} 'rm -rf /'",
+    "bash -c - 'rm -rf /'",
+    "bash -c -- 'rm -rf /'"
   ];
 
   for (const command of forbidden) {
@@ -512,11 +533,20 @@ describe("exec policy semantic shell safety", () => {
     "rm -rf node_modules/{a,b}/cache",
     // A group with no top-level comma is literal to the shell too.
     "rm -rf {/}",
+    // Not a range either: the endpoints have to be single letters or integers,
+    // and the shell leaves this one exactly as written.
+    "rm -rf {/../}",
     // Not a destructive command.
     "echo {/,}",
     "echo {a,b} | xargs echo",
     "find . -name x -delete",
     "find build dist -delete",
+    "find -H . -name x -delete",
+    // Ordinary range use, which is what ranges are usually for.
+    "mkdir -p logs/{1..3}",
+    "touch item{01..03}.txt",
+    "rm -rf build/{a..c}",
+    "echo {a..e}",
     // An expansion this cannot resolve, but not one that could be root: the
     // known part of the path says it is somewhere below a directory.
     "rm -rf $TMPDIR/build",
@@ -585,6 +615,7 @@ describe("exec policy semantic shell safety", () => {
     "rm -rf ${BUILD_DIR}",
     "rm -rf $BUILD_DIR",
     "find ${HOME:0:1} -delete",
+    "find -H ${HOME:0:1} -delete",
     // Every other printf option is one this does not model: `-v NAME` assigns
     // the result and prints nothing at all.
     "rm -rf $(printf -v x /)"
@@ -806,6 +837,18 @@ describe("brace expansion does not change the answer", () => {
     "find / {-delete,}",
     "find {/,} -delete",
     "echo / | xargs rm {-rf,}",
+    // the rule and pattern layers, which matched the command as typed
+    "git reset --har{d,}",
+    "git clean -f{d,}",
+    "docker volume pr{une,}",
+    "git p{ush,}",
+    "gh pr m{erge,}",
+    "terraform app{ly,}",
+    "kubectl app{ly,}",
+    // ranges, in the command name and in the operand
+    "r{m..m} -rf /",
+    "fi{n..n}d / -delete",
+    "cat .e{n..n}v",
     // and the ordinary uses, which have to keep their answer too
     "rm -rf build/{a,b}",
     "rm -rf {dist,coverage}",
@@ -831,7 +874,10 @@ describe("brace expansion does not change the answer", () => {
     "printf .{en,}v | xargs cat",
     "echo {.env,} | xargs cat",
     "echo auth{.json,} | xargs cat",
-    "cat notes{1,2}.txt"
+    "cat notes{1,2}.txt",
+    "cat .e{n..n}v",
+    "cat auth.jso{n..n}",
+    "printf .e{n..n}v | xargs cat"
   ];
 
   // The other direction, which no expansion comparison can state: quoting
