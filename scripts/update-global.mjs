@@ -318,11 +318,17 @@ function runProjectMigration(project, options, activePlatformRoot) {
   console.log(`  ${summarizeMigration(report, options.dryRun)}`);
 }
 
+function normalizeNpmViewResult(value) {
+  if (!Array.isArray(value)) return value;
+  return value.length === 1 ? value[0] : undefined;
+}
+
 function npmView(specifier, field) {
   const result = run("npm", ["view", specifier, field, "--json"], { capture: true });
   if (!result.ok) return undefined;
   try {
-    return JSON.parse(result.stdout.trim());
+    const raw = result.stdout.trim();
+    return raw ? normalizeNpmViewResult(JSON.parse(raw)) : undefined;
   } catch {
     return undefined;
   }
