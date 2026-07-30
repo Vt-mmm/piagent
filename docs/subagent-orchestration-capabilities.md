@@ -9,7 +9,7 @@ Package used:
 
 ## Kết luận
 
-Pi Agent Platform uses `pi-subagents` for child sessions, parallel read-only work, review loops, and structured handoffs. The platform keeps a safe default configuration and documents advanced commands separately so daily users can still start with `/task`.
+Pi Agent Platform uses `pi-subagents` for child sessions, parallel read-only work, review loops, and structured handoffs. The platform keeps a safe default configuration and documents advanced commands separately so daily users can still start with `/workflow task`.
 
 Core decisions:
 
@@ -44,7 +44,7 @@ Core decisions:
 - `scripts/setup.sh` / `scripts/install-global.sh`
   - optional `--with-web-access` installs `npm:pi-web-access@0.13.0` for web/docs research
 - Workflow prompts
-  - `/task`, `/plan`, `/review`, `/be-to-fe`, `/platform-improve` instruct the parent to auto-delegate when work is independent and bounded
+  - `/workflow task`, `/workflow plan`, `/workflow review`, `/workflow be-to-fe`, `/workflow platform-improve` instruct the parent to auto-delegate when work is independent and bounded
 - Docs
   - command reference lists prompt shortcuts, watchdog/profile commands, supervisor control, output/fork/worktree options
 
@@ -63,7 +63,7 @@ Core decisions:
 Daily implementation:
 
 ```text
-/task Implement <task>.
+/workflow task Implement <task>.
 ```
 
 Review until clean:

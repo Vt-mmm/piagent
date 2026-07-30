@@ -50,10 +50,11 @@ Lần đầu trong project, mở pane Pi rồi chạy:
 ```text
 /login
 <select provider/model>
-/onboard-project
+/onboard
+/onboard run
 ```
 
-Sau khi `.pi/project-context.md` đã được ghi, mới chạy `/task` cho implementation.
+Sau khi `.pi/project-context.md` đã được ghi, mới chạy `/workflow task` cho implementation.
 
 Pane đề xuất:
 

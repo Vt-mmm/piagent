@@ -1526,10 +1526,10 @@ function ensureProjectContextPlaceholder(cwd: string): void {
     "",
     "- Generated: not yet",
     "- Profile: see `.pi/piagent-profile.json`",
-    "- Model/pass: run `/onboard-project` after Pi login and model selection",
+    "- Model/pass: run `/onboard` after Pi login and model selection",
     "- Scope: pending",
     "",
-    "Run `/onboard-project` to replace this placeholder with a concise project context snapshot.",
+    "Run `/onboard` to replace this placeholder with a concise project context snapshot.",
     ""
   ].join("\n"));
 }
@@ -2825,7 +2825,7 @@ function buildContextIndexStatus(cwd: string, profile: ProjectProfile): {
   if (!settings.enabled || settings.writePolicy === "off") {
     warnings.push("context index disabled by profile");
   } else if (!exists) {
-    warnings.push("context index missing; run /onboard-project or record piagent_context_index_record");
+    warnings.push("context index missing; run /onboard or record piagent_context_index_record");
   }
   if (exists && !index) warnings.push("context index exists but cannot be parsed");
   if (index && settings.requireCitations && index.citations.length === 0) warnings.push("context index has no citations");
@@ -3756,7 +3756,7 @@ function buildContextPreflight(snapshot: UsageSnapshot, workflow = "task", input
   const live = snapshot.contextUsage;
   let projectedContext: ContextPreflight["projectedContext"];
   let recommendation: ContextPreflight["recommendation"] = "unknown";
-  let reason = "Context usage is unavailable; use /session or /piagent-usage if the task is large.";
+  let reason = "Context usage is unavailable; use /session or /usage if the task is large.";
 
   if (live && live.tokens !== null && live.percent !== null) {
     const projectedTokens = live.tokens + inputTokenEstimate;
@@ -3795,8 +3795,8 @@ function buildContextPreflight(snapshot: UsageSnapshot, workflow = "task", input
     commands: [
       "/task-preflight",
       "/task-preflight compact",
-      `/fresh-${workflow === "be-to-fe" ? "be-to-fe" : workflow === "scout" ? "scout" : "task"} <request>`,
-      "/piagent-usage",
+      `/fresh ${workflow === "be-to-fe" ? "be-to-fe" : workflow === "scout" ? "scout" : "task"} <request>`,
+      "/usage",
       "/session"
     ]
   };
@@ -3856,7 +3856,10 @@ function extractTaskRequest(text: string): string {
 }
 
 function stripLeadingWorkflowCommand(input: string): string {
-  return input.replace(/^\/(?:task|scout|be-to-fe|review|plan|platform-improve)\b\s*/i, "").trim();
+  return input
+    .replace(/^\/(?:piagent-workflow|workflow)\s+(?:task|scout|be-to-fe|review|plan|platform-improve|discuss|commit|pr)\b\s*/i, "")
+    .replace(/^\/(?:task|scout|be-to-fe|review|plan|platform-improve|discuss|commit|pr)\b\s*/i, "")
+    .trim();
 }
 
 function trimTaskForInline(input: string): string {
@@ -3868,6 +3871,10 @@ function trimTaskForInline(input: string): string {
 function chooseFreshWorkflow(original: string, task: string): "task" | "scout" | "be-to-fe" {
   const semantic = stripLeadingWorkflowCommand(task || original).toLowerCase();
   const starts = original.trim().toLowerCase();
+  const workflowStart = starts.match(/^\/(?:piagent-workflow|workflow)\s+(task|scout|be-to-fe)\b/);
+  if (workflowStart?.[1] === "be-to-fe") return "be-to-fe";
+  if (workflowStart?.[1] === "scout") return "scout";
+  if (workflowStart?.[1] === "task") return "task";
   if (starts.startsWith("/be-to-fe")) return "be-to-fe";
   if (starts.startsWith("/scout")) return "scout";
   const asksForWrite = /\b(implement|support|surface|consume|write|change|fix)\b/.test(semantic);
@@ -3881,11 +3888,11 @@ function chooseFreshWorkflow(original: string, task: string): "task" | "scout" |
 }
 
 function isPiagentWorkflowInput(text: string): boolean {
-  return /^\/(?:task|be-to-fe|scout|review|plan|platform-improve)\b/i.test(text.trim());
+  return /^\/(?:piagent-workflow|workflow|task|be-to-fe|scout|review|plan|platform-improve)\b/i.test(text.trim());
 }
 
 function isFreshOrUtilityInput(text: string): boolean {
-  return /^\/(?:fresh-task|fresh-scout|fresh-be-to-fe|task-preflight|piagent-usage|piagent-logs|setname|session|compact)\b/i.test(text.trim());
+  return /^\/(?:usage|logs|context|commands|permission|memory|onboard|name|fresh|fresh-task|fresh-scout|fresh-be-to-fe|task-preflight|piagent-usage|piagent-logs|piagent-session|piagent-context|piagent-commands|piagent-permission|model-options|memory-policy|onboard-project|setname|session|compact)\b/i.test(text.trim());
 }
 
 function taskInboxDir(cwd: string): string {
@@ -3906,9 +3913,9 @@ function buildFreshCommand(cwd: string, workflow: "task" | "scout" | "be-to-fe",
   const task = extractTaskRequest(originalText);
   if (originalText.length >= LONG_INPUT_CHARS) {
     const intakePath = writeTaskInbox(cwd, workflow, originalText);
-    return `/fresh-${workflow} Read task intake from ${intakePath}. ${reason}`;
+    return `/fresh ${workflow} Read task intake from ${intakePath}. ${reason}`;
   }
-  return `/fresh-${workflow} ${trimTaskForInline(task)}`;
+  return `/fresh ${workflow} ${trimTaskForInline(task)}`;
 }
 
 function shortTaskLabel(text: string): string {
@@ -4218,13 +4225,13 @@ export default function piagentGuard(pi: ExtensionAPI) {
     }
     const profileHint = explicitProfile || (projectTrusted && fs.existsSync(projectProfilePath(ctx.cwd)))
       ? ""
-      : " (run /onboard-project to select a profile)";
+      : " (run /onboard to select a profile)";
     const snapshot = buildUsageSnapshot(ctx, String(pi.getThinkingLevel()));
     const preflight = buildContextPreflight(snapshot, "task", 0);
     const capabilityState = verifyProjectCapabilityState(extensionDir, ctx.cwd, projectTrusted);
     const permissionProfile = resolvePermissionProfile(profile, policy, permissionOverrideFromContext(ctx));
     const contextHint = preflight.recommendation === "fresh-session"
-      ? " Context is high; use /fresh-task or /fresh-scout for new work."
+      ? " Context is high; use /fresh task or /fresh scout for new work."
       : preflight.recommendation === "compact"
         ? " Context is warm; run /task-preflight before large work."
         : "";
@@ -4253,6 +4260,9 @@ export default function piagentGuard(pi: ExtensionAPI) {
   pi.on("input", async (event, ctx) => {
     const text = event.text.trim();
     if (!text || isFreshOrUtilityInput(text)) return { action: "continue" };
+    if (/^\/piagent-workflow\b/i.test(text)) {
+      return { action: "transform", text: text.replace(/^\/piagent-workflow\b/i, "/workflow") };
+    }
 
     const imageAttachment = attachLocalImagesFromText(text, event.images, ctx.cwd);
     if (imageAttachment?.attached.length) {
@@ -5837,6 +5847,135 @@ export default function piagentGuard(pi: ExtensionAPI) {
     );
   }
 
+  function emitRuntimeMessage(
+    ctx: ExtensionContext,
+    customType: string,
+    content: string,
+    details: Record<string, unknown> = {},
+    notify?: { message: string; level: "info" | "warning" | "error" }
+  ): void {
+    if (notify) ctx.ui.notify(notify.message, notify.level);
+    pi.sendMessage(
+      { customType, content, display: true, details },
+      { triggerTurn: false }
+    );
+  }
+
+  function commandArgs(raw: string): { action: string; rest: string; tokens: string[] } {
+    const trimmed = String(raw ?? "").trim();
+    const tokens = trimmed.split(/\s+/).filter(Boolean);
+    const action = (tokens.shift() ?? "").toLowerCase();
+    return { action, rest: tokens.join(" "), tokens };
+  }
+
+  function shellArg(value: string): string {
+    return `'${value.replace(/'/g, "'\\''")}'`;
+  }
+
+  function usageExactCommands(cwd: string): string[] {
+    const project = shellArg(cwd);
+    return [
+      "/session",
+      `piagent-usage ${project}`,
+      `piagent-usage --history ${project} --days 7`,
+      "piagent-usage --history --all-projects --days 7 --csv"
+    ];
+  }
+
+  function sendWorkflowFollowUp(command: string): void {
+    pi.sendUserMessage(command, { deliverAs: "followUp" });
+  }
+
+  async function selectRuntimeAction(
+    ctx: ExtensionContext,
+    title: string,
+    entries: Array<{ value: string; label: string; description?: string; recommended?: boolean }>,
+    defaultValue?: string
+  ): Promise<string | undefined> {
+    if (ctx.hasUI === false) return undefined;
+    return await selectValueFromUi(ctx, title, entries, defaultValue ?? entries.find((entry) => entry.recommended)?.value);
+  }
+
+  function emitCurrentPermissionStatus(ctx: ExtensionContext): void {
+    const profile = loadProfileFromContext(ctx);
+    const permissionProfile = resolvePermissionProfile(profile, policy, permissionOverrideFromContext(ctx));
+    ctx.ui.notify(`Piagent permission profile: ${permissionProfile.mode}`, permissionProfile.mode === "trusted-full-access" ? "warning" : "info");
+    emitPermissionStatus(ctx, permissionProfile);
+  }
+
+  function applyPermissionProfileCommand(ctx: ExtensionContext, mode: PermissionProfileMode, request = ""): void {
+    setPermissionOverrideForContext(ctx, mode);
+    const profile = loadProfileFromContext(ctx);
+    const permissionProfile = resolvePermissionProfile(profile, policy, permissionOverrideFromContext(ctx));
+    const isActive = permissionProfile.mode === mode && !permissionProfile.warning;
+    const level = !isActive || mode === "trusted-full-access" ? "warning" : "info";
+    const message = isActive
+      ? `Piagent permission profile set to ${mode} for this session.`
+      : `Requested ${mode}, but active profile is ${permissionProfile.mode}.`;
+    ctx.ui.notify(message, level);
+    if (permissionProfile.warning) ctx.ui.notify(permissionProfile.warning, "warning");
+    if (permissionProfile.mode === "trusted-full-access") {
+      ctx.ui.notify("Trusted full access is active; protected paths, secret redaction, and destructive/external confirmations remain enforced.", "warning");
+    }
+    emitPermissionStatus(ctx, permissionProfile);
+    if (request.trim()) sendWorkflowFollowUp(request.trim());
+  }
+
+  function permissionModeFromAction(action: string): PermissionProfileMode | undefined {
+    if (["read", "readonly", "read-only", "ro"].includes(action)) return "read-only";
+    if (["write", "workspace", "workspace-write", "ww"].includes(action)) return "workspace-write";
+    if (["full", "full-access", "trusted", "trusted-full-access"].includes(action)) return "trusted-full-access";
+    return undefined;
+  }
+
+  async function runPermissionNamespace(raw: string, ctx: ExtensionContext): Promise<void> {
+    const { action, rest } = commandArgs(raw);
+    if (!action) {
+      const chosen = await selectRuntimeAction(ctx, "Piagent permission", [
+        { value: "status", label: "Status", description: "Show current session permission", recommended: true },
+        { value: "read-only", label: "Read-only", description: "Scout/review without writes" },
+        { value: "workspace-write", label: "Workspace write", description: "Normal governed implementation mode" },
+        { value: "full-access", label: "Full access", description: "Trusted local full access; guardrails still apply" },
+        { value: "help", label: "Help", description: "Show typed forms" }
+      ], "status");
+      if (chosen && chosen !== "help") {
+        if (chosen === "status") emitCurrentPermissionStatus(ctx);
+        else applyPermissionProfileCommand(ctx, permissionModeFromAction(chosen) as PermissionProfileMode);
+        return;
+      }
+      emitRuntimeMessage(ctx, "piagent-permission-help", [
+        "namespace: /permission",
+        "status: /permission status",
+        "read: /permission read-only",
+        "write: /permission workspace-write",
+        "full: /permission full-access",
+        "legacy: /piagent-permission"
+      ].join("\n"));
+      return;
+    }
+    if (["status", "show", "current"].includes(action)) {
+      emitCurrentPermissionStatus(ctx);
+      return;
+    }
+    if (action === "help") {
+      emitRuntimeMessage(ctx, "piagent-permission-help", [
+        "namespace: /permission",
+        "status: /permission status",
+        "read: /permission read-only",
+        "write: /permission workspace-write",
+        "full: /permission full-access",
+        "legacy: /piagent-permission"
+      ].join("\n"));
+      return;
+    }
+    const mode = permissionModeFromAction(action);
+    if (mode) {
+      applyPermissionProfileCommand(ctx, mode, rest);
+      return;
+    }
+    emitRuntimeMessage(ctx, "piagent-permission-error", `unknown permission action: ${action}\nRun /permission help`, { action }, { message: `Unknown permission action: ${action}`, level: "warning" });
+  }
+
   function registerPermissionProfileCommand(
     name: string,
     mode: PermissionProfileMode,
@@ -5845,35 +5984,39 @@ export default function piagentGuard(pi: ExtensionAPI) {
     pi.registerCommand(name, {
       description,
       handler: async (args, ctx) => {
-        const request = String(args ?? "").trim();
-        setPermissionOverrideForContext(ctx, mode);
-        const profile = loadProfileFromContext(ctx);
-        const permissionProfile = resolvePermissionProfile(profile, policy, permissionOverrideFromContext(ctx));
-        const isActive = permissionProfile.mode === mode && !permissionProfile.warning;
-        const level = !isActive || mode === "trusted-full-access" ? "warning" : "info";
-        const message = isActive
-          ? `Piagent permission profile set to ${mode} for this session.`
-          : `Requested ${mode}, but active profile is ${permissionProfile.mode}.`;
-        ctx.ui.notify(message, level);
-        if (permissionProfile.warning) ctx.ui.notify(permissionProfile.warning, "warning");
-        if (permissionProfile.mode === "trusted-full-access") {
-          ctx.ui.notify("Trusted full access is active; protected paths, secret redaction, and destructive/external confirmations remain enforced.", "warning");
-        }
-        emitPermissionStatus(ctx, permissionProfile);
-        if (request) {
-          pi.sendUserMessage(request, { deliverAs: "followUp" });
-        }
+        applyPermissionProfileCommand(ctx, mode, String(args ?? ""));
       }
     });
   }
 
+  pi.registerCommand("piagent-permission", {
+    description: "Legacy alias for /permission",
+    getArgumentCompletions: (prefix: string) => {
+      const actions = ["status", "read-only", "workspace-write", "full-access", "help"];
+      const typed = String(prefix ?? "").trim().toLowerCase();
+      return actions.filter((action) => action.startsWith(typed)).map((action) => ({ value: action, label: action }));
+    },
+    handler: async (args, ctx) => {
+      await runPermissionNamespace(String(args ?? ""), ctx);
+    }
+  });
+
+  pi.registerCommand("permission", {
+    description: "Show or switch runtime permission without a model follow-up",
+    getArgumentCompletions: (prefix: string) => {
+      const actions = ["status", "read-only", "workspace-write", "full-access", "help"];
+      const typed = String(prefix ?? "").trim().toLowerCase();
+      return actions.filter((action) => action.startsWith(typed)).map((action) => ({ value: action, label: action }));
+    },
+    handler: async (args, ctx) => {
+      await runPermissionNamespace(String(args ?? ""), ctx);
+    }
+  });
+
   pi.registerCommand("permission-status", {
-    description: "Show the active runtime permission profile and guard boundaries",
+    description: "Legacy alias for /permission status",
     handler: async (_args, ctx) => {
-      const profile = loadProfileFromContext(ctx);
-      const permissionProfile = resolvePermissionProfile(profile, policy, permissionOverrideFromContext(ctx));
-      ctx.ui.notify(`Piagent permission profile: ${permissionProfile.mode}`, permissionProfile.mode === "trusted-full-access" ? "warning" : "info");
-      emitPermissionStatus(ctx, permissionProfile);
+      emitCurrentPermissionStatus(ctx);
     }
   });
 
@@ -6161,7 +6304,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
                 `profile: ${applied.mode ?? profileName}`,
                 "updated: .pi/piagent-profile.json",
                 "updated: .pi/piagent-profile.lock.json",
-                `projectContext: ${projectContextExists ? "exists" : "missing"}${projectContextExists ? "" : " — run /onboard-project"}`
+            `projectContext: ${projectContextExists ? "exists" : "missing"}${projectContextExists ? "" : " — run /onboard"}`
               ].join("\n"),
               display: true,
               details: {
@@ -6220,27 +6363,39 @@ export default function piagentGuard(pi: ExtensionAPI) {
     }
   });
 
+  function emitMemoryPolicyStatus(ctx: ExtensionContext): void {
+    const profile = loadProfileFromContext(ctx);
+    const settings = resolveMemorySettings(profile);
+    ctx.ui.notify(`Project memory: ${settings.enabled ? settings.mode : "off"}`, "info");
+    emitRuntimeMessage(ctx, "piagent-memory-status", [
+      `memory: ${settings.enabled ? settings.mode : "off"}`,
+      `scope: ${settings.scope}`,
+      `summary: ${settings.summaryFile}`,
+      `handbook: ${settings.handbookFile}`,
+      `writePolicy: ${settings.writePolicy}`,
+      "rules: explicit-only by default; current repo files remain source of truth",
+      "remember: ask the agent clearly, then it must use piagent_memory_note"
+    ].join("\n"), settings);
+  }
+
   pi.registerCommand("piagent-memory", {
-    description: "Show project memory policy and available memory files",
+    description: "Legacy alias for /memory",
     handler: async (_args, ctx) => {
-      const profile = loadProfileFromContext(ctx);
-      const settings = resolveMemorySettings(profile);
-      ctx.ui.notify(`Project memory: ${settings.enabled ? settings.mode : "off"}`, "info");
-      pi.sendMessage(
-        {
-          customType: "piagent-memory-status",
-          content: [
-            `memory: ${settings.enabled ? settings.mode : "off"}`,
-            `scope: ${settings.scope}`,
-            `summary: ${settings.summaryFile}`,
-            `handbook: ${settings.handbookFile}`,
-            `writePolicy: ${settings.writePolicy}`
-          ].join("\n"),
-          display: true,
-          details: settings
-        },
-        { triggerTurn: false }
-      );
+      emitMemoryPolicyStatus(ctx);
+    }
+  });
+
+  pi.registerCommand("memory", {
+    description: "Show project memory policy and available memory files without a model follow-up",
+    handler: async (_args, ctx) => {
+      emitMemoryPolicyStatus(ctx);
+    }
+  });
+
+  pi.registerCommand("memory-policy", {
+    description: "Legacy alias for /memory",
+    handler: async (_args, ctx) => {
+      emitMemoryPolicyStatus(ctx);
     }
   });
 
@@ -6452,54 +6607,154 @@ export default function piagentGuard(pi: ExtensionAPI) {
   }
   registerMcpCommand();
 
-  pi.registerCommand("context-index", {
-    description: "Show or search the compact project context index without a model follow-up",
-    handler: async (args, ctx) => {
-      const raw = String(args ?? "").trim();
-      const profile = loadProfileFromContext(ctx);
-      if (/^search\s+/i.test(raw)) {
-        const query = raw.replace(/^search\s+/i, "").trim();
-        let matches: Array<{ id: string; kind: string; label: string; match: string }> = [];
-        let error: string | undefined;
-        try {
-          matches = query ? searchContextIndex(ctx.cwd, profile, query, 8) : [];
-        } catch (caught) {
-          error = caught instanceof Error ? caught.message : String(caught);
-        }
-        pi.sendMessage(
-          {
-            customType: "piagent-context-index-search",
-            content: error
-              ? `Context index search failed: ${error}`
-              : matches.length
-              ? matches.map((match) => `${match.id} [${match.kind}] ${match.label}: ${match.match}`).join("\n")
-              : "No context index matches.",
-            display: true,
-            details: { query, matches, error }
-          },
-          { triggerTurn: false }
-        );
+  function emitContextIndexSearch(ctx: ExtensionContext, query: string): void {
+    const profile = loadProfileFromContext(ctx);
+    let matches: Array<{ id: string; kind: string; label: string; match: string }> = [];
+    let error: string | undefined;
+    try {
+      matches = query ? searchContextIndex(ctx.cwd, profile, query, 8) : [];
+    } catch (caught) {
+      error = caught instanceof Error ? caught.message : String(caught);
+    }
+    emitRuntimeMessage(ctx, "piagent-context-index-search", error
+      ? `Context index search failed: ${error}`
+      : matches.length
+      ? matches.map((match) => `${match.id} [${match.kind}] ${match.label}: ${match.match}`).join("\n")
+      : "No context index matches.", { query, matches, error });
+  }
+
+  function emitContextIndexStatus(ctx: ExtensionContext): void {
+    const profile = loadProfileFromContext(ctx);
+    const status = buildContextIndexStatus(ctx.cwd, profile);
+    ctx.ui.notify(`Context index: ${status.exists ? `${status.nodes} nodes` : "missing"}`, status.warnings.length ? "warning" : "info");
+    emitRuntimeMessage(ctx, "piagent-context-index-status", [
+      `contextIndex: ${status.enabled ? "enabled" : "off"}`,
+      `path: ${status.path} (${status.exists ? "exists" : "missing"})`,
+      `nodes: ${status.nodes}`,
+      `edges: ${status.edges}`,
+      `citations: ${status.citations}`,
+      `updatedAt: ${status.updatedAt ?? "never"}`,
+      `warnings: ${status.warnings.join("; ") || "none"}`
+    ].join("\n"), status);
+  }
+
+  function parsePreflightWorkflow(raw: string): string {
+    return raw.match(/\b(?:scout|be-to-fe|review|plan|platform-improve|task)\b/i)?.[0]?.toLowerCase() ?? "task";
+  }
+
+  function compactCurrentSession(ctx: ExtensionContext): void {
+    ctx.compact({
+      customInstructions: [
+        "Preserve current task decisions, project constraints, changed files, verify commands, open blockers, and next action.",
+        "Drop repeated mandatory-flow boilerplate and stale exploration details.",
+        "After compaction, required project context must be re-read from current repository files before implementation."
+      ].join("\n")
+    });
+  }
+
+  function emitContextPreflight(ctx: ExtensionContext, raw: string, shouldCompact = false): void {
+    const workflow = parsePreflightWorkflow(raw);
+    const snapshot = buildUsageSnapshot(ctx, String(pi.getThinkingLevel()));
+    const preflight = buildContextPreflight(snapshot, workflow, raw.length);
+    const context = snapshot.contextUsage
+      ? `${formatCount(snapshot.contextUsage.tokens)} / ${formatCount(snapshot.contextUsage.contextWindow)} (${formatPercent(snapshot.contextUsage.percent)})`
+      : "context unavailable";
+    ctx.ui.notify(`Task preflight: ${preflight.recommendation}; ${context}`, preflight.recommendation === "ok" ? "info" : "warning");
+    if (shouldCompact) compactCurrentSession(ctx);
+    emitRuntimeMessage(ctx, "piagent-task-preflight", formatContextPreflight(preflight, snapshot), preflight);
+  }
+
+  async function runPiagentContextNamespace(raw: string, ctx: ExtensionContext): Promise<void> {
+    const { action, rest } = commandArgs(raw);
+    if (!action) {
+      const chosen = await selectRuntimeAction(ctx, "Piagent context", [
+        { value: "index", label: "Context index", description: "Show compact project map", recommended: true },
+        { value: "preflight", label: "Preflight", description: "Check whether to run, compact, or fresh-session" },
+        { value: "compact", label: "Compact", description: "Compact current session with Piagent carry-over rules" },
+        { value: "search", label: "Search index", description: "Use /context search <keyword>" },
+        { value: "help", label: "Help", description: "Show typed forms" }
+      ], "index");
+      if (chosen === "index") {
+        emitContextIndexStatus(ctx);
         return;
       }
-      const status = buildContextIndexStatus(ctx.cwd, profile);
-      ctx.ui.notify(`Context index: ${status.exists ? `${status.nodes} nodes` : "missing"}`, status.warnings.length ? "warning" : "info");
-      pi.sendMessage(
-        {
-          customType: "piagent-context-index-status",
-          content: [
-            `contextIndex: ${status.enabled ? "enabled" : "off"}`,
-            `path: ${status.path} (${status.exists ? "exists" : "missing"})`,
-            `nodes: ${status.nodes}`,
-            `edges: ${status.edges}`,
-            `citations: ${status.citations}`,
-            `updatedAt: ${status.updatedAt ?? "never"}`,
-            `warnings: ${status.warnings.join("; ") || "none"}`
-          ].join("\n"),
-          display: true,
-          details: status
-        },
-        { triggerTurn: false }
-      );
+      if (chosen === "preflight") {
+        emitContextPreflight(ctx, "task");
+        return;
+      }
+      if (chosen === "compact") {
+        emitContextPreflight(ctx, "task compact", true);
+        return;
+      }
+      emitRuntimeMessage(ctx, "piagent-context-help", [
+        "namespace: /context",
+        "index: /context index",
+        "search: /context search <keyword>",
+        "preflight: /context preflight [task|scout|be-to-fe|review|plan]",
+        "compact: /context compact [task|scout|be-to-fe]",
+        "legacy: /piagent-context | /context-index | /task-preflight"
+      ].join("\n"));
+      return;
+    }
+    if (["index", "status", "show", "current"].includes(action)) {
+      emitContextIndexStatus(ctx);
+      return;
+    }
+    if (action === "search") {
+      emitContextIndexSearch(ctx, rest);
+      return;
+    }
+    if (["preflight", "check"].includes(action)) {
+      emitContextPreflight(ctx, rest || "task");
+      return;
+    }
+    if (action === "compact") {
+      emitContextPreflight(ctx, `${rest || "task"} compact`, true);
+      return;
+    }
+    if (action === "help") {
+      emitRuntimeMessage(ctx, "piagent-context-help", [
+        "namespace: /context",
+        "index: /context index",
+        "search: /context search <keyword>",
+        "preflight: /context preflight [task|scout|be-to-fe|review|plan]",
+        "compact: /context compact [task|scout|be-to-fe]",
+        "legacy: /piagent-context | /context-index | /task-preflight"
+      ].join("\n"));
+      return;
+    }
+    emitContextIndexSearch(ctx, [action, rest].filter(Boolean).join(" "));
+  }
+
+  pi.registerCommand("piagent-context", {
+    description: "Legacy alias for /context",
+    getArgumentCompletions: (prefix: string) => {
+      const actions = ["index", "search", "preflight", "compact", "help"];
+      const typed = String(prefix ?? "").trim().toLowerCase();
+      return actions.filter((action) => action.startsWith(typed)).map((action) => ({ value: action, label: action }));
+    },
+    handler: async (args, ctx) => {
+      await runPiagentContextNamespace(String(args ?? ""), ctx);
+    }
+  });
+
+  pi.registerCommand("context", {
+    description: "Context index, search, preflight, and compact controls without a model follow-up",
+    getArgumentCompletions: (prefix: string) => {
+      const actions = ["index", "search", "preflight", "compact", "help"];
+      const typed = String(prefix ?? "").trim().toLowerCase();
+      return actions.filter((action) => action.startsWith(typed)).map((action) => ({ value: action, label: action }));
+    },
+    handler: async (args, ctx) => {
+      await runPiagentContextNamespace(String(args ?? ""), ctx);
+    }
+  });
+
+  pi.registerCommand("context-index", {
+    description: "Legacy alias for /context index/search",
+    handler: async (args, ctx) => {
+      const raw = String(args ?? "").trim();
+      await runPiagentContextNamespace(raw ? raw : "index", ctx);
     }
   });
 
@@ -6543,117 +6798,701 @@ export default function piagentGuard(pi: ExtensionAPI) {
     }
   });
 
+  function emitUsageSnapshot(ctx: ExtensionContext): void {
+    const snapshot = buildUsageSnapshot(ctx, String(pi.getThinkingLevel()));
+    const context = snapshot.contextUsage
+      ? `${formatCount(snapshot.contextUsage.tokens)} / ${formatCount(snapshot.contextUsage.contextWindow)} (${formatPercent(snapshot.contextUsage.percent)})`
+      : "context unavailable";
+    ctx.ui.notify(`Piagent usage: ${context}`, "info");
+    emitRuntimeMessage(ctx, "piagent-usage-snapshot", formatUsageSnapshot(snapshot), snapshot);
+  }
+
+  function emitUsageHistoryHint(ctx: ExtensionContext): void {
+    const commands = usageExactCommands(ctx.cwd);
+    emitRuntimeMessage(ctx, "piagent-usage-history-help", [
+      "usageHistory: terminal/RPC report",
+      `project: ${redactText(ctx.cwd)}`,
+      `current: ${commands[1]}`,
+      `history: ${commands[2]}`,
+      `weeklyCsv: ${commands[3]}`,
+      "insidePi: /session",
+      "note: history reads ~/.pi/agent/sessions/**/*.jsonl, including ended sessions and subagents unless --no-subagents is used"
+    ].join("\n"), { commands });
+  }
+
+  function emitToolLogCaptures(ctx: ExtensionContext): void {
+    const captures = readRecentToolResultCaptures(ctx.cwd, 5);
+    ctx.ui.notify(`Piagent logs: ${captures.length ? `${captures.length} recent capture(s)` : "no compacted captures yet"}`, "info");
+    emitRuntimeMessage(ctx, "piagent-log-captures", formatToolResultCaptureStatus(ctx.cwd, captures), {
+      policy: {
+        compactAboveChars: TOOL_RESULT_COMPACT_CHAR_THRESHOLD,
+        compactAboveLines: TOOL_RESULT_COMPACT_LINE_THRESHOLD,
+        previewMaxChars: TOOL_RESULT_PREVIEW_MAX_CHARS,
+        captureMaxChars: TOOL_RESULT_CAPTURE_MAX_CHARS
+      },
+      captures
+    });
+  }
+
+  async function runUsageNamespace(raw: string, ctx: ExtensionContext): Promise<void> {
+    const { action, rest } = commandArgs(raw);
+    if (!action) {
+      const chosen = await selectRuntimeAction(ctx, "Piagent usage", [
+        { value: "live", label: "Live usage", description: "Current context/session/model", recommended: true },
+        { value: "history", label: "History/report", description: "Exact terminal commands for old sessions and weekly CSV" },
+        { value: "preflight", label: "Preflight", description: "Check task/context health" },
+        { value: "compact", label: "Compact", description: "Compact current session with Piagent carry-over rules" },
+        { value: "logs", label: "Tool logs", description: "Recent compacted large tool outputs" },
+        { value: "help", label: "Help", description: "Show typed forms" }
+      ], "live");
+      if (chosen === "live") {
+        emitUsageSnapshot(ctx);
+        return;
+      }
+      if (chosen === "history") {
+        emitUsageHistoryHint(ctx);
+        return;
+      }
+      if (chosen === "preflight") {
+        emitContextPreflight(ctx, "task");
+        return;
+      }
+      if (chosen === "compact") {
+        emitContextPreflight(ctx, "task compact", true);
+        return;
+      }
+      if (chosen === "logs") {
+        emitToolLogCaptures(ctx);
+        return;
+      }
+      emitRuntimeMessage(ctx, "piagent-usage-help", [
+        "namespace: /usage",
+        "live: /usage live",
+        "history: /usage history",
+        "preflight: /usage preflight [task|scout|be-to-fe]",
+        "compact: /usage compact [task|scout|be-to-fe]",
+        "logs: /usage logs",
+        "native exact session: /session",
+        "legacy: /piagent-usage | /task-preflight | /logs"
+      ].join("\n"));
+      return;
+    }
+    if (["live", "status", "current", "context"].includes(action)) {
+      emitUsageSnapshot(ctx);
+      return;
+    }
+    if (["history", "cost", "exact", "report", "reports"].includes(action)) {
+      emitUsageHistoryHint(ctx);
+      return;
+    }
+    if (["preflight", "check"].includes(action)) {
+      emitContextPreflight(ctx, rest || "task");
+      return;
+    }
+    if (action === "compact") {
+      emitContextPreflight(ctx, `${rest || "task"} compact`, true);
+      return;
+    }
+    if (["logs", "log"].includes(action)) {
+      emitToolLogCaptures(ctx);
+      return;
+    }
+    if (action === "help") {
+      emitRuntimeMessage(ctx, "piagent-usage-help", [
+        "namespace: /usage",
+        "live | history | preflight | compact | logs",
+        "examples:",
+        "/usage live",
+        "/usage history",
+        "/usage compact scout"
+      ].join("\n"));
+      return;
+    }
+    emitRuntimeMessage(ctx, "piagent-usage-error", `unknown usage action: ${action}\nRun /usage help`, { action }, { message: `Unknown usage action: ${action}`, level: "warning" });
+  }
+
+  function setSessionNameFromCommand(ctx: ExtensionContext, raw: string, usage = "/name <task/session name>"): void {
+    const name = cleanSessionNameInput(raw);
+    if (!name) {
+      ctx.ui.notify(`Usage: ${usage}`, "warning");
+      return;
+    }
+    const previousName = currentSessionName(ctx);
+    pi.setSessionName(name);
+    appendSessionTrace(pi, {
+      event: "session_name_set",
+      previousName: previousName || undefined,
+      sessionName: name
+    });
+    ctx.ui.notify(`Session name set: ${name}`, "info");
+    emitRuntimeMessage(ctx, "piagent-session-name-set", `sessionName: ${name}`, { sessionName: name, previousName: previousName || undefined });
+  }
+
+  function emitSessionStatus(ctx: ExtensionContext): void {
+    const snapshot = buildUsageSnapshot(ctx, String(pi.getThinkingLevel()));
+    emitRuntimeMessage(ctx, "piagent-session-status", [
+      `session: ${snapshot.sessionName ?? "unnamed"} (${snapshot.sessionId ?? "unknown"})`,
+      `file: ${snapshot.sessionFile ?? "not persisted"}`,
+      `cwd: ${redactText(snapshot.cwd)}`,
+      `model: ${snapshot.model}; thinking: ${snapshot.thinkingLevel}`,
+      `entries: ${formatCount(snapshot.entries.branch)} active / ${formatCount(snapshot.entries.total)} total`,
+      "name: /name <task name>",
+      "resume: use Pi native /resume or /session"
+    ].join("\n"), snapshot, { message: `Piagent session: ${snapshot.sessionName ?? "unnamed"}`, level: "info" });
+  }
+
+  function emitSessionResumeHelp(ctx: ExtensionContext): void {
+    const snapshot = buildUsageSnapshot(ctx, String(pi.getThinkingLevel()));
+    const sessionFile = snapshot.sessionFile ? shellArg(snapshot.sessionFile) : "<session-file>";
+    emitRuntimeMessage(ctx, "piagent-session-resume-help", [
+      `session: ${snapshot.sessionName ?? "unnamed"} (${snapshot.sessionId ?? "unknown"})`,
+      `file: ${snapshot.sessionFile ?? "not persisted"}`,
+      "continueLatest: pi --continue",
+      "pickByName: pi --resume",
+      `exactFile: pi --session ${sessionFile}`,
+      "afterResume: run Pi native /session and /usage live"
+    ].join("\n"), snapshot);
+  }
+
+  async function runSessionNamespace(raw: string, ctx: any): Promise<void> {
+    const { action, rest } = commandArgs(raw);
+    if (!action) {
+      const chosen = await selectRuntimeAction(ctx, "Piagent session", [
+        { value: "current", label: "Current session", description: "Name, id, file, model", recommended: true },
+        { value: "name", label: "Set name", description: "Use /name <task name>" },
+        { value: "resume", label: "Resume help", description: "Commands for continuing old sessions" },
+        { value: "fresh-task", label: "Fresh task", description: "Use /fresh task <request>" },
+        { value: "fresh-scout", label: "Fresh scout", description: "Use /fresh scout <request>" },
+        { value: "usage", label: "Usage", description: "Current context/session usage" },
+        { value: "help", label: "Help", description: "Show typed forms" }
+      ], "current");
+      if (chosen === "current") {
+        emitSessionStatus(ctx);
+        return;
+      }
+      if (chosen === "resume") {
+        emitSessionResumeHelp(ctx);
+        return;
+      }
+      if (chosen === "usage") {
+        emitUsageSnapshot(ctx);
+        return;
+      }
+      emitRuntimeMessage(ctx, "piagent-session-help", [
+        "session helpers:",
+        "current: /usage live or Pi native /session",
+        "name: /name <task/session name>",
+        "fresh: /fresh task|scout|be-to-fe <request>",
+        "resume: Pi native /resume or /session",
+        "legacy: /piagent-session | /setname | /fresh-task | /fresh-scout | /fresh-be-to-fe"
+      ].join("\n"));
+      return;
+    }
+    if (["current", "status", "show"].includes(action)) {
+      emitSessionStatus(ctx);
+      return;
+    }
+    if (["name", "set", "rename"].includes(action)) {
+      setSessionNameFromCommand(ctx, rest);
+      return;
+    }
+    if (action === "resume") {
+      emitSessionResumeHelp(ctx);
+      return;
+    }
+    if (["usage", "cost"].includes(action)) {
+      emitUsageSnapshot(ctx);
+      return;
+    }
+    if (["fresh", "new"].includes(action)) {
+      const next = commandArgs(rest);
+      const workflow = next.action === "be-to-fe" ? "be-to-fe" : next.action === "scout" ? "scout" : "task";
+      await startFreshWorkflow(workflow, next.rest, ctx);
+      return;
+    }
+    if (["fresh-task", "task"].includes(action)) {
+      await startFreshWorkflow("task", rest, ctx);
+      return;
+    }
+    if (["fresh-scout", "scout"].includes(action)) {
+      await startFreshWorkflow("scout", rest, ctx);
+      return;
+    }
+    if (["fresh-be-to-fe", "be-to-fe"].includes(action)) {
+      await startFreshWorkflow("be-to-fe", rest, ctx);
+      return;
+    }
+    if (action === "help") {
+      emitRuntimeMessage(ctx, "piagent-session-help", [
+        "session helpers:",
+        "/usage live",
+        "/name ABC-123 Short task name",
+        "/fresh task Implement <request>",
+        "native: /session | /resume"
+      ].join("\n"));
+      return;
+    }
+    setSessionNameFromCommand(ctx, [action, rest].filter(Boolean).join(" "));
+  }
+
   pi.registerCommand("piagent-usage", {
-    description: "Show live context usage, session file, and token/cost follow-up commands",
-    handler: async (_args, ctx) => {
-      const snapshot = buildUsageSnapshot(ctx, String(pi.getThinkingLevel()));
-      const context = snapshot.contextUsage
-        ? `${formatCount(snapshot.contextUsage.tokens)} / ${formatCount(snapshot.contextUsage.contextWindow)} (${formatPercent(snapshot.contextUsage.percent)})`
-        : "context unavailable";
-      ctx.ui.notify(`Piagent usage: ${context}`, "info");
-      pi.sendMessage(
-        {
-          customType: "piagent-usage-snapshot",
-          content: formatUsageSnapshot(snapshot),
-          display: true,
-          details: snapshot
-        },
-        { triggerTurn: false }
-      );
+    description: "Legacy alias for /usage",
+    getArgumentCompletions: (prefix: string) => {
+      const actions = ["live", "history", "preflight", "compact", "logs", "help"];
+      const typed = String(prefix ?? "").trim().toLowerCase();
+      return actions.filter((action) => action.startsWith(typed)).map((action) => ({ value: action, label: action }));
+    },
+    handler: async (args, ctx) => {
+      await runUsageNamespace(String(args ?? ""), ctx);
+    }
+  });
+
+  pi.registerCommand("usage", {
+    description: "Usage namespace: live, history, preflight, compact, and logs without a model follow-up",
+    getArgumentCompletions: (prefix: string) => {
+      const actions = ["live", "history", "preflight", "compact", "logs", "help"];
+      const typed = String(prefix ?? "").trim().toLowerCase();
+      return actions.filter((action) => action.startsWith(typed)).map((action) => ({ value: action, label: action }));
+    },
+    handler: async (args, ctx) => {
+      await runUsageNamespace(String(args ?? ""), ctx);
     }
   });
 
   pi.registerCommand("piagent-logs", {
-    description: "Show compact log policy and recent captured large tool outputs",
+    description: "Legacy alias for /usage logs",
     handler: async (_args, ctx) => {
-      const captures = readRecentToolResultCaptures(ctx.cwd, 5);
-      ctx.ui.notify(`Piagent logs: ${captures.length ? `${captures.length} recent capture(s)` : "no compacted captures yet"}`, "info");
-      pi.sendMessage(
-        {
-          customType: "piagent-log-captures",
-          content: formatToolResultCaptureStatus(ctx.cwd, captures),
-          display: true,
-          details: {
-            policy: {
-              compactAboveChars: TOOL_RESULT_COMPACT_CHAR_THRESHOLD,
-              compactAboveLines: TOOL_RESULT_COMPACT_LINE_THRESHOLD,
-              previewMaxChars: TOOL_RESULT_PREVIEW_MAX_CHARS,
-              captureMaxChars: TOOL_RESULT_CAPTURE_MAX_CHARS
-            },
-            captures
-          }
-        },
-        { triggerTurn: false }
-      );
+      emitToolLogCaptures(ctx);
+    }
+  });
+
+  pi.registerCommand("logs", {
+    description: "Show recent compacted large tool outputs without a model follow-up",
+    handler: async (_args, ctx) => {
+      emitToolLogCaptures(ctx);
+    }
+  });
+
+  pi.registerCommand("piagent-session", {
+    description: "Legacy session helper namespace; prefer /usage, /name, and /fresh",
+    getArgumentCompletions: (prefix: string) => {
+      const actions = ["current", "name", "resume", "fresh", "usage", "help"];
+      const typed = String(prefix ?? "").trim().toLowerCase();
+      return actions.filter((action) => action.startsWith(typed)).map((action) => ({ value: action, label: action }));
+    },
+    handler: async (args, ctx) => {
+      await runSessionNamespace(String(args ?? ""), ctx);
+    }
+  });
+
+  pi.registerCommand("name", {
+    description: "Set the current session name for Agent Watch/report mapping",
+    handler: async (args, ctx) => {
+      setSessionNameFromCommand(ctx, String(args ?? ""), "/name <task/session name>");
     }
   });
 
   pi.registerCommand("setname", {
-    description: "Set the current Pi session name for reports and resume lists",
+    description: "Legacy alias for /name",
     handler: async (args, ctx) => {
-      const name = cleanSessionNameInput(String(args ?? ""));
-      if (!name) {
-        ctx.ui.notify("Usage: /setname <task/session name>", "warning");
-        return;
-      }
-      const previousName = currentSessionName(ctx);
-      pi.setSessionName(name);
-      appendSessionTrace(pi, {
-        event: "session_name_set",
-        previousName: previousName || undefined,
-        sessionName: name
-      });
-      ctx.ui.notify(`Session name set: ${name}`, "info");
-      pi.sendMessage(
-        {
-          customType: "piagent-session-name-set",
-          content: `sessionName: ${name}`,
-          display: true,
-          details: { sessionName: name, previousName: previousName || undefined }
-        },
-        { triggerTurn: false }
-      );
+      setSessionNameFromCommand(ctx, String(args ?? ""), "/setname <task/session name>");
     }
   });
 
   pi.registerCommand("task-preflight", {
-    description: "Check context health before a large task; optionally compact",
+    description: "Legacy alias for /context preflight; add compact to compact",
     handler: async (args, ctx) => {
       const raw = String(args ?? "").trim();
-      const workflow = raw.match(/\b(?:scout|be-to-fe|review|plan|platform-improve|task)\b/i)?.[0]?.toLowerCase() ?? "task";
-      const snapshot = buildUsageSnapshot(ctx, String(pi.getThinkingLevel()));
-      const preflight = buildContextPreflight(snapshot, workflow, raw.length);
-      const context = snapshot.contextUsage
-        ? `${formatCount(snapshot.contextUsage.tokens)} / ${formatCount(snapshot.contextUsage.contextWindow)} (${formatPercent(snapshot.contextUsage.percent)})`
-        : "context unavailable";
-      ctx.ui.notify(`Task preflight: ${preflight.recommendation}; ${context}`, preflight.recommendation === "ok" ? "info" : "warning");
+      emitContextPreflight(ctx, raw || "task", /\bcompact\b/i.test(raw));
+    }
+  });
 
-      if (/\bcompact\b/i.test(raw)) {
-        ctx.compact({
-          customInstructions: [
-            "Preserve current task decisions, project constraints, changed files, verify commands, open blockers, and next action.",
-            "Drop repeated mandatory-flow boilerplate and stale exploration details.",
-            "After compaction, required project context must be re-read from current repository files before implementation."
-          ].join("\n")
-        });
+  type WorkflowCommandName = "task" | "scout" | "be-to-fe" | "discuss" | "plan" | "review" | "platform-improve" | "commit" | "pr" | "onboard";
+
+  const WORKFLOW_ALIASES: Record<string, WorkflowCommandName> = {
+    task: "task",
+    implement: "task",
+    scout: "scout",
+    audit: "scout",
+    "be-to-fe": "be-to-fe",
+    befe: "be-to-fe",
+    discuss: "discuss",
+    clarify: "discuss",
+    plan: "plan",
+    review: "review",
+    "platform-improve": "platform-improve",
+    platform: "platform-improve",
+    commit: "commit",
+    pr: "pr",
+    onboard: "onboard",
+    "onboard-project": "onboard"
+  };
+
+  function workflowChoices(): Array<{ value: string; label: string; description: string; recommended?: boolean }> {
+    return [
+      { value: "task", label: "Task", description: "Implement a bounded task", recommended: true },
+      { value: "scout", label: "Scout", description: "Read-only audit/research" },
+      { value: "be-to-fe", label: "BE to FE", description: "Backend read-only, frontend implementation" },
+      { value: "discuss", label: "Discuss", description: "Clarify before planning/editing" },
+      { value: "plan", label: "Plan", description: "Create an implementation plan" },
+      { value: "review", label: "Review", description: "Review diff/source read-only" },
+      { value: "commit", label: "Commit", description: "Guarded local commit workflow" },
+      { value: "pr", label: "PR", description: "Guarded pull request preparation" },
+      { value: "onboard", label: "Onboard", description: "First-read project onboarding scout" },
+      { value: "platform-improve", label: "Platform", description: "Improve Pi Agent Platform itself" },
+      { value: "help", label: "Help", description: "Show typed workflow forms" }
+    ];
+  }
+
+  function buildOnboardingWorkflowPrompt(focus: string): string {
+    return [
+      "Run the Pi Agent Platform first-read onboarding workflow for this repository.",
+      "",
+      `Optional focus: ${focus.trim() || "whole repository"}`,
+      "",
+      "Preconditions:",
+      "- The operator has logged in and selected the intended model/thinking level.",
+      "- Stay read-only except writing Piagent onboarding state through piagent tools.",
+      "",
+      "Mandatory flow:",
+      "1. Call piagent_context with detail=full.",
+      "2. If the project is unprofiled, call piagent_profile_options, do a lightweight root scout, recommend a profile, and use piagent_profile_apply only after the operator choice is clear.",
+      "3. Prefer /profile setup or piagent_profile_tech_options + piagent_profile_tech_apply for tech stack selection.",
+      "4. Re-call piagent_context after profile/tech changes.",
+      "5. Call piagent_memory_status and treat memory as advisory.",
+      "6. Read AGENTS.md, README/package/build config, required context, docs/architecture files, source map, and verify command definitions. Do not ingest the whole repo.",
+      "7. Identify project purpose, stack/runtime, ownership boundaries, high-risk areas, protected paths, verify commands, MCP/tool capabilities, selected tech stack, memory policy, and conventions.",
+      "8. Write a concise .pi/project-context.md snapshot and record it with piagent_project_onboarding_record so .pi/context-index.json is generated.",
+      "9. Call piagent_context_index_status and report pending/stale warnings.",
+      "",
+      "Final output: profile, tech stack, context files read, verification matrix, high-risk areas, context-index status, memory status, and any missing operator decisions."
+    ].join("\n");
+  }
+
+  function emitWorkflowHelp(ctx: ExtensionContext): void {
+    emitRuntimeMessage(ctx, "piagent-workflow-help", [
+      "namespace: /workflow",
+      "daily: /workflow task <request>",
+      "readOnly: /workflow scout <area/spec/risk>",
+      "beToFe: /workflow be-to-fe <BE spec/change + FE outcome>",
+      "clarify: /workflow discuss <rough idea>",
+      "plan: /workflow plan <goal>",
+      "review: /workflow review <target or diff>",
+      "git: /workflow commit [message] | /workflow pr [title]",
+      "onboard: /workflow onboard [focus]",
+      "aliases still work: /task, /scout, /be-to-fe, /commit, /pr"
+    ].join("\n"), { workflows: workflowChoices().map((choice) => choice.value) });
+  }
+
+  async function runWorkflowNamespace(raw: string, ctx: ExtensionContext): Promise<void> {
+    const { action, rest } = commandArgs(raw);
+    if (!action) {
+      const chosen = await selectRuntimeAction(ctx, "Piagent workflow", workflowChoices(), "task");
+      if (!chosen || chosen === "help") {
+        emitWorkflowHelp(ctx);
+        return;
       }
+      if (chosen === "onboard") {
+        sendWorkflowFollowUp(buildOnboardingWorkflowPrompt(""));
+        ctx.ui.notify("Workflow launched: onboard", "info");
+        return;
+      }
+      emitRuntimeMessage(ctx, "piagent-workflow-selected", [
+        `workflow: ${chosen}`,
+        `run: /workflow ${chosen} <request>`,
+        "tip: type the request after the workflow name so the agent receives the task in one turn"
+      ].join("\n"), { workflow: chosen });
+      return;
+    }
+    const workflow = WORKFLOW_ALIASES[action];
+    if (!workflow || workflow === undefined) {
+      emitRuntimeMessage(ctx, "piagent-workflow-error", `unknown workflow: ${action}\nRun /workflow help`, { action }, { message: `Unknown workflow: ${action}`, level: "warning" });
+      return;
+    }
+    if (workflow === "onboard") {
+      sendWorkflowFollowUp(buildOnboardingWorkflowPrompt(rest));
+      ctx.ui.notify("Workflow launched: onboard", "info");
+      return;
+    }
+    if (!rest.trim()) {
+      emitRuntimeMessage(ctx, "piagent-workflow-needs-request", [
+        `workflow: ${workflow}`,
+        `run: /workflow ${workflow} <request>`,
+        `alias: /${workflow} <request>`
+      ].join("\n"), { workflow });
+      return;
+    }
+    sendWorkflowFollowUp(`/${workflow} ${rest}`);
+    ctx.ui.notify(`Workflow launched: ${workflow}`, "info");
+  }
 
-      pi.sendMessage(
-        {
-          customType: "piagent-task-preflight",
-          content: formatContextPreflight(preflight, snapshot),
-          display: true,
-          details: preflight
-        },
-        { triggerTurn: false }
-      );
+  function emitModelOptions(ctx: ExtensionContext): void {
+    const snapshot = buildUsageSnapshot(ctx, String(pi.getThinkingLevel()));
+    emitRuntimeMessage(ctx, "piagent-model-options", [
+      `current: ${snapshot.model}`,
+      `thinking: ${snapshot.thinkingLevel}`,
+      "selector: /model or Ctrl+L",
+      "cycleModel: Ctrl+P / Shift+Ctrl+P",
+      "thinkingLevel: Shift+Tab",
+      "terminalCatalog: piagent-models",
+      "scopeConfig: piagent-model-scope --preset team",
+      "codexFamily: openai-codex/gpt-5.4-mini, openai-codex/gpt-5.5, openai-codex/gpt-5.6-luna/sol/terra",
+      "claudeFamily: anthropic/claude-haiku, anthropic/claude-sonnet, anthropic/claude-opus, anthropic/claude-fable-5",
+      "rule: choose model/thinking by task effort; do not claim savings without benchmark evidence"
+    ].join("\n"), snapshot, { message: `Pi model: ${snapshot.model}`, level: "info" });
+  }
+
+  function emitPiagentCommandHelp(ctx: ExtensionContext, topic = "overview"): void {
+    const normalized = topic.toLowerCase();
+    const sections: Record<string, string[]> = {
+      overview: [
+        "Piagent command surface:",
+        "runtime: /workflow | /usage | /context | /permission | /commands | /profile | /memory | /onboard | /name | /fresh",
+        "native: /model | /session | /resume | /compact | /mcp",
+        "workflow: /workflow task|scout|be-to-fe|review|commit|pr <request>",
+        "mcp: /mcp is Pi native; governed MCP checks stay at /piagent-mcp to avoid collision",
+        "legacy: /piagent-* commands still work where they existed",
+        "principle: runtime commands run immediately; workflows intentionally launch an agent turn"
+      ],
+      workflow: [
+        "Workflow entrypoint:",
+        "/workflow",
+        "/workflow task <request>",
+        "/workflow scout <read-only request>",
+        "/workflow be-to-fe <BE spec/change + FE outcome>",
+        "/workflow onboard [focus]"
+      ],
+      usage: [
+        "Usage/session:",
+        "/usage",
+        "/usage history",
+        "/name <task name>",
+        "/fresh task|scout|be-to-fe <request>",
+        "native: /session | /resume"
+      ],
+      context: [
+        "Context:",
+        "/context",
+        "/context index",
+        "/context search <keyword>",
+        "/context preflight task",
+        "/context compact task"
+      ],
+      permission: [
+        "Permission:",
+        "/permission",
+        "/permission read-only",
+        "/permission workspace-write",
+        "/permission full-access"
+      ],
+      model: [
+        "Model:",
+        "/model or Ctrl+L opens Pi native selector",
+        "/model-options shows local Piagent model guidance",
+        "Ctrl+P cycles model scope; Shift+Tab cycles thinking"
+      ],
+      memory: [
+        "Memory:",
+        "/memory",
+        "Memory is explicit-only by default and advisory, not source of truth"
+      ],
+      mcp: [
+        "MCP:",
+        "/piagent-mcp opens governed MCP menu",
+        "/piagent-mcp status|get|doctor|approve|reject|reset|enable|disable",
+        "/mcp remains Pi native MCP panel"
+      ],
+      subagents: [
+        "Subagents:",
+        "/subagents-doctor",
+        "/subagents-models",
+        "/subagents-fleet",
+        "/subagent-cost",
+        "Daily work should start from /workflow; parent decides bounded subagents when worth token cost"
+      ],
+      terminal: [
+        "Terminal helpers:",
+        "piagent-install --stable",
+        "piagent-doctor /path/to/project --strict-share",
+        "piagent-usage --history --all-projects --days 7 --csv",
+        "piagent-mcp --preset core --scope global --replace",
+        "piagent-subagents --preset safe"
+      ]
+    };
+    const lines = sections[normalized] ?? sections.overview;
+    emitRuntimeMessage(ctx, "piagent-command-help", lines.join("\n"), { topic: normalized, topics: Object.keys(sections) }, { message: `Piagent commands: ${normalized}`, level: "info" });
+  }
+
+  async function runPiagentCommandsNamespace(raw: string, ctx: ExtensionContext): Promise<void> {
+    const topic = String(raw ?? "").trim().toLowerCase();
+    if (topic) {
+      emitPiagentCommandHelp(ctx, topic);
+      return;
+    }
+    const chosen = await selectRuntimeAction(ctx, "Piagent commands", [
+      { value: "overview", label: "Overview", description: "The simplified command map", recommended: true },
+      { value: "workflow", label: "Workflow", description: "Task/scout/review/git/onboard launcher" },
+      { value: "usage", label: "Usage/session", description: "Usage, reports, session names, resume" },
+      { value: "context", label: "Context", description: "Index/search/preflight/compact" },
+      { value: "permission", label: "Permission", description: "Read/write/full access controls" },
+      { value: "model", label: "Model", description: "Native model selector and thinking" },
+      { value: "mcp", label: "MCP", description: "Governed MCP commands" },
+      { value: "subagents", label: "Subagents", description: "Health, fleet, cost" },
+      { value: "terminal", label: "Terminal", description: "piagent-* helpers" }
+    ], "overview");
+    emitPiagentCommandHelp(ctx, chosen ?? "overview");
+  }
+
+  function emitOnboardingStatus(ctx: ExtensionContext): void {
+    const profile = loadProfileFromContext(ctx);
+    const projectContextExists = fs.existsSync(projectContextFilePath(ctx.cwd));
+    const techManifestExists = fs.existsSync(techStackPath(ctx.cwd));
+    const indexStatus = buildContextIndexStatus(ctx.cwd, profile);
+    const memory = resolveMemorySettings(profile);
+    emitRuntimeMessage(ctx, "piagent-onboarding-status", [
+      `profile: ${profile.mode ?? profile.projectId ?? "unprofiled"}`,
+      `profileFile: ${fs.existsSync(projectProfilePath(ctx.cwd)) ? "exists" : "missing"}`,
+      `projectContext: ${projectContextExists ? "exists" : "missing"}`,
+      `techStack: ${techManifestExists ? "exists" : "missing"}`,
+      `contextIndex: ${indexStatus.exists ? `${indexStatus.nodes} nodes` : "missing"}`,
+      `memory: ${memory.enabled ? memory.mode : "off"}`,
+      "next: /onboard run | /profile setup | /profile tech setup"
+    ].join("\n"), { profile, projectContextExists, techManifestExists, indexStatus, memory }, { message: `Onboarding: ${projectContextExists && indexStatus.exists ? "ready" : "pending"}`, level: projectContextExists && indexStatus.exists ? "info" : "warning" });
+  }
+
+  async function runOnboardingCommand(raw: string, ctx: ExtensionContext): Promise<void> {
+    const { action, rest } = commandArgs(raw);
+    if (!action) {
+      const chosen = await selectRuntimeAction(ctx, "Piagent onboarding", [
+        { value: "status", label: "Status", description: "Profile/context/index readiness", recommended: true },
+        { value: "run", label: "Run onboarding scout", description: "Launch the agent workflow to write project context" },
+        { value: "profile", label: "Profile status", description: "Show profile options" },
+        { value: "setup", label: "Profile + tech setup", description: "Select profile and tech stack" },
+        { value: "help", label: "Help", description: "Show typed forms" }
+      ], "status");
+      if (chosen === "run") {
+        sendWorkflowFollowUp(buildOnboardingWorkflowPrompt(""));
+        ctx.ui.notify("Workflow launched: onboard", "info");
+        return;
+      }
+      if (chosen === "profile") {
+        emitProfileStatus(ctx, "list");
+        return;
+      }
+      if (chosen === "setup") {
+        await runProfileTechWizard(ctx);
+        return;
+      }
+      if (chosen === "status") {
+        emitOnboardingStatus(ctx);
+        return;
+      }
+      emitRuntimeMessage(ctx, "piagent-onboarding-help", [
+        "namespace: /onboard",
+        "status: /onboard status",
+        "run: /onboard run [focus]",
+        "profile: /onboard profile",
+        "setup: /onboard setup [profile]",
+        "workflow alias: /workflow onboard [focus]"
+      ].join("\n"));
+      return;
+    }
+    if (["status", "show", "current"].includes(action)) {
+      emitOnboardingStatus(ctx);
+      return;
+    }
+    if (["run", "scout", "start"].includes(action)) {
+      sendWorkflowFollowUp(buildOnboardingWorkflowPrompt(rest));
+      ctx.ui.notify("Workflow launched: onboard", "info");
+      return;
+    }
+    if (["profile", "profiles"].includes(action)) {
+      emitProfileStatus(ctx, "list");
+      return;
+    }
+    if (["setup", "wizard", "select"].includes(action)) {
+      await runProfileTechWizard(ctx, rest || undefined);
+      return;
+    }
+    if (["tech", "stack"].includes(action)) {
+      emitProfileTechStatus(ctx);
+      return;
+    }
+    if (action === "help") {
+      emitRuntimeMessage(ctx, "piagent-onboarding-help", [
+        "namespace: /onboard",
+        "/onboard status",
+        "/onboard run [focus]",
+        "/onboard setup [profile]",
+        "/workflow onboard [focus]"
+      ].join("\n"));
+      return;
+    }
+    sendWorkflowFollowUp(buildOnboardingWorkflowPrompt([action, rest].filter(Boolean).join(" ")));
+    ctx.ui.notify("Workflow launched: onboard", "info");
+  }
+
+  pi.registerCommand("workflow", {
+    description: "One menu for Piagent task, scout, review, git, and onboarding workflows",
+    getArgumentCompletions: (prefix: string) => {
+      const actions = Object.keys(WORKFLOW_ALIASES).filter((name) => !["implement", "audit", "clarify", "platform", "onboard-project"].includes(name));
+      const typed = String(prefix ?? "").trim().toLowerCase();
+      return actions.filter((action) => action.startsWith(typed)).map((action) => ({ value: action, label: action }));
+    },
+    handler: async (args, ctx) => {
+      await runWorkflowNamespace(String(args ?? ""), ctx);
+    }
+  });
+
+  pi.registerCommand("piagent-commands", {
+    description: "Legacy alias for /commands",
+    handler: async (args, ctx) => {
+      await runPiagentCommandsNamespace(String(args ?? ""), ctx);
+    }
+  });
+
+  pi.registerCommand("commands", {
+    description: "Runtime command menu/help for Pi Agent Platform; no model follow-up",
+    handler: async (args, ctx) => {
+      await runPiagentCommandsNamespace(String(args ?? ""), ctx);
+    }
+  });
+
+  pi.registerCommand("model-options", {
+    description: "Show Pi model selector/thinking guidance without a model follow-up",
+    handler: async (_args, ctx) => {
+      emitModelOptions(ctx);
+    }
+  });
+
+  pi.registerCommand("onboard-project", {
+    description: "Legacy alias for /onboard",
+    getArgumentCompletions: (prefix: string) => {
+      const actions = ["status", "run", "profile", "setup", "tech", "help"];
+      const typed = String(prefix ?? "").trim().toLowerCase();
+      return actions.filter((action) => action.startsWith(typed)).map((action) => ({ value: action, label: action }));
+    },
+    handler: async (args, ctx) => {
+      await runOnboardingCommand(String(args ?? ""), ctx);
+    }
+  });
+
+  pi.registerCommand("onboard", {
+    description: "Runtime onboarding menu; run launches the first-read onboarding workflow",
+    getArgumentCompletions: (prefix: string) => {
+      const actions = ["status", "run", "profile", "setup", "tech", "help"];
+      const typed = String(prefix ?? "").trim().toLowerCase();
+      return actions.filter((action) => action.startsWith(typed)).map((action) => ({ value: action, label: action }));
+    },
+    handler: async (args, ctx) => {
+      await runOnboardingCommand(String(args ?? ""), ctx);
     }
   });
 
   async function startFreshWorkflow(workflow: "task" | "scout" | "be-to-fe", args: string, ctx: any) {
     const request = String(args ?? "").trim();
     if (!request) {
-      ctx.ui.notify(`Usage: /fresh-${workflow} <request>`, "warning");
+      ctx.ui.notify(`Usage: /fresh ${workflow} <request>`, "warning");
       return;
     }
 
@@ -6670,22 +7509,48 @@ export default function piagentGuard(pi: ExtensionAPI) {
     }
   }
 
+  pi.registerCommand("fresh", {
+    description: "Open a fresh governed session for task, scout, or BE-to-FE work",
+    getArgumentCompletions: (prefix: string) => {
+      const actions = ["task", "scout", "be-to-fe", "help"];
+      const typed = String(prefix ?? "").trim().toLowerCase();
+      return actions.filter((action) => action.startsWith(typed)).map((action) => ({ value: action, label: action }));
+    },
+    handler: async (args, ctx) => {
+      const { action, rest } = commandArgs(String(args ?? ""));
+      if (!action || action === "help") {
+        emitRuntimeMessage(ctx, "piagent-fresh-help", [
+          "namespace: /fresh",
+          "/fresh task <request>",
+          "/fresh scout <read-only request>",
+          "/fresh be-to-fe <BE spec/change + FE outcome>"
+        ].join("\n"));
+        return;
+      }
+      const workflow = action === "be-to-fe" ? "be-to-fe" : action === "scout" ? "scout" : "task";
+      const request = action === "task" || action === "scout" || action === "be-to-fe"
+        ? rest
+        : [action, rest].filter(Boolean).join(" ");
+      await startFreshWorkflow(workflow, request, ctx);
+    }
+  });
+
   pi.registerCommand("fresh-task", {
-    description: "Start a fresh governed session and run /task with the request",
+    description: "Legacy alias for /fresh task",
     handler: async (args, ctx) => {
       await startFreshWorkflow("task", String(args ?? ""), ctx);
     }
   });
 
   pi.registerCommand("fresh-scout", {
-    description: "Start a fresh governed session and run /scout read-only with the request",
+    description: "Legacy alias for /fresh scout",
     handler: async (args, ctx) => {
       await startFreshWorkflow("scout", String(args ?? ""), ctx);
     }
   });
 
   pi.registerCommand("fresh-be-to-fe", {
-    description: "Start a fresh governed session and run /be-to-fe with the request",
+    description: "Legacy alias for /fresh be-to-fe",
     handler: async (args, ctx) => {
       await startFreshWorkflow("be-to-fe", String(args ?? ""), ctx);
     }

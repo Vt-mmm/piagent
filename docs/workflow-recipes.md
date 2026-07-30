@@ -11,8 +11,9 @@ Dùng khi muốn cải tiến setup, prompt, MCP, model scope, memory, runtime p
 Lệnh trong Pi:
 
 ```text
-/onboard-project
-/platform-improve Improve <target behavior> in <platform area>.
+/onboard
+/onboard run
+/workflow platform-improve Improve <target behavior> in <platform area>.
 ```
 
 Input tối thiểu:
@@ -58,8 +59,9 @@ Setup project generic:
 Lệnh trong Pi:
 
 ```text
-/onboard-project
-/be-to-fe Implement FE from BE spec: <endpoint/spec/change>
+/onboard
+/onboard run
+/workflow be-to-fe Implement FE from BE spec: <endpoint/spec/change>
 ```
 
 Input tối thiểu:
@@ -96,7 +98,7 @@ Không dùng `auto` để suy ra `be-readonly-fe`, vì BE read-only là policy d
 Dùng khi muốn Pi nhớ durable facts/decisions/preferences giữa các session mà không phải scout lại từ đầu.
 
 ```text
-/memory-policy
+/memory
 Remember: this repo uses pnpm, never npm.
 ```
 
@@ -112,9 +114,10 @@ Rule:
 Dùng khi muốn giảm scout lại giữa các session mà không bật auto memory.
 
 ```text
-/onboard-project
-/context-index
-/context-index search auth
+/onboard
+/onboard run
+/context index
+/context search auth
 ```
 
 Rule:
@@ -122,4 +125,4 @@ Rule:
 1. Context index là advisory map, không phải source of truth.
 2. Node/edge phải ngắn và có citation tới file/doc/task đã verify.
 3. Không lưu raw transcript, secret, token, session, hoặc source excerpt dài.
-4. Nếu index stale so với profile/tech/onboarding snapshot, chạy lại `/onboard-project` hoặc record lại bằng `piagent_context_index_record`.
+4. Nếu index stale so với profile/tech/onboarding snapshot, chạy lại `/onboard run` hoặc record lại bằng `piagent_context_index_record`.

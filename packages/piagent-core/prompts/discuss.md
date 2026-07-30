@@ -13,7 +13,7 @@ Operating rules:
 
 1. Call `piagent_context` first when available.
 2. Call `piagent_memory_status`; use memory only to avoid repeated context questions, not as authority.
-3. Read `.pi/project-context.md` if available; if it is still pending, recommend `/onboard-project` before implementation.
+3. Read `.pi/project-context.md` if available; if it is still pending, recommend `/onboard-project run` before implementation.
 4. Inspect relevant files/docs before asking; do not ask what can be answered from the project.
 5. Identify the next unresolved decision, dependency, constraint, or risk.
 6. Ask at most 3 focused questions per round.
@@ -32,4 +32,4 @@ Final output when clear:
 - implementation approach
 - required context
 - verify commands
-- recommended next command: `/plan` or `/task`
+- recommended next command: `/workflow plan` or `/workflow task`

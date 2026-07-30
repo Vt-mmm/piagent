@@ -48,9 +48,9 @@ That is the daily flow. Pi onboards the project, selects an operating profile, u
 
 Running several agents side by side — one implementing, one reviewing read-only, one verifying — start `herdr` from the project instead of `pi` and open a Pi pane per role. Herdr orchestrates terminals and sessions; it is not a security boundary, so every gate still lives in the Pi extension and OAuth is still a `/login` inside Pi. See [Herdr workflow](docs/herdr-workflow.md).
 
-First run in a new project, type `/onboard-project`. It inspects the repository with bounded context, recommends a profile, explains the tradeoffs, asks before applying, then writes `.pi/piagent-profile.json`, its lock, `.pi/tech-stack.json`, `.pi/tech-context/*`, `.pi/project-context.md`, and `.pi/memory/*`.
+First run in a new project, type `/onboard` and choose the run action, or type `/onboard run`. It launches the bounded onboarding workflow, recommends a profile, explains the tradeoffs, asks before applying, then writes `.pi/piagent-profile.json`, its lock, `.pi/tech-stack.json`, `.pi/tech-context/*`, `.pi/project-context.md`, and `.pi/memory/*`.
 
-`/piagent-commands` lists everything else. For trusted local runs, `piagent-auto` wraps `pi --approve` and sets a permission profile for that run — it does not bypass protected-path checks, destructive shell checks, task gates, or verification evidence. See the [command reference](docs/command-reference-vietnamese.md).
+`/commands` lists everything else. For trusted local runs, `piagent-auto` wraps `pi --approve` and sets a permission profile for that run — it does not bypass protected-path checks, destructive shell checks, task gates, or verification evidence. See the [command reference](docs/command-reference-vietnamese.md).
 
 ## Uninstall
 
@@ -67,11 +67,14 @@ Removal targets what is registered in Pi's settings rather than what the current
 
 ## What it provides
 
-- Global Pi package with prompts, skills, guard extensions, and piagent subagents.
-- Runtime onboarding via `/onboard-project`.
+- Global Pi package with workflow prompts, runtime commands, skills, guard extensions, and piagent subagents.
+- Runtime command menu via `/commands`.
+- Workflow launcher via `/workflow` for task, scout, BE-to-FE, review, git, and onboarding work.
+- Runtime onboarding via `/onboard`; `/onboard run` launches the first-read onboarding workflow.
 - Runtime profile selection via `/profile`, plus select-style tech stack setup via `/profile setup` and `/profile tech`.
-- Explicit project memory via `/memory-policy` and `piagent_memory_*` tools.
-- Compact project context index via `/context-index` and `piagent_context_index_*` tools. This is an advisory navigation graph, not a security boundary or source of truth.
+- Runtime usage/session controls via `/usage`, `/name`, `/fresh`, plus Pi native `/session`.
+- Explicit project memory via `/memory` or `/memory-policy` and `piagent_memory_*` tools.
+- Compact project context controls via `/context` or `/context index` and `piagent_context_index_*` tools. This is an advisory navigation graph, not a security boundary or source of truth.
 - MCP setup helpers for Context7, Chrome DevTools, GitHub, Playwright, and Figma.
 - Subagent setup helpers for read-only scouting, planning, implementation, review, and risk challenge.
 - Chat image-path intake: paste a local screenshot path into the Pi chat box and the guard attaches it as `[image1]` before the model sees the prompt.
@@ -103,17 +106,18 @@ Project profiles can declare a runtime `permissionProfile`:
 
 For one run, set `PIAGENT_PERMISSION_PROFILE=read-only|workspace-write|trusted-full-access`, or use `piagent-auto --read-only`, `--workspace-write`, or `--full-access`.
 
-Inside an active Pi session, use slash commands for a session-local switch:
+Inside an active Pi session, use `/permission` for the menu or a session-local switch:
 
 ```text
-/permission-status
-/read-only
-/workspace-write
-/full-access
-/full-access Implement the requested trusted repo task.
+/permission
+/permission status
+/permission read-only
+/permission workspace-write
+/permission full-access
+/permission full-access Implement the requested trusted repo task.
 ```
 
-`/full-access` also accepts a task after the command. The guard switches the current session to `trusted-full-access`, then forwards the remaining text as the next user request.
+Legacy aliases still work: `/permission-status`, `/read-only`, `/workspace-write`, and `/full-access`. Full-access also accepts a task after the command. The guard switches the current session to `trusted-full-access`, then forwards the remaining text as the next user request.
 
 ## Solo-first orchestration
 
@@ -163,20 +167,23 @@ Commands and lock format: [Capability packs](docs/capability-packs.md).
 
 ## Main workflows
 
-Everything below is typed inside a Pi session. `/piagent-commands` lists the full set; [command reference](docs/command-reference-vietnamese.md) explains each one.
+Everything below is typed inside a Pi session. `/commands` lists the full set; [command reference](docs/command-reference-vietnamese.md) explains each one. The recommended team surface is grouped by namespace so people do not need to remember many one-off commands.
 
 | Command | Use when |
 |---|---|
-| `/task <request>` | The requirement is clear enough to implement. |
-| `/scout <request>` | Read-only investigation — payment, auth, data, or backend-contract mapping — before deciding whether to implement. |
-| `/discuss <rough request>` | The requirement is not clear yet. |
-| `/plan <goal>` | You want a plan before any edit. |
-| `/review current diff` | Reviewing work already done. |
-| `/commit <message>` | Governed local commit: inspect status and diff, stage only the intended files, run verification, commit. Never pushes. |
-| `/pr <title>` | Governed pull request: confirms before any `git push` or GitHub write. Draft by default. |
-| `/be-to-fe <request>` | Backend or spec is read-only and the implementation target is frontend. Pair with `/profile be-readonly-fe`. |
-| `/platform-improve <request>` | Package-level work: setup, MCP, model scope, memory, runtime policy, prompts, skills, subagents. |
-| `/fresh-task`, `/fresh-scout`, `/fresh-be-to-fe` | The current session is already heavy. Opens a new governed session and replays the compact workflow prompt. |
+| `/workflow` | Open the workflow picker. |
+| `/workflow task <request>` | The requirement is clear enough to implement. |
+| `/workflow scout <request>` | Read-only investigation — payment, auth, data, or backend-contract mapping — before deciding whether to implement. |
+| `/workflow discuss <rough request>` | The requirement is not clear yet. |
+| `/workflow plan <goal>` | You want a plan before any edit. |
+| `/workflow review current diff` | Reviewing work already done. |
+| `/workflow commit <message>` | Governed local commit: inspect status and diff, stage only the intended files, run verification, commit. Never pushes. |
+| `/workflow pr <title>` | Governed pull request: confirms before any `git push` or GitHub write. Draft by default. |
+| `/workflow be-to-fe <request>` | Backend or spec is read-only and the implementation target is frontend. Pair with `/profile be-readonly-fe`. |
+| `/workflow platform-improve <request>` | Package-level work: setup, MCP, model scope, memory, runtime policy, prompts, skills, subagents. |
+| `/fresh task|scout|be-to-fe <request>` | The current session is already heavy. Opens a new governed session and replays the compact workflow prompt. |
+
+Short workflow aliases such as `/task`, `/scout`, `/be-to-fe`, `/commit`, and `/pr` still work for power users, but docs and onboarding teach `/workflow` as the default.
 
 Git stays a capability rather than a `/git-*` namespace, so natural language works too. Broad staging — `git add .`, `git add -A`, `git add --all`, `git add -- .`, `git add :/` — requires confirmation, so unrelated or private files are not swept into a commit silently.
 
@@ -186,7 +193,7 @@ A spec that lives outside the project — the one just downloaded to `~/Download
 
 ## Model selection
 
-Handled by Pi's native UI: `/model` or `Ctrl+L` to pick, `Ctrl+P` to cycle the scoped set, `Shift+Tab` to cycle thinking level where the model supports it. Global setup seeds `enabledModels`; see [Model options](docs/model-options.md) to inspect or re-apply it.
+Handled by Pi's native UI: `/model` or `Ctrl+L` to pick, `Ctrl+P` to cycle the scoped set, `Shift+Tab` to cycle thinking level where the model supports it. Type `/model-options` for the current Piagent model/thinking guidance. Global setup seeds `enabledModels`; see [Model options](docs/model-options.md) to inspect or re-apply it.
 
 ## MCP setup
 
@@ -232,7 +239,7 @@ One command runs the full local gate — typecheck, tests, capability catalog, d
 npm run verify
 ```
 
-Individual checks and the contributor flow are in [CONTRIBUTING.md](CONTRIBUTING.md). Token and session follow-up is `/piagent-usage` inside Pi; see [Usage observability](docs/usage-observability.md). Comparing agent surfaces and models on the same scenarios: [Quality benchmark guide](docs/quality-benchmark.md).
+Individual checks and the contributor flow are in [CONTRIBUTING.md](CONTRIBUTING.md). Token and session follow-up is `/usage` inside Pi; see [Usage observability](docs/usage-observability.md). Comparing agent surfaces and models on the same scenarios: [Quality benchmark guide](docs/quality-benchmark.md).
 
 ## Public safety
 
@@ -283,7 +290,7 @@ This repository intentionally excludes:
 
 ## Maturity
 
-The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.2.2` or a reviewed commit.
+The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.2.3` or a reviewed commit.
 
 Ready for:
 

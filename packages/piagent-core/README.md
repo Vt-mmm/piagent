@@ -5,7 +5,7 @@ Shared Pi package for reusable project workflows.
 ## Contents
 
 - `extensions/piagent-guard.ts`: runtime guard tools and policy hooks.
-- `prompts/*.md`: slash-command workflows.
+- `prompts/*.md`: workflow aliases that intentionally launch an agent turn.
 - `skills/piagent-ops/SKILL.md`: operating guidance for implementation tasks.
 - `skills/piagent-source-cache/`: local cache for user-provided external source repositories.
 - `subagents/*.md`: piagent roles for `pi-subagents`.
@@ -31,15 +31,18 @@ The wrapper can set `PIAGENT_PERMISSION_PROFILE` for one run:
 - `workspace-write`: normal guarded implementation mode.
 - `trusted-full-access`: trusted automation mode; protected paths, secret redaction, capability lock integrity, and destructive/external confirmations stay active.
 
-Inside Pi, slash commands can switch the current session without writing the project profile:
+Inside Pi, `/permission` can switch the current session without writing the project profile:
 
 ```text
-/permission-status
-/read-only
-/workspace-write
-/full-access
-/full-access Implement the requested trusted repo task.
+/permission
+/permission status
+/permission read-only
+/permission workspace-write
+/permission full-access
+/permission full-access Implement the requested trusted repo task.
 ```
+
+Legacy aliases still work: `/permission-status`, `/read-only`, `/workspace-write`, and `/full-access`.
 
 ## Runtime quality tools
 
@@ -70,28 +73,25 @@ Inside Pi, slash commands can switch the current session without writing the pro
 - `piagent_verify_record` — records verify evidence only after matching an observed bash tool result after task start
 - `piagent_trace_record`
 
-## Prompt recipes
+## Runtime commands and workflow recipes
 
-- `/piagent-commands`: explain terminal, Pi, MCP, model, memory, and subagent commands in Vietnamese.
-- `/permission-status`, `/read-only`, `/workspace-write`, `/full-access`: inspect or switch the current session permission profile.
-- `/onboard-project`: first-run project context snapshot after login/model selection.
-- `/context-index`: inspect or search the compact project context index without a model follow-up.
+- `/commands`: runtime menu/help for terminal, Pi, MCP, model, memory, session, context, permission, and subagent commands.
+- `/workflow`: one launcher for task, scout, BE-to-FE, discuss, plan, review, commit, PR, platform-improve, and onboarding workflows.
+- `/usage`: runtime usage namespace for live snapshot, history hint, preflight, compact, and compact-log captures.
+- `/name`: set the current session name for Agent Watch/report mapping.
+- `/fresh`: open a fresh governed session for `task`, `scout`, or `be-to-fe`.
+- `/context`: runtime context namespace for context index status/search, task preflight, and compact.
+- `/permission`: runtime permission namespace for status/read-only/workspace-write/full-access.
+- `/onboard`: runtime onboarding namespace; `run` launches the first-read onboarding workflow.
+- `/context-index`: legacy alias for `/context index/search`.
 - `/profile`: show a short profile status, list options, apply a profile directly, or run select-style profile/tech setup without a model follow-up. Short aliases include `fe`, `be`, `full`, and `be-fe`.
 - `/profile tech`: show/select/apply the project tech stack for the active profile; fullstack setup selects frontend, backend, and database tech.
-- `/memory-policy`: inspect project memory policy and explicit remember workflow.
-- `/model-options`: explain model selector, scoped models, thinking levels, and benchmark discipline.
-- `/platform-improve`: improve package setup, runtime policy, docs, MCP, model, memory, or subagent workflows.
-- `/be-to-fe`: scout backend/spec read-only, then implement frontend only.
-- `/scout`: governed read-only scout/audit workflow.
-- `/task`: governed implementation lifecycle.
-- `/task-preflight`: check whether the active session should run, compact, or start fresh before large work.
-- `/piagent-logs`: show compact-log policy and recent oversized tool-output captures.
-- `/fresh-task`, `/fresh-scout`, `/fresh-be-to-fe`: start a fresh governed session and replay the compact workflow prompt.
-- `/commit`: create a guarded local commit from reviewed files only; no push.
-- `/pr`: prepare a pull request; push/PR creation still requires explicit operator confirmation.
-- `/plan`: bounded implementation plan.
-- `/discuss`: clarify a rough request before planning or editing.
-- `/review`: review source/diff with scope and verification checks.
+- `/memory` or `/memory-policy`: inspect project memory policy and explicit remember workflow.
+- `/model-options`: show model selector, scoped models, thinking levels, and benchmark discipline without a model follow-up.
+- `/logs`: short alias for `/usage logs`.
+- `/task-preflight`: legacy alias for `/context preflight`.
+- `/fresh-task`, `/fresh-scout`, `/fresh-be-to-fe`: legacy aliases for `/fresh ...`.
+- `/task`, `/scout`, `/be-to-fe`, `/platform-improve`, `/commit`, `/pr`, `/plan`, `/discuss`, `/review`: workflow aliases kept for power users; team docs should teach `/workflow ...` first.
 
 ## Subagents
 

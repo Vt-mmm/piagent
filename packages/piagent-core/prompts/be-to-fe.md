@@ -20,11 +20,11 @@ Use this for tasks like:
 
 Mandatory flow:
 
-0. Call `piagent_context_preflight` with `workflow=be-to-fe`. If it recommends `fresh-session`, stop loading context in this session and tell the user to use `/fresh-be-to-fe <request>` unless this command already runs in a fresh session.
+0. Call `piagent_context_preflight` with `workflow=be-to-fe`. If it recommends `fresh-session`, stop loading context in this session and tell the user to use `/piagent-session fresh be-to-fe <request>` unless this command already runs in a fresh session.
 1. Call `piagent_context` with `detail=full` and confirm profile/protected backend paths.
 2. Call `piagent_orchestration_policy`; keep the workflow solo-first unless bounded BE/FE scouting or review is worth the extra token/tool cost.
 3. Call `piagent_memory_status`; search memory or Field Guide for prior BE/FE mapping decisions if relevant, record citations with `piagent_memory_citation_record`, then verify against current BE/FE files.
-4. Read `.pi/project-context.md`. If pending, stop and ask for `/onboard-project`.
+4. Read `.pi/project-context.md`. If pending, stop and ask for `/onboard-project run`.
 5. Read required context from the active profile and call `piagent_context_budget` for BE/FE files that look large.
 6. Classify the task:
    - BE scout: read-only.
@@ -67,7 +67,7 @@ Mandatory flow:
 
 For generic projects, use profile `be-readonly-fe` when the repo policy is “BE scout only, FE write allowed”.
 
-Do not ask the user to paste the mandatory flow. The platform prompt already contains it. If the user asks only for scout/audit, stay read-only and prefer `/scout` or `/fresh-scout`.
+Do not ask the user to paste the mandatory flow. The platform prompt already contains it. If the user asks only for scout/audit, stay read-only and prefer `/workflow scout` or `/piagent-session fresh scout`.
 
 Final output:
 

@@ -6,11 +6,14 @@
       <div class="tag-list">
         <span class="tag">/login</span>
         <span class="tag">/model</span>
-        <span class="tag">/piagent-commands</span>
+        <span class="tag">/commands</span>
         <span class="tag">/piagent-status</span>
         <span class="tag">/piagent-orchestration</span>
-        <span class="tag">/piagent-usage</span>
-        <span class="tag">/task-preflight</span>
+        <span class="tag">/usage</span>
+        <span class="tag">/context preflight</span>
+        <span class="tag">/name</span>
+        <span class="tag">/fresh</span>
+        <span class="tag">/session</span>
       </div>
       <p>Dùng để setup session, chọn model, xem profile/usage/orchestration và quyết định có cần fresh session trước task lớn không.</p>
     </article>
@@ -31,30 +34,31 @@
     <article class="card">
       <h3 id="implementation-workflow">Implementation workflow</h3>
       <div class="tag-list">
-        <span class="tag">/task</span>
-        <span class="tag">/plan</span>
-        <span class="tag">/review</span>
-        <span class="tag">/scout</span>
-        <span class="tag">/discuss</span>
+        <span class="tag">/workflow</span>
+        <span class="tag">/workflow task</span>
+        <span class="tag">/workflow plan</span>
+        <span class="tag">/workflow review</span>
+        <span class="tag">/workflow scout</span>
+        <span class="tag">/workflow discuss</span>
       </div>
       <p>Gói sẵn read context, task contract, implementation, verify evidence và final handoff.</p>
     </article>
     <article class="card">
       <h3 id="git-handoff">Git handoff</h3>
       <div class="tag-list">
-        <span class="tag">/commit</span>
-        <span class="tag">/pr</span>
+        <span class="tag">/workflow commit</span>
+        <span class="tag">/workflow pr</span>
         <span class="tag">git status</span>
         <span class="tag">git diff</span>
       </div>
-      <p>Không cần namespace <span class="inline-code">/git</span>. Commit/PR đi qua shell guard; push và stage rộng như <span class="inline-code">git add -A</span> cần xác nhận.</p>
+      <p>Không cần namespace <span class="inline-code">/git</span>. Commit/PR đi qua workflow guard; push và stage rộng như <span class="inline-code">git add -A</span> cần xác nhận.</p>
     </article>
     <article class="card">
       <h3 id="fresh-sessions">Fresh sessions</h3>
       <div class="tag-list">
-        <span class="tag">/fresh-task</span>
-        <span class="tag">/fresh-scout</span>
-        <span class="tag">/fresh-be-to-fe</span>
+        <span class="tag">/fresh task</span>
+        <span class="tag">/fresh scout</span>
+        <span class="tag">/fresh be-to-fe</span>
       </div>
       <p>Dùng khi context đã nặng hoặc cần một session sạch cho workflow mới.</p>
     </article>

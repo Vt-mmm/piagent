@@ -132,12 +132,30 @@ describe("piagent guard integration", () => {
 
     assert.equal(harness.tools.size, 28);
     assert.equal(harness.tools.has("piagent_document_read"), true);
-    assert.equal(harness.commands.size, 18);
+    assert.equal(harness.commands.size, 35);
     assert.equal(harness.commands.has("profile"), true);
     assert.equal(harness.commands.has("context-index"), true);
     assert.equal(harness.commands.has("piagent-mcp"), true);
+    assert.equal(harness.commands.has("commands"), true);
+    assert.equal(harness.commands.has("usage"), true);
+    assert.equal(harness.commands.has("logs"), true);
+    assert.equal(harness.commands.has("context"), true);
+    assert.equal(harness.commands.has("permission"), true);
+    assert.equal(harness.commands.has("memory"), true);
+    assert.equal(harness.commands.has("onboard"), true);
+    assert.equal(harness.commands.has("name"), true);
+    assert.equal(harness.commands.has("fresh"), true);
     assert.equal(harness.commands.has("piagent-logs"), true);
     assert.equal(harness.commands.has("setname"), true);
+    assert.equal(harness.commands.has("workflow"), true);
+    assert.equal(harness.commands.has("piagent-commands"), true);
+    assert.equal(harness.commands.has("piagent-usage"), true);
+    assert.equal(harness.commands.has("piagent-session"), true);
+    assert.equal(harness.commands.has("piagent-context"), true);
+    assert.equal(harness.commands.has("piagent-permission"), true);
+    assert.equal(harness.commands.has("model-options"), true);
+    assert.equal(harness.commands.has("memory-policy"), true);
+    assert.equal(harness.commands.has("onboard-project"), true);
     assert.equal(harness.commands.has("profiles"), false);
     assert.equal(harness.commands.has("profile-tech"), false);
     assert.deepEqual([...harness.handlers.keys()].sort(), ["input", "session_start", "tool_call", "tool_result"]);
@@ -168,7 +186,7 @@ describe("piagent guard integration", () => {
 
     piagentGuard(harness.pi);
     await harness.handlers.get("session_start")({}, ctx);
-    await harness.commands.get("setname").handler("ABC-456 Fix checkout totals", ctx);
+    await harness.commands.get("name").handler("ABC-456 Fix checkout totals", ctx);
 
     assert.equal(harness.getSessionName(), "ABC-456 Fix checkout totals");
     assert.equal(harness.entries.at(-2).type, "piagent-task-trace");
@@ -176,8 +194,8 @@ describe("piagent guard integration", () => {
     assert.equal(harness.entries.at(-1).payload.customType, "piagent-session-name-set");
     assert.match(ctx.ui.notices.at(-1).message, /Session name set: ABC-456 Fix checkout totals/);
 
-    await harness.commands.get("setname").handler("   ", ctx);
-    assert.match(ctx.ui.notices.at(-1).message, /Usage: \/setname/);
+    await harness.commands.get("name").handler("   ", ctx);
+    assert.match(ctx.ui.notices.at(-1).message, /Usage: \/name/);
   });
 
   it("warns that an unconverted project is running without enforcement", async () => {
@@ -265,7 +283,7 @@ describe("piagent guard integration", () => {
     assert.equal(permission.details.permissionProfile.source, "default");
     assert.equal(ctx.ui.notices.some((notice) => /malicious-local-profile/.test(notice.message)), false);
     assert.equal(ctx.ui.notices.some((notice) => /Capability lock is missing/.test(notice.message)), false);
-    assert.equal(ctx.ui.notices.some((notice) => /run \/onboard-project/.test(notice.message)), true);
+    assert.equal(ctx.ui.notices.some((notice) => /run \/onboard/.test(notice.message)), true);
     assert.notEqual(safeShell.block, true);
   });
 
@@ -302,7 +320,7 @@ describe("piagent guard integration", () => {
 
       assert.equal(context.details.mode, "explicit-profile");
       assert.equal(context.details.profile.source, "env");
-      assert.equal(ctx.ui.notices.some((notice) => /run \/onboard-project/.test(notice.message)), false);
+      assert.equal(ctx.ui.notices.some((notice) => /run \/onboard/.test(notice.message)), false);
       assert.notEqual(safeShell.block, true);
     } finally {
       if (previousProfile === undefined) delete process.env.PIAGENT_PROFILE;
@@ -770,15 +788,52 @@ describe("piagent guard integration", () => {
 
     await harness.commands.get("profile").handler("", ctx);
     await harness.commands.get("piagent-status").handler("", ctx);
-    await harness.commands.get("piagent-memory").handler("", ctx);
+    await harness.commands.get("memory").handler("", ctx);
+    await harness.commands.get("memory-policy").handler("", ctx);
     await harness.commands.get("context-index").handler("", ctx);
+    await harness.commands.get("context").handler("index", ctx);
     await harness.commands.get("piagent-orchestration").handler("", ctx);
+    await harness.commands.get("commands").handler("overview", ctx);
+    await harness.commands.get("usage").handler("live", ctx);
+    await harness.commands.get("piagent-session").handler("current", ctx);
+    await harness.commands.get("permission").handler("status", ctx);
+    await harness.commands.get("model-options").handler("", ctx);
+    await harness.commands.get("onboard").handler("status", ctx);
 
     assert.equal(harness.entries.some((entry) => entry.type === "user-message"), false);
     assert.equal(harness.entries.some((entry) => entry.payload?.customType === "piagent-profile-status"), true);
     assert.equal(harness.entries.some((entry) => entry.payload?.customType === "piagent-status"), true);
     assert.equal(harness.entries.some((entry) => entry.payload?.customType === "piagent-memory-status"), true);
+    assert.equal(harness.entries.some((entry) => entry.payload?.customType === "piagent-command-help"), true);
+    assert.equal(harness.entries.some((entry) => entry.payload?.customType === "piagent-usage-snapshot"), true);
+    assert.equal(harness.entries.some((entry) => entry.payload?.customType === "piagent-session-status"), true);
+    assert.equal(harness.entries.some((entry) => entry.payload?.customType === "piagent-permission-profile"), true);
+    assert.equal(harness.entries.some((entry) => entry.payload?.customType === "piagent-model-options"), true);
+    assert.equal(harness.entries.some((entry) => entry.payload?.customType === "piagent-onboarding-status"), true);
     assert.equal(harness.entries.some((entry) => entry.payload?.customType === "piagent-orchestration-policy"), true);
+  });
+
+  it("launches workflows through a single runtime namespace", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const ctx = createContext(cwd);
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+
+    const rewritten = await harness.handlers.get("input")({
+      text: "/piagent-workflow scout Map auth flow read-only",
+      source: "interactive"
+    }, ctx);
+    assert.equal(rewritten.action, "transform");
+    assert.equal(rewritten.text, "/workflow scout Map auth flow read-only");
+
+    await harness.commands.get("workflow").handler("scout Map auth flow read-only", ctx);
+    await harness.commands.get("workflow").handler("onboard backend API", ctx);
+
+    const messages = harness.entries.filter((entry) => entry.type === "user-message").map((entry) => entry.payload.message);
+    assert.match(messages[0], /^\/scout Map auth flow read-only/);
+    assert.match(messages[1], /first-read onboarding workflow/);
+    assert.match(messages[1], /backend API/);
   });
 
   it("reports solo-first orchestration policy and records task work plans", async () => {
@@ -1937,7 +1992,7 @@ describe("piagent guard integration", () => {
     }, ctx);
 
     assert.equal(result.action, "transform");
-    assert.match(result.text, /^\/fresh-scout Scout payment FE mapping/);
+    assert.match(result.text, /^\/fresh scout Scout payment FE mapping/);
   });
 
   it("attaches local image paths from chat input and replaces them with image markers", async () => {

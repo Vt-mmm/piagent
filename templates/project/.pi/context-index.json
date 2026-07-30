@@ -3,7 +3,7 @@
   "projectId": "replace-me",
   "profileMode": "generic",
   "source": "manual",
-  "summary": "Pending. Run /onboard-project after login/model selection to generate the compact project context index.",
+  "summary": "Pending. Run /onboard run after login/model selection to generate the compact project context index.",
   "generatedAt": "not-configured",
   "updatedAt": "not-configured",
   "policy": {
@@ -20,6 +20,6 @@
   "edges": [],
   "citations": [],
   "warnings": [
-    "context index pending; run /onboard-project"
+    "context index pending; run /onboard run"
   ]
 }

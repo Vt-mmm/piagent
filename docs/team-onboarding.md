@@ -9,7 +9,7 @@ Một thành viên mới không cần biết local path của maintainer. Luồn
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.2.2
+npm install -g --ignore-scripts @piagent/platform@1.2.3
 piagent-install --stable
 cd /path/to/project
 pi
@@ -17,8 +17,9 @@ pi
 <select provider/model>
 /mcp
 /subagents-doctor
-/onboard-project
-/memory-policy
+/onboard
+/onboard run
+/memory
 ```
 
 ## Prerequisites
@@ -42,7 +43,7 @@ Mặc định team dùng stable helper:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.2.2
+npm install -g --ignore-scripts @piagent/platform@1.2.3
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -70,7 +71,7 @@ piagent-update --check
 piagent-update --project /path/to/project
 ```
 
-`--check` chỉ báo version, không đụng gì. Lên đúng một bản cụ thể thì `piagent-update --version 1.2.2`.
+`--check` chỉ báo version, không đụng gì. Lên đúng một bản cụ thể thì `piagent-update --version 1.2.3`.
 
 Không cần ai nhớ đi kiểm tra: khi có release mới, Pi tự báo ngay ở dòng notice lúc mở session, kèm luôn lệnh chạy.
 
@@ -148,7 +149,8 @@ Rồi chạy:
 ```text
 /mcp
 /subagents-doctor
-/onboard-project
+/onboard
+/onboard run
 ```
 
 Output chính:
@@ -177,9 +179,9 @@ Nếu project chưa có profile/tech stack, dùng select-style flow để tránh
 
 `fullstack` bắt chọn frontend, backend và database. Nếu native select chưa có trong Pi host, command trả card compact kèm lệnh deterministic `/profile tech apply ...`.
 
-Nếu `.pi/project-context.md` còn `Generated: not yet`, không nên chạy `/task` implementation.
+Nếu `.pi/project-context.md` còn `Generated: not yet`, không nên chạy `/workflow task` implementation.
 
-Memory mặc định là project-scoped và explicit-only. Chạy `/memory-policy` để xem files/rules. Agent chỉ ghi durable memory khi user yêu cầu rõ ràng.
+Memory mặc định là project-scoped và explicit-only. Chạy `/memory` để xem files/rules. `/memory-policy` vẫn là alias. Agent chỉ ghi durable memory khi user yêu cầu rõ ràng.
 
 Đổi profile sau này:
 
@@ -268,30 +270,32 @@ Lệnh này wrap `pi --approve`; nó không bypass piagent guard.
 Requirement chưa rõ:
 
 ```text
-/discuss Tạo plan cho feature X. Chưa implement.
+/workflow discuss Tạo plan cho feature X. Chưa implement.
 ```
 
 Task rõ:
 
 ```text
-/task Implement feature X. Follow project profile, protected paths, required context, exec policy, context budget, tool policy, verify, trace, and task gate.
+/workflow task Implement feature X. Follow project profile, protected paths, required context, exec policy, context budget, tool policy, verify, trace, and task gate.
 ```
 
 Scout/audit read-only:
 
 ```text
-/scout Scout payment FE mapping vs BE contract. Backend read-only. Do not edit source.
+/workflow scout Scout payment FE mapping vs BE contract. Backend read-only. Do not edit source.
 ```
 
 Session nặng hoặc context overflow:
 
 ```text
-/fresh-scout <read-only scout>
-/fresh-task <bounded task>
-/fresh-be-to-fe <BE-readonly/FE request>
+/fresh scout <read-only scout>
+/fresh task <bounded task>
+/fresh be-to-fe <BE-readonly/FE request>
 ```
 
 Không paste full mandatory flow hằng ngày. Platform prompts/tools đã chứa checklist; input guard sẽ tự collapse boilerplate nếu paste nhầm.
+
+Alias cũ `/discuss`, `/task`, `/scout`, `/fresh-*` vẫn chạy cho power user, nhưng tài liệu onboard team dùng `/workflow`, `/name`, `/fresh`, và `/usage` để dễ nhớ hơn.
 
 Runtime gate tools:
 
@@ -305,19 +309,19 @@ piagent_task_gate_check
 Task cải tiến platform:
 
 ```text
-/platform-improve Improve onboarding, model scope, MCP setup, and verification docs for team usage.
+/workflow platform-improve Improve onboarding, model scope, MCP setup, and verification docs for team usage.
 ```
 
 Task BE spec lên FE:
 
 ```text
-/be-to-fe Implement FE from BE contract <endpoint/spec>. Backend is read-only.
+/workflow be-to-fe Implement FE from BE contract <endpoint/spec>. Backend is read-only.
 ```
 
 Project memory:
 
 ```text
-/memory-policy
+/memory
 Remember: this repo uses pnpm, never npm.
 ```
 
@@ -343,7 +347,7 @@ bash /path/to/piagent/scripts/team-doctor.sh /path/to/project --strict-share
 bash /path/to/piagent/scripts/quality-benchmark.sh /path/to/project --init
 ```
 
-Nếu doctor cảnh báo `project onboarding snapshot is still pending`, mở Pi trong project và chạy `/onboard-project`.
+Nếu doctor cảnh báo `project onboarding snapshot is still pending`, mở Pi trong project và chạy `/onboard run`.
 
 ## Không commit
 

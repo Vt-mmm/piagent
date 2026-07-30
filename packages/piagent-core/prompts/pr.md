@@ -16,7 +16,7 @@ Rules:
 1. Do not merge. Do not publish, release, deploy, or tag.
 2. Use normal shell Git/GitHub commands so the piagent guard and confirmation gates remain active.
 3. Start with `git status --short`, `git branch --show-current`, and `git remote -v`.
-4. If there are uncommitted changes, stop and ask the operator to run `/commit` first, unless the operator explicitly asks this command to include a commit.
+4. If there are uncommitted changes, stop and ask the operator to run `/workflow commit` first, unless the operator explicitly asks this command to include a commit.
 5. Run the relevant verification command before opening the PR. At minimum use `git diff --check`; for source or policy changes, run the project verify/test/typecheck commands that apply.
 6. If the branch is not pushed, ask for explicit operator confirmation before `git push -u origin <branch>`.
 7. Create the PR only after the operator explicitly confirms the external GitHub action. Prefer `gh pr create --draft` with a clear title/body derived from the current diff and commits, unless the operator explicitly asks for a ready-for-review PR.

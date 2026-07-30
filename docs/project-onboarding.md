@@ -2,7 +2,7 @@
 
 ## Mục tiêu
 
-Lần đầu gắn một project vào Pi Agent Platform, không nên nhảy thẳng vào `/task`.
+Lần đầu gắn một project vào Pi Agent Platform, không nên nhảy thẳng vào `/workflow task`.
 
 Luồng chuẩn là:
 
@@ -11,10 +11,11 @@ cd /path/to/project
 pi
 /login
 <select provider/model>
-/onboard-project
+/onboard
+/onboard run
 ```
 
-Sau khi `/onboard-project` chạy xong, project có file:
+`/onboard` mở menu/status runtime. Sau khi `/onboard run` chạy xong, project có file:
 
 ```text
 .pi/piagent-profile.json
@@ -27,7 +28,7 @@ Sau khi `/onboard-project` chạy xong, project có file:
 .pi/memory/MEMORY.md
 ```
 
-`/onboard-project` là nơi profile và tech stack được chọn. Ưu tiên select-style flow:
+`/onboard run` là nơi profile và tech stack được chọn trong onboarding workflow. Ưu tiên select-style flow:
 
 ```text
 /profile setup
@@ -40,7 +41,7 @@ Nếu Pi host chưa có native select, command trả card compact và lệnh det
 
 `.pi/context-index.json` là compact advisory index dạng node/edge/citation cho profile, tech stack, verify command, docs, risk, memory pointer và task handoff đã được duyệt. Nó giúp agent tìm đúng điểm vào repo nhanh hơn, nhưng không phải source of truth hoặc security boundary.
 
-Context index là Pi runtime state. Không đọc/ghi raw file này trong workflow thường ngày; dùng `/context-index`, `piagent_context_index_status`, `piagent_context_index_search`, `/onboard-project` hoặc `piagent_context_index_record` để runtime có thể kiểm soát path và sanitize dữ liệu advisory trước khi đưa vào model.
+Context index là Pi runtime state. Không đọc/ghi raw file này trong workflow thường ngày; dùng `/context`, `piagent_context_index_status`, `piagent_context_index_search`, `/onboard run` hoặc `piagent_context_index_record` để runtime có thể kiểm soát path và sanitize dữ liệu advisory trước khi đưa vào model.
 
 Memory markdown là local/private mặc định và bị ignore bởi `.pi/.gitignore`. Chỉ commit memory nếu team quyết định opt-in sau khi review/redact.
 
@@ -50,7 +51,7 @@ Memory markdown là local/private mặc định và bị ignore bởi `.pi/.giti
 
 Bash setup chỉ biết tạo template và detect marker. Nó không có model reasoning, không biết project purpose, module ownership, domain rule, hay risk boundary.
 
-`/onboard-project` phải chạy sau login/model selection để chính model sẽ dùng cho task đọc qua project, chọn/gợi ý profile, và tạo snapshot.
+`/onboard run` phải chạy sau login/model selection để chính model sẽ dùng cho task đọc qua project, chọn/gợi ý profile, và tạo snapshot.
 
 ## Profile selection
 
@@ -108,8 +109,8 @@ Mục tiêu là hiểu cấu trúc và policy, không nhồi full repo vào cont
 `piagent_project_onboarding_record` sẽ tự ghi thêm `.pi/context-index.json` khi tool có sẵn. Nếu cần kiểm tra nhanh, dùng:
 
 ```text
-/context-index
-/context-index search <keyword>
+/context index
+/context search <keyword>
 ```
 
 ## Khi nào regenerate
@@ -117,7 +118,7 @@ Mục tiêu là hiểu cấu trúc và policy, không nhồi full repo vào cont
 Chạy lại:
 
 ```text
-/onboard-project
+/onboard run
 ```
 
 khi có thay đổi lớn:
@@ -128,8 +129,8 @@ khi có thay đổi lớn:
 - API/schema/migration/auth/provider policy đổi;
 - project ownership hoặc domain rule đổi.
 
-## Relationship với `/task`
+## Relationship với `/workflow task`
 
-`/task` sẽ yêu cầu đọc `.pi/project-context.md`. Nếu file còn trạng thái `Generated: not yet`, agent phải dừng và yêu cầu chạy `/onboard-project` trước.
+`/workflow task` sẽ yêu cầu đọc `.pi/project-context.md`. Nếu file còn trạng thái `Generated: not yet`, agent phải dừng và yêu cầu chạy `/onboard run` trước.
 
 Đây là điểm khác với CLI thuần: context bootstrap trở thành một bước có artifact có thể review và tái dùng. `.pi/project-context.md` và `.pi/context-index.json` có thể commit cho team sau khi review; memory markdown thì private-by-default.

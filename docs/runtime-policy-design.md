@@ -73,7 +73,7 @@ The runtime separates the active autonomy profile from the project profile:
 | `workspace-write` | Default governed implementation mode. Existing protected-path, shell, capability, context, verify, and final gates remain active. |
 | `trusted-full-access` | Trusted automation mode for known repos. It can relax tool-registry blocks and capability filesystem scopes inside the guard, but protected paths, secret redaction, capability-lock integrity, and destructive/external confirmation still apply. |
 
-`PIAGENT_PERMISSION_PROFILE` can override the profile for a single run. Invalid values fail closed to `read-only`. Inside Pi, `/read-only`, `/workspace-write`, and `/full-access` set a session-local override without writing the project profile. Precedence is launch env, then session command, then project profile, then policy default. `permissionProfiles.allowedModes` in base policy acts like a managed allowlist; removing `trusted-full-access` from that list disables it for the installation.
+`PIAGENT_PERMISSION_PROFILE` can override the profile for a single run. Invalid values fail closed to `read-only`. Inside Pi, `/permission read-only`, `/permission workspace-write`, and `/permission full-access` set a session-local override without writing the project profile. Legacy aliases `/read-only`, `/workspace-write`, and `/full-access` still work. Precedence is launch env, then session command, then project profile, then policy default. `permissionProfiles.allowedModes` in base policy acts like a managed allowlist; removing `trusted-full-access` from that list disables it for the installation.
 
 ## Task lifecycle
 

@@ -24,7 +24,7 @@ Project cụ thể chỉ cần adapter/profile riêng. Core package giữ lifecy
 |---|---|---|
 | Risk lane | `riskLane` + profile `hardGates` | Chặn auth, release, provider config, destructive action, database migration. |
 | Intake | `piagent_task_start` | Mỗi task có scope, output, acceptance criteria trước khi edit. |
-| Context rules | `/onboard-project`, `.pi/project-context.md`, `requiredContext`, context manifest | Giảm token và tránh đọc toàn repo. |
+| Context rules | `/onboard run`, `.pi/project-context.md`, `requiredContext`, context manifest | Giảm token và tránh đọc toàn repo. |
 | Test matrix | `verifyCommands` + observed verify evidence | DONE phải có exact verify command thực chạy qua Pi bash hoặc `N/A` rõ lý do. |
 | Trace | `piagent_trace_record`, `.pi/piagent-state/traces.jsonl`, session entry | Có audit trail cho task. |
 | Protected paths | `protectedPaths` trong profile + extension guard | Mỗi project có vùng cấm riêng. |
@@ -43,12 +43,12 @@ Project cụ thể chỉ cần adapter/profile riêng. Core package giữ lifecy
 
 ## Workflow prompts
 
-- `/platform-improve`: update package/platform behavior.
-- `/be-to-fe`: scout backend/spec read-only, create contract snapshot, implement frontend only.
-- `/task`: governed implementation lifecycle.
-- `/plan`: create implementation plan.
-- `/discuss`: clarify before work.
-- `/review`: review diff/source with evidence.
+- `/workflow platform-improve`: update package/platform behavior.
+- `/workflow be-to-fe`: scout backend/spec read-only, create contract snapshot, implement frontend only.
+- `/workflow task`: governed implementation lifecycle.
+- `/workflow plan`: create implementation plan.
+- `/workflow discuss`: clarify before work.
+- `/workflow review`: review diff/source with evidence.
 
 ## Task lifecycle chuẩn
 

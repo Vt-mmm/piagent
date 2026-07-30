@@ -14,11 +14,11 @@ Use this when the user needs evidence before deciding whether to implement. Do n
 Preflight first:
 
 1. Call `piagent_context_preflight` with `workflow=scout`.
-2. If it recommends `fresh-session`, stop loading context in this session and tell the user to use `/fresh-scout <request>` unless this command already runs in a fresh session.
+2. If it recommends `fresh-session`, stop loading context in this session and tell the user to use `/piagent-session fresh scout <request>` unless this command already runs in a fresh session.
 3. Call `piagent_context` with `detail=full`.
 4. Call `piagent_orchestration_policy`; keep scout solo-first unless independent read-only lanes are useful.
 5. Call `piagent_memory_status`; cite relevant memory or Field Guide only with `piagent_memory_citation_record`, then verify against current repo files.
-6. Read `.pi/project-context.md`; if pending, stop and ask for `/onboard-project`.
+6. Read `.pi/project-context.md`; if pending, stop and ask for `/onboard-project run`.
 7. Create a read-only task contract with `piagent_task_start` before broad scouting:
    - risk lane;
    - expected output;

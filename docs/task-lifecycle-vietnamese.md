@@ -14,7 +14,7 @@ Contract fields và enforcement level nằm ở [task-implementation-contract.md
 
 Harness cung cấp:
 
-- `/scout` — pha read-only, không được sửa source. Dùng để map payment/auth/BE contract trước khi quyết có làm hay không.
+- `/workflow scout` — pha read-only, không được sửa source. Dùng để map payment/auth/BE contract trước khi quyết có làm hay không. Alias `/scout` vẫn chạy.
 - `piagent_context_index_search` — bản đồ node/edge/citation compact để tìm điểm vào repo. Kết quả là **advisory**: phải mở file thật và verify trước khi sửa.
 - `piagent_memory_search` + `piagent_memory_citation_record` — Field Guide và memory của project, cũng advisory, cũng phải verify lại.
 - `piagent_source_checkout` — cache repo ngoài để đọc có mục tiêu.
@@ -82,7 +82,7 @@ Nghĩa là `true`, `echo ok`, `npm test || true` không mua được chữ "done
 
 | Pha | Trạng thái | Căn cứ |
 |---|---|---|
-| Research | **Đủ** | `/scout`, context index, memory, Context7, source checkout |
+| Research | **Đủ** | `/workflow scout`, context index, memory, Context7, source checkout |
 | Plan | **Đủ** | `piagent_task_start` + 19 field contract + `workPlan` |
 | Execute | **Đủ** | Chặn trước thực thi ở mọi đường: tool, MCP, shell |
 | Verify | **Mạnh** | Bằng chứng phải quan sát được và khớp lệnh, không tự khai được |

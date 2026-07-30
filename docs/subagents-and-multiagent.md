@@ -18,7 +18,7 @@ Pi core không có subagents built-in. Theo design của Pi, subagents là exten
 
 Từ `v0.3.7`, `scripts/setup.sh` mặc định cài `pi-subagents` và chạy config preset `safe`.
 
-Workflow prompts của platform dùng **solo-first orchestration policy**: khi anh chạy `/task`, `/be-to-fe`, `/platform-improve`, `/plan`, hoặc `/review`, parent agent đọc `piagent_orchestration_policy`, lập task tree/review lenses, rồi mới cân nhắc subagent cho phần việc độc lập. Anh không bắt buộc phải gọi `/run` nếu chỉ muốn task hoàn chỉnh, và platform cũng không spawn swarm khi task nhỏ.
+Workflow prompts của platform dùng **solo-first orchestration policy**: khi anh chạy `/workflow task`, `/workflow be-to-fe`, `/workflow platform-improve`, `/workflow plan`, hoặc `/workflow review`, parent agent đọc `piagent_orchestration_policy`, lập task tree/review lenses, rồi mới cân nhắc subagent cho phần việc độc lập. Anh không bắt buộc phải gọi `/run` nếu chỉ muốn task hoàn chỉnh, và platform cũng không spawn swarm khi task nhỏ. Alias cũ như `/task` vẫn giữ cùng policy.
 
 Kiểm tra nhanh policy trong Pi:
 
@@ -129,7 +129,7 @@ Giải nghĩa nhanh:
 Nếu cần bản tổng hợp cho team mới:
 
 ```text
-/piagent-commands subagents
+/commands subagents
 ```
 
 ## Gọi subagent tự nhiên
@@ -149,7 +149,7 @@ Run parallel research: external docs, local code context, and practical tradeoff
 Với workflow platform, còn có thể chỉ gọi:
 
 ```text
-/task Implement <task lớn>.
+/workflow task Implement <task lớn>.
 ```
 
 Parent agent sẽ tự quyết định:
@@ -324,7 +324,7 @@ Use:
 
 ```text
 /subagent-cost
-/piagent-usage
+/usage
 /session
 ```
 

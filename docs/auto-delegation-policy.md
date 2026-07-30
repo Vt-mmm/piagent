@@ -1,6 +1,6 @@
 # Solo-first orchestration policy
 
-Mục tiêu: user không phải nhớ `/run`, `/parallel`, `/chain` cho workflow hằng ngày, nhưng platform cũng không tự biến mọi task thành swarm tốn token. Khi anh gõ `/task`, `/be-to-fe`, `/platform-improve`, `/plan`, hoặc `/review`, parent agent đọc `piagent_orchestration_policy`, giữ mặc định **solo-first**, rồi chỉ dùng subagents nếu việc đó giúp giảm nhiễu context, tăng tốc read-heavy work, hoặc tăng chất lượng review.
+Mục tiêu: user không phải nhớ `/run`, `/parallel`, `/chain` cho workflow hằng ngày, nhưng platform cũng không tự biến mọi task thành swarm tốn token. Khi anh gõ `/workflow task`, `/workflow be-to-fe`, `/workflow platform-improve`, `/workflow plan`, hoặc `/workflow review`, parent agent đọc `piagent_orchestration_policy`, giữ mặc định **solo-first**, rồi chỉ dùng subagents nếu việc đó giúp giảm nhiễu context, tăng tốc read-heavy work, hoặc tăng chất lượng review. Alias cũ như `/task` vẫn giữ cùng policy.
 
 Kiểm tra policy hiện tại trong Pi:
 
@@ -81,7 +81,7 @@ Default rule: parallel read-only is OK; parallel writers are not default.
 
 ## Workflow policy
 
-### `/task`
+### `/workflow task`
 
 Parent should:
 
@@ -93,7 +93,7 @@ Parent should:
 6. keep implementation single-writer unless user explicitly approves otherwise;
 7. summarize subagent outputs into task contract/context manifest/final response.
 
-### `/be-to-fe`
+### `/workflow be-to-fe`
 
 Recommended auto-delegation:
 
@@ -103,7 +103,7 @@ Recommended auto-delegation:
 - parent or `piagent-worker`: implement FE only;
 - `piagent-reviewer`: review diff and verify coverage.
 
-### `/platform-improve`
+### `/workflow platform-improve`
 
 Recommended auto-delegation:
 
