@@ -9,7 +9,7 @@ Một thành viên mới không cần biết local path của maintainer. Luồn
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.2.3
+npm install -g --ignore-scripts @piagent/platform@1.2.4
 piagent-install --stable
 cd /path/to/project
 pi
@@ -43,7 +43,7 @@ Mặc định team dùng stable helper:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.2.3
+npm install -g --ignore-scripts @piagent/platform@1.2.4
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -68,10 +68,26 @@ Một lệnh, đúng thứ tự, cho cả ba thành phần:
 
 ```bash
 piagent-update --check
-piagent-update --project /path/to/project
+piagent-update --version X.Y.Z
 ```
 
-`--check` chỉ báo version, không đụng gì. Lên đúng một bản cụ thể thì `piagent-update --version 1.2.3`.
+Chạy từ Terminal, không cần mở Pi và không cần đứng trong project. Đây là update global cho cả máy: Pi host, npm-global helper, và Pi package.
+
+Khi cần kiểm tra một project sau rollout, chạy riêng:
+
+```bash
+piagent-update --version X.Y.Z --project /path/to/project
+```
+
+`--project` là bước phụ: tự migrate layout cũ nếu có rồi chạy doctor strict-share. `--check` chỉ báo version, không đụng gì.
+
+Nếu npm global mặc định của máy bị khóa quyền ở `/usr/local`, updater tự chuyển sang `~/.pi/npm-global` cho user hiện tại và in dòng `PATH` cần thêm. Không chạy doctor bằng `sudo`.
+
+Máy mới chưa có `piagent-update` dùng một dòng bootstrap này:
+
+```bash
+npm exec -y --package @piagent/platform@X.Y.Z -- piagent-update --version X.Y.Z --force
+```
 
 Không cần ai nhớ đi kiểm tra: khi có release mới, Pi tự báo ngay ở dòng notice lúc mở session, kèm luôn lệnh chạy.
 

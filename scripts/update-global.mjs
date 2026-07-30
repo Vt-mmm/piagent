@@ -17,6 +17,7 @@
 // it asked for.
 
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -39,13 +40,18 @@ Options:
   --dry-run               Print every command that would run, change nothing
   --version <x.y.z>       Update to an exact helper version instead of latest
   --force                 Reinstall even when already on the target version
-  --project <path>        Run the team doctor against this project afterwards
+  --project <path>        Optional: after the global update, migrate and doctor this project
   --no-host               Do not touch the Pi host
   --no-package            Do not reinstall the Pi package
+  --no-migrate            With --project, skip project state migration
+  --npm-prefix <path>     Use this npm global prefix for host/helper installs
   -h, --help              Show this help
 
 Anything after -- is passed through to piagent-install, for example:
   piagent-update -- --no-mcp
+
+Bootstrap a machine that does not have piagent-update yet:
+  npm exec -y --package @piagent/platform@X.Y.Z -- piagent-update --version X.Y.Z --force
 `;
 }
 
@@ -81,6 +87,8 @@ function parseArguments(argv) {
     project: undefined,
     host: true,
     package: true,
+    migrate: true,
+    npmPrefix: undefined,
     passthrough: []
   };
 
@@ -111,6 +119,15 @@ function parseArguments(argv) {
       case "--no-package":
         options.package = false;
         break;
+      case "--no-migrate":
+        options.migrate = false;
+        break;
+      case "--npm-prefix": {
+        const value = argv[index += 1];
+        if (!value) fail("--npm-prefix needs a path", EXIT_USAGE);
+        options.npmPrefix = value;
+        break;
+      }
       case "--version": {
         const value = normalizeVersion(argv[index += 1]);
         if (!isReleaseVersion(value)) fail(`--version needs an exact release such as 1.1.4, got ${argv[index] ?? "nothing"}`, EXIT_USAGE);
@@ -138,6 +155,167 @@ function run(command, args, { capture = false } = {}) {
   });
   if (result.error) return { ok: false, stdout: "", stderr: String(result.error.message ?? result.error) };
   return { ok: result.status === 0, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
+}
+
+function expandHome(value) {
+  if (value === "~") return os.homedir();
+  if (value?.startsWith("~/")) return path.join(os.homedir(), value.slice(2));
+  return value;
+}
+
+function configuredNpmPrefix() {
+  const result = run("npm", ["config", "get", "prefix"], { capture: true });
+  if (!result.ok) return undefined;
+  const prefix = result.stdout.trim();
+  return prefix && prefix !== "undefined" && prefix !== "null" ? path.resolve(expandHome(prefix)) : undefined;
+}
+
+function fallbackNpmRoot(prefix) {
+  return process.platform === "win32"
+    ? path.join(prefix, "node_modules")
+    : path.join(prefix, "lib", "node_modules");
+}
+
+function npmRoot(prefix) {
+  const args = ["root", "-g"];
+  if (prefix) args.push("--prefix", prefix);
+  const result = run("npm", args, { capture: true });
+  if (result.ok && result.stdout.trim()) return path.resolve(expandHome(result.stdout.trim()));
+  return prefix ? fallbackNpmRoot(prefix) : undefined;
+}
+
+function nearestExistingPath(target) {
+  let current = target;
+  while (current && !fs.existsSync(current)) {
+    const parent = path.dirname(current);
+    if (parent === current) return undefined;
+    current = parent;
+  }
+  return current || undefined;
+}
+
+function canWriteOrCreate(target) {
+  const nearest = nearestExistingPath(target);
+  if (!nearest) return false;
+  try {
+    fs.accessSync(nearest, fs.constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function userNpmPrefix() {
+  return path.join(os.homedir(), ".pi", "npm-global");
+}
+
+function binForPrefix(prefix) {
+  return process.platform === "win32" ? prefix : path.join(prefix, "bin");
+}
+
+function prependPath(directory) {
+  process.env.PATH = `${directory}${path.delimiter}${process.env.PATH ?? ""}`;
+}
+
+function resolveNpmInstallTarget(options, needsGlobalInstall) {
+  const explicitPrefix = options.npmPrefix ? path.resolve(expandHome(options.npmPrefix)) : undefined;
+  if (explicitPrefix) {
+    if (!options.dryRun) fs.mkdirSync(explicitPrefix, { recursive: true });
+    return {
+      prefix: explicitPrefix,
+      root: npmRoot(explicitPrefix),
+      bin: binForPrefix(explicitPrefix),
+      reason: "explicit"
+    };
+  }
+
+  const defaultPrefix = configuredNpmPrefix();
+  const defaultRoot = npmRoot(defaultPrefix);
+  if (!needsGlobalInstall || (defaultRoot && canWriteOrCreate(defaultRoot))) {
+    return { prefix: undefined, root: defaultRoot, bin: undefined, reason: "default" };
+  }
+
+  const prefix = userNpmPrefix();
+  if (!options.dryRun) fs.mkdirSync(prefix, { recursive: true });
+  return {
+    prefix,
+    root: npmRoot(prefix),
+    bin: binForPrefix(prefix),
+    reason: "user-prefix",
+    blockedRoot: defaultRoot
+  };
+}
+
+function npmInstallArgs(specifier, npmTarget) {
+  const args = ["install", "-g", "--ignore-scripts"];
+  if (npmTarget.prefix) args.push("--prefix", npmTarget.prefix);
+  args.push(specifier);
+  return args;
+}
+
+function helperRootFromNpmTarget(npmTarget) {
+  return npmTarget.root ? path.join(npmTarget.root, "@piagent", "platform") : undefined;
+}
+
+function helperVersionAt(root) {
+  return root ? readJson(path.join(root, "package.json"))?.version : undefined;
+}
+
+function resolveInstalledHelperRoot(targetHelper, npmTarget) {
+  const npmHelperRoot = helperRootFromNpmTarget(npmTarget);
+  if (helperVersionAt(npmHelperRoot) === targetHelper) return npmHelperRoot;
+  if (helperVersionAt(platformRoot) === targetHelper) return platformRoot;
+  const checked = [];
+  for (const root of [npmHelperRoot, platformRoot]) {
+    if (!root || checked.some((entry) => entry.root === root)) continue;
+    checked.push({ root, version: helperVersionAt(root) ?? "nothing" });
+  }
+  const details = checked.map((entry) => `${entry.root} reports ${entry.version}`).join("; ");
+  fail(`installed ${HELPER_PACKAGE}@${targetHelper}, but ${details || "the helper paths did not report that version"}. `
+    + "The Pi package was left untouched; rerun once the helper is correct.");
+}
+
+function parseJsonOutput(result, label) {
+  try {
+    return JSON.parse(result.stdout.trim() || "{}");
+  } catch {
+    fail(`${label} did not return valid JSON:\n${result.stdout.trim()}`);
+  }
+}
+
+function summarizeMigration(report, dryRun) {
+  const renamed = report.renamed?.length ?? 0;
+  const removed = report.removedOld?.length ?? 0;
+  const rewrote = report.rewrote?.length ?? report.wouldRewrite?.length ?? 0;
+  const wouldRename = report.wouldRename?.length ?? 0;
+  const alreadyMigrated = report.alreadyMigrated?.length ?? 0;
+
+  if (dryRun) {
+    const planned = wouldRename + rewrote + alreadyMigrated;
+    return planned > 0
+      ? `project migration: would update legacy layout (${wouldRename} rename, ${rewrote} rewrite, ${alreadyMigrated} already copied)`
+      : "project migration: already current";
+  }
+  if (report.migrated === false) return "project migration: already current";
+  return `project migration: applied (${renamed} rename, ${rewrote} rewrite, ${removed} old path removed)`;
+}
+
+function runProjectMigration(project, options, activePlatformRoot) {
+  const migrator = path.join(activePlatformRoot, "scripts/migrate-project-state.mjs");
+  if (!options.dryRun && !fs.existsSync(migrator)) {
+    fail(`the updated helper has no project migrator at ${migrator}`);
+  }
+  const args = options.dryRun
+    ? [migrator, project]
+    : [migrator, project, "--apply", "--remove-old"];
+  describeStep(options.dryRun, process.execPath, args);
+  const result = run(process.execPath, args, { capture: true });
+  if (!result.ok) fail(`project migration failed:\n${result.stderr.trim() || result.stdout.trim()}`);
+  const report = parseJsonOutput(result, "project migration");
+  if ((report.skipped?.length ?? 0) > 0) {
+    fail(`project migration skipped protected entries: ${report.skipped.map((entry) => `${entry.path} (${entry.reason})`).join(", ")}`);
+  }
+  console.log(`  ${summarizeMigration(report, options.dryRun)}`);
 }
 
 function npmView(specifier, field) {
@@ -196,6 +374,9 @@ function main() {
   console.log(`  helper:  ${currentHelper} -> ${targetHelper}${helperNeedsChange ? "" : " (already current)"}`);
   console.log(`  host:    ${currentHost ?? "not installed"} -> ${targetHost}${hostNeedsChange ? "" : " (already current)"}`);
   console.log(`  package: reinstalled from v${targetHelper} as a resolved commit${options.package ? "" : " (skipped)"}`);
+  if (options.project) {
+    console.log(`  project: ${path.resolve(options.project)} (${options.migrate ? "migrate + doctor" : "doctor only"})`);
+  }
 
   if (options.check) {
     const pending = [helperNeedsChange && "helper", hostNeedsChange && "host"].filter(Boolean);
@@ -203,7 +384,7 @@ function main() {
     return;
   }
 
-  if (!helperNeedsChange && !hostNeedsChange && !options.package) {
+  if (!helperNeedsChange && !hostNeedsChange && !options.package && !options.project) {
     console.log("\nNothing to do.");
     return;
   }
@@ -215,33 +396,38 @@ function main() {
       + `  bash ${path.join(platformRoot, "scripts/install-global.sh")} --local`);
   }
 
+  let activePlatformRoot = platformRoot;
+  const npmTarget = resolveNpmInstallTarget(options, hostNeedsChange || helperNeedsChange);
+  if (npmTarget.bin) prependPath(npmTarget.bin);
+  if (npmTarget.reason === "user-prefix") {
+    console.log(`  npm:     default global root is not writable (${npmTarget.blockedRoot ?? "unknown"}); using ${npmTarget.prefix}`);
+  } else if (npmTarget.reason === "explicit") {
+    console.log(`  npm:     using explicit global prefix ${npmTarget.prefix}`);
+  }
+
   // Host first: piagent-install refuses to run against a host that does not match
   // the version its package.json pins, so a helper installed ahead of the host
   // would fail on its very next step.
   if (hostNeedsChange) {
-    const args = ["install", "-g", "--ignore-scripts", `${HOST_PACKAGE}@${targetHost}`];
+    const args = npmInstallArgs(`${HOST_PACKAGE}@${targetHost}`, npmTarget);
     describeStep(options.dryRun, "npm", args);
     if (!options.dryRun && !run("npm", args).ok) fail(`could not install ${HOST_PACKAGE}@${targetHost}`);
   }
 
   if (helperNeedsChange) {
-    const args = ["install", "-g", "--ignore-scripts", `${HELPER_PACKAGE}@${targetHelper}`];
+    const args = npmInstallArgs(`${HELPER_PACKAGE}@${targetHelper}`, npmTarget);
     describeStep(options.dryRun, "npm", args);
     if (!options.dryRun) {
       if (!run("npm", args).ok) fail(`could not install ${HELPER_PACKAGE}@${targetHelper}`);
       // The helper has just replaced itself on disk. Everything after this point
       // runs the newly installed scripts, so confirm they are the ones asked for
       // rather than trusting that npm did what it said.
-      const landed = readJson(path.join(platformRoot, "package.json"))?.version;
-      if (landed !== targetHelper) {
-        fail(`installed ${HELPER_PACKAGE}@${targetHelper} but ${platformRoot} reports ${landed ?? "nothing"}. `
-          + "The Pi package was left untouched; rerun once the helper is correct.");
-      }
+      activePlatformRoot = resolveInstalledHelperRoot(targetHelper, npmTarget);
     }
   }
 
   if (options.package) {
-    const installer = path.join(platformRoot, "scripts/install-global.sh");
+    const installer = path.join(activePlatformRoot, "scripts/install-global.sh");
     if (!options.dryRun && !fs.existsSync(installer)) {
       fail(`the updated helper has no installer at ${installer}`);
     }
@@ -251,10 +437,20 @@ function main() {
   }
 
   if (options.project) {
-    const doctor = path.join(platformRoot, "scripts/team-doctor.sh");
+    if (options.migrate) {
+      runProjectMigration(options.project, options, activePlatformRoot);
+    } else {
+      console.log("  project migration: skipped");
+    }
+    const doctor = path.join(activePlatformRoot, "scripts/team-doctor.sh");
     const args = [doctor, options.project, "--strict-share"];
     describeStep(options.dryRun, "bash", args);
     if (!options.dryRun && !run("bash", args).ok) fail("the team doctor reported a problem");
+  }
+
+  if (npmTarget.reason === "user-prefix") {
+    console.log(`\nPATH note: add this once if your shell cannot find piagent-* commands later:`);
+    console.log(`  export PATH="${npmTarget.bin}:$PATH"`);
   }
 
   console.log(options.dryRun

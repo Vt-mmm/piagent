@@ -33,7 +33,8 @@ function stageGlobalInstall({
   installedHost = "0.81.0",
   helperInstallLands = registryVersion,
   npmViewFails = false,
-  npmInstallFails = ""
+  npmInstallFails = "",
+  defaultPrefixWritable = true
 } = {}) {
   const root = temporaryDirectory();
   const platformRoot = path.join(root, "lib", "node_modules", "@piagent", "platform");
@@ -49,11 +50,30 @@ function stageGlobalInstall({
 
   const log = path.join(root, "commands.log");
   const bin = path.join(root, "bin");
+  const defaultNpmPrefix = defaultPrefixWritable ? root : path.join(root, "readonly-global");
+  if (!defaultPrefixWritable) {
+    fs.mkdirSync(path.join(defaultNpmPrefix, "lib", "node_modules"), { recursive: true });
+    fs.chmodSync(path.join(defaultNpmPrefix, "lib", "node_modules"), 0o555);
+  }
   fs.mkdirSync(bin, { recursive: true });
 
   const peers = registryPeers ?? { "@earendil-works/pi-coding-agent": registryHost };
   fs.writeFileSync(path.join(bin, "npm"), `#!/usr/bin/env bash
 printf 'npm %s\\n' "$*" >> ${JSON.stringify(log)}
+if [[ "$1" == "config" && "$2" == "get" && "$3" == "prefix" ]]; then
+  printf '%s\\n' ${JSON.stringify(defaultNpmPrefix)}
+  exit 0
+fi
+if [[ "$1" == "root" && "$2" == "-g" ]]; then
+  prefix=${JSON.stringify(defaultNpmPrefix)}
+  previous=""
+  for arg in "$@"; do
+    if [[ "$previous" == "--prefix" ]]; then prefix="$arg"; fi
+    previous="$arg"
+  done
+  printf '%s/lib/node_modules\\n' "$prefix"
+  exit 0
+fi
 if [[ "$1" == "view" ]]; then
   ${npmViewFails ? "exit 1" : ""}
   case "$3" in
@@ -65,9 +85,20 @@ if [[ "$1" == "view" ]]; then
 fi
 if [[ "$1" == "install" ]]; then
   ${npmInstallFails ? `if [[ "$*" == *${JSON.stringify(npmInstallFails)}* ]]; then exit 1; fi` : ""}
+  prefix=${JSON.stringify(defaultNpmPrefix)}
+  previous=""
+  for arg in "$@"; do
+    if [[ "$previous" == "--prefix" ]]; then prefix="$arg"; fi
+    previous="$arg"
+  done
   # Only the helper install rewrites the on-disk version, the way npm would.
   if [[ "$*" == *"@piagent/platform@"* ]]; then
-    printf '{\\n  "name": "@piagent/platform",\\n  "version": "%s"\\n}\\n' ${JSON.stringify(helperInstallLands)} > ${JSON.stringify(path.join(platformRoot, "package.json"))}
+    target="$prefix/lib/node_modules/@piagent/platform"
+    if [[ "$target" != ${JSON.stringify(platformRoot)} ]]; then
+      mkdir -p "$target"
+      cp -R ${JSON.stringify(platformRoot)}/. "$target"/
+    fi
+    printf '{\\n  "name": "@piagent/platform",\\n  "version": "%s"\\n}\\n' ${JSON.stringify(helperInstallLands)} > "$target/package.json"
   fi
   exit 0
 fi
@@ -84,6 +115,25 @@ printf '${script} %s\\n' "$*" >> ${JSON.stringify(log)}
 exit 0
 `);
   }
+  fs.writeFileSync(path.join(platformRoot, "scripts", "migrate-project-state.mjs"), `#!/usr/bin/env node
+import fs from "node:fs";
+fs.appendFileSync(${JSON.stringify(log)}, \`migrate-project-state.mjs \${process.argv.slice(2).join(" ")}\\n\`);
+if (process.argv.includes("--fail")) {
+  console.error("migration failed");
+  process.exit(1);
+}
+console.log(JSON.stringify({
+  ok: true,
+  projectPath: process.argv[2],
+  migrated: process.argv.includes("--apply"),
+  renamed: process.argv.includes("--apply") ? [{ from: ".pi/company-profile.json", to: ".pi/piagent-profile.json" }] : undefined,
+  rewrote: process.argv.includes("--apply") ? ["AGENTS.md"] : undefined,
+  removedOld: process.argv.includes("--remove-old") ? [".pi/company-profile.json"] : undefined,
+  wouldRename: process.argv.includes("--apply") ? undefined : [{ from: ".pi/company-profile.json", to: ".pi/piagent-profile.json" }],
+  wouldRewrite: process.argv.includes("--apply") ? undefined : ["AGENTS.md"],
+  skipped: []
+}));
+`);
   for (const file of ["npm", "pi"]) fs.chmodSync(path.join(bin, file), 0o755);
 
   return { root, platformRoot, bin, log };
@@ -92,7 +142,7 @@ exit 0
 function runUpdate(stage, args, { env = {} } = {}) {
   const result = spawnSync(process.execPath, [path.join(stage.platformRoot, "scripts/update-global.mjs"), ...args], {
     cwd: stage.root,
-    env: { ...process.env, ...env, PATH: `${stage.bin}${path.delimiter}/usr/bin${path.delimiter}/bin` },
+    env: { ...process.env, HOME: stage.root, ...env, PATH: `${stage.bin}${path.delimiter}/usr/bin${path.delimiter}/bin` },
     encoding: "utf8"
   });
   const commands = fs.existsSync(stage.log) ? fs.readFileSync(stage.log, "utf8").trim().split("\n").filter(Boolean) : [];
@@ -136,6 +186,17 @@ describe("piagent-update", () => {
     assert.equal(fs.existsSync(stage.log) && result.commands.some((l) => l.startsWith("install-global.sh")), false);
   });
 
+  it("previews project migration under --dry-run", () => {
+    const stage = stageGlobalInstall();
+    const result = runUpdate(stage, ["--dry-run", "--project", "/tmp/some-project"]);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.commands.some((line) => line === "migrate-project-state.mjs /tmp/some-project"), true, result.commands.join("\n"));
+    assert.equal(result.commands.some((line) => line === "team-doctor.sh /tmp/some-project --strict-share"), false, result.commands.join("\n"));
+    assert.match(result.stdout, /project migration: would update legacy layout/);
+    assert.match(result.stdout, /DRY RUN: bash .*team-doctor\.sh \/tmp\/some-project --strict-share/);
+  });
+
   // piagent-install refuses to run against a host that does not match the version
   // its own package.json pins, so a helper installed ahead of the host fails on
   // its very next step.
@@ -151,6 +212,18 @@ describe("piagent-update", () => {
     assert.ok(host < helper, `host must be installed before the helper: ${result.installs.join(" | ")}`);
     assert.ok(helper < pkg, `the helper must be replaced before its installer runs: ${result.installs.join(" | ")}`);
     assert.match(result.stdout, /PASS: updated to v1\.1\.4/);
+  });
+
+  it("uses a user-writable npm prefix when the default global root is locked", () => {
+    const stage = stageGlobalInstall({ defaultPrefixWritable: false });
+    const result = runUpdate(stage, []);
+
+    assert.equal(result.status, 0, result.stderr);
+    const userPrefix = path.join(stage.root, ".pi", "npm-global");
+    assert.match(result.stdout, /default global root is not writable/);
+    assert.match(result.stdout, /PATH note/);
+    assert.equal(result.installs.some((line) => line.includes(`--prefix ${userPrefix}`) && line.includes("@piagent/platform@1.1.4")), true, result.installs.join("\n"));
+    assert.match(result.stdout, new RegExp(`${userPrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}.*install-global\\.sh --stable`));
   });
 
   it("reads the required host from the version being installed, not the one running", () => {
@@ -249,11 +322,36 @@ describe("piagent-update", () => {
     assert.equal(installer, "install-global.sh --stable --no-mcp --mcp-preset core");
   });
 
-  it("runs the doctor against the project it was given", () => {
+  it("migrates then runs the doctor against the project it was given", () => {
     const stage = stageGlobalInstall();
     const result = runUpdate(stage, ["--project", "/tmp/some-project"]);
 
     assert.equal(result.status, 0, result.stderr);
+    const migration = result.commands.findIndex((line) => line === "migrate-project-state.mjs /tmp/some-project --apply --remove-old");
+    const doctor = result.commands.findIndex((line) => line === "team-doctor.sh /tmp/some-project --strict-share");
+    assert.ok(migration >= 0, result.commands.join("\n"));
+    assert.ok(doctor >= 0, result.commands.join("\n"));
+    assert.ok(migration < doctor, result.commands.join("\n"));
+    assert.match(result.stdout, /project migration: applied/);
+  });
+
+  it("can run the project doctor without migration", () => {
+    const stage = stageGlobalInstall();
+    const result = runUpdate(stage, ["--project", "/tmp/some-project", "--no-migrate"]);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.commands.some((line) => line.startsWith("migrate-project-state.mjs")), false, result.commands.join("\n"));
+    assert.equal(result.commands.some((line) => line === "team-doctor.sh /tmp/some-project --strict-share"), true, result.commands.join("\n"));
+    assert.match(result.stdout, /project migration: skipped/);
+  });
+
+  it("still performs project work when install steps are skipped", () => {
+    const current = { helperVersion: "1.1.4", registryVersion: "1.1.4", installedHost: "0.82.0" };
+    const result = runUpdate(stageGlobalInstall(current), ["--no-package", "--project", "/tmp/some-project"]);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.doesNotMatch(result.stdout, /Nothing to do/);
+    assert.equal(result.commands.some((line) => line === "migrate-project-state.mjs /tmp/some-project --apply --remove-old"), true, result.commands.join("\n"));
     assert.equal(result.commands.some((line) => line === "team-doctor.sh /tmp/some-project --strict-share"), true, result.commands.join("\n"));
   });
 
