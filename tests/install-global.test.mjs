@@ -293,6 +293,32 @@ describe("install-global release channels", () => {
     assert.ok(!included.stdout.includes("--no-mcp"), included.stdout);
   });
 
+  it("passes the subagents opt-out through setup instead of preserving an existing install", () => {
+    const skipped = runSetup([
+      "--global-only",
+      "--dry-run",
+      "--no-mcp",
+      "--no-subagents",
+      "--no-herdr",
+      "--no-model-scope"
+    ]);
+    assert.equal(skipped.status, 0, skipped.stderr);
+    assert.ok(skipped.stdout.includes("--no-subagents"), skipped.stdout);
+    assert.ok(!skipped.stdout.includes("--with-subagents"), skipped.stdout);
+
+    const included = runSetup([
+      "--global-only",
+      "--dry-run",
+      "--no-mcp",
+      "--with-subagents",
+      "--no-herdr",
+      "--no-model-scope"
+    ]);
+    assert.equal(included.status, 0, included.stderr);
+    assert.ok(included.stdout.includes("--with-subagents --subagents-preset safe"), included.stdout);
+    assert.ok(!included.stdout.includes("--no-subagents"), included.stdout);
+  });
+
   // The preset used to be read only at the last step, after the platform package
   // and the MCP adapter had already been installed, so a typo failed with a
   // half-configured machine behind it.
@@ -383,6 +409,47 @@ describe("install-global release channels", () => {
     assert.match(result.stdout, /\+ pi remove git:github\.com\/Vt-mmm\/piagent@1111111111111111111111111111111111111111/);
     assert.doesNotMatch(result.stdout, new RegExp(`\\+ pi remove ${otherLocalSource.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
     assert.match(result.stdout, new RegExp(`\\+ pi install git:github.com/Vt-mmm/piagent@${resolvedCommit}`));
+  });
+
+  it("refreshes owned add-ons and preserves an existing subagents install", () => {
+    const result = runInstaller(["--stable", "--dry-run", "--no-model-scope"], {
+      PI_INSTALL_FAKE_PI_LIST: [
+        "User packages:",
+        "  npm:pi-mcp-adapter@2.11.0",
+        "    /tmp/pi-mcp-adapter",
+        "  npm:pi-subagents@0.35.1",
+        "    /tmp/pi-subagents",
+        "Project packages:",
+        ""
+      ].join("\\n")
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /\+ pi remove npm:pi-mcp-adapter@2\.11\.0/);
+    assert.match(result.stdout, /\+ pi install npm:pi-mcp-adapter@2\.15\.0/);
+    assert.match(result.stdout, /\+ pi remove npm:pi-subagents@0\.35\.1/);
+    assert.match(result.stdout, /\+ pi install npm:pi-subagents@0\.38\.0/);
+  });
+
+  it("does not add subagents to a clean install unless requested", () => {
+    const result = runInstaller(["--stable", "--dry-run", "--no-model-scope"]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.doesNotMatch(result.stdout, /pi install npm:pi-subagents/);
+  });
+
+  it("honors an explicit request to leave an existing subagents install alone", () => {
+    const result = runInstaller(["--stable", "--dry-run", "--no-model-scope", "--no-subagents"], {
+      PI_INSTALL_FAKE_PI_LIST: [
+        "User packages:",
+        "  npm:pi-subagents@0.35.1",
+        "    /tmp/pi-subagents",
+        "Project packages:",
+        ""
+      ].join("\\n")
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.doesNotMatch(result.stdout, /pi (?:remove|install) npm:pi-subagents/);
   });
 });
 

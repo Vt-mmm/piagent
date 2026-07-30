@@ -57,7 +57,7 @@ describe("runtime advisory policy", () => {
     assert.match(scriptSource, /reason:/);
   });
 
-  it("passes when the only high advisory is the accepted one", () => {
+  it("passes when the only blocking advisory is the accepted one", () => {
     const result = run(report({
       vulnerabilities: advisory(ACCEPTED_PACKAGE, "high", ACCEPTED_ID),
       counts: { high: 1, total: 1 }
@@ -125,7 +125,7 @@ describe("runtime advisory policy", () => {
     }
   });
 
-  it("fails on a high advisory that carries no advisory id", () => {
+  it("fails on a blocking advisory that carries no advisory id", () => {
     // An unidentifiable finding cannot be matched against the accepted list, so
     // it must block rather than slip through unmatched.
     const result = run(report({
@@ -139,7 +139,7 @@ describe("runtime advisory policy", () => {
     assert.match(result.stderr, /no advisory id/);
   });
 
-  it("ignores advisories below high", () => {
+  it("fails on a moderate advisory", () => {
     const result = run(report({
       vulnerabilities: {
         ...advisory(ACCEPTED_PACKAGE, "high", ACCEPTED_ID),
@@ -147,7 +147,8 @@ describe("runtime advisory policy", () => {
       },
       counts: { high: 1, moderate: 1, total: 2 }
     }));
-    assert.equal(result.code, 0, result.stderr);
+    assert.equal(result.code, 1);
+    assert.match(result.stderr, /GHSA-1111-2222-3333/);
   });
 
   it("refuses an audit report shape it does not understand", () => {

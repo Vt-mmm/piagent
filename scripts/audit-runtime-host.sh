@@ -27,8 +27,8 @@ require_exact_peer() {
 PI_CODING_VERSION="$(require_exact_peer "@earendil-works/pi-coding-agent")"
 PI_AI_VERSION="$(require_exact_peer "@earendil-works/pi-ai")"
 TYPEBOX_VERSION="$(require_exact_peer "typebox")"
-PI_MCP_ADAPTER_VERSION="2.11.0"
-PI_SUBAGENTS_VERSION="0.35.1"
+PI_MCP_ADAPTER_VERSION="2.15.0"
+PI_SUBAGENTS_VERSION="0.38.0"
 PI_WEB_ACCESS_VERSION="0.13.0"
 
 if [[ "$PI_CODING_VERSION" != "$PI_AI_VERSION" ]]; then
@@ -60,7 +60,7 @@ const target = process.argv[2];
 fs.writeFileSync(target, `${JSON.stringify({ name: "piagent-runtime-audit", version: "0.0.0", private: true }, null, 2)}\n`);
 NODE
 
-echo "Auditing Pi host ${PI_CODING_VERSION} and pinned add-ons at severity high and above..."
+echo "Auditing Pi host ${PI_CODING_VERSION} and pinned add-ons at severity moderate and above..."
 (
   cd "$AUDIT_ROOT"
   npm install --package-lock-only --ignore-scripts --no-audit --no-fund \

@@ -229,8 +229,8 @@ if (commandExists("pi")) {
   const combined = `${piList.stdout ?? ""}\n${piList.stderr ?? ""}`;
   piHasMcpAdapter = combined.includes("pi-mcp-adapter");
   piHasSubagents = combined.includes("pi-subagents");
-  if (!piHasMcpAdapter) warnings.push("Pi MCP adapter not found in `pi list`; run setup with --with-mcp or `pi install npm:pi-mcp-adapter@2.11.0`");
-  if (!piHasSubagents) warnings.push("Pi subagents package not found in `pi list`; run setup with --with-subagents or `pi install npm:pi-subagents@0.35.1`");
+  if (!piHasMcpAdapter) warnings.push("Pi MCP adapter not found in `pi list`; run setup with --with-mcp or `pi install npm:pi-mcp-adapter@2.15.0`");
+  if (!piHasSubagents) warnings.push("Pi subagents package not found in `pi list`; run setup with --with-subagents or `pi install npm:pi-subagents@0.38.0`");
 }
 
 const mcpFiles = [

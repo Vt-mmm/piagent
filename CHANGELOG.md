@@ -2,6 +2,20 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.2.7 - 2026-07-31
+
+### Security
+
+- Updated the pinned MCP and subagent add-ons to `pi-mcp-adapter@2.15.0` and `pi-subagents@0.38.0`. Their resolved runtime tree uses patched `fast-uri@3.1.4`, `@hono/node-server@2.0.12`, and MCP SDK `1.30.0`; a clean resolution reports no add-on advisories.
+
+- Raised the runtime release gate from high/critical to moderate/high/critical. The only remaining accepted finding is the separately documented `brace-expansion` denial of service pinned inside Pi host `0.82.0`.
+
+### Fixed
+
+- Global install/update now removes older registrations for platform-owned MCP and subagent add-ons before installing their reviewed exact versions. This forces npm to refresh stale transitive dependencies instead of retaining a vulnerable version from an older shared Pi package lock.
+
+- An existing `pi-subagents` installation is detected and upgraded during a normal platform update. Clean machines still require `--with-subagents`, and `--no-subagents` remains an explicit opt-out.
+
 ## v1.2.6 - 2026-07-31
 
 ### Added

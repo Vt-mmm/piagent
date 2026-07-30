@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  scripts/install-global.sh [--stable|--dev|--local|--channel <stable|dev|local>] [--version <tag>] [--resolve-tag] [--package-source <source>] [--dry-run] [--with-mcp|--no-mcp] [--mcp-preset <preset>] [--with-subagents] [--subagents-preset <preset>] [--with-web-access] [--with-herdr] [--model-scope <preset>]
+  scripts/install-global.sh [--stable|--dev|--local|--channel <stable|dev|local>] [--version <tag>] [--resolve-tag] [--package-source <source>] [--dry-run] [--with-mcp|--no-mcp] [--mcp-preset <preset>] [--with-subagents|--no-subagents] [--subagents-preset <preset>] [--with-web-access] [--with-herdr] [--model-scope <preset>]
 
 Purpose:
   Install the piagent Pi package into the current user's global Pi settings.
@@ -39,6 +39,8 @@ Notes:
     Skip it with --no-mcp. Writing the config does not start or authenticate anything:
     the GitHub server additionally needs Docker running and GITHUB_PERSONAL_ACCESS_TOKEN
     exported, and Chrome DevTools needs a local Chrome.
+  - An existing pi-subagents install is preserved and upgraded automatically.
+    New installs remain opt-in with --with-subagents; use --no-subagents to skip an existing install.
   - Subagents preset defaults to safe: compact tool description, bounded concurrency/depth.
   - Web access is optional. Install it only when you want the builtin `researcher` subagent to browse/fetch web sources inside Pi.
 USAGE
@@ -57,6 +59,7 @@ WITH_MCP=true
 MCP_PRESET="core"
 MCP_PRESET_EXPLICIT=false
 WITH_SUBAGENTS=false
+SUBAGENTS_EXPLICIT=false
 SUBAGENTS_PRESET="safe"
 SUBAGENTS_MODEL_SCOPE="none"
 WITH_WEB_ACCESS=false
@@ -71,11 +74,11 @@ RESOLVE_TAG=false
 RESOLVED_PACKAGE_TAG=""
 RESOLVED_PACKAGE_COMMIT=""
 CLI_PACKAGE_SELECTOR=""
-PI_MCP_ADAPTER_SOURCE="npm:pi-mcp-adapter@2.11.0"
-PI_SUBAGENTS_SOURCE="npm:pi-subagents@0.35.1"
+PI_MCP_ADAPTER_SOURCE="npm:pi-mcp-adapter@2.15.0"
+PI_SUBAGENTS_SOURCE="npm:pi-subagents@0.38.0"
 PI_WEB_ACCESS_SOURCE="npm:pi-web-access@0.13.0"
-PI_MCP_ADAPTER_INTEGRITY="sha512-4Y/eLbhbxnRih519dJUxMyQ5QASvPcdWyBlS8+dDXteAzaMuLnd4nMTWgoZw3JRIW+0r93KAQcz1Rbli4xCwEQ=="
-PI_SUBAGENTS_INTEGRITY="sha512-nIH6liO541FZ1RoeEu58Ligd59tiNw0/ODPgHh7uvx9Dk4UpWH08F84/l1+hXCzUgC85OCmyVtngWkZjcK94Cg=="
+PI_MCP_ADAPTER_INTEGRITY="sha512-HJAVt2I5IB52pKpSUYbVJnzOmuXYBCc/ZrI9ylHxYQWmE7p75j7aWzsHe734EFN+gL7WaM23CTX3eYHz2THKBA=="
+PI_SUBAGENTS_INTEGRITY="sha512-8wGQiX6rkR5J4V+AnWtQg3+LmC+cHnZIM1f/VWTjCTkVmcoKdeLsTAYG6BS2yKAugyEUjNUGj3vE5d9nj9m61A=="
 PI_WEB_ACCESS_INTEGRITY="sha512-ny0bHisMWdobmu1hcMp/jqjaRh6pYrH7dctBK2CVyRF4ia7bP47RnOPYdG1yiks9ohtcanWir5Hl9EFap8h0zQ=="
 
 require_value() {
@@ -226,13 +229,40 @@ remove_existing_piagent_platform_sources() {
     if is_piagent_platform_source "$source"; then
       run_cmd pi remove "$source"
     fi
-  done < <(
-    pi list --approve 2>/dev/null | awk '
-      $0 == "User packages:" { in_user = 1; next }
-      $0 == "Project packages:" { in_user = 0; next }
-      in_user && $0 ~ /^  [^ ]/ { sub(/^  /, ""); print }
-    '
-  )
+  done < <(list_user_pi_sources)
+}
+
+list_user_pi_sources() {
+  pi list --approve 2>/dev/null | awk '
+    $0 == "User packages:" { in_user = 1; next }
+    $0 == "Project packages:" { in_user = 0; next }
+    in_user && $0 ~ /^  [^ ]/ { sub(/^  /, ""); print }
+  '
+}
+
+has_user_npm_package_source() {
+  local package_name="$1"
+  local source
+  while IFS= read -r source; do
+    case "$source" in
+      "npm:${package_name}"|"npm:${package_name}@"*)
+        return 0
+        ;;
+    esac
+  done < <(list_user_pi_sources)
+  return 1
+}
+
+remove_existing_npm_package_sources() {
+  local package_name="$1"
+  local source
+  while IFS= read -r source; do
+    case "$source" in
+      "npm:${package_name}"|"npm:${package_name}@"*)
+        run_cmd pi remove "$source"
+        ;;
+    esac
+  done < <(list_user_pi_sources)
 }
 
 verify_npm_integrity() {
@@ -348,6 +378,12 @@ while [[ $# -gt 0 ]]; do
       ;;
     --with-subagents)
       WITH_SUBAGENTS=true
+      SUBAGENTS_EXPLICIT=true
+      shift
+      ;;
+    --no-subagents)
+      WITH_SUBAGENTS=false
+      SUBAGENTS_EXPLICIT=true
       shift
       ;;
     --subagents-preset)
@@ -542,6 +578,10 @@ else
   fi
 fi
 
+if [[ "$SUBAGENTS_EXPLICIT" == false ]] && command -v pi >/dev/null 2>&1 && has_user_npm_package_source "pi-subagents"; then
+  WITH_SUBAGENTS=true
+fi
+
 echo "Installing Pi Agent Platform package:"
 echo "  channel: $RESOLVED_CHANNEL_LABEL"
 echo "  currentRelease: $CURRENT_RELEASE_TAG (helper package version)"
@@ -562,6 +602,7 @@ if [[ "$WITH_MCP" == true ]]; then
   if [[ "$DRY_RUN" == false ]]; then
     verify_npm_integrity "$PI_MCP_ADAPTER_SOURCE" "$PI_MCP_ADAPTER_INTEGRITY"
   fi
+  remove_existing_npm_package_sources "pi-mcp-adapter"
   run_cmd pi install "$PI_MCP_ADAPTER_SOURCE"
   if [[ "$DRY_RUN" == false ]] && command -v pi-mcp-adapter >/dev/null 2>&1; then
     pi-mcp-adapter init || true
@@ -575,6 +616,7 @@ if [[ "$WITH_SUBAGENTS" == true ]]; then
   if [[ "$DRY_RUN" == false ]]; then
     verify_npm_integrity "$PI_SUBAGENTS_SOURCE" "$PI_SUBAGENTS_INTEGRITY"
   fi
+  remove_existing_npm_package_sources "pi-subagents"
   run_cmd pi install "$PI_SUBAGENTS_SOURCE"
   echo "Configuring Pi subagents baseline:"
   run_cmd bash "$PLATFORM_ROOT/scripts/configure-subagents.sh" --preset "$SUBAGENTS_PRESET" --model-scope "$SUBAGENTS_MODEL_SCOPE"

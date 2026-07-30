@@ -344,11 +344,11 @@ require_documented "auto-delegation" "$ROOT/README.md" "$ROOT/docs" "$ROOT/packa
 require_documented "Subagents used/not used" "$ROOT/packages/piagent-core/prompts" "$ROOT/docs/auto-delegation-policy.md"
 require_documented "Subagent orchestration capabilities" "$ROOT/README.md" "$ROOT/docs/subagent-orchestration-capabilities.md"
 require_documented "pi-web-access" "$ROOT/README.md" "$ROOT/docs" "$ROOT/scripts/install-global.sh" "$ROOT/scripts/setup.sh"
-grep -F 'PI_MCP_ADAPTER_SOURCE="npm:pi-mcp-adapter@2.11.0"' "$ROOT/scripts/install-global.sh" >/dev/null
-grep -F 'PI_SUBAGENTS_SOURCE="npm:pi-subagents@0.35.1"' "$ROOT/scripts/install-global.sh" >/dev/null
+grep -F 'PI_MCP_ADAPTER_SOURCE="npm:pi-mcp-adapter@2.15.0"' "$ROOT/scripts/install-global.sh" >/dev/null
+grep -F 'PI_SUBAGENTS_SOURCE="npm:pi-subagents@0.38.0"' "$ROOT/scripts/install-global.sh" >/dev/null
 grep -F 'PI_WEB_ACCESS_SOURCE="npm:pi-web-access@0.13.0"' "$ROOT/scripts/install-global.sh" >/dev/null
-grep -F 'PI_MCP_ADAPTER_VERSION="2.11.0"' "$ROOT/scripts/audit-runtime-host.sh" >/dev/null
-grep -F 'PI_SUBAGENTS_VERSION="0.35.1"' "$ROOT/scripts/audit-runtime-host.sh" >/dev/null
+grep -F 'PI_MCP_ADAPTER_VERSION="2.15.0"' "$ROOT/scripts/audit-runtime-host.sh" >/dev/null
+grep -F 'PI_SUBAGENTS_VERSION="0.38.0"' "$ROOT/scripts/audit-runtime-host.sh" >/dev/null
 grep -F 'PI_WEB_ACCESS_VERSION="0.13.0"' "$ROOT/scripts/audit-runtime-host.sh" >/dev/null
 node --input-type=module - "$ROOT/scripts/install-global.sh" "$ROOT/scripts/audit-runtime-host.sh" <<'NODE'
 import fs from "node:fs";

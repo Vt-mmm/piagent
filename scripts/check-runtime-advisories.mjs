@@ -2,7 +2,8 @@
 
 // Applies the runtime advisory policy to `npm audit --json` read from stdin.
 //
-// The rule is still "no high or critical advisory in the pinned Pi host tree".
+// The rule is "no moderate, high, or critical advisory in the pinned Pi host
+// and add-on tree".
 // What this adds is a way to accept one named advisory when there is provably
 // nothing to do about it, without lowering the bar for everything else.
 //
@@ -77,7 +78,7 @@ if (report.auditReportVersion !== 2) {
 const blocking = [];
 const seen = new Set();
 for (const [name, vulnerability] of Object.entries(report.vulnerabilities ?? {})) {
-  if (!["high", "critical"].includes(vulnerability.severity)) continue;
+  if (!["moderate", "high", "critical"].includes(vulnerability.severity)) continue;
   const ids = advisoryIdsFor(vulnerability);
   if (ids.length === 0) {
     blocking.push({ name, severity: vulnerability.severity, id: "(no advisory id)" });
@@ -110,5 +111,5 @@ if (failures.length > 0) {
 
 const counts = report.metadata?.vulnerabilities ?? {};
 const acceptedList = ACCEPTED.map((entry) => `${entry.id} (review by ${entry.reviewBy})`).join(", ");
-console.log(`PASS: no unaccepted high or critical advisory (${counts.high ?? 0} high, ${counts.critical ?? 0} critical)`);
+console.log(`PASS: no unaccepted moderate, high, or critical advisory (${counts.moderate ?? 0} moderate, ${counts.high ?? 0} high, ${counts.critical ?? 0} critical)`);
 if (acceptedList) console.log(`Accepted, with reasons recorded in scripts/check-runtime-advisories.mjs: ${acceptedList}`);
