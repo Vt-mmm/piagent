@@ -48,7 +48,7 @@ Nếu chỉ cài global:
 
 ```bash
 pi install git:github.com/Vt-mmm/piagent
-pi install npm:pi-subagents@0.35.1
+pi install npm:pi-subagents@0.38.0
 bash /path/to/piagent/scripts/configure-subagents.sh --preset safe
 ```
 

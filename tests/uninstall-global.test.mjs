@@ -99,7 +99,7 @@ describe("uninstall", () => {
   });
 
   it("removes the pinned add-ons only when asked", () => {
-    const packages = ["npm:@piagent/platform@1.0.2", "npm:pi-mcp-adapter@2.11.0", "npm:pi-subagents@0.35.1"];
+    const packages = ["npm:@piagent/platform@1.0.2", "npm:pi-mcp-adapter@2.15.0", "npm:pi-subagents@0.38.0"];
 
     const without = scratch();
     run(["--apply"], { root: without, agent: agentDir(without, packages) });
@@ -109,8 +109,8 @@ describe("uninstall", () => {
     const withAddons = scratch();
     run(["--apply", "--with-addons"], { root: withAddons, agent: agentDir(withAddons, packages) });
     const withCalls = fs.readFileSync(path.join(withAddons, "pi-calls.log"), "utf8");
-    assert.match(withCalls, /remove npm:pi-mcp-adapter@2\.11\.0/);
-    assert.match(withCalls, /remove npm:pi-subagents@0\.35\.1/);
+    assert.match(withCalls, /remove npm:pi-mcp-adapter@2\.15\.0/);
+    assert.match(withCalls, /remove npm:pi-subagents@0\.38\.0/);
   });
 
   it("removes platform project state but never operator data", () => {

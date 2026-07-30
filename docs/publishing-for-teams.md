@@ -59,6 +59,7 @@ pi install /path/to/piagent
 - `1.2.4`: update global có fallback về user-writable npm prefix và project migration/doctor là bước hậu kiểm tùy chọn.
 - `1.2.5`: updater đọc đúng metadata singleton-array của npm 12.
 - `1.2.6`: Context Engine v2, dynamic tool loading, hard-budget retrieval, semantic compaction, Agent Watch telemetry/feedback và quality benchmark theo context efficiency.
+- `1.2.7`: refresh exact MCP/subagent add-on pins, loại dependency URL/static-server có advisory và chặn cả moderate advisory trong runtime release gate.
 
 ## Không publish
 
