@@ -452,12 +452,13 @@ if [[ "$DO_PROJECT" == true ]]; then
   echo "  /scoped-models     # optional: edit Ctrl+P model cycle scope"
   echo "  /mcp               # inspect MCP servers; run /mcp setup for guided changes"
   echo "  /subagents-doctor  # inspect subagent setup"
-  echo "  /onboard-project   # first project-read snapshot before implementation"
-  echo "  /memory-policy     # inspect project memory policy when needed"
+  echo "  /onboard   # open onboarding menu/status"
+  echo "  /onboard run # first project-read snapshot before implementation"
+  echo "  /memory    # inspect project memory policy when needed"
 fi
 echo
 echo "Daily flow after setup:"
 echo "  herdr    # optional"
 echo "  cd <project>"
 echo "  pi"
-echo "  /task Implement <task>  # parent may auto-delegate scout/planner/reviewer"
+echo "  /workflow task Implement <task>  # parent may auto-delegate scout/planner/reviewer"

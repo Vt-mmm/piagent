@@ -178,6 +178,50 @@ run_cmd() {
   fi
 }
 
+resolve_user_package_path() {
+  local source="$1"
+  local pi_agent_dir="${PI_CODING_AGENT_DIR:-"${HOME}/.pi/agent"}"
+  node --input-type=module - "$pi_agent_dir" "$source" <<'NODE'
+import path from "node:path";
+
+const base = process.argv[2];
+const source = process.argv[3];
+console.log(path.resolve(base, source));
+NODE
+}
+
+is_piagent_platform_source() {
+  local source="$1"
+  case "$source" in
+    git:github.com/Vt-mmm/piagent|git:github.com/Vt-mmm/piagent@*|https://github.com/Vt-mmm/piagent*|npm:@piagent/platform|npm:@piagent/platform@*)
+      return 0
+      ;;
+    npm:*|git:*|http:*|https:*)
+      return 1
+      ;;
+  esac
+
+  local resolved_source
+  resolved_source="$(resolve_user_package_path "$source" 2>/dev/null || true)"
+  [[ "$resolved_source" == "$PLATFORM_ROOT" ]]
+}
+
+remove_existing_piagent_platform_sources() {
+  local source
+  while IFS= read -r source; do
+    [[ -n "$source" ]] || continue
+    if is_piagent_platform_source "$source"; then
+      run_cmd pi remove "$source"
+    fi
+  done < <(
+    pi list --approve 2>/dev/null | awk '
+      $0 == "User packages:" { in_user = 1; next }
+      $0 == "Project packages:" { in_user = 0; next }
+      in_user && $0 ~ /^  [^ ]/ { sub(/^  /, ""); print }
+    '
+  )
+}
+
 verify_npm_integrity() {
   local source="$1"
   local expected="$2"
@@ -496,6 +540,8 @@ if [[ -n "$RESOLVED_PACKAGE_COMMIT" ]]; then
   echo "  resolvedCommit: $RESOLVED_PACKAGE_COMMIT"
 fi
 echo "  source: $PACKAGE_SOURCE"
+echo "Removing previous Pi Agent Platform package registrations:"
+remove_existing_piagent_platform_sources
 run_cmd pi install "$PACKAGE_SOURCE"
 
 if [[ "$WITH_MCP" == true ]]; then
@@ -562,4 +608,4 @@ if [[ "$WITH_MCP" == true ]]; then
   echo "  /mcp            # inspect MCP servers; authenticate Figma/GitHub only when needed"
 fi
 echo "  /subagents-doctor"
-echo "  /task Implement <task>  # parent may auto-delegate scout/planner/reviewer"
+echo "  /workflow task Implement <task>  # parent may auto-delegate scout/planner/reviewer"

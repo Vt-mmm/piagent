@@ -27,7 +27,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.2.2 docs</span>
+        <span class="pill"><span class="pill-dot"></span>v1.2.3 docs</span>
         <a class="button social" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer" aria-label="Mở GitHub repository">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
@@ -95,7 +95,7 @@
 <section class="section">
   <div class="callout ok-callout">
     <strong>Git trong Pi Agent</strong>
-    <p>Không có namespace <span class="inline-code">/git</span> riêng. Dùng <span class="inline-code">/commit</span> để commit local đã review, dùng <span class="inline-code">/pr</span> để chuẩn bị PR. Các hành động như <span class="inline-code">git push</span> hoặc stage rộng <span class="inline-code">git add -A</span> vẫn cần operator xác nhận.</p>
+    <p>Không có namespace <span class="inline-code">/git</span> riêng. Dùng <span class="inline-code">/workflow commit</span> để commit local đã review, dùng <span class="inline-code">/workflow pr</span> để chuẩn bị PR. Các hành động như <span class="inline-code">git push</span> hoặc stage rộng <span class="inline-code">git add -A</span> vẫn cần operator xác nhận.</p>
   </div>
 
   <div class="callout">
@@ -105,37 +105,37 @@
 
   <div class="command-grid">
     <article class="command-card">
-      <header><span>Implementation bounded</span><button class="clip-btn" data-clip="/task Fix the failing checkout test and verify.">Lấy lệnh</button></header>
-      <pre><code>/task Fix the failing checkout test and verify.</code></pre>
+      <header><span>Implementation bounded</span><button class="clip-btn" data-clip="/workflow task Fix the failing checkout test and verify.">Lấy lệnh</button></header>
+      <pre><code>/workflow task Fix the failing checkout test and verify.</code></pre>
     </article>
     <article class="command-card">
-      <header><span>Read-only scout</span><button class="clip-btn" data-clip="/scout Map the auth flow and risk areas.">Lấy lệnh</button></header>
-      <pre><code>/scout Map the auth flow and risk areas.</code></pre>
+      <header><span>Read-only scout</span><button class="clip-btn" data-clip="/workflow scout Map the auth flow and risk areas.">Lấy lệnh</button></header>
+      <pre><code>/workflow scout Map the auth flow and risk areas.</code></pre>
     </article>
     <article class="command-card">
-      <header><span>Plan trước khi code</span><button class="clip-btn" data-clip="/plan Add multi-tenant billing support.">Lấy lệnh</button></header>
-      <pre><code>/plan Add multi-tenant billing support.</code></pre>
+      <header><span>Plan trước khi code</span><button class="clip-btn" data-clip="/workflow plan Add multi-tenant billing support.">Lấy lệnh</button></header>
+      <pre><code>/workflow plan Add multi-tenant billing support.</code></pre>
     </article>
     <article class="command-card">
-      <header><span>Review diff</span><button class="clip-btn" data-clip="/review">Lấy lệnh</button></header>
-      <pre><code>/review</code></pre>
+      <header><span>Review diff</span><button class="clip-btn" data-clip="/workflow review current diff">Lấy lệnh</button></header>
+      <pre><code>/workflow review current diff</code></pre>
     </article>
     <article class="command-card">
-      <header><span>Commit local có guard</span><button class="clip-btn" data-clip="/commit &quot;feat: add guarded git workflow&quot;">Lấy lệnh</button></header>
-      <pre><code>/commit "feat: add guarded git workflow"</code></pre>
+      <header><span>Commit local có guard</span><button class="clip-btn" data-clip="/workflow commit &quot;feat: add guarded git workflow&quot;">Lấy lệnh</button></header>
+      <pre><code>/workflow commit "feat: add guarded git workflow"</code></pre>
     </article>
     <article class="command-card">
-      <header><span>Chuẩn bị pull request</span><button class="clip-btn" data-clip="/pr &quot;Prepare PR for guarded git workflow&quot;">Lấy lệnh</button></header>
-      <pre><code>/pr "Prepare PR for guarded git workflow"</code></pre>
+      <header><span>Chuẩn bị pull request</span><button class="clip-btn" data-clip="/workflow pr &quot;Prepare PR for guarded git workflow&quot;">Lấy lệnh</button></header>
+      <pre><code>/workflow pr "Prepare PR for guarded git workflow"</code></pre>
     </article>
     <article class="command-card">
-      <header><span>Backend spec sang frontend</span><button class="clip-btn" data-clip="/be-to-fe Implement frontend support for the new user status endpoint.">Lấy lệnh</button></header>
+      <header><span>Backend spec sang frontend</span><button class="clip-btn" data-clip="/profile be-readonly-fe&#10;/workflow be-to-fe Implement frontend support for the new user status endpoint.">Lấy lệnh</button></header>
       <pre><code>/profile be-readonly-fe
-/be-to-fe Implement frontend support for the new user status endpoint.</code></pre>
+/workflow be-to-fe Implement frontend support for the new user status endpoint.</code></pre>
     </article>
     <article class="command-card">
-      <header><span>Cải thiện platform</span><button class="clip-btn" data-clip="/platform-improve Harden command docs and run verification.">Lấy lệnh</button></header>
-      <pre><code>/platform-improve Harden command docs and run verification.</code></pre>
+      <header><span>Cải thiện platform</span><button class="clip-btn" data-clip="/workflow platform-improve Harden command docs and run verification.">Lấy lệnh</button></header>
+      <pre><code>/workflow platform-improve Harden command docs and run verification.</code></pre>
     </article>
   </div>
 </section>

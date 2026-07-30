@@ -11,11 +11,11 @@ $ARGUMENTS
 
 Mandatory flow:
 
-0. Call `piagent_context_preflight` with `workflow=task`. If it recommends `fresh-session`, stop loading context in this session and tell the user to use `/fresh-task <request>` unless this command already runs in a fresh session.
+0. Call `piagent_context_preflight` with `workflow=task`. If it recommends `fresh-session`, stop loading context in this session and tell the user to use `/piagent-session fresh task <request>` unless this command already runs in a fresh session.
 1. Call `piagent_context` and read the project profile/runtime policy.
 2. Call `piagent_orchestration_policy` and keep the task solo-first unless the policy and task shape make bounded subagents clearly useful.
 3. Call `piagent_memory_status`. If memory or the Field Guide is enabled and relevant to the task, search/read it as advisory context, record citations with `piagent_memory_citation_record`, then verify against current repo files.
-4. Call `piagent_context_index_status` when available, then read `.pi/project-context.md`. If `.pi/project-context.md` is missing or still says `Generated: not yet`, stop and ask the user to run `/onboard-project` after login/model selection before implementation.
+4. Call `piagent_context_index_status` when available, then read `.pi/project-context.md`. If `.pi/project-context.md` is missing or still says `Generated: not yet`, stop and ask the user to run `/onboard-project run` after login/model selection before implementation.
    - Use `piagent_context_index_search` for navigation hints when the task touches an unfamiliar module/tech/risk area.
    - Treat context-index hits as advisory; open and verify cited files before editing.
 5. Build a Task Implementation Contract with `piagent_task_start` before editing:

@@ -110,9 +110,12 @@ Mode hiện tại:
 
 ```text
 /login
-/onboard-project
-/memory-policy
+/onboard
+/onboard run
+/memory
 ```
+
+`/memory-policy` vẫn là alias để xem cùng runtime status.
 
 ### Ghi nhớ explicit
 
@@ -125,7 +128,7 @@ Agent nên gọi `piagent_memory_note` với category `preference`.
 ### Trước implementation
 
 1. `piagent_context`
-2. `piagent_context_index_status` hoặc `/context-index` để lấy điểm vào repo nếu đã onboard
+2. `piagent_context_index_status` hoặc `/context index` để lấy điểm vào repo nếu đã onboard
 3. `piagent_memory_status`
 4. `piagent_memory_search` nếu task có keyword liên quan
 5. đọc repo files hiện tại để verify

@@ -80,13 +80,13 @@ Manifest data never executes code. Invalid paths, symbolic links, dependency cyc
 
 | Capability | Implementation |
 |---|---|
-| Project onboarding | `/onboard-project` + `piagent_project_onboarding_record` |
-| Project context index | `/context-index` + `piagent_context_index_*` |
+| Project onboarding | `/onboard run` + `piagent_project_onboarding_record` |
+| Project context index | `/context` + `piagent_context_index_*` |
 | Profile switching | `/profile` + `piagent_profile_options` / `piagent_profile_apply` |
-| Explicit memory | `/memory-policy` + `piagent_memory_*` |
-| Task lifecycle | `/task` + task/context/verify/trace tools |
-| Platform workflow | `/platform-improve` |
-| Backend-readonly to frontend | `/be-to-fe` |
+| Explicit memory | `/memory` + `piagent_memory_*` |
+| Task lifecycle | `/workflow task` + task/context/verify/trace tools |
+| Platform workflow | `/workflow platform-improve` |
+| Backend-readonly to frontend | `/workflow be-to-fe` |
 | Source cache | `piagent-source-cache` + `piagent_source_checkout` |
 | Subagent roles | `piagent-scout`, `piagent-planner`, `piagent-worker`, `piagent-reviewer`, `piagent-oracle` |
 | Quality benchmark | `scripts/quality-benchmark.sh` |

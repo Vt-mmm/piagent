@@ -198,7 +198,7 @@ if (contextIndex.enabled && contextIndex.writePolicy !== "off") {
   if (relativeIndexPath.startsWith("..") || path.isAbsolute(relativeIndexPath)) {
     errors.push(`contextIndex.path escapes project root: ${contextIndex.path}`);
   } else if (!fs.existsSync(indexPath)) {
-    warnings.push(`context index missing: ${contextIndex.path}; run /onboard-project or record piagent_context_index_record`);
+    warnings.push(`context index missing: ${contextIndex.path}; run /onboard run or record piagent_context_index_record`);
   }
 }
 

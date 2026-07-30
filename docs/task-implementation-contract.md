@@ -131,7 +131,7 @@ Use piagent_context first.
 Use piagent_orchestration_policy; default to solo-first, create a compact task tree, and choose review lenses before spawning subagents.
 Use piagent_context_index_status/search as advisory navigation when available; verify cited files before editing.
 Use piagent_memory_status and search memory when relevant; memory is advisory only.
-Read .pi/project-context.md; if it is pending, stop and request /onboard-project.
+Read .pi/project-context.md; if it is pending, stop and request /onboard run.
 Create a Task Implementation Contract with piagent_task_start.
 Check large context with piagent_context_budget.
 Check complex/high-impact shell with piagent_exec_policy_check.
@@ -193,8 +193,8 @@ Exact command identity matters. If the task profile says `npm test`, record `npm
 
 ## Named implementation recipes
 
-- `/platform-improve`: dùng cho task cải tiến setup, docs, prompt, MCP, model, memory, runtime policy, hoặc subagent workflow của platform.
-- `/be-to-fe`: dùng cho task scout BE contract read-only rồi implement FE.
-- `/memory-policy`: dùng cho task kiểm tra/ghi nhớ explicit project memory.
+- `/workflow platform-improve`: dùng cho task cải tiến setup, docs, prompt, MCP, model, memory, runtime policy, hoặc subagent workflow của platform.
+- `/workflow be-to-fe`: dùng cho task scout BE contract read-only rồi implement FE.
+- `/memory`: dùng cho task kiểm tra/ghi nhớ explicit project memory.
 
 Hai recipe này vẫn phải tạo/giữ Task Implementation Contract khi có source writes.

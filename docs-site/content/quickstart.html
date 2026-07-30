@@ -4,7 +4,7 @@
     <article class="step">
       <div>
         <h3 id="cai-hai-lenh">Cài — hai lệnh</h3>
-        <p>Cần Node.js 22.19.0 trở lên. Không cần cài Pi Coding Agent trước: <span class="inline-code">piagent-setup</span> tự cài đúng bản <span class="inline-code">0.82.0</span> mà release <span class="inline-code">v1.2.2</span> đang pin. Chạy nó ngay trong thư mục project — nó cài Pi package, khởi tạo <span class="inline-code">.pi/</span>, cài MCP baseline cùng subagents, rồi chạy doctor. Thêm <span class="inline-code">--no-mcp</span>, <span class="inline-code">--no-subagents</span>, <span class="inline-code">--no-herdr</span> hoặc <span class="inline-code">--global-only</span> để bỏ bớt.</p>
+        <p>Cần Node.js 22.19.0 trở lên. Không cần cài Pi Coding Agent trước: <span class="inline-code">piagent-setup</span> tự cài đúng bản <span class="inline-code">0.82.0</span> mà release <span class="inline-code">v1.2.3</span> đang pin. Chạy nó ngay trong thư mục project — nó cài Pi package, khởi tạo <span class="inline-code">.pi/</span>, cài MCP baseline cùng subagents, rồi chạy doctor. Thêm <span class="inline-code">--no-mcp</span>, <span class="inline-code">--no-subagents</span>, <span class="inline-code">--no-herdr</span> hoặc <span class="inline-code">--global-only</span> để bỏ bớt.</p>
         <div class="table-wrap compact-table">
           <table>
             <thead>
@@ -66,10 +66,11 @@ pi</code></pre>
     <article class="step">
       <div>
         <h3 id="onboard-context">Onboard context</h3>
-        <p>Chạy một lần ở repo mới để ghi context, verify matrix và protected areas vào <span class="inline-code">.pi/</span>.</p>
+        <p>Chạy một lần ở repo mới để ghi context, verify matrix và protected areas vào <span class="inline-code">.pi/</span>. <span class="inline-code">/onboard</span> mở menu/status; <span class="inline-code">run</span> mới launch workflow đọc project.</p>
         <div class="command-card">
-          <header><span>Onboard</span><button class="clip-btn" data-clip="/onboard-project">Lấy lệnh</button></header>
-          <pre><code>/onboard-project</code></pre>
+          <header><span>Onboard</span><button class="clip-btn" data-clip="/onboard&#10;/onboard run">Lấy lệnh</button></header>
+          <pre><code>/onboard
+/onboard run</code></pre>
         </div>
       </div>
     </article>
@@ -91,9 +92,9 @@ pi</code></pre>
         <h3 id="chon-permission">Chọn permission</h3>
         <p>Scout thì read-only, code bình thường thì workspace-write, automation tin cậy thì full-access có guard.</p>
         <div class="command-card">
-          <header><span>Permission</span><button class="clip-btn" data-clip="/workspace-write">Lấy lệnh</button></header>
-          <pre><code>/permission-status
-/workspace-write</code></pre>
+          <header><span>Permission</span><button class="clip-btn" data-clip="/permission status&#10;/permission workspace-write">Lấy lệnh</button></header>
+          <pre><code>/permission status
+/permission workspace-write</code></pre>
         </div>
       </div>
     </article>
@@ -103,10 +104,10 @@ pi</code></pre>
         <h3 id="chay-workflow">Chạy workflow</h3>
         <p>Dùng command đúng mục tiêu để agent không phải diễn giải quá dài. Task nào nặng context thì dùng fresh session.</p>
         <div class="command-card">
-          <header><span>Workflow</span><button class="clip-btn" data-clip="/task Implement the requested bounded change.">Lấy lệnh</button></header>
-          <pre><code>/task Implement the requested bounded change.
-/review
-/fresh-task Implement the requested bounded change.</code></pre>
+          <header><span>Workflow</span><button class="clip-btn" data-clip="/workflow task Implement the requested bounded change.&#10;/workflow review current diff&#10;/fresh task Implement the requested bounded change.">Lấy lệnh</button></header>
+          <pre><code>/workflow task Implement the requested bounded change.
+/workflow review current diff
+/fresh task Implement the requested bounded change.</code></pre>
         </div>
       </div>
     </article>

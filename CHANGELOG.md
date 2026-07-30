@@ -2,6 +2,24 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.2.3 - 2026-07-30
+
+### Added
+
+- Added short runtime command namespaces for team use: `/commands`, `/usage`, `/context`, `/permission`, `/memory`, `/onboard`, `/name`, and `/fresh`.
+
+- Added a compatibility rewrite for `/piagent-workflow` so older muscle memory routes to `/workflow` instead of becoming a normal agent prompt.
+
+### Changed
+
+- Consolidated workflow launchers under `/workflow ...` and fresh-session launches under `/fresh task|scout|be-to-fe ...`, reducing accidental scout/log chatter before a user reaches the menu.
+
+- Updated onboarding, quickstart, operator, deployment, and docs-site command references to separate Pi native commands from PiAgent runtime commands. Pi native `/model`, `/session`, `/resume`, `/compact`, and `/mcp` remain unclaimed by PiAgent.
+
+### Removed
+
+- Removed prompt-file versions of runtime help commands that should execute locally rather than asking the agent to inspect docs.
+
 ## v1.2.2 - 2026-07-29
 
 ### Added

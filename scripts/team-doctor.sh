@@ -149,8 +149,6 @@ if (!runtime.teamRolloutReady) {
 for (const rel of [
   "package.json",
   "packages/piagent-core/extensions/piagent-guard.ts",
-  "packages/piagent-core/prompts/onboard-project.md",
-  "packages/piagent-core/prompts/memory-policy.md",
   "packages/piagent-core/prompts/platform-improve.md",
   "packages/piagent-core/prompts/be-to-fe.md",
   "packages/piagent-core/prompts/task.md",
@@ -374,10 +372,10 @@ const projectContextPath = path.join(projectPath, ".pi", "project-context.md");
 if (fs.existsSync(projectContextPath)) {
   const projectContext = fs.readFileSync(projectContextPath, "utf8");
   if (/Generated:\s*not yet/i.test(projectContext)) {
-    warnings.push("project onboarding snapshot is still pending; run /onboard-project in Pi after login/model selection");
+    warnings.push("project onboarding snapshot is still pending; run /onboard run in Pi after login/model selection");
   }
 } else {
-  warnings.push("project has no .pi/project-context.md; run setup/init or /onboard-project");
+  warnings.push("project has no .pi/project-context.md; run setup/init or /onboard run");
 }
 
 const contextIndexConfig = projectProfile && typeof projectProfile.contextIndex === "object" && !Array.isArray(projectProfile.contextIndex)
@@ -402,8 +400,8 @@ if (contextIndexEscapes) {
     const edges = Array.isArray(contextIndex.edges) ? contextIndex.edges : [];
     const citations = Array.isArray(contextIndex.citations) ? contextIndex.citations : [];
     if (contextIndex.schemaVersion !== 1) warnings.push("project context index schemaVersion should be 1");
-    if (contextIndex.summary === "Pending. Run /onboard-project after login/model selection to generate the compact project context index.") {
-      warnings.push("project context index is still pending; run /onboard-project after login/model selection");
+    if (/Pending\.\s+Run \/onboard(?: run)? after login\/model selection/i.test(String(contextIndex.summary ?? ""))) {
+      warnings.push("project context index is still pending; run /onboard run after login/model selection");
     }
     if (nodes.length === 0) warnings.push("project context index has no nodes yet");
     if (contextIndex?.policy?.requireCitations !== false && citations.length === 0) warnings.push("project context index has no citations yet");
@@ -411,13 +409,13 @@ if (contextIndexEscapes) {
     if (edges.length > (contextIndex?.policy?.maxEdges ?? 240)) warnings.push("project context index has more edges than policy maxEdges");
   }
 } else {
-  warnings.push(`project has no ${contextIndexRelativePath}; run setup/init or /onboard-project`);
+  warnings.push(`project has no ${contextIndexRelativePath}; run setup/init or /onboard run`);
 }
 
 const memorySummaryPath = path.join(projectPath, ".pi", "memory", "memory_summary.md");
 const memoryHandbookPath = path.join(projectPath, ".pi", "memory", "MEMORY.md");
 if (!fs.existsSync(memorySummaryPath) || !fs.existsSync(memoryHandbookPath)) {
-  warnings.push("project has no .pi/memory scaffold; run setup/init or use /memory-policy before relying on project memory");
+  warnings.push("project has no .pi/memory scaffold; run setup/init or use /memory before relying on project memory");
 }
 
 if (strictShare) {

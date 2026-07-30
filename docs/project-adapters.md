@@ -91,7 +91,7 @@ Quy tắc:
 - Mọi key project tự khai **thay thế nguyên key** của adapter, không merge từng phần tử. Khai `protectedPaths` nghĩa là project sở hữu list đó và không nhận thay đổi từ adapter nữa.
 - Không khai `extends` thì profile giữ nguyên hành vi cũ, self-contained.
 
-`scripts/init-project.sh` và `/onboard-project` ghi dạng `extends` khi profile đến từ built-in adapter. Update platform sau đó không cần chạm vào project nào.
+`scripts/init-project.sh` và `/onboard` ghi dạng `extends` khi profile đến từ built-in adapter. Update platform sau đó không cần chạm vào project nào.
 
 ## Monorepo và workspace
 
@@ -133,7 +133,7 @@ Rule nằm ở `packages/piagent-core/extensions/project-shape.js`. Cả `piagen
 Default UX không bắt buộc chạy bash để set profile. Sau global install, vào project chạy:
 
 ```text
-/onboard-project
+/onboard
 ```
 
 Nếu chưa có `.pi/piagent-profile.json`, onboarding nên dùng select-style setup: chọn profile trước, rồi chọn tech theo role. Native command là:
@@ -158,7 +158,7 @@ Kết quả ghi:
 
 Sau khi agent đọc Context7 cho tech tương ứng, chỉ record snapshot ngắn bằng `piagent_profile_tech_context_record`; không lưu nguyên văn docs dài.
 
-`/onboard-project` cũng tạo `.pi/context-index.json`. Đây là advisory node/edge/citation map cho profile, tech, verify command, docs, risk và memory pointer; không dùng thay thế source hiện tại hoặc guard policy.
+`/onboard run` cũng tạo `.pi/context-index.json`. Đây là advisory node/edge/citation map cho profile, tech, verify command, docs, risk và memory pointer; không dùng thay thế source hiện tại hoặc guard policy.
 
 Đổi profile sau này:
 
@@ -185,7 +185,7 @@ Sau khi agent đọc Context7 cho tech tương ứng, chỉ record snapshot ng�
 
 Auto detect là bootstrap convenience, không phải policy cuối cùng. Sau init, `.pi/piagent-profile.json` là source of truth của project.
 
-Mọi built-in adapter đều đưa `.pi/project-context.md` vào `requiredContext`. File này được tạo dạng placeholder khi init project, rồi được model thay bằng snapshot thật sau `/onboard-project`.
+Mọi built-in adapter đều đưa `.pi/project-context.md` vào `requiredContext`. File này được tạo dạng placeholder khi init project, rồi được model thay bằng snapshot thật sau `/onboard run`.
 
 ## Khi nào cần custom profile
 

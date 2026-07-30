@@ -23,7 +23,7 @@ Mandatory flow:
 1. Call `piagent_context` with `detail=full` and inspect the active project profile.
 2. Call `piagent_orchestration_policy`; keep the platform change solo-first unless bounded scout/planning/review lanes are useful.
 3. Call `piagent_memory_status`; if prior decisions or Field Guide notes are relevant, search memory and record citations with `piagent_memory_citation_record`.
-4. Read `.pi/project-context.md`. If pending, stop and ask the user to run `/onboard-project`.
+4. Read `.pi/project-context.md`. If pending, stop and ask the user to run `/onboard-project run`.
 5. Read the required context declared by the active profile. Before loading large files, call `piagent_context_budget`.
 6. Classify the task risk lane and create a task contract with `piagent_task_start`, including review lenses and a compact workPlan, before source edits.
 7. Decide whether bounded subagents are useful enough to justify extra token/tool cost:

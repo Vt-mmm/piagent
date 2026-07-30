@@ -13,10 +13,11 @@ Pi có sẵn footer hiển thị token/cache usage, cost, context usage, model h
 Piagent package thêm command:
 
 ```text
-/piagent-usage
-/task-preflight
-/task-preflight compact
-/piagent-logs
+/usage
+/context preflight
+/context compact
+/usage logs
+/usage live
 ```
 
 Agent cũng có thể gọi tool:
@@ -26,7 +27,7 @@ piagent_usage_snapshot
 piagent_context_preflight
 ```
 
-`/piagent-usage` hiển thị:
+`/usage` hiển thị:
 
 - session file;
 - session id/name;
@@ -36,7 +37,7 @@ piagent_context_preflight
 - active branch entries / total entries;
 - lệnh để lấy exact token/cost totals từ terminal khác.
 
-`/task-preflight` hiển thị:
+`/context preflight` hiển thị:
 
 - workflow đang định chạy;
 - live context;
@@ -45,9 +46,9 @@ piagent_context_preflight
 - recommendation: `ok`, `watch`, `compact`, hoặc `fresh-session`;
 - fresh workflow commands nếu session hiện tại quá nặng.
 
-`/task-preflight compact` gọi Pi compaction với hướng dẫn giữ lại decisions, blockers, changed files, verify command, và next action.
+`/context compact` gọi Pi compaction với hướng dẫn giữ lại decisions, blockers, changed files, verify command, và next action.
 
-`/piagent-logs` không tail realtime. Nó chỉ hiển thị policy compact và vài capture mới nhất khi tool output quá dài. Capture nằm trong `.pi/piagent-state/tool-results/`, đã qua redaction trước khi ghi, để Agent Watch/report đọc offline mà Pi TUI không phải nhồi full terminal log vào transcript.
+`/usage logs` không tail realtime. Nó chỉ hiển thị policy compact và vài capture mới nhất khi tool output quá dài. Capture nằm trong `.pi/piagent-state/tool-results/`, đã qua redaction trước khi ghi, để Agent Watch/report đọc offline mà Pi TUI không phải nhồi full terminal log vào transcript. Alias `/logs` vẫn chạy.
 
 Giới hạn kỹ thuật: extension command context expose `ctx.getContextUsage()`, phù hợp để biết context window đang dùng bao nhiêu. Exact billed totals như `input`, `output`, `cacheRead`, `cacheWrite`, `cost` là API của Pi `/session` và RPC `get_session_stats`.
 
@@ -119,10 +120,10 @@ pi --name "ABC-123 Short task name"
 Hoặc đổi tên phiên đang mở trong Pi:
 
 ```text
-/setname ABC-123 Short task name
+/name ABC-123 Short task name
 ```
 
-Nếu tắt nhầm terminal/app, vào lại project rồi dùng `pi --continue` cho phiên gần nhất, hoặc `pi --resume` để chọn theo session name/id.
+Alias ngắn `/setname ABC-123 Short task name` vẫn chạy. Nếu tắt nhầm terminal/app, vào lại project rồi dùng `pi --continue` cho phiên gần nhất, hoặc `pi --resume` để chọn theo session name/id. Trong Pi có thể gõ `/resume` để xem reminder ngắn.
 
 Mặc định history mode **bao gồm subagent session files** vì đó là usage thật của máy. Dùng `--no-subagents` khi chỉ muốn parent/main sessions.
 
@@ -154,8 +155,8 @@ Xem `contextUsage.percent`:
 
 - `< 50%`: bình thường.
 - `50–70%`: bắt đầu tránh đọc file lớn không cần thiết.
-- `70–82%`: chạy `/task-preflight compact` trước task dài tiếp theo.
-- `> 82%`: dùng `/fresh-task`, `/fresh-scout`, hoặc `/fresh-be-to-fe` cho work mới.
+- `70–82%`: chạy `/context compact` trước task dài tiếp theo.
+- `> 82%`: dùng `/fresh task`, `/fresh scout`, hoặc `/fresh be-to-fe` cho work mới.
 - Sau compaction, `contextUsage.tokens` có thể là `null` cho đến khi có assistant response mới.
 
 Nếu user paste full mandatory-flow boilerplate, platform input guard sẽ collapse về workflow command ngắn. Nếu prompt quá dài thật, platform có thể lưu intake vào `.pi/task-inbox/` local gitignored rồi replay bằng fresh workflow command.

@@ -11,7 +11,7 @@ $ARGUMENTS
 
 Rules:
 
-0. Call `piagent_context_preflight` with `workflow=review` for large diffs or long requests. If it recommends `fresh-session`, prefer `/fresh-scout` for read-only evidence gathering or ask the user to resume in a fresh session.
+0. Call `piagent_context_preflight` with `workflow=review` for large diffs or long requests. If it recommends `fresh-session`, prefer `/piagent-session fresh scout` for read-only evidence gathering or ask the user to resume in a fresh session.
 1. Call `piagent_context`.
 2. Call `piagent_orchestration_policy` and select explicit review lenses before reading the diff deeply.
 3. Read `.pi/project-context.md` if available.

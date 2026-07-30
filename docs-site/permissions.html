@@ -27,7 +27,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.2.2 docs</span>
+        <span class="pill"><span class="pill-dot"></span>v1.2.3 docs</span>
         <a class="button social" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer" aria-label="Mở GitHub repository">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
@@ -109,19 +109,19 @@
           <td><span class="inline-code">read-only</span></td>
           <td>Scout, audit, mapping, review không chỉnh source.</td>
           <td>Cho read, grep, find, ls và piagent tools; chặn shell/write/unknown tools.</td>
-          <td><span class="inline-code">/read-only</span></td>
+          <td><span class="inline-code">/permission read-only</span></td>
         </tr>
         <tr>
           <td><span class="inline-code">workspace-write</span></td>
           <td>Implementation bình thường trong repo.</td>
           <td>Default guarded mode; giữ protected path, shell policy, capability và verify gate.</td>
-          <td><span class="inline-code">/workspace-write</span></td>
+          <td><span class="inline-code">/permission workspace-write</span></td>
         </tr>
         <tr>
           <td><span class="inline-code">trusted-full-access</span></td>
           <td>Automation trên repo đã tin và task đã rõ.</td>
           <td>Nới autonomy trong guard, nhưng vẫn giữ protected path, redaction, lock và confirmation.</td>
-          <td><span class="inline-code">/full-access</span></td>
+          <td><span class="inline-code">/permission full-access</span></td>
         </tr>
       </tbody>
     </table>
@@ -129,20 +129,20 @@
 
   <div class="command-grid">
     <article class="command-card">
-      <header><span>Xem permission</span><button class="clip-btn" data-clip="/permission-status">Lấy lệnh</button></header>
-      <pre><code>/permission-status</code></pre>
+      <header><span>Xem permission</span><button class="clip-btn" data-clip="/permission status">Lấy lệnh</button></header>
+      <pre><code>/permission status</code></pre>
     </article>
     <article class="command-card">
-      <header><span>Read-only session</span><button class="clip-btn" data-clip="/read-only">Lấy lệnh</button></header>
-      <pre><code>/read-only</code></pre>
+      <header><span>Read-only session</span><button class="clip-btn" data-clip="/permission read-only">Lấy lệnh</button></header>
+      <pre><code>/permission read-only</code></pre>
     </article>
     <article class="command-card">
-      <header><span>Workspace write</span><button class="clip-btn" data-clip="/workspace-write">Lấy lệnh</button></header>
-      <pre><code>/workspace-write</code></pre>
+      <header><span>Workspace write</span><button class="clip-btn" data-clip="/permission workspace-write">Lấy lệnh</button></header>
+      <pre><code>/permission workspace-write</code></pre>
     </article>
     <article class="command-card">
-      <header><span>Full-access + task</span><button class="clip-btn" data-clip="/full-access Run the trusted local verification suite.">Lấy lệnh</button></header>
-      <pre><code>/full-access Run the trusted local verification suite.</code></pre>
+      <header><span>Full-access + task</span><button class="clip-btn" data-clip="/permission full-access Run the trusted local verification suite.">Lấy lệnh</button></header>
+      <pre><code>/permission full-access Run the trusted local verification suite.</code></pre>
     </article>
   </div>
 </section>

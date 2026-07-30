@@ -14,9 +14,9 @@ Repo này phải chạy được cho nhiều project/domain khác nhau. Vì vậ
 
 | Use case | Package source |
 |---|---|
-| Team pinned release | `git:github.com/Vt-mmm/piagent@v1.2.2` |
+| Team pinned release | `git:github.com/Vt-mmm/piagent@v1.2.3` |
 | Personal/sandbox dev | `git:github.com/Vt-mmm/piagent` |
-| Registry distribution | `npm:@piagent/platform@1.2.2` |
+| Registry distribution | `npm:@piagent/platform@1.2.3` |
 | Enterprise npm (fork under another scope) | `npm:@your-scope/platform@x.y.z` |
 | Local platform dev | `/path/to/piagent` |
 
@@ -26,7 +26,7 @@ Latest tiện cho máy cá nhân muốn nhận cập nhật nhanh. Pin tag/commi
 
 | Channel | Command | Target | Policy |
 |---|---|---|---|
-| `stable` | `bash scripts/install-global.sh --stable` | Helper release tag resolved to commit SHA, currently `v1.2.2` | Install the Pi package matching the helper. |
+| `stable` | `bash scripts/install-global.sh --stable` | Helper release tag resolved to commit SHA, currently `v1.2.3` | Install the Pi package matching the helper. |
 | `exact` | `bash scripts/install-global.sh --version vX.Y.Z --resolve-tag` | Requested tag resolved to commit SHA | Pi-package-only rollout, rollback, and incident recovery. |
 | `dev` | `bash scripts/install-global.sh --dev` | Moving Git source | Personal/sandbox only; do not commit into project settings. |
 | `local` | `bash scripts/install-global.sh --local` | Current checkout path | Platform development only. |
@@ -53,7 +53,7 @@ Root `package.json` có `pi` manifest trỏ tới:
 Do đó team có thể:
 
 ```bash
-pi install git:github.com/Vt-mmm/piagent@v1.2.2
+pi install git:github.com/Vt-mmm/piagent@v1.2.3
 ```
 
 Không cần biết internal folder `packages/piagent-core`. Source không pin chỉ dành cho personal/sandbox như bảng channel ở trên.
@@ -65,12 +65,12 @@ Team nên install global package một lần:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.2.2
+npm install -g --ignore-scripts @piagent/platform@1.2.3
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
 
-`pi install git:github.com/Vt-mmm/piagent@v1.2.2` vẫn hợp lệ nếu chỉ cần cài Pi package. Lệnh đó không tự tạo các binary terminal `piagent-*`; muốn có helper global thì dùng `npm install -g --ignore-scripts @piagent/platform@1.2.2`.
+`pi install git:github.com/Vt-mmm/piagent@v1.2.3` vẫn hợp lệ nếu chỉ cần cài Pi package. Lệnh đó không tự tạo các binary terminal `piagent-*`; muốn có helper global thì dùng `npm install -g --ignore-scripts @piagent/platform@1.2.3`.
 
 Support matrix hiện tại: macOS Apple Silicon + Bash và Linux x64 + Bash đã được verify; macOS Intel + Bash và Linux ARM64 + Bash là supported target cần chạy smoke trước rollout; native Windows chưa phải target rollout team; WSL2 experimental. Chi tiết và version runtime nằm trong [release/install policy](release-install-policy.md).
 
@@ -81,7 +81,7 @@ cd /path/to/project
 pi
 ```
 
-Project profile được chọn trong Pi bằng `/onboard-project` hoặc `/profile`, không bắt buộc chạy bash init.
+Project profile được chọn trong Pi bằng `/onboard` hoặc `/profile`, không bắt buộc chạy bash init. `/onboard` là menu runtime; dùng `/onboard run` khi muốn model đọc project lần đầu và ghi snapshot.
 
 Sau setup, bước first-run trong Pi là:
 
@@ -90,11 +90,28 @@ Sau setup, bước first-run trong Pi là:
 <select provider/model>
 /mcp
 /subagents-doctor
-/onboard-project
+/onboard
+/onboard run
+/context index
+/memory
 ```
 
-`/onboard-project` ghi `.pi/project-context.md`; đây là snapshot context dùng chung cho các task sau.
+`/onboard run` ghi `.pi/project-context.md`; đây là snapshot context dùng chung cho các task sau.
 Nó cũng ghi `.pi/context-index.json`; đây là compact advisory map có citation để agent tìm đúng điểm vào repo mà không scout rộng lại.
+
+Command hằng ngày nên dạy theo namespace mới:
+
+```text
+/commands
+/workflow task <request>
+/workflow scout <read-only request>
+/name <task/session name>
+/fresh task <request>
+/context preflight
+/usage
+```
+
+Các alias cũ như `/task`, `/scout`, `/context index`, `/fresh-task` vẫn chạy để không gãy session cũ, nhưng không dùng làm đường onboard chính cho team mới.
 
 ## Optional preseed setup
 
@@ -103,7 +120,7 @@ Nếu muốn commit sẵn `.pi/piagent-profile.json` vào repo hoặc bootstrap 
 ```bash
 bash scripts/setup.sh /path/to/project \
   --profile be-readonly-fe \
-  --package-source git:github.com/Vt-mmm/piagent@v1.2.2 \
+  --package-source git:github.com/Vt-mmm/piagent@v1.2.3 \
   --mcp-preset core \
   --subagents-preset safe
 ```
