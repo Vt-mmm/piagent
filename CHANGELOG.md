@@ -2,6 +2,12 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.2.5 - 2026-07-30
+
+### Fixed
+
+- `piagent-update` now accepts npm 12's singleton-array `npm view --json` output when resolving the target helper version and its pinned Pi host peer dependency. Empty or multi-entry metadata still fails closed, so the updater never guesses which release or host to install.
+
 ## v1.2.4 - 2026-07-30
 
 ### Changed

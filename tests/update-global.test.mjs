@@ -30,6 +30,8 @@ function stageGlobalInstall({
   registryVersion = "1.1.4",
   registryHost = "0.82.0",
   registryPeers,
+  npmViewVersionResult,
+  npmViewPeerDependenciesResult,
   installedHost = "0.81.0",
   helperInstallLands = registryVersion,
   npmViewFails = false,
@@ -58,6 +60,8 @@ function stageGlobalInstall({
   fs.mkdirSync(bin, { recursive: true });
 
   const peers = registryPeers ?? { "@earendil-works/pi-coding-agent": registryHost };
+  const viewVersion = npmViewVersionResult ?? registryVersion;
+  const viewPeerDependencies = npmViewPeerDependenciesResult ?? peers;
   fs.writeFileSync(path.join(bin, "npm"), `#!/usr/bin/env bash
 printf 'npm %s\\n' "$*" >> ${JSON.stringify(log)}
 if [[ "$1" == "config" && "$2" == "get" && "$3" == "prefix" ]]; then
@@ -77,8 +81,8 @@ fi
 if [[ "$1" == "view" ]]; then
   ${npmViewFails ? "exit 1" : ""}
   case "$3" in
-    version) printf '%s' ${JSON.stringify(JSON.stringify(registryVersion))} ;;
-    peerDependencies) printf '%s' ${JSON.stringify(JSON.stringify(peers))} ;;
+    version) printf '%s' ${JSON.stringify(JSON.stringify(viewVersion))} ;;
+    peerDependencies) printf '%s' ${JSON.stringify(JSON.stringify(viewPeerDependencies))} ;;
     *) exit 1 ;;
   esac
   exit 0
@@ -233,6 +237,31 @@ describe("piagent-update", () => {
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /host:\s+0\.82\.0 -> 0\.83\.2/);
     assert.match(result.stdout, /pi-coding-agent@0\.83\.2/);
+  });
+
+  it("accepts npm 12 singleton metadata arrays", () => {
+    const stage = stageGlobalInstall({
+      npmViewVersionResult: ["1.1.4"],
+      npmViewPeerDependenciesResult: [{ "@earendil-works/pi-coding-agent": "0.82.0" }]
+    });
+    const result = runUpdate(stage, ["--check"]);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /helper:\s+1\.1\.0 -> 1\.1\.4/);
+    assert.match(result.stdout, /host:\s+0\.81\.0 -> 0\.82\.0/);
+  });
+
+  it("refuses ambiguous npm metadata arrays", () => {
+    const stage = stageGlobalInstall({
+      npmViewPeerDependenciesResult: [
+        { "@earendil-works/pi-coding-agent": "0.82.0" },
+        { "@earendil-works/pi-coding-agent": "0.83.0" }
+      ]
+    });
+    const result = runUpdate(stage, ["--version", "1.1.4", "--check"]);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /does not pin an exact/);
   });
 
   // npm reporting success is not evidence that the new files are on disk, and
