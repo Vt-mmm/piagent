@@ -2,6 +2,26 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.2.6 - 2026-07-31
+
+### Added
+
+- Added Pi Context Engine v2: a local incremental SQLite FTS5 index with symbol and import extraction, hybrid Reciprocal Rank Fusion and personalized PageRank retrieval, hard-budget context packs, reverse-import test impact, and the `piagent-context` terminal command.
+
+- Added Agent Watch compatible context telemetry keyed by Pi session ID and session name. It records model/thinking metadata, active tool counts, usage, retrieval confidence, context-pack utilization, duplicate reads/output, and transparent context-waste metrics without duplicating raw prompts or tool output.
+
+### Changed
+
+- Piagent now starts with a one-tool loader and activates governance, policy, code retrieval, knowledge, onboarding, and usage groups by task shape. Tiny tasks expose 11 of 30 Piagent tools and ordinary tasks expose 15, while runtime guards remain active regardless of the visible tool schema.
+
+- Task and scout workflows are risk-adaptive. Unfamiliar work receives one bounded Context Engine pack, low-confidence retrieval permits at most one read-only finder pass, repeated read/search results collapse to a delta marker, and session compaction preserves task state instead of raw logs.
+
+- Quality benchmarks now record fresh input, output and cache-read tokens, first-correct-edit time, rework count, and a context-efficiency snapshot so token savings are compared against acceptance and verification quality.
+
+### Fixed
+
+- Release installation now removes an older local `@piagent/platform` registration as well as older Git registrations before installing the pinned release, preventing the local checkout and released package from loading together.
+
 ## v1.2.5 - 2026-07-30
 
 ### Fixed

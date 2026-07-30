@@ -120,4 +120,33 @@ describe("the refusal holds when the scripts actually run", () => {
     const recorded = fs.readFileSync(path.join(project, ".pi", "benchmarks", "quality-runs.jsonl"), "utf8");
     assert.match(recorded, /"scenario":"read-only-scout"/);
   });
+
+  it("records context-era token and rework benchmark fields", () => {
+    const project = makeProject();
+    const result = runScript("quality-benchmark.sh", [
+      project,
+      "--record",
+      "--scenario", "bounded-source-fix",
+      "--surface", "pi-context-v2",
+      "--result", "pass",
+      "--tokens", "1200",
+      "--input-tokens", "900",
+      "--output-tokens", "300",
+      "--cache-read-tokens", "400",
+      "--first-correct-edit", "42",
+      "--rework", "1"
+    ]);
+    assert.equal(result.status, 0, result.stderr);
+    const [record] = fs.readFileSync(path.join(project, ".pi", "benchmarks", "quality-runs.jsonl"), "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    assert.equal(record.schemaVersion, 2);
+    assert.equal(record.inputTokens, 900);
+    assert.equal(record.outputTokens, 300);
+    assert.equal(record.cacheReadTokens, 400);
+    assert.equal(record.firstCorrectEditSeconds, 42);
+    assert.equal(record.reworkCount, 1);
+    assert.equal(typeof record.contextEfficiency.metrics.contextWasteScore, "number");
+  });
 });

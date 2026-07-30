@@ -18,6 +18,7 @@ Piagent package thêm command:
 /context compact
 /usage logs
 /usage live
+/usage efficiency
 ```
 
 Agent cũng có thể gọi tool:
@@ -49,6 +50,11 @@ piagent_context_preflight
 `/context compact` gọi Pi compaction với hướng dẫn giữ lại decisions, blockers, changed files, verify command, và next action.
 
 `/usage logs` không tail realtime. Nó chỉ hiển thị policy compact và vài capture mới nhất khi tool output quá dài. Capture nằm trong `.pi/piagent-state/tool-results/`, đã qua redaction trước khi ghi, để Agent Watch/report đọc offline mà Pi TUI không phải nhồi full terminal log vào transcript. Alias `/logs` vẫn chạy.
+
+`/usage efficiency` đọc local Context Engine telemetry và hiện công thức
+`contextWasteScore`: duplicate reads, duplicate output, tool-schema share,
+low-confidence retrieval, và active-tool excess. Score này phải đi cùng task
+gate/verify result; nó không tự kết luận model hoặc nhân viên làm tốt/xấu.
 
 Giới hạn kỹ thuật: extension command context expose `ctx.getContextUsage()`, phù hợp để biết context window đang dùng bao nhiêu. Exact billed totals như `input`, `output`, `cacheRead`, `cacheWrite`, `cost` là API của Pi `/session` và RPC `get_session_stats`.
 

@@ -56,6 +56,14 @@ if [[ "\${1:-}" == "--version" ]]; then
   printf '%s\\n' "\${PI_INSTALL_FAKE_PI_VERSION:-0.82.0}"
   exit 0
 fi
+if [[ "\${1:-}" == "list" ]]; then
+  if [[ -n "\${PI_INSTALL_FAKE_PI_LIST:-}" ]]; then
+    printf '%b' "\${PI_INSTALL_FAKE_PI_LIST}"
+  else
+    printf 'pi %s\\n' "$*"
+  fi
+  exit 0
+fi
 printf 'pi %s\\n' "$*"
 `);
   fs.chmodSync(git, 0o755);
@@ -339,6 +347,42 @@ describe("install-global release channels", () => {
     assert.match(result.stdout, /channel: dev/);
     assert.match(result.stdout, /source: git:github.com\/Vt-mmm\/piagent/);
     assert.doesNotMatch(result.stdout, /resolvedCommit:/);
+  });
+
+  it("removes an older local checkout registration before installing a release", () => {
+    const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-install-bin-"));
+    const localPlatform = fs.mkdtempSync(path.join(os.tmpdir(), "pi-install-bin-"));
+    const otherLocalPackage = fs.mkdtempSync(path.join(os.tmpdir(), "pi-install-bin-"));
+    temporaryRoots.add(agentDir);
+    temporaryRoots.add(localPlatform);
+    temporaryRoots.add(otherLocalPackage);
+    fs.writeFileSync(path.join(localPlatform, "package.json"), '{"name":"@piagent/platform","version":"0.0.0"}\n');
+    fs.writeFileSync(path.join(otherLocalPackage, "package.json"), '{"name":"@example/other","version":"0.0.0"}\n');
+
+    const localPlatformSource = path.relative(agentDir, localPlatform);
+    const otherLocalSource = path.relative(agentDir, otherLocalPackage);
+    const previousGitSource = "git:github.com/Vt-mmm/piagent@1111111111111111111111111111111111111111";
+    const result = runInstaller(["--stable", "--dry-run", "--no-model-scope", "--no-mcp"], {
+      PI_CODING_AGENT_DIR: agentDir,
+      PI_INSTALL_FAKE_PI_LIST: [
+        "User packages:",
+        `  ${localPlatformSource}`,
+        `    ${localPlatform}`,
+        `  ${otherLocalSource}`,
+        `    ${otherLocalPackage}`,
+        `  ${previousGitSource}`,
+        "    /tmp/piagent-release",
+        "Project packages:",
+        "  ../",
+        ""
+      ].join("\\n")
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, new RegExp(`\\+ pi remove ${localPlatformSource.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+    assert.match(result.stdout, /\+ pi remove git:github\.com\/Vt-mmm\/piagent@1111111111111111111111111111111111111111/);
+    assert.doesNotMatch(result.stdout, new RegExp(`\\+ pi remove ${otherLocalSource.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+    assert.match(result.stdout, new RegExp(`\\+ pi install git:github.com/Vt-mmm/piagent@${resolvedCommit}`));
   });
 });
 

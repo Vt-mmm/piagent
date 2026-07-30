@@ -19,7 +19,8 @@ const scriptByCommand = {
   "piagent-capabilities": "scripts/capability-catalog.mjs",
   "piagent-migrate": "scripts/migrate-project-state.mjs",
   "piagent-import-instructions": "scripts/import-agent-instructions.mjs",
-  "piagent-auto": "scripts/pi-auto.sh"
+  "piagent-auto": "scripts/pi-auto.sh",
+  "piagent-context": "scripts/context-engine.mjs"
 };
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");

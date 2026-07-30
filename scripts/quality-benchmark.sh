@@ -11,8 +11,16 @@ Options:
   --task-file <path>      File containing task prompt/spec.
   --verify <command>      Verification command used for the run.
   --tokens <number>       Total tokens reported by the agent/provider.
+  --input-tokens <number> Fresh input tokens reported by the provider.
+  --output-tokens <number>
+                          Output tokens reported by the provider.
+  --cache-read-tokens <number>
+                          Cached input tokens reported by the provider.
   --cost <number>         Cost reported for the run.
   --duration <seconds>    Wall-clock duration.
+  --first-correct-edit <seconds>
+                          Time until the first edit retained in the final fix.
+  --rework <number>       Number of discarded/reworked edit attempts.
   --notes <text>          Short notes or quality observations.
   --agent <name>          Backward-compatible alias for --surface.
 
@@ -42,6 +50,7 @@ fi
 shift || true
 
 PROJECT_PATH="$(cd "$PROJECT_PATH" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODE=""
 SCENARIO=""
 SURFACE=""
@@ -49,8 +58,13 @@ RESULT=""
 TASK_FILE=""
 VERIFY_CMD=""
 TOKENS=""
+INPUT_TOKENS=""
+OUTPUT_TOKENS=""
+CACHE_READ_TOKENS=""
 COST=""
 DURATION=""
+FIRST_CORRECT_EDIT=""
+REWORK=""
 NOTES=""
 
 # A flag left without a value otherwise consumes the next flag as its value, and
@@ -104,6 +118,21 @@ while [[ $# -gt 0 ]]; do
       TOKENS="$2"
       shift 2
       ;;
+    --input-tokens)
+      require_value "$1" "${2:-}"
+      INPUT_TOKENS="$2"
+      shift 2
+      ;;
+    --output-tokens)
+      require_value "$1" "${2:-}"
+      OUTPUT_TOKENS="$2"
+      shift 2
+      ;;
+    --cache-read-tokens)
+      require_value "$1" "${2:-}"
+      CACHE_READ_TOKENS="$2"
+      shift 2
+      ;;
     --cost)
       require_value "$1" "${2:-}"
       COST="$2"
@@ -112,6 +141,16 @@ while [[ $# -gt 0 ]]; do
     --duration)
       require_value "$1" "${2:-}"
       DURATION="$2"
+      shift 2
+      ;;
+    --first-correct-edit)
+      require_value "$1" "${2:-}"
+      FIRST_CORRECT_EDIT="$2"
+      shift 2
+      ;;
+    --rework)
+      require_value "$1" "${2:-}"
+      REWORK="$2"
       shift 2
       ;;
     --notes)
@@ -173,6 +212,13 @@ case "$RESULT" in
     ;;
 esac
 
+# Keep benchmark evidence and context-efficiency evidence in the same record.
+# Failure here does not invalidate a task result; it leaves the optional
+# contextEfficiency field null for older hosts or telemetry-disabled runs.
+if [[ -f "$SCRIPT_DIR/context-engine.mjs" ]]; then
+  node "$SCRIPT_DIR/context-engine.mjs" efficiency --project "$PROJECT_PATH" --json >/dev/null 2>&1 || true
+fi
+
 export PI_BENCHMARK_PROJECT_PATH="$PROJECT_PATH"
 export PI_BENCHMARK_SCENARIO="$SCENARIO"
 export PI_BENCHMARK_SURFACE="$SURFACE"
@@ -180,8 +226,13 @@ export PI_BENCHMARK_RESULT="$RESULT"
 export PI_BENCHMARK_TASK_FILE="$TASK_FILE"
 export PI_BENCHMARK_VERIFY="$VERIFY_CMD"
 export PI_BENCHMARK_TOKENS="$TOKENS"
+export PI_BENCHMARK_INPUT_TOKENS="$INPUT_TOKENS"
+export PI_BENCHMARK_OUTPUT_TOKENS="$OUTPUT_TOKENS"
+export PI_BENCHMARK_CACHE_READ_TOKENS="$CACHE_READ_TOKENS"
 export PI_BENCHMARK_COST="$COST"
 export PI_BENCHMARK_DURATION="$DURATION"
+export PI_BENCHMARK_FIRST_CORRECT_EDIT="$FIRST_CORRECT_EDIT"
+export PI_BENCHMARK_REWORK="$REWORK"
 export PI_BENCHMARK_NOTES="$NOTES"
 
 node --input-type=module <<'NODE'
@@ -195,8 +246,15 @@ const numberOrNull = (value) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 };
+const contextReportPath = path.join(root, ".pi", "piagent-state", "context-engine", "efficiency-report.json");
+let contextReport = null;
+try {
+  contextReport = JSON.parse(fs.readFileSync(contextReportPath, "utf8"));
+} catch {
+  // Context telemetry is optional and may be disabled for a baseline run.
+}
 const payload = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   recordedAt: new Date().toISOString(),
   scenario: process.env.PI_BENCHMARK_SCENARIO,
   surface: process.env.PI_BENCHMARK_SURFACE,
@@ -204,8 +262,20 @@ const payload = {
   taskFile: process.env.PI_BENCHMARK_TASK_FILE || null,
   verifyCommand: process.env.PI_BENCHMARK_VERIFY || null,
   tokens: numberOrNull(process.env.PI_BENCHMARK_TOKENS),
+  inputTokens: numberOrNull(process.env.PI_BENCHMARK_INPUT_TOKENS),
+  outputTokens: numberOrNull(process.env.PI_BENCHMARK_OUTPUT_TOKENS),
+  cacheReadTokens: numberOrNull(process.env.PI_BENCHMARK_CACHE_READ_TOKENS),
   cost: numberOrNull(process.env.PI_BENCHMARK_COST),
   durationSeconds: numberOrNull(process.env.PI_BENCHMARK_DURATION),
+  firstCorrectEditSeconds: numberOrNull(process.env.PI_BENCHMARK_FIRST_CORRECT_EDIT),
+  reworkCount: numberOrNull(process.env.PI_BENCHMARK_REWORK),
+  contextEfficiency: contextReport
+    ? {
+        generatedAt: contextReport.generatedAt ?? null,
+        sample: contextReport.sample ?? null,
+        metrics: contextReport.metrics ?? null
+      }
+    : null,
   notes: process.env.PI_BENCHMARK_NOTES || null
 };
 fs.appendFileSync(target, `${JSON.stringify(payload)}\n`);

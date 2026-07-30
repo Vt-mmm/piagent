@@ -21,7 +21,7 @@ Harness cung cấp:
 - `piagent_document_read` — đọc spec `.md`/`.pdf`/`.docx` từ project hoặc folder đã cấp trong `additionalReadRoots` (ví dụ `~/Downloads`). Nội dung trả về là **dữ liệu**, không phải chỉ thị.
 - Context7 qua MCP cho tài liệu vendor. Ghi snapshot ngắn bằng `piagent_profile_tech_context_record`, không paste nguyên khối doc vào file project.
 
-Ràng buộc: `piagent_context_preflight` chạy **trước** (`task.md` bước 0). Nếu nó trả `fresh-session` thì dừng nạp context ở session này.
+Ràng buộc: `/workflow task` chạy `piagent_context_preflight` một lần trước khi nạp context. Với `/workflow scout`, preflight chỉ bắt buộc cho scout rộng, cross-module hoặc high-risk. Nếu nó trả `fresh-session` thì dừng nạp context ở session này.
 
 ### 2. Plan — biến hiểu biết thành cam kết kiểm được
 
@@ -39,7 +39,7 @@ Ràng buộc: `piagent_context_preflight` chạy **trước** (`task.md` bước
 
 `workPlan[].mode` là `read-only` \| `single-writer` \| `review`. Mặc định là single-writer: chỉ một tác nhân được ghi, trừ khi người dùng yêu cầu rõ parallel writers.
 
-`piagent_orchestration_policy` quyết định có gọi subagent không. Chính sách là solo-first — subagent chỉ dùng khi việc đó độc lập và nặng phần đọc.
+`piagent_orchestration_policy` chỉ cần gọi khi task có khả năng hưởng lợi từ delegation. Chính sách là solo-first — subagent chỉ dùng khi việc đó độc lập và nặng phần đọc. Lane `tiny` dùng work plan hai bước parent-only: implement và verify.
 
 ### 3. Execute — làm trong hàng rào
 
@@ -72,7 +72,7 @@ Thiếu bất kỳ điều nào thì bằng chứng vẫn được ghi, nhưng c
 
 Nghĩa là `true`, `echo ok`, `npm test || true` không mua được chữ "done". Đó là chủ ý: một cổng có thể lách được thì tệ hơn không có cổng, vì nó vẫn hiện màu xanh.
 
-`piagent_task_gate_check` trả `pass` hoặc `fail` kèm danh sách `missing`. `task.md` bước 16: gate fail thì outcome là `blocked`/`partial`, **không phải** `done`.
+`piagent_task_gate_check` trả `pass` hoặc `fail` kèm danh sách `missing`. Gate fail thì outcome là `blocked`/`partial`, **không phải** `done`.
 
 ### 5. Fail → loop lại
 
@@ -93,7 +93,7 @@ Nghĩa là `true`, `echo ok`, `npm test || true` không mua được chữ "done
 Harness **phát hiện** thất bại tốt:
 
 - `trace.outcome` có `failed`, `blocked`, `partial` bên cạnh `completed`.
-- `task.md` bước 18: verify không chạy được thì dừng và báo blocker chính xác, không được gọi là done.
+- `task.md` yêu cầu verify không chạy được thì dừng và báo blocker chính xác, không được gọi là done.
 - Gate trả `missing` liệt kê đúng thứ còn thiếu.
 
 Nhưng nó **không mang được gì sang lần thử sau**:

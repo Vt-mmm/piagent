@@ -26,8 +26,8 @@
           "path": "evals/scenarios/capability-resolution.json"
         },
         {
-          "byteSize": 6146,
-          "digest": "sha256:a7a975b99ed2f45881d110582fb6990c500f7e081f865230bf9e4ae242cdd81e",
+          "byteSize": 6201,
+          "digest": "sha256:35398d414c6fd57f63c81990881410ad4286074c2c63fbf53a808b6cfb27b343",
           "id": "base-policy",
           "kind": "policies",
           "path": "packages/piagent-core/policies/base-policy.json"
@@ -61,8 +61,8 @@
           "path": "packages/piagent-core/prompts/review.md"
         },
         {
-          "byteSize": 5073,
-          "digest": "sha256:1dd1339b1e0d8e5882595a38da1781e5b8f59d96afdf4dcdc45c6a77ad7ccfe5",
+          "byteSize": 3452,
+          "digest": "sha256:d06f189c7cf6484cc60d79c200e85ff60f543651264b9233cb23686145cc35d8",
           "id": "task",
           "kind": "prompts",
           "path": "packages/piagent-core/prompts/task.md"

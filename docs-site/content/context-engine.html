@@ -1,0 +1,47 @@
+<section class="section">
+  <div class="grid cols-3">
+    <article class="card">
+      <h3 id="dynamic-tools">Tool theo task</h3>
+      <p>Pi chỉ đưa governance, policy, code retrieval, knowledge, onboarding hoặc usage vào prompt khi task cần. Runtime guard vẫn chạy ngầm.</p>
+    </article>
+    <article class="card">
+      <h3 id="local-index">Index local</h3>
+      <p>FTS5, symbol và import graph nằm trong <span class="inline-code">.pi/piagent-state/context-engine/</span>. Protected paths và secret files không được index.</p>
+    </article>
+    <article class="card">
+      <h3 id="ranked-context">Context có xếp hạng</h3>
+      <p>Explicit path, lexical match, symbol, Git, test relation, positive feedback và graph rank được gộp trước khi pack vào hard token budget.</p>
+    </article>
+    <article class="card">
+      <h3 id="semantic-compact">Semantic compact</h3>
+      <p>Giữ goal, quyết định, changed files, verify và blocker. Bỏ log lặp, source excerpt và kế hoạch đã bị thay thế.</p>
+    </article>
+    <article class="card">
+      <h3 id="test-impact">Test impact</h3>
+      <p>Đi ngược import graph từ file thay đổi để đề xuất dependent files và focused tests trước full suite.</p>
+    </article>
+    <article class="card">
+      <h3 id="agent-watch">Agent Watch</h3>
+      <p>Event local có session, model, thinking, tool surface, retrieval confidence, tỷ lệ context thực dùng và waste metrics; không lưu prompt hay output thô lần hai.</p>
+    </article>
+  </div>
+</section>
+
+<section class="section">
+  <div class="command-grid">
+    <article class="command-card">
+      <header><span>Trong Pi</span><button class="clip-btn" data-clip="/context index&#10;/context rebuild&#10;/context pack Fix invoice calculation&#10;/context impact&#10;/usage efficiency">Lấy lệnh</button></header>
+      <pre><code>/context index
+/context rebuild
+/context pack Fix invoice calculation
+/context impact
+/usage efficiency</code></pre>
+    </article>
+    <article class="command-card">
+      <header><span>Ngoài terminal</span><button class="clip-btn" data-clip="piagent-context rebuild&#10;piagent-context pack &quot;Fix invoice calculation&quot; --tokens 4000&#10;piagent-context efficiency">Lấy lệnh</button></header>
+      <pre><code>piagent-context rebuild
+piagent-context pack "Fix invoice calculation" --tokens 4000
+piagent-context efficiency</code></pre>
+    </article>
+  </div>
+</section>

@@ -125,6 +125,12 @@ const NAV = [
         lead: "Repo này không nhét business logic vào core. Core chỉ giữ policy, prompts, guard, skills và scripts dùng lại được."
       },
       {
+        slug: "context-engine",
+        nav: "Context Engine",
+        title: "Ít context hơn, giữ nguyên chất lượng model",
+        lead: "Index local, retrieval có xếp hạng, tool loading theo task, semantic compaction và telemetry minh bạch cho Agent Watch."
+      },
+      {
         slug: "runtime",
         nav: "Runtime tools",
         title: "Terminal commands cho operator",

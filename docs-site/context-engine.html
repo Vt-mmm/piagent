@@ -3,14 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Chọn đúng đường ray cho repo · Pi Agent Platform Docs</title>
-    <meta name="description" content="Profile ghi vào .pi/piagent-profile.json và lock tương ứng. Nó quyết định protected path, verify command và capability mà project cấp." />
+    <title>Ít context hơn, giữ nguyên chất lượng model · Pi Agent Platform Docs</title>
+    <meta name="description" content="Index local, retrieval có xếp hạng, tool loading theo task, semantic compaction và telemetry minh bạch cho Agent Watch." />
     <meta name="theme-color" content="#050505" />
-    <link rel="canonical" href="https://piagent.io.vn/profiles" />
+    <link rel="canonical" href="https://piagent.io.vn/context-engine" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <meta property="og:title" content="Chọn đúng đường ray cho repo · Pi Agent Platform Docs" />
-    <meta property="og:description" content="Profile ghi vào .pi/piagent-profile.json và lock tương ứng. Nó quyết định protected path, verify command và capability mà project cấp." />
-    <meta property="og:url" content="https://piagent.io.vn/profiles" />
+    <meta property="og:title" content="Ít context hơn, giữ nguyên chất lượng model · Pi Agent Platform Docs" />
+    <meta property="og:description" content="Index local, retrieval có xếp hạng, tool loading theo task, semantic compaction và telemetry minh bạch cho Agent Watch." />
+    <meta property="og:url" content="https://piagent.io.vn/context-engine" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -57,7 +57,7 @@
           </div>
           <div class="nav-group">
             <p class="nav-title">Build</p>
-            <a class="nav-link current" href="/profiles" aria-current="page">Project profile</a>
+            <a class="nav-link" href="/profiles">Project profile</a>
             <a class="nav-link" href="/permissions">Permission modes</a>
             <a class="nav-link" href="/commands">Command catalog</a>
             <a class="nav-link" href="/workflows">Workflows</a>
@@ -73,7 +73,7 @@
             <p class="nav-title">Operate</p>
             <a class="nav-link" href="/security">Security model</a>
             <a class="nav-link" href="/architecture">Architecture</a>
-            <a class="nav-link" href="/context-engine">Context Engine</a>
+            <a class="nav-link current" href="/context-engine" aria-current="page">Context Engine</a>
             <a class="nav-link" href="/runtime">Runtime tools</a>
             <a class="nav-link" href="/team">Team usage</a>
           </div>
@@ -85,90 +85,69 @@
             <nav class="breadcrumb" aria-label="Breadcrumb">
               <a href="/">Docs</a>
               <span aria-hidden="true">/</span>
-              <span>Build</span>
+              <span>Operate</span>
               <span aria-hidden="true">/</span>
-              <span>Project profile</span>
+              <span>Context Engine</span>
             </nav>
             <div class="page-head">
-              <h1>Chọn đúng đường ray cho repo</h1>
-              <p>Profile ghi vào .pi/piagent-profile.json và lock tương ứng. Nó quyết định protected path, verify command và capability mà project cấp.</p>
+              <h1>Ít context hơn, giữ nguyên chất lượng model</h1>
+              <p>Index local, retrieval có xếp hạng, tool loading theo task, semantic compaction và telemetry minh bạch cho Agent Watch.</p>
             </div>
 <section class="section">
+  <div class="grid cols-3">
+    <article class="card">
+      <h3 id="dynamic-tools">Tool theo task</h3>
+      <p>Pi chỉ đưa governance, policy, code retrieval, knowledge, onboarding hoặc usage vào prompt khi task cần. Runtime guard vẫn chạy ngầm.</p>
+    </article>
+    <article class="card">
+      <h3 id="local-index">Index local</h3>
+      <p>FTS5, symbol và import graph nằm trong <span class="inline-code">.pi/piagent-state/context-engine/</span>. Protected paths và secret files không được index.</p>
+    </article>
+    <article class="card">
+      <h3 id="ranked-context">Context có xếp hạng</h3>
+      <p>Explicit path, lexical match, symbol, Git, test relation, positive feedback và graph rank được gộp trước khi pack vào hard token budget.</p>
+    </article>
+    <article class="card">
+      <h3 id="semantic-compact">Semantic compact</h3>
+      <p>Giữ goal, quyết định, changed files, verify và blocker. Bỏ log lặp, source excerpt và kế hoạch đã bị thay thế.</p>
+    </article>
+    <article class="card">
+      <h3 id="test-impact">Test impact</h3>
+      <p>Đi ngược import graph từ file thay đổi để đề xuất dependent files và focused tests trước full suite.</p>
+    </article>
+    <article class="card">
+      <h3 id="agent-watch">Agent Watch</h3>
+      <p>Event local có session, model, thinking, tool surface, retrieval confidence, tỷ lệ context thực dùng và waste metrics; không lưu prompt hay output thô lần hai.</p>
+    </article>
+  </div>
+</section>
 
+<section class="section">
   <div class="command-grid">
     <article class="command-card">
-      <header><span>Xem status ngắn</span><button class="clip-btn" data-clip="/profile">Lấy lệnh</button></header>
-      <pre><code>/profile</code></pre>
+      <header><span>Trong Pi</span><button class="clip-btn" data-clip="/context index&#10;/context rebuild&#10;/context pack Fix invoice calculation&#10;/context impact&#10;/usage efficiency">Lấy lệnh</button></header>
+      <pre><code>/context index
+/context rebuild
+/context pack Fix invoice calculation
+/context impact
+/usage efficiency</code></pre>
     </article>
     <article class="command-card">
-      <header><span>Liệt kê options</span><button class="clip-btn" data-clip="/profile list">Lấy lệnh</button></header>
-      <pre><code>/profile list</code></pre>
+      <header><span>Ngoài terminal</span><button class="clip-btn" data-clip="piagent-context rebuild&#10;piagent-context pack &quot;Fix invoice calculation&quot; --tokens 4000&#10;piagent-context efficiency">Lấy lệnh</button></header>
+      <pre><code>piagent-context rebuild
+piagent-context pack "Fix invoice calculation" --tokens 4000
+piagent-context efficiency</code></pre>
     </article>
-    <article class="command-card">
-      <header><span>Áp profile detect</span><button class="clip-btn" data-clip="/profile auto">Lấy lệnh</button></header>
-      <pre><code>/profile auto</code></pre>
-    </article>
-    <article class="command-card">
-      <header><span>Setup bằng select</span><button class="clip-btn" data-clip="/profile setup&#10;/profile tech setup fullstack">Lấy lệnh</button></header>
-      <pre><code>/profile setup
-/profile tech setup fullstack</code></pre>
-    </article>
-    <article class="command-card">
-      <header><span>Apply tech deterministic</span><button class="clip-btn" data-clip="/profile tech apply fullstack frontend=nextjs backend=nestjs database=prisma">Lấy lệnh</button></header>
-      <pre><code>/profile tech apply fullstack frontend=nextjs backend=nestjs database=prisma</code></pre>
-    </article>
-    <article class="command-card">
-      <header><span>Frontend</span><button class="clip-btn" data-clip="/profile web-frontend">Lấy lệnh</button></header>
-      <pre><code>/profile web-frontend
-/profile fe</code></pre>
-    </article>
-    <article class="command-card">
-      <header><span>Backend/API</span><button class="clip-btn" data-clip="/profile backend-api">Lấy lệnh</button></header>
-      <pre><code>/profile backend-api</code></pre>
-    </article>
-    <article class="command-card">
-      <header><span>Backend read-only, frontend write</span><button class="clip-btn" data-clip="/profile be-readonly-fe">Lấy lệnh</button></header>
-      <pre><code>/profile be-readonly-fe
-/profile be-fe</code></pre>
-    </article>
-    <article class="command-card">
-      <header><span>Fullstack</span><button class="clip-btn" data-clip="/profile fullstack">Lấy lệnh</button></header>
-      <pre><code>/profile fullstack
-/profile full</code></pre>
-    </article>
-    <article class="command-card">
-      <header><span>Docs-only</span><button class="clip-btn" data-clip="/profile docs">Lấy lệnh</button></header>
-      <pre><code>/profile docs</code></pre>
-    </article>
-  </div>
-
-  <div class="tag-list">
-    <span class="tag">generic</span>
-    <span class="tag">node-typescript</span>
-    <span class="tag">python</span>
-    <span class="tag">web-frontend</span>
-    <span class="tag">backend-api</span>
-    <span class="tag">fullstack</span>
-    <span class="tag">be-readonly-fe</span>
-    <span class="tag">data</span>
-    <span class="tag">devops</span>
-    <span class="tag">mobile</span>
-    <span class="tag">docs</span>
-  </div>
-
-  <div class="callout">
-    <strong>Tech stack theo role</strong>
-    <p>Frontend profile chọn FE + database optional; backend profile chọn BE + database optional; fullstack chọn đủ FE, BE và database. Sau đó platform tạo <span class="inline-code">.pi/tech-stack.json</span> và snapshot Context7 ngắn trong <span class="inline-code">.pi/tech-context/*</span>.</p>
   </div>
 </section>
             <nav class="pager" aria-label="Trang kế tiếp">
-              <a class="pager-prev" href="/scope">
+              <a class="pager-prev" href="/architecture">
                 <span class="pager-label">Trước</span>
-                <span class="pager-title">Phạm vi platform</span>
+                <span class="pager-title">Architecture</span>
               </a>
-              <a class="pager-next" href="/permissions">
+              <a class="pager-next" href="/runtime">
                 <span class="pager-label">Tiếp</span>
-                <span class="pager-title">Permission modes</span>
+                <span class="pager-title">Runtime tools</span>
               </a>
             </nav>
 
