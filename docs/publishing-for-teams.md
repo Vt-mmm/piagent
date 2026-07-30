@@ -55,6 +55,10 @@ pi install /path/to/piagent
 - `1.2.0`: `piagent-mcp` quản lý server đầy đủ, server do repo mang theo phải được duyệt mới dùng được, và `/piagent-mcp` là command trong session chứ không phải nhờ model chạy bash.
 - `1.2.1`: approval gate thật sự phủ direct tool và server đến qua `imports` — hai đường vòng mà bản `1.2.0` để hở; kèm một loạt fix về containment khi vendor, độ sâu shell guard, và credential trong URL.
 - `1.2.2`: tool output dài được compact vào preview trong Pi và capture local cho Agent Watch/report; thêm `/setname` và `/logs` cho session naming và log audit gọn.
+- `1.2.3`: gom command hằng ngày về `/workflow`, `/usage`, `/context`, `/permission`, `/onboard`, `/name` và `/fresh`.
+- `1.2.4`: update global có fallback về user-writable npm prefix và project migration/doctor là bước hậu kiểm tùy chọn.
+- `1.2.5`: updater đọc đúng metadata singleton-array của npm 12.
+- `1.2.6`: Context Engine v2, dynamic tool loading, hard-budget retrieval, semantic compaction, Agent Watch telemetry/feedback và quality benchmark theo context efficiency.
 
 ## Không publish
 

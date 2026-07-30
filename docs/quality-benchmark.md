@@ -41,7 +41,12 @@ bash scripts/quality-benchmark.sh /path/to/project --record \
   --surface pi \
   --result pass \
   --tokens 8200 \
+  --input-tokens 6900 \
+  --output-tokens 1300 \
+  --cache-read-tokens 2400 \
   --duration 540 \
+  --first-correct-edit 210 \
+  --rework 0 \
   --notes "good plan, no edits"
 ```
 
@@ -58,8 +63,14 @@ Output:
 | `result` | `pass`, `fail`, hoặc `partial` theo verify và acceptance criteria. |
 | `surface` | Agent surface/workflow/model preset được dùng cho run. |
 | `tokens` | Tổng token do runtime/provider báo. |
+| `inputTokens` | Fresh input token, tách khỏi cache read để so context thực. |
+| `outputTokens` | Token model sinh ra. |
+| `cacheReadTokens` | Input được provider phục vụ từ prompt cache. |
 | `cost` | Cost nếu provider báo được. |
 | `durationSeconds` | Thời gian wall-clock. |
+| `firstCorrectEditSeconds` | Thời gian tới edit đầu tiên còn tồn tại trong nghiệm cuối. |
+| `reworkCount` | Số lượt edit bị bỏ hoặc phải làm lại. |
+| `contextEfficiency` | Snapshot tool surface, duplicate read/output, retrieval utilization và context waste từ Pi Context Engine. |
 | `notes` | Số lần sửa lại, missing context, wrong file, verify failure, hoặc quality observation. |
 
 ## Quy tắc claim
@@ -71,4 +82,6 @@ Chỉ claim một setup tốt hơn khi:
 - cùng verify command;
 - ít nhất 3 lần chạy hoặc 3 scenario khác nhau;
 - pass rate không thấp hơn setup hiện tại;
-- token/cost giảm mà không tăng manual rework.
+- fresh input token/cost giảm mà không tăng manual rework;
+- time-to-first-correct-edit giảm hoặc không xấu đi;
+- context waste giảm nhưng acceptance và verify vẫn giữ nguyên.

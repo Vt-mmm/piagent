@@ -203,7 +203,20 @@ is_piagent_platform_source() {
 
   local resolved_source
   resolved_source="$(resolve_user_package_path "$source" 2>/dev/null || true)"
-  [[ "$resolved_source" == "$PLATFORM_ROOT" ]]
+  [[ -n "$resolved_source" ]] || return 1
+  [[ "$resolved_source" == "$PLATFORM_ROOT" ]] && return 0
+
+  node --input-type=module - "$resolved_source" <<'NODE'
+import fs from "node:fs";
+import path from "node:path";
+
+try {
+  const manifest = JSON.parse(fs.readFileSync(path.join(process.argv[2], "package.json"), "utf8"));
+  process.exit(manifest.name === "@piagent/platform" ? 0 : 1);
+} catch {
+  process.exit(1);
+}
+NODE
 }
 
 remove_existing_piagent_platform_sources() {

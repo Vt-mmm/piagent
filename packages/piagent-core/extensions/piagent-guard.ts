@@ -73,6 +73,18 @@ import {
   normalizeActionToken,
   normalizeShellCommandForPolicy
 } from "./guard-shell-analysis.ts";
+import {
+  appendContextTelemetry,
+  buildContextEfficiencyReport,
+  buildContextIndexV2,
+  buildContextPack,
+  buildTestImpact,
+  classifyContextTask,
+  contextIndexV2Status,
+  estimateContextTokens,
+  searchContextIndexV2,
+  toolResultFingerprint
+} from "./context-engine.js";
 
 import type { ActionClassification } from "./guard-shell-analysis.ts";
 
@@ -144,6 +156,51 @@ const CONTEXT_INDEX_EDGE_KINDS = ["uses_tech", "depends_on", "verified_by", "pro
 const CONTEXT_INDEX_FILE = ".pi/context-index.json";
 const TECH_STACK_MANIFEST_FILE = ".pi/tech-stack.json";
 const TECH_CONTEXT_DIR = ".pi/tech-context";
+const PIAGENT_TOOL_GROUPS = {
+  loader: ["piagent_tools"],
+  governance: [
+    "piagent_context",
+    "piagent_context_preflight",
+    "piagent_task_start",
+    "piagent_context_record",
+    "piagent_verify_record",
+    "piagent_trace_record",
+    "piagent_task_gate_check"
+  ],
+  policy: [
+    "piagent_permission_status",
+    "piagent_exec_policy_check",
+    "piagent_tool_policy_check"
+  ],
+  retrieval: [
+    "piagent_context_engine",
+    "piagent_context_budget",
+    "piagent_context_index_status",
+    "piagent_context_index_search"
+  ],
+  knowledge: [
+    "piagent_memory_status",
+    "piagent_memory_search",
+    "piagent_memory_citation_record",
+    "piagent_document_read",
+    "piagent_source_checkout",
+    "piagent_orchestration_policy"
+  ],
+  onboarding: [
+    "piagent_profile_options",
+    "piagent_profile_apply",
+    "piagent_profile_tech_options",
+    "piagent_profile_tech_apply",
+    "piagent_profile_tech_context_record",
+    "piagent_project_onboarding_record",
+    "piagent_context_index_record",
+    "piagent_memory_note"
+  ],
+  usage: ["piagent_usage_snapshot"]
+} as const;
+type PiagentToolGroup = keyof typeof PIAGENT_TOOL_GROUPS;
+const PIAGENT_TOOL_ORDER = Object.values(PIAGENT_TOOL_GROUPS).flat();
+const PIAGENT_TOOL_NAMES = new Set<string>(PIAGENT_TOOL_ORDER);
 
 const TECH_OPTIONS: TechOption[] = [
   { id: "nextjs", label: "Next.js", role: "frontend", description: "React framework with App Router/SSR/static rendering patterns.", context7Query: "next.js", topics: ["app-router", "routing", "data-fetching", "server-components"] },
@@ -327,6 +384,8 @@ const DEFAULT_POLICY: BasePolicy = {
   toolRegistry: {
     defaultMode: "advisory",
     alwaysAllowedTools: [
+      "piagent_tools",
+      "piagent_context_engine",
       "piagent_context",
       "piagent_permission_status",
       "piagent_exec_policy_check",
@@ -1799,6 +1858,25 @@ function normalizeWorkPlanSteps(values: unknown): WorkPlanStep[] {
 }
 
 function defaultWorkPlan(summary: string, riskLane: TaskContract["riskLane"]): WorkPlanStep[] {
+  if (riskLane === "tiny") {
+    return [
+      {
+        id: "implement",
+        title: summary.slice(0, 160) || "Implement the approved bounded change.",
+        role: "parent",
+        mode: "single-writer",
+        status: "pending"
+      },
+      {
+        id: "verify",
+        title: "Review the changed files and record exact verification evidence.",
+        role: "parent",
+        mode: "review",
+        status: "pending",
+        dependsOn: ["implement"]
+      }
+    ];
+  }
   const steps: WorkPlanStep[] = [
     {
       id: "plan",
@@ -1817,7 +1895,7 @@ function defaultWorkPlan(summary: string, riskLane: TaskContract["riskLane"]): W
     },
     {
       id: "review",
-      title: riskLane === "tiny" ? "Review changed files and verify evidence." : "Run explicit review lenses against the diff and verify evidence.",
+      title: "Run explicit review lenses against the diff and verify evidence.",
       role: "piagent-reviewer",
       mode: "review",
       status: "pending",
@@ -4205,16 +4283,161 @@ function checkoutReferenceRepo(repoRef: string, forceUpdate = false): ReferenceR
   return { host, owner, repo, cloneUrl, checkoutPath, commit, fetched };
 }
 
+function toolGroupsForPrompt(prompt: string): PiagentToolGroup[] {
+  const signal = classifyContextTask(prompt);
+  const lower = prompt.toLowerCase();
+  const groups = new Set<PiagentToolGroup>(["loader"]);
+
+  if (signal.workflow === "usage") {
+    groups.add("usage");
+    return [...groups];
+  }
+  if (signal.workflow === "onboard") {
+    groups.add("governance");
+    groups.add("policy");
+    groups.add("retrieval");
+    groups.add("knowledge");
+    groups.add("onboarding");
+    return [...groups];
+  }
+
+  groups.add("governance");
+  groups.add("policy");
+  if (
+    signal.lane !== "tiny"
+    || ["scout", "review", "plan", "release"].includes(signal.workflow)
+    || /\b(context|document|memory|repository|source|subagent|vendor)\b/.test(lower)
+  ) {
+    groups.add("retrieval");
+  }
+  if (
+    signal.lane === "high-risk"
+    || ["scout", "review", "plan", "release"].includes(signal.workflow)
+    || /\b(document|memory|orchestration|source checkout|subagent|vendor)\b/.test(lower)
+  ) {
+    groups.add("knowledge");
+  }
+  if (/\b(profile|tech stack|onboard|project context)\b/.test(lower)) groups.add("onboarding");
+  if (/\b(token|usage|cost)\b/.test(lower)) groups.add("usage");
+  return [...groups];
+}
+
+function compactSessionTask(cwd: string): TaskContract | undefined {
+  const directory = path.join(stateRoot(cwd), "tasks");
+  if (!fs.existsSync(directory)) return undefined;
+  const candidates = fs.readdirSync(directory, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+    .map((entry) => {
+      const absolute = path.join(directory, entry.name);
+      return { absolute, mtimeMs: fs.statSync(absolute).mtimeMs };
+    })
+    .sort((left, right) => right.mtimeMs - left.mtimeMs);
+  return candidates[0] ? readJsonFile<TaskContract>(candidates[0].absolute) : undefined;
+}
+
+function semanticCompactionInstructions(cwd: string): string {
+  const task = compactSessionTask(cwd);
+  const taskState = task
+    ? [
+        `Current task: ${task.taskId} (${task.riskLane})`,
+        `Goal: ${task.summary}`,
+        `Acceptance: ${task.acceptanceCriteria.join("; ") || "not recorded"}`,
+        `Scope: ${task.scope.join(", ") || "not recorded"}`,
+        `Changed files: ${task.changedFiles.join(", ") || "none recorded"}`,
+        `Verify commands: ${task.verifyCommands.join(" | ") || "not recorded"}`,
+        `Outcome/blocker: ${task.trace.outcome}${task.trace.friction ? `; ${task.trace.friction}` : ""}`
+      ].join("\n")
+    : "No persisted task contract was found. Derive the current goal from the most recent user request.";
+  return [
+    "Create a structured Piagent carry-over summary.",
+    taskState,
+    "",
+    "Preserve:",
+    "- current goal, acceptance criteria, explicit user decisions, and non-negotiable constraints",
+    "- architecture facts and invariants verified from repository files",
+    "- files changed, exact verification evidence, unresolved failures, blockers, and next action",
+    "- citations or paths needed to re-read advisory context",
+    "",
+    "Discard:",
+    "- superseded plans, repeated reads, raw tool logs, successful intermediate output, and speculative reasoning",
+    "- full source excerpts that can be re-read from the repository",
+    "",
+    "Do not convert assumptions into facts. Mark unknowns explicitly. After compaction, re-read current files before editing."
+  ].join("\n");
+}
+
+function environmentFeatureEnabled(name: string, fallback = true): boolean {
+  const value = process.env[name]?.trim().toLowerCase();
+  if (!value) return fallback;
+  return !["0", "false", "no", "off", "disabled"].includes(value);
+}
+
 export default function piagentGuard(pi: ExtensionAPI) {
   const extensionDir = path.dirname(fileURLToPath(import.meta.url));
   const policy = loadPolicy(extensionDir);
   const bashResults = createBashResultLedger({ maxEntries: 300 });
+  const dynamicToolsEnabled = environmentFeatureEnabled("PIAGENT_DYNAMIC_TOOLS");
+  const contextTelemetryEnabled = environmentFeatureEnabled("PIAGENT_CONTEXT_TELEMETRY");
+  const autoContextEnabled = environmentFeatureEnabled("PIAGENT_AUTO_CONTEXT");
   // Advisory tool-registry verdicts are surfaced once per tool per session. A
   // notice on every call would be constant noise for a tool used all day, and
   // noise that is always present is read as background rather than as a warning.
   const advisedTools = new Set<string>();
+  const seenToolResults = new Map<string, { outputHash: string; recordedAt: string }>();
+  const autoPackedPrompts = new Set<string>();
+
+  function telemetry(ctx: ExtensionContext, payload: Record<string, unknown>): void {
+    if (!contextTelemetryEnabled) return;
+    try {
+      const safePayload = redactForStorage(payload) as Record<string, unknown>;
+      appendContextTelemetry(ctx.cwd, {
+        sessionId: ctx.sessionManager.getSessionId(),
+        sessionName: currentSessionName(ctx),
+        model: `${ctx.model?.provider ?? "unknown"}/${ctx.model?.id ?? "unknown"}`,
+        thinkingLevel: String(pi.getThinkingLevel()),
+        ...safePayload
+      });
+    } catch {
+      // Telemetry is local observability. It must never block the agent loop.
+    }
+  }
+
+  function activateToolGroups(ctx: ExtensionContext, groups: PiagentToolGroup[], additive = false): string[] {
+    const current = pi.getActiveTools();
+    if (!dynamicToolsEnabled) return current;
+    const selected = new Set<string>();
+    if (additive) {
+      for (const toolName of current) selected.add(toolName);
+    } else {
+      for (const toolName of current) {
+        if (!PIAGENT_TOOL_NAMES.has(toolName)) selected.add(toolName);
+      }
+    }
+    const normalizedGroups = [...new Set<PiagentToolGroup>(["loader", ...groups])];
+    for (const toolName of PIAGENT_TOOL_ORDER) {
+      if (normalizedGroups.some((group) => PIAGENT_TOOL_GROUPS[group].includes(toolName as never))) {
+        selected.add(toolName);
+      }
+    }
+    const ordered = [
+      ...current.filter((toolName) => selected.has(toolName) && !PIAGENT_TOOL_NAMES.has(toolName)),
+      ...PIAGENT_TOOL_ORDER.filter((toolName) => selected.has(toolName))
+    ];
+    const unchanged = ordered.length === current.length && ordered.every((toolName, index) => toolName === current[index]);
+    if (!unchanged) pi.setActiveTools(ordered);
+    telemetry(ctx, {
+      event: "tool_activation",
+      groups: normalizedGroups,
+      additive,
+      previousCount: current.length,
+      activeCount: ordered.length,
+      piagentTools: ordered.filter((toolName) => PIAGENT_TOOL_NAMES.has(toolName))
+    });
+    return ordered;
+  }
 
   pi.on("session_start", async (_event, ctx) => {
+    activateToolGroups(ctx, []);
     const projectTrusted = ctx.isProjectTrusted();
     const explicitProfile = Boolean(process.env.PIAGENT_PROFILE?.trim());
     const profile = loadProfile(ctx.cwd, projectTrusted);
@@ -4255,6 +4478,13 @@ export default function piagentGuard(pi: ExtensionAPI) {
     // the first thing the operator reads.
     const updateNotice = updateAvailabilityNotice();
     if (updateNotice) ctx.ui.notify(updateNotice, "info");
+    let engineStatus: unknown;
+    try {
+      engineStatus = await contextIndexV2Status(ctx.cwd);
+    } catch (error) {
+      engineStatus = { exists: false, error: error instanceof Error ? error.message : String(error) };
+    }
+    telemetry(ctx, { event: "session_start", activeTools: pi.getActiveTools().length, index: engineStatus });
   });
 
   pi.on("input", async (event, ctx) => {
@@ -4263,6 +4493,18 @@ export default function piagentGuard(pi: ExtensionAPI) {
     if (/^\/piagent-workflow\b/i.test(text)) {
       return { action: "transform", text: text.replace(/^\/piagent-workflow\b/i, "/workflow") };
     }
+    const taskSignal = classifyContextTask(text);
+    activateToolGroups(ctx, toolGroupsForPrompt(text));
+    telemetry(ctx, {
+      event: "user_input",
+      source: event.source,
+      promptHash: taskSignal.promptHash,
+      promptChars: taskSignal.promptChars,
+      workflow: taskSignal.workflow,
+      riskLane: taskSignal.lane,
+      explicitPathCount: taskSignal.paths.length,
+      termCount: taskSignal.terms.length
+    });
 
     const imageAttachment = attachLocalImagesFromText(text, event.images, ctx.cwd);
     if (imageAttachment?.attached.length) {
@@ -4305,6 +4547,128 @@ export default function piagentGuard(pi: ExtensionAPI) {
     return outgoingImages.length > 0
       ? { action: "transform", text: command, images: outgoingImages }
       : { action: "transform", text: command };
+  });
+
+  pi.on("before_agent_start", async (event, ctx) => {
+    const active = new Set<string>(pi.getActiveTools() as string[]);
+    const toolMetadata = pi.getAllTools()
+      .filter((tool) => active.has(tool.name))
+      .map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.parameters,
+        promptGuidelines: tool.promptGuidelines
+      }));
+    const toolSchemaTokens = estimateContextTokens(JSON.stringify(toolMetadata));
+    const systemPromptTokens = estimateContextTokens(event.systemPrompt);
+    const query = looksLikeGovernedBoilerplate(event.prompt) ? extractTaskRequest(event.prompt) : event.prompt.trim();
+    const signal = classifyContextTask(query);
+    telemetry(ctx, {
+      event: "agent_prompt",
+      promptHash: signal.promptHash,
+      promptChars: signal.promptChars,
+      workflow: signal.workflow,
+      riskLane: signal.lane,
+      activeTools: active.size,
+      activePiagentTools: [...active].filter((toolName) => PIAGENT_TOOL_NAMES.has(toolName)).length,
+      toolSchemaTokens,
+      systemPromptTokens,
+      systemPromptHash: crypto.createHash("sha256").update(event.systemPrompt).digest("hex"),
+      contextUsage: ctx.getContextUsage()
+    });
+
+    if (
+      query.length < 20
+      || signal.workflow === "usage"
+      || !autoContextEnabled
+      || autoPackedPrompts.has(signal.promptHash)
+      || !active.has("piagent_context_engine")
+    ) {
+      return;
+    }
+
+    autoPackedPrompts.add(signal.promptHash);
+    if (autoPackedPrompts.size > 50) autoPackedPrompts.delete(autoPackedPrompts.values().next().value as string);
+    try {
+      const status = await contextIndexV2Status(ctx.cwd);
+      if (!status.exists || status.stale) {
+        telemetry(ctx, {
+          event: "context_pack",
+          queryHash: signal.promptHash,
+          confidence: "none",
+          candidates: 0,
+          selected: 0,
+          skipped: status.exists ? "stale-index" : "missing-index"
+        });
+        return;
+      }
+      const budgetTokens = signal.lane === "high-risk" ? 1_200 : signal.lane === "tiny" ? 500 : 900;
+      const pack = await buildContextPack(ctx.cwd, query, { budgetTokens, includeCode: false, limit: 12 });
+      telemetry(ctx, {
+        event: "context_pack",
+        queryHash: pack.queryHash,
+        confidence: pack.confidence,
+        candidates: pack.candidates,
+        selected: pack.selected.length,
+        estimatedTokens: pack.estimatedTokens,
+        selectedPaths: pack.selected.map((item) => item.path),
+        finderRecommended: pack.finderRecommended
+      });
+      if (!["medium", "high"].includes(pack.confidence) || pack.selected.length === 0) return;
+      return {
+        message: {
+          customType: "piagent-context-pack-v2",
+          content: pack.text,
+          display: false,
+          details: {
+            schemaVersion: 2,
+            queryHash: pack.queryHash,
+            confidence: pack.confidence,
+            estimatedTokens: pack.estimatedTokens,
+            paths: pack.selected.map((item) => item.path)
+          }
+        }
+      };
+    } catch (error) {
+      telemetry(ctx, {
+        event: "context_pack",
+        queryHash: signal.promptHash,
+        confidence: "none",
+        candidates: 0,
+        selected: 0,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  pi.on("turn_end", async (event, ctx) => {
+    const message = event.message as unknown as { usage?: unknown; stopReason?: unknown; role?: unknown };
+    telemetry(ctx, {
+      event: "turn_end",
+      turnIndex: event.turnIndex,
+      toolResults: event.toolResults.length,
+      role: message.role,
+      stopReason: message.stopReason,
+      usage: message.usage,
+      contextUsage: ctx.getContextUsage()
+    });
+  });
+
+  pi.on("session_compact", async (event, ctx) => {
+    telemetry(ctx, {
+      event: "session_compact",
+      reason: event.reason,
+      willRetry: event.willRetry,
+      fromExtension: event.fromExtension
+    });
+  });
+
+  pi.on("session_shutdown", async (event, ctx) => {
+    telemetry(ctx, {
+      event: "session_shutdown",
+      reason: event.reason,
+      targetSessionFile: event.targetSessionFile ? path.basename(event.targetSessionFile) : undefined
+    });
   });
 
   pi.on("tool_result", async (event, ctx) => {
@@ -4367,6 +4731,40 @@ export default function piagentGuard(pi: ExtensionAPI) {
       resultChanged = true;
     }
 
+    const fingerprint = toolResultFingerprint(event.toolName, event.input, resultContent);
+    const previousFingerprint = seenToolResults.get(fingerprint.key);
+    const repeated = previousFingerprint?.outputHash === fingerprint.outputHash;
+    seenToolResults.set(fingerprint.key, { outputHash: fingerprint.outputHash, recordedAt: nowIso() });
+    if (seenToolResults.size > 500) seenToolResults.delete(seenToolResults.keys().next().value as string);
+    if (repeated && ["read", "grep", "find", "ls"].includes(event.toolName) && fingerprint.outputChars > 0) {
+      resultContent = [{
+        type: "text",
+        text: `[Piagent delta: unchanged ${event.toolName} result; ${fingerprint.outputChars} chars / ${fingerprint.outputLines} lines match the previous identical call.]`
+      }];
+      resultDetails = isPlainRecord(resultDetails)
+        ? {
+            ...resultDetails,
+            piagentDelta: {
+              unchanged: true,
+              previousRecordedAt: previousFingerprint?.recordedAt,
+              outputHash: fingerprint.outputHash,
+              originalChars: fingerprint.outputChars,
+              originalLines: fingerprint.outputLines
+            }
+          }
+        : {
+            value: resultDetails,
+            piagentDelta: {
+              unchanged: true,
+              previousRecordedAt: previousFingerprint?.recordedAt,
+              outputHash: fingerprint.outputHash,
+              originalChars: fingerprint.outputChars,
+              originalLines: fingerprint.outputLines
+            }
+          };
+      resultChanged = true;
+    }
+
     const captureCache = new Map<string, ToolResultCaptureSummary>();
     const compactedContent = compactToolResultTextContent(ctx.cwd, event, ctx, resultContent, captureCache);
     const compactionCaptures = [...compactedContent.captures];
@@ -4385,6 +4783,21 @@ export default function piagentGuard(pi: ExtensionAPI) {
       resultDetails = attachToolResultCompactionDetails(resultDetails, compactionCaptures);
     }
 
+    telemetry(ctx, {
+      event: "tool_result",
+      toolName: event.toolName,
+      inputHash: fingerprint.inputHash,
+      outputHash: fingerprint.outputHash,
+      outputChars: fingerprint.outputChars,
+      outputLines: fingerprint.outputLines,
+      repeated,
+      compacted: compactionCaptures.length > 0,
+      compactedCaptures: compactionCaptures.length,
+      sensitiveValuesRedacted,
+      isError: event.isError,
+      usage: event.usage
+    });
+
     if (resultChanged) {
       return resultDetails === undefined
         ? { content: resultContent }
@@ -4393,6 +4806,15 @@ export default function piagentGuard(pi: ExtensionAPI) {
   });
 
   pi.on("tool_call", async (event, ctx) => {
+    const callFingerprint = toolResultFingerprint(event.toolName, event.input, []);
+    const target = extractLikelyPathFromInput(ctx.cwd, event.input as Record<string, unknown>);
+    telemetry(ctx, {
+      event: "tool_call",
+      toolName: event.toolName,
+      inputHash: callFingerprint.inputHash,
+      targetHash: target ? crypto.createHash("sha256").update(target).digest("hex") : undefined,
+      targetPath: target ? redactText(target) : undefined
+    });
     const projectTrusted = ctx.isProjectTrusted();
     const capabilityState = verifyProjectCapabilityState(extensionDir, ctx.cwd, projectTrusted);
     const recoveryTools = new Set(["piagent_profile_options", "piagent_profile_apply", "piagent_context", "read", "grep", "find", "ls"]);
@@ -4556,6 +4978,148 @@ export default function piagentGuard(pi: ExtensionAPI) {
   });
 
   pi.registerTool({
+    name: "piagent_tools",
+    label: "Piagent Tool Loader",
+    description: "Activate an additional Piagent tool group only when the current task needs it.",
+    promptSnippet: "Load governance, policy, retrieval, knowledge, onboarding, or usage tools on demand.",
+    promptGuidelines: [
+      "Load the smallest group that resolves the current need; do not activate every group."
+    ],
+    parameters: Type.Object({
+      groups: Type.Array(StringEnum(["governance", "policy", "retrieval", "knowledge", "onboarding", "usage"] as const), { minItems: 1 })
+    }),
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      const groups = [...new Set(params.groups)] as PiagentToolGroup[];
+      if (!dynamicToolsEnabled) {
+        return {
+          content: [{ type: "text", text: "Dynamic Piagent tool loading is disabled by PIAGENT_DYNAMIC_TOOLS." }],
+          details: { groups, disabled: true, activePiagentTools: pi.getActiveTools().filter((toolName) => PIAGENT_TOOL_NAMES.has(toolName)) }
+        };
+      }
+      const activeTools = activateToolGroups(ctx, groups, true);
+      return {
+        content: [{
+          type: "text",
+          text: `Piagent tools activated: ${groups.join(", ")}. Active Piagent tools: ${activeTools.filter((toolName) => PIAGENT_TOOL_NAMES.has(toolName)).length}.`
+        }],
+        details: {
+          groups,
+          activePiagentTools: activeTools.filter((toolName) => PIAGENT_TOOL_NAMES.has(toolName))
+        }
+      };
+    }
+  });
+
+  pi.registerTool({
+    name: "piagent_context_engine",
+    label: "Pi Context Engine",
+    description: "Build or query the local code index, return a token-budgeted context pack, map impacted tests, or report context efficiency.",
+    promptSnippet: "Use this instead of broad repository scouting when the task needs code navigation.",
+    promptGuidelines: [
+      "Prefer pack for an unfamiliar task, search for a named symbol/path, impact before targeted verification, and efficiency only for usage analysis.",
+      "Index evidence is advisory; re-read selected files before editing.",
+      "Run one bounded finder pass only when pack confidence is low."
+    ],
+    parameters: Type.Object({
+      action: StringEnum(["status", "rebuild", "search", "pack", "impact", "efficiency"] as const),
+      query: Type.Optional(Type.String()),
+      files: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
+      budgetTokens: Type.Optional(Type.Number({ minimum: 200, maximum: 50000 })),
+      refresh: Type.Optional(Type.Boolean())
+    }),
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      const profile = loadProfileFromContext(ctx);
+      const pathPolicy = effectiveProtectedPaths(policy, profile);
+      const excludePatterns = Array.from(new Set([
+        ...pathPolicy.readProtectedPaths,
+        ...pathPolicy.writeProtectedPaths,
+        ".pi/context-index.json",
+        ".pi/piagent-state/**"
+      ]));
+      let result: unknown;
+      let text: string;
+      if (params.action === "status") {
+        result = await contextIndexV2Status(ctx.cwd);
+        const status = result as Awaited<ReturnType<typeof contextIndexV2Status>>;
+        text = [
+          `indexV2: ${status.exists ? "ready" : "missing"}`,
+          `path: ${status.path}`,
+          `files: ${status.files ?? 0}`,
+          `symbols: ${status.symbols ?? 0}`,
+          `imports: ${status.imports ?? 0}`,
+          `stale: ${status.stale ? "yes" : "no"}`,
+          `warnings: ${status.warnings.join("; ") || "none"}`
+        ].join("\n");
+      } else if (params.action === "rebuild") {
+        result = await buildContextIndexV2(ctx.cwd, { excludePatterns });
+        const built = result as Awaited<ReturnType<typeof buildContextIndexV2>>;
+        text = [
+          "indexV2: rebuilt",
+          `files: ${built.files}; symbols: ${built.symbols}; imports: ${built.imports}`,
+          `changed: ${built.changed}; removed: ${built.removed}`,
+          `skipped: ${built.skippedLarge} large, ${built.skippedBinary} binary`,
+          `duration: ${built.durationMs}ms`
+        ].join("\n");
+      } else if (params.action === "search") {
+        if (!params.query?.trim()) throw new Error("query is required for context search");
+        let status = await contextIndexV2Status(ctx.cwd);
+        if (params.refresh || !status.exists) {
+          await buildContextIndexV2(ctx.cwd, { excludePatterns });
+          status = await contextIndexV2Status(ctx.cwd);
+        }
+        result = await searchContextIndexV2(ctx.cwd, params.query, { limit: 15 });
+        const search = result as Awaited<ReturnType<typeof searchContextIndexV2>>;
+        text = [
+          `confidence: ${search.confidence}`,
+          `indexStale: ${status.stale ? "yes" : "no"}`,
+          ...search.results.map((item) => `- ${item.path}: ${item.sources.join("+")}; ${item.symbols.slice(0, 4).map((symbol) => `${symbol.name}@${symbol.line}`).join(", ") || "no symbols"}`)
+        ].join("\n");
+      } else if (params.action === "pack") {
+        if (!params.query?.trim()) throw new Error("query is required for a context pack");
+        let status = await contextIndexV2Status(ctx.cwd);
+        if (params.refresh || !status.exists) {
+          await buildContextIndexV2(ctx.cwd, { excludePatterns });
+          status = await contextIndexV2Status(ctx.cwd);
+        }
+        const pack = await buildContextPack(ctx.cwd, params.query, {
+          budgetTokens: params.budgetTokens ?? 6_000,
+          includeCode: true,
+          limit: 18
+        });
+        result = { ...pack, text: undefined, status };
+        text = pack.text;
+      } else if (params.action === "impact") {
+        result = await buildTestImpact(ctx.cwd, params.files ?? []);
+        const impact = result as Awaited<ReturnType<typeof buildTestImpact>>;
+        text = [
+          `changed: ${impact.changedFiles.join(", ") || "none"}`,
+          `impacted: ${impact.impactedFiles.map((item) => `${item.path} via ${item.via}`).join(", ") || "none"}`,
+          `tests: ${impact.tests.join(", ") || "none"}`
+        ].join("\n");
+      } else {
+        result = buildContextEfficiencyReport(ctx.cwd);
+        const report = result as ReturnType<typeof buildContextEfficiencyReport>;
+        text = [
+          `contextWasteScore: ${report.metrics.contextWasteScore}/100 (lower is better)`,
+          `activeTools: ${report.metrics.averageActiveTools}`,
+          `toolSchemaShare: ${formatPercent(report.metrics.toolSchemaShare)}`,
+          `duplicateReads: ${report.metrics.duplicateReads}/${report.metrics.readCalls}`,
+          `duplicateOutput: ${formatPercent(report.metrics.duplicateOutputRate)}`,
+          `lowConfidencePacks: ${report.metrics.lowConfidencePacks}/${report.sample.contextPacks}`,
+          ...report.recommendations.map((recommendation) => `- ${recommendation}`)
+        ].join("\n");
+      }
+      telemetry(ctx, {
+        event: "context_engine_action",
+        action: params.action,
+        queryHash: params.query ? crypto.createHash("sha256").update(params.query).digest("hex") : undefined,
+        fileCount: params.files?.length ?? 0
+      });
+      return { content: [{ type: "text", text }], details: result };
+    }
+  });
+
+  pi.registerTool({
     name: "piagent_context",
     label: "Piagent Context",
     description: "Return the current piagent project profile, required context files, verify commands, and MCP capabilities.",
@@ -4573,6 +5137,12 @@ export default function piagentGuard(pi: ExtensionAPI) {
       const pathPolicy = effectiveProtectedPaths(policy, profile);
       const orchestrationPolicy = resolveOrchestrationPolicy(profile, policy);
       const contextIndex = buildContextIndexStatus(ctx.cwd, profile);
+      let contextEngine: Awaited<ReturnType<typeof contextIndexV2Status>> | { exists: false; warnings: string[] };
+      try {
+        contextEngine = await contextIndexV2Status(ctx.cwd);
+      } catch (error) {
+        contextEngine = { exists: false, warnings: [error instanceof Error ? error.message : String(error)] };
+      }
       const requiredContext = [
         ...policy.defaultRequiredContext,
         ...(profile.requiredContext ?? [])
@@ -4596,6 +5166,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
           exists: fs.existsSync(projectContextFilePath(ctx.cwd))
         },
         contextIndex,
+        contextEngine,
         protectedPaths: profile.protectedPaths ?? [],
         shellProtectedPaths: profile.shellProtectedPaths ?? profile.protectedPaths ?? [],
         readOnlyPaths: profile.readOnlyPaths ?? [],
@@ -4631,6 +5202,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
         `profile: ${payload.profile.path} (${payload.profile.exists ? "exists" : "missing"})`,
         `projectContext: ${payload.projectContext.path} (${payload.projectContext.exists ? "exists" : "missing"})`,
         `contextIndex: ${payload.contextIndex.path} (${payload.contextIndex.exists ? `${payload.contextIndex.nodes} nodes` : "missing"})`,
+        `contextEngine: ${payload.contextEngine.exists ? `${payload.contextEngine.files ?? 0} files / ${payload.contextEngine.symbols ?? 0} symbols${payload.contextEngine.stale ? " / stale" : ""}` : "missing"}`,
         `requiredContext: ${payload.requiredContext.join(", ") || "none"}`,
         `verifyCommands: ${Object.keys(payload.verifyCommands).join(", ") || "none"}`,
         `mcpCapabilities: ${payload.mcpCapabilities.join(", ") || "none"}`,
@@ -5368,12 +5940,30 @@ export default function piagentGuard(pi: ExtensionAPI) {
       } catch (error) {
         contextIndexError = error instanceof Error ? error.message : String(error);
       }
+      let contextEngine: Awaited<ReturnType<typeof buildContextIndexV2>> | undefined;
+      let contextEngineError: string | undefined;
+      try {
+        const pathPolicy = effectiveProtectedPaths(policy, profile);
+        contextEngine = await buildContextIndexV2(ctx.cwd, {
+          excludePatterns: Array.from(new Set([
+            ...pathPolicy.readProtectedPaths,
+            ...pathPolicy.writeProtectedPaths,
+            ".pi/context-index.json",
+            ".pi/piagent-state/**"
+          ]))
+        });
+      } catch (error) {
+        contextEngineError = error instanceof Error ? error.message : String(error);
+      }
       appendTrace(ctx.cwd, { event: "project_onboarding_record", contextFile: snapshot.contextFile, sourceFiles: params.sourceFiles, contextIndex: contextIndex?.policy.path, contextIndexError });
       appendSessionTrace(pi, { event: "project_onboarding_record", contextFile: snapshot.contextFile, sourceFiles: params.sourceFiles, contextIndex: contextIndex?.policy.path, contextIndexError });
 
       return {
-        content: [{ type: "text", text: `Project onboarding snapshot recorded: .pi/project-context.md${contextIndex ? ` and ${contextIndex.policy.path}` : contextIndexError ? ` (context index skipped: ${contextIndexError})` : ""}` }],
-        details: { ...snapshot, contextIndex, contextIndexError }
+        content: [{
+          type: "text",
+          text: `Project onboarding snapshot recorded: .pi/project-context.md${contextIndex ? ` and ${contextIndex.policy.path}` : contextIndexError ? ` (context index skipped: ${contextIndexError})` : ""}${contextEngine ? `; Context Engine indexed ${contextEngine.files} files / ${contextEngine.symbols} symbols` : contextEngineError ? `; Context Engine skipped: ${contextEngineError}` : ""}`
+        }],
+        details: { ...snapshot, contextIndex, contextIndexError, contextEngine, contextEngineError }
       };
     }
   });
@@ -5385,7 +5975,9 @@ export default function piagentGuard(pi: ExtensionAPI) {
     promptSnippet: "Start a governed implementation task and persist the task contract.",
     promptGuidelines: [
       "Call this before source edits in a project managed by Pi Agent Platform.",
-      "Use piagent_context first when possible."
+      "Use piagent_context first when possible.",
+      "Use tiny for a bounded low-risk change, normal for ordinary multi-file work, and high-risk for security, data, release, migration, or external-impact work.",
+      "Tiny tasks should stay on the compact parent-only work plan unless the caller supplies a justified custom plan."
     ],
     parameters: Type.Object({
       taskId: Type.Optional(Type.String({ minLength: 1 })),
@@ -6638,17 +7230,129 @@ export default function piagentGuard(pi: ExtensionAPI) {
     ].join("\n"), status);
   }
 
+  async function emitContextEngineStatus(ctx: ExtensionContext): Promise<void> {
+    try {
+      const status = await contextIndexV2Status(ctx.cwd);
+      emitRuntimeMessage(ctx, "piagent-context-engine-status", [
+        `contextEngine: ${status.exists ? "ready" : "missing"}`,
+        `path: ${status.path}`,
+        `files: ${status.files ?? 0}`,
+        `symbols: ${status.symbols ?? 0}`,
+        `imports: ${status.imports ?? 0}`,
+        `builtAt: ${status.builtAt ?? "never"}`,
+        `stale: ${status.stale ? "yes" : "no"}`,
+        `warnings: ${status.warnings.join("; ") || "none"}`,
+        "rebuild: /context rebuild"
+      ].join("\n"), status);
+    } catch (error) {
+      emitRuntimeMessage(ctx, "piagent-context-engine-status", `Context Engine status failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  async function rebuildContextEngine(ctx: ExtensionContext): Promise<void> {
+    const profile = loadProfileFromContext(ctx);
+    const pathPolicy = effectiveProtectedPaths(policy, profile);
+    try {
+      const result = await buildContextIndexV2(ctx.cwd, {
+        excludePatterns: Array.from(new Set([
+          ...pathPolicy.readProtectedPaths,
+          ...pathPolicy.writeProtectedPaths,
+          ".pi/context-index.json",
+          ".pi/piagent-state/**"
+        ]))
+      });
+      telemetry(ctx, { event: "context_engine_action", action: "rebuild", ...result });
+      emitRuntimeMessage(ctx, "piagent-context-engine-rebuild", [
+        "contextEngine: rebuilt",
+        `files: ${result.files}; symbols: ${result.symbols}; imports: ${result.imports}`,
+        `changed: ${result.changed}; removed: ${result.removed}`,
+        `skipped: ${result.skippedLarge} large, ${result.skippedBinary} binary`,
+        `duration: ${result.durationMs}ms`
+      ].join("\n"), result);
+    } catch (error) {
+      emitRuntimeMessage(ctx, "piagent-context-engine-rebuild", `Context Engine rebuild failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  async function emitContextEngineSearch(ctx: ExtensionContext, query: string): Promise<boolean> {
+    const status = await contextIndexV2Status(ctx.cwd);
+    if (!status.exists || !query.trim()) return false;
+    const search = await searchContextIndexV2(ctx.cwd, query, { limit: 12 });
+    emitRuntimeMessage(ctx, "piagent-context-engine-search", [
+      `confidence: ${search.confidence}`,
+      `stale: ${status.stale ? "yes" : "no"}`,
+      ...search.results.map((item) => `- ${item.path}: ${item.sources.join("+")}; ${item.symbols.slice(0, 4).map((symbol) => `${symbol.name}@${symbol.line}`).join(", ") || "no symbols"}`)
+    ].join("\n"), { queryHash: crypto.createHash("sha256").update(query).digest("hex"), search });
+    return true;
+  }
+
+  async function emitContextPack(ctx: ExtensionContext, query: string): Promise<void> {
+    if (!query.trim()) {
+      emitRuntimeMessage(ctx, "piagent-context-pack-help", "Usage: /context pack <task or symbol>");
+      return;
+    }
+    const status = await contextIndexV2Status(ctx.cwd);
+    if (!status.exists) {
+      emitRuntimeMessage(ctx, "piagent-context-pack-help", "Context Engine index is missing. Run /context rebuild first.");
+      return;
+    }
+    const pack = await buildContextPack(ctx.cwd, query, { budgetTokens: 1_500, includeCode: false, limit: 15 });
+    telemetry(ctx, {
+      event: "context_pack",
+      queryHash: pack.queryHash,
+      confidence: pack.confidence,
+      candidates: pack.candidates,
+      selected: pack.selected.length,
+      estimatedTokens: pack.estimatedTokens,
+      selectedPaths: pack.selected.map((item) => item.path),
+      source: "command"
+    });
+    emitRuntimeMessage(ctx, "piagent-context-pack-v2", pack.text, {
+      queryHash: pack.queryHash,
+      confidence: pack.confidence,
+      estimatedTokens: pack.estimatedTokens,
+      paths: pack.selected.map((item) => item.path),
+      finderRecommended: pack.finderRecommended
+    });
+  }
+
+  async function emitTestImpact(ctx: ExtensionContext, raw: string): Promise<void> {
+    const files = raw.split(/\s+/).map((file) => file.trim()).filter(Boolean);
+    const impact = await buildTestImpact(ctx.cwd, files);
+    emitRuntimeMessage(ctx, "piagent-context-impact", [
+      `changed: ${impact.changedFiles.join(", ") || "none"}`,
+      `impacted: ${impact.impactedFiles.map((item) => `${item.path} via ${item.via}`).join(", ") || "none"}`,
+      `tests: ${impact.tests.join(", ") || "none"}`
+    ].join("\n"), impact);
+  }
+
+  function emitContextEfficiency(ctx: ExtensionContext): void {
+    const report = buildContextEfficiencyReport(ctx.cwd);
+    emitRuntimeMessage(ctx, "piagent-context-efficiency", [
+      `contextWasteScore: ${report.metrics.contextWasteScore}/100 (lower is better)`,
+      `activeTools: ${report.metrics.averageActiveTools}`,
+      `toolSchemaShare: ${formatPercent(report.metrics.toolSchemaShare)}`,
+      `duplicateReads: ${report.metrics.duplicateReads}/${report.metrics.readCalls}`,
+      `duplicateOutput: ${formatPercent(report.metrics.duplicateOutputRate)}`,
+      `lowConfidencePacks: ${report.metrics.lowConfidencePacks}/${report.sample.contextPacks}`,
+      ...report.recommendations.map((recommendation) => `- ${recommendation}`)
+    ].join("\n"), report);
+  }
+
   function parsePreflightWorkflow(raw: string): string {
     return raw.match(/\b(?:scout|be-to-fe|review|plan|platform-improve|task)\b/i)?.[0]?.toLowerCase() ?? "task";
   }
 
   function compactCurrentSession(ctx: ExtensionContext): void {
+    const instructions = semanticCompactionInstructions(ctx.cwd);
+    telemetry(ctx, {
+      event: "compaction_requested",
+      mode: "semantic",
+      instructionTokens: estimateContextTokens(instructions),
+      hasTaskContract: Boolean(compactSessionTask(ctx.cwd))
+    });
     ctx.compact({
-      customInstructions: [
-        "Preserve current task decisions, project constraints, changed files, verify commands, open blockers, and next action.",
-        "Drop repeated mandatory-flow boilerplate and stale exploration details.",
-        "After compaction, required project context must be re-read from current repository files before implementation."
-      ].join("\n")
+      customInstructions: instructions
     });
   }
 
@@ -6668,7 +7372,11 @@ export default function piagentGuard(pi: ExtensionAPI) {
     const { action, rest } = commandArgs(raw);
     if (!action) {
       const chosen = await selectRuntimeAction(ctx, "Piagent context", [
-        { value: "index", label: "Context index", description: "Show compact project map", recommended: true },
+        { value: "index", label: "Index status", description: "Architecture map plus local code index", recommended: true },
+        { value: "pack", label: "Context pack", description: "Rank paths and symbols for a task" },
+        { value: "impact", label: "Test impact", description: "Map changed files to dependents and tests" },
+        { value: "efficiency", label: "Efficiency", description: "Show transparent context waste metrics" },
+        { value: "rebuild", label: "Rebuild index", description: "Incrementally refresh changed files" },
         { value: "preflight", label: "Preflight", description: "Check whether to run, compact, or fresh-session" },
         { value: "compact", label: "Compact", description: "Compact current session with Piagent carry-over rules" },
         { value: "search", label: "Search index", description: "Use /context search <keyword>" },
@@ -6676,6 +7384,27 @@ export default function piagentGuard(pi: ExtensionAPI) {
       ], "index");
       if (chosen === "index") {
         emitContextIndexStatus(ctx);
+        await emitContextEngineStatus(ctx);
+        return;
+      }
+      if (chosen === "rebuild") {
+        await rebuildContextEngine(ctx);
+        return;
+      }
+      if (chosen === "efficiency") {
+        emitContextEfficiency(ctx);
+        return;
+      }
+      if (chosen === "pack") {
+        await emitContextPack(ctx, "");
+        return;
+      }
+      if (chosen === "impact") {
+        await emitTestImpact(ctx, "");
+        return;
+      }
+      if (chosen === "search") {
+        emitRuntimeMessage(ctx, "piagent-context-search-help", "Usage: /context search <keyword or symbol>");
         return;
       }
       if (chosen === "preflight") {
@@ -6689,7 +7418,11 @@ export default function piagentGuard(pi: ExtensionAPI) {
       emitRuntimeMessage(ctx, "piagent-context-help", [
         "namespace: /context",
         "index: /context index",
+        "rebuild: /context rebuild",
         "search: /context search <keyword>",
+        "pack: /context pack <task or symbol>",
+        "impact: /context impact [changed files]",
+        "efficiency: /context efficiency",
         "preflight: /context preflight [task|scout|be-to-fe|review|plan]",
         "compact: /context compact [task|scout|be-to-fe]",
         "legacy: /piagent-context | /context-index | /task-preflight"
@@ -6698,10 +7431,31 @@ export default function piagentGuard(pi: ExtensionAPI) {
     }
     if (["index", "status", "show", "current"].includes(action)) {
       emitContextIndexStatus(ctx);
+      await emitContextEngineStatus(ctx);
+      return;
+    }
+    if (["rebuild", "build", "refresh"].includes(action)) {
+      await rebuildContextEngine(ctx);
       return;
     }
     if (action === "search") {
-      emitContextIndexSearch(ctx, rest);
+      try {
+        if (!await emitContextEngineSearch(ctx, rest)) emitContextIndexSearch(ctx, rest);
+      } catch {
+        emitContextIndexSearch(ctx, rest);
+      }
+      return;
+    }
+    if (action === "pack") {
+      await emitContextPack(ctx, rest);
+      return;
+    }
+    if (["impact", "tests"].includes(action)) {
+      await emitTestImpact(ctx, rest);
+      return;
+    }
+    if (["efficiency", "stats", "waste"].includes(action)) {
+      emitContextEfficiency(ctx);
       return;
     }
     if (["preflight", "check"].includes(action)) {
@@ -6716,7 +7470,11 @@ export default function piagentGuard(pi: ExtensionAPI) {
       emitRuntimeMessage(ctx, "piagent-context-help", [
         "namespace: /context",
         "index: /context index",
+        "rebuild: /context rebuild",
         "search: /context search <keyword>",
+        "pack: /context pack <task or symbol>",
+        "impact: /context impact [changed files]",
+        "efficiency: /context efficiency",
         "preflight: /context preflight [task|scout|be-to-fe|review|plan]",
         "compact: /context compact [task|scout|be-to-fe]",
         "legacy: /piagent-context | /context-index | /task-preflight"
@@ -6729,7 +7487,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
   pi.registerCommand("piagent-context", {
     description: "Legacy alias for /context",
     getArgumentCompletions: (prefix: string) => {
-      const actions = ["index", "search", "preflight", "compact", "help"];
+      const actions = ["index", "rebuild", "search", "pack", "impact", "efficiency", "preflight", "compact", "help"];
       const typed = String(prefix ?? "").trim().toLowerCase();
       return actions.filter((action) => action.startsWith(typed)).map((action) => ({ value: action, label: action }));
     },
@@ -6739,9 +7497,9 @@ export default function piagentGuard(pi: ExtensionAPI) {
   });
 
   pi.registerCommand("context", {
-    description: "Context index, search, preflight, and compact controls without a model follow-up",
+    description: "Context index, retrieval pack, test impact, efficiency, preflight, and compact controls without a model follow-up",
     getArgumentCompletions: (prefix: string) => {
-      const actions = ["index", "search", "preflight", "compact", "help"];
+      const actions = ["index", "rebuild", "search", "pack", "impact", "efficiency", "preflight", "compact", "help"];
       const typed = String(prefix ?? "").trim().toLowerCase();
       return actions.filter((action) => action.startsWith(typed)).map((action) => ({ value: action, label: action }));
     },
@@ -6843,6 +7601,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
         { value: "preflight", label: "Preflight", description: "Check task/context health" },
         { value: "compact", label: "Compact", description: "Compact current session with Piagent carry-over rules" },
         { value: "logs", label: "Tool logs", description: "Recent compacted large tool outputs" },
+        { value: "efficiency", label: "Efficiency", description: "Context waste score and causes" },
         { value: "help", label: "Help", description: "Show typed forms" }
       ], "live");
       if (chosen === "live") {
@@ -6865,6 +7624,10 @@ export default function piagentGuard(pi: ExtensionAPI) {
         emitToolLogCaptures(ctx);
         return;
       }
+      if (chosen === "efficiency") {
+        emitContextEfficiency(ctx);
+        return;
+      }
       emitRuntimeMessage(ctx, "piagent-usage-help", [
         "namespace: /usage",
         "live: /usage live",
@@ -6872,6 +7635,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
         "preflight: /usage preflight [task|scout|be-to-fe]",
         "compact: /usage compact [task|scout|be-to-fe]",
         "logs: /usage logs",
+        "efficiency: /usage efficiency",
         "native exact session: /session",
         "legacy: /piagent-usage | /task-preflight | /logs"
       ].join("\n"));
@@ -6897,10 +7661,14 @@ export default function piagentGuard(pi: ExtensionAPI) {
       emitToolLogCaptures(ctx);
       return;
     }
+    if (["efficiency", "stats", "waste"].includes(action)) {
+      emitContextEfficiency(ctx);
+      return;
+    }
     if (action === "help") {
       emitRuntimeMessage(ctx, "piagent-usage-help", [
         "namespace: /usage",
-        "live | history | preflight | compact | logs",
+        "live | history | preflight | compact | logs | efficiency",
         "examples:",
         "/usage live",
         "/usage history",
@@ -7038,7 +7806,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
   pi.registerCommand("piagent-usage", {
     description: "Legacy alias for /usage",
     getArgumentCompletions: (prefix: string) => {
-      const actions = ["live", "history", "preflight", "compact", "logs", "help"];
+      const actions = ["live", "history", "preflight", "compact", "logs", "efficiency", "help"];
       const typed = String(prefix ?? "").trim().toLowerCase();
       return actions.filter((action) => action.startsWith(typed)).map((action) => ({ value: action, label: action }));
     },
@@ -7050,7 +7818,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
   pi.registerCommand("usage", {
     description: "Usage namespace: live, history, preflight, compact, and logs without a model follow-up",
     getArgumentCompletions: (prefix: string) => {
-      const actions = ["live", "history", "preflight", "compact", "logs", "help"];
+      const actions = ["live", "history", "preflight", "compact", "logs", "efficiency", "help"];
       const typed = String(prefix ?? "").trim().toLowerCase();
       return actions.filter((action) => action.startsWith(typed)).map((action) => ({ value: action, label: action }));
     },

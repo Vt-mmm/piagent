@@ -130,7 +130,9 @@ describe("piagent guard integration", () => {
     piagentGuard(harness.pi);
     await harness.handlers.get("session_start")({}, ctx);
 
-    assert.equal(harness.tools.size, 28);
+    assert.equal(harness.tools.size, 30);
+    assert.equal(harness.tools.has("piagent_tools"), true);
+    assert.equal(harness.tools.has("piagent_context_engine"), true);
     assert.equal(harness.tools.has("piagent_document_read"), true);
     assert.equal(harness.commands.size, 35);
     assert.equal(harness.commands.has("profile"), true);
@@ -158,10 +160,127 @@ describe("piagent guard integration", () => {
     assert.equal(harness.commands.has("onboard-project"), true);
     assert.equal(harness.commands.has("profiles"), false);
     assert.equal(harness.commands.has("profile-tech"), false);
-    assert.deepEqual([...harness.handlers.keys()].sort(), ["input", "session_start", "tool_call", "tool_result"]);
+    assert.deepEqual([...harness.handlers.keys()].sort(), [
+      "before_agent_start",
+      "input",
+      "session_compact",
+      "session_shutdown",
+      "session_start",
+      "tool_call",
+      "tool_result",
+      "turn_end"
+    ]);
     assert.equal(harness.getSessionName(), "pi:Integration Project");
     assert.match(ctx.ui.notices[0].message, /Piagent Pi guard loaded: Integration Project/);
     assert.match(ctx.ui.notices[0].message, /permission=workspace-write/);
+  });
+
+  it("keeps a small stable tool surface and activates workflow groups on demand", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const ctx = createContext(cwd, { confirm: true });
+    const harness = createPiHarness({ activeTools: ["read", "bash", "edit", "write"] });
+
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+    assert.equal(harness.activeTools.size, 5, "session start should keep four host tools plus the Piagent loader");
+    assert.equal(harness.activeTools.has("piagent_tools"), true);
+    assert.equal(harness.activeTools.has("piagent_context_engine"), false);
+    assert.equal(harness.activeTools.has("piagent_profile_apply"), false);
+
+    await harness.handlers.get("input")({ text: "Fix typo in src/view.ts", source: "user" }, ctx);
+    assert.equal(harness.activeTools.has("piagent_task_start"), true);
+    assert.equal(harness.activeTools.has("piagent_exec_policy_check"), true);
+    assert.equal(harness.activeTools.has("piagent_context_engine"), false, "tiny explicit changes should not pay retrieval schema cost");
+    assert.equal(harness.activeTools.size, 15);
+
+    await harness.handlers.get("input")({
+      text: "Implement invoice processing across the service layer and its tests",
+      source: "user"
+    }, ctx);
+    assert.equal(harness.activeTools.has("piagent_context_engine"), true);
+    assert.equal(harness.activeTools.has("piagent_memory_search"), false, "ordinary code retrieval should not load the knowledge schema group");
+    assert.equal(harness.activeTools.has("piagent_profile_apply"), false);
+    assert.equal(harness.activeTools.size, 19, "ordinary tasks should expose 15 Piagent tools instead of all 30");
+
+    await harness.tools.get("piagent_tools").execute(
+      "load-knowledge",
+      { groups: ["knowledge"] },
+      undefined,
+      () => {},
+      ctx
+    );
+    assert.equal(harness.activeTools.has("piagent_memory_search"), true);
+    assert.equal(harness.activeTools.size, 25);
+
+    await harness.tools.get("piagent_tools").execute(
+      "load-onboarding",
+      { groups: ["onboarding"] },
+      undefined,
+      () => {},
+      ctx
+    );
+    assert.equal(harness.activeTools.has("piagent_profile_apply"), true);
+    assert.equal(harness.activeTools.has("piagent_context_engine"), true);
+    assert.equal(harness.activeTools.size, 33, "usage remains unloaded until a usage request needs it");
+  });
+
+  it("builds and injects a bounded navigation pack without exposing protected files", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    fs.writeFileSync(path.join(cwd, "src", "invoice.ts"), [
+      "export function calculateInvoiceTotal(values: number[]): number {",
+      "  return values.reduce((sum, value) => sum + value, 0);",
+      "}",
+      ""
+    ].join("\n"));
+    fs.writeFileSync(path.join(cwd, "src", "invoice.test.ts"), [
+      "import { calculateInvoiceTotal } from './invoice';",
+      "test('total', () => calculateInvoiceTotal([1, 2]));",
+      ""
+    ].join("\n"));
+    const ctx = createContext(cwd, { confirm: true });
+    const harness = createPiHarness({ activeTools: ["read", "bash", "edit", "write"] });
+
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+    const rebuilt = await harness.tools.get("piagent_context_engine").execute(
+      "engine-rebuild",
+      { action: "rebuild" },
+      undefined,
+      () => {},
+      ctx
+    );
+    assert.match(rebuilt.content[0].text, /indexV2: rebuilt/);
+
+    const prompt = "Implement invoice total behavior across the service and its focused tests";
+    await harness.handlers.get("input")({ text: prompt, source: "user" }, ctx);
+    const injected = await harness.handlers.get("before_agent_start")({
+      prompt,
+      systemPrompt: "stable test system prompt",
+      systemPromptOptions: { cwd, selectedTools: [...harness.activeTools] }
+    }, ctx);
+    assert.equal(injected.message.customType, "piagent-context-pack-v2");
+    assert.match(injected.message.content, /src\/invoice\.ts/);
+    assert.doesNotMatch(injected.message.content, /\.env/);
+    assert.ok(injected.message.details.estimatedTokens <= 1_200);
+  });
+
+  it("returns a delta marker for an identical repeated read result", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const ctx = createContext(cwd);
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+    const toolResult = harness.handlers.get("tool_result");
+    const content = [{ type: "text", text: "line one\nline two\n" }];
+
+    const first = await callToolResult(toolResult, ctx, "read", { path: "src/view.ts" }, content);
+    const second = await callToolResult(toolResult, ctx, "read", { path: "src/view.ts" }, content);
+    assert.deepEqual(first, {});
+    assert.match(second.content[0].text, /Piagent delta: unchanged read result/);
+    assert.equal(second.details.piagentDelta.unchanged, true);
   });
 
   it("preserves an operator-provided Pi session name", async () => {
@@ -925,6 +1044,25 @@ describe("piagent guard integration", () => {
     );
     const implementStep = highRiskTask.details.workPlan.find((step) => step.id === "implement");
     assert.deepEqual(implementStep.dependsOn, ["plan", "challenge"]);
+
+    const tinyTask = await harness.tools.get("piagent_task_start").execute(
+      "orchestration-tiny-task-test",
+      {
+        taskId: "orchestration-tiny-task",
+        summary: "Fix a bounded low risk display label regression",
+        riskLane: "tiny",
+        expectedOutput: "The display label renders with the corrected text.",
+        acceptanceCriteria: ["The focused display test passes"],
+        scope: ["packages/piagent-core/**"],
+        outOfScope: ["architecture changes"]
+      },
+      undefined,
+      () => {},
+      ctx
+    );
+    assert.deepEqual(tinyTask.details.workPlan.map((step) => step.id), ["implement", "verify"]);
+    assert.deepEqual(tinyTask.details.workPlan.map((step) => step.role), ["parent", "parent"]);
+    assert.deepEqual(tinyTask.details.workPlan[1].dependsOn, ["implement"]);
   });
 
   it("switches the current session permission profile with slash commands", async () => {

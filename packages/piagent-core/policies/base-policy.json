@@ -114,6 +114,8 @@
   "toolRegistry": {
     "defaultMode": "advisory",
     "alwaysAllowedTools": [
+      "piagent_tools",
+      "piagent_context_engine",
       "piagent_context",
       "piagent_permission_status",
       "piagent_exec_policy_check",

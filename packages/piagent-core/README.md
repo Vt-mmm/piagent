@@ -12,6 +12,7 @@ Shared Pi package for reusable project workflows.
 - `policies/base-policy.json`: default runtime policy, including protected path and shell protected path defaults.
 - input hook support for local screenshot/image paths pasted into chat; supported images are attached as `[image1]`, `[image2]`, ...
 - compact tool-result rendering: oversized redacted output is previewed in Pi and captured under `.pi/piagent-state/tool-results/` for offline audit/reporting.
+- local Context Engine v2: incremental FTS5/symbol/import index, hybrid retrieval, token-budgeted packs, test-impact mapping, dynamic Piagent tools, and Agent Watch compatible telemetry.
 
 ## Trusted run wrapper
 
@@ -46,6 +47,8 @@ Legacy aliases still work: `/permission-status`, `/read-only`, `/workspace-write
 
 ## Runtime quality tools
 
+- `piagent_tools`
+- `piagent_context_engine`
 - `piagent_permission_status`
 - `piagent_exec_policy_check`
 - `piagent_context_budget`
@@ -77,10 +80,10 @@ Legacy aliases still work: `/permission-status`, `/read-only`, `/workspace-write
 
 - `/commands`: runtime menu/help for terminal, Pi, MCP, model, memory, session, context, permission, and subagent commands.
 - `/workflow`: one launcher for task, scout, BE-to-FE, discuss, plan, review, commit, PR, platform-improve, and onboarding workflows.
-- `/usage`: runtime usage namespace for live snapshot, history hint, preflight, compact, and compact-log captures.
+- `/usage`: runtime usage namespace for live snapshot, history hint, preflight, compact, compact-log captures, and context efficiency.
 - `/name`: set the current session name for Agent Watch/report mapping.
 - `/fresh`: open a fresh governed session for `task`, `scout`, or `be-to-fe`.
-- `/context`: runtime context namespace for context index status/search, task preflight, and compact.
+- `/context`: runtime context namespace for index/rebuild/search/pack/test-impact/efficiency, task preflight, and semantic compact.
 - `/permission`: runtime permission namespace for status/read-only/workspace-write/full-access.
 - `/onboard`: runtime onboarding namespace; `run` launches the first-read onboarding workflow.
 - `/context-index`: legacy alias for `/context index/search`.
@@ -136,6 +139,9 @@ Runtime task tools write local state to:
 - `.pi/memory/MEMORY.md` when the user explicitly asks Pi to remember durable information; generated projects ignore this file by default
 - `.pi/piagent-state/observed-bash.jsonl`
 - `.pi/piagent-state/traces.jsonl`
+- `.pi/piagent-state/context-engine/context-v2.sqlite`
+- `.pi/piagent-state/context-engine/events.jsonl`
+- `.pi/piagent-state/context-engine/efficiency-report.json`
 - `.pi/task-inbox/*.md` for oversized local task intake; generated projects ignore this directory by default
 - Pi custom session entry `piagent-task-trace`
 

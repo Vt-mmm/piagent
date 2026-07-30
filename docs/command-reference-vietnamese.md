@@ -37,8 +37,8 @@ Command ngắn của PiAgent dùng cho workflow và guard local:
 |---|---|
 | `/commands` | Menu/help command, không gọi model. |
 | `/workflow` | Launcher task/scout/plan/review/git/onboard. |
-| `/usage` | Usage live/history/preflight/compact/logs. |
-| `/context` | Context index/search/preflight/compact. |
+| `/usage` | Usage live/history/preflight/compact/logs/efficiency. |
+| `/context` | Smart index/rebuild/search/pack/impact/efficiency/preflight/compact. |
 | `/permission` | Permission mode của session. |
 | `/profile` | Profile và tech stack. |
 | `/memory` | Project memory policy. |
@@ -65,6 +65,7 @@ Trong Pi:
 /commands
 /onboard
 /context index
+/context rebuild
 /memory
 ```
 
@@ -107,10 +108,10 @@ Nếu task còn mơ hồ:
 Pi Agent dùng ít namespace nhưng mỗi namespace có subcommand/menu rõ:
 
 - `/workflow` là cửa chính cho task/scout/review/git/onboard workflow. Workflow cần agent turn là cố ý và được nói rõ.
-- `/usage` gom live usage, history/report hint, preflight, compact, logs.
+- `/usage` gom live usage, history/report hint, preflight, compact, logs, efficiency.
 - `/name` đặt tên session theo task để Agent Watch/report map đúng việc.
 - `/fresh` mở session mới cho `task`, `scout`, hoặc `be-to-fe` khi phiên hiện tại đã nặng.
-- `/context` gom context index, search, preflight, compact.
+- `/context` gom architecture map, code index, search, context pack, test impact, efficiency, preflight và semantic compact.
 - `/permission` gom permission status/read-only/workspace-write/full-access.
 - `/profile` là namespace duy nhất cho profile và tech stack.
 - `/commands` là runtime help/menu, không còn bắt agent đọc docs để giải thích.
@@ -137,10 +138,10 @@ Các command này đến từ package `piagent-core`.
 | `/onboard` | First-run setup/status. | Mở menu onboarding: status, run, profile, setup. |
 | `/profile` | Xem/áp profile và chọn tech. | Chạy ngay, không gọi model. |
 | `/profile setup` | Chọn profile + tech bằng option. | Ghi profile/lock/tech manifest. |
-| `/usage` | Xem live usage hoặc report hint. | Menu live/history/preflight/compact/logs. |
+| `/usage` | Xem live usage hoặc report hint. | Menu live/history/preflight/compact/logs/efficiency. |
 | `/name <name>` | Đặt tên session theo task. | Agent Watch/report map đúng task. |
 | `/fresh task|scout|be-to-fe <request>` | Phiên hiện tại đã nặng hoặc muốn tách việc. | Mở session mới có tên và replay workflow prompt gọn. |
-| `/context` | Xem context index/search/preflight/compact. | Menu context, không gọi model. |
+| `/context` | Xem index/search/pack/impact/efficiency/preflight/compact. | Menu context, không gọi model. |
 | `/permission` | Xem/đổi quyền runtime. | Menu status/read-only/workspace-write/full-access. |
 | `/memory` hoặc `/memory-policy` | Xem memory policy. | Chạy ngay, không gọi model. |
 | `/model-options` | Xem hướng dẫn model/thinking. | Chạy ngay; chọn model vẫn dùng `/model` hoặc `Ctrl+L`. |
@@ -464,8 +465,8 @@ Các lệnh này chạy ngoài Pi.
 | Command | Dùng khi nào |
 |---|---|
 | `npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0` | Cài Pi CLI tương thích với release hiện tại. |
-| `npm install -g --ignore-scripts @piagent/platform@1.2.5` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
-| `pi install git:github.com/Vt-mmm/piagent@v1.2.5` | Cài pinned release khi cần reproducible team setup. |
+| `npm install -g --ignore-scripts @piagent/platform@1.2.6` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
+| `pi install git:github.com/Vt-mmm/piagent@v1.2.6` | Cài pinned release khi cần reproducible team setup. |
 | `pi install git:github.com/Vt-mmm/piagent` | Cài latest package platform cho máy cá nhân/sandbox. |
 | `piagent-update --check` | Báo version hiện tại vs version sẽ lên cho cả ba thành phần; không cài gì. |
 | `piagent-update` | Full update global một lệnh cho cả máy: Pi host → npm-global helper → Pi package, đúng thứ tự release yêu cầu. |

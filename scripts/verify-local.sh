@@ -51,6 +51,7 @@ required_files=(
   "$ROOT/.pi/project-context.md"
   "$ROOT/packages/piagent-core/package.json"
   "$ROOT/packages/piagent-core/extensions/piagent-guard.ts"
+  "$ROOT/packages/piagent-core/extensions/context-engine.js"
   "$ROOT/packages/piagent-core/extensions/policy-core.js"
   "$ROOT/packages/piagent-core/extensions/redaction-core.js"
   "$ROOT/packages/piagent-core/extensions/runtime-evidence.js"
@@ -115,6 +116,7 @@ required_files=(
   "$ROOT/docs/publishing-for-teams.md"
   "$ROOT/docs/herdr-workflow.md"
   "$ROOT/docs/runtime-harness-standard.md"
+  "$ROOT/docs/context-engine.md"
   "$ROOT/docs/task-implementation-contract.md"
   "$ROOT/docs/runtime-quality-baseline.md"
   "$ROOT/docs/quality-benchmark.md"
@@ -128,9 +130,11 @@ required_files=(
   "$ROOT/docs-site/assets/docs.css"
   "$ROOT/docs-site/assets/docs.js"
   "$ROOT/docs-site/content/index.html"
+  "$ROOT/docs-site/content/context-engine.html"
   "$ROOT/docs-site/content/mcp.html"
   "$ROOT/docs-site/vercel.json"
   "$ROOT/scripts/build-docs-site.mjs"
+  "$ROOT/scripts/context-engine.mjs"
   "$ROOT/scripts/preview-docs-site.mjs"
   "$ROOT/schemas/project-profile.schema.json"
   "$ROOT/schemas/task-contract.schema.json"
@@ -171,6 +175,8 @@ required_files=(
   "$ROOT/scripts/import-agent-instructions.mjs"
   "$ROOT/tests/capability-core.test.mjs"
   "$ROOT/tests/piagent-guard-integration.test.mjs"
+  "$ROOT/tests/context-engine.test.mjs"
+  "$ROOT/tests/workflow-prompts.test.mjs"
   "$ROOT/tests/install-global.test.mjs"
   "$ROOT/tests/package-distribution.test.mjs"
   "$ROOT/tests/release-identity.test.mjs"
@@ -538,6 +544,7 @@ if grep -R -E -i \
 fi
 
 node --check "$ROOT/packages/piagent-core/extensions/piagent-guard.ts" >/dev/null
+node --check "$ROOT/packages/piagent-core/extensions/context-engine.js" >/dev/null
 node --check "$ROOT/packages/piagent-core/extensions/policy-core.js" >/dev/null
 node --check "$ROOT/packages/piagent-core/extensions/redaction-core.js" >/dev/null
 node --check "$ROOT/packages/piagent-core/extensions/runtime-evidence.js" >/dev/null
@@ -546,6 +553,7 @@ node --check "$ROOT/packages/piagent-core/capabilities/capability-core.js" >/dev
 node --check "$ROOT/packages/piagent-core/capabilities/capability-sources.js" >/dev/null
 node --check "$ROOT/scripts/capability-catalog.mjs" >/dev/null
 node --check "$ROOT/scripts/piagent-cli.mjs" >/dev/null
+node --check "$ROOT/scripts/context-engine.mjs" >/dev/null
 node --check "$ROOT/scripts/pi-usage-history.mjs" >/dev/null
 node --check "$ROOT/scripts/migrate-project-state.mjs" >/dev/null
 node --check "$ROOT/scripts/import-agent-instructions.mjs" >/dev/null

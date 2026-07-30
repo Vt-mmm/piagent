@@ -74,7 +74,7 @@ Removal targets what is registered in Pi's settings rather than what the current
 - Runtime profile selection via `/profile`, plus select-style tech stack setup via `/profile setup` and `/profile tech`.
 - Runtime usage/session controls via `/usage`, `/name`, `/fresh`, plus Pi native `/session`.
 - Explicit project memory via `/memory` or `/memory-policy` and `piagent_memory_*` tools.
-- Compact project context controls via `/context` or `/context index` and `piagent_context_index_*` tools. This is an advisory navigation graph, not a security boundary or source of truth.
+- Local Context Engine controls via `/context`: incremental code index, hybrid search, token-budgeted packs, test impact, efficiency telemetry, and semantic compaction. Results remain advisory, not a security boundary or source of truth.
 - MCP setup helpers for Context7, Chrome DevTools, GitHub, Playwright, and Figma.
 - Subagent setup helpers for read-only scouting, planning, implementation, review, and risk challenge.
 - Chat image-path intake: paste a local screenshot path into the Pi chat box and the guard attaches it as `[image1]` before the model sees the prompt.
@@ -261,6 +261,7 @@ This repository intentionally excludes:
 - [Operator manual tiếng Việt](docs/operator-manual-vietnamese.md)
 - [Quickstart tiếng Việt](docs/quickstart-vietnamese.md)
 - [Command reference tiếng Việt](docs/command-reference-vietnamese.md)
+- [Pi Context Engine](docs/context-engine.md)
 - [Team onboarding](docs/team-onboarding.md)
 - [Project onboarding](docs/project-onboarding.md)
 - [Workflow recipes](docs/workflow-recipes.md)
@@ -290,7 +291,7 @@ This repository intentionally excludes:
 
 ## Maturity
 
-The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.2.5` or a reviewed commit.
+The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.2.6` or a reviewed commit.
 
 Ready for:
 

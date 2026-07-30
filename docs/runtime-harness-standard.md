@@ -24,7 +24,7 @@ Project cụ thể chỉ cần adapter/profile riêng. Core package giữ lifecy
 |---|---|---|
 | Risk lane | `riskLane` + profile `hardGates` | Chặn auth, release, provider config, destructive action, database migration. |
 | Intake | `piagent_task_start` | Mỗi task có scope, output, acceptance criteria trước khi edit. |
-| Context rules | `/onboard run`, `.pi/project-context.md`, `requiredContext`, context manifest | Giảm token và tránh đọc toàn repo. |
+| Context rules | `/onboard run`, Pi Context Engine, `.pi/project-context.md`, `requiredContext`, context manifest | Giảm token và tránh đọc toàn repo. |
 | Test matrix | `verifyCommands` + observed verify evidence | DONE phải có exact verify command thực chạy qua Pi bash hoặc `N/A` rõ lý do. |
 | Trace | `piagent_trace_record`, `.pi/piagent-state/traces.jsonl`, session entry | Có audit trail cho task. |
 | Protected paths | `protectedPaths` trong profile + extension guard | Mỗi project có vùng cấm riêng. |
@@ -52,6 +52,9 @@ Project cụ thể chỉ cần adapter/profile riêng. Core package giữ lifecy
 
 ## Task lifecycle chuẩn
 
+Vòng đời thích nghi theo mức rủi ro. Runtime guard luôn hoạt động, nhưng các
+tool context mang tính advisory chỉ được nạp khi task thực sự cần.
+
 ```text
 1. Intake
    - risk lane
@@ -61,10 +64,10 @@ Project cụ thể chỉ cần adapter/profile riêng. Core package giữ lifecy
    - protected paths
 
 2. Context
-   - load piagent_context
-   - read `.pi/project-context.md`
-   - read requiredContext
-   - check large files with piagent_context_budget
+   - load concise piagent_context once
+   - use one token-budgeted Context Engine pack for unfamiliar/cross-module work
+   - read only targeted requiredContext
+   - check only large/unfamiliar files with piagent_context_budget
    - record context manifest
 
 3. Plan
@@ -73,8 +76,8 @@ Project cụ thể chỉ cần adapter/profile riêng. Core package giữ lifecy
    - rollback/handoff if high-risk
 
 4. Implement
-   - check risky shell with piagent_exec_policy_check
-   - check non-piagent tools with piagent_tool_policy_check
+   - check complex/risky shell with piagent_exec_policy_check
+   - check non-piagent tools only when capability is unclear
    - edit only in scope
    - avoid protected paths
 
@@ -91,6 +94,12 @@ Project cụ thể chỉ cần adapter/profile riêng. Core package giữ lifecy
    - next step
    - piagent_task_gate_check before DONE
 ```
+
+| Lane | Extra context/orchestration |
+|---|---|
+| `tiny` | Core lifecycle only; parent agent, targeted reads, exact verify. |
+| `normal` | Index/memory only for unfamiliar areas; bounded read-only delegation when it saves context. |
+| `high-risk` | Relevant index/memory/vendor evidence plus explicit security/data/release review. |
 
 ## Maturity phases
 

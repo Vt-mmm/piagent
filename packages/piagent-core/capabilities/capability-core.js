@@ -796,6 +796,10 @@ function buildCoreIntegrity(root) {
     "packages/piagent-core/capabilities/project-profile.js",
     "packages/piagent-core/security/sensitive-data.js",
     "packages/piagent-core/extensions/piagent-guard.ts",
+    // context-engine.js decides which repository content enters the model
+    // context and records the resulting telemetry, so it is part of the
+    // runtime trust boundary enforced by the profile lock.
+    "packages/piagent-core/extensions/context-engine.js",
     // guard-io.js loads the project profile and guard-shell-analysis.ts decides
     // what a command is about to reach, so tampering with either changes what
     // the guard enforces. guard-types.ts is deliberately absent: it is erased

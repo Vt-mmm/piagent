@@ -178,6 +178,10 @@ describe("capability catalog and profile lock", () => {
     assert.equal(lock.permissions.protectedPaths.includes(".pi/context-index.json"), true);
     assert.equal(lock.permissions.shellProtectedPaths.includes(".pi/piagent-state/**"), true);
     assert.equal(lock.permissions.shellProtectedPaths.includes(".pi/context-index.json"), true);
+    assert.ok(
+      lock.core.runtimeFiles.some((entry) => entry.path === "packages/piagent-core/extensions/context-engine.js"),
+      "the profile lock must pin the context engine runtime"
+    );
   });
 
   it("binds a lock to its declared package source", () => {

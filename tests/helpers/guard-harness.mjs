@@ -58,6 +58,7 @@ export function createPiHarness(options = {}) {
   const tools = new Map();
   const commands = new Map();
   const entries = [];
+  const activeTools = new Set(options.activeTools ?? []);
   let sessionName = options.sessionName ?? "";
   const pi = {
     on(name, handler) {
@@ -65,6 +66,7 @@ export function createPiHarness(options = {}) {
     },
     registerTool(tool) {
       tools.set(tool.name, tool);
+      activeTools.add(tool.name);
     },
     registerCommand(name, command) {
       commands.set(name, command);
@@ -83,9 +85,24 @@ export function createPiHarness(options = {}) {
     },
     getThinkingLevel() {
       return "xhigh";
+    },
+    getActiveTools() {
+      return [...activeTools];
+    },
+    getAllTools() {
+      return [...tools.values()].map((tool) => ({
+        ...tool,
+        sourceInfo: { source: "extension", path: "<test>", scope: "temporary", origin: "top-level" }
+      }));
+    },
+    setActiveTools(names) {
+      activeTools.clear();
+      for (const name of names) {
+        if (tools.has(name) || options.activeTools?.includes(name)) activeTools.add(name);
+      }
     }
   };
-  return { pi, handlers, tools, commands, entries, getSessionName: () => sessionName };
+  return { pi, handlers, tools, commands, entries, activeTools, getSessionName: () => sessionName };
 }
 
 export function createContext(cwd, options = {}) {

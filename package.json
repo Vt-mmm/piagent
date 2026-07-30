@@ -1,6 +1,6 @@
 {
   "name": "@piagent/platform",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "license": "MIT",
   "publishConfig": {
     "access": "public",
@@ -60,7 +60,8 @@
     "piagent-capabilities": "scripts/piagent-cli.mjs",
     "piagent-migrate": "scripts/piagent-cli.mjs",
     "piagent-import-instructions": "scripts/piagent-cli.mjs",
-    "piagent-auto": "scripts/piagent-cli.mjs"
+    "piagent-auto": "scripts/piagent-cli.mjs",
+    "piagent-context": "scripts/piagent-cli.mjs"
   },
   "pi": {
     "extensions": [
