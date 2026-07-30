@@ -2,6 +2,16 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.2.4 - 2026-07-30
+
+### Changed
+
+- `piagent-update` remains a global machine update first; optional `--project <path>` now runs a post-update legacy project migration and strict-share doctor when a maintainer wants that extra check.
+
+- Documented the global `npm exec --package @piagent/platform@X.Y.Z -- piagent-update ...` bootstrap command for machines that do not have the global `piagent-update` helper yet.
+
+- `piagent-update` now falls back to a user-writable npm global prefix when the default prefix is locked by the OS, avoiding `/usr/local/lib/node_modules` permission failures during team rollout.
+
 ## v1.2.3 - 2026-07-30
 
 ### Added

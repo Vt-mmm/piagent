@@ -290,7 +290,7 @@ This repository intentionally excludes:
 
 ## Maturity
 
-The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.2.3` or a reviewed commit.
+The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.2.4` or a reviewed commit.
 
 Ready for:
 

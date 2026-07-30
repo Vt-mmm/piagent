@@ -464,12 +464,15 @@ Các lệnh này chạy ngoài Pi.
 | Command | Dùng khi nào |
 |---|---|
 | `npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0` | Cài Pi CLI tương thích với release hiện tại. |
-| `npm install -g --ignore-scripts @piagent/platform@1.2.3` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
-| `pi install git:github.com/Vt-mmm/piagent@v1.2.3` | Cài pinned release khi cần reproducible team setup. |
+| `npm install -g --ignore-scripts @piagent/platform@1.2.4` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
+| `pi install git:github.com/Vt-mmm/piagent@v1.2.4` | Cài pinned release khi cần reproducible team setup. |
 | `pi install git:github.com/Vt-mmm/piagent` | Cài latest package platform cho máy cá nhân/sandbox. |
 | `piagent-update --check` | Báo version hiện tại vs version sẽ lên cho cả ba thành phần; không cài gì. |
-| `piagent-update` | Full update một lệnh: Pi host → npm-global helper → Pi package, đúng thứ tự release yêu cầu. Thêm `--project <path>` để chạy doctor sau. |
+| `piagent-update` | Full update global một lệnh cho cả máy: Pi host → npm-global helper → Pi package, đúng thứ tự release yêu cầu. |
 | `piagent-update --version X.Y.Z` | Update tới đúng một release thay vì latest; dùng cho rollout theo lô hoặc rollback. |
+| `piagent-update --project <path>` | Bước phụ sau global update: migrate project cũ nếu có rồi chạy doctor strict-share cho project đó. |
+| `piagent-update --npm-prefix ~/.pi/npm-global` | Ép updater cài host/helper vào npm global prefix của user; hữu ích khi `/usr/local/lib/node_modules` không ghi được. |
+| `npm exec -y --package @piagent/platform@X.Y.Z -- piagent-update --version X.Y.Z --force` | Bootstrap/update global cho máy chưa có `piagent-update`; chạy từ Terminal, không cần mở Pi. |
 | `PIAGENT_NO_UPDATE_CHECK=1` | Tắt notice "có bản mới" ở đầu session Pi. Mặc định bật, hỏi registry nhiều nhất một lần mỗi 24 giờ ở tiến trình nền. |
 | Cài exact Pi host của release, rồi `npm install -g --ignore-scripts @piagent/platform@X.Y.Z` và `piagent-install --stable` | Sequence thủ công tương đương. Thứ tự bắt buộc: `piagent-install` fail nếu Pi host lệch bản pin và không tự cài host. Version pin của từng release nằm trong [release/install policy](release-install-policy.md). |
 | Cài exact Pi host ghi trong release cũ, rồi helper `vPREVIOUS` và `piagent-install --stable` | Full rollback; đánh giá dependency risk của host cũ trước khi hạ version. |
