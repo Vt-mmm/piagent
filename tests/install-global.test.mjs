@@ -419,6 +419,8 @@ describe("install-global release channels", () => {
         "    /tmp/pi-mcp-adapter",
         "  npm:pi-subagents@0.35.1",
         "    /tmp/pi-subagents",
+        "  npm:pi-web-access@0.13.0",
+        "    /tmp/pi-web-access",
         "Project packages:",
         ""
       ].join("\\n")
@@ -429,12 +431,32 @@ describe("install-global release channels", () => {
     assert.match(result.stdout, /\+ pi install npm:pi-mcp-adapter@2\.15\.0/);
     assert.match(result.stdout, /\+ pi remove npm:pi-subagents@0\.35\.1/);
     assert.match(result.stdout, /\+ pi install npm:pi-subagents@0\.38\.0/);
+    assert.match(result.stdout, /\+ pi remove npm:pi-web-access@0\.13\.0/);
+    assert.match(result.stdout, /\+ pi install npm:pi-web-access@0\.17\.0/);
   });
 
   it("does not add subagents to a clean install unless requested", () => {
     const result = runInstaller(["--stable", "--dry-run", "--no-model-scope"]);
     assert.equal(result.status, 0, result.stderr);
     assert.doesNotMatch(result.stdout, /pi install npm:pi-subagents/);
+  });
+
+  it("installs web access by default and honors explicit opt-out", () => {
+    const included = runInstaller(["--stable", "--dry-run", "--no-model-scope"]);
+    assert.equal(included.status, 0, included.stderr);
+    assert.match(included.stdout, /\+ pi install npm:pi-web-access@0\.17\.0/);
+
+    const skipped = runInstaller(["--stable", "--dry-run", "--no-model-scope", "--no-web-access"], {
+      PI_INSTALL_FAKE_PI_LIST: [
+        "User packages:",
+        "  npm:pi-web-access@0.13.0",
+        "    /tmp/pi-web-access",
+        "Project packages:",
+        ""
+      ].join("\\n")
+    });
+    assert.equal(skipped.status, 0, skipped.stderr);
+    assert.doesNotMatch(skipped.stdout, /pi (?:remove|install) npm:pi-web-access/);
   });
 
   it("honors an explicit request to leave an existing subagents install alone", () => {
@@ -450,6 +472,33 @@ describe("install-global release channels", () => {
 
     assert.equal(result.status, 0, result.stderr);
     assert.doesNotMatch(result.stdout, /pi (?:remove|install) npm:pi-subagents/);
+  });
+
+  it("passes the web access opt-out through setup", () => {
+    const skipped = runSetup([
+      "--global-only",
+      "--dry-run",
+      "--no-mcp",
+      "--no-subagents",
+      "--no-web-access",
+      "--no-herdr",
+      "--no-model-scope"
+    ]);
+    assert.equal(skipped.status, 0, skipped.stderr);
+    assert.ok(skipped.stdout.includes("--no-web-access"), skipped.stdout);
+    assert.ok(!skipped.stdout.includes("--with-web-access"), skipped.stdout);
+
+    const included = runSetup([
+      "--global-only",
+      "--dry-run",
+      "--no-mcp",
+      "--no-subagents",
+      "--no-herdr",
+      "--no-model-scope"
+    ]);
+    assert.equal(included.status, 0, included.stderr);
+    assert.ok(included.stdout.includes("--with-web-access"), included.stdout);
+    assert.ok(!included.stdout.includes("--no-web-access"), included.stdout);
   });
 });
 

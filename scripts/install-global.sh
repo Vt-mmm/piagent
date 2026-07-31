@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  scripts/install-global.sh [--stable|--dev|--local|--channel <stable|dev|local>] [--version <tag>] [--resolve-tag] [--package-source <source>] [--dry-run] [--with-mcp|--no-mcp] [--mcp-preset <preset>] [--with-subagents|--no-subagents] [--subagents-preset <preset>] [--with-web-access] [--with-herdr] [--model-scope <preset>]
+  scripts/install-global.sh [--stable|--dev|--local|--channel <stable|dev|local>] [--version <tag>] [--resolve-tag] [--package-source <source>] [--dry-run] [--with-mcp|--no-mcp] [--mcp-preset <preset>] [--with-subagents|--no-subagents] [--subagents-preset <preset>] [--with-web-access|--no-web-access] [--with-herdr] [--model-scope <preset>]
 
 Purpose:
   Install the piagent Pi package into the current user's global Pi settings.
@@ -42,7 +42,7 @@ Notes:
   - An existing pi-subagents install is preserved and upgraded automatically.
     New installs remain opt-in with --with-subagents; use --no-subagents to skip an existing install.
   - Subagents preset defaults to safe: compact tool description, bounded concurrency/depth.
-  - Web access is optional. Install it only when you want the builtin `researcher` subagent to browse/fetch web sources inside Pi.
+  - Web access is installed by default so the builtin `researcher` subagent can browse/fetch web sources inside Pi. Skip it with --no-web-access.
 USAGE
 }
 
@@ -62,7 +62,7 @@ WITH_SUBAGENTS=false
 SUBAGENTS_EXPLICIT=false
 SUBAGENTS_PRESET="safe"
 SUBAGENTS_MODEL_SCOPE="none"
-WITH_WEB_ACCESS=false
+WITH_WEB_ACCESS=true
 WITH_HERDR=false
 CONFIGURE_MODEL_SCOPE=true
 MODEL_SCOPE_PRESET="full"
@@ -76,10 +76,10 @@ RESOLVED_PACKAGE_COMMIT=""
 CLI_PACKAGE_SELECTOR=""
 PI_MCP_ADAPTER_SOURCE="npm:pi-mcp-adapter@2.15.0"
 PI_SUBAGENTS_SOURCE="npm:pi-subagents@0.38.0"
-PI_WEB_ACCESS_SOURCE="npm:pi-web-access@0.13.0"
+PI_WEB_ACCESS_SOURCE="npm:pi-web-access@0.17.0"
 PI_MCP_ADAPTER_INTEGRITY="sha512-HJAVt2I5IB52pKpSUYbVJnzOmuXYBCc/ZrI9ylHxYQWmE7p75j7aWzsHe734EFN+gL7WaM23CTX3eYHz2THKBA=="
 PI_SUBAGENTS_INTEGRITY="sha512-8wGQiX6rkR5J4V+AnWtQg3+LmC+cHnZIM1f/VWTjCTkVmcoKdeLsTAYG6BS2yKAugyEUjNUGj3vE5d9nj9m61A=="
-PI_WEB_ACCESS_INTEGRITY="sha512-ny0bHisMWdobmu1hcMp/jqjaRh6pYrH7dctBK2CVyRF4ia7bP47RnOPYdG1yiks9ohtcanWir5Hl9EFap8h0zQ=="
+PI_WEB_ACCESS_INTEGRITY="sha512-rDAhkIzYtBmCCNgstTJ/zFnw91V64TQqhqLOeGXFxmnJaxE45nj+L4BkUPMYSUb3WFexDDYdGlONyBLLKE4eVw=="
 
 require_value() {
   local option="$1"
@@ -400,6 +400,10 @@ while [[ $# -gt 0 ]]; do
       WITH_WEB_ACCESS=true
       shift
       ;;
+    --no-web-access)
+      WITH_WEB_ACCESS=false
+      shift
+      ;;
     --with-herdr)
       WITH_HERDR=true
       shift
@@ -627,6 +631,7 @@ if [[ "$WITH_WEB_ACCESS" == true ]]; then
   if [[ "$DRY_RUN" == false ]]; then
     verify_npm_integrity "$PI_WEB_ACCESS_SOURCE" "$PI_WEB_ACCESS_INTEGRITY"
   fi
+  remove_existing_npm_package_sources "pi-web-access"
   run_cmd pi install "$PI_WEB_ACCESS_SOURCE"
 fi
 

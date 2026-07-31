@@ -103,15 +103,15 @@ Sau khi mở session mới hoặc `/reload`:
 
 `/subagents-doctor` là lệnh đầu tiên nên chạy nếu không thấy tool/agent.
 
-Optional research support:
+Web research support is installed by default in team setup/update:
 
 ```bash
-pi install npm:pi-web-access@0.13.0
-# hoặc
-bash /path/to/piagent/scripts/setup.sh . --with-web-access
+pi install npm:pi-web-access@0.17.0
+# hoặc full setup/update:
+bash /path/to/piagent/scripts/setup.sh .
 ```
 
-`researcher` builtin cần web/search/fetch tools từ package này. Không bật mặc định để tránh tăng tool surface cho team không cần web research.
+`researcher` builtin cần web/search/fetch tools từ package này. Từ `v1.2.8`, platform cài package này mặc định để `/parallel-research` không bị giới hạn ở local repo/docs. Nếu một máy thật sự không được phép browse/fetch web, dùng `--no-web-access`.
 
 Giải nghĩa nhanh:
 

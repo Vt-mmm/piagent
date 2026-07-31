@@ -2,6 +2,16 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.2.8 - 2026-07-31
+
+### Changed
+
+- Global setup/update now installs `pi-web-access@0.17.0` by default so builtin researcher subagents can browse/search/fetch external sources instead of being limited to local repo/docs. Machines that cannot use web research can opt out with `--no-web-access`.
+
+### Fixed
+
+- Global install/update now removes older platform-owned `pi-web-access` registrations before installing the reviewed exact version, forcing Pi's shared npm package tree to refresh stale transitive dependencies.
+
 ## v1.2.7 - 2026-07-31
 
 ### Security
