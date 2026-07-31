@@ -89,8 +89,8 @@
           "path": "packages/piagent-core/subagents/piagent-planner.md"
         },
         {
-          "byteSize": 1601,
-          "digest": "sha256:be1ec2282db3038717c1e66e91e3890b8d0d665fed039c903cc1e4a3c427f69e",
+          "byteSize": 1604,
+          "digest": "sha256:ee050d70faba909a9b8f82d24a63d8bad90178380d266af0d071010538bc8d3c",
           "id": "piagent-reviewer",
           "kind": "subagents",
           "path": "packages/piagent-core/subagents/piagent-reviewer.md"

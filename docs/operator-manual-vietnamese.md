@@ -18,12 +18,12 @@ Support matrix release hiện tại: macOS Apple Silicon + Bash và Linux x64 + 
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.2.9
+npm install -g --ignore-scripts @piagent/platform@1.2.10
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
 
-Khi seed `.pi/settings.json` cho team/repo cần audit lặp lại, giữ package source dạng pinned tag như `git:github.com/Vt-mmm/piagent@v1.2.9`. Máy cá nhân có thể dùng `git:github.com/Vt-mmm/piagent` để theo latest.
+Khi seed `.pi/settings.json` cho team/repo cần audit lặp lại, giữ package source dạng pinned tag như `git:github.com/Vt-mmm/piagent@v1.2.10`. Máy cá nhân có thể dùng `git:github.com/Vt-mmm/piagent` để theo latest.
 
 Nếu đang ở source checkout của platform, dùng helper theo channel để preview trước khi đổi:
 
@@ -99,7 +99,7 @@ install package once
 
 ```bash
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.2.9
+npm install -g --ignore-scripts @piagent/platform@1.2.10
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -282,7 +282,7 @@ Không phải daily default. Dùng khi muốn tạo sẵn `.pi` files cho projec
 bash /path/to/piagent/scripts/setup.sh /path/to/project \
   --project-only \
   --profile auto \
-  --package-source git:github.com/Vt-mmm/piagent@v1.2.9 \
+  --package-source git:github.com/Vt-mmm/piagent@v1.2.10 \
   --mcp-preset core \
   --subagents-preset safe
 ```
@@ -347,10 +347,20 @@ Input guard của platform cũng tự collapse prompt có full `Mandatory flow` 
 
 ### Gửi ảnh/screenshot trong chat
 
-Nếu Pi/chat box không tạo native image attachment mà chỉ hiện local path kiểu `/var/folders/.../Ảnh màn hình ...png`, cứ để nguyên path trong prompt:
+Nếu Pi/chat box không tạo native image attachment mà chỉ hiện local path, dùng
+ảnh nằm trong project hoặc một folder đã cấp qua `additionalReadRoots`. Ví dụ
+lưu screenshot vào `~/Documents/team-screenshots` rồi thêm folder đó vào profile:
+
+```json
+{
+  "additionalReadRoots": ["~/Documents/team-screenshots"]
+}
+```
+
+Sau đó để nguyên path trong prompt:
 
 ```text
-/workflow scout Scout UI issue from screenshot /var/folders/.../screenshot.png
+/workflow scout Scout UI issue from screenshot ~/Documents/team-screenshots/screenshot.png
 ```
 
 Piagent guard sẽ xử lý trước khi model nhận input:
@@ -360,9 +370,15 @@ Piagent guard sẽ xử lý trước khi model nhận input:
 3. thay path trong prompt bằng marker `[image1]`;
 4. báo `Piagent image input: attached [image1]`.
 
-Hỗ trợ `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`. Giới hạn mặc định: tối đa 4 ảnh/input, 8 MB/ảnh.
+Hỗ trợ `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`. Giới hạn mặc định:
+tối đa 4 ảnh/input, 8 MB/ảnh. Guard resolve target thật trước khi đọc, giữ
+`protectedPaths` và filesystem read scope, đồng thời kiểm tra bytes đúng định
+dạng ảnh; đổi tên file text thành `.png` không đủ để attach.
 
-Nếu ảnh quá lớn, lưu ảnh nhỏ hơn hoặc yêu cầu agent dùng Pi `read` tool trên file ảnh để Pi resize. Không cần copy ảnh vào repo và không commit screenshot tạm.
+Nếu ảnh quá lớn, lưu ảnh nhỏ hơn hoặc yêu cầu agent dùng Pi `read` tool trên file
+ảnh để Pi resize. Không cần commit screenshot tạm. Với path ngoài project chưa
+được cấp root, file không được đọc hoặc attach; chuỗi path vẫn chỉ là text trong
+prompt.
 
 ### BE spec lên FE
 
@@ -894,8 +910,8 @@ Watchdog là optional adversarial reviewer ở cuối turn, không bật mặc �
 
 | Command | Dùng để |
 |---|---|
-| `npm install -g --ignore-scripts @piagent/platform@1.2.9` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
-| `pi install git:github.com/Vt-mmm/piagent@v1.2.9` | Install pinned release cho reproducible team setup. |
+| `npm install -g --ignore-scripts @piagent/platform@1.2.10` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
+| `pi install git:github.com/Vt-mmm/piagent@v1.2.10` | Install pinned release cho reproducible team setup. |
 | `pi install git:github.com/Vt-mmm/piagent` | Install latest platform package cho máy cá nhân/sandbox. |
 | Cài exact Pi host của release, rồi `npm install -g --ignore-scripts @piagent/platform@X.Y.Z` và `piagent-install --stable` | Full update: đồng bộ host, terminal helper và Pi package. Mỗi release pin một Pi host chính xác; lấy đúng version của release đang cài trong [release/install policy](release-install-policy.md). |
 | Cài exact Pi host ghi trong release cũ, rồi helper `vPREVIOUS` và `piagent-install --stable` | Full rollback; đánh giá lại dependency findings của host cũ trước khi hạ version. |
@@ -1002,7 +1018,7 @@ Mở lại Pi session sau khi install.
 Cài lại terminal helper đúng release rồi kiểm tra `PATH`:
 
 ```bash
-npm install -g --ignore-scripts @piagent/platform@1.2.9
+npm install -g --ignore-scripts @piagent/platform@1.2.10
 command -v piagent-install
 ```
 

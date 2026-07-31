@@ -62,6 +62,7 @@ pi install /path/to/piagent
 - `1.2.7`: refresh exact MCP/subagent add-on pins, loại dependency URL/static-server có advisory và chặn cả moderate advisory trong runtime release gate.
 - `1.2.8`: cài `pi-web-access@0.17.0` mặc định trong setup/update để researcher subagents có web/search/fetch thật; thêm `--no-web-access` cho máy không được phép browse.
 - `1.2.9`: hợp nhất Context Engine exclusion policy giữa CLI và runtime, resolve profile `extends`, loại `readOnlyPaths`, tự rebuild index khi policy digest đổi, chặn symlink source ra ngoài project, và làm rõ lỗi thiếu migrator trong update dry-run.
+- `1.2.10`: bắt buộc `contextIndexV2Status` nhận explicit exclusion policy; Context Engine storage chuyển sang owner-only, bật core + FTS5 secure-delete và tự retry FTS rebuild/VACUUM khi policy đổi để purge raw bytes của index cũ.
 
 ## Không publish
 

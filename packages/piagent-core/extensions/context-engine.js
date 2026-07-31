@@ -92,6 +92,21 @@ export function contextEnginePaths(cwd) {
   };
 }
 
+function hardenContextDatabaseArtifacts(cwd) {
+  const database = contextEnginePaths(cwd).database;
+  for (const artifact of [database, `${database}-wal`, `${database}-shm`]) {
+    try {
+      const stat = fs.lstatSync(artifact);
+      if (!stat.isFile()) {
+        throw new Error(`Context index storage path must be a regular file: ${artifact}`);
+      }
+      fs.chmodSync(artifact, 0o600);
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+  }
+}
+
 async function loadSqlite() {
   if (!sqliteModulePromise) {
     sqliteModulePromise = (async () => {
@@ -117,53 +132,85 @@ async function loadSqlite() {
 async function openDatabase(cwd, { create = true } = {}) {
   const paths = contextEnginePaths(cwd);
   if (!create && !fs.existsSync(paths.database)) return undefined;
-  fs.mkdirSync(paths.root, { recursive: true });
+  fs.mkdirSync(paths.root, { recursive: true, mode: 0o700 });
+  if (!fs.lstatSync(paths.root).isDirectory()) {
+    throw new Error(`Context index storage root must be a directory: ${paths.root}`);
+  }
+  fs.chmodSync(paths.root, 0o700);
+  hardenContextDatabaseArtifacts(cwd);
+  const descriptor = fs.openSync(
+    paths.database,
+    fs.constants.O_RDWR
+      | (create ? fs.constants.O_CREAT : 0)
+      | (fs.constants.O_NOFOLLOW ?? 0),
+    0o600
+  );
+  try {
+    fs.fchmodSync(descriptor, 0o600);
+  } finally {
+    fs.closeSync(descriptor);
+  }
   const { DatabaseSync } = await loadSqlite();
   const db = new DatabaseSync(paths.database);
-  db.exec(`
-    PRAGMA journal_mode = WAL;
-    PRAGMA synchronous = NORMAL;
-    PRAGMA foreign_keys = ON;
-    CREATE TABLE IF NOT EXISTS metadata (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS files (
-      path TEXT PRIMARY KEY,
-      hash TEXT NOT NULL,
-      bytes INTEGER NOT NULL,
-      mtime_ms REAL NOT NULL,
-      language TEXT NOT NULL,
-      indexed_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS symbols (
-      id INTEGER PRIMARY KEY,
-      file_path TEXT NOT NULL REFERENCES files(path) ON DELETE CASCADE,
-      name TEXT NOT NULL,
-      kind TEXT NOT NULL,
-      line INTEGER NOT NULL,
-      end_line INTEGER NOT NULL,
-      signature TEXT NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS symbols_name_idx ON symbols(name);
-    CREATE INDEX IF NOT EXISTS symbols_file_idx ON symbols(file_path);
-    CREATE TABLE IF NOT EXISTS imports (
-      id INTEGER PRIMARY KEY,
-      file_path TEXT NOT NULL REFERENCES files(path) ON DELETE CASCADE,
-      specifier TEXT NOT NULL,
-      target_path TEXT,
-      line INTEGER NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS imports_file_idx ON imports(file_path);
-    CREATE INDEX IF NOT EXISTS imports_target_idx ON imports(target_path);
-    CREATE VIRTUAL TABLE IF NOT EXISTS file_fts USING fts5(
-      path UNINDEXED,
-      body,
-      symbol_names,
-      tokenize = 'unicode61 remove_diacritics 2'
-    );
-  `);
-  return db;
+  try {
+    db.exec(`
+      PRAGMA journal_mode = WAL;
+      PRAGMA synchronous = NORMAL;
+      PRAGMA foreign_keys = ON;
+      PRAGMA secure_delete = ON;
+      CREATE TABLE IF NOT EXISTS metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS files (
+        path TEXT PRIMARY KEY,
+        hash TEXT NOT NULL,
+        bytes INTEGER NOT NULL,
+        mtime_ms REAL NOT NULL,
+        language TEXT NOT NULL,
+        indexed_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS symbols (
+        id INTEGER PRIMARY KEY,
+        file_path TEXT NOT NULL REFERENCES files(path) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        line INTEGER NOT NULL,
+        end_line INTEGER NOT NULL,
+        signature TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS symbols_name_idx ON symbols(name);
+      CREATE INDEX IF NOT EXISTS symbols_file_idx ON symbols(file_path);
+      CREATE TABLE IF NOT EXISTS imports (
+        id INTEGER PRIMARY KEY,
+        file_path TEXT NOT NULL REFERENCES files(path) ON DELETE CASCADE,
+        specifier TEXT NOT NULL,
+        target_path TEXT,
+        line INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS imports_file_idx ON imports(file_path);
+      CREATE INDEX IF NOT EXISTS imports_target_idx ON imports(target_path);
+      CREATE VIRTUAL TABLE IF NOT EXISTS file_fts USING fts5(
+        path UNINDEXED,
+        body,
+        symbol_names,
+        tokenize = 'unicode61 remove_diacritics 2'
+      );
+    `);
+    const ftsSecureDelete = db.prepare(`
+      SELECT v
+      FROM file_fts_config
+      WHERE k = 'secure-delete'
+    `).get();
+    if (Number(ftsSecureDelete?.v) !== 1) {
+      db.exec("INSERT INTO file_fts(file_fts, rank) VALUES('secure-delete', 1)");
+    }
+    hardenContextDatabaseArtifacts(cwd);
+    return db;
+  } catch (error) {
+    db.close();
+    throw error;
+  }
 }
 
 function metadataMap(db) {
@@ -465,6 +512,7 @@ export function classifyContextTask(prompt) {
 
 export async function buildContextIndexV2(cwd, options = {}) {
   const excludePatterns = requireExplicitExcludePatterns(options, "buildContextIndexV2");
+  const excludeDigest = contextIndexExcludeDigest(excludePatterns);
   const startedAt = Date.now();
   const projectRoot = fs.realpathSync.native(cwd);
   const directoryCache = new Map();
@@ -473,7 +521,10 @@ export async function buildContextIndexV2(cwd, options = {}) {
   const listed = gitFileList(cwd) ?? walkedFileList(cwd, maxFiles);
   const candidates = listed.filter((file) => shouldIndexPath(file, { ...options, excludePatterns })).slice(0, maxFiles).sort();
   const db = await openDatabase(cwd);
+  const previousMetadata = metadataMap(db);
   const existing = new Map(db.prepare("SELECT path, hash, bytes, mtime_ms FROM files").all().map((row) => [row.path, row]));
+  const purgeStaleContent = Boolean(previousMetadata.builtAt || existing.size > 0)
+    && (previousMetadata.purgePending === "1" || previousMetadata.excludeDigest !== excludeDigest);
   const current = new Set();
   const currentHashes = new Map();
   const changed = [];
@@ -525,8 +576,10 @@ export async function buildContextIndexV2(cwd, options = {}) {
   }
 
   const removed = [...existing.keys()].filter((file) => !current.has(file));
-  db.exec("BEGIN IMMEDIATE");
+  let transactionOpen = false;
   try {
+    db.exec("BEGIN IMMEDIATE");
+    transactionOpen = true;
     const deleteFile = db.prepare("DELETE FROM files WHERE path = ?");
     const deleteFts = db.prepare("DELETE FROM file_fts WHERE path = ?");
     for (const relativePath of [...removed, ...changed.map((item) => item.relativePath)]) {
@@ -574,12 +627,28 @@ export async function buildContextIndexV2(cwd, options = {}) {
       importCount: counts.imports,
       maxFileBytes,
       excludePatterns: JSON.stringify(excludePatterns),
-      excludeDigest: contextIndexExcludeDigest(excludePatterns),
+      excludeDigest,
       excludePolicyVersion: contextIndexExcludePolicyVersion(),
+      purgePending: purgeStaleContent ? 1 : 0,
       skippedPaths: JSON.stringify(skippedPaths)
     });
     db.exec("COMMIT");
-    db.close();
+    transactionOpen = false;
+    if (purgeStaleContent) {
+      if (typeof options.onPurgeStart === "function") await options.onPurgeStart();
+      db.exec("INSERT INTO file_fts(file_fts) VALUES('rebuild')");
+      db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+      db.exec("VACUUM");
+      db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+      db.exec("BEGIN IMMEDIATE");
+      transactionOpen = true;
+      setMetadata(db, {
+        purgePending: 0,
+        purgedAt: nowIso()
+      });
+      db.exec("COMMIT");
+      transactionOpen = false;
+    }
     return {
       schemaVersion: INDEX_SCHEMA_VERSION,
       builtAt: indexedAt,
@@ -590,25 +659,24 @@ export async function buildContextIndexV2(cwd, options = {}) {
       removed: removed.length,
       skippedLarge,
       skippedBinary,
+      purgedStaleContent: purgeStaleContent,
       ...counts
     };
   } catch (error) {
-    db.exec("ROLLBACK");
-    db.close();
+    if (transactionOpen) db.exec("ROLLBACK");
     throw error;
+  } finally {
+    db.close();
+    hardenContextDatabaseArtifacts(cwd);
   }
 }
 
 export async function contextIndexV2Status(cwd, options = {}) {
+  const expectedExcludePatterns = requireExplicitExcludePatterns(options, "contextIndexV2Status");
+  const expectedExcludeDigest = contextIndexExcludeDigest(expectedExcludePatterns);
   const paths = contextEnginePaths(cwd);
   const projectRoot = fs.realpathSync.native(cwd);
   const directoryCache = new Map();
-  const expectedExcludePatterns = options.excludePatterns === undefined
-    ? undefined
-    : normalizeContextIndexExcludePatterns(options.excludePatterns);
-  const expectedExcludeDigest = expectedExcludePatterns
-    ? contextIndexExcludeDigest(expectedExcludePatterns)
-    : undefined;
   if (!fs.existsSync(paths.database)) {
     return {
       schemaVersion: INDEX_SCHEMA_VERSION,
@@ -617,6 +685,7 @@ export async function contextIndexV2Status(cwd, options = {}) {
       stale: false,
       policyStale: false,
       expectedExcludeDigest,
+      purgePending: false,
       warnings: ["index-v2 missing"]
     };
   }
@@ -628,20 +697,14 @@ export async function contextIndexV2Status(cwd, options = {}) {
     const symbols = Number(db.prepare("SELECT COUNT(*) count FROM symbols").get().count);
     const imports = Number(db.prepare("SELECT COUNT(*) count FROM imports").get().count);
     const indexedPaths = new Set(fileRows.map((row) => row.path));
-    let storedExcludePatterns = [];
-    try {
-      const parsed = JSON.parse(metadata.excludePatterns ?? "[]");
-      if (Array.isArray(parsed)) storedExcludePatterns = normalizeContextIndexExcludePatterns(parsed);
-    } catch {
-      storedExcludePatterns = [];
-    }
-    const activeExcludePatterns = expectedExcludePatterns ?? storedExcludePatterns;
     const storedExcludeDigest = metadata.excludeDigest;
-    const policyStale = expectedExcludeDigest !== undefined
-      && (typeof storedExcludeDigest !== "string" || storedExcludeDigest !== expectedExcludeDigest);
+    const purgePending = metadata.purgePending === "1";
+    const excludeDigestStale = typeof storedExcludeDigest !== "string"
+      || storedExcludeDigest !== expectedExcludeDigest;
+    const policyStale = purgePending || excludeDigestStale;
     const statChanged = [];
     for (const row of fileRows) {
-      if (!shouldIndexPath(row.path, { excludePatterns: activeExcludePatterns })) continue;
+      if (!shouldIndexPath(row.path, { excludePatterns: expectedExcludePatterns })) continue;
       const file = projectFileInfo(cwd, row.path, projectRoot, directoryCache);
       if (
         !file
@@ -660,11 +723,12 @@ export async function contextIndexV2Status(cwd, options = {}) {
     }
     const listed = gitFileList(cwd);
     const newlyVisible = listed
-      ? listed.filter((file) => !indexedPaths.has(file) && !skippedPaths.has(file) && shouldIndexPath(file, { excludePatterns: activeExcludePatterns }))
+      ? listed.filter((file) => !indexedPaths.has(file) && !skippedPaths.has(file) && shouldIndexPath(file, { excludePatterns: expectedExcludePatterns }))
       : [];
     const stalePaths = [...new Set([...statChanged, ...newlyVisible])];
     const warnings = [];
-    if (policyStale) warnings.push("context index exclusion policy changed");
+    if (purgePending) warnings.push("context index storage purge pending");
+    if (excludeDigestStale) warnings.push("context index exclusion policy changed");
     if (stalePaths.length > 0) warnings.push(`${stalePaths.length} changed file(s) since the last index build`);
     return {
       schemaVersion: Number(metadata.schemaVersion ?? INDEX_SCHEMA_VERSION),
@@ -676,6 +740,7 @@ export async function contextIndexV2Status(cwd, options = {}) {
       imports,
       stale: policyStale || stalePaths.length > 0,
       policyStale,
+      purgePending,
       excludePolicyVersion: metadata.excludePolicyVersion,
       excludeDigest: storedExcludeDigest,
       expectedExcludeDigest,

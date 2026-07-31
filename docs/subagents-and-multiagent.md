@@ -253,7 +253,7 @@ Platform package exposes these package-level agents:
 | `piagent-scout` | bounded repo mapping | no |
 | `piagent-planner` | implementation plan + verify gates | no |
 | `piagent-worker` | single-writer implementation | yes |
-| `piagent-reviewer` | review diff/policy/tests/scope | review-first, edit only if asked |
+| `piagent-reviewer` | review diff/policy/tests/scope | no |
 | `piagent-oracle` | second opinion/risk challenge | no |
 
 Default rule:

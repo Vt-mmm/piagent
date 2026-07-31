@@ -344,6 +344,65 @@ describe("MCP approval gate", () => {
     });
   });
 
+  it("refuses every call when a repository server enables prefixless direct tools", async () => {
+    const fixture = await loadFixture();
+    writeProjectConfig(fixture.cwd, {
+      settings: { toolPrefix: "none" },
+      mcpServers: {
+        repo: { ...serverEntry, directTools: true }
+      }
+    });
+
+    await withHome(fixture.home, async () => {
+      const { ctx, harness } = await startGuard(fixture);
+      const bare = await callToolCall(harness.handlers.get("tool_call"), ctx, "search", { query: "x" });
+      assert.equal(bare?.block, true);
+      assert.match(bare.reason, /repo/);
+      assert.match(bare.reason, /directTools/);
+      assert.match(bare.reason, /toolPrefix "none"/);
+    });
+  });
+
+  it("keeps imported directTools effective through a partial repository override", async () => {
+    const fixture = await loadFixture();
+    writeProjectConfig(fixture.cwd, {
+      settings: { toolPrefix: "none" },
+      imports: ["vscode"],
+      mcpServers: {
+        repo: { args: ["--project-override"] }
+      }
+    });
+    writeProjectConfig(fixture.cwd, {
+      servers: {
+        repo: { command: "node", args: ["server.js"], directTools: true }
+      }
+    }, path.join(".vscode", "mcp.json"));
+
+    await withHome(fixture.home, async () => {
+      const { ctx, harness } = await startGuard(fixture);
+      const bare = await callToolCall(harness.handlers.get("tool_call"), ctx, "search", { query: "x" });
+      assert.equal(bare?.block, true);
+      assert.match(bare.reason, /repo/);
+      assert.match(bare.reason, /directTools/);
+    });
+  });
+
+  it("allows an approved server's direct tool while its name preserves the server prefix", async () => {
+    const fixture = await loadFixture();
+    const directEntry = { ...serverEntry, directTools: true };
+    writeProjectConfig(fixture.cwd, {
+      settings: { toolPrefix: "server" },
+      mcpServers: { repo: directEntry }
+    });
+    approve(fixture.home, fixture.cwd, "repo", directEntry);
+
+    await withHome(fixture.home, async () => {
+      const { ctx, harness } = await startGuard(fixture);
+      const decision = await callToolCall(harness.handlers.get("tool_call"), ctx, "repo_search", { query: "x" });
+      assert.notEqual(decision?.block, true);
+    });
+  });
+
   // One of the six import kinds keeps its servers in a format nothing here
   // parses. Blocking the servers that could be listed would say nothing about
   // the ones that could not, so the declaration itself is what gets refused.

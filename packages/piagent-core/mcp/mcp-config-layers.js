@@ -8,7 +8,7 @@ import {
   importedServers,
   unreadableImportTargets
 } from "./mcp-import-kinds.js";
-import { erasesToolOrigin } from "./mcp-tool-naming.js";
+import { directToolsEnabled, erasesToolOrigin } from "./mcp-tool-naming.js";
 
 // Four files can define MCP servers, and which one a change belongs in is the
 // first thing anyone gets wrong. The scope names are the vocabulary the CLI
@@ -253,13 +253,29 @@ export function mergedServerEntry(options) {
     } catch {
       continue;
     }
-    const entry = config.mcpServers[options.name];
-    if (!isRecord(entry)) continue;
-    merged = { ...merged, ...entry };
+    let layerEntry = {};
+    let layerSeen = false;
+    // The adapter expands imports inside each layer before applying that
+    // layer's direct server map. First imported definition wins; the direct
+    // entry then overrides it field by field.
+    for (const kind of config.imports) {
+      const imported = importedServers(kind, options).find((server) => server.name === options.name);
+      if (!imported) continue;
+      layerEntry = { ...imported.entry };
+      layerSeen = true;
+      break;
+    }
+    const directEntry = config.mcpServers[options.name];
+    if (isRecord(directEntry)) {
+      layerEntry = { ...layerEntry, ...directEntry };
+      layerSeen = true;
+    }
+    if (!layerSeen) continue;
+    merged = { ...merged, ...layerEntry };
     seen = true;
   }
-  // A server reached through `imports` is in no layer's `mcpServers`, so the
-  // entry the caller already has is the whole definition.
+  // A server supplied directly by a caller outside the configured layers keeps
+  // its own definition as the fallback.
   return seen ? merged : { ...(options.entry ?? {}) };
 }
 
@@ -428,6 +444,36 @@ export function unverifiableMcpConfig(options = {}) {
         "server name off every tool and leaves nothing to check an approval against. " +
         "Remove that setting, then approve servers individually."
     });
+  }
+
+  if (merged.settings.toolPrefix === "none" && !erasesToolOrigin(merged.settings)) {
+    const prefixScope = merged.contributors.toolPrefix;
+    const prefixFile = prefixScope
+      ? configPathForScope(prefixScope, options)
+      : configPathForScope("global", options);
+    const affected = new Map();
+    for (const server of collectServers(options)) {
+      if (!server.requiresApproval || affected.has(server.name)) continue;
+      const effective = mergedServerEntry({
+        ...options,
+        name: server.name,
+        entry: server.entry
+      });
+      if (!directToolsEnabled(effective.directTools)) continue;
+      affected.set(server.name, server.file);
+    }
+    if (affected.size > 0) {
+      const serverFiles = [...new Set(affected.values())];
+      const names = [...affected.keys()].sort();
+      problems.push({
+        scope: "repository direct tools",
+        file: serverFiles[0] ?? prefixFile,
+        detail: `${serverFiles.join(" and ")} ${serverFiles.length === 1 ? "enables" : "enable"} effective directTools ` +
+          `for repository MCP server(s) ${names.join(", ")} ` +
+          `while ${prefixFile} sets toolPrefix "none". This strips the server name off those tools and leaves ` +
+          "nothing to check an approval against. Disable directTools for those servers or use a server-bearing tool prefix."
+      });
+    }
   }
 
   for (const scope of REPOSITORY_SCOPES) {

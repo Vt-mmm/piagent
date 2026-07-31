@@ -6,7 +6,7 @@ import { resolveProjectProfileDocument } from "../capabilities/project-profile.j
 
 const DEFAULT_CONTEXT_INDEX_PATH = ".pi/context-index.json";
 const CONTEXT_ENGINE_STATE_PATTERN = ".pi/piagent-state/**";
-const EXCLUDE_POLICY_VERSION = 1;
+const EXCLUDE_POLICY_VERSION = 2;
 
 function stringArray(value) {
   return Array.isArray(value)

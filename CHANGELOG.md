@@ -2,6 +2,48 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.2.10 - 2026-07-31
+
+### Security
+
+- `contextIndexV2Status` giờ yêu cầu `excludePatterns` tường minh như năm
+  Context Engine API còn lại. Status không còn báo `policyStale: false` khi
+  caller chưa cung cấp policy để đối chiếu, nên caller mới không thể vô tình bỏ
+  qua rebuild của index được tạo bằng luật yếu hơn.
+
+- Đã xóa fallback đọc exclusion list từ metadata cũ. Active policy luôn đến từ
+  caller đã resolve project policy; index metadata chỉ còn là giá trị stored để
+  so digest.
+
+- Context index storage giờ dùng directory mode `0700` và mode `0600` cho
+  SQLite database, WAL và SHM. Mỗi connection bật cả SQLite core
+  `secure_delete` lẫn FTS5 `secure-delete`, nên source bị xóa trong refresh bình
+  thường không còn nằm lại trong raw index bytes.
+
+- Exclusion policy version `2` buộc index cũ tự migrate một lần khi mở bằng
+  policy hiện hành. Migration dựng lại toàn bộ FTS index từ content table đã
+  lọc, checkpoint WAL rồi `VACUUM` để purge cả tombstone FTS và free-page bytes
+  được tạo bởi bản cũ. Digest mới và `purgePending: 1` được commit cùng nhau
+  trước pha purge; cờ chỉ clear sau khi toàn bộ chuỗi thành công. Nếu app hoặc
+  máy dừng giữa chừng, lần mở sau tự retry.
+
+- Full FTS rebuild và `VACUUM` chỉ chạy khi exclusion digest đổi hoặc một purge
+  cũ còn pending. Incremental rebuild cùng policy không nhận chi phí này.
+
+- Image path trong chat giờ chỉ được auto-attach khi target thật nằm trong
+  project hoặc `additionalReadRoots`, không khớp protected path, nằm trong
+  capability read scope hiện hành và có bytes đúng định dạng ảnh. Symlink ra
+  ngoài root, ảnh trong `.pi/piagent-state/**` và file giả đuôi `.png` đều bị
+  từ chối trước khi nội dung được đưa vào model.
+
+- MCP approval gate và `piagent-mcp doctor` giờ nhận diện cả `directTools` đặt
+  trên từng server. Repository server bật direct tool trong khi
+  `toolPrefix: "none"` sẽ fail-closed vì tên tool không còn mang server origin.
+
+- `piagent-reviewer` giờ là read-only thật: manifest chỉ cấp `read`, `grep`,
+  `find`, `ls`; autofix phải chuyển sang `piagent-worker`. Test package ghim
+  mọi subagent có `acceptanceRole: read-only` vào allowlist read-only.
+
 ## v1.2.9 - 2026-07-31
 
 ### Security

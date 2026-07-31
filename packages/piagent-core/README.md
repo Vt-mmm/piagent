@@ -147,10 +147,15 @@ Runtime task tools write local state to:
 
 Project-local state belongs in `.pi/.gitignore`.
 
+The Context Engine SQLite index contains allowed source bodies. Its directory is
+kept at mode `0700`, with database/WAL/SHM at `0600`; core and FTS5 secure-delete
+cover normal refreshes, while exclusion-policy changes trigger a retryable FTS
+rebuild and database vacuum before the new policy is considered clean.
+
 Passing final gates require an observed exit `0` command that exactly matches one entry in `task.verifyCommands`. Other observed commands are traceable but advisory.
 
 Raw path-like tool access to protected paths is blocked before execution. This includes Pi built-ins (`read`, `write`, `edit`, `grep`, `find`, `ls`) and custom/MCP tools with nested path-like strings, arrays, or `file://` URIs. Path-like strings are percent-decoded once, and input nesting above `MAX_TOOL_INPUT_INSPECTION_DEPTH=32` fails closed. Known content fields such as `content`, `query`, `pattern`, `text`, and `command` are excluded from generic extraction. `grep.glob` and `find.pattern` are checked when they explicitly target protected paths, while broad `grep`, `find`, and `ls` results are filtered so protected content lines or path metadata are redacted before reaching the model.
 
 Raw `bash` access to protected paths is blocked through shell path extraction. `.pi/piagent-state/**` and `.pi/piagent-profile.json` are self-protected; use `piagent_context` and piagent task tools for governed access.
 
-The input hook also detects local image paths in chat prompts. Supported formats are `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, and `.bmp`, including macOS screenshot paths under `/var/folders/...`. Up to 4 images are attached per input, with an 8 MB per-image cap. Oversized images should be read through Pi's `read` tool so Pi can resize them.
+The input hook also detects local image paths in chat prompts. Supported formats are `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, and `.bmp`. The canonical target must be inside the project or a directory granted through `additionalReadRoots`/`PIAGENT_ADDITIONAL_READ_ROOTS`; protected paths and project files outside the resolved filesystem read scope remain blocked. File bytes are sniffed before attachment, and the checked file identity must still match when opened. Up to 4 images are attached per input, with an 8 MB per-image cap. Oversized images should be read through Pi's `read` tool so Pi can resize them.

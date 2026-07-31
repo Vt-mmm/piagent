@@ -33,6 +33,7 @@
     <ul>
       <li>Có thể bị ảnh hưởng bởi symlink, encoding, nested payload, shell expansion hoặc tool mới chưa được policy hoá.</li>
       <li>Redaction là backstop giảm rò rỉ, không phải giấy phép để đưa secret thật vào prompt/output.</li>
+      <li>Context index là local cache có source body: mode owner-only giảm cross-account access, nhưng process chạy cùng OS account vẫn cần được tin cậy.</li>
       <li>Workload không tin cậy cần container/VM với giới hạn filesystem, process, network và credential.</li>
     </ul>
   </div>

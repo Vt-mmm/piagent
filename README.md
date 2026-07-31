@@ -74,10 +74,10 @@ Removal targets what is registered in Pi's settings rather than what the current
 - Runtime profile selection via `/profile`, plus select-style tech stack setup via `/profile setup` and `/profile tech`.
 - Runtime usage/session controls via `/usage`, `/name`, `/fresh`, plus Pi native `/session`.
 - Explicit project memory via `/memory` or `/memory-policy` and `piagent_memory_*` tools.
-- Local Context Engine controls via `/context`: incremental code index, hybrid search, token-budgeted packs, test impact, efficiency telemetry, and semantic compaction. Results remain advisory, not a security boundary or source of truth.
+- Local Context Engine controls via `/context`: incremental code index, hybrid search, token-budgeted packs, test impact, efficiency telemetry, and semantic compaction. Index storage is owner-only and securely purged when exclusion policy changes; results remain advisory, not a security boundary or source of truth.
 - MCP setup helpers for Context7, Chrome DevTools, GitHub, Playwright, and Figma.
 - Subagent setup helpers for read-only scouting, planning, implementation, review, and risk challenge.
-- Chat image-path intake: paste a local screenshot path into the Pi chat box and the guard attaches it as `[image1]` before the model sees the prompt.
+- Chat image-path intake: paste a screenshot path from the project or a granted `additionalReadRoots` directory and the guard attaches it as `[image1]` before the model sees the prompt.
 - Trusted-run wrapper: `piagent-auto` launches Pi with `--approve` for the current run while keeping piagent guardrails active.
 - Runtime policy tools:
   - `piagent_permission_status`
@@ -187,7 +187,7 @@ Short workflow aliases such as `/task`, `/scout`, `/be-to-fe`, `/commit`, and `/
 
 Git stays a capability rather than a `/git-*` namespace, so natural language works too. Broad staging — `git add .`, `git add -A`, `git add --all`, `git add -- .`, `git add :/` — requires confirmation, so unrelated or private files are not swept into a commit silently.
 
-Paste a local screenshot path straight into a task and the guard attaches it as `[image1]` before the model sees the prompt: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`, up to 4 images at 8 MB each. The guard also collapses pasted mandatory-flow boilerplate, so there is no need to paste a checklist into every task.
+Paste a screenshot path straight into a task and the guard attaches it as `[image1]` before the model sees the prompt: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`, up to 4 images at 8 MB each. The target must be inside the project or a directory listed in `additionalReadRoots`; protected paths, paths outside the resolved filesystem read scope, symlink escapes, and extension-only fake images are refused. The guard also collapses pasted mandatory-flow boilerplate, so there is no need to paste a checklist into every task.
 
 A spec that lives outside the project — the one just downloaded to `~/Downloads` — is read with `piagent_document_read` once its directory is listed in the profile's `additionalReadRoots`. The grant is read-only, covers `.md`, `.txt`, `.csv`, `.json`, `.yaml`, `.pdf`, and `.docx` only, and does not open anything `protectedPaths` covers. See [command reference](docs/command-reference-vietnamese.md).
 
@@ -291,7 +291,7 @@ This repository intentionally excludes:
 
 ## Maturity
 
-The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.2.9` or a reviewed commit.
+The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.2.10` or a reviewed commit.
 
 Ready for:
 

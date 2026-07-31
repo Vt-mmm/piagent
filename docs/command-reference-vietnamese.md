@@ -177,11 +177,14 @@ Alias `/commit` và `/pr` vẫn chạy. Commit workflow chỉ tạo local commit
 
 | Tình huống | Cách dùng | Kết quả |
 |---|---|---|
-| Chat box trả ra local path ảnh | `/workflow scout Check screenshot /var/folders/.../screenshot.png` | Platform attach ảnh và rewrite path thành `[image1]`. |
+| Chat box trả ra local path ảnh | `/workflow scout Check screenshot ~/Documents/team-screenshots/screenshot.png` | Platform attach ảnh nếu file ở trong project hoặc folder đã cấp bằng `additionalReadRoots`, rồi rewrite path thành `[image1]`. |
 | Nhiều ảnh trong cùng prompt | Dán tối đa 4 path ảnh | Prompt có `[image1]`, `[image2]`, ... |
 | Ảnh quá lớn | Dùng Pi `read` tool trên file ảnh hoặc resize ảnh trước | Tránh nhồi ảnh quá lớn vào chat input. |
 
-Định dạng hỗ trợ: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`. Giới hạn mặc định: 4 ảnh/input, 8 MB/ảnh.
+Định dạng hỗ trợ: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`. Giới hạn
+mặc định: 4 ảnh/input, 8 MB/ảnh. Protected path, symlink đi khỏi readable root,
+file ngoài capability read scope và file chỉ giả đuôi ảnh đều bị từ chối trước
+khi bytes được attach.
 
 Profile name nên biết:
 
@@ -465,8 +468,8 @@ Các lệnh này chạy ngoài Pi.
 | Command | Dùng khi nào |
 |---|---|
 | `npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0` | Cài Pi CLI tương thích với release hiện tại. |
-| `npm install -g --ignore-scripts @piagent/platform@1.2.9` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
-| `pi install git:github.com/Vt-mmm/piagent@v1.2.9` | Cài pinned release khi cần reproducible team setup. |
+| `npm install -g --ignore-scripts @piagent/platform@1.2.10` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
+| `pi install git:github.com/Vt-mmm/piagent@v1.2.10` | Cài pinned release khi cần reproducible team setup. |
 | `pi install git:github.com/Vt-mmm/piagent` | Cài latest package platform cho máy cá nhân/sandbox. |
 | `piagent-update --check` | Báo version hiện tại vs version sẽ lên cho cả ba thành phần; không cài gì. |
 | `piagent-update` | Full update global một lệnh cho cả máy: Pi host → npm-global helper → Pi package, đúng thứ tự release yêu cầu. |

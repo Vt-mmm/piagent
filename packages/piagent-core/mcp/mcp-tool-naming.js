@@ -78,6 +78,17 @@ export function attributeDirectTool(toolName, serverNames) {
 }
 
 /**
+ * Whether a global or per-server direct-tool selection registers at least one
+ * direct tool. The adapter accepts `true` or a non-empty list on server entries.
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+export function directToolsEnabled(value) {
+  return value === true
+    || (Array.isArray(value) && value.some((item) => typeof item === "string" && item.trim().length > 0));
+}
+
+/**
  * Whether a config's settings put tools on the model under names that cannot be
  * traced to a server. Both halves are required: without `directTools` every call
  * goes through the proxy, which names its server explicitly.
@@ -86,5 +97,5 @@ export function attributeDirectTool(toolName, serverNames) {
  */
 export function erasesToolOrigin(settings) {
   if (!settings || typeof settings !== "object") return false;
-  return settings.directTools === true && settings.toolPrefix === "none";
+  return directToolsEnabled(settings.directTools) && settings.toolPrefix === "none";
 }

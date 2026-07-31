@@ -59,6 +59,25 @@ dụng record có `mtime` và size không đổi. `.gitignore`, binary, file qu�
 secret file, protected paths, dependency/build output và toàn bộ guard state
 không được index.
 
+Index chứa source body của những file được phép index, không chỉ metadata. Vì
+vậy directory `context-engine/` được giữ mode `0700`; SQLite database, WAL và
+SHM được giữ mode `0600`. Đây là ranh giới giữa các OS account trên cùng máy,
+không chặn process khác đang chạy bằng chính account của operator.
+
+Mỗi SQLite connection bật cả core `secure_delete` và FTS5 `secure-delete`.
+Refresh cùng policy vì vậy xóa source cũ khỏi ordinary table lẫn full-text
+index mà không chạy full compaction. Khi exclusion digest đổi, policy version
+`2` commit digest mới cùng `purgePending: 1` trước khi dựng lại FTS index từ
+content table đã lọc, checkpoint WAL rồi chạy `VACUUM`. Cờ pending chỉ clear
+sau khi toàn bộ chuỗi thành công; app hoặc máy dừng giữa chừng thì lần mở tiếp
+theo tự retry.
+
+FTS rebuild và `VACUUM` chỉ chạy khi policy đổi hoặc purge trước còn pending,
+không chạy ở mỗi refresh. Trong lúc `VACUUM`, máy có thể cần tạm thời gần gấp
+đôi dung lượng file database. Xem mô tả chính thức về
+[FTS5 rebuild/secure-delete](https://www.sqlite.org/fts5.html) và
+[VACUUM](https://www.sqlite.org/lang_vacuum.html).
+
 Symbol layer hiện dùng parser adapter zero-dependency cho TypeScript/JavaScript,
 Python, Go, Rust, Java/Kotlin/C#, C/C++, Swift, Dart, Ruby, PHP, Elixir, Lua,
 SQL và Markdown. Schema parser-neutral để có thể thêm Tree-sitter sau này mà
@@ -85,12 +104,12 @@ Context pack tách repo map và source snippets, sau đó dừng cứng tại to
 budget. Index chỉ là navigation evidence; model phải đọc file hiện tại trước
 khi edit.
 
-Các API có thể build hoặc đọc nội dung (`build`, `ensure`, `search`, `pack`,
+Tất cả API chạm context index (`build`, `status`, `ensure`, `search`, `pack`,
 `impact`) bắt buộc caller truyền `excludePatterns` tường minh và fail-closed
 nếu thiếu. Runtime và CLI lấy danh sách này từ shared project policy resolver;
-low-level tool hoặc test chỉ dùng `[]` khi chủ ý chọn không loại trừ. API
-`status` vẫn có thể đọc metadata mà không cần policy vì nó không đọc source
-content.
+low-level tool hoặc test chỉ dùng `[]` khi chủ ý chọn không loại trừ. Dù
+`status` không trả source content, nó vẫn cần policy để không báo false-negative
+`policyStale: false` rồi khiến caller bỏ qua rebuild.
 
 ## P2: compaction, finder và test impact
 

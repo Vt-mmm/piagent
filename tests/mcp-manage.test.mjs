@@ -439,6 +439,26 @@ describe("piagent-mcp server management", () => {
     assert.match(doctor.stdout, /toolPrefix "none"/);
   });
 
+  it("reports server-level direct tools that erase origin", () => {
+    const fixture = createFixture();
+    fs.writeFileSync(path.join(fixture.project, ".mcp.json"), `${JSON.stringify({
+      settings: { toolPrefix: "none" },
+      mcpServers: {
+        repo: {
+          command: "node",
+          args: ["server.js"],
+          directTools: ["search"]
+        }
+      }
+    })}\n`);
+
+    const doctor = run(fixture, ["doctor"]);
+    assert.equal(doctor.status, 1, doctor.stdout);
+    assert.match(doctor.stdout, /repo/);
+    assert.match(doctor.stdout, /directTools/);
+    assert.match(doctor.stdout, /toolPrefix "none"/);
+  });
+
   // Scope says which layer named the import; it does not say where the servers
   // came from. A global config importing a repository-relative kind reads them
   // out of the clone, and the gate treats them as the repository's.

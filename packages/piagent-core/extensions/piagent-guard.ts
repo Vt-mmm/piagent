@@ -263,6 +263,14 @@ type ChatImageAttachmentResult = {
   skipped: Array<{ path: string; reason: string }>;
 };
 
+type ChatImageAccessPolicy = {
+  roots: ReturnType<typeof resolveDocumentRoots>;
+  readProtectedPaths: string[];
+  filesystemRead?: string[];
+  enforceFilesystemRead: boolean;
+  onImageInspected?: (path: string) => void;
+};
+
 const DEFAULT_MEMORY_SETTINGS: Required<MemorySettings> = {
   enabled: true,
   mode: "manual",
@@ -3985,29 +3993,55 @@ function escapeRegExp(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function supportedImageMimeType(filePath: string, bytes: Buffer): string | undefined {
-  if (bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+function supportedImageMimeType(bytes: Buffer): string | undefined {
+  if (
+    bytes.length >= 24
+    && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+    && bytes.readUInt32BE(8) === 13
+    && bytes.subarray(12, 16).toString("ascii") === "IHDR"
+    && bytes.readUInt32BE(16) > 0
+    && bytes.readUInt32BE(20) > 0
+  ) {
     return "image/png";
   }
-  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+  if (
+    bytes.length >= 4
+    && bytes[0] === 0xff
+    && bytes[1] === 0xd8
+    && bytes[2] === 0xff
+    && bytes[bytes.length - 2] === 0xff
+    && bytes[bytes.length - 1] === 0xd9
+  ) {
     return "image/jpeg";
   }
-  if (bytes.length >= 6) {
+  if (bytes.length >= 10) {
     const head = bytes.subarray(0, 6).toString("ascii");
-    if (head === "GIF87a" || head === "GIF89a") return "image/gif";
+    if (
+      (head === "GIF87a" || head === "GIF89a")
+      && bytes.readUInt16LE(6) > 0
+      && bytes.readUInt16LE(8) > 0
+    ) {
+      return "image/gif";
+    }
   }
-  if (bytes.length >= 12 && bytes.subarray(0, 4).toString("ascii") === "RIFF" && bytes.subarray(8, 12).toString("ascii") === "WEBP") {
+  if (
+    bytes.length >= 16
+    && bytes.subarray(0, 4).toString("ascii") === "RIFF"
+    && bytes.subarray(8, 12).toString("ascii") === "WEBP"
+    && ["VP8 ", "VP8L", "VP8X"].includes(bytes.subarray(12, 16).toString("ascii"))
+    && bytes.readUInt32LE(4) + 8 <= bytes.length
+  ) {
     return "image/webp";
   }
-  if (bytes.length >= 2 && bytes[0] === 0x42 && bytes[1] === 0x4d) {
+  if (
+    bytes.length >= 26
+    && bytes[0] === 0x42
+    && bytes[1] === 0x4d
+    && bytes.readUInt32LE(2) <= bytes.length
+    && bytes.readUInt32LE(14) >= 12
+  ) {
     return "image/bmp";
   }
-  const ext = path.extname(filePath).toLowerCase().replace(/^\./, "");
-  if (ext === "png") return "image/png";
-  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
-  if (ext === "gif") return "image/gif";
-  if (ext === "webp") return "image/webp";
-  if (ext === "bmp") return "image/bmp";
   return undefined;
 }
 
@@ -4061,9 +4095,131 @@ function extractLocalImagePathCandidates(text: string, cwd: string): string[] {
   return [...candidates];
 }
 
-function attachLocalImagesFromText(text: string, existingImages: unknown[] | undefined, cwd: string): ChatImageAttachmentResult | undefined {
+type ResolvedChatImage =
+  | { status: "ok"; absolutePath: string; bytes: Buffer; mimeType: string }
+  | { status: "error"; reason: string };
+
+function pathContainedBy(root: string, candidate: string): boolean {
+  if (candidate === root) return true;
+  const relative = path.relative(root, candidate);
+  return relative.length > 0
+    && relative !== ".."
+    && !relative.startsWith(`..${path.sep}`)
+    && !path.isAbsolute(relative);
+}
+
+export function readChatImage(
+  requestedPath: string,
+  cwd: string,
+  access: ChatImageAccessPolicy
+): ResolvedChatImage {
+  const lexicalRequestedPath = path.isAbsolute(requestedPath)
+    ? path.normalize(requestedPath)
+    : path.resolve(cwd, requestedPath);
+  const lexicalProjectRoot = path.resolve(cwd);
+  const requestedProjectLexicalRelative = pathContainedBy(lexicalProjectRoot, lexicalRequestedPath)
+    ? path.relative(lexicalProjectRoot, lexicalRequestedPath).split(path.sep).join("/") || "."
+    : undefined;
+  let canonicalPath: string;
+  let inspected: fs.Stats;
+  try {
+    canonicalPath = fs.realpathSync.native(requestedPath);
+    inspected = fs.statSync(canonicalPath);
+  } catch {
+    return { status: "error", reason: "file does not exist or cannot be inspected" };
+  }
+  if (!inspected.isFile()) return { status: "error", reason: "not a regular file" };
+  if (inspected.size <= 0) return { status: "error", reason: "empty file" };
+  if (inspected.size > MAX_CHAT_IMAGE_BYTES) {
+    return {
+      status: "error",
+      reason: `image is ${formatCount(inspected.size)} bytes > ${formatCount(MAX_CHAT_IMAGE_BYTES)} byte limit`
+    };
+  }
+
+  const root = access.roots.find((candidate) => pathContainedBy(candidate.path, canonicalPath));
+  if (!root) return { status: "error", reason: "outside the project and every granted additionalReadRoots directory" };
+
+  const rootRelative = path.relative(root.path, canonicalPath).split(path.sep).join("/") || ".";
+  const projectRoot = access.roots.find((candidate) => candidate.source === "project");
+  let canonicalRequestedLocation = requestedPath;
+  try {
+    canonicalRequestedLocation = path.join(
+      fs.realpathSync.native(path.dirname(requestedPath)),
+      path.basename(requestedPath)
+    );
+  } catch {
+    // The full target already resolved. This location form only preserves the
+    // final symlink's policy position, so failure falls back to the raw path.
+  }
+  const requestedProjectRelative = projectRoot && pathContainedBy(projectRoot.path, canonicalRequestedLocation)
+    ? path.relative(projectRoot.path, canonicalRequestedLocation).split(path.sep).join("/") || "."
+    : undefined;
+  const protectedMatch = matchesProtectedPath(canonicalPath, access.readProtectedPaths)
+    ?? matchesProtectedPath(rootRelative, access.readProtectedPaths)
+    ?? matchesProtectedPath(canonicalRequestedLocation, access.readProtectedPaths)
+    ?? matchesProtectedPath(requestedPath, access.readProtectedPaths)
+    ?? (requestedProjectLexicalRelative
+      ? matchesProtectedPath(requestedProjectLexicalRelative, access.readProtectedPaths)
+      : undefined)
+    ?? (requestedProjectRelative ? matchesProtectedPath(requestedProjectRelative, access.readProtectedPaths) : undefined);
+  if (protectedMatch) return { status: "error", reason: `matches protected path ${protectedMatch}` };
+
+  if (
+    root.source === "project"
+    && access.enforceFilesystemRead
+    && access.filesystemRead
+    && !matchesAnyPath(rootRelative, access.filesystemRead)
+  ) {
+    return {
+      status: "error",
+      reason: `outside the resolved filesystem read scope (${access.filesystemRead.join(", ")})`
+    };
+  }
+
+  access.onImageInspected?.(canonicalPath);
+  const openFlags = fs.constants.O_RDONLY | fs.constants.O_NONBLOCK | fs.constants.O_NOFOLLOW;
+  let fd: number;
+  try {
+    fd = fs.openSync(canonicalPath, openFlags);
+  } catch {
+    return { status: "error", reason: "file changed before it could be opened" };
+  }
+  try {
+    const opened = fs.fstatSync(fd);
+    if (
+      !opened.isFile()
+      || opened.dev !== inspected.dev
+      || opened.ino !== inspected.ino
+      || opened.size !== inspected.size
+    ) {
+      return { status: "error", reason: "file changed between the safety checks and the read" };
+    }
+    const bytes = Buffer.alloc(opened.size);
+    let offset = 0;
+    while (offset < bytes.length) {
+      const read = fs.readSync(fd, bytes, offset, bytes.length - offset, offset);
+      if (read <= 0) break;
+      offset += read;
+    }
+    if (offset !== bytes.length) return { status: "error", reason: "file changed while it was being read" };
+    const mimeType = supportedImageMimeType(bytes);
+    if (!mimeType) return { status: "error", reason: "file bytes are not a supported image" };
+    return { status: "ok", absolutePath: canonicalPath, bytes, mimeType };
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+function attachLocalImagesFromText(
+  text: string,
+  existingImages: unknown[] | undefined,
+  cwd: string,
+  resolveAccess: () => ChatImageAccessPolicy
+): ChatImageAttachmentResult | undefined {
   const imagePaths = extractLocalImagePathCandidates(text, cwd);
   if (imagePaths.length === 0) return undefined;
+  const access = resolveAccess();
 
   const existing = Array.isArray(existingImages) ? existingImages : [];
   const images: ChatImageAttachmentResult["images"] = [];
@@ -4077,28 +4233,14 @@ function attachLocalImagesFromText(text: string, existingImages: unknown[] | und
       continue;
     }
     try {
-      const stat = fs.statSync(imagePath);
-      if (!stat.isFile()) {
-        skipped.push({ path: imagePath, reason: "not a file" });
-        continue;
-      }
-      if (stat.size <= 0) {
-        skipped.push({ path: imagePath, reason: "empty file" });
-        continue;
-      }
-      if (stat.size > MAX_CHAT_IMAGE_BYTES) {
-        skipped.push({ path: imagePath, reason: `image is ${formatCount(stat.size)} bytes > ${formatCount(MAX_CHAT_IMAGE_BYTES)} byte limit; use read on the file so Pi can resize it` });
-        continue;
-      }
-      const bytes = fs.readFileSync(imagePath);
-      const mimeType = supportedImageMimeType(imagePath, bytes);
-      if (!mimeType) {
-        skipped.push({ path: imagePath, reason: "unsupported image type" });
+      const resolved = readChatImage(imagePath, cwd, access);
+      if (resolved.status === "error") {
+        skipped.push({ path: imagePath, reason: resolved.reason });
         continue;
       }
       const marker = `[image${existing.length + images.length + 1}]`;
-      images.push({ type: "image", mimeType, data: bytes.toString("base64") });
-      attached.push({ marker, path: imagePath, mimeType, bytes: stat.size });
+      images.push({ type: "image", mimeType: resolved.mimeType, data: resolved.bytes.toString("base64") });
+      attached.push({ marker, path: imagePath, mimeType: resolved.mimeType, bytes: resolved.bytes.length });
       nextText = nextText.replace(new RegExp(escapeRegExp(imagePath), "g"), marker);
       nextText = nextText.replace(new RegExp(escapeRegExp(`file://${imagePath}`), "g"), marker);
     } catch (error) {
@@ -4484,7 +4626,22 @@ export default function piagentGuard(pi: ExtensionAPI) {
       termCount: taskSignal.terms.length
     });
 
-    const imageAttachment = attachLocalImagesFromText(text, event.images, ctx.cwd);
+    const imageAttachment = attachLocalImagesFromText(text, event.images, ctx.cwd, () => {
+      const projectTrusted = ctx.isProjectTrusted();
+      const profile = loadProfileFromContext(ctx);
+      const permissionProfile = resolvePermissionProfile(profile, policy, permissionOverrideFromContext(ctx));
+      const capabilityState = verifyProjectCapabilityState(extensionDir, ctx.cwd, projectTrusted);
+      return {
+        roots: resolveDocumentRoots({
+          cwd: ctx.cwd,
+          profileRoots: profile.additionalReadRoots,
+          environmentRoots: process.env.PIAGENT_ADDITIONAL_READ_ROOTS
+        }),
+        readProtectedPaths: effectiveProtectedPaths(policy, profile).readProtectedPaths,
+        filesystemRead: capabilityState.filesystemRead,
+        enforceFilesystemRead: permissionProfile.mode !== "trusted-full-access"
+      };
+    });
     if (imageAttachment?.attached.length) {
       ctx.ui.notify(`Piagent image input: attached ${imageAttachment.attached.map((item) => item.marker).join(", ")}`, "info");
     } else if (imageAttachment?.skipped.length) {

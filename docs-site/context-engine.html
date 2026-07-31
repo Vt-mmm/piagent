@@ -27,7 +27,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.2.9 docs</span>
+        <span class="pill"><span class="pill-dot"></span>v1.2.10 docs</span>
         <a class="button social" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer" aria-label="Mở GitHub repository">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
@@ -101,7 +101,7 @@
     </article>
     <article class="card">
       <h3 id="local-index">Index local</h3>
-      <p>FTS5, symbol và import graph nằm trong <span class="inline-code">.pi/piagent-state/context-engine/</span>. Protected paths và secret files không được index.</p>
+      <p>FTS5, symbol và import graph nằm trong <span class="inline-code">.pi/piagent-state/context-engine/</span>. Storage chỉ cho OS account hiện tại; policy đổi sẽ retry FTS rebuild và VACUUM đến khi purge xong.</p>
     </article>
     <article class="card">
       <h3 id="ranked-context">Context có xếp hạng</h3>
@@ -119,6 +119,13 @@
       <h3 id="agent-watch">Agent Watch</h3>
       <p>Event local có session, model, thinking, tool surface, retrieval confidence, tỷ lệ context thực dùng và waste metrics; không lưu prompt hay output thô lần hai.</p>
     </article>
+  </div>
+</section>
+
+<section class="section">
+  <div class="callout">
+    <strong>Index có chứa source body</strong>
+    <p>Protected paths và secret files không được index. Directory dùng mode <span class="inline-code">0700</span>; database, WAL và SHM dùng <span class="inline-code">0600</span>. Refresh bình thường dùng SQLite core + FTS5 secure-delete. Full FTS rebuild và VACUUM chỉ chạy khi exclusion policy đổi hoặc một purge trước bị gián đoạn, không chạy trên mỗi prompt hay mỗi refresh.</p>
   </div>
 </section>
 

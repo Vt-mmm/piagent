@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -74,6 +75,23 @@ function writeProjectProfile(cwd, profile) {
   );
 }
 
+function contextDatabaseArtifacts(cwd) {
+  const database = contextEnginePaths(cwd).database;
+  return [database, `${database}-wal`, `${database}-shm`].filter((file) => fs.existsSync(file));
+}
+
+function contextDatabaseArtifactsContain(cwd, value) {
+  const needle = Buffer.from(value);
+  return contextDatabaseArtifacts(cwd).some((file) => fs.readFileSync(file).includes(needle));
+}
+
+function contextExcludeDigestForVersion(version, patterns) {
+  return crypto
+    .createHash("sha256")
+    .update(JSON.stringify({ version, patterns }))
+    .digest("hex");
+}
+
 test("classifies task signals without calling a model", () => {
   const result = classifyContextTask("Fix auth validation in src/session.ts before release");
   assert.equal(result.lane, "high-risk");
@@ -90,6 +108,7 @@ test("fails closed when a content API omits its exclusion policy", async (t) => 
   t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
   const operations = [
     ["buildContextIndexV2", () => buildContextIndexV2(cwd)],
+    ["contextIndexV2Status", () => contextIndexV2Status(cwd)],
     ["ensureContextIndexV2", () => ensureContextIndexV2(cwd)],
     ["searchContextIndexV2", () => searchContextIndexV2(cwd, "invoice")],
     ["buildContextPack", () => buildContextPack(cwd, "invoice")],
@@ -126,19 +145,19 @@ test("builds an incremental local index and retrieves symbols with hybrid eviden
   assert.ok(["high", "medium"].includes(search.confidence));
   assert.equal(search.results.some((result) => result.path === ".env"), false);
 
-  const status = await contextIndexV2Status(cwd);
+  const status = await contextIndexV2Status(cwd, { excludePatterns: [] });
   assert.equal(status.exists, true);
   assert.equal(status.files, 4);
   assert.equal(status.stale, false);
 
   fs.appendFileSync(path.join(cwd, "src", "math.ts"), "// changed\n");
-  const stale = await contextIndexV2Status(cwd);
+  const stale = await contextIndexV2Status(cwd, { excludePatterns: [] });
   assert.equal(stale.stale, true);
   assert.ok(stale.stalePaths.includes("src/math.ts"));
 
   await buildContextIndexV2(cwd, { excludePatterns: [] });
   fs.writeFileSync(path.join(cwd, "src", "new-module.ts"), "export const newModule = true;\n");
-  const added = await contextIndexV2Status(cwd);
+  const added = await contextIndexV2Status(cwd, { excludePatterns: [] });
   assert.equal(added.stale, true);
   assert.ok(added.stalePaths.includes("src/new-module.ts"));
 });
@@ -164,6 +183,175 @@ test("packs ranked snippets to a hard token budget and reports low-confidence fi
   assert.match(missing.finderRequest, /bounded read-only finder pass/);
 });
 
+test("keeps context index storage private to the current OS account", async (t) => {
+  const cwd = fixture();
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+
+  await buildContextIndexV2(cwd, { excludePatterns: [] });
+  const paths = contextEnginePaths(cwd);
+
+  assert.equal(fs.statSync(paths.root).mode & 0o777, 0o700);
+  assert.equal(fs.statSync(paths.database).mode & 0o777, 0o600);
+
+  fs.chmodSync(paths.root, 0o755);
+  fs.chmodSync(paths.database, 0o644);
+  await contextIndexV2Status(cwd, { excludePatterns: [] });
+
+  assert.equal(fs.statSync(paths.root).mode & 0o777, 0o700);
+  assert.equal(fs.statSync(paths.database).mode & 0o777, 0o600);
+});
+
+test("purges raw indexed bytes when the exclusion policy tightens", async (t) => {
+  const cwd = fixture();
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(cwd, "backend"), { recursive: true });
+  fs.writeFileSync(
+    path.join(cwd, "backend", "credentials.ts"),
+    "export const DB_URL = 'postgres://user:HUNTER2@prod/db';\n"
+  );
+
+  await buildContextIndexV2(cwd, { excludePatterns: [] });
+  assert.equal(contextDatabaseArtifactsContain(cwd, "HUNTER2"), true);
+
+  const ensured = await ensureContextIndexV2(cwd, {
+    excludePatterns: ["backend/**"],
+    rebuildMissing: true
+  });
+  const search = await searchContextIndexV2(cwd, "HUNTER2", {
+    excludePatterns: ["backend/**"]
+  });
+
+  assert.equal(ensured.rebuilt, true);
+  assert.equal(ensured.reason, "exclusion-policy");
+  assert.equal(ensured.build.purgedStaleContent, true);
+  assert.equal(search.results.some((result) => result.path === "backend/credentials.ts"), false);
+  assert.equal(contextDatabaseArtifactsContain(cwd, "HUNTER2"), false);
+  assert.equal(fs.statSync(contextEnginePaths(cwd).database).mode & 0o777, 0o600);
+});
+
+test("securely deletes raw bytes during an ordinary same-policy rebuild", async (t) => {
+  const cwd = fixture();
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  const secret = "samepolicysecuredeletehunter2token";
+  const target = path.join(cwd, "src", "temporary-secret.ts");
+  fs.writeFileSync(target, `export const value = ${JSON.stringify(`${secret}\n`.repeat(256))};\n`);
+
+  await buildContextIndexV2(cwd, { excludePatterns: [] });
+  assert.equal(contextDatabaseArtifactsContain(cwd, secret), true);
+
+  fs.unlinkSync(target);
+  const rebuilt = await buildContextIndexV2(cwd, { excludePatterns: [] });
+
+  assert.equal(rebuilt.purgedStaleContent, false);
+  assert.equal(contextDatabaseArtifactsContain(cwd, secret), false);
+});
+
+test("commits purgePending before expensive policy migration and resumes after interruption", async (t) => {
+  const cwd = fixture();
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(cwd, "backend"), { recursive: true });
+  fs.writeFileSync(
+    path.join(cwd, "backend", "credentials.ts"),
+    "export const PRODUCER_MARKER = 'must-be-purged';\n"
+  );
+  await buildContextIndexV2(cwd, { excludePatterns: [] });
+
+  let observedMetadata;
+  let purgeStarts = 0;
+  await assert.rejects(
+    () => buildContextIndexV2(cwd, {
+      excludePatterns: ["backend/**"],
+      onPurgeStart: async () => {
+        purgeStarts += 1;
+        const { DatabaseSync } = await import("node:sqlite");
+        const reader = new DatabaseSync(contextEnginePaths(cwd).database, { readOnly: true });
+        try {
+          observedMetadata = Object.fromEntries(
+            reader.prepare("SELECT key, value FROM metadata").all().map((row) => [row.key, row.value])
+          );
+        } finally {
+          reader.close();
+        }
+        throw new Error("simulated interruption after purge marker commit");
+      }
+    }),
+    /simulated interruption after purge marker commit/
+  );
+
+  assert.equal(purgeStarts, 1);
+  assert.equal(observedMetadata.purgePending, "1");
+  const interrupted = await contextIndexV2Status(cwd, { excludePatterns: ["backend/**"] });
+  assert.equal(observedMetadata.excludeDigest, interrupted.expectedExcludeDigest);
+  assert.equal(interrupted.policyStale, true);
+  assert.equal(interrupted.purgePending, true);
+
+  const resumed = await ensureContextIndexV2(cwd, {
+    excludePatterns: ["backend/**"],
+    rebuildMissing: true
+  });
+
+  assert.equal(resumed.rebuilt, true);
+  assert.equal(resumed.reason, "exclusion-policy");
+  assert.equal(resumed.build.purgedStaleContent, true);
+  assert.equal(resumed.status.purgePending, false);
+});
+
+test("vacuum purges raw bytes left by a legacy exclusion policy", async (t) => {
+  const cwd = fixture();
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  await buildContextIndexV2(cwd, { excludePatterns: [] });
+
+  const secret = "legacypolicyresiduehunter2token";
+  const legacyPath = "legacy/deleted-secret.ts";
+  const legacyBody = `export const legacy = ${JSON.stringify(`${secret}\n`.repeat(256))};\n`;
+  const legacyExcludeDigest = contextExcludeDigestForVersion(1, []);
+  const { DatabaseSync } = await import("node:sqlite");
+  const db = new DatabaseSync(contextEnginePaths(cwd).database);
+  try {
+    db.exec(`
+      PRAGMA secure_delete = OFF;
+      INSERT INTO file_fts(file_fts, rank) VALUES('secure-delete', 0);
+      BEGIN IMMEDIATE;
+    `);
+    db.prepare(`
+      INSERT INTO files(path, hash, bytes, mtime_ms, language, indexed_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(legacyPath, "legacy-hash", Buffer.byteLength(legacyBody), Date.now(), "typescript", new Date().toISOString());
+    db.prepare("INSERT INTO file_fts(path, body, symbol_names) VALUES (?, ?, ?)").run(
+      legacyPath,
+      legacyBody,
+      "legacy"
+    );
+    db.prepare("DELETE FROM file_fts WHERE path = ?").run(legacyPath);
+    db.prepare("DELETE FROM files WHERE path = ?").run(legacyPath);
+    db.prepare("UPDATE metadata SET value = ? WHERE key = 'excludeDigest'").run(legacyExcludeDigest);
+    db.prepare("UPDATE metadata SET value = ? WHERE key = 'excludePolicyVersion'").run("1");
+    db.exec(`
+      COMMIT;
+      PRAGMA wal_checkpoint(TRUNCATE);
+    `);
+  } finally {
+    db.close();
+  }
+
+  assert.equal(contextDatabaseArtifactsContain(cwd, secret), true);
+  const before = await contextIndexV2Status(cwd, { excludePatterns: [] });
+  assert.equal(before.policyStale, true);
+  assert.equal(before.purgePending, false);
+  assert.equal(contextDatabaseArtifactsContain(cwd, secret), true);
+
+  const ensured = await ensureContextIndexV2(cwd, {
+    excludePatterns: [],
+    rebuildMissing: true
+  });
+
+  assert.equal(ensured.rebuilt, true);
+  assert.equal(ensured.reason, "exclusion-policy");
+  assert.equal(ensured.build.purgedStaleContent, true);
+  assert.equal(ensured.status.purgePending, false);
+  assert.equal(contextDatabaseArtifactsContain(cwd, secret), false);
+});
+
 test("keeps configured protected paths out of both the index and stale signal", async (t) => {
   const cwd = fixture();
   t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
@@ -171,7 +359,9 @@ test("keeps configured protected paths out of both the index and stale signal", 
   fs.writeFileSync(path.join(cwd, "src", "private.ts"), "export const privateValue = 'secret';\n");
 
   await buildContextIndexV2(cwd, { excludePatterns: ["src/private.ts"] });
-  const status = await contextIndexV2Status(cwd);
+  const status = await contextIndexV2Status(cwd, {
+    excludePatterns: ["src/private.ts"]
+  });
   const search = await searchContextIndexV2(cwd, "privateValue", {
     excludePatterns: ["src/private.ts"]
   });
@@ -249,6 +439,10 @@ test("CLI pack rebuilds an existing index when its exclusion policy differs", as
   });
   await buildContextIndexV2(cwd, { excludePatterns: [] });
 
+  const before = runContextCli(cwd, ["status"]);
+  assert.equal(before.status, 0, before.stderr);
+  assert.equal(JSON.parse(before.stdout).policyStale, true);
+
   const pack = runContextCli(cwd, ["pack", "STALE_POLICY_VALUE"]);
   assert.equal(pack.status, 0, pack.stderr);
   const parsed = JSON.parse(pack.stdout);
@@ -310,7 +504,7 @@ test("does not search or pack a stale index entry after its file becomes a symli
     throw error;
   }
 
-  const status = await contextIndexV2Status(cwd);
+  const status = await contextIndexV2Status(cwd, { excludePatterns: [] });
   const search = await searchContextIndexV2(cwd, "LEGACY_SYMLINK_VALUE", { excludePatterns: [] });
   const pack = await buildContextPack(cwd, "LEGACY_SYMLINK_VALUE", {
     budgetTokens: 500,
@@ -330,7 +524,7 @@ test("does not make intentionally skipped large or binary sources permanently st
   fs.writeFileSync(path.join(cwd, "src", "binary.ts"), Buffer.from([0, 1, 2, 3]));
 
   const build = await buildContextIndexV2(cwd, { maxFileBytes: 1_024, excludePatterns: [] });
-  const status = await contextIndexV2Status(cwd);
+  const status = await contextIndexV2Status(cwd, { excludePatterns: [] });
   assert.equal(build.skippedLarge, 1);
   assert.equal(build.skippedBinary, 1);
   assert.equal(status.stale, false);

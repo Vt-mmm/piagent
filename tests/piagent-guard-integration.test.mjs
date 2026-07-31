@@ -51,7 +51,7 @@ async function loadGuardFixture(options = {}) {
   options.mutatePackage?.(packageRoot);
   const moduleUrl = pathToFileURL(path.join(packageRoot, "extensions", "piagent-guard.ts")).href;
   const imported = await import(`${moduleUrl}?t=${Date.now()}-${Math.random()}`);
-  return { root, piagentGuard: imported.default };
+  return { root, piagentGuard: imported.default, readChatImage: imported.readChatImage };
 }
 
 function createProject(root) {
@@ -2205,6 +2205,199 @@ describe("piagent guard integration", () => {
     assert.equal(result.action, "transform");
     assert.match(result.text, /^\/scout Check this screenshot \[image1\]/);
     assert.equal(result.images.length, 1);
+  });
+
+  it("does not attach valid images from protected project state", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const protectedImagePath = path.join(cwd, ".pi", "piagent-state", "secret.png");
+    const protectedLinkPath = path.join(cwd, ".pi", "piagent-state", "linked.png");
+    const protectedDirectoryLink = path.join(cwd, ".pi", "piagent-state", "screenshots");
+    const safeImagePath = path.join(cwd, "screenshots", "Ảnh màn hình 2026-07-20 lúc 12.00.00.png");
+    fs.copyFileSync(
+      safeImagePath,
+      protectedImagePath
+    );
+    fs.symlinkSync(safeImagePath, protectedLinkPath);
+    fs.symlinkSync(path.dirname(safeImagePath), protectedDirectoryLink, "dir");
+    const ctx = createContext(cwd);
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    const input = harness.handlers.get("input");
+
+    const result = await input({
+      text: `Please inspect ${protectedImagePath}`,
+      source: "extension"
+    }, ctx);
+
+    assert.equal(result.action, "continue");
+    assert.equal(result.images, undefined);
+
+    const linked = await input({
+      text: `Please inspect ${protectedLinkPath}`,
+      source: "extension"
+    }, ctx);
+    assert.equal(linked.action, "continue");
+    assert.equal(linked.images, undefined);
+
+    const canonicalProtectedLinkPath = path.join(
+      fs.realpathSync.native(cwd),
+      ".pi",
+      "piagent-state",
+      path.basename(protectedLinkPath)
+    );
+    const linkedThroughCanonicalProjectPath = await input({
+      text: `Please inspect ${canonicalProtectedLinkPath}`,
+      source: "extension"
+    }, ctx);
+    assert.equal(linkedThroughCanonicalProjectPath.action, "continue");
+    assert.equal(linkedThroughCanonicalProjectPath.images, undefined);
+
+    const linkedThroughDirectory = await input({
+      text: `Please inspect ${path.join(protectedDirectoryLink, path.basename(safeImagePath))}`,
+      source: "extension"
+    }, ctx);
+    assert.equal(linkedThroughDirectory.action, "continue");
+    assert.equal(linkedThroughDirectory.images, undefined);
+  });
+
+  it("requires an explicit readable root before attaching an out-of-project image", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const externalRoot = path.join(root, "external-images");
+    const externalImagePath = path.join(externalRoot, "screen.png");
+    const linkedImagePath = path.join(cwd, "screenshots", "external-link.png");
+    fs.mkdirSync(externalRoot, { recursive: true });
+    fs.copyFileSync(
+      path.join(cwd, "screenshots", "Ảnh màn hình 2026-07-20 lúc 12.00.00.png"),
+      externalImagePath
+    );
+    fs.symlinkSync(externalImagePath, linkedImagePath);
+    const ctx = createContext(cwd);
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    const input = harness.handlers.get("input");
+
+    const denied = await input({
+      text: `Please inspect ${externalImagePath}`,
+      source: "interactive"
+    }, ctx);
+    assert.equal(denied.action, "continue");
+    assert.equal(denied.images, undefined);
+
+    const deniedLink = await input({
+      text: `Please inspect ${linkedImagePath}`,
+      source: "interactive"
+    }, ctx);
+    assert.equal(deniedLink.action, "continue");
+    assert.equal(deniedLink.images, undefined);
+
+    const profilePath = path.join(cwd, ".pi", "piagent-profile.json");
+    const profile = JSON.parse(fs.readFileSync(profilePath, "utf8"));
+    profile.additionalReadRoots = [externalRoot];
+    fs.writeFileSync(profilePath, `${JSON.stringify(profile, null, 2)}\n`);
+
+    const allowed = await input({
+      text: `Please inspect ${externalImagePath}`,
+      source: "interactive"
+    }, ctx);
+    assert.equal(allowed.action, "transform");
+    assert.equal(allowed.images.length, 1);
+    assert.equal(allowed.images[0].mimeType, "image/png");
+  });
+
+  it("keeps image auto-attachment inside the resolved filesystem read scope", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const manifestPath = path.join(root, "packs", "engineering-base", "pack.json");
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    manifest.spec.permissions.filesystemRead = ["src/**"];
+    manifest.spec.permissions.filesystemWrite = ["src/**"];
+    fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    const adapterPath = path.join(root, "adapters", "generic", "profile.json");
+    const adapter = JSON.parse(fs.readFileSync(adapterPath, "utf8"));
+    adapter.capabilityPolicy.allowedFilesystemRead = ["src/**"];
+    adapter.capabilityPolicy.allowedFilesystemWrite = ["src/**"];
+    fs.writeFileSync(adapterPath, `${JSON.stringify(adapter, null, 2)}\n`);
+
+    const cwd = createProject(root);
+    const allowedImagePath = path.join(cwd, "src", "screen.png");
+    const deniedImagePath = path.join(cwd, "screenshots", "Ảnh màn hình 2026-07-20 lúc 12.00.00.png");
+    fs.copyFileSync(deniedImagePath, allowedImagePath);
+    const ctx = createContext(cwd, { confirm: true });
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    const applied = await harness.tools.get("piagent_profile_apply").execute(
+      "image-scope-profile-test",
+      { profile: "generic", overwrite: true },
+      undefined,
+      () => {},
+      ctx
+    );
+    assert.equal(applied.isError, undefined);
+    const input = harness.handlers.get("input");
+
+    const denied = await input({
+      text: `Please inspect ${deniedImagePath}`,
+      source: "interactive"
+    }, ctx);
+    const allowed = await input({
+      text: `Please inspect ${allowedImagePath}`,
+      source: "interactive"
+    }, ctx);
+
+    assert.equal(denied.action, "continue");
+    assert.equal(denied.images, undefined);
+    assert.equal(allowed.action, "transform");
+    assert.equal(allowed.images.length, 1);
+  });
+
+  it("does not attach a non-image payload solely because its name ends in .png", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const fakeImagePath = path.join(cwd, "screenshots", "not-an-image.png");
+    fs.writeFileSync(fakeImagePath, "this is not image data\n");
+    const ctx = createContext(cwd);
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    const input = harness.handlers.get("input");
+
+    const result = await input({
+      text: `Please inspect ${fakeImagePath}`,
+      source: "interactive"
+    }, ctx);
+
+    assert.equal(result.action, "continue");
+    assert.equal(result.images, undefined);
+  });
+
+  it("does not read a protected image swapped in after path validation", async () => {
+    const { root, readChatImage } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const safeImagePath = path.join(cwd, "screenshots", "race.png");
+    const protectedImagePath = path.join(cwd, ".pi", "piagent-state", "secret.png");
+    const fixtureImagePath = path.join(cwd, "screenshots", "Ảnh màn hình 2026-07-20 lúc 12.00.00.png");
+    fs.copyFileSync(fixtureImagePath, safeImagePath);
+    fs.copyFileSync(fixtureImagePath, protectedImagePath);
+    const canonicalSafeImagePath = fs.realpathSync.native(safeImagePath);
+    let swapped = false;
+    const result = readChatImage(safeImagePath, cwd, {
+      roots: [{ path: fs.realpathSync.native(cwd), source: "project" }],
+      readProtectedPaths: [".pi/piagent-state/**"],
+      enforceFilesystemRead: false,
+      onImageInspected(file) {
+        assert.equal(file, canonicalSafeImagePath);
+        assert.equal(swapped, false);
+        swapped = true;
+        fs.rmSync(safeImagePath);
+        fs.linkSync(protectedImagePath, safeImagePath);
+      }
+    });
+
+    assert.equal(swapped, true, JSON.stringify(result));
+    assert.equal(result.status, "error");
+    if (result.status === "error") {
+      assert.match(result.reason, /changed between the safety checks and the read/);
+    }
   });
 
   it("blocks raw access to secrets, guard state, and guard profile without false positives", async () => {

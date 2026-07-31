@@ -137,6 +137,13 @@ Vì vậy một config đặt `directTools: true` cùng `toolPrefix: "none"` là
 
 Adapter **merge `settings` của cả bốn layer thành một block cho cả session**, layer sau ghi đè theo từng key — không phải per-server. Nên `directTools` đặt ở file này và `toolPrefix: "none"` đặt ở file kia vẫn ra đúng tổ hợp đó, trong khi đọc riêng từng file thì không file nào có vấn đề. Platform đọc settings đã merge, và báo cả hai file, vì sửa file nào cũng đủ.
 
+Adapter cũng hỗ trợ `directTools: true` hoặc danh sách tool ngay trên từng server,
+và giá trị per-server override default trong `settings`. Platform vì vậy resolve
+effective server entry, không chỉ đọc settings: nếu một repository server có
+direct tool hiệu lực trong khi prefix là `none`, guard và
+`piagent-mcp doctor` cùng fail-closed. Khi prefix vẫn là `server`/`short`, direct
+tool đã approve tiếp tục chạy bình thường.
+
 ### `imports` — server không nằm trong bốn scope
 
 Adapter nhận thêm key `imports` trong config MCP, để kéo định nghĩa server từ config của công cụ khác. Server vào session theo đường này **không** xuất hiện ở scope nào trong bốn scope trên, nên trước đây gate không thấy chúng.
