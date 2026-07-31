@@ -30,7 +30,8 @@ Options:
                                   Configure pi-subagents runtime baseline (default: safe)
   --subagents-model-scope <none|piagent|codex|claude>   model family for subagents
                                   Optional subagent model allowlist (default: none)
-  --with-web-access               Install pi-web-access for builtin `researcher` subagent (default: skip)
+  --with-web-access / --no-web-access
+                                  Install/skip pi-web-access for builtin `researcher` subagent (default: install)
   --with-herdr / --no-herdr      Install/skip Herdr Pi integration if herdr exists (default: install)
   --model-scope <full|codex|claude>   model families to enable
                                   Configure Pi enabledModels for selector/cycling (default: full)
@@ -73,7 +74,7 @@ MCP_PRESET_EXPLICIT=false
 WITH_SUBAGENTS=true
 SUBAGENTS_PRESET="safe"
 SUBAGENTS_MODEL_SCOPE="none"
-WITH_WEB_ACCESS=false
+WITH_WEB_ACCESS=true
 WITH_HERDR=true
 CONFIGURE_MODEL_SCOPE=true
 MODEL_SCOPE_PRESET="full"
@@ -152,6 +153,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --with-web-access)
       WITH_WEB_ACCESS=true
+      shift
+      ;;
+    --no-web-access)
+      WITH_WEB_ACCESS=false
       shift
       ;;
     --with-herdr)
@@ -412,6 +417,8 @@ if [[ "$DO_GLOBAL" == true ]]; then
   fi
   if [[ "$WITH_WEB_ACCESS" == true ]]; then
     install_args+=("--with-web-access")
+  else
+    install_args+=("--no-web-access")
   fi
   if [[ "$WITH_HERDR" == true ]]; then
     install_args+=("--with-herdr")

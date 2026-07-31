@@ -29,7 +29,7 @@ PI_AI_VERSION="$(require_exact_peer "@earendil-works/pi-ai")"
 TYPEBOX_VERSION="$(require_exact_peer "typebox")"
 PI_MCP_ADAPTER_VERSION="2.15.0"
 PI_SUBAGENTS_VERSION="0.38.0"
-PI_WEB_ACCESS_VERSION="0.13.0"
+PI_WEB_ACCESS_VERSION="0.17.0"
 
 if [[ "$PI_CODING_VERSION" != "$PI_AI_VERSION" ]]; then
   echo "FAIL: Pi Coding Agent and Pi AI host versions must match." >&2

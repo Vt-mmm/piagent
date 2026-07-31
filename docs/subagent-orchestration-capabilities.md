@@ -42,7 +42,7 @@ Core decisions:
   - `scheduledRuns.enabled: false`
   - bounded `maxSubagentDepth`, spawn cap, and parallel concurrency
 - `scripts/setup.sh` / `scripts/install-global.sh`
-  - optional `--with-web-access` installs `npm:pi-web-access@0.13.0` for web/docs research
+  - install `npm:pi-web-access@0.17.0` by default for web/docs research; `--no-web-access` opts out
 - Workflow prompts
   - `/workflow task`, `/workflow plan`, `/workflow review`, `/workflow be-to-fe`, `/workflow platform-improve` instruct the parent to auto-delegate when work is independent and bounded
 - Docs
@@ -81,7 +81,7 @@ Parallel review:
 Research-heavy task:
 
 ```bash
-pi install npm:pi-web-access@0.13.0
+pi install npm:pi-web-access@0.17.0
 ```
 
 ```text

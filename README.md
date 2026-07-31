@@ -211,7 +211,7 @@ Keep provider keys in environment variables, never in committed config. Switchin
 
 ## Subagents
 
-`piagent-setup` installs `pi-subagents` with the `safe` preset unless disabled. Daily task prompts stay solo-first: they delegate bounded scout, planning, and review work only when it is independent enough to be worth the cost, and the final handoff states whether subagents were used and why.
+`piagent-setup` installs `pi-subagents` with the `safe` preset and `pi-web-access` for web-backed researcher runs unless disabled. Daily task prompts stay solo-first: they delegate bounded scout, planning, research, and review work only when it is independent enough to be worth the cost, and the final handoff states whether subagents were used and why.
 
 `/subagents-doctor` runs a health check; `/run piagent-scout "…"` and its planner, worker, and reviewer counterparts dispatch work. See [Subagents and multi-agent](docs/subagents-and-multiagent.md).
 
@@ -291,7 +291,7 @@ This repository intentionally excludes:
 
 ## Maturity
 
-The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.2.7` or a reviewed commit.
+The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.2.8` or a reviewed commit.
 
 Ready for:
 

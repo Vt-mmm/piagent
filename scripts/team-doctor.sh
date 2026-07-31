@@ -224,13 +224,16 @@ function mcpSummary(file) {
 
 let piHasMcpAdapter = false;
 let piHasSubagents = false;
+let piHasWebAccess = false;
 if (commandExists("pi")) {
   const piList = spawnSync("pi", ["list"], { encoding: "utf8" });
   const combined = `${piList.stdout ?? ""}\n${piList.stderr ?? ""}`;
   piHasMcpAdapter = combined.includes("pi-mcp-adapter");
   piHasSubagents = combined.includes("pi-subagents");
+  piHasWebAccess = combined.includes("pi-web-access");
   if (!piHasMcpAdapter) warnings.push("Pi MCP adapter not found in `pi list`; run setup with --with-mcp or `pi install npm:pi-mcp-adapter@2.15.0`");
   if (!piHasSubagents) warnings.push("Pi subagents package not found in `pi list`; run setup with --with-subagents or `pi install npm:pi-subagents@0.38.0`");
+  if (!piHasWebAccess) warnings.push("Pi web access package not found in `pi list`; run `piagent-update --force` or `pi install npm:pi-web-access@0.17.0` so researcher subagents can browse/fetch external sources");
 }
 
 const mcpFiles = [
