@@ -3,6 +3,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 
+import {
+  contextIndexExcludeDigest,
+  contextIndexExcludePolicyVersion,
+  normalizeContextIndexExcludePatterns
+} from "./context-index-policy.js";
+import { matchesProtectedPath } from "./policy-core.js";
+
 const INDEX_SCHEMA_VERSION = 2;
 const TELEMETRY_SCHEMA_VERSION = 1;
 const RRF_K = 60;
@@ -62,6 +69,13 @@ function clampInteger(value, fallback, min, max) {
   const number = Number(value);
   if (!Number.isFinite(number)) return fallback;
   return Math.max(min, Math.min(max, Math.trunc(number)));
+}
+
+function requireExplicitExcludePatterns(options, operation) {
+  if (!Array.isArray(options?.excludePatterns)) {
+    throw new TypeError(`${operation} requires an explicit excludePatterns array`);
+  }
+  return normalizeContextIndexExcludePatterns(options.excludePatterns);
 }
 
 export function estimateContextTokens(value) {
@@ -184,41 +198,28 @@ function shouldIndexPath(relativePath, options) {
   const segments = rel.split("/");
   if (segments.some((segment) => IGNORED_SEGMENTS.has(segment))) return false;
   if (SECRET_FILE_PATTERNS.some((pattern) => pattern.test(rel))) return false;
-  if ((options.excludePatterns ?? []).some((pattern) => simpleGlobMatch(rel, pattern))) return false;
+  if (matchesProtectedPath(rel, options.excludePatterns ?? [])) return false;
   const name = path.posix.basename(rel);
   return SOURCE_NAMES.has(name) || SOURCE_EXTENSIONS.has(path.posix.extname(name).toLowerCase());
 }
 
-function simpleGlobMatch(relativePath, pattern) {
-  const rel = normalizeRelative(relativePath);
-  const normalized = normalizeRelative(pattern);
-  let source = "";
-  for (let index = 0; index < normalized.length; index += 1) {
-    const char = normalized[index];
-    if (char === "*" && normalized[index + 1] === "*") {
-      if (normalized[index + 2] === "/") {
-        source += "(?:.*/)?";
-        index += 2;
-      } else {
-        source += ".*";
-        index += 1;
-      }
-      continue;
-    }
-    if (char === "*") {
-      source += "[^/]*";
-      continue;
-    }
-    if (char === "?") {
-      source += "[^/]";
-      continue;
-    }
-    source += /[.+^${}()|[\]\\]/.test(char) ? `\\${char}` : char;
-  }
+function projectFileInfo(cwd, relativePath, root = fs.realpathSync.native(cwd), directoryCache = new Map()) {
+  const expected = path.resolve(root, relativePath);
+  if (expected !== root && !expected.startsWith(`${root}${path.sep}`)) return undefined;
   try {
-    return new RegExp(`^${source}$`, "i").test(rel);
+    const directPath = path.resolve(cwd, relativePath);
+    const directParent = path.dirname(directPath);
+    let canonicalParent = directoryCache.get(directParent);
+    if (canonicalParent === undefined) {
+      canonicalParent = fs.realpathSync.native(directParent);
+      directoryCache.set(directParent, canonicalParent);
+    }
+    if (canonicalParent !== path.dirname(expected)) return undefined;
+    const direct = fs.lstatSync(directPath);
+    if (direct.isSymbolicLink() || !direct.isFile()) return undefined;
+    return { absolute: expected, stat: direct };
   } catch {
-    return rel === normalized;
+    return undefined;
   }
 }
 
@@ -463,11 +464,14 @@ export function classifyContextTask(prompt) {
 }
 
 export async function buildContextIndexV2(cwd, options = {}) {
+  const excludePatterns = requireExplicitExcludePatterns(options, "buildContextIndexV2");
   const startedAt = Date.now();
+  const projectRoot = fs.realpathSync.native(cwd);
+  const directoryCache = new Map();
   const maxFiles = clampInteger(options.maxFiles, DEFAULT_MAX_FILES, 1, 50_000);
   const maxFileBytes = clampInteger(options.maxFileBytes, DEFAULT_MAX_FILE_BYTES, 1_024, 2 * 1024 * 1024);
   const listed = gitFileList(cwd) ?? walkedFileList(cwd, maxFiles);
-  const candidates = listed.filter((file) => shouldIndexPath(file, options)).slice(0, maxFiles).sort();
+  const candidates = listed.filter((file) => shouldIndexPath(file, { ...options, excludePatterns })).slice(0, maxFiles).sort();
   const db = await openDatabase(cwd);
   const existing = new Map(db.prepare("SELECT path, hash, bytes, mtime_ms FROM files").all().map((row) => [row.path, row]));
   const current = new Set();
@@ -480,18 +484,12 @@ export async function buildContextIndexV2(cwd, options = {}) {
   const skippedPaths = [];
 
   for (const relativePath of candidates) {
-    const absolute = path.resolve(cwd, relativePath);
-    if (!absolute.startsWith(`${path.resolve(cwd)}${path.sep}`) && absolute !== path.resolve(cwd)) continue;
-    let stat;
-    try {
-      stat = fs.statSync(absolute);
-      if (!stat.isFile()) continue;
-      if (stat.size > maxFileBytes) {
-        skippedLarge += 1;
-        skippedPaths.push(relativePath);
-        continue;
-      }
-    } catch {
+    const file = projectFileInfo(cwd, relativePath, projectRoot, directoryCache);
+    if (!file) continue;
+    const { absolute, stat } = file;
+    if (stat.size > maxFileBytes) {
+      skippedLarge += 1;
+      skippedPaths.push(relativePath);
       continue;
     }
     const previous = existing.get(relativePath);
@@ -575,7 +573,9 @@ export async function buildContextIndexV2(cwd, options = {}) {
       symbolCount: counts.symbols,
       importCount: counts.imports,
       maxFileBytes,
-      excludePatterns: JSON.stringify(options.excludePatterns ?? []),
+      excludePatterns: JSON.stringify(excludePatterns),
+      excludeDigest: contextIndexExcludeDigest(excludePatterns),
+      excludePolicyVersion: contextIndexExcludePolicyVersion(),
       skippedPaths: JSON.stringify(skippedPaths)
     });
     db.exec("COMMIT");
@@ -599,10 +599,26 @@ export async function buildContextIndexV2(cwd, options = {}) {
   }
 }
 
-export async function contextIndexV2Status(cwd) {
+export async function contextIndexV2Status(cwd, options = {}) {
   const paths = contextEnginePaths(cwd);
+  const projectRoot = fs.realpathSync.native(cwd);
+  const directoryCache = new Map();
+  const expectedExcludePatterns = options.excludePatterns === undefined
+    ? undefined
+    : normalizeContextIndexExcludePatterns(options.excludePatterns);
+  const expectedExcludeDigest = expectedExcludePatterns
+    ? contextIndexExcludeDigest(expectedExcludePatterns)
+    : undefined;
   if (!fs.existsSync(paths.database)) {
-    return { schemaVersion: INDEX_SCHEMA_VERSION, exists: false, path: normalizeRelative(path.relative(cwd, paths.database)), warnings: ["index-v2 missing"] };
+    return {
+      schemaVersion: INDEX_SCHEMA_VERSION,
+      exists: false,
+      path: normalizeRelative(path.relative(cwd, paths.database)),
+      stale: false,
+      policyStale: false,
+      expectedExcludeDigest,
+      warnings: ["index-v2 missing"]
+    };
   }
   const db = await openDatabase(cwd, { create: false });
   try {
@@ -612,23 +628,28 @@ export async function contextIndexV2Status(cwd) {
     const symbols = Number(db.prepare("SELECT COUNT(*) count FROM symbols").get().count);
     const imports = Number(db.prepare("SELECT COUNT(*) count FROM imports").get().count);
     const indexedPaths = new Set(fileRows.map((row) => row.path));
-    const statChanged = [];
-    for (const row of fileRows) {
-      try {
-        const stat = fs.statSync(path.resolve(cwd, row.path));
-        if (!stat.isFile() || stat.size !== Number(row.bytes) || Math.abs(stat.mtimeMs - Number(row.mtime_ms)) >= 0.5) {
-          statChanged.push(row.path);
-        }
-      } catch {
-        statChanged.push(row.path);
-      }
-    }
-    let excludePatterns = [];
+    let storedExcludePatterns = [];
     try {
       const parsed = JSON.parse(metadata.excludePatterns ?? "[]");
-      if (Array.isArray(parsed)) excludePatterns = parsed.filter((value) => typeof value === "string");
+      if (Array.isArray(parsed)) storedExcludePatterns = normalizeContextIndexExcludePatterns(parsed);
     } catch {
-      excludePatterns = [];
+      storedExcludePatterns = [];
+    }
+    const activeExcludePatterns = expectedExcludePatterns ?? storedExcludePatterns;
+    const storedExcludeDigest = metadata.excludeDigest;
+    const policyStale = expectedExcludeDigest !== undefined
+      && (typeof storedExcludeDigest !== "string" || storedExcludeDigest !== expectedExcludeDigest);
+    const statChanged = [];
+    for (const row of fileRows) {
+      if (!shouldIndexPath(row.path, { excludePatterns: activeExcludePatterns })) continue;
+      const file = projectFileInfo(cwd, row.path, projectRoot, directoryCache);
+      if (
+        !file
+        || file.stat.size !== Number(row.bytes)
+        || Math.abs(file.stat.mtimeMs - Number(row.mtime_ms)) >= 0.5
+      ) {
+        statChanged.push(row.path);
+      }
     }
     let skippedPaths = new Set();
     try {
@@ -639,9 +660,12 @@ export async function contextIndexV2Status(cwd) {
     }
     const listed = gitFileList(cwd);
     const newlyVisible = listed
-      ? listed.filter((file) => !indexedPaths.has(file) && !skippedPaths.has(file) && shouldIndexPath(file, { excludePatterns }))
+      ? listed.filter((file) => !indexedPaths.has(file) && !skippedPaths.has(file) && shouldIndexPath(file, { excludePatterns: activeExcludePatterns }))
       : [];
     const stalePaths = [...new Set([...statChanged, ...newlyVisible])];
+    const warnings = [];
+    if (policyStale) warnings.push("context index exclusion policy changed");
+    if (stalePaths.length > 0) warnings.push(`${stalePaths.length} changed file(s) since the last index build`);
     return {
       schemaVersion: Number(metadata.schemaVersion ?? INDEX_SCHEMA_VERSION),
       exists: true,
@@ -650,13 +674,35 @@ export async function contextIndexV2Status(cwd) {
       files,
       symbols,
       imports,
-      stale: stalePaths.length > 0,
+      stale: policyStale || stalePaths.length > 0,
+      policyStale,
+      excludePolicyVersion: metadata.excludePolicyVersion,
+      excludeDigest: storedExcludeDigest,
+      expectedExcludeDigest,
       stalePaths: stalePaths.slice(0, 20),
-      warnings: stalePaths.length > 0 ? [`${stalePaths.length} changed file(s) since the last index build`] : []
+      warnings
     };
   } finally {
     db.close();
   }
+}
+
+export async function ensureContextIndexV2(cwd, options = {}) {
+  const excludePatterns = requireExplicitExcludePatterns(options, "ensureContextIndexV2");
+  let status = await contextIndexV2Status(cwd, { excludePatterns });
+  const reason = options.refresh
+    ? "refresh"
+    : status.policyStale
+      ? "exclusion-policy"
+      : !status.exists && options.rebuildMissing
+        ? "missing"
+        : undefined;
+  let build;
+  if (reason) {
+    build = await buildContextIndexV2(cwd, { ...options, excludePatterns });
+    status = await contextIndexV2Status(cwd, { excludePatterns });
+  }
+  return { status, rebuilt: Boolean(reason), reason, build, excludePatterns };
 }
 
 function addRankedList(scores, rows, source, weight = 1) {
@@ -783,8 +829,11 @@ function retrievalFeedback(cwd) {
 }
 
 export async function searchContextIndexV2(cwd, query, options = {}) {
+  const excludePatterns = requireExplicitExcludePatterns(options, "searchContextIndexV2");
   const limit = clampInteger(options.limit, 12, 1, 50);
-  const status = await contextIndexV2Status(cwd);
+  const projectRoot = fs.realpathSync.native(cwd);
+  const directoryCache = new Map();
+  const status = await contextIndexV2Status(cwd, { excludePatterns });
   if (!status.exists) return { query, terms: [], confidence: "none", results: [], status };
   const terms = tokenizeQuery(query);
   const explicitPaths = queryPathCandidates(query);
@@ -792,7 +841,8 @@ export async function searchContextIndexV2(cwd, query, options = {}) {
   const db = await openDatabase(cwd, { create: false });
   try {
     const scores = new Map();
-    const allFiles = db.prepare("SELECT path, mtime_ms FROM files").all();
+    const pathAllowed = (filePath) => shouldIndexPath(filePath, { excludePatterns });
+    const allFiles = db.prepare("SELECT path, mtime_ms FROM files").all().filter((file) => pathAllowed(file.path));
     const explicitRows = [];
     for (const file of allFiles) {
       const basename = path.posix.basename(file.path).toLowerCase();
@@ -809,7 +859,7 @@ export async function searchContextIndexV2(cwd, query, options = {}) {
       lexicalRows = db.prepare(`
         SELECT path, bm25(file_fts, 0.0, 1.0, 2.2) lexical_score
         FROM file_fts WHERE file_fts MATCH ? ORDER BY lexical_score LIMIT ?
-      `).all(ftsQuery(terms), Math.max(limit * 4, 30));
+      `).all(ftsQuery(terms), Math.max(limit * 4, 30)).filter((row) => pathAllowed(row.path));
       addRankedList(scores, lexicalRows, "lexical", 1.5);
     }
 
@@ -820,7 +870,7 @@ export async function searchContextIndexV2(cwd, query, options = {}) {
       ORDER BY CASE WHEN lower(name) = ? THEN 0 ELSE 1 END, length(name) LIMIT ?
     `);
     for (const term of terms.slice(0, 8)) {
-      symbolRows.push(...symbolStatement.all(term, `%${term}%`, term, Math.max(limit * 2, 20)));
+      symbolRows.push(...symbolStatement.all(term, `%${term}%`, term, Math.max(limit * 2, 20)).filter((row) => pathAllowed(row.file_path)));
     }
     const dedupedSymbols = [...new Map(symbolRows.map((row) => [`${row.file_path}:${row.line}`, row])).values()];
     addRankedList(scores, dedupedSymbols, "symbol", 2.2);
@@ -841,11 +891,19 @@ export async function searchContextIndexV2(cwd, query, options = {}) {
     addRankedList(scores, feedbackRows, "feedback", 0.45);
 
     const graphSeeds = new Map([...scores.entries()].map(([filePath, value]) => [filePath, value.score]));
-    const importRows = db.prepare("SELECT file_path, target_path FROM imports WHERE target_path IS NOT NULL").all();
+    const importRows = db.prepare("SELECT file_path, target_path FROM imports WHERE target_path IS NOT NULL")
+      .all()
+      .filter((row) => pathAllowed(row.file_path) && pathAllowed(row.target_path));
     const graphRows = personalizedPageRank(importRows, graphSeeds).slice(0, Math.max(limit * 3, 30));
     addRankedList(scores, graphRows, "graph", 1);
 
-    const ranked = [...scores.values()].sort((left, right) => right.score - left.score).slice(0, limit);
+    const ranked = [...scores.values()]
+      .filter((candidate) => (
+        shouldIndexPath(candidate.path, { excludePatterns })
+        && projectFileInfo(cwd, candidate.path, projectRoot, directoryCache)
+      ))
+      .sort((left, right) => right.score - left.score)
+      .slice(0, limit);
     const symbolLookup = db.prepare("SELECT name, kind, line, end_line, signature FROM symbols WHERE file_path = ? ORDER BY line LIMIT 12");
     const results = ranked.map((candidate) => {
       const matchingSymbols = candidate.rows
@@ -897,9 +955,15 @@ function lineRangesForFile(text, result, terms, includeCode) {
 }
 
 export async function buildContextPack(cwd, query, options = {}) {
+  const excludePatterns = requireExplicitExcludePatterns(options, "buildContextPack");
   const budgetTokens = clampInteger(options.budgetTokens, DEFAULT_PACK_TOKENS, 200, 50_000);
   const includeCode = options.includeCode !== false;
-  const search = await searchContextIndexV2(cwd, query, { limit: clampInteger(options.limit, 16, 1, 50) });
+  const projectRoot = fs.realpathSync.native(cwd);
+  const directoryCache = new Map();
+  const search = await searchContextIndexV2(cwd, query, {
+    limit: clampInteger(options.limit, 16, 1, 50),
+    excludePatterns
+  });
   const selected = [];
   const mapBudget = Math.min(1_200, Math.max(40, Math.trunc(budgetTokens * 0.2)));
   const mapLines = [];
@@ -935,7 +999,9 @@ export async function buildContextPack(cwd, query, options = {}) {
   for (const result of search.results) {
     let text;
     try {
-      text = fs.readFileSync(path.resolve(cwd, result.path), "utf8");
+      const file = projectFileInfo(cwd, result.path, projectRoot, directoryCache);
+      if (!file) continue;
+      text = fs.readFileSync(file.absolute, "utf8");
     } catch {
       continue;
     }
@@ -979,7 +1045,10 @@ export async function buildContextPack(cwd, query, options = {}) {
 }
 
 export async function buildTestImpact(cwd, changedFiles = [], options = {}) {
-  const status = await contextIndexV2Status(cwd);
+  const excludePatterns = requireExplicitExcludePatterns(options, "buildTestImpact");
+  const projectRoot = fs.realpathSync.native(cwd);
+  const directoryCache = new Map();
+  const status = await contextIndexV2Status(cwd, { excludePatterns });
   const normalizedChanged = [...new Set((changedFiles.length > 0 ? changedFiles : gitChangedFiles(cwd)).map(normalizeRelative).filter(Boolean))];
   if (!status.exists) return { changedFiles: normalizedChanged, impactedFiles: [], tests: [], status };
   const db = await openDatabase(cwd, { create: false });
@@ -993,13 +1062,22 @@ export async function buildTestImpact(cwd, changedFiles = [], options = {}) {
       const current = queue.shift();
       if (current.depth >= maxDepth) continue;
       for (const row of reverseStatement.all(current.filePath)) {
+        if (
+          !shouldIndexPath(row.file_path, { excludePatterns })
+          || !projectFileInfo(cwd, row.file_path, projectRoot, directoryCache)
+        ) continue;
         if (seen.has(row.file_path)) continue;
         seen.add(row.file_path);
         impacted.push({ path: row.file_path, via: current.filePath, depth: current.depth + 1 });
         queue.push({ filePath: row.file_path, depth: current.depth + 1 });
       }
     }
-    const allFiles = db.prepare("SELECT path FROM files").all().map((row) => row.path);
+    const allFiles = db.prepare("SELECT path FROM files").all()
+      .map((row) => row.path)
+      .filter((filePath) => (
+        shouldIndexPath(filePath, { excludePatterns })
+        && projectFileInfo(cwd, filePath, projectRoot, directoryCache)
+      ));
     const stemTerms = normalizedChanged.flatMap((filePath) => {
       const basename = path.posix.basename(filePath, path.posix.extname(filePath)).replace(/\.(?:test|spec)$/, "");
       return basename.split(/[-_.]/).filter((term) => term.length >= 3);

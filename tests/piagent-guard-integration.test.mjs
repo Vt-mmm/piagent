@@ -266,6 +266,38 @@ describe("piagent guard integration", () => {
     assert.ok(injected.message.details.estimatedTokens <= 1_200);
   });
 
+  it("rebuilds a context index created under weaker exclusions before packing it", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    fs.mkdirSync(path.join(cwd, "backend"), { recursive: true });
+    fs.writeFileSync(
+      path.join(cwd, "backend", "credentials.ts"),
+      "export const LEGACY_INDEX_SECRET = 'STALE_POLICY_VALUE';\n"
+    );
+    const profilePath = path.join(cwd, ".pi", "piagent-profile.json");
+    const profile = JSON.parse(fs.readFileSync(profilePath, "utf8"));
+    profile.readOnlyPaths = ["backend/**"];
+    fs.writeFileSync(profilePath, `${JSON.stringify(profile, null, 2)}\n`);
+    const engine = await import(
+      `${pathToFileURL(path.join(root, "packages", "piagent-core", "extensions", "context-engine.js")).href}?unsafe=${Math.random()}`
+    );
+    await engine.buildContextIndexV2(cwd, { excludePatterns: [] });
+
+    const ctx = createContext(cwd, { confirm: true });
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    const packed = await harness.tools.get("piagent_context_engine").execute(
+      "stale-policy-pack",
+      { action: "pack", query: "STALE_POLICY_VALUE" },
+      undefined,
+      () => {},
+      ctx
+    );
+
+    assert.doesNotMatch(packed.content[0].text, /STALE_POLICY_VALUE|backend\/credentials\.ts/);
+    assert.equal(packed.details.status.policyStale, false);
+  });
+
   it("returns a delta marker for an identical repeated read result", async () => {
     const { root, piagentGuard } = await loadGuardFixture();
     const cwd = createProject(root);

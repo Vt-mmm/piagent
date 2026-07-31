@@ -52,6 +52,7 @@ required_files=(
   "$ROOT/packages/piagent-core/package.json"
   "$ROOT/packages/piagent-core/extensions/piagent-guard.ts"
   "$ROOT/packages/piagent-core/extensions/context-engine.js"
+  "$ROOT/packages/piagent-core/extensions/context-index-policy.js"
   "$ROOT/packages/piagent-core/extensions/policy-core.js"
   "$ROOT/packages/piagent-core/extensions/redaction-core.js"
   "$ROOT/packages/piagent-core/extensions/runtime-evidence.js"
@@ -545,6 +546,7 @@ fi
 
 node --check "$ROOT/packages/piagent-core/extensions/piagent-guard.ts" >/dev/null
 node --check "$ROOT/packages/piagent-core/extensions/context-engine.js" >/dev/null
+node --check "$ROOT/packages/piagent-core/extensions/context-index-policy.js" >/dev/null
 node --check "$ROOT/packages/piagent-core/extensions/policy-core.js" >/dev/null
 node --check "$ROOT/packages/piagent-core/extensions/redaction-core.js" >/dev/null
 node --check "$ROOT/packages/piagent-core/extensions/runtime-evidence.js" >/dev/null

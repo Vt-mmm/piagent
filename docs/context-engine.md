@@ -34,7 +34,10 @@ task
   model, thinking, active-tool count, usage, retrieval confidence và đường dẫn
   tương đối đã được guard redaction.
 
-Rollback flags:
+Ba cơ chế `PIAGENT_DYNAMIC_TOOLS`, `PIAGENT_AUTO_CONTEXT` và
+`PIAGENT_CONTEXT_TELEMETRY` đều **bật mặc định** từ `v1.2.6`. Telemetry chỉ ghi
+operational metadata/hash như mô tả dưới đây, không ghi prompt hoặc tool output
+thô. Tắt riêng từng cơ chế cho một lần chạy bằng:
 
 ```bash
 PIAGENT_DYNAMIC_TOOLS=off pi
@@ -81,6 +84,13 @@ score(file) = sum(weight(source) / (60 + rank(source, file)))
 Context pack tách repo map và source snippets, sau đó dừng cứng tại token
 budget. Index chỉ là navigation evidence; model phải đọc file hiện tại trước
 khi edit.
+
+Các API có thể build hoặc đọc nội dung (`build`, `ensure`, `search`, `pack`,
+`impact`) bắt buộc caller truyền `excludePatterns` tường minh và fail-closed
+nếu thiếu. Runtime và CLI lấy danh sách này từ shared project policy resolver;
+low-level tool hoặc test chỉ dùng `[]` khi chủ ý chọn không loại trừ. API
+`status` vẫn có thể đọc metadata mà không cần policy vì nó không đọc source
+content.
 
 ## P2: compaction, finder và test impact
 

@@ -302,7 +302,7 @@ function summarizeMigration(report, dryRun) {
 
 function runProjectMigration(project, options, activePlatformRoot) {
   const migrator = path.join(activePlatformRoot, "scripts/migrate-project-state.mjs");
-  if (!options.dryRun && !fs.existsSync(migrator)) {
+  if (!fs.existsSync(migrator)) {
     fail(`the updated helper has no project migrator at ${migrator}`);
   }
   const args = options.dryRun

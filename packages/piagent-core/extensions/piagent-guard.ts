@@ -81,10 +81,15 @@ import {
   buildTestImpact,
   classifyContextTask,
   contextIndexV2Status,
+  ensureContextIndexV2,
   estimateContextTokens,
   searchContextIndexV2,
   toolResultFingerprint
 } from "./context-engine.js";
+import {
+  contextIndexExcludePatterns,
+  effectiveProtectedPaths
+} from "./context-index-policy.js";
 
 import type { ActionClassification } from "./guard-shell-analysis.ts";
 
@@ -99,7 +104,6 @@ import type {
   ContextIndexNodeKind,
   ContextIndexSettings,
   ContextPreflight,
-  EffectiveProtectedPaths,
   ExecPolicyConfig,
   ExternalActionPolicyConfig,
   FinalGateConfig,
@@ -1919,34 +1923,6 @@ function defaultWorkPlan(summary: string, riskLane: TaskContract["riskLane"]): W
 
 function uniqueStrings(values: string[]): string[] {
   return [...new Set(values.filter((value) => typeof value === "string" && value.trim().length > 0))];
-}
-
-function effectiveProtectedPaths(policy: BasePolicy, profile: ProjectProfile): EffectiveProtectedPaths {
-  const baseReadProtectedPaths = policy.shellProtectedPaths ?? policy.protectedPaths;
-  const profileProtectedPaths = profile.protectedPaths ?? [];
-  const profileShellProtectedPaths = profile.shellProtectedPaths ?? profile.protectedPaths ?? [];
-  const readOnlyPaths = profile.readOnlyPaths ?? [];
-  const contextIndexStatePath = resolveContextIndexSettings(profile).path;
-  return {
-    readProtectedPaths: uniqueStrings([
-      ...baseReadProtectedPaths,
-      ...profileProtectedPaths,
-      contextIndexStatePath
-    ]),
-    writeProtectedPaths: uniqueStrings([
-      ...policy.protectedPaths,
-      ...profileProtectedPaths,
-      ...readOnlyPaths,
-      contextIndexStatePath
-    ]),
-    shellProtectedPaths: uniqueStrings([
-      ...baseReadProtectedPaths,
-      ...profileShellProtectedPaths,
-      ...readOnlyPaths,
-      contextIndexStatePath
-    ]),
-    readOnlyPaths: uniqueStrings(readOnlyPaths)
-  };
 }
 
 function classifyExternalAction(toolName: string, input: Record<string, unknown>, policy: BasePolicy): {
@@ -4480,7 +4456,9 @@ export default function piagentGuard(pi: ExtensionAPI) {
     if (updateNotice) ctx.ui.notify(updateNotice, "info");
     let engineStatus: unknown;
     try {
-      engineStatus = await contextIndexV2Status(ctx.cwd);
+      engineStatus = await contextIndexV2Status(ctx.cwd, {
+        excludePatterns: contextIndexExcludePatterns(policy, profile)
+      });
     } catch (error) {
       engineStatus = { exists: false, error: error instanceof Error ? error.message : String(error) };
     }
@@ -4590,7 +4568,12 @@ export default function piagentGuard(pi: ExtensionAPI) {
     autoPackedPrompts.add(signal.promptHash);
     if (autoPackedPrompts.size > 50) autoPackedPrompts.delete(autoPackedPrompts.values().next().value as string);
     try {
-      const status = await contextIndexV2Status(ctx.cwd);
+      const excludePatterns = contextIndexExcludePatterns(policy, loadProfileFromContext(ctx));
+      const ensured = await ensureContextIndexV2(ctx.cwd, {
+        excludePatterns,
+        rebuildMissing: false
+      });
+      const status = ensured.status;
       if (!status.exists || status.stale) {
         telemetry(ctx, {
           event: "context_pack",
@@ -4603,7 +4586,12 @@ export default function piagentGuard(pi: ExtensionAPI) {
         return;
       }
       const budgetTokens = signal.lane === "high-risk" ? 1_200 : signal.lane === "tiny" ? 500 : 900;
-      const pack = await buildContextPack(ctx.cwd, query, { budgetTokens, includeCode: false, limit: 12 });
+      const pack = await buildContextPack(ctx.cwd, query, {
+        budgetTokens,
+        includeCode: false,
+        limit: 12,
+        excludePatterns
+      });
       telemetry(ctx, {
         event: "context_pack",
         queryHash: pack.queryHash,
@@ -5029,17 +5017,11 @@ export default function piagentGuard(pi: ExtensionAPI) {
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const profile = loadProfileFromContext(ctx);
-      const pathPolicy = effectiveProtectedPaths(policy, profile);
-      const excludePatterns = Array.from(new Set([
-        ...pathPolicy.readProtectedPaths,
-        ...pathPolicy.writeProtectedPaths,
-        ".pi/context-index.json",
-        ".pi/piagent-state/**"
-      ]));
+      const excludePatterns = contextIndexExcludePatterns(policy, profile);
       let result: unknown;
       let text: string;
       if (params.action === "status") {
-        result = await contextIndexV2Status(ctx.cwd);
+        result = await contextIndexV2Status(ctx.cwd, { excludePatterns });
         const status = result as Awaited<ReturnType<typeof contextIndexV2Status>>;
         text = [
           `indexV2: ${status.exists ? "ready" : "missing"}`,
@@ -5062,12 +5044,13 @@ export default function piagentGuard(pi: ExtensionAPI) {
         ].join("\n");
       } else if (params.action === "search") {
         if (!params.query?.trim()) throw new Error("query is required for context search");
-        let status = await contextIndexV2Status(ctx.cwd);
-        if (params.refresh || !status.exists) {
-          await buildContextIndexV2(ctx.cwd, { excludePatterns });
-          status = await contextIndexV2Status(ctx.cwd);
-        }
-        result = await searchContextIndexV2(ctx.cwd, params.query, { limit: 15 });
+        const ensured = await ensureContextIndexV2(ctx.cwd, {
+          excludePatterns,
+          refresh: params.refresh,
+          rebuildMissing: true
+        });
+        const status = ensured.status;
+        result = await searchContextIndexV2(ctx.cwd, params.query, { limit: 15, excludePatterns });
         const search = result as Awaited<ReturnType<typeof searchContextIndexV2>>;
         text = [
           `confidence: ${search.confidence}`,
@@ -5076,20 +5059,23 @@ export default function piagentGuard(pi: ExtensionAPI) {
         ].join("\n");
       } else if (params.action === "pack") {
         if (!params.query?.trim()) throw new Error("query is required for a context pack");
-        let status = await contextIndexV2Status(ctx.cwd);
-        if (params.refresh || !status.exists) {
-          await buildContextIndexV2(ctx.cwd, { excludePatterns });
-          status = await contextIndexV2Status(ctx.cwd);
-        }
+        const ensured = await ensureContextIndexV2(ctx.cwd, {
+          excludePatterns,
+          refresh: params.refresh,
+          rebuildMissing: true
+        });
+        const status = ensured.status;
         const pack = await buildContextPack(ctx.cwd, params.query, {
           budgetTokens: params.budgetTokens ?? 6_000,
           includeCode: true,
-          limit: 18
+          limit: 18,
+          excludePatterns
         });
         result = { ...pack, text: undefined, status };
         text = pack.text;
       } else if (params.action === "impact") {
-        result = await buildTestImpact(ctx.cwd, params.files ?? []);
+        await ensureContextIndexV2(ctx.cwd, { excludePatterns, rebuildMissing: false });
+        result = await buildTestImpact(ctx.cwd, params.files ?? [], { excludePatterns });
         const impact = result as Awaited<ReturnType<typeof buildTestImpact>>;
         text = [
           `changed: ${impact.changedFiles.join(", ") || "none"}`,
@@ -5139,7 +5125,9 @@ export default function piagentGuard(pi: ExtensionAPI) {
       const contextIndex = buildContextIndexStatus(ctx.cwd, profile);
       let contextEngine: Awaited<ReturnType<typeof contextIndexV2Status>> | { exists: false; warnings: string[] };
       try {
-        contextEngine = await contextIndexV2Status(ctx.cwd);
+        contextEngine = await contextIndexV2Status(ctx.cwd, {
+          excludePatterns: contextIndexExcludePatterns(policy, profile)
+        });
       } catch (error) {
         contextEngine = { exists: false, warnings: [error instanceof Error ? error.message : String(error)] };
       }
@@ -7232,7 +7220,9 @@ export default function piagentGuard(pi: ExtensionAPI) {
 
   async function emitContextEngineStatus(ctx: ExtensionContext): Promise<void> {
     try {
-      const status = await contextIndexV2Status(ctx.cwd);
+      const status = await contextIndexV2Status(ctx.cwd, {
+        excludePatterns: contextIndexExcludePatterns(policy, loadProfileFromContext(ctx))
+      });
       emitRuntimeMessage(ctx, "piagent-context-engine-status", [
         `contextEngine: ${status.exists ? "ready" : "missing"}`,
         `path: ${status.path}`,
@@ -7251,15 +7241,10 @@ export default function piagentGuard(pi: ExtensionAPI) {
 
   async function rebuildContextEngine(ctx: ExtensionContext): Promise<void> {
     const profile = loadProfileFromContext(ctx);
-    const pathPolicy = effectiveProtectedPaths(policy, profile);
+    const excludePatterns = contextIndexExcludePatterns(policy, profile);
     try {
       const result = await buildContextIndexV2(ctx.cwd, {
-        excludePatterns: Array.from(new Set([
-          ...pathPolicy.readProtectedPaths,
-          ...pathPolicy.writeProtectedPaths,
-          ".pi/context-index.json",
-          ".pi/piagent-state/**"
-        ]))
+        excludePatterns
       });
       telemetry(ctx, { event: "context_engine_action", action: "rebuild", ...result });
       emitRuntimeMessage(ctx, "piagent-context-engine-rebuild", [
@@ -7275,9 +7260,13 @@ export default function piagentGuard(pi: ExtensionAPI) {
   }
 
   async function emitContextEngineSearch(ctx: ExtensionContext, query: string): Promise<boolean> {
-    const status = await contextIndexV2Status(ctx.cwd);
+    const excludePatterns = contextIndexExcludePatterns(policy, loadProfileFromContext(ctx));
+    const { status } = await ensureContextIndexV2(ctx.cwd, {
+      excludePatterns,
+      rebuildMissing: false
+    });
     if (!status.exists || !query.trim()) return false;
-    const search = await searchContextIndexV2(ctx.cwd, query, { limit: 12 });
+    const search = await searchContextIndexV2(ctx.cwd, query, { limit: 12, excludePatterns });
     emitRuntimeMessage(ctx, "piagent-context-engine-search", [
       `confidence: ${search.confidence}`,
       `stale: ${status.stale ? "yes" : "no"}`,
@@ -7291,12 +7280,21 @@ export default function piagentGuard(pi: ExtensionAPI) {
       emitRuntimeMessage(ctx, "piagent-context-pack-help", "Usage: /context pack <task or symbol>");
       return;
     }
-    const status = await contextIndexV2Status(ctx.cwd);
+    const excludePatterns = contextIndexExcludePatterns(policy, loadProfileFromContext(ctx));
+    const { status } = await ensureContextIndexV2(ctx.cwd, {
+      excludePatterns,
+      rebuildMissing: false
+    });
     if (!status.exists) {
       emitRuntimeMessage(ctx, "piagent-context-pack-help", "Context Engine index is missing. Run /context rebuild first.");
       return;
     }
-    const pack = await buildContextPack(ctx.cwd, query, { budgetTokens: 1_500, includeCode: false, limit: 15 });
+    const pack = await buildContextPack(ctx.cwd, query, {
+      budgetTokens: 1_500,
+      includeCode: false,
+      limit: 15,
+      excludePatterns
+    });
     telemetry(ctx, {
       event: "context_pack",
       queryHash: pack.queryHash,
@@ -7318,7 +7316,9 @@ export default function piagentGuard(pi: ExtensionAPI) {
 
   async function emitTestImpact(ctx: ExtensionContext, raw: string): Promise<void> {
     const files = raw.split(/\s+/).map((file) => file.trim()).filter(Boolean);
-    const impact = await buildTestImpact(ctx.cwd, files);
+    const excludePatterns = contextIndexExcludePatterns(policy, loadProfileFromContext(ctx));
+    await ensureContextIndexV2(ctx.cwd, { excludePatterns, rebuildMissing: false });
+    const impact = await buildTestImpact(ctx.cwd, files, { excludePatterns });
     emitRuntimeMessage(ctx, "piagent-context-impact", [
       `changed: ${impact.changedFiles.join(", ") || "none"}`,
       `impacted: ${impact.impactedFiles.map((item) => `${item.path} via ${item.via}`).join(", ") || "none"}`,

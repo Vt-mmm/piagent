@@ -2,6 +2,39 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.2.9 - 2026-07-31
+
+### Security
+
+- Context Engine CLI và runtime giờ dùng chung một policy resolver. Base policy,
+  profile `extends`, `protectedPaths`, `shellProtectedPaths`, `readOnlyPaths` và
+  custom context-index path cùng tạo ra một canonical exclusion list; context
+  search/pack không còn đọc một view khác với guard.
+
+- Context index metadata ghi versioned exclusion digest. Search, pack, impact và
+  auto-context rebuild incremental khi digest hiện hành khác digest đã build,
+  đồng thời lọc lại candidate ở read time. Index cũ tạo bằng luật yếu hơn vì vậy
+  tự loại nội dung protected trước khi model nhận context.
+
+- Context Engine từ chối source-shaped symlink và canonical path đi ra ngoài
+  project ở cả build, stale check và pack read.
+
+- API build, ensure, search, pack và impact giờ fail-closed nếu caller không
+  truyền `excludePatterns` tường minh. `[]` vẫn được hỗ trợ cho low-level tool
+  chủ ý chạy không loại trừ; caller mới không còn vô tình quay về permissive
+  default.
+
+### Fixed
+
+- `piagent-update --dry-run --project ...` báo trực tiếp khi helper thiếu project
+  migrator thay vì chạy Node rồi trả stack `MODULE_NOT_FOUND`.
+
+### Documentation
+
+- Tài liệu ghi rõ dynamic tools, auto context và Context Engine telemetry bật mặc
+  định; telemetry vẫn chỉ lưu metadata/hash đã redact, không lưu prompt hay tool
+  output thô.
+
 ## v1.2.8 - 2026-07-31
 
 ### Changed

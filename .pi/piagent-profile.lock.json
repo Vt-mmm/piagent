@@ -115,18 +115,18 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:83dcb2ac008d279ec943017de176492346da23f39b2d79298588367b08116cb5",
+    "packageDigest": "sha256:53e767de3610bf2921125ea95a6fc46202b7cfbfc5dce9e7a12a31cb8a2186c2",
     "packageSource": "../",
-    "packageVersion": "1.2.8",
+    "packageVersion": "1.2.9",
     "runtimeFiles": [
       {
         "byteSize": 4294,
-        "digest": "sha256:220bb7bf260f246fe4613b93325bf451b241e718826a62d1470e0e51dbe25ef2",
+        "digest": "sha256:3d9865ec2e5d2f1933743a046790b1b3be068aada3885fe31a3a0cb1addcb543",
         "path": "package.json"
       },
       {
         "byteSize": 984,
-        "digest": "sha256:798294e9a65232d74fb004c9a51b14b9ede453bbc914db6f827b0f34644d5c66",
+        "digest": "sha256:5efb122c27cc5693715a7537da45e119f3efc7ac5782b5a1b4ffb4a4977079a5",
         "path": "packages/piagent-core/package.json"
       },
       {
@@ -135,8 +135,8 @@
         "path": "packages/piagent-core/policies/base-policy.json"
       },
       {
-        "byteSize": 65020,
-        "digest": "sha256:b53c71d28de8a1e69e12bcee8ee50314381908495991ba15afbb456f1e5239e9",
+        "byteSize": 65223,
+        "digest": "sha256:8f52826816ad62b688ade2107fa678efd52d6547b261a514517b58a36a72d11d",
         "path": "packages/piagent-core/capabilities/capability-core.js"
       },
       {
@@ -155,14 +155,19 @@
         "path": "packages/piagent-core/security/sensitive-data.js"
       },
       {
-        "byteSize": 360203,
-        "digest": "sha256:65d72db2b596f736d63855eb882cafd7406c6ab26aaa61443eefd04b8a39a0e9",
+        "byteSize": 360102,
+        "digest": "sha256:e5c92eadd5591496a5dbf27c0d7c0bff39f9fcbe02e1e945ef94f1d196c7a307",
         "path": "packages/piagent-core/extensions/piagent-guard.ts"
       },
       {
-        "byteSize": 49586,
-        "digest": "sha256:ee117a2716550098f0869a76b52d24060079863fc29d10ee5baaf8d2ce0d9343",
+        "byteSize": 53615,
+        "digest": "sha256:b061811b32001d0e6512820844bbab1529e2b5783cd9fd282a9937e827d8ab93",
         "path": "packages/piagent-core/extensions/context-engine.js"
+      },
+      {
+        "byteSize": 4517,
+        "digest": "sha256:c4ded4fb147c512fc8d0a29ff4d0213f1f06e379af87d773a0f3f9578b7a8902",
+        "path": "packages/piagent-core/extensions/context-index-policy.js"
       },
       {
         "byteSize": 1481,

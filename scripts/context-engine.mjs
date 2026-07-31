@@ -9,9 +9,12 @@ import {
   buildContextPack,
   buildTestImpact,
   contextIndexV2Status,
+  ensureContextIndexV2,
   searchContextIndexV2
 } from "../packages/piagent-core/extensions/context-engine.js";
+import { loadProjectContextIndexPolicy } from "../packages/piagent-core/extensions/context-index-policy.js";
 
+const platformRoot = path.resolve(import.meta.dirname, "..");
 function usage() {
   return [
     "Pi Context Engine",
@@ -53,21 +56,6 @@ function parseArgs(argv) {
   return { command, project, json, tokens, values };
 }
 
-function projectExcludes(project) {
-  const target = path.join(project, ".pi", "piagent-profile.json");
-  try {
-    const profile = JSON.parse(fs.readFileSync(target, "utf8"));
-    return [
-      ...(Array.isArray(profile.protectedPaths) ? profile.protectedPaths : []),
-      ...(Array.isArray(profile.shellProtectedPaths) ? profile.shellProtectedPaths : []),
-      ".pi/context-index.json",
-      ".pi/piagent-state/**"
-    ];
-  } catch {
-    return [".pi/context-index.json", ".pi/piagent-state/**"];
-  }
-}
-
 function print(value, json) {
   if (json || typeof value === "string") {
     process.stdout.write(`${typeof value === "string" ? value : JSON.stringify(value, null, 2)}\n`);
@@ -88,21 +76,35 @@ if (!fs.existsSync(parsed.project) || !fs.statSync(parsed.project).isDirectory()
 }
 
 try {
+  const contextPolicy = ["status", "show", "rebuild", "build", "refresh", "search", "pack", "impact", "tests"]
+    .includes(parsed.command)
+    ? loadProjectContextIndexPolicy(platformRoot, parsed.project, {
+        profilePath: process.env.PIAGENT_PROFILE
+      })
+    : undefined;
+  const excludePatterns = contextPolicy?.excludePatterns ?? [];
   if (["status", "show"].includes(parsed.command)) {
-    print(await contextIndexV2Status(parsed.project), parsed.json);
+    print(await contextIndexV2Status(parsed.project, { excludePatterns }), parsed.json);
   } else if (["rebuild", "build", "refresh"].includes(parsed.command)) {
-    print(await buildContextIndexV2(parsed.project, { excludePatterns: projectExcludes(parsed.project) }), parsed.json);
+    print(await buildContextIndexV2(parsed.project, { excludePatterns }), parsed.json);
   } else if (parsed.command === "search") {
     const query = parsed.values.join(" ").trim();
     if (!query) throw new Error("search requires a query");
-    print(await searchContextIndexV2(parsed.project, query, { limit: 15 }), parsed.json);
+    await ensureContextIndexV2(parsed.project, { excludePatterns, rebuildMissing: true });
+    print(await searchContextIndexV2(parsed.project, query, { limit: 15, excludePatterns }), parsed.json);
   } else if (parsed.command === "pack") {
     const query = parsed.values.join(" ").trim();
     if (!query) throw new Error("pack requires a task or query");
-    const pack = await buildContextPack(parsed.project, query, { budgetTokens: parsed.tokens, includeCode: true });
+    await ensureContextIndexV2(parsed.project, { excludePatterns, rebuildMissing: true });
+    const pack = await buildContextPack(parsed.project, query, {
+      budgetTokens: parsed.tokens,
+      includeCode: true,
+      excludePatterns
+    });
     print(parsed.json ? pack : pack.text, parsed.json);
   } else if (["impact", "tests"].includes(parsed.command)) {
-    print(await buildTestImpact(parsed.project, parsed.values), parsed.json);
+    await ensureContextIndexV2(parsed.project, { excludePatterns, rebuildMissing: false });
+    print(await buildTestImpact(parsed.project, parsed.values, { excludePatterns }), parsed.json);
   } else if (["efficiency", "stats", "waste"].includes(parsed.command)) {
     print(buildContextEfficiencyReport(parsed.project), parsed.json);
   } else {

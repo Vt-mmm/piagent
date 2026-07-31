@@ -800,6 +800,9 @@ function buildCoreIntegrity(root) {
     // context and records the resulting telemetry, so it is part of the
     // runtime trust boundary enforced by the profile lock.
     "packages/piagent-core/extensions/context-engine.js",
+    // context-index-policy.js resolves adapter inheritance and decides which
+    // protected paths the context engine must never ingest.
+    "packages/piagent-core/extensions/context-index-policy.js",
     // guard-io.js loads the project profile and guard-shell-analysis.ts decides
     // what a command is about to reach, so tampering with either changes what
     // the guard enforces. guard-types.ts is deliberately absent: it is erased

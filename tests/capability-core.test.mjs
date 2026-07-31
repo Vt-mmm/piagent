@@ -182,6 +182,10 @@ describe("capability catalog and profile lock", () => {
       lock.core.runtimeFiles.some((entry) => entry.path === "packages/piagent-core/extensions/context-engine.js"),
       "the profile lock must pin the context engine runtime"
     );
+    assert.ok(
+      lock.core.runtimeFiles.some((entry) => entry.path === "packages/piagent-core/extensions/context-index-policy.js"),
+      "the profile lock must pin the context index policy runtime"
+    );
   });
 
   it("binds a lock to its declared package source", () => {

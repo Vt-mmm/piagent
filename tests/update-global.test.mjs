@@ -201,6 +201,17 @@ describe("piagent-update", () => {
     assert.match(result.stdout, /DRY RUN: bash .*team-doctor\.sh \/tmp\/some-project --strict-share/);
   });
 
+  it("reports a missing project migrator clearly during --dry-run", () => {
+    const stage = stageGlobalInstall();
+    fs.rmSync(path.join(stage.platformRoot, "scripts", "migrate-project-state.mjs"));
+
+    const result = runUpdate(stage, ["--dry-run", "--project", "/tmp/some-project"]);
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /the updated helper has no project migrator at/);
+    assert.doesNotMatch(result.stderr, /project migration failed/);
+  });
+
   // piagent-install refuses to run against a host that does not match the version
   // its own package.json pins, so a helper installed ahead of the host fails on
   // its very next step.
