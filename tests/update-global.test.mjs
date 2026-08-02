@@ -9,9 +9,22 @@ import { after, describe, it } from "node:test";
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const temporaryRoots = new Set();
 
+function restoreFixtureDirectoryPermissions(root) {
+  const pending = [root];
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (!fs.existsSync(current)) continue;
+    fs.chmodSync(current, 0o700);
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      if (entry.isDirectory()) pending.push(path.join(current, entry.name));
+    }
+  }
+}
+
 after(() => {
   for (const root of temporaryRoots) {
     if (path.dirname(root) !== os.tmpdir() || !path.basename(root).startsWith("pi-update-")) continue;
+    restoreFixtureDirectoryPermissions(root);
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
@@ -252,6 +265,14 @@ describe("piagent-update", () => {
     assert.match(result.stdout, /PATH note/);
     assert.equal(result.installs.some((line) => line.includes(`--prefix ${userPrefix}`) && line.includes("@piagent/platform@1.1.4")), true, result.installs.join("\n"));
     assert.match(result.stdout, new RegExp(`${userPrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}.*install-global\\.sh --stable`));
+
+    restoreFixtureDirectoryPermissions(stage.root);
+    for (const lockedPrefix of [
+      path.join(stage.root, "lib", "node_modules"),
+      path.join(stage.root, "readonly-global", "lib", "node_modules")
+    ]) {
+      assert.equal(fs.statSync(lockedPrefix).mode & 0o777, 0o700);
+    }
   });
 
   it("reads the required host from the version being installed, not the one running", () => {
