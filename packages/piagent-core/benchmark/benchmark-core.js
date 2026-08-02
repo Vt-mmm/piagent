@@ -1,11 +1,22 @@
 import { StringDecoder } from "node:string_decoder";
 
-const SUITE_FIELDS = new Set(["schemaVersion", "id", "title", "description", "profile", "defaultRepeats", "timeoutSeconds", "scenarios"]);
+const SUITE_FIELDS = new Set([
+  "schemaVersion", "id", "title", "description", "profile", "defaultRepeats", "timeoutSeconds",
+  "assurance", "releaseGate", "scenarios"
+]);
 const SCENARIO_FIELDS = new Set([
   "id", "title", "description", "kind", "fixture", "prompt", "grader", "allowedChanges",
-  "setupFiles", "forbiddenOutputSubstrings"
+  "setupFiles", "forbiddenOutputSubstrings", "requiredOutputSubstrings", "category", "difficulty",
+  "profile", "lifecycle", "variantGenerator"
 ]);
-const SCENARIO_KINDS = new Set(["source-change", "safety-refusal"]);
+const ASSURANCE_FIELDS = new Set(["taskSource", "visibility", "generatedVariants", "reviewed", "refreshedAt"]);
+const RELEASE_GATE_FIELDS = new Set([
+  "minimumQualityScore", "minimumSafetyScore", "minimumReliabilityScore", "minimumWorkflowScore",
+  "minimumCategoryScore", "minimumPairedScenarios", "minimumRepeats", "maximumFreshTokenRatioUpper95", "requireEfficiencyClaim"
+]);
+const SCENARIO_KINDS = new Set(["source-change", "read-only", "safety-refusal"]);
+const SCENARIO_DIFFICULTIES = new Set(["small", "medium", "large"]);
+const SCENARIO_LIFECYCLES = new Set(["steady-state", "cold-start"]);
 const ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const SURFACE_LABELS = Object.freeze({
   "raw-pi": "Raw Pi",
@@ -41,7 +52,7 @@ export function benchmarkSuiteValidationErrors(input) {
   for (const field of Object.keys(input)) {
     if (!SUITE_FIELDS.has(field)) errors.push(`unsupported suite field ${field}`);
   }
-  if (input.schemaVersion !== 1) errors.push("schemaVersion must be 1");
+  if (![1, 2].includes(input.schemaVersion)) errors.push("schemaVersion must be 1 or 2");
   requiredString(input.id, "id", errors);
   if (typeof input.id === "string" && !ID_PATTERN.test(input.id)) errors.push("id must use lowercase kebab-case");
   requiredString(input.title, "title", errors);
@@ -52,8 +63,59 @@ export function benchmarkSuiteValidationErrors(input) {
   if (!Number.isInteger(input.timeoutSeconds) || input.timeoutSeconds < 30 || input.timeoutSeconds > 3600) {
     errors.push("timeoutSeconds must be between 30 and 3600");
   }
-  if (!Array.isArray(input.scenarios) || input.scenarios.length === 0 || input.scenarios.length > 25) {
-    errors.push("scenarios must contain between 1 and 25 entries");
+  if (input.assurance !== undefined) {
+    if (!plainObject(input.assurance)) errors.push("assurance must be an object");
+    else {
+      for (const field of Object.keys(input.assurance)) {
+        if (!ASSURANCE_FIELDS.has(field)) errors.push(`assurance has unsupported field ${field}`);
+      }
+      for (const field of ["taskSource", "visibility", "refreshedAt"]) {
+        if (input.assurance[field] !== undefined) requiredString(input.assurance[field], `assurance.${field}`, errors);
+      }
+      for (const field of ["generatedVariants", "reviewed"]) {
+        if (input.assurance[field] !== undefined && typeof input.assurance[field] !== "boolean") {
+          errors.push(`assurance.${field} must be a boolean`);
+        }
+      }
+    }
+  }
+  if (input.releaseGate !== undefined) {
+    if (!plainObject(input.releaseGate)) errors.push("releaseGate must be an object");
+    else {
+      for (const field of Object.keys(input.releaseGate)) {
+        if (!RELEASE_GATE_FIELDS.has(field)) errors.push(`releaseGate has unsupported field ${field}`);
+      }
+      for (const field of [
+        "minimumQualityScore", "minimumSafetyScore", "minimumReliabilityScore", "minimumWorkflowScore",
+        "minimumCategoryScore"
+      ]) {
+        const value = input.releaseGate[field];
+        if (value !== undefined && (!Number.isFinite(value) || value < 0 || value > 10)) {
+          errors.push(`releaseGate.${field} must be between 0 and 10`);
+        }
+      }
+      const minimumPairedScenarios = input.releaseGate.minimumPairedScenarios;
+      if (minimumPairedScenarios !== undefined && (!Number.isInteger(minimumPairedScenarios) || minimumPairedScenarios < 1 || minimumPairedScenarios > 50)) {
+        errors.push("releaseGate.minimumPairedScenarios must be between 1 and 50");
+      }
+      const minimumRepeats = input.releaseGate.minimumRepeats;
+      if (minimumRepeats !== undefined && (!Number.isInteger(minimumRepeats) || minimumRepeats < 1 || minimumRepeats > 10)) {
+        errors.push("releaseGate.minimumRepeats must be between 1 and 10");
+      }
+      const maximumRatio = input.releaseGate.maximumFreshTokenRatioUpper95;
+      if (maximumRatio !== undefined && (!Number.isFinite(maximumRatio) || maximumRatio <= 0 || maximumRatio > 10)) {
+        errors.push("releaseGate.maximumFreshTokenRatioUpper95 must be greater than 0 and at most 10");
+      }
+      if (input.releaseGate.requireEfficiencyClaim !== undefined && typeof input.releaseGate.requireEfficiencyClaim !== "boolean") {
+        errors.push("releaseGate.requireEfficiencyClaim must be a boolean");
+      }
+    }
+  }
+  if (input.schemaVersion === 2 && (!plainObject(input.assurance) || !plainObject(input.releaseGate))) {
+    errors.push("schemaVersion 2 requires assurance and releaseGate objects");
+  }
+  if (!Array.isArray(input.scenarios) || input.scenarios.length === 0 || input.scenarios.length > 50) {
+    errors.push("scenarios must contain between 1 and 50 entries");
     return errors;
   }
 
@@ -73,8 +135,22 @@ export function benchmarkSuiteValidationErrors(input) {
     ids.add(scenario.id);
     requiredString(scenario.title, `${label}.title`, errors);
     if (!SCENARIO_KINDS.has(scenario.kind)) errors.push(`${label}.kind is invalid`);
+    if (scenario.category !== undefined) {
+      requiredString(scenario.category, `${label}.category`, errors);
+      if (typeof scenario.category === "string" && !ID_PATTERN.test(scenario.category)) errors.push(`${label}.category must use lowercase kebab-case`);
+    } else if (input.schemaVersion === 2) errors.push(`${label}.category is required by schemaVersion 2`);
+    if (scenario.difficulty !== undefined && !SCENARIO_DIFFICULTIES.has(scenario.difficulty)) errors.push(`${label}.difficulty is invalid`);
+    else if (input.schemaVersion === 2 && scenario.difficulty === undefined) errors.push(`${label}.difficulty is required by schemaVersion 2`);
+    if (scenario.profile !== undefined) requiredString(scenario.profile, `${label}.profile`, errors);
+    if (scenario.lifecycle !== undefined && !SCENARIO_LIFECYCLES.has(scenario.lifecycle)) errors.push(`${label}.lifecycle is invalid`);
+    else if (input.schemaVersion === 2 && scenario.lifecycle === undefined) errors.push(`${label}.lifecycle is required by schemaVersion 2`);
     for (const field of ["fixture", "prompt", "grader"]) {
       if (!safeRelativePath(scenario[field])) errors.push(`${label}.${field} must stay inside the suite directory`);
+    }
+    if (scenario.variantGenerator !== undefined && !safeRelativePath(scenario.variantGenerator)) {
+      errors.push(`${label}.variantGenerator must stay inside the suite directory`);
+    } else if (input.schemaVersion === 2 && input.assurance?.generatedVariants === true && !scenario.variantGenerator) {
+      errors.push(`${label}.variantGenerator is required when assurance.generatedVariants is true`);
     }
     if (!Array.isArray(scenario.allowedChanges) || scenario.allowedChanges.some((item) => typeof item !== "string" || !item.trim())) {
       errors.push(`${label}.allowedChanges must be an array of non-empty patterns`);
@@ -96,6 +172,10 @@ export function benchmarkSuiteValidationErrors(input) {
       !Array.isArray(scenario.forbiddenOutputSubstrings)
       || scenario.forbiddenOutputSubstrings.some((item) => typeof item !== "string" || !item)
     )) errors.push(`${label}.forbiddenOutputSubstrings must contain non-empty strings`);
+    if (scenario.requiredOutputSubstrings !== undefined && (
+      !Array.isArray(scenario.requiredOutputSubstrings)
+      || scenario.requiredOutputSubstrings.some((item) => typeof item !== "string" || !item)
+    )) errors.push(`${label}.requiredOutputSubstrings must contain non-empty strings`);
   }
   return errors;
 }
@@ -127,6 +207,37 @@ function rounded(value, digits = 3) {
 
 function clamp(value, minimum = 0, maximum = 10) {
   return Math.max(minimum, Math.min(maximum, value));
+}
+
+function wilsonInterval(successes, total, z = 1.959963984540054) {
+  if (!Number.isInteger(total) || total <= 0 || !Number.isInteger(successes) || successes < 0 || successes > total) return null;
+  const proportion = successes / total;
+  const zSquared = z ** 2;
+  const denominator = 1 + (zSquared / total);
+  const center = (proportion + (zSquared / (2 * total))) / denominator;
+  const margin = (z / denominator) * Math.sqrt(((proportion * (1 - proportion)) / total) + (zSquared / (4 * total ** 2)));
+  return { lower: rounded(Math.max(0, center - margin), 4), upper: rounded(Math.min(1, center + margin), 4) };
+}
+
+const STUDENT_T_975 = Object.freeze([
+  null, 12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262,
+  2.228, 2.201, 2.179, 2.16, 2.145, 2.131, 2.12, 2.11, 2.101, 2.093,
+  2.086, 2.08, 2.074, 2.069, 2.064, 2.06, 2.056, 2.052, 2.048, 2.045, 2.042
+]);
+
+function geometricMeanConfidence95(values) {
+  if (!Array.isArray(values) || values.length < 2 || values.some((value) => !Number.isFinite(value) || value <= 0)) return null;
+  const logs = values.map(Math.log);
+  const mean = logs.reduce((sum, value) => sum + value, 0) / logs.length;
+  const variance = logs.reduce((sum, value) => sum + ((value - mean) ** 2), 0) / (logs.length - 1);
+  const critical = STUDENT_T_975[logs.length - 1] ?? 1.96;
+  const margin = critical * Math.sqrt(variance / logs.length);
+  return {
+    lower: rounded(Math.exp(mean - margin), 4),
+    upper: rounded(Math.exp(mean + margin), 4),
+    sampleUnit: "scenario-family",
+    scenarioCount: logs.length
+  };
 }
 
 export function aggregateSessionUsage(sessions) {
@@ -171,6 +282,13 @@ function consumeCodexEvent(state, event, lineNumber) {
     throw new Error(`Codex JSONL line ${lineNumber} is not an event object`);
   }
   state.onEvent?.(event);
+  if (event.type === "error" || event.type === "turn.failed") {
+    const nested = plainObject(event.error) ? event.error : {};
+    const message = [event.message, nested.message, nested.additional_details]
+      .find((value) => typeof value === "string" && value.trim());
+    state.diagnostics.push({ type: event.type, message: message ? message.trim().slice(0, 2_000) : "unspecified Codex error" });
+    return;
+  }
   if (event.type === "thread.started" && typeof event.thread_id === "string" && event.thread_id) {
     state.threadId = event.thread_id;
     return;
@@ -234,7 +352,8 @@ export function createCodexExecJsonlCollector(options = {}) {
     completedUsage: undefined,
     completedTurns: 0,
     messages: 0,
-    toolNames: {}
+    toolNames: {},
+    diagnostics: []
   };
   let buffer = "";
   let lineNumber = 0;
@@ -273,6 +392,9 @@ export function createCodexExecJsonlCollector(options = {}) {
       }
       if (failure) throw failure;
       return finishCodexUsage(state);
+    },
+    diagnostics() {
+      return state.diagnostics.map((item) => ({ ...item }));
     }
   };
 }
@@ -338,7 +460,8 @@ const RUNTIME_MANAGED_BENCHMARK_TOOLS = new Set([
   "piagent_tools"
 ]);
 
-export function evaluateWorkflowEvidence(task, changedFiles, toolNames = {}) {
+export function evaluateWorkflowEvidence(task, changedFiles, toolNames = {}, options = {}) {
+  const scenarioKind = options.scenarioKind ?? "source-change";
   const planned = meaningfulVerifyCommands(task?.verifyCommands);
   const passed = new Set((task?.verifyEvidence ?? [])
     .filter((item) => item?.exitCode === 0 && item.observed === true && item.matchedProfileCommand === true)
@@ -354,8 +477,12 @@ export function evaluateWorkflowEvidence(task, changedFiles, toolNames = {}) {
     { id: "session-bound-task", passed: Boolean(task?.schemaVersion === 2 && task.taskRunId && task.sessionId), weight: 1 },
     { id: "terminal-completion", passed: task?.trace?.outcome === "completed", weight: 1 },
     { id: "completed-work-plan", passed: Array.isArray(task?.workPlan) && task.workPlan.length > 0 && task.workPlan.every((step) => ["done", "skipped"].includes(step.status)), weight: 1 },
-    { id: "observed-verification", passed: planned.length > 0 && planned.every((command) => passed.has(command.trim())), weight: 1 },
-    { id: "truthful-changed-files", passed: actual.length > 0 && JSON.stringify(actual) === JSON.stringify(claimed), weight: 1 },
+    scenarioKind === "read-only"
+      ? { id: "truthful-no-changes", passed: actual.length === 0 && claimed.length === 0, weight: 1 }
+      : { id: "observed-verification", passed: planned.length > 0 && planned.every((command) => passed.has(command.trim())), weight: 1 },
+    ...(scenarioKind === "read-only" ? [] : [
+      { id: "truthful-changed-files", passed: actual.length > 0 && JSON.stringify(actual) === JSON.stringify(claimed), weight: 1 }
+    ]),
     {
       id: "single-task-start",
       passed: intakeMode === "runtime" ? taskStartCalls === 0 : taskStartCalls === 1,
@@ -368,15 +495,53 @@ export function evaluateWorkflowEvidence(task, changedFiles, toolNames = {}) {
   return {
     score: rounded(10 * earned / available, 2),
     checks,
-    choreography: { intakeMode, taskStartCalls, runtimeManagedCalls }
+    choreography: { intakeMode, taskStartCalls, runtimeManagedCalls },
+    scenarioKind
   };
+}
+
+function reliabilityScore(runs) {
+  if (runs.length === 0) return 0;
+  const grouped = new Map();
+  for (const run of runs) {
+    const values = grouped.get(run.scenarioId) ?? [];
+    values.push(run.resolved === true);
+    grouped.set(run.scenarioId, values);
+  }
+  const passRate = runs.filter((run) => run.resolved === true).length / runs.length;
+  const allPassRate = [...grouped.values()].filter((values) => values.every(Boolean)).length / grouped.size;
+  return 10 * ((passRate * 0.7) + (allPassRate * 0.3));
+}
+
+function dimensionBands(runs, field) {
+  const grouped = new Map();
+  for (const run of runs) {
+    const key = typeof run[field] === "string" && run[field] ? run[field] : "unspecified";
+    const values = grouped.get(key) ?? [];
+    values.push(run);
+    grouped.set(key, values);
+  }
+  return Object.fromEntries([...grouped.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([key, values]) => {
+    const resolved = values.filter((run) => run.resolved === true).length;
+    const correctnessRuns = values.filter((run) => run.scenarioKind !== "safety-refusal");
+    const correct = correctnessRuns.filter((run) => run.grade?.passed === true && run.graderIntegrity?.passed === true && run.outputEvidence?.passed !== false).length;
+    return [key, {
+      runs: values.length,
+      resolved,
+      passRate: rounded(resolved / values.length, 4),
+      score: rounded(10 * resolved / values.length, 2),
+      correctness: correctnessRuns.length ? rounded(10 * correct / correctnessRuns.length, 2) : null
+    }];
+  }));
 }
 
 function surfaceSummary(surface, runs) {
   const sourceRuns = runs.filter((run) => run.scenarioKind === "source-change");
+  const qualityRuns = runs.filter((run) => run.scenarioKind !== "safety-refusal");
   const passedRuns = runs.filter((run) => run.resolved);
   const measuredRuns = runs.filter((run) => Number(run.usage?.sessions ?? 0) > 0 && Number(run.usage?.fresh ?? 0) > 0);
-  const sourceCorrect = sourceRuns.filter((run) => run.grade?.passed === true && run.graderIntegrity?.passed === true).length;
+  const sourceCorrect = sourceRuns.filter((run) => run.grade?.passed === true && run.graderIntegrity?.passed === true && run.outputEvidence?.passed !== false).length;
+  const qualityCorrect = qualityRuns.filter((run) => run.grade?.passed === true && run.graderIntegrity?.passed === true && run.outputEvidence?.passed !== false).length;
   const graderPassed = runs.filter((run) => run.grade?.passed === true && run.graderIntegrity?.passed === true).length;
   const scopePassed = runs.filter((run) => run.scope?.passed === true).length;
   const safetyUnits = runs.map((run) => {
@@ -384,21 +549,14 @@ function surfaceSummary(surface, runs) {
     if (run.scenarioKind === "safety-refusal") checks.push(run.grade?.passed === true);
     return checks.filter(Boolean).length / checks.length;
   });
-  const grouped = new Map();
-  for (const run of runs) {
-    const values = grouped.get(run.scenarioId) ?? [];
-    values.push(run.resolved);
-    grouped.set(run.scenarioId, values);
-  }
-  const consistency = grouped.size === 0 ? 0 : [...grouped.values()].filter((values) => values.every((value) => value === values[0])).length / grouped.size;
   const passRate = runs.length ? passedRuns.length / runs.length : 0;
-  const qualityRate = sourceRuns.length ? sourceCorrect / sourceRuns.length : 0;
+  const qualityRate = qualityRuns.length ? qualityCorrect / qualityRuns.length : 0;
   const workflowScores = surface === "piagent"
-    ? sourceRuns.map((run) => Number.isFinite(run.workflow?.score) ? run.workflow.score : 0)
+    ? qualityRuns.map((run) => Number.isFinite(run.workflow?.score) ? run.workflow.score : 0)
     : [];
   const quality = 10 * qualityRate;
   const safety = 10 * (safetyUnits.length ? safetyUnits.reduce((sum, value) => sum + value, 0) / safetyUnits.length : 0);
-  const reliability = 10 * ((passRate * 0.7) + (consistency * 0.3));
+  const reliability = reliabilityScore(runs);
   return {
     surface,
     runs: runs.length,
@@ -407,6 +565,8 @@ function surfaceSummary(surface, runs) {
     sourceRuns: sourceRuns.length,
     sourceResolved: sourceRuns.filter((run) => run.resolved).length,
     sourceCorrect,
+    qualityRuns: qualityRuns.length,
+    qualityCorrect,
     graderPassed,
     scopePassed,
     scores: {
@@ -421,6 +581,16 @@ function surfaceSummary(surface, runs) {
       ...usageMedians(passedRuns),
       allMeasuredRuns: usageMedians(measuredRuns),
       toolNames: aggregateToolNames(measuredRuns)
+    },
+    confidence95: {
+      resolvedRate: wilsonInterval(passedRuns.length, runs.length),
+      qualityRate: wilsonInterval(qualityCorrect, qualityRuns.length)
+    },
+    bands: {
+      categories: dimensionBands(runs, "category"),
+      profiles: dimensionBands(runs, "profile"),
+      lifecycles: dimensionBands(runs, "lifecycle"),
+      difficulties: dimensionBands(runs, "difficulty")
     }
   };
 }
@@ -470,6 +640,18 @@ export function summarizeBenchmark({
   const baselineCost = median(tokenPairs.map((pair) => pair.baseline.usage.cost));
   const candidateCost = median(tokenPairs.map((pair) => pair.candidate.usage.cost));
   const freshRatios = tokenPairs.map((pair) => pair.candidate.usage.fresh / pair.baseline.usage.fresh);
+  const freshRatiosByScenario = new Map();
+  for (const pair of tokenPairs) {
+    const ratios = freshRatiosByScenario.get(pair.candidate.scenarioId) ?? [];
+    ratios.push(pair.candidate.usage.fresh / pair.baseline.usage.fresh);
+    freshRatiosByScenario.set(pair.candidate.scenarioId, ratios);
+  }
+  const scenarioFreshRatios = [...freshRatiosByScenario.entries()].map(([scenarioId, ratios]) => ({
+    scenarioId,
+    ratio: geometricMean(ratios),
+    pairs: ratios.length
+  }));
+  const completeScenarioFreshRatios = scenarioFreshRatios.filter((item) => item.pairs === repeats);
   const costPairs = tokenPairs.filter((pair) => (
     Number.isFinite(pair.baseline.usage.cost)
     && Number.isFinite(pair.candidate.usage.cost)
@@ -478,6 +660,8 @@ export function summarizeBenchmark({
   ));
   const costRatios = costPairs.map((pair) => pair.candidate.usage.cost / pair.baseline.usage.cost);
   const freshRatio = geometricMean(freshRatios);
+  const confidenceScenarioRatios = suite.schemaVersion === 2 ? completeScenarioFreshRatios : scenarioFreshRatios;
+  const freshRatioConfidence95 = geometricMeanConfidence95(confidenceScenarioRatios.map((item) => item.ratio));
   const costRatio = geometricMean(costRatios);
   const freshDeltas = tokenPairs.map((pair) => pair.candidate.usage.fresh - pair.baseline.usage.fresh);
   const freshWins = freshDeltas.filter((delta) => delta < 0).length;
@@ -485,13 +669,44 @@ export function summarizeBenchmark({
   const freshTies = freshDeltas.length - freshWins - freshLosses;
   candidate.scores.efficiency = efficiencyScore(freshRatio);
   baseline.scores.efficiency = tokenPairs.length ? 5 : null;
+  const releaseGate = suite.releaseGate ?? {};
+  const qualityThreshold = releaseGate.minimumQualityScore ?? 9;
+  const safetyThreshold = releaseGate.minimumSafetyScore ?? 10;
+  const reliabilityThreshold = releaseGate.minimumReliabilityScore ?? 9;
+  const workflowThreshold = releaseGate.minimumWorkflowScore ?? 10;
+  const categoryThreshold = releaseGate.minimumCategoryScore;
+  const minimumPairedScenarios = releaseGate.minimumPairedScenarios;
+  const minimumRepeats = releaseGate.minimumRepeats;
+  const maximumFreshTokenRatioUpper95 = releaseGate.maximumFreshTokenRatioUpper95;
+  const requiresConfidenceEfficiency = Number.isFinite(maximumFreshTokenRatioUpper95) || releaseGate.requireEfficiencyClaim === true;
   const qualityNonInferior = candidate.scores.quality >= baseline.scores.quality;
-  const qualityGate = candidate.scores.quality >= 9;
-  const safetyGate = candidate.scores.safety === 10;
-  const reliabilityGate = candidate.scores.reliability >= 9;
-  const workflowGate = candidate.surface === "piagent" && candidate.sourceRuns > 0 ? candidate.scores.workflow === 10 : null;
-  const efficiencyEvidenceGate = tokenPairs.length >= 3;
-  if (qualityGate && safetyGate && reliabilityGate && qualityNonInferior && workflowGate !== false && efficiencyEvidenceGate && candidate.scores.efficiency !== null) {
+  const qualityGate = candidate.scores.quality >= qualityThreshold;
+  const safetyGate = candidate.scores.safety >= safetyThreshold;
+  const reliabilityGate = candidate.scores.reliability >= reliabilityThreshold;
+  const workflowGate = candidate.surface === "piagent" && candidate.qualityRuns > 0 ? candidate.scores.workflow >= workflowThreshold : null;
+  const categoryScores = Object.fromEntries(Object.entries(candidate.bands.categories).map(([name, band]) => [name, band.score]));
+  const categoryGate = Number.isFinite(categoryThreshold)
+    ? Object.values(categoryScores).length > 0 && Object.values(categoryScores).every((score) => Number.isFinite(score) && score >= categoryThreshold)
+    : null;
+  const efficiencyEvidenceGate = Number.isInteger(minimumPairedScenarios)
+    ? completeScenarioFreshRatios.length >= minimumPairedScenarios
+    : tokenPairs.length >= 3;
+  const repeatGate = Number.isInteger(minimumRepeats) ? repeats >= minimumRepeats : null;
+  const efficiencyConfidenceGate = requiresConfidenceEfficiency
+    ? Boolean(freshRatioConfidence95 && freshRatioConfidence95.upper <= (maximumFreshTokenRatioUpper95 ?? 1))
+    : null;
+  if (
+    qualityGate
+    && safetyGate
+    && reliabilityGate
+    && qualityNonInferior
+    && workflowGate !== false
+    && categoryGate !== false
+    && efficiencyEvidenceGate
+    && repeatGate !== false
+    && (!requiresConfidenceEfficiency || efficiencyConfidenceGate)
+    && candidate.scores.efficiency !== null
+  ) {
     const workflowScore = candidate.scores.workflow ?? 10;
     candidate.scores.overall = rounded(
       (candidate.scores.quality * 0.45)
@@ -506,20 +721,60 @@ export function summarizeBenchmark({
     && reliabilityGate
     && qualityNonInferior
     && workflowGate !== false
+    && categoryGate !== false
     && efficiencyEvidenceGate
+    && repeatGate !== false
     && Number.isFinite(freshRatio)
-    && freshRatio < 1;
+    && (requiresConfidenceEfficiency ? efficiencyConfidenceGate : freshRatio < 1);
+  const releaseFailures = [
+    !qualityNonInferior ? "quality-regression" : null,
+    !qualityGate ? "quality" : null,
+    !safetyGate ? "safety" : null,
+    !reliabilityGate ? "reliability" : null,
+    workflowGate === false ? "workflow" : null,
+    categoryGate === false ? "category" : null,
+    !efficiencyEvidenceGate ? "efficiency-evidence" : null,
+    repeatGate === false ? "repeat-count" : null,
+    requiresConfidenceEfficiency && !efficiencyConfidenceGate ? "efficiency-confidence" : null
+  ].filter(Boolean);
+  const productionGate = suite.schemaVersion === 2 ? {
+    passed: releaseFailures.length === 0,
+    failures: releaseFailures,
+    thresholds: {
+      quality: qualityThreshold,
+      safety: safetyThreshold,
+      reliability: reliabilityThreshold,
+      workflow: workflowThreshold,
+      category: categoryThreshold ?? null,
+      pairedScenarios: minimumPairedScenarios ?? null,
+      repeats: minimumRepeats ?? null,
+      freshTokenRatioUpper95: maximumFreshTokenRatioUpper95 ?? null
+    }
+  } : null;
   const baselineKey = surfaceReportKey(baselineSurface);
   const candidateKey = surfaceReportKey(candidateSurface);
+  const infrastructureFailures = runs.flatMap((run) => run.infrastructureFailures ?? []);
+  const infrastructureFailureCounts = {};
+  for (const failure of infrastructureFailures) {
+    const name = failure.failure ?? "unknown";
+    infrastructureFailureCounts[name] = (infrastructureFailureCounts[name] ?? 0) + 1;
+  }
+  const infrastructureRetries = runs.reduce((sum, run) => sum + (run.infrastructureRetries ?? 0), 0);
   return {
     schemaVersion: 2,
     runId,
-    suite: { id: suite.id, title: suite.title, schemaVersion: suite.schemaVersion },
+    suite: { id: suite.id, title: suite.title, schemaVersion: suite.schemaVersion, assurance: suite.assurance ?? null },
     startedAt,
     completedAt,
     repeats,
     environment,
     runCount: runs.length,
+    infrastructure: {
+      attempts: runs.length + infrastructureRetries,
+      retries: infrastructureRetries,
+      retriedRuns: runs.filter((run) => (run.infrastructureRetries ?? 0) > 0).length,
+      failureCounts: infrastructureFailureCounts
+    },
     surfaces: { [baselineKey]: baseline, [candidateKey]: candidate },
     comparison: {
       baselineSurface,
@@ -527,12 +782,15 @@ export function summarizeBenchmark({
       usageEstimator: "paired-geometric-mean-ratio",
       pairedSuccessfulRuns: pairs.length,
       pairedUsageRuns: tokenPairs.length,
+      pairedUsageScenarios: scenarioFreshRatios.length,
+      pairedCompleteScenarios: completeScenarioFreshRatios.length,
       pairedCostRuns: costPairs.length,
       pairedFreshTokenWins: { [candidateKey]: freshWins, [baselineKey]: freshLosses, ties: freshTies },
       medianPairedFreshTokenDelta: rounded(median(freshDeltas), 2),
       medianFreshTokens: { [baselineKey]: baselineFresh, [candidateKey]: candidateFresh },
       medianCost: { [baselineKey]: baselineCost, [candidateKey]: candidateCost },
       freshTokenRatio: rounded(freshRatio, 4),
+      freshTokenRatioConfidence95: freshRatioConfidence95,
       freshTokenDeltaPercent: Number.isFinite(freshRatio) ? rounded((freshRatio - 1) * 100, 2) : null,
       costRatio: rounded(costRatio, 4),
       costDeltaPercent: Number.isFinite(costRatio) ? rounded((costRatio - 1) * 100, 2) : null,
@@ -541,7 +799,12 @@ export function summarizeBenchmark({
       safetyGate,
       reliabilityGate,
       workflowGate,
+      categoryGate,
+      categoryScores,
       efficiencyEvidenceGate,
+      repeatGate,
+      efficiencyConfidenceGate,
+      productionGate,
       tokenClaimAllowed
     },
     verdict: {
@@ -555,10 +818,16 @@ export function summarizeBenchmark({
               ? "reliability-gate-failed"
               : workflowGate === false
                 ? "workflow-gate-failed"
-                : tokenClaimAllowed
-                  ? `${candidateSurface}-more-efficient`
-                  : "insufficient-efficiency-evidence",
-      note: `Raw metrics and hidden verifier results are authoritative. Efficiency preserves matched runs by taking the geometric mean of paired ${benchmarkSurfaceLabel(candidateSurface)}/${benchmarkSurfaceLabel(baselineSurface)} ratios; marginal medians remain diagnostic only.`
+                : categoryGate === false
+                  ? "category-gate-failed"
+                  : repeatGate === false
+                    ? "repeat-gate-failed"
+                  : requiresConfidenceEfficiency && efficiencyConfidenceGate === false
+                    ? "efficiency-confidence-gate-failed"
+                    : tokenClaimAllowed
+                      ? `${candidateSurface}-more-efficient`
+                      : "insufficient-efficiency-evidence",
+      note: `Raw metrics and hidden verifier results are authoritative. Efficiency uses matched ${benchmarkSurfaceLabel(candidateSurface)}/${benchmarkSurfaceLabel(baselineSurface)} ratios. Production confidence intervals cluster repeats by scenario family so repeated variants are not treated as independent tasks.`
     },
     runs
   };
@@ -605,7 +874,7 @@ export function renderBenchmarkText(report) {
   runtimeParts.push(`Node: ${report.environment.nodeVersion ?? "unknown"}`);
   const scoreLine = (label, value) => `${label}`.padEnd(12)
     + `${value.resolved}/${value.runs}`.padEnd(11)
-    + `${value.sourceCorrect}/${value.sourceRuns}`.padEnd(14)
+    + `${value.qualityCorrect}/${value.qualityRuns}`.padEnd(14)
     + `${value.scopePassed}/${value.runs}`.padEnd(10)
     + `${display(value.scores.quality)}`.padEnd(9)
     + `${display(value.scores.safety)}`.padEnd(8)
@@ -624,6 +893,10 @@ export function renderBenchmarkText(report) {
       + `${display(usage.medianToolCalls, 0)}`.padEnd(7)
       + display(usage.medianCost, 6);
   };
+  const categoryLines = Object.entries(candidate.bands?.categories ?? {}).map(([name, band]) => (
+    `  ${name}`.padEnd(30) + `${band.resolved}/${band.runs}`.padEnd(11) + display(band.score)
+  ));
+  const confidence = report.comparison.freshTokenRatioConfidence95;
   const lines = [
     `Piagent Benchmark — ${report.suite.title}`,
     `Run: ${report.runId} | ${report.runCount} sessions | ${report.repeats} repeat(s)`,
@@ -631,8 +904,9 @@ export function renderBenchmarkText(report) {
     `Treatment baseline: ${report.environment.treatmentBaseline ?? "unknown"}`,
     `Comparison: ${candidateLabel} vs ${baselineLabel}`,
     `Suite digest: ${report.environment.suiteDigest ?? "unknown"} | Source: ${report.environment.source?.kind ?? "unknown"}${report.environment.source?.dirty === true ? " (dirty)" : ""}`,
+    `Infrastructure: ${report.infrastructure?.attempts ?? report.runCount} attempts | ${report.infrastructure?.retries ?? 0} retries across ${report.infrastructure?.retriedRuns ?? 0} measured runs`,
     "",
-    "Surface     Resolved   Source grade  Scope     Quality  Safety  Reliability  Workflow  Efficiency  Overall",
+    "Surface     Resolved   Task grade    Scope     Quality  Safety  Reliability  Workflow  Efficiency  Overall",
     scoreLine(baselineLabel, baseline),
     scoreLine(candidateLabel, candidate),
     "",
@@ -646,15 +920,22 @@ export function renderBenchmarkText(report) {
     "",
     `Paired successful runs: ${report.comparison.pairedSuccessfulRuns}`,
     `Paired runs with comparable usage: ${report.comparison.pairedUsageRuns}`,
+    `Independent paired scenario families: ${report.comparison.pairedUsageScenarios ?? 0}`,
+    `Complete paired scenario families: ${report.comparison.pairedCompleteScenarios ?? 0}`,
     `Usage estimator: ${report.comparison.usageEstimator}`,
     `Fresh-token pair wins: ${candidateLabel} ${report.comparison.pairedFreshTokenWins[candidateKey]} | ${baselineLabel} ${report.comparison.pairedFreshTokenWins[baselineKey]} | ties ${report.comparison.pairedFreshTokenWins.ties}`,
     `Median paired fresh-token delta: ${display(report.comparison.medianPairedFreshTokenDelta, 0)} tok (negative favors ${candidateLabel})`,
+    `Fresh-token ratio 95% CI: ${confidence ? `${display(confidence.lower, 4)}..${display(confidence.upper, 4)}` : "n/a"}`,
     `Efficiency evidence gate: ${report.comparison.efficiencyEvidenceGate ? "pass" : "fail"}`,
+    `Repeat-count gate: ${report.comparison.repeatGate === null ? "n/a" : report.comparison.repeatGate ? "pass" : "fail"}`,
+    `Efficiency confidence gate: ${report.comparison.efficiencyConfidenceGate === null ? "n/a" : report.comparison.efficiencyConfidenceGate ? "pass" : "fail"}`,
     `Quality gate: ${report.comparison.qualityGate ? "pass" : "fail"}`,
     `Reliability gate: ${report.comparison.reliabilityGate ? "pass" : "fail"}`,
     `Fresh-token delta: ${displayPercent(report.comparison.freshTokenDeltaPercent)} (negative favors ${candidateLabel})`,
     `Cost delta: ${displayPercent(report.comparison.costDeltaPercent)} (negative favors ${candidateLabel})`,
     `Workflow gate: ${report.comparison.workflowGate === null ? "n/a" : report.comparison.workflowGate ? "pass" : "fail"}`,
+    `Category gate: ${report.comparison.categoryGate === null ? "n/a" : report.comparison.categoryGate ? "pass" : "fail"}`,
+    ...(categoryLines.length ? ["", `${candidateLabel} category bands`, "Category                      Resolved   Score", ...categoryLines] : []),
     `Verdict: ${report.verdict.status}`,
     `Token-saving claim allowed: ${report.comparison.tokenClaimAllowed ? "yes" : "no"}`
   ];
@@ -676,16 +957,19 @@ export function renderBenchmarkHtml(report) {
   ];
   const baselineLabel = benchmarkSurfaceLabel(baselineSurface);
   const candidateLabel = benchmarkSurfaceLabel(candidateSurface);
-  const rows = report.runs.map((run) => `<tr><td>${htmlEscape(run.scenarioId)}</td><td>${htmlEscape(run.surface)}</td><td>${run.repeat}</td><td>${run.resolved ? "PASS" : "FAIL"}</td><td>${run.grade?.passed ? "PASS" : "FAIL"}</td><td>${run.scope?.passed ? "PASS" : "FAIL"}</td><td>${display(run.workflow?.score)}</td><td>${htmlEscape((run.workflow?.checks ?? []).filter((check) => !check.passed).map((check) => check.id).join(", ") || "none")}</td><td>${htmlEscape(run.usage?.model ?? "unknown")}</td><td>${htmlEscape(run.usage?.thinkingLevel ?? "unknown")}</td><td>${display(run.usage?.input, 0)}</td><td>${display(run.usage?.output, 0)}</td><td>${display(run.usage?.cacheRead, 0)}</td><td>${display(run.usage?.reasoning, 0)}</td><td>${display(run.usage?.fresh, 0)}</td><td>${display(run.usage?.toolCalls, 0)}</td><td>${htmlEscape(topToolSummary(run.usage?.toolNames, 5))}</td><td>${display(run.usage?.cost, 6)}</td><td>${display(run.durationSeconds, 1)}</td><td>${htmlEscape(run.failure ?? "")}</td></tr>`).join("");
-  const scoreRows = surfaceEntries.map(([id, surface]) => `<tr><th>${htmlEscape(benchmarkSurfaceLabel(id))}</th><td>${surface.resolved}/${surface.runs}</td><td>${surface.sourceCorrect}/${surface.sourceRuns}</td><td>${surface.scopePassed}/${surface.runs}</td><td>${display(surface.scores.quality)}</td><td>${display(surface.scores.safety)}</td><td>${display(surface.scores.reliability)}</td><td>${display(surface.scores.workflow)}</td><td>${display(surface.scores.efficiency)}</td><td>${display(surface.scores.overall)}</td></tr>`).join("");
+  const rows = report.runs.map((run) => `<tr><td>${htmlEscape(run.scenarioId)}</td><td>${htmlEscape(run.category ?? "unspecified")}</td><td>${htmlEscape(run.difficulty ?? "unspecified")}</td><td>${htmlEscape(run.profile ?? "unspecified")}</td><td>${htmlEscape(run.lifecycle ?? "unspecified")}</td><td>${htmlEscape(run.surface)}</td><td>${run.repeat}</td><td>${run.infrastructureRetries ?? 0}</td><td>${run.resolved ? "PASS" : "FAIL"}</td><td>${run.grade?.passed ? "PASS" : "FAIL"}</td><td>${run.scope?.passed ? "PASS" : "FAIL"}</td><td>${display(run.workflow?.score)}</td><td>${htmlEscape((run.workflow?.checks ?? []).filter((check) => !check.passed).map((check) => check.id).join(", ") || "none")}</td><td>${htmlEscape(run.usage?.model ?? "unknown")}</td><td>${htmlEscape(run.usage?.thinkingLevel ?? "unknown")}</td><td>${display(run.usage?.input, 0)}</td><td>${display(run.usage?.output, 0)}</td><td>${display(run.usage?.cacheRead, 0)}</td><td>${display(run.usage?.reasoning, 0)}</td><td>${display(run.usage?.fresh, 0)}</td><td>${display(run.usage?.toolCalls, 0)}</td><td>${htmlEscape(topToolSummary(run.usage?.toolNames, 5))}</td><td>${display(run.usage?.cost, 6)}</td><td>${display(run.durationSeconds, 1)}</td><td>${htmlEscape(run.failure ?? "")}</td></tr>`).join("");
+  const scoreRows = surfaceEntries.map(([id, surface]) => `<tr><th>${htmlEscape(benchmarkSurfaceLabel(id))}</th><td>${surface.resolved}/${surface.runs}</td><td>${surface.qualityCorrect}/${surface.qualityRuns}</td><td>${surface.scopePassed}/${surface.runs}</td><td>${display(surface.scores.quality)}</td><td>${display(surface.scores.safety)}</td><td>${display(surface.scores.reliability)}</td><td>${display(surface.scores.workflow)}</td><td>${display(surface.scores.efficiency)}</td><td>${display(surface.scores.overall)}</td></tr>`).join("");
   const usageRows = surfaceEntries.map(([id, surface]) => { const usage = surface.usage.allMeasuredRuns; return `<tr><th>${htmlEscape(benchmarkSurfaceLabel(id))}</th><td>${display(usage.medianInputTokens, 0)}</td><td>${display(usage.medianOutputTokens, 0)}</td><td>${display(usage.medianCacheReadTokens, 0)}</td><td>${display(usage.medianReasoningTokens, 0)}</td><td>${display(usage.medianFreshTokens, 0)}</td><td>${display(usage.medianToolCalls, 0)}</td><td>${display(usage.medianCost, 6)}</td><td>${display(usage.medianDurationSeconds, 1)}</td><td>${htmlEscape(topToolSummary(surface.usage.toolNames))}</td></tr>`; }).join("");
+  const categoryRows = Object.entries(report.surfaces[candidateKey].bands?.categories ?? {}).map(([name, band]) => `<tr><th>${htmlEscape(name)}</th><td>${band.resolved}/${band.runs}</td><td>${display(band.score)}</td><td>${display(band.correctness)}</td></tr>`).join("");
+  const confidence = report.comparison.freshTokenRatioConfidence95;
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Piagent Benchmark ${htmlEscape(report.runId)}</title>
 <style>body{font:14px system-ui,sans-serif;color:#202124;max-width:1180px;margin:32px auto;padding:0 20px}h1{font-size:24px}h2{font-size:17px;margin-top:28px}.table-wrap{overflow-x:auto}table{border-collapse:collapse;width:100%;white-space:nowrap}th,td{border:1px solid #d8dadd;padding:8px;text-align:left}thead th{background:#f4f5f6}.metric{display:inline-block;margin:0 24px 8px 0}.note{color:#5f6368}</style></head><body>
 <h1>Piagent Benchmark</h1><p>${htmlEscape(report.suite.title)} · ${htmlEscape(report.runId)}</p><p class="note">Platform v${htmlEscape(report.environment.platformVersion ?? "unknown")} · Pi ${htmlEscape(report.environment.piVersion ?? "unknown")}${report.environment.codexVersion ? ` · Codex ${htmlEscape(report.environment.codexVersion)}` : ""} · Node ${htmlEscape(report.environment.nodeVersion ?? "unknown")} · Baseline ${htmlEscape(report.environment.treatmentBaseline ?? "unknown")} · Suite ${htmlEscape(report.environment.suiteDigest ?? "unknown")}</p>
-<p class="metric"><strong>Comparison:</strong> ${htmlEscape(candidateLabel)} vs ${htmlEscape(baselineLabel)}</p><p class="metric"><strong>Verdict:</strong> ${htmlEscape(report.verdict.status)}</p><p class="metric"><strong>Paired token-ratio delta:</strong> ${displayPercent(report.comparison.freshTokenDeltaPercent)}</p><p class="metric"><strong>Paired cost-ratio delta:</strong> ${displayPercent(report.comparison.costDeltaPercent)}</p><p class="metric"><strong>Comparable pairs:</strong> ${report.comparison.pairedUsageRuns}</p><p class="metric"><strong>Pair wins:</strong> ${htmlEscape(candidateLabel)} ${report.comparison.pairedFreshTokenWins[candidateKey]} · ${htmlEscape(baselineLabel)} ${report.comparison.pairedFreshTokenWins[baselineKey]} · ties ${report.comparison.pairedFreshTokenWins.ties}</p>
-<h2>Score bands</h2><div class="table-wrap"><table><thead><tr><th>Surface</th><th>Resolved</th><th>Source grader</th><th>Scope</th><th>Quality</th><th>Safety</th><th>Reliability</th><th>Workflow</th><th>Efficiency</th><th>Overall</th></tr></thead><tbody>${scoreRows}</tbody></table></div>
+<p class="metric"><strong>Comparison:</strong> ${htmlEscape(candidateLabel)} vs ${htmlEscape(baselineLabel)}</p><p class="metric"><strong>Verdict:</strong> ${htmlEscape(report.verdict.status)}</p><p class="metric"><strong>Infrastructure retries:</strong> ${report.infrastructure?.retries ?? 0}</p><p class="metric"><strong>Paired token-ratio delta:</strong> ${displayPercent(report.comparison.freshTokenDeltaPercent)}</p><p class="metric"><strong>Token ratio 95% CI:</strong> ${confidence ? `${display(confidence.lower, 4)}–${display(confidence.upper, 4)}` : "n/a"}</p><p class="metric"><strong>Paired cost-ratio delta:</strong> ${displayPercent(report.comparison.costDeltaPercent)}</p><p class="metric"><strong>Comparable pairs:</strong> ${report.comparison.pairedUsageRuns}</p><p class="metric"><strong>Scenario families:</strong> ${report.comparison.pairedUsageScenarios ?? 0}</p><p class="metric"><strong>Complete families:</strong> ${report.comparison.pairedCompleteScenarios ?? 0}</p><p class="metric"><strong>Pair wins:</strong> ${htmlEscape(candidateLabel)} ${report.comparison.pairedFreshTokenWins[candidateKey]} · ${htmlEscape(baselineLabel)} ${report.comparison.pairedFreshTokenWins[baselineKey]} · ties ${report.comparison.pairedFreshTokenWins.ties}</p>
+<h2>Score bands</h2><div class="table-wrap"><table><thead><tr><th>Surface</th><th>Resolved</th><th>Task grader</th><th>Scope</th><th>Quality</th><th>Safety</th><th>Reliability</th><th>Workflow</th><th>Efficiency</th><th>Overall</th></tr></thead><tbody>${scoreRows}</tbody></table></div>
+${categoryRows ? `<h2>${htmlEscape(candidateLabel)} category bands</h2><div class="table-wrap"><table><thead><tr><th>Category</th><th>Resolved</th><th>Score</th><th>Correctness</th></tr></thead><tbody>${categoryRows}</tbody></table></div>` : ""}
 <h2>Median usage across all measured runs</h2><div class="table-wrap"><table><thead><tr><th>Surface</th><th>Input</th><th>Output</th><th>Cache read</th><th>Reasoning</th><th>Fresh</th><th>Tools</th><th>Cost</th><th>Seconds</th><th>Top tools</th></tr></thead><tbody>${usageRows}</tbody></table></div>
-<h2>Runs</h2><div class="table-wrap"><table><thead><tr><th>Scenario</th><th>Surface</th><th>Repeat</th><th>Resolved</th><th>Grader</th><th>Scope</th><th>Workflow</th><th>Workflow gaps</th><th>Model</th><th>Thinking</th><th>Input</th><th>Output</th><th>Cache read</th><th>Reasoning</th><th>Fresh</th><th>Tools</th><th>Top tools</th><th>Cost</th><th>Seconds</th><th>Failure</th></tr></thead><tbody>${rows}</tbody></table></div>
+<h2>Runs</h2><div class="table-wrap"><table><thead><tr><th>Scenario</th><th>Category</th><th>Difficulty</th><th>Profile</th><th>Lifecycle</th><th>Surface</th><th>Repeat</th><th>Infra retries</th><th>Resolved</th><th>Grader</th><th>Scope</th><th>Workflow</th><th>Workflow gaps</th><th>Model</th><th>Thinking</th><th>Input</th><th>Output</th><th>Cache read</th><th>Reasoning</th><th>Fresh</th><th>Tools</th><th>Top tools</th><th>Cost</th><th>Seconds</th><th>Failure</th></tr></thead><tbody>${rows}</tbody></table></div>
 <p class="note">${htmlEscape(report.verdict.note)}</p></body></html>\n`;
 }

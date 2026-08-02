@@ -23,6 +23,7 @@ import { summarizeSession, walkJsonl } from "./pi-usage-history.mjs";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const coreSuitePath = path.join(packageRoot, "benchmarks", "core-v1", "suite.json");
+const productionSuitePath = path.join(packageRoot, "benchmarks", "production-v1", "suite.json");
 const packageManifest = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"));
 const outputLimit = 4 * 1024 * 1024;
 const activeChildren = new Set();
@@ -45,6 +46,12 @@ const controlledCodexFeatures = [
   "tool_suggest",
   "workspace_dependencies"
 ];
+const coldStartRuntimeManagedPaths = [
+  ".pi/project-context.md",
+  ".pi/context-index.json",
+  ".pi/context-v2.sqlite",
+  ".pi/context-v2.sqlite-*"
+];
 let interruptedSignal;
 
 const usage = `Usage:
@@ -57,12 +64,17 @@ With no options it uses the built-in core-v1 suite, the current Pi default
 model/thinking setting, and the suite's repeat count.
 
 Options:
-  --suite <core-v1|path>       Built-in suite id or suite.json path.
+  --suite <id|path>            core-v1, production-v1, or suite.json path.
+  --production                 Alias for --suite production-v1.
   --surfaces <a,b>             raw-pi,piagent (default) or piagent,codex-cli.
   --model <provider/model>     Pin one model identity for both surfaces.
   --thinking <level>           off|minimal|low|medium|high|xhigh|max.
   --codex-mode <mode>          controlled isolated home (default) or native user configuration.
   --repeats <1-10>             Override the suite repeat count.
+  --infrastructure-retries <n> Retry 0-3 startup failures with zero recorded usage.
+  --retry-delay <seconds>      Backoff before infrastructure retry, 0-120 seconds.
+  --scenarios <id,id>          Run selected scenario families for diagnosis.
+  --seed <value>               Reproduce generated hidden variants.
   --timeout <seconds>          Per-agent timeout, 30-3600 seconds.
   --output <directory>         Report directory; must be empty or absent.
   --keep-workspaces            Retain isolated workspaces and session logs.
@@ -130,7 +142,11 @@ export function parseBenchmarkArgs(argv) {
     model: undefined,
     thinking: undefined,
     codexMode: "controlled",
+    seed: undefined,
     repeats: undefined,
+    infrastructureRetries: undefined,
+    retryDelaySeconds: undefined,
+    scenarioIds: undefined,
     timeoutSeconds: undefined,
     output: undefined,
     keepWorkspaces: false,
@@ -148,6 +164,9 @@ export function parseBenchmarkArgs(argv) {
       case "--suite":
         options.suite = requireValue(argv, index, arg);
         index += 1;
+        break;
+      case "--production":
+        options.suite = "production-v1";
         break;
       case "--surfaces": {
         const values = requireValue(argv, index, arg).split(",").map((value) => value.trim()).filter(Boolean);
@@ -177,6 +196,26 @@ export function parseBenchmarkArgs(argv) {
         break;
       case "--repeats":
         options.repeats = positiveInteger(requireValue(argv, index, arg), arg, 1, 10);
+        index += 1;
+        break;
+      case "--infrastructure-retries":
+        options.infrastructureRetries = positiveInteger(requireValue(argv, index, arg), arg, 0, 3);
+        index += 1;
+        break;
+      case "--retry-delay":
+        options.retryDelaySeconds = positiveInteger(requireValue(argv, index, arg), arg, 0, 120);
+        index += 1;
+        break;
+      case "--scenarios": {
+        const values = requireValue(argv, index, arg).split(",").map((value) => value.trim()).filter(Boolean);
+        if (values.length === 0 || new Set(values).size !== values.length) fail("--scenarios must contain unique scenario ids");
+        options.scenarioIds = values;
+        index += 1;
+        break;
+      }
+      case "--seed":
+        options.seed = requireValue(argv, index, arg);
+        if (options.seed.length > 200) fail("--seed must contain at most 200 characters");
         index += 1;
         break;
       case "--timeout":
@@ -232,7 +271,7 @@ function runCommand(command, args, options = {}) {
     const cleanup = () => activeChildren.delete(child);
     if (options.inherit) {
       child.once("error", (error) => { cleanup(); reject(error); });
-      child.once("exit", (code, signal) => { cleanup(); resolve({ code: code ?? 1, signal, timedOut: false, stdout: "", stderr: "", forbiddenHits: [], durationSeconds: (Date.now() - started) / 1000 }); });
+      child.once("exit", (code, signal) => { cleanup(); resolve({ code: code ?? 1, signal, timedOut: false, stdout: "", stderr: "", forbiddenHits: [], requiredHits: [], durationSeconds: (Date.now() - started) / 1000 }); });
       return;
     }
     if (options.input !== undefined) {
@@ -243,14 +282,21 @@ function runCommand(command, args, options = {}) {
     let stderr = "";
     const stdoutDigest = crypto.createHash("sha256");
     const forbidden = [...new Set(options.forbiddenSubstrings ?? [])].filter((value) => typeof value === "string" && value);
+    const required = [...new Set(options.requiredSubstrings ?? [])].filter((value) => typeof value === "string" && value);
     const forbiddenHits = new Set();
+    const requiredHits = new Set();
     const scanTails = { stdout: "", stderr: "" };
-    const scanWindow = Math.max(0, ...forbidden.map((value) => value.length - 1));
+    const scanWindow = Math.max(0, ...[...forbidden, ...required].map((value) => value.length - 1));
     const append = (current, chunk) => `${current}${chunk}`.slice(-outputLimit);
     const inspect = (stream, chunk) => {
       const text = `${scanTails[stream]}${chunk}`;
       for (const value of forbidden) {
         if (text.includes(value)) forbiddenHits.add(value);
+      }
+      if (stream === "stdout") {
+        for (const value of required) {
+          if (text.includes(value)) requiredHits.add(value);
+        }
       }
       scanTails[stream] = scanWindow > 0 ? text.slice(-scanWindow) : "";
     };
@@ -279,13 +325,14 @@ function runCommand(command, args, options = {}) {
     child.once("exit", (code, signal) => {
       if (timer) clearTimeout(timer);
       cleanup();
-      resolve({ code: code ?? 1, signal, timedOut, stdout, stdoutHash: stdoutDigest.digest("hex"), stderr, forbiddenHits: [...forbiddenHits], durationSeconds: (Date.now() - started) / 1000 });
+      resolve({ code: code ?? 1, signal, timedOut, stdout, stdoutHash: stdoutDigest.digest("hex"), stderr, forbiddenHits: [...forbiddenHits], requiredHits: [...requiredHits], durationSeconds: (Date.now() - started) / 1000 });
     });
   });
 }
 
 function resolveSuitePath(input) {
   if (input === "core-v1") return coreSuitePath;
+  if (input === "production-v1") return productionSuitePath;
   const candidate = path.resolve(input);
   return fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()
     ? path.join(candidate, "suite.json")
@@ -343,8 +390,14 @@ function validateSuiteFiles(suite, suiteRoot) {
     const fixture = resolveSuiteEntry(suiteRoot, scenario.fixture, "fixture");
     const prompt = resolveSuiteEntry(suiteRoot, scenario.prompt, "prompt");
     const grader = resolveSuiteEntry(suiteRoot, scenario.grader, "grader");
+    const generator = scenario.variantGenerator
+      ? resolveSuiteEntry(suiteRoot, scenario.variantGenerator, "variant generator")
+      : null;
     if (inside(fixture, grader) || inside(fixture, prompt)) {
       fail(`Suite prompt and grader must stay outside the agent fixture: ${scenario.id}`, 1);
+    }
+    if (generator && inside(fixture, generator)) {
+      fail(`Suite variant generator must stay outside the agent fixture: ${scenario.id}`, 1);
     }
   }
 }
@@ -540,6 +593,46 @@ function applySetupFiles(workspace, setupFiles) {
   }
 }
 
+function variantSeed(rootSeed, suiteDigest, scenarioId, repeat) {
+  return crypto.createHmac("sha256", rootSeed)
+    .update(`${suiteDigest}\0${scenarioId}\0${repeat}`)
+    .digest("hex");
+}
+
+function generatedStringArray(value, field) {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 20 || value.some((item) => typeof item !== "string" || !item || item.length > 1_000)) {
+    fail(`Benchmark variant ${field} must contain at most 20 non-empty strings of at most 1000 characters`, 1);
+  }
+  return [...new Set(value)];
+}
+
+async function generateVariant({ generator, workspace, oraclePath, seed, scenario, timeoutSeconds }) {
+  const result = await runCommand(process.execPath, [generator, workspace, oraclePath, seed, scenario.id], {
+    cwd: path.dirname(generator),
+    timeoutMs: Math.min(timeoutSeconds, 120) * 1_000,
+    env: graderEnvironment(scenario.id)
+  });
+  if (result.timedOut) fail(`Benchmark variant generator timed out for ${scenario.id}`, 1);
+  if (result.code !== 0) fail(`Benchmark variant generator failed for ${scenario.id}: ${result.stderr.trim() || result.stdout.trim()}`, 1);
+  let oracle;
+  try { oracle = JSON.parse(fs.readFileSync(oraclePath, "utf8")); }
+  catch (error) { fail(`Benchmark variant generator did not write a valid oracle for ${scenario.id}: ${error.message}`, 1); }
+  if (!oracle || typeof oracle !== "object" || Array.isArray(oracle) || oracle.schemaVersion !== 1 || !oracle.graderData || typeof oracle.graderData !== "object" || Array.isArray(oracle.graderData)) {
+    fail(`Benchmark variant oracle is invalid for ${scenario.id}`, 1);
+  }
+  const serialized = JSON.stringify(oracle);
+  if (Buffer.byteLength(serialized) > 100_000) fail(`Benchmark variant oracle is too large for ${scenario.id}`, 1);
+  writePrivate(oraclePath, `${JSON.stringify(oracle)}\n`);
+  return {
+    oraclePath,
+    oracleDigest: crypto.createHash("sha256").update(serialized).digest("hex"),
+    seedDigest: crypto.createHash("sha256").update(seed).digest("hex"),
+    requiredOutputSubstrings: generatedStringArray(oracle.requiredOutputSubstrings, "requiredOutputSubstrings"),
+    forbiddenOutputSubstrings: generatedStringArray(oracle.forbiddenOutputSubstrings, "forbiddenOutputSubstrings")
+  };
+}
+
 async function initializeTreatment(workspace, profile) {
   const result = await runCommand("bash", [
     path.join(packageRoot, "scripts", "init-project.sh"),
@@ -724,8 +817,9 @@ function parseGraderResult(stdout) {
   };
 }
 
-async function gradeWorkspace(grader, workspace, scenario, timeoutSeconds) {
-  const result = await runCommand(process.execPath, [grader, workspace], {
+async function gradeWorkspace(grader, workspace, scenario, timeoutSeconds, oraclePath) {
+  const args = oraclePath ? [grader, workspace, oraclePath] : [grader, workspace];
+  const result = await runCommand(process.execPath, args, {
     cwd: path.dirname(grader),
     timeoutMs: Math.min(timeoutSeconds, 120) * 1_000,
     env: graderEnvironment(scenario.id)
@@ -739,7 +833,7 @@ function sessionSummaries(sessionDir) {
   return walkJsonl(sessionDir).map((file) => summarizeSession(file, {})).filter(Boolean);
 }
 
-function failureReason({ agent, grade, graderIntegrity, outsideScope, forbiddenHits }) {
+function failureReason({ agent, grade, graderIntegrity, outsideScope, forbiddenHits, missingRequired }) {
   const failures = [];
   if (agent.timedOut) failures.push("agent-timeout");
   else if (agent.code !== 0) failures.push(`agent-exit-${agent.code}`);
@@ -747,7 +841,20 @@ function failureReason({ agent, grade, graderIntegrity, outsideScope, forbiddenH
   if (!graderIntegrity.passed) failures.push("grader-mutated-workspace");
   if (outsideScope.length) failures.push(`outside-scope:${outsideScope.join(",")}`);
   if (forbiddenHits.length) failures.push("forbidden-output");
+  if (missingRequired.length) failures.push("required-output-missing");
   return failures.join("; ") || undefined;
+}
+
+function safeInfrastructureDiagnostic(value, forbiddenValues) {
+  let diagnostic = String(value ?? "");
+  for (const forbidden of forbiddenValues) {
+    if (forbidden) diagnostic = diagnostic.replaceAll(forbidden, "[REDACTED]");
+  }
+  return diagnostic
+    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, " ")
+    .trim()
+    .slice(-4_000);
 }
 
 async function runOne({
@@ -756,25 +863,59 @@ async function runOne({
   scenario,
   surface,
   repeat,
+  infrastructureAttempt = 1,
   runId,
   runRoot,
   options,
   piCommand,
   codexCommand,
   codexDisabledFeatures,
-  codexRuntime
+  codexRuntime,
+  suiteDigest,
+  rootSeed
 }) {
-  const key = `${String(repeat).padStart(2, "0")}-${scenario.id}-${surface}`;
+  const attemptSuffix = infrastructureAttempt > 1 ? `-infra-${infrastructureAttempt}` : "";
+  const key = `${String(repeat).padStart(2, "0")}-${scenario.id}-${surface}${attemptSuffix}`;
   const workspaceRoot = privateDirectory(path.join(runRoot, "workspaces", key));
   const workspace = path.join(workspaceRoot, "project");
   const sessions = privateDirectory(path.join(workspaceRoot, "sessions"));
   const fixture = resolveSuiteEntry(suiteRoot, scenario.fixture, "fixture");
   fs.cpSync(fixture, workspace, { recursive: true, errorOnExist: true });
   applySetupFiles(workspace, scenario.setupFiles);
+  const profile = scenario.profile ?? suite.profile;
+  const lifecycle = scenario.lifecycle ?? "steady-state";
+  let variant = {
+    oraclePath: null,
+    oracleDigest: null,
+    seedDigest: null,
+    requiredOutputSubstrings: [],
+    forbiddenOutputSubstrings: []
+  };
+  if (scenario.variantGenerator) {
+    const generator = resolveSuiteEntry(suiteRoot, scenario.variantGenerator, "variant generator");
+    variant = await generateVariant({
+      generator,
+      workspace,
+      oraclePath: path.join(workspaceRoot, "oracle.json"),
+      seed: variantSeed(rootSeed, suiteDigest, scenario.id, repeat),
+      scenario,
+      timeoutSeconds: options.timeoutSeconds
+    });
+  }
+  const forbiddenOutputSubstrings = [...new Set([
+    ...(scenario.forbiddenOutputSubstrings ?? []),
+    ...variant.forbiddenOutputSubstrings
+  ])];
+  const requiredOutputSubstrings = [...new Set([
+    ...(scenario.requiredOutputSubstrings ?? []),
+    ...variant.requiredOutputSubstrings
+  ])];
   if (surface === "piagent") {
-    await initializeTreatment(workspace, suite.profile);
-    prepareTreatmentBaseline(workspace, suite.profile, scenario);
-    await prepareTreatmentContextEngine(workspace);
+    await initializeTreatment(workspace, profile);
+    if (lifecycle === "steady-state") {
+      prepareTreatmentBaseline(workspace, profile, scenario);
+      await prepareTreatmentContextEngine(workspace);
+    }
   }
   await initializeGit(workspace, scenario.setupFiles);
 
@@ -817,14 +958,15 @@ async function runOne({
   const codexCollector = surface === "codex-cli" ? createCodexExecJsonlCollector({
     model: options.model,
     thinkingLevel: options.thinking,
-    onEvent: (event) => inspectForbiddenValue(event, scenario.forbiddenOutputSubstrings ?? [], codexForbiddenHits)
+    onEvent: (event) => inspectForbiddenValue(event, forbiddenOutputSubstrings, codexForbiddenHits)
   }) : undefined;
 
   const agent = await runCommand(command, args, {
     cwd: workspace,
     input: surface === "codex-cli" ? prompt : undefined,
     timeoutMs: options.timeoutSeconds * 1_000,
-    forbiddenSubstrings: scenario.forbiddenOutputSubstrings,
+    forbiddenSubstrings: forbiddenOutputSubstrings,
+    requiredSubstrings: requiredOutputSubstrings,
     onStdoutChunk: codexCollector ? (chunk) => codexCollector.write(chunk) : undefined,
     env: surface === "codex-cli" ? codexProcessEnvironment(codexRuntime, {
       PIAGENT_NO_UPDATE_CHECK: "1",
@@ -832,6 +974,8 @@ async function runOne({
       PIAGENT_BENCHMARK_SCENARIO: scenario.id,
       PIAGENT_BENCHMARK_SURFACE: surface,
       PIAGENT_BENCHMARK_SESSION_ID: sessionId,
+      PIAGENT_BENCHMARK_PROFILE: profile,
+      PIAGENT_BENCHMARK_LIFECYCLE: lifecycle,
       NO_COLOR: "1"
     }) : benchmarkEnvironment({
       PIAGENT_NO_UPDATE_CHECK: "1",
@@ -839,11 +983,14 @@ async function runOne({
       PIAGENT_BENCHMARK_SCENARIO: scenario.id,
       PIAGENT_BENCHMARK_SURFACE: surface,
       PIAGENT_BENCHMARK_SESSION_ID: sessionId,
+      PIAGENT_BENCHMARK_PROFILE: profile,
+      PIAGENT_BENCHMARK_LIFECYCLE: lifecycle,
       NO_COLOR: "1"
     })
   });
   const sessionFiles = surface === "codex-cli" ? [] : walkJsonl(sessions);
   let usage;
+  let codexDiagnostics = [];
   if (surface === "codex-cli") {
     try {
       usage = codexCollector.finish();
@@ -851,6 +998,7 @@ async function runOne({
       if (agent.code === 0 && !agent.timedOut) throw error;
       usage = aggregateSessionUsage([]);
     }
+    codexDiagnostics = codexCollector.diagnostics();
   } else {
     usage = aggregateSessionUsage(sessionSummaries(sessions));
   }
@@ -858,54 +1006,104 @@ async function runOne({
     ...(agent.forbiddenHits ?? []),
     ...(surface === "codex-cli"
       ? [...codexForbiddenHits]
-      : forbiddenSessionHits(sessionFiles, scenario.forbiddenOutputSubstrings ?? []))
+      : forbiddenSessionHits(sessionFiles, forbiddenOutputSubstrings))
   ])];
-  const changedFiles = workingTreeFiles(workspace);
+  const requiredHits = new Set(agent.requiredHits ?? []);
+  if (surface !== "codex-cli") {
+    for (const value of forbiddenSessionHits(sessionFiles, requiredOutputSubstrings)) requiredHits.add(value);
+  }
+  const missingRequired = requiredOutputSubstrings.filter((value) => !requiredHits.has(value));
+  const allChangedFiles = workingTreeFiles(workspace);
+  const runtimeManagedChanges = surface === "piagent" && lifecycle === "cold-start"
+    ? allChangedFiles.filter((file) => matchesAnyPath(file, coldStartRuntimeManagedPaths))
+    : [];
+  const runtimeManagedSet = new Set(runtimeManagedChanges);
+  const changedFiles = allChangedFiles.filter((file) => !runtimeManagedSet.has(file));
   const beforeGrade = workingTreeSnapshot(workspace);
   const outsideScope = changedFiles.filter((file) => !matchesAnyPath(file, scenario.allowedChanges));
-  const grade = await gradeWorkspace(graderPath, workspace, scenario, options.timeoutSeconds);
+  const grade = await gradeWorkspace(graderPath, workspace, scenario, options.timeoutSeconds, variant.oraclePath);
   const afterGrade = workingTreeSnapshot(workspace);
   const graderIntegrity = { passed: JSON.stringify(beforeGrade) === JSON.stringify(afterGrade) };
   let workflow = null;
-  if (surface === "piagent" && scenario.kind === "source-change") {
+  if (surface === "piagent" && scenario.kind !== "safety-refusal") {
     const task = listTaskContracts(workspace).find((item) => item.sessionId === sessionId);
-    workflow = evaluateWorkflowEvidence(task, changedFiles, usage.toolNames);
+    workflow = evaluateWorkflowEvidence(task, changedFiles, usage.toolNames, { scenarioKind: scenario.kind });
   }
-  const scope = { passed: outsideScope.length === 0, changedFiles, outsideScope };
+  const scope = { passed: outsideScope.length === 0, changedFiles, outsideScope, allChangedFiles, runtimeManagedChanges };
   const outputSafety = { passed: forbiddenHits.length === 0, forbiddenHits: forbiddenHits.map((value) => crypto.createHash("sha256").update(value).digest("hex")) };
-  const abortSuite = agent.timedOut || (agent.code !== 0 && usage.fresh <= 0);
-  const resolved = agent.code === 0 && !agent.timedOut && grade.passed && graderIntegrity.passed && scope.passed && outputSafety.passed;
+  const outputEvidence = {
+    passed: missingRequired.length === 0,
+    requiredCount: requiredOutputSubstrings.length,
+    observedCount: requiredOutputSubstrings.length - missingRequired.length,
+    missingHashes: missingRequired.map((value) => crypto.createHash("sha256").update(value).digest("hex"))
+  };
+  // A timed-out agent is measured reliability evidence. Only an early process
+  // failure with no provider usage is infrastructure and eligible for retry.
+  const abortSuite = !agent.timedOut && agent.code !== 0 && usage.fresh <= 0;
+  const diagnosticInput = codexDiagnostics.length > 0
+    ? JSON.stringify(codexDiagnostics)
+    : `${agent.stderr ?? ""}\n${agent.stdout ?? ""}`;
+  const resolved = agent.code === 0 && !agent.timedOut && grade.passed && graderIntegrity.passed && scope.passed && outputSafety.passed && outputEvidence.passed;
   const record = {
     schemaVersion: 1,
     scenarioId: scenario.id,
     scenarioTitle: scenario.title,
     scenarioKind: scenario.kind,
+    category: scenario.category ?? "unspecified",
+    difficulty: scenario.difficulty ?? "unspecified",
+    profile,
+    lifecycle,
     surface,
     repeat,
+    infrastructureAttempt,
     sessionId,
     providerSessionId: usage.providerSessionId ?? null,
     abortSuite,
+    infrastructureFailure: abortSuite ? `agent-exit-${agent.code}-before-usage` : undefined,
+    infrastructureDiagnostic: abortSuite ? safeInfrastructureDiagnostic(diagnosticInput, forbiddenOutputSubstrings) : undefined,
+    infrastructureDiagnosticSource: abortSuite ? (codexDiagnostics.length > 0 ? "codex-error-events" : "process-output-tail") : undefined,
     resolved,
-    failure: failureReason({ agent, grade, graderIntegrity, outsideScope, forbiddenHits }),
-    agent: { exitCode: agent.code, signal: agent.signal, timedOut: agent.timedOut, stdoutHash: agent.stdoutHash ?? crypto.createHash("sha256").update(agent.stdout).digest("hex") },
+    failure: failureReason({ agent, grade, graderIntegrity, outsideScope, forbiddenHits, missingRequired }),
+    agent: {
+      exitCode: agent.code,
+      signal: agent.signal,
+      timedOut: agent.timedOut,
+      stdoutHash: agent.stdoutHash ?? crypto.createHash("sha256").update(agent.stdout).digest("hex"),
+      stderrHash: crypto.createHash("sha256").update(agent.stderr ?? "").digest("hex")
+    },
     grade,
     graderIntegrity,
     scope,
     outputSafety,
+    outputEvidence,
     workflow,
     usage,
     durationSeconds: agent.durationSeconds,
-    promptHash: crypto.createHash("sha256").update(prompt).digest("hex")
+    promptHash: crypto.createHash("sha256").update(prompt).digest("hex"),
+    variant: scenario.variantGenerator ? {
+      generated: true,
+      seedDigest: variant.seedDigest,
+      oracleDigest: variant.oracleDigest
+    } : { generated: false }
   };
   if (!options.keepWorkspaces) fs.rmSync(workspaceRoot, { recursive: true, force: true });
   return record;
 }
 
-function executionOrder(suite, repeats, surfaces) {
+function executionOrder(suite, repeats, surfaces, rootSeed) {
   const order = [];
   for (let repeat = 1; repeat <= repeats; repeat += 1) {
-    for (const [index, scenario] of suite.scenarios.entries()) {
-      const ordered = (repeat + index) % 2 === 0 ? surfaces : [...surfaces].reverse();
+    const scenarios = suite.schemaVersion === 2
+      ? [...suite.scenarios].sort((left, right) => {
+        const rank = (scenario) => crypto.createHmac("sha256", rootSeed).update(`order\0${repeat}\0${scenario.id}`).digest("hex");
+        return rank(left).localeCompare(rank(right));
+      })
+      : suite.scenarios;
+    for (const [index, scenario] of scenarios.entries()) {
+      const reverse = suite.schemaVersion === 2
+        ? (crypto.createHmac("sha256", rootSeed).update(`surface\0${repeat}\0${scenario.id}`).digest()[0] & 1) === 1
+        : (repeat + index) % 2 !== 0;
+      const ordered = reverse ? [...surfaces].reverse() : surfaces;
       for (const surface of ordered) order.push({ scenario, surface, repeat });
     }
   }
@@ -987,29 +1185,44 @@ async function main() {
   }
   const { suite, manifestPath, suiteRoot } = loadSuite(options.suite);
   validateSuiteFiles(suite, suiteRoot);
+  const declaredScenarioCount = suite.scenarios.length;
+  if (options.scenarioIds) {
+    const byId = new Map(suite.scenarios.map((scenario) => [scenario.id, scenario]));
+    const missing = options.scenarioIds.filter((id) => !byId.has(id));
+    if (missing.length) fail(`Unknown benchmark scenario: ${missing.join(", ")}`, 1);
+    suite.scenarios = options.scenarioIds.map((id) => byId.get(id));
+  }
   options.repeats = options.repeats ?? suite.defaultRepeats;
+  options.infrastructureRetries = options.infrastructureRetries ?? (suite.schemaVersion === 2 ? 2 : 0);
+  options.retryDelaySeconds = options.retryDelaySeconds ?? (suite.schemaVersion === 2 ? 60 : 0);
   options.timeoutSeconds = options.timeoutSeconds ?? suite.timeoutSeconds;
   if (options.surfaces.includes("codex-cli")) {
     codexModelName(options.model);
     codexThinkingEffort(options.thinking);
   }
   const comparison = comparisonSurfaces(options);
-  const order = executionOrder(suite, options.repeats, options.surfaces);
   const piCommand = process.env.PIAGENT_BENCHMARK_PI_COMMAND || "pi";
   const codexCommand = process.env.PIAGENT_BENCHMARK_CODEX_COMMAND || "codex";
   const suiteDigest = suiteTreeDigest(suiteRoot);
+  const rootSeed = options.seed ?? crypto.randomBytes(32).toString("hex");
+  const rootSeedDigest = crypto.createHash("sha256").update(rootSeed).digest("hex");
+  const order = executionOrder(suite, options.repeats, options.surfaces, rootSeed);
+  const lifecycles = [...new Set(suite.scenarios.map((scenario) => scenario.lifecycle ?? "steady-state"))];
   const plan = [
     "Piagent automatic benchmark",
     `  platform:  v${packageManifest.version}`,
-    `  suite:     ${suite.id} (${suite.scenarios.length} scenarios)`,
+    `  suite:     ${suite.id} (${suite.scenarios.length}${suite.scenarios.length !== declaredScenarioCount ? `/${declaredScenarioCount}` : ""} scenarios)`,
     `  digest:    ${suiteDigest.slice(0, 16)}`,
     `  surfaces:  ${options.surfaces.join(", ")}`,
     `  compare:   ${benchmarkSurfaceLabel(comparison.candidateSurface)} vs ${benchmarkSurfaceLabel(comparison.baselineSurface)}`,
     `  repeats:   ${options.repeats}`,
+    `  retries:   ${options.infrastructureRetries} infrastructure-only · ${options.retryDelaySeconds}s backoff`,
     `  sessions:  ${order.length}`,
     `  model:     ${options.model ?? "Pi default"}`,
     `  thinking:  ${options.thinking ?? "Pi default"}`,
-    "  lifecycle: Piagent steady-state (initialized and onboarded before measurement)",
+    `  lifecycle: ${lifecycles.join(", ")}`,
+    `  variants:  ${suite.scenarios.some((scenario) => scenario.variantGenerator) ? `generated · seed ${rootSeedDigest.slice(0, 16)}` : "static"}`,
+    `  ordering:  ${suite.schemaVersion === 2 ? "seeded paired blocks" : "paired alternating"}`,
     `  timeout:   ${options.timeoutSeconds}s per session`,
     "  grading:   hidden verifier + scope + output safety + Pi task evidence"
   ].join("\n");
@@ -1041,50 +1254,89 @@ async function main() {
   const runs = [];
   let fatalRunError;
   const ledgerPath = path.join(runRoot, "runs.jsonl");
+  const infrastructureLedgerPath = path.join(runRoot, "infrastructure-attempts.jsonl");
   try {
     for (const [index, item] of order.entries()) {
       if (interruptedSignal) break;
       process.stdout.write(`[${index + 1}/${order.length}] ${item.scenario.id} · ${item.surface} · repeat ${item.repeat}\n`);
       let record;
-      try {
-        record = await runOne({
-          suite,
-          suiteRoot,
-          ...item,
-          runId,
-          runRoot,
-          options,
-          piCommand,
-          codexCommand,
-          codexDisabledFeatures: runtime.codexDisabledFeatures,
-          codexRuntime
+      const infrastructureFailures = [];
+      for (let infrastructureAttempt = 1; infrastructureAttempt <= options.infrastructureRetries + 1; infrastructureAttempt += 1) {
+        let attemptError;
+        let attemptCodexRuntime = codexRuntime;
+        try {
+          if (item.surface === "codex-cli") attemptCodexRuntime = createCodexRuntime(options);
+          record = await runOne({
+            suite,
+            suiteRoot,
+            ...item,
+            infrastructureAttempt,
+            runId,
+            runRoot,
+            options,
+            piCommand,
+            codexCommand,
+            codexDisabledFeatures: runtime.codexDisabledFeatures,
+            codexRuntime: attemptCodexRuntime,
+            suiteDigest,
+            rootSeed
+          });
+        } catch (error) {
+          attemptError = error;
+          record = {
+            schemaVersion: 1,
+            scenarioId: item.scenario.id,
+            scenarioTitle: item.scenario.title,
+            scenarioKind: item.scenario.kind,
+            category: item.scenario.category ?? "unspecified",
+            difficulty: item.scenario.difficulty ?? "unspecified",
+            profile: item.scenario.profile ?? suite.profile,
+            lifecycle: item.scenario.lifecycle ?? "steady-state",
+            surface: item.surface,
+            repeat: item.repeat,
+            infrastructureAttempt,
+            abortSuite: true,
+            infrastructureFailure: `runner-error:${error.message}`,
+            resolved: false,
+            failure: `runner-error:${error.message}`,
+            grade: { passed: false, score: 0, checks: [] },
+            graderIntegrity: { passed: false },
+            scope: { passed: false, changedFiles: [], outsideScope: [] },
+            outputSafety: { passed: false, forbiddenHits: [] },
+            outputEvidence: { passed: false, requiredCount: 0, observedCount: 0, missingHashes: [] },
+            workflow: null,
+            usage: aggregateSessionUsage([]),
+            durationSeconds: 0
+          };
+        } finally {
+          if (attemptCodexRuntime !== codexRuntime) attemptCodexRuntime.cleanup();
+        }
+        if (!record.abortSuite || interruptedSignal) break;
+        const retryAvailable = infrastructureAttempt <= options.infrastructureRetries;
+        infrastructureFailures.push({
+          attempt: infrastructureAttempt,
+          failure: record.infrastructureFailure ?? record.failure,
+          agent: record.agent,
+          durationSeconds: record.durationSeconds
         });
-      } catch (error) {
-        fatalRunError = error;
-        record = {
-          schemaVersion: 1,
-          scenarioId: item.scenario.id,
-          scenarioTitle: item.scenario.title,
-          scenarioKind: item.scenario.kind,
-          surface: item.surface,
-          repeat: item.repeat,
-          abortSuite: true,
-          resolved: false,
-          failure: `runner-error:${error.message}`,
-          grade: { passed: false, score: 0, checks: [] },
-          graderIntegrity: { passed: false },
-          scope: { passed: false, changedFiles: [], outsideScope: [] },
-          outputSafety: { passed: false, forbiddenHits: [] },
-          workflow: null,
-          usage: aggregateSessionUsage([]),
-          durationSeconds: 0
-        };
+        fs.appendFileSync(infrastructureLedgerPath, `${JSON.stringify({ ...record, accepted: false, retryAvailable })}\n`, { mode: 0o600 });
+        if (!retryAvailable) {
+          if (attemptError) fatalRunError = attemptError;
+          break;
+        }
+        process.stdout.write(`           RETRY ${infrastructureAttempt}/${options.infrastructureRetries} (${record.infrastructureFailure ?? record.failure})\n`);
+        if (options.retryDelaySeconds > 0) {
+          await new Promise((resolve) => setTimeout(resolve, options.retryDelaySeconds * 1_000));
+        }
       }
+      record.infrastructureAttempts = record.infrastructureAttempt ?? 1;
+      record.infrastructureRetries = Math.max(0, record.infrastructureAttempts - 1);
+      record.infrastructureFailures = infrastructureFailures;
       runs.push(record);
       fs.appendFileSync(ledgerPath, `${JSON.stringify(record)}\n`, { mode: 0o600 });
       const cost = Number.isFinite(record.usage.cost) ? `$${Number(record.usage.cost).toFixed(6)}` : "cost n/a";
       process.stdout.write(`           ${record.resolved ? "PASS" : `FAIL (${record.failure})`} · ${record.usage.fresh} fresh tok · ${cost}\n`);
-      if (record.abortSuite && !fatalRunError) fatalRunError = new Error(record.failure ?? "agent startup failure");
+      if (record.abortSuite && !fatalRunError) fatalRunError = new Error(record.infrastructureFailure ?? record.failure ?? "agent startup failure");
       if (fatalRunError) break;
     }
   } finally {
@@ -1113,12 +1365,17 @@ async function main() {
     environment: {
       platformVersion: packageManifest.version,
       suiteDigest,
+      variantRootSeed: suite.scenarios.some((scenario) => scenario.variantGenerator) ? rootSeed : null,
+      variantRootSeedDigest: suite.scenarios.some((scenario) => scenario.variantGenerator) ? rootSeedDigest : null,
+      executionOrder: suite.schemaVersion === 2 ? "seeded-paired-block-randomized" : "paired-alternating",
       profile: suite.profile,
       requestedModel: options.model ?? null,
       requestedThinking: options.thinking ?? null,
-      treatmentBaseline: options.surfaces.includes("codex-cli")
-        ? "piagent-initialized-and-onboarded; codex-clean-fixture"
-        : "initialized-and-onboarded",
+      treatmentBaseline: lifecycles.length === 1 && lifecycles[0] === "steady-state"
+        ? options.surfaces.includes("codex-cli")
+          ? "piagent-initialized-and-onboarded; codex-clean-fixture"
+          : "initialized-and-onboarded"
+        : "scenario-defined-mixed-lifecycle",
       timeoutSeconds: options.timeoutSeconds,
       nodeVersion: process.version,
       piVersion: runtime.piVersion,
@@ -1126,7 +1383,7 @@ async function main() {
       codexMode: options.surfaces.includes("codex-cli") ? options.codexMode : null,
       codexAuth: runtime.codexAuth ?? null,
       codexIsolation: options.surfaces.includes("codex-cli")
-        ? options.codexMode === "controlled" ? "temporary-home" : "operator-home"
+        ? options.codexMode === "controlled" ? "per-session-temporary-home" : "operator-home"
         : null,
       codexCredentialBridge: options.surfaces.includes("codex-cli") ? codexRuntime.credentialBridge : null,
       codexGlobalInstructions: options.surfaces.includes("codex-cli")
@@ -1134,6 +1391,7 @@ async function main() {
         : null,
       codexDisabledFeatures: runtime.codexDisabledFeatures,
       surfaces: options.surfaces,
+      scenarioSelection: options.scenarioIds ?? null,
       surfaceModels: options.surfaces.includes("codex-cli") ? {
         piagent: options.model,
         "codex-cli": codexModelName(options.model)
@@ -1158,6 +1416,8 @@ async function main() {
     || report.comparison.reliabilityGate === false
     || report.comparison.qualityNonInferior === false
     || report.comparison.workflowGate === false
+    || report.comparison.categoryGate === false
+    || report.comparison.productionGate?.passed === false
   ) process.exitCode = 1;
   } finally {
     codexRuntime.cleanup();

@@ -2,6 +2,43 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.2.12 - 2026-08-03
+
+### Production benchmark
+
+- Added `production-v1`, a 108-session release benchmark covering 18 independent
+  scenario families across backend, frontend, data, platform, reliability and
+  security, with small/medium/large tasks, five profiles, cold-start and
+  steady-state lifecycles, generated variants and private hidden oracles.
+- Added category/profile/lifecycle/difficulty bands, Wilson quality intervals,
+  complete-family efficiency evidence and a scenario-clustered 95% confidence
+  interval for paired fresh-token ratios. Production claims now require all 18
+  families, three repeats, quality/reliability/workflow/category scores of at
+  least 9, perfect safety and an upper token-ratio bound no greater than 1.
+- Added controlled Codex CLI comparison with a fresh private `CODEX_HOME` for
+  every measured session and retry, paired seeded execution blocks, strict JSONL
+  usage parsing, bounded diagnostics and streaming required/forbidden output
+  checks.
+- Added infrastructure-only retries for zero-usage process failures. Timeout or
+  any run that consumed provider usage remains a measured reliability result;
+  retries are recorded separately and cannot improve task scores silently.
+- Validated the release candidate with 108/108 resolved sessions against Codex
+  CLI on the same model/thinking configuration. Piagent reached 10.00 quality,
+  safety, reliability and efficiency, 9.58 workflow and 9.92 overall; the
+  paired fresh-token estimate was 51.11% lower with a 95% ratio interval of
+  0.3809 to 0.6276.
+
+### Harness refinements
+
+- Kept automatic bounded intake for safe prompts while exposing explicit task
+  intake when a legitimate high-risk request mentions a protected path.
+- Rendered every verifier as a separate shell call throughout intake, recovery,
+  compaction and final-gate guidance. Recovery now reports only verifier commands
+  whose observed passing evidence is missing, avoiding accidental pipelines and
+  repeated successful checks.
+- Documented the distinct smoke and production workflow thresholds while keeping
+  every failed workflow check visible in JSON, text and HTML reports.
+
 ## v1.2.11 - 2026-08-02
 
 ### Breakthrough task harness

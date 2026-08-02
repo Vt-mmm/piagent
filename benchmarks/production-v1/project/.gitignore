@@ -1,0 +1,4 @@
+.pi/piagent-state/
+.pi/context-v2.sqlite*
+.env
+node_modules/

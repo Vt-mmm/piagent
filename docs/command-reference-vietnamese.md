@@ -468,8 +468,8 @@ Các lệnh này chạy ngoài Pi.
 | Command | Dùng khi nào |
 |---|---|
 | `npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0` | Cài Pi CLI tương thích với release hiện tại. |
-| `npm install -g --ignore-scripts @piagent/platform@1.2.11` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
-| `pi install git:github.com/Vt-mmm/piagent@v1.2.11` | Cài pinned release khi cần reproducible team setup. |
+| `npm install -g --ignore-scripts @piagent/platform@1.2.12` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
+| `pi install git:github.com/Vt-mmm/piagent@v1.2.12` | Cài pinned release khi cần reproducible team setup. |
 | `pi install git:github.com/Vt-mmm/piagent` | Cài latest package platform cho máy cá nhân/sandbox. |
 | `piagent-update --check` | Báo version hiện tại vs version sẽ lên cho cả ba thành phần; không cài gì. |
 | `piagent-update` | Full update global một lệnh cho cả máy: Pi host → npm-global helper → Pi package, đúng thứ tự release yêu cầu. |
@@ -511,8 +511,14 @@ Các lệnh này chạy ngoài Pi.
 | `piagent-uninstall --apply` | Gỡ Pi package của platform khỏi Pi settings global. |
 | `piagent-uninstall --apply --with-addons --with-host` | Gỡ thêm pi-mcp-adapter, pi-subagents, pi-web-access và Pi host. |
 | `piagent-uninstall --apply --project /path/to/project` | Gỡ thêm state của platform trong project: profile, lock, `piagent-state/`. |
-| `piagent-benchmark` | Tự chạy paired Raw Pi/Piagent ở steady-state đã onboard, chấm riêng hidden grader + scope + workflow và đọc exact token/tool histogram từ session. |
+| `piagent-benchmark` | Chạy smoke suite `core-v1`: paired Raw Pi/Piagent, 24 session, hidden grader + scope + workflow + exact usage. |
 | `piagent-benchmark --dry-run` | Validate suite và xem số model session, không gọi model. |
+| `piagent-benchmark --production --dry-run` | Xem ma trận production 18 family x 3 variant x 2 surface = 108 session, chưa dùng quota. |
+| `piagent-benchmark --production --surfaces piagent,codex-cli --model <provider/model> --thinking high` | Chạy production release gate đa domain/profile/lifecycle, chấm category band và 95% token-ratio confidence. |
+| `piagent-benchmark --production --seed <value> ...` | Tái lập đúng generated variant của một production report riêng tư. |
+| `piagent-benchmark --production --scenarios <id,id> --repeats 1 ...` | Chẩn đoán family/rubric đã chọn; không đủ điều kiện nhận production verdict. |
+| `piagent-benchmark --production --infrastructure-retries 2 ...` | Retry đúng lỗi process chết trước usage; timeout/task failure không retry và vẫn chấm reliability. |
+| `piagent-benchmark --production --retry-delay 60 ...` | Đặt backoff trước infrastructure retry; production mặc định 60 giây. |
 | `bash scripts/verify-local.sh` | Verify repo platform trước khi commit/tag. |
 | `bash scripts/verify-local.sh --offline` | Verify trong CI/máy sạch, bỏ qua local Pi model catalog. |
 | `bash scripts/setup.sh <project> ...` | Preseed setup project; không bắt buộc cho daily flow. |
@@ -572,9 +578,12 @@ export GITHUB_PERSONAL_ACCESS_TOKEN=<github-token>
 | Có nên compact chưa? | Xem `contextUsage.percent`; trên 75% mới cân nhắc `/compact`. |
 
 Không claim tiết kiệm token/cost nếu chưa có paired evidence cùng scenario. Dùng
-`piagent-benchmark`; runner chỉ cho phép verdict tiết kiệm khi
-quality/reliability đạt ít nhất `9/10`, safety/workflow đạt tuyệt đối, quality
-không giảm và có ít nhất ba cặp cùng model với exact usage.
+`piagent-benchmark`; smoke suite chỉ cho phép verdict khi quality/reliability đạt
+ít nhất `9/10`, safety/workflow đạt tuyệt đối, quality không giảm và có ít nhất
+ba cặp cùng model với exact usage. Production gate giữ safety `10`, cho workflow
+ít nhất `9`, đồng thời bắt mọi category đạt `9`, đủ 18 paired family và cận trên
+95% của token ratio không vượt baseline. Report vẫn liệt kê từng workflow check
+bị hụt để ngưỡng tổng không che mất hành vi cần xem lại.
 
 ## Source rule cho subagent/custom agent
 

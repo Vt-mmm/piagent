@@ -18,12 +18,12 @@ Support matrix release hiện tại: macOS Apple Silicon + Bash và Linux x64 + 
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.2.11
+npm install -g --ignore-scripts @piagent/platform@1.2.12
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
 
-Khi seed `.pi/settings.json` cho team/repo cần audit lặp lại, giữ package source dạng pinned tag như `git:github.com/Vt-mmm/piagent@v1.2.11`. Máy cá nhân có thể dùng `git:github.com/Vt-mmm/piagent` để theo latest.
+Khi seed `.pi/settings.json` cho team/repo cần audit lặp lại, giữ package source dạng pinned tag như `git:github.com/Vt-mmm/piagent@v1.2.12`. Máy cá nhân có thể dùng `git:github.com/Vt-mmm/piagent` để theo latest.
 
 Nếu đang ở source checkout của platform, dùng helper theo channel để preview trước khi đổi:
 
@@ -99,7 +99,7 @@ install package once
 
 ```bash
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.2.11
+npm install -g --ignore-scripts @piagent/platform@1.2.12
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -282,7 +282,7 @@ Không phải daily default. Dùng khi muốn tạo sẵn `.pi` files cho projec
 bash /path/to/piagent/scripts/setup.sh /path/to/project \
   --project-only \
   --profile auto \
-  --package-source git:github.com/Vt-mmm/piagent@v1.2.11 \
+  --package-source git:github.com/Vt-mmm/piagent@v1.2.12 \
   --mcp-preset core \
   --subagents-preset safe
 ```
@@ -602,14 +602,29 @@ Không claim tiết kiệm token/cost nếu chưa có số liệu cùng scenario
 ```bash
 piagent-benchmark --dry-run
 piagent-benchmark
+piagent-benchmark --production --dry-run
 ```
 
 Lệnh mặc định tự chạy 4 scenario trên Raw Pi và Piagent, mỗi bên 3 lần; token,
 cost, model và thinking được đọc từ Pi session thay vì nhập tay. Runner chỉ cho
-phép kết luận tiết kiệm token khi quality/reliability đạt ít nhất `9/10`,
-safety/workflow đạt `10/10`, quality không giảm, có ít nhất ba cặp cùng model
-với exact usage và geometric mean của tỷ lệ fresh token `Piagent / Raw Pi`
-theo từng cặp thực sự nhỏ hơn `1`.
+phép kết luận tiết kiệm token khi quality/reliability đạt ít nhất `9/10`, safety
+đạt `10/10`, workflow đạt ngưỡng của suite (`10/10` cho smoke, ít nhất `9/10`
+cho production), quality không giảm, có ít nhất ba cặp cùng model với exact
+usage và geometric mean của tỷ lệ fresh token `Piagent / Raw Pi` theo từng cặp
+thực sự nhỏ hơn `1`.
+
+Lệnh không flag là smoke suite 24 session. Khi chốt thay đổi lớn về harness,
+model hoặc token policy, dùng `--production`: 18 scenario family, ba generated
+variant, hai surface, tổng 108 session; production gate chấm riêng sáu domain,
+profile/lifecycle/difficulty và cận trên 95% của paired token ratio. Seed/oracle
+động không đi vào agent workspace; root seed chỉ nằm trong private report để
+tái lập bằng `--seed`.
+
+Production runner mặc định retry tối đa hai lần, cách nhau 60 giây, chỉ khi process chết trước
+khi ghi usage. Timeout hoặc task đã tiêu token rồi fail vẫn là reliability failure thật,
+không được retry. Report hiện số retry và giữ chi tiết local trong
+`infrastructure-attempts.jsonl`. Dùng `--scenarios <id,id> --repeats 1` để debug
+rubric; subset không thể vượt production release gate.
 
 So sánh trực tiếp với surface `codex-cli` đã đăng nhập:
 
@@ -621,7 +636,7 @@ piagent-benchmark \
 ```
 
 Chế độ mặc định là `controlled`: Codex chạy ephemeral, chỉ được ghi trong
-workspace benchmark, dùng `CODEX_HOME` tạm để loại global `AGENTS.md`,
+workspace benchmark, dùng `CODEX_HOME` tạm mới cho từng session/retry để loại global `AGENTS.md`,
 config/rules/hooks/plugins/session cá nhân và tắt capability tùy chọn có thể
 làm lệch task offline. Credential hiện có chỉ được nối bằng symlink `auth.json`,
 không bị runner đọc hay sao chép. `--codex-mode native` đo cấu hình Codex thật
@@ -956,8 +971,8 @@ Watchdog là optional adversarial reviewer ở cuối turn, không bật mặc �
 
 | Command | Dùng để |
 |---|---|
-| `npm install -g --ignore-scripts @piagent/platform@1.2.11` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
-| `pi install git:github.com/Vt-mmm/piagent@v1.2.11` | Install pinned release cho reproducible team setup. |
+| `npm install -g --ignore-scripts @piagent/platform@1.2.12` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
+| `pi install git:github.com/Vt-mmm/piagent@v1.2.12` | Install pinned release cho reproducible team setup. |
 | `pi install git:github.com/Vt-mmm/piagent` | Install latest platform package cho máy cá nhân/sandbox. |
 | Cài exact Pi host của release, rồi `npm install -g --ignore-scripts @piagent/platform@X.Y.Z` và `piagent-install --stable` | Full update: đồng bộ host, terminal helper và Pi package. Mỗi release pin một Pi host chính xác; lấy đúng version của release đang cài trong [release/install policy](release-install-policy.md). |
 | Cài exact Pi host ghi trong release cũ, rồi helper `vPREVIOUS` và `piagent-install --stable` | Full rollback; đánh giá lại dependency findings của host cũ trước khi hạ version. |
@@ -990,8 +1005,9 @@ Watchdog là optional adversarial reviewer ở cuối turn, không bật mặc �
 | `piagent-subagents --preset safe` | Setup subagents baseline. |
 | `bash scripts/verify-local.sh` | Verify platform repo. |
 | `bash scripts/team-doctor.sh /path/to/project --strict-share` | Doctor project/team setup khi chạy từ source checkout. |
-| `piagent-benchmark` | Tự chạy, chấm và xuất paired benchmark report. |
+| `piagent-benchmark` | Chạy và chấm paired smoke benchmark 24 session. |
 | `piagent-benchmark --dry-run` | Xem execution plan, không dùng model quota. |
+| `piagent-benchmark --production --dry-run` | Xem production plan 108 session, không dùng model quota. |
 | `piagent-benchmark --surfaces piagent,codex-cli --model <provider/model> --thinking high` | So sánh Piagent với surface `codex-cli` ở controlled mode. |
 | `piagent-benchmark /path/to/project --record ...` | Legacy: ghi tay một scenario project-specific. |
 
@@ -1067,7 +1083,7 @@ Mở lại Pi session sau khi install.
 Cài lại terminal helper đúng release rồi kiểm tra `PATH`:
 
 ```bash
-npm install -g --ignore-scripts @piagent/platform@1.2.11
+npm install -g --ignore-scripts @piagent/platform@1.2.12
 command -v piagent-install
 ```
 

@@ -137,7 +137,8 @@ Ad-hoc commands can still be recorded for traceability, but they do not satisfy 
 Release-level quality/token/cost claims must use `piagent-benchmark`: paired clean
 workspaces, the same prompt/model/thinking, hidden acceptance checks, exact Pi
 usage, scope checks and Piagent workflow evidence. A token-saving verdict also
-requires quality/reliability at least `9/10`, perfect safety/workflow,
+requires quality/reliability at least `9/10`, perfect safety, the suite's
+workflow threshold (`10/10` for smoke and at least `9/10` for production),
 non-inferior quality and at least three same-model paired runs with exact usage.
 `scripts/quality-benchmark.sh` remains only as a legacy recorder for
 project-specific evidence.

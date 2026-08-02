@@ -3959,6 +3959,10 @@ function taskScopeIncludesPath(scope: string[], file: string): boolean {
   });
 }
 
+function verifierCommandInstructions(commands: string[]): string[] {
+  return commands.map((command, index) => `Verifier ${index + 1} (run as its own shell call): ${command}`);
+}
+
 function evaluateTaskGate(
   cwd: string,
   task: TaskContract | undefined,
@@ -3970,6 +3974,7 @@ function evaluateTaskGate(
 ): {
   decision: "pass" | "fail";
   missing: string[];
+  missingVerifyCommands: string[];
   warnings: string[];
   changedFileEvidence?: ReturnType<typeof taskChangedFileEvidence>;
 } {
@@ -3977,7 +3982,7 @@ function evaluateTaskGate(
   const missing: string[] = [];
   const warnings: string[] = [];
   if (!task) {
-    return { decision: "fail", missing: ["task contract"], warnings };
+    return { decision: "fail", missing: ["task contract"], missingVerifyCommands: [], warnings };
   }
   const currentDigests = options.currentDigests ?? workingTreeSnapshot(cwd) as Record<string, string>;
   const currentWorkingTreeDigest = options.currentWorkingTreeDigest ?? workingTreeEvidenceDigest(currentDigests);
@@ -4000,6 +4005,7 @@ function evaluateTaskGate(
   ))) {
     warnings.push("Verification evidence from a different working-tree snapshot is stale and is ignored.");
   }
+  let missingVerifyCommands: string[] = [];
   if (task.changeMode === "source-change" && finalGate.requirePassingVerify && plannedVerifyCommands.length > 0) {
     const passingCommands = new Set(task.verifyEvidence
       .filter((evidence) => (
@@ -4009,8 +4015,8 @@ function evaluateTaskGate(
         && evidence.workingTreeDigest === currentWorkingTreeDigest
       ))
       .map((evidence) => evidence.command.trim()));
-    const missingCommands = plannedVerifyCommands.filter((command) => !passingCommands.has(command.trim()));
-    if (missingCommands.length > 0) missing.push(`observed passing verify evidence for every command (${missingCommands.join(" | ")})`);
+    missingVerifyCommands = plannedVerifyCommands.filter((command) => !passingCommands.has(command.trim()));
+    if (missingVerifyCommands.length > 0) missing.push(`observed passing verify evidence for every configured command (${missingVerifyCommands.length} missing)`);
   }
   if (finalGate.requireTrace && task.trace.outcome !== "completed") missing.push("completed final trace");
   const incompleteSteps = (task.workPlan ?? []).filter((step) => step.status === "pending" || step.status === "in-progress" || step.status === "failed");
@@ -4027,7 +4033,7 @@ function evaluateTaskGate(
   if (task.changeMode === "read-only" && changedFileEvidence.expected.length > 0) {
     missing.push(`read-only task has observed changes (${changedFileEvidence.expected.join(", ")})`);
   }
-  return { decision: missing.length === 0 ? "pass" : "fail", missing, warnings, changedFileEvidence };
+  return { decision: missing.length === 0 ? "pass" : "fail", missing, missingVerifyCommands, warnings, changedFileEvidence };
 }
 
 function assistantMessageText(message: unknown): string {
@@ -5143,6 +5149,16 @@ function automaticTaskIntakeEligible(prompt: string, readProtectedPaths: string[
   return !signal.paths.some((candidate) => matchesProtectedPath(candidate, readProtectedPaths));
 }
 
+function manualTaskIntakeEligible(prompt: string, readProtectedPaths: string[]): boolean {
+  const text = String(prompt ?? "").trim();
+  if (!text || text.length > LONG_INPUT_CHARS) return false;
+  const signal = classifyContextTask(text);
+  if (signal.workflow !== "task" || !AUTO_INTAKE_CHANGE_INTENT.test(text)) return false;
+  if (AUTO_INTAKE_READ_ONLY_LEAD.test(text) || /\bpiagent_task_start\b/i.test(text)) return false;
+  if (signal.paths.length === 0) return true;
+  return signal.paths.some((candidate) => !matchesProtectedPath(candidate, readProtectedPaths));
+}
+
 function automaticTaskScope(prompt: string, context: Array<{ path: string }>): string[] {
   const signal = classifyContextTask(prompt);
   const explicit = signal.paths.filter((candidate) => candidate && candidate !== "." && !candidate.startsWith(".pi/"));
@@ -5212,7 +5228,9 @@ function semanticCompactionInstructions(cwd: string, sessionId: string): string 
         `Acceptance: ${task.acceptanceCriteria.join("; ") || "not recorded"}`,
         `Scope: ${task.scope.join(", ") || "not recorded"}`,
         `Changed files: ${task.changedFiles.join(", ") || "none recorded"}`,
-        `Verify commands: ${task.verifyCommands.join(" | ") || "not recorded"}`,
+        task.verifyCommands.length > 0
+          ? ["Exact verify commands:", ...verifierCommandInstructions(task.verifyCommands)].join("\n")
+          : "Exact verify commands: not recorded",
         `Outcome/blocker: ${task.trace.outcome}${task.trace.friction ? `; ${task.trace.friction}` : ""}`
       ].join("\n")
     : "No persisted task contract was found. Derive the current goal from the most recent user request.";
@@ -5574,12 +5592,16 @@ export default function piagentGuard(pi: ExtensionAPI) {
     const activeTask = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
     const readProtectedPaths = effectiveProtectedPaths(policy, loadProfileFromContext(ctx)).readProtectedPaths;
     const protectedTarget = taskSignal.paths.some((candidate) => matchesProtectedPath(candidate, readProtectedPaths));
+    const protectedOnlyTarget = taskSignal.paths.length > 0
+      && taskSignal.paths.every((candidate) => matchesProtectedPath(candidate, readProtectedPaths));
     const runtimeIntake = !activeTask && automaticTaskIntakeEligible(text, readProtectedPaths);
-    const promptGroups = protectedTarget
+    const manualIntake = !activeTask && !runtimeIntake && manualTaskIntakeEligible(text, readProtectedPaths);
+    const promptGroups = protectedOnlyTarget
       ? []
       : toolGroupsForPrompt(text).filter((group) => (
           runtimeIntake ? group !== "intake" && group !== "task" : true
         ));
+    if (manualIntake && !promptGroups.includes("intake")) promptGroups.push("intake");
     activateToolGroups(ctx, activeTask?.trace.outcome === "pending"
       ? [...promptGroups.filter((group) => group !== "intake"), ...activeTaskToolGroups(activeTask)]
       : promptGroups);
@@ -5592,6 +5614,8 @@ export default function piagentGuard(pi: ExtensionAPI) {
       riskLane: taskSignal.lane,
       intakeMode: runtimeIntake ? "runtime" : "model",
       protectedTarget,
+      protectedOnlyTarget,
+      manualIntake,
       explicitPathCount: taskSignal.paths.length,
       termCount: taskSignal.terms.length
     });
@@ -5660,10 +5684,11 @@ export default function piagentGuard(pi: ExtensionAPI) {
     const signal = classifyContextTask(query);
     const profile = loadProfileFromContext(ctx);
     const readProtectedPaths = effectiveProtectedPaths(policy, profile).readProtectedPaths;
-    const protectedTarget = signal.paths.some((candidate) => matchesProtectedPath(candidate, readProtectedPaths));
+    const protectedOnlyTarget = signal.paths.length > 0
+      && signal.paths.every((candidate) => matchesProtectedPath(candidate, readProtectedPaths));
     const activeTask = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
     const runtimeIntake = !activeTask && automaticTaskIntakeEligible(query, readProtectedPaths);
-    const compactMode = protectedTarget
+    const compactMode = protectedOnlyTarget
       ? "protected"
       : runtimeIntake || activeTask?.intakeMode === "runtime"
         ? "automatic"
@@ -5922,6 +5947,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
           ]
         : [
             "Continue the same bounded task. Re-check the requested behavior against current source, make a relevant in-scope change when required, and run every exact configured verifier.",
+            ...verifierCommandInstructions(gate.missingVerifyCommands),
             "A pre-existing passing test without a relevant source diff is not completion. Do not repeat diagnostic Piagent tools; use ordinary read/edit/bash work."
           ];
       const recovery = [
@@ -5959,6 +5985,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
       `[Piagent completion gate: NOT APPROVED]`,
       `Task ${task.taskId} (${task.taskRunId}) is still open.`,
       `Missing: ${gate.missing.join(", ") || "a completed task trace"}.`,
+      ...verifierCommandInstructions(gate.missingVerifyCommands),
       "The response below is preserved as work in progress and must not be treated as a completion report.",
       ""
     ].join("\n");
@@ -6784,6 +6811,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
         `decision: ${result.decision}`,
         `mode: ${runtime.finalGate}`,
         `missing: ${result.missing.join(", ") || "none"}`,
+        ...verifierCommandInstructions(result.missingVerifyCommands),
         `warnings: ${result.warnings.join("; ") || "none"}`
       ].join("\n");
       return { content: [{ type: "text", text }], details: { ...result, task: projected } };
@@ -7616,7 +7644,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
           text: [
             `Task ${taskId} started (${params.riskLane}, ${lifecycleMode}; attempt ${attempt}/${maxAttempts}).`,
             written.verifyCommands.length > 0
-              ? `Verify: ${written.verifyCommands.join(" | ")}.`
+              ? ["Exact verifier commands:", ...verifierCommandInstructions(written.verifyCommands)].join("\n")
               : "Verify: none (read-only).",
             lifecycleMode === "automatic-readonly"
               ? "Runtime records targeted reads and final completion automatically. Stay read-only and report cited evidence."
@@ -7686,12 +7714,13 @@ export default function piagentGuard(pi: ExtensionAPI) {
         text: "Piagent runtime intake did not persist a task contract. Use piagent_task_start once before mutation."
       };
     }
-    const verify = task.verifyCommands.length > 0 ? task.verifyCommands.join(" | ") : "none";
     return {
       started: true,
       task,
       text: [
-        `Piagent runtime task: ${task.taskId}; scope: ${task.scope.join(", ")}; verify: ${verify}.`,
+        `Piagent runtime task: ${task.taskId}; scope: ${task.scope.join(", ")}.`,
+        "Exact verifier commands:",
+        ...(task.verifyCommands.length > 0 ? verifierCommandInstructions(task.verifyCommands) : ["none"]),
         "Root project instructions are loaded. Do not re-read root AGENTS.md or inspect Piagent/platform files; work directly in relevant source/tests with ordinary tools.",
         "Finish intended edits, then run the exact verifier once; rerun only after a later mutation. Runtime records evidence and completion; do not call task-management tools."
       ].join("\n")
@@ -8212,7 +8241,13 @@ export default function piagentGuard(pi: ExtensionAPI) {
         appendTrace(ctx.cwd, blockedTrace);
         appendSessionTrace(pi, blockedTrace);
         return {
-          content: [{ type: "text", text: `Final gate blocked completion: missing ${gate.missing.join(", ")}` }],
+          content: [{
+            type: "text",
+            text: [
+              `Final gate blocked completion: missing ${gate.missing.join(", ")}`,
+              ...verifierCommandInstructions(gate.missingVerifyCommands)
+            ].join("\n")
+          }],
           details: { gate, task: nextTask },
           isError: true
         };
