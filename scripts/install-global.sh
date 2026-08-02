@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  scripts/install-global.sh [--stable|--dev|--local|--channel <stable|dev|local>] [--version <tag>] [--resolve-tag] [--package-source <source>] [--dry-run] [--with-mcp|--no-mcp] [--mcp-preset <preset>] [--with-subagents|--no-subagents] [--subagents-preset <preset>] [--with-web-access|--no-web-access] [--with-herdr] [--model-scope <preset>]
+  scripts/install-global.sh [--stable|--dev|--local|--channel <stable|dev|local>] [--version <tag>] [--resolve-tag] [--package-source <source>] [--dry-run] [--with-mcp|--no-mcp] [--mcp-preset <preset>] [--with-subagents|--no-subagents] [--subagents-preset <preset>] [--with-web-access|--no-web-access] [--with-herdr] [--model-scope <preset>|--no-model-scope]
 
 Purpose:
   Install the piagent Pi package into the current user's global Pi settings.

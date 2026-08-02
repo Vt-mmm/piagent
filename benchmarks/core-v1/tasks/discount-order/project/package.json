@@ -1,0 +1,8 @@
+{
+  "name": "piagent-benchmark-discount",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

@@ -9,7 +9,7 @@ Một thành viên mới không cần biết local path của maintainer. Luồn
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.2.10
+npm install -g --ignore-scripts @piagent/platform@1.2.11
 piagent-install --stable
 cd /path/to/project
 pi
@@ -43,7 +43,7 @@ Mặc định team dùng stable helper:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.2.10
+npm install -g --ignore-scripts @piagent/platform@1.2.11
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -79,7 +79,12 @@ Khi cần kiểm tra một project sau rollout, chạy riêng:
 piagent-update --version X.Y.Z --project /path/to/project
 ```
 
-`--project` là bước phụ: tự migrate layout cũ nếu có rồi chạy doctor strict-share. `--check` chỉ báo version, không đụng gì.
+`--project` là bước phụ: tự migrate layout cũ, Task Contract và managed block
+trong `AGENTS.md` nếu có rồi chạy doctor strict-share. Text riêng của project
+ngoài managed block được giữ nguyên. Nếu chỉ update global, runtime mới vẫn thay
+checklist template cũ trong system prompt ở memory nên task dùng logic mới ngay;
+chạy `--project` để file trên disk được dọn bền vững. `--check` chỉ báo version,
+không đụng gì.
 
 Nếu npm global mặc định của máy bị khóa quyền ở `/usr/local`, updater tự chuyển sang `~/.pi/npm-global` cho user hiện tại và in dòng `PATH` cần thêm. Không chạy doctor bằng `sudo`.
 
@@ -360,8 +365,11 @@ Chạy trên project:
 ```bash
 bash /path/to/piagent/scripts/profile-doctor.sh /path/to/project
 bash /path/to/piagent/scripts/team-doctor.sh /path/to/project --strict-share
-bash /path/to/piagent/scripts/quality-benchmark.sh /path/to/project --init
+piagent-benchmark --dry-run
 ```
+
+Maintainer chạy `piagent-benchmark` khi cần đo release/model bằng automatic paired
+suite. Lệnh dùng model quota và sẽ hỏi xác nhận trước khi bắt đầu.
 
 Nếu doctor cảnh báo `project onboarding snapshot is still pending`, mở Pi trong project và chạy `/onboard run`.
 

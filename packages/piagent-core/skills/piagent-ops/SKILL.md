@@ -1,25 +1,23 @@
 ---
 name: piagent-ops
-description: Piagent operating policy for Pi tasks across projects.
+description: Operator-invoked reference for Piagent manual intake, recovery, and high-risk task controls.
+disable-model-invocation: true
 ---
 
 # Piagent Ops Skill
 
-Use this skill for every implementation, review, planning, MCP, or tooling task in a project using Pi Agent Platform.
+Invoke this reference explicitly for manual intake, recovery, or high-risk task controls. Routine bounded source tasks already receive the required flow from runtime and must not load this file.
 
-## Mandatory steps
+## Source-task flow
 
-1. Load active project profile with `piagent_context`.
-2. Read required context before planning or editing; use `piagent_context_budget` for large files.
-3. Start source-changing work with `piagent_task_start`.
-4. Respect `protectedPaths`.
-5. Check complex/high-impact shell with `piagent_exec_policy_check`.
-6. Check non-piagent MCP/app tools with `piagent_tool_policy_check`.
-7. Use MCP only when capability is declared.
-8. Prefer small diffs with explicit verification.
-9. Run the exact command from `task.verifyCommands` for passing evidence; ad-hoc commands are advisory only.
-10. Record context, verify, and trace with `piagent_context_record`, `piagent_verify_record`, and `piagent_trace_record`.
-11. Before DONE, call `piagent_task_gate_check`.
+1. Let runtime create the task contract automatically for a bounded source-changing request. Do not call management tools for routine intake.
+2. If runtime pauses for broad, high-risk, or ambiguous scope, call `piagent_task_start` exactly once with project-relative path/glob scope and reuse an active contract.
+3. Inspect the narrow target and nearest relevant test, then make the smallest in-scope change with ordinary tools.
+4. Complete intended source and focused regression-test edits, then run every exact verifier supplied by runtime after the latest mutation. Rerun only after another mutation.
+5. Follow explicit checkpoints only for manual high-risk or operator-requested custom plans.
+6. Report changed files, exact verification, and residual risk concisely.
+
+Runtime hooks automatically enforce policy and record context, changes, current-tree verification, trace, and final-gate evidence. Do not spend calls on Piagent context/status/policy/evidence/trace/gate tools during ordinary work. Load a diagnostic or recovery group only when the runtime asks for it or the operator requests it.
 
 ## Risk gates
 
@@ -40,5 +38,4 @@ Always include:
 - what changed
 - where
 - exact verification result
-- task gate result
 - what remains manual

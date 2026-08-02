@@ -15,6 +15,7 @@ import {
   classifyContextTask,
   contextEnginePaths,
   contextIndexV2Status,
+  estimateContextTokens,
   ensureContextIndexV2,
   searchContextIndexV2
 } from "../packages/piagent-core/extensions/context-engine.js";
@@ -101,6 +102,31 @@ test("classifies task signals without calling a model", () => {
   assert.equal(result.promptHash.length, 64);
   assert.equal(classifyContextTask("Show current session token usage").workflow, "usage");
   assert.equal(classifyContextTask("Optimize token usage in src/context.ts").workflow, "task");
+  assert.deepEqual(classifyContextTask("Read `.env`, then report it").paths, [".env"]);
+  const vietnamese = classifyContextTask("Kiểm tra phân quyền thanh toán trong src/xác-thực.ts trước khi triển khai");
+  assert.equal(vietnamese.lane, "high-risk");
+  assert.equal(vietnamese.workflow, "release");
+  assert.deepEqual(vietnamese.paths, ["src/xác-thực.ts"]);
+  assert.ok(vietnamese.terms.includes("phân"));
+  assert.ok(estimateContextTokens("phân quyền bảo mật") > estimateContextTokens("plain ascii text"));
+});
+
+test("retrieves Vietnamese source signals with accented or unaccented queries", async (t) => {
+  const cwd = fixture();
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(cwd, "src", "phan-quyen.ts"), [
+    "// Kiểm tra phân quyền thanh toán trước khi phát hành.",
+    "// Đăng nhập an toàn cho người dùng nội bộ.",
+    "export function kiemTraQuyenThanhToan() { return true; }",
+    ""
+  ].join("\n"));
+  await buildContextIndexV2(cwd, { excludePatterns: [] });
+  const accented = await searchContextIndexV2(cwd, "phân quyền thanh toán", { excludePatterns: [] });
+  const unaccented = await searchContextIndexV2(cwd, "phan quyen thanh toan", { excludePatterns: [] });
+  const crossedD = await searchContextIndexV2(cwd, "dang nhap an toan", { excludePatterns: [] });
+  assert.equal(accented.results[0]?.path, "src/phan-quyen.ts");
+  assert.equal(unaccented.results[0]?.path, "src/phan-quyen.ts");
+  assert.equal(crossedD.results[0]?.path, "src/phan-quyen.ts");
 });
 
 test("fails closed when a content API omits its exclusion policy", async (t) => {
@@ -165,6 +191,7 @@ test("builds an incremental local index and retrieves symbols with hybrid eviden
 test("packs ranked snippets to a hard token budget and reports low-confidence finder fallback", async (t) => {
   const cwd = fixture();
   t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(cwd, "AGENTS.md"), "calculateInvoiceTotal invoice total calculation calculateInvoiceTotal\n");
   await buildContextIndexV2(cwd, { excludePatterns: [] });
 
   const pack = await buildContextPack(cwd, "invoice total calculation", {
@@ -174,6 +201,23 @@ test("packs ranked snippets to a hard token budget and reports low-confidence fi
   assert.ok(pack.estimatedTokens <= 500);
   assert.match(pack.text, /Repository map:/);
   assert.match(pack.text, /src\/math\.ts/);
+
+  const unfiltered = await searchContextIndexV2(cwd, "invoice total calculation", {
+    limit: 12,
+    excludePatterns: []
+  });
+  assert.ok(unfiltered.results.some((result) => result.path === "AGENTS.md"));
+
+  const snapshot = await buildContextPack(cwd, "invoice total calculation", {
+    budgetTokens: 700,
+    includePatterns: ["src/**", "tests/**"],
+    currentSnapshot: true,
+    excludePatterns: []
+  });
+  assert.ok(snapshot.estimatedTokens <= 700);
+  assert.match(snapshot.text, /Current-turn source snapshot/);
+  assert.match(snapshot.text, /calculateInvoiceTotal/);
+  assert.doesNotMatch(snapshot.text, /package\.json|AGENTS\.md/);
 
   const missing = await buildContextPack(cwd, "quantum zebra subsystem", {
     budgetTokens: 400,

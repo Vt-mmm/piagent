@@ -20,14 +20,14 @@ Runtime policy là lớp kiểm soát cách agent đọc context, gọi tool, s�
 | Project context | `piagent_context` | Load profile, settings, policy, and local state summary. |
 | Context index | `piagent_context_index_status/search/record` | Maintain a compact advisory node/edge/citation map for profile/project/tech/task navigation. |
 | Permission profile | `piagent_permission_status` | Show active `read-only`, `workspace-write`, or `trusted-full-access` boundary. |
-| Exec policy | `piagent_exec_policy_check` | Evaluate shell command risk before execution. |
-| Context budget | `piagent_context_budget` | Enforce size/count limits for context files. |
-| Tool registry | `piagent_tool_policy_check` | Check external tool capability against profile. |
-| Task contract | `piagent_task_start` | Persist scope, acceptance criteria, risk lane, and verify plan. |
-| Context manifest | `piagent_context_record` | Record files read for a task. |
-| Verify evidence | `piagent_verify_record` | Record command result only after matching an observed Pi `bash` tool result after task start. |
-| Final gate | `piagent_task_gate_check` | Validate readiness before final handoff. |
-| Trace | `piagent_trace_record` | Persist changed files, outcome, and handoff state. |
+| Exec policy | `tool_call` hook; diagnostic `piagent_exec_policy_check` | Evaluate shell command risk before execution. |
+| Context budget | lifecycle hooks; diagnostic `piagent_context_budget` | Enforce size/count limits for context files. |
+| Tool registry | `tool_call` hook; diagnostic `piagent_tool_policy_check` | Check external tool capability against profile. |
+| Task contract | automatic intake; fallback `piagent_task_start` | Persist scope, acceptance criteria, risk lane, intake mode, and verify plan before model work. |
+| Context manifest | `tool_result` hook; recovery `piagent_context_record` | Record successful targeted reads for a task. |
+| Verify evidence | `tool_result` hook; recovery `piagent_verify_record` | Bind an exact observed Pi `bash` result to the current working tree. |
+| Final gate | `message_end` hook; diagnostic `piagent_task_gate_check` | Validate projected readiness before final handoff. |
+| Trace | completion hook; recovery `piagent_trace_record` | Persist changed files, outcome, and handoff state. |
 | Usage | `piagent_usage_snapshot` | Show session/context/token usage when available. |
 
 ## Policy precedence
@@ -78,7 +78,7 @@ The runtime separates the active autonomy profile from the project profile:
 ## Task lifecycle
 
 ```text
-intake
+runtime/manual intake
   -> profile/context
   -> task contract
   -> context manifest
@@ -90,7 +90,9 @@ intake
   -> handoff
 ```
 
-This lifecycle is intentionally explicit. It makes task quality auditable and avoids relying on a long prompt as the only control layer.
+This lifecycle is intentionally explicit in persisted state but passive in the
+routine model flow. Hooks make task quality auditable without turning the state
+machine into a long sequence of model tool calls.
 
 ## Verify evidence ledger
 
@@ -100,7 +102,10 @@ Pi `bash` results are observed through the runtime `tool_result` hook and append
 .pi/piagent-state/observed-bash.jsonl
 ```
 
-The ledger stores cwd, timestamp, status, a hash of the normalized command, and redacted command text for audit. It does not need the raw command text to validate a later `piagent_verify_record` call.
+The ledger stores cwd, timestamp, status, a hash of the normalized command, and
+redacted command text for audit. Runtime uses it directly; a recovery
+`piagent_verify_record` call can also validate against it without raw command
+storage.
 
 This file-based ledger is intentionally shared by parent and subagent processes that run in the same project cwd. If a worker subagent runs `npm test`, the parent can later record that exact verify command without depending on process-local memory.
 
@@ -129,4 +134,10 @@ Ad-hoc commands can still be recorded for traceability, but they do not satisfy 
 
 ## Benchmark discipline
 
-Quality/token/cost claims must be recorded through `scripts/quality-benchmark.sh` or equivalent project evidence. The benchmark unit is a real task scenario with the same acceptance criteria and verification command.
+Release-level quality/token/cost claims must use `piagent-benchmark`: paired clean
+workspaces, the same prompt/model/thinking, hidden acceptance checks, exact Pi
+usage, scope checks and Piagent workflow evidence. A token-saving verdict also
+requires quality/reliability at least `9/10`, perfect safety/workflow,
+non-inferior quality and at least three same-model paired runs with exact usage.
+`scripts/quality-benchmark.sh` remains only as a legacy recorder for
+project-specific evidence.

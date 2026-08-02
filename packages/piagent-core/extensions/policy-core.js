@@ -1987,6 +1987,7 @@ function extractAttachedRedirectionPaths(segment) {
       index += 1;
     }
 
+    const writesFile = char === ">" || (char === "<" && next === ">");
     if ((char === ">" && (next === ">" || next === "|")) || (char === "<" && next === ">")) index += 1;
     let cursor = index + 1;
     while (/\s/.test(segment[cursor] ?? "")) cursor += 1;
@@ -2054,11 +2055,20 @@ function extractAttachedRedirectionPaths(segment) {
       target += targetChar;
       targetMask += (targetQuote || insideSubstitution) ? "1" : "0";
     }
-    if (target) paths.push({ value: target, literalMask: targetMask });
+    if (target) paths.push({ value: target, literalMask: targetMask, writesFile });
     index = Math.max(index, cursor - 1);
   }
 
   return paths;
+}
+
+export function shellHasFileWriteRedirection(command) {
+  return splitShellSegments(String(command ?? "")).some((segment) => (
+    extractAttachedRedirectionPaths(segment)
+      .filter((redirect) => redirect.writesFile)
+      .flatMap(redirectionTargetWords)
+      .length > 0
+  ));
 }
 
 export function extractShellPathCandidates(command) {

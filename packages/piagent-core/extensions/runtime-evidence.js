@@ -2,6 +2,10 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { redactSensitiveText } from "../security/sensitive-data.js";
+import { appendJsonlBounded, readJsonlTail } from "./state-retention.js";
+import { resolveLocalStatePath } from "./local-state-path.js";
+
+const MAX_OBSERVED_BASH_BYTES = 8 * 1024 * 1024;
 
 export function normalizeEvidenceCommand(command) {
   return String(command ?? "")
@@ -180,40 +184,56 @@ function persistedObservedEntry(entry) {
 }
 
 export function readObservedBashResults(filePath, options = {}) {
-  if (!filePath || !fs.existsSync(filePath)) return [];
+  if (!filePath) return [];
   const maxEntries = Number.isInteger(options.maxEntries) ? options.maxEntries : 5000;
-  const text = fs.readFileSync(filePath, "utf8");
   const entries = [];
-  for (const line of text.split(/\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    try {
-      const parsed = JSON.parse(trimmed);
-      const entry = canonicalObservedEntry(parsed);
-      if (entry) entries.push(entry);
-    } catch {
-      // Ignore a partially written/corrupt JSONL line. The ledger is advisory evidence,
-      // and the final gate remains fail-closed when no valid observation is available.
-    }
+  for (const parsed of readJsonlTail(filePath, {
+    maxEntries,
+    limit: maxEntries,
+    maxBytes: MAX_OBSERVED_BASH_BYTES,
+    projectRoot: options.projectRoot
+  })) {
+    const entry = canonicalObservedEntry(parsed);
+    if (entry) entries.push(entry);
   }
   return entries.slice(-maxEntries);
 }
 
-function pruneObservedBashFile(filePath, maxPersistedEntries) {
+function pruneObservedBashFile(filePath, maxPersistedEntries, projectRoot) {
   if (!Number.isInteger(maxPersistedEntries) || maxPersistedEntries <= 0) return;
-  const entries = readObservedBashResults(filePath, { maxEntries: maxPersistedEntries });
+  const entries = readObservedBashResults(filePath, { maxEntries: maxPersistedEntries, projectRoot });
   const lines = entries.map((entry) => JSON.stringify(persistedObservedEntry(entry))).filter(Boolean);
-  fs.writeFileSync(filePath, `${lines.join("\n")}${lines.length ? "\n" : ""}`);
+  const safePath = projectRoot
+    ? resolveLocalStatePath(projectRoot, filePath, { label: "Observed bash ledger", kind: "file" })
+    : filePath;
+  const descriptor = fs.openSync(
+    safePath,
+    fs.constants.O_WRONLY | fs.constants.O_TRUNC | (fs.constants.O_NOFOLLOW ?? 0),
+    0o600
+  );
+  try {
+    fs.writeSync(descriptor, `${lines.join("\n")}${lines.length ? "\n" : ""}`);
+    try {
+      fs.fchmodSync(descriptor, 0o600);
+    } catch {
+      // Best effort on filesystems that do not expose POSIX modes.
+    }
+  } finally {
+    fs.closeSync(descriptor);
+  }
 }
 
 export function appendObservedBashResult(filePath, entry, options = {}) {
   if (!filePath) return undefined;
   const persisted = persistedObservedEntry(entry);
   if (!persisted) return undefined;
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.appendFileSync(filePath, `${JSON.stringify(persisted)}\n`);
+  appendJsonlBounded(filePath, persisted, {
+    maxBytes: MAX_OBSERVED_BASH_BYTES,
+    mode: 0o600,
+    projectRoot: options.projectRoot
+  });
   if (Number.isInteger(options.maxPersistedEntries)) {
-    pruneObservedBashFile(filePath, options.maxPersistedEntries);
+    pruneObservedBashFile(filePath, options.maxPersistedEntries, options.projectRoot);
   }
   return persisted;
 }

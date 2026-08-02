@@ -179,8 +179,20 @@ export type WorkPlanStep = {
   title: string;
   role: OrchestrationRole;
   mode: "read-only" | "single-writer" | "review";
-  status: "pending" | "in-progress" | "done" | "skipped";
+  status: "pending" | "in-progress" | "done" | "skipped" | "failed";
   dependsOn?: string[];
+  note?: string;
+  updatedAt?: string;
+};
+
+export type TaskAttemptSummary = {
+  taskRunId: string;
+  attempt: number;
+  outcome: "pending" | "completed" | "blocked" | "partial" | "failed";
+  failedAt?: "research" | "plan" | "execute" | "verify" | "review";
+  reason?: string;
+  ruledOut?: string;
+  recordedAt: string;
 };
 
 export type OrchestrationPolicySettings = {
@@ -250,9 +262,18 @@ export type ProjectOnboardingSnapshot = {
 };
 
 export type TaskContract = {
+  schemaVersion: 2;
+  taskRunId: string;
   taskId: string;
+  sessionId: string;
+  sessionName?: string;
+  changeMode: "source-change" | "read-only";
+  attempt: number;
+  maxAttempts: number;
+  previousAttempts: TaskAttemptSummary[];
   summary: string;
   riskLane: "tiny" | "normal" | "high-risk";
+  intakeMode?: "model" | "runtime";
   expectedOutput: string;
   acceptanceCriteria: string[];
   scope: string[];
@@ -262,9 +283,10 @@ export type TaskContract = {
   contextManifest: Array<{ path: string; reason: string }>;
   memoryCitations: Array<{ path: string; reason: string }>;
   mcpCapabilities: string[];
+  verifyGroup?: string;
   verifyCommands: string[];
-  workPlan?: WorkPlanStep[];
-  reviewLenses?: ReviewLens[];
+  workPlan: WorkPlanStep[];
+  reviewLenses: ReviewLens[];
   orchestration?: {
     mode: OrchestrationMode;
     subagents: "not-used" | "optional" | "used";
@@ -272,6 +294,11 @@ export type TaskContract = {
     fieldGuidePath?: string;
     modelRoles?: Record<"planner" | "worker" | "reviewer" | "watchdog", string>;
   };
+  baselineChangedFiles: string[];
+  baselineFileDigests: Record<string, string>;
+  observedChangedFiles: string[];
+  finalWorkingTreeFiles: string[];
+  finalFileDigests: Record<string, string>;
   changedFiles: string[];
   verifyEvidence: Array<{
     command: string;
@@ -282,6 +309,7 @@ export type TaskContract = {
     observedAt?: string;
     isError?: boolean;
     matchedProfileCommand?: boolean;
+    workingTreeDigest?: string;
   }>;
   trace: {
     outcome: "pending" | "completed" | "blocked" | "partial" | "failed";
@@ -289,6 +317,10 @@ export type TaskContract = {
     notes?: string;
     recordedAt?: string;
   };
+  failedAt?: "research" | "plan" | "execute" | "verify" | "review";
+  failureReason?: string;
+  ruledOut?: string;
+  migratedFromSchemaVersion?: number;
   createdAt: string;
   updatedAt: string;
 };

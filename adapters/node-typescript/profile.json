@@ -43,9 +43,7 @@
       "test -s README.md"
     ],
     "source": [
-      "npm run type-check --if-present",
-      "npm run lint --if-present",
-      "npm test --if-present"
+      "node -e \"const s=require('./package.json').scripts||{}; const n=['type-check','typecheck','lint','test']; if(!n.some(k=>s[k])){console.error('No Node source verifier is configured');process.exit(2)}\" && npm run type-check --if-present && npm run typecheck --if-present && npm run lint --if-present && npm test --if-present"
     ]
   },
   "mcpCapabilities": [

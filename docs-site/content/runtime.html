@@ -26,6 +26,16 @@ piagent-install --version vX.Y.Z --resolve-tag</code></pre>
       <pre><code>piagent-doctor /path/to/project</code></pre>
     </article>
     <article class="command-card">
+      <header><span>Automatic benchmark</span><button class="clip-btn" data-clip="piagent-benchmark --dry-run&#10;piagent-benchmark">Lấy lệnh</button></header>
+      <pre><code>piagent-benchmark --dry-run
+piagent-benchmark</code></pre>
+    </article>
+    <article class="command-card">
+      <header><span>Compare codex-cli</span><button class="clip-btn" data-clip="piagent-benchmark --surfaces piagent,codex-cli --model openai-codex/gpt-5.6-sol --thinking xhigh">Lấy lệnh</button></header>
+      <pre><code>piagent-benchmark --surfaces piagent,codex-cli \
+  --model openai-codex/gpt-5.6-sol --thinking xhigh</code></pre>
+    </article>
+    <article class="command-card">
       <header><span>Trusted run</span><button class="clip-btn" data-clip="piagent-auto --full-access -p &quot;Run the trusted local benchmark suite.&quot;">Lấy lệnh</button></header>
       <pre><code>piagent-auto --read-only -p "Scout payment mapping. Do not edit source."
 piagent-auto --full-access -p "Run the trusted local benchmark suite."</code></pre>

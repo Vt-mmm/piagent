@@ -453,13 +453,18 @@ Search/list channels cũng được kiểm:
 
 ## Built-in platform tools
 
+The registry below is the full capability surface. Dynamic activation exposes
+only the small subset needed now. Routine tasks use task start/progress while
+lifecycle hooks handle policy and evidence; status/evidence/gate entries are
+operator diagnostics or recovery tools.
+
 | Tool | Intent |
 |---|---|
 | `piagent_context` | Active profile/context/verify/MCP/memory overview. |
-| `piagent_exec_policy_check` | Evaluate shell command before running. |
-| `piagent_context_budget` | Check candidate context files against hard caps. |
-| `piagent_tool_policy_check` | Check tool capability registration. |
-| `piagent_task_gate_check` | Check task readiness before final DONE. |
+| `piagent_exec_policy_check` | Explain the shell-policy verdict already enforced by the hook. |
+| `piagent_context_budget` | Diagnose candidate context files against hard caps. |
+| `piagent_tool_policy_check` | Diagnose tool capability registration. |
+| `piagent_task_gate_check` | Diagnose missing final proof during recovery. |
 | `piagent_memory_status` | Project memory policy/files/rules. |
 | `piagent_memory_search` | Keyword search `.pi/memory` markdown. |
 | `piagent_memory_note` | Append explicit durable memory note. |
@@ -473,9 +478,10 @@ Search/list channels cũng được kiểm:
 | `piagent_profile_tech_apply` | Apply profile + selected role tech stack and Context7 placeholders. |
 | `piagent_profile_tech_context_record` | Record a concise Context7 evidence snapshot for a selected tech. |
 | `piagent_task_start` | Create Task Implementation Contract. |
-| `piagent_context_record` | Record context manifest for task. |
-| `piagent_verify_record` | Record verify evidence only when it matches an observed Pi bash result after task start. Passing gate also requires exact match with `task.verifyCommands`. |
-| `piagent_trace_record` | Record handoff/final trace. |
+| `piagent_task_progress` | Complete the normal review step or explicit custom/high-risk checkpoints. |
+| `piagent_context_record` | Recovery fallback for context manifest evidence. |
+| `piagent_verify_record` | Recovery fallback for an exact observed Pi bash result bound to the current tree. |
+| `piagent_trace_record` | Recovery/high-risk fallback for handoff or blocker state. |
 
 ## Core capabilities
 

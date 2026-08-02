@@ -146,19 +146,16 @@ piagent-model-scope --preset full --default-model anthropic/claude-sonnet-5:xhig
 
 ## Benchmark rule
 
-Không claim “Pi + provider X tiết kiệm hơn provider Y” bằng cảm giác. Chạy cùng scenario rồi ghi bằng:
+Không claim “Pi + provider X tiết kiệm hơn provider Y” bằng cảm giác. Pin model
+và thinking rồi chạy automatic paired benchmark:
 
 ```bash
-piagent-usage /path/to/project
-bash scripts/quality-benchmark.sh /path/to/project --record \
-  --scenario bounded-source-fix \
-  --surface pi \
-  --result pass \
-  --tokens <total> \
-  --cost <cost> \
-  --verify "<verify-command>" \
-  --notes "provider/model/thinking=<provider/model:thinking>"
+piagent-benchmark --dry-run --model <provider/model> --thinking high
+piagent-benchmark --model <provider/model> --thinking high
 ```
+
+Runner đọc model/thinking/token/cost từ Pi session và chỉ kết luận efficiency
+khi quality/safety gates vẫn đạt. Dùng một report riêng cho mỗi model preset.
 
 So sánh tối thiểu:
 

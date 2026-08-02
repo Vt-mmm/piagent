@@ -8,6 +8,8 @@ Pi Agent Platform được đóng gói như một reusable Pi package để dùn
 
 ```text
 packages/piagent-core/
+├─ benchmark/
+│  └─ benchmark-core.js    ← suite validation, scoring, reports
 ├─ capabilities/
 │  └─ capability-core.js
 ├─ extensions/
@@ -89,7 +91,7 @@ Manifest data never executes code. Invalid paths, symbolic links, dependency cyc
 | Backend-readonly to frontend | `/workflow be-to-fe` |
 | Source cache | `piagent-source-cache` + `piagent_source_checkout` |
 | Subagent roles | `piagent-scout`, `piagent-planner`, `piagent-worker`, `piagent-reviewer`, `piagent-oracle` |
-| Quality benchmark | `scripts/quality-benchmark.sh` |
+| Quality benchmark | `scripts/benchmark-runner.mjs` + `benchmark/benchmark-core.js`; legacy recorder: `scripts/quality-benchmark.sh` |
 | Capability catalog | `packs/*/pack.json` + `catalog/capabilities.json` |
 | Capability resolver | `capability-core.js` + `piagent-capabilities` |
 

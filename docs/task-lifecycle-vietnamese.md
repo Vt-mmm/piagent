@@ -1,139 +1,143 @@
-# Vòng đời một task: research → plan → execute → verify → loop
+# Vong doi task trong Pi Agent Platform
 
-## Mục tiêu
+## Muc tieu
 
-Tài liệu này mô tả một task chạy qua platform từ đầu tới cuối, và nói thẳng harness hiện tại đỡ được khâu nào, chưa đỡ được khâu nào. Mọi nhận định đều dẫn tới dòng code cụ thể, để khi code đổi thì tài liệu này sai một cách kiểm tra được chứ không sai âm thầm.
+Tu `v1.2.11`, mot source task duoc quan ly theo chuoi khép kín:
 
-Contract fields và enforcement level nằm ở [task-implementation-contract.md](task-implementation-contract.md). Tài liệu này nói về *luồng*, không lặp lại field.
+```text
+session name -> task contract v2 -> scoped work plan -> observed changes
+-> exact verification -> immutable outcome -> retry evidence
+```
 
-## Năm pha
+Runtime guard thi hanh chuoi nay. Prompt chi huong dan agent, khong phai lop
+enforcement chinh.
 
-### 1. Research — hiểu trước khi hứa
+## Luong lam viec hang ngay
 
-Đầu vào: yêu cầu của người dùng, tài liệu spec, code sẵn có.
+1. Mo project bang Pi va dat ten session theo task noi bo.
+2. Neu quen dat luc mo, chay `/name <task/session name>` hoac `/setname`.
+3. Chay `/workflow task <yeu cau>` de implement, hoac `/workflow scout <yeu cau>`
+   de chi doc.
+4. Runtime tu tao Task Implementation Contract cho task nho, ro scope va gan voi
+   dung Pi session truoc model turn dau tien.
+5. Agent lam viec ngay bang read/edit/bash thuong va chay exact verifier runtime
+   cung cap. Chi task rong, high-risk hoac scope mo ho moi can goi
+   `piagent_task_start` mot lan. Runtime tu ghi context, changed files, verify,
+   trace va gate.
+6. Neu dong terminal, resume dung session cu bang `pi --continue`, `pi --resume`
+   hoac `pi --session <id-or-file>`. Task dang mo duoc map lai theo session id va
+   custom trace cua Pi; session name van dung cho Agent Watch/report.
 
-Harness cung cấp:
+Mot Pi session chi thuoc mot task, ke ca sau khi task da completed/failed. Task
+moi hoac retry phai dung session moi. Quy tac nay ngan hai cong viec tron prompt,
+usage va changed-file evidence vao mot report.
 
-- `/workflow scout` — pha read-only, không được sửa source. Dùng để map payment/auth/BE contract trước khi quyết có làm hay không. Alias `/scout` vẫn chạy.
-- `piagent_context_index_search` — bản đồ node/edge/citation compact để tìm điểm vào repo. Kết quả là **advisory**: phải mở file thật và verify trước khi sửa.
-- `piagent_memory_search` + `piagent_memory_citation_record` — Field Guide và memory của project, cũng advisory, cũng phải verify lại.
-- `piagent_source_checkout` — cache repo ngoài để đọc có mục tiêu.
-- `piagent_document_read` — đọc spec `.md`/`.pdf`/`.docx` từ project hoặc folder đã cấp trong `additionalReadRoots` (ví dụ `~/Downloads`). Nội dung trả về là **dữ liệu**, không phải chỉ thị.
-- Context7 qua MCP cho tài liệu vendor. Ghi snapshot ngắn bằng `piagent_profile_tech_context_record`, không paste nguyên khối doc vào file project.
+## Nam pha
 
-Ràng buộc: `/workflow task` chạy `piagent_context_preflight` một lần trước khi nạp context. Với `/workflow scout`, preflight chỉ bắt buộc cho scout rộng, cross-module hoặc high-risk. Nếu nó trả `fresh-session` thì dừng nạp context ở session này.
+### 1. Research
 
-### 2. Plan — biến hiểu biết thành cam kết kiểm được
+- `/workflow scout` tao luong read-only khi chua can sua source.
+- Pi Context Engine tim file/symbol/test bang FTS, import graph va Git signals.
+- Memory, Context7, source checkout va document reader la advisory evidence;
+  agent van phai doc file hien tai truoc khi sua.
+- Auto-context chi inject mot bounded pack cho moi prompt trong tung session.
+  Goi pack lai voi cung query se tra reuse marker, khong nhan doi payload/token.
 
-`piagent_task_start` dựng Task Implementation Contract. Đây là chỗ task trở thành thứ có thể chấm điểm:
+### 2. Plan
 
-| Field | Nó ràng buộc điều gì |
+Automatic intake hoac fallback `piagent_task_start` tao contract schema v2 gom:
+
+| Nhom | Field chinh |
 |---|---|
-| `riskLane` | `tiny` \| `normal` \| `high-risk` — quyết định mức gate |
-| `acceptanceCriteria` | Định nghĩa "xong", viết trước khi làm |
-| `scope` / `outOfScope` | Ranh giới, để review biết cái gì là lạc đề |
-| `protectedPaths` | Đường không được đụng |
-| `verifyCommands` | **Lệnh chính xác** sẽ dùng làm bằng chứng |
-| `reviewLenses` | `correctness` \| `tests` \| `scope` \| `security` \| `docs` \| `release` \| `package` |
-| `workPlan` | Cây task tối đa 12 node, mỗi node có `role` và `mode` |
+| Identity | `taskRunId`, `taskId`, `sessionId`, `sessionName`, `intakeMode` |
+| Retry | `attempt`, `maxAttempts`, `previousAttempts` |
+| Boundary | `changeMode`, `scope`, `outOfScope`, `protectedPaths` |
+| Quality | `acceptanceCriteria`, `verifyGroup`, `verifyCommands`, `reviewLenses` |
+| Execution | `workPlan`, `orchestration` |
+| Evidence | context, memory, baseline/observed/final file digests, verify, trace |
 
-`workPlan[].mode` là `read-only` \| `single-writer` \| `review`. Mặc định là single-writer: chỉ một tác nhân được ghi, trừ khi người dùng yêu cầu rõ parallel writers.
+Source task bat buoc nam trong Git working tree. Khong co Git thi runtime tu
+choi source-change vi khong the chung minh file nao da doi; read-only scout van
+hoat dong.
 
-`piagent_orchestration_policy` chỉ cần gọi khi task có khả năng hưởng lợi từ delegation. Chính sách là solo-first — subagent chỉ dùng khi việc đó độc lập và nặng phần đọc. Lane `tiny` dùng work plan hai bước parent-only: implement và verify.
+Work plan toi da 12 step, dependency khong duoc thieu, tu tham chieu hoac tao
+cycle. Source task `tiny` tu dong hoan tat lifecycle; source task `normal` tu
+dong ghi objective evidence va giu mot explicit review step. Read-only task dung
+plan `scout`/`review`, khong con step `implement` mau thuan. Task high-risk/custom
+van giu checkpoint thu cong. Chi dung subagent cho scout, planning hoac review
+doc lap. Mot write set chi co mot owner.
 
-### 3. Execute — làm trong hàng rào
+### 3. Execute
 
-Trong lúc làm, guard chặn trước khi thực thi, không phải sau:
+Truoc khi co task contract, project da onboard chi cho inspection co gioi han;
+write/edit va shell command that su ghi file bi chan. Sau khi task bat dau:
 
-- Protected path: chặn ở `read`, `write`, `edit`, `grep`, `find`, `ls`, tool MCP, và cả đường vòng qua shell.
-- `piagent_exec_policy_check` — bắt buộc trước lệnh shell vượt quá read/list/test.
-- `piagent_tool_policy_check` — bắt buộc trước tool MCP/app ngoài piagent.
-- `piagent_context_budget` — kiểm trước khi nạp file lớn hoặc lạ.
-- `piagent_context_record` — ghi lại đọc file nào, vì lý do gì.
+- direct tool va MCP write phai nam trong `scope`;
+- read-only task chan moi project/external mutation;
+- protected path, secret redaction, destructive command va external confirmation
+  van manh hon task gate;
+- tool result ghi nhan file da quan sat thay doi;
+- file da dirty truoc task chi tinh la thay doi cua task neu digest sau task khac
+  baseline;
+- rename ghi nhan ca source va destination.
 
-### 4. Verify — chỗ mạnh nhất của harness
+### 4. Verify va complete
 
-Đây là phần được thiết kế kỹ nhất, và đáng để hiểu chính xác.
+Moi lenh trong `task.verifyCommands` phai duoc Pi `bash` chay that sau thoi diem
+task bat dau. Hook `tool_result` tu ghi evidence khi command identity khop plan;
+tool `piagent_verify_record` chi con la recovery surface va van phai khop ledger
+`.pi/piagent-state/observed-bash.jsonl`.
 
-Bằng chứng verify **không phải** thứ agent tự khai. Guard nghe `tool_result` của Pi và ghi vào sổ `.pi/piagent-state/observed-bash.jsonl` ([`piagent-guard.ts:1378`](../packages/piagent-core/extensions/piagent-guard.ts)). `piagent_verify_record` chỉ nhận bằng chứng khớp được với một quan sát thật, sau thời điểm task bắt đầu.
+Gate completed yeu cau dong thoi:
 
-`evaluateTaskGate` ([`piagent-guard.ts:3125`](../packages/piagent-core/extensions/piagent-guard.ts)) đòi ba điều kiện cộng dồn để một bằng chứng được tính là **pass**:
+- context manifest theo policy;
+- moi verify command co observed result `exitCode=0` va exact match;
+- work plan khong con `pending`, `in-progress` hoac `failed`;
+- declared changed files khop final digest sau baseline; file da revert khong tinh;
+- khong co file ngoai `scope`;
+- final trace la `completed`.
 
-```
-evidence.exitCode === 0
-&& evidence.observed === true            // đã quan sát được, không phải khai báo
-&& evidence.matchedProfileCommand === true  // khớp đúng verifyCommands của task
-```
+`true`, `echo ok`, `npm test || true` hoac command gan giong khong thay the lenh
+verify da chot. Hard completion hook tu project final state, check gate va ghi
+completed trace. Evidence verify chi hop le cho working-tree digest hien tai;
+sua tiep sau verify buoc phai chay lai. Neu automatic/assisted task dung som,
+runtime gui dung mot follow-up correction turn voi missing reasons that, sau do
+khong loop.
 
-Thiếu bất kỳ điều nào thì bằng chứng vẫn được ghi, nhưng chỉ ở mức advisory và gate không tính. Cụ thể:
+Sau terminal outcome (`completed`, `blocked`, `partial`, `failed`), contract la
+immutable. Agent khong the chen them context/verify/change evidence de viet lai
+lich su.
 
-- `observed !== true` → cảnh báo "Unobserved verify evidence is ignored by the passing verify gate."
-- `observed === true` nhưng lệnh không khớp `verifyCommands` → "advisory only".
+### 5. Fail va retry
 
-Nghĩa là `true`, `echo ok`, `npm test || true` không mua được chữ "done". Đó là chủ ý: một cổng có thể lách được thì tệ hơn không có cổng, vì nó vẫn hiện màu xanh.
+`workPlan[].status` co `failed`. Final failure ghi `failedAt`, `failureReason`,
+`ruledOut` va friction. Session moi dung cung `taskId` tao attempt tiep theo va
+mang theo toi da 10 attempt summaries.
 
-`piagent_task_gate_check` trả `pass` hoặc `fail` kèm danh sách `missing`. Gate fail thì outcome là `blocked`/`partial`, **không phải** `done`.
+`maxAttempts` duoc khoa tu attempt dau (mac dinh 3, toi da 10). Sua tay attempt
+sau khong the nang tran. Completed task khong duoc mo lai bang cung `taskId`;
+cong viec moi phai co ID moi.
 
-### 5. Fail → loop lại
+## Migration va local state
 
-Đây là chỗ đứt. Xem mục [Chỗ đứt, nói chính xác](#chỗ-đứt-nói-chính-xác).
+Session start va `piagent-update --project <path>` deu nhan biet contract v1.
+Migration:
 
-## Pi hiện tại xử lý tới đâu
+- preview truoc khi ghi;
+- tu choi toan bo neu co state unreadable/corrupt;
+- tao contract v2 roi archive v1, co the chay lai sau interruption;
+- chi map legacy task vao session resume khi custom Pi trace chung minh dung task;
+- khong yeu cau onboard lai project.
 
-| Pha | Trạng thái | Căn cứ |
-|---|---|---|
-| Research | **Đủ** | `/workflow scout`, context index, memory, Context7, source checkout |
-| Plan | **Đủ** | `piagent_task_start` + 19 field contract + `workPlan` |
-| Execute | **Đủ** | Chặn trước thực thi ở mọi đường: tool, MCP, shell |
-| Verify | **Mạnh** | Bằng chứng phải quan sát được và khớp lệnh, không tự khai được |
-| Fail → loop | **Nửa vời** | Phát hiện được, từ chối nhận done được, nhưng không mang được state qua lần sau |
+State, telemetry va capture nam trong `.pi/piagent-state/`, mode owner-only. Moi
+writer dung chung local-state boundary, tu choi `.pi`/ancestor symlink thoat
+project. JSONL duoc rotate co lock lien process; capture gioi han 500 file,
+128 MiB va 30 ngay.
 
-### Chỗ đứt, nói chính xác
+## Lien quan
 
-Harness **phát hiện** thất bại tốt:
-
-- `trace.outcome` có `failed`, `blocked`, `partial` bên cạnh `completed`.
-- `task.md` yêu cầu verify không chạy được thì dừng và báo blocker chính xác, không được gọi là done.
-- Gate trả `missing` liệt kê đúng thứ còn thiếu.
-
-Nhưng nó **không mang được gì sang lần thử sau**:
-
-1. **Contract không có bộ đếm lần thử.** Không có `attempt`, không có `previousAttempts`. Lần thử thứ hai bắt đầu như thể chưa từng có lần một.
-2. **`workPlan[].status` không có giá trị `failed`.** Enum chỉ là `pending` \| `in-progress` \| `done` \| `skipped` ([`schemas/task-contract.schema.json`](../schemas/task-contract.schema.json)). Một node đã thử và hỏng chỉ có thể ghi là `skipped` — mất nghĩa.
-3. **Không có chỗ ghi giả thuyết đã loại.** Verify fail vì lý do gì, đã thử cách nào, tại sao không được — không field nào giữ. Lần sau agent rất dễ thử lại đúng cách đã hỏng.
-4. **Không có trần số vòng.** Không có gì chặn loop vô hạn ngoài sự kiên nhẫn của người dùng.
-
-`/review-loop` có tồn tại và đúng là loop, nhưng nó đến từ add-on `pi-subagents` chứ không phải platform này, và nó lặp vòng review→fix, không phải vòng research→plan→execute→verify.
-
-### Đề xuất để khép vòng
-
-Thêm vào contract, không đổi thứ đang có:
-
-```jsonc
-{
-  "attempt": 2,                    // lần thử hiện tại
-  "maxAttempts": 3,                // trần, gate fail cứng khi vượt
-  "previousAttempts": [
-    {
-      "attempt": 1,
-      "failedAt": "verify",        // research | plan | execute | verify
-      "reason": "npm test — 3 test đỏ ở auth/session",
-      "ruledOut": "Không phải do token expiry; đã kiểm bằng fixture cố định giờ."
-    }
-  ]
-}
-```
-
-Và mở `workPlan[].status` thêm giá trị `failed`.
-
-Chi phí: một field mảng trong schema, một nhánh trong `evaluateTaskGate`, một bước trong `task.md`. Đổi lại, lần thử thứ hai đọc được lần thứ nhất đã loại trừ gì — đó là toàn bộ giá trị của việc loop thay vì làm lại.
-
-Đây là đề xuất, chưa implement. Cần chốt trước khi làm.
-
-## Liên quan
-
-- [task-implementation-contract.md](task-implementation-contract.md) — field và enforcement level
-- [workflow-recipes.md](workflow-recipes.md) — công thức cho từng loại việc
-- [runtime-policy-design.md](runtime-policy-design.md) — thiết kế lớp policy
-- [security-threat-model.md](security-threat-model.md) — giả định, vector, và rủi ro còn lại
-- [command-reference-vietnamese.md](command-reference-vietnamese.md) — giải thích từng lệnh
+- [Task Implementation Contract](task-implementation-contract.md)
+- [Runtime harness standard](runtime-harness-standard.md)
+- [Pi Context Engine](context-engine.md)
+- [Command reference](command-reference-vietnamese.md)
+- [Usage observability](usage-observability.md)

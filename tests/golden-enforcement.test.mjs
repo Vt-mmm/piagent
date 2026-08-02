@@ -10,6 +10,7 @@ import {
   matchesProtectedPath
 } from "../packages/piagent-core/extensions/policy-core.js";
 import { claimedExitMatchesObserved, commandMatchesVerifyPlan } from "../packages/piagent-core/extensions/runtime-evidence.js";
+import { taskContractValidationErrors } from "../packages/piagent-core/extensions/task-state.js";
 import { containsSensitiveText, redactSensitiveText } from "../packages/piagent-core/security/sensitive-data.js";
 import {
   validateCapabilityPack,
@@ -47,6 +48,12 @@ function stampTimestamps(value) {
 
 function loadFixture(name) {
   return stampTimestamps(JSON.parse(fs.readFileSync(path.join(repositoryRoot, "evals", "fixtures", name), "utf8")));
+}
+
+function validateTaskContract(input, sourceName) {
+  const errors = taskContractValidationErrors(input);
+  if (errors.length > 0) throw new Error(`${sourceName}: ${errors.join("; ")}`);
+  return input;
 }
 
 // These cases exist to make a refactor argue with the rule rather than with a
@@ -174,7 +181,8 @@ describe("golden enforcement decisions", () => {
       "capability-pack": validateCapabilityPack,
       "capability-recipe": validateCapabilityRecipe,
       "eval-scenario": validateEvalScenario,
-      "action-proposal": validateExternalActionProposal
+      "action-proposal": validateExternalActionProposal,
+      "task-contract": validateTaskContract
     };
 
     for (const [name, validate] of Object.entries(validators)) {

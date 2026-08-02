@@ -36,7 +36,8 @@ function stageGlobalInstall({
   helperInstallLands = registryVersion,
   npmViewFails = false,
   npmInstallFails = "",
-  defaultPrefixWritable = true
+  defaultPrefixWritable = true,
+  activePrefixWritable = true
 } = {}) {
   const root = temporaryDirectory();
   const platformRoot = path.join(root, "lib", "node_modules", "@piagent", "platform");
@@ -139,6 +140,7 @@ console.log(JSON.stringify({
 }));
 `);
   for (const file of ["npm", "pi"]) fs.chmodSync(path.join(bin, file), 0o755);
+  if (!activePrefixWritable) fs.chmodSync(path.join(root, "lib", "node_modules"), 0o555);
 
   return { root, platformRoot, bin, log };
 }
@@ -229,8 +231,19 @@ describe("piagent-update", () => {
     assert.match(result.stdout, /PASS: updated to v1\.1\.4/);
   });
 
-  it("uses a user-writable npm prefix when the default global root is locked", () => {
+  it("keeps updates in the active writable npm prefix when npm config points elsewhere", () => {
     const stage = stageGlobalInstall({ defaultPrefixWritable: false });
+    const result = runUpdate(stage, []);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /active helper is installed under/);
+    assert.doesNotMatch(result.stdout, /PATH note/);
+    assert.equal(result.installs.some((line) => line.includes(`--prefix ${stage.root}`) && line.includes("@piagent/platform@1.1.4")), true, result.installs.join("\n"));
+    assert.match(result.stdout, new RegExp(`${stage.root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}.*install-global\\.sh --stable`));
+  });
+
+  it("uses a user-writable npm prefix when both configured and active roots are locked", () => {
+    const stage = stageGlobalInstall({ defaultPrefixWritable: false, activePrefixWritable: false });
     const result = runUpdate(stage, []);
 
     assert.equal(result.status, 0, result.stderr);

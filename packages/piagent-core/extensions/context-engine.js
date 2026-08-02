@@ -8,7 +8,9 @@ import {
   contextIndexExcludePolicyVersion,
   normalizeContextIndexExcludePatterns
 } from "./context-index-policy.js";
-import { matchesProtectedPath } from "./policy-core.js";
+import { matchesAnyPath, matchesProtectedPath } from "./policy-core.js";
+import { appendJsonlBounded, readJsonlTail } from "./state-retention.js";
+import { ensurePrivateStateDirectory, resolveLocalStatePath } from "./local-state-path.js";
 
 const INDEX_SCHEMA_VERSION = 2;
 const TELEMETRY_SCHEMA_VERSION = 1;
@@ -18,6 +20,7 @@ const DEFAULT_MAX_FILES = 8_000;
 const DEFAULT_PACK_TOKENS = 6_000;
 const MAX_TELEMETRY_EVENTS = 50_000;
 const MAX_TELEMETRY_READ_BYTES = 32 * 1024 * 1024;
+const MAX_TELEMETRY_FILE_BYTES = 32 * 1024 * 1024;
 const SOURCE_EXTENSIONS = new Set([
   ".c", ".cc", ".cpp", ".cs", ".css", ".dart", ".ex", ".exs", ".go", ".h", ".hpp",
   ".html", ".java", ".js", ".jsx", ".kt", ".kts", ".lua", ".m", ".md", ".mdx",
@@ -47,7 +50,8 @@ const STOP_TERMS = new Set([
   "about", "after", "agent", "before", "build", "change", "check", "code", "could", "file",
   "from", "have", "into", "just", "make", "need", "please", "project", "should", "task",
   "that", "them", "then", "there", "these", "this", "through", "update", "using", "want",
-  "what", "when", "where", "which", "with", "would"
+  "what", "when", "where", "which", "with", "would",
+  "anh", "cho", "cua", "em", "giup", "lam", "minh", "muon", "nay", "trong", "voi"
 ]);
 
 let sqliteModulePromise;
@@ -79,7 +83,17 @@ function requireExplicitExcludePatterns(options, operation) {
 }
 
 export function estimateContextTokens(value) {
-  return Math.max(0, Math.ceil(String(value ?? "").length / 4));
+  const text = String(value ?? "");
+  let asciiChars = 0;
+  let nonAsciiBytes = 0;
+  for (const character of text) {
+    if (character.codePointAt(0) <= 0x7f) asciiChars += 1;
+    else nonAsciiBytes += Buffer.byteLength(character, "utf8");
+  }
+  // ASCII prose/code averages close to four characters per token. UTF-8 text
+  // is estimated more conservatively so Vietnamese, CJK, and emoji packs do not
+  // silently exceed the provider budget.
+  return Math.max(0, Math.ceil(asciiChars / 4 + nonAsciiBytes / 2.5));
 }
 
 export function contextEnginePaths(cwd) {
@@ -93,7 +107,7 @@ export function contextEnginePaths(cwd) {
 }
 
 function hardenContextDatabaseArtifacts(cwd) {
-  const database = contextEnginePaths(cwd).database;
+  const database = resolveLocalStatePath(cwd, contextEnginePaths(cwd).database, { label: "Context index database" });
   for (const artifact of [database, `${database}-wal`, `${database}-shm`]) {
     try {
       const stat = fs.lstatSync(artifact);
@@ -131,15 +145,20 @@ async function loadSqlite() {
 
 async function openDatabase(cwd, { create = true } = {}) {
   const paths = contextEnginePaths(cwd);
-  if (!create && !fs.existsSync(paths.database)) return undefined;
-  fs.mkdirSync(paths.root, { recursive: true, mode: 0o700 });
-  if (!fs.lstatSync(paths.root).isDirectory()) {
-    throw new Error(`Context index storage root must be a directory: ${paths.root}`);
+  const database = resolveLocalStatePath(cwd, paths.database, { label: "Context index database" });
+  if (!create && !fs.existsSync(database)) return undefined;
+  if (create) ensurePrivateStateDirectory(cwd, paths.root, "Context index storage root");
+  else {
+    const existingRoot = resolveLocalStatePath(cwd, paths.root, { label: "Context index storage root", kind: "directory" });
+    try {
+      fs.chmodSync(existingRoot, 0o700);
+    } catch {
+      // Best effort on filesystems that do not expose POSIX modes.
+    }
   }
-  fs.chmodSync(paths.root, 0o700);
   hardenContextDatabaseArtifacts(cwd);
   const descriptor = fs.openSync(
-    paths.database,
+    database,
     fs.constants.O_RDWR
       | (create ? fs.constants.O_CREAT : 0)
       | (fs.constants.O_NOFOLLOW ?? 0),
@@ -151,7 +170,7 @@ async function openDatabase(cwd, { create = true } = {}) {
     fs.closeSync(descriptor);
   }
   const { DatabaseSync } = await loadSqlite();
-  const db = new DatabaseSync(paths.database);
+  const db = new DatabaseSync(database);
   try {
     db.exec(`
       PRAGMA journal_mode = WAL;
@@ -455,18 +474,30 @@ function resolveImportTarget(sourcePath, specifier, files) {
   return candidates.map(normalizeRelative).find((candidate) => files.has(candidate));
 }
 
+function foldSearchSignal(value) {
+  return String(value ?? "")
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .replace(/[đĐ]/g, (character) => character === "Đ" ? "D" : "d")
+    .toLowerCase();
+}
+
 function tokenizeQuery(query) {
   const expanded = String(query ?? "")
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .replaceAll("_", " ")
     .replaceAll("-", " ");
-  const terms = expanded.match(/[A-Za-z][A-Za-z0-9]{1,63}/g) ?? [];
-  return [...new Set(terms.map((term) => term.toLowerCase()).filter((term) => !STOP_TERMS.has(term)))].slice(0, 16);
+  const terms = expanded.match(/[\p{L}][\p{L}\p{N}]{1,63}/gu) ?? [];
+  return [...new Set(terms
+    .map((term) => term.toLowerCase())
+    .filter((term) => !STOP_TERMS.has(foldSearchSignal(term))))].slice(0, 16);
 }
 
 function queryPathCandidates(query) {
-  const values = String(query ?? "").match(/(?:^|[\s"'`(])((?:\.{0,2}\/)?[A-Za-z0-9_.@-]+(?:\/[A-Za-z0-9_.@-]+)+|[A-Za-z0-9_.@-]+\.[A-Za-z0-9]{1,8})(?=$|[\s"'`),:])/g) ?? [];
-  return values.map((value) => normalizeRelative(value.trim().replace(/^["'`(]+|["'`),:]+$/g, ""))).filter(Boolean);
+  const pattern = /(?:^|[\s"'`(])((?:\.{0,2}\/)?[\p{L}\p{N}_.@-]+(?:\/[\p{L}\p{N}_.@-]+)+|[\p{L}\p{N}_.@-]+\.[\p{L}\p{N}]{1,8}|\.[\p{L}\p{N}_@-]{1,32})(?=$|[\s"'`),:])/gu;
+  return [...String(query ?? "").matchAll(pattern)]
+    .map((match) => normalizeRelative(match[1]))
+    .filter(Boolean);
 }
 
 function ftsQuery(terms) {
@@ -488,18 +519,20 @@ function gitChangedFiles(cwd) {
 export function classifyContextTask(prompt) {
   const text = String(prompt ?? "").trim();
   const lower = text.toLowerCase();
+  const folded = foldSearchSignal(text);
   const paths = queryPathCandidates(text);
   const terms = tokenizeQuery(text);
   let workflow = "task";
   if (/^\/?(?:scout|review|plan|discuss)\b/.test(lower)) workflow = lower.match(/^\/?([a-z-]+)/)?.[1] ?? "task";
-  if (/\b(onboard|profile setup|first-read)\b/.test(lower)) workflow = "onboard";
-  if (/\b(commit|pull request|\bpr\b|release|publish|deploy)\b/.test(lower)) workflow = "release";
+  if (/\b(onboard|profile setup|first-read|cau hinh profile|khoi tao project)\b/.test(folded)) workflow = "onboard";
+  if (/\b(commit|pull request|pr|release|publish|deploy|phat hanh|trien khai)\b/.test(folded)) workflow = "release";
   const usageIntent = /^\/?(?:usage|session)\b/.test(lower)
     || /\b(?:show|check|view|report|current|session|how many)\b.{0,48}\b(?:usage|tokens?|cost|context stats|efficiency)\b/.test(lower)
-    || /\b(?:usage|tokens?|cost|context stats|efficiency)\b.{0,48}\b(?:show|check|view|report|current|session)\b/.test(lower);
+    || /\b(?:usage|tokens?|cost|context stats|efficiency)\b.{0,48}\b(?:show|check|view|report|current|session)\b/.test(lower)
+    || /\b(?:xem|kiem tra|bao cao|hien tai|phien)\b.{0,48}\b(?:usage|token|chi phi|context)\b/.test(folded);
   if (usageIntent) workflow = "usage";
-  const highRisk = /\b(auth|authorization|credential|database|deploy|encryption|migration|payment|permission|production|release|secret|security|token)\b/.test(lower);
-  const tiny = text.length < 220 && (paths.length > 0 || /\b(rename|typo|label|copy|one line|small)\b/.test(lower));
+  const highRisk = /\b(auth|authorization|credential|database|deploy|encryption|migration|payment|permission|production|release|secret|security|token|bao mat|phan quyen|xac thuc|du lieu|co so du lieu|thanh toan|ma hoa|trien khai|phat hanh)\b/.test(folded);
+  const tiny = text.length < 220 && (paths.length > 0 || /\b(rename|typo|label|copy|one line|small|doi ten|sua chu|nhan|mot dong|nho)\b/.test(folded));
   return {
     workflow,
     lane: highRisk ? "high-risk" : tiny ? "tiny" : "normal",
@@ -677,7 +710,8 @@ export async function contextIndexV2Status(cwd, options = {}) {
   const paths = contextEnginePaths(cwd);
   const projectRoot = fs.realpathSync.native(cwd);
   const directoryCache = new Map();
-  if (!fs.existsSync(paths.database)) {
+  const database = resolveLocalStatePath(cwd, paths.database, { label: "Context index database" });
+  if (!fs.existsSync(database)) {
     return {
       schemaVersion: INDEX_SCHEMA_VERSION,
       exists: false,
@@ -820,9 +854,9 @@ function personalizedPageRank(importRows, seeds, iterations = 8) {
 }
 
 function retrievalFeedback(cwd) {
-  const target = contextEnginePaths(cwd).telemetry;
   let signature = "missing";
   try {
+    const target = resolveLocalStatePath(cwd, contextEnginePaths(cwd).telemetry, { label: "Context telemetry" });
     const stat = fs.statSync(target);
     signature = `${stat.size}:${stat.mtimeMs}`;
   } catch {
@@ -1023,27 +1057,39 @@ export async function buildContextPack(cwd, query, options = {}) {
   const excludePatterns = requireExplicitExcludePatterns(options, "buildContextPack");
   const budgetTokens = clampInteger(options.budgetTokens, DEFAULT_PACK_TOKENS, 200, 50_000);
   const includeCode = options.includeCode !== false;
+  if (options.includePatterns !== undefined && !Array.isArray(options.includePatterns)) {
+    throw new TypeError("buildContextPack includePatterns must be an array when provided");
+  }
+  const includePatterns = options.includePatterns === undefined
+    ? undefined
+    : [...new Set(options.includePatterns.map((value) => String(value).trim()).filter(Boolean))];
   const projectRoot = fs.realpathSync.native(cwd);
   const directoryCache = new Map();
   const search = await searchContextIndexV2(cwd, query, {
     limit: clampInteger(options.limit, 16, 1, 50),
     excludePatterns
   });
+  const rankedResults = includePatterns === undefined
+    ? search.results
+    : search.results.filter((result) => matchesAnyPath(result.path, includePatterns));
+  const confidence = rankedResults.length > 0 ? search.confidence : "none";
   const selected = [];
   const mapBudget = Math.min(1_200, Math.max(40, Math.trunc(budgetTokens * 0.2)));
   const mapLines = [];
-  for (const result of search.results) {
+  for (const result of rankedResults) {
     const symbolNames = result.symbols.slice(0, 5).map((symbol) => `${symbol.kind} ${symbol.name}`).join(", ");
     const line = `- ${result.path}${symbolNames ? `: ${symbolNames}` : ""} [${result.sources.join("+")}]`;
     const cost = estimateContextTokens(line);
     if (estimateContextTokens(mapLines.join("\n")) + cost > mapBudget) break;
     mapLines.push(line);
   }
-  const footer = "Use this as navigation evidence. Re-read current files before editing; index hits are advisory.";
+  const footer = options.currentSnapshot === true
+    ? "Current-turn source snapshot: content was read from current non-protected project files after index freshness checks. Use it for the first edit; re-read only when a needed region is absent or an edit reports a mismatch."
+    : "Use this as navigation evidence. Re-read current files before editing; index hits are advisory.";
   const renderHeader = () => [
       "Pi Context Pack v2",
       `queryHash: ${sha256(String(query)).slice(0, 12)}`,
-      `confidence: ${search.confidence}`,
+      `confidence: ${confidence}`,
       `index: ${search.status.files ?? 0} files / ${search.status.symbols ?? 0} symbols${search.status.stale ? " / stale" : ""}`,
       "",
       "Repository map:",
@@ -1061,7 +1107,7 @@ export async function buildContextPack(cwd, query, options = {}) {
     header = renderHeader();
   }
 
-  for (const result of search.results) {
+  for (const result of rankedResults) {
     let text;
     try {
       const file = projectFileInfo(cwd, result.path, projectRoot, directoryCache);
@@ -1096,13 +1142,13 @@ export async function buildContextPack(cwd, query, options = {}) {
   const text = renderPack(selected);
   return {
     queryHash: sha256(String(query)),
-    confidence: search.confidence,
+    confidence,
     status: search.status,
-    candidates: search.results.length,
+    candidates: rankedResults.length,
     selected: selected.map(({ text: _text, ...item }) => item),
     estimatedTokens: estimateContextTokens(text),
-    finderRecommended: search.confidence === "none" || search.confidence === "low",
-    finderRequest: search.confidence === "none" || search.confidence === "low"
+    finderRecommended: confidence === "none" || confidence === "low",
+    finderRequest: confidence === "none" || confidence === "low"
       ? `Run one bounded read-only finder pass for: ${String(query).slice(0, 600)}. Return only paths, symbols, line ranges, evidence, and unknowns.`
       : undefined,
     text
@@ -1159,44 +1205,21 @@ export async function buildTestImpact(cwd, changedFiles = [], options = {}) {
 
 export function appendContextTelemetry(cwd, event) {
   const paths = contextEnginePaths(cwd);
-  fs.mkdirSync(paths.root, { recursive: true });
   const record = {
     schemaVersion: TELEMETRY_SCHEMA_VERSION,
     source: "piagent",
     recordedAt: nowIso(),
     ...event
   };
-  fs.appendFileSync(paths.telemetry, `${JSON.stringify(record)}\n`, { mode: 0o600 });
+  appendJsonlBounded(paths.telemetry, record, { maxBytes: MAX_TELEMETRY_FILE_BYTES, mode: 0o600, projectRoot: cwd });
   return record;
 }
 
 export function readContextTelemetry(cwd, options = {}) {
   const target = contextEnginePaths(cwd).telemetry;
-  if (!fs.existsSync(target)) return [];
   const limit = clampInteger(options.limit, MAX_TELEMETRY_EVENTS, 1, MAX_TELEMETRY_EVENTS);
   const maxBytes = clampInteger(options.maxBytes, MAX_TELEMETRY_READ_BYTES, 64 * 1024, 256 * 1024 * 1024);
-  const stat = fs.statSync(target);
-  const start = Math.max(0, stat.size - maxBytes);
-  const length = stat.size - start;
-  const buffer = Buffer.allocUnsafe(length);
-  const descriptor = fs.openSync(target, "r");
-  try {
-    fs.readSync(descriptor, buffer, 0, length, start);
-  } finally {
-    fs.closeSync(descriptor);
-  }
-  let text = buffer.toString("utf8");
-  if (start > 0) text = text.slice(Math.max(0, text.indexOf("\n") + 1));
-  const lines = text.split(/\r?\n/).filter(Boolean);
-  const events = [];
-  for (const line of lines.slice(-limit)) {
-    try {
-      events.push(JSON.parse(line));
-    } catch {
-      // Ignore one incomplete tail record after an interrupted append.
-    }
-  }
-  return events;
+  return readJsonlTail(target, { limit, maxBytes, projectRoot: cwd });
 }
 
 function ratio(numerator, denominator) {
@@ -1298,8 +1321,9 @@ export function buildContextEfficiencyReport(cwd, options = {}) {
     recommendations
   };
   const paths = contextEnginePaths(cwd);
-  fs.mkdirSync(paths.root, { recursive: true });
-  fs.writeFileSync(paths.report, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
+  ensurePrivateStateDirectory(cwd, paths.root, "Context report directory");
+  const reportPath = resolveLocalStatePath(cwd, paths.report, { label: "Context efficiency report" });
+  fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
   return report;
 }
 

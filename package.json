@@ -1,6 +1,6 @@
 {
   "name": "@piagent/platform",
-  "version": "1.2.10",
+  "version": "1.2.11",
   "license": "MIT",
   "publishConfig": {
     "access": "public",
@@ -30,6 +30,7 @@
     "SECURITY.md",
     ".gitattributes",
     "adapters/",
+    "benchmarks/",
     "catalog/",
     "docs/",
     "!docs/journals/",
@@ -113,7 +114,7 @@
     "install-global": "bash scripts/install-global.sh",
     "init-project": "bash scripts/init-project.sh",
     "doctor": "bash scripts/team-doctor.sh",
-    "benchmark": "bash scripts/quality-benchmark.sh",
+    "benchmark": "node scripts/benchmark-runner.mjs",
     "benchmark:redaction": "node scripts/redaction-benchmark.mjs",
     "audit:runtime": "bash scripts/audit-runtime-host.sh",
     "release:identity": "node scripts/verify-release-identity.mjs",

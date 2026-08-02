@@ -1,29 +1,19 @@
 # Project Agent Instructions
 
+<!-- piagent-managed:start -->
 ## Operating model
 
 This project uses Pi Agent Platform.
 
-Before implementation:
+For an ordinary source task:
 
-1. Load `.pi/piagent-profile.json` with `piagent_context`.
-2. If `.pi/project-context.md` still says "Generated: not yet", run `/onboard run` after login/model selection before the first implementation task.
-3. Check `.pi/context-index.json` with `/context index` or `piagent_context_index_status` when available; use it only as an advisory navigation map.
-4. Read `.pi/project-context.md` and required context files listed in the profile; use `piagent_context_budget` for large files.
-5. Check project memory with `piagent_memory_status` when relevant; memory is advisory, source files are authoritative.
-6. Start source-changing work with `piagent_task_start`.
-7. Respect protected paths.
-8. Use `piagent_exec_policy_check` before high-impact or complex shell commands.
-9. Use `piagent_tool_policy_check` before non-piagent MCP/app tools.
-10. Use MCP/tools only when declared in profile.
-11. Use `piagent_usage_snapshot` or `/usage` when the user asks about token/context usage or session follow-up.
-12. Record context/verify/trace with `piagent_context_record`, `piagent_verify_record`, and `piagent_trace_record`. Passing verify evidence must be the exact command from `task.verifyCommands`.
-13. Run `piagent_task_gate_check` before DONE.
-14. For unclear tasks, use `/workflow discuss` first; do not implement while requirements are unresolved.
-15. For external source repos, use `piagent-source-cache` and read targeted files only.
-16. For medium/large tasks, auto-delegate independent read-only scout/planning/review work to `piagent-scout`, `piagent-planner`, `piagent-reviewer`, or `piagent-oracle` when `pi-subagents` is available. Do not require the user to type `/run` for normal task orchestration.
-17. Keep implementation single-writer by default. Use parallel writers only with explicit user approval or safe worktree isolation and disjoint write sets.
-18. If the bundled `pi-subagents` parent skill is available, use it for delegation patterns, review loops, native supervisor coordination, and safety boundaries.
+1. Runtime binds bounded source work to this Pi session before the model starts. If intake pauses for broad/high-risk/ambiguous scope, call `piagent_task_start` exactly once with project-relative path/glob scope and reuse the contract.
+2. Read the narrow target and nearest test. Use ordinary read/search/edit/bash tools and one writer.
+3. Complete intended source and focused regression-test edits, then run each exact runtime verifier. Rerun only after another mutation.
+4. Do not call Piagent management/diagnostic tools unless runtime or the operator asks. Report changed files, verification, and residual risk concisely.
+
+Runtime enforces protected paths, permissions, external/destructive confirmation, scope, current-tree evidence, and the final gate. Current source is authoritative; generated context is advisory. Use subagents only for independent read-only lanes.
+<!-- piagent-managed:end -->
 
 ## Review
 

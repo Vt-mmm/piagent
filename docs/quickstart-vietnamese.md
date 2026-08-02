@@ -125,6 +125,11 @@ pi --name "ABC-123 Short task name"
 
 Rồi mô tả việc cần làm bằng tiếng Việt hoặc tiếng Anh. Nếu quên đặt tên lúc mở Pi, gõ `/name ABC-123 Short task name` hoặc alias ngắn `/setname ABC-123 Short task name` trước khi làm tiếp; Agent Watch sẽ dùng tên session này trong report. Không cần paste checklist — input guard tự collapse boilerplate, và `/workflow task` tự cân nhắc gọi scout/planner/reviewer khi task đủ lớn.
 
+Mỗi Pi session chỉ dùng cho một task. Retry hoặc task mới mở session mới; resume
+thì quay lại đúng session cũ theo name/id. Source task yêu cầu project là Git
+working tree và profile có verify command thật. `/workflow scout` vẫn chạy ở
+read-only mode khi chỉ cần nghiên cứu và không sửa source.
+
 Muốn chạy nhiều agent song song thì gõ `herdr` thay vì `pi`, rồi mở mỗi pane một vai: implement, review read-only, verify, notes. Herdr chỉ điều phối terminal/session, không phải security boundary — gate vẫn nằm ở Pi extension và OAuth vẫn `/login` trong Pi. Chi tiết: [herdr-workflow.md](herdr-workflow.md).
 
 | Gõ | Khi nào |

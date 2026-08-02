@@ -12,8 +12,8 @@
       },
       "artifacts": [
         {
-          "byteSize": 1901,
-          "digest": "sha256:4cf593f5ae8d2806d5d1262ea31f7814e087b0d599e66fc064467b8c22a6a075",
+          "byteSize": 1913,
+          "digest": "sha256:fc10abbe00bb05e64e43662550b9a92e95b7441c3da000a5e2e244c5afb0eccc",
           "id": "generic",
           "kind": "adapters",
           "path": "adapters/generic/profile.json"
@@ -26,8 +26,8 @@
           "path": "evals/scenarios/capability-resolution.json"
         },
         {
-          "byteSize": 6201,
-          "digest": "sha256:35398d414c6fd57f63c81990881410ad4286074c2c63fbf53a808b6cfb27b343",
+          "byteSize": 6232,
+          "digest": "sha256:a2c44a910a440e972579c2a2ec372ee15cfb73b63b27d01c1e3a053c176d11bf",
           "id": "base-policy",
           "kind": "policies",
           "path": "packages/piagent-core/policies/base-policy.json"
@@ -54,15 +54,15 @@
           "path": "packages/piagent-core/prompts/pr.md"
         },
         {
-          "byteSize": 1749,
-          "digest": "sha256:160bf204e632293068bba0d457f0abb0c5a76af3ed452b0647746e9e7071d773",
+          "byteSize": 1314,
+          "digest": "sha256:e1e9caf68957748bebf6ac2d6294905226b298b2734434db8341b35664794388",
           "id": "review",
           "kind": "prompts",
           "path": "packages/piagent-core/prompts/review.md"
         },
         {
-          "byteSize": 3452,
-          "digest": "sha256:d06f189c7cf6484cc60d79c200e85ff60f543651264b9233cb23686145cc35d8",
+          "byteSize": 2371,
+          "digest": "sha256:bfe8374f15e06d410eec7ab2c82f85ef011fc7d514a92f23720179b497910a44",
           "id": "task",
           "kind": "prompts",
           "path": "packages/piagent-core/prompts/task.md"
@@ -75,8 +75,8 @@
           "path": "packs/engineering-base/recipes/bounded-change.json"
         },
         {
-          "byteSize": 1356,
-          "digest": "sha256:8ee63773b66386fb1e278e178842d4bd2a725b73d60e1114529df4aa3bc628f4",
+          "byteSize": 1832,
+          "digest": "sha256:a1c21e7d1c3ab12fff8516bbac2922526e35b37a6852eaa9f5a7d98a102b830e",
           "id": "piagent-ops",
           "kind": "skills",
           "path": "packages/piagent-core/skills/piagent-ops/SKILL.md"

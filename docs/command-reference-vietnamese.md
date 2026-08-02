@@ -468,8 +468,8 @@ Các lệnh này chạy ngoài Pi.
 | Command | Dùng khi nào |
 |---|---|
 | `npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0` | Cài Pi CLI tương thích với release hiện tại. |
-| `npm install -g --ignore-scripts @piagent/platform@1.2.10` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
-| `pi install git:github.com/Vt-mmm/piagent@v1.2.10` | Cài pinned release khi cần reproducible team setup. |
+| `npm install -g --ignore-scripts @piagent/platform@1.2.11` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
+| `pi install git:github.com/Vt-mmm/piagent@v1.2.11` | Cài pinned release khi cần reproducible team setup. |
 | `pi install git:github.com/Vt-mmm/piagent` | Cài latest package platform cho máy cá nhân/sandbox. |
 | `piagent-update --check` | Báo version hiện tại vs version sẽ lên cho cả ba thành phần; không cài gì. |
 | `piagent-update` | Full update global một lệnh cho cả máy: Pi host → npm-global helper → Pi package, đúng thứ tự release yêu cầu. |
@@ -511,11 +511,12 @@ Các lệnh này chạy ngoài Pi.
 | `piagent-uninstall --apply` | Gỡ Pi package của platform khỏi Pi settings global. |
 | `piagent-uninstall --apply --with-addons --with-host` | Gỡ thêm pi-mcp-adapter, pi-subagents, pi-web-access và Pi host. |
 | `piagent-uninstall --apply --project /path/to/project` | Gỡ thêm state của platform trong project: profile, lock, `piagent-state/`. |
-| `piagent-benchmark ...` | Ghi quality benchmark bằng package bin. |
+| `piagent-benchmark` | Tự chạy paired Raw Pi/Piagent ở steady-state đã onboard, chấm riêng hidden grader + scope + workflow và đọc exact token/tool histogram từ session. |
+| `piagent-benchmark --dry-run` | Validate suite và xem số model session, không gọi model. |
 | `bash scripts/verify-local.sh` | Verify repo platform trước khi commit/tag. |
 | `bash scripts/verify-local.sh --offline` | Verify trong CI/máy sạch, bỏ qua local Pi model catalog. |
 | `bash scripts/setup.sh <project> ...` | Preseed setup project; không bắt buộc cho daily flow. |
-| `bash scripts/quality-benchmark.sh ...` | Ghi quality benchmark theo scenario thật. |
+| `bash scripts/quality-benchmark.sh ...` | Legacy: ghi tay benchmark cho scenario project-specific. |
 
 Trong output `piagent-install`, `currentRelease` là version của terminal helper đang chạy, không phải lời xác nhận rằng npm-global helper vừa được update. Checklist đầy đủ nằm tại [release/install policy](release-install-policy.md).
 
@@ -528,7 +529,7 @@ Khi đang develop chính repo `piagent`, có thể dùng npm scripts tương ứ
 | `npm run install-global` | `bash scripts/install-global.sh` |
 | `npm run init-project -- <project>` | `bash scripts/init-project.sh <project>` |
 | `npm run doctor -- <project> --strict-share` | `bash scripts/team-doctor.sh <project> --strict-share` |
-| `npm run benchmark -- ...` | `bash scripts/quality-benchmark.sh ...` |
+| `npm run benchmark -- ...` | `node scripts/benchmark-runner.mjs ...` |
 | `npm run usage -- <project>` | `bash scripts/pi-session-stats.sh <project>` |
 | `npm run usage -- --history <project> --days 7` | `bash scripts/pi-session-stats.sh --history <project> --days 7` |
 | `npm run models` | `bash scripts/pi-model-catalog.sh` |
@@ -570,7 +571,10 @@ export GITHUB_PERSONAL_ACCESS_TOKEN=<github-token>
 | Subagents tốn bao nhiêu? | `/subagent-cost` |
 | Có nên compact chưa? | Xem `contextUsage.percent`; trên 75% mới cân nhắc `/compact`. |
 
-Không claim tiết kiệm token/cost nếu chưa có số liệu cùng scenario. Dùng benchmark script để ghi lại.
+Không claim tiết kiệm token/cost nếu chưa có paired evidence cùng scenario. Dùng
+`piagent-benchmark`; runner chỉ cho phép verdict tiết kiệm khi
+quality/reliability đạt ít nhất `9/10`, safety/workflow đạt tuyệt đối, quality
+không giảm và có ít nhất ba cặp cùng model với exact usage.
 
 ## Source rule cho subagent/custom agent
 

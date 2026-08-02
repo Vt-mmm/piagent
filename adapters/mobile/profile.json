@@ -54,8 +54,7 @@
       "test -s README.md"
     ],
     "source": [
-      "if test -f package.json; then npm test --if-present; fi",
-      "if test -f pubspec.yaml && command -v flutter >/dev/null 2>&1; then flutter test; else echo 'flutter test skipped'; fi"
+      "if test -f package.json; then node -e \"const s=require('./package.json').scripts||{}; if(!s.test){console.error('No mobile test script is configured');process.exit(2)}\" && npm test; elif test -f pubspec.yaml && command -v flutter >/dev/null 2>&1; then flutter test; else echo 'No mobile verify command configured; update .pi/piagent-profile.json' >&2; exit 2; fi"
     ]
   },
   "mcpCapabilities": [

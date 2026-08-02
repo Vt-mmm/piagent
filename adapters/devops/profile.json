@@ -58,9 +58,7 @@
       "test -s README.md"
     ],
     "source": [
-      "git diff --check",
-      "if command -v docker >/dev/null 2>&1 && { test -f docker-compose.yml || test -f compose.yml || test -f compose.yaml; }; then docker compose config >/dev/null; else echo 'docker compose config skipped'; fi",
-      "if command -v terraform >/dev/null 2>&1 && test -d terraform; then terraform -chdir=terraform validate; else echo 'terraform validate skipped'; fi"
+      "git diff --check && verified=0; if command -v docker >/dev/null 2>&1 && { test -f docker-compose.yml || test -f compose.yml || test -f compose.yaml; }; then docker compose config >/dev/null || exit $?; verified=1; fi; if command -v terraform >/dev/null 2>&1 && test -d terraform; then terraform -chdir=terraform validate || exit $?; verified=1; fi; if command -v helm >/dev/null 2>&1 && test -f Chart.yaml; then helm template piagent-verify . >/dev/null || exit $?; verified=1; fi; if test \"$verified\" -ne 1; then echo 'No DevOps verifier is available; update .pi/piagent-profile.json' >&2; exit 2; fi"
     ]
   },
   "mcpCapabilities": [

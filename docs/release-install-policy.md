@@ -10,7 +10,7 @@ This file is the canonical install, update, rollback, and release checklist. Oth
 
 All supported environments require Node.js `>=22.19.0` and Pi Coding Agent `0.82.0`. The Pi host is installed as a Node CLI; Pi Agent Platform still defines its own release matrix because the terminal helpers and shell policy rely on Bash/POSIX behavior.
 
-| Surface | Status for v1.2.10 | Rollout guidance |
+| Surface | Status for v1.2.11 | Rollout guidance |
 |---|---|---|
 | macOS Apple Silicon (`darwin/arm64`) + Bash | Verified for this release. | Safe default for team rollout after normal project smoke tests. |
 | Linux x64 + Bash | Verified in GitHub Actions. | Safe default for CI/server usage after normal project smoke tests. |
@@ -33,7 +33,7 @@ These three components are versioned independently. A full install, update, or r
 
 | Channel | Source shape | Mutability | Use when |
 |---|---|---:|---|
-| `stable` | `git:github.com/Vt-mmm/piagent@<resolved-commit-sha>` from `v1.2.10` | Fixed after resolution | Default for team rollout. |
+| `stable` | `git:github.com/Vt-mmm/piagent@<resolved-commit-sha>` from `v1.2.11` | Fixed after resolution | Default for team rollout. |
 | `exact` | Tag, reviewed commit, or a tag resolved with `--resolve-tag` | Fixed when using a commit SHA | Pi-package-only roll forward, rollback, or reproduction. |
 | `dev` | `git:github.com/Vt-mmm/piagent` | Moving | Personal machine or sandbox only. |
 | `local` | `/path/to/piagent` | Local workspace | Platform development and dry-run validation. |
@@ -53,7 +53,7 @@ Use this flow when the team needs both terminal commands and the Pi package:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.2.10
+npm install -g --ignore-scripts @piagent/platform@1.2.11
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -61,8 +61,8 @@ piagent-install --stable
 The stable preview and apply output includes:
 
 ```text
-currentRelease: v1.2.10 (helper package version)
-tag: v1.2.10
+currentRelease: v1.2.11 (helper package version)
+tag: v1.2.11
 resolvedCommit: <40-char-sha>
 source: git:github.com/Vt-mmm/piagent@<40-char-sha>
 ```
@@ -79,7 +79,7 @@ bash scripts/install-global.sh --stable
 Use this only when terminal commands are not needed:
 
 ```bash
-pi install git:github.com/Vt-mmm/piagent@v1.2.10
+pi install git:github.com/Vt-mmm/piagent@v1.2.11
 ```
 
 Direct `pi install` does not create `piagent-*` commands on `PATH`.
@@ -104,7 +104,34 @@ piagent-update --version X.Y.Z --project /path/to/project
 
 With `--project`, the updater migrates legacy project state if needed and runs `piagent-doctor --strict-share`; use `--no-migrate` only when debugging a migration.
 
-If the machine's default npm global prefix is locked by the OS, for example `/usr/local/lib/node_modules`, the updater uses `~/.pi/npm-global` for this rollout and prints the `PATH` line to add later. Do not run project update/doctor as root, because that can leave project files owned by root. Maintainers can force a specific prefix with `--npm-prefix <path>`.
+From `v1.2.11`, project migration also previews and upgrades Task Contract v1
+state to session-bound v2. It fails before changing project files when any task
+state is unreadable, writes v2 atomically, and archives v1 only after the new
+contract exists. Opening the project with the new Pi package also performs the
+same idempotent task-state migration for resumed sessions.
+
+The `v1.2.11` migrator also upgrades the exact generated `v1.2.10` `AGENTS.md`
+and future `<!-- piagent-managed:* -->` blocks while preserving project text
+outside that block. A global-only update is still effective immediately: the
+runtime replaces the exact legacy checklist in the model's in-memory system
+prompt without editing the project file. Running `--project` makes the cleanup
+durable and lets doctor verify it.
+
+A project already onboarded does not need onboarding again after a global
+update. Its profile still extends the newly installed adapter and its capability
+lock re-pins only when the release does not widen the project's grants. Daily
+source work must start a new v2 task in a Git working tree with a configured
+verify command; read-only scout remains available without a source verifier.
+
+The updater first identifies the npm prefix that owns the active
+`piagent-update` command. If that prefix is writable, host and helper stay there
+even when `npm config get prefix` points somewhere else, such as an active
+`/opt/homebrew` install with npm configured for `/usr/local`. This prevents two
+same-version helpers with different source from shadowing one another. If both
+the active prefix and the configured global prefix are locked, the updater uses
+`~/.pi/npm-global` and prints the `PATH` line to add later. Do not run project
+update/doctor as root, because that can leave project files owned by root.
+Maintainers can force a specific prefix with `--npm-prefix <path>`.
 
 For a fresh machine that does not have `piagent-update` yet, bootstrap the same all-in-one flow without opening Pi:
 
@@ -259,6 +286,13 @@ Re-running the workflow from a branch instead skips publishing, because the publ
    npm pack --dry-run --json
    bash scripts/setup.sh --global-only --package-source git:github.com/Vt-mmm/piagent@vX.Y.Z --dry-run
    ```
+
+   Nếu release thay đổi harness, context budget, tool loading hoặc logic tính
+   token, maintainer còn phải chạy `piagent-benchmark --dry-run`, sau đó chạy
+   `piagent-benchmark --model <provider/model> --thinking <level>` trên đúng
+   release candidate và lưu report. Đây là model-quota gate có xác nhận riêng,
+   không chạy ngầm trong CI. Không claim token/cost nếu report không cho phép
+   `tokenClaimAllowed`.
 
 3. Push the release-candidate branch, open a pull request to `main`, and wait for both Ubuntu/macOS verify jobs and both CodeQL matrix jobs to pass. Record the exact PR-head commit SHA that passed; do not merge it into the Vercel production branch yet, and do not tag a later unverified edit.
 4. Create an annotated, reviewed tag on that exact verified commit and push the tag. Pushing the tag starts `publish.yml`, which runs the full verify matrix as a dependency and only then publishes, so a failure on any supported runtime stops the release before it reaches the registry:

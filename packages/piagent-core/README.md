@@ -6,13 +6,23 @@ Shared Pi package for reusable project workflows.
 
 - `extensions/piagent-guard.ts`: runtime guard tools and policy hooks.
 - `prompts/*.md`: workflow aliases that intentionally launch an agent turn.
-- `skills/piagent-ops/SKILL.md`: operating guidance for implementation tasks.
+- `skills/piagent-ops/SKILL.md`: operator-invoked reference for manual intake, recovery, and high-risk controls; routine runtime-managed tasks do not advertise or load it.
 - `skills/piagent-source-cache/`: local cache for user-provided external source repositories.
 - `subagents/*.md`: piagent roles for `pi-subagents`.
+- `benchmark/benchmark-core.js`: deterministic suite validation, evidence scoring, usage comparison, and report rendering for `piagent-benchmark`.
 - `policies/base-policy.json`: default runtime policy, including protected path and shell protected path defaults.
 - input hook support for local screenshot/image paths pasted into chat; supported images are attached as `[image1]`, `[image2]`, ...
 - compact tool-result rendering: oversized redacted output is previewed in Pi and captured under `.pi/piagent-state/tool-results/` for offline audit/reporting.
-- local Context Engine v2: incremental FTS5/symbol/import index, hybrid retrieval, token-budgeted packs, test-impact mapping, dynamic Piagent tools, and Agent Watch compatible telemetry.
+- local Context Engine v2: incremental FTS5/symbol/import index, hybrid retrieval, token-budgeted packs, bounded current-turn source/test snapshots, test-impact mapping, dynamic Piagent tools, and Agent Watch compatible telemetry.
+
+The root package exposes `piagent-benchmark` for an automatic paired Piagent
+steady-state benchmark against Raw Pi or the `codex-cli` surface. Treatment
+onboarding/context preparation happens before measured model usage;
+post-baseline mutations remain scope violations. Codex runs through a strict
+streaming JSONL adapter and defaults to controlled ephemeral execution with an
+isolated temporary Codex home. Run
+`piagent-benchmark --dry-run` before starting billed model sessions; see
+`docs/quality-benchmark.md` for score and verdict rules.
 
 ## Trusted run wrapper
 
@@ -70,11 +80,19 @@ Legacy aliases still work: `/permission-status`, `/read-only`, `/workspace-write
 - `piagent_profile_tech_context_record`
 - `piagent_project_onboarding_record`
 - `piagent_task_start`
+- `piagent_task_progress`
 - `piagent_source_checkout`
 - `piagent_document_read` — reads `.md`/`.txt`/`.csv`/`.json`/`.yaml`/`.pdf`/`.docx` from the project or a granted `additionalReadRoots` directory; read-only, and `protectedPaths` still wins
 - `piagent_context_record`
 - `piagent_verify_record` — records verify evidence only after matching an observed bash tool result after task start
 - `piagent_trace_record`
+
+These tools are registered capabilities, not a per-task call sequence. Runtime
+starts bounded source tasks directly and exposes no Piagent management schema
+to the model. Broad, high-risk, or ambiguous intake activates
+`piagent_task_start`; lifecycle hooks still collect context, changes,
+current-tree verification, trace and final-gate evidence. Diagnostic/recovery
+groups load only when requested.
 
 ## Runtime commands and workflow recipes
 
@@ -132,6 +150,7 @@ If no trusted profile is available, the extension still applies baseline secret 
 Runtime task tools write local state to:
 
 - `.pi/piagent-state/tasks/*.json`
+- `.pi/piagent-state/session-tasks/*.json`
 - `.pi/project-context.md`
 - `.pi/tech-stack.json`
 - `.pi/tech-context/*.json`
@@ -147,12 +166,27 @@ Runtime task tools write local state to:
 
 Project-local state belongs in `.pi/.gitignore`.
 
+Task files use schema v2 and bind one unique `taskRunId` to one Pi `sessionId`.
+They record attempt/max-attempt history, dependency-safe work-plan progress,
+Git baseline/final digests, observed changes, all exact verify results and final
+trace. A terminal task is immutable; retry starts in a fresh session and carries
+the prior failure/ruled-out evidence. Legacy v1 state is migrated and archived
+without requiring project onboarding again.
+
+Local state directories are owner-only. Task state, context telemetry, trace,
+bash evidence and captures refuse ancestor symlinks out of the project. JSONL
+files rotate under a cross-process lock; compacted tool captures are pruned by
+age, count and aggregate bytes.
+
 The Context Engine SQLite index contains allowed source bodies. Its directory is
 kept at mode `0700`, with database/WAL/SHM at `0600`; core and FTS5 secure-delete
 cover normal refreshes, while exclusion-policy changes trigger a retryable FTS
 rebuild and database vacuum before the new policy is considered clean.
 
-Passing final gates require an observed exit `0` command that exactly matches one entry in `task.verifyCommands`. Other observed commands are traceable but advisory.
+Passing source final gates require an observed exit `0` result for every
+meaningful entry in `task.verifyCommands`. Other observed commands are traceable
+but advisory. Declared changed files must also differ from the task baseline,
+match observed tool results and remain inside `task.scope`.
 
 Raw path-like tool access to protected paths is blocked before execution. This includes Pi built-ins (`read`, `write`, `edit`, `grep`, `find`, `ls`) and custom/MCP tools with nested path-like strings, arrays, or `file://` URIs. Path-like strings are percent-decoded once, and input nesting above `MAX_TOOL_INPUT_INSPECTION_DEPTH=32` fails closed. Known content fields such as `content`, `query`, `pattern`, `text`, and `command` are excluded from generic extraction. `grep.glob` and `find.pattern` are checked when they explicitly target protected paths, while broad `grep`, `find`, and `ls` results are filtered so protected content lines or path metadata are redacted before reaching the model.
 

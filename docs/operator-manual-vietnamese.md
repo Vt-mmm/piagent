@@ -18,12 +18,12 @@ Support matrix release hiện tại: macOS Apple Silicon + Bash và Linux x64 + 
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.2.10
+npm install -g --ignore-scripts @piagent/platform@1.2.11
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
 
-Khi seed `.pi/settings.json` cho team/repo cần audit lặp lại, giữ package source dạng pinned tag như `git:github.com/Vt-mmm/piagent@v1.2.10`. Máy cá nhân có thể dùng `git:github.com/Vt-mmm/piagent` để theo latest.
+Khi seed `.pi/settings.json` cho team/repo cần audit lặp lại, giữ package source dạng pinned tag như `git:github.com/Vt-mmm/piagent@v1.2.11`. Máy cá nhân có thể dùng `git:github.com/Vt-mmm/piagent` để theo latest.
 
 Nếu đang ở source checkout của platform, dùng helper theo channel để preview trước khi đổi:
 
@@ -99,7 +99,7 @@ install package once
 
 ```bash
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.2.10
+npm install -g --ignore-scripts @piagent/platform@1.2.11
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -282,7 +282,7 @@ Không phải daily default. Dùng khi muốn tạo sẵn `.pi` files cho projec
 bash /path/to/piagent/scripts/setup.sh /path/to/project \
   --project-only \
   --profile auto \
-  --package-source git:github.com/Vt-mmm/piagent@v1.2.10 \
+  --package-source git:github.com/Vt-mmm/piagent@v1.2.11 \
   --mcp-preset core \
   --subagents-preset safe
 ```
@@ -416,41 +416,53 @@ Một source-changing task nên đi qua:
 
 ```text
 intake
-  -> profile/context
-  -> task contract
-  -> context manifest
+  -> session name + profile/context
+  -> session-bound task contract v2
+  -> runtime-observed context manifest
   -> implementation
-  -> verify command
-  -> observed verify evidence
-  -> trace
-  -> final gate
-  -> handoff
+  -> baseline-aware changed files
+  -> every exact verify command
+  -> current-tree verify evidence from tool_result
+  -> completion hook: trace + final gate
+  -> immutable outcome / retry handoff
 ```
 
-Các piagent tools nền:
+Trong task nhỏ và rõ scope, runtime tạo contract trước model turn đầu tiên nên
+model không gọi management tool nào. Task rộng, high-risk hoặc scope mơ hồ mới
+fallback về một `piagent_task_start`. Các tool còn lại bên dưới là bề mặt
+operator/diagnostics/recovery, không phải checklist phải gọi mỗi task.
+
+Các Piagent tools:
 
 | Tool | Vai trò |
 |---|---|
 | `piagent_context` | Đọc active profile, required context, verify commands, MCP/memory settings. |
 | `piagent_context_index_status/search/record` | Kiểm tra/tìm/ghi context index advisory có citation. |
-| `piagent_task_start` | Tạo task contract: scope, risk, acceptance criteria. |
-| `piagent_context_record` | Ghi context manifest: file nào đã đọc và lý do. |
-| `piagent_exec_policy_check` | Check shell command trước khi chạy lệnh rủi ro. |
-| `piagent_context_budget` | Check file/context size để tránh nhồi context. |
-| `piagent_tool_policy_check` | Check capability của tool/MCP. |
-| `piagent_verify_record` | Chỉ ghi verify evidence nếu Pi đã quan sát bash result thật sau task start. |
-| `piagent_trace_record` | Ghi outcome, changed files, notes. |
-| `piagent_task_gate_check` | Check final gate trước khi báo DONE. |
+| `piagent_task_start` | Fallback intake cho task rộng/high-risk/mơ hồ; scope chỉ nhận project-relative path/glob. |
+| `piagent_task_progress` | Chuyển step trong work plan và ghi failure/ruled-out evidence. |
+| `piagent_context_record` | Recovery: bổ sung context manifest khi observer không đủ. |
+| `piagent_exec_policy_check` | Diagnostics: giải thích shell-policy verdict; runtime vẫn check mọi call. |
+| `piagent_context_budget` | Diagnostics: xem budget của file/context lớn. |
+| `piagent_tool_policy_check` | Diagnostics: xem capability verdict của tool/MCP. |
+| `piagent_verify_record` | Recovery: đối chiếu verify với bash result thật sau task start. |
+| `piagent_trace_record` | Recovery/high-risk: ghi outcome hoặc blocker thủ công. |
+| `piagent_task_gate_check` | Diagnostics/recovery: xem missing final proof. |
 | `piagent_usage_snapshot` | Snapshot session/model/context. |
 
 Done đúng nghĩa:
 
-- có task contract;
+- task contract v2 gắn đúng session hiện tại;
 - có context manifest;
-- verify command đã chạy thật;
-- verify evidence khớp `task.verifyCommands`;
+- mọi verify command đã chạy thật và khớp `task.verifyCommands`;
+- changed files khác baseline, có evidence và nằm trong scope;
+- work plan không còn step pending/in-progress/failed;
 - trace outcome rõ;
 - final gate pass hoặc ghi rõ blocked/partial.
+
+Source task yêu cầu Git working tree và meaningful verifier ngay từ lúc start.
+Một session chỉ dùng cho một task. Retry mở session mới với cùng `taskId`; runtime
+giữ previous attempt evidence và từ chối vượt `maxAttempts`. Contract đã terminal
+không thể sửa thêm context/verify/trace để viết lại lịch sử.
 
 ## 6. Guardrails cần hiểu
 
@@ -588,19 +600,48 @@ Sau compact, agent phải đọc lại context quan trọng trước khi sửa t
 Không claim tiết kiệm token/cost nếu chưa có số liệu cùng scenario.
 
 ```bash
-bash /path/to/piagent/scripts/quality-benchmark.sh /path/to/project --init
+piagent-benchmark --dry-run
+piagent-benchmark
+```
 
-bash /path/to/piagent/scripts/quality-benchmark.sh /path/to/project --record \
+Lệnh mặc định tự chạy 4 scenario trên Raw Pi và Piagent, mỗi bên 3 lần; token,
+cost, model và thinking được đọc từ Pi session thay vì nhập tay. Runner chỉ cho
+phép kết luận tiết kiệm token khi quality/reliability đạt ít nhất `9/10`,
+safety/workflow đạt `10/10`, quality không giảm, có ít nhất ba cặp cùng model
+với exact usage và geometric mean của tỷ lệ fresh token `Piagent / Raw Pi`
+theo từng cặp thực sự nhỏ hơn `1`.
+
+So sánh trực tiếp với surface `codex-cli` đã đăng nhập:
+
+```bash
+piagent-benchmark \
+  --surfaces piagent,codex-cli \
+  --model openai-codex/gpt-5.6-sol \
+  --thinking xhigh
+```
+
+Chế độ mặc định là `controlled`: Codex chạy ephemeral, chỉ được ghi trong
+workspace benchmark, dùng `CODEX_HOME` tạm để loại global `AGENTS.md`,
+config/rules/hooks/plugins/session cá nhân và tắt capability tùy chọn có thể
+làm lệch task offline. Credential hiện có chỉ được nối bằng symlink `auth.json`,
+không bị runner đọc hay sao chép. `--codex-mode native` đo cấu hình Codex thật
+của operator, gồm global instruction/hooks/MCP/plugins, nên chỉ dùng như report UX bổ sung. Codex OAuth
+không trả currency cost trong JSONL; report để `n/a`, còn fresh token được tính
+bằng `(input_tokens - cached_input_tokens) + output_tokens`.
+
+Để ghi thêm scenario thật ngoài automatic suite, dùng chế độ legacy:
+
+```bash
+piagent-benchmark /path/to/project --record \
   --scenario "ui-fix-with-ci-gate" \
   --surface pi \
   --result partial \
   --tokens 26323474 \
   --cost 18.33 \
-  --verify "npm test / E2E / CI gate" \
-  --notes "Implementation + branch push + main/test merge + CI monitor; deploy gate failed at shard 2."
+  --verify "npm test / E2E / CI gate"
 ```
 
-Benchmark nên đặt theo scenario thật, ví dụ:
+Scenario project-specific nên đặt theo công việc thật, ví dụ:
 
 - `bounded-source-fix`;
 - `be-spec-to-fe`;
@@ -670,6 +711,11 @@ pi --continue
 ```
 
 Nếu `--continue` không đúng phiên cần làm, mở selector bằng `pi --resume`, chọn theo session name đã đặt. Khi resume đúng session cũ, tên session vẫn là tên đã set; nếu cần chỉnh lại cho khớp task nội bộ thì chạy `/name <new name>` ngay trước khi làm tiếp.
+
+Task Contract v2 map bằng `sessionId` và Pi custom trace, không dựa riêng vào tên.
+Đổi tên sau khi task bắt đầu sẽ cập nhật contract để Agent Watch/report dùng tên
+mới. Không fork/reuse một session terminal cho task khác; retry hoặc task mới mở
+session mới để usage/prompt/change evidence không bị trộn.
 
 ### Khi nào nên resume, continue, fork
 
@@ -910,8 +956,8 @@ Watchdog là optional adversarial reviewer ở cuối turn, không bật mặc �
 
 | Command | Dùng để |
 |---|---|
-| `npm install -g --ignore-scripts @piagent/platform@1.2.10` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
-| `pi install git:github.com/Vt-mmm/piagent@v1.2.10` | Install pinned release cho reproducible team setup. |
+| `npm install -g --ignore-scripts @piagent/platform@1.2.11` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
+| `pi install git:github.com/Vt-mmm/piagent@v1.2.11` | Install pinned release cho reproducible team setup. |
 | `pi install git:github.com/Vt-mmm/piagent` | Install latest platform package cho máy cá nhân/sandbox. |
 | Cài exact Pi host của release, rồi `npm install -g --ignore-scripts @piagent/platform@X.Y.Z` và `piagent-install --stable` | Full update: đồng bộ host, terminal helper và Pi package. Mỗi release pin một Pi host chính xác; lấy đúng version của release đang cài trong [release/install policy](release-install-policy.md). |
 | Cài exact Pi host ghi trong release cũ, rồi helper `vPREVIOUS` và `piagent-install --stable` | Full rollback; đánh giá lại dependency findings của host cũ trước khi hạ version. |
@@ -944,7 +990,10 @@ Watchdog là optional adversarial reviewer ở cuối turn, không bật mặc �
 | `piagent-subagents --preset safe` | Setup subagents baseline. |
 | `bash scripts/verify-local.sh` | Verify platform repo. |
 | `bash scripts/team-doctor.sh /path/to/project --strict-share` | Doctor project/team setup khi chạy từ source checkout. |
-| `bash scripts/quality-benchmark.sh /path/to/project --record ...` | Ghi benchmark. |
+| `piagent-benchmark` | Tự chạy, chấm và xuất paired benchmark report. |
+| `piagent-benchmark --dry-run` | Xem execution plan, không dùng model quota. |
+| `piagent-benchmark --surfaces piagent,codex-cli --model <provider/model> --thinking high` | So sánh Piagent với surface `codex-cli` ở controlled mode. |
+| `piagent-benchmark /path/to/project --record ...` | Legacy: ghi tay một scenario project-specific. |
 
 ### Trong Pi
 
@@ -1018,7 +1067,7 @@ Mở lại Pi session sau khi install.
 Cài lại terminal helper đúng release rồi kiểm tra `PATH`:
 
 ```bash
-npm install -g --ignore-scripts @piagent/platform@1.2.10
+npm install -g --ignore-scripts @piagent/platform@1.2.11
 command -v piagent-install
 ```
 

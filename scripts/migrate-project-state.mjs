@@ -7,6 +7,15 @@
 // the caller confirms removal, so an interrupted run is always recoverable.
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
+import { migrateTaskState, taskStateMigrationStatus } from "../packages/piagent-core/extensions/task-state.js";
+
+const TASK_CONTRACT_MIGRATION_ID = "task-contract-v2";
+const AGENTS_MANAGED_START = "<!-- piagent-managed:start -->";
+const AGENTS_MANAGED_END = "<!-- piagent-managed:end -->";
+const LEGACY_GENERATED_AGENTS_HASHES = new Set([
+  "571fbf7967ce36a0c28fbc703551b6e8ad113933e8de0ba745c69b971eb73fb1"
+]);
 
 const RENAMES = [
   { from: ".pi/company-profile.json", to: ".pi/piagent-profile.json" },
@@ -71,6 +80,38 @@ function rewriteText(text) {
   return output;
 }
 
+function sha256(text) {
+  return crypto.createHash("sha256").update(text).digest("hex");
+}
+
+function managedAgentsBlock(text) {
+  const start = text.indexOf(AGENTS_MANAGED_START);
+  const endStart = text.indexOf(AGENTS_MANAGED_END, start + AGENTS_MANAGED_START.length);
+  if (start < 0 || endStart < 0) return undefined;
+  return { start, end: endStart + AGENTS_MANAGED_END.length };
+}
+
+function currentAgentsTemplate() {
+  try {
+    return fs.readFileSync(path.resolve(import.meta.dirname, "../templates/project/AGENTS.md"), "utf8");
+  } catch {
+    return undefined;
+  }
+}
+
+function migrateAgentsText(text) {
+  const renamed = rewriteText(text);
+  const template = currentAgentsTemplate();
+  if (!template) return renamed;
+  if (LEGACY_GENERATED_AGENTS_HASHES.has(sha256(renamed))) return template;
+
+  const existingBlock = managedAgentsBlock(renamed);
+  const templateBlock = managedAgentsBlock(template);
+  if (!existingBlock || !templateBlock) return renamed;
+  const replacement = template.slice(templateBlock.start, templateBlock.end);
+  return `${renamed.slice(0, existingBlock.start)}${replacement}${renamed.slice(existingBlock.end)}`;
+}
+
 function copyRecursive(from, to) {
   const stat = fs.lstatSync(from);
   if (stat.isSymbolicLink()) return { skipped: from, reason: "symlink" };
@@ -110,12 +151,19 @@ for (const { from, to } of RENAMES) {
 // that no longer exist.
 const agentsPath = path.join(projectPath, "AGENTS.md");
 let agentsNeedsRewrite = false;
+let migratedAgentsText;
 if (fs.existsSync(agentsPath)) {
   const text = fs.readFileSync(agentsPath, "utf8");
-  agentsNeedsRewrite = rewriteText(text) !== text;
+  migratedAgentsText = migrateAgentsText(text);
+  agentsNeedsRewrite = migratedAgentsText !== text;
 }
 
-const nothingToDo = planned.length === 0 && alreadyMigrated.length === 0 && !agentsNeedsRewrite;
+const taskMigrationBefore = taskStateMigrationStatus(projectPath);
+const nothingToDo = planned.length === 0
+  && alreadyMigrated.length === 0
+  && !agentsNeedsRewrite
+  && taskMigrationBefore.legacy === 0
+  && taskMigrationBefore.unreadable.length === 0;
 
 if (nothingToDo) {
   console.log(JSON.stringify({ ok: true, projectPath, migrated: false, reason: "already on the current layout" }, null, 2));
@@ -129,12 +177,25 @@ if (!apply) {
     dryRun: true,
     wouldRename: planned,
     wouldRewrite: agentsNeedsRewrite ? ["AGENTS.md"] : [],
+    wouldMigrateTaskContracts: taskMigrationBefore.legacy,
+    taskStateWarnings: taskMigrationBefore.unreadable,
     alreadyMigrated,
     next: alreadyMigrated.length > 0 && planned.length === 0
       ? "re-run with --apply --remove-old to delete the originals"
       : "re-run with --apply"
   }, null, 2));
   process.exit(0);
+}
+
+if (taskMigrationBefore.unreadable.length > 0) {
+  console.log(JSON.stringify({
+    ok: false,
+    projectPath,
+    migrated: false,
+    taskStateWarnings: taskMigrationBefore.unreadable,
+    reason: "invalid task state requires manual recovery; no project files were changed"
+  }, null, 2));
+  process.exit(2);
 }
 
 const renamed = [];
@@ -148,7 +209,36 @@ for (const { from, to } of planned) {
 }
 
 if (agentsNeedsRewrite) {
-  fs.writeFileSync(agentsPath, rewriteText(fs.readFileSync(agentsPath, "utf8")));
+  fs.writeFileSync(agentsPath, migratedAgentsText);
+}
+
+const taskMigration = migrateTaskState(projectPath);
+if (taskMigration.warnings.length > 0) {
+  console.log(JSON.stringify({
+    ok: false,
+    projectPath,
+    migrated: false,
+    renamed,
+    taskMigration,
+    reason: "invalid task state requires manual recovery; old project paths were preserved"
+  }, null, 2));
+  process.exit(2);
+}
+if (taskMigration.migrated > 0) {
+  const migrationFile = path.join(projectPath, ".pi", "piagent-state", "migrations.json");
+  let migrationState = { schemaVersion: 1, applied: [] };
+  try {
+    const parsed = JSON.parse(fs.readFileSync(migrationFile, "utf8"));
+    if (parsed && typeof parsed === "object" && Array.isArray(parsed.applied)) migrationState = parsed;
+  } catch {
+    // Missing or unreadable migration metadata is reconstructed from applied work.
+  }
+  const applied = migrationState.applied.filter((entry) => entry?.id !== TASK_CONTRACT_MIGRATION_ID);
+  applied.push({ id: TASK_CONTRACT_MIGRATION_ID, appliedAt: new Date().toISOString(), migrated: taskMigration.migrated });
+  fs.mkdirSync(path.dirname(migrationFile), { recursive: true, mode: 0o700 });
+  const temporary = `${migrationFile}.${process.pid}.tmp`;
+  fs.writeFileSync(temporary, `${JSON.stringify({ schemaVersion: 1, applied }, null, 2)}\n`, { mode: 0o600 });
+  fs.renameSync(temporary, migrationFile);
 }
 
 const removed = [];
@@ -168,6 +258,7 @@ console.log(JSON.stringify({
   renamed,
   alreadyMigrated,
   rewrote: agentsNeedsRewrite ? ["AGENTS.md"] : [],
+  taskMigration,
   skipped,
   removedOld: removed,
   next: pendingCleanup > 0

@@ -4,7 +4,14 @@
   "title": "Pi Agent Task Implementation Contract",
   "type": "object",
   "required": [
+    "schemaVersion",
+    "taskRunId",
     "taskId",
+    "sessionId",
+    "changeMode",
+    "attempt",
+    "maxAttempts",
+    "previousAttempts",
     "summary",
     "riskLane",
     "expectedOutput",
@@ -15,15 +22,143 @@
     "requiredContext",
     "contextManifest",
     "memoryCitations",
+    "mcpCapabilities",
     "verifyCommands",
+    "workPlan",
+    "reviewLenses",
+    "baselineChangedFiles",
+    "baselineFileDigests",
+    "observedChangedFiles",
+    "finalWorkingTreeFiles",
+    "finalFileDigests",
     "changedFiles",
     "verifyEvidence",
-    "trace"
+    "trace",
+    "createdAt",
+    "updatedAt"
   ],
-  "properties": {
-    "taskId": {
+  "$defs": {
+    "nonEmptyString": {
       "type": "string",
       "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "uniqueItems": true
+    },
+    "citation": {
+      "type": "object",
+      "required": [
+        "path",
+        "reason"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "reason": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "additionalProperties": false
+    },
+    "fileDigests": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "properties": {
+    "schemaVersion": {
+      "const": 2
+    },
+    "taskRunId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "maxLength": 80
+    },
+    "taskId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "maxLength": 80
+    },
+    "sessionId": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "sessionName": {
+      "type": "string"
+    },
+    "changeMode": {
+      "enum": [
+        "source-change",
+        "read-only"
+      ]
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10
+    },
+    "maxAttempts": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10
+    },
+    "previousAttempts": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "required": [
+          "taskRunId",
+          "attempt",
+          "outcome",
+          "recordedAt"
+        ],
+        "properties": {
+          "taskRunId": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "attempt": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "outcome": {
+            "enum": [
+              "pending",
+              "completed",
+              "blocked",
+              "partial",
+              "failed"
+            ]
+          },
+          "failedAt": {
+            "enum": [
+              "research",
+              "plan",
+              "execute",
+              "verify",
+              "review"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "ruledOut": {
+            "type": "string"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      }
     },
     "summary": {
       "type": "string",
@@ -36,103 +171,68 @@
         "high-risk"
       ]
     },
+    "intakeMode": {
+      "enum": [
+        "model",
+        "runtime"
+      ]
+    },
     "expectedOutput": {
       "type": "string",
       "minLength": 10
     },
     "acceptanceCriteria": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1
-      },
-      "minItems": 1
+      "allOf": [
+        {
+          "$ref": "#/$defs/stringList"
+        },
+        {
+          "minItems": 1
+        }
+      ]
     },
     "scope": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1
-      },
-      "minItems": 1
+      "allOf": [
+        {
+          "$ref": "#/$defs/stringList"
+        },
+        {
+          "minItems": 1
+        }
+      ]
     },
     "outOfScope": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1
-      }
+      "$ref": "#/$defs/stringList"
     },
     "protectedPaths": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1
-      }
+      "$ref": "#/$defs/stringList"
     },
     "requiredContext": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1
-      }
+      "$ref": "#/$defs/stringList"
     },
     "contextManifest": {
       "type": "array",
       "items": {
-        "type": "object",
-        "required": [
-          "path",
-          "reason"
-        ],
-        "properties": {
-          "path": {
-            "type": "string"
-          },
-          "reason": {
-            "type": "string"
-          }
-        },
-        "additionalProperties": true
+        "$ref": "#/$defs/citation"
       }
     },
     "memoryCitations": {
       "type": "array",
       "items": {
-        "type": "object",
-        "required": [
-          "path",
-          "reason"
-        ],
-        "properties": {
-          "path": {
-            "type": "string",
-            "minLength": 1
-          },
-          "reason": {
-            "type": "string",
-            "minLength": 1
-          }
-        },
-        "additionalProperties": false
+        "$ref": "#/$defs/citation"
       }
     },
     "mcpCapabilities": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
+      "$ref": "#/$defs/stringList"
+    },
+    "verifyGroup": {
+      "$ref": "#/$defs/nonEmptyString"
     },
     "verifyCommands": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1
-      }
+      "$ref": "#/$defs/stringList"
     },
     "workPlan": {
       "type": "array",
-      "description": "Optional solo-first task tree for parent/subagent coordination.",
       "maxItems": 12,
       "items": {
         "type": "object",
@@ -146,7 +246,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "minLength": 1,
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
             "maxLength": 40
           },
           "title": {
@@ -176,16 +276,20 @@
               "pending",
               "in-progress",
               "done",
-              "skipped"
+              "skipped",
+              "failed"
             ]
           },
           "dependsOn": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 40
-            }
+            "$ref": "#/$defs/stringList"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
           }
         },
         "additionalProperties": false
@@ -193,7 +297,6 @@
     },
     "reviewLenses": {
       "type": "array",
-      "description": "Explicit review lenses for the task, used instead of blanket swarm review.",
       "uniqueItems": true,
       "items": {
         "enum": [
@@ -209,7 +312,6 @@
     },
     "orchestration": {
       "type": "object",
-      "description": "Resolved solo-first orchestration policy captured when the task starts.",
       "properties": {
         "mode": {
           "enum": [
@@ -226,31 +328,49 @@
           ]
         },
         "reason": {
-          "type": "string",
-          "minLength": 1
+          "$ref": "#/$defs/nonEmptyString"
         },
         "fieldGuidePath": {
-          "type": "string",
-          "minLength": 1
+          "$ref": "#/$defs/nonEmptyString"
         },
         "modelRoles": {
           "type": "object",
           "properties": {
-            "planner": { "type": "string" },
-            "worker": { "type": "string" },
-            "reviewer": { "type": "string" },
-            "watchdog": { "type": "string" }
+            "planner": {
+              "type": "string"
+            },
+            "worker": {
+              "type": "string"
+            },
+            "reviewer": {
+              "type": "string"
+            },
+            "watchdog": {
+              "type": "string"
+            }
           },
           "additionalProperties": false
         }
       },
       "additionalProperties": false
     },
+    "baselineChangedFiles": {
+      "$ref": "#/$defs/stringList"
+    },
+    "baselineFileDigests": {
+      "$ref": "#/$defs/fileDigests"
+    },
+    "observedChangedFiles": {
+      "$ref": "#/$defs/stringList"
+    },
+    "finalWorkingTreeFiles": {
+      "$ref": "#/$defs/stringList"
+    },
+    "finalFileDigests": {
+      "$ref": "#/$defs/fileDigests"
+    },
     "changedFiles": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
+      "$ref": "#/$defs/stringList"
     },
     "verifyEvidence": {
       "type": "array",
@@ -259,36 +379,42 @@
         "required": [
           "command",
           "exitCode",
-          "summary"
+          "summary",
+          "recordedAt"
         ],
         "properties": {
           "command": {
-            "type": "string"
+            "$ref": "#/$defs/nonEmptyString"
           },
           "exitCode": {
             "type": "integer"
           },
           "summary": {
-            "type": "string"
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
           },
           "observed": {
-            "type": "boolean",
-            "description": "True only when the verify command was matched against an observed bash tool_result after task start."
+            "type": "boolean"
           },
           "observedAt": {
             "type": "string",
-            "description": "Timestamp of the matching bash tool_result observation."
+            "format": "date-time"
           },
           "isError": {
-            "type": "boolean",
-            "description": "Observed Pi tool_result isError flag."
+            "type": "boolean"
           },
           "matchedProfileCommand": {
-            "type": "boolean",
-            "description": "True only when the observed verify command exactly matches one of task.verifyCommands."
+            "type": "boolean"
+          },
+          "workingTreeDigest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
           }
         },
-        "additionalProperties": true
+        "additionalProperties": false
       }
     },
     "trace": {
@@ -305,10 +431,47 @@
             "partial",
             "failed"
           ]
+        },
+        "friction": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "recordedAt": {
+          "type": "string",
+          "format": "date-time"
         }
       },
-      "additionalProperties": true
+      "additionalProperties": false
+    },
+    "failedAt": {
+      "enum": [
+        "research",
+        "plan",
+        "execute",
+        "verify",
+        "review"
+      ]
+    },
+    "failureReason": {
+      "type": "string"
+    },
+    "ruledOut": {
+      "type": "string"
+    },
+    "migratedFromSchemaVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
     }
   },
-  "additionalProperties": true
+  "additionalProperties": false
 }

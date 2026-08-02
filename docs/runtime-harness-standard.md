@@ -6,14 +6,15 @@ Runtime harness là “máy vận hành task” dùng chung cho nhiều project:
 
 ```text
 User request
-  -> project profile
-  -> intake/risk lane
+  -> Pi session name / task identity
+  -> resolved project profile + capability lock
+  -> intake/risk lane/change mode
   -> required context manifest
-  -> plan / task contract
+  -> session-bound task contract v2 + work-plan DAG
   -> guarded tool calls
-  -> implementation
-  -> observed verify evidence
-  -> trace / handoff
+  -> baseline-aware changed-file evidence
+  -> all-command observed verification
+  -> immutable trace / retry handoff
 ```
 
 Project cụ thể chỉ cần adapter/profile riêng. Core package giữ lifecycle, policy, verification, và documentation flow.
@@ -23,10 +24,12 @@ Project cụ thể chỉ cần adapter/profile riêng. Core package giữ lifecy
 | Module | Pi Agent Platform target | Lý do |
 |---|---|---|
 | Risk lane | `riskLane` + profile `hardGates` | Chặn auth, release, provider config, destructive action, database migration. |
-| Intake | `piagent_task_start` | Mỗi task có scope, output, acceptance criteria trước khi edit. |
+| Intake | runtime automatic intake; fallback `piagent_task_start` | Mỗi attempt có identity/session/scope/output/acceptance criteria trước model work; bounded tasks không tốn management turn. |
 | Context rules | `/onboard run`, Pi Context Engine, `.pi/project-context.md`, `requiredContext`, context manifest | Giảm token và tránh đọc toàn repo. |
-| Test matrix | `verifyCommands` + observed verify evidence | DONE phải có exact verify command thực chạy qua Pi bash hoặc `N/A` rõ lý do. |
-| Trace | `piagent_trace_record`, `.pi/piagent-state/traces.jsonl`, session entry | Có audit trail cho task. |
+| Test matrix | `verifyCommands` + observed verify evidence | Source DONE phải có mọi exact verify command thực chạy và pass qua Pi bash. |
+| Trace | completion hook, `.pi/piagent-state/traces.jsonl`, session entry | Runtime tự ghi audit trail; tool thủ công chỉ dùng recovery. |
+| Retry | `attempt`, `maxAttempts`, `previousAttempts`, failed step state | Lần sau giữ failure/ruled-out evidence và không loop vô hạn. |
+| Change truth | Git baseline/final digests + tool-result observation | Không nhận file dirty cũ hoặc claim không có evidence là thay đổi của task. |
 | Protected paths | `protectedPaths` trong profile + extension guard | Mỗi project có vùng cấm riêng. |
 | Tool registry | `mcpCapabilities` + `.mcp.json` | Không tự đoán tool/MCP. |
 | Domain contract | Project docs/profile | Chỉ project cần UX/form/data strict mới bật. |
@@ -57,6 +60,9 @@ tool context mang tính advisory chỉ được nạp khi task thực sự cần
 
 ```text
 1. Intake
+   - one Pi session per task
+   - runtime auto-start for bounded source changes; manual fallback for broad/high-risk/ambiguous scope
+   - source-change or read-only
    - risk lane
    - expected output
    - acceptance criteria
@@ -64,41 +70,46 @@ tool context mang tính advisory chỉ được nạp khi task thực sự cần
    - protected paths
 
 2. Context
-   - load concise piagent_context once
-   - use one token-budgeted Context Engine pack for unfamiliar/cross-module work
-   - read only targeted requiredContext
-   - check only large/unfamiliar files with piagent_context_budget
-   - record context manifest
+   - runtime injects one bounded Context Engine navigation pack when useful
+   - read only targeted current files
+   - successful reads become context manifest evidence automatically
+   - no routine context/status/index tool calls
 
 3. Plan
    - exact touchpoints
    - verify command
    - rollback/handoff if high-risk
+   - dependency DAG with one write owner
 
 4. Implement
-   - check complex/risky shell with piagent_exec_policy_check
-   - check non-piagent tools only when capability is unclear
+   - tool-call hook checks shell, capabilities and external actions automatically
    - edit only in scope
    - avoid protected paths
+   - block direct and shell writes outside scope
 
 5. Verify
-   - run exact mapped verify command
-   - store evidence
+   - run every exact mapped verify command
+   - tool-result hook records exact observed evidence after task start
+   - bind passing evidence to the current working-tree digest
+   - reconcile changed files against baseline and scope
    - if verify unavailable: not DONE
 
 6. Trace
-   - changed files
-   - commands
-   - result
-   - friction
-   - next step
-   - piagent_task_gate_check before DONE
+   - completion hook projects the final contract and runs the gate
+   - runtime persists changed files, commands, result and final trace
+   - one bounded continuation repairs missing evidence; it never loops
+   - freeze the contract after a terminal outcome
+
+7. Retry when needed
+   - start a fresh Pi session with the same taskId
+   - carry forward failedAt, reason, ruledOut, and prior outcome
+   - refuse attempts beyond the first attempt's maxAttempts
 ```
 
 | Lane | Extra context/orchestration |
 |---|---|
-| `tiny` | Core lifecycle only; parent agent, targeted reads, exact verify. |
-| `normal` | Index/memory only for unfamiliar areas; bounded read-only delegation when it saves context. |
+| `tiny` | Automatic lifecycle; parent agent, targeted reads, exact verify, no progress/evidence calls. |
+| `normal` | Automatic objective evidence plus one explicit final review step. |
 | `high-risk` | Relevant index/memory/vendor evidence plus explicit security/data/release review. |
 
 ## Maturity phases
@@ -108,20 +119,27 @@ tool context mang tính advisory chỉ được nạp khi task thực sự cần
 | P0 | package core + profile + docs + protected path guard | Chỉ đủ pilot/read-only. |
 | P1 | schema + task contract + doctor + verify-local + lean prompts | Dùng được cho task nhỏ có review. |
 | P2 | extension tools for task/context/verify/trace + session entries | Dùng được cho source task có guard rõ. |
-| P3 | exec policy + context budget + tool registry + task gate + benchmark recorder | Dùng được cho guarded project workflows. |
-| P4 | stronger worktree/sandbox/team governance | Cần project-specific dry run trước khi làm default. |
+| P3 | exec policy + context budget + tool registry + task gate + automatic paired benchmark | Dùng được cho guarded project workflows. |
+| P4 | session-bound v2 state, Git change truth, retry, completion hook, bounded secure local state | Sẵn sàng rollout có kiểm soát; OS/MDM governance vẫn ngoài core. |
 
 ## Chuẩn DONE
 
 Một Pi task chỉ DONE khi có đủ:
 
 - profile loaded;
+- task is bound to the current Pi session;
 - lane classified;
 - protected paths known;
 - context manifest exists;
 - plan exists for source write;
 - changed files listed;
-- exact verify command ran and passed, hoặc explicitly `N/A` với reason;
+- every exact source verify command ran and passed;
+- declared changed files are evidenced, in scope, and different from baseline;
+- work plan has no pending/in-progress/failed step;
 - trace/handoff recorded;
 - no secrets touched;
 - no protected path writes.
+
+Read-only task có thể hoàn tất không cần source verifier nhưng phải giữ working
+tree không đổi. Source task không có Git hoặc meaningful verifier bị từ chối từ
+đầu, không đợi tới cuối mới báo thiếu evidence.

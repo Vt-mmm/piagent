@@ -6,7 +6,8 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const scriptPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "scripts", "migrate-project-state.mjs");
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const scriptPath = path.join(repoRoot, "scripts", "migrate-project-state.mjs");
 
 function makeLegacyProject(overrides = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-migrate-"));
@@ -80,6 +81,50 @@ describe("project state migration", () => {
     assert.equal(fs.readFileSync(path.join(root, "AGENTS.md"), "utf8"), before);
   });
 
+  it("updates only the managed AGENTS block and preserves project instructions", () => {
+    const root = makeLegacyProject();
+    run(root, "--apply", "--remove-old");
+    fs.writeFileSync(path.join(root, "AGENTS.md"), [
+      "# Project instructions",
+      "",
+      "Keep this team-specific preface.",
+      "<!-- piagent-managed:start -->",
+      "## Operating model",
+      "Old managed checklist.",
+      "<!-- piagent-managed:end -->",
+      "",
+      "## Team rule",
+      "Never replace this line.",
+      ""
+    ].join("\n"));
+
+    const preview = run(root);
+    assert.deepEqual(preview.wouldRewrite, ["AGENTS.md"]);
+    run(root, "--apply");
+    const agents = fs.readFileSync(path.join(root, "AGENTS.md"), "utf8");
+    assert.match(agents, /piagent_task_start` exactly once/);
+    assert.match(agents, /Keep this team-specific preface/);
+    assert.match(agents, /Never replace this line/);
+    assert.doesNotMatch(agents, /Old managed checklist/);
+    assert.equal(run(root).migrated, false);
+  });
+
+  it("upgrades the exact generated v1.2.10 instructions without requiring markers", () => {
+    const root = makeLegacyProject();
+    run(root, "--apply", "--remove-old");
+    fs.copyFileSync(
+      path.join(repoRoot, "tests", "fixtures", "AGENTS.v1.2.10.md"),
+      path.join(root, "AGENTS.md")
+    );
+
+    assert.deepEqual(run(root).wouldRewrite, ["AGENTS.md"]);
+    run(root, "--apply");
+    assert.equal(
+      fs.readFileSync(path.join(root, "AGENTS.md"), "utf8"),
+      fs.readFileSync(path.join(repoRoot, "templates", "project", "AGENTS.md"), "utf8")
+    );
+  });
+
   it("migrates nested state directories", () => {
     const root = makeLegacyProject({ ".pi/company-state/traces/one.jsonl": '{"tool":"company_task_start"}\n' });
     run(root, "--apply", "--remove-old");
@@ -105,5 +150,45 @@ describe("project state migration", () => {
     const result = run(root, "--apply");
     assert.deepEqual(result.skipped, [{ path: ".pi/company-state", reason: "symlink" }]);
     assert.ok(!fs.existsSync(path.join(root, ".pi", "piagent-state", "secret.json")));
+  });
+
+  it("previews and applies task-contract v2 migration on an otherwise current project", () => {
+    const root = makeLegacyProject();
+    run(root, "--apply", "--remove-old");
+    const tasks = path.join(root, ".pi", "piagent-state", "tasks");
+    fs.mkdirSync(tasks, { recursive: true });
+    fs.writeFileSync(path.join(tasks, "ticket-9.json"), `${JSON.stringify({
+      taskId: "TICKET-9",
+      summary: "Migrate the existing task evidence safely",
+      riskLane: "normal",
+      expectedOutput: "A v2 task contract is written.",
+      acceptanceCriteria: ["Migration is durable"],
+      scope: ["src/**"],
+      outOfScope: [],
+      protectedPaths: [],
+      requiredContext: [],
+      contextManifest: [],
+      memoryCitations: [],
+      mcpCapabilities: [],
+      verifyCommands: ["npm test"],
+      workPlan: [],
+      reviewLenses: [],
+      changedFiles: [],
+      verifyEvidence: [],
+      trace: { outcome: "pending" },
+      createdAt: "2026-07-30T01:00:00.000Z",
+      updatedAt: "2026-07-30T01:00:00.000Z"
+    })}\n`);
+
+    const preview = run(root);
+    assert.equal(preview.dryRun, true);
+    assert.equal(preview.wouldMigrateTaskContracts, 1);
+    const applied = run(root, "--apply");
+    assert.equal(applied.taskMigration.migrated, 1);
+    const current = fs.readdirSync(tasks).filter((name) => name.endsWith(".json"));
+    const migrated = JSON.parse(fs.readFileSync(path.join(tasks, current[0]), "utf8"));
+    assert.equal(migrated.schemaVersion, 2);
+    assert.equal(migrated.sessionId, "legacy");
+    assert.ok(fs.existsSync(path.join(root, ".pi", "piagent-state", "migrations.json")));
   });
 });

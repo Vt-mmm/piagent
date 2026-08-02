@@ -10,7 +10,7 @@ const scriptByCommand = {
   "piagent-uninstall": "scripts/uninstall-global.sh",
   "piagent-init": "scripts/init-project.sh",
   "piagent-doctor": "scripts/team-doctor.sh",
-  "piagent-benchmark": "scripts/quality-benchmark.sh",
+  "piagent-benchmark": "scripts/benchmark-runner.mjs",
   "piagent-usage": "scripts/pi-session-stats.sh",
   "piagent-models": "scripts/pi-model-catalog.sh",
   "piagent-model-scope": "scripts/configure-model-scope.sh",

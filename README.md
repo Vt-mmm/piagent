@@ -74,7 +74,7 @@ Removal targets what is registered in Pi's settings rather than what the current
 - Runtime profile selection via `/profile`, plus select-style tech stack setup via `/profile setup` and `/profile tech`.
 - Runtime usage/session controls via `/usage`, `/name`, `/fresh`, plus Pi native `/session`.
 - Explicit project memory via `/memory` or `/memory-policy` and `piagent_memory_*` tools.
-- Local Context Engine controls via `/context`: incremental code index, hybrid search, token-budgeted packs, test impact, efficiency telemetry, and semantic compaction. Index storage is owner-only and securely purged when exclusion policy changes; results remain advisory, not a security boundary or source of truth.
+- Local Context Engine controls via `/context`: incremental code index, hybrid search, token-budgeted packs, bounded current-turn source/test snapshots for automatic tasks, test impact, efficiency telemetry, and semantic compaction. Index storage is owner-only and securely purged when exclusion policy changes; manual packs remain advisory, while current-turn snapshots are freshness-checked and exact edits fail closed on a later mismatch.
 - MCP setup helpers for Context7, Chrome DevTools, GitHub, Playwright, and Figma.
 - Subagent setup helpers for read-only scouting, planning, implementation, review, and risk challenge.
 - Chat image-path intake: paste a screenshot path from the project or a granted `additionalReadRoots` directory and the guard attaches it as `[image1]` before the model sees the prompt.
@@ -90,7 +90,16 @@ Removal targets what is registered in Pi's settings rather than what the current
   - `piagent_orchestration_policy`
 - Context7-ready tech stack manifest and concise `.pi/tech-context/*` snapshots for selected profile roles.
 - Accident-brake guardrails for protected paths, destructive shell commands, task contracts, context manifests, observed verification evidence, and trace records.
-- Quality benchmark recorder for comparing approved agent surfaces, models, and workflow presets on the same task scenarios.
+- Session-bound Task Contract v2: one Pi session per task, bounded retry history,
+  Git baseline-aware changed files, scope enforcement, all-command verification,
+  and an immutable terminal outcome.
+- Bounded owner-only local state with cross-process JSONL rotation and a shared
+  symlink-safe boundary for task evidence, telemetry, traces, and captures.
+- One-command paired benchmark that compares Piagent with Raw Pi or controlled
+  `codex-cli` in clean workspaces and an isolated temporary Codex home, prepares Piagent as an already-onboarded
+  steady-state project, grades hidden acceptance/safety/workflow evidence, and
+  reads exact JSONL usage plus privacy-safe tool histograms. The legacy manual
+  recorder remains available for project-specific tasks.
 - Built-in profiles for frontend, backend, fullstack, BE-readonly/FE-write, data, DevOps, mobile, docs, Python, and Node TypeScript.
 - Versioned capability packs with deterministic catalog, profile resolution, integrity lock, and permission checks.
 
@@ -130,6 +139,20 @@ Inside Pi:
 ```
 
 This shows the active mode, max subagents, review lenses, Field Guide path, and writer policy without triggering a model follow-up.
+
+For bounded source work, runtime creates the session-bound contract before the
+model starts and injects its path scope plus concise verifier. Broad, high-risk,
+or ambiguous work falls back to one explicit `piagent_task_start`. A source task
+requires a Git working tree and a meaningful project verifier. Direct and shell
+writes are constrained to declared scope; final completion needs every planned
+verify command and changed-file evidence. Read-only scouts do not need a source
+verifier and must leave the working tree unchanged.
+
+Routine evidence is runtime-managed: successful targeted reads, actual changes,
+exact verifier results, current-tree digest, trace and final gate are recorded
+from Pi lifecycle hooks. Automatic bounded tasks carry no Piagent management
+schema or lifecycle calls. Context/status/evidence/gate tools are diagnostic or
+recovery surfaces, not a checklist for every task.
 
 ## Profiles
 
@@ -239,7 +262,7 @@ One command runs the full local gate — typecheck, tests, capability catalog, d
 npm run verify
 ```
 
-Individual checks and the contributor flow are in [CONTRIBUTING.md](CONTRIBUTING.md). Token and session follow-up is `/usage` inside Pi; see [Usage observability](docs/usage-observability.md). Comparing agent surfaces and models on the same scenarios: [Quality benchmark guide](docs/quality-benchmark.md).
+Individual checks and the contributor flow are in [CONTRIBUTING.md](CONTRIBUTING.md). Token and session follow-up is `/usage` inside Pi; see [Usage observability](docs/usage-observability.md). Preview the automatic paired benchmark with `piagent-benchmark --dry-run`, then run it with `piagent-benchmark`. Compare against the `codex-cli` surface with `piagent-benchmark --surfaces piagent,codex-cli --model <provider/model> --thinking high`; scoring, isolation and quota details are in the [Quality benchmark guide](docs/quality-benchmark.md).
 
 ## Public safety
 
@@ -291,7 +314,7 @@ This repository intentionally excludes:
 
 ## Maturity
 
-The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.2.10` or a reviewed commit.
+The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.2.11` or a reviewed commit.
 
 Ready for:
 

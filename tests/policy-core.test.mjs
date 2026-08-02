@@ -7,6 +7,7 @@ import {
   findProtectedPathInCommand,
   matchesAnyPath,
   matchesProtectedPath,
+  shellHasFileWriteRedirection,
   unresolvedPathExpansions
 } from "../packages/piagent-core/extensions/policy-core.js";
 
@@ -327,6 +328,15 @@ describe("protected path extraction from shell", () => {
   it("leaves descriptor duplication and unprotected redirection alone", () => {
     for (const command of ["echo x >&2", "echo x 2>&1", "exec 3>&-", "echo x >| notes.txt", "> notes.txt cat"]) {
       assert.equal(findProtectedPathInCommand(command, policy.shellProtectedPaths), undefined, command);
+    }
+  });
+
+  it("distinguishes filesystem-writing redirects from reads, heredocs, and descriptor duplication", () => {
+    for (const command of ["printf x > out.txt", "printf x >>out.txt", "exec <> state.db", "echo x >& output.txt"]) {
+      assert.equal(shellHasFileWriteRedirection(command), true, command);
+    }
+    for (const command of ["cat < input.txt", "cat <<EOF", "cat <<< text", "echo x >&2", "echo x 2>&1", "printf x > {a,b}"]) {
+      assert.equal(shellHasFileWriteRedirection(command), false, command);
     }
   });
 

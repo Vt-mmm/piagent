@@ -213,6 +213,16 @@ function binForPrefix(prefix) {
   return process.platform === "win32" ? prefix : path.join(prefix, "bin");
 }
 
+function npmPrefixForInstalledHelper(root) {
+  if (path.basename(root) !== "platform") return undefined;
+  const scopeRoot = path.dirname(root);
+  if (path.basename(scopeRoot) !== "@piagent") return undefined;
+  const nodeModulesRoot = path.dirname(scopeRoot);
+  if (path.basename(nodeModulesRoot) !== "node_modules") return undefined;
+  const parent = path.dirname(nodeModulesRoot);
+  return path.basename(parent) === "lib" ? path.dirname(parent) : parent;
+}
+
 function prependPath(directory) {
   process.env.PATH = `${directory}${path.delimiter}${process.env.PATH ?? ""}`;
 }
@@ -231,6 +241,23 @@ function resolveNpmInstallTarget(options, needsGlobalInstall) {
 
   const defaultPrefix = configuredNpmPrefix();
   const defaultRoot = npmRoot(defaultPrefix);
+  const activePrefix = runningFromGlobalInstall() ? npmPrefixForInstalledHelper(platformRoot) : undefined;
+  if (
+    needsGlobalInstall
+    && activePrefix
+    && path.resolve(activePrefix) !== path.resolve(defaultPrefix ?? "")
+  ) {
+    const activeRoot = npmRoot(activePrefix);
+    if (activeRoot && canWriteOrCreate(activeRoot)) {
+      return {
+        prefix: activePrefix,
+        root: activeRoot,
+        bin: binForPrefix(activePrefix),
+        reason: "active-install",
+        configuredPrefix: defaultPrefix
+      };
+    }
+  }
   if (!needsGlobalInstall || (defaultRoot && canWriteOrCreate(defaultRoot))) {
     return { prefix: undefined, root: defaultRoot, bin: undefined, reason: "default" };
   }
@@ -289,15 +316,17 @@ function summarizeMigration(report, dryRun) {
   const rewrote = report.rewrote?.length ?? report.wouldRewrite?.length ?? 0;
   const wouldRename = report.wouldRename?.length ?? 0;
   const alreadyMigrated = report.alreadyMigrated?.length ?? 0;
+  const wouldMigrateTasks = report.wouldMigrateTaskContracts ?? 0;
+  const migratedTasks = report.taskMigration?.migrated ?? 0;
 
   if (dryRun) {
-    const planned = wouldRename + rewrote + alreadyMigrated;
+    const planned = wouldRename + rewrote + alreadyMigrated + wouldMigrateTasks;
     return planned > 0
-      ? `project migration: would update legacy layout (${wouldRename} rename, ${rewrote} rewrite, ${alreadyMigrated} already copied)`
+      ? `project migration: would update legacy layout (${wouldRename} rename, ${rewrote} rewrite, ${alreadyMigrated} already copied, ${wouldMigrateTasks} task contract)`
       : "project migration: already current";
   }
   if (report.migrated === false) return "project migration: already current";
-  return `project migration: applied (${renamed} rename, ${rewrote} rewrite, ${removed} old path removed)`;
+  return `project migration: applied (${renamed} rename, ${rewrote} rewrite, ${removed} old path removed, ${migratedTasks} task contract)`;
 }
 
 function runProjectMigration(project, options, activePlatformRoot) {
@@ -315,6 +344,8 @@ function runProjectMigration(project, options, activePlatformRoot) {
   if ((report.skipped?.length ?? 0) > 0) {
     fail(`project migration skipped protected entries: ${report.skipped.map((entry) => `${entry.path} (${entry.reason})`).join(", ")}`);
   }
+  const stateWarnings = [...(report.taskStateWarnings ?? []), ...(report.taskMigration?.warnings ?? [])];
+  if (stateWarnings.length > 0) fail(`project migration found invalid task state: ${stateWarnings.join("; ")}`);
   console.log(`  ${summarizeMigration(report, options.dryRun)}`);
 }
 
@@ -407,6 +438,8 @@ function main() {
   if (npmTarget.bin) prependPath(npmTarget.bin);
   if (npmTarget.reason === "user-prefix") {
     console.log(`  npm:     default global root is not writable (${npmTarget.blockedRoot ?? "unknown"}); using ${npmTarget.prefix}`);
+  } else if (npmTarget.reason === "active-install") {
+    console.log(`  npm:     active helper is installed under ${npmTarget.prefix}; keeping host and helper in that prefix`);
   } else if (npmTarget.reason === "explicit") {
     console.log(`  npm:     using explicit global prefix ${npmTarget.prefix}`);
   }

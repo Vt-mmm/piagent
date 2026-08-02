@@ -2,6 +2,143 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.2.11 - 2026-08-02
+
+### Breakthrough task harness
+
+- Added Task Implementation Contract schema v2 with unique `taskRunId`, Pi
+  `sessionId`/`sessionName` binding, `source-change` versus `read-only` mode,
+  bounded attempts, prior failure summaries, work-plan progress, and baseline,
+  observed, final and declared changed-file evidence.
+- Enforced one Pi session per task. Session rename updates the bound contract;
+  resume maps legacy state only when Pi custom trace identifies the task. Retry
+  starts in a fresh session, inherits prior evidence and cannot raise the limit
+  fixed by attempt one.
+- Source mutation now requires a task, a Git working tree, declared scope and a
+  meaningful verifier. Read-only inspection remains available before a task and
+  in scout mode. Terminal contracts are immutable.
+- Final completion now requires every exact verify command to have a passing Pi
+  bash observation after task start. The gate reconciles changed-file claims
+  against Git baseline digests and tool results, rejects out-of-scope files and
+  records both source and destination of staged renames. The assistant
+  completion hook catches a premature DONE claim even when the agent skips the
+  explicit gate call.
+- Added `piagent_task_progress`, failed work-plan steps, dependency/cycle checks,
+  failure phase/reason/ruled-out evidence and deterministic retry handoff.
+
+### Context and performance
+
+- Replaced routine model-driven intake/context/evidence/trace/gate choreography
+  with lifecycle hooks. Runtime now creates bounded task contracts before the
+  first model turn, deriving path/glob scope from the request and bounded Context
+  Engine navigation. Broad, high-risk, ambiguous, or protected-path requests
+  fail over to explicit intake instead of silently widening scope.
+- Automatic source tasks expose zero Piagent management schemas and need no
+  `task_start` round trip. Manual intake validates every scope entry as a
+  project-relative path/glob, keeps the active tool surface cache-stable, and
+  adds recovery schemas only when the selected lane requires them.
+- Routine tasks no longer advertise the duplicate `piagent-ops` skill to the
+  model. Runtime states that root project instructions are already loaded, so
+  the agent does not spend tool calls re-reading platform policy or root
+  `AGENTS.md`; the skill remains available for explicit manual/recovery use.
+- A bounded automatic task can receive a current-turn Context Engine snapshot
+  of relevant source/tests before its first model action. The snapshot is capped
+  at 900 estimated tokens, restricted to source/test roots, filtered by the
+  active exclusion policy and skipped for stale/low-confidence indexes; the
+  agent re-reads only missing regions or edit mismatches.
+- Node-family runtime intake resolves the generic verifier to concise existing
+  package scripts such as `npm test`, while preserving the profile's fail-closed
+  command when package metadata is absent or invalid.
+- Removed the Piagent tool-loader schema from the default session and task
+  surface. Prompt classification activates the required group directly, while
+  explicit diagnostics can still request the loader; ordinary turns therefore
+  carry no unused management schema.
+- Verification evidence is bound to a SHA-256 digest of the current working
+  tree. A later edit invalidates prior proof; running a verifier no longer looks
+  like a mutation. Files edited and restored to their baseline digest do not
+  satisfy the final changed-file gate.
+- Added one bounded automatic continuation for automatic/assisted tasks when an
+  agent stops with missing evidence, including the “existing tests pass but no
+  relevant diff” case. The continuation uses Pi `followUp`, never loops, reports
+  projected final-gate reasons, and recognizes Vietnamese completion wording.
+  Set `PIAGENT_AUTO_RECOVERY=off` for rollback.
+- Added lifecycle-native read-only plans: tiny scouts complete from observed
+  reads, normal scouts retain one explicit evidence review, and high-risk or
+  custom plans keep manual checkpoints.
+- Auto Context Engine packing now skips follow-up turns once a task is active,
+  avoiding repeated navigation payloads during verification or recovery.
+- Automatic navigation also skips prompts that already name a concrete path,
+  including protected dotfiles such as `.env`; the agent reads the bounded
+  target directly instead of paying for an unrelated context pack.
+- Benchmark workflow scoring accepts exactly one persisted intake source:
+  runtime intake with zero model calls, or manual intake with one `task_start`.
+  It still requires zero routine context/evidence/gate choreography and exposes
+  failed checks instead of awarding 10/10 to expensive management loops.
+
+- Auto-context is cached by project, session and prompt. A repeated prompt in
+  one session is not reinjected; a manual pack with the same query returns a
+  compact reuse marker unless refresh is requested. Another session still gets
+  its own pack.
+- Reduced automatic/manual context budgets, kept dynamic tools/default-on
+  telemetry, added conservative UTF-8 token estimation and verified accented or
+  unaccented Vietnamese retrieval.
+- Profile source verifiers now fail closed instead of printing a successful
+  placeholder. Node-family profiles run configured checks; DevOps verification
+  cannot hide one failing verifier behind another passing tool.
+- Added `piagent-benchmark`, a one-command paired Raw Pi versus Piagent runner.
+  It creates isolated Git fixtures, alternates execution order, grades hidden
+  correctness/scope/safety and Piagent workflow evidence, reads exact usage from
+  Pi session JSONL, and emits private JSON, HTML, text, and JSONL reports.
+- The same command can now compare `piagent` with `codex-cli`. Controlled mode
+  runs Codex ephemeral in a workspace-write sandbox and a private temporary
+  Codex home, excluding global `AGENTS.md`, user config/rules, hooks, plugins,
+  sessions, and caches while linking the existing credential without copying it;
+  disables available optional integrations discovered from that CLI version,
+  requires command-line-pinned model/thinking parity, and keeps native mode as
+  an explicit full-product comparison.
+- Added fail-closed streaming parsing for Codex exec JSONL, including UTF-8
+  chunk boundaries and output larger than the retained log tail. Fresh input
+  excludes cached input, reasoning is not counted twice, full stdout is hashed
+  without being stored, and unavailable OAuth currency cost remains `n/a`.
+- The automatic benchmark prepares Piagent fixtures as initialized, onboarded
+  steady-state projects before the measured model run. It no longer charges
+  every task repeat for one-time onboarding, while post-baseline context/index
+  mutations remain visible to the scope gate.
+- Benchmark reporting separates hidden correctness from scope and end-to-end
+  reliability, shows median usage across every measured run, and records only
+  tool-name histograms so failed expensive runs cannot disappear from the
+  headline while tool arguments and outputs remain private. These orthogonal
+  metrics are emitted as benchmark report schema v2.
+- Benchmark score bands cover quality, safety, reliability, workflow and fresh
+  token efficiency. A token-saving verdict requires quality/reliability at
+  least `9/10`, perfect safety/workflow, non-inferior quality, at least three
+  same-model successful usage pairs, and a paired geometric-mean fresh-token
+  ratio below `1`. The report keeps marginal medians as diagnostics, and adds
+  pair wins plus median paired delta so task scale cannot silently reverse the
+  conclusion. Manual benchmark recording remains backward compatible.
+
+### State, migration and security
+
+- `piagent-update` now keeps host and helper updates in the writable npm prefix
+  that owns the active command. This prevents an `/opt/homebrew` installation
+  from being shadowed by a second copy under `/usr/local` or a user fallback
+  when `npm config get prefix` points somewhere else.
+- Added idempotent v1-to-v2 task migration to session startup and
+  `piagent-update --project`. Preflight refuses corrupt state before project
+  writes; v1 is archived only after v2 exists. Existing onboarded projects keep
+  their grants and do not need onboarding again.
+- Added a shared local-state path boundary for task state, Context Engine,
+  telemetry, bash evidence, traces and captures. It accepts a project opened
+  through a legitimate cwd symlink but refuses `.pi` or any descendant ancestor
+  symlink that escapes the project.
+- JSONL state is owner-only, size bounded and rotated under a cross-process
+  lock. Oversized records become audit markers. Tool-result captures are pruned
+  to 500 files, 128 MiB and 30 days; readers/pruners tolerate concurrent
+  rotation and deletion.
+- Task v2 readers reject unknown fields, malformed timestamps, invalid nested
+  plans, dependency cycles and taskRunId/filename mismatches. Git snapshots now
+  remain truthful in unborn repositories and across staged renames.
+
 ## v1.2.10 - 2026-07-31
 
 ### Security

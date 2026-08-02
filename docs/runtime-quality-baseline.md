@@ -133,7 +133,18 @@ Runtime behavior:
 - yêu cầu observed passing verify khớp exact `task.verifyCommands` khi task có source changes;
 - block `piagent_trace_record completed` nếu final gate đang enforce và proof chưa đủ.
 
-Agent vẫn phải gọi `piagent_task_gate_check` trước final handoff.
+Agent không phải gọi các tool evidence/trace/gate trong task thường. Hook
+`tool_result` tự ghi targeted reads, changed files và exact verifier; hook
+`message_end` dựng final contract, chạy gate rồi ghi terminal trace khi đủ proof.
+Các tool thủ công vẫn tồn tại cho diagnostics/recovery và high-risk/custom plan.
+
+Passing evidence còn phải khớp `workingTreeDigest` hiện tại. Bất kỳ mutation nào
+sau verify làm evidence cũ stale. Việc chạm một file rồi revert về đúng digest
+baseline chỉ được giữ trong audit history, không được tính là final source diff.
+
+Automatic/assisted plan được phép một `followUp` correction turn khi projected
+gate fail. Lượt này nhận đúng missing reasons, không tự lặp; rollback bằng
+`PIAGENT_AUTO_RECOVERY=off`.
 
 `piagent_verify_record` không còn tin `exitCode` tự khai báo. Lệnh verify phải khớp một bash tool result đã quan sát sau `task.createdAt`, và claimed `exitCode` phải khớp trạng thái `isError` của Pi. Observed result được ghi vào `.pi/piagent-state/observed-bash.jsonl` để parent/subagent process có thể share evidence trong cùng project cwd.
 
@@ -158,7 +169,7 @@ Guard state tự bảo vệ:
 - mọi text block trong `tool_result` và string leaf trong JSON-like `details` có thêm shared sensitive-data redaction; key như `password`, `token`, `credential` được dùng làm context phát hiện;
 - `npm run benchmark:redaction` gate contextual recall, benign preservation, structured objects/arrays, và large-output correctness bằng synthetic data; opaque entropy không có credential context được báo riêng và không gate release;
 - bash evidence chỉ giữ command text đã redact ở memory/disk; raw command hash vẫn dùng để exact-match verify evidence;
-- `piagent_task_start`, `piagent_verify_record`, và `tool_result` hook vẫn ghi state được qua internal extension path.
+- `piagent_task_start`, lifecycle hooks và các recovery tools vẫn ghi state được qua internal extension path.
 
 ## 5. Local verification
 
@@ -188,34 +199,37 @@ pi list --approve
 
 ## 6. Quality benchmark
 
-Script:
+Automatic paired benchmark:
 
 ```bash
-bash scripts/quality-benchmark.sh <project-path> --init
-bash scripts/quality-benchmark.sh <project-path> --record \
-  --scenario bounded-source-fix \
-  --surface pi \
-  --result pass \
-  --tokens 12345 \
-  --cost 0.12 \
-  --verify "npm test" \
-  --notes "verify passed; no manual correction"
+piagent-benchmark --dry-run
+piagent-benchmark
 ```
 
 Output:
 
 ```text
-<project>/.pi/benchmarks/quality-scenarios.md
-<project>/.pi/benchmarks/quality-runs.jsonl
+~/.pi/agent/benchmarks/piagent/<run-id>/report.json
+~/.pi/agent/benchmarks/piagent/<run-id>/report.html
+~/.pi/agent/benchmarks/piagent/<run-id>/summary.txt
+~/.pi/agent/benchmarks/piagent/<run-id>/runs.jsonl
 ```
 
-Chỉ claim chất lượng/token/cost khi cùng scenario có:
+Runner dùng clean Git fixture, hidden grader và exact Pi session usage. Piagent
+fixture được init/onboard và build context trước measured run để benchmark task
+steady-state; mọi context/index mutation sau Git baseline vẫn bị scope gate bắt.
+Report tách hidden correctness khỏi scope/reliability, hiện usage của mọi run và
+chỉ lưu histogram tên tool. Chỉ claim chất lượng/token/cost khi các paired run có:
 
 - cùng task prompt/spec;
 - cùng acceptance criteria;
 - verify command rõ;
-- token/cost/duration được ghi lại;
-- quality notes và số vòng sửa lại.
+- token/cost/duration được runtime ghi lại;
+- quality/reliability đạt ít nhất `9/10`, safety/workflow đạt `10/10`, quality
+  không giảm và ít nhất ba cặp cùng model có exact usage.
+
+`piagent-benchmark <project> --record ...` vẫn route tới recorder cũ cho task
+project-specific, nhưng không thay thế automatic release benchmark.
 
 ## Runtime policy trong profile
 

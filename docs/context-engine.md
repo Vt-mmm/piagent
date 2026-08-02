@@ -12,7 +12,7 @@ task
   -> dynamic tool groups
   -> explicit path + FTS5 + symbol/import graph + git/test signals
   -> Reciprocal Rank Fusion + personalized PageRank
-  -> token-budgeted context pack
+  -> token-budgeted navigation pack or current-turn source snapshot
   -> selected parent model
   -> delta tool results + semantic compaction
   -> local telemetry for Agent Watch
@@ -23,19 +23,32 @@ task
 - Piagent tools được chia thành `governance`, `policy`, `retrieval`,
   `knowledge`, `onboarding`, và `usage`. Code retrieval không tự kéo theo
   memory, document intake, source checkout hoặc orchestration.
-- Session bắt đầu với loader nhỏ. Input hook bật nhóm cần cho task trước khi
-  system prompt được tạo.
-- `piagent_tools` chỉ mở thêm nhóm được yêu cầu; runtime guard vẫn chạy kể cả
-  khi policy tool không hiện với model.
+- Session bắt đầu không mang schema quản trị Piagent. Input hook bật thẳng nhóm
+  tối thiểu cần cho task trước khi system prompt được tạo.
+- `piagent_tools` chỉ xuất hiện khi operator yêu cầu rõ tool loader; runtime
+  guard vẫn chạy kể cả khi policy tool không hiện với model.
 - Tool order cố định để giữ prompt prefix ổn định cho provider có prompt cache.
 - Read/grep/find/ls lặp lại với cùng input và cùng output trả delta marker thay
   vì chèn lại toàn bộ kết quả.
+- Auto-context được cache theo `cwd + sessionId + promptHash`. Cùng prompt trong
+  cùng session chỉ inject một lần; session khác vẫn có pack riêng. Gọi manual
+  pack với cùng query trả reuse marker ngắn trừ khi `refresh=true`.
+- Auto pack dùng 500 token cho `tiny`, 900 cho `normal`, 1.200 cho `high-risk`;
+  manual pack mặc định 2.400 token. Model và thinking level không bị hạ.
+- Task source bounded do runtime intake quản lý có thể nhận current-turn snapshot
+  tối đa 900 token trước action đầu. Snapshot chỉ lấy file dưới source/test root,
+  đọc nội dung hiện tại sau freshness/protected-path/symlink checks và bị bỏ qua
+  khi index stale hoặc retrieval confidence thấp. Model dùng snapshot cho edit
+  đầu tiên, chỉ re-read khi thiếu region hoặc edit báo mismatch.
+- Token estimator tính ASCII và UTF-8 riêng, bảo thủ hơn cho tiếng Việt/CJK/emoji
+  để pack không vượt budget chỉ vì một ký tự dùng nhiều byte.
 - Telemetry không lưu prompt hoặc tool output thô. Nó lưu hash, kích thước, tool,
   model, thinking, active-tool count, usage, retrieval confidence và đường dẫn
   tương đối đã được guard redaction.
 
-Ba cơ chế `PIAGENT_DYNAMIC_TOOLS`, `PIAGENT_AUTO_CONTEXT` và
-`PIAGENT_CONTEXT_TELEMETRY` đều **bật mặc định** từ `v1.2.6`. Telemetry chỉ ghi
+Bốn cơ chế `PIAGENT_DYNAMIC_TOOLS`, `PIAGENT_AUTO_CONTEXT`,
+`PIAGENT_CONTEXT_TELEMETRY` và `PIAGENT_AUTO_RECOVERY` đều **bật mặc định**.
+Ba cờ đầu có từ `v1.2.6`; bounded recovery có từ `v1.2.11`. Telemetry chỉ ghi
 operational metadata/hash như mô tả dưới đây, không ghi prompt hoặc tool output
 thô. Tắt riêng từng cơ chế cho một lần chạy bằng:
 
@@ -43,6 +56,7 @@ thô. Tắt riêng từng cơ chế cho một lần chạy bằng:
 PIAGENT_DYNAMIC_TOOLS=off pi
 PIAGENT_AUTO_CONTEXT=off pi
 PIAGENT_CONTEXT_TELEMETRY=off pi
+PIAGENT_AUTO_RECOVERY=off pi
 ```
 
 ## P1: code index và retrieval
@@ -101,8 +115,10 @@ score(file) = sum(weight(source) / (60 + rank(source, file)))
 ```
 
 Context pack tách repo map và source snippets, sau đó dừng cứng tại token
-budget. Index chỉ là navigation evidence; model phải đọc file hiện tại trước
-khi edit.
+budget. Manual/read-only pack vẫn chỉ là navigation evidence và model phải đọc
+file hiện tại trước khi edit. Riêng current-turn snapshot của automatic bounded
+task đọc lại file hiện tại sau freshness check; edit exact-text sẽ fail nếu file
+đổi sau snapshot, khi đó model phải re-read thay vì đoán.
 
 Tất cả API chạm context index (`build`, `status`, `ensure`, `search`, `pack`,
 `impact`) bắt buộc caller truyền `excludePatterns` tường minh và fail-closed
@@ -146,8 +162,14 @@ Mỗi event có:
 ```
 
 Agent Watch có thể join event với Pi session JSONL bằng `sessionId` và
-`sessionName`. Không cần polling realtime; import lúc mở app hoặc lúc xuất
-report vẫn thấy đủ event đã ghi.
+`sessionName`, và với task contract bằng `taskId`/`taskRunId`. Không cần polling
+realtime; import lúc mở app hoặc lúc xuất report vẫn thấy event đã ghi.
+
+Telemetry, trace, observed-bash và capture dùng bounded JSONL owner-only, có
+cross-process rotation lock. Giới hạn mặc định: context telemetry 32 MiB, task
+trace 8 MiB, capture index 4 MiB; tool-result captures tối đa 500 file, 128 MiB
+và 30 ngày. Record đơn lẻ vượt trần được thay bằng audit marker thay vì làm file
+phình. Mọi writer từ chối `.pi` hoặc ancestor symlink ra ngoài project.
 
 Feedback không phải model học ngầm. Khi một context pack chọn file và chính
 session đó sau đó thực sự đọc hoặc sửa file, file nhận một boost nhỏ ở những

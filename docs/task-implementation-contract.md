@@ -1,200 +1,136 @@
-# Task Implementation Contract
+# Task Implementation Contract v2
 
-## Mục tiêu
+## Muc tieu
 
-Đây là contract tối thiểu để Pi implement task không khác gì một CLI agent nghiêm túc: có scope, context, guard, verify, trace.
-
-## Contract fields
-
-| Field | Required | Ý nghĩa |
-|---|---:|---|
-| `taskId` | yes | ID ổn định cho task. |
-| `summary` | yes | Một câu mô tả outcome. |
-| `riskLane` | yes | `tiny`, `normal`, hoặc `high-risk`. |
-| `expectedOutput` | yes | Artifact/behavior cụ thể. |
-| `acceptanceCriteria` | yes | Điều kiện pass/fail. |
-| `scope` | yes | File/module được phép đụng. |
-| `outOfScope` | yes | Cái không làm. |
-| `protectedPaths` | yes | Vùng cấm từ profile/policy. |
-| `requiredContext` | yes | Context bắt buộc đọc. |
-| `contextManifest` | yes | Bằng chứng context đã dùng. |
-| `memoryCitations` | no | Memory file dùng làm advisory context, nếu có. |
-| `mcpCapabilities` | no | Tool/MCP được phép. |
-| `verifyCommands` | yes | Command phải chạy trước DONE. |
-| `workPlan` | no | Task tree compact: step, role, mode, trạng thái, dependency. |
-| `reviewLenses` | no | Góc review rõ ràng, mặc định `correctness`, `tests`, `scope`. |
-| `orchestration` | no | Snapshot solo-first policy khi task bắt đầu: mode, subagent stance, Field Guide, model-role guidance. |
-| `verifyEvidence` | yes before done | Observed command result. Passing gate requires exact match with `verifyCommands`. |
-| `changedFiles` | yes before done | File đã sửa. |
-| `trace` | yes before done | Handoff/audit record. |
-
-## JSON example
-
-```json
-{
-  "taskId": "TASK-0001",
-  "summary": "Fix listing filter reset behavior",
-  "riskLane": "normal",
-  "expectedOutput": "Filter reset returns listing page to default query and preserves route owner.",
-  "acceptanceCriteria": [
-    "Reset button clears selected filters",
-    "URL query returns to canonical default",
-    "No protected paths are modified"
-  ],
-  "scope": [
-    "src/features/listings/**"
-  ],
-  "outOfScope": [
-    "backend API changes",
-    "database changes"
-  ],
-  "protectedPaths": [
-    "backend/**"
-  ],
-  "requiredContext": [
-    "AGENTS.md",
-    ".pi/project-context.md",
-    "docs/frontend/structure-guide.md"
-  ],
-  "contextManifest": [
-    {
-      "path": "AGENTS.md",
-      "reason": "root rules"
-    }
-  ],
-  "memoryCitations": [],
-  "mcpCapabilities": [
-    "filesystem-readonly",
-    "browser"
-  ],
-  "verifyCommands": [
-    "npm run test"
-  ],
-  "workPlan": [
-    {
-      "id": "plan",
-      "title": "Confirm scope and verify gate before editing.",
-      "role": "parent",
-      "mode": "read-only",
-      "status": "done"
-    },
-    {
-      "id": "implement",
-      "title": "Apply the bounded source change.",
-      "role": "piagent-worker",
-      "mode": "single-writer",
-      "status": "pending",
-      "dependsOn": [
-        "plan"
-      ]
-    }
-  ],
-  "reviewLenses": [
-    "correctness",
-    "tests",
-    "scope"
-  ],
-  "orchestration": {
-    "mode": "solo-first",
-    "subagents": "not-used",
-    "reason": "Task starts in solo-first mode; use bounded subagents only for independent scout, planning, or review work.",
-    "fieldGuidePath": ".pi/memory/MEMORY.md",
-    "modelRoles": {
-      "planner": "Use the strongest available model for decomposition, architecture, risk, and acceptance criteria.",
-      "worker": "Use the fastest reliable model for a bounded, already-planned single write set.",
-      "reviewer": "Use a model or thinking setting decorrelated from the worker when review quality matters.",
-      "watchdog": "Use a strong model only for final risk review, security, release, or high-impact changes."
-    }
-  },
-  "verifyEvidence": [
-    {
-      "command": "npm run test",
-      "exitCode": 0,
-      "summary": "Unit test suite passed.",
-      "observed": true,
-      "matchedProfileCommand": true
-    }
-  ],
-  "changedFiles": [],
-  "trace": {
-    "outcome": "pending"
-  }
-}
-```
-
-## Prompt contract
-
-Pi task prompt phải bắt buộc:
+Contract la state machine cuc bo giup Pi chung minh mot task da doc gi, duoc sua
+gi, da thay doi gi, verify bang lenh nao va ket thuc ra sao. File nam tai:
 
 ```text
-Use piagent_context first.
-Use piagent_orchestration_policy; default to solo-first, create a compact task tree, and choose review lenses before spawning subagents.
-Use piagent_context_index_status/search as advisory navigation when available; verify cited files before editing.
-Use piagent_memory_status and search memory when relevant; memory is advisory only.
-Read .pi/project-context.md; if it is pending, stop and request /onboard run.
-Create a Task Implementation Contract with piagent_task_start.
-Check large context with piagent_context_budget.
-Check complex/high-impact shell with piagent_exec_policy_check.
-Check non-piagent tools with piagent_tool_policy_check.
-Do not edit before scope + verify command are known.
-Before final, run the exact verify command from task.verifyCommands through Pi bash, record observed verify evidence, and trace.
-Call piagent_task_gate_check before DONE.
-If verify cannot run, final outcome is blocked/partial, not done.
+.pi/piagent-state/tasks/<taskRunId>.json
+.pi/piagent-state/session-tasks/<session-id-hash>.json
 ```
 
-## Enforcement levels
+`taskId` la ten logic cua cong viec. `taskRunId` la identity duy nhat cua mot
+attempt. `sessionId` rang attempt vao dung Pi session; `sessionName` de resume va
+Agent Watch/report hien ten task ma operator da dat.
 
-| Level | Cách enforce | Độ tin cậy |
-|---|---|---:|
-| Prompt only | prompt nhắc model | Thấp |
-| Profile + prompt | profile có rule, prompt đọc profile | Trung bình |
-| Extension guard | tool_call block protected/destructive | Khá |
-| Runtime task tools | task_start/context_record/verify_record/trace | Cao |
-| Runtime quality tools | exec_policy/context_budget/tool_policy/task_gate | Cao |
-| Final gate | trace completion block khi `finalGate=enforce`; hard assistant stop-hook khi Pi API hỗ trợ | Cao nhất |
+## Field groups
 
-Hiện platform đang ở mức “P3-baseline runtime policy”:
+| Nhom | Field | Quy tac |
+|---|---|---|
+| Schema | `schemaVersion` | Luon la `2`. |
+| Identity | `taskRunId`, `taskId`, `sessionId`, `sessionName`, `intakeMode` | Run ID/Task ID normalized; mot session chi co mot task; intake la `runtime` hoac `model`. |
+| Mode | `changeMode` | `source-change` hoac `read-only`. |
+| Retry | `attempt`, `maxAttempts`, `previousAttempts` | Tran lay tu attempt dau, khong duoc nang o retry sau. |
+| Intent | `summary`, `riskLane`, `expectedOutput`, `acceptanceCriteria` | Chot truoc khi implementation. |
+| Scope | `scope`, `outOfScope`, `protectedPaths` | Direct write bi chan ngoai scope; final gate doi chieu Git. |
+| Context | `requiredContext`, `contextManifest`, `memoryCitations`, `mcpCapabilities` | Citation co path va reason. |
+| Verify | `verifyGroup`, `verifyCommands`, `verifyEvidence` | Moi command phai observed, exact-match va pass. |
+| Plan | `workPlan`, `reviewLenses`, `orchestration` | Toi da 12 step, dependency DAG, single writer. |
+| Changes | baseline/observed/final file lists va digests, `changedFiles` | Phan biet dirty truoc task voi thay doi trong task; ghi ca hai dau rename. |
+| Outcome | `trace`, `failedAt`, `failureReason`, `ruledOut` | Terminal contract immutable. |
+| Time | `createdAt`, `updatedAt` | Timestamp parseable, dung de sap xep/migration/report. |
 
-- `piagent_task_start`
-- `piagent_exec_policy_check`
-- `piagent_context_budget`
-- `piagent_context_index_status`
-- `piagent_context_index_search`
-- `piagent_context_index_record`
-- `piagent_tool_policy_check`
-- `piagent_context_record`
-- `piagent_verify_record`
-- `piagent_trace_record`
-- `piagent_task_gate_check`
-- local task/trace/observed-bash state trong `.pi/piagent-state/`
-- session trace qua Pi custom entry `piagent-task-trace`
+Template day du nam tai
+[`templates/project/.pi/task-contract.template.json`](../templates/project/.pi/task-contract.template.json).
+Schema chinh thuc nam tai
+[`schemas/task-contract.schema.json`](../schemas/task-contract.schema.json).
 
-`piagent_trace_record` có thể block completion nếu profile bật `finalGate=enforce`. Nếu Pi runtime chưa expose hard final assistant stop hook, agent vẫn phải gọi `piagent_task_gate_check` và final phải nêu gate result.
-
-## Verify evidence rules
-
-`piagent_verify_record` is not a free-form self-report. It accepts evidence only when the same normalized command was observed through a Pi `bash` `tool_result` after `task.createdAt`.
-
-Observed bash results are persisted to:
+## Runtime lifecycle
 
 ```text
-.pi/piagent-state/observed-bash.jsonl
+runtime automatic intake OR piagent_task_start fallback
+  -> ordinary targeted reads + project tool calls
+  -> runtime-observed context and changed files
+  -> exact bash verify commands
+  -> current-tree verify evidence from tool_result
+  -> completion hook projects trace + final gate
 ```
 
-This lets parent agents validate verify commands executed by guarded subagent processes in the same cwd.
+Bounded default source tasks are created and completed through runtime hooks
+without model management calls. Broad/high-risk/custom source tasks use manual
+intake and explicit checkpoints when required.
+Read-only defaults use `scout`/`review`, never an implementation step. Manual
+context/verify/trace/gate tools are recovery surfaces for custom/high-risk work.
 
-Final-gate pass requires:
+Task start tu choi khi:
 
-- `observed=true`;
-- `matchedProfileCommand=true`;
-- `exitCode=0`.
+- session da thuoc task khac hoac task terminal;
+- cung `taskId` dang pending o session khac;
+- task da completed;
+- retry vuot `maxAttempts`;
+- source task khong o trong Git working tree;
+- profile khong co meaningful verifier;
+- work plan trung ID, thieu dependency, tu tham chieu hoac co cycle.
 
-Exact command identity matters. If the task profile says `npm test`, record `npm test`. `npm  test`, `npm test 2>&1`, `npm test || true`, `true`, and `echo ok` are different commands and will not satisfy the passing gate unless explicitly present in `task.verifyCommands`.
+Truoc task start, governed project chi cho phep inspection. Guard chi coi shell la
+mutation khi command that su co kha nang ghi project (write redirection, mutating
+Git/package/file command, interpreter write, `sed -i`, `find -delete`...). Read,
+search va test khong bi gan nham thanh write.
 
-## Named implementation recipes
+## Changed-file truth
 
-- `/workflow platform-improve`: dùng cho task cải tiến setup, docs, prompt, MCP, model, memory, runtime policy, hoặc subagent workflow của platform.
-- `/workflow be-to-fe`: dùng cho task scout BE contract read-only rồi implement FE.
-- `/memory`: dùng cho task kiểm tra/ghi nhớ explicit project memory.
+Luc start, runtime luu Git working-tree snapshot va digest tung file dirty. Luc
+gate/final trace, runtime chup lai snapshot:
 
-Hai recipe này vẫn phải tạo/giữ Task Implementation Contract khi có source writes.
+```text
+expected change = file co final digest khac task-start baseline
+```
+
+Vi vay:
+
+- file dirty truoc task khong tu dong bi nhan la do task;
+- file dirty truoc task nhung bi sua tiep se duoc tinh;
+- file da duoc sua roi revert ve baseline chi nam trong audit history, khong pass gate;
+- claim file khong co evidence bi tu choi;
+- thay doi ngoai `scope` bi tu choi;
+- delete/missing co digest rieng;
+- staged rename ghi ca old path va new path.
+
+## Verify truth
+
+Observed bash ledger la bounded owner-only JSONL. Evidence chi pass khi:
+
+```text
+exitCode === 0
+observed === true
+matchedProfileCommand === true
+command nam chinh xac trong task.verifyCommands
+```
+
+Final gate doi evidence cho **tat ca** meaningful verify commands, khong chi mot
+command bat ky. Profile `generic` fail-closed cho source work den khi project khai
+verifier. Profile theo stack chi chay command co y nghia va khong dung `|| true`
+de che failure.
+
+## Retry va terminal immutability
+
+Step co the `pending`, `in-progress`, `done`, `skipped`, `failed`. Reopen mot
+failed step can note moi; step done/skipped khong duoc mo lai. Khi trace da
+terminal, cac tool progress/context/memory/verify/trace va project mutations deu
+bi chan cho session do.
+
+Retry chay o session moi. `previousAttempts` giu outcome, phase failure, reason,
+ruled-out hypothesis va timestamp de agent khong lap lai cach da that bai.
+
+## Migration v1 -> v2
+
+Reader v2 fail-closed voi field la, timestamp hong, nested plan sai, taskRunId
+khong khop filename hoac state unreadable. Migrator v1 chi copy whitelist field
+da cong bo, them identity/session/retry/baseline defaults, ghi v2 atomically roi
+archive file v1. Update preflight tu choi truoc moi project write neu state can
+operator recovery.
+
+Project da onboard khong can onboard lai sau global update. Capability lock giu
+nguyen grant cua project va chi re-pin core khi release moi khong mo rong quyen.
+
+## Enforcement
+
+| Lop | Enforcement |
+|---|---|
+| Prompt/workflow | Huong dan dung tool theo thu tu. |
+| Tool-call guard | Protected path, scope, read-only, destructive/external confirmation. |
+| Tool-result observer | Changed-file va bash evidence tu su kien that. |
+| Persisted contract | Session binding, retry, plan, context, verify, trace. |
+| Completion hook | Chan completion claim khi gate chua pass. |
+| Local-state boundary | Owner-only, atomic write, no ancestor symlink, bounded retention. |

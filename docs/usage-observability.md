@@ -131,6 +131,11 @@ Hoặc đổi tên phiên đang mở trong Pi:
 
 Alias ngắn `/setname ABC-123 Short task name` vẫn chạy. Nếu tắt nhầm terminal/app, vào lại project rồi dùng `pi --continue` cho phiên gần nhất, hoặc `pi --resume` để chọn theo session name/id. Trong Pi có thể gõ `/resume` để xem reminder ngắn.
 
+Task Contract v2 lưu cả `sessionId`, `sessionName`, `taskId` và `taskRunId`, nên
+Agent Watch/report có thể map usage vào đúng attempt kể cả session đã resume hoặc
+được đổi tên sau khi bắt đầu. Một session không được tái sử dụng cho task khác;
+retry dùng session mới và giữ liên kết qua cùng `taskId`.
+
 Mặc định history mode **bao gồm subagent session files** vì đó là usage thật của máy. Dùng `--no-subagents` khi chỉ muốn parent/main sessions.
 
 Format hỗ trợ:
@@ -169,18 +174,20 @@ Nếu user paste full mandatory-flow boilerplate, platform input guard sẽ coll
 
 Tool output dài cũng bị compact theo cùng triết lý: chat giữ preview, audit/report giữ capture local. Nếu verify fail và preview chưa đủ, chạy lại command targeted hơn thay vì đổ full log vào session.
 
+Trace, observed-bash, telemetry và capture đều bounded và owner-only. Rotation
+không cần UI polling realtime, dùng lock liên process để nhiều Pi session/subagent
+không ghi đè nhau. Capture mặc định giữ tối đa 500 file, 128 MiB và 30 ngày.
+
 ## Khi nào ghi benchmark
 
 Sau một task cần so sánh workflow/model bằng số liệu:
 
 ```bash
-bash scripts/quality-benchmark.sh /path/to/project --record \
-  --scenario bounded-source-fix \
-  --surface pi \
-  --result pass \
-  --tokens <total-from-piagent-usage> \
-  --cost <cost-from-piagent-usage> \
-  --verify "<verify-command>"
+piagent-benchmark --dry-run
+piagent-benchmark --model <provider/model> --thinking high
 ```
 
-Không dùng ước lượng ký tự để claim tiết kiệm token. Dùng `/session`, RPC `get_session_stats`, hoặc `piagent-usage`.
+Automatic runner lấy exact usage từ session JSONL và so median trên các cặp cùng
+pass. Không dùng ước lượng ký tự để claim tiết kiệm token. Với một task ngoài
+suite, vẫn dùng `/session`, RPC `get_session_stats`, `piagent-usage`, hoặc legacy
+`piagent-benchmark <project> --record ...`.

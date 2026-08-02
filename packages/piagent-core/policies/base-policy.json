@@ -138,6 +138,7 @@
       "piagent_profile_tech_context_record",
       "piagent_project_onboarding_record",
       "piagent_task_start",
+      "piagent_task_progress",
       "piagent_source_checkout",
       "piagent_context_record",
       "piagent_verify_record",

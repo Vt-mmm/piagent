@@ -43,7 +43,7 @@
     ],
     "source": [
       "git diff --check",
-      "if test -f package.json; then npm test --if-present; else echo 'No docs test command configured; update .pi/piagent-profile.json if needed'; fi"
+      "if test -f package.json && node -e \"const s=require('./package.json').scripts||{}; process.exit(s.test?0:1)\"; then npm test; else test -s README.md || test -d docs; fi"
     ]
   },
   "mcpCapabilities": [

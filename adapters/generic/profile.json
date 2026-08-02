@@ -43,7 +43,7 @@
       "test -s README.md"
     ],
     "source": [
-      "echo 'No project verify command configured; update .pi/piagent-profile.json'"
+      "echo 'No project verify command configured; update .pi/piagent-profile.json' >&2; exit 2"
     ]
   },
   "mcpCapabilities": [

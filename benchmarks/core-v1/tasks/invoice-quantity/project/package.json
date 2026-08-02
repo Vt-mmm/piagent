@@ -1,0 +1,8 @@
+{
+  "name": "piagent-benchmark-invoice",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

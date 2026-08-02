@@ -1,4 +1,10 @@
 {
+  "schemaVersion": 2,
+  "taskRunId": "task-0001-20260731120000-a1b2c3d4e5",
+  "changeMode": "source-change",
+  "attempt": 4,
+  "maxAttempts": 3,
+  "previousAttempts": [],
   "summary": "Replace with one-sentence task outcome.",
   "riskLane": "normal",
   "expectedOutput": "Replace with exact artifact or behavior expected.",
@@ -16,6 +22,7 @@
   "contextManifest": [],
   "memoryCitations": [],
   "mcpCapabilities": [],
+  "verifyGroup": "source",
   "verifyCommands": [
     "Replace with verify command."
   ],
@@ -65,9 +72,16 @@
       "watchdog": "Use a strong model only for final risk review, security, release, or high-impact changes."
     }
   },
+  "baselineChangedFiles": [],
+  "baselineFileDigests": {},
+  "observedChangedFiles": [],
+  "finalWorkingTreeFiles": [],
+  "finalFileDigests": {},
   "changedFiles": [],
   "verifyEvidence": [],
   "trace": {
     "outcome": "pending"
-  }
+  },
+  "createdAt": "2026-07-31T12:00:00.000Z",
+  "updatedAt": "2026-07-31T12:00:00.000Z"
 }

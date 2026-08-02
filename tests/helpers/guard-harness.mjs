@@ -74,8 +74,8 @@ export function createPiHarness(options = {}) {
     sendUserMessage(message, options) {
       entries.push({ type: "user-message", payload: { message, options } });
     },
-    sendMessage(message) {
-      entries.push({ type: "message", payload: message });
+    sendMessage(message, options) {
+      entries.push({ type: "message", payload: message, options });
     },
     appendEntry(type, payload) {
       entries.push({ type, payload });
@@ -110,6 +110,7 @@ export function createContext(cwd, options = {}) {
   const confirmations = [];
   const selections = Array.isArray(options.select) ? [...options.select] : [];
   const selectCalls = [];
+  const compactions = [];
   return {
     cwd,
     mode: "test",
@@ -130,19 +131,22 @@ export function createContext(cwd, options = {}) {
       }
     },
     isProjectTrusted: () => options.projectTrusted ?? true,
+    isIdle: () => options.idle ?? true,
     getContextUsage: () => options.contextUsage ?? ({ tokens: 0, contextWindow: 1000, percent: 0 }),
-    compact: () => {
+    compact: (compactOptions) => {
+      compactions.push(compactOptions);
       notices.push({ message: "compact called", level: "info" });
     },
     sessionManager: {
       getSessionFile: () => path.join(cwd, ".pi", "session.jsonl"),
-      getSessionId: () => "session-test",
+      getSessionId: () => options.sessionId ?? "session-test",
       getSessionName: () => options.sessionName ?? "session",
-      getEntries: () => [],
-      getBranch: () => []
+      getEntries: () => options.entries ?? options.branch ?? [],
+      getBranch: () => options.branch ?? options.entries ?? []
     },
     confirmations,
-    selectCalls
+    selectCalls,
+    compactions
   };
 }
 

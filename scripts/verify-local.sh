@@ -53,9 +53,12 @@ required_files=(
   "$ROOT/packages/piagent-core/extensions/piagent-guard.ts"
   "$ROOT/packages/piagent-core/extensions/context-engine.js"
   "$ROOT/packages/piagent-core/extensions/context-index-policy.js"
+  "$ROOT/packages/piagent-core/extensions/local-state-path.js"
   "$ROOT/packages/piagent-core/extensions/policy-core.js"
   "$ROOT/packages/piagent-core/extensions/redaction-core.js"
   "$ROOT/packages/piagent-core/extensions/runtime-evidence.js"
+  "$ROOT/packages/piagent-core/extensions/state-retention.js"
+  "$ROOT/packages/piagent-core/extensions/task-state.js"
   "$ROOT/packages/piagent-core/security/sensitive-data.js"
   "$ROOT/packages/piagent-core/capabilities/capability-core.js"
   "$ROOT/packages/piagent-core/prompts/platform-improve.md"
@@ -162,6 +165,7 @@ required_files=(
   "$ROOT/scripts/team-doctor.sh"
   "$ROOT/scripts/link-project.sh"
   "$ROOT/scripts/profile-doctor.sh"
+  "$ROOT/scripts/benchmark-runner.mjs"
   "$ROOT/scripts/quality-benchmark.sh"
   "$ROOT/scripts/runtime-policy-smoke.sh"
   "$ROOT/scripts/pi-session-stats.sh"
@@ -177,6 +181,9 @@ required_files=(
   "$ROOT/tests/capability-core.test.mjs"
   "$ROOT/tests/piagent-guard-integration.test.mjs"
   "$ROOT/tests/context-engine.test.mjs"
+  "$ROOT/tests/benchmark-core.test.mjs"
+  "$ROOT/tests/benchmark-runner.test.mjs"
+  "$ROOT/tests/benchmark-suite.test.mjs"
   "$ROOT/tests/workflow-prompts.test.mjs"
   "$ROOT/tests/install-global.test.mjs"
   "$ROOT/tests/package-distribution.test.mjs"
@@ -185,6 +192,8 @@ required_files=(
   "$ROOT/tests/redaction-core.test.mjs"
   "$ROOT/tests/runtime-evidence.test.mjs"
   "$ROOT/tests/golden-enforcement.test.mjs"
+  "$ROOT/packages/piagent-core/benchmark/benchmark-core.js"
+  "$ROOT/benchmarks/core-v1/suite.json"
   "$ROOT/tests/capability-sources.test.mjs"
   "$ROOT/packages/piagent-core/capabilities/capability-sources.js"
   "$ROOT/packages/piagent-core/extensions/guard-shell-analysis.ts"
@@ -473,6 +482,7 @@ require_documented "piagent-task-trace" "$ROOT/packages/piagent-core/extensions/
 require_documented "piagent-source-cache" "$ROOT/packages/piagent-core/skills" "$ROOT/templates/project/AGENTS.md"
 require_documented "piagent_source_checkout" "$ROOT/packages/piagent-core"
 require_documented "scripts/setup.sh" "$ROOT/README.md" "$ROOT/docs"
+require_documented "piagent-benchmark" "$ROOT/README.md" "$ROOT/docs"
 require_documented "quality-benchmark.sh" "$ROOT/README.md" "$ROOT/docs"
 require_documented "piagent-capabilities" "$ROOT/README.md" "$ROOT/docs/capability-packs.md"
 require_documented ".pi-subagents/" "$ROOT/.gitignore" "$ROOT/docs/subagents-and-multiagent.md" "$ROOT/docs/distribution-standard.md" "$ROOT/scripts/init-project.sh"
@@ -547,14 +557,19 @@ fi
 node --check "$ROOT/packages/piagent-core/extensions/piagent-guard.ts" >/dev/null
 node --check "$ROOT/packages/piagent-core/extensions/context-engine.js" >/dev/null
 node --check "$ROOT/packages/piagent-core/extensions/context-index-policy.js" >/dev/null
+node --check "$ROOT/packages/piagent-core/extensions/local-state-path.js" >/dev/null
 node --check "$ROOT/packages/piagent-core/extensions/policy-core.js" >/dev/null
 node --check "$ROOT/packages/piagent-core/extensions/redaction-core.js" >/dev/null
 node --check "$ROOT/packages/piagent-core/extensions/runtime-evidence.js" >/dev/null
+node --check "$ROOT/packages/piagent-core/extensions/state-retention.js" >/dev/null
+node --check "$ROOT/packages/piagent-core/extensions/task-state.js" >/dev/null
+node --check "$ROOT/packages/piagent-core/benchmark/benchmark-core.js" >/dev/null
 node --check "$ROOT/packages/piagent-core/security/sensitive-data.js" >/dev/null
 node --check "$ROOT/packages/piagent-core/capabilities/capability-core.js" >/dev/null
 node --check "$ROOT/packages/piagent-core/capabilities/capability-sources.js" >/dev/null
 node --check "$ROOT/scripts/capability-catalog.mjs" >/dev/null
 node --check "$ROOT/scripts/piagent-cli.mjs" >/dev/null
+node --check "$ROOT/scripts/benchmark-runner.mjs" >/dev/null
 node --check "$ROOT/scripts/context-engine.mjs" >/dev/null
 node --check "$ROOT/scripts/pi-usage-history.mjs" >/dev/null
 node --check "$ROOT/scripts/migrate-project-state.mjs" >/dev/null

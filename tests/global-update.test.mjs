@@ -3,6 +3,7 @@
 // actually does to it — what flows through, what stops it, and what stays the
 // project's own decision.
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -77,8 +78,17 @@ function createProject(adapter, overrides = {}) {
     extends: adapter,
     projectId: "global-update-project",
     displayName: "Global Update Project",
+    verifyCommands: {
+      source: ["test -s README.md"],
+      docsOnly: ["test -s README.md"]
+    },
     ...overrides
   });
+  execFileSync("git", ["init", "-q", cwd]);
+  execFileSync("git", ["-C", cwd, "config", "user.email", "test@example.com"]);
+  execFileSync("git", ["-C", cwd, "config", "user.name", "Piagent Test"]);
+  execFileSync("git", ["-C", cwd, "add", "README.md", "src/index.ts", ".pi/settings.json", ".pi/piagent-profile.json"]);
+  execFileSync("git", ["-C", cwd, "commit", "-qm", "fixture"]);
   return cwd;
 }
 
@@ -103,6 +113,19 @@ async function startSession(piagentGuard, cwd, options = {}) {
   return { ctx, harness, notices: ctx.ui.notices, toolCall: harness.handlers.get("tool_call") };
 }
 
+async function startSourceTask(session, taskId, scope = ["src/**"]) {
+  const result = await session.harness.tools.get("piagent_task_start").execute(`start-${taskId}`, {
+    taskId,
+    summary: `Verify global update compatibility for ${taskId}`,
+    riskLane: "normal",
+    expectedOutput: "The updated platform preserves the reviewed project policy.",
+    acceptanceCriteria: ["The project keeps its prior capability grants"],
+    scope
+  }, undefined, undefined, session.ctx);
+  assert.equal(result.isError, undefined, result.content?.[0]?.text);
+  return result;
+}
+
 function noticeMatching(notices, pattern) {
   return notices.find((notice) => pattern.test(notice.message));
 }
@@ -118,6 +141,7 @@ describe("global platform update", () => {
       fs.appendFileSync(path.join(root, "packages", "piagent-core", "extensions", "policy-core.js"), "\n// release change\n");
     });
     const session = await startSession(after.piagentGuard, cwd);
+    await startSourceTask(session, "UPDATE-COMPAT-1");
     const write = await callToolCall(session.toolCall, session.ctx, "write", { path: "src/index.ts", content: "export const value = 2;\n" });
 
     assert.notEqual(write.block, true);
@@ -155,6 +179,7 @@ describe("global platform update", () => {
       });
     });
     const session = await startSession(after.piagentGuard, cwd);
+    await startSourceTask(session, "UPDATE-COMPAT-2", ["src/**", "infra/secrets/**"]);
     const blocked = await callToolCall(session.toolCall, session.ctx, "write", { path: "infra/secrets/keys.json", content: "{}\n" });
     const allowed = await callToolCall(session.toolCall, session.ctx, "write", { path: "src/index.ts", content: "export const value = 2;\n" });
 
@@ -194,6 +219,7 @@ describe("global platform update", () => {
       fs.appendFileSync(path.join(root, "packages", "piagent-core", "prompts", "task.md"), "\nAlways state what you did not verify.\n");
     });
     const session = await startSession(after.piagentGuard, cwd);
+    await startSourceTask(session, "UPDATE-COMPAT-3");
     const write = await callToolCall(session.toolCall, session.ctx, "write", { path: "src/index.ts", content: "export const value = 2;\n" });
 
     assert.notEqual(write.block, true);
