@@ -1,0 +1,2 @@
+2026-08-02T01:00:00Z service=api status=healthy
+2026-08-02T01:01:00Z service=worker status=degraded cause=PLACEHOLDER

@@ -15,6 +15,7 @@ import {
 } from "../packages/piagent-core/benchmark/benchmark-core.js";
 
 const suite = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, "../benchmarks/core-v1/suite.json"), "utf8"));
+const productionSuite = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, "../benchmarks/production-v1/suite.json"), "utf8"));
 
 test("validates the built-in benchmark suite and rejects hidden schema drift", () => {
   assert.equal(validateBenchmarkSuite(suite), suite);
@@ -23,6 +24,16 @@ test("validates the built-in benchmark suite and rejects hidden schema drift", (
   invalid.scenarios[1].fixture = "../outside";
   assert.match(benchmarkSuiteValidationErrors(invalid).join("; "), /unsupported field graderInstruction/);
   assert.match(benchmarkSuiteValidationErrors(invalid).join("; "), /fixture must stay inside/);
+});
+
+test("validates production schema metadata and generated scenario controls", () => {
+  assert.equal(validateBenchmarkSuite(productionSuite), productionSuite);
+  const invalid = structuredClone(productionSuite);
+  delete invalid.scenarios[0].category;
+  invalid.releaseGate.maximumFreshTokenRatioUpper95 = 0;
+  const errors = benchmarkSuiteValidationErrors(invalid).join("; ");
+  assert.match(errors, /category is required/);
+  assert.match(errors, /maximumFreshTokenRatioUpper95/);
 });
 
 test("aggregates exact Pi usage categories without folding cache into fresh tokens", () => {
@@ -94,6 +105,14 @@ test("streams Codex JSONL safely across UTF-8 and line chunk boundaries", () => 
   assert.equal(usage.providerSessionId, "stream-thread");
 });
 
+test("retains bounded Codex error diagnostics without accepting missing usage", () => {
+  const collector = createCodexExecJsonlCollector({ model: "test/model", thinkingLevel: "high" });
+  collector.write(`${JSON.stringify({ type: "thread.started", thread_id: "failed-thread" })}\n`);
+  collector.write(`${JSON.stringify({ type: "turn.failed", error: { message: "rate limit reached" } })}\n`);
+  assert.throws(() => collector.finish(), /missing turn.completed usage/);
+  assert.deepEqual(collector.diagnostics(), [{ type: "turn.failed", message: "rate limit reached" }]);
+});
+
 test("scores workflow evidence only when all configured verification and file claims are truthful", () => {
   const task = {
     schemaVersion: 2,
@@ -153,10 +172,30 @@ test("workflow score accepts one persisted runtime intake without model choreogr
   assert.deepEqual(workflow.choreography, { intakeMode: "runtime", taskStartCalls: 0, runtimeManagedCalls: 0 });
 });
 
+test("workflow score supports read-only tasks without inventing source verification", () => {
+  const task = {
+    schemaVersion: 2,
+    taskRunId: "runtime-run",
+    sessionId: "runtime-session",
+    intakeMode: "runtime",
+    trace: { outcome: "completed" },
+    workPlan: [{ status: "done" }],
+    changedFiles: []
+  };
+  const workflow = evaluateWorkflowEvidence(task, [], { read: 2 }, { scenarioKind: "read-only" });
+  assert.equal(workflow.score, 10);
+  assert.equal(workflow.checks.some((check) => check.id === "observed-verification"), false);
+  assert.equal(workflow.checks.find((check) => check.id === "truthful-no-changes").passed, true);
+});
+
 function runRecord(scenario, surface, repeat, fresh) {
   return {
     scenarioId: scenario.id,
     scenarioKind: scenario.kind,
+    category: scenario.category ?? "unspecified",
+    difficulty: scenario.difficulty ?? "unspecified",
+    profile: scenario.profile ?? "node-typescript",
+    lifecycle: scenario.lifecycle ?? "steady-state",
     surface,
     repeat,
     resolved: true,
@@ -342,7 +381,42 @@ test("keeps hidden correctness separate from scope and end-to-end reliability", 
   assert.equal(report.surfaces.piagent.sourceCorrect, 3);
   assert.equal(report.surfaces.piagent.scores.quality, 10);
   assert.equal(report.surfaces.piagent.scores.safety, 5);
-  assert.equal(report.surfaces.piagent.scores.reliability, 3);
+  assert.equal(report.surfaces.piagent.scores.reliability, 0);
   assert.equal(report.surfaces.piagent.usage.allMeasuredRuns.medianFreshTokens, 300);
   assert.equal(report.verdict.status, "safety-gate-failed");
+});
+
+test("production release gate uses independent scenario families and the upper 95 percent token bound", () => {
+  const scenarios = productionSuite.scenarios.slice(0, 3);
+  const testSuite = {
+    ...productionSuite,
+    scenarios,
+    releaseGate: { ...productionSuite.releaseGate, minimumPairedScenarios: 3 }
+  };
+  const runs = [];
+  for (let repeat = 1; repeat <= 3; repeat += 1) {
+    for (const scenario of scenarios) {
+      runs.push(runRecord(scenario, "raw-pi", repeat, 100));
+      runs.push(runRecord(scenario, "piagent", repeat, 80));
+    }
+  }
+  const report = summarizeBenchmark({ suite: testSuite, runId: "production", startedAt: "2026-08-01T00:00:00.000Z", completedAt: "2026-08-01T00:01:00.000Z", repeats: 3, runs });
+  assert.equal(report.comparison.pairedUsageRuns, 9);
+  assert.equal(report.comparison.pairedUsageScenarios, 3);
+  assert.equal(report.comparison.pairedCompleteScenarios, 3);
+  assert.deepEqual(report.comparison.freshTokenRatioConfidence95, { lower: 0.8, upper: 0.8, sampleUnit: "scenario-family", scenarioCount: 3 });
+  assert.equal(report.comparison.efficiencyConfidenceGate, true);
+  assert.equal(report.comparison.productionGate.passed, true);
+
+  testSuite.releaseGate = { ...testSuite.releaseGate, minimumPairedScenarios: 4 };
+  const insufficient = summarizeBenchmark({ suite: testSuite, runId: "insufficient", startedAt: "2026-08-01T00:00:00.000Z", completedAt: "2026-08-01T00:01:00.000Z", repeats: 3, runs });
+  assert.equal(insufficient.comparison.efficiencyEvidenceGate, false);
+  assert.equal(insufficient.comparison.productionGate.passed, false);
+
+  testSuite.releaseGate = { ...testSuite.releaseGate, minimumPairedScenarios: 3 };
+  runs.find((run) => run.surface === "piagent" && run.scenarioId === scenarios[0].id && run.repeat === 1).resolved = false;
+  const incomplete = summarizeBenchmark({ suite: testSuite, runId: "incomplete", startedAt: "2026-08-01T00:00:00.000Z", completedAt: "2026-08-01T00:01:00.000Z", repeats: 3, runs });
+  assert.equal(incomplete.comparison.pairedUsageScenarios, 3);
+  assert.equal(incomplete.comparison.pairedCompleteScenarios, 2);
+  assert.equal(incomplete.comparison.efficiencyEvidenceGate, false);
 });

@@ -1,0 +1,11 @@
+{
+  "name": "piagent-production-benchmark-fixture",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "type-check": "node scripts/check.mjs",
+    "lint": "node scripts/check.mjs",
+    "test": "node --test test/*.test.js",
+    "test:e2e": "node --test test/*.test.js"
+  }
+}

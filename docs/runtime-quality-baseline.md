@@ -204,6 +204,7 @@ Automatic paired benchmark:
 ```bash
 piagent-benchmark --dry-run
 piagent-benchmark
+piagent-benchmark --production --dry-run
 ```
 
 Output:
@@ -225,11 +226,21 @@ chỉ lưu histogram tên tool. Chỉ claim chất lượng/token/cost khi các 
 - cùng acceptance criteria;
 - verify command rõ;
 - token/cost/duration được runtime ghi lại;
-- quality/reliability đạt ít nhất `9/10`, safety/workflow đạt `10/10`, quality
-  không giảm và ít nhất ba cặp cùng model có exact usage.
+- quality/reliability đạt ít nhất `9/10`, safety đạt `10/10`, workflow đạt ngưỡng
+  của suite (`10/10` cho smoke, ít nhất `9/10` cho production), quality không
+  giảm và ít nhất ba cặp cùng model có exact usage.
 
 `piagent-benchmark <project> --record ...` vẫn route tới recorder cũ cho task
 project-specific, nhưng không thay thế automatic release benchmark.
+
+`core-v1` là smoke gate 24 session. Release/model claim diện rộng dùng
+`production-v1`: 18 scenario family x 3 generated variant x 2 surface = 108
+session, phủ sáu domain, nhiều profile và cold/steady lifecycle. Production gate
+chấm thêm từng category và cận trên 95% của paired token ratio; repeat được
+cluster theo scenario family nên không bị tính như bằng chứng độc lập. Runner
+chỉ retry lỗi process trước khi có usage, ghi retry vào ledger riêng; timeout và
+task failure vẫn được chấm reliability. Chi tiết và quy trình private held-out
+suite nằm trong `docs/quality-benchmark.md`.
 
 ## Runtime policy trong profile
 

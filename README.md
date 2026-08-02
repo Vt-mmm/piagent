@@ -95,11 +95,13 @@ Removal targets what is registered in Pi's settings rather than what the current
   and an immutable terminal outcome.
 - Bounded owner-only local state with cross-process JSONL rotation and a shared
   symlink-safe boundary for task evidence, telemetry, traces, and captures.
-- One-command paired benchmark that compares Piagent with Raw Pi or controlled
-  `codex-cli` in clean workspaces and an isolated temporary Codex home, prepares Piagent as an already-onboarded
-  steady-state project, grades hidden acceptance/safety/workflow evidence, and
-  reads exact JSONL usage plus privacy-safe tool histograms. The legacy manual
-  recorder remains available for project-specific tasks.
+- Two-tier one-command benchmark: `core-v1` is a fast paired smoke gate, while
+  `production-v1` runs 18 generated scenario families across backend, frontend,
+  data, platform, reliability, and security. It compares Piagent with Raw Pi or
+  controlled `codex-cli`, grades hidden acceptance/safety/workflow evidence,
+  reports category/lifecycle/profile bands and 95% token-ratio confidence, and
+  reads exact JSONL usage plus privacy-safe tool histograms. Production runs
+  retry only zero-usage startup failures and disclose every retry separately.
 - Built-in profiles for frontend, backend, fullstack, BE-readonly/FE-write, data, DevOps, mobile, docs, Python, and Node TypeScript.
 - Versioned capability packs with deterministic catalog, profile resolution, integrity lock, and permission checks.
 
@@ -262,7 +264,7 @@ One command runs the full local gate — typecheck, tests, capability catalog, d
 npm run verify
 ```
 
-Individual checks and the contributor flow are in [CONTRIBUTING.md](CONTRIBUTING.md). Token and session follow-up is `/usage` inside Pi; see [Usage observability](docs/usage-observability.md). Preview the automatic paired benchmark with `piagent-benchmark --dry-run`, then run it with `piagent-benchmark`. Compare against the `codex-cli` surface with `piagent-benchmark --surfaces piagent,codex-cli --model <provider/model> --thinking high`; scoring, isolation and quota details are in the [Quality benchmark guide](docs/quality-benchmark.md).
+Individual checks and the contributor flow are in [CONTRIBUTING.md](CONTRIBUTING.md). Token and session follow-up is `/usage` inside Pi; see [Usage observability](docs/usage-observability.md). Preview the smoke benchmark with `piagent-benchmark --dry-run`; preview the 108-session production gate with `piagent-benchmark --production --dry-run`. Compare against `codex-cli` with `--surfaces piagent,codex-cli --model <provider/model> --thinking high`; scoring, isolation, confidence, and quota details are in the [Quality benchmark guide](docs/quality-benchmark.md).
 
 ## Public safety
 
@@ -314,7 +316,7 @@ This repository intentionally excludes:
 
 ## Maturity
 
-The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.2.11` or a reviewed commit.
+The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.2.12` or a reviewed commit.
 
 Ready for:
 

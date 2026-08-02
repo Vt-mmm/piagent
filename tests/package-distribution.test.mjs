@@ -38,6 +38,8 @@ describe("package distribution", () => {
     // The exclusions must not swallow the documentation users install for.
     assert.ok(entries.includes("docs/capability-packs.md"));
     assert.ok(entries.includes("benchmarks/core-v1/suite.json"));
+    assert.ok(entries.includes("benchmarks/production-v1/suite.json"));
+    assert.ok(entries.includes("benchmarks/production-v1/variant.mjs"));
     assert.ok(entries.includes("scripts/benchmark-runner.mjs"));
     assert.ok(entries.includes("packages/piagent-core/benchmark/benchmark-core.js"));
     assert.equal(entries.some((entry) => /(?:^|\/)\.env(?:$|\.)/.test(entry)), false);
@@ -127,6 +129,9 @@ describe("package distribution", () => {
     assert.equal(files.has("packages/piagent-core/benchmark/benchmark-core.js"), true);
     assert.equal(files.has("benchmarks/core-v1/suite.json"), true);
     assert.equal(files.has("benchmarks/core-v1/tasks/invoice-quantity/grade.mjs"), true);
+    assert.equal(files.has("benchmarks/production-v1/suite.json"), true);
+    assert.equal(files.has("benchmarks/production-v1/grade.mjs"), true);
+    assert.equal(files.has("benchmarks/production-v1/project/package.json"), true);
     assert.equal(files.has("scripts/verify-vercel-link.mjs"), true);
     assert.equal(files.has("templates/project/.pi/gitignore.template"), true);
     assert.equal(files.has("templates/project/.pi/context-index.json"), true);

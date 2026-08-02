@@ -55,6 +55,10 @@ import fs from "node:fs";
 import path from "node:path";
 if (process.argv.includes("--version")) { console.log("0.82.0"); process.exit(0); }
 if (process.env.BENCHMARK_FAKE_STARTUP_FAIL === "1") process.exit(2);
+if (process.env.BENCHMARK_FAKE_STARTUP_FAIL_ONCE) {
+  const marker = process.env.BENCHMARK_FAKE_STARTUP_FAIL_ONCE;
+  if (!fs.existsSync(marker)) { fs.writeFileSync(marker, "failed\\n"); console.error("startup PIAGENT_BENCHMARK_STREAM_SECRET"); process.exit(2); }
+}
 if (process.env.BENCHMARK_FAKE_SLEEP === "1") {
   fs.writeFileSync(process.env.BENCHMARK_FAKE_SIGNAL_FILE, "started:" + process.pid + "\\n");
   process.on("SIGINT", () => {
@@ -71,12 +75,18 @@ const surface = process.env.PIAGENT_BENCHMARK_SURFACE;
 if (surface === "piagent") {
   const context = fs.readFileSync(path.join(process.cwd(), ".pi", "project-context.md"), "utf8");
   const index = JSON.parse(fs.readFileSync(path.join(process.cwd(), ".pi", "context-index.json"), "utf8"));
-  const onboarding = JSON.parse(fs.readFileSync(path.join(process.cwd(), ".pi", "piagent-state", "project-onboarding.json"), "utf8"));
-  if (context.includes("Generated: not yet") || index.source !== "onboarding-record" || index.warnings.length !== 0 || onboarding.model !== "benchmark-setup") process.exit(4);
+  if (process.env.PIAGENT_BENCHMARK_LIFECYCLE === "cold-start") {
+    if (!context.includes("Generated: not yet") || index.source === "onboarding-record") process.exit(4);
+    fs.writeFileSync(path.join(process.cwd(), ".pi", "project-context.md"), context.replace("Generated: not yet", "Generated: during measured cold start"));
+  } else {
+    const onboarding = JSON.parse(fs.readFileSync(path.join(process.cwd(), ".pi", "piagent-state", "project-onboarding.json"), "utf8"));
+    if (context.includes("Generated: not yet") || index.source !== "onboarding-record" || index.warnings.length !== 0 || onboarding.model !== "benchmark-setup") process.exit(4);
+  }
 }
 fs.writeFileSync(path.join(process.cwd(), "result.txt"), "correct\\n");
 fs.mkdirSync(sessionDir, { recursive: true });
 if (process.env.BENCHMARK_FAKE_LEAK === "1") console.log("PIAGENT_BENCHMARK_STREAM_SECRET");
+if (process.env.BENCHMARK_FAKE_REQUIRED === "1") console.log("PIAGENT_BENCHMARK_REQUIRED_MARKER");
 const input = surface === "piagent" ? 50 : 100;
 const toolName = surface === "piagent" ? "piagent_task_start" : "read";
 const entries = [
@@ -124,6 +134,7 @@ if (args[0] === "login" && args[1] === "status") { requireControlledIsolation();
 if (args[0] === "features" && args[1] === "list") { requireControlledIsolation(); console.log("apps stable true\\nplugins stable true\\nbrowser_use stable true\\nhooks stable true"); process.exit(0); }
 if (args[0] !== "exec") process.exit(7);
 requireControlledIsolation();
+if (process.env.BENCHMARK_FAKE_CODEX_HOME_LOG) fs.appendFileSync(process.env.BENCHMARK_FAKE_CODEX_HOME_LOG, process.env.CODEX_HOME + "\\n");
 const value = (name) => args[args.indexOf(name) + 1];
 if (!args.includes("--json") || !args.includes("--ephemeral") || !args.includes("--ignore-user-config") || !args.includes("--ignore-rules")) process.exit(8);
 if (!args.includes("--disable") || !args.includes("apps") || value("-s") !== "workspace-write" || value("-m") !== "fake-model") process.exit(9);
@@ -208,7 +219,8 @@ test("one command runs paired surfaces, grades them, and writes private reports"
   const report = JSON.parse(fs.readFileSync(path.join(value.output, "report.json"), "utf8"));
   assert.equal(report.schemaVersion, 2);
   assert.equal(report.runCount, 6);
-  assert.equal(report.environment.platformVersion, "1.2.11");
+  assert.deepEqual(report.infrastructure, { attempts: 6, retries: 0, retriedRuns: 0, failureCounts: {} });
+  assert.equal(report.environment.platformVersion, "1.2.12");
   assert.equal(report.environment.piVersion, "0.82.0");
   assert.equal(report.environment.treatmentBaseline, "initialized-and-onboarded");
   assert.match(report.environment.suiteDigest, /^[a-f0-9]{64}$/);
@@ -223,8 +235,56 @@ test("one command runs paired surfaces, grades them, and writes private reports"
   assert.equal(fs.existsSync(path.join(value.output, "workspaces")), false);
 });
 
+test("generated variants are paired by seed and enforce required output without storing values", (t) => {
+  const value = fixture(t);
+  const suite = JSON.parse(fs.readFileSync(value.suite, "utf8"));
+  suite.schemaVersion = 2;
+  suite.assurance = { taskSource: "test", visibility: "test", generatedVariants: true, reviewed: true, refreshedAt: "2026-08-02" };
+  suite.releaseGate = { minimumQualityScore: 9, minimumSafetyScore: 10, minimumReliabilityScore: 9, minimumWorkflowScore: 10, minimumCategoryScore: 9 };
+  Object.assign(suite.scenarios[0], {
+    category: "platform",
+    difficulty: "small",
+    lifecycle: "cold-start",
+    variantGenerator: "variant.mjs"
+  });
+  fs.writeFileSync(value.suite, `${JSON.stringify(suite, null, 2)}\n`);
+  fs.writeFileSync(path.join(path.dirname(value.suite), "variant.mjs"), `
+import crypto from "node:crypto";
+import fs from "node:fs";
+const seed = process.argv[4];
+const marker = "PIAGENT_BENCHMARK_REQUIRED_MARKER";
+const secret = crypto.createHash("sha256").update(seed).digest("hex").slice(0, 16);
+fs.writeFileSync(process.argv[3], JSON.stringify({ schemaVersion: 1, graderData: { secretHash: secret }, requiredOutputSubstrings: [marker], forbiddenOutputSubstrings: ["DYNAMIC_SECRET_" + secret] }));
+`);
+  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, "--seed", "paired-seed", "--yes", "--output", value.output], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: 60_000,
+    env: {
+      ...process.env,
+      BENCHMARK_FAKE_REQUIRED: "1",
+      PIAGENT_BENCHMARK_PI_COMMAND: value.fakePi,
+      PIAGENT_BENCHMARK_TASK_FIXTURE: path.join(root, "evals", "fixtures", "task-contract.valid.json")
+    }
+  });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const report = JSON.parse(fs.readFileSync(path.join(value.output, "report.json"), "utf8"));
+  assert.equal(report.environment.variantRootSeed, "paired-seed");
+  assert.equal(report.runs.every((run) => run.outputEvidence.passed), true);
+  const coldPiagentRuns = report.runs.filter((run) => run.surface === "piagent");
+  assert.equal(coldPiagentRuns.every((run) => run.scope.runtimeManagedChanges.includes(".pi/project-context.md")), true);
+  assert.equal(coldPiagentRuns.every((run) => run.scope.changedFiles.includes(".pi/project-context.md") === false), true);
+  for (let repeat = 1; repeat <= 3; repeat += 1) {
+    assert.equal(new Set(report.runs.filter((run) => run.repeat === repeat).map((run) => run.variant.oracleDigest)).size, 1);
+  }
+  assert.equal(new Set(report.runs.map((run) => run.variant.oracleDigest)).size, 3);
+  assert.equal(JSON.stringify(report).includes("PIAGENT_BENCHMARK_REQUIRED_MARKER"), false);
+  assert.equal(JSON.stringify(report).includes("DYNAMIC_SECRET_"), false);
+});
+
 test("one command compares Piagent with controlled Codex CLI using strict JSONL usage", (t) => {
   const value = fixture(t);
+  const codexHomeLog = path.join(value.dir, "codex-homes.log");
   const result = spawnSync(process.execPath, [
     runner,
     "--suite", value.suite,
@@ -240,6 +300,7 @@ test("one command compares Piagent with controlled Codex CLI using strict JSONL 
     env: {
       ...process.env,
       BENCHMARK_FAKE_EXPECT_CODEX_ISOLATION: "1",
+      BENCHMARK_FAKE_CODEX_HOME_LOG: codexHomeLog,
       BENCHMARK_FAKE_OPERATOR_CODEX_HOME: value.operatorCodexHome,
       CODEX_HOME: value.operatorCodexHome,
       PIAGENT_BENCHMARK_PI_COMMAND: value.fakePi,
@@ -253,7 +314,7 @@ test("one command compares Piagent with controlled Codex CLI using strict JSONL 
   assert.equal(report.environment.codexVersion, "codex-cli 1.0.0-test");
   assert.equal(report.environment.codexMode, "controlled");
   assert.equal(report.environment.codexAuth, "login-status");
-  assert.equal(report.environment.codexIsolation, "temporary-home");
+  assert.equal(report.environment.codexIsolation, "per-session-temporary-home");
   assert.equal(report.environment.codexCredentialBridge, "auth-json-link");
   assert.equal(report.environment.codexGlobalInstructions, "excluded");
   assert.deepEqual(report.environment.codexDisabledFeatures, ["apps", "plugins", "browser_use", "hooks"]);
@@ -270,6 +331,9 @@ test("one command compares Piagent with controlled Codex CLI using strict JSONL 
   assert.equal(report.verdict.status, "piagent-more-efficient");
   assert.match(result.stdout, /Comparison: Piagent vs Codex CLI/);
   assert.match(result.stdout, /cost n\/a/);
+  const codexHomes = fs.readFileSync(codexHomeLog, "utf8").trim().split("\n");
+  assert.equal(codexHomes.length, 3);
+  assert.equal(new Set(codexHomes).size, 3, "every measured Codex session must receive a clean CODEX_HOME");
 });
 
 test("streams Codex JSONL larger than the retained process-output tail", (t) => {
@@ -367,6 +431,49 @@ test("aborts when Pi exits before recording usage", (t) => {
   assert.equal(record.abortSuite, true);
   assert.match(record.failure, /agent-exit-2/);
   assert.equal(fs.existsSync(path.join(value.output, "aborted.json")), true);
+});
+
+test("retries one zero-usage infrastructure failure without counting it as a measured run", (t) => {
+  const value = fixture(t);
+  const failureMarker = path.join(value.dir, "startup-failed-once");
+  const result = spawnSync(process.execPath, [
+    runner,
+    "--suite", value.suite,
+    "--repeats", "1",
+    "--infrastructure-retries", "1",
+    "--yes",
+    "--output", value.output
+  ], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: 60_000,
+    env: {
+      ...process.env,
+      BENCHMARK_FAKE_STARTUP_FAIL_ONCE: failureMarker,
+      PIAGENT_BENCHMARK_PI_COMMAND: value.fakePi,
+      PIAGENT_BENCHMARK_TASK_FIXTURE: path.join(root, "evals", "fixtures", "task-contract.valid.json")
+    }
+  });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /RETRY 1\/1 \(agent-exit-2-before-usage\)/);
+  const report = JSON.parse(fs.readFileSync(path.join(value.output, "report.json"), "utf8"));
+  assert.equal(report.runCount, 2);
+  const retried = report.runs.find((run) => run.infrastructureRetries === 1);
+  assert.equal(retried.infrastructureAttempts, 2);
+  assert.equal(retried.infrastructureFailures.length, 1);
+  assert.equal(retried.infrastructureFailures[0].failure, "agent-exit-2-before-usage");
+  assert.deepEqual(report.infrastructure, {
+    attempts: 3,
+    retries: 1,
+    retriedRuns: 1,
+    failureCounts: { "agent-exit-2-before-usage": 1 }
+  });
+  const attempts = fs.readFileSync(path.join(value.output, "infrastructure-attempts.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
+  assert.equal(attempts.length, 1);
+  assert.equal(attempts[0].accepted, false);
+  assert.equal(attempts[0].retryAvailable, true);
+  assert.match(attempts[0].infrastructureDiagnostic, /startup \[REDACTED\]/);
+  assert.equal(JSON.stringify(attempts).includes("PIAGENT_BENCHMARK_STREAM_SECRET"), false);
 });
 
 test("forwards interruption to the active Pi process and leaves only a partial private ledger", async (t) => {

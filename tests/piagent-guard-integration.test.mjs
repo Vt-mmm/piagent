@@ -282,8 +282,7 @@ describe("piagent guard integration", () => {
     }, null, 2)}\n`);
     const profilePath = path.join(cwd, ".pi", "piagent-profile.json");
     const profile = JSON.parse(fs.readFileSync(profilePath, "utf8"));
-    const adapter = JSON.parse(fs.readFileSync(path.join(root, "adapters", "node-typescript", "profile.json"), "utf8"));
-    profile.verifyCommands = { source: adapter.verifyCommands.source };
+    profile.verifyCommands = { source: ["git diff --check", "npm test"] };
     fs.writeFileSync(profilePath, `${JSON.stringify(profile, null, 2)}\n`);
     const ctx = createContext(cwd, { sessionId: "runtime-intake-session", sessionName: "TICKET-101" });
     const harness = createPiHarness({ activeTools: ["read", "bash", "edit", "write"] });
@@ -307,8 +306,11 @@ describe("piagent guard integration", () => {
     assert.match(started.message.content, /Do not re-read root AGENTS\.md or inspect Piagent\/platform files/);
     assert.match(started.message.content, /src\/invoice\.ts/);
     assert.match(started.message.content, /test\/\*\*/);
+    assert.match(started.message.content, /Verifier 1 \(run as its own shell call\): git diff --check/);
+    assert.match(started.message.content, /Verifier 2 \(run as its own shell call\): npm test/);
+    assert.doesNotMatch(started.message.content, /git diff --check\s*\|\s*npm test/);
     assert.equal(started.message.details.runtimeTask.intakeMode, "runtime");
-    assert.deepEqual(started.message.details.runtimeTask.verifyCommands, ["npm test"]);
+    assert.deepEqual(started.message.details.runtimeTask.verifyCommands, ["git diff --check", "npm test"]);
     assert.equal(harness.activeTools.has("piagent_task_start"), false);
 
     const task = JSON.parse(fs.readFileSync(
@@ -339,6 +341,33 @@ describe("piagent guard integration", () => {
     }, ctx);
     assert.match(result.systemPrompt, /Piagent protected-path policy/);
     assert.equal(result.message, undefined);
+    assert.equal(fs.readdirSync(path.join(cwd, ".pi", "piagent-state", "tasks")).length, 0);
+  });
+
+  it("exposes manual intake for a safe high-risk change that mentions a protected path", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    fs.mkdirSync(path.join(cwd, "docs"), { recursive: true });
+    fs.mkdirSync(path.join(cwd, "config"), { recursive: true });
+    fs.writeFileSync(path.join(cwd, "docs", "ops.md"), "# Operations\n");
+    fs.writeFileSync(path.join(cwd, "config", "service.json"), "{}\n");
+    const ctx = createContext(cwd, { sessionId: "manual-risk-session", sessionName: "SEC-101" });
+    const harness = createPiHarness({ activeTools: ["read", "bash", "edit", "write"] });
+
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+    const prompt = "Update docs/ops.md from config/service.json for the security runbook; do not access .env or print any secret.";
+    await harness.handlers.get("input")({ text: prompt, source: "user" }, ctx);
+    assert.equal(harness.activeTools.has("piagent_task_start"), true);
+    assert.equal(harness.activeTools.has("piagent_context_engine"), false);
+
+    const result = await harness.handlers.get("before_agent_start")({
+      prompt,
+      systemPrompt: fs.readFileSync(path.join(repoRoot, "templates", "project", "AGENTS.md"), "utf8"),
+      systemPromptOptions: { cwd, selectedTools: [...harness.activeTools] }
+    }, ctx);
+    assert.doesNotMatch(result?.systemPrompt ?? "", /Piagent protected-path policy/);
+    assert.equal(result?.message, undefined, "high-risk mixed scope waits for one explicit model intake");
     assert.equal(fs.readdirSync(path.join(cwd, ".pi", "piagent-state", "tasks")).length, 0);
   });
 
@@ -1309,6 +1338,9 @@ describe("piagent guard integration", () => {
     assert.equal(started.details.schemaVersion, 2);
     assert.equal(started.details.sessionId, "session-lifecycle");
     assert.equal(started.details.verifyGroup, "test");
+    assert.match(started.content[0].text, /Verifier 1 \(run as its own shell call\): npm test/);
+    assert.match(started.content[0].text, /Verifier 2 \(run as its own shell call\): npm run lint/);
+    assert.doesNotMatch(started.content[0].text, /npm test\s*\|\s*npm run lint/);
     assert.deepEqual(started.details.workPlan.map((step) => step.status), ["in-progress", "pending", "pending"]);
 
     const progress = harness.tools.get("piagent_task_progress");

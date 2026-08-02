@@ -10,7 +10,7 @@ This file is the canonical install, update, rollback, and release checklist. Oth
 
 All supported environments require Node.js `>=22.19.0` and Pi Coding Agent `0.82.0`. The Pi host is installed as a Node CLI; Pi Agent Platform still defines its own release matrix because the terminal helpers and shell policy rely on Bash/POSIX behavior.
 
-| Surface | Status for v1.2.11 | Rollout guidance |
+| Surface | Status for v1.2.12 | Rollout guidance |
 |---|---|---|
 | macOS Apple Silicon (`darwin/arm64`) + Bash | Verified for this release. | Safe default for team rollout after normal project smoke tests. |
 | Linux x64 + Bash | Verified in GitHub Actions. | Safe default for CI/server usage after normal project smoke tests. |
@@ -33,7 +33,7 @@ These three components are versioned independently. A full install, update, or r
 
 | Channel | Source shape | Mutability | Use when |
 |---|---|---:|---|
-| `stable` | `git:github.com/Vt-mmm/piagent@<resolved-commit-sha>` from `v1.2.11` | Fixed after resolution | Default for team rollout. |
+| `stable` | `git:github.com/Vt-mmm/piagent@<resolved-commit-sha>` from `v1.2.12` | Fixed after resolution | Default for team rollout. |
 | `exact` | Tag, reviewed commit, or a tag resolved with `--resolve-tag` | Fixed when using a commit SHA | Pi-package-only roll forward, rollback, or reproduction. |
 | `dev` | `git:github.com/Vt-mmm/piagent` | Moving | Personal machine or sandbox only. |
 | `local` | `/path/to/piagent` | Local workspace | Platform development and dry-run validation. |
@@ -53,7 +53,7 @@ Use this flow when the team needs both terminal commands and the Pi package:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.2.11
+npm install -g --ignore-scripts @piagent/platform@1.2.12
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -61,8 +61,8 @@ piagent-install --stable
 The stable preview and apply output includes:
 
 ```text
-currentRelease: v1.2.11 (helper package version)
-tag: v1.2.11
+currentRelease: v1.2.12 (helper package version)
+tag: v1.2.12
 resolvedCommit: <40-char-sha>
 source: git:github.com/Vt-mmm/piagent@<40-char-sha>
 ```
@@ -79,7 +79,7 @@ bash scripts/install-global.sh --stable
 Use this only when terminal commands are not needed:
 
 ```bash
-pi install git:github.com/Vt-mmm/piagent@v1.2.11
+pi install git:github.com/Vt-mmm/piagent@v1.2.12
 ```
 
 Direct `pi install` does not create `piagent-*` commands on `PATH`.
@@ -288,11 +288,15 @@ Re-running the workflow from a branch instead skips publishing, because the publ
    ```
 
    Nếu release thay đổi harness, context budget, tool loading hoặc logic tính
-   token, maintainer còn phải chạy `piagent-benchmark --dry-run`, sau đó chạy
-   `piagent-benchmark --model <provider/model> --thinking <level>` trên đúng
-   release candidate và lưu report. Đây là model-quota gate có xác nhận riêng,
-   không chạy ngầm trong CI. Không claim token/cost nếu report không cho phép
-   `tokenClaimAllowed`.
+   token, maintainer trước tiên chạy smoke suite bằng `piagent-benchmark`, sau
+   đó chạy production suite với `--production --surfaces piagent,codex-cli --model <provider/model> --thinking <level>` trên đúng release candidate và lưu
+   report. Production gate dùng 108 model session, generated held-out variant,
+   category bands và 95% token-ratio confidence nên là model-quota gate có xác
+   nhận riêng, không chạy ngầm trong CI. Không claim token/cost nếu report không
+   cho phép `tokenClaimAllowed` hoặc `productionGate.passed` khác `true`.
+   Zero-usage process failure có thể retry tối đa hai lần với backoff và phải xuất hiện trong
+   infrastructure ledger; timeout hay task failure không được retry để né điểm
+   reliability.
 
 3. Push the release-candidate branch, open a pull request to `main`, and wait for both Ubuntu/macOS verify jobs and both CodeQL matrix jobs to pass. Record the exact PR-head commit SHA that passed; do not merge it into the Vercel production branch yet, and do not tag a later unverified edit.
 4. Create an annotated, reviewed tag on that exact verified commit and push the tag. Pushing the tag starts `publish.yml`, which runs the full verify matrix as a dependency and only then publishes, so a failure on any supported runtime stops the release before it reaches the registry:
