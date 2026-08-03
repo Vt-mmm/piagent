@@ -1,6 +1,6 @@
 {
   "defaultProjectTrust": "ask",
-  "defaultThinkingLevel": "xhigh",
+  "defaultThinkingLevel": "high",
   "hideThinkingBlock": false,
   "showCacheMissNotices": true,
   "compaction": {

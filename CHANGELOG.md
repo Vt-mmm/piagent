@@ -2,6 +2,17 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.2.16 - 2026-08-03
+
+### Codex default
+
+- Changed the default Codex configuration to `openai-codex/gpt-5.5:high`
+  across setup, global install, model-scope configuration and the global
+  settings template. Explicit `xhigh` selections remain supported.
+- Changed the no-thinking-suffix fallback to `high` and added an executable
+  regression test covering default settings, scoped models and explicit
+  `xhigh` overrides.
+
 ## v1.2.15 - 2026-08-03
 
 ### Global update reliability

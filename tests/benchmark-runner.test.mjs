@@ -220,7 +220,7 @@ test("one command runs paired surfaces, grades them, and writes private reports"
   assert.equal(report.schemaVersion, 2);
   assert.equal(report.runCount, 6);
   assert.deepEqual(report.infrastructure, { attempts: 6, retries: 0, retriedRuns: 0, failureCounts: {} });
-  assert.equal(report.environment.platformVersion, "1.2.15");
+  assert.equal(report.environment.platformVersion, "1.2.16");
   assert.equal(report.environment.piVersion, "0.82.0");
   assert.equal(report.environment.treatmentBaseline, "initialized-and-onboarded");
   assert.match(report.environment.suiteDigest, /^[a-f0-9]{64}$/);

@@ -119,7 +119,7 @@ Tên model có thể đổi theo Pi model catalog. Khi không chắc, ưu tiên 
 Global setup mặc định:
 
 ```bash
-piagent-model-scope --preset full --default-model openai-codex/gpt-5.5:xhigh
+piagent-model-scope --preset full --default-model openai-codex/gpt-5.5:high
 ```
 
 Scope này ghi vào settings:
