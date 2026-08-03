@@ -1,0 +1,21 @@
+<section class="section">
+  <div class="callout ok-callout">
+    <strong>Git in Pi Agent</strong>
+    <p>There is no separate <span class="inline-code">/git</span> namespace. Use <span class="inline-code">/workflow commit</span> for a reviewed local commit and <span class="inline-code">/workflow pr</span> to prepare a pull request. Actions such as <span class="inline-code">git push</span> or broad staging with <span class="inline-code">git add -A</span> still require operator confirmation.</p>
+  </div>
+  <div class="callout">
+    <strong>Solo-first orchestration</strong>
+    <p>Use <span class="inline-code">/piagent-orchestration</span> to inspect mode, subagent limits, review lenses, Field Guide, and writer policy. The parent agent owns the task by default; subagents are used only when scouting, planning, or review has an independent lane worth the token cost.</p>
+  </div>
+  <div class="command-grid">
+    <article class="command-card"><header><span>Bounded implementation</span><button class="clip-btn" data-clip="/workflow task Fix the failing checkout test and verify.">Copy</button></header><pre><code>/workflow task Fix the failing checkout test and verify.</code></pre></article>
+    <article class="command-card"><header><span>Read-only scout</span><button class="clip-btn" data-clip="/workflow scout Map the auth flow and risk areas.">Copy</button></header><pre><code>/workflow scout Map the auth flow and risk areas.</code></pre></article>
+    <article class="command-card"><header><span>Plan before coding</span><button class="clip-btn" data-clip="/workflow plan Add multi-tenant billing support.">Copy</button></header><pre><code>/workflow plan Add multi-tenant billing support.</code></pre></article>
+    <article class="command-card"><header><span>Review a diff</span><button class="clip-btn" data-clip="/workflow review current diff">Copy</button></header><pre><code>/workflow review current diff</code></pre></article>
+    <article class="command-card"><header><span>Guarded local commit</span><button class="clip-btn" data-clip="/workflow commit &quot;feat: add guarded git workflow&quot;">Copy</button></header><pre><code>/workflow commit "feat: add guarded git workflow"</code></pre></article>
+    <article class="command-card"><header><span>Prepare a pull request</span><button class="clip-btn" data-clip="/workflow pr &quot;Prepare PR for guarded git workflow&quot;">Copy</button></header><pre><code>/workflow pr "Prepare PR for guarded git workflow"</code></pre></article>
+    <article class="command-card"><header><span>Backend spec to frontend</span><button class="clip-btn" data-clip="/profile be-readonly-fe&#10;/workflow be-to-fe Implement frontend support for the new user status endpoint.">Copy</button></header><pre><code>/profile be-readonly-fe
+/workflow be-to-fe Implement frontend support for the new user status endpoint.</code></pre></article>
+    <article class="command-card"><header><span>Improve the platform</span><button class="clip-btn" data-clip="/workflow platform-improve Harden command docs and run verification.">Copy</button></header><pre><code>/workflow platform-improve Harden command docs and run verification.</code></pre></article>
+  </div>
+</section>

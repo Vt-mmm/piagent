@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en" data-copy-success="Copied" data-copy-fallback="Select command">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Change task permissions with one command · Pi Agent Platform Docs</title>
+    <meta name="description" content="Permission modes are session-local overrides. Changing a mode does not modify the project profile." />
+    <meta name="theme-color" content="#050505" />
+    <link rel="canonical" href="https://piagent.io.vn/en/permissions" />
+    <link rel="alternate" hreflang="vi" href="https://piagent.io.vn/permissions" />
+    <link rel="alternate" hreflang="en" href="https://piagent.io.vn/en/permissions" />
+    <link rel="alternate" hreflang="x-default" href="https://piagent.io.vn/permissions" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta property="og:title" content="Change task permissions with one command · Pi Agent Platform Docs" />
+    <meta property="og:description" content="Permission modes are session-local overrides. Changing a mode does not modify the project profile." />
+    <meta property="og:url" content="https://piagent.io.vn/en/permissions" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/docs.css" />
+    <script src="/assets/docs.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/en/" aria-label="Pi Agent Platform">
+        <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" /></span>
+        <span>Pi Agent Platform</span>
+      </a>
+      <div class="top-actions">
+        <span class="pill"><span class="pill-dot"></span>v1.2.17 docs · EN</span>
+        <nav class="language-switch" aria-label="Language">
+          <a class="language-option" href="/permissions" hreflang="vi" lang="vi">VI</a>
+          <a class="language-option current" href="/en/permissions" hreflang="en" lang="en" aria-current="true">EN</a>
+        </nav>
+        <a class="button social" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer" aria-label="Open GitHub repository">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          GitHub
+        </a>
+        <button class="button mobile-menu" type="button" data-menu>Menu</button>
+        <a class="button top-command-link" href="/en/commands">Commands</a>
+      </div>
+    </header>
+
+    <div class="layout with-toc">
+      <aside class="sidebar" data-sidebar>
+        <div class="sidebar-search" aria-label="Search documentation">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M10.8 18.1a7.3 7.3 0 1 1 0-14.6 7.3 7.3 0 0 1 0 14.6Zm5.3-1.7 4.4 4.4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          <input type="search" placeholder="Search pages" data-filter />
+        </div>
+
+        <nav aria-label="Documentation">
+          <div class="nav-group">
+            <p class="nav-title">Get started</p>
+            <a class="nav-link" href="/en/">Overview</a>
+            <a class="nav-link" href="/en/quickstart">Quickstart</a>
+            <a class="nav-link" href="/en/scope">Platform scope</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Build</p>
+            <a class="nav-link" href="/en/profiles">Project profiles</a>
+            <a class="nav-link current" href="/en/permissions" aria-current="page">Permission modes</a>
+            <a class="nav-link" href="/en/commands">Command catalog</a>
+            <a class="nav-link" href="/en/workflows">Workflows</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">MCP</p>
+            <a class="nav-link" href="/en/mcp">MCP overview</a>
+            <a class="nav-link" href="/en/mcp-servers">Server management</a>
+            <a class="nav-link" href="/en/mcp-auth">Authentication</a>
+            <a class="nav-link" href="/en/mcp-approval">Approval gate</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Operate</p>
+            <a class="nav-link" href="/en/security">Security model</a>
+            <a class="nav-link" href="/en/architecture">Architecture</a>
+            <a class="nav-link" href="/en/context-engine">Context Engine</a>
+            <a class="nav-link" href="/en/benchmark">Benchmark</a>
+            <a class="nav-link" href="/en/runtime">Runtime tools</a>
+            <a class="nav-link" href="/en/team">Team usage</a>
+          </div>
+        </nav>
+      </aside>
+
+      <main>
+        <div class="content-shell" data-article>
+            <nav class="breadcrumb" aria-label="Breadcrumb">
+              <a href="/en/">Docs</a>
+              <span aria-hidden="true">/</span>
+              <span>Build</span>
+              <span aria-hidden="true">/</span>
+              <span>Permission modes</span>
+            </nav>
+            <div class="page-head">
+              <h1>Change task permissions with one command</h1>
+              <p>Permission modes are session-local overrides. Changing a mode does not modify the project profile.</p>
+            </div>
+<section class="section">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Mode</th><th>Use it for</th><th>Boundary</th><th>Command</th></tr></thead>
+      <tbody>
+        <tr><td><span class="inline-code">read-only</span></td><td>Scouting, audits, mapping, and reviews without source edits.</td><td>Allows read, grep, find, ls, and Piagent tools; blocks shell, write, and unknown tools.</td><td><span class="inline-code">/permission read-only</span></td></tr>
+        <tr><td><span class="inline-code">workspace-write</span></td><td>Normal implementation inside the repository.</td><td>Default guarded mode with protected paths, shell policy, capabilities, and verification gates.</td><td><span class="inline-code">/permission workspace-write</span></td></tr>
+        <tr><td><span class="inline-code">trusted-full-access</span></td><td>Automation in a trusted repository with a clearly bounded task.</td><td>Expands autonomy while retaining protected paths, redaction, integrity locks, and confirmation gates.</td><td><span class="inline-code">/permission full-access</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="command-grid">
+    <article class="command-card"><header><span>Show permission</span><button class="clip-btn" data-clip="/permission status">Copy</button></header><pre><code>/permission status</code></pre></article>
+    <article class="command-card"><header><span>Read-only session</span><button class="clip-btn" data-clip="/permission read-only">Copy</button></header><pre><code>/permission read-only</code></pre></article>
+    <article class="command-card"><header><span>Workspace write</span><button class="clip-btn" data-clip="/permission workspace-write">Copy</button></header><pre><code>/permission workspace-write</code></pre></article>
+    <article class="command-card"><header><span>Full access with a task</span><button class="clip-btn" data-clip="/permission full-access Run the trusted local verification suite.">Copy</button></header><pre><code>/permission full-access Run the trusted local verification suite.</code></pre></article>
+  </div>
+</section>
+            <nav class="pager" aria-label="Adjacent pages">
+              <a class="pager-prev" href="/en/profiles">
+                <span class="pager-label">Previous</span>
+                <span class="pager-title">Project profiles</span>
+              </a>
+              <a class="pager-next" href="/en/commands">
+                <span class="pager-label">Next</span>
+                <span class="pager-title">Command catalog</span>
+              </a>
+            </nav>
+
+            <footer class="footer">
+              <p>Pi Agent Platform docs · static HTML · governed agent workflow</p>
+              <div class="footer-links" aria-label="External links">
+                <a href="https://piagent.io.vn" target="_blank" rel="noopener noreferrer">piagent.io.vn</a>
+                <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub repository</a>
+                <a href="/permissions" hreflang="vi">Tiếng Việt</a>
+                <a href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer">Facebook profile</a>
+              </div>
+            </footer>
+        </div>
+      </main>
+
+      <aside class="toc" aria-label="Page contents">
+        <p class="toc-title">On this page</p>
+        <nav data-toc></nav>
+      </aside>
+    </div>
+  </body>
+</html>

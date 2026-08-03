@@ -293,8 +293,8 @@ This repository intentionally excludes:
 - [Architecture (Tiếng Việt)](docs/vi/architecture.md)
 - [Maintainer guide (English)](docs/en/maintainer-guide.md)
 - [Maintainer guide (Tiếng Việt)](docs/vi/maintainer-guide.md)
-- [Public docs site](https://piagent.io.vn)
-- [Static team docs site](docs-site/index.html) — generated from `docs-site/content/`, preview with `npm run site:preview`
+- [Public docs site (VI/EN)](https://piagent.io.vn)
+- [Static team docs site](docs-site/index.html) — bilingual output generated from `docs-site/content/`, preview with `npm run site:preview`
 - [Changelog](CHANGELOG.md)
 - [Vercel docs site deploy](docs/vercel-docs-site.md)
 - [Operator manual tiếng Việt](docs/operator-manual-vietnamese.md)
@@ -330,7 +330,7 @@ This repository intentionally excludes:
 
 ## Maturity
 
-The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.2.16` or a reviewed commit.
+The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.2.17` or a reviewed commit.
 
 Ready for:
 

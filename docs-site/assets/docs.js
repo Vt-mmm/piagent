@@ -71,11 +71,13 @@ document.querySelectorAll("[data-clip]").forEach((button) => {
   button.addEventListener("click", async () => {
     const text = button.getAttribute("data-clip") || "";
     const original = button.textContent;
+    const copySuccess = document.documentElement.dataset.copySuccess || "Copied";
+    const copyFallback = document.documentElement.dataset.copyFallback || "Select command";
     try {
       await navigator.clipboard.writeText(text);
-      button.textContent = "Đã lấy";
+      button.textContent = copySuccess;
     } catch {
-      button.textContent = "Chọn lệnh";
+      button.textContent = copyFallback;
     }
     setTimeout(() => {
       button.textContent = original;

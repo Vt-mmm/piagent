@@ -25,23 +25,25 @@ Site là nhiều trang tĩnh, mỗi topic một trang, sinh ra từ một shell 
 
 ```text
 docs-site/
-  content/<slug>.html   # nội dung riêng của từng trang, không có header/sidebar/footer
+  content/<slug>.html   # source tiếng Việt; URL giữ ở /<slug>
+  content/en/<slug>.html # source English; URL ở /en/<slug>
   assets/docs.css       # style dùng chung
   assets/docs.js        # sidebar filter, TOC, active-section, copy button
-  <slug>.html           # output đã generate, được commit
+  <slug>.html           # output VI đã generate, được commit
+  en/<slug>.html        # output EN đã generate, được commit
   vercel.json
 scripts/build-docs-site.mjs
 ```
 
-Sidebar chia theo bốn nhóm — Get started, Build, MCP, Operate. Thứ tự nhóm và thứ tự trang nằm trong hằng `NAV` của `scripts/build-docs-site.mjs`; đó cũng là thứ tự của link prev/next ở cuối mỗi trang. Thêm một trang = thêm `docs-site/content/<slug>.html` + một entry trong `NAV`, rồi build lại.
+Sidebar chia theo bốn nhóm — Get started, Build, MCP, Operate. Thứ tự nhóm và thứ tự trang nằm trong hằng `NAV` của `scripts/build-docs-site.mjs`; metadata English nằm trong `EN_PAGE_COPY`. Đây cũng là thứ tự của link prev/next ở cuối mỗi trang. Thêm một trang = thêm đủ fragment VI/EN, thêm metadata vào `NAV` và `EN_PAGE_COPY`, rồi build lại. Root URL giữ VI để không gãy link cũ; EN dùng prefix `/en`. Mỗi cặp có canonical, `hreflang` và language switch giữ nguyên topic.
 
 ```bash
 npm run site:build
 ```
 
-Output HTML được commit, vì Vercel serve file tĩnh và không có build step. `npm run verify` chạy `build-docs-site.mjs --check`, fail khi output đã commit không còn khớp source — cùng cách `catalog/capabilities.json` đang dùng. Không sửa tay `docs-site/<slug>.html`; sửa fragment trong `content/` hoặc sửa shell trong script.
+Output HTML được commit, vì Vercel serve file tĩnh và không có build step. `npm run verify` chạy `build-docs-site.mjs --check`, fail khi output đã commit không còn khớp source — cùng cách `catalog/capabilities.json` đang dùng. Không sửa tay `docs-site/<slug>.html` hoặc `docs-site/en/<slug>.html`; sửa fragment trong `content/` hoặc sửa shell trong script.
 
-Version badge xuất hiện trên mọi trang, nên `npm run release:identity` kiểm tra tất cả `docs-site/*.html` chứ không riêng `index.html`.
+Version badge xuất hiện trên mọi trang, nên `npm run release:identity` kiểm tra recursive toàn bộ generated VI/EN pages chứ không riêng `index.html`.
 
 ## Production promotion policy
 

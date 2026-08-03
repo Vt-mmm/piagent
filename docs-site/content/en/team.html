@@ -1,0 +1,14 @@
+<section class="section">
+  <div class="split">
+    <article class="card"><h3 id="do">Do</h3><p>Run <span class="inline-code">/onboard run</span>, apply <span class="inline-code">/profile auto</span>, use <span class="inline-code">/workflow</span>, execute real verification, and state blockers clearly.</p></article>
+    <article class="card"><h3 id="avoid">Avoid</h3><p>Do not place tokens, authentication files, caches, sessions, private examples, or project-specific business logic in the public core package.</p></article>
+  </div>
+  <div class="callout ok-callout">
+    <strong>Handoff standard</strong>
+    <p>A final response should briefly state what changed, which verification ran, whether subagents were used, and which risks or next steps require review.</p>
+  </div>
+  <div class="callout">
+    <strong>Release documentation gate</strong>
+    <p>A new docs version is promoted to Vercel only after tag-triggered CI passes and the stable dry run resolves the exact commit SHA. Promotion uses the tagged commit without an intervening merge or docs-only edit. The canonical domain is <span class="inline-code">piagent.io.vn</span>; the apex is the Vercel primary and <span class="inline-code">www</span> redirects to it.</p>
+  </div>
+</section>

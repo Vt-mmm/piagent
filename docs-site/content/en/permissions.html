@@ -1,0 +1,19 @@
+<section class="section">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Mode</th><th>Use it for</th><th>Boundary</th><th>Command</th></tr></thead>
+      <tbody>
+        <tr><td><span class="inline-code">read-only</span></td><td>Scouting, audits, mapping, and reviews without source edits.</td><td>Allows read, grep, find, ls, and Piagent tools; blocks shell, write, and unknown tools.</td><td><span class="inline-code">/permission read-only</span></td></tr>
+        <tr><td><span class="inline-code">workspace-write</span></td><td>Normal implementation inside the repository.</td><td>Default guarded mode with protected paths, shell policy, capabilities, and verification gates.</td><td><span class="inline-code">/permission workspace-write</span></td></tr>
+        <tr><td><span class="inline-code">trusted-full-access</span></td><td>Automation in a trusted repository with a clearly bounded task.</td><td>Expands autonomy while retaining protected paths, redaction, integrity locks, and confirmation gates.</td><td><span class="inline-code">/permission full-access</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="command-grid">
+    <article class="command-card"><header><span>Show permission</span><button class="clip-btn" data-clip="/permission status">Copy</button></header><pre><code>/permission status</code></pre></article>
+    <article class="command-card"><header><span>Read-only session</span><button class="clip-btn" data-clip="/permission read-only">Copy</button></header><pre><code>/permission read-only</code></pre></article>
+    <article class="command-card"><header><span>Workspace write</span><button class="clip-btn" data-clip="/permission workspace-write">Copy</button></header><pre><code>/permission workspace-write</code></pre></article>
+    <article class="command-card"><header><span>Full access with a task</span><button class="clip-btn" data-clip="/permission full-access Run the trusted local verification suite.">Copy</button></header><pre><code>/permission full-access Run the trusted local verification suite.</code></pre></article>
+  </div>
+</section>

@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en" data-copy-success="Copied" data-copy-fallback="Select command">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Repository servers require approval · Pi Agent Platform Docs</title>
+    <meta name="description" content="Cloning an untrusted repository must not grant its author a process on the operator's machine. Decisions live outside the repository and are pinned by digest." />
+    <meta name="theme-color" content="#050505" />
+    <link rel="canonical" href="https://piagent.io.vn/en/mcp-approval" />
+    <link rel="alternate" hreflang="vi" href="https://piagent.io.vn/mcp-approval" />
+    <link rel="alternate" hreflang="en" href="https://piagent.io.vn/en/mcp-approval" />
+    <link rel="alternate" hreflang="x-default" href="https://piagent.io.vn/mcp-approval" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta property="og:title" content="Repository servers require approval · Pi Agent Platform Docs" />
+    <meta property="og:description" content="Cloning an untrusted repository must not grant its author a process on the operator's machine. Decisions live outside the repository and are pinned by digest." />
+    <meta property="og:url" content="https://piagent.io.vn/en/mcp-approval" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/docs.css" />
+    <script src="/assets/docs.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/en/" aria-label="Pi Agent Platform">
+        <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" /></span>
+        <span>Pi Agent Platform</span>
+      </a>
+      <div class="top-actions">
+        <span class="pill"><span class="pill-dot"></span>v1.2.17 docs · EN</span>
+        <nav class="language-switch" aria-label="Language">
+          <a class="language-option" href="/mcp-approval" hreflang="vi" lang="vi">VI</a>
+          <a class="language-option current" href="/en/mcp-approval" hreflang="en" lang="en" aria-current="true">EN</a>
+        </nav>
+        <a class="button social" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer" aria-label="Open GitHub repository">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          GitHub
+        </a>
+        <button class="button mobile-menu" type="button" data-menu>Menu</button>
+        <a class="button top-command-link" href="/en/commands">Commands</a>
+      </div>
+    </header>
+
+    <div class="layout with-toc">
+      <aside class="sidebar" data-sidebar>
+        <div class="sidebar-search" aria-label="Search documentation">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M10.8 18.1a7.3 7.3 0 1 1 0-14.6 7.3 7.3 0 0 1 0 14.6Zm5.3-1.7 4.4 4.4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          <input type="search" placeholder="Search pages" data-filter />
+        </div>
+
+        <nav aria-label="Documentation">
+          <div class="nav-group">
+            <p class="nav-title">Get started</p>
+            <a class="nav-link" href="/en/">Overview</a>
+            <a class="nav-link" href="/en/quickstart">Quickstart</a>
+            <a class="nav-link" href="/en/scope">Platform scope</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Build</p>
+            <a class="nav-link" href="/en/profiles">Project profiles</a>
+            <a class="nav-link" href="/en/permissions">Permission modes</a>
+            <a class="nav-link" href="/en/commands">Command catalog</a>
+            <a class="nav-link" href="/en/workflows">Workflows</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">MCP</p>
+            <a class="nav-link" href="/en/mcp">MCP overview</a>
+            <a class="nav-link" href="/en/mcp-servers">Server management</a>
+            <a class="nav-link" href="/en/mcp-auth">Authentication</a>
+            <a class="nav-link current" href="/en/mcp-approval" aria-current="page">Approval gate</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Operate</p>
+            <a class="nav-link" href="/en/security">Security model</a>
+            <a class="nav-link" href="/en/architecture">Architecture</a>
+            <a class="nav-link" href="/en/context-engine">Context Engine</a>
+            <a class="nav-link" href="/en/benchmark">Benchmark</a>
+            <a class="nav-link" href="/en/runtime">Runtime tools</a>
+            <a class="nav-link" href="/en/team">Team usage</a>
+          </div>
+        </nav>
+      </aside>
+
+      <main>
+        <div class="content-shell" data-article>
+            <nav class="breadcrumb" aria-label="Breadcrumb">
+              <a href="/en/">Docs</a>
+              <span aria-hidden="true">/</span>
+              <span>MCP</span>
+              <span aria-hidden="true">/</span>
+              <span>Approval gate</span>
+            </nav>
+            <div class="page-head">
+              <h1>Repository servers require approval</h1>
+              <p>Cloning an untrusted repository must not grant its author a process on the operator's machine. Decisions live outside the repository and are pinned by digest.</p>
+            </div>
+<section class="section">
+  <h2 id="problem">The problem</h2>
+  <p>A repository may include <span class="inline-code">.mcp.json</span> and <span class="inline-code">.pi/mcp.json</span>. Cloning an untrusted repository and opening a session must <strong>not</strong> grant its author a process on the operator's machine with the operator's credentials. Servers from those scopes remain unavailable until someone on the machine approves them.</p>
+  <pre><code>/piagent-mcp get internal        # inspect first
+/piagent-mcp approve internal    # or reject, or reset</code></pre>
+  <p>In a terminal, omit the slash: <span class="inline-code">piagent-mcp get internal</span>. Both surfaces store the same decision in the same file.</p>
+  <p><span class="inline-code">approve</span> prints the definition before recording consent. Approving without reading is exactly what this gate is designed to prevent.</p>
+</section>
+
+<section class="section">
+  <h2 id="three-properties">Three properties</h2>
+  <div class="grid">
+    <div class="card"><h3 id="outside-repository">The decision lives outside the repository</h3><p>It is stored in <span class="inline-code">~/.pi/piagent-mcp-approvals.json</span>. If a repository could approve itself, the gate would not exist. A fork, rename, or second checkout starts at <span class="inline-code">pending</span>.</p></div>
+    <div class="card"><h3 id="digest-pinning">Pinned by digest</h3><p>Approval means consenting to <em>what the server runs</em>. Changing the command, URL, or arguments creates a new decision and returns the state to <span class="inline-code">approval-changed</span>.</p></div>
+    <div class="card"><h3 id="tool-call-enforcement">Enforced at tool call</h3><p>The guard handles both the proxy form (<span class="inline-code">mcp</span> with <span class="inline-code">input.server</span>) and direct tools. A proxy-only gate could be bypassed by enabling <span class="inline-code">directTools</span>.</p></div>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="limit">Limit</h2>
+  <div class="callout">
+    <strong>The gate cannot prevent connection establishment</strong>
+    <p>The adapter owns connections, so the extension cannot stop one from opening. It blocks <strong>every tool call</strong>, not the connection itself. The residual risk is the connection and any remote log that records it.</p>
+  </div>
+  <p>Servers in <span class="inline-code">global</span> and <span class="inline-code">pi-global</span> do not pass through this gate. A repository cannot place a server in those scopes, and asking users to approve their own machine configuration would add no security value.</p>
+</section>
+
+<section class="section">
+  <h2 id="imports">Servers supplied through <span class="inline-code">imports</span></h2>
+  <p>MCP configuration supports an <span class="inline-code">imports</span> key that reads server definitions from other tools. Imported servers are not directly declared in one of the four scopes, which creates another path around a naive approval gate.</p>
+  <p>Of the six import kinds, only <span class="inline-code">vscode</span> points to a path <strong>inside the project</strong>: <span class="inline-code">.vscode/mcp.json</span>. It travels with a clone and requires approval like any directly declared repository server.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Situation</th><th>Handling</th></tr></thead>
+      <tbody>
+        <tr><td>Any layer imports a repository-relative kind</td><td>The server requires approval even when the import is declared globally, because the loaded content still lives in the repository.</td></tr>
+        <tr><td>A repository scope imports any kind</td><td>The server requires approval because the repository selected what the machine should run.</td></tr>
+        <tr><td>A repository scope imports a format that cannot be read, such as Codex TOML</td><td>Block every tool call when that file exists. A present but unreadable source is not equivalent to an empty configuration.</td></tr>
+        <tr><td><span class="inline-code">remove</span>, <span class="inline-code">enable</span>, or <span class="inline-code">disable</span> targets an imported server</td><td>Reject the operation and name the actual file to edit. Rewriting another tool's configuration with the platform writer would corrupt ownership and format.</td></tr>
+        <tr><td>Repository configuration combines <span class="inline-code">directTools</span> with <span class="inline-code">toolPrefix: "none"</span></td><td>Block every tool call. Without a prefix, the server identity cannot be recovered for approval lookup, while blocking only the proxy would let the unprefixed direct tools pass.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p><span class="inline-code">piagent-mcp doctor</span> names the importing file, its import kinds, unreadable layers, and import targets that exist but cannot be read. These states must not collapse into "no servers declared".</p>
+  <p>For full-block states, <span class="inline-code">doctor</span> and <span class="inline-code">list</span> explain the reason and exit 1, including <span class="inline-code">list --json</span>. Exit status answers whether MCP can operate, not whether the command printed rows. The guard, slash command, and CLI consume the same state.</p>
+  <p>The gate cache is scoped by project and recomputed when the signature of every file used by readers changes, including currently missing paths. This lets a newly created imported file or a personal global change become visible immediately.</p>
+  <p>The adapter merges <span class="inline-code">settings</span> across all four layers for the session. Therefore <span class="inline-code">directTools</span> in one file and <span class="inline-code">toolPrefix: "none"</span> in another still form the unsafe combination. The report identifies both files.</p>
+  <p>The <span class="inline-code">SCOPE</span> column names the layer that declared <span class="inline-code">imports</span>, not the location that defined the server. A server imported by global configuration may still require approval when its source is in the clone.</p>
+</section>
+
+<section class="section">
+  <h2 id="design-decisions">Design decisions</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Decision</th><th>Reason</th></tr></thead>
+      <tbody>
+        <tr><td>Gate repository-supplied servers only</td><td>Only <span class="inline-code">.mcp.json</span> and <span class="inline-code">.pi/mcp.json</span> travel with a clone. User-owned machine configuration needs no repository consent.</td></tr>
+        <tr><td>Store decisions outside the repository</td><td><span class="inline-code">~/.pi/piagent-mcp-approvals.json</span> prevents a repository from approving itself.</td></tr>
+        <tr><td>Pin the definition digest</td><td>Consent applies to the exact command, arguments, and URL. A change returns the server to pending.</td></tr>
+        <tr><td>Preview the merged definition but hash the repository-owned fragment</td><td>The adapter merges duplicate IDs by key, so preview must show what will run. Hashing only the repository-controlled fragment prevents unrelated global edits from invalidating consent.</td></tr>
+        <tr><td>Block at <span class="inline-code">tool_call</span></td><td>Cover both proxy and direct tools without a bypass. Direct tools are traced through their configured server prefix.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>The ideal point would be before connection, but that requires owning the connection. Piagent chooses the furthest point it actually controls and states the residual risk explicitly.</p>
+</section>
+
+<section class="section">
+  <h2 id="migration">Migration</h2>
+  <div class="callout">
+    <strong>Projects with existing servers</strong>
+    <p>Servers already present in <span class="inline-code">.mcp.json</span> or <span class="inline-code">.pi/mcp.json</span> become <span class="inline-code">pending-approval</span> after update. Run <span class="inline-code">/piagent-mcp approve &lt;name&gt;</span> once per project. Shipped templates are empty, so most projects are unaffected; session notices and doctor name every server requiring review.</p>
+  </div>
+</section>
+            <nav class="pager" aria-label="Adjacent pages">
+              <a class="pager-prev" href="/en/mcp-auth">
+                <span class="pager-label">Previous</span>
+                <span class="pager-title">Authentication</span>
+              </a>
+              <a class="pager-next" href="/en/security">
+                <span class="pager-label">Next</span>
+                <span class="pager-title">Security model</span>
+              </a>
+            </nav>
+
+            <footer class="footer">
+              <p>Pi Agent Platform docs · static HTML · governed agent workflow</p>
+              <div class="footer-links" aria-label="External links">
+                <a href="https://piagent.io.vn" target="_blank" rel="noopener noreferrer">piagent.io.vn</a>
+                <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub repository</a>
+                <a href="/mcp-approval" hreflang="vi">Tiếng Việt</a>
+                <a href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer">Facebook profile</a>
+              </div>
+            </footer>
+        </div>
+      </main>
+
+      <aside class="toc" aria-label="Page contents">
+        <p class="toc-title">On this page</p>
+        <nav data-toc></nav>
+      </aside>
+    </div>
+  </body>
+</html>

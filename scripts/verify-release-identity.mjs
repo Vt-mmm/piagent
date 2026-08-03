@@ -20,6 +20,17 @@ function readJson(relative) {
   }
 }
 
+function filesUnder(relativeDirectory, extension) {
+  const directory = path.join(root, relativeDirectory);
+  const files = [];
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const relative = path.join(relativeDirectory, entry.name);
+    if (entry.isDirectory()) files.push(...filesUnder(relative, extension));
+    else if (entry.isFile() && entry.name.endsWith(extension)) files.push(relative);
+  }
+  return files;
+}
+
 function parseArguments(values) {
   const parsed = { tag: "", commit: "" };
   for (let index = 0; index < values.length; index += 1) {
@@ -73,11 +84,11 @@ if (!changelog.includes(`## ${expectedTag} -`)) fail(`CHANGELOG.md has no ${expe
 
 // The badge is generated onto every page, so a stale build shows up as one page
 // still carrying the previous version rather than as a single missed edit.
-const docsPages = fs.readdirSync(path.join(root, "docs-site")).filter((name) => name.endsWith(".html"));
+const docsPages = filesUnder("docs-site", ".html").filter((name) => !name.startsWith("docs-site/content/"));
 if (docsPages.length === 0) fail("docs-site has no generated pages");
 for (const page of docsPages) {
-  const html = fs.readFileSync(path.join(root, "docs-site", page), "utf8");
-  if (!html.includes(`${expectedTag} docs`)) fail(`docs-site/${page} version badge does not identify ${expectedTag}`);
+  const html = fs.readFileSync(path.join(root, page), "utf8");
+  if (!html.includes(`${expectedTag} docs`)) fail(`${page} version badge does not identify ${expectedTag}`);
 }
 
 // A version written into an install command does not come from the build, so it
@@ -96,9 +107,7 @@ const RELEASE_TAG_MENTION = /(?:@piagent\/platform@|Vt-mmm\/piagent@v?|--version
 function proseFiles() {
   const files = fs.readdirSync(path.join(root, "docs")).filter((name) => name.endsWith(".md")).map((name) => `docs/${name}`);
   files.push("README.md");
-  for (const name of fs.readdirSync(path.join(root, "docs-site", "content"))) {
-    if (name.endsWith(".html")) files.push(`docs-site/content/${name}`);
-  }
+  files.push(...filesUnder("docs-site/content", ".html"));
   return files.filter((file) => !VERSION_HISTORY_FILES.has(file));
 }
 

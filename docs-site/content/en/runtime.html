@@ -1,0 +1,27 @@
+<section class="section">
+  <div class="command-grid">
+    <article class="command-card"><header><span>Global setup</span><button class="clip-btn" data-clip="piagent-setup --mcp-preset core --subagents-preset safe">Copy</button></header><pre><code>piagent-setup --mcp-preset core --subagents-preset safe</code></pre></article>
+    <article class="command-card"><header><span>Full update</span><button class="clip-btn" data-clip="npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0&#10;npm install -g --ignore-scripts @piagent/platform@X.Y.Z&#10;piagent-install --stable --dry-run&#10;piagent-install --stable">Copy</button></header><pre><code>npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
+npm install -g --ignore-scripts @piagent/platform@X.Y.Z
+piagent-install --stable --dry-run
+piagent-install --stable</code></pre></article>
+    <article class="command-card"><header><span>Pi package only</span><button class="clip-btn" data-clip="piagent-install --version vX.Y.Z --resolve-tag --dry-run&#10;piagent-install --version vX.Y.Z --resolve-tag">Copy</button></header><pre><code>piagent-install --version vX.Y.Z --resolve-tag --dry-run
+piagent-install --version vX.Y.Z --resolve-tag</code></pre></article>
+    <article class="command-card"><header><span>Initialize a project</span><button class="clip-btn" data-clip="piagent-init /path/to/project">Copy</button></header><pre><code>piagent-init /path/to/project</code></pre></article>
+    <article class="command-card"><header><span>Doctor</span><button class="clip-btn" data-clip="piagent-doctor /path/to/project">Copy</button></header><pre><code>piagent-doctor /path/to/project</code></pre></article>
+    <article class="command-card"><header><span>Smoke benchmark</span><button class="clip-btn" data-clip="piagent-benchmark --dry-run&#10;piagent-benchmark">Copy</button></header><pre><code>piagent-benchmark --dry-run
+piagent-benchmark</code></pre></article>
+    <article class="command-card"><header><span>Production benchmark</span><button class="clip-btn" data-clip="piagent-benchmark --production --dry-run&#10;piagent-benchmark --production --surfaces piagent,codex-cli --model openai-codex/gpt-5.6-sol --thinking xhigh">Copy</button></header><pre><code>piagent-benchmark --production --dry-run
+piagent-benchmark --production --surfaces piagent,codex-cli \
+  --model openai-codex/gpt-5.6-sol --thinking xhigh</code></pre></article>
+    <article class="command-card"><header><span>Compare codex-cli</span><button class="clip-btn" data-clip="piagent-benchmark --surfaces piagent,codex-cli --model openai-codex/gpt-5.6-sol --thinking xhigh">Copy</button></header><pre><code>piagent-benchmark --surfaces piagent,codex-cli \
+  --model openai-codex/gpt-5.6-sol --thinking xhigh</code></pre></article>
+    <article class="command-card"><header><span>Trusted run</span><button class="clip-btn" data-clip="piagent-auto --full-access -p &quot;Run the trusted local benchmark suite.&quot;">Copy</button></header><pre><code>piagent-auto --read-only -p "Scout payment mapping. Do not edit source."
+piagent-auto --full-access -p "Run the trusted local benchmark suite."</code></pre></article>
+    <article class="command-card"><header><span>Capabilities</span><button class="clip-btn" data-clip="piagent-capabilities catalog --check&#10;piagent-capabilities doctor --profile .pi/piagent-profile.json">Copy</button></header><pre><code>piagent-capabilities catalog --check
+piagent-capabilities doctor --profile .pi/piagent-profile.json</code></pre></article>
+    <article class="command-card"><header><span>Verification</span><button class="clip-btn" data-clip="npm run verify&#10;npm test&#10;npm run typecheck">Copy</button></header><pre><code>npm run verify
+npm test
+npm run typecheck</code></pre></article>
+  </div>
+</section>

@@ -468,8 +468,8 @@ Các lệnh này chạy ngoài Pi.
 | Command | Dùng khi nào |
 |---|---|
 | `npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0` | Cài Pi CLI tương thích với release hiện tại. |
-| `npm install -g --ignore-scripts @piagent/platform@1.2.16` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
-| `pi install git:github.com/Vt-mmm/piagent@v1.2.16` | Cài pinned release khi cần reproducible team setup. |
+| `npm install -g --ignore-scripts @piagent/platform@1.2.17` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
+| `pi install git:github.com/Vt-mmm/piagent@v1.2.17` | Cài pinned release khi cần reproducible team setup. |
 | `pi install git:github.com/Vt-mmm/piagent` | Cài latest package platform cho máy cá nhân/sandbox. |
 | `piagent-update --check` | Báo version hiện tại vs version sẽ lên cho cả ba thành phần; không cài gì. |
 | `piagent-update` | Full update global một lệnh cho cả máy: Pi host → npm-global helper → Pi package, đúng thứ tự release yêu cầu. |

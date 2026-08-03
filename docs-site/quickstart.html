@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="vi">
+<html lang="vi" data-copy-success="Đã lấy" data-copy-fallback="Chọn lệnh">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -7,6 +7,9 @@
     <meta name="description" content="Hai lệnh để cài, rồi mở repo, chọn profile, bật quyền phù hợp, chạy task, và verify bằng bằng chứng thật trước khi handoff." />
     <meta name="theme-color" content="#050505" />
     <link rel="canonical" href="https://piagent.io.vn/quickstart" />
+    <link rel="alternate" hreflang="vi" href="https://piagent.io.vn/quickstart" />
+    <link rel="alternate" hreflang="en" href="https://piagent.io.vn/en/quickstart" />
+    <link rel="alternate" hreflang="x-default" href="https://piagent.io.vn/quickstart" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <meta property="og:title" content="Step by step cho thành viên mới · Pi Agent Platform Docs" />
     <meta property="og:description" content="Hai lệnh để cài, rồi mở repo, chọn profile, bật quyền phù hợp, chạy task, và verify bằng bằng chứng thật trước khi handoff." />
@@ -27,8 +30,11 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.2.16 docs · VI</span>
-        <a class="button" href="https://github.com/Vt-mmm/piagent/blob/main/docs/en/README.md" lang="en" target="_blank" rel="noopener noreferrer">English docs</a>
+        <span class="pill"><span class="pill-dot"></span>v1.2.17 docs · VI</span>
+        <nav class="language-switch" aria-label="Ngôn ngữ">
+          <a class="language-option current" href="/quickstart" hreflang="vi" lang="vi" aria-current="true">VI</a>
+          <a class="language-option" href="/en/quickstart" hreflang="en" lang="en">EN</a>
+        </nav>
         <a class="button social" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer" aria-label="Mở GitHub repository">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
@@ -36,7 +42,7 @@
           GitHub
         </a>
         <button class="button mobile-menu" type="button" data-menu>Lộ trình</button>
-        <a class="button" href="/commands">Commands</a>
+        <a class="button top-command-link" href="/commands">Commands</a>
       </div>
     </header>
 
@@ -101,7 +107,7 @@
     <article class="step">
       <div>
         <h3 id="cai-hai-lenh">Cài — hai lệnh</h3>
-        <p>Cần Node.js 22.19.0 trở lên. Không cần cài Pi Coding Agent trước: <span class="inline-code">piagent-setup</span> tự cài đúng bản <span class="inline-code">0.82.0</span> mà release <span class="inline-code">v1.2.3</span> đang pin. Chạy nó ngay trong thư mục project — nó cài Pi package, khởi tạo <span class="inline-code">.pi/</span>, cài MCP baseline cùng subagents, rồi chạy doctor. Thêm <span class="inline-code">--no-mcp</span>, <span class="inline-code">--no-subagents</span>, <span class="inline-code">--no-herdr</span> hoặc <span class="inline-code">--global-only</span> để bỏ bớt.</p>
+        <p>Cần Node.js 22.19.0 trở lên. Không cần cài Pi Coding Agent trước: <span class="inline-code">piagent-setup</span> tự cài đúng bản host mà release hiện tại đang pin. Chạy nó ngay trong thư mục project — nó cài Pi package, khởi tạo <span class="inline-code">.pi/</span>, cài MCP baseline cùng subagents, rồi chạy doctor. Thêm <span class="inline-code">--no-mcp</span>, <span class="inline-code">--no-subagents</span>, <span class="inline-code">--no-herdr</span> hoặc <span class="inline-code">--global-only</span> để bỏ bớt.</p>
         <div class="table-wrap compact-table">
           <table>
             <thead>
@@ -253,10 +259,10 @@ piagent-uninstall --apply</code></pre>
 
             <footer class="footer">
               <p>Pi Agent Platform docs · static HTML · governed agent workflow</p>
-              <div class="footer-links" aria-label="External links">
+              <div class="footer-links" aria-label="Liên kết ngoài">
                 <a href="https://piagent.io.vn" target="_blank" rel="noopener noreferrer">piagent.io.vn</a>
                 <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub repository</a>
-                <a href="https://github.com/Vt-mmm/piagent/blob/main/docs/en/README.md" lang="en" target="_blank" rel="noopener noreferrer">English docs</a>
+                <a href="/en/quickstart" hreflang="en">English</a>
                 <a href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer">Facebook profile</a>
               </div>
             </footer>

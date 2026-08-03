@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en" data-copy-success="Copied" data-copy-fallback="Select command">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Authentication and readiness · Pi Agent Platform Docs</title>
+    <meta name="description" content="The platform does not store tokens or run OAuth. It rejects secrets in configuration and reports which servers are actually ready." />
+    <meta name="theme-color" content="#050505" />
+    <link rel="canonical" href="https://piagent.io.vn/en/mcp-auth" />
+    <link rel="alternate" hreflang="vi" href="https://piagent.io.vn/mcp-auth" />
+    <link rel="alternate" hreflang="en" href="https://piagent.io.vn/en/mcp-auth" />
+    <link rel="alternate" hreflang="x-default" href="https://piagent.io.vn/mcp-auth" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta property="og:title" content="Authentication and readiness · Pi Agent Platform Docs" />
+    <meta property="og:description" content="The platform does not store tokens or run OAuth. It rejects secrets in configuration and reports which servers are actually ready." />
+    <meta property="og:url" content="https://piagent.io.vn/en/mcp-auth" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/docs.css" />
+    <script src="/assets/docs.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/en/" aria-label="Pi Agent Platform">
+        <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" /></span>
+        <span>Pi Agent Platform</span>
+      </a>
+      <div class="top-actions">
+        <span class="pill"><span class="pill-dot"></span>v1.2.17 docs · EN</span>
+        <nav class="language-switch" aria-label="Language">
+          <a class="language-option" href="/mcp-auth" hreflang="vi" lang="vi">VI</a>
+          <a class="language-option current" href="/en/mcp-auth" hreflang="en" lang="en" aria-current="true">EN</a>
+        </nav>
+        <a class="button social" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer" aria-label="Open GitHub repository">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          GitHub
+        </a>
+        <button class="button mobile-menu" type="button" data-menu>Menu</button>
+        <a class="button top-command-link" href="/en/commands">Commands</a>
+      </div>
+    </header>
+
+    <div class="layout with-toc">
+      <aside class="sidebar" data-sidebar>
+        <div class="sidebar-search" aria-label="Search documentation">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M10.8 18.1a7.3 7.3 0 1 1 0-14.6 7.3 7.3 0 0 1 0 14.6Zm5.3-1.7 4.4 4.4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          <input type="search" placeholder="Search pages" data-filter />
+        </div>
+
+        <nav aria-label="Documentation">
+          <div class="nav-group">
+            <p class="nav-title">Get started</p>
+            <a class="nav-link" href="/en/">Overview</a>
+            <a class="nav-link" href="/en/quickstart">Quickstart</a>
+            <a class="nav-link" href="/en/scope">Platform scope</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Build</p>
+            <a class="nav-link" href="/en/profiles">Project profiles</a>
+            <a class="nav-link" href="/en/permissions">Permission modes</a>
+            <a class="nav-link" href="/en/commands">Command catalog</a>
+            <a class="nav-link" href="/en/workflows">Workflows</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">MCP</p>
+            <a class="nav-link" href="/en/mcp">MCP overview</a>
+            <a class="nav-link" href="/en/mcp-servers">Server management</a>
+            <a class="nav-link current" href="/en/mcp-auth" aria-current="page">Authentication</a>
+            <a class="nav-link" href="/en/mcp-approval">Approval gate</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Operate</p>
+            <a class="nav-link" href="/en/security">Security model</a>
+            <a class="nav-link" href="/en/architecture">Architecture</a>
+            <a class="nav-link" href="/en/context-engine">Context Engine</a>
+            <a class="nav-link" href="/en/benchmark">Benchmark</a>
+            <a class="nav-link" href="/en/runtime">Runtime tools</a>
+            <a class="nav-link" href="/en/team">Team usage</a>
+          </div>
+        </nav>
+      </aside>
+
+      <main>
+        <div class="content-shell" data-article>
+            <nav class="breadcrumb" aria-label="Breadcrumb">
+              <a href="/en/">Docs</a>
+              <span aria-hidden="true">/</span>
+              <span>MCP</span>
+              <span aria-hidden="true">/</span>
+              <span>Authentication</span>
+            </nav>
+            <div class="page-head">
+              <h1>Authentication and readiness</h1>
+              <p>The platform does not store tokens or run OAuth. It rejects secrets in configuration and reports which servers are actually ready.</p>
+            </div>
+<section class="section">
+  <h2 id="no-token-storage">The platform does not store tokens</h2>
+  <p>MCP tokens already have an owner: OAuth belongs to <span class="inline-code">pi-mcp-adapter</span>. The adapter registers <span class="inline-code">/mcp</span> and <span class="inline-code">/mcp-auth</span> and owns storage, refresh, and revocation. A second credential store would only create another leak surface. The platform therefore <strong>detects and guides</strong>.</p>
+  <pre><code>/mcp-auth figma</code></pre>
+  <div class="callout ok-callout">
+    <strong>Boundary</strong>
+    <p>The platform does not execute OAuth, store tokens, or refresh them. It can identify that a server <em>requires</em> authentication, but cannot prove whether an existing login is still valid, and reports that uncertainty explicitly.</p>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="reject-secrets">Secrets are rejected before configuration is written</h2>
+  <p>MCP configuration may be read by several clients, lives in a home directory or repository, and project scope may be committed. A token supplied through <span class="inline-code">--env</span> would propagate to all those locations. The add command rejects it and shows the safe form:</p>
+  <pre><code>$ piagent-mcp add gh --env GITHUB_PERSONAL_ACCESS_TOKEN=ghp_xxx -- npx -y @acme/gh-mcp
+FAIL: GITHUB_PERSONAL_ACCESS_TOKEN names a credential, so its value cannot be
+written into MCP config. Export it in your shell and reference it instead:
+--env 'GITHUB_PERSONAL_ACCESS_TOKEN=${GITHUB_PERSONAL_ACCESS_TOKEN}'</code></pre>
+  <div class="split">
+    <div class="card"><h3 id="field-name">Field-name detection</h3><p>Names containing <span class="inline-code">token</span>, <span class="inline-code">secret</span>, <span class="inline-code">password</span>, <span class="inline-code">api_key</span>, or <span class="inline-code">authorization</span> require environment-variable references.</p></div>
+    <div class="card"><h3 id="value-shape">Value-shape detection</h3><p>Values are checked independently, so a neutral name such as <span class="inline-code">--env CONFIG=ghp_...</span> is also rejected.</p></div>
+  </div>
+  <p>The same rules apply to <span class="inline-code">--header</span>. <span class="inline-code">--url</span> accepts HTTPS, or HTTP only for loopback hosts such as Figma desktop MCP. <span class="inline-code">list</span> and <span class="inline-code">get</span> mask values while preserving <span class="inline-code">${VAR}</span>, because the variable name is not the credential.</p>
+</section>
+
+<section class="section">
+  <h2 id="readiness">Readiness states</h2>
+  <p>A server count cannot show which server can answer a call. <span class="inline-code">/piagent-mcp doctor</span> classifies each server:</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>State</th><th>Meaning</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td><span class="inline-code">ready</span></td><td>Requirements are satisfied</td><td>—</td></tr>
+        <tr><td><span class="inline-code">needs-env</span></td><td>Configuration references an unset <span class="inline-code">${VAR}</span></td><td>Export the variable in the shell profile</td></tr>
+        <tr><td><span class="inline-code">needs-command</span></td><td>The executable is missing from PATH</td><td>Install it or update the server definition</td></tr>
+        <tr><td><span class="inline-code">pending-approval</span></td><td>The repository supplied this server and the machine has not approved it</td><td><span class="inline-code">/piagent-mcp approve &lt;name&gt;</span></td></tr>
+        <tr><td><span class="inline-code">approval-changed</span></td><td>An approved definition changed</td><td>Review and approve again</td></tr>
+        <tr><td><span class="inline-code">rejected</span></td><td>The project server was rejected</td><td>Use <span class="inline-code">reset</span> to reconsider</td></tr>
+        <tr><td><span class="inline-code">disabled</span></td><td>Disabled explicitly</td><td><span class="inline-code">/piagent-mcp enable &lt;name&gt;</span></td></tr>
+        <tr><td><span class="inline-code">oauth</span></td><td>Authentication is owned by Pi</td><td><span class="inline-code">/mcp-auth &lt;name&gt;</span> when login is needed</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>The report states only what it can prove. <span class="inline-code">needs-env</span> prints the variable <strong>name</strong>, never its value.</p>
+  <p>Inside a session, <span class="inline-code">/piagent-mcp doctor</span> returns the same report with slash-command remedies. From a terminal:</p>
+  <pre><code>$ piagent-mcp doctor
+OK   context7 (global): ready
+OK   chrome-devtools (global): ready
+NEED github (global): GITHUB_PERSONAL_ACCESS_TOKEN is referenced but not set
+       -> export GITHUB_PERSONAL_ACCESS_TOKEN=... in your shell profile
+NEED docker: installed but the daemon is not responding
+       -> start Docker Desktop, then re-run piagent-mcp doctor</code></pre>
+  <div class="callout">
+    <strong>Why <span class="inline-code">oauth</span> is not an error</strong>
+    <p>It does not appear in the session-start notice because the platform cannot tell whether the user is already logged in. Repeating an uncertain warning every session would create noise. The notice includes only proven blockers; disable it with <span class="inline-code">PIAGENT_NO_MCP_NOTICE=1</span>.</p>
+  </div>
+  <p><span class="inline-code">doctor</span> also runs <span class="inline-code">docker info</span>. That slower check belongs in doctor, not session startup. <span class="inline-code">piagent-doctor</span> includes blocking states in its warnings.</p>
+</section>
+            <nav class="pager" aria-label="Adjacent pages">
+              <a class="pager-prev" href="/en/mcp-servers">
+                <span class="pager-label">Previous</span>
+                <span class="pager-title">Server management</span>
+              </a>
+              <a class="pager-next" href="/en/mcp-approval">
+                <span class="pager-label">Next</span>
+                <span class="pager-title">Approval gate</span>
+              </a>
+            </nav>
+
+            <footer class="footer">
+              <p>Pi Agent Platform docs · static HTML · governed agent workflow</p>
+              <div class="footer-links" aria-label="External links">
+                <a href="https://piagent.io.vn" target="_blank" rel="noopener noreferrer">piagent.io.vn</a>
+                <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub repository</a>
+                <a href="/mcp-auth" hreflang="vi">Tiếng Việt</a>
+                <a href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer">Facebook profile</a>
+              </div>
+            </footer>
+        </div>
+      </main>
+
+      <aside class="toc" aria-label="Page contents">
+        <p class="toc-title">On this page</p>
+        <nav data-toc></nav>
+      </aside>
+    </div>
+  </body>
+</html>

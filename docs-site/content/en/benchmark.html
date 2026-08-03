@@ -1,0 +1,164 @@
+<section class="benchmark-summary" aria-labelledby="benchmark-verdict">
+  <div class="benchmark-verdict">
+    <div>
+      <p class="section-kicker">Production V1 · release evidence</p>
+      <h2 id="benchmark-verdict">Piagent scores 9.92/10</h2>
+      <p>It resolved all 54 tasks, maintained 10/10 Quality, Safety, and Reliability, and used 51.11% fewer fresh tokens than the <code>codex-cli</code> surface in paired measurement.</p>
+    </div>
+    <div class="benchmark-verdict-score" aria-label="Overall score 9.92 out of 10">
+      <strong>9.92</strong>
+      <span>Overall / 10</span>
+    </div>
+  </div>
+
+  <div class="benchmark-metrics" aria-label="Headline metrics">
+    <div class="benchmark-metric"><span>Tasks resolved</span><strong>54/54</strong><small>100% on both surfaces</small></div>
+    <div class="benchmark-metric"><span>Fresh tokens</span><strong>-51.11%</strong><small>paired geometric mean</small></div>
+    <div class="benchmark-metric"><span>Token wins</span><strong>47/54</strong><small><code>codex-cli</code> won 7 pairs</small></div>
+    <div class="benchmark-metric"><span>Infrastructure</span><strong>0 retries</strong><small>108 valid runs</small></div>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Measurement configuration</p>
+  <h2 id="configuration">Same model, same tasks, automatic grading</h2>
+  <p class="section-lead">The suite runs Piagent and the <code>codex-cli</code> surface in separate clean workspaces with matching fixtures, generated variants, and hidden verifiers. Usage is parsed from agent JSONL rather than entered manually.</p>
+  <dl class="benchmark-facts">
+    <div><dt>Model</dt><dd><code>openai-codex/gpt-5.6-sol</code></dd></div>
+    <div><dt>Thinking</dt><dd><code>xhigh</code></dd></div>
+    <div><dt>Matrix</dt><dd>18 families × 3 repeats × 2 surfaces</dd></div>
+    <div><dt>Total sessions</dt><dd>108</dd></div>
+    <div><dt>Baseline</dt><dd><code>codex-cli</code> controlled mode</dd></div>
+    <div><dt>Duration</dt><dd>1 hour 49 minutes</dd></div>
+  </dl>
+  <div class="callout ok-callout">
+    <strong>Isolated control surface</strong>
+    <p><code>codex-cli</code> uses a temporary home per session and loads no global instructions, plugins, apps, browser, or multi-agent configuration. Both surfaces use the same model and thinking level with a 900-second timeout per session.</p>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Score bands</p>
+  <h2 id="scores">Token reduction does not trade away quality</h2>
+  <p class="section-lead">Overall is calculated only when quality, safety, reliability, and workflow gates all pass. The <code>codex-cli</code> surface is the baseline and does not receive the harness-specific Workflow or Overall score.</p>
+  <div class="benchmark-score-chart" role="img" aria-label="Piagent scores Quality 10, Safety 10, Reliability 10, Workflow 9.58, Efficiency 10, and Overall 9.92 out of 10">
+    <div class="benchmark-score-row"><span>Quality</span><div class="benchmark-track"><i style="--bar-size: 100%"></i></div><strong>10.00</strong></div>
+    <div class="benchmark-score-row"><span>Safety</span><div class="benchmark-track"><i style="--bar-size: 100%"></i></div><strong>10.00</strong></div>
+    <div class="benchmark-score-row"><span>Reliability</span><div class="benchmark-track"><i style="--bar-size: 100%"></i></div><strong>10.00</strong></div>
+    <div class="benchmark-score-row"><span>Workflow</span><div class="benchmark-track"><i style="--bar-size: 95.8%"></i></div><strong>9.58</strong></div>
+    <div class="benchmark-score-row"><span>Efficiency</span><div class="benchmark-track"><i style="--bar-size: 100%"></i></div><strong>10.00</strong></div>
+    <div class="benchmark-score-row overall"><span>Overall</span><div class="benchmark-track"><i style="--bar-size: 99.2%"></i></div><strong>9.92</strong></div>
+  </div>
+  <div class="table-wrap benchmark-table-wrap">
+    <table>
+      <thead><tr><th>Band</th><th>Piagent</th><th>codex-cli</th><th>Evidence</th></tr></thead>
+      <tbody>
+        <tr><td>Quality</td><td><strong>10.00</strong></td><td>10.00</td><td>48/48 source tasks passed hidden graders</td></tr>
+        <tr><td>Safety</td><td><strong>10.00</strong></td><td>10.00</td><td>54/54 sessions stayed in scope and emitted no forbidden output</td></tr>
+        <tr><td>Reliability</td><td><strong>10.00</strong></td><td>10.00</td><td>54/54 resolved across all 18 families</td></tr>
+        <tr><td>Workflow</td><td><strong>9.58</strong></td><td>n/a</td><td>Passed the 9.00 gate with every evidence gap disclosed</td></tr>
+        <tr><td>Efficiency</td><td><strong>10.00</strong></td><td>5.00 baseline</td><td>54 valid usage pairs with the same model and thinking</td></tr>
+        <tr><td>Overall</td><td><strong>9.92</strong></td><td>n/a</td><td>Quality 45%, reliability 15%, workflow 20%, efficiency 20%</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Tokens and tools</p>
+  <h2 id="tokens">Piagent uses less fresh context</h2>
+  <p class="section-lead">The bars show independent medians across 54 runs per surface. The Efficiency score does not divide these aggregate medians; it uses matched scenario-and-repeat ratios to avoid distortion from task size.</p>
+  <div class="benchmark-legend" aria-label="Chart legend">
+    <span><i class="piagent-swatch"></i>Piagent</span>
+    <span><i class="codex-swatch"></i>codex-cli</span>
+  </div>
+  <div class="benchmark-usage-chart" aria-label="Median usage comparison between Piagent and codex-cli">
+    <div class="benchmark-usage-group">
+      <h3>Fresh tokens</h3>
+      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 39.88%"></i></div><strong>7,368</strong></div>
+      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 100%"></i></div><strong>18,476</strong></div>
+    </div>
+    <div class="benchmark-usage-group">
+      <h3>Input excluding cache</h3>
+      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 48.98%"></i></div><strong>6,801</strong></div>
+      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 100%"></i></div><strong>13,885</strong></div>
+    </div>
+    <div class="benchmark-usage-group">
+      <h3>Output</h3>
+      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 39.71%"></i></div><strong>913</strong></div>
+      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 100%"></i></div><strong>2,299</strong></div>
+    </div>
+    <div class="benchmark-usage-group">
+      <h3>Tool calls</h3>
+      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 62.5%"></i></div><strong>5</strong></div>
+      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 100%"></i></div><strong>8</strong></div>
+    </div>
+  </div>
+  <div class="table-wrap benchmark-table-wrap">
+    <table>
+      <thead><tr><th>Median per run</th><th>Piagent</th><th>codex-cli</th></tr></thead>
+      <tbody>
+        <tr><td>Input excluding cache</td><td><strong>6,801</strong></td><td>13,885</td></tr>
+        <tr><td>Output</td><td><strong>913</strong></td><td>2,299</td></tr>
+        <tr><td>Cache read</td><td><strong>7,680</strong></td><td>78,208</td></tr>
+        <tr><td>Reasoning included in output</td><td><strong>414</strong></td><td>592</td></tr>
+        <tr><td>Fresh tokens</td><td><strong>7,368</strong></td><td>18,476</td></tr>
+        <tr><td>Tool calls</td><td><strong>5</strong></td><td>8</td></tr>
+        <tr><td>Cost</td><td><strong>$0.059141</strong></td><td>n/a from Codex OAuth JSONL</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="benchmark-paired">
+    <div class="benchmark-paired-head">
+      <div><span>Fresh-token pair wins</span><strong>47 Piagent · 7 codex-cli · 0 ties</strong></div>
+      <div><span>Median paired delta</span><strong>-7,870 tokens</strong></div>
+    </div>
+    <div class="benchmark-win-track" role="img" aria-label="Piagent won 47 of 54 pairs and codex-cli won 7">
+      <i class="piagent-win" style="--bar-size: 87.04%"></i>
+      <i class="codex-win" style="--bar-size: 12.96%"></i>
+    </div>
+    <p>Paired geometric mean ratio: <strong>0.4889</strong>. The 95% confidence interval is <strong>0.3809–0.6276</strong>, whose upper bound remains below the 1.0 baseline, so the token-saving claim is allowed. Across the full benchmark, Piagent used 529,932 fresh tokens versus 1,006,150 for <code>codex-cli</code>; recorded Piagent cost was $5.321.</p>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Coverage</p>
+  <h2 id="coverage">Six domains with three families each</h2>
+  <div class="benchmark-categories">
+    <div><span>Backend</span><strong>10.00</strong><p>Authorization, money rounding, cache isolation</p></div>
+    <div><span>Frontend</span><strong>10.00</strong><p>Async response, Unicode search, pagination</p></div>
+    <div><span>Data</span><strong>10.00</strong><p>Quoted CSV, stable deduplication, schema migration</p></div>
+    <div><span>Platform</span><strong>10.00</strong><p>Config precedence, CLI parsing, workspace order</p></div>
+    <div><span>Reliability</span><strong>10.00</strong><p>Bounded retry, expiry, incident diagnosis</p></div>
+    <div><span>Security</span><strong>10.00</strong><p>Secret refusal, prompt injection, audit history</p></div>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Provenance</p>
+  <h2 id="transparency">Interpret results within their measured scope</h2>
+  <div class="table-wrap benchmark-table-wrap">
+    <table>
+      <tbody>
+        <tr><th>Run</th><td><code>production-v1-20260802T153320Z-11f3d0</code></td></tr>
+        <tr><th>Suite digest</th><td><code>90a44ac4f5d4ec11772eac00f4f984d78c6962d116581ca29ab6b8760c8f9171</code></td></tr>
+        <tr><th>Runtime</th><td>Pi 0.82.0 · <code>codex-cli 0.146.0-alpha.9.2</code> · Node 24.11.1</td></tr>
+        <tr><th>Verdict</th><td><code>piagent-more-efficient</code> · every production gate passed</td></tr>
+        <tr><th>Release mapping</th><td>Measured on the candidate before metadata bump; the same logic shipped as v1.2.12.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout">
+    <strong>Limits of the conclusion</strong>
+    <p>This is a synthetic production benchmark built by the maintainer, not an independent benchmark proving that Piagent is better for every repository or model. The raw report remains private because its seed can reproduce synthetic secrets. Company-wide rollout should add a private held-out suite and real task reports.</p>
+  </div>
+  <div class="command-grid">
+    <div class="command-card">
+      <header><span>Run the production benchmark</span><button class="clip-btn" data-clip="piagent-benchmark --production --surfaces piagent,codex-cli --model openai-codex/gpt-5.6-sol --thinking xhigh">Copy</button></header>
+      <pre><code>piagent-benchmark --production \
+  --surfaces piagent,codex-cli \
+  --model openai-codex/gpt-5.6-sol \
+  --thinking xhigh</code></pre>
+    </div>
+  </div>
+</section>

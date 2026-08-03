@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en" data-copy-success="Copied" data-copy-fallback="Select command">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>What the platform owns · Pi Agent Platform Docs</title>
+    <meta name="description" content="General coding agents already provide governance primitives. This platform packages one repeatable operating model for Pi across every repository." />
+    <meta name="theme-color" content="#050505" />
+    <link rel="canonical" href="https://piagent.io.vn/en/scope" />
+    <link rel="alternate" hreflang="vi" href="https://piagent.io.vn/scope" />
+    <link rel="alternate" hreflang="en" href="https://piagent.io.vn/en/scope" />
+    <link rel="alternate" hreflang="x-default" href="https://piagent.io.vn/scope" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta property="og:title" content="What the platform owns · Pi Agent Platform Docs" />
+    <meta property="og:description" content="General coding agents already provide governance primitives. This platform packages one repeatable operating model for Pi across every repository." />
+    <meta property="og:url" content="https://piagent.io.vn/en/scope" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/docs.css" />
+    <script src="/assets/docs.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/en/" aria-label="Pi Agent Platform">
+        <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" /></span>
+        <span>Pi Agent Platform</span>
+      </a>
+      <div class="top-actions">
+        <span class="pill"><span class="pill-dot"></span>v1.2.17 docs · EN</span>
+        <nav class="language-switch" aria-label="Language">
+          <a class="language-option" href="/scope" hreflang="vi" lang="vi">VI</a>
+          <a class="language-option current" href="/en/scope" hreflang="en" lang="en" aria-current="true">EN</a>
+        </nav>
+        <a class="button social" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer" aria-label="Open GitHub repository">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          GitHub
+        </a>
+        <button class="button mobile-menu" type="button" data-menu>Menu</button>
+        <a class="button top-command-link" href="/en/commands">Commands</a>
+      </div>
+    </header>
+
+    <div class="layout with-toc">
+      <aside class="sidebar" data-sidebar>
+        <div class="sidebar-search" aria-label="Search documentation">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M10.8 18.1a7.3 7.3 0 1 1 0-14.6 7.3 7.3 0 0 1 0 14.6Zm5.3-1.7 4.4 4.4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          <input type="search" placeholder="Search pages" data-filter />
+        </div>
+
+        <nav aria-label="Documentation">
+          <div class="nav-group">
+            <p class="nav-title">Get started</p>
+            <a class="nav-link" href="/en/">Overview</a>
+            <a class="nav-link" href="/en/quickstart">Quickstart</a>
+            <a class="nav-link current" href="/en/scope" aria-current="page">Platform scope</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Build</p>
+            <a class="nav-link" href="/en/profiles">Project profiles</a>
+            <a class="nav-link" href="/en/permissions">Permission modes</a>
+            <a class="nav-link" href="/en/commands">Command catalog</a>
+            <a class="nav-link" href="/en/workflows">Workflows</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">MCP</p>
+            <a class="nav-link" href="/en/mcp">MCP overview</a>
+            <a class="nav-link" href="/en/mcp-servers">Server management</a>
+            <a class="nav-link" href="/en/mcp-auth">Authentication</a>
+            <a class="nav-link" href="/en/mcp-approval">Approval gate</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Operate</p>
+            <a class="nav-link" href="/en/security">Security model</a>
+            <a class="nav-link" href="/en/architecture">Architecture</a>
+            <a class="nav-link" href="/en/context-engine">Context Engine</a>
+            <a class="nav-link" href="/en/benchmark">Benchmark</a>
+            <a class="nav-link" href="/en/runtime">Runtime tools</a>
+            <a class="nav-link" href="/en/team">Team usage</a>
+          </div>
+        </nav>
+      </aside>
+
+      <main>
+        <div class="content-shell" data-article>
+            <nav class="breadcrumb" aria-label="Breadcrumb">
+              <a href="/en/">Docs</a>
+              <span aria-hidden="true">/</span>
+              <span>Get started</span>
+              <span aria-hidden="true">/</span>
+              <span>Platform scope</span>
+            </nav>
+            <div class="page-head">
+              <h1>What the platform owns</h1>
+              <p>General coding agents already provide governance primitives. This platform packages one repeatable operating model for Pi across every repository.</p>
+            </div>
+<section class="section">
+  <h2 id="not-a-new-agent">This is not a new agent</h2>
+  <p>The platform has no model, runtime, or agent loop of its own. It runs as a Pi extension and adds one thing: <strong>a repeatable operating model</strong> that every repository can reuse.</p>
+  <p>General coding agent CLIs already provide sandboxes, approvals, and project configuration. The useful question is not which agent is stronger. It is who configures those controls, and whether the configuration stays consistent across twenty repositories.</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Area</th><th>General agent CLI</th><th>What this platform adds</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Role</td><td>A coding agent operating on a local repository with tool and command selection.</td><td>A governance layer for Pi: policy, profiles, and workflows represented as files instead of prompt conventions.</td></tr>
+        <tr><td>Team customization</td><td>Instructions, settings, permissions, hooks, skills, and MCP configured per repository.</td><td>Profile adapters, base policy, command guards, capability packs, docs, and scripts defined once and distributed with <span class="inline-code">piagent-init</span>.</td></tr>
+        <tr><td>Execution permissions</td><td>OS or process sandboxing, per-action approval, and workspace boundaries.</td><td>Three named modes: <span class="inline-code">read-only</span>, <span class="inline-code">workspace-write</span>, and <span class="inline-code">trusted-full-access</span>, changed with one command.</td></tr>
+        <tr><td>Secret safety</td><td>Sandbox, approval, and network policy beneath the tool layer.</td><td>Application-level policy after a tool call: protected paths, shell checks, symlink aliases, output redaction, and integrity locks.</td></tr>
+        <tr><td>Distinct value</td><td>A complete agent experience and broad tool ecosystem.</td><td>Repeatability: the same profiles, guard, and verification discipline across repositories, with differences visible in files.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="complementary-layers">The two layers are complementary</h2>
+  <p>The host sandbox controls processes: a process cannot open files outside its permitted scope. The platform guard controls tool calls: it can inspect the <em>arguments</em> the agent intends to use, including paths, destinations, and external payloads.</p>
+  <div class="split">
+    <div class="card">
+      <h3 id="lower-layer">The lower layer sees processes</h3>
+      <p>It can tell that a process is writing outside the workspace. It cannot tell whether that process is <span class="inline-code">npm test</span> or a script generated during the current turn.</p>
+    </div>
+    <div class="card">
+      <h3 id="upper-layer">The upper layer sees intent</h3>
+      <p>It knows the tool, arguments, and capability. That is enough to block <span class="inline-code">.env</span> by name, redact tokens in output, and reject an MCP server supplied by a repository.</p>
+    </div>
+  </div>
+  <div class="callout">
+    <strong>Removing either layer leaves a gap</strong>
+    <p>An application guard cannot replace a sandbox once a process is running. A sandbox does not know why <span class="inline-code">.env</span> differs from <span class="inline-code">.env.example</span>. The platform assumes the lower layer remains enabled.</p>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="when-not-needed">When you may not need it</h2>
+  <p>For one person, one repository, no meaningful secrets, and no shared operating process, Pi's native configuration may be sufficient.</p>
+  <p>The platform becomes useful when no one can remember which permissions are active across many repositories, or when "has this been verified?" needs the same evidence-based answer everywhere.</p>
+</section>
+            <nav class="pager" aria-label="Adjacent pages">
+              <a class="pager-prev" href="/en/quickstart">
+                <span class="pager-label">Previous</span>
+                <span class="pager-title">Quickstart</span>
+              </a>
+              <a class="pager-next" href="/en/profiles">
+                <span class="pager-label">Next</span>
+                <span class="pager-title">Project profiles</span>
+              </a>
+            </nav>
+
+            <footer class="footer">
+              <p>Pi Agent Platform docs · static HTML · governed agent workflow</p>
+              <div class="footer-links" aria-label="External links">
+                <a href="https://piagent.io.vn" target="_blank" rel="noopener noreferrer">piagent.io.vn</a>
+                <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub repository</a>
+                <a href="/scope" hreflang="vi">Tiếng Việt</a>
+                <a href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer">Facebook profile</a>
+              </div>
+            </footer>
+        </div>
+      </main>
+
+      <aside class="toc" aria-label="Page contents">
+        <p class="toc-title">On this page</p>
+        <nav data-toc></nav>
+      </aside>
+    </div>
+  </body>
+</html>

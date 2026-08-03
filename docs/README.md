@@ -20,4 +20,4 @@ Every normative architecture document must be listed in `docs/languages.json`. T
 
 ## Existing operating guides
 
-The public static site is Vietnamese and lives under `docs-site/`. Long-form operator documents keep their existing stable paths until they receive a reviewed language pair. Their language must remain explicit in the title or filename during that migration.
+The public static site is bilingual and lives under `docs-site/`. Existing root URLs remain Vietnamese for compatibility; matching English pages live under `/en/`, and every page links to its language peer. Long-form operator documents keep their existing stable paths until they receive a reviewed language pair. Their language must remain explicit in the title or filename during that migration.

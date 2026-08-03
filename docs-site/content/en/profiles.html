@@ -1,0 +1,27 @@
+<section class="section">
+  <div class="command-grid">
+    <article class="command-card"><header><span>Show concise status</span><button class="clip-btn" data-clip="/profile">Copy</button></header><pre><code>/profile</code></pre></article>
+    <article class="command-card"><header><span>List options</span><button class="clip-btn" data-clip="/profile list">Copy</button></header><pre><code>/profile list</code></pre></article>
+    <article class="command-card"><header><span>Apply detected profile</span><button class="clip-btn" data-clip="/profile auto">Copy</button></header><pre><code>/profile auto</code></pre></article>
+    <article class="command-card"><header><span>Interactive setup</span><button class="clip-btn" data-clip="/profile setup&#10;/profile tech setup fullstack">Copy</button></header><pre><code>/profile setup
+/profile tech setup fullstack</code></pre></article>
+    <article class="command-card"><header><span>Deterministic tech selection</span><button class="clip-btn" data-clip="/profile tech apply fullstack frontend=nextjs backend=nestjs database=prisma">Copy</button></header><pre><code>/profile tech apply fullstack frontend=nextjs backend=nestjs database=prisma</code></pre></article>
+    <article class="command-card"><header><span>Frontend</span><button class="clip-btn" data-clip="/profile web-frontend">Copy</button></header><pre><code>/profile web-frontend
+/profile fe</code></pre></article>
+    <article class="command-card"><header><span>Backend/API</span><button class="clip-btn" data-clip="/profile backend-api">Copy</button></header><pre><code>/profile backend-api</code></pre></article>
+    <article class="command-card"><header><span>Read-only backend, writable frontend</span><button class="clip-btn" data-clip="/profile be-readonly-fe">Copy</button></header><pre><code>/profile be-readonly-fe
+/profile be-fe</code></pre></article>
+    <article class="command-card"><header><span>Full stack</span><button class="clip-btn" data-clip="/profile fullstack">Copy</button></header><pre><code>/profile fullstack
+/profile full</code></pre></article>
+    <article class="command-card"><header><span>Docs only</span><button class="clip-btn" data-clip="/profile docs">Copy</button></header><pre><code>/profile docs</code></pre></article>
+  </div>
+
+  <div class="tag-list">
+    <span class="tag">generic</span><span class="tag">node-typescript</span><span class="tag">python</span><span class="tag">web-frontend</span><span class="tag">backend-api</span><span class="tag">fullstack</span><span class="tag">be-readonly-fe</span><span class="tag">data</span><span class="tag">devops</span><span class="tag">mobile</span><span class="tag">docs</span>
+  </div>
+
+  <div class="callout">
+    <strong>Technology stack by role</strong>
+    <p>Frontend profiles select frontend technology and an optional database; backend profiles select backend technology and an optional database; full-stack profiles select frontend, backend, and database. The platform then writes <span class="inline-code">.pi/tech-stack.json</span> and a compact Context7 snapshot under <span class="inline-code">.pi/tech-context/*</span>.</p>
+  </div>
+</section>
