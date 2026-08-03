@@ -206,6 +206,99 @@ Root seed nằm trong `report.json` riêng tư để điều tra/reproduce. Khô
 report production công khai khi chưa loại trường này, vì suite công khai có thể
 dùng seed để tái tạo synthetic secret.
 
+## Kết quả production chuẩn của v1.2.12
+
+Snapshot dưới đây là release evidence đầu tiên của `production-v1`. Candidate
+được chạy từ 22:33 ngày 02/08/2026 đến 00:22 ngày 03/08/2026 theo múi giờ
+Asia/Ho_Chi_Minh, sau đó cùng logic được đóng gói thành `v1.2.12`.
+
+| Thuộc tính | Giá trị |
+|---|---|
+| Run | `production-v1-20260802T153320Z-11f3d0` |
+| Model | `openai-codex/gpt-5.6-sol` cho Piagent, `gpt-5.6-sol` cho `codex-cli` |
+| Thinking | `xhigh` cho cả hai surface |
+| Ma trận | 18 scenario family x 3 repeat x 2 surface = 108 session |
+| Baseline | `codex-cli` controlled mode, home tạm riêng mỗi session |
+| Runtime | Pi `0.82.0`, `codex-cli 0.146.0-alpha.9.2`, Node `24.11.1` |
+| Suite digest | `90a44ac4f5d4ec11772eac00f4f984d78c6962d116581ca29ab6b8760c8f9171` |
+| Hạ tầng | 108 attempt, 0 retry |
+
+### Điểm và kết quả task
+
+| Surface | Resolved | Hidden task grade | Scope | Quality | Safety | Reliability | Workflow | Efficiency | Overall |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `codex-cli` | 54/54 | 48/48 | 54/54 | 10.00 | 10.00 | 10.00 | n/a | 5.00 baseline | n/a |
+| Piagent | **54/54** | **48/48** | **54/54** | **10.00** | **10.00** | **10.00** | **9.58** | **10.00** | **9.92** |
+
+Piagent đạt `10.00` ở cả sáu category: `backend`, `frontend`, `data`,
+`platform`, `reliability` và `security`. Quality, safety, reliability,
+workflow, category, repeat-count, efficiency-evidence và confidence gate đều
+pass.
+
+Workflow chưa tròn 10 vì mỗi check `session-bound-task`,
+`terminal-completion`, `completed-work-plan` và `single-task-start` hụt ở ba
+run. Các run này vẫn giải đúng task, đúng scope và qua safety gate; report giữ
+gap để Overall không che mất chất lượng vận hành.
+
+### Token và tool usage
+
+Median trên toàn bộ 54 run của mỗi surface:
+
+| Usage | Piagent | `codex-cli` |
+|---|---:|---:|
+| Input đã loại cache | 6,801 | 13,885 |
+| Output | 913 | 2,299 |
+| Cache read | 7,680 | 78,208 |
+| Reasoning, là breakdown của output | 414 | 592 |
+| Fresh token | **7,368** | **18,476** |
+| Tool calls | **5** | **8** |
+| Cost mỗi run | `$0.059141` | `n/a` từ Codex OAuth JSONL |
+
+Biểu đồ median fresh token, lấy `codex-cli` làm thanh 100%:
+
+```text
+Piagent      7,368 | ########             | 39.88% median baseline
+codex-cli   18,476 | #################### | 100.00%
+```
+
+Biểu đồ này chỉ giúp nhìn quy mô median. Efficiency chính thức không chia hai
+median độc lập; runner dùng matched pair theo đúng scenario/repeat:
+
+```text
+Fresh-token pair wins
+Piagent    47 | #################  | 87.04%
+codex-cli   7 | ###                | 12.96%
+Ties         0
+```
+
+- 54/54 cặp có usage và model/thinking tương thích.
+- Piagent thắng 47 cặp, `codex-cli` thắng 7 cặp, không có cặp hòa.
+- Median paired delta là `-7,870` fresh token.
+- Paired geometric mean ratio là `0.4889`, tương ứng giảm `51.11%`.
+- 95% confidence interval của ratio là `0.3809..0.6276`, với 18 scenario
+  family là 18 đơn vị mẫu độc lập.
+- Tổng fresh token của 54 Piagent run là `529,932`; `codex-cli` là `1,006,150`.
+- Tổng chi phí Piagent ghi nhận là `$5.321041`; Codex JSONL không cung cấp cost
+  nên report không suy diễn bảng giá.
+
+Cận trên confidence interval vẫn thấp hơn baseline `1.0`, vì vậy verdict là
+`piagent-more-efficient` và `token-saving claim allowed: yes`.
+
+### Provenance và giới hạn
+
+Full model run diễn ra trước commit bump metadata, nên environment gốc ghi
+platform `v1.2.11`, source working tree dirty. Candidate được test chính là logic
+sau đó phát hành trong `v1.2.12`; 1,253 deterministic test, typecheck, verify,
+audit và CI Linux/macOS được chạy lại sau khi đóng gói. Không chạy lại 108 model
+session chỉ để đổi version metadata.
+
+Raw report không được commit vì giữ root seed có thể tái tạo synthetic secret.
+Snapshot này cố ý chỉ công khai summary, suite digest và provenance không nhạy
+cảm. Đây là benchmark synthetic do maintainer xây dựng, không phải external
+benchmark chứng minh Piagent tốt hơn trên mọi repository/model. Claim triển khai
+toàn công ty vẫn cần đối chiếu held-out suite riêng và task thực tế. Bản trực
+quan của snapshot nằm tại [piagent.io.vn/benchmark](https://piagent.io.vn/benchmark).
+
 ## Bảng điểm
 
 Tất cả band nằm trong khoảng `0-10`:

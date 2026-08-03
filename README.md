@@ -102,6 +102,12 @@ Removal targets what is registered in Pi's settings rather than what the current
   reports category/lifecycle/profile bands and 95% token-ratio confidence, and
   reads exact JSONL usage plus privacy-safe tool histograms. Production runs
   retry only zero-usage startup failures and disclose every retry separately.
+- The v1.2.12 production snapshot resolved 54/54 Piagent tasks, scored 10.00 for
+  quality/safety/reliability, 9.58 for workflow, 10.00 for efficiency, and 9.92
+  overall. Against controlled `codex-cli` on the same `gpt-5.6-sol`/`xhigh`
+  matrix, Piagent used 51.11% fewer paired fresh tokens with a 95% ratio interval
+  of `0.3809..0.6276`; see the [benchmark evidence](https://piagent.io.vn/benchmark)
+  and [methodology](docs/quality-benchmark.md).
 - Built-in profiles for frontend, backend, fullstack, BE-readonly/FE-write, data, DevOps, mobile, docs, Python, and Node TypeScript.
 - Versioned capability packs with deterministic catalog, profile resolution, integrity lock, and permission checks.
 

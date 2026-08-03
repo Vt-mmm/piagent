@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bằng chứng chất lượng và hiệu suất · Pi Agent Platform Docs</title>
+    <meta name="description" content="Production benchmark so sánh Piagent với surface codex-cli trên cùng model, cùng thinking level, 18 nhóm bài và 108 session được chấm tự động." />
+    <meta name="theme-color" content="#050505" />
+    <link rel="canonical" href="https://piagent.io.vn/benchmark" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta property="og:title" content="Bằng chứng chất lượng và hiệu suất · Pi Agent Platform Docs" />
+    <meta property="og:description" content="Production benchmark so sánh Piagent với surface codex-cli trên cùng model, cùng thinking level, 18 nhóm bài và 108 session được chấm tự động." />
+    <meta property="og:url" content="https://piagent.io.vn/benchmark" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/docs.css" />
+    <script src="/assets/docs.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Pi Agent Platform">
+        <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" /></span>
+        <span>Pi Agent Platform</span>
+      </a>
+      <div class="top-actions">
+        <span class="pill"><span class="pill-dot"></span>v1.2.12 docs</span>
+        <a class="button social" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer" aria-label="Mở GitHub repository">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          GitHub
+        </a>
+        <button class="button mobile-menu" type="button" data-menu>Lộ trình</button>
+        <a class="button" href="/commands">Commands</a>
+      </div>
+    </header>
+
+    <div class="layout with-toc">
+      <aside class="sidebar" data-sidebar>
+        <div class="sidebar-search" aria-label="Tìm trong tài liệu">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M10.8 18.1a7.3 7.3 0 1 1 0-14.6 7.3 7.3 0 0 1 0 14.6Zm5.3-1.7 4.4 4.4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          <input type="search" placeholder="Tìm trang" data-filter />
+        </div>
+
+        <nav aria-label="Tài liệu">
+          <div class="nav-group">
+            <p class="nav-title">Get started</p>
+            <a class="nav-link" href="/">Overview</a>
+            <a class="nav-link" href="/quickstart">Quickstart</a>
+            <a class="nav-link" href="/scope">Phạm vi platform</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Build</p>
+            <a class="nav-link" href="/profiles">Project profile</a>
+            <a class="nav-link" href="/permissions">Permission modes</a>
+            <a class="nav-link" href="/commands">Command catalog</a>
+            <a class="nav-link" href="/workflows">Workflows</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">MCP</p>
+            <a class="nav-link" href="/mcp">MCP overview</a>
+            <a class="nav-link" href="/mcp-servers">Quản lý server</a>
+            <a class="nav-link" href="/mcp-auth">Auth và readiness</a>
+            <a class="nav-link" href="/mcp-approval">Approval gate</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Operate</p>
+            <a class="nav-link" href="/security">Security model</a>
+            <a class="nav-link" href="/architecture">Architecture</a>
+            <a class="nav-link" href="/context-engine">Context Engine</a>
+            <a class="nav-link current" href="/benchmark" aria-current="page">Benchmark</a>
+            <a class="nav-link" href="/runtime">Runtime tools</a>
+            <a class="nav-link" href="/team">Team usage</a>
+          </div>
+        </nav>
+      </aside>
+
+      <main>
+        <div class="content-shell" data-article>
+            <nav class="breadcrumb" aria-label="Breadcrumb">
+              <a href="/">Docs</a>
+              <span aria-hidden="true">/</span>
+              <span>Operate</span>
+              <span aria-hidden="true">/</span>
+              <span>Benchmark</span>
+            </nav>
+            <div class="page-head">
+              <h1>Bằng chứng chất lượng và hiệu suất</h1>
+              <p>Production benchmark so sánh Piagent với surface codex-cli trên cùng model, cùng thinking level, 18 nhóm bài và 108 session được chấm tự động.</p>
+            </div>
+<section class="benchmark-summary" aria-labelledby="benchmark-verdict">
+  <div class="benchmark-verdict">
+    <div>
+      <p class="section-kicker">Production V1 · release evidence</p>
+      <h2 id="benchmark-verdict">Piagent đạt 9,92/10</h2>
+      <p>Hoàn thành toàn bộ 54 task, giữ Quality, Safety và Reliability ở 10/10, đồng thời dùng ít hơn 51,11% fresh token so với surface <code>codex-cli</code> trong phép đo ghép cặp.</p>
+    </div>
+    <div class="benchmark-verdict-score" aria-label="Điểm tổng thể 9,92 trên 10">
+      <strong>9,92</strong>
+      <span>Overall / 10</span>
+    </div>
+  </div>
+
+  <div class="benchmark-metrics" aria-label="Số liệu nổi bật">
+    <div class="benchmark-metric">
+      <span>Task resolved</span>
+      <strong>54/54</strong>
+      <small>100% cho cả hai surface</small>
+    </div>
+    <div class="benchmark-metric">
+      <span>Fresh token</span>
+      <strong>-51,11%</strong>
+      <small>paired geometric mean</small>
+    </div>
+    <div class="benchmark-metric">
+      <span>Token wins</span>
+      <strong>47/54</strong>
+      <small>7 lần <code>codex-cli</code> thắng</small>
+    </div>
+    <div class="benchmark-metric">
+      <span>Infrastructure</span>
+      <strong>0 retry</strong>
+      <small>108 lần chạy hợp lệ</small>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Cấu hình phép đo</p>
+  <h2 id="cau-hinh">Cùng model, cùng bài, chấm tự động</h2>
+  <p class="section-lead">Suite chạy Piagent và surface <code>codex-cli</code> trên hai workspace sạch nhưng có cùng fixture, generated variant và hidden verifier. Mọi usage được đọc từ JSONL của agent, không nhập tay.</p>
+
+  <dl class="benchmark-facts">
+    <div><dt>Model</dt><dd><code>openai-codex/gpt-5.6-sol</code></dd></div>
+    <div><dt>Thinking</dt><dd><code>xhigh</code></dd></div>
+    <div><dt>Ma trận</dt><dd>18 family × 3 repeat × 2 surface</dd></div>
+    <div><dt>Tổng session</dt><dd>108</dd></div>
+    <div><dt>Baseline</dt><dd><code>codex-cli</code> controlled mode</dd></div>
+    <div><dt>Thời gian</dt><dd>1 giờ 49 phút</dd></div>
+  </dl>
+
+  <div class="callout ok-callout">
+    <strong>Đối chứng được cách ly</strong>
+    <p><code>codex-cli</code> dùng home tạm theo session, không nạp global instruction, plugin, app, browser hay multi-agent. Hai surface được pin cùng model và thinking level; timeout là 900 giây mỗi session.</p>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Band điểm</p>
+  <h2 id="diem-so">Không đổi chất lượng lấy token</h2>
+  <p class="section-lead">Overall chỉ được tính khi các gate chất lượng, an toàn, độ ổn định và workflow cùng đạt chuẩn. Surface <code>codex-cli</code> là baseline nên không nhận điểm Workflow hoặc Overall của harness Piagent.</p>
+
+  <div class="benchmark-score-chart" role="img" aria-label="Piagent đạt Quality 10, Safety 10, Reliability 10, Workflow 9,58, Efficiency 10 và Overall 9,92 trên 10">
+    <div class="benchmark-score-row">
+      <span>Quality</span>
+      <div class="benchmark-track"><i style="--bar-size: 100%"></i></div>
+      <strong>10,00</strong>
+    </div>
+    <div class="benchmark-score-row">
+      <span>Safety</span>
+      <div class="benchmark-track"><i style="--bar-size: 100%"></i></div>
+      <strong>10,00</strong>
+    </div>
+    <div class="benchmark-score-row">
+      <span>Reliability</span>
+      <div class="benchmark-track"><i style="--bar-size: 100%"></i></div>
+      <strong>10,00</strong>
+    </div>
+    <div class="benchmark-score-row">
+      <span>Workflow</span>
+      <div class="benchmark-track"><i style="--bar-size: 95.8%"></i></div>
+      <strong>9,58</strong>
+    </div>
+    <div class="benchmark-score-row">
+      <span>Efficiency</span>
+      <div class="benchmark-track"><i style="--bar-size: 100%"></i></div>
+      <strong>10,00</strong>
+    </div>
+    <div class="benchmark-score-row overall">
+      <span>Overall</span>
+      <div class="benchmark-track"><i style="--bar-size: 99.2%"></i></div>
+      <strong>9,92</strong>
+    </div>
+  </div>
+
+  <div class="table-wrap benchmark-table-wrap">
+    <table>
+      <thead><tr><th>Band</th><th>Piagent</th><th>codex-cli</th><th>Bằng chứng</th></tr></thead>
+      <tbody>
+        <tr><td>Quality</td><td><strong>10,00</strong></td><td>10,00</td><td>48/48 source task qua hidden grader</td></tr>
+        <tr><td>Safety</td><td><strong>10,00</strong></td><td>10,00</td><td>54/54 session đúng scope, không lộ output cấm</td></tr>
+        <tr><td>Reliability</td><td><strong>10,00</strong></td><td>10,00</td><td>54/54 resolved, đủ cả 18 family</td></tr>
+        <tr><td>Workflow</td><td><strong>9,58</strong></td><td>n/a</td><td>Pass gate 9,00; công khai mọi evidence gap</td></tr>
+        <tr><td>Efficiency</td><td><strong>10,00</strong></td><td>5,00 baseline</td><td>54 cặp usage hợp lệ, cùng model/thinking</td></tr>
+        <tr><td>Overall</td><td><strong>9,92</strong></td><td>n/a</td><td>Quality 45%, reliability 15%, workflow 20%, efficiency 20%</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Token và tool</p>
+  <h2 id="token">Piagent dùng ít fresh context hơn</h2>
+  <p class="section-lead">Các thanh dưới đây dùng median độc lập của 54 run mỗi surface để quan sát quy mô. Điểm Efficiency không chia hai median này; nó dùng tỷ lệ ghép cặp của đúng scenario và repeat để tránh sai lệch do task lớn nhỏ khác nhau.</p>
+
+  <div class="benchmark-legend" aria-label="Chú thích biểu đồ">
+    <span><i class="piagent-swatch"></i>Piagent</span>
+    <span><i class="codex-swatch"></i>codex-cli</span>
+  </div>
+
+  <div class="benchmark-usage-chart" aria-label="So sánh median usage giữa Piagent và surface codex-cli">
+    <div class="benchmark-usage-group">
+      <h3>Fresh token</h3>
+      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 39.88%"></i></div><strong>7.368</strong></div>
+      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 100%"></i></div><strong>18.476</strong></div>
+    </div>
+    <div class="benchmark-usage-group">
+      <h3>Input, đã loại cache</h3>
+      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 48.98%"></i></div><strong>6.801</strong></div>
+      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 100%"></i></div><strong>13.885</strong></div>
+    </div>
+    <div class="benchmark-usage-group">
+      <h3>Output</h3>
+      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 39.71%"></i></div><strong>913</strong></div>
+      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 100%"></i></div><strong>2.299</strong></div>
+    </div>
+    <div class="benchmark-usage-group">
+      <h3>Tool calls</h3>
+      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 62.5%"></i></div><strong>5</strong></div>
+      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 100%"></i></div><strong>8</strong></div>
+    </div>
+  </div>
+
+  <div class="table-wrap benchmark-table-wrap">
+    <table>
+      <thead><tr><th>Median mỗi run</th><th>Piagent</th><th>codex-cli</th></tr></thead>
+      <tbody>
+        <tr><td>Input, đã loại cache</td><td><strong>6.801</strong></td><td>13.885</td></tr>
+        <tr><td>Output</td><td><strong>913</strong></td><td>2.299</td></tr>
+        <tr><td>Cache read</td><td><strong>7.680</strong></td><td>78.208</td></tr>
+        <tr><td>Reasoning, nằm trong output</td><td><strong>414</strong></td><td>592</td></tr>
+        <tr><td>Fresh token</td><td><strong>7.368</strong></td><td>18.476</td></tr>
+        <tr><td>Tool calls</td><td><strong>5</strong></td><td>8</td></tr>
+        <tr><td>Cost</td><td><strong>$0,059141</strong></td><td>n/a từ Codex OAuth JSONL</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="benchmark-paired">
+    <div class="benchmark-paired-head">
+      <div><span>Fresh-token pair wins</span><strong>47 Piagent · 7 codex-cli · 0 hòa</strong></div>
+      <div><span>Median paired delta</span><strong>-7.870 token</strong></div>
+    </div>
+    <div class="benchmark-win-track" role="img" aria-label="Piagent thắng 47 trong 54 cặp, surface codex-cli thắng 7 cặp">
+      <i class="piagent-win" style="--bar-size: 87.04%"></i>
+      <i class="codex-win" style="--bar-size: 12.96%"></i>
+    </div>
+    <p>Paired geometric mean ratio: <strong>0,4889</strong>. Khoảng tin cậy 95% là <strong>0,3809–0,6276</strong>, nên cận trên vẫn thấp hơn baseline 1,0 và claim tiết kiệm token được phép. Trên toàn bộ benchmark, Piagent dùng 529.932 fresh token so với 1.006.150 của <code>codex-cli</code>; tổng chi phí Piagent ghi nhận là $5,321.</p>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Phạm vi</p>
+  <h2 id="pham-vi">Sáu domain, mỗi domain ba family</h2>
+  <div class="benchmark-categories">
+    <div><span>Backend</span><strong>10,00</strong><p>Authorization, money rounding, cache isolation</p></div>
+    <div><span>Frontend</span><strong>10,00</strong><p>Async response, Unicode search, pagination</p></div>
+    <div><span>Data</span><strong>10,00</strong><p>Quoted CSV, stable dedup, schema migration</p></div>
+    <div><span>Platform</span><strong>10,00</strong><p>Config precedence, CLI parsing, workspace order</p></div>
+    <div><span>Reliability</span><strong>10,00</strong><p>Bounded retry, expiry, incident diagnosis</p></div>
+    <div><span>Security</span><strong>10,00</strong><p>Secret refusal, prompt injection, audit history</p></div>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Provenance</p>
+  <h2 id="minh-bach">Đọc kết quả đúng phạm vi</h2>
+  <div class="table-wrap benchmark-table-wrap">
+    <table>
+      <tbody>
+        <tr><th>Run</th><td><code>production-v1-20260802T153320Z-11f3d0</code></td></tr>
+        <tr><th>Suite digest</th><td><code>90a44ac4f5d4ec11772eac00f4f984d78c6962d116581ca29ab6b8760c8f9171</code></td></tr>
+        <tr><th>Runtime</th><td>Pi 0.82.0 · <code>codex-cli 0.146.0-alpha.9.2</code> · Node 24.11.1</td></tr>
+        <tr><th>Verdict</th><td><code>piagent-more-efficient</code> · mọi production gate pass</td></tr>
+        <tr><th>Release mapping</th><td>Chạy trên candidate trước khi bump metadata; cùng logic được đóng gói và phát hành thành v1.2.12.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <strong>Giới hạn của kết luận</strong>
+    <p>Đây là synthetic production benchmark do maintainer xây dựng, không phải benchmark độc lập chứng minh Piagent tốt hơn trên mọi repository hoặc model. Raw report giữ private vì chứa seed tái tạo synthetic secret. Rollout toàn công ty vẫn nên đối chiếu thêm held-out suite riêng và report task thực tế.</p>
+  </div>
+
+  <div class="command-grid">
+    <div class="command-card">
+      <header><span>Chạy lại production benchmark</span><button class="clip-btn" data-clip="piagent-benchmark --production --surfaces piagent,codex-cli --model openai-codex/gpt-5.6-sol --thinking xhigh">Lấy lệnh</button></header>
+      <pre><code>piagent-benchmark --production \
+  --surfaces piagent,codex-cli \
+  --model openai-codex/gpt-5.6-sol \
+  --thinking xhigh</code></pre>
+    </div>
+  </div>
+</section>
+            <nav class="pager" aria-label="Trang kế tiếp">
+              <a class="pager-prev" href="/context-engine">
+                <span class="pager-label">Trước</span>
+                <span class="pager-title">Context Engine</span>
+              </a>
+              <a class="pager-next" href="/runtime">
+                <span class="pager-label">Tiếp</span>
+                <span class="pager-title">Runtime tools</span>
+              </a>
+            </nav>
+
+            <footer class="footer">
+              <p>Pi Agent Platform docs · static HTML · governed agent workflow</p>
+              <div class="footer-links" aria-label="External links">
+                <a href="https://piagent.io.vn" target="_blank" rel="noopener noreferrer">piagent.io.vn</a>
+                <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub repository</a>
+                <a href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer">Facebook profile</a>
+              </div>
+            </footer>
+        </div>
+      </main>
+
+      <aside class="toc" aria-label="Mục lục trang">
+        <p class="toc-title">Trên trang này</p>
+        <nav data-toc></nav>
+      </aside>
+    </div>
+  </body>
+</html>
