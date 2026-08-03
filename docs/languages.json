@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "defaultLanguage": "en",
+  "preservedTechnicalTerms": [
+    "agent",
+    "terminal",
+    "workflow",
+    "MCP",
+    "tool",
+    "runtime",
+    "context",
+    "session",
+    "token",
+    "model",
+    "thinking",
+    "benchmark"
+  ],
+  "pairs": [
+    {
+      "topic": "repository-readme",
+      "en": "README.md",
+      "vi": "README.vi.md"
+    },
+    {
+      "topic": "documentation-index",
+      "en": "docs/en/README.md",
+      "vi": "docs/vi/README.md"
+    },
+    {
+      "topic": "architecture",
+      "en": "docs/en/architecture.md",
+      "vi": "docs/vi/architecture.md"
+    },
+    {
+      "topic": "maintainer-guide",
+      "en": "docs/en/maintainer-guide.md",
+      "vi": "docs/vi/maintainer-guide.md"
+    }
+  ]
+}

@@ -13,6 +13,7 @@ import {
   migrateTaskState,
   normalizeTaskContract,
   resolveTaskContract,
+  safeTaskId,
   taskContractValidationErrors,
   taskStateMigrationStatus,
   workPlanDependencyError,
@@ -123,6 +124,59 @@ test("migrates v1 contracts without assigning unrelated history to the resumed s
   assert.equal(migrated.find((item) => item.taskId === "task-2").sessionId, "legacy");
   assert.equal(taskStateMigrationStatus(cwd).legacy, 0);
   assert.equal(fs.readdirSync(path.join(tasks, "legacy-v1")).length, 2);
+});
+
+test("migrates a long v1 task without truncating away legacy run entropy", (t) => {
+  const cwd = fixture();
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  const tasks = path.join(cwd, ".pi", "piagent-state", "tasks");
+  fs.mkdirSync(tasks, { recursive: true });
+  const taskId = `investigate-${"long-task-name-".repeat(8)}`;
+  const sourceName = safeTaskId(taskId);
+  const legacy = contract({
+    schemaVersion: 1,
+    taskRunId: undefined,
+    taskId,
+    sessionId: undefined,
+    baselineFileDigests: undefined,
+    finalFileDigests: undefined
+  });
+  fs.writeFileSync(path.join(tasks, `${sourceName}.json`), `${JSON.stringify(legacy)}\n`);
+
+  const result = migrateTaskState(cwd);
+  const [migrated] = listTaskContracts(cwd);
+  assert.deepEqual(result, { migrated: 1, current: 0, warnings: [] });
+  assert.equal(migrated.taskId, sourceName);
+  assert.notEqual(migrated.taskRunId, sourceName);
+  assert.match(migrated.taskRunId, /-legacy-[a-f0-9]{12}$/);
+  assert.equal(migrated.taskRunId.length, 80);
+  assert.equal(taskStateMigrationStatus(cwd).current, 1);
+  const archived = JSON.parse(fs.readFileSync(path.join(tasks, "legacy-v1", `${sourceName}.json`), "utf8"));
+  assert.equal(archived.schemaVersion, 1);
+});
+
+test("archives a colliding v1 source before writing its v2 contract", (t) => {
+  const cwd = fixture();
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  const tasks = path.join(cwd, ".pi", "piagent-state", "tasks");
+  fs.mkdirSync(tasks, { recursive: true });
+  const legacy = contract({
+    schemaVersion: 1,
+    taskRunId: "task",
+    sessionId: undefined,
+    baselineFileDigests: undefined,
+    finalFileDigests: undefined
+  });
+  fs.writeFileSync(path.join(tasks, "task.json"), `${JSON.stringify(legacy)}\n`);
+
+  const result = migrateTaskState(cwd);
+  const current = JSON.parse(fs.readFileSync(path.join(tasks, "task.json"), "utf8"));
+  const archived = JSON.parse(fs.readFileSync(path.join(tasks, "legacy-v1", "task.json"), "utf8"));
+  assert.deepEqual(result, { migrated: 1, current: 0, warnings: [] });
+  assert.equal(current.schemaVersion, 2);
+  assert.equal(current.taskRunId, "task");
+  assert.equal(archived.schemaVersion, 1);
+  assert.equal(taskStateMigrationStatus(cwd).current, 1);
 });
 
 test("working-tree snapshots distinguish a file already dirty before the task from a later edit", (t) => {

@@ -391,43 +391,6 @@ export type EffectiveProtectedPaths = {
   readOnlyPaths: string[];
 };
 
-export type UsageSnapshot = {
-  sessionFile?: string;
-  sessionId?: string;
-  sessionName?: string;
-  cwd: string;
-  mode: string;
-  model: string;
-  thinkingLevel: string;
-  entries: {
-    total: number;
-    branch: number;
-  };
-  contextUsage?: {
-    tokens: number | null;
-    contextWindow: number;
-    percent: number | null;
-  };
-  exactTotals: {
-    availableInCommand: false;
-    howToRead: string[];
-  };
-};
-
-export type ContextPreflight = {
-  workflow: string;
-  inputChars: number;
-  inputTokenEstimate: number;
-  liveContext?: UsageSnapshot["contextUsage"];
-  projectedContext?: {
-    tokens: number;
-    percent: number;
-  };
-  recommendation: "ok" | "watch" | "compact" | "fresh-session" | "unknown";
-  reason: string;
-  commands: string[];
-};
-
 export type ReferenceRepo = {
   host: string;
   owner: string;

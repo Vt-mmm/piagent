@@ -1,5 +1,7 @@
 # Pi Agent Platform
 
+[Tiếng Việt](README.vi.md)
+
 Reusable Pi package for project onboarding, profile-based coding workflows, guarded tool usage, multi-agent orchestration, MCP setup, memory policy, and task verification.
 
 Public docs: [piagent.io.vn](https://piagent.io.vn)
@@ -72,7 +74,7 @@ Removal targets what is registered in Pi's settings rather than what the current
 - Workflow launcher via `/workflow` for task, scout, BE-to-FE, review, git, and onboarding work.
 - Runtime onboarding via `/onboard`; `/onboard run` launches the first-read onboarding workflow.
 - Runtime profile selection via `/profile`, plus select-style tech stack setup via `/profile setup` and `/profile tech`.
-- Runtime usage/session controls via `/usage`, `/name`, `/fresh`, plus Pi native `/session`.
+- Runtime usage/session controls via `/usage` and `/fresh`, plus Pi native `/name` and `/session`.
 - Explicit project memory via `/memory` or `/memory-policy` and `piagent_memory_*` tools.
 - Local Context Engine controls via `/context`: incremental code index, hybrid search, token-budgeted packs, bounded current-turn source/test snapshots for automatic tasks, test impact, efficiency telemetry, and semantic compaction. Index storage is owner-only and securely purged when exclusion policy changes; manual packs remain advisory, while current-turn snapshots are freshness-checked and exact edits fail closed on a later mismatch.
 - MCP setup helpers for Context7, Chrome DevTools, GitHub, Playwright, and Figma.
@@ -250,9 +252,10 @@ Keep provider keys in environment variables, never in committed config. Switchin
 
 ```text
 piagent/
+├─ architecture/                      machine-readable layer and file budgets
 ├─ adapters/                         reusable project profiles
 ├─ catalog/                          deterministic capability index
-├─ docs/                             Vietnamese documentation and operating notes
+├─ docs/                             EN/VI canonical docs plus stable operating guides
 ├─ evals/                            governed evaluation scenarios
 ├─ packs/                            versioned capability manifests and recipes
 ├─ packages/
@@ -285,6 +288,11 @@ This repository intentionally excludes:
 
 ## Documentation
 
+- [Documentation language index](docs/README.md)
+- [Architecture (English)](docs/en/architecture.md)
+- [Architecture (Tiếng Việt)](docs/vi/architecture.md)
+- [Maintainer guide (English)](docs/en/maintainer-guide.md)
+- [Maintainer guide (Tiếng Việt)](docs/vi/maintainer-guide.md)
 - [Public docs site](https://piagent.io.vn)
 - [Static team docs site](docs-site/index.html) — generated from `docs-site/content/`, preview with `npm run site:preview`
 - [Changelog](CHANGELOG.md)
@@ -322,7 +330,7 @@ This repository intentionally excludes:
 
 ## Maturity
 
-The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.2.13` or a reviewed commit.
+The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.2.14` or a reviewed commit.
 
 Ready for:
 

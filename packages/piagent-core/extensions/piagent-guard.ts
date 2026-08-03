@@ -20,12 +20,10 @@ import {
   shellHasFileWriteRedirection
 } from "./policy-core.js";
 import {
-  appendObservedBashResult,
   commandMatchesVerifyPlan,
   createBashResultLedger,
   findMatchingObservedBashResult,
-  readObservedBashResults,
-  observedBashResultFromToolResultEvent
+  readObservedBashResults
 } from "./runtime-evidence.js";
 import {
   findPackageRoot,
@@ -99,7 +97,6 @@ import {
   createTaskRunId,
   isGitWorkingTree,
   listTaskContracts,
-  migrateTaskState,
   priorTaskAttempts,
   resolveTaskContract,
   safeTaskId,
@@ -113,12 +110,56 @@ import {
   runtimeLifecycleMode,
   workingTreeEvidenceDigest
 } from "./task-lifecycle.js";
-import {
-  appendJsonlBounded,
-  pruneCaptureFiles,
-  readJsonlTail
-} from "./state-retention.js";
+import { appendJsonlBounded } from "./state-retention.js";
 import { ensurePrivateStateDirectory, resolveLocalStatePath } from "./local-state-path.js";
+import {
+  TOOL_RESULT_CAPTURE_MAX_CHARS,
+  TOOL_RESULT_COMPACT_CHAR_THRESHOLD,
+  TOOL_RESULT_COMPACT_LINE_THRESHOLD,
+  TOOL_RESULT_PREVIEW_MAX_CHARS
+} from "../runtime/runtime-limits.ts";
+import {
+  cleanSessionNameInput,
+  currentSessionName,
+  hasOperatorSessionName
+} from "../runtime/session/message-signals.ts";
+import {
+  buildContextPreflight,
+  buildUsageSnapshot,
+  formatContextPreflight,
+  formatCount,
+  formatPercent,
+  formatUsageSnapshot
+} from "../runtime/session/usage.ts";
+import {
+  formatToolResultCaptureStatus,
+  readRecentToolResultCaptures
+} from "../runtime/session/tool-result-compaction.ts";
+import { RuntimeSessionState } from "../runtime/session/runtime-state.ts";
+import type { ObservedTaskContext } from "../runtime/session/runtime-state.ts";
+import {
+  PIAGENT_TOOL_GROUPS,
+  PIAGENT_TOOL_NAMES,
+  PIAGENT_TOOL_ORDER,
+  activeTaskToolGroups
+} from "../runtime/tools/tool-groups.ts";
+import type { PiagentToolGroup } from "../runtime/tools/tool-groups.ts";
+import { shortTaskLabel } from "../runtime/workflows/input-routing.ts";
+import {
+  automaticReviewLenses,
+  automaticTaskIntakeEligible,
+  automaticTaskScope,
+  validTaskScopePattern
+} from "../runtime/workflows/task-intake.ts";
+import { readChatImage } from "../runtime/input/chat-images.ts";
+import { registerInputHook } from "../runtime/hooks/input-hook.ts";
+import { registerAgentStartHook } from "../runtime/hooks/agent-start-hook.ts";
+import { registerCompletionHook } from "../runtime/hooks/completion-hook.ts";
+import { registerSessionHooks } from "../runtime/hooks/session-hooks.ts";
+import { registerSessionStartHook } from "../runtime/hooks/session-start-hook.ts";
+import { registerToolResultHook } from "../runtime/hooks/tool-result-hook.ts";
+
+export { readChatImage };
 
 import type { ActionClassification } from "./guard-shell-analysis.ts";
 
@@ -132,7 +173,6 @@ import type {
   ContextIndexNode,
   ContextIndexNodeKind,
   ContextIndexSettings,
-  ContextPreflight,
   ExecPolicyConfig,
   ExternalActionPolicyConfig,
   FinalGateConfig,
@@ -159,43 +199,13 @@ import type {
   TechStackEntry,
   TechStackManifest,
   ToolRegistryConfig,
-  UsageSnapshot,
   WorkPlanStep
 } from "./guard-types.js";
 
 
 const PIAGENT_TRACE_STATE_TYPE = "piagent-task-trace";
-const CONTEXT_WATCH_PERCENT = 50;
-const CONTEXT_COMPACT_PERCENT = 70;
-const CONTEXT_FRESH_PERCENT = 82;
-const LONG_INPUT_CHARS = 8000;
 const BOILERPLATE_COLLAPSE_CHARS = 300;
-const MAX_INLINE_COLLAPSED_TASK_CHARS = 2200;
-const MAX_CHAT_IMAGE_ATTACHMENTS = 4;
-const MAX_CHAT_IMAGE_BYTES = 8 * 1024 * 1024;
-const TOOL_RESULT_COMPACT_CHAR_THRESHOLD = 12_000;
-const TOOL_RESULT_COMPACT_LINE_THRESHOLD = 180;
-const TOOL_RESULT_PREVIEW_HEAD_LINES = 24;
-const TOOL_RESULT_PREVIEW_TAIL_LINES = 24;
-const TOOL_RESULT_PREVIEW_INTERESTING_LINES = 24;
-const TOOL_RESULT_PREVIEW_MAX_CHARS = 6_000;
-const TOOL_RESULT_CAPTURE_MAX_CHARS = 500_000;
 const TRACE_MAX_BYTES = 8 * 1024 * 1024;
-const CAPTURE_INDEX_MAX_BYTES = 4 * 1024 * 1024;
-const CAPTURE_RETENTION_MAX_BYTES = 128 * 1024 * 1024;
-const CAPTURE_RETENTION_MAX_FILES = 500;
-const CAPTURE_RETENTION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
-const CAPTURE_WRITES_SINCE_PRUNE = new Map<string, number>();
-const LEGACY_PROJECT_INSTRUCTIONS_START = "Before implementation:\n\n1. Load `.pi/piagent-profile.json` with `piagent_context`.";
-const LEGACY_PROJECT_INSTRUCTIONS_END = "18. If the bundled `pi-subagents` parent skill is available, use it for delegation patterns, review loops, native supervisor coordination, and safety boundaries.";
-const RUNTIME_MANAGED_PROJECT_INSTRUCTIONS = [
-  "Piagent runtime-managed task flow:",
-  "1. Runtime creates the task contract automatically for a bounded source-changing request before the model starts.",
-  "2. Only when runtime intake pauses for broad, high-risk, or ambiguous scope, call `piagent_task_start` exactly once with project-relative path/glob scope; reuse an active contract.",
-  "3. Read the narrow target and nearest relevant test, then use ordinary read/edit/bash tools.",
-  "4. Run every exact runtime-provided verifier after the latest mutation. Automatic tasks need no management calls.",
-  "5. Runtime hooks enforce policy and record context, changes, current-tree verification, trace and final gate. Diagnostic groups appear only for explicit requests or manual high-risk checkpoints."
-].join("\n");
 type TaskStartParameters = {
   taskId?: string;
   summary: string;
@@ -219,7 +229,6 @@ type TaskStartParameters = {
     note?: string;
   }>;
 };
-const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp", "bmp"] as const;
 const ORCHESTRATION_MODES = ["solo-first", "bounded-subagents", "parallel-readonly"] as const;
 const REVIEW_LENSES = ["correctness", "tests", "scope", "security", "docs", "release", "package"] as const;
 const ORCHESTRATION_ROLES = ["parent", "piagent-scout", "piagent-planner", "piagent-worker", "piagent-reviewer", "piagent-oracle"] as const;
@@ -228,55 +237,6 @@ const CONTEXT_INDEX_EDGE_KINDS = ["uses_tech", "depends_on", "verified_by", "pro
 const CONTEXT_INDEX_FILE = ".pi/context-index.json";
 const TECH_STACK_MANIFEST_FILE = ".pi/tech-stack.json";
 const TECH_CONTEXT_DIR = ".pi/tech-context";
-const PIAGENT_TOOL_GROUPS = {
-  loader: ["piagent_tools"],
-  intake: ["piagent_task_start"],
-  governance: [
-    "piagent_context",
-    "piagent_context_preflight"
-  ],
-  task: ["piagent_task_progress"],
-  recovery: [
-    "piagent_context_record",
-    "piagent_verify_record",
-    "piagent_trace_record",
-    "piagent_task_gate_check"
-  ],
-  policy: [
-    "piagent_permission_status",
-    "piagent_exec_policy_check",
-    "piagent_tool_policy_check"
-  ],
-  retrieval: [
-    "piagent_context_engine",
-    "piagent_context_budget",
-    "piagent_context_index_status",
-    "piagent_context_index_search"
-  ],
-  knowledge: [
-    "piagent_memory_status",
-    "piagent_memory_search",
-    "piagent_memory_citation_record",
-    "piagent_document_read",
-    "piagent_source_checkout",
-    "piagent_orchestration_policy"
-  ],
-  onboarding: [
-    "piagent_profile_options",
-    "piagent_profile_apply",
-    "piagent_profile_tech_options",
-    "piagent_profile_tech_apply",
-    "piagent_profile_tech_context_record",
-    "piagent_project_onboarding_record",
-    "piagent_context_index_record",
-    "piagent_memory_note"
-  ],
-  usage: ["piagent_usage_snapshot"]
-} as const;
-type PiagentToolGroup = keyof typeof PIAGENT_TOOL_GROUPS;
-const PIAGENT_TOOL_ORDER = Object.values(PIAGENT_TOOL_GROUPS).flat();
-const PIAGENT_TOOL_NAMES = new Set<string>(PIAGENT_TOOL_ORDER);
-
 const TECH_OPTIONS: TechOption[] = [
   { id: "nextjs", label: "Next.js", role: "frontend", description: "React framework with App Router/SSR/static rendering patterns.", context7Query: "next.js", topics: ["app-router", "routing", "data-fetching", "server-components"] },
   { id: "react-vite", label: "React + Vite", role: "frontend", description: "Client-side React app built with Vite.", context7Query: "react vite", topics: ["components", "hooks", "vite", "testing"] },
@@ -325,21 +285,6 @@ const PROFILE_TECH_ROLES: Record<string, TechRole[]> = {
   mobile: ["mobile"],
   docs: ["docs"],
   generic: ["runtime"]
-};
-
-type ChatImageAttachmentResult = {
-  text: string;
-  images: Array<{ type: "image"; data: string; mimeType: string }>;
-  attached: Array<{ marker: string; path: string; mimeType: string; bytes: number }>;
-  skipped: Array<{ path: string; reason: string }>;
-};
-
-type ChatImageAccessPolicy = {
-  roots: ReturnType<typeof resolveDocumentRoots>;
-  readProtectedPaths: string[];
-  filesystemRead?: string[];
-  enforceFilesystemRead: boolean;
-  onImageInspected?: (path: string) => void;
 };
 
 const DEFAULT_MEMORY_SETTINGS: Required<MemorySettings> = {
@@ -1357,37 +1302,10 @@ function shellGlobTargetsProtectedPath(
   return undefined;
 }
 
-function countChangedStringLeaves(before: unknown, after: unknown): number {
-  if (typeof before === "string" && typeof after === "string") return before === after ? 0 : 1;
-  if (Array.isArray(before) && Array.isArray(after)) {
-    return before.reduce((total, item, index) => total + countChangedStringLeaves(item, after[index]), 0);
-  }
-  if (!before || !after || typeof before !== "object" || typeof after !== "object") return 0;
-  return Object.entries(before as Record<string, unknown>).reduce(
-    (total, [key, value]) => total + countChangedStringLeaves(value, (after as Record<string, unknown>)[key]),
-    0
-  );
-}
-
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
-}
-
-function redactToolResultTextContent(content: unknown): { content: unknown; redacted: number } {
-  if (!Array.isArray(content)) return { content, redacted: 0 };
-  let redacted = 0;
-  const safeContent = content.map((block) => {
-    if (!block || typeof block !== "object") return block;
-    const typed = block as { type?: unknown; text?: unknown };
-    if (typed.type !== "text" || typeof typed.text !== "string") return block;
-    const safeText = redactSensitiveText(typed.text);
-    if (!safeText.redacted) return block;
-    redacted += 1;
-    return { ...block, text: safeText.text };
-  });
-  return { content: safeContent, redacted };
 }
 
 function evaluatePathLikeToolAccess(
@@ -1513,107 +1431,6 @@ function evaluatePathLikeToolAccess(
   return { block: false };
 }
 
-function grepOutputLinePath(line: string): string | undefined {
-  const match = line.match(/^(.+?)(?::\d+:|-\d+-)/);
-  return match?.[1];
-}
-
-function filterGrepProtectedContent(content: unknown, protectedPatterns: string[]): {
-  changed: boolean;
-  content?: unknown;
-  redactedLines: number;
-} {
-  if (!Array.isArray(content)) return { changed: false, redactedLines: 0 };
-
-  let changed = false;
-  let redactedLines = 0;
-  const filtered = content.map((block) => {
-    if (!block || typeof block !== "object") return block;
-    const text = (block as { type?: unknown; text?: unknown }).text;
-    if ((block as { type?: unknown }).type !== "text" || typeof text !== "string") return block;
-
-    const kept: string[] = [];
-    let blockRedactedLines = 0;
-    for (const line of text.split(/\r?\n/)) {
-      const linePath = grepOutputLinePath(line);
-      if (linePath && matchesProtectedPath(linePath, protectedPatterns)) {
-        changed = true;
-        redactedLines += 1;
-        blockRedactedLines += 1;
-        continue;
-      }
-      kept.push(line);
-    }
-
-    if (blockRedactedLines === 0) return block;
-    const notice = `[Piagent Pi guard redacted ${blockRedactedLines} protected grep line${blockRedactedLines === 1 ? "" : "s"}.]`;
-    const nextText = kept.join("\n").trim().length > 0
-      ? `${kept.join("\n")}\n${notice}`
-      : `No matches found in non-protected paths.\n${notice}`;
-    return { ...block, text: nextText };
-  });
-
-  return { changed, content: filtered, redactedLines };
-}
-
-function resultLineProtectedPathCandidates(cwd: string, basePath: string, line: string): string[] {
-  const trimmed = line.trim();
-  if (!trimmed || trimmed.startsWith("[") || trimmed.startsWith("No ") || trimmed === "(empty directory)") return [];
-  const entry = trimmed.replace(/[\\/]+$/, "");
-  const candidates = new Set<string>();
-  const add = (value: string | undefined) => {
-    if (value !== undefined) candidates.add(value);
-  };
-
-  add(normalizeRelative(cwd, entry));
-  add(normalizeRelative(cwd, path.posix.join(basePath || ".", entry)));
-  return [...candidates];
-}
-
-function filterProtectedPathListContent(
-  cwd: string,
-  content: unknown,
-  protectedPatterns: string[],
-  basePath: string,
-  toolName: string
-): {
-  changed: boolean;
-  content?: unknown;
-  redactedLines: number;
-} {
-  if (!Array.isArray(content)) return { changed: false, redactedLines: 0 };
-
-  let changed = false;
-  let redactedLines = 0;
-  const filtered = content.map((block) => {
-    if (!block || typeof block !== "object") return block;
-    const text = (block as { type?: unknown; text?: unknown }).text;
-    if ((block as { type?: unknown }).type !== "text" || typeof text !== "string") return block;
-
-    const kept: string[] = [];
-    let blockRedactedLines = 0;
-    for (const line of text.split(/\r?\n/)) {
-      const candidates = resultLineProtectedPathCandidates(cwd, basePath, line);
-      if (candidates.some((candidate) => matchesProtectedPath(candidate, protectedPatterns))) {
-        changed = true;
-        redactedLines += 1;
-        blockRedactedLines += 1;
-        continue;
-      }
-      kept.push(line);
-    }
-
-    if (blockRedactedLines === 0) return block;
-    const notice = `[Piagent Pi guard redacted ${blockRedactedLines} protected ${toolName} line${blockRedactedLines === 1 ? "" : "s"}.]`;
-    const nextText = kept.join("\n").trim().length > 0
-      ? `${kept.join("\n")}\n${notice}`
-      : `No entries found in non-protected paths.\n${notice}`;
-    return { ...block, text: nextText };
-  });
-
-  return { changed, content: filtered, redactedLines };
-}
-
 function stateRoot(cwd: string): string {
   return path.join(cwd, ".pi", "piagent-state");
 }
@@ -1632,14 +1449,6 @@ function traceFilePath(cwd: string): string {
 
 function observedBashLedgerPath(cwd: string): string {
   return path.join(stateRoot(cwd), "observed-bash.jsonl");
-}
-
-function toolResultCaptureRoot(cwd: string): string {
-  return path.join(stateRoot(cwd), "tool-results");
-}
-
-function toolResultCaptureIndexPath(cwd: string): string {
-  return path.join(toolResultCaptureRoot(cwd), "index.jsonl");
 }
 
 function nowIso(): string {
@@ -2249,8 +2058,6 @@ function taskMutationTargets(cwd: string, toolName: string, input: Record<string
       && !candidate.startsWith(".pi/piagent-state/")
     )));
 }
-
-type ObservedTaskContext = { path: string; reason: string };
 
 function observedTaskContextFromToolResult(
   cwd: string,
@@ -4036,884 +3843,6 @@ function evaluateTaskGate(
   return { decision: missing.length === 0 ? "pass" : "fail", missing, missingVerifyCommands, warnings, changedFileEvidence };
 }
 
-function assistantMessageText(message: unknown): string {
-  if (!message || typeof message !== "object" || (message as { role?: unknown }).role !== "assistant") return "";
-  const content = (message as { content?: unknown }).content;
-  if (!Array.isArray(content)) return "";
-  return content
-    .filter((item): item is { type: "text"; text: string } => Boolean(item && typeof item === "object" && (item as { type?: unknown }).type === "text" && typeof (item as { text?: unknown }).text === "string"))
-    .map((item) => item.text)
-    .join("\n");
-}
-
-function assistantMessageHasToolCall(message: unknown): boolean {
-  const content = message && typeof message === "object" ? (message as { content?: unknown }).content : undefined;
-  return Array.isArray(content) && content.some((item) => item && typeof item === "object" && (item as { type?: unknown }).type === "toolCall");
-}
-
-function normalizeLanguageSignal(text: string): string {
-  return text
-    .normalize("NFKD")
-    .replace(/\p{M}/gu, "")
-    .toLowerCase()
-    .replaceAll("đ", "d");
-}
-
-function looksLikeIncompleteHandoff(text: string): boolean {
-  const normalized = normalizeLanguageSignal(text);
-  return /\b(?:not done|not complete|not finished|still working|blocked|cannot complete|unable to complete|need clarification|tests? (?:fail|failed|failing)|verification (?:fail|failed|failing)|chua xong|chua hoan tat|chua hoan thanh|dang lam|bi chan|can lam them|test (?:loi|fail))\b/.test(normalized);
-}
-
-function looksLikeCompletionClaim(text: string): boolean {
-  const normalized = normalizeLanguageSignal(text);
-  if (!normalized.trim() || normalized.includes("[piagent completion gate:")) return false;
-  if (looksLikeIncompleteHandoff(text)) return false;
-  return /\b(?:done|completed|complete|finished|fixed|implemented|resolved|shipped|all tests pass(?:ed)?|tests? pass(?:ed)?|da xong|da sua|da fix|da hoan tat|da hoan thanh|da trien khai|test da pass|kiem tra da pass)\b/.test(normalized);
-}
-
-function formatCount(value: number | null | undefined): string {
-  if (value === null || value === undefined || Number.isNaN(value)) return "unknown";
-  return Math.round(value).toLocaleString("en-US");
-}
-
-function formatPercent(value: number | null | undefined): string {
-  if (value === null || value === undefined || Number.isNaN(value)) return "unknown";
-  return `${value.toFixed(1)}%`;
-}
-
-function modelLabel(ctx: ExtensionContext): string {
-  const model = ctx.model as { provider?: string; id?: string; name?: string } | undefined;
-  if (!model) return "none";
-  if (model.provider && model.id) return `${model.provider}/${model.id}`;
-  return model.name ?? model.id ?? "unknown";
-}
-
-function currentSessionName(ctx: ExtensionContext): string {
-  try {
-    return String(ctx.sessionManager.getSessionName() ?? "").trim();
-  } catch {
-    return "";
-  }
-}
-
-function hasOperatorSessionName(name: string): boolean {
-  const normalized = name.trim().toLowerCase();
-  return Boolean(normalized && normalized !== "session");
-}
-
-function cleanSessionNameInput(input: string): string {
-  let name = input.trim();
-  if ((name.startsWith("\"") && name.endsWith("\"")) || (name.startsWith("'") && name.endsWith("'"))) {
-    name = name.slice(1, -1).trim();
-  }
-  return name;
-}
-
-type ToolResultCaptureSummary = {
-  path?: string;
-  error?: string;
-  source: string;
-  toolName: string;
-  originalChars: number;
-  originalLines: number;
-  previewChars?: number;
-  storedChars?: number;
-  storedTruncated?: boolean;
-  sha256: string;
-};
-
-function normalizeToolResultText(text: string): string {
-  return text.replace(/\r\n/g, "\n");
-}
-
-function toolResultLineCount(text: string): number {
-  if (!text) return 0;
-  return normalizeToolResultText(text).split("\n").length;
-}
-
-function shouldCompactToolResultText(text: string): boolean {
-  return text.length > TOOL_RESULT_COMPACT_CHAR_THRESHOLD
-    || toolResultLineCount(text) > TOOL_RESULT_COMPACT_LINE_THRESHOLD;
-}
-
-function clipPreviewLine(line: string, maxChars = 260): string {
-  if (line.length <= maxChars) return line;
-  return `${line.slice(0, maxChars).trimEnd()} ... [line clipped]`;
-}
-
-function boundedPreview(text: string): string {
-  if (text.length <= TOOL_RESULT_PREVIEW_MAX_CHARS) return text;
-  const marker = "\n[Piagent preview shortened further to stay light.]\n";
-  const edge = Math.floor((TOOL_RESULT_PREVIEW_MAX_CHARS - marker.length) / 2);
-  return `${text.slice(0, edge).trimEnd()}${marker}${text.slice(-edge).trimStart()}`;
-}
-
-function interestingToolResultLines(lines: string[]): string[] {
-  const interesting = /\b(?:error|errors|err!|failed?|failure|warning|warn|exception|traceback|assert(?:ion)?|panic|fatal|timeout|timed out|denied|not found|cannot|eacces|enoent|ts\d{3,5}|err_[a-z0-9_]+)\b/i;
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index];
-    if (!interesting.test(line)) continue;
-    const rendered = `${index + 1}: ${clipPreviewLine(line)}`;
-    if (seen.has(rendered)) continue;
-    seen.add(rendered);
-    result.push(rendered);
-    if (result.length >= TOOL_RESULT_PREVIEW_INTERESTING_LINES) break;
-  }
-  return result;
-}
-
-function storedToolResultText(text: string): { text: string; truncated: boolean } {
-  if (text.length <= TOOL_RESULT_CAPTURE_MAX_CHARS) return { text, truncated: false };
-  const marker = `\n\n[Piagent capture truncated: omitted ${formatCount(text.length - TOOL_RESULT_CAPTURE_MAX_CHARS)} chars from the middle.]\n\n`;
-  const edge = Math.floor((TOOL_RESULT_CAPTURE_MAX_CHARS - marker.length) / 2);
-  return {
-    text: `${text.slice(0, edge).trimEnd()}${marker}${text.slice(-edge).trimStart()}`,
-    truncated: true
-  };
-}
-
-function compactToolResultPreview(toolName: string, source: string, text: string, capture: ToolResultCaptureSummary): string {
-  const normalized = normalizeToolResultText(text);
-  const lines = normalized.split("\n");
-  const head = lines.slice(0, TOOL_RESULT_PREVIEW_HEAD_LINES).map((line) => clipPreviewLine(line));
-  const tailStart = Math.max(TOOL_RESULT_PREVIEW_HEAD_LINES, lines.length - TOOL_RESULT_PREVIEW_TAIL_LINES);
-  const tail = lines.slice(tailStart).map((line) => clipPreviewLine(line));
-  const omitted = Math.max(0, lines.length - head.length - tail.length);
-  const interesting = interestingToolResultLines(lines);
-  const captureLine = capture.path
-    ? `capture: ${capture.path}${capture.storedTruncated ? " (stored head/tail sample; original too large)" : ""}`
-    : `capture: unavailable (${capture.error ?? "write failed"})`;
-  const sections = [
-    `[Piagent compacted large ${toolName} output from ${source}: ${formatCount(capture.originalChars)} chars / ${formatCount(capture.originalLines)} lines.]`,
-    `[${captureLine}]`,
-    "[Preview keeps head, notable lines, and tail.]",
-    "",
-    "head:",
-    ...head
-  ];
-  if (interesting.length > 0) {
-    sections.push("", "notable:", ...interesting);
-  }
-  if (omitted > 0) {
-    sections.push("", `... ${formatCount(omitted)} middle line${omitted === 1 ? "" : "s"} omitted ...`);
-  }
-  sections.push("", "tail:", ...tail);
-  return boundedPreview(sections.join("\n"));
-}
-
-function maybeNumber(value: unknown): number | undefined {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && /^-?\d+$/.test(value.trim())) return Number.parseInt(value, 10);
-  return undefined;
-}
-
-function currentSessionField(ctx: ExtensionContext, field: "getSessionFile" | "getSessionId" | "getSessionName"): string | undefined {
-  try {
-    const value = ctx.sessionManager[field]?.();
-    return value === undefined || value === null ? undefined : redactText(String(value));
-  } catch {
-    return undefined;
-  }
-}
-
-function writeToolResultCapture(
-  cwd: string,
-  event: any,
-  ctx: ExtensionContext,
-  source: string,
-  text: string,
-  cache: Map<string, ToolResultCaptureSummary>
-): ToolResultCaptureSummary {
-  const normalized = normalizeToolResultText(text);
-  const sha256 = crypto.createHash("sha256").update(normalized).digest("hex");
-  const originalLines = toolResultLineCount(normalized);
-  const cached = cache.get(sha256);
-  if (cached?.path) return { ...cached, source };
-
-  const toolName = String(event?.toolName ?? "tool");
-  const recordedAt = nowIso();
-  const date = recordedAt.slice(0, 10);
-  const filename = `${recordedAt.replace(/[:.]/g, "-")}-${slugify(toolName)}-${sha256.slice(0, 12)}.log`;
-  const relativePath = [".pi", "piagent-state", "tool-results", date, filename].join("/");
-  const absolutePath = path.join(cwd, ".pi", "piagent-state", "tool-results", date, filename);
-  const capture = storedToolResultText(normalized);
-  const details = event?.details && typeof event.details === "object" ? event.details : {};
-  const exitCode = maybeNumber(details.exitCode ?? details.status ?? event?.exitCode);
-  const metadata = {
-    schemaVersion: 1,
-    recordedAt,
-    cwd: redactText(cwd),
-    sessionId: currentSessionField(ctx, "getSessionId"),
-    sessionName: currentSessionField(ctx, "getSessionName"),
-    sessionFile: currentSessionField(ctx, "getSessionFile"),
-    toolName,
-    source,
-    isError: event?.isError === true,
-    exitCode,
-    input: redactForStorage(event?.input),
-    path: relativePath,
-    originalChars: normalized.length,
-    originalLines,
-    storedChars: capture.text.length,
-    storedTruncated: capture.truncated,
-    sha256
-  };
-
-  try {
-    ensurePrivateStateDirectory(cwd, path.dirname(absolutePath), "Tool-result capture directory");
-    const capturePath = resolveLocalStatePath(cwd, absolutePath, { label: "Tool-result capture" });
-    fs.writeFileSync(capturePath, [
-      "# Piagent compacted tool result capture",
-      JSON.stringify(metadata),
-      "---",
-      capture.text
-    ].join("\n"), { mode: 0o600 });
-    appendJsonlBounded(toolResultCaptureIndexPath(cwd), metadata, { maxBytes: CAPTURE_INDEX_MAX_BYTES, mode: 0o600, projectRoot: cwd });
-    const writes = (CAPTURE_WRITES_SINCE_PRUNE.get(cwd) ?? 0) + 1;
-    if (writes >= 25) {
-      pruneCaptureFiles(toolResultCaptureRoot(cwd), {
-        maxFiles: CAPTURE_RETENTION_MAX_FILES,
-        maxBytes: CAPTURE_RETENTION_MAX_BYTES,
-        maxAgeMs: CAPTURE_RETENTION_MAX_AGE_MS,
-        projectRoot: cwd
-      });
-      CAPTURE_WRITES_SINCE_PRUNE.set(cwd, 0);
-    } else {
-      CAPTURE_WRITES_SINCE_PRUNE.set(cwd, writes);
-    }
-    const summary = {
-      path: relativePath,
-      source,
-      toolName,
-      originalChars: normalized.length,
-      originalLines,
-      storedChars: capture.text.length,
-      storedTruncated: capture.truncated,
-      sha256
-    };
-    cache.set(sha256, summary);
-    return summary;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const summary = {
-      error: message,
-      source,
-      toolName,
-      originalChars: normalized.length,
-      originalLines,
-      sha256
-    };
-    cache.set(sha256, summary);
-    return summary;
-  }
-}
-
-function compactToolResultTextContent(
-  cwd: string,
-  event: any,
-  ctx: ExtensionContext,
-  content: unknown,
-  cache: Map<string, ToolResultCaptureSummary>
-): { content: unknown; captures: ToolResultCaptureSummary[] } {
-  if (!Array.isArray(content)) return { content, captures: [] };
-  const captures: ToolResultCaptureSummary[] = [];
-  const compacted = content.map((block, index) => {
-    if (!block || typeof block !== "object") return block;
-    const typed = block as { type?: unknown; text?: unknown };
-    if (typed.type !== "text" || typeof typed.text !== "string" || !shouldCompactToolResultText(typed.text)) return block;
-    const source = `content[${index}].text`;
-    const capture = writeToolResultCapture(cwd, event, ctx, source, typed.text, cache);
-    captures.push(capture);
-    return {
-      ...block,
-      text: compactToolResultPreview(String(event?.toolName ?? "tool"), source, typed.text, capture)
-    };
-  });
-  return { content: compacted, captures };
-}
-
-function compactToolResultDetails(
-  cwd: string,
-  event: any,
-  ctx: ExtensionContext,
-  value: unknown,
-  cache: Map<string, ToolResultCaptureSummary>,
-  captures: ToolResultCaptureSummary[],
-  source = "details",
-  depth = 0
-): unknown {
-  if (typeof value === "string") {
-    if (!shouldCompactToolResultText(value)) return value;
-    const capture = writeToolResultCapture(cwd, event, ctx, source, value, cache);
-    captures.push(capture);
-    return compactToolResultPreview(String(event?.toolName ?? "tool"), source, value, capture);
-  }
-  if (Array.isArray(value)) {
-    if (depth >= 6) return value;
-    return value.map((item, index) => compactToolResultDetails(cwd, event, ctx, item, cache, captures, `${source}[${index}]`, depth + 1));
-  }
-  if (isPlainRecord(value)) {
-    if (depth >= 6) return value;
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [
-        key,
-        compactToolResultDetails(cwd, event, ctx, item, cache, captures, `${source}.${key}`, depth + 1)
-      ])
-    );
-  }
-  return value;
-}
-
-function attachToolResultCompactionDetails(details: unknown, captures: ToolResultCaptureSummary[]): unknown {
-  if (captures.length === 0) return details;
-  const compacted = captures.map((capture) => ({
-    path: capture.path,
-    error: capture.error,
-    source: capture.source,
-    toolName: capture.toolName,
-    originalChars: capture.originalChars,
-    originalLines: capture.originalLines,
-    storedChars: capture.storedChars,
-    storedTruncated: capture.storedTruncated,
-    sha256: capture.sha256
-  }));
-  if (isPlainRecord(details)) return { ...details, piagentCompactedToolResults: compacted };
-  if (details === undefined) return { piagentCompactedToolResults: compacted };
-  return { value: details, piagentCompactedToolResults: compacted };
-}
-
-function readRecentToolResultCaptures(cwd: string, limit = 5): Record<string, unknown>[] {
-  const indexPath = toolResultCaptureIndexPath(cwd);
-  const captures: Record<string, unknown>[] = [];
-  for (const parsed of readJsonlTail(indexPath, { limit: Math.max(limit * 3, limit), maxBytes: CAPTURE_INDEX_MAX_BYTES, projectRoot: cwd })) {
-    if (isPlainRecord(parsed)) captures.push(redactForStorage(parsed) as Record<string, unknown>);
-  }
-  return captures.slice(-limit);
-}
-
-function formatToolResultCaptureStatus(cwd: string, captures: Record<string, unknown>[]): string {
-  const root = normalizeRelative(cwd, toolResultCaptureRoot(cwd)) ?? ".pi/piagent-state/tool-results";
-  const lines = [
-    `logPolicy: compact above ${formatCount(TOOL_RESULT_COMPACT_CHAR_THRESHOLD)} chars or ${formatCount(TOOL_RESULT_COMPACT_LINE_THRESHOLD)} lines`,
-    `captureRoot: ${root}`,
-    `recent: ${captures.length || "none"}`
-  ];
-  for (const capture of captures) {
-    const originalLines = typeof capture.originalLines === "number" ? formatCount(capture.originalLines) : "unknown";
-    const originalChars = typeof capture.originalChars === "number" ? formatCount(capture.originalChars) : "unknown";
-    const exit = capture.exitCode === undefined ? "" : ` exit=${capture.exitCode}`;
-    lines.push(`- ${capture.recordedAt ?? "unknown"} ${capture.toolName ?? "tool"}${exit}: ${originalLines} lines / ${originalChars} chars -> ${capture.path ?? "no capture path"}`);
-  }
-  return lines.join("\n");
-}
-
-function buildUsageSnapshot(ctx: ExtensionContext, thinkingLevel?: string): UsageSnapshot {
-  const contextUsage = ctx.getContextUsage();
-  const contextWithThinking = ctx as ExtensionContext & { getThinkingLevel?: () => string };
-  return {
-    sessionFile: ctx.sessionManager.getSessionFile(),
-    sessionId: ctx.sessionManager.getSessionId(),
-    sessionName: ctx.sessionManager.getSessionName(),
-    cwd: ctx.cwd,
-    mode: ctx.mode,
-    model: modelLabel(ctx),
-    thinkingLevel: thinkingLevel ?? contextWithThinking.getThinkingLevel?.() ?? "unknown",
-    entries: {
-      total: ctx.sessionManager.getEntries().length,
-      branch: ctx.sessionManager.getBranch().length
-    },
-    contextUsage: contextUsage
-      ? {
-          tokens: contextUsage.tokens,
-          contextWindow: contextUsage.contextWindow,
-          percent: contextUsage.percent
-        }
-      : undefined,
-    exactTotals: {
-      availableInCommand: false,
-      howToRead: [
-        "Inside Pi TUI: run /session for exact tokens and cost.",
-        "Outside Pi: run piagent-usage /path/to/project or scripts/pi-session-stats.sh /path/to/project.",
-        "Historical totals: run piagent-usage --history /path/to/project --days 7."
-      ]
-    }
-  };
-}
-
-function formatUsageSnapshot(snapshot: UsageSnapshot): string {
-  const context = snapshot.contextUsage
-    ? `${formatCount(snapshot.contextUsage.tokens)} / ${formatCount(snapshot.contextUsage.contextWindow)} tokens (${formatPercent(snapshot.contextUsage.percent)})`
-    : "unavailable";
-  return [
-    `usage: ${context}`,
-    `session: ${snapshot.sessionName ?? "unnamed"} (${snapshot.sessionId ?? "unknown"})`,
-    `model: ${snapshot.model}; thinking: ${snapshot.thinkingLevel}`,
-    `entries: ${formatCount(snapshot.entries.branch)} active / ${formatCount(snapshot.entries.total)} total`,
-    `file: ${snapshot.sessionFile ?? "not persisted"}`,
-    "exact: /session | piagent-usage /path/to/project",
-    "history: piagent-usage --history /path/to/project --days 7"
-  ].join("\n");
-}
-
-function estimateTokensFromChars(chars: number): number {
-  return Math.max(0, Math.ceil(chars / 4));
-}
-
-function buildContextPreflight(snapshot: UsageSnapshot, workflow = "task", inputChars = 0): ContextPreflight {
-  const inputTokenEstimate = estimateTokensFromChars(inputChars);
-  const live = snapshot.contextUsage;
-  let projectedContext: ContextPreflight["projectedContext"];
-  let recommendation: ContextPreflight["recommendation"] = "unknown";
-  let reason = "Context usage is unavailable; use /session or /usage if the task is large.";
-
-  if (live && live.tokens !== null && live.percent !== null) {
-    const projectedTokens = live.tokens + inputTokenEstimate;
-    const projectedPercent = live.contextWindow > 0 ? (projectedTokens / live.contextWindow) * 100 : live.percent;
-    projectedContext = {
-      tokens: projectedTokens,
-      percent: projectedPercent
-    };
-
-    if (live.percent >= CONTEXT_FRESH_PERCENT || projectedPercent >= CONTEXT_FRESH_PERCENT || inputChars >= LONG_INPUT_CHARS) {
-      recommendation = "fresh-session";
-      reason = "Use a fresh governed session before this task to avoid provider context overflow and stale task state.";
-    } else if (live.percent >= CONTEXT_COMPACT_PERCENT || projectedPercent >= CONTEXT_COMPACT_PERCENT) {
-      recommendation = "compact";
-      reason = "Compact before continuing; the current session is close to the high-context zone.";
-    } else if (live.percent >= CONTEXT_WATCH_PERCENT || projectedPercent >= CONTEXT_WATCH_PERCENT) {
-      recommendation = "watch";
-      reason = "Proceed, but keep context targeted and avoid broad file injection.";
-    } else {
-      recommendation = "ok";
-      reason = "Context is within the normal range for a bounded task.";
-    }
-  } else if (inputChars >= LONG_INPUT_CHARS) {
-    recommendation = "fresh-session";
-    reason = "The incoming request is large; start a fresh governed session and keep the full intake in a file.";
-  }
-
-  return {
-    workflow,
-    inputChars,
-    inputTokenEstimate,
-    liveContext: live,
-    projectedContext,
-    recommendation,
-    reason,
-    commands: [
-      "/task-preflight",
-      "/task-preflight compact",
-      `/fresh ${workflow === "be-to-fe" ? "be-to-fe" : workflow === "scout" ? "scout" : "task"} <request>`,
-      "/usage",
-      "/session"
-    ]
-  };
-}
-
-function formatContextPreflight(preflight: ContextPreflight, snapshot: UsageSnapshot): string {
-  const live = preflight.liveContext
-    ? `${formatCount(preflight.liveContext.tokens)} / ${formatCount(preflight.liveContext.contextWindow)} (${formatPercent(preflight.liveContext.percent)})`
-    : "unavailable";
-  const projected = preflight.projectedContext
-    ? `${formatCount(preflight.projectedContext.tokens)} (${formatPercent(preflight.projectedContext.percent)})`
-    : "unavailable";
-  return [
-    `preflight: ${preflight.recommendation}`,
-    `workflow: ${preflight.workflow}`,
-    `session: ${snapshot.sessionName ?? "unnamed"} (${snapshot.sessionId ?? "unknown"})`,
-    `model: ${snapshot.model}; thinking: ${snapshot.thinkingLevel}`,
-    `context: ${live}; projected: ${projected}`,
-    `input: ~${formatCount(preflight.inputTokenEstimate)} tokens from ${formatCount(preflight.inputChars)} chars`,
-    `reason: ${preflight.reason}`,
-    `next: ${preflight.commands.join(" | ")}`
-  ].join("\n");
-}
-
-function looksLikeGovernedBoilerplate(text: string): boolean {
-  const lower = text.toLowerCase();
-  const markers = [
-    "mandatory flow",
-    "piagent_context",
-    "piagent_task_start",
-    "piagent_context_record",
-    "piagent_verify_record",
-    "piagent_task_gate_check",
-    "output format"
-  ];
-  return markers.filter((marker) => lower.includes(marker)).length >= 3;
-}
-
-function extractFencedBlockAfter(label: RegExp, text: string): string | undefined {
-  const labelMatch = label.exec(text);
-  if (!labelMatch || labelMatch.index === undefined) return undefined;
-  const rest = text.slice(labelMatch.index + labelMatch[0].length);
-  const fenced = /```(?:text|md|markdown)?\s*([\s\S]*?)```/i.exec(rest);
-  return fenced?.[1]?.trim();
-}
-
-function extractTaskRequest(text: string): string {
-  const labeled =
-    extractFencedBlockAfter(/(?:implement|scout|review|plan)\s+(?:this\s+)?task\s*:?\s*/i, text) ??
-    extractFencedBlockAfter(/request\s*:?\s*/i, text);
-  if (labeled) return stripLeadingWorkflowCommand(labeled);
-
-  const firstFence = /```(?:text|md|markdown)?\s*([\s\S]*?)```/i.exec(text);
-  if (firstFence?.[1]?.trim()) return stripLeadingWorkflowCommand(firstFence[1].trim());
-
-  return stripLeadingWorkflowCommand(text.trim());
-}
-
-function stripLeadingWorkflowCommand(input: string): string {
-  return input
-    .replace(/^\/(?:piagent-workflow|workflow)\s+(?:task|scout|be-to-fe|review|plan|platform-improve|discuss|commit|pr)\b\s*/i, "")
-    .replace(/^\/(?:task|scout|be-to-fe|review|plan|platform-improve|discuss|commit|pr)\b\s*/i, "")
-    .trim();
-}
-
-function trimTaskForInline(input: string): string {
-  const normalized = stripLeadingWorkflowCommand(input).trim().replace(/\n{3,}/g, "\n\n");
-  if (normalized.length <= MAX_INLINE_COLLAPSED_TASK_CHARS) return normalized;
-  return `${normalized.slice(0, MAX_INLINE_COLLAPSED_TASK_CHARS).trim()}\n\n[Input truncated by piagent preflight. Put the full spec in a project file and reference that file.]`;
-}
-
-function chooseFreshWorkflow(original: string, task: string): "task" | "scout" | "be-to-fe" {
-  const semantic = stripLeadingWorkflowCommand(task || original).toLowerCase();
-  const starts = original.trim().toLowerCase();
-  const workflowStart = starts.match(/^\/(?:piagent-workflow|workflow)\s+(task|scout|be-to-fe)\b/);
-  if (workflowStart?.[1] === "be-to-fe") return "be-to-fe";
-  if (workflowStart?.[1] === "scout") return "scout";
-  if (workflowStart?.[1] === "task") return "task";
-  if (starts.startsWith("/be-to-fe")) return "be-to-fe";
-  if (starts.startsWith("/scout")) return "scout";
-  const asksForWrite = /\b(implement|support|surface|consume|write|change|fix)\b/.test(semantic);
-  if (/\b(scout|read-only|read only|audit|mapping|mapping matrix|map contract)\b/.test(semantic) && !asksForWrite) {
-    return "scout";
-  }
-  if (/\b(be|backend)\b/.test(semantic) && /\b(fe|frontend)\b/.test(semantic) && asksForWrite) {
-    return "be-to-fe";
-  }
-  return "task";
-}
-
-function isPiagentWorkflowInput(text: string): boolean {
-  return /^\/(?:piagent-workflow|workflow|task|be-to-fe|scout|review|plan|platform-improve)\b/i.test(text.trim());
-}
-
-function isFreshOrUtilityInput(text: string): boolean {
-  return /^\/(?:usage|logs|context|commands|permission|memory|onboard|name|fresh|fresh-task|fresh-scout|fresh-be-to-fe|task-preflight|piagent-usage|piagent-logs|piagent-session|piagent-context|piagent-commands|piagent-permission|model-options|memory-policy|onboard-project|setname|session|compact)\b/i.test(text.trim());
-}
-
-function taskInboxDir(cwd: string): string {
-  return path.join(cwd, ".pi", "task-inbox");
-}
-
-function writeTaskInbox(cwd: string, workflow: string, text: string): string {
-  fs.mkdirSync(taskInboxDir(cwd), { recursive: true });
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const safeWorkflow = workflow.replace(/[^a-z0-9-]+/gi, "-").toLowerCase() || "task";
-  const fileName = `${stamp}-${safeWorkflow}.md`;
-  const absolute = path.join(taskInboxDir(cwd), fileName);
-  fs.writeFileSync(absolute, `${redactText(text)}\n`);
-  return path.relative(cwd, absolute).split(path.sep).join("/");
-}
-
-function buildFreshCommand(cwd: string, workflow: "task" | "scout" | "be-to-fe", originalText: string, reason: string): string {
-  const task = extractTaskRequest(originalText);
-  if (originalText.length >= LONG_INPUT_CHARS) {
-    const intakePath = writeTaskInbox(cwd, workflow, originalText);
-    return `/fresh ${workflow} Read task intake from ${intakePath}. ${reason}`;
-  }
-  return `/fresh ${workflow} ${trimTaskForInline(task)}`;
-}
-
-function shortTaskLabel(text: string): string {
-  const compact = text
-    .replace(/```[\s\S]*?```/g, " ")
-    .replace(/[^A-Za-z0-9\u00C0-\u1EF9_-]+/g, " ")
-    .trim()
-    .slice(0, 64);
-  return compact || "piagent task";
-}
-
-function escapeRegExp(input: string): string {
-  return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function supportedImageMimeType(bytes: Buffer): string | undefined {
-  if (
-    bytes.length >= 24
-    && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
-    && bytes.readUInt32BE(8) === 13
-    && bytes.subarray(12, 16).toString("ascii") === "IHDR"
-    && bytes.readUInt32BE(16) > 0
-    && bytes.readUInt32BE(20) > 0
-  ) {
-    return "image/png";
-  }
-  if (
-    bytes.length >= 4
-    && bytes[0] === 0xff
-    && bytes[1] === 0xd8
-    && bytes[2] === 0xff
-    && bytes[bytes.length - 2] === 0xff
-    && bytes[bytes.length - 1] === 0xd9
-  ) {
-    return "image/jpeg";
-  }
-  if (bytes.length >= 10) {
-    const head = bytes.subarray(0, 6).toString("ascii");
-    if (
-      (head === "GIF87a" || head === "GIF89a")
-      && bytes.readUInt16LE(6) > 0
-      && bytes.readUInt16LE(8) > 0
-    ) {
-      return "image/gif";
-    }
-  }
-  if (
-    bytes.length >= 16
-    && bytes.subarray(0, 4).toString("ascii") === "RIFF"
-    && bytes.subarray(8, 12).toString("ascii") === "WEBP"
-    && ["VP8 ", "VP8L", "VP8X"].includes(bytes.subarray(12, 16).toString("ascii"))
-    && bytes.readUInt32LE(4) + 8 <= bytes.length
-  ) {
-    return "image/webp";
-  }
-  if (
-    bytes.length >= 26
-    && bytes[0] === 0x42
-    && bytes[1] === 0x4d
-    && bytes.readUInt32LE(2) <= bytes.length
-    && bytes.readUInt32LE(14) >= 12
-  ) {
-    return "image/bmp";
-  }
-  return undefined;
-}
-
-function normalizeImagePathCandidate(candidate: string, cwd: string, options: { allowBareRelative?: boolean } = {}): string | undefined {
-  let raw = candidate.trim().replace(/^['"`<]+|['"`>,.;:!?]+$/g, "");
-  if (!raw) return undefined;
-  const allowBareRelative = options.allowBareRelative !== false;
-  const hasExplicitPathPrefix = raw.startsWith("file://") || raw.startsWith("~/") || path.isAbsolute(raw) || raw.startsWith("./") || raw.startsWith("../");
-  if (!allowBareRelative && !hasExplicitPathPrefix) return undefined;
-  try {
-    if (raw.startsWith("file://")) raw = fileURLToPath(raw);
-  } catch {
-    return undefined;
-  }
-  if (raw.startsWith("~/")) {
-    const home = process.env.HOME;
-    if (!home) return undefined;
-    raw = path.join(home, raw.slice(2));
-  }
-  const ext = path.extname(raw).toLowerCase().replace(/^\./, "");
-  if (!IMAGE_EXTENSIONS.includes(ext as typeof IMAGE_EXTENSIONS[number])) return undefined;
-  const absolute = path.isAbsolute(raw) ? raw : path.resolve(cwd, raw);
-  return absolute;
-}
-
-function extractLocalImagePathCandidates(text: string, cwd: string): string[] {
-  const candidates = new Set<string>();
-  const imageExt = "(?:png|jpe?g|gif|webp|bmp)";
-  const wholeTextPath = normalizeImagePathCandidate(text, cwd, { allowBareRelative: false });
-  if (wholeTextPath) candidates.add(wholeTextPath);
-
-  const quoted = new RegExp(`(?:path=)?["']([^"']+\\.${imageExt})["']`, "gi");
-  for (const match of text.matchAll(quoted)) {
-    const normalized = normalizeImagePathCandidate(match[1], cwd);
-    if (normalized) candidates.add(normalized);
-  }
-
-  const fileUrl = new RegExp(`file://[^\\s"'<>]+\\.${imageExt}`, "gi");
-  for (const match of text.matchAll(fileUrl)) {
-    const normalized = normalizeImagePathCandidate(match[0], cwd);
-    if (normalized) candidates.add(normalized);
-  }
-
-  const linePathPattern = '\\s((?:/|~\\/|\\.\\.?/)[^\\n\\r"\\\'<>]*?\\.' + imageExt + ')(?=$|\\s|["\\\'`)>])';
-  const linePath = new RegExp(linePathPattern, "gi");
-  for (const match of text.matchAll(linePath)) {
-    const normalized = normalizeImagePathCandidate(match[1], cwd);
-    if (normalized) candidates.add(normalized);
-  }
-
-  return [...candidates];
-}
-
-type ResolvedChatImage =
-  | { status: "ok"; absolutePath: string; bytes: Buffer; mimeType: string }
-  | { status: "error"; reason: string };
-
-function pathContainedBy(root: string, candidate: string): boolean {
-  if (candidate === root) return true;
-  const relative = path.relative(root, candidate);
-  return relative.length > 0
-    && relative !== ".."
-    && !relative.startsWith(`..${path.sep}`)
-    && !path.isAbsolute(relative);
-}
-
-export function readChatImage(
-  requestedPath: string,
-  cwd: string,
-  access: ChatImageAccessPolicy
-): ResolvedChatImage {
-  const lexicalRequestedPath = path.isAbsolute(requestedPath)
-    ? path.normalize(requestedPath)
-    : path.resolve(cwd, requestedPath);
-  const lexicalProjectRoot = path.resolve(cwd);
-  const requestedProjectLexicalRelative = pathContainedBy(lexicalProjectRoot, lexicalRequestedPath)
-    ? path.relative(lexicalProjectRoot, lexicalRequestedPath).split(path.sep).join("/") || "."
-    : undefined;
-  let canonicalPath: string;
-  let inspected: fs.Stats;
-  try {
-    canonicalPath = fs.realpathSync.native(requestedPath);
-    inspected = fs.statSync(canonicalPath);
-  } catch {
-    return { status: "error", reason: "file does not exist or cannot be inspected" };
-  }
-  if (!inspected.isFile()) return { status: "error", reason: "not a regular file" };
-  if (inspected.size <= 0) return { status: "error", reason: "empty file" };
-  if (inspected.size > MAX_CHAT_IMAGE_BYTES) {
-    return {
-      status: "error",
-      reason: `image is ${formatCount(inspected.size)} bytes > ${formatCount(MAX_CHAT_IMAGE_BYTES)} byte limit`
-    };
-  }
-
-  const root = access.roots.find((candidate) => pathContainedBy(candidate.path, canonicalPath));
-  if (!root) return { status: "error", reason: "outside the project and every granted additionalReadRoots directory" };
-
-  const rootRelative = path.relative(root.path, canonicalPath).split(path.sep).join("/") || ".";
-  const projectRoot = access.roots.find((candidate) => candidate.source === "project");
-  let canonicalRequestedLocation = requestedPath;
-  try {
-    canonicalRequestedLocation = path.join(
-      fs.realpathSync.native(path.dirname(requestedPath)),
-      path.basename(requestedPath)
-    );
-  } catch {
-    // The full target already resolved. This location form only preserves the
-    // final symlink's policy position, so failure falls back to the raw path.
-  }
-  const requestedProjectRelative = projectRoot && pathContainedBy(projectRoot.path, canonicalRequestedLocation)
-    ? path.relative(projectRoot.path, canonicalRequestedLocation).split(path.sep).join("/") || "."
-    : undefined;
-  const protectedMatch = matchesProtectedPath(canonicalPath, access.readProtectedPaths)
-    ?? matchesProtectedPath(rootRelative, access.readProtectedPaths)
-    ?? matchesProtectedPath(canonicalRequestedLocation, access.readProtectedPaths)
-    ?? matchesProtectedPath(requestedPath, access.readProtectedPaths)
-    ?? (requestedProjectLexicalRelative
-      ? matchesProtectedPath(requestedProjectLexicalRelative, access.readProtectedPaths)
-      : undefined)
-    ?? (requestedProjectRelative ? matchesProtectedPath(requestedProjectRelative, access.readProtectedPaths) : undefined);
-  if (protectedMatch) return { status: "error", reason: `matches protected path ${protectedMatch}` };
-
-  if (
-    root.source === "project"
-    && access.enforceFilesystemRead
-    && access.filesystemRead
-    && !matchesAnyPath(rootRelative, access.filesystemRead)
-  ) {
-    return {
-      status: "error",
-      reason: `outside the resolved filesystem read scope (${access.filesystemRead.join(", ")})`
-    };
-  }
-
-  access.onImageInspected?.(canonicalPath);
-  const openFlags = fs.constants.O_RDONLY | fs.constants.O_NONBLOCK | fs.constants.O_NOFOLLOW;
-  let fd: number;
-  try {
-    fd = fs.openSync(canonicalPath, openFlags);
-  } catch {
-    return { status: "error", reason: "file changed before it could be opened" };
-  }
-  try {
-    const opened = fs.fstatSync(fd);
-    if (
-      !opened.isFile()
-      || opened.dev !== inspected.dev
-      || opened.ino !== inspected.ino
-      || opened.size !== inspected.size
-    ) {
-      return { status: "error", reason: "file changed between the safety checks and the read" };
-    }
-    const bytes = Buffer.alloc(opened.size);
-    let offset = 0;
-    while (offset < bytes.length) {
-      const read = fs.readSync(fd, bytes, offset, bytes.length - offset, offset);
-      if (read <= 0) break;
-      offset += read;
-    }
-    if (offset !== bytes.length) return { status: "error", reason: "file changed while it was being read" };
-    const mimeType = supportedImageMimeType(bytes);
-    if (!mimeType) return { status: "error", reason: "file bytes are not a supported image" };
-    return { status: "ok", absolutePath: canonicalPath, bytes, mimeType };
-  } finally {
-    fs.closeSync(fd);
-  }
-}
-
-function attachLocalImagesFromText(
-  text: string,
-  existingImages: unknown[] | undefined,
-  cwd: string,
-  resolveAccess: () => ChatImageAccessPolicy
-): ChatImageAttachmentResult | undefined {
-  const imagePaths = extractLocalImagePathCandidates(text, cwd);
-  if (imagePaths.length === 0) return undefined;
-  const access = resolveAccess();
-
-  const existing = Array.isArray(existingImages) ? existingImages : [];
-  const images: ChatImageAttachmentResult["images"] = [];
-  const attached: ChatImageAttachmentResult["attached"] = [];
-  const skipped: ChatImageAttachmentResult["skipped"] = [];
-  let nextText = text;
-
-  for (const imagePath of imagePaths) {
-    if (images.length + existing.length >= MAX_CHAT_IMAGE_ATTACHMENTS) {
-      skipped.push({ path: imagePath, reason: `attachment limit ${MAX_CHAT_IMAGE_ATTACHMENTS} reached` });
-      continue;
-    }
-    try {
-      const resolved = readChatImage(imagePath, cwd, access);
-      if (resolved.status === "error") {
-        skipped.push({ path: imagePath, reason: resolved.reason });
-        continue;
-      }
-      const marker = `[image${existing.length + images.length + 1}]`;
-      images.push({ type: "image", mimeType: resolved.mimeType, data: resolved.bytes.toString("base64") });
-      attached.push({ marker, path: imagePath, mimeType: resolved.mimeType, bytes: resolved.bytes.length });
-      nextText = nextText.replace(new RegExp(escapeRegExp(imagePath), "g"), marker);
-      nextText = nextText.replace(new RegExp(escapeRegExp(`file://${imagePath}`), "g"), marker);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      skipped.push({ path: imagePath, reason: message });
-    }
-  }
-
-  if (attached.length === 0) {
-    return skipped.length > 0 ? { text, images: [], attached, skipped } : undefined;
-  }
-
-  const attachmentLines = attached.map((item) => `- ${item.marker}: ${path.basename(item.path)} (${item.mimeType}, ${formatCount(item.bytes)} bytes)`);
-  const skippedLines = skipped.map((item) => `- skipped ${path.basename(item.path)}: ${item.reason}`);
-  nextText = [
-    nextText.trim(),
-    "",
-    "Attached local image(s):",
-    ...attachmentLines,
-    ...(skippedLines.length > 0 ? ["", "Skipped local image path(s):", ...skippedLines] : [])
-  ].join("\n").trim();
-
-  return { text: nextText, images, attached, skipped };
-}
-
 function appendTrace(cwd: string, payload: Record<string, unknown>): void {
   ensureStateDirs(cwd);
   const safePayload = redactForStorage(payload) as Record<string, unknown>;
@@ -5092,116 +4021,6 @@ function checkoutReferenceRepo(repoRef: string, forceUpdate = false): ReferenceR
   return { host, owner, repo, cloneUrl, checkoutPath, commit, fetched };
 }
 
-function toolGroupsForPrompt(prompt: string): PiagentToolGroup[] {
-  const signal = classifyContextTask(prompt);
-  const lower = prompt.toLowerCase();
-  const groups = new Set<PiagentToolGroup>();
-
-  if (signal.workflow === "usage") {
-    groups.add("usage");
-    return [...groups];
-  }
-  if (signal.workflow === "onboard") {
-    groups.add("governance");
-    groups.add("policy");
-    groups.add("retrieval");
-    groups.add("knowledge");
-    groups.add("onboarding");
-    return [...groups];
-  }
-
-  groups.add("intake");
-  // Keep the common task surface stable across the first tool call so provider
-  // prompt caches do not lose the full system prefix after task_start.
-  if (signal.lane !== "tiny") groups.add("task");
-  if (
-    /\b(context (?:engine|index|search|diagnostic)|source checkout|vendor checkout)\b/.test(lower)
-  ) {
-    groups.add("retrieval");
-  }
-  if (
-    /\b(document intake|project memory|orchestration policy|source checkout|subagent policy|vendor checkout)\b/.test(lower)
-  ) {
-    groups.add("knowledge");
-  }
-  if (/\b(permission|capability|exec policy|tool policy)\b/.test(lower)) groups.add("policy");
-  if (/\b(profile|tech stack|onboard|project context)\b/.test(lower)) groups.add("onboarding");
-  if (/\b(token|usage|cost)\b/.test(lower)) groups.add("usage");
-  if (/\b(?:piagent tool loader|load piagent tools?|piagent tool groups?)\b/.test(lower)) groups.add("loader");
-  return [...groups];
-}
-
-const AUTO_INTAKE_MAX_PROMPT_CHARS = 700;
-const AUTO_INTAKE_SNAPSHOT_PATTERNS = [
-  "src/**", "app/**", "lib/**", "packages/**", "test/**", "tests/**", "spec/**", "__tests__/**"
-];
-const AUTO_INTAKE_CHANGE_INTENT = /\b(?:add|build|change|correct|create|fix|implement|modify|refactor|remove|rename|replace|update|write|sua|them|doi|cap nhat|xoa|tao)\b/i;
-const AUTO_INTAKE_READ_ONLY_LEAD = /^\s*\/?(?:analy[sz]e|audit|check|discuss|explain|inspect|plan|research|review|scout|summari[sz]e|why|how|can\s+(?:you|we)|kiem tra|nghien cuu|giai thich|danh gia)\b/i;
-const AUTO_INTAKE_MANUAL_RISK = /\b(?:credential|database|deploy|destructive|encryption|external provider|migration|payment|permission|production|publish|release|secret|schema migration|token rotation)\b/i;
-
-function automaticTaskIntakeEligible(prompt: string, readProtectedPaths: string[]): boolean {
-  const text = String(prompt ?? "").trim();
-  if (!text || text.length > AUTO_INTAKE_MAX_PROMPT_CHARS) return false;
-  const signal = classifyContextTask(text);
-  if (signal.workflow !== "task" || !AUTO_INTAKE_CHANGE_INTENT.test(text)) return false;
-  if (AUTO_INTAKE_READ_ONLY_LEAD.test(text) || AUTO_INTAKE_MANUAL_RISK.test(text)) return false;
-  if (/\bpiagent_task_start\b/i.test(text)) return false;
-  return !signal.paths.some((candidate) => matchesProtectedPath(candidate, readProtectedPaths));
-}
-
-function manualTaskIntakeEligible(prompt: string, readProtectedPaths: string[]): boolean {
-  const text = String(prompt ?? "").trim();
-  if (!text || text.length > LONG_INPUT_CHARS) return false;
-  const signal = classifyContextTask(text);
-  if (signal.workflow !== "task" || !AUTO_INTAKE_CHANGE_INTENT.test(text)) return false;
-  if (AUTO_INTAKE_READ_ONLY_LEAD.test(text) || /\bpiagent_task_start\b/i.test(text)) return false;
-  if (signal.paths.length === 0) return true;
-  return signal.paths.some((candidate) => !matchesProtectedPath(candidate, readProtectedPaths));
-}
-
-function automaticTaskScope(prompt: string, context: Array<{ path: string }>): string[] {
-  const signal = classifyContextTask(prompt);
-  const explicit = signal.paths.filter((candidate) => candidate && candidate !== "." && !candidate.startsWith(".pi/"));
-  const navigated = context
-    .map((item) => normalizePathCandidate(item.path))
-    .filter((candidate): candidate is string => Boolean(
-      candidate
-      && candidate !== "."
-      && !candidate.startsWith(".pi/")
-      && !["AGENTS.md", "README.md", "REVIEW_GUIDELINES.md"].includes(candidate)
-      && /^(?:app|lib|packages|spec|src|test|tests|__tests__)\//.test(candidate)
-    ))
-    .slice(0, 8);
-  const scope = uniqueStrings([...explicit, ...navigated]);
-  if (scope.length === 0) scope.push("src/**", "app/**", "lib/**");
-  if (/\b(?:test|tests|verification|verify|kiem thu)\b/i.test(prompt)) {
-    scope.push("test/**", "tests/**", "spec/**", "__tests__/**");
-  }
-  return uniqueStrings(scope);
-}
-
-function automaticReviewLenses(prompt: string): ReviewLens[] {
-  const lenses: ReviewLens[] = ["correctness", "tests", "scope"];
-  if (/\b(?:auth|authorization|credential|permission|security|session|secret|xac thuc|phan quyen|bao mat)\b/i.test(prompt)) {
-    lenses.push("security");
-  }
-  return lenses;
-}
-
-function validTaskScopePattern(value: string): boolean {
-  const candidate = String(value ?? "").trim().replaceAll("\\", "/");
-  if (!candidate || /\s|\0/.test(candidate)) return false;
-  if (candidate.startsWith("/") || candidate.startsWith("~/") || /^[A-Za-z]:\//.test(candidate)) return false;
-  return !candidate.split("/").includes("..");
-}
-
-function activeTaskToolGroups(task: TaskContract): PiagentToolGroup[] {
-  const mode = runtimeLifecycleMode(task);
-  if (mode.startsWith("automatic")) return [];
-  if (mode.startsWith("assisted")) return ["task"];
-  return ["task", "recovery"];
-}
-
 function sessionTaskReference(ctx: ExtensionContext): { taskId?: string; taskRunId?: string } | undefined {
   const entries = ctx.sessionManager.getBranch();
   for (let index = entries.length - 1; index >= 0; index -= 1) {
@@ -5258,48 +4077,6 @@ function environmentFeatureEnabled(name: string, fallback = true): boolean {
   return !["0", "false", "no", "off", "disabled"].includes(value);
 }
 
-function rewriteLegacyProjectInstructions(systemPrompt: string): {
-  systemPrompt: string;
-  rewritten: boolean;
-} {
-  const start = systemPrompt.indexOf(LEGACY_PROJECT_INSTRUCTIONS_START);
-  if (start < 0) return { systemPrompt, rewritten: false };
-  const endStart = systemPrompt.indexOf(LEGACY_PROJECT_INSTRUCTIONS_END, start);
-  if (endStart < 0) return { systemPrompt, rewritten: false };
-  const end = endStart + LEGACY_PROJECT_INSTRUCTIONS_END.length;
-  return {
-    systemPrompt: `${systemPrompt.slice(0, start)}${RUNTIME_MANAGED_PROJECT_INSTRUCTIONS}${systemPrompt.slice(end)}`,
-    rewritten: true
-  };
-}
-
-function compactManagedProjectInstructions(
-  systemPrompt: string,
-  mode: "automatic" | "protected"
-): { systemPrompt: string; compacted: boolean } {
-  const concise = mode === "protected"
-    ? "Piagent protected-path policy: do not read, disclose, or mutate protected content. Refuse without tool calls."
-    : "Piagent runtime task is injected below. Root project instructions are already loaded; do not re-read root AGENTS.md. Use task-relevant source/tests and ordinary tools, run the exact verifier after final edits, and make no task-management calls.";
-  const markerStart = "<!-- piagent-managed:start -->";
-  const markerEnd = "<!-- piagent-managed:end -->";
-  const start = systemPrompt.indexOf(markerStart);
-  const endStart = start >= 0 ? systemPrompt.indexOf(markerEnd, start) : -1;
-  if (start >= 0 && endStart >= 0) {
-    const end = endStart + markerEnd.length;
-    return {
-      systemPrompt: `${systemPrompt.slice(0, start)}${markerStart}\n${concise}\n${markerEnd}${systemPrompt.slice(end)}`,
-      compacted: true
-    };
-  }
-  if (systemPrompt.includes(RUNTIME_MANAGED_PROJECT_INSTRUCTIONS)) {
-    return {
-      systemPrompt: systemPrompt.replace(RUNTIME_MANAGED_PROJECT_INSTRUCTIONS, concise),
-      compacted: true
-    };
-  }
-  return { systemPrompt, compacted: false };
-}
-
 export default function piagentGuard(pi: ExtensionAPI) {
   const extensionDir = path.dirname(fileURLToPath(import.meta.url));
   const policy = loadPolicy(extensionDir);
@@ -5308,90 +4085,9 @@ export default function piagentGuard(pi: ExtensionAPI) {
   const contextTelemetryEnabled = environmentFeatureEnabled("PIAGENT_CONTEXT_TELEMETRY");
   const autoContextEnabled = environmentFeatureEnabled("PIAGENT_AUTO_CONTEXT");
   const autoRecoveryEnabled = environmentFeatureEnabled("PIAGENT_AUTO_RECOVERY");
-  // Advisory tool-registry verdicts are surfaced once per tool per session. A
-  // notice on every call would be constant noise for a tool used all day, and
-  // noise that is always present is read as background rather than as a warning.
-  const advisedTools = new Set<string>();
-  const seenToolResults = new Map<string, { outputHash: string; recordedAt: string }>();
-  const autoPackedPrompts = new Set<string>();
-  const injectedContextPacks = new Map<string, { queryHash: string; confidence: string; estimatedTokens: number; paths: string[] }>();
-  const taskIdentityBySession = new Map<string, { taskId: string; taskRunId: string }>();
-  const observedContextBySession = new Map<string, Map<string, ObservedTaskContext>>();
-  const completionRecoveryAttempts = new Map<string, number>();
-  const shellMutationSnapshots = new Map<string, Record<string, string>>();
-
-  function sessionCacheKey(ctx: ExtensionContext): string {
-    return `${ctx.cwd}\u0000${ctx.sessionManager.getSessionId()}`;
-  }
-
-  function cacheTaskIdentity(ctx: ExtensionContext, task: TaskContract | undefined): void {
-    const key = sessionCacheKey(ctx);
-    if (task) taskIdentityBySession.set(key, { taskId: task.taskId, taskRunId: task.taskRunId });
-    else taskIdentityBySession.delete(key);
-    if (taskIdentityBySession.size > 100) taskIdentityBySession.delete(taskIdentityBySession.keys().next().value as string);
-  }
-
-  function rememberObservedContext(ctx: ExtensionContext, entry: ObservedTaskContext): void {
-    const key = sessionCacheKey(ctx);
-    let observed = observedContextBySession.get(key);
-    if (!observed) {
-      observed = new Map();
-      observedContextBySession.set(key, observed);
-    }
-    if (!observed.has(entry.path)) observed.set(entry.path, entry);
-    while (observed.size > contextBudgetConfig(policy).maxManifestFiles) {
-      observed.delete(observed.keys().next().value as string);
-    }
-    if (observedContextBySession.size > 100) observedContextBySession.delete(observedContextBySession.keys().next().value as string);
-  }
-
-  function observedContext(ctx: ExtensionContext): ObservedTaskContext[] {
-    return [...(observedContextBySession.get(sessionCacheKey(ctx))?.values() ?? [])];
-  }
-
-  function clearObservedContext(ctx: ExtensionContext): void {
-    observedContextBySession.delete(sessionCacheKey(ctx));
-  }
-
-  function shellMutationSnapshotKey(
-    ctx: ExtensionContext,
-    toolName: string,
-    input: unknown
-  ): string {
-    return `${sessionCacheKey(ctx)}\u0000${toolResultFingerprint(toolName, input, []).key}`;
-  }
-
-  function rememberShellMutationSnapshot(
-    ctx: ExtensionContext,
-    toolName: string,
-    input: unknown
-  ): void {
-    shellMutationSnapshots.set(
-      shellMutationSnapshotKey(ctx, toolName, input),
-      workingTreeSnapshot(ctx.cwd) as Record<string, string>
-    );
-    if (shellMutationSnapshots.size > 100) {
-      shellMutationSnapshots.delete(shellMutationSnapshots.keys().next().value as string);
-    }
-  }
-
-  function consumeShellMutationSnapshot(
-    ctx: ExtensionContext,
-    toolName: string,
-    input: unknown
-  ): Record<string, string> | undefined {
-    const key = shellMutationSnapshotKey(ctx, toolName, input);
-    const snapshot = shellMutationSnapshots.get(key);
-    shellMutationSnapshots.delete(key);
-    return snapshot;
-  }
-
-  function clearShellMutationSnapshots(ctx: ExtensionContext): void {
-    const prefix = `${sessionCacheKey(ctx)}\u0000`;
-    for (const key of shellMutationSnapshots.keys()) {
-      if (key.startsWith(prefix)) shellMutationSnapshots.delete(key);
-    }
-  }
+  const runtimeState = new RuntimeSessionState({
+    maxObservedContext: contextBudgetConfig(policy).maxManifestFiles
+  });
 
   function retrievalKey(ctx: ExtensionContext, query: string): string {
     const signal = classifyContextTask(query);
@@ -5413,11 +4109,11 @@ export default function piagentGuard(pi: ExtensionAPI) {
     if (!contextTelemetryEnabled) return;
     try {
       const safePayload = redactForStorage(payload) as Record<string, unknown>;
-      let taskIdentity = taskIdentityBySession.get(sessionCacheKey(ctx));
+      let taskIdentity = runtimeState.taskIdentity(ctx);
       if (!taskIdentity) {
         const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
         if (task) {
-          cacheTaskIdentity(ctx, task);
+          runtimeState.cacheTaskIdentity(ctx, task);
           taskIdentity = { taskId: task.taskId, taskRunId: task.taskRunId };
         }
       }
@@ -5468,159 +4164,41 @@ export default function piagentGuard(pi: ExtensionAPI) {
     return ordered;
   }
 
-  pi.on("session_start", async (_event, ctx) => {
-    activateToolGroups(ctx, []);
-    const projectTrusted = ctx.isProjectTrusted();
-    const explicitProfile = Boolean(process.env.PIAGENT_PROFILE?.trim());
-    const profile = loadProfile(ctx.cwd, projectTrusted);
-    const name = profile.displayName || profile.projectId || path.basename(ctx.cwd);
-    const operatorSessionName = currentSessionName(ctx);
-    if (!hasOperatorSessionName(operatorSessionName)) {
-      pi.setSessionName(`pi:${name}`);
-    }
-    const sessionId = ctx.sessionManager.getSessionId();
-    const sessionName = currentSessionName(ctx);
-    const taskReference = sessionTaskReference(ctx);
-    let captureRetention: Record<string, unknown>;
-    try {
-      captureRetention = pruneCaptureFiles(toolResultCaptureRoot(ctx.cwd), {
-        maxFiles: CAPTURE_RETENTION_MAX_FILES,
-        maxBytes: CAPTURE_RETENTION_MAX_BYTES,
-        maxAgeMs: CAPTURE_RETENTION_MAX_AGE_MS,
-        projectRoot: ctx.cwd
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      captureRetention = { removed: 0, kept: 0, bytes: 0, error: message };
-      ctx.ui.notify(`Piagent local state needs recovery: ${message}`, "warning");
-    }
-    const migration = migrateTaskState(ctx.cwd, {
-      sessionId,
-      sessionName,
-      taskId: taskReference?.taskId
-    });
-    if (migration.warnings.length > 0) {
-      ctx.ui.notify(`Piagent task-state migration needs recovery: ${migration.warnings.join("; ")}`, "warning");
-    }
-    let resumedTask = activeSessionTask(ctx.cwd, sessionId) as TaskContract | undefined;
-    if (!resumedTask && taskReference) {
-      resumedTask = resolveTaskContract(ctx.cwd, taskReference.taskRunId ?? taskReference.taskId, sessionId) as TaskContract | undefined;
-      if (resumedTask) bindSessionTask(ctx.cwd, sessionId, sessionName, resumedTask);
-    }
-    if (resumedTask && resumedTask.sessionName !== sessionName) {
-      resumedTask.sessionName = sessionName;
-      resumedTask = writeTask(ctx.cwd, resumedTask);
-      bindSessionTask(ctx.cwd, sessionId, sessionName, resumedTask);
-    }
-    cacheTaskIdentity(ctx, resumedTask);
-    if (resumedTask?.trace.outcome === "pending") activateToolGroups(ctx, activeTaskToolGroups(resumedTask));
-    const profileHint = explicitProfile || (projectTrusted && fs.existsSync(projectProfilePath(ctx.cwd)))
-      ? ""
-      : " (run /onboard to select a profile)";
-    const snapshot = buildUsageSnapshot(ctx, String(pi.getThinkingLevel()));
-    const preflight = buildContextPreflight(snapshot, "task", 0);
-    const capabilityState = verifyProjectCapabilityState(extensionDir, ctx.cwd, projectTrusted);
-    const permissionProfile = resolvePermissionProfile(profile, policy, permissionOverrideFromContext(ctx));
-    const contextHint = preflight.recommendation === "fresh-session"
-      ? " Context is high; use /fresh task or /fresh scout for new work."
-      : preflight.recommendation === "compact"
-        ? " Context is warm; run /task-preflight before large work."
-        : "";
-    const permissionHint = ` permission=${permissionProfile.mode}`;
-    ctx.ui.notify(`Piagent Pi guard loaded: ${name}${profileHint}${permissionHint}${contextHint}`, preflight.recommendation === "fresh-session" ? "warning" : "info");
-    if (!capabilityState.ok) ctx.ui.notify(capabilityState.reason ?? "Capability validation failed.", "warning");
-    if (capabilityState.repinned) {
-      ctx.ui.notify(`Capability lock re-pinned: ${capabilityState.repinned}. The capabilities this project grants are unchanged.`, "info");
-    }
-    const legacyWarning = legacyProjectStateWarning(ctx.cwd);
-    if (legacyWarning) ctx.ui.notify(legacyWarning, "warning");
-    if (permissionProfile.warning) ctx.ui.notify(permissionProfile.warning, "warning");
-    if (permissionProfile.mode === "trusted-full-access") {
-      ctx.ui.notify("Piagent permission profile trusted-full-access is active; protected paths, secret redaction, and destructive/external confirmations remain enforced.", "warning");
-    }
-    // A server this repository defines and nobody approved is a decision waiting
-    // on the operator, so it is a warning and it comes before the release news.
-    const mcpNotice = mcpReadinessNotice(ctx.cwd);
-    if (mcpNotice) ctx.ui.notify(mcpNotice, "warning");
-    // Last, so a release announcement never pushes a security warning out of
-    // the first thing the operator reads.
-    const updateNotice = updateAvailabilityNotice();
-    if (updateNotice) ctx.ui.notify(updateNotice, "info");
-    let engineStatus: unknown;
-    try {
-      engineStatus = await contextIndexV2Status(ctx.cwd, {
-        excludePatterns: contextIndexExcludePatterns(policy, profile)
-      });
-    } catch (error) {
-      engineStatus = { exists: false, error: error instanceof Error ? error.message : String(error) };
-    }
-    telemetry(ctx, {
-      event: "session_start",
-      activeTools: pi.getActiveTools().length,
-      index: engineStatus,
-      taskMigration: migration,
-      taskId: resumedTask?.taskId,
-      taskRunId: resumedTask?.taskRunId,
-      captureRetention
-    });
+  registerSessionStartHook(pi, {
+    state: runtimeState,
+    loadProfile: loadProfileFromContext,
+    projectProfileExists: (cwd) => fs.existsSync(projectProfilePath(cwd)),
+    activateToolGroups,
+    taskReference: sessionTaskReference,
+    activeTask: (cwd, sessionId) => activeSessionTask(cwd, sessionId) as TaskContract | undefined,
+    resolveTask: (cwd, reference, sessionId) => resolveTaskContract(cwd, reference, sessionId) as TaskContract | undefined,
+    bindTask: bindSessionTask,
+    writeTask,
+    capabilityState: (ctx) => verifyProjectCapabilityState(extensionDir, ctx.cwd, ctx.isProjectTrusted()),
+    permissionProfile: (ctx, profile) => resolvePermissionProfile(profile, policy, permissionOverrideFromContext(ctx)),
+    legacyProjectWarning: legacyProjectStateWarning,
+    mcpReadinessNotice,
+    updateAvailabilityNotice,
+    contextExcludePatterns: (profile) => contextIndexExcludePatterns(policy, profile),
+    telemetry
   });
 
-  pi.on("session_info_changed", async (event, ctx) => {
-    const sessionId = ctx.sessionManager.getSessionId();
-    const task = activeSessionTask(ctx.cwd, sessionId) as TaskContract | undefined;
-    if (!task) return;
-    const sessionName = String(event.name ?? "").trim() || undefined;
-    task.sessionName = sessionName;
-    const written = writeTask(ctx.cwd, task);
-    bindSessionTask(ctx.cwd, sessionId, sessionName, written);
-    appendTrace(ctx.cwd, {
-      event: "task_session_renamed",
-      taskId: written.taskId,
-      taskRunId: written.taskRunId,
-      sessionId,
-      sessionName
-    });
+  registerSessionHooks(pi, {
+    state: runtimeState,
+    maxManifestFiles: contextBudgetConfig(policy).maxManifestFiles,
+    telemetry,
+    activeTask: (cwd, sessionId) => activeSessionTask(cwd, sessionId) as TaskContract | undefined,
+    writeTask,
+    bindTask: bindSessionTask,
+    appendTrace,
+    flushObservedTaskContext
   });
 
-  pi.on("input", async (event, ctx) => {
-    const text = event.text.trim();
-    if (!text || isFreshOrUtilityInput(text)) return { action: "continue" };
-    if (/^\/piagent-workflow\b/i.test(text)) {
-      return { action: "transform", text: text.replace(/^\/piagent-workflow\b/i, "/workflow") };
-    }
-    const taskSignal = classifyContextTask(text);
-    const activeTask = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
-    const readProtectedPaths = effectiveProtectedPaths(policy, loadProfileFromContext(ctx)).readProtectedPaths;
-    const protectedTarget = taskSignal.paths.some((candidate) => matchesProtectedPath(candidate, readProtectedPaths));
-    const protectedOnlyTarget = taskSignal.paths.length > 0
-      && taskSignal.paths.every((candidate) => matchesProtectedPath(candidate, readProtectedPaths));
-    const runtimeIntake = !activeTask && automaticTaskIntakeEligible(text, readProtectedPaths);
-    const manualIntake = !activeTask && !runtimeIntake && manualTaskIntakeEligible(text, readProtectedPaths);
-    const promptGroups = protectedOnlyTarget
-      ? []
-      : toolGroupsForPrompt(text).filter((group) => (
-          runtimeIntake ? group !== "intake" && group !== "task" : true
-        ));
-    if (manualIntake && !promptGroups.includes("intake")) promptGroups.push("intake");
-    activateToolGroups(ctx, activeTask?.trace.outcome === "pending"
-      ? [...promptGroups.filter((group) => group !== "intake"), ...activeTaskToolGroups(activeTask)]
-      : promptGroups);
-    telemetry(ctx, {
-      event: "user_input",
-      source: event.source,
-      promptHash: taskSignal.promptHash,
-      promptChars: taskSignal.promptChars,
-      workflow: taskSignal.workflow,
-      riskLane: taskSignal.lane,
-      intakeMode: runtimeIntake ? "runtime" : "model",
-      protectedTarget,
-      protectedOnlyTarget,
-      manualIntake,
-      explicitPathCount: taskSignal.paths.length,
-      termCount: taskSignal.terms.length
-    });
-
-    const imageAttachment = attachLocalImagesFromText(text, event.images, ctx.cwd, () => {
+  registerInputHook(pi, {
+    boilerplateCollapseChars: BOILERPLATE_COLLAPSE_CHARS,
+    activeTask: (ctx) => activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined,
+    readProtectedPaths: (ctx) => effectiveProtectedPaths(policy, loadProfileFromContext(ctx)).readProtectedPaths,
+    imageAccess: (ctx) => {
       const projectTrusted = ctx.isProjectTrusted();
       const profile = loadProfileFromContext(ctx);
       const permissionProfile = resolvePermissionProfile(profile, policy, permissionOverrideFromContext(ctx));
@@ -5635,557 +4213,57 @@ export default function piagentGuard(pi: ExtensionAPI) {
         filesystemRead: capabilityState.filesystemRead,
         enforceFilesystemRead: permissionProfile.mode !== "trusted-full-access"
       };
-    });
-    if (imageAttachment?.attached.length) {
-      ctx.ui.notify(`Piagent image input: attached ${imageAttachment.attached.map((item) => item.marker).join(", ")}`, "info");
-    } else if (imageAttachment?.skipped.length) {
-      ctx.ui.notify(`Piagent image input: skipped ${imageAttachment.skipped.length} local image path(s)`, "warning");
-    }
-
-    const inputText = imageAttachment?.text ?? text;
-    const canRewriteWorkflow = event.source !== "extension";
-    const snapshot = buildUsageSnapshot(ctx, String(pi.getThinkingLevel()));
-    const preflight = buildContextPreflight(snapshot, chooseFreshWorkflow(inputText, inputText), inputText.length);
-    const hasBoilerplate = looksLikeGovernedBoilerplate(inputText);
-    const shouldFreshen =
-      canRewriteWorkflow &&
-      preflight.recommendation === "fresh-session" &&
-      (hasBoilerplate || isPiagentWorkflowInput(inputText) || inputText.length >= LONG_INPUT_CHARS);
-    const shouldCollapseBoilerplate = canRewriteWorkflow && hasBoilerplate && inputText.length >= BOILERPLATE_COLLAPSE_CHARS;
-
-    const outgoingImages = [
-      ...(Array.isArray(event.images) ? event.images : []),
-      ...(imageAttachment?.images ?? [])
-    ];
-
-    if (!shouldFreshen && !shouldCollapseBoilerplate) {
-      if (imageAttachment?.attached.length) return { action: "transform", text: inputText, images: outgoingImages };
-      return { action: "continue" };
-    }
-
-    const task = extractTaskRequest(inputText);
-    const workflow = chooseFreshWorkflow(inputText, task);
-    const reason = shouldFreshen
-      ? "Current session is near context limits; use a fresh governed session."
-      : "Mandatory flow boilerplate is already part of the platform; collapse it to the task request.";
-    const command = shouldFreshen
-      ? buildFreshCommand(ctx.cwd, workflow, inputText, reason)
-      : `/${workflow} ${trimTaskForInline(task)}`;
-
-    ctx.ui.notify(`Piagent preflight: ${reason}`, "warning");
-    return outgoingImages.length > 0
-      ? { action: "transform", text: command, images: outgoingImages }
-      : { action: "transform", text: command };
+    },
+    activateToolGroups,
+    telemetry
   });
 
-  pi.on("before_agent_start", async (event, ctx) => {
-    const projectInstructions = rewriteLegacyProjectInstructions(event.systemPrompt);
-    const query = looksLikeGovernedBoilerplate(event.prompt) ? extractTaskRequest(event.prompt) : event.prompt.trim();
-    const signal = classifyContextTask(query);
-    const profile = loadProfileFromContext(ctx);
-    const readProtectedPaths = effectiveProtectedPaths(policy, profile).readProtectedPaths;
-    const protectedOnlyTarget = signal.paths.length > 0
-      && signal.paths.every((candidate) => matchesProtectedPath(candidate, readProtectedPaths));
-    const activeTask = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
-    const runtimeIntake = !activeTask && automaticTaskIntakeEligible(query, readProtectedPaths);
-    const compactMode = protectedOnlyTarget
-      ? "protected"
-      : runtimeIntake || activeTask?.intakeMode === "runtime"
-        ? "automatic"
-        : undefined;
-    const compactedInstructions = compactMode
-      ? compactManagedProjectInstructions(projectInstructions.systemPrompt, compactMode)
-      : { systemPrompt: projectInstructions.systemPrompt, compacted: false };
-    const effectiveSystemPrompt = compactedInstructions.systemPrompt;
-    const systemPromptUpdate = effectiveSystemPrompt !== event.systemPrompt
-      ? { systemPrompt: effectiveSystemPrompt }
-      : undefined;
-    const active = new Set<string>(pi.getActiveTools() as string[]);
-    const toolMetadata = pi.getAllTools()
-      .filter((tool) => active.has(tool.name))
-      .map((tool) => ({
-        name: tool.name,
-        description: tool.description,
-        parameters: tool.parameters,
-        promptGuidelines: tool.promptGuidelines
-      }));
-    const toolSchemaTokens = estimateContextTokens(JSON.stringify(toolMetadata));
-    const systemPromptTokens = estimateContextTokens(effectiveSystemPrompt);
-    const autoPackUseful = activeTask?.trace.outcome !== "pending"
-      && (runtimeIntake || signal.paths.length === 0);
-    telemetry(ctx, {
-      event: "agent_prompt",
-      promptHash: signal.promptHash,
-      promptChars: signal.promptChars,
-      workflow: signal.workflow,
-      riskLane: signal.lane,
-      activeTools: active.size,
-      activePiagentTools: [...active].filter((toolName) => PIAGENT_TOOL_NAMES.has(toolName)).length,
-      toolSchemaTokens,
-      systemPromptTokens,
-      systemPromptHash: crypto.createHash("sha256").update(effectiveSystemPrompt).digest("hex"),
-      legacyProjectInstructionsRewritten: projectInstructions.rewritten,
-      managedInstructionsCompacted: compactedInstructions.compacted,
-      contextUsage: ctx.getContextUsage()
-    });
-
-    const finishAgentStart = async (contextMessage?: {
-      customType: string;
-      content: string;
-      details: Record<string, unknown>;
-    }) => {
-      const intake = await maybeStartAutomaticTask(query, ctx);
-      if (!contextMessage && !intake) return systemPromptUpdate;
-      const content = [contextMessage?.content, intake?.text].filter(Boolean).join("\n\n");
-      return {
-        ...(systemPromptUpdate ?? {}),
-        message: {
-          customType: contextMessage?.customType ?? "piagent-runtime-task-intake",
-          content,
-          display: false,
-          details: {
-            ...(contextMessage?.details ?? {}),
-            runtimeTask: intake?.task
-              ? {
-                  taskId: intake.task.taskId,
-                  taskRunId: intake.task.taskRunId,
-                  scope: intake.task.scope,
-                  verifyCommands: intake.task.verifyCommands,
-                  intakeMode: intake.task.intakeMode
-                }
-              : undefined,
-            runtimeIntakeStarted: intake?.started ?? false
-          }
-        }
-      };
-    };
-
-    if (
-      query.length < 20
-      || signal.workflow === "usage"
-      || !autoContextEnabled
-      || !autoPackUseful
-      || autoPackedPrompts.has(promptPackKey(ctx, signal.promptHash))
-    ) {
-      return finishAgentStart();
-    }
-
-    autoPackedPrompts.add(promptPackKey(ctx, signal.promptHash));
-    if (autoPackedPrompts.size > 50) autoPackedPrompts.delete(autoPackedPrompts.values().next().value as string);
-    try {
-      const excludePatterns = contextIndexExcludePatterns(policy, loadProfileFromContext(ctx));
-      const ensured = await ensureContextIndexV2(ctx.cwd, {
-        excludePatterns,
-        rebuildMissing: false
-      });
-      const status = ensured.status;
-      if (!status.exists || status.stale) {
-        telemetry(ctx, {
-          event: "context_pack",
-          queryHash: signal.promptHash,
-          confidence: "none",
-          candidates: 0,
-          selected: 0,
-          skipped: status.exists ? "stale-index" : "missing-index"
-        });
-        return finishAgentStart();
-      }
-      const budgetTokens = runtimeIntake
-        ? 900
-        : signal.lane === "high-risk" ? 1_200 : signal.lane === "tiny" ? 500 : 900;
-      const pack = await buildContextPack(ctx.cwd, query, {
-        budgetTokens,
-        includeCode: runtimeIntake,
-        includePatterns: runtimeIntake ? AUTO_INTAKE_SNAPSHOT_PATTERNS : undefined,
-        currentSnapshot: runtimeIntake,
-        limit: runtimeIntake ? 8 : 12,
-        excludePatterns
-      });
-      telemetry(ctx, {
-        event: "context_pack",
-        queryHash: pack.queryHash,
-        confidence: pack.confidence,
-        candidates: pack.candidates,
-        selected: pack.selected.length,
-        estimatedTokens: pack.estimatedTokens,
-        selectedPaths: pack.selected.map((item) => item.path),
-        finderRecommended: pack.finderRecommended,
-        currentSnapshot: runtimeIntake
-      });
-      if (!["medium", "high"].includes(pack.confidence) || pack.selected.length === 0) return finishAgentStart();
-      injectedContextPacks.set(retrievalKey(ctx, query), {
-        queryHash: pack.queryHash,
-        confidence: pack.confidence,
-        estimatedTokens: pack.estimatedTokens,
-        paths: pack.selected.map((item) => item.path)
-      });
-      for (const selected of pack.selected) {
-        rememberObservedContext(ctx, {
-          path: selected.path,
-          reason: "Runtime injected a bounded Context Engine navigation pack."
-        });
-      }
-      if (injectedContextPacks.size > 50) injectedContextPacks.delete(injectedContextPacks.keys().next().value as string);
-      return finishAgentStart({
-        customType: "piagent-context-pack-v2",
-        content: pack.text,
-        details: {
-          schemaVersion: 2,
-          queryHash: pack.queryHash,
-          confidence: pack.confidence,
-          estimatedTokens: pack.estimatedTokens,
-          paths: pack.selected.map((item) => item.path),
-          currentSnapshot: runtimeIntake
-        }
-      });
-    } catch (error) {
-      telemetry(ctx, {
-        event: "context_pack",
-        queryHash: signal.promptHash,
-        confidence: "none",
-        candidates: 0,
-        selected: 0,
-        error: error instanceof Error ? error.message : String(error)
-      });
-      return finishAgentStart();
-    }
+  registerAgentStartHook(pi, {
+    state: runtimeState,
+    autoContextEnabled,
+    activeTask: (ctx) => activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined,
+    readProtectedPaths: (ctx) => effectiveProtectedPaths(policy, loadProfileFromContext(ctx)).readProtectedPaths,
+    contextExcludePatterns: (ctx) => contextIndexExcludePatterns(policy, loadProfileFromContext(ctx)),
+    promptPackKey,
+    retrievalKey,
+    startAutomaticTask: maybeStartAutomaticTask,
+    telemetry
   });
 
-  pi.on("turn_end", async (event, ctx) => {
-    const message = event.message as unknown as { usage?: unknown; stopReason?: unknown; role?: unknown };
-    telemetry(ctx, {
-      event: "turn_end",
-      turnIndex: event.turnIndex,
-      toolResults: event.toolResults.length,
-      role: message.role,
-      stopReason: message.stopReason,
-      usage: message.usage,
-      contextUsage: ctx.getContextUsage()
-    });
-  });
-
-  pi.on("message_end", async (event, ctx) => {
-    if (!event.message || event.message.role !== "assistant" || assistantMessageHasToolCall(event.message)) return;
-    const budget = contextBudgetConfig(policy);
-    let task = flushObservedTaskContext(
-      pi,
-      ctx,
-      observedContext(ctx),
-      budget.maxManifestFiles,
-      "context_observed_before_handoff"
-    ) ?? activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
-    if (!task) return;
-    const text = assistantMessageText(event.message);
-    const completionClaim = looksLikeCompletionClaim(text);
-    const incompleteHandoff = looksLikeIncompleteHandoff(text);
-    if (task.trace.outcome !== "pending") return;
-    const readOnlyEvidenceObserved = task.changeMode === "read-only" && task.contextManifest.length > 0;
-    const potentiallyFinalEvidence = task.observedChangedFiles.length > 0
-      || task.verifyEvidence.some((evidence) => evidence.exitCode === 0 && evidence.observed === true && evidence.matchedProfileCommand === true)
-      || readOnlyEvidenceObserved;
-    if (!completionClaim && (incompleteHandoff || !potentiallyFinalEvidence)) return;
-    const currentDigests = workingTreeSnapshot(ctx.cwd) as Record<string, string>;
-    const currentDigest = workingTreeEvidenceDigest(currentDigests);
-    const currentPassingVerifierObserved = task.verifyEvidence.some((evidence) => (
-      evidence.exitCode === 0
-      && evidence.observed === true
-      && evidence.matchedProfileCommand === true
-      && evidence.workingTreeDigest === currentDigest
-    ));
-    const handoffAttempt = completionClaim || (
-      !incompleteHandoff
-      && (task.observedChangedFiles.length > 0 || currentPassingVerifierObserved || readOnlyEvidenceObserved)
-    );
-    let completionGate: ReturnType<typeof evaluateTaskGate> | undefined;
-    if (task.trace.outcome === "pending" && handoffAttempt) {
-      const projected = completionTaskProjection(ctx.cwd, task, currentDigests);
-      const projectedGate = evaluateTaskGate(ctx.cwd, projected, policy, {
-        currentDigests,
-        currentWorkingTreeDigest: currentDigest
-      });
-      completionGate = projectedGate;
-      if (projectedGate.decision === "pass") {
-        task = writeTask(ctx.cwd, projected);
-        cacheTaskIdentity(ctx, task);
-        completionRecoveryAttempts.delete(task.taskRunId);
-        clearObservedContext(ctx);
-        activateToolGroups(ctx, []);
-        const trace = {
-          event: "task_auto_completed",
-          taskId: task.taskId,
-          taskRunId: task.taskRunId,
-          sessionId: task.sessionId,
-          changedFiles: task.changedFiles,
-          lifecycleMode: runtimeLifecycleMode(task)
-        };
-        appendTrace(ctx.cwd, trace);
-        appendSessionTrace(pi, trace);
-        telemetry(ctx, trace);
-        return;
-      }
-    }
-    if (!handoffAttempt || resolveRuntimePolicy(loadProfileFromContext(ctx)).finalGate !== "enforce") return;
-    const gate = completionGate ?? evaluateTaskGate(ctx.cwd, task, policy, {
+  registerCompletionHook(pi, {
+    state: runtimeState,
+    maxManifestFiles: contextBudgetConfig(policy).maxManifestFiles,
+    autoRecoveryEnabled,
+    activeTask: (ctx) => activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined,
+    flushObservedTaskContext,
+    completionProjection: completionTaskProjection,
+    evaluateGate: (cwd, task, currentDigests, currentDigest) => evaluateTaskGate(cwd, task, policy, {
       currentDigests,
       currentWorkingTreeDigest: currentDigest
-    });
-    if (gate.decision === "pass") return;
-
-    const recoveryAttempt = completionRecoveryAttempts.get(task.taskRunId) ?? 0;
-    const lifecycleMode = runtimeLifecycleMode(task);
-    if (
-      autoRecoveryEnabled
-      && handoffAttempt
-      && lifecycleMode !== "manual"
-      && recoveryAttempt < 1
-    ) {
-      completionRecoveryAttempts.set(task.taskRunId, recoveryAttempt + 1);
-      const recoveryGuidance = task.changeMode === "read-only"
-        ? [
-            "Continue the same read-only task. Review the cited evidence against the requested scope, state concrete unknowns, and complete the returned review step when required.",
-            "Do not mutate project source or repeat diagnostic Piagent tools; use ordinary targeted reads and the active progress tool only."
-          ]
-        : [
-            "Continue the same bounded task. Re-check the requested behavior against current source, make a relevant in-scope change when required, and run every exact configured verifier.",
-            ...verifierCommandInstructions(gate.missingVerifyCommands),
-            "A pre-existing passing test without a relevant source diff is not completion. Do not repeat diagnostic Piagent tools; use ordinary read/edit/bash work."
-          ];
-      const recovery = [
-        `[Piagent continuation required]`,
-        `Task ${task.taskId} cannot finish yet. Missing: ${gate.missing.join(", ")}.`,
-        ...recoveryGuidance
-      ].join("\n");
-      pi.sendMessage(
-        { customType: "piagent-completion-recovery", content: recovery, display: false, details: { taskId: task.taskId, missing: gate.missing } },
-        { deliverAs: "followUp", triggerTurn: true }
-      );
-      const recoveryTrace = {
-        event: "completion_recovery_scheduled",
-        taskId: task.taskId,
-        taskRunId: task.taskRunId,
-        sessionId: task.sessionId,
-        attempt: recoveryAttempt + 1,
-        missing: gate.missing
-      };
-      appendTrace(ctx.cwd, recoveryTrace);
-      appendSessionTrace(pi, recoveryTrace);
-      telemetry(ctx, recoveryTrace);
-      const continuingNotice = [
-        "[Piagent completion gate: CONTINUING]",
-        `Task ${task.taskId} needs one bounded correction pass before handoff.`,
-        ""
-      ].join("\n");
-      const content = Array.isArray(event.message.content)
-        ? [{ type: "text" as const, text: continuingNotice }, ...event.message.content]
-        : [{ type: "text" as const, text: `${continuingNotice}${text}` }];
-      return { message: { ...event.message, content } };
-    }
-
-    const notice = [
-      `[Piagent completion gate: NOT APPROVED]`,
-      `Task ${task.taskId} (${task.taskRunId}) is still open.`,
-      `Missing: ${gate.missing.join(", ") || "a completed task trace"}.`,
-      ...verifierCommandInstructions(gate.missingVerifyCommands),
-      "The response below is preserved as work in progress and must not be treated as a completion report.",
-      ""
-    ].join("\n");
-    const content = Array.isArray(event.message.content)
-      ? [{ type: "text" as const, text: notice }, ...event.message.content]
-      : [{ type: "text" as const, text: `${notice}${text}` }];
-    const trace = {
-      event: "completion_claim_blocked",
-      taskId: task.taskId,
-      taskRunId: task.taskRunId,
-      sessionId: task.sessionId,
-      missing: gate.missing,
-      responseHash: crypto.createHash("sha256").update(text).digest("hex"),
-      responseChars: text.length
-    };
-    appendTrace(ctx.cwd, trace);
-    appendSessionTrace(pi, trace);
-    telemetry(ctx, trace);
-    return { message: { ...event.message, content } };
+    }),
+    writeTask,
+    activateBaseTools: (ctx) => activateToolGroups(ctx, []),
+    appendTrace,
+    appendSessionTrace,
+    telemetry,
+    finalGateMode: (ctx) => resolveRuntimePolicy(loadProfileFromContext(ctx)).finalGate,
+    verifierInstructions: verifierCommandInstructions
   });
 
-  pi.on("agent_settled", async (_event, ctx) => {
-    const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
-    telemetry(ctx, {
-      event: "agent_settled",
-      idle: ctx.isIdle(),
-      taskId: task?.taskId,
-      taskRunId: task?.taskRunId,
-      taskOutcome: task?.trace.outcome
-    });
-  });
-
-  pi.on("session_compact", async (event, ctx) => {
-    telemetry(ctx, {
-      event: "session_compact",
-      reason: event.reason,
-      willRetry: event.willRetry,
-      fromExtension: event.fromExtension
-    });
-  });
-
-  pi.on("session_shutdown", async (event, ctx) => {
-    flushObservedTaskContext(
-      pi,
-      ctx,
-      observedContext(ctx),
-      contextBudgetConfig(policy).maxManifestFiles,
-      "context_observed_before_shutdown"
-    );
-    telemetry(ctx, {
-      event: "session_shutdown",
-      reason: event.reason,
-      targetSessionFile: event.targetSessionFile ? path.basename(event.targetSessionFile) : undefined
-    });
-    clearObservedContext(ctx);
-    clearShellMutationSnapshots(ctx);
-  });
-
-  pi.on("tool_result", async (event, ctx) => {
-    const profile = loadProfileFromContext(ctx);
-    const pathPolicy = effectiveProtectedPaths(policy, profile);
-
-    const observed = observedBashResultFromToolResultEvent(event, ctx.cwd);
-    if (observed) {
-      bashResults.record(observed);
-      try {
-        appendObservedBashResult(observedBashLedgerPath(ctx.cwd), {
-          ...observed,
-          redactedCommand: redactText(observed.command)
-        }, { projectRoot: ctx.cwd });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        ctx.ui.notify(`Piagent Pi guard could not persist bash evidence ledger: ${message}`, "warn");
-      }
-    }
-
-    const observedContextEntry = observedTaskContextFromToolResult(ctx.cwd, event, pathPolicy.readProtectedPaths);
-    if (observedContextEntry) rememberObservedContext(ctx, observedContextEntry);
-    const pendingContext = observedContext(ctx);
-    const maxManifestFiles = contextBudgetConfig(policy).maxManifestFiles;
-    const shellSnapshotBefore = SHELL_TOOL_NAMES.has(event.toolName)
-      ? consumeShellMutationSnapshot(ctx, event.toolName, event.input)
-      : undefined;
-    recordObservedTaskChanges(pi, ctx, event, pendingContext, maxManifestFiles, shellSnapshotBefore);
-    if (observed) recordObservedTaskVerification(pi, ctx, observed, pendingContext, maxManifestFiles);
-
-    let resultContent: unknown = event.content;
-    let resultDetails: unknown = event.details;
-    let resultChanged = false;
-
-    if (event.toolName === "grep") {
-      const filtered = filterGrepProtectedContent(resultContent, pathPolicy.readProtectedPaths);
-      if (filtered.changed) {
-        resultContent = filtered.content;
-        resultDetails = resultDetails && typeof resultDetails === "object"
-          ? { ...resultDetails, protectedMatchesRedacted: filtered.redactedLines }
-          : { protectedMatchesRedacted: filtered.redactedLines };
-        resultChanged = true;
-      }
-    }
-
-    if (event.toolName === "find" || event.toolName === "ls") {
-      const input = event.input && typeof event.input === "object"
-        ? event.input as Record<string, unknown>
-        : {};
-      const basePath = extractLikelyPathFromInput(ctx.cwd, input) || ".";
-      const filtered = filterProtectedPathListContent(ctx.cwd, resultContent, pathPolicy.readProtectedPaths, basePath, event.toolName);
-      if (filtered.changed) {
-        resultContent = filtered.content;
-        resultDetails = resultDetails && typeof resultDetails === "object"
-          ? { ...resultDetails, protectedPathsRedacted: filtered.redactedLines }
-          : { protectedPathsRedacted: filtered.redactedLines };
-        resultChanged = true;
-      }
-    }
-
-    const safeContent = redactToolResultTextContent(resultContent);
-    const safeDetails = redactForStorage(resultDetails);
-    const detailRedactions = countChangedStringLeaves(resultDetails, safeDetails);
-    const sensitiveValuesRedacted = safeContent.redacted + detailRedactions;
-    if (sensitiveValuesRedacted > 0) {
-      resultContent = safeContent.content;
-      resultDetails = isPlainRecord(safeDetails)
-        ? { ...safeDetails, sensitiveValuesRedacted }
-        : safeDetails;
-      resultChanged = true;
-    }
-
-    const fingerprint = toolResultFingerprint(event.toolName, event.input, resultContent);
-    const previousFingerprint = seenToolResults.get(fingerprint.key);
-    const repeated = previousFingerprint?.outputHash === fingerprint.outputHash;
-    seenToolResults.set(fingerprint.key, { outputHash: fingerprint.outputHash, recordedAt: nowIso() });
-    if (seenToolResults.size > 500) seenToolResults.delete(seenToolResults.keys().next().value as string);
-    if (repeated && ["read", "grep", "find", "ls"].includes(event.toolName) && fingerprint.outputChars > 0) {
-      resultContent = [{
-        type: "text",
-        text: `[Piagent delta: unchanged ${event.toolName} result; ${fingerprint.outputChars} chars / ${fingerprint.outputLines} lines match the previous identical call.]`
-      }];
-      resultDetails = isPlainRecord(resultDetails)
-        ? {
-            ...resultDetails,
-            piagentDelta: {
-              unchanged: true,
-              previousRecordedAt: previousFingerprint?.recordedAt,
-              outputHash: fingerprint.outputHash,
-              originalChars: fingerprint.outputChars,
-              originalLines: fingerprint.outputLines
-            }
-          }
-        : {
-            value: resultDetails,
-            piagentDelta: {
-              unchanged: true,
-              previousRecordedAt: previousFingerprint?.recordedAt,
-              outputHash: fingerprint.outputHash,
-              originalChars: fingerprint.outputChars,
-              originalLines: fingerprint.outputLines
-            }
-          };
-      resultChanged = true;
-    }
-
-    const captureCache = new Map<string, ToolResultCaptureSummary>();
-    const compactedContent = compactToolResultTextContent(ctx.cwd, event, ctx, resultContent, captureCache);
-    const compactionCaptures = [...compactedContent.captures];
-    if (compactedContent.captures.length > 0) {
-      resultContent = compactedContent.content;
-      resultChanged = true;
-    }
-    if (resultDetails !== undefined) {
-      const compactedDetails = compactToolResultDetails(ctx.cwd, event, ctx, resultDetails, captureCache, compactionCaptures);
-      if (compactionCaptures.length > compactedContent.captures.length) {
-        resultDetails = compactedDetails;
-        resultChanged = true;
-      }
-    }
-    if (compactionCaptures.length > 0) {
-      resultDetails = attachToolResultCompactionDetails(resultDetails, compactionCaptures);
-    }
-
-    telemetry(ctx, {
-      event: "tool_result",
-      toolName: event.toolName,
-      inputHash: fingerprint.inputHash,
-      outputHash: fingerprint.outputHash,
-      outputChars: fingerprint.outputChars,
-      outputLines: fingerprint.outputLines,
-      repeated,
-      compacted: compactionCaptures.length > 0,
-      compactedCaptures: compactionCaptures.length,
-      sensitiveValuesRedacted,
-      isError: event.isError,
-      usage: event.usage
-    });
-
-    if (resultChanged) {
-      return resultDetails === undefined
-        ? { content: resultContent }
-        : { content: resultContent, details: resultDetails };
-    }
+  registerToolResultHook(pi, {
+    state: runtimeState,
+    maxManifestFiles: contextBudgetConfig(policy).maxManifestFiles,
+    readProtectedPaths: (ctx) => effectiveProtectedPaths(policy, loadProfileFromContext(ctx)).readProtectedPaths,
+    recordObservedBash: (observed) => bashResults.record(observed),
+    observedBashLedgerPath,
+    redactText,
+    observedTaskContext: observedTaskContextFromToolResult,
+    recordObservedTaskChanges,
+    recordObservedTaskVerification,
+    extractLikelyPath: extractLikelyPathFromInput,
+    isShellTool: (toolName) => SHELL_TOOL_NAMES.has(toolName),
+    telemetry,
+    now: nowIso
   });
 
   pi.on("tool_call", async (event, ctx) => {
@@ -6218,8 +4296,8 @@ export default function piagentGuard(pi: ExtensionAPI) {
     }
     // An advisory verdict that is computed and discarded makes advisory mode
     // indistinguishable from off, which is not what the mode is for.
-    if (toolDecision.decision === "warn" && !advisedTools.has(event.toolName)) {
-      advisedTools.add(event.toolName);
+    if (toolDecision.decision === "warn" && !runtimeState.hasAdvisedTool(ctx, event.toolName)) {
+      runtimeState.rememberAdvisedTool(ctx, event.toolName);
       const missing = toolDecision.requiredCapabilities.length > 0
         ? ` Declare ${toolDecision.requiredCapabilities.join(", ")} in profile mcpCapabilities to clear this.`
         : "";
@@ -6412,7 +4490,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
       && sessionTask.changeMode === "source-change"
       && shellProjectMutation
     ) {
-      rememberShellMutationSnapshot(ctx, event.toolName, event.input);
+      runtimeState.rememberShellMutationSnapshot(ctx, event.toolName, event.input);
     }
   });
 
@@ -6511,7 +4589,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
         ].join("\n");
       } else if (params.action === "pack") {
         if (!params.query?.trim()) throw new Error("query is required for a context pack");
-        const injected = injectedContextPacks.get(retrievalKey(ctx, params.query));
+        const injected = runtimeState.injectedContextPack(ctx, retrievalKey(ctx, params.query));
         if (injected && params.refresh !== true) {
           result = { reusedInjectedPack: true, ...injected };
           text = [
@@ -7565,7 +5643,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
       const reviewLenses = normalizeReviewLenses(params.reviewLenses, orchestration.defaultReviewLenses);
       const providedWorkPlan = normalizeWorkPlanSteps(params.workPlan);
       const workPlan = providedWorkPlan.length ? providedWorkPlan : defaultWorkPlan(safeSummary, params.riskLane, changeMode);
-      const seededContext = observedContext(ctx).slice(0, contextBudgetConfig(policy).maxManifestFiles);
+      const seededContext = runtimeState.observedContext(ctx).slice(0, contextBudgetConfig(policy).maxManifestFiles);
       const workPlanError = validateNewWorkPlan(workPlan);
       if (workPlanError) {
         return { content: [{ type: "text", text: `Task start refused: ${workPlanError}.` }], details: workPlan, isError: true };
@@ -7627,7 +5705,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
       }
       const written = writeTask(ctx.cwd, task);
       bindSessionTask(ctx.cwd, sessionId, sessionName, written);
-      cacheTaskIdentity(ctx, written);
+      runtimeState.cacheTaskIdentity(ctx, written);
       if (written.intakeMode !== "runtime") {
         // Intake classification defines the cache-stable surface for this agent turn.
         // A model may choose a narrower lane than the prompt classifier; never remove
@@ -7675,7 +5753,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
 
     const summary = redactText(prompt).replace(/\s+/g, " ").trim().slice(0, 320);
     const sessionName = currentSessionName(ctx);
-    const scope = automaticTaskScope(prompt, observedContext(ctx));
+    const scope = automaticTaskScope(prompt, runtimeState.observedContext(ctx));
     const started = await taskStartTool.execute(
       `runtime-intake-${ctx.sessionManager.getSessionId()}`,
       {
@@ -9590,7 +7668,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
       `cwd: ${redactText(snapshot.cwd)}`,
       `model: ${snapshot.model}; thinking: ${snapshot.thinkingLevel}`,
       `entries: ${formatCount(snapshot.entries.branch)} active / ${formatCount(snapshot.entries.total)} total`,
-      "name: /name <task name>",
+      "name: Pi native /name <task name>",
       "resume: use Pi native /resume or /session"
     ].join("\n"), snapshot, { message: `Piagent session: ${snapshot.sessionName ?? "unnamed"}`, level: "info" });
   }
@@ -9613,7 +7691,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
     if (!action) {
       const chosen = await selectRuntimeAction(ctx, "Piagent session", [
         { value: "current", label: "Current session", description: "Name, id, file, model", recommended: true },
-        { value: "name", label: "Set name", description: "Use /name <task name>" },
+        { value: "name", label: "Set name", description: "Use Pi native /name <task name>" },
         { value: "resume", label: "Resume help", description: "Commands for continuing old sessions" },
         { value: "fresh-task", label: "Fresh task", description: "Use /fresh task <request>" },
         { value: "fresh-scout", label: "Fresh scout", description: "Use /fresh scout <request>" },
@@ -9635,7 +7713,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
       emitRuntimeMessage(ctx, "piagent-session-help", [
         "session helpers:",
         "current: /usage live or Pi native /session",
-        "name: /name <task/session name>",
+        "name: Pi native /name <task/session name>",
         "fresh: /fresh task|scout|be-to-fe <request>",
         "resume: Pi native /resume or /session",
         "legacy: /piagent-session | /setname | /fresh-task | /fresh-scout | /fresh-be-to-fe"
@@ -9680,7 +7758,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
       emitRuntimeMessage(ctx, "piagent-session-help", [
         "session helpers:",
         "/usage live",
-        "/name ABC-123 Short task name",
+        "Pi native: /name ABC-123 Short task name",
         "/fresh task Implement <request>",
         "native: /session | /resume"
       ].join("\n"));
@@ -9728,7 +7806,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
   });
 
   pi.registerCommand("piagent-session", {
-    description: "Legacy session helper namespace; prefer /usage, /name, and /fresh",
+    description: "Legacy session helper namespace; prefer /usage, Pi native /name, and /fresh",
     getArgumentCompletions: (prefix: string) => {
       const actions = ["current", "name", "resume", "fresh", "usage", "help"];
       const typed = String(prefix ?? "").trim().toLowerCase();
@@ -9739,15 +7817,8 @@ export default function piagentGuard(pi: ExtensionAPI) {
     }
   });
 
-  pi.registerCommand("name", {
-    description: "Set the current session name for Agent Watch/report mapping",
-    handler: async (args, ctx) => {
-      setSessionNameFromCommand(ctx, String(args ?? ""), "/name <task/session name>");
-    }
-  });
-
   pi.registerCommand("setname", {
-    description: "Legacy alias for /name",
+    description: "Compatibility alias for Pi native /name",
     handler: async (args, ctx) => {
       setSessionNameFromCommand(ctx, String(args ?? ""), "/setname <task/session name>");
     }
@@ -9901,8 +7972,8 @@ export default function piagentGuard(pi: ExtensionAPI) {
     const sections: Record<string, string[]> = {
       overview: [
         "Piagent command surface:",
-        "runtime: /workflow | /usage | /context | /permission | /commands | /profile | /memory | /onboard | /name | /fresh",
-        "native: /model | /session | /resume | /compact | /mcp",
+        "runtime: /workflow | /usage | /context | /permission | /commands | /profile | /memory | /onboard | /fresh",
+        "native: /model | /name | /session | /resume | /compact | /mcp",
         "workflow: /workflow task|scout|be-to-fe|review|commit|pr <request>",
         "mcp: /mcp is Pi native; governed MCP checks stay at /piagent-mcp to avoid collision",
         "legacy: /piagent-* commands still work where they existed",
@@ -9920,7 +7991,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
         "Usage/session:",
         "/usage",
         "/usage history",
-        "/name <task name>",
+        "Pi native: /name <task name>",
         "/fresh task|scout|be-to-fe <request>",
         "native: /session | /resume"
       ],

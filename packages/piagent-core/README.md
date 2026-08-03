@@ -4,7 +4,9 @@ Shared Pi package for reusable project workflows.
 
 ## Contents
 
-- `extensions/piagent-guard.ts`: runtime guard tools and policy hooks.
+- `extensions/piagent-guard.ts`: Pi extension composition root and registration order.
+- `runtime/`: Pi-facing session, usage, log-compaction, and workflow input adapters. New command/tool/hook modules belong here.
+- `extensions/*.js|ts`: legacy-location core services for policy, context, task lifecycle, state, and document intake; only `piagent-guard.ts` is loaded as an extension.
 - `prompts/*.md`: workflow aliases that intentionally launch an agent turn.
 - `skills/piagent-ops/SKILL.md`: operator-invoked reference for manual intake, recovery, and high-risk controls; routine runtime-managed tasks do not advertise or load it.
 - `skills/piagent-source-cache/`: local cache for user-provided external source repositories.
@@ -14,6 +16,8 @@ Shared Pi package for reusable project workflows.
 - input hook support for local screenshot/image paths pasted into chat; supported images are attached as `[image1]`, `[image2]`, ...
 - compact tool-result rendering: oversized redacted output is previewed in Pi and captured under `.pi/piagent-state/tool-results/` for offline audit/reporting.
 - local Context Engine v2: incremental FTS5/symbol/import index, hybrid retrieval, token-budgeted packs, bounded current-turn source/test snapshots, test-impact mapping, dynamic Piagent tools, and Agent Watch compatible telemetry.
+
+Architecture boundaries and non-growth file budgets are enforced by `npm run architecture:check`. See [English architecture](../../docs/en/architecture.md), [kiến trúc tiếng Việt](../../docs/vi/architecture.md), and the paired maintainer guides before adding a new runtime surface.
 
 The root package exposes `piagent-benchmark` for an automatic paired Piagent
 steady-state benchmark against Raw Pi or the `codex-cli` surface. Treatment
@@ -99,7 +103,7 @@ groups load only when requested.
 - `/commands`: runtime menu/help for terminal, Pi, MCP, model, memory, session, context, permission, and subagent commands.
 - `/workflow`: one launcher for task, scout, BE-to-FE, discuss, plan, review, commit, PR, platform-improve, and onboarding workflows.
 - `/usage`: runtime usage namespace for live snapshot, history hint, preflight, compact, compact-log captures, and context efficiency.
-- `/name`: set the current session name for Agent Watch/report mapping.
+- Pi native `/name`: set the current session name for Agent Watch/report mapping; Piagent observes the native rename event and keeps `/setname` as a compatibility alias.
 - `/fresh`: open a fresh governed session for `task`, `scout`, or `be-to-fe`.
 - `/context`: runtime context namespace for index/rebuild/search/pack/test-impact/efficiency, task preflight, and semantic compact.
 - `/permission`: runtime permission namespace for status/read-only/workspace-write/full-access.

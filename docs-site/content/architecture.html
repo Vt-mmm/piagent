@@ -1,29 +1,51 @@
 <section class="section">
-
+  <div class="callout">
+    <strong>Chiều dependency được enforce bằng code.</strong>
+    <p><span class="inline-code">architecture/layers.json</span> là rule máy đọc; <span class="inline-code">npm run architecture:check</span> chặn dependency ngược và file vượt budget.</p>
+  </div>
   <div class="grid cols-3">
     <article class="card">
-      <h3 id="core-package">Core package</h3>
-      <p><span class="inline-code">packages/piagent-core</span> chứa extension guard, prompts, skills và subagent roles.</p>
+      <h3 id="composition">Composition</h3>
+      <p><span class="inline-code">piagent-guard.ts</span> chỉ giữ wiring, registration order và shared runtime state. File này không được tiếp tục chứa feature algorithm.</p>
     </article>
     <article class="card">
-      <h3 id="adapters">Adapters</h3>
-      <p><span class="inline-code">adapters/</span> chứa profile dùng lại: frontend, backend, fullstack, data, devops, docs.</p>
+      <h3 id="runtime-adapters">Runtime adapters</h3>
+      <p><span class="inline-code">packages/piagent-core/runtime</span> quản lý Pi hook, command, tool, session UI, usage, log compaction và workflow input routing.</p>
     </article>
     <article class="card">
-      <h3 id="capability-packs">Capability packs</h3>
-      <p><span class="inline-code">packs/</span> gom policy, lifecycle, recipes và eval scenarios theo manifest có lock.</p>
+      <h3 id="core-services">Core services</h3>
+      <p>Policy, task, context và state trả về structured decision. Core service không import runtime adapter hay Pi composition root.</p>
     </article>
     <article class="card">
-      <h3 id="policies">Policies</h3>
-      <p>Base policy định nghĩa protected paths, command rules, permission modes và human-action gates.</p>
+      <h3 id="integrations">Integrations</h3>
+      <p><span class="inline-code">mcp/</span>, <span class="inline-code">capabilities/</span> và <span class="inline-code">security/</span> có ownership riêng; không nhúng task workflow vào integration.</p>
     </article>
     <article class="card">
-      <h3 id="scripts">Scripts</h3>
-      <p>Setup, doctor, model scope, MCP, subagents, benchmark và trusted-run wrapper đều có CLI riêng.</p>
+      <h3 id="entrypoints">Entrypoints</h3>
+      <p><span class="inline-code">scripts/</span> parse CLI argument rồi gọi use case. Metric, policy và state transition không được duplicate trong CLI.</p>
     </article>
     <article class="card">
-      <h3 id="docs">Docs</h3>
-      <p><span class="inline-code">docs/</span> giữ manual dài. <span class="inline-code">docs-site/</span> là trang HTML gọn cho team.</p>
+      <h3 id="product-assets">Product assets</h3>
+      <p><span class="inline-code">prompts/</span>, <span class="inline-code">skills/</span>, <span class="inline-code">subagents/</span>, <span class="inline-code">adapters/</span>, <span class="inline-code">packs/</span> và <span class="inline-code">schemas/</span> là declarative assets.</p>
     </article>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-head">
+    <p class="eyebrow">Ownership</p>
+    <h2 id="state-ownership">Một state chỉ có một source of truth</h2>
+    <p>Project profile và lock có thể commit. Task evidence, telemetry, trace, capture và session history là local state. Derived index phải có policy digest và rebuild được.</p>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>State</th><th>Owner</th><th>Vị trí</th><th>Commit</th></tr></thead>
+      <tbody>
+        <tr><td>Project profile + lock</td><td>Project</td><td><span class="inline-code">.pi/piagent-profile*.json</span></td><td>Có</td></tr>
+        <tr><td>Task, trace, telemetry, capture</td><td>Runtime</td><td><span class="inline-code">.pi/piagent-state/</span></td><td>Không</td></tr>
+        <tr><td>Session history</td><td>Pi</td><td>Pi session store</td><td>Không</td></tr>
+        <tr><td>Shared instructions</td><td>Project</td><td><span class="inline-code">AGENTS.md</span>, project docs</td><td>Có</td></tr>
+      </tbody>
+    </table>
   </div>
 </section>
