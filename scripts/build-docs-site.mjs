@@ -131,6 +131,12 @@ const NAV = [
         lead: "Index local, retrieval có xếp hạng, tool loading theo task, semantic compaction và telemetry minh bạch cho Agent Watch."
       },
       {
+        slug: "benchmark",
+        nav: "Benchmark",
+        title: "Bằng chứng chất lượng và hiệu suất",
+        lead: "Production benchmark so sánh Piagent với surface codex-cli trên cùng model, cùng thinking level, 18 nhóm bài và 108 session được chấm tự động."
+      },
+      {
         slug: "runtime",
         nav: "Runtime tools",
         title: "Terminal commands cho operator",
