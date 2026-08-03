@@ -150,7 +150,7 @@ describe("piagent guard integration", () => {
     assert.equal(harness.tools.has("piagent_context_engine"), true);
     assert.equal(harness.tools.has("piagent_document_read"), true);
     assert.equal(harness.tools.has("piagent_task_progress"), true);
-    assert.equal(harness.commands.size, 35);
+    assert.equal(harness.commands.size, 34);
     assert.equal(harness.commands.has("profile"), true);
     assert.equal(harness.commands.has("context-index"), true);
     assert.equal(harness.commands.has("piagent-mcp"), true);
@@ -161,7 +161,7 @@ describe("piagent guard integration", () => {
     assert.equal(harness.commands.has("permission"), true);
     assert.equal(harness.commands.has("memory"), true);
     assert.equal(harness.commands.has("onboard"), true);
-    assert.equal(harness.commands.has("name"), true);
+    assert.equal(harness.commands.has("name"), false);
     assert.equal(harness.commands.has("fresh"), true);
     assert.equal(harness.commands.has("piagent-logs"), true);
     assert.equal(harness.commands.has("setname"), true);
@@ -543,7 +543,7 @@ describe("piagent guard integration", () => {
     assert.match(ctx.ui.notices[0].message, /Piagent Pi guard loaded: Integration Project/);
   });
 
-  it("sets the current Pi session name with a short command", async () => {
+  it("keeps /setname as a compatibility alias without shadowing Pi native /name", async () => {
     const { root, piagentGuard } = await loadGuardFixture();
     const cwd = createProject(root);
     const ctx = createContext(cwd, { confirm: true });
@@ -551,7 +551,8 @@ describe("piagent guard integration", () => {
 
     piagentGuard(harness.pi);
     await harness.handlers.get("session_start")({}, ctx);
-    await harness.commands.get("name").handler("ABC-456 Fix checkout totals", ctx);
+    assert.equal(harness.commands.has("name"), false);
+    await harness.commands.get("setname").handler("ABC-456 Fix checkout totals", ctx);
 
     assert.equal(harness.getSessionName(), "ABC-456 Fix checkout totals");
     assert.equal(harness.entries.at(-2).type, "piagent-task-trace");
@@ -559,8 +560,8 @@ describe("piagent guard integration", () => {
     assert.equal(harness.entries.at(-1).payload.customType, "piagent-session-name-set");
     assert.match(ctx.ui.notices.at(-1).message, /Session name set: ABC-456 Fix checkout totals/);
 
-    await harness.commands.get("name").handler("   ", ctx);
-    assert.match(ctx.ui.notices.at(-1).message, /Usage: \/name/);
+    await harness.commands.get("setname").handler("   ", ctx);
+    assert.match(ctx.ui.notices.at(-1).message, /Usage: \/setname/);
   });
 
   it("warns that an unconverted project is running without enforcement", async () => {

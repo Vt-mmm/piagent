@@ -1,6 +1,6 @@
 {
   "name": "@piagent/platform",
-  "version": "1.2.13",
+  "version": "1.2.14",
   "license": "MIT",
   "publishConfig": {
     "access": "public",
@@ -27,7 +27,9 @@
     "CONTRIBUTING.md",
     "LICENSE",
     "README.md",
+    "README.vi.md",
     "SECURITY.md",
+    "architecture/",
     ".gitattributes",
     "adapters/",
     "benchmarks/",
@@ -122,6 +124,8 @@
     "site:build": "node scripts/build-docs-site.mjs",
     "site:preview": "node scripts/preview-docs-site.mjs",
     "site:check": "node scripts/check-published-site.mjs",
+    "architecture:check": "node scripts/check-architecture.mjs",
+    "docs:check": "node scripts/check-doc-languages.mjs",
     "smoke": "bash scripts/runtime-policy-smoke.sh",
     "usage": "bash scripts/pi-session-stats.sh",
     "auto": "bash scripts/pi-auto.sh",

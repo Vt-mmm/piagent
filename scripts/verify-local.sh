@@ -34,6 +34,7 @@ done
 
 required_files=(
   "$ROOT/README.md"
+  "$ROOT/README.vi.md"
   "$ROOT/SECURITY.md"
   "$ROOT/AGENTS.md"
   "$ROOT/CHANGELOG.md"
@@ -51,6 +52,22 @@ required_files=(
   "$ROOT/.pi/project-context.md"
   "$ROOT/packages/piagent-core/package.json"
   "$ROOT/packages/piagent-core/extensions/piagent-guard.ts"
+  "$ROOT/packages/piagent-core/runtime/runtime-limits.ts"
+  "$ROOT/packages/piagent-core/runtime/hooks/agent-start-hook.ts"
+  "$ROOT/packages/piagent-core/runtime/hooks/completion-hook.ts"
+  "$ROOT/packages/piagent-core/runtime/hooks/input-hook.ts"
+  "$ROOT/packages/piagent-core/runtime/hooks/session-hooks.ts"
+  "$ROOT/packages/piagent-core/runtime/hooks/session-start-hook.ts"
+  "$ROOT/packages/piagent-core/runtime/hooks/tool-result-hook.ts"
+  "$ROOT/packages/piagent-core/runtime/input/chat-images.ts"
+  "$ROOT/packages/piagent-core/runtime/session/message-signals.ts"
+  "$ROOT/packages/piagent-core/runtime/session/runtime-state.ts"
+  "$ROOT/packages/piagent-core/runtime/session/system-prompt.ts"
+  "$ROOT/packages/piagent-core/runtime/session/tool-result-compaction.ts"
+  "$ROOT/packages/piagent-core/runtime/session/usage.ts"
+  "$ROOT/packages/piagent-core/runtime/tools/tool-groups.ts"
+  "$ROOT/packages/piagent-core/runtime/workflows/input-routing.ts"
+  "$ROOT/packages/piagent-core/runtime/workflows/task-intake.ts"
   "$ROOT/packages/piagent-core/extensions/context-engine.js"
   "$ROOT/packages/piagent-core/extensions/context-index-policy.js"
   "$ROOT/packages/piagent-core/extensions/local-state-path.js"
@@ -104,6 +121,14 @@ required_files=(
   "$ROOT/templates/project/.pi/gitignore.template"
   "$ROOT/templates/project/REVIEW_GUIDELINES.md"
   "$ROOT/docs/quickstart-vietnamese.md"
+  "$ROOT/docs/README.md"
+  "$ROOT/docs/languages.json"
+  "$ROOT/docs/en/README.md"
+  "$ROOT/docs/en/architecture.md"
+  "$ROOT/docs/en/maintainer-guide.md"
+  "$ROOT/docs/vi/README.md"
+  "$ROOT/docs/vi/architecture.md"
+  "$ROOT/docs/vi/maintainer-guide.md"
   "$ROOT/docs/command-reference-vietnamese.md"
   "$ROOT/docs/auto-delegation-policy.md"
   "$ROOT/docs/subagent-orchestration-capabilities.md"
@@ -138,6 +163,9 @@ required_files=(
   "$ROOT/docs-site/content/mcp.html"
   "$ROOT/docs-site/vercel.json"
   "$ROOT/scripts/build-docs-site.mjs"
+  "$ROOT/scripts/check-architecture.mjs"
+  "$ROOT/scripts/check-doc-languages.mjs"
+  "$ROOT/architecture/layers.json"
   "$ROOT/scripts/context-engine.mjs"
   "$ROOT/scripts/preview-docs-site.mjs"
   "$ROOT/schemas/project-profile.schema.json"
@@ -553,6 +581,7 @@ if grep -R -E -i \
   "$ROOT/packages/piagent-core/prompts" \
   "$ROOT/packages/piagent-core/mcp" \
   "$ROOT/packages/piagent-core/extensions" \
+  "$ROOT/packages/piagent-core/runtime" \
   "$ROOT/templates/project/AGENTS.md" >/dev/null; then
   echo "Public docs contain non-neutral platform wording"
   exit 1
@@ -582,6 +611,8 @@ node --check "$ROOT/scripts/check-runtime-advisories.mjs" >/dev/null
 node --check "$ROOT/scripts/check-published-site.mjs" >/dev/null
 node --check "$ROOT/scripts/build-docs-site.mjs" >/dev/null
 node --check "$ROOT/scripts/preview-docs-site.mjs" >/dev/null
+node "$ROOT/scripts/check-architecture.mjs" >/dev/null
+node "$ROOT/scripts/check-doc-languages.mjs" >/dev/null
 run_quietly "npm test" npm test
 if [[ -x "$ROOT/node_modules/.bin/tsc" ]]; then
   run_quietly "npm run typecheck" npm run typecheck

@@ -21,6 +21,7 @@ const SITE = {
   title: "Pi Agent Platform Docs",
   origin: "https://piagent.io.vn",
   repo: "https://github.com/Vt-mmm/piagent",
+  englishDocs: "https://github.com/Vt-mmm/piagent/blob/main/docs/en/README.md",
   facebook: "https://www.facebook.com/vinhtam0544/"
 };
 
@@ -300,7 +301,8 @@ function renderPage(page, index, body, version) {
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v${version} docs</span>
+        <span class="pill"><span class="pill-dot"></span>v${version} docs · VI</span>
+        <a class="button" href="${SITE.englishDocs}" lang="en" target="_blank" rel="noopener noreferrer">English docs</a>
         <a class="button social" href="${SITE.repo}" target="_blank" rel="noopener noreferrer" aria-label="Mở GitHub repository">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
@@ -335,6 +337,7 @@ ${renderPager(index)}
               <div class="footer-links" aria-label="External links">
                 <a href="${SITE.origin}" target="_blank" rel="noopener noreferrer">piagent.io.vn</a>
                 <a href="${SITE.repo}" target="_blank" rel="noopener noreferrer">GitHub repository</a>
+                <a href="${SITE.englishDocs}" lang="en" target="_blank" rel="noopener noreferrer">English docs</a>
                 <a href="${SITE.facebook}" target="_blank" rel="noopener noreferrer">Facebook profile</a>
               </div>
             </footer>

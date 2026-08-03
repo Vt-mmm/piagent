@@ -1,5 +1,14 @@
 # Package architecture notes
 
+This path is retained for stable links. The maintained architecture documents are:
+
+- [Architecture (English)](en/architecture.md)
+- [Architecture (Tiếng Việt)](vi/architecture.md)
+- [Maintainer guide (English)](en/maintainer-guide.md)
+- [Maintainer guide (Tiếng Việt)](vi/maintainer-guide.md)
+
+The remaining notes below describe historical package decisions and should not be used as the current file-placement map.
+
 ## Mục tiêu
 
 Pi Agent Platform được đóng gói như một reusable Pi package để dùng cho nhiều project mà không kéo theo rule nghiệp vụ của một repo cụ thể.

@@ -129,6 +129,20 @@ function createPlatformFixture() {
   return root;
 }
 
+function filesBelow(root, relativeDirectory) {
+  const files = [];
+  const visit = (relative) => {
+    const absolute = path.join(root, relative);
+    for (const entry of fs.readdirSync(absolute, { withFileTypes: true })) {
+      const child = path.join(relative, entry.name);
+      if (entry.isDirectory()) visit(child);
+      else if (entry.isFile()) files.push(child.split(path.sep).join("/"));
+    }
+  };
+  visit(relativeDirectory);
+  return files.sort();
+}
+
 function validActionProposal() {
   return {
     apiVersion: "piagent/v1",
@@ -185,6 +199,18 @@ describe("capability catalog and profile lock", () => {
     assert.ok(
       lock.core.runtimeFiles.some((entry) => entry.path === "packages/piagent-core/extensions/context-index-policy.js"),
       "the profile lock must pin the context index policy runtime"
+    );
+    assert.ok(
+      lock.core.runtimeFiles.some((entry) => entry.path === "packages/piagent-core/capabilities/runtime-integrity.js"),
+      "the profile lock must pin the runtime integrity manifest"
+    );
+    assert.deepEqual(
+      lock.core.runtimeFiles
+        .map((entry) => entry.path)
+        .filter((entry) => entry.startsWith("packages/piagent-core/runtime/"))
+        .sort(),
+      filesBelow(repositoryRoot, "packages/piagent-core/runtime"),
+      "every executable runtime module must be pinned by the profile lock"
     );
   });
 

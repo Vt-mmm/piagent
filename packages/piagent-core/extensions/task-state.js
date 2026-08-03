@@ -123,7 +123,9 @@ function pickFields(value, allowed) {
 function legacyRunId(task, sourceName = "task") {
   const taskId = safeTaskId(task?.taskId ?? sourceName);
   const identity = `${taskId}\u0000${task?.createdAt ?? "legacy"}\u0000${sourceName}`;
-  return safeTaskId(`${taskId}-legacy-${crypto.createHash("sha256").update(identity).digest("hex").slice(0, 12)}`);
+  const suffix = `legacy-${crypto.createHash("sha256").update(identity).digest("hex").slice(0, 12)}`;
+  const taskKey = taskId.slice(0, 80 - suffix.length - 1).replace(/-+$/g, "") || "task";
+  return `${taskKey}-${suffix}`;
 }
 
 export function taskContractValidationErrors(input) {
@@ -620,10 +622,27 @@ export function migrateTaskState(cwd, options = {}) {
       sessionName: belongsToCurrentSession ? options.sessionName : undefined
     });
     if (!task) continue;
-    writeTaskContract(cwd, task);
     const safeArchiveRoot = ensurePrivateStateDirectory(cwd, archiveRoot, "Task state archive");
     const archiveTarget = resolveLocalStatePath(cwd, path.join(safeArchiveRoot, entry.name), { label: "Task state archive file" });
-    fs.renameSync(source, archiveTarget);
+    if (fs.existsSync(archiveTarget)) {
+      const archived = fs.readFileSync(archiveTarget);
+      const legacy = fs.readFileSync(source);
+      if (!archived.equals(legacy)) {
+        warnings.push(`legacy task archive conflict: ${entry.name}`);
+        continue;
+      }
+    } else {
+      fs.copyFileSync(source, archiveTarget, fs.constants.COPYFILE_EXCL);
+      fs.chmodSync(archiveTarget, 0o600);
+    }
+    const written = writeTaskContract(cwd, task);
+    const currentTarget = taskRunPath(cwd, written.taskRunId);
+    const sourceStat = fs.statSync(source);
+    const targetStat = fs.statSync(currentTarget);
+    const sameInode = sourceStat.ino > 0 && targetStat.ino > 0
+      && sourceStat.dev === targetStat.dev && sourceStat.ino === targetStat.ino;
+    const sameCanonicalPath = fs.realpathSync(source) === fs.realpathSync(currentTarget);
+    if (!sameInode && !sameCanonicalPath) fs.rmSync(source);
     migrated += 1;
   }
   return { migrated, current, warnings };

@@ -26,6 +26,7 @@ PiAgent không chiếm các command native đang dùng của Pi. Những command
 |---|---|
 | `/login` | Đăng nhập provider/OAuth. |
 | `/model`, `Ctrl+L` | Chọn model/provider. |
+| `/name` | Đặt tên session; Piagent nhận rename event để map Agent Watch/report. |
 | `/session` | Xem session id/name/token/cost/context hiện tại. |
 | `/resume` | Resume session cũ bằng UI/native flow. |
 | `/compact` | Nén context bằng Pi native compaction. |
@@ -43,7 +44,6 @@ Command ngắn của PiAgent dùng cho workflow và guard local:
 | `/profile` | Profile và tech stack. |
 | `/memory` | Project memory policy. |
 | `/onboard` | Project onboarding/status/setup. |
-| `/name` | Đặt tên session cho Agent Watch/report. |
 | `/fresh` | Tạo session mới cho workflow. |
 
 Riêng MCP governance vẫn giữ `/piagent-mcp` vì `/mcp` đã là command native của Pi.
@@ -109,7 +109,7 @@ Pi Agent dùng ít namespace nhưng mỗi namespace có subcommand/menu rõ:
 
 - `/workflow` là cửa chính cho task/scout/review/git/onboard workflow. Workflow cần agent turn là cố ý và được nói rõ.
 - `/usage` gom live usage, history/report hint, preflight, compact, logs, efficiency.
-- `/name` đặt tên session theo task để Agent Watch/report map đúng việc.
+- Pi native `/name` đặt tên session theo task; Piagent nhận rename event để Agent Watch/report map đúng việc.
 - `/fresh` mở session mới cho `task`, `scout`, hoặc `be-to-fe` khi phiên hiện tại đã nặng.
 - `/context` gom architecture map, code index, search, context pack, test impact, efficiency, preflight và semantic compact.
 - `/permission` gom permission status/read-only/workspace-write/full-access.
@@ -139,7 +139,6 @@ Các command này đến từ package `piagent-core`.
 | `/profile` | Xem/áp profile và chọn tech. | Chạy ngay, không gọi model. |
 | `/profile setup` | Chọn profile + tech bằng option. | Ghi profile/lock/tech manifest. |
 | `/usage` | Xem live usage hoặc report hint. | Menu live/history/preflight/compact/logs/efficiency. |
-| `/name <name>` | Đặt tên session theo task. | Agent Watch/report map đúng task. |
 | `/fresh task|scout|be-to-fe <request>` | Phiên hiện tại đã nặng hoặc muốn tách việc. | Mở session mới có tên và replay workflow prompt gọn. |
 | `/context` | Xem index/search/pack/impact/efficiency/preflight/compact. | Menu context, không gọi model. |
 | `/permission` | Xem/đổi quyền runtime. | Menu status/read-only/workspace-write/full-access. |
@@ -156,7 +155,7 @@ Alias cũ vẫn giữ để không phá thói quen:
 | `/be-to-fe <request>` | `/workflow be-to-fe <request>` |
 | `/commit [message]` | `/workflow commit [message]` |
 | `/pr [title]` | `/workflow pr [title]` |
-| `/setname <name>` | `/name <name>` |
+| `/setname <name>` | Pi native `/name <name>` |
 | `/fresh-task <request>` | `/fresh task <request>` |
 | `/fresh-scout <request>` | `/fresh scout <request>` |
 | `/fresh-be-to-fe <request>` | `/fresh be-to-fe <request>` |
@@ -269,6 +268,7 @@ Các command này thuộc Pi core hoặc package Pi chính. Tên/availability c�
 | `Ctrl+P` | Cycle model | Đổi model trong scope nhanh. | Dùng sau khi đã setup `enabledModels`. |
 | `Shift+Ctrl+P` | Cycle model ngược | Quay lại model trước trong scope. | Tiện khi test provider. |
 | `Shift+Tab` | Đổi thinking level | Chọn effort như `medium`, `high`, `xhigh`, `max` nếu model hỗ trợ. | Model không hỗ trợ level nào thì Pi có thể clamp. |
+| `/name <name>` | Đặt tên session | Đối chiếu task trong Agent Watch/report và tìm lại khi resume. | Piagent theo dõi sự kiện rename; `/setname` là alias tương thích. |
 | `/session` | Xem session hiện tại | Cần session id/name/token/cost/context. | Dùng sau `pi --name` hoặc `/name` để kiểm tra tên. |
 | `/resume` | Resume session | Khi tắt nhầm Pi hoặc muốn nối lại work cũ. | Dựa vào session list/id/name của Pi. |
 | `/compact` | Nén context | Khi context usage cao trước task dài. | Chỉ dùng khi cần; đọc lại context quan trọng sau compact. |
@@ -468,8 +468,8 @@ Các lệnh này chạy ngoài Pi.
 | Command | Dùng khi nào |
 |---|---|
 | `npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0` | Cài Pi CLI tương thích với release hiện tại. |
-| `npm install -g --ignore-scripts @piagent/platform@1.2.13` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
-| `pi install git:github.com/Vt-mmm/piagent@v1.2.13` | Cài pinned release khi cần reproducible team setup. |
+| `npm install -g --ignore-scripts @piagent/platform@1.2.14` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
+| `pi install git:github.com/Vt-mmm/piagent@v1.2.14` | Cài pinned release khi cần reproducible team setup. |
 | `pi install git:github.com/Vt-mmm/piagent` | Cài latest package platform cho máy cá nhân/sandbox. |
 | `piagent-update --check` | Báo version hiện tại vs version sẽ lên cho cả ba thành phần; không cài gì. |
 | `piagent-update` | Full update global một lệnh cho cả máy: Pi host → npm-global helper → Pi package, đúng thứ tự release yêu cầu. |

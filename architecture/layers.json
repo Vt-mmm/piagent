@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "layers": [
+    {
+      "name": "composition",
+      "files": [
+        "packages/piagent-core/extensions/piagent-guard.ts"
+      ]
+    },
+    {
+      "name": "runtime",
+      "roots": [
+        "packages/piagent-core/runtime"
+      ]
+    },
+    {
+      "name": "core",
+      "roots": [
+        "packages/piagent-core/extensions"
+      ]
+    },
+    {
+      "name": "mcp",
+      "roots": [
+        "packages/piagent-core/mcp"
+      ]
+    },
+    {
+      "name": "capabilities",
+      "roots": [
+        "packages/piagent-core/capabilities"
+      ]
+    },
+    {
+      "name": "security",
+      "roots": [
+        "packages/piagent-core/security"
+      ]
+    },
+    {
+      "name": "benchmark",
+      "roots": [
+        "packages/piagent-core/benchmark"
+      ]
+    },
+    {
+      "name": "entrypoints",
+      "roots": [
+        "scripts"
+      ]
+    }
+  ],
+  "allowedDependencies": {
+    "composition": [
+      "runtime",
+      "core",
+      "mcp",
+      "capabilities",
+      "security",
+      "benchmark"
+    ],
+    "runtime": [
+      "runtime",
+      "core",
+      "mcp",
+      "capabilities",
+      "security"
+    ],
+    "core": [
+      "core",
+      "capabilities",
+      "security"
+    ],
+    "mcp": [
+      "mcp",
+      "capabilities",
+      "security"
+    ],
+    "capabilities": [
+      "capabilities",
+      "security"
+    ],
+    "security": [
+      "security"
+    ],
+    "benchmark": [
+      "benchmark"
+    ],
+    "entrypoints": [
+      "entrypoints",
+      "runtime",
+      "core",
+      "mcp",
+      "capabilities",
+      "security",
+      "benchmark"
+    ]
+  },
+  "lineBudgets": {
+    "defaults": {
+      "composition": 500,
+      "runtime": 500,
+      "core": 1000,
+      "mcp": 700,
+      "capabilities": 1200,
+      "security": 400,
+      "benchmark": 1000,
+      "entrypoints": 800
+    },
+    "files": {
+      "packages/piagent-core/extensions/piagent-guard.ts": 8290,
+      "packages/piagent-core/extensions/policy-core.js": 2568,
+      "packages/piagent-core/extensions/context-engine.js": 1342,
+      "scripts/benchmark-runner.mjs": 1432
+    }
+  }
+}

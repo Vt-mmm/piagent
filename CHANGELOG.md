@@ -2,6 +2,32 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.2.14 - 2026-08-03
+
+### Runtime architecture
+
+- Split session lifecycle, input routing, context usage, tool-result filtering,
+  tool activation and task intake out of the guard entrypoint into focused
+  runtime modules while preserving the existing behavior and command surface.
+- Added machine-enforced architecture layers, dependency directions and file
+  size budgets so new runtime code cannot silently grow back into the guard.
+- Extended capability integrity locks to pin every extracted runtime module;
+  the test suite now rejects any runtime file omitted from that trust boundary.
+- Added paired English and Vietnamese maintainer documentation with a language
+  parity gate. Vietnamese docs preserve operational terms such as agent,
+  terminal, workflow, MCP, session, token, model and benchmark.
+
+### Session and migration reliability
+
+- Stopped registering a custom `/name` command so Piagent no longer shadows
+  Pi's native session command. Native rename events continue to update task
+  bindings and Agent Watch records; `/setname` remains a compatibility alias.
+- Hardened legacy task migration so long task identifiers retain a unique hash
+  suffix, the source contract is archived before the v2 write, and path aliases
+  cannot delete a newly written current contract on macOS.
+- Added integration, runtime isolation, migration-collision, architecture and
+  documentation tests for the extracted boundaries and release behavior.
+
 ## v1.2.13 - 2026-08-03
 
 ### Benchmark evidence
