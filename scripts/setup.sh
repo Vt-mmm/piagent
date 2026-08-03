@@ -36,7 +36,7 @@ Options:
   --model-scope <full|codex|claude>   model families to enable
                                   Configure Pi enabledModels for selector/cycling (default: full)
   --default-model <provider/model[:thinking]>
-                                  Configure default provider/model/thinking (default: openai-codex/gpt-5.5:xhigh)
+                                  Configure default provider/model/thinking (default: openai-codex/gpt-5.5:high)
   --no-model-scope               Skip global model-scope configuration
   --install-pi / --no-install-pi Install/skip Pi CLI with npm if `pi` is missing (default: install)
   --force-profile                Replace existing project .pi/piagent-profile.json
@@ -78,7 +78,7 @@ WITH_WEB_ACCESS=true
 WITH_HERDR=true
 CONFIGURE_MODEL_SCOPE=true
 MODEL_SCOPE_PRESET="full"
-DEFAULT_MODEL="openai-codex/gpt-5.5:xhigh"
+DEFAULT_MODEL="openai-codex/gpt-5.5:high"
 AUTO_INSTALL_PI=true
 FORCE_PROFILE=false
 FORCE_SETTINGS=false

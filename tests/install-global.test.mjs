@@ -110,6 +110,22 @@ describe("install-global release channels", () => {
     assert.match(result.stdout, new RegExp(`\\+ pi install git:github.com/Vt-mmm/piagent@${resolvedCommit}`));
   });
 
+  it("passes the gpt-5.5 high default through install and setup", () => {
+    const installer = runInstaller([
+      "--stable", "--dry-run", "--no-mcp", "--no-subagents", "--no-web-access"
+    ]);
+    assert.equal(installer.status, 0, installer.stderr);
+    assert.match(installer.stdout, /configure-model-scope\.sh --preset full --default-model openai-codex\/gpt-5\.5:high/);
+    assert.doesNotMatch(installer.stdout, /default-model openai-codex\/gpt-5\.5:xhigh/);
+
+    const setup = runSetup([
+      "--global-only", "--dry-run", "--no-mcp", "--no-subagents", "--no-web-access", "--no-herdr"
+    ]);
+    assert.equal(setup.status, 0, setup.stderr);
+    assert.match(setup.stdout, /--default-model openai-codex\/gpt-5\.5:high/);
+    assert.doesNotMatch(setup.stdout, /default-model openai-codex\/gpt-5\.5:xhigh/);
+  });
+
   it("resolves exact version tags when requested", () => {
     const result = runInstaller(["--version", "v1.0.2", "--resolve-tag", "--dry-run", "--no-model-scope"]);
     assert.equal(result.status, 0, result.stderr);

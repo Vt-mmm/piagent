@@ -636,7 +636,7 @@ if [[ "$OFFLINE" == true || "${PIAGENT_VERIFY_OFFLINE:-}" == "1" || "${CI:-}" ==
 else
   bash "$ROOT/scripts/pi-model-catalog.sh" --json >/dev/null
 fi
-bash "$ROOT/scripts/configure-model-scope.sh" --dry-run --preset full --default-model openai-codex/gpt-5.5:xhigh >/dev/null
+bash "$ROOT/scripts/configure-model-scope.sh" --dry-run --preset full --default-model openai-codex/gpt-5.5:high >/dev/null
 node "$ROOT/scripts/mcp-manage.mjs" --list >/dev/null
 node "$ROOT/scripts/mcp-manage.mjs" --dry-run --preset popular --scope project --project "$ROOT" >/dev/null
 node --input-type=module - "$ROOT" <<'NODE'
