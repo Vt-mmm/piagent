@@ -2,6 +2,23 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.2.13 - 2026-08-03
+
+### Benchmark evidence
+
+- Published a dedicated static benchmark page with the verified production-v1
+  scores, median usage, paired fresh-token comparison, confidence interval,
+  category coverage and release provenance.
+- Added lightweight CSS charts for score bands, token usage and paired wins;
+  the page has no charting dependency or client-side data fetch and remains
+  readable on desktop and mobile.
+- Added the sanitized v1.2.12 production snapshot to the benchmark guide and
+  README while keeping the raw report private because its root seed can
+  reproduce synthetic secrets.
+- Documented that the full model run measured the release candidate before its
+  metadata bump, and kept the claim scoped to the controlled public suite
+  rather than presenting it as a universal model or repository result.
+
 ## v1.2.12 - 2026-08-03
 
 ### Production benchmark
