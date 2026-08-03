@@ -223,11 +223,23 @@ NODE
 }
 
 remove_existing_piagent_platform_sources() {
-  local source
+  local source removal_source
   while IFS= read -r source; do
     [[ -n "$source" ]] || continue
     if is_piagent_platform_source "$source"; then
-      run_cmd pi remove "$source"
+      removal_source="$source"
+      case "$source" in
+        npm:*|git:*|http:*|https:*)
+          ;;
+        *)
+          # Pi stores user-local packages relative to the agent directory, but
+          # matches remove input relative to the caller's cwd. Resolve the
+          # listed source first so an update launched from any directory can
+          # remove the registration it just discovered.
+          removal_source="$(resolve_user_package_path "$source")"
+          ;;
+      esac
+      run_cmd pi remove "$removal_source"
     fi
   done < <(list_user_pi_sources)
 }

@@ -2,6 +2,18 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.2.15 - 2026-08-03
+
+### Global update reliability
+
+- Fixed stable updates from machines whose existing Piagent registration is a
+  local path. Pi displays user-local sources relative to its agent directory,
+  while `pi remove` resolves input from the caller's working directory; the
+  installer now removes the discovered registration by its absolute path.
+- Added a regression assertion that fails if the installer passes Pi's displayed
+  relative path back to `pi remove`, covering updates launched outside the Pi
+  agent directory.
+
 ## v1.2.14 - 2026-08-03
 
 ### Runtime architecture

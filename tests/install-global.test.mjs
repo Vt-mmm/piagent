@@ -405,7 +405,8 @@ describe("install-global release channels", () => {
     });
 
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, new RegExp(`\\+ pi remove ${localPlatformSource.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+    assert.match(result.stdout, new RegExp(`\\+ pi remove ${localPlatform.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+    assert.doesNotMatch(result.stdout, new RegExp(`\\+ pi remove ${localPlatformSource.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
     assert.match(result.stdout, /\+ pi remove git:github\.com\/Vt-mmm\/piagent@1111111111111111111111111111111111111111/);
     assert.doesNotMatch(result.stdout, new RegExp(`\\+ pi remove ${otherLocalSource.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
     assert.match(result.stdout, new RegExp(`\\+ pi install git:github.com/Vt-mmm/piagent@${resolvedCommit}`));
