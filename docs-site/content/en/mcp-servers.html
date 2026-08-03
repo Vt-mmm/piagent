@@ -1,0 +1,91 @@
+<section class="section">
+  <h2 id="two-surfaces">Two surfaces for two contexts</h2>
+  <p>Inside a Pi session, use the <strong>slash command</strong>. In a terminal, use the <strong>CLI</strong>. Both read the same state; the difference is where the operation runs.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Task</th><th>In a session</th><th>In a terminal</th></tr></thead>
+      <tbody>
+        <tr><td>Open the menu</td><td><span class="inline-code">/piagent-mcp</span></td><td>—</td></tr>
+        <tr><td>List servers and state</td><td><span class="inline-code">/piagent-mcp status</span></td><td><span class="inline-code">piagent-mcp list</span></td></tr>
+        <tr><td>Inspect one server</td><td><span class="inline-code">/piagent-mcp get &lt;name&gt;</span></td><td><span class="inline-code">piagent-mcp get &lt;name&gt;</span></td></tr>
+        <tr><td>Show readiness blockers</td><td><span class="inline-code">/piagent-mcp doctor</span></td><td><span class="inline-code">piagent-mcp doctor</span></td></tr>
+        <tr><td>Approve a repository server</td><td><span class="inline-code">/piagent-mcp approve &lt;name&gt;</span></td><td><span class="inline-code">piagent-mcp approve &lt;name&gt;</span></td></tr>
+        <tr><td>Enable or disable</td><td><span class="inline-code">/piagent-mcp enable|disable &lt;name&gt;</span></td><td><span class="inline-code">piagent-mcp enable|disable &lt;name&gt;</span></td></tr>
+        <tr><td>Add, remove, or seed a preset</td><td>—</td><td><span class="inline-code">piagent-mcp add|remove|--preset</span></td></tr>
+        <tr><td>Live connection state or OAuth</td><td><span class="inline-code">/mcp</span>, <span class="inline-code">/mcp-auth</span></td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout ok-callout">
+    <strong>Why use a slash command instead of invoking the CLI in-session</strong>
+    <p>Asking the model to run <span class="inline-code">piagent-mcp list</span> through bash spends model turns executing, reading, and restating data that the current process already has. Pi dispatches the slash command directly to its handler: no model tokens, no interpretation, and a deterministic response.</p>
+  </div>
+  <div class="callout">
+    <strong>Adding a server remains terminal-only</strong>
+    <p><span class="inline-code">add</span> includes shell quoting, <span class="inline-code">${VAR}</span> references, and a command line after <span class="inline-code">--</span>. The shell already parses these correctly. Reimplementing that parser in a slash command would create a second, weaker grammar. <span class="inline-code">/piagent-mcp add</span> prints the exact terminal command to run.</p>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="commands">Commands</h2>
+  <div class="command-grid">
+    <article class="command-card">
+      <h3 id="in-session">In a session</h3>
+      <p>No arguments opens the menu. Direct commands support Tab completion for subcommands and server names.</p>
+      <pre><code>/piagent-mcp                 menu
+/piagent-mcp status          full table
+/piagent-mcp get sentry
+/piagent-mcp doctor
+/piagent-mcp approve internal</code></pre>
+    </article>
+    <article class="command-card">
+      <h3 id="add-server">Add a server</h3>
+      <p>Use <span class="inline-code">--url</span> for a remote server, or place a local server command after <span class="inline-code">--</span>. Run this in a terminal.</p>
+      <pre><code>piagent-mcp add sentry --url https://mcp.sentry.dev/mcp --scope global
+piagent-mcp add internal --scope project -- npx -y @acme/internal-mcp</code></pre>
+    </article>
+    <article class="command-card">
+      <h3 id="inspect">Inspect</h3>
+      <p><span class="inline-code">list</span> shows every server visible from the current project and its state. <span class="inline-code">get</span> shows one server in detail.</p>
+      <pre><code>piagent-mcp list
+piagent-mcp get sentry</code></pre>
+    </article>
+    <article class="command-card">
+      <h3 id="disable-remove">Disable and remove</h3>
+      <p><span class="inline-code">disable</span> preserves the definition but stops using it. <span class="inline-code">remove</span> deletes it from a scope.</p>
+      <pre><code>piagent-mcp disable sentry
+piagent-mcp enable sentry
+piagent-mcp remove sentry --scope global</code></pre>
+    </article>
+    <article class="command-card">
+      <h3 id="preset-command">Preset</h3>
+      <p>Seed a pinned group of servers. <span class="inline-code">--replace</span> returns preset-owned servers to their baseline.</p>
+      <pre><code>piagent-mcp --preset core --scope global --replace
+piagent-mcp --list</code></pre>
+    </article>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="output">Output names the modified file</h2>
+  <p>All four configuration layers are read, so the first debugging question is which file is active. <span class="inline-code">add</span> answers that directly:</p>
+  <pre><code>$ piagent-mcp add internal --scope project -- npx -y @acme/internal-mcp
+Added local MCP server internal with command: npx -y @acme/internal-mcp in project scope
+File modified: /Users/you/repo/.mcp.json
+This scope is part of the repository, so the server is not usable until approved: piagent-mcp approve internal</code></pre>
+  <p><span class="inline-code">list</span> renders a table whose <span class="inline-code">STATE</span> column identifies immediately usable servers:</p>
+  <pre><code>NAME             SCOPE    TRANSPORT  TARGET                                  STATE
+context7         global   stdio      npx -y @upstash/context7-mcp@3.2.4       ready
+chrome-devtools  global   stdio      npx -y chrome-devtools-mcp@1.6.0 ...     ready
+github           global   stdio      docker run -i --rm -e GITHUB_PERSON...   needs-env
+internal         project  stdio      npx -y @acme/internal-mcp               pending-approval</code></pre>
+</section>
+
+<section class="section">
+  <h2 id="updates">Custom servers and updates</h2>
+  <p>Each <span class="inline-code">piagent-update</span> reapplies the selected preset with <span class="inline-code">--replace</span>. The merge touches only server IDs owned by that preset.</p>
+  <div class="split">
+    <div class="card"><h3 id="preserved">Preserved</h3><p>Custom IDs such as <span class="inline-code">my-internal</span> or <span class="inline-code">sentry</span> survive every update.</p></div>
+    <div class="card"><h3 id="overwritten">Replaced</h3><p>Manual edits to preset-owned IDs such as <span class="inline-code">github</span> or <span class="inline-code">context7</span> return to baseline on the next update. Use a distinct ID for a custom variant.</p></div>
+  </div>
+</section>

@@ -1,0 +1,33 @@
+<section class="section">
+  <div class="grid cols-2">
+    <article class="card"><h3 id="protected-paths">Protected paths</h3><p>Controlled tools block reads and writes to files such as <span class="inline-code">.env</span>, <span class="inline-code">auth.json</span>, local trust files, profile locks, and sensitive settings.</p></article>
+    <article class="card"><h3 id="shell-hardening">Shell hardening</h3><p>The guard uses shell parsing and controlled-command rules to catch globs, braces, redirects, bare-word symlinks, and xargs composition before runtime expansion.</p></article>
+    <article class="card"><h3 id="secret-redaction">Secret redaction</h3><p>Text tool output passes through a redactor for provider tokens, secret keyword patterns, and common sensitive values. Current benchmarks are synthetic and internal; the model continues to evolve.</p></article>
+    <article class="card"><h3 id="capability-lock">Capability lock</h3><p>Capability packs have digests and tamper detection. An invalid lock fails closed and never expands permissions automatically.</p></article>
+    <article class="card"><h3 id="human-action-gate">Human-action gate</h3><p>Destructive or external-provider actions require explicit operator confirmation even in full-access mode. The gate covers direct tools, decoded MCP proxy calls, GitHub CLI writes, and non-GET HTTP shell forms.</p></article>
+    <article class="card"><h3 id="verify-evidence">Verification evidence</h3><p>A completed handoff requires observed bash results, not an unsupported statement that tests passed.</p></article>
+  </div>
+
+  <div class="callout">
+    <strong>Important boundary</strong>
+    <p>The guard depends on controlled tool paths and the shell syntax it can observe. It cannot stop another process running with the same OS permissions outside the guard, and it does not replace operating-system sandboxing.</p>
+    <ul>
+      <li>Symlinks, encodings, nested payloads, shell expansion, or newly introduced tools can affect coverage.</li>
+      <li>Redaction is a leak-reduction backstop, not permission to place real secrets in prompts or outputs.</li>
+      <li>The context index is a local cache containing source bodies. Owner-only mode limits cross-account access, but processes under the same OS account must still be trusted.</li>
+      <li>Untrusted workloads require a container or VM with filesystem, process, network, and credential boundaries.</li>
+    </ul>
+  </div>
+
+  <div class="callout">
+    <strong>Redaction still requires independent audit</strong>
+    <p>Current benchmarks are synthetic internal regression and release gates, not an external security audit. The project publishes its <a href="https://github.com/Vt-mmm/piagent/blob/main/docs/security-threat-model.md" target="_blank" rel="noopener noreferrer">threat model and attack-vector map</a>. Broader parser fuzzing, third-party review, and LTS guarantees remain higher assurance levels that are not currently claimed. Published npm packages do include signed provenance through GitHub Actions and Sigstore.</p>
+  </div>
+
+  <div class="callout">
+    <strong>Dependency gates separate two trees</strong>
+    <p>Releases audit the small terminal-helper dependency tree separately from the exact Pi host and pinned add-ons. The helper tree is clean. The current Pi host tree has one high and eleven moderate advisories; the project reports those numbers instead of claiming zero runtime vulnerabilities.</p>
+    <p>The high advisory is <span class="inline-code">GHSA-mh99-v99m-4gvg</span> in <span class="inline-code">brace-expansion</span>, a denial-of-service issue rather than privilege escalation or data exposure. The published Pi host shrinkwrap pins the affected version and overrides cannot replace it. The release gate exempts only this named advisory with a source-controlled rationale and expires the exemption on <span class="inline-code">2026-08-25</span> or when upstream publishes a fix. Every other high or critical advisory still blocks release.</p>
+    <p>The eleven moderate findings belong to two upstream advisories: encoded-backslash path traversal on Windows in a Hono adapter and a protobuf parser denial of service. Native Windows and WSL2 are not team rollout targets, but both findings remain tracked.</p>
+  </div>
+</section>

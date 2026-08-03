@@ -117,7 +117,7 @@
     "apiVersion": 1,
     "packageDigest": "sha256:ea1659c1e0286acec85180f1bea900cda950250a9c4703ac665f3c75225adf6b",
     "packageSource": "../",
-    "packageVersion": "1.2.16",
+    "packageVersion": "1.2.17",
     "runtimeFiles": [
       {
         "byteSize": 4478,

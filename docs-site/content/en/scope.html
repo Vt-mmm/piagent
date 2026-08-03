@@ -1,0 +1,45 @@
+<section class="section">
+  <h2 id="not-a-new-agent">This is not a new agent</h2>
+  <p>The platform has no model, runtime, or agent loop of its own. It runs as a Pi extension and adds one thing: <strong>a repeatable operating model</strong> that every repository can reuse.</p>
+  <p>General coding agent CLIs already provide sandboxes, approvals, and project configuration. The useful question is not which agent is stronger. It is who configures those controls, and whether the configuration stays consistent across twenty repositories.</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Area</th><th>General agent CLI</th><th>What this platform adds</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Role</td><td>A coding agent operating on a local repository with tool and command selection.</td><td>A governance layer for Pi: policy, profiles, and workflows represented as files instead of prompt conventions.</td></tr>
+        <tr><td>Team customization</td><td>Instructions, settings, permissions, hooks, skills, and MCP configured per repository.</td><td>Profile adapters, base policy, command guards, capability packs, docs, and scripts defined once and distributed with <span class="inline-code">piagent-init</span>.</td></tr>
+        <tr><td>Execution permissions</td><td>OS or process sandboxing, per-action approval, and workspace boundaries.</td><td>Three named modes: <span class="inline-code">read-only</span>, <span class="inline-code">workspace-write</span>, and <span class="inline-code">trusted-full-access</span>, changed with one command.</td></tr>
+        <tr><td>Secret safety</td><td>Sandbox, approval, and network policy beneath the tool layer.</td><td>Application-level policy after a tool call: protected paths, shell checks, symlink aliases, output redaction, and integrity locks.</td></tr>
+        <tr><td>Distinct value</td><td>A complete agent experience and broad tool ecosystem.</td><td>Repeatability: the same profiles, guard, and verification discipline across repositories, with differences visible in files.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="complementary-layers">The two layers are complementary</h2>
+  <p>The host sandbox controls processes: a process cannot open files outside its permitted scope. The platform guard controls tool calls: it can inspect the <em>arguments</em> the agent intends to use, including paths, destinations, and external payloads.</p>
+  <div class="split">
+    <div class="card">
+      <h3 id="lower-layer">The lower layer sees processes</h3>
+      <p>It can tell that a process is writing outside the workspace. It cannot tell whether that process is <span class="inline-code">npm test</span> or a script generated during the current turn.</p>
+    </div>
+    <div class="card">
+      <h3 id="upper-layer">The upper layer sees intent</h3>
+      <p>It knows the tool, arguments, and capability. That is enough to block <span class="inline-code">.env</span> by name, redact tokens in output, and reject an MCP server supplied by a repository.</p>
+    </div>
+  </div>
+  <div class="callout">
+    <strong>Removing either layer leaves a gap</strong>
+    <p>An application guard cannot replace a sandbox once a process is running. A sandbox does not know why <span class="inline-code">.env</span> differs from <span class="inline-code">.env.example</span>. The platform assumes the lower layer remains enabled.</p>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="when-not-needed">When you may not need it</h2>
+  <p>For one person, one repository, no meaningful secrets, and no shared operating process, Pi's native configuration may be sufficient.</p>
+  <p>The platform becomes useful when no one can remember which permissions are active across many repositories, or when "has this been verified?" needs the same evidence-based answer everywhere.</p>
+</section>

@@ -2,6 +2,20 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.2.17 - 2026-08-03
+
+### Bilingual public documentation
+
+- Added a complete English peer for all 17 public documentation pages under
+  `/en`, while preserving existing Vietnamese URLs at the site root.
+- Added same-topic VI/EN switching, localized navigation and copy feedback,
+  canonical URLs, and `hreflang` metadata without adding a client-side i18n
+  framework or language bundle.
+- Extended build, release-identity, scaffold, link-integrity, and locale-parity
+  gates to cover all 34 generated pages.
+- Fixed the multi-page grid breakpoint that kept desktop sidebar and TOC
+  columns active on mobile, restoring a single-column content layout.
+
 ## v1.2.16 - 2026-08-03
 
 ### Codex default

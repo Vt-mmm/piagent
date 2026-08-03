@@ -1,0 +1,85 @@
+<section class="hero">
+  <p class="eyebrow">Team operating docs</p>
+  <h1>A reusable Pi runtime for every project.</h1>
+  <p>
+    These docs bring installation, profiles, permissions, MCP, security, and workflows into one place. A new team member can find the right command, choose a safe mode, and understand the operating boundary without rebuilding the process in a prompt.
+  </p>
+  <div class="owner-strip" aria-label="Project information">
+    <span class="owner-label">Project links</span>
+    <a href="https://piagent.io.vn/en/" target="_blank" rel="noopener noreferrer">Docs · piagent.io.vn</a>
+    <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub · Vt-mmm/piagent</a>
+    <a href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer">Facebook · Vinh Tam</a>
+  </div>
+  <div class="hero-actions">
+    <a class="button primary" href="/en/quickstart">Get started</a>
+    <a class="button" href="/en/commands">View commands</a>
+    <a class="button" href="/en/mcp">MCP</a>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="install">Install with two commands</h2>
+  <p>Requires Node.js <span class="inline-code">&gt;=22.19.0</span>. Run these commands from the project you want to configure.</p>
+  <pre><code>npm install -g @piagent/platform
+piagent-setup</code></pre>
+  <p><span class="inline-code">piagent-setup</span> installs the pinned Pi Coding Agent host, installs the Pi package, initializes the current directory, and runs doctor. It also installs the MCP baseline and subagents; skip them with <span class="inline-code">--no-mcp</span>, <span class="inline-code">--no-subagents</span>, or <span class="inline-code">--global-only</span>. See the <a href="/en/quickstart">Quickstart</a> for the complete flow.</p>
+</section>
+
+<section class="section">
+  <h2 id="where-to-start">Where to start</h2>
+  <div class="card-grid">
+    <a class="doc-card" href="/en/quickstart">
+      <span class="card-kicker">Get started</span>
+      <h3>Quickstart</h3>
+      <p>Install, open a repository, onboard context, choose a profile and permission mode, run the first task, and verify before handoff.</p>
+    </a>
+    <a class="doc-card" href="/en/scope">
+      <span class="card-kicker">Get started</span>
+      <h3>Platform scope</h3>
+      <p>Why this repository exists alongside general coding agents, and which operating concerns it owns.</p>
+    </a>
+    <a class="doc-card" href="/en/profiles">
+      <span class="card-kicker">Build</span>
+      <h3>Project profiles</h3>
+      <p>Choose the operating profile for a repository: protected paths, verification commands, and granted capabilities.</p>
+    </a>
+    <a class="doc-card" href="/en/mcp">
+      <span class="card-kicker">MCP</span>
+      <h3>MCP</h3>
+      <p>Four configuration layers, pinned presets, server management, authentication readiness, and repository approval gates.</p>
+    </a>
+    <a class="doc-card" href="/en/security">
+      <span class="card-kicker">Operate</span>
+      <h3>Security model</h3>
+      <p>A policy enforcement layer, not an OS sandbox, with explicit claims about what is and is not controlled.</p>
+    </a>
+    <a class="doc-card" href="/en/benchmark">
+      <span class="card-kicker">Operate</span>
+      <h3>Production benchmark</h3>
+      <p>Quality, safety, workflow, and token evidence from 108 sessions compared with the <code>codex-cli</code> surface.</p>
+    </a>
+    <a class="doc-card" href="/en/commands">
+      <span class="card-kicker">Build</span>
+      <h3>Command catalog</h3>
+      <p>Slash commands and terminal commands grouped by the job they perform.</p>
+    </a>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="doc-groups">Three documentation groups</h2>
+  <div class="split">
+    <div class="card">
+      <h3 id="get-started-group">Get started</h3>
+      <p>For first-time users: installation, quickstart, and where the platform fits alongside other agent CLIs.</p>
+    </div>
+    <div class="card">
+      <h3 id="build-group">Build</h3>
+      <p>Daily operation: profiles, permissions, commands, workflows, and a dedicated MCP section for its broader command surface.</p>
+    </div>
+    <div class="card">
+      <h3 id="operate-group">Operate</h3>
+      <p>For operators and reviewers: security boundaries, repository architecture, terminal tools, and the team operating standard.</p>
+    </div>
+  </div>
+</section>

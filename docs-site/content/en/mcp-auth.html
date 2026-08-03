@@ -1,0 +1,57 @@
+<section class="section">
+  <h2 id="no-token-storage">The platform does not store tokens</h2>
+  <p>MCP tokens already have an owner: OAuth belongs to <span class="inline-code">pi-mcp-adapter</span>. The adapter registers <span class="inline-code">/mcp</span> and <span class="inline-code">/mcp-auth</span> and owns storage, refresh, and revocation. A second credential store would only create another leak surface. The platform therefore <strong>detects and guides</strong>.</p>
+  <pre><code>/mcp-auth figma</code></pre>
+  <div class="callout ok-callout">
+    <strong>Boundary</strong>
+    <p>The platform does not execute OAuth, store tokens, or refresh them. It can identify that a server <em>requires</em> authentication, but cannot prove whether an existing login is still valid, and reports that uncertainty explicitly.</p>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="reject-secrets">Secrets are rejected before configuration is written</h2>
+  <p>MCP configuration may be read by several clients, lives in a home directory or repository, and project scope may be committed. A token supplied through <span class="inline-code">--env</span> would propagate to all those locations. The add command rejects it and shows the safe form:</p>
+  <pre><code>$ piagent-mcp add gh --env GITHUB_PERSONAL_ACCESS_TOKEN=ghp_xxx -- npx -y @acme/gh-mcp
+FAIL: GITHUB_PERSONAL_ACCESS_TOKEN names a credential, so its value cannot be
+written into MCP config. Export it in your shell and reference it instead:
+--env 'GITHUB_PERSONAL_ACCESS_TOKEN=${GITHUB_PERSONAL_ACCESS_TOKEN}'</code></pre>
+  <div class="split">
+    <div class="card"><h3 id="field-name">Field-name detection</h3><p>Names containing <span class="inline-code">token</span>, <span class="inline-code">secret</span>, <span class="inline-code">password</span>, <span class="inline-code">api_key</span>, or <span class="inline-code">authorization</span> require environment-variable references.</p></div>
+    <div class="card"><h3 id="value-shape">Value-shape detection</h3><p>Values are checked independently, so a neutral name such as <span class="inline-code">--env CONFIG=ghp_...</span> is also rejected.</p></div>
+  </div>
+  <p>The same rules apply to <span class="inline-code">--header</span>. <span class="inline-code">--url</span> accepts HTTPS, or HTTP only for loopback hosts such as Figma desktop MCP. <span class="inline-code">list</span> and <span class="inline-code">get</span> mask values while preserving <span class="inline-code">${VAR}</span>, because the variable name is not the credential.</p>
+</section>
+
+<section class="section">
+  <h2 id="readiness">Readiness states</h2>
+  <p>A server count cannot show which server can answer a call. <span class="inline-code">/piagent-mcp doctor</span> classifies each server:</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>State</th><th>Meaning</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td><span class="inline-code">ready</span></td><td>Requirements are satisfied</td><td>—</td></tr>
+        <tr><td><span class="inline-code">needs-env</span></td><td>Configuration references an unset <span class="inline-code">${VAR}</span></td><td>Export the variable in the shell profile</td></tr>
+        <tr><td><span class="inline-code">needs-command</span></td><td>The executable is missing from PATH</td><td>Install it or update the server definition</td></tr>
+        <tr><td><span class="inline-code">pending-approval</span></td><td>The repository supplied this server and the machine has not approved it</td><td><span class="inline-code">/piagent-mcp approve &lt;name&gt;</span></td></tr>
+        <tr><td><span class="inline-code">approval-changed</span></td><td>An approved definition changed</td><td>Review and approve again</td></tr>
+        <tr><td><span class="inline-code">rejected</span></td><td>The project server was rejected</td><td>Use <span class="inline-code">reset</span> to reconsider</td></tr>
+        <tr><td><span class="inline-code">disabled</span></td><td>Disabled explicitly</td><td><span class="inline-code">/piagent-mcp enable &lt;name&gt;</span></td></tr>
+        <tr><td><span class="inline-code">oauth</span></td><td>Authentication is owned by Pi</td><td><span class="inline-code">/mcp-auth &lt;name&gt;</span> when login is needed</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>The report states only what it can prove. <span class="inline-code">needs-env</span> prints the variable <strong>name</strong>, never its value.</p>
+  <p>Inside a session, <span class="inline-code">/piagent-mcp doctor</span> returns the same report with slash-command remedies. From a terminal:</p>
+  <pre><code>$ piagent-mcp doctor
+OK   context7 (global): ready
+OK   chrome-devtools (global): ready
+NEED github (global): GITHUB_PERSONAL_ACCESS_TOKEN is referenced but not set
+       -> export GITHUB_PERSONAL_ACCESS_TOKEN=... in your shell profile
+NEED docker: installed but the daemon is not responding
+       -> start Docker Desktop, then re-run piagent-mcp doctor</code></pre>
+  <div class="callout">
+    <strong>Why <span class="inline-code">oauth</span> is not an error</strong>
+    <p>It does not appear in the session-start notice because the platform cannot tell whether the user is already logged in. Repeating an uncertain warning every session would create noise. The notice includes only proven blockers; disable it with <span class="inline-code">PIAGENT_NO_MCP_NOTICE=1</span>.</p>
+  </div>
+  <p><span class="inline-code">doctor</span> also runs <span class="inline-code">docker info</span>. That slower check belongs in doctor, not session startup. <span class="inline-code">piagent-doctor</span> includes blocking states in its warnings.</p>
+</section>

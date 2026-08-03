@@ -1,0 +1,30 @@
+<section class="section">
+  <div class="grid cols-3">
+    <article class="card"><h3 id="dynamic-tools">Task-driven tools</h3><p>Pi includes governance, policy, retrieval, knowledge, onboarding, or usage guidance in the prompt only when the task needs it. The runtime guard remains active in the background.</p></article>
+    <article class="card"><h3 id="local-index">Local index</h3><p>FTS5, symbols, and the import graph live under <span class="inline-code">.pi/piagent-state/context-engine/</span>. Storage is restricted to the current OS account; policy changes retry FTS rebuild and VACUUM until purging completes.</p></article>
+    <article class="card"><h3 id="ranked-context">Ranked context</h3><p>Explicit paths, lexical matches, symbols, Git signals, test relationships, positive feedback, and graph rank are combined before packing into a hard token budget.</p></article>
+    <article class="card"><h3 id="semantic-compact">Semantic compaction</h3><p>Preserves the goal, decisions, changed files, verification, and blockers. Removes repeated logs, source excerpts, and superseded plans.</p></article>
+    <article class="card"><h3 id="test-impact">Test impact</h3><p>Walks the import graph backward from changed files to suggest dependents and focused tests before running the full suite.</p></article>
+    <article class="card"><h3 id="agent-watch">Agent Watch</h3><p>Local events include session, model, thinking, tool surface, retrieval confidence, context-use ratio, and waste metrics without storing raw prompts or outputs a second time.</p></article>
+  </div>
+</section>
+
+<section class="section">
+  <div class="callout">
+    <strong>The index contains source bodies</strong>
+    <p>Protected paths and secret files are excluded. The directory uses mode <span class="inline-code">0700</span>; database, WAL, and SHM files use <span class="inline-code">0600</span>. Normal refresh uses SQLite core and FTS5 secure delete. Full FTS rebuild and VACUUM run only when exclusion policy changes or an interrupted purge must resume, not on every prompt or refresh.</p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="command-grid">
+    <article class="command-card"><header><span>Inside Pi</span><button class="clip-btn" data-clip="/context index&#10;/context rebuild&#10;/context pack Fix invoice calculation&#10;/context impact&#10;/usage efficiency">Copy</button></header><pre><code>/context index
+/context rebuild
+/context pack Fix invoice calculation
+/context impact
+/usage efficiency</code></pre></article>
+    <article class="command-card"><header><span>From a terminal</span><button class="clip-btn" data-clip="piagent-context rebuild&#10;piagent-context pack &quot;Fix invoice calculation&quot; --tokens 4000&#10;piagent-context efficiency">Copy</button></header><pre><code>piagent-context rebuild
+piagent-context pack "Fix invoice calculation" --tokens 4000
+piagent-context efficiency</code></pre></article>
+  </div>
+</section>

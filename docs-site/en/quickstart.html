@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en" data-copy-success="Copied" data-copy-fallback="Select command">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Step by step for new team members · Pi Agent Platform Docs</title>
+    <meta name="description" content="Install with two commands, open a repository, select its profile and permission mode, run a task, and verify real evidence before handoff." />
+    <meta name="theme-color" content="#050505" />
+    <link rel="canonical" href="https://piagent.io.vn/en/quickstart" />
+    <link rel="alternate" hreflang="vi" href="https://piagent.io.vn/quickstart" />
+    <link rel="alternate" hreflang="en" href="https://piagent.io.vn/en/quickstart" />
+    <link rel="alternate" hreflang="x-default" href="https://piagent.io.vn/quickstart" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta property="og:title" content="Step by step for new team members · Pi Agent Platform Docs" />
+    <meta property="og:description" content="Install with two commands, open a repository, select its profile and permission mode, run a task, and verify real evidence before handoff." />
+    <meta property="og:url" content="https://piagent.io.vn/en/quickstart" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/docs.css" />
+    <script src="/assets/docs.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/en/" aria-label="Pi Agent Platform">
+        <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" /></span>
+        <span>Pi Agent Platform</span>
+      </a>
+      <div class="top-actions">
+        <span class="pill"><span class="pill-dot"></span>v1.2.17 docs · EN</span>
+        <nav class="language-switch" aria-label="Language">
+          <a class="language-option" href="/quickstart" hreflang="vi" lang="vi">VI</a>
+          <a class="language-option current" href="/en/quickstart" hreflang="en" lang="en" aria-current="true">EN</a>
+        </nav>
+        <a class="button social" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer" aria-label="Open GitHub repository">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          GitHub
+        </a>
+        <button class="button mobile-menu" type="button" data-menu>Menu</button>
+        <a class="button top-command-link" href="/en/commands">Commands</a>
+      </div>
+    </header>
+
+    <div class="layout with-toc">
+      <aside class="sidebar" data-sidebar>
+        <div class="sidebar-search" aria-label="Search documentation">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M10.8 18.1a7.3 7.3 0 1 1 0-14.6 7.3 7.3 0 0 1 0 14.6Zm5.3-1.7 4.4 4.4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          <input type="search" placeholder="Search pages" data-filter />
+        </div>
+
+        <nav aria-label="Documentation">
+          <div class="nav-group">
+            <p class="nav-title">Get started</p>
+            <a class="nav-link" href="/en/">Overview</a>
+            <a class="nav-link current" href="/en/quickstart" aria-current="page">Quickstart</a>
+            <a class="nav-link" href="/en/scope">Platform scope</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Build</p>
+            <a class="nav-link" href="/en/profiles">Project profiles</a>
+            <a class="nav-link" href="/en/permissions">Permission modes</a>
+            <a class="nav-link" href="/en/commands">Command catalog</a>
+            <a class="nav-link" href="/en/workflows">Workflows</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">MCP</p>
+            <a class="nav-link" href="/en/mcp">MCP overview</a>
+            <a class="nav-link" href="/en/mcp-servers">Server management</a>
+            <a class="nav-link" href="/en/mcp-auth">Authentication</a>
+            <a class="nav-link" href="/en/mcp-approval">Approval gate</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Operate</p>
+            <a class="nav-link" href="/en/security">Security model</a>
+            <a class="nav-link" href="/en/architecture">Architecture</a>
+            <a class="nav-link" href="/en/context-engine">Context Engine</a>
+            <a class="nav-link" href="/en/benchmark">Benchmark</a>
+            <a class="nav-link" href="/en/runtime">Runtime tools</a>
+            <a class="nav-link" href="/en/team">Team usage</a>
+          </div>
+        </nav>
+      </aside>
+
+      <main>
+        <div class="content-shell" data-article>
+            <nav class="breadcrumb" aria-label="Breadcrumb">
+              <a href="/en/">Docs</a>
+              <span aria-hidden="true">/</span>
+              <span>Get started</span>
+              <span aria-hidden="true">/</span>
+              <span>Quickstart</span>
+            </nav>
+            <div class="page-head">
+              <h1>Step by step for new team members</h1>
+              <p>Install with two commands, open a repository, select its profile and permission mode, run a task, and verify real evidence before handoff.</p>
+            </div>
+<section class="section">
+  <div class="steps">
+    <article class="step">
+      <div>
+        <h3 id="install-two-commands">Install with two commands</h3>
+        <p>Requires Node.js 22.19.0 or newer. You do not need to install Pi Coding Agent first: <span class="inline-code">piagent-setup</span> installs the exact host version pinned by the current release. Run it inside the project directory. It installs the Pi package, initializes <span class="inline-code">.pi/</span>, installs the MCP baseline and subagents, and runs doctor. Use <span class="inline-code">--no-mcp</span>, <span class="inline-code">--no-subagents</span>, <span class="inline-code">--no-herdr</span>, or <span class="inline-code">--global-only</span> to omit optional parts.</p>
+        <div class="table-wrap compact-table">
+          <table>
+            <thead><tr><th>Runtime</th><th>Rollout status</th></tr></thead>
+            <tbody>
+              <tr><td>macOS Apple Silicon + Bash</td><td>Verified for this release.</td></tr>
+              <tr><td>Linux x64 + Bash</td><td>Verified in CI.</td></tr>
+              <tr><td>macOS Intel / Linux ARM64 + Bash</td><td>Supported target; run doctor and smoke tests before broad rollout.</td></tr>
+              <tr><td>Native Windows / WSL2</td><td>Not a team rollout target; WSL2 remains experimental.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="command-card">
+          <header><span>Two commands</span><button class="clip-btn" data-clip="npm install -g @piagent/platform&#10;piagent-setup">Copy</button></header>
+          <pre><code>npm install -g @piagent/platform
+piagent-setup</code></pre>
+        </div>
+        <p>Because setup runs from the installed package, the source written to <span class="inline-code">.pi/settings.json</span> is <span class="inline-code">npm:@piagent/platform@&lt;version&gt;</span>. It resolves consistently on teammate machines and can be committed.</p>
+        <p>If you use <a href="https://herdr.dev/docs/install/">Herdr</a>, install it <strong>first</strong>. <span class="inline-code">piagent-setup</span> installs the Herdr Pi integration when <span class="inline-code">herdr</span> is present on <span class="inline-code">PATH</span>. Otherwise it skips the integration with a warning; after installing Herdr, run <span class="inline-code">piagent-setup --global-only</span>.</p>
+        <div class="command-card">
+          <header><span>Herdr (optional, install first)</span><button class="clip-btn" data-clip="brew install herdr">Copy</button></header>
+          <pre><code>brew install herdr                            # macOS
+curl -fsSL https://herdr.dev/install.sh | sh  # macOS or Linux</code></pre>
+        </div>
+        <p>The <span class="inline-code">curl</span> form executes a downloaded installer. For an auditable path, use <span class="inline-code">brew</span> or download from <a href="https://github.com/ogulcancelik/herdr/releases">GitHub releases</a>. Herdr stable supports macOS and Linux; Windows remains preview.</p>
+        <p>See the <a href="https://github.com/Vt-mmm/piagent/blob/main/docs/release-install-policy.md">release and install policy</a> for pinned rollout, updates, rollback, and the latest channel for personal machines.</p>
+      </div>
+    </article>
+
+    <article class="step">
+      <div>
+        <h3 id="open-project-repository">Open the project repository</h3>
+        <p>Start Pi from the repository directory. In a trusted repository, use the trusted-run wrapper only when controlled automation is needed.</p>
+        <div class="command-card">
+          <header><span>Start</span><button class="clip-btn" data-clip="cd /path/to/project && pi">Copy</button></header>
+          <pre><code>cd /path/to/project
+pi</code></pre>
+        </div>
+        <p>For multiple parallel agents, run <span class="inline-code">herdr</span> instead of <span class="inline-code">pi</span> and assign one role per pane: implementation, read-only review, verification, or notes. Herdr coordinates terminals and sessions; it is not a security boundary. Gates remain in the Pi extension and OAuth still occurs in Pi. See the <a href="https://github.com/Vt-mmm/piagent/blob/main/docs/herdr-workflow.md">Herdr workflow</a>.</p>
+      </div>
+    </article>
+
+    <article class="step">
+      <div>
+        <h3 id="onboard-context">Onboard context</h3>
+        <p>Run this once in a new repository to record project context, verification matrices, and protected areas under <span class="inline-code">.pi/</span>. <span class="inline-code">/onboard</span> opens the menu and status; <span class="inline-code">run</span> launches the project-reading workflow.</p>
+        <div class="command-card">
+          <header><span>Onboard</span><button class="clip-btn" data-clip="/onboard&#10;/onboard run">Copy</button></header>
+          <pre><code>/onboard
+/onboard run</code></pre>
+        </div>
+      </div>
+    </article>
+
+    <article class="step">
+      <div>
+        <h3 id="select-profile-and-tech">Select profile and technology</h3>
+        <p>Use <span class="inline-code">/profile setup</span> for the interactive selector: choose the profile, then the technology by role. Full-stack setup selects frontend, backend, and database.</p>
+        <div class="command-card">
+          <header><span>Profile and tech setup</span><button class="clip-btn" data-clip="/profile setup&#10;/profile tech setup fullstack">Copy</button></header>
+          <pre><code>/profile setup
+/profile tech setup fullstack</code></pre>
+        </div>
+      </div>
+    </article>
+
+    <article class="step">
+      <div>
+        <h3 id="select-permission">Select a permission mode</h3>
+        <p>Use read-only for scouting, workspace-write for normal coding, and guarded full access for trusted automation.</p>
+        <div class="command-card">
+          <header><span>Permission</span><button class="clip-btn" data-clip="/permission status&#10;/permission workspace-write">Copy</button></header>
+          <pre><code>/permission status
+/permission workspace-write</code></pre>
+        </div>
+      </div>
+    </article>
+
+    <article class="step">
+      <div>
+        <h3 id="run-workflow">Run a workflow</h3>
+        <p>Use the command that matches the intent so the agent does not spend context rediscovering the process. Start a fresh session for context-heavy work.</p>
+        <div class="command-card">
+          <header><span>Workflow</span><button class="clip-btn" data-clip="/workflow task Implement the requested bounded change.&#10;/workflow review current diff&#10;/fresh task Implement the requested bounded change.">Copy</button></header>
+          <pre><code>/workflow task Implement the requested bounded change.
+/workflow review current diff
+/fresh task Implement the requested bounded change.</code></pre>
+        </div>
+      </div>
+    </article>
+
+    <article class="step">
+      <div>
+        <h3 id="verify-before-handoff">Verify before handoff</h3>
+        <p>The final gate trusts only commands that actually ran, exited successfully, and matched the verification plan. After pinning or upgrading a version, run doctor in the project:</p>
+        <div class="command-card">
+          <header><span>Doctor</span><button class="clip-btn" data-clip="piagent-doctor">Copy</button></header>
+          <pre><code>piagent-doctor</code></pre>
+        </div>
+        <p>Platform maintainers also run <span class="inline-code">npm run verify</span> in the source repository. See <a href="https://github.com/Vt-mmm/piagent/blob/main/CONTRIBUTING.md">CONTRIBUTING</a>.</p>
+      </div>
+    </article>
+
+    <article class="step">
+      <div>
+        <h3 id="uninstall">Uninstall when no longer needed</h3>
+        <p><span class="inline-code">piagent-uninstall</span> is a dry run by default. Add <span class="inline-code">--apply</span> to make changes because it edits Pi settings that other tools may also use. The default removes only the platform's Pi package; add-ons, the Pi host, and project state are opt-in.</p>
+        <div class="command-card">
+          <header><span>Uninstall in two steps</span><button class="clip-btn" data-clip="piagent-uninstall&#10;piagent-uninstall --apply">Copy</button></header>
+          <pre><code>piagent-uninstall
+piagent-uninstall --apply</code></pre>
+        </div>
+        <p>Add-ons, the Pi host, project state, and the global npm helper each have separate opt-in flags listed by <span class="inline-code">piagent-uninstall --help</span>. Removal follows packages registered in Pi settings, so registrations created by older releases are still found.</p>
+        <div class="callout ok-callout">
+          <strong>Never removed</strong>
+          <p>Credentials, trust decisions, sessions, todos, and <span class="inline-code">.pi/memory/</span> remain under every flag combination. Generated files that may have been edited, such as <span class="inline-code">AGENTS.md</span>, <span class="inline-code">.pi/settings.json</span>, and <span class="inline-code">project-context.md</span>, are listed for manual review. In <span class="inline-code">.pi/settings.json</span>, only the package entry that points to the platform is removed.</p>
+        </div>
+      </div>
+    </article>
+  </div>
+</section>
+            <nav class="pager" aria-label="Adjacent pages">
+              <a class="pager-prev" href="/en/">
+                <span class="pager-label">Previous</span>
+                <span class="pager-title">Overview</span>
+              </a>
+              <a class="pager-next" href="/en/scope">
+                <span class="pager-label">Next</span>
+                <span class="pager-title">Platform scope</span>
+              </a>
+            </nav>
+
+            <footer class="footer">
+              <p>Pi Agent Platform docs · static HTML · governed agent workflow</p>
+              <div class="footer-links" aria-label="External links">
+                <a href="https://piagent.io.vn" target="_blank" rel="noopener noreferrer">piagent.io.vn</a>
+                <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub repository</a>
+                <a href="/quickstart" hreflang="vi">Tiếng Việt</a>
+                <a href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer">Facebook profile</a>
+              </div>
+            </footer>
+        </div>
+      </main>
+
+      <aside class="toc" aria-label="Page contents">
+        <p class="toc-title">On this page</p>
+        <nav data-toc></nav>
+      </aside>
+    </div>
+  </body>
+</html>

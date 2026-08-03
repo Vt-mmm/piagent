@@ -1,0 +1,90 @@
+<section class="section">
+  <h2 id="start">Where to start</h2>
+  <p>Enter <span class="inline-code">/piagent-mcp</span> to open a menu. You do not need to memorize subcommands:</p>
+  <pre><code>MCP
+  Servers — 2/3 ready
+  Doctor — 1 need attention          (recommended)
+  Inspect a server
+  Approve a repository server — 1 waiting
+  Turn a server off
+  Add a server
+  All subcommands</code></pre>
+  <p>The menu reflects the current project. It does not offer "turn back on" when no server is disabled or "approve" when nothing is waiting. When an action requires a server, it asks which one unless only one choice exists.</p>
+  <p>Every menu item also has a direct command:</p>
+  <pre><code>/piagent-mcp doctor     show what is blocked and what it needs
+/piagent-mcp status     show the full table
+/mcp                    show live connection state from the adapter
+/mcp-auth &lt;name&gt;        authenticate one OAuth server</code></pre>
+  <p>In a terminal, use the same command family without the slash: <span class="inline-code">piagent-mcp list</span> or <span class="inline-code">piagent-mcp doctor</span>. Adding and removing server definitions is terminal-only. See <a href="/en/mcp-servers">Server management</a>.</p>
+</section>
+
+<section class="section">
+  <h2 id="three-similar-names">Three similar names that are not connected</h2>
+  <p>No code maps a capability name to an MCP server ID. Declaring <span class="inline-code">"github"</span> in <span class="inline-code">mcpCapabilities</span> does <strong>not</strong> enable the MCP server named <span class="inline-code">github</span>, and the reverse is also false.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Item</th><th>Location</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><span class="inline-code">mcpCapabilities: ["github"]</span></td><td><span class="inline-code">.pi/piagent-profile.json</span></td><td>A capability label for the tool registry</td></tr>
+        <tr><td><span class="inline-code">toolCapabilities</span></td><td><span class="inline-code">base-policy.json</span></td><td>Maps a tool <strong>named</strong> <span class="inline-code">github</span> to a capability</td></tr>
+        <tr><td><span class="inline-code">github</span> server</td><td><span class="inline-code">~/.config/mcp/mcp.json</span></td><td>The actual MCP server, running through Docker</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="four-config-layers">Four configuration layers</h2>
+  <p>All four files are read. The <span class="inline-code">--scope</span> option of <span class="inline-code">piagent-mcp</span> uses these names.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Scope</th><th>File</th><th>Use</th></tr></thead>
+      <tbody>
+        <tr><td><span class="inline-code">global</span></td><td><span class="inline-code">~/.config/mcp/mcp.json</span></td><td>Default shared configuration for multiple agents and projects</td></tr>
+        <tr><td><span class="inline-code">pi-global</span></td><td><span class="inline-code">~/.pi/agent/mcp.json</span></td><td>Pi-specific global overrides</td></tr>
+        <tr><td><span class="inline-code">project</span></td><td><span class="inline-code">.mcp.json</span></td><td>Repository-specific, committable server definitions</td></tr>
+        <tr><td><span class="inline-code">pi-project</span></td><td><span class="inline-code">.pi/mcp.json</span></td><td>Pi-specific overrides for one repository</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout">
+    <strong>The final two layers travel with the repository</strong>
+    <p>Cloning a repository also brings its <span class="inline-code">.mcp.json</span>. Servers from these scopes must pass the <a href="/en/mcp-approval">approval gate</a> before use.</p>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="presets">Pinned presets</h2>
+  <p><span class="inline-code">piagent-setup</span> and <span class="inline-code">piagent-install</span> install <span class="inline-code">pi-mcp-adapter</span> and seed the <span class="inline-code">core</span> preset by default. Skip this with <span class="inline-code">--no-mcp</span>.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Preset</th><th>Servers</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><span class="inline-code">minimal</span></td><td>—</td><td>Safe settings only</td></tr>
+        <tr><td><span class="inline-code">docs</span></td><td>Context7</td><td>Current framework and library docs</td></tr>
+        <tr><td><span class="inline-code">browser</span></td><td>Chrome DevTools, Playwright</td><td>UI/runtime inspection and browser automation</td></tr>
+        <tr><td><span class="inline-code">github</span></td><td>GitHub MCP</td><td>Issue, PR, repository, and release workflows</td></tr>
+        <tr><td><span class="inline-code">design</span></td><td>Figma remote</td><td>Design-to-code through Figma OAuth</td></tr>
+        <tr><td><span class="inline-code">design-local</span></td><td>Figma desktop</td><td>Local Dev Mode MCP</td></tr>
+        <tr><td><span class="inline-code">web</span></td><td>Context7, Chrome DevTools, Playwright</td><td>Frontend and web workflows</td></tr>
+        <tr><td><span class="inline-code">core</span></td><td>Context7, Chrome DevTools, GitHub</td><td>Default team baseline</td></tr>
+        <tr><td><span class="inline-code">popular</span></td><td>core + Playwright + Figma</td><td>A broader development baseline</td></tr>
+        <tr><td><span class="inline-code">all</span></td><td>popular + Figma desktop</td><td>Complete preset</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Every server is pinned by version or digest. An MCP server is code running on the operator's machine with the operator's credentials, so floating tags would turn each session into an unattended supply-chain decision.</p>
+  <div class="callout">
+    <strong>Writing configuration does not prove readiness</strong>
+    <p>Servers connect lazily and are not checked until first use. <a href="/en/mcp-auth">Authentication and readiness</a> explains which servers can actually run.</p>
+  </div>
+</section>
+
+<section class="section">
+  <h2 id="token-efficiency">Token efficiency</h2>
+  <p><span class="inline-code">pi-mcp-adapter</span> exposes all servers through one proxy tool named <span class="inline-code">mcp</span> instead of loading every tool schema into startup context. Defaults include <span class="inline-code">directTools: false</span>, <span class="inline-code">outputGuard</span>, and <span class="inline-code">idleTimeout</span>.</p>
+  <div class="callout">
+    <strong>Warning when enabling <span class="inline-code">toolRegistry: enforce</span></strong>
+    <p>The proxy tool <span class="inline-code">mcp</span> is not in <span class="inline-code">alwaysAllowedTools</span> or <span class="inline-code">toolCapabilities</span>, so enforce mode blocks <strong>all</strong> MCP access. Adding <span class="inline-code">mcpCapabilities</span> cannot bypass that earlier block. The only exception is <span class="inline-code">trusted-full-access</span>.</p>
+  </div>
+</section>

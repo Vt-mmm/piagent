@@ -21,7 +21,6 @@ const SITE = {
   title: "Pi Agent Platform Docs",
   origin: "https://piagent.io.vn",
   repo: "https://github.com/Vt-mmm/piagent",
-  englishDocs: "https://github.com/Vt-mmm/piagent/blob/main/docs/en/README.md",
   facebook: "https://www.facebook.com/vinhtam0544/"
 };
 
@@ -153,11 +152,164 @@ const NAV = [
   }
 ];
 
-const pages = NAV.flatMap((section) => section.pages.map((page) => ({ ...page, group: section.group })));
+const EN_PAGE_COPY = {
+  index: {
+    nav: "Overview",
+    title: "Pi Agent Platform",
+    lead: "Reusable infrastructure for multiple projects: installation, profiles, permissions, MCP, security, and workflows in one place."
+  },
+  quickstart: {
+    nav: "Quickstart",
+    title: "Step by step for new team members",
+    lead: "Install with two commands, open a repository, select its profile and permission mode, run a task, and verify real evidence before handoff."
+  },
+  scope: {
+    nav: "Platform scope",
+    title: "What the platform owns",
+    lead: "General coding agents already provide governance primitives. This platform packages one repeatable operating model for Pi across every repository."
+  },
+  profiles: {
+    nav: "Project profiles",
+    title: "Choose the right operating profile",
+    lead: "A project profile defines protected paths, verification commands, and the capabilities granted to a repository."
+  },
+  permissions: {
+    nav: "Permission modes",
+    title: "Change task permissions with one command",
+    lead: "Permission modes are session-local overrides. Changing a mode does not modify the project profile."
+  },
+  commands: {
+    nav: "Command catalog",
+    title: "Short commands with predictable behavior",
+    lead: "Slash commands package policy and workflow directly, avoiding model-driven command discovery and unnecessary token use."
+  },
+  workflows: {
+    nav: "Workflows",
+    title: "Core workflows",
+    lead: "Select a workflow by intent instead of repeating policy in every prompt. This keeps behavior consistent and context compact."
+  },
+  mcp: {
+    nav: "MCP overview",
+    title: "MCP in Pi Agent Platform",
+    lead: "The platform installs pi-mcp-adapter for token-efficient MCP access and manages servers across four configuration layers."
+  },
+  "mcp-servers": {
+    nav: "Server management",
+    title: "Add, inspect, and remove MCP servers",
+    lead: "piagent-mcp provides deterministic add, remove, get, list, enable, and disable operations across all four scopes."
+  },
+  "mcp-auth": {
+    nav: "Authentication",
+    title: "Authentication and readiness",
+    lead: "The platform does not store tokens or run OAuth. It rejects secrets in configuration and reports which servers are actually ready."
+  },
+  "mcp-approval": {
+    nav: "Approval gate",
+    title: "Repository servers require approval",
+    lead: "Cloning an untrusted repository must not grant its author a process on the operator's machine. Decisions live outside the repository and are pinned by digest."
+  },
+  security: {
+    nav: "Security model",
+    title: "Policy enforcement, not an OS sandbox",
+    lead: "Controlled tool surfaces fail closed when profiles, integrity locks, permissions, or verification evidence are invalid."
+  },
+  architecture: {
+    nav: "Architecture",
+    title: "Repository architecture",
+    lead: "Core contains reusable policy and runtime infrastructure, while project-specific business logic stays in the project that owns it."
+  },
+  "context-engine": {
+    nav: "Context Engine",
+    title: "Less context without reducing model quality",
+    lead: "Local indexing, ranked retrieval, task-driven tool loading, semantic compaction, and transparent telemetry for Agent Watch."
+  },
+  benchmark: {
+    nav: "Benchmark",
+    title: "Quality and efficiency evidence",
+    lead: "The production benchmark compares Piagent with codex-cli using the same model, thinking level, 18 task families, and 108 automatically graded sessions."
+  },
+  runtime: {
+    nav: "Runtime tools",
+    title: "Terminal commands for operators",
+    lead: "Use these commands outside Pi for setup, updates, doctor checks, benchmarks, capabilities, and MCP management."
+  },
+  team: {
+    nav: "Team usage",
+    title: "A repeatable team operating standard",
+    lead: "Each repository links the package, selects a fitting profile, and keeps project-specific documentation in the repository that owns it."
+  }
+};
+
+const NAV_BY_LOCALE = {
+  vi: NAV,
+  en: NAV.map((section) => ({
+    group: section.group,
+    pages: section.pages.map((page) => ({ ...page, ...EN_PAGE_COPY[page.slug] }))
+  }))
+};
+
+const LOCALES = {
+  vi: {
+    code: "vi",
+    label: "VI",
+    prefix: "",
+    contentRoot,
+    nav: NAV_BY_LOCALE.vi,
+    ui: {
+      breadcrumb: "Docs",
+      language: "Ngôn ngữ",
+      githubAria: "Mở GitHub repository",
+      menu: "Lộ trình",
+      commands: "Commands",
+      searchAria: "Tìm trong tài liệu",
+      searchPlaceholder: "Tìm trang",
+      navAria: "Tài liệu",
+      pagerAria: "Trang kế tiếp",
+      previous: "Trước",
+      next: "Tiếp",
+      tocAria: "Mục lục trang",
+      tocTitle: "Trên trang này",
+      externalLinks: "Liên kết ngoài",
+      copySuccess: "Đã lấy",
+      copyFallback: "Chọn lệnh"
+    }
+  },
+  en: {
+    code: "en",
+    label: "EN",
+    prefix: "/en",
+    contentRoot: path.join(contentRoot, "en"),
+    nav: NAV_BY_LOCALE.en,
+    ui: {
+      breadcrumb: "Docs",
+      language: "Language",
+      githubAria: "Open GitHub repository",
+      menu: "Menu",
+      commands: "Commands",
+      searchAria: "Search documentation",
+      searchPlaceholder: "Search pages",
+      navAria: "Documentation",
+      pagerAria: "Adjacent pages",
+      previous: "Previous",
+      next: "Next",
+      tocAria: "Page contents",
+      tocTitle: "On this page",
+      externalLinks: "External links",
+      copySuccess: "Copied",
+      copyFallback: "Select command"
+    }
+  }
+};
+
+const pagesFor = (locale) => locale.nav.flatMap((section) =>
+  section.pages.map((page) => ({ ...page, group: section.group }))
+);
 
 /** @param {{slug: string, href?: string}} page @returns {string} */
-function hrefFor(page) {
-  return page.href ?? `/${page.slug}`;
+function hrefFor(page, locale) {
+  const relative = page.href ?? `/${page.slug}`;
+  if (!locale.prefix) return relative;
+  return relative === "/" ? `${locale.prefix}/` : `${locale.prefix}${relative}`;
 }
 
 /** @param {string} value @returns {string} */
@@ -191,27 +343,27 @@ function stripTags(value) {
   return text;
 }
 
-/** @param {string} currentSlug @returns {string} */
-function renderNav(currentSlug) {
-  return NAV.map((section) => {
+/** @param {string} currentSlug @param {typeof LOCALES.vi} locale @returns {string} */
+function renderNav(currentSlug, locale) {
+  return locale.nav.map((section) => {
     const links = section.pages
       .map((page) => {
         const current = page.slug === currentSlug;
         const classes = current ? "nav-link current" : "nav-link";
         const aria = current ? ' aria-current="page"' : "";
-        return `            <a class="${classes}" href="${hrefFor(page)}"${aria}>${escapeHtml(page.nav)}</a>`;
+        return `            <a class="${classes}" href="${hrefFor(page, locale)}"${aria}>${escapeHtml(page.nav)}</a>`;
       })
       .join("\n");
     return `          <div class="nav-group">\n            <p class="nav-title">${escapeHtml(section.group)}</p>\n${links}\n          </div>`;
   }).join("\n");
 }
 
-/** @param {typeof pages[number]} page @returns {string} */
-function renderBreadcrumb(page) {
+/** @param {ReturnType<typeof pagesFor>[number]} page @param {typeof LOCALES.vi} locale @returns {string} */
+function renderBreadcrumb(page, locale) {
   if (page.slug === "index") return "";
   return [
     '            <nav class="breadcrumb" aria-label="Breadcrumb">',
-    '              <a href="/">Docs</a>',
+    `              <a href="${hrefFor({ slug: "index", href: "/" }, locale)}">${locale.ui.breadcrumb}</a>`,
     '              <span aria-hidden="true">/</span>',
     `              <span>${escapeHtml(page.group)}</span>`,
     '              <span aria-hidden="true">/</span>',
@@ -221,7 +373,7 @@ function renderBreadcrumb(page) {
   ].join("\n");
 }
 
-/** @param {typeof pages[number]} page @returns {string} */
+/** @param {ReturnType<typeof pagesFor>[number]} page @returns {string} */
 function renderPageHead(page) {
   // The landing page carries its own hero, so it is not given a generated head.
   if (page.slug === "index") return "";
@@ -234,24 +386,24 @@ function renderPageHead(page) {
   ].join("\n");
 }
 
-/** @param {number} index @returns {string} */
-function renderPager(index) {
+/** @param {number} index @param {ReturnType<typeof pagesFor>} pages @param {typeof LOCALES.vi} locale @returns {string} */
+function renderPager(index, pages, locale) {
   const previous = pages[index - 1];
   const next = pages[index + 1];
   if (!previous && !next) return "";
-  const parts = ['            <nav class="pager" aria-label="Trang kế tiếp">'];
+  const parts = [`            <nav class="pager" aria-label="${locale.ui.pagerAria}">`];
   if (previous) {
     parts.push(
-      `              <a class="pager-prev" href="${hrefFor(previous)}">`,
-      '                <span class="pager-label">Trước</span>',
+      `              <a class="pager-prev" href="${hrefFor(previous, locale)}">`,
+      `                <span class="pager-label">${locale.ui.previous}</span>`,
       `                <span class="pager-title">${escapeHtml(previous.nav)}</span>`,
       "              </a>"
     );
   }
   if (next) {
     parts.push(
-      `              <a class="pager-next" href="${hrefFor(next)}">`,
-      '                <span class="pager-label">Tiếp</span>',
+      `              <a class="pager-next" href="${hrefFor(next, locale)}">`,
+      `                <span class="pager-label">${locale.ui.next}</span>`,
       `                <span class="pager-title">${escapeHtml(next.nav)}</span>`,
       "              </a>"
     );
@@ -261,19 +413,29 @@ function renderPager(index) {
 }
 
 /**
- * @param {typeof pages[number]} page
+ * @param {ReturnType<typeof pagesFor>[number]} page
  * @param {number} index
  * @param {string} body
  * @param {string} version
+ * @param {typeof LOCALES.vi} locale
+ * @param {ReturnType<typeof pagesFor>} pages
  * @returns {string}
  */
-function renderPage(page, index, body, version) {
-  const canonical = page.slug === "index" ? `${SITE.origin}/` : `${SITE.origin}${hrefFor(page)}`;
+function renderPage(page, index, body, version, locale, pages) {
+  const canonical = `${SITE.origin}${hrefFor(page, locale)}`;
+  const alternateVi = `${SITE.origin}${hrefFor(page, LOCALES.vi)}`;
+  const alternateEn = `${SITE.origin}${hrefFor(page, LOCALES.en)}`;
   const documentTitle = page.slug === "index" ? SITE.title : `${page.title} · ${SITE.title}`;
   const description = stripTags(page.lead);
+  const languageLinks = Object.values(LOCALES).map((candidate) => {
+    const current = candidate.code === locale.code;
+    const classes = current ? "language-option current" : "language-option";
+    const aria = current ? ' aria-current="true"' : "";
+    return `<a class="${classes}" href="${hrefFor(page, candidate)}" hreflang="${candidate.code}" lang="${candidate.code}"${aria}>${candidate.label}</a>`;
+  }).join("\n          ");
 
   return `<!doctype html>
-<html lang="vi">
+<html lang="${locale.code}" data-copy-success="${locale.ui.copySuccess}" data-copy-fallback="${locale.ui.copyFallback}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -281,6 +443,9 @@ function renderPage(page, index, body, version) {
     <meta name="description" content="${escapeHtml(description)}" />
     <meta name="theme-color" content="#050505" />
     <link rel="canonical" href="${canonical}" />
+    <link rel="alternate" hreflang="vi" href="${alternateVi}" />
+    <link rel="alternate" hreflang="en" href="${alternateEn}" />
+    <link rel="alternate" hreflang="x-default" href="${alternateVi}" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <meta property="og:title" content="${escapeHtml(documentTitle)}" />
     <meta property="og:description" content="${escapeHtml(description)}" />
@@ -296,56 +461,58 @@ function renderPage(page, index, body, version) {
   </head>
   <body>
     <header class="topbar">
-      <a class="brand" href="/" aria-label="Pi Agent Platform">
+      <a class="brand" href="${hrefFor({ slug: "index", href: "/" }, locale)}" aria-label="Pi Agent Platform">
         <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" /></span>
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v${version} docs · VI</span>
-        <a class="button" href="${SITE.englishDocs}" lang="en" target="_blank" rel="noopener noreferrer">English docs</a>
-        <a class="button social" href="${SITE.repo}" target="_blank" rel="noopener noreferrer" aria-label="Mở GitHub repository">
+        <span class="pill"><span class="pill-dot"></span>v${version} docs · ${locale.label}</span>
+        <nav class="language-switch" aria-label="${locale.ui.language}">
+          ${languageLinks}
+        </nav>
+        <a class="button social" href="${SITE.repo}" target="_blank" rel="noopener noreferrer" aria-label="${locale.ui.githubAria}">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
           GitHub
         </a>
-        <button class="button mobile-menu" type="button" data-menu>Lộ trình</button>
-        <a class="button" href="/commands">Commands</a>
+        <button class="button mobile-menu" type="button" data-menu>${locale.ui.menu}</button>
+        <a class="button top-command-link" href="${hrefFor({ slug: "commands" }, locale)}">${locale.ui.commands}</a>
       </div>
     </header>
 
     <div class="layout with-toc">
       <aside class="sidebar" data-sidebar>
-        <div class="sidebar-search" aria-label="Tìm trong tài liệu">
+        <div class="sidebar-search" aria-label="${locale.ui.searchAria}">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M10.8 18.1a7.3 7.3 0 1 1 0-14.6 7.3 7.3 0 0 1 0 14.6Zm5.3-1.7 4.4 4.4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
           </svg>
-          <input type="search" placeholder="Tìm trang" data-filter />
+          <input type="search" placeholder="${locale.ui.searchPlaceholder}" data-filter />
         </div>
 
-        <nav aria-label="Tài liệu">
-${renderNav(page.slug)}
+        <nav aria-label="${locale.ui.navAria}">
+${renderNav(page.slug, locale)}
         </nav>
       </aside>
 
       <main>
         <div class="content-shell" data-article>
-${renderBreadcrumb(page)}${renderPageHead(page)}${body}
-${renderPager(index)}
+${renderBreadcrumb(page, locale)}${renderPageHead(page)}${body}
+${renderPager(index, pages, locale)}
             <footer class="footer">
               <p>Pi Agent Platform docs · static HTML · governed agent workflow</p>
-              <div class="footer-links" aria-label="External links">
+              <div class="footer-links" aria-label="${locale.ui.externalLinks}">
                 <a href="${SITE.origin}" target="_blank" rel="noopener noreferrer">piagent.io.vn</a>
                 <a href="${SITE.repo}" target="_blank" rel="noopener noreferrer">GitHub repository</a>
-                <a href="${SITE.englishDocs}" lang="en" target="_blank" rel="noopener noreferrer">English docs</a>
+                <a href="${hrefFor(page, locale.code === "vi" ? LOCALES.en : LOCALES.vi)}" hreflang="${locale.code === "vi" ? "en" : "vi"}">${locale.code === "vi" ? "English" : "Tiếng Việt"}</a>
                 <a href="${SITE.facebook}" target="_blank" rel="noopener noreferrer">Facebook profile</a>
               </div>
             </footer>
         </div>
       </main>
 
-      <aside class="toc" aria-label="Mục lục trang">
-        <p class="toc-title">Trên trang này</p>
+      <aside class="toc" aria-label="${locale.ui.tocAria}">
+        <p class="toc-title">${locale.ui.tocTitle}</p>
         <nav data-toc></nav>
       </aside>
     </div>
@@ -386,14 +553,18 @@ function build() {
   const version = JSON.parse(fs.readFileSync(path.join(repoRoot, "package.json"), "utf8")).version;
   /** @type {{file: string, html: string}[]} */
   const outputs = [];
-  for (const [index, page] of pages.entries()) {
-    const fragment = path.join(contentRoot, `${page.slug}.html`);
-    if (!fs.existsSync(fragment)) throw new Error(`missing content fragment: ${path.relative(repoRoot, fragment)}`);
-    const body = fs.readFileSync(fragment, "utf8").replace(/\s+$/, "");
-    if (body.includes("\t")) throw new Error(`${page.slug}: content fragment contains a tab character`);
-    const html = renderPage(page, index, body, version);
-    assertPreBlocksIntact(page.slug, body, html);
-    outputs.push({ file: path.join(siteRoot, `${page.slug}.html`), html });
+  for (const locale of Object.values(LOCALES)) {
+    const pages = pagesFor(locale);
+    for (const [index, page] of pages.entries()) {
+      const fragment = path.join(locale.contentRoot, `${page.slug}.html`);
+      if (!fs.existsSync(fragment)) throw new Error(`missing content fragment: ${path.relative(repoRoot, fragment)}`);
+      const body = fs.readFileSync(fragment, "utf8").replace(/\s+$/, "");
+      if (body.includes("\t")) throw new Error(`${locale.code}/${page.slug}: content fragment contains a tab character`);
+      const html = renderPage(page, index, body, version, locale, pages);
+      assertPreBlocksIntact(`${locale.code}/${page.slug}`, body, html);
+      const outputDir = locale.prefix ? path.join(siteRoot, locale.code) : siteRoot;
+      outputs.push({ file: path.join(outputDir, `${page.slug}.html`), html });
+    }
   }
   return outputs;
 }
@@ -415,7 +586,7 @@ function main(argv) {
     });
     if (stale.length > 0) {
       process.stderr.write(
-        `FAIL: docs-site output is stale for ${stale.map((item) => path.basename(item.file)).join(", ")}. ` +
+        `FAIL: docs-site output is stale for ${stale.map((item) => path.relative(siteRoot, item.file)).join(", ")}. ` +
         "Run: node scripts/build-docs-site.mjs\n"
       );
       return 1;
@@ -424,7 +595,10 @@ function main(argv) {
     return 0;
   }
 
-  for (const output of outputs) fs.writeFileSync(output.file, output.html);
+  for (const output of outputs) {
+    fs.mkdirSync(path.dirname(output.file), { recursive: true });
+    fs.writeFileSync(output.file, output.html);
+  }
   process.stdout.write(`${JSON.stringify({ ok: true, pages: outputs.length, out: path.relative(repoRoot, siteRoot) })}\n`);
   return 0;
 }
@@ -433,4 +607,4 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   process.exit(main(process.argv.slice(2)));
 }
 
-export { NAV, build, main };
+export { LOCALES, NAV, NAV_BY_LOCALE, build, hrefFor, main, pagesFor };

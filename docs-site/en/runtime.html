@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en" data-copy-success="Copied" data-copy-fallback="Select command">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Terminal commands for operators · Pi Agent Platform Docs</title>
+    <meta name="description" content="Use these commands outside Pi for setup, updates, doctor checks, benchmarks, capabilities, and MCP management." />
+    <meta name="theme-color" content="#050505" />
+    <link rel="canonical" href="https://piagent.io.vn/en/runtime" />
+    <link rel="alternate" hreflang="vi" href="https://piagent.io.vn/runtime" />
+    <link rel="alternate" hreflang="en" href="https://piagent.io.vn/en/runtime" />
+    <link rel="alternate" hreflang="x-default" href="https://piagent.io.vn/runtime" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta property="og:title" content="Terminal commands for operators · Pi Agent Platform Docs" />
+    <meta property="og:description" content="Use these commands outside Pi for setup, updates, doctor checks, benchmarks, capabilities, and MCP management." />
+    <meta property="og:url" content="https://piagent.io.vn/en/runtime" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/docs.css" />
+    <script src="/assets/docs.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/en/" aria-label="Pi Agent Platform">
+        <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" /></span>
+        <span>Pi Agent Platform</span>
+      </a>
+      <div class="top-actions">
+        <span class="pill"><span class="pill-dot"></span>v1.2.17 docs · EN</span>
+        <nav class="language-switch" aria-label="Language">
+          <a class="language-option" href="/runtime" hreflang="vi" lang="vi">VI</a>
+          <a class="language-option current" href="/en/runtime" hreflang="en" lang="en" aria-current="true">EN</a>
+        </nav>
+        <a class="button social" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer" aria-label="Open GitHub repository">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          GitHub
+        </a>
+        <button class="button mobile-menu" type="button" data-menu>Menu</button>
+        <a class="button top-command-link" href="/en/commands">Commands</a>
+      </div>
+    </header>
+
+    <div class="layout with-toc">
+      <aside class="sidebar" data-sidebar>
+        <div class="sidebar-search" aria-label="Search documentation">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M10.8 18.1a7.3 7.3 0 1 1 0-14.6 7.3 7.3 0 0 1 0 14.6Zm5.3-1.7 4.4 4.4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          <input type="search" placeholder="Search pages" data-filter />
+        </div>
+
+        <nav aria-label="Documentation">
+          <div class="nav-group">
+            <p class="nav-title">Get started</p>
+            <a class="nav-link" href="/en/">Overview</a>
+            <a class="nav-link" href="/en/quickstart">Quickstart</a>
+            <a class="nav-link" href="/en/scope">Platform scope</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Build</p>
+            <a class="nav-link" href="/en/profiles">Project profiles</a>
+            <a class="nav-link" href="/en/permissions">Permission modes</a>
+            <a class="nav-link" href="/en/commands">Command catalog</a>
+            <a class="nav-link" href="/en/workflows">Workflows</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">MCP</p>
+            <a class="nav-link" href="/en/mcp">MCP overview</a>
+            <a class="nav-link" href="/en/mcp-servers">Server management</a>
+            <a class="nav-link" href="/en/mcp-auth">Authentication</a>
+            <a class="nav-link" href="/en/mcp-approval">Approval gate</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Operate</p>
+            <a class="nav-link" href="/en/security">Security model</a>
+            <a class="nav-link" href="/en/architecture">Architecture</a>
+            <a class="nav-link" href="/en/context-engine">Context Engine</a>
+            <a class="nav-link" href="/en/benchmark">Benchmark</a>
+            <a class="nav-link current" href="/en/runtime" aria-current="page">Runtime tools</a>
+            <a class="nav-link" href="/en/team">Team usage</a>
+          </div>
+        </nav>
+      </aside>
+
+      <main>
+        <div class="content-shell" data-article>
+            <nav class="breadcrumb" aria-label="Breadcrumb">
+              <a href="/en/">Docs</a>
+              <span aria-hidden="true">/</span>
+              <span>Operate</span>
+              <span aria-hidden="true">/</span>
+              <span>Runtime tools</span>
+            </nav>
+            <div class="page-head">
+              <h1>Terminal commands for operators</h1>
+              <p>Use these commands outside Pi for setup, updates, doctor checks, benchmarks, capabilities, and MCP management.</p>
+            </div>
+<section class="section">
+  <div class="command-grid">
+    <article class="command-card"><header><span>Global setup</span><button class="clip-btn" data-clip="piagent-setup --mcp-preset core --subagents-preset safe">Copy</button></header><pre><code>piagent-setup --mcp-preset core --subagents-preset safe</code></pre></article>
+    <article class="command-card"><header><span>Full update</span><button class="clip-btn" data-clip="npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0&#10;npm install -g --ignore-scripts @piagent/platform@X.Y.Z&#10;piagent-install --stable --dry-run&#10;piagent-install --stable">Copy</button></header><pre><code>npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
+npm install -g --ignore-scripts @piagent/platform@X.Y.Z
+piagent-install --stable --dry-run
+piagent-install --stable</code></pre></article>
+    <article class="command-card"><header><span>Pi package only</span><button class="clip-btn" data-clip="piagent-install --version vX.Y.Z --resolve-tag --dry-run&#10;piagent-install --version vX.Y.Z --resolve-tag">Copy</button></header><pre><code>piagent-install --version vX.Y.Z --resolve-tag --dry-run
+piagent-install --version vX.Y.Z --resolve-tag</code></pre></article>
+    <article class="command-card"><header><span>Initialize a project</span><button class="clip-btn" data-clip="piagent-init /path/to/project">Copy</button></header><pre><code>piagent-init /path/to/project</code></pre></article>
+    <article class="command-card"><header><span>Doctor</span><button class="clip-btn" data-clip="piagent-doctor /path/to/project">Copy</button></header><pre><code>piagent-doctor /path/to/project</code></pre></article>
+    <article class="command-card"><header><span>Smoke benchmark</span><button class="clip-btn" data-clip="piagent-benchmark --dry-run&#10;piagent-benchmark">Copy</button></header><pre><code>piagent-benchmark --dry-run
+piagent-benchmark</code></pre></article>
+    <article class="command-card"><header><span>Production benchmark</span><button class="clip-btn" data-clip="piagent-benchmark --production --dry-run&#10;piagent-benchmark --production --surfaces piagent,codex-cli --model openai-codex/gpt-5.6-sol --thinking xhigh">Copy</button></header><pre><code>piagent-benchmark --production --dry-run
+piagent-benchmark --production --surfaces piagent,codex-cli \
+  --model openai-codex/gpt-5.6-sol --thinking xhigh</code></pre></article>
+    <article class="command-card"><header><span>Compare codex-cli</span><button class="clip-btn" data-clip="piagent-benchmark --surfaces piagent,codex-cli --model openai-codex/gpt-5.6-sol --thinking xhigh">Copy</button></header><pre><code>piagent-benchmark --surfaces piagent,codex-cli \
+  --model openai-codex/gpt-5.6-sol --thinking xhigh</code></pre></article>
+    <article class="command-card"><header><span>Trusted run</span><button class="clip-btn" data-clip="piagent-auto --full-access -p &quot;Run the trusted local benchmark suite.&quot;">Copy</button></header><pre><code>piagent-auto --read-only -p "Scout payment mapping. Do not edit source."
+piagent-auto --full-access -p "Run the trusted local benchmark suite."</code></pre></article>
+    <article class="command-card"><header><span>Capabilities</span><button class="clip-btn" data-clip="piagent-capabilities catalog --check&#10;piagent-capabilities doctor --profile .pi/piagent-profile.json">Copy</button></header><pre><code>piagent-capabilities catalog --check
+piagent-capabilities doctor --profile .pi/piagent-profile.json</code></pre></article>
+    <article class="command-card"><header><span>Verification</span><button class="clip-btn" data-clip="npm run verify&#10;npm test&#10;npm run typecheck">Copy</button></header><pre><code>npm run verify
+npm test
+npm run typecheck</code></pre></article>
+  </div>
+</section>
+            <nav class="pager" aria-label="Adjacent pages">
+              <a class="pager-prev" href="/en/benchmark">
+                <span class="pager-label">Previous</span>
+                <span class="pager-title">Benchmark</span>
+              </a>
+              <a class="pager-next" href="/en/team">
+                <span class="pager-label">Next</span>
+                <span class="pager-title">Team usage</span>
+              </a>
+            </nav>
+
+            <footer class="footer">
+              <p>Pi Agent Platform docs · static HTML · governed agent workflow</p>
+              <div class="footer-links" aria-label="External links">
+                <a href="https://piagent.io.vn" target="_blank" rel="noopener noreferrer">piagent.io.vn</a>
+                <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub repository</a>
+                <a href="/runtime" hreflang="vi">Tiếng Việt</a>
+                <a href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer">Facebook profile</a>
+              </div>
+            </footer>
+        </div>
+      </main>
+
+      <aside class="toc" aria-label="Page contents">
+        <p class="toc-title">On this page</p>
+        <nav data-toc></nav>
+      </aside>
+    </div>
+  </body>
+</html>
