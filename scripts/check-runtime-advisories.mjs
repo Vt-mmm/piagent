@@ -4,35 +4,9 @@
 //
 // The rule is "no moderate, high, or critical advisory in the pinned Pi host
 // and add-on tree".
-// What this adds is a way to accept one named advisory when there is provably
-// nothing to do about it, without lowering the bar for everything else.
-//
-// An accepted advisory is not forgotten:
-//   - it must still be present, so the entry disappears the moment upstream
-//     ships a fix rather than lingering as scar tissue;
-//   - it expires on a date, so accepting it can never become permanent by
-//     inattention.
-// Both of those fail the audit. A gate that quietly stops checking is worse
-// than no gate, because it reads as a pass.
-
-const ACCEPTED = [
-  {
-    id: "GHSA-mh99-v99m-4gvg",
-    package: "brace-expansion",
-    reviewBy: "2026-08-25",
-    reason: [
-      "Denial of service only: brace expansion can exhaust memory and crash the",
-      "process. No privilege escalation and no data exposure.",
-      "Nothing can fix it from here. The Pi host publishes an npm-shrinkwrap.json",
-      "that pins brace-expansion 5.0.7, and a published shrinkwrap takes",
-      "precedence over consumer overrides, so the resolution cannot be changed",
-      "by this repository. Every released Pi host carries a high brace-expansion",
-      "advisory: 0.81.1 and 0.82.0 carry this one, and 0.80.x carry the previous",
-      "GHSA-3jxr-9vmj-r5cp, so pinning an older host only trades one for another.",
-      "The fix is a regenerated shrinkwrap in a Pi release."
-    ].join(" ")
-  }
-];
+// There is deliberately no advisory allowlist. A supported host release must
+// audit clean at these severities; changing that policy requires changing this
+// gate and its tests explicitly.
 
 function readStdin() {
   return new Promise((resolve, reject) => {
@@ -53,12 +27,6 @@ function advisoryIdsFor(vulnerability) {
     .filter(Boolean);
 }
 
-function today() {
-  // Date-only comparison in UTC keeps the expiry independent of the runner's
-  // timezone.
-  return new Date().toISOString().slice(0, 10);
-}
-
 const raw = await readStdin();
 let report;
 try {
@@ -76,7 +44,6 @@ if (report.auditReportVersion !== 2) {
 }
 
 const blocking = [];
-const seen = new Set();
 for (const [name, vulnerability] of Object.entries(report.vulnerabilities ?? {})) {
   if (!["moderate", "high", "critical"].includes(vulnerability.severity)) continue;
   const ids = advisoryIdsFor(vulnerability);
@@ -85,23 +52,13 @@ for (const [name, vulnerability] of Object.entries(report.vulnerabilities ?? {})
     continue;
   }
   for (const id of ids) {
-    seen.add(id);
-    const accepted = ACCEPTED.find((entry) => entry.id === id && entry.package === name);
-    if (!accepted) blocking.push({ name, severity: vulnerability.severity, id });
+    blocking.push({ name, severity: vulnerability.severity, id });
   }
 }
 
-const failures = [];
-for (const entry of blocking) {
-  failures.push(`${entry.severity} advisory ${entry.id} in ${entry.name} is not accepted`);
-}
-for (const entry of ACCEPTED) {
-  if (!seen.has(entry.id)) {
-    failures.push(`accepted advisory ${entry.id} is no longer reported; remove it from ACCEPTED in ${"scripts/check-runtime-advisories.mjs"}`);
-  } else if (today() > entry.reviewBy) {
-    failures.push(`accepted advisory ${entry.id} passed its ${entry.reviewBy} review date; confirm it still applies or remove it`);
-  }
-}
+const failures = blocking.map(
+  (entry) => `${entry.severity} advisory ${entry.id} in ${entry.name} blocks the supported runtime`
+);
 
 if (failures.length > 0) {
   console.error("FAIL: runtime advisory policy");
@@ -110,6 +67,4 @@ if (failures.length > 0) {
 }
 
 const counts = report.metadata?.vulnerabilities ?? {};
-const acceptedList = ACCEPTED.map((entry) => `${entry.id} (review by ${entry.reviewBy})`).join(", ");
-console.log(`PASS: no unaccepted moderate, high, or critical advisory (${counts.moderate ?? 0} moderate, ${counts.high ?? 0} high, ${counts.critical ?? 0} critical)`);
-if (acceptedList) console.log(`Accepted, with reasons recorded in scripts/check-runtime-advisories.mjs: ${acceptedList}`);
+console.log(`PASS: no moderate, high, or critical advisory (${counts.moderate ?? 0} moderate, ${counts.high ?? 0} high, ${counts.critical ?? 0} critical)`);

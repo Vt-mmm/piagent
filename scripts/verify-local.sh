@@ -353,9 +353,9 @@ if (!rootPkg.pi.subagents?.agents?.length) {
   throw new Error("root package.json missing pi.subagents.agents");
 }
 const expectedPeers = {
-  "@earendil-works/pi-ai": "0.82.0",
-  "@earendil-works/pi-coding-agent": "0.82.0",
-  typebox: "1.1.38"
+  "@earendil-works/pi-ai": "0.84.1",
+  "@earendil-works/pi-coding-agent": "0.84.1",
+  typebox: "1.3.7"
 };
 for (const [name, version] of Object.entries(expectedPeers)) {
   if (rootPkg.peerDependencies?.[name] !== version) throw new Error(`root package peer ${name} must be pinned to ${version}`);

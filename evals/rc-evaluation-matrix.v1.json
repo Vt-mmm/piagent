@@ -11,7 +11,7 @@
     "maximumCandidateRevisions": 2
   },
   "versions": {
-    "piHost": "0.82.0",
+    "piHost": "0.84.1",
     "piagentPackage": "1.3.0-rc.2",
     "taskContract": 2,
     "acceptanceReceipt": 1,

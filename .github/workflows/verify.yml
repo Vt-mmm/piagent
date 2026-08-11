@@ -42,6 +42,12 @@ jobs:
         run: |
           node -p "JSON.stringify({ node: process.version, platform: process.platform, arch: process.arch })"
 
+      - name: Install Linux test tools
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ripgrep
+
       - name: Install dependencies
         run: npm ci --ignore-scripts --legacy-peer-deps
 

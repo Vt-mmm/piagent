@@ -109,7 +109,7 @@ const ratios = {
 };
 const report = {
   schemaVersion: 1,
-  pilotId: `solver-shadow-${new Date().toISOString().replace(/[-:.]/g, "").replace("Z", "Z")}`,
+  pilotId: `solver-shadow-${new Date().toISOString().replace(/[-:.]/g, "")}`,
   generatedAt: new Date().toISOString(),
   mode: "shadow",
   policyVersion: "solver-v1",

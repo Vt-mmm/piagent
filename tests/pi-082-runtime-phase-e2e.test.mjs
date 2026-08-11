@@ -12,6 +12,8 @@ import { workingTreeEvidenceDigest } from "../packages/piagent-core/extensions/w
 const require = createRequire(import.meta.url);
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const capabilityPromptRoot = path.join(repoRoot, "benchmarks", "capability-v1", "prompts");
+const expectedPiHostVersion = JSON.parse(fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"))
+  .peerDependencies["@earendil-works/pi-coding-agent"];
 
 function packageRootFrom(start) {
   let current = path.dirname(start);
@@ -53,7 +55,7 @@ function installedPiPackageRoot() {
   }
   const executable = executableOnPath("pi");
   const root = executable ? packageRootFrom(executable) : undefined;
-  if (!root) throw new Error("Pi 0.82 host package is unavailable on module resolution or PATH");
+  if (!root) throw new Error("The pinned Pi host package is unavailable on module resolution or PATH");
   return root;
 }
 
@@ -105,8 +107,8 @@ function createProject(temporary, options = {}) {
   fs.mkdirSync(cwd, { recursive: true });
   writeFile(cwd, ".pi/piagent-profile.json", `${JSON.stringify({
     schemaVersion: 1,
-    projectId: "pi-082-runtime-e2e",
-    displayName: "Pi 0.82 Runtime E2E",
+    projectId: "pinned-pi-runtime-e2e",
+    displayName: "Pinned Pi Runtime E2E",
     mode: "node-javascript",
     ...(options.authorityProfile ? { authorityProfile: options.authorityProfile } : {}),
     protectedPaths: [],
@@ -123,7 +125,7 @@ function createProject(temporary, options = {}) {
       finalGate: "enforce"
     }
   }, null, 2)}\n`);
-  writeFile(cwd, "package.json", `${JSON.stringify({ name: "pi-082-runtime-e2e", private: true, type: "module" }, null, 2)}\n`);
+  writeFile(cwd, "package.json", `${JSON.stringify({ name: "pinned-pi-runtime-e2e", private: true, type: "module" }, null, 2)}\n`);
   writeFile(cwd, "src/greeting.js", [
     "export function greet(name) {",
     "  return `Hello, ${name}!`;",
@@ -442,7 +444,7 @@ async function runActualSession({ host, piAi, guard, cwd, temporary, id, prompt,
   };
 }
 
-test("Pi 0.82 executes Piagent runtime tasks end to end without a provider or phase deadlock", async (t) => {
+test("the pinned Pi host executes Piagent runtime tasks end to end without a provider or phase deadlock", async (t) => {
   let piRoot;
   try {
     piRoot = installedPiPackageRoot();
@@ -450,7 +452,7 @@ test("Pi 0.82 executes Piagent runtime tasks end to end without a provider or ph
     t.skip(error.message);
     return;
   }
-  assert.equal(JSON.parse(fs.readFileSync(path.join(piRoot, "package.json"), "utf8")).version, "0.82.0");
+  assert.equal(JSON.parse(fs.readFileSync(path.join(piRoot, "package.json"), "utf8")).version, expectedPiHostVersion);
 
   const previousEnvironment = new Map();
   const environment = {
@@ -476,7 +478,7 @@ test("Pi 0.82 executes Piagent runtime tasks end to end without a provider or ph
     }
   });
 
-  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-pi-082-runtime-e2e-"));
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-pinned-runtime-e2e-"));
   t.after(() => fs.rmSync(temporary, { recursive: true, force: true }));
   const { packageRoot } = copyRuntimePlatform(temporary, piRoot);
   const host = await import(pathToFileURL(path.join(piRoot, "dist", "index.js")));

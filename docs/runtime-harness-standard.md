@@ -68,7 +68,7 @@ catalog. Raw prompt/source không được ghi vào decision. `unknown` provenan
 explicit user pin, unavailable model/effort, protected/external/destructive
 action, thiếu Git/verifier, hoặc host boundary không an toàn đều fail closed.
 
-Pi 0.82.0 có extension API đổi model nhưng path đó đồng thời cập nhật user
+Pi 0.84.1 có extension API đổi model nhưng path đó đồng thời cập nhật user
 default. Vì vậy Piagent không dùng nó để đổi model âm thầm. `auto` chỉ enforce ở
 prelaunch adapter do operator gọi bằng `piagent-route --execute --yes`; runtime
 extension vẫn chỉ shadow/recommend. Đây cũng là lý do model không bị đổi giữa

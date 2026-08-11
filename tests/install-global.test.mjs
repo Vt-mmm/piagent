@@ -12,7 +12,9 @@ const annotatedCommit = "3e7df37915b06575ec347b714669ec48fec8215d";
 // --stable reads the release tag out of this repository's own package.json, so
 // assertions about it have to follow the version instead of pinning it. Tags
 // passed as explicit arguments further down are fixtures and stay literal.
-const releaseTag = `v${JSON.parse(fs.readFileSync(path.join(repositoryRoot, "package.json"), "utf8")).version}`;
+const rootManifest = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "package.json"), "utf8"));
+const releaseTag = `v${rootManifest.version}`;
+const expectedPiHostVersion = rootManifest.peerDependencies["@earendil-works/pi-coding-agent"];
 const temporaryRoots = new Set();
 
 after(() => {
@@ -53,7 +55,7 @@ exit 2
 `);
   fs.writeFileSync(pi, `#!/usr/bin/env bash
 if [[ "\${1:-}" == "--version" ]]; then
-  printf '%s\\n' "\${PI_INSTALL_FAKE_PI_VERSION:-0.82.0}"
+  printf '%s\\n' "\${PI_INSTALL_FAKE_PI_VERSION:-${expectedPiHostVersion}}"
   exit 0
 fi
 if [[ "\${1:-}" == "list" ]]; then
@@ -177,7 +179,7 @@ describe("install-global release channels", () => {
         PI_INSTALL_FAKE_PI_VERSION: version
       });
       assert.equal(result.status, 1);
-      assert.match(result.stderr, /Pi Coding Agent 0\.82\.0 is required/);
+      assert.match(result.stderr, new RegExp(`Pi Coding Agent ${expectedPiHostVersion.replaceAll(".", "\\.")} is required`));
       assert.doesNotMatch(result.stdout, /\+ pi install/);
     }
   });
@@ -194,11 +196,11 @@ describe("install-global release channels", () => {
     ];
     const upgrade = runSetup(common, { PI_INSTALL_FAKE_PI_VERSION: "0.80.10" });
     assert.equal(upgrade.status, 0, upgrade.stderr);
-    assert.match(upgrade.stdout, /npm install -g --ignore-scripts @earendil-works\/pi-coding-agent@0\.82\.0/);
+    assert.ok(upgrade.stdout.includes(`npm install -g --ignore-scripts @earendil-works/pi-coding-agent@${expectedPiHostVersion}`));
 
     const disabled = runSetup([...common, "--no-install-pi"], { PI_INSTALL_FAKE_PI_VERSION: "0.80.10" });
     assert.equal(disabled.status, 1);
-    assert.match(disabled.stderr, /Pi Coding Agent 0\.82\.0 is required/);
+    assert.match(disabled.stderr, new RegExp(`Pi Coding Agent ${expectedPiHostVersion.replaceAll(".", "\\.")} is required`));
   });
 
   it("rejects --resolve-tag outside stable or exact version channels", () => {

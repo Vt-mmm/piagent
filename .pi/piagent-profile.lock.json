@@ -115,18 +115,18 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:347ca5d242d4ee559e74503e01a70e24c791c9195749157460cc3a1103799a42",
+    "packageDigest": "sha256:e478e04f6bf7d6519ab4fd90b847973b39081f5eb39210024880b7b90e75c845",
     "packageSource": "../",
-    "packageVersion": "1.3.0-ie.1",
+    "packageVersion": "1.3.0-ie.2",
     "runtimeFiles": [
       {
-        "byteSize": 4665,
-        "digest": "sha256:06feaaf6e62ec7da04074db066143474d4fc0aad3badd62609db7f3dc49d0be7",
+        "byteSize": 4664,
+        "digest": "sha256:6057a843872e5078972c0013997c810cb2b0c4d6d9002437da3ca193ffaceac9",
         "path": "package.json"
       },
       {
-        "byteSize": 989,
-        "digest": "sha256:c49e07829ac3f7519313f1a90907a0d578832b8cbee600bd5c0954f4f5a191a8",
+        "byteSize": 988,
+        "digest": "sha256:712bf8cfa9d61f7abadcdbb4a2dab20320abc2b47e4ba8f40db429be792d044e",
         "path": "packages/piagent-core/package.json"
       },
       {
@@ -450,8 +450,8 @@
         "path": "packages/piagent-core/runtime/registration/activity-inspector-command.ts"
       },
       {
-        "byteSize": 2702,
-        "digest": "sha256:a249e1976063927e48f016200b5e003239898f149589c90a9bfa8bcffed86d5f",
+        "byteSize": 2713,
+        "digest": "sha256:9fceae187647c6f1b9d14fcae0fb73bea3f19156d75fa7c12da4e57c3ed98398",
         "path": "packages/piagent-core/runtime/registration/extension-registration.ts"
       },
       {

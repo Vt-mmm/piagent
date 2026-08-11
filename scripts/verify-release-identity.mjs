@@ -58,7 +58,7 @@ const packageLock = readJson("package-lock.json");
 const capabilityLock = readJson(".pi/piagent-profile.lock.json");
 const version = rootPackage.version;
 const expectedTag = `v${version}`;
-const supportedPiHost = "0.82.0";
+const supportedPiHost = "0.84.1";
 
 // The package is published now, so the old private-forever rule is gone. What
 // still has to hold is that a scoped package cannot reach the registry as

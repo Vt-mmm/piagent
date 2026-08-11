@@ -21,7 +21,7 @@ function hostCompatibleTool(definition: RuntimeToolDefinition): RuntimeToolDefin
     ...definition,
     async execute(...args: any[]) {
       const result = await execute.apply(definition, args);
-      // Pi 0.82 treats thrown execute errors as tool failures. A legacy
+      // The pinned Pi host treats thrown execute errors as tool failures. A legacy
       // `isError` return field is ignored and reaches the model as success,
       // which made refused intake/progress calls look actionable.
       if (result && typeof result === "object" && result.isError === true) {

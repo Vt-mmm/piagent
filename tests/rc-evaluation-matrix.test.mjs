@@ -16,7 +16,7 @@ describe("RC evaluation matrix", () => {
     assert.match(matrix.transitionContract.sha256, /^[a-f0-9]{64}$/);
     assert.equal(matrix.transitionContract.betaRequiresExactRcMigrationGate, true);
     assert.equal(matrix.transitionContract.maximumCandidateRevisions, 2);
-    assert.equal(matrix.versions.piHost, "0.82.0");
+    assert.equal(matrix.versions.piHost, "0.84.1");
     assert.equal(matrix.profiles.length, 11);
     assert.equal(new Set(matrix.profiles).size, matrix.profiles.length);
     assert.ok(matrix.scenarioRevisions.length >= 4);

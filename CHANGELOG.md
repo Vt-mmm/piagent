@@ -4,7 +4,19 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
-- No changes after the `v1.3.0-ie.1` candidate boundary.
+No changes after the `v1.3.0-ie.2` candidate boundary.
+
+## v1.3.0-ie.2 - 2026-08-11
+
+### Runtime and release-gate refresh
+
+- Raised the exact Pi Coding Agent and Pi AI host pin to `0.84.1` and TypeBox
+  to `1.3.7`. The new host tree audits clean at moderate and above, replacing
+  the expired `0.82.0` advisory exception; provider-free host compatibility,
+  package lifecycle and release identity are re-gated on the new pin.
+- Scoped CodeQL away from the byte-pinned Hono benchmark fixture while keeping
+  all Piagent product and benchmark harness code analyzed, and made Ubuntu CI
+  install the ripgrep dependency exercised by helper evaluation.
 
 ## v1.3.0-ie.1 - 2026-08-11
 

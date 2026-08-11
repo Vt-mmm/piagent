@@ -1,0 +1,6 @@
+name: "Piagent CodeQL configuration"
+
+# This is a byte-pinned upstream package used only as an offline benchmark
+# fixture. Product and benchmark harness code remain in the analysis scope.
+paths-ignore:
+  - benchmarks/e2-framework-v1/project/vendor/hono/**

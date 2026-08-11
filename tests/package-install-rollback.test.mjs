@@ -210,7 +210,16 @@ describe("full-source package install, upgrade, and rollback", () => {
     const workflow = fs.readFileSync(path.join(repositoryRoot, ".github", "workflows", "verify.yml"), "utf8");
     assert.match(workflow, /matrix:\s*\n\s*os:\s*\n\s*- ubuntu-latest\s*\n\s*- macos-latest/);
     assert.match(workflow, /node-version:\s*["']22\.19\.0["']/);
+    assert.match(workflow, /- name: Install Linux test tools\s*\n\s*if: runner\.os == 'Linux'[\s\S]*apt-get install --yes ripgrep/);
     assert.match(workflow, /- name: Run policy regression tests\s*\n\s*run: npm test/);
     assert.doesNotMatch(workflow, /continue-on-error:\s*true/);
+  });
+
+  it("keeps vendored benchmark dependencies out of CodeQL without hiding product code", () => {
+    const workflow = fs.readFileSync(path.join(repositoryRoot, ".github", "workflows", "codeql.yml"), "utf8");
+    const config = fs.readFileSync(path.join(repositoryRoot, ".github", "codeql", "codeql-config.yml"), "utf8");
+    assert.match(workflow, /config-file:\s*\.\/\.github\/codeql\/codeql-config\.yml/);
+    assert.match(config, /paths-ignore:\s*\n\s*- benchmarks\/e2-framework-v1\/project\/vendor\/hono\/\*\*/);
+    assert.doesNotMatch(config, /^\s*- (?:benchmarks|scripts|packages)\/\*\*\s*$/m);
   });
 });

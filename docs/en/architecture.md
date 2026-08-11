@@ -140,7 +140,7 @@ scope, and acceptance receipt. Manual and high-risk tasks remain discovery-only
 through their plan/challenge checkpoints. Tool visibility is not authorization:
 scope, read-only, protected-path, destructive, and external-action guards remain
 active in every mode and for every mutation path. Piagent state/project mutators
-use Pi 0.82 native sequential execution metadata, pure reads remain
+use Pi 0.84.1 native sequential execution metadata, pure reads remain
 parallel-safe, and Pi retains its native per-file mutation queue. No custom
 runtime lock is acquired in authorization hooks.
 
@@ -193,7 +193,7 @@ Parent routing now has a versioned `low|medium|high|ultra` capability contract,
 selection provenance, exact authenticated-catalog matching, and
 `intelligence|balance|cost` objectives. It classifies before a fresh task call,
 never switches models mid-conversation, preserves `/model` and CLI pins, and
-fails closed when provenance or host capability is unknown. Pi 0.82.0's
+fails closed when provenance or host capability is unknown. Pi 0.84.1's
 extension model switch also updates user default state, so extension `auto`
 remains recommendation-only; enforcement is limited to the explicit
 `piagent-route --execute --yes` prelaunch adapter. The default remains `off`

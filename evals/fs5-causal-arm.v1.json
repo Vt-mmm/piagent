@@ -29,7 +29,7 @@
     },
     {
       "path": "scripts/phase-tools-evaluation.mjs",
-      "sha256": "24a633be612beaecc54e6279e9a3cf6747304dedc304a19730e098f4fac0efa0"
+      "sha256": "5cc8ca065d3c2c0f362529ff782c352b279a2e0b3b4c180b940a945a4d12dbb0"
     },
     {
       "path": "tests/phase-tools-evaluation.test.mjs",

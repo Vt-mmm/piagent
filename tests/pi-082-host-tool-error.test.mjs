@@ -9,6 +9,9 @@ import test from "node:test";
 import { registerRuntimeTool } from "../packages/piagent-core/runtime/registration/extension-registration.ts";
 
 const require = createRequire(import.meta.url);
+const repositoryRoot = path.resolve(import.meta.dirname, "..");
+const expectedPiHostVersion = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "package.json"), "utf8"))
+  .peerDependencies["@earendil-works/pi-coding-agent"];
 
 function packageRootFrom(start) {
   let current = path.dirname(start);
@@ -51,7 +54,7 @@ function installedPiPackageRoot() {
   }
   const executable = executableOnPath("pi");
   const root = executable ? packageRootFrom(executable) : undefined;
-  if (!root) throw new Error("Pi 0.82 host package is unavailable on module resolution or PATH");
+  if (!root) throw new Error("The pinned Pi host package is unavailable on module resolution or PATH");
   return root;
 }
 
@@ -95,7 +98,7 @@ function assistantMessage(content, stopReason) {
   };
 }
 
-test("Pi 0.82 host serializes a registered legacy refusal as an observed tool error without a provider", async (t) => {
+test("the pinned Pi host serializes a registered legacy refusal as an observed tool error without a provider", async (t) => {
   let piRoot;
   try {
     piRoot = installedPiPackageRoot();
@@ -107,12 +110,12 @@ test("Pi 0.82 host serializes a registered legacy refusal as an observed tool er
     return;
   }
   const manifest = JSON.parse(fs.readFileSync(path.join(piRoot, "package.json"), "utf8"));
-  assert.equal(manifest.version, "0.82.0");
+  assert.equal(manifest.version, expectedPiHostVersion);
 
   const host = await import(pathToFileURL(path.join(piRoot, "dist", "index.js")));
   const piAiRoot = dependencyPackageRoot(piRoot, "@earendil-works/pi-ai");
   const piAi = await import(pathToFileURL(path.join(piAiRoot, "dist", "index.js")));
-  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-pi-082-tool-error-"));
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-pinned-host-tool-error-"));
   t.after(() => fs.rmSync(temporary, { recursive: true, force: true }));
   const cwd = path.join(temporary, "project");
   const agentDir = path.join(temporary, "agent");

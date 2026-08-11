@@ -140,7 +140,7 @@ receipt. Manual và high-risk task chỉ được discovery trong suốt checkpo
 plan/challenge. Tool visibility không phải authorization: scope, read-only,
 protected-path, destructive và external-action guard vẫn hoạt động ở mọi mode và
 trên mọi đường mutation. Piagent state/project mutator dùng native sequential
-execution metadata của Pi 0.82, pure read vẫn parallel-safe, và Pi giữ native
+execution metadata của Pi 0.84.1, pure read vẫn parallel-safe, và Pi giữ native
 per-file mutation queue. Authorization hook không acquire custom runtime lock.
 
 Acceptance assurance và semantic repair có kill switch off-only độc lập. Tắt
@@ -192,7 +192,7 @@ selection provenance, exact authenticated-catalog matching và objective
 `intelligence|balance|cost`. Router phân loại trước model call của fresh task,
 không đổi model giữa conversation, giữ `/model` và CLI pin, đồng thời fail
 closed khi provenance hoặc host capability chưa rõ. Extension switch model của
-Pi 0.82.0 còn cập nhật user default, nên extension `auto` chỉ recommendation;
+Pi 0.84.1 còn cập nhật user default, nên extension `auto` chỉ recommendation;
 chỉ explicit prelaunch adapter `piagent-route --execute --yes` được enforce.
 Default vẫn `off` cho đến khi authenticated G1/G2 pass mọi aggregate gate
 `>=9.5` và từng outcome riêng lẻ đều `>9.5`.

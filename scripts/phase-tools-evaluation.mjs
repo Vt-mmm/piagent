@@ -187,10 +187,10 @@ durations.sort((left, right) => left - right);
 const reduction = p2WeightedBytes === 0 ? 0 : (p2WeightedBytes - phaseWeightedBytes) / p2WeightedBytes;
 const report = {
   schemaVersion: 1,
-  evaluationId: `phase-tools-${new Date().toISOString().replace(/[-:.]/g, "").replace("Z", "Z")}`,
+  evaluationId: `phase-tools-${new Date().toISOString().replace(/[-:.]/g, "")}`,
   generatedAt: new Date().toISOString(),
   platformVersion: "1.2.17",
-  piHostVersion: "0.82.0",
+  piHostVersion: "0.84.1",
   methodology: {
     baseline: "P2 cache-stable Piagent management schemas retained for each active lane after task intake.",
     candidate: "Phase intent is enforced at tool-call and mutation-carrier boundaries while the provider-visible schema remains byte-for-byte stable for the task.",
