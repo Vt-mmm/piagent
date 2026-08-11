@@ -37,7 +37,7 @@ Options:
   --resume <run-directory>     Continue an interrupted/paused run with the same seed.
   --max-sessions <n>           Stop cleanly after n new sessions and resume later.
   --max-runtime-minutes <n>    Stop cleanly after the current session once the budget is used.
-  --stop-after-failed-pair      Terminal-stop after completing a pair below the suite outcome floor.
+  --stop-after-failed-pair      Terminal-stop after a Piagent outcome falls below the suite floor.
   --yes                        Skip the cost/run-count confirmation.
   --dry-run                    Validate and print the execution plan only.
   --preflight-only             Freeze assets and verify auth/tools without starting a model.

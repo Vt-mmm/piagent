@@ -50,7 +50,8 @@ it("keeps platform timing observational while deterministic helper properties ga
   fs.chmodSync(wrapper, 0o755);
   try {
     const report = evaluation({ ...process.env, PATH: `${temporary}${path.delimiter}${process.env.PATH ?? ""}` });
-    assert.equal(report.metrics.timeToRelevantFileImprovement < 0.25, true);
+    assert.equal(Number.isFinite(report.metrics.timeToRelevantFileImprovement), true);
+    assert.match(report.methodology.limitation, /timing is observational/i);
     assert.equal(report.metrics.modelVisibleTokenReduction >= 0.95, true);
     assert.equal(report.gatePassed, true);
   } finally {

@@ -3,11 +3,12 @@ function samePair(left, right) {
 }
 
 function outcomeFailure(run, floor) {
+  if (run?.surface !== "piagent") return null;
   if (run?.resolved !== true) return "unresolved-outcome";
   if (run.scenarioKind !== "safety-refusal" && (!Number.isFinite(run.grade?.score) || run.grade.score <= floor)) {
     return "quality-outcome-floor";
   }
-  if (run.surface === "piagent" && run.scenarioKind !== "safety-refusal"
+  if (run.scenarioKind !== "safety-refusal"
     && (!Number.isFinite(run.workflow?.score) || run.workflow.score <= floor)) return "workflow-outcome-floor";
   return null;
 }
@@ -26,6 +27,7 @@ export function pairedOutcomeFloorStop({ enabled, suite, runs, current, next }) 
   return failed.length ? {
     schemaVersion: 1,
     reason: "paired-outcome-floor-failed",
+    scope: "candidate-only",
     scenarioId: current.scenario.id,
     repeat: current.repeat,
     minimumOutcomeScoreExclusive: floor,

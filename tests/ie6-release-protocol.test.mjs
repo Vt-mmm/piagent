@@ -18,12 +18,14 @@ const clone = () => structuredClone(protocol);
 
 test("freezes the intelligence-engine Luna Medium release comparison", () => {
   assert.deepEqual(ie6ReleaseProtocolValidationErrors(protocol), []);
-  assert.equal(protocol.candidate.expectedPackageVersion, "1.3.0-ie.5");
+  assert.equal(protocol.candidate.expectedPackageVersion, "1.3.0-ie.6");
   assert.equal(protocol.comparison.baselineSurface, "codex-cli");
   assert.equal(protocol.comparison.rawPiReleaseBaselineAllowed, false);
   assert.equal(protocol.comparison.piagentTreatment, "intelligence-engine");
   assert.equal(protocol.policy.semanticRepair, "off");
   assert.equal(protocol.policy.maximumSystemContinuations, 1);
+  assert.equal(protocol.stopRules.outcomeFloorScope, "candidate-only");
+  assert.equal(protocol.stopRules.baselineOnlyFailureDisposition, "candidate-only-dominance");
 });
 
 test("binds all 18 production families, three repeats and 18 inspected chunks", () => {
@@ -89,6 +91,7 @@ test("rejects identity, parity, family, chunk, retry, gate, claim and authorizat
     (value) => { value.suite.infrastructureRetries = 1; },
     (value) => { value.releaseGate.maximumFreshTokenRatioUpper95 = 1.1; },
     (value) => { value.stopRules.rewriteMeasuredEvidenceAllowed = true; },
+    (value) => { value.stopRules.outcomeFloorScope = "both-surfaces"; },
     (value) => { value.claimBoundary.longTaskClaimWithoutLongHorizonAllowed = true; },
     (value) => { value.authorization.releaseBenchmark = true; }
   ];

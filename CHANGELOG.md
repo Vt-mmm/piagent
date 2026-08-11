@@ -4,7 +4,20 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
-No changes after the `v1.3.0-ie.5` candidate boundary.
+No changes after the `v1.3.0-ie.6` candidate boundary.
+
+## v1.3.0-ie.6 - 2026-08-12
+
+### Candidate-only finite benchmark stop
+
+- Aligned the paired terminal stop with the production evaluator: a Piagent
+  outcome below the frozen floor stops after its pair, while a Codex-only miss
+  remains candidate-only dominance and does not prevent later coverage.
+- Kept helper wall-clock timing observational under parallel host load; exact
+  retrieval, token reduction, lifecycle, writer and privacy invariants remain
+  the release-gating properties.
+- Preserved the terminal `v1.3.0-ie.5` canary as immutable evidence; it is not
+  resumed or relabelled after this correction.
 
 ## v1.3.0-ie.5 - 2026-08-12
 

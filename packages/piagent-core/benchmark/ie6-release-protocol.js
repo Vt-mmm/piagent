@@ -52,7 +52,7 @@ export function ie6ReleaseProtocolValidationErrors(protocol) {
 
   const candidate = protocol.candidate ?? {};
   expectFields(errors, candidate, {
-    expectedPackageVersion: "1.3.0-ie.5",
+    expectedPackageVersion: "1.3.0-ie.6",
     sourceState: "clean-approved-commit-only",
     candidateIdentity: "commit-plus-materialized-content-digest-plus-tarball-sha512",
     anyMaterialChangeInvalidates: true,
@@ -124,7 +124,8 @@ export function ie6ReleaseProtocolValidationErrors(protocol) {
     resumeAfterIdentityDriftAllowed: false, continueAfterSafetyFailureAllowed: false,
     continueAfterOutcomeFloorFailureAllowed: false, continueAfterUnknownUsageAllowed: false,
     continueAfterPairedRegressionAllowed: false, automaticProviderRetryAllowed: false,
-    rewriteMeasuredEvidenceAllowed: false, failedChunkRequiresOperatorDecision: true
+    rewriteMeasuredEvidenceAllowed: false, failedChunkRequiresOperatorDecision: true,
+    outcomeFloorScope: "candidate-only", baselineOnlyFailureDisposition: "candidate-only-dominance"
   }, "stopRules");
 
   const dossier = protocol.dossierContract ?? {};

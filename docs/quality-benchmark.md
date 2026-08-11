@@ -574,6 +574,12 @@ comparable attempt chia cho số resolved outcome của từng arm; failure-awar
 này cũng phải không xấu hơn ngưỡng. Baseline failure vì vậy không làm gate bất
 khả thi, đồng thời cũng không biến mất khỏi chi phí đạt kết quả.
 
+Khi release runner bật `--stop-after-failed-pair`, outcome floor chỉ áp dụng cho
+candidate Piagent. Baseline-only failure vẫn được giữ nguyên trong ledger dưới
+dạng candidate-only dominance và runner tiếp tục; Piagent unresolved, quality
+không vượt floor hoặc workflow không vượt floor mới tạo terminal stop. Quy tắc
+này khớp evaluator và ngăn một lỗi của baseline vô tình chặn bằng chứng ứng viên.
+
 ## Tùy chọn hữu ích
 
 ```bash

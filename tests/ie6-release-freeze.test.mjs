@@ -12,7 +12,7 @@ test("reports a valid provider-closed IE6 freeze plan without writing evidence",
   assert.equal(result.status, 0, result.stderr);
   const report = JSON.parse(result.stdout);
   assert.equal(report.status, "valid-provider-closed");
-  assert.equal(report.expectedPackageVersion, "1.3.0-ie.5");
+  assert.equal(report.expectedPackageVersion, "1.3.0-ie.6");
   assert.equal(report.totalSessions, 108);
   assert.equal(report.chunks, 18);
   assert.equal(report.sessionsPerChunk, 6);

@@ -1243,13 +1243,28 @@ test("one command compares Piagent with controlled Codex CLI using strict JSONL 
   assert.equal(new Set(codexHomes).size, 3, "every measured Codex session must receive a clean CODEX_HOME");
 });
 
-test("terminal-stops at the paired boundary after an outcome-floor failure", (t) => {
+test("does not terminal-stop when only the baseline fails the outcome floor", (t) => {
   const value = fixture(t);
   const suite = JSON.parse(fs.readFileSync(value.suite, "utf8"));
   suite.releaseGate = { minimumOutcomeScoreExclusive: 9.5 };
   fs.writeFileSync(value.suite, `${JSON.stringify(suite, null, 2)}\n`);
   const args = [runner, "--suite", value.suite, "--surfaces", "piagent,codex-cli", "--model", "test/fake-model", "--thinking", "high", "--repeats", "3", "--stop-after-failed-pair", "--yes", "--output", value.output];
   const env = { ...process.env, BENCHMARK_FAKE_FAIL_CODEX: "1", PIAGENT_BENCHMARK_PI_COMMAND: value.fakePi, PIAGENT_BENCHMARK_CODEX_COMMAND: value.fakeCodex, PIAGENT_BENCHMARK_TASK_FIXTURE: path.join(root, "evals", "fixtures", "task-contract.valid.json") };
+  const result = spawnSync(process.execPath, args, { cwd: root, encoding: "utf8", timeout: 60_000, env });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const runs = fs.readFileSync(path.join(value.output, "runs.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
+  assert.equal(runs.length, 6);
+  assert.equal(fs.existsSync(path.join(value.output, "stopped.json")), false);
+  assert.equal(fs.existsSync(path.join(value.output, "report.json")), true);
+});
+
+test("terminal-stops at the paired boundary after a candidate outcome-floor failure", (t) => {
+  const value = fixture(t);
+  const suite = JSON.parse(fs.readFileSync(value.suite, "utf8"));
+  suite.releaseGate = { minimumOutcomeScoreExclusive: 9.5 };
+  fs.writeFileSync(value.suite, `${JSON.stringify(suite, null, 2)}\n`);
+  const args = [runner, "--suite", value.suite, "--surfaces", "piagent,codex-cli", "--model", "test/fake-model", "--thinking", "high", "--repeats", "3", "--stop-after-failed-pair", "--yes", "--output", value.output];
+  const env = { ...process.env, BENCHMARK_FAKE_FAIL_PIAGENT: "1", PIAGENT_BENCHMARK_PI_COMMAND: value.fakePi, PIAGENT_BENCHMARK_CODEX_COMMAND: value.fakeCodex, PIAGENT_BENCHMARK_TASK_FIXTURE: path.join(root, "evals", "fixtures", "task-contract.valid.json") };
   const result = spawnSync(process.execPath, args, { cwd: root, encoding: "utf8", timeout: 60_000, env });
   assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`);
   assert.match(result.stderr, /terminal-stopped after paired outcome-floor failure/);
@@ -1258,6 +1273,7 @@ test("terminal-stops at the paired boundary after an outcome-floor failure", (t)
   assert.deepEqual(new Set(runs.map((run) => run.surface)), new Set(["piagent", "codex-cli"]));
   const stopped = JSON.parse(fs.readFileSync(path.join(value.output, "stopped.json"), "utf8"));
   assert.equal(stopped.reason, "paired-outcome-floor-failed");
+  assert.equal(stopped.scope, "candidate-only");
   assert.equal(stopped.resumeAllowed, false);
   assert.equal(stopped.completedRuns, 2);
   assert.equal(fs.existsSync(path.join(value.output, "report.json")), false);
