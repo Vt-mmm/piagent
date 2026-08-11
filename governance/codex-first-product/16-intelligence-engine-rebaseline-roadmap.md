@@ -63,9 +63,9 @@ Allowed states: `not-started`, `in-progress`, `blocked`, `implemented`,
 | CF-IE3-03 | `complete` | Strict opt-in profile retains all advanced capability enforcement | Strict profile silently weakens safety/scope/current-tree truth |
 | CF-IE4-01 | `complete` | Provider-free causal fixtures comparing mechanical-only and intelligence-engine | Any correctness regression or new loop |
 | CF-IE4-02 | `complete` | Full local/type/package/install/migration/rollback gate on exact tree | Any required local gate fails |
-| CF-IE5-01 | `in-progress` | One Fullstack Luna Medium Piagent/Codex pair plus at most one evidence-backed confirmation after a code change | Any confirmation finite gate fails |
-| CF-IE5-02 | `blocked` | One Migration Luna Medium Piagent/Codex pair | IE5-01 fails or IE4 incomplete |
-| CF-IE6-01 | `blocked` | Frozen statistical protocol and exact release candidate | IE5 incomplete |
+| CF-IE5-01 | `complete` | One Fullstack Luna Medium Piagent/Codex pair plus at most one evidence-backed confirmation after a code change | Any confirmation finite gate fails |
+| CF-IE5-02 | `complete` | One Migration Luna Medium Piagent/Codex pair | IE5-01 fails or IE4 incomplete |
+| CF-IE6-01 | `not-started` | Frozen statistical protocol and exact release candidate | IE5 incomplete |
 | CF-IE6-02 | `blocked` | Chunked paired benchmark, cohorts, platforms and release dossier | Upstream release gate incomplete |
 
 ## Promotion map
@@ -103,10 +103,13 @@ Allowed states: `not-started`, `in-progress`, `blocked`, `implemented`,
 - Capability catalog/lock was current at the IE4 boundary. The subsequent
   bounded context-delivery correction is current at
   `sha256:bdc2b02dbb2731cf56f0e606bb8eb22fa17a253a5a11f392728558e09e00cb31`.
-- All four capability-shaped runtime intake messages remain below 2,600
-  characters. Mechanical control emits no criterion-map text; the intelligence
-  arm changes only `PIAGENT_INTELLIGENCE_ENGINE`, preserves task truth and tool
-  schemas, and adds no provider follow-up turn.
+- Before the bounded source snapshot, all four capability-shaped runtime intake
+  messages remained below 2,600 characters. The final source-delivery boundary
+  is below 3,600 characters for the same fixtures and replaces later file reads
+  with at most 900 tokens of current scoped source. Mechanical control emits no
+  criterion-map text; the intelligence arm changes only
+  `PIAGENT_INTELLIGENCE_ENGINE`, preserves task truth and tool schemas, and adds
+  no provider follow-up turn.
 - No provider session or benchmark evidence was created during IE0-IE4.
 
 ## IE5 Fullstack pair #1 and finite correction
@@ -134,3 +137,41 @@ Allowed states: `not-started`, `in-progress`, `blocked`, `implemented`,
 - Exactly one newly preflighted Fullstack confirmation pair may now run. A
   repeated duration failure closes this hypothesis; no third Fullstack pair and
   no Migration pair is allowed.
+
+## IE5 exit evidence — 2026-08-11
+
+- Exact source: clean commit `effc58fca7582d0f12ea0fbd55452875a1ed1070`,
+  candidate `073bbbc819a43247e4fd91602d7fffcf5363d615590dcee9b7c73b28da215f13`
+  across 1,420 files, suite
+  `bb2e97a83a8a3d06976bcc94259e60c3513626704bd463d87c9808e66fe5152c`.
+- Fullstack confirmation: both surfaces passed grade, scope and safety at 10;
+  Piagent workflow was 10 with 6/6 criteria, 3/3 critical, zero retry, zero
+  continuation and zero blocked call. Piagent used 19,045 fresh tokens versus
+  Codex CLI 39,016 (`0.4881`, 51.19% lower) and 114.134 versus 127.137 seconds
+  (`0.8977`).
+- Migration: both surfaces passed grade, scope and safety at 10; Piagent
+  workflow was 10 with 8/8 criteria, 3/3 critical, zero retry, zero
+  continuation and zero blocked call. Piagent used 18,335 fresh tokens versus
+  Codex CLI 30,823 (`0.5948`, 40.52% lower) and 152.787 versus 165.214 seconds
+  (`0.9248`).
+- The two-family diagnostic total is 37,380 versus 69,839 fresh tokens and
+  266.921 versus 292.351 seconds. This is engineering evidence that the
+  criterion graph plus bounded current-source delivery recovered the intended
+  efficiency on both steady-state and cold-start tasks; it is not a statistical
+  release or generalization claim.
+- Fullstack evidence: private run
+  `/Users/vtamm/.pi/benchmarks/cf-ie5-fullstack-confirm-effc58f-v1`; report,
+  runs and manifest SHA-256 are respectively
+  `0d74b9cf7a37feb89a6df9e3e96e6f68799fa47606b74513d268aad997e4c03d`,
+  `164071416b68bd1e64c475b44e6be637bff3fec689415ada0292768d36ff6b91`,
+  and `64d18ca8d08f6a2a96aca7a3b17de27e0a886df2400ab5a5fc77210ec1b4ae4e`.
+- Migration evidence: private run
+  `/Users/vtamm/.pi/benchmarks/cf-ie5-migration-effc58f-v1`; report, runs and
+  manifest SHA-256 are respectively
+  `7e4fa7f4124d7c37613caf0b2b09bfd74fd1c7d26a0759099aea015338928b3b`,
+  `be63cc233fd3db8316c188a5716bb2cb633d31640c1acdf914d54f5648dd2341`,
+  and `ab706c20257c7465552543ff9e182648e419557f322b0b2320aec202b3b69830`.
+- Both reports intentionally end at `repeat-gate-failed`: one repeat per family
+  cannot authorize a token-saving, generalization or release claim. Provider
+  work stops here. IE6 must first freeze the exact RC, representative family
+  set, repeat/chunk protocol, platform/cohort gates and abort rules.

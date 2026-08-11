@@ -1,16 +1,16 @@
 ---
 plan_id: codex-first-product
-program_status: intelligence-engine-bounded-canary-ready
+program_status: intelligence-engine-ie5-complete-ie6-protocol-pending
 current_workstream: IE
-current_phase: IE5
-current_work_item: CF-IE5-01
-next_work_item: CF-IE5-02
+current_phase: IE6
+current_work_item: CF-IE6-01
+next_work_item: CF-IE6-02
 last_updated: 2026-08-11
 execution_mode: controlled-work-item-sessions
 canonical_roadmap: 16-intelligence-engine-rebaseline-roadmap.md
 canonical_tracker_path: governance/codex-first-product/STATUS.md
-candidate_state: ie5-fullstack-confirmation-pending
-candidate_digest: null
+candidate_state: ie5-canaries-passed-statistical-protocol-pending
+candidate_digest: 073bbbc819a43247e4fd91602d7fffcf5363d615590dcee9b7c73b28da215f13
 policy_manifest_version: authority-v1
 ---
 
@@ -24,15 +24,15 @@ This is the only mutable progress tracker for the plan. Phase files define inten
 |---|---|
 | Program | v1.3 intelligence-engine rebaseline; the prior FS6 finite release plan remains terminal NO-GO historical evidence |
 | Canonical roadmap | [`16-intelligence-engine-rebaseline-roadmap.md`](16-intelligence-engine-rebaseline-roadmap.md) |
-| Current phase | `IE5` — bounded Luna Medium canary after the complete provider-free IE0-IE4 gate |
-| Active work item | `CF-IE5-01` — freeze and preflight the one permitted Fullstack confirmation after an evidence-backed context-delivery correction; do not open Migration unless every finite gate passes |
+| Current phase | `IE6` — provider work stopped after both bounded Luna Medium canaries passed; statistical protocol and exact RC are not yet frozen |
+| Active work item | `CF-IE6-01` — freeze the release benchmark protocol, representative family set, repeats/chunks, exact package identity, platform/cohort gates and abort rules before any further provider execution |
 | Owner/session | `root`; operator approved the complete intelligence-engine implementation path on `2026-08-11` with checklist continuity across sessions |
-| Candidate | RC.2 commit `fc23a73b…4880`, tree `218002fe…d8ec`, candidate `sha256:356c90a4…8fcc1`, tarball SHA-512 `15fd1247…a7388`; local assembly/readback passed but exact Migration gate failed |
+| Candidate | Intelligence-engine commit `effc58fca7582d0f12ea0fbd55452875a1ed1070`, clean candidate `073bbbc8…15f13` across 1,420 files; IE5 diagnostic canaries passed, but this is not yet a frozen release artifact |
 | Policy manifest | `authority-v1`, digest `sha256:28112cb6…7393`; current identity independently revalidated by FS3 gate audit `59e878c8…aa13` |
-| Provider authority | `one CF-IE5-01 confirmation pair only after clean commit and provider-free preflight`. RC.2 and the first IE5 pair are immutable and must never resume. Full production and IE5-02 remain closed until the confirmation passes every finite gate. |
-| Last verified release evidence | RC.2 pair 1 passed all gates at token/duration ratios `0.4620`/`0.8420`. Pair 2 passed quality/scope/safety/workflow 10 and ratios `1.1828`/`1.2439`, but recorded 7/8 acceptance, 2/3 critical and blocked-valid upper bound 1, so the exact per-pair gate failed. |
-| Blocker | First Fullstack pair failed only the duration ceiling (`1.7712 > 1.5`) despite grade/scope/safety/workflow 10 and fresh ratio `1.0490`. Release and Migration remain blocked. |
-| Next exact action | Commit the locally verified direct criterion-context snapshot, preflight the new candidate, then execute the single retries-zero Fullstack confirmation. A repeated duration failure closes the hypothesis without a third pair. |
+| Provider authority | Closed after the two permitted IE5 pairs. No further provider run is authorized until `CF-IE6-01` freezes the exact RC/protocol and the operator approves the bounded chunks. Historical RC.1/RC.2 and IE5 runs must never be resumed or relabeled. |
+| Last verified release evidence | Diagnostic only: Fullstack Piagent/Codex fresh ratio `0.4881`, duration ratio `0.8977`; Migration fresh ratio `0.5948`, duration ratio `0.9248`. Both surfaces had grade/scope/safety 10; Piagent had workflow 10, complete critical acceptance, zero retry/continuation/block. Repeat and evidence-size gates correctly deny a release/token claim. |
+| Blocker | No exact release artifact or frozen statistical protocol yet; one repeat across two families has no confidence interval, platform, cohort or generalization authority. |
+| Next exact action | Complete `CF-IE6-01` provider-free: freeze the exact package/commit/policy, representative family and repeat matrix, six-session chunk boundary, platform/cohort gates, stop rules and release dossier schema. Do not start the 108-session release run from this tracker state. |
 
 The old P0-P7 unattended autopilot and the exhausted FS6 provider plan are not
 active for this workstream. Resume from the first non-complete IE item in this
@@ -47,8 +47,8 @@ tracker and preserve every finite dependency and stop rule.
 | IE2 Context/execution | `complete`; scoped selection, checkpoint, resume and long-input bounds are green | No | Context stays in scope; graph/policy survives resume; stale verifier remains invalid | Complete |
 | IE3 Production critical path | `complete`; graph planning defaults on, speculative capabilities retain broad shadow/advisory modes and strict opt-in | No | Zero graph-triggered provider turns; shared continuation ceiling remains one | Complete |
 | IE4 Local causal gate | `complete`; mechanical versus intelligence differs by one switch and the full local gate passes | No | `npm run verify` PASS, 1958/1958; focused 24/24; guard/resume 108/108; architecture 202 | Complete |
-| IE5 Medium canary | `in-progress`; first Fullstack pair passed truth/token but failed duration; one bounded correction is locally green | Yes, one confirmation | Correctness 10, fresh `<=1.25`, duration `<=1.5`, no retry/unknown/loop | Commit, preflight and run the one Fullstack confirmation |
-| IE6 Release evidence | `blocked` | Yes, chunked | Frozen statistical protocol, cohorts, platforms, exact artifact | IE5 pass |
+| IE5 Medium canary | `complete`; Fullstack confirmation and Migration both passed every finite engineering gate on clean commit `effc58f…` | Yes, exactly two final pairs | Correctness/workflow 10, fresh `0.4881`/`0.5948`, duration `0.8977`/`0.9248`, no retry/unknown/loop | Complete; do not add another canary |
+| IE6 Release evidence | `not-started`; provider closed pending protocol freeze | No until approved chunks | Frozen statistical protocol, cohorts, platforms, exact artifact | Complete `CF-IE6-01` provider-free |
 
 ## Full-source phase map
 
@@ -731,24 +731,24 @@ Untracked production import audit: 15 of 16 modules are reached directly by runt
 ## Active handoff
 
 ```text
-Work item: CF-IE5-01
-State: in progress; first Fullstack pair stopped on duration, one confirmation after one code change remains
+Work item: CF-IE6-01
+State: not started; IE5 bounded canaries complete and provider work stopped before statistical release evidence
 Owner/session: root / operator-approved intelligence-engine implementation and bounded Luna Medium canary, 2026-08-11
-Baseline tree/status: clean commit 1d079da90412674678c6ab6cd714b1542aff3112; candidate 38580c7c565ced6df2b052a461372eefef7552a731e7230bf396171b6a50b20c; 1,419 files
-Candidate state/digest: first pair immutable diagnostic stop; correction locally verified but not yet committed/preflighted
+Baseline tree/status: clean commit effc58fca7582d0f12ea0fbd55452875a1ed1070; candidate 073bbbc819a43247e4fd91602d7fffcf5363d615590dcee9b7c73b28da215f13; 1,420 files
+Candidate state/digest: IE5 canaries passed; diagnostic only, not yet a frozen release artifact
 Policy manifest version: authority-v1; intelligence-engine treatment differs from mechanical-core only by PIAGENT_INTELLIGENCE_ENGINE=on
 Changed: additive Criterion Graph/context selection plus one bounded current-file delivery correction; speculative capabilities remain shadow/advisory and strict opt-in
-Out of scope: resuming RC.1/RC.2 or the first IE5 pair; Migration before Fullstack passes; third Fullstack pair; production/108-session run; cohorts/private holdout/tag/push/publish
-Verified: first candidate full local 1958/1958; first pair grade/scope/safety/workflow 10, acceptance 6/6 and critical 3/3, zero retry/continuation/block; correction context/Pi/causal 35/35 plus full npm run verify, typecheck and architecture 203 PASS
-Evidence: private run /Users/vtamm/.pi/benchmarks/cf-ie5-fullstack-1d079da-v1; report SHA-256 8c9dc7f47b68839565fa831515233f7632f4e913b645b4652f0640ef2cad87ed; runs SHA-256 9f144cc8eba4e22c35a93c9ab54cd19755798b470b98ef787c7e34571c805d9c
+Out of scope: resuming RC.1/RC.2 or any IE5 run; third Fullstack/Migration pair; production/108-session run before protocol freeze; cohorts/private holdout/tag/push/publish
+Verified: full local 1958/1958; context/Pi/causal 35/35; typecheck and architecture 203 PASS; Fullstack and Migration grade/scope/safety/workflow 10 with complete critical acceptance, zero retry/continuation/block
+Evidence: Fullstack /Users/vtamm/.pi/benchmarks/cf-ie5-fullstack-confirm-effc58f-v1 (report 0d74b9cf…c03d, runs 16407141…6b91); Migration /Users/vtamm/.pi/benchmarks/cf-ie5-migration-effc58f-v1 (report 7e4fa7f4…8b3b, runs be63cc23…2341)
 Feature modes/authority: Criterion Graph on; solver/phase shadow; acceptance/performance advisory; semantic repair broad off; helpers recommend; parent routing off
 Schema/migration: Task Contract v2 additive graph only; legacy contracts remain readable; exact verifier/current-tree/terminal truth unchanged
 Rollback: PIAGENT_INTELLIGENCE_ENGINE=off restores mechanical context behavior without deleting capability source or rewriting task evidence
-Decision: token ratio 1.0490 passes, duration ratio 1.7712 fails; direct current-file context delivery is the only correction hypothesis
-Known limitation: successful workspaces were not retained, so phase telemetry proves tool/message churn but not individual command causality
-Stop-rule audit: first pair stopped immediately; Migration unopened; correction received provider-free gates only; exactly one Fullstack confirmation remains
-Blocker: confirmation must achieve duration <=1.5 while preserving every correctness/workflow/usage gate
-Next exact action: commit correction, provider-free preflight exact new candidate, then run one retries-zero Fullstack confirmation and stop on its result
+Decision: IE5 passes. Fullstack fresh/duration ratios 0.4881/0.8977; Migration 0.5948/0.9248. Results are diagnostic because each family has one repeat.
+Known limitation: no confidence interval, platform/cohort/generalization evidence or exact release package identity; context-window peak remains unavailable
+Stop-rule audit: exactly one evidence-backed Fullstack confirmation and one unlocked Migration pair ran; no retry, third pair or production expansion occurred
+Blocker: CF-IE6-01 protocol/artifact freeze and later explicit bounded-chunk authority
+Next exact action: provider-free IE6 protocol/package/platform/cohort checklist freeze; no provider call from this state
 ```
 
 ## Recent FS0 handoffs — non-executable
