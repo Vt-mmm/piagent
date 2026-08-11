@@ -37,6 +37,7 @@ Options:
   --resume <run-directory>     Continue an interrupted/paused run with the same seed.
   --max-sessions <n>           Stop cleanly after n new sessions and resume later.
   --max-runtime-minutes <n>    Stop cleanly after the current session once the budget is used.
+  --stop-after-failed-pair      Terminal-stop after completing a pair below the suite outcome floor.
   --yes                        Skip the cost/run-count confirmation.
   --dry-run                    Validate and print the execution plan only.
   --preflight-only             Freeze assets and verify auth/tools without starting a model.
@@ -90,6 +91,7 @@ export function parseBenchmarkArgs(argv) {
     resume: undefined,
     maxSessions: undefined,
     maxRuntimeMinutes: undefined,
+    stopAfterFailedPair: false,
     yes: false,
     dryRun: false,
     preflightOnly: false,
@@ -197,6 +199,9 @@ export function parseBenchmarkArgs(argv) {
       case "--max-runtime-minutes":
         options.maxRuntimeMinutes = positiveInteger(requireValue(argv, index, arg), arg, 1, 24 * 60);
         index += 1;
+        break;
+      case "--stop-after-failed-pair":
+        options.stopAfterFailedPair = true;
         break;
       case "--yes":
         options.yes = true;

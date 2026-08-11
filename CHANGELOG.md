@@ -4,7 +4,19 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
-No changes after the `v1.3.0-ie.4` candidate boundary.
+No changes after the `v1.3.0-ie.5` candidate boundary.
+
+## v1.3.0-ie.5 - 2026-08-12
+
+### Finite release benchmark and prerelease publishing
+
+- Added a release-only paired outcome stop that finishes the current Piagent/Codex
+  pair, records a terminal non-resumable receipt, and starts no later provider
+  session after an outcome falls below the frozen suite floor.
+- Bound prerelease packages to the npm `next` dist-tag in both package identity
+  and the tag-driven publish workflow, preserving `latest` for stable releases.
+- Preserved the failed `v1.3.0-ie.4` measurement as immutable evidence; no suite,
+  grader, prompt, or measured result was rewritten for this candidate.
 
 ## v1.3.0-ie.4 - 2026-08-11
 

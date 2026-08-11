@@ -84,7 +84,8 @@ export function benchmarkPreflightReceipt({
       timeoutSeconds: options.timeoutSeconds,
       infrastructureRetries: options.infrastructureRetries,
       retryDelaySeconds: options.retryDelaySeconds,
-      maxSessions: options.maxSessions ?? null
+      maxSessions: options.maxSessions ?? null,
+      stopAfterFailedPair: options.stopAfterFailedPair
     },
     runtime: {
       gitVersion: runtime.gitVersion,

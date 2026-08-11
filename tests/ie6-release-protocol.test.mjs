@@ -18,7 +18,7 @@ const clone = () => structuredClone(protocol);
 
 test("freezes the intelligence-engine Luna Medium release comparison", () => {
   assert.deepEqual(ie6ReleaseProtocolValidationErrors(protocol), []);
-  assert.equal(protocol.candidate.expectedPackageVersion, "1.3.0-ie.4");
+  assert.equal(protocol.candidate.expectedPackageVersion, "1.3.0-ie.5");
   assert.equal(protocol.comparison.baselineSurface, "codex-cli");
   assert.equal(protocol.comparison.rawPiReleaseBaselineAllowed, false);
   assert.equal(protocol.comparison.piagentTreatment, "intelligence-engine");
@@ -55,6 +55,7 @@ test("builds no-provider commands and denies premature execution", () => {
   assert.throws(() => ie6ReleaseArguments(protocol, { mode: "execute" }), /explicit operator authorization/);
   assert.throws(() => ie6ReleaseArguments(protocol, { mode: "execute", operatorAuthorized: true }), /every frozen prerequisite/);
   const execute = ie6ReleaseArguments(protocol, { mode: "execute", operatorAuthorized: true, prerequisitesPassed: true });
+  assert.equal(execute.includes("--stop-after-failed-pair"), true);
   assert.equal(execute.at(-1), "--yes");
 });
 

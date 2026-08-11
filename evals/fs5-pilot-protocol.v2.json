@@ -58,7 +58,7 @@
     {
       "id": "runner-core",
       "path": "scripts/benchmark-runner-core.mjs",
-      "sha256": "6de138856183c76e32db7f3fffb1ff9f0a2ecf0bde2545d468aa27d03dd9cff9"
+      "sha256": "9081c4fb90747b682ccbd41adebae4536239b9742a9a3e930245ae676a9ff322"
     }
   ],
   "runIdentityContract": {

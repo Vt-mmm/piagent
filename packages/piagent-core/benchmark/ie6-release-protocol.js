@@ -52,7 +52,7 @@ export function ie6ReleaseProtocolValidationErrors(protocol) {
 
   const candidate = protocol.candidate ?? {};
   expectFields(errors, candidate, {
-    expectedPackageVersion: "1.3.0-ie.4",
+    expectedPackageVersion: "1.3.0-ie.5",
     sourceState: "clean-approved-commit-only",
     candidateIdentity: "commit-plus-materialized-content-digest-plus-tarball-sha512",
     anyMaterialChangeInvalidates: true,
@@ -195,7 +195,7 @@ export function ie6ReleaseArguments(protocol, { mode = "dry-run", operatorAuthor
     "--scenarios", suite.scenarioIds.join(","), "--seed", suite.seed,
     "--repeats", String(suite.repeats), "--timeout", String(suite.timeoutSeconds),
     "--infrastructure-retries", String(suite.infrastructureRetries), "--retry-delay", String(suite.retryDelaySeconds),
-    "--max-sessions", String(suite.maximumSessionsPerChunk), "--allow-pi-auth-writeback"
+    "--max-sessions", String(suite.maximumSessionsPerChunk), "--stop-after-failed-pair", "--allow-pi-auth-writeback"
   ];
   if (mode === "dry-run") args.push("--dry-run");
   if (mode === "preflight") args.push("--preflight-only", "--json");

@@ -138,6 +138,10 @@ describe("package distribution", () => {
     // A scoped package defaults to restricted; publishing publicly is explicit.
     assert.equal(pkg.publishConfig?.access, "public");
     assert.equal(pkg.publishConfig?.provenance, true);
+    assert.equal(pkg.publishConfig?.tag, "next", "prerelease must not replace npm latest");
+    const workflow = fs.readFileSync(path.join(repositoryRoot, ".github", "workflows", "publish.yml"), "utf8");
+    assert.match(workflow, /if \[\[ "\$version" == \*-\* \]\]; then tag="next"; fi/);
+    assert.match(workflow, /npm publish --tag "\$\{\{ steps\.npm-tag\.outputs\.value \}\}"/);
   });
 
   it("declares only real extension entry points in every pi manifest", () => {

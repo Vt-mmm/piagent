@@ -16,13 +16,7 @@ import { benchmarkUsage, parseBenchmarkArgs } from "../packages/piagent-core/ben
 import { codexModelName, codexThinkingEffort } from "../packages/piagent-core/benchmark/benchmark-codex.js";
 import { benchmarkTrustChecklist } from "../packages/piagent-core/benchmark/benchmark-matrix.js";
 import { applyBenchmarkClaimRestrictions } from "../packages/piagent-core/benchmark/benchmark-claim-restrictions.js";
-import {
-  benchmarkEnvironment,
-  benchmarkEnvironmentPolicy,
-  comparisonSurfaces,
-  createCodexRuntime,
-  piagentTreatment
-} from "../packages/piagent-core/benchmark/benchmark-runtime.js";
+import { benchmarkEnvironment, benchmarkEnvironmentPolicy, comparisonSurfaces, createCodexRuntime, piagentTreatment } from "../packages/piagent-core/benchmark/benchmark-runtime.js";
 import { assertBenchmarkPiCredentialReady, assertBenchmarkPiCredentialWritebackPolicy, cleanupBenchmarkPiRuntimeHome, createBenchmarkPiRuntimeHome, resetBenchmarkPiRuntimeEphemeralState, withBenchmarkPiCredentialWriteback } from "../packages/piagent-core/benchmark/benchmark-pi-home.js";
 import { benchmarkPreflight, benchmarkPreflightReceipt } from "../packages/piagent-core/benchmark/benchmark-preflight.js";
 import {
@@ -37,28 +31,14 @@ import {
   writePrivate,
   writePrivateAtomic
 } from "../packages/piagent-core/benchmark/benchmark-forensics.js";
-import {
-  benchmarkBootstrapCandidateIndex,
-  benchmarkBootstrapMetadata
-} from "../packages/piagent-core/benchmark/benchmark-bootstrap.js";
+import { benchmarkBootstrapCandidateIndex, benchmarkBootstrapMetadata } from "../packages/piagent-core/benchmark/benchmark-bootstrap.js";
 import { createBenchmarkExecutionGuard } from "../packages/piagent-core/benchmark/benchmark-execution-guard.js";
 import { benchmarkCommandIdentity } from "../packages/piagent-core/benchmark/benchmark-runtime-identity.js";
 import { benchmarkTreeIdentity } from "../packages/piagent-core/benchmark/benchmark-tree-identity.js";
 import { completedBenchmarkRecord, expectedBenchmarkRecord } from "../packages/piagent-core/benchmark/benchmark-record-validation.js";
-import {
-  loadBenchmarkAssuranceEvidence,
-  loadBenchmarkSuite,
-  resolveBenchmarkSuiteEntry,
-  validateBenchmarkSuiteFiles
-} from "../packages/piagent-core/benchmark/benchmark-suite-runtime.js";
-import {
-  appendBenchmarkLedger,
-  assertBenchmarkLedgerBinding,
-  benchmarkLedgerCheckpoint,
-  emptyBenchmarkLedgerBinding,
-  inspectBenchmarkLedger,
-  validateBenchmarkLedgerPrefix
-} from "../packages/piagent-core/benchmark/benchmark-ledger.js";
+import { pairedOutcomeFloorStop } from "../packages/piagent-core/benchmark/benchmark-stop-policy.js";
+import { loadBenchmarkAssuranceEvidence, loadBenchmarkSuite, resolveBenchmarkSuiteEntry, validateBenchmarkSuiteFiles } from "../packages/piagent-core/benchmark/benchmark-suite-runtime.js";
+import { appendBenchmarkLedger, assertBenchmarkLedgerBinding, benchmarkLedgerCheckpoint, emptyBenchmarkLedgerBinding, inspectBenchmarkLedger, validateBenchmarkLedgerPrefix } from "../packages/piagent-core/benchmark/benchmark-ledger.js";
 import { acquireBenchmarkRunLock } from "../packages/piagent-core/benchmark/benchmark-run-lock.js";
 import { createBenchmarkProcessController } from "../packages/piagent-core/benchmark/benchmark-process.js";
 import {
@@ -171,6 +151,7 @@ function loadResumeState(input) {
       fail(`Cannot resume ${runRoot}: missing run-manifest.json. This run was created before resume metadata was written, so its root seed cannot be recovered safely. Start a new run with --max-sessions or --max-runtime-minutes to make it resumable.`, 1);
     }
     const manifest = readJsonFile(manifestPath, "benchmark resume manifest");
+    if (fs.existsSync(path.join(runRoot, "stopped.json"))) fail(`Cannot resume ${runRoot}: the paired release stop is terminal`, 1);
     if (manifest?.schemaVersion !== 1 || typeof manifest.runId !== "string") {
       fail(`Cannot resume ${runRoot}: run-manifest.json has an unsupported shape`, 1);
     }
@@ -328,6 +309,7 @@ async function main() {
   options.infrastructureRetries = options.infrastructureRetries ?? (suite.schemaVersion === 2 ? 2 : 0);
   options.retryDelaySeconds = options.retryDelaySeconds ?? (suite.schemaVersion === 2 ? 60 : 0);
   options.timeoutSeconds = options.timeoutSeconds ?? suite.timeoutSeconds;
+  if (options.stopAfterFailedPair && !Number.isFinite(suite.releaseGate?.minimumOutcomeScoreExclusive)) fail("--stop-after-failed-pair requires a suite outcome floor", 1);
   if (options.surfaces.includes("codex-cli")) {
     codexModelName(options.model);
     codexThinkingEffort(options.thinking);
@@ -419,6 +401,7 @@ async function main() {
     ...(resumeState ? [`  completed: ${resumeState.completedRuns.length}`, `  remaining: ${pendingOrder.length}`] : []),
     ...(options.maxSessions !== undefined ? [`  chunk:    up to ${order.length}/${pendingOrder.length} remaining sessions`] : []),
     ...(options.maxRuntimeMinutes !== undefined ? [`  budget:   ${options.maxRuntimeMinutes} minute runtime chunk`] : []),
+    ...(options.stopAfterFailedPair ? ["  stop:     terminal after a completed pair falls below the outcome floor"] : []),
     `  model:     ${options.model ?? "Pi default"}`,
     `  thinking:  ${options.thinking ?? "Pi default"}`,
     `  treatment: ${options.piagentTreatment}`,
@@ -472,6 +455,7 @@ async function main() {
     timeoutSeconds: options.timeoutSeconds,
     infrastructureRetries: options.infrastructureRetries,
     retryDelaySeconds: options.retryDelaySeconds,
+    stopAfterFailedPair: options.stopAfterFailedPair,
     order: fullOrder.map((item) => ({ scenarioId: item.scenario.id, surface: item.surface, repeat: item.repeat }))
   };
   const configurationDigest = crypto.createHash("sha256").update(JSON.stringify(configuration)).digest("hex");
@@ -540,7 +524,7 @@ async function main() {
   const startedAt = resumeState?.manifest.startedAt ?? new Date().toISOString();
   const runs = resumeState ? [...resumeState.completedRuns] : [];
   let ledgerBinding = resumeState?.ledgerBinding ?? emptyBenchmarkLedgerBinding();
-  let fatalRunError, fatalExecutionReceipt;
+  let fatalRunError, fatalExecutionReceipt, terminalStop;
   let pauseReason;
   const ledgerPath = path.join(runRoot, "runs.jsonl");
   const infrastructureLedgerPath = path.join(runRoot, "infrastructure-attempts.jsonl");
@@ -583,6 +567,7 @@ async function main() {
     timeoutSeconds: options.timeoutSeconds,
     infrastructureRetries: options.infrastructureRetries,
     retryDelaySeconds: options.retryDelaySeconds,
+    stopAfterFailedPair: options.stopAfterFailedPair,
     scenarioIds: options.scenarioIds ?? null,
     order: fullOrder.map((item) => ({
       scenarioId: item.scenario.id,
@@ -778,6 +763,8 @@ async function main() {
       const remainingAfter = Math.max(0, fullOrder.length - completedAfter);
       const averageAfterMs = (Date.now() - wallStartedAt) / Math.max(1, newRuns);
       process.stdout.write(`           ${record.resolved ? "PASS" : `FAIL (${record.failure})`} · ${record.usage.fresh} fresh tok · ${cost} · run ${formatDuration(Number(record.durationSeconds ?? 0) * 1_000)} · remaining ${remainingAfter} · ETA ${formatDuration(averageAfterMs * remainingAfter)}\n`);
+      terminalStop = pairedOutcomeFloorStop({ enabled: options.stopAfterFailedPair, suite, runs, current: item, next: order[index + 1] });
+      if (terminalStop) break;
       if (fatalRunError) break;
     }
     if (!pauseReason && options.maxSessions !== undefined && pendingOrder.length > order.length) {
@@ -821,6 +808,15 @@ async function main() {
     process.stderr.write(provenanceFailure
       ? `Benchmark aborted because candidate provenance changed. Partial ledger: ${ledgerPath}\n`
       : `Benchmark aborted after an infrastructure error. Partial ledger: ${ledgerPath}\n`);
+    process.exitCode = 1;
+    return;
+  }
+  if (terminalStop) {
+    cleanupBenchmarkPiRuntimeHome(bootstrapMetadata.piAgentHome, piRuntimeHome); piRuntimeHome = undefined;
+    cleanupUnretainedWorkspaces(runRoot, options.keepWorkspaces);
+    for (const marker of ["paused.json", "interrupted.json", "aborted.json"]) fs.rmSync(path.join(runRoot, marker), { force: true });
+    writePrivateAtomic(path.join(runRoot, "stopped.json"), `${JSON.stringify({ ...terminalStop, runId, completedRuns: runs.filter(completedBenchmarkRecord).length, expectedRuns: fullOrder.length, stoppedAt: new Date().toISOString(), resumeAllowed: false, ledger: ledgerBinding, provenanceStamp: finalizationReceipt.stamp }, null, 2)}\n`);
+    process.stderr.write(`Benchmark terminal-stopped after paired outcome-floor failure. Partial ledger: ${ledgerPath}\n`);
     process.exitCode = 1;
     return;
   }
@@ -917,7 +913,7 @@ async function main() {
   const prepublishReceipt = executionGuard.receipt("prepublish");
   const prepublishError = prepublishReceipt.error;
   if (prepublishError) { writeBenchmarkAbort(runRoot, { runId, completedRuns: completedRuns.length, expectedRuns: fullOrder.length }, prepublishError, { ledger: ledgerBinding, provenanceStamp: prepublishReceipt.stamp }); throw prepublishError; }
-  for (const marker of ["paused.json", "interrupted.json", "aborted.json"]) fs.rmSync(path.join(runRoot, marker), { force: true });
+  for (const marker of ["paused.json", "interrupted.json", "aborted.json", "stopped.json"]) fs.rmSync(path.join(runRoot, marker), { force: true });
   writePrivateAtomic(path.join(runRoot, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
   process.stdout.write(options.json ? `${JSON.stringify(report, null, 2)}\n` : text);
   process.stdout.write(`Reports: ${runRoot}\n`);

@@ -67,6 +67,8 @@ if (rootPackage.name !== "@piagent/platform") fail("root package must be named @
 if (rootPackage.private) fail("root package must not be private; publishing is intended");
 if (rootPackage.publishConfig?.access !== "public") fail("scoped package must declare publishConfig.access=public");
 if (rootPackage.publishConfig?.provenance !== true) fail("root package must publish with provenance");
+if (version?.includes("-") && rootPackage.publishConfig?.tag !== "next") fail("prerelease packages must publish under the npm next tag");
+if (!version?.includes("-") && rootPackage.publishConfig?.tag !== undefined) fail("stable packages must not retain a prerelease npm tag");
 // The git+ prefix is npm's own normalization. Publishing without it succeeds
 // but rewrites the field, which leaves the manifest in the repository saying
 // something different from the manifest on the registry.

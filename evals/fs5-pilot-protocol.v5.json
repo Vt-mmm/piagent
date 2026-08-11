@@ -25,7 +25,7 @@
     { "id": "phase-attribution", "path": "packages/piagent-core/benchmark/benchmark-phase-attribution.js", "sha256": "9c07bda5bfe7bb7b0959844ccea6790735cc9f154d8d5972e18785148cea6d9a" },
     { "id": "record-validator", "path": "packages/piagent-core/benchmark/benchmark-record-validation.js", "sha256": "70bccd4db24ab44b68af590c67aa82caf2b7fedc3b83333a097858001235848a" },
     { "id": "protocol-enforcement", "path": "packages/piagent-core/benchmark/fs5-pilot-protocol.js", "sha256": "2bcc0cf6c18eee0c080c30e727610b0f10a278f5862855d920ba5797f07a2f2d" },
-    { "id": "runner-core", "path": "scripts/benchmark-runner-core.mjs", "sha256": "6de138856183c76e32db7f3fffb1ff9f0a2ecf0bde2545d468aa27d03dd9cff9" }
+    { "id": "runner-core", "path": "scripts/benchmark-runner-core.mjs", "sha256": "9081c4fb90747b682ccbd41adebae4536239b9742a9a3e930245ae676a9ff322" }
   ],
   "runIdentityContract": {
     "required": [

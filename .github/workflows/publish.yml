@@ -75,8 +75,26 @@ jobs:
       - name: Pack
         run: npm pack --dry-run
 
+      - name: Resolve npm dist-tag
+        id: npm-tag
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          tag="latest"
+          if [[ "$version" == *-* ]]; then tag="next"; fi
+          configured="$(node -p "require('./package.json').publishConfig?.tag ?? ''")"
+          if [[ "$tag" == "next" && "$configured" != "next" ]]; then
+            echo "prerelease $version must declare publishConfig.tag=next" >&2
+            exit 1
+          fi
+          if [[ "$tag" == "latest" && -n "$configured" ]]; then
+            echo "stable $version must not retain prerelease publishConfig.tag" >&2
+            exit 1
+          fi
+          echo "value=$tag" >> "$GITHUB_OUTPUT"
+
       - name: Publish
         if: startsWith(github.ref, 'refs/tags/') && inputs.dry_run != true
-        run: npm publish
+        run: npm publish --tag "${{ steps.npm-tag.outputs.value }}"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

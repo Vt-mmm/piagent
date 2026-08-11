@@ -23,7 +23,7 @@
     { "id": "failure-and-operational-classifier", "path": "packages/piagent-core/benchmark/benchmark-forensics.js", "sha256": "274d5fdd62f08565211d28d3039a7a4bba187524f1e6903ed6b5feb775617c95" },
     { "id": "record-validator", "path": "packages/piagent-core/benchmark/benchmark-record-validation.js", "sha256": "70bccd4db24ab44b68af590c67aa82caf2b7fedc3b83333a097858001235848a" },
     { "id": "protocol-enforcement", "path": "packages/piagent-core/benchmark/fs5-pilot-protocol.js", "sha256": "05b9a6e0c58639dd10ba78f4d8a4379bfdebbf180d04423c821a4523f5f89569" },
-    { "id": "runner-core", "path": "scripts/benchmark-runner-core.mjs", "sha256": "6de138856183c76e32db7f3fffb1ff9f0a2ecf0bde2545d468aa27d03dd9cff9" }
+    { "id": "runner-core", "path": "scripts/benchmark-runner-core.mjs", "sha256": "9081c4fb90747b682ccbd41adebae4536239b9742a9a3e930245ae676a9ff322" }
   ],
   "runIdentityContract": {
     "required": [

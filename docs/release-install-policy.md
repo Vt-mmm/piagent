@@ -44,7 +44,7 @@ configure providers.
 
 The active machine-readable protocol is
 `evals/ie6-release-protocol.v1.json`. The candidate identity is
-`1.3.0-ie.4`; it is separate from the exhausted RC.1/RC.2 train. The protocol
+`1.3.0-ie.5`; it is separate from the exhausted RC.1/RC.2 train. The protocol
 requires Piagent and controlled `codex-cli` on Luna Medium, all 18 public
 production families, three repeats, two surfaces, retry zero and inspection
 after every six sessions. Provider execution remains blocked until the exact
@@ -111,7 +111,7 @@ Use this flow when the team needs both terminal commands and the Pi package:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.84.1
-npm install -g --ignore-scripts @piagent/platform@1.3.0-ie.4
+npm install -g --ignore-scripts @piagent/platform@1.3.0-ie.5
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -137,7 +137,7 @@ bash scripts/install-global.sh --stable
 Use this only when terminal commands are not needed:
 
 ```bash
-pi install git:github.com/Vt-mmm/piagent@v1.3.0-ie.4
+pi install git:github.com/Vt-mmm/piagent@v1.3.0-ie.5
 ```
 
 Direct `pi install` does not create `piagent-*` commands on `PATH`.
@@ -320,6 +320,11 @@ The publish workflow authenticates with the `NPM_TOKEN` repository secret. That 
 3. An expiry date the maintainer tracks. An expired token fails as an authentication error that does not say the token expired.
 
 The workflow reaches the registry only at its final step, so every gate can pass and the release can still stop there. A failed upload publishes nothing, but the provenance attestation is signed and written to the public transparency log first, so a failed attempt still leaves a public record of the repository, commit, and workflow.
+
+Prerelease versions are published only under the npm `next` dist-tag. The
+workflow derives the tag from the package version and release identity requires
+`publishConfig.tag=next`; a stable version must remove that field before it can
+publish to `latest`.
 
 Fix the token, then re-run the failed job on the same tag so the publish step still sees a tag ref:
 

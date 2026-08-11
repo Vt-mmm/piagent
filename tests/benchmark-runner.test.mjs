@@ -24,7 +24,7 @@ after(() => {
 
 function terminalArtifact(output) {
   const diagnostics = [];
-  for (const name of ["aborted.json", "interrupted.json", "paused.json"]) {
+  for (const name of ["aborted.json", "interrupted.json", "paused.json", "stopped.json"]) {
     const file = path.join(output, name);
     if (fs.existsSync(file)) diagnostics.push(fs.readFileSync(file, "utf8"));
   }
@@ -330,7 +330,7 @@ const value = (name) => args[args.indexOf(name) + 1];
 if (!args.includes("--json") || !args.includes("--ephemeral") || !args.includes("--ignore-user-config") || !args.includes("--ignore-rules")) process.exit(8);
 if (!args.includes("--disable") || !args.includes("apps") || value("-s") !== "workspace-write" || value("-m") !== "fake-model") process.exit(9);
 const workspace = value("-C");
-fs.writeFileSync(path.join(workspace, "result.txt"), "correct\\n");
+fs.writeFileSync(path.join(workspace, "result.txt"), process.env.BENCHMARK_FAKE_FAIL_CODEX === "1" ? "wrong\\n" : "correct\\n");
 const events = [
   { type: "thread.started", thread_id: "fake-codex-thread" },
   { type: "turn.started" },
@@ -1241,6 +1241,29 @@ test("one command compares Piagent with controlled Codex CLI using strict JSONL 
   const codexHomes = fs.readFileSync(codexHomeLog, "utf8").trim().split("\n");
   assert.equal(codexHomes.length, 3);
   assert.equal(new Set(codexHomes).size, 3, "every measured Codex session must receive a clean CODEX_HOME");
+});
+
+test("terminal-stops at the paired boundary after an outcome-floor failure", (t) => {
+  const value = fixture(t);
+  const suite = JSON.parse(fs.readFileSync(value.suite, "utf8"));
+  suite.releaseGate = { minimumOutcomeScoreExclusive: 9.5 };
+  fs.writeFileSync(value.suite, `${JSON.stringify(suite, null, 2)}\n`);
+  const args = [runner, "--suite", value.suite, "--surfaces", "piagent,codex-cli", "--model", "test/fake-model", "--thinking", "high", "--repeats", "3", "--stop-after-failed-pair", "--yes", "--output", value.output];
+  const env = { ...process.env, BENCHMARK_FAKE_FAIL_CODEX: "1", PIAGENT_BENCHMARK_PI_COMMAND: value.fakePi, PIAGENT_BENCHMARK_CODEX_COMMAND: value.fakeCodex, PIAGENT_BENCHMARK_TASK_FIXTURE: path.join(root, "evals", "fixtures", "task-contract.valid.json") };
+  const result = spawnSync(process.execPath, args, { cwd: root, encoding: "utf8", timeout: 60_000, env });
+  assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stderr, /terminal-stopped after paired outcome-floor failure/);
+  const runs = fs.readFileSync(path.join(value.output, "runs.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
+  assert.equal(runs.length, 2);
+  assert.deepEqual(new Set(runs.map((run) => run.surface)), new Set(["piagent", "codex-cli"]));
+  const stopped = JSON.parse(fs.readFileSync(path.join(value.output, "stopped.json"), "utf8"));
+  assert.equal(stopped.reason, "paired-outcome-floor-failed");
+  assert.equal(stopped.resumeAllowed, false);
+  assert.equal(stopped.completedRuns, 2);
+  assert.equal(fs.existsSync(path.join(value.output, "report.json")), false);
+  const resumed = spawnSync(process.execPath, [runner, "--resume", value.output, "--yes"], { cwd: root, encoding: "utf8", timeout: 60_000, env });
+  assert.equal(resumed.status, 1);
+  assert.match(resumed.stderr, /paired release stop is terminal/);
 });
 
 test("streams Codex JSONL larger than the retained process-output tail", (t) => {
