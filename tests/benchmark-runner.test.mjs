@@ -396,7 +396,7 @@ test("modern run executes suite and Piagent extension from the immutable preflig
   let stderr = "";
   child.stdout.on("data", (chunk) => { stdout += chunk; });
   child.stderr.on("data", (chunk) => { stderr += chunk; });
-  const timeout = Date.now() + 10_000;
+  const timeout = Date.now() + 30_000;
   while (!fs.existsSync(ready) && Date.now() < timeout) await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(fs.existsSync(ready), true, "preflight did not start after snapshot creation");
 

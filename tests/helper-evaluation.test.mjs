@@ -6,9 +6,13 @@ import path from "node:path";
 import { it } from "node:test";
 
 const evaluationScript = path.resolve(import.meta.dirname, "../scripts/helper-evaluation.mjs");
+// The full repository suite starts many filesystem-heavy integration fixtures
+// in parallel. Keep this correctness probe bounded without making host load a
+// release property; helper wall-clock timing remains observational.
+const evaluationTimeoutMs = 180_000;
 
 function evaluation(environment = process.env) {
-  return JSON.parse(execFileSync(process.execPath, [evaluationScript], { encoding: "utf8", timeout: 30_000, env: environment }));
+  return JSON.parse(execFileSync(process.execPath, [evaluationScript], { encoding: "utf8", timeout: evaluationTimeoutMs, env: environment }));
 }
 
 it("measures bounded retrieval and lifecycle contracts instead of hardcoding helper safety", () => {

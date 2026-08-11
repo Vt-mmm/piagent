@@ -4,7 +4,18 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
-No changes after the `v1.3.0-ie.3` candidate boundary.
+No changes after the `v1.3.0-ie.4` candidate boundary.
+
+## v1.3.0-ie.4 - 2026-08-11
+
+### Symmetric native CI prerequisites
+
+- Installed the exact ripgrep test prerequisite on both Ubuntu and macOS CI.
+  This keeps the helper evaluation identical across native platforms; no
+  product gate, benchmark evaluator, or provider behavior was relaxed.
+- Kept the integration waits finite while giving the full parallel suite room
+  for native filesystem contention. The helper and immutable-snapshot product
+  assertions remain unchanged; only their test-harness deadlines moved.
 
 ## v1.3.0-ie.3 - 2026-08-11
 
