@@ -124,6 +124,16 @@ if (preflight.status !== "ready" || preflight.providerSessionsStarted !== 0) fai
 if (preflight.packageVersion !== packageJson.version || preflight.source?.commit !== head || preflight.source?.dirty !== false) {
   fail("production preflight candidate identity does not match the clean release commit");
 }
+const localGates = Object.fromEntries(protocol.prerequisites.local.map((gate) => [gate, true]));
+const prerequisiteState = evaluateIe6Prerequisites(protocol, {
+  local: localGates,
+  platforms: { [`${process.platform}-${process.arch}`]: true },
+  cohorts: { cohortATasks: 0, cohortBAttempts: 0, cohortCTerminalAttempts: 0 },
+  independentHumanParticipants: 0,
+  privateFamilyDisjointHoldout: false,
+  longHorizonInterruptionResume: false,
+  explicitOperatorChunkApproval: false
+});
 
 const receipt = {
   schemaVersion: 1,
@@ -153,12 +163,7 @@ const receipt = {
     sessionsPerChunk: protocol.suite.maximumSessionsPerChunk,
     providerSessionsStarted: 0
   },
-  localGates: {
-    fullVerify: true,
-    releaseIdentity: true,
-    packageReadback: true,
-    providerFreePreflight: true
-  },
+  localGates,
   authorization: {
     providerExecution: false,
     cohortExecution: false,
@@ -168,7 +173,7 @@ const receipt = {
     publish: false,
     publicDocsPromotion: false
   },
-  blockers: emptyPrerequisites.blockers
+  blockers: prerequisiteState.blockers
 };
 
 fs.mkdirSync(path.dirname(options.output), { recursive: true, mode: 0o700 });

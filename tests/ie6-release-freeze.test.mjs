@@ -34,4 +34,7 @@ test("contains no external release mutation command", () => {
   assert.doesNotMatch(source, /npm["'],\s*\[[^\]]*["']publish|git["'],\s*\[[^\]]*["'](?:tag|push)|vercel["']/);
   assert.match(source, /providerExecution: false/);
   assert.match(source, /O_EXCL/);
+  assert.match(source, /Object\.fromEntries\(protocol\.prerequisites\.local/);
+  assert.match(source, /platforms: \{ \[`\$\{process\.platform\}-\$\{process\.arch\}`\]: true \}/);
+  assert.doesNotMatch(source, /blockers: emptyPrerequisites\.blockers/);
 });
