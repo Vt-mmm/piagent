@@ -142,6 +142,9 @@ Muốn chạy nhiều agent song song thì gõ `herdr` thay vì `pi`, rồi mở
 | `/workflow review current diff` | Review việc vừa làm. |
 | `/name <task/session name>` | Đặt/đổi tên session để resume và report dễ đối chiếu. |
 | `/usage logs` | Xem các capture khi test/build output quá dài và Pi chỉ hiện preview. |
+| `/task-preflight` | Xem intent/risk/scope/model/route/approval trước task, không gọi model. |
+| `/piagent-status` | Xem phase/checkpoint/verifier/recovery/helper/receipt từ state đã quan sát. |
+| `/usage efficiency` | Xem context efficiency và task metrics có nguồn; giá trị không đo được là `null`. |
 | `/workflow be-to-fe <việc>` | Backend read-only, làm FE. |
 | `/workflow commit <message>` | Commit local có kiểm soát, không push. |
 | `/workflow pr <title>` | Tạo PR, hỏi xác nhận trước khi push. |

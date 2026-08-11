@@ -37,18 +37,31 @@ Không tạo folder `utils` để gom code không rõ ownership. Module phải m
 - `runtime/hooks/input-hook.ts`
 - `runtime/hooks/agent-start-hook.ts`
 - `runtime/hooks/completion-hook.ts`
+- `runtime/hooks/tool-call-hook.ts`
 - `runtime/hooks/tool-result-hook.ts`
+- `runtime/context/adaptive-planner.ts`
+- `runtime/context/retrieval-route-policy.ts`
+- `runtime/model/capabilities.ts`
+- `runtime/model/model-route-types.ts`
+- `runtime/model/model-route-policy.ts`
+- `runtime/model/model-route-runtime.ts`
+- `runtime/model/model-selection-provenance.ts`
 - `runtime/tools/tool-groups.ts`
 - `runtime/workflows/input-routing.ts`
 - `runtime/workflows/task-intake.ts`
 - `runtime/runtime-limits.ts`
+- `extensions/task-journal.js`
+- `extensions/task-runtime-audit.js`
+- `extensions/repository-memory.js`
+- `extensions/verification-intelligence.js`
+- `extensions/execution-backend.js`
 
 Những feature cần tách tiếp theo một khối trọn vẹn:
 
-1. `runtime/hooks/tool-call-hook.ts`: enforcement trước tool call cho capability, path, shell, external action, task scope và confirmation.
+1. Chuyển phần policy decision body đang được wire qua `runtime/hooks/tool-call-hook.ts` vào core service nhỏ.
 2. `runtime/tools/`: policy, task, context, memory, onboarding, profile, document và source tools.
 3. `runtime/commands/`: workflow, session, permission, context, MCP, profile, onboarding và compatibility alias.
-4. Tạo core service tập trung cho profile, memory, onboarding và source-cache algorithm vẫn còn nằm trong composition root.
+4. Tiếp tục đưa context, policy, onboarding, profile và source-cache call site về owning service; task audit và verifier selection đã đi qua focused service thay vì nằm trong composition root.
 
 Mục tiêu: composition root dưới 500 dòng, chỉ giữ registration order và một shared runtime state object nhỏ.
 
@@ -102,6 +115,26 @@ Tách `scripts/benchmark-runner.mjs` thành CLI mỏng và package module cho su
   code thực thi trước khi release được phép pass.
 - Mỗi filesystem write phải khai báo path, mode, retention và source of truth.
 - Mỗi derived metric phải nêu input và có unit test tính tay một ví dụ.
+- Thay đổi adaptive context phải ghi plan receipt, phase, lane, budget, model,
+  thinking level và confidence threshold vào telemetry.
+- Thay đổi task recovery phải giữ task contract là operational truth và task
+  journal là audit/replay truth; không được để checkpoint derived thay thế ngầm
+  một contract hợp lệ.
+- Recovery ceiling là invariant xuyên task attempt. Classifier mới không được
+  grant mutation; policy vẫn phải kiểm tra riêng source ownership, task scope và
+  hook authorization. Handoff/receipt state chỉ lưu bounded reference, không lưu
+  raw verifier log hay source.
+- Thay đổi resume phải so actual current tree với exact-verifier evidence và
+  fail closed khi identity, journal, trajectory, handoff hoặc symlink integrity
+  lỗi. Byte của terminal Task Contract phải immutable.
+- Thay đổi helper phải giữ pinned parent, one-writer invariant, strict
+  RolePolicy/HelperRequest scope intersection, cross-process owned budget và
+  digest-only usage receipt. Ở GA, `on` chỉ dispatch read-only role; automatic
+  worker delegation vẫn disabled.
+- Operator projection phải đọc persisted/observed truth, vẫn dùng được khi
+  sidecar cũ bị thiếu, hash session identity và giữ timing/token/cost fact không
+  có nguồn ở null. Thay đổi formatting phải giữ structured schema/version và
+  ranh giới host-không-phải-sandbox rõ ràng.
 
 ## Checklist khi thay đổi
 

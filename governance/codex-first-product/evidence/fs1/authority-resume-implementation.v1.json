@@ -1,0 +1,157 @@
+{
+  "schemaVersion": "codex-first-fs1-authority-resume-evidence-v1",
+  "workItem": "CF-FS1-04",
+  "recordedAt": "2026-08-10T16:00:00.000Z",
+  "status": "pass",
+  "scope": {
+    "objective": "Make mechanical-only and per-feature rollback policy-safe while preserving immutable pinned authority on active tasks.",
+    "providerInvoked": false,
+    "benchmarkRunInvoked": false,
+    "releaseActionInvoked": false,
+    "nextWorkItemStarted": false
+  },
+  "compatibilityMatrix": [
+    {
+      "case": "known exact snapshot with ordinary broad/strict profile drift in either direction",
+      "disposition": "resume-pinned",
+      "taskMutation": "none"
+    },
+    {
+      "case": "explicit mechanical-only request for a non-mechanical active task",
+      "disposition": "new-attempt-required",
+      "durability": "one task/run-bound journal event plus deterministic handoff"
+    },
+    {
+      "case": "explicit off value for a capability active in the pinned snapshot",
+      "disposition": "new-attempt-required",
+      "durability": "ordered capability ids are recorded and must all be off in the replacement snapshot"
+    },
+    {
+      "case": "missing snapshot, unknown snapshot or manifest version, manifest drift, invalid snapshot, or cross-task identity",
+      "disposition": "new-attempt-required",
+      "durability": "legacy or incompatible evidence is never promoted"
+    },
+    {
+      "case": "corrupt, duplicated, stale, or identity-mismatched disposition state",
+      "disposition": "blocked",
+      "durability": "resume, mutation, and replacement all fail closed"
+    },
+    {
+      "case": "crash after journal disposition and before handoff write",
+      "disposition": "new-attempt-required",
+      "durability": "next session or user-input boundary reconstructs handoff before exposing task start"
+    },
+    {
+      "case": "terminal task under later policy drift",
+      "disposition": "terminal-historical",
+      "taskMutation": "none"
+    }
+  ],
+  "invariants": [
+    "The pinned Task Contract and authority snapshot are never rewritten during resume or rollback.",
+    "A persisted rollback receipt is sticky and cannot be reopened by restoring the old environment.",
+    "A replacement retains the model-attempt number, receives a fresh current snapshot, and inherits no changed-file or verifier evidence.",
+    "Mechanical-only is an authority ceiling: launch-time feature values may disable more but cannot re-enable an advanced capability.",
+    "The replacement tool is visible only after a durable handoff is written.",
+    "Operator status reports the authority resume disposition and bounded reason without a model turn."
+  ],
+  "implementation": [
+    {
+      "path": "packages/piagent-core/runtime/policy/authority-resume-policy.ts",
+      "sha256": "d3a042ccb2c9b912ac4954d75605d6a6cef91772150e2bbb404c8cfe3bcb1d8f"
+    },
+    {
+      "path": "packages/piagent-core/runtime/policy/task-authority-runtime.ts",
+      "sha256": "ad802cb136a3b837c7a2d9c607ec9287e987289c712bf471efd7597ce385f9bf"
+    },
+    {
+      "path": "packages/piagent-core/runtime/recovery/resume-state.ts",
+      "sha256": "5cf7a8262c17df419797a0442472b7601d6d51f05f3cfedaab666467eb1240ab"
+    },
+    {
+      "path": "packages/piagent-core/runtime/hooks/input-hook.ts",
+      "sha256": "53b976b4f3fe1fc82c9cf640e85301eb909e41bfa1e32e7e3ed5b111ab519ceb"
+    },
+    {
+      "path": "packages/piagent-core/runtime/hooks/session-start-hook.ts",
+      "sha256": "6b16476eba94aff7b033d12f70ebf802476f8eaa69fde5309caa20420869f29d"
+    },
+    {
+      "path": "packages/piagent-core/runtime/registration/task-start-tool.ts",
+      "sha256": "e5299459f18a2f72da8374c4ff5bac0de2114779134c8f8bbccab63890f9318b"
+    },
+    {
+      "path": "packages/piagent-core/extensions/piagent-guard.ts",
+      "sha256": "5b8a8871b16845640b43771f12fd74dabaf20f4ff035cc88b337919429879e8d"
+    },
+    {
+      "path": "packages/piagent-core/runtime/product/operator-projections.ts",
+      "sha256": "9c96b8792f4e77a6b9d0c166dffa902042a0db7ebc2e0a0f70b52bdf7060090a"
+    }
+  ],
+  "distribution": {
+    "runtimeIntegrityPath": "packages/piagent-core/capabilities/runtime-integrity.js",
+    "runtimeIntegritySha256": "26bc8b10999a7949ba56f8b090a66f845df7618e34f52afc6283e59c711891ea",
+    "profileLockSha256": "edbdefb55fb9e4f7f428f7f271353aeee20df89e89efe4a2bc77dd2b22e45252",
+    "profileLockStatus": "current",
+    "ownershipManifest": "capability-module-ownership-delta.v3.json",
+    "ownershipManifestSha256": "6266fc07fb0bfff81a99ceb668215071ddf1ce7f0bd11ffbafab917ba12665e9",
+    "ownershipIdentity": "sha256:cf032f15b45d2257a7d460524f895d0aa828d653489aa81bed149eb07a083886",
+    "productionFiles": 444,
+    "addedOwner": "CAP-04",
+    "updatedHistoricalOwner": "CAP-01"
+  },
+  "verification": [
+    {
+      "command": "node --test tests/authority-manifest.test.mjs tests/authority-resume-policy.test.mjs",
+      "result": "18/18 pass"
+    },
+    {
+      "command": "node --test tests/resume-state.test.mjs tests/recovery-chaos.test.mjs tests/authority-resume-policy.test.mjs",
+      "result": "19/19 pass"
+    },
+    {
+      "command": "node --test tests/piagent-guard-integration.test.mjs",
+      "result": "97/97 pass through the final full-suite run"
+    },
+    {
+      "command": "node --test tests/pi-082-runtime-phase-e2e.test.mjs tests/pi-082-host-tool-error.test.mjs",
+      "result": "12/12 pass; provider-free actual Pi 0.82"
+    },
+    {
+      "command": "PIAGENT_NO_UPDATE_CHECK=1 node --test --test-reporter=dot tests/*.test.mjs",
+      "result": "1829/1829 pass"
+    },
+    {
+      "command": "npm run verify -- --offline",
+      "result": "pass; scaffold complete"
+    },
+    {
+      "command": "npm run typecheck && npm run architecture:check",
+      "result": "pass; 192 source files within boundaries and line budgets"
+    },
+    {
+      "command": "node --test tests/package-distribution.test.mjs tests/capability-core.test.mjs tests/project-package.test.mjs",
+      "result": "55/55 pass"
+    },
+    {
+      "command": "node governance/codex-first-product/evidence/fs1/verify-capability-ownership-delta-v3.mjs",
+      "result": "pass; 431 base + 12 prior additions + 1 new = 444 current production paths; 1 prior addition updated without owner relabeling"
+    },
+    {
+      "command": "npm run capabilities:check && npm run docs:check && git diff --check",
+      "result": "pass; capability catalog current; 4 documentation pairs complete; no whitespace error"
+    }
+  ],
+  "rollback": {
+    "mechanism": "Select mechanical-only or set an explicit supported feature value to off. The active task is handed off; a clean replacement pins the new authority.",
+    "dataHandling": "No Task Contract, terminal evidence, journal history, or provider evidence is deleted or relabeled.",
+    "operatorAction": "If the journal disposition is blocked or handoff cannot be written, inspect the local journal/handoff and start no replacement until state is repaired."
+  },
+  "stopRule": {
+    "satisfied": true,
+    "nextWorkItem": "CF-FS1-05",
+    "nextWorkItemStarted": false,
+    "providerAuthorityGranted": false
+  }
+}

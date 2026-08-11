@@ -1,0 +1,181 @@
+{
+  "schemaVersion": "codex-first-fs3-phase-tool-evidence-v1",
+  "workItem": "CF-FS3-02",
+  "recordedAt": "2026-08-10T17:05:00+07:00",
+  "status": "pass",
+  "scope": {
+    "objective": "Bound phase classification and strict phase enforcement without changing the provider-visible tool schema, false-blocking valid inspection, or weakening mutation-carrier authorization.",
+    "providerInvoked": false,
+    "benchmarkRunInvoked": false,
+    "releaseActionInvoked": false,
+    "nextWorkItemStarted": false,
+    "candidateState": "unfrozen",
+    "candidateDigest": null
+  },
+  "reviewedIdentity": {
+    "head": "4f37ae05d56431f2f9db9c4159e20252c3da3b2a",
+    "exactTag": "v1.2.17",
+    "packageVersion": "1.2.17",
+    "policyManifestVersion": "authority-v1",
+    "executionProtocolSha256": "aab941a5422a2797fc1a3a1e420764a1f03fffcb4f06e4d04ea70fe3bbc1e470",
+    "roadmapSha256": "cb91fe410add6de293431308436ae7cff34e593c89fe8146a3633d8c85550aa7",
+    "profileLockSha256": "f3485b86d749a8220f58b3cedf641b4ea2624729d0366225d4a61a28cce67a9d",
+    "profilePackageDigest": "sha256:d28e19d14ecbf972ee12d0ec6708b8f7d9d76e363f3b285b727599ecd7a68216",
+    "workingTreeDisposition": "Dirty user-owned full-source development tree retained. This artifact binds exact current carriers and provider-free local verification only; it is not a clean or frozen release-candidate identity."
+  },
+  "productionContract": {
+    "broadDefault": "shadow/observe",
+    "strictAvailability": "pinned strict-high-risk authority only",
+    "providerSchema": "cache-stable for the complete task; strict mode enforces at tool-call and mutation-carrier boundaries and never calls setActiveTools",
+    "visiblePhaseContract": "Current phase is exposed through status/preflight; every strict denial names the exact phase and allowed surface. Review retains bash for bounded read-only inspection while carrier analysis blocks project mutation before execution.",
+    "shadowEffects": {
+      "providerSchemaChanges": 0,
+      "blockedValidCalls": 0,
+      "blockedMutations": 0,
+      "providerTurns": 0
+    },
+    "rollback": "Set CAP-09/PIAGENT_PHASE_TOOLS off for a clean replacement task. A pinned active task is never reinterpreted in place and retains its durable handoff/evidence."
+  },
+  "implementation": [
+    {
+      "path": "packages/piagent-core/runtime/tools/phase-tools.ts",
+      "sha256": "270a83ed13a07853910fdf33e89eae634a087481c0d21436bc1530e8d0ab5de5",
+      "change": "Retained carrier-checked bash in review while direct edit/write/apply_patch remain absent from read-only and review surfaces."
+    },
+    {
+      "path": "scripts/phase-tools-evaluation.mjs",
+      "sha256": "24a633be612beaecc54e6279e9a3cf6747304dedc304a19730e098f4fac0efa0",
+      "change": "Replaced the release gate's inferred schema-reduction claim with actual runtime probes for schema stability, valid-call blocks, mutation-carrier denial, and shadow non-interference. The legacy reduction is retained only as a labeled counterfactual intended-surface estimate."
+    },
+    {
+      "path": "tests/phase-tool-runtime.test.mjs",
+      "sha256": "ac33602adf615b292e405abcb1118584bd08e23cbc637d6a119ca219e8b12b0c",
+      "change": "Added strict review inspection/mutation separation and provider-schema stability coverage."
+    },
+    {
+      "path": "tests/piagent-guard-integration.test.mjs",
+      "sha256": "36a2f8e89ee72b6901e95056257864d443021e592f39fa371efaa1634c3301ea",
+      "change": "Added an actual pre-execution byte-identity assertion for a rejected shell mutation during the review checkpoint while preserving the exact bounded no-index review command."
+    },
+    {
+      "path": ".pi/piagent-profile.lock.json",
+      "sha256": "f3485b86d749a8220f58b3cedf641b4ea2624729d0366225d4a61a28cce67a9d",
+      "change": "Regenerated the deterministic runtime-integrity lock for the exact current source."
+    }
+  ],
+  "unchangedContractCarriers": [
+    {
+      "path": "packages/piagent-core/runtime/tools/phase-tool-runtime.ts",
+      "sha256": "daa72e9516fc69dbe565d2f961cd889bd4d84c30d0a569bf5ea0a25f963a165f"
+    }
+  ],
+  "exitEvidence": [
+    {
+      "requirement": "Provider schema remains stable",
+      "status": "pass",
+      "evidence": {
+        "strictInitialTools": 39,
+        "strictFinalTools": 39,
+        "strictSetActiveToolsCalls": 0,
+        "shadowInitialTools": 39,
+        "shadowFinalTools": 39,
+        "shadowSetActiveToolsCalls": 0
+      }
+    },
+    {
+      "requirement": "Valid-call block rate",
+      "status": "pass",
+      "evidence": {
+        "evaluated": 68,
+        "blocked": 0,
+        "blockRate": 0,
+        "reviewReadOnlyShell": "allowed"
+      }
+    },
+    {
+      "requirement": "Denied mutation and carrier parity",
+      "status": "pass",
+      "evidence": {
+        "evaluated": 8,
+        "blocked": 8,
+        "coverage": 1,
+        "carriers": [
+          "direct-edit",
+          "shell-redirection",
+          "review-bash-project-mutation",
+          "shell-alias",
+          "exec-alias",
+          "MCP-proxy"
+        ],
+        "preExecutionByteIdentity": true
+      }
+    },
+    {
+      "requirement": "Shadow non-interference",
+      "status": "pass",
+      "evidence": {
+        "validCallsBlocked": 0,
+        "mutationsBlocked": 0,
+        "providerSchemaChanges": 0
+      }
+    },
+    {
+      "requirement": "Historical phase-schema metric remains honest",
+      "status": "pass",
+      "evidence": "schemaReduction and schemaReductionPercent remain reproducible but are explicitly labeled counterfactual-intended-surface-only and are not used by the gate or presented as provider/token savings."
+    }
+  ],
+  "verification": [
+    {
+      "command": "node --test tests/phase-tools.test.mjs tests/phase-tool-runtime.test.mjs tests/phase-tools-evaluation.test.mjs tests/trajectory-types.test.mjs tests/trajectory-state.test.mjs tests/trajectory-runtime.test.mjs",
+      "result": "40/40 pass"
+    },
+    {
+      "command": "node --test --test-name-pattern='keeps authored untracked review proof' tests/piagent-guard-integration.test.mjs",
+      "result": "1/1 pass"
+    },
+    {
+      "command": "node --test --test-name-pattern='phase|carrier|schema' tests/piagent-guard-integration.test.mjs",
+      "result": "4/4 pass"
+    },
+    {
+      "command": "node --test --test-reporter=dot tests/piagent-guard-integration.test.mjs",
+      "result": "100/100 pass"
+    },
+    {
+      "command": "node --test tests/pi-082-host-tool-error.test.mjs tests/pi-082-runtime-phase-e2e.test.mjs",
+      "result": "12/12 pass; provider-free"
+    },
+    {
+      "command": "node --test tests/authority-manifest.test.mjs tests/authority-resume-policy.test.mjs",
+      "result": "18/18 pass"
+    },
+    {
+      "command": "node --test tests/capability-core.test.mjs tests/package-distribution.test.mjs tests/project-shape.test.mjs tests/architecture-boundaries.test.mjs",
+      "result": "103/103 pass"
+    },
+    {
+      "command": "npm run verify -- --offline",
+      "result": "pass; complete local scaffold; authenticated catalog deliberately skipped"
+    },
+    {
+      "command": "npm run typecheck && npm run architecture:check && git diff --check",
+      "result": "pass; 192 source files within boundaries and line budgets"
+    },
+    {
+      "command": "node scripts/capability-catalog.mjs doctor --profile .pi/piagent-profile.json --lock .pi/piagent-profile.lock.json --package-source ../",
+      "result": "pass; lock current"
+    }
+  ],
+  "schemaAndMigration": {
+    "providerToolSchema": "unchanged",
+    "taskContract": "unchanged v2",
+    "journalTrajectoryHandoff": "unchanged",
+    "migration": "none",
+    "authorityPromotion": "none; CAP-09 remains broad-default observe/shadow"
+  },
+  "deferredEvidence": [
+    "No provider, benchmark, cache-token, outcome-quality, capability-promotion, candidate-freeze or release claim was made. Cache-surface stability is proven structurally and in the host harness; provider cache hit-rate remains a later frozen-candidate measurement.",
+    "Strict phase enforcement remains opt-in under a pinned strict-high-risk authority profile. The FS3 interaction gate must still test it pairwise with acceptance, review, recovery, helpers and resume before any wider promotion."
+  ]
+}

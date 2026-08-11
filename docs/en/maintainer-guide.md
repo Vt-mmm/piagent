@@ -37,18 +37,31 @@ Already extracted:
 - `runtime/hooks/input-hook.ts`
 - `runtime/hooks/agent-start-hook.ts`
 - `runtime/hooks/completion-hook.ts`
+- `runtime/hooks/tool-call-hook.ts`
 - `runtime/hooks/tool-result-hook.ts`
+- `runtime/context/adaptive-planner.ts`
+- `runtime/context/retrieval-route-policy.ts`
+- `runtime/model/capabilities.ts`
+- `runtime/model/model-route-types.ts`
+- `runtime/model/model-route-policy.ts`
+- `runtime/model/model-route-runtime.ts`
+- `runtime/model/model-selection-provenance.ts`
 - `runtime/tools/tool-groups.ts`
 - `runtime/workflows/input-routing.ts`
 - `runtime/workflows/task-intake.ts`
 - `runtime/runtime-limits.ts`
+- `extensions/task-journal.js`
+- `extensions/task-runtime-audit.js`
+- `extensions/repository-memory.js`
+- `extensions/verification-intelligence.js`
+- `extensions/execution-backend.js`
 
 Next cohesive extractions:
 
-1. `runtime/hooks/tool-call-hook.ts`: pre-call capability, path, shell, external-action, task-scope, and confirmation enforcement.
+1. Move the policy decision body now wired through `runtime/hooks/tool-call-hook.ts` into focused core services.
 2. `runtime/tools/`: policy, task, context, memory, onboarding, profile, document, and source tools.
 3. `runtime/commands/`: workflow, session, permission, context, MCP, profile, onboarding, and compatibility aliases.
-4. Focused core services for the remaining profile, memory, onboarding, and source-cache algorithms still embedded in the composition root.
+4. Continue moving context, policy, onboarding, profile, and source-cache call sites behind their owning services; task audit and verifier selection already leave the composition root through focused services.
 
 Target: the composition root stays below 500 lines and contains registration order plus a small shared runtime state object.
 
@@ -102,6 +115,26 @@ Split `scripts/benchmark-runner.mjs` into a thin CLI plus package modules for su
   runtime code before a release can pass.
 - Every filesystem write declares path, mode, retention, and source of truth.
 - Every derived metric names its inputs and has a unit test with a hand-computed example.
+- Adaptive context changes must record the plan receipt, phase, lane, budget,
+  model, thinking level, and confidence threshold in telemetry.
+- Task recovery changes must keep task contract as operational truth and task
+  journal as audit/replay truth; never let a derived checkpoint silently replace
+  a valid contract.
+- Recovery ceilings are cross-attempt invariants. New classifiers cannot grant
+  mutation; policy must separately require source ownership, task scope, and
+  hook authorization. Handoff/receipt state stores bounded references, never
+  raw verifier logs or source.
+- Resume changes must compare the actual current tree with exact-verifier
+  evidence and fail closed on identity, journal, trajectory, handoff, or symlink
+  integrity errors. Terminal Task Contract bytes remain immutable.
+- Helper changes must preserve the pinned parent, one-writer invariant, strict
+  RolePolicy/HelperRequest scope intersection, cross-process owned budget, and
+  digest-only usage receipts. `on` may dispatch only read-only roles for GA;
+  automatic worker delegation remains disabled.
+- Operator projections must read persisted/observed truth, remain usable when
+  old sidecars are missing, hash session identity, and leave unavailable
+  timing/token/cost facts null. Formatting changes must preserve the structured
+  schema/version and the explicit host-not-a-sandbox boundary.
 
 ## Change checklist
 

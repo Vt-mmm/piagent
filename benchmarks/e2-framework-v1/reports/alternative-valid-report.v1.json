@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "e2-framework-v1",
+  "kind": "alternative-valid",
+  "scenarioCount": 4,
+  "structurallyDistinct": true,
+  "expectedPassingScenarios": ["hono-tenant-api", "hono-accessible-search", "sqlite-resumable-inventory", "workspace-policy-rollout"],
+  "expectedScore": 10,
+  "providerUsed": false
+}

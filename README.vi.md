@@ -34,6 +34,18 @@ Trong session Pi đầu tiên của project, chạy `/onboard`. Hằng ngày, d�
 - Local state nằm trong `.pi/piagent-state/`, có owner-only permission và bounded retention.
 - Project-specific business logic nằm trong project profile hoặc adapter, không đưa vào core.
 
+Task Contract v2 hiện gắn task/session/run identity với current-tree verification,
+strict acceptance receipt, hash-chained journal checkpoint, retry có giới hạn và
+terminal outcome bất biến. Đây là operational record do cùng runtime tạo ra,
+không phải independent attestation.
+
+Adaptive Context Planner dùng model, thinking và context usage do Pi báo để đặt
+budget có giới hạn; repository-memory hint luôn có citation và không thay thế
+việc đọc source hiện tại. Parent model vẫn do operator pin: baseline ổn định này
+chưa ship solver hoặc automatic parent routing. Host execution là mặc định; nếu
+yêu cầu isolation backend chưa có adapter, mutation bị block thay vì âm thầm
+fallback về host.
+
 ## Command chính
 
 | Command | Mục đích |
@@ -43,6 +55,7 @@ Trong session Pi đầu tiên của project, chạy `/onboard`. Hằng ngày, d�
 | `/permission` | Đổi permission mode trong session |
 | `/context` | Xem Context Engine, index, retrieval và telemetry |
 | `/usage` | Xem session, model, thinking và context usage |
+| `/piagent-inspector` | Mở menu read-only để xem task diff, command fail/block, safety warning và context budget; panel bốn dòng tự hiện sát footer native, `toggle` để ẩn trong session |
 | Pi native `/name` | Đặt tên session; Piagent nhận rename event để map Agent Watch/report |
 | `/memory` | Xem hoặc cập nhật explicit project memory |
 | `/onboard` | Khởi tạo project profile và context |
@@ -70,6 +83,12 @@ npm run architecture:check
 - [Tài liệu tiếng Việt](docs/vi/README.md)
 - [Operator manual tiếng Việt](docs/operator-manual-vietnamese.md)
 - [Command reference tiếng Việt](docs/command-reference-vietnamese.md)
+
+## Adaptive model routing
+
+Adaptive model routing cho fresh task dùng `piagent-route --prompt "<task>" --json`.
+Chỉ `--execute --yes` mới mở provider-backed Pi process; `/model`/CLI pin luôn
+được giữ và extension không đổi model giữa conversation.
 
 ## Verification
 

@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Vt-mmm/piagent/schemas/authority-manifest.schema.json",
+  "title": "Piagent Capability Authority Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "manifestVersion", "releaseVersion", "status", "authorityVocabulary", "sourceProvenance", "globalBudgets", "profiles", "capabilities"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "manifestVersion": { "const": "authority-v1" },
+    "releaseVersion": { "const": "1.3.0" },
+    "status": { "enum": ["pre-release", "release"] },
+    "authorityVocabulary": {
+      "type": "array",
+      "prefixItems": [
+        { "const": "off" }, { "const": "observe" }, { "const": "advise" }, { "const": "enforce" }, { "const": "orchestrate" }
+      ],
+      "items": false,
+      "minItems": 5,
+      "maxItems": 5
+    },
+    "sourceProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decisionDate", "roadmap", "constitution", "constitutionSha256", "evidenceTier"],
+      "properties": {
+        "decisionDate": { "type": "string", "format": "date" },
+        "roadmap": { "$ref": "#/$defs/name" },
+        "constitution": { "$ref": "#/$defs/name" },
+        "constitutionSha256": { "$ref": "#/$defs/bareHash" },
+        "evidenceTier": { "enum": ["local-pre-release", "release-candidate"] }
+      }
+    },
+    "globalBudgets": { "$ref": "#/$defs/globalBudgets" },
+    "profiles": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": { "$ref": "#/$defs/profile" }
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 17,
+      "maxItems": 17,
+      "items": { "$ref": "#/$defs/capability" }
+    }
+  },
+  "$defs": {
+    "bareHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 160, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,159}$" },
+    "capabilityId": { "type": "string", "pattern": "^CAP-(0[1-9]|1[0-7])$" },
+    "mode": { "$ref": "#/$defs/name" },
+    "authority": { "enum": ["off", "observe", "advise", "enforce", "orchestrate"] },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["systemContinuations", "automaticDispatches", "reviewRounds"],
+      "properties": {
+        "systemContinuations": { "type": "integer", "minimum": 0, "maximum": 8 },
+        "automaticDispatches": { "type": "integer", "minimum": 0, "maximum": 8 },
+        "reviewRounds": { "type": "integer", "minimum": 0, "maximum": 8 }
+      }
+    },
+    "globalBudgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxSystemContinuationsPerTask", "maxAutomaticDispatchesPerTask", "maxSpecialistReviewRoundsPerTask"],
+      "properties": {
+        "maxSystemContinuationsPerTask": { "const": 1 },
+        "maxAutomaticDispatchesPerTask": { "const": 1 },
+        "maxSpecialistReviewRoundsPerTask": { "const": 1 }
+      }
+    },
+    "modeMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "authority", "budgets"],
+      "properties": {
+        "value": { "$ref": "#/$defs/mode" },
+        "authority": { "$ref": "#/$defs/authority" },
+        "budgets": { "$ref": "#/$defs/budget" }
+      }
+    },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "owner", "layer", "configKey", "configSources", "defaultMode", "killSwitchMode", "dependencies", "modeMappings", "constitutionTargetMode", "constitutionTargetAuthority"],
+      "properties": {
+        "id": { "$ref": "#/$defs/capabilityId" },
+        "owner": { "$ref": "#/$defs/name" },
+        "layer": { "enum": ["L0", "L1", "L2", "L3", "L4", "L5"] },
+        "configKey": { "$ref": "#/$defs/name" },
+        "configSources": { "type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": true, "items": { "$ref": "#/$defs/name" } },
+        "defaultMode": { "$ref": "#/$defs/mode" },
+        "killSwitchMode": { "$ref": "#/$defs/mode" },
+        "dependencies": { "type": "array", "maxItems": 17, "uniqueItems": true, "items": { "$ref": "#/$defs/capabilityId" } },
+        "modeMappings": { "type": "array", "minItems": 1, "maxItems": 8, "items": { "$ref": "#/$defs/modeMapping" } },
+        "constitutionTargetMode": { "$ref": "#/$defs/mode" },
+        "constitutionTargetAuthority": { "$ref": "#/$defs/authority" }
+      }
+    },
+    "profileModes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["CAP-01", "CAP-02", "CAP-03", "CAP-04", "CAP-05", "CAP-06", "CAP-07", "CAP-08", "CAP-09", "CAP-10", "CAP-11", "CAP-12", "CAP-13", "CAP-14", "CAP-15", "CAP-16", "CAP-17"],
+      "properties": {
+        "CAP-01": { "$ref": "#/$defs/mode" }, "CAP-02": { "$ref": "#/$defs/mode" }, "CAP-03": { "$ref": "#/$defs/mode" },
+        "CAP-04": { "$ref": "#/$defs/mode" }, "CAP-05": { "$ref": "#/$defs/mode" }, "CAP-06": { "$ref": "#/$defs/mode" },
+        "CAP-07": { "$ref": "#/$defs/mode" }, "CAP-08": { "$ref": "#/$defs/mode" }, "CAP-09": { "$ref": "#/$defs/mode" },
+        "CAP-10": { "$ref": "#/$defs/mode" }, "CAP-11": { "$ref": "#/$defs/mode" }, "CAP-12": { "$ref": "#/$defs/mode" },
+        "CAP-13": { "$ref": "#/$defs/mode" }, "CAP-14": { "$ref": "#/$defs/mode" }, "CAP-15": { "$ref": "#/$defs/mode" },
+        "CAP-16": { "$ref": "#/$defs/mode" }, "CAP-17": { "$ref": "#/$defs/mode" }
+      }
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "description", "modes"],
+      "properties": {
+        "id": { "enum": ["broad-default", "mechanical-only", "strict-high-risk"] },
+        "description": { "type": "string", "minLength": 12, "maxLength": 320 },
+        "modes": { "$ref": "#/$defs/profileModes" }
+      }
+    }
+  }
+}

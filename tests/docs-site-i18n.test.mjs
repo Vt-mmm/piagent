@@ -23,13 +23,15 @@ describe("bilingual docs site", () => {
     const viPages = pagesFor(LOCALES.vi);
     const enPages = pagesFor(LOCALES.en);
 
-    assert.equal(viPages.length, 17);
+    assert.equal(viPages.length, 18);
     assert.equal(enPages.length, viPages.length);
     assert.equal(outputs.length, viPages.length * 2);
     assert.deepEqual(enPages.map((page) => page.slug), viPages.map((page) => page.slug));
     assert.equal(hrefFor(viPages[0], LOCALES.vi), "/");
     assert.equal(hrefFor(enPages[0], LOCALES.en), "/en/");
     assert.equal(hrefFor(enPages[1], LOCALES.en), "/en/quickstart");
+    assert.equal(hrefFor(viPages[2], LOCALES.vi), "/whats-new");
+    assert.equal(hrefFor(enPages[2], LOCALES.en), "/en/whats-new");
   });
 
   it("emits language-specific canonical, alternates, controls, and copy labels", () => {
@@ -64,6 +66,22 @@ describe("bilingual docs site", () => {
           assert.ok(!slugs.has(rootSlug), `${page.slug} links to VI route /${route}`);
         }
       }
+    }
+  });
+
+  it("documents how inspection commands fit into the workflow", () => {
+    const outputs = build();
+    const vi = renderedPage(outputs, LOCALES.vi, "workflows");
+    const en = renderedPage(outputs, LOCALES.en, "workflows");
+    const commands = ["/task-preflight", "/piagent-status", "/usage efficiency", "/piagent-orchestration"];
+
+    assert.ok(vi.includes('id="command-anh-huong-gi"'));
+    assert.ok(en.includes('id="command-effects"'));
+    assert.match(vi, /Không có command bắt buộc mới/);
+    assert.match(en, /No new command is mandatory/);
+    for (const command of commands) {
+      assert.ok(vi.includes(command), `VI workflow page is missing ${command}`);
+      assert.ok(en.includes(command), `EN workflow page is missing ${command}`);
     }
   });
 

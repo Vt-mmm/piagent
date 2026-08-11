@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 2,
+  "id": "e2-framework-v1",
+  "title": "Piagent E2 Real Framework V1",
+  "description": "Unsaturated provider-free E2 tasks over a pinned Hono and Node SQLite monorepo with exact taxonomy attribution and calibrated graders.",
+  "profile": "fullstack",
+  "defaultRepeats": 3,
+  "timeoutSeconds": 1200,
+  "assurance": {
+    "taskSource": "maintainer-authored-real-framework-monorepo",
+    "visibility": "public-suite-with-run-private-oracles",
+    "claimTier": "capability",
+    "generatedVariants": true,
+    "familyDisjointSplit": false,
+    "reviewed": true,
+    "refreshedAt": "2026-08-11"
+  },
+  "releaseGate": {
+    "minimumQualityScore": 8,
+    "minimumSafetyScore": 10,
+    "minimumReliabilityScore": 8,
+    "minimumWorkflowScore": 9,
+    "minimumCategoryScore": 7,
+    "minimumOutcomeScoreExclusive": 9.5,
+    "minimumPairedScenarios": 4,
+    "minimumComparableEfficiencyScenarios": 2,
+    "minimumRepeats": 3,
+    "requireEfficiencyClaim": false
+  },
+  "scenarios": [
+    {
+      "id": "hono-tenant-api",
+      "title": "Hono tenant-aware user route",
+      "kind": "source-change",
+      "category": "authorization-tenant-boundary",
+      "difficulty": "large",
+      "profile": "backend-api",
+      "lifecycle": "cold-start",
+      "fixture": "project",
+      "prompt": "prompts/hono-tenant-api.md",
+      "grader": "grade.mjs",
+      "variantGenerator": "variant.mjs",
+      "allowedChanges": ["apps/api/src/tenant-app.js", "test/**"]
+    },
+    {
+      "id": "hono-accessible-search",
+      "title": "Hono accessible search page",
+      "kind": "source-change",
+      "category": "fullstack-cross-boundary-contract",
+      "difficulty": "large",
+      "profile": "fullstack",
+      "lifecycle": "steady-state",
+      "fixture": "project",
+      "prompt": "prompts/hono-accessible-search.md",
+      "grader": "grade.mjs",
+      "variantGenerator": "variant.mjs",
+      "allowedChanges": ["apps/web/src/search-app.js", "test/**"]
+    },
+    {
+      "id": "sqlite-resumable-inventory",
+      "title": "Node SQLite resumable inventory migration",
+      "kind": "source-change",
+      "category": "data-schema-migration",
+      "difficulty": "large",
+      "profile": "data",
+      "lifecycle": "cold-start",
+      "fixture": "project",
+      "prompt": "prompts/sqlite-resumable-inventory.md",
+      "grader": "grade.mjs",
+      "variantGenerator": "variant.mjs",
+      "allowedChanges": ["packages/migration/src/inventory.js", "test/**"]
+    },
+    {
+      "id": "workspace-policy-rollout",
+      "title": "Cross-workspace feature policy rollout",
+      "kind": "source-change",
+      "category": "multi-package-contract-rollout",
+      "difficulty": "large",
+      "profile": "fullstack",
+      "lifecycle": "cold-start",
+      "fixture": "project",
+      "prompt": "prompts/workspace-policy-rollout.md",
+      "grader": "grade.mjs",
+      "variantGenerator": "variant.mjs",
+      "allowedChanges": ["packages/policy/src/rollout.js", "packages/feature-api/src/evaluate.js", "apps/admin/src/summary.js", "test/**"]
+    }
+  ]
+}

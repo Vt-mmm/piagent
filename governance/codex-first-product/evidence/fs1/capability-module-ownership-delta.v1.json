@@ -1,0 +1,118 @@
+{
+  "schemaVersion": "capability-module-ownership-delta-v1",
+  "workItem": "CF-FS1-02",
+  "createdAt": "2026-08-10T10:24:07.000Z",
+  "repositoryRoot": {
+    "relativePathFromManifest": "../../../.."
+  },
+  "baseManifest": {
+    "relativePathFromManifest": "../fs0/capability-module-ownership.v1.json",
+    "sha256": "3bc2f59c1a37d7c89c56834c447e8803802131b2ae8862e2a32dce439ce76120",
+    "disposition": "Immutable FS0 ownership snapshot; this delta never rewrites or relabels it."
+  },
+  "constitution": {
+    "relativePathFromManifest": "../fs0/capability-constitution.v1.json",
+    "sha256": "5dc65f03639df4236ea4e9c70e31e81aa9613317102e1acd2b371c6e44e8c1e8"
+  },
+  "referenceVerifier": {
+    "relativePathFromManifest": "verify-capability-ownership-delta.mjs",
+    "sha256": "2e3ac6e9b9ab8be01d39532f739d5e26b3627076a37ff02909acad3b32d49db0",
+    "mutationBehavior": "read-only"
+  },
+  "assignmentAuthority": {
+    "normativeSource": "entries[]",
+    "rule": "The immutable FS0 manifest owns its original paths. This exact additive set assigns one primary capability to every production path introduced through CF-FS1-02; removed base paths, extra additions, content drift, mode drift, symlinks, duplicate owners, or unknown capabilities fail closed.",
+    "onePrimaryOwner": true
+  },
+  "ownershipAggregate": {
+    "algorithm": "piagent-capability-ownership-delta-v1",
+    "domainUtf8": "piagent-capability-ownership-delta-v1\n",
+    "identity": "sha256:c1a1ebd1f25d4c5be3f3b4a483d3e02c65689dcf5c6c2102e9910324ac8c7ee4"
+  },
+  "totalFiles": 11,
+  "currentProductionFileCount": 442,
+  "countsByCapability": {
+    "CAP-01": 4,
+    "CAP-16": 3,
+    "CAP-17": 4
+  },
+  "entries": [
+    {
+      "path": "evals/fixtures/authority-manifest.invalid.json",
+      "cap": "CAP-17",
+      "size": 104,
+      "mode": "0644",
+      "sha256": "79fb43b24d10d12c4128c2768321d6e0ee3e02244023b420398d84f0c11172db"
+    },
+    {
+      "path": "evals/fixtures/authority-manifest.valid.json",
+      "cap": "CAP-17",
+      "size": 16827,
+      "mode": "0644",
+      "sha256": "7f223487384b5521bcda01bc1dc1578dfb3f8293dc94eadd85b86048b645273c"
+    },
+    {
+      "path": "evals/fixtures/task-authority-snapshot.invalid.json",
+      "cap": "CAP-17",
+      "size": 226,
+      "mode": "0644",
+      "sha256": "ce93413ff460d37895d9be2d81224cbff005718e225cf860b0ca8af715a2334c"
+    },
+    {
+      "path": "evals/fixtures/task-authority-snapshot.valid.json",
+      "cap": "CAP-17",
+      "size": 6235,
+      "mode": "0644",
+      "sha256": "da6361124709cdac087d45b46501cf191dbe3a74383607cd0fafc22fe1c87cc7"
+    },
+    {
+      "path": "packages/piagent-core/capabilities/authority-manifest.ts",
+      "cap": "CAP-16",
+      "size": 27324,
+      "mode": "0644",
+      "sha256": "0516ccee96f240c421cc4468829701fd09baa4605bfe5425920ef534ad84489d"
+    },
+    {
+      "path": "packages/piagent-core/extensions/task-authority-contract.js",
+      "cap": "CAP-01",
+      "size": 772,
+      "mode": "0644",
+      "sha256": "6e8bbe50fc5ad7de5f24ecf026d99d6872e611933e7d11d6aec76612d236d1f3"
+    },
+    {
+      "path": "packages/piagent-core/policy/authority-manifest.v1.json",
+      "cap": "CAP-16",
+      "size": 16827,
+      "mode": "0644",
+      "sha256": "7f223487384b5521bcda01bc1dc1578dfb3f8293dc94eadd85b86048b645273c"
+    },
+    {
+      "path": "packages/piagent-core/runtime/policy/authority-manifest.ts",
+      "cap": "CAP-16",
+      "size": 282,
+      "mode": "0644",
+      "sha256": "27bfdc6099bf6aaf175202fa9b702fd988e10b04a50ce0397efe9f22fdad2b8c"
+    },
+    {
+      "path": "packages/piagent-core/runtime/policy/task-authority-runtime.ts",
+      "cap": "CAP-01",
+      "size": 6960,
+      "mode": "0644",
+      "sha256": "f18ca1a21ea901ec53be18872e1d9757cf68aea9ca1c71c021e3feb2d2083a81"
+    },
+    {
+      "path": "schemas/authority-manifest.schema.json",
+      "cap": "CAP-01",
+      "size": 5879,
+      "mode": "0644",
+      "sha256": "f957865f9922cd58146f74a9c32b006d4cdf7c067d9497625fb71730c0c6ddc7"
+    },
+    {
+      "path": "schemas/task-authority-snapshot.schema.json",
+      "cap": "CAP-01",
+      "size": 4093,
+      "mode": "0644",
+      "sha256": "5a92961f330af5df97f312fd1fb16ff01063ff7fdd80e3a2906847ecbed5c34a"
+    }
+  ]
+}

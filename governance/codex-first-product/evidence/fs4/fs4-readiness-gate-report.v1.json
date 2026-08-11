@@ -1,0 +1,287 @@
+{
+  "schemaVersion": 1,
+  "reportVersion": "fs4-readiness-review-v1",
+  "generatedAt": "2026-08-11T01:45:41.631Z",
+  "workItem": "CF-FS4-05",
+  "matrix": {
+    "path": "evals/fs4-readiness-matrix.v1.json",
+    "sha256": "1ce2f455fb939cc3698393bd0d7f7461b7d7d6dddb90ee0409c24a4d9c135af8",
+    "artifactManifestSha256": "771a5c4048a37348cd29be1ac6009a81715617ff4d9d54daca1c0ac9c5ec22f1",
+    "artifacts": [
+      {
+        "id": "e0-core-suite",
+        "path": "benchmarks/core-v1/suite.json",
+        "sha256": "ec19b26f80850143a5196380b3fd1b858f42e7c200c4000d5f684b891959f84b",
+        "bytes": 1838
+      },
+      {
+        "id": "e1-public-suite",
+        "path": "benchmarks/production-v1/suite.json",
+        "sha256": "8d03df7c08eee5debbabdb3490beb5d45b021a392b6da77df257e6d94c346d58",
+        "bytes": 9573
+      },
+      {
+        "id": "e2-suite",
+        "path": "benchmarks/e2-framework-v1/suite.json",
+        "sha256": "97d28eb96341f03e3f2537d648265e6ec80537a98941e9f5d349dea7b90f26f1",
+        "bytes": 3058
+      },
+      {
+        "id": "e2-reference",
+        "path": "benchmarks/e2-framework-v1/reports/reference-report.v1.json",
+        "sha256": "37df0eda9a93320772751dc4bcd0b522b2f5b4743ffed76334b68b768e4f7c8b",
+        "bytes": 285
+      },
+      {
+        "id": "e2-mutation",
+        "path": "benchmarks/e2-framework-v1/reports/mutation-report.v1.json",
+        "sha256": "859c8863f6c8c671d8b71e7f379f53097c8e967046825a0e55e36930b0eb4135",
+        "bytes": 710
+      },
+      {
+        "id": "e2-alternative",
+        "path": "benchmarks/e2-framework-v1/reports/alternative-valid-report.v1.json",
+        "sha256": "b9ba2b5397cfa01d04c8634fc38242d83f5474358f9d14c09c06603a4cc38a15",
+        "bytes": 325
+      },
+      {
+        "id": "e2-scope",
+        "path": "benchmarks/e2-framework-v1/reports/scope-report.v1.json",
+        "sha256": "72e521f7e0481e1625780de905e97c2831fbeb98af22ffc578f206ad3ed61e70",
+        "bytes": 262
+      },
+      {
+        "id": "e2-sensitivity",
+        "path": "benchmarks/e2-framework-v1/reports/grader-sensitivity-report.v1.json",
+        "sha256": "185388ef9d8952bbc0ee51b3c3fc8b8d9d66bc5dffbc078650b41373ec33ab04",
+        "bytes": 405
+      },
+      {
+        "id": "long-lane",
+        "path": "evals/long-horizon-v1/lane.json",
+        "sha256": "e2cd78cef5f4ff87745e15f34ea115df281f6676fa1f1d613bb88b3faa9dafdf",
+        "bytes": 699
+      },
+      {
+        "id": "long-report",
+        "path": "evals/long-horizon-v1/reports/provider-free-30m-run.v1.json",
+        "sha256": "c60e4ffb8f316985ed3857e62d3359ab913b45432072e66136b35e5a7b39536b",
+        "bytes": 24034
+      },
+      {
+        "id": "e3-runbook",
+        "path": "evals/private-holdout-v1/CUSTODIAN_RUNBOOK.md",
+        "sha256": "b59503971549d44f4366766db780c0d89bc0b90c5ccb01d2269c5440446954b8",
+        "bytes": 4085
+      },
+      {
+        "id": "e3-access-policy",
+        "path": "evals/private-holdout-v1/access-policy.v1.json",
+        "sha256": "3189aa3d811083954aaab5470a07c23963d05d4bacccc547a29844e2a8a76525",
+        "bytes": 2862
+      },
+      {
+        "id": "e3-human-rubric",
+        "path": "evals/private-holdout-v1/human-rubric.v1.json",
+        "sha256": "e291e5097ef1415cc037198e00d690d0abd7a8a9f8b98be773a25d313ac1b629",
+        "bytes": 2246
+      },
+      {
+        "id": "e3-public-exposure",
+        "path": "evals/private-holdout-v1/public-exposure.v1.json",
+        "sha256": "b91b86607d1499c13e87d577257e14f29fa347f50b1bd9eccab5e5bb64e1549d",
+        "bytes": 2538
+      },
+      {
+        "id": "taxonomy",
+        "path": "evals/real-task-taxonomy.v1.json",
+        "sha256": "b3fa32c7008ce7b60de4ffebd6853da1601effae8b422f1cfa68810e4ea2150a",
+        "bytes": 25036
+      }
+    ]
+  },
+  "tests": [
+    {
+      "id": "e0",
+      "files": [
+        "tests/golden-enforcement.test.mjs",
+        "tests/benchmark-core.test.mjs"
+      ],
+      "fileDigests": {
+        "tests/golden-enforcement.test.mjs": "173ac10f814625f4391c28a1eaca0b55a9ea32a334257a8f59c1998e12441940",
+        "tests/benchmark-core.test.mjs": "481bc9b9f7765b614b65db7bbbed1afa53b39cefb42e88705dc6b5d0e78c52ca"
+      },
+      "passed": true,
+      "skipped": false,
+      "testsPassed": 122,
+      "testsFailed": 0,
+      "durationMs": 209.335
+    },
+    {
+      "id": "e1",
+      "files": [
+        "tests/production-benchmark-suite.test.mjs"
+      ],
+      "fileDigests": {
+        "tests/production-benchmark-suite.test.mjs": "1d657c146011241d1121aef1c39886ccf7d58a000b3104228a4ace81683d4bfd"
+      },
+      "passed": true,
+      "skipped": false,
+      "testsPassed": 4,
+      "testsFailed": 0,
+      "durationMs": 3642.194
+    },
+    {
+      "id": "e2",
+      "files": [
+        "tests/capability-benchmark-suite.test.mjs",
+        "tests/e2-framework-benchmark-suite.test.mjs"
+      ],
+      "fileDigests": {
+        "tests/capability-benchmark-suite.test.mjs": "823e041a4364309ccce10b5e7e9eb8c395ebf3909506086cd736bedf16e96c38",
+        "tests/e2-framework-benchmark-suite.test.mjs": "fba0b18406734cb923c2c4aefca42a503f472b3280b2908aa9eacde55599313c"
+      },
+      "passed": true,
+      "skipped": false,
+      "testsPassed": 18,
+      "testsFailed": 0,
+      "durationMs": 10106.359
+    },
+    {
+      "id": "longHorizon",
+      "files": [
+        "tests/long-horizon-lane.test.mjs"
+      ],
+      "fileDigests": {
+        "tests/long-horizon-lane.test.mjs": "bc0a6418c1337050863bb95438a1029d9e607c8465d23a8cc07f841dc4aa8494"
+      },
+      "passed": true,
+      "skipped": false,
+      "testsPassed": 6,
+      "testsFailed": 0,
+      "durationMs": 3595.439
+    },
+    {
+      "id": "e3",
+      "files": [
+        "tests/private-holdout-readiness.test.mjs"
+      ],
+      "fileDigests": {
+        "tests/private-holdout-readiness.test.mjs": "25b83e219a676a3817ff3549f72dff00ee01b9480a1af71c5dd4cc6618e43729"
+      },
+      "passed": true,
+      "skipped": false,
+      "testsPassed": 6,
+      "testsFailed": 0,
+      "durationMs": 154.735
+    }
+  ],
+  "evaluation": {
+    "status": "passed-local-external-e3-deferred",
+    "tierStatus": {
+      "e0": "passed-deterministic",
+      "e1": "passed-public-regression",
+      "e2": "passed-public-capability",
+      "e3": "protocol-ready-external-execution-pending",
+      "longHorizon": "passed-provider-free-lifecycle"
+    },
+    "checks": {
+      "e0": {
+        "artifact-bindings-current": true,
+        "deterministic-tests-pass": true,
+        "core-suite-id": true,
+        "core-scenario-count": true
+      },
+      "e1": {
+        "public-tests-pass": true,
+        "public-suite-id": true,
+        "public-scenario-count": true,
+        "public-repeats": true,
+        "public-claim-tier": true,
+        "generated-variants-disclosed": true,
+        "not-family-disjoint": true,
+        "public-reviewed": true
+      },
+      "e2": {
+        "capability-tests-pass": true,
+        "capability-suite-id": true,
+        "capability-scenario-count": true,
+        "capability-claim-tier": true,
+        "references-pass": true,
+        "mutations-killed": true,
+        "alternatives-pass": true,
+        "scope-calibrated": true,
+        "grader-sensitive": true
+      },
+      "e3Local": {
+        "custody-tests-pass": true,
+        "local-protocol-verified": true,
+        "external-input-declared": true,
+        "self-attestation-refused": true,
+        "execute-only-boundary": true,
+        "author-access-denied": true,
+        "human-process-bounded": true,
+        "external-execution-deferred": true
+      },
+      "e3External": {
+        "sealed-custodian-receipt": false,
+        "human-calibration-recorded": false,
+        "custody-origin-verified": false,
+        "private-holdout-ready": false
+      },
+      "longHorizon": {
+        "lane-tests-pass": true,
+        "provider-free": true,
+        "wall-clock-qualified": true,
+        "completed-from-resume": true,
+        "crash-and-restart": true,
+        "compaction-and-handoff": true,
+        "continuation-bounded": true,
+        "context-bounded": true,
+        "state-bounded": true,
+        "stable-current-tree": true
+      }
+    },
+    "readinessReviewPassed": true,
+    "fs4ExitPassed": false,
+    "fs5ProtocolPreparationAllowed": true,
+    "providerExecutionAuthorized": false,
+    "releasePromotionAllowed": false,
+    "claims": {
+      "deterministicLocalEvidence": true,
+      "publicRegression": true,
+      "publicCapability": true,
+      "providerFreeLifecycle": true,
+      "modelLongTaskPerformance": false,
+      "generalization": false,
+      "tokenOrLatency": false,
+      "release": false
+    },
+    "blockers": [
+      "sealed external custodian receipt missing",
+      "sampled human calibration record missing",
+      "external custody origin not yet verified"
+    ]
+  },
+  "claimBoundary": {
+    "e0": "deterministic-local-evidence-only",
+    "e1": "public-regression-only",
+    "e2": "public-capability-only",
+    "e3": "protocol-ready-external-execution-pending",
+    "longHorizon": "provider-free-lifecycle-only",
+    "generalization": false,
+    "modelLongTaskPerformance": false,
+    "tokenOrLatency": false,
+    "release": false
+  },
+  "authorization": {
+    "providerExecution": false,
+    "privateHoldoutExecution": false,
+    "releaseAction": false
+  },
+  "handoff": {
+    "nextLocalWorkItem": "CF-FS5-01",
+    "externalE3ExecutionWorkItem": "CF-FS7-01",
+    "disposition": "passed-local-external-e3-deferred"
+  }
+}

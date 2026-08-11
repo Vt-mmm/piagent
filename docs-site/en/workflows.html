@@ -3,16 +3,16 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Core workflows · Pi Agent Platform Docs</title>
-    <meta name="description" content="Select a workflow by intent instead of repeating policy in every prompt. This keeps behavior consistent and context compact." />
+    <title>How workflows change after the update · Pi Agent Platform Docs</title>
+    <meta name="description" content="Existing workflow launchers stay unchanged. The runtime lifecycle and live inspector update automatically, while commands expose preflight, diffs, progress, receipts, efficiency, and orchestration policy." />
     <meta name="theme-color" content="#050505" />
     <link rel="canonical" href="https://piagent.io.vn/en/workflows" />
     <link rel="alternate" hreflang="vi" href="https://piagent.io.vn/workflows" />
     <link rel="alternate" hreflang="en" href="https://piagent.io.vn/en/workflows" />
     <link rel="alternate" hreflang="x-default" href="https://piagent.io.vn/workflows" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <meta property="og:title" content="Core workflows · Pi Agent Platform Docs" />
-    <meta property="og:description" content="Select a workflow by intent instead of repeating policy in every prompt. This keeps behavior consistent and context compact." />
+    <meta property="og:title" content="How workflows change after the update · Pi Agent Platform Docs" />
+    <meta property="og:description" content="Existing workflow launchers stay unchanged. The runtime lifecycle and live inspector update automatically, while commands expose preflight, diffs, progress, receipts, efficiency, and orchestration policy." />
     <meta property="og:url" content="https://piagent.io.vn/en/workflows" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.2.17 docs · EN</span>
+        <span class="pill"><span class="pill-dot"></span>v1.3.0-rc.1 docs · EN</span>
         <nav class="language-switch" aria-label="Language">
           <a class="language-option" href="/workflows" hreflang="vi" lang="vi">VI</a>
           <a class="language-option current" href="/en/workflows" hreflang="en" lang="en" aria-current="true">EN</a>
@@ -60,6 +60,7 @@
             <p class="nav-title">Get started</p>
             <a class="nav-link" href="/en/">Overview</a>
             <a class="nav-link" href="/en/quickstart">Quickstart</a>
+            <a class="nav-link" href="/en/whats-new">What’s new</a>
             <a class="nav-link" href="/en/scope">Platform scope</a>
           </div>
           <div class="nav-group">
@@ -98,9 +99,69 @@
               <span>Workflows</span>
             </nav>
             <div class="page-head">
-              <h1>Core workflows</h1>
-              <p>Select a workflow by intent instead of repeating policy in every prompt. This keeps behavior consistent and context compact.</p>
+              <h1>How workflows change after the update</h1>
+              <p>Existing workflow launchers stay unchanged. The runtime lifecycle and live inspector update automatically, while commands expose preflight, diffs, progress, receipts, efficiency, and orchestration policy.</p>
             </div>
+<section class="section">
+  <p class="section-kicker">Workflow impact</p>
+  <h2 id="conclusion">No new command is mandatory in the daily flow</h2>
+  <p class="section-lead">Users still assign work with a natural-language request or <span class="inline-code">/workflow task</span>. The main change is inside the runtime: task state, trajectories, verifier evidence, recovery, and completion gates are recorded more strictly. The new commands only expose that data when needed.</p>
+  <div class="callout ok-callout">
+    <strong>Short answer</strong>
+    <p>The interaction flow is not longer. The control flow behind it is safer and fails closed when evidence is missing. A valid task does not require all four new commands.</p>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Moment</th><th>User action stays the same</th><th>New automatic runtime behavior</th><th>Optional inspection command</th></tr></thead>
+      <tbody>
+        <tr><td>Before a task</td><td>Send a request or <span class="inline-code">/workflow task &lt;request&gt;</span>.</td><td>Loads profile and context, classifies intent and risk, captures runtime truth, and computes a solver recommendation.</td><td><span class="inline-code">/task-preflight [--json] &lt;intent&gt;</span></td></tr>
+        <tr><td>During work</td><td>Continue the task normally.</td><td>Records the work plan, phase, changed files, tool and command results, checkpoints, helpers, and recovery events. The inspector updates below the footer.</td><td><span class="inline-code">/piagent-inspector</span> or <span class="inline-code">/piagent-status</span></td></tr>
+        <tr><td>Verify and review</td><td>Use project verification; call <span class="inline-code">/workflow review</span> when a separate review is useful.</td><td>Accepts only successful exact verifiers bound to the current working-tree identity.</td><td><span class="inline-code">/piagent-status</span></td></tr>
+        <tr><td>Completion or handoff</td><td>Receive the outcome and remaining risks as before.</td><td>Approves a receipt only when trace, work plan, acceptance, changed-file integrity, and the hard gate all pass.</td><td><span class="inline-code">/piagent-status</span></td></tr>
+        <tr><td>After a task</td><td>No new required step.</td><td>Keeps sourced telemetry without inferring quality.</td><td><span class="inline-code">/usage efficiency</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Command semantics</p>
+  <h2 id="command-effects">How far the new commands affect a workflow</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Command</th><th>Reads or displays</th><th>Does not perform</th></tr></thead>
+      <tbody>
+        <tr><td><span class="inline-code">/task-preflight</span></td><td>Intent, risk, scope, runtime, route, phase/tool/helper policy, backend, approval, and blockers.</td><td>Does not create a task, advance a phase, call a model, or grant implementation authority.</td></tr>
+        <tr><td><span class="inline-code">/piagent-status</span></td><td>Task Contract, trajectory, checkpoint, verifier, recovery, helper, resume, and terminal receipt from persisted evidence.</td><td>Does not edit files, rerun verification, retry work, or turn missing evidence into success.</td></tr>
+        <tr><td><span class="inline-code">/piagent-inspector</span></td><td>Observed task files in the four-row footer panel, exact baseline delta in the <span class="inline-code">files</span> view, current tool, command failures and blocks, safety warnings, and context budget. No argument opens the menu.</td><td>Does not edit files, execute commands, change completion state, or estimate tokens for each built-in tool.</td></tr>
+        <tr><td><span class="inline-code">/usage efficiency</span></td><td>Sourced context telemetry and task metrics; unavailable facts remain <span class="inline-code">null</span> or unavailable.</td><td>Does not grade a person or model and does not decide the completion gate.</td></tr>
+        <tr><td><span class="inline-code">/piagent-orchestration</span></td><td>Current mode, helper mode, subagent limit, review lenses, Field Guide, and writer policy.</td><td>Does not change mode, spawn a helper, or enable parallel writers.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout">
+    <strong>Only explicit opt-in changes behavior.</strong>
+    <p>These five commands are read-only. Behavior changes only when an operator deliberately enables a rollout setting such as phase tools or helper mode; parent routing, automatic workers, and multiple writers do not turn on automatically.</p>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Daily example</p>
+  <h2 id="example-flow">A complete flow can look like this</h2>
+  <div class="command-grid">
+    <article class="command-card">
+      <header><span>Inspect → implement → review → receipt</span><button class="clip-btn" data-clip="/task-preflight --json Fix the failing checkout test&#10;/workflow task Fix the failing checkout test and verify.&#10;/piagent-inspector&#10;/workflow review current diff&#10;/piagent-status&#10;/usage efficiency">Copy</button></header>
+      <pre><code>/task-preflight --json Fix the failing checkout test
+/workflow task Fix the failing checkout test and verify.
+/piagent-inspector
+/workflow review current diff
+/piagent-status
+/usage efficiency</code></pre>
+      <p>Only <span class="inline-code">/workflow task</span> starts implementation. The inspector opens a menu for files, commands, safety, and context; preflight, inspector, status, and efficiency are optional. Use a separate review when the scope or handoff policy calls for one.</p>
+    </article>
+  </div>
+</section>
+
 <section class="section">
   <div class="callout ok-callout">
     <strong>Git in Pi Agent</strong>

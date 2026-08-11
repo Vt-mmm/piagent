@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "id": "fs4-readiness-v1",
+  "workItem": "CF-FS4-05",
+  "purpose": "Independently classify deterministic E0, public-regression E1, calibrated-capability E2, private-holdout-readiness E3, and provider-free long-horizon evidence without widening any claim.",
+  "artifacts": [
+    { "id": "e0-core-suite", "path": "benchmarks/core-v1/suite.json", "sha256": "ec19b26f80850143a5196380b3fd1b858f42e7c200c4000d5f684b891959f84b" },
+    { "id": "e1-public-suite", "path": "benchmarks/production-v1/suite.json", "sha256": "8d03df7c08eee5debbabdb3490beb5d45b021a392b6da77df257e6d94c346d58" },
+    { "id": "e2-suite", "path": "benchmarks/e2-framework-v1/suite.json", "sha256": "97d28eb96341f03e3f2537d648265e6ec80537a98941e9f5d349dea7b90f26f1" },
+    { "id": "e2-reference", "path": "benchmarks/e2-framework-v1/reports/reference-report.v1.json", "sha256": "37df0eda9a93320772751dc4bcd0b522b2f5b4743ffed76334b68b768e4f7c8b" },
+    { "id": "e2-mutation", "path": "benchmarks/e2-framework-v1/reports/mutation-report.v1.json", "sha256": "859c8863f6c8c671d8b71e7f379f53097c8e967046825a0e55e36930b0eb4135" },
+    { "id": "e2-alternative", "path": "benchmarks/e2-framework-v1/reports/alternative-valid-report.v1.json", "sha256": "b9ba2b5397cfa01d04c8634fc38242d83f5474358f9d14c09c06603a4cc38a15" },
+    { "id": "e2-scope", "path": "benchmarks/e2-framework-v1/reports/scope-report.v1.json", "sha256": "72e521f7e0481e1625780de905e97c2831fbeb98af22ffc578f206ad3ed61e70" },
+    { "id": "e2-sensitivity", "path": "benchmarks/e2-framework-v1/reports/grader-sensitivity-report.v1.json", "sha256": "185388ef9d8952bbc0ee51b3c3fc8b8d9d66bc5dffbc078650b41373ec33ab04" },
+    { "id": "long-lane", "path": "evals/long-horizon-v1/lane.json", "sha256": "e2cd78cef5f4ff87745e15f34ea115df281f6676fa1f1d613bb88b3faa9dafdf" },
+    { "id": "long-report", "path": "evals/long-horizon-v1/reports/provider-free-30m-run.v1.json", "sha256": "c60e4ffb8f316985ed3857e62d3359ab913b45432072e66136b35e5a7b39536b" },
+    { "id": "e3-runbook", "path": "evals/private-holdout-v1/CUSTODIAN_RUNBOOK.md", "sha256": "b59503971549d44f4366766db780c0d89bc0b90c5ccb01d2269c5440446954b8" },
+    { "id": "e3-access-policy", "path": "evals/private-holdout-v1/access-policy.v1.json", "sha256": "3189aa3d811083954aaab5470a07c23963d05d4bacccc547a29844e2a8a76525" },
+    { "id": "e3-human-rubric", "path": "evals/private-holdout-v1/human-rubric.v1.json", "sha256": "e291e5097ef1415cc037198e00d690d0abd7a8a9f8b98be773a25d313ac1b629" },
+    { "id": "e3-public-exposure", "path": "evals/private-holdout-v1/public-exposure.v1.json", "sha256": "b91b86607d1499c13e87d577257e14f29fa347f50b1bd9eccab5e5bb64e1549d" },
+    { "id": "taxonomy", "path": "evals/real-task-taxonomy.v1.json", "sha256": "b3fa32c7008ce7b60de4ffebd6853da1601effae8b422f1cfa68810e4ea2150a" }
+  ],
+  "deterministicTests": {
+    "e0": ["tests/golden-enforcement.test.mjs", "tests/benchmark-core.test.mjs"],
+    "e1": ["tests/production-benchmark-suite.test.mjs"],
+    "e2": ["tests/capability-benchmark-suite.test.mjs", "tests/e2-framework-benchmark-suite.test.mjs"],
+    "longHorizon": ["tests/long-horizon-lane.test.mjs"],
+    "e3": ["tests/private-holdout-readiness.test.mjs"]
+  },
+  "externalE3": {
+    "executionStatus": "deferred-to-fs7-01",
+    "sealedCustodianReceiptPresent": false,
+    "humanCalibrationRecorded": false,
+    "custodyOriginVerified": false
+  },
+  "claimBoundary": {
+    "e0": "deterministic-local-evidence-only",
+    "e1": "public-regression-only",
+    "e2": "public-capability-only",
+    "e3": "protocol-ready-external-execution-pending",
+    "longHorizon": "provider-free-lifecycle-only",
+    "generalization": false,
+    "modelLongTaskPerformance": false,
+    "tokenOrLatency": false,
+    "release": false
+  }
+}

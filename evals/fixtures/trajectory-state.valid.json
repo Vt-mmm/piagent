@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "policyVersion": "trajectory-v1",
+  "taskId": "task-101",
+  "taskRunId": "task-101-run-1",
+  "sessionHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "changeMode": "source-change",
+  "riskLane": "normal",
+  "currentPhase": "plan",
+  "recommendationRef": {
+    "solverPolicyVersion": "solver-v1",
+    "featureHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "route": "plan-first",
+    "decisionDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+  },
+  "sequence": 1,
+  "appliedEventIds": ["64e102e6b1c9081cd363ef20f252e09680844829dee157261ad85d0db557587b"],
+  "lastTransition": {
+    "schemaVersion": 1,
+    "policyVersion": "trajectory-v1",
+    "eventId": "64e102e6b1c9081cd363ef20f252e09680844829dee157261ad85d0db557587b",
+    "taskId": "task-101",
+    "taskRunId": "task-101-run-1",
+    "sessionHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "sequence": 1,
+    "from": "intake",
+    "to": "plan",
+    "cause": "plan-observed",
+    "sourceHook": "tool-result",
+    "taskDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "treeDigest": null,
+    "skippedPhases": [],
+    "skipReason": null,
+    "observedAt": "2026-08-08T00:00:01.000Z",
+    "terminalTaskOutcomeRef": null
+  },
+  "createdAt": "2026-08-08T00:00:00.000Z",
+  "updatedAt": "2026-08-08T00:00:01.000Z",
+  "terminalTaskOutcomeRef": null
+}

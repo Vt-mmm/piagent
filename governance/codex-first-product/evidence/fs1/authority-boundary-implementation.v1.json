@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 1,
+  "workItem": "CF-FS1-02",
+  "status": "complete",
+  "recordedAt": "2026-08-10T10:31:24Z",
+  "scope": {
+    "objective": "Make the Task Contract authority snapshot the sole runtime authority for blocking, mutation, dispatch, and system-triggered model turns.",
+    "implementationBoundary": "runtime-authority-consumption-and-cross-mode-enforcement",
+    "providerOrBenchmarkRun": false,
+    "releaseOrExternalAction": false,
+    "nextWorkItemNotStarted": "CF-FS1-03"
+  },
+  "authorityBinding": {
+    "manifestVersion": "authority-v1",
+    "manifestDigest": "sha256:24f77f5f5ddcd5430c70c120599e10995f99f420bebb474ec352bb7af7030027",
+    "snapshotVersion": "task-authority-snapshot-v1",
+    "newTaskBehavior": "Every new Task Contract persists an immutable authority snapshot bound to taskId, taskRunId, and createdAt before runtime decisions are made.",
+    "resumeBehavior": "A valid exact-identity snapshot resumes pinned. Missing, invalid, tampered, or cross-task snapshots cannot grant advanced authority; legacy tasks retain only CAP-01 through CAP-04 hard invariants.",
+    "environmentDriftBehavior": "Closed environment and project-profile inputs are captured once at task start. Later process-wide changes cannot widen a live task.",
+    "taskContractSoleTruth": true
+  },
+  "closedActionContract": {
+    "actions": ["observe", "advise", "block", "mutate", "model-turn", "dispatch"],
+    "off": [],
+    "observe": ["observe"],
+    "advise": ["observe", "advise"],
+    "enforce": ["observe", "advise", "block", "mutate"],
+    "orchestrate": ["observe", "advise", "block", "mutate", "dispatch"],
+    "budgetRule": "model-turn and dispatch additionally require a positive capability budget in the pinned snapshot",
+    "crossModeInvariant": "observe and advise can never block, mutate, dispatch, or trigger a model turn"
+  },
+  "runtimeConsumers": [
+    {
+      "capability": "CAP-09",
+      "surface": "phase-tool runtime",
+      "broadDefault": "shadow-only",
+      "strictHighRisk": "blocking enforcement",
+      "mechanicalOnly": "off"
+    },
+    {
+      "capability": "CAP-12",
+      "surface": "automatic recovery selection",
+      "broadDefault": "budgeted model turn allowed by snapshot",
+      "strictHighRisk": "budgeted model turn allowed by snapshot",
+      "mechanicalOnly": "off"
+    },
+    {
+      "capability": "CAP-13",
+      "surface": "critical acceptance gate, semantic review, and semantic repair",
+      "broadDefault": "advisory-only and no system model turn",
+      "strictHighRisk": "blocking and one budgeted review round",
+      "mechanicalOnly": "off"
+    }
+  ],
+  "acceptanceTruth": {
+    "taskContractCriteriaMaximum": 12,
+    "persistedReceiptMaximum": 12,
+    "projectionTruncationRemoved": true,
+    "broadDefaultMissingSemanticProof": "advisory and cannot block completion",
+    "hardGatesUnaffected": ["permission and scope", "safety", "current-tree exact verifier", "truthful changed files", "terminal immutability"]
+  },
+  "profiles": {
+    "broad-default": "L0 hard invariants and L1 mechanical efficiency stay active; advanced semantic and phase capabilities observe or advise without a blocking/model-turn critical path.",
+    "mechanical-only": "advanced capabilities are off while hard safety, scope, current-tree, and task-truth invariants remain.",
+    "strict-high-risk": "phase and semantic enforcement are explicit task-pinned opt-ins with declared budgets."
+  },
+  "runtimeIntegrity": {
+    "profileLockSha256": "8ecfc650eadb2855af455c18fdbd44270646831b6438445fabfee7fd4c37d3d6",
+    "corePackageDigest": "sha256:f10a8ee4611c256184bb831ea6afb9518b85c3de8ec99d3fed89672342bd9b08",
+    "runtimeFileCount": 115,
+    "doctorStatus": "current",
+    "authorityPathsPinned": [
+      "packages/piagent-core/capabilities/authority-manifest.ts",
+      "packages/piagent-core/extensions/task-authority-contract.js",
+      "packages/piagent-core/policy/authority-manifest.v1.json",
+      "packages/piagent-core/runtime/policy/authority-manifest.ts",
+      "packages/piagent-core/runtime/policy/task-authority-runtime.ts"
+    ]
+  },
+  "ownership": {
+    "baseManifestSha256": "3bc2f59c1a37d7c89c56834c447e8803802131b2ae8862e2a32dce439ce76120",
+    "deltaManifest": "governance/codex-first-product/evidence/fs1/capability-module-ownership-delta.v1.json",
+    "deltaManifestSha256": "6aa6d2c0165e076abe35f1e752e017fbdba2a99e212073f13c61a8915d1bd610",
+    "deltaVerifierSha256": "2e3ac6e9b9ab8be01d39532f739d5e26b3627076a37ff02909acad3b32d49db0",
+    "addedProductionFiles": 11,
+    "currentProductionFiles": 442,
+    "ownershipIdentity": "sha256:c1a1ebd1f25d4c5be3f3b4a483d3e02c65689dcf5c6c2102e9910324ac8c7ee4",
+    "baseSnapshotMutated": false
+  },
+  "packageDryRun": {
+    "name": "@piagent/platform",
+    "currentRepositoryVersion": "1.2.17",
+    "entryCount": 564,
+    "packedBytes": 1040241,
+    "unpackedBytes": 4388860,
+    "requiredAuthorityPathsPresent": true,
+    "releaseIdentityConsequence": "This is a productionization checkpoint on the existing v1.2.17 worktree, not a frozen 1.3.0 release candidate."
+  },
+  "verification": [
+    {
+      "command": "node --test tests/authority-manifest.test.mjs tests/task-state.test.mjs tests/phase-tool-runtime.test.mjs",
+      "result": "pass",
+      "tests": 53,
+      "failures": 0
+    },
+    {
+      "command": "node --test --test-reporter=dot tests/piagent-guard-integration.test.mjs",
+      "result": "pass",
+      "tests": 96,
+      "failures": 0
+    },
+    {
+      "command": "node --test tests/pi-082-host-tool-error.test.mjs tests/pi-082-runtime-phase-e2e.test.mjs",
+      "result": "pass",
+      "tests": 11,
+      "failures": 0,
+      "provider": false
+    },
+    {
+      "command": "node --test tests/capability-core.test.mjs tests/project-capability-state.test.mjs tests/package-production-import-graph.test.mjs tests/golden-enforcement.test.mjs",
+      "result": "pass",
+      "tests": 136,
+      "failures": 0
+    },
+    {
+      "command": "PIAGENT_NO_UPDATE_CHECK=1 node --test tests/*.test.mjs",
+      "result": "pass",
+      "tests": 1814,
+      "suites": 119,
+      "failures": 0
+    },
+    {
+      "command": "PIAGENT_VERIFY_OFFLINE=1 npm run verify",
+      "result": "pass"
+    },
+    {
+      "command": "npm run typecheck",
+      "result": "pass"
+    },
+    {
+      "command": "npm run architecture:check",
+      "result": "pass",
+      "sourceFiles": 190
+    },
+    {
+      "command": "npm run capabilities:check",
+      "result": "pass"
+    },
+    {
+      "command": "npm run release:identity",
+      "result": "pass-v1.2.17-only"
+    },
+    {
+      "command": "npm pack --dry-run --json",
+      "result": "pass-authority-paths-present"
+    },
+    {
+      "command": "node governance/codex-first-product/evidence/fs1/verify-capability-ownership-delta.mjs",
+      "result": "pass",
+      "baseFiles": 431,
+      "addedFiles": 11,
+      "currentFiles": 442
+    },
+    {
+      "command": "git diff --check",
+      "result": "pass"
+    }
+  ],
+  "finalFileHashes": [
+    { "path": ".pi/piagent-profile.lock.json", "sha256": "8ecfc650eadb2855af455c18fdbd44270646831b6438445fabfee7fd4c37d3d6" },
+    { "path": "docs/authority-manifest.md", "sha256": "cebd2ffa4cdea16c43b321643f13a25ff69aacee9fb6a650fb84403f51d8f989" },
+    { "path": "packages/piagent-core/capabilities/authority-manifest.ts", "sha256": "0516ccee96f240c421cc4468829701fd09baa4605bfe5425920ef534ad84489d" },
+    { "path": "packages/piagent-core/capabilities/runtime-integrity.js", "sha256": "347d4418d31e1fb98e6fffef9ced70b7767f459367aaa2cc56b41ae3a98054df" },
+    { "path": "packages/piagent-core/extensions/piagent-guard.ts", "sha256": "1bf2e90ee4e1ebfbc3cc33484b9aa3694a15a12202b4024266dcef346e390b0d" },
+    { "path": "packages/piagent-core/extensions/task-authority-contract.js", "sha256": "6e8bbe50fc5ad7de5f24ecf026d99d6872e611933e7d11d6aec76612d236d1f3" },
+    { "path": "packages/piagent-core/extensions/task-state.js", "sha256": "45c49f6e79167925f1f4bd813506e23a27f93470fab9bf8ebc4cdb823e35b84c" },
+    { "path": "packages/piagent-core/policy/authority-manifest.v1.json", "sha256": "7f223487384b5521bcda01bc1dc1578dfb3f8293dc94eadd85b86048b645273c" },
+    { "path": "packages/piagent-core/runtime/hooks/completion-hook.ts", "sha256": "0bdd6999851eab56fc0ae695298685c4b0740d5dfdd377cac8480b39df638ed6" },
+    { "path": "packages/piagent-core/runtime/policy/task-authority-runtime.ts", "sha256": "f18ca1a21ea901ec53be18872e1d9757cf68aea9ca1c71c021e3feb2d2083a81" },
+    { "path": "packages/piagent-core/runtime/registration/task-start-tool.ts", "sha256": "f1dec4d3b77d11bda5b642316ebbfc6301819428b6e857a415b5e190df02a3be" },
+    { "path": "schemas/project-profile.schema.json", "sha256": "6bc494961e432776e7726e5e6e94f292416f84c94fbeda987f461981d82a6ec4" },
+    { "path": "schemas/task-contract.schema.json", "sha256": "6a29d78ad98616edf936376590d3000aa4e12d9595c11fce63e70c5c42e2f759" },
+    { "path": "tests/authority-manifest.test.mjs", "sha256": "0d8481adff373818a100e1bdbea7c5a6c412b0a4983cc48321eeec310e4f1b6f" },
+    { "path": "tests/piagent-guard-integration.test.mjs", "sha256": "34bc3b93e3364811512d690ff791a59b213aff8297ff83bbc3555052e65022d4" }
+  ],
+  "explicitNonClaims": [
+    "CF-FS1-03 global continuation accounting is not started.",
+    "CF-FS1-04 migration and rollback completion is not started.",
+    "No provider benchmark, token claim, release candidate, tag, package publish, or external action occurred."
+  ]
+}

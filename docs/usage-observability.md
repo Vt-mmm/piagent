@@ -19,6 +19,7 @@ Piagent package thêm command:
 /usage logs
 /usage live
 /usage efficiency
+/piagent-inspector
 ```
 
 Agent cũng có thể gọi tool:
@@ -54,7 +55,41 @@ piagent_context_preflight
 `/usage efficiency` đọc local Context Engine telemetry và hiện công thức
 `contextWasteScore`: duplicate reads, duplicate output, tool-schema share,
 low-confidence retrieval, và active-tool excess. Score này phải đi cùng task
-gate/verify result; nó không tự kết luận model hoặc nhân viên làm tốt/xấu.
+gate/verify result; nó không tự kết luận model hoặc nhân viên làm tốt/xấu. Nếu
+session có Task Contract, JSON detail còn có `taskEfficiency`: hashed
+session/task/run identity, solver route/mode/override, persisted phase duration,
+context/tool-group utilization, verify/repair/retry count, digest-only helper
+usage, outcome và acceptance. Raw task text/child output không được lưu. Parent
+token/cost, actual tool-call count, relevant-file time và correct-edit time giữ
+`null` hoặc `unavailable` nếu runtime không có exact fact; không dùng estimate.
+
+## Context Budget Inspector và activity panel
+
+`/piagent-inspector` là namespace duy nhất cho activity/diff review. Gõ không
+tham số để chọn `summary`, `files`, `commands`, `security`, `context`, `toggle`
+hoặc `help`. Panel live bốn dòng tự hiện sát phía trên footer native từ lúc mở
+session; `/piagent-inspector toggle` chỉ ẩn/hiện panel trong session hiện tại
+và không sửa profile.
+
+Màu panel mang nghĩa cố định: cyan/magenta phân biệt file và test, xanh lá cho
+addition/pass và context dưới 60%, vàng cho block hoặc context từ 60%, đỏ cho
+deletion/failure/safety hoặc context từ 80%. Màu có thể tắt bằng `NO_COLOR=1`.
+
+Inspector đọc các nguồn local đã có: Task Contract và baseline working tree,
+tool call/result, exact bash evidence, safety decision, trajectory/resume state,
+session messages và `ctx.getContextUsage()`. Vì vậy nó hiển thị được:
+
+- observed task files trên footer panel; exact task-baseline delta trong view `files`; toàn bộ dirty working tree khi không có task;
+- file/tool đang chạy và patch line vừa hoàn tất khi Pi cung cấp patch;
+- command requested, executed, passed, failed hoặc blocked;
+- verifier pass/fail, policy block, secret redaction và integrity warning;
+- context hiện tại, token/cost cộng theo session và usage của assistant turn mới nhất.
+
+Giới hạn được ghi rõ trong output: Pi gắn model usage vào assistant response/turn,
+không gắn exact token vào từng built-in tool call. Do đó inspector không chia token
+cho `read`, `edit`, `bash` bằng estimate. Nếu task đụng file đã dirty từ baseline,
+line scope là `mixed-working-tree`; dùng file list/task baseline để review, không
+coi toàn bộ `git diff HEAD` là công của task hiện tại.
 
 Giới hạn kỹ thuật: extension command context expose `ctx.getContextUsage()`, phù hợp để biết context window đang dùng bao nhiêu. Exact billed totals như `input`, `output`, `cacheRead`, `cacheWrite`, `cost` là API của Pi `/session` và RPC `get_session_stats`.
 

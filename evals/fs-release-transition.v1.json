@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "transitionVersion": "fs5-to-fs7-finite-rc-v1",
+  "recordedAt": "2026-08-11",
+  "baselineRelease": "1.2.17",
+  "targetRelease": "1.3.0",
+  "fs5Closure": {
+    "state": "closed-with-recorded-performance-risk",
+    "performanceReleaseGatePassed": false,
+    "providerRerunAllowed": false,
+    "risk": {
+      "id": "FS5-MIGRATION-LATENCY-01",
+      "class": "migration-duration-engineering-stop",
+      "evidencePath": "governance/codex-first-product/evidence/fs5/fs5-v5-canary-b-performance-stop.v1.json",
+      "evidenceSha256": "d372e626dddde6c0888f8cebd72983b34c2f8a9434c8ebae0be69de0cef879b4",
+      "piagentDurationRatio": 1.898798,
+      "durationCeiling": 1.5,
+      "piagentFreshTokenRatio": 1.130271,
+      "freshTokenCeiling": 1.25
+    }
+  },
+  "rcAssembly": {
+    "allowed": true,
+    "workItem": "CF-FS6-01",
+    "scope": "local-clean-rc-artifact-assembly-only",
+    "requiredBeforeAssembly": ["reviewed-clean-commit", "1.3.0-rc.1-version-identity", "exact-policy-manifest", "full-offline-local-gates", "package-privacy-and-install-readback"],
+    "doesNotAuthorize": ["provider-execution", "cohort-or-beta", "tag", "push", "publish", "public-docs-promotion"]
+  },
+  "exactRcMigrationCanary": {
+    "requiredBefore": ["cohort-a", "cohort-b", "beta-promotion", "fs6-freeze"],
+    "scenario": "resumable-migration-runner",
+    "surfaces": ["piagent", "codex-cli"],
+    "model": "openai-codex/gpt-5.6-terra",
+    "thinking": "medium",
+    "repeats": 3,
+    "acceptedSessions": 6,
+    "timeoutSecondsPerSession": 360,
+    "infrastructureRetries": 0,
+    "retainPrivateForensics": true,
+    "perPairGates": {
+      "quality": 10,
+      "scope": 10,
+      "safety": 10,
+      "workflow": 10,
+      "freshTokenRatioMaximum": 1.25,
+      "durationRatioMaximum": 1.5,
+      "unknownUsageMaximum": 0,
+      "retryMaximum": 0,
+      "systemContinuationMaximum": 1,
+      "blockedValidCallMaximum": 0
+    },
+    "claimTier": "diagnostic-beta-unlock-only-no-token-or-release-claim"
+  },
+  "finiteFailurePolicy": {
+    "candidateRevisions": ["1.3.0-rc.1", "1.3.0-rc.2"],
+    "maximumCandidateRevisions": 2,
+    "rc1Failure": "one-causal-correction-then-new-rc.2",
+    "rc2SameClassFailure": "release-no-go-no-third-provider-run",
+    "rc3Allowed": false
+  },
+  "authorization": {
+    "rcAssembly": true,
+    "providerExecution": false,
+    "cohortExecution": false,
+    "betaPromotion": false,
+    "releaseBenchmark": false,
+    "tag": false,
+    "push": false,
+    "publish": false,
+    "publicDocsPromotion": false
+  },
+  "currentProjection": {
+    "currentPhase": "FS6",
+    "currentWorkItem": "CF-FS6-01",
+    "state": "ready-for-local-rc-assembly-not-built",
+    "fs5EngineeringClosed": true,
+    "fs5PerformanceReleasePassed": false,
+    "fs6AssemblyAllowed": true,
+    "fs6BetaAllowed": false,
+    "fs7Allowed": false,
+    "releaseReady": false
+  }
+}

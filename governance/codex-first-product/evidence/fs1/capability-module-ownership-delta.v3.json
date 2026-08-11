@@ -1,0 +1,62 @@
+{
+  "schemaVersion": "capability-module-ownership-delta-v3",
+  "workItem": "CF-FS1-04",
+  "createdAt": "2026-08-10T15:00:00.000Z",
+  "repositoryRoot": {
+    "relativePathFromManifest": "../../../.."
+  },
+  "baseManifest": {
+    "relativePathFromManifest": "../fs0/capability-module-ownership.v1.json",
+    "sha256": "3bc2f59c1a37d7c89c56834c447e8803802131b2ae8862e2a32dce439ce76120",
+    "disposition": "Immutable FS0 ownership snapshot; this delta never rewrites or relabels it."
+  },
+  "priorDelta": {
+    "relativePathFromManifest": "capability-module-ownership-delta.v2.json",
+    "sha256": "b25eebeea8519dd2484a24906ad3cb62f8b668bd35913dd6b5e519e467b142e9",
+    "disposition": "Immutable CF-FS1-03 additive ownership snapshot; this delta layers one new path and one content update without changing historical evidence bytes."
+  },
+  "constitution": {
+    "relativePathFromManifest": "../fs0/capability-constitution.v1.json",
+    "sha256": "5dc65f03639df4236ea4e9c70e31e81aa9613317102e1acd2b371c6e44e8c1e8"
+  },
+  "referenceVerifier": {
+    "relativePathFromManifest": "verify-capability-ownership-delta-v3.mjs",
+    "sha256": "bac3f6ad7c7beb8922553a85a2ddbf10d38f6bc2d9268d9f27b62957905e955d",
+    "mutationBehavior": "read-only"
+  },
+  "assignmentAuthority": {
+    "normativeSource": "entries[] plus updatedEntries[]",
+    "rule": "FS0 and prior FS1 deltas retain ownership of their exact paths. This additive set assigns one primary capability to every production path introduced by CF-FS1-04 and records current identity for any previously added path changed by this work item; removed inherited paths, undeclared additions or prior-delta drift, owner relabeling, mode drift, symlinks, duplicate owners, or unknown capabilities fail closed.",
+    "onePrimaryOwner": true
+  },
+  "ownershipAggregate": {
+    "algorithm": "piagent-capability-ownership-delta-v3",
+    "domainUtf8": "piagent-capability-ownership-delta-v3\n",
+    "identity": "sha256:cf032f15b45d2257a7d460524f895d0aa828d653489aa81bed149eb07a083886"
+  },
+  "totalFiles": 1,
+  "updatedFiles": 1,
+  "currentProductionFileCount": 444,
+  "countsByCapability": {
+    "CAP-01": 1,
+    "CAP-04": 1
+  },
+  "entries": [
+    {
+      "path": "packages/piagent-core/runtime/policy/authority-resume-policy.ts",
+      "cap": "CAP-04",
+      "size": 9837,
+      "mode": "0644",
+      "sha256": "d3a042ccb2c9b912ac4954d75605d6a6cef91772150e2bbb404c8cfe3bcb1d8f"
+    }
+  ],
+  "updatedEntries": [
+    {
+      "path": "packages/piagent-core/runtime/policy/task-authority-runtime.ts",
+      "cap": "CAP-01",
+      "size": 7121,
+      "mode": "0644",
+      "sha256": "ad802cb136a3b837c7a2d9c607ec9287e987289c712bf471efd7597ce385f9bf"
+    }
+  ]
+}

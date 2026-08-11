@@ -1,0 +1,177 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-08-11",
+  "objective": "Give subsequent sessions a finite, evidence-bound CF-FS6/CF-FS7 execution map without manufacturing cohort, platform, private-holdout, release-candidate or release evidence.",
+  "dependencyReadback": {
+    "required": "CF-FS5-04 six-family pilot passes before CF-FS6",
+    "observed": "V5 bounded adjudication and Fullstack canary A pass. Migration canary B completes both quality outcomes at grade/scope/safety/workflow 10 and fresh-token ratio 1.1303, but its accepted Piagent duration ratio is 1.8988 and exceeds the frozen 1.5 ceiling. The six-family pilot never opened, so FS5 exit remains false.",
+    "entryAllowed": false,
+    "evidence": "../fs5/fs5-v5-canary-b-performance-stop.v1.json"
+  },
+  "currentIdentity": {
+    "packageVersion": "1.2.17",
+    "releaseTarget": "1.3.0",
+    "candidateState": "unfrozen",
+    "cleanCommit": null,
+    "rcPackage": null,
+    "linuxArtifact": null,
+    "macosArtifact": null
+  },
+  "localFoundationVerification": {
+    "fullSerialRepository": "1921/1921 PASS across 124 suites",
+    "packageInstallUpdateRollbackRcPrivacyMatrix": "270/270 PASS across 25 suites",
+    "releaseIdentity": "PASS for historical/current package version 1.2.17 only; this is not RC identity",
+    "capabilityCatalog": "PASS",
+    "documentationPairs": "PASS (4 EN/VI pairs)",
+    "architecture": "PASS (198 source files)",
+    "typecheck": "PASS",
+    "diffCheck": "PASS",
+    "packageDryRun": {
+      "version": "1.2.17",
+      "entryCount": 1199,
+      "packedBytes": 1356914,
+      "unpackedBytes": 6055801,
+      "sha1": "cc05b4ed02c914bbf4b2edbbdfa464ae27313a32",
+      "actualTarballWritten": false,
+      "releaseEvidence": false
+    }
+  },
+  "workItems": [
+    {
+      "id": "CF-FS6-01",
+      "state": "blocked-by-fs5-and-clean-rc-identity",
+      "implementedFoundation": [
+        "package allowlist and privacy checks",
+        "release identity validator",
+        "disposable install/update/rollback harness",
+        "runtime integrity and capability inventories"
+      ],
+      "missingExitEvidence": [
+        "reviewed clean commit",
+        "1.3.0-rc.1 identity on every version surface",
+        "actual immutable tarball and provenance",
+        "clean install/readback with no private files"
+      ],
+      "nextAfterUnblock": "assemble an attributed codex/v1.3.0-rc.1 candidate only with explicit branch/commit approval"
+    },
+    {
+      "id": "CF-FS6-02",
+      "state": "blocked-by-fs6-01-and-external-cohort",
+      "missingExitEvidence": [
+        "20 real maintainer tasks",
+        "zero unbounded loop or safety escape",
+        "issue taxonomy",
+        "rollback rehearsal"
+      ]
+    },
+    {
+      "id": "CF-FS6-03",
+      "state": "blocked-by-fs6-02-and-independent-humans",
+      "missingExitEvidence": [
+        "100 internal attempts over five profiles",
+        "five independent users",
+        "install and upgrade usability",
+        "false-block, comprehension, recovery and timing findings"
+      ]
+    },
+    {
+      "id": "CF-FS6-04",
+      "state": "implemented-foundation-exact-rc-platform-proof-blocked",
+      "implementedFoundation": [
+        "disposable macOS ARM64 install/update/rollback tests",
+        "Ubuntu and macOS CI declarations",
+        "1.2.17 rollback baseline"
+      ],
+      "missingExitEvidence": [
+        "the exact same RC package on macOS ARM64 and Linux x64",
+        "1.2.17 -> RC -> 1.2.17 migration on both platforms",
+        "safe old-runtime handling of additive sidecars"
+      ]
+    },
+    {
+      "id": "CF-FS6-05",
+      "state": "blocked-by-fs6-01-through-fs6-04",
+      "missingExitEvidence": [
+        "immutable v1.3.0-rc.1 commit",
+        "source/tree/package/policy/suite/model/grader descriptor",
+        "no-write evaluation matrix",
+        "independent freeze readback"
+      ]
+    },
+    {
+      "id": "CF-FS7-01",
+      "state": "blocked-by-fs6-and-external-custody",
+      "implementedFoundation": [
+        "provider-free 32.61 minute hard-crash/resume long-horizon lane",
+        "private E3 custody and redaction protocol"
+      ],
+      "missingExitEvidence": [
+        "sealed family-disjoint private holdout",
+        "two blinded reviewers and resolved disagreements",
+        "exact-RC paid E3 execution",
+        "exact-RC long-horizon confirmation"
+      ]
+    },
+    {
+      "id": "CF-FS7-02",
+      "state": "blocked-by-fs7-01-and-external-cohort",
+      "missingExitEvidence": [
+        "200 terminal beta attempts",
+        "high-risk, recovery and long-task cases",
+        "incident, rollback and human-escalation report"
+      ]
+    },
+    {
+      "id": "CF-FS7-03",
+      "state": "blocked-by-exact-rc-e3-cohort-and-fs5-pilot",
+      "implementedFoundation": [
+        "Piagent versus controlled Codex CLI Luna Medium benchmark runner",
+        "immutable ledger, pause/resume, usage and confidence evaluator"
+      ],
+      "missingExitEvidence": [
+        "frozen RC",
+        "FS7-01 and FS7-02 pass",
+        "18 families x 3 repeats x 2 surfaces = 108 accepted sessions",
+        "inspection after every at-most-six-session chunk"
+      ]
+    },
+    {
+      "id": "CF-FS7-04",
+      "state": "blocked-by-fs7-03",
+      "missingExitEvidence": [
+        "complete report and confidence intervals",
+        "quality, safety, workflow, reliability and category gates",
+        "cohort, human, platform, migration and rollback attachments",
+        "independent GO/NO-GO review"
+      ]
+    },
+    {
+      "id": "CF-FS7-05",
+      "state": "blocked-by-fs7-04-and-explicit-release-approval",
+      "externalActionsNotAuthorizedByThisArtifact": [
+        "tag",
+        "push",
+        "publish",
+        "public docs switch",
+        "registry install/readback"
+      ]
+    }
+  ],
+  "finiteNextPath": [
+    "Preserve every terminal FS5 v1, v2, v3 and v4 ledger and the completed v5 adjudication run; do not resume, replay or relabel any of them.",
+    "Treat v5 adjudication and canary A as passing historical stages and canary B as a terminal duration stop. Do not resume, replay, relabel or open the six-family pilot.",
+    "Perform provider-free causal work only; aggregate continuation/tool-error correlation is insufficient to authorize a source change or provider confirmation.",
+    "A future candidate requires a separately frozen protocol decision and must still pass both canaries before any six-family pilot.",
+    "Only after a complete FS5 six-family pilot passes may a clean v1.3.0-rc.1 branch/commit/package be assembled and FS6-01 through FS6-05 execute in order.",
+    "Collect real cohorts, independent humans and Linux evidence; local fixtures cannot substitute for them.",
+    "Run FS7-01 and FS7-02 on the exact frozen RC before the 108-session benchmark.",
+    "Run FS7-03 in at-most-six-session chunks and stop on any frozen gate failure.",
+    "Assemble FS7-04; require explicit operator GO before any FS7-05 external action."
+  ],
+  "verdict": {
+    "fs6Complete": false,
+    "fs7Complete": false,
+    "releaseReady": false,
+    "reason": "The dependency chain is evidence-bearing: v5 clears bounded-retry and Fullstack, but Migration canary B exceeds the frozen duration ceiling and closes the candidate before the six-family pilot. FS5 exit is false; clean RC identity, external cohorts/humans/Linux/private holdout and the final benchmark also cannot be replaced by local code or a checklist."
+  }
+}

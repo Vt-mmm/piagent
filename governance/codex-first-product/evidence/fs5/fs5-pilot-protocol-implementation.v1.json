@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "workItem": "CF-FS5-01",
+  "status": "complete-local-protocol-provider-execution-not-authorized",
+  "verifiedAt": "2026-08-11",
+  "objective": "Freeze a finite Piagent-versus-controlled-codex-cli Luna Medium product protocol, make command, credential and isolation preflight provider-free, and prove exact usage, ledger, pair-boundary resume, redaction and stop-budget behavior without starting a model session.",
+  "implementation": {
+    "protocol": {
+      "path": "evals/fs5-pilot-protocol.v1.json",
+      "sha256": "9ab102b08d0c571fa5687522038c7e1fe8f2b4316d538a74219266517e1827b0"
+    },
+    "protocolRuntime": {
+      "path": "packages/piagent-core/benchmark/fs5-pilot-protocol.js",
+      "sha256": "3ed0be2250be3b082c17869f947858b70ca5a5bc5c150e5873eab1e4e3b0119f"
+    },
+    "cli": {
+      "path": "packages/piagent-core/benchmark/benchmark-cli.js",
+      "sha256": "08a8e58fcfc44ce0118ff7ce7ae029f9c0ab47e137af9de53e1ba5b39cce45f8"
+    },
+    "preflight": {
+      "path": "packages/piagent-core/benchmark/benchmark-preflight.js",
+      "sha256": "09cb9246b22980a0b81f7f3c2eb0c4ec7492f92dd3da25e63d3b155493977baa"
+    },
+    "runnerCore": {
+      "path": "scripts/benchmark-runner-core.mjs",
+      "sha256": "6de138856183c76e32db7f3fffb1ff9f0a2ecf0bde2545d468aa27d03dd9cff9",
+      "architectureLines": "950/950"
+    },
+    "protocolTest": {
+      "path": "tests/fs5-pilot-protocol.test.mjs",
+      "sha256": "6aab3867bca711c33d988f5a4cb1e15277b9dcd7011bfd8123525fed0252ab85"
+    },
+    "runnerTest": {
+      "path": "tests/benchmark-runner.test.mjs",
+      "sha256": "4fc198eea5ae8ebce5186c35c6a852a775ab59afd1b8c47ab831af80f5c68cfd"
+    },
+    "documentation": {
+      "path": "docs/quality-benchmark.md",
+      "sha256": "2b68558489e7b93379327f85c5dd1ae6cad5113278732605ae0581407dc282a7"
+    }
+  },
+  "productComparison": {
+    "candidateSurface": "piagent",
+    "baselineSurface": "codex-cli",
+    "rawPiReleaseBaselineAllowed": false,
+    "model": "openai-codex/gpt-5.6-luna",
+    "thinking": "medium",
+    "codexMode": "controlled",
+    "piagentTreatment": "local-safe",
+    "executionBackend": "host",
+    "resourceResolution": "offline"
+  },
+  "stagePlan": {
+    "canaryA": "capability-v1/fullstack-search-contract, one pair, repeat 1, timeout 360 seconds, retries 0, maxSessions 2",
+    "canaryB": "capability-v1/resumable-migration-runner, one pair only after canary A passes, repeat 1, timeout 360 seconds, retries 0, maxSessions 2",
+    "pilot": "six production-v1 families, one repeat, 12 sessions, timeout 600 seconds, retries 0, inspect after each two-session pair",
+    "dryRunSessions": {
+      "canaryA": 2,
+      "canaryB": 2,
+      "pilot": 12
+    }
+  },
+  "finiteDecisionRules": {
+    "onePairPerCanaryDecision": true,
+    "oneConfirmationPairAfterCodeChange": true,
+    "sameFailureClassMaximumOccurrences": 2,
+    "thirdProviderRunForSameFailureClassAllowed": false,
+    "minimumGrade": 10,
+    "minimumSafety": 10,
+    "requiredPiagentWorkflow": 10,
+    "maxSystemContinuations": 1,
+    "shadowAdvisoryAddedContinuations": 0,
+    "maxFreshTokenRatio": 1.25,
+    "maxDurationRatio": 1.5,
+    "unknownUsageAllowsAdvance": false,
+    "pairedRegressionAllowsAdvance": false
+  },
+  "preflightDecision": {
+    "dryRunStartsProvider": false,
+    "preflightOnlyStartsProvider": false,
+    "providerSessionsStarted": 0,
+    "isolatedFakeCredentialAndCommandPreflight": "PASS",
+    "actualOperatorCredentialPreflight": "not-run; Pi OAuth writeback authority and provider-stage authorization remain explicit CF-FS5-03 operator decisions",
+    "providerExecutionAuthorized": false
+  },
+  "verification": {
+    "focusedBenchmarkMatrix": "140/140 PASS",
+    "protocolAndPackage": "18/18 PASS",
+    "repository": "1911/1911 PASS, 124 suites",
+    "offlineVerify": "PASS on the final source tree",
+    "typecheck": "PASS",
+    "architecture": "PASS, 197 source files within budgets",
+    "docs": "PASS, 4 EN/VI pairs",
+    "capabilityCatalog": "PASS, 2 packs",
+    "packageDryRun": "PASS, 1197 entries; package version remains the unreleased development identity 1.2.17",
+    "diffCheck": "PASS",
+    "providerUsed": false,
+    "benchmarkEvidenceMutated": false,
+    "privateHoldoutExecuted": false,
+    "releaseActionPerformed": false
+  },
+  "claimBoundary": {
+    "canaries": "diagnostic-only",
+    "sixFamilyPilot": "engineering-promotion-evidence-only",
+    "tokenSavingClaimAllowed": false,
+    "generalizationClaimAllowed": false,
+    "releaseClaimAllowed": false,
+    "releaseBenchmarkWorkItem": "CF-FS7-03"
+  },
+  "nextWorkItem": "CF-FS5-02"
+}

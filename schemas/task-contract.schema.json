@@ -26,6 +26,7 @@
     "verifyCommands",
     "workPlan",
     "reviewLenses",
+    "workingTreeDigestAlgorithm",
     "baselineChangedFiles",
     "baselineFileDigests",
     "observedChangedFiles",
@@ -69,8 +70,333 @@
       "type": "object",
       "additionalProperties": {
         "type": "string",
-        "minLength": 1
+        "pattern": "^(?:wt-content-v2|wt-content-v2-unavailable):[a-f0-9]{64}$"
       }
+    },
+    "workingTreeDigestMigration": {
+      "type": "object",
+      "required": ["status", "source", "reasonCode", "requiredAction", "archivePath", "archiveDigest", "archiveBytes", "baselineEvidenceDigest", "finalEvidenceDigest", "recordedAt"],
+      "properties": {
+        "status": { "enum": ["verification-refresh-required", "refreshed", "new-attempt-required", "historical-unverifiable"] },
+        "source": { "const": "legacy-unversioned" },
+        "reasonCode": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "requiredAction": { "enum": ["rerun-exact-verifier", "none", "start-new-attempt", "historical-only"] },
+        "archivePath": { "type": "string", "pattern": "^\\.pi/piagent-state/digest-migrations/[a-z0-9-]+\\.legacy\\.json$" },
+        "archiveDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "archiveBytes": { "type": "integer", "minimum": 1 },
+        "baselineEvidenceDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "finalEvidenceDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "recordedAt": { "type": "string", "format": "date-time" },
+        "refreshedAt": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "acceptanceEvidence": {
+      "type": "object",
+      "required": [
+        "kind",
+        "summary",
+        "paths"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "paths": {
+          "type": "array",
+          "maxItems": 12,
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "uniqueItems": true
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "exitCode": {
+          "type": "integer"
+        },
+        "workingTreeDigest": {
+          "type": "string",
+          "pattern": "^wt-content-v2:[a-f0-9]{64}$"
+        },
+        "recordedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false
+    },
+    "acceptanceCriterion": {
+      "type": "object",
+      "required": [
+        "id",
+        "hash",
+        "obligation",
+        "priority",
+        "status",
+        "evidence"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "obligation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "priority": {
+          "enum": [
+            "normal",
+            "critical"
+          ]
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "satisfied",
+            "blocked"
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/acceptanceEvidence"
+          }
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false
+    },
+    "acceptanceReceipt": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "source",
+        "promptHash",
+        "generatedAt",
+        "criteria"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "source": {
+          "enum": [
+            "model",
+            "runtime"
+          ]
+        },
+        "promptHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "provenance": {
+          "type": "object",
+          "required": [
+            "assurance",
+            "disposition",
+            "repairCount",
+            "retryCount",
+            "finalRecoveryDisposition",
+            "failureRef",
+            "recoveryRef",
+            "handoffRef",
+            "recordedAt"
+          ],
+          "properties": {
+            "assurance": {
+              "const": "runtime-observed"
+            },
+            "disposition": {
+              "enum": [
+                "first-pass-success",
+                "repaired-success",
+                "blocked",
+                "partial",
+                "failed",
+                "pending"
+              ]
+            },
+            "repairCount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10
+            },
+            "retryCount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10
+            },
+            "finalRecoveryDisposition": {
+              "enum": [
+                "not-needed",
+                "succeeded",
+                "blocked",
+                "partial",
+                "failed",
+                "pending"
+              ]
+            },
+            "failureRef": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "evidenceDigest",
+                    "category",
+                    "captureRef"
+                  ],
+                  "properties": {
+                    "evidenceDigest": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    },
+                    "category": {
+                      "enum": [
+                        "passed",
+                        "compile-typecheck",
+                        "test-assertion",
+                        "lint-format",
+                        "dependency-config",
+                        "environment",
+                        "provider-network",
+                        "permission-policy",
+                        "scope-protected-path",
+                        "flaky-infrastructure",
+                        "unknown"
+                      ]
+                    },
+                    "captureRef": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._/-]{0,511}$"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "recoveryRef": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "policyVersion",
+                    "action",
+                    "reasonCodes"
+                  ],
+                  "properties": {
+                    "policyVersion": {
+                      "const": "recovery-v1"
+                    },
+                    "action": {
+                      "enum": [
+                        "repair",
+                        "retry",
+                        "fresh-session",
+                        "ask-operator",
+                        "handoff",
+                        "blocked"
+                      ]
+                    },
+                    "reasonCodes": {
+                      "type": "array",
+                      "maxItems": 16,
+                      "uniqueItems": true,
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[a-z0-9_.:-]+$"
+                      }
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "handoffRef": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^[a-zA-Z0-9.][a-zA-Z0-9:._/-]{0,511}$"
+            },
+            "recordedAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "additionalProperties": false
+        },
+        "helperUsage": {
+          "type": "object",
+          "required": ["mode", "used", "reasonCodes", "helpers", "recordedAt"],
+          "properties": {
+            "mode": { "enum": ["off", "recommend", "on"] },
+            "used": { "type": "boolean" },
+            "reasonCodes": { "type": "array", "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z0-9_.:-]+$" } },
+            "helpers": {
+              "type": "array", "maxItems": 3,
+              "items": {
+                "type": "object",
+                "required": ["role", "disposition", "requestRef", "outputDigest", "calls", "tokens"],
+                "properties": {
+                  "role": { "enum": ["retriever", "scout", "planner", "worker", "reviewer", "oracle", "researcher"] },
+                  "disposition": { "type": "string", "pattern": "^[a-z0-9_.:-]+$" },
+                  "requestRef": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+                  "outputDigest": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
+                  "calls": { "type": "integer", "minimum": 0, "maximum": 100 },
+                  "tokens": { "type": "integer", "minimum": 0, "maximum": 100000000 }
+                },
+                "additionalProperties": false
+              }
+            },
+            "recordedAt": { "type": "string", "format": "date-time" }
+          },
+          "additionalProperties": false
+        },
+        "criteria": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "items": {
+            "$ref": "#/$defs/acceptanceCriterion"
+          }
+        }
+      },
+      "additionalProperties": false
     }
   },
   "properties": {
@@ -310,6 +636,12 @@
         ]
       }
     },
+    "workingTreeDigestAlgorithm": {
+      "enum": ["wt-content-v2", "legacy-untrusted"]
+    },
+    "workingTreeDigestMigration": {
+      "$ref": "#/$defs/workingTreeDigestMigration"
+    },
     "orchestration": {
       "type": "object",
       "properties": {
@@ -353,6 +685,12 @@
         }
       },
       "additionalProperties": false
+    },
+    "acceptanceReceipt": {
+      "$ref": "#/$defs/acceptanceReceipt"
+    },
+    "authoritySnapshot": {
+      "$ref": "https://github.com/Vt-mmm/piagent/schemas/task-authority-snapshot.schema.json"
     },
     "baselineChangedFiles": {
       "$ref": "#/$defs/stringList"
@@ -409,9 +747,13 @@
           "matchedProfileCommand": {
             "type": "boolean"
           },
+          "preWorkingTreeDigest": {
+            "type": "string",
+            "pattern": "^wt-content-v2:[a-f0-9]{64}$"
+          },
           "workingTreeDigest": {
             "type": "string",
-            "pattern": "^[a-f0-9]{64}$"
+            "pattern": "^wt-content-v2:[a-f0-9]{64}$"
           }
         },
         "additionalProperties": false
@@ -473,5 +815,43 @@
       "format": "date-time"
     }
   },
+  "allOf": [
+    {
+      "if": { "properties": { "workingTreeDigestAlgorithm": { "const": "legacy-untrusted" } }, "required": ["workingTreeDigestAlgorithm"] },
+      "then": {
+        "required": ["workingTreeDigestMigration"],
+        "properties": {
+          "baselineChangedFiles": { "maxItems": 0 },
+          "baselineFileDigests": { "maxProperties": 0 },
+          "observedChangedFiles": { "maxItems": 0 },
+          "finalWorkingTreeFiles": { "maxItems": 0 },
+          "finalFileDigests": { "maxProperties": 0 },
+          "changedFiles": { "maxItems": 0 },
+          "verifyEvidence": { "maxItems": 0 },
+          "trace": { "properties": { "outcome": { "not": { "const": "pending" } } } },
+          "acceptanceReceipt": {
+            "not": { "required": ["provenance"] },
+            "properties": { "criteria": { "items": { "properties": { "status": { "const": "pending" }, "evidence": { "maxItems": 0 } } } } }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "workingTreeDigestMigration": { "properties": { "status": { "const": "verification-refresh-required" } }, "required": ["status"] } }, "required": ["workingTreeDigestMigration"] },
+      "then": { "properties": { "workingTreeDigestAlgorithm": { "const": "wt-content-v2" }, "workingTreeDigestMigration": { "properties": { "reasonCode": { "const": "clean-baseline-rebound" }, "requiredAction": { "const": "rerun-exact-verifier" } } }, "trace": { "properties": { "outcome": { "const": "pending" } } } } }
+    },
+    {
+      "if": { "properties": { "workingTreeDigestMigration": { "properties": { "status": { "const": "refreshed" } }, "required": ["status"] } }, "required": ["workingTreeDigestMigration"] },
+      "then": { "properties": { "workingTreeDigestAlgorithm": { "const": "wt-content-v2" }, "workingTreeDigestMigration": { "required": ["refreshedAt"], "properties": { "reasonCode": { "const": "clean-baseline-rebound" }, "requiredAction": { "const": "none" } } } } }
+    },
+    {
+      "if": { "properties": { "workingTreeDigestMigration": { "properties": { "status": { "const": "new-attempt-required" } }, "required": ["status"] } }, "required": ["workingTreeDigestMigration"] },
+      "then": { "properties": { "workingTreeDigestAlgorithm": { "const": "legacy-untrusted" }, "workingTreeDigestMigration": { "properties": { "reasonCode": { "enum": ["semantic-repair-state-present", "read-only-legacy-task", "exact-verifier-plan-missing", "baseline-not-provably-clean", "evidence-root-unavailable", "current-snapshot-unavailable", "legacy-carrier-key-mismatch", "active-task-binding-unavailable", "schema-v1-unversioned", "legacy-untrusted"] }, "requiredAction": { "const": "start-new-attempt" } } }, "trace": { "properties": { "outcome": { "const": "blocked" } } } } }
+    },
+    {
+      "if": { "properties": { "workingTreeDigestMigration": { "properties": { "status": { "const": "historical-unverifiable" } }, "required": ["status"] } }, "required": ["workingTreeDigestMigration"] },
+      "then": { "properties": { "workingTreeDigestAlgorithm": { "const": "legacy-untrusted" }, "workingTreeDigestMigration": { "properties": { "reasonCode": { "enum": ["terminal-legacy-evidence", "schema-v1-unversioned", "legacy-untrusted"] }, "requiredAction": { "const": "historical-only" } } }, "trace": { "properties": { "outcome": { "not": { "const": "pending" } } } } } }
+    }
+  ],
   "additionalProperties": false
 }

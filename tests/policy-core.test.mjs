@@ -7,9 +7,12 @@ import {
   findProtectedPathInCommand,
   matchesAnyPath,
   matchesProtectedPath,
-  shellHasFileWriteRedirection,
   unresolvedPathExpansions
 } from "../packages/piagent-core/extensions/policy-core.js";
+import {
+  extractShellWritePathCandidates,
+  shellHasFileWriteRedirection
+} from "../packages/piagent-core/extensions/shell-write-targets.js";
 
 const policy = {
   protectedPaths: [".git/**", "**/auth.json", "**/.env", "**/.env.*", "**/node_modules/**", "**/dist/**", ".pi/piagent-state/**", ".pi/piagent-profile.json"],
@@ -1164,4 +1167,41 @@ describe("exec policy git workflow confirmations", () => {
       assert.equal(result.decision, "allow", JSON.stringify(result, null, 2));
     });
   }
+
+  it("does not treat source text containing a release method as a release action", () => {
+    const sourceWrite = evaluateExecPolicyCore(
+      "printf '%s\\n' 'export function release(owner) { return owner; }' > src/lease.js",
+      { policy, mode: "enforce" }
+    );
+    assert.equal(sourceWrite.decision, "allow", JSON.stringify(sourceWrite, null, 2));
+    assert.deepEqual(extractShellWritePathCandidates(
+      "printf '%s\\n' 'export function release(owner) { return owner; }' > src/lease.js"
+    ), ["src/lease.js"]);
+
+    const actualRelease = evaluateExecPolicyCore("make release", { policy, mode: "enforce" });
+    assert.equal(actualRelease.decision, "prompt", JSON.stringify(actualRelease, null, 2));
+  });
+
+  it("extracts every visible source/destination operand for exact-grant shell mutations", () => {
+    assert.deepEqual(
+      extractShellWritePathCandidates("mv src/sibling.js src/limit.js"),
+      ["src/sibling.js", "src/limit.js"]
+    );
+    assert.deepEqual(
+      extractShellWritePathCandidates("mv src/a.js src/b.js test/target/"),
+      ["src/a.js", "src/b.js", "test/target"]
+    );
+    assert.deepEqual(
+      extractShellWritePathCandidates("cp -t test/newdir src/limit.js"),
+      ["test/newdir", "src/limit.js"]
+    );
+    assert.deepEqual(
+      extractShellWritePathCandidates("install --target-directory=test/newdir src/limit.js"),
+      ["src/limit.js", "test/newdir"]
+    );
+    assert.deepEqual(
+      extractShellWritePathCandidates("rename from to src/sibling.js"),
+      ["from", "to", "src/sibling.js"]
+    );
+  });
 });

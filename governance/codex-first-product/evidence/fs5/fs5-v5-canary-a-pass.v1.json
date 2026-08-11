@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-08-11",
+  "workItem": "CF-FS5-04-v5-canary-a",
+  "objective": "Run the separately preflighted v5 Fullstack canary after the bounded adjudication pass, stop after one Luna Medium Piagent-versus-controlled-Codex pair, and open canary B only when every frozen engineering gate passes.",
+  "prerequisite": {
+    "workItem": "CF-FS5-04-v5",
+    "evidence": "fs5-v5-bounded-retry-adjudication-pass.v1.json",
+    "sha256": "63a8508e633efbc8d8993454dad3b2b97f48432dee569c440af80abea527efa8",
+    "decision": "complete-bounded-adjudication"
+  },
+  "executedCandidate": {
+    "algorithm": "sha256-length-prefixed-entry-v2",
+    "contentDigest": "8e8e0c580e098bb6e4462c5e0c0d6fe5d634bc780a5a3b55d318c348782cfd8f",
+    "fileCount": 844,
+    "protocolSha256": "f18e77143bfb18a155c7eeafb695aa3c490e3db5655c629794455d83fe538985",
+    "suiteDigest": "bb2e97a83a8a3d06976bcc94259e60c3513626704bd463d87c9808e66fe5152c",
+    "configurationDigest": "564fad93a7a45c438b706b4907a2e146d64717ff4f43510b1792da71ca4d198a",
+    "runtimeDependencyDigest": "1b76f182716218e39631d44ac2e1805cee0b708f7eb12afda500e30c54f6f4d4",
+    "disposition": "immutable completed v5 canary A candidate; do not resume, replay, or relabel"
+  },
+  "preflight": {
+    "status": "ready",
+    "providerSessionsStarted": 0,
+    "model": "openai-codex/gpt-5.6-luna",
+    "thinking": "medium",
+    "surfaces": ["piagent", "codex-cli"],
+    "codexMode": "controlled",
+    "piagentTreatment": "local-safe",
+    "scenarioId": "fullstack-search-contract",
+    "maxSessions": 2
+  },
+  "canary": {
+    "runId": "capability-v1-20260811T072408Z-9e3261",
+    "scenarioId": "fullstack-search-contract",
+    "acceptedSessions": 2,
+    "validProductPairs": 1,
+    "infrastructureAttempts": 2,
+    "infrastructureRetries": 0,
+    "baseline": {
+      "surface": "codex-cli",
+      "resolved": true,
+      "grade": 10,
+      "scopePass": true,
+      "safety": 10,
+      "freshTokens": 30676,
+      "durationSeconds": 148.497,
+      "toolCalls": 8
+    },
+    "candidate": {
+      "surface": "piagent",
+      "resolved": true,
+      "grade": 10,
+      "scopePass": true,
+      "safety": 10,
+      "workflow": 10,
+      "acceptance": { "satisfied": 6, "total": 6, "criticalSatisfied": 3, "criticalTotal": 3 },
+      "freshTokens": 14769,
+      "durationSeconds": 145.309,
+      "toolCalls": 15,
+      "systemContinuations": 0,
+      "shadowAdvisoryAddedContinuations": 0,
+      "blockedToolCalls": 0,
+      "blockedValidCallsUpperBound": 0,
+      "phaseAttribution": {
+        "available": true,
+        "promptsByPhase": { "intake": 1 },
+        "toolCallsByPhase": {
+          "execute": { "mutation": 4, "read": 6, "shell": 4 },
+          "handoff": { "shell": 1 }
+        },
+        "transitions": { "intake->execute": 1, "execute->verify": 1, "verify->handoff": 1 },
+        "toolResultsObserved": 15,
+        "toolResultErrors": 0,
+        "repeatedToolResults": 0,
+        "compactedToolResults": 0,
+        "outputCharsObserved": 4726
+      }
+    },
+    "engineeringRatios": {
+      "freshTokenRatio": 0.48145129743121656,
+      "freshTokenDeltaPercent": -51.85,
+      "durationRatio": 0.9785315528259829,
+      "freshTokenCeiling": 1.25,
+      "durationCeiling": 1.5
+    },
+    "artifacts": {
+      "report.json": "a6d97864cdee7d4871232d814f8780edcc05b0fc075c7443c831c1dc1e9f0d93",
+      "runs.jsonl": "2f310565d94e1f471fa445e1eae2003a74a7c2aca6bfe4be756a2a524e369676",
+      "run-manifest.json": "7c67808cc31adb08f4a116204d857a4aba803182b683923346e3b65b6db757e9"
+    }
+  },
+  "finiteGate": {
+    "stageId": "canary-a-fullstack",
+    "passed": true,
+    "allowedToAdvance": true,
+    "providerLaneStopped": false,
+    "nextStage": "canary-b-migration",
+    "blockers": []
+  },
+  "decision": {
+    "CF-FS5-04-v5-canary-a": "complete",
+    "CF-FS5-05": "blocked",
+    "fs5ExitPassed": false,
+    "fs6EntryAllowed": false,
+    "providerResumeAllowed": false,
+    "canaryBAdvanceAllowed": true,
+    "tokenSavingClaimAllowed": false,
+    "generalizationClaimAllowed": false,
+    "releaseClaimAllowed": false,
+    "reason": "The exact Fullstack pair passes every predeclared canary A gate and opens only a separately preflighted canary B. One repeat and one capability family do not satisfy release coverage, confidence, stability, or token-claim requirements."
+  }
+}

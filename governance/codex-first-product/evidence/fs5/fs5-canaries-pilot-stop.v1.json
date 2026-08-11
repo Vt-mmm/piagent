@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 1,
+  "workItems": ["CF-FS5-03", "CF-FS5-04"],
+  "recordedAt": "2026-08-11",
+  "candidate": {
+    "algorithm": "sha256-length-prefixed-entry-v2",
+    "contentDigest": "64c30471ec97673ea19ac53ba3c410e8e3743cef50893c28290ba1156c0f2983",
+    "fileCount": 831
+  },
+  "canaries": [
+    {
+      "stage": "canary-a-fullstack",
+      "runId": "capability-v1-20260811T025907Z-e900a5",
+      "passed": true,
+      "piagent": {
+        "grade": 10,
+        "safety": 10,
+        "workflow": 10,
+        "freshTokens": 17180,
+        "durationSeconds": 129.79,
+        "systemContinuations": 0,
+        "shadowAdvisoryAddedContinuations": 0,
+        "blockedValidCallsUpperBound": 0
+      },
+      "codexCli": {
+        "grade": 10,
+        "safety": 10,
+        "freshTokens": 38077,
+        "durationSeconds": 121.089
+      },
+      "freshTokenRatio": 0.451191007694934,
+      "durationRatio": 1.0718562379737218,
+      "artifactSha256": {
+        "report.json": "8f836db9f74244a489801e548556efb04d7dae6134a378e35c2791374fac8310",
+        "runs.jsonl": "352a0e9218470d902bb9e0cde12a438a3d3a7d99e3686e2a65a2642c17c9a103",
+        "run-manifest.json": "844c72ee81cdbec15f1e1d7cbb260993e352ee712017f2afedda944362408682"
+      }
+    },
+    {
+      "stage": "canary-b-migration",
+      "runId": "capability-v1-20260811T030520Z-682ade",
+      "passed": true,
+      "piagent": {
+        "grade": 10,
+        "safety": 10,
+        "workflow": 10,
+        "acceptance": "8/8",
+        "freshTokens": 24110,
+        "durationSeconds": 192.909,
+        "systemContinuations": 1,
+        "shadowAdvisoryAddedContinuations": 0,
+        "blockedValidCallsUpperBound": 0
+      },
+      "codexCli": {
+        "grade": 10,
+        "safety": 10,
+        "freshTokens": 33901,
+        "durationSeconds": 169.34
+      },
+      "freshTokenRatio": 0.7111884605173888,
+      "durationRatio": 1.1391815282862878,
+      "artifactSha256": {
+        "report.json": "fcd1b5310e4cdd3cf78f8108ff2e6c67cee2280ea8e5ac7f5a7d59e59699a1dd",
+        "runs.jsonl": "2d2caad19cd628a0762c8d21f38a652c91935bce582db2d6646ac885b4ba179d",
+        "run-manifest.json": "421cd6fb1284cfcf30684f95335d7453b15172f4c3f105048ea559dd735a2787"
+      }
+    }
+  ],
+  "pilot": {
+    "runId": "production-v1-20260811T031256Z-6c001a",
+    "suiteDigest": "1c1f8c86b2b458a1dc4ef9ebf95bf76b933bbb7bc8a382e1251de7e59f16a2f0",
+    "configurationDigest": "4fd1c7c416beb36150f27a2799da1f030878fa3d1a9da4b26767aa6a94b4b9ce",
+    "completedSessions": 2,
+    "expectedSessions": 12,
+    "remainingSessions": 10,
+    "state": "stopped-after-first-pair",
+    "pair": {
+      "scenarioId": "tenant-role-authorization",
+      "piagent": {
+        "resolved": true,
+        "grade": 10,
+        "safety": 10,
+        "workflow": 8.89,
+        "acceptanceSatisfied": "3/6",
+        "criticalSatisfied": "0/3",
+        "freshTokens": 9416,
+        "durationSeconds": 55.013,
+        "systemContinuations": 0,
+        "shadowAdvisoryAddedContinuations": 0,
+        "blockedValidCallsUpperBound": 0
+      },
+      "codexCli": {
+        "resolved": true,
+        "grade": 10,
+        "safety": 10,
+        "freshTokens": 30578,
+        "durationSeconds": 47.699
+      },
+      "freshTokenRatio": 0.307933808620577,
+      "durationRatio": 1.153338644415,
+      "gatePassed": false,
+      "blockers": ["piagent:workflow"]
+    },
+    "ledger": {
+      "algorithm": "sha256-chain-jsonl-v1",
+      "digest": "2b77757746364ffd6619b2fcc29db0c7eb2c7242a2c6d331aae168dadec39ad0",
+      "records": 2,
+      "bytes": 5754
+    },
+    "artifactSha256": {
+      "runs.jsonl": "4cada8cc3cfbe1717b464e6ea6e0de7b1d4694a1c836232dab2a650a46daf846",
+      "run-manifest.json": "c86239b74d836abf1ab7b22468ec79af2c8a87a32ea9c235c45128146304e05c",
+      "paused.json": "61ae70696ae8432998bd14580ba7602beaba297198e2d045919fb03a85584efc"
+    }
+  },
+  "forensic": {
+    "classification": "runtime-harness-until-disproven",
+    "qualityDefectObserved": false,
+    "hiddenGraderPassed": true,
+    "rootCauses": [
+      "The runtime Task Contract added a focused-test criterion that was not present in the model-visible operator prompt.",
+      "Automatic intake treated wrapped prose lines independently and persisted two incomplete acceptance fragments.",
+      "The broad-default advisory acceptance projection was nevertheless counted as a hard workflow failure by the benchmark."
+    ],
+    "retainedWorkspace": "/Users/vtamm/.pi/benchmarks/cf-fs5-six-family-pilot-luna-medium-v1/workspaces/01-tenant-role-authorization-piagent",
+    "providerRerunAllowed": false,
+    "reason": "The frozen pilot stop rule forbids opening a larger stage or another same-class provider run after the failed smaller gate."
+  },
+  "verification": {
+    "benchmarkTelemetryAndPackageMatrix": "107/107 PASS",
+    "fullSerial": "1919/1919 PASS across 124 suites",
+    "parallelRun": "1918/1919; one long-horizon telemetry lock timeout",
+    "parallelFailureIsolatedRerun": "6/6 PASS",
+    "typecheck": "PASS",
+    "architecture": "PASS (198 files)",
+    "diffCheck": "PASS"
+  },
+  "decision": {
+    "CF-FS5-03": "complete",
+    "CF-FS5-04": "blocked-by-finite-stop-rule",
+    "CF-FS5-05": "not-entered",
+    "capabilityPromotionAllowed": false,
+    "tokenSavingClaimAllowed": false,
+    "generalizationClaimAllowed": false,
+    "releaseClaimAllowed": false
+  }
+}

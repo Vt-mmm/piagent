@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 2,
+  "claimTier": "private-holdout",
+  "visibility": "external-private-holdout",
+  "familyDisjointSplit": true,
+  "repositoryDisjointSplit": false,
+  "holdoutManifestDigest": "1111111111111111111111111111111111111111111111111111111111111111",
+  "referenceSolutionDigest": "2222222222222222222222222222222222222222222222222222222222222222",
+  "mutationReportDigest": "3333333333333333333333333333333333333333333333333333333333333333",
+  "calibrationReportDigest": "4444444444444444444444444444444444444444444444444444444444444444",
+  "accessPolicyDigest": "3189aa3d811083954aaab5470a07c23963d05d4bacccc547a29844e2a8a76525",
+  "disjointnessReportDigest": "5555555555555555555555555555555555555555555555555555555555555555",
+  "humanRubricDigest": "e291e5097ef1415cc037198e00d690d0abd7a8a9f8b98be773a25d313ac1b629",
+  "disagreementReportDigest": "6666666666666666666666666666666666666666666666666666666666666666",
+  "accessControl": {
+    "protocolVersion": "e3-custody-v1",
+    "policyDigest": "3189aa3d811083954aaab5470a07c23963d05d4bacccc547a29844e2a8a76525",
+    "candidateAuthorPromptAccess": "allowed",
+    "candidateAuthorGraderAccess": "denied-until-rc-freeze",
+    "candidateAuthorRepositoryAccess": "denied-until-rc-freeze",
+    "operatorAccess": "execute-only",
+    "reviewerAccess": "blinded-rubric-and-output",
+    "custodianIndependent": true,
+    "reviewerIndependent": true,
+    "appendOnlyAccessLog": true,
+    "accessLogDigest": "7777777777777777777777777777777777777777777777777777777777777777",
+    "issuedAt": "2026-08-01T00:00:00.000Z",
+    "expiresAt": "2099-09-11T00:00:00.000Z"
+  },
+  "disjointness": {
+    "taxonomyDigest": "b3fa32c7008ce7b60de4ffebd6853da1601effae8b422f1cfa68810e4ea2150a",
+    "publicExposureDigest": "b91b86607d1499c13e87d577257e14f29fa347f50b1bd9eccab5e5bb64e1549d",
+    "reportDigest": "5555555555555555555555555555555555555555555555555555555555555555",
+    "familyDisjoint": true,
+    "repositoryDisjoint": false,
+    "scenarioCount": 6,
+    "familyCount": 6,
+    "repositoryCount": 5,
+    "verifiedAt": "2026-08-11T01:00:00.000Z"
+  },
+  "referenceSolutions": {
+    "total": 6,
+    "passed": 6
+  },
+  "mutationChecks": {
+    "total": 18,
+    "killed": 17
+  },
+  "calibration": {
+    "sampleSize": 12,
+    "reviewerCount": 2,
+    "sampledFamilyCount": 4,
+    "doubleScoredCount": 12,
+    "agreementCount": 10,
+    "disagreementCount": 2,
+    "resolvedDisagreementCount": 1,
+    "unresolvedDisagreementCount": 1,
+    "agreement": 0.8333,
+    "blinded": true,
+    "independentFirstPass": true,
+    "adjudicatorIndependent": true,
+    "rubricDigest": "e291e5097ef1415cc037198e00d690d0abd7a8a9f8b98be773a25d313ac1b629",
+    "reviewerSetDigest": "8888888888888888888888888888888888888888888888888888888888888888",
+    "sampleSelectionDigest": "9999999999999999999999999999999999999999999999999999999999999999",
+    "disagreementLogDigest": "6666666666666666666666666666666666666666666666666666666666666666",
+    "adjudicationPolicyDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  }
+}

@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  scripts/team-doctor.sh [project-path] [--strict-share]
+  scripts/team-doctor.sh [project-path] [--strict-share] [--json] [--offline]
 
 Checks:
   - Pi/Herdr availability
@@ -21,11 +21,19 @@ USAGE
 
 PROJECT_PATH=""
 STRICT_SHARE=false
+OFFLINE=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --strict-share)
       STRICT_SHARE=true
+      shift
+      ;;
+    --json)
+      shift
+      ;;
+    --offline)
+      OFFLINE=true
       shift
       ;;
     -h|--help)
@@ -48,14 +56,15 @@ done
 PLATFORM_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT_PATH="${PROJECT_PATH:-$PWD}"
 
-node --input-type=module - "$PLATFORM_ROOT" "$PROJECT_PATH" "$STRICT_SHARE" <<'NODE'
+node --input-type=module - "$PLATFORM_ROOT" "$PROJECT_PATH" "$STRICT_SHARE" "$OFFLINE" <<'NODE'
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
-const [platformRoot, projectPath, strictShareRaw] = process.argv.slice(2);
+const [platformRoot, projectPath, strictShareRaw, offlineRaw] = process.argv.slice(2);
 const strictShare = strictShareRaw === "true";
+const offline = offlineRaw === "true";
 const errors = [];
 const warnings = [];
 const { verifyCapabilityLock } = await import(pathToFileURL(path.join(platformRoot, "packages", "piagent-core", "capabilities", "capability-core.js")).href);
@@ -181,6 +190,30 @@ if (!rootPackage.pi?.subagents?.agents?.length) errors.push("root package.json m
 
 if (!commandExists("pi")) warnings.push("pi is not on PATH");
 if (!commandExists("herdr")) warnings.push("herdr is not on PATH; Herdr integration optional");
+
+const { capturePiModelCatalog } = await import(pathToFileURL(path.join(platformRoot, "scripts", "model-catalog.mjs")).href);
+const authenticatedCatalog = capturePiModelCatalog({ provider: "", offline });
+const runtimeModel = {
+  schemaVersion: 1,
+  capturedAt: authenticatedCatalog.capturedAt,
+  piHostVersion: authenticatedCatalog.piHostVersion,
+  piagentVersion: typeof rootPackage.version === "string" ? rootPackage.version : null,
+  provider: null,
+  modelId: null,
+  requestedThinkingLevel: null,
+  effectiveThinkingLevel: null,
+  contextWindow: null,
+  authenticatedCatalog: {
+    source: authenticatedCatalog.source,
+    availability: authenticatedCatalog.availability,
+    modelCount: authenticatedCatalog.models.length
+  },
+  provenance: authenticatedCatalog.provenance,
+  warnings: [
+    "Active session provider/model/thinking/context are unverified outside a Pi session.",
+    ...authenticatedCatalog.warnings
+  ]
+};
 
 function readJsonIfPresent(file) {
   if (!fs.existsSync(file)) return null;
@@ -452,6 +485,33 @@ if (strictShare) {
   }
 }
 
+const gitProbe = spawnSync("git", ["-C", projectPath, "rev-parse", "--show-toplevel"], { encoding: "utf8" });
+const verifyGroups = projectProfile?.verifyCommands && typeof projectProfile.verifyCommands === "object" && !Array.isArray(projectProfile.verifyCommands)
+  ? Object.entries(projectProfile.verifyCommands).filter(([, commands]) => Array.isArray(commands) && commands.some((command) => typeof command === "string" && command.trim() && !/^echo\b/i.test(command.trim()))).map(([group]) => group)
+  : [];
+const stateRoot = path.join(projectPath, ".pi", "piagent-state");
+const expectedPiHostVersion = rootPackage.peerDependencies?.["@earendil-works/pi-coding-agent"] ?? null;
+const productReadiness = {
+  schemaVersion: 1,
+  versionAlignment: {
+    piHostExpected: expectedPiHostVersion,
+    piHostObserved: runtimeModel.piHostVersion,
+    piagentPackage: rootPackage.version ?? null,
+    piagentObserved: runtimeModel.piagentVersion,
+    aligned: runtimeModel.piHostVersion === null || expectedPiHostVersion === null ? null : runtimeModel.piHostVersion === expectedPiHostVersion
+  },
+  model: { availability: runtimeModel.authenticatedCatalog.availability, provenance: runtimeModel.provenance, activeSessionFacts: "unknown-outside-pi" },
+  project: { profile: Boolean(projectProfile), capabilityLock: fs.existsSync(path.join(projectPath, ".pi", "piagent-profile.lock.json")), gitReady: gitProbe.status === 0, meaningfulVerifierGroups: verifyGroups },
+  context: { indexEnabled: contextIndexEnabled, indexPath: contextIndexRelativePath, stateRootExists: fs.existsSync(stateRoot) },
+  subagents: { packageAvailable: piHasSubagents, roleDefinitions: rootPackage.pi?.subagents?.agents ?? [] },
+  executionBackend: projectProfile?.executionBackend?.type ?? "host",
+  executionBoundary: "host execution is not a sandbox",
+  featureModes: { solver: process.env.PIAGENT_SOLVER_MODE ?? "shadow", phaseTools: process.env.PIAGENT_PHASE_TOOLS ?? "shadow", recovery: process.env.PIAGENT_AUTO_RECOVERY ?? "on", helpers: process.env.PIAGENT_HELPERS_MODE ?? "recommend" },
+  migrationRecovery: { taskStateExists: fs.existsSync(path.join(stateRoot, "tasks")), handoffStateExists: fs.existsSync(path.join(stateRoot, "handoffs")), action: "run piagent-doctor --json and inspect /piagent-status before deleting state" },
+  supportedPlatform: runtime.status,
+  rollbackTarget: { packageVersion: rootPackage.version ?? null, instruction: "reinstall the last known-good exact version after operator confirmation; project state is preserved" }
+};
+
 const report = {
   platformRoot,
   projectPath,
@@ -467,6 +527,8 @@ const report = {
   },
   piOnPath: commandExists("pi"),
   herdrOnPath: commandExists("herdr"),
+  runtimeModel,
+  productReadiness,
   piHasMcpAdapter,
   piHasSubagents,
   mcp,

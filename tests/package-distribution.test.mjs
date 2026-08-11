@@ -9,6 +9,39 @@ import { after, describe, it } from "node:test";
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const temporaryRoots = new Set();
 
+function dryRunPackageFiles(cwd = repositoryRoot) {
+  const packed = spawnSync("npm", ["pack", "--dry-run", "--json"], { cwd, encoding: "utf8" });
+  assert.equal(packed.status, 0, packed.stderr);
+  return new Set(JSON.parse(packed.stdout)[0].files.map((file) => file.path));
+}
+
+function localModuleSpecifiers(source) {
+  const patterns = [
+    /\b(?:import|export)\s+(?:type\s+)?[\w*{},\s]+?\s+from\s+["']([^"']+)["']/g,
+    /\bimport\s*["']([^"']+)["']/g,
+    /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g
+  ];
+  return patterns.flatMap((pattern) => [...source.matchAll(pattern)].map((match) => match[1]))
+    .filter((specifier) => specifier.startsWith("."));
+}
+
+function importedProductionModules(entrypoints) {
+  const visited = new Set();
+  const pending = [...entrypoints];
+  while (pending.length > 0) {
+    const relative = pending.pop();
+    if (visited.has(relative)) continue;
+    visited.add(relative);
+    const absolute = path.join(repositoryRoot, relative);
+    const source = fs.readFileSync(absolute, "utf8");
+    for (const specifier of localModuleSpecifiers(source)) {
+      const target = path.relative(repositoryRoot, path.resolve(path.dirname(absolute), specifier));
+      if (fs.existsSync(path.join(repositoryRoot, target)) && !visited.has(target)) pending.push(target);
+    }
+  }
+  return visited;
+}
+
 after(() => {
   for (const root of temporaryRoots) {
     if (path.dirname(root) !== os.tmpdir() || !path.basename(root).startsWith("pi-package-bin-")) continue;
@@ -38,13 +71,55 @@ describe("package distribution", () => {
     // The exclusions must not swallow the documentation users install for.
     assert.ok(entries.includes("docs/capability-packs.md"));
     assert.ok(entries.includes("benchmarks/core-v1/suite.json"));
+    assert.ok(entries.includes("benchmarks/capability-v1/suite.json"));
+    assert.ok(entries.includes("benchmarks/capability-v1/grade.mjs"));
     assert.ok(entries.includes("benchmarks/production-v1/suite.json"));
     assert.ok(entries.includes("benchmarks/production-v1/variant.mjs"));
     assert.ok(entries.includes("scripts/benchmark-runner.mjs"));
+    assert.ok(entries.includes("scripts/rc-readiness-evaluation.mjs"));
+    assert.ok(entries.includes("scripts/private-holdout-readiness.mjs"));
+    assert.ok(entries.includes("scripts/fs4-readiness-evaluation.mjs"));
+    assert.ok(entries.includes("evals/rc-evaluation-matrix.v1.json"));
+    assert.ok(entries.includes("evals/private-holdout-v1/access-policy.v1.json"));
+    assert.ok(entries.includes("evals/private-holdout-v1/human-rubric.v1.json"));
+    assert.ok(entries.includes("evals/private-holdout-v1/public-exposure.v1.json"));
+    assert.ok(entries.includes("evals/private-holdout-v1/CUSTODIAN_RUNBOOK.md"));
+    assert.ok(entries.includes("evals/fs4-readiness-matrix.v1.json"));
+    assert.ok(entries.includes("evals/fs5-pilot-protocol.v1.json"));
+    assert.ok(entries.includes("evals/fs5-pilot-protocol.v5.json"));
+    assert.ok(entries.includes("evals/fs5-causal-arm.v1.json"));
+    assert.ok(entries.includes("schemas/benchmark-assurance-evidence.schema.json"));
     assert.ok(entries.includes("packages/piagent-core/benchmark/benchmark-core.js"));
+    assert.ok(entries.includes("packages/piagent-core/benchmark/fs4-readiness-gates.js"));
+    assert.ok(entries.includes("packages/piagent-core/benchmark/fs5-pilot-protocol.js"));
+    assert.ok(entries.includes("packages/piagent-core/benchmark/fs5-causal-arm.js"));
+    assert.ok(entries.includes("packages/piagent-core/benchmark/benchmark-report.js"));
     assert.equal(entries.some((entry) => /(?:^|\/)\.env(?:$|\.)/.test(entry)), false);
     assert.ok(entries.some((entry) => entry.startsWith("templates/project/")));
     assert.ok(entries.some((entry) => entry.startsWith("adapters/")));
+  });
+
+  it("ships the complete production import graph and no private runtime state", () => {
+    const files = dryRunPackageFiles();
+    const imported = importedProductionModules([
+      "packages/piagent-core/extensions/piagent-guard.ts",
+      "scripts/piagent-cli.mjs"
+    ]);
+    for (const relative of imported) {
+      assert.equal(files.has(relative), true, `imported production module is missing from package: ${relative}`);
+    }
+
+    const forbidden = [
+      /(?:^|\/)auth\.json$/i,
+      /(?:^|\/)trust\.json$/i,
+      /(?:^|\/)\.env(?:$|\.)/i,
+      /(?:^|\/)\.pi\/piagent-state(?:\/|$)/i,
+      /(?:^|\/)examples\/private(?:\/|$)/i,
+      /(?:^|\/)docs\/(?:journals|decisions)(?:\/|$)/i,
+      /(?:^|\/)plans(?:\/|$)/i
+    ];
+    const leaked = [...files].filter((relative) => forbidden.some((pattern) => pattern.test(relative)));
+    assert.deepEqual(leaked, []);
   });
 
   it("declares a publishable package", () => {
@@ -126,9 +201,28 @@ describe("package distribution", () => {
     assert.equal(files.has("SECURITY.md"), true);
     assert.equal(files.has("scripts/piagent-cli.mjs"), true);
     assert.equal(files.has("scripts/benchmark-runner.mjs"), true);
+    assert.equal(files.has("scripts/rc-readiness-evaluation.mjs"), true);
+    assert.equal(files.has("scripts/private-holdout-readiness.mjs"), true);
+    assert.equal(files.has("scripts/fs4-readiness-evaluation.mjs"), true);
+    assert.equal(files.has("evals/rc-evaluation-matrix.v1.json"), true);
+    assert.equal(files.has("evals/private-holdout-v1/access-policy.v1.json"), true);
+    assert.equal(files.has("evals/private-holdout-v1/human-rubric.v1.json"), true);
+    assert.equal(files.has("evals/private-holdout-v1/public-exposure.v1.json"), true);
+    assert.equal(files.has("evals/private-holdout-v1/CUSTODIAN_RUNBOOK.md"), true);
+    assert.equal(files.has("evals/fs4-readiness-matrix.v1.json"), true);
+    assert.equal(files.has("evals/fs5-pilot-protocol.v1.json"), true);
+    assert.equal(files.has("evals/fs5-pilot-protocol.v5.json"), true);
+    assert.equal(files.has("evals/fs5-causal-arm.v1.json"), true);
+    assert.equal(files.has("schemas/benchmark-assurance-evidence.schema.json"), true);
     assert.equal(files.has("packages/piagent-core/benchmark/benchmark-core.js"), true);
+    assert.equal(files.has("packages/piagent-core/benchmark/fs4-readiness-gates.js"), true);
+    assert.equal(files.has("packages/piagent-core/benchmark/fs5-pilot-protocol.js"), true);
+    assert.equal(files.has("packages/piagent-core/benchmark/fs5-causal-arm.js"), true);
+    assert.equal(files.has("packages/piagent-core/benchmark/benchmark-report.js"), true);
     assert.equal(files.has("benchmarks/core-v1/suite.json"), true);
     assert.equal(files.has("benchmarks/core-v1/tasks/invoice-quantity/grade.mjs"), true);
+    assert.equal(files.has("benchmarks/capability-v1/suite.json"), true);
+    assert.equal(files.has("benchmarks/capability-v1/references/concurrent-lease-lifecycle/packages/lease/src/store.js"), true);
     assert.equal(files.has("benchmarks/production-v1/suite.json"), true);
     assert.equal(files.has("benchmarks/production-v1/grade.mjs"), true);
     assert.equal(files.has("benchmarks/production-v1/project/package.json"), true);

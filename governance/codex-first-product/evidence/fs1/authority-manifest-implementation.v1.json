@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "workItem": "CF-FS1-01",
+  "status": "complete",
+  "recordedAt": "2026-08-10T09:54:00Z",
+  "scope": {
+    "objective": "Version the complete capability authority policy and produce an immutable, provenance-bound per-task snapshot.",
+    "implementationBoundary": "declarative-policy-and-validation-only",
+    "runtimeAuthorityConsumption": false,
+    "providerOrBenchmarkRun": false,
+    "nextWorkItemNotStarted": "CF-FS1-02"
+  },
+  "authorityManifest": {
+    "schemaVersion": 1,
+    "manifestVersion": "authority-v1",
+    "manifestDigest": "sha256:24f77f5f5ddcd5430c70c120599e10995f99f420bebb474ec352bb7af7030027",
+    "releaseVersion": "1.3.0",
+    "status": "pre-release",
+    "capabilityCount": 17,
+    "profiles": ["broad-default", "mechanical-only", "strict-high-risk"],
+    "authorityVocabulary": ["off", "observe", "advise", "enforce", "orchestrate"],
+    "globalBudgets": {
+      "maxSystemContinuationsPerTask": 1,
+      "maxAutomaticDispatchesPerTask": 1,
+      "maxSpecialistReviewRoundsPerTask": 1
+    },
+    "constitutionSha256": "5dc65f03639df4236ea4e9c70e31e81aa9613317102e1acd2b371c6e44e8c1e8"
+  },
+  "taskSnapshotContract": {
+    "schemaVersion": 1,
+    "snapshotVersion": "task-authority-snapshot-v1",
+    "immutable": true,
+    "resolutionSources": ["profile", "explicit-overrides", "legacy-feature-modes-v0"],
+    "unknownOrDriftedDisposition": "new-task-required",
+    "rollbackProfile": "mechanical-only",
+    "activeSnapshotMutationAllowed": false
+  },
+  "runtimeIntegrity": {
+    "profileLockSha256": "8afa858ea061b0b3014cd20f0e6288f5fc9d0c9da1a03830f70c1084efd2e1de",
+    "corePackageDigest": "sha256:4a0b4e65ecd84334e18200709447252f2e473c48c54728486f514f7e6cb83c72",
+    "runtimeFileCount": 112,
+    "doctorStatus": "current",
+    "authorityRuntimeFiles": [
+      {
+        "path": "packages/piagent-core/policy/authority-manifest.v1.json",
+        "sha256": "7f223487384b5521bcda01bc1dc1578dfb3f8293dc94eadd85b86048b645273c"
+      },
+      {
+        "path": "packages/piagent-core/runtime/policy/authority-manifest.ts",
+        "sha256": "7841f9e9c600dcc103f20b1366c940fa3778a0e5caf2e25eadd9a8cadb0b1ba1"
+      }
+    ]
+  },
+  "packageDryRun": {
+    "name": "@piagent/platform",
+    "currentRepositoryVersion": "1.2.17",
+    "entryCount": 561,
+    "packedBytes": 1036864,
+    "unpackedBytes": 4375183,
+    "requiredAuthorityPathsPresent": true,
+    "releaseIdentityConsequence": "The authority manifest targets 1.3.0, but no 1.3.0 candidate/package identity is frozen in CF-FS1-01."
+  },
+  "verification": [
+    {
+      "command": "node --test tests/authority-manifest.test.mjs tests/golden-enforcement.test.mjs",
+      "result": "pass",
+      "tests": 102,
+      "failures": 0
+    },
+    {
+      "command": "PIAGENT_NO_UPDATE_CHECK=1 node --test tests/*.test.mjs",
+      "result": "pass",
+      "tests": 1808,
+      "suites": 119,
+      "failures": 0
+    },
+    { "command": "npm run typecheck", "result": "pass" },
+    { "command": "npm run architecture:check", "result": "pass", "sourceFiles": 187 },
+    { "command": "npm run docs:check", "result": "pass" },
+    { "command": "npm run capabilities:check", "result": "pass" },
+    { "command": "piagent-capabilities doctor with repository profile and lock", "result": "pass-current" },
+    { "command": "npm pack --dry-run --json", "result": "pass-authority-paths-present" },
+    { "command": "npm run verify", "result": "pass" },
+    { "command": "git diff --check", "result": "pass" }
+  ],
+  "finalFileHashes": [
+    { "path": ".pi/piagent-profile.lock.json", "sha256": "8afa858ea061b0b3014cd20f0e6288f5fc9d0c9da1a03830f70c1084efd2e1de" },
+    { "path": "docs/authority-manifest.md", "sha256": "bd6925477d59af8e8c28017e7215170cdfe96908f977bc26edc56861c83be34e" },
+    { "path": "evals/fixtures/authority-manifest.invalid.json", "sha256": "79fb43b24d10d12c4128c2768321d6e0ee3e02244023b420398d84f0c11172db" },
+    { "path": "evals/fixtures/authority-manifest.valid.json", "sha256": "7f223487384b5521bcda01bc1dc1578dfb3f8293dc94eadd85b86048b645273c" },
+    { "path": "evals/fixtures/task-authority-snapshot.invalid.json", "sha256": "ce93413ff460d37895d9be2d81224cbff005718e225cf860b0ca8af715a2334c" },
+    { "path": "evals/fixtures/task-authority-snapshot.valid.json", "sha256": "da6361124709cdac087d45b46501cf191dbe3a74383607cd0fafc22fe1c87cc7" },
+    { "path": "packages/piagent-core/capabilities/runtime-integrity.js", "sha256": "0430674c03b19a5b2ace52f863b30a832a3c60c3a86fd01bb5a8a6117b3b21a4" },
+    { "path": "packages/piagent-core/policy/authority-manifest.v1.json", "sha256": "7f223487384b5521bcda01bc1dc1578dfb3f8293dc94eadd85b86048b645273c" },
+    { "path": "packages/piagent-core/runtime/policy/authority-manifest.ts", "sha256": "7841f9e9c600dcc103f20b1366c940fa3778a0e5caf2e25eadd9a8cadb0b1ba1" },
+    { "path": "schemas/authority-manifest.schema.json", "sha256": "f957865f9922cd58146f74a9c32b006d4cdf7c067d9497625fb71730c0c6ddc7" },
+    { "path": "schemas/task-authority-snapshot.schema.json", "sha256": "5a92961f330af5df97f312fd1fb16ff01063ff7fdd80e3a2906847ecbed5c34a" },
+    { "path": "tests/authority-manifest.test.mjs", "sha256": "bd8c279ad32c4101264f0c6fd7c1e50b9ec298b06935d7d129851ee4ba6ecd12" },
+    { "path": "tests/golden-enforcement.test.mjs", "sha256": "173ac10f814625f4391c28a1eaca0b55a9ea32a334257a8f59c1998e12441940" }
+  ],
+  "overlapBoundary": {
+    "preExistingModifiedFilesUpdatedInScope": [
+      ".pi/piagent-profile.lock.json",
+      "packages/piagent-core/capabilities/runtime-integrity.js",
+      "tests/golden-enforcement.test.mjs"
+    ],
+    "preservationRule": "Only additive authority manifest, schema-registration, and generated integrity-pin changes were made in these pre-existing modified files."
+  }
+}

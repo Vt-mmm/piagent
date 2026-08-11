@@ -25,6 +25,9 @@ describe("model scope defaults", () => {
     assert.equal(settings.defaultThinkingLevel, "high");
     assert.ok(settings.enabledModels.includes("openai-codex/gpt-5.5:high"));
     assert.ok(!settings.enabledModels.includes("openai-codex/gpt-5.5:xhigh"));
+    assert.ok(settings.enabledModels.includes("openai-codex/gpt-5.6-luna:medium"));
+    assert.ok(settings.enabledModels.includes("openai-codex/gpt-5.6-terra:high"));
+    assert.ok(settings.enabledModels.includes("openai-codex/gpt-5.6-sol:high"));
   });
 
   it("falls back to high without a suffix and preserves an explicit override", () => {
@@ -38,6 +41,9 @@ describe("model scope defaults", () => {
     assert.equal(template.defaultModel, "gpt-5.5");
     assert.equal(template.defaultThinkingLevel, "high");
     assert.ok(template.enabledModels.includes("openai-codex/gpt-5.5:high"));
+    assert.ok(template.enabledModels.includes("openai-codex/gpt-5.6-luna:medium"));
+    assert.ok(template.enabledModels.includes("openai-codex/gpt-5.6-terra:high"));
+    assert.ok(template.enabledModels.includes("openai-codex/gpt-5.6-sol:high"));
 
     const projectTemplate = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "templates", "project", ".pi", "settings.json"), "utf8"));
     const repositorySettings = JSON.parse(fs.readFileSync(path.join(repositoryRoot, ".pi", "settings.json"), "utf8"));

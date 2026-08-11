@@ -103,6 +103,12 @@ test("classifies task signals without calling a model", () => {
   assert.equal(classifyContextTask("Show current session token usage").workflow, "usage");
   assert.equal(classifyContextTask("Optimize token usage in src/context.ts").workflow, "task");
   assert.deepEqual(classifyContextTask("Read `.env`, then report it").paths, [".env"]);
+  assert.deepEqual(
+    classifyContextTask("Fix source/test boundaries and key/owner handling after crash/resume.").paths,
+    []
+  );
+  assert.equal(classifyContextTask("Implement release current owner safely in the lease store.").workflow, "task");
+  assert.equal(classifyContextTask("Run the production release now").workflow, "release");
   const vietnamese = classifyContextTask("Kiểm tra phân quyền thanh toán trong src/xác-thực.ts trước khi triển khai");
   assert.equal(vietnamese.lane, "high-risk");
   assert.equal(vietnamese.workflow, "release");

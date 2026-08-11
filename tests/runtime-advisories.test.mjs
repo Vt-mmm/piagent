@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -103,7 +104,8 @@ describe("runtime advisory policy", () => {
 
   it("fails once the review date has passed", () => {
     const expired = scriptSource.replace(/reviewBy: "\d{4}-\d{2}-\d{2}"/, 'reviewBy: "2000-01-01"');
-    const temporaryScript = path.join(repositoryRoot, "scripts", ".check-runtime-advisories.expiry-test.mjs");
+    const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-runtime-advisory-"));
+    const temporaryScript = path.join(temporaryRoot, "check-runtime-advisories.expiry-test.mjs");
     fs.writeFileSync(temporaryScript, expired);
     try {
       const input = report({
@@ -121,7 +123,7 @@ describe("runtime advisory policy", () => {
       assert.equal(code, 1);
       assert.match(stderr, /review date/);
     } finally {
-      fs.rmSync(temporaryScript, { force: true });
+      fs.rmSync(temporaryRoot, { recursive: true, force: true });
     }
   });
 

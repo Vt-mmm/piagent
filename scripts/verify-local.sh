@@ -210,12 +210,16 @@ required_files=(
   "$ROOT/scripts/mcp-manage.mjs"
   "$ROOT/scripts/configure-subagents.sh"
   "$ROOT/scripts/capability-catalog.mjs"
+  "$ROOT/scripts/private-holdout-readiness.mjs"
+  "$ROOT/scripts/fs4-readiness-evaluation.mjs"
+  "$ROOT/scripts/evaluate-fs-release-transition.mjs"
   "$ROOT/scripts/migrate-project-state.mjs"
   "$ROOT/scripts/import-agent-instructions.mjs"
   "$ROOT/tests/capability-core.test.mjs"
   "$ROOT/tests/piagent-guard-integration.test.mjs"
   "$ROOT/tests/context-engine.test.mjs"
   "$ROOT/tests/benchmark-core.test.mjs"
+  "$ROOT/tests/benchmark-treatment.test.mjs"
   "$ROOT/tests/benchmark-runner.test.mjs"
   "$ROOT/tests/benchmark-suite.test.mjs"
   "$ROOT/tests/production-benchmark-suite.test.mjs"
@@ -228,7 +232,37 @@ required_files=(
   "$ROOT/tests/runtime-evidence.test.mjs"
   "$ROOT/tests/golden-enforcement.test.mjs"
   "$ROOT/packages/piagent-core/benchmark/benchmark-core.js"
+  "$ROOT/packages/piagent-core/benchmark/benchmark-assurance.js"
+  "$ROOT/packages/piagent-core/benchmark/benchmark-comparison.js"
+  "$ROOT/packages/piagent-core/benchmark/benchmark-report.js"
+  "$ROOT/packages/piagent-core/benchmark/benchmark-suite.js"
   "$ROOT/benchmarks/core-v1/suite.json"
+  "$ROOT/benchmarks/capability-v1/suite.json"
+  "$ROOT/benchmarks/capability-v1/grade.mjs"
+  "$ROOT/tests/capability-benchmark-suite.test.mjs"
+  "$ROOT/tests/private-holdout-readiness.test.mjs"
+  "$ROOT/tests/fs4-readiness-gates.test.mjs"
+  "$ROOT/tests/fs5-pilot-protocol.test.mjs"
+  "$ROOT/tests/fs5-causal-arm.test.mjs"
+  "$ROOT/tests/fs-release-transition.test.mjs"
+  "$ROOT/schemas/benchmark-assurance-evidence.schema.json"
+  "$ROOT/evals/private-holdout-v1/access-policy.v1.json"
+  "$ROOT/evals/private-holdout-v1/human-rubric.v1.json"
+  "$ROOT/evals/private-holdout-v1/public-exposure.v1.json"
+  "$ROOT/evals/private-holdout-v1/README.md"
+  "$ROOT/evals/private-holdout-v1/CUSTODIAN_RUNBOOK.md"
+  "$ROOT/evals/fs4-readiness-matrix.v1.json"
+  "$ROOT/packages/piagent-core/benchmark/fs4-readiness-gates.js"
+  "$ROOT/evals/fs5-pilot-protocol.v1.json"
+  "$ROOT/evals/fs5-pilot-protocol.v2.json"
+  "$ROOT/evals/fs5-pilot-protocol.v3.json"
+  "$ROOT/evals/fs5-pilot-protocol.v4.json"
+  "$ROOT/evals/fs5-pilot-protocol.v5.json"
+  "$ROOT/evals/fs5-causal-arm.v1.json"
+  "$ROOT/evals/fs-release-transition.v1.json"
+  "$ROOT/packages/piagent-core/benchmark/fs5-pilot-protocol.js"
+  "$ROOT/packages/piagent-core/benchmark/fs5-causal-arm.js"
+  "$ROOT/packages/piagent-core/benchmark/fs-release-transition.js"
   "$ROOT/benchmarks/production-v1/suite.json"
   "$ROOT/benchmarks/production-v1/grade.mjs"
   "$ROOT/benchmarks/production-v1/variant.mjs"
@@ -293,6 +327,7 @@ const jsonFiles = [
   "schemas/capability-recipe.schema.json",
   "schemas/eval-scenario.schema.json",
   "schemas/action-proposal.schema.json",
+  "schemas/benchmark-assurance-evidence.schema.json",
   "packs/engineering-base/pack.json",
   "packs/engineering-base/recipes/bounded-change.json",
   "packs/web-delivery/pack.json",
@@ -603,6 +638,10 @@ node --check "$ROOT/packages/piagent-core/extensions/runtime-evidence.js" >/dev/
 node --check "$ROOT/packages/piagent-core/extensions/state-retention.js" >/dev/null
 node --check "$ROOT/packages/piagent-core/extensions/task-state.js" >/dev/null
 node --check "$ROOT/packages/piagent-core/benchmark/benchmark-core.js" >/dev/null
+node --check "$ROOT/packages/piagent-core/benchmark/benchmark-assurance.js" >/dev/null
+node --check "$ROOT/packages/piagent-core/benchmark/benchmark-comparison.js" >/dev/null
+node --check "$ROOT/packages/piagent-core/benchmark/benchmark-report.js" >/dev/null
+node --check "$ROOT/packages/piagent-core/benchmark/benchmark-suite.js" >/dev/null
 node --check "$ROOT/packages/piagent-core/security/sensitive-data.js" >/dev/null
 node --check "$ROOT/packages/piagent-core/capabilities/capability-core.js" >/dev/null
 node --check "$ROOT/packages/piagent-core/capabilities/capability-sources.js" >/dev/null

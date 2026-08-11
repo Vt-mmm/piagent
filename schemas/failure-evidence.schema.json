@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Vt-mmm/piagent/schemas/failure-evidence.schema.json",
+  "title": "Pi Agent Failure Parser Evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "parserVersion", "exitCode", "signals", "structuredEvents", "outputRef"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "parserVersion": { "const": "failure-parser-v1" },
+    "exitCode": { "type": "integer", "minimum": 0, "maximum": 255 },
+    "signals": { "type": "array", "maxItems": 16, "uniqueItems": true, "items": { "$ref": "#/$defs/reason" } },
+    "structuredEvents": { "type": "array", "maxItems": 16, "uniqueItems": true, "items": { "enum": ["scope-violation", "protected-path", "permission-denied", "policy-block", "provider-network", "environment", "flaky-infrastructure", "stale-verifier", "missing-verifier"] } },
+    "outputRef": { "$ref": "#/$defs/outputRef" }
+  },
+  "$defs": {
+    "reason": { "enum": ["exit-zero", "structured-scope", "structured-protected-path", "structured-permission", "structured-policy", "structured-provider", "structured-environment", "structured-flaky-infrastructure", "structured-stale-verifier", "structured-missing-verifier", "typescript-diagnostic", "python-type-diagnostic", "go-compile-diagnostic", "rust-compile-diagnostic", "generic-compile-diagnostic", "test-assertion-diagnostic", "lint-format-diagnostic", "dependency-config-diagnostic", "environment-diagnostic", "provider-rate-limit", "provider-transport", "permission-diagnostic", "policy-diagnostic", "scope-diagnostic", "local-port-conflict", "transient-infrastructure", "unknown-diagnostic"] },
+    "outputRef": { "type": "object", "additionalProperties": false, "required": ["sha256", "chars", "truncated", "captureRef"], "properties": { "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "chars": { "type": "integer", "minimum": 0, "maximum": 1000000000 }, "truncated": { "type": "boolean" }, "captureRef": { "type": ["string", "null"], "pattern": "^[A-Za-z0-9][A-Za-z0-9:._-]{0,255}$" } } }
+  }
+}

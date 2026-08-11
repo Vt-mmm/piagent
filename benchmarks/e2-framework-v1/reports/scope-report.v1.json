@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "e2-framework-v1",
+  "kind": "scope",
+  "scenarioCount": 4,
+  "inScopeReferenceExpected": true,
+  "outsideScopeProbe": "README.md",
+  "outsideScopeExpected": false,
+  "vendorMutationAllowed": false,
+  "providerUsed": false
+}

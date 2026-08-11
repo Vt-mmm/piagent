@@ -100,9 +100,9 @@ const codexModels = [
   "openai-codex/gpt-5.4-mini:minimal",
   "openai-codex/gpt-5.4:xhigh",
   "openai-codex/gpt-5.5:high",
-  "openai-codex/gpt-5.6-luna:xhigh",
-  "openai-codex/gpt-5.6-sol:xhigh",
-  "openai-codex/gpt-5.6-terra:xhigh"
+  "openai-codex/gpt-5.6-luna:medium",
+  "openai-codex/gpt-5.6-terra:high",
+  "openai-codex/gpt-5.6-sol:high"
 ];
 
 const claudeModels = [

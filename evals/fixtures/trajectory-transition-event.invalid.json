@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "policyVersion": "trajectory-v1",
+  "eventId": "not-a-hash",
+  "taskId": "task-101",
+  "taskRunId": "task-101-run-1",
+  "sessionHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "sequence": 2,
+  "from": "plan",
+  "to": "intake",
+  "cause": "invented-cause",
+  "sourceHook": "model-claim",
+  "taskDigest": null,
+  "treeDigest": null,
+  "skippedPhases": [],
+  "skipReason": null,
+  "observedAt": "not-a-time",
+  "terminalTaskOutcomeRef": null,
+  "rawPrompt": "must never be accepted"
+}

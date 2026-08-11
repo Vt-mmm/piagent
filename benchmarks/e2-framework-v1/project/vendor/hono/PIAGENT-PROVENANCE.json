@@ -1,0 +1,10 @@
+{
+  "name": "hono",
+  "version": "4.13.1",
+  "source": "https://registry.npmjs.org/hono/-/hono-4.13.1.tgz",
+  "integrity": "sha512-kdJoFVv2xmayw6cY09H7AbMJMt8Jn5jdlEdXsP7AGBdF2DIptVlKlOLKXP41yPip4/a3yQPv9gVcJYI8YY04dw==",
+  "shasum": "d4a606b792954d07a6215d12c01b7cf59da03cbc",
+  "license": "MIT",
+  "vendoredAt": "2026-08-11",
+  "purpose": "Pinned zero-install real-framework fixture for provider-free E2 evaluation."
+}

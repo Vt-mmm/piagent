@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "long-horizon-v1",
+  "title": "Real repository crash, resume, compaction and handoff lane",
+  "workItem": "CF-FS4-03",
+  "fixture": "../../benchmarks/e2-framework-v1/project",
+  "logicalDurationMinutes": 90,
+  "minimumWallClockMinutes": 30,
+  "totalUnits": 90,
+  "hardCrashAfterUnit": 30,
+  "handoffAfterUnit": 60,
+  "compactionUnits": [20, 40, 60, 80],
+  "tickMilliseconds": 21000,
+  "contextProxyCeilingTokens": 1200,
+  "durableStateCeilingBytes": 2097152,
+  "continuationBudget": 1,
+  "providerRequired": false,
+  "claimBoundary": "Provider-free lifecycle evidence only; no model quality, token, latency, 90-minute wall-clock, generalization, or release claim."
+}

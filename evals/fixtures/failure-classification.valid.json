@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "policyVersion": "failure-policy-v1",
+  "evidenceDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "category": "compile-typecheck",
+  "ownership": "source",
+  "retryable": false,
+  "sourceMutationPermission": "eligible-in-scope",
+  "confidence": "high",
+  "reasonCodes": ["typescript-diagnostic"],
+  "authorizesSourceMutation": false,
+  "outputRef": { "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "chars": 42, "truncated": false, "captureRef": null }
+}

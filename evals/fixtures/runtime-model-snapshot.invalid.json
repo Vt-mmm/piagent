@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "tomorrow",
+  "source": "api-doc-hint",
+  "piHostVersion": null,
+  "piagentVersion": null,
+  "provider": "openai",
+  "modelId": "example",
+  "availability": "public",
+  "contextWindow": -1,
+  "requestedThinkingLevel": null,
+  "effectiveThinkingLevel": null,
+  "supportedThinkingLevels": [],
+  "capabilities": [],
+  "provenance": [],
+  "warnings": [],
+  "accessToken": "synthetic-secret"
+}

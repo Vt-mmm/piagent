@@ -108,10 +108,23 @@
       "entrypoints": 800
     },
     "files": {
-      "packages/piagent-core/extensions/piagent-guard.ts": 8290,
+      "packages/piagent-core/extensions/piagent-guard.ts": 5000,
       "packages/piagent-core/extensions/policy-core.js": 2568,
       "packages/piagent-core/extensions/context-engine.js": 1342,
-      "scripts/benchmark-runner.mjs": 1432
+      "packages/piagent-core/benchmark/benchmark-core.js": 1034,
+      "scripts/benchmark-runner-core.mjs": 950
     }
-  }
+  },
+  "budgetExceptions": [
+    {
+      "file": "packages/piagent-core/extensions/piagent-guard.ts",
+      "approvedMaximum": 5000,
+      "targetMaximum": 5000,
+      "reviewedAt": "2026-08-08",
+      "expiresOn": "2026-08-22",
+      "ownerWorkItem": "CF-P4-03-prep",
+      "extraction": "Completed: tool and command registrations moved into bounded runtime modules before recovery-policy hook wiring; retain the 5,000-line ceiling while the remaining composition root is reduced toward GA.",
+      "review": "local-autopilot-reviewed; external maintainer approval is not implied"
+    }
+  ]
 }

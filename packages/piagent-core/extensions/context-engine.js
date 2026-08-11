@@ -475,29 +475,25 @@ function resolveImportTarget(sourcePath, specifier, files) {
 }
 
 function foldSearchSignal(value) {
-  return String(value ?? "")
-    .normalize("NFKD")
-    .replace(/\p{M}/gu, "")
-    .replace(/[đĐ]/g, (character) => character === "Đ" ? "D" : "d")
-    .toLowerCase();
+  return String(value ?? "").normalize("NFKD").replace(/\p{M}/gu, "")
+    .replace(/[đĐ]/g, (character) => character === "Đ" ? "D" : "d").toLowerCase();
 }
 
 function tokenizeQuery(query) {
-  const expanded = String(query ?? "")
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .replaceAll("_", " ")
-    .replaceAll("-", " ");
+  const expanded = String(query ?? "").replace(/([a-z0-9])([A-Z])/g, "$1 $2").replaceAll("_", " ").replaceAll("-", " ");
   const terms = expanded.match(/[\p{L}][\p{L}\p{N}]{1,63}/gu) ?? [];
-  return [...new Set(terms
-    .map((term) => term.toLowerCase())
-    .filter((term) => !STOP_TERMS.has(foldSearchSignal(term))))].slice(0, 16);
+  return [...new Set(terms.map((term) => term.toLowerCase()).filter((term) => !STOP_TERMS.has(foldSearchSignal(term))))].slice(0, 16);
 }
 
 function queryPathCandidates(query) {
   const pattern = /(?:^|[\s"'`(])((?:\.{0,2}\/)?[\p{L}\p{N}_.@-]+(?:\/[\p{L}\p{N}_.@-]+)+|[\p{L}\p{N}_.@-]+\.[\p{L}\p{N}]{1,8}|\.[\p{L}\p{N}_@-]{1,32})(?=$|[\s"'`),:])/gu;
-  return [...String(query ?? "").matchAll(pattern)]
-    .map((match) => normalizeRelative(match[1]))
-    .filter(Boolean);
+  const explicitRoots = /^(?:\.github|app|apps|backend|bin|config|docs|examples|frontend|lib|logs|packages|pages|public|scripts|services|spec|src|test|tests|vendor|__tests__)\//i;
+  return [...String(query ?? "").matchAll(pattern)].flatMap((match) => {
+    const raw = match[1], candidate = normalizeRelative(raw);
+    const explicit = candidate && (raw.startsWith("./") || raw.startsWith("../") || explicitRoots.test(candidate)
+      || candidate.split("/").length >= 3 || /(?:^|\/)(?:\.[^/]+|[^/]+\.[\p{L}\p{N}]{1,8})$/u.test(candidate));
+    return explicit ? [candidate] : [];
+  });
 }
 
 function ftsQuery(terms) {
@@ -525,7 +521,8 @@ export function classifyContextTask(prompt) {
   let workflow = "task";
   if (/^\/?(?:scout|review|plan|discuss)\b/.test(lower)) workflow = lower.match(/^\/?([a-z-]+)/)?.[1] ?? "task";
   if (/\b(onboard|profile setup|first-read|cau hinh profile|khoi tao project)\b/.test(folded)) workflow = "onboard";
-  if (/\b(commit|pull request|pr|release|publish|deploy|phat hanh|trien khai)\b/.test(folded)) workflow = "release";
+  if (/^\/?(?:commit|release|publish|deploy)\b/.test(folded) || /\b(?:pull request|publish|deploy|phat hanh|trien khai)\b/.test(folded)
+    || /\b(?:after|before|create|cut|merge|open|prepare|push|run|ship|tag|version)\b.{0,40}\b(?:commit|pr|release)\b/.test(folded)) workflow = "release";
   const usageIntent = /^\/?(?:usage|session)\b/.test(lower)
     || /\b(?:show|check|view|report|current|session|how many)\b.{0,48}\b(?:usage|tokens?|cost|context stats|efficiency)\b/.test(lower)
     || /\b(?:usage|tokens?|cost|context stats|efficiency)\b.{0,48}\b(?:show|check|view|report|current|session)\b/.test(lower)

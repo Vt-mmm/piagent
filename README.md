@@ -81,6 +81,7 @@ Removal targets what is registered in Pi's settings rather than what the current
 - Subagent setup helpers for read-only scouting, planning, implementation, review, and risk challenge.
 - Chat image-path intake: paste a screenshot path from the project or a granted `additionalReadRoots` directory and the guard attaches it as `[image1]` before the model sees the prompt.
 - Trusted-run wrapper: `piagent-auto` launches Pi with `--approve` for the current run while keeping piagent guardrails active.
+- Fresh-task capability routing: `piagent-route` explains a catalog-verified low/medium/high/ultra recommendation; provider execution requires explicit `--execute --yes`, while in-extension auto routing remains fail-closed.
 - Runtime policy tools:
   - `piagent_permission_status`
   - `piagent_exec_policy_check`
@@ -94,7 +95,16 @@ Removal targets what is registered in Pi's settings rather than what the current
 - Accident-brake guardrails for protected paths, destructive shell commands, task contracts, context manifests, observed verification evidence, and trace records.
 - Session-bound Task Contract v2: one Pi session per task, bounded retry history,
   Git baseline-aware changed files, scope enforcement, all-command verification,
-  and an immutable terminal outcome.
+  strict acceptance receipts, identity-bound journal checkpoints, and an
+  immutable terminal outcome. These are same-runtime operational records, not
+  independent attestation.
+- Adaptive context planning uses Pi-reported model/thinking/context facts to set
+  a bounded context budget; cited repository-memory hints never replace current
+  source reads. The parent model stays operator-pinned—there is no automatic
+  parent routing or solver in this stabilization baseline.
+- Execution backends are explicit and fail closed: host execution is the
+  default, while a requested isolation backend without an installed adapter
+  blocks mutation instead of silently using the host.
 - Bounded owner-only local state with cross-process JSONL rotation and a shared
   symlink-safe boundary for task evidence, telemetry, traces, and captures.
 - Two-tier one-command benchmark: `core-v1` is a fast paired smoke gate, while
@@ -109,7 +119,9 @@ Removal targets what is registered in Pi's settings rather than what the current
   overall. Against controlled `codex-cli` on the same `gpt-5.6-sol`/`xhigh`
   matrix, Piagent used 51.11% fewer paired fresh tokens with a 95% ratio interval
   of `0.3809..0.6276`; see the [benchmark evidence](https://piagent.io.vn/benchmark)
-  and [methodology](docs/quality-benchmark.md).
+  and [methodology](docs/quality-benchmark.md). This is immutable historical
+  evidence; current production gates additionally require every task and score
+  band to exceed 9.5, so aggregate 9.58 alone is no longer sufficient.
 - Built-in profiles for frontend, backend, fullstack, BE-readonly/FE-write, data, DevOps, mobile, docs, Python, and Node TypeScript.
 - Versioned capability packs with deterministic catalog, profile resolution, integrity lock, and permission checks.
 
@@ -215,6 +227,7 @@ Everything below is typed inside a Pi session. `/commands` lists the full set; [
 | `/workflow be-to-fe <request>` | Backend or spec is read-only and the implementation target is frontend. Pair with `/profile be-readonly-fe`. |
 | `/workflow platform-improve <request>` | Package-level work: setup, MCP, model scope, memory, runtime policy, prompts, skills, subagents. |
 | `/fresh task|scout|be-to-fe <request>` | The current session is already heavy. Opens a new governed session and replays the compact workflow prompt. |
+| `/piagent-inspector` | Open one read-only menu for task files and line diff, commands and failures, safety warnings, and context budget. A four-row panel is always shown beside Pi's native footer and can be hidden for the session with `toggle`. |
 
 Short workflow aliases such as `/task`, `/scout`, `/be-to-fe`, `/commit`, and `/pr` still work for power users, but docs and onboarding teach `/workflow` as the default.
 

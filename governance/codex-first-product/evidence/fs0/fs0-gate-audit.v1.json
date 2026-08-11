@@ -1,0 +1,232 @@
+{
+  "schemaVersion": "fs0-gate-audit-v1",
+  "workItem": "CF-FS0-05",
+  "auditedAt": "2026-08-10T08:31:03Z",
+  "review": {
+    "reviewer": "root",
+    "session": "separate-read-only-gate-2026-08-10",
+    "independence": "separate session and independent recomputation; not an external human review",
+    "mutationScope": [
+      "this immutable audit artifact",
+      "the sole mutable tracker STATUS.md"
+    ],
+    "prohibitedAndNotPerformed": [
+      "product/runtime/test/schema/package/generated edits",
+      "provider execution",
+      "benchmark execution",
+      "raw historical evidence mutation",
+      "branch/worktree/commit/tag/push/publish/install/cleanup"
+    ]
+  },
+  "sourceIdentity": {
+    "head": "4f37ae05d56431f2f9db9c4159e20252c3da3b2a",
+    "headTree": "0907c03c88373471c6da8606af61b4f172149c73",
+    "exactTag": "v1.2.17",
+    "packageVersion": "1.2.17",
+    "candidateState": "unfrozen",
+    "candidateDigest": null,
+    "policyManifestVersion": "unassigned"
+  },
+  "inputArtifacts": [
+    {
+      "path": "governance/codex-first-product/evidence/fs0/current-tree-inventory.v1.json",
+      "sha256": "dd41102e05ecb4c980bf61370e17992f4515b86dd328601a77ab54af8b0761fe"
+    },
+    {
+      "path": "governance/codex-first-product/evidence/fs0/historical-evidence-map.v1.json",
+      "sha256": "17736325605b19d24210407eff12ddf068ce91d22da17df03f233318ac53c1ba"
+    },
+    {
+      "path": "governance/codex-first-product/evidence/fs0/control-plane-manifest.v1.json",
+      "sha256": "add22c7df2e3cf8bac334e8ae88aff87bc6612d4c3ed134d2696fcb11b665758"
+    },
+    {
+      "path": "governance/codex-first-product/evidence/fs0/capability-constitution.v1.json",
+      "sha256": "5dc65f03639df4236ea4e9c70e31e81aa9613317102e1acd2b371c6e44e8c1e8"
+    },
+    {
+      "path": "governance/codex-first-product/decisions/CF-FS0-03-capability-constitution.md",
+      "sha256": "66abf8b48ec1198135645536097d8ee3fd187535850e3beb0f2777dff01ca798"
+    },
+    {
+      "path": "governance/codex-first-product/evidence/fs0/candidate-boundary.v1.json",
+      "sha256": "af132f6c05c2abddafceb8dec8909df53f76d6394d0582c7a78bcc93c0a66733"
+    },
+    {
+      "path": "governance/codex-first-product/decisions/CF-FS0-04-clean-candidate-and-release-identity.md",
+      "sha256": "475ff47c2ef44d17c5db119d5fa81ed2ca914678ed1866bfc545d123ba1c75ec"
+    },
+    {
+      "path": "governance/codex-first-product/checklists/CF-FS0-04-candidate-build.md",
+      "sha256": "4b9e64839f0376ccc4a2d5c8ceaf2f5c42022283bc9dc5ccaa12fd86246fc9b0"
+    }
+  ],
+  "exitConditions": [
+    {
+      "id": "FS0-EXIT-01",
+      "name": "every current path is attributed and overlap is resolved",
+      "status": "pass",
+      "evidence": {
+        "originalInventoryPaths": 374,
+        "originalPathsMissing": 0,
+        "originalPathContentModeDrift": 0,
+        "currentPorcelainPathsBeforeAuditArtifact": 388,
+        "postInventoryPaths": 14,
+        "postInventoryClassification": "governance-control-plane",
+        "unresolvedPaths": 0,
+        "duplicatePaths": 0,
+        "auditArtifactClassification": "governance-control-plane"
+      }
+    },
+    {
+      "id": "FS0-EXIT-02",
+      "name": "historical evidence is immutable, privately bounded, and never promoted to release proof",
+      "status": "fail",
+      "evidence": {
+        "directRawRoots": 42,
+        "manifestRoots": 42,
+        "rootSetMatches": true,
+        "structuralCountMismatches": 0,
+        "files": 26380,
+        "nestedDirectories": 19070,
+        "symlinks": 0,
+        "bytes": 49338086,
+        "privateRetentionRiskRoots": 24,
+        "releaseEligibleRoots": 0,
+        "br5Br6ClaimTier": "diagnostic-only-no-release-or-token-claim",
+        "treeHashAlgorithmRecorded": false,
+        "treeHashCanonicalizationRecorded": false
+      },
+      "failure": "The map instructs later sessions to verify treeSha256 but does not specify a domain, entry encoding, path ordering, mode/symlink treatment, or canonicalization. Structural counts match, but an independent session cannot recompute the 42 content identities from the artifact alone."
+    },
+    {
+      "id": "FS0-EXIT-03",
+      "name": "the full source capability inventory and authority/ownership matrix are independently reproducible",
+      "status": "fail",
+      "evidence": {
+        "capabilities": 17,
+        "productionFiles": 431,
+        "productionPathListSha256": "94b65390f6ce5838758eed22599601e3026b7d498a9e1015da41c4085a2b2a1b",
+        "pathListMatches": true,
+        "unownedFilesClaimed": 0,
+        "perFileOwnershipEntriesRecorded": 0,
+        "machineExecutableOwnershipRules": 0,
+        "proseOwnershipRules": 17,
+        "claimedContentOwnershipManifestSha256": "14b486f8e45079a91b685b4244ca884d2e46533640e2ce62a051f94ac1f81d72"
+      },
+      "failure": "The 431-file scope and path-list digest reproduce, but the artifact records only prose match descriptions and an aggregate ownership digest. It does not record the per-file owner manifest or exact executable predicates, so a later session cannot independently prove zero unowned or multiply owned production files."
+    },
+    {
+      "id": "FS0-EXIT-04",
+      "name": "candidate and rollback identity are reproducibly designed without claiming a frozen candidate",
+      "status": "pass",
+      "evidence": {
+        "candidateState": "unfrozen",
+        "candidateDigest": null,
+        "candidateDescriptorRequiredFields": 18,
+        "packageDryRunEntries": 552,
+        "packageDryRunTarballBytes": 1024601,
+        "packageDryRunUnpackedBytes": 4294011,
+        "packagePathListSha256": "de80cc05621bc9c161880f8803696bb8e043810bffa3366170758e7074eb3a7f",
+        "forbiddenPackageMatches": 0,
+        "rollbackTag": "v1.2.17",
+        "rollbackTagObjectType": "tag",
+        "rollbackCommit": "4f37ae05d56431f2f9db9c4159e20252c3da3b2a",
+        "rollbackTree": "0907c03c88373471c6da8606af61b4f172149c73",
+        "rollbackRegistryArtifactDigest": null,
+        "rootProfileLockCurrent": false,
+        "rootProfileLockDisposition": "repin-before-candidate-freeze"
+      }
+    },
+    {
+      "id": "FS0-EXIT-05",
+      "name": "no provider benchmark or release write starts before FS0 passes",
+      "status": "pass",
+      "evidence": {
+        "providerInvokedByAudit": false,
+        "benchmarkInvokedByAudit": false,
+        "branchWorktreeCommitTagPushPublishInstallPerformedByAudit": false,
+        "historicalRawRootCountBeforeAndAfter": 42
+      }
+    }
+  ],
+  "findings": [
+    {
+      "id": "FS0-HISTORY-HASH-01",
+      "severity": "gate-blocking",
+      "affectedWorkItem": "CF-FS0-02",
+      "finding": "Historical tree digests are not self-describing or independently recomputable.",
+      "requiredCorrection": "Preserve historical-evidence-map.v1.json byte-for-byte. Add an immutable versioned hash contract that specifies domain separation, exact entry bytes, raw UTF-8 path ordering, regular/symlink/directory and mode treatment, and aggregate rendering; recompute all 42 roots and bind old recorded values to the new independently reproducible identities without promoting any root to release evidence."
+    },
+    {
+      "id": "FS0-OWNERSHIP-MAP-01",
+      "severity": "gate-blocking",
+      "affectedWorkItem": "CF-FS0-03",
+      "finding": "The capability ownership aggregate cannot be reconstructed from the constitution alone.",
+      "requiredCorrection": "Preserve capability-constitution.v1.json byte-for-byte. Add an immutable, sorted 431-entry manifest containing path, capability, byte size, normalized mode, and content SHA-256 plus an explicit canonical aggregate algorithm; validate unique paths, exactly one owner per in-scope file, counts by capability, and equality with the current 431-file scope."
+    },
+    {
+      "id": "FS0-SNAPSHOT-LABEL-01",
+      "severity": "advisory",
+      "affectedWorkItem": "CF-FS0-04",
+      "finding": "candidate-boundary.v1 currentObservedState contains a point-in-time untracked count without a timestamp, while later governance artifacts legitimately increase the current count.",
+      "requiredCorrection": "Treat the field as a historical FS0-04 observation only. Future candidate descriptors must record an explicit observation timestamp and clean predicate rather than relying on a dirty-tree count."
+    }
+  ],
+  "verification": [
+    {
+      "gate": "control-plane immutable-file digest and size readback",
+      "result": "pass",
+      "detail": "7/7 files match; zero drift"
+    },
+    {
+      "gate": "historical raw-root structural readback",
+      "result": "pass-structural-only",
+      "detail": "42/42 roots; zero count mismatch; content identity unavailable because the hash contract is absent"
+    },
+    {
+      "gate": "production scope path-list readback",
+      "result": "pass-path-scope-only",
+      "detail": "431/431; path-list digest matches; ownership mapping not independently reproducible"
+    },
+    {
+      "gate": "release identity, docs generation, and capability catalog",
+      "result": "pass",
+      "detail": "historical 1.2.17 identity; 36 docs pages; 2 capability packs"
+    },
+    {
+      "gate": "package dry-run allowlist",
+      "result": "pass",
+      "detail": "552 entries; zero forbidden or governance entries; diagnostic 1.2.17 baseline only"
+    },
+    {
+      "gate": "package/install/update/rollback focused matrix",
+      "result": "pass",
+      "detail": "76/76 tests"
+    },
+    {
+      "gate": "offline full repository verification",
+      "result": "pass",
+      "detail": "npm run verify -- --offline exited 0"
+    },
+    {
+      "gate": "typecheck, architecture, and diff hygiene",
+      "result": "pass",
+      "detail": "typecheck passed; 186 source files passed architecture budgets; git diff --check passed"
+    },
+    {
+      "gate": "root profile integrity lock",
+      "result": "known-candidate-debt",
+      "detail": "catalog current; lock current=false/status=repin; FS6 candidate freeze must require current=true"
+    }
+  ],
+  "verdict": {
+    "status": "fail",
+    "passedExitConditions": 3,
+    "failedExitConditions": 2,
+    "fs0State": "in-progress",
+    "advanceToFs1": false,
+    "nextWorkItem": "CF-FS0-02",
+    "nextAction": "Run one bounded evidence-only correction session for FS0-HISTORY-HASH-01, then a separate CF-FS0-03 ownership-manifest correction session, and finally rerun CF-FS0-05. Do not implement CF-FS1-01 before the rerun passes."
+  }
+}

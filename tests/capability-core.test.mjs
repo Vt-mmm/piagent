@@ -204,6 +204,22 @@ describe("capability catalog and profile lock", () => {
       lock.core.runtimeFiles.some((entry) => entry.path === "packages/piagent-core/capabilities/runtime-integrity.js"),
       "the profile lock must pin the runtime integrity manifest"
     );
+    assert.ok(
+      lock.core.runtimeFiles.some((entry) => entry.path === "packages/piagent-core/extensions/task-runtime-audit.js"),
+      "the profile lock must pin current-tree verifier checkpoint identity"
+    );
+    assert.deepEqual(
+      lock.core.runtimeFiles
+        .map((entry) => entry.path)
+        .filter((entry) => entry.includes("model-mutation-proof") || entry.includes("performance-review"))
+        .sort(),
+      [
+        "packages/piagent-core/runtime/quality/model-mutation-proof.ts",
+        "packages/piagent-core/runtime/quality/performance-review-evidence.ts",
+        "packages/piagent-core/runtime/session/performance-review-state.ts"
+      ],
+      "the profile lock must pin every performance-review enforcement module"
+    );
     assert.deepEqual(
       lock.core.runtimeFiles
         .map((entry) => entry.path)

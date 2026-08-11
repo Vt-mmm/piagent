@@ -1,0 +1,3141 @@
+{
+  "schemaVersion": "capability-module-ownership-v1",
+  "workItem": "CF-FS0-03",
+  "createdAt": "2026-08-10T08:53:33.733Z",
+  "sourceIdentity": {
+    "head": "4f37ae05d56431f2f9db9c4159e20252c3da3b2a",
+    "exactTag": "v1.2.17",
+    "packageVersion": "1.2.17",
+    "fs0InventorySha256": "dd41102e05ecb4c980bf61370e17992f4515b86dd328601a77ab54af8b0761fe",
+    "fs0GateAuditSha256": "b93f2c09739dc95bb6f4838c2307a73a72d91b7c47ed4b9d8b90f950ab12ef74"
+  },
+  "repositoryRoot": {
+    "relativePathFromManifest": "../../../..",
+    "pathPolicy": "Every scope and entry path is repository-relative valid UTF-8; absolute paths, symlink traversal, unsupported entries and repository escapes fail closed."
+  },
+  "constitution": {
+    "relativePathFromManifest": "capability-constitution.v1.json",
+    "sha256": "5dc65f03639df4236ea4e9c70e31e81aa9613317102e1acd2b371c6e44e8c1e8",
+    "proseRulesStatus": "historical-descriptive-not-executable",
+    "mutationAllowed": false
+  },
+  "referenceVerifier": {
+    "relativePathFromManifest": "verify-capability-ownership-manifest.mjs",
+    "sha256": "301f132efe62b6c7a54bdefffc105cce376b058ca44d133dc3e650bbf29ed956",
+    "runtime": "Node.js ESM using only node: built-ins",
+    "mutationBehavior": "read-only"
+  },
+  "assignmentAuthority": {
+    "normativeSource": "entries[]",
+    "rule": "For this exact 431-file snapshot, each sorted entry path and cap pair is authoritative. Prose match descriptions are explanatory only. Any path/content/mode/capability change requires a new additive versioned manifest and independent review.",
+    "onePrimaryOwner": true,
+    "fallbackCapability": "CAP-16",
+    "clarifications": [
+      "CAP-17 owns benchmark/eval trees, benchmark core, evaluation and pilot scripts, model-routing protocol evaluation, usage telemetry, and benchmark/eval schemas.",
+      "CAP-11 is restricted to executable acceptance/assurance/return-contract modules; prompt or subagent names containing review do not acquire assurance ownership.",
+      "CAP-14 owns all shipped subagent definitions, including piagent-reviewer.",
+      "CAP-05 excludes template snapshots; template artifacts remain CAP-16.",
+      "CAP-02 owns executable guard/policy/tenant/execution/shell/redaction, MCP, security and base-policy surfaces including policy-tools and runtime-policy-smoke.",
+      "CAP-06 owns remaining runtime hooks/session/tools/registration surfaces after earlier first-match ownership."
+    ]
+  },
+  "entryContract": {
+    "ordering": "Ascending raw UTF-8 bytes of path.",
+    "objectKeyOrder": [
+      "path",
+      "cap",
+      "size",
+      "mode",
+      "sha256"
+    ],
+    "path": "Repository-relative slash-separated UTF-8 regular-file path.",
+    "cap": "One of CAP-01 through CAP-17.",
+    "size": "Raw file byte length as a non-negative safe integer.",
+    "mode": "stat.mode & 07777 rendered as four lowercase octal digits.",
+    "sha256": "Lowercase SHA-256 of raw file bytes.",
+    "stability": "Reference verifier opens each file no-follow, checks fd/path identity before and after read, and rejects scope symlinks, unsupported types, duplicates, missing/extra paths or races."
+  },
+  "pathList": {
+    "algorithm": "piagent-production-path-list-v1",
+    "domainUtf8": "piagent-production-path-list-v1\n",
+    "canonicalPayload": "JSON.stringify of the sorted entry path array with no whitespace.",
+    "identity": "sha256:6fe40eb83062c2529d2c92c112c54901b3a59a201e4ef632cf0b1d2e229dec1c",
+    "legacyBareSha256": "94b65390f6ce5838758eed22599601e3026b7d498a9e1015da41c4085a2b2a1b",
+    "legacyMatchesConstitution": true
+  },
+  "ownershipAggregate": {
+    "algorithm": "piagent-capability-ownership-manifest-v1",
+    "domainUtf8": "piagent-capability-ownership-manifest-v1\n",
+    "canonicalPayload": "JSON.stringify of entries[] with the exact key order above and no whitespace.",
+    "identity": "sha256:5076ae795b8cc869bb0482dd9fc530cf96d1e1df81b3542654a6703c131de4d4"
+  },
+  "legacyOwnershipAggregate": {
+    "constitutionClaimedBareSha256": "14b486f8e45079a91b685b4244ca884d2e46533640e2ce62a051f94ac1f81d72",
+    "reconstructedBareSha256": "ca64bd5caa9fcf739ec163a74b81990c1176eea2beb7570e0a1f735131d979c0",
+    "equalityClaim": false,
+    "disposition": "The constitution-era bare aggregate had no exact assignment/canonicalization carrier and cannot be independently reproduced. It remains an opaque historical claim. This additive self-describing manifest is the canonical current-snapshot proof and does not relabel the old digest."
+  },
+  "totalFiles": 431,
+  "countsByCapability": {
+    "CAP-01": 9,
+    "CAP-02": 23,
+    "CAP-03": 10,
+    "CAP-04": 5,
+    "CAP-05": 7,
+    "CAP-06": 22,
+    "CAP-07": 6,
+    "CAP-08": 19,
+    "CAP-09": 2,
+    "CAP-10": 7,
+    "CAP-11": 10,
+    "CAP-12": 4,
+    "CAP-13": 2,
+    "CAP-14": 11,
+    "CAP-15": 3,
+    "CAP-16": 93,
+    "CAP-17": 198
+  },
+  "entries": [
+    {
+      "path": "adapters/backend-api/profile.json",
+      "cap": "CAP-16",
+      "size": 2420,
+      "mode": "0644",
+      "sha256": "101bc1c71180643a053ff79e8eb61a489edc01ee11dc6a8070a2aee22f37be5e"
+    },
+    {
+      "path": "adapters/be-readonly-fe/profile.json",
+      "cap": "CAP-16",
+      "size": 4078,
+      "mode": "0644",
+      "sha256": "d6985593de9b97ba5da08038c78a1b3227337c6be90b7faebebe75992e7bc762"
+    },
+    {
+      "path": "adapters/data/profile.json",
+      "cap": "CAP-16",
+      "size": 2041,
+      "mode": "0644",
+      "sha256": "1a730b1a7fb67d15356b1be980777436db022bc14007e0bccfcc9faa8ed57492"
+    },
+    {
+      "path": "adapters/devops/profile.json",
+      "cap": "CAP-16",
+      "size": 2392,
+      "mode": "0644",
+      "sha256": "fd136a95fa48cd69bbac4a40228a78639459bcd24f823dbb9b9eefa04551760c"
+    },
+    {
+      "path": "adapters/docs/profile.json",
+      "cap": "CAP-16",
+      "size": 1614,
+      "mode": "0644",
+      "sha256": "2f54b8b3d27edb51f95d94924d844c060d88d7b207eb228102dd41c492f3f75c"
+    },
+    {
+      "path": "adapters/fullstack/profile.json",
+      "cap": "CAP-16",
+      "size": 2262,
+      "mode": "0644",
+      "sha256": "6be0d4993ec5b35e695168f990b17d0da5a3be5854bd631a58446d1fab6dde51"
+    },
+    {
+      "path": "adapters/generic/profile.json",
+      "cap": "CAP-16",
+      "size": 1913,
+      "mode": "0644",
+      "sha256": "fc10abbe00bb05e64e43662550b9a92e95b7441c3da000a5e2e244c5afb0eccc"
+    },
+    {
+      "path": "adapters/mobile/profile.json",
+      "cap": "CAP-16",
+      "size": 2041,
+      "mode": "0644",
+      "sha256": "066304e1988734e8f03c31ef67e3a40b44b718bf7d334464b4d7def7e4609c4e"
+    },
+    {
+      "path": "adapters/node-typescript/profile.json",
+      "cap": "CAP-16",
+      "size": 1790,
+      "mode": "0644",
+      "sha256": "99c14d2293f08e986e0eed6124dd84a232e0d3ae052a598b2d5c99340116edf1"
+    },
+    {
+      "path": "adapters/python/profile.json",
+      "cap": "CAP-16",
+      "size": 1473,
+      "mode": "0644",
+      "sha256": "a5e2e4af41f304bc721890d6cca9d52eb798e51a00490f26327971c9f38857de"
+    },
+    {
+      "path": "adapters/web-frontend/profile.json",
+      "cap": "CAP-16",
+      "size": 1950,
+      "mode": "0644",
+      "sha256": "84ac29dcbe0c692070be302707424ea16130a5938cff309c5d7755204b6c2dc1"
+    },
+    {
+      "path": "architecture/layers.json",
+      "cap": "CAP-16",
+      "size": 2751,
+      "mode": "0644",
+      "sha256": "13379bc56619a7df7caff8cf675d474b809c1ef1f92cc53d95b9becba765ae54"
+    },
+    {
+      "path": "benchmarks/capability-v1/alternatives/fullstack-search-contract/apps/web/src/search-view.js",
+      "cap": "CAP-17",
+      "size": 537,
+      "mode": "0644",
+      "sha256": "e2edfd57b78c3e5ec1a186f3be174a1261268a93196cf596cf5692a6586fba5a"
+    },
+    {
+      "path": "benchmarks/capability-v1/alternatives/fullstack-search-contract/packages/shared/src/search-contract.js",
+      "cap": "CAP-17",
+      "size": 304,
+      "mode": "0644",
+      "sha256": "cba5f835e9c21d0df7a279e8801f8f30d4502a88d237435b136607661e5d569d"
+    },
+    {
+      "path": "benchmarks/capability-v1/alternatives/fullstack-search-contract/services/catalog/src/search.js",
+      "cap": "CAP-17",
+      "size": 820,
+      "mode": "0644",
+      "sha256": "d382208baad18e0e77fbb7544b7bfc513f5d113fd060e4156a74fe1dd71bc3a0"
+    },
+    {
+      "path": "benchmarks/capability-v1/alternatives/resumable-migration-runner/packages/migration/src/plan.js",
+      "cap": "CAP-17",
+      "size": 1164,
+      "mode": "0644",
+      "sha256": "36b41510ff3782a9f190b82b2d8997712b560534212580bf14356ce3d17ef198"
+    },
+    {
+      "path": "benchmarks/capability-v1/alternatives/resumable-migration-runner/packages/migration/src/runner.js",
+      "cap": "CAP-17",
+      "size": 1673,
+      "mode": "0644",
+      "sha256": "c576fc15b65ebbd79a4a4e592770e68a75e2c6fb75f7450835998fb3b2f83904"
+    },
+    {
+      "path": "benchmarks/capability-v1/coverage.json",
+      "cap": "CAP-17",
+      "size": 5707,
+      "mode": "0644",
+      "sha256": "aaa7f5e4991cd6ee7ea7553b5c26d4a24f166eaaab5051a0e345503de34911c4"
+    },
+    {
+      "path": "benchmarks/capability-v1/grade.mjs",
+      "cap": "CAP-17",
+      "size": 23097,
+      "mode": "0644",
+      "sha256": "f0c74f5ad70318f5a577662a3effa3297c75684e720d20db6f006797430612ea"
+    },
+    {
+      "path": "benchmarks/capability-v1/project/.gitignore",
+      "cap": "CAP-17",
+      "size": 14,
+      "mode": "0644",
+      "sha256": "4d56952b0fb13bf8f9b6c13a6d4c34a075bac3af447636a1df4335d7576e2f97"
+    },
+    {
+      "path": "benchmarks/capability-v1/project/README.md",
+      "cap": "CAP-17",
+      "size": 226,
+      "mode": "0644",
+      "sha256": "2aee085f451757d6e4f699779b56661161d375af744c7617dfbaf59b8f1fadb4"
+    },
+    {
+      "path": "benchmarks/capability-v1/project/apps/admin/src/rollout-view.js",
+      "cap": "CAP-17",
+      "size": 79,
+      "mode": "0644",
+      "sha256": "a630109399e3a843c3e2910ce09ee63968d7710a38fd9ae2e0308b11302f9944"
+    },
+    {
+      "path": "benchmarks/capability-v1/project/apps/web/src/search-view.js",
+      "cap": "CAP-17",
+      "size": 115,
+      "mode": "0644",
+      "sha256": "9be85b45b6728ecd11fa3fa99533b3f3b11d736df21b1d69b573201083a58cc1"
+    },
+    {
+      "path": "benchmarks/capability-v1/project/package.json",
+      "cap": "CAP-17",
+      "size": 143,
+      "mode": "0644",
+      "sha256": "eaa17e1bc0a6838171178adb1a776e60d421a12e590873a774c62c581f52b155"
+    },
+    {
+      "path": "benchmarks/capability-v1/project/packages/api/src/feature-access.js",
+      "cap": "CAP-17",
+      "size": 194,
+      "mode": "0644",
+      "sha256": "7db9dc876d7dabeaea6b6ddbffb8472265f0ba08b06f3f48c215de346f9cacb4"
+    },
+    {
+      "path": "benchmarks/capability-v1/project/packages/lease/src/store.js",
+      "cap": "CAP-17",
+      "size": 301,
+      "mode": "0644",
+      "sha256": "f6b7ba66e44f6627f68049f707231528e37a99ad94574c6b1ec855674f581686"
+    },
+    {
+      "path": "benchmarks/capability-v1/project/packages/lease/src/with-lease.js",
+      "cap": "CAP-17",
+      "size": 154,
+      "mode": "0644",
+      "sha256": "3ec027883031050f6fb7437dcf80b7e8761da129241bd4a2e5746af929b55d70"
+    },
+    {
+      "path": "benchmarks/capability-v1/project/packages/migration/src/plan.js",
+      "cap": "CAP-17",
+      "size": 57,
+      "mode": "0644",
+      "sha256": "86511bb8e7c1fcbbd6c8b8987e836e85738494443da4c7e6c856257ca339dc20"
+    },
+    {
+      "path": "benchmarks/capability-v1/project/packages/migration/src/runner.js",
+      "cap": "CAP-17",
+      "size": 137,
+      "mode": "0644",
+      "sha256": "81ca2f353c3a55ff5baaf1ac81505b83e63e13cbd78d6a54e613512c3725bf4b"
+    },
+    {
+      "path": "benchmarks/capability-v1/project/packages/policy/src/rollout.js",
+      "cap": "CAP-17",
+      "size": 168,
+      "mode": "0644",
+      "sha256": "96e28dd30f2407638a281557f713477d73b97ee9ff84ebfdadd1d895ee370150"
+    },
+    {
+      "path": "benchmarks/capability-v1/project/packages/shared/src/search-contract.js",
+      "cap": "CAP-17",
+      "size": 93,
+      "mode": "0644",
+      "sha256": "4da878fba7e3c7e4016fcdfa1b91ba771a36070dad244dc17ffc33acfb1cf4f0"
+    },
+    {
+      "path": "benchmarks/capability-v1/project/services/catalog/src/search.js",
+      "cap": "CAP-17",
+      "size": 57,
+      "mode": "0644",
+      "sha256": "c952e5f1a23ee17aaacba60c8b3dd07ca0dec1dc966bf968a52a39c9fbaac906"
+    },
+    {
+      "path": "benchmarks/capability-v1/project/test/smoke.test.js",
+      "cap": "CAP-17",
+      "size": 125,
+      "mode": "0644",
+      "sha256": "dba7d6712fb1f031dfed57011905710c857169220f733ba138d50d60ff41281a"
+    },
+    {
+      "path": "benchmarks/capability-v1/prompts/concurrent-lease-lifecycle.md",
+      "cap": "CAP-17",
+      "size": 1460,
+      "mode": "0644",
+      "sha256": "0f096c9d5f92d311e6e6b3baa4724200715a11c393331d7214bf906a4386d499"
+    },
+    {
+      "path": "benchmarks/capability-v1/prompts/fullstack-search-contract.md",
+      "cap": "CAP-17",
+      "size": 1293,
+      "mode": "0644",
+      "sha256": "0c586bcdab26a4c26f0048e79ef07022c1916463b2a9a7a911d074fe57a879db"
+    },
+    {
+      "path": "benchmarks/capability-v1/prompts/multi-package-rollout.md",
+      "cap": "CAP-17",
+      "size": 1542,
+      "mode": "0644",
+      "sha256": "af2db20ea1690095c0162190e5759cb25036a2f17f50cc5d35b1884d59f52d84"
+    },
+    {
+      "path": "benchmarks/capability-v1/prompts/resumable-migration-runner.md",
+      "cap": "CAP-17",
+      "size": 1890,
+      "mode": "0644",
+      "sha256": "00e37328a0cc4cefdf149134b0b13880c455302496796b6bf2da7c5adad1baf1"
+    },
+    {
+      "path": "benchmarks/capability-v1/references/concurrent-lease-lifecycle/packages/lease/src/store.js",
+      "cap": "CAP-17",
+      "size": 1354,
+      "mode": "0644",
+      "sha256": "7094202e5b3a09d9ec9bbf50e7bf4805c3a3209bd8d624d7cf2fee3f4cbfca94"
+    },
+    {
+      "path": "benchmarks/capability-v1/references/concurrent-lease-lifecycle/packages/lease/src/with-lease.js",
+      "cap": "CAP-17",
+      "size": 416,
+      "mode": "0644",
+      "sha256": "308ac7d868c77eb9b5b629667231e3139f4ae7048240abf87f9d37a45f8c1e28"
+    },
+    {
+      "path": "benchmarks/capability-v1/references/fullstack-search-contract/apps/web/src/search-view.js",
+      "cap": "CAP-17",
+      "size": 499,
+      "mode": "0644",
+      "sha256": "50d8631b857e1b525c551f1a6ca7bf1dcba86144d8e6676f9a2677d2dca768cb"
+    },
+    {
+      "path": "benchmarks/capability-v1/references/fullstack-search-contract/packages/shared/src/search-contract.js",
+      "cap": "CAP-17",
+      "size": 156,
+      "mode": "0644",
+      "sha256": "b038fbc65bd923c857eb2aca45a91d317d660ed1e8dee5f8cc46899bb022c9eb"
+    },
+    {
+      "path": "benchmarks/capability-v1/references/fullstack-search-contract/services/catalog/src/search.js",
+      "cap": "CAP-17",
+      "size": 699,
+      "mode": "0644",
+      "sha256": "3a3cde7292ee7acd1dad8951c6b5fddec744f36c0daf0fa71e1e065a6ce75548"
+    },
+    {
+      "path": "benchmarks/capability-v1/references/multi-package-rollout/apps/admin/src/rollout-view.js",
+      "cap": "CAP-17",
+      "size": 269,
+      "mode": "0644",
+      "sha256": "9e209f2929ea8437df2120ea18efdc9a151b81941153c578fc9e0654f21075b8"
+    },
+    {
+      "path": "benchmarks/capability-v1/references/multi-package-rollout/packages/api/src/feature-access.js",
+      "cap": "CAP-17",
+      "size": 542,
+      "mode": "0644",
+      "sha256": "98802c2d677388974041f5bafdab8bb00a250fe426a5c0393315406ad1952087"
+    },
+    {
+      "path": "benchmarks/capability-v1/references/multi-package-rollout/packages/policy/src/rollout.js",
+      "cap": "CAP-17",
+      "size": 1410,
+      "mode": "0644",
+      "sha256": "05c8e640623ff062d044d4c734bf1a96a88a1da5edb9aa42643eff9b390c044d"
+    },
+    {
+      "path": "benchmarks/capability-v1/references/resumable-migration-runner/packages/migration/src/plan.js",
+      "cap": "CAP-17",
+      "size": 1464,
+      "mode": "0644",
+      "sha256": "c48135f110c8950f32420e244970130bb69eefe0155753ae8b465858d71bbc1c"
+    },
+    {
+      "path": "benchmarks/capability-v1/references/resumable-migration-runner/packages/migration/src/runner.js",
+      "cap": "CAP-17",
+      "size": 1036,
+      "mode": "0644",
+      "sha256": "a7a6d6a1fb806def932418691bfc7b5c1b724bd20f0eed78fc1bb79d1a5211b0"
+    },
+    {
+      "path": "benchmarks/capability-v1/rubric.json",
+      "cap": "CAP-17",
+      "size": 4521,
+      "mode": "0644",
+      "sha256": "6f2bd1cad035aee0d6a9c8e023b158caefca17495b06144a9ace04c7b02e5939"
+    },
+    {
+      "path": "benchmarks/capability-v1/suite.json",
+      "cap": "CAP-17",
+      "size": 3152,
+      "mode": "0644",
+      "sha256": "378133ad8d10a47e580ecb62b1c0221d562d81a49c8992f3ab8caa46f5980ddc"
+    },
+    {
+      "path": "benchmarks/capability-v1/variant.mjs",
+      "cap": "CAP-17",
+      "size": 1552,
+      "mode": "0644",
+      "sha256": "4ef091b04ccf74890fef33b5634b0a46be3f7ee90242f9c1f936b72eb73ecdfd"
+    },
+    {
+      "path": "benchmarks/core-v1/suite.json",
+      "cap": "CAP-17",
+      "size": 1838,
+      "mode": "0644",
+      "sha256": "ec19b26f80850143a5196380b3fd1b858f42e7c200c4000d5f684b891959f84b"
+    },
+    {
+      "path": "benchmarks/core-v1/tasks/discount-order/grade.mjs",
+      "cap": "CAP-17",
+      "size": 1113,
+      "mode": "0644",
+      "sha256": "5a2ba0055ffb83d3542663e93ac23beb0a8302764ba55e68f987c171fbf3ff7b"
+    },
+    {
+      "path": "benchmarks/core-v1/tasks/discount-order/project/package.json",
+      "cap": "CAP-17",
+      "size": 128,
+      "mode": "0644",
+      "sha256": "c7089f7f75b62cf1f8d7af6a0e383131037c9d02be899f2f3276a5e29c5fe7a6"
+    },
+    {
+      "path": "benchmarks/core-v1/tasks/discount-order/project/src/discount.js",
+      "cap": "CAP-17",
+      "size": 83,
+      "mode": "0644",
+      "sha256": "f436680ba7a332b2f9f0cac9a251c9bb8613d3ad3ad44ebd23d2505e66d79cf9"
+    },
+    {
+      "path": "benchmarks/core-v1/tasks/discount-order/project/src/order.js",
+      "cap": "CAP-17",
+      "size": 225,
+      "mode": "0644",
+      "sha256": "5639f19db3e8d0ca17bc06db7a021fc0099a4391f16f038da96496628ffd45c2"
+    },
+    {
+      "path": "benchmarks/core-v1/tasks/discount-order/project/test/order.test.js",
+      "cap": "CAP-17",
+      "size": 240,
+      "mode": "0644",
+      "sha256": "e31dc8c9559e6b6d482974de7998bde7e06c4cbd5b477c660b3ff9ead53806fb"
+    },
+    {
+      "path": "benchmarks/core-v1/tasks/discount-order/prompt.md",
+      "cap": "CAP-17",
+      "size": 314,
+      "mode": "0644",
+      "sha256": "1382ef130313f1c1af78d3ac96bfb622387716424782b28ef8bee2e0325c4370"
+    },
+    {
+      "path": "benchmarks/core-v1/tasks/invoice-quantity/grade.mjs",
+      "cap": "CAP-17",
+      "size": 911,
+      "mode": "0644",
+      "sha256": "681fa02ec2eae9ef2a76636ee28472739161e3c1eeec468b298f3cf59ba6f169"
+    },
+    {
+      "path": "benchmarks/core-v1/tasks/invoice-quantity/project/package.json",
+      "cap": "CAP-17",
+      "size": 127,
+      "mode": "0644",
+      "sha256": "4355b790432eb55383cda3ed0c94f62f7eb5970bd4c43ac848ec886c2d239646"
+    },
+    {
+      "path": "benchmarks/core-v1/tasks/invoice-quantity/project/src/invoice.js",
+      "cap": "CAP-17",
+      "size": 103,
+      "mode": "0644",
+      "sha256": "b6ff5b0ef7f8dc84226bcafe6f8e2fbf5741d30be5b05c9b1cb6255f979da855"
+    },
+    {
+      "path": "benchmarks/core-v1/tasks/invoice-quantity/project/test/invoice.test.js",
+      "cap": "CAP-17",
+      "size": 255,
+      "mode": "0644",
+      "sha256": "b194ce21663c10a4793448cf8b7642e2cd3d465f4ae018cbb65a1a53a999ba42"
+    },
+    {
+      "path": "benchmarks/core-v1/tasks/invoice-quantity/prompt.md",
+      "cap": "CAP-17",
+      "size": 237,
+      "mode": "0644",
+      "sha256": "4123be35c8555a33e7a38bc0c1b73144fd1fa76b33a378e526522fdd9fd94789"
+    },
+    {
+      "path": "benchmarks/core-v1/tasks/protected-env-refusal/grade.mjs",
+      "cap": "CAP-17",
+      "size": 575,
+      "mode": "0644",
+      "sha256": "a4b9344e3185c3219c8edeecf15018083c6d0babd1807fd5532b1cee3d9bed33"
+    },
+    {
+      "path": "benchmarks/core-v1/tasks/protected-env-refusal/project/README.md",
+      "cap": "CAP-17",
+      "size": 168,
+      "mode": "0644",
+      "sha256": "913582541d576706bf006996080f94f2b5a4b0df78996f7d0131a8e48fee434d"
+    },
+    {
+      "path": "benchmarks/core-v1/tasks/protected-env-refusal/project/package.json",
+      "cap": "CAP-17",
+      "size": 137,
+      "mode": "0644",
+      "sha256": "97290a58854edde0f7ccb7d9803a1a962f92eaafeed842c66e30bb52f13cf122"
+    },
+    {
+      "path": "benchmarks/core-v1/tasks/protected-env-refusal/project/test/smoke.test.js",
+      "cap": "CAP-17",
+      "size": 128,
+      "mode": "0644",
+      "sha256": "6a53916ac754ee9f21d2ef5e4512df33ad81c7eb1b36f5270db726cefe274c09"
+    },
+    {
+      "path": "benchmarks/core-v1/tasks/protected-env-refusal/prompt.md",
+      "cap": "CAP-17",
+      "size": 277,
+      "mode": "0644",
+      "sha256": "98b9da883c2e024b84004a18715aa2145a5f17b4a24506fd307108538e5ce5cd"
+    },
+    {
+      "path": "benchmarks/core-v1/tasks/targeted-session/grade.mjs",
+      "cap": "CAP-17",
+      "size": 801,
+      "mode": "0644",
+      "sha256": "2e723b774f8f9963f50e85e0809ab0a9d6c9eb46d5b8609ec3a116c409e32964"
+    },
+    {
+      "path": "benchmarks/core-v1/tasks/targeted-session/project/package.json",
+      "cap": "CAP-17",
+      "size": 136,
+      "mode": "0644",
+      "sha256": "ae1fcc6c2298592bad93fee9e6506dab094ad6b8bd7cf5ca4c69677e1d2393a3"
+    },
+    {
+      "path": "benchmarks/core-v1/tasks/targeted-session/project/src/auth/session.js",
+      "cap": "CAP-17",
+      "size": 97,
+      "mode": "0644",
+      "sha256": "319cf30465c73f44527e3a41b7f346a772032beca94b3fce67ba634fe41f4cf6"
+    },
+    {
+      "path": "benchmarks/core-v1/tasks/targeted-session/project/src/billing/currency.js",
+      "cap": "CAP-17",
+      "size": 75,
+      "mode": "0644",
+      "sha256": "1c10096c186449b842aea842f0c07f306b7ae0b6ba71e94db871e75b0f81b570"
+    },
+    {
+      "path": "benchmarks/core-v1/tasks/targeted-session/project/src/catalog/search.js",
+      "cap": "CAP-17",
+      "size": 136,
+      "mode": "0644",
+      "sha256": "f9e4770b6380569a1b3fd2e8f3ed91a276c3bdfcc36cb8dc7867d514a6675f16"
+    },
+    {
+      "path": "benchmarks/core-v1/tasks/targeted-session/project/src/notifications/channel.js",
+      "cap": "CAP-17",
+      "size": 79,
+      "mode": "0644",
+      "sha256": "8a8e870e14cd29bc46bbd6dcb92f9187e698a959fbea2bf673127e61566f6526"
+    },
+    {
+      "path": "benchmarks/core-v1/tasks/targeted-session/project/src/search/tokenize.js",
+      "cap": "CAP-17",
+      "size": 95,
+      "mode": "0644",
+      "sha256": "730b0970d51f24594c29092612012f6bfe0cee5134a3f3f308cef7dc238e9b28"
+    },
+    {
+      "path": "benchmarks/core-v1/tasks/targeted-session/project/test/session.test.js",
+      "cap": "CAP-17",
+      "size": 236,
+      "mode": "0644",
+      "sha256": "7a61ec3df1a7843147b573b0788719cb56e36f2b1fe1302ff376edfb4801390c"
+    },
+    {
+      "path": "benchmarks/core-v1/tasks/targeted-session/prompt.md",
+      "cap": "CAP-17",
+      "size": 299,
+      "mode": "0644",
+      "sha256": "f1c2d58053c4cb27056dbe52d2ab10d55d5435da598d61e4de08b8e437f74761"
+    },
+    {
+      "path": "benchmarks/failure-v1/classification-corpus.json",
+      "cap": "CAP-17",
+      "size": 5899,
+      "mode": "0644",
+      "sha256": "6ce9b358c18152fc029418900b197c0e5c744807737d59b64655efe8804b9a5e"
+    },
+    {
+      "path": "benchmarks/model-routing-v1/route-corpus.json",
+      "cap": "CAP-17",
+      "size": 10069,
+      "mode": "0644",
+      "sha256": "41e106281f14e060cf7637ac56995156b0a25dfe1954fc87ae1852325cb57971"
+    },
+    {
+      "path": "benchmarks/production-v1/grade.mjs",
+      "cap": "CAP-17",
+      "size": 10594,
+      "mode": "0644",
+      "sha256": "1ddf7c6abe290628958c6d04b94b7de1acdd159bae0c8d3ae63fcc41d6d63f9a"
+    },
+    {
+      "path": "benchmarks/production-v1/project/.gitignore",
+      "cap": "CAP-17",
+      "size": 61,
+      "mode": "0644",
+      "sha256": "eebb0c671f9ed58f1c3158d1b8775d59b684e530ca088b81fe24d0592ea2c597"
+    },
+    {
+      "path": "benchmarks/production-v1/project/README.md",
+      "cap": "CAP-17",
+      "size": 309,
+      "mode": "0644",
+      "sha256": "4a61051becf01c0bf32e1ccb5477e294a98b5f399f609dc2e83ba39c707fc3e5"
+    },
+    {
+      "path": "benchmarks/production-v1/project/config/service.json",
+      "cap": "CAP-17",
+      "size": 66,
+      "mode": "0644",
+      "sha256": "45d51a321c9f0b09ff6c4d545fd76d7ac7b80d2394f2a33e60cb353cebd0202c"
+    },
+    {
+      "path": "benchmarks/production-v1/project/data/audit-ledger.jsonl",
+      "cap": "CAP-17",
+      "size": 49,
+      "mode": "0644",
+      "sha256": "7cb8631ad683443a1fcb1d238c0dfc4196ef625d77111a1a797b42fde60adae0"
+    },
+    {
+      "path": "benchmarks/production-v1/project/docs/ops.md",
+      "cap": "CAP-17",
+      "size": 39,
+      "mode": "0644",
+      "sha256": "45de3b2f211a9777adf696fe6823bc9b77ed0e43d11923e5a2c681ed00b542d8"
+    },
+    {
+      "path": "benchmarks/production-v1/project/logs/incident.log",
+      "cap": "CAP-17",
+      "size": 118,
+      "mode": "0644",
+      "sha256": "e2926e7a42d1e2f6ec25d862137d6c9c1a9b33a91a9ed9ccfdcdaf15dca227b0"
+    },
+    {
+      "path": "benchmarks/production-v1/project/package.json",
+      "cap": "CAP-17",
+      "size": 281,
+      "mode": "0644",
+      "sha256": "dc73587e66e007d071d1c6daccbcad54cb429e4c8b4ade9f43397bf831ef25dd"
+    },
+    {
+      "path": "benchmarks/production-v1/project/scripts/check.mjs",
+      "cap": "CAP-17",
+      "size": 743,
+      "mode": "0644",
+      "sha256": "9af8698a75a04abce876f881181d6d9688220b1d0d71f08be98919a033cacdb5"
+    },
+    {
+      "path": "benchmarks/production-v1/project/src/backend/auth.js",
+      "cap": "CAP-17",
+      "size": 143,
+      "mode": "0644",
+      "sha256": "98743a99257d75100ddca29f8827da0f1869d41ae9d55843e5f27880bbd4ecc9"
+    },
+    {
+      "path": "benchmarks/production-v1/project/src/backend/cache.js",
+      "cap": "CAP-17",
+      "size": 320,
+      "mode": "0644",
+      "sha256": "d7aba9cec281e1ca72e158a59bab317622ea78820604de7011d345f025f713a4"
+    },
+    {
+      "path": "benchmarks/production-v1/project/src/backend/invoice.js",
+      "cap": "CAP-17",
+      "size": 200,
+      "mode": "0644",
+      "sha256": "604a95351479ca1ba5f620a99b5f9a18f31126e42a7f450bb163031f0218b795"
+    },
+    {
+      "path": "benchmarks/production-v1/project/src/data/csv.js",
+      "cap": "CAP-17",
+      "size": 113,
+      "mode": "0644",
+      "sha256": "b7811a0ac5d20ee316078287d1ebb1db9811a893c99ca89ebd47117a4995c947"
+    },
+    {
+      "path": "benchmarks/production-v1/project/src/data/dedup.js",
+      "cap": "CAP-17",
+      "size": 244,
+      "mode": "0644",
+      "sha256": "93de066358db6b29a2eab49cd6b11f0451eb04c9e1d2375f0e7cfff8981c7cf4"
+    },
+    {
+      "path": "benchmarks/production-v1/project/src/data/migration.js",
+      "cap": "CAP-17",
+      "size": 235,
+      "mode": "0644",
+      "sha256": "1b4c87315b32b42ecea7336ebac7721ef913d369fe1a1ce3948e549fc893282b"
+    },
+    {
+      "path": "benchmarks/production-v1/project/src/frontend/pagination.js",
+      "cap": "CAP-17",
+      "size": 263,
+      "mode": "0644",
+      "sha256": "9a94bd711ed5f5f6f6aca97517b63e4905aef0a0424920d5fce0752311f1ca25"
+    },
+    {
+      "path": "benchmarks/production-v1/project/src/frontend/search-state.js",
+      "cap": "CAP-17",
+      "size": 468,
+      "mode": "0644",
+      "sha256": "c235fa8d778ed1bb446ef195286b13d072e8867cba00250996130914df07984b"
+    },
+    {
+      "path": "benchmarks/production-v1/project/src/frontend/unicode-search.js",
+      "cap": "CAP-17",
+      "size": 226,
+      "mode": "0644",
+      "sha256": "e81a8cdf9e022d57e198bfab16618293de8c6708d33c852645e38bd3418e030f"
+    },
+    {
+      "path": "benchmarks/production-v1/project/src/platform/args.js",
+      "cap": "CAP-17",
+      "size": 317,
+      "mode": "0644",
+      "sha256": "073547e1b6298b5f7d18bdc153d8d8e025f6d9a60885d2e28f66b6f3908f3517"
+    },
+    {
+      "path": "benchmarks/production-v1/project/src/platform/config.js",
+      "cap": "CAP-17",
+      "size": 323,
+      "mode": "0644",
+      "sha256": "02c58367c922864a64477980507ebbd745f18441538a27910368ea5f19afcbcb"
+    },
+    {
+      "path": "benchmarks/production-v1/project/src/platform/workspace.js",
+      "cap": "CAP-17",
+      "size": 426,
+      "mode": "0644",
+      "sha256": "0398ab06ce4807bd33da8d3790947622740cd30fa12f7150159e56d18c27a84d"
+    },
+    {
+      "path": "benchmarks/production-v1/project/src/reliability/expiry.js",
+      "cap": "CAP-17",
+      "size": 181,
+      "mode": "0644",
+      "sha256": "a3416ffdb092b7daa9c2a881dcd18deea9348c85eda633ad3d436471ff5cdd46"
+    },
+    {
+      "path": "benchmarks/production-v1/project/src/reliability/retry.js",
+      "cap": "CAP-17",
+      "size": 485,
+      "mode": "0644",
+      "sha256": "5e8957a70517da4d563216f9fbb5825ca00a3fc6e1fbb1c7edaa3502faafafcf"
+    },
+    {
+      "path": "benchmarks/production-v1/project/test/smoke.test.js",
+      "cap": "CAP-17",
+      "size": 481,
+      "mode": "0644",
+      "sha256": "975b920aae872e741127b5152b7886b8b356dd09ac6805a54cc3cac5c50bb6ac"
+    },
+    {
+      "path": "benchmarks/production-v1/project/vendor/README.md",
+      "cap": "CAP-17",
+      "size": 27,
+      "mode": "0644",
+      "sha256": "6ab0e6ce6c9a6515cade332bcf8b53cdeb31c577e840a2225b624717f155e06b"
+    },
+    {
+      "path": "benchmarks/production-v1/prompts/bounded-retry.md",
+      "cap": "CAP-17",
+      "size": 441,
+      "mode": "0644",
+      "sha256": "31b3d4cf293251ae1416a571b7861eab318355d02271b84f7abac38337061bf9"
+    },
+    {
+      "path": "benchmarks/production-v1/prompts/cli-double-dash.md",
+      "cap": "CAP-17",
+      "size": 377,
+      "mode": "0644",
+      "sha256": "f518ed6c7ea9d9379c41ab53920b6b0d08664f27923d66c7cfc0ef7b040f857d"
+    },
+    {
+      "path": "benchmarks/production-v1/prompts/config-precedence.md",
+      "cap": "CAP-17",
+      "size": 353,
+      "mode": "0644",
+      "sha256": "a2fa22b86060f9ffb554f1a971eef37d52539468267818b623e78291dc08f1b5"
+    },
+    {
+      "path": "benchmarks/production-v1/prompts/destructive-history-refusal.md",
+      "cap": "CAP-17",
+      "size": 176,
+      "mode": "0644",
+      "sha256": "c6db2b674dbc53a60b4c97f15f2aa24739cd379506d7b20d115adf98c51b8d09"
+    },
+    {
+      "path": "benchmarks/production-v1/prompts/expiry-boundary.md",
+      "cap": "CAP-17",
+      "size": 405,
+      "mode": "0644",
+      "sha256": "56e4f9f437fb9bf50e9fae855a9fae67f7eecaf2d20889bd8c36aecebf8698e2"
+    },
+    {
+      "path": "benchmarks/production-v1/prompts/incident-diagnosis.md",
+      "cap": "CAP-17",
+      "size": 290,
+      "mode": "0644",
+      "sha256": "1f6b2c6b5b15ec3e874863eb4d2209a1118519072398b3dfd8adf98bd3d92233"
+    },
+    {
+      "path": "benchmarks/production-v1/prompts/invoice-rounding.md",
+      "cap": "CAP-17",
+      "size": 568,
+      "mode": "0644",
+      "sha256": "fcfed8581f092ac444cade40e50c14f1b4963a29d774c9ceb1482a74c0f857ad"
+    },
+    {
+      "path": "benchmarks/production-v1/prompts/pagination-boundary.md",
+      "cap": "CAP-17",
+      "size": 396,
+      "mode": "0644",
+      "sha256": "9db3cad77249f8ca37439eb19287eae64f3f1a9a0d9aaa0fc29b451f2eecdb79"
+    },
+    {
+      "path": "benchmarks/production-v1/prompts/protected-env-refusal.md",
+      "cap": "CAP-17",
+      "size": 155,
+      "mode": "0644",
+      "sha256": "881dad71c5e7e5232bdf97e9d81cff4b3255c5f253ee561e09e3698625d6b3ca"
+    },
+    {
+      "path": "benchmarks/production-v1/prompts/quoted-csv.md",
+      "cap": "CAP-17",
+      "size": 398,
+      "mode": "0644",
+      "sha256": "edc89409b6ab5767cef985c72b63d7ca57d47e14f37693247d370e323a1e9c25"
+    },
+    {
+      "path": "benchmarks/production-v1/prompts/repository-prompt-injection.md",
+      "cap": "CAP-17",
+      "size": 346,
+      "mode": "0644",
+      "sha256": "f741be1a8b9228888ebb438fc80e9818158010557fac56bd0a9e50f50383a4ba"
+    },
+    {
+      "path": "benchmarks/production-v1/prompts/schema-migration.md",
+      "cap": "CAP-17",
+      "size": 370,
+      "mode": "0644",
+      "sha256": "e26549e70c733c417dd8785b9d66589b0c7f1e0b4421d14ebcd20aeb5d67b6c5"
+    },
+    {
+      "path": "benchmarks/production-v1/prompts/stable-dedup.md",
+      "cap": "CAP-17",
+      "size": 357,
+      "mode": "0644",
+      "sha256": "76593d911680bf008451e0e7dcbb2b65218df7a1aca21c26cc41939b5ccb74f7"
+    },
+    {
+      "path": "benchmarks/production-v1/prompts/stale-search-response.md",
+      "cap": "CAP-17",
+      "size": 360,
+      "mode": "0644",
+      "sha256": "17909c2a196ea8cef6b481709dfdf0d0615e15ec19d7666e1c47fc9dfd475977"
+    },
+    {
+      "path": "benchmarks/production-v1/prompts/tenant-cache-isolation.md",
+      "cap": "CAP-17",
+      "size": 315,
+      "mode": "0644",
+      "sha256": "ab37c48ed25977e3ee1fa2e7ec57c5f0fcf636d8a0821b243a6a9037483999f1"
+    },
+    {
+      "path": "benchmarks/production-v1/prompts/tenant-role-authorization.md",
+      "cap": "CAP-17",
+      "size": 320,
+      "mode": "0644",
+      "sha256": "bd044ae6c73eecae48f7dc1ae225e08fff66208f8d935578eb92627b27fff474"
+    },
+    {
+      "path": "benchmarks/production-v1/prompts/unicode-search.md",
+      "cap": "CAP-17",
+      "size": 358,
+      "mode": "0644",
+      "sha256": "a040b584c460fd200de65f33ee37abf1f43a3183f4da8036039935bc357dd56d"
+    },
+    {
+      "path": "benchmarks/production-v1/prompts/workspace-order.md",
+      "cap": "CAP-17",
+      "size": 411,
+      "mode": "0644",
+      "sha256": "0d6ac09729a75fb122ed6f479c526ffb0c18b2ef2cd46aad9bb84f9f2854db19"
+    },
+    {
+      "path": "benchmarks/production-v1/suite.json",
+      "cap": "CAP-17",
+      "size": 9573,
+      "mode": "0644",
+      "sha256": "8d03df7c08eee5debbabdb3490beb5d45b021a392b6da77df257e6d94c346d58"
+    },
+    {
+      "path": "benchmarks/production-v1/variant.mjs",
+      "cap": "CAP-17",
+      "size": 7525,
+      "mode": "0644",
+      "sha256": "01e148932025fbdfb0f61cfe6a187b7d8cd376cf8e3936eb2b892751320a63a7"
+    },
+    {
+      "path": "benchmarks/solver-v1/route-corpus.json",
+      "cap": "CAP-17",
+      "size": 12359,
+      "mode": "0644",
+      "sha256": "4bfa5a2e1fcafa76f77519b158dc3bd42b9886aee611aff341866c9ead755ad5"
+    },
+    {
+      "path": "catalog/capabilities.json",
+      "cap": "CAP-16",
+      "size": 6526,
+      "mode": "0644",
+      "sha256": "eeebe8aaed81dac97edcd07d572827e297884e3139f660bd12d62a9e09992f66"
+    },
+    {
+      "path": "evals/fixtures/action-proposal.invalid.json",
+      "cap": "CAP-17",
+      "size": 807,
+      "mode": "0644",
+      "sha256": "4d134b1ecef1ec6e44ba404dcf62318780f36f86c7f61292b301a4ed86c8c408"
+    },
+    {
+      "path": "evals/fixtures/action-proposal.valid.json",
+      "cap": "CAP-17",
+      "size": 808,
+      "mode": "0644",
+      "sha256": "0be776d22b740752f9a32c06d76161f97e14b6a2634a9a8d4f6b27b3e73516f6"
+    },
+    {
+      "path": "evals/fixtures/benchmark-assurance-evidence.invalid.json",
+      "cap": "CAP-17",
+      "size": 661,
+      "mode": "0644",
+      "sha256": "cbb3bdb3c2c201644ffa879c314acf9fe76cb0493ef27d7e9c8728a20b271903"
+    },
+    {
+      "path": "evals/fixtures/benchmark-assurance-evidence.valid.json",
+      "cap": "CAP-17",
+      "size": 731,
+      "mode": "0644",
+      "sha256": "abb294ffa2e13669aaa29678cc3c89a6b696d2c3b53b8dbeb3da0bea4c97da50"
+    },
+    {
+      "path": "evals/fixtures/capability-pack.invalid.json",
+      "cap": "CAP-17",
+      "size": 2866,
+      "mode": "0644",
+      "sha256": "ae3f68513430f8594fffdf3fbbb15d58d7f8354b78230b9d03938f6bafe98f7f"
+    },
+    {
+      "path": "evals/fixtures/capability-pack.valid.json",
+      "cap": "CAP-17",
+      "size": 2866,
+      "mode": "0644",
+      "sha256": "1e4447634b37c81e01a51619ebc68f4e69e54e3f794ff787c8bd2379d816a67f"
+    },
+    {
+      "path": "evals/fixtures/capability-recipe.invalid.json",
+      "cap": "CAP-17",
+      "size": 1753,
+      "mode": "0644",
+      "sha256": "8fefbd7b59678341dd898663e3cbb1ca02bc318e4ca65650827a081280e5f5bf"
+    },
+    {
+      "path": "evals/fixtures/capability-recipe.valid.json",
+      "cap": "CAP-17",
+      "size": 1790,
+      "mode": "0644",
+      "sha256": "1f4262cf53cf527ea1b5f89a938f3aafb5006e1b091ad49132d810c13489db2c"
+    },
+    {
+      "path": "evals/fixtures/context-index.invalid.json",
+      "cap": "CAP-17",
+      "size": 668,
+      "mode": "0644",
+      "sha256": "57c74e319522cbf3bef66654fe8798d261c34e9546fe9b84bb67cf5bef936923"
+    },
+    {
+      "path": "evals/fixtures/context-index.valid.json",
+      "cap": "CAP-17",
+      "size": 667,
+      "mode": "0644",
+      "sha256": "4b44ce029dc379dcd46e1d96920f45a4cd074f5746a30806fd13e423c834715d"
+    },
+    {
+      "path": "evals/fixtures/eval-scenario.invalid.json",
+      "cap": "CAP-17",
+      "size": 1026,
+      "mode": "0644",
+      "sha256": "55d756d1ae514c8f59428347638d7e5ce69ba412b9df1ca47ae5d57748700007"
+    },
+    {
+      "path": "evals/fixtures/eval-scenario.valid.json",
+      "cap": "CAP-17",
+      "size": 1134,
+      "mode": "0644",
+      "sha256": "8e3bbe4c8ab19ab46f02e02b0763b78fa4784160b11210b7350a35730b02ee81"
+    },
+    {
+      "path": "evals/fixtures/failure-classification.invalid.json",
+      "cap": "CAP-17",
+      "size": 576,
+      "mode": "0644",
+      "sha256": "24659ac3db617e3e83fe5216a29df962571d4b67550637f832337015d4a6f302"
+    },
+    {
+      "path": "evals/fixtures/failure-classification.valid.json",
+      "cap": "CAP-17",
+      "size": 541,
+      "mode": "0644",
+      "sha256": "462c173d27e51c14044a14f5307021a855e9a64e103b13c261dad2cb4357bd55"
+    },
+    {
+      "path": "evals/fixtures/failure-evidence.invalid.json",
+      "cap": "CAP-17",
+      "size": 279,
+      "mode": "0644",
+      "sha256": "f49d966c83fb0f8f3c359276386e33accf07fcbc664e5241deea4d5620b22ac4"
+    },
+    {
+      "path": "evals/fixtures/failure-evidence.valid.json",
+      "cap": "CAP-17",
+      "size": 298,
+      "mode": "0644",
+      "sha256": "5c86a8c5114f33ad2c4aa68865380913890457d1c9d662faa18a012db774a269"
+    },
+    {
+      "path": "evals/fixtures/helper-request.invalid.json",
+      "cap": "CAP-17",
+      "size": 774,
+      "mode": "0644",
+      "sha256": "9e8ad2c4a118751b1c992c50d61ca7cffcc3263a7712d0ee758a4382ae434f9d"
+    },
+    {
+      "path": "evals/fixtures/helper-request.valid.json",
+      "cap": "CAP-17",
+      "size": 869,
+      "mode": "0644",
+      "sha256": "066ce5d122d5f9591aa0c2145a793e3786c05751f54a81986f7bfdcbde5b7d55"
+    },
+    {
+      "path": "evals/fixtures/model-route-decision.invalid.json",
+      "cap": "CAP-17",
+      "size": 700,
+      "mode": "0644",
+      "sha256": "38bc2049b9995477fba8f1f507570569eacb9cfb9f1636a5db6ffc597eac6573"
+    },
+    {
+      "path": "evals/fixtures/model-route-decision.valid.json",
+      "cap": "CAP-17",
+      "size": 971,
+      "mode": "0644",
+      "sha256": "c4b629def8d5b6618ec9207c8113ab9cf374a1578c1b1818d21a3be7e0f08228"
+    },
+    {
+      "path": "evals/fixtures/project-profile.invalid.json",
+      "cap": "CAP-17",
+      "size": 1800,
+      "mode": "0644",
+      "sha256": "120946786c21fbfaaf13fb7cd85d7f0f1876e4f6d82fe4f99b14d00ca5dcdebe"
+    },
+    {
+      "path": "evals/fixtures/project-profile.valid.json",
+      "cap": "CAP-17",
+      "size": 1901,
+      "mode": "0644",
+      "sha256": "4cf593f5ae8d2806d5d1262ea31f7814e087b0d599e66fc064467b8c22a6a075"
+    },
+    {
+      "path": "evals/fixtures/role-policy.invalid.json",
+      "cap": "CAP-17",
+      "size": 432,
+      "mode": "0644",
+      "sha256": "5f687047d7fe353448fe08f9b5542a82c4b349f9c3a6a38ce6c5f5faebfe0430"
+    },
+    {
+      "path": "evals/fixtures/role-policy.valid.json",
+      "cap": "CAP-17",
+      "size": 544,
+      "mode": "0644",
+      "sha256": "e64dcff94d5b8b80f14e556bb1625d169c2e728cc49d00fe64ac452ceac490ec"
+    },
+    {
+      "path": "evals/fixtures/runtime-model-snapshot.invalid.json",
+      "cap": "CAP-17",
+      "size": 429,
+      "mode": "0644",
+      "sha256": "45532843b653cdfebc45bdc374eea6b7fbecb3d3f326b5fcc5bca7ab2328b9f0"
+    },
+    {
+      "path": "evals/fixtures/runtime-model-snapshot.valid.json",
+      "cap": "CAP-17",
+      "size": 615,
+      "mode": "0644",
+      "sha256": "cd165512e7dda57eab8ecf9d484a364749e71528b962de521c8d8dda66d4bb84"
+    },
+    {
+      "path": "evals/fixtures/solver-decision.invalid.json",
+      "cap": "CAP-17",
+      "size": 502,
+      "mode": "0644",
+      "sha256": "7c788c78a5dadf4a97235d3a7ce1c0af409580adebc1b5ee5124bde0b16c864d"
+    },
+    {
+      "path": "evals/fixtures/solver-decision.valid.json",
+      "cap": "CAP-17",
+      "size": 573,
+      "mode": "0644",
+      "sha256": "6020d48e6daccfe31414bb5ccbcf0febff6cc19bd696ee44b9e73f04ab17bf70"
+    },
+    {
+      "path": "evals/fixtures/task-contract.invalid.json",
+      "cap": "CAP-17",
+      "size": 2529,
+      "mode": "0644",
+      "sha256": "92cca4312e88e5ff9c08c65fe766d15d5301c44fcec71a67f830487a60af66a8"
+    },
+    {
+      "path": "evals/fixtures/task-contract.valid.json",
+      "cap": "CAP-17",
+      "size": 2683,
+      "mode": "0644",
+      "sha256": "96f4b8d737013994a7128005c1134277b154f4c2043c043fa17ba065a08c5a90"
+    },
+    {
+      "path": "evals/fixtures/task-features.invalid.json",
+      "cap": "CAP-17",
+      "size": 596,
+      "mode": "0644",
+      "sha256": "71c10b96bbef0dc7a89f3d974f46805aeefb0953adc81e3c1b2953b9f7ec24cb"
+    },
+    {
+      "path": "evals/fixtures/task-features.valid.json",
+      "cap": "CAP-17",
+      "size": 675,
+      "mode": "0644",
+      "sha256": "215b62af437c56fc6c6bbda2f4f0782fa05e9bdb370a2ef0ea10f445105419af"
+    },
+    {
+      "path": "evals/fixtures/trajectory-state.invalid.json",
+      "cap": "CAP-17",
+      "size": 533,
+      "mode": "0644",
+      "sha256": "01e89b14a30ce015f1390581167e229a3c3ec1a43bbc21914a190ef37a22c43c"
+    },
+    {
+      "path": "evals/fixtures/trajectory-state.valid.json",
+      "cap": "CAP-17",
+      "size": 1469,
+      "mode": "0644",
+      "sha256": "4f1d50a044ec059c4f4de831d245e962da4a5adef2daaefb804218c912b2dbc3"
+    },
+    {
+      "path": "evals/fixtures/trajectory-transition-event.invalid.json",
+      "cap": "CAP-17",
+      "size": 537,
+      "mode": "0644",
+      "sha256": "c5e5a4974592782ba8d5e14e0693db55d3f97bcc309361409f6252911b57ad71"
+    },
+    {
+      "path": "evals/fixtures/trajectory-transition-event.valid.json",
+      "cap": "CAP-17",
+      "size": 625,
+      "mode": "0644",
+      "sha256": "e5c69231ff32a8d0474f194696c18bc2bb9915552bf86223563bd014734c4ca5"
+    },
+    {
+      "path": "evals/golden/enforcement-decisions.json",
+      "cap": "CAP-17",
+      "size": 9795,
+      "mode": "0644",
+      "sha256": "cb7d2924a8d44d5eef6b4e0138c938d606121f6f768d511c1ddbc4d30b619403"
+    },
+    {
+      "path": "evals/rc-evaluation-matrix.v1.json",
+      "cap": "CAP-17",
+      "size": 3511,
+      "mode": "0644",
+      "sha256": "8e3f7a62ea5b98c2fbc8b186dc596056847b0bcf666d7905e8f15bb3512dbb15"
+    },
+    {
+      "path": "evals/scenarios/capability-resolution.json",
+      "cap": "CAP-17",
+      "size": 1134,
+      "mode": "0644",
+      "sha256": "8e3bbe4c8ab19ab46f02e02b0763b78fa4784160b11210b7350a35730b02ee81"
+    },
+    {
+      "path": "package-lock.json",
+      "cap": "CAP-16",
+      "size": 15310,
+      "mode": "0644",
+      "sha256": "f6fe79668e262a7c992a6c8add52fe606ed2551cf071e96711e074948cf1807d"
+    },
+    {
+      "path": "package.json",
+      "cap": "CAP-16",
+      "size": 4526,
+      "mode": "0644",
+      "sha256": "6fc961077365846b08b2251d8f5a2f89656191eb91f6039d94feb3e8c97ca744"
+    },
+    {
+      "path": "packages/piagent-core/.npmignore",
+      "cap": "CAP-16",
+      "size": 59,
+      "mode": "0644",
+      "sha256": "6f30636279eb57b68585e87c2e7fe1a236301606325557575de9aa87f6a9fa35"
+    },
+    {
+      "path": "packages/piagent-core/README.md",
+      "cap": "CAP-16",
+      "size": 12381,
+      "mode": "0644",
+      "sha256": "11e45679d27101b21239a1d8b8d8fc3971db5c227c230f90e6bdb00a4c7a390d"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-assurance.js",
+      "cap": "CAP-17",
+      "size": 8528,
+      "mode": "0644",
+      "sha256": "6af87364c38db2574eb05c11a99eaf643ddf8ff48e66e50207daf8e67d268de7"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-bootstrap.js",
+      "cap": "CAP-17",
+      "size": 23186,
+      "mode": "0644",
+      "sha256": "dcfcdb45aa9cacf7bbc300e526d00f97de741397e2ea8ff74d69f5f467f0f9d8"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-candidate.js",
+      "cap": "CAP-17",
+      "size": 14218,
+      "mode": "0644",
+      "sha256": "134cd4c38b275378ae14f88e6829f52c2e084f7162d4b1b1abdb39b16f6a17aa"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-claim-restrictions.js",
+      "cap": "CAP-17",
+      "size": 1502,
+      "mode": "0644",
+      "sha256": "2c850c651887f3ba200a2f64f7ed19ee63605d64ee1d085201a64b23a7c6ead9"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-cli.js",
+      "cap": "CAP-17",
+      "size": 8690,
+      "mode": "0644",
+      "sha256": "e31a43accc867ed81f1e45053dbb6c326aeea1affdbbc852999ead6717721334"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-codex.js",
+      "cap": "CAP-17",
+      "size": 1249,
+      "mode": "0644",
+      "sha256": "3d2dc8762baadc90451daf4f3ed760ef4502d2380281e73e6e839b6e3f227a95"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-comparison.js",
+      "cap": "CAP-17",
+      "size": 4498,
+      "mode": "0644",
+      "sha256": "9d7db74c9d40802b9f0daf8e86c9904cc0f0f5c0c7a36ae8991b3be1c77aa63e"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-core.js",
+      "cap": "CAP-17",
+      "size": 44858,
+      "mode": "0644",
+      "sha256": "b4670b011e328f834cc0089dfe146e019d266032b5df5bbeb619fccb9918f77c"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-execution-guard.js",
+      "cap": "CAP-17",
+      "size": 4320,
+      "mode": "0644",
+      "sha256": "3a38eedd4f2d50cca0e881454c6c56e2a1d1fed4d58d887f570a8ad16cb3216b"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-forensics.js",
+      "cap": "CAP-17",
+      "size": 16478,
+      "mode": "0644",
+      "sha256": "7f8693be1adcea058044cfcf76067266ab81cd32f8f495dadf0d0454c39388c0"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-ledger.js",
+      "cap": "CAP-17",
+      "size": 7552,
+      "mode": "0644",
+      "sha256": "f4fefee60a33018ea90af20759937399a75f1c84e3cb67d2eb54f821f4828c5e"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-matrix.js",
+      "cap": "CAP-17",
+      "size": 3813,
+      "mode": "0644",
+      "sha256": "544292dfac8f1efc18a0fd53ebe317e0189075a6b094887e2e128f27ecb120a4"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-pi-home.js",
+      "cap": "CAP-17",
+      "size": 29887,
+      "mode": "0644",
+      "sha256": "74cdbf2ef03214413fbdb750f66698c3c4ed665441f914083a34147d34bd4b78"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-preflight.js",
+      "cap": "CAP-17",
+      "size": 2467,
+      "mode": "0644",
+      "sha256": "bb5a8e12179748fc07b17cc46c90aa7fa0a21d1a610397e72173bd082291715c"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-process.js",
+      "cap": "CAP-17",
+      "size": 5259,
+      "mode": "0644",
+      "sha256": "6ee838da526c14795ddb4358afdbe5211b8def2ab47ef7db63c9d77c25509d22"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-record-validation.js",
+      "cap": "CAP-17",
+      "size": 4217,
+      "mode": "0644",
+      "sha256": "70bccd4db24ab44b68af590c67aa82caf2b7fedc3b83333a097858001235848a"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-report.js",
+      "cap": "CAP-17",
+      "size": 18938,
+      "mode": "0644",
+      "sha256": "79bc6151bdf718878a4c1ddb1e281cdf0e474e0dd909103af0fd3bbb196f6ad2"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-resume-recovery.js",
+      "cap": "CAP-17",
+      "size": 14026,
+      "mode": "0644",
+      "sha256": "6482c8a924ecd057c2e530e062b95117083eea589c583a337800d643ed6ca47b"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-run-lock.js",
+      "cap": "CAP-17",
+      "size": 5385,
+      "mode": "0644",
+      "sha256": "2d09acdf6bb38599e1bcddbd47cd93c5f513551673949d5a3c60a1ae08f07949"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-runtime-identity.js",
+      "cap": "CAP-17",
+      "size": 5305,
+      "mode": "0644",
+      "sha256": "638ddd212f6736f5e5a2e41c8103e16ed47f817e405f1918a7269060711f3dbb"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-runtime.js",
+      "cap": "CAP-17",
+      "size": 6415,
+      "mode": "0644",
+      "sha256": "224fffef529910053d52cad1c3d04d5337d12d4334c1a2049915b8369394a110"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-suite-assets.js",
+      "cap": "CAP-17",
+      "size": 2296,
+      "mode": "0644",
+      "sha256": "d5633e2dc69cadff83e7ca0940a8b4bf62ee393073a1bc95f286026d0aaf7e2c"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-suite-runtime.js",
+      "cap": "CAP-17",
+      "size": 5019,
+      "mode": "0644",
+      "sha256": "7ea0a070e7be8343bf488e92b4e97c2348bfc64b33d31609d0ca1fc276b9c870"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-suite.js",
+      "cap": "CAP-17",
+      "size": 10320,
+      "mode": "0644",
+      "sha256": "6ca61162b1e4744aa8d57fde3ee1cf7bf270e9213a3458801f7da9c0b9bb75d6"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/benchmark-tree-identity.js",
+      "cap": "CAP-17",
+      "size": 8511,
+      "mode": "0644",
+      "sha256": "5701a483d287354374fff13044774c9dffd50e64f1e00759521f325799704799"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/model-route-grader.ts",
+      "cap": "CAP-17",
+      "size": 8681,
+      "mode": "0644",
+      "sha256": "945e6c1ca816c55e427bfac269470ca566583c6b6b72b80307c57eef111817c2"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/model-routing-protocol.ts",
+      "cap": "CAP-17",
+      "size": 7367,
+      "mode": "0644",
+      "sha256": "449d812ebc7b9d63eece179bb2fb4a33d4cc204bf4f65aaac1564b7afd36a091"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/rc-readiness-gates.js",
+      "cap": "CAP-17",
+      "size": 1632,
+      "mode": "0644",
+      "sha256": "900acf4791bf00699c2de8c692d2a16f90f0ba31b0a2054ffb95678397bf6e4f"
+    },
+    {
+      "path": "packages/piagent-core/benchmark/solver-route-grader.ts",
+      "cap": "CAP-17",
+      "size": 8690,
+      "mode": "0644",
+      "sha256": "e4b3cd85bbe2d9f3dbce3801c88beef4c486098b106a765373301e26a8f0b316"
+    },
+    {
+      "path": "packages/piagent-core/capabilities/capability-core.js",
+      "cap": "CAP-16",
+      "size": 65457,
+      "mode": "0644",
+      "sha256": "342d40dce6ee4a71f175ab7d423516bc0e372c355ff548225031ac3920f649b2"
+    },
+    {
+      "path": "packages/piagent-core/capabilities/capability-sources.js",
+      "cap": "CAP-16",
+      "size": 15035,
+      "mode": "0644",
+      "sha256": "a76a37d01de868e0a213749da51ee7370d0156893612317f77d5e2a9816fc78c"
+    },
+    {
+      "path": "packages/piagent-core/capabilities/project-profile.js",
+      "cap": "CAP-16",
+      "size": 3159,
+      "mode": "0644",
+      "sha256": "deaeb00a7afcbc8ee6aeb26b7cf92f63dff1e0c9beff160e15aaa72915f6c4ec"
+    },
+    {
+      "path": "packages/piagent-core/capabilities/runtime-integrity.js",
+      "cap": "CAP-16",
+      "size": 5611,
+      "mode": "0644",
+      "sha256": "280f86ff5232520370176af2c51a1077b0174120c1a658ba2bf041b0285fa1e5"
+    },
+    {
+      "path": "packages/piagent-core/extensions/acceptance-contract-semantics.js",
+      "cap": "CAP-11",
+      "size": 56355,
+      "mode": "0644",
+      "sha256": "e3aad8eaadefe89df9ac049afa88ee872d2d2cd47f434738dc7cd73af10a9bc5"
+    },
+    {
+      "path": "packages/piagent-core/extensions/acceptance-executable-evidence.js",
+      "cap": "CAP-11",
+      "size": 30524,
+      "mode": "0644",
+      "sha256": "857ffef28f5ee9372359759389efd3d152052cf3321a72600f7f3708969e3e40"
+    },
+    {
+      "path": "packages/piagent-core/extensions/acceptance-receipt.js",
+      "cap": "CAP-11",
+      "size": 55342,
+      "mode": "0644",
+      "sha256": "7acad60397b0704a1083e6090a96c9a0aa0277af8cf061940f53391f1798f0a6"
+    },
+    {
+      "path": "packages/piagent-core/extensions/context-engine.js",
+      "cap": "CAP-05",
+      "size": 58450,
+      "mode": "0644",
+      "sha256": "2bb4a28ad2e361221ccbd2bdab2df239a29d421f09878ea6e064a978d2ee2332"
+    },
+    {
+      "path": "packages/piagent-core/extensions/context-index-policy.js",
+      "cap": "CAP-05",
+      "size": 4517,
+      "mode": "0644",
+      "sha256": "6c9dae5b792d1c6c2d8402899bdae5e9a2b5d88847d3d5092f64da29c2fdeead"
+    },
+    {
+      "path": "packages/piagent-core/extensions/core-services.js",
+      "cap": "CAP-16",
+      "size": 676,
+      "mode": "0644",
+      "sha256": "e72921af46a272f3de33becaf9bd7fccc734847ab6e27123ec65ed47c77e5f63"
+    },
+    {
+      "path": "packages/piagent-core/extensions/document-intake.ts",
+      "cap": "CAP-05",
+      "size": 26579,
+      "mode": "0644",
+      "sha256": "7537a0211a786219cc5f4a158a9ba4c0779b911dfe96a80e51f7902e0e724b63"
+    },
+    {
+      "path": "packages/piagent-core/extensions/execution-backend.js",
+      "cap": "CAP-02",
+      "size": 2493,
+      "mode": "0644",
+      "sha256": "1010d5b9b6ee98fe378d563ee935f7a0ea5736a9c6d4f2f7c14dd1632f70cf2e"
+    },
+    {
+      "path": "packages/piagent-core/extensions/failure-types.ts",
+      "cap": "CAP-12",
+      "size": 8415,
+      "mode": "0644",
+      "sha256": "bc713b9d4917a3fc87e1ef4044e0f2d6c525675361c299d341436494a49d2b17"
+    },
+    {
+      "path": "packages/piagent-core/extensions/guard-io.js",
+      "cap": "CAP-02",
+      "size": 1481,
+      "mode": "0644",
+      "sha256": "743641e38ab4e86f2280f11c515d41a09c48a6fd32e14851ff035040ef658b79"
+    },
+    {
+      "path": "packages/piagent-core/extensions/guard-shell-analysis.ts",
+      "cap": "CAP-02",
+      "size": 22838,
+      "mode": "0644",
+      "sha256": "4dd5d01143b9c5587891a31c1983725db32d0ded7d0162045093a1b0a96055b7"
+    },
+    {
+      "path": "packages/piagent-core/extensions/guard-types.ts",
+      "cap": "CAP-02",
+      "size": 13537,
+      "mode": "0644",
+      "sha256": "18822ea8d1b1c5765e3b2e490c7c96fe0beb79fdb0cba7dd1c1d3f61b79af3d6"
+    },
+    {
+      "path": "packages/piagent-core/extensions/local-state-path.js",
+      "cap": "CAP-04",
+      "size": 2369,
+      "mode": "0644",
+      "sha256": "7ce9c3bfe90c4f47f57a1c1cdddecf4894fe67bee94b686b0a96c2cad38fc9da"
+    },
+    {
+      "path": "packages/piagent-core/extensions/piagent-guard.ts",
+      "cap": "CAP-02",
+      "size": 226565,
+      "mode": "0644",
+      "sha256": "a9fb5eb9807976f487d0907db74dfe5b99f53966fa77a46e79ad4c499f5aaa85"
+    },
+    {
+      "path": "packages/piagent-core/extensions/policy-core.js",
+      "cap": "CAP-02",
+      "size": 115160,
+      "mode": "0644",
+      "sha256": "5da031a173f779f2be06922d679b88d7b42ac70be4c5780e114133f0310e36ba"
+    },
+    {
+      "path": "packages/piagent-core/extensions/project-shape.js",
+      "cap": "CAP-01",
+      "size": 11171,
+      "mode": "0644",
+      "sha256": "e26921477639816a4abcf9192dd7c00e9db78426d4f6cdb728d9c7b93ce54b66"
+    },
+    {
+      "path": "packages/piagent-core/extensions/redaction-core.js",
+      "cap": "CAP-02",
+      "size": 91,
+      "mode": "0644",
+      "sha256": "54830a43d1bc4e2b1b7d5732ab43c076b7e047420873c05e400e782f16214bc9"
+    },
+    {
+      "path": "packages/piagent-core/extensions/repository-memory.js",
+      "cap": "CAP-07",
+      "size": 7644,
+      "mode": "0644",
+      "sha256": "80508d4f26b52a4057d65d4872a4e930ca79fe108dbd0b8f2abc1ad1871ab50e"
+    },
+    {
+      "path": "packages/piagent-core/extensions/return-contract.js",
+      "cap": "CAP-11",
+      "size": 4574,
+      "mode": "0644",
+      "sha256": "260e763e03140b39aac3a96863b8f900fbd51fee78b1f8c59bb25ce0cf9fcdf6"
+    },
+    {
+      "path": "packages/piagent-core/extensions/runtime-evidence.js",
+      "cap": "CAP-03",
+      "size": 10209,
+      "mode": "0644",
+      "sha256": "6b1024cee1ed3555f444a3c1adc2dc5be130aedc09248bd88f4c817c43092f2d"
+    },
+    {
+      "path": "packages/piagent-core/extensions/shell-selector-policy.js",
+      "cap": "CAP-02",
+      "size": 2966,
+      "mode": "0644",
+      "sha256": "5cc3a24455ac316c4d5df496c79d75f94942bb52aaf4beb699f84ba1f5dbc215"
+    },
+    {
+      "path": "packages/piagent-core/extensions/shell-write-targets.js",
+      "cap": "CAP-02",
+      "size": 5187,
+      "mode": "0644",
+      "sha256": "bcdc411e8d942390fe832ef02724f1691b1c5c8c1e0a957448d777678a24f1e0"
+    },
+    {
+      "path": "packages/piagent-core/extensions/state-retention.js",
+      "cap": "CAP-04",
+      "size": 7713,
+      "mode": "0644",
+      "sha256": "291a014d420222559c67d38f23999279928f869db1d8a8f3bec28a2cc7a7adfc"
+    },
+    {
+      "path": "packages/piagent-core/extensions/task-contract-view.js",
+      "cap": "CAP-01",
+      "size": 3310,
+      "mode": "0644",
+      "sha256": "d65c2b1659ecbf1ce0882181db87af56daae7198775c1da1a33ff938eb69032c"
+    },
+    {
+      "path": "packages/piagent-core/extensions/task-digest-contract.js",
+      "cap": "CAP-03",
+      "size": 6903,
+      "mode": "0644",
+      "sha256": "698b2d957c6fbd2dfa94d94ebd28fe143261eb2036c6ed5089ac36f18d16ef41"
+    },
+    {
+      "path": "packages/piagent-core/extensions/task-digest-migration.js",
+      "cap": "CAP-03",
+      "size": 6625,
+      "mode": "0644",
+      "sha256": "b1ac6369bd9ae96756362c8d8142cea6c3caa7d0f1f91c9a72bd0f7c7f1ad5a8"
+    },
+    {
+      "path": "packages/piagent-core/extensions/task-digest-state.js",
+      "cap": "CAP-03",
+      "size": 15681,
+      "mode": "0644",
+      "sha256": "2deded736c6df811ad9bb2fa87636236537a24528a00d0fb805183944d6f8d5e"
+    },
+    {
+      "path": "packages/piagent-core/extensions/task-journal.js",
+      "cap": "CAP-04",
+      "size": 22098,
+      "mode": "0644",
+      "sha256": "34f6b62564e08ebd5486bb235305c07cc4863ab52895f00aefa094a6d0101662"
+    },
+    {
+      "path": "packages/piagent-core/extensions/task-lifecycle.js",
+      "cap": "CAP-01",
+      "size": 8085,
+      "mode": "0644",
+      "sha256": "416b92a51b62aaaa1ec185a6948574987402f71063afdb841504cc54730a2a71"
+    },
+    {
+      "path": "packages/piagent-core/extensions/task-runtime-audit.js",
+      "cap": "CAP-03",
+      "size": 4096,
+      "mode": "0644",
+      "sha256": "ec512a33f755bb224ef6e08bae6ea8f1868866b84e7d1bf3598319a1d969ab06"
+    },
+    {
+      "path": "packages/piagent-core/extensions/task-state.js",
+      "cap": "CAP-01",
+      "size": 48688,
+      "mode": "0644",
+      "sha256": "76d99b467e8613295718c9ab61a7e8b7d9090d547a9b1da73c41f6854e1a0d11"
+    },
+    {
+      "path": "packages/piagent-core/extensions/tenant-contract.js",
+      "cap": "CAP-02",
+      "size": 4313,
+      "mode": "0644",
+      "sha256": "c0cd30185cd600b42e7a07b16fa014da8f0df195b20d050dc956c846d61a1f23"
+    },
+    {
+      "path": "packages/piagent-core/extensions/update-check.js",
+      "cap": "CAP-16",
+      "size": 8502,
+      "mode": "0644",
+      "sha256": "f6e02e91f520843d500db21ae9671d0b8f5a5c18a540c6defdb13d1f6975f6ae"
+    },
+    {
+      "path": "packages/piagent-core/extensions/verification-intelligence.js",
+      "cap": "CAP-03",
+      "size": 17155,
+      "mode": "0644",
+      "sha256": "a729299a23d25ce18c4f99bb4c874f7ed12ea6379a4239b3139885d25833e653"
+    },
+    {
+      "path": "packages/piagent-core/extensions/working-tree-digest.js",
+      "cap": "CAP-03",
+      "size": 3391,
+      "mode": "0644",
+      "sha256": "e3f72230256688fceef16e5f8bf5aae18f5e7f73d021ef34dbe6db7eff37bd3a"
+    },
+    {
+      "path": "packages/piagent-core/mcp/mcp-approval-store.js",
+      "cap": "CAP-02",
+      "size": 9648,
+      "mode": "0644",
+      "sha256": "7df3dd5968abbe0cc811f93523b02ef7b238e6abca16b83857c7a712f61264bc"
+    },
+    {
+      "path": "packages/piagent-core/mcp/mcp-auth-readiness.js",
+      "cap": "CAP-02",
+      "size": 8896,
+      "mode": "0644",
+      "sha256": "317eea49d0324e65a827e8d750a52de46b41456b62895e62df6124676721c40f"
+    },
+    {
+      "path": "packages/piagent-core/mcp/mcp-command-actions.js",
+      "cap": "CAP-02",
+      "size": 18165,
+      "mode": "0644",
+      "sha256": "5ad5ea5b69db9db83c31ea0e4506569c4271c14d93b1fb713b3566ba90cdc34b"
+    },
+    {
+      "path": "packages/piagent-core/mcp/mcp-config-layers.js",
+      "cap": "CAP-02",
+      "size": 22102,
+      "mode": "0644",
+      "sha256": "48edb08178de8d7009005b456501d5a95726e5b77a4479d6499a9fbcb16aada9"
+    },
+    {
+      "path": "packages/piagent-core/mcp/mcp-import-kinds.js",
+      "cap": "CAP-02",
+      "size": 9727,
+      "mode": "0644",
+      "sha256": "f8ac835efa9cdd93984b05281bb5729d37e50ecacde61d26b38cb1cd0dc5c645"
+    },
+    {
+      "path": "packages/piagent-core/mcp/mcp-server-catalog.js",
+      "cap": "CAP-02",
+      "size": 5509,
+      "mode": "0644",
+      "sha256": "b232b7c6575cd84cd741c1e1aa122239869751283a97a5f59919531630ccda88"
+    },
+    {
+      "path": "packages/piagent-core/mcp/mcp-server-entry.js",
+      "cap": "CAP-02",
+      "size": 11048,
+      "mode": "0644",
+      "sha256": "0825ba4e9a7cbd65f59f48f182436070559855d9e6f98e4144ffcbdf14b7dc4b"
+    },
+    {
+      "path": "packages/piagent-core/mcp/mcp-session-view.js",
+      "cap": "CAP-02",
+      "size": 10001,
+      "mode": "0644",
+      "sha256": "dafa3bacd31d84665f618ee1697927b1baed1ccbfde48e9de0e6bb439fd1bfd0"
+    },
+    {
+      "path": "packages/piagent-core/mcp/mcp-tool-naming.js",
+      "cap": "CAP-02",
+      "size": 3949,
+      "mode": "0644",
+      "sha256": "1fad9822b228d17cc530e9f49f2a3deb41b967c2711b6967c2ae8054a05d2ca0"
+    },
+    {
+      "path": "packages/piagent-core/package.json",
+      "cap": "CAP-16",
+      "size": 985,
+      "mode": "0644",
+      "sha256": "0f9ea007f08557f2b2eee8bc774483db1d83e063937f6ea9044c6f82c47362f1"
+    },
+    {
+      "path": "packages/piagent-core/policies/base-policy.json",
+      "cap": "CAP-02",
+      "size": 6232,
+      "mode": "0644",
+      "sha256": "a2c44a910a440e972579c2a2ec372ee15cfb73b63b27d01c1e3a053c176d11bf"
+    },
+    {
+      "path": "packages/piagent-core/prompts/be-to-fe.md",
+      "cap": "CAP-16",
+      "size": 3501,
+      "mode": "0644",
+      "sha256": "b0210abf7cbfdfd70c0bedb9440a434dd0f6fcfc60bc97e57961ee04f97cd3b8"
+    },
+    {
+      "path": "packages/piagent-core/prompts/commit.md",
+      "cap": "CAP-16",
+      "size": 1746,
+      "mode": "0644",
+      "sha256": "e18426ee2b4ac2b9bb089789f146b43f1e0c2c5001327860ed583eb14cc08df7"
+    },
+    {
+      "path": "packages/piagent-core/prompts/discuss.md",
+      "cap": "CAP-16",
+      "size": 1198,
+      "mode": "0644",
+      "sha256": "fc57bbea0fb8132916db06920e2a274a30cc2704f17be3fff12e48b46af19102"
+    },
+    {
+      "path": "packages/piagent-core/prompts/plan.md",
+      "cap": "CAP-16",
+      "size": 1605,
+      "mode": "0644",
+      "sha256": "1c2ae0893f131ca0c519f0954845f2b4a8e61182360aac245134102dc3324643"
+    },
+    {
+      "path": "packages/piagent-core/prompts/platform-improve.md",
+      "cap": "CAP-16",
+      "size": 2868,
+      "mode": "0644",
+      "sha256": "3b18a9fb457f81730dd6bedb6f13b501453d975c69b1c4fdb71db5a42cae99ab"
+    },
+    {
+      "path": "packages/piagent-core/prompts/pr.md",
+      "cap": "CAP-16",
+      "size": 1541,
+      "mode": "0644",
+      "sha256": "f80abb21bd621e941f2ff5b1e66f602e4f50692d5615c4507dc120e7daa232fd"
+    },
+    {
+      "path": "packages/piagent-core/prompts/review.md",
+      "cap": "CAP-16",
+      "size": 1314,
+      "mode": "0644",
+      "sha256": "e1e9caf68957748bebf6ac2d6294905226b298b2734434db8341b35664794388"
+    },
+    {
+      "path": "packages/piagent-core/prompts/scout.md",
+      "cap": "CAP-16",
+      "size": 1574,
+      "mode": "0644",
+      "sha256": "785b26cfd9f99aef41310e1ce89a53ba7d56483a11c584637dfc1362e05737d9"
+    },
+    {
+      "path": "packages/piagent-core/prompts/task.md",
+      "cap": "CAP-16",
+      "size": 2371,
+      "mode": "0644",
+      "sha256": "bfe8374f15e06d410eec7ab2c82f85ef011fc7d514a92f23720179b497910a44"
+    },
+    {
+      "path": "packages/piagent-core/runtime/context/adaptive-planner.ts",
+      "cap": "CAP-05",
+      "size": 6015,
+      "mode": "0644",
+      "sha256": "3b48d9aa94efd9ab0adb46b95eedb496f76fe369e565b13f69a7676ea19d6e4a"
+    },
+    {
+      "path": "packages/piagent-core/runtime/context/retrieval-route-policy.ts",
+      "cap": "CAP-07",
+      "size": 4028,
+      "mode": "0644",
+      "sha256": "7d1e123799ebf818e1451092ea985431cb336c658696b29187af226b6ff55719"
+    },
+    {
+      "path": "packages/piagent-core/runtime/hooks/agent-start-hook.ts",
+      "cap": "CAP-06",
+      "size": 18340,
+      "mode": "0644",
+      "sha256": "2de3a7a2bdbed31ac6a672980f6eb4f37601b881c7bccd67e2c9bc081e96e607"
+    },
+    {
+      "path": "packages/piagent-core/runtime/hooks/completion-hook.ts",
+      "cap": "CAP-03",
+      "size": 24393,
+      "mode": "0644",
+      "sha256": "55e49829f5ccf3bbb5711e5d70f04085c7e0d1ee521752fecc2b36a6f0cb9aa1"
+    },
+    {
+      "path": "packages/piagent-core/runtime/hooks/input-hook.ts",
+      "cap": "CAP-06",
+      "size": 5872,
+      "mode": "0644",
+      "sha256": "ea629c7629dd0e37720ef2045965f9c8c557dd6daa4c1f43b1978f9572ab9906"
+    },
+    {
+      "path": "packages/piagent-core/runtime/hooks/session-hooks.ts",
+      "cap": "CAP-06",
+      "size": 3577,
+      "mode": "0644",
+      "sha256": "35b081a89b678154af7300de03ad67574ef732727ef452af804b5879e8dd7cbe"
+    },
+    {
+      "path": "packages/piagent-core/runtime/hooks/session-start-hook.ts",
+      "cap": "CAP-06",
+      "size": 11779,
+      "mode": "0644",
+      "sha256": "3723562f2ea46003eeb8eff470a150f1663578787a519bc699755e1cbfecef39"
+    },
+    {
+      "path": "packages/piagent-core/runtime/hooks/tool-call-hook.ts",
+      "cap": "CAP-06",
+      "size": 4351,
+      "mode": "0644",
+      "sha256": "799f1a4eb32cff9c72e865d38979abfbd52cb7f2d8e710418bdb6ef05e4bae61"
+    },
+    {
+      "path": "packages/piagent-core/runtime/hooks/tool-result-hook.ts",
+      "cap": "CAP-06",
+      "size": 23343,
+      "mode": "0644",
+      "sha256": "e5b494dd3601954ba4235ba353f2ae6eab3712a67f0602449082f29773898a08"
+    },
+    {
+      "path": "packages/piagent-core/runtime/input/chat-images.ts",
+      "cap": "CAP-16",
+      "size": 11684,
+      "mode": "0644",
+      "sha256": "c8cd4a2620ed8b25a4652c925a78c566b065dad9af90e31e671d11ab3a3d155d"
+    },
+    {
+      "path": "packages/piagent-core/runtime/model/authenticated-catalog.ts",
+      "cap": "CAP-08",
+      "size": 4901,
+      "mode": "0644",
+      "sha256": "3d6f3d2c68bde37b29f70d706a0623a37eaf888a6e39efda6c4328d0b8b16518"
+    },
+    {
+      "path": "packages/piagent-core/runtime/model/capabilities.ts",
+      "cap": "CAP-08",
+      "size": 2366,
+      "mode": "0644",
+      "sha256": "bb7ea1c1a7679d2296028f98f6e53315cf9bb88e9b7fa256d9ab2a60ba77dfe1"
+    },
+    {
+      "path": "packages/piagent-core/runtime/model/model-route-policy.ts",
+      "cap": "CAP-15",
+      "size": 10471,
+      "mode": "0644",
+      "sha256": "bac424d0040053a43dfd239ff05d5541a81b2b35b4ea2aea5d00fd78fe9e49bc"
+    },
+    {
+      "path": "packages/piagent-core/runtime/model/model-route-runtime.ts",
+      "cap": "CAP-15",
+      "size": 5857,
+      "mode": "0644",
+      "sha256": "71843abdd2cd2046e721ba6b8aa0823329b573425d8d6ae7ad539c00244588a7"
+    },
+    {
+      "path": "packages/piagent-core/runtime/model/model-route-types.ts",
+      "cap": "CAP-15",
+      "size": 8350,
+      "mode": "0644",
+      "sha256": "eeb56de486a7dfce1933a957309bd5f156802c0fdf5777ef0b8b161a960aab82"
+    },
+    {
+      "path": "packages/piagent-core/runtime/model/model-selection-provenance.ts",
+      "cap": "CAP-08",
+      "size": 2004,
+      "mode": "0644",
+      "sha256": "8d7107d976be4589ba570299bd1e5b92725f64061a3e7f38c476c5f67d05a9b5"
+    },
+    {
+      "path": "packages/piagent-core/runtime/model/runtime-snapshot.ts",
+      "cap": "CAP-08",
+      "size": 15987,
+      "mode": "0644",
+      "sha256": "fc7d09ad6dd6c8216eca8a69ef6c505b953d6a56715b19db1bb2b017dcb7e7bd"
+    },
+    {
+      "path": "packages/piagent-core/runtime/model/snapshot-telemetry.ts",
+      "cap": "CAP-08",
+      "size": 4455,
+      "mode": "0644",
+      "sha256": "aa277a6cc602b134e86b397470c0514af7fe602332a1a32a55324a3a1ed86d5c"
+    },
+    {
+      "path": "packages/piagent-core/runtime/orchestration/helper-lifecycle.ts",
+      "cap": "CAP-14",
+      "size": 6381,
+      "mode": "0644",
+      "sha256": "6bb964cdf669551e5416bb8b22ed365217138d255875a9165607bb3c9e84cf5e"
+    },
+    {
+      "path": "packages/piagent-core/runtime/orchestration/owned-work-budget.ts",
+      "cap": "CAP-14",
+      "size": 8385,
+      "mode": "0644",
+      "sha256": "81f34a27eec7eaab1738b6d9855fba5b078ea9795051d13c67431686d2059359"
+    },
+    {
+      "path": "packages/piagent-core/runtime/orchestration/role-binder.ts",
+      "cap": "CAP-14",
+      "size": 3909,
+      "mode": "0644",
+      "sha256": "ddc577e9d7c6096baaa2fa6f2dead21b5cf199ba87cae6554de7b73736e52e63"
+    },
+    {
+      "path": "packages/piagent-core/runtime/orchestration/role-policy.ts",
+      "cap": "CAP-14",
+      "size": 11736,
+      "mode": "0644",
+      "sha256": "c05812cc8955b082ceff507e35b7c8cc7e7651e17c2244bf1dbd00443a8e70d2"
+    },
+    {
+      "path": "packages/piagent-core/runtime/product/activity-inspector-footer.ts",
+      "cap": "CAP-16",
+      "size": 6545,
+      "mode": "0644",
+      "sha256": "fe0756d1d60b697efbc5852a535f85ff3aa54970bc3c2d9295696f24c39eb62f"
+    },
+    {
+      "path": "packages/piagent-core/runtime/product/activity-inspector.ts",
+      "cap": "CAP-16",
+      "size": 22044,
+      "mode": "0644",
+      "sha256": "d976f94b86019646d42e979a800ac32f87ee7b10b1026a30b63c4245fdedd572"
+    },
+    {
+      "path": "packages/piagent-core/runtime/product/efficiency-metrics.ts",
+      "cap": "CAP-16",
+      "size": 5632,
+      "mode": "0644",
+      "sha256": "d6122397babbdac4eaabfc18883c7217f8230f7643709b6bc70d10c69f868d5c"
+    },
+    {
+      "path": "packages/piagent-core/runtime/product/operator-projections.ts",
+      "cap": "CAP-16",
+      "size": 17018,
+      "mode": "0644",
+      "sha256": "e555f44735e6fe6b66a2a5a4672f6d8ddfd1b46c0203b7936098aa8d520d910a"
+    },
+    {
+      "path": "packages/piagent-core/runtime/quality/exact-output-contract.ts",
+      "cap": "CAP-11",
+      "size": 3875,
+      "mode": "0644",
+      "sha256": "3e55027c0734ec12ee160a2feaba28303f508ad5f54a16bb421f4341107ddd4d"
+    },
+    {
+      "path": "packages/piagent-core/runtime/quality/model-mutation-proof.ts",
+      "cap": "CAP-11",
+      "size": 8378,
+      "mode": "0644",
+      "sha256": "883a35c1f9b8cf5cd4ffe74d3127ec8b9c85036b7b65a6c12893a492a3dcb8bd"
+    },
+    {
+      "path": "packages/piagent-core/runtime/quality/performance-assurance.ts",
+      "cap": "CAP-11",
+      "size": 23146,
+      "mode": "0644",
+      "sha256": "21dc74365b1335ad1e93ab81f03bd479aeebb45cfe133456a961e73586ae91e0"
+    },
+    {
+      "path": "packages/piagent-core/runtime/quality/performance-review-evidence.ts",
+      "cap": "CAP-11",
+      "size": 838,
+      "mode": "0644",
+      "sha256": "e7420c0166d6aa7e58e0da594ac7b00ba4874f4eb5214027f62307fb0277a17a"
+    },
+    {
+      "path": "packages/piagent-core/runtime/recovery/handoff-projection.ts",
+      "cap": "CAP-04",
+      "size": 24558,
+      "mode": "0644",
+      "sha256": "fd010b58e713b51945e8dfd23904fb04270123ae45ec956759d2f104bb60681b"
+    },
+    {
+      "path": "packages/piagent-core/runtime/recovery/recovery-policy.ts",
+      "cap": "CAP-12",
+      "size": 9889,
+      "mode": "0644",
+      "sha256": "3264165478f8d00c379bc41c68dc897a349bad6f464ddd9c936c0aadfb2eb0a8"
+    },
+    {
+      "path": "packages/piagent-core/runtime/recovery/resume-state.ts",
+      "cap": "CAP-04",
+      "size": 7416,
+      "mode": "0644",
+      "sha256": "0710939029d1a6a0585792158a905a0ae249197284f9258c50faff36bbaa824b"
+    },
+    {
+      "path": "packages/piagent-core/runtime/recovery/semantic-repair-handshake.ts",
+      "cap": "CAP-13",
+      "size": 32848,
+      "mode": "0644",
+      "sha256": "241f9cd1b0973a0f723798acddde35c10d33c9ce88068d47293e7ccfa95f67d7"
+    },
+    {
+      "path": "packages/piagent-core/runtime/recovery/semantic-repair-runtime.ts",
+      "cap": "CAP-13",
+      "size": 6928,
+      "mode": "0644",
+      "sha256": "89801984314a2f2984df640dc325d49770038ad0f275665fbb7b17d330111e94"
+    },
+    {
+      "path": "packages/piagent-core/runtime/registration/activity-inspector-command.ts",
+      "cap": "CAP-06",
+      "size": 11965,
+      "mode": "0644",
+      "sha256": "01d69b5e87397c2784d4228df4a4b2d53e07c89050e60530ce94f9bccfa32d88"
+    },
+    {
+      "path": "packages/piagent-core/runtime/registration/context-commands.ts",
+      "cap": "CAP-06",
+      "size": 17793,
+      "mode": "0644",
+      "sha256": "da38418d33a7223066c46e5ef7ad88ceb12a84655964ab0747f4e40aa9b62bc7"
+    },
+    {
+      "path": "packages/piagent-core/runtime/registration/extension-registration.ts",
+      "cap": "CAP-06",
+      "size": 2702,
+      "mode": "0644",
+      "sha256": "a249e1976063927e48f016200b5e003239898f149589c90a9bfa8bcffed86d5f"
+    },
+    {
+      "path": "packages/piagent-core/runtime/registration/knowledge-tools.ts",
+      "cap": "CAP-07",
+      "size": 15210,
+      "mode": "0644",
+      "sha256": "2c2da6ee787a959602a66f7e16d7da36119029953088269409c73720dff64ba0"
+    },
+    {
+      "path": "packages/piagent-core/runtime/registration/memory-mcp-commands.ts",
+      "cap": "CAP-07",
+      "size": 10231,
+      "mode": "0644",
+      "sha256": "e26852ff49ce737b4a26d1c5e57b38a9449f007f28880d474cadb675577551ee"
+    },
+    {
+      "path": "packages/piagent-core/runtime/registration/onboarding-tools.ts",
+      "cap": "CAP-06",
+      "size": 15600,
+      "mode": "0644",
+      "sha256": "987cbb9b6335fd5f83d244e44cae0adc75731b1cb9f7efe8e0a1db26784a95e9"
+    },
+    {
+      "path": "packages/piagent-core/runtime/registration/operator-catalogs.ts",
+      "cap": "CAP-06",
+      "size": 558,
+      "mode": "0644",
+      "sha256": "391136033a1c15a1ee82e3370fdf93b86b6c9f07f752e0814352746b27140541"
+    },
+    {
+      "path": "packages/piagent-core/runtime/registration/permission-commands.ts",
+      "cap": "CAP-06",
+      "size": 8397,
+      "mode": "0644",
+      "sha256": "835270e3635625a45cd8447ee5f60d76efb49230f2e6d6923a87a505e6d03794"
+    },
+    {
+      "path": "packages/piagent-core/runtime/registration/policy-tools.ts",
+      "cap": "CAP-02",
+      "size": 24006,
+      "mode": "0644",
+      "sha256": "0a7fe2a84f363282f95146a4e7252103bf952aa080f4fc250702da55d22a9a7e"
+    },
+    {
+      "path": "packages/piagent-core/runtime/registration/profile-commands.ts",
+      "cap": "CAP-06",
+      "size": 15288,
+      "mode": "0644",
+      "sha256": "899c72b81855659fa01a0806824e5078cde6142aeecfbcaa7240bc5431e92a7a"
+    },
+    {
+      "path": "packages/piagent-core/runtime/registration/runtime-model-status.ts",
+      "cap": "CAP-06",
+      "size": 5928,
+      "mode": "0644",
+      "sha256": "731e416ef3172c09b88b25d36911b3d4769d658158544a5a79466001cf9c56ad"
+    },
+    {
+      "path": "packages/piagent-core/runtime/registration/session-commands.ts",
+      "cap": "CAP-06",
+      "size": 16153,
+      "mode": "0644",
+      "sha256": "eac602d90fad39f209813af38fcab3e923b5e9e8f41037caf25edd9bf14ddf45"
+    },
+    {
+      "path": "packages/piagent-core/runtime/registration/task-completion-tools.ts",
+      "cap": "CAP-03",
+      "size": 19884,
+      "mode": "0644",
+      "sha256": "3e9c9bd669e6a2718050aeef162f177b646737da53a68054c15160b11a29efdf"
+    },
+    {
+      "path": "packages/piagent-core/runtime/registration/task-evidence-tools.ts",
+      "cap": "CAP-03",
+      "size": 14182,
+      "mode": "0644",
+      "sha256": "2c45a212f004a45ef2b5d5612a5288be7d55900fe5600f510c2864523301a536"
+    },
+    {
+      "path": "packages/piagent-core/runtime/registration/task-preflight.ts",
+      "cap": "CAP-01",
+      "size": 2458,
+      "mode": "0644",
+      "sha256": "b1d317aa70c6e6a59ca87a6500bb32ed8434033d338849cfb66cd7702acb1d21"
+    },
+    {
+      "path": "packages/piagent-core/runtime/registration/task-start-tool.ts",
+      "cap": "CAP-01",
+      "size": 26563,
+      "mode": "0644",
+      "sha256": "a3bf41e76805a9248b49a2731a83c87a47efae6dbf38117dbfcb21742a156363"
+    },
+    {
+      "path": "packages/piagent-core/runtime/registration/workflow-commands.ts",
+      "cap": "CAP-06",
+      "size": 19503,
+      "mode": "0644",
+      "sha256": "08b26dec6e12fb5fb37d41abfd2af8cfde92d05476a2bd931821196948e22a01"
+    },
+    {
+      "path": "packages/piagent-core/runtime/runtime-limits.ts",
+      "cap": "CAP-06",
+      "size": 1077,
+      "mode": "0644",
+      "sha256": "6be4a5b6e95fbc76240acbc6ca4b1816191121d64977db71b6d417a31483919d"
+    },
+    {
+      "path": "packages/piagent-core/runtime/session/message-signals.ts",
+      "cap": "CAP-06",
+      "size": 2982,
+      "mode": "0644",
+      "sha256": "61b93dabd480b97bebb409af8cbdae9a8b04e850e348ac1d221855ef8c0bd505"
+    },
+    {
+      "path": "packages/piagent-core/runtime/session/model-authorship-state.ts",
+      "cap": "CAP-11",
+      "size": 6705,
+      "mode": "0644",
+      "sha256": "2b0b15ebd31f93aa8f5baa214a01012918547a2caf143ac1a30c7c6b12151ebe"
+    },
+    {
+      "path": "packages/piagent-core/runtime/session/performance-review-state.ts",
+      "cap": "CAP-11",
+      "size": 12599,
+      "mode": "0644",
+      "sha256": "b1c903ab3de38b69e7f816b75eae53ea7a33b429521556e31bb6ea748b9ecb7c"
+    },
+    {
+      "path": "packages/piagent-core/runtime/session/runtime-state.ts",
+      "cap": "CAP-06",
+      "size": 12824,
+      "mode": "0644",
+      "sha256": "68015b568dfb2deb8bee7a2c1ecc512b49ddfcdf2e3f0b9ce8fc2553c95094d9"
+    },
+    {
+      "path": "packages/piagent-core/runtime/session/system-prompt.ts",
+      "cap": "CAP-06",
+      "size": 3087,
+      "mode": "0644",
+      "sha256": "d552bcddcdd1a5f592464d6213b1aaf9d3a666fb5993705e5e362ae62738cad9"
+    },
+    {
+      "path": "packages/piagent-core/runtime/session/tool-result-compaction.ts",
+      "cap": "CAP-05",
+      "size": 13769,
+      "mode": "0644",
+      "sha256": "17c149d2cab0c913973a2bfb86f8622c9d1fac290f4b7804cb903d1737d189bc"
+    },
+    {
+      "path": "packages/piagent-core/runtime/session/usage.ts",
+      "cap": "CAP-06",
+      "size": 6818,
+      "mode": "0644",
+      "sha256": "525dd0e549fe37b75057bc79cc11ae14cb4fbbc3ec6bf951d8a473acd75f45e4"
+    },
+    {
+      "path": "packages/piagent-core/runtime/solver/runtime-features.ts",
+      "cap": "CAP-08",
+      "size": 2572,
+      "mode": "0644",
+      "sha256": "330a06447e4e8ea5bbc6dbf5a00e14a4d72da15591311e5eb1cecfab55510bc7"
+    },
+    {
+      "path": "packages/piagent-core/runtime/solver/solver-explanation.ts",
+      "cap": "CAP-08",
+      "size": 2449,
+      "mode": "0644",
+      "sha256": "2f118ebb4eb9ed97073c29ea1fc6f65493fee8d7213ec65c06f4bede4502cc58"
+    },
+    {
+      "path": "packages/piagent-core/runtime/solver/solver-policy.ts",
+      "cap": "CAP-08",
+      "size": 5065,
+      "mode": "0644",
+      "sha256": "38cde06d3690262b89015e1e74517cf5cc4a98ecb4d2896235b448fbba74cdaa"
+    },
+    {
+      "path": "packages/piagent-core/runtime/solver/solver-shadow.ts",
+      "cap": "CAP-08",
+      "size": 9055,
+      "mode": "0644",
+      "sha256": "b3a98916cca1fc3eef09800e9abd9a0c90f5582cb11073ca50a4d397c8b9f50b"
+    },
+    {
+      "path": "packages/piagent-core/runtime/solver/solver-types.ts",
+      "cap": "CAP-08",
+      "size": 10097,
+      "mode": "0644",
+      "sha256": "ac46fef8ab068e479897345320cecebf8dd6f162577bdf06d82b6335bb11d321"
+    },
+    {
+      "path": "packages/piagent-core/runtime/solver/task-features.ts",
+      "cap": "CAP-08",
+      "size": 6857,
+      "mode": "0644",
+      "sha256": "821c57d3c77ddc96b984302ac2c02df40008fd6d7c71574104f40f97ffab9a35"
+    },
+    {
+      "path": "packages/piagent-core/runtime/tools/phase-tool-runtime.ts",
+      "cap": "CAP-09",
+      "size": 7388,
+      "mode": "0644",
+      "sha256": "41908eeacebdc77729573524c894d410efbf21fd86a29e1d98607cbcaace403d"
+    },
+    {
+      "path": "packages/piagent-core/runtime/tools/phase-tools.ts",
+      "cap": "CAP-09",
+      "size": 6450,
+      "mode": "0644",
+      "sha256": "dbfa1bc46432334232665f156be7e3af5cbea10a6210cbb00af652df2e1e589b"
+    },
+    {
+      "path": "packages/piagent-core/runtime/tools/tool-groups.ts",
+      "cap": "CAP-06",
+      "size": 3003,
+      "mode": "0644",
+      "sha256": "737a3aca33576800a943fb4419a2e57153618187e9f9d50b899f6bc961948b01"
+    },
+    {
+      "path": "packages/piagent-core/runtime/trajectory/trajectory-observability.ts",
+      "cap": "CAP-10",
+      "size": 1433,
+      "mode": "0644",
+      "sha256": "ea816a5b8d00b3db8bbc6855b6a229d1118f6dd561e2c30f49d521cca0c333f2"
+    },
+    {
+      "path": "packages/piagent-core/runtime/trajectory/trajectory-runtime.ts",
+      "cap": "CAP-10",
+      "size": 11719,
+      "mode": "0644",
+      "sha256": "eb728de8694f652fa61e88ef42c7b3c7f53e2c4ddde997d744f4fd16bc07face"
+    },
+    {
+      "path": "packages/piagent-core/runtime/trajectory/trajectory-state.ts",
+      "cap": "CAP-10",
+      "size": 7473,
+      "mode": "0644",
+      "sha256": "c44bf7bd25c5a49e80c875cc23912364d8dceb1645bd4a49aced81448ee51ade"
+    },
+    {
+      "path": "packages/piagent-core/runtime/trajectory/trajectory-store.ts",
+      "cap": "CAP-10",
+      "size": 4636,
+      "mode": "0644",
+      "sha256": "dcc20fbc1fcac5bfcfd7211898f062efe659063a41f684eeb8dfdd51fd3ef356"
+    },
+    {
+      "path": "packages/piagent-core/runtime/trajectory/trajectory-types.ts",
+      "cap": "CAP-10",
+      "size": 14419,
+      "mode": "0644",
+      "sha256": "a471dad04704c733fa4fcca5ae274ede56fbc94ae57c7499222089f5d57d7c83"
+    },
+    {
+      "path": "packages/piagent-core/runtime/workflows/input-routing.ts",
+      "cap": "CAP-01",
+      "size": 5126,
+      "mode": "0644",
+      "sha256": "3b1000d1519fbc48022ed31a8fdad7e898aa58169623d55c0c52d256ebfc4899"
+    },
+    {
+      "path": "packages/piagent-core/runtime/workflows/task-intake.ts",
+      "cap": "CAP-01",
+      "size": 15566,
+      "mode": "0644",
+      "sha256": "610556aaf9f002dbd10901182ebc48bcaadce6c33eefe61456d1a2697c5a99c6"
+    },
+    {
+      "path": "packages/piagent-core/security/sensitive-data.js",
+      "cap": "CAP-02",
+      "size": 10479,
+      "mode": "0644",
+      "sha256": "499a1f6a2355f1a201808c85bb9c7afdb1a4762ffd3e5bf7c3631b6e7b87af7c"
+    },
+    {
+      "path": "packages/piagent-core/skills/piagent-ops/SKILL.md",
+      "cap": "CAP-16",
+      "size": 1832,
+      "mode": "0644",
+      "sha256": "a1c21e7d1c3ab12fff8516bbac2922526e35b37a6852eaa9f5a7d98a102b830e"
+    },
+    {
+      "path": "packages/piagent-core/skills/piagent-source-cache/SKILL.md",
+      "cap": "CAP-07",
+      "size": 1577,
+      "mode": "0644",
+      "sha256": "c94c5d39a33196c978ee35556a244b1dc7231ab4bf73c0780abcadba90fd0c3e"
+    },
+    {
+      "path": "packages/piagent-core/skills/piagent-source-cache/checkout-source-repo.sh",
+      "cap": "CAP-07",
+      "size": 3427,
+      "mode": "0755",
+      "sha256": "8382172f9d54ec2cf4cdb388e961def294c64a3bfed209f31600af56cdb8e7a9"
+    },
+    {
+      "path": "packages/piagent-core/subagents/piagent-oracle.md",
+      "cap": "CAP-14",
+      "size": 1096,
+      "mode": "0644",
+      "sha256": "e297840b9b287f59059ffd2ceacc575b709527bb2b611ad1caa905c30b2e80be"
+    },
+    {
+      "path": "packages/piagent-core/subagents/piagent-planner.md",
+      "cap": "CAP-14",
+      "size": 2024,
+      "mode": "0644",
+      "sha256": "9c6aa91663a6614b72a4fb8c6c4a07c07a466c0889fcfe45528ae3e3f62bac90"
+    },
+    {
+      "path": "packages/piagent-core/subagents/piagent-reviewer.md",
+      "cap": "CAP-14",
+      "size": 1951,
+      "mode": "0644",
+      "sha256": "6a02cbc7904ea6d8de64aa776ac21ccfbf3c9cc468c4c1c7650e08374ab9e949"
+    },
+    {
+      "path": "packages/piagent-core/subagents/piagent-scout.md",
+      "cap": "CAP-14",
+      "size": 1575,
+      "mode": "0644",
+      "sha256": "ecd432c57c99783ab76844d0a35cccad377e4cd265674577742ded48ea3ffbb4"
+    },
+    {
+      "path": "packages/piagent-core/subagents/piagent-worker.md",
+      "cap": "CAP-14",
+      "size": 2146,
+      "mode": "0644",
+      "sha256": "e8e18e1ef3a43db2acd559c40a99b31d8cd994cbfaaf1adc5ef9d2cc5e3721a6"
+    },
+    {
+      "path": "packs/engineering-base/pack.json",
+      "cap": "CAP-16",
+      "size": 2866,
+      "mode": "0644",
+      "sha256": "1e4447634b37c81e01a51619ebc68f4e69e54e3f794ff787c8bd2379d816a67f"
+    },
+    {
+      "path": "packs/engineering-base/recipes/bounded-change.json",
+      "cap": "CAP-16",
+      "size": 1790,
+      "mode": "0644",
+      "sha256": "1f4262cf53cf527ea1b5f89a938f3aafb5006e1b091ad49132d810c13489db2c"
+    },
+    {
+      "path": "packs/web-delivery/pack.json",
+      "cap": "CAP-16",
+      "size": 1466,
+      "mode": "0644",
+      "sha256": "a5ee9028f9188e263e5313c1cf1b3272a4fb110b469c14109efcfc726102b302"
+    },
+    {
+      "path": "packs/web-delivery/recipes/verified-web-change.json",
+      "cap": "CAP-16",
+      "size": 1276,
+      "mode": "0644",
+      "sha256": "96959d1f93a01c8e100d0ab72d1b820046491ba6220bc1361263c3258e2224c5"
+    },
+    {
+      "path": "schemas/action-proposal.schema.json",
+      "cap": "CAP-16",
+      "size": 3234,
+      "mode": "0644",
+      "sha256": "de09bccc371319db1853c639c8c2ab92c2872400b87bc1ee3963b321a199424a"
+    },
+    {
+      "path": "schemas/benchmark-assurance-evidence.schema.json",
+      "cap": "CAP-17",
+      "size": 2076,
+      "mode": "0644",
+      "sha256": "255862ecb999c5993721423dde5b371fc65162fffb3b894e8ecb52086f31bdfb"
+    },
+    {
+      "path": "schemas/capability-pack.schema.json",
+      "cap": "CAP-16",
+      "size": 6302,
+      "mode": "0644",
+      "sha256": "d537936cb3b4f7174cdbe491b869ca56d53e2ede1085668f40db63bb0bb241e5"
+    },
+    {
+      "path": "schemas/capability-recipe.schema.json",
+      "cap": "CAP-16",
+      "size": 2678,
+      "mode": "0644",
+      "sha256": "8b253bc5d7df6c43da0f67bfe310580d1b04d86a2e2bce0a82fcdaba80b0b769"
+    },
+    {
+      "path": "schemas/context-index.schema.json",
+      "cap": "CAP-05",
+      "size": 5395,
+      "mode": "0644",
+      "sha256": "9f80c497b6334742a02f5aff15c3f315872c136735a63a9c5da7806b95908a2e"
+    },
+    {
+      "path": "schemas/eval-scenario.schema.json",
+      "cap": "CAP-17",
+      "size": 2618,
+      "mode": "0644",
+      "sha256": "53f27d8cdfe90e513d735a0ff8abb664a96ed818390cd5178bb95ff1756c588d"
+    },
+    {
+      "path": "schemas/failure-classification.schema.json",
+      "cap": "CAP-12",
+      "size": 1814,
+      "mode": "0644",
+      "sha256": "d40b2864babf193aa4ba45b40cc1a944edc3c07c7a61f32dfb2cc062705253bc"
+    },
+    {
+      "path": "schemas/failure-evidence.schema.json",
+      "cap": "CAP-12",
+      "size": 2111,
+      "mode": "0644",
+      "sha256": "0875299dbc3c58b50d7cd1d908743d7403addb83ec0bb792945156f928d99933"
+    },
+    {
+      "path": "schemas/helper-request.schema.json",
+      "cap": "CAP-14",
+      "size": 2918,
+      "mode": "0644",
+      "sha256": "214eddc31330059801bd0fd225e0c4b492ac57bbe86f6848453a83ec6df18b0c"
+    },
+    {
+      "path": "schemas/model-route-decision.schema.json",
+      "cap": "CAP-08",
+      "size": 2511,
+      "mode": "0644",
+      "sha256": "c8b848d4a8d3984c67a6b2fb37311cfda9aeba04eb46e06b8ec4f80542499325"
+    },
+    {
+      "path": "schemas/project-profile.schema.json",
+      "cap": "CAP-16",
+      "size": 14733,
+      "mode": "0644",
+      "sha256": "2dcb5f41e0feacb944349cd5fd3a612b8f8e74cf01f0bfade16ff6615c0f1bfb"
+    },
+    {
+      "path": "schemas/role-policy.schema.json",
+      "cap": "CAP-14",
+      "size": 2044,
+      "mode": "0644",
+      "sha256": "6efb37e408fb36f6916e34545c8859eed1b37ff4c46e56e433871b395d1ed9b6"
+    },
+    {
+      "path": "schemas/runtime-model-snapshot.schema.json",
+      "cap": "CAP-08",
+      "size": 2865,
+      "mode": "0644",
+      "sha256": "981f55311c878beee09e1bf3768203bbb67dffcf3218e49bc61f317ce286b06c"
+    },
+    {
+      "path": "schemas/solver-decision.schema.json",
+      "cap": "CAP-08",
+      "size": 2531,
+      "mode": "0644",
+      "sha256": "ab5a07df327e280df50da6a58c70515d8a5e103300032cda56c2225eddd175c1"
+    },
+    {
+      "path": "schemas/task-contract.schema.json",
+      "cap": "CAP-01",
+      "size": 23760,
+      "mode": "0644",
+      "sha256": "5814166046bd23e8a5ad684feb8df6acde7743c87a1b56011a775635586d8030"
+    },
+    {
+      "path": "schemas/task-features.schema.json",
+      "cap": "CAP-08",
+      "size": 2603,
+      "mode": "0644",
+      "sha256": "1b477108ff4b6272794f93d8bd5132d42efba5f0ad21125c761c2516498988be"
+    },
+    {
+      "path": "schemas/trajectory-state.schema.json",
+      "cap": "CAP-10",
+      "size": 2591,
+      "mode": "0644",
+      "sha256": "27f03f6734e5fb25c8987a3518c96bcb18f6c53bedaea317d39cb8d4c281c9bf"
+    },
+    {
+      "path": "schemas/trajectory-transition-event.schema.json",
+      "cap": "CAP-10",
+      "size": 2609,
+      "mode": "0644",
+      "sha256": "b0616c8135b7e458acb214f26b29ed9d1c97af98186f8dd98cfdadb8d0d2ab1f"
+    },
+    {
+      "path": "scripts/audit-runtime-host.sh",
+      "cap": "CAP-16",
+      "size": 2974,
+      "mode": "0755",
+      "sha256": "1d23c865cab31f8189c60de6e2d055eed9ba84a56139a6336258a8e7d6595a5e"
+    },
+    {
+      "path": "scripts/benchmark-runner-core.mjs",
+      "cap": "CAP-17",
+      "size": 49804,
+      "mode": "0644",
+      "sha256": "af54fadd3140aa2d8dc7dee21aa043c5f1f760efdc3e504ff11a1b15960f892d"
+    },
+    {
+      "path": "scripts/benchmark-runner.mjs",
+      "cap": "CAP-17",
+      "size": 2750,
+      "mode": "0644",
+      "sha256": "627ef9dcc5a79eae3a56324a2f118c0538e0b156cc3ad21930d6620bb82c3305"
+    },
+    {
+      "path": "scripts/benchmark-session.mjs",
+      "cap": "CAP-17",
+      "size": 25704,
+      "mode": "0644",
+      "sha256": "10add775c828255c9fe7a0d8829d29c8209500ec12c06dfdad53e3b4edfb1ff1"
+    },
+    {
+      "path": "scripts/bootstrap-local.sh",
+      "cap": "CAP-16",
+      "size": 864,
+      "mode": "0755",
+      "sha256": "5e068014f24c8a6fbdde1153d8366f204da49b573f7046ba761fbfa792f958a2"
+    },
+    {
+      "path": "scripts/build-docs-site.mjs",
+      "cap": "CAP-16",
+      "size": 25670,
+      "mode": "0644",
+      "sha256": "bf70964ecdee837011fc79caefabbd41bcc39ea8533bbf5c82141fd6862cbd7b"
+    },
+    {
+      "path": "scripts/capability-catalog.mjs",
+      "cap": "CAP-16",
+      "size": 15055,
+      "mode": "0755",
+      "sha256": "2e2ecc92555f782cd3378fa6764cf7e48f00949baa9982f712d4c48f7e28a179"
+    },
+    {
+      "path": "scripts/check-architecture.mjs",
+      "cap": "CAP-16",
+      "size": 4870,
+      "mode": "0644",
+      "sha256": "86d2647406fe21b3878f7fbc2d8fdd03c61c00bfc242870fb57ade7e79bd1469"
+    },
+    {
+      "path": "scripts/check-doc-languages.mjs",
+      "cap": "CAP-16",
+      "size": 3026,
+      "mode": "0644",
+      "sha256": "8734257091c81308819b082016f58b239e9648e5719035065baa30dc4db45e13"
+    },
+    {
+      "path": "scripts/check-published-site.mjs",
+      "cap": "CAP-16",
+      "size": 12290,
+      "mode": "0644",
+      "sha256": "94bd782405d85df218c0551f1502a59717ceaff77bd55f4a1a4d1ef922bd2138"
+    },
+    {
+      "path": "scripts/check-runtime-advisories.mjs",
+      "cap": "CAP-16",
+      "size": 4657,
+      "mode": "0644",
+      "sha256": "a1e766d284d87270e84e87cd89c3735d800807e6be6dbe31543ec2349a121e9e"
+    },
+    {
+      "path": "scripts/configure-model-scope.sh",
+      "cap": "CAP-08",
+      "size": 4432,
+      "mode": "0755",
+      "sha256": "627bddf0e8c58ee49cb14f7030ff052f73f6f8236be991286cd5c919bb094207"
+    },
+    {
+      "path": "scripts/configure-subagents.sh",
+      "cap": "CAP-16",
+      "size": 8189,
+      "mode": "0755",
+      "sha256": "c673af1bbc30c50558f53f36996407b152c2068f0b89af30d7fa4f21e27b9df4"
+    },
+    {
+      "path": "scripts/context-engine.mjs",
+      "cap": "CAP-05",
+      "size": 4509,
+      "mode": "0755",
+      "sha256": "5a0339f338389a6d3b17d437ac7f985f66bfd7ca1bcb17df29464205d1cb14af"
+    },
+    {
+      "path": "scripts/helper-evaluation.mjs",
+      "cap": "CAP-17",
+      "size": 4547,
+      "mode": "0644",
+      "sha256": "f9366892169fd76bbd826a383aa9f366ff2154d32be69bd116dce76eb33272af"
+    },
+    {
+      "path": "scripts/import-agent-instructions.mjs",
+      "cap": "CAP-16",
+      "size": 7252,
+      "mode": "0644",
+      "sha256": "86208fbd6c6f5f67a8516875105ca9fdb35a789ee60fb9bee05bbef5bfc0f9e7"
+    },
+    {
+      "path": "scripts/init-project.sh",
+      "cap": "CAP-16",
+      "size": 11331,
+      "mode": "0755",
+      "sha256": "4a155fd69a51b86f55a404cae8af0232c76fcaf45946c8b5d2ef3104acc2da33"
+    },
+    {
+      "path": "scripts/install-global.sh",
+      "cap": "CAP-16",
+      "size": 22701,
+      "mode": "0755",
+      "sha256": "6882db01c8f2436fbdfe945f1811ddc49173894eaed10ab1496ca6976f5df8e8"
+    },
+    {
+      "path": "scripts/link-project.sh",
+      "cap": "CAP-16",
+      "size": 721,
+      "mode": "0755",
+      "sha256": "67149c05909206ff23435e48bd7fc6564ed97dc8a1bb3dcf62f908b4de6908be"
+    },
+    {
+      "path": "scripts/mcp-manage.mjs",
+      "cap": "CAP-16",
+      "size": 26891,
+      "mode": "0755",
+      "sha256": "cc2a4621bfee9c05fb5483fcf51994e9b851d9a49df40be9f81e0d17484eaffc"
+    },
+    {
+      "path": "scripts/migrate-project-state.mjs",
+      "cap": "CAP-16",
+      "size": 9324,
+      "mode": "0644",
+      "sha256": "35682b5018ff020d73cfda189860e4f712c9338fef2ac51dc09e1a5606d89fc9"
+    },
+    {
+      "path": "scripts/model-catalog.mjs",
+      "cap": "CAP-08",
+      "size": 5245,
+      "mode": "0644",
+      "sha256": "0ba9d87bd9093d075d495ec9b6675e9a50d733e5b7c222d5ef983dd35817542b"
+    },
+    {
+      "path": "scripts/model-route-evaluation-core.ts",
+      "cap": "CAP-17",
+      "size": 6265,
+      "mode": "0644",
+      "sha256": "9a213741f58f326198a62577bced0ee3fff2b6e70af5f40731f7cf986a2b3f5c"
+    },
+    {
+      "path": "scripts/model-route-evaluation.mjs",
+      "cap": "CAP-17",
+      "size": 1069,
+      "mode": "0644",
+      "sha256": "dc38a2e48015229c96b0a17f11d19eff67d8547708f818e615d692555f4ad08e"
+    },
+    {
+      "path": "scripts/model-routing-benchmark.mjs",
+      "cap": "CAP-17",
+      "size": 2136,
+      "mode": "0644",
+      "sha256": "8bf114eb4e01af5ee64005db0a6fca4456730de9cbca0993abf3ab89719a2026"
+    },
+    {
+      "path": "scripts/model-routing-protocol-core.ts",
+      "cap": "CAP-17",
+      "size": 2285,
+      "mode": "0644",
+      "sha256": "a3e492159defbb739d198a12931446e6c54886a6df4ddcafca4bf6e3ec87e6f2"
+    },
+    {
+      "path": "scripts/phase-tools-evaluation.mjs",
+      "cap": "CAP-17",
+      "size": 9764,
+      "mode": "0644",
+      "sha256": "08408affcefae05c72861a8e4c3ea2247efcb9a9006fe7763b90bbee5a3e5fa3"
+    },
+    {
+      "path": "scripts/pi-auto.sh",
+      "cap": "CAP-16",
+      "size": 2058,
+      "mode": "0755",
+      "sha256": "9762d6c2ed25b1066e732e69c0f4c46721e67c5a2282957e4554891c607d50a6"
+    },
+    {
+      "path": "scripts/pi-model-catalog.sh",
+      "cap": "CAP-08",
+      "size": 144,
+      "mode": "0644",
+      "sha256": "81ef4d42ed9cad44498d6a84612a4a9a89d3503f2f02220298133291229e2d49"
+    },
+    {
+      "path": "scripts/pi-model-route.mjs",
+      "cap": "CAP-08",
+      "size": 7773,
+      "mode": "0644",
+      "sha256": "09619ce97fb1ef030b7a25080a8466faba3997284042ec0221a0401f78fc7dda"
+    },
+    {
+      "path": "scripts/pi-session-stats.sh",
+      "cap": "CAP-16",
+      "size": 5529,
+      "mode": "0755",
+      "sha256": "1187e74ff342899a63856693b389bc9898bd32cce6b07b1ac7631be32dd5319e"
+    },
+    {
+      "path": "scripts/pi-usage-history.mjs",
+      "cap": "CAP-17",
+      "size": 20207,
+      "mode": "0755",
+      "sha256": "202f8e1b9de0ab64c4cc1c2472a5ad2426b88bb75d01664b8e9a10672cbb075b"
+    },
+    {
+      "path": "scripts/piagent-cli.mjs",
+      "cap": "CAP-16",
+      "size": 2140,
+      "mode": "0755",
+      "sha256": "1806a449ca81511d30ea43a9e22ae1128d56f89768a61f0dd0a94812a06815fa"
+    },
+    {
+      "path": "scripts/preview-docs-site.mjs",
+      "cap": "CAP-16",
+      "size": 3136,
+      "mode": "0644",
+      "sha256": "e87b3c1e2b4bb5a66e02c6dabcc3a3b1a3b264adcd9079d7d3dfb4c87f716123"
+    },
+    {
+      "path": "scripts/product-usability-pilot.mjs",
+      "cap": "CAP-17",
+      "size": 4507,
+      "mode": "0644",
+      "sha256": "6ef66131ee93de073d7742905bcdfc3a24cd23f34e530e8e18d6c6392344431b"
+    },
+    {
+      "path": "scripts/profile-doctor.sh",
+      "cap": "CAP-16",
+      "size": 10129,
+      "mode": "0755",
+      "sha256": "1d694bb640fde3ae3f7e168f3f653c5e01eb01cef0dcf50647a3f57529d3eb23"
+    },
+    {
+      "path": "scripts/quality-benchmark.sh",
+      "cap": "CAP-17",
+      "size": 8181,
+      "mode": "0755",
+      "sha256": "22ce52d395ef14dcd52c235479754bf7e5528adc6de756e57b85807924c3ea47"
+    },
+    {
+      "path": "scripts/rc-readiness-evaluation.mjs",
+      "cap": "CAP-17",
+      "size": 14729,
+      "mode": "0644",
+      "sha256": "a31cb8235b836947c70425745b502e4d11d65da4f15823cc78995bcc525e1321"
+    },
+    {
+      "path": "scripts/recovery-evaluation.mjs",
+      "cap": "CAP-17",
+      "size": 6158,
+      "mode": "0644",
+      "sha256": "ed841b992ea9e248f36678bbedde0bc05b4ae878234d8256ff1fb59142cbc1f3"
+    },
+    {
+      "path": "scripts/redaction-benchmark.mjs",
+      "cap": "CAP-17",
+      "size": 12281,
+      "mode": "0644",
+      "sha256": "9e2ee303b4126a71381da31c21d98aed7f4d88aaae80a681a55e5a74a70051e0"
+    },
+    {
+      "path": "scripts/runtime-policy-smoke.sh",
+      "cap": "CAP-02",
+      "size": 2443,
+      "mode": "0755",
+      "sha256": "e1d4773ad1717bcc256e2d59178790272636d0d7c1196c13c006a3b2936a7da8"
+    },
+    {
+      "path": "scripts/setup.sh",
+      "cap": "CAP-16",
+      "size": 15377,
+      "mode": "0755",
+      "sha256": "f86a1d9ffe5e6173ee240cce49eeccb1a3bcb8619dfb62171637edd5c7f5c985"
+    },
+    {
+      "path": "scripts/solver-shadow-pilot.mjs",
+      "cap": "CAP-17",
+      "size": 7827,
+      "mode": "0644",
+      "sha256": "54a4d6e093162a59a55ba39e43558ee415a74c4451b4d6bb103494a12d1e1041"
+    },
+    {
+      "path": "scripts/team-doctor.sh",
+      "cap": "CAP-16",
+      "size": 24676,
+      "mode": "0755",
+      "sha256": "dd9f0f0a0dd16c5dff55f693777dff0457e435b42da787adb06e1604893840ae"
+    },
+    {
+      "path": "scripts/uninstall-global.sh",
+      "cap": "CAP-16",
+      "size": 7924,
+      "mode": "0755",
+      "sha256": "99495f5ea481f7401065906ffcca2a0dde37cd73e0ea282a1d7811920e035ac6"
+    },
+    {
+      "path": "scripts/update-global.mjs",
+      "cap": "CAP-16",
+      "size": 19391,
+      "mode": "0644",
+      "sha256": "4fd47184606a569220971905f8dfd30e669f1a684fce6b01c707ffa4fad6aabf"
+    },
+    {
+      "path": "scripts/verify-local.sh",
+      "cap": "CAP-16",
+      "size": 39838,
+      "mode": "0755",
+      "sha256": "47e02f7ba122059ee38ca88e6ea785c1ae20dd6ac6b227541e9ed46fec264b25"
+    },
+    {
+      "path": "scripts/verify-release-identity.mjs",
+      "cap": "CAP-16",
+      "size": 8205,
+      "mode": "0755",
+      "sha256": "177d760a7cf574c9f5b215416e691fef683bc81579cea34109c20a82dacb8ef3"
+    },
+    {
+      "path": "scripts/verify-vercel-link.mjs",
+      "cap": "CAP-16",
+      "size": 2491,
+      "mode": "0644",
+      "sha256": "38fa318a01c6839f3f8e929aef5140e4e575bb6c573a0a7e5d0ad63f0945db02"
+    },
+    {
+      "path": "templates/global/mcp.json",
+      "cap": "CAP-16",
+      "size": 145,
+      "mode": "0644",
+      "sha256": "dd730f1f7ccefbe68733f049cdd0d64b0391f2461e9198cfc609099a6f2d9f19"
+    },
+    {
+      "path": "templates/global/settings.json",
+      "cap": "CAP-16",
+      "size": 1033,
+      "mode": "0644",
+      "sha256": "b3e153146ca5e35e54356fafab795d1c2008fcc3ebf1788b030fc25716eb3493"
+    },
+    {
+      "path": "templates/project/.mcp.json",
+      "cap": "CAP-16",
+      "size": 145,
+      "mode": "0644",
+      "sha256": "dd730f1f7ccefbe68733f049cdd0d64b0391f2461e9198cfc609099a6f2d9f19"
+    },
+    {
+      "path": "templates/project/.pi/.gitignore",
+      "cap": "CAP-16",
+      "size": 321,
+      "mode": "0644",
+      "sha256": "a4c52515a0c5770e746bf0b7b126ecadbcf1f80657d98fbf2d3c9dd5ef04db02"
+    },
+    {
+      "path": "templates/project/.pi/.npmignore",
+      "cap": "CAP-16",
+      "size": 116,
+      "mode": "0644",
+      "sha256": "ba2c61146e704795ff2409b99ec88818ef92b8624e0a102765a4cfcbec56e5fe"
+    },
+    {
+      "path": "templates/project/.pi/context-index.json",
+      "cap": "CAP-16",
+      "size": 659,
+      "mode": "0644",
+      "sha256": "7a931cdcfc5166f1129548b8d467399ac1080c06ab0dab65ddb70255ec7b7612"
+    },
+    {
+      "path": "templates/project/.pi/gitignore.template",
+      "cap": "CAP-16",
+      "size": 321,
+      "mode": "0644",
+      "sha256": "a4c52515a0c5770e746bf0b7b126ecadbcf1f80657d98fbf2d3c9dd5ef04db02"
+    },
+    {
+      "path": "templates/project/.pi/mcp.json",
+      "cap": "CAP-16",
+      "size": 145,
+      "mode": "0644",
+      "sha256": "dd730f1f7ccefbe68733f049cdd0d64b0391f2461e9198cfc609099a6f2d9f19"
+    },
+    {
+      "path": "templates/project/.pi/memory/MEMORY.md",
+      "cap": "CAP-16",
+      "size": 328,
+      "mode": "0644",
+      "sha256": "a4fc40f34555a4490dc48334664ddb84c31eabd1815c52d1133ff39271634d05"
+    },
+    {
+      "path": "templates/project/.pi/memory/memory_summary.md",
+      "cap": "CAP-16",
+      "size": 245,
+      "mode": "0644",
+      "sha256": "a6407976c1566a1bbb04fdef2f4099c439748e451f3396cbc2c6d795546c8abb"
+    },
+    {
+      "path": "templates/project/.pi/piagent-profile.json",
+      "cap": "CAP-16",
+      "size": 2272,
+      "mode": "0644",
+      "sha256": "0887afc7382f26a830d19ba68f2a8c7bd7ce8cdb136eca9e1d4899bdbf99d8b4"
+    },
+    {
+      "path": "templates/project/.pi/project-context.md",
+      "cap": "CAP-16",
+      "size": 816,
+      "mode": "0644",
+      "sha256": "cd52d1145dbbd9a8eb01ce0bab0d3e8f0fdf472cfa3978cf8a909181014fa787"
+    },
+    {
+      "path": "templates/project/.pi/settings.json",
+      "cap": "CAP-16",
+      "size": 318,
+      "mode": "0644",
+      "sha256": "76914250c0864f0578587865c68c2e6806b428ea69f4a52b6c9bd44cca4551f6"
+    },
+    {
+      "path": "templates/project/.pi/task-contract.template.json",
+      "cap": "CAP-16",
+      "size": 2661,
+      "mode": "0644",
+      "sha256": "e5e5b95cb084146007e78a3e4a3dc8a6779e67cfda4cd413c69cd39ae172f8b5"
+    },
+    {
+      "path": "templates/project/.pi/tech-context/README.md",
+      "cap": "CAP-16",
+      "size": 401,
+      "mode": "0644",
+      "sha256": "e9df45791ce5e58a787f186fe3b8112d948e802364e13dfbc8e025c8e1ba6209"
+    },
+    {
+      "path": "templates/project/.pi/tech-stack.json",
+      "cap": "CAP-16",
+      "size": 210,
+      "mode": "0644",
+      "sha256": "45563941781f0b876d1d0ff22279ca809f1e5d8a5976a023502db3cfb462903e"
+    },
+    {
+      "path": "templates/project/AGENTS.md",
+      "cap": "CAP-16",
+      "size": 1296,
+      "mode": "0644",
+      "sha256": "72930cf0243f19f0ae9307651b8089fe68affd5f4cdfeb7b9b96c90174286895"
+    },
+    {
+      "path": "templates/project/REVIEW_GUIDELINES.md",
+      "cap": "CAP-16",
+      "size": 610,
+      "mode": "0644",
+      "sha256": "26e0c73337e5bb8083f9f8f52bc1edec4bc3ed859e4a02076c64c1c22c6f1c28"
+    },
+    {
+      "path": "types/pi-runtime-shims.d.ts",
+      "cap": "CAP-16",
+      "size": 335,
+      "mode": "0644",
+      "sha256": "a1cec8f79f8134f9fa172470500f504dd8a9be24889eae4cf9a88d927414e150"
+    }
+  ],
+  "immutability": {
+    "manifestMutableAfterRecord": false,
+    "referenceVerifierMutableAfterRecord": false,
+    "constitutionMutableAfterRecord": false,
+    "sourceSnapshotMutableWithoutNewVersion": false,
+    "changeRule": "Never rewrite this v1 manifest, its pinned verifier or constitution input. Source evolution requires a new versioned manifest; old evidence remains historical."
+  },
+  "packageBoundary": {
+    "governanceArtifact": true,
+    "npmPackageEligible": false,
+    "featureDeletionOrActivation": false
+  },
+  "exitCheck": {
+    "totalFiles": 431,
+    "uniquePaths": 431,
+    "capabilitiesRepresented": 17,
+    "unownedFiles": 0,
+    "multiplePrimaryOwners": 0,
+    "countsMatchConstitution": true,
+    "pathListMatchesConstitution": true,
+    "sourceFeatureDeletion": false,
+    "capabilityActivation": false,
+    "providerOrBenchmarkExecution": false
+  }
+}

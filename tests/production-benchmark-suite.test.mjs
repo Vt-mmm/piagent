@@ -164,6 +164,8 @@ test("production-v1 spans the declared production matrix", () => {
 test("hidden boundary checks are disclosed in the public task contract", () => {
   const invoicePrompt = fs.readFileSync(path.join(suiteRoot, "prompts", "invoice-rounding.md"), "utf8");
   assert.match(invoicePrompt, /inclusive 0 through 10,000 range/);
+  const authorizationPrompt = fs.readFileSync(path.join(suiteRoot, "prompts", "tenant-role-authorization.md"), "utf8");
+  assert.match(authorizationPrompt, /`user\.tenantId` and `resource\.tenantId` are the\s+same non-empty string/);
 });
 
 test("every generated hidden grader rejects its regression and accepts reference behavior", (t) => {

@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "policyVersion": "trajectory-v1",
+  "taskId": "task-101",
+  "taskRunId": "task-101-run-1",
+  "sessionHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "changeMode": "source-change",
+  "riskLane": "normal",
+  "currentPhase": "terminal",
+  "recommendationRef": null,
+  "sequence": 0,
+  "appliedEventIds": [],
+  "lastTransition": null,
+  "createdAt": "2026-08-08T00:00:00.000Z",
+  "updatedAt": "2026-08-07T00:00:00.000Z",
+  "terminalTaskOutcomeRef": null,
+  "outcome": "completed"
+}

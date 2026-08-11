@@ -1,0 +1,235 @@
+{
+  "schemaVersion": 1,
+  "workItem": "CF-FS1-03",
+  "status": "complete",
+  "recordedAt": "2026-08-10T11:00:26Z",
+  "scope": {
+    "objective": "Enforce one task-wide system-triggered continuation by default, bind it to durable progress evidence, and hand off instead of reopening repeated review or repair loops.",
+    "implementationBoundary": "journal-backed-global-continuation-reservation-and-deterministic-handoff",
+    "providerOrBenchmarkRun": false,
+    "releaseOrExternalAction": false,
+    "nextWorkItemNotStarted": "CF-FS1-04"
+  },
+  "authorityBinding": {
+    "manifestVersion": "authority-v1",
+    "manifestDigest": "sha256:24f77f5f5ddcd5430c70c120599e10995f99f420bebb474ec352bb7af7030027",
+    "snapshotVersion": "task-authority-snapshot-v1",
+    "maximumSystemContinuationsPerTask": 1,
+    "reservationScope": [
+      "taskId",
+      "taskRunId",
+      "authoritySnapshotDigest"
+    ],
+    "advancedAuthorityRequired": true,
+    "broadDefaultRecovery": "one shared CAP-12 unit when the pinned task authorizes a model turn",
+    "strictHighRisk": "CAP-12 recovery and CAP-13 semantic review compete for the same single unit",
+    "mechanicalOnly": "no advanced system-triggered continuation"
+  },
+  "progressSignature": {
+    "version": "global-continuation-v1",
+    "algorithm": "sha256",
+    "domainUtf8": "piagent-global-continuation-progress-v1\n",
+    "boundFields": [
+      "taskId",
+      "taskRunId",
+      "authoritySnapshotDigest",
+      "capabilityId",
+      "classification",
+      "action",
+      "currentWorkingTreeDigest",
+      "normalizedEvidenceDigest",
+      "sortedBoundedMissingEvidence",
+      "sortedBoundedVerifierCommands",
+      "sortedBoundedReasonCodes"
+    ],
+    "sameSignatureDisposition": "repeated-progress-signature handoff",
+    "newSignatureAfterConsumptionDisposition": "global-budget-exhausted handoff",
+    "invalidOrUnavailableEvidenceDisposition": "fail-closed handoff"
+  },
+  "durabilityAndConcurrency": {
+    "authoritativeEvent": "continuation-consumed",
+    "store": ".pi/piagent-state/task-journal/events.jsonl",
+    "appendOnlyHashChain": true,
+    "exclusiveWriterLock": true,
+    "atomicCheckAndAppend": true,
+    "runtimeMemoryCounterRemoved": true,
+    "restartAndResumeResetBudget": false,
+    "concurrentProcessWinners": 1,
+    "corruptOrInvalidJournal": "cannot schedule a model turn"
+  },
+  "closedClassifications": [
+    "semantic-review",
+    "source-repair",
+    "verifier-retry",
+    "infrastructure-retry",
+    "model-retry",
+    "diagnostic-retry",
+    "policy-blocked"
+  ],
+  "schedulerInventory": {
+    "systemTriggeredProductionCallsites": 2,
+    "callsites": [
+      "packages/piagent-core/runtime/hooks/completion-hook.ts: CAP-13 semantic review",
+      "packages/piagent-core/runtime/hooks/completion-hook.ts: CAP-12 completion recovery"
+    ],
+    "allCallsitesUseSharedReservation": true,
+    "operatorDeliveredFollowUpExcluded": "piagent-guard sendUserMessage is operator-command driven and does not set triggerTurn=true",
+    "branchLocalCompletionRecoveryCounterRemoved": true,
+    "independentSemanticReviewMaximumRemoved": true
+  },
+  "handoffSemantics": {
+    "automaticTurnOnFirstEligibleReservation": true,
+    "automaticTurnAfterConsumedOrRepeated": false,
+    "trajectoryDisposition": "handoff-observed",
+    "nextSafeAction": "handoff",
+    "sourceMutationAllowed": false,
+    "staleJournalRecoveryFallbackRemoved": true,
+    "explicitNullRecoveryOverridesHistoricalJournalDecision": true
+  },
+  "runtimeIntegrity": {
+    "profileLockSha256": "ef6a10bff745c52f84a3ee2eb3ca5dc4c0bfe291013b56cac9f8402edcbab633",
+    "corePackageDigest": "sha256:128e2ce01827f32715c6b6bb221a1818b0cc66b35b4a2b05261fdf610d5193b1",
+    "runtimeFileCount": 116,
+    "doctorStatus": "current",
+    "continuationModulePinned": {
+      "path": "packages/piagent-core/runtime/recovery/continuation-budget.ts",
+      "byteSize": 10246,
+      "sha256": "0cc6ca588f69f9f8f65d19847ccdda3a1267a903c7cb62e70f76a84e40ab8659"
+    }
+  },
+  "ownership": {
+    "baseManifestSha256": "3bc2f59c1a37d7c89c56834c447e8803802131b2ae8862e2a32dce439ce76120",
+    "priorDeltaManifestSha256": "6aa6d2c0165e076abe35f1e752e017fbdba2a99e212073f13c61a8915d1bd610",
+    "deltaManifest": "governance/codex-first-product/evidence/fs1/capability-module-ownership-delta.v2.json",
+    "deltaManifestSha256": "b25eebeea8519dd2484a24906ad3cb62f8b668bd35913dd6b5e519e467b142e9",
+    "deltaVerifierSha256": "e65fabf871928c39cc36a002f88c80aa2e406b42e28368721566b3295ee5fe52",
+    "newProductionFiles": 1,
+    "currentProductionFiles": 443,
+    "primaryOwner": "CAP-12",
+    "ownershipIdentity": "sha256:03485ed9d308cdfc6488a586fb1a1dd1d3eb3ff6cfef8b0b7126b3bcf1b559e9",
+    "historicalManifestsMutated": false
+  },
+  "verification": [
+    {
+      "command": "node --test tests/continuation-budget.test.mjs",
+      "result": "pass",
+      "tests": 6,
+      "failures": 0,
+      "coverage": "resume persistence, repeated and changed signatures, cross-process atomic winner, shared CAP-12/CAP-13 unit, authority fail-closed, classification, corruption"
+    },
+    {
+      "command": "node --test tests/continuation-budget.test.mjs tests/runtime-session-modules.test.mjs tests/recovery-policy.test.mjs tests/recovery-chaos.test.mjs tests/task-state.test.mjs",
+      "result": "pass",
+      "tests": 74,
+      "failures": 0
+    },
+    {
+      "command": "node --test tests/piagent-guard-integration.test.mjs",
+      "result": "pass",
+      "tests": 95,
+      "failures": 0
+    },
+    {
+      "command": "node --test tests/pi-082-runtime-phase-e2e.test.mjs tests/pi-082-host-integration.test.mjs",
+      "result": "pass",
+      "tests": 10,
+      "failures": 0,
+      "provider": false
+    },
+    {
+      "command": "PIAGENT_NO_UPDATE_CHECK=1 node --test tests/*.test.mjs",
+      "result": "pass",
+      "tests": 1820,
+      "suites": 120,
+      "failures": 0
+    },
+    {
+      "command": "npm run verify",
+      "result": "pass"
+    },
+    {
+      "command": "npm run typecheck",
+      "result": "pass"
+    },
+    {
+      "command": "npm run architecture:check",
+      "result": "pass",
+      "sourceFiles": 191
+    },
+    {
+      "command": "npm run capabilities:check",
+      "result": "pass"
+    },
+    {
+      "command": "node governance/codex-first-product/evidence/fs1/verify-capability-ownership-delta-v2.mjs",
+      "result": "pass",
+      "baseFiles": 431,
+      "priorAddedFiles": 11,
+      "addedFiles": 1,
+      "currentFiles": 443
+    },
+    {
+      "command": "git diff --check",
+      "result": "pass"
+    }
+  ],
+  "finalFileHashes": [
+    {
+      "path": ".pi/piagent-profile.lock.json",
+      "sha256": "ef6a10bff745c52f84a3ee2eb3ca5dc4c0bfe291013b56cac9f8402edcbab633"
+    },
+    {
+      "path": "docs/authority-manifest.md",
+      "sha256": "8327d15932b2a7b02cb58d1dfaa0a8f24118f1ac05be9622ba27a26226f4b886"
+    },
+    {
+      "path": "packages/piagent-core/capabilities/runtime-integrity.js",
+      "sha256": "4057ac37245593a67f8ba7aaa3b9d1f304755c17f8079f305128bc7d911808cb"
+    },
+    {
+      "path": "packages/piagent-core/extensions/task-journal.js",
+      "sha256": "c7e947e146349e7c51f5fc4f6b13e36903b6bb132687bc9d245e6ac389ae1a6d"
+    },
+    {
+      "path": "packages/piagent-core/runtime/hooks/completion-hook.ts",
+      "sha256": "bdeb777fbe0003abe884deeb8832602c2965caa76e3e95822a67fd59b4814007"
+    },
+    {
+      "path": "packages/piagent-core/runtime/recovery/continuation-budget.ts",
+      "sha256": "0cc6ca588f69f9f8f65d19847ccdda3a1267a903c7cb62e70f76a84e40ab8659"
+    },
+    {
+      "path": "packages/piagent-core/runtime/recovery/handoff-projection.ts",
+      "sha256": "c5f335bc3822eefac6f9253fc65c4ba308d3d624fd7e74c827131d91039f7874"
+    },
+    {
+      "path": "packages/piagent-core/runtime/recovery/recovery-policy.ts",
+      "sha256": "48aca79e479de4eeb848e8a6e35276453fca7b48ef9023f73823f9edeb0f11ef"
+    },
+    {
+      "path": "packages/piagent-core/runtime/runtime-limits.ts",
+      "sha256": "0acf310e6e76199f36be2d139c6cec4690311cc3bac9873c0c7b481b1e950b20"
+    },
+    {
+      "path": "packages/piagent-core/runtime/session/runtime-state.ts",
+      "sha256": "fc1411c3347e9dcb101f15b2b238367c0953a543129c2ad9c921b09fdb109cee"
+    },
+    {
+      "path": "tests/continuation-budget.test.mjs",
+      "sha256": "7ec14787c06e257c35e8e4425871b1454c8ffd3f028bb33027dea5f1abb70dfb"
+    },
+    {
+      "path": "tests/pi-082-runtime-phase-e2e.test.mjs",
+      "sha256": "31606900cc170df460716070817c5491b0439b49fdd83a5f906f0ccd61928d22"
+    },
+    {
+      "path": "tests/piagent-guard-integration.test.mjs",
+      "sha256": "83b0e98fe0f10144b7f2a0c9d59d4b332b760f0d7fa0895ba6b96620916ce6ee"
+    }
+  ],
+  "explicitNonClaims": [
+    "CF-FS1-04 active-task upgrade, downgrade, rollback, crash, and stale-policy compatibility is not started.",
+    "The task-wide continuation ledger controls Piagent runtime scheduling; it is not a provider retry or benchmark claim.",
+    "No provider benchmark, token claim, release candidate, branch, worktree, commit, tag, package publish, install, or external action occurred."
+  ]
+}

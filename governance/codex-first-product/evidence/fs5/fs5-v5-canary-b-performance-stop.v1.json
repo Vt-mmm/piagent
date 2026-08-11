@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-08-11",
+  "workItem": "CF-FS5-04-v5-canary-b",
+  "objective": "Run the separately preflighted v5 Migration canary once, preserve the one allowed exact-zero infrastructure retry, and stop before the six-family pilot on any frozen engineering-gate failure.",
+  "prerequisite": {
+    "workItem": "CF-FS5-04-v5-canary-a",
+    "evidence": "fs5-v5-canary-a-pass.v1.json",
+    "sha256": "9f640c7d3dc03908962fc3a19a8fce459bdd6e466af14b0f8c7ef6bab93a6a99",
+    "decision": "complete"
+  },
+  "executedCandidate": {
+    "algorithm": "sha256-length-prefixed-entry-v2",
+    "contentDigest": "69123924e0654eaf3d69a2e5d71df626717b1199665ce5244fb597fe4176a951",
+    "fileCount": 845,
+    "protocolSha256": "f18e77143bfb18a155c7eeafb695aa3c490e3db5655c629794455d83fe538985",
+    "suiteDigest": "bb2e97a83a8a3d06976bcc94259e60c3513626704bd463d87c9808e66fe5152c",
+    "configurationDigest": "130cc44086a0c92b537e756b4652ded06b4a2eef1b6106c2b7144b8badd94a2e",
+    "runtimeDependencyDigest": "1b76f182716218e39631d44ac2e1805cee0b708f7eb12afda500e30c54f6f4d4",
+    "disposition": "immutable terminal v5 canary B candidate; do not resume, replay, relabel, or open its six-family pilot"
+  },
+  "preflight": {
+    "status": "ready",
+    "providerSessionsStarted": 0,
+    "model": "openai-codex/gpt-5.6-luna",
+    "thinking": "medium",
+    "surfaces": ["piagent", "codex-cli"],
+    "codexMode": "controlled",
+    "piagentTreatment": "local-safe",
+    "scenarioId": "resumable-migration-runner",
+    "maxSessions": 2
+  },
+  "canary": {
+    "runId": "capability-v1-20260811T073313Z-a5d85f",
+    "scenarioId": "resumable-migration-runner",
+    "acceptedSessions": 2,
+    "validProductPairs": 1,
+    "infrastructureAttempts": 3,
+    "infrastructureRetries": 1,
+    "infrastructureFailure": {
+      "class": "provider-infrastructure",
+      "failure": "provider-temporarily-unavailable-with-zero-measured-usage",
+      "usageStatus": "measured-but-unaccepted",
+      "freshTokens": 0,
+      "durationSeconds": 55.557,
+      "disposition": "the only protocol-authorized zero-usage retry; retained in the infrastructure ledger"
+    },
+    "baseline": {
+      "surface": "codex-cli",
+      "resolved": true,
+      "grade": 10,
+      "scopePass": true,
+      "safety": 10,
+      "freshTokens": 29285,
+      "durationSeconds": 135.254,
+      "toolCalls": 8
+    },
+    "candidate": {
+      "surface": "piagent",
+      "resolved": true,
+      "grade": 10,
+      "scopePass": true,
+      "safety": 10,
+      "workflow": 10,
+      "acceptance": { "satisfied": 7, "total": 8, "criticalSatisfied": 2, "criticalTotal": 3 },
+      "freshTokens": 33100,
+      "durationSeconds": 256.82,
+      "toolCalls": 15,
+      "systemContinuations": 1,
+      "shadowAdvisoryAddedContinuations": 0,
+      "blockedToolCalls": 0,
+      "blockedValidCallsUpperBound": 0,
+      "phaseAttribution": {
+        "available": true,
+        "promptsByPhase": { "intake": 1 },
+        "toolCallsByPhase": {
+          "execute": { "mutation": 4, "read": 4, "shell": 5 },
+          "verify": { "shell": 1 },
+          "handoff": { "shell": 1 }
+        },
+        "transitions": { "intake->execute": 1, "execute->verify": 1, "verify->handoff": 1 },
+        "toolResultsObserved": 15,
+        "toolResultErrors": 1,
+        "repeatedToolResults": 0,
+        "compactedToolResults": 0,
+        "outputCharsObserved": 7741
+      }
+    },
+    "engineeringRatios": {
+      "freshTokenRatio": 1.1302714700358545,
+      "freshTokenDeltaPercent": 13.03,
+      "durationRatio": 1.8987978174397802,
+      "freshTokenCeiling": 1.25,
+      "durationCeiling": 1.5
+    },
+    "artifacts": {
+      "report.json": "87bc6f42e4bf16898dc54b9ea8b32f9ebb5e394b49ad059f948c7b1d8d2f8260",
+      "runs.jsonl": "b8d5e8dcce0aed03e5a7f3d92516925b48a314a253add5fcc83dabc29d3b7bf0",
+      "run-manifest.json": "ad38441df04a1389b7c1d9a363664f1dbacb53f93a234a7467cc5e7d1af53646",
+      "infrastructure-attempts.jsonl": "30617f4f0108e7cb5bf22b43dacd430750e9f52dd7a78f4336c46e83d7e69211"
+    }
+  },
+  "finiteGate": {
+    "stageId": "canary-b-migration",
+    "passed": false,
+    "allowedToAdvance": false,
+    "providerLaneStopped": false,
+    "stageStopped": true,
+    "nextStage": null,
+    "freshTokenGate": "pass",
+    "durationGate": "fail",
+    "blockers": ["duration-engineering-stop"]
+  },
+  "forensicBoundary": {
+    "proven": [
+      "The accepted Pi outcome is functionally correct and workflow-complete.",
+      "The accepted Pi attempt itself took 256.82 seconds; this value excludes the separate 55.557-second zero-usage infrastructure attempt.",
+      "The aggregate runtime evidence records one tool-result error and one system continuation, both within the declared absolute budget.",
+      "No blocked-valid call, semantic-review loop, repeated tool result, or provider retry after measured usage occurred."
+    ],
+    "notProvableFromRetainedEvidence": [
+      "The accepted Pi session transcript was not retained, so the exact failed command or continuation prompt cannot be attributed safely.",
+      "The aggregate evidence cannot prove one source feature caused the latency regression."
+    ],
+    "safeDisposition": "Do not change runtime policy or rerun the provider from an aggregate correlation. Preserve the terminal stop and require a separate provider-free causal work item before any future candidate proposal."
+  },
+  "decision": {
+    "CF-FS5-04-v5-canary-b": "blocked-terminal-performance-stop",
+    "CF-FS5-05": "blocked",
+    "fs5ExitPassed": false,
+    "fs6EntryAllowed": false,
+    "providerResumeAllowed": false,
+    "sixFamilyPilotAllowed": false,
+    "tokenSavingClaimAllowed": false,
+    "generalizationClaimAllowed": false,
+    "releaseClaimAllowed": false,
+    "reason": "Canary B passes quality, safety, scope, workflow and the fresh-token ceiling, but its accepted Pi attempt is 1.8988 times the controlled Codex duration and exceeds the frozen 1.5 engineering ceiling. The mandatory smaller-stage stop prevents the six-family pilot and all downstream promotion."
+  }
+}

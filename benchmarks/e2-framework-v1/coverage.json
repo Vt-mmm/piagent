@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "checks": {
+    "tenant-hono-route": "Proves that the implementation uses the pinned Hono request lifecycle and registers the exact parameterized route.",
+    "tenant-authorization": "Kills tenant-boundary and role regressions by exercising matching, mismatching, absent, and unsupported caller identities.",
+    "tenant-validation": "Covers malformed repositories and blank path or header values so validation cannot be replaced by permissive coercion.",
+    "tenant-response-contract": "Distinguishes active, inactive, missing, and successful records while enforcing the exact public response projection.",
+    "tenant-immutability": "Detects caller mutation and leaked object identity across repeated framework requests with independently cloned observations.",
+    "search-normalization": "Exercises decomposed Unicode marks, Unicode whitespace, nullish values, and non-string values through the public normalizer.",
+    "search-hono-route": "Proves real Hono routing, normalized name and string-tag matching, stable input order, and an HTML content type.",
+    "search-limit-contract": "Kills default, boundary, fractional, zero, negative, oversized, and repeated-query limit parsing regressions.",
+    "search-accessible-escaping": "Requires both accessible form/list structure and exact escaping of every dangerous HTML character in all public fields.",
+    "search-empty-immutable": "Distinguishes a valid empty result from missing markup while detecting mutation of nested caller-owned item data.",
+    "inventory-schema-migration": "Uses a real in-memory Node SQLite database to prove the new schema, metadata version, and converted row contract.",
+    "inventory-validation-atomicity": "Injects invalid legacy rows and proves the transaction leaves no partial table, metadata, or converted records.",
+    "inventory-idempotency": "Runs migration twice against the same real database and rejects duplicate writes or nonzero repeated migration counts.",
+    "inventory-crash-resume": "Injects a deterministic mid-transaction crash, checks complete rollback, and then proves a normal retry can finish.",
+    "inventory-preserves-legacy": "Checks legacy schema and exact legacy rows after migration and statically requires prepared statements plus transaction control.",
+    "policy-normalized-shape": "Checks exact output keys, boolean conversion, trim and first-seen deduplication, fresh identity, and input immutability.",
+    "policy-validation": "Exercises null, arrays, percentage boundaries, unsafe numbers, malformed tenant containers, and blank tenant elements.",
+    "policy-enablement": "Covers disabled and missing subjects, tenant override, exclusive percentage boundaries, and invalid bucket values.",
+    "policy-api-reasons": "Requires the cross-package import and each exact decision reason without swallowing policy-layer validation errors.",
+    "policy-admin-summary": "Requires the admin package to reuse normalization and emit the exact stable summary including deduplicated tenants."
+  }
+}

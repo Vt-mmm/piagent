@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Command ngắn, rõ, ít token burn · Pi Agent Platform Docs</title>
-    <meta name="description" content="Ưu tiên dùng slash command vì mỗi command đã gói sẵn policy và flow. Thành viên không cần nhớ lại quy trình trong prompt." />
+    <meta name="description" content="Slash command gói sẵn policy và flow; một inspector menu duy nhất cho diff, command, safety và context. Thành viên không cần nhớ nhiều command rời." />
     <meta name="theme-color" content="#050505" />
     <link rel="canonical" href="https://piagent.io.vn/commands" />
     <link rel="alternate" hreflang="vi" href="https://piagent.io.vn/commands" />
@@ -12,7 +12,7 @@
     <link rel="alternate" hreflang="x-default" href="https://piagent.io.vn/commands" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <meta property="og:title" content="Command ngắn, rõ, ít token burn · Pi Agent Platform Docs" />
-    <meta property="og:description" content="Ưu tiên dùng slash command vì mỗi command đã gói sẵn policy và flow. Thành viên không cần nhớ lại quy trình trong prompt." />
+    <meta property="og:description" content="Slash command gói sẵn policy và flow; một inspector menu duy nhất cho diff, command, safety và context. Thành viên không cần nhớ nhiều command rời." />
     <meta property="og:url" content="https://piagent.io.vn/commands" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.2.17 docs · VI</span>
+        <span class="pill"><span class="pill-dot"></span>v1.3.0-rc.1 docs · VI</span>
         <nav class="language-switch" aria-label="Ngôn ngữ">
           <a class="language-option current" href="/commands" hreflang="vi" lang="vi" aria-current="true">VI</a>
           <a class="language-option" href="/en/commands" hreflang="en" lang="en">EN</a>
@@ -60,6 +60,7 @@
             <p class="nav-title">Get started</p>
             <a class="nav-link" href="/">Overview</a>
             <a class="nav-link" href="/quickstart">Quickstart</a>
+            <a class="nav-link" href="/whats-new">Có gì mới</a>
             <a class="nav-link" href="/scope">Phạm vi platform</a>
           </div>
           <div class="nav-group">
@@ -99,7 +100,7 @@
             </nav>
             <div class="page-head">
               <h1>Command ngắn, rõ, ít token burn</h1>
-              <p>Ưu tiên dùng slash command vì mỗi command đã gói sẵn policy và flow. Thành viên không cần nhớ lại quy trình trong prompt.</p>
+              <p>Slash command gói sẵn policy và flow; một inspector menu duy nhất cho diff, command, safety và context. Thành viên không cần nhớ nhiều command rời.</p>
             </div>
 <section class="section">
 
@@ -111,8 +112,11 @@
         <span class="tag">/model</span>
         <span class="tag">/commands</span>
         <span class="tag">/piagent-status</span>
+        <span class="tag">/piagent-inspector</span>
         <span class="tag">/piagent-orchestration</span>
         <span class="tag">/usage</span>
+        <span class="tag">/usage efficiency</span>
+        <span class="tag">/task-preflight</span>
         <span class="tag">/context preflight</span>
         <span class="tag">/name</span>
         <span class="tag">/fresh</span>
@@ -183,6 +187,43 @@
       </div>
       <p>Kiểm tra runtime, model routing, background runs và cost. Daily flow vẫn solo-first; subagents dùng cho scout/planning/review độc lập.</p>
     </article>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Product visibility</p>
+  <h2 id="product-status-command">Xem runtime đang quyết định gì</h2>
+  <p class="section-lead">Các command này đọc state deterministic, không cần model giải thích và không bắt buộc trong workflow hằng ngày.</p>
+  <div class="command-grid">
+    <article class="command-card">
+      <header><span>Preflight trước task</span><button class="clip-btn" data-clip="/task-preflight --json Review current repository state">Lấy lệnh</button></header>
+      <pre><code>/task-preflight --json Review current repository state</code></pre>
+      <p>Xem intent, risk, scope, runtime, solver route, phase, tool/helper recommendation, backend, approval và blocker trước khi bắt đầu.</p>
+    </article>
+    <article class="command-card">
+      <header><span>Live task status</span><button class="clip-btn" data-clip="/piagent-status">Lấy lệnh</button></header>
+      <pre><code>/piagent-status</code></pre>
+      <p>Đọc Task Contract, checkpoint, verifier, recovery, helper, resume state và terminal receipt. Receipt chỉ approved khi hard completion gate trên working tree hiện tại pass.</p>
+    </article>
+    <article class="command-card">
+      <header><span>Activity, diff và context</span><button class="clip-btn" data-clip="/piagent-inspector">Lấy lệnh</button></header>
+      <pre><code>/piagent-inspector</code></pre>
+      <p>Một menu duy nhất cho <span class="inline-code">summary</span>, <span class="inline-code">files</span>, <span class="inline-code">commands</span>, <span class="inline-code">security</span>, <span class="inline-code">context</span> và <span class="inline-code">toggle</span>. Panel bốn dòng tự hiện sát phía trên footer native; xanh lá là ổn, vàng cần chú ý, đỏ là failure/safety hoặc context từ 80%. Command chỉ đọc state local, không gọi model.</p>
+    </article>
+    <article class="command-card">
+      <header><span>Efficiency có nguồn</span><button class="clip-btn" data-clip="/usage efficiency">Lấy lệnh</button></header>
+      <pre><code>/usage efficiency</code></pre>
+      <p>Xem context/tool utilization, verify, repair, retry và helper usage. Giá trị runtime không đo được giữ là <span class="inline-code">null</span>, không ước đoán.</p>
+    </article>
+    <article class="command-card">
+      <header><span>Helper policy</span><button class="clip-btn" data-clip="/piagent-orchestration">Lấy lệnh</button></header>
+      <pre><code>/piagent-orchestration</code></pre>
+      <p>Xem solo-first policy, read-only roles, reviewer/Oracle recommendation, owned budget và one-writer invariant.</p>
+    </article>
+  </div>
+  <div class="callout">
+    <strong>Diff rõ nguồn, token không ước lượng.</strong>
+    <p>Footer status dùng file task đã quan sát để cập nhật nhanh; view <span class="inline-code">files</span> tính exact snapshot delta và đánh dấu <span class="inline-code">mixed-working-tree</span> nếu task đụng file đã dirty từ trước. Pi chỉ cung cấp model usage theo turn/session, nên token theo từng built-in tool luôn hiện unavailable.</p>
   </div>
 </section>
             <nav class="pager" aria-label="Trang kế tiếp">

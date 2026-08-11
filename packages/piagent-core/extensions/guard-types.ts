@@ -1,11 +1,14 @@
 // Shared shapes for the guard and its domain modules.
 // Types only: no runtime values, so importing this cannot introduce a cycle.
 
+import type { TaskAuthoritySnapshot } from "../capabilities/authority-manifest.ts";
+
 export type ProjectProfile = {
   schemaVersion?: number;
   projectId?: string;
   displayName?: string;
   mode?: string;
+  authorityProfile?: "broad-default" | "mechanical-only" | "strict-high-risk";
   permissionProfile?: PermissionProfileMode;
   protectedPaths?: string[];
   shellProtectedPaths?: string[];
@@ -185,6 +188,63 @@ export type WorkPlanStep = {
   updatedAt?: string;
 };
 
+export type AcceptanceReceipt = {
+  schemaVersion: 1;
+  source: "model" | "runtime";
+  promptHash?: string;
+  generatedAt?: string;
+  provenance?: {
+    assurance: "runtime-observed";
+    disposition: "first-pass-success" | "repaired-success" | "blocked" | "partial" | "failed" | "pending";
+    repairCount: number;
+    retryCount: number;
+    finalRecoveryDisposition: "not-needed" | "succeeded" | "blocked" | "partial" | "failed" | "pending";
+    failureRef: {
+      evidenceDigest: string;
+      category: "passed" | "compile-typecheck" | "test-assertion" | "lint-format" | "dependency-config" | "environment" | "provider-network" | "permission-policy" | "scope-protected-path" | "flaky-infrastructure" | "unknown";
+      captureRef: string | null;
+    } | null;
+    recoveryRef: {
+      policyVersion: "recovery-v1";
+      action: "repair" | "retry" | "fresh-session" | "ask-operator" | "handoff" | "blocked";
+      reasonCodes: string[];
+    } | null;
+    handoffRef: string | null;
+    recordedAt: string;
+  };
+  helperUsage?: {
+    mode: "off" | "recommend" | "on";
+    used: boolean;
+    reasonCodes: string[];
+    helpers: Array<{
+      role: "retriever" | "scout" | "planner" | "worker" | "reviewer" | "oracle" | "researcher";
+      disposition: string;
+      requestRef: string;
+      outputDigest: string | null;
+      calls: number;
+      tokens: number;
+    }>;
+    recordedAt: string;
+  };
+  criteria: Array<{
+    id: string;
+    hash: string;
+    obligation: string;
+    priority: "normal" | "critical";
+    status: "pending" | "satisfied" | "blocked";
+    evidence: Array<{
+      kind: string;
+      summary: string;
+      paths?: string[];
+      command?: string;
+      exitCode?: number;
+      workingTreeDigest?: string;
+      recordedAt?: string;
+    }>;
+    updatedAt?: string;
+  }>;
+};
+
 export type TaskAttemptSummary = {
   taskRunId: string;
   attempt: number;
@@ -193,6 +253,21 @@ export type TaskAttemptSummary = {
   reason?: string;
   ruledOut?: string;
   recordedAt: string;
+};
+
+export type WorkingTreeDigestAlgorithm = "wt-content-v2" | "legacy-untrusted";
+export type WorkingTreeDigestMigration = {
+  status: "verification-refresh-required" | "refreshed" | "new-attempt-required" | "historical-unverifiable";
+  source: "legacy-unversioned";
+  reasonCode: string;
+  requiredAction: "rerun-exact-verifier" | "none" | "start-new-attempt" | "historical-only";
+  archivePath: string;
+  archiveDigest: string;
+  archiveBytes: number;
+  baselineEvidenceDigest: string;
+  finalEvidenceDigest: string;
+  recordedAt: string;
+  refreshedAt?: string;
 };
 
 export type OrchestrationPolicySettings = {
@@ -287,6 +362,10 @@ export type TaskContract = {
   verifyCommands: string[];
   workPlan: WorkPlanStep[];
   reviewLenses: ReviewLens[];
+  acceptanceReceipt?: AcceptanceReceipt;
+  authoritySnapshot?: TaskAuthoritySnapshot;
+  workingTreeDigestAlgorithm: WorkingTreeDigestAlgorithm;
+  workingTreeDigestMigration?: WorkingTreeDigestMigration;
   orchestration?: {
     mode: OrchestrationMode;
     subagents: "not-used" | "optional" | "used";
@@ -309,6 +388,7 @@ export type TaskContract = {
     observedAt?: string;
     isError?: boolean;
     matchedProfileCommand?: boolean;
+    preWorkingTreeDigest?: string;
     workingTreeDigest?: string;
   }>;
   trace: {

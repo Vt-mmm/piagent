@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "workItem": "CF-FS4-04",
+  "status": "verified-local-external-input-required",
+  "verifiedAt": "2026-08-11",
+  "objective": "Provide a fail-closed public E3 custody boundary for a family- and repository-disjoint private holdout plus blinded sampled human calibration without exposing private prompts, graders, repositories, reviewer identities, raw scores, or private locators to candidate authors.",
+  "publicBoundary": {
+    "protocolVersion": "e3-custody-v1",
+    "accessPolicy": {
+      "path": "evals/private-holdout-v1/access-policy.v1.json",
+      "sha256": "3189aa3d811083954aaab5470a07c23963d05d4bacccc547a29844e2a8a76525",
+      "candidateAuthorPromptAccess": "denied-until-rc-freeze",
+      "candidateAuthorGraderAccess": "denied-until-rc-freeze",
+      "candidateAuthorRepositoryAccess": "denied-until-rc-freeze",
+      "operatorAccess": "execute-only"
+    },
+    "humanRubric": {
+      "path": "evals/private-holdout-v1/human-rubric.v1.json",
+      "sha256": "e291e5097ef1415cc037198e00d690d0abd7a8a9f8b98be773a25d313ac1b629",
+      "minimumItems": 12,
+      "minimumFamilies": 4,
+      "minimumReviewers": 2,
+      "doubleScoreEveryItem": true,
+      "unresolvedDisagreementsAllowed": 0,
+      "minimumAgreement": 0.8
+    },
+    "publicExposure": {
+      "path": "evals/private-holdout-v1/public-exposure.v1.json",
+      "sha256": "b91b86607d1499c13e87d577257e14f29fa347f50b1bd9eccab5e5bb64e1549d",
+      "minimumPrivateScenarios": 6,
+      "minimumPrivateFamilies": 6,
+      "minimumPrivateRepositories": 6,
+      "requiresFamilyDisjoint": true,
+      "requiresRepositoryDisjoint": true
+    },
+    "schema": {
+      "path": "schemas/benchmark-assurance-evidence.schema.json",
+      "sha256": "5d937632d2cfff34dbbb781dd367bb78feb64c36d571c36ca15f2cc40c576af8",
+      "legacyV1Disposition": "parseable-historical-untrusted",
+      "currentV2Disposition": "required-for-e3-readiness"
+    },
+    "readinessCommand": {
+      "path": "scripts/private-holdout-readiness.mjs",
+      "sha256": "3e9d6515055fbc9747939f09a694b5e608f9a0a78d6b54a10dbab56c3d9b9a12",
+      "output": "redacted-count-boolean-timestamp-and-digest-receipt-only"
+    },
+    "custodianRunbook": {
+      "path": "evals/private-holdout-v1/CUSTODIAN_RUNBOOK.md",
+      "sha256": "b59503971549d44f4366766db780c0d89bc0b90c5ccb01d2269c5440446954b8",
+      "selfAttestationAllowed": false,
+      "independentOriginReadbackRequired": true
+    }
+  },
+  "enforcement": {
+    "assuranceValidatorSha256": "9dc47300b2bfa1d71ff24a40efade63ee49378e98660e3b386059a7313d1b68b",
+    "suiteLoaderSha256": "fbdbe0e1dcd349c1e2982da80c5ffee73dc054651c80fa6abbc7487208b4e6d2",
+    "validSyntheticFixtureSha256": "6f6e3037fa4f1c1108fd3f2fe0cf4fa1c435fcee010b94c8158c72c0056bb305",
+    "invalidSyntheticFixtureSha256": "3b472868055e93ff3e1cc8e28040bdd13798c08af808476a1789f92faac7979f",
+    "failClosedOn": [
+      "candidate-author private access",
+      "non-execute-only operator access",
+      "family overlap",
+      "repository overlap",
+      "insufficient scenario, family, repository, reviewer, or sample counts",
+      "unresolved human disagreement",
+      "invented agreement arithmetic",
+      "surviving mutations or failing references",
+      "suite/evidence digest mismatch",
+      "expired or not-yet-valid access receipt",
+      "raw or unsupported private fields"
+    ]
+  },
+  "verification": {
+    "focusedCustodyCoreGolden": "128/128 PASS",
+    "runnerSuiteProvenance": "60/60 PASS",
+    "repositorySerial": "1897/1897 PASS through offline verify",
+    "offlineVerify": "PASS",
+    "typecheck": "PASS",
+    "architecture": "PASS, 194 source files within budgets",
+    "docs": "PASS, 4 EN/VI pairs",
+    "capabilityCatalog": "PASS, 2 packs",
+    "packageDistribution": "11/11 PASS, including the readiness command, E3 public boundary, and assurance schema",
+    "packageDryRun": "PASS, 1192 entries",
+    "diffCheck": "PASS",
+    "providerUsed": false,
+    "privateHoldoutExecuted": false
+  },
+  "externalEvidenceRequired": {
+    "state": "not-present-and-not-fabricated",
+    "custodianReceipt": "A controlled external custodian must create the actual sealed v2 receipt after comparing private family and repository lineage against the exact public exposure boundary.",
+    "humanCalibrationReceipt": "At least two blinded independent reviewers must double-score at least 12 sampled items across at least four families and an independent adjudicator must close every disagreement.",
+    "accessReceipt": "The append-only access log must prove candidate authors could not inspect private prompts, graders, or repository locators before the exact RC freeze and that the benchmark operator remained execute-only.",
+    "claimEffect": "Until these receipts exist and validate against an exact clean frozen candidate, generalization, production-stability, token, latency, quality, and release claims remain unavailable."
+  },
+  "boundaries": {
+    "localProtocolVerified": true,
+    "privateHoldoutReady": false,
+    "humanCalibrationRecorded": false,
+    "generalizationClaimAllowed": false,
+    "productionStabilityClaimAllowed": false,
+    "tokenClaimAllowed": false,
+    "releaseClaimAllowed": false,
+    "candidateFrozen": false,
+    "nextWorkItem": "CF-FS4-04",
+    "nextExactAction": "An independent external custodian must supply the sealed v2 private-holdout and human-calibration receipts. Re-run the redacted readiness command, then independently audit CF-FS4-05 in a new bounded session."
+  }
+}

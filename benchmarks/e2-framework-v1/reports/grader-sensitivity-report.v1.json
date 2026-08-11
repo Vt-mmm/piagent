@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "e2-framework-v1",
+  "kind": "grader-sensitivity",
+  "rubricCheckCount": 20,
+  "seededScenarioCount": 4,
+  "seededExpectedPassing": 0,
+  "referenceExpectedPassing": 4,
+  "alternativeExpectedPassing": 4,
+  "targetedMutationsExpectedKilled": 20,
+  "outsideScopeExpectedRejected": 4,
+  "claimTier": "capability",
+  "releaseClaimAllowed": false,
+  "providerUsed": false
+}

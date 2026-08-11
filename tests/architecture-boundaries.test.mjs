@@ -41,6 +41,18 @@ describe("architecture boundaries", () => {
     assert.ok(result.layers.runtime >= 4);
   });
 
+  it("keeps the composition exception bounded, dated, and assigned to an extraction work item", () => {
+    const exception = config.budgetExceptions.find((item) => item.file === "packages/piagent-core/extensions/piagent-guard.ts");
+    assert.equal(exception.approvedMaximum, config.lineBudgets.files[exception.file]);
+    assert.ok(exception.targetMaximum <= 5000);
+    assert.match(exception.reviewedAt, /^\d{4}-\d{2}-\d{2}$/);
+    assert.match(exception.expiresOn, /^\d{4}-\d{2}-\d{2}$/);
+    assert.ok(Date.parse(exception.expiresOn) > Date.parse(exception.reviewedAt));
+    assert.equal(exception.ownerWorkItem, "CF-P4-03-prep");
+    const guard = fs.readFileSync(path.join(repoRoot, exception.file), "utf8");
+    assert.ok(sourceLineCount(guard) <= exception.targetMaximum);
+  });
+
   it("rejects a runtime import back into composition and a new oversized module", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-architecture-"));
     temporaryRoots.add(root);

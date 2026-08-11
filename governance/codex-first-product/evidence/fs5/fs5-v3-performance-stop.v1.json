@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-08-11",
+  "workItem": "CF-FS5-04-v3",
+  "candidate": {
+    "algorithm": "sha256-length-prefixed-entry-v2",
+    "contentDigest": "232074950ef735be3c842309f9774f28d85862e7e2c24906243f6e82059711b2",
+    "fileCount": 838,
+    "disposition": "historical-exact-fs5-v3-candidate; superseded by this additive evidence record; never resume as current"
+  },
+  "confirmation": {
+    "scenarioId": "quoted-csv",
+    "runId": "production-v1-20260811T051629Z-1a4096",
+    "passed": true,
+    "blockers": [],
+    "piagent": { "grade": 10, "workflow": 10, "freshTokens": 16961, "durationSeconds": 66.152, "blockedValidCallsUpperBound": 0 },
+    "codexCli": { "grade": 10, "freshTokens": 22683, "durationSeconds": 80.127 },
+    "freshTokenRatio": 0.7477405986862408,
+    "durationRatio": 0.8255893768642281,
+    "artifacts": {
+      "report.json": "703fb92a6a51d7d19cbfc86f1f462a1b625c12b2eed8511df6d15d27da581dd9",
+      "runs.jsonl": "083bb370581472f66fa0d33faa55ec0907b8fdfb62985f21fbf489b7370bce03",
+      "run-manifest.json": "9189b473e1736225d39493b24558aff328138f4856ace19d2005147f6f59dd13"
+    }
+  },
+  "canaries": [
+    {
+      "stage": "canary-a-fullstack",
+      "runId": "capability-v1-20260811T052005Z-466c8c",
+      "passed": true,
+      "piagentFreshTokens": 17190,
+      "codexFreshTokens": 26986,
+      "freshTokenRatio": 0.636996961387386,
+      "durationRatio": 0.7070882697828637,
+      "blockedValidCallsUpperBound": 0,
+      "reportSha256": "b368b58502f0248cc16062d8bcfbde1212cdc2a1ac1a6d5682ef5617af00fcbb"
+    },
+    {
+      "stage": "canary-b-migration",
+      "runId": "capability-v1-20260811T052430Z-5b4587",
+      "passed": true,
+      "piagentFreshTokens": 29728,
+      "codexFreshTokens": 31242,
+      "freshTokenRatio": 0.9515395941360988,
+      "durationRatio": 0.9117849572695729,
+      "blockedValidCallsUpperBound": 0,
+      "reportSha256": "92b061f225faed0b2e761e48f654a508684315ed0bcf61aae9a2038aa8119014"
+    }
+  ],
+  "pilot": {
+    "runId": "production-v1-20260811T053026Z-a8b6e9",
+    "configurationDigest": "9fda74daf9a3e9e1e26fcc5c530be701957f2b24eeafce59cc56e4253426411c",
+    "acceptedSessions": 8,
+    "expectedSessions": 12,
+    "state": "paused-terminal-by-frozen-performance-stop",
+    "passedPairs": [
+      { "scenarioId": "tenant-role-authorization", "freshTokenRatio": 0.36199917874112747, "durationRatio": 0.5838808009670469 },
+      { "scenarioId": "quoted-csv", "freshTokenRatio": 0.5298360067033756, "durationRatio": 1.0271425073457394 },
+      { "scenarioId": "cli-double-dash", "freshTokenRatio": 0.30510023764548166, "durationRatio": 0.5871891178560552 }
+    ],
+    "failedPair": {
+      "scenarioId": "bounded-retry",
+      "quality": "both grade/scope/safety 10; Piagent workflow 10",
+      "piagent": {
+        "freshTokens": 36540,
+        "durationSeconds": 130.424,
+        "messages": 28,
+        "toolCalls": 15,
+        "systemContinuations": 0,
+        "blockedValidCallsUpperBound": 0
+      },
+      "codexCli": {
+        "freshTokens": 21121,
+        "durationSeconds": 75.322,
+        "messages": 4,
+        "toolCalls": 7
+      },
+      "freshTokenRatio": 1.7300317219828607,
+      "durationRatio": 1.7315525344520857,
+      "blockers": ["fresh-token-engineering-stop", "duration-engineering-stop"]
+    },
+    "forensicComparison": {
+      "v2SameFamilyPiagent": { "freshTokens": 11039, "durationSeconds": 59.873, "messages": 18, "toolCalls": 9 },
+      "v3Delta": { "freshTokens": 25501, "durationSeconds": 70.551, "messages": 10, "toolCalls": 6 },
+      "proven": "The v3 failure is post-quality model/tool choreography variance with no system continuation or policy block.",
+      "notProven": "The retained aggregate record cannot attribute the extra model turns to one source feature or prompt segment."
+    },
+    "artifacts": {
+      "runs.jsonl": "f2f4cfbb129c3b168a2471214ec1853c08e7bdcd82172c2e22fbc81c5df441d9",
+      "run-manifest.json": "32ce13c837ba13ac6ec9aa90273a68537de771d0cc8de7bccfbb480d1363fcd5",
+      "paused.json": "d269b3df6d29c92a02ce3de700346af82dac373661385a77e45da768dd75cfa2"
+    }
+  },
+  "decision": {
+    "CF-FS5-04-v3": "blocked-by-frozen-performance-stop",
+    "CF-FS5-05": "blocked",
+    "fs5ExitPassed": false,
+    "fs6EntryAllowed": false,
+    "providerResumeAllowed": false,
+    "tokenSavingClaimAllowed": false,
+    "generalizationClaimAllowed": false,
+    "releaseClaimAllowed": false,
+    "reason": "One accepted pair exceeds both finite engineering ceilings. Stop rules prohibit finishing or relabeling the partial pilot."
+  }
+}

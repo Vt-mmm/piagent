@@ -226,9 +226,10 @@ chỉ lưu histogram tên tool. Chỉ claim chất lượng/token/cost khi các 
 - cùng acceptance criteria;
 - verify command rõ;
 - token/cost/duration được runtime ghi lại;
-- quality/reliability đạt ít nhất `9/10`, safety đạt `10/10`, workflow đạt ngưỡng
-  của suite (`10/10` cho smoke, ít nhất `9/10` cho production), quality không
-  giảm và ít nhất ba cặp cùng model có exact usage.
+- safety đạt `10/10` và các gate quality/reliability/workflow của suite pass;
+  production yêu cầu điểm tổng hợp ít nhất `9.5/10`, mọi task và mọi
+  category/profile/lifecycle/difficulty band lớn hơn `9.5`, quality không giảm,
+  cùng paired usage đủ confidence.
 
 `piagent-benchmark <project> --record ...` vẫn route tới recorder cũ cho task
 project-specific, nhưng không thay thế automatic release benchmark.

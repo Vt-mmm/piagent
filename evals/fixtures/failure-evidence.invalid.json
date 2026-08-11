@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "parserVersion": "failure-parser-v1",
+  "exitCode": 1,
+  "signals": ["raw-output"],
+  "structuredEvents": [],
+  "outputRef": { "sha256": "bad", "chars": -1, "truncated": false, "captureRef": "../../secret" },
+  "rawOutput": "TOKEN=must-not-be-stored"
+}

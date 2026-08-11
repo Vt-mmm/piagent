@@ -226,6 +226,7 @@ describe("be-readonly-fe keeps the backend read-only", () => {
   // only for repositories whose backend sat at the root.
   for (const candidate of [
     "backend/src/main.ts",
+    "v-nexus-backend/src/main.ts",
     "server/index.js",
     "api/routes.ts",
     "apps/api/src/main.ts",
@@ -245,6 +246,7 @@ describe("be-readonly-fe keeps the backend read-only", () => {
   // The frontend is the write target. A frontend's own HTTP client lives in an
   // `api` directory, and a `**/api/**` pattern would have frozen it.
   for (const candidate of [
+    "v-nexus-frontend/src/api/client.ts",
     "packages/web/src/api/client.ts",
     "frontend/src/api/client.ts",
     "apps/web/src/server/render.ts",

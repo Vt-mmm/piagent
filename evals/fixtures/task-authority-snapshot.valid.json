@@ -1,0 +1,279 @@
+{
+  "schemaVersion": 1,
+  "snapshotVersion": "task-authority-snapshot-v1",
+  "manifestVersion": "authority-v1",
+  "manifestDigest": "sha256:28112cb62a8868d4371f78c9edefff7489adb0dc6616b9e489c4303b80307393",
+  "releaseVersion": "1.3.0",
+  "profile": "broad-default",
+  "taskId": "task-authority-fixture",
+  "taskRunId": "run-authority-fixture",
+  "capturedAt": "2026-08-10T00:00:00.000Z",
+  "resolution": {
+    "source": "profile",
+    "modeOverrides": {}
+  },
+  "globalBudgets": {
+    "maxSystemContinuationsPerTask": 1,
+    "maxAutomaticDispatchesPerTask": 1,
+    "maxSpecialistReviewRoundsPerTask": 1
+  },
+  "capabilities": [
+    {
+      "id": "CAP-01",
+      "owner": "task-contract-maintainer",
+      "mode": "enforce",
+      "authority": "enforce",
+      "dependencies": [],
+      "budgets": {
+        "systemContinuations": 0,
+        "automaticDispatches": 0,
+        "reviewRounds": 0
+      }
+    },
+    {
+      "id": "CAP-02",
+      "owner": "security-policy-maintainer",
+      "mode": "enforce",
+      "authority": "enforce",
+      "dependencies": [
+        "CAP-01"
+      ],
+      "budgets": {
+        "systemContinuations": 0,
+        "automaticDispatches": 0,
+        "reviewRounds": 0
+      }
+    },
+    {
+      "id": "CAP-03",
+      "owner": "verification-truth-maintainer",
+      "mode": "enforce",
+      "authority": "enforce",
+      "dependencies": [
+        "CAP-01",
+        "CAP-02"
+      ],
+      "budgets": {
+        "systemContinuations": 0,
+        "automaticDispatches": 0,
+        "reviewRounds": 0
+      }
+    },
+    {
+      "id": "CAP-04",
+      "owner": "long-task-state-maintainer",
+      "mode": "enforce",
+      "authority": "enforce",
+      "dependencies": [
+        "CAP-01",
+        "CAP-03"
+      ],
+      "budgets": {
+        "systemContinuations": 0,
+        "automaticDispatches": 0,
+        "reviewRounds": 0
+      }
+    },
+    {
+      "id": "CAP-05",
+      "owner": "context-efficiency-maintainer",
+      "mode": "on",
+      "authority": "enforce",
+      "dependencies": [
+        "CAP-01"
+      ],
+      "budgets": {
+        "systemContinuations": 0,
+        "automaticDispatches": 0,
+        "reviewRounds": 0
+      }
+    },
+    {
+      "id": "CAP-06",
+      "owner": "tool-surface-maintainer",
+      "mode": "on",
+      "authority": "enforce",
+      "dependencies": [
+        "CAP-02"
+      ],
+      "budgets": {
+        "systemContinuations": 0,
+        "automaticDispatches": 0,
+        "reviewRounds": 0
+      }
+    },
+    {
+      "id": "CAP-07",
+      "owner": "retrieval-memory-maintainer",
+      "mode": "recommend",
+      "authority": "advise",
+      "dependencies": [
+        "CAP-02",
+        "CAP-05"
+      ],
+      "budgets": {
+        "systemContinuations": 0,
+        "automaticDispatches": 0,
+        "reviewRounds": 0
+      }
+    },
+    {
+      "id": "CAP-08",
+      "owner": "solver-runtime-maintainer",
+      "mode": "shadow",
+      "authority": "observe",
+      "dependencies": [
+        "CAP-01",
+        "CAP-05"
+      ],
+      "budgets": {
+        "systemContinuations": 0,
+        "automaticDispatches": 0,
+        "reviewRounds": 0
+      }
+    },
+    {
+      "id": "CAP-09",
+      "owner": "phase-policy-maintainer",
+      "mode": "shadow",
+      "authority": "observe",
+      "dependencies": [
+        "CAP-01",
+        "CAP-02",
+        "CAP-10"
+      ],
+      "budgets": {
+        "systemContinuations": 0,
+        "automaticDispatches": 0,
+        "reviewRounds": 0
+      }
+    },
+    {
+      "id": "CAP-10",
+      "owner": "trajectory-observability-maintainer",
+      "mode": "shadow",
+      "authority": "observe",
+      "dependencies": [
+        "CAP-01",
+        "CAP-04"
+      ],
+      "budgets": {
+        "systemContinuations": 0,
+        "automaticDispatches": 0,
+        "reviewRounds": 0
+      }
+    },
+    {
+      "id": "CAP-11",
+      "owner": "assurance-maintainer",
+      "mode": "advisory",
+      "authority": "observe",
+      "dependencies": [
+        "CAP-01",
+        "CAP-03"
+      ],
+      "budgets": {
+        "systemContinuations": 0,
+        "automaticDispatches": 0,
+        "reviewRounds": 0
+      }
+    },
+    {
+      "id": "CAP-12",
+      "owner": "recovery-maintainer",
+      "mode": "on",
+      "authority": "enforce",
+      "dependencies": [
+        "CAP-01",
+        "CAP-03",
+        "CAP-04"
+      ],
+      "budgets": {
+        "systemContinuations": 1,
+        "automaticDispatches": 0,
+        "reviewRounds": 0
+      }
+    },
+    {
+      "id": "CAP-13",
+      "owner": "semantic-enforcement-maintainer",
+      "mode": "off",
+      "authority": "off",
+      "dependencies": [
+        "CAP-02",
+        "CAP-03",
+        "CAP-09",
+        "CAP-11",
+        "CAP-12"
+      ],
+      "budgets": {
+        "systemContinuations": 0,
+        "automaticDispatches": 0,
+        "reviewRounds": 0
+      }
+    },
+    {
+      "id": "CAP-14",
+      "owner": "orchestration-maintainer",
+      "mode": "recommend",
+      "authority": "advise",
+      "dependencies": [
+        "CAP-02",
+        "CAP-05",
+        "CAP-08"
+      ],
+      "budgets": {
+        "systemContinuations": 0,
+        "automaticDispatches": 0,
+        "reviewRounds": 0
+      }
+    },
+    {
+      "id": "CAP-15",
+      "owner": "parent-routing-maintainer",
+      "mode": "off",
+      "authority": "off",
+      "dependencies": [
+        "CAP-02",
+        "CAP-08",
+        "CAP-14"
+      ],
+      "budgets": {
+        "systemContinuations": 0,
+        "automaticDispatches": 0,
+        "reviewRounds": 0
+      }
+    },
+    {
+      "id": "CAP-16",
+      "owner": "release-operator-experience-maintainer",
+      "mode": "on",
+      "authority": "enforce",
+      "dependencies": [
+        "CAP-02",
+        "CAP-04"
+      ],
+      "budgets": {
+        "systemContinuations": 0,
+        "automaticDispatches": 0,
+        "reviewRounds": 0
+      }
+    },
+    {
+      "id": "CAP-17",
+      "owner": "evaluation-claims-maintainer",
+      "mode": "on",
+      "authority": "observe",
+      "dependencies": [
+        "CAP-03",
+        "CAP-04"
+      ],
+      "budgets": {
+        "systemContinuations": 0,
+        "automaticDispatches": 0,
+        "reviewRounds": 0
+      }
+    }
+  ],
+  "snapshotDigest": "sha256:d62518f6f247e435a7666288b8079531215b19869ffc13423211d6d5106f7393"
+}

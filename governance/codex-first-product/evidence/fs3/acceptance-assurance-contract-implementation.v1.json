@@ -1,0 +1,156 @@
+{
+  "schemaVersion": "codex-first-fs3-acceptance-assurance-evidence-v1",
+  "workItem": "CF-FS3-03",
+  "recordedAt": "2026-08-10T23:32:00+07:00",
+  "status": "pass",
+  "scope": {
+    "objective": "Bound acceptance and performance assurance to an advisory projection with a finite JavaScript/TypeScript adapter family, calibrated abstention, and no universal-regex proof or broad-default provider continuation.",
+    "providerInvoked": false,
+    "benchmarkRunInvoked": false,
+    "releaseActionInvoked": false,
+    "nextWorkItemStarted": false,
+    "candidateState": "unfrozen",
+    "candidateDigest": null
+  },
+  "reviewedIdentity": {
+    "head": "4f37ae05d56431f2f9db9c4159e20252c3da3b2a",
+    "exactTag": "v1.2.17",
+    "packageVersion": "1.2.17",
+    "policyManifestVersion": "authority-v1",
+    "executionProtocolSha256": "aab941a5422a2797fc1a3a1e420764a1f03fffcb4f06e4d04ea70fe3bbc1e470",
+    "roadmapSha256": "cb91fe410add6de293431308436ae7cff34e593c89fe8146a3633d8c85550aa7",
+    "profileLockSha256": "053b468f709672d852aabd2fc795cf4c8ab3034696ae7c0c00d1b1d97abecd9f",
+    "profilePackageDigest": "sha256:230128e77fafa7be67df580b42f6f329fbbca39e04b121f54823d883b86d7ed9",
+    "workingTreeDisposition": "Dirty user-owned full-source development tree retained. This artifact binds exact current carriers and provider-free local verification only; it is not a clean or frozen release-candidate identity."
+  },
+  "productionContract": {
+    "broadDefault": "CAP-11 advisory/observe; CAP-13 semantic review remains off",
+    "strictAvailability": "CAP-13 remains a pinned strict-high-risk opt-in and is not promoted by this work item",
+    "taskTruth": "Task Contract v2 remains the sole task truth. Acceptance receipts and performance plans are bounded projections and cannot replace operator criteria.",
+    "finiteAdapters": {
+      "policyVersion": "acceptance-language-adapters-v1",
+      "proofCapable": ["JavaScript", "TypeScript", "ESM", "CommonJS"],
+      "neutralCompanions": ["JSON", "Markdown", "YAML", "TOML", "lock/snapshot", "CSS", "HTML", "SVG"],
+      "abstain": "Known unsupported source languages and unresolved extensions never enter JavaScript semantic proof. Unsupported proof remains pending without conflict guessing, recovery guidance, or a performance-review turn."
+    },
+    "broadDefaultEffects": {
+      "acceptanceHardBlocks": 0,
+      "performanceReviewTurns": 0,
+      "semanticRecoveryTurns": 0,
+      "providerTurns": 0
+    },
+    "rollback": "Set CAP-11 off for a clean replacement task. Existing pinned tasks and receipts keep their provenance; no in-place task reinterpretation or schema migration is required."
+  },
+  "implementation": [
+    {
+      "path": "packages/piagent-core/extensions/acceptance-language-adapters.js",
+      "sha256": "aca32576b3f425889a4f6e7368c35915d7889ef8edad948b96b28164b0a1bda6",
+      "change": "Added a closed adapter registry, bounded source corpus, neutral companion classification, and explicit unsupported/unresolved abstention."
+    },
+    {
+      "path": "packages/piagent-core/extensions/acceptance-receipt.js",
+      "sha256": "cbda9a25074d6ad2b0d85a7241e05b499ddb529d53904dda7808d42a37aa0515",
+      "change": "Routed semantic receipt/conflict/recovery evidence through the finite adapter corpus while preserving current-tree verifier and generic read-only evidence."
+    },
+    {
+      "path": "packages/piagent-core/runtime/quality/performance-assurance.ts",
+      "sha256": "a54daf140cc0413754df997fe76583baa307e04d7119ba9093bfaf7cdc282816",
+      "change": "Calibrated performance assurance to abstain without review for unsupported or unresolved changed-source languages."
+    },
+    {
+      "path": "packages/piagent-core/capabilities/runtime-integrity.js",
+      "sha256": "3117208cc351915d883625632cc976978a821002e6054498b280c10c700bb660",
+      "change": "Bound the new adapter policy into the production runtime-integrity inventory."
+    },
+    {
+      "path": "tests/acceptance-adapter-contract.test.mjs",
+      "sha256": "561fa86194eaf61b59531ab4024c19520bca9a8f3fc3d8cde964cf205e8c67fc",
+      "change": "Added the explicit positive, negative, alternative-valid, mutation, and unsupported-language exit matrix."
+    },
+    {
+      "path": ".pi/piagent-profile.lock.json",
+      "sha256": "053b468f709672d852aabd2fc795cf4c8ab3034696ae7c0c00d1b1d97abecd9f",
+      "change": "Regenerated the deterministic runtime-integrity lock for the exact current source."
+    }
+  ],
+  "exitEvidence": [
+    {
+      "requirement": "Finite adapter boundary",
+      "status": "pass",
+      "evidence": {
+        "supportedExtensions": 8,
+        "unsupportedSamples": ["python", "go", "rust"],
+        "unresolvedExtensionSamples": 1,
+        "neutralOnlyProofCapable": false,
+        "mixedUnsupportedProofCapable": false
+      }
+    },
+    {
+      "requirement": "Positive and alternative-valid",
+      "status": "pass",
+      "evidence": "Equivalent ESM and CommonJS implementations with executable focused invalid-partition tests both satisfy the critical semantic criterion."
+    },
+    {
+      "requirement": "Negative and mutation",
+      "status": "pass",
+      "evidence": "A missing fractional guard remains pending even with a current passing verifier; old evidence is invalidated and cannot survive a current-tree mutation."
+    },
+    {
+      "requirement": "Unsupported-language abstention",
+      "status": "pass",
+      "evidence": "Python files containing JavaScript-looking proof strings remain pending, produce no semantic conflicts or critical recovery projection, and schedule no performance review."
+    },
+    {
+      "requirement": "Broad-default zero-turn advisory behavior",
+      "status": "pass",
+      "evidence": "The broad-default integration completes with pending semantic evidence and zero performance-review turns when exact current-tree verification passes; a stale verifier remains a hard invariant and blocks completion."
+    }
+  ],
+  "verification": [
+    {
+      "command": "node --test tests/acceptance-adapter-contract.test.mjs tests/acceptance-recovery-provenance.test.mjs tests/adaptive-runtime-services.test.mjs tests/runtime-session-modules.test.mjs",
+      "result": "76/76 pass"
+    },
+    {
+      "command": "node --test --test-name-pattern='keeps broad-default semantic evidence advisory' tests/piagent-guard-integration.test.mjs",
+      "result": "1/1 pass"
+    },
+    {
+      "command": "node --test --test-reporter=dot tests/piagent-guard-integration.test.mjs",
+      "result": "100/100 pass"
+    },
+    {
+      "command": "node --test tests/pi-082-host-tool-error.test.mjs tests/pi-082-runtime-phase-e2e.test.mjs",
+      "result": "12/12 pass; provider-free"
+    },
+    {
+      "command": "node --test tests/capability-core.test.mjs tests/package-distribution.test.mjs tests/project-shape.test.mjs tests/architecture-boundaries.test.mjs",
+      "result": "103/103 pass"
+    },
+    {
+      "command": "npm run verify -- --offline",
+      "result": "pass; complete local scaffold; authenticated catalog deliberately skipped"
+    },
+    {
+      "command": "npm run typecheck && npm run architecture:check && git diff --check",
+      "result": "pass; 193 source files within boundaries and line budgets"
+    },
+    {
+      "command": "node scripts/capability-catalog.mjs doctor --profile .pi/piagent-profile.json --lock .pi/piagent-profile.lock.json --package-source ../",
+      "result": "pass; lock current"
+    }
+  ],
+  "schemaAndMigration": {
+    "providerToolSchema": "unchanged",
+    "taskContract": "unchanged v2",
+    "acceptanceReceiptSchema": "unchanged v1",
+    "journalTrajectoryHandoff": "unchanged",
+    "migration": "none",
+    "authorityPromotion": "none; CAP-11 remains broad-default advisory/observe and CAP-13 remains strict opt-in"
+  },
+  "deferredEvidence": [
+    "No provider, benchmark, cache-token, outcome-quality, capability-promotion, candidate-freeze or release claim was made.",
+    "Only JavaScript/TypeScript semantic proof is supported by this finite adapter version. Other languages deliberately abstain until a separately owned adapter and calibrated corpus are added.",
+    "Pairwise interaction with phase, recovery, helpers and resume remains CF-FS3-06; real-framework false-block calibration remains FS4."
+  ]
+}

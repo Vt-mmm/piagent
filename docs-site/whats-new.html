@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="vi" data-copy-success="Đã lấy" data-copy-fallback="Chọn lệnh">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Luồng task an toàn hơn, ít thao tác tay hơn · Pi Agent Platform Docs</title>
+    <meta name="description" content="Product stabilization bổ sung runtime truth, trajectory, recovery, helper policy, activity inspector và completion receipt fail-closed mà không phá workflow cũ." />
+    <meta name="theme-color" content="#050505" />
+    <link rel="canonical" href="https://piagent.io.vn/whats-new" />
+    <link rel="alternate" hreflang="vi" href="https://piagent.io.vn/whats-new" />
+    <link rel="alternate" hreflang="en" href="https://piagent.io.vn/en/whats-new" />
+    <link rel="alternate" hreflang="x-default" href="https://piagent.io.vn/whats-new" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta property="og:title" content="Luồng task an toàn hơn, ít thao tác tay hơn · Pi Agent Platform Docs" />
+    <meta property="og:description" content="Product stabilization bổ sung runtime truth, trajectory, recovery, helper policy, activity inspector và completion receipt fail-closed mà không phá workflow cũ." />
+    <meta property="og:url" content="https://piagent.io.vn/whats-new" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/docs.css" />
+    <script src="/assets/docs.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Pi Agent Platform">
+        <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" /></span>
+        <span>Pi Agent Platform</span>
+      </a>
+      <div class="top-actions">
+        <span class="pill"><span class="pill-dot"></span>v1.3.0-rc.1 docs · VI</span>
+        <nav class="language-switch" aria-label="Ngôn ngữ">
+          <a class="language-option current" href="/whats-new" hreflang="vi" lang="vi" aria-current="true">VI</a>
+          <a class="language-option" href="/en/whats-new" hreflang="en" lang="en">EN</a>
+        </nav>
+        <a class="button social" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer" aria-label="Mở GitHub repository">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          GitHub
+        </a>
+        <button class="button mobile-menu" type="button" data-menu>Lộ trình</button>
+        <a class="button top-command-link" href="/commands">Commands</a>
+      </div>
+    </header>
+
+    <div class="layout with-toc">
+      <aside class="sidebar" data-sidebar>
+        <div class="sidebar-search" aria-label="Tìm trong tài liệu">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M10.8 18.1a7.3 7.3 0 1 1 0-14.6 7.3 7.3 0 0 1 0 14.6Zm5.3-1.7 4.4 4.4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          <input type="search" placeholder="Tìm trang" data-filter />
+        </div>
+
+        <nav aria-label="Tài liệu">
+          <div class="nav-group">
+            <p class="nav-title">Get started</p>
+            <a class="nav-link" href="/">Overview</a>
+            <a class="nav-link" href="/quickstart">Quickstart</a>
+            <a class="nav-link current" href="/whats-new" aria-current="page">Có gì mới</a>
+            <a class="nav-link" href="/scope">Phạm vi platform</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Build</p>
+            <a class="nav-link" href="/profiles">Project profile</a>
+            <a class="nav-link" href="/permissions">Permission modes</a>
+            <a class="nav-link" href="/commands">Command catalog</a>
+            <a class="nav-link" href="/workflows">Workflows</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">MCP</p>
+            <a class="nav-link" href="/mcp">MCP overview</a>
+            <a class="nav-link" href="/mcp-servers">Quản lý server</a>
+            <a class="nav-link" href="/mcp-auth">Auth và readiness</a>
+            <a class="nav-link" href="/mcp-approval">Approval gate</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Operate</p>
+            <a class="nav-link" href="/security">Security model</a>
+            <a class="nav-link" href="/architecture">Architecture</a>
+            <a class="nav-link" href="/context-engine">Context Engine</a>
+            <a class="nav-link" href="/benchmark">Benchmark</a>
+            <a class="nav-link" href="/runtime">Runtime tools</a>
+            <a class="nav-link" href="/team">Team usage</a>
+          </div>
+        </nav>
+      </aside>
+
+      <main>
+        <div class="content-shell" data-article>
+            <nav class="breadcrumb" aria-label="Breadcrumb">
+              <a href="/">Docs</a>
+              <span aria-hidden="true">/</span>
+              <span>Get started</span>
+              <span aria-hidden="true">/</span>
+              <span>Có gì mới</span>
+            </nav>
+            <div class="page-head">
+              <h1>Luồng task an toàn hơn, ít thao tác tay hơn</h1>
+              <p>Product stabilization bổ sung runtime truth, trajectory, recovery, helper policy, activity inspector và completion receipt fail-closed mà không phá workflow cũ.</p>
+            </div>
+<section class="section">
+  <p class="section-kicker">Product stabilization</p>
+  <h2 id="thay-doi-chinh">Sáu thay đổi người dùng sẽ thấy</h2>
+  <p class="section-lead">Workflow cũ vẫn chạy. Update này đưa thêm bằng chứng runtime và các gate fail-closed vào phía sau, rồi mở những projection ngắn để người dùng kiểm tra khi cần.</p>
+  <div class="grid cols-3">
+    <article class="card">
+      <h3 id="runtime-truth">Runtime truth</h3>
+      <p>Model, provider, thinking, context window và provenance được đọc từ runtime hoặc authenticated catalog. Fact chưa có giữ là unknown, không đoán từ tên model.</p>
+    </article>
+    <article class="card">
+      <h3 id="trajectory">Task trajectory</h3>
+      <p>Task đi qua plan, execute, verify, review, handoff và terminal bằng state có replay. Event stale, sai identity hoặc corrupt sẽ fail closed.</p>
+    </article>
+    <article class="card">
+      <h3 id="recovery">Recovery và resume</h3>
+      <p>Lỗi được phân loại trước khi retry hoặc repair. Environment, provider, permission, policy và scope failure không bao giờ cấp quyền sửa source.</p>
+    </article>
+    <article class="card">
+      <h3 id="helpers">Role-bound helpers</h3>
+      <p>Scout, planner, reviewer và Oracle nhận scope/tool/budget có giới hạn. Parent model được giữ nguyên; automatic worker và multi-writer vẫn tắt.</p>
+    </article>
+    <article class="card">
+      <h3 id="receipt">Completion receipt</h3>
+      <p>Receipt chỉ approved khi trace completed, acceptance satisfied và hard gate trên working tree hiện tại pass. Thiếu verifier hoặc work plan còn pending phải giữ remaining risk.</p>
+    </article>
+    <article class="card">
+      <h3 id="product-views">Product views</h3>
+      <p>Preflight, live status, activity inspector, efficiency và orchestration policy có output deterministic; người dùng không cần nhờ model nhớ hoặc diễn giải state.</p>
+    </article>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Daily flow</p>
+  <h2 id="luong-su-dung">Luồng dùng hằng ngày không bị phá</h2>
+  <div class="steps">
+    <article class="step"><div><h3>Giao task như trước</h3><p>Dùng prompt tự nhiên hoặc <span class="inline-code">/workflow task &lt;request&gt;</span>. Không cần gọi preflight thủ công.</p></div></article>
+    <article class="step"><div><h3>Runtime tự ghi nhận truth</h3><p>Task Contract, context, changed files, trajectory và checkpoint được cập nhật từ hook/tool result thay vì trí nhớ của model.</p></div></article>
+    <article class="step"><div><h3>Verify đúng working tree</h3><p>Chỉ exact command đã quan sát, exit thành công và khớp current-tree digest mới được tính là passing evidence.</p></div></article>
+    <article class="step"><div><h3>Recovery hoặc handoff có giới hạn</h3><p>Source repair và transient retry có ceiling. Trường hợp không an toàn chuyển sang handoff/operator thay vì tiếp tục đoán.</p></div></article>
+    <article class="step"><div><h3>Completion fail closed</h3><p>Trace completed không đủ. Work plan, acceptance, changed-file integrity và verifier hiện hành phải cùng pass trước khi receipt approved.</p></div></article>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Inspect when needed</p>
+  <h2 id="command-moi">Năm command để nhìn xuyên suốt luồng</h2>
+  <p class="section-lead">Đây là command quan sát và chẩn đoán, không phải bước bắt buộc trước mỗi task.</p>
+  <div class="command-grid">
+    <article class="command-card">
+      <header><span>Preflight, activity, status, metrics và helper policy</span><button class="clip-btn" data-clip="/task-preflight --json Review current repository state&#10;/piagent-inspector&#10;/piagent-status&#10;/usage efficiency&#10;/piagent-orchestration">Lấy lệnh</button></header>
+      <pre><code>/task-preflight --json Review current repository state
+/piagent-inspector
+/piagent-status
+/usage efficiency
+/piagent-orchestration</code></pre>
+      <p>Xem <a href="/workflows">Workflow thay đổi thế nào</a> để biết chính xác từng command đọc gì, không làm gì và nên dùng ở thời điểm nào.</p>
+    </article>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Automatic vs opt-in</p>
+  <h2 id="tu-dong-va-opt-in">Cái gì tự chạy, cái gì cần bật rõ ràng</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Surface</th><th>Mặc định</th><th>Hành vi</th></tr></thead>
+      <tbody>
+        <tr><td>Runtime snapshot + task evidence</td><td>Tự động</td><td>Ghi fact, journal, verifier, recovery và receipt có giới hạn.</td></tr>
+        <tr><td>Activity inspector</td><td>Panel bốn dòng tự động, menu tùy chọn</td><td>Hiện task diff, command, safety và context sát footer; không gọi model và không đổi workflow state.</td></tr>
+        <tr><td>Solver</td><td><span class="inline-code">shadow</span></td><td>Đánh giá route nhưng không đổi parent model hoặc tự chiếm quyền workflow.</td></tr>
+        <tr><td>Phase tools</td><td><span class="inline-code">shadow</span></td><td>Tính projection; dùng <span class="inline-code">PIAGENT_PHASE_TOOLS=on</span> để áp tool visibility theo phase.</td></tr>
+        <tr><td>Recovery</td><td><span class="inline-code">on</span></td><td>Tự retry/repair trong ceiling; dùng <span class="inline-code">PIAGENT_AUTO_RECOVERY=off</span> để quay về ordinary handoff.</td></tr>
+        <tr><td>Helpers</td><td><span class="inline-code">recommend</span></td><td>Chỉ giải thích recommendation; <span class="inline-code">PIAGENT_HELPERS_MODE=on</span> chỉ dispatch read-only role qua adapter có sẵn.</td></tr>
+        <tr><td>Parent routing + automatic worker</td><td><span class="inline-code">off</span></td><td>Không tự đổi parent model, không tự bật writer và không có multi-writer mặc định.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Compatibility</p>
+  <h2 id="tuong-thich">Không cần đổi thói quen hoặc migrate task cũ</h2>
+  <div class="callout">
+    <strong>Task Contract vẫn là v2.</strong>
+    <p>Runtime snapshot, solver, trajectory, recovery và helper state là sidecar versioned/additive. Alias command cũ vẫn hoạt động; state cũ thiếu projection mới phải hiện unknown/unavailable thay vì được nâng cấp thành success.</p>
+  </div>
+  <div class="grid cols-2">
+    <article class="card"><h3 id="host-boundary">Host không phải sandbox</h3><p>Policy giảm lỗi trong tool surface được kiểm soát nhưng không cô lập code khỏi account của operator. External và destructive action vẫn cần confirmation.</p></article>
+    <article class="card"><h3 id="safe-defaults">Default giữ conservative</h3><p>Solver/phase tools chưa được promote khỏi shadow, helpers chưa tự dispatch, parent routing và automatic worker vẫn off cho tới khi có rollout evidence riêng.</p></article>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Try it</p>
+  <h2 id="test-truc-tiep">Test trực tiếp sau khi mở Pi session mới</h2>
+  <div class="command-grid">
+    <article class="command-card">
+      <header><span>Read-only product walkthrough</span><button class="clip-btn" data-clip="/task-preflight --json Review this repository without modifying files&#10;/piagent-inspector&#10;/piagent-status&#10;/usage efficiency">Lấy lệnh</button></header>
+      <pre><code>/task-preflight --json Review this repository without modifying files
+/piagent-inspector
+/piagent-status
+/usage efficiency</code></pre>
+      <p>Sau update package hoặc local checkout, mở Pi session mới để extension được reload. Dùng <a href="/commands">Command catalog</a> cho toàn bộ command và alias.</p>
+    </article>
+  </div>
+</section>
+            <nav class="pager" aria-label="Trang kế tiếp">
+              <a class="pager-prev" href="/quickstart">
+                <span class="pager-label">Trước</span>
+                <span class="pager-title">Quickstart</span>
+              </a>
+              <a class="pager-next" href="/scope">
+                <span class="pager-label">Tiếp</span>
+                <span class="pager-title">Phạm vi platform</span>
+              </a>
+            </nav>
+
+            <footer class="footer">
+              <p>Pi Agent Platform docs · static HTML · governed agent workflow</p>
+              <div class="footer-links" aria-label="Liên kết ngoài">
+                <a href="https://piagent.io.vn" target="_blank" rel="noopener noreferrer">piagent.io.vn</a>
+                <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub repository</a>
+                <a href="/en/whats-new" hreflang="en">English</a>
+                <a href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer">Facebook profile</a>
+              </div>
+            </footer>
+        </div>
+      </main>
+
+      <aside class="toc" aria-label="Mục lục trang">
+        <p class="toc-title">Trên trang này</p>
+        <nav data-toc></nav>
+      </aside>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,445 @@
+{
+  "schemaVersion": "capability-constitution-v1",
+  "workItem": "CF-FS0-03",
+  "createdAt": "2026-08-10",
+  "repository": {
+    "head": "4f37ae05",
+    "tag": "v1.2.17",
+    "packageVersion": "1.2.17",
+    "candidateState": "unfrozen",
+    "changedTreeInventoryDigest": "dd41102e05ecb4c980bf61370e17992f4515b86dd328601a77ab54af8b0761fe"
+  },
+  "decision": {
+    "strategy": "full-source-maturity-gated",
+    "sourceDeletionAllowed": false,
+    "taskContractIsSoleTaskTruth": true,
+    "receiptIsProjectionOnly": true,
+    "targetModesAreActivatedByThisArtifact": false,
+    "policyActivationWorkItem": "CF-FS1-01",
+    "releaseRule": "All capabilities remain present in source and package scope; authority is promoted independently only after its own evidence gate.",
+    "rollbackRule": "Lower a capability authority mode or use mechanical-only rollback without deleting capability code, widening permissions, or rewriting persisted truth."
+  },
+  "authorityVocabulary": {
+    "mode": ["off", "shadow", "recommend", "advisory", "on", "strict"],
+    "authority": ["off", "observe", "advise", "enforce", "orchestrate"],
+    "rule": "Mode controls activation; authority controls what the capability may cause. Observe and advise may not block, mutate, dispatch, or add a model continuation."
+  },
+  "layers": [
+    {
+      "id": "L0",
+      "name": "hard-invariants",
+      "releaseDefault": "enforce",
+      "rollback": "emergency runtime rollback only; never silently disabled by a normal feature flag"
+    },
+    {
+      "id": "L1",
+      "name": "mechanical-efficiency",
+      "releaseDefault": "on/enforce",
+      "rollback": "mechanical-only or per-feature off while preserving L0"
+    },
+    {
+      "id": "L2",
+      "name": "observation",
+      "releaseDefault": "shadow/advisory",
+      "rollback": "off without state deletion"
+    },
+    {
+      "id": "L3",
+      "name": "guidance",
+      "releaseDefault": "recommend/advisory",
+      "rollback": "shadow or off; no automatic continuation"
+    },
+    {
+      "id": "L4",
+      "name": "bounded-enforcement",
+      "releaseDefault": "strict opt-in only",
+      "rollback": "shadow/off with explicit handoff for incompatible active state"
+    }
+  ],
+  "capabilities": [
+    {
+      "id": "CAP-01",
+      "name": "Task Contract and intake truth",
+      "layer": "L0",
+      "purpose": "Create and preserve the sole durable statement of task identity, scope, acceptance criteria, attempts, and outcome.",
+      "trigger": "Task intake, explicit task start, resume, and terminal projection.",
+      "targetMode": "on",
+      "targetAuthority": "enforce",
+      "budget": "Prompt intake <=8000 characters; automatic criteria <=12 and each fragment <=600 characters; no projection may truncate contract truth.",
+      "failurePolicy": "Ambiguous or incompatible identity fails closed to handoff or a new attempt; never infer completion.",
+      "telemetry": ["taskRunId", "intakeMode", "criteriaCount", "scopeResolution", "migrationDisposition"],
+      "killSwitch": "L0 emergency rollback only; active task state requires explicit compatibility handling.",
+      "owner": "task-contract-maintainer",
+      "sourceAnchors": ["packages/piagent-core/extensions/task-state.js", "packages/piagent-core/runtime/workflows/task-intake.ts", "schemas/task-contract.schema.json"]
+    },
+    {
+      "id": "CAP-02",
+      "name": "Permission, scope, protected-path, and external-action guards",
+      "layer": "L0",
+      "purpose": "Keep model/tool actions inside operator authority, project scope, and protected/external-action policy.",
+      "trigger": "Every tool authorization, shell analysis, MCP action, and protected or external target.",
+      "targetMode": "on",
+      "targetAuthority": "enforce",
+      "budget": "Synchronous deterministic authorization; no provider retry may widen scope or approval.",
+      "failurePolicy": "Deny before mutation and return a classified, redacted reason; uncertain targets fail closed.",
+      "telemetry": ["decision", "reasonCode", "carrier", "normalizedTargets", "approvalClass"],
+      "killSwitch": "L0 emergency rollback only; external and destructive confirmation remains mandatory.",
+      "owner": "security-policy-maintainer",
+      "sourceAnchors": ["packages/piagent-core/extensions/piagent-guard.ts", "packages/piagent-core/extensions/policy-core.js", "packages/piagent-core/security/sensitive-data.js"]
+    },
+    {
+      "id": "CAP-03",
+      "name": "Current-tree, verifier, and terminal truth",
+      "layer": "L0",
+      "purpose": "Bind proof to the exact current tree and latest stable execution of every configured verifier before terminal completion.",
+      "trigger": "Verifier call/result, tree mutation, completion request, and terminal write.",
+      "targetMode": "on",
+      "targetAuthority": "enforce",
+      "budget": "One stable pre/post snapshot per exact verifier execution; current digest namespace is wt-content-v2.",
+      "failurePolicy": "Missing, unavailable, stale, tree-changing, or mixed-digest proof cannot complete or score as current.",
+      "telemetry": ["preDigest", "postDigest", "currentDigest", "verifierCommandHash", "observedAt", "terminalDisposition"],
+      "killSwitch": "L0 emergency rollback only; historical evidence remains immutable and untrusted for current proof.",
+      "owner": "verification-truth-maintainer",
+      "sourceAnchors": ["packages/piagent-core/extensions/working-tree-digest.js", "packages/piagent-core/extensions/runtime-evidence.js", "packages/piagent-core/runtime/hooks/completion-hook.ts"]
+    },
+    {
+      "id": "CAP-04",
+      "name": "Journal, checkpoint, resume, and handoff",
+      "layer": "L0",
+      "purpose": "Make long work resumable without accepting stale, corrupt, cross-session, or partial state.",
+      "trigger": "Durable event append, checkpoint, interruption, process restart, resume, and handoff.",
+      "targetMode": "on",
+      "targetAuthority": "enforce",
+      "budget": "Journal <=5000 events and <=64 KiB per event; handoff <=1 MiB; one immutable terminal outcome.",
+      "failurePolicy": "Corruption, identity conflict, unsafe active state, or stale evidence blocks mutation and requires handoff/new attempt.",
+      "telemetry": ["journalSequence", "checkpointDigest", "resumeDisposition", "handoffReference", "stateOwner"],
+      "killSwitch": "L0 emergency rollback only; preserve evidence and never auto-delete incompatible state.",
+      "owner": "long-task-state-maintainer",
+      "sourceAnchors": ["packages/piagent-core/extensions/task-journal.js", "packages/piagent-core/runtime/recovery/resume-state.ts", "packages/piagent-core/runtime/recovery/handoff-projection.ts"]
+    },
+    {
+      "id": "CAP-05",
+      "name": "Context budgets and compaction",
+      "layer": "L1",
+      "purpose": "Bound model context and tool-output growth while retaining task-critical evidence.",
+      "trigger": "Input classification, context-pack assembly, tool-result capture, and context thresholds.",
+      "targetMode": "on",
+      "targetAuthority": "enforce",
+      "budget": "Watch 50%, compact 70%, fresh 82%; tool result 12000 chars/180 lines with 6000-char preview; capture <=500 KiB; source file <=512 KiB and repository index <=8000 files.",
+      "failurePolicy": "Compaction failure degrades to bounded evidence and explicit unknown; never drop L0 proof silently.",
+      "telemetry": ["estimatedContext", "compactionReason", "selectedFiles", "capturedBytes", "truncation"],
+      "killSwitch": "mechanical-only retains this capability; individual automatic context selection may be disabled.",
+      "owner": "context-efficiency-maintainer",
+      "sourceAnchors": ["packages/piagent-core/extensions/context-engine.js", "packages/piagent-core/runtime/context/adaptive-planner.ts", "packages/piagent-core/runtime/session/tool-result-compaction.ts"]
+    },
+    {
+      "id": "CAP-06",
+      "name": "Tool groups and schema-stable runtime",
+      "layer": "L1",
+      "purpose": "Expose a small stable provider tool surface while enforcing runtime permission at call time.",
+      "trigger": "Session start, runtime registration, tool call, tool result, and mode resolution.",
+      "targetMode": "on",
+      "targetAuthority": "enforce",
+      "budget": "Provider-visible schema must remain stable across phase transitions; registration and hook paths stay within architecture line budgets.",
+      "failurePolicy": "Unavailable or unauthorized runtime action fails closed without changing schemas mid-session.",
+      "telemetry": ["visibleToolCount", "toolGroup", "runtimeDecision", "schemaDigest", "resultCompaction"],
+      "killSwitch": "mechanical-only retains the stable base group; optional groups can be disabled without weakening L0.",
+      "owner": "tool-surface-maintainer",
+      "sourceAnchors": ["packages/piagent-core/runtime/tools/tool-groups.ts", "packages/piagent-core/runtime/hooks/tool-call-hook.ts", "packages/piagent-core/runtime/registration/extension-registration.ts"]
+    },
+    {
+      "id": "CAP-07",
+      "name": "Repository memory and retrieval",
+      "layer": "L3",
+      "purpose": "Recommend bounded, current, cited repository context without automatic model-work expansion.",
+      "trigger": "Repository search/memory request or context recommendation.",
+      "targetMode": "recommend",
+      "targetAuthority": "advise",
+      "budget": "Bounded citations and current-file validation; no automatic helper or provider dispatch at RC default.",
+      "failurePolicy": "Stale, missing, or unverifiable citations are omitted; base task continues without them.",
+      "telemetry": ["candidateCount", "selectedCount", "citationCurrent", "abstentionReason"],
+      "killSwitch": "off or shadow; repository memory bytes remain preserved.",
+      "owner": "retrieval-memory-maintainer",
+      "sourceAnchors": ["packages/piagent-core/extensions/repository-memory.js", "packages/piagent-core/runtime/context/retrieval-route-policy.ts", "packages/piagent-core/skills/piagent-source-cache/SKILL.md"]
+    },
+    {
+      "id": "CAP-08",
+      "name": "Solver, model, and effort decision",
+      "layer": "L2",
+      "purpose": "Observe and explain routing/effort opportunities without replacing the operator-selected model in the first release candidate.",
+      "trigger": "Task feature extraction and model catalog inspection.",
+      "targetMode": "shadow",
+      "targetAuthority": "observe",
+      "budget": "Local deterministic decision only; zero model turns and zero automatic model substitution.",
+      "failurePolicy": "Missing catalog or low confidence records abstention and preserves the selected model/effort.",
+      "telemetry": ["features", "candidateRoute", "confidence", "reasons", "regret"],
+      "killSwitch": "off; no task truth or operator selection is rewritten.",
+      "owner": "solver-runtime-maintainer",
+      "sourceAnchors": ["packages/piagent-core/runtime/solver/solver-policy.ts", "packages/piagent-core/runtime/model/authenticated-catalog.ts", "schemas/solver-decision.schema.json"]
+    },
+    {
+      "id": "CAP-09",
+      "name": "Phase classifier and phase tools",
+      "layer": "L2",
+      "purpose": "Observe task-phase/tool mismatches before any production enforcement promotion.",
+      "trigger": "Tool call classification and task phase transition.",
+      "targetMode": "shadow",
+      "targetAuthority": "observe",
+      "budget": "Zero extra model turns; provider tool schema stays unchanged.",
+      "failurePolicy": "Classifier uncertainty cannot block a valid call in the release default.",
+      "telemetry": ["phase", "tool", "wouldAllow", "reason", "falseBlockReview"],
+      "killSwitch": "off; strict phase enforcement remains an independent opt-in promotion.",
+      "owner": "phase-policy-maintainer",
+      "sourceAnchors": ["packages/piagent-core/runtime/tools/phase-tool-runtime.ts", "packages/piagent-core/runtime/tools/phase-tools.ts"]
+    },
+    {
+      "id": "CAP-10",
+      "name": "Trajectory and long-task observability",
+      "layer": "L2",
+      "purpose": "Record bounded phase progress and durable long-task transitions without steering by itself.",
+      "trigger": "Phase transition, verification, recovery, checkpoint, resume, and terminal event.",
+      "targetMode": "shadow",
+      "targetAuthority": "observe",
+      "budget": "Bounded append-only event/state projection within journal limits; no provider turn.",
+      "failurePolicy": "Invalid or conflicting trajectory blocks unsafe resume through L0 but does not invent progress.",
+      "telemetry": ["phase", "transition", "sourceHook", "treeDigest", "terminalReference"],
+      "killSwitch": "observation can be hidden from guidance, but persisted safety evidence is retained.",
+      "owner": "trajectory-observability-maintainer",
+      "sourceAnchors": ["packages/piagent-core/runtime/trajectory/trajectory-runtime.ts", "packages/piagent-core/runtime/trajectory/trajectory-store.ts", "schemas/trajectory-state.schema.json"]
+    },
+    {
+      "id": "CAP-11",
+      "name": "Acceptance and performance assurance",
+      "layer": "L3",
+      "purpose": "Project criterion and performance risks as bounded advice while Task Contract and exact verifiers remain authoritative.",
+      "trigger": "Current-tree receipt refresh and completion projection.",
+      "targetMode": "advisory",
+      "targetAuthority": "observe",
+      "budget": "Zero automatic model continuations in the broad RC profile; finite local analysis; projection must cover all contract criteria without truncation.",
+      "failurePolicy": "Unsupported syntax, ambiguous causality, or incomplete evidence yields unknown/advice rather than a hard block in the broad profile.",
+      "telemetry": ["criterionStatus", "missingDimension", "abstentionReason", "falsePositiveReview", "falseNegativeReview"],
+      "killSwitch": "off or shadow; Task Contract, verifier evidence, and prior receipts remain intact.",
+      "owner": "assurance-maintainer",
+      "sourceAnchors": ["packages/piagent-core/extensions/acceptance-receipt.js", "packages/piagent-core/extensions/acceptance-executable-evidence.js", "packages/piagent-core/runtime/quality/performance-assurance.ts"]
+    },
+    {
+      "id": "CAP-12",
+      "name": "Recovery",
+      "layer": "L1",
+      "purpose": "Perform one bounded, evidence-classified continuation when it is safer and cheaper than handoff.",
+      "trigger": "Failed verifier, transient infrastructure result, or explicit recoverable completion state.",
+      "targetMode": "on",
+      "targetAuthority": "enforce",
+      "budget": "Target global maximum one system-triggered continuation per task across all recovery classes.",
+      "failurePolicy": "Repeated hypothesis, unknown progress, unsafe mutation, or exhausted budget immediately hands off.",
+      "telemetry": ["failureClass", "hypothesis", "attempt", "progressSignature", "disposition"],
+      "killSwitch": "off returns to ordinary fail-closed handoff and preserves recovery history.",
+      "owner": "recovery-maintainer",
+      "sourceAnchors": ["packages/piagent-core/runtime/recovery/recovery-policy.ts", "packages/piagent-core/extensions/failure-types.ts", "schemas/failure-classification.schema.json"]
+    },
+    {
+      "id": "CAP-13",
+      "name": "Semantic review and repair",
+      "layer": "L4",
+      "purpose": "Offer narrowly authorized semantic repair for high-risk opt-in tasks after exact evidence identifies a bounded conflict.",
+      "trigger": "Strict-profile completion with current-digest critical conflict and explicit eligible paths.",
+      "targetMode": "strict",
+      "targetAuthority": "enforce",
+      "budget": "Strict profile only; <=12 paths, <=2 revisions, <=8 successful mutations, <=3 unsuccessful calls, and subject to the global continuation budget.",
+      "failurePolicy": "Missing/corrupt state, target drift, unavailable proof, carrier escape, or ceiling exhaustion fails closed to handoff.",
+      "telemetry": ["grantState", "eligiblePaths", "revision", "mutationCount", "verifierDisposition"],
+      "killSwitch": "off/shadow for new tasks; incompatible active strict state requires explicit handoff or pinned-policy resume.",
+      "owner": "semantic-enforcement-maintainer",
+      "sourceAnchors": ["packages/piagent-core/runtime/recovery/semantic-repair-handshake.ts", "packages/piagent-core/runtime/recovery/semantic-repair-runtime.ts"]
+    },
+    {
+      "id": "CAP-14",
+      "name": "Helpers, subagents, and Oracle",
+      "layer": "L3",
+      "purpose": "Recommend bounded specialist help while preserving one-writer ownership and operator/model control.",
+      "trigger": "Independent review, repository scouting, planning, or high-risk uncertainty signal.",
+      "targetMode": "recommend",
+      "targetAuthority": "advise",
+      "budget": "No automatic dispatch at RC default; owned-work ceiling 2 concurrent/3 total, one per read-only role and one writer.",
+      "failurePolicy": "Unavailable, duplicate, expired, or conflicting helper work returns to the parent; late results are ignored.",
+      "telemetry": ["recommendation", "role", "reservation", "usageDigest", "cancellation"],
+      "killSwitch": "off; helper state is cancelled/expired without altering parent task truth.",
+      "owner": "orchestration-maintainer",
+      "sourceAnchors": ["packages/piagent-core/runtime/orchestration/helper-lifecycle.ts", "packages/piagent-core/runtime/orchestration/owned-work-budget.ts", "packages/piagent-core/subagents/piagent-reviewer.md"]
+    },
+    {
+      "id": "CAP-15",
+      "name": "Parent auto-routing and workers",
+      "layer": "L4",
+      "purpose": "Retain future parent-routing and worker surfaces without granting production orchestration authority before field evidence.",
+      "trigger": "Explicit experimental policy only.",
+      "targetMode": "off",
+      "targetAuthority": "off",
+      "budget": "Zero automatic parent routing and zero automatic worker dispatch in the first release candidate.",
+      "failurePolicy": "Always preserve the operator-selected parent and return a recommendation or abstention.",
+      "telemetry": ["shadowDecision", "candidate", "confidence", "override", "regret"],
+      "killSwitch": "already off by default; experimental state can be discarded without deleting source.",
+      "owner": "parent-routing-maintainer",
+      "sourceAnchors": ["packages/piagent-core/runtime/model/model-route-policy.ts", "packages/piagent-core/runtime/model/model-route-runtime.ts", "packages/piagent-core/runtime/model/model-route-types.ts"]
+    },
+    {
+      "id": "CAP-16",
+      "name": "Operator UX, packaging, install, update, and rollback",
+      "layer": "L1",
+      "purpose": "Provide truthful operator views and a reproducible package/install/update/rollback boundary.",
+      "trigger": "CLI, setup, doctor, status, packaging, install, update, rollback, and profile resolution.",
+      "targetMode": "on",
+      "targetAuthority": "enforce",
+      "budget": "No external install/publish/tag/push without explicit operator approval; package contains only declared release assets.",
+      "failurePolicy": "Identity mismatch, missing artifact, dirty candidate, unsupported platform, or credential risk blocks release action.",
+      "telemetry": ["packageVersion", "candidateDigest", "platform", "installDisposition", "rollbackDisposition"],
+      "killSwitch": "operator-selected rollback to exact prior artifact; never erase user auth, sessions, memory, or task evidence.",
+      "owner": "release-operator-experience-maintainer",
+      "sourceAnchors": ["packages/piagent-core/runtime/product/operator-projections.ts", "scripts/setup.sh", "packages/piagent-core/capabilities/runtime-integrity.js"]
+    },
+    {
+      "id": "CAP-17",
+      "name": "Benchmark, telemetry, and claim tiers",
+      "layer": "L2",
+      "purpose": "Measure exact candidate behavior and separate diagnostic, causal, release, and generalization claims.",
+      "trigger": "Local evaluation, controlled canary, causal pilot, release benchmark, or cohort evidence ingest.",
+      "targetMode": "on",
+      "targetAuthority": "observe",
+      "budget": "Provider runs require separate approval and finite stop rules; release benchmark is Piagent versus Codex CLI on the exact candidate and identical Luna Medium policy.",
+      "failurePolicy": "Unaccepted, contaminated, partial, unstable, underpowered, or incomparable evidence cannot support token/release claims.",
+      "telemetry": ["suiteDigest", "candidateDigest", "surface", "quality", "workflow", "freshTokens", "duration", "claimEligibility"],
+      "killSwitch": "stop provider execution; preserve immutable evidence and produce a no-claim report.",
+      "owner": "evaluation-claims-maintainer",
+      "sourceAnchors": ["packages/piagent-core/benchmark/benchmark-core.js", "scripts/benchmark-runner.mjs", "benchmarks/production-v1/suite.json"]
+    }
+  ],
+  "productionModuleScope": {
+    "roots": ["packages/piagent-core", "scripts", "schemas", "adapters", "templates", "architecture", "catalog", "benchmarks", "evals", "packs", "types"],
+    "rootFiles": ["package.json", "package-lock.json"],
+    "exclusions": [
+      {"path": "tests", "reason": "validation code, not a shipped production module"},
+      {"path": "docs", "reason": "documentation is governed in CF-FS0-04 and release gates, not runtime ownership"},
+      {"path": "docs-site", "reason": "generated documentation output"},
+      {"path": "governance", "reason": "control plane, intentionally package-excluded"},
+      {"path": "plans", "reason": "ignored raw historical/private evidence, never release input"}
+    ],
+    "resolution": "Apply orderedOwnershipRules by first match; fallback CAP-16 owns packaging/operator static assets. Each in-scope regular file resolves to exactly one primary capability."
+  },
+  "orderedOwnershipRules": [
+    {"id": "R01", "capability": "CAP-17", "match": "benchmarks/**, evals/**, core benchmark/**, evaluation scripts, benchmark/eval schemas"},
+    {"id": "R02", "capability": "CAP-13", "match": "**/semantic-repair*"},
+    {"id": "R03", "capability": "CAP-11", "match": "acceptance*, assurance/review/exact-output/model-mutation/model-authorship/return-contract"},
+    {"id": "R04", "capability": "CAP-04", "match": "task-journal, state-retention, local-state-path, handoff-projection, resume-state"},
+    {"id": "R05", "capability": "CAP-12", "match": "remaining runtime/recovery, failure types and failure schemas"},
+    {"id": "R06", "capability": "CAP-10", "match": "runtime/trajectory and trajectory schemas"},
+    {"id": "R07", "capability": "CAP-09", "match": "runtime/tools/phase-*"},
+    {"id": "R08", "capability": "CAP-15", "match": "runtime/model/model-route-policy|runtime|types"},
+    {"id": "R09", "capability": "CAP-08", "match": "runtime/solver, remaining runtime/model, model/solver/task-feature schemas and model scripts"},
+    {"id": "R10", "capability": "CAP-14", "match": "runtime/orchestration, subagents, helper/role schemas"},
+    {"id": "R11", "capability": "CAP-07", "match": "repository-memory, retrieval-route-policy, source-cache skill, knowledge/memory registration"},
+    {"id": "R12", "capability": "CAP-05", "match": "context engine/index, document intake, adaptive planner, tool-result compaction, context schema/script"},
+    {"id": "R13", "capability": "CAP-01", "match": "task state/lifecycle/view, project shape, intake/routing, task start/preflight, Task Contract schema"},
+    {"id": "R14", "capability": "CAP-03", "match": "working-tree/task-digest/runtime-evidence/verification/audit, completion and evidence tools"},
+    {"id": "R15", "capability": "CAP-02", "match": "guard/policy/tenant/execution/shell/redaction, MCP/security/base policy"},
+    {"id": "R16", "capability": "CAP-06", "match": "remaining runtime hooks/session/tools/registration and runtime limits"},
+    {"id": "R17", "capability": "CAP-16", "match": "fallback: profiles, templates, package metadata, capability inventory, operator/product UI, prompts and release scripts"}
+  ],
+  "coverageProof": {
+    "algorithm": "Sort all in-scope regular paths; assign the first matching rule; hash JSON(path list) and JSON([{path,cap,size,mode,sha256}]).",
+    "totalFiles": 431,
+    "unownedFiles": 0,
+    "multiplePrimaryOwners": 0,
+    "coveredPathListSha256": "94b65390f6ce5838758eed22599601e3026b7d498a9e1015da41c4085a2b2a1b",
+    "coveredContentOwnershipManifestSha256": "14b486f8e45079a91b685b4244ca884d2e46533640e2ce62a051f94ac1f81d72",
+    "countsByCapability": {
+      "CAP-01": 9,
+      "CAP-02": 23,
+      "CAP-03": 10,
+      "CAP-04": 5,
+      "CAP-05": 7,
+      "CAP-06": 22,
+      "CAP-07": 6,
+      "CAP-08": 19,
+      "CAP-09": 2,
+      "CAP-10": 7,
+      "CAP-11": 10,
+      "CAP-12": 4,
+      "CAP-13": 2,
+      "CAP-14": 11,
+      "CAP-15": 3,
+      "CAP-16": 93,
+      "CAP-17": 198
+    }
+  },
+  "runtimeIntegrityExceptions": {
+    "candidateBoundaryWorkItem": "CF-FS0-04",
+    "mustBind": [
+      {"path": "packages/piagent-core/extensions/execution-backend.js", "owner": "CAP-02"},
+      {"path": "packages/piagent-core/extensions/return-contract.js", "owner": "CAP-11"},
+      {"path": "packages/piagent-core/extensions/shell-selector-policy.js", "owner": "CAP-02"},
+      {"path": "packages/piagent-core/extensions/shell-write-targets.js", "owner": "CAP-02"},
+      {"path": "packages/piagent-core/extensions/task-digest-contract.js", "owner": "CAP-03"},
+      {"path": "packages/piagent-core/extensions/task-digest-state.js", "owner": "CAP-03"},
+      {"path": "packages/piagent-core/extensions/task-runtime-audit.js", "owner": "CAP-03"},
+      {"path": "packages/piagent-core/extensions/verification-intelligence.js", "owner": "CAP-03"}
+    ],
+    "testOnlyBarrel": {
+      "path": "packages/piagent-core/extensions/core-services.js",
+      "owner": "CAP-16",
+      "releaseDisposition": "exclude unless a production import is introduced and integrity-bound"
+    }
+  },
+  "knownDeviations": [
+    {
+      "id": "DEV-FS0-03-01",
+      "severity": "release-blocking",
+      "finding": "Continuation authority is split: completion recovery allows 2 attempts, performance review allows 3 attempts, and recovery classes have separate ceilings.",
+      "target": "One system-triggered continuation total per task in the broad production profile.",
+      "ownerWorkItem": "CF-FS1-03"
+    },
+    {
+      "id": "DEV-FS0-03-02",
+      "severity": "release-blocking",
+      "finding": "Automatic intake may preserve 12 acceptance criteria while acceptance receipt projection caps processing at 8.",
+      "target": "Task Contract remains sole truth and every criterion is projected without silent truncation; unsupported evidence abstains.",
+      "ownerWorkItem": "CF-FS1-02"
+    },
+    {
+      "id": "DEV-FS0-03-03",
+      "severity": "candidate-blocking",
+      "finding": "Eight runtime-referenced modules are not explicitly bound by runtime-integrity inventory.",
+      "target": "Bind every shipped runtime dependency on the exact candidate.",
+      "ownerWorkItem": "CF-FS0-04"
+    },
+    {
+      "id": "DEV-FS0-03-04",
+      "severity": "candidate-blocking",
+      "finding": "core-services.js is a test-only aggregation barrel inside package source.",
+      "target": "Exclude it from release package or production-import and integrity-bind it; do not delete source during constitution work.",
+      "ownerWorkItem": "CF-FS0-04"
+    },
+    {
+      "id": "DEV-FS0-03-05",
+      "severity": "benchmark-blocking",
+      "finding": "Historical capability canaries exercised stricter phase/review behavior than the target broad release defaults.",
+      "target": "Benchmark treatment must snapshot and match the exact release policy manifest.",
+      "ownerWorkItem": "CF-FS5-01"
+    }
+  ],
+  "promotionOrder": [
+    "L0 invariants and L1 mechanical efficiency",
+    "CAP-08/CAP-09/CAP-10 shadow calibration",
+    "CAP-07/CAP-11/CAP-14 advisory/recommend calibration",
+    "CAP-13 strict opt-in enforcement",
+    "CAP-15 parent routing and automatic workers only after beta field evidence"
+  ],
+  "exitCheck": {
+    "all17CapabilitiesIncluded": true,
+    "allCapabilitiesHaveOwner": true,
+    "allCapabilitiesHaveTriggerAuthorityBudgetFailureTelemetryKillSwitch": true,
+    "all431ProductionFilesResolveToOnePrimaryCapability": true,
+    "sourceFeatureDeletion": false,
+    "targetModesActivated": false,
+    "releaseCandidateFrozen": false
+  }
+}

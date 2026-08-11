@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 2,
+  "recordedAt": "2026-08-11",
+  "objective": "Separate permission to assemble an exact local RC from permission to execute beta/provider/release stages, while preserving the terminal FS5 performance risk and a finite two-candidate process.",
+  "supersedesForCurrentPlanning": "fs6-fs7-entry-readiness.v1.json",
+  "historicalEvidencePreserved": true,
+  "transitionContract": {
+    "path": "evals/fs-release-transition.v1.json",
+    "version": "fs5-to-fs7-finite-rc-v1",
+    "evaluationCommand": "npm run release:transition"
+  },
+  "fs5Disposition": {
+    "engineeringLane": "closed-with-recorded-performance-risk",
+    "releasePerformancePassed": false,
+    "providerRerunAllowed": false,
+    "sixFamilyPilotCompleted": false,
+    "capabilityPromotionAllowed": false,
+    "risk": {
+      "id": "FS5-MIGRATION-LATENCY-01",
+      "evidence": "../fs5/fs5-v5-canary-b-performance-stop.v1.json",
+      "evidenceSha256": "d372e626dddde6c0888f8cebd72983b34c2f8a9434c8ebae0be69de0cef879b4",
+      "freshTokenRatio": 1.130271,
+      "durationRatio": 1.898798,
+      "durationCeiling": 1.5
+    }
+  },
+  "permissionMap": {
+    "localRcAssembly": true,
+    "providerExecution": false,
+    "cohortExecution": false,
+    "betaPromotion": false,
+    "fs7Execution": false,
+    "releaseBenchmark": false,
+    "tag": false,
+    "push": false,
+    "publish": false,
+    "publicDocsPromotion": false
+  },
+  "currentIdentity": {
+    "packageVersion": "1.2.17",
+    "releaseTarget": "1.3.0",
+    "candidateState": "unfrozen-ready-for-local-assembly",
+    "cleanCommit": null,
+    "rcPackage": null,
+    "linuxArtifact": null,
+    "macosArtifact": null
+  },
+  "workItems": [
+    {
+      "id": "CF-FS6-01",
+      "state": "ready-for-local-rc-assembly-not-built",
+      "allowedScope": [
+        "review and isolate intended full-source candidate files",
+        "prepare a clean local RC branch/commit after explicit commit authorization",
+        "align 1.3.0-rc.1 version identity and exact policy manifest",
+        "build an immutable local tarball",
+        "run offline verification, privacy, install and readback checks"
+      ],
+      "missingExitEvidence": [
+        "reviewed clean commit",
+        "1.3.0-rc.1 identity on every version surface",
+        "immutable tarball and provenance",
+        "clean install/readback with no private files"
+      ],
+      "notAuthorized": ["provider", "cohort", "tag", "push", "publish", "public docs promotion"]
+    },
+    {
+      "id": "CF-FS6-02",
+      "state": "blocked-by-fs6-01-and-exact-rc-migration-gate",
+      "firstGate": "three retained resumable-migration-runner Piagent/Codex CLI pairs on Luna Medium; every pair must pass the frozen transition contract",
+      "afterGate": "20 real maintainer tasks with zero unbounded loop or safety escape"
+    },
+    {
+      "id": "CF-FS6-03",
+      "state": "blocked-by-fs6-02-and-independent-humans",
+      "missingExitEvidence": ["100 internal attempts over five profiles", "five independent users", "install/upgrade usability", "false-block, recovery and timing findings"]
+    },
+    {
+      "id": "CF-FS6-04",
+      "state": "implemented-foundation-exact-rc-platform-proof-blocked",
+      "missingExitEvidence": ["same RC on macOS ARM64 and Linux x64", "1.2.17 -> RC -> 1.2.17 on both platforms", "safe old-runtime sidecar behavior"]
+    },
+    {
+      "id": "CF-FS6-05",
+      "state": "blocked-by-fs6-01-through-fs6-04",
+      "missingExitEvidence": ["validated immutable RC commit/package", "source/package/policy/suite/model/grader descriptor", "independent freeze readback"]
+    },
+    {
+      "id": "CF-FS7-01",
+      "state": "blocked-by-fs6-and-external-custody",
+      "missingExitEvidence": ["sealed family-disjoint private holdout", "two blinded reviewers", "exact-RC paid E3", "exact-RC long-horizon confirmation"]
+    },
+    {
+      "id": "CF-FS7-02",
+      "state": "blocked-by-fs7-01-and-external-cohort",
+      "missingExitEvidence": ["200 terminal beta attempts", "high-risk, recovery and long-task cases", "incident and rollback report"]
+    },
+    {
+      "id": "CF-FS7-03",
+      "state": "blocked-by-exact-rc-e3-and-cohort",
+      "missingExitEvidence": ["frozen RC", "FS7-01 and FS7-02 pass", "18 families x 3 repeats x 2 surfaces", "inspection every at-most-six sessions"]
+    },
+    {
+      "id": "CF-FS7-04",
+      "state": "blocked-by-fs7-03",
+      "missingExitEvidence": ["complete report/confidence intervals", "all quality/safety/workflow/reliability/category gates", "independent GO/NO-GO dossier"]
+    },
+    {
+      "id": "CF-FS7-05",
+      "state": "blocked-by-fs7-04-and-explicit-release-approval",
+      "externalActionsNotAuthorized": ["tag", "push", "publish", "public docs switch", "registry install/readback"]
+    }
+  ],
+  "finiteCandidatePath": {
+    "candidateRevisions": ["1.3.0-rc.1", "1.3.0-rc.2"],
+    "maximumCandidateRevisions": 2,
+    "rc1Failure": "one retained causal diagnosis and one source correction may create RC.2",
+    "rc2SameClassFailure": "release NO-GO; no RC.3 and no third provider run",
+    "exactRcCanaryClaimTier": "diagnostic beta-unlock only; no token, generalization or release claim"
+  },
+  "verdict": {
+    "fs5EngineeringClosed": true,
+    "fs5ReleasePerformancePassed": false,
+    "fs6AssemblyAllowed": true,
+    "fs6Complete": false,
+    "fs6BetaAllowed": false,
+    "fs7Complete": false,
+    "releaseReady": false,
+    "nextWorkItem": "CF-FS6-01"
+  }
+}

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Short commands with predictable behavior · Pi Agent Platform Docs</title>
-    <meta name="description" content="Slash commands package policy and workflow directly, avoiding model-driven command discovery and unnecessary token use." />
+    <meta name="description" content="Slash commands package policy and workflow directly, with one inspector menu for diffs, commands, safety, and context instead of many one-off commands." />
     <meta name="theme-color" content="#050505" />
     <link rel="canonical" href="https://piagent.io.vn/en/commands" />
     <link rel="alternate" hreflang="vi" href="https://piagent.io.vn/commands" />
@@ -12,7 +12,7 @@
     <link rel="alternate" hreflang="x-default" href="https://piagent.io.vn/commands" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <meta property="og:title" content="Short commands with predictable behavior · Pi Agent Platform Docs" />
-    <meta property="og:description" content="Slash commands package policy and workflow directly, avoiding model-driven command discovery and unnecessary token use." />
+    <meta property="og:description" content="Slash commands package policy and workflow directly, with one inspector menu for diffs, commands, safety, and context instead of many one-off commands." />
     <meta property="og:url" content="https://piagent.io.vn/en/commands" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.2.17 docs · EN</span>
+        <span class="pill"><span class="pill-dot"></span>v1.3.0-rc.1 docs · EN</span>
         <nav class="language-switch" aria-label="Language">
           <a class="language-option" href="/commands" hreflang="vi" lang="vi">VI</a>
           <a class="language-option current" href="/en/commands" hreflang="en" lang="en" aria-current="true">EN</a>
@@ -60,6 +60,7 @@
             <p class="nav-title">Get started</p>
             <a class="nav-link" href="/en/">Overview</a>
             <a class="nav-link" href="/en/quickstart">Quickstart</a>
+            <a class="nav-link" href="/en/whats-new">What’s new</a>
             <a class="nav-link" href="/en/scope">Platform scope</a>
           </div>
           <div class="nav-group">
@@ -99,13 +100,13 @@
             </nav>
             <div class="page-head">
               <h1>Short commands with predictable behavior</h1>
-              <p>Slash commands package policy and workflow directly, avoiding model-driven command discovery and unnecessary token use.</p>
+              <p>Slash commands package policy and workflow directly, with one inspector menu for diffs, commands, safety, and context instead of many one-off commands.</p>
             </div>
 <section class="section">
   <div class="grid cols-2">
     <article class="card">
       <h3 id="session-basics">Session basics</h3>
-      <div class="tag-list"><span class="tag">/login</span><span class="tag">/model</span><span class="tag">/commands</span><span class="tag">/piagent-status</span><span class="tag">/piagent-orchestration</span><span class="tag">/usage</span><span class="tag">/context preflight</span><span class="tag">/name</span><span class="tag">/fresh</span><span class="tag">/session</span></div>
+      <div class="tag-list"><span class="tag">/login</span><span class="tag">/model</span><span class="tag">/commands</span><span class="tag">/piagent-status</span><span class="tag">/piagent-inspector</span><span class="tag">/piagent-orchestration</span><span class="tag">/usage</span><span class="tag">/usage efficiency</span><span class="tag">/task-preflight</span><span class="tag">/context preflight</span><span class="tag">/name</span><span class="tag">/fresh</span><span class="tag">/session</span></div>
       <p>Set up a session, select a model, inspect profile, usage, or orchestration state, and decide whether a large task needs a fresh session.</p>
     </article>
     <article class="card">
@@ -138,6 +139,43 @@
       <div class="tag-list"><span class="tag">/subagents-doctor</span><span class="tag">/subagents-models</span><span class="tag">/subagents-fleet</span><span class="tag">/subagent-cost</span></div>
       <p>Inspect runtime health, model routing, background runs, and cost. Daily work remains solo-first; subagents are reserved for independent scouting, planning, or review lanes.</p>
     </article>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Product visibility</p>
+  <h2 id="product-status-commands">Inspect runtime decisions</h2>
+  <p class="section-lead">These commands read deterministic state without asking a model to interpret it. They are optional in the daily workflow.</p>
+  <div class="command-grid">
+    <article class="command-card">
+      <header><span>Preflight before a task</span><button class="clip-btn" data-clip="/task-preflight --json Review current repository state">Copy</button></header>
+      <pre><code>/task-preflight --json Review current repository state</code></pre>
+      <p>Inspect intent, risk, scope, runtime, solver route, phases, tool and helper recommendations, backend, approvals, and blockers before starting.</p>
+    </article>
+    <article class="command-card">
+      <header><span>Live task status</span><button class="clip-btn" data-clip="/piagent-status">Copy</button></header>
+      <pre><code>/piagent-status</code></pre>
+      <p>Read the Task Contract, checkpoints, verifier evidence, recovery, helpers, resume state, and terminal receipt. Approval requires the current-tree hard completion gate to pass.</p>
+    </article>
+    <article class="command-card">
+      <header><span>Activity, diff, and context</span><button class="clip-btn" data-clip="/piagent-inspector">Copy</button></header>
+      <pre><code>/piagent-inspector</code></pre>
+      <p>One menu for <span class="inline-code">summary</span>, <span class="inline-code">files</span>, <span class="inline-code">commands</span>, <span class="inline-code">security</span>, <span class="inline-code">context</span>, and <span class="inline-code">toggle</span>. A four-row panel appears automatically just above the native footer: green is healthy, yellow needs attention, and red marks failures, safety warnings, or context at 80% and above. The command reads local state without calling a model.</p>
+    </article>
+    <article class="command-card">
+      <header><span>Sourced efficiency</span><button class="clip-btn" data-clip="/usage efficiency">Copy</button></header>
+      <pre><code>/usage efficiency</code></pre>
+      <p>Inspect context and tool utilization, verification, repair, retries, and helper usage. Runtime values that cannot be measured stay <span class="inline-code">null</span>.</p>
+    </article>
+    <article class="command-card">
+      <header><span>Helper policy</span><button class="clip-btn" data-clip="/piagent-orchestration">Copy</button></header>
+      <pre><code>/piagent-orchestration</code></pre>
+      <p>Inspect the solo-first policy, read-only roles, reviewer or Oracle recommendations, owned budgets, and the one-writer invariant.</p>
+    </article>
+  </div>
+  <div class="callout">
+    <strong>Sourced diffs, no token estimates.</strong>
+    <p>The footer panel uses observed task files for fast updates; the <span class="inline-code">files</span> view computes the exact snapshot delta and marks <span class="inline-code">mixed-working-tree</span> when a task touches a file that was already dirty. Pi exposes model usage by turn and session, so per-built-in-tool tokens remain unavailable.</p>
   </div>
 </section>
             <nav class="pager" aria-label="Adjacent pages">

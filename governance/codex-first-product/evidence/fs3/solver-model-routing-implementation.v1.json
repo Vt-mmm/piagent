@@ -1,0 +1,183 @@
+{
+  "schemaVersion": "codex-first-fs3-solver-model-routing-evidence-v1",
+  "workItem": "CF-FS3-01",
+  "recordedAt": "2026-08-10T15:45:07Z",
+  "status": "pass",
+  "scope": {
+    "objective": "Bound solver and parent-model routing to deterministic shadow or recommendation behavior, preserve explicit operator pins, consume only the authenticated model catalog, and prevent silent substitution or an in-task model switch.",
+    "providerInvoked": false,
+    "benchmarkRunInvoked": false,
+    "releaseActionInvoked": false,
+    "nextWorkItemStarted": false,
+    "candidateState": "unfrozen",
+    "candidateDigest": null
+  },
+  "reviewedIdentity": {
+    "head": "4f37ae05d56431f2f9db9c4159e20252c3da3b2a",
+    "exactTag": "v1.2.17",
+    "packageVersion": "1.2.17",
+    "policyManifestVersion": "authority-v1",
+    "policyManifestSha256": "7f223487384b5521bcda01bc1dc1578dfb3f8293dc94eadd85b86048b645273c",
+    "executionProtocolSha256": "aab941a5422a2797fc1a3a1e420764a1f03fffcb4f06e4d04ea70fe3bbc1e470",
+    "roadmapSha256": "cb91fe410add6de293431308436ae7cff34e593c89fe8146a3633d8c85550aa7",
+    "profileLockSha256": "36f153d2b2862f62b78ded32f86b8f7ed1b7261a3e5091d1597951506ae9dbf8",
+    "profilePackageDigest": "sha256:15279b0fc23cdb33ea5683eb866b11bdd0d784935e7ade28e5d0512cf8aebb46",
+    "workingTreeDisposition": "Dirty user-owned full-source development tree retained. This artifact binds exact carriers and local test outputs only; it is not a clean or frozen release-candidate identity."
+  },
+  "productionContract": {
+    "solverDefault": "shadow",
+    "parentRoutingDefault": "off",
+    "broadAuthority": {
+      "CAP-08": "observe",
+      "CAP-15": "off"
+    },
+    "solverEffects": {
+      "providerTurns": 0,
+      "freshTokens": 0,
+      "hostMutations": 0,
+      "parentModelMutation": false,
+      "helperDispatch": false
+    },
+    "modelRouting": {
+      "mappingVersion": "openai-codex-model-route-map-v1",
+      "acceptedTargets": [
+        "openai-codex/gpt-5.6-luna:medium",
+        "openai-codex/gpt-5.6-terra:medium",
+        "openai-codex/gpt-5.6-sol:high",
+        "openai-codex/gpt-5.6-sol:xhigh"
+      ],
+      "catalogSource": "authenticated-catalog",
+      "explicitPinDisposition": "preserved and never enforced by the router",
+      "offlineOrUnavailableDisposition": "unavailable with no provider/model/effort substitute",
+      "unknownSelectionProvenanceDisposition": "recommendation only; never enforced",
+      "inTaskDisposition": "recommendation only; runtime exposes no parent-model or thinking mutation API",
+      "onlyExecutableBoundary": "an explicitly confirmed fresh-task prelaunch adapter; not the Pi extension runtime"
+    }
+  },
+  "implementation": [
+    {
+      "path": "packages/piagent-core/runtime/model/model-route-policy.ts",
+      "sha256": "15941a39df0860db7c8b66962e11b27a9b7d06d40b6cc2e1a96dc3002d3814fd",
+      "change": "Replaced fuzzy tier-name matching with exact provider/model mapping. A wrong provider, alias-like model id, or explicitly unsupported effort now returns unavailable/no-silent-substitution."
+    },
+    {
+      "path": "tests/model-route-policy.test.mjs",
+      "sha256": "9fa40039a1d528aef6a9001a214a648b6140c41d9156ebea6a55aab8f1f2a709",
+      "change": "Added exact provider/model/effort negative regressions."
+    },
+    {
+      "path": "tests/model-route-runtime.test.mjs",
+      "sha256": "62fd595ba3e0c3e1d3d01d404aad54c8142cee29f3f2bee0fbcf82bc34f0c0bd",
+      "change": "Added a static and behavioral regression proving an active task cannot switch model or thinking level."
+    },
+    {
+      "path": ".pi/piagent-profile.lock.json",
+      "sha256": "36f153d2b2862f62b78ded32f86b8f7ed1b7261a3e5091d1597951506ae9dbf8",
+      "change": "Regenerated the deterministic runtime-integrity lock for the exact current source."
+    }
+  ],
+  "unchangedContractCarriers": [
+    { "path": "packages/piagent-core/runtime/solver/solver-policy.ts", "sha256": "38cde06d3690262b89015e1e74517cf5cc4a98ecb4d2896235b448fbba74cdaa" },
+    { "path": "packages/piagent-core/runtime/solver/solver-shadow.ts", "sha256": "b3a98916cca1fc3eef09800e9abd9a0c90f5582cb11073ca50a4d397c8b9f50b" },
+    { "path": "packages/piagent-core/runtime/model/authenticated-catalog.ts", "sha256": "3d6f3d2c68bde37b29f70d706a0623a37eaf888a6e39efda6c4328d0b8b16518" },
+    { "path": "packages/piagent-core/runtime/model/model-route-runtime.ts", "sha256": "71843abdd2cd2046e721ba6b8aa0823329b573425d8d6ae7ad539c00244588a7" },
+    { "path": "packages/piagent-core/runtime/model/model-selection-provenance.ts", "sha256": "8d7107d976be4589ba570299bd1e5b92725f64061a3e7f38c476c5f67d05a9b5" },
+    { "path": "packages/piagent-core/runtime/model/model-route-types.ts", "sha256": "eeb56de486a7dfce1933a957309bd5f156802c0fdf5777ef0b8b161a960aab82" },
+    { "path": "benchmarks/solver-v1/route-corpus.json", "sha256": "4bfa5a2e1fcafa76f77519b158dc3bd42b9886aee611aff341866c9ead755ad5" },
+    { "path": "benchmarks/model-routing-v1/route-corpus.json", "sha256": "41e106281f14e060cf7637ac56995156b0a25dfe1954fc87ae1852325cb57971" }
+  ],
+  "exitEvidence": [
+    {
+      "requirement": "Coverage and regret",
+      "status": "pass",
+      "evidence": {
+        "solverDecisions": 117,
+        "productionDecisions": 54,
+        "adversarialDecisions": 52,
+        "profilesCovered": 11,
+        "eligibleDecisionCoverage": 1,
+        "reasonCodeCoverage": 1,
+        "deterministicReplay": 1,
+        "routeRegret": 0
+      }
+    },
+    {
+      "requirement": "Safety and zero hidden execution",
+      "status": "pass",
+      "evidence": {
+        "safetyRouteFalseNegatives": 0,
+        "safetyReviewsRequired": 37,
+        "safetyReviewsCompleted": 37,
+        "solverModelCalls": 0,
+        "solverFreshTokens": 0,
+        "solverHostMutations": 0,
+        "parentModelMutationApiInRuntime": false
+      }
+    },
+    {
+      "requirement": "Authenticated exact model routing",
+      "status": "pass",
+      "evidence": {
+        "labeledCases": 240,
+        "templates": 24,
+        "policyCatalogVariants": 10,
+        "locales": { "en": 17, "vi": 7 },
+        "deterministicReplay": 1,
+        "highRiskFalseLow": 0,
+        "explicitPinViolations": 0,
+        "silentSubstitutions": 0,
+        "unknownProvenanceEnforcements": 0,
+        "unsupportedHostEnforcements": 0,
+        "rawPromptFindings": 0,
+        "invariantViolations": 0
+      }
+    },
+    {
+      "requirement": "Offline and unavailable catalog behavior",
+      "status": "pass",
+      "evidence": "Offline capture performs no Pi query, records availability=offline, and route policy returns unavailable without a substituted provider/model/effort. Logged-out, empty, failed and partial registries remain bounded and explicit."
+    },
+    {
+      "requirement": "Unknown provenance and mid-task boundary",
+      "status": "pass",
+      "evidence": "Unknown selection provenance cannot enforce auto. The extension always declares hostBoundary=unavailable, and a non-fresh task returns a non-enforced recommendation. Only the separate --execute --yes prelaunch adapter can start Pi with an exact selected route."
+    }
+  ],
+  "verification": [
+    {
+      "command": "node --test tests/model-route-policy.test.mjs tests/model-route-runtime.test.mjs tests/model-route-cli.test.mjs tests/model-catalog-cli.test.mjs tests/authenticated-model-catalog.test.mjs tests/model-route-corpus.test.mjs tests/model-routing-protocol.test.mjs tests/solver-policy.test.mjs tests/solver-shadow.test.mjs tests/solver-explanation.test.mjs tests/solver-route-corpus.test.mjs tests/solver-shadow-pilot.test.mjs tests/rc-readiness-gates.test.mjs",
+      "result": "105/105 pass"
+    },
+    {
+      "command": "node scripts/model-route-evaluation.mjs",
+      "result": "240/240 labeled cases; 11/11 gates pass; zero violations"
+    },
+    {
+      "command": "node scripts/solver-shadow-pilot.mjs --output <private-temp>",
+      "result": "117/117 eligible; route regret 0; safety false-negative 0; every gate pass"
+    },
+    {
+      "command": "node --test tests/authority-manifest.test.mjs tests/authority-resume-policy.test.mjs",
+      "result": "18/18 pass"
+    },
+    {
+      "command": "node --test tests/capability-core.test.mjs tests/package-distribution.test.mjs tests/project-shape.test.mjs tests/architecture-boundaries.test.mjs",
+      "result": "103/103 pass"
+    },
+    { "command": "npm run typecheck", "result": "pass" },
+    { "command": "npm run architecture:check", "result": "pass; 192 source files within boundaries and line budgets" },
+    { "command": "npm run verify -- --offline", "result": "pass; complete repository tests and local scaffold checks; authenticated catalog check deliberately skipped" },
+    { "command": "node scripts/capability-catalog.mjs doctor --profile .pi/piagent-profile.json --lock .pi/piagent-profile.lock.json --package-source ../", "result": "pass; lock current" },
+    { "command": "git diff --check", "result": "pass" }
+  ],
+  "deferredEvidence": [
+    "No live authenticated model-catalog or provider task was run because CF-FS3-01 received no provider authority. Local registry and CLI fixtures prove the fail-closed boundary; authenticated execution remains a separately approved later gate.",
+    "Parent routing remains off in the broad release authority. This work item does not promote auto routing, claim model quality/token savings, freeze a candidate, or authorize a model-routing benchmark."
+  ],
+  "schemaAndRollback": {
+    "schemaMigration": "none",
+    "taskContractMigration": "none",
+    "rollback": "Set parent routing to off (already the broad default) and solver to off if needed. Reverting the exact-mapping source/test/lock change restores the prior fuzzy matching without touching Task Contract, journal, trajectory, handoff or provider state."
+  },
+  "stopRule": "CF-FS3-01 only. CF-FS3-02 was not started."
+}

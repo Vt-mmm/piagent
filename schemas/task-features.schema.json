@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Vt-mmm/piagent/schemas/task-features.schema.json",
+  "title": "Pi Agent Task Features",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "featureHash", "workflowIntent", "changeMode", "riskLane", "riskSignals", "ambiguity", "explicitPathCount", "scopeEstimate", "profileMode", "projectShape", "gitReady", "dirtyTree", "verifierReady", "contextPressure", "activeTaskState", "runtimeSnapshotDigest", "runtimeCapabilitiesKnown", "userPinnedProvider", "userPinnedModel", "userPinnedEffort", "protectedTarget", "externalAction", "destructiveAction", "permissionExpansion"],
+  "properties": {
+    "schemaVersion": { "const": 1 }, "featureHash": { "$ref": "#/$defs/hash" },
+    "workflowIntent": { "enum": ["implement", "review", "plan", "diagnose", "scout", "unknown"] },
+    "changeMode": { "enum": ["source-change", "read-only", "plan-only", "unknown"] },
+    "riskLane": { "enum": ["tiny", "normal", "high-risk", "unknown"] },
+    "riskSignals": { "$ref": "#/$defs/names" }, "ambiguity": { "enum": ["low", "medium", "high", "unknown"] },
+    "explicitPathCount": { "type": "integer", "minimum": 0, "maximum": 1000 }, "scopeEstimate": { "enum": ["tiny", "bounded", "broad", "unknown"] },
+    "profileMode": { "$ref": "#/$defs/nullableName" }, "projectShape": { "$ref": "#/$defs/names" },
+    "gitReady": { "type": ["boolean", "null"] }, "dirtyTree": { "type": ["boolean", "null"] }, "verifierReady": { "type": ["boolean", "null"] },
+    "contextPressure": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }, "activeTaskState": { "enum": ["none", "pending", "terminal", "unknown"] },
+    "runtimeSnapshotDigest": { "oneOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }] }, "runtimeCapabilitiesKnown": { "type": "boolean" },
+    "userPinnedProvider": { "$ref": "#/$defs/nullableName" }, "userPinnedModel": { "$ref": "#/$defs/nullableName" }, "userPinnedEffort": { "$ref": "#/$defs/nullableName" },
+    "protectedTarget": { "type": "boolean" }, "externalAction": { "type": "boolean" }, "destructiveAction": { "type": "boolean" }, "permissionExpansion": { "type": "boolean" }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$" },
+    "nullableName": { "oneOf": [{ "$ref": "#/$defs/name" }, { "type": "null" }] },
+    "names": { "type": "array", "maxItems": 16, "uniqueItems": true, "items": { "$ref": "#/$defs/name" } }
+  }
+}

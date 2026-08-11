@@ -18,12 +18,12 @@ Support matrix release hiện tại: macOS Apple Silicon + Bash và Linux x64 + 
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.2.17
+npm install -g --ignore-scripts @piagent/platform@1.3.0-rc.1
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
 
-Khi seed `.pi/settings.json` cho team/repo cần audit lặp lại, giữ package source dạng pinned tag như `git:github.com/Vt-mmm/piagent@v1.2.17`. Máy cá nhân có thể dùng `git:github.com/Vt-mmm/piagent` để theo latest.
+Khi seed `.pi/settings.json` cho team/repo cần audit lặp lại, giữ package source dạng pinned tag như `git:github.com/Vt-mmm/piagent@v1.3.0-rc.1`. Máy cá nhân có thể dùng `git:github.com/Vt-mmm/piagent` để theo latest.
 
 Nếu đang ở source checkout của platform, dùng helper theo channel để preview trước khi đổi:
 
@@ -99,7 +99,7 @@ install package once
 
 ```bash
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.2.17
+npm install -g --ignore-scripts @piagent/platform@1.3.0-rc.1
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -282,7 +282,7 @@ Không phải daily default. Dùng khi muốn tạo sẵn `.pi` files cho projec
 bash /path/to/piagent/scripts/setup.sh /path/to/project \
   --project-only \
   --profile auto \
-  --package-source git:github.com/Vt-mmm/piagent@v1.2.17 \
+  --package-source git:github.com/Vt-mmm/piagent@v1.3.0-rc.1 \
   --mcp-preset core \
   --subagents-preset safe
 ```
@@ -409,6 +409,73 @@ Git trong Pi Agent là capability + guard, không có namespace `/git-*`. Khi mu
 ```
 
 `/workflow commit` inspect status/diff, stage đúng scope, verify phù hợp, rồi commit local; không push. `/workflow pr` inspect branch/diff/commit rồi hỏi xác nhận trước khi `git push` hoặc tạo/cập nhật GitHub PR. Alias `/commit` và `/pr` vẫn chạy cho power user. Các lệnh stage rộng như `git add .`, `git add -A`, `git add --all`, `git add -- .`, `git add :/` cũng phải qua confirmation.
+
+### Preflight, live status và receipt
+
+Trước task hoặc khi cần kiểm tra deterministic state, dùng:
+
+```text
+/task-preflight
+/piagent-status
+/piagent-inspector
+/usage efficiency
+```
+
+Preflight phân biệt rõ mode `shadow`, `assist`, `enforce`; runtime fact chưa có
+được ghi là `unknown`. Nó hiển thị intent/risk/scope, model và effort provenance,
+solver route, phase, context/tool/helper budget, backend, approval và blocker.
+Read-only/plan/review không bao giờ hiện implementation authorization. Dòng
+`host execution is not a sandbox` là boundary thật: Piagent policy giảm lỗi thao
+tác nhưng không cô lập code khỏi account của operator.
+
+`/piagent-status` đọc Task Contract, checkpoint, trajectory, verifier, recovery,
+helper và resume state đã lưu, không hỏi model nhớ lại. Khi terminal, JSON detail
+có completion receipt: outcome, acceptance, changed-tree identity, exact verify,
+review/helper/recovery, remaining risk và handoff. Receipt chỉ gọi là complete
+khi hard completion gate trên working tree hiện tại pass, trace terminal là
+`completed`, và mọi acceptance criterion đều satisfied. Thiếu gate evidence phải
+fail closed thay vì suy đoán từ state cũ; evidence cùng runtime không được
+gọi là independent audit. Tắt từng lớp bằng `PIAGENT_SOLVER_MODE=off`,
+`PIAGENT_PHASE_TOOLS=off`, `PIAGENT_AUTO_RECOVERY=off`, hoặc
+`PIAGENT_HELPERS_MODE=off`. Hai lớp semantic có kill switch độc lập:
+`PIAGENT_ACCEPTANCE_ASSURANCE=off` tắt assurance và semantic repair phụ thuộc,
+còn `PIAGENT_SEMANTIC_REPAIR=off` chỉ tắt repair/review. Các biến này chỉ được
+hạ authority, không được dùng để nâng mode ngoài profile đã pin; state cũ được
+giữ để có thể tạo attempt mới có provenance rõ ràng.
+
+`/piagent-inspector` là một namespace read-only, không sinh thêm command rời.
+Gõ không tham số để chọn `summary`, `files`, `commands`, `security`, `context`
+hoặc `toggle`. Panel bốn dòng tự hiện sát phía trên footer native từ lúc mở session:
+phase và việc hiện tại; task file/test, `+/-`, command pass/fail/block, safety và
+context budget. Nó dùng extension-status API nên không thay footer native của
+Pi và không thêm bước bắt buộc vào workflow. Dòng status dùng file task đã quan
+sát để phản hồi nhanh; view `files` tính exact snapshot delta. Task đụng file dirty từ trước được
+đánh dấu mixed baseline; token theo từng built-in tool luôn unavailable vì Pi
+chỉ cung cấp usage exact theo response/turn.
+
+Known unsupported/unpromoted surfaces của candidate hiện tại: parent routing
+đã có `off|shadow|recommend|auto`, nhưng extension `auto` fail-closed về
+recommend; chỉ `piagent-route --execute --yes` là explicit prelaunch boundary.
+Authenticated G1/G2 chưa chạy nên default vẫn `off`. Helper không tự đổi parent model; automatic worker và
+multi-writer luôn off; helper `on` chưa phải default; docker/devcontainer/
+sandbox không chạy nếu chưa có adapter và không âm thầm fallback; native Windows
+không nằm trong rollout matrix. Local scripted pilot không thay thế năm người
+độc lập, và same-process receipt không thay thế security audit.
+
+Kiểm tra decision trước khi chạy:
+
+```bash
+piagent-route --prompt "Fix src/parser.ts and run npm test" --json
+```
+
+Chỉ khi muốn router thực sự mở một fresh Pi process mới dùng:
+
+```bash
+piagent-route --prompt-file /path/to/task.txt --execute --yes -- --approve
+```
+
+Lệnh này dùng authenticated `pi --list-models`, không đọc credential store,
+không ghi raw task vào route sidecar, giữ hard pin, và từ chối task bị blocked.
 
 ## 5. Control flow của một task chuẩn
 
@@ -607,11 +674,11 @@ piagent-benchmark --production --dry-run
 
 Lệnh mặc định tự chạy 4 scenario trên Raw Pi và Piagent, mỗi bên 3 lần; token,
 cost, model và thinking được đọc từ Pi session thay vì nhập tay. Runner chỉ cho
-phép kết luận tiết kiệm token khi quality/reliability đạt ít nhất `9/10`, safety
-đạt `10/10`, workflow đạt ngưỡng của suite (`10/10` cho smoke, ít nhất `9/10`
-cho production), quality không giảm, có ít nhất ba cặp cùng model với exact
-usage và geometric mean của tỷ lệ fresh token `Piagent / Raw Pi` theo từng cặp
-thực sự nhỏ hơn `1`.
+phép kết luận tiết kiệm token khi safety đạt `10/10` và các gate quality,
+reliability, workflow của suite đều pass. Production yêu cầu các điểm tổng hợp
+ít nhất `9.5/10`, đồng thời từng task và từng category/profile/lifecycle/
+difficulty band phải lớn hơn `9.5`; quality không giảm và paired usage cùng
+model phải vượt confidence gate.
 
 Lệnh không flag là smoke suite 24 session. Khi chốt thay đổi lớn về harness,
 model hoặc token policy, dùng `--production`: 18 scenario family, ba generated
@@ -631,8 +698,9 @@ So sánh trực tiếp với surface `codex-cli` đã đăng nhập:
 ```bash
 piagent-benchmark \
   --surfaces piagent,codex-cli \
-  --model openai-codex/gpt-5.6-sol \
-  --thinking xhigh
+  --model openai-codex/gpt-5.6-luna \
+  --thinking medium \
+  --piagent-treatment candidate
 ```
 
 Chế độ mặc định là `controlled`: Codex chạy ephemeral, chỉ được ghi trong
@@ -971,8 +1039,8 @@ Watchdog là optional adversarial reviewer ở cuối turn, không bật mặc �
 
 | Command | Dùng để |
 |---|---|
-| `npm install -g --ignore-scripts @piagent/platform@1.2.17` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
-| `pi install git:github.com/Vt-mmm/piagent@v1.2.17` | Install pinned release cho reproducible team setup. |
+| `npm install -g --ignore-scripts @piagent/platform@1.3.0-rc.1` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
+| `pi install git:github.com/Vt-mmm/piagent@v1.3.0-rc.1` | Install pinned release cho reproducible team setup. |
 | `pi install git:github.com/Vt-mmm/piagent` | Install latest platform package cho máy cá nhân/sandbox. |
 | Cài exact Pi host của release, rồi `npm install -g --ignore-scripts @piagent/platform@X.Y.Z` và `piagent-install --stable` | Full update: đồng bộ host, terminal helper và Pi package. Mỗi release pin một Pi host chính xác; lấy đúng version của release đang cài trong [release/install policy](release-install-policy.md). |
 | Cài exact Pi host ghi trong release cũ, rồi helper `vPREVIOUS` và `piagent-install --stable` | Full rollback; đánh giá lại dependency findings của host cũ trước khi hạ version. |
@@ -1020,6 +1088,7 @@ Watchdog là optional adversarial reviewer ở cuối turn, không bật mặc �
 | `Ctrl+P` | Cycle scoped models. |
 | `Shift+Tab` | Cycle thinking level. |
 | `/commands` | Menu/help command runtime theo topic. |
+| `/piagent-inspector` | Menu read-only cho task diff/file test/line, command, safety và context; `toggle` ẩn/hiện panel bốn dòng trong session. |
 | `/workflow` | Menu task/scout/review/git/onboard workflow. |
 | `/permission` | Menu permission status/read-only/workspace-write/full-access. |
 | `/permission status` | Xem permission profile hiện tại. |
@@ -1083,7 +1152,7 @@ Mở lại Pi session sau khi install.
 Cài lại terminal helper đúng release rồi kiểm tra `PATH`:
 
 ```bash
-npm install -g --ignore-scripts @piagent/platform@1.2.17
+npm install -g --ignore-scripts @piagent/platform@1.3.0-rc.1
 command -v piagent-install
 ```
 

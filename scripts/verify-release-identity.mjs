@@ -58,6 +58,7 @@ const packageLock = readJson("package-lock.json");
 const capabilityLock = readJson(".pi/piagent-profile.lock.json");
 const version = rootPackage.version;
 const expectedTag = `v${version}`;
+const supportedPiHost = "0.82.0";
 
 // The package is published now, so the old private-forever rule is gone. What
 // still has to hold is that a scoped package cannot reach the registry as
@@ -78,6 +79,12 @@ if (corePackage.version !== version) fail("root and core package versions do not
 if (packageLock.packages?.[""]?.version !== version) fail("package-lock root version does not match package.json");
 if (packageLock.packages?.["packages/piagent-core"]?.version !== version) fail("package-lock core version does not match package.json");
 if (capabilityLock.core?.packageVersion !== version) fail("capability lock packageVersion does not match package.json");
+if (rootPackage.peerDependencies?.["@earendil-works/pi-ai"] !== supportedPiHost) fail(`root Pi AI host must be pinned to ${supportedPiHost}`);
+if (rootPackage.peerDependencies?.["@earendil-works/pi-coding-agent"] !== supportedPiHost) fail(`root Pi Coding Agent host must be pinned to ${supportedPiHost}`);
+if (corePackage.peerDependencies?.["@earendil-works/pi-coding-agent"] !== supportedPiHost) fail(`core Pi Coding Agent host must be pinned to ${supportedPiHost}`);
+if (packageLock.packages?.[""]?.peerDependencies?.["@earendil-works/pi-ai"] !== supportedPiHost) fail("package-lock Pi AI host pin does not match package.json");
+if (packageLock.packages?.[""]?.peerDependencies?.["@earendil-works/pi-coding-agent"] !== supportedPiHost) fail("package-lock Pi Coding Agent host pin does not match package.json");
+if (packageLock.packages?.["packages/piagent-core"]?.peerDependencies?.["@earendil-works/pi-coding-agent"] !== supportedPiHost) fail("package-lock core Pi host pin does not match package.json");
 
 const changelog = fs.readFileSync(path.join(root, "CHANGELOG.md"), "utf8");
 if (!changelog.includes(`## ${expectedTag} -`)) fail(`CHANGELOG.md has no ${expectedTag} release section`);
@@ -102,7 +109,7 @@ for (const page of docsPages) {
 // the current number would make them false. Files that exist to list past
 // versions are exempt outright.
 const VERSION_HISTORY_FILES = new Set(["CHANGELOG.md", "docs/publishing-for-teams.md"]);
-const RELEASE_TAG_MENTION = /(?:@piagent\/platform@|Vt-mmm\/piagent@v?|--version )(\d+\.\d+\.\d+)/g;
+const RELEASE_TAG_MENTION = /(?:@piagent\/platform@|Vt-mmm\/piagent@v?|--version )(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)/g;
 
 function proseFiles() {
   const files = fs.readdirSync(path.join(root, "docs")).filter((name) => name.endsWith(".md")).map((name) => `docs/${name}`);

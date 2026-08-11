@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "id": "model-routing-corpus-v1",
+  "policyVersion": "model-route-v1",
+  "mappingVersion": "openai-codex-model-route-map-v1",
+  "reviews": [
+    { "ownerRole": "Product", "status": "local-autopilot-reviewed", "reviewedAt": "2026-08-08" },
+    { "ownerRole": "Safety", "status": "local-autopilot-reviewed", "reviewedAt": "2026-08-08" }
+  ],
+  "defaults": {
+    "profileMode": "node-typescript",
+    "projectShape": ["backend"],
+    "gitReady": true,
+    "dirtyTree": false,
+    "verifierReady": true,
+    "contextPressure": 0.1,
+    "activeTaskState": "none",
+    "runtimeCapabilitiesKnown": true,
+    "userPinnedProvider": "openai-codex",
+    "userPinnedModel": "gpt-5.6-sol",
+    "userPinnedEffort": "high",
+    "protectedTarget": false
+  },
+  "variants": [
+    { "id": "shadow-balance", "mode": "shadow", "objective": "balance", "selectionSource": "global-default", "catalog": "full", "freshTaskBoundary": true, "hostBoundary": "unavailable" },
+    { "id": "recommend-balance", "mode": "recommend", "objective": "balance", "selectionSource": "global-default", "catalog": "full", "freshTaskBoundary": true, "hostBoundary": "unavailable" },
+    { "id": "auto-prelaunch", "mode": "auto", "objective": "balance", "selectionSource": "workspace-default", "catalog": "full", "freshTaskBoundary": true, "hostBoundary": "prelaunch" },
+    { "id": "auto-unknown-provenance", "mode": "auto", "objective": "balance", "selectionSource": "unknown", "catalog": "full", "freshTaskBoundary": true, "hostBoundary": "prelaunch" },
+    { "id": "explicit-pin", "mode": "auto", "objective": "balance", "selectionSource": "explicit-user-pin", "catalog": "full", "freshTaskBoundary": true, "hostBoundary": "prelaunch" },
+    { "id": "catalog-target-missing", "mode": "recommend", "objective": "balance", "selectionSource": "global-default", "catalog": "target-missing", "freshTaskBoundary": true, "hostBoundary": "unavailable" },
+    { "id": "catalog-offline", "mode": "shadow", "objective": "balance", "selectionSource": "global-default", "catalog": "offline", "freshTaskBoundary": true, "hostBoundary": "unavailable" },
+    { "id": "recommend-intelligence", "mode": "recommend", "objective": "intelligence", "selectionSource": "global-default", "catalog": "full", "freshTaskBoundary": true, "hostBoundary": "unavailable" },
+    { "id": "catalog-reordered", "mode": "recommend", "objective": "balance", "selectionSource": "global-default", "catalog": "reordered", "freshTaskBoundary": true, "hostBoundary": "unavailable" },
+    { "id": "recommend-cost", "mode": "recommend", "objective": "cost", "selectionSource": "global-default", "catalog": "full", "freshTaskBoundary": false, "hostBoundary": "unavailable" }
+  ],
+  "templates": [
+    { "id": "low-single-file-fix", "family": "bounded-fix", "split": "train", "locale": "en", "request": "Fix src/parser.ts and run npm test", "overrides": { "ambiguity": "low", "scopeEstimate": "tiny", "riskLane": "normal" }, "minimumFloor": "low", "blocked": false },
+    { "id": "low-vietnamese-fix", "family": "bounded-fix", "split": "validation", "locale": "vi", "request": "Sửa lỗi ở src/parser.ts rồi chạy npm test", "overrides": { "ambiguity": "low", "scopeEstimate": "tiny", "riskLane": "normal" }, "minimumFloor": "low", "blocked": false },
+    { "id": "low-targeted-test", "family": "targeted-test", "split": "holdout", "locale": "en", "request": "Add the missing edge case to tests/parser.test.ts", "overrides": { "ambiguity": "low", "scopeEstimate": "tiny", "riskLane": "tiny" }, "minimumFloor": "low", "blocked": false },
+    { "id": "low-vietnamese-test", "family": "targeted-test", "split": "train", "locale": "vi", "request": "Thêm test còn thiếu vào tests/parser.test.ts", "overrides": { "ambiguity": "low", "scopeEstimate": "tiny", "riskLane": "tiny" }, "minimumFloor": "low", "blocked": false },
+    { "id": "low-doc-correction", "family": "documentation", "split": "validation", "locale": "en", "request": "Correct the command example in docs/quickstart.md", "overrides": { "ambiguity": "low", "scopeEstimate": "tiny", "riskLane": "tiny" }, "minimumFloor": "low", "blocked": false },
+    { "id": "low-vietnamese-doc", "family": "documentation", "split": "holdout", "locale": "vi", "request": "Cập nhật ví dụ lệnh trong docs/quickstart.md", "overrides": { "ambiguity": "low", "scopeEstimate": "tiny", "riskLane": "tiny" }, "minimumFloor": "low", "blocked": false },
+    { "id": "low-bounded-refactor", "family": "bounded-refactor", "split": "train", "locale": "en", "request": "Refactor src/format.ts without changing behavior", "overrides": { "ambiguity": "low", "scopeEstimate": "tiny", "riskLane": "normal" }, "minimumFloor": "low", "blocked": false },
+    { "id": "low-two-file-fix", "family": "bounded-fix", "split": "holdout", "locale": "en", "request": "Fix src/a.ts and tests/a.test.ts, then run the exact test", "overrides": { "ambiguity": "low", "scopeEstimate": "bounded", "riskLane": "normal" }, "minimumFloor": "low", "blocked": false },
+
+    { "id": "medium-bounded-feature", "family": "bounded-feature", "split": "train", "locale": "en", "request": "Implement the requested parser feature in src/parser.ts and tests/parser.test.ts", "overrides": { "ambiguity": "medium", "scopeEstimate": "bounded", "riskLane": "normal" }, "minimumFloor": "medium", "blocked": false },
+    { "id": "medium-vietnamese-feature", "family": "bounded-feature", "split": "validation", "locale": "vi", "request": "Triển khai tính năng parser trong src/parser.ts và tests/parser.test.ts", "overrides": { "ambiguity": "medium", "scopeEstimate": "bounded", "riskLane": "normal" }, "minimumFloor": "medium", "blocked": false },
+    { "id": "medium-diagnosis", "family": "diagnosis", "split": "holdout", "locale": "en", "request": "Diagnose the failing parser workflow across src/parser.ts and tests/parser.test.ts", "overrides": { "ambiguity": "medium", "scopeEstimate": "bounded", "riskLane": "normal" }, "minimumFloor": "medium", "blocked": false },
+    { "id": "medium-vietnamese-diagnosis", "family": "diagnosis", "split": "train", "locale": "vi", "request": "Chẩn đoán lỗi workflow giữa src/parser.ts và tests/parser.test.ts", "overrides": { "ambiguity": "medium", "scopeEstimate": "bounded", "riskLane": "normal" }, "minimumFloor": "medium", "blocked": false },
+    { "id": "medium-review", "family": "review", "split": "validation", "locale": "en", "request": "Review changes in src/api.ts and src/store.ts for correctness", "overrides": { "ambiguity": "medium", "scopeEstimate": "bounded", "riskLane": "normal" }, "minimumFloor": "medium", "blocked": false },
+    { "id": "medium-plan", "family": "planning", "split": "holdout", "locale": "en", "request": "Plan the bounded change across src/api.ts and src/store.ts", "overrides": { "ambiguity": "medium", "scopeEstimate": "bounded", "riskLane": "normal" }, "minimumFloor": "medium", "blocked": false },
+    { "id": "medium-context-pressure", "family": "context-pressure", "split": "train", "locale": "en", "request": "Implement the bounded fix in src/api.ts", "overrides": { "ambiguity": "low", "scopeEstimate": "bounded", "riskLane": "normal", "contextPressure": 0.8 }, "minimumFloor": "medium", "blocked": false },
+    { "id": "medium-no-runtime-capability", "family": "runtime-unknown", "split": "holdout", "locale": "en", "request": "Implement the bounded fix in src/api.ts", "overrides": { "ambiguity": "low", "scopeEstimate": "bounded", "riskLane": "normal", "runtimeCapabilitiesKnown": false }, "minimumFloor": "high", "blocked": false },
+
+    { "id": "high-auth-boundary", "family": "authorization", "split": "train", "locale": "en", "request": "Change authorization checks across src/auth.ts and src/routes.ts", "overrides": { "ambiguity": "medium", "scopeEstimate": "bounded", "riskLane": "high-risk" }, "minimumFloor": "high", "blocked": false },
+    { "id": "high-vietnamese-auth", "family": "authorization", "split": "validation", "locale": "vi", "request": "Sửa logic phân quyền trong src/auth.ts và src/routes.ts", "overrides": { "ambiguity": "medium", "scopeEstimate": "bounded", "riskLane": "high-risk" }, "minimumFloor": "high", "blocked": false },
+    { "id": "ultra-broad-architecture", "family": "architecture", "split": "holdout", "locale": "en", "request": "Refactor the entire platform architecture somehow", "overrides": { "ambiguity": "high", "scopeEstimate": "broad", "riskLane": "high-risk" }, "minimumFloor": "ultra", "blocked": false },
+    { "id": "ultra-vietnamese-architecture", "family": "architecture", "split": "train", "locale": "vi", "request": "Thiết kế lại toàn bộ kiến trúc nền tảng khi phạm vi chưa rõ", "overrides": { "ambiguity": "high", "scopeEstimate": "broad", "riskLane": "high-risk" }, "minimumFloor": "ultra", "blocked": false },
+    { "id": "blocked-protected-file", "family": "protected-path", "split": "validation", "locale": "en", "request": "Update .env", "overrides": { "ambiguity": "low", "scopeEstimate": "tiny", "riskLane": "high-risk", "protectedTarget": true }, "minimumFloor": "high", "blocked": true },
+    { "id": "blocked-external-release", "family": "external-action", "split": "holdout", "locale": "en", "request": "Publish the package after changing src/version.ts", "overrides": { "ambiguity": "low", "scopeEstimate": "bounded", "riskLane": "high-risk" }, "minimumFloor": "high", "blocked": true },
+    { "id": "blocked-destructive-migration", "family": "migration", "split": "train", "locale": "en", "request": "Delete all production records during the migration in src/db.ts", "overrides": { "ambiguity": "medium", "scopeEstimate": "broad", "riskLane": "high-risk" }, "minimumFloor": "ultra", "blocked": true },
+    { "id": "blocked-missing-verifier", "family": "readiness", "split": "holdout", "locale": "en", "request": "Fix the concurrency race in src/lock.ts", "overrides": { "ambiguity": "medium", "scopeEstimate": "bounded", "riskLane": "high-risk", "verifierReady": false }, "minimumFloor": "high", "blocked": true }
+  ]
+}

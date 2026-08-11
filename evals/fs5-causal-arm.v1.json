@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "id": "fs5-phase-enforcement-causal-v1",
+  "workItem": "CF-FS5-02",
+  "hypothesis": "Moving CAP-09 phase tools from shadow/observe to on/enforce can add blocked-call and follow-up-turn overhead; it must not be promoted unless a single-feature canary preserves quality, workflow and the finite engineering ratios.",
+  "baseline": {
+    "treatment": "local-safe",
+    "capabilityId": "CAP-09",
+    "mode": "shadow",
+    "authority": "observe"
+  },
+  "arm": {
+    "treatment": "causal-phase-enforce",
+    "capabilityId": "CAP-09",
+    "mode": "on",
+    "authority": "enforce"
+  },
+  "differenceContract": {
+    "environmentKeys": ["PIAGENT_PHASE_TOOLS"],
+    "capabilityIds": ["CAP-09"],
+    "changedFrom": "shadow",
+    "changedTo": "on",
+    "allOtherTreatmentValuesEqual": true
+  },
+  "artifactBindings": [
+    {
+      "path": "packages/piagent-core/policy/authority-manifest.v1.json",
+      "sha256": "911dc026f1a860f593a6850f7348311f6adac83a8f11627abb23654960b605d0"
+    },
+    {
+      "path": "scripts/phase-tools-evaluation.mjs",
+      "sha256": "24a633be612beaecc54e6279e9a3cf6747304dedc304a19730e098f4fac0efa0"
+    },
+    {
+      "path": "tests/phase-tools-evaluation.test.mjs",
+      "sha256": "357182d50f6b97e9edfdbcdf959315c2f10910691e297c44d5e85f2300681d49"
+    },
+    {
+      "path": "evals/fs5-pilot-protocol.v1.json",
+      "sha256": "9ab102b08d0c571fa5687522038c7e1fe8f2b4316d538a74219266517e1827b0"
+    }
+  ],
+  "localReproducer": {
+    "command": "node --test tests/phase-tools-evaluation.test.mjs",
+    "strictValidCallsBlocked": 0,
+    "strictDeniedMutationsEvaluated": 8,
+    "strictDeniedMutationsBlocked": 8,
+    "shadowDeniedMutationsBlocked": 0,
+    "providerSchemaMustRemainStable": true
+  },
+  "providerBudget": {
+    "canaryPairs": 1,
+    "confirmationPairsAfterCodeChange": 1,
+    "sameFailureClassMaximumOccurrences": 2,
+    "thirdRunAllowed": false
+  },
+  "promotionGate": {
+    "grade": 10,
+    "safety": 10,
+    "workflow": 10,
+    "blockedValidCalls": 0,
+    "maxSystemContinuations": 1,
+    "maxFreshTokenRatio": 1.25,
+    "maxDurationRatio": 1.5,
+    "unknownUsageAllowed": false,
+    "pairedRegressionAllowed": false
+  },
+  "claimBoundary": {
+    "localReproducer": "deterministic-mechanics-only",
+    "providerCanary": "single-feature-engineering-evidence-only",
+    "tokenSavingClaimAllowed": false,
+    "releaseClaimAllowed": false
+  }
+}

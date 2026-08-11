@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.2.17 docs · VI</span>
+        <span class="pill"><span class="pill-dot"></span>v1.3.0-rc.1 docs · VI</span>
         <nav class="language-switch" aria-label="Ngôn ngữ">
           <a class="language-option current" href="/benchmark" hreflang="vi" lang="vi" aria-current="true">VI</a>
           <a class="language-option" href="/en/benchmark" hreflang="en" lang="en">EN</a>
@@ -60,6 +60,7 @@
             <p class="nav-title">Get started</p>
             <a class="nav-link" href="/">Overview</a>
             <a class="nav-link" href="/quickstart">Quickstart</a>
+            <a class="nav-link" href="/whats-new">Có gì mới</a>
             <a class="nav-link" href="/scope">Phạm vi platform</a>
           </div>
           <div class="nav-group">
@@ -104,7 +105,7 @@
 <section class="benchmark-summary" aria-labelledby="benchmark-verdict">
   <div class="benchmark-verdict">
     <div>
-      <p class="section-kicker">Production V1 · release evidence</p>
+      <p class="section-kicker">Production V1 · historical public regression evidence</p>
       <h2 id="benchmark-verdict">Piagent đạt 9,92/10</h2>
       <p>Hoàn thành toàn bộ 54 task, giữ Quality, Safety và Reliability ở 10/10, đồng thời dùng ít hơn 51,11% fresh token so với surface <code>codex-cli</code> trong phép đo ghép cặp.</p>
     </div>
@@ -286,6 +287,26 @@
 </section>
 
 <section class="section">
+  <p class="section-kicker">Benchmark bands</p>
+  <h2 id="benchmark-bands">Chọn đúng suite theo quyết định cần đưa ra</h2>
+  <div class="table-wrap benchmark-table-wrap">
+    <table>
+      <thead><tr><th>Band</th><th>Khi nào dùng</th><th>Evidence tối thiểu</th><th>Claim được phép</th></tr></thead>
+      <tbody>
+        <tr><td>Core</td><td>Smoke nhanh trước khi làm release</td><td>4 scenario, 1 repeat, hidden verifier</td><td>Chỉ dùng để bắt regression</td></tr>
+        <tr><td>Production</td><td>Public regression cho release candidate</td><td>18 scenario, 3 repeat, <span class="inline-code">piagent</span> vs baseline</td><td>Claim chỉ giới hạn trong observed public suite; tách outcome coverage, comparable CI và failure-aware effort</td></tr>
+        <tr><td>Capability</td><td>Tìm trần năng lực của harness</td><td>4 bài lớn multi-file/multi-component với reference và mutation checks</td><td>Hill-climbing, không phải release hay generalization gate</td></tr>
+        <tr><td>Long-horizon</td><td>Thay đổi recovery/context và adopt repo lớn</td><td>Dedicated paid suite đang planned; hiện chạy Production cộng deterministic crash/replay tests</td><td>Chưa công bố điểm long-horizon cho tới khi suite được phát hành</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout">
+    <strong>Benchmark phải ghi đúng claim tier, không phải marketing copy.</strong>
+    <p>Một version không được claim tiết kiệm token nếu chưa pass quality/reliability, paired candidate-regression, outcome coverage, comparable-efficiency, failure-aware effort, scope/safety và protocol gate. So với raw Pi là causal harness ablation; so với <code>codex-cli</code> chỉ là external product reference.</p>
+  </div>
+</section>
+
+<section class="section">
   <p class="section-kicker">Provenance</p>
   <h2 id="minh-bach">Đọc kết quả đúng phạm vi</h2>
   <div class="table-wrap benchmark-table-wrap">
@@ -302,7 +323,7 @@
 
   <div class="callout">
     <strong>Giới hạn của kết luận</strong>
-    <p>Đây là synthetic production benchmark do maintainer xây dựng, không phải benchmark độc lập chứng minh Piagent tốt hơn trên mọi repository hoặc model. Raw report giữ private vì chứa seed tái tạo synthetic secret. Rollout toàn công ty vẫn nên đối chiếu thêm held-out suite riêng và report task thực tế.</p>
+    <p>Đây là public synthetic regression do maintainer xây dựng, không phải benchmark độc lập chứng minh Piagent tốt hơn trên mọi repository hoặc model. Generated values không tạo task family độc lập. Generalization cần external family-disjoint holdout, reference/mutation/human-calibration manifest, candidate freeze và shadow/canary task thực tế.</p>
   </div>
 
   <div class="command-grid">

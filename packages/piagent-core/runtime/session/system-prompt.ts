@@ -1,3 +1,6 @@
+import type { TaskContract } from "../../extensions/guard-types.ts";
+import { SEMANTIC_COMPACTION_MAX_CHARS } from "../runtime-limits.ts";
+
 const LEGACY_PROJECT_INSTRUCTIONS_START = "Before implementation:\n\n1. Load `.pi/piagent-profile.json` with `piagent_context`.";
 const LEGACY_PROJECT_INSTRUCTIONS_END = "18. If the bundled `pi-subagents` parent skill is available, use it for delegation patterns, review loops, native supervisor coordination, and safety boundaries.";
 const RUNTIME_MANAGED_PROJECT_INSTRUCTIONS = [
@@ -49,4 +52,56 @@ export function compactManagedProjectInstructions(
     };
   }
   return { systemPrompt, compacted: false };
+}
+
+function compactCarryOverText(value: unknown, maxChars: number): string {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (text.length <= maxChars) return text;
+  const marker = " ... ";
+  const available = maxChars - marker.length;
+  const head = Math.floor(available * 0.6);
+  return `${text.slice(0, head).trimEnd()}${marker}${text.slice(-(available - head)).trimStart()}`;
+}
+
+function compactCarryOverList(values: unknown[], limit: number, itemChars: number): string {
+  const selected = values.slice(0, limit).map((item) => compactCarryOverText(item, itemChars));
+  if (values.length > limit) selected.push(`[${values.length - limit} more retained in Task Contract]`);
+  return selected.join(", ") || "none recorded";
+}
+
+function boundedCarryOver(value: string): string {
+  if (value.length <= SEMANTIC_COMPACTION_MAX_CHARS) return value;
+  const marker = "\n\n[Piagent carry-over shortened; the durable Task Contract remains authoritative.]\n\n";
+  const available = SEMANTIC_COMPACTION_MAX_CHARS - marker.length;
+  const head = Math.floor(available * 0.72);
+  return `${value.slice(0, head).trimEnd()}${marker}${value.slice(-(available - head)).trimStart()}`;
+}
+
+export function buildSemanticCompactionInstructions(task?: TaskContract): string {
+  const taskState = task
+    ? [
+        `Current task: ${compactCarryOverText(task.taskId, 160)} (${task.riskLane})`,
+        `Session: ${compactCarryOverText(task.sessionName ?? task.sessionId, 160)}`,
+        `Goal: ${compactCarryOverText(task.summary, 600)}`,
+        "Acceptance criteria:",
+        ...task.acceptanceCriteria.slice(0, 12).map((criterion, index) => `- ${index + 1}. ${compactCarryOverText(criterion, 280)}`),
+        `Scope: ${compactCarryOverList(task.scope, 8, 80)}`,
+        `Changed files: ${compactCarryOverList(task.changedFiles, 8, 100)}`,
+        task.verifyCommands.length > 0
+          ? ["Exact verify commands:", ...task.verifyCommands.slice(0, 8).map((command, index) => `${index + 1}. ${compactCarryOverText(command, 180)}`)].join("\n")
+          : "Exact verify commands: not recorded",
+        `Outcome/blocker: ${task.trace.outcome}${task.trace.friction ? `; ${compactCarryOverText(task.trace.friction, 320)}` : ""}`,
+        "Full task truth is file-backed by the durable Task Contract; do not inspect private Piagent state directly."
+      ].join("\n")
+    : "No persisted task contract was found. Derive the current goal from the most recent user request.";
+  return boundedCarryOver([
+    "Create a structured Piagent carry-over summary.", taskState, "", "Preserve:",
+    "- current goal, acceptance criteria, explicit user decisions, and non-negotiable constraints",
+    "- architecture facts and invariants verified from repository files",
+    "- files changed, exact verification evidence, unresolved failures, blockers, and next action",
+    "- citations or paths needed to re-read advisory context", "", "Discard:",
+    "- superseded plans, repeated reads, raw tool logs, successful intermediate output, and speculative reasoning",
+    "- full source excerpts that can be re-read from the repository", "",
+    "Do not convert assumptions into facts. Mark unknowns explicitly. After compaction, re-read current files before editing."
+  ].join("\n"));
 }

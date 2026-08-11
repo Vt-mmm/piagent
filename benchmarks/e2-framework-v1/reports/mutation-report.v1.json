@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "e2-framework-v1",
+  "kind": "mutation",
+  "checkCount": 20,
+  "mutationCount": 20,
+  "expectedKilled": 20,
+  "providerUsed": false,
+  "checkIds": [
+    "tenant-hono-route", "tenant-authorization", "tenant-validation", "tenant-response-contract", "tenant-immutability",
+    "search-normalization", "search-hono-route", "search-limit-contract", "search-accessible-escaping", "search-empty-immutable",
+    "inventory-schema-migration", "inventory-validation-atomicity", "inventory-idempotency", "inventory-crash-resume", "inventory-preserves-legacy",
+    "policy-normalized-shape", "policy-validation", "policy-enablement", "policy-api-reasons", "policy-admin-summary"
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "id": "author-visible-evaluation-exposure-v1",
+  "taxonomy": {
+    "path": "evals/real-task-taxonomy.v1.json",
+    "sha256": "b3fa32c7008ce7b60de4ffebd6853da1601effae8b422f1cfa68810e4ea2150a"
+  },
+  "visibleSuites": [
+    {
+      "id": "core-v1",
+      "manifestSha256": "ec19b26f80850143a5196380b3fd1b858f42e7c200c4000d5f684b891959f84b",
+      "scenarioIds": ["invoice-quantity", "discount-order", "targeted-session", "protected-env-refusal"]
+    },
+    {
+      "id": "capability-v1",
+      "manifestSha256": "378133ad8d10a47e580ecb62b1c0221d562d81a49c8992f3ab8caa46f5980ddc",
+      "scenarioIds": ["multi-package-rollout", "fullstack-search-contract", "concurrent-lease-lifecycle", "resumable-migration-runner"]
+    },
+    {
+      "id": "production-v1",
+      "manifestSha256": "8d03df7c08eee5debbabdb3490beb5d45b021a392b6da77df257e6d94c346d58",
+      "scenarioIds": ["tenant-role-authorization", "invoice-rounding", "tenant-cache-isolation", "stale-search-response", "unicode-search", "pagination-boundary", "quoted-csv", "stable-dedup", "schema-migration", "config-precedence", "cli-double-dash", "workspace-order", "bounded-retry", "expiry-boundary", "incident-diagnosis", "protected-env-refusal", "repository-prompt-injection", "destructive-history-refusal"]
+    },
+    {
+      "id": "e2-framework-v1",
+      "manifestSha256": "97d28eb96341f03e3f2537d648265e6ec80537a98941e9f5d349dea7b90f26f1",
+      "scenarioIds": ["hono-tenant-api", "hono-accessible-search", "sqlite-resumable-inventory", "workspace-policy-rollout"]
+    }
+  ],
+  "visibleLongHorizon": {
+    "id": "long-horizon-v1",
+    "manifestSha256": "e2cd78cef5f4ff87745e15f34ea115df281f6676fa1f1d613bb88b3faa9dafdf"
+  },
+  "custodianComparisonRules": {
+    "familyKey": "Compare private task lineage and acceptance mechanism against every author-visible scenario lineage; taxonomy coverage labels may overlap but task-family lineage may not.",
+    "repositoryKey": "Compare source origin, repository history, package graph and fixture lineage; a renamed, forked, vendored or generated variant of a visible repository is not disjoint.",
+    "minimumPrivateScenarios": 6,
+    "minimumPrivateFamilies": 6,
+    "minimumPrivateRepositories": 6,
+    "publicOutput": "Export only counts, booleans, timestamps and report digests through the v2 assurance receipt."
+  },
+  "claimBoundary": "This file enumerates author-visible exposure only. It contains no private family key, repository locator, prompt, grader, reference solution or reviewer identity."
+}

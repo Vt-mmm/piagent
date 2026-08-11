@@ -44,6 +44,12 @@ const NAV = [
         lead: "Hai lệnh để cài, rồi mở repo, chọn profile, bật quyền phù hợp, chạy task, và verify bằng bằng chứng thật trước khi handoff."
       },
       {
+        slug: "whats-new",
+        nav: "Có gì mới",
+        title: "Luồng task an toàn hơn, ít thao tác tay hơn",
+        lead: "Product stabilization bổ sung runtime truth, trajectory, recovery, helper policy, activity inspector và completion receipt fail-closed mà không phá workflow cũ."
+      },
+      {
         slug: "scope",
         nav: "Phạm vi platform",
         title: "Platform này nhận phần nào về mình",
@@ -70,13 +76,13 @@ const NAV = [
         slug: "commands",
         nav: "Command catalog",
         title: "Command ngắn, rõ, ít token burn",
-        lead: "Ưu tiên dùng slash command vì mỗi command đã gói sẵn policy và flow. Thành viên không cần nhớ lại quy trình trong prompt."
+        lead: "Slash command gói sẵn policy và flow; một inspector menu duy nhất cho diff, command, safety và context. Thành viên không cần nhớ nhiều command rời."
       },
       {
         slug: "workflows",
         nav: "Workflows",
-        title: "Các luồng chính",
-        lead: "Chọn workflow theo intent thay vì mô tả lại policy trong prompt. Cách này giảm context lãng phí và giữ hành vi nhất quán."
+        title: "Workflow thay đổi thế nào sau update",
+        lead: "Workflow launcher cũ vẫn giữ nguyên. Runtime lifecycle và live inspector chạy tự động; command mới chỉ giúp quan sát preflight, diff, tiến độ, receipt, hiệu suất và orchestration policy."
       }
     ]
   },
@@ -163,6 +169,11 @@ const EN_PAGE_COPY = {
     title: "Step by step for new team members",
     lead: "Install with two commands, open a repository, select its profile and permission mode, run a task, and verify real evidence before handoff."
   },
+  "whats-new": {
+    nav: "What’s new",
+    title: "Safer task flow with less manual coordination",
+    lead: "Product stabilization adds runtime truth, trajectories, recovery, helper policy, an activity inspector, and fail-closed completion receipts without breaking existing workflows."
+  },
   scope: {
     nav: "Platform scope",
     title: "What the platform owns",
@@ -181,12 +192,12 @@ const EN_PAGE_COPY = {
   commands: {
     nav: "Command catalog",
     title: "Short commands with predictable behavior",
-    lead: "Slash commands package policy and workflow directly, avoiding model-driven command discovery and unnecessary token use."
+    lead: "Slash commands package policy and workflow directly, with one inspector menu for diffs, commands, safety, and context instead of many one-off commands."
   },
   workflows: {
     nav: "Workflows",
-    title: "Core workflows",
-    lead: "Select a workflow by intent instead of repeating policy in every prompt. This keeps behavior consistent and context compact."
+    title: "How workflows change after the update",
+    lead: "Existing workflow launchers stay unchanged. The runtime lifecycle and live inspector update automatically, while commands expose preflight, diffs, progress, receipts, efficiency, and orchestration policy."
   },
   mcp: {
     nav: "MCP overview",

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-08-08T00:00:00.000Z",
+  "source": "pi-runtime",
+  "piHostVersion": "0.82.0",
+  "piagentVersion": "1.2.17",
+  "provider": "openai-codex",
+  "modelId": "gpt-5.6-terra",
+  "availability": "authenticated",
+  "contextWindow": 200000,
+  "requestedThinkingLevel": "medium",
+  "effectiveThinkingLevel": "medium",
+  "supportedThinkingLevels": null,
+  "capabilities": [
+    { "name": "image-input", "value": null, "source": "pi-runtime" }
+  ],
+  "provenance": [
+    { "field": "modelId", "source": "pi-runtime", "capturedAt": "2026-08-08T00:00:00.000Z" }
+  ],
+  "warnings": []
+}

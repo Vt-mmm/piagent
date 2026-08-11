@@ -1,0 +1,436 @@
+{
+  "schemaVersion": 1,
+  "id": "piagent-real-task-taxonomy-v1",
+  "status": "frozen-boundary",
+  "frozenAt": "2026-08-11",
+  "workItem": "CF-FS4-01",
+  "purpose": "Define non-overlapping real-task families and the adapter boundary that later E2, long-horizon, holdout, and release evidence must satisfy.",
+  "scope": {
+    "thisArtifactProves": [
+      "task-family distribution",
+      "public scenario attribution",
+      "profile, language, framework, lifecycle, and risk boundaries"
+    ],
+    "thisArtifactDoesNotProve": [
+      "real-framework task execution",
+      "long-horizon completion",
+      "family-disjoint private holdout",
+      "human calibration",
+      "provider quality or token efficiency",
+      "release readiness"
+    ]
+  },
+  "classification": {
+    "cardinality": "exactly-one-primary-family",
+    "rule": "Classify by the primary acceptance outcome and the repository boundary that must change, then use routePriority as the deterministic tie-breaker. Secondary concerns are tags only and never create a second family assignment.",
+    "overlapPolicy": "A scenario may appear in historicalPublicScenarios of exactly one family. E2 and E3 manifests must also bind each scenario to exactly one familyId.",
+    "holdoutPolicy": "CF-FS4-04 must be repository-disjoint and family-disjoint from author-visible calibration tasks; this public taxonomy contains no private prompt, grader, oracle, or repository locator."
+  },
+  "historicalScenarioSources": [
+    { "suite": "production-v1", "path": "benchmarks/production-v1/suite.json", "role": "historical-public-regression-attribution" },
+    { "suite": "capability-v1", "path": "benchmarks/capability-v1/suite.json", "role": "historical-public-capability-attribution" }
+  ],
+  "excludedScenarioSources": [
+    { "suite": "core-v1", "reason": "E0 smoke scenarios overlap production archetypes and are not evidence of an additional real-task family." }
+  ],
+  "coverageGroups": [
+    "multi-file-package",
+    "backend-api-auth",
+    "data-migration-concurrency",
+    "frontend-browser",
+    "diagnosis-security",
+    "large-repo-retrieval",
+    "long-task"
+  ],
+  "adapterBoundary": {
+    "profiles": [
+      "backend-api",
+      "be-readonly-fe",
+      "data",
+      "devops",
+      "docs",
+      "fullstack",
+      "generic",
+      "mobile",
+      "node-typescript",
+      "python",
+      "web-frontend"
+    ],
+    "languages": [
+      { "id": "javascript", "execution": "exact-verifier", "semanticProof": "closed-js-ts" },
+      { "id": "typescript", "execution": "exact-verifier", "semanticProof": "closed-js-ts" },
+      { "id": "python", "execution": "exact-verifier", "semanticProof": "abstain" },
+      { "id": "java", "execution": "exact-verifier", "semanticProof": "abstain" },
+      { "id": "kotlin", "execution": "exact-verifier", "semanticProof": "abstain" },
+      { "id": "go", "execution": "exact-verifier", "semanticProof": "abstain" },
+      { "id": "rust", "execution": "exact-verifier", "semanticProof": "abstain" },
+      { "id": "dart", "execution": "exact-verifier", "semanticProof": "abstain" },
+      { "id": "shell", "execution": "exact-verifier", "semanticProof": "abstain" },
+      { "id": "sql", "execution": "exact-verifier", "semanticProof": "abstain" },
+      { "id": "yaml", "execution": "exact-verifier", "semanticProof": "abstain" },
+      { "id": "hcl", "execution": "exact-verifier", "semanticProof": "abstain" },
+      { "id": "markdown", "execution": "exact-verifier", "semanticProof": "abstain" }
+    ],
+    "frameworks": [
+      { "id": "node-generic", "profile": "node-typescript", "binding": "fixture-or-manifest" },
+      { "id": "node-workspace", "profile": "fullstack", "binding": "fixture-or-manifest" },
+      { "id": "react", "profile": "web-frontend", "binding": "fixture-or-manifest" },
+      { "id": "nextjs", "profile": "web-frontend", "binding": "fixture-or-manifest" },
+      { "id": "vue", "profile": "web-frontend", "binding": "fixture-or-manifest" },
+      { "id": "svelte", "profile": "web-frontend", "binding": "fixture-or-manifest" },
+      { "id": "express", "profile": "backend-api", "binding": "fixture-or-manifest" },
+      { "id": "fastify", "profile": "backend-api", "binding": "fixture-or-manifest" },
+      { "id": "hono", "profile": "backend-api", "binding": "fixture-or-manifest" },
+      { "id": "nestjs", "profile": "backend-api", "binding": "fixture-or-manifest" },
+      { "id": "python-generic", "profile": "python", "binding": "fixture-or-manifest" },
+      { "id": "fastapi", "profile": "backend-api", "binding": "fixture-or-manifest" },
+      { "id": "django", "profile": "backend-api", "binding": "fixture-or-manifest" },
+      { "id": "spring-boot", "profile": "backend-api", "binding": "fixture-or-manifest" },
+      { "id": "flutter", "profile": "mobile", "binding": "fixture-or-manifest" },
+      { "id": "docker-compose", "profile": "devops", "binding": "fixture-or-manifest" },
+      { "id": "terraform", "profile": "devops", "binding": "fixture-or-manifest" },
+      { "id": "kubernetes", "profile": "devops", "binding": "fixture-or-manifest" },
+      { "id": "docs-site", "profile": "docs", "binding": "fixture-or-manifest" },
+      { "id": "generic-repository", "profile": "generic", "binding": "explicit" }
+    ],
+    "lifecycles": [
+      { "id": "fresh", "evidenceWorkItem": "CF-FS4-02" },
+      { "id": "repair", "evidenceWorkItem": "CF-FS4-02" },
+      { "id": "resume", "evidenceWorkItem": "CF-FS4-03" },
+      { "id": "read-only", "evidenceWorkItem": "CF-FS4-02" },
+      { "id": "migration", "evidenceWorkItem": "CF-FS4-02" },
+      { "id": "long-horizon", "evidenceWorkItem": "CF-FS4-03" }
+    ],
+    "risks": [
+      "routine",
+      "high-risk",
+      "protected-boundary",
+      "destructive-refusal"
+    ],
+    "proofRules": [
+      "A configured verifier may prove execution for any listed language when its fixture pins the toolchain and command.",
+      "Semantic acceptance proof is limited to the closed JavaScript/TypeScript adapter; all other languages must abstain instead of blocking completion.",
+      "A framework name is a fixture or manifest binding, not a claim that Piagent understands every framework semantic.",
+      "No family becomes E2-ready until CF-FS4-02 supplies a real framework or repository fixture, exact verifier or calibrated rubric, reference solution, mutation sensitivity, alternative-valid solution, and scope check.",
+      "No family becomes long-horizon-ready until CF-FS4-03 records 30-90 minute checkpoint, compaction, crash, process-restart, handoff, and bounded-continuation evidence."
+    ]
+  },
+  "distributionRationale": {
+    "minimumFamilyCount": 12,
+    "frozenFamilyCount": 17,
+    "principle": "Separate families by acceptance authority and repository boundary, not by surface wording or renamed values. Historical public scenarios are attribution anchors only.",
+    "requiredCoverage": {
+      "multi-file-package": 4,
+      "backend-api-auth": 2,
+      "data-migration-concurrency": 3,
+      "frontend-browser": 3,
+      "diagnosis-security": 2,
+      "large-repo-retrieval": 2,
+      "long-task": 1
+    }
+  },
+  "families": [
+    {
+      "id": "multi-package-contract-rollout",
+      "routePriority": 1,
+      "title": "Multi-package contract rollout",
+      "coverageGroup": "multi-file-package",
+      "primaryConcern": "one behavioral contract must remain consistent across multiple workspace packages",
+      "includes": ["shared contract changes spanning at least two packages", "package-to-package rollout and compatibility"],
+      "excludes": ["single service API behavior", "dependency-only version upgrades"],
+      "profiles": ["fullstack", "node-typescript"],
+      "languages": ["javascript", "typescript"],
+      "frameworks": ["node-workspace"],
+      "lifecycles": ["fresh", "repair"],
+      "risks": ["routine", "high-risk"],
+      "historicalPublicScenarios": [{ "suite": "capability-v1", "id": "multi-package-rollout", "evidenceTier": "historical-capability" }],
+      "nextEvidenceWorkItem": "CF-FS4-02"
+    },
+    {
+      "id": "fullstack-cross-boundary-contract",
+      "routePriority": 2,
+      "title": "Fullstack cross-boundary contract",
+      "coverageGroup": "multi-file-package",
+      "primaryConcern": "one user-facing contract crosses shared, backend, and frontend boundaries",
+      "includes": ["shared DTO or query contract used by backend and frontend", "cross-boundary rendering or serialization"],
+      "excludes": ["frontend-only state behavior", "package rollout without an end-user path"],
+      "profiles": ["fullstack", "be-readonly-fe"],
+      "languages": ["javascript", "typescript"],
+      "frameworks": ["node-workspace", "react", "nextjs"],
+      "lifecycles": ["fresh", "repair"],
+      "risks": ["routine", "high-risk"],
+      "historicalPublicScenarios": [{ "suite": "capability-v1", "id": "fullstack-search-contract", "evidenceTier": "historical-capability" }],
+      "nextEvidenceWorkItem": "CF-FS4-02"
+    },
+    {
+      "id": "dependency-build-upgrade",
+      "routePriority": 3,
+      "title": "Dependency and build upgrade",
+      "coverageGroup": "multi-file-package",
+      "primaryConcern": "dependency graph, build configuration, or package order changes without changing the product contract",
+      "includes": ["workspace dependency ordering", "framework or library upgrade with build compatibility"],
+      "excludes": ["product behavior rollout across packages", "infrastructure deployment configuration"],
+      "profiles": ["node-typescript", "python", "fullstack"],
+      "languages": ["javascript", "typescript", "python", "yaml"],
+      "frameworks": ["node-workspace", "python-generic"],
+      "lifecycles": ["fresh", "repair"],
+      "risks": ["routine", "high-risk"],
+      "historicalPublicScenarios": [{ "suite": "production-v1", "id": "workspace-order", "evidenceTier": "historical-micro" }],
+      "nextEvidenceWorkItem": "CF-FS4-02"
+    },
+    {
+      "id": "backend-api-behavior",
+      "routePriority": 4,
+      "title": "Backend API behavior",
+      "coverageGroup": "backend-api-auth",
+      "primaryConcern": "request validation, domain calculation, response shape, or service error behavior inside one backend boundary",
+      "includes": ["API input and output contracts", "domain calculations and error mapping"],
+      "excludes": ["authorization policy", "frontend rendering"],
+      "profiles": ["backend-api", "python"],
+      "languages": ["javascript", "typescript", "python", "java", "kotlin", "go"],
+      "frameworks": ["express", "fastify", "hono", "nestjs", "fastapi", "django", "spring-boot"],
+      "lifecycles": ["fresh", "repair"],
+      "risks": ["routine", "high-risk"],
+      "historicalPublicScenarios": [{ "suite": "production-v1", "id": "invoice-rounding", "evidenceTier": "historical-micro" }],
+      "nextEvidenceWorkItem": "CF-FS4-02"
+    },
+    {
+      "id": "authorization-tenant-boundary",
+      "routePriority": 5,
+      "title": "Authorization and tenant boundary",
+      "coverageGroup": "backend-api-auth",
+      "primaryConcern": "identity, role, tenant, or entitlement isolation determines whether data or actions are allowed",
+      "includes": ["role and tenant authorization", "tenant-scoped cache or data isolation"],
+      "excludes": ["generic input validation", "destructive-operation refusal by the coding agent"],
+      "profiles": ["backend-api", "fullstack"],
+      "languages": ["javascript", "typescript", "python", "java", "kotlin", "go"],
+      "frameworks": ["express", "fastify", "hono", "nestjs", "fastapi", "django", "spring-boot"],
+      "lifecycles": ["fresh", "repair"],
+      "risks": ["high-risk", "protected-boundary"],
+      "historicalPublicScenarios": [
+        { "suite": "production-v1", "id": "tenant-role-authorization", "evidenceTier": "historical-micro" },
+        { "suite": "production-v1", "id": "tenant-cache-isolation", "evidenceTier": "historical-micro" }
+      ],
+      "nextEvidenceWorkItem": "CF-FS4-02"
+    },
+    {
+      "id": "data-pipeline-transformation",
+      "routePriority": 6,
+      "title": "Data pipeline transformation",
+      "coverageGroup": "data-migration-concurrency",
+      "primaryConcern": "records are parsed, normalized, deduplicated, or transformed while preserving ordering and data invariants",
+      "includes": ["parsing and serialization", "stable deduplication and batch transforms"],
+      "excludes": ["persistent schema migration", "concurrent ownership or locking"],
+      "profiles": ["data", "node-typescript", "python"],
+      "languages": ["javascript", "typescript", "python", "sql"],
+      "frameworks": ["node-generic", "python-generic"],
+      "lifecycles": ["fresh", "repair"],
+      "risks": ["routine", "high-risk"],
+      "historicalPublicScenarios": [
+        { "suite": "production-v1", "id": "quoted-csv", "evidenceTier": "historical-micro" },
+        { "suite": "production-v1", "id": "stable-dedup", "evidenceTier": "historical-micro" }
+      ],
+      "nextEvidenceWorkItem": "CF-FS4-02"
+    },
+    {
+      "id": "data-schema-migration",
+      "routePriority": 7,
+      "title": "Data and schema migration",
+      "coverageGroup": "data-migration-concurrency",
+      "primaryConcern": "persistent state must move between schema versions idempotently and resume safely",
+      "includes": ["backward-compatible schema changes", "resumable migration planning and checkpoints"],
+      "excludes": ["stateless record transformation", "general long task without migration state"],
+      "profiles": ["data", "node-typescript", "python", "backend-api"],
+      "languages": ["javascript", "typescript", "python", "sql"],
+      "frameworks": ["node-generic", "python-generic"],
+      "lifecycles": ["migration", "resume"],
+      "risks": ["high-risk", "protected-boundary"],
+      "historicalPublicScenarios": [
+        { "suite": "production-v1", "id": "schema-migration", "evidenceTier": "historical-micro" },
+        { "suite": "capability-v1", "id": "resumable-migration-runner", "evidenceTier": "historical-capability" }
+      ],
+      "nextEvidenceWorkItem": "CF-FS4-02"
+    },
+    {
+      "id": "concurrency-idempotency-coordination",
+      "routePriority": 8,
+      "title": "Concurrency, idempotency, and coordination",
+      "coverageGroup": "data-migration-concurrency",
+      "primaryConcern": "multiple attempts or actors must coordinate without duplicate, stale, or leaked state",
+      "includes": ["leases and locks", "bounded retries, idempotency, expiry, and cleanup"],
+      "excludes": ["single-threaded migration ordering", "frontend stale-response suppression"],
+      "profiles": ["backend-api", "node-typescript", "python"],
+      "languages": ["javascript", "typescript", "python", "go", "rust"],
+      "frameworks": ["node-generic", "express", "fastify", "python-generic"],
+      "lifecycles": ["fresh", "repair", "resume"],
+      "risks": ["high-risk"],
+      "historicalPublicScenarios": [
+        { "suite": "production-v1", "id": "bounded-retry", "evidenceTier": "historical-micro" },
+        { "suite": "production-v1", "id": "expiry-boundary", "evidenceTier": "historical-micro" },
+        { "suite": "capability-v1", "id": "concurrent-lease-lifecycle", "evidenceTier": "historical-capability" }
+      ],
+      "nextEvidenceWorkItem": "CF-FS4-02"
+    },
+    {
+      "id": "frontend-state-rendering",
+      "routePriority": 9,
+      "title": "Frontend state and rendering",
+      "coverageGroup": "frontend-browser",
+      "primaryConcern": "client state, ordering, pagination, search, or rendering is correct without requiring a browser journey",
+      "includes": ["async state reducers", "Unicode search, pagination, and pure rendering"],
+      "excludes": ["browser navigation or accessibility journey", "shared backend/frontend contract"],
+      "profiles": ["web-frontend", "be-readonly-fe"],
+      "languages": ["javascript", "typescript"],
+      "frameworks": ["react", "nextjs", "vue", "svelte"],
+      "lifecycles": ["fresh", "repair"],
+      "risks": ["routine"],
+      "historicalPublicScenarios": [
+        { "suite": "production-v1", "id": "stale-search-response", "evidenceTier": "historical-micro" },
+        { "suite": "production-v1", "id": "unicode-search", "evidenceTier": "historical-micro" },
+        { "suite": "production-v1", "id": "pagination-boundary", "evidenceTier": "historical-micro" }
+      ],
+      "nextEvidenceWorkItem": "CF-FS4-02"
+    },
+    {
+      "id": "browser-accessibility-journey",
+      "routePriority": 10,
+      "title": "Browser and accessibility journey",
+      "coverageGroup": "frontend-browser",
+      "primaryConcern": "an interactive user journey must work in a real browser with accessibility and network behavior verified",
+      "includes": ["navigation, forms, focus, keyboard, and browser state", "visual or network-visible integration behavior"],
+      "excludes": ["pure reducer or rendering function", "mobile-native journey"],
+      "profiles": ["web-frontend", "fullstack", "be-readonly-fe"],
+      "languages": ["javascript", "typescript"],
+      "frameworks": ["react", "nextjs", "vue", "svelte"],
+      "lifecycles": ["fresh", "repair"],
+      "risks": ["routine", "high-risk"],
+      "historicalPublicScenarios": [],
+      "nextEvidenceWorkItem": "CF-FS4-02"
+    },
+    {
+      "id": "mobile-client-lifecycle",
+      "routePriority": 11,
+      "title": "Mobile client lifecycle",
+      "coverageGroup": "frontend-browser",
+      "primaryConcern": "mobile navigation, local state, platform lifecycle, or offline behavior must remain correct",
+      "includes": ["Flutter or mobile client state", "platform lifecycle and offline transitions"],
+      "excludes": ["web browser journey", "release signing or external store publication"],
+      "profiles": ["mobile"],
+      "languages": ["dart", "javascript", "typescript"],
+      "frameworks": ["flutter"],
+      "lifecycles": ["fresh", "repair", "resume"],
+      "risks": ["routine", "high-risk"],
+      "historicalPublicScenarios": [],
+      "nextEvidenceWorkItem": "CF-FS4-02"
+    },
+    {
+      "id": "incident-diagnosis-readonly",
+      "routePriority": 12,
+      "title": "Read-only incident diagnosis",
+      "coverageGroup": "diagnosis-security",
+      "primaryConcern": "evidence must be inspected and a causal diagnosis reported without mutating the repository or external systems",
+      "includes": ["log, trace, configuration, and code-path diagnosis", "ranked evidence-backed remediation options"],
+      "excludes": ["implementing the remediation", "security refusal where the requested action is itself forbidden"],
+      "profiles": ["generic", "node-typescript", "backend-api", "devops"],
+      "languages": ["javascript", "typescript", "python", "shell", "yaml"],
+      "frameworks": ["generic-repository", "node-generic", "python-generic", "kubernetes"],
+      "lifecycles": ["read-only"],
+      "risks": ["routine", "high-risk"],
+      "historicalPublicScenarios": [{ "suite": "production-v1", "id": "incident-diagnosis", "evidenceTier": "historical-micro" }],
+      "nextEvidenceWorkItem": "CF-FS4-02"
+    },
+    {
+      "id": "security-protected-boundary",
+      "routePriority": 13,
+      "title": "Security and protected boundary",
+      "coverageGroup": "diagnosis-security",
+      "primaryConcern": "untrusted instructions, secrets, destructive history, or protected paths require hard refusal or bounded hardening",
+      "includes": ["prompt-injection resistance", "secret, history, permission, and protected-path boundaries"],
+      "excludes": ["product authorization logic", "ordinary read-only diagnosis"],
+      "profiles": ["generic", "docs", "node-typescript", "backend-api", "devops"],
+      "languages": ["javascript", "typescript", "python", "shell", "yaml", "markdown"],
+      "frameworks": ["generic-repository", "docs-site", "node-generic", "python-generic", "kubernetes"],
+      "lifecycles": ["fresh", "repair", "read-only"],
+      "risks": ["protected-boundary", "destructive-refusal"],
+      "historicalPublicScenarios": [
+        { "suite": "production-v1", "id": "protected-env-refusal", "evidenceTier": "historical-micro" },
+        { "suite": "production-v1", "id": "repository-prompt-injection", "evidenceTier": "historical-micro" },
+        { "suite": "production-v1", "id": "destructive-history-refusal", "evidenceTier": "historical-micro" }
+      ],
+      "nextEvidenceWorkItem": "CF-FS4-02"
+    },
+    {
+      "id": "large-repo-change-localization",
+      "routePriority": 14,
+      "title": "Large-repository change localization",
+      "coverageGroup": "large-repo-retrieval",
+      "primaryConcern": "the correct small change surface must be found in a large repository before a bounded implementation",
+      "includes": ["multi-module symbol and ownership discovery", "change localization with distractor packages"],
+      "excludes": ["read-only architecture explanation", "long task defined by process interruption"],
+      "profiles": ["generic", "fullstack", "node-typescript"],
+      "languages": ["javascript", "typescript", "python", "java", "kotlin", "go", "rust"],
+      "frameworks": ["generic-repository", "node-workspace", "python-generic", "spring-boot"],
+      "lifecycles": ["fresh", "repair"],
+      "risks": ["routine", "high-risk"],
+      "historicalPublicScenarios": [],
+      "nextEvidenceWorkItem": "CF-FS4-02"
+    },
+    {
+      "id": "large-repo-architecture-retrieval",
+      "routePriority": 15,
+      "title": "Large-repository architecture retrieval",
+      "coverageGroup": "large-repo-retrieval",
+      "primaryConcern": "repository evidence must be retrieved and synthesized across modules without changing product files",
+      "includes": ["architecture and dependency explanation", "current-file citation and ownership mapping"],
+      "excludes": ["incident diagnosis", "implementation after localization"],
+      "profiles": ["generic", "fullstack", "docs"],
+      "languages": ["javascript", "typescript", "python", "java", "kotlin", "go", "rust", "markdown"],
+      "frameworks": ["generic-repository", "node-workspace", "docs-site"],
+      "lifecycles": ["read-only"],
+      "risks": ["routine"],
+      "historicalPublicScenarios": [],
+      "nextEvidenceWorkItem": "CF-FS4-02"
+    },
+    {
+      "id": "long-horizon-interrupted-delivery",
+      "routePriority": 16,
+      "title": "Long-horizon interrupted delivery",
+      "coverageGroup": "long-task",
+      "primaryConcern": "a 30-90 minute multi-stage task must survive compaction, crash, process restart, handoff, and bounded continuation without stale proof",
+      "includes": ["checkpointed implementation across process boundaries", "resume with current-tree verifier and state-growth telemetry"],
+      "excludes": ["short migration with no process restart", "large repository task completed in one uninterrupted session"],
+      "profiles": ["generic", "fullstack", "node-typescript", "backend-api", "data", "devops"],
+      "languages": ["javascript", "typescript", "python", "java", "kotlin", "go", "rust", "shell", "yaml", "hcl"],
+      "frameworks": ["generic-repository", "node-workspace", "python-generic", "spring-boot", "terraform", "kubernetes"],
+      "lifecycles": ["long-horizon", "resume"],
+      "risks": ["high-risk"],
+      "historicalPublicScenarios": [],
+      "nextEvidenceWorkItem": "CF-FS4-03"
+    },
+    {
+      "id": "cli-configuration-tooling",
+      "routePriority": 17,
+      "title": "CLI and configuration tooling",
+      "coverageGroup": "multi-file-package",
+      "primaryConcern": "command-line parsing or layered configuration must preserve explicit values and boundary semantics",
+      "includes": ["CLI option and positional parsing", "configuration precedence and falsey values"],
+      "excludes": ["dependency graph upgrades", "infrastructure deployment manifests"],
+      "profiles": ["node-typescript", "fullstack", "devops"],
+      "languages": ["javascript", "typescript", "python", "shell", "yaml"],
+      "frameworks": ["node-generic", "python-generic", "generic-repository"],
+      "lifecycles": ["fresh", "repair"],
+      "risks": ["routine", "high-risk"],
+      "historicalPublicScenarios": [
+        { "suite": "production-v1", "id": "config-precedence", "evidenceTier": "historical-micro" },
+        { "suite": "production-v1", "id": "cli-double-dash", "evidenceTier": "historical-micro" }
+      ],
+      "nextEvidenceWorkItem": "CF-FS4-02"
+    }
+  ],
+  "deferredEvidence": {
+    "CF-FS4-02": "Materialize real framework and repository fixtures with reference, mutation, alternative-valid, scope, and grader-sensitivity evidence.",
+    "CF-FS4-03": "Materialize 30-90 minute crash, compaction, restart, handoff, continuation-budget, peak-context, and state-growth evidence.",
+    "CF-FS4-04": "Create the external family-disjoint private holdout and human calibration process without exposing prompts or graders to implementers.",
+    "CF-FS4-05": "Independently review E0, E1, E2, and E3 readiness and preserve the claim boundaries."
+  }
+}

@@ -50,6 +50,9 @@
       "type": "string",
       "minLength": 1
     },
+    "authorityProfile": {
+      "enum": ["broad-default", "mechanical-only", "strict-high-risk"]
+    },
     "permissionProfile": {
       "description": "Runtime permission profile. workspace-write is the default; trusted-full-access still keeps Piagent protected-path and destructive/external confirmation gates.",
       "enum": [

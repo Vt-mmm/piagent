@@ -1,0 +1,370 @@
+{
+  "schemaVersion": "fs2-gate-audit-v1",
+  "workItem": "CF-FS2-05",
+  "auditedAt": "2026-08-10T15:13:15Z",
+  "status": "pass",
+  "verdict": {
+    "phase": "FS2",
+    "localGate": "pass",
+    "exitConditionsPassed": 5,
+    "exitConditionsTotal": 5,
+    "advanceAllowed": "CF-FS3-01 may be selected after exact artifact readback; no FS3 implementation is authorized by this artifact",
+    "candidatePromotion": "none; candidate remains unfrozen"
+  },
+  "review": {
+    "reviewer": "root",
+    "session": "fresh-independent-source-evidence-read-only-fs2-gate-2026-08-10",
+    "independence": "Separate bounded gate turn after CF-FS2-04. The reviewer re-read the current protocol, roadmap, tracker and source; recomputed all identities; reran the complete local matrix; and did not rely on the implementation handoff as proof. This is not an external human audit.",
+    "mutationScope": [
+      "the atomic STATUS.md audit claim before review",
+      "this new immutable audit artifact"
+    ],
+    "prohibitedAndNotPerformed": [
+      "product, runtime, test, schema, package, documentation, workflow, or existing evidence edits",
+      "provider or benchmark execution",
+      "candidate freeze or release-state mutation",
+      "user or system global installation",
+      "registry write or network publication",
+      "branch, worktree, stage, commit, tag, push, pull request, publish, or cleanup",
+      "CF-FS3-01 implementation"
+    ]
+  },
+  "reviewedIdentity": {
+    "head": "4f37ae05d56431f2f9db9c4159e20252c3da3b2a",
+    "headTree": "0907c03c88373471c6da8606af61b4f172149c73",
+    "exactTag": "v1.2.17",
+    "packageVersion": "1.2.17",
+    "candidateState": "unfrozen",
+    "candidateDigest": null,
+    "policyManifestVersion": "authority-v1",
+    "policyManifestDigest": "sha256:24f77f5f5ddcd5430c70c120599e10995f99f420bebb474ec352bb7af7030027",
+    "productionTree": {
+      "algorithm": "piagent-fs2-work-item-production-tree-v1",
+      "domainUtf8": "piagent-fs2-work-item-production-tree-v1\n",
+      "canonicalization": "UTF-8 sorted production paths from the FS0 constitution; JSON array of {path,mode,size,sha256}; aggregate SHA-256 is domain plus canonical JSON bytes",
+      "files": 444,
+      "identity": "sha256:ce024d899816cc71c431ef9a4f8dd62254faa19299c9d69fc8ce1be786e2ea62",
+      "preAndPostVerificationMatch": true
+    },
+    "preArtifactWorkingTreeObservation": {
+      "porcelainRecords": 310,
+      "porcelainSha256": "ed04936feaa4b88d35265cbfa0d73f9b4b5c7002d89ac55c85f047ac6f3338a9",
+      "disposition": "Dirty user-owned development tree retained. The same path/status inventory and production identity were observed before and after verification. The audit artifact is the only expected post-observation addition."
+    },
+    "trackerAtAuditClaimSha256": "4a1345f42cf44f2afaefcc9af32954a20139e94be2e08333702fe33227c2dddc",
+    "executionProtocolSha256": "aab941a5422a2797fc1a3a1e420764a1f03fffcb4f06e4d04ea70fe3bbc1e470",
+    "roadmapSha256": "cb91fe410add6de293431308436ae7cff34e593c89fe8146a3633d8c85550aa7"
+  },
+  "inputArtifacts": [
+    {
+      "path": "governance/codex-first-product/evidence/fs2/context-efficiency-implementation.v1.json",
+      "sha256": "65e6e66a3acfbefeb3c6abf0cce95e14ec7db3ec63601002c83ab36bbdd89353",
+      "workItem": "CF-FS2-01"
+    },
+    {
+      "path": "governance/codex-first-product/evidence/fs2/current-tree-verifier-implementation.v1.json",
+      "sha256": "a62e76374ec94648feddc962937f08b3626b4b7cabdbea2010cbdaf918535f6d",
+      "workItem": "CF-FS2-02"
+    },
+    {
+      "path": "governance/codex-first-product/evidence/fs2/long-task-state-implementation.v1.json",
+      "sha256": "ed3dd153819c7d0e3b081a3b077883abc2f5ce073a8556ffd48aca35413e5be7",
+      "workItem": "CF-FS2-03"
+    },
+    {
+      "path": "governance/codex-first-product/evidence/fs2/package-install-rollback-implementation.v1.json",
+      "sha256": "440cdbaee9af2f63a87f62b2ca1a0a26a752b2ba39ccd6d4ef160adf451fdf3d",
+      "workItem": "CF-FS2-04"
+    }
+  ],
+  "currentCarrierHashes": [
+    {
+      "path": "packages/piagent-core/runtime/runtime-limits.ts",
+      "sha256": "cb5c3eae636dffee92685175e15e99ecc4671f464436d9efe5b3c09d591bdd19"
+    },
+    {
+      "path": "packages/piagent-core/runtime/session/tool-result-compaction.ts",
+      "sha256": "888b2d19cafc14b7e4643f2412ee943432f2a7f6cf379180f54f21413aefdcc0"
+    },
+    {
+      "path": "packages/piagent-core/extensions/working-tree-digest.js",
+      "sha256": "9f08714e076c8edf94f8ebb8d6560c43f7ff061f4751a11ee8e7d32ce03c8443"
+    },
+    {
+      "path": "packages/piagent-core/extensions/task-state.js",
+      "sha256": "45c49f6e79167925f1f4bd813506e23a27f93470fab9bf8ebc4cdb823e35b84c"
+    },
+    {
+      "path": "packages/piagent-core/runtime/recovery/resume-state.ts",
+      "sha256": "d2d3f0eead4f55149709399b7fe274370890b698149ce4724339b6cc01f61755"
+    },
+    {
+      "path": "packages/piagent-core/extensions/task-journal.js",
+      "sha256": "1f8f46e620467093d0873dd0158826b3a00faf6c349c85438fb73771f7078485"
+    },
+    {
+      "path": "packages/piagent-core/runtime/recovery/handoff-projection.ts",
+      "sha256": "38eed4410bfefe0273fc639886f3ee81689266251668a77a80182662a70f85f8"
+    },
+    {
+      "path": "packages/piagent-core/policy/authority-manifest.v1.json",
+      "sha256": "7f223487384b5521bcda01bc1dc1578dfb3f8293dc94eadd85b86048b645273c"
+    },
+    {
+      "path": "tests/package-install-rollback.test.mjs",
+      "sha256": "6a6625f170cd3a04d0d55269fedfbccba09edc6dcf721600f4f28cd7f1cbc27c"
+    },
+    {
+      "path": "scripts/rc-readiness-evaluation.mjs",
+      "sha256": "cf6f3221419b193e8dc85d73a7658e72ebffadd229aca85fb32bf92d143ab66d"
+    },
+    {
+      "path": ".github/workflows/verify.yml",
+      "sha256": "68c03c609096b0b39f6f343fe8120df71f332c103810ab2f23df7c657786d79f"
+    },
+    {
+      "path": ".pi/piagent-profile.lock.json",
+      "sha256": "1507f8f7cf576702960e4ce61ddc9b7faa5efb54c287bc323b3dff946ec8139a"
+    }
+  ],
+  "workItemReview": [
+    {
+      "id": "CF-FS2-01",
+      "implementationState": "complete",
+      "currentTreeVerification": "pass",
+      "finding": "Automatic context is capped at 900 tokens; runtime intake at 6000 characters; semantic carry-over at 8000 characters; aggregate text compacts above 12000 characters or 180 lines into bounded private captures. Resume injects no duplicate intake/context pack and the provider-visible tool schema remains stable.",
+      "providerPerformanceClaim": "none; local component behavior only"
+    },
+    {
+      "id": "CF-FS2-02",
+      "implementationState": "complete",
+      "currentTreeVerification": "pass",
+      "finding": "One immutable post-event observation is shared by mutation, verifier, authorship, review, repair and changed-file consumers. Every configured verifier requires its latest stable pre == post == current digest; unavailable evidence cannot prove completion."
+    },
+    {
+      "id": "CF-FS2-03",
+      "implementationState": "complete",
+      "currentTreeVerification": "pass",
+      "finding": "Task Contract, journal, trajectory and handoff reconstruct bounded task, plan, progress, exact verifier state and one next action across a fresh process. Torn tails, corruption, disk failure, stale evidence and retry exhaustion remain fail-closed."
+    },
+    {
+      "id": "CF-FS2-04",
+      "implementationState": "complete",
+      "currentTreeVerification": "pass",
+      "finding": "The 566-file package contains the complete production import graph and no private state. A disposable macOS prefix installs v1.2.17, upgrades to the exact current source package, and rolls back to v1.2.17 without changing synthetic operator credential, trust or session bytes/modes."
+    }
+  ],
+  "exitConditions": [
+    {
+      "id": "FS2-EXIT-01",
+      "name": "default efficiency mechanisms do not add model turns",
+      "status": "pass",
+      "evidence": {
+        "CAP05ContextAuthority": "enforce with systemContinuations=0",
+        "CAP06ToolSurfaceAuthority": "enforce with systemContinuations=0",
+        "broadDefaultAdvancedModes": "solver/phase/trajectory observe; acceptance advise; semantic repair and parent routing off",
+        "automaticContextMaximumTokens": 900,
+        "duplicateResumeIntakeOrContextPack": false,
+        "providerToolSurfaceChangedByPhase": false,
+        "providerInvokedByAudit": false
+      }
+    },
+    {
+      "id": "FS2-EXIT-02",
+      "name": "no stale verifier or tree evidence can complete a task",
+      "status": "pass",
+      "evidence": {
+        "workingTreeDigestContract": "wt-content-v2 self-describing and unavailable-separated",
+        "proofRule": "latest execution for every configured command must satisfy pre == post == current",
+        "coveredCarriers": [
+          "tracked",
+          "untracked",
+          "mode",
+          "symlink target",
+          "unavailable",
+          "rename",
+          "nested Git root",
+          "mutation between consumers",
+          "multi-verifier"
+        ],
+        "stalePostVerifyMutationDisposition": "proof invalidated; exact verifier rerun required"
+      }
+    },
+    {
+      "id": "FS2-EXIT-03",
+      "name": "interrupted long tasks resume from durable state rather than transcript memory",
+      "status": "pass",
+      "evidence": {
+        "freshProcessReconstruction": true,
+        "resumeContextMaximumCharacters": 6000,
+        "sources": [
+          "Task Contract v2",
+          "hash-chained journal",
+          "trajectory",
+          "handoff"
+        ],
+        "coveredFailures": [
+          "process exit between execute and verify",
+          "session compaction",
+          "process-torn tail",
+          "committed-looking corruption",
+          "ENOSPC",
+          "EACCES",
+          "stale tree",
+          "verifier timeout",
+          "provider disconnect",
+          "retry exhaustion",
+          "handoff symlink"
+        ]
+      }
+    },
+    {
+      "id": "FS2-EXIT-04",
+      "name": "the package contains every reachable production module and no private state",
+      "status": "pass",
+      "evidence": {
+        "packageFiles": 566,
+        "fullProductionImportGraph": true,
+        "forbiddenMatches": 0,
+        "forbiddenClasses": [
+          "auth.json",
+          "trust.json",
+          ".env and .env.*",
+          ".pi/piagent-state",
+          "examples/private",
+          "docs journals/decisions",
+          "plans"
+        ]
+      }
+    },
+    {
+      "id": "FS2-EXIT-05",
+      "name": "mechanical-only rollback requires no Task Contract migration",
+      "status": "pass",
+      "evidence": {
+        "pinnedTaskDisposition": "one durable new-attempt-required handoff",
+        "replacementTask": "clean Task Contract v2 with fresh policy and no inherited mutation/verifier evidence",
+        "taskContractVersionChange": false,
+        "workingTreeDigestAlgorithmChange": false,
+        "operatorStateMigration": false,
+        "rollbackArtifact": "immutable v1.2.17 tarball"
+      }
+    }
+  ],
+  "localAlphaAndFeatureOff": {
+    "status": "pass",
+    "broadDefault": "L0/L1 mechanical truth and efficiency on; advanced solver/phase/trajectory observe, acceptance advise, recovery bounded, semantic repair and parent routing off",
+    "mechanicalOnly": "L0/L1 and operator/package foundations remain; CAP-07..15 off except hard invariants; no Task Contract migration",
+    "strictHighRisk": "present but not promoted; remains explicit pinned opt-in",
+    "actualPiProviderFree": "mechanical rollback, clean replacement, automatic normal source task, current-tree verifier and terminal receipt pass without a provider",
+    "featureOffMutationOrContinuation": false,
+    "providerOrBenchmarkClaim": false
+  },
+  "p0Comparison": {
+    "historicalBaseline": "The P0 Terra/medium 2-outcome diagnostic remains immutable: Piagent quality/safety/reliability/workflow 10 and 5174 versus 6871 fresh tokens, with its token claim withheld.",
+    "currentComparableProviderMeasurement": "not performed and not required for this local mechanical gate",
+    "componentComparison": "FS2 preserves the FS0 constitution's 12000-character/180-line tool-result threshold and tightens the automatic context path to at most 900 tokens, intake display to 6000 characters, and semantic carry-over to 8000 characters without a duplicate provider turn.",
+    "disposition": "Historical provider metrics are not relabelled as current candidate evidence; causal/product performance remains FS5-FS7 work."
+  },
+  "verification": [
+    {
+      "gate": "efficiency, authority, feature-off, context and runtime-session matrix",
+      "result": "pass",
+      "detail": "123/123 tests"
+    },
+    {
+      "gate": "current-tree, Task Contract, resume, recovery, handoff and disk-failure matrix",
+      "result": "pass",
+      "detail": "87/87 tests"
+    },
+    {
+      "gate": "full guard plus provider-free actual Pi 0.82 lifecycle",
+      "result": "pass",
+      "detail": "111/111 tests; includes mechanical rollback clean replacement"
+    },
+    {
+      "gate": "package, install, update, migration, uninstall, release identity and actual tarball lifecycle",
+      "result": "pass",
+      "detail": "101/101 tests"
+    },
+    {
+      "gate": "isolated benchmark-runner infrastructure regression after aggregate contention",
+      "result": "pass",
+      "detail": "39/39 tests; no provider; the prior aggregate pause/interrupt timeouts did not reproduce"
+    },
+    {
+      "gate": "full repository clean authoritative rerun",
+      "result": "pass",
+      "detail": "1845/1845 tests across 122 suites; zero failure, cancel, skip or todo; duration 156597.724 ms"
+    },
+    {
+      "gate": "non-authoritative interrupted aggregate observation",
+      "result": "transient-fail-preserved",
+      "detail": "1843/1845: pause/resume and interrupt benchmark fixtures timed out during a resource-contended turn interruption; both passed in isolated 39/39 and the subsequent clean full 1845/1845 rerun"
+    },
+    {
+      "gate": "offline aggregate verification",
+      "result": "pass",
+      "detail": "scaffold complete; local Pi model catalog intentionally skipped in offline mode"
+    },
+    {
+      "gate": "typecheck, architecture, docs, capability catalog, release identity, smoke and diff hygiene",
+      "result": "pass",
+      "detail": "typecheck pass; 192 source files pass boundaries/budgets; four EN/VI pairs; two packs; v1.2.17 identity; runtime policy smoke; git diff --check"
+    },
+    {
+      "gate": "runtime integrity doctor",
+      "result": "pass",
+      "detail": "profile lock current; actual and expected sha256:1507f8f7cf576702960e4ce61ddc9b7faa5efb54c287bc323b3dff946ec8139a"
+    },
+    {
+      "gate": "package dry-run and privacy boundary",
+      "result": "pass-with-historical-version",
+      "detail": "@piagent/platform 1.2.17; 566 files; 1052407-byte tarball; 4439521 bytes unpacked; zero forbidden matches; no 1.3 candidate claim"
+    },
+    {
+      "gate": "current additive ownership",
+      "result": "pass",
+      "detail": "444 current production files; identity sha256:cf032f15b45d2257a7d460524f895d0aa828d653489aa81bed149eb07a083886"
+    },
+    {
+      "gate": "pre/post production identity",
+      "result": "pass",
+      "detail": "444 files and sha256:ce024d899816cc71c431ef9a4f8dd62254faa19299c9d69fc8ce1be786e2ea62 before and after verification"
+    }
+  ],
+  "privacySecurityAndRollback": {
+    "credentialsSecretsOrPrivateEvidenceReadOrCopied": false,
+    "providerInvoked": false,
+    "benchmarkInvoked": false,
+    "releaseActionInvoked": false,
+    "productOrExistingEvidenceMutated": false,
+    "nextPhaseImplementationStarted": false,
+    "packageForbiddenMatches": 0,
+    "operatorCredentialTrustSessionIdentityUnchanged": true,
+    "featureOffRollback": "mechanical-only uses the same Task Contract v2 and durable new-attempt boundary; individual advanced features remain independently off-capable",
+    "sourceRollback": "No source mutation was made by this audit"
+  },
+  "remainingDebt": [
+    {
+      "id": "FS2-CANDIDATE-UNFROZEN",
+      "severity": "expected-later-phase",
+      "disposition": "The reviewed tree is dirty and package identity remains historical v1.2.17. No clean/frozen v1.3 alpha or RC digest is claimed."
+    },
+    {
+      "id": "FS2-LINUX-EXTERNAL-PENDING",
+      "severity": "expected-later-phase",
+      "disposition": "The Ubuntu/macOS CI matrix and shared lifecycle fixture are verified, but only macOS ARM64 executed locally. External Linux execution belongs to FS6."
+    },
+    {
+      "id": "FS2-PERFORMANCE-EVIDENCE-DEFERRED",
+      "severity": "expected-later-phase",
+      "disposition": "No current provider, long-horizon, holdout, cohort, or Piagent-versus-Codex evidence is claimed. Those gates belong to FS4-FS7."
+    }
+  ],
+  "stopRule": {
+    "workItemCompleteAfterReadback": true,
+    "nextWorkItem": "CF-FS3-01",
+    "nextWorkItemStarted": false
+  }
+}

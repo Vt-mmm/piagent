@@ -45,6 +45,7 @@ Command ngắn của PiAgent dùng cho workflow và guard local:
 | `/memory` | Project memory policy. |
 | `/onboard` | Project onboarding/status/setup. |
 | `/fresh` | Tạo session mới cho workflow. |
+| `/piagent-inspector` | Menu quan sát file diff, command, safety và context của task/session. |
 
 Riêng MCP governance vẫn giữ `/piagent-mcp` vì `/mcp` đã là command native của Pi.
 
@@ -115,6 +116,7 @@ Pi Agent dùng ít namespace nhưng mỗi namespace có subcommand/menu rõ:
 - `/permission` gom permission status/read-only/workspace-write/full-access.
 - `/profile` là namespace duy nhất cho profile và tech stack.
 - `/commands` là runtime help/menu, không còn bắt agent đọc docs để giải thích.
+- `/piagent-inspector` là một namespace quan sát duy nhất; mở menu để tránh sinh thêm command rời.
 - Khi user cần chọn, ưu tiên select option. Khi UI select không khả dụng, trả exact command.
 - Hành động rủi ro như stage rộng, push, PR write, deploy, publish, thay đổi database hoặc external-provider write vẫn cần xác nhận người vận hành.
 
@@ -139,12 +141,43 @@ Các command này đến từ package `piagent-core`.
 | `/profile` | Xem/áp profile và chọn tech. | Chạy ngay, không gọi model. |
 | `/profile setup` | Chọn profile + tech bằng option. | Ghi profile/lock/tech manifest. |
 | `/usage` | Xem live usage hoặc report hint. | Menu live/history/preflight/compact/logs/efficiency. |
+| `/task-preflight` | Xem product preflight deterministic. | Intent/risk/scope/runtime/solver/phases/tools/helpers/backend/approval có schema/version. |
+| `/piagent-status` | Xem product live status deterministic. | Task/phase/checkpoint/resume/recovery/helper/terminal receipt từ persisted evidence. |
+| `/piagent-inspector` | Muốn xem Piagent đang làm gì, sửa file nào, diff bao nhiêu dòng, command nào fail/block và context còn bao nhiêu. | Mở menu `summary/files/commands/security/context/toggle`; read-only, không gọi model. |
 | `/fresh task|scout|be-to-fe <request>` | Phiên hiện tại đã nặng hoặc muốn tách việc. | Mở session mới có tên và replay workflow prompt gọn. |
 | `/context` | Xem index/search/pack/impact/efficiency/preflight/compact. | Menu context, không gọi model. |
 | `/permission` | Xem/đổi quyền runtime. | Menu status/read-only/workspace-write/full-access. |
 | `/memory` hoặc `/memory-policy` | Xem memory policy. | Chạy ngay, không gọi model. |
 | `/model-options` | Xem hướng dẫn model/thinking. | Chạy ngay; chọn model vẫn dùng `/model` hoặc `Ctrl+L`. |
 | `/piagent-mcp` | Xem/quản trị MCP trong Pi. | Menu MCP, không gọi model. |
+
+`/piagent-inspector` không thêm bước bắt buộc vào workflow. Panel bốn dòng tự
+hiện sát phía trên footer native từ lúc mở session. Khi có Task Contract, panel
+dùng các file task đã quan sát; không có task thì dùng working-tree status. View `files` mới tính exact snapshot
+delta so với task baseline. Gõ command không kèm option để mở menu, hoặc dùng
+trực tiếp:
+
+Panel dùng màu theo mức độ: file cyan, test magenta, dòng thêm xanh lá, dòng
+xóa đỏ; command pass xanh lá, blocked vàng, failed và safety warning đỏ. Context
+dưới 60% là xanh lá, từ 60% là vàng và từ 80% là đỏ. Có thể đặt `NO_COLOR=1`
+nếu terminal cần output không màu.
+
+```text
+/piagent-inspector summary
+/piagent-inspector files
+/piagent-inspector commands
+/piagent-inspector security
+/piagent-inspector context
+/piagent-inspector toggle
+/piagent-inspector --json summary
+```
+
+`files` tách source/test và hiển thị `+/-`. Nếu task sửa một file đã dirty trước
+khi task bắt đầu, scope được ghi `mixed-working-tree` thay vì nhận nhầm toàn bộ
+line diff là do task hiện tại. `commands` tách requested/executed/passed/failed/
+blocked. `security` chỉ hiện policy block, secret redaction và integrity warning
+đã quan sát. `context` dùng exact usage theo turn/session mà Pi cung cấp; token
+theo từng built-in tool call luôn ghi unavailable, không ước lượng.
 
 Alias cũ vẫn giữ để không phá thói quen:
 
@@ -468,8 +501,8 @@ Các lệnh này chạy ngoài Pi.
 | Command | Dùng khi nào |
 |---|---|
 | `npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0` | Cài Pi CLI tương thích với release hiện tại. |
-| `npm install -g --ignore-scripts @piagent/platform@1.2.17` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
-| `pi install git:github.com/Vt-mmm/piagent@v1.2.17` | Cài pinned release khi cần reproducible team setup. |
+| `npm install -g --ignore-scripts @piagent/platform@1.3.0-rc.1` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
+| `pi install git:github.com/Vt-mmm/piagent@v1.3.0-rc.1` | Cài pinned release khi cần reproducible team setup. |
 | `pi install git:github.com/Vt-mmm/piagent` | Cài latest package platform cho máy cá nhân/sandbox. |
 | `piagent-update --check` | Báo version hiện tại vs version sẽ lên cho cả ba thành phần; không cài gì. |
 | `piagent-update` | Full update global một lệnh cho cả máy: Pi host → npm-global helper → Pi package, đúng thứ tự release yêu cầu. |
@@ -496,6 +529,8 @@ Các lệnh này chạy ngoài Pi.
 | `piagent-setup <project> --profile auto` | Setup đầy đủ cho một project khi muốn preseed bằng bin. |
 | `piagent-init <project> --profile generic` | Init project files tối thiểu. |
 | `piagent-models` | Xem catalog model seeded bởi platform. |
+| `piagent-route --prompt "<task>" --json` | Tính capability/model/effort trước task từ authenticated catalog; không gọi model và không lưu raw prompt. |
+| `piagent-route --prompt-file <file> --execute --yes -- --approve` | Explicit prelaunch adaptive task; giữ hard pin và fail closed nếu preflight/catalog không đủ. |
 | `piagent-model-scope --preset full` | Re-apply full provider model scope. |
 | `piagent-mcp --preset core --scope global --replace` | Apply the governed MCP core baseline: Context7, Chrome DevTools, GitHub. |
 | `piagent-mcp --preset popular --scope global --replace` | Apply the governed MCP popular baseline: core + Playwright + Figma remote. |
@@ -514,7 +549,9 @@ Các lệnh này chạy ngoài Pi.
 | `piagent-benchmark` | Chạy smoke suite `core-v1`: paired Raw Pi/Piagent, 24 session, hidden grader + scope + workflow + exact usage. |
 | `piagent-benchmark --dry-run` | Validate suite và xem số model session, không gọi model. |
 | `piagent-benchmark --production --dry-run` | Xem ma trận production 18 family x 3 variant x 2 surface = 108 session, chưa dùng quota. |
-| `piagent-benchmark --production --surfaces piagent,codex-cli --model <provider/model> --thinking high` | Chạy production release gate đa domain/profile/lifecycle, chấm category band và 95% token-ratio confidence. |
+| `piagent-benchmark --production --surfaces piagent,codex-cli --model <provider/model> --thinking high --piagent-treatment candidate` | Chạy production release gate đa domain/profile/lifecycle với controlled Codex, treatment Piagent đã pin, paired outcome và 95% token-ratio confidence. |
+| `piagent-benchmark --piagent-treatment release-defaults\|local-safe\|candidate\|feature-off ...` | Pin treatment Piagent; chỉ surface `piagent` nhận feature env, manifest/resume/replay/report giữ nguyên treatment. |
+| `piagent-benchmark --codex-mode native ...` | Đo UX Codex theo cấu hình operator; protocol gate fail closed nên report không được claim tiết kiệm token. |
 | `piagent-benchmark --production --seed <value> ...` | Tái lập đúng generated variant của một production report riêng tư. |
 | `piagent-benchmark --production --scenarios <id,id> --repeats 1 ...` | Chẩn đoán family/rubric đã chọn; không đủ điều kiện nhận production verdict. |
 | `piagent-benchmark --production --infrastructure-retries 2 ...` | Retry đúng lỗi process chết trước usage; timeout/task failure không retry và vẫn chấm reliability. |
@@ -580,10 +617,12 @@ export GITHUB_PERSONAL_ACCESS_TOKEN=<github-token>
 Không claim tiết kiệm token/cost nếu chưa có paired evidence cùng scenario. Dùng
 `piagent-benchmark`; smoke suite chỉ cho phép verdict khi quality/reliability đạt
 ít nhất `9/10`, safety/workflow đạt tuyệt đối, quality không giảm và có ít nhất
-ba cặp cùng model với exact usage. Production gate giữ safety `10`, cho workflow
-ít nhất `9`, đồng thời bắt mọi category đạt `9`, đủ 18 paired family và cận trên
-95% của token ratio không vượt baseline. Report vẫn liệt kê từng workflow check
-bị hụt để ngưỡng tổng không che mất hành vi cần xem lại.
+ba cặp cùng model với exact usage. Production gate giữ safety `10`, yêu cầu
+quality/reliability/workflow và mọi category ít nhất `9.5`, đồng thời bắt từng
+task cùng mọi category/profile/lifecycle/difficulty band lớn hơn `9.5`, đủ 18
+paired family và cận trên 95% của token ratio không vượt baseline. Report vẫn
+liệt kê từng workflow check bị hụt để ngưỡng tổng không che mất hành vi cần xem
+lại.
 
 ## Source rule cho subagent/custom agent
 

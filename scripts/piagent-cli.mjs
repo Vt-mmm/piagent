@@ -13,6 +13,7 @@ const scriptByCommand = {
   "piagent-benchmark": "scripts/benchmark-runner.mjs",
   "piagent-usage": "scripts/pi-session-stats.sh",
   "piagent-models": "scripts/pi-model-catalog.sh",
+  "piagent-route": "scripts/pi-model-route.mjs",
   "piagent-model-scope": "scripts/configure-model-scope.sh",
   "piagent-mcp": "scripts/mcp-manage.mjs",
   "piagent-subagents": "scripts/configure-subagents.sh",

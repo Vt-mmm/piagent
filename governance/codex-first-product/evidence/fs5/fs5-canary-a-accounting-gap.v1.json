@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "workItem": "CF-FS5-03",
+  "recordedAt": "2026-08-11",
+  "classification": "measurement-accounting-gap",
+  "failureClassOccurrence": 1,
+  "providerRun": {
+    "runId": "capability-v1-20260811T024407Z-dca161",
+    "outputRoot": "/Users/vtamm/.pi/benchmarks/cf-fs5-canary-a-luna-medium-v1",
+    "candidateContentDigest": "3cb2386fcaeece8ddcade44a0dd957a996130eaa795036fe27947922b0ffc59a",
+    "suiteDigest": "bb2e97a83a8a3d06976bcc94259e60c3513626704bd463d87c9808e66fe5152c",
+    "sessions": 2,
+    "retries": 0,
+    "piagent": {
+      "resolved": true,
+      "grade": 10,
+      "workflow": 10,
+      "freshTokens": 23086,
+      "durationSeconds": 167.962
+    },
+    "codexCli": {
+      "resolved": true,
+      "grade": 10,
+      "freshTokens": 41756,
+      "durationSeconds": 121.883
+    },
+    "freshTokenRatio": 0.552878628221094,
+    "durationRatio": 1.3780592863647925,
+    "artifactSha256": {
+      "report.json": "a19f888143b8c78de8488ea83e84adba925a32831f706a5f338b1f4082a2f750",
+      "runs.jsonl": "b815cef41bc27d1517376415e28f5ab81aef6ddfb8622c9a5bf639fd9fcff3a3",
+      "run-manifest.json": "925428d86cc151d2f0cc15d83fe9623cdc72a999fce267885fba1b27d1ac0a25"
+    }
+  },
+  "gate": {
+    "passed": false,
+    "allowedToAdvance": false,
+    "blockers": [
+      "piagent:operational-evidence",
+      "piagent:continuation-budget",
+      "piagent:shadow-advisory-continuation",
+      "piagent:blocked-valid-call"
+    ],
+    "reason": "The report did not persist operational evidence; absent values were not inferred or entered manually."
+  },
+  "boundedCorrection": {
+    "description": "Persist complete context-telemetry-derived tool decisions, blocked-call upper bound, and system/advisory continuation counts in each Piagent workflow record; the stage gate now rejects missing telemetry.",
+    "oneConfirmationPairAuthorizedByProtocol": true,
+    "thirdRunAllowed": false,
+    "implementationSha256": {
+      "packages/piagent-core/benchmark/benchmark-forensics.js": "42c50eebae144c96db7d813111efdb5225d5b3427eda9fe275f2e72f5800eee5",
+      "scripts/benchmark-session.mjs": "1861907d224258fd5ea677b4146f078a445c0b1fb441a9decb4d090f92242e05",
+      "packages/piagent-core/benchmark/fs5-pilot-protocol.js": "f0fa4937921190114dce4f051a4548401e21743455df7e8b7f8a3aa710203f62",
+      "tests/benchmark-operational-evidence.test.mjs": "22459e3dda60524099c89d562c47e08ccd1a8e175c0834efeb0e43f6d3416ee4",
+      "tests/fs5-pilot-protocol.test.mjs": "e4bf54f3699c488af0841469651970dcc4b350bbc2253a844c04067b5f28ea94"
+    },
+    "verification": {
+      "focused": "9/9",
+      "benchmarkPackageMatrix": "107/107",
+      "typecheck": "PASS",
+      "architecture": "PASS (198 files)",
+      "diffCheck": "PASS"
+    }
+  },
+  "claimBoundary": {
+    "diagnosticOnly": true,
+    "tokenSavingClaimAllowed": false,
+    "releaseClaimAllowed": false,
+    "canaryBAllowedBeforeConfirmationPass": false
+  }
+}

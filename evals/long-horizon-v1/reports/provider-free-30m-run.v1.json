@@ -1,0 +1,900 @@
+{
+  "schemaVersion": 1,
+  "laneId": "long-horizon-v1",
+  "workItem": "CF-FS4-03",
+  "evidenceClass": "provider-free-long-horizon",
+  "startedAt": "2026-08-10T19:08:05.110Z",
+  "completedAt": "2026-08-10T19:40:40.669Z",
+  "logicalDurationMinutes": 90,
+  "wallClockMilliseconds": 1956749,
+  "wallClockMinutes": 32.6125,
+  "minimumWallClockMinutes": 30,
+  "wallClockQualified": true,
+  "providerUsed": false,
+  "completedFromResume": true,
+  "lifecycle": {
+    "totalUnits": 90,
+    "hardCrashAfterUnit": 30,
+    "handoffAfterUnit": 60,
+    "processStarts": 3,
+    "hardCrashes": 1,
+    "resumedUnits": [
+      30,
+      60
+    ],
+    "compactions": 4,
+    "handoffReadback": true,
+    "journalEvents": 100,
+    "journalCorruptions": [],
+    "terminalDecision": "terminal"
+  },
+  "context": {
+    "source": "deterministic-provider-free-proxy",
+    "observations": 90,
+    "peakProxyTokens": 1062,
+    "peakObservedAtUnit": 80,
+    "ceilingTokens": 1200,
+    "withinCeiling": true,
+    "efficiency": {
+      "averageActiveTools": 4,
+      "averageSystemPromptTokens": 1006,
+      "averageToolSchemaTokens": 872,
+      "toolSchemaShare": 0.8668,
+      "readCalls": 0,
+      "duplicateReads": 0,
+      "duplicateReadRate": 0,
+      "outputChars": 0,
+      "duplicateOutputChars": 0,
+      "duplicateOutputRate": 0,
+      "lowConfidencePacks": 0,
+      "lowConfidenceRate": 0,
+      "contextSelections": 0,
+      "contextSelectionsUsed": 0,
+      "contextSelectionsUnused": 0,
+      "contextUtilizationRate": 0,
+      "contextWasteScore": 20
+    }
+  },
+  "stateGrowth": {
+    "observations": 90,
+    "initialBytes": 14609,
+    "finalBytes": 165871,
+    "growthBytes": 151262,
+    "peakBytes": 165871,
+    "ceilingBytes": 2097152,
+    "withinCeiling": true,
+    "checkpointSequenceComplete": true,
+    "samples": [
+      {
+        "unit": 1,
+        "processStart": 1,
+        "resumedFromUnit": 0,
+        "compactions": 0,
+        "contextProxyTokens": 42,
+        "durableStateBytes": 14609
+      },
+      {
+        "unit": 2,
+        "processStart": 1,
+        "resumedFromUnit": 0,
+        "compactions": 0,
+        "contextProxyTokens": 82,
+        "durableStateBytes": 16104
+      },
+      {
+        "unit": 3,
+        "processStart": 1,
+        "resumedFromUnit": 0,
+        "compactions": 0,
+        "contextProxyTokens": 127,
+        "durableStateBytes": 17465
+      },
+      {
+        "unit": 4,
+        "processStart": 1,
+        "resumedFromUnit": 0,
+        "compactions": 0,
+        "contextProxyTokens": 171,
+        "durableStateBytes": 18830
+      },
+      {
+        "unit": 5,
+        "processStart": 1,
+        "resumedFromUnit": 0,
+        "compactions": 0,
+        "contextProxyTokens": 215,
+        "durableStateBytes": 20190
+      },
+      {
+        "unit": 6,
+        "processStart": 1,
+        "resumedFromUnit": 0,
+        "compactions": 0,
+        "contextProxyTokens": 260,
+        "durableStateBytes": 21555
+      },
+      {
+        "unit": 7,
+        "processStart": 1,
+        "resumedFromUnit": 0,
+        "compactions": 0,
+        "contextProxyTokens": 304,
+        "durableStateBytes": 22917
+      },
+      {
+        "unit": 8,
+        "processStart": 1,
+        "resumedFromUnit": 0,
+        "compactions": 0,
+        "contextProxyTokens": 349,
+        "durableStateBytes": 24283
+      },
+      {
+        "unit": 9,
+        "processStart": 1,
+        "resumedFromUnit": 0,
+        "compactions": 0,
+        "contextProxyTokens": 390,
+        "durableStateBytes": 25635
+      },
+      {
+        "unit": 10,
+        "processStart": 1,
+        "resumedFromUnit": 0,
+        "compactions": 0,
+        "contextProxyTokens": 438,
+        "durableStateBytes": 27014
+      },
+      {
+        "unit": 11,
+        "processStart": 1,
+        "resumedFromUnit": 0,
+        "compactions": 0,
+        "contextProxyTokens": 486,
+        "durableStateBytes": 28398
+      },
+      {
+        "unit": 12,
+        "processStart": 1,
+        "resumedFromUnit": 0,
+        "compactions": 0,
+        "contextProxyTokens": 532,
+        "durableStateBytes": 29776
+      },
+      {
+        "unit": 13,
+        "processStart": 1,
+        "resumedFromUnit": 0,
+        "compactions": 0,
+        "contextProxyTokens": 580,
+        "durableStateBytes": 31158
+      },
+      {
+        "unit": 14,
+        "processStart": 1,
+        "resumedFromUnit": 0,
+        "compactions": 0,
+        "contextProxyTokens": 628,
+        "durableStateBytes": 32540
+      },
+      {
+        "unit": 15,
+        "processStart": 1,
+        "resumedFromUnit": 0,
+        "compactions": 0,
+        "contextProxyTokens": 676,
+        "durableStateBytes": 33924
+      },
+      {
+        "unit": 16,
+        "processStart": 1,
+        "resumedFromUnit": 0,
+        "compactions": 0,
+        "contextProxyTokens": 722,
+        "durableStateBytes": 35299
+      },
+      {
+        "unit": 17,
+        "processStart": 1,
+        "resumedFromUnit": 0,
+        "compactions": 0,
+        "contextProxyTokens": 769,
+        "durableStateBytes": 36676
+      },
+      {
+        "unit": 18,
+        "processStart": 1,
+        "resumedFromUnit": 0,
+        "compactions": 0,
+        "contextProxyTokens": 815,
+        "durableStateBytes": 38051
+      },
+      {
+        "unit": 19,
+        "processStart": 1,
+        "resumedFromUnit": 0,
+        "compactions": 0,
+        "contextProxyTokens": 861,
+        "durableStateBytes": 39429
+      },
+      {
+        "unit": 20,
+        "processStart": 1,
+        "resumedFromUnit": 0,
+        "compactions": 1,
+        "contextProxyTokens": 908,
+        "durableStateBytes": 37500
+      },
+      {
+        "unit": 21,
+        "processStart": 1,
+        "resumedFromUnit": 0,
+        "compactions": 1,
+        "contextProxyTokens": 77,
+        "durableStateBytes": 38879
+      },
+      {
+        "unit": 22,
+        "processStart": 1,
+        "resumedFromUnit": 0,
+        "compactions": 1,
+        "contextProxyTokens": 121,
+        "durableStateBytes": 40243
+      },
+      {
+        "unit": 23,
+        "processStart": 1,
+        "resumedFromUnit": 0,
+        "compactions": 1,
+        "contextProxyTokens": 165,
+        "durableStateBytes": 41609
+      },
+      {
+        "unit": 24,
+        "processStart": 1,
+        "resumedFromUnit": 0,
+        "compactions": 1,
+        "contextProxyTokens": 212,
+        "durableStateBytes": 42991
+      },
+      {
+        "unit": 25,
+        "processStart": 1,
+        "resumedFromUnit": 0,
+        "compactions": 1,
+        "contextProxyTokens": 263,
+        "durableStateBytes": 44385
+      },
+      {
+        "unit": 26,
+        "processStart": 1,
+        "resumedFromUnit": 0,
+        "compactions": 1,
+        "contextProxyTokens": 314,
+        "durableStateBytes": 45778
+      },
+      {
+        "unit": 27,
+        "processStart": 1,
+        "resumedFromUnit": 0,
+        "compactions": 1,
+        "contextProxyTokens": 364,
+        "durableStateBytes": 47169
+      },
+      {
+        "unit": 28,
+        "processStart": 1,
+        "resumedFromUnit": 0,
+        "compactions": 1,
+        "contextProxyTokens": 414,
+        "durableStateBytes": 48560
+      },
+      {
+        "unit": 29,
+        "processStart": 1,
+        "resumedFromUnit": 0,
+        "compactions": 1,
+        "contextProxyTokens": 463,
+        "durableStateBytes": 49947
+      },
+      {
+        "unit": 30,
+        "processStart": 1,
+        "resumedFromUnit": 0,
+        "compactions": 1,
+        "contextProxyTokens": 511,
+        "durableStateBytes": 51331
+      },
+      {
+        "unit": 31,
+        "processStart": 2,
+        "resumedFromUnit": 30,
+        "compactions": 1,
+        "contextProxyTokens": 561,
+        "durableStateBytes": 62542
+      },
+      {
+        "unit": 32,
+        "processStart": 2,
+        "resumedFromUnit": 30,
+        "compactions": 1,
+        "contextProxyTokens": 609,
+        "durableStateBytes": 63928
+      },
+      {
+        "unit": 33,
+        "processStart": 2,
+        "resumedFromUnit": 30,
+        "compactions": 1,
+        "contextProxyTokens": 657,
+        "durableStateBytes": 65311
+      },
+      {
+        "unit": 34,
+        "processStart": 2,
+        "resumedFromUnit": 30,
+        "compactions": 1,
+        "contextProxyTokens": 706,
+        "durableStateBytes": 66700
+      },
+      {
+        "unit": 35,
+        "processStart": 2,
+        "resumedFromUnit": 30,
+        "compactions": 1,
+        "contextProxyTokens": 759,
+        "durableStateBytes": 68101
+      },
+      {
+        "unit": 36,
+        "processStart": 2,
+        "resumedFromUnit": 30,
+        "compactions": 1,
+        "contextProxyTokens": 811,
+        "durableStateBytes": 69501
+      },
+      {
+        "unit": 37,
+        "processStart": 2,
+        "resumedFromUnit": 30,
+        "compactions": 1,
+        "contextProxyTokens": 862,
+        "durableStateBytes": 70899
+      },
+      {
+        "unit": 38,
+        "processStart": 2,
+        "resumedFromUnit": 30,
+        "compactions": 1,
+        "contextProxyTokens": 915,
+        "durableStateBytes": 72302
+      },
+      {
+        "unit": 39,
+        "processStart": 2,
+        "resumedFromUnit": 30,
+        "compactions": 1,
+        "contextProxyTokens": 967,
+        "durableStateBytes": 73702
+      },
+      {
+        "unit": 40,
+        "processStart": 2,
+        "resumedFromUnit": 30,
+        "compactions": 2,
+        "contextProxyTokens": 1022,
+        "durableStateBytes": 71353
+      },
+      {
+        "unit": 41,
+        "processStart": 2,
+        "resumedFromUnit": 30,
+        "compactions": 2,
+        "contextProxyTokens": 84,
+        "durableStateBytes": 72761
+      },
+      {
+        "unit": 42,
+        "processStart": 2,
+        "resumedFromUnit": 30,
+        "compactions": 2,
+        "contextProxyTokens": 136,
+        "durableStateBytes": 74160
+      },
+      {
+        "unit": 43,
+        "processStart": 2,
+        "resumedFromUnit": 30,
+        "compactions": 2,
+        "contextProxyTokens": 189,
+        "durableStateBytes": 75564
+      },
+      {
+        "unit": 44,
+        "processStart": 2,
+        "resumedFromUnit": 30,
+        "compactions": 2,
+        "contextProxyTokens": 238,
+        "durableStateBytes": 76953
+      },
+      {
+        "unit": 45,
+        "processStart": 2,
+        "resumedFromUnit": 30,
+        "compactions": 2,
+        "contextProxyTokens": 287,
+        "durableStateBytes": 78340
+      },
+      {
+        "unit": 46,
+        "processStart": 2,
+        "resumedFromUnit": 30,
+        "compactions": 2,
+        "contextProxyTokens": 335,
+        "durableStateBytes": 79726
+      },
+      {
+        "unit": 47,
+        "processStart": 2,
+        "resumedFromUnit": 30,
+        "compactions": 2,
+        "contextProxyTokens": 386,
+        "durableStateBytes": 81119
+      },
+      {
+        "unit": 48,
+        "processStart": 2,
+        "resumedFromUnit": 30,
+        "compactions": 2,
+        "contextProxyTokens": 434,
+        "durableStateBytes": 82503
+      },
+      {
+        "unit": 49,
+        "processStart": 2,
+        "resumedFromUnit": 30,
+        "compactions": 2,
+        "contextProxyTokens": 483,
+        "durableStateBytes": 83893
+      },
+      {
+        "unit": 50,
+        "processStart": 2,
+        "resumedFromUnit": 30,
+        "compactions": 2,
+        "contextProxyTokens": 534,
+        "durableStateBytes": 85289
+      },
+      {
+        "unit": 51,
+        "processStart": 2,
+        "resumedFromUnit": 30,
+        "compactions": 2,
+        "contextProxyTokens": 585,
+        "durableStateBytes": 86684
+      },
+      {
+        "unit": 52,
+        "processStart": 2,
+        "resumedFromUnit": 30,
+        "compactions": 2,
+        "contextProxyTokens": 635,
+        "durableStateBytes": 88077
+      },
+      {
+        "unit": 53,
+        "processStart": 2,
+        "resumedFromUnit": 30,
+        "compactions": 2,
+        "contextProxyTokens": 685,
+        "durableStateBytes": 89469
+      },
+      {
+        "unit": 54,
+        "processStart": 2,
+        "resumedFromUnit": 30,
+        "compactions": 2,
+        "contextProxyTokens": 735,
+        "durableStateBytes": 90860
+      },
+      {
+        "unit": 55,
+        "processStart": 2,
+        "resumedFromUnit": 30,
+        "compactions": 2,
+        "contextProxyTokens": 784,
+        "durableStateBytes": 92249
+      },
+      {
+        "unit": 56,
+        "processStart": 2,
+        "resumedFromUnit": 30,
+        "compactions": 2,
+        "contextProxyTokens": 833,
+        "durableStateBytes": 93636
+      },
+      {
+        "unit": 57,
+        "processStart": 2,
+        "resumedFromUnit": 30,
+        "compactions": 2,
+        "contextProxyTokens": 884,
+        "durableStateBytes": 95034
+      },
+      {
+        "unit": 58,
+        "processStart": 2,
+        "resumedFromUnit": 30,
+        "compactions": 2,
+        "contextProxyTokens": 935,
+        "durableStateBytes": 96430
+      },
+      {
+        "unit": 59,
+        "processStart": 2,
+        "resumedFromUnit": 30,
+        "compactions": 2,
+        "contextProxyTokens": 986,
+        "durableStateBytes": 97826
+      },
+      {
+        "unit": 60,
+        "processStart": 2,
+        "resumedFromUnit": 30,
+        "compactions": 3,
+        "contextProxyTokens": 1036,
+        "durableStateBytes": 95399
+      },
+      {
+        "unit": 61,
+        "processStart": 3,
+        "resumedFromUnit": 60,
+        "compactions": 3,
+        "contextProxyTokens": 80,
+        "durableStateBytes": 102285
+      },
+      {
+        "unit": 62,
+        "processStart": 3,
+        "resumedFromUnit": 60,
+        "compactions": 3,
+        "contextProxyTokens": 129,
+        "durableStateBytes": 103674
+      },
+      {
+        "unit": 63,
+        "processStart": 3,
+        "resumedFromUnit": 60,
+        "compactions": 3,
+        "contextProxyTokens": 180,
+        "durableStateBytes": 105074
+      },
+      {
+        "unit": 64,
+        "processStart": 3,
+        "resumedFromUnit": 60,
+        "compactions": 3,
+        "contextProxyTokens": 232,
+        "durableStateBytes": 106473
+      },
+      {
+        "unit": 65,
+        "processStart": 3,
+        "resumedFromUnit": 60,
+        "compactions": 3,
+        "contextProxyTokens": 283,
+        "durableStateBytes": 107870
+      },
+      {
+        "unit": 66,
+        "processStart": 3,
+        "resumedFromUnit": 60,
+        "compactions": 3,
+        "contextProxyTokens": 334,
+        "durableStateBytes": 109267
+      },
+      {
+        "unit": 67,
+        "processStart": 3,
+        "resumedFromUnit": 60,
+        "compactions": 3,
+        "contextProxyTokens": 384,
+        "durableStateBytes": 110660
+      },
+      {
+        "unit": 68,
+        "processStart": 3,
+        "resumedFromUnit": 60,
+        "compactions": 3,
+        "contextProxyTokens": 433,
+        "durableStateBytes": 112050
+      },
+      {
+        "unit": 69,
+        "processStart": 3,
+        "resumedFromUnit": 60,
+        "compactions": 3,
+        "contextProxyTokens": 484,
+        "durableStateBytes": 113447
+      },
+      {
+        "unit": 70,
+        "processStart": 3,
+        "resumedFromUnit": 60,
+        "compactions": 3,
+        "contextProxyTokens": 534,
+        "durableStateBytes": 114838
+      },
+      {
+        "unit": 71,
+        "processStart": 3,
+        "resumedFromUnit": 60,
+        "compactions": 3,
+        "contextProxyTokens": 582,
+        "durableStateBytes": 116226
+      },
+      {
+        "unit": 72,
+        "processStart": 3,
+        "resumedFromUnit": 60,
+        "compactions": 3,
+        "contextProxyTokens": 633,
+        "durableStateBytes": 117620
+      },
+      {
+        "unit": 73,
+        "processStart": 3,
+        "resumedFromUnit": 60,
+        "compactions": 3,
+        "contextProxyTokens": 686,
+        "durableStateBytes": 119026
+      },
+      {
+        "unit": 74,
+        "processStart": 3,
+        "resumedFromUnit": 60,
+        "compactions": 3,
+        "contextProxyTokens": 739,
+        "durableStateBytes": 120431
+      },
+      {
+        "unit": 75,
+        "processStart": 3,
+        "resumedFromUnit": 60,
+        "compactions": 3,
+        "contextProxyTokens": 791,
+        "durableStateBytes": 121834
+      },
+      {
+        "unit": 76,
+        "processStart": 3,
+        "resumedFromUnit": 60,
+        "compactions": 3,
+        "contextProxyTokens": 845,
+        "durableStateBytes": 123242
+      },
+      {
+        "unit": 77,
+        "processStart": 3,
+        "resumedFromUnit": 60,
+        "compactions": 3,
+        "contextProxyTokens": 898,
+        "durableStateBytes": 124647
+      },
+      {
+        "unit": 78,
+        "processStart": 3,
+        "resumedFromUnit": 60,
+        "compactions": 3,
+        "contextProxyTokens": 955,
+        "durableStateBytes": 126066
+      },
+      {
+        "unit": 79,
+        "processStart": 3,
+        "resumedFromUnit": 60,
+        "compactions": 3,
+        "contextProxyTokens": 1009,
+        "durableStateBytes": 127479
+      },
+      {
+        "unit": 80,
+        "processStart": 3,
+        "resumedFromUnit": 60,
+        "compactions": 4,
+        "contextProxyTokens": 1062,
+        "durableStateBytes": 124962
+      },
+      {
+        "unit": 81,
+        "processStart": 3,
+        "resumedFromUnit": 60,
+        "compactions": 4,
+        "contextProxyTokens": 84,
+        "durableStateBytes": 126371
+      },
+      {
+        "unit": 82,
+        "processStart": 3,
+        "resumedFromUnit": 60,
+        "compactions": 4,
+        "contextProxyTokens": 134,
+        "durableStateBytes": 127764
+      },
+      {
+        "unit": 83,
+        "processStart": 3,
+        "resumedFromUnit": 60,
+        "compactions": 4,
+        "contextProxyTokens": 184,
+        "durableStateBytes": 129156
+      },
+      {
+        "unit": 84,
+        "processStart": 3,
+        "resumedFromUnit": 60,
+        "compactions": 4,
+        "contextProxyTokens": 234,
+        "durableStateBytes": 130547
+      },
+      {
+        "unit": 85,
+        "processStart": 3,
+        "resumedFromUnit": 60,
+        "compactions": 4,
+        "contextProxyTokens": 285,
+        "durableStateBytes": 131945
+      },
+      {
+        "unit": 86,
+        "processStart": 3,
+        "resumedFromUnit": 60,
+        "compactions": 4,
+        "contextProxyTokens": 334,
+        "durableStateBytes": 133334
+      },
+      {
+        "unit": 87,
+        "processStart": 3,
+        "resumedFromUnit": 60,
+        "compactions": 4,
+        "contextProxyTokens": 384,
+        "durableStateBytes": 134729
+      },
+      {
+        "unit": 88,
+        "processStart": 3,
+        "resumedFromUnit": 60,
+        "compactions": 4,
+        "contextProxyTokens": 436,
+        "durableStateBytes": 136130
+      },
+      {
+        "unit": 89,
+        "processStart": 3,
+        "resumedFromUnit": 60,
+        "compactions": 4,
+        "contextProxyTokens": 488,
+        "durableStateBytes": 137530
+      },
+      {
+        "unit": 90,
+        "processStart": 3,
+        "resumedFromUnit": 60,
+        "compactions": 4,
+        "contextProxyTokens": 539,
+        "durableStateBytes": 138928
+      }
+    ]
+  },
+  "continuation": {
+    "firstAllowed": true,
+    "secondAllowed": false,
+    "secondReason": "global-budget-exhausted",
+    "consumed": 1,
+    "maximum": 1,
+    "enforcementSafe": true
+  },
+  "verification": {
+    "command": "node .pi/piagent-state/long-horizon/verify.mjs . 90",
+    "exitCode": 0,
+    "preWorkingTreeDigest": "wt-content-v2:8557a8c2cc51373bda2a6f339cac7c14886d4518d86198bcfa177db776951035",
+    "workingTreeDigest": "wt-content-v2:8557a8c2cc51373bda2a6f339cac7c14886d4518d86198bcfa177db776951035",
+    "stableCurrentTree": true,
+    "changedFiles": [
+      "artifacts/long-horizon/report.json",
+      "artifacts/long-horizon/units/001.json",
+      "artifacts/long-horizon/units/002.json",
+      "artifacts/long-horizon/units/003.json",
+      "artifacts/long-horizon/units/004.json",
+      "artifacts/long-horizon/units/005.json",
+      "artifacts/long-horizon/units/006.json",
+      "artifacts/long-horizon/units/007.json",
+      "artifacts/long-horizon/units/008.json",
+      "artifacts/long-horizon/units/009.json",
+      "artifacts/long-horizon/units/010.json",
+      "artifacts/long-horizon/units/011.json",
+      "artifacts/long-horizon/units/012.json",
+      "artifacts/long-horizon/units/013.json",
+      "artifacts/long-horizon/units/014.json",
+      "artifacts/long-horizon/units/015.json",
+      "artifacts/long-horizon/units/016.json",
+      "artifacts/long-horizon/units/017.json",
+      "artifacts/long-horizon/units/018.json",
+      "artifacts/long-horizon/units/019.json",
+      "artifacts/long-horizon/units/020.json",
+      "artifacts/long-horizon/units/021.json",
+      "artifacts/long-horizon/units/022.json",
+      "artifacts/long-horizon/units/023.json",
+      "artifacts/long-horizon/units/024.json",
+      "artifacts/long-horizon/units/025.json",
+      "artifacts/long-horizon/units/026.json",
+      "artifacts/long-horizon/units/027.json",
+      "artifacts/long-horizon/units/028.json",
+      "artifacts/long-horizon/units/029.json",
+      "artifacts/long-horizon/units/030.json",
+      "artifacts/long-horizon/units/031.json",
+      "artifacts/long-horizon/units/032.json",
+      "artifacts/long-horizon/units/033.json",
+      "artifacts/long-horizon/units/034.json",
+      "artifacts/long-horizon/units/035.json",
+      "artifacts/long-horizon/units/036.json",
+      "artifacts/long-horizon/units/037.json",
+      "artifacts/long-horizon/units/038.json",
+      "artifacts/long-horizon/units/039.json",
+      "artifacts/long-horizon/units/040.json",
+      "artifacts/long-horizon/units/041.json",
+      "artifacts/long-horizon/units/042.json",
+      "artifacts/long-horizon/units/043.json",
+      "artifacts/long-horizon/units/044.json",
+      "artifacts/long-horizon/units/045.json",
+      "artifacts/long-horizon/units/046.json",
+      "artifacts/long-horizon/units/047.json",
+      "artifacts/long-horizon/units/048.json",
+      "artifacts/long-horizon/units/049.json",
+      "artifacts/long-horizon/units/050.json",
+      "artifacts/long-horizon/units/051.json",
+      "artifacts/long-horizon/units/052.json",
+      "artifacts/long-horizon/units/053.json",
+      "artifacts/long-horizon/units/054.json",
+      "artifacts/long-horizon/units/055.json",
+      "artifacts/long-horizon/units/056.json",
+      "artifacts/long-horizon/units/057.json",
+      "artifacts/long-horizon/units/058.json",
+      "artifacts/long-horizon/units/059.json",
+      "artifacts/long-horizon/units/060.json",
+      "artifacts/long-horizon/units/061.json",
+      "artifacts/long-horizon/units/062.json",
+      "artifacts/long-horizon/units/063.json",
+      "artifacts/long-horizon/units/064.json",
+      "artifacts/long-horizon/units/065.json",
+      "artifacts/long-horizon/units/066.json",
+      "artifacts/long-horizon/units/067.json",
+      "artifacts/long-horizon/units/068.json",
+      "artifacts/long-horizon/units/069.json",
+      "artifacts/long-horizon/units/070.json",
+      "artifacts/long-horizon/units/071.json",
+      "artifacts/long-horizon/units/072.json",
+      "artifacts/long-horizon/units/073.json",
+      "artifacts/long-horizon/units/074.json",
+      "artifacts/long-horizon/units/075.json",
+      "artifacts/long-horizon/units/076.json",
+      "artifacts/long-horizon/units/077.json",
+      "artifacts/long-horizon/units/078.json",
+      "artifacts/long-horizon/units/079.json",
+      "artifacts/long-horizon/units/080.json",
+      "artifacts/long-horizon/units/081.json",
+      "artifacts/long-horizon/units/082.json",
+      "artifacts/long-horizon/units/083.json",
+      "artifacts/long-horizon/units/084.json",
+      "artifacts/long-horizon/units/085.json",
+      "artifacts/long-horizon/units/086.json",
+      "artifacts/long-horizon/units/087.json",
+      "artifacts/long-horizon/units/088.json",
+      "artifacts/long-horizon/units/089.json",
+      "artifacts/long-horizon/units/090.json"
+    ],
+    "finalFileDigestCount": 91
+  },
+  "claimBoundary": "Provider-free lifecycle evidence only; no model quality, token, latency, 90-minute wall-clock, generalization, or release claim."
+}

@@ -9,7 +9,7 @@ Một thành viên mới không cần biết local path của maintainer. Luồn
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.2.17
+npm install -g --ignore-scripts @piagent/platform@1.3.0-rc.1
 piagent-install --stable
 cd /path/to/project
 pi
@@ -43,7 +43,7 @@ Mặc định team dùng stable helper:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.2.17
+npm install -g --ignore-scripts @piagent/platform@1.3.0-rc.1
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -261,6 +261,14 @@ Project init tạo:
 - `REVIEW_GUIDELINES.md` nếu chưa có
 
 Hai file memory ở trên là local/private mặc định theo `.pi/.gitignore`; chỉ commit nếu team opt-in sau review.
+
+Với luồng FE/BE tách repo nhưng để chung một folder làm việc, mở Pi tại folder cha và chọn `be-readonly-fe` cho chính folder cha đó. Ví dụ `Working/v-nexus-frontend/` và `Working/v-nexus-backend/` là hai Git repo riêng; `Working/.pi/piagent-profile.json` là profile của phiên Pi. Khi start task, scope ghi nên nằm trong FE repo:
+
+```text
+/workflow be-to-fe Scout BE changes read-only and create the FE remediation plan. Scope: v-nexus-frontend/plans/**, v-nexus-frontend/**. Backend repo is read-only.
+```
+
+Plan/report có thể ghi vào `v-nexus-frontend/plans/**` nếu muốn đi cùng FE repo, hoặc `Working/plans/**` nếu muốn lưu ở workspace cha. File ngoài repo con được theo dõi bằng bounded file-digest evidence, còn FE/BE repo con vẫn dùng Git evidence.
 
 ## Bước 4 — run trong Herdr
 

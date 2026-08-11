@@ -1,0 +1,245 @@
+{
+  "schemaVersion": "codex-first-fs2-context-efficiency-evidence-v1",
+  "workItem": "CF-FS2-01",
+  "recordedAt": "2026-08-10T12:44:11Z",
+  "status": "pass",
+  "scope": {
+    "objective": "Bound intake, automatic context, semantic carry-over, and provider-visible textual tool output without adding a provider turn or changing the provider-visible tool index on resume.",
+    "providerInvoked": false,
+    "benchmarkRunInvoked": false,
+    "releaseActionInvoked": false,
+    "nextWorkItemStarted": false,
+    "candidateState": "unfrozen",
+    "candidateDigest": null
+  },
+  "reviewedIdentity": {
+    "head": "4f37ae05d56431f2f9db9c4159e20252c3da3b2a",
+    "packageVersion": "1.2.17",
+    "policyManifestVersion": "authority-v1",
+    "policyManifestSha256": "7f223487384b5521bcda01bc1dc1578dfb3f8293dc94eadd85b86048b645273c",
+    "trackerBeforeCloseSha256": "a6854d2b8ede15254b4498d78880b193777ce02f64c76816fb9228bcf5fdf390",
+    "roadmapSha256": "cb91fe410add6de293431308436ae7cff34e593c89fe8146a3633d8c85550aa7",
+    "executionProtocolSha256": "aab941a5422a2797fc1a3a1e420764a1f03fffcb4f06e4d04ea70fe3bbc1e470",
+    "productionTree": {
+      "algorithm": "piagent-fs2-work-item-production-tree-v1",
+      "domainUtf8": "piagent-fs2-work-item-production-tree-v1\n",
+      "canonicalization": "UTF-8 sorted production paths from the FS0 constitution; JSON array of {path,mode,size,sha256}; aggregate SHA-256 is domain plus canonical JSON bytes",
+      "files": 444,
+      "identity": "sha256:e9c698a044731b435bcb0aa8ed9afd9062c07807a53a0a7c584da00fc010b446"
+    },
+    "preArtifactWorkingTreeObservation": {
+      "porcelainRecords": 309,
+      "porcelainSha256": "4b63f5ae22a321aad6fcaa34fae72ec93458ccdce641be876e33cdc7ddc27e2b",
+      "disposition": "Dirty user-owned development tree retained. Exact production identity is local implementation evidence only; no clean or frozen release candidate is claimed."
+    }
+  },
+  "closedBudgets": {
+    "automaticInputMaximumChars": 8000,
+    "runtimeIntakeDisplayMaximumChars": 6000,
+    "semanticCompactionInstructionMaximumChars": 8000,
+    "automaticContextPackMaximumTokens": 900,
+    "toolResultCompactionThresholdChars": 12000,
+    "toolResultCompactionThresholdLines": 180,
+    "toolResultPreviewMaximumCharsPerTextChannel": 6000,
+    "toolResultCaptureMaximumChars": 500000,
+    "captureIndexMaximumBytes": 4194304,
+    "captureRetentionMaximumBytes": 134217728,
+    "captureRetentionMaximumFiles": 500,
+    "captureRetentionMaximumAgeDays": 30
+  },
+  "exitEvidence": [
+    {
+      "requirement": "Intake, context, and tool-result budgets are closed and shared.",
+      "result": "pass",
+      "evidence": "One runtime-limits policy now names the 900-token context ceiling, 6000-character runtime-intake display, and 8000-character semantic carry-over. Aggregate many-block content/details are compacted when their combined text crosses the existing 12000-character or 180-line threshold."
+    },
+    {
+      "requirement": "Semantic and file-backed compaction preserve quality-critical edges.",
+      "result": "pass",
+      "evidence": "Carry-over retains goal head/tail, all twelve criterion labels and head/tail, exact verifier commands, changed-file summary, blocker and next-step rules while the full Task Contract remains durable. Tool output retains head, notable failures and tail; its full bounded capture is private mode 0600."
+    },
+    {
+      "requirement": "Automatic context remains quality-neutral inside a hard token budget.",
+      "result": "pass",
+      "evidence": "All injectable phase/pressure combinations remain at 240..900 tokens. Existing hybrid context tests still retrieve the relevant source and current-turn snapshot at or below requested 500/700-token budgets, exclude protected content, and preserve low-confidence fallback."
+    },
+    {
+      "requirement": "Context growth is bounded across resume.",
+      "result": "pass",
+      "evidence": "A pending automatic task resumes from its durable task/session binding, injects neither another intake nor another automatic context pack, and keeps the semantic carry-over bounded to 8000 characters. Session-specific task compaction still excludes a different session's task."
+    },
+    {
+      "requirement": "The provider-visible tool index stays stable.",
+      "result": "pass",
+      "evidence": "The automatic source task exposes only read/bash/edit/write before intake, after task creation, and after exact-session resume, in the same order. No tool schema or registration contract changed."
+    },
+    {
+      "requirement": "Default efficiency mechanisms add zero model turns.",
+      "result": "pass",
+      "evidence": "Runtime intake and context are returned as the current before_agent_start message; no sendUserMessage/sendMessage follow-up is emitted. Pending resume returns no new intake/context message and emits zero provider follow-ups."
+    },
+    {
+      "requirement": "Adversarial aggregate results cannot bypass per-string compaction.",
+      "result": "pass",
+      "evidence": "400 content blocks, 2000 detail records, and a mixed single-large-string plus 20000-number payload each collapse to one bounded preview/capture. Actual hook integration preserves exitCode and a notable ERROR while the returned content/details envelope stays below 15000 serialized characters."
+    }
+  ],
+  "implementation": [
+    {
+      "path": "packages/piagent-core/runtime/runtime-limits.ts",
+      "sha256": "cb5c3eae636dffee92685175e15e99ecc4671f464436d9efe5b3c09d591bdd19"
+    },
+    {
+      "path": "packages/piagent-core/runtime/context/adaptive-planner.ts",
+      "sha256": "52164403b1c0bcd948930a6c19be13d7e49a34d9db58e0ecdaadcad317b8e90d"
+    },
+    {
+      "path": "packages/piagent-core/runtime/workflows/task-intake.ts",
+      "sha256": "2b2c6b9b580306c01e785f17ba85bfdbcbb128df0dbba4941bcf32fc038983a7"
+    },
+    {
+      "path": "packages/piagent-core/runtime/registration/task-start-tool.ts",
+      "sha256": "6ed59ecd194631685341d52b1f94143431640236415930e8d41574b3b91feb3b"
+    },
+    {
+      "path": "packages/piagent-core/runtime/session/system-prompt.ts",
+      "sha256": "93465a1450963592690dcb01112c6f2c2404aa944945aca7234ec4a6b5c9aae0"
+    },
+    {
+      "path": "packages/piagent-core/runtime/session/tool-result-compaction.ts",
+      "sha256": "888b2d19cafc14b7e4643f2412ee943432f2a7f6cf379180f54f21413aefdcc0"
+    },
+    {
+      "path": "packages/piagent-core/extensions/piagent-guard.ts",
+      "sha256": "dc37bb6626c67a40d718ce857ced5e52927f338712413022308d5a15c788d98b"
+    }
+  ],
+  "proofCriticalExistingCarriers": [
+    {
+      "path": "packages/piagent-core/extensions/context-engine.js",
+      "sha256": "2bb4a28ad2e361221ccbd2bdab2df239a29d421f09878ea6e064a978d2ee2332"
+    },
+    {
+      "path": "packages/piagent-core/runtime/hooks/agent-start-hook.ts",
+      "sha256": "2de3a7a2bdbed31ac6a672980f6eb4f37601b881c7bccd67e2c9bc081e96e607"
+    },
+    {
+      "path": "packages/piagent-core/runtime/hooks/input-hook.ts",
+      "sha256": "53b976b4f3fe1fc82c9cf640e85301eb909e41bfa1e32e7e3ed5b111ab519ceb"
+    },
+    {
+      "path": "packages/piagent-core/runtime/hooks/session-start-hook.ts",
+      "sha256": "6b16476eba94aff7b033d12f70ebf802476f8eaa69fde5309caa20420869f29d"
+    },
+    {
+      "path": "packages/piagent-core/runtime/hooks/tool-result-hook.ts",
+      "sha256": "e5b494dd3601954ba4235ba353f2ae6eab3712a67f0602449082f29773898a08"
+    },
+    {
+      "path": "packages/piagent-core/runtime/tools/tool-groups.ts",
+      "sha256": "737a3aca33576800a943fb4419a2e57153618187e9f9d50b899f6bc961948b01"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/runtime-session-modules.test.mjs",
+      "sha256": "662e9d2f7568a0f704049f56b4821ab5911961b668ac278c130c69714d9962c2"
+    },
+    {
+      "path": "tests/adaptive-runtime-services.test.mjs",
+      "sha256": "54a0fb6a58ad2ca8853da45d5808eda015da471d39e65a994f7fe7702d954fbe"
+    },
+    {
+      "path": "tests/context-engine.test.mjs",
+      "sha256": "b9f4fb44eeea6a5f4777cd5470ffa76c9ae620430411b1fad7a2820aa8b64dca"
+    },
+    {
+      "path": "tests/piagent-guard-integration.test.mjs",
+      "sha256": "303e39398e343659485714a3e549efbd48f2937ecc7259a1b1831b40bbceef21"
+    }
+  ],
+  "verification": [
+    {
+      "command": "node --test tests/runtime-session-modules.test.mjs tests/adaptive-runtime-services.test.mjs tests/context-engine.test.mjs",
+      "result": "67/67 pass"
+    },
+    {
+      "command": "node --test tests/piagent-guard-integration.test.mjs",
+      "result": "99/99 pass"
+    },
+    {
+      "command": "node --test tests/pi-082-runtime-phase-e2e.test.mjs tests/pi-082-host-tool-error.test.mjs",
+      "result": "12/12 pass; provider-free actual Pi 0.82"
+    },
+    {
+      "command": "node --test tests/architecture-boundaries.test.mjs tests/capability-core.test.mjs tests/package-distribution.test.mjs tests/project-shape.test.mjs",
+      "result": "103/103 pass"
+    },
+    {
+      "command": "npm test",
+      "result": "1834/1834 pass across 121 suites; zero fail, cancel, skip, or todo"
+    },
+    {
+      "command": "npm run typecheck",
+      "result": "pass"
+    },
+    {
+      "command": "npm run architecture:check",
+      "result": "pass; 192 source files within layer and line budgets"
+    },
+    {
+      "command": "npm run docs:check",
+      "result": "pass; four EN/VI pairs"
+    },
+    {
+      "command": "npm run capabilities:check",
+      "result": "pass; catalog current with two packs"
+    },
+    {
+      "command": "node scripts/capability-catalog.mjs doctor --profile .pi/piagent-profile.json --lock .pi/piagent-profile.lock.json --package-source ../",
+      "result": "pass; profile lock current at sha256:502b41b518cc2f3ed73aa93662a7faf7b1b1556cf5176ec133b6adb791664050; capability grants unchanged"
+    },
+    {
+      "command": "node governance/codex-first-product/evidence/fs1/verify-capability-ownership-delta-v3.mjs governance/codex-first-product/evidence/fs1/capability-module-ownership-delta.v3.json",
+      "result": "pass; 444 production files, ownership identity sha256:cf032f15b45d2257a7d460524f895d0aa828d653489aa81bed149eb07a083886"
+    },
+    {
+      "command": "npm run verify -- --offline",
+      "result": "pass; offline scaffold complete"
+    },
+    {
+      "command": "git diff --check",
+      "result": "pass"
+    }
+  ],
+  "distribution": {
+    "profileLockPath": ".pi/piagent-profile.lock.json",
+    "profileLockSha256": "502b41b518cc2f3ed73aa93662a7faf7b1b1556cf5176ec133b6adb791664050",
+    "profileLockStatus": "current",
+    "capabilityGrantChanged": false,
+    "productionFiles": 444
+  },
+  "schemaAndMigration": {
+    "schemaChanged": false,
+    "taskContractMigrationRequired": false,
+    "authorityManifestChanged": false,
+    "activeTaskBehavior": "Existing pending Task Contracts resume from their pinned authority and durable state; the efficiency layer only bounds current-turn display and does not reinterpret task truth."
+  },
+  "rollback": {
+    "mechanicalOnlyCompatibility": "unchanged",
+    "taskContractMigrationRequired": false,
+    "method": "Restore the exact seven implementation files and matching generated profile lock from their prior reviewed bytes. Durable Task Contracts and captures remain readable; no state deletion or widening is required."
+  },
+  "limitations": [
+    "This is exact-current local implementation evidence on an unfrozen dirty tree, not a release-candidate or token-savings claim.",
+    "No provider, paid canary, Codex comparison, cohort, Linux candidate, or human pilot was run.",
+    "Thirty-to-ninety-minute reconstruction, kill/resume, corrupt-state, and disk/process failure proof belongs to CF-FS2-03 and was not claimed here.",
+    "Non-text multimodal result blocks retain host semantics; this work item bounds provider-visible textual content/details and private capture retention."
+  ],
+  "stopRule": {
+    "nextWorkItem": "CF-FS2-02",
+    "nextWorkItemStarted": false,
+    "providerAuthority": "none",
+    "decision": "CF-FS2-01 is locally complete. Stop this implementation session before any current-tree evidence work."
+  }
+}

@@ -1,0 +1,146 @@
+{
+  "schemaVersion": "codex-first-fs4-real-task-taxonomy-evidence-v1",
+  "workItem": "CF-FS4-01",
+  "recordedAt": "2026-08-11T01:25:33+07:00",
+  "status": "verified",
+  "scope": {
+    "objective": "Freeze at least twelve non-overlapping real-task families and explicit profile, language, framework, lifecycle, and risk adapter boundaries.",
+    "providerInvoked": false,
+    "benchmarkRunInvoked": false,
+    "releaseActionInvoked": false,
+    "nextWorkItemStarted": false,
+    "candidateState": "unfrozen",
+    "candidateDigest": null
+  },
+  "reviewedIdentity": {
+    "head": "4f37ae05d56431f2f9db9c4159e20252c3da3b2a",
+    "exactTag": "v1.2.17",
+    "packageVersion": "1.2.17",
+    "policyManifestVersion": "authority-v1",
+    "policyManifestDigest": "sha256:28112cb62a8868d4371f78c9edefff7489adb0dc6616b9e489c4303b80307393",
+    "profileLockSha256": "6d5cd4d80c873439b9ea207e502593018b6a1ec18d1b23532489fb7c44a8c1b2",
+    "fs3AuditSha256": "59e878c8e4c5e9268084d0748caf893eaa20f907df25d137a3248e2c5f5aaa13",
+    "workingTreeDisposition": "Dirty user-owned full-source development tree retained. This evidence binds only the new taxonomy contract, its verifier, and the cited current public suite manifests; it is not a clean or frozen release candidate."
+  },
+  "implementation": [
+    {
+      "path": "evals/real-task-taxonomy.v1.json",
+      "sha256": "b3fa32c7008ce7b60de4ffebd6853da1601effae8b422f1cfa68810e4ea2150a",
+      "change": "Freezes seventeen primary real-task families, deterministic classification, exact historical attribution, adapter boundaries, claim restrictions, and downstream evidence dependencies."
+    },
+    {
+      "path": "tests/real-task-taxonomy.test.mjs",
+      "sha256": "18aa1c8792ccfc62f3928c575f85415b348c1ffa11f579d369c83c12b8927f5e",
+      "change": "Validates family distribution, shipped profiles, exhaustive/disjoint historical attribution, semantic-proof abstention, claim boundaries, and adversarial authority widening."
+    },
+    {
+      "path": "benchmarks/production-v1/suite.json",
+      "sha256": "8d03df7c08eee5debbabdb3490beb5d45b021a392b6da77df257e6d94c346d58",
+      "change": "Read-only historical attribution source; no suite or grader bytes changed."
+    },
+    {
+      "path": "benchmarks/capability-v1/suite.json",
+      "sha256": "378133ad8d10a47e580ecb62b1c0221d562d81a49c8992f3ab8caa46f5980ddc",
+      "change": "Read-only historical attribution source; no suite or grader bytes changed."
+    }
+  ],
+  "taxonomy": {
+    "families": 17,
+    "minimumRequired": 12,
+    "coverageGroups": {
+      "multi-file-package": 4,
+      "backend-api-auth": 2,
+      "data-migration-concurrency": 3,
+      "frontend-browser": 3,
+      "diagnosis-security": 2,
+      "large-repo-retrieval": 2,
+      "long-task": 1
+    },
+    "profiles": 11,
+    "languages": 13,
+    "frameworks": 20,
+    "lifecycles": 6,
+    "risks": 4,
+    "historicalScenariosAttributed": 22,
+    "historicalScenarioDuplicates": 0,
+    "historicalScenarioOmissions": 0,
+    "classificationCardinality": "exactly-one-primary-family"
+  },
+  "adapterBoundary": {
+    "execution": "Every listed language may be used only with a fixture-pinned exact verifier.",
+    "semanticProof": "Closed JavaScript/TypeScript only; Python, Java, Kotlin, Go, Rust, Dart, shell, SQL, YAML, HCL, and Markdown abstain rather than hard-blocking completion.",
+    "frameworkMeaning": "A framework entry binds a fixture or manifest to a reusable profile; it does not claim universal framework semantic understanding.",
+    "longHorizon": "Taxonomy-only until CF-FS4-03 supplies 30-90 minute crash, compaction, restart, handoff, continuation, context, and state-growth evidence.",
+    "privateHoldout": "No private prompt, grader, oracle, or repository locator is present; the external family-disjoint boundary remains CF-FS4-04."
+  },
+  "verification": [
+    {
+      "command": "node --test tests/real-task-taxonomy.test.mjs",
+      "result": "7/7 pass"
+    },
+    {
+      "command": "node --test tests/real-task-taxonomy.test.mjs tests/benchmark-suite.test.mjs tests/production-benchmark-suite.test.mjs tests/capability-benchmark-suite.test.mjs tests/golden-enforcement.test.mjs tests/package-distribution.test.mjs",
+      "result": "125/125 pass"
+    },
+    {
+      "command": "PIAGENT_NO_UPDATE_CHECK=1 node --test --test-concurrency=1 tests/*.test.mjs",
+      "result": "1877/1877 pass across 124 suites"
+    },
+    {
+      "command": "npm run typecheck",
+      "result": "pass"
+    },
+    {
+      "command": "npm run architecture:check",
+      "result": "pass; 193 source files within architecture and line budgets"
+    },
+    {
+      "command": "npm run docs:check",
+      "result": "pass; four English/Vietnamese pairs complete"
+    },
+    {
+      "command": "npm run capabilities:check",
+      "result": "pass; two packs and current catalog"
+    },
+    {
+      "command": "npm run verify -- --offline",
+      "result": "pass; Pi model catalog intentionally skipped offline and local scaffold complete"
+    },
+    {
+      "command": "git diff --check",
+      "result": "pass"
+    }
+  ],
+  "verificationNote": {
+    "parallelRun": "The first parallel npm test run reported 1876/1877 because runtime-advisories.test.mjs creates and deletes a repository-local temporary script while benchmark candidate snapshotting runs concurrently. The failure was an expected candidate-freeze ENOENT, not a taxonomy assertion.",
+    "authoritativeRun": "The complete suite was rerun with Node test concurrency set to one and passed 1877/1877 without source changes. The unrelated test-local race was not patched inside CF-FS4-01."
+  },
+  "schemaAndMigration": {
+    "productRuntimeSchema": "unchanged",
+    "providerToolSchema": "unchanged",
+    "taskContract": "unchanged v2",
+    "authorityManifest": "unchanged authority-v1",
+    "migration": "none; this is an additive evaluation taxonomy contract",
+    "rollback": "Remove the taxonomy, its focused test, and this evidence artifact; no runtime or user state requires migration."
+  },
+  "claimBoundary": {
+    "realTaskClaimAllowed": false,
+    "longTaskClaimAllowed": false,
+    "generalizationClaimAllowed": false,
+    "tokenClaimAllowed": false,
+    "releaseClaimAllowed": false,
+    "reason": "CF-FS4-01 freezes attribution and adapter boundaries only. E2 fixtures, long-horizon runs, external holdout, human calibration, provider evidence, and a frozen candidate remain future work."
+  },
+  "handoff": {
+    "workItem": "CF-FS4-02",
+    "state": "selected-not-started",
+    "nextExactAction": "Build real-framework and repository fixtures against this exact taxonomy, beginning with a bounded reference/mutation/alternative-valid/scope/grader-sensitivity contract without running a provider.",
+    "outOfScope": [
+      "CF-FS4-02 fixture implementation in this session",
+      "CF-FS4-03 long-horizon execution",
+      "CF-FS4-04 private holdout content",
+      "provider or benchmark sessions",
+      "candidate freeze, package versioning, release, tag, publish, or external writes"
+    ]
+  }
+}

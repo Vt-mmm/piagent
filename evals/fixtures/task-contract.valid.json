@@ -63,6 +63,7 @@
     "tests",
     "scope"
   ],
+  "workingTreeDigestAlgorithm": "wt-content-v2",
   "orchestration": {
     "mode": "solo-first",
     "subagents": "not-used",

@@ -1,0 +1,343 @@
+{
+  "schemaVersion": "fs1-gate-audit-v1",
+  "workItem": "CF-FS1-05",
+  "auditedAt": "2026-08-10T12:17:26Z",
+  "review": {
+    "reviewer": "root",
+    "session": "fresh-independent-source-tracker-read-only-fs1-gate-2026-08-10",
+    "independence": "Separate bounded gate session after CF-FS1-04. The reviewer re-read the control plane, recomputed current identities, inspected current source, and reran the complete local matrix. This is not an external human audit.",
+    "mutationScope": [
+      "this new immutable audit artifact"
+    ],
+    "prohibitedAndNotPerformed": [
+      "product/runtime/test/schema/documentation edits",
+      "STATUS.md or existing evidence edits",
+      "provider or benchmark execution",
+      "candidate freeze or release-state mutation",
+      "branch/worktree/commit/tag/push/publish/install/cleanup",
+      "CF-FS2-01 implementation"
+    ]
+  },
+  "reviewedIdentity": {
+    "head": "4f37ae05d56431f2f9db9c4159e20252c3da3b2a",
+    "headTree": "0907c03c88373471c6da8606af61b4f172149c73",
+    "exactTag": "v1.2.17",
+    "packageVersion": "1.2.17",
+    "candidateState": "unfrozen",
+    "candidateDigest": null,
+    "policyManifestVersion": "authority-v1",
+    "policyManifestDigest": "sha256:24f77f5f5ddcd5430c70c120599e10995f99f420bebb474ec352bb7af7030027",
+    "productionTree": {
+      "algorithm": "piagent-fs1-gate-production-tree-v1",
+      "domainUtf8": "piagent-fs1-gate-production-tree-v1\n",
+      "canonicalization": "UTF-8 sorted production paths from the FS0 constitution; JSON array of {path,mode,size,sha256}; aggregate SHA-256 is domain plus canonical JSON bytes",
+      "files": 444,
+      "identity": "sha256:25d969c4b147da286f6cc1b7fb19407307270a041bbfc1732b39c7119dc657a7",
+      "preAndPostVerificationMatch": true
+    },
+    "preArtifactWorkingTreeObservation": {
+      "porcelainRecords": 422,
+      "trackedRecords": 123,
+      "untrackedRecords": 299,
+      "porcelainSha256": "9b4185b4c0a58457cf77ef27c9f45dfd224ab3d14e4b26b2bece055b3ed8d427",
+      "disposition": "Dirty user-owned development tree; exact production identity is reviewed for this local gate, but no clean or frozen release candidate is claimed. The audit artifact itself is the only expected post-observation addition."
+    },
+    "trackerSha256": "b645940767df417ceb60a539b282934e761efabf6b7822c5299c62dbcb949e96",
+    "executionProtocolSha256": "aab941a5422a2797fc1a3a1e420764a1f03fffcb4f06e4d04ea70fe3bbc1e470",
+    "roadmapSha256": "cb91fe410add6de293431308436ae7cff34e593c89fe8146a3633d8c85550aa7",
+    "sessionPromptsSha256": "8ba45ee421225df73eb20a650f74ae22c86c325c89fa0eae47f85fc79a81c32f"
+  },
+  "inputArtifacts": [
+    {
+      "path": "governance/codex-first-product/evidence/fs1/authority-manifest-implementation.v1.json",
+      "sha256": "33982819bd7112fbe600d2757bc271aa6be1c313a5a1cfca52cca096270b4ca6",
+      "workItem": "CF-FS1-01"
+    },
+    {
+      "path": "governance/codex-first-product/evidence/fs1/authority-boundary-implementation.v1.json",
+      "sha256": "0662275192cfa6f39e38b40b543f405a5b7a451ad9a10bcc510a537f68e46dd6",
+      "workItem": "CF-FS1-02"
+    },
+    {
+      "path": "governance/codex-first-product/evidence/fs1/continuation-control-implementation.v1.json",
+      "sha256": "25ad57b4900f656262188c026d1b3371fb4df2e86a00c24226df269a462beaaa",
+      "workItem": "CF-FS1-03"
+    },
+    {
+      "path": "governance/codex-first-product/evidence/fs1/authority-resume-implementation.v1.json",
+      "sha256": "748e4b93f3536259c258d6dbeb1392c2a521d69e4462ca86bd5eb0528f56dcfb",
+      "workItem": "CF-FS1-04"
+    },
+    {
+      "path": "governance/codex-first-product/evidence/fs1/capability-module-ownership-delta.v3.json",
+      "sha256": "6266fc07fb0bfff81a99ceb668215071ddf1ce7f0bd11ffbafab917ba12665e9",
+      "disposition": "Current additive ownership head over immutable FS0, FS1 v1, and FS1 v2 manifests"
+    },
+    {
+      "path": "packages/piagent-core/policy/authority-manifest.v1.json",
+      "sha256": "7f223487384b5521bcda01bc1dc1578dfb3f8293dc94eadd85b86048b645273c"
+    },
+    {
+      "path": "schemas/authority-manifest.schema.json",
+      "sha256": "f957865f9922cd58146f74a9c32b006d4cdf7c067d9497625fb71730c0c6ddc7"
+    },
+    {
+      "path": "schemas/task-authority-snapshot.schema.json",
+      "sha256": "5a92961f330af5df97f312fd1fb16ff01063ff7fdd80e3a2906847ecbed5c34a"
+    },
+    {
+      "path": "docs/authority-manifest.md",
+      "sha256": "40f628c717caef7ad5b06e30b09729298cc4c1cf7c8440e08a0071e18764fc83"
+    },
+    {
+      "path": ".pi/piagent-profile.lock.json",
+      "sha256": "edbdefb55fb9e4f7f428f7f271353aeee20df89e89efe4a2bc77dd2b22e45252"
+    }
+  ],
+  "workItemReview": [
+    {
+      "id": "CF-FS1-01",
+      "implementationState": "complete",
+      "localVerificationState": "pass-current-tree-revalidated",
+      "frozenCandidateEvidenceState": "not-applicable-yet; candidate is deliberately unfrozen",
+      "fieldExternalEvidenceState": "not required for the FS1 local control-plane gate",
+      "historicalEvidenceDisposition": "The implementation artifact and old lock/file hashes remain immutable lineage. Later FS1 edits supersede those point-in-time file identities; current behavior is proven by this gate, not by relabelling them.",
+      "finding": "Closed authority-v1 covers 17 capabilities, three profiles, five normalized authorities, dependencies, provenance, budgets, kill-switch modes, strict schemas, and immutable task snapshots."
+    },
+    {
+      "id": "CF-FS1-02",
+      "implementationState": "complete",
+      "localVerificationState": "pass-current-tree-revalidated",
+      "frozenCandidateEvidenceState": "not-applicable-yet; candidate is deliberately unfrozen",
+      "fieldExternalEvidenceState": "not required for the FS1 local control-plane gate",
+      "historicalEvidenceDisposition": "Point-in-time finalFileHashes are historical; the current cross-mode and Task Contract matrix was independently rerun.",
+      "finding": "Observe and advise cannot block, mutate, dispatch, or trigger a model turn. All 12 Task Contract criteria survive projection; hard safety, scope, exact verifier, changed-file, and terminal truth remain authoritative."
+    },
+    {
+      "id": "CF-FS1-03",
+      "implementationState": "complete",
+      "localVerificationState": "pass-current-tree-revalidated",
+      "frozenCandidateEvidenceState": "not-applicable-yet; candidate is deliberately unfrozen",
+      "fieldExternalEvidenceState": "not required for the FS1 local control-plane gate",
+      "historicalEvidenceDisposition": "The implementation artifact is immutable lineage; current source and journal behavior were independently rerun.",
+      "finding": "CAP-12 and CAP-13 share one append-only task/run/snapshot-bound continuation unit. Repeated or new requests after consumption hand off; restart, corruption, invalid tree, advisory, off, legacy, and race paths cannot create a second turn."
+    },
+    {
+      "id": "CF-FS1-04",
+      "implementationState": "complete",
+      "localVerificationState": "pass-current-tree-revalidated",
+      "frozenCandidateEvidenceState": "not-applicable-yet; candidate is deliberately unfrozen",
+      "fieldExternalEvidenceState": "not required for the FS1 local control-plane gate",
+      "historicalEvidenceDisposition": "Current immutable implementation evidence matches its recorded digest and reviewed production identity.",
+      "finding": "Exact compatible tasks resume pinned. Mechanical-only and per-feature-off narrowing produce one sticky journal disposition and deterministic handoff; clean replacement receives a fresh snapshot and no inherited mutation or verifier proof. Missing, unknown, tampered, stale, cross-task, crash, and corrupt paths are closed."
+    }
+  ],
+  "exitConditions": [
+    {
+      "id": "FS1-EXIT-01",
+      "name": "every capability has one owner, closed modes, bounded budgets, dependencies, provenance, and a kill switch",
+      "status": "pass",
+      "evidence": {
+        "capabilities": 17,
+        "profiles": 3,
+        "authorityValues": 5,
+        "manifestValidation": "pass",
+        "schemaPositiveNegative": "pass",
+        "uniqueProductionOwners": true,
+        "currentProductionFiles": 444,
+        "ownershipIdentity": "sha256:cf032f15b45d2257a7d460524f895d0aa828d653489aa81bed149eb07a083886",
+        "killSwitchRule": "L0 hard invariants retain enforce authority; every disable-capable L1-L5 capability has an explicit off mode; mechanical-only is a non-widening ceiling"
+      }
+    },
+    {
+      "id": "FS1-EXIT-02",
+      "name": "receipt, parser, trajectory, review, and recovery projections cannot replace Task Contract truth",
+      "status": "pass",
+      "evidence": {
+        "taskContractVersion": 2,
+        "criteriaPreserved": 12,
+        "projectionMaximum": 12,
+        "projectionTruthMutation": false,
+        "currentTreeExactVerifierStillHard": true,
+        "terminalImmutabilityStillHard": true,
+        "unsupportedOrMissingBroadSemanticEvidence": "advisory or not assessed; not a broad-default hard block"
+      }
+    },
+    {
+      "id": "FS1-EXIT-03",
+      "name": "the default absolute maximum is one system-triggered continuation per task",
+      "status": "pass",
+      "evidence": {
+        "manifestMaximum": 1,
+        "schedulerCallsites": [
+          "packages/piagent-core/runtime/hooks/completion-hook.ts:259",
+          "packages/piagent-core/runtime/hooks/completion-hook.ts:417"
+        ],
+        "sharedReservation": true,
+        "runtimeMemoryCounter": false,
+        "restartResetsBudget": false,
+        "crossProcessWinners": 1
+      }
+    },
+    {
+      "id": "FS1-EXIT-04",
+      "name": "repeated evidence cannot reopen a repair or review loop",
+      "status": "pass",
+      "evidence": {
+        "sameSignatureDisposition": "repeated-progress-signature handoff",
+        "changedSignatureAfterConsumptionDisposition": "global-budget-exhausted handoff",
+        "secondAutomaticTurn": false,
+        "journalCorruptionDisposition": "handoff or blocked; never schedule"
+      }
+    },
+    {
+      "id": "FS1-EXIT-05",
+      "name": "existing active state has a documented safe resume or explicit handoff/new-attempt path",
+      "status": "pass",
+      "evidence": {
+        "exactCompatible": "resume-pinned",
+        "explicitNarrowing": "new-attempt-required",
+        "missingUnknownTamperedCrossTask": "new-attempt-required",
+        "staleDuplicateCorruptWrongIdentity": "blocked",
+        "crashWindow": "durable journal replay reconstructs handoff before task-start visibility",
+        "terminalTask": "immutable historical"
+      }
+    },
+    {
+      "id": "FS1-GATE-01",
+      "name": "shadow and advisory behavior creates zero provider continuation turns",
+      "status": "pass",
+      "evidence": {
+        "observeAdviseHardActionsDenied": [
+          "block",
+          "mutate",
+          "model-turn",
+          "dispatch"
+        ],
+        "broadDefaultPhaseAuthority": "observe",
+        "broadDefaultAssuranceAuthority": "observe",
+        "broadDefaultSemanticRepairAuthority": "off",
+        "providerInvokedByAudit": false,
+        "providerFreePi082Tests": "12/12 pass"
+      }
+    },
+    {
+      "id": "FS1-GATE-02",
+      "name": "no universal heuristic or parser hard-block exists in the broad default",
+      "status": "pass",
+      "evidence": {
+        "broadDefaultCAP09": "shadow/observe",
+        "broadDefaultCAP11": "advisory/observe",
+        "broadDefaultCAP13": "off",
+        "strictHardBlockProfile": "strict-high-risk explicit pinned opt-in",
+        "unknownSemanticDisposition": "abstain, advisory, or not assessed outside strict opt-in",
+        "deterministicHardBlocksRetained": [
+          "permission and scope",
+          "safety and protected paths",
+          "current-tree exact verifier",
+          "truthful changed files",
+          "terminal immutability"
+        ]
+      }
+    }
+  ],
+  "verification": [
+    {
+      "gate": "independent manifest/action/callsite/documentation inspection",
+      "result": "pass",
+      "detail": "17 capabilities, three profiles, closed budgets and kill switches; observe/advice hard actions denied; mechanical advanced turns denied; strict semantic review opt-in; exactly two triggerTurn callsites, both in completion-hook"
+    },
+    {
+      "gate": "authority, Task Contract, acceptance, continuation, migration, recovery, resume, and runtime-session matrix",
+      "result": "pass",
+      "detail": "133/133 tests"
+    },
+    {
+      "gate": "full guard integration",
+      "result": "pass",
+      "detail": "97/97 tests"
+    },
+    {
+      "gate": "provider-free actual Pi 0.82 host and end-to-end lifecycle",
+      "result": "pass",
+      "detail": "12/12 tests; includes one continuation ceiling and mechanical rollback clean replacement"
+    },
+    {
+      "gate": "package, capability, golden schema, project state, and production import graph",
+      "result": "pass",
+      "detail": "147/147 tests"
+    },
+    {
+      "gate": "full repository",
+      "result": "pass",
+      "detail": "1829/1829 tests across 121 suites; zero failure, cancel, skip, or todo"
+    },
+    {
+      "gate": "offline aggregate verification",
+      "result": "pass",
+      "detail": "PIAGENT_NO_UPDATE_CHECK=1 npm run verify -- --offline; scaffold complete; local provider catalog intentionally skipped"
+    },
+    {
+      "gate": "typecheck, architecture, docs, capability catalog, and diff hygiene",
+      "result": "pass",
+      "detail": "typecheck pass; 192 source files pass boundaries/budgets; four EN/VI pairs complete; two packs current; git diff --check pass"
+    },
+    {
+      "gate": "runtime integrity doctor",
+      "result": "pass",
+      "detail": "profile lock current; actual and expected sha256:edbdefb55fb9e4f7f428f7f271353aeee20df89e89efe4a2bc77dd2b22e45252; no reasons"
+    },
+    {
+      "gate": "package dry-run and privacy boundary",
+      "result": "pass-with-historical-version",
+      "detail": "@piagent/platform 1.2.17; 566 files; authority manifest, authority resume, and continuation modules present; zero governance/auth.json/piagent-state matches; no 1.3 candidate claim"
+    },
+    {
+      "gate": "current additive ownership",
+      "result": "pass",
+      "detail": "431 FS0 base + 12 prior FS1 additions + 1 CF-FS1-04 addition = 444 current production files; one prior addition updated without owner relabeling"
+    }
+  ],
+  "privacyAndStopRules": {
+    "credentialsOrSecretsReadOrCopied": false,
+    "providerInvoked": false,
+    "benchmarkInvoked": false,
+    "releaseActionInvoked": false,
+    "sourceOrExistingEvidenceMutated": false,
+    "trackerMutated": false,
+    "nextPhaseImplementationStarted": false,
+    "shadowOrAdvisoryProviderContinuationsObserved": 0
+  },
+  "remainingDebt": [
+    {
+      "id": "FS1-CANDIDATE-UNFROZEN",
+      "severity": "expected-later-phase",
+      "disposition": "The reviewed tree is dirty and package identity is historical 1.2.17. No exact frozen 1.3 candidate, package digest, platform artifact, provider comparison, cohort, or release proof is claimed by FS1."
+    },
+    {
+      "id": "FS1-FIELD-EVIDENCE-DEFERRED",
+      "severity": "expected-later-phase",
+      "disposition": "Real-task, long-horizon, holdout, human, cohort, cross-platform, and provider evidence belongs to FS4-FS7 and cannot be promoted from this local gate."
+    },
+    {
+      "id": "FS1-PRIOR-FILE-HASHES-HISTORICAL",
+      "severity": "advisory",
+      "disposition": "CF-FS1-01 through CF-FS1-03 finalFileHashes are point-in-time lineage and were superseded by later FS1 implementation. Their immutable evidence was not rewritten; current behavior is bound by this audit production-tree identity and fresh verification."
+    },
+    {
+      "id": "FS1-AUDIT-NOT-EXTERNAL-HUMAN",
+      "severity": "advisory",
+      "disposition": "This is a separate read-only agent session, not maintainer or external-human signoff. Later release gates retain their explicit human requirements."
+    }
+  ],
+  "verdict": {
+    "status": "pass",
+    "passedExitConditions": 7,
+    "failedExitConditions": 0,
+    "fs1ImplementationState": "complete",
+    "trackerAdvanceRecorded": false,
+    "advanceToFs2Eligible": true,
+    "nextWorkItemAfterReadback": "CF-FS2-01",
+    "nextAction": "Stop this audit session. In a separate sole-tracker-writer session, verify this artifact digest and reviewed production/policy/tracker identities. If they still match, record CF-FS1-05 and FS1 complete, select exactly CF-FS2-01, and stop without implementing it."
+  }
+}

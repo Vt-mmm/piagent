@@ -1,0 +1,9 @@
+{
+  "name": "piagent-e2-real-framework-monorepo",
+  "private": true,
+  "type": "module",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  }
+}

@@ -11,7 +11,7 @@ Shared Pi package for reusable project workflows.
 - `skills/piagent-ops/SKILL.md`: operator-invoked reference for manual intake, recovery, and high-risk controls; routine runtime-managed tasks do not advertise or load it.
 - `skills/piagent-source-cache/`: local cache for user-provided external source repositories.
 - `subagents/*.md`: piagent roles for `pi-subagents`.
-- `benchmark/benchmark-core.js`: deterministic suite validation, evidence scoring, usage comparison, and report rendering for `piagent-benchmark`.
+- `benchmark/benchmark-core.js`: deterministic suite validation, evidence scoring, and paired usage comparison for `piagent-benchmark`; `benchmark-report.js` renders the human/HTML reports.
 - `policies/base-policy.json`: default runtime policy, including protected path and shell protected path defaults.
 - input hook support for local screenshot/image paths pasted into chat; supported images are attached as `[image1]`, `[image2]`, ...
 - compact tool-result rendering: oversized redacted output is previewed in Pi and captured under `.pi/piagent-state/tool-results/` for offline audit/reporting.
@@ -39,6 +39,12 @@ piagent-auto --full-access -p "Run the trusted local benchmark suite."
 ```
 
 This is a wrapper for `pi --approve` on the current run. It loads trusted project-local resources without turning off Piagent guardrails.
+
+For an explainable fresh-task model recommendation, use
+`piagent-route --prompt "<task>" --json`. Provider-backed adaptive launch is a
+separate explicit action: `piagent-route --prompt-file <file> --execute --yes`.
+The in-extension router never changes models mid-conversation and remains
+fail-closed when the user pin, catalog, provenance, or host boundary is unclear.
 
 The wrapper can set `PIAGENT_PERMISSION_PROFILE` for one run:
 

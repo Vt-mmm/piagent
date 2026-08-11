@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-08-11",
+  "workItem": "CF-FS5-04-v4",
+  "objective": "Adjudicate the historical bounded-retry performance outlier once with privacy-safe phase attribution, while preserving a finite provider budget and distinguishing product outcomes from provider infrastructure failures.",
+  "executedCandidate": {
+    "algorithm": "sha256-length-prefixed-entry-v2",
+    "contentDigest": "9aedd23f1524b07a9c4df7508800c3955ef9308b8ad6e8b7e23773b47501cf36",
+    "fileCount": 841,
+    "protocolSha256": "8bdd7fc8210e78770ebc2f3230061a0df3c2e98b2752a3929c68b43bf4d112fb",
+    "disposition": "immutable historical adjudication candidate; the run is infrastructure-inconclusive and must never be resumed or relabelled"
+  },
+  "adjudication": {
+    "runId": "production-v1-20260811T060819Z-f8f9ce",
+    "scenarioId": "bounded-retry",
+    "expectedSessions": 2,
+    "historicallyRecordedSessions": 2,
+    "validProductPairs": 0,
+    "baseline": {
+      "surface": "codex-cli",
+      "resolved": true,
+      "grade": 10,
+      "scopePass": true,
+      "freshTokens": 21071,
+      "durationSeconds": 66.582
+    },
+    "candidate": {
+      "surface": "piagent",
+      "historicalFailure": "hidden-grader-failed",
+      "correctFailureClass": "provider-infrastructure",
+      "correctFailure": "provider-temporarily-unavailable-after-measured-usage",
+      "usageStatus": "measured-but-unaccepted",
+      "freshTokens": 3478,
+      "durationSeconds": 67.141,
+      "toolCalls": 5,
+      "toolNames": { "read": 3, "bash": 2 },
+      "phaseAttribution": {
+        "available": true,
+        "promptsByPhase": { "intake": 1 },
+        "toolCallsByPhase": { "execute": { "read": 3, "shell": 2 } },
+        "transitions": { "intake->execute": 1 },
+        "systemContinuations": 0,
+        "blockedToolCalls": 0
+      }
+    },
+    "sessionForensics": {
+      "assistantMessages": 8,
+      "assistantErrorMessages": 6,
+      "positiveUsageMessages": 2,
+      "terminalAssistantStopReason": "error",
+      "mutationToolCalls": 0,
+      "finding": "Two provider-backed turns completed and returned five tool calls. The terminal root assistant event was an overload error after four consecutive post-tool overload errors. The process exited zero, so the pre-fix runner graded a partial workspace instead of classifying a paid infrastructure attempt."
+    },
+    "artifacts": {
+      "report.json": "703325116d6f1a09f46a91d28e3abfad1e187840c68be6098489fe16f7d9c649",
+      "runs.jsonl": "14db68d4f4c3347260e6e735eb43533333862057fd6e075d79b47aa3ca1b7b38",
+      "run-manifest.json": "727c79a4ed0a9c036fd428c8d4b81143f51687d728f2c2cd056155756b164548",
+      "retained-pi-session.jsonl": "6a68a2bef4ba1bf8c904cae829a7546a470fffe0cee39cd1002aa9ca9fb4e9eb"
+    }
+  },
+  "systemicFix": {
+    "behavior": [
+      "Read the terminal root Pi assistant event after the provider process returns.",
+      "Treat a terminal overload with exact nonzero session usage as provider infrastructure with measured-but-unaccepted usage.",
+      "Skip the hidden grader for the incomplete workspace and never append it as an accepted outcome.",
+      "Keep known paid usage in the infrastructure ledger, but do not open another paid retry; exact zero-usage overload recovery remains bounded to one retry.",
+      "Ignore transient overload events when a later root assistant response completes successfully."
+    ],
+    "files": [
+      "packages/piagent-core/benchmark/benchmark-forensics.js",
+      "scripts/benchmark-session.mjs",
+      "tests/benchmark-operational-evidence.test.mjs",
+      "tests/benchmark-runner.test.mjs",
+      "evals/fs5-pilot-protocol.v4.json"
+    ],
+    "currentHashes": {
+      "evals/fs5-pilot-protocol.v4.json": "62acb6d571ad33e277eb38d15b9e1fda73bf6f4ecec5aa2ab8aee637e40e5f87",
+      "packages/piagent-core/benchmark/benchmark-forensics.js": "4c0a2d011f48bc356b5edd50dd849d520b66ad91b8ccd47c6eb23ff3e5f5e9fb",
+      "packages/piagent-core/benchmark/fs5-pilot-protocol.js": "5592f6859d77fd26d0324cd37dcfeaad08810b7dd77c1c1f2298117b505ff2ad",
+      "scripts/benchmark-session.mjs": "3bcca9dbd5948dff639dc7061188937a6d8e6fe819e5642a23c56961639978ec",
+      "tests/benchmark-operational-evidence.test.mjs": "28c33a6409b34c80f1a5e08fd5b28b140d21484b61df3ed10f005229f09d972c",
+      "tests/benchmark-runner.test.mjs": "58a545ea5eb26213c7a3d0d9345fd1ff9aaaf90518de730c5b9517ec04ee9db9"
+    },
+    "verification": {
+      "terminalAndZeroUsageRegressions": "2/2 PASS",
+      "operationalAndTerminalParser": "5/5 PASS",
+      "benchmarkMatrixBeforeBindingRefresh": "95/96 PASS; sole failure was the expected v4 artifact hash mismatch after the classifier edit",
+      "protocolAfterBindingRefresh": "12/12 PASS",
+      "offlineFullRepositoryVerifyAfterFreeze": "PASS: piagent-platform scaffold is complete",
+      "typecheck": "PASS",
+      "architecture": "PASS; 199 source files",
+      "diffCheck": "PASS"
+    }
+  },
+  "decision": {
+    "CF-FS5-04-v4": "blocked-infrastructure-inconclusive",
+    "CF-FS5-05": "blocked",
+    "fs5ExitPassed": false,
+    "fs6EntryAllowed": false,
+    "providerResumeAllowed": false,
+    "canaryAdvanceAllowed": false,
+    "tokenSavingClaimAllowed": false,
+    "generalizationClaimAllowed": false,
+    "releaseClaimAllowed": false,
+    "reason": "The only v4 pair is not a valid product comparison: Codex completed, while Pi ended with a terminal provider overload after exact paid usage. The historical accepted Pi record is preserved but invalidated for product adjudication. The finite lane remains closed; this local harness correction does not manufacture a passing FS5 outcome."
+  }
+}

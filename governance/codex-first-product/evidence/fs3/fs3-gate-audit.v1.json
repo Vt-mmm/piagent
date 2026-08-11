@@ -1,0 +1,180 @@
+{
+  "schemaVersion": "fs3-gate-audit-v1",
+  "workItem": "CF-FS3-06",
+  "auditedAt": "2026-08-10T17:58:10Z",
+  "status": "pass",
+  "verdict": {
+    "phase": "FS3",
+    "localGate": "pass",
+    "exitConditionsPassed": 5,
+    "exitConditionsTotal": 5,
+    "interactionConditionsPassed": 3,
+    "interactionConditionsTotal": 3,
+    "advanceAllowed": "CF-FS4-01 may be selected after exact artifact and tracker readback; this artifact does not authorize CF-FS4-01 implementation in the audit session",
+    "candidatePromotion": "none; candidate remains unfrozen"
+  },
+  "review": {
+    "reviewer": "root",
+    "session": "fresh-independent-source-evidence-read-only-fs3-gate-2026-08-11",
+    "independence": "Separate bounded gate turn after CF-FS3-06 implementation. The reviewer re-read the current protocol, roadmap, tracker, evidence and source; recomputed all identities; ran an independently shaped adversarial mode matrix; and reran the complete local verification matrix. This is not an external human audit.",
+    "mutationScope": [
+      "this new immutable audit artifact",
+      "the subsequent sole-writer tracker readback if and only if this artifact remains exact"
+    ],
+    "prohibitedAndNotPerformed": [
+      "product, runtime, test, schema, package, documentation, workflow, or existing evidence edits",
+      "provider, authenticated model, helper-model, or benchmark execution",
+      "candidate freeze, capability promotion, or release-state mutation",
+      "user or system global installation",
+      "branch, worktree, stage, commit, tag, push, pull request, publish, or cleanup",
+      "CF-FS4-01 implementation"
+    ]
+  },
+  "reviewedIdentity": {
+    "head": "4f37ae05d56431f2f9db9c4159e20252c3da3b2a",
+    "headTree": "0907c03c88373471c6da8606af61b4f172149c73",
+    "exactTag": "v1.2.17",
+    "packageVersion": "1.2.17",
+    "candidateState": "unfrozen",
+    "candidateDigest": null,
+    "policyManifestVersion": "authority-v1",
+    "policyManifestDigest": "sha256:28112cb62a8868d4371f78c9edefff7489adb0dc6616b9e489c4303b80307393",
+    "policyManifestSha256": "911dc026f1a860f593a6850f7348311f6adac83a8f11627abb23654960b605d0",
+    "profileLockSha256": "6d5cd4d80c873439b9ea207e502593018b6a1ec18d1b23532489fb7c44a8c1b2",
+    "profilePackageDigest": "sha256:dec3246b645e6a564186ccd4dab59612149b97c45e22ddc0b726ad8d819ae983",
+    "currentCarrierAggregate": {
+      "algorithm": "fs3-gate-current-carriers-v1",
+      "domainUtf8": "fs3-gate-current-carriers-v1\n",
+      "files": 19,
+      "identity": "sha256:bd6121bc3b9f71dbc5cf300cf4c1826a53ffdefc2b556d752580cfc313da2f4d",
+      "preAndPostVerificationMatch": true
+    },
+    "preArtifactWorkingTreeObservation": {
+      "porcelainRecords": 314,
+      "trackedRecords": 125,
+      "untrackedRecords": 189,
+      "porcelainSha256": "8a072c8906a82b6d714cf45198cbcacf7106e19929bd09a0e7bb5256fe42458e",
+      "disposition": "Dirty user-owned full-source development tree retained. The audit binds exact current carriers and local behavior but does not claim a clean or frozen release candidate. The audit artifact is the only expected pre-readback addition."
+    },
+    "trackerBeforeAuditSha256": "ae6d96226d0e4333155f17c5f35922ed35c738306d63216f1b89d2a9bb13b23f",
+    "executionProtocolSha256": "aab941a5422a2797fc1a3a1e420764a1f03fffcb4f06e4d04ea70fe3bbc1e470",
+    "roadmapSha256": "cb91fe410add6de293431308436ae7cff34e593c89fe8146a3633d8c85550aa7"
+  },
+  "inputArtifacts": [
+    { "path": "governance/codex-first-product/evidence/fs3/solver-model-routing-implementation.v1.json", "sha256": "a3f78ef8aef296fc4587564c3dc980dd28cf49b178d3e84c426a54e702ed881a", "workItem": "CF-FS3-01" },
+    { "path": "governance/codex-first-product/evidence/fs3/phase-tool-contract-implementation.v1.json", "sha256": "b9bea01b160151e8de019956e9fa9ef78ce2b5072831c905ea2af4a68bcef4b0", "workItem": "CF-FS3-02" },
+    { "path": "governance/codex-first-product/evidence/fs3/acceptance-assurance-contract-implementation.v1.json", "sha256": "d59612873d514c19fb1f0b070c02d444213f864abfda8954d20d6537fdebb2fb", "workItem": "CF-FS3-03" },
+    { "path": "governance/codex-first-product/evidence/fs3/helper-retrieval-contract-implementation.v1.json", "sha256": "7e91e8ad9ecda770e34bb69f720120aff1b8aefebbbf6330b565668c7f45ffb7", "workItem": "CF-FS3-04" },
+    { "path": "governance/codex-first-product/evidence/fs3/semantic-repair-review-contract-implementation.v1.json", "sha256": "90c8fb846011d3fe6d971b31bb3899c19ece608a27b8ab32dc7d64299b2f8985", "workItem": "CF-FS3-05" },
+    { "path": "governance/codex-first-product/evidence/fs3/advanced-capability-interaction-implementation.v1.json", "sha256": "c32b3baf1d079d4eda31ff69df26d2f64eb02fa74d128bac3a937b784a355f22", "workItem": "CF-FS3-06" }
+  ],
+  "currentCarrierHashes": [
+    { "path": "packages/piagent-core/policy/authority-manifest.v1.json", "sha256": "911dc026f1a860f593a6850f7348311f6adac83a8f11627abb23654960b605d0" },
+    { "path": "packages/piagent-core/capabilities/authority-manifest.ts", "sha256": "5009eeff31efea91c65dcc9221fc2690ec26bc557b86366e38506c685583b314" },
+    { "path": "packages/piagent-core/runtime/policy/task-authority-runtime.ts", "sha256": "aa1767a28293323fd585e24dee2d238d53b31a6ce1a04d92942c865aa2be8729" },
+    { "path": "packages/piagent-core/runtime/policy/authority-resume-policy.ts", "sha256": "8674195059554ae5e9fa5dcfc4ddc37e043a37e7ce3638cc64ab78d755646a1b" },
+    { "path": "packages/piagent-core/runtime/solver/solver-shadow.ts", "sha256": "b3a98916cca1fc3eef09800e9abd9a0c90f5582cb11073ca50a4d397c8b9f50b" },
+    { "path": "packages/piagent-core/runtime/model/model-route-policy.ts", "sha256": "15941a39df0860db7c8b66962e11b27a9b7d06d40b6cc2e1a96dc3002d3814fd" },
+    { "path": "packages/piagent-core/runtime/tools/phase-tool-runtime.ts", "sha256": "daa72e9516fc69dbe565d2f961cd889bd4d84c30d0a569bf5ea0a25f963a165f" },
+    { "path": "packages/piagent-core/extensions/acceptance-language-adapters.js", "sha256": "aca32576b3f425889a4f6e7368c35915d7889ef8edad948b96b28164b0a1bda6" },
+    { "path": "packages/piagent-core/extensions/acceptance-contract-semantics.js", "sha256": "e3aad8eaadefe89df9ac049afa88ee872d2d2cd47f434738dc7cd73af10a9bc5" },
+    { "path": "packages/piagent-core/runtime/quality/performance-assurance.ts", "sha256": "316620c9545e4487ee8baf5935d0b694025ecea95a13b51b55980ab8ab1c57bf" },
+    { "path": "packages/piagent-core/runtime/recovery/continuation-budget.ts", "sha256": "0cc6ca588f69f9f8f65d19847ccdda3a1267a903c7cb62e70f76a84e40ab8659" },
+    { "path": "packages/piagent-core/runtime/recovery/semantic-repair-handshake.ts", "sha256": "241f9cd1b0973a0f723798acddde35c10d33c9ce88068d47293e7ccfa95f67d7" },
+    { "path": "packages/piagent-core/runtime/recovery/semantic-repair-runtime.ts", "sha256": "89801984314a2f2984df640dc325d49770038ad0f275665fbb7b17d330111e94" },
+    { "path": "packages/piagent-core/runtime/orchestration/helper-lifecycle.ts", "sha256": "4080fde2d13a1e01f24758c607621cac54b43fcaf428f3f55b5efcd0544baafa" },
+    { "path": "packages/piagent-core/runtime/orchestration/owned-work-budget.ts", "sha256": "6c55aec62eb9995952ffe76333c1f2bdc336cca49dc49c41854ec599db01e722" },
+    { "path": "packages/piagent-core/runtime/context/retrieval-route-policy.ts", "sha256": "035880702f01b9b1d2bef3e4d84641ca6dd47f8c4fb2bdf118cc8239d8f8011b" },
+    { "path": "packages/piagent-core/runtime/hooks/completion-hook.ts", "sha256": "bdeb777fbe0003abe884deeb8832602c2965caa76e3e95822a67fd59b4814007" },
+    { "path": "packages/piagent-core/extensions/piagent-guard.ts", "sha256": "d3da28d77856e8f12c23728d4ae00a1c771946f4a3dab552ebe786d2fd0f92e6" },
+    { "path": "tests/advanced-capability-interactions.test.mjs", "sha256": "1afd3f592a2b16cba5bca707f909e56d6cae74b45d0b8f61686b19993edbcd8f" }
+  ],
+  "workItemReview": [
+    { "id": "CF-FS3-01", "currentTreeVerification": "pass", "finding": "Solver remains deterministic shadow/observe and parent routing remains off by broad default. Route decisions cannot silently substitute or switch the pinned parent model." },
+    { "id": "CF-FS3-02", "currentTreeVerification": "pass", "finding": "Phase shadow records only observations. Strict phase policy is enforced at the call carrier while one provider-visible schema stays stable across intake, execute, verify, review and repair." },
+    { "id": "CF-FS3-03", "currentTreeVerification": "pass", "finding": "Acceptance and performance assurance remain Task-Contract-derived advisory projections. Unsupported and unresolved languages abstain; no broad advisory path spends a model turn." },
+    { "id": "CF-FS3-04", "currentTreeVerification": "pass", "finding": "Helpers remain recommend-first and zero-turn by default. Automatic helper work is read-only and globally dispatch-bounded; explicit owned work retains one writer, finite ceilings, cancellation, privacy and parent-only merge." },
+    { "id": "CF-FS3-05", "currentTreeVerification": "pass", "finding": "Semantic repair and specialist review remain strict-high-risk opt-in, exact-path, one-continuation, mutation-bound and final-verifier-bound with finite handoff." },
+    { "id": "CF-FS3-06", "currentTreeVerification": "pass", "finding": "All 21 advanced-capability pairs across three profiles resolve only their pinned authority. Invalid semantic dependencies, aggregate dispatch overflow, duplicate continuation and non-independent rollback fail closed." }
+  ],
+  "exitConditions": [
+    {
+      "id": "FS3-EXIT-01",
+      "name": "unknown semantic syntax abstains instead of blocking",
+      "status": "pass",
+      "evidence": { "unsupportedVectors": ["Python", "Go", "Rust"], "unresolvedVector": "unknown extension", "proofCapable": false, "automaticContinuation": false }
+    },
+    {
+      "id": "FS3-EXIT-02",
+      "name": "advisory and shadow paths add zero provider turns",
+      "status": "pass",
+      "evidence": { "broadObserveAdviseCapabilitiesChecked": 7, "hardActionsDenied": ["block", "mutate", "model-turn", "dispatch"], "providerInvokedByAudit": false }
+    },
+    {
+      "id": "FS3-EXIT-03",
+      "name": "strict review and repair is bounded and opt-in by pinned policy",
+      "status": "pass",
+      "evidence": { "broadCAP13": "off", "mechanicalCAP13": "off", "strictCAP13": "enforce", "requiredDependencies": ["CAP-09 enforce", "CAP-12 enforce"], "sharedContinuationMaximum": 1, "reviewRoundMaximum": 1 }
+    },
+    {
+      "id": "FS3-EXIT-04",
+      "name": "helpers cannot create a second writer or exceed task budgets",
+      "status": "pass",
+      "evidence": { "broadHelper": "recommend/advise/zero-turn", "automaticDispatchMaximum": 1, "combinedHelperParentDispatchTwoRejected": true, "activeWriterMaximum": 1, "explicitOwnedWorkCeilingsPreserved": true }
+    },
+    {
+      "id": "FS3-EXIT-05",
+      "name": "each promotion can be reverted independently without losing evidence",
+      "status": "pass",
+      "evidence": { "acceptanceOff": "CAP-11 and dependent CAP-13 off; phase and recovery unchanged", "semanticOff": "CAP-13 off only", "nonOffPromotionVectorsRejected": 6, "resumeDisposition": "one durable new-attempt-required event", "oldSnapshotMutation": false }
+    }
+  ],
+  "interactionConditions": [
+    { "id": "FS3-INTERACTION-01", "name": "no hidden authority escalation", "status": "pass", "evidence": { "capabilities": 7, "uniquePairs": 21, "profiles": 3, "profilePairCases": 63, "actionAssertions": 756, "invalidDependencyVectorsRejected": 2, "aggregateDispatchVectorRejected": true } },
+    { "id": "FS3-INTERACTION-02", "name": "no duplicate continuation", "status": "pass", "evidence": { "schedulerCallsites": 2, "sharedLedgerCapabilities": ["CAP-12", "CAP-13"], "maximum": 1, "secondDisposition": "global-budget-exhausted", "crossProcessWinners": 1 } },
+    { "id": "FS3-INTERACTION-03", "name": "no phase-driven provider tool-schema churn", "status": "pass", "evidence": { "phaseModes": ["off", "shadow", "on"], "phases": ["intake", "execute", "verify", "review", "repair"], "phaseSetActiveToolsCalls": 0, "enforcementBoundary": "tool-call guard" } }
+  ],
+  "privacyAndSecurity": {
+    "status": "pass",
+    "findings": [
+      "No raw prompt, provider output, credential, auth path, token, account identity, or helper raw output is added to the interaction evidence.",
+      "Rollback state remains owner-local and journal-bound; active snapshots and terminal evidence are never rewritten.",
+      "Unknown, missing, drifted, cross-task, duplicate, corrupt, symlink-unsafe, or stale evidence remains fail-closed in the rerun matrix.",
+      "No provider, external action, permission widening, destructive action, install, publication, or cleanup occurred during the audit."
+    ]
+  },
+  "baselineComparison": {
+    "reference": "CF-FS3-05 local gate on the same unfrozen development lineage",
+    "fullTests": { "before": "1863/1863", "current": "1870/1870", "regression": false },
+    "guard": { "before": "100/100", "current": "100/100", "regression": false },
+    "piProviderFree": { "before": "12/12", "current": "12/12", "regression": false },
+    "integrity": { "before": "103/103", "current": "103/103", "regression": false },
+    "architectureFiles": { "before": 193, "current": 193 },
+    "providerPerformanceMetrics": "not measured and not claimed; FS4/FS5 own real-task and causal provider evidence"
+  },
+  "verification": [
+    { "command": "independent inline evidence/hash/matrix validator", "result": "pass; 13 implementation hashes, 21 pairs, 63 profile-pair cases and 756 action assertions reproduced" },
+    { "command": "independent inline adversarial profile/rollback/promotion validator", "result": "pass; three profiles, two rollback vectors, six non-promoting values, three invalid combinations and one valid single-dispatch combination" },
+    { "command": "node --test tests/advanced-capability-interactions.test.mjs tests/authority-manifest.test.mjs tests/authority-resume-policy.test.mjs tests/phase-tool-runtime.test.mjs tests/acceptance-recovery-provenance.test.mjs tests/continuation-budget.test.mjs tests/helper-lifecycle.test.mjs tests/owned-work-budget.test.mjs tests/retrieval-route-policy.test.mjs tests/role-policy-binder.test.mjs tests/resume-state.test.mjs tests/handoff-projection.test.mjs", "result": "110/110 pass across 13 suites" },
+    { "command": "PIAGENT_NO_UPDATE_CHECK=1 npm test", "result": "1870/1870 pass across 124 suites" },
+    { "command": "node --test --test-reporter=dot tests/piagent-guard-integration.test.mjs", "result": "100/100 pass" },
+    { "command": "node --test tests/pi-082-host-tool-error.test.mjs tests/pi-082-runtime-phase-e2e.test.mjs", "result": "12/12 pass; provider-free" },
+    { "command": "node --test tests/capability-core.test.mjs tests/package-distribution.test.mjs tests/project-shape.test.mjs tests/architecture-boundaries.test.mjs", "result": "103/103 pass" },
+    { "command": "PIAGENT_NO_UPDATE_CHECK=1 npm run verify", "result": "pass; complete local scaffold" },
+    { "command": "npm run typecheck && npm run architecture:check && npm run docs:check && npm run capabilities:check && capability doctor && git diff --check", "result": "pass; 193 source files, four EN/VI pairs, catalog current, profile lock current" }
+  ],
+  "schemaMigrationRollback": {
+    "providerToolSchema": "unchanged and phase-stable",
+    "taskContract": "unchanged v2",
+    "journalTrajectoryHandoff": "unchanged",
+    "authorityManifest": "authority-v1 schema retained with a new canonical pre-release content digest",
+    "migration": "Prior manifest snapshots are preserved and require a clean new attempt; no in-place rewrite occurs.",
+    "rollback": "Use the independent CAP-11/CAP-13 off-only switches, each feature's declared off/shadow/advisory/recommend mode, or mechanical-only on a clean replacement task.",
+    "authorityPromotion": "none"
+  },
+  "limitations": [
+    "This is local same-repository maintainer evidence, not an external human, provider, field, benchmark, or release audit.",
+    "The tree is dirty and candidate identity remains unfrozen; no release or token-performance conclusion is possible.",
+    "Real-framework calibration, long-horizon interruption/resume, family-disjoint holdout, causal Piagent-vs-Codex and cohort evidence remain FS4-FS7."
+  ]
+}

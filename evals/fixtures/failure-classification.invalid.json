@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "policyVersion": "failure-policy-v1",
+  "evidenceDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "category": "environment",
+  "ownership": "environment",
+  "retryable": true,
+  "sourceMutationPermission": "eligible-in-scope",
+  "confidence": "high",
+  "reasonCodes": ["environment-diagnostic"],
+  "authorizesSourceMutation": true,
+  "outputRef": { "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "chars": 42, "truncated": false, "captureRef": null },
+  "rawOutput": "must not be copied"
+}

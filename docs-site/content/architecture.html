@@ -33,6 +33,40 @@
 
 <section class="section">
   <div class="section-head">
+    <p class="eyebrow">Adaptive runtime</p>
+    <h2 id="adaptive-runtime">Piagent tách runtime decision khỏi Pi wiring</h2>
+    <p>Harness giữ nguyên model người dùng chọn, nhưng mỗi task có context plan nhỏ hơn, có citation, có task journal bền vững và recovery decision rõ ràng.</p>
+  </div>
+  <div class="grid cols-3">
+    <article class="card">
+      <h3>Context planner</h3>
+      <p><span class="inline-code">runtime/context/adaptive-planner.ts</span> chọn budget, retrieval lane, code inclusion và plan receipt theo phase, context pressure, model capability và thinking level.</p>
+    </article>
+    <article class="card">
+      <h3>Task journal</h3>
+      <p><span class="inline-code">extensions/task-journal.js</span> ghi checkpoint cho start, progress, mutation, verifier và completion. Resume tin task contract trước; retention compaction giữ hash anchor.</p>
+    </article>
+    <article class="card">
+      <h3>Repository memory</h3>
+      <p><span class="inline-code">extensions/repository-memory.js</span> chỉ lưu fact có citation và expiry; từ chối raw prompt/output, OAuth material, API key và secret. Hint chỉ dùng token budget còn dư.</p>
+    </article>
+    <article class="card">
+      <h3>Model capability</h3>
+      <p><span class="inline-code">runtime/model/capabilities.ts</span> đọc model family, context window và thinking level làm tín hiệu budget, không đổi provider và không cần API key.</p>
+    </article>
+    <article class="card">
+      <h3>Verification intelligence</h3>
+      <p><span class="inline-code">extensions/verification-intelligence.js</span> phân loại lỗi và chọn verify group theo task scope; scope chạm cả frontend/backend dùng full source verifier.</p>
+    </article>
+    <article class="card">
+      <h3>Execution backend</h3>
+      <p><span class="inline-code">extensions/execution-backend.js</span> giữ Pi OAuth local làm owner; mutation bị block nếu experimental adapter được yêu cầu nhưng chưa có.</p>
+    </article>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-head">
     <p class="eyebrow">Ownership</p>
     <h2 id="state-ownership">Một state chỉ có một source of truth</h2>
     <p>Project profile và lock có thể commit. Task evidence, telemetry, trace, capture và session history là local state. Derived index phải có policy digest và rebuild được.</p>
@@ -43,6 +77,8 @@
       <tbody>
         <tr><td>Project profile + lock</td><td>Project</td><td><span class="inline-code">.pi/piagent-profile*.json</span></td><td>Có</td></tr>
         <tr><td>Task, trace, telemetry, capture</td><td>Runtime</td><td><span class="inline-code">.pi/piagent-state/</span></td><td>Không</td></tr>
+        <tr><td>Task journal + checkpoint</td><td>Runtime</td><td><span class="inline-code">.pi/piagent-state/task-journal/</span></td><td>Không</td></tr>
+        <tr><td>Repository memory fact</td><td>Runtime</td><td><span class="inline-code">.pi/piagent-state/repository-memory/</span></td><td>Không</td></tr>
         <tr><td>Session history</td><td>Pi</td><td>Pi session store</td><td>Không</td></tr>
         <tr><td>Shared instructions</td><td>Project</td><td><span class="inline-code">AGENTS.md</span>, project docs</td><td>Có</td></tr>
       </tbody>

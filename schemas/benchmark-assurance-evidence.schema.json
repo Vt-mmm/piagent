@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.local/schemas/benchmark-assurance-evidence.schema.json",
+  "title": "Piagent benchmark assurance evidence",
+  "oneOf": [
+    { "$ref": "#/$defs/legacyV1" },
+    { "$ref": "#/$defs/custodyV2" }
+  ],
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "completeResults": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "passed"],
+      "properties": {
+        "total": { "type": "integer", "minimum": 1 },
+        "passed": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "mutationResults": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "killed"],
+      "properties": {
+        "total": { "type": "integer", "minimum": 1 },
+        "killed": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "legacyV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "claimTier", "visibility", "familyDisjointSplit", "holdoutManifestDigest", "referenceSolutionDigest", "mutationReportDigest", "calibrationReportDigest", "referenceSolutions", "mutationChecks", "calibration"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "claimTier": { "enum": ["private-holdout", "production-shadow"] },
+        "visibility": { "const": "external-private-holdout" },
+        "familyDisjointSplit": { "const": true },
+        "holdoutManifestDigest": { "$ref": "#/$defs/sha256" },
+        "referenceSolutionDigest": { "$ref": "#/$defs/sha256" },
+        "mutationReportDigest": { "$ref": "#/$defs/sha256" },
+        "calibrationReportDigest": { "$ref": "#/$defs/sha256" },
+        "referenceSolutions": { "$ref": "#/$defs/completeResults" },
+        "mutationChecks": { "$ref": "#/$defs/mutationResults" },
+        "calibration": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sampleSize", "reviewerCount", "agreement"],
+          "properties": {
+            "sampleSize": { "type": "integer", "minimum": 1 },
+            "reviewerCount": { "type": "integer", "minimum": 2 },
+            "agreement": { "type": "number", "minimum": 0.8, "maximum": 1 }
+          }
+        }
+      }
+    },
+    "custodyV2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "claimTier", "visibility", "familyDisjointSplit", "repositoryDisjointSplit", "holdoutManifestDigest", "referenceSolutionDigest", "mutationReportDigest", "calibrationReportDigest", "accessPolicyDigest", "disjointnessReportDigest", "humanRubricDigest", "disagreementReportDigest", "accessControl", "disjointness", "referenceSolutions", "mutationChecks", "calibration"],
+      "properties": {
+        "schemaVersion": { "const": 2 },
+        "claimTier": { "enum": ["private-holdout", "production-shadow"] },
+        "visibility": { "const": "external-private-holdout" },
+        "familyDisjointSplit": { "const": true },
+        "repositoryDisjointSplit": { "const": true },
+        "holdoutManifestDigest": { "$ref": "#/$defs/sha256" },
+        "referenceSolutionDigest": { "$ref": "#/$defs/sha256" },
+        "mutationReportDigest": { "$ref": "#/$defs/sha256" },
+        "calibrationReportDigest": { "$ref": "#/$defs/sha256" },
+        "accessPolicyDigest": { "$ref": "#/$defs/sha256" },
+        "disjointnessReportDigest": { "$ref": "#/$defs/sha256" },
+        "humanRubricDigest": { "$ref": "#/$defs/sha256" },
+        "disagreementReportDigest": { "$ref": "#/$defs/sha256" },
+        "accessControl": { "$ref": "#/$defs/accessControl" },
+        "disjointness": { "$ref": "#/$defs/disjointness" },
+        "referenceSolutions": { "$ref": "#/$defs/completeResults" },
+        "mutationChecks": { "$ref": "#/$defs/mutationResults" },
+        "calibration": { "$ref": "#/$defs/calibrationV2" }
+      }
+    },
+    "accessControl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocolVersion", "policyDigest", "candidateAuthorPromptAccess", "candidateAuthorGraderAccess", "candidateAuthorRepositoryAccess", "operatorAccess", "reviewerAccess", "custodianIndependent", "reviewerIndependent", "appendOnlyAccessLog", "accessLogDigest", "issuedAt", "expiresAt"],
+      "properties": {
+        "protocolVersion": { "const": "e3-custody-v1" },
+        "policyDigest": { "$ref": "#/$defs/sha256" },
+        "candidateAuthorPromptAccess": { "const": "denied-until-rc-freeze" },
+        "candidateAuthorGraderAccess": { "const": "denied-until-rc-freeze" },
+        "candidateAuthorRepositoryAccess": { "const": "denied-until-rc-freeze" },
+        "operatorAccess": { "const": "execute-only" },
+        "reviewerAccess": { "const": "blinded-rubric-and-output" },
+        "custodianIndependent": { "const": true },
+        "reviewerIndependent": { "const": true },
+        "appendOnlyAccessLog": { "const": true },
+        "accessLogDigest": { "$ref": "#/$defs/sha256" },
+        "issuedAt": { "type": "string", "format": "date-time" },
+        "expiresAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "disjointness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["taxonomyDigest", "publicExposureDigest", "reportDigest", "familyDisjoint", "repositoryDisjoint", "scenarioCount", "familyCount", "repositoryCount", "verifiedAt"],
+      "properties": {
+        "taxonomyDigest": { "$ref": "#/$defs/sha256" },
+        "publicExposureDigest": { "$ref": "#/$defs/sha256" },
+        "reportDigest": { "$ref": "#/$defs/sha256" },
+        "familyDisjoint": { "const": true },
+        "repositoryDisjoint": { "const": true },
+        "scenarioCount": { "type": "integer", "minimum": 6 },
+        "familyCount": { "type": "integer", "minimum": 6 },
+        "repositoryCount": { "type": "integer", "minimum": 6 },
+        "verifiedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "calibrationV2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sampleSize", "reviewerCount", "sampledFamilyCount", "doubleScoredCount", "agreementCount", "disagreementCount", "resolvedDisagreementCount", "unresolvedDisagreementCount", "agreement", "blinded", "independentFirstPass", "adjudicatorIndependent", "rubricDigest", "reviewerSetDigest", "sampleSelectionDigest", "disagreementLogDigest", "adjudicationPolicyDigest"],
+      "properties": {
+        "sampleSize": { "type": "integer", "minimum": 12 },
+        "reviewerCount": { "type": "integer", "minimum": 2 },
+        "sampledFamilyCount": { "type": "integer", "minimum": 4 },
+        "doubleScoredCount": { "type": "integer", "minimum": 12 },
+        "agreementCount": { "type": "integer", "minimum": 0 },
+        "disagreementCount": { "type": "integer", "minimum": 0 },
+        "resolvedDisagreementCount": { "type": "integer", "minimum": 0 },
+        "unresolvedDisagreementCount": { "const": 0 },
+        "agreement": { "type": "number", "minimum": 0.8, "maximum": 1 },
+        "blinded": { "const": true },
+        "independentFirstPass": { "const": true },
+        "adjudicatorIndependent": { "const": true },
+        "rubricDigest": { "$ref": "#/$defs/sha256" },
+        "reviewerSetDigest": { "$ref": "#/$defs/sha256" },
+        "sampleSelectionDigest": { "$ref": "#/$defs/sha256" },
+        "disagreementLogDigest": { "$ref": "#/$defs/sha256" },
+        "adjudicationPolicyDigest": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  }
+}

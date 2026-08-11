@@ -1,6 +1,6 @@
 {
   "name": "@piagent/platform",
-  "version": "1.2.17",
+  "version": "1.3.0-rc.1",
   "license": "MIT",
   "publishConfig": {
     "access": "public",
@@ -57,6 +57,7 @@
     "piagent-benchmark": "scripts/piagent-cli.mjs",
     "piagent-usage": "scripts/piagent-cli.mjs",
     "piagent-models": "scripts/piagent-cli.mjs",
+    "piagent-route": "scripts/piagent-cli.mjs",
     "piagent-model-scope": "scripts/piagent-cli.mjs",
     "piagent-mcp": "scripts/piagent-cli.mjs",
     "piagent-subagents": "scripts/piagent-cli.mjs",
@@ -120,6 +121,7 @@
     "benchmark:redaction": "node scripts/redaction-benchmark.mjs",
     "audit:runtime": "bash scripts/audit-runtime-host.sh",
     "release:identity": "node scripts/verify-release-identity.mjs",
+    "release:transition": "node scripts/evaluate-fs-release-transition.mjs",
     "vercel:preflight": "node scripts/verify-vercel-link.mjs",
     "site:build": "node scripts/build-docs-site.mjs",
     "site:preview": "node scripts/preview-docs-site.mjs",

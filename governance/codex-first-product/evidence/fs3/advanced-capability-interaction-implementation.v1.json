@@ -1,0 +1,124 @@
+{
+  "schemaVersion": "codex-first-fs3-advanced-interaction-evidence-v1",
+  "workItem": "CF-FS3-06",
+  "recordedAt": "2026-08-11T00:43:31+07:00",
+  "status": "verified-awaiting-independent-audit",
+  "scope": {
+    "objective": "Close the pairwise interaction and independent rollback contract across solver, phase, acceptance, review, recovery, helpers, resume, and feature modes without provider-visible schema churn or duplicate automatic work.",
+    "providerInvoked": false,
+    "benchmarkRunInvoked": false,
+    "releaseActionInvoked": false,
+    "nextWorkItemStarted": false,
+    "candidateState": "unfrozen",
+    "candidateDigest": null
+  },
+  "reviewedIdentity": {
+    "head": "4f37ae05d56431f2f9db9c4159e20252c3da3b2a",
+    "exactTag": "v1.2.17",
+    "packageVersion": "1.2.17",
+    "policyManifestVersion": "authority-v1",
+    "policyManifestDigest": "sha256:28112cb62a8868d4371f78c9edefff7489adb0dc6616b9e489c4303b80307393",
+    "policyManifestSha256": "911dc026f1a860f593a6850f7348311f6adac83a8f11627abb23654960b605d0",
+    "executionProtocolSha256": "aab941a5422a2797fc1a3a1e420764a1f03fffcb4f06e4d04ea70fe3bbc1e470",
+    "roadmapSha256": "cb91fe410add6de293431308436ae7cff34e593c89fe8146a3633d8c85550aa7",
+    "profileLockSha256": "6d5cd4d80c873439b9ea207e502593018b6a1ec18d1b23532489fb7c44a8c1b2",
+    "profilePackageDigest": "sha256:dec3246b645e6a564186ccd4dab59612149b97c45e22ddc0b726ad8d819ae983",
+    "workingTreeDisposition": "Dirty user-owned full-source development tree retained. This artifact binds the exact current interaction carriers and provider-free verification only; it is not a clean or frozen release candidate."
+  },
+  "interactionContract": {
+    "pairwiseAuthority": "Every advanced capability action is derived only from its pinned manifest entry. Observe and advise cannot block, mutate, dispatch, or schedule a model turn.",
+    "semanticDependencies": "CAP-13 enforce authority requires CAP-09 phase enforcement and CAP-12 recovery enforcement. CAP-11 may be disabled independently and then closes dependent CAP-13.",
+    "dispatchCeiling": "The aggregate automatic dispatch budget across CAP-14 helpers and CAP-15 parent routing cannot exceed the one-unit task-global ceiling.",
+    "continuationCeiling": "CAP-12 recovery and CAP-13 semantic review share one append-only continuation unit. The second request hands off instead of scheduling another turn.",
+    "schemaStability": "Off, shadow, and enforced phase modes retain one provider-visible tool schema; phase policy is enforced at the tool-call boundary without setActiveTools churn.",
+    "unknownSyntax": "Unsupported or unresolved language syntax remains non-proof-capable and cannot promote advisory acceptance into enforcement or recovery.",
+    "independentRollback": "PIAGENT_ACCEPTANCE_ASSURANCE=off closes CAP-11 and dependent CAP-13; PIAGENT_SEMANTIC_REPAIR=off closes CAP-13 only. Neither switch can promote authority, and resume records one durable new-attempt disposition.",
+    "helperOwnership": "CAP-14 recommend remains zero-turn, CAP-14 on retains one read-only automatic dispatch, and CAP-15 cannot add a second dispatch. Existing one-writer and owned-work ceilings remain unchanged."
+  },
+  "pairwiseMatrix": {
+    "capabilities": ["CAP-08", "CAP-09", "CAP-11", "CAP-12", "CAP-13", "CAP-14", "CAP-15"],
+    "profiles": ["broad-default", "mechanical-only", "strict-high-risk"],
+    "uniquePairs": 21,
+    "profilePairCases": 63,
+    "actionAssertions": 756,
+    "status": "pass",
+    "pairs": [
+      { "left": "CAP-08", "right": "CAP-09", "status": "pass" },
+      { "left": "CAP-08", "right": "CAP-11", "status": "pass" },
+      { "left": "CAP-08", "right": "CAP-12", "status": "pass" },
+      { "left": "CAP-08", "right": "CAP-13", "status": "pass" },
+      { "left": "CAP-08", "right": "CAP-14", "status": "pass" },
+      { "left": "CAP-08", "right": "CAP-15", "status": "pass" },
+      { "left": "CAP-09", "right": "CAP-11", "status": "pass" },
+      { "left": "CAP-09", "right": "CAP-12", "status": "pass" },
+      { "left": "CAP-09", "right": "CAP-13", "status": "pass" },
+      { "left": "CAP-09", "right": "CAP-14", "status": "pass" },
+      { "left": "CAP-09", "right": "CAP-15", "status": "pass" },
+      { "left": "CAP-11", "right": "CAP-12", "status": "pass" },
+      { "left": "CAP-11", "right": "CAP-13", "status": "pass" },
+      { "left": "CAP-11", "right": "CAP-14", "status": "pass" },
+      { "left": "CAP-11", "right": "CAP-15", "status": "pass" },
+      { "left": "CAP-12", "right": "CAP-13", "status": "pass" },
+      { "left": "CAP-12", "right": "CAP-14", "status": "pass" },
+      { "left": "CAP-12", "right": "CAP-15", "status": "pass" },
+      { "left": "CAP-13", "right": "CAP-14", "status": "pass" },
+      { "left": "CAP-13", "right": "CAP-15", "status": "pass" },
+      { "left": "CAP-14", "right": "CAP-15", "status": "pass" }
+    ]
+  },
+  "implementation": [
+    { "path": "packages/piagent-core/policy/authority-manifest.v1.json", "sha256": "911dc026f1a860f593a6850f7348311f6adac83a8f11627abb23654960b605d0", "change": "Declares independent off-only configuration provenance for acceptance assurance and semantic repair." },
+    { "path": "packages/piagent-core/capabilities/authority-manifest.ts", "sha256": "5009eeff31efea91c65dcc9221fc2690ec26bc557b86366e38506c685583b314", "change": "Rejects aggregate automatic-dispatch overflow and semantic enforcement without enforced phase and recovery dependencies." },
+    { "path": "packages/piagent-core/runtime/policy/task-authority-runtime.ts", "sha256": "aa1767a28293323fd585e24dee2d238d53b31a6ce1a04d92942c865aa2be8729", "change": "Resolves CAP-11 and CAP-13 kill switches as off-only and closes dependent semantic authority without promoting other modes." },
+    { "path": "packages/piagent-core/runtime/policy/authority-resume-policy.ts", "sha256": "8674195059554ae5e9fa5dcfc4ddc37e043a37e7ce3638cc64ab78d755646a1b", "change": "Persists independent acceptance and semantic rollback as one durable clean-attempt requirement." },
+    { "path": "evals/fixtures/task-authority-snapshot.valid.json", "sha256": "21a10c2e1bb9be2ca0c9d263d1708bbfef170255a731f7616d6b3679e9d4872e", "change": "Rebinds the canonical valid snapshot fixture to the additive pre-release manifest identity." },
+    { "path": "tests/authority-manifest.test.mjs", "sha256": "c11867e1cff0c9266fd5d0aa41f9156c26a69f44b749c9004c081e7829c09c48", "change": "Covers dependency, aggregate dispatch, and off-only environment authority behavior." },
+    { "path": "tests/authority-resume-policy.test.mjs", "sha256": "cf230e70910e40dbf036ec7a319c5220957325368314328414c9bcdd673f0a99", "change": "Covers separate CAP-11 and CAP-13 rollback with one durable disposition each." },
+    { "path": "tests/advanced-capability-interactions.test.mjs", "sha256": "1afd3f592a2b16cba5bca707f909e56d6cae74b45d0b8f61686b19993edbcd8f", "change": "Adds the integrated 21-pair, three-profile authority, rollback, syntax, schema-stability, and continuation gate." },
+    { "path": "docs/authority-manifest.md", "sha256": "c82a4b8ec887407ea6e67ffe5dc462e90061ac0a49cb93defe4cbf29eaf2aad9", "change": "Documents independent semantic rollback, strict dependencies, and aggregate dispatch ceiling." },
+    { "path": "docs/operator-manual-vietnamese.md", "sha256": "1c7bc3b408ac2692c6b4bf6d66f169e15359329a479bf50fbc3beef1ae7eb062", "change": "Documents the Vietnamese operator rollback controls without implying authority promotion." },
+    { "path": "docs/en/architecture.md", "sha256": "7b219e706e1c0c1a8449028ec5090b339d9a139ab1fe1158b348ffb10230b3df", "change": "Documents the English interaction boundary and cache-stable schema invariant." },
+    { "path": "docs/vi/architecture.md", "sha256": "2480023413e221c2d21381516c3815b1c906a7205239cce87ebe97987a9dd77b", "change": "Documents the aligned Vietnamese interaction boundary." },
+    { "path": ".pi/piagent-profile.lock.json", "sha256": "6d5cd4d80c873439b9ea207e502593018b6a1ec18d1b23532489fb7c44a8c1b2", "change": "Re-pins the exact runtime-integrity lock after the policy and runtime changes." }
+  ],
+  "exitEvidence": [
+    { "requirement": "Unknown syntax abstains", "status": "pass", "evidence": "Python, Go, Rust, and unresolved extensions remain non-proof-capable and cannot spend a continuation." },
+    { "requirement": "Advisory and shadow add zero provider turns", "status": "pass", "evidence": "Every broad-default observe/advise capability rejects model-turn and dispatch actions; no provider was invoked." },
+    { "requirement": "Strict review remains bounded and pinned", "status": "pass", "evidence": "CAP-13 enforce requires the exact strict dependency set and shares the one continuation with CAP-12." },
+    { "requirement": "Helpers preserve one writer and global budgets", "status": "pass", "evidence": "Existing helper lifecycle/owned-work tests remain green, and combined CAP-14/CAP-15 automatic dispatch above one is rejected at snapshot creation and validation." },
+    { "requirement": "Each promotion is independently revertible", "status": "pass", "evidence": "CAP-11 and CAP-13 have separate off-only switches; phase/recovery stay intact when only CAP-13 is disabled, while resume records immutable evidence and requires a clean attempt." },
+    { "requirement": "No provider-visible tool-schema churn", "status": "pass", "evidence": "All five trajectory phases across off, shadow, and on modes preserve the exact active tool array and make zero setActiveTools calls." },
+    { "requirement": "No duplicate continuation", "status": "pass", "evidence": "Strict semantic review consumes the shared unit and a following recovery request deterministically returns global-budget-exhausted." }
+  ],
+  "verification": [
+    { "command": "node --test tests/advanced-capability-interactions.test.mjs tests/authority-manifest.test.mjs tests/authority-resume-policy.test.mjs", "result": "25/25 pass" },
+    { "command": "node --test tests/advanced-capability-interactions.test.mjs tests/authority-manifest.test.mjs tests/authority-resume-policy.test.mjs tests/phase-tool-runtime.test.mjs tests/acceptance-recovery-provenance.test.mjs tests/continuation-budget.test.mjs tests/helper-lifecycle.test.mjs tests/owned-work-budget.test.mjs tests/retrieval-route-policy.test.mjs tests/role-policy-binder.test.mjs tests/resume-state.test.mjs tests/handoff-projection.test.mjs", "result": "110/110 pass across 13 suites" },
+    { "command": "PIAGENT_NO_UPDATE_CHECK=1 npm test", "result": "1870/1870 pass across 124 suites" },
+    { "command": "node --test --test-reporter=dot tests/piagent-guard-integration.test.mjs", "result": "100/100 pass" },
+    { "command": "node --test tests/pi-082-host-tool-error.test.mjs tests/pi-082-runtime-phase-e2e.test.mjs", "result": "12/12 pass; provider-free" },
+    { "command": "node --test tests/capability-core.test.mjs tests/package-distribution.test.mjs tests/project-shape.test.mjs tests/architecture-boundaries.test.mjs", "result": "103/103 pass" },
+    { "command": "PIAGENT_NO_UPDATE_CHECK=1 npm run verify", "result": "pass; complete local scaffold" },
+    { "command": "npm run typecheck && npm run architecture:check && npm run docs:check && npm run capabilities:check && git diff --check", "result": "pass; 193 source files within boundaries and line budgets" },
+    { "command": "node scripts/capability-catalog.mjs doctor --profile .pi/piagent-profile.json --lock .pi/piagent-profile.lock.json", "result": "pass; catalog and lock current at sha256:6d5cd4d80c873439b9ea207e502593018b6a1ec18d1b23532489fb7c44a8c1b2" }
+  ],
+  "schemaAndMigration": {
+    "providerToolSchema": "unchanged and phase-stable",
+    "taskContract": "unchanged v2",
+    "authorityManifest": "authority-v1 schema retained; additive config-source provenance and interaction validation produce a new canonical manifest digest",
+    "journalTrajectoryHandoff": "unchanged",
+    "migration": "Existing snapshots bound to the prior manifest digest fail closed through the existing new-attempt path; no active snapshot is rewritten.",
+    "authorityPromotion": "none; broad defaults are unchanged"
+  },
+  "phaseGateDisposition": {
+    "implementation": "verified",
+    "independentAudit": "pending-separate-read-only-session",
+    "fs3Complete": false,
+    "fs4Started": false,
+    "nextExactAction": "Perform an independent source/evidence-read-only audit of the current manifest identity, all 21 pair rows, rollback switches, continuation ownership, provider-visible schema stability, and the full verification matrix."
+  },
+  "deferredEvidence": [
+    "No provider, paired benchmark, token, latency, quality, candidate-freeze, capability-promotion, or release claim was made.",
+    "The prior CF-FS1 independent audit remains historical for its earlier manifest digest; CF-FS3 cannot complete until a separate read-only audit binds the new pre-release manifest identity.",
+    "Provider-backed calibration and Piagent-vs-Codex evidence remain FS4/FS5 after this phase gate passes independent audit."
+  ]
+}

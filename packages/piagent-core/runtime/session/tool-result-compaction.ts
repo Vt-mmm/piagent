@@ -80,6 +80,71 @@ function shouldCompactToolResultText(text: string): boolean {
     || toolResultLineCount(text) > TOOL_RESULT_COMPACT_LINE_THRESHOLD;
 }
 
+function aggregateContentText(content: unknown[]): { text: string; count: number } | undefined {
+  const entries = content.flatMap((block, index) => {
+    if (!block || typeof block !== "object") return [];
+    const typed = block as { type?: unknown; text?: unknown };
+    return typed.type === "text" && typeof typed.text === "string"
+      ? [{ source: `content[${index}].text`, text: typed.text }]
+      : [];
+  });
+  if (entries.length < 2) return undefined;
+  return {
+    count: entries.length,
+    text: entries.map((entry) => `[${entry.source}]\n${entry.text}`).join("\n\n")
+  };
+}
+
+function serializableDetailsText(value: unknown): string | undefined {
+  const seen = new WeakSet<object>();
+  try {
+    return JSON.stringify(value, (_key, item) => {
+      if (typeof item === "bigint") return `${item}n`;
+      if (!item || typeof item !== "object") return item;
+      if (seen.has(item)) return "[circular]";
+      seen.add(item);
+      return item;
+    }, 2);
+  } catch {
+    return undefined;
+  }
+}
+
+type OversizedLeafStats = { count: number; chars: number; maxDepth: number };
+
+function oversizedStringLeaves(value: unknown, seen = new WeakSet<object>(), depth = 0): OversizedLeafStats {
+  if (typeof value === "string") return shouldCompactToolResultText(value)
+    ? { count: 1, chars: value.length, maxDepth: depth }
+    : { count: 0, chars: 0, maxDepth: 0 };
+  if (!value || typeof value !== "object" || depth >= 12 || seen.has(value)) return { count: 0, chars: 0, maxDepth: 0 };
+  seen.add(value);
+  const children = Array.isArray(value) ? value : isPlainRecord(value) ? Object.values(value) : [];
+  const result = { count: 0, chars: 0, maxDepth: 0 };
+  for (const child of children) {
+    const nested = oversizedStringLeaves(child, seen, depth + 1);
+    result.count += nested.count;
+    result.chars += nested.chars;
+    result.maxDepth = Math.max(result.maxDepth, nested.maxDepth);
+  }
+  return result;
+}
+
+function compactDetailsEnvelope(value: unknown, preview: string): unknown {
+  if (Array.isArray(value)) return [{ piagentCompactedDetails: preview }];
+  if (!isPlainRecord(value)) return preview;
+  const preserved: Record<string, unknown> = {};
+  let preservedChars = 0;
+  for (const [key, item] of Object.entries(value)) {
+    if (Object.keys(preserved).length >= 16) break;
+    if (!(item === null || typeof item === "boolean" || typeof item === "number" || (typeof item === "string" && item.length <= 200))) continue;
+    const chars = key.length + String(item).length;
+    if (preservedChars + chars > 1_000) break;
+    preserved[key] = item;
+    preservedChars += chars;
+  }
+  return { ...preserved, piagentCompactedDetails: preview };
+}
+
 function clipPreviewLine(line: string, maxChars = 260): string {
   if (line.length <= maxChars) return line;
   return `${line.slice(0, maxChars).trimEnd()} ... [line clipped]`;
@@ -257,6 +322,23 @@ export function compactToolResultTextContent(
   cache: Map<string, ToolResultCaptureSummary>
 ): { content: unknown; captures: ToolResultCaptureSummary[] } {
   if (!Array.isArray(content)) return { content, captures: [] };
+  const aggregate = aggregateContentText(content);
+  if (aggregate && shouldCompactToolResultText(aggregate.text)) {
+    const source = `content[*].text (${aggregate.count} blocks)`;
+    const capture = writeToolResultCapture(cwd, event, ctx, source, aggregate.text, cache);
+    const preview = compactToolResultPreview(String(event?.toolName ?? "tool"), source, aggregate.text, capture);
+    let emitted = false;
+    return {
+      content: content.flatMap((block) => {
+        const typed = block && typeof block === "object" ? block as { type?: unknown; text?: unknown } : undefined;
+        if (typed?.type !== "text" || typeof typed.text !== "string") return [block];
+        if (emitted) return [];
+        emitted = true;
+        return [{ ...block, text: preview }];
+      }),
+      captures: [capture]
+    };
+  }
   const captures: ToolResultCaptureSummary[] = [];
   const compacted = content.map((block, index) => {
     if (!block || typeof block !== "object") return block;
@@ -283,6 +365,19 @@ export function compactToolResultDetails(
   source = "details",
   depth = 0
 ): unknown {
+  if (depth === 0 && (Array.isArray(value) || isPlainRecord(value))) {
+    const serialized = serializableDetailsText(value);
+    const largeLeaves = oversizedStringLeaves(value);
+    const nonLargePayloadChars = serialized ? Math.max(0, serialized.length - largeLeaves.chars) : 0;
+    const preserveOneReachableLeaf = largeLeaves.count === 1
+      && largeLeaves.maxDepth <= 6
+      && nonLargePayloadChars <= TOOL_RESULT_COMPACT_CHAR_THRESHOLD;
+    if (serialized && shouldCompactToolResultText(serialized) && !preserveOneReachableLeaf) {
+      const capture = writeToolResultCapture(cwd, event, ctx, source, serialized, cache);
+      captures.push(capture);
+      return compactDetailsEnvelope(value, compactToolResultPreview(String(event?.toolName ?? "tool"), source, serialized, capture));
+    }
+  }
   if (typeof value === "string") {
     if (!shouldCompactToolResultText(value)) return value;
     const capture = writeToolResultCapture(cwd, event, ctx, source, value, cache);

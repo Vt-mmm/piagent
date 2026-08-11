@@ -6,6 +6,46 @@ const LOCK_WAIT_MS = 500;
 const LOCK_STALE_MS = 5_000;
 const sleepBuffer = new Int32Array(new SharedArrayBuffer(4));
 
+function processAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code === "EPERM";
+  }
+}
+
+function recoverDeadLock(lockPath) {
+  const recoveryPath = `${lockPath}.recovery`;
+  let recoveryDescriptor;
+  try {
+    recoveryDescriptor = fs.openSync(recoveryPath, "wx", 0o600);
+    let stat;
+    let owner = null;
+    try {
+      stat = fs.lstatSync(lockPath);
+      if (!stat.isFile() || stat.isSymbolicLink()) return false;
+      owner = Number.parseInt(fs.readFileSync(lockPath, "utf8").trim(), 10);
+    } catch (error) {
+      return error?.code === "ENOENT";
+    }
+    const validDeadOwner = Number.isInteger(owner) && owner > 0 && !processAlive(owner);
+    const malformedAndStale = (!Number.isInteger(owner) || owner <= 0) && Date.now() - stat.mtimeMs > LOCK_STALE_MS;
+    if (!validDeadOwner && !malformedAndStale) return false;
+    fs.rmSync(lockPath, { force: true });
+    return true;
+  } catch (error) {
+    if (error?.code === "EEXIST") return false;
+    throw error;
+  } finally {
+    if (recoveryDescriptor !== undefined) {
+      try { fs.closeSync(recoveryDescriptor); } catch {}
+      fs.rmSync(recoveryPath, { force: true });
+    }
+  }
+}
+
 function ensurePrivateParent(filePath, projectRoot) {
   const safeFilePath = projectRoot
     ? resolveLocalStatePath(projectRoot, filePath, { label: "Local JSONL state" })
@@ -30,14 +70,7 @@ function withFileLock(filePath, action) {
       fs.writeFileSync(descriptor, `${process.pid}\n`);
     } catch (error) {
       if (error?.code !== "EEXIST") throw error;
-      try {
-        if (Date.now() - fs.lstatSync(lockPath).mtimeMs > LOCK_STALE_MS) {
-          fs.rmSync(lockPath, { force: true });
-          continue;
-        }
-      } catch (statError) {
-        if (statError?.code === "ENOENT") continue;
-      }
+      if (recoverDeadLock(lockPath)) continue;
       if (Date.now() >= deadline) {
         throw new Error(`Timed out waiting for state lock: ${path.basename(filePath)}`);
       }

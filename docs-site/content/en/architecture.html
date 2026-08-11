@@ -15,6 +15,22 @@
 
 <section class="section">
   <div class="section-head">
+    <p class="eyebrow">Adaptive runtime</p>
+    <h2 id="adaptive-runtime">Piagent now separates runtime decisions from Pi wiring</h2>
+    <p>The harness keeps the model choice intact, but every task gets a smaller, cited context plan, durable task journal, and explicit recovery decision.</p>
+  </div>
+  <div class="grid cols-3">
+    <article class="card"><h3>Context planner</h3><p><span class="inline-code">runtime/context/adaptive-planner.ts</span> chooses budget, retrieval lane, code inclusion, and a plan receipt from phase, context pressure, model capability, and thinking level.</p></article>
+    <article class="card"><h3>Task journal</h3><p><span class="inline-code">extensions/task-journal.js</span> records start, progress, mutation, verifier, and completion checkpoints. Resume trusts the task contract first; retention compaction preserves hash anchors.</p></article>
+    <article class="card"><h3>Repository memory</h3><p><span class="inline-code">extensions/repository-memory.js</span> stores only cited, expiring facts and rejects raw prompts, outputs, OAuth material, API keys, and secrets. Hints use only unused context-plan budget.</p></article>
+    <article class="card"><h3>Model capability</h3><p><span class="inline-code">runtime/model/capabilities.ts</span> reads model family, context window, and thinking level as budget signals without switching providers or requiring API keys.</p></article>
+    <article class="card"><h3>Verification intelligence</h3><p><span class="inline-code">extensions/verification-intelligence.js</span> classifies failures and chooses a targeted verifier from task scope; mixed frontend/backend scope uses the full source verifier.</p></article>
+    <article class="card"><h3>Execution backend</h3><p><span class="inline-code">extensions/execution-backend.js</span> keeps local Pi OAuth as owner and blocks mutation when a requested experimental adapter is unavailable.</p></article>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-head">
     <p class="eyebrow">Ownership</p>
     <h2 id="state-ownership">Each state has one source of truth</h2>
     <p>Project profiles and locks may be committed. Task evidence, telemetry, traces, captures, and session history are local state. Derived indexes carry a policy digest and remain rebuildable.</p>
@@ -25,6 +41,8 @@
       <tbody>
         <tr><td>Project profile and lock</td><td>Project</td><td><span class="inline-code">.pi/piagent-profile*.json</span></td><td>Yes</td></tr>
         <tr><td>Task, trace, telemetry, capture</td><td>Runtime</td><td><span class="inline-code">.pi/piagent-state/</span></td><td>No</td></tr>
+        <tr><td>Task journal and checkpoints</td><td>Runtime</td><td><span class="inline-code">.pi/piagent-state/task-journal/</span></td><td>No</td></tr>
+        <tr><td>Repository memory facts</td><td>Runtime</td><td><span class="inline-code">.pi/piagent-state/repository-memory/</span></td><td>No</td></tr>
         <tr><td>Session history</td><td>Pi</td><td>Pi session store</td><td>No</td></tr>
         <tr><td>Shared instructions</td><td>Project</td><td><span class="inline-code">AGENTS.md</span>, project docs</td><td>Yes</td></tr>
       </tbody>

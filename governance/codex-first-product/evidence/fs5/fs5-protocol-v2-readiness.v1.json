@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-08-11",
+  "workItem": "CF-FS5-04",
+  "purpose": "Reopen FS5 as a new finite candidate after preserving the terminal v1 run; do not resume or relabel historical evidence.",
+  "historicalRun": {
+    "evidence": "fs5-final-candidate-pilot-stop.v2.json",
+    "disposition": "immutable-terminal-incomplete",
+    "reusedAsCurrentEvidence": false
+  },
+  "rootCause": {
+    "observed": "The provider emitted only overloaded error turns with exact measured zero usage and exited zero.",
+    "previousMisclassification": "The attempt reached completed-record validation and was rejected as measured-record-identity-or-paired-fixture-mismatch.",
+    "systemicCorrection": "Classify exact-zero overload diagnostics as retryable provider infrastructure before completed-record validation.",
+    "scope": "benchmark harness only; no evaluator, grader, suite, task fixture or measured evidence was weakened"
+  },
+  "protocol": {
+    "path": "evals/fs5-pilot-protocol.v2.json",
+    "sha256": "5d4c9836d0d4d0427a07cff62f8d36bc8c76d51e50c285a8761d638ca3faab4f",
+    "comparison": "piagent-versus-controlled-codex-cli",
+    "model": "openai-codex/gpt-5.6-luna",
+    "thinking": "medium",
+    "maximumInfrastructureRetriesPerOutcome": 1,
+    "retryDelaySeconds": 15,
+    "advanceAfterRetryRequires": "provider-infrastructure + measured-but-unaccepted + exact fresh=0; every failed attempt remains in the infrastructure ledger",
+    "unknownUsageAllowsAdvance": false,
+    "claims": "diagnostic/engineering-promotion only; no token, generalization or release claim"
+  },
+  "bindings": {
+    "benchmarkForensics": "14ed4528a9f77ca11ff034ef0d27bdae616a308fd2a08ca781e8f4e1e485ac76",
+    "protocolEnforcement": "5aa3533785cde5b39b5b59ca5ffcc0e8f4bc764763d48519a8b8d956da749920",
+    "protocolTests": "bee7771f66f7cf028efbcef40ba2f65cf372d153cd55dec0958aa6da6676ccf5",
+    "runnerTests": "c0862f096630c1b11b7962ad17dd7f09eddd9346a7fb6c57590a0794714634ce",
+    "verifyLocal": "a41f03b06b77111a7c4926d78531fafd32a61bc10cb4bf4fd7b40e460404a0d3"
+  },
+  "verification": {
+    "focusedInfrastructure": "3/3 PASS",
+    "protocolCoreRecovery": "45/45 PASS",
+    "benchmarkRunnerAndSuites": "47/47 PASS",
+    "typecheck": "PASS",
+    "architecture": "PASS (198 source files)",
+    "diffCheck": "PASS"
+  },
+  "finiteExecution": [
+    "Freeze one new exact candidate after this governance checkpoint.",
+    "Run provider-free preflight for Canary A.",
+    "Execute Canary A once; stop and evaluate the pair.",
+    "Only on every gate pass execute Canary B once; stop and evaluate the pair.",
+    "Only on both canaries passing execute the six-family pilot in two-session inspection chunks.",
+    "A second occurrence of the same failure class, unknown usage, quality/workflow failure, token ratio above 1.25, duration ratio above 1.5 or any safety/scope failure closes the provider lane."
+  ],
+  "state": "local-readiness-passed-provider-preflight-next"
+}

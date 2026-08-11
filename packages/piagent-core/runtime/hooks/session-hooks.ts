@@ -22,6 +22,9 @@ type SessionHookDependencies = {
     maxManifestFiles: number,
     event: string
   ) => TaskContract | undefined;
+  onTurnEnd?: (ctx: ExtensionContext) => void;
+  onAgentSettled?: (ctx: ExtensionContext) => void;
+  beforeShutdown?: (ctx: ExtensionContext) => void;
 };
 
 export function registerSessionHooks(pi: ExtensionAPI, dependencies: SessionHookDependencies): void {
@@ -64,6 +67,7 @@ export function registerSessionHooks(pi: ExtensionAPI, dependencies: SessionHook
       usage: message.usage,
       contextUsage: ctx.getContextUsage()
     });
+    dependencies.onTurnEnd?.(ctx);
   });
 
   pi.on("agent_settled", async (_event, ctx) => {
@@ -75,6 +79,7 @@ export function registerSessionHooks(pi: ExtensionAPI, dependencies: SessionHook
       taskRunId: task?.taskRunId,
       taskOutcome: task?.trace.outcome
     });
+    dependencies.onAgentSettled?.(ctx);
   });
 
   pi.on("session_compact", async (event, ctx) => {
@@ -87,6 +92,7 @@ export function registerSessionHooks(pi: ExtensionAPI, dependencies: SessionHook
   });
 
   pi.on("session_shutdown", async (event, ctx) => {
+    dependencies.beforeShutdown?.(ctx);
     flushObservedTaskContext(
       pi,
       ctx,

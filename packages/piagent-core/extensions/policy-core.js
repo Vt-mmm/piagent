@@ -1,9 +1,8 @@
+import { excludedFindSelectorValue, findSelectorOption, SEARCH_COMMANDS, SEARCH_FILE_OPTIONS, SEARCH_GLOB_OPTIONS,
+  SEARCH_PATTERN_OPTIONS, searchSelectorIsExclusion, searchSelectorWithinToken } from "./shell-selector-policy.js";
+
 const PATH_REDIRECT_OPERATORS = new Set(["<", ">", ">>", "1>", "1>>", "2>", "2>>", "&>", "&>>"]);
 const DATA_ONLY_COMMANDS = new Set(["echo", "printf"]);
-const SEARCH_COMMANDS = new Set(["grep", "egrep", "fgrep", "rg", "ripgrep"]);
-const SEARCH_FILE_OPTIONS = new Set(["-f", "--file", "--exclude-from", "--ignore-file"]);
-const SEARCH_GLOB_OPTIONS = new Set(["-g", "--glob", "--iglob", "--include", "--exclude"]);
-const SEARCH_PATTERN_OPTIONS = new Set(["-e", "--regexp", "--pattern"]);
 const ASSIGNMENT_BUILTINS = new Set(["export", "readonly", "declare", "typeset", "local"]);
 const SHELL_COMMANDS = new Set(["bash", "sh", "zsh"]);
 
@@ -46,9 +45,7 @@ export function normalizePathCandidate(candidate) {
   if (typeof candidate !== "string") return "";
   const raw = candidate.trim().replace(/^['"]|['"]$/g, "");
   if (/^\/+$/.test(raw)) return "/";
-  return candidate
-    .trim()
-    .replace(/^['"]|['"]$/g, "")
+  return raw
     .replace(/\\/g, "/")
     .replace(/^\.\//, "")
     .replace(/\/+/g, "/")
@@ -520,7 +517,7 @@ function expandShellBraces(word, mask = "0".repeat(word.length), depth = 0) {
  * @param {{value: string, literalMask?: string}} redirect
  * @returns {{value: string, mask: string}[]}
  */
-function redirectionTargetWords(redirect) {
+export function redirectionTargetWords(redirect) {
   // The scanner writes one mask character per target character, so the fallback
   // is a defensive default rather than a reachable branch. Unmasked is the safe
   // direction of the two: it expands, and expanding offers more to check.
@@ -1229,11 +1226,22 @@ export function evaluateExecPolicyCore(command, options) {
     segments.push({ command: segment, expanded: text, words, matches, warnings });
   }
 
-  // The expanded text of every segment as well as the raw command, so a pattern
-  // written as `git push` still matches when the author typed `git p{ush,}`.
-  const normalizedCommand = [command, ...segments.map((entry) => entry.expanded)].join("\n").toLowerCase();
+  const confirmationPatternMatches = (pattern, words) => {
+    const expected = shellWords(String(pattern ?? ""));
+    if (expected.length === 0) return false;
+    const executableWords = stripWrapper(words);
+    if (arrayStartsWith(executableWords, expected)) return true;
+    if (expected.length !== 1) return false;
+    const action = expected[0];
+    const executable = commandBasename(executableWords[0] ?? "");
+    if (["npm", "pnpm", "yarn", "bun"].includes(executable)) {
+      const args = executableWords.slice(1).filter((word) => !word.startsWith("-"));
+      return args[0] === action || (args[0] === "run" && args[1] === action);
+    }
+    return ["just", "make", "task"].includes(executable) && executableWords.slice(1).some((word) => word === action);
+  };
   for (const pattern of policy.requireConfirmationPatterns ?? []) {
-    if (normalizedCommand.includes(String(pattern).toLowerCase())) {
+    if (segments.some((entry) => confirmationPatternMatches(pattern, entry.words))) {
       reasons.push(`Confirmation required by legacy policy pattern: ${pattern}`);
       break;
     }
@@ -1942,7 +1950,7 @@ function xargsPipelineInputCandidates(command) {
   return candidates;
 }
 
-function extractAttachedRedirectionPaths(segment) {
+export function extractAttachedRedirectionPaths(segment) {
   const paths = [];
   let quote;
   let escaped = false;
@@ -2062,15 +2070,6 @@ function extractAttachedRedirectionPaths(segment) {
   return paths;
 }
 
-export function shellHasFileWriteRedirection(command) {
-  return splitShellSegments(String(command ?? "")).some((segment) => (
-    extractAttachedRedirectionPaths(segment)
-      .filter((redirect) => redirect.writesFile)
-      .flatMap(redirectionTargetWords)
-      .length > 0
-  ));
-}
-
 export function extractShellPathCandidates(command) {
   const candidates = [...xargsPipelineInputCandidates(command)];
   const assignments = new Map();
@@ -2094,12 +2093,12 @@ export function extractShellPathCandidates(command) {
       .map((entry) => entry.value)
       .filter((word) => word !== expanded));
   };
-  const pending = splitShellSegments(command).map((segment) => ({ segment, depth: 0 }));
+  const rootSegments = splitShellSegments(command);
+  const pending = rootSegments.map((segment, index) => ({ segment, depth: 0, piped: rootSegments[index + 1] !== undefined && feedsFileOperandConsumer(rootSegments[index + 1], assignments) }));
   while (pending.length > 0) {
-    const { segment, depth } = pending.shift();
-    // One stream for the command name and for the operands alike: `{cat,.env}`
-    // is a `cat` whose only argument came out of the same word, and reading the
-    // name from one list and the arguments from another lost it.
+    const { segment, depth, piped } = pending.shift();
+    // One stream for command and operands: `{cat,.env}` expands to a `cat` whose
+    // argument must not be lost by reading its command from a different list.
     const { words, text, tokens, braceText, evaluable } = expandedSegment(segment, assignments);
     const expandedWords = words;
     rememberLeadingShellAssignments(words, assignments);
@@ -2164,6 +2163,7 @@ export function extractShellPathCandidates(command) {
           if (pathPart) addCandidate(pathPart, argumentTokens[index].variableActive, argumentTokens[index].braceActive);
           continue;
         }
+        if (excludedFindSelectorValue(argumentTokens, index, commandName, piped)) continue;
         const optionEquals = word.indexOf("=");
         const optionName = optionEquals > 0 ? word.slice(0, optionEquals) : word;
         const inlineOptionValue = optionEquals > 0 ? word.slice(optionEquals + 1) : undefined;
@@ -2191,17 +2191,16 @@ export function extractShellPathCandidates(command) {
           continue;
         }
         if (attachedRgOption?.option === "-g") {
-          addCandidate(attachedRgOption.value, argumentTokens[index].variableActive, argumentTokens[index].braceActive);
+          const selector = argumentTokens[index].variableActive ? expandKnownShellVariables(attachedRgOption.value, assignments) : attachedRgOption.value;
+          if (!searchSelectorIsExclusion(commandName, "-g", selector)) addCandidate(attachedRgOption.value, argumentTokens[index].variableActive, argumentTokens[index].braceActive);
           continue;
         }
         if (SEARCH_COMMANDS.has(commandName) && (SEARCH_FILE_OPTIONS.has(optionName) || SEARCH_GLOB_OPTIONS.has(optionName))) {
-          if (inlineOptionValue !== undefined) {
-            addCandidate(inlineOptionValue, argumentTokens[index].variableActive, argumentTokens[index].braceActive);
-          } else {
-            const target = argumentTokens[index + 1];
-            if (target) addCandidate(target.value, target.variableActive, target.braceActive);
-            index += 1;
-          }
+          const target = inlineOptionValue === undefined ? argumentTokens[index + 1] : argumentTokens[index];
+          const targetValue = inlineOptionValue ?? target?.value;
+          const selector = target?.variableActive && targetValue !== undefined ? expandKnownShellVariables(targetValue, assignments) : targetValue;
+          if (targetValue !== undefined && !searchSelectorIsExclusion(commandName, optionName, selector)) addCandidate(targetValue, target?.variableActive, target?.braceActive);
+          if (inlineOptionValue === undefined) index += 1;
           if (SEARCH_FILE_OPTIONS.has(optionName) && (optionName === "-f" || optionName === "--file")) searchPatternPending = false;
           continue;
         }
@@ -2225,18 +2224,18 @@ export function extractShellPathCandidates(command) {
     }
     if (depth < MAX_NESTED_DEPTH) {
       for (const nestedCommand of extractNestedCommands(braceText, expandedWords)) {
-        for (const nestedSegment of splitShellSegments(nestedCommand)) {
+        const nestedSegments = splitShellSegments(nestedCommand);
+        for (const [nestedSegmentIndex, nestedSegment] of nestedSegments.entries()) {
           // `$(echo -e '.en\x76')` prints `.env`, and `printf` decodes its
           // format the same way. The backslash is gone by the time the body is
           // tokenized, so the escape is read back off the raw text -- the same
           // reading the `xargs` producer already gets.
-          const nestedWords = shellWords(nestedSegment);
-          const nestedName = commandBasename(stripWrapper(expandedSegment(nestedSegment, assignments).words)[0] ?? "");
+          const nestedWords = shellWords(nestedSegment); const nestedName = commandBasename(stripWrapper(expandedSegment(nestedSegment, assignments).words)[0] ?? "");
           const nestedIndex = producerCommandIndex(nestedWords, nestedName);
           if (nestedName === "printf" || (nestedName === "echo" && echoEscapeMode(nestedWords, nestedIndex))) {
             for (const literal of escapedLiteralCandidates(nestedSegment)) addCandidate(literal, false);
           }
-          pending.push({ segment: nestedSegment, depth: depth + 1 });
+          pending.push({ segment: nestedSegment, depth: depth + 1, piped: nestedSegments[nestedSegmentIndex + 1] !== undefined && feedsFileOperandConsumer(nestedSegments[nestedSegmentIndex + 1], assignments) });
         }
       }
     }
@@ -2312,6 +2311,7 @@ export function extractShellGlobCandidates(command) {
           index += 1;
           continue;
         }
+        if (excludedFindSelectorValue(argumentTokens, index, commandName, piped)) continue;
         const optionEquals = token.value.indexOf("=");
         const optionName = optionEquals > 0 ? token.value.slice(0, optionEquals) : token.value;
         const inlineOptionValue = optionEquals > 0 ? token.value.slice(optionEquals + 1) : undefined;
@@ -2333,7 +2333,7 @@ export function extractShellGlobCandidates(command) {
           const expanded = token.variableActive
             ? expandKnownShellVariables(attachedRgOption.value, assignments)
             : attachedRgOption.value;
-          candidates.push(expanded);
+          if (!searchSelectorIsExclusion(commandName, "-g", expanded)) candidates.push(expanded);
           continue;
         }
         if (SEARCH_COMMANDS.has(commandName) && (SEARCH_FILE_OPTIONS.has(optionName) || SEARCH_GLOB_OPTIONS.has(optionName))) {
@@ -2342,7 +2342,8 @@ export function extractShellGlobCandidates(command) {
           if (targetValue !== undefined) {
             const targetVariableActive = inlineOptionValue === undefined ? target?.variableActive : token.variableActive;
             const expanded = targetVariableActive ? expandKnownShellVariables(targetValue, assignments) : targetValue;
-            if (SEARCH_GLOB_OPTIONS.has(optionName) || target?.activeGlob || (target?.unquotedVariable && /[*?{\[]/.test(expanded))) {
+            if (!searchSelectorIsExclusion(commandName, optionName, expanded)
+              && (SEARCH_GLOB_OPTIONS.has(optionName) || target?.activeGlob || (target?.unquotedVariable && /[*?{\[]/.test(expanded)))) {
               candidates.push(expanded);
             }
           }
@@ -2512,42 +2513,41 @@ export function unresolvedPathExpansions(command) {
       const argumentTokens = executableArgumentTokens(tokens, words, commandName);
       for (let index = 0; index < argumentTokens.length; index += 1) {
         const token = argumentTokens[index];
+        if (excludedFindSelectorValue(argumentTokens, index, commandName, piped)) continue;
+        const attachedRgOption = ["rg", "ripgrep"].includes(commandName) ? attachedRgShortOption(token.value) : undefined;
+        const embeddedSelector = searchSelectorWithinToken(commandName, token.value, attachedRgOption);
+        if (token.variableActive && embeddedSelector) {
+          const expanded = expandKnownShellVariables(embeddedSelector.value, assignments);
+          if (/\$\{|\$\(|`|\$[A-Za-z_]/.test(expanded)) unresolved.push(token.value);
+          continue;
+        }
+        const previousOption = argumentTokens[index - 1]?.value ?? "";
+        const expandedToken = token.variableActive ? expandKnownShellVariables(token.value, assignments) : token.value;
+        if (searchSelectorIsExclusion(commandName, previousOption, expandedToken)) {
+          if (token.variableActive && /\$\{|\$\(|`|\$[A-Za-z_]/.test(expandedToken)) unresolved.push(token.value);
+          continue;
+        }
+        if (SEARCH_COMMANDS.has(commandName) && SEARCH_PATTERN_OPTIONS.has(previousOption)) continue;
         if (!token.variableActive) continue;
         if (token.value.startsWith("-")) continue;
-        // `grep`'s first bare operand is the pattern, so the command does not
-        // open files by name -- but the word after `-f` does, and
-        // `grep -f ${X:+.env} README.md` reads a protected file with the
-        // command sitting outside every list that says so.
-        const namedByFlag = SEARCH_COMMANDS.has(commandName)
-          && SEARCH_FILE_OPTIONS.has(argumentTokens[index - 1]?.value ?? "");
-        // `dd if=.en$(echo v)` hides a filename in an operand value. Reading the
-        // key as literal text would refuse every `TAG=build$(date +%s)` too, so
-        // the value is taken on its own and only when it is shaped like a path.
+        // Bare grep operands start with a pattern, but values of file/glob flags
+        // and find selectors are paths or selectors whose expansion must resolve.
+        const namedByFlag = (SEARCH_COMMANDS.has(commandName) && (SEARCH_FILE_OPTIONS.has(previousOption) || SEARCH_GLOB_OPTIONS.has(previousOption)))
+          || (commandName === "find" && findSelectorOption(previousOption));
+        // Inspect only the path-shaped value in operands such as `dd if=.en$V`;
+        // treating every `KEY=value` as a path would refuse ordinary metadata.
         const operandValue = operandValuePath(token.value);
         const word = operandValue ?? token.value;
-        if (operandValue !== undefined
-          && !operandValue.includes("/")
-          && !operandValue.startsWith(".")) continue;
+        if (operandValue !== undefined && !operandValue.includes("/") && !operandValue.startsWith(".")) continue;
         if (word.startsWith("-")) continue;
-        const expanded = expandKnownShellVariables(word, assignments);
+        const expanded = operandValue === undefined ? expandedToken : expandKnownShellVariables(word, assignments);
         const basename = expanded.slice(expanded.lastIndexOf("/") + 1);
-        // A name assembled out of pieces is a filename wherever it appears. A
-        // word that is *nothing but* one parameter expansion is a filename only
-        // where the command says so -- and there it is refused too, because the
-        // whole point of this net is that a form nobody has modelled yet should
-        // cost a question rather than a miss. Widening it to every command would
-        // ask about `git commit -m $MSG`. Words printed into an `xargs cat` are
-        // operands of that `cat`, whatever printed them. And a name nobody can
-        // evaluate could be a command that opens files: `${X:+cat} ${X:+.env}`
-        // reads a protected file whenever the variable is set, and both halves
-        // read as words naming nothing. This only fires when the operand is
-        // unresolved too, so a named command with a literal operand is untouched.
-        const opensFiles = FILE_OPERAND_COMMANDS.has(commandName)
-          || piped
-          || namedByFlag
+        // Piecewise names always fail closed. A bare expansion does so only in a
+        // known file/selector position, an xargs file pipeline, or a dynamic command.
+        const opensFiles = FILE_OPERAND_COMMANDS.has(commandName) || piped || namedByFlag
           || commandNameIsDynamic(commandName);
         const bare = opensFiles && holdsUnresolvedParameter(basename);
-        if (assemblesFilename(basename) || bare) unresolved.push(token.value);
+        if ((namedByFlag && /\$\{|\$\(|`|\$[A-Za-z_]/.test(expanded)) || assemblesFilename(basename) || bare) unresolved.push(token.value);
       }
     }
     if (depth < MAX_NESTED_DEPTH) {

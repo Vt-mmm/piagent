@@ -95,7 +95,9 @@ Quy tắc:
 
 ## Monorepo và workspace
 
-Một project = một thư mục mở `pi`. Guard đọc profile tại `<cwd>/.pi/piagent-profile.json` và không đi ngược lên tìm, nên mở `pi` ở thư mục cha chứa nhiều project sẽ bỏ qua profile của từng project con và chạy unprofiled.
+Một project = một thư mục mở `pi`. Guard đọc profile tại `<cwd>/.pi/piagent-profile.json` và không đi ngược lên tìm, nên nếu mở `pi` ở thư mục cha thì thư mục cha đó cũng phải có `.pi/piagent-profile.json`.
+
+Workspace cha chứa nhiều Git repo riêng được hỗ trợ cho luồng BE-to-FE nội bộ: ví dụ mở `pi` tại `Working/`, bên trong có `v-nexus-frontend/` và `v-nexus-backend/`, mỗi thư mục con vẫn là Git repo riêng. Source-change task dùng Git evidence từ các repo con trực tiếp và prefix file bằng tên repo (`v-nexus-frontend/src/...`). File nằm ở workspace cha nhưng không thuộc repo con, ví dụ `Working/plans/**`, dùng bounded file-digest evidence. Scope ghi nên trỏ rõ vào vùng được phép, ví dụ `v-nexus-frontend/**` và `plans/**`.
 
 Detect FE/BE đọc theo thứ tự:
 
@@ -123,10 +125,11 @@ Rule nằm ở `packages/piagent-core/extensions/project-shape.js`. Cả `piagen
 | `mobile` | React Native/Flutter | npm test / flutter test nếu tool có |
 | `docs` | Docs portal/manual | markdown diff check + test nếu project có |
 
-`be-readonly-fe` giữ read-only cho backend ở root (`backend`, `server`, `api`), ở một cấp dưới `apps/` và `packages/` (`api`, `server`, `backend`), toàn bộ `services/*`, và mọi `**/migrations/**`. Profile built-in là điểm khởi đầu, không phải danh sách đầy đủ — sửa `readOnlyPaths` **và** `shellProtectedPaths` trong `.pi/piagent-profile.json` cho đúng repo:
+`be-readonly-fe` giữ read-only cho backend ở root (`backend`, `server`, `api`), repo con trực tiếp có tên chứa `backend` như `v-nexus-backend`, ở một cấp dưới `apps/` và `packages/` (`api`, `server`, `backend`), toàn bộ `services/*`, và mọi `**/migrations/**`. Profile built-in là điểm khởi đầu, không phải danh sách đầy đủ — sửa `readOnlyPaths` **và** `shellProtectedPaths` trong `.pi/piagent-profile.json` cho đúng repo:
 
 - backend đặt tên khác (`apps/gateway`, `packages/core-service`): thêm path vào cả hai field.
 - frontend nằm trong `services/` (ví dụ `services/web`): `services/*/**` sẽ khoá nhầm nó. Thay pattern đó bằng danh sách service backend cụ thể. Triệu chứng là một write bị chặn kèm lý do trỏ tới `readOnlyPaths`, không phải lỗi im lặng.
+- FE và BE là hai repo ngang hàng: tạo profile ở workspace cha và dùng scope ghi kiểu `v-nexus-frontend/**` hoặc `plans/**`. BE repo có tên chứa `backend` được read-only tự động; nếu BE tên khác thì thêm đúng tên repo, ví dụ `v-nexus-api/**`, vào cả `readOnlyPaths` và `shellProtectedPaths`.
 
 ## Runtime profile selection
 

@@ -26,6 +26,29 @@ Kiểm tra nhanh policy trong Pi:
 /piagent-orchestration
 ```
 
+Runtime policy dùng `RolePolicy v1` và `HelperRequest v1` để bind objective,
+task/session identity hash, scope, exact tool allowlist, model/effort từ
+authenticated runtime catalog, context/time/call ceiling, output schema,
+stopping rule, approval restriction và deduplication key. Chọn mode bằng:
+
+```bash
+PIAGENT_HELPERS_MODE=off        # không recommend/spawn
+PIAGENT_HELPERS_MODE=recommend  # default; giải thích nhưng không spawn
+PIAGENT_HELPERS_MODE=on         # chỉ read-only role qua provider adapter
+```
+
+`piagent-worker` vẫn disabled by default và không được auto-delegate cho GA.
+CAP-14 chỉ cho tối đa một automatic helper dispatch cho mỗi task/run. Lower-level
+helper budget chỉ theo dõi child work do Piagent tạo (tối đa 2 concurrent, 3
+explicit owned reservation tổng, 1 pass cho từng scout/planner/reviewer/Oracle,
+tối đa 1 writer); nó không
+claim account-wide scheduling hay kiểm soát các Pi session không liên quan.
+Mỗi dispatch cưỡng chế đúng time/call/token ceiling của request. Timeout,
+parent cancellation, late/stale result và budget overflow đều fail closed và
+không merge output. Khi thành công, parent chỉ nhận bounded redacted summary và
+giữ merge ownership; durable receipt chỉ giữ digest/counters, không giữ raw
+child output hay session identity.
+
 Guard extension vẫn load trong subagent process. Bash verify results do not stay in process-local memory only; they are appended to `.pi/piagent-state/observed-bash.jsonl`. Because parent and child share the same project cwd, parent can validate an exact verify command that a guarded worker subagent ran.
 
 Xem chi tiết: `docs/auto-delegation-policy.md`.

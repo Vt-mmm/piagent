@@ -813,6 +813,7 @@ function buildCoreIntegrity(root) {
     "packages/piagent-core/extensions/guard-io.js",
     "packages/piagent-core/extensions/guard-shell-analysis.ts",
     "packages/piagent-core/extensions/policy-core.js",
+    "packages/piagent-core/extensions/shell-write-targets.js",
     "packages/piagent-core/extensions/redaction-core.js",
     "packages/piagent-core/extensions/runtime-evidence.js",
     // project-shape.js picks the profile a project is offered, and the profile is

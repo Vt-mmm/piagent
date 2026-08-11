@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/role-policy.schema.json",
+  "title": "Piagent RolePolicy v1",
+  "type": "object",
+  "required": ["schemaVersion", "policyVersion", "role", "authority", "enabledByDefault", "readScope", "writeScope", "allowedTools", "modelSelectionSource", "effortSelectionSource", "contextBudget", "ceilings", "outputSchema", "stoppingRule", "approvalRestrictions"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "policyVersion": { "const": "role-policy-v1" },
+    "role": { "enum": ["retriever", "scout", "planner", "worker", "reviewer", "oracle", "researcher"] },
+    "authority": { "enum": ["read-only", "single-writer"] },
+    "enabledByDefault": { "type": "boolean" },
+    "readScope": { "$ref": "#/$defs/scopes" },
+    "writeScope": { "$ref": "#/$defs/scopes" },
+    "allowedTools": { "$ref": "#/$defs/names" },
+    "modelSelectionSource": { "const": "runtime-catalog" },
+    "effortSelectionSource": { "enum": ["runtime-snapshot", "parent"] },
+    "contextBudget": { "type": "integer", "minimum": 256, "maximum": 100000 },
+    "ceilings": { "$ref": "#/$defs/ceilings" },
+    "outputSchema": { "type": "string", "minLength": 3, "maxLength": 200 },
+    "stoppingRule": { "type": "string", "minLength": 3, "maxLength": 500 },
+    "approvalRestrictions": { "$ref": "#/$defs/names" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "scopes": { "type": "array", "maxItems": 100, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 300 } },
+    "names": { "type": "array", "maxItems": 32, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 300 } },
+    "ceilings": { "type": "object", "required": ["timeSeconds", "calls", "retries"], "properties": { "timeSeconds": { "type": "integer", "minimum": 1, "maximum": 3600 }, "calls": { "type": "integer", "minimum": 1, "maximum": 100 }, "retries": { "type": "integer", "minimum": 0, "maximum": 3 } }, "additionalProperties": false }
+  }
+}

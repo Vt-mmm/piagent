@@ -1,0 +1,224 @@
+{
+  "schemaVersion": "codex-first-fs2-current-tree-verifier-evidence-v1",
+  "workItem": "CF-FS2-02",
+  "recordedAt": "2026-08-10T13:17:58Z",
+  "status": "pass",
+  "scope": {
+    "objective": "Use one immutable post-tool working-tree observation for every consumer of an event and bind exact configured verifier proof to stable pre, post, and current working-tree evidence.",
+    "providerInvoked": false,
+    "benchmarkRunInvoked": false,
+    "releaseActionInvoked": false,
+    "nextWorkItemStarted": false,
+    "candidateState": "unfrozen",
+    "candidateDigest": null
+  },
+  "reviewedIdentity": {
+    "head": "4f37ae05d56431f2f9db9c4159e20252c3da3b2a",
+    "packageVersion": "1.2.17",
+    "policyManifestVersion": "authority-v1",
+    "policyManifestSha256": "7f223487384b5521bcda01bc1dc1578dfb3f8293dc94eadd85b86048b645273c",
+    "trackerBeforeCloseSha256": "67f182ea554b1854bdd2cf44ce207c19ff740d517e743ab1c5b2a46901fb44d2",
+    "roadmapSha256": "cb91fe410add6de293431308436ae7cff34e593c89fe8146a3633d8c85550aa7",
+    "executionProtocolSha256": "aab941a5422a2797fc1a3a1e420764a1f03fffcb4f06e4d04ea70fe3bbc1e470",
+    "productionTree": {
+      "algorithm": "piagent-fs2-work-item-production-tree-v1",
+      "domainUtf8": "piagent-fs2-work-item-production-tree-v1\n",
+      "canonicalization": "UTF-8 sorted production paths from the FS0 constitution; JSON array of {path,mode,size,sha256}; aggregate SHA-256 is domain plus canonical JSON bytes",
+      "files": 444,
+      "identity": "sha256:2d72d824798c2879ff317c0d3a12a674f3f70f9c4f5b5506591e6045e34355a1"
+    },
+    "preArtifactWorkingTreeObservation": {
+      "porcelainRecords": 309,
+      "porcelainSha256": "4b63f5ae22a321aad6fcaa34fae72ec93458ccdce641be876e33cdc7ddc27e2b",
+      "disposition": "Dirty user-owned development tree retained. Exact production identity is local implementation evidence only; no clean or frozen release candidate is claimed."
+    }
+  },
+  "oneObservationContract": {
+    "captureBoundary": "Each active-task tool_result consumes the authorized shell pre-snapshot, captures one immutable UTF-8-sorted post-event working-tree observation, and passes that same object to every event consumer.",
+    "sharedConsumers": [
+      "observed task change recording",
+      "exact verifier recording",
+      "model-authorship transaction",
+      "performance-review state",
+      "semantic-repair result",
+      "changed-path projection"
+    ],
+    "immutability": "The supplied snapshot is cloned, sorted, frozen, and digested once. Mutation of the caller's input or the workspace after capture cannot change the event observation.",
+    "unavailableDisposition": "Snapshots containing unavailable carrier evidence produce a wt-content-v2-unavailable aggregate and are never proof-capable verifier evidence."
+  },
+  "exactVerifierContract": {
+    "pre": "The authorized exact configured shell verifier captures its proof-capable tree before execution.",
+    "post": "The tool-result event supplies its single proof-capable post observation; verifier recording does not resnapshot.",
+    "current": "Completion re-evaluates the current working tree and accepts proof only when each configured verifier's latest execution has pre == post == current.",
+    "ordering": "Latest observedAt/recordedAt evidence for every configured command wins; a later failure cannot be hidden by an earlier pass and each command must be stable on the same current digest.",
+    "checkpointIdentity": "Journal idempotency binds command, pre digest, post digest, exit code, and observed time so stable and unstable executions cannot alias."
+  },
+  "carrierMatrix": [
+    {
+      "carrier": "tracked content and untracked content",
+      "result": "pass",
+      "evidence": "The current-tree snapshot contains both modified tracked files and newly created untracked files with independent wt-content-v2 identities."
+    },
+    {
+      "carrier": "POSIX mode",
+      "result": "pass",
+      "evidence": "Changing only a regular file mode changes its current-tree file digest."
+    },
+    {
+      "carrier": "symbolic link",
+      "result": "pass",
+      "evidence": "The digest binds the link target path without following or hashing external target bytes; changing the target changes the link evidence."
+    },
+    {
+      "carrier": "unavailable evidence",
+      "result": "pass",
+      "evidence": "An unchanged unavailable file has stable inventory evidence but its aggregate is explicitly unavailable and not proof-capable."
+    },
+    {
+      "carrier": "mutation between consumers",
+      "result": "pass",
+      "evidence": "A behavioral tool-result test mutates the workspace inside the first consumer and proves all later consumers still receive the same frozen event observation."
+    },
+    {
+      "carrier": "multi-verifier and idempotency",
+      "result": "pass",
+      "evidence": "Per-command pre/post/current stability and latest-result semantics remain enforced; otherwise identical checkpoints with a different pre digest are distinct while exact duplicates remain idempotent."
+    }
+  ],
+  "implementation": [
+    {
+      "path": "packages/piagent-core/extensions/working-tree-digest.js",
+      "sha256": "9f08714e076c8edf94f8ebb8d6560c43f7ff061f4751a11ee8e7d32ce03c8443"
+    },
+    {
+      "path": "packages/piagent-core/runtime/hooks/tool-result-hook.ts",
+      "sha256": "a96a38f751a4edabe5aa7e5988a033fee278a65314c26c0e9ed0a6e59a56b721"
+    },
+    {
+      "path": "packages/piagent-core/extensions/piagent-guard.ts",
+      "sha256": "f95bef7a38f2d1d675fecb76ac3052ee083595da560b2ba6c8617215e419d69f"
+    },
+    {
+      "path": "packages/piagent-core/extensions/task-runtime-audit.js",
+      "sha256": "fe4261ba1dfa949cd732623daa62a43fe0e91aba5feb86e5663a01ac1ae1bc8c"
+    },
+    {
+      "path": "packages/piagent-core/capabilities/runtime-integrity.js",
+      "sha256": "dc1c3764bf01dd644e1a7d97d3a7637ae494fc6025a4bbc3dc64aa19ab3490fd"
+    },
+    {
+      "path": ".pi/piagent-profile.lock.json",
+      "sha256": "6295f7972142848e3deaea815dd4ac1671061c972b891ef3ca0719b670339ca2"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/task-state.test.mjs",
+      "sha256": "c6ac78289a7b65f70830f90739b24290d1a6b7eac0ca9a6eafd5cd7510ebdfee"
+    },
+    {
+      "path": "tests/runtime-session-modules.test.mjs",
+      "sha256": "7d96577c7fecf8649720589644bdeeaef44c298fdbe222ff45e3efa1e587d971"
+    },
+    {
+      "path": "tests/resume-state.test.mjs",
+      "sha256": "e2b05e8578b78a0bf23a73223c43a373ea0d8e0910b35e646c61afd1bbdbd645"
+    },
+    {
+      "path": "tests/capability-core.test.mjs",
+      "sha256": "329f2946221c0b58a31049a68c0ec23c9bbeb617068b8a45105497534fe7d3aa"
+    }
+  ],
+  "verification": [
+    {
+      "command": "node --test tests/resume-state.test.mjs tests/runtime-session-modules.test.mjs tests/task-state.test.mjs tests/task-digest-refresh.test.mjs tests/handoff-projection.test.mjs tests/recovery-chaos.test.mjs",
+      "result": "pass",
+      "tests": 75,
+      "failures": 0
+    },
+    {
+      "command": "node --test tests/piagent-guard-integration.test.mjs",
+      "result": "pass",
+      "tests": 99,
+      "failures": 0
+    },
+    {
+      "command": "node --test tests/pi-082-runtime-phase-e2e.test.mjs tests/pi-082-host-tool-error.test.mjs tests/resume-state.test.mjs tests/handoff-projection.test.mjs tests/task-digest-refresh.test.mjs tests/recovery-chaos.test.mjs",
+      "result": "pass",
+      "tests": 34,
+      "failures": 0
+    },
+    {
+      "command": "node --test tests/capability-core.test.mjs tests/package-distribution.test.mjs tests/project-shape.test.mjs tests/architecture-boundaries.test.mjs",
+      "result": "pass",
+      "tests": 103,
+      "failures": 0
+    },
+    {
+      "command": "PIAGENT_NO_UPDATE_CHECK=1 node --test tests/*.test.mjs",
+      "result": "pass",
+      "tests": 1836,
+      "suites": 121,
+      "failures": 0
+    },
+    {
+      "command": "npm run typecheck",
+      "result": "pass"
+    },
+    {
+      "command": "npm run architecture:check",
+      "result": "pass",
+      "sourceFiles": 192
+    },
+    {
+      "command": "npm run docs:check",
+      "result": "pass",
+      "languagePairs": 4
+    },
+    {
+      "command": "npm run capabilities:check",
+      "result": "pass",
+      "packs": 2
+    },
+    {
+      "command": "npm run verify -- --offline",
+      "result": "pass"
+    },
+    {
+      "command": "piagent-capabilities doctor with repository profile and lock",
+      "result": "pass-current",
+      "digest": "sha256:6295f7972142848e3deaea815dd4ac1671061c972b891ef3ca0719b670339ca2"
+    },
+    {
+      "command": "node governance/codex-first-product/evidence/fs1/verify-capability-ownership-delta-v3.mjs governance/codex-first-product/evidence/fs1/capability-module-ownership-delta.v3.json",
+      "result": "pass",
+      "productionFiles": 444,
+      "ownershipIdentity": "sha256:cf032f15b45d2257a7d460524f895d0aa828d653489aa81bed149eb07a083886"
+    },
+    {
+      "command": "git diff --check",
+      "result": "pass"
+    }
+  ],
+  "authorityAndMigration": {
+    "authorityChange": "none",
+    "taskContractSchemaChange": "none",
+    "workingTreeDigestAlgorithmChange": "none; this work centralizes observation of the already-current wt-content-v2 algorithm",
+    "runtimeIntegrityChange": "task-runtime-audit.js is now explicitly pinned because it participates in verifier evidence identity"
+  },
+  "rollback": {
+    "mechanism": "Restore the five implementation files and generated profile lock to their prior reviewed bytes.",
+    "stateMigrationRequired": false,
+    "taskDataDeletionRequired": false
+  },
+  "limitations": [
+    "This is exact-current local implementation evidence, not a clean or frozen release candidate.",
+    "No provider, Codex comparison, benchmark, release package, long-task soak, branch, worktree, commit, tag, push, publish, or install action was performed.",
+    "CF-FS2-03 cross-session reconstruction and failure injection remains a separate work item and was not started."
+  ],
+  "stopRule": {
+    "workItemComplete": true,
+    "nextWorkItem": "CF-FS2-03",
+    "nextWorkItemStarted": false
+  }
+}

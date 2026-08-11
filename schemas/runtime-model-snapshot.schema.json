@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Vt-mmm/piagent/schemas/runtime-model-snapshot.schema.json",
+  "title": "Pi Agent Runtime Model Snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "capturedAt", "source", "piHostVersion", "piagentVersion", "provider", "modelId", "availability", "contextWindow", "requestedThinkingLevel", "effectiveThinkingLevel", "supportedThinkingLevels", "capabilities", "provenance", "warnings"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "capturedAt": { "$ref": "#/$defs/timestamp" },
+    "source": { "$ref": "#/$defs/source" },
+    "piHostVersion": { "$ref": "#/$defs/nullableText" },
+    "piagentVersion": { "$ref": "#/$defs/nullableText" },
+    "provider": { "$ref": "#/$defs/nullableText" },
+    "modelId": { "$ref": "#/$defs/nullableText" },
+    "availability": { "enum": ["authenticated", "unavailable", "offline", "logged-out", "unknown"] },
+    "contextWindow": { "type": ["integer", "null"], "minimum": 1, "maximum": 10000000 },
+    "requestedThinkingLevel": { "$ref": "#/$defs/nullableText" },
+    "effectiveThinkingLevel": { "$ref": "#/$defs/nullableText" },
+    "supportedThinkingLevels": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "array", "maxItems": 16, "uniqueItems": true, "items": { "$ref": "#/$defs/name" } }
+      ]
+    },
+    "capabilities": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/capability" } },
+    "provenance": { "type": "array", "maxItems": 128, "items": { "$ref": "#/$defs/provenance" } },
+    "warnings": { "type": "array", "maxItems": 32, "items": { "type": "string", "minLength": 1, "maxLength": 240 } }
+  },
+  "$defs": {
+    "timestamp": { "type": "string", "format": "date-time", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$" },
+    "source": { "enum": ["pi-runtime", "authenticated-catalog", "provider-profile", "api-doc-hint"] },
+    "nullableText": { "type": ["string", "null"], "minLength": 1, "maxLength": 160 },
+    "name": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$" },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "value", "source"],
+      "properties": {
+        "name": { "$ref": "#/$defs/name" },
+        "value": { "type": ["boolean", "null"] },
+        "source": { "$ref": "#/$defs/source" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "source", "capturedAt"],
+      "properties": {
+        "field": { "$ref": "#/$defs/name" },
+        "source": { "$ref": "#/$defs/source" },
+        "capturedAt": { "$ref": "#/$defs/timestamp" },
+        "detail": { "type": "string", "maxLength": 240 }
+      }
+    }
+  }
+}

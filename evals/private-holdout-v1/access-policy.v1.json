@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "id": "e3-custody-v1",
+  "workItem": "CF-FS4-04",
+  "state": "external-input-required",
+  "visibility": "public-boundary-only",
+  "roles": {
+    "holdoutCustodian": "Owns encrypted prompts, graders, repositories, reference solutions and the append-only access log outside the candidate-author environment.",
+    "candidateAuthor": "May read this public boundary and digest-only readiness receipt, but no private prompt, grader or repository locator before RC freeze.",
+    "benchmarkOperator": "May invoke a custodian-provided execute-only interface against an exact frozen candidate and receives only redacted outcome evidence.",
+    "humanReviewer": "Receives a blinded task/output/rubric packet, records an independent first score and cannot see product surface labels.",
+    "adjudicator": "Resolves sealed disagreements after both first-pass scores exist and must be independent of candidate authors.",
+    "releaseAuditor": "Verifies the sealed artifacts in the controlled environment and exports only the closed v2 assurance receipt."
+  },
+  "preFreezeAccess": {
+    "candidateAuthorPromptAccess": "denied-until-rc-freeze",
+    "candidateAuthorGraderAccess": "denied-until-rc-freeze",
+    "candidateAuthorRepositoryAccess": "denied-until-rc-freeze",
+    "operatorAccess": "execute-only",
+    "reviewerAccess": "blinded-rubric-and-output"
+  },
+  "separation": {
+    "custodianIndependent": true,
+    "reviewerIndependent": true,
+    "adjudicatorIndependent": true,
+    "candidateAuthorCannotFillCustodianReviewerOrAdjudicatorRole": true,
+    "reviewersCannotSeeProductSurfaceUntilScoresAreSealed": true
+  },
+  "privateArtifactClasses": [
+    "holdout manifest and repository locators",
+    "task prompts and setup assets",
+    "hidden graders and oracles",
+    "reference solutions and mutations",
+    "reviewer identities and raw score sheets",
+    "access and disagreement logs"
+  ],
+  "publicReceipt": {
+    "schema": "schemas/benchmark-assurance-evidence.schema.json#/$defs/custodyV2",
+    "allowedData": ["closed enums", "counts", "timestamps", "booleans", "SHA-256 commitments"],
+    "forbiddenData": ["prompt text", "grader code", "repository locator", "credential", "reviewer identity", "raw output", "private path"]
+  },
+  "retention": {
+    "accessLog": "append-only",
+    "privateArtifacts": "custodian-controlled",
+    "publicReceipt": "digest-only",
+    "candidateAuthorWorkspaceCopy": "forbidden"
+  },
+  "freezeRule": "Custodian access receipts must predate the first private execution and remain valid through the exact RC run; any candidate, suite, grader, rubric, access-policy or evidence change invalidates comparability.",
+  "claimBoundary": "This policy establishes a fail-closed custody contract only. It contains no private holdout and grants no generalization, quality, token, latency or release claim."
+}

@@ -67,11 +67,21 @@ plan `scout`/`review`, khong con step `implement` mau thuan. Task high-risk/cust
 van giu checkpoint thu cong. Chi dung subagent cho scout, planning hoac review
 doc lap. Mot write set chi co mot owner.
 
+Trajectory khong suy dien quyen sua tu loi model noi. Automatic source task chi
+chuyen sang `execute` khi contract do runtime tao co bounded scope, exact
+verifier, acceptance receipt va mot step `single-writer` dang `in-progress` voi
+toan bo dependency da xong. Runtime ghi ro phase nao khong ton tai trong automatic
+plan neu can bo qua. Manual/high-risk task vao phase `plan` de doc, tim va cap
+nhat checkpoint; edit/write/bash ghi file van bi chan cho den khi plan/challenge
+hoan tat va step `single-writer` thuc su dependency-ready.
+
 ### 3. Execute
 
 Truoc khi co task contract, project da onboard chi cho inspection co gioi han;
 write/edit va shell command that su ghi file bi chan. Sau khi task bat dau:
 
+- phase `intake`, `scout` va `plan` chi cho discovery; `execute`/`repair` moi co
+  mutation tools, con read-only task khong bao gio nhan quyen mutation;
 - direct tool va MCP write phai nam trong `scope`;
 - read-only task chan moi project/external mutation;
 - protected path, secret redaction, destructive command va external confirmation

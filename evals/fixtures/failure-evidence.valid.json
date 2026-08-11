@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "parserVersion": "failure-parser-v1",
+  "exitCode": 2,
+  "signals": ["typescript-diagnostic"],
+  "structuredEvents": [],
+  "outputRef": { "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "chars": 42, "truncated": false, "captureRef": null }
+}

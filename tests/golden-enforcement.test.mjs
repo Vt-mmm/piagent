@@ -11,6 +11,7 @@ import {
 } from "../packages/piagent-core/extensions/policy-core.js";
 import { claimedExitMatchesObserved, commandMatchesVerifyPlan } from "../packages/piagent-core/extensions/runtime-evidence.js";
 import { taskContractValidationErrors } from "../packages/piagent-core/extensions/task-state.js";
+import { validateFailureClassification, validateFailureEvidence } from "../packages/piagent-core/extensions/failure-types.ts";
 import { containsSensitiveText, redactSensitiveText } from "../packages/piagent-core/security/sensitive-data.js";
 import {
   validateCapabilityPack,
@@ -18,6 +19,13 @@ import {
   validateEvalScenario,
   validateExternalActionProposal
 } from "../packages/piagent-core/capabilities/capability-core.js";
+import { validateRuntimeModelSnapshot } from "../packages/piagent-core/runtime/model/runtime-snapshot.ts";
+import { validateModelRouteDecision } from "../packages/piagent-core/runtime/model/model-route-types.ts";
+import { validateSolverDecision, validateTaskFeatures } from "../packages/piagent-core/runtime/solver/solver-types.ts";
+import { validateTrajectoryState, validateTrajectoryTransition } from "../packages/piagent-core/runtime/trajectory/trajectory-types.ts";
+import { validateHelperRequest, validateRolePolicy } from "../packages/piagent-core/runtime/orchestration/role-policy.ts";
+import { validateAuthorityManifest, validateTaskAuthoritySnapshot } from "../packages/piagent-core/runtime/policy/authority-manifest.ts";
+import { benchmarkAssuranceEvidenceValidationErrors } from "../packages/piagent-core/benchmark/benchmark-assurance.js";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const golden = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "evals", "golden", "enforcement-decisions.json"), "utf8"));
@@ -54,6 +62,16 @@ function validateTaskContract(input, sourceName) {
   const errors = taskContractValidationErrors(input);
   if (errors.length > 0) throw new Error(`${sourceName}: ${errors.join("; ")}`);
   return input;
+}
+
+function validateBenchmarkAssuranceEvidence(input, sourceName) {
+  const errors = benchmarkAssuranceEvidenceValidationErrors(input);
+  if (errors.length > 0) throw new Error(`${sourceName}: ${errors.join("; ")}`);
+  return input;
+}
+
+function validateTaskAuthoritySnapshotFixture(input) {
+  return validateTaskAuthoritySnapshot(input);
 }
 
 // These cases exist to make a refactor argue with the rule rather than with a
@@ -182,7 +200,20 @@ describe("golden enforcement decisions", () => {
       "capability-recipe": validateCapabilityRecipe,
       "eval-scenario": validateEvalScenario,
       "action-proposal": validateExternalActionProposal,
-      "task-contract": validateTaskContract
+      "task-contract": validateTaskContract,
+      "runtime-model-snapshot": validateRuntimeModelSnapshot,
+      "model-route-decision": validateModelRouteDecision,
+      "task-features": validateTaskFeatures,
+      "solver-decision": validateSolverDecision,
+      "trajectory-state": validateTrajectoryState,
+      "trajectory-transition-event": validateTrajectoryTransition,
+      "failure-evidence": validateFailureEvidence,
+      "failure-classification": validateFailureClassification,
+      "role-policy": validateRolePolicy,
+      "helper-request": validateHelperRequest,
+      "authority-manifest": validateAuthorityManifest,
+      "task-authority-snapshot": validateTaskAuthoritySnapshotFixture,
+      "benchmark-assurance-evidence": validateBenchmarkAssuranceEvidence
     };
 
     for (const [name, validate] of Object.entries(validators)) {

@@ -5,6 +5,7 @@ import {
   runtimeLifecycleMode,
   workingTreeEvidenceDigest
 } from "../packages/piagent-core/extensions/task-lifecycle.js";
+import { versionWorkingTreeHash } from "../packages/piagent-core/extensions/working-tree-digest.js";
 
 function tinyTask() {
   return {
@@ -43,12 +44,14 @@ function readOnlyTask(riskLane = "normal") {
 }
 
 test("working-tree evidence digest is ordered and changes with content", () => {
-  const left = workingTreeEvidenceDigest({ "b.ts": "two", "a.ts": "one" });
-  const reordered = workingTreeEvidenceDigest({ "a.ts": "one", "b.ts": "two" });
-  const changed = workingTreeEvidenceDigest({ "a.ts": "different", "b.ts": "two" });
+  const one = versionWorkingTreeHash("1".repeat(64)), two = versionWorkingTreeHash("2".repeat(64)), different = versionWorkingTreeHash("3".repeat(64));
+  const left = workingTreeEvidenceDigest({ "b.ts": two, "a.ts": one });
+  const reordered = workingTreeEvidenceDigest({ "a.ts": one, "b.ts": two });
+  const changed = workingTreeEvidenceDigest({ "a.ts": different, "b.ts": two });
   assert.equal(left, reordered);
   assert.notEqual(left, changed);
-  assert.match(left, /^[a-f0-9]{64}$/);
+  assert.match(left, /^wt-content-v2:[a-f0-9]{64}$/);
+  assert.match(workingTreeEvidenceDigest({ "a.ts": "malformed" }), /^legacy-untrusted:/);
 });
 
 test("tiny default plan is automatic and reopens after a later mutation", () => {

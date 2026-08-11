@@ -1,0 +1,51 @@
+{
+  "schemaVersion": "capability-module-ownership-delta-v2",
+  "workItem": "CF-FS1-03",
+  "createdAt": "2026-08-10T13:10:00.000Z",
+  "repositoryRoot": {
+    "relativePathFromManifest": "../../../.."
+  },
+  "baseManifest": {
+    "relativePathFromManifest": "../fs0/capability-module-ownership.v1.json",
+    "sha256": "3bc2f59c1a37d7c89c56834c447e8803802131b2ae8862e2a32dce439ce76120",
+    "disposition": "Immutable FS0 ownership snapshot; this delta never rewrites or relabels it."
+  },
+  "priorDelta": {
+    "relativePathFromManifest": "capability-module-ownership-delta.v1.json",
+    "sha256": "6aa6d2c0165e076abe35f1e752e017fbdba2a99e212073f13c61a8915d1bd610",
+    "disposition": "Immutable CF-FS1-02 additive ownership snapshot; this delta layers one new path without changing historical bytes."
+  },
+  "constitution": {
+    "relativePathFromManifest": "../fs0/capability-constitution.v1.json",
+    "sha256": "5dc65f03639df4236ea4e9c70e31e81aa9613317102e1acd2b371c6e44e8c1e8"
+  },
+  "referenceVerifier": {
+    "relativePathFromManifest": "verify-capability-ownership-delta-v2.mjs",
+    "sha256": "e65fabf871928c39cc36a002f88c80aa2e406b42e28368721566b3295ee5fe52",
+    "mutationBehavior": "read-only"
+  },
+  "assignmentAuthority": {
+    "normativeSource": "entries[]",
+    "rule": "FS0 and CF-FS1-02 retain ownership of their exact paths. This additive set assigns one primary capability to every production path introduced by CF-FS1-03; removed inherited paths, extra additions, content drift in prior additions, mode drift, symlinks, duplicate owners, or unknown capabilities fail closed.",
+    "onePrimaryOwner": true
+  },
+  "ownershipAggregate": {
+    "algorithm": "piagent-capability-ownership-delta-v2",
+    "domainUtf8": "piagent-capability-ownership-delta-v2\n",
+    "identity": "sha256:03485ed9d308cdfc6488a586fb1a1dd1d3eb3ff6cfef8b0b7126b3bcf1b559e9"
+  },
+  "totalFiles": 1,
+  "currentProductionFileCount": 443,
+  "countsByCapability": {
+    "CAP-12": 1
+  },
+  "entries": [
+    {
+      "path": "packages/piagent-core/runtime/recovery/continuation-budget.ts",
+      "cap": "CAP-12",
+      "size": 10246,
+      "mode": "0644",
+      "sha256": "0cc6ca588f69f9f8f65d19847ccdda3a1267a903c7cb62e70f76a84e40ab8659"
+    }
+  ]
+}

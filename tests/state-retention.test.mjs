@@ -67,6 +67,18 @@ test("serializes concurrent writers without partial JSON or abandoned locks", as
   assert.ok(fs.statSync(target).size <= 8192);
 });
 
+test("recovers a state lock left by a dead local writer without waiting for the stale timeout", (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-retention-dead-lock-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const target = path.join(root, "events.jsonl");
+  fs.writeFileSync(`${target}.lock`, "999999999\n", { mode: 0o600 });
+  const startedAt = Date.now();
+  appendJsonlBounded(target, { event: "recovered" }, { maxBytes: 1024 });
+  assert.ok(Date.now() - startedAt < 500);
+  assert.equal(fs.existsSync(`${target}.lock`), false);
+  assert.deepEqual(readJsonlTail(target, { limit: 1 }), [{ event: "recovered" }]);
+});
+
 test("prunes captures by age, count, and aggregate bytes", (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-captures-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

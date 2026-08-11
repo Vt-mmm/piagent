@@ -6,6 +6,8 @@ import type { TaskContract } from "../../extensions/guard-types.js";
 import { attachLocalImagesFromText } from "../input/chat-images.ts";
 import type { ChatImageAccessPolicy } from "../input/chat-images.ts";
 import { LONG_INPUT_CHARS } from "../runtime-limits.ts";
+import type { AuthorityResumeDecision } from "../policy/authority-resume-policy.ts";
+import { buildHandoffProjection, writeHandoffProjection } from "../recovery/handoff-projection.ts";
 import { buildContextPreflight, buildUsageSnapshot } from "../session/usage.ts";
 import { activeTaskToolGroups, toolGroupsForPrompt } from "../tools/tool-groups.ts";
 import type { PiagentToolGroup } from "../tools/tool-groups.ts";
@@ -19,13 +21,14 @@ import {
   trimTaskForInline
 } from "../workflows/input-routing.ts";
 import {
-  automaticTaskIntakeEligible,
+  automaticTaskIntakeMode,
   manualTaskIntakeEligible
 } from "../workflows/task-intake.ts";
 
 type InputHookDependencies = {
   boilerplateCollapseChars: number;
   activeTask: (ctx: ExtensionContext) => TaskContract | undefined;
+  authorityPolicy: (ctx: ExtensionContext, task: TaskContract) => AuthorityResumeDecision;
   readProtectedPaths: (ctx: ExtensionContext) => string[];
   imageAccess: (ctx: ExtensionContext) => ChatImageAccessPolicy;
   activateToolGroups: (ctx: ExtensionContext, groups: PiagentToolGroup[]) => unknown;
@@ -42,11 +45,28 @@ export function registerInputHook(pi: ExtensionAPI, dependencies: InputHookDepen
 
     const taskSignal = classifyContextTask(text);
     const activeTask = dependencies.activeTask(ctx);
+    const authorityPolicy = activeTask?.trace.outcome === "pending" ? dependencies.authorityPolicy(ctx, activeTask) : undefined;
+    let authorityHandoffReady = false;
+    if (activeTask && authorityPolicy?.disposition === "new-attempt-required") {
+      try {
+        writeHandoffProjection(ctx.cwd, buildHandoffProjection(ctx.cwd, activeTask, {
+          gate: { decision: "fail", missing: [`authority policy handoff: ${authorityPolicy.reason}`], missingVerifyCommands: [] },
+          recovery: null
+        }));
+        authorityHandoffReady = true;
+      } catch (error) {
+        ctx.ui.notify(`Piagent authority-policy handoff could not be written: ${error instanceof Error ? error.message : String(error)}`, "warning");
+      }
+    }
+    const replacementIntake = Boolean(activeTask && (
+      activeTask.workingTreeDigestMigration?.status === "new-attempt-required" || authorityHandoffReady
+    ));
     const readProtectedPaths = dependencies.readProtectedPaths(ctx);
     const protectedTarget = taskSignal.paths.some((candidate) => matchesProtectedPath(candidate, readProtectedPaths));
     const protectedOnlyTarget = taskSignal.paths.length > 0
       && taskSignal.paths.every((candidate) => matchesProtectedPath(candidate, readProtectedPaths));
-    const runtimeIntake = !activeTask && automaticTaskIntakeEligible(text, readProtectedPaths);
+    const runtimeIntakeMode = !activeTask ? automaticTaskIntakeMode(text, readProtectedPaths) : undefined;
+    const runtimeIntake = Boolean(runtimeIntakeMode);
     const manualIntake = !activeTask && !runtimeIntake && manualTaskIntakeEligible(text, readProtectedPaths);
     const promptGroups = protectedOnlyTarget
       ? []
@@ -55,7 +75,7 @@ export function registerInputHook(pi: ExtensionAPI, dependencies: InputHookDepen
         ));
     if (manualIntake && !promptGroups.includes("intake")) promptGroups.push("intake");
     dependencies.activateToolGroups(ctx, activeTask?.trace.outcome === "pending"
-      ? [...promptGroups.filter((group) => group !== "intake"), ...activeTaskToolGroups(activeTask)]
+      ? [...promptGroups.filter((group) => replacementIntake || group !== "intake"), ...(replacementIntake ? ["intake" as const] : activeTaskToolGroups(activeTask))]
       : promptGroups);
     dependencies.telemetry(ctx, {
       event: "user_input",
@@ -65,6 +85,7 @@ export function registerInputHook(pi: ExtensionAPI, dependencies: InputHookDepen
       workflow: taskSignal.workflow,
       riskLane: taskSignal.lane,
       intakeMode: runtimeIntake ? "runtime" : "model",
+      taskMode: runtimeIntakeMode,
       protectedTarget,
       protectedOnlyTarget,
       manualIntake,

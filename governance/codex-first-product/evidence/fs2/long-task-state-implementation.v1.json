@@ -1,0 +1,241 @@
+{
+  "schemaVersion": "codex-first-fs2-long-task-state-evidence-v1",
+  "workItem": "CF-FS2-03",
+  "recordedAt": "2026-08-10T13:47:56Z",
+  "status": "pass",
+  "scope": {
+    "objective": "Reconstruct a bounded long task's Task Contract, plan progress, exact verifier state, trajectory phase, recovery decision, handoff, and next safe action in a new runtime process while failing closed on ambiguous durable state.",
+    "providerInvoked": false,
+    "benchmarkRunInvoked": false,
+    "releaseActionInvoked": false,
+    "nextWorkItemStarted": false,
+    "candidateState": "unfrozen",
+    "candidateDigest": null
+  },
+  "reviewedIdentity": {
+    "head": "4f37ae05d56431f2f9db9c4159e20252c3da3b2a",
+    "packageVersion": "1.2.17",
+    "policyManifestVersion": "authority-v1",
+    "policyManifestSha256": "7f223487384b5521bcda01bc1dc1578dfb3f8293dc94eadd85b86048b645273c",
+    "trackerBeforeCloseSha256": "483adf125ebdbe8532222c1c1833905666936c9a3e065fd407494939b835c9c7",
+    "roadmapSha256": "cb91fe410add6de293431308436ae7cff34e593c89fe8146a3633d8c85550aa7",
+    "executionProtocolSha256": "aab941a5422a2797fc1a3a1e420764a1f03fffcb4f06e4d04ea70fe3bbc1e470",
+    "productionTree": {
+      "algorithm": "piagent-fs2-work-item-production-tree-v1",
+      "domainUtf8": "piagent-fs2-work-item-production-tree-v1\n",
+      "canonicalization": "UTF-8 sorted production paths from the FS0 constitution; JSON array of {path,mode,size,sha256}; aggregate SHA-256 is domain plus canonical JSON bytes",
+      "files": 444,
+      "identity": "sha256:86d46080fbfea199f2f143843c739d13a32b991cf02a4b0df5fbb278b74761b3"
+    },
+    "preArtifactWorkingTreeObservation": {
+      "porcelainRecords": 309,
+      "porcelainSha256": "4b63f5ae22a321aad6fcaa34fae72ec93458ccdce641be876e33cdc7ddc27e2b",
+      "disposition": "Dirty user-owned development tree retained. Exact production identity is local implementation evidence only; no clean or frozen release candidate is claimed."
+    }
+  },
+  "reconstructionContract": {
+    "authorities": [
+      "Task Contract v2 remains the sole task, goal, scope, plan, acceptance, exact-verifier, and terminal authority.",
+      "The hash-chained task journal supplies durable checkpoints, retry ceilings, migration barriers, and interruption history.",
+      "The trajectory store supplies the exact lifecycle phase and blocks corrupt, mismatched, or unsafe transitions.",
+      "The handoff projection remains a bounded derived recovery view and never replaces the Task Contract."
+    ],
+    "freshProcess": "session_start reconstructs the exact task/run/session identity and RuntimeSessionState delivers one bounded resume context at the first agent-start boundary only.",
+    "resumeContext": "The deterministic resume context is capped at 6000 characters and includes bounded goal, expected output, acceptance focus, scope, work-plan progress, current checkpoint, current/stale verifier state, exact commands, next safe action, and handoff guidance without a follow-up provider turn.",
+    "nextAction": "Terminal, unsafe, paused, retry, stale/current verifier, open-plan, and completion states map to one closed next-action vocabulary. A source task resumed in verify without current stable proof must run every exact configured verifier before continuing an open plan step.",
+    "delivery": "Resume context is task/run/session bound and delivered at most once per runtime process; a later task or digest migration clears only the process-local delivery marker."
+  },
+  "durabilityContract": {
+    "journal": "Every append is fsynced. An in-process append/fsync failure rolls back to the last valid byte boundary. A process-torn final segment without the writer's mandatory newline is ignored and truncated before the next append; newline-terminated malformed JSON remains corruption and blocks resume.",
+    "handoff": "Handoff writes use write, fsync, and atomic rename. ENOSPC, EACCES, or rename failure removes the partial temporary file and preserves the last authoritative handoff bytes.",
+    "terminal": "Completed, blocked, partial, and failed Task Contracts remain immutable and never recommend retry.",
+    "privacy": "All durable state stays under the existing private project-state boundary; the provider-visible resume projection omits raw session identity and remains bounded."
+  },
+  "failureMatrix": [
+    {
+      "case": "process exit between execute and verify",
+      "result": "pass",
+      "evidence": "A fresh Node process reconstructs exact task/run identity, execute/verify progress, current step, current tree, and next action from disk."
+    },
+    {
+      "case": "session compaction",
+      "result": "pass",
+      "evidence": "Compaction preserves the Task Contract and checkpoint identity; the next runtime reconstructs the verifier phase without a second intake or context pack."
+    },
+    {
+      "case": "process-torn journal tail",
+      "result": "pass",
+      "evidence": "A non-newline final partial record is excluded, truncated at the prior valid boundary, and followed by one valid durable append."
+    },
+    {
+      "case": "newline-terminated corrupt journal",
+      "result": "pass",
+      "evidence": "Malformed committed-looking bytes remain visible corruption and force a bounded inspect-handoff path."
+    },
+    {
+      "case": "disk write failure",
+      "result": "pass",
+      "evidence": "Injected ENOSPC and EACCES preserve the prior journal/handoff authority and leave no authoritative partial state."
+    },
+    {
+      "case": "stale or missing verifier truth",
+      "result": "pass",
+      "evidence": "External post-verify edits invalidate old proof; verify-phase resume without a current stable pass emits the exact configured verifier command before any open plan step."
+    },
+    {
+      "case": "provider disconnect, verifier timeout, and retry exhaustion",
+      "result": "pass",
+      "evidence": "Recovery remains non-mutating, retry ceilings persist across processes, and exhausted tasks hand off without an extra continuation."
+    },
+    {
+      "case": "handoff path substitution",
+      "result": "pass",
+      "evidence": "Symlinked or cross-identity handoff state fails closed instead of escaping the private state root."
+    }
+  ],
+  "implementation": [
+    {
+      "path": "packages/piagent-core/runtime/recovery/resume-state.ts",
+      "sha256": "d2d3f0eead4f55149709399b7fe274370890b698149ce4724339b6cc01f61755"
+    },
+    {
+      "path": "packages/piagent-core/runtime/session/runtime-state.ts",
+      "sha256": "05b4a10c4c44218edf066ef9f326259785993a0feba7bc82debbb828b94f885c"
+    },
+    {
+      "path": "packages/piagent-core/runtime/hooks/agent-start-hook.ts",
+      "sha256": "31aa10f332da3b43edf23b07afd1bf12a0f4e7f6a30208267a717cb1423aa6b0"
+    },
+    {
+      "path": "packages/piagent-core/runtime/hooks/session-start-hook.ts",
+      "sha256": "1387cb355a183e57566b584f9a95937fa92271bd348f8cd772224c62892b45d7"
+    },
+    {
+      "path": "packages/piagent-core/extensions/task-journal.js",
+      "sha256": "1f8f46e620467093d0873dd0158826b3a00faf6c349c85438fb73771f7078485"
+    },
+    {
+      "path": "packages/piagent-core/runtime/recovery/handoff-projection.ts",
+      "sha256": "38eed4410bfefe0273fc639886f3ee81689266251668a77a80182662a70f85f8"
+    },
+    {
+      "path": ".pi/piagent-profile.lock.json",
+      "sha256": "1507f8f7cf576702960e4ce61ddc9b7faa5efb54c287bc323b3dff946ec8139a"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/resume-state.test.mjs",
+      "sha256": "e7ad11d9a174b8a7ba44061644ce631193f01c2b895ac6eeafed17fa87bde7f4"
+    },
+    {
+      "path": "tests/piagent-guard-integration.test.mjs",
+      "sha256": "763699844ace442a95a1d21b888009025b8da80e911f6796efa2314cc98c1c73"
+    },
+    {
+      "path": "tests/runtime-session-modules.test.mjs",
+      "sha256": "62a8c486996c3dbbae619b8c007666de24f77c43d298abec3bd91780a43709e8"
+    },
+    {
+      "path": "tests/recovery-chaos.test.mjs",
+      "sha256": "1e5c15c86d1281dc4c06807480ee8063b750a2b18d54da265b119d7321e18622"
+    },
+    {
+      "path": "tests/handoff-projection.test.mjs",
+      "sha256": "1cf77376ea2029b36eee036abf775f0fdf06c0f4dcd757fb449b90fdf8cc37bd"
+    }
+  ],
+  "verification": [
+    {
+      "command": "node --test tests/resume-state.test.mjs tests/recovery-chaos.test.mjs tests/handoff-projection.test.mjs tests/local-state-failure-modes.test.mjs tests/trajectory-runtime.test.mjs tests/runtime-session-modules.test.mjs",
+      "result": "pass",
+      "tests": 60,
+      "failures": 0
+    },
+    {
+      "command": "node --test tests/piagent-guard-integration.test.mjs",
+      "result": "pass",
+      "tests": 99,
+      "failures": 0
+    },
+    {
+      "command": "node --test tests/pi-082-runtime-phase-e2e.test.mjs tests/pi-082-host-tool-error.test.mjs tests/resume-state.test.mjs tests/recovery-chaos.test.mjs tests/handoff-projection.test.mjs tests/local-state-failure-modes.test.mjs",
+      "result": "pass",
+      "tests": 42,
+      "failures": 0
+    },
+    {
+      "command": "node --test tests/capability-core.test.mjs tests/package-distribution.test.mjs tests/project-shape.test.mjs tests/architecture-boundaries.test.mjs",
+      "result": "pass",
+      "tests": 103,
+      "failures": 0
+    },
+    {
+      "command": "PIAGENT_NO_UPDATE_CHECK=1 node --test tests/*.test.mjs",
+      "result": "pass",
+      "tests": 1843,
+      "suites": 121,
+      "failures": 0
+    },
+    {
+      "command": "npm run typecheck",
+      "result": "pass"
+    },
+    {
+      "command": "npm run architecture:check",
+      "result": "pass",
+      "sourceFiles": 192
+    },
+    {
+      "command": "npm run docs:check",
+      "result": "pass",
+      "languagePairs": 4
+    },
+    {
+      "command": "npm run capabilities:check",
+      "result": "pass",
+      "packs": 2
+    },
+    {
+      "command": "npm run verify -- --offline",
+      "result": "pass"
+    },
+    {
+      "command": "piagent-capabilities doctor with repository profile and lock",
+      "result": "pass-current",
+      "digest": "sha256:1507f8f7cf576702960e4ce61ddc9b7faa5efb54c287bc323b3dff946ec8139a"
+    },
+    {
+      "command": "node governance/codex-first-product/evidence/fs1/verify-capability-ownership-delta-v3.mjs governance/codex-first-product/evidence/fs1/capability-module-ownership-delta.v3.json",
+      "result": "pass",
+      "productionFiles": 444,
+      "ownershipIdentity": "sha256:cf032f15b45d2257a7d460524f895d0aa828d653489aa81bed149eb07a083886"
+    },
+    {
+      "command": "git diff --check",
+      "result": "pass"
+    }
+  ],
+  "authorityAndMigration": {
+    "authorityChange": "none",
+    "taskContractSchemaChange": "none",
+    "workingTreeDigestAlgorithmChange": "none",
+    "runtimeIntegrityChange": "existing runtime carriers changed and the generated profile lock was re-pinned without granting new capabilities",
+    "stateCompatibility": "existing Task Contract v2, journal, trajectory, and handoff formats remain readable; the resume reconstruction is additive and derived"
+  },
+  "rollback": {
+    "mechanism": "Restore the six implementation files and generated profile lock to their prior reviewed bytes.",
+    "stateMigrationRequired": false,
+    "taskDataDeletionRequired": false
+  },
+  "limitations": [
+    "This is exact-current local implementation evidence, not a clean or frozen release candidate.",
+    "The fresh-process proof is provider-free and bounded; multi-hour and multi-day soak belongs to CF-FS2-04 and later FS4 evidence.",
+    "No provider, Codex comparison, benchmark, release package, branch, worktree, commit, tag, push, publish, install, or cleanup action was performed."
+  ],
+  "stopRule": {
+    "workItemComplete": true,
+    "nextWorkItem": "CF-FS2-04",
+    "nextWorkItemStarted": false
+  }
+}

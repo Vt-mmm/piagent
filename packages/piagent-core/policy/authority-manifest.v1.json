@@ -1,0 +1,380 @@
+{
+  "schemaVersion": 1,
+  "manifestVersion": "authority-v1",
+  "releaseVersion": "1.3.0",
+  "status": "pre-release",
+  "authorityVocabulary": ["off", "observe", "advise", "enforce", "orchestrate"],
+  "sourceProvenance": {
+    "decisionDate": "2026-08-10",
+    "roadmap": "governance/codex-first-product/15-full-source-productionization-roadmap.md",
+    "constitution": "governance/codex-first-product/evidence/fs0/capability-constitution.v1.json",
+    "constitutionSha256": "5dc65f03639df4236ea4e9c70e31e81aa9613317102e1acd2b371c6e44e8c1e8",
+    "evidenceTier": "local-pre-release"
+  },
+  "globalBudgets": {
+    "maxSystemContinuationsPerTask": 1,
+    "maxAutomaticDispatchesPerTask": 1,
+    "maxSpecialistReviewRoundsPerTask": 1
+  },
+  "profiles": [
+    {
+      "id": "broad-default",
+      "description": "Mechanical invariants and efficiency stay active; advanced analysis observes or advises without universal enforcement.",
+      "modes": {
+        "CAP-01": "enforce",
+        "CAP-02": "enforce",
+        "CAP-03": "enforce",
+        "CAP-04": "enforce",
+        "CAP-05": "on",
+        "CAP-06": "on",
+        "CAP-07": "recommend",
+        "CAP-08": "shadow",
+        "CAP-09": "shadow",
+        "CAP-10": "shadow",
+        "CAP-11": "advisory",
+        "CAP-12": "on",
+        "CAP-13": "off",
+        "CAP-14": "recommend",
+        "CAP-15": "off",
+        "CAP-16": "on",
+        "CAP-17": "on"
+      }
+    },
+    {
+      "id": "mechanical-only",
+      "description": "Retain L0/L1 mechanical truth, context, tool and operator foundations while disabling advanced guidance, repair and orchestration.",
+      "modes": {
+        "CAP-01": "enforce",
+        "CAP-02": "enforce",
+        "CAP-03": "enforce",
+        "CAP-04": "enforce",
+        "CAP-05": "on",
+        "CAP-06": "on",
+        "CAP-07": "off",
+        "CAP-08": "off",
+        "CAP-09": "off",
+        "CAP-10": "off",
+        "CAP-11": "off",
+        "CAP-12": "off",
+        "CAP-13": "off",
+        "CAP-14": "off",
+        "CAP-15": "off",
+        "CAP-16": "on",
+        "CAP-17": "on"
+      }
+    },
+    {
+      "id": "strict-high-risk",
+      "description": "Opt-in high-risk profile that adds phase and semantic enforcement under the same global continuation ceiling.",
+      "modes": {
+        "CAP-01": "enforce",
+        "CAP-02": "enforce",
+        "CAP-03": "enforce",
+        "CAP-04": "enforce",
+        "CAP-05": "on",
+        "CAP-06": "on",
+        "CAP-07": "recommend",
+        "CAP-08": "shadow",
+        "CAP-09": "strict",
+        "CAP-10": "shadow",
+        "CAP-11": "advisory",
+        "CAP-12": "on",
+        "CAP-13": "strict",
+        "CAP-14": "recommend",
+        "CAP-15": "off",
+        "CAP-16": "on",
+        "CAP-17": "on"
+      }
+    }
+  ],
+  "capabilities": [
+    {
+      "id": "CAP-01",
+      "owner": "task-contract-maintainer",
+      "layer": "L0",
+      "configKey": "taskContract",
+      "configSources": ["manifest"],
+      "defaultMode": "enforce",
+      "killSwitchMode": "enforce",
+      "dependencies": [],
+      "modeMappings": [
+        { "value": "on", "authority": "enforce", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "enforce", "authority": "enforce", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } }
+      ],
+      "constitutionTargetMode": "on",
+      "constitutionTargetAuthority": "enforce"
+    },
+    {
+      "id": "CAP-02",
+      "owner": "security-policy-maintainer",
+      "layer": "L0",
+      "configKey": "safetyPolicy",
+      "configSources": ["manifest", "PIAGENT_PERMISSION_PROFILE", "PIAGENT_EXECUTION_BACKEND"],
+      "defaultMode": "enforce",
+      "killSwitchMode": "enforce",
+      "dependencies": ["CAP-01"],
+      "modeMappings": [
+        { "value": "on", "authority": "enforce", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "enforce", "authority": "enforce", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } }
+      ],
+      "constitutionTargetMode": "on",
+      "constitutionTargetAuthority": "enforce"
+    },
+    {
+      "id": "CAP-03",
+      "owner": "verification-truth-maintainer",
+      "layer": "L0",
+      "configKey": "verificationTruth",
+      "configSources": ["manifest"],
+      "defaultMode": "enforce",
+      "killSwitchMode": "enforce",
+      "dependencies": ["CAP-01", "CAP-02"],
+      "modeMappings": [
+        { "value": "on", "authority": "enforce", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "enforce", "authority": "enforce", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } }
+      ],
+      "constitutionTargetMode": "on",
+      "constitutionTargetAuthority": "enforce"
+    },
+    {
+      "id": "CAP-04",
+      "owner": "long-task-state-maintainer",
+      "layer": "L0",
+      "configKey": "durableTaskState",
+      "configSources": ["manifest"],
+      "defaultMode": "enforce",
+      "killSwitchMode": "enforce",
+      "dependencies": ["CAP-01", "CAP-03"],
+      "modeMappings": [
+        { "value": "on", "authority": "enforce", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "enforce", "authority": "enforce", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } }
+      ],
+      "constitutionTargetMode": "on",
+      "constitutionTargetAuthority": "enforce"
+    },
+    {
+      "id": "CAP-05",
+      "owner": "context-efficiency-maintainer",
+      "layer": "L1",
+      "configKey": "contextEfficiency",
+      "configSources": ["manifest", "PIAGENT_AUTO_CONTEXT"],
+      "defaultMode": "on",
+      "killSwitchMode": "off",
+      "dependencies": ["CAP-01"],
+      "modeMappings": [
+        { "value": "off", "authority": "off", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "on", "authority": "enforce", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } }
+      ],
+      "constitutionTargetMode": "on",
+      "constitutionTargetAuthority": "enforce"
+    },
+    {
+      "id": "CAP-06",
+      "owner": "tool-surface-maintainer",
+      "layer": "L1",
+      "configKey": "toolSurface",
+      "configSources": ["manifest", "PIAGENT_DYNAMIC_TOOLS"],
+      "defaultMode": "on",
+      "killSwitchMode": "off",
+      "dependencies": ["CAP-02"],
+      "modeMappings": [
+        { "value": "off", "authority": "off", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "on", "authority": "enforce", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } }
+      ],
+      "constitutionTargetMode": "on",
+      "constitutionTargetAuthority": "enforce"
+    },
+    {
+      "id": "CAP-07",
+      "owner": "retrieval-memory-maintainer",
+      "layer": "L3",
+      "configKey": "retrievalMemory",
+      "configSources": ["manifest", "PIAGENT_LOCAL_RERANKER"],
+      "defaultMode": "recommend",
+      "killSwitchMode": "off",
+      "dependencies": ["CAP-02", "CAP-05"],
+      "modeMappings": [
+        { "value": "off", "authority": "off", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "shadow", "authority": "observe", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "recommend", "authority": "advise", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } }
+      ],
+      "constitutionTargetMode": "recommend",
+      "constitutionTargetAuthority": "advise"
+    },
+    {
+      "id": "CAP-08",
+      "owner": "solver-runtime-maintainer",
+      "layer": "L2",
+      "configKey": "solver",
+      "configSources": ["manifest", "PIAGENT_SOLVER_MODE", "PIAGENT_RUNTIME_SNAPSHOT"],
+      "defaultMode": "shadow",
+      "killSwitchMode": "off",
+      "dependencies": ["CAP-01", "CAP-05"],
+      "modeMappings": [
+        { "value": "off", "authority": "off", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "shadow", "authority": "observe", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "on", "authority": "observe", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "recommend", "authority": "advise", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "assist", "authority": "advise", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } }
+      ],
+      "constitutionTargetMode": "shadow",
+      "constitutionTargetAuthority": "observe"
+    },
+    {
+      "id": "CAP-09",
+      "owner": "phase-policy-maintainer",
+      "layer": "L2",
+      "configKey": "phaseTools",
+      "configSources": ["manifest", "PIAGENT_PHASE_TOOLS"],
+      "defaultMode": "shadow",
+      "killSwitchMode": "off",
+      "dependencies": ["CAP-01", "CAP-02", "CAP-10"],
+      "modeMappings": [
+        { "value": "off", "authority": "off", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "shadow", "authority": "observe", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "on", "authority": "enforce", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "strict", "authority": "enforce", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } }
+      ],
+      "constitutionTargetMode": "shadow",
+      "constitutionTargetAuthority": "observe"
+    },
+    {
+      "id": "CAP-10",
+      "owner": "trajectory-observability-maintainer",
+      "layer": "L2",
+      "configKey": "trajectory",
+      "configSources": ["manifest"],
+      "defaultMode": "shadow",
+      "killSwitchMode": "off",
+      "dependencies": ["CAP-01", "CAP-04"],
+      "modeMappings": [
+        { "value": "off", "authority": "off", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "shadow", "authority": "observe", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "on", "authority": "observe", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } }
+      ],
+      "constitutionTargetMode": "shadow",
+      "constitutionTargetAuthority": "observe"
+    },
+    {
+      "id": "CAP-11",
+      "owner": "assurance-maintainer",
+      "layer": "L3",
+      "configKey": "assurance",
+      "configSources": ["manifest", "PIAGENT_ACCEPTANCE_ASSURANCE"],
+      "defaultMode": "advisory",
+      "killSwitchMode": "off",
+      "dependencies": ["CAP-01", "CAP-03"],
+      "modeMappings": [
+        { "value": "off", "authority": "off", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "shadow", "authority": "observe", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "advisory", "authority": "observe", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "recommend", "authority": "advise", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } }
+      ],
+      "constitutionTargetMode": "advisory",
+      "constitutionTargetAuthority": "observe"
+    },
+    {
+      "id": "CAP-12",
+      "owner": "recovery-maintainer",
+      "layer": "L1",
+      "configKey": "recovery",
+      "configSources": ["manifest", "PIAGENT_AUTO_RECOVERY"],
+      "defaultMode": "on",
+      "killSwitchMode": "off",
+      "dependencies": ["CAP-01", "CAP-03", "CAP-04"],
+      "modeMappings": [
+        { "value": "off", "authority": "off", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "shadow", "authority": "observe", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "on", "authority": "enforce", "budgets": { "systemContinuations": 1, "automaticDispatches": 0, "reviewRounds": 0 } }
+      ],
+      "constitutionTargetMode": "on",
+      "constitutionTargetAuthority": "enforce"
+    },
+    {
+      "id": "CAP-13",
+      "owner": "semantic-enforcement-maintainer",
+      "layer": "L4",
+      "configKey": "semanticRepair",
+      "configSources": ["manifest", "PIAGENT_SEMANTIC_REPAIR"],
+      "defaultMode": "off",
+      "killSwitchMode": "off",
+      "dependencies": ["CAP-02", "CAP-03", "CAP-09", "CAP-11", "CAP-12"],
+      "modeMappings": [
+        { "value": "off", "authority": "off", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "shadow", "authority": "observe", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "advisory", "authority": "advise", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "strict", "authority": "enforce", "budgets": { "systemContinuations": 1, "automaticDispatches": 0, "reviewRounds": 1 } }
+      ],
+      "constitutionTargetMode": "strict",
+      "constitutionTargetAuthority": "enforce"
+    },
+    {
+      "id": "CAP-14",
+      "owner": "orchestration-maintainer",
+      "layer": "L3",
+      "configKey": "helpers",
+      "configSources": ["manifest", "PIAGENT_HELPERS_MODE"],
+      "defaultMode": "recommend",
+      "killSwitchMode": "off",
+      "dependencies": ["CAP-02", "CAP-05", "CAP-08"],
+      "modeMappings": [
+        { "value": "off", "authority": "off", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "shadow", "authority": "observe", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "recommend", "authority": "advise", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "on", "authority": "orchestrate", "budgets": { "systemContinuations": 0, "automaticDispatches": 1, "reviewRounds": 0 } }
+      ],
+      "constitutionTargetMode": "recommend",
+      "constitutionTargetAuthority": "advise"
+    },
+    {
+      "id": "CAP-15",
+      "owner": "parent-routing-maintainer",
+      "layer": "L4",
+      "configKey": "parentRouting",
+      "configSources": ["manifest", "PIAGENT_PARENT_ROUTING"],
+      "defaultMode": "off",
+      "killSwitchMode": "off",
+      "dependencies": ["CAP-02", "CAP-08", "CAP-14"],
+      "modeMappings": [
+        { "value": "off", "authority": "off", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "shadow", "authority": "observe", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "recommend", "authority": "advise", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "auto", "authority": "orchestrate", "budgets": { "systemContinuations": 0, "automaticDispatches": 1, "reviewRounds": 0 } }
+      ],
+      "constitutionTargetMode": "off",
+      "constitutionTargetAuthority": "off"
+    },
+    {
+      "id": "CAP-16",
+      "owner": "release-operator-experience-maintainer",
+      "layer": "L1",
+      "configKey": "operatorExperience",
+      "configSources": ["manifest"],
+      "defaultMode": "on",
+      "killSwitchMode": "off",
+      "dependencies": ["CAP-02", "CAP-04"],
+      "modeMappings": [
+        { "value": "off", "authority": "off", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "on", "authority": "enforce", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } }
+      ],
+      "constitutionTargetMode": "on",
+      "constitutionTargetAuthority": "enforce"
+    },
+    {
+      "id": "CAP-17",
+      "owner": "evaluation-claims-maintainer",
+      "layer": "L2",
+      "configKey": "evaluationTelemetry",
+      "configSources": ["manifest", "PIAGENT_CONTEXT_TELEMETRY"],
+      "defaultMode": "on",
+      "killSwitchMode": "off",
+      "dependencies": ["CAP-03", "CAP-04"],
+      "modeMappings": [
+        { "value": "off", "authority": "off", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } },
+        { "value": "on", "authority": "observe", "budgets": { "systemContinuations": 0, "automaticDispatches": 0, "reviewRounds": 0 } }
+      ],
+      "constitutionTargetMode": "on",
+      "constitutionTargetAuthority": "observe"
+    }
+  ]
+}

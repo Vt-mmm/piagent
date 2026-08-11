@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "scenarios": {
+    "hono-tenant-api": [
+      { "id": "tenant-hono-route", "clause": "A1", "weight": 1, "critical": true },
+      { "id": "tenant-authorization", "clause": "A2", "weight": 1, "critical": true },
+      { "id": "tenant-validation", "clause": "A3", "weight": 1, "critical": true },
+      { "id": "tenant-response-contract", "clause": "A4", "weight": 1, "critical": true },
+      { "id": "tenant-immutability", "clause": "A5", "weight": 1, "critical": true }
+    ],
+    "hono-accessible-search": [
+      { "id": "search-normalization", "clause": "S1", "weight": 1, "critical": true },
+      { "id": "search-hono-route", "clause": "S2", "weight": 1, "critical": true },
+      { "id": "search-limit-contract", "clause": "S3", "weight": 1, "critical": true },
+      { "id": "search-accessible-escaping", "clause": "S4", "weight": 1, "critical": true },
+      { "id": "search-empty-immutable", "clause": "S5", "weight": 1, "critical": true }
+    ],
+    "sqlite-resumable-inventory": [
+      { "id": "inventory-schema-migration", "clause": "M1", "weight": 1, "critical": true },
+      { "id": "inventory-validation-atomicity", "clause": "M2", "weight": 1, "critical": true },
+      { "id": "inventory-idempotency", "clause": "M3", "weight": 1, "critical": true },
+      { "id": "inventory-crash-resume", "clause": "M4", "weight": 1, "critical": true },
+      { "id": "inventory-preserves-legacy", "clause": "M5", "weight": 1, "critical": true }
+    ],
+    "workspace-policy-rollout": [
+      { "id": "policy-normalized-shape", "clause": "R1", "weight": 1, "critical": true },
+      { "id": "policy-validation", "clause": "R2", "weight": 1, "critical": true },
+      { "id": "policy-enablement", "clause": "R3", "weight": 1, "critical": true },
+      { "id": "policy-api-reasons", "clause": "R4", "weight": 1, "critical": true },
+      { "id": "policy-admin-summary", "clause": "R5", "weight": 1, "critical": true }
+    ]
+  }
+}

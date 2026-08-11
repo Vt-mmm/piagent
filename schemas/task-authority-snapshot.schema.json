@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Vt-mmm/piagent/schemas/task-authority-snapshot.schema.json",
+  "title": "Piagent Immutable Task Authority Snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "snapshotVersion", "manifestVersion", "manifestDigest", "releaseVersion", "profile", "taskId", "taskRunId", "capturedAt", "resolution", "globalBudgets", "capabilities", "snapshotDigest"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "snapshotVersion": { "const": "task-authority-snapshot-v1" },
+    "manifestVersion": { "const": "authority-v1" },
+    "manifestDigest": { "$ref": "#/$defs/hash" },
+    "releaseVersion": { "const": "1.3.0" },
+    "profile": { "enum": ["broad-default", "mechanical-only", "strict-high-risk"] },
+    "taskId": { "$ref": "#/$defs/name" },
+    "taskRunId": { "$ref": "#/$defs/name" },
+    "capturedAt": { "type": "string", "format": "date-time" },
+    "resolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "modeOverrides"],
+      "properties": {
+        "source": { "enum": ["profile", "explicit-overrides", "legacy-feature-modes-v0"] },
+        "modeOverrides": { "$ref": "#/$defs/modeOverrides" }
+      }
+    },
+    "globalBudgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxSystemContinuationsPerTask", "maxAutomaticDispatchesPerTask", "maxSpecialistReviewRoundsPerTask"],
+      "properties": {
+        "maxSystemContinuationsPerTask": { "const": 1 },
+        "maxAutomaticDispatchesPerTask": { "const": 1 },
+        "maxSpecialistReviewRoundsPerTask": { "const": 1 }
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 17,
+      "maxItems": 17,
+      "items": { "$ref": "#/$defs/entry" }
+    },
+    "snapshotDigest": { "$ref": "#/$defs/hash" }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 160, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,159}$" },
+    "capabilityId": { "type": "string", "pattern": "^CAP-(0[1-9]|1[0-7])$" },
+    "authority": { "enum": ["off", "observe", "advise", "enforce", "orchestrate"] },
+    "modeOverrides": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "CAP-01": { "$ref": "#/$defs/name" }, "CAP-02": { "$ref": "#/$defs/name" }, "CAP-03": { "$ref": "#/$defs/name" },
+        "CAP-04": { "$ref": "#/$defs/name" }, "CAP-05": { "$ref": "#/$defs/name" }, "CAP-06": { "$ref": "#/$defs/name" },
+        "CAP-07": { "$ref": "#/$defs/name" }, "CAP-08": { "$ref": "#/$defs/name" }, "CAP-09": { "$ref": "#/$defs/name" },
+        "CAP-10": { "$ref": "#/$defs/name" }, "CAP-11": { "$ref": "#/$defs/name" }, "CAP-12": { "$ref": "#/$defs/name" },
+        "CAP-13": { "$ref": "#/$defs/name" }, "CAP-14": { "$ref": "#/$defs/name" }, "CAP-15": { "$ref": "#/$defs/name" },
+        "CAP-16": { "$ref": "#/$defs/name" }, "CAP-17": { "$ref": "#/$defs/name" }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["systemContinuations", "automaticDispatches", "reviewRounds"],
+      "properties": {
+        "systemContinuations": { "type": "integer", "minimum": 0, "maximum": 8 },
+        "automaticDispatches": { "type": "integer", "minimum": 0, "maximum": 8 },
+        "reviewRounds": { "type": "integer", "minimum": 0, "maximum": 8 }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "owner", "mode", "authority", "dependencies", "budgets"],
+      "properties": {
+        "id": { "$ref": "#/$defs/capabilityId" },
+        "owner": { "$ref": "#/$defs/name" },
+        "mode": { "$ref": "#/$defs/name" },
+        "authority": { "$ref": "#/$defs/authority" },
+        "dependencies": { "type": "array", "maxItems": 17, "uniqueItems": true, "items": { "$ref": "#/$defs/capabilityId" } },
+        "budgets": { "$ref": "#/$defs/budget" }
+      }
+    }
+  }
+}

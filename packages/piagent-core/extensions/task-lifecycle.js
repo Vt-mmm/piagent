@@ -1,4 +1,4 @@
-import crypto from "node:crypto";
+export { workingTreeEvidenceDigest } from "./working-tree-digest.js";
 
 function sameValues(left, right) {
   return JSON.stringify(left ?? []) === JSON.stringify(right ?? []);
@@ -35,7 +35,7 @@ export function runtimeLifecycleMode(task) {
   if (!Array.isArray(task?.workPlan)) return "manual";
   if (
     task.changeMode === "read-only"
-    && task.riskLane === "tiny"
+    && (task.riskLane === "tiny" || (task.intakeMode === "runtime" && task.riskLane === "normal"))
     && task.workPlan.length === AUTOMATIC_READ_ONLY_PLAN.length
     && task.workPlan.every((step, index) => matchesStep(step, AUTOMATIC_READ_ONLY_PLAN[index]))
   ) return "automatic-readonly";
@@ -47,7 +47,7 @@ export function runtimeLifecycleMode(task) {
   ) return "assisted-readonly";
   if (task.changeMode !== "source-change") return "manual";
   if (
-    task.riskLane === "tiny"
+    (task.riskLane === "tiny" || (task.intakeMode === "runtime" && task.riskLane === "normal"))
     && task.workPlan.length === AUTOMATIC_TINY_PLAN.length
     && task.workPlan.every((step, index) => matchesStep(step, AUTOMATIC_TINY_PLAN[index]))
   ) return "automatic";
@@ -59,11 +59,65 @@ export function runtimeLifecycleMode(task) {
   return "manual";
 }
 
-export function workingTreeEvidenceDigest(snapshot) {
-  const entries = Object.entries(snapshot ?? {})
-    .filter(([file, digest]) => typeof file === "string" && typeof digest === "string")
-    .sort(([left], [right]) => left.localeCompare(right));
-  return crypto.createHash("sha256").update(JSON.stringify(entries)).digest("hex");
+function nonEmptyStrings(value) {
+  return Array.isArray(value)
+    && value.length > 0
+    && value.every((item) => typeof item === "string" && item.trim().length > 0);
+}
+
+function sourceContractReady(task) {
+  return task?.schemaVersion === 2
+    && task.changeMode === "source-change"
+    && task.trace?.outcome === "pending"
+    && nonEmptyStrings(task.acceptanceCriteria)
+    && nonEmptyStrings(task.scope)
+    && nonEmptyStrings(task.verifyCommands)
+    && Array.isArray(task.workPlan);
+}
+
+function dependencyReadyStep(task, predicate) {
+  if (!sourceContractReady(task)) return false;
+  const byId = new Map(task.workPlan.map((step) => [step?.id, step]));
+  return task.workPlan.some((step) => (
+    predicate(step)
+    && (step.dependsOn ?? []).every((dependency) => {
+      const status = byId.get(dependency)?.status;
+      return status === "done";
+    })
+  ));
+}
+
+/** A persisted read-only plan step is the active pre-mutation gate. */
+export function sourcePlanningAuthorized(task) {
+  return dependencyReadyStep(task, (step) => (
+    step?.id === "plan"
+    && step.mode === "read-only"
+    && step.status === "in-progress"
+  ));
+}
+
+/**
+ * A source phase is executable when the persisted work plan, rather than a
+ * claimed mutation, has opened one dependency-ready single-writer step.
+ * Active tasks have already passed Task Contract validation; the checks here
+ * retain the source-specific contract, scope, and verifier prerequisites that
+ * authorize mutation at call time.
+ */
+export function sourceExecutionAuthorized(task) {
+  return dependencyReadyStep(task, (step) => (
+    step?.mode === "single-writer"
+    && step.status === "in-progress"
+  ));
+}
+
+/** Runtime-owned automatic tasks may bypass a phase that is absent by design. */
+export function runtimeAutomaticSourceExecutionReady(task) {
+  return sourceExecutionAuthorized(task)
+    && task.intakeMode === "runtime"
+    && task.acceptanceReceipt?.source === "runtime"
+    && Array.isArray(task.acceptanceReceipt.criteria)
+    && task.acceptanceReceipt.criteria.length > 0
+    && runtimeLifecycleMode(task) === "automatic";
 }
 
 function setStep(step, status, note, recordedAt) {

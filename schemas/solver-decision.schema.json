@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Vt-mmm/piagent/schemas/solver-decision.schema.json",
+  "title": "Pi Agent Solver Decision",
+  "type": "object", "additionalProperties": false,
+  "required": ["schemaVersion", "policyVersion", "featureHash", "route", "plannedPhases", "context", "toolGroups", "helper", "parentModel", "reasonCodes", "confidence", "mode", "override"],
+  "properties": {
+    "schemaVersion": { "const": 1 }, "policyVersion": { "const": "solver-v1" }, "featureHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "route": { "$ref": "#/$defs/route" }, "plannedPhases": { "type": "array", "minItems": 1, "maxItems": 7, "uniqueItems": true, "items": { "enum": ["intake", "context", "plan", "implement", "verify", "review", "handoff"] } },
+    "context": { "type": "object", "additionalProperties": false, "required": ["recommendation", "budgetBand"], "properties": { "recommendation": { "enum": ["none", "targeted", "bounded"] }, "budgetBand": { "enum": ["none", "small", "medium", "large"] } } },
+    "toolGroups": { "type": "array", "maxItems": 10, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 128 } },
+    "helper": { "type": "object", "additionalProperties": false, "required": ["needed", "role", "enforced"], "properties": { "needed": { "type": "boolean" }, "role": { "enum": ["scout", "planner", "reviewer", null] }, "enforced": { "const": false } } },
+    "parentModel": { "type": "object", "additionalProperties": false, "required": ["provider", "modelId", "effort", "enforced"], "properties": { "provider": { "type": ["string", "null"], "maxLength": 128 }, "modelId": { "type": ["string", "null"], "maxLength": 128 }, "effort": { "type": ["string", "null"], "maxLength": 128 }, "enforced": { "const": false } } },
+    "reasonCodes": { "type": "array", "minItems": 1, "maxItems": 24, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 128 } },
+    "confidence": { "enum": ["low", "medium", "high"] }, "mode": { "enum": ["off", "shadow", "recommend"] },
+    "override": { "type": "object", "additionalProperties": false, "required": ["observed", "route", "recordedAt"], "properties": { "observed": { "type": "boolean" }, "route": { "oneOf": [{ "$ref": "#/$defs/route" }, { "type": "null" }] }, "recordedAt": { "type": ["string", "null"], "format": "date-time" } } }
+  },
+  "$defs": { "route": { "enum": ["direct", "scout-first", "plan-first", "review-only", "blocked-preflight"] } }
+}

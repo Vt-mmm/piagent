@@ -1,0 +1,88 @@
+{
+  "schemaVersion": "codex-first-fs3-semantic-repair-review-evidence-v1",
+  "workItem": "CF-FS3-05",
+  "recordedAt": "2026-08-11T00:20:02+07:00",
+  "status": "pass",
+  "scope": {
+    "objective": "Bound semantic repair and specialist review to the pinned strict-high-risk authority, one shared continuation, exact current-tree scope, a post-mutation exact verifier, and deterministic finite handoff.",
+    "providerInvoked": false,
+    "benchmarkRunInvoked": false,
+    "releaseActionInvoked": false,
+    "nextWorkItemStarted": false,
+    "candidateState": "unfrozen",
+    "candidateDigest": null
+  },
+  "reviewedIdentity": {
+    "head": "4f37ae05d56431f2f9db9c4159e20252c3da3b2a",
+    "exactTag": "v1.2.17",
+    "packageVersion": "1.2.17",
+    "policyManifestVersion": "authority-v1",
+    "policyManifestSha256": "7f223487384b5521bcda01bc1dc1578dfb3f8293dc94eadd85b86048b645273c",
+    "executionProtocolSha256": "aab941a5422a2797fc1a3a1e420764a1f03fffcb4f06e4d04ea70fe3bbc1e470",
+    "roadmapSha256": "cb91fe410add6de293431308436ae7cff34e593c89fe8146a3633d8c85550aa7",
+    "profileLockSha256": "443dade8a55d004fe6433cab789a27eb2c56e8871eade38827b32058b2df27b5",
+    "profilePackageDigest": "sha256:443dade8a55d004fe6433cab789a27eb2c56e8871eade38827b32058b2df27b5",
+    "workingTreeDisposition": "Dirty user-owned full-source development tree retained. This artifact binds the exact current strict semantic repair/review carriers and provider-free verification only; it is not a clean or frozen release candidate."
+  },
+  "productionContract": {
+    "authority": "CAP-13 remains off in broad-default and mechanical-only. Only a task pinned to strict-high-risk grants CAP-13 enforce authority, one specialist-review round, and at most one system continuation.",
+    "sharedContinuation": "CAP-13 and CAP-12 reserve the same append-only task/run-bound continuation unit. Repeated, absent-progress, exhausted, corrupt, stale, advisory, off, or legacy requests cannot schedule another model turn.",
+    "reviewBudget": "One review opportunity admits one current-tree bounded diff and at most two targeted reads. Review guidance, state enforcement, and tests agree on this ceiling.",
+    "eligibleScope": "Repair is restricted to exact semantically conflicting source paths and statically linked live executable companion tests inside Task Contract scope. Directory siblings, shadows, unresolved tests, skipped/dead proof, opaque shell targets, and outside-scope carriers fail closed.",
+    "mutationAndVerifier": "Only an observed successful tree-changing mutation consumes repair progress. Completion requires the task's exact configured verifier to pass stably on the new current-tree digest.",
+    "classifiedVerifierRecovery": "Inside the already consumed continuation, one retryable infrastructure failure may retry the exact verifier on the same digest, and one high-confidence eligible in-scope failure may open one final mutation-bound correction. Unclassified, tree-changing, repeated, or exhausted failures lock and hand off.",
+    "finiteFailurePolicy": "A review call denied by the review/scope budget, a failed call, a successful no-op, stale evidence, corrupt or missing repair state, path mismatch, digest race, or exhaustion locks the opportunity and invalidates reusable review credit. Policy denials outside the review transaction do not destroy valid current-tree evidence.",
+    "unsupportedLanguages": "Semantic evidence remains a closed finite JavaScript/TypeScript adapter. Unsupported or unproven shapes abstain or hand off; no parser result creates universal repair authority.",
+    "rollback": "Create a clean replacement task with CAP-13 off or use broad-default/mechanical-only. Existing receipts, journal events, handoffs, and terminal tasks remain immutable evidence."
+  },
+  "implementation": [
+    { "path": "packages/piagent-core/runtime/recovery/continuation-budget.ts", "sha256": "0cc6ca588f69f9f8f65d19847ccdda3a1267a903c7cb62e70f76a84e40ab8659", "change": "Provides the single durable continuation unit shared by recovery and semantic review." },
+    { "path": "packages/piagent-core/runtime/recovery/semantic-repair-handshake.ts", "sha256": "241f9cd1b0973a0f723798acddde35c10d33c9ce88068d47293e7ccfa95f67d7", "change": "Binds exact task/session/digest targets, reservations, ceilings, final verifier and fail-closed resume behavior." },
+    { "path": "packages/piagent-core/runtime/recovery/semantic-repair-runtime.ts", "sha256": "89801984314a2f2984df640dc325d49770038ad0f275665fbb7b17d330111e94", "change": "Blocks completion while a committed repair lacks its exact final verifier and handles finite resume state." },
+    { "path": "packages/piagent-core/runtime/quality/performance-assurance.ts", "sha256": "316620c9545e4487ee8baf5935d0b694025ecea95a13b51b55980ab8ab1c57bf", "change": "Aligns the strict review read allowance with the documented maximum of two targeted reads." },
+    { "path": "packages/piagent-core/runtime/session/performance-review-state.ts", "sha256": "2f370713ec980bdc8451f1ce6448c312135a7652b18cea02ce8ee58ab9f6145e", "change": "Locks failed and no-op review activity, records only real mutations, and exposes explicit denied-review invalidation." },
+    { "path": "packages/piagent-core/runtime/session/runtime-state.ts", "sha256": "567dc935a87c71395ca6b1f61165c10bfd366a1e405f80ddb805d46577317ae8", "change": "Invalidates reusable review credit whenever the active review transaction locks or invalidates." },
+    { "path": "packages/piagent-core/extensions/piagent-guard.ts", "sha256": "d3da28d77856e8f12c23728d4ae00a1c771946f4a3dab552ebe786d2fd0f92e6", "change": "Applies strict authority, exact task scope, review-specific denial handling and phase-safe reservation without treating unrelated policy denial as review failure." },
+    { "path": "packages/piagent-core/runtime/hooks/tool-result-hook.ts", "sha256": "17bea5903124631f4786c661d25d70c2b04b1f24f933e9865eee8a750a3ba0ee", "change": "Commits review state only from the immutable observed post-call tree result." },
+    { "path": "packages/piagent-core/runtime/hooks/completion-hook.ts", "sha256": "bdeb777fbe0003abe884deeb8832602c2965caa76e3e95822a67fd59b4814007", "change": "Routes strict review through the shared continuation and emits deterministic bounded handoff on exhaustion." },
+    { "path": "tests/runtime-session-modules.test.mjs", "sha256": "98dac7d1eba8c7f1aec0ab5b7e7ed569472629fec971f6314aafd84a0f7e5d2a", "change": "Covers failed, no-op and denied review state, credit invalidation, exact mutation progress and the two-read ceiling." },
+    { "path": "tests/piagent-guard-integration.test.mjs", "sha256": "2cc69a1bf2b5213e6162f07bc408e2ca073c12bf8da627b0e5c80691ee7d0fe3", "change": "Covers one bounded review, exact path mutation, stale tree, denied review handoff, untracked authorship and terminal current-tree truth." },
+    { "path": "docs/authority-manifest.md", "sha256": "25956f724a7770fd3eeb178b4dd74b135f3ee5fb0b9fdf5aa7d38984ab599b47", "change": "Documents the strict CAP-13 trigger, finite budgets, exact scope, verifier and handoff contract." },
+    { "path": "docs/en/architecture.md", "sha256": "e3a37090fa70d5a8db3fcfd34d77992a84dcd18e910120a0c70401493fb85110", "change": "Documents the English strict specialist-review boundary." },
+    { "path": "docs/vi/architecture.md", "sha256": "46426de6b72bfdda62bf9b51beee138513e6a85191151475c070fe454e3587ec", "change": "Documents the aligned Vietnamese strict specialist-review boundary." },
+    { "path": "docs/runtime-harness-standard.md", "sha256": "b151bb5cdf6f606b1fa2203001998a0574720959603149e36bc4c66d6fa534b7", "change": "Adds the exact bounded review and finite failure rules to the standard workflow." },
+    { "path": ".pi/piagent-profile.lock.json", "sha256": "443dade8a55d004fe6433cab789a27eb2c56e8871eade38827b32058b2df27b5", "change": "Regenerates the exact production runtime-integrity lock after the contract change." }
+  ],
+  "exitEvidence": [
+    { "requirement": "Strict/high-risk opt-in only", "status": "pass", "evidence": "Authority tests prove CAP-13 off for broad/mechanical profiles and strict/enforce with one continuation and one review round only for strict-high-risk." },
+    { "requirement": "At most one continuation", "status": "pass", "evidence": "The append-only continuation ledger is shared by CAP-12 and CAP-13; second/repeated requests hand off across process restart." },
+    { "requirement": "Exact trigger and eligible scope", "status": "pass", "evidence": "Per-conflict source selection and the shared live executable test-binding grammar reject sibling, shadow, unresolved, skipped/dead and out-of-scope targets." },
+    { "requirement": "Final verifier after mutation", "status": "pass", "evidence": "Observed tree-changing mutation opens an exact verifier requirement; completion blocks until stable current-tree proof and stale/tree-changing evidence fails closed." },
+    { "requirement": "No-op, denied, failure and exhaustion handoff", "status": "pass", "evidence": "Review-specific denial, failed result and successful no-op lock state and erase reusable credit; retry/correction ceilings and continuation exhaustion produce pending handoff without another turn." },
+    { "requirement": "No parser-driven universal repair", "status": "pass", "evidence": "Only pinned CAP-13 authority plus a finite supported-language conflict can authorize exact repair; unsupported or unproven inputs abstain or hand off." }
+  ],
+  "verification": [
+    { "command": "node --test tests/continuation-budget.test.mjs tests/semantic-repair-handshake.test.mjs tests/runtime-session-modules.test.mjs", "result": "39/39 pass" },
+    { "command": "node --test --test-reporter=dot tests/piagent-guard-integration.test.mjs", "result": "100/100 pass" },
+    { "command": "node --test tests/pi-082-host-tool-error.test.mjs tests/pi-082-runtime-phase-e2e.test.mjs", "result": "12/12 pass; provider-free" },
+    { "command": "node --test tests/authority-manifest.test.mjs tests/authority-resume-policy.test.mjs", "result": "18/18 pass" },
+    { "command": "node --test tests/capability-core.test.mjs tests/package-distribution.test.mjs tests/project-shape.test.mjs tests/architecture-boundaries.test.mjs", "result": "103/103 pass" },
+    { "command": "npm test", "result": "1863/1863 pass across 123 suites" },
+    { "command": "npm run verify -- --offline", "result": "pass; complete local scaffold; authenticated catalog deliberately skipped" },
+    { "command": "npm run typecheck && npm run architecture:check && npm run docs:check && npm run capabilities:check && git diff --check", "result": "pass; 193 source files within boundaries and line budgets" },
+    { "command": "npm run capabilities:doctor -- --profile .pi/piagent-profile.json --lock .pi/piagent-profile.lock.json --package-source ../", "result": "pass; catalog and lock current at sha256:443dade8a55d004fe6433cab789a27eb2c56e8871eade38827b32058b2df27b5" }
+  ],
+  "schemaAndMigration": {
+    "providerToolSchema": "unchanged and phase-stable",
+    "taskContract": "unchanged v2",
+    "authorityManifest": "unchanged authority-v1",
+    "journalAndHandoff": "unchanged schema; existing shared continuation and semantic repair state are reused",
+    "migration": "none",
+    "authorityPromotion": "none; CAP-13 remains strict-high-risk opt-in"
+  },
+  "deferredEvidence": [
+    "No provider, paired benchmark, model-token, latency, quality, candidate-freeze, capability-promotion or release claim was made.",
+    "Pairwise interaction across solver, phase, acceptance, review, recovery, helpers, resume and all feature modes remains CF-FS3-06.",
+    "Provider-backed calibration and Piagent-vs-Codex evidence remain FS4/FS5 after the product contract is frozen."
+  ]
+}

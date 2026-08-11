@@ -1,0 +1,188 @@
+{
+  "schemaVersion": 2,
+  "workItems": [
+    "CF-FS5-03",
+    "CF-FS5-04",
+    "CF-FS5-05"
+  ],
+  "recordedAt": "2026-08-11",
+  "comparison": {
+    "candidateSurface": "piagent",
+    "baselineSurface": "codex-cli",
+    "model": "openai-codex/gpt-5.6-luna",
+    "thinking": "medium",
+    "treatment": "local-safe"
+  },
+  "measuredCandidate": {
+    "algorithm": "sha256-length-prefixed-entry-v2",
+    "contentDigest": "f92ed21b37e7da60853a2b9adb56eb826e2473cd8b33ec7615045131379161a5",
+    "fileCount": 832,
+    "disposition": "historical-exact-fs5-candidate; superseded by this additive governance record; never resume as a current candidate"
+  },
+  "suiteIdentity": {
+    "productionV1": "7c2a77c0e7490a1376bf1cb856262e5e6996e7c5672e4c0934f1dc924d7449fa",
+    "capabilityV1": "bb2e97a83a8a3d06976bcc94259e60c3513626704bd463d87c9808e66fe5152c"
+  },
+  "localVerification": {
+    "fullSerial": "1921/1921 PASS across 124 suites on the final checkpoint tree",
+    "postClarificationFocused": "60/60 PASS across production-suite, intake and benchmark-core regressions",
+    "typecheck": "PASS",
+    "architecture": "PASS (198 source files)",
+    "capabilityCatalog": "PASS",
+    "diffCheck": "PASS"
+  },
+  "tenantContractConfirmation": {
+    "runId": "production-v1-20260811T034835Z-ed1b4a",
+    "configurationDigest": "cf9329280802abe39a5c4f6769a7aa089d626b6c8e9e8a9a7f0d7df805d4b4fe",
+    "passed": true,
+    "piagent": {
+      "grade": 10,
+      "workflow": 10,
+      "freshTokens": 6290,
+      "durationSeconds": 33.261,
+      "systemContinuations": 0,
+      "blockedValidCallsUpperBound": 0
+    },
+    "codexCli": {
+      "grade": 10,
+      "freshTokens": 17263,
+      "durationSeconds": 59.19
+    },
+    "freshTokenRatio": 0.3643630886867868,
+    "durationRatio": 0.5619361378604494,
+    "artifactSha256": {
+      "report.json": "2effe31cb4894db19b20b3c6934f823a4be41fb2ed4ed3d1fecb793e07682e12",
+      "runs.jsonl": "7983144f654ceb916e98ee41d70f53f60e94e2f7c2a50beab72a3b7971c3e460",
+      "run-manifest.json": "746e36719946e1f76c0162c670259f177320fd257bb047f3d6d0045b828ae634"
+    }
+  },
+  "canaries": [
+    {
+      "stage": "canary-a-fullstack",
+      "runId": "capability-v1-20260811T035052Z-2de228",
+      "configurationDigest": "a038f4d25ce751f14375b0ae68eac540ac065534e644b2f5939b02beaac8a974",
+      "passed": true,
+      "piagent": {
+        "grade": 10,
+        "workflow": 10,
+        "freshTokens": 17513,
+        "durationSeconds": 137.086,
+        "systemContinuations": 0,
+        "blockedValidCallsUpperBound": 0
+      },
+      "codexCli": {
+        "grade": 10,
+        "freshTokens": 28085,
+        "durationSeconds": 145.808
+      },
+      "freshTokenRatio": 0.6235713014064447,
+      "durationRatio": 0.9401816086919825,
+      "artifactSha256": {
+        "report.json": "43e8954afd87dd2f9d6366b57f5844dea4e6d661830de217fcdb33ed31b92465",
+        "runs.jsonl": "59d0eb46dfae1216b90d44776657c8fae434dab720d9596b6fd866a51fb5f9f0",
+        "run-manifest.json": "8b4985363fcca49fb84b77048700648285013115b234406a57546e43c53a5568"
+      }
+    },
+    {
+      "stage": "canary-b-migration",
+      "runId": "capability-v1-20260811T035614Z-044420",
+      "configurationDigest": "a2fe95a3b5f1a9e941c9af41088ee9e7ec296843966d418fa301c14ef2bee50d",
+      "passed": true,
+      "piagent": {
+        "grade": 10,
+        "workflow": 10,
+        "freshTokens": 19922,
+        "durationSeconds": 187.062,
+        "systemContinuations": 1,
+        "blockedValidCallsUpperBound": 0
+      },
+      "codexCli": {
+        "grade": 10,
+        "freshTokens": 32379,
+        "durationSeconds": 189.785
+      },
+      "freshTokenRatio": 0.6152753333951018,
+      "durationRatio": 0.9856521858956187,
+      "artifactSha256": {
+        "report.json": "4b98fea2b1d53a8dbd915e871699f6a50afcb434eab6c561bf1072efe0797dd7",
+        "runs.jsonl": "15e94344a1c2e7d90b0cf0326d2c70785c7929b7ced34c1b42c5a62043a19010",
+        "run-manifest.json": "1e3d5af1046b3841040bc80f4f769e62f564de4337aa3881a2e7366d22173b18"
+      }
+    }
+  ],
+  "pilot": {
+    "runId": "production-v1-20260811T040332Z-03773c",
+    "configurationDigest": "0d6dd3f3485f112ae83b8c03defaa8f31d83372c8db37c13e34da054feaecb19",
+    "expectedSessions": 12,
+    "acceptedSessions": 3,
+    "state": "terminal-incomplete-external-infrastructure-stop",
+    "completedPair": {
+      "scenarioId": "stale-search-response",
+      "piagent": {
+        "grade": 10,
+        "workflow": 10,
+        "freshTokens": 5513,
+        "durationSeconds": 45.163,
+        "systemContinuations": 0,
+        "blockedValidCallsUpperBound": 0
+      },
+      "codexCli": {
+        "grade": 10,
+        "freshTokens": 25609,
+        "durationSeconds": 33.516
+      },
+      "freshTokenRatio": 0.2152758795735874,
+      "durationRatio": 1.3475056689342402,
+      "gatePassed": true
+    },
+    "incompletePair": {
+      "scenarioId": "quoted-csv",
+      "codexCli": {
+        "grade": 10,
+        "freshTokens": 33442,
+        "durationSeconds": 73.064
+      },
+      "piagent": {
+        "acceptedRecord": false,
+        "measuredUsage": {
+          "freshTokens": 0,
+          "totalTokens": 0,
+          "cost": 0
+        },
+        "classification": "external-provider-overloaded-before-measured-session"
+      }
+    },
+    "manualRecovery": {
+      "attempted": true,
+      "providerCalled": false,
+      "result": "runner refused recovery because infrastructureRetries=0 after orphan-attempt recovery",
+      "terminalReason": "No infrastructure retry remains after recovering an interrupted provider attempt for quoted-csv/piagent/r1"
+    },
+    "ledger": {
+      "schemaVersion": 1,
+      "algorithm": "sha256-chain-jsonl-v1",
+      "digest": "f5a8f3d61decd8f88f68ca6111c407a12343e7e6da36595eb3631d430257cacb",
+      "records": 3,
+      "bytes": 8404
+    },
+    "artifactSha256": {
+      "runs.jsonl": "07e98fc78cd3da037d14a3e8e45af4bd89a44ddfe9bf28aadf327457279d4c18",
+      "run-manifest.json": "263ee582f536f074ae87fb639a985fe3fd2991ec1f176429a648d4338908e58a",
+      "infrastructure-attempts.jsonl": "ac8727393d94ed338c040d5b1d9d6ca0de0c2651860ff0208c142bbda5499c72",
+      "aborted.json": "98f821b85a1b1bd93ac589d279a8e19c5c2e29953413e387c3913ab1464369a3"
+    }
+  },
+  "decision": {
+    "CF-FS5-03": "complete-on-final-exact-candidate",
+    "CF-FS5-04": "blocked-terminal-incomplete-by-external-provider-overload",
+    "CF-FS5-05": "blocked-no-six-family-promotion-evidence",
+    "capabilityPromotionAllowed": false,
+    "fs5ExitPassed": false,
+    "fs6EntryAllowed": false,
+    "tokenSavingClaimAllowed": false,
+    "generalizationClaimAllowed": false,
+    "releaseClaimAllowed": false,
+    "providerResumeAllowed": false,
+    "reason": "The six-family engineering pilot did not complete. The accepted pair passed, but an external zero-usage provider failure terminally closed the zero-retry run. No partial result is promoted."
+  }
+}

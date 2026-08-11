@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.2.17 docs · EN</span>
+        <span class="pill"><span class="pill-dot"></span>v1.3.0-rc.1 docs · EN</span>
         <nav class="language-switch" aria-label="Language">
           <a class="language-option" href="/benchmark" hreflang="vi" lang="vi">VI</a>
           <a class="language-option current" href="/en/benchmark" hreflang="en" lang="en" aria-current="true">EN</a>
@@ -60,6 +60,7 @@
             <p class="nav-title">Get started</p>
             <a class="nav-link" href="/en/">Overview</a>
             <a class="nav-link" href="/en/quickstart">Quickstart</a>
+            <a class="nav-link" href="/en/whats-new">What’s new</a>
             <a class="nav-link" href="/en/scope">Platform scope</a>
           </div>
           <div class="nav-group">
@@ -104,7 +105,7 @@
 <section class="benchmark-summary" aria-labelledby="benchmark-verdict">
   <div class="benchmark-verdict">
     <div>
-      <p class="section-kicker">Production V1 · release evidence</p>
+      <p class="section-kicker">Production V1 · historical public regression evidence</p>
       <h2 id="benchmark-verdict">Piagent scores 9.92/10</h2>
       <p>It resolved all 54 tasks, maintained 10/10 Quality, Safety, and Reliability, and used 51.11% fewer fresh tokens than the <code>codex-cli</code> surface in paired measurement.</p>
     </div>
@@ -238,6 +239,26 @@
 </section>
 
 <section class="section">
+  <p class="section-kicker">Benchmark bands</p>
+  <h2 id="benchmark-bands">Use the right suite for the decision</h2>
+  <div class="table-wrap benchmark-table-wrap">
+    <table>
+      <thead><tr><th>Band</th><th>When to use it</th><th>Minimum evidence</th><th>Claim allowed</th></tr></thead>
+      <tbody>
+        <tr><td>Core</td><td>Fast local smoke before release work</td><td>4 scenarios, 1 repeat, hidden verifier</td><td>Regression only</td></tr>
+        <tr><td>Production</td><td>Public regression for a release candidate</td><td>18 scenarios, 3 repeats, <span class="inline-code">piagent</span> vs baseline</td><td>Claims stay bounded to the observed public suite; outcome coverage, comparable CI, and failure-aware effort are separate</td></tr>
+        <tr><td>Capability</td><td>Find the harness capability ceiling</td><td>4 large multi-file/multi-component tasks with reference and mutation checks</td><td>Hill-climbing, not a release or generalization gate</td></tr>
+        <tr><td>Long-horizon</td><td>Recovery/context changes and large-repository adoption</td><td>Planned dedicated paid suite; today run Production plus deterministic crash/replay tests</td><td>No public long-horizon score until that suite ships</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout">
+    <strong>A benchmark must state its claim tier; it is not marketing copy.</strong>
+    <p>A version should not claim token savings unless quality/reliability, paired candidate-regression, outcome coverage, comparable-efficiency, failure-aware effort, scope/safety, and protocol gates pass. Raw Pi is a causal harness ablation; <code>codex-cli</code> is only an external product reference.</p>
+  </div>
+</section>
+
+<section class="section">
   <p class="section-kicker">Provenance</p>
   <h2 id="transparency">Interpret results within their measured scope</h2>
   <div class="table-wrap benchmark-table-wrap">
@@ -253,7 +274,7 @@
   </div>
   <div class="callout">
     <strong>Limits of the conclusion</strong>
-    <p>This is a synthetic production benchmark built by the maintainer, not an independent benchmark proving that Piagent is better for every repository or model. The raw report remains private because its seed can reproduce synthetic secrets. Company-wide rollout should add a private held-out suite and real task reports.</p>
+    <p>This is a maintainer-built public synthetic regression, not an independent benchmark proving Piagent is better for every repository or model. Generated values do not create independent task families. Generalization requires an external family-disjoint holdout, a reference/mutation/human-calibration manifest, a frozen candidate, and real shadow/canary tasks.</p>
   </div>
   <div class="command-grid">
     <div class="command-card">

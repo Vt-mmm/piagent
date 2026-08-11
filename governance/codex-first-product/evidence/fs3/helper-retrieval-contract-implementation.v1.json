@@ -1,0 +1,85 @@
+{
+  "schemaVersion": "codex-first-fs3-helper-retrieval-evidence-v1",
+  "workItem": "CF-FS3-04",
+  "recordedAt": "2026-08-10T23:57:01+07:00",
+  "status": "pass",
+  "scope": {
+    "objective": "Bound Piagent-owned helpers, retrieval and subagent orchestration to recommend-first authority, read-only automatic work, finite budgets, one-writer ownership, isolated redacted summaries, cancellation and parent-owned merge.",
+    "providerInvoked": false,
+    "benchmarkRunInvoked": false,
+    "releaseActionInvoked": false,
+    "nextWorkItemStarted": false,
+    "candidateState": "unfrozen",
+    "candidateDigest": null
+  },
+  "reviewedIdentity": {
+    "head": "4f37ae05d56431f2f9db9c4159e20252c3da3b2a",
+    "exactTag": "v1.2.17",
+    "packageVersion": "1.2.17",
+    "policyManifestVersion": "authority-v1",
+    "executionProtocolSha256": "aab941a5422a2797fc1a3a1e420764a1f03fffcb4f06e4d04ea70fe3bbc1e470",
+    "roadmapSha256": "cb91fe410add6de293431308436ae7cff34e593c89fe8146a3633d8c85550aa7",
+    "profileLockSha256": "1962e5e075dd7fd294a8c72fdc3389a2e9d238e8f7d0b7ec41a90fcb0515fce5",
+    "profilePackageDigest": "sha256:1962e5e075dd7fd294a8c72fdc3389a2e9d238e8f7d0b7ec41a90fcb0515fce5",
+    "workingTreeDisposition": "Dirty user-owned full-source development tree retained. This artifact binds the exact current helper/retrieval carriers and provider-free verification only; it is not a clean or frozen release candidate."
+  },
+  "productionContract": {
+    "broadDefault": "CAP-14 recommend/advise and CAP-15 off; recommendation adds zero adapter or provider turns and never dispatches automatically.",
+    "automaticOptIn": "CAP-14 on permits at most one read-only automatic helper dispatch per task/run. Automatic workers remain disabled.",
+    "explicitOwnedWork": "The lower-level controller permits at most two concurrent and three total explicitly owned reservations, one pass per bounded role, and one active writer.",
+    "retrieval": "Retrieval recommendations use grep/find/read only, at most two parallel searches and two rounds, never automatic dispatch and never wider parent scope.",
+    "permissionInheritance": "A child preserves the parent catalog identity, allowed tools, approval restrictions and scope; absolute paths, traversal, wildcard broadening and undeclared regions are rejected.",
+    "resultOwnership": "A successful helper exposes only a redacted normalized summary capped at 1000 characters. The parent is the sole merge owner; durable state stores only bounded counters and a raw-output digest.",
+    "failurePolicy": "Timeout, cancellation, terminal-parent late result, stale reservation, call/token overflow, unavailable model, duplicate work and orphan recovery all fail closed without merging output.",
+    "rollback": "Set CAP-14 off or recommend and keep CAP-15 off for a clean replacement task. Existing receipts remain evidence; Task Contract, tool schema and persisted state require no migration."
+  },
+  "implementation": [
+    { "path": "packages/piagent-core/runtime/orchestration/owned-work-budget.ts", "sha256": "6c55aec62eb9995952ffe76333c1f2bdc336cca49dc49c41854ec599db01e722", "change": "Enforced explicit and automatic ceilings, deduplication, one-writer ownership, orphan/terminal handling, late-result rejection, and call/token result budgets." },
+    { "path": "packages/piagent-core/runtime/orchestration/helper-lifecycle.ts", "sha256": "4080fde2d13a1e01f24758c607621cac54b43fcaf428f3f55b5efcd0544baafa", "change": "Added actual timeout/abort/cancel behavior, one-dispatch automatic budget, stale/overflow rejection, redacted bounded summary and parent-only merge ownership." },
+    { "path": "packages/piagent-core/runtime/orchestration/role-policy.ts", "sha256": "fc3f7edf28f11a6c430e9956b69945a54d26c23413c4b175f3c8b6ba6b9b9e63", "change": "Made scope inheritance conservative and rejected absolute, traversal, wildcard-broadening and undeclared child paths." },
+    { "path": "packages/piagent-core/runtime/context/retrieval-route-policy.ts", "sha256": "035880702f01b9b1d2bef3e4d84641ca6dd47f8c4fb2bdf118cc8239d8f8011b", "change": "Bound every route to at most two parallel read-only searches and two rounds with automatic dispatch false." },
+    { "path": "scripts/helper-evaluation.mjs", "sha256": "d5dc0202eb2e8cd67680ab5811ac6de51de8268cc368bb8c92a039398a7c977d", "change": "Replaced hard-coded safety metrics with deterministic lifecycle, timeout, cancellation, orphan, budget, writer and privacy probes." },
+    { "path": "tests/helper-lifecycle.test.mjs", "sha256": "f1e6c77589117a54a4d14a2cf002da02602861d7880e300877cebbdcfc9f2e67", "change": "Covered zero-turn recommendation, one automatic dispatch, actual timeout/cancel/stale/overflow handling and redacted summary merge." },
+    { "path": "tests/owned-work-budget.test.mjs", "sha256": "4875099ab2f063bacc8c37ed157a94479f1a3b17ffae005b4629cb61f5fd5ec3", "change": "Covered direct result overflow, late release, concurrency, stale-lock recovery, orphan and terminal behavior." },
+    { "path": "tests/role-policy-binder.test.mjs", "sha256": "8d6df798f2186394a7246f14bf9e37b3f78e459458b0642b49d6097dd85570b7", "change": "Covered traversal, absolute, additional-scope rejection and valid narrowed child scope." },
+    { "path": "tests/retrieval-route-policy.test.mjs", "sha256": "5814987e8f2e4d9a6297fee34a80a7a4598fa2353dc90a1f9d8a752569385b0d", "change": "Covered the full helpers-mode/confidence matrix, finite ceilings and no automatic dispatch." },
+    { "path": "tests/helper-evaluation.test.mjs", "sha256": "4a95779b51917880a897b777b353657b60a8de5fa10904a11751953adef3026c", "change": "Required actual evaluation probes, bounded metrics and private-value exclusion." },
+    { "path": "docs/en/architecture.md", "sha256": "4df5c5ff1b9160e4c78f83233c046d6178b3abac17e303a09b3b9407bf82d4fa", "change": "Documented helper authority, budgets, privacy, parent merge and 2x2 retrieval limits." },
+    { "path": "docs/vi/architecture.md", "sha256": "a9f0eda34d39523a772c46e4646e90d3ad1202a777f2a966a3375d85602bf330", "change": "Kept the Vietnamese production contract aligned with the English authority and retrieval limits." },
+    { "path": "docs/subagents-and-multiagent.md", "sha256": "376b5a8441f8d4788b787cc2552ddd4760d0fd5a47220084daf00df0b02f4149", "change": "Separated one automatic dispatch from explicit owned reservations and documented fail-closed merge behavior." },
+    { "path": ".pi/piagent-profile.lock.json", "sha256": "1962e5e075dd7fd294a8c72fdc3389a2e9d238e8f7d0b7ec41a90fcb0515fce5", "change": "Regenerated the exact production runtime-integrity lock." }
+  ],
+  "exitEvidence": [
+    { "requirement": "Recommend-first and automatic authority", "status": "pass", "evidence": "Recommend mode invokes no adapter/provider; on mode admits one read-only automatic dispatch per task/run; worker and parent routing remain off." },
+    { "requirement": "Finite token/work/time budgets", "status": "pass", "evidence": "Request context, calls and timeout are enforced at execution/result merge; overflow and timeout cannot contribute output." },
+    { "requirement": "Permission inheritance and one writer", "status": "pass", "evidence": "Child scope/tools cannot widen the parent; explicit owner budget serializes the writer and cross-process reservations." },
+    { "requirement": "Cancellation, stale result and recovery", "status": "pass", "evidence": "Parent terminal aborts active work; late/stale adapter success is rejected; orphan recovery does not create extra budget." },
+    { "requirement": "Privacy and merge ownership", "status": "pass", "evidence": "Raw prompts, outputs and session identity are absent from durable evidence; only a digest/counters persist and the parent owns a redacted 1000-character maximum summary." },
+    { "requirement": "Bounded retrieval mechanics", "status": "pass", "evidence": "Six deterministic 5000-file cases passed with 37.27% median time-to-relevant-file improvement and equal verified pass rate; this is local mechanics evidence only, not provider/model/token evidence." }
+  ],
+  "verification": [
+    { "command": "node --test tests/helper-lifecycle.test.mjs tests/owned-work-budget.test.mjs tests/retrieval-route-policy.test.mjs tests/role-policy-binder.test.mjs tests/subagent-policy.test.mjs tests/helper-evaluation.test.mjs", "result": "30/30 pass" },
+    { "command": "node --test tests/authority-manifest.test.mjs tests/authority-resume-policy.test.mjs", "result": "18/18 pass" },
+    { "command": "node scripts/helper-evaluation.mjs", "result": "gatePassed true; 6/6 verified retrieval cases; timeout/cancellation/orphan/writer/privacy probes pass; zero automatic workers and budget violations" },
+    { "command": "npm test", "result": "1863/1863 pass" },
+    { "command": "node --test --test-reporter=dot tests/piagent-guard-integration.test.mjs", "result": "100/100 pass" },
+    { "command": "node --test tests/pi-082-host-tool-error.test.mjs tests/pi-082-runtime-phase-e2e.test.mjs", "result": "12/12 pass; provider-free" },
+    { "command": "node --test tests/capability-core.test.mjs tests/package-distribution.test.mjs tests/project-shape.test.mjs tests/architecture-boundaries.test.mjs", "result": "103/103 pass" },
+    { "command": "npm run verify -- --offline", "result": "pass; complete local scaffold; authenticated catalog deliberately skipped" },
+    { "command": "npm run typecheck && npm run architecture:check && npm run docs:check && npm run capabilities:check && git diff --check", "result": "pass; 193 source files within boundaries and line budgets" },
+    { "command": "npm run capabilities:doctor -- --profile .pi/piagent-profile.json --lock .pi/piagent-profile.lock.json --package-source ../", "result": "pass; catalog and lock current" }
+  ],
+  "schemaAndMigration": {
+    "providerToolSchema": "unchanged",
+    "taskContract": "unchanged v2",
+    "helperRequest": "unchanged v1",
+    "durableBudgetState": "unchanged owned-work-budget-v1; result counters remain bounded",
+    "migration": "none",
+    "authorityPromotion": "none; CAP-14 remains broad-default recommend/advise and CAP-15 remains off"
+  },
+  "deferredEvidence": [
+    "No provider, paired benchmark, model-token, latency, quality, capability-promotion, candidate-freeze or release claim was made.",
+    "The controller governs Piagent-owned child work only; it does not claim account-wide control over unrelated Pi sessions or external subagent packages.",
+    "Provider-backed helper quality and token calibration remain FS4/FS5. Pairwise interaction with phase, recovery, semantic review and resume remains CF-FS3-06."
+  ]
+}

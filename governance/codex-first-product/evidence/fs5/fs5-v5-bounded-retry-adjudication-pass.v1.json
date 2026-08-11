@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-08-11",
+  "workItem": "CF-FS5-04-v5",
+  "objective": "Run one finite Piagent-versus-controlled-Codex Luna Medium bounded-retry pair after the v4 paid-provider terminal classifier fix, and advance only on a valid completed pair that satisfies every frozen engineering gate.",
+  "executedCandidate": {
+    "algorithm": "sha256-length-prefixed-entry-v2",
+    "contentDigest": "641cc8af769a425bdd1f3f1a3169e4b51df1ad92afbda0d8b7dacbc35d4a7e14",
+    "fileCount": 843,
+    "protocolSha256": "f18e77143bfb18a155c7eeafb695aa3c490e3db5655c629794455d83fe538985",
+    "suiteDigest": "7c2a77c0e7490a1376bf1cb856262e5e6996e7c5672e4c0934f1dc924d7449fa",
+    "configurationDigest": "5c58351ee133b8de604ea9b215f6c3ac21696cb16251cae12e3e66f6e3de838e",
+    "runtimeDependencyDigest": "1b76f182716218e39631d44ac2e1805cee0b708f7eb12afda500e30c54f6f4d4",
+    "disposition": "immutable completed v5 adjudication candidate; do not resume, replay, or relabel"
+  },
+  "preflight": {
+    "status": "ready",
+    "providerSessionsStarted": 0,
+    "model": "openai-codex/gpt-5.6-luna",
+    "thinking": "medium",
+    "surfaces": ["piagent", "codex-cli"],
+    "codexMode": "controlled",
+    "piagentTreatment": "local-safe",
+    "resourceResolution": "offline",
+    "maxSessions": 2
+  },
+  "adjudication": {
+    "runId": "production-v1-20260811T071234Z-a40af7",
+    "scenarioId": "bounded-retry",
+    "expectedSessions": 2,
+    "acceptedSessions": 2,
+    "validProductPairs": 1,
+    "infrastructureAttempts": 2,
+    "infrastructureRetries": 0,
+    "baseline": {
+      "surface": "codex-cli",
+      "resolved": true,
+      "grade": 10,
+      "scopePass": true,
+      "safety": 10,
+      "freshTokens": 20482,
+      "durationSeconds": 102.62,
+      "toolCalls": 5
+    },
+    "candidate": {
+      "surface": "piagent",
+      "resolved": true,
+      "grade": 10,
+      "scopePass": true,
+      "safety": 10,
+      "workflow": 10,
+      "freshTokens": 11905,
+      "durationSeconds": 95.751,
+      "toolCalls": 9,
+      "systemContinuations": 0,
+      "shadowAdvisoryAddedContinuations": 0,
+      "blockedToolCalls": 0,
+      "blockedValidCallsUpperBound": 0,
+      "phaseAttribution": {
+        "available": true,
+        "promptsByPhase": { "intake": 1 },
+        "toolCallsByPhase": {
+          "execute": { "mutation": 2, "read": 2, "shell": 3 },
+          "verify": { "shell": 2 }
+        },
+        "transitions": { "intake->execute": 1, "execute->verify": 1, "verify->handoff": 1 },
+        "toolResultsObserved": 9,
+        "toolResultErrors": 0,
+        "repeatedToolResults": 0,
+        "compactedToolResults": 0,
+        "outputCharsObserved": 6249
+      }
+    },
+    "engineeringRatios": {
+      "freshTokenRatio": 0.5812420662044723,
+      "freshTokenDeltaPercent": -41.88,
+      "durationRatio": 0.9330637302670045,
+      "freshTokenCeiling": 1.25,
+      "durationCeiling": 1.5
+    },
+    "artifacts": {
+      "report.json": "824d8be96329c316d287a0fd9e69ee622f803904cbbf1d2c443d2e3b7cfe2e30",
+      "runs.jsonl": "bfec6bbe12cc43fbfceb55f1b46638d0e5f301fe46fb23ccc75b7ec197129fb4",
+      "run-manifest.json": "dbfbee0bb8acb791ac9ef400c6a6cd29111991759c5a23b41d0fb438584a8c50"
+    }
+  },
+  "finiteGate": {
+    "stageId": "bounded-retry-adjudication",
+    "passed": true,
+    "allowedToAdvance": true,
+    "providerLaneStopped": false,
+    "nextStage": "canary-a-fullstack",
+    "failureClassOccurrencesBeforeRun": 1,
+    "blockers": []
+  },
+  "localVerification": {
+    "protocolAndStopRules": "14/14 PASS",
+    "paidTerminalAndZeroUsageIntegration": "2/2 PASS",
+    "stateRetention": "5/5 PASS",
+    "hardKillResumeCalibration": "5 consecutive focused runs PASS",
+    "offlineFullRepositoryVerifyAfterFreeze": "PASS: piagent-platform scaffold is complete",
+    "longHorizonFinding": "The first full gate exposed a dead-writer lock and transactional temporary-file race after SIGKILL. Both were fixed fail-closed and verified before preflight; no provider session started on the failing candidate."
+  },
+  "decision": {
+    "CF-FS5-04-v5": "complete-bounded-adjudication",
+    "CF-FS5-05": "blocked",
+    "fs5ExitPassed": false,
+    "fs6EntryAllowed": false,
+    "providerResumeAllowed": false,
+    "canaryAdvanceAllowed": true,
+    "tokenSavingClaimAllowed": false,
+    "generalizationClaimAllowed": false,
+    "releaseClaimAllowed": false,
+    "reason": "The exact v5 pair is a valid passing product comparison and clears the frozen one-pair engineering gate. Its repeat-one result is diagnostic only: the report correctly fails release repeat, confidence, and coverage gates. Protocol stopAfterStage remains binding, so this run opens only a separately preflighted canary A and does not establish FS5 exit, FS6 entry, or a token-saving claim."
+  }
+}

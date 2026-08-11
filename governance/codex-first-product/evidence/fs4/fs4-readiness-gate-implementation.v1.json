@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 1,
+  "workItem": "CF-FS4-05",
+  "status": "complete-local-gate-external-e3-deferred",
+  "verifiedAt": "2026-08-11",
+  "objective": "Evaluate the E0 deterministic, E1 public-regression, E2 public-capability, provider-free long-horizon, and E3 custody-readiness tiers independently, preserve their claim boundaries, and allow only local FS5 protocol preparation while external E3 evidence is deferred to CF-FS7-01.",
+  "implementation": {
+    "matrix": {
+      "path": "evals/fs4-readiness-matrix.v1.json",
+      "sha256": "1ce2f455fb939cc3698393bd0d7f7461b7d7d6dddb90ee0409c24a4d9c135af8"
+    },
+    "gate": {
+      "path": "packages/piagent-core/benchmark/fs4-readiness-gates.js",
+      "sha256": "df34e7d09316883299484bfdb26eeee35184bb6315a5fe0fe3eb366397236740"
+    },
+    "evaluator": {
+      "path": "scripts/fs4-readiness-evaluation.mjs",
+      "sha256": "cec2e0d1c2f77e3f45a6d806602c764e3e61fae980128234abe03075fa3b3482"
+    },
+    "focusedTest": {
+      "path": "tests/fs4-readiness-gates.test.mjs",
+      "sha256": "d8ccfc0bc9088bf571764933081f6bf83348e7a0d3718b1b07e267784b867cd3"
+    },
+    "parallelRaceRegression": {
+      "path": "tests/runtime-advisories.test.mjs",
+      "sha256": "60ffba505f3230b949c493a1f7e57041d61276e11feb25fb4d94164cc33f9e3c",
+      "disposition": "repository-local expiry fixture moved to an isolated operating-system temporary directory so concurrent candidate freezing remains fail closed without a test-created source-tree race"
+    },
+    "report": {
+      "path": "governance/codex-first-product/evidence/fs4/fs4-readiness-gate-report.v1.json",
+      "sha256": "e5a9222908ca41417134320a522db2d826cbe13317e11ed7a21da6668f6b0233",
+      "mode": "0644",
+      "artifactCount": 15,
+      "artifactManifestSha256": "771a5c4048a37348cd29be1ac6009a81715617ff4d9d54daca1c0ac9c5ec22f1"
+    }
+  },
+  "tierResults": {
+    "e0": {
+      "status": "passed-deterministic",
+      "tests": "122/122 PASS",
+      "claimBoundary": "deterministic local evidence only"
+    },
+    "e1": {
+      "status": "passed-public-regression",
+      "tests": "4/4 PASS",
+      "claimBoundary": "reviewed public regression only; generated variants disclosed; not family-disjoint and not generalization evidence"
+    },
+    "e2": {
+      "status": "passed-public-capability",
+      "tests": "18/18 PASS",
+      "calibration": "4/4 references scored 10, 20/20 named mutations killed, 4/4 distinct valid alternatives scored 10, scope and 20 sensitivity checks passed",
+      "claimBoundary": "public capability evidence only"
+    },
+    "longHorizon": {
+      "status": "passed-provider-free-lifecycle",
+      "tests": "6/6 PASS",
+      "wallClockMinutes": 32.6125,
+      "claimBoundary": "provider-free crash, restart, resume, compaction, handoff, bounded-continuation, bounded-context and stable-tree lifecycle evidence only; not model long-task performance"
+    },
+    "e3": {
+      "status": "protocol-ready-external-execution-pending",
+      "tests": "6/6 PASS",
+      "sealedCustodianReceipt": false,
+      "humanCalibrationRecorded": false,
+      "custodyOriginVerified": false,
+      "privateHoldoutReady": false,
+      "executionDeferredTo": "CF-FS7-01",
+      "claimBoundary": "custody and calibration protocol readiness only; author self-attestation forbidden"
+    }
+  },
+  "gateDecision": {
+    "readinessReviewPassed": true,
+    "fs4ExitPassed": false,
+    "fs5ProtocolPreparationAllowed": true,
+    "providerExecutionAuthorized": false,
+    "releasePromotionAllowed": false,
+    "generalizationClaimAllowed": false,
+    "modelLongTaskPerformanceClaimAllowed": false,
+    "tokenOrLatencyClaimAllowed": false,
+    "releaseClaimAllowed": false,
+    "nextLocalWorkItem": "CF-FS5-01",
+    "externalEvidenceWorkItem": "CF-FS7-01"
+  },
+  "verification": {
+    "tierReadiness": "156/156 PASS",
+    "focusedMatrixGateAndPackage": "40/40 PASS",
+    "runtimeRaceAndGateRegression": "16/16 PASS",
+    "repositoryParallel": "1902/1902 PASS, 124 suites",
+    "offlineVerify": "PASS on the final source tree",
+    "typecheck": "PASS",
+    "architecture": "PASS, 196 source files within budgets",
+    "docs": "PASS, 4 EN/VI pairs",
+    "capabilityCatalog": "PASS, 2 packs",
+    "packageDryRun": "PASS, 1195 entries",
+    "diffCheck": "PASS",
+    "providerUsed": false,
+    "privateHoldoutExecuted": false,
+    "releaseActionPerformed": false
+  },
+  "externalEvidenceRequired": {
+    "state": "deferred-to-cf-fs7-01-and-not-fabricated",
+    "items": [
+      "sealed v2 custodian access and family/repository-disjointness receipt for the exact frozen candidate",
+      "append-only proof that candidate authors had no private prompt, grader, repository, or locator access",
+      "double-scored sampled human calibration record with every disagreement resolved",
+      "independent custody-origin readback"
+    ],
+    "effect": "The missing external inputs keep FS4 release exit, generalization, provider authorization, token or latency claims, and release promotion false, but do not block local CF-FS5-01 protocol preparation."
+  }
+}

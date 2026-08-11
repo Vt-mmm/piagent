@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "workItem": "CF-FS5-02",
+  "status": "complete-local-one-feature-arm-provider-canary-not-run",
+  "verifiedAt": "2026-08-11",
+  "objective": "Replace bundled historical treatments with one falsifiable causal hypothesis whose arm differs from local-safe in CAP-09 phase authority only, prove the mechanics locally, and retain a one-canary plus one-confirmation provider ceiling.",
+  "hypothesis": "CAP-09 on/enforce may add blocked-call and follow-up-turn overhead relative to shadow/observe and therefore must remain unpromoted until single-feature provider evidence passes every finite gate.",
+  "implementation": {
+    "protocol": { "path": "evals/fs5-causal-arm.v1.json", "sha256": "49a1d40587f57badc12ce3463b1f10dbec6ae491117c3053f330d408ac15dc38" },
+    "validator": { "path": "packages/piagent-core/benchmark/fs5-causal-arm.js", "sha256": "21457d0ce70098f5eff2710de730eecfff90b705342fff9856f9a9f3593aed85" },
+    "treatmentRuntime": { "path": "packages/piagent-core/benchmark/benchmark-runtime.js", "sha256": "25ca1328c2777e9c0efe394a0b56a6948fae6a2e193fd6191df214b15b9f1159" },
+    "cli": { "path": "packages/piagent-core/benchmark/benchmark-cli.js", "sha256": "7c08e3a7d1aee0ef1ac4acefd1401ce864ac2c67b33879acc1849d93cc442b88" },
+    "focusedTest": { "path": "tests/fs5-causal-arm.test.mjs", "sha256": "6b878b77f7e37d11a22711ba5cfb7077bc8ecbc832c5992e4465b7b40ce67dcc" }
+  },
+  "causalIdentity": {
+    "baselineTreatment": "local-safe",
+    "armTreatment": "causal-phase-enforce",
+    "changedEnvironmentKeys": ["PIAGENT_PHASE_TOOLS"],
+    "changedCapabilityIds": ["CAP-09"],
+    "baselineModeAuthority": "shadow/observe",
+    "armModeAuthority": "on/enforce",
+    "solverRecoveryHelpersAndBackendEqual": true
+  },
+  "localReproducer": {
+    "status": "passed-deterministic-mechanics",
+    "strictValidCalls": "0/68 blocked",
+    "strictMutationCarriers": "8/8 blocked",
+    "shadowMutationCarriers": "0/8 blocked",
+    "providerSchemas": "unchanged in shadow and enforce",
+    "promotionAllowed": false
+  },
+  "providerBudget": {
+    "canaryPairs": 1,
+    "confirmationPairsAfterCodeChange": 1,
+    "sameFailureClassMaximumOccurrences": 2,
+    "thirdRunAllowed": false,
+    "providerPairsUsed": 0
+  },
+  "verification": {
+    "causalFocusedAndPackage": "21/21 PASS",
+    "benchmarkKernel": "146/146 PASS",
+    "typecheck": "PASS",
+    "architecture": "PASS, 198 source files within budgets",
+    "docs": "PASS, 4 EN/VI pairs",
+    "diffCheck": "PASS",
+    "providerUsed": false,
+    "benchmarkEvidenceMutated": false,
+    "releaseActionPerformed": false
+  },
+  "decision": {
+    "armFrozen": true,
+    "phasePromotionAllowed": false,
+    "reason": "Local mechanics are necessary but not provider performance evidence; product canaries continue with local-safe while CAP-09 stays shadow.",
+    "nextWorkItem": "CF-FS5-03"
+  }
+}

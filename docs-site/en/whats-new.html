@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en" data-copy-success="Copied" data-copy-fallback="Select command">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Safer task flow with less manual coordination · Pi Agent Platform Docs</title>
+    <meta name="description" content="Product stabilization adds runtime truth, trajectories, recovery, helper policy, an activity inspector, and fail-closed completion receipts without breaking existing workflows." />
+    <meta name="theme-color" content="#050505" />
+    <link rel="canonical" href="https://piagent.io.vn/en/whats-new" />
+    <link rel="alternate" hreflang="vi" href="https://piagent.io.vn/whats-new" />
+    <link rel="alternate" hreflang="en" href="https://piagent.io.vn/en/whats-new" />
+    <link rel="alternate" hreflang="x-default" href="https://piagent.io.vn/whats-new" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta property="og:title" content="Safer task flow with less manual coordination · Pi Agent Platform Docs" />
+    <meta property="og:description" content="Product stabilization adds runtime truth, trajectories, recovery, helper policy, an activity inspector, and fail-closed completion receipts without breaking existing workflows." />
+    <meta property="og:url" content="https://piagent.io.vn/en/whats-new" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/docs.css" />
+    <script src="/assets/docs.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/en/" aria-label="Pi Agent Platform">
+        <span class="brand-mark"><img src="/assets/piagent-logo.svg" alt="" /></span>
+        <span>Pi Agent Platform</span>
+      </a>
+      <div class="top-actions">
+        <span class="pill"><span class="pill-dot"></span>v1.3.0-rc.1 docs · EN</span>
+        <nav class="language-switch" aria-label="Language">
+          <a class="language-option" href="/whats-new" hreflang="vi" lang="vi">VI</a>
+          <a class="language-option current" href="/en/whats-new" hreflang="en" lang="en" aria-current="true">EN</a>
+        </nav>
+        <a class="button social" href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer" aria-label="Open GitHub repository">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          GitHub
+        </a>
+        <button class="button mobile-menu" type="button" data-menu>Menu</button>
+        <a class="button top-command-link" href="/en/commands">Commands</a>
+      </div>
+    </header>
+
+    <div class="layout with-toc">
+      <aside class="sidebar" data-sidebar>
+        <div class="sidebar-search" aria-label="Search documentation">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M10.8 18.1a7.3 7.3 0 1 1 0-14.6 7.3 7.3 0 0 1 0 14.6Zm5.3-1.7 4.4 4.4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          <input type="search" placeholder="Search pages" data-filter />
+        </div>
+
+        <nav aria-label="Documentation">
+          <div class="nav-group">
+            <p class="nav-title">Get started</p>
+            <a class="nav-link" href="/en/">Overview</a>
+            <a class="nav-link" href="/en/quickstart">Quickstart</a>
+            <a class="nav-link current" href="/en/whats-new" aria-current="page">What’s new</a>
+            <a class="nav-link" href="/en/scope">Platform scope</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Build</p>
+            <a class="nav-link" href="/en/profiles">Project profiles</a>
+            <a class="nav-link" href="/en/permissions">Permission modes</a>
+            <a class="nav-link" href="/en/commands">Command catalog</a>
+            <a class="nav-link" href="/en/workflows">Workflows</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">MCP</p>
+            <a class="nav-link" href="/en/mcp">MCP overview</a>
+            <a class="nav-link" href="/en/mcp-servers">Server management</a>
+            <a class="nav-link" href="/en/mcp-auth">Authentication</a>
+            <a class="nav-link" href="/en/mcp-approval">Approval gate</a>
+          </div>
+          <div class="nav-group">
+            <p class="nav-title">Operate</p>
+            <a class="nav-link" href="/en/security">Security model</a>
+            <a class="nav-link" href="/en/architecture">Architecture</a>
+            <a class="nav-link" href="/en/context-engine">Context Engine</a>
+            <a class="nav-link" href="/en/benchmark">Benchmark</a>
+            <a class="nav-link" href="/en/runtime">Runtime tools</a>
+            <a class="nav-link" href="/en/team">Team usage</a>
+          </div>
+        </nav>
+      </aside>
+
+      <main>
+        <div class="content-shell" data-article>
+            <nav class="breadcrumb" aria-label="Breadcrumb">
+              <a href="/en/">Docs</a>
+              <span aria-hidden="true">/</span>
+              <span>Get started</span>
+              <span aria-hidden="true">/</span>
+              <span>What’s new</span>
+            </nav>
+            <div class="page-head">
+              <h1>Safer task flow with less manual coordination</h1>
+              <p>Product stabilization adds runtime truth, trajectories, recovery, helper policy, an activity inspector, and fail-closed completion receipts without breaking existing workflows.</p>
+            </div>
+<section class="section">
+  <p class="section-kicker">Product stabilization</p>
+  <h2 id="main-changes">Six changes users will notice</h2>
+  <p class="section-lead">Existing workflows continue to work. This update adds runtime evidence and fail-closed gates behind them, plus compact projections that users can inspect when needed.</p>
+  <div class="grid cols-3">
+    <article class="card">
+      <h3 id="runtime-truth">Runtime truth</h3>
+      <p>Model, provider, thinking, context window, and provenance come from the runtime or authenticated catalog. Missing facts stay unknown instead of being inferred from a model name.</p>
+    </article>
+    <article class="card">
+      <h3 id="trajectory">Task trajectories</h3>
+      <p>Tasks move through plan, execute, verify, review, handoff, and terminal using replayable state. Stale, corrupt, or identity-mismatched events fail closed.</p>
+    </article>
+    <article class="card">
+      <h3 id="recovery">Recovery and resume</h3>
+      <p>Failures are classified before retry or repair. Environment, provider, permission, policy, and scope failures never grant source-mutation authority.</p>
+    </article>
+    <article class="card">
+      <h3 id="helpers">Role-bound helpers</h3>
+      <p>Scouts, planners, reviewers, and Oracle receive bounded scope, tools, and budgets. The parent model stays pinned; automatic workers and multiple writers remain off.</p>
+    </article>
+    <article class="card">
+      <h3 id="receipt">Completion receipts</h3>
+      <p>A receipt is approved only when the trace is completed, acceptance is satisfied, and the current-tree hard gate passes. Missing verifiers or pending work remain visible risks.</p>
+    </article>
+    <article class="card">
+      <h3 id="product-views">Product views</h3>
+      <p>Preflight, live status, the activity inspector, efficiency, and orchestration policy use deterministic output; users do not need a model to remember or interpret runtime state.</p>
+    </article>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Daily flow</p>
+  <h2 id="usage-flow">The daily workflow does not break</h2>
+  <div class="steps">
+    <article class="step"><div><h3>Assign work as before</h3><p>Use a natural-language request or <span class="inline-code">/workflow task &lt;request&gt;</span>. Manual preflight is optional.</p></div></article>
+    <article class="step"><div><h3>The runtime records truth</h3><p>Task Contracts, context, changed files, trajectories, and checkpoints are updated from hooks and tool results rather than model memory.</p></div></article>
+    <article class="step"><div><h3>Verify the exact working tree</h3><p>Only observed exact commands that exit successfully and match the current-tree digest count as passing evidence.</p></div></article>
+    <article class="step"><div><h3>Bounded recovery or handoff</h3><p>Source repair and transient retries have ceilings. Unsafe cases return to handoff or the operator instead of continuing by guesswork.</p></div></article>
+    <article class="step"><div><h3>Completion fails closed</h3><p>A completed trace is not enough. Work plan, acceptance, changed-file integrity, and current verifier evidence must pass before approval.</p></div></article>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Inspect when needed</p>
+  <h2 id="new-commands">Five commands that expose the whole flow</h2>
+  <p class="section-lead">These are inspection and diagnostic commands, not mandatory steps before every task.</p>
+  <div class="command-grid">
+    <article class="command-card">
+      <header><span>Preflight, activity, status, metrics, and helper policy</span><button class="clip-btn" data-clip="/task-preflight --json Review current repository state&#10;/piagent-inspector&#10;/piagent-status&#10;/usage efficiency&#10;/piagent-orchestration">Copy</button></header>
+      <pre><code>/task-preflight --json Review current repository state
+/piagent-inspector
+/piagent-status
+/usage efficiency
+/piagent-orchestration</code></pre>
+      <p>See <a href="/en/workflows">How workflows change</a> for exactly what each command reads, what it does not do, and when to use it.</p>
+    </article>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Automatic vs opt-in</p>
+  <h2 id="automatic-and-opt-in">What runs automatically and what requires opt-in</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Surface</th><th>Default</th><th>Behavior</th></tr></thead>
+      <tbody>
+        <tr><td>Runtime snapshots and task evidence</td><td>Automatic</td><td>Records bounded facts, journal entries, verifier evidence, recovery, and receipts.</td></tr>
+        <tr><td>Activity inspector</td><td>Automatic four-row panel, optional menu</td><td>Shows task diffs, commands, safety, and context beside the footer without calling a model or changing workflow state.</td></tr>
+        <tr><td>Solver</td><td><span class="inline-code">shadow</span></td><td>Evaluates routes without changing the parent model or taking control of the workflow.</td></tr>
+        <tr><td>Phase tools</td><td><span class="inline-code">shadow</span></td><td>Computes projections; use <span class="inline-code">PIAGENT_PHASE_TOOLS=on</span> to apply phase-specific tool visibility.</td></tr>
+        <tr><td>Recovery</td><td><span class="inline-code">on</span></td><td>Retries or repairs within ceilings; use <span class="inline-code">PIAGENT_AUTO_RECOVERY=off</span> to restore ordinary handoff.</td></tr>
+        <tr><td>Helpers</td><td><span class="inline-code">recommend</span></td><td>Explains recommendations only; <span class="inline-code">PIAGENT_HELPERS_MODE=on</span> dispatches read-only roles only when an adapter is available.</td></tr>
+        <tr><td>Parent routing and automatic workers</td><td><span class="inline-code">off</span></td><td>No automatic parent-model switch, writer dispatch, or default multi-writer behavior.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Compatibility</p>
+  <h2 id="compatibility">No workflow rewrite or old-task migration required</h2>
+  <div class="callout">
+    <strong>Task Contract remains v2.</strong>
+    <p>Runtime snapshots, solver decisions, trajectories, recovery, and helper state use additive versioned sidecars. Existing command aliases continue to work; old state without a new projection stays unknown or unavailable instead of being upgraded into success.</p>
+  </div>
+  <div class="grid cols-2">
+    <article class="card"><h3 id="host-boundary">The host is not a sandbox</h3><p>Policy reduces mistakes inside controlled tool surfaces but does not isolate code from the operator account. External and destructive actions still require confirmation.</p></article>
+    <article class="card"><h3 id="safe-defaults">Defaults remain conservative</h3><p>Solver and phase tools remain in shadow, helpers do not auto-dispatch, and parent routing and automatic workers stay off until separate rollout evidence exists.</p></article>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Try it</p>
+  <h2 id="try-directly">Test directly in a new Pi session</h2>
+  <div class="command-grid">
+    <article class="command-card">
+      <header><span>Read-only product walkthrough</span><button class="clip-btn" data-clip="/task-preflight --json Review this repository without modifying files&#10;/piagent-inspector&#10;/piagent-status&#10;/usage efficiency">Copy</button></header>
+      <pre><code>/task-preflight --json Review this repository without modifying files
+/piagent-inspector
+/piagent-status
+/usage efficiency</code></pre>
+      <p>After updating the package or a local checkout, start a new Pi session so the extension reloads. See the <a href="/en/commands">Command catalog</a> for every command and compatibility alias.</p>
+    </article>
+  </div>
+</section>
+            <nav class="pager" aria-label="Adjacent pages">
+              <a class="pager-prev" href="/en/quickstart">
+                <span class="pager-label">Previous</span>
+                <span class="pager-title">Quickstart</span>
+              </a>
+              <a class="pager-next" href="/en/scope">
+                <span class="pager-label">Next</span>
+                <span class="pager-title">Platform scope</span>
+              </a>
+            </nav>
+
+            <footer class="footer">
+              <p>Pi Agent Platform docs · static HTML · governed agent workflow</p>
+              <div class="footer-links" aria-label="External links">
+                <a href="https://piagent.io.vn" target="_blank" rel="noopener noreferrer">piagent.io.vn</a>
+                <a href="https://github.com/Vt-mmm/piagent" target="_blank" rel="noopener noreferrer">GitHub repository</a>
+                <a href="/whats-new" hreflang="vi">Tiếng Việt</a>
+                <a href="https://www.facebook.com/vinhtam0544/" target="_blank" rel="noopener noreferrer">Facebook profile</a>
+              </div>
+            </footer>
+        </div>
+      </main>
+
+      <aside class="toc" aria-label="Page contents">
+        <p class="toc-title">On this page</p>
+        <nav data-toc></nav>
+      </aside>
+    </div>
+  </body>
+</html>

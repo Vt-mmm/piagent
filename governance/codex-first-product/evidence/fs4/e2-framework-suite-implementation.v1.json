@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "workItem": "CF-FS4-02",
+  "status": "complete",
+  "completedAt": "2026-08-11",
+  "objective": "Build a taxonomy-bound E2 capability suite over real framework and repository dependencies without provider execution.",
+  "suite": {
+    "id": "e2-framework-v1",
+    "claimTier": "capability",
+    "releaseClaimAllowed": false,
+    "providerUsed": false,
+    "scenarioCount": 4,
+    "defaultRepeats": 3,
+    "timeoutSeconds": 1200,
+    "scenarioIds": [
+      "hono-tenant-api",
+      "hono-accessible-search",
+      "sqlite-resumable-inventory",
+      "workspace-policy-rollout"
+    ],
+    "taxonomyFamilyIds": [
+      "authorization-tenant-boundary",
+      "fullstack-cross-boundary-contract",
+      "data-schema-migration",
+      "multi-package-contract-rollout"
+    ],
+    "manifestSha256": "97d28eb96341f03e3f2537d648265e6ec80537a98941e9f5d349dea7b90f26f1",
+    "rubricSha256": "e14272868a1441d049d4ae8fa908f5c7d5a010c5e064e0bcbf8efbab85ffcd0d",
+    "coverageSha256": "4caa6dc1344023a2db6ebc9eeeab98428118c1f7c0008b63b999306550964cff",
+    "graderSha256": "6dab006dbe138ab6986e7f9ae2836e6f5b9093267746aebe01d583da92818ec6",
+    "variantGeneratorSha256": "f3cbce510b6fe04e9b3e01557c49b6d0a79878f3d750a1e53217a55e42e6d947",
+    "treeSha256": "b0dcc08ec522e524a55b4bc69368bcb507e9ae6dbe6136e64e15af9f8836a4f8",
+    "treeFiles": 613,
+    "treeBytes": 1421282
+  },
+  "realDependencies": {
+    "hono": {
+      "version": "4.13.1",
+      "source": "https://registry.npmjs.org/hono/-/hono-4.13.1.tgz",
+      "registryIntegrity": "sha512-kdJoFVv2xmayw6cY09H7AbMJMt8Jn5jdlEdXsP7AGBdF2DIptVlKlOLKXP41yPip4/a3yQPv9gVcJYI8YY04dw==",
+      "registryShasum": "d4a606b792954d07a6215d12c01b7cf59da03cbc",
+      "license": "MIT",
+      "vendoredFileCountIncludingProvenance": 565,
+      "vendoredBytesIncludingProvenance": 1373658,
+      "provenanceSha256": "67243804691a0ba8906121375f5c0d02ca8c5ca3e365d167f8fde50821d0973a"
+    },
+    "nodeSqlite": {
+      "module": "node:sqlite",
+      "runtimeObject": "DatabaseSync",
+      "runtimeNetworkRequired": false
+    },
+    "workspace": {
+      "apps": 3,
+      "packages": 6,
+      "runtimeInstallRequired": false
+    }
+  },
+  "calibration": {
+    "rubricChecks": 20,
+    "seededScenariosRejected": 4,
+    "referenceScenariosPassing": 4,
+    "referenceScores": [10, 10, 10, 10],
+    "alternativeValidScenariosPassing": 4,
+    "alternativeValidScores": [10, 10, 10, 10],
+    "structurallyDistinctAlternatives": 4,
+    "targetedMutationsKilled": 20,
+    "targetedMutationsTotal": 20,
+    "inScopeReferencesPassing": 4,
+    "outsideScopeProbesRejected": 4,
+    "reportSha256": {
+      "reference": "37df0eda9a93320772751dc4bcd0b522b2f5b4743ffed76334b68b768e4f7c8b",
+      "mutation": "859c8863f6c8c671d8b71e7f379f53097c8e967046825a0e55e36930b0eb4135",
+      "alternativeValid": "b9ba2b5397cfa01d04c8634fc38242d83f5474358f9d14c09c06603a4cc38a15",
+      "scope": "72e521f7e0481e1625780de905e97c2831fbeb98af22ffc578f206ad3ed61e70",
+      "graderSensitivity": "185388ef9d8952bbc0ee51b3c3fc8b8d9d66bc5dffbc078650b41373ec33ab04"
+    }
+  },
+  "verification": {
+    "focusedE2": "8/8 PASS",
+    "benchmarkFocused": "29/29 PASS",
+    "packageArchitectureFocused": "61/61 PASS",
+    "repositorySerial": "1885/1885 PASS (exit 0, dot reporter)",
+    "typecheck": "PASS",
+    "architecture": "PASS, 193 source files within budgets",
+    "docs": "PASS",
+    "capabilityCatalog": "PASS",
+    "offlineVerify": "PASS",
+    "diffCheck": "PASS",
+    "dryRun": "e2-framework-v1, 4 scenarios, repeat 1, 8 sessions; no model session started",
+    "testSha256": "fba0b18406734cb923c2c4aefca42a503f472b3280b2908aa9eacde55599313c"
+  },
+  "boundaries": {
+    "longHorizonEvidence": false,
+    "privateHoldout": false,
+    "humanCalibration": false,
+    "generalizationClaim": false,
+    "releaseGateClaim": false,
+    "tokenOrLatencyClaim": false,
+    "nextWorkItem": "CF-FS4-03",
+    "nextExactAction": "Build the bounded 30-90 minute crash, resume, and compaction lane against the frozen taxonomy and E2 suite without starting provider execution until its own preflight gate is complete."
+  }
+}

@@ -3,16 +3,39 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { ensurePrivateStateDirectory, resolveLocalStatePath } from "./local-state-path.js";
+import { appendTaskJournalEvent, readTaskJournal } from "./task-journal.js";
+import {
+  acceptanceReceiptProvenanceSummary,
+  acceptanceReceiptSummary,
+  acceptanceReceiptValidationErrors,
+  normalizeAcceptanceReceipt
+} from "./acceptance-receipt.js";
+import { LEGACY_UNTRUSTED_DIGEST_ALGORITHM } from "./task-digest-migration.js";
+import { normalizeTaskAuthoritySnapshot, taskAuthorityContractValidationErrors } from "./task-authority-contract.js";
+import {
+  commitLegacySchemaTaskDigestState,
+  migrateUnversionedTaskDigestState,
+  taskDigestMigrationArchiveStatus,
+  taskNeedsDigestMigration
+} from "./task-digest-state.js";
+export { taskDigestMigrationArchiveStatus } from "./task-digest-state.js";
+import { acceptanceReceiptWithoutWorkingTreeProof, normalizedTaskDigestFields, taskDigestContractValidationErrors } from "./task-digest-contract.js";
+import {
+  WORKING_TREE_DIGEST_ALGORITHM,
+  isCurrentWorkingTreeDigest,
+  isUnavailableWorkingTreeDigest,
+  unavailableWorkingTreeHash,
+  versionWorkingTreeHash
+} from "./working-tree-digest.js";
 
-export const TASK_CONTRACT_SCHEMA_VERSION = 2;
-export const DEFAULT_MAX_TASK_ATTEMPTS = 3;
-const TASK_OUTCOMES = ["pending", "completed", "blocked", "partial", "failed"];
+export const TASK_CONTRACT_SCHEMA_VERSION = 2; export const DEFAULT_MAX_TASK_ATTEMPTS = 3;
+const TASK_OUTCOMES = ["pending", "completed", "blocked", "partial", "failed"], TERMINAL_TASK_OUTCOMES = new Set(["completed", "blocked", "partial", "failed"]);
 const REVIEW_LENSES = ["correctness", "tests", "scope", "security", "docs", "release", "package"];
 const TASK_CONTRACT_FIELDS = new Set([
   "schemaVersion", "taskRunId", "taskId", "sessionId", "sessionName", "changeMode", "attempt", "maxAttempts",
   "previousAttempts", "summary", "riskLane", "intakeMode", "expectedOutput", "acceptanceCriteria", "scope", "outOfScope",
   "protectedPaths", "requiredContext", "contextManifest", "memoryCitations", "mcpCapabilities", "verifyGroup",
-  "verifyCommands", "workPlan", "reviewLenses", "orchestration", "baselineChangedFiles", "baselineFileDigests",
+  "verifyCommands", "workPlan", "reviewLenses", "orchestration", "acceptanceReceipt", "authoritySnapshot", "workingTreeDigestAlgorithm", "workingTreeDigestMigration", "baselineChangedFiles", "baselineFileDigests",
   "observedChangedFiles", "finalWorkingTreeFiles", "finalFileDigests", "changedFiles", "verifyEvidence", "trace",
   "failedAt", "failureReason", "ruledOut", "migratedFromSchemaVersion", "createdAt", "updatedAt"
 ]);
@@ -21,11 +44,25 @@ const CITATION_FIELDS = new Set(["path", "reason"]);
 const WORK_PLAN_FIELDS = new Set(["id", "title", "role", "mode", "status", "dependsOn", "note", "updatedAt"]);
 const ORCHESTRATION_FIELDS = new Set(["mode", "subagents", "reason", "fieldGuidePath", "modelRoles"]);
 const MODEL_ROLE_FIELDS = new Set(["planner", "worker", "reviewer", "watchdog"]);
-const VERIFY_EVIDENCE_FIELDS = new Set(["command", "exitCode", "summary", "recordedAt", "observed", "observedAt", "isError", "matchedProfileCommand", "workingTreeDigest"]);
+const VERIFY_EVIDENCE_FIELDS = new Set(["command", "exitCode", "summary", "recordedAt", "observed", "observedAt", "isError", "matchedProfileCommand", "preWorkingTreeDigest", "workingTreeDigest"]);
 const TRACE_FIELDS = new Set(["outcome", "friction", "notes", "recordedAt"]);
+const WORKSPACE_EVIDENCE_MAX_FILES = 2000;
+const WORKSPACE_EVIDENCE_SKIP_NAMES = new Set([
+  ".git", ".hg", ".svn", ".pi", "node_modules", "dist", "build", ".next", "coverage"
+]);
+const WORKSPACE_EVIDENCE_PRIORITY_NAMES = new Map([
+  ["plans", 0]
+]);
 
 export function safeTaskId(value) {
-  return String(value ?? "").trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "task";
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80)
+    .replace(/-+$/g, "");
+  return normalized || "task";
 }
 
 function stateRoot(cwd) {
@@ -80,6 +117,16 @@ function writeJsonAtomic(cwd, filePath, value) {
     fs.chmodSync(safePath, 0o600);
   } catch {
     // Best effort on filesystems that do not expose POSIX modes.
+  }
+}
+
+function appendTaskStateJournalEvent(cwd, event) {
+  try {
+    return appendTaskJournalEvent(cwd, event);
+  } catch {
+    // The contract remains the operational source of truth. Journal failures are
+    // surfaced by doctor/reporting instead of corrupting normal task writes.
+    return undefined;
   }
 }
 
@@ -155,9 +202,11 @@ export function taskContractValidationErrors(input) {
   if (!["source-change", "read-only"].includes(input.changeMode)) errors.push("changeMode is invalid");
   if (!["tiny", "normal", "high-risk"].includes(input.riskLane)) errors.push("riskLane is invalid");
   if (input.intakeMode !== undefined && !["model", "runtime"].includes(input.intakeMode)) errors.push("intakeMode is invalid");
+  errors.push(...taskDigestContractValidationErrors(input));
+  errors.push(...acceptanceReceiptValidationErrors(input.acceptanceReceipt));
+  errors.push(...taskAuthorityContractValidationErrors(input));
   if (!Number.isInteger(input.attempt) || input.attempt < 1) errors.push("attempt must be a positive integer");
-  if (!Number.isInteger(input.maxAttempts) || input.maxAttempts < 1 || input.maxAttempts > 10) errors.push("maxAttempts must be between 1 and 10");
-  if (Number.isInteger(input.attempt) && Number.isInteger(input.maxAttempts) && input.attempt > input.maxAttempts) errors.push("attempt exceeds maxAttempts");
+  if (!Number.isInteger(input.maxAttempts) || input.maxAttempts < 1 || input.maxAttempts > 10) errors.push("maxAttempts must be between 1 and 10"); if (Number.isInteger(input.attempt) && Number.isInteger(input.maxAttempts) && input.attempt > input.maxAttempts) errors.push("attempt exceeds maxAttempts");
   for (const field of [
     "previousAttempts", "acceptanceCriteria", "scope", "outOfScope", "protectedPaths", "requiredContext",
     "contextManifest", "memoryCitations", "mcpCapabilities", "verifyCommands", "workPlan", "reviewLenses",
@@ -168,7 +217,13 @@ export function taskContractValidationErrors(input) {
   for (const field of ["baselineFileDigests", "finalFileDigests"]) {
     if (!input[field] || typeof input[field] !== "object" || Array.isArray(input[field])) errors.push(`${field} must be an object`);
     else if (Object.entries(input[field]).some(([key, value]) => !key || typeof value !== "string")) errors.push(`${field} must contain string digests`);
+    else if (input.workingTreeDigestAlgorithm === WORKING_TREE_DIGEST_ALGORITHM && Object.values(input[field]).some((value) => !isCurrentWorkingTreeDigest(value) && !isUnavailableWorkingTreeDigest(value))) errors.push(`${field} must contain ${WORKING_TREE_DIGEST_ALGORITHM} digests`);
+    else if (input.workingTreeDigestAlgorithm === LEGACY_UNTRUSTED_DIGEST_ALGORITHM && Object.keys(input[field]).length > 0) errors.push(`${field} legacy evidence must be archived, not reinterpreted`);
   }
+  for (const [list, map] of [["baselineChangedFiles", "baselineFileDigests"], ["finalWorkingTreeFiles", "finalFileDigests"]]) {
+    if (Array.isArray(input[list]) && isRecord(input[map]) && JSON.stringify([...input[list]].sort()) !== JSON.stringify(Object.keys(input[map]).sort())) errors.push(`${list} must exactly match ${map} keys`);
+  }
+  if (input.changeMode === "source-change" && isRecord(input.baselineFileDigests) && Object.values(input.baselineFileDigests).some(isUnavailableWorkingTreeDigest)) errors.push("source-change baseline evidence must be proof-capable");
   for (const field of ["acceptanceCriteria", "scope", "outOfScope", "protectedPaths", "requiredContext", "mcpCapabilities", "verifyCommands", "reviewLenses", "baselineChangedFiles", "observedChangedFiles", "finalWorkingTreeFiles", "changedFiles"]) {
     if (Array.isArray(input[field]) && input[field].some((item) => typeof item !== "string" || !item.trim())) errors.push(`${field} must contain non-empty strings`);
   }
@@ -243,7 +298,8 @@ export function taskContractValidationErrors(input) {
     || (item.observedAt !== undefined && !validTimestamp(item.observedAt))
     || (item.isError !== undefined && typeof item.isError !== "boolean")
     || (item.matchedProfileCommand !== undefined && typeof item.matchedProfileCommand !== "boolean")
-    || (item.workingTreeDigest !== undefined && (typeof item.workingTreeDigest !== "string" || !/^[a-f0-9]{64}$/.test(item.workingTreeDigest)))
+    || (item.preWorkingTreeDigest !== undefined && !isCurrentWorkingTreeDigest(item.preWorkingTreeDigest))
+    || (item.workingTreeDigest !== undefined && !isCurrentWorkingTreeDigest(item.workingTreeDigest))
   ))) {
     errors.push("verifyEvidence entries are invalid");
   }
@@ -313,6 +369,8 @@ export function normalizeTaskContract(input, options = {}) {
   const now = new Date().toISOString();
   const createdAt = normalizedTimestamp(input.createdAt, now);
   const updatedAt = normalizedTimestamp(input.updatedAt, createdAt);
+  const digestFields = normalizedTaskDigestFields(input, { schemaVersion: TASK_CONTRACT_SCHEMA_VERSION, taskRunId, trace, updatedAt, options });
+  const currentDigestContract = digestFields.current, legacyDigestContract = digestFields.legacy;
   const verifyEvidence = Array.isArray(input.verifyEvidence)
     ? input.verifyEvidence.map((item) => item && typeof item === "object" ? {
         command: item.command,
@@ -323,6 +381,7 @@ export function normalizeTaskContract(input, options = {}) {
         observedAt: item.observedAt,
         isError: item.isError,
         matchedProfileCommand: item.matchedProfileCommand,
+        preWorkingTreeDigest: item.preWorkingTreeDigest,
         workingTreeDigest: item.workingTreeDigest
       } : item)
     : [];
@@ -352,27 +411,33 @@ export function normalizeTaskContract(input, options = {}) {
     verifyCommands: stringArray(input.verifyCommands),
     workPlan: Array.isArray(input.workPlan) ? input.workPlan.map((item) => pickFields(item, WORK_PLAN_FIELDS)) : [],
     reviewLenses: stringArray(input.reviewLenses),
+    acceptanceReceipt: normalizeAcceptanceReceipt(legacyDigestContract
+      ? acceptanceReceiptWithoutWorkingTreeProof(input.acceptanceReceipt, updatedAt)
+      : input.acceptanceReceipt),
+    authoritySnapshot: normalizeTaskAuthoritySnapshot(input.authoritySnapshot),
+    workingTreeDigestAlgorithm: digestFields.algorithm,
+    workingTreeDigestMigration: digestFields.migration,
     orchestration: isRecord(input.orchestration) ? {
       ...pickFields(input.orchestration, ORCHESTRATION_FIELDS),
       modelRoles: isRecord(input.orchestration.modelRoles)
         ? pickFields(input.orchestration.modelRoles, MODEL_ROLE_FIELDS)
         : input.orchestration.modelRoles
     } : undefined,
-    baselineChangedFiles: stringArray(input.baselineChangedFiles),
-    baselineFileDigests: stringRecord(input.baselineFileDigests),
-    observedChangedFiles: stringArray(input.observedChangedFiles),
-    finalWorkingTreeFiles: stringArray(input.finalWorkingTreeFiles),
-    finalFileDigests: stringRecord(input.finalFileDigests),
-    changedFiles: stringArray(input.changedFiles),
-    verifyEvidence,
+    baselineChangedFiles: legacyDigestContract ? [] : stringArray(input.baselineChangedFiles),
+    baselineFileDigests: legacyDigestContract ? {} : stringRecord(input.baselineFileDigests),
+    observedChangedFiles: legacyDigestContract ? [] : stringArray(input.observedChangedFiles),
+    finalWorkingTreeFiles: legacyDigestContract ? [] : stringArray(input.finalWorkingTreeFiles),
+    finalFileDigests: legacyDigestContract ? {} : stringRecord(input.finalFileDigests),
+    changedFiles: legacyDigestContract ? [] : stringArray(input.changedFiles),
+    verifyEvidence: legacyDigestContract ? [] : verifyEvidence,
     trace: {
-      outcome: TASK_OUTCOMES.includes(trace.outcome) ? trace.outcome : "pending",
-      friction: typeof trace.friction === "string" ? trace.friction : undefined,
+      outcome: legacyDigestContract && trace.outcome === "pending" ? "blocked" : TASK_OUTCOMES.includes(trace.outcome) ? trace.outcome : "pending",
+      friction: legacyDigestContract && trace.outcome === "pending" ? "Legacy working-tree evidence is not replayable; start a new attempt." : typeof trace.friction === "string" ? trace.friction : undefined,
       notes: typeof trace.notes === "string" ? trace.notes : undefined,
-      recordedAt: trace.recordedAt === undefined ? undefined : normalizedTimestamp(trace.recordedAt, updatedAt)
+      recordedAt: legacyDigestContract && trace.outcome === "pending" ? updatedAt : trace.recordedAt === undefined ? undefined : normalizedTimestamp(trace.recordedAt, updatedAt)
     },
-    failedAt: ["research", "plan", "execute", "verify", "review"].includes(input.failedAt) ? input.failedAt : undefined,
-    failureReason: typeof input.failureReason === "string" ? input.failureReason : undefined,
+    failedAt: legacyDigestContract && trace.outcome === "pending" ? "verify" : ["research", "plan", "execute", "verify", "review"].includes(input.failedAt) ? input.failedAt : undefined,
+    failureReason: legacyDigestContract && trace.outcome === "pending" ? "Working-tree digest migration requires a bounded new attempt." : typeof input.failureReason === "string" ? input.failureReason : undefined,
     ruledOut: typeof input.ruledOut === "string" ? input.ruledOut : undefined,
     createdAt,
     updatedAt,
@@ -402,8 +467,29 @@ export function writeTaskContract(cwd, task) {
   if (!normalized) throw new Error("Task contract is not an object");
   const errors = taskContractValidationErrors(normalized);
   if (errors.length > 0) throw new Error(`Task contract is invalid: ${errors.join("; ")}`);
+  const existing = readTaskRun(cwd, normalized.taskRunId);
+  if (existing && TERMINAL_TASK_OUTCOMES.has(existing.trace?.outcome)) {
+    throw new Error(`Task contract ${existing.taskRunId} is immutable after ${existing.trace.outcome}`);
+  }
   normalized.updatedAt = new Date().toISOString();
   writeJsonAtomic(cwd, taskRunPath(cwd, normalized.taskRunId), normalized);
+  appendTaskStateJournalEvent(cwd, {
+    eventType: "contract-written",
+    taskRunId: normalized.taskRunId,
+    taskId: normalized.taskId,
+    sessionId: normalized.sessionId,
+    sessionName: normalized.sessionName,
+    data: {
+      outcome: normalized.trace?.outcome,
+      attempt: normalized.attempt,
+      changeMode: normalized.changeMode,
+      riskLane: normalized.riskLane,
+      verifyCommands: normalized.verifyCommands,
+      scope: normalized.scope,
+      acceptanceReceipt: acceptanceReceiptSummary(normalized.acceptanceReceipt),
+      acceptanceProvenance: acceptanceReceiptProvenanceSummary(normalized.acceptanceReceipt), authoritySnapshot: normalized.authoritySnapshot ? { profile: normalized.authoritySnapshot.profile, manifestDigest: normalized.authoritySnapshot.manifestDigest, snapshotDigest: normalized.authoritySnapshot.snapshotDigest } : null
+    }
+  });
   return normalized;
 }
 
@@ -439,6 +525,16 @@ export function bindSessionTask(cwd, sessionId, sessionName, task) {
     updatedAt: new Date().toISOString()
   };
   writeJsonAtomic(cwd, sessionBindingPath(cwd, sessionId), binding);
+  appendTaskStateJournalEvent(cwd, {
+    eventType: "session-bound",
+    taskRunId: task.taskRunId,
+    taskId: task.taskId,
+    sessionId: String(sessionId),
+    sessionName: binding.sessionName,
+    data: {
+      bindingUpdatedAt: binding.updatedAt
+    }
+  });
   return binding;
 }
 
@@ -508,17 +604,177 @@ export function isGitWorkingTree(cwd) {
   }
 }
 
+function normalizedGitPath(value) {
+  return String(value ?? "").replaceAll("\\", "/").replace(/^\/+/, "");
+}
+
+function prefixedGitPath(prefix, file) {
+  const normalized = normalizedGitPath(file);
+  return prefix ? `${prefix}/${normalized}` : normalized;
+}
+
+function workingTreeFilesForGitRoot(cwd) {
+  if (!isGitWorkingTree(cwd)) return [];
+  const changed = gitHasHead(cwd)
+    ? changedPathsFromNameStatus(gitOutput(cwd, ["diff", "--name-status", "-z", "--find-renames", "--diff-filter=ACMRD", "HEAD", "--"]))
+    : gitOutput(cwd, ["ls-files", "-z"]).split("\0").filter(Boolean);
+  const untracked = gitOutput(cwd, ["ls-files", "--others", "--exclude-standard", "-z"]).split("\0").filter(Boolean);
+  return [...new Set([...changed, ...untracked].map(normalizedGitPath).filter((item) => item && !item.startsWith(".pi/piagent-state/")))].sort();
+}
+
+function directChildGitEvidenceRoots(cwd) {
+  const roots = [];
+  let entries;
+  try {
+    entries = fs.readdirSync(cwd, { withFileTypes: true });
+  } catch {
+    return roots;
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name.startsWith(".") || entry.name === "node_modules") continue;
+    const child = path.join(cwd, entry.name);
+    try {
+      if (fs.lstatSync(child).isSymbolicLink()) continue;
+      if (!isGitWorkingTree(child)) continue;
+      const topLevel = gitOutput(child, ["rev-parse", "--show-toplevel"]).trim();
+      if (fs.realpathSync(topLevel) !== fs.realpathSync(child)) continue;
+      roots.push({ cwd: child, prefix: normalizedGitPath(entry.name) });
+    } catch {
+      // Ignore unreadable or non-standard child folders; source-change start
+      // only needs at least one reliable evidence root.
+    }
+  }
+  return roots.sort((left, right) => left.prefix.localeCompare(right.prefix));
+}
+
+function gitEvidenceRoots(cwd) {
+  if (isGitWorkingTree(cwd)) return [{ cwd, prefix: "" }];
+  return directChildGitEvidenceRoots(cwd);
+}
+
+function nonGitWorkspaceFiles(cwd, gitRootPrefixes) {
+  const files = [];
+  const gitRoots = new Set(gitRootPrefixes.filter(Boolean));
+  function orderedEntries(entries) {
+    return [...entries].sort((left, right) => {
+      const leftPriority = WORKSPACE_EVIDENCE_PRIORITY_NAMES.get(left.name.toLowerCase()) ?? 10;
+      const rightPriority = WORKSPACE_EVIDENCE_PRIORITY_NAMES.get(right.name.toLowerCase()) ?? 10;
+      if (leftPriority !== rightPriority) return leftPriority - rightPriority;
+      return left.name.localeCompare(right.name, "en-US");
+    });
+  }
+  function visit(directory, relativeDirectory) {
+    if (files.length >= WORKSPACE_EVIDENCE_MAX_FILES) return;
+    let entries;
+    try {
+      entries = fs.readdirSync(directory, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of orderedEntries(entries)) {
+      if (files.length >= WORKSPACE_EVIDENCE_MAX_FILES) return;
+      if (WORKSPACE_EVIDENCE_SKIP_NAMES.has(entry.name)) continue;
+      const relative = relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name;
+      const topSegment = relative.split("/")[0];
+      if (gitRoots.has(topSegment)) continue;
+      const absolute = path.join(directory, entry.name);
+      try {
+        if (fs.lstatSync(absolute).isSymbolicLink()) continue;
+      } catch {
+        continue;
+      }
+      if (entry.isDirectory()) {
+        visit(absolute, relative);
+      } else if (entry.isFile()) {
+        files.push(normalizedGitPath(relative));
+      }
+    }
+  }
+  visit(cwd, "");
+  return files.sort();
+}
+
+function nonGitWorkspaceFileDigest(cwd, file) {
+  return streamedWorkingTreeFileDigest(cwd, file, false);
+}
+
+function pathWithinNonGitWorkspaceEvidenceRoot(candidate, gitRootPrefixes) {
+  const topSegment = candidate.split("/")[0];
+  return Boolean(
+    topSegment
+    && !WORKSPACE_EVIDENCE_SKIP_NAMES.has(topSegment)
+    && !topSegment.startsWith(".")
+    && !gitRootPrefixes.includes(topSegment)
+  );
+}
+
+export function hasGitEvidenceRoot(cwd) {
+  return gitEvidenceRoots(cwd).length > 0;
+}
+
+export function usesNestedGitEvidenceRoots(cwd) {
+  return !isGitWorkingTree(cwd) && directChildGitEvidenceRoots(cwd).length > 0;
+}
+
+export function pathWithinChangeEvidenceRoot(cwd, candidate) {
+  const normalized = normalizedGitPath(candidate);
+  if (!normalized || normalized === "." || normalized === ".." || normalized.startsWith("../")) return false;
+  const roots = gitEvidenceRoots(cwd);
+  for (const root of roots) {
+    if (!root.prefix) return true;
+    if (normalized === root.prefix || normalized.startsWith(`${root.prefix}/`)) return true;
+  }
+  return roots.length > 0 && pathWithinNonGitWorkspaceEvidenceRoot(normalized, roots.map((root) => root.prefix));
+}
+
+export function pathWithinGitEvidenceRoot(cwd, candidate) {
+  return pathWithinChangeEvidenceRoot(cwd, candidate);
+}
+
 export function workingTreeFiles(cwd) {
   try {
-    if (!isGitWorkingTree(cwd)) return [];
-    const changed = gitHasHead(cwd)
-      ? changedPathsFromNameStatus(gitOutput(cwd, ["diff", "--name-status", "-z", "--find-renames", "--diff-filter=ACMRD", "HEAD", "--"]))
-      : gitOutput(cwd, ["ls-files", "-z"]).split("\0").filter(Boolean);
-    const untracked = gitOutput(cwd, ["ls-files", "--others", "--exclude-standard", "-z"]).split("\0").filter(Boolean);
-    return [...new Set([...changed, ...untracked].map((item) => item.replaceAll("\\", "/")).filter((item) => item && !item.startsWith(".pi/piagent-state/")))].sort();
+    const roots = gitEvidenceRoots(cwd);
+    const files = [];
+    for (const root of roots) {
+      for (const file of workingTreeFilesForGitRoot(root.cwd)) {
+        files.push(prefixedGitPath(root.prefix, file));
+      }
+    }
+    if (!isGitWorkingTree(cwd) && roots.length > 0) {
+      files.push(...nonGitWorkspaceFiles(cwd, roots.map((root) => root.prefix)));
+    }
+    return [...new Set(files)].sort();
   } catch {
     return [];
   }
+}
+
+export function repositoryFileManifest(cwd, maxFiles = 10_000) {
+  const limit = Number.isInteger(maxFiles) ? Math.max(1, Math.min(50_000, maxFiles)) : 10_000;
+  const files = [];
+  try {
+    for (const root of gitEvidenceRoots(cwd)) {
+      const listed = gitOutput(root.cwd, ["ls-files", "--cached", "--others", "--exclude-standard", "-z"])
+        .split("\0")
+        .filter(Boolean);
+      for (const file of listed) {
+        const candidate = prefixedGitPath(root.prefix, file);
+        if (
+          !candidate
+          || candidate.startsWith(".pi/")
+          || candidate.startsWith(".git/")
+          || candidate.split("/").includes("node_modules")
+          || /(?:^|\/)\.env(?:\.|$)/i.test(candidate)
+          || /(?:^|\/)(?:auth|credentials?|secrets?|tokens?)\.json$/i.test(candidate)
+        ) continue;
+        files.push(candidate);
+        if (files.length >= limit) return [...new Set(files)].sort();
+      }
+    }
+  } catch {
+    return [];
+  }
+  return [...new Set(files)].sort();
 }
 
 function changedPathsFromNameStatus(output) {
@@ -537,18 +793,92 @@ function changedPathsFromNameStatus(output) {
   return files;
 }
 
+const WORKING_TREE_STREAM_CHUNK_BYTES = 1024 * 1024;
+function unavailableWorkingTreeDigest(file, reason, stat) {
+  return unavailableWorkingTreeHash(crypto.createHash("sha256")
+    .update(`${file}\0${reason}\0${stat?.mode ?? ""}\0${stat?.size ?? ""}\0${stat?.mtimeMs ?? ""}\0${stat?.ctimeMs ?? ""}`)
+    .digest("hex"));
+}
+
+export function workingTreeSnapshotHasUnavailableEvidence(snapshot) {
+  return Object.values(snapshot ?? {}).some((digest) => isUnavailableWorkingTreeDigest(digest));
+}
+
+function streamedWorkingTreeFileDigest(root, file, hasHead) {
+  const absolute = path.resolve(root, file);
+  const relative = path.relative(root, absolute);
+  if (!relative || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    return unavailableWorkingTreeDigest(file, "outside-root");
+  }
+
+  let stat;
+  try {
+    stat = fs.lstatSync(absolute);
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return versionWorkingTreeHash(crypto.createHash("sha256").update(`deleted\0${file}`).digest("hex"));
+    }
+    return unavailableWorkingTreeDigest(file, error?.code ?? "lstat-failed");
+  }
+
+  try {
+    if (stat.isSymbolicLink()) {
+      return versionWorkingTreeHash(crypto.createHash("sha256")
+        .update(`symlink\0${stat.mode & 0o7777}\0${fs.readlinkSync(absolute)}`)
+        .digest("hex"));
+    }
+    if (stat.isDirectory()) {
+      const evidence = hasHead
+        ? gitOutput(root, ["diff", "--no-ext-diff", "--submodule=short", "HEAD", "--", file], { maxBuffer: 4 * 1024 * 1024 })
+        : `directory:${stat.mode & 0o7777}:${stat.mtimeMs}`;
+      return versionWorkingTreeHash(crypto.createHash("sha256").update(`directory\0${evidence}`).digest("hex"));
+    }
+    if (!stat.isFile()) {
+      return unavailableWorkingTreeDigest(file, "unsupported-file-type", stat);
+    }
+
+    const descriptor = fs.openSync(absolute, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+    try {
+      const before = fs.fstatSync(descriptor);
+      if (!before.isFile()) {
+        return unavailableWorkingTreeDigest(file, "changed-file-type", before);
+      }
+      const hash = crypto.createHash("sha256");
+      hash.update(`file\0${before.mode & 0o7777}\0${before.size}\0`);
+      const buffer = Buffer.allocUnsafe(WORKING_TREE_STREAM_CHUNK_BYTES);
+      let position = 0;
+      while (position < before.size) {
+        const bytesRead = fs.readSync(descriptor, buffer, 0, Math.min(buffer.length, before.size - position), position);
+        if (bytesRead <= 0) return unavailableWorkingTreeDigest(file, "short-read", before);
+        hash.update(buffer.subarray(0, bytesRead));
+        position += bytesRead;
+      }
+      const after = fs.fstatSync(descriptor);
+      if (after.size !== before.size || after.mtimeMs !== before.mtimeMs || after.ctimeMs !== before.ctimeMs) {
+        return unavailableWorkingTreeDigest(file, "changed-during-read", after);
+      }
+      return versionWorkingTreeHash(hash.digest("hex"));
+    } finally {
+      fs.closeSync(descriptor);
+    }
+  } catch (error) {
+    return unavailableWorkingTreeDigest(file, error?.code ?? "read-failed", stat);
+  }
+}
+
 export function workingTreeSnapshot(cwd) {
   const snapshot = {};
-  const hasHead = gitHasHead(cwd);
-  for (const file of workingTreeFiles(cwd)) {
-    try {
-      let evidence = hasHead
-        ? gitOutput(cwd, ["diff", "--no-ext-diff", "--binary", "HEAD", "--", file], { maxBuffer: 32 * 1024 * 1024 })
-        : "";
-      if (!evidence) evidence = `working:${gitOutput(cwd, ["hash-object", "--no-filters", "--", file]).trim()}`;
-      snapshot[file] = crypto.createHash("sha256").update(evidence).digest("hex");
-    } catch {
-      snapshot[file] = "missing-or-unavailable";
+  const roots = gitEvidenceRoots(cwd);
+  for (const root of roots) {
+    const hasHead = gitHasHead(root.cwd);
+    for (const file of workingTreeFilesForGitRoot(root.cwd)) {
+      const snapshotPath = prefixedGitPath(root.prefix, file);
+      snapshot[snapshotPath] = streamedWorkingTreeFileDigest(root.cwd, file, hasHead);
+    }
+  }
+  if (!isGitWorkingTree(cwd) && roots.length > 0) {
+    for (const file of nonGitWorkspaceFiles(cwd, roots.map((root) => root.prefix))) {
+      snapshot[file] = nonGitWorkspaceFileDigest(cwd, file);
     }
   }
   return snapshot;
@@ -574,7 +904,9 @@ export function taskStateMigrationStatus(cwd) {
       continue;
     }
     if (raw.schemaVersion === TASK_CONTRACT_SCHEMA_VERSION && typeof raw.taskRunId === "string") {
-      if (safeTaskId(raw.taskRunId) !== entry.name.slice(0, -5) || taskContractValidationErrors(raw).length > 0) unreadable.push(entry.name);
+      if (safeTaskId(raw.taskRunId) !== entry.name.slice(0, -5)) unreadable.push(entry.name);
+      else if (taskNeedsDigestMigration(raw)) legacy += 1;
+      else if (taskContractValidationErrors(raw).length > 0) unreadable.push(entry.name);
       else current += 1;
     } else {
       const migrated = normalizeTaskContract(raw, { sourceName: entry.name.slice(0, -5) });
@@ -607,6 +939,24 @@ export function migrateTaskState(cwd, options = {}) {
       continue;
     }
     if (raw.schemaVersion === TASK_CONTRACT_SCHEMA_VERSION && typeof raw.taskRunId === "string") {
+      if (taskNeedsDigestMigration(raw)) {
+        try {
+          migrateUnversionedTaskDigestState(cwd, source, raw, {
+            validateTask: taskContractValidationErrors,
+            normalizeTask: normalizeTaskContract,
+            workingTreeSnapshot,
+            snapshotHasUnavailable: workingTreeSnapshotHasUnavailableEvidence,
+            isGitWorkingTree, activeTaskRunId: options.taskRunId, activeSessionId: options.sessionId,
+            writeAtomic: writeJsonAtomic,
+            appendBarrier: appendTaskJournalEvent,
+            findBarrier: (root, taskRunId, archiveDigest) => ((journal) => { if (journal.corruptions.length) throw new Error("task journal is corrupt during digest migration"); return journal.events.findLast((event) => event.eventType === "digest-migrated" && event.data?.archiveDigest === archiveDigest); })(readTaskJournal(root, { taskRunId }))
+          });
+          migrated += 1;
+        } catch (error) {
+          warnings.push(`digest migration blocked: ${entry.name} (${error instanceof Error ? error.message : String(error)})`);
+        }
+        continue;
+      }
       const errors = taskContractValidationErrors(raw);
       const sourceName = entry.name.slice(0, -5);
       if (safeTaskId(raw.taskRunId) !== sourceName) errors.push("taskRunId does not match filename");
@@ -616,10 +966,13 @@ export function migrateTaskState(cwd, options = {}) {
     }
     const sourceTaskId = safeTaskId(raw.taskId ?? entry.name.slice(0, -5));
     const belongsToCurrentSession = options.taskId && safeTaskId(options.taskId) === sourceTaskId;
+    const sourceBytes = fs.readFileSync(source);
     const task = normalizeTaskContract(raw, {
       sourceName: entry.name.slice(0, -5),
       sessionId: belongsToCurrentSession ? options.sessionId : undefined,
-      sessionName: belongsToCurrentSession ? options.sessionName : undefined
+      sessionName: belongsToCurrentSession ? options.sessionName : undefined,
+      archiveDigest: crypto.createHash("sha256").update(sourceBytes).digest("hex"),
+      archiveBytes: sourceBytes.length
     });
     if (!task) continue;
     const safeArchiveRoot = ensurePrivateStateDirectory(cwd, archiveRoot, "Task state archive");
@@ -635,14 +988,12 @@ export function migrateTaskState(cwd, options = {}) {
       fs.copyFileSync(source, archiveTarget, fs.constants.COPYFILE_EXCL);
       fs.chmodSync(archiveTarget, 0o600);
     }
-    const written = writeTaskContract(cwd, task);
-    const currentTarget = taskRunPath(cwd, written.taskRunId);
-    const sourceStat = fs.statSync(source);
-    const targetStat = fs.statSync(currentTarget);
-    const sameInode = sourceStat.ino > 0 && targetStat.ino > 0
-      && sourceStat.dev === targetStat.dev && sourceStat.ino === targetStat.ino;
-    const sameCanonicalPath = fs.realpathSync(source) === fs.realpathSync(currentTarget);
-    if (!sameInode && !sameCanonicalPath) fs.rmSync(source);
+    const currentTarget = taskRunPath(cwd, task.taskRunId);
+    commitLegacySchemaTaskDigestState(cwd, source, currentTarget, task, sourceBytes, {
+      writeAtomic: writeJsonAtomic, appendBarrier: appendTaskJournalEvent,
+      findBarrier: (root, taskRunId, archiveDigest) => ((journal) => { if (journal.corruptions.length) throw new Error("task journal is corrupt during digest migration"); return journal.events.findLast((event) => event.eventType === "digest-migrated" && event.data?.archiveDigest === archiveDigest); })(readTaskJournal(root, { taskRunId }))
+    });
+    if (fs.realpathSync(source) !== fs.realpathSync(currentTarget)) fs.rmSync(source);
     migrated += 1;
   }
   return { migrated, current, warnings };

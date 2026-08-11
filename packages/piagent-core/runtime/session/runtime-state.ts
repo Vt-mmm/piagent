@@ -3,6 +3,31 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { toolResultFingerprint } from "../../extensions/context-engine.js";
 import { workingTreeSnapshot } from "../../extensions/task-state.js";
 import type { TaskContract } from "../../extensions/guard-types.ts";
+import type { RecoveryHistoryEntry } from "../recovery/recovery-policy.ts";
+import type { ResumeState } from "../recovery/resume-state.ts";
+import { ModelAuthorshipState } from "./model-authorship-state.ts";
+import type { ModelMutationIdentity } from "./model-authorship-state.ts";
+import type { ModelMutationProof } from "../quality/model-mutation-proof.ts";
+import { PerformanceReviewState } from "./performance-review-state.ts";
+import type {
+  PerformanceReviewCheckpoint,
+  PerformanceReviewCredit,
+  PerformanceReviewToolCompletion,
+  PerformanceReviewToolCompletionResult
+} from "./performance-review-state.ts";
+export {
+  MAX_PERFORMANCE_MUTATIONS_PER_REVISION,
+  MAX_PERFORMANCE_REPAIR_PATHS,
+  MAX_PERFORMANCE_REPAIR_REVISIONS
+} from "./performance-review-state.ts";
+export type {
+  PerformanceReviewCheckpoint,
+  PerformanceReviewCredit,
+  PerformanceReviewToolCompletion,
+  PerformanceReviewToolCompletionResult,
+  PerformanceReviewToolKind,
+  PerformanceReviewVerifierState
+} from "./performance-review-state.ts";
 
 export type ObservedTaskContext = { path: string; reason: string };
 
@@ -23,7 +48,11 @@ export class RuntimeSessionState {
   readonly #seenToolResults = new Map<string, { outputHash: string; recordedAt: string }>();
   readonly #autoPackedPrompts = new Set<string>();
   readonly #injectedContextPacks = new Map<string, InjectedContextPack>();
-  readonly #completionRecoveryAttempts = new Map<string, number>();
+  readonly #modelAuthorship = new ModelAuthorshipState();
+  readonly #performanceReview = new PerformanceReviewState();
+  readonly #recoveryHistoryByTask = new Map<string, RecoveryHistoryEntry[]>();
+  readonly #resumeStateByTaskRun = new Map<string, ResumeState>();
+  readonly #deliveredResumeContexts = new Set<string>();
   readonly #taskIdentityBySession = new Map<string, { taskId: string; taskRunId: string }>();
   readonly #observedContextBySession = new Map<string, Map<string, ObservedTaskContext>>();
   readonly #shellMutationSnapshots = new Map<string, Record<string, string>>();
@@ -124,17 +153,144 @@ export class RuntimeSessionState {
     return this.#injectedContextPacks.get(`${this.sessionKey(ctx)}\u0000${key}`);
   }
 
-  completionRecoveryAttempt(taskRunId: string): number {
-    return this.#completionRecoveryAttempts.get(taskRunId) ?? 0;
+  performanceReviewCheckpoint(taskRunId: string): PerformanceReviewCheckpoint | undefined {
+    return this.#performanceReview.checkpoint(taskRunId);
   }
 
-  rememberCompletionRecoveryAttempt(taskRunId: string, attempt: number): void {
-    this.#completionRecoveryAttempts.set(taskRunId, attempt);
-    evictOldest(this.#completionRecoveryAttempts, 100);
+  rememberPerformanceReviewCheckpoint(
+    taskRunId: string,
+    workingTreeDigest: string,
+    attempt: number,
+    expectedPaths: string[] = [],
+    reviewedPaths: string[] = []
+  ): void {
+    this.#performanceReview.rememberCheckpoint(taskRunId, workingTreeDigest, attempt, expectedPaths, reviewedPaths);
   }
 
-  clearCompletionRecoveryAttempt(taskRunId: string): void {
-    this.#completionRecoveryAttempts.delete(taskRunId);
+  rememberPerformanceReviewActivity(taskRunId: string, toolName = "read"): void {
+    this.#performanceReview.rememberReadActivity(taskRunId, toolName);
+  }
+
+  reservePerformanceReviewTool(
+    taskRunId: string,
+    reservation: {
+      toolCallId: string;
+      kind: "inspection" | "mutation" | "verifier";
+      toolName: string;
+      workingTreeDigest: string;
+      workingTreeSnapshot: Record<string, string>;
+      targetPaths: string[];
+    }
+  ): boolean {
+    return this.#performanceReview.reserveTool(taskRunId, reservation);
+  }
+
+  completePerformanceReviewTool(
+    taskRunId: string,
+    toolCallId: string,
+    result: PerformanceReviewToolCompletion
+  ): PerformanceReviewToolCompletionResult {
+    const completion = this.#performanceReview.completeTool(taskRunId, toolCallId, result);
+    if (["locked", "invalidated"].includes(completion)) this.#performanceReview.invalidateCredit(taskRunId);
+    return completion;
+  }
+
+  invalidatePerformanceReviewCheckpoint(taskRunId: string): void {
+    this.#performanceReview.invalidateCheckpoint(taskRunId);
+  }
+
+  denyPerformanceReviewTool(taskRunId: string): void {
+    if (this.#performanceReview.denyTool(taskRunId)) this.#performanceReview.invalidateCredit(taskRunId);
+  }
+
+  clearPerformanceReview(taskRunId: string): void {
+    this.#performanceReview.clearReview(taskRunId);
+  }
+
+  rememberPerformanceReviewCredit(taskRunId: string, credit: PerformanceReviewCredit): void {
+    this.#performanceReview.rememberCredit(taskRunId, credit);
+  }
+
+  performanceReviewCredit(taskRunId: string, currentWorkingTreeDigest?: string): PerformanceReviewCredit | undefined {
+    return this.#performanceReview.credit(taskRunId, currentWorkingTreeDigest);
+  }
+
+  invalidatePerformanceReviewCredit(taskRunId: string): boolean {
+    return this.#performanceReview.invalidateCredit(taskRunId);
+  }
+
+  reserveAuthorizedModelMutation(
+    identity: ModelMutationIdentity,
+    toolCallId: string,
+    workingTreeSnapshotBefore: Record<string, string>,
+    targetPaths: string[],
+    proof: ModelMutationProof
+  ): boolean {
+    return this.#modelAuthorship.reserve(identity, toolCallId, workingTreeSnapshotBefore, targetPaths, proof);
+  }
+
+  completeAuthorizedModelMutation(
+    identity: ModelMutationIdentity,
+    toolCallId: string,
+    success: boolean,
+    currentSnapshot: Record<string, string>,
+    currentContentDigests: Record<string, string> = {}
+  ): { changedPaths: string[]; recordedDigests: Record<string, string> } {
+    return this.#modelAuthorship.complete(identity, toolCallId, success, currentSnapshot, currentContentDigests);
+  }
+
+  successfulModelMutationDigests(identity: ModelMutationIdentity, currentSnapshot?: Record<string, string>): Record<string, string> {
+    return this.#modelAuthorship.digests(identity, currentSnapshot);
+  }
+
+  invalidateSuccessfulModelMutationPaths(identity: ModelMutationIdentity, paths: string[]): void {
+    this.#modelAuthorship.invalidate(identity, paths);
+  }
+
+  recoveryHistory(taskId: string): RecoveryHistoryEntry[] {
+    return [...(this.#recoveryHistoryByTask.get(taskId) ?? [])];
+  }
+
+  rememberRecoveryHistory(entry: RecoveryHistoryEntry): void {
+    const history = [...(this.#recoveryHistoryByTask.get(entry.taskId) ?? []), entry].slice(-20);
+    this.#recoveryHistoryByTask.set(entry.taskId, history);
+    evictOldest(this.#recoveryHistoryByTask, 100);
+  }
+
+  rememberResumeState(resume: ResumeState): void {
+    this.#resumeStateByTaskRun.set(resume.taskRunId, structuredClone(resume));
+    evictOldest(this.#resumeStateByTaskRun, 100);
+  }
+
+  resumeState(taskRunId: string): ResumeState | undefined {
+    const state = this.#resumeStateByTaskRun.get(taskRunId);
+    return state ? structuredClone(state) : undefined;
+  }
+
+  takeResumeContextState(ctx: ExtensionContext, taskRunId: string): ResumeState | undefined {
+    const key = `${this.sessionKey(ctx)}\u0000${taskRunId}`;
+    if (this.#deliveredResumeContexts.has(key)) return undefined;
+    const resume = this.#resumeStateByTaskRun.get(taskRunId);
+    if (!resume) return undefined;
+    this.#deliveredResumeContexts.add(key);
+    while (this.#deliveredResumeContexts.size > 200) {
+      this.#deliveredResumeContexts.delete(this.#deliveredResumeContexts.values().next().value as string);
+    }
+    return structuredClone(resume);
+  }
+
+  taskResumeBlock(taskRunId: string): string | undefined {
+    const resume = this.#resumeStateByTaskRun.get(taskRunId);
+    return resume && !resume.enforcementSafe && resume.decision !== "terminal" ? resume.reason : undefined;
+  }
+
+  clearDigestMigrationState(ctx: ExtensionContext, taskRunId: string, taskId: string): void {
+    this.#performanceReview.clearTask(taskRunId);
+    this.#modelAuthorship.clear(taskRunId);
+    this.#recoveryHistoryByTask.delete(taskId);
+    this.#resumeStateByTaskRun.delete(taskRunId);
+    this.#deliveredResumeContexts.delete(`${this.sessionKey(ctx)}\u0000${taskRunId}`);
+    this.clearShellMutationSnapshots(ctx);
   }
 
   previousToolResult(
@@ -160,8 +316,11 @@ export class RuntimeSessionState {
     this.#taskIdentityBySession.delete(sessionKey);
     this.#observedContextBySession.delete(sessionKey);
     this.clearShellMutationSnapshots(ctx);
-    if (taskIdentity) this.#completionRecoveryAttempts.delete(taskIdentity.taskRunId);
-    for (const values of [this.#advisedTools, this.#autoPackedPrompts]) {
+    if (taskIdentity) {
+      this.#performanceReview.clearTask(taskIdentity.taskRunId);
+      this.#modelAuthorship.clear(taskIdentity.taskRunId);
+    }
+    for (const values of [this.#advisedTools, this.#autoPackedPrompts, this.#deliveredResumeContexts]) {
       for (const key of values) {
         if (key.startsWith(prefix)) values.delete(key);
       }

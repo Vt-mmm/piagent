@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "scenarios": {
+    "multi-package-rollout": [
+      { "id": "rollout-normalized-shape", "clause": "R1", "critical": true, "weight": 2 },
+      { "id": "rollout-input-immutable", "clause": "R1", "critical": true, "weight": 2 },
+      { "id": "rollout-new-object", "clause": "R1", "critical": true, "weight": 2 },
+      { "id": "rollout-invalid-object", "clause": "R2", "critical": true, "weight": 2 },
+      { "id": "rollout-invalid-percentage", "clause": "R2", "critical": true, "weight": 2 },
+      { "id": "rollout-invalid-tenants", "clause": "R2", "critical": true, "weight": 2 },
+      { "id": "rollout-tenant-override", "clause": "R3", "critical": true, "weight": 2 },
+      { "id": "rollout-percentage-boundaries", "clause": "R3", "critical": true, "weight": 2 },
+      { "id": "rollout-disabled-missing-subject", "clause": "R3", "critical": true, "weight": 2 },
+      { "id": "rollout-invalid-bucket", "clause": "R3", "critical": true, "weight": 2 },
+      { "id": "feature-access-reasons", "clause": "R4", "critical": true, "weight": 2 },
+      { "id": "rollout-summary", "clause": "R5", "critical": true, "weight": 2 },
+      { "id": "rollout-summary-validates", "clause": "R5", "critical": true, "weight": 2 }
+    ],
+    "fullstack-search-contract": [
+      { "id": "query-normalization", "clause": "S1", "critical": true, "weight": 2 },
+      { "id": "query-nullish", "clause": "S1", "critical": true, "weight": 2 },
+      { "id": "catalog-name-tag-order", "clause": "S2", "critical": true, "weight": 2 },
+      { "id": "catalog-input-immutable", "clause": "S2", "critical": true, "weight": 2 },
+      { "id": "catalog-limit-contract", "clause": "S2", "critical": true, "weight": 2 },
+      { "id": "catalog-invalid-input", "clause": "S2", "critical": true, "weight": 2 },
+      { "id": "catalog-shared-normalizer", "clause": "S2", "critical": true, "weight": 2 },
+      { "id": "search-render-exact-escaping", "clause": "S3", "critical": true, "weight": 2 },
+      { "id": "search-render-order", "clause": "S3", "critical": true, "weight": 2 },
+      { "id": "search-render-empty", "clause": "S3", "critical": true, "weight": 2 },
+      { "id": "search-render-invalid-input", "clause": "S3", "critical": true, "weight": 2 }
+    ],
+    "concurrent-lease-lifecycle": [
+      { "id": "lease-acquire-input-validation", "clause": "L1", "critical": true, "weight": 2 },
+      { "id": "lease-renew-input-validation", "clause": "L1", "critical": true, "weight": 2 },
+      { "id": "lease-release-current-input-validation", "clause": "L1", "critical": true, "weight": 2 },
+      { "id": "lease-contention-inclusive-expiry", "clause": "L2", "critical": true, "weight": 2 },
+      { "id": "lease-same-owner-reacquire", "clause": "L2", "critical": true, "weight": 2 },
+      { "id": "lease-renew-contract", "clause": "L3", "critical": true, "weight": 2 },
+      { "id": "lease-release-contract", "clause": "L3", "critical": true, "weight": 2 },
+      { "id": "lease-snapshot-isolation", "clause": "L3", "critical": true, "weight": 2 },
+      { "id": "with-lease-success-callback", "clause": "L4", "critical": true, "weight": 2 },
+      { "id": "with-lease-busy", "clause": "L4", "critical": true, "weight": 2 },
+      { "id": "with-lease-failure-cleanup", "clause": "L4", "critical": true, "weight": 2 },
+      { "id": "with-lease-owner-change-cleanup", "clause": "L4", "critical": true, "weight": 2 }
+    ],
+    "resumable-migration-runner": [
+      { "id": "migration-step-validation", "clause": "M1", "critical": true, "weight": 2 },
+      { "id": "migration-dependency-validation", "clause": "M1", "critical": true, "weight": 2 },
+      { "id": "migration-cycle-validation", "clause": "M1", "critical": true, "weight": 2 },
+      { "id": "migration-stable-chain-order", "clause": "M2", "critical": true, "weight": 2 },
+      { "id": "migration-stable-ready-order", "clause": "M2", "critical": true, "weight": 2 },
+      { "id": "migration-input-immutable", "clause": "M2", "critical": true, "weight": 2 },
+      { "id": "migration-runner-input-validation", "clause": "M3", "critical": true, "weight": 2 },
+      { "id": "migration-checkpoint-validation", "clause": "M3", "critical": true, "weight": 2 },
+      { "id": "migration-skip-write-return", "clause": "M3", "critical": true, "weight": 2 },
+      { "id": "migration-crash-resume", "clause": "M4", "critical": true, "weight": 2 },
+      { "id": "migration-return-isolation", "clause": "M4", "critical": true, "weight": 2 }
+    ]
+  }
+}

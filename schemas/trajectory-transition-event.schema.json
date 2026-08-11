@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.local/schemas/trajectory-transition-event.schema.json",
+  "title": "TrajectoryTransitionEvent v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "policyVersion", "eventId", "taskId", "taskRunId", "sessionHash", "sequence", "from", "to", "cause", "sourceHook", "taskDigest", "treeDigest", "skippedPhases", "skipReason", "observedAt", "terminalTaskOutcomeRef"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "policyVersion": { "const": "trajectory-v1" },
+    "eventId": { "$ref": "#/$defs/hash" },
+    "taskId": { "$ref": "#/$defs/id" },
+    "taskRunId": { "$ref": "#/$defs/id" },
+    "sessionHash": { "$ref": "#/$defs/hash" },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "from": { "$ref": "#/$defs/phase" },
+    "to": { "$ref": "#/$defs/phase" },
+    "cause": { "enum": ["task-started", "context-observed", "plan-observed", "execution-authorized", "mutation-observed", "verification-started", "verification-passed", "verification-failed", "review-observed", "handoff-observed", "task-terminal", "recovery-requested", "explicit-skip"] },
+    "sourceHook": { "enum": ["input", "agent-start", "tool-call", "tool-result", "completion", "session-start", "task-state", "operator"] },
+    "taskDigest": { "anyOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }] },
+    "treeDigest": { "anyOf": [{ "$ref": "#/$defs/workingTreeDigest" }, { "type": "null" }] },
+    "skippedPhases": { "type": "array", "maxItems": 7, "uniqueItems": true, "items": { "$ref": "#/$defs/phase" } },
+    "skipReason": { "anyOf": [{ "type": "string", "minLength": 3, "maxLength": 240 }, { "type": "null" }] },
+    "observedAt": { "type": "string", "format": "date-time" },
+    "terminalTaskOutcomeRef": { "anyOf": [{ "$ref": "#/$defs/terminalRef" }, { "type": "null" }] }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "workingTreeDigest": { "type": "string", "pattern": "^wt-content-v2:[a-f0-9]{64}$" },
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,127}$" },
+    "phase": { "enum": ["intake", "scout", "plan", "execute", "verify", "repair", "review", "handoff", "terminal"] },
+    "terminalRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["taskRunId", "taskUpdatedAt", "taskDigest"],
+      "properties": {
+        "taskRunId": { "$ref": "#/$defs/id" },
+        "taskUpdatedAt": { "type": "string", "format": "date-time" },
+        "taskDigest": { "$ref": "#/$defs/hash" }
+      }
+    }
+  }
+}

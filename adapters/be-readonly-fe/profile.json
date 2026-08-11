@@ -28,6 +28,7 @@
   ],
   "readOnlyPaths": [
     "backend/**",
+    "*backend*/**",
     "server/**",
     "api/**",
     "apps/api/**",
@@ -47,6 +48,7 @@
     "**/*.pem",
     "**/*.key",
     "backend/**",
+    "*backend*/**",
     "server/**",
     "api/**",
     "apps/api/**",

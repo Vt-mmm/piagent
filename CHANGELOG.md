@@ -2,6 +2,129 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## Unreleased
+
+- No changes after the `v1.3.0-rc.1` candidate boundary.
+
+## v1.3.0-rc.1 - 2026-08-11
+
+### Operator product journey
+
+- Added deterministic parent model routing with versioned
+  `low|medium|high|ultra` capability bands, explicit pin/default provenance,
+  intelligence/balance/cost objectives, exact authenticated-catalog matching,
+  and fail-closed shadow/recommend/auto modes. `piagent-route` provides the only
+  explicit prelaunch enforcement path; extension auto does not mutate the Pi
+  user default or switch models mid-conversation.
+- Added a bounded Windsurf-style retrieval route (read-only grep/find/read, up
+  to eight parallel searches and four rounds, recommendation-only), a 240-case
+  offline routing gate, and a resume-locked 144-session static-versus-adaptive
+  protocol dry-run. No authenticated benchmark is implied by these local gates.
+
+- Extended task preflight with stable human/JSON projections for intent, risk,
+  scope, runtime provenance, solver route, phases, tools, helper budget,
+  execution boundary, readiness, approvals, and blockers. Read-only and
+  authorization-sensitive requests never display implementation permission.
+- Extended `/piagent-status` with persisted task, trajectory, checkpoint,
+  verifier, recovery, helper, resume, terminal receipt, and bounded efficiency
+  evidence. Completion remains hard-gate dependent and same-runtime evidence is
+  described as operational assurance, not independent audit.
+- Added one `/piagent-inspector` namespace with an automatic compact status line
+  below Pi's native TUI footer and
+  menu views for task-versus-working-tree diff, test files and line counts,
+  tool/command outcomes, safety warnings, verifier evidence, and context budget.
+  It reuses existing lifecycle hooks, does not call a model, marks mixed dirty
+  baselines explicitly, and never invents per-tool token attribution.
+- Hardened terminal receipts to fail closed unless the current-tree completion
+  gate passes, and hardened RC local readiness so every published routing,
+  safety, helper/writer, recovery, phase-tool, and host-boundary gate is
+  decisive. The RC matrix pins each P0-P6 evidence input by SHA-256 and the
+  generated report records the verified bytes and composite input digest.
+- Extended offline doctor readiness and `/usage efficiency` with install/update
+  recovery guidance and exact-or-unavailable task metrics joined through hashed
+  session/task/run identity. Raw task text and child output are not retained;
+  unmeasurable time, tokens, cost, and invocation counts remain null.
+
+### Durable runtime evidence
+
+- Fixed automatic long-prompt intake, repository-aware scope resolution,
+  idempotent bounded task IDs, runtime verifier defaults, and full-prompt
+  acceptance extraction. Phase enforcement now uses dependency-ready work-plan
+  evidence, keeps provider tool schemas cache-stable, treats `shell`/`exec` as
+  `bash`, and applies one phase decision to direct, shell, patch, and MCP
+  mutation carriers. Manual/high-risk planning and every read-only task remain
+  mutation-free; exact verifiers and bounded repair retain their intended path.
+- Recalibrated the public capability suite around explicit contracts and 47
+  weighted critical atomic checks across 16 prompt clauses. Each clause has a
+  named killed mutation and sensitivity rationale; independently shaped search
+  and migration implementations pass without object-identity, module-provenance,
+  fixture-name, or representation coupling. Historical benchmark evidence is
+  retained unchanged and is not regraded as a new performance claim.
+- Hardened Piagent-versus-Codex benchmarking with named, candidate-only runtime
+  treatments preserved across dry-run, resume, replay, and reports. Token-saving
+  claims now fail closed unless controlled Codex isolation, model/thinking pins,
+  randomized paired order, and exact treatment provenance pass; reports expose
+  paired resolved/quality/safety outcomes and token ratios by benchmark band.
+- Stabilized Task Contract v2 with identity-bound journal checkpoints, strict
+  acceptance receipts, current-tree verification evidence, bounded retries, and
+  immutable terminal outcomes. Journal hashes and receipts are operational
+  evidence produced by the same runtime, not independent attestation.
+- Added adaptive context planning, cited repository-memory hints, model
+  capability facts, verification intelligence, and a fail-closed execution
+  backend descriptor. The parent model remains operator-pinned, no solver or
+  automatic parent routing is shipped, and unavailable isolation adapters do
+  not silently fall back to host mutation.
+- Added benchmark measurement schema v1 with exact-or-unavailable context usage
+  and bounded task/acceptance evidence. Route, phase, and helper measurements
+  remain absent until their later schemas and runtime behavior are implemented.
+- Extracted bounded registration adapters and operator catalogs from the Pi
+  composition root, locked the root against growth, and extended runtime
+  integrity/package coverage for the new modules.
+
+### Controlled RC readiness
+
+- Added a pinned RC evaluation matrix and local-only readiness evaluator across
+  quality/routing, security/privacy, reliability/performance, and disposable
+  install/migration/rollback gates. It records candidate content and catalog
+  digests without storing credentials or gaining release-write capabilities.
+- Added cross-process helper lock waiting/stale-lock recovery and synthetic
+  disk-full/permission-denied state tests after the concurrency gate exposed an
+  immediate-lock-failure race.
+- Retained conservative defaults: solver and phase tools stay shadow, recovery
+  stays on, helpers stay recommend, and parent routing/automatic workers stay
+  off. GA remains blocked on controlled cohorts, human usability, Linux,
+  candidate benchmark, RC package/identity, and explicit operator approval.
+
+### Bounded recovery and handoff
+
+- Added deterministic failure classification and a cross-attempt recovery
+  matrix with one source repair or exact transient retry ceiling. Environment,
+  provider, permission, policy, scope, and unknown failures never gain source
+  mutation authority; `PIAGENT_AUTO_RECOVERY=off` preserves the prior handoff
+  path.
+- Added owner-only Handoff v1 projections and safe resume reconstruction bound
+  to task/session identity, journal integrity, trajectory phase, the actual
+  current tree, and exact verifier evidence. Stale passes are invalidated;
+  corrupt or symlink-unsafe state blocks mutation.
+- Extended acceptance receipts with optional runtime-observed recovery
+  provenance. Criteria/status truth is unchanged and the receipt stores only
+  bounded digests, counts, dispositions, and state references rather than raw
+  logs or source.
+
+### Role-bound helpers
+
+- Added strict RolePolicy v1 and HelperRequest v1 contracts for retriever,
+  scout, planner, worker, reviewer, Oracle, and researcher roles. Requests bind
+  hashed parent identity, bounded scope/tools/model/effort/budgets/output/stops,
+  cannot broaden parent authority, and never delegate approvals.
+- Added deterministic authenticated-catalog role binding that preserves the
+  user-pinned parent and reports unavailable instead of silently substituting a
+  model or effort. Worker remains disabled by default.
+- Added owner-only Piagent-owned helper budgets with two-concurrent/three-total,
+  per-role and one-writer ceilings, deduplication, orphan recovery, terminal
+  cancellation, and digest-only usage receipts. `PIAGENT_HELPERS_MODE` defaults
+  to `recommend`; automatic worker delegation is not enabled.
+
 ## v1.2.17 - 2026-08-03
 
 ### Bilingual public documentation

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/helper-request.schema.json",
+  "title": "Piagent HelperRequest v1",
+  "type": "object",
+  "required": ["schemaVersion", "policyVersion", "role", "objectiveHash", "objectiveText", "taskId", "taskRunId", "sessionHash", "authority", "readScope", "writeScope", "allowedTools", "model", "contextBudget", "ceilings", "outputSchema", "stoppingRule", "approvalRestrictions", "parentAuthorityDigest", "singleWriterOwnership", "deduplicationKey"],
+  "properties": {
+    "schemaVersion": { "const": 1 }, "policyVersion": { "const": "role-policy-v1" },
+    "role": { "enum": ["retriever", "scout", "planner", "worker", "reviewer", "oracle", "researcher"] },
+    "objectiveHash": { "$ref": "#/$defs/hash" }, "objectiveText": { "type": "string", "minLength": 3, "maxLength": 1000 },
+    "taskId": { "$ref": "#/$defs/ref" }, "taskRunId": { "$ref": "#/$defs/ref" }, "sessionHash": { "$ref": "#/$defs/hash" },
+    "authority": { "enum": ["read-only", "single-writer"] }, "readScope": { "$ref": "#/$defs/scopes" }, "writeScope": { "$ref": "#/$defs/scopes" }, "allowedTools": { "$ref": "#/$defs/names" },
+    "model": { "anyOf": [{ "type": "null" }, { "type": "object", "required": ["provider", "modelId", "effort", "source"], "properties": { "provider": { "$ref": "#/$defs/text" }, "modelId": { "$ref": "#/$defs/text" }, "effort": { "$ref": "#/$defs/text" }, "source": { "$ref": "#/$defs/text" } }, "additionalProperties": false }] },
+    "contextBudget": { "type": "integer", "minimum": 256, "maximum": 100000 }, "ceilings": { "$ref": "#/$defs/ceilings" },
+    "outputSchema": { "type": "string", "minLength": 3, "maxLength": 200 }, "stoppingRule": { "type": "string", "minLength": 3, "maxLength": 500 }, "approvalRestrictions": { "$ref": "#/$defs/names" },
+    "parentAuthorityDigest": { "$ref": "#/$defs/hash" }, "singleWriterOwnership": { "type": ["string", "null"], "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._/-]{0,255}$" }, "deduplicationKey": { "$ref": "#/$defs/hash" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "ref": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._/-]{0,255}$" }, "text": { "type": "string", "minLength": 1, "maxLength": 160 },
+    "scopes": { "type": "array", "maxItems": 100, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 300 } }, "names": { "type": "array", "maxItems": 32, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 300 } },
+    "ceilings": { "type": "object", "required": ["timeSeconds", "calls", "retries"], "properties": { "timeSeconds": { "type": "integer", "minimum": 1, "maximum": 3600 }, "calls": { "type": "integer", "minimum": 1, "maximum": 100 }, "retries": { "type": "integer", "minimum": 0, "maximum": 3 } }, "additionalProperties": false }
+  }
+}

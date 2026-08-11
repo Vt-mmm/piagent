@@ -1,0 +1,249 @@
+{
+  "schemaVersion": "codex-first-fs2-package-install-rollback-evidence-v1",
+  "workItem": "CF-FS2-04",
+  "recordedAt": "2026-08-10T14:13:35Z",
+  "status": "pass",
+  "scope": {
+    "objective": "Prove that the full-source package graph is complete and privacy-safe, then exercise a disposable local install from v1.2.17, upgrade to the exact current full-source package, and rollback to v1.2.17 without mutating operator credential, trust, or session state.",
+    "providerInvoked": false,
+    "benchmarkRunInvoked": false,
+    "releaseActionInvoked": false,
+    "registryWriteInvoked": false,
+    "userOrSystemGlobalInstallInvoked": false,
+    "disposableLocalPrefixInstallInvoked": true,
+    "nextWorkItemStarted": false,
+    "candidateState": "unfrozen",
+    "candidateDigest": null
+  },
+  "reviewedIdentity": {
+    "head": "4f37ae05d56431f2f9db9c4159e20252c3da3b2a",
+    "headTag": "v1.2.17",
+    "packageVersion": "1.2.17",
+    "policyManifestVersion": "authority-v1",
+    "policyManifestSha256": "7f223487384b5521bcda01bc1dc1578dfb3f8293dc94eadd85b86048b645273c",
+    "trackerBeforeCloseSha256": "a5df8852dec2cc75b537bf856a96a1061e8aa4fe8aa52e7ba6da4b05017de97e",
+    "roadmapSha256": "cb91fe410add6de293431308436ae7cff34e593c89fe8146a3633d8c85550aa7",
+    "executionProtocolSha256": "aab941a5422a2797fc1a3a1e420764a1f03fffcb4f06e4d04ea70fe3bbc1e470",
+    "productionTree": {
+      "algorithm": "piagent-fs2-work-item-production-tree-v1",
+      "domainUtf8": "piagent-fs2-work-item-production-tree-v1\n",
+      "canonicalization": "UTF-8 sorted production paths from the FS0 constitution; JSON array of {path,mode,size,sha256}; aggregate SHA-256 is domain plus canonical JSON bytes",
+      "files": 444,
+      "identity": "sha256:ce024d899816cc71c431ef9a4f8dd62254faa19299c9d69fc8ce1be786e2ea62"
+    },
+    "preArtifactWorkingTreeObservation": {
+      "porcelainRecords": 310,
+      "porcelainSha256": "ed04936feaa4b88d35265cbfa0d73f9b4b5c7002d89ac55c85f047ac6f3338a9",
+      "disposition": "Dirty user-owned development tree retained. Exact production identity is local implementation evidence only; no clean or frozen release candidate is claimed."
+    }
+  },
+  "packageGraphContract": {
+    "fullSource": "The current package dry-run contains every production module reachable from the shipped Piagent guard and CLI entrypoints, including packages/piagent-core/runtime/recovery/resume-state.ts.",
+    "privacyExclusions": [
+      "auth.json",
+      "trust.json",
+      ".env and .env.*",
+      ".pi/piagent-state",
+      "examples/private",
+      "docs/journals and docs/decisions",
+      "plans"
+    ],
+    "packageDryRun": {
+      "name": "@piagent/platform",
+      "version": "1.2.17",
+      "filename": "piagent-platform-1.2.17.tgz",
+      "files": 566,
+      "size": 1052407,
+      "unpackedSize": 4439521,
+      "forbiddenMatches": 0
+    },
+    "rcReadinessBinding": "The install-migration-rollback RC test group now explicitly includes tests/package-install-rollback.test.mjs, so later readiness evaluation cannot pass this group using only the older fixture set."
+  },
+  "lifecycleContract": {
+    "baseline": "A source archive is built from the immutable historical tag v1.2.17^{} and packed as the exact rollback artifact.",
+    "candidate": "The exact current working source is copied to a disposable directory, assigned synthetic version 1.3.0-fs2.4 only inside that directory, and packed locally. The synthetic version is test identity, not a release-candidate identity.",
+    "install": "npm install --global --ignore-scripts targets an isolated temporary prefix and cache; the installed baseline reports 1.2.17 and does not contain the current-only resume-state module.",
+    "upgrade": "Installing the disposable current-source tarball into the same prefix reports 1.3.0-fs2.4, contains the current-only module with the exact working-source SHA-256, and exposes a working piagent-doctor help command.",
+    "rollback": "Reinstalling the v1.2.17 tarball reports 1.2.17, removes the current-only module, and exposes a working piagent-install help command.",
+    "cleanup": "All archives, package roots, npm prefixes, caches, and synthetic operator homes are created below disposable temporary roots and removed after each test."
+  },
+  "privacyAndStateContract": {
+    "operatorFixture": "A private temporary Pi operator tree contains synthetic auth, settings, trust, and session files with 0700 directories and 0600 files.",
+    "proof": "A domain-separated recursive identity over type, path, POSIX mode, and file bytes is identical before install, after upgrade, and after rollback.",
+    "result": "pass",
+    "credentialMutation": false,
+    "trustMutation": false,
+    "sessionMutation": false,
+    "secretMaterialInEvidence": false
+  },
+  "platformEvidence": {
+    "locallyObserved": {
+      "platform": "darwin",
+      "arch": "arm64",
+      "node": "v24.11.1",
+      "npm": "11.6.2",
+      "result": "pass"
+    },
+    "declaredCiFixture": {
+      "workflow": ".github/workflows/verify.yml",
+      "runners": [
+        "ubuntu-latest",
+        "macos-latest"
+      ],
+      "node": "22.19",
+      "command": "npm test",
+      "continueOnError": false,
+      "coverage": "The package-install-rollback regression is part of tests/*.test.mjs and therefore runs on both declared workflow runners."
+    },
+    "externalLinuxExecutionObserved": false,
+    "boundary": "This artifact proves the macOS execution and the deterministic Linux CI/fixture wiring. It does not claim that an external Linux runner or exact RC artifact has executed."
+  },
+  "implementation": [
+    {
+      "path": "tests/package-install-rollback.test.mjs",
+      "sha256": "6a6625f170cd3a04d0d55269fedfbccba09edc6dcf721600f4f28cd7f1cbc27c"
+    },
+    {
+      "path": "scripts/rc-readiness-evaluation.mjs",
+      "sha256": "cf6f3221419b193e8dc85d73a7658e72ebffadd229aca85fb32bf92d143ab66d"
+    }
+  ],
+  "reviewedInputs": [
+    {
+      "path": ".github/workflows/verify.yml",
+      "sha256": "68c03c609096b0b39f6f343fe8120df71f332c103810ab2f23df7c657786d79f"
+    },
+    {
+      "path": "package.json",
+      "sha256": "6fc961077365846b08b2251d8f5a2f89656191eb91f6039d94feb3e8c97ca744"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "f6fe79668e262a7c992a6c8add52fe606ed2551cf071e96711e074948cf1807d"
+    },
+    {
+      "path": "packages/piagent-core/package.json",
+      "sha256": "0f9ea007f08557f2b2eee8bc774483db1d83e063937f6ea9044c6f82c47362f1"
+    },
+    {
+      "path": "scripts/install-global.sh",
+      "sha256": "6882db01c8f2436fbdfe945f1811ddc49173894eaed10ab1496ca6976f5df8e8"
+    },
+    {
+      "path": "scripts/update-global.mjs",
+      "sha256": "4fd47184606a569220971905f8dfd30e669f1a684fce6b01c707ffa4fad6aabf"
+    },
+    {
+      "path": "scripts/migrate-project-state.mjs",
+      "sha256": "35682b5018ff020d73cfda189860e4f712c9338fef2ac51dc09e1a5606d89fc9"
+    },
+    {
+      "path": "scripts/uninstall-global.sh",
+      "sha256": "99495f5ea481f7401065906ffcca2a0dde37cd73e0ea282a1d7811920e035ac6"
+    },
+    {
+      "path": "tests/package-distribution.test.mjs",
+      "sha256": "8aaba2ee15dd320ae8ea318c5ac70834fe7b6d708abe8a9718ba2c30b1880640"
+    },
+    {
+      "path": "docs/release-install-policy.md",
+      "sha256": "4db8a0d2bb73e698e59cd46aa5bcfb603165bfb36b3b6b51f9e8a5a674c6fef2"
+    },
+    {
+      "path": ".pi/piagent-profile.lock.json",
+      "sha256": "1507f8f7cf576702960e4ce61ddc9b7faa5efb54c287bc323b3dff946ec8139a"
+    }
+  ],
+  "verification": [
+    {
+      "command": "node --test tests/package-install-rollback.test.mjs",
+      "result": "pass",
+      "tests": 2,
+      "failures": 0
+    },
+    {
+      "command": "node --test tests/install-global.test.mjs tests/update-global.test.mjs tests/global-update.test.mjs tests/migrate-project-state.test.mjs tests/uninstall-global.test.mjs tests/package-distribution.test.mjs tests/release-identity.test.mjs tests/package-install-rollback.test.mjs",
+      "result": "pass",
+      "tests": 101,
+      "failures": 0
+    },
+    {
+      "command": "PIAGENT_NO_UPDATE_CHECK=1 node --test tests/*.test.mjs",
+      "result": "pass",
+      "tests": 1845,
+      "suites": 122,
+      "failures": 0
+    },
+    {
+      "command": "npm run typecheck",
+      "result": "pass"
+    },
+    {
+      "command": "npm run architecture:check",
+      "result": "pass",
+      "sourceFiles": 192
+    },
+    {
+      "command": "npm run docs:check",
+      "result": "pass",
+      "languagePairs": 4
+    },
+    {
+      "command": "npm run capabilities:check",
+      "result": "pass",
+      "packs": 2
+    },
+    {
+      "command": "npm run release:identity",
+      "result": "pass",
+      "version": "1.2.17"
+    },
+    {
+      "command": "npm run smoke",
+      "result": "pass"
+    },
+    {
+      "command": "npm run verify -- --offline",
+      "result": "pass"
+    },
+    {
+      "command": "piagent-capabilities doctor with repository profile and lock",
+      "result": "pass-current",
+      "digest": "sha256:1507f8f7cf576702960e4ce61ddc9b7faa5efb54c287bc323b3dff946ec8139a"
+    },
+    {
+      "command": "node governance/codex-first-product/evidence/fs1/verify-capability-ownership-delta-v3.mjs governance/codex-first-product/evidence/fs1/capability-module-ownership-delta.v3.json",
+      "result": "pass",
+      "productionFiles": 444,
+      "ownershipIdentity": "sha256:cf032f15b45d2257a7d460524f895d0aa828d653489aa81bed149eb07a083886"
+    },
+    {
+      "command": "git diff --check",
+      "result": "pass"
+    }
+  ],
+  "authorityAndMigration": {
+    "authorityChange": "none",
+    "taskContractSchemaChange": "none",
+    "workingTreeDigestAlgorithmChange": "none",
+    "runtimeIntegrityChange": "none",
+    "releaseIdentityChange": "none; the synthetic candidate version exists only inside the disposable test package root",
+    "stateCompatibility": "The test exercises the existing v1.2.17 install/update/rollback boundary without modifying user or project state."
+  },
+  "rollback": {
+    "mechanism": "Remove the additive package lifecycle regression and remove it from the RC install-migration-rollback test group.",
+    "stateMigrationRequired": false,
+    "operatorDataDeletionRequired": false
+  },
+  "limitations": [
+    "This is exact-current local implementation evidence on a dirty development tree, not a clean or frozen release candidate.",
+    "The current-source tarball uses a synthetic disposable version solely to prove upgrade/rollback mechanics; it is not a v1.3.0 RC artifact.",
+    "The package lifecycle executed locally on macOS ARM64. Ubuntu and macOS workflow wiring is verified from the current CI fixture, but no external Linux execution is claimed.",
+    "No provider, benchmark, registry write, user/system global install, branch, worktree, commit, tag, push, publish, candidate freeze, cleanup of user files, or CF-FS2-05 gate work was performed."
+  ],
+  "stopRule": {
+    "workItemComplete": true,
+    "nextWorkItem": "CF-FS2-05",
+    "nextWorkItemStarted": false
+  }
+}

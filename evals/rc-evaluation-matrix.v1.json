@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "matrixVersion": "rc-evaluation-matrix-v1",
+  "targetRelease": "1.3.0",
+  "baselineRelease": "1.2.17",
+  "transitionContract": {
+    "path": "evals/fs-release-transition.v1.json",
+    "sha256": "7ef0f6451754b3bc319eb7503dd9c3f2377fb82fc94fb44a758cff31a7153ee5",
+    "rcAssemblyScope": "local-clean-rc-artifact-assembly-only",
+    "betaRequiresExactRcMigrationGate": true,
+    "maximumCandidateRevisions": 2
+  },
+  "versions": {
+    "piHost": "0.82.0",
+    "piagentPackage": "1.3.0-rc.1",
+    "taskContract": 2,
+    "acceptanceReceipt": 1,
+    "runtimeModelSnapshot": 1,
+    "taskFeatures": 1,
+    "solverDecision": 1,
+    "solverPolicy": "solver-v1",
+    "trajectoryState": 1,
+    "trajectoryPolicy": "trajectory-v1",
+    "failureEvidence": 1,
+    "failureClassification": 1,
+    "handoff": "handoff-v1",
+    "recoveryPolicy": "recovery-v1",
+    "rolePolicy": "role-policy-v1",
+    "helperRequest": 1,
+    "productPreflight": "product-preflight-v1",
+    "liveTaskStatus": "live-task-status-v1",
+    "completionReceiptView": "completion-receipt-view-v1",
+    "taskEfficiency": "task-efficiency-v1"
+  },
+  "scenarioRevisions": [
+    { "id": "core-v1", "path": "benchmarks/core-v1/suite.json" },
+    { "id": "production-v1", "path": "benchmarks/production-v1/suite.json" },
+    { "id": "solver-route-corpus-v1", "path": "benchmarks/solver-v1/route-corpus.json" },
+    { "id": "failure-classification-v1", "path": "benchmarks/failure-v1/classification-corpus.json" }
+  ],
+  "evidenceInputs": [
+    { "id": "P0", "path": "plans/codex-first-product/evidence/p0-baseline-terra-medium/report.json", "sha256": "204a663678605b4944e5e9b954cd0cb7ca0cefe2e000c261c18b3ee2d6e2bd7c" },
+    { "id": "P2", "path": "plans/codex-first-product/evidence/p2-shadow-pilot/report.json", "sha256": "e651c2ca0a71c6d2034ab17f220b5bd4df49dc82095e1b9c2ac1a7d5f7d4ef50" },
+    { "id": "P3", "path": "plans/codex-first-product/evidence/p3-phase-tools/report.json", "sha256": "898d9ec2fcd6ff2cd038b2e55744727d2235c2215e673450f57d5ba7bfd38adb" },
+    { "id": "P4", "path": "plans/codex-first-product/evidence/p4-recovery/report.json", "sha256": "f74035fa3cc9d80101ef280f57a3b98aa2fea9d26b27ef1d56712c34eb92a3f2" },
+    { "id": "P5", "path": "plans/codex-first-product/evidence/p5-helpers/report.json", "sha256": "27ae78ba29ec1566cf5f4db688470752a14785e84e3431d6c3a1881e10485229" },
+    { "id": "P6", "path": "plans/codex-first-product/evidence/p6-usability-pilot/report.json", "sha256": "115536cf5a9a1b039d06b57b8ca23b0c32f3e08bff626d8b58acb2c1b910f52b" }
+  ],
+  "profiles": [
+    "backend-api",
+    "be-readonly-fe",
+    "data",
+    "devops",
+    "docs",
+    "fullstack",
+    "generic",
+    "mobile",
+    "node-typescript",
+    "python",
+    "web-frontend"
+  ],
+  "model": {
+    "catalogSource": "authenticated-catalog",
+    "baselineProvider": "openai-codex",
+    "baselineModel": "gpt-5.6-terra",
+    "thinkingLevel": "medium",
+    "parentRouting": "off"
+  },
+  "featureModes": {
+    "candidate": { "solver": "assist", "phaseTools": "on", "recovery": "on", "helpers": "recommend", "parentRouting": "off", "executionBackend": "host" },
+    "localSafeDefault": { "solver": "shadow", "phaseTools": "shadow", "recovery": "on", "helpers": "recommend", "parentRouting": "off", "executionBackend": "host" }
+  },
+  "verifiers": ["npm run verify"],
+  "platforms": [
+    { "id": "darwin-arm64", "required": true },
+    { "id": "linux-x64", "required": true }
+  ],
+  "grading": {
+    "benchmarkMeasurementSchema": 1,
+    "solverRouteGrader": "solver-route-grader-v1",
+    "productUsabilityReport": "product-usability-pilot-v1"
+  },
+  "releaseRequirements": {
+    "cleanReleaseCommit": true,
+    "rcPackage": true,
+    "independentHumanPilot": 5,
+    "cohortATasks": 20,
+    "cohortBAttempts": 100,
+    "cohortCTerminalAttempts": 200
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-08-11",
+  "workItem": "CF-FS5-04-v3",
+  "candidateV2": {
+    "contentDigest": "bc3ef1d5efa811e494a123d5c992af60aea3887b29b50f50d89b2cb4663eabf9",
+    "fileCount": 836,
+    "disposition": "historical-exact-candidate; superseded by the telemetry correction; never resume or relabel"
+  },
+  "canariesV2": [
+    {
+      "stage": "canary-a-fullstack",
+      "runId": "capability-v1-20260811T044216Z-e8ef98",
+      "passed": true,
+      "piagentFreshTokens": 13661,
+      "codexFreshTokens": 26361,
+      "freshTokenRatio": 0.5182276848374493,
+      "durationRatio": 0.6587134672565088,
+      "reportSha256": "496135ba31181053861ae5f10e722b7eb8d978a8270477fc80bfafce22ec3f59"
+    },
+    {
+      "stage": "canary-b-migration",
+      "runId": "capability-v1-20260811T044640Z-b25e2f",
+      "passed": true,
+      "piagentFreshTokens": 18244,
+      "codexFreshTokens": 32159,
+      "freshTokenRatio": 0.5673061973320066,
+      "durationRatio": 0.8078180223751694,
+      "reportSha256": "483014d7d23eac16ad1a996597fb198ecab349f23c72748265e22c3c65108658"
+    }
+  ],
+  "pilotV2": {
+    "runId": "production-v1-20260811T045227Z-104581",
+    "configurationDigest": "cc0884d0ea2283badeeb2bea77482d9eebd27051bbd10c6c412bc63411b3a375",
+    "acceptedSessions": 12,
+    "expectedSessions": 12,
+    "gradeScopeSafety": "12/12 PASS",
+    "piagentWorkflow": "6/6 score 10",
+    "infrastructure": { "attempts": 12, "retries": 0, "failures": 0 },
+    "freshTokenRatio": 0.4135,
+    "failureAwareFreshTokenRatio": 0.4144,
+    "freshTokenRatioConfidence95": { "lower": 0.2421, "upper": 0.7065, "scenarioFamilies": 6 },
+    "pairWins": { "piagent": 6, "codexCli": 0, "ties": 0 },
+    "stagePassed": false,
+    "blocker": {
+      "scenarioId": "quoted-csv",
+      "field": "blockedValidCallsUpperBound",
+      "value": 1,
+      "reason": "v2 retained only a total blocked count and could not distinguish a contract-invalid policy denial from a valid call blocked by runtime"
+    },
+    "artifacts": {
+      "report.json": "70f5fa6ab8b580822f093b25fe7660c54aba88826ee50df173bed1ecaad02858",
+      "runs.jsonl": "67419e8dbadfe87229bad4dfa49e9ada0646425408ff94df604b4cc597b72ba6",
+      "run-manifest.json": "26dd20ae24cdd74c244158309f027c46c53e38947f963d1a04c8dfb33db51e29"
+    },
+    "claimBoundary": "engineering diagnostic only; no token, generalization, release or FS6-entry claim"
+  },
+  "systemicCorrectionV3": {
+    "protocolPath": "evals/fs5-pilot-protocol.v3.json",
+    "protocolSha256": "c642aaa7b414b288c4cd60c38e9352f4ecf25e317a5c4b7868a93e8781d53d16",
+    "behavior": "Persist only closed privacy-safe block classes. Scope, authority, destructive and registry denials proven invalid are excluded; phase and unclassified denials remain in blockedValidCallsUpperBound.",
+    "confirmationScenario": "quoted-csv",
+    "maximumConfirmationPairs": 1,
+    "bindings": {
+      "benchmarkForensics": "274d5fdd62f08565211d28d3039a7a4bba187524f1e6903ed6b5feb775617c95",
+      "protocolEnforcement": "05b9a6e0c58639dd10ba78f4d8a4379bfdebbf180d04423c821a4523f5f89569",
+      "operationalEvidenceTests": "bfdfe3e29590c9c5a21df9f5145f84201a900a642c9bdb92e8bab9b7167c8800",
+      "protocolTests": "00a48489706fbc8f1560d5983373c786a443ca881ef1ba8a883311d501e49474",
+      "runnerTests": "c0862f096630c1b11b7962ad17dd7f09eddd9346a7fb6c57590a0794714634ce",
+      "verifyLocal": "6657be801dcb7b0eeeebe51ef9d55959dbb33d37a8034ae76e91b671ee3657a9"
+    },
+    "verification": {
+      "classifierProtocolCore": "44/44 PASS",
+      "runnerAndSuites": "47/47 PASS",
+      "typecheck": "PASS",
+      "architecture": "PASS (198 source files)",
+      "diffCheck": "PASS"
+    }
+  },
+  "state": "v2-stopped-v3-local-ready-one-confirmation-pair-next"
+}

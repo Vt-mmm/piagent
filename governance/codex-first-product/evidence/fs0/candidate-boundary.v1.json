@@ -1,0 +1,285 @@
+{
+  "schemaVersion": "candidate-boundary-v1",
+  "workItem": "CF-FS0-04",
+  "createdAt": "2026-08-10",
+  "releaseTrain": {
+    "gaTarget": "1.3.0",
+    "firstCandidateVersion": "1.3.0-rc.1",
+    "firstCandidateTag": "v1.3.0-rc.1",
+    "integrationBranchProcedureName": "codex/v1.3.0-rc.1",
+    "branchCreated": false,
+    "worktreeCreated": false,
+    "commitCreated": false,
+    "tagCreated": false,
+    "pushOrPublishPerformed": false
+  },
+  "currentObservedState": {
+    "head": "4f37ae05d56431f2f9db9c4159e20252c3da3b2a",
+    "headTree": "0907c03c88373471c6da8606af61b4f172149c73",
+    "branch": "main",
+    "upstream": "origin/main",
+    "ahead": 0,
+    "behind": 0,
+    "exactTag": "v1.2.17",
+    "packageVersion": "1.2.17",
+    "trackedModified": 122,
+    "untracked": 263,
+    "stagedAddedDeletedRenamed": 0,
+    "candidateState": "unfrozen",
+    "candidateDigest": null,
+    "reason": "The implementation exists only in a dirty working tree and no exact RC policy/package/commit identity exists."
+  },
+  "candidateWorktreeProcedure": {
+    "approvalBoundary": "The operator must separately approve branch/worktree creation, staging, commit, tag, push, publish, install, and provider execution at the stage where each is needed.",
+    "assembly": [
+      "Review the attributed dirty tree and select only intended full-source product/generated/test/docs/governance changes.",
+      "After approval, create codex/v1.3.0-rc.1 without resetting, cleaning, or rewriting the current user worktree.",
+      "Commit the reviewed candidate inputs only after explicit commit approval.",
+      "Create a new isolated detached worktree from that exact commit; do not copy the dirty directory and do not run git clean on it.",
+      "Require empty porcelain status including all untracked paths before generation, after generation is committed, before package build, and before freeze.",
+      "Build and verify in the isolated worktree. Freeze only the exact commit after every local gate passes and an immutable candidate descriptor is written outside the package tarball.",
+      "Any source, policy, package, generated output, suite, prompt, grader, runner, runtime, lock, or version change invalidates the candidate and its paid evidence."
+    ],
+    "cleanPredicate": "git status --porcelain=v2 --untracked-files=all returns zero entries",
+    "forbiddenOperations": ["git reset --hard", "git clean", "checkout-over-user-work", "copy-dirty-tree-as-candidate", "force-tag", "force-push"],
+    "candidateWorktreeLocation": "fresh private temporary or reviewed build root outside the repository and outside evidence directories"
+  },
+  "sourceBoundary": {
+    "selection": "git-index-working-tree-plus-nonignored-untracked-v2 on an empty-status isolated worktree",
+    "algorithm": "sha256-length-prefixed-entry-v2",
+    "implementation": "packages/piagent-core/benchmark/benchmark-candidate.js",
+    "requiredBindings": ["40-character commit SHA", "Git tree object id", "file count", "path", "kind", "working mode", "index mode", "raw payload bytes"],
+    "unsupported": ["unresolved index conflict", "gitlink", "absolute/external symlink", "unsupported file type", "file mutation during read"],
+    "rule": "A source candidate is reproducible only when clean commit identity and recomputed content provenance agree. A dirty-working-tree digest is diagnostic, never an RC identity."
+  },
+  "packageBoundary": {
+    "package": "@piagent/platform",
+    "rootFilesAllowlist": [
+      "AGENTS.md",
+      "CHANGELOG.md",
+      "CODE_OF_CONDUCT.md",
+      "CONTRIBUTING.md",
+      "LICENSE",
+      "README.md",
+      "README.vi.md",
+      "SECURITY.md",
+      "architecture/",
+      ".gitattributes",
+      "adapters/",
+      "benchmarks/",
+      "catalog/",
+      "docs/",
+      "!docs/journals/",
+      "!docs/decisions/",
+      "!docs/readiness-assessment.md",
+      "docs-site/",
+      "evals/",
+      "packs/",
+      "packages/piagent-core/",
+      "schemas/",
+      "scripts/",
+      "templates/",
+      "types/"
+    ],
+    "rootFilesAllowlistSha256": "b93145a02180ba48d12abde9bebf3646e3540a42d2ec56f4ed39e37601121d6c",
+    "requiredForbiddenPatterns": [
+      "governance/**",
+      "plans/**",
+      "docs/journals/**",
+      "docs/decisions/**",
+      "docs/readiness-assessment.md",
+      "examples/private/**",
+      "**/auth.json",
+      "**/trust.json",
+      "**/.env*",
+      "**/.pi/piagent-state/**",
+      "**/node_modules/**"
+    ],
+    "requiredCandidateDecision": {
+      "path": "packages/piagent-core/extensions/core-services.js",
+      "currentState": "included by the root package allowlist but referenced only by tests",
+      "requiredState": "excluded from the RC tarball unless a reviewed production import is introduced and the module is integrity-bound",
+      "featureDeletion": false
+    },
+    "currentDryRunBaseline": {
+      "releaseIdentity": "@piagent/platform@1.2.17",
+      "entryCount": 552,
+      "tarballBytes": 1024601,
+      "unpackedBytes": 4294011,
+      "pathListSha256": "de80cc05621bc9c161880f8803696bb8e043810bffa3366170758e7074eb3a7f",
+      "pathModeSizeSha256": "38eaccf2db714e262575cad427f73ae653b4d6ac84c27fe59b9aae1f640999c5",
+      "localSourceContentManifestSha256": "3d355e2d0bccaef0fa025b05864f3ed56a549082d1624293cc3ad31ae464e1a3",
+      "forbiddenMatches": 0,
+      "governanceEntries": 0,
+      "note": "This is a dirty-tree 1.2.17 dry-run baseline, not an RC package or registry artifact."
+    },
+    "candidatePackageProof": [
+      "Build one actual npm tarball with lifecycle scripts disabled into a private temporary directory.",
+      "Record npm-reported name/version/file count plus tarball SHA-512 and byte size.",
+      "Extract into a second private directory and hash a sorted manifest of path, regular/symlink kind, normalized mode, byte size, and SHA-256 bytes.",
+      "Compare extracted imports, package pi entrypoints, bins, templates, profiles, schemas, benchmarks, and generated artifacts with the reviewed allowlist.",
+      "Install that exact tarball into a disposable home/project and run package, install, update, rollback, and doctor gates before any publish."
+    ]
+  },
+  "generatedArtifactPolicy": {
+    "rule": "Generators and reviewed sources are authoritative. Generated outputs are committed only after deterministic regeneration in the candidate worktree and byte-equality check; hand edits are rejected.",
+    "artifacts": [
+      {
+        "id": "docs-site",
+        "sources": ["scripts/build-docs-site.mjs", "docs-site/content/**/*.html", "package.json#/version", "docs-site/favicon.svg", "docs-site/vercel.json"],
+        "outputs": ["docs-site/*.html", "docs-site/en/*.html"],
+        "expectedSourceFragments": 36,
+        "expectedGeneratedPages": 36,
+        "regenerate": "node scripts/build-docs-site.mjs",
+        "verify": "node scripts/build-docs-site.mjs --check"
+      },
+      {
+        "id": "capability-catalog",
+        "sources": ["packs/**/*.json", "packages/piagent-core/capabilities/capability-core.js", "packages/piagent-core/capabilities/capability-sources.js"],
+        "outputs": ["catalog/capabilities.json"],
+        "regenerate": "node scripts/capability-catalog.mjs catalog --write",
+        "verify": "node scripts/capability-catalog.mjs catalog --check"
+      },
+      {
+        "id": "root-profile-integrity-lock",
+        "sources": [".pi/piagent-profile.json", "package.json", "packages/piagent-core/package.json", "packages/piagent-core/policies/base-policy.json", "packages/piagent-core/capabilities/**/*.js", "packages/piagent-core/runtime/**/*", "reviewed executable extension/MCP/security dependencies", "packs/**", "adapters/**"],
+        "outputs": [".pi/piagent-profile.lock.json"],
+        "regenerate": "node scripts/capability-catalog.mjs resolve --profile .pi/piagent-profile.json --output .pi/piagent-profile.lock.json --package-source ../",
+        "verify": "node scripts/capability-catalog.mjs doctor --profile .pi/piagent-profile.json --lock .pi/piagent-profile.lock.json --package-source ../ and require report.lock.current===true; process exit 0 alone is insufficient",
+        "packageDisposition": "source-candidate integrity artifact; excluded from npm tarball"
+      },
+      {
+        "id": "npm-lock",
+        "sources": ["package.json", "packages/piagent-core/package.json", "pinned npm and Node toolchain"],
+        "outputs": ["package-lock.json"],
+        "regenerate": "after reviewed version/manifest edits, use npm package-lock generation with lifecycle scripts disabled inside the candidate worktree",
+        "verify": "npm ci --ignore-scripts followed by release identity and package tests",
+        "networkRule": "No network-dependent regeneration is part of FS0; the RC build records exact Node/npm versions and resolved lock bytes."
+      }
+    ]
+  },
+  "versionSurfaces": {
+    "requiredExactCandidateValues": {
+      "packageVersion": "1.3.0-rc.1",
+      "tag": "v1.3.0-rc.1",
+      "gaTarget": "1.3.0",
+      "supportedPiHost": "0.82.0"
+    },
+    "machineReadable": [
+      "package.json#/version",
+      "packages/piagent-core/package.json#/version",
+      "package-lock.json#/version",
+      "package-lock.json#/packages//version",
+      "package-lock.json#/packages/packages~1piagent-core/version",
+      ".pi/piagent-profile.lock.json#/core/packageVersion",
+      "evals/rc-evaluation-matrix.v1.json#/targetRelease",
+      "evals/rc-evaluation-matrix.v1.json#/versions/piagentPackage"
+    ],
+    "humanAndGenerated": [
+      "CHANGELOG.md exact release heading",
+      "README.md and allowed docs installation commands",
+      "docs-site/content installation/release references",
+      "all generated docs-site version badges",
+      "npm tarball package.json and filename",
+      "annotated Git tag only after explicit approval"
+    ],
+    "existingValidator": "node scripts/verify-release-identity.mjs; at tag gate also pass --tag and --commit",
+    "intentionalHistoricalValues": ["CHANGELOG history", "docs/publishing-for-teams.md version history", "evals/rc-evaluation-matrix.v1.json#/baselineRelease"]
+  },
+  "runtimeIntegrityClosure": {
+    "currentProfileLockRuntimeFileCount": 110,
+    "currentPackageDigest": "sha256:581e3680d944af21edd2e02083c3d32dae23f3eaa5beca5d69472d44dfcba142",
+    "currentDoctorState": {
+      "catalogCurrent": true,
+      "lockCurrent": false,
+      "lockStatus": "repin",
+      "reportedActualDigest": "sha256:4b041d917043c56023e6986c4d8b4ce6ab85ef19361930c01c0dff9363ec6407",
+      "reportedExpectedDigest": "sha256:0b4491e9d6b6b7854ca5d22978c02ac00fbd2f2b3a7258e32b75a4125eed980d",
+      "candidateConsequence": "The current root profile lock is historical/stale and cannot prove an RC closure. Regenerate only after the exact candidate source and version are assembled."
+    },
+    "authoritativeCandidateProof": "The regenerated profile lock must include and hash every executable transitive production dependency reachable from the Pi extension, CLI, permission/MCP paths, and generated capability resolution; type-only erased imports are documented exceptions.",
+    "requiredExplicitBindingsBeforeFreeze": [
+      "packages/piagent-core/extensions/execution-backend.js",
+      "packages/piagent-core/extensions/return-contract.js",
+      "packages/piagent-core/extensions/shell-selector-policy.js",
+      "packages/piagent-core/extensions/shell-write-targets.js",
+      "packages/piagent-core/extensions/task-digest-contract.js",
+      "packages/piagent-core/extensions/task-digest-state.js",
+      "packages/piagent-core/extensions/task-runtime-audit.js",
+      "packages/piagent-core/extensions/verification-intelligence.js"
+    ],
+    "candidateGate": "A transitive production-import-graph test must prove every executable dependency is both shipped in the tarball and represented in the regenerated runtime integrity closure; package presence alone is insufficient.",
+    "testOnlyBarrel": "core-services.js must remain excluded from the tarball unless it becomes a real production dependency."
+  },
+  "candidateDigestDesign": {
+    "schemaVersion": "piagent-release-candidate-v1",
+    "canonicalization": "UTF-8 stable JSON with recursively sorted object keys; path arrays sorted by raw UTF-8 bytes; no timestamps or absolute paths in the digest preimage.",
+    "domain": "piagent-release-candidate-v1",
+    "requiredDescriptorFields": [
+      "releaseVersion",
+      "sourceCommitSha",
+      "sourceGitTreeOid",
+      "sourceProvenance.algorithm",
+      "sourceProvenance.selection",
+      "sourceProvenance.contentDigest",
+      "sourceProvenance.fileCount",
+      "package.tarballSha512",
+      "package.entryManifestSha256",
+      "package.entryCount",
+      "generatedManifestSha256",
+      "runtimeIntegrityPackageDigest",
+      "runtimeIntegrityFileManifestSha256",
+      "policyManifestVersion",
+      "policyManifestSha256",
+      "nodeVersion",
+      "npmVersion",
+      "piHostVersion"
+    ],
+    "algorithm": "SHA-256 over length-prefixed UTF-8 domain plus length-prefixed canonical descriptor bytes",
+    "rendering": "sha256:<64 lowercase hex>",
+    "selfReferenceRule": "The descriptor does not include its own digest or storage path.",
+    "freezeRule": "candidate_state becomes frozen only after a clean-worktree recomputation, actual tarball extraction proof, generated checks, integrity closure, exact policy manifest, local phase gate, and operator-approved immutable commit identity all agree."
+  },
+  "rollbackBaseline": {
+    "release": "1.2.17",
+    "annotatedTag": "v1.2.17",
+    "commit": "4f37ae05d56431f2f9db9c4159e20252c3da3b2a",
+    "gitTree": "0907c03c88373471c6da8606af61b4f172149c73",
+    "commitDate": "2026-08-03T16:19:49+07:00",
+    "piHost": "0.82.0",
+    "registryArtifactDigest": null,
+    "registryArtifactStatus": "must be resolved and verified before RC cohort or rollback drill; tag/source identity does not prove registry bytes",
+    "rollbackMethod": [
+      "Use an exact prior artifact/version, never git reset/checkout over user work.",
+      "Dry-run the helper, host, Pi package, project migration compatibility, and doctor plan.",
+      "Require explicit operator confirmation for the actual global install/rollback.",
+      "Preserve auth, settings, sessions, project profiles, memory, task evidence, and provenance; optional newer sidecars are ignored safely or handed off, never silently reinterpreted.",
+      "After rollback, run strict doctor and a disposable project smoke before declaring recovery."
+    ]
+  },
+  "candidateInvalidation": {
+    "invalidates": ["source byte or mode", "policy manifest", "package allowlist or tarball", "generated source/output", "runtime integrity lock", "version surface", "suite", "prompt", "grader", "runner", "runtime dependency", "model/thinking treatment"],
+    "doesNotInvalidate": ["new read-only report that hashes the unchanged candidate", "operator commentary outside the candidate/evidence roots"],
+    "action": "Mark candidate invalidated, preserve ledgers/reports, rebuild from the smallest local gate, and never resume or relabel paid evidence as comparable."
+  },
+  "entryGates": [
+    "All intended source is reviewed and committed with a clean status.",
+    "All generated artifacts are rebuilt and byte-current.",
+    "Every version surface agrees with the exact RC version and release identity validator.",
+    "Package dry-run and actual extracted tarball match the reviewed allowlist and contain no forbidden/private path.",
+    "Every executable production import is shipped and integrity-bound; capability doctor reports lock.current===true; core-services.js is excluded or production-bound by explicit decision.",
+    "Policy manifest exists, is task-pinnable, and its digest is in the candidate descriptor.",
+    "Local full verification, distribution, install/update/rollback, and supported-platform gates pass.",
+    "No provider or cohort run starts before freeze and separate approval."
+  ],
+  "exitCheck": {
+    "candidateProcedureDefined": true,
+    "packageAllowlistDefined": true,
+    "generatedPolicyDefined": true,
+    "versionSurfacesDefined": true,
+    "digestDesignDefined": true,
+    "rollbackBaselineDefined": true,
+    "branchCommitTagPushPublishPerformed": false,
+    "candidateFrozen": false
+  }
+}

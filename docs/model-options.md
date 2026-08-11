@@ -4,7 +4,35 @@ Pi Agent Platform không khóa vào một provider. Hai họ model dưới đây
 
 Lưu ý cách đọc: trong toàn bộ tài liệu này, "Codex" và "Claude" là **tên họ model** đứng sau các provider id ở trên. Chúng không phải tên CLI, và cũng không phải một agent nào khác — mọi thứ ở đây đều chạy trong Pi.
 
-Quan trọng: flow chính là user chọn model bằng native Pi selector, không phải hỏi agent recommend.
+Flow mặc định vẫn là user chọn model bằng native Pi selector. Adaptive routing
+chỉ hoạt động khi operator chọn mode tương ứng; `/model`, CLI `--model`, hoặc
+`--thinking` là hard pin và luôn thắng router.
+
+## Capability routing trước task
+
+Piagent có contract `low | medium | high | ultra`, tách khỏi tên model cụ thể.
+Mapping đánh giá OpenAI hiện tại là Luna/medium, Terra/medium, Sol/high và
+Sol/xhigh; authenticated catalog phải có đúng model/effort, nếu không decision
+trả `unavailable` thay vì substitute.
+
+```text
+PIAGENT_PARENT_ROUTING=off|shadow|recommend|auto
+PIAGENT_ROUTING_OBJECTIVE=intelligence|balance|cost
+```
+
+- `shadow`: tính và lưu decision đã redaction, không đổi model.
+- `recommend`: hiện band/model/effort và reason trong `/task-preflight`.
+- `auto`: extension hiện fail-closed về recommend. Task-boundary adapter an toàn
+  là lệnh prelaunch rõ ràng:
+
+```bash
+piagent-route --prompt "Fix src/parser.ts and run npm test" --json
+piagent-route --prompt-file /path/to/task.txt --execute --yes -- --approve
+```
+
+`--execute --yes` mới bắt đầu provider-backed task. Router từ chối explicit pin,
+task chưa qua preflight, catalog thiếu, hoặc decision không đủ điều kiện. Nó
+không đổi model giữa thread và không ghi raw prompt vào route evidence.
 
 ## Flow chuẩn sau OAuth
 
@@ -50,7 +78,12 @@ piagent-models --provider openai-codex
 piagent-models --provider anthropic
 ```
 
-Lưu ý: `--list-models` chỉ hiện model mà Pi xem là available với credential/provider hiện tại. Nếu chưa login Anthropic, các model Claude có thể chưa hiện dù model catalog local có metadata.
+Lưu ý: `--list-models` và `piagent-models` chỉ hiện model mà Pi xem là
+available với credential/provider hiện tại. `piagent-models --json` ghi rõ
+`authenticated`, `logged-out`, `offline` hoặc `unavailable`; nó không đọc public
+catalog rồi trình bày như quyền truy cập đã xác thực. Nếu một model đã seed vào
+scope nhưng chưa available, report giữ nguyên tên và cảnh báo, không substitute
+sang model khác.
 
 ## Thinking levels
 
@@ -80,9 +113,9 @@ pi --thinking medium
 | `openai-codex/gpt-5.4-mini` | fast/cheap | scout nhẹ, docs, simple fix |
 | `openai-codex/gpt-5.4` | balanced | task bình thường |
 | `openai-codex/gpt-5.5` | balanced/hard default | default mạnh cho implement |
-| `openai-codex/gpt-5.6-luna` | focused hard | debug/review/test khó, cần reasoning sâu nhưng scope hẹp |
-| `openai-codex/gpt-5.6-sol` | strategic/deep | architecture, large refactor, planning lớn |
-| `openai-codex/gpt-5.6-terra` | huge-context scout | đọc nhiều docs/source, tổng hợp repo lớn |
+| `openai-codex/gpt-5.6-luna` | cost-sensitive/high-volume | workload nhanh, nhiều lượt, ưu tiên latency và chi phí |
+| `openai-codex/gpt-5.6-terra` | balanced | công việc hằng ngày cần cân bằng capability, speed và cost |
+| `openai-codex/gpt-5.6-sol` | frontier/quality-first | task phức tạp, long-horizon hoặc cần chất lượng cao nhất |
 
 ### Họ model Claude (Anthropic)
 
@@ -102,15 +135,17 @@ Pi catalog có thể có thêm dated variants như `*-2025xxxx`. Dùng alias lat
 
 ## Recommended presets
 
-Preset dưới đây là cách mình seed `enabledModels`, không phải giới hạn hard. User vẫn có thể mở `/model` để chọn bất kỳ model available nào trong provider catalog.
+Preset dưới đây là benchmark seed cho `enabledModels`, không phải universal
+routing truth hay giới hạn hard. User vẫn có thể mở `/model` để chọn bất kỳ model
+available nào trong authenticated provider catalog.
 
 | Preset | Model OpenAI Codex | Model Claude (Anthropic) | Khi dùng |
 |---|---|---|---|
 | Fast scout | `openai-codex/gpt-5.4-mini:low` | `anthropic/claude-haiku-4-5:low` | đọc nhanh, hỏi đáp, grep/scout nhẹ |
 | Balanced implement | `openai-codex/gpt-5.5:medium` | `anthropic/claude-sonnet-5:medium` | task source bình thường |
-| Hard implement | `openai-codex/gpt-5.6-luna:xhigh` hoặc `openai-codex/gpt-5.5:xhigh` | `anthropic/claude-sonnet-5:xhigh` | task nhiều file, contract mapping, debug khó |
-| Strategic/deep | `openai-codex/gpt-5.6-sol:xhigh` | `anthropic/claude-opus-4-7:max` hoặc `anthropic/claude-opus-4-8:max` | architecture, large refactor, high-risk review |
-| Huge-context scout | `openai-codex/gpt-5.6-terra:xhigh` | `anthropic/claude-fable-5:max` | đọc nhiều docs/context, tổng hợp repo lớn |
+| Cost-sensitive volume | `openai-codex/gpt-5.6-luna:medium` | `anthropic/claude-haiku-4-5:low` | workload nhanh, nhiều lượt; đo quality gate trước khi promote |
+| Balanced implement | `openai-codex/gpt-5.6-terra:high` hoặc `openai-codex/gpt-5.5:high` | `anthropic/claude-sonnet-5:high` | task source hằng ngày, cân bằng capability/cost |
+| Frontier/quality-first | `openai-codex/gpt-5.6-sol:high` | `anthropic/claude-opus-4-7:xhigh` hoặc `anthropic/claude-opus-4-8:xhigh` | architecture, long-horizon, high-risk review |
 
 Tên model có thể đổi theo Pi model catalog. Khi không chắc, ưu tiên `/model` hoặc `pi --list-models`.
 
@@ -140,7 +175,7 @@ Shift+Tab
 Nếu muốn đặt default khác:
 
 ```bash
-piagent-model-scope --preset full --default-model openai-codex/gpt-5.6-sol:xhigh
+piagent-model-scope --preset full --default-model openai-codex/gpt-5.6-sol:high
 piagent-model-scope --preset full --default-model anthropic/claude-sonnet-5:xhigh
 ```
 
@@ -157,8 +192,19 @@ piagent-benchmark --model <provider/model> --thinking high
 Runner đọc model/thinking/token/cost từ Pi session và chỉ kết luận efficiency
 khi quality/safety gates vẫn đạt. Dùng một report riêng cho mỗi model preset.
 
+Khi migrate model family, giữ effort hiện tại làm baseline rồi chạy cùng effort
+và đúng một level thấp hơn trên representative tasks. Ví dụ baseline `high` thì
+so `high` với `medium`; không đặt `xhigh` hay `max` làm mặc định chung chỉ vì
+model hỗ trợ level đó. Promote seed chỉ khi paired report giữ quality, safety,
+reliability và workflow gate.
+
 So sánh tối thiểu:
 
 - Pi + model Codex ở fast/balanced/deep;
 - Pi + model Claude ở fast/balanced/deep;
 - any other approved setup nếu team muốn so sánh bằng số liệu.
+
+`/task-preflight` và `/piagent-status` chỉ report model/effort/context có
+provenance từ Pi runtime hoặc authenticated catalog. Solver/helper không tự đổi
+parent model đã pin. Nếu fact chưa có ngoài Pi session, UI ghi `unknown`; không
+substitute model và không ước lượng token/cost.

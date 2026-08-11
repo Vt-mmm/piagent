@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.local/schemas/trajectory-state.schema.json",
+  "title": "TrajectoryState v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "policyVersion", "taskId", "taskRunId", "sessionHash", "changeMode", "riskLane", "currentPhase", "recommendationRef", "sequence", "appliedEventIds", "lastTransition", "createdAt", "updatedAt", "terminalTaskOutcomeRef"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "policyVersion": { "const": "trajectory-v1" },
+    "taskId": { "$ref": "#/$defs/id" },
+    "taskRunId": { "$ref": "#/$defs/id" },
+    "sessionHash": { "$ref": "#/$defs/hash" },
+    "changeMode": { "enum": ["source-change", "read-only"] },
+    "riskLane": { "enum": ["tiny", "normal", "high-risk"] },
+    "currentPhase": { "$ref": "#/$defs/phase" },
+    "recommendationRef": { "anyOf": [{ "$ref": "#/$defs/recommendationRef" }, { "type": "null" }] },
+    "sequence": { "type": "integer", "minimum": 0 },
+    "appliedEventIds": { "type": "array", "maxItems": 256, "uniqueItems": true, "items": { "$ref": "#/$defs/hash" } },
+    "lastTransition": { "anyOf": [{ "$ref": "trajectory-transition-event.schema.json" }, { "type": "null" }] },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "terminalTaskOutcomeRef": { "anyOf": [{ "$ref": "#/$defs/terminalRef" }, { "type": "null" }] }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,127}$" },
+    "phase": { "enum": ["intake", "scout", "plan", "execute", "verify", "repair", "review", "handoff", "terminal"] },
+    "recommendationRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["solverPolicyVersion", "featureHash", "route", "decisionDigest"],
+      "properties": {
+        "solverPolicyVersion": { "const": "solver-v1" },
+        "featureHash": { "$ref": "#/$defs/hash" },
+        "route": { "enum": ["direct", "scout-first", "plan-first", "review-only", "blocked-preflight"] },
+        "decisionDigest": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "terminalRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["taskRunId", "taskUpdatedAt", "taskDigest"],
+      "properties": {
+        "taskRunId": { "$ref": "#/$defs/id" },
+        "taskUpdatedAt": { "type": "string", "format": "date-time" },
+        "taskDigest": { "$ref": "#/$defs/hash" }
+      }
+    }
+  }
+}

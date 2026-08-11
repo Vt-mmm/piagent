@@ -1,4 +1,64 @@
 <section class="section">
+  <p class="section-kicker">Workflow impact</p>
+  <h2 id="ket-luan">Không có command bắt buộc mới trong daily flow</h2>
+  <p class="section-lead">Người dùng vẫn giao việc bằng prompt tự nhiên hoặc <span class="inline-code">/workflow task</span>. Thay đổi chính nằm trong runtime: task state, trajectory, verifier evidence, recovery và completion gate được ghi nhận chặt hơn. Các command mới chỉ mở cửa sổ đọc những dữ liệu đó khi cần.</p>
+  <div class="callout ok-callout">
+    <strong>Kết luận ngắn</strong>
+    <p>Luồng thao tác không dài thêm. Luồng kiểm soát phía sau an toàn hơn và fail closed khi thiếu bằng chứng. Không cần chạy đủ bốn command mới để một task hợp lệ.</p>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Thời điểm</th><th>Người dùng làm như trước</th><th>Runtime mới tự xử lý</th><th>Command xem thêm, không bắt buộc</th></tr></thead>
+      <tbody>
+        <tr><td>Trước task</td><td>Gửi prompt hoặc <span class="inline-code">/workflow task &lt;request&gt;</span>.</td><td>Đọc profile/context, phân loại intent và risk, chụp runtime truth và solver recommendation.</td><td><span class="inline-code">/task-preflight [--json] &lt;intent&gt;</span></td></tr>
+        <tr><td>Đang làm</td><td>Tiếp tục trao đổi trong cùng task.</td><td>Ghi work plan, phase, changed files, tool/command result, checkpoint, helper và recovery event. Inspector tự cập nhật dưới footer.</td><td><span class="inline-code">/piagent-inspector</span> hoặc <span class="inline-code">/piagent-status</span></td></tr>
+        <tr><td>Verify và review</td><td>Dùng verify của project; gọi <span class="inline-code">/workflow review</span> khi cần review riêng.</td><td>Chỉ nhận exact verifier thành công và khớp working-tree identity hiện tại.</td><td><span class="inline-code">/piagent-status</span></td></tr>
+        <tr><td>Hoàn tất hoặc handoff</td><td>Nhận kết quả và remaining risk như trước.</td><td>Receipt chỉ approved khi trace, work plan, acceptance, changed-file integrity và hard gate cùng pass.</td><td><span class="inline-code">/piagent-status</span></td></tr>
+        <tr><td>Sau task</td><td>Không có bước bắt buộc mới.</td><td>Giữ telemetry có nguồn, không tự suy diễn chất lượng.</td><td><span class="inline-code">/usage efficiency</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Command semantics</p>
+  <h2 id="command-anh-huong-gi">Command mới ảnh hưởng workflow đến đâu</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Command</th><th>Đọc hoặc hiển thị</th><th>Không thực hiện</th></tr></thead>
+      <tbody>
+        <tr><td><span class="inline-code">/task-preflight</span></td><td>Intent, risk, scope, runtime, route, phase/tool/helper policy, backend, approval và blocker.</td><td>Không tạo task, không advance phase, không gọi model và không cấp quyền implementation.</td></tr>
+        <tr><td><span class="inline-code">/piagent-status</span></td><td>Task Contract, trajectory, checkpoint, verifier, recovery, helper, resume và terminal receipt từ persisted evidence.</td><td>Không sửa file, không chạy lại verify, không retry và không biến state thiếu evidence thành success.</td></tr>
+        <tr><td><span class="inline-code">/piagent-inspector</span></td><td>Observed task files trên panel bốn dòng sát footer, exact baseline delta trong view <span class="inline-code">files</span>, tool hiện tại, command fail/block, safety warning và context budget. Không tham số sẽ mở menu.</td><td>Không sửa file, không chạy command, không đổi completion state và không ước lượng token theo từng built-in tool.</td></tr>
+        <tr><td><span class="inline-code">/usage efficiency</span></td><td>Context telemetry và task metrics có nguồn; fact không đo được giữ <span class="inline-code">null</span> hoặc unavailable.</td><td>Không chấm chất lượng con người/model và không quyết định completion gate.</td></tr>
+        <tr><td><span class="inline-code">/piagent-orchestration</span></td><td>Mode, helper mode, giới hạn subagent, review lenses, Field Guide và writer policy hiện hành.</td><td>Không đổi mode, không spawn helper và không bật parallel writer.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout">
+    <strong>Chỉ opt-in mới đổi hành vi.</strong>
+    <p>Năm command trên là read-only. Hành vi chỉ đổi khi operator chủ động bật setting rollout như phase tools hoặc helper mode; parent routing, automatic worker và multi-writer vẫn không tự bật.</p>
+  </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Daily example</p>
+  <h2 id="luong-mau">Một luồng đầy đủ có thể dùng như sau</h2>
+  <div class="command-grid">
+    <article class="command-card">
+      <header><span>Inspect → implement → review → receipt</span><button class="clip-btn" data-clip="/task-preflight --json Fix the failing checkout test&#10;/workflow task Fix the failing checkout test and verify.&#10;/piagent-inspector&#10;/workflow review current diff&#10;/piagent-status&#10;/usage efficiency">Lấy lệnh</button></header>
+      <pre><code>/task-preflight --json Fix the failing checkout test
+/workflow task Fix the failing checkout test and verify.
+/piagent-inspector
+/workflow review current diff
+/piagent-status
+/usage efficiency</code></pre>
+      <p>Chỉ dòng <span class="inline-code">/workflow task</span> khởi chạy implementation. Inspector mở menu để xem file/command/safety/context; preflight, inspector, status và efficiency đều tùy chọn. Review riêng dùng khi scope hoặc quy trình handoff yêu cầu.</p>
+    </article>
+  </div>
+</section>
+
+<section class="section">
   <div class="callout ok-callout">
     <strong>Git trong Pi Agent</strong>
     <p>Không có namespace <span class="inline-code">/git</span> riêng. Dùng <span class="inline-code">/workflow commit</span> để commit local đã review, dùng <span class="inline-code">/workflow pr</span> để chuẩn bị PR. Các hành động như <span class="inline-code">git push</span> hoặc stage rộng <span class="inline-code">git add -A</span> vẫn cần operator xác nhận.</p>

@@ -19,6 +19,48 @@ All supported environments require Node.js `>=22.19.0` and Pi Coding Agent `0.82
 | Native Windows x64/ARM64 | Not supported for team rollout in this release. | Node is available on Windows, but platform helper scripts and shell parsing assume Bash/POSIX semantics. Use a verified macOS/Linux surface for release-critical work. |
 | WSL2 | Experimental and not release-gated. | Treat as local/personal until a WSL lane and smoke suite are added. |
 
+### Unreleased 1.3 candidate readiness
+
+The local RC matrix is `evals/rc-evaluation-matrix.v1.json`; the repeatable
+evaluator is `node scripts/rc-readiness-evaluation.mjs`. It pins the candidate
+content digest, host/package/schema versions, four scenario revisions, all 11
+profiles, authenticated model-catalog digest, model/effort, modes, verifiers,
+platforms, and grader versions without making release writes.
+
+Current evidence retains conservative defaults: solver `shadow`, phase tools
+`shadow`, recovery `on`, helpers `recommend`, parent routing and automatic
+workers `off`, execution backend `host`. The proposed solver `assist` and phase
+tools `on` defaults are not promoted merely because implementation is complete.
+Automatic read-only helper dispatch also remains unpromoted.
+
+This is not a released RC or GA claim. Release remains blocked until there is a
+clean approved candidate commit and RC package, Cohorts A-C, a five-person
+independent usability pilot, the Linux x64 candidate run, a new authenticated
+paired quality benchmark, stable tag/source identity, and explicit operator
+approval. The evaluator cannot commit, tag, push, publish, promote docs, or
+configure providers.
+
+### Finite 1.3 RC transition
+
+The machine-readable transition is `evals/fs-release-transition.v1.json` and is
+checked locally with `npm run release:transition`. It separates three permissions
+that must never be inferred from one another:
+
+1. **RC assembly** may prepare a clean local `1.3.0-rc.1` commit/package and run
+   privacy/install/readback checks.
+2. **Beta/cohort execution** remains blocked until the exact RC passes three
+   retained `resumable-migration-runner` `piagent`/`codex-cli` pairs on Luna
+   Medium, each within the frozen correctness, usage, token and duration gates.
+3. **Release** remains blocked until all FS6/FS7, platform, cohort, private
+   holdout, long-horizon, confidence, provenance and explicit-approval gates pass.
+
+The historical FS5 v5 duration stop remains a failed release-performance gate;
+it is not relabeled. It only ceases to block local RC assembly. The candidate
+train has at most RC.1 and RC.2: RC.1 may receive one causal correction, while a
+repeated failure class on RC.2 is release NO-GO. The transition file does not
+authorize a provider call, cohort, tag, push, publish, public docs promotion, or
+token/generalization claim.
+
 ## Runtime and two installation planes
 
 | Component | Installed by | Provides |
@@ -53,7 +95,7 @@ Use this flow when the team needs both terminal commands and the Pi package:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.2.17
+npm install -g --ignore-scripts @piagent/platform@1.3.0-rc.1
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -79,7 +121,7 @@ bash scripts/install-global.sh --stable
 Use this only when terminal commands are not needed:
 
 ```bash
-pi install git:github.com/Vt-mmm/piagent@v1.2.17
+pi install git:github.com/Vt-mmm/piagent@v1.3.0-rc.1
 ```
 
 Direct `pi install` does not create `piagent-*` commands on `PATH`.
