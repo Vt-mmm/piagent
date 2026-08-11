@@ -42,6 +42,7 @@
     "evals/",
     "packs/",
     "packages/piagent-core/",
+    "!packages/piagent-core/extensions/core-services.js",
     "schemas/",
     "scripts/",
     "templates/",

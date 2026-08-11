@@ -73,6 +73,7 @@ describe("package distribution", () => {
     assert.ok(entries.includes("benchmarks/core-v1/suite.json"));
     assert.ok(entries.includes("benchmarks/capability-v1/suite.json"));
     assert.ok(entries.includes("benchmarks/capability-v1/grade.mjs"));
+    assert.ok(entries.includes("benchmarks/e2-framework-v1/project/vendor/hono/dist/index.js"));
     assert.ok(entries.includes("benchmarks/production-v1/suite.json"));
     assert.ok(entries.includes("benchmarks/production-v1/variant.mjs"));
     assert.ok(entries.includes("scripts/benchmark-runner.mjs"));
@@ -108,6 +109,11 @@ describe("package distribution", () => {
     for (const relative of imported) {
       assert.equal(files.has(relative), true, `imported production module is missing from package: ${relative}`);
     }
+    assert.equal(
+      files.has("packages/piagent-core/extensions/core-services.js"),
+      false,
+      "the test-only aggregation barrel must not ship as an unbound production module"
+    );
 
     const forbidden = [
       /(?:^|\/)auth\.json$/i,
@@ -223,6 +229,7 @@ describe("package distribution", () => {
     assert.equal(files.has("benchmarks/core-v1/tasks/invoice-quantity/grade.mjs"), true);
     assert.equal(files.has("benchmarks/capability-v1/suite.json"), true);
     assert.equal(files.has("benchmarks/capability-v1/references/concurrent-lease-lifecycle/packages/lease/src/store.js"), true);
+    assert.equal(files.has("benchmarks/e2-framework-v1/project/vendor/hono/dist/index.js"), true);
     assert.equal(files.has("benchmarks/production-v1/suite.json"), true);
     assert.equal(files.has("benchmarks/production-v1/grade.mjs"), true);
     assert.equal(files.has("benchmarks/production-v1/project/package.json"), true);

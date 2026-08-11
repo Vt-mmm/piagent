@@ -32,6 +32,8 @@ progress.md
 # Node/package output
 node_modules/
 dist/
+!benchmarks/e2-framework-v1/project/vendor/hono/dist/
+!benchmarks/e2-framework-v1/project/vendor/hono/dist/**
 coverage/
 *.tsbuildinfo
 

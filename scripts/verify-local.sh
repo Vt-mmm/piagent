@@ -569,7 +569,7 @@ test -s "$ROOT/tests/policy-core.test.mjs"
 # the file readable.
 non_text_sources="$(
   cd "$ROOT" && git ls-files -z -- '*.js' '*.mjs' '*.ts' '*.json' '*.md' '*.sh' '*.html' '*.css' \
-    | LC_ALL=C xargs -0 -n 1 sh -c '[ ! -f "$1" ] || grep -qI "" "$1" 2>/dev/null || echo "$1"' sh
+    | LC_ALL=C xargs -0 -n 1 sh -c '[ ! -f "$1" ] || [ ! -s "$1" ] || grep -qI "" "$1" 2>/dev/null || echo "$1"' sh
 )"
 if [[ -n "$non_text_sources" ]]; then
   echo "Source files contain control bytes, so grep-based gates and diffs skip them:"
