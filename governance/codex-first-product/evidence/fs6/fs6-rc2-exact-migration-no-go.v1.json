@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 1,
+  "workItem": "CF-FS6-02",
+  "recordedAt": "2026-08-11T09:11:30Z",
+  "claimTier": "diagnostic-beta-unlock-only-no-token-or-release-claim",
+  "candidate": {
+    "version": "1.3.0-rc.2",
+    "sourceCommitSha": "fc23a73b13f4000f8c7a485246f42b8585cf4880",
+    "sourceGitTreeOid": "218002fef3938518862ed66cd08ed96d337dd8ec",
+    "sourceProvenanceDigest": "6d31dc1651cc63adf50837af74e9b9c21e27743bc105a258662f1b749df79a81",
+    "sourceFileCount": 1414,
+    "candidateDigest": "sha256:356c90a4eb4251adcf3826f4d50ac524fdff76ef7bb0f566be81f3d1f428fcc1",
+    "candidateRecordSha256": "63eb4683505676f008f3b26e797fe130056e7bc4b44c36bd6a20bf94a26e651b",
+    "tarballSha512": "15fd1247443d2f6cc1b65a7a59c5043c3c6838b746797d4dafc92360a648b0064825b3ea6fe8bbb7e9a99d5173fd2dcf0a67bec2b7431df855d661c5df6a7388",
+    "packageEntryManifestSha256": "7bfd535aea138d5356462d2822b421e56b0bb3d0e8402eb96915d27ec91af01a",
+    "packageEntries": 1206,
+    "repeatPackMatched": true,
+    "installPrivacyReadbackPassed": true,
+    "platform": "darwin-arm64"
+  },
+  "protocol": {
+    "suite": "capability-v1",
+    "suiteDigest": "bb2e97a83a8a3d06976bcc94259e60c3513626704bd463d87c9808e66fe5152c",
+    "scenario": "resumable-migration-runner",
+    "surfaces": [
+      "piagent",
+      "codex-cli"
+    ],
+    "model": "openai-codex/gpt-5.6-terra",
+    "thinking": "medium",
+    "piagentTreatment": "release-defaults",
+    "rootSeedDigest": "1681c03692f7d59839aad466792e7805115ec6f343d6cc5c16fc5ec707bda3ce",
+    "configurationDigest": "b325b5f9c90c93cd37fe6b660642dfb96929fde6871a989ddac53d4229dd6303",
+    "plannedPairs": 3,
+    "timeoutSeconds": 360,
+    "infrastructureRetries": 0,
+    "chunkSessions": 2,
+    "operatorAuthorization": "explicit-full-CF-FS6-execution",
+    "runId": "capability-v1-20260811T085937Z-01372a"
+  },
+  "preflight": {
+    "status": "ready",
+    "providerSessionsStarted": 0,
+    "sourceClean": true,
+    "candidateProvenanceMatched": true,
+    "packageVersion": "1.3.0-rc.2",
+    "piVersion": "0.82.0",
+    "codexVersion": "codex-cli 0.147.0-alpha.6.5"
+  },
+  "pairs": [
+    {
+      "repeat": 1,
+      "piagent": {
+        "quality": 10,
+        "scope": 10,
+        "safety": 10,
+        "workflow": 10,
+        "acceptanceSatisfied": 8,
+        "acceptanceTotal": 8,
+        "criticalSatisfied": 3,
+        "criticalTotal": 3,
+        "freshTokens": 22965,
+        "durationSeconds": 147.963,
+        "infrastructureRetries": 0,
+        "systemContinuations": 0,
+        "blockedValidCallsUpperBound": 0
+      },
+      "codexCli": {
+        "quality": 10,
+        "scope": 10,
+        "safety": 10,
+        "freshTokens": 49703,
+        "durationSeconds": 175.729,
+        "infrastructureRetries": 0
+      },
+      "ratios": {
+        "freshTokens": 0.4620445445948937,
+        "freshTokenCeiling": 1.25,
+        "duration": 0.8419953451052472,
+        "durationCeiling": 1.5
+      },
+      "gate": "passed"
+    },
+    {
+      "repeat": 2,
+      "piagent": {
+        "quality": 10,
+        "scope": 10,
+        "safety": 10,
+        "workflow": 10,
+        "acceptanceSatisfied": 7,
+        "acceptanceTotal": 8,
+        "criticalSatisfied": 2,
+        "criticalTotal": 3,
+        "freshTokens": 21105,
+        "durationSeconds": 136.868,
+        "infrastructureRetries": 0,
+        "systemContinuations": 0,
+        "blockedValidCallsUpperBound": 1,
+        "blockedDecisionClass": "unclassified"
+      },
+      "codexCli": {
+        "quality": 10,
+        "scope": 10,
+        "safety": 10,
+        "freshTokens": 17844,
+        "durationSeconds": 110.027,
+        "infrastructureRetries": 0
+      },
+      "ratios": {
+        "freshTokens": 1.1827505043712172,
+        "freshTokenCeiling": 1.25,
+        "duration": 1.243949212466031,
+        "durationCeiling": 1.5
+      },
+      "gate": "failed-zero-blocked-valid-call-and-complete-critical-acceptance"
+    }
+  ],
+  "finiteStop": {
+    "completedSessions": 4,
+    "expectedSessions": 6,
+    "action": "paused-after-second-pair-failed-the-per-pair-gate",
+    "remainingSessionsNotRun": 2,
+    "runMustNeverResume": true,
+    "cohortAOpened": false,
+    "cohortBOpened": false,
+    "rc3Allowed": false,
+    "ledgerRecords": 4,
+    "ledgerBytes": 15030,
+    "ledgerChainDigest": "1b1bcbb2a5c7bdebc04d9e5c25d51a379b5df50fba7c17a818a90f0eee3946d2"
+  },
+  "privateEvidenceDigests": {
+    "runManifestSha256": "0c3b95316ec7e13ac1c75a2227b44c2c97651cf95401f88e1d8d67d2f1b45d87",
+    "runsLedgerSha256": "b781e294938819d67844363c6c30abbac8e3d533c989ef4a8ac80bf76312a8d6",
+    "pausedRecordSha256": "c944dd5267a3cc5b9dcb71a542bb8cd431a40a6a29a33401cbc65d3d009c77c5",
+    "rawEvidenceReleaseEligible": false
+  },
+  "forensicBoundary": {
+    "proven": "The exact RC.2 candidate improved the first retained pair materially and passed both engineering ratios in both completed pairs. Pair 2 nevertheless violated the frozen zero-blocked-valid-call rule and retained only 7/8 acceptance evidence with 2/3 critical criteria while the hidden implementation grade remained 10.",
+    "notProven": "The retained workspace naming preserves only the first workspace for this scenario and surface, so the exact repeat-2 blocked command is not available for causal attribution. The failure is consistent with a late criterion/evidence interaction but is not relabelled as a proven source cause.",
+    "governanceConsequence": "The exact gate requires every pair to pass and the finite candidate budget ends at RC.2. No third pair, RC.3, cohort, beta or release proof is permitted from this run."
+  },
+  "verdict": {
+    "rc2ExactMigrationGatePassed": false,
+    "fs6CohortAllowed": false,
+    "fs6Complete": false,
+    "fs6State": "terminal-no-go-under-finite-plan",
+    "nextWorkItem": "none-within-current-FS6-plan; a future operator-approved rebaseline must start from provider-free causal evidence and a new finite protocol"
+  }
+}

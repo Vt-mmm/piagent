@@ -1,16 +1,16 @@
 ---
 plan_id: codex-first-product
-program_status: full-source-productionization-in-progress
+program_status: full-source-productionization-fs6-terminal-no-go
 current_workstream: FS
 current_phase: FS6
 current_work_item: CF-FS6-02
-next_work_item: CF-FS6-02-RC2-exact-gate
+next_work_item: none-finite-plan-exhausted
 last_updated: 2026-08-11
 execution_mode: controlled-work-item-sessions
 canonical_roadmap: 15-full-source-productionization-roadmap.md
 canonical_tracker_path: governance/codex-first-product/STATUS.md
-candidate_state: rc1-terminal-performance-stop-rc2-correction-in-progress
-candidate_digest: null
+candidate_state: rc2-terminal-exact-gate-no-go
+candidate_digest: sha256:356c90a4eb4251adcf3826f4d50ac524fdff76ef7bb0f566be81f3d1f428fcc1
 policy_manifest_version: authority-v1
 ---
 
@@ -24,15 +24,15 @@ This is the only mutable progress tracker for the plan. Phase files define inten
 |---|---|
 | Program | Full-source v1.3 productionization |
 | Canonical roadmap | [`15-full-source-productionization-roadmap.md`](15-full-source-productionization-roadmap.md) |
-| Current phase | `FS6` — RC.1 assembled and stopped at its exact Migration gate; RC.2 is the final permitted correction candidate |
-| Active work item | `CF-FS6-02` — build exact RC.2 from the single evidence-backed intake correction, then rerun the frozen three-pair Migration gate once |
+| Current phase | `FS6` — terminal NO-GO under the finite RC.1/RC.2 plan; FS7 and release are not opened |
+| Active work item | `CF-FS6-02` — terminally stopped after RC.2 pair 2 violated the per-pair blocked-valid/critical-acceptance gate; no RC.3 or resume is allowed |
 | Owner/session | `root`; operator explicitly authorized continuous CF-FS5 through CF-FS7 execution on `2026-08-11`; frozen dependencies and stop rules remain binding |
-| Candidate | RC.1 commit `9faf63d8…842e`, tree `f4df960a…0ea0`, candidate `sha256:32ae9a74…74e7d`, tarball SHA-512 `1f143d42…0b026`; RC.1 is terminally stopped and RC.2 source has passed all local gates but is not yet committed/packed |
+| Candidate | RC.2 commit `fc23a73b…4880`, tree `218002fe…d8ec`, candidate `sha256:356c90a4…8fcc1`, tarball SHA-512 `15fd1247…a7388`; local assembly/readback passed but exact Migration gate failed |
 | Policy manifest | `authority-v1`, digest `sha256:28112cb6…7393`; current identity independently revalidated by FS3 gate audit `59e878c8…aa13` |
-| Provider authority | Operator explicitly authorized the full CF-FS6 execution. Exactly one new RC.2 Migration gate is permitted after clean local assembly; the interrupted RC.1 run is immutable and must never resume. Cohort, beta, tag, push, publish and release authority remain gated. |
-| Last verified release evidence | RC.1 pair 1 completed grade/scope/safety/workflow 10 on both surfaces, but Piagent/Codex fresh-token ratio `1.6375` exceeded `1.25` and duration ratio `1.6335` exceeded `1.5`; the run was stopped immediately and Cohort A did not open. |
-| Blocker | RC.2 must pass every one of three exact Migration pairs. The same performance failure class on RC.2 is terminal FS6 NO-GO with no RC.3. Cohorts, five independent users, Linux x64, E3 and long-horizon evidence remain external gates even if RC.2 passes. |
-| Next exact action | Regenerate, verify, commit, package and install-readback exact `1.3.0-rc.2`; then run the frozen Piagent-versus-Codex Luna Medium Migration gate once. |
+| Provider authority | `false` under the exhausted finite plan. RC.2 is paused permanently at 4/6 sessions; its last pair and RC.1 runs must never resume. RC.3, cohort, beta, FS7 benchmark, tag, push, publish and release remain prohibited. |
+| Last verified release evidence | RC.2 pair 1 passed all gates at token/duration ratios `0.4620`/`0.8420`. Pair 2 passed quality/scope/safety/workflow 10 and ratios `1.1828`/`1.2439`, but recorded 7/8 acceptance, 2/3 critical and blocked-valid upper bound 1, so the exact per-pair gate failed. |
+| Blocker | Finite candidate budget is exhausted. CF-FS6-03..05 and all FS7 work are dependency-blocked; five users, cohorts and Linux were not attempted because the exact candidate did not clear FS6-02. |
+| Next exact action | None inside the current plan. Preserve RC.1/RC.2 evidence; any future attempt requires an explicitly approved provider-free causal rebaseline and a new finite protocol, not an RC.3 continuation. |
 
 The old P0-P7 unattended autopilot is not active for this workstream. Use
 [`prompts/10-full-source-productionization-prompts.md`](prompts/10-full-source-productionization-prompts.md)
@@ -51,7 +51,7 @@ not repeated unnecessarily, but it is not promoted to exact-candidate evidence.
 | FS3 Advanced capability contracts | `complete`; `CF-FS3-01..06` complete | Independent audit `59e878c8…aa13` passes 5/5 exits and 3/3 interaction gates on the exact current manifest/evidence/carrier identity; no provider promotion claim | FS1-FS2 complete | Complete; reopen only if audited carriers or policy identity change |
 | FS4 Real/long-task evaluation | `complete-local-evaluation`; `CF-FS4-01..05` locally complete; external exact-candidate E3 execution explicitly deferred to `CF-FS7-01` | `local-readiness-passed-fs4-release-exit-false-external-e3-pending` | FS2-FS3 complete | Start local `CF-FS5-01`; retain the E3 external gate for FS7 |
 | FS5 Causal/product pilot | `closed-with-recorded-performance-risk`; v1-v5 remain immutable, no capability promotion, six-family pilot unopened | `FS5-MIGRATION-LATENCY-01`; release-performance pass remains false | FS4 local evaluation complete | Never resume v5; risk transfers only to the exact-RC beta-unlock gate |
-| FS6 Beta/RC | `CF-FS6-01` RC.1 assembly complete; one bounded RC.2 correction is in progress | `rc1-terminal-performance-stop`; RC.1 pair 1 ratio `1.6375` tokens / `1.6335` duration | Evidence `fs6-rc1-migration-performance-stop.v1.json` | Build exact RC.2, rerun the same gate once, then either open Cohort A or close FS6 NO-GO |
+| FS6 Beta/RC | RC.1 and RC.2 exact artifacts assembled; finite gate terminally stopped | `terminal-no-go`; RC.2 pair 2 blocked-valid upper bound 1 and critical acceptance 2/3 | Evidence `fs6-rc2-exact-migration-no-go.v1.json`, SHA-256 `7c03fe1e…b856` | Preserve evidence; no cohort, RC.3 or FS7 transition under this plan |
 | FS7 GA proof | Benchmark/release machinery implemented locally | `not-started` | FS6 | 108 sessions, Cohort C, GA dossier, explicit approval |
 
 ## Capability check map
@@ -125,10 +125,10 @@ source; `complete` requires every evidence level named by the roadmap.
 | CF-FS5-04-v5-canary-b | `blocked-terminal-performance-stop` | Migration pair passed grade/scope/safety/workflow 10 and fresh-token ratio 1.1303, but Piagent duration ratio 1.8988 exceeds the frozen 1.5 ceiling; one exact-zero provider retry was allowed and retained | Evidence `fs5-v5-canary-b-performance-stop.v1.json`, SHA-256 `d372e626…f879b4`; no six-family sessions opened | v5 canary A pass | Terminal v5 stop; provider-free causal work only, never resume/relabel this run |
 | CF-FS5-05 | `closed-no-promotion` | Broad defaults remain unchanged; no capability promoted from repeat-one adjudication evidence | Six-family pilot did not pass; release-performance gate remains false | FS5-04 | Historical only; promotion must be earned by later exact-RC and field gates |
 | CF-FS6-01 | `complete-rc1` | Clean commit/tree, deterministic tarball, policy/runtime manifests and install/privacy readback exist for RC.1 | Commit `9faf63d8…842e`; candidate `sha256:32ae9a74…74e7d`; tarball SHA-512 `1f143d42…0b026`; package 1,206 entries | Finite FS5 closure amendment | Historical exact artifact only; RC.1 is terminal after its Migration performance stop |
-| CF-FS6-02 | `rc1-terminal-performance-stop-rc2-final-correction` | RC.1 first pair passed correctness but failed both engineering ratios; one intake-only causal correction is allowed | Evidence `fs6-rc1-migration-performance-stop.v1.json`; no Cohort A; interrupted third session is unaccepted and non-resumable | FS6-01 complete | Build exact RC.2 and run the same three-pair gate once; same failure class closes FS6 with no RC.3 |
-| CF-FS6-03 | `blocked` | Scripted usability fixtures only | No Cohort B, 100 attempts or five independent users | FS6-02 | External human/internal operational evidence is required |
-| CF-FS6-04 | `implemented-local-not-executed-on-rc2` | Disposable macOS/local lifecycle fixtures and CI declarations exist | Exact surviving RC on Linux x64 and macOS ARM64 remains absent | FS6-01 | Run 1.2.17 -> surviving RC -> 1.2.17 on both platforms after the Migration gate passes |
-| CF-FS6-05 | `blocked` | Freeze machinery exists | No passing FS6-02..04; RC.1 is terminal and RC.2 is not assembled | FS6-02..04 | Freeze only the exact surviving RC after all dependencies pass; any edit invalidates it |
+| CF-FS6-02 | `blocked-terminal-rc2-no-go` | RC.2 pair 1 passed; pair 2 failed the mandatory zero-blocked-valid/complete-critical-acceptance condition despite both engineering ratios passing | Evidence `fs6-rc2-exact-migration-no-go.v1.json`, SHA-256 `7c03fe1e…b856`; run paused at 4/6 and is permanently non-resumable | FS6-01 complete | Stop; no RC.3 and no Cohort A under the finite plan |
+| CF-FS6-03 | `blocked-upstream-terminal-no-go` | Scripted usability fixtures only | FS6-02 failed; no Cohort B, 100 attempts or five independent users | FS6-02 pass required | Do not fabricate or start external cohort evidence |
+| CF-FS6-04 | `blocked-upstream-terminal-no-go` | Local disposable lifecycle and exact RC.2 macOS install readback pass | FS6-02 failed; exact same candidate on Linux x64 and full two-platform rollback remain absent | FS6-02 pass required | Do not spend platform capacity on a candidate that failed its exact gate |
+| CF-FS6-05 | `blocked-terminal-no-freeze` | Freeze machinery and exact RC.2 artifact exist | FS6-02 failed and FS6-03/04 never opened | FS6-02..04 | No candidate freeze under this plan |
 | CF-FS7-01 | `blocked` | Provider-free long-horizon contract complete in FS4-03; private E3 custody protocol complete in FS4-04 | Exact RC, sealed holdout, reviewers and paid confirmation absent | FS6 | Run only through the external custody protocol against the frozen RC |
 | CF-FS7-02 | `blocked` | No Cohort C | No FS7-01 pass or 200 terminal beta attempts | FS7-01 | Collect real operational evidence; local fixtures are not substitutes |
 | CF-FS7-03 | `blocked` | Full Piagent-vs-Codex Luna Medium runner exists | No frozen RC, FS7-01/02 pass or 108-session ledger | FS7-01..02 | Run only after upstream gates; inspect at most six sessions per chunk |
@@ -720,23 +720,23 @@ Untracked production import audit: 15 of 16 modules are reached directly by runt
 
 ```text
 Work item: CF-FS6-02
-State: RC.1 terminal performance stop; final permitted RC.2 correction in progress; Cohort A, beta, FS7 and release remain blocked
+State: terminal FS6 NO-GO; RC.2 exact gate failed at pair 2; no resume, RC.3, cohort, beta, FS7 or release
 Owner/session: root / operator-authorized continuous CF-FS5 through CF-FS7 session 2026-08-11
-Baseline tree/status: RC.1 clean commit 9faf63d808e7ede8f5b1b5d5c814b91bd443842e; one bounded RC.2 source correction is currently uncommitted
-Candidate state/digest: RC.1 terminal candidate sha256:32ae9a7492d5b6922a71335c5f43a280a307919cf6eea948c8194c9b5b974e7d; RC.2 identity pending regeneration
+Baseline tree/status: RC.2 clean commit fc23a73b13f4000f8c7a485246f42b8585cf4880; tree 218002fef3938518862ed66cd08ed96d337dd8ec; benchmark source stayed clean
+Candidate state/digest: terminal-no-go / sha256:356c90a4eb4251adcf3826f4d50ac524fdff76ef7bb0f566be81f3d1f428fcc1
 Policy manifest version: authority-v1 / sha256:28112cb62a8868d4371f78c9edefff7489adb0dc6616b9e489c4303b80307393
-Changed: one intake-only first-pass criterion-map correction plus RC.2 identity; no gate relaxation, capability deletion, extra continuation, evaluator or scenario change
-Out of scope: rewriting measured evidence; resuming RC.1; RC.3; tag/push/publish; fabricating cohorts, humans, Linux or private holdout evidence
-Verified: RC.1 clean source/package/install readback and offline gate PASS; exact pair grade/scope/safety/workflow 10 but token ratio 1.6375 and duration ratio 1.6335 fail the frozen ceilings; RC.2 guard 99/99, package/E2/install/upgrade/rollback 98/98, typecheck, architecture 201, release identity, docs/catalog/diff and full offline verify PASS
-Evidence: fs6-rc1-migration-performance-stop.v1.json; RC.1 run manifest e4de57a4…ac5; accepted ledger 61969477…a4a; interrupted record is unaccepted
+Changed: RC.2 contained exactly one intake-only criterion-map correction and aligned release identity; no gate/evaluator/scenario relaxation
+Out of scope: rewriting measured evidence; running pair 3; resuming either RC run; RC.3; cohorts/humans/Linux/private holdout; tag/push/publish
+Verified: RC.2 local guard 99/99, package/E2/install/upgrade/rollback 98/98, typecheck, architecture 201, identity, docs/catalog/diff and full offline verify PASS; deterministic 1,206-entry tarball and clean install/privacy readback PASS; exact pair 1 PASS, pair 2 FAIL on blocked-valid 1 plus critical acceptance 2/3
+Evidence: fs6-rc1-migration-performance-stop.v1.json; fs6-rc2-exact-migration-no-go.v1.json; RC.2 ledger b781e294…a8d6, chain 1b1bcbb2…46d2
 Feature modes/authority: local-safe broad default unchanged; CAP-09 causal arm remains unpromoted; comparison is controlled codex-cli on Luna Medium
 Schema/migration: no credential, Task Contract, user-state or measured-ledger rewrite; RC.2 only changes compact source-change intake guidance
-Rollback: preserve RC.1 artifacts and evidence immutably; revert the RC.2 correction/identity without altering product or user state
-Decision: RC.1 cannot open Cohort A; exactly one new RC.2 gate is authorized by the finite amendment and operator instruction
-Known limitation: repeat-one RC.1 performance failed; confidence/generalization, cohorts, humans, Linux, E3 and release benchmark remain absent
-Stop-rule audit: RC.1 stopped after the first failed pair; a concurrently started third session was interrupted and excluded; same class on RC.2 is terminal NO-GO
-Blocker: clean exact RC.2 artifact and three passing Migration pairs before Cohort A
-Next exact action: regenerate and verify RC.2, commit/package/install-readback it, then run the frozen exact Migration gate once
+Rollback: preserve both exact artifacts and ledgers immutably; no user/project state was promoted or published
+Decision: RC.2 did not pass every exact pair; CF-FS6 is terminal NO-GO under the finite plan and FS7 does not open
+Known limitation: repeat-2 exact blocked call lacks retained command-level transcript; this limits causal attribution but does not change the failed frozen gate
+Stop-rule audit: RC.2 ran in two-session chunks; stopped after pair 2; no pair 3, retry or continuation; runner remains paused and must never resume
+Blocker: exhausted candidate budget plus missing Cohort A/B, five users, Linux and two-platform rollback
+Next exact action: none within this plan; future work requires a new operator-approved provider-free causal rebaseline and finite protocol
 ```
 
 ## Recent FS0 handoffs — non-executable
