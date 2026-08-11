@@ -7,6 +7,7 @@ import {
   ensureContextIndexV2,
   estimateContextTokens
 } from "../../extensions/context-engine.js";
+import { buildSelectedContextPack } from "../../extensions/criterion-context-pack.js";
 import { matchesProtectedPath } from "../../extensions/policy-core.js";
 import { selectRepositoryMemoryFacts } from "../../extensions/repository-memory.js";
 import type { TaskContract } from "../../extensions/guard-types.js";
@@ -35,6 +36,7 @@ import {
   AUTO_INTAKE_SNAPSHOT_PATTERNS,
   automaticTaskIntakeMode
 } from "../workflows/task-intake.ts";
+import { CONTEXT_PACK_MAX_TOKENS } from "../runtime-limits.ts";
 
 type RuntimeIntakeResult = {
   started: boolean;
@@ -223,7 +225,16 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
       const intake = await dependencies.startAutomaticTask(query, ctx);
       if (intake?.task) observeTrajectorySync(ctx, dependencies.syncTrajectory?.(ctx, intake.task, { sourceHook: "agent-start", recommendationRef }), dependencies.telemetry);
       if (!selectedContext && !intake) return systemPromptUpdate;
-      const content = [selectedContext?.content, intake?.text].filter(Boolean).join("\n\n");
+      const criterionContext = !selectedContext && intake?.task?.criterionGraph?.mode === "criterion-graph"
+        ? buildSelectedContextPack(ctx.cwd, intake.task.contextManifest.filter((entry) => /^criterion-/.test(entry.reason)), {
+            budgetTokens: CONTEXT_PACK_MAX_TOKENS, limit: 6, excludePatterns: readProtectedPaths
+          })
+        : undefined;
+      if (criterionContext?.selected.length) dependencies.telemetry(ctx, {
+        event: "criterion_context_pack", selected: criterionContext.selected.length,
+        estimatedTokens: criterionContext.estimatedTokens, selectedPaths: criterionContext.selected.map((entry) => entry.path)
+      });
+      const content = [selectedContext?.content, intake?.text, criterionContext?.text].filter(Boolean).join("\n\n");
       return {
         ...(systemPromptUpdate ?? {}),
         message: {
@@ -242,6 +253,9 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
                   intakeMode: intake.task.intakeMode
                 }
               : undefined,
+            criterionContext: criterionContext?.selected.length ? {
+              paths: criterionContext.selected.map((entry) => entry.path), estimatedTokens: criterionContext.estimatedTokens
+            } : undefined,
             runtimeIntakeStarted: intake?.started ?? false
           }
         }

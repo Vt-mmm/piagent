@@ -9,8 +9,8 @@ last_updated: 2026-08-11
 execution_mode: controlled-work-item-sessions
 canonical_roadmap: 16-intelligence-engine-rebaseline-roadmap.md
 canonical_tracker_path: governance/codex-first-product/STATUS.md
-candidate_state: rc2-terminal-exact-gate-no-go
-candidate_digest: sha256:356c90a4eb4251adcf3826f4d50ac524fdff76ef7bb0f566be81f3d1f428fcc1
+candidate_state: ie5-fullstack-confirmation-pending
+candidate_digest: null
 policy_manifest_version: authority-v1
 ---
 
@@ -25,14 +25,14 @@ This is the only mutable progress tracker for the plan. Phase files define inten
 | Program | v1.3 intelligence-engine rebaseline; the prior FS6 finite release plan remains terminal NO-GO historical evidence |
 | Canonical roadmap | [`16-intelligence-engine-rebaseline-roadmap.md`](16-intelligence-engine-rebaseline-roadmap.md) |
 | Current phase | `IE5` — bounded Luna Medium canary after the complete provider-free IE0-IE4 gate |
-| Active work item | `CF-IE5-01` — freeze and preflight one Fullstack Piagent-versus-Codex pair; do not open Migration unless every finite Fullstack gate passes |
+| Active work item | `CF-IE5-01` — freeze and preflight the one permitted Fullstack confirmation after an evidence-backed context-delivery correction; do not open Migration unless every finite gate passes |
 | Owner/session | `root`; operator approved the complete intelligence-engine implementation path on `2026-08-11` with checklist continuity across sessions |
 | Candidate | RC.2 commit `fc23a73b…4880`, tree `218002fe…d8ec`, candidate `sha256:356c90a4…8fcc1`, tarball SHA-512 `15fd1247…a7388`; local assembly/readback passed but exact Migration gate failed |
 | Policy manifest | `authority-v1`, digest `sha256:28112cb6…7393`; current identity independently revalidated by FS3 gate audit `59e878c8…aa13` |
-| Provider authority | `bounded CF-IE5-01 only`. RC.2 remains permanently paused at 4/6 and must never resume. Full production and IE5-02 remain closed until the new Fullstack pair passes every finite gate. |
+| Provider authority | `one CF-IE5-01 confirmation pair only after clean commit and provider-free preflight`. RC.2 and the first IE5 pair are immutable and must never resume. Full production and IE5-02 remain closed until the confirmation passes every finite gate. |
 | Last verified release evidence | RC.2 pair 1 passed all gates at token/duration ratios `0.4620`/`0.8420`. Pair 2 passed quality/scope/safety/workflow 10 and ratios `1.1828`/`1.2439`, but recorded 7/8 acceptance, 2/3 critical and blocked-valid upper bound 1, so the exact per-pair gate failed. |
-| Blocker | No local implementation blocker. Release evidence remains blocked; only one fresh diagnostic Fullstack pair is authorized. |
-| Next exact action | Commit the exact IE4-passing tree, run provider-free benchmark preflight, then execute one retries-zero, two-session Fullstack Luna Medium Piagent-versus-Codex canary. Stop immediately on any gate failure. |
+| Blocker | First Fullstack pair failed only the duration ceiling (`1.7712 > 1.5`) despite grade/scope/safety/workflow 10 and fresh ratio `1.0490`. Release and Migration remain blocked. |
+| Next exact action | Commit the locally verified direct criterion-context snapshot, preflight the new candidate, then execute the single retries-zero Fullstack confirmation. A repeated duration failure closes the hypothesis without a third pair. |
 
 The old P0-P7 unattended autopilot and the exhausted FS6 provider plan are not
 active for this workstream. Resume from the first non-complete IE item in this
@@ -47,7 +47,7 @@ tracker and preserve every finite dependency and stop rule.
 | IE2 Context/execution | `complete`; scoped selection, checkpoint, resume and long-input bounds are green | No | Context stays in scope; graph/policy survives resume; stale verifier remains invalid | Complete |
 | IE3 Production critical path | `complete`; graph planning defaults on, speculative capabilities retain broad shadow/advisory modes and strict opt-in | No | Zero graph-triggered provider turns; shared continuation ceiling remains one | Complete |
 | IE4 Local causal gate | `complete`; mechanical versus intelligence differs by one switch and the full local gate passes | No | `npm run verify` PASS, 1958/1958; focused 24/24; guard/resume 108/108; architecture 202 | Complete |
-| IE5 Medium canary | `in-progress`; only CF-IE5-01 is authorized | Yes, bounded | One approved pair per family; correctness 10 and finite engineering gates | Freeze commit and run Fullstack preflight/pair |
+| IE5 Medium canary | `in-progress`; first Fullstack pair passed truth/token but failed duration; one bounded correction is locally green | Yes, one confirmation | Correctness 10, fresh `<=1.25`, duration `<=1.5`, no retry/unknown/loop | Commit, preflight and run the one Fullstack confirmation |
 | IE6 Release evidence | `blocked` | Yes, chunked | Frozen statistical protocol, cohorts, platforms, exact artifact | IE5 pass |
 
 ## Full-source phase map
@@ -731,24 +731,24 @@ Untracked production import audit: 15 of 16 modules are reached directly by runt
 ## Active handoff
 
 ```text
-Work item: CF-FS6-02
-State: terminal FS6 NO-GO; RC.2 exact gate failed at pair 2; no resume, RC.3, cohort, beta, FS7 or release
-Owner/session: root / operator-authorized continuous CF-FS5 through CF-FS7 session 2026-08-11
-Baseline tree/status: RC.2 clean commit fc23a73b13f4000f8c7a485246f42b8585cf4880; tree 218002fef3938518862ed66cd08ed96d337dd8ec; benchmark source stayed clean
-Candidate state/digest: terminal-no-go / sha256:356c90a4eb4251adcf3826f4d50ac524fdff76ef7bb0f566be81f3d1f428fcc1
-Policy manifest version: authority-v1 / sha256:28112cb62a8868d4371f78c9edefff7489adb0dc6616b9e489c4303b80307393
-Changed: RC.2 contained exactly one intake-only criterion-map correction and aligned release identity; no gate/evaluator/scenario relaxation
-Out of scope: rewriting measured evidence; running pair 3; resuming either RC run; RC.3; cohorts/humans/Linux/private holdout; tag/push/publish
-Verified: RC.2 local guard 99/99, package/E2/install/upgrade/rollback 98/98, typecheck, architecture 201, identity, docs/catalog/diff and full offline verify PASS; deterministic 1,206-entry tarball and clean install/privacy readback PASS; exact pair 1 PASS, pair 2 FAIL on blocked-valid 1 plus critical acceptance 2/3
-Evidence: fs6-rc1-migration-performance-stop.v1.json; fs6-rc2-exact-migration-no-go.v1.json; RC.2 ledger b781e294…a8d6, chain 1b1bcbb2…46d2
-Feature modes/authority: local-safe broad default unchanged; CAP-09 causal arm remains unpromoted; comparison is controlled codex-cli on Luna Medium
-Schema/migration: no credential, Task Contract, user-state or measured-ledger rewrite; RC.2 only changes compact source-change intake guidance
-Rollback: preserve both exact artifacts and ledgers immutably; no user/project state was promoted or published
-Decision: RC.2 did not pass every exact pair; CF-FS6 is terminal NO-GO under the finite plan and FS7 does not open
-Known limitation: repeat-2 exact blocked call lacks retained command-level transcript; this limits causal attribution but does not change the failed frozen gate
-Stop-rule audit: RC.2 ran in two-session chunks; stopped after pair 2; no pair 3, retry or continuation; runner remains paused and must never resume
-Blocker: exhausted candidate budget plus missing Cohort A/B, five users, Linux and two-platform rollback
-Next exact action: none within this plan; future work requires a new operator-approved provider-free causal rebaseline and finite protocol
+Work item: CF-IE5-01
+State: in progress; first Fullstack pair stopped on duration, one confirmation after one code change remains
+Owner/session: root / operator-approved intelligence-engine implementation and bounded Luna Medium canary, 2026-08-11
+Baseline tree/status: clean commit 1d079da90412674678c6ab6cd714b1542aff3112; candidate 38580c7c565ced6df2b052a461372eefef7552a731e7230bf396171b6a50b20c; 1,419 files
+Candidate state/digest: first pair immutable diagnostic stop; correction locally verified but not yet committed/preflighted
+Policy manifest version: authority-v1; intelligence-engine treatment differs from mechanical-core only by PIAGENT_INTELLIGENCE_ENGINE=on
+Changed: additive Criterion Graph/context selection plus one bounded current-file delivery correction; speculative capabilities remain shadow/advisory and strict opt-in
+Out of scope: resuming RC.1/RC.2 or the first IE5 pair; Migration before Fullstack passes; third Fullstack pair; production/108-session run; cohorts/private holdout/tag/push/publish
+Verified: first candidate full local 1958/1958; first pair grade/scope/safety/workflow 10, acceptance 6/6 and critical 3/3, zero retry/continuation/block; correction context/Pi/causal 35/35 plus full npm run verify, typecheck and architecture 203 PASS
+Evidence: private run /Users/vtamm/.pi/benchmarks/cf-ie5-fullstack-1d079da-v1; report SHA-256 8c9dc7f47b68839565fa831515233f7632f4e913b645b4652f0640ef2cad87ed; runs SHA-256 9f144cc8eba4e22c35a93c9ab54cd19755798b470b98ef787c7e34571c805d9c
+Feature modes/authority: Criterion Graph on; solver/phase shadow; acceptance/performance advisory; semantic repair broad off; helpers recommend; parent routing off
+Schema/migration: Task Contract v2 additive graph only; legacy contracts remain readable; exact verifier/current-tree/terminal truth unchanged
+Rollback: PIAGENT_INTELLIGENCE_ENGINE=off restores mechanical context behavior without deleting capability source or rewriting task evidence
+Decision: token ratio 1.0490 passes, duration ratio 1.7712 fails; direct current-file context delivery is the only correction hypothesis
+Known limitation: successful workspaces were not retained, so phase telemetry proves tool/message churn but not individual command causality
+Stop-rule audit: first pair stopped immediately; Migration unopened; correction received provider-free gates only; exactly one Fullstack confirmation remains
+Blocker: confirmation must achieve duration <=1.5 while preserving every correctness/workflow/usage gate
+Next exact action: commit correction, provider-free preflight exact new candidate, then run one retries-zero Fullstack confirmation and stop on its result
 ```
 
 ## Recent FS0 handoffs — non-executable

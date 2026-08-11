@@ -115,7 +115,7 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:363b066b94f8c4c9cf82ba80c355c4c598e6fff2a77d66b4d6b204a82f6ff46a",
+    "packageDigest": "sha256:372fc33949abc2f6e0d801467ee86b7765aecc5fcc5c55bcfcc6b0977dbeb78b",
     "packageSource": "../",
     "packageVersion": "1.3.0-rc.2",
     "runtimeFiles": [
@@ -140,8 +140,8 @@
         "path": "packages/piagent-core/capabilities/capability-core.js"
       },
       {
-        "byteSize": 6254,
-        "digest": "sha256:9df3dfb19cce6ca88392d7a1be90e63c23999a8a00494e5a7ab529fd4cf7f088",
+        "byteSize": 6318,
+        "digest": "sha256:392e724e7f40bf1b0d5e9d6a8bd4939535f57a606b97148459ad04aa9e28909f",
         "path": "packages/piagent-core/capabilities/runtime-integrity.js"
       },
       {
@@ -200,6 +200,11 @@
         "path": "packages/piagent-core/extensions/criterion-graph.js"
       },
       {
+        "byteSize": 4098,
+        "digest": "sha256:6fa85dd119027a051885f1484e5765a053023bccda9b60f51673a6c0be7407c1",
+        "path": "packages/piagent-core/extensions/criterion-context-pack.js"
+      },
+      {
         "byteSize": 8415,
         "digest": "sha256:bc713b9d4917a3fc87e1ef4044e0f2d6c525675361c299d341436494a49d2b17",
         "path": "packages/piagent-core/extensions/failure-types.ts"
@@ -255,8 +260,8 @@
         "path": "packages/piagent-core/capabilities/authority-manifest.ts"
       },
       {
-        "byteSize": 18917,
-        "digest": "sha256:aed043fb0ca0bc50b0966740f7e943a5916d85d37f0484c0393a4908aff7316e",
+        "byteSize": 19975,
+        "digest": "sha256:1614e231c7721930abc611be1e64269338df97e8239ad03efc5a9e42b9c62071",
         "path": "packages/piagent-core/runtime/hooks/agent-start-hook.ts"
       },
       {

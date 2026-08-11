@@ -19,6 +19,7 @@ import {
   ensureContextIndexV2,
   searchContextIndexV2
 } from "../packages/piagent-core/extensions/context-engine.js";
+import { buildSelectedContextPack } from "../packages/piagent-core/extensions/criterion-context-pack.js";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 
@@ -144,6 +145,7 @@ test("fails closed when a content API omits its exclusion policy", async (t) => 
     ["ensureContextIndexV2", () => ensureContextIndexV2(cwd)],
     ["searchContextIndexV2", () => searchContextIndexV2(cwd, "invoice")],
     ["buildContextPack", () => buildContextPack(cwd, "invoice")],
+    ["buildSelectedContextPack", async () => buildSelectedContextPack(cwd, [{ path: "src/math.ts" }])],
     ["buildTestImpact", () => buildTestImpact(cwd, ["src/math.ts"])]
   ];
 
@@ -231,6 +233,24 @@ test("packs ranked snippets to a hard token budget and reports low-confidence fi
   });
   assert.equal(missing.finderRecommended, true);
   assert.match(missing.finderRequest, /bounded read-only finder pass/);
+});
+
+test("packs exact graph-selected files without an index, secrets, symlinks, or partial oversized content", (t) => {
+  const cwd = fixture();
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  fs.symlinkSync(path.join(cwd, "src", "math.ts"), path.join(cwd, "src", "linked.ts"));
+  const pack = buildSelectedContextPack(cwd, [
+    { path: "src/math.ts" }, { path: "src/service.ts" }, { path: ".env" }, { path: "src/linked.ts" }
+  ], { budgetTokens: 900, excludePatterns: ["src/service.ts"] });
+  assert.deepEqual(pack.selected.map((entry) => entry.path), ["src/math.ts"]);
+  assert.equal(pack.selected[0].contentDigest, crypto.createHash("sha256").update(fs.readFileSync(path.join(cwd, "src", "math.ts"))).digest("hex"));
+  assert.ok(pack.estimatedTokens <= 900);
+  assert.match(pack.text, /criterion context snapshot/);
+  assert.match(pack.text, /calculateInvoiceTotal/);
+  assert.doesNotMatch(pack.text, /SECRET=|linked\.ts|service\.ts/);
+  assert.deepEqual(buildSelectedContextPack(cwd, [{ path: "src/math.ts" }], {
+    budgetTokens: 900, maxFileBytes: 16, excludePatterns: []
+  }), { text: "", selected: [], estimatedTokens: 0 });
 });
 
 test("keeps context index storage private to the current OS account", async (t) => {

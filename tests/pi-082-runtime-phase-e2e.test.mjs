@@ -541,7 +541,9 @@ test("Pi 0.82 executes Piagent runtime tasks end to end without a provider or ph
       assert.ok(runtimeIntake, `${item.file}: provider context is missing runtime intake`);
       assert.match(runtimeIntake, /complete operator request above is the authoritative acceptance contract/);
       assert.doesNotMatch(runtimeIntake, /Acceptance focus:|Pre-completion contract review:/);
-      assert.ok(runtimeIntake.length < 2_600, `${item.file}: runtime intake expanded to ${runtimeIntake.length} chars`);
+      assert.match(runtimeIntake, /criterion context snapshot/);
+      assert.match(runtimeIntake, new RegExp(item.sources[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+      assert.ok(runtimeIntake.length < 3_600, `${item.file}: runtime intake expanded to ${runtimeIntake.length} chars`);
       assert.equal(toolEvent(run.events, callId)?.isError, false, item.file);
       assert.equal(persistedToolResult(run.sessionEntries, callId)?.message?.isError, false, item.file);
       assert.match(persistedToolResult(run.sessionEntries, callId)?.message?.content?.[0]?.text ?? "", /fixture/, item.file);

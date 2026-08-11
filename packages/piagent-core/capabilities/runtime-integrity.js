@@ -6,6 +6,7 @@ export const CORE_RUNTIME_INTEGRITY_FILES = Object.freeze([
   "packages/piagent-core/extensions/acceptance-language-adapters.js",
   "packages/piagent-core/extensions/acceptance-receipt.js",
   "packages/piagent-core/extensions/criterion-graph.js",
+  "packages/piagent-core/extensions/criterion-context-pack.js",
   "packages/piagent-core/extensions/failure-types.ts",
   "packages/piagent-core/extensions/repository-memory.js",
   "packages/piagent-core/extensions/task-contract-view.js",

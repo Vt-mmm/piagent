@@ -63,7 +63,7 @@ Allowed states: `not-started`, `in-progress`, `blocked`, `implemented`,
 | CF-IE3-03 | `complete` | Strict opt-in profile retains all advanced capability enforcement | Strict profile silently weakens safety/scope/current-tree truth |
 | CF-IE4-01 | `complete` | Provider-free causal fixtures comparing mechanical-only and intelligence-engine | Any correctness regression or new loop |
 | CF-IE4-02 | `complete` | Full local/type/package/install/migration/rollback gate on exact tree | Any required local gate fails |
-| CF-IE5-01 | `in-progress` | One Fullstack Luna Medium Piagent/Codex pair | Any finite canary gate fails |
+| CF-IE5-01 | `in-progress` | One Fullstack Luna Medium Piagent/Codex pair plus at most one evidence-backed confirmation after a code change | Any confirmation finite gate fails |
 | CF-IE5-02 | `blocked` | One Migration Luna Medium Piagent/Codex pair | IE5-01 fails or IE4 incomplete |
 | CF-IE6-01 | `blocked` | Frozen statistical protocol and exact release candidate | IE5 incomplete |
 | CF-IE6-02 | `blocked` | Chunked paired benchmark, cohorts, platforms and release dossier | Upstream release gate incomplete |
@@ -100,10 +100,37 @@ Allowed states: `not-started`, `in-progress`, `blocked`, `implemented`,
 - Criterion graph, causal arm, FS5 binding and Pi 0.82 focused slice: `24/24`.
 - Full guard plus durable resume slice: `108/108`.
 - Architecture: PASS for 202 source files and all declared line budgets.
-- Capability catalog/lock: current at
-  `sha256:bf449ec9ca2734a8d59513d761ac6fa5708ce79264d2933751306b0de08c166b`.
+- Capability catalog/lock was current at the IE4 boundary. The subsequent
+  bounded context-delivery correction is current at
+  `sha256:bdc2b02dbb2731cf56f0e606bb8eb22fa17a253a5a11f392728558e09e00cb31`.
 - All four capability-shaped runtime intake messages remain below 2,600
   characters. Mechanical control emits no criterion-map text; the intelligence
   arm changes only `PIAGENT_INTELLIGENCE_ENGINE`, preserves task truth and tool
   schemas, and adds no provider follow-up turn.
 - No provider session or benchmark evidence was created during IE0-IE4.
+
+## IE5 Fullstack pair #1 and finite correction
+
+- Exact source: commit `1d079da90412674678c6ab6cd714b1542aff3112`,
+  candidate `38580c7c565ced6df2b052a461372eefef7552a731e7230bf396171b6a50b20c`,
+  clean status, suite `bb2e97a83a8a3d06976bcc94259e60c3513626704bd463d87c9808e66fe5152c`.
+- Both surfaces passed hidden grade, scope and safety at 10. Piagent workflow
+  was 10 with 6/6 criteria, 3/3 critical, zero retry, zero continuation and
+  zero blocked valid call.
+- Piagent used 21,094 fresh tokens versus Codex CLI 20,108 (`1.0490`), inside
+  the `1.25` engineering ceiling. Duration was 153.500 versus 86.664 seconds
+  (`1.7712`), outside the `1.5` ceiling. Migration did not open.
+- Evidence-backed hypothesis: graph selection was persisted and shown as paths
+  but, when the optional repository index was absent, selected source bytes were
+  not delivered in the current provider turn. The measured Pi session made 20
+  tool calls and 33 messages versus Codex's 6 and 4; it had no semantic review,
+  recovery or policy-block loop.
+- The single allowed correction adds a 900-token current-file snapshot for
+  graph-selected paths. It requires no index or model turn, rejects protected,
+  secret, symlink, binary, oversized and unstable file carriers, and leaves the
+  Task Contract/verifier as truth. Provider-free context/Pi/causal tests are
+  `35/35`; the complete repository gate, typecheck and 203-file architecture
+  gate pass.
+- Exactly one newly preflighted Fullstack confirmation pair may now run. A
+  repeated duration failure closes this hypothesis; no third Fullstack pair and
+  no Migration pair is allowed.
