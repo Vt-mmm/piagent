@@ -44,7 +44,7 @@ configure providers.
 
 The active machine-readable protocol is
 `evals/ie6-release-protocol.v1.json`. The candidate identity is
-`1.3.0-ie.2`; it is separate from the exhausted RC.1/RC.2 train. The protocol
+`1.3.0-ie.3`; it is separate from the exhausted RC.1/RC.2 train. The protocol
 requires Piagent and controlled `codex-cli` on Luna Medium, all 18 public
 production families, three repeats, two surfaces, retry zero and inspection
 after every six sessions. Provider execution remains blocked until the exact
@@ -111,7 +111,7 @@ Use this flow when the team needs both terminal commands and the Pi package:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.84.1
-npm install -g --ignore-scripts @piagent/platform@1.3.0-ie.2
+npm install -g --ignore-scripts @piagent/platform@1.3.0-ie.3
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -137,7 +137,7 @@ bash scripts/install-global.sh --stable
 Use this only when terminal commands are not needed:
 
 ```bash
-pi install git:github.com/Vt-mmm/piagent@v1.3.0-ie.2
+pi install git:github.com/Vt-mmm/piagent@v1.3.0-ie.3
 ```
 
 Direct `pi install` does not create `piagent-*` commands on `PATH`.

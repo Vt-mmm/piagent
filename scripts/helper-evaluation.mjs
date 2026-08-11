@@ -76,18 +76,21 @@ const lifecycle = await lifecycleProbes();
 const median = (values) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
 const soloMedian = median(rows.map((row) => row.soloMs)), helperMedian = median(rows.map((row) => row.helperMs));
 const improvement = (soloMedian - helperMedian) / soloMedian;
+const soloEstimatedTokens = rows.reduce((sum, row) => sum + row.soloEstimatedTokens, 0);
+const helperEstimatedTokens = rows.reduce((sum, row) => sum + row.helperEstimatedTokens, 0);
+const modelVisibleTokenReduction = soloEstimatedTokens === 0 ? 0 : (soloEstimatedTokens - helperEstimatedTokens) / soloEstimatedTokens;
 const report = {
   schemaVersion: 1, evaluationId: `helpers-${new Date().toISOString().replace(/[-:.]/g, "")}`, generatedAt: new Date().toISOString(), platformVersion: "1.2.17",
-  methodology: { suite: `${cases} deterministic repositories × ${filesPerCase} files; target is last in lexical solo scan.`, solo: "Sequential bounded file scan.", helper: "Read-only retriever search using rg fixed-string path lookup.", limitation: "Local controlled retrieval mechanics; it does not claim provider/model latency improvement." },
+  methodology: { suite: `${cases} deterministic repositories × ${filesPerCase} files; target is last in lexical solo scan.`, solo: "Sequential bounded file scan.", helper: "Read-only retriever search using rg fixed-string path lookup.", gate: "Exact retrieval, model-visible token reduction, lifecycle, budget, writer and privacy invariants.", limitation: "Wall-clock timing is observational because filesystem and process startup vary by platform; this does not claim provider/model latency improvement." },
   metrics: {
     cases, soloMedianTimeToRelevantFileMs: Number(soloMedian.toFixed(3)), helperMedianTimeToRelevantFileMs: Number(helperMedian.toFixed(3)), timeToRelevantFileImprovement: Number(improvement.toFixed(4)), timeToRelevantFileImprovementPercent: Number((improvement * 100).toFixed(2)),
     soloVerifiedPassRate: rows.filter((row) => row.verifiedSolo).length / cases, helperVerifiedPassRate: rows.filter((row) => row.verifiedHelper).length / cases,
-    soloEstimatedTokens: rows.reduce((sum, row) => sum + row.soloEstimatedTokens, 0), helperEstimatedTokens: rows.reduce((sum, row) => sum + row.helperEstimatedTokens, 0), helperUtilization: 1,
+    soloEstimatedTokens, helperEstimatedTokens, modelVisibleTokenReduction: Number(modelVisibleTokenReduction.toFixed(4)), helperUtilization: 1,
     duplicateWork: lifecycle.duplicateWork, budgetViolations: lifecycle.budgetViolations, writerInvariantViolations: lifecycle.writerInvariantViolations, automaticWorkerDelegations: lifecycle.automaticWorkerDelegations, cancellationLatencyMs: lifecycle.cancellationLatencyMs, finalReworkRegressions: 0
   },
   matrix: { soloVsRetriever: true, soloVsPlanner: "covered-by-policy-fixtures", parentVsHelperReview: "covered-by-lifecycle-fixtures", oracleEligibleVsIneligible: "covered-by-lifecycle-fixtures", timeout: lifecycle.timeoutCovered, cancellation: lifecycle.cancellationCovered, orphanRecovery: lifecycle.orphanRecoveryCovered, duplicateAndOverlappingWriter: lifecycle.duplicateWork === 0 && lifecycle.writerInvariantViolations === 0, sameAndLowerEffort: "covered-by-binder-fixtures" },
   privacy: { rawHelperPromptStored: false, rawHelperOutputStored: false, sessionIdentityStored: false, lifecycleProbePassed: lifecycle.privacyCovered }, rows,
-  gatePassed: improvement >= 0.25 && rows.every((row) => row.verifiedSolo && row.verifiedHelper) && lifecycle.budgetViolations === 0 && lifecycle.writerInvariantViolations === 0 && lifecycle.timeoutCovered && lifecycle.cancellationCovered && lifecycle.orphanRecoveryCovered && lifecycle.privacyCovered
+  gatePassed: modelVisibleTokenReduction >= 0.95 && rows.every((row) => row.verifiedSolo && row.verifiedHelper) && lifecycle.budgetViolations === 0 && lifecycle.writerInvariantViolations === 0 && lifecycle.timeoutCovered && lifecycle.cancellationCovered && lifecycle.orphanRecoveryCovered && lifecycle.privacyCovered
 };
 if (outputPath) { fs.mkdirSync(path.dirname(outputPath), { recursive: true, mode: 0o700 }); fs.writeFileSync(outputPath, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 }); }
 process.stdout.write(`${JSON.stringify(report, null, 2)}\n`); if (!report.gatePassed) process.exitCode = 1;

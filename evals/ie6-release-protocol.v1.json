@@ -4,7 +4,7 @@
   "workItem": "CF-IE6-01",
   "recordedAt": "2026-08-11",
   "candidate": {
-    "expectedPackageVersion": "1.3.0-ie.2",
+    "expectedPackageVersion": "1.3.0-ie.3",
     "sourceState": "clean-approved-commit-only",
     "candidateIdentity": "commit-plus-materialized-content-digest-plus-tarball-sha512",
     "anyMaterialChangeInvalidates": true,
@@ -56,9 +56,9 @@
     "seed": "cf-ie6-production-luna-medium-v1"
   },
   "artifactBindings": [
-    { "id": "platform-package", "path": "package.json", "sha256": "6057a843872e5078972c0013997c810cb2b0c4d6d9002437da3ca193ffaceac9" },
-    { "id": "core-package", "path": "packages/piagent-core/package.json", "sha256": "712bf8cfa9d61f7abadcdbb4a2dab20320abc2b47e4ba8f40db429be792d044e" },
-    { "id": "capability-lock", "path": ".pi/piagent-profile.lock.json", "sha256": "c19d7b9ec2e94166184626a9cbcb94901e05b7a631ceda5f0f6cb21c75969595" },
+    { "id": "platform-package", "path": "package.json", "sha256": "a098b1924448fd9e0bd682ac82a1215b913282a09baa3ee402903fd64185e0ff" },
+    { "id": "core-package", "path": "packages/piagent-core/package.json", "sha256": "35506ebeb5b33820f890a1f3e76d2f3de7191e759edbe29efafaf5acb6991db3" },
+    { "id": "capability-lock", "path": ".pi/piagent-profile.lock.json", "sha256": "2238b3e57fbeaf7629f1fd04b7e25032652636890ae813700bad3bc1824be850" },
     { "id": "authority-manifest", "path": "packages/piagent-core/policy/authority-manifest.v1.json", "sha256": "911dc026f1a860f593a6850f7348311f6adac83a8f11627abb23654960b605d0" },
     { "id": "production-suite", "path": "benchmarks/production-v1/suite.json", "sha256": "8d03df7c08eee5debbabdb3490beb5d45b021a392b6da77df257e6d94c346d58" },
     { "id": "production-grader", "path": "benchmarks/production-v1/grade.mjs", "sha256": "1ddf7c6abe290628958c6d04b94b7de1acdd159bae0c8d3ae63fcc41d6d63f9a" },

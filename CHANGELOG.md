@@ -4,7 +4,17 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
-No changes after the `v1.3.0-ie.2` candidate boundary.
+No changes after the `v1.3.0-ie.3` candidate boundary.
+
+## v1.3.0-ie.3 - 2026-08-11
+
+### Deterministic cross-platform helper gate
+
+- Kept helper retrieval timing as an observational metric, but made the release
+  gate depend on exact retrieval correctness, model-visible token reduction,
+  lifecycle, budget, writer and privacy invariants. This removes filesystem and
+  process-startup timing noise from native Linux CI without weakening the
+  product property the helper is intended to provide.
 
 ## v1.3.0-ie.2 - 2026-08-11
 

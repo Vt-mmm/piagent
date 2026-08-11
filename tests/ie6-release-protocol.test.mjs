@@ -18,7 +18,7 @@ const clone = () => structuredClone(protocol);
 
 test("freezes the intelligence-engine Luna Medium release comparison", () => {
   assert.deepEqual(ie6ReleaseProtocolValidationErrors(protocol), []);
-  assert.equal(protocol.candidate.expectedPackageVersion, "1.3.0-ie.2");
+  assert.equal(protocol.candidate.expectedPackageVersion, "1.3.0-ie.3");
   assert.equal(protocol.comparison.baselineSurface, "codex-cli");
   assert.equal(protocol.comparison.rawPiReleaseBaselineAllowed, false);
   assert.equal(protocol.comparison.piagentTreatment, "intelligence-engine");
