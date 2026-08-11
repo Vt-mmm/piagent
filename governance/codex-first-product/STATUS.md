@@ -1,13 +1,13 @@
 ---
 plan_id: codex-first-product
-program_status: full-source-productionization-fs6-terminal-no-go
-current_workstream: FS
-current_phase: FS6
-current_work_item: CF-FS6-02
-next_work_item: none-finite-plan-exhausted
+program_status: intelligence-engine-bounded-canary-ready
+current_workstream: IE
+current_phase: IE5
+current_work_item: CF-IE5-01
+next_work_item: CF-IE5-02
 last_updated: 2026-08-11
 execution_mode: controlled-work-item-sessions
-canonical_roadmap: 15-full-source-productionization-roadmap.md
+canonical_roadmap: 16-intelligence-engine-rebaseline-roadmap.md
 canonical_tracker_path: governance/codex-first-product/STATUS.md
 candidate_state: rc2-terminal-exact-gate-no-go
 candidate_digest: sha256:356c90a4eb4251adcf3826f4d50ac524fdff76ef7bb0f566be81f3d1f428fcc1
@@ -22,21 +22,33 @@ This is the only mutable progress tracker for the plan. Phase files define inten
 
 | Field | Current value |
 |---|---|
-| Program | Full-source v1.3 productionization |
-| Canonical roadmap | [`15-full-source-productionization-roadmap.md`](15-full-source-productionization-roadmap.md) |
-| Current phase | `FS6` — terminal NO-GO under the finite RC.1/RC.2 plan; FS7 and release are not opened |
-| Active work item | `CF-FS6-02` — terminally stopped after RC.2 pair 2 violated the per-pair blocked-valid/critical-acceptance gate; no RC.3 or resume is allowed |
-| Owner/session | `root`; operator explicitly authorized continuous CF-FS5 through CF-FS7 execution on `2026-08-11`; frozen dependencies and stop rules remain binding |
+| Program | v1.3 intelligence-engine rebaseline; the prior FS6 finite release plan remains terminal NO-GO historical evidence |
+| Canonical roadmap | [`16-intelligence-engine-rebaseline-roadmap.md`](16-intelligence-engine-rebaseline-roadmap.md) |
+| Current phase | `IE5` — bounded Luna Medium canary after the complete provider-free IE0-IE4 gate |
+| Active work item | `CF-IE5-01` — freeze and preflight one Fullstack Piagent-versus-Codex pair; do not open Migration unless every finite Fullstack gate passes |
+| Owner/session | `root`; operator approved the complete intelligence-engine implementation path on `2026-08-11` with checklist continuity across sessions |
 | Candidate | RC.2 commit `fc23a73b…4880`, tree `218002fe…d8ec`, candidate `sha256:356c90a4…8fcc1`, tarball SHA-512 `15fd1247…a7388`; local assembly/readback passed but exact Migration gate failed |
 | Policy manifest | `authority-v1`, digest `sha256:28112cb6…7393`; current identity independently revalidated by FS3 gate audit `59e878c8…aa13` |
-| Provider authority | `false` under the exhausted finite plan. RC.2 is paused permanently at 4/6 sessions; its last pair and RC.1 runs must never resume. RC.3, cohort, beta, FS7 benchmark, tag, push, publish and release remain prohibited. |
+| Provider authority | `bounded CF-IE5-01 only`. RC.2 remains permanently paused at 4/6 and must never resume. Full production and IE5-02 remain closed until the new Fullstack pair passes every finite gate. |
 | Last verified release evidence | RC.2 pair 1 passed all gates at token/duration ratios `0.4620`/`0.8420`. Pair 2 passed quality/scope/safety/workflow 10 and ratios `1.1828`/`1.2439`, but recorded 7/8 acceptance, 2/3 critical and blocked-valid upper bound 1, so the exact per-pair gate failed. |
-| Blocker | Finite candidate budget is exhausted. CF-FS6-03..05 and all FS7 work are dependency-blocked; five users, cohorts and Linux were not attempted because the exact candidate did not clear FS6-02. |
-| Next exact action | None inside the current plan. Preserve RC.1/RC.2 evidence; any future attempt requires an explicitly approved provider-free causal rebaseline and a new finite protocol, not an RC.3 continuation. |
+| Blocker | No local implementation blocker. Release evidence remains blocked; only one fresh diagnostic Fullstack pair is authorized. |
+| Next exact action | Commit the exact IE4-passing tree, run provider-free benchmark preflight, then execute one retries-zero, two-session Fullstack Luna Medium Piagent-versus-Codex canary. Stop immediately on any gate failure. |
 
-The old P0-P7 unattended autopilot is not active for this workstream. Use
-[`prompts/10-full-source-productionization-prompts.md`](prompts/10-full-source-productionization-prompts.md)
-and exactly one implementation work item per session.
+The old P0-P7 unattended autopilot and the exhausted FS6 provider plan are not
+active for this workstream. Resume from the first non-complete IE item in this
+tracker and preserve every finite dependency and stop rule.
+
+## Intelligence-engine phase map
+
+| Phase | State | Provider | Exit gate | Next exact action |
+|---|---|---:|---|---|
+| IE0 Rebaseline | `complete`; branch, roadmap and historical boundary read back | No | Exact tracker/history readback and dependency inventory | Complete |
+| IE1 Criterion graph | `complete`; compiler, additive Task Contract field and compact task-start map are green | No | Every criterion mapped once; no proof/satisfaction invented | Complete |
+| IE2 Context/execution | `complete`; scoped selection, checkpoint, resume and long-input bounds are green | No | Context stays in scope; graph/policy survives resume; stale verifier remains invalid | Complete |
+| IE3 Production critical path | `complete`; graph planning defaults on, speculative capabilities retain broad shadow/advisory modes and strict opt-in | No | Zero graph-triggered provider turns; shared continuation ceiling remains one | Complete |
+| IE4 Local causal gate | `complete`; mechanical versus intelligence differs by one switch and the full local gate passes | No | `npm run verify` PASS, 1958/1958; focused 24/24; guard/resume 108/108; architecture 202 | Complete |
+| IE5 Medium canary | `in-progress`; only CF-IE5-01 is authorized | Yes, bounded | One approved pair per family; correctness 10 and finite engineering gates | Freeze commit and run Fullstack preflight/pair |
+| IE6 Release evidence | `blocked` | Yes, chunked | Frozen statistical protocol, cohorts, platforms, exact artifact | IE5 pass |
 
 ## Full-source phase map
 

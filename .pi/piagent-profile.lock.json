@@ -115,7 +115,7 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:d978ea5a9abc69f013aadde4b22fddd8e6f8daadb8b80ef83f086460ca389a60",
+    "packageDigest": "sha256:363b066b94f8c4c9cf82ba80c355c4c598e6fff2a77d66b4d6b204a82f6ff46a",
     "packageSource": "../",
     "packageVersion": "1.3.0-rc.2",
     "runtimeFiles": [
@@ -140,8 +140,8 @@
         "path": "packages/piagent-core/capabilities/capability-core.js"
       },
       {
-        "byteSize": 6197,
-        "digest": "sha256:3117208cc351915d883625632cc976978a821002e6054498b280c10c700bb660",
+        "byteSize": 6254,
+        "digest": "sha256:9df3dfb19cce6ca88392d7a1be90e63c23999a8a00494e5a7ab529fd4cf7f088",
         "path": "packages/piagent-core/capabilities/runtime-integrity.js"
       },
       {
@@ -195,6 +195,11 @@
         "path": "packages/piagent-core/extensions/acceptance-receipt.js"
       },
       {
+        "byteSize": 13451,
+        "digest": "sha256:d423c2b68a7252d7777152a841e486a55d835fb0cfa804dfd4f93612ba207914",
+        "path": "packages/piagent-core/extensions/criterion-graph.js"
+      },
+      {
         "byteSize": 8415,
         "digest": "sha256:bc713b9d4917a3fc87e1ef4044e0f2d6c525675361c299d341436494a49d2b17",
         "path": "packages/piagent-core/extensions/failure-types.ts"
@@ -205,8 +210,8 @@
         "path": "packages/piagent-core/extensions/repository-memory.js"
       },
       {
-        "byteSize": 3520,
-        "digest": "sha256:3d226bb33bd987b6e6904968a95b5307c184406a03b25cbbb0a1cc4e868ceee8",
+        "byteSize": 3692,
+        "digest": "sha256:9292b5953c5a48a01522dbfa6453ef2243e5b20c362595dec640c17f5c7a28f7",
         "path": "packages/piagent-core/extensions/task-contract-view.js"
       },
       {
@@ -225,8 +230,8 @@
         "path": "packages/piagent-core/extensions/task-journal.js"
       },
       {
-        "byteSize": 4205,
-        "digest": "sha256:fe4261ba1dfa949cd732623daa62a43fe0e91aba5feb86e5663a01ac1ae1bc8c",
+        "byteSize": 4332,
+        "digest": "sha256:f16da9f7e21914b9ae7ad4dae411881b6ea2eb3e2625780592340c4fe3b6ae0d",
         "path": "packages/piagent-core/extensions/task-runtime-audit.js"
       },
       {
@@ -250,8 +255,8 @@
         "path": "packages/piagent-core/capabilities/authority-manifest.ts"
       },
       {
-        "byteSize": 18703,
-        "digest": "sha256:31aa10f332da3b43edf23b07afd1bf12a0f4e7f6a30208267a717cb1423aa6b0",
+        "byteSize": 18917,
+        "digest": "sha256:aed043fb0ca0bc50b0966740f7e943a5916d85d37f0484c0393a4908aff7316e",
         "path": "packages/piagent-core/runtime/hooks/agent-start-hook.ts"
       },
       {
@@ -420,8 +425,8 @@
         "path": "packages/piagent-core/runtime/recovery/handoff-projection.ts"
       },
       {
-        "byteSize": 15807,
-        "digest": "sha256:d2d3f0eead4f55149709399b7fe274370890b698149ce4724339b6cc01f61755",
+        "byteSize": 16084,
+        "digest": "sha256:03012dcc2a2e130b997499a36efad88e174d463c4820fa54fc980aca30954508",
         "path": "packages/piagent-core/runtime/recovery/resume-state.ts"
       },
       {
@@ -505,8 +510,8 @@
         "path": "packages/piagent-core/runtime/registration/task-evidence-tools.ts"
       },
       {
-        "byteSize": 30092,
-        "digest": "sha256:13f0862dee0e6712f7fef01132021092cfa5890c8b956a19ffc3e2cebe0ef084",
+        "byteSize": 31883,
+        "digest": "sha256:98e430b8e723e5bce39303e09c7d24bdfca1abc0aa954d310f7d546b3f0162ea",
         "path": "packages/piagent-core/runtime/registration/task-start-tool.ts"
       },
       {
@@ -540,8 +545,8 @@
         "path": "packages/piagent-core/runtime/session/runtime-state.ts"
       },
       {
-        "byteSize": 6501,
-        "digest": "sha256:93465a1450963592690dcb01112c6f2c2404aa944945aca7234ec4a6b5c9aae0",
+        "byteSize": 6779,
+        "digest": "sha256:740d51c492ad889be16da62dbe8e6413a2e79f561ba2bd22a977ced43b36addb",
         "path": "packages/piagent-core/runtime/session/system-prompt.ts"
       },
       {

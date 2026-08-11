@@ -238,6 +238,7 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
                   taskRunId: intake.task.taskRunId,
                   scope: intake.task.scope,
                   verifyCommands: intake.task.verifyCommands,
+                  criterionGraph: intake.task.criterionGraph ? { mode: intake.task.criterionGraph.mode, graphDigest: intake.task.criterionGraph.graphDigest, nodes: intake.task.criterionGraph.nodes.length } : null,
                   intakeMode: intake.task.intakeMode
                 }
               : undefined,

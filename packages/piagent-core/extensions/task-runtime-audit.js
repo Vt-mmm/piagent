@@ -60,7 +60,7 @@ export function recordTaskStartCheckpoint(ctx, task, checkpointId, lifecycleMode
     phase: checkpointId,
     status: "in-progress",
     attempt: task.attempt,
-    evidence: { riskLane: task.riskLane, lifecycleMode }
+    evidence: { riskLane: task.riskLane, lifecycleMode, criterionGraph: task.criterionGraph ? { mode: task.criterionGraph.mode, graphDigest: task.criterionGraph.graphDigest } : null }
   });
 }
 

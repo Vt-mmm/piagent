@@ -188,6 +188,27 @@ export type WorkPlanStep = {
   updatedAt?: string;
 };
 
+export type CriterionGraphNode = {
+  id: string;
+  criterionIndex: number;
+  obligation: string;
+  kind: "behavior" | "boundary" | "output" | "scope" | "verification" | "investigation";
+  proofKinds: Array<"behavioral-check" | "exact-verifier" | "read-evidence" | "scoped-diff">;
+  targetHints: string[];
+  dependsOn: string[];
+};
+
+export type CriterionGraph = {
+  schemaVersion: 1;
+  compiler: "criterion-graph-v1";
+  mode: "mechanical" | "criterion-graph";
+  criterionDigest: string;
+  graphDigest: string;
+  createdAt: string;
+  nodes: CriterionGraphNode[];
+  order: string[];
+};
+
 export type AcceptanceReceipt = {
   schemaVersion: 1;
   source: "model" | "runtime";
@@ -351,6 +372,7 @@ export type TaskContract = {
   intakeMode?: "model" | "runtime";
   expectedOutput: string;
   acceptanceCriteria: string[];
+  criterionGraph?: CriterionGraph;
   scope: string[];
   outOfScope: string[];
   protectedPaths: string[];

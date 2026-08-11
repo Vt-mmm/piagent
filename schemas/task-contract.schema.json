@@ -91,6 +91,50 @@
       },
       "additionalProperties": false
     },
+    "criterionGraph": {
+      "type": "object",
+      "required": ["schemaVersion", "compiler", "mode", "criterionDigest", "graphDigest", "createdAt", "nodes", "order"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "compiler": { "const": "criterion-graph-v1" },
+        "mode": { "enum": ["mechanical", "criterion-graph"] },
+        "criterionDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "graphDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "nodes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "items": {
+            "type": "object",
+            "required": ["id", "criterionIndex", "obligation", "kind", "proofKinds", "targetHints", "dependsOn"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^criterion-[0-9]{2}$" },
+              "criterionIndex": { "type": "integer", "minimum": 0, "maximum": 11 },
+              "obligation": { "type": "string", "minLength": 1 },
+              "kind": { "enum": ["behavior", "boundary", "output", "scope", "verification", "investigation"] },
+              "proofKinds": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": { "enum": ["behavioral-check", "exact-verifier", "read-evidence", "scoped-diff"] }
+              },
+              "targetHints": { "$ref": "#/$defs/stringList" },
+              "dependsOn": { "$ref": "#/$defs/stringList" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "order": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^criterion-[0-9]{2}$" }
+        }
+      },
+      "additionalProperties": false
+    },
     "acceptanceEvidence": {
       "type": "object",
       "required": [
@@ -516,6 +560,9 @@
           "minItems": 1
         }
       ]
+    },
+    "criterionGraph": {
+      "$ref": "#/$defs/criterionGraph"
     },
     "scope": {
       "allOf": [

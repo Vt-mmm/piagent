@@ -106,7 +106,19 @@ identity Pi báo về và thinking level để chọn hard token budget cùng gi
 file. Planner không tự đổi model/provider. Hiện chưa ship local semantic
 reranker, nên plan luôn report `reranker: off` kể cả khi còn legacy environment
 flag. Mỗi context pack được inject có receipt để report giải thích vì sao path đó
-vào context. Task đã complete có thể
+vào context.
+
+Task Contract v2 còn mang projection lập kế hoạch Criterion Graph v1 theo kiểu
+cộng thêm. Graph map đúng một lần từng criterion của operator sang planning kind
+đóng, target hint nằm trong scope, proof kind và dependency order. Graph không có
+state `satisfied`, nên không thể thay acceptance hay exact-verifier truth. Graph
+ưu tiên context liên quan trong scope trước observation cũ, giữ nguyên digest qua
+compaction/resume, không đổi tool schema và không tạo provider follow-up turn.
+`PIAGENT_INTELLIGENCE_ENGINE=off` chọn mechanical control cho causal test hoặc
+rollback khẩn cấp; task mới mặc định dùng criterion engine và pin mode/digest của
+nó trong Task Contract.
+
+Task đã complete có thể
 tạo retrieval fact ngắn hạn, có citation. Turn sau chỉ inject memory hint nếu còn
 chỗ trong token budget của context plan; repository file hiện tại vẫn là source
 of truth.
@@ -170,7 +182,7 @@ không đo được phải giữ null. Same-runtime evidence là operational ass
 không phải independent audit.
 
 Cho đến khi controlled beta cohort cùng independent usability/platform gate
-complete, safe default được freeze là solver `shadow`, phase tools `shadow`,
+complete, safe default được freeze là criterion engine `on`, solver `shadow`, phase tools `shadow`,
 recovery `on`, helpers `recommend`, parent routing `off`, automatic worker
 `off`, và host execution. Chỉ implement xong không đủ để promote mode.
 Feature-off vẫn đọc sidecar cũ mà không xóa state.

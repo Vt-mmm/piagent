@@ -35,6 +35,7 @@ export function compactTaskDetails(task) {
     verifyCommands: task.verifyCommands,
     acceptanceReceipt: acceptanceReceiptSummary(task.acceptanceReceipt),
     acceptanceProvenance: acceptanceReceiptProvenanceSummary(task.acceptanceReceipt),
+    criterionGraph: task.criterionGraph ? { mode: task.criterionGraph.mode, graphDigest: task.criterionGraph.graphDigest, nodes: task.criterionGraph.nodes.length } : null,
     authoritySnapshot: task.authoritySnapshot ? { profile: task.authoritySnapshot.profile, manifestDigest: task.authoritySnapshot.manifestDigest, snapshotDigest: task.authoritySnapshot.snapshotDigest } : null,
     workPlan: task.workPlan,
     reviewLenses: task.reviewLenses,

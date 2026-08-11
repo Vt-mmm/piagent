@@ -11,6 +11,7 @@ import {
   normalizeAcceptanceReceipt
 } from "./acceptance-receipt.js";
 import { LEGACY_UNTRUSTED_DIGEST_ALGORITHM } from "./task-digest-migration.js";
+import { criterionGraphValidationErrors, normalizeCriterionGraph } from "./criterion-graph.js";
 import { normalizeTaskAuthoritySnapshot, taskAuthorityContractValidationErrors } from "./task-authority-contract.js";
 import {
   commitLegacySchemaTaskDigestState,
@@ -33,7 +34,7 @@ const TASK_OUTCOMES = ["pending", "completed", "blocked", "partial", "failed"], 
 const REVIEW_LENSES = ["correctness", "tests", "scope", "security", "docs", "release", "package"];
 const TASK_CONTRACT_FIELDS = new Set([
   "schemaVersion", "taskRunId", "taskId", "sessionId", "sessionName", "changeMode", "attempt", "maxAttempts",
-  "previousAttempts", "summary", "riskLane", "intakeMode", "expectedOutput", "acceptanceCriteria", "scope", "outOfScope",
+  "previousAttempts", "summary", "riskLane", "intakeMode", "expectedOutput", "acceptanceCriteria", "criterionGraph", "scope", "outOfScope",
   "protectedPaths", "requiredContext", "contextManifest", "memoryCitations", "mcpCapabilities", "verifyGroup",
   "verifyCommands", "workPlan", "reviewLenses", "orchestration", "acceptanceReceipt", "authoritySnapshot", "workingTreeDigestAlgorithm", "workingTreeDigestMigration", "baselineChangedFiles", "baselineFileDigests",
   "observedChangedFiles", "finalWorkingTreeFiles", "finalFileDigests", "changedFiles", "verifyEvidence", "trace",
@@ -203,7 +204,7 @@ export function taskContractValidationErrors(input) {
   if (!["tiny", "normal", "high-risk"].includes(input.riskLane)) errors.push("riskLane is invalid");
   if (input.intakeMode !== undefined && !["model", "runtime"].includes(input.intakeMode)) errors.push("intakeMode is invalid");
   errors.push(...taskDigestContractValidationErrors(input));
-  errors.push(...acceptanceReceiptValidationErrors(input.acceptanceReceipt));
+  errors.push(...acceptanceReceiptValidationErrors(input.acceptanceReceipt), ...criterionGraphValidationErrors(input.criterionGraph, input));
   errors.push(...taskAuthorityContractValidationErrors(input));
   if (!Number.isInteger(input.attempt) || input.attempt < 1) errors.push("attempt must be a positive integer");
   if (!Number.isInteger(input.maxAttempts) || input.maxAttempts < 1 || input.maxAttempts > 10) errors.push("maxAttempts must be between 1 and 10"); if (Number.isInteger(input.attempt) && Number.isInteger(input.maxAttempts) && input.attempt > input.maxAttempts) errors.push("attempt exceeds maxAttempts");
@@ -398,9 +399,8 @@ export function normalizeTaskContract(input, options = {}) {
     summary: typeof input.summary === "string" ? input.summary : "",
     riskLane: ["tiny", "normal", "high-risk"].includes(input.riskLane) ? input.riskLane : "normal",
     intakeMode: ["model", "runtime"].includes(input.intakeMode) ? input.intakeMode : "model",
-    expectedOutput: typeof input.expectedOutput === "string" ? input.expectedOutput : "",
-    acceptanceCriteria: stringArray(input.acceptanceCriteria),
-    scope: stringArray(input.scope),
+    expectedOutput: typeof input.expectedOutput === "string" ? input.expectedOutput : "", acceptanceCriteria: stringArray(input.acceptanceCriteria),
+    criterionGraph: normalizeCriterionGraph(input.criterionGraph), scope: stringArray(input.scope),
     outOfScope: stringArray(input.outOfScope),
     protectedPaths: stringArray(input.protectedPaths),
     requiredContext: stringArray(input.requiredContext),

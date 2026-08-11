@@ -369,9 +369,9 @@ describe("piagent guard integration", () => {
     assert.doesNotMatch(started.message.content, /Acceptance focus:|Pre-completion contract review:/);
     assert.ok(started.message.content.length < 2_000, `runtime intake should stay compact, got ${started.message.content.length} chars`);
     assert.match(started.message.content, /Do not re-read root AGENTS\.md or inspect Piagent\/platform files/);
-    assert.match(started.message.content, /privately map every operator criterion to implementation and focused-test coverage/);
-    assert.match(started.message.content, /batch independent reads or writes/);
-    assert.match(started.message.content, /criterion-by-criterion self-review, then run the exact verifier once/);
+    assert.match(started.message.content, /Execution map \(planning only\)/);
+    assert.match(started.message.content, /batch context reads by target/);
+    assert.match(started.message.content, /implement dependency-ready criteria, then run the exact verifier once/);
     assert.match(started.message.content, /src\/invoice\.ts/);
     assert.match(started.message.content, /test\/\*\*/);
     assert.match(started.message.content, /Existing public return elements in src\/invoice\.ts are names\/identifiers, not object values/);
@@ -393,7 +393,7 @@ describe("piagent guard integration", () => {
     assert.equal(task.authoritySnapshot.taskRunId, task.taskRunId);
     assert.equal(task.authoritySnapshot.capturedAt, task.createdAt);
     assert.equal(task.authoritySnapshot.capabilities.find((entry) => entry.id === "CAP-13").authority, "off");
-    assert.deepEqual(task.contextManifest, []);
+    assert.deepEqual(task.contextManifest, [{ path: "src/invoice.ts", reason: "criterion-01 scope target" }]);
     assert.equal(harness.entries.filter((entry) => entry.type === "user-message" || entry.type === "message").length, 0,
       "runtime intake and bounded context are injected into the current turn, never a provider follow-up");
 
@@ -458,6 +458,45 @@ describe("piagent guard integration", () => {
       assert.match(task.acceptanceCriteria[index - 1], new RegExp(`exact-tail-${index}`));
     }
     assert.equal(harness.entries.filter((entry) => entry.type === "user-message" || entry.type === "message").length, 0);
+  });
+
+  it("persists and presents the criterion graph only when the intelligence engine is explicitly enabled", async () => {
+    const previous = process.env.PIAGENT_INTELLIGENCE_ENGINE;
+    process.env.PIAGENT_INTELLIGENCE_ENGINE = "on";
+    try {
+      const { root, piagentGuard } = await loadGuardFixture();
+      const cwd = createProject(root);
+      fs.writeFileSync(path.join(cwd, "src", "invoice.ts"), "export const invoice = 1;\n");
+      const ctx = createContext(cwd, { sessionId: "criterion-graph-session", sessionName: "GRAPH-1" });
+      const harness = createPiHarness({ activeTools: ["read", "bash", "edit", "write"] });
+      const initialSurface = [...harness.activeTools];
+      piagentGuard(harness.pi);
+      await harness.handlers.get("session_start")({}, ctx);
+      const prompt = "Update src/invoice.ts, reject invalid fractional quantities, and run focused tests.";
+      await harness.handlers.get("input")({ text: prompt, source: "user" }, ctx);
+      const started = await harness.handlers.get("before_agent_start")({
+        prompt,
+        systemPrompt: "stable system prompt",
+        systemPromptOptions: { cwd, selectedTools: [...harness.activeTools] }
+      }, ctx);
+      assert.match(started.message.content, /Execution map \(planning only\)/);
+      assert.match(started.message.content, /criterion-[0-9]{2} boundary/);
+      assert.match(started.message.content, /map plans work but never overrides the operator request or verifier/);
+      assert.equal(started.message.details.runtimeTask.criterionGraph.mode, "criterion-graph");
+      const taskPath = path.join(cwd, ".pi", "piagent-state", "tasks", `${started.message.details.runtimeTask.taskRunId}.json`);
+      const task = JSON.parse(fs.readFileSync(taskPath, "utf8"));
+      assert.equal(task.criterionGraph.mode, "criterion-graph");
+      assert.equal(task.criterionGraph.nodes.length, task.acceptanceCriteria.length);
+      assert.deepEqual(task.criterionGraph.nodes.map((node) => node.obligation), task.acceptanceCriteria);
+      assert.ok(task.criterionGraph.nodes.every((node) => !Object.hasOwn(node, "status")));
+      assert.ok(task.contextManifest.some((entry) => entry.path === "src/invoice.ts" && /^criterion-/.test(entry.reason)));
+      assert.deepEqual([...harness.activeTools], initialSurface, "criterion planning does not replace or reorder provider-visible tool schemas");
+      assert.equal(harness.entries.filter((entry) => entry.type === "user-message" || entry.type === "message").length, 0,
+        "criterion planning adds no provider follow-up turn");
+    } finally {
+      if (previous === undefined) delete process.env.PIAGENT_INTELLIGENCE_ENGINE;
+      else process.env.PIAGENT_INTELLIGENCE_ENGINE = previous;
+    }
   });
 
   it("enforces phase tools only in on mode while retaining the tiny source mutation surface", async () => {
@@ -3298,6 +3337,7 @@ describe("piagent guard integration", () => {
     const taskPath = path.join(cwd, ".pi", "piagent-state", "tasks", `${started.details.taskRunId}.json`);
     const legacy = JSON.parse(fs.readFileSync(taskPath, "utf8"));
     legacy.scope = ["plan.js", "test/**"];
+    delete legacy.criterionGraph;
     fs.writeFileSync(taskPath, `${JSON.stringify(legacy, null, 2)}\n`);
 
     const refined = await taskStart.execute("refine-safe", params, undefined, undefined, ctx);
@@ -3310,6 +3350,7 @@ describe("piagent guard integration", () => {
 
     const staleAgain = JSON.parse(fs.readFileSync(taskPath, "utf8"));
     staleAgain.scope = ["plan.js", "test/**"];
+    delete staleAgain.criterionGraph;
     fs.writeFileSync(taskPath, `${JSON.stringify(staleAgain, null, 2)}\n`);
     fs.writeFileSync(nested, "export const plan = ['changed'];\n");
     const afterMutation = await taskStart.execute("refine-too-late", params, undefined, undefined, ctx);

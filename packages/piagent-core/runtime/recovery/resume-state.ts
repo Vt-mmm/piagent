@@ -2,6 +2,7 @@ import path from "node:path";
 
 import type { TaskContract } from "../../extensions/guard-types.ts";
 import { allVerifyCommandsPassCurrentTree } from "../../extensions/task-contract-view.js";
+import { criterionGraphGuidance } from "../../extensions/criterion-graph.js";
 import { replayTaskCheckpoints, taskRecoveryDecision } from "../../extensions/task-journal.js";
 import { taskDigestMigrationArchiveStatus, workingTreeSnapshot, workingTreeSnapshotHasUnavailableEvidence } from "../../extensions/task-state.js";
 import { workingTreeEvidenceDigest } from "../../extensions/task-lifecycle.js";
@@ -133,6 +134,7 @@ export function buildTaskResumeContext(task: TaskContract, resume: ResumeState):
   ));
   if (resume.reconstruction.plan.length > 12) plan.push(`- [${resume.reconstruction.plan.length - 12} more steps retained in the Task Contract]`);
   const verifiers = limitedLines(task.verifyCommands, 8, 180, (value, index) => `${index + 1}. ${value}`);
+  const executionMap = criterionGraphGuidance(task.criterionGraph, 8).map((line: string) => `- ${line}`);
   const next = resume.reconstruction.nextAction;
   const lines = [
     "[Piagent durable task resume]",
@@ -143,6 +145,7 @@ export function buildTaskResumeContext(task: TaskContract, resume: ResumeState):
     "Acceptance focus:", ...criteria,
     "Scope:", ...scope,
     "Work plan/progress:", ...plan,
+    ...(executionMap.length > 0 ? ["Execution map (planning only):", ...executionMap] : []),
     `Current phase/checkpoint: ${resume.phase ?? "unknown"} / ${resume.latestCheckpoint?.checkpointId ?? "none"}`,
     `Verifier state: current=${resume.verifierEvidenceCurrent}; stale=${resume.staleVerifierEvidence}; tree=${resume.currentTreeDigest}`,
     "Exact verifier commands:", ...verifiers,

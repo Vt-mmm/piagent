@@ -108,6 +108,17 @@ file limit. It never switches model/provider. No local semantic reranker is
 shipped yet, so the plan reports `reranker: off` even if a legacy environment
 flag is present. Each injected pack carries a receipt so reports can explain why
 those paths entered context.
+
+Task Contract v2 also carries an additive Criterion Graph v1 planning
+projection. It maps every operator criterion exactly once to a closed planning
+kind, scoped target hints, proof kinds, and dependency order. The graph has no
+`satisfied` state and cannot override acceptance or exact-verifier truth. It
+selects relevant in-scope context before older observations, survives
+compaction/resume by digest, and adds no tool-schema change or provider follow-up
+turn. `PIAGENT_INTELLIGENCE_ENGINE=off` selects the mechanical control for
+causal tests and emergency rollback; new tasks otherwise use the criterion
+engine and pin its mode/digest in the task contract.
+
 Completed tasks may add a short-lived, cited retrieval fact. A later turn can
 inject at most the memory hints that fit inside the context plan's unused token
 budget; current repository files remain authoritative.
@@ -173,7 +184,7 @@ transitions, while unmeasurable edit timing, token totals, and cost remain null.
 Same-runtime evidence is operational assurance, never an independent audit.
 
 Until controlled beta cohorts and the independent usability/platform gates are
-complete, the frozen safe defaults remain solver `shadow`, phase tools
+complete, the frozen safe defaults remain criterion engine `on`, solver `shadow`, phase tools
 `shadow`, recovery `on`, helpers `recommend`, parent routing `off`, automatic
 workers `off`, and host execution. Implementation completion alone cannot
 promote a mode. Feature-off reads existing sidecars without deleting them.

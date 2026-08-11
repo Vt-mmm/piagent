@@ -6,6 +6,7 @@ import { automaticTaskSummary, boundedRuntimeIntakeMessage } from "../workflows/
 import { WORKING_TREE_DIGEST_ALGORITHM } from "../../extensions/working-tree-digest.js";
 import { createEnvironmentBoundTaskAuthority } from "../policy/task-authority-runtime.ts";
 import { authorityReplacementState } from "../policy/authority-resume-policy.ts";
+import { compileCriterionGraph, criterionGraphContextSelection, criterionGraphGuidance, criterionGraphMode } from "../../extensions/criterion-graph.js";
 
 type ExtensionContext = any;
 type TaskContract = any;
@@ -135,7 +136,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
             && expectedScope.every((entry, index) => entry === proposedScope[index]);
           if (pristine && canonicalRefinement) {
             const previousScope = [...active.scope];
-            active.scope = redactTextArray(currentScopeResolution.scope);
+            active.scope = redactTextArray(currentScopeResolution.scope); active.criterionGraph = compileCriterionGraph({ acceptanceCriteria: active.acceptanceCriteria, scope: active.scope, verifyCommands: active.verifyCommands, changeMode: active.changeMode, mode: active.criterionGraph?.mode ?? "mechanical", createdAt: active.criterionGraph?.createdAt ?? active.createdAt });
             active.updatedAt = createdAt;
             const refined = writeTask(ctx.cwd, active);
             bindSessionTask(ctx.cwd, sessionId, sessionName, refined);
@@ -271,7 +272,6 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       const providedWorkPlan = normalizeWorkPlanSteps(params.workPlan);
       const defaultPlanLane = params.intakeMode === "runtime" && params.riskLane === "normal" ? "tiny" : params.riskLane;
       const workPlan = providedWorkPlan.length ? providedWorkPlan : defaultWorkPlan(safeSummary, defaultPlanLane, changeMode);
-      const seededContext = runtimeState.observedContext(ctx).slice(0, contextBudgetConfig(policy).maxManifestFiles);
       const workPlanError = validateNewWorkPlan(workPlan);
       if (workPlanError) {
         return { content: [{ type: "text", text: `Task start refused: ${workPlanError}.` }], details: workPlan, isError: true };
@@ -295,6 +295,9 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
         source: params.intakeMode === "runtime" ? "runtime" : "model",
         generatedAt: createdAt
       });
+      const criterionGraph = compileCriterionGraph({ acceptanceCriteria: acceptance.acceptanceCriteria, scope: resolvedScope,
+        verifyCommands: verifyPlan.commands, changeMode, mode: criterionGraphMode(), createdAt });
+      const seededContext = criterionGraphContextSelection(criterionGraph, repositoryFileManifest(ctx.cwd), runtimeState.observedContext(ctx), contextBudgetConfig(policy).maxManifestFiles);
       const task: TaskContract = {
         schemaVersion: 2,
         taskRunId,
@@ -310,6 +313,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
         intakeMode: params.intakeMode === "runtime" ? "runtime" : "model",
         expectedOutput: redactText(params.expectedOutput),
         acceptanceCriteria: acceptance.acceptanceCriteria,
+        criterionGraph,
         scope: redactTextArray(resolvedScope),
         outOfScope: redactTextArray(params.outOfScope),
         protectedPaths: profile.protectedPaths ?? [],
@@ -362,8 +366,8 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       }
       const lifecycleMode = runtimeLifecycleMode(written);
       const scopeMappings = scopeResolution.mappings.map((item) => `${item.from} -> ${item.to}`);
-      appendTrace(ctx.cwd, { taskId, taskRunId, sessionId, sessionName, attempt, event: "task_start", summary: task.summary, riskLane: params.riskLane, intakeMode: task.intakeMode, changeMode: task.changeMode, lifecycleMode, authorityProfile: written.authoritySnapshot.profile, authoritySnapshotDigest: written.authoritySnapshot.snapshotDigest, scopeMappings, seededContext: seededContext.map((item) => item.path) });
-      appendSessionTrace(pi, { taskId, taskRunId, sessionId, sessionName, attempt, event: "task_start", summary: task.summary, riskLane: params.riskLane, intakeMode: task.intakeMode, changeMode: task.changeMode, lifecycleMode, authorityProfile: written.authoritySnapshot.profile, authoritySnapshotDigest: written.authoritySnapshot.snapshotDigest, scopeMappings, seededContext: seededContext.map((item) => item.path) });
+      appendTrace(ctx.cwd, { taskId, taskRunId, sessionId, sessionName, attempt, event: "task_start", summary: task.summary, riskLane: params.riskLane, intakeMode: task.intakeMode, changeMode: task.changeMode, lifecycleMode, criterionGraphMode: written.criterionGraph.mode, criterionGraphDigest: written.criterionGraph.graphDigest, authorityProfile: written.authoritySnapshot.profile, authoritySnapshotDigest: written.authoritySnapshot.snapshotDigest, scopeMappings, seededContext: seededContext.map((item) => item.path) });
+      appendSessionTrace(pi, { taskId, taskRunId, sessionId, sessionName, attempt, event: "task_start", summary: task.summary, riskLane: params.riskLane, intakeMode: task.intakeMode, changeMode: task.changeMode, lifecycleMode, criterionGraphMode: written.criterionGraph.mode, criterionGraphDigest: written.criterionGraph.graphDigest, authorityProfile: written.authoritySnapshot.profile, authoritySnapshotDigest: written.authoritySnapshot.snapshotDigest, scopeMappings, seededContext: seededContext.map((item) => item.path) });
       recordTaskStartCheckpoint(ctx, written, firstReady.id, lifecycleMode);
 
       return {
@@ -378,6 +382,9 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
             written.acceptanceCriteria.length > 0
               ? ["Acceptance focus:", ...written.acceptanceCriteria.map((criterion, index) => `${index + 1}. ${criterion}`)].join("\n")
               : "Acceptance focus: not recorded.",
+            ...(criterionGraphGuidance(written.criterionGraph).length > 0
+              ? [["Execution map (planning only; verifier remains authoritative):", ...criterionGraphGuidance(written.criterionGraph).map((line: string) => `- ${line}`)].join("\n")]
+              : []),
             ...exactOutputGuidance,
             ...(changeMode === "source-change" && acceptanceProofGuidance(written).length > 0
               ? [["Critical behavioral proof:", ...acceptanceProofGuidance(written).map((item: string) => `- ${item}`), "Persist focused tests inside task scope; runtime accepts executed project verification, not prose claims."].join("\n")]
@@ -478,10 +485,13 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
         ...exactOutputGuidance,
         "Exact verifier commands:",
         ...(task.verifyCommands.length > 0 ? verifierCommandInstructions(task.verifyCommands) : ["none"]),
+        ...(criterionGraphGuidance(task.criterionGraph).length > 0 ? [["Execution map (planning only):", ...criterionGraphGuidance(task.criterionGraph).map((line: string) => `- ${line}`)].join("\n")] : []),
         "Root project instructions are loaded. Do not re-read root AGENTS.md or inspect Piagent/platform files; work directly in relevant source/tests with ordinary tools.",
         task.changeMode === "read-only"
           ? "Stay read-only. Runtime records targeted reads and completion evidence; do not call task-management tools."
-          : "Before mutating, privately map every operator criterion to implementation and focused-test coverage; batch independent reads or writes. Finish intended edits and one criterion-by-criterion self-review, then run the exact verifier once; rerun only after a later mutation. Runtime records evidence and completion; do not call task-management tools."
+          : task.criterionGraph?.mode === "criterion-graph"
+            ? "Follow the execution map: batch context reads by target, implement dependency-ready criteria, then run the exact verifier once; rerun only after a later mutation. The map plans work but never overrides the operator request or verifier."
+            : "Before mutating, privately map every operator criterion to implementation and focused-test coverage; batch independent reads or writes. Finish intended edits and one criterion-by-criterion self-review, then run the exact verifier once; rerun only after a later mutation. Runtime records evidence and completion; do not call task-management tools."
       ].join("\n"))
     };
   }

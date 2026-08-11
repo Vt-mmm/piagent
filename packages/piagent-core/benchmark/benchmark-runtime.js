@@ -30,6 +30,14 @@ export const PIAGENT_BENCHMARK_TREATMENTS = Object.freeze({
     PIAGENT_HELPERS_MODE: "recommend",
     PIAGENT_EXECUTION_BACKEND: "host"
   }),
+  "mechanical-core": Object.freeze({
+    PIAGENT_SOLVER_MODE: "shadow", PIAGENT_PHASE_TOOLS: "shadow", PIAGENT_AUTO_RECOVERY: "on",
+    PIAGENT_HELPERS_MODE: "recommend", PIAGENT_EXECUTION_BACKEND: "host", PIAGENT_INTELLIGENCE_ENGINE: "off"
+  }),
+  "intelligence-engine": Object.freeze({
+    PIAGENT_SOLVER_MODE: "shadow", PIAGENT_PHASE_TOOLS: "shadow", PIAGENT_AUTO_RECOVERY: "on",
+    PIAGENT_HELPERS_MODE: "recommend", PIAGENT_EXECUTION_BACKEND: "host", PIAGENT_INTELLIGENCE_ENGINE: "on"
+  }),
   "causal-phase-enforce": Object.freeze({
     PIAGENT_SOLVER_MODE: "shadow",
     PIAGENT_PHASE_TOOLS: "on",
@@ -49,7 +57,8 @@ export const PIAGENT_BENCHMARK_TREATMENTS = Object.freeze({
     PIAGENT_PHASE_TOOLS: "off",
     PIAGENT_AUTO_RECOVERY: "off",
     PIAGENT_HELPERS_MODE: "off",
-    PIAGENT_EXECUTION_BACKEND: "host"
+    PIAGENT_EXECUTION_BACKEND: "host",
+    PIAGENT_INTELLIGENCE_ENGINE: "off"
   })
 });
 

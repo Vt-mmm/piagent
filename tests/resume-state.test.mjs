@@ -8,6 +8,7 @@ import { describe, it } from "node:test";
 import { recordVerificationCheckpoint } from "../packages/piagent-core/extensions/task-runtime-audit.js";
 import { readTaskJournal, replayTaskCheckpoints, taskJournalPaths } from "../packages/piagent-core/extensions/task-journal.js";
 import { workingTreeSnapshot } from "../packages/piagent-core/extensions/task-state.js";
+import { compileCriterionGraph } from "../packages/piagent-core/extensions/criterion-graph.js";
 import { workingTreeEvidenceDigest } from "../packages/piagent-core/extensions/task-lifecycle.js";
 import { RESUME_CONTEXT_MAX_CHARS, buildTaskResumeContext, inspectTaskResumeState } from "../packages/piagent-core/runtime/recovery/resume-state.ts";
 import { createBoundTaskAuthority } from "../packages/piagent-core/runtime/policy/task-authority-runtime.ts";
@@ -90,6 +91,10 @@ describe("safe task resume state", () => {
     current.summary = `Resume a long bounded task ${"goal ".repeat(200)}`;
     current.expectedOutput = `A verified artifact ${"result ".repeat(100)}`;
     current.acceptanceCriteria = Array.from({ length: 12 }, (_entry, index) => `[C${index + 1}] ${"criterion ".repeat(40)}tail-${index + 1}`);
+    current.criterionGraph = compileCriterionGraph({
+      acceptanceCriteria: current.acceptanceCriteria, scope: current.scope, verifyCommands: current.verifyCommands,
+      changeMode: current.changeMode, mode: "criterion-graph", createdAt: current.createdAt
+    });
     current.workPlan[0].status = "done";
     current.workPlan[1].status = "in-progress";
     const resume = inspectTaskResumeState(cwd, current, current.sessionId);
@@ -103,6 +108,8 @@ describe("safe task resume state", () => {
     assert.match(projection.content, /Task: resume-101 \(resume-101-run-1\)/);
     assert.match(projection.content, /plan: done/);
     assert.match(projection.content, /implement: in-progress/);
+    assert.match(projection.content, /Execution map \(planning only\):/);
+    assert.match(projection.content, /criterion-01 behavior/);
     assert.match(projection.content, /Exact verifier commands:\n1\. npm test/);
     assert.match(projection.content, /Next safe action: continue-plan \(implement\)/);
     assert.doesNotMatch(projection.content, /session-resume/);

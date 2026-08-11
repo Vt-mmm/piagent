@@ -18,7 +18,7 @@
     { "id": "authority-manifest", "path": "packages/piagent-core/policy/authority-manifest.v1.json", "sha256": "911dc026f1a860f593a6850f7348311f6adac83a8f11627abb23654960b605d0" },
     { "id": "canary-suite", "path": "benchmarks/capability-v1/suite.json", "sha256": "378133ad8d10a47e580ecb62b1c0221d562d81a49c8992f3ab8caa46f5980ddc" },
     { "id": "pilot-suite", "path": "benchmarks/production-v1/suite.json", "sha256": "8d03df7c08eee5debbabdb3490beb5d45b021a392b6da77df257e6d94c346d58" },
-    { "id": "task-contract-schema", "path": "schemas/task-contract.schema.json", "sha256": "6a29d78ad98616edf936376590d3000aa4e12d9595c11fce63e70c5c42e2f759" },
+    { "id": "task-contract-schema", "path": "schemas/task-contract.schema.json", "sha256": "432a253af865f5c79527b3c7e5e65fc3b6cfea43d19f9e915f3bda792a358bb4" },
     { "id": "assurance-schema", "path": "schemas/benchmark-assurance-evidence.schema.json", "sha256": "5d937632d2cfff34dbbb781dd367bb78feb64c36d571c36ca15f2cc40c576af8" },
     { "id": "failure-and-operational-classifier", "path": "packages/piagent-core/benchmark/benchmark-forensics.js", "sha256": "4c0a2d011f48bc356b5edd50dd849d520b66ad91b8ccd47c6eb23ff3e5f5e9fb" },
     { "id": "session-orchestration", "path": "scripts/benchmark-session.mjs", "sha256": "3bcca9dbd5948dff639dc7061188937a6d8e6fe819e5642a23c56961639978ec" },

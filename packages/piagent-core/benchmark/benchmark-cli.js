@@ -23,7 +23,7 @@ Options:
   --model <provider/model>     Pin one model identity for both surfaces.
   --thinking <level>           off|minimal|low|medium|high|xhigh|max.
   --codex-mode <mode>          controlled isolated home (default) or native user configuration.
-  --piagent-treatment <id>     release-defaults, local-safe, causal-phase-enforce, candidate, or feature-off.
+  --piagent-treatment <id>     release-defaults, local-safe, mechanical-core, intelligence-engine, causal-phase-enforce, candidate, or feature-off.
   --allow-pi-auth-writeback    Allow same-account OAuth refresh CAS writeback under Pi's auth lock.
   --repeats <1-10>             Override the suite repeat count.
   --infrastructure-retries <n> Retry 0-3 startup failures with zero recorded usage.

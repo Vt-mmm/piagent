@@ -1,5 +1,6 @@
 import type { TaskContract } from "../../extensions/guard-types.ts";
 import { SEMANTIC_COMPACTION_MAX_CHARS } from "../runtime-limits.ts";
+import { criterionGraphGuidance } from "../../extensions/criterion-graph.js";
 
 const LEGACY_PROJECT_INSTRUCTIONS_START = "Before implementation:\n\n1. Load `.pi/piagent-profile.json` with `piagent_context`.";
 const LEGACY_PROJECT_INSTRUCTIONS_END = "18. If the bundled `pi-subagents` parent skill is available, use it for delegation patterns, review loops, native supervisor coordination, and safety boundaries.";
@@ -86,6 +87,7 @@ export function buildSemanticCompactionInstructions(task?: TaskContract): string
         "Acceptance criteria:",
         ...task.acceptanceCriteria.slice(0, 12).map((criterion, index) => `- ${index + 1}. ${compactCarryOverText(criterion, 280)}`),
         `Scope: ${compactCarryOverList(task.scope, 8, 80)}`,
+        ...(criterionGraphGuidance(task.criterionGraph, 8).length > 0 ? ["Execution map (planning only):", ...criterionGraphGuidance(task.criterionGraph, 8).map((line: string) => `- ${line}`)] : []),
         `Changed files: ${compactCarryOverList(task.changedFiles, 8, 100)}`,
         task.verifyCommands.length > 0
           ? ["Exact verify commands:", ...task.verifyCommands.slice(0, 8).map((command, index) => `${index + 1}. ${compactCarryOverText(command, 180)}`)].join("\n")

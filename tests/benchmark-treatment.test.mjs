@@ -12,9 +12,10 @@ test("parses and validates explicit Piagent benchmark treatments", () => {
   assert.equal(parseBenchmarkArgs([]).piagentTreatment, "release-defaults");
   assert.equal(parseBenchmarkArgs(["--piagent-treatment", "candidate"]).piagentTreatment, "candidate");
   assert.equal(parseBenchmarkArgs(["--piagent-treatment", "causal-phase-enforce"]).piagentTreatment, "causal-phase-enforce");
+  assert.equal(parseBenchmarkArgs(["--piagent-treatment", "intelligence-engine"]).piagentTreatment, "intelligence-engine");
   assert.throws(
     () => parseBenchmarkArgs(["--piagent-treatment", "unknown"]),
-    /release-defaults, local-safe, causal-phase-enforce, candidate, feature-off/
+    /release-defaults, local-safe, mechanical-core, intelligence-engine, causal-phase-enforce, candidate, feature-off/
   );
 });
 
@@ -56,4 +57,14 @@ test("keeps the phase causal treatment identical to local-safe except CAP-09 inp
   );
   assert.equal(baseline.PIAGENT_PHASE_TOOLS, "shadow");
   assert.equal(arm.PIAGENT_PHASE_TOOLS, "on");
+});
+
+test("keeps the intelligence causal arms identical except for the criterion engine", () => {
+  const baseline = piagentTreatment("mechanical-core").environment;
+  const arm = piagentTreatment("intelligence-engine").environment;
+  assert.deepEqual(Object.keys({ ...baseline, ...arm }).filter((key) => baseline[key] !== arm[key]), ["PIAGENT_INTELLIGENCE_ENGINE"]);
+  assert.equal(baseline.PIAGENT_INTELLIGENCE_ENGINE, "off");
+  assert.equal(arm.PIAGENT_INTELLIGENCE_ENGINE, "on");
+  assert.equal(baseline.PIAGENT_PHASE_TOOLS, "shadow");
+  assert.equal(arm.PIAGENT_PHASE_TOOLS, "shadow");
 });
