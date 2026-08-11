@@ -281,7 +281,7 @@ claim. The closed machine-readable contract is
 | `CF-FS6-02` | Exact-RC Migration gate, then Cohort A | Three retained Piagent/Codex Migration pairs on Luna Medium must pass the finite amendment before 20 maintainer tasks may start | Every pair passes the frozen correctness, usage, continuation, token and duration gates; then Cohort A has zero unbounded loop/safety escape, issue taxonomy and rollback rehearsal |
 | `CF-FS6-03` | Cohort B and usability | 100 internal attempts across five profiles plus five independent users including install/upgrade | Completion, comprehension, timing, false-block, recovery, and human findings |
 | `CF-FS6-04` | Platform and migration gate | Exact candidate on macOS arm64 and Linux x64; 1.2.17 -> RC -> 1.2.17 disposable migration/rollback | Same source/package identity and safe old-runtime sidecar behavior |
-| `CF-FS6-05` | Freeze `v1.3.0-rc.1` | Exact commit/package/suite/policy/model/graders and no-write evaluation matrix | Any later edit invalidates the RC and returns to the appropriate earlier gate |
+| `CF-FS6-05` | Freeze the surviving exact RC | Exact commit/package/suite/policy/model/graders and no-write evaluation matrix | RC.1 is historical after its stop; RC.2 may freeze only if every prior FS6 dependency passes, and any later edit invalidates it |
 
 FS6 exit checklist:
 

@@ -4,7 +4,21 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
-- No changes after the `v1.3.0-rc.1` candidate boundary.
+- No changes after the `v1.3.0-rc.2` candidate boundary.
+
+## v1.3.0-rc.2 - 2026-08-11
+
+### Finite FS6 correction
+
+- Added one intake-only efficiency correction after the exact RC.1 Migration
+  gate: map every operator criterion to implementation and focused-test
+  coverage, batch independent operations, and perform one criterion review
+  before the first exact verifier. No completion gate, continuation budget,
+  capability mode, benchmark evaluator, or scenario behavior was relaxed.
+- Bound the pinned Hono 4.13.1 zero-install E2 fixture into the clean source and
+  package, excluded the test-only `core-services.js` barrel from distribution,
+  and made the control-byte gate accept valid empty upstream JavaScript files
+  without weakening checks for non-empty binary source.
 
 ## v1.3.0-rc.1 - 2026-08-11
 

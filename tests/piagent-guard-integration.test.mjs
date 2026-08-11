@@ -369,6 +369,9 @@ describe("piagent guard integration", () => {
     assert.doesNotMatch(started.message.content, /Acceptance focus:|Pre-completion contract review:/);
     assert.ok(started.message.content.length < 2_000, `runtime intake should stay compact, got ${started.message.content.length} chars`);
     assert.match(started.message.content, /Do not re-read root AGENTS\.md or inspect Piagent\/platform files/);
+    assert.match(started.message.content, /privately map every operator criterion to implementation and focused-test coverage/);
+    assert.match(started.message.content, /batch independent reads or writes/);
+    assert.match(started.message.content, /criterion-by-criterion self-review, then run the exact verifier once/);
     assert.match(started.message.content, /src\/invoice\.ts/);
     assert.match(started.message.content, /test\/\*\*/);
     assert.match(started.message.content, /Existing public return elements in src\/invoice\.ts are names\/identifiers, not object values/);

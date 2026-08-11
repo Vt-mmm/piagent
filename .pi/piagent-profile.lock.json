@@ -115,18 +115,18 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:cd94accb34423d4684c24b5cf30ec97383caeff00ee9404f94000169092d8555",
+    "packageDigest": "sha256:d978ea5a9abc69f013aadde4b22fddd8e6f8daadb8b80ef83f086460ca389a60",
     "packageSource": "../",
-    "packageVersion": "1.3.0-rc.1",
+    "packageVersion": "1.3.0-rc.2",
     "runtimeFiles": [
       {
-        "byteSize": 4607,
-        "digest": "sha256:9a371e6ec6b25f8312de41a0226d230a625afeb5ac3a7ad8116882ea7ba7212f",
+        "byteSize": 4665,
+        "digest": "sha256:881d01488137aabffa0bb6618ce60eb36f94057562c8c012acf27dc1edc8040e",
         "path": "package.json"
       },
       {
         "byteSize": 989,
-        "digest": "sha256:9985f51ae9f3c2c348104b795e7fded146d0e2eb18dd9242b5c1c60ccf6f0be6",
+        "digest": "sha256:b2aad50f4cf2c8882032ad2d1d792e18d41905d5cd35fb2b3a9dfd3eb71628cc",
         "path": "packages/piagent-core/package.json"
       },
       {
@@ -505,8 +505,8 @@
         "path": "packages/piagent-core/runtime/registration/task-evidence-tools.ts"
       },
       {
-        "byteSize": 29913,
-        "digest": "sha256:6ed59ecd194631685341d52b1f94143431640236415930e8d41574b3b91feb3b",
+        "byteSize": 30092,
+        "digest": "sha256:13f0862dee0e6712f7fef01132021092cfa5890c8b956a19ffc3e2cebe0ef084",
         "path": "packages/piagent-core/runtime/registration/task-start-tool.ts"
       },
       {

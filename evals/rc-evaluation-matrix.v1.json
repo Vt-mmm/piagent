@@ -12,7 +12,7 @@
   },
   "versions": {
     "piHost": "0.82.0",
-    "piagentPackage": "1.3.0-rc.1",
+    "piagentPackage": "1.3.0-rc.2",
     "taskContract": 2,
     "acceptanceReceipt": 1,
     "runtimeModelSnapshot": 1,

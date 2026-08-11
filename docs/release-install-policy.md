@@ -46,7 +46,7 @@ The machine-readable transition is `evals/fs-release-transition.v1.json` and is
 checked locally with `npm run release:transition`. It separates three permissions
 that must never be inferred from one another:
 
-1. **RC assembly** may prepare a clean local `1.3.0-rc.1` commit/package and run
+1. **RC assembly** may prepare a clean local `1.3.0-rc.2` commit/package and run
    privacy/install/readback checks.
 2. **Beta/cohort execution** remains blocked until the exact RC passes three
    retained `resumable-migration-runner` `piagent`/`codex-cli` pairs on Luna
@@ -95,7 +95,7 @@ Use this flow when the team needs both terminal commands and the Pi package:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.3.0-rc.1
+npm install -g --ignore-scripts @piagent/platform@1.3.0-rc.2
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -121,7 +121,7 @@ bash scripts/install-global.sh --stable
 Use this only when terminal commands are not needed:
 
 ```bash
-pi install git:github.com/Vt-mmm/piagent@v1.3.0-rc.1
+pi install git:github.com/Vt-mmm/piagent@v1.3.0-rc.2
 ```
 
 Direct `pi install` does not create `piagent-*` commands on `PATH`.

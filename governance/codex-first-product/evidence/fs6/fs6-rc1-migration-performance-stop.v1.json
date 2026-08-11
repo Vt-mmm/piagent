@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "workItem": "CF-FS6-02",
+  "recordedAt": "2026-08-11T08:42:32.883Z",
+  "claimTier": "diagnostic-beta-unlock-only-no-token-or-release-claim",
+  "candidate": {
+    "version": "1.3.0-rc.1",
+    "sourceCommitSha": "9faf63d808e7ede8f5b1b5d5c814b91bd443842e",
+    "sourceGitTreeOid": "f4df960a6a65888c1464f6a790c5bd80a76f0ea0",
+    "candidateDigest": "sha256:32ae9a7492d5b6922a71335c5f43a280a307919cf6eea948c8194c9b5b974e7d",
+    "tarballSha512": "1f143d42065c083700b95565ecc718da31fdec0950bee669f60bde2f415a1ebc034c4f7d7e836a8e40d75b31163033100b32269f6dea2ee80a1da61a7140b026",
+    "packageEntries": 1206
+  },
+  "protocol": {
+    "suite": "capability-v1",
+    "suiteDigest": "bb2e97a83a8a3d06976bcc94259e60c3513626704bd463d87c9808e66fe5152c",
+    "scenario": "resumable-migration-runner",
+    "surfaces": ["piagent", "codex-cli"],
+    "model": "openai-codex/gpt-5.6-terra",
+    "thinking": "medium",
+    "piagentTreatment": "release-defaults",
+    "plannedPairs": 3,
+    "timeoutSeconds": 360,
+    "infrastructureRetries": 0,
+    "operatorAuthorization": "explicit-full-CF-FS6-execution",
+    "runId": "capability-v1-20260811T083710Z-252c64"
+  },
+  "preflight": {
+    "status": "ready",
+    "providerSessionsStarted": 0,
+    "sourceClean": true,
+    "candidateProvenanceMatched": true,
+    "piVersion": "0.82.0",
+    "codexVersion": "codex-cli 0.147.0-alpha.6.5"
+  },
+  "acceptedPair": {
+    "repeat": 1,
+    "piagent": {
+      "quality": 10,
+      "scope": 10,
+      "safety": 10,
+      "workflow": 10,
+      "freshTokens": 35515,
+      "durationSeconds": 187.379,
+      "systemContinuations": 0,
+      "blockedValidCallsUpperBound": 0,
+      "toolCalls": 13,
+      "messages": 26,
+      "infrastructureRetries": 0
+    },
+    "codexCli": {
+      "quality": 10,
+      "scope": 10,
+      "safety": 10,
+      "freshTokens": 21688,
+      "durationSeconds": 114.709,
+      "toolCalls": 6,
+      "messages": 4,
+      "infrastructureRetries": 0
+    },
+    "ratios": {
+      "freshTokens": 1.6375414976023608,
+      "freshTokenCeiling": 1.25,
+      "duration": 1.633516114690216,
+      "durationCeiling": 1.5
+    },
+    "gate": "failed-performance"
+  },
+  "observedCausalTrace": {
+    "firstVerifierPassedAt": "2026-08-11T08:39:49.071Z",
+    "postPassMutationAt": "2026-08-11T08:40:10.246Z",
+    "secondVerifierPassedAt": "2026-08-11T08:40:13.429Z",
+    "autoCompletedAt": "2026-08-11T08:40:16.439Z",
+    "postFirstVerifierFreshTokens": 12257,
+    "postFirstVerifierToAutoCompleteSeconds": 27.368,
+    "systemContinuationContribution": 0,
+    "finding": "The model missed one operator contract edge before the first verifier, then performed a correct post-pass edit and second verifier. The extra turns included a final prompt-cache miss. This is an intake and first-pass planning inefficiency, not a quality, safety, workflow, semantic-review, or recovery-loop failure."
+  },
+  "finiteStop": {
+    "completedAcceptedSessions": 2,
+    "expectedSessions": 6,
+    "action": "interrupted-after-first-failed-pair",
+    "signal": "SIGINT",
+    "ledgerRecords": 2,
+    "ledgerDigest": "4fbf1744fdf0ff04cea154237dedd9a5fdb32e010148a9407b628fbb92cb22cc",
+    "thirdSession": "started-before-pair-output-then-interrupted; unaccepted unknown-usage infrastructure record; never resume or include in comparison",
+    "cohortAOpened": false
+  },
+  "privateEvidenceDigests": {
+    "runManifestSha256": "e4de57a437670e8cac1ff52e9a2513abfd2a1ad607140e15f15b36dc433cdac5",
+    "runsLedgerSha256": "61969477c9d8f73b5315d8c78713c48f6bf9d378f963da31a8aea8eced929a4a",
+    "interruptedRecordSha256": "5040eeeafe60b9d5bff6b6fc6545d02284ce424d9e6b85557702b787f95d1d30",
+    "infrastructureLedgerSha256": "07f58e1c1cc1b9ae7693e30e31ad1bd0a858526f1a3f9e9b39dd0368baa7617b",
+    "rawEvidenceReleaseEligible": false
+  },
+  "singleAllowedCorrection": {
+    "candidate": "1.3.0-rc.2",
+    "id": "FS6-RC2-FIRST-PASS-CRITERIA-MAP",
+    "scope": "Runtime intake tells the model to privately map every operator criterion to implementation and focused-test coverage, batch independent reads or writes, and perform one criterion-by-criterion self-review before the first exact verifier.",
+    "prohibited": ["gate relaxation", "capability deletion", "extra continuation", "benchmark evaluator change", "scenario special case"],
+    "providerBudgetAfterCorrection": "one new exact three-pair RC.2 gate; same failure class closes FS6 as NO-GO with no RC.3"
+  },
+  "verdict": {
+    "rc1ExactMigrationGatePassed": false,
+    "fs6CohortAllowed": false,
+    "fs6Complete": false,
+    "nextWorkItem": "build exact 1.3.0-rc.2 with the single causal correction, then rerun the frozen gate once"
+  }
+}

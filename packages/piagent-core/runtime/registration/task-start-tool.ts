@@ -481,7 +481,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
         "Root project instructions are loaded. Do not re-read root AGENTS.md or inspect Piagent/platform files; work directly in relevant source/tests with ordinary tools.",
         task.changeMode === "read-only"
           ? "Stay read-only. Runtime records targeted reads and completion evidence; do not call task-management tools."
-          : "Finish intended edits, then run the exact verifier once; rerun only after a later mutation. Runtime records evidence and completion; do not call task-management tools."
+          : "Before mutating, privately map every operator criterion to implementation and focused-test coverage; batch independent reads or writes. Finish intended edits and one criterion-by-criterion self-review, then run the exact verifier once; rerun only after a later mutation. Runtime records evidence and completion; do not call task-management tools."
       ].join("\n"))
     };
   }
