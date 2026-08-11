@@ -115,18 +115,18 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:372fc33949abc2f6e0d801467ee86b7765aecc5fcc5c55bcfcc6b0977dbeb78b",
+    "packageDigest": "sha256:347ca5d242d4ee559e74503e01a70e24c791c9195749157460cc3a1103799a42",
     "packageSource": "../",
-    "packageVersion": "1.3.0-rc.2",
+    "packageVersion": "1.3.0-ie.1",
     "runtimeFiles": [
       {
         "byteSize": 4665,
-        "digest": "sha256:881d01488137aabffa0bb6618ce60eb36f94057562c8c012acf27dc1edc8040e",
+        "digest": "sha256:06feaaf6e62ec7da04074db066143474d4fc0aad3badd62609db7f3dc49d0be7",
         "path": "package.json"
       },
       {
         "byteSize": 989,
-        "digest": "sha256:b2aad50f4cf2c8882032ad2d1d792e18d41905d5cd35fb2b3a9dfd3eb71628cc",
+        "digest": "sha256:c49e07829ac3f7519313f1a90907a0d578832b8cbee600bd5c0954f4f5a191a8",
         "path": "packages/piagent-core/package.json"
       },
       {

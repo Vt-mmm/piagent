@@ -4,7 +4,25 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
-- No changes after the `v1.3.0-rc.2` candidate boundary.
+- No changes after the `v1.3.0-ie.1` candidate boundary.
+
+## v1.3.0-ie.1 - 2026-08-11
+
+### Intelligence-engine candidate
+
+- Added a deterministic Criterion Graph projection and bounded current-source
+  context delivery so Luna Medium can plan against operator criteria without a
+  repository-index dependency or an extra model turn. Mechanical task truth,
+  exact verification, current-tree evidence and permissions remain unchanged.
+- Kept every advanced capability in the package while broad defaults leave
+  solver and phase tools in shadow, acceptance and performance assurance
+  advisory, semantic repair off, helpers recommend-only and parent routing off.
+- Added a fail-closed IE6 release protocol for Piagent versus controlled Codex
+  CLI on Luna Medium: 18 production families, three repeats, two surfaces, 108
+  sessions, six-session inspected chunks, retry zero and explicit platform,
+  cohort, private-holdout, long-horizon and operator gates.
+- Preserved RC.1 and RC.2 as immutable historical NO-GO evidence. The IE train
+  uses its own prerelease identity and does not relabel or resume either RC.
 
 ## v1.3.0-rc.2 - 2026-08-11
 

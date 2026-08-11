@@ -78,6 +78,7 @@ describe("package distribution", () => {
     assert.ok(entries.includes("benchmarks/production-v1/variant.mjs"));
     assert.ok(entries.includes("scripts/benchmark-runner.mjs"));
     assert.ok(entries.includes("scripts/rc-readiness-evaluation.mjs"));
+    assert.ok(entries.includes("scripts/ie6-release-freeze.mjs"));
     assert.ok(entries.includes("scripts/private-holdout-readiness.mjs"));
     assert.ok(entries.includes("scripts/fs4-readiness-evaluation.mjs"));
     assert.ok(entries.includes("evals/rc-evaluation-matrix.v1.json"));
@@ -88,11 +89,13 @@ describe("package distribution", () => {
     assert.ok(entries.includes("evals/fs4-readiness-matrix.v1.json"));
     assert.ok(entries.includes("evals/fs5-pilot-protocol.v1.json"));
     assert.ok(entries.includes("evals/fs5-pilot-protocol.v5.json"));
+    assert.ok(entries.includes("evals/ie6-release-protocol.v1.json"));
     assert.ok(entries.includes("evals/fs5-causal-arm.v1.json"));
     assert.ok(entries.includes("schemas/benchmark-assurance-evidence.schema.json"));
     assert.ok(entries.includes("packages/piagent-core/benchmark/benchmark-core.js"));
     assert.ok(entries.includes("packages/piagent-core/benchmark/fs4-readiness-gates.js"));
     assert.ok(entries.includes("packages/piagent-core/benchmark/fs5-pilot-protocol.js"));
+    assert.ok(entries.includes("packages/piagent-core/benchmark/ie6-release-protocol.js"));
     assert.ok(entries.includes("packages/piagent-core/benchmark/fs5-causal-arm.js"));
     assert.ok(entries.includes("packages/piagent-core/benchmark/benchmark-report.js"));
     assert.equal(entries.some((entry) => /(?:^|\/)\.env(?:$|\.)/.test(entry)), false);
@@ -208,6 +211,7 @@ describe("package distribution", () => {
     assert.equal(files.has("scripts/piagent-cli.mjs"), true);
     assert.equal(files.has("scripts/benchmark-runner.mjs"), true);
     assert.equal(files.has("scripts/rc-readiness-evaluation.mjs"), true);
+    assert.equal(files.has("scripts/ie6-release-freeze.mjs"), true);
     assert.equal(files.has("scripts/private-holdout-readiness.mjs"), true);
     assert.equal(files.has("scripts/fs4-readiness-evaluation.mjs"), true);
     assert.equal(files.has("evals/rc-evaluation-matrix.v1.json"), true);
@@ -218,11 +222,13 @@ describe("package distribution", () => {
     assert.equal(files.has("evals/fs4-readiness-matrix.v1.json"), true);
     assert.equal(files.has("evals/fs5-pilot-protocol.v1.json"), true);
     assert.equal(files.has("evals/fs5-pilot-protocol.v5.json"), true);
+    assert.equal(files.has("evals/ie6-release-protocol.v1.json"), true);
     assert.equal(files.has("evals/fs5-causal-arm.v1.json"), true);
     assert.equal(files.has("schemas/benchmark-assurance-evidence.schema.json"), true);
     assert.equal(files.has("packages/piagent-core/benchmark/benchmark-core.js"), true);
     assert.equal(files.has("packages/piagent-core/benchmark/fs4-readiness-gates.js"), true);
     assert.equal(files.has("packages/piagent-core/benchmark/fs5-pilot-protocol.js"), true);
+    assert.equal(files.has("packages/piagent-core/benchmark/ie6-release-protocol.js"), true);
     assert.equal(files.has("packages/piagent-core/benchmark/fs5-causal-arm.js"), true);
     assert.equal(files.has("packages/piagent-core/benchmark/benchmark-report.js"), true);
     assert.equal(files.has("benchmarks/core-v1/suite.json"), true);

@@ -1,6 +1,6 @@
 ---
 plan_id: codex-first-product
-program_status: intelligence-engine-ie5-complete-ie6-protocol-pending
+program_status: intelligence-engine-ie6-freeze-ready-provider-closed
 current_workstream: IE
 current_phase: IE6
 current_work_item: CF-IE6-01
@@ -9,8 +9,8 @@ last_updated: 2026-08-11
 execution_mode: controlled-work-item-sessions
 canonical_roadmap: 16-intelligence-engine-rebaseline-roadmap.md
 canonical_tracker_path: governance/codex-first-product/STATUS.md
-candidate_state: ie5-canaries-passed-statistical-protocol-pending
-candidate_digest: 073bbbc819a43247e4fd91602d7fffcf5363d615590dcee9b7c73b28da215f13
+candidate_state: ie6-freeze-ready-private-receipt-pending
+candidate_digest: null
 policy_manifest_version: authority-v1
 ---
 
@@ -24,15 +24,15 @@ This is the only mutable progress tracker for the plan. Phase files define inten
 |---|---|
 | Program | v1.3 intelligence-engine rebaseline; the prior FS6 finite release plan remains terminal NO-GO historical evidence |
 | Canonical roadmap | [`16-intelligence-engine-rebaseline-roadmap.md`](16-intelligence-engine-rebaseline-roadmap.md) |
-| Current phase | `IE6` — provider work stopped after both bounded Luna Medium canaries passed; statistical protocol and exact RC are not yet frozen |
-| Active work item | `CF-IE6-01` — freeze the release benchmark protocol, representative family set, repeats/chunks, exact package identity, platform/cohort gates and abort rules before any further provider execution |
+| Current phase | `IE6` — statistical protocol and `1.3.0-ie.1` identity implemented; provider remains closed pending a clean external freeze receipt and all field gates |
+| Active work item | `CF-IE6-01` — commit the provider-free protocol/candidate, then generate the exclusive freeze receipt that binds the clean commit, tarball and production preflight |
 | Owner/session | `root`; operator approved the complete intelligence-engine implementation path on `2026-08-11` with checklist continuity across sessions |
-| Candidate | Intelligence-engine commit `effc58fca7582d0f12ea0fbd55452875a1ed1070`, clean candidate `073bbbc8…15f13` across 1,420 files; IE5 diagnostic canaries passed, but this is not yet a frozen release artifact |
+| Candidate | `1.3.0-ie.1` source/protocol locally green but not yet frozen. The exact identity is valid only after `/Users/vtamm/.pi/releases/ie6/1.3.0-ie.1/freeze-receipt.json` is written from a clean commit by the checked freeze tool. |
 | Policy manifest | `authority-v1`, digest `sha256:28112cb6…7393`; current identity independently revalidated by FS3 gate audit `59e878c8…aa13` |
 | Provider authority | Closed after the two permitted IE5 pairs. No further provider run is authorized until `CF-IE6-01` freezes the exact RC/protocol and the operator approves the bounded chunks. Historical RC.1/RC.2 and IE5 runs must never be resumed or relabeled. |
 | Last verified release evidence | Diagnostic only: Fullstack Piagent/Codex fresh ratio `0.4881`, duration ratio `0.8977`; Migration fresh ratio `0.5948`, duration ratio `0.9248`. Both surfaces had grade/scope/safety 10; Piagent had workflow 10, complete critical acceptance, zero retry/continuation/block. Repeat and evidence-size gates correctly deny a release/token claim. |
-| Blocker | No exact release artifact or frozen statistical protocol yet; one repeat across two families has no confidence interval, platform, cohort or generalization authority. |
-| Next exact action | Complete `CF-IE6-01` provider-free: freeze the exact package/commit/policy, representative family and repeat matrix, six-session chunk boundary, platform/cohort gates, stop rules and release dossier schema. Do not start the 108-session release run from this tracker state. |
+| Blocker | Freeze receipt still pending; after it exists, Linux x64, Cohorts A/B/C, five-person pilot, private holdout, long horizon and explicit chunk approval remain release blockers. |
+| Next exact action | Commit the locally green `1.3.0-ie.1` protocol candidate, require a clean tree, then run `node scripts/ie6-release-freeze.mjs --output /Users/vtamm/.pi/releases/ie6/1.3.0-ie.1/freeze-receipt.json`. Do not start a provider chunk. |
 
 The old P0-P7 unattended autopilot and the exhausted FS6 provider plan are not
 active for this workstream. Resume from the first non-complete IE item in this
@@ -48,7 +48,7 @@ tracker and preserve every finite dependency and stop rule.
 | IE3 Production critical path | `complete`; graph planning defaults on, speculative capabilities retain broad shadow/advisory modes and strict opt-in | No | Zero graph-triggered provider turns; shared continuation ceiling remains one | Complete |
 | IE4 Local causal gate | `complete`; mechanical versus intelligence differs by one switch and the full local gate passes | No | `npm run verify` PASS, 1958/1958; focused 24/24; guard/resume 108/108; architecture 202 | Complete |
 | IE5 Medium canary | `complete`; Fullstack confirmation and Migration both passed every finite engineering gate on clean commit `effc58f…` | Yes, exactly two final pairs | Correctness/workflow 10, fresh `0.4881`/`0.5948`, duration `0.8977`/`0.9248`, no retry/unknown/loop | Complete; do not add another canary |
-| IE6 Release evidence | `not-started`; provider closed pending protocol freeze | No until approved chunks | Frozen statistical protocol, cohorts, platforms, exact artifact | Complete `CF-IE6-01` provider-free |
+| IE6 Release evidence | `in-progress`; protocol, identity and local gates implemented; clean external freeze receipt pending | No until all prerequisites and separately approved chunks | Frozen statistical protocol, cohorts, platforms, exact artifact | Commit and generate the provider-free freeze receipt |
 
 ## Full-source phase map
 
@@ -732,23 +732,23 @@ Untracked production import audit: 15 of 16 modules are reached directly by runt
 
 ```text
 Work item: CF-IE6-01
-State: not started; IE5 bounded canaries complete and provider work stopped before statistical release evidence
+State: implemented/freeze-ready; provider closed and private exact-candidate receipt pending
 Owner/session: root / operator-approved intelligence-engine implementation and bounded Luna Medium canary, 2026-08-11
-Baseline tree/status: clean commit effc58fca7582d0f12ea0fbd55452875a1ed1070; candidate 073bbbc819a43247e4fd91602d7fffcf5363d615590dcee9b7c73b28da215f13; 1,420 files
-Candidate state/digest: IE5 canaries passed; diagnostic only, not yet a frozen release artifact
+Baseline tree/status: IE5 source commit effc58fca7582d0f12ea0fbd55452875a1ed1070; current `1.3.0-ie.1` protocol candidate awaits its clean commit
+Candidate state/digest: freeze-ready / resolved only by the external provider-free receipt after commit
 Policy manifest version: authority-v1; intelligence-engine treatment differs from mechanical-core only by PIAGENT_INTELLIGENCE_ENGINE=on
-Changed: additive Criterion Graph/context selection plus one bounded current-file delivery correction; speculative capabilities remain shadow/advisory and strict opt-in
+Changed: additive Criterion Graph/context selection, bounded current-file delivery, separate `1.3.0-ie.1` identity and closed IE6 release protocol/freezer; speculative capabilities remain shadow/advisory and strict opt-in
 Out of scope: resuming RC.1/RC.2 or any IE5 run; third Fullstack/Migration pair; production/108-session run before protocol freeze; cohorts/private holdout/tag/push/publish
-Verified: full local 1958/1958; context/Pi/causal 35/35; typecheck and architecture 203 PASS; Fullstack and Migration grade/scope/safety/workflow 10 with complete critical acceptance, zero retry/continuation/block
+Verified: full local gate PASS; IE6/package/release focused 22/22 then freeze/protocol/package 20/20; release identity PASS; 1.2.17 upgrade/rollback PASS; typecheck/docs/site/architecture 204/diff PASS; IE5 Fullstack and Migration remain immutable diagnostic pass evidence
 Evidence: Fullstack /Users/vtamm/.pi/benchmarks/cf-ie5-fullstack-confirm-effc58f-v1 (report 0d74b9cf…c03d, runs 16407141…6b91); Migration /Users/vtamm/.pi/benchmarks/cf-ie5-migration-effc58f-v1 (report 7e4fa7f4…8b3b, runs be63cc23…2341)
 Feature modes/authority: Criterion Graph on; solver/phase shadow; acceptance/performance advisory; semantic repair broad off; helpers recommend; parent routing off
 Schema/migration: Task Contract v2 additive graph only; legacy contracts remain readable; exact verifier/current-tree/terminal truth unchanged
 Rollback: PIAGENT_INTELLIGENCE_ENGINE=off restores mechanical context behavior without deleting capability source or rewriting task evidence
-Decision: IE5 passes. Fullstack fresh/duration ratios 0.4881/0.8977; Migration 0.5948/0.9248. Results are diagnostic because each family has one repeat.
-Known limitation: no confidence interval, platform/cohort/generalization evidence or exact release package identity; context-window peak remains unavailable
-Stop-rule audit: exactly one evidence-backed Fullstack confirmation and one unlocked Migration pair ran; no retry, third pair or production expansion occurred
-Blocker: CF-IE6-01 protocol/artifact freeze and later explicit bounded-chunk authority
-Next exact action: provider-free IE6 protocol/package/platform/cohort checklist freeze; no provider call from this state
+Decision: IE5 passes diagnostically; IE6 protocol is implemented but release execution remains unauthorized
+Known limitation: no exact freeze receipt yet; no Linux/cohort/human/private-holdout/long-horizon confidence evidence; context-window peak remains unavailable
+Stop-rule audit: protocol hard-codes 108 sessions into 18 six-session inspected chunks, retry zero and no continue-on-failure; current authorization fields remain false
+Blocker: private freeze receipt, then every field prerequisite and explicit operator chunk approval
+Next exact action: commit, require clean status, execute the provider-free freeze tool once, and preserve its receipt without editing the candidate
 ```
 
 ## Recent FS0 handoffs — non-executable

@@ -65,7 +65,7 @@ Allowed states: `not-started`, `in-progress`, `blocked`, `implemented`,
 | CF-IE4-02 | `complete` | Full local/type/package/install/migration/rollback gate on exact tree | Any required local gate fails |
 | CF-IE5-01 | `complete` | One Fullstack Luna Medium Piagent/Codex pair plus at most one evidence-backed confirmation after a code change | Any confirmation finite gate fails |
 | CF-IE5-02 | `complete` | One Migration Luna Medium Piagent/Codex pair | IE5-01 fails or IE4 incomplete |
-| CF-IE6-01 | `not-started` | Frozen statistical protocol and exact release candidate | IE5 incomplete |
+| CF-IE6-01 | `implemented` | Frozen statistical protocol and exact release candidate | IE5 incomplete or freeze receipt does not bind the clean commit/package/preflight |
 | CF-IE6-02 | `blocked` | Chunked paired benchmark, cohorts, platforms and release dossier | Upstream release gate incomplete |
 
 ## Promotion map
@@ -175,3 +175,32 @@ Allowed states: `not-started`, `in-progress`, `blocked`, `implemented`,
   cannot authorize a token-saving, generalization or release claim. Provider
   work stops here. IE6 must first freeze the exact RC, representative family
   set, repeat/chunk protocol, platform/cohort gates and abort rules.
+
+## IE6 protocol boundary — 2026-08-11
+
+- `evals/ie6-release-protocol.v1.json` is the only active statistical release
+  protocol. It does not rewrite the historical RC transition. The new package
+  identity is `1.3.0-ie.1`; RC.1 and RC.2 remain immutable NO-GO history.
+- The protocol fixes Piagent versus controlled `codex-cli`, Luna Medium,
+  `intelligence-engine`, all 18 `production-v1` families, three repeats, two
+  surfaces, 108 sessions, retry zero and 18 inspected chunks of at most six
+  sessions.
+- The release gate requires quality/reliability/workflow/category at least 9.5,
+  safety 10, every outcome above 9.5, all 18 paired families, at least 12
+  comparable efficiency families, no paired regression or unknown paid usage,
+  and fresh-token ratio upper 95% confidence bound at most 1. Token-saving
+  wording additionally requires the upper bound to be below 1.
+- `scripts/ie6-release-freeze.mjs` is provider-free. On a clean commit it reruns
+  the full local gate and release identity, builds and reads back the tarball,
+  runs production preflight with zero provider sessions, and writes an exclusive
+  private receipt outside the repository. Any artifact, source, version, suite,
+  policy or configuration drift fails closed.
+- Provider execution remains false until macOS arm64 and Linux x64 evidence,
+  1.2.17 upgrade/rollback, Cohorts A/B/C (20/100/200), five independent people,
+  private family-disjoint holdout, long-horizon interruption/resume and explicit
+  operator chunk approval all exist.
+- `CF-IE6-01` becomes complete only when the private freeze receipt at
+  `/Users/vtamm/.pi/releases/ie6/1.3.0-ie.1/freeze-receipt.json` binds the clean
+  candidate commit, materialized content digest, tarball SHA-512, suite/config
+  digests and zero provider sessions. The receipt is deliberately outside the
+  candidate; updating this roadmap after freeze would invalidate it.

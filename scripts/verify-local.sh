@@ -243,6 +243,8 @@ required_files=(
   "$ROOT/tests/private-holdout-readiness.test.mjs"
   "$ROOT/tests/fs4-readiness-gates.test.mjs"
   "$ROOT/tests/fs5-pilot-protocol.test.mjs"
+  "$ROOT/tests/ie6-release-protocol.test.mjs"
+  "$ROOT/tests/ie6-release-freeze.test.mjs"
   "$ROOT/tests/fs5-causal-arm.test.mjs"
   "$ROOT/tests/fs-release-transition.test.mjs"
   "$ROOT/schemas/benchmark-assurance-evidence.schema.json"
@@ -258,9 +260,11 @@ required_files=(
   "$ROOT/evals/fs5-pilot-protocol.v3.json"
   "$ROOT/evals/fs5-pilot-protocol.v4.json"
   "$ROOT/evals/fs5-pilot-protocol.v5.json"
+  "$ROOT/evals/ie6-release-protocol.v1.json"
   "$ROOT/evals/fs5-causal-arm.v1.json"
   "$ROOT/evals/fs-release-transition.v1.json"
   "$ROOT/packages/piagent-core/benchmark/fs5-pilot-protocol.js"
+  "$ROOT/packages/piagent-core/benchmark/ie6-release-protocol.js"
   "$ROOT/packages/piagent-core/benchmark/fs5-causal-arm.js"
   "$ROOT/packages/piagent-core/benchmark/fs-release-transition.js"
   "$ROOT/benchmarks/production-v1/suite.json"
@@ -642,6 +646,8 @@ node --check "$ROOT/packages/piagent-core/benchmark/benchmark-assurance.js" >/de
 node --check "$ROOT/packages/piagent-core/benchmark/benchmark-comparison.js" >/dev/null
 node --check "$ROOT/packages/piagent-core/benchmark/benchmark-report.js" >/dev/null
 node --check "$ROOT/packages/piagent-core/benchmark/benchmark-suite.js" >/dev/null
+node --check "$ROOT/packages/piagent-core/benchmark/ie6-release-protocol.js" >/dev/null
+node --check "$ROOT/scripts/ie6-release-freeze.mjs" >/dev/null
 node --check "$ROOT/packages/piagent-core/security/sensitive-data.js" >/dev/null
 node --check "$ROOT/packages/piagent-core/capabilities/capability-core.js" >/dev/null
 node --check "$ROOT/packages/piagent-core/capabilities/capability-sources.js" >/dev/null

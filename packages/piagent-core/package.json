@@ -1,6 +1,6 @@
 {
   "name": "@piagent/core",
-  "version": "1.3.0-rc.2",
+  "version": "1.3.0-ie.1",
   "type": "module",
   "private": true,
   "license": "MIT",

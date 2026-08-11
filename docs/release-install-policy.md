@@ -40,13 +40,29 @@ paired quality benchmark, stable tag/source identity, and explicit operator
 approval. The evaluator cannot commit, tag, push, publish, promote docs, or
 configure providers.
 
-### Finite 1.3 RC transition
+### Intelligence-engine 1.3 candidate transition
+
+The active machine-readable protocol is
+`evals/ie6-release-protocol.v1.json`. The candidate identity is
+`1.3.0-ie.1`; it is separate from the exhausted RC.1/RC.2 train. The protocol
+requires Piagent and controlled `codex-cli` on Luna Medium, all 18 public
+production families, three repeats, two surfaces, retry zero and inspection
+after every six sessions. Provider execution remains blocked until the exact
+package, macOS and Linux gates, rollback, Cohorts A-C, five independent users,
+private family-disjoint holdout, long-horizon interruption/resume evidence and
+explicit operator chunk approval all exist.
+
+The current IE5 canaries are diagnostic only. They authorize protocol and local
+candidate assembly, not a token-saving claim, cohort, tag, push, publish or
+public documentation promotion.
+
+### Historical finite 1.3 RC transition
 
 The machine-readable transition is `evals/fs-release-transition.v1.json` and is
 checked locally with `npm run release:transition`. It separates three permissions
 that must never be inferred from one another:
 
-1. **RC assembly** may prepare a clean local `1.3.0-rc.2` commit/package and run
+1. **RC assembly** could prepare a clean local `1.3.0-rc.2` commit/package and run
    privacy/install/readback checks.
 2. **Beta/cohort execution** remains blocked until the exact RC passes three
    retained `resumable-migration-runner` `piagent`/`codex-cli` pairs on Luna
@@ -95,7 +111,7 @@ Use this flow when the team needs both terminal commands and the Pi package:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.0
-npm install -g --ignore-scripts @piagent/platform@1.3.0-rc.2
+npm install -g --ignore-scripts @piagent/platform@1.3.0-ie.1
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -121,7 +137,7 @@ bash scripts/install-global.sh --stable
 Use this only when terminal commands are not needed:
 
 ```bash
-pi install git:github.com/Vt-mmm/piagent@v1.3.0-rc.2
+pi install git:github.com/Vt-mmm/piagent@v1.3.0-ie.1
 ```
 
 Direct `pi install` does not create `piagent-*` commands on `PATH`.
