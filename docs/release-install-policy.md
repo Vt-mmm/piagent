@@ -56,8 +56,11 @@ The completed IE7 production run is exact public-regression evidence for its
 frozen runtime and policy. It does not prove private-holdout generalization or
 production stability. Tag `v1.3.0-ie.7` failed in the deterministic publish-job
 test phase before npm was reached. `v1.3.0-ie.8` changes only that distribution
-job (complete tag checkout plus the Linux `ripgrep` prerequisite); it does not
-relabel the IE7 measurement as an exact IE8 performance run.
+job (complete tag checkout plus the Linux `ripgrep` prerequisite); IE9 adds
+installed-package parity for TypeScript-backed terminal commands and resolves
+the benchmark source from the matching exact Pi package Git clone. Neither
+distribution correction relabels the IE7 measurement as an exact IE8/IE9
+performance run.
 
 ### Historical finite 1.3 RC transition
 
@@ -114,7 +117,7 @@ Use this flow when the team needs both terminal commands and the Pi package:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.84.1
-npm install -g --ignore-scripts @piagent/platform@1.3.0-ie.8
+npm install -g --ignore-scripts @piagent/platform@1.3.0-ie.9
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -140,7 +143,7 @@ bash scripts/install-global.sh --stable
 Use this only when terminal commands are not needed:
 
 ```bash
-pi install git:github.com/Vt-mmm/piagent@v1.3.0-ie.8
+pi install git:github.com/Vt-mmm/piagent@v1.3.0-ie.9
 ```
 
 Direct `pi install` does not create `piagent-*` commands on `PATH`.

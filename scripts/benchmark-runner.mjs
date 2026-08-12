@@ -27,7 +27,8 @@ function terminate(child, signal) {
 
 function runChild(script, argv, env, cleanup) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [script, ...argv], {
+    const loader = path.join(path.dirname(script), "register-typescript-loader.mjs");
+    const child = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", "--import", loader, script, ...argv], {
       cwd: process.cwd(),
       env,
       detached: process.platform !== "win32",
