@@ -140,6 +140,8 @@ describe("package distribution", () => {
     assert.equal(pkg.publishConfig?.provenance, true);
     assert.equal(pkg.publishConfig?.tag, "next", "prerelease must not replace npm latest");
     const workflow = fs.readFileSync(path.join(repositoryRoot, ".github", "workflows", "publish.yml"), "utf8");
+    assert.match(workflow, /fetch-depth:\s*0/, "publish checkout must include release-tag history");
+    assert.match(workflow, /apt-get install --yes ripgrep/, "publish job must install its Linux test prerequisite");
     assert.match(workflow, /if \[\[ "\$version" == \*-\* \]\]; then tag="next"; fi/);
     assert.match(workflow, /npm publish --tag "\$\{\{ steps\.npm-tag\.outputs\.value \}\}"/);
   });

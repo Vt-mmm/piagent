@@ -67,7 +67,13 @@ const protocol = JSON.parse(protocolBytes);
 const errors = ie6ReleaseProtocolValidationErrors(protocol);
 if (errors.length) fail(`invalid IE6 protocol: ${errors.join("; ")}`);
 for (const artifact of protocol.artifactBindings) {
-  const actual = digest(fs.readFileSync(path.join(root, artifact.path)));
+  let bytes;
+  try {
+    bytes = execFileSync("git", ["show", `${protocol.candidate.sourceCommit}:${artifact.path}`], { cwd: root });
+  } catch {
+    fail(`cannot read historical artifact ${artifact.path} at ${protocol.candidate.sourceCommit}`);
+  }
+  const actual = digest(bytes);
   if (actual !== artifact.sha256) fail(`artifact binding mismatch for ${artifact.path}`);
 }
 
@@ -92,6 +98,7 @@ const status = execFileSync("git", ["status", "--porcelain=v1"], { cwd: root, en
 if (status !== "") fail("working tree must be clean before IE6 freeze");
 const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+if (head !== protocol.candidate.sourceCommit) fail("historical IE7 freeze can run only at its exact source commit");
 if (packageJson.version !== protocol.candidate.expectedPackageVersion) fail("package version does not match the IE6 protocol");
 
 run("npm", ["run", "verify"]);

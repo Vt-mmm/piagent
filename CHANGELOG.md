@@ -4,7 +4,21 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
-No changes after the `v1.3.0-ie.7` candidate boundary.
+No changes after the `v1.3.0-ie.8` candidate boundary.
+
+## v1.3.0-ie.8 - 2026-08-12
+
+### Reproducible prerelease publishing
+
+- Made the tag-driven publish job fetch the complete Git/tag history required
+  by rollback tests and install the same `ripgrep` prerequisite used by the
+  native Ubuntu verification lane.
+- Preserved `v1.3.0-ie.7` as immutable failed-before-publish evidence. Its
+  workflow stopped during deterministic tests, before `npm publish`, so the
+  registry was not modified.
+- Kept the product runtime identical to IE7. The completed 108-session Luna
+  Medium benchmark remains exact IE7 runtime evidence and is not relabelled as
+  an exact IE8 benchmark; IE8 is a distribution-only correction.
 
 ## v1.3.0-ie.7 - 2026-08-12
 

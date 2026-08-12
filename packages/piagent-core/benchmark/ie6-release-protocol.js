@@ -53,6 +53,7 @@ export function ie6ReleaseProtocolValidationErrors(protocol) {
   const candidate = protocol.candidate ?? {};
   expectFields(errors, candidate, {
     expectedPackageVersion: "1.3.0-ie.7",
+    sourceCommit: "de28308347b0333d0c4c44c3507a36c93d7cfe95",
     sourceState: "clean-approved-commit-only",
     candidateIdentity: "commit-plus-materialized-content-digest-plus-tarball-sha512",
     anyMaterialChangeInvalidates: true,

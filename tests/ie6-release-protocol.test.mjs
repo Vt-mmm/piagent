@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
@@ -39,9 +40,10 @@ test("binds all 18 production families, three repeats and 18 inspected chunks", 
   assert.deepEqual(chunks.at(-1), { chunk: 18, firstSession: 103, lastSession: 108, maximumSessions: 6, requiresInspectionBeforeNext: true });
 });
 
-test("binds every release-critical artifact to current bytes", () => {
+test("binds every release-critical artifact to the immutable IE7 source commit", () => {
   for (const artifact of protocol.artifactBindings) {
-    const actual = crypto.createHash("sha256").update(fs.readFileSync(path.join(root, artifact.path))).digest("hex");
+    const bytes = execFileSync("git", ["show", `${protocol.candidate.sourceCommit}:${artifact.path}`], { cwd: root });
+    const actual = crypto.createHash("sha256").update(bytes).digest("hex");
     assert.equal(actual, artifact.sha256, artifact.path);
   }
 });

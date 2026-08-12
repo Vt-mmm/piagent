@@ -9,7 +9,7 @@ Một thành viên mới không cần biết local path của maintainer. Luồn
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.84.1
-npm install -g --ignore-scripts @piagent/platform@1.3.0-ie.7
+npm install -g --ignore-scripts @piagent/platform@1.3.0-ie.8
 piagent-install --stable
 cd /path/to/project
 pi
@@ -43,7 +43,7 @@ Mặc định team dùng stable helper:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.84.1
-npm install -g --ignore-scripts @piagent/platform@1.3.0-ie.7
+npm install -g --ignore-scripts @piagent/platform@1.3.0-ie.8
 piagent-install --stable --dry-run
 piagent-install --stable
 ```

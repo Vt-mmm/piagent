@@ -43,7 +43,7 @@ configure providers.
 ### Intelligence-engine 1.3 candidate transition
 
 The active machine-readable protocol is
-`evals/ie6-release-protocol.v1.json`. The candidate identity is
+`evals/ie6-release-protocol.v1.json`. The measured runtime identity is
 `1.3.0-ie.7`; it is separate from the exhausted RC.1/RC.2 train. The protocol
 requires Piagent and controlled `codex-cli` on Luna Medium, all 18 public
 production families, three repeats, two surfaces, retry zero and inspection
@@ -52,10 +52,12 @@ package, macOS and Linux gates, rollback, Cohorts A-C, five independent users,
 private family-disjoint holdout, long-horizon interruption/resume evidence and
 explicit operator chunk approval all exist.
 
-The terminal IE6 production attempts and canaries are historical diagnostic
-evidence only. They do not authorize a token-saving claim, cohort, tag, push,
-publish or public documentation promotion. IE7 requires a fresh bounded
-workspace-order canary before any new production run may begin.
+The completed IE7 production run is exact public-regression evidence for its
+frozen runtime and policy. It does not prove private-holdout generalization or
+production stability. Tag `v1.3.0-ie.7` failed in the deterministic publish-job
+test phase before npm was reached. `v1.3.0-ie.8` changes only that distribution
+job (complete tag checkout plus the Linux `ripgrep` prerequisite); it does not
+relabel the IE7 measurement as an exact IE8 performance run.
 
 ### Historical finite 1.3 RC transition
 
@@ -112,7 +114,7 @@ Use this flow when the team needs both terminal commands and the Pi package:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.84.1
-npm install -g --ignore-scripts @piagent/platform@1.3.0-ie.7
+npm install -g --ignore-scripts @piagent/platform@1.3.0-ie.8
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -138,7 +140,7 @@ bash scripts/install-global.sh --stable
 Use this only when terminal commands are not needed:
 
 ```bash
-pi install git:github.com/Vt-mmm/piagent@v1.3.0-ie.7
+pi install git:github.com/Vt-mmm/piagent@v1.3.0-ie.8
 ```
 
 Direct `pi install` does not create `piagent-*` commands on `PATH`.
