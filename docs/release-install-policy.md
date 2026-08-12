@@ -10,7 +10,7 @@ This file is the canonical install, update, rollback, and release checklist. Oth
 
 All supported environments require Node.js `>=22.19.0` and Pi Coding Agent `0.84.1`. The Pi host is installed as a Node CLI; Pi Agent Platform still defines its own release matrix because the terminal helpers and shell policy rely on Bash/POSIX behavior.
 
-| Surface | Status for v1.2.17 | Rollout guidance |
+| Surface | Status for v1.3.0 | Rollout guidance |
 |---|---|---|
 | macOS Apple Silicon (`darwin/arm64`) + Bash | Verified for this release. | Safe default for team rollout after normal project smoke tests. |
 | Linux x64 + Bash | Verified in GitHub Actions. | Safe default for CI/server usage after normal project smoke tests. |
@@ -19,7 +19,7 @@ All supported environments require Node.js `>=22.19.0` and Pi Coding Agent `0.84
 | Native Windows x64/ARM64 | Not supported for team rollout in this release. | Node is available on Windows, but platform helper scripts and shell parsing assume Bash/POSIX semantics. Use a verified macOS/Linux surface for release-critical work. |
 | WSL2 | Experimental and not release-gated. | Treat as local/personal until a WSL lane and smoke suite are added. |
 
-### Unreleased 1.3 candidate readiness
+### v1.3.0 stable release boundary
 
 The local RC matrix is `evals/rc-evaluation-matrix.v1.json`; the repeatable
 evaluator is `node scripts/rc-readiness-evaluation.mjs`. It pins the candidate
@@ -33,24 +33,26 @@ workers `off`, execution backend `host`. The proposed solver `assist` and phase
 tools `on` defaults are not promoted merely because implementation is complete.
 Automatic read-only helper dispatch also remains unpromoted.
 
-This is not a released RC or GA claim. Release remains blocked until there is a
-clean approved candidate commit and RC package, Cohorts A-C, a five-person
-independent usability pilot, the Linux x64 candidate run, a new authenticated
-paired quality benchmark, stable tag/source identity, and explicit operator
-approval. The evaluator cannot commit, tag, push, publish, promote docs, or
-configure providers.
+The stable package makes the verified macOS/Linux product runtime available to
+teams under a bounded public-regression claim. It does not convert missing
+Cohorts A-C, the five-person independent usability pilot, private family-disjoint
+holdout or real-model long-horizon evidence into completed gates. Those remain
+required before claiming private-holdout generalization, production stability or
+real-model long-task performance. The evaluator cannot commit, tag, push,
+publish, promote docs, or configure providers; the operator authorizes release
+writes separately after the exact source and package gates pass.
 
-### Intelligence-engine 1.3 candidate transition
+### Intelligence-engine 1.3 evidence transition
 
 The active machine-readable protocol is
 `evals/ie6-release-protocol.v1.json`. The measured runtime identity is
 `1.3.0-ie.7`; it is separate from the exhausted RC.1/RC.2 train. The protocol
 requires Piagent and controlled `codex-cli` on Luna Medium, all 18 public
 production families, three repeats, two surfaces, retry zero and inspection
-after every six sessions. Provider execution remains blocked until the exact
-package, macOS and Linux gates, rollback, Cohorts A-C, five independent users,
-private family-disjoint holdout, long-horizon interruption/resume evidence and
-explicit operator chunk approval all exist.
+after every six sessions. That IE7 run completed under its recorded chunk
+approvals. This historical protocol does not authorize another provider run;
+cohorts, independent users and the private holdout remain pending wider-rollout
+evidence rather than being inferred from the public suite.
 
 The completed IE7 production run is exact public-regression evidence for its
 frozen runtime and policy. It does not prove private-holdout generalization or
@@ -59,14 +61,17 @@ test phase before npm was reached. `v1.3.0-ie.8` changes only that distribution
 job (complete tag checkout plus the Linux `ripgrep` prerequisite); IE9 adds
 installed-package parity for TypeScript-backed terminal commands and resolves
 the benchmark source from the matching exact Pi package Git clone. Neither
-distribution correction relabels the IE7 measurement as an exact IE8/IE9
-performance run.
+distribution correction relabels the IE7 measurement as an exact IE8/IE9 or
+stable v1.3.0 performance run. Stable release notes must keep that claim
+boundary visible.
 
 ### Historical finite 1.3 RC transition
 
 The machine-readable transition is `evals/fs-release-transition.v1.json` and is
 checked locally with `npm run release:transition`. It separates three permissions
-that must never be inferred from one another:
+that must never be inferred from one another. This section records the exhausted
+RC.1/RC.2 train; it does not override the later Intelligence Engine stable
+boundary above:
 
 1. **RC assembly** could prepare a clean local `1.3.0-rc.2` commit/package and run
    privacy/install/readback checks.
@@ -97,7 +102,7 @@ These three components are versioned independently. A full install, update, or r
 
 | Channel | Source shape | Mutability | Use when |
 |---|---|---:|---|
-| `stable` | `git:github.com/Vt-mmm/piagent@<resolved-commit-sha>` from `v1.2.17` | Fixed after resolution | Default for team rollout. |
+| `stable` | `git:github.com/Vt-mmm/piagent@<resolved-commit-sha>` from `v1.3.0` | Fixed after resolution | Default for team rollout. |
 | `exact` | Tag, reviewed commit, or a tag resolved with `--resolve-tag` | Fixed when using a commit SHA | Pi-package-only roll forward, rollback, or reproduction. |
 | `dev` | `git:github.com/Vt-mmm/piagent` | Moving | Personal machine or sandbox only. |
 | `local` | `/path/to/piagent` | Local workspace | Platform development and dry-run validation. |
@@ -117,7 +122,7 @@ Use this flow when the team needs both terminal commands and the Pi package:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.84.1
-npm install -g --ignore-scripts @piagent/platform@1.3.0-ie.9
+npm install -g --ignore-scripts @piagent/platform@1.3.0
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -125,8 +130,8 @@ piagent-install --stable
 The stable preview and apply output includes:
 
 ```text
-currentRelease: v1.2.17 (helper package version)
-tag: v1.2.17
+currentRelease: v1.3.0 (helper package version)
+tag: v1.3.0
 resolvedCommit: <40-char-sha>
 source: git:github.com/Vt-mmm/piagent@<40-char-sha>
 ```
@@ -143,7 +148,7 @@ bash scripts/install-global.sh --stable
 Use this only when terminal commands are not needed:
 
 ```bash
-pi install git:github.com/Vt-mmm/piagent@v1.3.0-ie.9
+pi install git:github.com/Vt-mmm/piagent@v1.3.0
 ```
 
 Direct `pi install` does not create `piagent-*` commands on `PATH`.
