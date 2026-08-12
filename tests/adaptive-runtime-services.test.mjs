@@ -1436,8 +1436,16 @@ test("acceptance semantic conflicts preserve the baseline return element represe
   const sourcePath = path.join(cwd, "src", "platform", "workspace.js");
   fs.writeFileSync(sourcePath, [
     "export function workspaceOrder(packages) {",
+    "  const byName = new Map(packages.map((item) => [item.name, item]));",
     "  const result = [];",
-    "  for (const item of packages) result.push(item.name);",
+    "  const visited = new Set();",
+    "  function visit(name) {",
+    "    if (visited.has(name)) return;",
+    "    visited.add(name);",
+    "    result.push(name);",
+    "    for (const dependency of byName.get(name)?.dependencies ?? []) visit(dependency);",
+    "  }",
+    "  for (const item of packages) visit(item.name);",
     "  return result;",
     "}",
     ""
@@ -1447,6 +1455,13 @@ test("acceptance semantic conflicts preserve the baseline return element represe
   execFileSync("git", ["config", "user.name", "Piagent Test"], { cwd });
   execFileSync("git", ["add", "src/platform/workspace.js"], { cwd });
   execFileSync("git", ["commit", "-qm", "baseline"], { cwd });
+  const task = contract({
+    summary: "Fix dependency order without changing the public API or mutating input.",
+    changedFiles: ["src/platform/workspace.js"]
+  });
+  assert.deepEqual(acceptanceBaselineGuidance({ ...task, scope: ["src/platform/workspace.js", "test/**"] }, { cwd }), [
+    "Existing public return elements in src/platform/workspace.js are names/identifiers, not object values; preserve that representation unless the request explicitly changes it."
+  ]);
 
   fs.writeFileSync(sourcePath, [
     "export function workspaceOrder(packages) {",
@@ -1456,10 +1471,6 @@ test("acceptance semantic conflicts preserve the baseline return element represe
     "}",
     ""
   ].join("\n"));
-  const task = contract({
-    summary: "Fix dependency order without changing the public API or mutating input.",
-    changedFiles: ["src/platform/workspace.js"]
-  });
   assert.deepEqual(acceptanceSemanticConflicts(task, {
     cwd,
     changedFiles: task.changedFiles

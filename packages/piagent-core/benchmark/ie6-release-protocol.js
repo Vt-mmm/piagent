@@ -52,7 +52,7 @@ export function ie6ReleaseProtocolValidationErrors(protocol) {
 
   const candidate = protocol.candidate ?? {};
   expectFields(errors, candidate, {
-    expectedPackageVersion: "1.3.0-ie.6",
+    expectedPackageVersion: "1.3.0-ie.7",
     sourceState: "clean-approved-commit-only",
     candidateIdentity: "commit-plus-materialized-content-digest-plus-tarball-sha512",
     anyMaterialChangeInvalidates: true,
@@ -81,7 +81,7 @@ export function ie6ReleaseProtocolValidationErrors(protocol) {
     surfaces: ["piagent", "codex-cli"], totalSessions: 108,
     timeoutSeconds: 900, infrastructureRetries: 0, retryDelaySeconds: 0,
     maximumSessionsPerChunk: 6, inspectAfterEveryChunk: true,
-    pauseOnlyAtPairBoundary: true, seed: "cf-ie6-production-luna-medium-v1"
+    pauseOnlyAtPairBoundary: true, seed: "cf-ie7-production-luna-medium-v1"
   }, "suite");
 
   if (!Array.isArray(protocol.artifactBindings) || protocol.artifactBindings.length < 10) {

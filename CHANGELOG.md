@@ -4,7 +4,22 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
-No changes after the `v1.3.0-ie.6` candidate boundary.
+No changes after the `v1.3.0-ie.7` candidate boundary.
+
+## v1.3.0-ie.7 - 2026-08-12
+
+### Source-derived public return-contract guidance
+
+- Extended the bounded return-representation classifier to recognize helper
+  parameters seeded from object properties, including stable graph traversals
+  that call `visit(item.name)` and later push that name into the public result.
+- Surfaces the existing names-versus-objects representation in the first model
+  turn before mutation. This preserves the public API without enabling a hard
+  semantic gate, adding a continuation, or changing the benchmark prompt,
+  variant, grader, outcome floor, or measured IE6 evidence.
+- Preserved the terminal IE6 production run as immutable NO-GO evidence. IE7
+  uses a new candidate digest and production seed and must pass a single paired
+  workspace-order canary before another full release benchmark is authorized.
 
 ## v1.3.0-ie.6 - 2026-08-12
 
