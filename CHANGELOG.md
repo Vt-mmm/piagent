@@ -4,7 +4,26 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
-No changes after the `v1.3.0-ie.9` candidate boundary.
+No changes after the `v1.3.0` stable boundary.
+
+## v1.3.0 - 2026-08-12
+
+### Stable Intelligence Engine release
+
+- Promoted the exact IE9 product tree to stable without changing model-facing
+  runtime behavior. The Criterion Graph, bounded current-source context,
+  stable tool surface, one-continuation ceiling, current-tree verification,
+  durable resume/handoff and conservative broad defaults remain unchanged.
+- Published the first stable package with Pi host `0.84.1` and installed-package
+  parity for every terminal command. Stable installs use npm `latest` and the
+  pinned Git tag `v1.3.0`; prerelease `next` remains historical.
+- Preserved the completed 108-session Luna Medium IE7 run as exact
+  public-regression evidence for the unchanged product runtime. It is not
+  relabelled as an exact v1.3.0 measurement and does not prove private-holdout
+  generalization, field stability or real-model long-horizon performance.
+- Kept solver and phase tools in shadow, acceptance and performance assurance
+  advisory, semantic repair off, helpers recommend-only, parent routing off,
+  recovery on and a maximum of one system continuation for broad defaults.
 
 ## v1.3.0-ie.9 - 2026-08-12
 

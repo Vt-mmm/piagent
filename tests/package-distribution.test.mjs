@@ -138,7 +138,11 @@ describe("package distribution", () => {
     // A scoped package defaults to restricted; publishing publicly is explicit.
     assert.equal(pkg.publishConfig?.access, "public");
     assert.equal(pkg.publishConfig?.provenance, true);
-    assert.equal(pkg.publishConfig?.tag, "next", "prerelease must not replace npm latest");
+    if (pkg.version.includes("-")) {
+      assert.equal(pkg.publishConfig?.tag, "next", "prerelease must not replace npm latest");
+    } else {
+      assert.equal(pkg.publishConfig?.tag, undefined, "stable release must publish to npm latest");
+    }
     const workflow = fs.readFileSync(path.join(repositoryRoot, ".github", "workflows", "publish.yml"), "utf8");
     assert.match(workflow, /fetch-depth:\s*0/, "publish checkout must include release-tag history");
     assert.match(workflow, /apt-get install --yes ripgrep/, "publish job must install its Linux test prerequisite");
