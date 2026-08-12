@@ -4,7 +4,25 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
-No changes after the `v1.3.0-ie.8` candidate boundary.
+No changes after the `v1.3.0-ie.9` candidate boundary.
+
+## v1.3.0-ie.9 - 2026-08-12
+
+### Installed-package runtime parity
+
+- Added a package-owned TypeScript loader for terminal entry points so the npm
+  installation can load the same audited TypeScript runtime that Pi loads,
+  even when the package lives under `node_modules`.
+- Made the global benchmark helper use the matching exact Pi package Git source
+  installed by `piagent-install --stable`. It refuses to invent Git identity or
+  run against a mismatched helper/package version.
+- Replaced the symlink-only binary smoke with a real packed-and-installed test:
+  all global commands print help from `node_modules`, and the installed benchmark
+  completes a provider-free dry run from an exact temporary Git source.
+- Preserved IE8 as the first successfully published package. Its helper,
+  installer, doctor and capability commands work, but the route and benchmark
+  binaries cannot load TypeScript from `node_modules`; IE9 supersedes it on the
+  npm `next` channel. Product/model behavior remains unchanged from IE7/IE8.
 
 ## v1.3.0-ie.8 - 2026-08-12
 

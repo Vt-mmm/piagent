@@ -270,11 +270,21 @@ describe("package distribution", () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "package.json"), "utf8"));
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-package-bin-"));
     temporaryRoots.add(root);
+    const packed = spawnSync("npm", ["pack", "--json", "--pack-destination", root], {
+      cwd: repositoryRoot,
+      encoding: "utf8"
+    });
+    assert.equal(packed.status, 0, packed.stderr);
+    const tarball = path.join(root, JSON.parse(packed.stdout)[0].filename);
+    const installed = spawnSync("npm", ["install", "--global", "--ignore-scripts", "--prefix", root, tarball], {
+      cwd: root,
+      encoding: "utf8"
+    });
+    assert.equal(installed.status, 0, installed.stderr || installed.stdout);
 
     for (const name of Object.keys(pkg.bin)) {
-      const link = path.join(root, name);
-      fs.symlinkSync(path.join(repositoryRoot, "scripts", "piagent-cli.mjs"), link);
-      const result = spawnSync(link, ["--help"], {
+      const executable = path.join(root, "bin", name);
+      const result = spawnSync(executable, ["--help"], {
         cwd: root,
         encoding: "utf8"
       });
@@ -282,6 +292,31 @@ describe("package distribution", () => {
       assert.match(result.stdout, /Usage:/, `${name} should print usage`);
       assert.equal(result.stderr, "", `${name} --help should not emit an error`);
     }
+
+    const agentRoot = path.join(root, "agent");
+    const benchmarkSource = path.join(agentRoot, "git", "github.com", "Vt-mmm", "piagent");
+    fs.mkdirSync(path.dirname(benchmarkSource), { recursive: true });
+    fs.cpSync(path.join(root, "lib", "node_modules", "@piagent", "platform"), benchmarkSource, { recursive: true });
+    const gitEnvironment = {
+      ...process.env,
+      GIT_CONFIG_GLOBAL: os.devNull,
+      GIT_CONFIG_NOSYSTEM: "1",
+      GIT_AUTHOR_NAME: "Piagent Package Test",
+      GIT_AUTHOR_EMAIL: "package-test@invalid.example",
+      GIT_COMMITTER_NAME: "Piagent Package Test",
+      GIT_COMMITTER_EMAIL: "package-test@invalid.example"
+    };
+    for (const args of [["init"], ["add", "-A"], ["commit", "-m", "package fixture"]]) {
+      const git = spawnSync("git", args, { cwd: benchmarkSource, env: gitEnvironment, encoding: "utf8" });
+      assert.equal(git.status, 0, git.stderr || git.stdout);
+    }
+    const dryRun = spawnSync(path.join(root, "bin", "piagent-benchmark"), ["--dry-run"], {
+      cwd: root,
+      env: { ...process.env, PI_CODING_AGENT_DIR: agentRoot },
+      encoding: "utf8"
+    });
+    assert.equal(dryRun.status, 0, dryRun.stderr || dryRun.stdout);
+    assert.match(dryRun.stdout, /DRY RUN: no model session started\./);
   });
 
   it("reports a controlled error when a command runner is unavailable", () => {

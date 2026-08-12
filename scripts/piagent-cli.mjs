@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -34,9 +36,29 @@ if (!script) {
   process.exit(2);
 }
 
-const target = path.join(packageRoot, script);
+function benchmarkSourceRoot() {
+  if (fs.existsSync(path.join(packageRoot, ".git"))) return packageRoot;
+  if (process.argv.slice(2).some((value) => value === "--help" || value === "-h")) return packageRoot;
+  const agentRoot = path.resolve(process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent"));
+  const installed = path.join(agentRoot, "git", "github.com", "Vt-mmm", "piagent");
+  try {
+    const helperVersion = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8")).version;
+    const installedVersion = JSON.parse(fs.readFileSync(path.join(installed, "package.json"), "utf8")).version;
+    if (helperVersion === installedVersion && fs.existsSync(path.join(installed, ".git"))) return installed;
+  } catch {
+    // The controlled error below explains how to materialize the exact source.
+  }
+  console.error("piagent-benchmark requires the matching exact Pi package source. Run piagent-install --stable first.");
+  process.exit(1);
+}
+
+const sourceRoot = invokedAs === "piagent-benchmark" ? benchmarkSourceRoot() : packageRoot;
+const target = path.join(sourceRoot, script);
 const runner = target.endsWith(".mjs") ? process.execPath : "bash";
-const child = spawn(runner, [target, ...process.argv.slice(2)], {
+const runnerArgs = target.endsWith(".mjs")
+  ? ["--disable-warning=ExperimentalWarning", "--import", path.join(sourceRoot, "scripts", "register-typescript-loader.mjs"), target]
+  : [target];
+const child = spawn(runner, [...runnerArgs, ...process.argv.slice(2)], {
   cwd: process.cwd(),
   env: process.env,
   stdio: "inherit"
