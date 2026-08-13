@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { ensurePrivateStateDirectory, resolveLocalStatePath } from "./local-state-path.js";
@@ -16,36 +17,6 @@ function processAlive(pid) {
   }
 }
 
-function recoverDeadLock(lockPath) {
-  const recoveryPath = `${lockPath}.recovery`;
-  let recoveryDescriptor;
-  try {
-    recoveryDescriptor = fs.openSync(recoveryPath, "wx", 0o600);
-    let stat;
-    let owner = null;
-    try {
-      stat = fs.lstatSync(lockPath);
-      if (!stat.isFile() || stat.isSymbolicLink()) return false;
-      owner = Number.parseInt(fs.readFileSync(lockPath, "utf8").trim(), 10);
-    } catch (error) {
-      return error?.code === "ENOENT";
-    }
-    const validDeadOwner = Number.isInteger(owner) && owner > 0 && !processAlive(owner);
-    const malformedAndStale = (!Number.isInteger(owner) || owner <= 0) && Date.now() - stat.mtimeMs > LOCK_STALE_MS;
-    if (!validDeadOwner && !malformedAndStale) return false;
-    fs.rmSync(lockPath, { force: true });
-    return true;
-  } catch (error) {
-    if (error?.code === "EEXIST") return false;
-    throw error;
-  } finally {
-    if (recoveryDescriptor !== undefined) {
-      try { fs.closeSync(recoveryDescriptor); } catch {}
-      fs.rmSync(recoveryPath, { force: true });
-    }
-  }
-}
-
 function ensurePrivateParent(filePath, projectRoot) {
   const safeFilePath = projectRoot
     ? resolveLocalStatePath(projectRoot, filePath, { label: "Local JSONL state" })
@@ -60,31 +31,93 @@ function ensurePrivateParent(filePath, projectRoot) {
   return safeFilePath;
 }
 
+function publishOwnedLock(lockPath) {
+  let candidatePath;
+  let descriptor;
+  while (true) {
+    const candidate = `${lockPath}.${process.pid}.${crypto.randomBytes(12).toString("hex")}.candidate`;
+    try {
+      descriptor = fs.openSync(candidate, "wx", 0o600);
+      candidatePath = candidate;
+      break;
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+    }
+  }
+  try {
+    fs.writeFileSync(descriptor, `${process.pid}\n`);
+    fs.closeSync(descriptor);
+    descriptor = undefined;
+    try {
+      fs.linkSync(candidatePath, lockPath);
+      const stat = fs.lstatSync(candidatePath);
+      return { device: stat.dev, inode: stat.ino };
+    } catch (error) {
+      if (error?.code === "EEXIST") return undefined;
+      throw error;
+    }
+  } finally {
+    if (descriptor !== undefined) {
+      try { fs.closeSync(descriptor); } catch {}
+    }
+    fs.rmSync(candidatePath, { force: true });
+  }
+}
+
+function releaseOwnedLock(lockPath, owner) {
+  try {
+    const stat = fs.lstatSync(lockPath);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.dev !== owner.device || stat.ino !== owner.inode) return;
+    fs.rmSync(lockPath, { force: true });
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+}
+
+function recoverDeadLock(lockPath) {
+  const recoveryPath = `${lockPath}.recovery`;
+  const recoveryOwner = publishOwnedLock(recoveryPath);
+  // A recovery owner is never stolen automatically: without a kernel
+  // compare-and-delete primitive, doing so can delete a live successor. A
+  // crashed recovery owner therefore fails closed and needs operator cleanup.
+  if (!recoveryOwner) return false;
+  try {
+    let stat;
+    let ownerText;
+    try {
+      stat = fs.lstatSync(lockPath);
+      if (!stat.isFile() || stat.isSymbolicLink()) return false;
+      ownerText = fs.readFileSync(lockPath, "utf8").trim();
+    } catch (error) {
+      return error?.code === "ENOENT";
+    }
+    const parsedOwner = /^[1-9]\d*$/.test(ownerText) ? Number(ownerText) : undefined;
+    const owner = Number.isSafeInteger(parsedOwner) && parsedOwner > 0 ? parsedOwner : undefined;
+    const validDeadOwner = owner !== undefined && !processAlive(owner);
+    const malformedAndStale = owner === undefined && Date.now() - stat.mtimeMs > LOCK_STALE_MS;
+    if (!validDeadOwner && !malformedAndStale) return false;
+    fs.rmSync(lockPath, { force: true });
+    return true;
+  } finally {
+    releaseOwnedLock(recoveryPath, recoveryOwner);
+  }
+}
+
 function withFileLock(filePath, action) {
   const lockPath = `${filePath}.lock`;
   const deadline = Date.now() + LOCK_WAIT_MS;
-  let descriptor;
-  while (descriptor === undefined) {
-    try {
-      descriptor = fs.openSync(lockPath, "wx", 0o600);
-      fs.writeFileSync(descriptor, `${process.pid}\n`);
-    } catch (error) {
-      if (error?.code !== "EEXIST") throw error;
-      if (recoverDeadLock(lockPath)) continue;
-      if (Date.now() >= deadline) {
-        throw new Error(`Timed out waiting for state lock: ${path.basename(filePath)}`);
-      }
-      Atomics.wait(sleepBuffer, 0, 0, 10);
+  let owner;
+  while (!(owner = publishOwnedLock(lockPath))) {
+    if (recoverDeadLock(lockPath)) continue;
+    if (Date.now() >= deadline) {
+      throw new Error(`Timed out waiting for state lock: ${path.basename(filePath)}`);
     }
+    Atomics.wait(sleepBuffer, 0, 0, 10);
   }
   try {
     return action();
   } finally {
-    try {
-      fs.closeSync(descriptor);
-    } finally {
-      fs.rmSync(lockPath, { force: true });
-    }
+    releaseOwnedLock(lockPath, owner);
   }
 }
 

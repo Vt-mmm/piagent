@@ -178,7 +178,7 @@ Lock pin hai thứ khác nhau, và khi lệch thì câu trả lời cũng khác 
 - `packs` — name, version, origin, source, owner, lifecycle và digest của manifest. Manifest khai luôn `provides`, nên artifact xuất hiện thêm, biến mất hoặc đổi path đều nằm ở nhánh này;
 - permission theo hướng: granting key (`capabilities`, `filesystemRead`, `filesystemWrite`, `networkDomains`, `externalActions`) chặn khi **thêm**; restricting key (`protectedPaths`, `readOnlyPaths`, `shellProtectedPaths`) chặn khi **mất**.
 
-**Build — platform đổi bản, lock được ghi lại và báo, session chạy tiếp (`repin`):**
+**Build — platform đổi bản, lock chỉ được ghi lại tại session start có kiểm soát (`repin`):**
 
 - `core.packageVersion`, `core.runtimeFiles`, `core.packageDigest`;
 - nội dung artifact (`artifacts[].digest`).
@@ -186,6 +186,13 @@ Lock pin hai thứ khác nhau, và khi lệch thì câu trả lời cũng khác 
 Vì sao nội dung artifact nằm ở nhánh build: adapter policy file, base policy, prompt, skill, subagent và recipe đều ship dạng artifact. Pin bytes của chúng nghĩa là bản sửa policy không bao giờ tới được project đang tham chiếu — đúng thứ mà việc ship policy tập trung tồn tại để làm. Không mất gì khi bỏ pin: danh sách artifact nằm trong manifest và manifest digest vẫn được pin ở `packs`, còn policy artifact bị nới lỏng vẫn chặn vì permission sau resolve được so trực tiếp theo hướng.
 
 Việc pin build cũng chưa bao giờ chống được trường hợp nó trông giống: code kiểm tra lock chính là một trong các file mà lock pin, nên thứ gì sửa được platform đã cài thì sửa luôn được checker.
+
+Session start thực hiện full verification và có thể ghi lại build mới nếu grant
+không đổi. Sau khi session đã bind với một build digest, drift mới phát hiện giữa
+phiên sẽ chặn tool call và yêu cầu restart; một session khác re-pin build mới
+không làm session cũ tự chuyển identity. Mỗi tool call vẫn kiểm tra integrity,
+nhưng đường bình thường dùng fingerprint metadata mạnh; bất kỳ thay đổi, lỗi
+metadata, symlink hoặc catalog/profile/lock drift nào đều quay lại full hash.
 
 ## Lifecycle
 
@@ -249,7 +256,7 @@ Khai source không cấp quyền gì. Pack ngoài vẫn phải qua `capabilityPo
 ## Giới hạn hiện tại
 
 - Catalog là local file, chưa có remote discovery service. Catalog chỉ chứa pack của platform; pack ngoài xuất hiện trong lock của project.
-- Lock là preflight và integrity contract; runtime guard xác minh lại trước mỗi tool call đối với profile hiện hành. `PIAGENT_PROFILE` trusted override và legacy profile chưa khai `capabilityPacks` nằm ngoài lock gate; khi lock lỗi chỉ nhóm recovery/read-only tool giới hạn được phép hoạt động.
+- Lock là preflight và integrity contract; runtime guard kiểm tra lại trước mỗi tool call đối với profile hiện hành, dùng cache metadata fail-closed và full hash khi cache không còn hợp lệ. `PIAGENT_PROFILE` trusted override và legacy profile chưa khai `capabilityPacks` nằm ngoài lock gate; khi lock lỗi chỉ nhóm recovery/read-only tool giới hạn được phép hoạt động.
 - Eval scenario mới có schema và validation; execution matrix được triển khai ở phase tiếp theo.
 - Recipe binding nội bộ và eval scenario ID được kiểm tra trong exact dependency graph; capability binding vẫn do runtime tool registry giải quyết.
 - External action proposal chỉ được validate; authorization, artifact byte verification và executor có credential không nằm trong phạm vi này.

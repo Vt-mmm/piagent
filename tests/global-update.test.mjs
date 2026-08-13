@@ -40,7 +40,7 @@ async function installPlatform(version, mutate) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-global-update-platform-"));
   temporaryRoots.add(root);
   writeRuntimeStubs(root);
-  for (const directory of ["packages", "adapters", "packs", "evals"]) {
+  for (const directory of ["packages", "adapters", "packs", "evals", "scripts"]) {
     fs.cpSync(path.join(repoRoot, directory), path.join(root, directory), { recursive: true });
   }
   const packageDocument = JSON.parse(fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"));
@@ -131,6 +131,41 @@ function noticeMatching(notices, pattern) {
 }
 
 describe("global platform update", () => {
+  it("blocks mid-session runtime drift without silently rewriting the lock", async () => {
+    const platform = await installPlatform(BEFORE);
+    const cwd = createProject("generic");
+    onboard(platform.root, cwd);
+    const session = await startSession(platform.piagentGuard, cwd);
+    const lockBefore = fs.readFileSync(path.join(cwd, ".pi", "piagent-profile.lock.json"));
+
+    fs.appendFileSync(path.join(platform.root, "packages", "piagent-core", "extensions", "policy-core.js"), "\n// unexpected mid-session drift\n");
+    const tool = await callToolCall(session.toolCall, session.ctx, "bash", { command: "pwd" });
+
+    assert.equal(tool.block, true);
+    assert.match(tool.reason, /runtime changed during this session/i);
+    assert.deepEqual(fs.readFileSync(path.join(cwd, ".pi", "piagent-profile.lock.json")), lockBefore);
+  });
+
+  it("lets a new session re-pin drift while the older live session stays blocked", async () => {
+    const platform = await installPlatform(BEFORE);
+    const cwd = createProject("generic");
+    onboard(platform.root, cwd);
+    const first = await startSession(platform.piagentGuard, cwd);
+
+    fs.appendFileSync(path.join(platform.root, "packages", "piagent-core", "extensions", "policy-core.js"), "\n// controlled restart drift\n");
+    const blocked = await callToolCall(first.toolCall, first.ctx, "bash", { command: "pwd" });
+    assert.equal(blocked.block, true);
+
+    const restarted = await startSession(platform.piagentGuard, cwd, { sessionId: "session-restarted" });
+    const allowed = await callToolCall(restarted.toolCall, restarted.ctx, "bash", { command: "pwd" });
+    assert.notEqual(allowed.block, true);
+    assert.ok(noticeMatching(restarted.notices, /Capability lock re-pinned/));
+
+    const stillBlocked = await callToolCall(first.toolCall, first.ctx, "bash", { command: "pwd" });
+    assert.equal(stillBlocked.block, true);
+    assert.match(stillBlocked.reason, /runtime changed during this session/i);
+  });
+
   it("keeps a project working after a release it never opted into", async () => {
     const before = await installPlatform(BEFORE);
     const cwd = createProject("generic");
