@@ -49,10 +49,13 @@ import * as mcpActions from "../mcp/mcp-command-actions.js";
 import { buildExtendingProfile, resolveProjectProfileDocument } from "../capabilities/project-profile.js";
 import {
   resolveCapabilityProfileDocument,
-  verifyCapabilityLock,
   writeJsonAtomic,
   writeProfileLockAtomic
 } from "../capabilities/capability-core.js";
+import {
+  createCapabilityVerificationCache,
+  verifyProjectCapabilityStateCached
+} from "../capabilities/capability-verification-cache.js";
 import { resolveCapabilitySourceRoots } from "../capabilities/capability-sources.js";
 import {
   actionTextMatchesAny, actionTokens, classifyActionTokenSequence, classifyExplicitActionValues, classifyToolNameAction,
@@ -715,7 +718,15 @@ type ProjectCapabilityState = {
   filesystemWrite?: string[];
 };
 
-function verifyProjectCapabilityState(extensionDir: string, cwd: string, projectTrusted: boolean): ProjectCapabilityState {
+const capabilityVerificationCache = createCapabilityVerificationCache();
+const sessionCapabilityDigests = new Map<string, string>();
+
+function verifyProjectCapabilityState(
+  extensionDir: string,
+  cwd: string,
+  projectTrusted: boolean,
+  options: { allowRepin?: boolean; forceFull?: boolean; sessionId?: string } = {}
+): ProjectCapabilityState {
   if (process.env.PIAGENT_PROFILE?.trim()) return { ok: true };
   if (!projectTrusted) return { ok: true };
   const profilePath = projectProfilePath(cwd);
@@ -725,46 +736,24 @@ function verifyProjectCapabilityState(extensionDir: string, cwd: string, project
   // would skip the lock entirely for every project that references an adapter.
   const stored = readJsonFile<ProjectProfile>(profilePath);
   if (!stored) return { ok: true };
-  let profile: ProjectProfile;
   try {
-    profile = resolveProjectProfileDocument(PLATFORM_ROOT, stored).profile as ProjectProfile;
+    const profile = resolveProjectProfileDocument(findPlatformRoot(extensionDir), stored).profile;
+    if (!Array.isArray(profile.capabilityPacks)) return { ok: true };
   } catch (error) {
     return { ok: false, reason: error instanceof Error ? error.message : String(error) };
   }
-  if (!Array.isArray(profile.capabilityPacks)) return { ok: true };
   const lockPath = path.join(cwd, ".pi", "piagent-profile.lock.json");
   if (!fs.existsSync(lockPath)) return { ok: false, reason: "Capability lock is missing. Reapply the project profile." };
   const lock = readJsonFile<Record<string, unknown>>(lockPath);
   if (!lock) return { ok: false, reason: "Capability lock is unreadable. Reapply the project profile." };
   try {
-    const verification = verifyCapabilityLock(findPlatformRoot(extensionDir), profilePath, lock, {
-      packageSource: projectPackageSource(cwd),
-      extraRoots: capabilitySourceRoots(cwd, profile)
+    return verifyProjectCapabilityStateCached({
+      cache: capabilityVerificationCache, cwd, platformRoot: findPlatformRoot(extensionDir), profilePath, lockPath,
+      lockDocument: lock, storedProfile: stored, packageSource: projectPackageSource, extraRoots: capabilitySourceRoots,
+      writeLock: writeJsonAtomic, allowRepin: options.allowRepin, forceFull: options.forceFull,
+      sessionDigest: options.sessionId ? sessionCapabilityDigests.get(`${cwd}\0${options.sessionId}`) : undefined,
+      rememberSessionDigest: options.sessionId ? (digest: string) => sessionCapabilityDigests.set(`${cwd}\0${options.sessionId}`, digest) : undefined
     });
-    if (verification.status === "blocked") {
-      return {
-        ok: false,
-        reason: `Capability lock does not match what this project agreed to: ${verification.reasons.join("; ")}. Reapply the project profile.`
-      };
-    }
-    const granted = {
-      filesystemRead: verification.expected.permissions.filesystemRead,
-      filesystemWrite: verification.expected.permissions.filesystemWrite
-    };
-    if (verification.status !== "repin") return { ok: true, ...granted };
-
-    // The grant is unchanged and only the platform build moved. Record the new
-    // build instead of stopping the session, which is what turned every release
-    // into a chore in every project.
-    try {
-      writeJsonAtomic(lockPath, verification.expected);
-    } catch (error) {
-      return {
-        ok: false,
-        reason: `Capability lock is behind the installed platform and could not be rewritten: ${error instanceof Error ? error.message : String(error)}`
-      };
-    }
-    return { ok: true, repinned: verification.reasons.join("; "), ...granted };
   } catch (error) {
     return { ok: false, reason: `Capability validation failed: ${error instanceof Error ? error.message : String(error)}` };
   }
@@ -4273,7 +4262,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
     resolveTaskAny: (cwd, reference) => resolveTaskContract(cwd, reference, undefined) as TaskContract | undefined,
     bindTask: bindSessionTask,
     writeTask,
-    capabilityState: (ctx) => verifyProjectCapabilityState(extensionDir, ctx.cwd, ctx.isProjectTrusted()),
+    capabilityState: (ctx) => verifyProjectCapabilityState(extensionDir, ctx.cwd, ctx.isProjectTrusted(), { allowRepin: true, forceFull: true, sessionId: ctx.sessionManager.getSessionId() }),
     permissionProfile: (ctx, profile) => resolvePermissionProfile(profile, policy, permissionOverrideFromContext(ctx)),
     legacyProjectWarning: legacyProjectStateWarning,
     mcpReadinessNotice,
@@ -4311,7 +4300,10 @@ export default function piagentGuard(pi: ExtensionAPI) {
     flushObservedTaskContext,
     onTurnEnd: activityInspector.refresh,
     onAgentSettled: activityInspector.refresh,
-    beforeShutdown: activityInspector.dispose
+    beforeShutdown: (ctx) => {
+      activityInspector.dispose(ctx);
+      sessionCapabilityDigests.delete(`${ctx.cwd}\0${ctx.sessionManager.getSessionId()}`);
+    }
   });
 
   registerInputHook(pi, {
@@ -4322,7 +4314,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
       const projectTrusted = ctx.isProjectTrusted();
       const profile = loadProfileFromContext(ctx);
       const permissionProfile = resolvePermissionProfile(profile, policy, permissionOverrideFromContext(ctx));
-      const capabilityState = verifyProjectCapabilityState(extensionDir, ctx.cwd, projectTrusted);
+      const capabilityState = verifyProjectCapabilityState(extensionDir, ctx.cwd, projectTrusted, { sessionId: ctx.sessionManager.getSessionId() });
       return {
         roots: resolveDocumentRoots({
           cwd: ctx.cwd,
@@ -4572,7 +4564,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
     const eventInput = isPlainRecord(event.input) ? event.input : {};
     const backendDecision = executionBackendToolDecision(isTaskMutationTool(event.toolName, eventInput));
     if (!backendDecision.allowed) return { block: true, reason: backendDecision.reason };
-    const capabilityState = verifyProjectCapabilityState(extensionDir, ctx.cwd, projectTrusted);
+    const capabilityState = verifyProjectCapabilityState(extensionDir, ctx.cwd, projectTrusted, { sessionId: ctx.sessionManager.getSessionId() });
     const recoveryTools = new Set(["piagent_profile_options", "piagent_profile_apply", "piagent_context", "read", "grep", "find", "ls"]);
     if (!capabilityState.ok && !recoveryTools.has(event.toolName)) {
       return { block: true, reason: capabilityState.reason ?? "Capability lock validation failed." };

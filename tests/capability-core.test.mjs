@@ -22,6 +22,17 @@ import {
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const actionValidationNow = Date.parse("2026-07-21T01:30:00.000Z");
 const temporaryRoots = new Set();
+const CONTROL_BOUNDARY_INTEGRITY_FILES = Object.freeze([
+  "packages/piagent-core/capabilities/capability-verification-cache.js",
+  "packages/piagent-core/extensions/document-intake.ts",
+  "packages/piagent-core/extensions/execution-backend.js",
+  "packages/piagent-core/extensions/state-retention.js",
+  "packages/piagent-core/extensions/task-state.js",
+  "packages/piagent-core/extensions/verification-intelligence.js",
+  "scripts/piagent-cli.mjs",
+  "scripts/register-typescript-loader.mjs",
+  "scripts/typescript-loader.mjs"
+]);
 
 after(() => {
   for (const root of temporaryRoots) {
@@ -123,6 +134,11 @@ function createPlatformFixture() {
   temporaryRoots.add(root);
   writeJson(path.join(root, "package.json"), { name: "fixture", version: "1.0.2" });
   fs.cpSync(path.join(repositoryRoot, "packages", "piagent-core"), path.join(root, "packages", "piagent-core"), { recursive: true });
+  for (const relativePath of CONTROL_BOUNDARY_INTEGRITY_FILES.filter((entry) => entry.startsWith("scripts/"))) {
+    const target = path.join(root, relativePath);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.copyFileSync(path.join(repositoryRoot, relativePath), target);
+  }
   fs.writeFileSync(path.join(root, "artifact.txt"), "bounded artifact\n");
   writeJson(path.join(root, "packs", "test-pack", "pack.json"), baseManifest());
   writeJson(path.join(root, "profile.json"), baseProfile());
@@ -208,6 +224,12 @@ describe("capability catalog and profile lock", () => {
       lock.core.runtimeFiles.some((entry) => entry.path === "packages/piagent-core/extensions/task-runtime-audit.js"),
       "the profile lock must pin current-tree verifier checkpoint identity"
     );
+    const pinnedRuntimeFiles = new Set(lock.core.runtimeFiles.map((entry) => entry.path));
+    assert.deepEqual(
+      CONTROL_BOUNDARY_INTEGRITY_FILES.filter((entry) => !pinnedRuntimeFiles.has(entry)),
+      [],
+      "the profile lock must pin every task-decision and TypeScript-loader control boundary"
+    );
     assert.deepEqual(
       lock.core.runtimeFiles
         .map((entry) => entry.path)
@@ -258,6 +280,20 @@ describe("capability catalog and profile lock", () => {
     const verification = verifyCapabilityLock(root, profilePath, lock);
     assert.equal(verification.status, "repin");
     assert.equal(verification.ok, true);
+  });
+
+  it("re-pins every task-decision and TypeScript-loader control change", () => {
+    const root = createPlatformFixture();
+    const profilePath = path.join(root, "profile.json");
+    const lock = resolveCapabilityProfile(root, profilePath);
+    for (const relativePath of CONTROL_BOUNDARY_INTEGRITY_FILES) {
+      const target = path.join(root, relativePath);
+      const original = fs.readFileSync(target);
+      fs.appendFileSync(target, "\n// control-boundary mutation\n");
+      assert.equal(verifyCapabilityLock(root, profilePath, lock).status, "repin", relativePath);
+      fs.writeFileSync(target, original);
+      assert.equal(verifyCapabilityLock(root, profilePath, lock).status, "current", relativePath);
+    }
   });
 
   it("re-pins a base policy change that only reformats it", () => {

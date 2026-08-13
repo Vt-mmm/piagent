@@ -51,6 +51,8 @@ export type DocumentExtraction =
   | { status: "ok"; text: string; truncated: boolean; kind: "text" | "docx" | "pdf" }
   | { status: "error"; reason: string };
 
+type DocumentCommandResult = { status: number | null; stdout: string; stderr: string; error?: Error };
+
 export function expandHome(candidate: string, home: string | undefined): string {
   if (candidate === "~") return home ?? candidate;
   if (candidate.startsWith("~/")) {
@@ -435,7 +437,7 @@ export function extractTextDocument(buffer: Buffer): DocumentExtraction {
 // missing tool would be a lie in the direction that wastes the most time.
 export function extractPdfFromDescriptor(
   fd: number,
-  run: (command: string, args: string[], input?: number) => { status: number | null; stdout: string; stderr: string; error?: Error } = defaultRun
+  run: (command: string, args: string[], input?: number) => DocumentCommandResult = defaultRun
 ): DocumentExtraction {
   const probe = run("command", ["-v", "pdftotext"]);
   if (probe.error || probe.status !== 0) {
@@ -471,19 +473,31 @@ export function extractPdfFromDescriptor(
 // returns would hang the session rather than fail the read.
 const PDF_TIMEOUT_MS = 20_000;
 
+export function probeExecutableOnPath(executable: string): DocumentCommandResult {
+  const result = spawnSync("/bin/sh", ["-c", 'command -v "$1"', "piagent-command-probe", executable], {
+    encoding: "utf8",
+    timeout: PDF_TIMEOUT_MS
+  });
+  return {
+    status: result.status,
+    stdout: result.stdout ?? "",
+    stderr: result.stderr ?? "",
+    error: result.error
+  };
+}
+
 function defaultRun(
   command: string,
   args: string[],
   input?: number
-): { status: number | null; stdout: string; stderr: string; error?: Error } {
-  const result = command === "command"
-    ? spawnSync("/bin/sh", ["-c", `command -v ${args[1]}`], { encoding: "utf8", timeout: PDF_TIMEOUT_MS })
-    : spawnSync(command, args, {
-      encoding: "utf8",
-      maxBuffer: MAX_DOCUMENT_BYTES,
-      timeout: PDF_TIMEOUT_MS,
-      stdio: [input ?? "ignore", "pipe", "pipe"]
-    });
+): DocumentCommandResult {
+  if (command === "command") return probeExecutableOnPath(args[1] ?? "");
+  const result = spawnSync(command, args, {
+    encoding: "utf8",
+    maxBuffer: MAX_DOCUMENT_BYTES,
+    timeout: PDF_TIMEOUT_MS,
+    stdio: [input ?? "ignore", "pipe", "pipe"]
+  });
   return {
     status: result.status,
     stdout: result.stdout ?? "",

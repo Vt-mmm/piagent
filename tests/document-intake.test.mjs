@@ -15,6 +15,7 @@ import {
   extractPdfFromDescriptor,
   extractTextDocument,
   parseRootList,
+  probeExecutableOnPath,
   resolveDocumentPath,
   resolveDocumentRoots
 } from "../packages/piagent-core/extensions/document-intake.ts";
@@ -580,6 +581,19 @@ describe("document extraction", () => {
     assert.equal(extracted.status, "error");
     assert.match(extracted.reason, /pdftotext/);
     assert.match(extracted.reason, /brew install poppler/);
+  });
+
+  it("passes command probes as shell data rather than executable source", () => {
+    const root = temporaryDirectory();
+    const marker = path.join(root, "shell-probe-ran");
+    const payload = `piagent-no-such-document-tool; printf injected > ${marker}`;
+    const malicious = probeExecutableOnPath(payload);
+    assert.notEqual(malicious.status, 0);
+    assert.equal(fs.existsSync(marker), false);
+
+    const legitimate = probeExecutableOnPath("sh");
+    assert.equal(legitimate.status, 0);
+    assert.match(legitimate.stdout, /sh/);
   });
 
   it("reports a converter that fails or never returns rather than reporting no text", () => {

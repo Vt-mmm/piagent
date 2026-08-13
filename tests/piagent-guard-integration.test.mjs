@@ -51,6 +51,7 @@ function copyPiagentPackage(root) {
   fs.cpSync(path.join(repoRoot, "adapters"), path.join(root, "adapters"), { recursive: true });
   fs.cpSync(path.join(repoRoot, "packs"), path.join(root, "packs"), { recursive: true });
   fs.cpSync(path.join(repoRoot, "evals"), path.join(root, "evals"), { recursive: true });
+  fs.cpSync(path.join(repoRoot, "scripts"), path.join(root, "scripts"), { recursive: true });
   return packageRoot;
 }
 

@@ -2,9 +2,23 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
-## Unreleased
+## v1.3.1 - 2026-08-13
 
-No changes after the `v1.3.0` stable boundary.
+### Security and reliability hardening
+
+- Extended the capability integrity inventory to include the TypeScript loader,
+  CLI dispatcher, and the remaining task-state, verification, and backend
+  decision modules that can affect runtime enforcement.
+- Replaced repeated full-file capability hashing on every tool call with a
+  fail-closed metadata cache. Session start may re-pin an unchanged grant to a
+  new installed build; build drift discovered during a running session blocks
+  that session until restart instead of silently rewriting its lock.
+- Removed shell interpolation from the `pdftotext` availability probe while
+  preserving the existing PDF extraction behavior.
+- Made local JSONL state locks publish their complete owner atomically and
+  recover a hard-killed normal writer without exposing an empty lock. Recovery
+  ownership is deliberately fail-closed: if that recovery process itself is
+  killed, an operator must remove its `.recovery` lock before writes resume.
 
 ## v1.3.0 - 2026-08-12
 
