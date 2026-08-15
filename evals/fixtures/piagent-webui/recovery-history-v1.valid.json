@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-recovery-history-v1",
+  "generatedAt": "2026-08-14T12:00:00.000Z",
+  "identity": { "projectRef": "project.fixture", "runtimeInstanceId": "runtime.fixture", "sessionRef": "session.fixture", "taskId": "task-active", "taskRunId": "task-active-run", "agentOperationId": null, "toolCallId": null },
+  "runRef": "run.fixture",
+  "state": "ready",
+  "historyRevision": "recovery-history.fixture",
+  "completeness": "complete",
+  "summary": { "contextCompactions": 1, "toolResultCompactions": 1, "compactedToolResults": 2 },
+  "recovery": { "decision": "paused", "enforcementSafe": true, "latestCheckpointRef": "checkpoint.fixture", "verifierState": "stale", "invalidatedFileCount": 1, "invalidatedFilesKnown": true, "handoffState": "available", "reasonCode": "recovery-paused" },
+  "retainedContent": { "access": "omitted", "exposed": false, "reasonCode": "protected-runtime-evidence" },
+  "events": [
+    { "eventRef": "compaction.context", "evidenceRef": "telemetry.context", "sequence": 1, "recordedAt": "2026-08-14T10:00:00.000Z", "kind": "context-compaction", "title": "Context compacted", "detail": "threshold", "toolName": null, "originalChars": null, "originalLines": null, "captureCount": null, "willRetry": false, "fromExtension": false },
+    { "eventRef": "compaction.tool", "evidenceRef": "telemetry.tool", "sequence": 2, "recordedAt": "2026-08-14T10:01:00.000Z", "kind": "tool-result-compaction", "title": "Tool result compacted", "detail": null, "toolName": "bash", "originalChars": 120000, "originalLines": 3000, "captureCount": 2, "willRetry": null, "fromExtension": null }
+  ],
+  "page": { "total": 2, "returned": 2, "truncated": false },
+  "warnings": [],
+  "health": { "state": "ok", "reasonCode": null, "message": null }
+}

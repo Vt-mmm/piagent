@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-subagent-tree-v1",
+  "generatedAt": "2026-08-14T12:00:00.000Z",
+  "identity": {
+    "projectRef": "project.fixture",
+    "runtimeInstanceId": "runtime.fixture",
+    "sessionRef": "session.fixture",
+    "taskId": "task-fixture",
+    "taskRunId": "task-fixture-run",
+    "agentOperationId": null,
+    "toolCallId": null
+  },
+  "runRef": "run.fixture",
+  "state": "ready",
+  "treeRevision": "subagent-tree.fixture",
+  "evidenceState": "complete",
+  "orchestration": { "mode": "bounded-subagents", "subagents": "used" },
+  "parent": { "nodeRef": "parent.fixture", "lifecycleState": "active", "budgetTerminal": false, "mergeOwner": "parent" },
+  "children": [
+    {
+      "nodeRef": "helper.fixture",
+      "parentRef": "parent.fixture",
+      "role": "scout",
+      "authority": "read-only",
+      "lifecycleState": "succeeded",
+      "reservedAt": "2026-08-14T11:00:00.000Z",
+      "expiresAt": "2026-08-14T11:10:00.000Z",
+      "completedAt": "2026-08-14T11:05:00.000Z",
+      "currentWriter": false,
+      "result": { "state": "accepted", "disposition": "succeeded", "calls": 2, "tokens": 300 }
+    }
+  ],
+  "writer": { "state": "parent", "ownerNodeRef": "parent.fixture" },
+  "nestedLineage": { "state": "unavailable", "reasonCode": "no-durable-nested-lineage" },
+  "summary": { "total": 1, "active": 0, "completed": 1, "staleResults": 0, "readOnly": 1, "singleWriter": 0 },
+  "warnings": [],
+  "health": { "state": "ok", "reasonCode": null, "message": null }
+}

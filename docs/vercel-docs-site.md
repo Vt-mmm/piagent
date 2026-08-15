@@ -1,4 +1,5 @@
 # Vercel docs site
+<!-- language: vi; english-index: docs/en/README.md -->
 
 ## Khuyến nghị
 

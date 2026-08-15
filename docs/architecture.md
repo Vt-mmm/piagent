@@ -1,4 +1,5 @@
 # Architecture documentation
+<!-- language: en+vi -->
 
 - [English architecture](en/architecture.md)
 - [Architecture tiếng Việt](vi/architecture.md)

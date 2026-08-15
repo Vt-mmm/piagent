@@ -1,5 +1,4 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-
 import { exactFinalOutputGuidance } from "../quality/exact-output-contract.ts";
 import { taskPerformanceAssurance } from "../quality/performance-assurance.ts";
 import { automaticTaskSummary, boundedRuntimeIntakeMessage } from "../workflows/task-intake.ts";
@@ -7,18 +6,16 @@ import { WORKING_TREE_DIGEST_ALGORITHM } from "../../extensions/working-tree-dig
 import { createEnvironmentBoundTaskAuthority } from "../policy/task-authority-runtime.ts";
 import { authorityReplacementState } from "../policy/authority-resume-policy.ts";
 import { compileCriterionGraph, criterionGraphContextSelection, criterionGraphGuidance, criterionGraphMode } from "../../extensions/criterion-graph.js";
-
+import { captureTaskStartBaseline } from "../inspection/task-baseline-start-capture.ts";
 type ExtensionContext = any;
 type TaskContract = any;
 type TaskStartParameters = any;
-
 function sameStringRecord(left: Record<string, string>, right: Record<string, string>): boolean {
   const leftEntries = Object.entries(left).sort(([a], [b]) => a.localeCompare(b));
   const rightEntries = Object.entries(right).sort(([a], [b]) => a.localeCompare(b));
   return leftEntries.length === rightEntries.length
     && leftEntries.every(([key, value], index) => rightEntries[index]?.[0] === key && rightEntries[index]?.[1] === value);
 }
-
 function satisfiesAuthorityReplacement(task: TaskContract, state: ReturnType<typeof authorityReplacementState>): boolean {
   if (!task.authoritySnapshot) return false;
   if (state.reason === "mechanical-rollback-requested") {
@@ -31,7 +28,6 @@ function satisfiesAuthorityReplacement(task: TaskContract, state: ReturnType<typ
   }
   return true;
 }
-
 export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any>): any {
   const {
     DEFAULT_MAX_TASK_ATTEMPTS, ORCHESTRATION_ROLES, REVIEW_LENSES, StringEnum, Type,
@@ -39,10 +35,10 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
     applyRuntimeLifecycleObservation, automaticAcceptanceCriteria, automaticReadOnlyTaskScope, automaticReviewLenses, automaticTaskIntakeMode, automaticTaskRiskLane, automaticTaskScope,
     acceptanceBaselineGuidance, acceptanceProofGuidance, bindSessionTask, buildAcceptanceReceipt, compactTaskDetails, contextBudgetConfig, createTaskRunId,
     currentSessionName, defaultWorkPlan, effectiveProtectedPaths, hasGitEvidenceRoot, hasOperatorSessionName,
-    loadProfileFromContext, normalizeReviewLenses, normalizeWorkPlanSteps, nowIso, policy,
+    loadProfileFromContext, matchesProtectedPath, normalizeReviewLenses, normalizeWorkPlanSteps, nowIso, policy,
     priorTaskAttempts, recordTaskStartCheckpoint, redactText, redactTextArray, registerRuntimeTool,
     repositoryFileManifest, resolveOrchestrationPolicy, resolveTaskScopePatterns, runtimeLifecycleMode, runtimeState, safeTaskId, selectVerificationPlan,
-    summarizeAttempt, validTaskScopePattern, validateNewWorkPlan, verifierCommandInstructions, workingTreeSnapshot, workingTreeSnapshotHasUnavailableEvidence,
+    summarizeAttempt, validTaskScopePattern, validateNewWorkPlan, verifierCommandInstructions, workingTreeEvidenceDigest, workingTreeSnapshot, workingTreeSnapshotHasUnavailableEvidence,
     writeTask
   } = deps;
   const taskStartTool = {
@@ -287,6 +283,15 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       if (changeMode === "source-change" && workingTreeSnapshotHasUnavailableEvidence(baselineFileDigests)) {
         return { content: [{ type: "text", text: "Task start refused: the baseline contains unavailable working-tree content evidence. Restore readable repository files before starting source changes." }], isError: true };
       }
+      if (changeMode === "source-change") {
+        const protectedPaths = effectiveProtectedPaths(policy, profile).readProtectedPaths;
+        try {
+          await captureTaskStartBaseline({ projectRoot: ctx.cwd, taskId, taskRunId, sessionId, capturedAt: createdAt,
+            baselineTreeDigest: workingTreeEvidenceDigest(baselineFileDigests), protectedPaths, matchesProtectedPath });
+        } catch {
+          return { content: [{ type: "text", text: "Task start refused: the private Task Baseline Manifest could not be captured safely. Inspect local-state permissions and retry before editing." }], isError: true };
+        }
+      }
       const acceptance = buildAcceptanceReceipt({
         summary: safeSummary,
         expectedOutput: redactText(params.expectedOutput),
@@ -369,7 +374,6 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       appendTrace(ctx.cwd, { taskId, taskRunId, sessionId, sessionName, attempt, event: "task_start", summary: task.summary, riskLane: params.riskLane, intakeMode: task.intakeMode, changeMode: task.changeMode, lifecycleMode, criterionGraphMode: written.criterionGraph.mode, criterionGraphDigest: written.criterionGraph.graphDigest, authorityProfile: written.authoritySnapshot.profile, authoritySnapshotDigest: written.authoritySnapshot.snapshotDigest, scopeMappings, seededContext: seededContext.map((item) => item.path) });
       appendSessionTrace(pi, { taskId, taskRunId, sessionId, sessionName, attempt, event: "task_start", summary: task.summary, riskLane: params.riskLane, intakeMode: task.intakeMode, changeMode: task.changeMode, lifecycleMode, criterionGraphMode: written.criterionGraph.mode, criterionGraphDigest: written.criterionGraph.graphDigest, authorityProfile: written.authoritySnapshot.profile, authoritySnapshotDigest: written.authoritySnapshot.snapshotDigest, scopeMappings, seededContext: seededContext.map((item) => item.path) });
       recordTaskStartCheckpoint(ctx, written, firstReady.id, lifecycleMode);
-
       return {
         content: [{
           type: "text",
@@ -408,18 +412,13 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
     }
   };
   registerRuntimeTool(pi, taskStartTool);
-
-  async function maybeStartAutomaticTask(
-    prompt: string,
-    ctx: ExtensionContext
-  ): Promise<{ started: boolean; text: string; task?: TaskContract } | undefined> {
+  async function maybeStartAutomaticTask(prompt: string, ctx: ExtensionContext): Promise<{ started: boolean; text: string; task?: TaskContract } | undefined> {
     const profile = loadProfileFromContext(ctx);
     const readProtectedPaths = effectiveProtectedPaths(policy, profile).readProtectedPaths;
     const intakeMode = automaticTaskIntakeMode(prompt, readProtectedPaths);
     if (!intakeMode) return undefined;
     const active = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
     if (active?.trace.outcome === "pending") return undefined;
-
     const summary = redactText(automaticTaskSummary(prompt));
     const sessionName = currentSessionName(ctx);
     const projectFiles = repositoryFileManifest(ctx.cwd);

@@ -1,0 +1,5206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/runtime-event-v2.schema.json",
+  "title": "Piagent WebUI bounded runtime event v2",
+  "description": "A bounded, browser-safe event projection. This schema intentionally excludes raw Pi payloads, filesystem and session paths, provider headers, reasoning content, and raw tool arguments or results.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "eventId",
+    "eventCursor",
+    "writerSequence",
+    "recordedAt",
+    "sourceObservedAt",
+    "projectRef",
+    "runtimeInstanceId",
+    "sessionRef",
+    "taskId",
+    "taskRunId",
+    "agentOperationId",
+    "turnIndex",
+    "messageRef",
+    "toolCallId",
+    "revision",
+    "kind",
+    "correlation",
+    "evidence",
+    "payload",
+    "redaction"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 2
+    },
+    "eventId": {
+      "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+    },
+    "eventCursor": {
+      "$ref": "common-v1.schema.json#/$defs/revisionToken"
+    },
+    "writerSequence": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "recordedAt": {
+      "$ref": "common-v1.schema.json#/$defs/timestamp"
+    },
+    "sourceObservedAt": {
+      "$ref": "#/$defs/nullableTimestamp"
+    },
+    "projectRef": {
+      "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+    },
+    "runtimeInstanceId": {
+      "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+    },
+    "sessionRef": {
+      "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+    },
+    "taskId": {
+      "$ref": "common-v1.schema.json#/$defs/nullablePublicId"
+    },
+    "taskRunId": {
+      "$ref": "common-v1.schema.json#/$defs/nullablePublicId"
+    },
+    "agentOperationId": {
+      "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef"
+    },
+    "turnIndex": {
+      "$ref": "#/$defs/nullableTurnIndex"
+    },
+    "messageRef": {
+      "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef"
+    },
+    "toolCallId": {
+      "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef"
+    },
+    "revision": {
+      "$ref": "common-v1.schema.json#/$defs/domainRevision"
+    },
+    "kind": {
+      "$ref": "#/$defs/eventKind"
+    },
+    "correlation": {
+      "$ref": "#/$defs/correlation"
+    },
+    "evidence": {
+      "enum": [
+        "observed",
+        "derived"
+      ]
+    },
+    "payload": {
+      "type": "object"
+    },
+    "redaction": {
+      "$ref": "common-v1.schema.json#/$defs/redaction"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "type": "object",
+        "required": [
+          "taskRunId"
+        ],
+        "properties": {
+          "taskRunId": {
+            "type": "string"
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "taskId": {
+            "$ref": "common-v1.schema.json#/$defs/publicId"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "required": [
+          "toolCallId"
+        ],
+        "properties": {
+          "toolCallId": {
+            "type": "string"
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "agentOperationId": {
+            "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "required": [
+          "turnIndex"
+        ],
+        "properties": {
+          "turnIndex": {
+            "type": "integer"
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "agentOperationId": {
+            "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "message.started",
+              "message.text-delta",
+              "message.thinking-state",
+              "message.completed",
+              "message.failed"
+            ]
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "agentOperationId",
+          "turnIndex",
+          "messageRef"
+        ],
+        "properties": {
+          "agentOperationId": {
+            "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+          },
+          "turnIndex": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "messageRef": {
+            "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "approval.requested",
+              "approval.resolved",
+              "approval.expired"
+            ]
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "taskId",
+          "taskRunId",
+          "agentOperationId",
+          "toolCallId"
+        ],
+        "properties": {
+          "taskId": {
+            "$ref": "common-v1.schema.json#/$defs/publicId"
+          },
+          "taskRunId": {
+            "$ref": "common-v1.schema.json#/$defs/publicId"
+          },
+          "agentOperationId": {
+            "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+          },
+          "toolCallId": {
+            "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "verifier.started",
+              "verifier.finished",
+              "verifier.stale",
+              "handoff.updated"
+            ]
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "taskId",
+          "taskRunId"
+        ],
+        "properties": {
+          "taskId": {
+            "$ref": "common-v1.schema.json#/$defs/publicId"
+          },
+          "taskRunId": {
+            "$ref": "common-v1.schema.json#/$defs/publicId"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "required": [
+          "kind",
+          "payload"
+        ],
+        "properties": {
+          "kind": {
+            "const": "source.changed"
+          },
+          "payload": {
+            "type": "object",
+            "required": [
+              "projection"
+            ],
+            "properties": {
+              "projection": {
+                "const": "task"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "taskId",
+          "taskRunId"
+        ],
+        "properties": {
+          "taskId": {
+            "$ref": "common-v1.schema.json#/$defs/publicId"
+          },
+          "taskRunId": {
+            "$ref": "common-v1.schema.json#/$defs/publicId"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "required": [
+          "kind",
+          "payload"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "activity.requested",
+              "activity.started",
+              "activity.progress",
+              "activity.finished",
+              "activity.failed",
+              "activity.blocked",
+              "activity.aborted"
+            ]
+          },
+          "payload": {
+            "type": "object",
+            "required": [
+              "activityType"
+            ],
+            "properties": {
+              "activityType": {
+                "const": "tool"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "agentOperationId",
+          "toolCallId"
+        ],
+        "properties": {
+          "agentOperationId": {
+            "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+          },
+          "toolCallId": {
+            "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "required": [
+          "kind",
+          "payload"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "activity.requested",
+              "activity.started",
+              "activity.progress",
+              "activity.finished",
+              "activity.failed",
+              "activity.blocked",
+              "activity.aborted"
+            ]
+          },
+          "payload": {
+            "type": "object",
+            "required": [
+              "activityType"
+            ],
+            "properties": {
+              "activityType": {
+                "enum": [
+                  "provider",
+                  "compaction",
+                  "retry"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "agentOperationId"
+        ],
+        "properties": {
+          "agentOperationId": {
+            "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "required": [
+          "kind",
+          "payload"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "activity.requested",
+              "activity.started",
+              "activity.progress",
+              "activity.finished",
+              "activity.failed",
+              "activity.blocked",
+              "activity.aborted"
+            ]
+          },
+          "payload": {
+            "type": "object",
+            "required": [
+              "activityType"
+            ],
+            "properties": {
+              "activityType": {
+                "enum": [
+                  "verifier",
+                  "task"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "taskId",
+          "taskRunId"
+        ],
+        "properties": {
+          "taskId": {
+            "$ref": "common-v1.schema.json#/$defs/publicId"
+          },
+          "taskRunId": {
+            "$ref": "common-v1.schema.json#/$defs/publicId"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "required": [
+          "kind",
+          "payload"
+        ],
+        "properties": {
+          "kind": {
+            "const": "usage.updated"
+          },
+          "payload": {
+            "type": "object",
+            "required": [
+              "scope"
+            ],
+            "properties": {
+              "scope": {
+                "const": "task-ledger"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "taskId",
+          "taskRunId"
+        ],
+        "properties": {
+          "taskId": {
+            "$ref": "common-v1.schema.json#/$defs/publicId"
+          },
+          "taskRunId": {
+            "$ref": "common-v1.schema.json#/$defs/publicId"
+          }
+        }
+      }
+    },
+    {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/runtimeStartedEvent"
+        },
+        {
+          "$ref": "#/$defs/runtimeHealthChangedEvent"
+        },
+        {
+          "$ref": "#/$defs/runtimeDisconnectedEvent"
+        },
+        {
+          "$ref": "#/$defs/runtimeResyncRequiredEvent"
+        },
+        {
+          "$ref": "#/$defs/runtimeResyncedEvent"
+        },
+        {
+          "$ref": "#/$defs/runtimePhaseChangedEvent"
+        },
+        {
+          "$ref": "#/$defs/sessionBoundEvent"
+        },
+        {
+          "$ref": "#/$defs/sessionInfoChangedEvent"
+        },
+        {
+          "$ref": "#/$defs/sessionReplacementRequestedEvent"
+        },
+        {
+          "$ref": "#/$defs/sessionReplacementPendingEvent"
+        },
+        {
+          "$ref": "#/$defs/sessionReplacementCommittedEvent"
+        },
+        {
+          "$ref": "#/$defs/sessionReplacementCancelledEvent"
+        },
+        {
+          "$ref": "#/$defs/sessionReplacementFailedEvent"
+        },
+        {
+          "$ref": "#/$defs/sessionCompactionPreflightEvent"
+        },
+        {
+          "$ref": "#/$defs/sessionCompactedEvent"
+        },
+        {
+          "$ref": "#/$defs/sessionShutdownEvent"
+        },
+        {
+          "$ref": "#/$defs/agentOperationStartedEvent"
+        },
+        {
+          "$ref": "#/$defs/agentOperationLoopEndedEvent"
+        },
+        {
+          "$ref": "#/$defs/agentOperationSettledEvent"
+        },
+        {
+          "$ref": "#/$defs/agentOperationStopRequestedEvent"
+        },
+        {
+          "$ref": "#/$defs/agentOperationStopSettledEvent"
+        },
+        {
+          "$ref": "#/$defs/turnStartedEvent"
+        },
+        {
+          "$ref": "#/$defs/turnEndedEvent"
+        },
+        {
+          "$ref": "#/$defs/messageStartedEvent"
+        },
+        {
+          "$ref": "#/$defs/messageTextDeltaEvent"
+        },
+        {
+          "$ref": "#/$defs/messageThinkingStateEvent"
+        },
+        {
+          "$ref": "#/$defs/messageCompletedEvent"
+        },
+        {
+          "$ref": "#/$defs/messageFailedEvent"
+        },
+        {
+          "$ref": "#/$defs/chatHeldEvent"
+        },
+        {
+          "$ref": "#/$defs/chatDispatchRequestedEvent"
+        },
+        {
+          "$ref": "#/$defs/chatDispatchObservedEvent"
+        },
+        {
+          "$ref": "#/$defs/chatDispatchRejectedEvent"
+        },
+        {
+          "$ref": "#/$defs/chatDispatchUnknownEvent"
+        },
+        {
+          "$ref": "#/$defs/modelChangedEvent"
+        },
+        {
+          "$ref": "#/$defs/thinkingChangedEvent"
+        },
+        {
+          "$ref": "#/$defs/taskStartedEvent"
+        },
+        {
+          "$ref": "#/$defs/taskStateChangedEvent"
+        },
+        {
+          "$ref": "#/$defs/taskOutcomeChangedEvent"
+        },
+        {
+          "$ref": "#/$defs/taskControlStopRequestedEvent"
+        },
+        {
+          "$ref": "#/$defs/taskControlStopSettledEvent"
+        },
+        {
+          "$ref": "#/$defs/taskControlPauseRequestedEvent"
+        },
+        {
+          "$ref": "#/$defs/taskControlPausedEvent"
+        },
+        {
+          "$ref": "#/$defs/taskControlPauseCancelledEvent"
+        },
+        {
+          "$ref": "#/$defs/taskControlResumeRequestedEvent"
+        },
+        {
+          "$ref": "#/$defs/taskControlResumedEvent"
+        },
+        {
+          "$ref": "#/$defs/taskControlResumeRejectedEvent"
+        },
+        {
+          "$ref": "#/$defs/taskControlContinueRequestedEvent"
+        },
+        {
+          "$ref": "#/$defs/taskControlContinueDispatchedEvent"
+        },
+        {
+          "$ref": "#/$defs/taskControlContinueUncertainEvent"
+        },
+        {
+          "$ref": "#/$defs/queueChangedEvent"
+        },
+        {
+          "$ref": "#/$defs/activityRequestedEvent"
+        },
+        {
+          "$ref": "#/$defs/activityStartedEvent"
+        },
+        {
+          "$ref": "#/$defs/activityProgressEvent"
+        },
+        {
+          "$ref": "#/$defs/activityFinishedEvent"
+        },
+        {
+          "$ref": "#/$defs/activityFailedEvent"
+        },
+        {
+          "$ref": "#/$defs/activityBlockedEvent"
+        },
+        {
+          "$ref": "#/$defs/activityAbortedEvent"
+        },
+        {
+          "$ref": "#/$defs/approvalRequestedEvent"
+        },
+        {
+          "$ref": "#/$defs/approvalResolvedEvent"
+        },
+        {
+          "$ref": "#/$defs/approvalExpiredEvent"
+        },
+        {
+          "$ref": "#/$defs/sourceChangedEvent"
+        },
+        {
+          "$ref": "#/$defs/verifierStartedEvent"
+        },
+        {
+          "$ref": "#/$defs/verifierFinishedEvent"
+        },
+        {
+          "$ref": "#/$defs/verifierStaleEvent"
+        },
+        {
+          "$ref": "#/$defs/usageUpdatedEvent"
+        },
+        {
+          "$ref": "#/$defs/handoffUpdatedEvent"
+        }
+      ]
+    }
+  ],
+  "$defs": {
+    "nullableTimestamp": {
+      "anyOf": [
+        {
+          "$ref": "common-v1.schema.json#/$defs/timestamp"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "nullableDigest": {
+      "anyOf": [
+        {
+          "$ref": "common-v1.schema.json#/$defs/digest"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "nullableTurnIndex": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000000
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "nullableCount": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000000000
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "nullableBoolean": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "nullableExitCode": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "safeChunk": {
+      "type": "string",
+      "maxLength": 16384,
+      "pattern": "^[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]*$"
+    },
+    "nullableLongDisplayText": {
+      "anyOf": [
+        {
+          "$ref": "common-v1.schema.json#/$defs/longDisplayText"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "toolName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "nullableToolName": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/toolName"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "thinkingLevel": {
+      "enum": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ]
+    },
+    "nullableThinkingLevel": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/thinkingLevel"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "stopReason": {
+      "enum": [
+        "pending",
+        "stop",
+        "length",
+        "toolUse",
+        "error",
+        "aborted",
+        "deferred"
+      ]
+    },
+    "nullableStopReason": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/stopReason"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "taskOutcome": {
+      "enum": [
+        "pending",
+        "completed",
+        "blocked",
+        "partial",
+        "failed"
+      ]
+    },
+    "nullableTaskOutcome": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/taskOutcome"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "controlState": {
+      "enum": [
+        "active",
+        "pause-requested",
+        "paused",
+        "terminal",
+        "unknown"
+      ]
+    },
+    "nullableControlState": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/controlState"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "operationState": {
+      "enum": [
+        "idle",
+        "running",
+        "stopping",
+        "settled",
+        "unknown"
+      ]
+    },
+    "factState": {
+      "enum": [
+        "known",
+        "unknown",
+        "unavailable",
+        "disconnected",
+        "resync-required"
+      ]
+    },
+    "booleanFact": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "state",
+            "value",
+            "reasonCode"
+          ],
+          "properties": {
+            "state": {
+              "const": "known"
+            },
+            "value": {
+              "type": "boolean"
+            },
+            "reasonCode": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "state",
+            "value",
+            "reasonCode"
+          ],
+          "properties": {
+            "state": {
+              "enum": [
+                "unknown",
+                "unavailable",
+                "disconnected",
+                "resync-required"
+              ]
+            },
+            "value": {
+              "type": "null"
+            },
+            "reasonCode": {
+              "$ref": "common-v1.schema.json#/$defs/reasonCode"
+            }
+          }
+        }
+      ]
+    },
+    "correlation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commandId",
+        "messageRequestId",
+        "replacementId",
+        "approvalRequestId",
+        "causationEventId",
+        "idempotencyKeyDigest"
+      ],
+      "properties": {
+        "commandId": {
+          "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef"
+        },
+        "messageRequestId": {
+          "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef"
+        },
+        "replacementId": {
+          "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef"
+        },
+        "approvalRequestId": {
+          "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef"
+        },
+        "causationEventId": {
+          "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef"
+        },
+        "idempotencyKeyDigest": {
+          "$ref": "#/$defs/nullableDigest"
+        }
+      }
+    },
+    "eventKind": {
+      "enum": [
+        "runtime.started",
+        "runtime.health-changed",
+        "runtime.disconnected",
+        "runtime.resync-required",
+        "runtime.resynced",
+        "runtime.phase-changed",
+        "session.bound",
+        "session.info-changed",
+        "session.replacement-requested",
+        "session.replacement-pending",
+        "session.replacement-committed",
+        "session.replacement-cancelled",
+        "session.replacement-failed",
+        "session.compaction-preflight",
+        "session.compacted",
+        "session.shutdown",
+        "agent-operation.started",
+        "agent-operation.loop-ended",
+        "agent-operation.settled",
+        "agent-operation.stop-requested",
+        "agent-operation.stop-settled",
+        "turn.started",
+        "turn.ended",
+        "message.started",
+        "message.text-delta",
+        "message.thinking-state",
+        "message.completed",
+        "message.failed",
+        "chat.held",
+        "chat.dispatch-requested",
+        "chat.dispatch-observed",
+        "chat.dispatch-rejected",
+        "chat.dispatch-unknown",
+        "session-option.model-changed",
+        "session-option.thinking-changed",
+        "task.started",
+        "task.state-changed",
+        "task.outcome-changed",
+        "task-control.stop-requested",
+        "task-control.stop-settled",
+        "task-control.pause-requested",
+        "task-control.paused",
+        "task-control.pause-cancelled",
+        "task-control.resume-requested",
+        "task-control.resumed",
+        "task-control.resume-rejected",
+        "task-control.continue-requested",
+        "task-control.continue-dispatched",
+        "task-control.continue-uncertain",
+        "queue.changed",
+        "activity.requested",
+        "activity.started",
+        "activity.progress",
+        "activity.finished",
+        "activity.failed",
+        "activity.blocked",
+        "activity.aborted",
+        "approval.requested",
+        "approval.resolved",
+        "approval.expired",
+        "source.changed",
+        "verifier.started",
+        "verifier.finished",
+        "verifier.stale",
+        "usage.updated",
+        "handoff.updated"
+      ]
+    },
+    "runtimeStartedPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "connectionState",
+        "operationState",
+        "buildRef",
+        "capabilitySnapshotRef",
+        "reasonCode"
+      ],
+      "properties": {
+        "connectionState": {
+          "const": "connected"
+        },
+        "operationState": {
+          "$ref": "#/$defs/operationState"
+        },
+        "buildRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "capabilitySnapshotRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "reasonCode": {
+          "$ref": "common-v1.schema.json#/$defs/nullableReasonCode"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": { "operationState": { "const": "unknown" } },
+            "required": ["operationState"]
+          },
+          "then": {
+            "type": "object",
+            "properties": { "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" } }
+          },
+          "else": {
+            "type": "object",
+            "properties": { "reasonCode": { "type": "null" } }
+          }
+        }
+      ]
+    },
+    "runtimeHealthChangedPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "health"
+      ],
+      "properties": {
+        "health": {
+          "$ref": "common-v1.schema.json#/$defs/health"
+        }
+      }
+    },
+    "runtimeDisconnectedPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reasonCode",
+        "message",
+        "lastKnownCursor",
+        "recoverable",
+        "resyncRequired"
+      ],
+      "properties": {
+        "reasonCode": {
+          "$ref": "common-v1.schema.json#/$defs/reasonCode"
+        },
+        "message": {
+          "$ref": "common-v1.schema.json#/$defs/nullableDisplayText"
+        },
+        "lastKnownCursor": {
+          "$ref": "common-v1.schema.json#/$defs/nullableRevisionToken"
+        },
+        "recoverable": {
+          "type": "boolean"
+        },
+        "resyncRequired": {
+          "type": "boolean"
+        }
+      }
+    },
+    "runtimeResyncRequiredPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reasonCode",
+        "message",
+        "lastAcceptedCursor",
+        "minimumAvailableCursor",
+        "snapshotRequired"
+      ],
+      "properties": {
+        "reasonCode": {
+          "$ref": "common-v1.schema.json#/$defs/reasonCode"
+        },
+        "message": {
+          "$ref": "common-v1.schema.json#/$defs/nullableDisplayText"
+        },
+        "lastAcceptedCursor": {
+          "$ref": "common-v1.schema.json#/$defs/nullableRevisionToken"
+        },
+        "minimumAvailableCursor": {
+          "$ref": "common-v1.schema.json#/$defs/nullableRevisionToken"
+        },
+        "snapshotRequired": {
+          "const": true
+        }
+      }
+    },
+    "runtimeResyncedPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "previousCursor",
+        "snapshotRef",
+        "snapshotRevision",
+        "currentCursor"
+      ],
+      "properties": {
+        "previousCursor": {
+          "$ref": "common-v1.schema.json#/$defs/nullableRevisionToken"
+        },
+        "snapshotRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "snapshotRevision": {
+          "$ref": "common-v1.schema.json#/$defs/snapshotRevision"
+        },
+        "currentCursor": {
+          "$ref": "common-v1.schema.json#/$defs/revisionToken"
+        }
+      }
+    },
+    "runtimePhaseChangedPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "factState",
+        "phase",
+        "operationState",
+        "reasonCode"
+      ],
+      "properties": {
+        "factState": {
+          "$ref": "#/$defs/factState"
+        },
+        "phase": {
+          "$ref": "common-v1.schema.json#/$defs/operationPhase"
+        },
+        "operationState": {
+          "$ref": "#/$defs/operationState"
+        },
+        "reasonCode": {
+          "$ref": "common-v1.schema.json#/$defs/nullableReasonCode"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "required": [
+              "factState"
+            ],
+            "properties": {
+              "factState": {
+                "const": "known"
+              }
+            }
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "phase": {
+                "allOf": [
+                  {
+                    "$ref": "common-v1.schema.json#/$defs/operationPhase"
+                  },
+                  {
+                    "not": {
+                      "const": "unknown"
+                    }
+                  }
+                ]
+              },
+              "operationState": {
+                "enum": [
+                  "idle",
+                  "running",
+                  "stopping",
+                  "settled"
+                ]
+              },
+              "reasonCode": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "phase": {
+                "const": "unknown"
+              },
+              "operationState": {
+                "const": "unknown"
+              },
+              "reasonCode": {
+                "$ref": "common-v1.schema.json#/$defs/reasonCode"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "sessionBoundPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reason",
+        "replacementId"
+      ],
+      "properties": {
+        "reason": {
+          "enum": [
+            "startup",
+            "reload",
+            "new",
+            "resume",
+            "fork"
+          ]
+        },
+        "replacementId": {
+          "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": { "factState": { "const": "known" }, "phase": { "const": "idle" } },
+            "required": ["factState", "phase"]
+          },
+          "then": {
+            "type": "object",
+            "properties": { "operationState": { "const": "idle" } }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "factState": { "const": "known" }, "phase": { "const": "settling" } },
+            "required": ["factState", "phase"]
+          },
+          "then": {
+            "type": "object",
+            "properties": { "operationState": { "enum": ["stopping", "settled"] } }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "factState": { "const": "known" },
+              "phase": {
+                "enum": [
+                  "input-preflight", "model", "tool-preflight", "waiting-approval",
+                  "tool", "retry", "compaction", "branch-summary", "direct-bash", "other"
+                ]
+              }
+            },
+            "required": ["factState", "phase"]
+          },
+          "then": {
+            "type": "object",
+            "properties": { "operationState": { "enum": ["running", "stopping"] } }
+          }
+        }
+      ]
+    },
+    "sessionInfoChangedPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "displayName"
+      ],
+      "properties": {
+        "displayName": {
+          "$ref": "common-v1.schema.json#/$defs/nullableDisplayText"
+        }
+      }
+    },
+    "replacementReason": {
+      "enum": [
+        "new",
+        "resume",
+        "fork"
+      ]
+    },
+    "sessionReplacementRequestedPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reason",
+        "gateState",
+        "proposedSessionRef"
+      ],
+      "properties": {
+        "reason": {
+          "$ref": "#/$defs/replacementReason"
+        },
+        "gateState": {
+          "const": "closed"
+        },
+        "proposedSessionRef": {
+          "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef"
+        }
+      }
+    },
+    "sessionReplacementPendingPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reason",
+        "gateState",
+        "waitingFor"
+      ],
+      "properties": {
+        "reason": {
+          "$ref": "#/$defs/replacementReason"
+        },
+        "gateState": {
+          "const": "closed"
+        },
+        "waitingFor": {
+          "const": "host-result-callback"
+        }
+      }
+    },
+    "sessionReplacementCommittedPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reason",
+        "previousSessionRef",
+        "currentSessionRef",
+        "currentSessionValidated",
+        "gateState"
+      ],
+      "properties": {
+        "reason": {
+          "$ref": "#/$defs/replacementReason"
+        },
+        "previousSessionRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "currentSessionRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "currentSessionValidated": {
+          "type": "boolean"
+        },
+        "gateState": {
+          "enum": [
+            "open",
+            "closed"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "gateState": {
+                "const": "open"
+              }
+            },
+            "required": [
+              "gateState"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "currentSessionValidated": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "currentSessionValidated": {
+                "const": false
+              }
+            },
+            "required": [
+              "currentSessionValidated"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "gateState": {
+                "const": "closed"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "sessionReplacementCancelledPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reason",
+        "unchangedSessionRevalidated",
+        "gateState",
+        "reasonCode"
+      ],
+      "properties": {
+        "reason": {
+          "$ref": "#/$defs/replacementReason"
+        },
+        "unchangedSessionRevalidated": {
+          "type": "boolean"
+        },
+        "gateState": {
+          "enum": [
+            "open",
+            "closed"
+          ]
+        },
+        "reasonCode": {
+          "$ref": "common-v1.schema.json#/$defs/reasonCode"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "gateState": {
+                "const": "open"
+              }
+            },
+            "required": [
+              "gateState"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "unchangedSessionRevalidated": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "unchangedSessionRevalidated": {
+                "const": false
+              }
+            },
+            "required": [
+              "unchangedSessionRevalidated"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "gateState": {
+                "const": "closed"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "sessionReplacementFailedPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reason",
+        "unchangedSessionRevalidated",
+        "gateState",
+        "resyncRequired",
+        "reasonCode",
+        "message"
+      ],
+      "properties": {
+        "reason": {
+          "$ref": "#/$defs/replacementReason"
+        },
+        "unchangedSessionRevalidated": {
+          "type": "boolean"
+        },
+        "gateState": {
+          "enum": [
+            "open",
+            "closed"
+          ]
+        },
+        "resyncRequired": {
+          "type": "boolean"
+        },
+        "reasonCode": {
+          "$ref": "common-v1.schema.json#/$defs/reasonCode"
+        },
+        "message": {
+          "$ref": "common-v1.schema.json#/$defs/nullableDisplayText"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "gateState": {
+                "const": "open"
+              }
+            },
+            "required": [
+              "gateState"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "unchangedSessionRevalidated": {
+                "const": true
+              },
+              "resyncRequired": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "unchangedSessionRevalidated": {
+                "const": false
+              }
+            },
+            "required": [
+              "unchangedSessionRevalidated"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "gateState": {
+                "const": "closed"
+              },
+              "resyncRequired": {
+                "const": true
+              }
+            }
+          }
+        }
+      ]
+    },
+    "sessionCompactionPreflightPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reason",
+        "willRetry",
+        "cancellable"
+      ],
+      "properties": {
+        "reason": {
+          "enum": [
+            "manual",
+            "threshold",
+            "overflow"
+          ]
+        },
+        "willRetry": {
+          "type": "boolean"
+        },
+        "cancellable": {
+          "const": true
+        }
+      }
+    },
+    "sessionCompactedPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reason",
+        "willRetry",
+        "fromExtension",
+        "summaryDigest",
+        "tokensBefore"
+      ],
+      "properties": {
+        "reason": {
+          "enum": [
+            "manual",
+            "threshold",
+            "overflow"
+          ]
+        },
+        "willRetry": {
+          "type": "boolean"
+        },
+        "fromExtension": {
+          "type": "boolean"
+        },
+        "summaryDigest": {
+          "$ref": "#/$defs/nullableDigest"
+        },
+        "tokensBefore": {
+          "$ref": "#/$defs/nullableCount"
+        }
+      }
+    },
+    "sessionShutdownPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reason",
+        "replacementId"
+      ],
+      "properties": {
+        "reason": {
+          "enum": [
+            "quit",
+            "reload",
+            "new",
+            "resume",
+            "fork"
+          ]
+        },
+        "replacementId": {
+          "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef"
+        }
+      }
+    },
+    "agentOperationStartedPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dispatchSource",
+        "delivery",
+        "inputDigest"
+      ],
+      "properties": {
+        "dispatchSource": {
+          "enum": [
+            "interactive",
+            "rpc",
+            "extension",
+            "recovery",
+            "system",
+            "unknown"
+          ]
+        },
+        "delivery": {
+          "enum": [
+            "new-operation",
+            "steer",
+            "follow-up",
+            "automatic",
+            "unknown"
+          ]
+        },
+        "inputDigest": {
+          "$ref": "#/$defs/nullableDigest"
+        }
+      }
+    },
+    "agentOperationLoopEndedPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "willRetry",
+        "messageCount",
+        "lastStopReason"
+      ],
+      "properties": {
+        "willRetry": {
+          "$ref": "#/$defs/booleanFact"
+        },
+        "messageCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "lastStopReason": {
+          "$ref": "#/$defs/nullableStopReason"
+        }
+      }
+    },
+    "agentOperationSettledPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "settlement",
+        "lastStopReason",
+        "hasPendingMessages"
+      ],
+      "properties": {
+        "settlement": {
+          "enum": [
+            "completed",
+            "aborted",
+            "error",
+            "unknown"
+          ]
+        },
+        "lastStopReason": {
+          "$ref": "#/$defs/nullableStopReason"
+        },
+        "hasPendingMessages": {
+          "$ref": "#/$defs/booleanFact"
+        }
+      }
+    },
+    "agentOperationStopRequestedPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "emergency",
+        "auditAvailable",
+        "reasonCode"
+      ],
+      "properties": {
+        "phase": {
+          "$ref": "#/$defs/operationState"
+        },
+        "emergency": {
+          "type": "boolean"
+        },
+        "auditAvailable": {
+          "type": "boolean"
+        },
+        "reasonCode": {
+          "$ref": "common-v1.schema.json#/$defs/reasonCode"
+        }
+      }
+    },
+    "agentOperationStopSettledPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result",
+        "operationState",
+        "reasonCode"
+      ],
+      "properties": {
+        "result": {
+          "enum": [
+            "already-idle",
+            "stopped",
+            "unsupported-operation-phase",
+            "settlement-unknown",
+            "audit-unavailable",
+            "failed"
+          ]
+        },
+        "operationState": {
+          "$ref": "#/$defs/operationState"
+        },
+        "reasonCode": {
+          "$ref": "common-v1.schema.json#/$defs/reasonCode"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": { "result": { "const": "already-idle" } },
+            "required": ["result"]
+          },
+          "then": {
+            "type": "object",
+            "properties": { "operationState": { "const": "idle" } }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "result": { "const": "stopped" } },
+            "required": ["result"]
+          },
+          "then": {
+            "type": "object",
+            "properties": { "operationState": { "enum": ["idle", "settled"] } }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "result": { "const": "unsupported-operation-phase" } },
+            "required": ["result"]
+          },
+          "then": {
+            "type": "object",
+            "properties": { "operationState": { "enum": ["running", "stopping"] } }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "result": { "enum": ["settlement-unknown", "audit-unavailable", "failed"] } },
+            "required": ["result"]
+          },
+          "then": {
+            "type": "object",
+            "properties": { "operationState": { "const": "unknown" } }
+          }
+        }
+      ]
+    },
+    "turnStartedPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase"
+      ],
+      "properties": {
+        "phase": {
+          "const": "started"
+        }
+      }
+    },
+    "turnEndedPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "finalMessageRef",
+        "toolResultCount",
+        "stopReason"
+      ],
+      "properties": {
+        "phase": {
+          "const": "ended"
+        },
+        "finalMessageRef": {
+          "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef"
+        },
+        "toolResultCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "stopReason": {
+          "$ref": "#/$defs/nullableStopReason"
+        }
+      }
+    },
+    "messageRole": {
+      "enum": [
+        "user",
+        "assistant",
+        "tool-result",
+        "bash-execution",
+        "custom",
+        "branch-summary",
+        "compaction-summary"
+      ]
+    },
+    "messageStartedPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "contentDigest",
+        "textChars",
+        "imageCount"
+      ],
+      "properties": {
+        "role": {
+          "$ref": "#/$defs/messageRole"
+        },
+        "contentDigest": {
+          "$ref": "#/$defs/nullableDigest"
+        },
+        "textChars": {
+          "$ref": "#/$defs/nullableCount"
+        },
+        "imageCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 32
+        }
+      }
+    },
+    "messageTextDeltaPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "contentIndex",
+        "chunkSequence",
+        "delta",
+        "deltaDigest"
+      ],
+      "properties": {
+        "role": {
+          "const": "assistant"
+        },
+        "contentIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "chunkSequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000000
+        },
+        "delta": {
+          "$ref": "#/$defs/safeChunk"
+        },
+        "deltaDigest": {
+          "$ref": "common-v1.schema.json#/$defs/digest"
+        }
+      }
+    },
+    "messageThinkingStatePayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contentIndex",
+        "state",
+        "redacted"
+      ],
+      "properties": {
+        "contentIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "state": {
+          "enum": [
+            "started",
+            "streaming",
+            "completed"
+          ]
+        },
+        "redacted": {
+          "type": "boolean"
+        }
+      }
+    },
+    "tokenUsage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "input",
+        "output",
+        "cacheRead",
+        "cacheWrite",
+        "reasoning",
+        "total"
+      ],
+      "properties": {
+        "input": {
+          "$ref": "#/$defs/nullableCount"
+        },
+        "output": {
+          "$ref": "#/$defs/nullableCount"
+        },
+        "cacheRead": {
+          "$ref": "#/$defs/nullableCount"
+        },
+        "cacheWrite": {
+          "$ref": "#/$defs/nullableCount"
+        },
+        "reasoning": {
+          "$ref": "#/$defs/nullableCount"
+        },
+        "total": {
+          "$ref": "#/$defs/nullableCount"
+        }
+      }
+    },
+    "nullableTokenUsage": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/tokenUsage"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "messageCompletedPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "contentDigest",
+        "contentRef",
+        "textPreview",
+        "textChars",
+        "blockCount",
+        "stopReason",
+        "usage"
+      ],
+      "properties": {
+        "role": {
+          "$ref": "#/$defs/messageRole"
+        },
+        "contentDigest": {
+          "$ref": "#/$defs/nullableDigest"
+        },
+        "contentRef": {
+          "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef"
+        },
+        "textPreview": {
+          "$ref": "#/$defs/nullableLongDisplayText"
+        },
+        "textChars": {
+          "$ref": "#/$defs/nullableCount"
+        },
+        "blockCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "stopReason": {
+          "$ref": "#/$defs/nullableStopReason"
+        },
+        "usage": {
+          "$ref": "#/$defs/nullableTokenUsage"
+        }
+      }
+    },
+    "messageFailedPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "reason",
+        "errorCode",
+        "message",
+        "contentDigest"
+      ],
+      "properties": {
+        "role": {
+          "const": "assistant"
+        },
+        "reason": {
+          "enum": [
+            "aborted",
+            "error"
+          ]
+        },
+        "errorCode": {
+          "$ref": "common-v1.schema.json#/$defs/reasonCode"
+        },
+        "message": {
+          "$ref": "common-v1.schema.json#/$defs/nullableDisplayText"
+        },
+        "contentDigest": {
+          "$ref": "#/$defs/nullableDigest"
+        }
+      }
+    },
+    "chatPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "delivery",
+        "contentDigest",
+        "textChars",
+        "attachmentRefs",
+        "resultCode"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "held",
+            "dispatch-requested",
+            "dispatch-observed",
+            "dispatch-rejected",
+            "dispatch-unknown"
+          ]
+        },
+        "delivery": {
+          "enum": [
+            "new-operation",
+            "steer",
+            "follow-up",
+            "hold"
+          ]
+        },
+        "contentDigest": {
+          "$ref": "common-v1.schema.json#/$defs/digest"
+        },
+        "textChars": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65536
+        },
+        "attachmentRefs": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+          }
+        },
+        "resultCode": {
+          "$ref": "common-v1.schema.json#/$defs/reasonCode"
+        }
+      }
+    },
+    "safeModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "modelRef",
+        "provider",
+        "modelId",
+        "displayName",
+        "reasoning",
+        "inputCapabilities",
+        "supportedThinkingLevels",
+        "contextWindow",
+        "maxOutputTokens"
+      ],
+      "properties": {
+        "modelRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "provider": {
+          "$ref": "common-v1.schema.json#/$defs/publicId"
+        },
+        "modelId": {
+          "$ref": "common-v1.schema.json#/$defs/publicId"
+        },
+        "displayName": {
+          "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText"
+        },
+        "reasoning": {
+          "type": "boolean"
+        },
+        "inputCapabilities": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "text",
+              "image"
+            ]
+          }
+        },
+        "supportedThinkingLevels": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 7,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/thinkingLevel"
+          }
+        },
+        "contextWindow": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000000
+        },
+        "maxOutputTokens": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000000
+        }
+      }
+    },
+    "nullableSafeModel": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/safeModel"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "modelChangedPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "previousModel",
+        "currentModel",
+        "source",
+        "effectScope",
+        "observedBy"
+      ],
+      "properties": {
+        "previousModel": {
+          "$ref": "#/$defs/nullableSafeModel"
+        },
+        "currentModel": {
+          "$ref": "#/$defs/safeModel"
+        },
+        "source": {
+          "enum": [
+            "set",
+            "cycle",
+            "restore"
+          ]
+        },
+        "effectScope": {
+          "enum": [
+            "session",
+            "session-and-user-default",
+            "unknown"
+          ]
+        },
+        "observedBy": {
+          "enum": [
+            "model-select-event",
+            "readback",
+            "host-result"
+          ]
+        }
+      }
+    },
+    "thinkingChangedPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "previousLevel",
+        "currentLevel",
+        "source",
+        "effectScope",
+        "observedBy"
+      ],
+      "properties": {
+        "previousLevel": {
+          "$ref": "#/$defs/nullableThinkingLevel"
+        },
+        "currentLevel": {
+          "$ref": "#/$defs/thinkingLevel"
+        },
+        "source": {
+          "enum": [
+            "set",
+            "cycle",
+            "restore",
+            "model-clamp"
+          ]
+        },
+        "effectScope": {
+          "enum": [
+            "session",
+            "session-and-user-default",
+            "unknown"
+          ]
+        },
+        "observedBy": {
+          "enum": [
+            "thinking-select-event",
+            "readback",
+            "host-result"
+          ]
+        }
+      }
+    },
+    "taskStartedPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "taskContractDigest",
+        "criterionCount",
+        "taskOutcome",
+        "controlState"
+      ],
+      "properties": {
+        "taskContractDigest": {
+          "$ref": "common-v1.schema.json#/$defs/digest"
+        },
+        "criterionCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "taskOutcome": {
+          "const": "pending"
+        },
+        "controlState": {
+          "const": "active"
+        }
+      }
+    },
+    "taskStateChangedPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "taskContractDigest",
+        "criterionCounts",
+        "activeCriterionIds",
+        "reasonCode"
+      ],
+      "properties": {
+        "taskContractDigest": {
+          "$ref": "common-v1.schema.json#/$defs/digest"
+        },
+        "criterionCounts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "pending",
+            "inProgress",
+            "passed",
+            "failed",
+            "blocked"
+          ],
+          "properties": {
+            "pending": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "inProgress": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "passed": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "failed": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "blocked": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            }
+          }
+        },
+        "activeCriterionIds": {
+          "type": "array",
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "common-v1.schema.json#/$defs/publicId"
+          }
+        },
+        "reasonCode": {
+          "$ref": "common-v1.schema.json#/$defs/reasonCode"
+        }
+      }
+    },
+    "taskOutcomeChangedPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "previousOutcome",
+        "currentOutcome",
+        "terminal",
+        "reasonCode",
+        "taskContractDigest"
+      ],
+      "properties": {
+        "previousOutcome": {
+          "$ref": "#/$defs/nullableTaskOutcome"
+        },
+        "currentOutcome": {
+          "$ref": "#/$defs/taskOutcome"
+        },
+        "terminal": {
+          "type": "boolean"
+        },
+        "reasonCode": {
+          "$ref": "common-v1.schema.json#/$defs/reasonCode"
+        },
+        "taskContractDigest": {
+          "$ref": "common-v1.schema.json#/$defs/digest"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "required": [
+              "currentOutcome"
+            ],
+            "properties": {
+              "currentOutcome": {
+                "const": "pending"
+              }
+            }
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "terminal": {
+                "const": false
+              }
+            }
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "terminal": {
+                "const": true
+              }
+            }
+          }
+        }
+      ]
+    },
+    "taskControlPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action",
+        "fact",
+        "fromControlState",
+        "toControlState",
+        "taskOutcome",
+        "resultCode",
+        "requestSequence",
+        "parentSequence",
+        "expectedControlRevision",
+        "preWorkingTreeDigest",
+        "postWorkingTreeDigest",
+        "dispatchState"
+      ],
+      "properties": {
+        "action": {
+          "enum": [
+            "stop",
+            "pause",
+            "resume",
+            "resume-and-continue"
+          ]
+        },
+        "fact": {
+          "enum": [
+            "stop-requested",
+            "stop-settled",
+            "pause-requested",
+            "paused",
+            "pause-cancelled",
+            "resume-requested",
+            "resumed",
+            "resume-rejected",
+            "continue-requested",
+            "continue-dispatched",
+            "continue-uncertain"
+          ]
+        },
+        "fromControlState": {
+          "$ref": "#/$defs/nullableControlState"
+        },
+        "toControlState": {
+          "$ref": "#/$defs/controlState"
+        },
+        "taskOutcome": {
+          "$ref": "#/$defs/taskOutcome"
+        },
+        "resultCode": {
+          "$ref": "common-v1.schema.json#/$defs/reasonCode"
+        },
+        "requestSequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "parentSequence": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expectedControlRevision": {
+          "$ref": "common-v1.schema.json#/$defs/nullableRevisionToken"
+        },
+        "preWorkingTreeDigest": {
+          "$ref": "common-v1.schema.json#/$defs/nullableWorkingTreeDigest"
+        },
+        "postWorkingTreeDigest": {
+          "$ref": "common-v1.schema.json#/$defs/nullableWorkingTreeDigest"
+        },
+        "dispatchState": {
+          "enum": [
+            "none",
+            "requested",
+            "observed",
+            "rejected",
+            "unknown"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "type": "object",
+          "properties": {
+            "taskOutcome": { "const": "pending" },
+            "expectedControlRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "fact": { "enum": ["stop-requested", "stop-settled"] } },
+            "required": ["fact"]
+          },
+          "then": {
+            "allOf": [
+              {
+                "oneOf": [
+                  { "type": "object", "properties": { "fromControlState": { "const": "active" }, "toControlState": { "const": "active" } } },
+                  { "type": "object", "properties": { "fromControlState": { "const": "pause-requested" }, "toControlState": { "const": "pause-requested" } } },
+                  { "type": "object", "properties": { "fromControlState": { "const": "paused" }, "toControlState": { "const": "paused" } } }
+                ]
+              },
+              { "type": "object", "properties": { "dispatchState": { "const": "none" } } }
+            ]
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "fact": { "const": "pause-requested" } },
+            "required": ["fact"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "fromControlState": { "const": "active" },
+              "toControlState": { "const": "pause-requested" },
+              "dispatchState": { "const": "none" },
+              "resultCode": { "const": "pause-requested" }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "fact": { "const": "paused" } },
+            "required": ["fact"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "fromControlState": { "const": "pause-requested" },
+              "toControlState": { "const": "paused" },
+              "dispatchState": { "const": "none" },
+              "resultCode": { "const": "paused" },
+              "parentSequence": { "type": "integer", "minimum": 0 },
+              "postWorkingTreeDigest": { "$ref": "common-v1.schema.json#/$defs/workingTreeDigest" }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "fact": { "const": "pause-cancelled" } },
+            "required": ["fact"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "fromControlState": { "const": "pause-requested" },
+              "toControlState": { "const": "active" },
+              "dispatchState": { "const": "none" },
+              "resultCode": { "const": "pause-cancelled" }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "fact": { "const": "resume-requested" } },
+            "required": ["fact"]
+          },
+          "then": {
+            "allOf": [
+              {
+                "oneOf": [
+                  { "type": "object", "properties": { "fromControlState": { "const": "paused" }, "toControlState": { "const": "paused" } } },
+                  { "type": "object", "properties": { "fromControlState": { "const": "pause-requested" }, "toControlState": { "const": "pause-requested" } } }
+                ]
+              },
+              { "type": "object", "properties": { "dispatchState": { "const": "none" }, "resultCode": { "const": "resume-requested" } } }
+            ]
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "fact": { "const": "resumed" } },
+            "required": ["fact"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "fromControlState": { "enum": ["paused", "pause-requested"] },
+              "toControlState": { "const": "active" },
+              "dispatchState": { "const": "none" },
+              "resultCode": { "const": "resumed" },
+              "postWorkingTreeDigest": { "$ref": "common-v1.schema.json#/$defs/workingTreeDigest" }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "fact": { "const": "resume-rejected" } },
+            "required": ["fact"]
+          },
+          "then": {
+            "allOf": [
+              {
+                "oneOf": [
+                  { "type": "object", "properties": { "fromControlState": { "const": "paused" }, "toControlState": { "const": "paused" } } },
+                  { "type": "object", "properties": { "fromControlState": { "const": "pause-requested" }, "toControlState": { "const": "pause-requested" } } }
+                ]
+              },
+              { "type": "object", "properties": { "dispatchState": { "const": "rejected" }, "resultCode": { "const": "resume-rejected" } } }
+            ]
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "fact": { "const": "continue-requested" } },
+            "required": ["fact"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "fromControlState": { "const": "paused" },
+              "toControlState": { "const": "paused" },
+              "dispatchState": { "const": "requested" },
+              "resultCode": { "const": "dispatch-requested" }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "fact": { "const": "continue-dispatched" } },
+            "required": ["fact"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "fromControlState": { "const": "paused" },
+              "toControlState": { "const": "active" },
+              "dispatchState": { "const": "observed" },
+              "resultCode": { "const": "dispatch-observed" },
+              "postWorkingTreeDigest": { "$ref": "common-v1.schema.json#/$defs/workingTreeDigest" }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "fact": { "const": "continue-uncertain" } },
+            "required": ["fact"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "fromControlState": { "const": "paused" },
+              "toControlState": { "const": "unknown" },
+              "dispatchState": { "const": "unknown" },
+              "resultCode": { "const": "dispatch-unknown" }
+            }
+          }
+        }
+      ]
+    },
+    "queueChangedPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "queueKind",
+        "state",
+        "pendingCount",
+        "hasPending",
+        "messageRequestIds",
+        "reasonCode"
+      ],
+      "properties": {
+        "queueKind": {
+          "enum": [
+            "runtime-held",
+            "pi-steering",
+            "pi-follow-up",
+            "aggregate"
+          ]
+        },
+        "state": {
+          "enum": [
+            "held",
+            "dispatching",
+            "quarantined",
+            "cleared",
+            "unknown",
+            "unavailable"
+          ]
+        },
+        "pendingCount": {
+          "$ref": "#/$defs/nullableCount"
+        },
+        "hasPending": {
+          "$ref": "#/$defs/nullableBoolean"
+        },
+        "messageRequestIds": {
+          "type": "array",
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+          }
+        },
+        "reasonCode": {
+          "$ref": "common-v1.schema.json#/$defs/nullableReasonCode"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "required": [
+              "state"
+            ],
+            "properties": {
+              "state": {
+                "enum": [
+                  "unknown",
+                  "unavailable"
+                ]
+              }
+            }
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "pendingCount": {
+                "type": "null"
+              },
+              "hasPending": {
+                "type": "null"
+              },
+              "messageRequestIds": {
+                "type": "array",
+                "maxItems": 0
+              },
+              "reasonCode": {
+                "$ref": "common-v1.schema.json#/$defs/reasonCode"
+              }
+            }
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "pendingCount": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000000
+              },
+              "hasPending": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "activityPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "activityType",
+        "activityRef",
+        "toolName",
+        "inputDigest",
+        "outputDigest",
+        "preview",
+        "previewKind",
+        "outputBytes",
+        "outputLines",
+        "exitCode",
+        "isError",
+        "affectedFileRefs",
+        "criterionIds",
+        "verifierAttemptIds",
+        "reasonCode"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "requested",
+            "started",
+            "progress",
+            "finished",
+            "failed",
+            "blocked",
+            "aborted"
+          ]
+        },
+        "activityType": {
+          "enum": [
+            "tool",
+            "provider",
+            "command",
+            "verifier",
+            "compaction",
+            "retry",
+            "task",
+            "other"
+          ]
+        },
+        "activityRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "toolName": {
+          "$ref": "#/$defs/nullableToolName"
+        },
+        "inputDigest": {
+          "$ref": "#/$defs/nullableDigest"
+        },
+        "outputDigest": {
+          "$ref": "#/$defs/nullableDigest"
+        },
+        "preview": {
+          "$ref": "#/$defs/nullableLongDisplayText"
+        },
+        "previewKind": {
+          "enum": [
+            "none",
+            "summary",
+            "log",
+            "text"
+          ]
+        },
+        "outputBytes": {
+          "$ref": "#/$defs/nullableCount"
+        },
+        "outputLines": {
+          "$ref": "#/$defs/nullableCount"
+        },
+        "exitCode": {
+          "$ref": "#/$defs/nullableExitCode"
+        },
+        "isError": {
+          "$ref": "#/$defs/nullableBoolean"
+        },
+        "affectedFileRefs": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+          }
+        },
+        "criterionIds": {
+          "type": "array",
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "common-v1.schema.json#/$defs/publicId"
+          }
+        },
+        "verifierAttemptIds": {
+          "type": "array",
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+          }
+        },
+        "reasonCode": {
+          "$ref": "common-v1.schema.json#/$defs/nullableReasonCode"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": { "state": { "const": "finished" } },
+            "required": ["state"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "isError": { "const": false },
+              "exitCode": { "anyOf": [{ "const": 0 }, { "type": "null" }] },
+              "reasonCode": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "state": { "const": "failed" } },
+            "required": ["state"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "isError": { "const": true },
+              "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "state": { "enum": ["blocked", "aborted"] } },
+            "required": ["state"]
+          },
+          "then": {
+            "type": "object",
+            "properties": { "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" } }
+          }
+        }
+      ]
+    },
+    "approvalPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "actionDigest",
+        "actionSummary",
+        "decision",
+        "expiresAt",
+        "resolutionCode"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "requested",
+            "resolved",
+            "expired"
+          ]
+        },
+        "actionDigest": {
+          "$ref": "common-v1.schema.json#/$defs/digest"
+        },
+        "actionSummary": {
+          "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText"
+        },
+        "decision": {
+          "anyOf": [
+            {
+              "enum": [
+                "allow",
+                "deny",
+                "cancel"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expiresAt": {
+          "$ref": "#/$defs/nullableTimestamp"
+        },
+        "resolutionCode": {
+          "$ref": "common-v1.schema.json#/$defs/nullableReasonCode"
+        }
+      }
+    },
+    "sourceChangedPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repoRef",
+        "projection",
+        "changeSetDigest",
+        "changedFileRefs",
+        "additions",
+        "deletions",
+        "truncated"
+      ],
+      "properties": {
+        "repoRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "projection": {
+          "enum": [
+            "task",
+            "working-tree",
+            "staged"
+          ]
+        },
+        "changeSetDigest": {
+          "$ref": "common-v1.schema.json#/$defs/digest"
+        },
+        "changedFileRefs": {
+          "type": "array",
+          "maxItems": 512,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+          }
+        },
+        "additions": {
+          "$ref": "#/$defs/nullableCount"
+        },
+        "deletions": {
+          "$ref": "#/$defs/nullableCount"
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      }
+    },
+    "verifierPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "verifierAttemptId",
+        "verifierRef",
+        "displayName",
+        "commandDigest",
+        "exact",
+        "exitCode",
+        "workingTreeDigest",
+        "staleFileRefs",
+        "logPreview",
+        "logDigest",
+        "reasonCode"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "started",
+            "passed",
+            "failed",
+            "blocked",
+            "aborted",
+            "stale",
+            "unavailable"
+          ]
+        },
+        "verifierAttemptId": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "verifierRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "displayName": {
+          "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText"
+        },
+        "commandDigest": {
+          "$ref": "common-v1.schema.json#/$defs/digest"
+        },
+        "exact": {
+          "type": "boolean"
+        },
+        "exitCode": {
+          "$ref": "#/$defs/nullableExitCode"
+        },
+        "workingTreeDigest": {
+          "$ref": "common-v1.schema.json#/$defs/nullableWorkingTreeDigest"
+        },
+        "staleFileRefs": {
+          "type": "array",
+          "maxItems": 512,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+          }
+        },
+        "logPreview": {
+          "$ref": "#/$defs/nullableLongDisplayText"
+        },
+        "logDigest": {
+          "$ref": "#/$defs/nullableDigest"
+        },
+        "reasonCode": {
+          "$ref": "common-v1.schema.json#/$defs/nullableReasonCode"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": { "state": { "const": "passed" } },
+            "required": ["state"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "exact": { "const": true },
+              "exitCode": { "const": 0 },
+              "workingTreeDigest": { "$ref": "common-v1.schema.json#/$defs/workingTreeDigest" },
+              "staleFileRefs": { "type": "array", "maxItems": 0 },
+              "reasonCode": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "state": { "const": "unavailable" } },
+            "required": ["state"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "exact": { "const": false },
+              "exitCode": { "type": "null" },
+              "workingTreeDigest": { "type": "null" },
+              "staleFileRefs": { "type": "array", "maxItems": 0 },
+              "logPreview": { "type": "null" },
+              "logDigest": { "type": "null" },
+              "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "state": { "const": "stale" } },
+            "required": ["state"]
+          },
+          "then": {
+            "type": "object",
+            "properties": { "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" } }
+          }
+        }
+      ]
+    },
+    "usageUpdatedPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "aggregation",
+        "modelRef",
+        "tokens",
+        "contextTokens",
+        "contextWindow",
+        "contextPercentBasisPoints",
+        "costUsdMicros",
+        "reasonCode"
+      ],
+      "properties": {
+        "scope": {
+          "enum": [
+            "context-estimate",
+            "provider-response",
+            "session-ledger",
+            "task-ledger",
+            "tool"
+          ]
+        },
+        "aggregation": {
+          "enum": [
+            "delta",
+            "cumulative"
+          ]
+        },
+        "modelRef": {
+          "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef"
+        },
+        "tokens": {
+          "$ref": "#/$defs/tokenUsage"
+        },
+        "contextTokens": {
+          "$ref": "#/$defs/nullableCount"
+        },
+        "contextWindow": {
+          "$ref": "#/$defs/nullableCount"
+        },
+        "contextPercentBasisPoints": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "costUsdMicros": {
+          "$ref": "#/$defs/nullableCount"
+        },
+        "reasonCode": {
+          "$ref": "common-v1.schema.json#/$defs/nullableReasonCode"
+        }
+      }
+    },
+    "handoffUpdatedPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "handoffRef",
+        "handoffDigest",
+        "state",
+        "blockerCount",
+        "blockerRefs",
+        "reasonCode"
+      ],
+      "properties": {
+        "handoffRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "handoffDigest": {
+          "$ref": "common-v1.schema.json#/$defs/digest"
+        },
+        "state": {
+          "enum": [
+            "current",
+            "stale",
+            "unavailable",
+            "unknown"
+          ]
+        },
+        "blockerCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "blockerRefs": {
+          "type": "array",
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+          }
+        },
+        "reasonCode": {
+          "$ref": "common-v1.schema.json#/$defs/nullableReasonCode"
+        }
+      }
+    },
+    "runtimeStartedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "runtime.started"
+        },
+        "payload": {
+          "$ref": "#/$defs/runtimeStartedPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ]
+    },
+    "runtimeHealthChangedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "runtime.health-changed"
+        },
+        "payload": {
+          "$ref": "#/$defs/runtimeHealthChangedPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ]
+    },
+    "runtimeDisconnectedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "runtime.disconnected"
+        },
+        "payload": {
+          "$ref": "#/$defs/runtimeDisconnectedPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ]
+    },
+    "runtimeResyncRequiredEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "runtime.resync-required"
+        },
+        "payload": {
+          "$ref": "#/$defs/runtimeResyncRequiredPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ]
+    },
+    "runtimeResyncedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "runtime.resynced"
+        },
+        "payload": {
+          "$ref": "#/$defs/runtimeResyncedPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ]
+    },
+    "runtimePhaseChangedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "runtime.phase-changed"
+        },
+        "payload": {
+          "$ref": "#/$defs/runtimePhaseChangedPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ]
+    },
+    "sessionBoundEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "session.bound"
+        },
+        "payload": {
+          "$ref": "#/$defs/sessionBoundPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ]
+    },
+    "sessionInfoChangedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "session.info-changed"
+        },
+        "payload": {
+          "$ref": "#/$defs/sessionInfoChangedPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ]
+    },
+    "sessionReplacementRequestedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "session.replacement-requested"
+        },
+        "correlation": {
+          "type": "object",
+          "properties": {
+            "replacementId": {
+              "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+            }
+          },
+          "required": [
+            "replacementId"
+          ]
+        },
+        "payload": {
+          "$ref": "#/$defs/sessionReplacementRequestedPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "correlation",
+        "payload"
+      ]
+    },
+    "sessionReplacementPendingEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "session.replacement-pending"
+        },
+        "correlation": {
+          "type": "object",
+          "properties": {
+            "replacementId": {
+              "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+            }
+          },
+          "required": [
+            "replacementId"
+          ]
+        },
+        "payload": {
+          "$ref": "#/$defs/sessionReplacementPendingPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "correlation",
+        "payload"
+      ]
+    },
+    "sessionReplacementCommittedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "session.replacement-committed"
+        },
+        "correlation": {
+          "type": "object",
+          "properties": {
+            "replacementId": {
+              "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+            }
+          },
+          "required": [
+            "replacementId"
+          ]
+        },
+        "payload": {
+          "$ref": "#/$defs/sessionReplacementCommittedPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "correlation",
+        "payload"
+      ]
+    },
+    "sessionReplacementCancelledEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "session.replacement-cancelled"
+        },
+        "correlation": {
+          "type": "object",
+          "properties": {
+            "replacementId": {
+              "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+            }
+          },
+          "required": [
+            "replacementId"
+          ]
+        },
+        "payload": {
+          "$ref": "#/$defs/sessionReplacementCancelledPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "correlation",
+        "payload"
+      ]
+    },
+    "sessionReplacementFailedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "session.replacement-failed"
+        },
+        "correlation": {
+          "type": "object",
+          "properties": {
+            "replacementId": {
+              "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+            }
+          },
+          "required": [
+            "replacementId"
+          ]
+        },
+        "payload": {
+          "$ref": "#/$defs/sessionReplacementFailedPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "correlation",
+        "payload"
+      ]
+    },
+    "sessionCompactionPreflightEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "session.compaction-preflight"
+        },
+        "payload": {
+          "$ref": "#/$defs/sessionCompactionPreflightPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ]
+    },
+    "sessionCompactedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "session.compacted"
+        },
+        "payload": {
+          "$ref": "#/$defs/sessionCompactedPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ]
+    },
+    "sessionShutdownEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "session.shutdown"
+        },
+        "payload": {
+          "$ref": "#/$defs/sessionShutdownPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ]
+    },
+    "agentOperationStartedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "agent-operation.started"
+        },
+        "agentOperationId": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "payload": {
+          "$ref": "#/$defs/agentOperationStartedPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "agentOperationId",
+        "payload"
+      ]
+    },
+    "agentOperationLoopEndedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "agent-operation.loop-ended"
+        },
+        "agentOperationId": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "payload": {
+          "$ref": "#/$defs/agentOperationLoopEndedPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "agentOperationId",
+        "payload"
+      ]
+    },
+    "agentOperationSettledEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "agent-operation.settled"
+        },
+        "agentOperationId": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "payload": {
+          "$ref": "#/$defs/agentOperationSettledPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "agentOperationId",
+        "payload"
+      ]
+    },
+    "agentOperationStopRequestedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "agent-operation.stop-requested"
+        },
+        "agentOperationId": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "correlation": {
+          "type": "object",
+          "properties": {
+            "commandId": {
+              "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+            }
+          },
+          "required": [
+            "commandId"
+          ]
+        },
+        "payload": {
+          "$ref": "#/$defs/agentOperationStopRequestedPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "agentOperationId",
+        "correlation",
+        "payload"
+      ]
+    },
+    "agentOperationStopSettledEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "agent-operation.stop-settled"
+        },
+        "agentOperationId": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "correlation": {
+          "type": "object",
+          "properties": {
+            "commandId": {
+              "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+            }
+          },
+          "required": [
+            "commandId"
+          ]
+        },
+        "payload": {
+          "$ref": "#/$defs/agentOperationStopSettledPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "agentOperationId",
+        "correlation",
+        "payload"
+      ]
+    },
+    "turnStartedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "turn.started"
+        },
+        "agentOperationId": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "turnIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000000
+        },
+        "payload": {
+          "$ref": "#/$defs/turnStartedPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "agentOperationId",
+        "turnIndex",
+        "payload"
+      ]
+    },
+    "turnEndedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "turn.ended"
+        },
+        "agentOperationId": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "turnIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000000
+        },
+        "payload": {
+          "$ref": "#/$defs/turnEndedPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "agentOperationId",
+        "turnIndex",
+        "payload"
+      ]
+    },
+    "messageStartedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "message.started"
+        },
+        "messageRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "payload": {
+          "$ref": "#/$defs/messageStartedPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "messageRef",
+        "payload"
+      ]
+    },
+    "messageTextDeltaEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "message.text-delta"
+        },
+        "messageRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "payload": {
+          "$ref": "#/$defs/messageTextDeltaPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "messageRef",
+        "payload"
+      ]
+    },
+    "messageThinkingStateEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "message.thinking-state"
+        },
+        "messageRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "payload": {
+          "$ref": "#/$defs/messageThinkingStatePayload"
+        }
+      },
+      "required": [
+        "kind",
+        "messageRef",
+        "payload"
+      ]
+    },
+    "messageCompletedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "message.completed"
+        },
+        "messageRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "payload": {
+          "$ref": "#/$defs/messageCompletedPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "messageRef",
+        "payload"
+      ]
+    },
+    "messageFailedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "message.failed"
+        },
+        "messageRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "payload": {
+          "$ref": "#/$defs/messageFailedPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "messageRef",
+        "payload"
+      ]
+    },
+    "chatControlEventBase": {
+      "type": "object",
+      "properties": {
+        "correlation": {
+          "type": "object",
+          "properties": {
+            "commandId": {
+              "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+            },
+            "messageRequestId": {
+              "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+            },
+            "idempotencyKeyDigest": {
+              "$ref": "common-v1.schema.json#/$defs/digest"
+            }
+          },
+          "required": [
+            "commandId",
+            "messageRequestId",
+            "idempotencyKeyDigest"
+          ]
+        },
+        "payload": {
+          "$ref": "#/$defs/chatPayload"
+        }
+      },
+      "required": [
+        "correlation",
+        "payload"
+      ]
+    },
+    "chatHeldEvent": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/chatControlEventBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "chat.held"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "held"
+                },
+                "delivery": {
+                  "const": "hold"
+                }
+              },
+              "required": [
+                "state",
+                "delivery"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "payload"
+          ]
+        }
+      ]
+    },
+    "chatDispatchRequestedEvent": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/chatControlEventBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "chat.dispatch-requested"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "dispatch-requested"
+                },
+                "delivery": {
+                  "enum": [
+                    "new-operation",
+                    "steer",
+                    "follow-up"
+                  ]
+                }
+              },
+              "required": [
+                "state",
+                "delivery"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "payload"
+          ]
+        }
+      ]
+    },
+    "chatDispatchObservedEvent": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/chatControlEventBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "chat.dispatch-observed"
+            },
+            "agentOperationId": {
+              "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+            },
+            "messageRef": {
+              "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "dispatch-observed"
+                },
+                "delivery": {
+                  "enum": [
+                    "new-operation",
+                    "steer",
+                    "follow-up"
+                  ]
+                }
+              },
+              "required": [
+                "state",
+                "delivery"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "agentOperationId",
+            "messageRef",
+            "payload"
+          ]
+        }
+      ]
+    },
+    "chatDispatchRejectedEvent": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/chatControlEventBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "chat.dispatch-rejected"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "dispatch-rejected"
+                }
+              },
+              "required": [
+                "state"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "payload"
+          ]
+        }
+      ]
+    },
+    "chatDispatchUnknownEvent": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/chatControlEventBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "chat.dispatch-unknown"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "dispatch-unknown"
+                },
+                "delivery": {
+                  "enum": [
+                    "new-operation",
+                    "steer",
+                    "follow-up"
+                  ]
+                }
+              },
+              "required": [
+                "state",
+                "delivery"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "payload"
+          ]
+        }
+      ]
+    },
+    "modelChangedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "session-option.model-changed"
+        },
+        "payload": {
+          "$ref": "#/$defs/modelChangedPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ]
+    },
+    "thinkingChangedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "session-option.thinking-changed"
+        },
+        "payload": {
+          "$ref": "#/$defs/thinkingChangedPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ]
+    },
+    "taskStartedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "task.started"
+        },
+        "taskId": {
+          "$ref": "common-v1.schema.json#/$defs/publicId"
+        },
+        "taskRunId": {
+          "$ref": "common-v1.schema.json#/$defs/publicId"
+        },
+        "payload": {
+          "$ref": "#/$defs/taskStartedPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "taskId",
+        "taskRunId",
+        "payload"
+      ]
+    },
+    "taskStateChangedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "task.state-changed"
+        },
+        "taskId": {
+          "$ref": "common-v1.schema.json#/$defs/publicId"
+        },
+        "taskRunId": {
+          "$ref": "common-v1.schema.json#/$defs/publicId"
+        },
+        "payload": {
+          "$ref": "#/$defs/taskStateChangedPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "taskId",
+        "taskRunId",
+        "payload"
+      ]
+    },
+    "taskOutcomeChangedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "task.outcome-changed"
+        },
+        "taskId": {
+          "$ref": "common-v1.schema.json#/$defs/publicId"
+        },
+        "taskRunId": {
+          "$ref": "common-v1.schema.json#/$defs/publicId"
+        },
+        "payload": {
+          "$ref": "#/$defs/taskOutcomeChangedPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "taskId",
+        "taskRunId",
+        "payload"
+      ]
+    },
+    "taskControlEventBase": {
+      "type": "object",
+      "properties": {
+        "taskId": {
+          "$ref": "common-v1.schema.json#/$defs/publicId"
+        },
+        "taskRunId": {
+          "$ref": "common-v1.schema.json#/$defs/publicId"
+        },
+        "correlation": {
+          "type": "object",
+          "properties": {
+            "commandId": {
+              "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+            },
+            "idempotencyKeyDigest": {
+              "$ref": "common-v1.schema.json#/$defs/digest"
+            }
+          },
+          "required": [
+            "commandId",
+            "idempotencyKeyDigest"
+          ]
+        },
+        "payload": {
+          "$ref": "#/$defs/taskControlPayload"
+        }
+      },
+      "required": [
+        "taskId",
+        "taskRunId",
+        "correlation",
+        "payload"
+      ]
+    },
+    "taskControlStopRequestedEvent": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/taskControlEventBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "task-control.stop-requested"
+            },
+            "agentOperationId": {
+              "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "stop"
+                },
+                "fact": {
+                  "const": "stop-requested"
+                },
+                "resultCode": {
+                  "const": "stop-requested"
+                }
+              },
+              "required": [
+                "action",
+                "fact",
+                "resultCode"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "agentOperationId",
+            "payload"
+          ]
+        }
+      ]
+    },
+    "taskControlStopSettledEvent": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/taskControlEventBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "task-control.stop-settled"
+            },
+            "agentOperationId": {
+              "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "stop"
+                },
+                "fact": {
+                  "const": "stop-settled"
+                },
+                "resultCode": {
+                  "enum": [
+                    "stopped",
+                    "already-idle",
+                    "emergency-stop",
+                    "audit-unavailable",
+                    "settlement-unknown"
+                  ]
+                }
+              },
+              "required": [
+                "action",
+                "fact",
+                "resultCode"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "agentOperationId",
+            "payload"
+          ]
+        }
+      ]
+    },
+    "taskControlPauseRequestedEvent": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/taskControlEventBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "task-control.pause-requested"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "pause"
+                },
+                "fact": {
+                  "const": "pause-requested"
+                }
+              },
+              "required": [
+                "action",
+                "fact"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "payload"
+          ]
+        }
+      ]
+    },
+    "taskControlPausedEvent": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/taskControlEventBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "task-control.paused"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "pause"
+                },
+                "fact": {
+                  "const": "paused"
+                }
+              },
+              "required": [
+                "action",
+                "fact"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "payload"
+          ]
+        }
+      ]
+    },
+    "taskControlPauseCancelledEvent": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/taskControlEventBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "task-control.pause-cancelled"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "resume"
+                },
+                "fact": {
+                  "const": "pause-cancelled"
+                }
+              },
+              "required": [
+                "action",
+                "fact"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "payload"
+          ]
+        }
+      ]
+    },
+    "taskControlResumeRequestedEvent": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/taskControlEventBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "task-control.resume-requested"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "resume"
+                },
+                "fact": {
+                  "const": "resume-requested"
+                }
+              },
+              "required": [
+                "action",
+                "fact"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "payload"
+          ]
+        }
+      ]
+    },
+    "taskControlResumedEvent": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/taskControlEventBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "task-control.resumed"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "resume"
+                },
+                "fact": {
+                  "const": "resumed"
+                }
+              },
+              "required": [
+                "action",
+                "fact"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "payload"
+          ]
+        }
+      ]
+    },
+    "taskControlResumeRejectedEvent": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/taskControlEventBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "task-control.resume-rejected"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "resume"
+                },
+                "fact": {
+                  "const": "resume-rejected"
+                }
+              },
+              "required": [
+                "action",
+                "fact"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "payload"
+          ]
+        }
+      ]
+    },
+    "taskControlContinueRequestedEvent": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/taskControlEventBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "task-control.continue-requested"
+            },
+            "correlation": {
+              "type": "object",
+              "properties": {
+                "messageRequestId": {
+                  "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+                }
+              },
+              "required": [
+                "messageRequestId"
+              ]
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "resume-and-continue"
+                },
+                "fact": {
+                  "const": "continue-requested"
+                },
+                "dispatchState": {
+                  "const": "requested"
+                }
+              },
+              "required": [
+                "action",
+                "fact",
+                "dispatchState"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "correlation",
+            "payload"
+          ]
+        }
+      ]
+    },
+    "taskControlContinueDispatchedEvent": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/taskControlEventBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "task-control.continue-dispatched"
+            },
+            "agentOperationId": {
+              "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+            },
+            "messageRef": {
+              "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+            },
+            "correlation": {
+              "type": "object",
+              "properties": {
+                "messageRequestId": {
+                  "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+                }
+              },
+              "required": [
+                "messageRequestId"
+              ]
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "resume-and-continue"
+                },
+                "fact": {
+                  "const": "continue-dispatched"
+                },
+                "dispatchState": {
+                  "const": "observed"
+                }
+              },
+              "required": [
+                "action",
+                "fact",
+                "dispatchState"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "agentOperationId",
+            "messageRef",
+            "correlation",
+            "payload"
+          ]
+        }
+      ]
+    },
+    "taskControlContinueUncertainEvent": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/taskControlEventBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "task-control.continue-uncertain"
+            },
+            "correlation": {
+              "type": "object",
+              "properties": {
+                "messageRequestId": {
+                  "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+                }
+              },
+              "required": [
+                "messageRequestId"
+              ]
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "resume-and-continue"
+                },
+                "fact": {
+                  "const": "continue-uncertain"
+                },
+                "dispatchState": {
+                  "const": "unknown"
+                }
+              },
+              "required": [
+                "action",
+                "fact",
+                "dispatchState"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "correlation",
+            "payload"
+          ]
+        }
+      ]
+    },
+    "queueChangedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "queue.changed"
+        },
+        "payload": {
+          "$ref": "#/$defs/queueChangedPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ]
+    },
+    "activityRequestedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "activity.requested"
+        },
+        "payload": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/activityPayload"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "requested"
+                }
+              },
+              "required": [
+                "state"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ]
+    },
+    "activityStartedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "activity.started"
+        },
+        "payload": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/activityPayload"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "started"
+                }
+              },
+              "required": [
+                "state"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ]
+    },
+    "activityProgressEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "activity.progress"
+        },
+        "payload": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/activityPayload"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "progress"
+                }
+              },
+              "required": [
+                "state"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ]
+    },
+    "activityFinishedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "activity.finished"
+        },
+        "payload": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/activityPayload"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "finished"
+                }
+              },
+              "required": [
+                "state"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ]
+    },
+    "activityFailedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "activity.failed"
+        },
+        "payload": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/activityPayload"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "failed"
+                }
+              },
+              "required": [
+                "state"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ]
+    },
+    "activityBlockedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "activity.blocked"
+        },
+        "payload": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/activityPayload"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "blocked"
+                }
+              },
+              "required": [
+                "state"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ]
+    },
+    "activityAbortedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "activity.aborted"
+        },
+        "payload": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/activityPayload"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "aborted"
+                }
+              },
+              "required": [
+                "state"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ]
+    },
+    "approvalRequestedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "approval.requested"
+        },
+        "correlation": {
+          "type": "object",
+          "properties": {
+            "approvalRequestId": {
+              "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+            }
+          },
+          "required": [
+            "approvalRequestId"
+          ]
+        },
+        "payload": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/approvalPayload"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "requested"
+                },
+                "decision": {
+                  "type": "null"
+                },
+                "resolutionCode": {
+                  "type": "null"
+                }
+              },
+              "required": [
+                "state",
+                "decision",
+                "resolutionCode"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "correlation",
+        "payload"
+      ]
+    },
+    "approvalResolvedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "approval.resolved"
+        },
+        "correlation": {
+          "type": "object",
+          "properties": {
+            "approvalRequestId": {
+              "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+            }
+          },
+          "required": [
+            "approvalRequestId"
+          ]
+        },
+        "payload": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/approvalPayload"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "resolved"
+                },
+                "decision": {
+                  "enum": [
+                    "allow",
+                    "deny",
+                    "cancel"
+                  ]
+                },
+                "resolutionCode": {
+                  "$ref": "common-v1.schema.json#/$defs/reasonCode"
+                }
+              },
+              "required": [
+                "state",
+                "decision",
+                "resolutionCode"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "correlation",
+        "payload"
+      ]
+    },
+    "approvalExpiredEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "approval.expired"
+        },
+        "correlation": {
+          "type": "object",
+          "properties": {
+            "approvalRequestId": {
+              "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+            }
+          },
+          "required": [
+            "approvalRequestId"
+          ]
+        },
+        "payload": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/approvalPayload"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "expired"
+                },
+                "decision": {
+                  "enum": [
+                    "deny",
+                    "cancel"
+                  ]
+                },
+                "resolutionCode": {
+                  "$ref": "common-v1.schema.json#/$defs/reasonCode"
+                }
+              },
+              "required": [
+                "state",
+                "decision",
+                "resolutionCode"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "correlation",
+        "payload"
+      ]
+    },
+    "sourceChangedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "source.changed"
+        },
+        "payload": {
+          "$ref": "#/$defs/sourceChangedPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ]
+    },
+    "verifierStartedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "verifier.started"
+        },
+        "payload": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/verifierPayload"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "started"
+                }
+              },
+              "required": [
+                "state"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ]
+    },
+    "verifierFinishedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "verifier.finished"
+        },
+        "payload": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/verifierPayload"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "enum": [
+                    "passed",
+                    "failed",
+                    "blocked",
+                    "aborted",
+                    "unavailable"
+                  ]
+                }
+              },
+              "required": [
+                "state"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ]
+    },
+    "verifierStaleEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "verifier.stale"
+        },
+        "payload": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/verifierPayload"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "stale"
+                }
+              },
+              "required": [
+                "state"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ]
+    },
+    "usageUpdatedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "usage.updated"
+        },
+        "payload": {
+          "$ref": "#/$defs/usageUpdatedPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ]
+    },
+    "handoffUpdatedEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "handoff.updated"
+        },
+        "payload": {
+          "$ref": "#/$defs/handoffUpdatedPayload"
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ]
+    }
+  }
+}

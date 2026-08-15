@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/review-state-v1.schema.json",
+  "title": "Piagent WebUI digest-bound selected-file review state v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "version",
+    "generatedAt",
+    "identity",
+    "state",
+    "target",
+    "recordedState",
+    "recordedAt",
+    "evidenceRef",
+    "reasonCode",
+    "health"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "version": { "const": "piagent-webui-review-state-v1" },
+    "generatedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+    "identity": { "$ref": "common-v1.schema.json#/$defs/identity" },
+    "state": { "enum": ["reviewed", "unreviewed", "stale", "unavailable"] },
+    "target": {
+      "anyOf": [
+        { "$ref": "#/$defs/reviewTarget" },
+        { "type": "null" }
+      ]
+    },
+    "recordedState": {
+      "anyOf": [
+        { "enum": ["reviewed", "unreviewed"] },
+        { "type": "null" }
+      ]
+    },
+    "recordedAt": {
+      "anyOf": [
+        { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+        { "type": "null" }
+      ]
+    },
+    "evidenceRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+    "reasonCode": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" },
+    "health": { "$ref": "common-v1.schema.json#/$defs/health" }
+  },
+  "allOf": [
+    {
+      "properties": {
+        "identity": {
+          "type": "object",
+          "properties": {
+            "taskId": { "$ref": "common-v1.schema.json#/$defs/publicId" },
+            "taskRunId": { "$ref": "common-v1.schema.json#/$defs/publicId" },
+            "agentOperationId": { "type": "null" },
+            "toolCallId": { "type": "null" }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "state": { "const": "reviewed" } },
+        "required": ["state"]
+      },
+      "then": {
+        "properties": {
+          "target": { "$ref": "#/$defs/reviewTarget" },
+          "recordedState": { "const": "reviewed" },
+          "recordedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+          "evidenceRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+          "reasonCode": { "type": "null" },
+          "health": {
+            "type": "object",
+            "properties": { "state": { "const": "ok" } }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "state": { "const": "unreviewed" } },
+        "required": ["state"]
+      },
+      "then": {
+        "properties": {
+          "target": { "$ref": "#/$defs/reviewTarget" },
+          "recordedState": {
+            "anyOf": [
+              { "const": "unreviewed" },
+              { "type": "null" }
+            ]
+          },
+          "reasonCode": { "type": "null" },
+          "health": {
+            "type": "object",
+            "properties": { "state": { "const": "ok" } }
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": { "recordedState": { "const": "unreviewed" } },
+              "required": ["recordedState"]
+            },
+            "then": {
+              "properties": {
+                "recordedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+                "evidenceRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" }
+              }
+            },
+            "else": {
+              "properties": {
+                "recordedAt": { "type": "null" },
+                "evidenceRef": { "type": "null" }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": { "state": { "const": "stale" } },
+        "required": ["state"]
+      },
+      "then": {
+        "properties": {
+          "target": { "$ref": "#/$defs/reviewTarget" },
+          "recordedState": { "const": "reviewed" },
+          "recordedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+          "evidenceRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+          "reasonCode": { "const": "review-target-changed" },
+          "health": {
+            "type": "object",
+            "properties": { "state": { "const": "degraded" } }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "state": { "const": "unavailable" } },
+        "required": ["state"]
+      },
+      "then": {
+        "properties": {
+          "target": { "type": "null" },
+          "recordedState": { "type": "null" },
+          "recordedAt": { "type": "null" },
+          "evidenceRef": { "type": "null" },
+          "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" },
+          "health": {
+            "type": "object",
+            "properties": { "state": { "enum": ["unavailable", "error"] } }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "reviewTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "view",
+        "fileRef",
+        "diffRef",
+        "taskRevision",
+        "workspaceRevision",
+        "indexRevision",
+        "viewRevision",
+        "fileRevision",
+        "baseDigest",
+        "currentDigest",
+        "patchPreimage",
+        "contentDigest"
+      ],
+      "properties": {
+        "view": { "$ref": "source-change-v1.schema.json#/$defs/view" },
+        "fileRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "diffRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "taskRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "workspaceRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "indexRevision": { "$ref": "common-v1.schema.json#/$defs/nullableRevisionToken" },
+        "viewRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "fileRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "baseDigest": {
+          "anyOf": [
+            { "$ref": "common-v1.schema.json#/$defs/digest" },
+            { "type": "null" }
+          ]
+        },
+        "currentDigest": {
+          "anyOf": [
+            { "$ref": "common-v1.schema.json#/$defs/digest" },
+            { "type": "null" }
+          ]
+        },
+        "patchPreimage": { "$ref": "common-v1.schema.json#/$defs/digest" },
+        "contentDigest": { "$ref": "common-v1.schema.json#/$defs/digest" }
+      }
+    }
+  }
+}

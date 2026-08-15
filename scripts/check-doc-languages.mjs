@@ -35,7 +35,23 @@ function inspectDocLanguages(root = repoRoot) {
     if (!viText.includes(enLink)) errors.push(`${pair.topic}: Vietnamese file does not link to ${enLink}`);
     if (!/[À-ỹĐđ]/u.test(viText)) errors.push(`${pair.topic}: Vietnamese file has no Vietnamese diacritics`);
   }
-  return { ok: errors.length === 0, errors, pairs: manifest.pairs.length, terms: manifest.preservedTechnicalTerms };
+  const rootDocs = fs.readdirSync(path.join(root, "docs"), { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
+    .map((entry) => path.join(root, "docs", entry.name));
+  const languageCounts = { en: 0, vi: 0, "en+vi": 0 };
+  for (const file of rootDocs) {
+    const text = fs.readFileSync(file, "utf8"), relative = path.relative(root, file).split(path.sep).join("/");
+    const match = text.slice(0, 1_024).match(/<!--\s*language:\s*(en\+vi|en|vi)(?:;\s*english-index:\s*([^\s]+))?\s*-->/i);
+    if (!match) { errors.push(`${relative}: missing explicit language marker`); continue; }
+    const language = match[1].toLowerCase(); languageCounts[language] += 1;
+    if (language === "vi") {
+      const index = match[2];
+      if (!index) errors.push(`${relative}: Vietnamese document has no English index`);
+      else if (!fs.existsSync(path.join(root, index))) errors.push(`${relative}: missing English index ${index}`);
+    }
+  }
+  return { ok: errors.length === 0, errors, pairs: manifest.pairs.length, rootDocuments: rootDocs.length,
+    languages: languageCounts, terms: manifest.preservedTechnicalTerms };
 }
 
 function main(argv = process.argv.slice(2)) {
@@ -56,7 +72,8 @@ function main(argv = process.argv.slice(2)) {
     process.stderr.write(`FAIL: documentation language check found ${result.errors.length} problem(s)\n${result.errors.map((error) => `- ${error}`).join("\n")}\n`);
     return 1;
   }
-  process.stdout.write(json ? `${JSON.stringify(result)}\n` : `PASS: ${result.pairs} EN/VI documentation pairs are complete\n`);
+  process.stdout.write(json ? `${JSON.stringify(result)}\n`
+    : `PASS: ${result.pairs} EN/VI pairs and ${result.rootDocuments} explicitly classified root documents are complete\n`);
   return 0;
 }
 

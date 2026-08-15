@@ -67,6 +67,7 @@ function inspectArchitecture({ root = repoRoot, config = readConfig() } = {}) {
   const errors = [];
   const files = [
     ...walkSources(path.join(root, "packages", "piagent-core")),
+    ...walkSources(path.join(root, "packages", "piagent-webui")),
     ...walkSources(path.join(root, "scripts"))
   ];
   const counts = {};

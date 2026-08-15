@@ -68,7 +68,7 @@ export const CATALOG_SERVERS = {
     }
   },
   figma: {
-    description: "Figma remote MCP server. Requires Figma OAuth from the MCP panel when first used.",
+    description: "Figma remote MCP server. OAuth works only for clients approved in the Figma MCP Catalog.",
     config: {
       url: "https://mcp.figma.com/mcp",
       auth: "oauth",
@@ -99,7 +99,7 @@ export const CATALOG_PREREQUISITES = {
     "export GITHUB_PERSONAL_ACCESS_TOKEN with the scopes you intend to use"
   ],
   playwright: ["browsers installed on first use (npx playwright install)"],
-  figma: ["Figma OAuth, completed from the Pi MCP panel on first use"],
+  figma: ["Piagent approved in the Figma MCP Catalog before remote OAuth can register"],
   "figma-desktop": ["Figma desktop running with Dev Mode MCP enabled"]
 };
 
@@ -119,12 +119,12 @@ export const CATALOG_PRESETS = {
   docs: ["context7"],
   browser: ["chrome-devtools", "playwright"],
   github: ["github"],
-  design: ["figma"],
+  design: ["figma-desktop"],
   "design-local": ["figma-desktop"],
   web: ["context7", "chrome-devtools", "playwright"],
   core: ["context7", "chrome-devtools", "github"],
-  popular: ["context7", "chrome-devtools", "playwright", "github", "figma"],
-  all: ["context7", "chrome-devtools", "playwright", "github", "figma", "figma-desktop"]
+  popular: ["context7", "chrome-devtools", "playwright", "github", "figma-desktop"],
+  all: ["context7", "chrome-devtools", "playwright", "github", "figma-desktop", "figma"]
 };
 
 /** @param {string} name @returns {boolean} */

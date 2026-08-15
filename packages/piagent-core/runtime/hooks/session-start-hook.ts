@@ -49,7 +49,7 @@ type SessionStartHookDependencies = {
   inspectResume: (cwd: string, task: TaskContract, sessionId: string) => ResumeState;
   telemetry: (ctx: ExtensionContext, payload: Record<string, unknown>) => void;
   syncTrajectory?: (ctx: ExtensionContext, task: TaskContract) => TrajectorySyncResult;
-  afterStart?: (ctx: ExtensionContext) => void;
+  afterStart?: (ctx: ExtensionContext) => void | Promise<void>;
 };
 
 export function registerSessionStartHook(pi: ExtensionAPI, dependencies: SessionStartHookDependencies): void {
@@ -227,6 +227,6 @@ export function registerSessionStartHook(pi: ExtensionAPI, dependencies: Session
       taskRecovery,
       executionBackend
     });
-    dependencies.afterStart?.(ctx);
+    await dependencies.afterStart?.(ctx);
   });
 }

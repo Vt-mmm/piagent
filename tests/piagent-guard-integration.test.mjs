@@ -24,11 +24,26 @@ const { resolveProjectProfileDocument } = await import(
 const { appendRepositoryMemoryFact } = await import(
   pathToFileURL(path.join(repoRoot, "packages", "piagent-core", "extensions", "repository-memory.js")).href
 );
-const { workingTreeCarrierDigest } = await import(
+const { workingTreeCarrierDigest, workingTreeEvidenceDigest } = await import(
   pathToFileURL(path.join(repoRoot, "packages", "piagent-core", "extensions", "working-tree-digest.js")).href
+);
+const { activeSessionTask, workingTreeSnapshot } = await import(
+  pathToFileURL(path.join(repoRoot, "packages", "piagent-core", "extensions", "task-state.js")).href
 );
 const { appendTaskJournalEvent, replayTaskCheckpoints } = await import(
   pathToFileURL(path.join(repoRoot, "packages", "piagent-core", "extensions", "task-journal.js")).href
+);
+const { readTaskBaselineManifest } = await import(
+  pathToFileURL(path.join(repoRoot, "packages", "piagent-core", "runtime", "inspection", "source-evidence-store.ts")).href
+);
+const { readMutationProvenance } = await import(
+  pathToFileURL(path.join(repoRoot, "packages", "piagent-core", "runtime", "inspection", "mutation-provenance-store.ts")).href
+);
+const { readVerifierFileSnapshots } = await import(
+  pathToFileURL(path.join(repoRoot, "packages", "piagent-core", "runtime", "inspection", "verifier-snapshot-store.ts")).href
+);
+const { appendTaskControlTransition, inspectTaskControlState } = await import(
+  pathToFileURL(path.join(repoRoot, "packages", "piagent-core", "runtime", "inspection", "task-control-journal.ts")).href
 );
 
 // A stored profile that names an adapter is only meaningful once resolved
@@ -63,7 +78,10 @@ async function loadGuardFixture(options = {}) {
   options.mutatePackage?.(packageRoot);
   const moduleUrl = pathToFileURL(path.join(packageRoot, "extensions", "piagent-guard.ts")).href;
   const imported = await import(`${moduleUrl}?t=${Date.now()}-${Math.random()}`);
-  return { root, piagentGuard: imported.default, readChatImage: imported.readChatImage };
+  const brokerModule = await import(pathToFileURL(path.join(packageRoot, "runtime", "inspection", "approval-broker.ts")).href);
+  const mutationGuardModule = await import(pathToFileURL(path.join(packageRoot, "runtime", "policy", "source-mutation-guard.ts")).href);
+  return { root, piagentGuard: imported.default, readChatImage: imported.readChatImage, approvalBroker: brokerModule.piApprovalBroker,
+    sourceMutationGuard: mutationGuardModule.piSourceMutationGuard };
 }
 
 function createProject(root, options = {}) {
@@ -394,6 +412,13 @@ describe("piagent guard integration", () => {
     assert.equal(task.authoritySnapshot.taskRunId, task.taskRunId);
     assert.equal(task.authoritySnapshot.capturedAt, task.createdAt);
     assert.equal(task.authoritySnapshot.capabilities.find((entry) => entry.id === "CAP-13").authority, "off");
+    const baseline = readTaskBaselineManifest(cwd, task.taskRunId);
+    assert.equal(baseline.taskId, task.taskId);
+    assert.equal(baseline.taskRunId, task.taskRunId);
+    assert.equal(baseline.captureState, "unavailable", "a dirty protected Pi profile must degrade exact task evidence without blocking task start");
+    assert.equal(baseline.reasonCode, "protected-path");
+    assert.equal(baseline.roots.some((root) => root.entries.some((entry) => entry.state === "protected" && entry.contentRef === null)), true);
+    assert.equal(JSON.stringify(baseline).includes("runtime-intake-session"), false, "private baseline evidence must not persist the raw session identity");
     assert.deepEqual(task.contextManifest, [{ path: "src/invoice.ts", reason: "criterion-01 scope target" }]);
     assert.equal(harness.entries.filter((entry) => entry.type === "user-message" || entry.type === "message").length, 0,
       "runtime intake and bounded context are injected into the current turn, never a provider follow-up");
@@ -2822,9 +2847,19 @@ describe("piagent guard integration", () => {
     await authorize("test-patch", "apply_patch", patchInput);
     fs.writeFileSync(path.join(cwd, testInput.path), finalTest);
     await complete("test-patch", "apply_patch", patchInput, "patch applied");
+    const mutationLedger = readMutationProvenance(cwd, started.details.taskRunId);
+    assert.deepEqual(mutationLedger.corruptions, []);
+    assert.equal(mutationLedger.records.length, 3, "successful exact write/apply-patch results must persist one record per tool call");
+    assert.equal(mutationLedger.records.every((record) => record.evidenceMode === "exact-runtime"), true);
+    assert.deepEqual(mutationLedger.records.map((record) => record.toolName).sort(), ["apply_patch", "write", "write"]);
     const verifierInput = { command: "npm test" };
     await authorize("verify", "bash", verifierInput);
     await complete("verify", "bash", verifierInput, "pass");
+    const verifierSnapshots = readVerifierFileSnapshots(cwd, started.details.taskRunId);
+    assert.deepEqual(verifierSnapshots.corruptions, []);
+    assert.equal(verifierSnapshots.records.length, 1);
+    assert.equal(verifierSnapshots.records[0].outcome, "passed");
+    assert.equal(verifierSnapshots.records[0].treeDigest, workingTreeEvidenceDigest(workingTreeSnapshot(cwd)));
 
     const firstClaim = await harness.handlers.get("message_end")({
       message: { role: "assistant", content: [{ type: "text", text: "The implementation and exact verifier are complete." }] }
@@ -4204,6 +4239,60 @@ describe("piagent guard integration", () => {
     assert.equal(mixedReadWriteAction.block, true);
     assert.match(mixedReadWriteAction.reason, /external provider action/);
     assert.equal(ctx.confirmations.length, 9);
+  });
+
+  it("lets the exact WebUI decision win the same Pi guard confirmation once", async () => {
+    const { root, piagentGuard, approvalBroker } = await loadGuardFixture();
+    const cwd = createProject(root), ctx = createContext(cwd), harness = createPiHarness();
+    let resolveTerminal; const terminal = new Promise((resolve) => { resolveTerminal = resolve; });
+    ctx.ui.confirm = async (message, title) => { ctx.confirmations.push({ message, title }); return await terminal; };
+    piagentGuard(harness.pi); await startSourceTask(harness, ctx, "web-approval");
+    const task = activeSessionTask(cwd, ctx.sessionManager.getSessionId());
+    const runtimeInstanceId = "runtime.web-approval";
+    approvalBroker.bind({ cwd, rawSessionId: ctx.sessionManager.getSessionId(), runtimeInstanceId,
+      authority: () => ({ identity: { projectRef: "project.web", runtimeInstanceId, sessionRef: "session.web", taskId: task.taskId,
+        taskRunId: task.taskRunId, agentOperationId: "operation.web-approval" },
+      revisions: { runtimeRevision: "runtime-rev.web", taskRevision: "task-rev.web", controlRevision: "control-rev.web" }, taskState: "active" }) });
+    const resultPromise = harness.handlers.get("tool_call")({ toolName: "mcp__github__create_issue", toolCallId: "tool.web-approval",
+      input: { owner: "org", repo: "repo", title: "Release note" } }, ctx);
+    await new Promise((resolve) => setImmediate(resolve));
+    const projection = approvalBroker.projection(cwd, ctx.sessionManager.getSessionId());
+    assert.equal(projection.summary.state, "waiting");
+    const request = approvalBroker.detail(cwd, ctx.sessionManager.getSessionId(), projection.summary.pending[0].approvalRef);
+    const decision = { schemaVersion: 1, version: "piagent-webui-approval-v1", recordType: "decision", approvalRef: request.approvalRef,
+      decisionId: "decision.web-approval", decisionToken: request.decisionToken, identity: structuredClone(request.identity), actionDigest: request.action.actionDigest,
+      expectedRevisions: structuredClone(request.expectedRevisions), decision: "allow", reason: null, decidedAt: new Date().toISOString(),
+      expiresAt: request.expiresAt, decisionSurface: "webui", executor: "pi-guard", directExecution: false };
+    const receiptPromise = approvalBroker.decide(cwd, ctx.sessionManager.getSessionId(), request.approvalRef, decision);
+    const result = await resultPromise, receipt = await receiptPromise; resolveTerminal(false);
+    assert.notEqual(result?.block, true); assert.equal(receipt.winnerSurface, "webui"); assert.equal(receipt.permit.status, "consumed");
+  });
+
+  it("makes source mutation capability depend on the exact live Pi guard session binding", async () => {
+    const { root, piagentGuard, sourceMutationGuard } = await loadGuardFixture();
+    const cwd = createProject(root), ctx = createContext(cwd), harness = createPiHarness();
+    piagentGuard(harness.pi);
+    assert.equal(sourceMutationGuard.available(cwd, ctx.sessionManager.getSessionId()), false);
+    await harness.handlers.get("session_start")({}, ctx);
+    assert.equal(sourceMutationGuard.available(cwd, ctx.sessionManager.getSessionId()), false, "an active task is required");
+    await startSourceTask(harness, ctx, "source-mutation-guard-binding");
+    assert.equal(sourceMutationGuard.available(cwd, ctx.sessionManager.getSessionId()), true);
+    await harness.handlers.get("session_shutdown")({ reason: "test" }, ctx);
+    assert.equal(sourceMutationGuard.available(cwd, ctx.sessionManager.getSessionId()), false);
+  });
+
+  it("rechecks the durable Pause barrier at the final tool-start boundary", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root), ctx = createContext(cwd), harness = createPiHarness();
+    piagentGuard(harness.pi); await startSourceTask(harness, ctx, "lifecycle-pause");
+    const task = activeSessionTask(cwd, ctx.sessionManager.getSessionId()), control = inspectTaskControlState(cwd, task);
+    const transition = appendTaskControlTransition({ cwd, task, runtimeInstanceId: "runtime.lifecycle-guard", commandId: "command.lifecycle-pause",
+      idempotencyKeyDigest: `sha256:${"a".repeat(64)}`, actionDigest: `sha256:${"b".repeat(64)}`, fact: "task-control.pause-requested",
+      action: "pause", expectedControlRevision: control.controlRevision, expectedStates: ["active"], toState: "pause-requested",
+      resultCode: "pause-requested", pauseEpoch: 1 });
+    assert.equal(transition.ok, true);
+    const decision = await callToolCall(harness.handlers.get("tool_call"), ctx, "read", { path: "README.md" });
+    assert.equal(decision.block, true); assert.match(decision.reason, /lifecycle control blocks tool start.*pause-requested/i);
   });
 
   it("enforces provider and protected-path gates through the default MCP proxy carrier", async () => {

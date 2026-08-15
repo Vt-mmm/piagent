@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-verifier-file-snapshot-v1",
+  "attemptId": "verifier.invalid",
+  "attemptRef": "verifier-evidence.invalid",
+  "taskId": "task-01",
+  "taskRunId": "task-01-run-01",
+  "sessionIdentityHash": "raw-session",
+  "toolCallIdentityHash": "raw-tool",
+  "commandDigest": "raw-command",
+  "observedAt": "invalid",
+  "capturedAt": "invalid",
+  "retentionUntil": "invalid",
+  "exitCode": 1,
+  "outcome": "passed",
+  "treeDigest": "unknown",
+  "fileCount": 1,
+  "exposedPathCount": 1,
+  "files": [],
+  "integrityDigest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+}

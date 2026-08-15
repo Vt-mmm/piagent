@@ -1,4 +1,5 @@
 # Quickstart tiếng Việt
+<!-- language: vi; english-index: docs-site/content/en/quickstart.html -->
 
 > Nếu cần hướng dẫn đầy đủ từ setup, command, token/session, MCP đến subagents, xem `docs/operator-manual-vietnamese.md`.
 
@@ -50,14 +51,14 @@ Xong. Từ đây project nào cũng chỉ cần `cd` vào rồi gõ `pi`.
 
 Rollout team pin từng bước, update, rollback, và channel `--dev` cho máy cá nhân: [release-install-policy.md](release-install-policy.md).
 
-## Bước 2 — login OAuth provider model (OpenAI/ChatGPT hoặc Anthropic)
+## Bước 2 — login OAuth provider model đã chọn
 
 ```bash
 pi
 /login
 ```
 
-Chọn provider cho họ model muốn dùng trong danh sách Pi: OpenAI/ChatGPT cho model Codex, hoặc Anthropic cho model Claude. Token được lưu local trong Pi agent dir, không nằm trong repo.
+Chọn đúng provider được Pi liệt kê cho model cần dùng và hoàn tất flow OAuth tương ứng. Token được lưu local trong Pi agent dir, không nằm trong repo.
 
 ## Bước 3 — chọn model và chạy project onboarding
 

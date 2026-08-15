@@ -50,14 +50,16 @@ function target(value: string, maximum = 44): string {
   return single.length <= maximum ? single : `${single.slice(0, maximum - 1)}…`;
 }
 
-function healthTone(view: ReturnType<typeof buildActivityInspector>): ActivityFooterTone {
+type ActivityInspectorView = Awaited<ReturnType<typeof buildActivityInspector>>;
+
+function healthTone(view: ActivityInspectorView): ActivityFooterTone {
   if (view.safety.warnings > 0 || (view.context.current?.percent ?? 0) >= 80) return "red";
   if ((view.context.current?.percent ?? 0) >= 60) return "yellow";
   return "green";
 }
 
 export function formatActivityPanel(
-  view: ReturnType<typeof buildActivityInspector>,
+  view: ActivityInspectorView,
   options: { color?: boolean } = {}
 ): string[] {
   const color = options.color === true;
@@ -87,7 +89,7 @@ export function formatActivityPanel(
 }
 
 export function formatActivityFooter(
-  view: ReturnType<typeof buildActivityInspector>,
+  view: ActivityInspectorView,
   options: { color?: boolean } = {}
 ): string {
   const color = options.color === true;

@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/task-index-v1.schema.json",
+  "title": "Piagent WebUI authoritative local task run index v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "version", "generatedAt", "identity", "state", "indexRevision", "activeRunRef", "runs", "page", "warnings", "health"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "version": { "const": "piagent-webui-task-index-v1" },
+    "generatedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+    "identity": { "$ref": "common-v1.schema.json#/$defs/identity" },
+    "state": { "enum": ["ready", "unavailable"] },
+    "indexRevision": { "$ref": "common-v1.schema.json#/$defs/nullableRevisionToken" },
+    "activeRunRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+    "runs": { "type": "array", "maxItems": 200, "items": { "$ref": "#/$defs/run" } },
+    "page": { "$ref": "#/$defs/page" },
+    "warnings": { "type": "array", "maxItems": 8, "items": { "$ref": "#/$defs/warning" } },
+    "health": { "$ref": "common-v1.schema.json#/$defs/health" }
+  },
+  "allOf": [
+    {
+      "properties": { "identity": { "type": "object", "properties": { "agentOperationId": { "type": "null" }, "toolCallId": { "type": "null" } } } }
+    },
+    {
+      "if": { "properties": { "state": { "const": "ready" } }, "required": ["state"] },
+      "then": { "properties": { "indexRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "health": { "type": "object", "properties": { "state": { "enum": ["ok", "degraded"] } } } } },
+      "else": { "properties": { "indexRevision": { "type": "null" }, "activeRunRef": { "type": "null" }, "runs": { "type": "array", "maxItems": 0 },
+        "page": { "type": "object", "properties": { "total": { "const": 0 }, "returned": { "const": 0 }, "truncated": { "const": false } } },
+        "health": { "type": "object", "properties": { "state": { "enum": ["unavailable", "error"] } } } } }
+    }
+  ],
+  "$defs": {
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runRef", "taskRef", "taskId", "taskRunId", "summary", "sessionLabel", "outcome", "terminal", "attempt", "maxAttempts", "changeMode", "riskLane", "createdAt", "updatedAt", "isCurrentSession", "isActive", "progress"],
+      "properties": {
+        "runRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "taskRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "taskId": { "$ref": "common-v1.schema.json#/$defs/publicId" },
+        "taskRunId": { "$ref": "common-v1.schema.json#/$defs/publicId" },
+        "summary": { "type": "string", "maxLength": 240, "pattern": "^[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]*$" },
+        "sessionLabel": { "$ref": "common-v1.schema.json#/$defs/nullableDisplayText" },
+        "outcome": { "enum": ["pending", "completed", "blocked", "partial", "failed", "unknown"] },
+        "terminal": { "type": "boolean" },
+        "attempt": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 10 },
+        "changeMode": { "enum": ["read-only", "source-change"] },
+        "riskLane": { "enum": ["tiny", "normal", "high-risk"] },
+        "createdAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+        "updatedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+        "isCurrentSession": { "type": "boolean" },
+        "isActive": { "type": "boolean" },
+        "progress": { "type": "object", "additionalProperties": false, "required": ["completed", "total"],
+          "properties": { "completed": { "type": "integer", "minimum": 0, "maximum": 12 }, "total": { "type": "integer", "minimum": 0, "maximum": 12 } } }
+      },
+      "allOf": [
+        { "if": { "properties": { "outcome": { "const": "pending" } }, "required": ["outcome"] }, "then": { "properties": { "terminal": { "const": false } } }, "else": { "properties": { "terminal": { "const": true } } } },
+        { "if": { "properties": { "isActive": { "const": true } }, "required": ["isActive"] }, "then": { "properties": { "isCurrentSession": { "const": true }, "outcome": { "const": "pending" }, "terminal": { "const": false } } } }
+      ]
+    },
+    "page": {
+      "type": "object", "additionalProperties": false, "required": ["total", "returned", "truncated"],
+      "properties": { "total": { "type": "integer", "minimum": 0, "maximum": 100000 }, "returned": { "type": "integer", "minimum": 0, "maximum": 200 }, "truncated": { "type": "boolean" } }
+    },
+    "warning": {
+      "type": "object", "additionalProperties": false, "required": ["code", "count", "message"],
+      "properties": { "code": { "enum": ["corrupt-task-state", "legacy-task-state", "task-index-truncated"] },
+        "count": { "type": "integer", "minimum": 1, "maximum": 100000 }, "message": { "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText" } }
+    }
+  }
+}

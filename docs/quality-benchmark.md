@@ -1,4 +1,5 @@
 # Quality benchmark guide
+<!-- language: vi; english-index: docs-site/content/en/benchmark.html -->
 
 ## Chạy và chấm tự động bằng một lệnh
 

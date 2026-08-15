@@ -17,6 +17,12 @@ type AuthorizedMutation = {
 };
 
 export type ModelMutationCompletion = { changedPaths: string[]; recordedDigests: Record<string, string> };
+export type ModelMutationEvidenceCompletion = ModelMutationCompletion & {
+  beforeSnapshot: Record<string, string> | null;
+  targetPaths: string[];
+  recordedContentDigests: Record<string, string>;
+  proofModes: Record<string, "full-content" | "exact-replacement">;
+};
 
 function uniquePaths(values: string[]): string[] {
   return [...new Set(values.map((value) => String(value ?? "").replaceAll("\\", "/").replace(/^\.\//, "").trim()).filter(Boolean))].sort();
@@ -95,16 +101,30 @@ export class ModelAuthorshipState {
     currentSnapshot: Record<string, string>,
     currentContentDigests: Record<string, string> = {}
   ): ModelMutationCompletion {
+    const result = this.completeWithEvidence(identity, toolCallId, success, currentSnapshot, currentContentDigests);
+    return { changedPaths: result.changedPaths, recordedDigests: result.recordedDigests };
+  }
+
+  completeWithEvidence(
+    identity: ModelMutationIdentity,
+    toolCallId: string,
+    success: boolean,
+    currentSnapshot: Record<string, string>,
+    currentContentDigests: Record<string, string> = {}
+  ): ModelMutationEvidenceCompletion {
     const key = this.#key(identity.taskRunId, toolCallId);
     const reservation = this.#reservations.get(key);
     this.#reservations.delete(key);
-    if (!reservation) return { changedPaths: [], recordedDigests: {} };
+    const empty: ModelMutationEvidenceCompletion = {
+      changedPaths: [], recordedDigests: {}, beforeSnapshot: null, targetPaths: [], recordedContentDigests: {}, proofModes: {}
+    };
+    if (!reservation) return empty;
     const changed = changedPaths(reservation.workingTreeSnapshot, currentSnapshot);
     const evidence = this.#taskEvidence(reservation.identity.taskRunId);
     const proofPaths = uniquePaths([...reservation.proof.fullContentPaths, ...reservation.proof.replacePaths]);
     const invalidate = () => {
       for (const file of uniquePaths([...reservation.targetPaths, ...changed])) evidence.delete(file);
-      return { changedPaths: changed, recordedDigests: {} };
+      return { ...empty, changedPaths: changed, beforeSnapshot: { ...reservation.workingTreeSnapshot }, targetPaths: [...reservation.targetPaths] };
     };
     if (!sameIdentity(reservation.identity, identity) || !success || changed.length === 0 || !exactPaths(changed, proofPaths)) return invalidate();
     const candidates: Array<{ file: string; workingTreeDigest: string; contentDigest: string }> = [];
@@ -116,12 +136,20 @@ export class ModelAuthorshipState {
       candidates.push({ file, workingTreeDigest, contentDigest: content });
     }
     const recordedDigests: Record<string, string> = {};
+    const recordedContentDigests: Record<string, string> = {};
+    const proofModes: Record<string, "full-content" | "exact-replacement"> = {};
     for (const candidate of candidates) {
       evidence.set(candidate.file, { ...reservation.identity, ...candidate });
       recordedDigests[candidate.file] = candidate.workingTreeDigest;
+      recordedContentDigests[candidate.file] = candidate.contentDigest;
+      proofModes[candidate.file] = reservation.proof.fullContentPaths.includes(candidate.file) ? "full-content" : "exact-replacement";
     }
     while (this.#evidence.size > 100) this.#evidence.delete(this.#evidence.keys().next().value as string);
-    return { changedPaths: changed, recordedDigests };
+    return {
+      changedPaths: changed, recordedDigests,
+      beforeSnapshot: { ...reservation.workingTreeSnapshot }, targetPaths: [...reservation.targetPaths],
+      recordedContentDigests, proofModes
+    };
   }
 
   digests(identity: ModelMutationIdentity, currentSnapshot?: Record<string, string>): Record<string, string> {

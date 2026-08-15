@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/mutation-provenance-record.schema.json",
+  "title": "Piagent mutation provenance record v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "version", "recordId", "evidenceRef", "taskId", "taskRunId",
+    "sessionIdentityHash", "toolCallIdentityHash", "toolName", "recordedAt", "evidenceMode",
+    "beforeTreeDigest", "afterTreeDigest", "changes", "integrityDigest"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "version": { "const": "piagent-mutation-provenance-v1" },
+    "recordId": { "type": "string", "pattern": "^provenance\\.[a-f0-9]{64}$" },
+    "evidenceRef": { "type": "string", "pattern": "^mutation\\.[a-f0-9]{64}$" },
+    "taskId": { "type": "string", "minLength": 1, "maxLength": 160, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@~-]*$" },
+    "taskRunId": { "type": "string", "minLength": 1, "maxLength": 160, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@~-]*$" },
+    "sessionIdentityHash": { "$ref": "#/$defs/digest" },
+    "toolCallIdentityHash": { "$ref": "#/$defs/digest" },
+    "toolName": { "enum": ["edit", "write", "apply_patch", "shell", "opaque"] },
+    "recordedAt": { "type": "string", "format": "date-time", "maxLength": 32 },
+    "evidenceMode": { "enum": ["exact-runtime", "observed-runtime"] },
+    "beforeTreeDigest": { "$ref": "#/$defs/treeDigest" },
+    "afterTreeDigest": { "$ref": "#/$defs/treeDigest" },
+    "changes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": { "$ref": "#/$defs/change" }
+    },
+    "integrityDigest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "treeDigest": { "type": "string", "pattern": "^wt-content-v2:[a-f0-9]{64}$" },
+    "carrierDigest": { "type": "string", "pattern": "^wt-content-v2:[a-f0-9]{64}$" },
+    "change": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pathDigest", "repoPathBase64", "beforeCarrierDigest", "afterCarrierDigest",
+        "afterContentDigest", "proofMode", "effect"
+      ],
+      "properties": {
+        "pathDigest": { "$ref": "#/$defs/digest" },
+        "repoPathBase64": { "type": "string", "minLength": 1, "maxLength": 4096, "pattern": "^[A-Za-z0-9_-]+$" },
+        "beforeCarrierDigest": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/carrierDigest" }]
+        },
+        "afterCarrierDigest": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/carrierDigest" }]
+        },
+        "afterContentDigest": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/digest" }]
+        },
+        "proofMode": {
+          "oneOf": [{ "type": "null" }, { "enum": ["full-content", "exact-replacement"] }]
+        },
+        "effect": { "enum": ["exact-content", "content-preserved", "content-changed", "unknown"] }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "evidenceMode": { "const": "exact-runtime" } }, "required": ["evidenceMode"] },
+      "then": {
+        "properties": {
+          "toolName": { "enum": ["edit", "write", "apply_patch"] },
+          "changes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "afterCarrierDigest": { "$ref": "#/$defs/carrierDigest" },
+                "afterContentDigest": { "$ref": "#/$defs/digest" },
+                "proofMode": { "enum": ["full-content", "exact-replacement"] },
+                "effect": { "const": "exact-content" }
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "changes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "proofMode": { "type": "null" },
+                "effect": { "enum": ["content-preserved", "content-changed", "unknown"] }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

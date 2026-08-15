@@ -8,6 +8,110 @@ import { after, describe, it } from "node:test";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const temporaryRoots = new Set();
+const webUiSchemaPackageFiles = [
+  "schemas/piagent-webui/catalog-v1.json",
+  "schemas/piagent-webui/common-v1.schema.json",
+  "schemas/piagent-webui/snapshot-v1.schema.json",
+  "schemas/piagent-webui/runtime-event-v2.schema.json",
+  "schemas/piagent-webui/source-change-v1.schema.json",
+  "schemas/piagent-webui/diff-v1.schema.json",
+  "schemas/piagent-webui/review-state-v1.schema.json",
+  "schemas/piagent-webui/source-mutation-v1.schema.json",
+  "schemas/piagent-webui/source-revert-v1.schema.json",
+  "schemas/piagent-webui/commit-summary-v1.schema.json",
+  "schemas/piagent-webui/task-index-v1.schema.json",
+  "schemas/piagent-webui/task-timeline-v1.schema.json",
+  "schemas/piagent-webui/recovery-history-v1.schema.json",
+  "schemas/piagent-webui/handoff-history-v1.schema.json",
+  "schemas/piagent-webui/subagent-tree-v1.schema.json",
+  "schemas/piagent-webui/release-monitor-v1.schema.json",
+  "schemas/piagent-webui/transcript-v1.schema.json",
+  "schemas/piagent-webui/queue-v1.schema.json",
+  "schemas/piagent-webui/model-catalog-v1.schema.json",
+  "schemas/piagent-webui/attachment-v1.schema.json",
+  "schemas/piagent-webui/control-command-v1.schema.json",
+  "schemas/piagent-webui/approval-v1.schema.json",
+  "schemas/piagent-webui/capabilities-v1.schema.json",
+  "schemas/piagent-webui/session-catalog-v1.schema.json",
+  "schemas/piagent-webui/session-command-v1.schema.json",
+  "schemas/piagent-webui/gateway-capabilities-v1.schema.json",
+  "schemas/piagent-webui/gateway-protocol-v1.schema.json",
+  "schemas/task-baseline-manifest.schema.json",
+  "schemas/mutation-provenance-record.schema.json",
+  "schemas/verifier-file-snapshot.schema.json"
+];
+const webUiInspectionPackageFiles = [
+  "packages/piagent-core/runtime/inspection/activity-event-adapter.ts",
+  "packages/piagent-core/runtime/inspection/commit-summary-projection.ts",
+  "packages/piagent-core/runtime/inspection/criteria-links.ts",
+  "packages/piagent-core/runtime/inspection/git-numstat-adapter.ts",
+  "packages/piagent-core/runtime/inspection/git-filter-safety.ts",
+  "packages/piagent-core/runtime/inspection/git-status-adapter.ts",
+  "packages/piagent-core/runtime/inspection/git-tree-adapter.ts",
+  "packages/piagent-core/runtime/inspection/mutation-provenance-contract.ts",
+  "packages/piagent-core/runtime/inspection/mutation-provenance-recorder.ts",
+  "packages/piagent-core/runtime/inspection/mutation-provenance-store.ts",
+  "packages/piagent-core/runtime/inspection/runtime-event-store.ts",
+  "packages/piagent-core/runtime/inspection/same-process-bridge-proof.ts",
+  "packages/piagent-core/runtime/inspection/zero-turn-conformance.ts",
+  "packages/piagent-core/runtime/inspection/source-evidence-contract.ts",
+  "packages/piagent-core/runtime/inspection/source-evidence-store.ts",
+  "packages/piagent-core/runtime/inspection/source-mutation-projection.ts",
+  "packages/piagent-core/runtime/inspection/source-mutation-store.ts",
+  "packages/piagent-core/runtime/inspection/source-revert-projection.ts",
+  "packages/piagent-core/runtime/inspection/source-handoff-store.ts",
+  "packages/piagent-core/runtime/inspection/source-open-target.ts",
+  "packages/piagent-core/runtime/inspection/task-baseline-start-capture.ts",
+  "packages/piagent-core/runtime/inspection/task-run-index.ts",
+  "packages/piagent-core/runtime/inspection/task-recovery-timeline.ts",
+  "packages/piagent-core/runtime/inspection/task-compaction-history.ts",
+  "packages/piagent-core/runtime/inspection/context-telemetry-inspection.ts",
+  "packages/piagent-core/runtime/inspection/task-handoff-history.ts",
+  "packages/piagent-core/runtime/inspection/task-subagent-tree.ts",
+  "packages/piagent-core/runtime/inspection/task-source-projection.ts",
+  "packages/piagent-core/runtime/inspection/task-provenance-projection.ts",
+  "packages/piagent-core/runtime/inspection/verifier-snapshot-contract.ts",
+  "packages/piagent-core/runtime/inspection/verifier-snapshot-store.ts",
+  "packages/piagent-core/runtime/inspection/webui-snapshot.ts",
+  "packages/piagent-core/runtime/inspection/text-diff.ts",
+  "packages/piagent-core/runtime/inspection/source-change-projection.ts",
+  "packages/piagent-core/runtime/inspection/workspace-file-reader.ts",
+  "packages/piagent-core/runtime/inspection/workspace-source-projection.ts",
+  "packages/piagent-core/runtime/inspection/mcp-control.ts",
+  "packages/piagent-core/runtime/inspection/diff-projection.ts",
+  "packages/piagent-core/runtime/inspection/review-state-contract.ts",
+  "packages/piagent-core/runtime/inspection/review-state-projection.ts",
+  "packages/piagent-core/runtime/inspection/review-state-store.ts",
+  "packages/piagent-core/runtime/policy/source-index-transaction.ts",
+  "packages/piagent-core/runtime/policy/source-mutation-guard-binding.ts",
+  "packages/piagent-core/runtime/policy/source-mutation-guard.ts",
+  "packages/piagent-core/runtime/policy/source-worktree-transaction.ts"
+];
+const webUiGatewayPackageFiles = [
+  "packages/piagent-webui/gateway/control-socket.ts",
+  "packages/piagent-webui/gateway/gateway-service.ts",
+  "packages/piagent-webui/gateway/gateway-events.ts",
+  "packages/piagent-webui/gateway/gateway-protocol-service.ts",
+  "packages/piagent-webui/gateway/gateway-session-stream.ts",
+  "packages/piagent-webui/gateway/pi-host.ts",
+  "packages/piagent-webui/gateway/profile-state.ts",
+  "packages/piagent-webui/gateway/project-registry.ts",
+  "packages/piagent-webui/gateway/native-project-picker.ts",
+  "packages/piagent-webui/gateway/provider-auth-broker.ts",
+  "packages/piagent-webui/gateway/mcp-auth-broker.ts",
+  "packages/piagent-webui/gateway/session-catalog.ts",
+  "packages/piagent-webui/gateway/session-command-controller.ts",
+  "packages/piagent-webui/gateway/session-command-store.ts",
+  "packages/piagent-webui/gateway/session-lease-store.ts",
+  "packages/piagent-webui/gateway/session-metadata-store.ts",
+  "packages/piagent-webui/gateway/session-runtime-supervisor.ts",
+  "packages/piagent-webui/ownership/profile-state.ts",
+  "packages/piagent-webui/ownership/session-lease-store.ts",
+  "packages/piagent-webui/ownership/session-refs.ts",
+  "packages/piagent-webui/extension/terminal-session-adapter.ts",
+  "packages/piagent-webui/server/gateway-websocket.ts",
+  "scripts/piagent-dashboard.mjs"
+];
 
 function dryRunPackageFiles(cwd = repositoryRoot) {
   const packed = spawnSync("npm", ["pack", "--dry-run", "--json"], { cwd, encoding: "utf8" });
@@ -17,7 +121,7 @@ function dryRunPackageFiles(cwd = repositoryRoot) {
 
 function localModuleSpecifiers(source) {
   const patterns = [
-    /\b(?:import|export)\s+(?:type\s+)?[\w*{},\s]+?\s+from\s+["']([^"']+)["']/g,
+    /\b(?:import|export)\s+(?!type\b)[\w*{},\s]+?\s+from\s+["']([^"']+)["']/g,
     /\bimport\s*["']([^"']+)["']/g,
     /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g
   ];
@@ -67,6 +171,29 @@ describe("package distribution", () => {
       || /^docs\/decisions\//.test(entry)
       || /^docs\/readiness-assessment\.md$/.test(entry));
     assert.deepEqual(shipsInternalNotes, []);
+    const shippedWebUi = entries.filter((entry) => entry.startsWith("packages/piagent-webui/"));
+    assert.ok(shippedWebUi.includes("packages/piagent-webui/package.json"));
+    assert.ok(shippedWebUi.includes("packages/piagent-webui/extension/piagent-webui.ts"));
+    assert.ok(shippedWebUi.includes("packages/piagent-webui/extension/same-session-bridge.ts"));
+    assert.ok(shippedWebUi.includes("packages/piagent-webui/extension/held-message-queue.ts"));
+    assert.ok(shippedWebUi.includes("packages/piagent-webui/extension/session-options-controller.ts"));
+    assert.ok(shippedWebUi.includes("packages/piagent-webui/extension/session-stream-adapter.ts"));
+    assert.ok(shippedWebUi.includes("packages/piagent-webui/extension/attachment-store.ts"));
+    assert.ok(shippedWebUi.includes("packages/piagent-webui/extension/lifecycle-controller.ts"));
+    assert.ok(shippedWebUi.includes("packages/piagent-webui/extension/lifecycle-event-adapter.ts"));
+    assert.ok(shippedWebUi.includes("packages/piagent-webui/extension/source-mutation-controller.ts"));
+    assert.ok(shippedWebUi.includes("packages/piagent-webui/extension/source-revert-controller.ts"));
+    assert.ok(shippedWebUi.includes("packages/piagent-webui/extension/source-open-controller.ts"));
+    assert.ok(shippedWebUi.includes("packages/piagent-webui/extension/vscode-handoff.ts"));
+    assert.ok(entries.includes("packages/piagent-core/runtime/inspection/approval-broker.ts"));
+    assert.ok(entries.includes("packages/piagent-core/runtime/inspection/task-control-journal.ts"));
+    assert.ok(shippedWebUi.includes("packages/piagent-webui/server/transcript-projection.ts"));
+    assert.ok(shippedWebUi.includes("packages/piagent-webui/server/benchmark-release-monitor.ts"));
+    assert.ok(shippedWebUi.includes("packages/piagent-webui/server/sidecar-main.ts"));
+    assert.ok(shippedWebUi.includes("packages/piagent-webui/dist/client/index.html"));
+    assert.ok(entries.includes("scripts/piagent-webui-launcher.mjs"));
+    assert.equal(shippedWebUi.some((entry) => /\/(?:client\/src|benchmark|scripts|contracts)\//.test(entry)), false,
+      "the public root package may ship only the reviewed WebUI runtime and static bundle");
 
     // The exclusions must not swallow the documentation users install for.
     assert.ok(entries.includes("docs/capability-packs.md"));
@@ -92,6 +219,9 @@ describe("package distribution", () => {
     assert.ok(entries.includes("evals/ie6-release-protocol.v1.json"));
     assert.ok(entries.includes("evals/fs5-causal-arm.v1.json"));
     assert.ok(entries.includes("schemas/benchmark-assurance-evidence.schema.json"));
+    for (const file of webUiSchemaPackageFiles) assert.ok(entries.includes(file), `missing WebUI wire contract: ${file}`);
+    for (const file of webUiInspectionPackageFiles) assert.ok(entries.includes(file), `missing WebUI inspection module: ${file}`);
+    for (const file of webUiGatewayPackageFiles) assert.ok(entries.includes(file), `missing WebUI Gateway module: ${file}`);
     assert.ok(entries.includes("packages/piagent-core/benchmark/benchmark-core.js"));
     assert.ok(entries.includes("packages/piagent-core/benchmark/fs4-readiness-gates.js"));
     assert.ok(entries.includes("packages/piagent-core/benchmark/fs5-pilot-protocol.js"));
@@ -107,7 +237,11 @@ describe("package distribution", () => {
     const files = dryRunPackageFiles();
     const imported = importedProductionModules([
       "packages/piagent-core/extensions/piagent-guard.ts",
-      "scripts/piagent-cli.mjs"
+      "packages/piagent-webui/extension/piagent-webui.ts",
+      "packages/piagent-webui/server/sidecar-main.ts",
+      "scripts/piagent-cli.mjs",
+      "scripts/piagent-dashboard.mjs",
+      "scripts/piagent-webui-launcher.mjs"
     ]);
     for (const relative of imported) {
       assert.equal(files.has(relative), true, `imported production module is missing from package: ${relative}`);
@@ -203,7 +337,7 @@ describe("package distribution", () => {
     const bins = Object.entries(pkg.bin);
     assert.ok(bins.length > 0);
     for (const [name, target] of bins) {
-      assert.match(name, /^piagent-/);
+      assert.match(name, /^piagent(?:-|$)/);
       assert.equal(target, "scripts/piagent-cli.mjs");
     }
     assert.equal(fs.statSync(path.join(repositoryRoot, "scripts", "piagent-cli.mjs")).mode & 0o111, 0o111);
@@ -235,6 +369,9 @@ describe("package distribution", () => {
     assert.equal(files.has("evals/ie6-release-protocol.v1.json"), true);
     assert.equal(files.has("evals/fs5-causal-arm.v1.json"), true);
     assert.equal(files.has("schemas/benchmark-assurance-evidence.schema.json"), true);
+    for (const file of webUiSchemaPackageFiles) assert.equal(files.has(file), true, `missing WebUI wire contract: ${file}`);
+    for (const file of webUiInspectionPackageFiles) assert.equal(files.has(file), true, `missing WebUI inspection module: ${file}`);
+    for (const file of webUiGatewayPackageFiles) assert.equal(files.has(file), true, `missing WebUI Gateway module: ${file}`);
     assert.equal(files.has("packages/piagent-core/benchmark/benchmark-core.js"), true);
     assert.equal(files.has("packages/piagent-core/benchmark/fs4-readiness-gates.js"), true);
     assert.equal(files.has("packages/piagent-core/benchmark/fs5-pilot-protocol.js"), true);
@@ -268,6 +405,19 @@ describe("package distribution", () => {
     });
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /piagent-capabilities catalog/);
+  });
+
+  it("routes the primary piagent dashboard subcommand through the installed dispatcher", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-package-bin-"));
+    temporaryRoots.add(root);
+    const link = path.join(root, "piagent");
+    fs.symlinkSync(path.join(repositoryRoot, "scripts", "piagent-cli.mjs"), link);
+    const result = spawnSync(link, ["dashboard", "--help"], {
+      cwd: repositoryRoot,
+      encoding: "utf8"
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Usage: piagent dashboard/);
   });
 
   it("shows help successfully for every global command without requiring project state", () => {

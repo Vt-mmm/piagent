@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-release-monitor-v1",
+  "generatedAt": "2026-08-14T12:00:00.000Z",
+  "identity": { "projectRef": "project.fixture", "runtimeInstanceId": "runtime.fixture", "sessionRef": "session.fixture", "taskId": null, "taskRunId": null, "agentOperationId": null, "toolCallId": null },
+  "state": "ready",
+  "monitorRevision": "release-monitor.fixture",
+  "benchmark": {
+    "state": "ready",
+    "runs": [
+      {
+        "runRef": "benchmark.fixture", "suiteId": "production-v1", "lifecycle": "completed", "evidenceState": "complete", "sourceState": "current",
+        "startedAt": "2026-08-14T10:00:00.000Z", "updatedAt": "2026-08-14T11:00:00.000Z", "completedRuns": 12, "expectedRuns": 12,
+        "verdict": "passed", "releaseGate": "passed", "tokenClaimAllowed": true, "claimTier": "production-shadow",
+        "scores": { "quality": 9.1, "safety": 10, "reliability": 9.5, "workflow": 9, "efficiency": 8.8, "overall": 9.3 }
+      }
+    ],
+    "warnings": [],
+    "page": { "total": 1, "returned": 1, "truncated": false }
+  },
+  "release": {
+    "state": "ready", "reportRef": "release.fixture", "generatedAt": "2026-08-14T11:30:00.000Z", "sourceState": "current",
+    "localSafeGate": "passed", "rcAssembly": "ready", "beta": "blocked", "gaRelease": "blocked", "blockerCount": 1,
+    "blockers": ["explicit operator approval missing"],
+    "authorization": { "releaseCommit": false, "tag": false, "publish": false, "push": false }
+  },
+  "actions": { "runBenchmark": false, "resumeBenchmark": false, "releaseCommit": false, "tag": false, "publish": false, "push": false },
+  "health": { "state": "ok", "reasonCode": null, "message": null }
+}

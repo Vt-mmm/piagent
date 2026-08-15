@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-commit-summary-v1",
+  "generatedAt": "2026-08-14T09:00:00.000Z",
+  "identity": { "projectRef": "project_01", "runtimeInstanceId": "runtime_01", "sessionRef": "session_01", "taskId": "task_01", "taskRunId": "task_run_01", "agentOperationId": null, "toolCallId": null },
+  "state": "ready",
+  "summary": null,
+  "reasonCode": null,
+  "health": { "state": "ok", "reasonCode": null, "message": null }
+}

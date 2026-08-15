@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-handoff-history-v1",
+  "generatedAt": "2026-08-14T13:00:00.000Z",
+  "identity": { "projectRef": "project.fixture", "runtimeInstanceId": "runtime.fixture", "sessionRef": "session.fixture", "taskId": "task-active", "taskRunId": "task-active-run", "agentOperationId": null, "toolCallId": null },
+  "runRef": "run.fixture",
+  "state": "ready",
+  "historyRevision": "handoff-history.fixture",
+  "completeness": "complete",
+  "current": null,
+  "nextAction": { "action": "unknown", "stepRef": null, "reason": "Click to continue.", "exactCommandCount": 0, "dispatchable": true, "enforcementSafe": false },
+  "events": [],
+  "page": { "total": 0, "returned": 0, "truncated": false },
+  "warnings": [],
+  "health": { "state": "ok", "reasonCode": null, "message": null }
+}

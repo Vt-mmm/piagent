@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/queue-v1.schema.json",
+  "title": "Piagent WebUI held message queue projection v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "version", "generatedAt", "identity", "revision", "state", "heldCount", "quarantinedCount", "items", "reasonCode"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "version": { "const": "piagent-webui-queue-v1" },
+    "generatedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+    "identity": { "$ref": "#/$defs/identity" },
+    "revision": { "$ref": "common-v1.schema.json#/$defs/domainRevision" },
+    "state": { "enum": ["ready", "unavailable"] },
+    "heldCount": { "$ref": "#/$defs/count" },
+    "quarantinedCount": { "$ref": "#/$defs/count" },
+    "items": {
+      "type": "array",
+      "maxItems": 100,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/item" }
+    },
+    "reasonCode": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "state": { "const": "ready" } }, "required": ["state"] },
+      "then": { "properties": { "reasonCode": { "type": "null" } } }
+    },
+    {
+      "if": { "properties": { "state": { "const": "unavailable" } }, "required": ["state"] },
+      "then": {
+        "properties": {
+          "heldCount": { "const": 0 },
+          "quarantinedCount": { "const": 0 },
+          "items": { "type": "array", "maxItems": 0 },
+          "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "count": { "type": "integer", "minimum": 0, "maximum": 100 },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["projectRef", "runtimeInstanceId", "sessionRef", "taskId", "taskRunId", "agentOperationId", "toolCallId"],
+      "properties": {
+        "projectRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "runtimeInstanceId": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "sessionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "taskId": { "$ref": "common-v1.schema.json#/$defs/nullablePublicId" },
+        "taskRunId": { "$ref": "common-v1.schema.json#/$defs/nullablePublicId" },
+        "agentOperationId": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+        "toolCallId": { "type": "null" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "taskRunId": { "type": "string" } }, "required": ["taskRunId"] },
+          "then": { "properties": { "taskId": { "$ref": "common-v1.schema.json#/$defs/publicId" } } }
+        }
+      ]
+    },
+    "previewText": {
+      "type": "string",
+      "maxLength": 4000,
+      "pattern": "^[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]*$"
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["queueItemRef", "messageRequestId", "position", "state", "preview", "redacted", "truncated", "attachmentCount", "previewDigest", "createdAt", "updatedAt", "reasonCode"],
+      "properties": {
+        "queueItemRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "messageRequestId": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "position": { "type": "integer", "minimum": 0, "maximum": 99 },
+        "state": { "enum": ["held", "quarantined"] },
+        "preview": { "$ref": "#/$defs/previewText" },
+        "redacted": { "type": "boolean" },
+        "truncated": { "type": "boolean" },
+        "attachmentCount": { "type": "integer", "minimum": 0, "maximum": 16 },
+        "previewDigest": { "$ref": "common-v1.schema.json#/$defs/digest" },
+        "createdAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+        "updatedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+        "reasonCode": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "const": "held" } }, "required": ["state"] },
+          "then": { "properties": { "reasonCode": { "type": "null" } } }
+        },
+        {
+          "if": { "properties": { "state": { "const": "quarantined" } }, "required": ["state"] },
+          "then": { "properties": { "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" } } }
+        }
+      ]
+    }
+  }
+}

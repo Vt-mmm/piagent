@@ -1,4 +1,5 @@
 # Vong doi task trong Pi Agent Platform
+<!-- language: vi; english-index: docs-site/content/en/runtime.html -->
 
 ## Muc tieu
 

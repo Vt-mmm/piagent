@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-task-timeline-v1",
+  "generatedAt": "2026-08-14T11:00:00.000Z",
+  "identity": { "projectRef": "project.fixture", "runtimeInstanceId": "runtime.fixture", "sessionRef": "session.fixture", "taskId": "task-active", "taskRunId": "task-active-run", "agentOperationId": null, "toolCallId": null },
+  "runRef": "run.fixture",
+  "state": "unavailable",
+  "timelineRevision": null,
+  "continuity": { "crashEvidence": "possible-interruption", "recoveryDecision": "resume", "latestCheckpointRef": "checkpoint.untrusted", "reasonCode": null },
+  "events": [],
+  "page": { "total": 0, "returned": 0, "truncated": false },
+  "warnings": [],
+  "health": { "state": "unavailable", "reasonCode": "timeline-unavailable", "message": "Timeline unavailable" }
+}

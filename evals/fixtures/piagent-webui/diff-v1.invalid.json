@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-diff-v1",
+  "view": "working-tree",
+  "hunks": [
+    {
+      "kind": "added",
+      "oldLineNumber": 1,
+      "newLineNumber": 1,
+      "text": "An added line cannot have an old line number."
+    }
+  ]
+}

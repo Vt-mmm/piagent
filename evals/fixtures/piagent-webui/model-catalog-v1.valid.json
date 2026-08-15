@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-model-catalog-v1",
+  "generatedAt": "2026-08-13T15:00:00.000Z",
+  "identity": {
+    "projectRef": "project_01",
+    "runtimeInstanceId": "runtime_01",
+    "sessionRef": "session_01",
+    "taskId": null,
+    "taskRunId": null,
+    "agentOperationId": null,
+    "toolCallId": null
+  },
+  "revision": {
+    "runtimeRevision": "runtime_rev_01",
+    "taskRevision": null,
+    "controlRevision": null,
+    "workspaceRevision": null,
+    "indexRevision": null,
+    "approvalRevision": null,
+    "sessionOptionRevision": "session_option_rev_01",
+    "queueRevision": "queue_rev_01"
+  },
+  "state": "ready",
+  "catalogScope": "authenticated-all",
+  "effectScope": "session-and-user-default",
+  "activeModelRef": "model_01",
+  "activeThinkingLevel": "high",
+  "models": [
+    {
+      "modelRef": "model_01",
+      "provider": "provider-01",
+      "modelId": "model-01",
+      "displayName": "Model 01",
+      "reasoning": true,
+      "inputCapabilities": ["text", "image"],
+      "supportedThinkingLevels": ["off", "low", "medium", "high"],
+      "contextWindow": 200000,
+      "maxOutputTokens": 32000
+    }
+  ],
+  "reasonCode": null
+}

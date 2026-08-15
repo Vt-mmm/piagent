@@ -1,4 +1,5 @@
 # Runtime quality baseline
+<!-- language: vi; english-index: docs-site/content/en/runtime.html -->
 
 ## Mục tiêu
 

@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-task-baseline-manifest-v1",
+  "taskId": "task-01",
+  "taskRunId": "task-01-run-1",
+  "sessionIdentityHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "capturedAt": "2026-08-13T12:00:00.000Z",
+  "retentionUntil": "2026-09-12T12:00:00.000Z",
+  "baselineDigestAlgorithm": "wt-content-v2",
+  "baselineTreeDigest": "wt-content-v2:2222222222222222222222222222222222222222222222222222222222222222",
+  "captureState": "current",
+  "reasonCode": null,
+  "limits": { "maxEntries": 2000, "maxFileBytes": 4194304, "maxTotalBytes": 67108864, "capturedBytes": 5 },
+  "roots": [
+    {
+      "repoRef": "repo.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "projectPath": ".",
+      "headState": "head",
+      "headOid": "3333333333333333333333333333333333333333",
+      "workspaceRevision": "workspace.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "indexRevision": "index.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "state": "current",
+      "reasonCode": null,
+      "entries": [
+        {
+          "pathRef": "path.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "pathDigest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+          "repoPathBase64": "YS50eHQ",
+          "state": "blob",
+          "reasonCode": null,
+          "contentRef": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+          "byteLength": 5,
+          "mode": "100644",
+          "headObject": "6666666666666666666666666666666666666666",
+          "indexObject": "7777777777777777777777777777777777777777"
+        }
+      ]
+    }
+  ],
+  "integrityDigest": "sha256:19a3c69ef5e5abeeb505725d52b481744c60d3fec4bd8c46ec19a4800f64e59d"
+}

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-task-timeline-v1",
+  "generatedAt": "2026-08-14T11:00:00.000Z",
+  "identity": { "projectRef": "project.fixture", "runtimeInstanceId": "runtime.fixture", "sessionRef": "session.fixture", "taskId": "task-active", "taskRunId": "task-active-run", "agentOperationId": null, "toolCallId": null },
+  "runRef": "run.fixture",
+  "state": "ready",
+  "timelineRevision": "timeline.fixture",
+  "continuity": { "crashEvidence": "unknown", "recoveryDecision": "paused", "latestCheckpointRef": "checkpoint.fixture", "reasonCode": "no-explicit-crash-evidence" },
+  "events": [
+    { "eventRef": "event.fixture", "evidenceRef": "journal.fixture", "sequence": 1, "recordedAt": "2026-08-14T10:00:00.000Z", "kind": "checkpoint", "state": "observed", "title": "Checkpoint paused", "detail": "verify · paused", "checkpointRef": "checkpoint.fixture" }
+  ],
+  "page": { "total": 1, "returned": 1, "truncated": false },
+  "warnings": [{ "code": "crash-not-observed", "count": 1, "message": "No explicit crash fact was recorded." }],
+  "health": { "state": "degraded", "reasonCode": "timeline-warning", "message": "Some continuity facts remain unknown." }
+}

@@ -1,0 +1,106 @@
+{
+  "version": "piagent-webui0-gate-evidence-v1",
+  "generatedAt": "2026-08-13T15:10:00.000Z",
+  "implementationVerdict": "pass",
+  "independentSignoff": "accepted",
+  "independentReview": {
+    "verdict": "accepted",
+    "openP0": 0,
+    "openP1": 0,
+    "focusedVerification": "39/39 pass",
+    "statusInventoryDigest": "c814919f5b1e77a2ec310318d6f24e108714cf5ccd2a2fcf1cb84e2197c734d4",
+    "repositoryMutation": "none"
+  },
+  "openP0": 0,
+  "openP1": 0,
+  "currentTreeVerification": {
+    "webuiFocused": "105/105 pass excluding gate-audit status assertions",
+    "taskSourceRemediation": "11/11 pass; staged and committed protected/internal rename aliases covered",
+    "supportingEvidence": "22/22 task-baseline, provenance, verifier and Inspector pass",
+    "auditEvidence": "4/4 pass",
+    "fullRepository": "2124/2124 pass",
+    "bridgeMessageE2e": "1/1 pass",
+    "typecheck": "pass",
+    "architecture": "pass",
+    "docs": "pass",
+    "capabilities": "pass",
+    "fullOfflineVerify": "exit 0; piagent-platform scaffold PASS"
+  },
+  "closedFindings": [
+    {
+      "id": "WUI0-AUDIT-P1-001",
+      "severity": "P1",
+      "summary": "Bridge method/source proof did not execute a test message in a running current Pi session.",
+      "resolution": "Added a controlled pinned-host E2E that dispatches through the loaded extension runtime and proves input, provider context, message event, settlement and exact session identity.",
+      "evidence": ["tests/piagent-webui-bridge-message-e2e.test.mjs"]
+    },
+    {
+      "id": "WUI0-AUDIT-P1-002",
+      "severity": "P1",
+      "summary": "Task Changes and task diff bypassed the effective protected-path policy for content introduced or changed after baseline.",
+      "resolution": "Task projection now checks current and historical paths before bytes, emits no protected digest/stats/hunks, and fails the whole task view closed when an exact dirty-baseline comparison would require protected content.",
+      "evidence": ["packages/piagent-core/runtime/inspection/task-source-projection.ts", "tests/piagent-webui-task-source-projection.test.mjs"]
+    },
+    {
+      "id": "WUI0-AUDIT-P1-003",
+      "severity": "P1",
+      "summary": "The shared source collector read protected untracked bytes before discarding them, and task diff recollection repeated the read.",
+      "resolution": "Protected untracked inspection now short-circuits; a pure Git inspection plan excludes protected current/old paths before numstat/blob work; canonical working-tree hashing is policy-aware; inode regressions require zero protected reads.",
+      "evidence": ["packages/piagent-core/runtime/inspection/source-change-projection.ts", "packages/piagent-core/runtime/inspection/source-inspection-plan.ts", "packages/piagent-core/extensions/task-state.js", "tests/piagent-webui-task-source-projection.test.mjs", "tests/piagent-webui-source-change-projection.test.mjs", "tests/piagent-webui-zero-turn-conformance.test.mjs"]
+    },
+    {
+      "id": "WUI0-AUDIT-P1-004",
+      "severity": "P1",
+      "summary": "Historical rename protection was not propagated to workspace revision hashing or canonical working-tree evidence, so a protected old name could be read through its current name.",
+      "resolution": "Rename records now share one bidirectional protection decision across workspace hashing, Git inspection and canonical evidence; historical internal-state renames are excluded; old-only and new-only inode regressions require zero content reads in source, task diff and snapshot paths.",
+      "evidence": ["packages/piagent-core/runtime/inspection/source-change-projection.ts", "packages/piagent-core/runtime/inspection/source-inspection-plan.ts", "packages/piagent-core/extensions/task-state.js", "tests/piagent-webui-task-source-projection.test.mjs", "tests/piagent-webui-source-change-projection.test.mjs", "tests/piagent-webui-zero-turn-conformance.test.mjs"]
+    },
+    {
+      "id": "WUI0-AUDIT-P1-005",
+      "severity": "P1",
+      "summary": "Task Changes rediscovered a historical internal-state rename after the shared Git inspection plan excluded it, then task diff exposed the current content.",
+      "resolution": "Task path discovery builds an alias graph from current status and rename-aware immutable task-start-tree changes, so committed and staged aliases share protection/visibility through workspace observation and task content lookup; inode regressions prove zero reads and no canonical task file or diff authority.",
+      "evidence": ["packages/piagent-core/runtime/inspection/git-tree-adapter.ts", "packages/piagent-core/runtime/inspection/task-source-projection.ts", "tests/piagent-webui-git-status-adapter.test.mjs", "tests/piagent-webui-task-source-projection.test.mjs"]
+    }
+  ],
+  "deliverables": [
+    { "id": "D-PRODUCT", "evidence": ["governance/piagent-webui/decisions/WUI0-01-product-control-contract.md"] },
+    { "id": "D-SCHEMAS", "evidence": ["schemas/piagent-webui/catalog-v1.json", "tests/piagent-webui-schema.test.mjs"] },
+    { "id": "D-GIT", "evidence": ["packages/piagent-core/runtime/inspection/git-status-adapter.ts", "tests/piagent-webui-git-status-adapter.test.mjs"] },
+    { "id": "D-SOURCE", "evidence": ["packages/piagent-core/runtime/inspection/source-change-projection.ts", "tests/piagent-webui-source-change-projection.test.mjs"] },
+    { "id": "D-BASELINE", "evidence": ["schemas/task-baseline-manifest.schema.json", "tests/task-baseline-manifest.test.mjs"] },
+    { "id": "D-PROVENANCE", "evidence": ["schemas/mutation-provenance-record.schema.json", "tests/mutation-provenance.test.mjs"] },
+    { "id": "D-VERIFIER", "evidence": ["schemas/verifier-file-snapshot.schema.json", "tests/verifier-file-snapshot.test.mjs"] },
+    { "id": "D-CRITERIA", "evidence": ["packages/piagent-core/runtime/inspection/criteria-links.ts", "tests/piagent-webui-criteria-links.test.mjs"] },
+    { "id": "D-EVENTS", "evidence": ["packages/piagent-core/runtime/inspection/runtime-event-store.ts", "tests/piagent-webui-runtime-event-store.test.mjs"] },
+    { "id": "D-SECURITY", "evidence": ["governance/piagent-webui/security-contract.v1.json", "tests/piagent-webui-security-contract.test.mjs"] },
+    { "id": "D-ZERO-TURN", "evidence": ["packages/piagent-core/runtime/inspection/zero-turn-conformance.ts", "tests/piagent-webui-zero-turn-conformance.test.mjs"] },
+    { "id": "D-BRIDGE", "evidence": ["packages/piagent-core/runtime/inspection/same-process-bridge-proof.ts", "tests/piagent-webui-same-process-bridge.test.mjs", "tests/piagent-webui-bridge-message-e2e.test.mjs"] }
+  ],
+  "fixtures": [
+    { "id": "F-STATUS", "covers": ["A", "M", "D", "R", "U", "C"], "evidence": ["tests/piagent-webui-source-change-projection.test.mjs"] },
+    { "id": "F-RENAME-EDIT", "covers": ["rename", "edited-hunks"], "evidence": ["tests/piagent-webui-diff-projection.test.mjs"] },
+    { "id": "F-INDEX", "covers": ["staged", "unstaged", "mixed"], "evidence": ["tests/piagent-webui-diff-projection.test.mjs"] },
+    { "id": "F-CONTENT-KINDS", "covers": ["binary", "symlink", "submodule", "oversized"], "evidence": ["tests/piagent-webui-diff-projection.test.mjs", "tests/piagent-webui-source-change-projection.test.mjs"] },
+    { "id": "F-PATHS", "covers": ["spaces", "unicode", "newline"], "evidence": ["tests/piagent-webui-git-status-adapter.test.mjs", "tests/piagent-webui-source-change-projection.test.mjs"] },
+    { "id": "F-REPOSITORIES", "covers": ["unborn-head", "detached-head", "no-git", "nested-root", "multiple-roots"], "evidence": ["tests/piagent-webui-source-change-projection.test.mjs"] },
+    { "id": "F-BASELINE-OVERLAP", "covers": ["pre-existing-dirty", "post-baseline-mutation", "baseline-restore"], "evidence": ["tests/piagent-webui-task-source-projection.test.mjs", "tests/activity-inspector.test.mjs", "tests/mutation-provenance.test.mjs"] },
+    { "id": "F-RACES", "covers": ["concurrent-human-edit", "git-diff-race"], "evidence": ["tests/task-baseline-manifest.test.mjs", "tests/piagent-webui-diff-projection.test.mjs"] }
+  ],
+  "exitGates": [
+    { "id": "G-TASK-PATCH", "claim": "Exact task patch or explicit unavailable reason.", "evidence": ["tests/piagent-webui-task-source-projection.test.mjs"] },
+    { "id": "G-PROVENANCE", "claim": "No false runtime-observed-agent claim.", "evidence": ["tests/mutation-provenance.test.mjs"] },
+    { "id": "G-BASELINE-NONMUTATING", "claim": "Baseline capture does not mutate Git index, worktree or object store.", "evidence": ["tests/task-baseline-manifest.test.mjs"] },
+    { "id": "G-SNAPSHOT-EQUALITY", "claim": "Inspector and canonical WebUI snapshot deep-equal for the same facts.", "evidence": ["tests/piagent-webui-criteria-links.test.mjs", "tests/piagent-webui-zero-turn-conformance.test.mjs"] },
+    { "id": "G-SECURITY", "claim": "Security paths fail closed.", "evidence": ["tests/piagent-webui-security-contract.test.mjs", "tests/piagent-webui-runtime-event-store.test.mjs", "tests/piagent-webui-workspace-file-reader.test.mjs"] },
+    { "id": "G-ZERO-TURN", "claim": "Read-only conformance rejects model/message/continuation/prompt/tool-schema causality.", "evidence": ["tests/piagent-webui-zero-turn-conformance.test.mjs"] },
+    { "id": "G-SAME-SESSION-MESSAGE", "claim": "A test bridge message enters the exact running Pi process/session.", "evidence": ["tests/piagent-webui-bridge-message-e2e.test.mjs"] },
+    { "id": "G-NO-SECOND-RUNTIME", "claim": "Unsupported control remains unavailable; no second Pi runtime fallback.", "evidence": ["tests/piagent-webui-same-process-bridge.test.mjs", "governance/piagent-webui/security-contract.v1.json"] },
+    { "id": "G-ROLLBACK", "claim": "Inspector remains operational and public WebUI capabilities remain inspect-only/off.", "evidence": ["tests/activity-inspector.test.mjs", "tests/piagent-webui-same-process-bridge.test.mjs"] }
+  ],
+  "knownDownstreamGates": [
+    "Actual loopback auth/CSP/browser XSS and fault isolation belong to WEBUI-1 and remain unclaimed.",
+    "Chat/Control remain unavailable until WEBUI-2 productionizes the same-process bridge and lifecycle/approval arbiters.",
+    "Independent WEBUI-0 read-back was accepted with P0=0 and P1=0; later milestones require their own independent gates."
+  ]
+}

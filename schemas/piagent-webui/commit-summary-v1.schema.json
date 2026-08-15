@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/commit-summary-v1.schema.json",
+  "title": "Piagent WebUI deterministic staged commit summary v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "version", "generatedAt", "identity", "state", "summary", "reasonCode", "health"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "version": { "const": "piagent-webui-commit-summary-v1" },
+    "generatedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+    "identity": { "$ref": "common-v1.schema.json#/$defs/identity" },
+    "state": { "enum": ["ready", "unavailable"] },
+    "summary": { "anyOf": [{ "$ref": "#/$defs/summary" }, { "type": "null" }] },
+    "reasonCode": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" },
+    "health": { "$ref": "common-v1.schema.json#/$defs/health" }
+  },
+  "allOf": [
+    {
+      "properties": {
+        "identity": { "type": "object", "properties": {
+          "taskId": { "$ref": "common-v1.schema.json#/$defs/publicId" },
+          "taskRunId": { "$ref": "common-v1.schema.json#/$defs/publicId" },
+          "agentOperationId": { "type": "null" }, "toolCallId": { "type": "null" }
+        } }
+      }
+    },
+    {
+      "if": { "properties": { "state": { "const": "ready" } }, "required": ["state"] },
+      "then": { "properties": { "summary": { "$ref": "#/$defs/summary" }, "reasonCode": { "type": "null" },
+        "health": { "type": "object", "properties": { "state": { "const": "ok" } } } } },
+      "else": { "properties": { "summary": { "type": "null" }, "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" },
+        "health": { "type": "object", "properties": { "state": { "enum": ["unavailable", "error"] } } } } }
+    }
+  ],
+  "$defs": {
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summaryRef", "taskRevision", "indexRevision", "title", "bodyLines", "modelPrompt", "fileCount", "returnedFiles",
+        "statusCounts", "additions", "deletions", "protectedFileCount", "redacted", "truncated"],
+      "properties": {
+        "summaryRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "taskRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "indexRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 160, "pattern": "^[^\\u0000-\\u001F\\u007F]+$" },
+        "bodyLines": { "type": "array", "maxItems": 32, "items": { "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText" } },
+        "modelPrompt": { "type": "string", "minLength": 1, "maxLength": 8000, "pattern": "^[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]+$" },
+        "fileCount": { "type": "integer", "minimum": 1, "maximum": 2000 },
+        "returnedFiles": { "type": "integer", "minimum": 0, "maximum": 300 },
+        "statusCounts": { "type": "object", "additionalProperties": false, "required": ["A", "M", "D", "R", "C"],
+          "properties": { "A": { "type": "integer", "minimum": 0, "maximum": 2000 }, "M": { "type": "integer", "minimum": 0, "maximum": 2000 },
+            "D": { "type": "integer", "minimum": 0, "maximum": 2000 }, "R": { "type": "integer", "minimum": 0, "maximum": 2000 },
+            "C": { "type": "integer", "minimum": 0, "maximum": 2000 } } },
+        "additions": { "type": ["integer", "null"], "minimum": 0 },
+        "deletions": { "type": ["integer", "null"], "minimum": 0 },
+        "protectedFileCount": { "type": "integer", "minimum": 0, "maximum": 2000 },
+        "redacted": { "type": "boolean" },
+        "truncated": { "type": "boolean" }
+      }
+    }
+  }
+}

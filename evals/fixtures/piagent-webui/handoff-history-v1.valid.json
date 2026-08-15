@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-handoff-history-v1",
+  "generatedAt": "2026-08-14T13:00:00.000Z",
+  "identity": { "projectRef": "project.fixture", "runtimeInstanceId": "runtime.fixture", "sessionRef": "session.fixture", "taskId": "task-active", "taskRunId": "task-active-run", "agentOperationId": null, "toolCallId": null },
+  "runRef": "run.fixture",
+  "state": "ready",
+  "historyRevision": "handoff-history.fixture",
+  "completeness": "complete",
+  "current": { "handoffRef": "handoff.fixture", "generatedAt": "2026-08-14T12:30:00.000Z", "phase": "handoff", "taskOutcome": "pending", "gateDecision": "fail", "completionApproved": false, "requiredAuthority": "operator", "treeEvidenceCurrent": true, "latestVerifierMatchesCurrentTree": true, "changedFileCount": 2, "missingCount": 1, "projectedAction": "ask-operator" },
+  "nextAction": { "action": "inspect-handoff", "stepRef": null, "reason": "Review the latest handoff before continuing.", "exactCommandCount": 0, "dispatchable": false, "enforcementSafe": true },
+  "events": [{ "eventRef": "handoff-event.fixture", "evidenceRef": "telemetry.fixture", "sequence": 1, "recordedAt": "2026-08-14T12:30:00.000Z", "phase": "handoff", "completionApproved": false, "projectedAction": "ask-operator" }],
+  "page": { "total": 1, "returned": 1, "truncated": false },
+  "warnings": [],
+  "health": { "state": "ok", "reasonCode": null, "message": null }
+}

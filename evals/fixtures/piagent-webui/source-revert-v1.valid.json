@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-source-revert-v1",
+  "generatedAt": "2026-08-14T00:00:00.000Z",
+  "identity": {
+    "projectRef": "project_01",
+    "runtimeInstanceId": "runtime_01",
+    "sessionRef": "session_01",
+    "taskId": "task-01",
+    "taskRunId": "task-run-01",
+    "agentOperationId": null,
+    "toolCallId": null
+  },
+  "action": "source.revert",
+  "state": "ready",
+  "target": {
+    "view": "working-tree",
+    "repoRef": "repo_01",
+    "fileRef": "file_01",
+    "diffRef": "diff_01",
+    "status": "M",
+    "path": "src/app.ts",
+    "oldPath": null,
+    "effect": "restore-worktree-from-index",
+    "taskRevision": "task_rev_01",
+    "workspaceRevision": "workspace_rev_01",
+    "indexRevision": "index_rev_01",
+    "viewRevision": "view_rev_01",
+    "fileRevision": "file_rev_01",
+    "workspacePreimage": "wt-content-v2:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "indexPreimage": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "patchPreimage": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "contentDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "hunkRefs": ["hunk_01"],
+    "previewRef": "revert-preview_01",
+    "confirmedPreviewDigest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "expiresAt": "2026-08-14T00:05:00.000Z",
+    "summary": {
+      "files": 1,
+      "hunks": 1,
+      "additionsDiscarded": 2,
+      "deletionsRestored": 1,
+      "effect": "discard-unstaged-keep-index",
+      "recovery": "not-guaranteed"
+    }
+  },
+  "preview": {
+    "basis": "index-to-working-tree",
+    "hunks": [{
+      "hunkRef": "hunk_01",
+      "header": "@@ -1,2 +1,3 @@",
+      "lines": [
+        { "kind": "context", "marker": " ", "text": "kept" },
+        { "kind": "deleted", "marker": "-", "text": "restored" },
+        { "kind": "added", "marker": "+", "text": "discarded" }
+      ]
+    }],
+    "truncated": false
+  },
+  "reasonCode": null,
+  "health": { "state": "ok", "reasonCode": null, "message": null }
+}

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-recovery-history-v1",
+  "generatedAt": "2026-08-14T12:00:00.000Z",
+  "identity": { "projectRef": "project.fixture", "runtimeInstanceId": "runtime.fixture", "sessionRef": "session.fixture", "taskId": "task-active", "taskRunId": "task-active-run", "agentOperationId": null, "toolCallId": null },
+  "runRef": "run.fixture",
+  "state": "ready",
+  "historyRevision": "recovery-history.fixture",
+  "completeness": "complete",
+  "summary": { "contextCompactions": 1, "toolResultCompactions": 0, "compactedToolResults": 0 },
+  "recovery": { "decision": "unknown", "enforcementSafe": null, "latestCheckpointRef": null, "verifierState": "unknown", "invalidatedFileCount": null, "invalidatedFilesKnown": false, "handoffState": "unknown", "reasonCode": "invented-recovery" },
+  "retainedContent": { "access": "available", "exposed": true, "reasonCode": "raw-capture" },
+  "events": [],
+  "page": { "total": 0, "returned": 0, "truncated": false },
+  "warnings": [],
+  "health": { "state": "ok", "reasonCode": null, "message": null }
+}

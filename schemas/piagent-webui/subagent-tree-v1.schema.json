@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/subagent-tree-v1.schema.json",
+  "title": "Piagent WebUI bounded subagent ownership tree v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "version", "generatedAt", "identity", "runRef", "state", "treeRevision", "evidenceState", "orchestration", "parent", "children", "writer", "nestedLineage", "summary", "warnings", "health"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "version": { "const": "piagent-webui-subagent-tree-v1" },
+    "generatedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+    "identity": { "$ref": "common-v1.schema.json#/$defs/identity" },
+    "runRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+    "state": { "enum": ["ready", "unavailable"] },
+    "treeRevision": { "$ref": "common-v1.schema.json#/$defs/nullableRevisionToken" },
+    "evidenceState": { "enum": ["complete", "partial", "aggregate-only", "missing", "unknown"] },
+    "orchestration": { "$ref": "#/$defs/orchestration" },
+    "parent": { "anyOf": [{ "$ref": "#/$defs/parent" }, { "type": "null" }] },
+    "children": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/child" } },
+    "writer": { "$ref": "#/$defs/writer" },
+    "nestedLineage": { "$ref": "#/$defs/nestedLineage" },
+    "summary": { "$ref": "#/$defs/summary" },
+    "warnings": { "type": "array", "maxItems": 8, "items": { "$ref": "#/$defs/warning" } },
+    "health": { "$ref": "common-v1.schema.json#/$defs/health" }
+  },
+  "allOf": [
+    { "properties": { "identity": { "type": "object", "properties": {
+      "taskId": { "$ref": "common-v1.schema.json#/$defs/publicId" }, "taskRunId": { "$ref": "common-v1.schema.json#/$defs/publicId" },
+      "agentOperationId": { "type": "null" }, "toolCallId": { "type": "null" }
+    } } } },
+    {
+      "if": { "properties": { "state": { "const": "ready" } }, "required": ["state"] },
+      "then": { "properties": {
+        "treeRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "evidenceState": { "enum": ["complete", "partial", "aggregate-only", "missing"] },
+        "parent": { "$ref": "#/$defs/parent" },
+        "health": { "type": "object", "properties": { "state": { "enum": ["ok", "degraded"] } } }
+      } },
+      "else": { "properties": {
+        "treeRevision": { "type": "null" }, "evidenceState": { "const": "unknown" }, "parent": { "type": "null" },
+        "children": { "type": "array", "maxItems": 0 },
+        "writer": { "type": "object", "properties": { "state": { "const": "unknown" }, "ownerNodeRef": { "type": "null" } } },
+        "summary": { "type": "object", "properties": { "total": { "const": 0 }, "active": { "const": 0 }, "completed": { "const": 0 }, "staleResults": { "const": 0 }, "readOnly": { "const": 0 }, "singleWriter": { "const": 0 } } },
+        "warnings": { "type": "array", "maxItems": 0 },
+        "health": { "type": "object", "properties": { "state": { "enum": ["unavailable", "error"] } } }
+      } }
+    }
+  ],
+  "$defs": {
+    "orchestration": { "type": "object", "additionalProperties": false, "required": ["mode", "subagents"], "properties": {
+      "mode": { "enum": ["solo-first", "bounded-subagents", "parallel-readonly", "unknown"] },
+      "subagents": { "enum": ["not-used", "optional", "used", "unknown"] }
+    } },
+    "parent": { "type": "object", "additionalProperties": false, "required": ["nodeRef", "lifecycleState", "budgetTerminal", "mergeOwner"], "properties": {
+      "nodeRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" }, "lifecycleState": { "enum": ["active", "terminal", "unknown"] },
+      "budgetTerminal": { "type": ["boolean", "null"] }, "mergeOwner": { "const": "parent" }
+    } },
+    "child": { "type": "object", "additionalProperties": false, "required": ["nodeRef", "parentRef", "role", "authority", "lifecycleState", "reservedAt", "expiresAt", "completedAt", "currentWriter", "result"], "properties": {
+      "nodeRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" }, "parentRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+      "role": { "enum": ["retriever", "scout", "planner", "worker", "reviewer", "oracle", "researcher"] },
+      "authority": { "enum": ["read-only", "single-writer"] }, "lifecycleState": { "enum": ["active", "succeeded", "failed", "cancelled", "orphaned"] },
+      "reservedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" }, "expiresAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+      "completedAt": { "anyOf": [{ "$ref": "common-v1.schema.json#/$defs/timestamp" }, { "type": "null" }] }, "currentWriter": { "type": "boolean" },
+      "result": { "$ref": "#/$defs/result" }
+    } },
+    "result": { "type": "object", "additionalProperties": false, "required": ["state", "disposition", "calls", "tokens"], "properties": {
+      "state": { "enum": ["accepted", "rejected", "stale-result", "not-recorded"] },
+      "disposition": { "$ref": "common-v1.schema.json#/$defs/nullableDisplayText" },
+      "calls": { "type": ["integer", "null"], "minimum": 0, "maximum": 101 },
+      "tokens": { "type": ["integer", "null"], "minimum": 0, "maximum": 100001 }
+    } },
+    "writer": { "type": "object", "additionalProperties": false, "required": ["state", "ownerNodeRef"], "properties": {
+      "state": { "enum": ["parent", "helper", "unknown"] }, "ownerNodeRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" }
+    } },
+    "nestedLineage": { "type": "object", "additionalProperties": false, "required": ["state", "reasonCode"], "properties": {
+      "state": { "const": "unavailable" }, "reasonCode": { "const": "no-durable-nested-lineage" }
+    } },
+    "summary": { "type": "object", "additionalProperties": false, "required": ["total", "active", "completed", "staleResults", "readOnly", "singleWriter"], "properties": {
+      "total": { "type": "integer", "minimum": 0, "maximum": 64 }, "active": { "type": "integer", "minimum": 0, "maximum": 64 },
+      "completed": { "type": "integer", "minimum": 0, "maximum": 64 }, "staleResults": { "type": "integer", "minimum": 0, "maximum": 64 },
+      "readOnly": { "type": "integer", "minimum": 0, "maximum": 64 }, "singleWriter": { "type": "integer", "minimum": 0, "maximum": 64 }
+    } },
+    "warning": { "type": "object", "additionalProperties": false, "required": ["code", "count", "message"], "properties": {
+      "code": { "enum": ["helper-budget-missing", "expired-helper-derived-orphan", "helper-receipt-unmatched"] },
+      "count": { "type": "integer", "minimum": 1, "maximum": 1000000 }, "message": { "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText" }
+    } }
+  }
+}

@@ -23,12 +23,26 @@ const scriptByCommand = {
   "piagent-migrate": "scripts/migrate-project-state.mjs",
   "piagent-import-instructions": "scripts/import-agent-instructions.mjs",
   "piagent-auto": "scripts/pi-auto.sh",
-  "piagent-context": "scripts/context-engine.mjs"
+  "piagent-context": "scripts/context-engine.mjs",
+  "piagent-webui": "scripts/piagent-webui-launcher.mjs",
+  "piagent-dashboard": "scripts/piagent-dashboard.mjs"
 };
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const invokedAs = path.basename(process.argv[1] ?? "");
-const script = scriptByCommand[invokedAs];
+let forwardedArgs = process.argv.slice(2);
+let script = scriptByCommand[invokedAs];
+
+if (invokedAs === "piagent") {
+  const subcommand = forwardedArgs[0];
+  if (subcommand === "dashboard") {
+    script = "scripts/piagent-dashboard.mjs";
+    forwardedArgs = forwardedArgs.slice(1);
+  } else if ([undefined, "help", "--help", "-h"].includes(subcommand)) {
+    console.log("Usage: piagent dashboard [open|status|stop|restart|doctor] [--no-open] [--json]");
+    process.exit(0);
+  }
+}
 
 if (!script) {
   console.error(`Unknown Pi Agent command: ${invokedAs || "(unknown)"}`);
@@ -58,7 +72,7 @@ const runner = target.endsWith(".mjs") ? process.execPath : "bash";
 const runnerArgs = target.endsWith(".mjs")
   ? ["--disable-warning=ExperimentalWarning", "--import", path.join(sourceRoot, "scripts", "register-typescript-loader.mjs"), target]
   : [target];
-const child = spawn(runner, [...runnerArgs, ...process.argv.slice(2)], {
+const child = spawn(runner, [...runnerArgs, ...forwardedArgs], {
   cwd: process.cwd(),
   env: process.env,
   stdio: "inherit"

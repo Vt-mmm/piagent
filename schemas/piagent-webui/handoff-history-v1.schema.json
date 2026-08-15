@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/handoff-history-v1.schema.json",
+  "title": "Piagent WebUI bounded handoff history and next action v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "version", "generatedAt", "identity", "runRef", "state", "historyRevision", "completeness", "current", "nextAction", "events", "page", "warnings", "health"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "version": { "const": "piagent-webui-handoff-history-v1" },
+    "generatedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+    "identity": { "$ref": "common-v1.schema.json#/$defs/identity" },
+    "runRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+    "state": { "enum": ["ready", "unavailable"] },
+    "historyRevision": { "$ref": "common-v1.schema.json#/$defs/nullableRevisionToken" },
+    "completeness": { "enum": ["complete", "partial", "snapshot-only", "missing", "unknown"] },
+    "current": { "anyOf": [{ "$ref": "#/$defs/current" }, { "type": "null" }] },
+    "nextAction": { "$ref": "#/$defs/nextAction" },
+    "events": { "type": "array", "maxItems": 100, "items": { "$ref": "#/$defs/event" } },
+    "page": { "$ref": "#/$defs/page" },
+    "warnings": { "type": "array", "maxItems": 8, "items": { "$ref": "#/$defs/warning" } },
+    "health": { "$ref": "common-v1.schema.json#/$defs/health" }
+  },
+  "allOf": [
+    { "properties": { "identity": { "type": "object", "properties": {
+      "taskId": { "$ref": "common-v1.schema.json#/$defs/publicId" }, "taskRunId": { "$ref": "common-v1.schema.json#/$defs/publicId" },
+      "agentOperationId": { "type": "null" }, "toolCallId": { "type": "null" }
+    } } } },
+    {
+      "if": { "properties": { "state": { "const": "ready" } }, "required": ["state"] },
+      "then": { "properties": {
+        "historyRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "completeness": { "enum": ["complete", "partial", "snapshot-only", "missing"] },
+        "nextAction": { "type": "object", "properties": {
+          "action": { "enum": ["terminal", "inspect-handoff", "wait-paused", "retry-checkpoint", "rerun-exact-verifier", "continue-plan", "request-completion"] },
+          "enforcementSafe": { "type": "boolean" }
+        } },
+        "health": { "type": "object", "properties": { "state": { "enum": ["ok", "degraded"] } } }
+      } },
+      "else": { "properties": {
+        "historyRevision": { "type": "null" }, "completeness": { "const": "unknown" }, "current": { "type": "null" },
+        "nextAction": { "type": "object", "properties": { "action": { "const": "unknown" }, "stepRef": { "type": "null" },
+          "exactCommandCount": { "const": 0 }, "dispatchable": { "const": false }, "enforcementSafe": { "const": false } } },
+        "events": { "type": "array", "maxItems": 0 },
+        "page": { "type": "object", "properties": { "total": { "const": 0 }, "returned": { "const": 0 }, "truncated": { "const": false } } },
+        "health": { "type": "object", "properties": { "state": { "enum": ["unavailable", "error"] } } }
+      } }
+    }
+  ],
+  "$defs": {
+    "current": {
+      "type": "object", "additionalProperties": false,
+      "required": ["handoffRef", "generatedAt", "phase", "taskOutcome", "gateDecision", "completionApproved", "requiredAuthority", "treeEvidenceCurrent", "latestVerifierMatchesCurrentTree", "changedFileCount", "missingCount", "projectedAction"],
+      "properties": {
+        "handoffRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" }, "generatedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+        "phase": { "$ref": "common-v1.schema.json#/$defs/nullableDisplayText" },
+        "taskOutcome": { "enum": ["pending", "completed", "blocked", "partial", "failed"] },
+        "gateDecision": { "enum": ["pass", "fail"] }, "completionApproved": { "type": "boolean" },
+        "requiredAuthority": { "enum": ["none", "operator", "permission", "scope", "fresh-session"] },
+        "treeEvidenceCurrent": { "type": "boolean" }, "latestVerifierMatchesCurrentTree": { "type": "boolean" },
+        "changedFileCount": { "type": "integer", "minimum": 0, "maximum": 500 }, "missingCount": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "projectedAction": { "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText" }
+      }
+    },
+    "nextAction": {
+      "type": "object", "additionalProperties": false,
+      "required": ["action", "stepRef", "reason", "exactCommandCount", "dispatchable", "enforcementSafe"],
+      "properties": {
+        "action": { "enum": ["terminal", "inspect-handoff", "wait-paused", "retry-checkpoint", "rerun-exact-verifier", "continue-plan", "request-completion", "unknown"] },
+        "stepRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" }, "reason": { "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText" },
+        "exactCommandCount": { "type": "integer", "minimum": 0, "maximum": 50 }, "dispatchable": { "const": false }, "enforcementSafe": { "type": "boolean" }
+      }
+    },
+    "event": {
+      "type": "object", "additionalProperties": false,
+      "required": ["eventRef", "evidenceRef", "sequence", "recordedAt", "phase", "completionApproved", "projectedAction"],
+      "properties": {
+        "eventRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" }, "evidenceRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "sequence": { "type": "integer", "minimum": 1, "maximum": 2147483647 }, "recordedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+        "phase": { "$ref": "common-v1.schema.json#/$defs/nullableDisplayText" }, "completionApproved": { "type": "boolean" },
+        "projectedAction": { "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText" }
+      }
+    },
+    "page": { "type": "object", "additionalProperties": false, "required": ["total", "returned", "truncated"], "properties": {
+      "total": { "type": "integer", "minimum": 0, "maximum": 100000 }, "returned": { "type": "integer", "minimum": 0, "maximum": 100 }, "truncated": { "type": "boolean" }
+    } },
+    "warning": { "type": "object", "additionalProperties": false, "required": ["code", "count", "message"], "properties": {
+      "code": { "enum": ["telemetry-missing", "telemetry-corrupt", "telemetry-incomplete-tail", "telemetry-input-truncated", "history-truncated", "current-handoff-missing", "history-snapshot-only"] },
+      "count": { "type": "integer", "minimum": 1, "maximum": 1000000000 }, "message": { "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText" }
+    } }
+  }
+}

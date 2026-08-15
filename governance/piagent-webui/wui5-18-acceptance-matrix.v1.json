@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-wui5-18-acceptance-matrix-v1",
+  "milestone": "WUI5-18",
+  "cases": [
+    { "id": "no-terminal-zero-turn", "testFile": "tests/piagent-webui-gateway.test.mjs", "testName": "runs once per profile" },
+    { "id": "multi-project-no-raw-paths", "testFile": "tests/piagent-webui-project-registry.test.mjs", "testName": "projects" },
+    { "id": "create-first-session-once", "testFile": "tests/piagent-webui-session-command-admission.test.mjs", "testName": "creates one durable session" },
+    { "id": "browser-reopen-durable", "testFile": "tests/piagent-webui-session-hub.e2e.mjs", "testName": "session-first hub" },
+    { "id": "gateway-restart-new-authority", "testFile": "tests/piagent-webui-gateway.test.mjs", "testName": "restarts with new authority" },
+    { "id": "crash-during-command-no-replay", "testFile": "tests/piagent-webui-session-command-admission.test.mjs", "testName": "orphan intent" },
+    { "id": "resume-offline-exact-history", "testFile": "tests/piagent-webui-session-lease-runtime.test.mjs", "testName": "real persisted Pi runtime" },
+    { "id": "refuse-terminal-owned", "testFile": "tests/piagent-webui-session-lease-runtime.test.mjs", "testName": "terminal and Gateway ownership" },
+    { "id": "terminal-release-gateway-acquire-once", "testFile": "tests/piagent-webui-session-lease-runtime.test.mjs", "testName": "terminal adapter register and release" },
+    { "id": "idempotency-race-single-effect", "testFile": "tests/piagent-webui-session-command-admission.test.mjs", "testName": "deduplicates the browser retry" },
+    { "id": "archive-unarchive", "testFile": "tests/piagent-webui-session-command-admission.test.mjs", "testName": "renames, pins, archives" },
+    { "id": "fork-lineage", "testFile": "tests/piagent-webui-session-lease-runtime.test.mjs", "testName": "real persisted Pi runtime" },
+    { "id": "navigation-zero-turn", "testFile": "tests/piagent-webui-zero-turn-conformance.test.mjs", "testName": "zero" },
+    { "id": "protected-credential-path-redaction", "testFile": "tests/piagent-webui-zero-turn-conformance.test.mjs", "testName": "without reading protected workspace bytes" },
+    { "id": "malformed-traffic-fail-closed", "testFile": "tests/piagent-webui-gateway-transport.test.mjs", "testName": "authenticated typed Gateway transport" },
+    { "id": "approval-exact-runtime-binding", "testFile": "tests/piagent-webui-session-lease-runtime.test.mjs", "testName": "pending browser approval" },
+    { "id": "stale-lock-doctor-recovery", "testFile": "tests/piagent-webui-gateway.test.mjs", "testName": "repairs an invalid stopped descriptor" },
+    { "id": "language-and-neutrality", "testFile": "tests/third-party-neutrality.test.mjs", "testName": "third-party neutral" },
+    { "id": "desktop-mobile-theme-a11y", "testFile": "tests/piagent-webui-session-hub.e2e.mjs", "testName": "phone viewport" }
+  ]
+}

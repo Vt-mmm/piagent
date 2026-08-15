@@ -1,0 +1,479 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/common-v1.schema.json",
+  "title": "Piagent WebUI common wire definitions v1",
+  "$defs": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+    },
+    "opaqueRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,159}$"
+    },
+    "nullableOpaqueRef": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/opaqueRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "publicId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@~-]{0,159}$"
+    },
+    "nullablePublicId": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/publicId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "revisionToken": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:~-]{0,159}$"
+    },
+    "nullableRevisionToken": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/revisionToken"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "reasonCode": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 96,
+      "pattern": "^[a-z0-9][a-z0-9.-]{0,95}$"
+    },
+    "nullableReasonCode": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/reasonCode"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "workingTreeDigest": {
+      "type": "string",
+      "pattern": "^wt-content-v2:[a-f0-9]{64}$"
+    },
+    "nullableWorkingTreeDigest": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/workingTreeDigest"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "displayText": {
+      "type": "string",
+      "maxLength": 500,
+      "pattern": "^[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]*$"
+    },
+    "nonEmptyDisplayText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "pattern": "^[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]+$"
+    },
+    "nullableDisplayText": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/nonEmptyDisplayText"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "longDisplayText": {
+      "type": "string",
+      "maxLength": 4000,
+      "pattern": "^[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]*$"
+    },
+    "safeDisplayPath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000-\\u001F\\u007F\\\\]+$"
+    },
+    "nullableSafeDisplayPath": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/safeDisplayPath"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "operationPhase": {
+      "enum": [
+        "idle",
+        "input-preflight",
+        "model",
+        "tool-preflight",
+        "waiting-approval",
+        "tool",
+        "retry",
+        "compaction",
+        "branch-summary",
+        "direct-bash",
+        "settling",
+        "other",
+        "unknown"
+      ]
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "projectRef",
+        "runtimeInstanceId",
+        "sessionRef",
+        "taskId",
+        "taskRunId",
+        "agentOperationId",
+        "toolCallId"
+      ],
+      "properties": {
+        "projectRef": {
+          "$ref": "#/$defs/opaqueRef"
+        },
+        "runtimeInstanceId": {
+          "$ref": "#/$defs/opaqueRef"
+        },
+        "sessionRef": {
+          "$ref": "#/$defs/opaqueRef"
+        },
+        "taskId": {
+          "$ref": "#/$defs/nullablePublicId"
+        },
+        "taskRunId": {
+          "$ref": "#/$defs/nullablePublicId"
+        },
+        "agentOperationId": {
+          "$ref": "#/$defs/nullableOpaqueRef"
+        },
+        "toolCallId": {
+          "$ref": "#/$defs/nullableOpaqueRef"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "taskRunId": { "type": "string" }
+            },
+            "required": ["taskRunId"]
+          },
+          "then": {
+            "properties": {
+              "taskId": { "$ref": "#/$defs/publicId" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "toolCallId": { "type": "string" }
+            },
+            "required": ["toolCallId"]
+          },
+          "then": {
+            "properties": {
+              "agentOperationId": { "$ref": "#/$defs/opaqueRef" }
+            }
+          }
+        }
+      ]
+    },
+    "domainRevision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runtimeRevision",
+        "taskRevision",
+        "controlRevision",
+        "workspaceRevision",
+        "indexRevision",
+        "approvalRevision",
+        "sessionOptionRevision",
+        "queueRevision"
+      ],
+      "properties": {
+        "runtimeRevision": {
+          "$ref": "#/$defs/revisionToken"
+        },
+        "taskRevision": {
+          "$ref": "#/$defs/nullableRevisionToken"
+        },
+        "controlRevision": {
+          "$ref": "#/$defs/nullableRevisionToken"
+        },
+        "workspaceRevision": {
+          "$ref": "#/$defs/nullableRevisionToken"
+        },
+        "indexRevision": {
+          "$ref": "#/$defs/nullableRevisionToken"
+        },
+        "approvalRevision": {
+          "$ref": "#/$defs/nullableRevisionToken"
+        },
+        "sessionOptionRevision": {
+          "$ref": "#/$defs/nullableRevisionToken"
+        },
+        "queueRevision": {
+          "$ref": "#/$defs/nullableRevisionToken"
+        }
+      }
+    },
+    "snapshotRevision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runtimeRevision",
+        "taskRevision",
+        "controlRevision",
+        "workspaceRevision",
+        "indexRevision",
+        "approvalRevision",
+        "sessionOptionRevision",
+        "queueRevision",
+        "journalHead",
+        "eventCursor"
+      ],
+      "properties": {
+        "runtimeRevision": {
+          "$ref": "#/$defs/revisionToken"
+        },
+        "taskRevision": {
+          "$ref": "#/$defs/nullableRevisionToken"
+        },
+        "controlRevision": {
+          "$ref": "#/$defs/nullableRevisionToken"
+        },
+        "workspaceRevision": {
+          "$ref": "#/$defs/nullableRevisionToken"
+        },
+        "indexRevision": {
+          "$ref": "#/$defs/nullableRevisionToken"
+        },
+        "approvalRevision": {
+          "$ref": "#/$defs/nullableRevisionToken"
+        },
+        "sessionOptionRevision": {
+          "$ref": "#/$defs/nullableRevisionToken"
+        },
+        "queueRevision": {
+          "$ref": "#/$defs/nullableRevisionToken"
+        },
+        "journalHead": {
+          "$ref": "#/$defs/nullableRevisionToken"
+        },
+        "eventCursor": {
+          "$ref": "#/$defs/revisionToken"
+        }
+      }
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "applied",
+        "valuesRemoved",
+        "truncated"
+      ],
+      "properties": {
+        "applied": {
+          "type": "boolean"
+        },
+        "valuesRemoved": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "applied": { "const": false }
+            },
+            "required": ["applied"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "valuesRemoved": { "const": 0 }
+            }
+          }
+        }
+      ]
+    },
+    "health": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "reasonCode",
+        "message"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "ok",
+            "degraded",
+            "error",
+            "unavailable",
+            "unknown"
+          ]
+        },
+        "reasonCode": {
+          "$ref": "#/$defs/nullableReasonCode"
+        },
+        "message": {
+          "$ref": "#/$defs/nullableDisplayText"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": { "const": "ok" }
+            },
+            "required": ["state"]
+          },
+          "then": {
+            "properties": {
+              "reasonCode": { "type": "null" }
+            }
+          },
+          "else": {
+            "properties": {
+              "reasonCode": { "$ref": "#/$defs/reasonCode" }
+            }
+          }
+        }
+      ]
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "issueRef",
+        "severity",
+        "code",
+        "message",
+        "relatedRefs"
+      ],
+      "properties": {
+        "issueRef": {
+          "$ref": "#/$defs/opaqueRef"
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "warning",
+            "error"
+          ]
+        },
+        "code": {
+          "$ref": "#/$defs/reasonCode"
+        },
+        "message": {
+          "$ref": "#/$defs/nonEmptyDisplayText"
+        },
+        "relatedRefs": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/opaqueRef"
+          }
+        }
+      }
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cursor",
+        "nextCursor",
+        "total",
+        "returned",
+        "truncated"
+      ],
+      "properties": {
+        "cursor": {
+          "$ref": "#/$defs/nullableRevisionToken"
+        },
+        "nextCursor": {
+          "$ref": "#/$defs/nullableRevisionToken"
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "returned": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2000
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      }
+    },
+    "stateReason": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/reasonCode"
+        },
+        "message": {
+          "$ref": "#/$defs/nonEmptyDisplayText"
+        }
+      }
+    }
+  }
+}

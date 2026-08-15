@@ -1,4 +1,5 @@
 # Command reference tiếng Việt
+<!-- language: vi; english-index: docs-site/content/en/commands.html -->
 
 > Nếu cần flow đầy đủ theo thứ tự dùng thật, đọc `docs/operator-manual-vietnamese.md`. File này chỉ là bảng tra cứu command.
 
@@ -309,7 +310,7 @@ Các command này thuộc Pi core hoặc package Pi chính. Tên/availability c�
 | `/mcp setup` | Setup/refresh MCP | Khi MCP chưa nhận config. | Tùy adapter/version. |
 | `/mcp tools` | List MCP tools | Muốn biết server expose tool nào. | Dùng trước khi bảo agent gọi tool ngoài. |
 | `/mcp reconnect` | Kết nối lại MCP | Khi server lỗi, token mới, hoặc config đổi. | Không thay thế việc export secret env. |
-| `/mcp-auth figma` | OAuth Figma MCP | Khi dùng Figma remote MCP. | Có thể khác theo Figma/Pi MCP package version. |
+| `/mcp-auth figma` | OAuth Figma remote MCP | Chỉ dùng khi Piagent đã được duyệt trong Figma MCP Catalog. | Nếu bị từ chối client, dùng `figma-desktop`. |
 | `/piagent-mcp` | Menu MCP | Không nhớ subcommand, hoặc muốn xem có việc gì cần làm. | Menu dựng theo project; không có select UI thì in thẳng bảng trạng thái. |
 | `/piagent-mcp status` | Danh sách MCP server + state | Muốn biết server nào đang có, ở scope nào, sẵn sàng chưa. | Đọc config, không kiểm tra kết nối live — cái đó là `/mcp`. |
 | `/piagent-mcp get <name>` | Chi tiết một server | Trước khi duyệt, hoặc khi không rõ scope nào đang có hiệu lực. | Giá trị credential bị mask; `${VAR}` in nguyên vì là tên biến. |
@@ -501,8 +502,8 @@ Các lệnh này chạy ngoài Pi.
 | Command | Dùng khi nào |
 |---|---|
 | `npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.84.1` | Cài Pi CLI tương thích với release hiện tại. |
-| `npm install -g --ignore-scripts @piagent/platform@1.3.1` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
-| `pi install git:github.com/Vt-mmm/piagent@v1.3.1` | Cài pinned release khi cần reproducible team setup. |
+| `npm install -g --ignore-scripts @piagent/platform@1.4.0` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
+| `pi install git:github.com/Vt-mmm/piagent@v1.4.0` | Cài pinned release khi cần reproducible team setup. |
 | `pi install git:github.com/Vt-mmm/piagent` | Cài latest package platform cho máy cá nhân/sandbox. |
 | `piagent-update --check` | Báo version hiện tại vs version sẽ lên cho cả ba thành phần; không cài gì. |
 | `piagent-update` | Full update global một lệnh cho cả máy: Pi host → npm-global helper → Pi package, đúng thứ tự release yêu cầu. |
@@ -533,7 +534,7 @@ Các lệnh này chạy ngoài Pi.
 | `piagent-route --prompt-file <file> --execute --yes -- --approve` | Explicit prelaunch adaptive task; giữ hard pin và fail closed nếu preflight/catalog không đủ. |
 | `piagent-model-scope --preset full` | Re-apply full provider model scope. |
 | `piagent-mcp --preset core --scope global --replace` | Apply the governed MCP core baseline: Context7, Chrome DevTools, GitHub. |
-| `piagent-mcp --preset popular --scope global --replace` | Apply the governed MCP popular baseline: core + Playwright + Figma remote. |
+| `piagent-mcp --preset popular --scope global --replace` | Apply the governed MCP popular baseline: core + Playwright + Figma desktop. |
 | `piagent-mcp --list` | List MCP presets. |
 | `piagent-subagents --preset safe` | Re-apply subagent safe config. |
 | `pi install npm:pi-web-access@0.17.0` | Cấp web/search/fetch tools cho builtin `researcher`; platform setup/update cài mặc định từ `v1.2.8`. |

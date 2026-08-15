@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-gateway-protocol-v1",
+  "messageType": "request",
+  "requestId": "request_abcdefgh01",
+  "method": "sessions.get",
+  "params": {
+    "cursor": null,
+    "limit": 50,
+    "filter": "active",
+    "query": null,
+    "projectRef": null
+  }
+}

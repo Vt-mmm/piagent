@@ -1,4 +1,5 @@
 # Subagent orchestration capabilities
+<!-- language: en -->
 
 Review date: 2026-07-19
 

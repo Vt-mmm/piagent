@@ -6,16 +6,18 @@ import path from "node:path";
 import { describe, it } from "node:test";
 
 import { workingTreeSnapshot } from "../packages/piagent-core/extensions/task-state.js";
+import { workingTreeEvidenceDigest } from "../packages/piagent-core/extensions/working-tree-digest.js";
 import {
   buildActivityInspector,
-  formatActivityInspector,
-  inspectChangedFileStats
+  formatActivityInspector
 } from "../packages/piagent-core/runtime/product/activity-inspector.ts";
+import { captureTaskBaselineManifest } from "../packages/piagent-core/runtime/inspection/source-evidence-store.ts";
 import { formatActivityFooter, formatActivityPanel } from "../packages/piagent-core/runtime/product/activity-inspector-footer.ts";
 import { registerActivityInspector } from "../packages/piagent-core/runtime/registration/activity-inspector-command.ts";
 import { createBoundTaskAuthority } from "../packages/piagent-core/runtime/policy/task-authority-runtime.ts";
 
 const fixture = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, "../evals/fixtures/task-contract.valid.json"), "utf8"));
+const TEST_AT = "2026-08-13T14:00:00.000Z";
 
 function workspace() {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-inspector-"));
@@ -42,10 +44,23 @@ function task(baseline, overrides = {}) {
     verifyCommands: ["npm test"],
     verifyEvidence: [],
     trace: { outcome: "pending" },
+    createdAt: TEST_AT,
+    updatedAt: TEST_AT,
     ...overrides
   };
   value.authoritySnapshot = createBoundTaskAuthority(value);
   return value;
+}
+
+async function captureBaseline(cwd, currentTask) {
+  await captureTaskBaselineManifest({
+    projectRoot: cwd,
+    taskId: currentTask.taskId,
+    taskRunId: currentTask.taskRunId,
+    sessionId: currentTask.sessionId,
+    capturedAt: TEST_AT,
+    baselineTreeDigest: workingTreeEvidenceDigest(workingTreeSnapshot(cwd))
+  });
 }
 
 function events() {
@@ -62,14 +77,15 @@ function events() {
 }
 
 describe("Piagent activity inspector", () => {
-  it("projects task diff, tests, command failures, safety, and context without inventing per-tool tokens", () => {
+  it("projects task diff, tests, command failures, safety, and context without inventing per-tool tokens", async () => {
     const cwd = workspace();
     const baseline = workingTreeSnapshot(cwd);
+    const currentTask = task(baseline);
+    await captureBaseline(cwd, currentTask);
     fs.writeFileSync(path.join(cwd, "src", "checkout.ts"), "export const checkout = 1;\nexport const ready = true;\n");
     fs.mkdirSync(path.join(cwd, "tests"), { recursive: true });
     fs.writeFileSync(path.join(cwd, "tests", "checkout.test.ts"), "import assert from 'node:assert';\nassert.ok(true);\n");
-    const currentTask = task(baseline);
-    const view = buildActivityInspector({
+    const view = await buildActivityInspector({
       cwd,
       sessionId: "inspect-session",
       task: currentTask,
@@ -82,7 +98,7 @@ describe("Piagent activity inspector", () => {
     });
 
     assert.equal(view.files.count, 2);
-    assert.equal(view.files.evidence, "exact-snapshot-delta");
+    assert.equal(view.files.evidence, "exact-task-baseline");
     assert.deepEqual(view.files.testFiles, ["tests/checkout.test.ts"]);
     assert.ok(view.files.additions >= 3);
     assert.equal(view.commands.executed, 1);
@@ -119,33 +135,38 @@ describe("Piagent activity inspector", () => {
     assert.match(formatActivityFooter(pressured, { color: true }), /\u001b\[31m85%\u001b\[0m/);
   });
 
-  it("marks line counts as mixed working-tree evidence when a task edits a pre-existing dirty file", () => {
+  it("uses exact task-baseline line counts when a task edits a pre-existing dirty file", async () => {
     const cwd = workspace();
     fs.writeFileSync(path.join(cwd, "src", "checkout.ts"), "export const checkout = 2;\n");
     const baseline = workingTreeSnapshot(cwd);
+    const currentTask = task(baseline);
+    await captureBaseline(cwd, currentTask);
     fs.writeFileSync(path.join(cwd, "src", "checkout.ts"), "export const checkout = 3;\nexport const taskEdit = true;\n");
-    const view = buildActivityInspector({ cwd, sessionId: "inspect-session", task: task(baseline), events: [] });
-    assert.equal(view.files.lineStatsScope, "mixed-working-tree");
+    const view = await buildActivityInspector({ cwd, sessionId: "inspect-session", task: currentTask, events: [] });
+    assert.equal(view.files.lineStatsScope, "task-baseline");
     assert.deepEqual(view.files.baselineOverlap, ["src/checkout.ts"]);
   });
 
-  it("keeps a file in the task delta when the task restores a pre-existing dirty file", () => {
+  it("keeps a file in the task delta when the task restores a pre-existing dirty file", async () => {
     const cwd = workspace();
     fs.writeFileSync(path.join(cwd, "src", "checkout.ts"), "export const checkout = 2;\n");
     const baseline = workingTreeSnapshot(cwd);
+    const currentTask = task(baseline);
+    await captureBaseline(cwd, currentTask);
     fs.writeFileSync(path.join(cwd, "src", "checkout.ts"), "export const checkout = 1;\n");
-    const view = buildActivityInspector({ cwd, sessionId: "inspect-session", task: task(baseline), events: [] });
+    const view = await buildActivityInspector({ cwd, sessionId: "inspect-session", task: currentTask, events: [] });
     assert.deepEqual(view.files.taskChanged, ["src/checkout.ts"]);
-    assert.equal(view.files.lineStatsScope, "mixed-working-tree");
+    assert.equal(view.files.lineStatsScope, "task-baseline");
   });
 
-  it("reports untracked test files with additions", () => {
+  it("reports untracked test files with additions from the canonical working-tree view", async () => {
     const cwd = workspace();
     fs.mkdirSync(path.join(cwd, "tests"), { recursive: true });
     fs.writeFileSync(path.join(cwd, "tests", "new.test.ts"), "one\ntwo\n");
-    const [entry] = inspectChangedFileStats(cwd, ["tests/new.test.ts"]);
+    const view = await buildActivityInspector({ cwd, sessionId: "inspect-session" });
+    const entry = view.files.entries.find((item) => item.path === "tests/new.test.ts");
     assert.equal(entry.test, true);
-    assert.equal(entry.status, "untracked");
+    assert.equal(entry.status, "U");
     assert.equal(entry.additions, 2);
     assert.equal(entry.deletions, 0);
   });
@@ -162,6 +183,7 @@ describe("Piagent activity inspector", () => {
     };
     const context = {
       cwd,
+      mode: "tui",
       hasUI: true,
       ui: {
         theme: { fg: (_color, text) => text },
@@ -183,13 +205,20 @@ describe("Piagent activity inspector", () => {
     });
 
     assert.deepEqual([...commands.keys()], ["piagent-inspector"]);
-    inspector.refresh(context);
+    await inspector.refresh(context);
     assert.equal(widgets.at(-1).value.length, 4);
     assert.equal(widgets.at(-1).options.placement, "belowEditor");
     assert.equal(statuses.at(-1).value, undefined);
     await commands.get("piagent-inspector").handler("", context);
     assert.equal(emitted.at(-1).customType, "piagent-inspector-context");
     assert.match(emitted.at(-1).content, /context: 1\.0k\/100k/);
+    const beforeCursor = (await inspector.project(context)).snapshot.revision.eventCursor;
+    assert.equal((await inspector.project(context)).snapshot.capabilities.replay.eventRetentionCount, 5_000);
+    inspector.observe(context, { event: "tool_call", activityId: "live-call-1", toolCallId: "live-tool-1", toolName: "read", targetPath: "src/checkout.ts", recordedAt: "2026-08-13T04:00:00.000Z" });
+    const replay = inspector.replay(context, beforeCursor, 10);
+    assert.equal(replay.state, "current");
+    assert.deepEqual(replay.events.map((event) => event.kind), ["activity.started"]);
+    assert.equal((await inspector.project(context)).snapshot.revision.eventCursor, replay.latestCursor);
     await commands.get("piagent-inspector").handler("toggle", context);
     assert.equal(statuses.at(-1).value, undefined);
   });

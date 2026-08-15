@@ -1,4 +1,5 @@
 # Documentation languages
+<!-- language: en+vi -->
 
 [English](en/README.md) | [Tiếng Việt](vi/README.md)
 

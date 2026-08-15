@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-subagent-tree-v1",
+  "generatedAt": "2026-08-14T12:00:00.000Z",
+  "identity": {
+    "projectRef": "project.fixture",
+    "runtimeInstanceId": "runtime.fixture",
+    "sessionRef": "session.fixture",
+    "taskId": "task-fixture",
+    "taskRunId": "task-fixture-run",
+    "agentOperationId": null,
+    "toolCallId": null
+  },
+  "runRef": "run.fixture",
+  "state": "unavailable",
+  "treeRevision": "subagent-tree.false-authority",
+  "evidenceState": "complete",
+  "orchestration": { "mode": "bounded-subagents", "subagents": "used" },
+  "parent": { "nodeRef": "parent.fixture", "lifecycleState": "active", "budgetTerminal": false, "mergeOwner": "parent" },
+  "children": [],
+  "writer": { "state": "parent", "ownerNodeRef": "parent.fixture" },
+  "nestedLineage": { "state": "unavailable", "reasonCode": "no-durable-nested-lineage" },
+  "summary": { "total": 0, "active": 0, "completed": 0, "staleResults": 0, "readOnly": 0, "singleWriter": 0 },
+  "warnings": [],
+  "health": { "state": "ok", "reasonCode": null, "message": null }
+}

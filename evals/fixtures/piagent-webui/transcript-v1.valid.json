@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-transcript-v1",
+  "generatedAt": "2026-08-13T14:00:00.000Z",
+  "identity": {
+    "projectRef": "project_01",
+    "runtimeInstanceId": "runtime_01",
+    "sessionRef": "session_01",
+    "taskId": null,
+    "taskRunId": null,
+    "agentOperationId": null,
+    "toolCallId": null
+  },
+  "revision": {
+    "runtimeRevision": "runtime_rev_01",
+    "taskRevision": null,
+    "controlRevision": null,
+    "workspaceRevision": null,
+    "indexRevision": null,
+    "approvalRevision": null,
+    "sessionOptionRevision": null,
+    "queueRevision": "queue_rev_01"
+  },
+  "eventCursor": "cursor_01",
+  "state": "ready",
+  "items": [
+    {
+      "messageRef": "message_01",
+      "parentMessageRef": null,
+      "role": "user",
+      "recordedAt": "2026-08-13T13:59:59.000Z",
+      "agentOperationId": "operation_01",
+      "turnIndex": 0,
+      "content": {
+        "state": "available",
+        "text": "Continue the current task.",
+        "textChars": 26,
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "truncated": false,
+        "redacted": false,
+        "imageCount": 0,
+        "reasonCode": null
+      },
+      "toolCalls": []
+    }
+  ],
+  "page": {
+    "beforeCursor": null,
+    "nextBeforeCursor": null,
+    "hasOlder": false,
+    "limit": 50,
+    "truncated": false
+  },
+  "reasonCode": null
+}

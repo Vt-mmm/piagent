@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-review-state-v1",
+  "generatedAt": "2026-08-14T12:00:00.000Z",
+  "identity": {
+    "projectRef": "project_01",
+    "runtimeInstanceId": "runtime_01",
+    "sessionRef": "session_01",
+    "taskId": "task_01",
+    "taskRunId": "task_run_01",
+    "agentOperationId": null,
+    "toolCallId": null
+  },
+  "state": "reviewed",
+  "target": {
+    "view": "task",
+    "fileRef": "file_01",
+    "diffRef": "diff_01",
+    "taskRevision": "task_rev_01",
+    "workspaceRevision": "workspace_rev_01",
+    "indexRevision": "index_rev_01",
+    "viewRevision": "view_rev_01",
+    "fileRevision": "file_rev_01",
+    "baseDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "currentDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "patchPreimage": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "contentDigest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+  },
+  "recordedState": "reviewed",
+  "recordedAt": "2026-08-14T12:00:00.000Z",
+  "evidenceRef": "review_evidence_01",
+  "reasonCode": null,
+  "health": {
+    "state": "ok",
+    "reasonCode": null,
+    "message": null
+  }
+}

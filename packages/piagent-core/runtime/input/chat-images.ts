@@ -32,7 +32,7 @@ function escapeRegExp(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function supportedImageMimeType(bytes: Buffer): string | undefined {
+export function supportedChatImageMimeType(bytes: Buffer): string | undefined {
   if (
     bytes.length >= 24
     && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
@@ -236,7 +236,7 @@ export function readChatImage(
       offset += read;
     }
     if (offset !== bytes.length) return { status: "error", reason: "file changed while it was being read" };
-    const mimeType = supportedImageMimeType(bytes);
+    const mimeType = supportedChatImageMimeType(bytes);
     if (!mimeType) return { status: "error", reason: "file bytes are not a supported image" };
     return { status: "ok", absolutePath: canonicalPath, bytes, mimeType };
   } finally {

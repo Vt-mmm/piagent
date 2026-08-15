@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-transcript-v1",
+  "generatedAt": "2026-08-13T14:00:00.000Z",
+  "identity": {
+    "projectRef": "project_01",
+    "runtimeInstanceId": "runtime_01",
+    "sessionRef": "session_01",
+    "taskId": null,
+    "taskRunId": null,
+    "agentOperationId": "operation_smuggled",
+    "toolCallId": null
+  },
+  "revision": {
+    "runtimeRevision": "runtime_rev_01",
+    "taskRevision": null,
+    "controlRevision": null,
+    "workspaceRevision": null,
+    "indexRevision": null,
+    "approvalRevision": null,
+    "sessionOptionRevision": null,
+    "queueRevision": null
+  },
+  "eventCursor": "cursor_01",
+  "state": "unavailable",
+  "items": [{ "rawSessionMessage": "secret" }],
+  "page": {
+    "beforeCursor": null,
+    "nextBeforeCursor": "cursor_invented",
+    "hasOlder": false,
+    "limit": 50,
+    "truncated": false
+  },
+  "reasonCode": null
+}

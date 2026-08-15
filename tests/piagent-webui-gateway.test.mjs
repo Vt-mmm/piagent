@@ -1,0 +1,166 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+import { describe, it } from "node:test";
+
+import { requestGatewayControl } from "../packages/piagent-webui/gateway/control-socket.ts";
+import { loadPinnedPiHost } from "../packages/piagent-webui/gateway/pi-host.ts";
+import { gatewayProfileState, readGatewayDescriptor } from "../packages/piagent-webui/gateway/profile-state.ts";
+import { startPiagentGateway } from "../packages/piagent-webui/gateway/gateway-service.ts";
+import { SessionInspectionRegistry } from "../packages/piagent-webui/gateway/session-inspection-registry.ts";
+import { createWebUiSchemaRegistry, validateFixture } from "./helpers/piagent-webui-schema-registry.mjs";
+import { ensureWebUiBuild } from "./helpers/piagent-webui-build.mjs";
+
+const root = path.resolve(import.meta.dirname, "..");
+const expectedPiVersion = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"))
+  .peerDependencies["@earendil-works/pi-coding-agent"];
+const registry = createWebUiSchemaRegistry();
+function assistantMessage(text) {
+  return {
+    role: "assistant",
+    content: [{ type: "text", text }],
+    api: "fixture",
+    provider: "fixture",
+    model: "fixture",
+    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+    stopReason: "stop",
+    timestamp: Date.now()
+  };
+}
+
+describe("Piagent local Session Hub Gateway", () => {
+  it("rejects repository TypeScript that needs code generation", (t) => {
+    const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-typescript-loader-"));
+    t.after(() => fs.rmSync(temporary, { recursive: true, force: true }));
+    const fixture = path.join(temporary, "parameter-property.ts");
+    fs.writeFileSync(fixture, "class Example { constructor(readonly value: string) {} }\nprocess.stdout.write(new Example('ready').value);\n");
+    const result = spawnSync(process.execPath, ["--disable-warning=ExperimentalWarning", "--import",
+      path.join(root, "scripts", "register-typescript-loader.mjs"), fixture], { cwd: root, encoding: "utf8" });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX|parameter property/);
+  });
+
+  it("projects only opaque projects and credential-safe authenticated model choices", async () => {
+    const key = Buffer.alloc(32, 4), cwd = "/safe/project";
+    const registry = new SessionInspectionRegistry({ gatewayInstanceRef: "gateway_safe_options", key, packageRoot: root,
+      host: { SessionManager: { listAll: async () => [{ path: "/opaque/session.jsonl", id: "raw", cwd,
+        created: new Date(), modified: new Date(), messageCount: 2, firstMessage: "safe", allMessagesText: "safe" }] } },
+      models: { getModel() {}, getAvailableSnapshot: () => [
+        { provider: "fixture", id: "safe-model", name: "Visible sk-proj-abcdefghijklmnopqrstuvwxyz", reasoning: true },
+        { provider: "fixture", id: "sk-proj-abcdefghijklmnopqrstuvwxyz", name: "Must be omitted", reasoning: true }
+      ] } });
+    const projected = await registry.creationOptions();
+    assert.equal(projected.projects.length, 1);
+    assert.equal(projected.projects[0].label, "project");
+    assert.equal(JSON.stringify(projected).includes(cwd), false);
+    assert.equal(projected.models.length, 1);
+    assert.equal(projected.models[0].modelId, "safe-model");
+    assert.equal(projected.models[0].displayName.includes("sk-proj-"), false);
+    assert.equal(JSON.stringify(projected).includes("abcdefghijklmnopqrstuvwxyz"), false);
+  });
+
+  it("reports owner-safe lifecycle health and repairs an invalid stopped descriptor only when requested", (t) => {
+    ensureWebUiBuild(root);
+    const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-gateway-doctor-")), agentDir = path.join(temporary, "agent");
+    t.after(() => fs.rmSync(temporary, { recursive: true, force: true }));
+    const invoke = (...arguments_) => spawnSync(process.execPath, ["--disable-warning=ExperimentalWarning", "--import",
+      path.join(root, "scripts", "register-typescript-loader.mjs"), path.join(root, "scripts", "piagent-dashboard.mjs"),
+      "doctor", "--json", "--agent-dir", agentDir, ...arguments_], { cwd: root, encoding: "utf8" });
+    const healthy = invoke();
+    assert.equal(healthy.status, 0, healthy.stderr);
+    const result = JSON.parse(healthy.stdout);
+    assert.equal(result.ok, true); assert.match(result.profileRef, /^profile_/);
+    assert.equal(JSON.stringify(result).includes(agentDir), false);
+    const state = gatewayProfileState(agentDir);
+    fs.writeFileSync(state.descriptorFile, "{\"invalid\":true}\n", { mode: 0o600 });
+    const repair = invoke("--repair");
+    assert.equal(repair.status, 1);
+    assert.deepEqual(JSON.parse(repair.stdout).repaired, ["invalid-descriptor-removed"]);
+    const verified = invoke();
+    assert.equal(verified.status, 0, verified.stderr);
+    assert.equal(JSON.parse(verified.stdout).ok, true);
+  });
+
+  it("runs once per profile, serves a schema-valid redacted catalog, and restarts with new authority", async (t) => {
+    ensureWebUiBuild(root);
+    const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-gateway-test-"));
+    const agentDir = path.join(temporary, "agent");
+    const cwd = path.join(temporary, "project-secret-name");
+    fs.mkdirSync(cwd, { recursive: true });
+    const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+    t.after(() => {
+      if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+      else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+      fs.rmSync(temporary, { recursive: true, force: true });
+    });
+
+    const first = await startPiagentGateway({ packageRoot: root, expectedPiVersion, agentDir });
+    t.after(() => first.close());
+    const state = gatewayProfileState(agentDir);
+    assert.equal(readGatewayDescriptor(state)?.gatewayInstanceRef, first.descriptor.gatewayInstanceRef);
+    assert.equal(fs.statSync(state.root).mode & 0o777, 0o700);
+    assert.equal(fs.statSync(state.descriptorFile).mode & 0o777, 0o600);
+    assert.equal(fs.statSync(state.controlSocket).mode & 0o777, 0o600);
+    await assert.rejects(() => startPiagentGateway({ packageRoot: root, expectedPiVersion, agentDir }), /gateway-already-running/);
+
+    const host = await loadPinnedPiHost(expectedPiVersion);
+    const manager = host.SessionManager.create(cwd, undefined, { id: "raw-session-id-must-not-leak" });
+    manager.appendMessage({ role: "user", content: [{ type: "text", text: "Discuss a safe local dashboard." }], timestamp: Date.now() });
+    manager.appendMessage(assistantMessage("The durable session is ready."));
+    manager.appendSessionInfo("Gateway session sk-proj-abcdefghijklmnopqrstuvwxyz");
+    assert.equal(fs.existsSync(manager.getSessionFile()), true);
+    assert.equal((await host.SessionManager.listAll()).length, 1);
+
+    const launch = await requestGatewayControl(state.controlSocket, { action: "issue-launch-url" });
+    assert.equal(launch.ok, true);
+    const launchUrl = launch.value.launchUrl;
+    const target = new URL(launchUrl);
+    const capability = new URLSearchParams(target.hash.slice(1)).get("bootstrap");
+    const index = await fetch(target.origin);
+    assert.equal(index.status, 200);
+    assert.match(await index.text(), /name="piagent-webui-mode" content="gateway"/);
+    const exchange = await fetch(`${target.origin}/api/v1/bootstrap`, {
+      method: "POST",
+      headers: { Origin: target.origin, "Content-Type": "application/json" },
+      body: JSON.stringify({ capability })
+    });
+    assert.equal(exchange.status, 200);
+    const cookie = exchange.headers.get("set-cookie").split(";", 1)[0];
+    const capabilities = await (await fetch(`${target.origin}/api/v1/capabilities`, { headers: { Origin: target.origin, Cookie: cookie } })).json();
+    assert.equal(validateFixture(registry, "gateway-capabilities-v1", capabilities).valid, true);
+    assert.equal(capabilities.mode, "full");
+    assert.equal(capabilities.capabilities.sessionRuntime.status, "available");
+    assert.equal(capabilities.capabilities.sessionActions.create.status, "available");
+    assert.equal(capabilities.capabilities.sessionActions.acquire.status, "available");
+    assert.equal(capabilities.capabilities.sessionActions.send.status, "available");
+    const catalog = await (await fetch(`${target.origin}/api/v1/session-catalog`, { headers: { Origin: target.origin, Cookie: cookie } })).json();
+    const validation = validateFixture(registry, "session-catalog-v1", catalog);
+    assert.equal(validation.valid, true, validation.errors);
+    assert.equal(catalog.sessions.length, 1);
+    assert.equal(catalog.sessions[0].title.includes("sk-proj-"), false);
+    assert.equal(catalog.sessions[0].title.includes("[REDACTED_SECRET]"), true);
+    const serialized = JSON.stringify(catalog);
+    assert.equal(serialized.includes("raw-session-id-must-not-leak"), false);
+    assert.equal(serialized.includes(manager.getSessionFile()), false);
+    assert.equal(serialized.includes(cwd), false);
+    const creation = await (await fetch(`${target.origin}/api/v1/session-creation-options`, {
+      headers: { Origin: target.origin, Cookie: cookie }
+    })).json();
+    assert.equal(creation.version, "piagent-session-creation-options-v1");
+    assert.equal(creation.projects.length, 1);
+    assert.equal(creation.projects[0].label, "project-secret-name");
+    assert.equal(JSON.stringify(creation).includes(cwd), false);
+
+    const firstInstance = first.descriptor.gatewayInstanceRef;
+    await first.close();
+    assert.equal(readGatewayDescriptor(state), null);
+    assert.equal(fs.existsSync(state.controlSocket), false);
+    const second = await startPiagentGateway({ packageRoot: root, expectedPiVersion, agentDir });
+    t.after(() => second.close());
+    assert.notEqual(second.descriptor.gatewayInstanceRef, firstInstance);
+    await second.close();
+  });
+});

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-task-baseline-manifest-v1",
+  "taskId": "task-01",
+  "taskRunId": "task-01-run-1",
+  "sessionIdentityHash": "raw-session-id",
+  "capturedAt": "2026-08-13",
+  "retentionUntil": "2026-09-12",
+  "baselineDigestAlgorithm": "sha1",
+  "baselineTreeDigest": "unknown",
+  "captureState": "current",
+  "reasonCode": "invented-current-error",
+  "limits": { "maxEntries": 3000, "maxFileBytes": 0, "maxTotalBytes": 0, "capturedBytes": -1 },
+  "roots": [],
+  "integrityDigest": "not-a-digest"
+}

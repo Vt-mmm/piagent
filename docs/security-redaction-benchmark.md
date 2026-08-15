@@ -1,4 +1,5 @@
 # Sensitive-data redaction benchmark
+<!-- language: en -->
 
 The redaction benchmark measures the text and structured-data backstop used by the runtime guard. It uses deterministic synthetic values only; real credentials must never be added to the corpus. This is an internal regression benchmark, not an independent security audit, and the detector model should be treated as still maturing.
 

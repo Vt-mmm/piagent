@@ -66,17 +66,9 @@ export function safeTaskId(value) {
   return normalized || "task";
 }
 
-function stateRoot(cwd) {
-  return path.join(cwd, ".pi", "piagent-state");
-}
-
-function tasksRoot(cwd) {
-  return path.join(stateRoot(cwd), "tasks");
-}
-
-function sessionsRoot(cwd) {
-  return path.join(stateRoot(cwd), "session-tasks");
-}
+function stateRoot(cwd) { return path.join(cwd, ".pi", "piagent-state"); }
+function tasksRoot(cwd) { return path.join(stateRoot(cwd), "tasks"); }
+function sessionsRoot(cwd) { return path.join(stateRoot(cwd), "session-tasks"); }
 
 function taskRunPath(cwd, taskRunId) {
   return path.join(tasksRoot(cwd), `${safeTaskId(taskRunId)}.json`);
@@ -98,7 +90,12 @@ function readJson(cwd, filePath) {
     const safePath = resolveLocalStatePath(cwd, filePath, { label: "Task state", kind: "file" });
     const descriptor = fs.openSync(safePath, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
     try {
-      return JSON.parse(fs.readFileSync(descriptor, "utf8"));
+      const before = fs.fstatSync(descriptor, { bigint: true });
+      if (!before.isFile() || before.size > BigInt(8 * 1024 * 1024)) return undefined;
+      const value = JSON.parse(fs.readFileSync(descriptor, "utf8"));
+      const after = fs.fstatSync(descriptor, { bigint: true });
+      const fields = ["dev", "ino", "mode", "size", "mtimeNs", "ctimeNs"];
+      return fields.every((field) => before[field] === after[field]) ? value : undefined;
     } finally {
       fs.closeSync(descriptor);
     }
@@ -586,7 +583,6 @@ function gitOutput(cwd, args, options = {}) {
     stdio: ["ignore", "pipe", "ignore"]
   });
 }
-
 function gitHasHead(cwd) {
   try {
     gitOutput(cwd, ["rev-parse", "--verify", "HEAD"]);
@@ -595,7 +591,6 @@ function gitHasHead(cwd) {
     return false;
   }
 }
-
 export function isGitWorkingTree(cwd) {
   try {
     return gitOutput(cwd, ["rev-parse", "--is-inside-work-tree"]).trim() === "true";
@@ -603,20 +598,18 @@ export function isGitWorkingTree(cwd) {
     return false;
   }
 }
-
 function normalizedGitPath(value) {
   return String(value ?? "").replaceAll("\\", "/").replace(/^\/+/, "");
 }
-
 function prefixedGitPath(prefix, file) {
   const normalized = normalizedGitPath(file);
   return prefix ? `${prefix}/${normalized}` : normalized;
 }
 
-function workingTreeFilesForGitRoot(cwd) {
+function workingTreeFilesForGitRoot(cwd, observeRename) {
   if (!isGitWorkingTree(cwd)) return [];
   const changed = gitHasHead(cwd)
-    ? changedPathsFromNameStatus(gitOutput(cwd, ["diff", "--name-status", "-z", "--find-renames", "--diff-filter=ACMRD", "HEAD", "--"]))
+    ? changedPathsFromNameStatus(gitOutput(cwd, ["diff", "--name-status", "-z", "--find-renames", "--diff-filter=ACMRD", "HEAD", "--"]), observeRename)
     : gitOutput(cwd, ["ls-files", "-z"]).split("\0").filter(Boolean);
   const untracked = gitOutput(cwd, ["ls-files", "--others", "--exclude-standard", "-z"]).split("\0").filter(Boolean);
   return [...new Set([...changed, ...untracked].map(normalizedGitPath).filter((item) => item && !item.startsWith(".pi/piagent-state/")))].sort();
@@ -694,9 +687,7 @@ function nonGitWorkspaceFiles(cwd, gitRootPrefixes) {
   return files.sort();
 }
 
-function nonGitWorkspaceFileDigest(cwd, file) {
-  return streamedWorkingTreeFileDigest(cwd, file, false);
-}
+function nonGitWorkspaceFileDigest(cwd, file, protectedProjectPath = null) { return streamedWorkingTreeFileDigest(cwd, file, false, protectedProjectPath); }
 
 function pathWithinNonGitWorkspaceEvidenceRoot(candidate, gitRootPrefixes) {
   const topSegment = candidate.split("/")[0];
@@ -777,7 +768,7 @@ export function repositoryFileManifest(cwd, maxFiles = 10_000) {
   return [...new Set(files)].sort();
 }
 
-function changedPathsFromNameStatus(output) {
+function changedPathsFromNameStatus(output, observeRename) {
   const fields = String(output ?? "").split("\0").filter(Boolean);
   const files = [];
   for (let index = 0; index < fields.length;) {
@@ -787,7 +778,7 @@ function changedPathsFromNameStatus(output) {
     files.push(source);
     if (/^[RC]/.test(status)) {
       const destination = fields[index++];
-      if (destination) files.push(destination);
+      if (destination) { files.push(destination); observeRename?.(source, destination); }
     }
   }
   return files;
@@ -804,8 +795,12 @@ export function workingTreeSnapshotHasUnavailableEvidence(snapshot) {
   return Object.values(snapshot ?? {}).some((digest) => isUnavailableWorkingTreeDigest(digest));
 }
 
-function streamedWorkingTreeFileDigest(root, file, hasHead) {
+function streamedWorkingTreeFileDigest(root, file, hasHead, protectedProjectPath = null) {
   const absolute = path.resolve(root, file);
+  if (protectedProjectPath) {
+    try { return unavailableWorkingTreeDigest(protectedProjectPath, "protected-path", fs.lstatSync(absolute)); }
+    catch { return unavailableWorkingTreeDigest(protectedProjectPath, "protected-path"); }
+  }
   const relative = path.relative(root, absolute);
   if (!relative || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
     return unavailableWorkingTreeDigest(file, "outside-root");
@@ -866,22 +861,24 @@ function streamedWorkingTreeFileDigest(root, file, hasHead) {
   }
 }
 
-export function workingTreeSnapshot(cwd) {
+export function workingTreeSnapshot(cwd, options = {}) {
   const snapshot = {};
+  const isProtectedProjectPath = typeof options.isProtectedProjectPath === "function" ? options.isProtectedProjectPath : () => false;
   const roots = gitEvidenceRoots(cwd);
   for (const root of roots) {
-    const hasHead = gitHasHead(root.cwd);
-    for (const file of workingTreeFilesForGitRoot(root.cwd)) {
-      const snapshotPath = prefixedGitPath(root.prefix, file);
-      snapshot[snapshotPath] = streamedWorkingTreeFileDigest(root.cwd, file, hasHead);
+    const protectedAliases = new Set();
+    const observeRename = (source, destination) => {
+      const paths = [source, destination];
+      if (paths.some((file) => file === ".pi/piagent-state" || file.startsWith(".pi/piagent-state/") || isProtectedProjectPath(prefixedGitPath(root.prefix, file))))
+        paths.forEach((file) => protectedAliases.add(file));
+    };
+    const hasHead = gitHasHead(root.cwd); for (const file of workingTreeFilesForGitRoot(root.cwd, observeRename)) {
+      const projectPath = prefixedGitPath(root.prefix, file);
+      snapshot[projectPath] = streamedWorkingTreeFileDigest(root.cwd, file, hasHead, isProtectedProjectPath(projectPath) || protectedAliases.has(file) ? projectPath : null);
     }
-  }
-  if (!isGitWorkingTree(cwd) && roots.length > 0) {
-    for (const file of nonGitWorkspaceFiles(cwd, roots.map((root) => root.prefix))) {
-      snapshot[file] = nonGitWorkspaceFileDigest(cwd, file);
-    }
-  }
-  return snapshot;
+  } if (!isGitWorkingTree(cwd) && roots.length > 0) for (const file of nonGitWorkspaceFiles(cwd, roots.map((root) => root.prefix))) {
+      snapshot[file] = nonGitWorkspaceFileDigest(cwd, file, isProtectedProjectPath(file) ? file : null);
+  } return snapshot;
 }
 
 export function taskStateMigrationStatus(cwd) {

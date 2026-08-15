@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-snapshot-v1",
+  "generatedAt": "2026-08-13T09:05:00.000Z",
+  "identity": {
+    "projectRef": "project_01",
+    "runtimeInstanceId": "runtime_01",
+    "sessionRef": "session_01",
+    "taskId": null,
+    "taskRunId": null,
+    "agentOperationId": null,
+    "toolCallId": null
+  },
+  "revision": {
+    "runtimeRevision": "runtime_rev_01",
+    "taskRevision": null,
+    "controlRevision": null,
+    "workspaceRevision": "workspace_rev_01",
+    "indexRevision": "index_rev_01",
+    "approvalRevision": null,
+    "sessionOptionRevision": "session_option_rev_01",
+    "queueRevision": null,
+    "journalHead": null,
+    "eventCursor": "event_cursor_01"
+  },
+  "capabilities": {
+    "schemaVersion": 1,
+    "version": "piagent-webui-capabilities-v1",
+    "generatedAt": "2026-08-13T09:05:00.000Z",
+    "protocolMin": 1,
+    "protocolMax": 1,
+    "supportedSnapshotVersions": [1],
+    "supportedEventVersions": [2],
+    "mode": "inspect-only",
+    "compatibility": { "state": "compatible", "reason": null },
+    "identity": {
+      "projectRef": "project_01",
+      "runtimeInstanceId": "runtime_01",
+      "sessionRef": "session_01",
+      "taskId": null,
+      "taskRunId": null,
+      "agentOperationId": null,
+      "toolCallId": null
+    },
+    "runtimeBuild": { "state": "available", "buildId": "runtime_build_01", "version": "0.84.1", "reason": null },
+    "serverBuild": { "state": "available", "buildId": "server_build_01", "version": "1.0.0", "reason": null },
+    "capabilities": {
+      "inspect": { "status": "available", "version": 1, "reason": null, "sourceViews": ["task", "working-tree", "staged"] },
+      "control.chat": { "status": "unavailable", "version": null, "reason": { "code": "bridge-not-proven", "message": "Same-session dispatch acknowledgement is not available." } },
+      "control.lifecycle": { "status": "unavailable", "version": null, "reason": { "code": "bridge-not-proven", "message": "Awaited lifecycle settlement is not available." } },
+      "control.resumeAndContinue": { "status": "unavailable", "version": null, "reason": { "code": "compound-control-not-proven", "message": "Atomic resume and same-session dispatch are not available." } },
+      "control.sessionOptions": { "status": "unavailable", "version": null, "reason": { "code": "effect-scope-unproven", "message": "The model setting effect scope has not been proved." } },
+      "attachments": { "status": "unavailable", "version": null, "reason": { "code": "attachments-not-implemented", "message": "Attachment staging is not implemented." } },
+      "approve": { "status": "unavailable", "version": null, "reason": { "code": "approval-broker-not-implemented", "message": "The runtime approval broker is not implemented." } },
+      "reviewActions": { "status": "unavailable", "version": null, "reason": { "code": "review-actions-not-implemented", "message": "Review mutations are not implemented." } }
+    },
+    "replay": { "eventRetentionCount": 10000, "eventRetentionSeconds": 3600, "resyncSupported": true },
+    "limits": {
+      "maxRequestBodyBytes": 1048576,
+      "maxEventPayloadBytes": 65536,
+      "maxReplayEvents": 10000,
+      "maxDiffBytes": 4194304,
+      "maxDiffLines": 5000,
+      "maxDiffHunks": 256,
+      "maxLogPreviewBytes": 65536,
+      "maxLogPreviewLines": 500,
+      "maxAttachmentCount": 16,
+      "maxAttachmentFileBytes": 10485760,
+      "maxAttachmentTotalBytes": 33554432,
+      "maxQueueItems": 100,
+      "maxMessageBytes": 65536,
+      "maxSseClients": 8,
+      "maxGitProcesses": 4,
+      "requestTimeoutMs": 30000
+    }
+  },
+  "session": {
+    "connectionState": "connected",
+    "connectionReason": null,
+    "displayName": "Piagent WebUI contract session",
+    "operation": {
+      "liveness": "idle",
+      "operationRef": null,
+      "hostPhase": { "state": "known", "value": "idle", "evidence": "observed", "reasonCode": null },
+      "startedAt": null,
+      "settledAt": null,
+      "reasonCode": null
+    },
+    "controlState": "active",
+    "taskOutcome": null,
+    "approvalState": "none",
+    "verificationState": "unavailable",
+    "permissionProfile": { "state": "known", "value": "workspace-write", "evidence": "observed", "reasonCode": null },
+    "model": {
+      "state": "known",
+      "value": {
+        "modelRef": "model_01",
+        "provider": "openai",
+        "modelId": "gpt-5.6",
+        "displayName": "GPT-5.6",
+        "reasoning": true,
+        "inputCapabilities": ["text", "image"],
+        "supportedThinkingLevels": ["low", "medium", "high"],
+        "contextWindow": 200000,
+        "maxOutputTokens": 100000
+      },
+      "evidence": "observed",
+      "reasonCode": null
+    },
+    "thinking": { "state": "known", "value": "high", "evidence": "observed", "reasonCode": null },
+    "queue": { "state": "unavailable", "hasPending": null, "heldCount": null, "revision": null, "reasonCode": "host-queue-api-unavailable" },
+    "context": { "state": "known", "tokens": 1000, "contextWindow": 200000, "percent": 0.5, "capturedAt": "2026-08-13T09:05:00.000Z", "reasonCode": null }
+  },
+  "task": null,
+  "sourceChanges": {
+    "task": {
+      "view": "task",
+      "base": "task-baseline",
+      "state": "unavailable",
+      "revision": null,
+      "counts": { "files": 0, "added": 0, "modified": 0, "deleted": 0, "renamed": 0, "untracked": 0, "conflicted": 0, "additions": null, "deletions": null },
+      "health": { "state": "unavailable", "reasonCode": "no-active-task", "message": "No active task baseline exists." }
+    },
+    "workingTree": {
+      "view": "working-tree",
+      "base": "HEAD",
+      "state": "ready",
+      "revision": "workspace_rev_01",
+      "counts": { "files": 0, "added": 0, "modified": 0, "deleted": 0, "renamed": 0, "untracked": 0, "conflicted": 0, "additions": 0, "deletions": 0 },
+      "health": { "state": "ok", "reasonCode": null, "message": null }
+    },
+    "staged": {
+      "view": "staged",
+      "base": "HEAD",
+      "state": "ready",
+      "revision": "index_rev_01",
+      "counts": { "files": 0, "added": 0, "modified": 0, "deleted": 0, "renamed": 0, "untracked": 0, "conflicted": 0, "additions": 0, "deletions": 0 },
+      "health": { "state": "ok", "reasonCode": null, "message": null }
+    }
+  },
+  "activity": {
+    "running": [],
+    "recent": [],
+    "page": { "cursor": null, "nextCursor": null, "total": 0, "returned": 0, "truncated": false },
+    "health": { "state": "ok", "reasonCode": null, "message": null }
+  },
+  "approvals": {
+    "state": "none",
+    "pending": [],
+    "recent": [],
+    "health": { "state": "ok", "reasonCode": null, "message": null }
+  },
+  "verification": {
+    "state": "unavailable",
+    "latest": null,
+    "requiredCommands": [],
+    "reasonCode": "no-active-task",
+    "health": { "state": "ok", "reasonCode": null, "message": null }
+  },
+  "usage": {
+    "context": { "state": "known", "tokens": 1000, "contextWindow": 200000, "percent": 0.5, "capturedAt": "2026-08-13T09:05:00.000Z", "reasonCode": null },
+    "latestTurn": { "state": "unknown", "input": null, "output": null, "cacheRead": null, "cacheWrite": null, "cost": null, "currency": null, "reasonCode": "no-assistant-turn" },
+    "sessionTotal": { "state": "unavailable", "input": null, "output": null, "cacheRead": null, "cacheWrite": null, "cost": null, "currency": null, "reasonCode": "host-total-usage-unavailable" },
+    "taskTotal": { "state": "unavailable", "input": null, "output": null, "cacheRead": null, "cacheWrite": null, "cost": null, "currency": null, "reasonCode": "no-active-task" },
+    "capturedAt": "2026-08-13T09:05:00.000Z",
+    "health": { "state": "degraded", "reasonCode": "partial-usage-only", "message": "Only current context usage is authoritative." }
+  },
+  "continuation": {
+    "state": "not-applicable",
+    "consumed": null,
+    "maximum": null,
+    "remaining": null,
+    "reservationRef": null,
+    "reasonCode": "no-active-task"
+  },
+  "handoff": null,
+  "health": {
+    "state": "degraded",
+    "issues": [
+      {
+        "issueRef": "issue_01",
+        "severity": "warning",
+        "code": "host-queue-api-unavailable",
+        "message": "The current host cannot enumerate the held queue.",
+        "relatedRefs": []
+      }
+    ],
+    "resyncRequired": false,
+    "generatedFromRevision": "runtime_rev_01"
+  }
+}

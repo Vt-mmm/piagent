@@ -27,6 +27,19 @@ printf '%s\\n' 'openai-codex  a-model        128K     64K      no        no'
   return root;
 }
 
+function initializedProject() {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-model-project-"));
+  roots.add(project);
+  assert.equal(spawnSync("git", ["init", "-q", project], { encoding: "utf8" }).status, 0);
+  const initialized = spawnSync("bash", ["scripts/init-project.sh", project, "--profile", "generic",
+    "--package-source", repositoryRoot, "--skip-agents", "--skip-review-guidelines"], {
+    cwd: repositoryRoot,
+    encoding: "utf8"
+  });
+  assert.equal(initialized.status, 0, initialized.stderr || initialized.stdout);
+  return project;
+}
+
 function run(args, extra = {}) {
   return spawnSync("/bin/bash", ["scripts/pi-model-catalog.sh", ...args], {
     cwd: repositoryRoot,
@@ -63,7 +76,8 @@ describe("piagent-models", () => {
   });
 
   it("adds the same bounded unknown/provenance fields to offline doctor JSON", () => {
-    const result = spawnSync("bash", ["scripts/team-doctor.sh", repositoryRoot, "--json", "--offline"], {
+    const project = initializedProject();
+    const result = spawnSync("bash", ["scripts/team-doctor.sh", project, "--json", "--offline"], {
       cwd: repositoryRoot,
       encoding: "utf8"
     });

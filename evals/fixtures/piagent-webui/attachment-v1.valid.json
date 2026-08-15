@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-attachment-v1",
+  "messageType": "stage-command",
+  "commandId": "attachment-command-01",
+  "idempotencyKey": "attachment-idempotency-key-00000001",
+  "requestedAt": "2026-08-14T08:00:00.000Z",
+  "expiresAt": "2026-08-14T08:05:00.000Z",
+  "identity": {
+    "projectRef": "project_01",
+    "runtimeInstanceId": "runtime_01",
+    "sessionRef": "session_01",
+    "taskId": null,
+    "taskRunId": null,
+    "agentOperationId": null,
+    "toolCallId": null
+  },
+  "expectedRuntimeRevision": "runtime_rev_01",
+  "messageRequestId": "message_request_01",
+  "file": {
+    "displayName": "notes.md",
+    "declaredMimeType": "text/markdown",
+    "dataBase64": "IyBOb3Rlcwo="
+  }
+}

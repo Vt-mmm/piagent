@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/verifier-file-snapshot.schema.json",
+  "title": "Piagent verifier file snapshot v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "version", "attemptId", "attemptRef", "taskId", "taskRunId",
+    "sessionIdentityHash", "toolCallIdentityHash", "commandDigest", "observedAt", "capturedAt",
+    "retentionUntil", "exitCode", "outcome", "treeDigest", "fileCount", "exposedPathCount",
+    "files", "integrityDigest"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "version": { "const": "piagent-verifier-file-snapshot-v1" },
+    "attemptId": { "type": "string", "pattern": "^verifier\\.[a-f0-9]{64}$" },
+    "attemptRef": { "type": "string", "pattern": "^verifier-evidence\\.[a-f0-9]{64}$" },
+    "taskId": { "$ref": "#/$defs/publicId" },
+    "taskRunId": { "$ref": "#/$defs/publicId" },
+    "sessionIdentityHash": { "$ref": "#/$defs/digest" },
+    "toolCallIdentityHash": { "$ref": "#/$defs/digest" },
+    "commandDigest": { "$ref": "#/$defs/digest" },
+    "observedAt": { "$ref": "#/$defs/timestamp" },
+    "capturedAt": { "$ref": "#/$defs/timestamp" },
+    "retentionUntil": { "$ref": "#/$defs/timestamp" },
+    "exitCode": { "type": "integer", "minimum": -2147483648, "maximum": 2147483647 },
+    "outcome": { "enum": ["passed", "failed"] },
+    "treeDigest": { "$ref": "#/$defs/treeDigest" },
+    "fileCount": { "type": "integer", "minimum": 0, "maximum": 2000 },
+    "exposedPathCount": { "type": "integer", "minimum": 0, "maximum": 2000 },
+    "files": {
+      "type": "array",
+      "maxItems": 2000,
+      "items": { "$ref": "#/$defs/file" }
+    },
+    "integrityDigest": { "$ref": "#/$defs/digest" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "outcome": { "const": "passed" } }, "required": ["outcome"] },
+      "then": { "properties": { "exitCode": { "const": 0 } } },
+      "else": { "properties": { "exitCode": { "not": { "const": 0 } } } }
+    }
+  ],
+  "$defs": {
+    "publicId": { "type": "string", "minLength": 1, "maxLength": 160, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@~-]*$" },
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "treeDigest": { "type": "string", "pattern": "^wt-content-v2:[a-f0-9]{64}$" },
+    "carrierDigest": { "type": "string", "pattern": "^wt-content-v2:[a-f0-9]{64}$" },
+    "timestamp": { "type": "string", "format": "date-time", "maxLength": 32 },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pathDigest", "repoPathBase64", "state", "reasonCode", "carrierDigest"],
+      "properties": {
+        "pathDigest": { "$ref": "#/$defs/digest" },
+        "repoPathBase64": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "minLength": 1, "maxLength": 2048, "pattern": "^[A-Za-z0-9_-]+$" }
+          ]
+        },
+        "state": { "enum": ["exact", "protected", "unavailable"] },
+        "reasonCode": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "minLength": 1, "maxLength": 96, "pattern": "^[a-z0-9][a-z0-9.-]*$" }
+          ]
+        },
+        "carrierDigest": { "$ref": "#/$defs/carrierDigest" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "const": "exact" } }, "required": ["state"] },
+          "then": { "properties": { "repoPathBase64": { "type": "string" }, "reasonCode": { "type": "null" } } },
+          "else": { "properties": { "repoPathBase64": { "type": "null" }, "reasonCode": { "type": "string" } } }
+        }
+      ]
+    }
+  }
+}

@@ -104,8 +104,9 @@ change during FS1–FS3 and must be regenerated against the exact RC boundary.
 
 ## Consequences
 
-- Work inspired by Amp, Cursor, Windsurf, Codex, and Claude remains in the
-  product. Maturity controls authority; they do not discard implementation.
+- Previously researched capability, routing, retrieval, and coding-agent ideas
+  remain in the product. Maturity controls authority; it does not discard
+  implementation.
 - Broad defaults prioritize mechanical token/context savings and long-task truth.
   Semantic intelligence first observes/advises; it earns enforcement separately.
 - A benchmark cannot silently choose a stricter treatment than the release.

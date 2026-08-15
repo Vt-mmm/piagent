@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-commit-summary-v1",
+  "generatedAt": "2026-08-14T09:00:00.000Z",
+  "identity": { "projectRef": "project_01", "runtimeInstanceId": "runtime_01", "sessionRef": "session_01", "taskId": "task_01", "taskRunId": "task_run_01", "agentOperationId": null, "toolCallId": null },
+  "state": "ready",
+  "summary": {
+    "summaryRef": "commit-summary_01",
+    "taskRevision": "task_revision_01",
+    "indexRevision": "index_revision_01",
+    "title": "Update 2 staged files",
+    "bodyLines": ["- Add src/new.ts (+4/-0)", "- Update src/app.ts (+2/-1)", "- Staged changes: +6 / -1"],
+    "modelPrompt": "Write a concise Git commit message from this exact staged summary.\nIndex revision: index_revision_01\nTitle: Update 2 staged files",
+    "fileCount": 2,
+    "returnedFiles": 2,
+    "statusCounts": { "A": 1, "M": 1, "D": 0, "R": 0, "C": 0 },
+    "additions": 6,
+    "deletions": 1,
+    "protectedFileCount": 0,
+    "redacted": false,
+    "truncated": false
+  },
+  "reasonCode": null,
+  "health": { "state": "ok", "reasonCode": null, "message": null }
+}

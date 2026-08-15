@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-session-catalog-v1",
+  "generatedAt": "2026-08-14T04:30:00.000Z",
+  "gatewayInstanceRef": "gateway_01",
+  "state": "unavailable",
+  "catalogRevision": "invented_revision",
+  "sessions": [],
+  "page": {
+    "limit": 50,
+    "returned": 0,
+    "total": 0,
+    "nextCursor": null,
+    "truncated": false
+  },
+  "reasonCode": "gateway-offline"
+}

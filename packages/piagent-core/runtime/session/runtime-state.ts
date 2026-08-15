@@ -6,7 +6,7 @@ import type { TaskContract } from "../../extensions/guard-types.ts";
 import type { RecoveryHistoryEntry } from "../recovery/recovery-policy.ts";
 import type { ResumeState } from "../recovery/resume-state.ts";
 import { ModelAuthorshipState } from "./model-authorship-state.ts";
-import type { ModelMutationIdentity } from "./model-authorship-state.ts";
+import type { ModelMutationEvidenceCompletion, ModelMutationIdentity } from "./model-authorship-state.ts";
 import type { ModelMutationProof } from "../quality/model-mutation-proof.ts";
 import { PerformanceReviewState } from "./performance-review-state.ts";
 import type {
@@ -237,6 +237,16 @@ export class RuntimeSessionState {
     currentContentDigests: Record<string, string> = {}
   ): { changedPaths: string[]; recordedDigests: Record<string, string> } {
     return this.#modelAuthorship.complete(identity, toolCallId, success, currentSnapshot, currentContentDigests);
+  }
+
+  completeAuthorizedModelMutationEvidence(
+    identity: ModelMutationIdentity,
+    toolCallId: string,
+    success: boolean,
+    currentSnapshot: Record<string, string>,
+    currentContentDigests: Record<string, string> = {}
+  ): ModelMutationEvidenceCompletion {
+    return this.#modelAuthorship.completeWithEvidence(identity, toolCallId, success, currentSnapshot, currentContentDigests);
   }
 
   successfulModelMutationDigests(identity: ModelMutationIdentity, currentSnapshot?: Record<string, string>): Record<string, string> {

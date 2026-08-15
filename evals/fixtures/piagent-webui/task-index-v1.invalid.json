@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-task-index-v1",
+  "generatedAt": "2026-08-14T10:00:00.000Z",
+  "identity": { "projectRef": "project.fixture", "runtimeInstanceId": "runtime.fixture", "sessionRef": "session.fixture", "taskId": null, "taskRunId": null, "agentOperationId": null, "toolCallId": null },
+  "state": "ready",
+  "indexRevision": "task-index.fixture",
+  "activeRunRef": "run.fixture",
+  "runs": [
+    { "runRef": "run.fixture", "taskRef": "task.fixture", "taskId": "task-old", "taskRunId": "task-old-run", "summary": "Impossible active terminal run", "sessionLabel": null, "outcome": "completed", "terminal": true, "attempt": 1, "maxAttempts": 3, "changeMode": "source-change", "riskLane": "normal", "createdAt": "2026-08-14T09:00:00.000Z", "updatedAt": "2026-08-14T09:30:00.000Z", "isCurrentSession": false, "isActive": true, "progress": { "completed": 1, "total": 1 } }
+  ],
+  "page": { "total": 1, "returned": 1, "truncated": false },
+  "warnings": [],
+  "health": { "state": "ok", "reasonCode": null, "message": null }
+}

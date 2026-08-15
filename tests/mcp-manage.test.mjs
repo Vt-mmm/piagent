@@ -375,6 +375,14 @@ describe("piagent-mcp server management", () => {
     assert.match(entry.detail, /definitely-not-installed-binary is not on PATH/);
   });
 
+  it("uses the local Figma desktop server for design presets until remote OAuth approves this client", () => {
+    const fixture = createFixture();
+    assert.equal(run(fixture, ["--preset", "design", "--scope", "global"]).status, 0);
+    const config = readConfig(path.join(fixture.home, ".config", "mcp", "mcp.json"));
+    assert.equal(config.mcpServers["figma-desktop"].url, "http://127.0.0.1:3845/mcp");
+    assert.equal(Object.hasOwn(config.mcpServers, "figma"), false);
+  });
+
   it("keeps hand-added servers when a preset is re-applied, and re-pins the ones it owns", () => {
     const fixture = createFixture();
     const config = path.join(fixture.home, ".config", "mcp", "mcp.json");

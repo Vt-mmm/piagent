@@ -1,0 +1,243 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/transcript-v1.schema.json",
+  "title": "Piagent WebUI bounded transcript projection v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "version",
+    "generatedAt",
+    "identity",
+    "revision",
+    "eventCursor",
+    "state",
+    "items",
+    "page",
+    "reasonCode"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "version": { "const": "piagent-webui-transcript-v1" },
+    "generatedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+    "identity": { "$ref": "#/$defs/identity" },
+    "revision": { "$ref": "common-v1.schema.json#/$defs/domainRevision" },
+    "eventCursor": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+    "state": { "enum": ["ready", "unavailable"] },
+    "items": {
+      "type": "array",
+      "maxItems": 200,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/transcriptItem" }
+    },
+    "page": { "$ref": "#/$defs/page" },
+    "reasonCode": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "state": { "const": "ready" } }, "required": ["state"] },
+      "then": { "properties": { "reasonCode": { "type": "null" } } }
+    },
+    {
+      "if": { "properties": { "state": { "const": "unavailable" } }, "required": ["state"] },
+      "then": {
+        "properties": {
+          "items": { "type": "array", "maxItems": 0 },
+          "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" },
+          "page": {
+            "type": "object",
+            "properties": {
+              "nextBeforeCursor": { "type": "null" },
+              "hasOlder": { "const": false }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["projectRef", "runtimeInstanceId", "sessionRef", "taskId", "taskRunId", "agentOperationId", "toolCallId"],
+      "properties": {
+        "projectRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "runtimeInstanceId": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "sessionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "taskId": { "$ref": "common-v1.schema.json#/$defs/nullablePublicId" },
+        "taskRunId": { "$ref": "common-v1.schema.json#/$defs/nullablePublicId" },
+        "agentOperationId": { "type": "null" },
+        "toolCallId": { "type": "null" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "taskRunId": { "type": "string" } }, "required": ["taskRunId"] },
+          "then": { "properties": { "taskId": { "$ref": "common-v1.schema.json#/$defs/publicId" } } }
+        }
+      ]
+    },
+    "nullableCount": {
+      "anyOf": [
+        { "type": "integer", "minimum": 0, "maximum": 1000000000 },
+        { "type": "null" }
+      ]
+    },
+    "safeTranscriptText": {
+      "type": "string",
+      "maxLength": 16384,
+      "pattern": "^[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]*$"
+    },
+    "nullableSafeTranscriptText": {
+      "anyOf": [
+        { "$ref": "#/$defs/safeTranscriptText" },
+        { "type": "null" }
+      ]
+    },
+    "content": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "text", "textChars", "digest", "truncated", "redacted", "imageCount", "reasonCode"],
+      "properties": {
+        "state": { "enum": ["available", "redacted", "unavailable"] },
+        "text": { "$ref": "#/$defs/nullableSafeTranscriptText" },
+        "textChars": { "$ref": "#/$defs/nullableCount" },
+        "digest": {
+          "anyOf": [
+            { "$ref": "common-v1.schema.json#/$defs/digest" },
+            { "type": "null" }
+          ]
+        },
+        "truncated": { "type": "boolean" },
+        "redacted": { "type": "boolean" },
+        "imageCount": { "type": "integer", "minimum": 0, "maximum": 32 },
+        "reasonCode": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "const": "available" } }, "required": ["state"] },
+          "then": {
+            "properties": {
+              "text": { "$ref": "#/$defs/safeTranscriptText" },
+              "textChars": { "type": "integer", "minimum": 0, "maximum": 1000000000 },
+              "digest": { "$ref": "common-v1.schema.json#/$defs/digest" },
+              "redacted": { "const": false },
+              "reasonCode": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "state": { "const": "redacted" } }, "required": ["state"] },
+          "then": {
+            "properties": {
+              "text": { "$ref": "#/$defs/safeTranscriptText" },
+              "textChars": { "type": "integer", "minimum": 0, "maximum": 1000000000 },
+              "digest": { "$ref": "common-v1.schema.json#/$defs/digest" },
+              "redacted": { "const": true },
+              "reasonCode": { "const": "sensitive-values-redacted" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "state": { "const": "unavailable" } }, "required": ["state"] },
+          "then": {
+            "properties": {
+              "text": { "type": "null" },
+              "textChars": { "type": "null" },
+              "digest": { "type": "null" },
+              "truncated": { "const": false },
+              "redacted": { "const": false },
+              "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+            }
+          }
+        }
+      ]
+    },
+    "toolCall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["toolCallRef", "toolName", "state"],
+      "properties": {
+        "toolCallRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "toolName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@~-]{0,79}$"
+        },
+        "state": { "enum": ["requested", "completed", "failed", "unknown"] }
+      }
+    },
+    "transcriptItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "messageRef",
+        "parentMessageRef",
+        "role",
+        "recordedAt",
+        "agentOperationId",
+        "turnIndex",
+        "content",
+        "toolCalls"
+      ],
+      "properties": {
+        "messageRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "parentMessageRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+        "role": { "enum": ["user", "assistant", "tool-result"] },
+        "recordedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+        "agentOperationId": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+        "turnIndex": { "$ref": "#/$defs/nullableCount" },
+        "content": { "$ref": "#/$defs/content" },
+        "toolCalls": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/toolCall" }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "turnIndex": { "type": "integer" } }, "required": ["turnIndex"] },
+          "then": { "properties": { "agentOperationId": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" } } }
+        },
+        {
+          "if": { "properties": { "role": { "const": "tool-result" } }, "required": ["role"] },
+          "then": {
+            "properties": {
+              "content": {
+                "type": "object",
+                "properties": {
+                  "state": { "const": "unavailable" },
+                  "reasonCode": { "const": "tool-output-in-activity-preview" }
+                }
+              },
+              "toolCalls": { "type": "array", "minItems": 1, "maxItems": 1 }
+            }
+          }
+        }
+      ]
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["beforeCursor", "nextBeforeCursor", "hasOlder", "limit", "truncated"],
+      "properties": {
+        "beforeCursor": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+        "nextBeforeCursor": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+        "hasOlder": { "type": "boolean" },
+        "limit": { "type": "integer", "minimum": 1, "maximum": 200 },
+        "truncated": { "type": "boolean" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "hasOlder": { "const": false } }, "required": ["hasOlder"] },
+          "then": { "properties": { "nextBeforeCursor": { "type": "null" } } }
+        },
+        {
+          "if": { "properties": { "hasOlder": { "const": true } }, "required": ["hasOlder"] },
+          "then": { "properties": { "nextBeforeCursor": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" } } }
+        }
+      ]
+    }
+  }
+}

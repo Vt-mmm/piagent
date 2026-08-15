@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-mutation-provenance-v1",
+  "recordId": "provenance.856b6562e9295f67824562ebaf32f8ab6da89c0261b6f5f5f734cfa939c06f53",
+  "evidenceRef": "mutation.856b6562e9295f67824562ebaf32f8ab6da89c0261b6f5f5f734cfa939c06f53",
+  "taskId": "task-01",
+  "taskRunId": "task-01-run-01",
+  "sessionIdentityHash": "sha256:6e165fadbb274b7254278eadb81c25aaa7fda6b62c3f2c6f8ca393b34f90834e",
+  "toolCallIdentityHash": "sha256:4dd7feedf5ee29f32ee3a58080756f540d67d815fb658d836f77d959b6c33c49",
+  "toolName": "write",
+  "recordedAt": "2026-08-13T15:00:00.000Z",
+  "evidenceMode": "exact-runtime",
+  "beforeTreeDigest": "wt-content-v2:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "afterTreeDigest": "wt-content-v2:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "changes": [
+    {
+      "pathDigest": "sha256:072fc23b941d05af2383888f292b78e406e0e82a4a3f8ee698113dd9bcc79e5f",
+      "repoPathBase64": "c3JjL2EudHM",
+      "beforeCarrierDigest": "wt-content-v2:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "afterCarrierDigest": "wt-content-v2:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "afterContentDigest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "proofMode": "full-content",
+      "effect": "exact-content"
+    }
+  ],
+  "integrityDigest": "sha256:5481227f603726e91e7cbd1224df9fd32ceeda557b67ffea7628cf3e18598c5e"
+}
