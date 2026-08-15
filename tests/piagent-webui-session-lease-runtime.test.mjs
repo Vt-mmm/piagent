@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, it } from "node:test";
 
 import { webUiModelRef } from "../packages/piagent-core/runtime/inspection/webui-snapshot.ts";
@@ -10,12 +11,37 @@ import { piApprovalBroker } from "../packages/piagent-core/runtime/inspection/ap
 import { buildSessionCatalog, projectRefForCwd, sessionRefForPath } from "../packages/piagent-webui/gateway/session-catalog.ts";
 import { SessionLeaseStore } from "../packages/piagent-webui/gateway/session-lease-store.ts";
 import { SessionRuntimeSupervisor } from "../packages/piagent-webui/gateway/session-runtime-supervisor.ts";
-import { loadPinnedPiHost } from "../packages/piagent-webui/gateway/pi-host.ts";
+import { installedPiHostRoot, loadPinnedPiHost } from "../packages/piagent-webui/gateway/pi-host.ts";
 import { TerminalSessionAdapter } from "../packages/piagent-webui/extension/terminal-session-adapter.ts";
 import { createWebUiSchemaRegistry, validateFixture } from "./helpers/piagent-webui-schema-registry.mjs";
 
 const registry = createWebUiSchemaRegistry();
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
+
+async function localPiAi() {
+  const hostRoot = installedPiHostRoot();
+  const candidates = [path.join(hostRoot, "node_modules", "@earendil-works", "pi-ai"), path.join(path.dirname(hostRoot), "pi-ai"),
+    path.join(repositoryRoot, "node_modules", "@earendil-works", "pi-ai")];
+  const found = candidates.find((candidate) => {
+    try { return JSON.parse(fs.readFileSync(path.join(candidate, "package.json"), "utf8")).name === "@earendil-works/pi-ai"; }
+    catch { return false; }
+  });
+  if (!found) throw new Error("pi-ai-unavailable");
+  return await import(pathToFileURL(path.join(found, "dist", "index.js")));
+}
+
+function waitFor(assertion, timeout = 5_000) {
+  const started = Date.now();
+  return new Promise((resolve, reject) => {
+    const check = () => {
+      try { if (assertion()) { resolve(); return; } }
+      catch (error) { reject(error); return; }
+      if (Date.now() - started >= timeout) { reject(new Error("timed out waiting for runtime state")); return; }
+      setTimeout(check, 10);
+    };
+    check();
+  });
+}
 
 function state(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-session-lease-"));
@@ -322,5 +348,66 @@ describe("Piagent Session Hub owner lease and lazy runtime supervisor", () => {
     await supervisor.release(createdRef);
     assert.equal((await supervisor.listSessions()).length, 2);
     await supervisor.close();
+  });
+
+  it("starts the first Gateway message with the installed WebUI extension and a headless theme", async (t) => {
+    const { root, key } = state(t), cwd = path.join(root, "project"), agentDir = path.join(root, "agent"), sessionDir = path.join(root, "sessions");
+    fs.mkdirSync(cwd); fs.mkdirSync(agentDir); fs.mkdirSync(sessionDir);
+    execFileSync("git", ["init", "-q", cwd]);
+    execFileSync("git", ["-C", cwd, "config", "user.email", "test@example.com"]);
+    execFileSync("git", ["-C", cwd, "config", "user.name", "Piagent Test"]);
+    fs.writeFileSync(path.join(cwd, "README.md"), "# Gateway first-message proof\n");
+    execFileSync("git", ["-C", cwd, "add", "."]); execFileSync("git", ["-C", cwd, "commit", "-qm", "fixture"]);
+    const expected = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "package.json"), "utf8"))
+      .peerDependencies["@earendil-works/pi-coding-agent"];
+    const host = await loadPinnedPiHost(expected), piAi = await localPiAi();
+    const themeProof = path.join(root, "gateway-theme-proof.mjs");
+    fs.writeFileSync(themeProof, `export default function (pi) {\n  pi.on("session_start", (_event, ctx) => {\n    pi.appendEntry("gateway-theme-proof", { rendered: ctx.ui.theme.fg("accent", "ready") });\n  });\n}\n`);
+    const model = { id: "fixture", name: "Fixture model", api: "fixture", provider: "fixture", baseUrl: "", reasoning: false,
+      input: ["text"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 16000, maxTokens: 1000 };
+    let providerTurns = 0;
+    const modelRuntime = {
+      async refresh() {}, hasConfiguredAuth: () => true, checkAuth: async () => ({ configured: true }), isUsingOAuth: () => false,
+      getAuth: async () => ({ auth: { apiKey: "fixture" }, env: {} }),
+      getModel: (provider, id) => provider === "fixture" && id === "fixture" ? model : undefined,
+      getModels: () => [model], getAvailable: async () => [model], getAvailableSnapshot: () => [model], getProviders: () => [],
+      registerProvider() {}, registerNativeProvider() {}, unregisterProvider() {},
+      streamSimple() {
+        providerTurns += 1;
+        const stream = piAi.createAssistantMessageEventStream();
+        stream.push({ type: "done", reason: "stop", message: { role: "assistant", content: [{ type: "text", text: "Gateway reply." }],
+          api: "fixture", provider: "fixture", model: "fixture", usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0,
+            totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }, stopReason: "stop", timestamp: Date.now() } });
+        return stream;
+      }
+    };
+    class ScopedSessionManager extends host.SessionManager {
+      static create(targetCwd) { return host.SessionManager.create(targetCwd, sessionDir); }
+      static forkFrom(sourcePath, targetCwd) { return host.SessionManager.forkFrom(sourcePath, targetCwd, sessionDir); }
+    }
+    const runtimeHost = { ...host, SessionManager: ScopedSessionManager,
+      createAgentSessionServices: (options) => host.createAgentSessionServices({ ...options,
+        resourceLoaderOptions: { ...options.resourceLoaderOptions, additionalExtensionPaths: [
+          ...(options.resourceLoaderOptions?.additionalExtensionPaths ?? []),
+          path.join(repositoryRoot, "packages", "piagent-webui", "extension", "piagent-webui.ts"), themeProof
+        ] } }) };
+    const projectRef = projectRefForCwd(key, cwd);
+    const supervisor = new SessionRuntimeSupervisor({ gatewayInstanceRef: "gateway_first_message", key,
+      leases: new SessionLeaseStore(root, key), listSessions: () => host.SessionManager.list(cwd, sessionDir), host: runtimeHost,
+      agentDir, packageRoot: repositoryRoot, modelRuntime, resolveProject: (value) => value === projectRef ? cwd : null });
+    const createdRef = await supervisor.create(projectRef, projectRef, webUiModelRef("fixture", "fixture"), "off");
+    const started = await supervisor.send(createdRef, { delivery: "new-operation", message: "Start this imported project.",
+      expectedOperationRef: null }, "session-revision.gateway-first-message");
+    assert.equal(started.resultCode, "started"); assert.match(started.operationRef, /^operation_/);
+    await waitFor(() => supervisor.ownership(createdRef).liveState === "idle");
+    assert.equal(providerTurns, 1);
+    const sessions = await host.SessionManager.list(cwd, sessionDir), created = sessions.find((item) => sessionRefForPath(key, item.path) === createdRef);
+    assert.ok(created);
+    const branch = host.SessionManager.open(created.path, sessionDir).getBranch();
+    assert.equal(branch.some((entry) => entry.type === "custom" && entry.customType === "gateway-theme-proof" && entry.data?.rendered === "ready"), true);
+    assert.equal(branch.filter((entry) => entry.type === "message" && entry.message?.role === "user").length, 1);
+    assert.equal(branch.filter((entry) => entry.type === "message" && entry.message?.role === "assistant").length, 1);
+    await supervisor.release(createdRef); await supervisor.close();
+    await new Promise((resolve) => setTimeout(resolve, 100));
   });
 });

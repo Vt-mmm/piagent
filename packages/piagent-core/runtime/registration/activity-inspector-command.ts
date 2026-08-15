@@ -155,6 +155,7 @@ export function registerActivityInspector(pi: ExtensionAPI, dependencies: Inspec
   }
 
   async function renderSurface(ctx: ExtensionContext, force = false): Promise<void> {
+    if (ctx.mode !== "tui") return;
     const canUseStatus = typeof ctx.ui?.setStatus === "function";
     const canUseWidget = typeof ctx.ui?.setWidget === "function";
     if (ctx.hasUI === false || (!canUseStatus && !canUseWidget)) return;

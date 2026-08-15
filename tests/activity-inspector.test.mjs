@@ -183,6 +183,7 @@ describe("Piagent activity inspector", () => {
     };
     const context = {
       cwd,
+      mode: "tui",
       hasUI: true,
       ui: {
         theme: { fg: (_color, text) => text },

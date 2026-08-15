@@ -32,6 +32,7 @@ import { SourceRevertController } from "./source-revert-controller.ts";
 import { SourceOpenController } from "./source-open-controller.ts";
 import { VSCodeHandoff } from "./vscode-handoff.ts";
 import { TerminalSessionAdapter } from "./terminal-session-adapter.ts";
+import { isGatewayRuntimeContext } from "../ownership/gateway-runtime-context.ts";
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PLATFORM_ROOT = path.resolve(PACKAGE_ROOT, "../..");
@@ -170,7 +171,6 @@ function readMethod(provider: CoreInspectionProvider, queue: HeldMessageQueue, s
 export default function piagentWebUiExtension(pi: ExtensionAPI): void {
   const runtimeInstanceId = createWebUiExtensionRuntimeInstanceRef();
   let terminalAdapter: TerminalSessionAdapter | null = null;
-  try { terminalAdapter = new TerminalSessionAdapter(runtimeInstanceId); } catch { terminalAdapter = null; }
   const managers = new Map<string, Manager>();
   const eventReaders = new Map<string, EventReader>();
   const taskFacts = (ctx: ExtensionContext): BridgeTaskFacts => {
@@ -398,13 +398,13 @@ export default function piagentWebUiExtension(pi: ExtensionAPI): void {
     }
   });
 
-  pi.on("tool_call", (_event, ctx) => { publishPersisted(ctx); if (!terminalAdapter?.dispatchAllowed(ctx)) return { block: true,
+  pi.on("tool_call", (_event, ctx) => { publishPersisted(ctx); if (!isGatewayRuntimeContext(ctx) && !terminalAdapter?.dispatchAllowed(ctx)) return { block: true,
     reason: `Piagent cannot prove this terminal owns the session (${terminalAdapter?.reasonCode() ?? "terminal-session-adapter-unavailable"}).` };
     if (!lifecycle.dispatchAllowed(ctx)) return { block: true,
     reason: "Piagent lifecycle control blocks new tool work while the task is paused or stopping." }; });
   pi.on("tool_result", (_event, ctx) => publishPersisted(ctx));
   pi.on("input", (event, ctx) => {
-    if (!terminalAdapter?.dispatchAllowed(ctx)) {
+    if (!isGatewayRuntimeContext(ctx) && !terminalAdapter?.dispatchAllowed(ctx)) {
       try { ctx.ui.notify(`Piagent cannot prove this terminal owns the session (${terminalAdapter?.reasonCode() ?? "terminal-session-adapter-unavailable"}).`, "error"); }
       catch { /* optional UI */ }
       return { action: "handled" } as const;
@@ -444,8 +444,11 @@ export default function piagentWebUiExtension(pi: ExtensionAPI): void {
   pi.on("session_before_fork", () => { lifecycle.replacementPending(); bridgeSoft(() => bridge.replacementPending()); });
   pi.on("session_start", async (_event, ctx) => {
     currentContext = ctx; stream.reset(); queue.reset(); sessionOptions.reset(); attachments?.reset();
-    try { terminalAdapter?.bind(ctx); }
-    catch (error) { try { ctx.ui.notify(error instanceof Error ? error.message : "terminal-session-lease-unavailable", "error"); } catch { /* optional UI */ } }
+    if (!isGatewayRuntimeContext(ctx)) {
+      try { terminalAdapter ??= new TerminalSessionAdapter(runtimeInstanceId); } catch { terminalAdapter = null; }
+      try { terminalAdapter?.bind(ctx); }
+      catch (error) { try { ctx.ui.notify(error instanceof Error ? error.message : "terminal-session-lease-unavailable", "error"); } catch { /* optional UI */ } }
+    }
     bridgeSoft(() => bridge.bind(ctx));
     bridgeSoft(() => lifecycle.bind(ctx));
     bridgeSoft(() => bindApproval(ctx));

@@ -11,19 +11,37 @@ import { projectRefForCwd, sessionRefForPath } from "./session-catalog.ts";
 import { SessionLeaseStore, type SessionLeaseSnapshot } from "./session-lease-store.ts";
 import { GatewayEventStore } from "./gateway-events.ts";
 import { GatewaySessionStream } from "./gateway-session-stream.ts";
+import { GATEWAY_RUNTIME_UI_MARKER } from "../ownership/gateway-runtime-context.ts";
 
 const MAX_WARM_RUNTIMES = 10;
 
 type RuntimeHandle = { dispose(): Promise<void>; session?: any };
 type RuntimeFactory = (info: PiSessionInfo, runtimeInstanceRef: string, sessionManager?: any) => Promise<RuntimeHandle>;
 type ActiveRuntime = { runtime: RuntimeHandle; lease: SessionLeaseSnapshot; info: PiSessionInfo; operationRef: string | null;
-  unsubscribe: (() => void) | null; completion: Promise<void> | null; approvalWaiting: boolean;
+  unsubscribe: (() => void) | null; completion: Promise<void> | null; settling: boolean; approvalWaiting: boolean;
   unbindApproval: (() => void) | null; unsubscribeApproval: (() => void) | null };
 type Projection = { sessionRevision: string; liveState: "offline" | "idle" | "running" | "paused" | "waiting-approval" | "uncertain" };
 
 function rpcUiContext(): object {
+  const plain = (text: unknown): string => String(text ?? "");
+  const theme = Object.freeze({
+    fg: (_color: unknown, text: unknown) => plain(text),
+    bg: (_color: unknown, text: unknown) => plain(text),
+    bold: plain,
+    italic: plain,
+    underline: plain,
+    inverse: plain,
+    strikethrough: plain,
+    getFgAnsi: () => "",
+    getBgAnsi: () => "",
+    getColorMode: () => "truecolor",
+    getThinkingBorderColor: () => plain,
+    getBashModeBorderColor: () => plain
+  });
   return new Proxy({}, {
     get(_target, property) {
+      if (property === GATEWAY_RUNTIME_UI_MARKER) return true;
+      if (property === "theme") return theme;
       if (property === "confirm") return () => new Promise<boolean>(() => undefined);
       if (property === "select" || property === "input") return async () => undefined;
       return () => undefined;
@@ -179,7 +197,7 @@ export class SessionRuntimeSupervisor {
         throw new Error("session-owner-continuity-lost");
       }
       const active: ActiveRuntime = { runtime, lease: current, info, operationRef: null, unsubscribe: null, completion: null,
-        approvalWaiting: false, unbindApproval: null, unsubscribeApproval: null };
+        settling: false, approvalWaiting: false, unbindApproval: null, unsubscribeApproval: null };
       this.#active.set(sessionRef, active);
       this.#bindApproval(sessionRef, active);
       return current;
@@ -198,6 +216,8 @@ export class SessionRuntimeSupervisor {
       throw new Error(current.state === "recovery-required" ? "session-recovery-required" : "session-owner-conflict");
     }
     if (active.operationRef) throw new Error("session-runtime-busy");
+    if (active.settling && active.completion) await active.completion;
+    if (active.operationRef || active.settling) throw new Error("session-runtime-busy");
     this.#active.delete(sessionRef);
     active.unsubscribeApproval?.(); active.unbindApproval?.();
     try { await active.runtime.dispose(); }
@@ -257,7 +277,7 @@ export class SessionRuntimeSupervisor {
       if (payload.delivery === "follow-up") { await session.followUp(payload.message); return { resultCode: "queued", operationRef: active.operationRef }; }
       await session.steer(payload.message); return { resultCode: "steered", operationRef: active.operationRef };
     }
-    if (payload.expectedOperationRef !== null || active.operationRef || !session.isIdle) throw new Error("session-operation-conflict");
+    if (payload.expectedOperationRef !== null || active.operationRef || active.settling || !session.isIdle) throw new Error("session-operation-conflict");
     const operationRef = `operation_${randomBytes(24).toString("base64url")}`;
     const stream = new GatewaySessionStream({ sessionRef, operationRef, events: this.#events });
     active.operationRef = operationRef;
@@ -441,7 +461,7 @@ export class SessionRuntimeSupervisor {
   async #finishOperation(sessionRef: string, operationRef: string, stream: GatewaySessionStream): Promise<void> {
     const active = this.#active.get(sessionRef);
     if (!active || active.operationRef !== operationRef) return;
-    active.unsubscribe?.(); active.unsubscribe = null; active.operationRef = null; active.completion = null;
+    active.unsubscribe?.(); active.unsubscribe = null; active.operationRef = null; active.settling = true;
     try {
       const projection = await this.#readProjection?.(sessionRef);
       if (!projection) return;
@@ -449,6 +469,9 @@ export class SessionRuntimeSupervisor {
       this.#events.publish("runtime.changed", { sessionRef, sessionRevision: projection.sessionRevision,
         liveState: projection.liveState, operationRef: null, reasonCode: null });
     } catch { /* Canonical refresh failure cannot be replaced by an invented revision. */ }
+    finally {
+      if (this.#active.get(sessionRef) === active) { active.settling = false; active.completion = null; }
+    }
   }
 
   async close(): Promise<void> {

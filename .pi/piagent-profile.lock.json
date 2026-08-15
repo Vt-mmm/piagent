@@ -115,7 +115,7 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:5e4a5f9d8ee49b5b2fcf844efaf3e6a764115a63579bc3cd6655d635ed45f7a2",
+    "packageDigest": "sha256:ca39ea1b467e9cd79d5a80141684e8197133b23f6a40030b60eb2a6864278130",
     "packageSource": "../",
     "packageVersion": "1.4.0",
     "runtimeFiles": [
@@ -935,8 +935,8 @@
         "path": "packages/piagent-core/runtime/recovery/semantic-repair-runtime.ts"
       },
       {
-        "byteSize": 14895,
-        "digest": "sha256:76d406d624f919241b70861bf6e5eb2ec2b8fc6f78d06173561b86cb068406d9",
+        "byteSize": 14931,
+        "digest": "sha256:5d05cb823697fa5350cbb4129a2e60984661eba98726a0cda81cb92095eef7a7",
         "path": "packages/piagent-core/runtime/registration/activity-inspector-command.ts"
       },
       {
@@ -1180,8 +1180,8 @@
         "path": "packages/piagent-webui/extension/lifecycle-event-adapter.ts"
       },
       {
-        "byteSize": 34079,
-        "digest": "sha256:32ee2447273889db3ea5cb93711c7510a74377077bd7777c687b1586c587dc40",
+        "byteSize": 34285,
+        "digest": "sha256:2fe1ad0532dcaa7194ee1e78ce2c1067861f3c8d5ae47e51ed0a96d09df8428b",
         "path": "packages/piagent-webui/extension/piagent-webui.ts"
       },
       {
@@ -1315,9 +1315,14 @@
         "path": "packages/piagent-webui/gateway/session-metadata-store.ts"
       },
       {
-        "byteSize": 26706,
-        "digest": "sha256:44f6ef724e6775dd5f96f71e1ef03eef2d486d58cf7a062918c6f231c898ba90",
+        "byteSize": 27726,
+        "digest": "sha256:da886bdb57bbe64ca721586d487bd00efb219b578c8cfc113888c99cc84ef388",
         "path": "packages/piagent-webui/gateway/session-runtime-supervisor.ts"
+      },
+      {
+        "byteSize": 365,
+        "digest": "sha256:8129048548a6ab8cd62f8a921ae4e1183d45f5d474daf8107e703e930f6ece7e",
+        "path": "packages/piagent-webui/ownership/gateway-runtime-context.ts"
       },
       {
         "byteSize": 5577,
@@ -1375,8 +1380,8 @@
         "path": "packages/piagent-webui/server/read-only-router.ts"
       },
       {
-        "byteSize": 3228,
-        "digest": "sha256:86539c027048345f484503574c74c85bc8968f76f6be69b8288692bae1c51dd5",
+        "byteSize": 3742,
+        "digest": "sha256:fab03022f2d912e4f7deb64f8f73b33e171b994858058192cc95b3b9df478def",
         "path": "packages/piagent-webui/server/session-auth.ts"
       },
       {

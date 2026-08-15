@@ -106,8 +106,11 @@ test("runtime replacement cancels pending approval and rejects the old token", a
 
 test("runtime expiry defaults to deny and never issues a permit", async () => {
   const current = setup();
-  const guard = await current.broker.request({ cwd: "/repo", rawSessionId: "raw-session", toolCallId: "tool.expiry", action: externalAction,
-    expectedTask: { taskId: identity.taskId, taskRunId: identity.taskRunId }, terminalConfirm: () => current.terminal.promise, ttlMs: 5_000 });
+  let deadline;
+  const keepAlive = new Promise((_, reject) => { deadline = setTimeout(() => reject(new Error("approval-expiry-timeout")), 7_000); });
+  const guard = await Promise.race([current.broker.request({ cwd: "/repo", rawSessionId: "raw-session", toolCallId: "tool.expiry", action: externalAction,
+    expectedTask: { taskId: identity.taskId, taskRunId: identity.taskRunId }, terminalConfirm: () => current.terminal.promise, ttlMs: 5_000 }), keepAlive]);
+  clearTimeout(deadline);
   assert.equal(guard.allowed, false); assert.equal(guard.receipt.state, "expired"); assert.equal(guard.receipt.permit.status, "expired");
   assert.equal(guard.receipt.winnerSurface, "runtime-expiry");
 });
