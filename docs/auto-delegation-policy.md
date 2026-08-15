@@ -1,4 +1,5 @@
 # Solo-first orchestration policy
+<!-- language: vi; english-index: docs-site/content/en/workflows.html -->
 
 Mục tiêu: user không phải nhớ `/run`, `/parallel`, `/chain` cho workflow hằng ngày, nhưng platform cũng không tự biến mọi task thành swarm tốn token. Khi anh gõ `/workflow task`, `/workflow be-to-fe`, `/workflow platform-improve`, `/workflow plan`, hoặc `/workflow review`, parent agent đọc `piagent_orchestration_policy`, giữ mặc định **solo-first**, rồi chỉ dùng subagents nếu việc đó giúp giảm nhiễu context, tăng tốc read-heavy work, hoặc tăng chất lượng review. Alias cũ như `/task` vẫn giữ cùng policy.
 

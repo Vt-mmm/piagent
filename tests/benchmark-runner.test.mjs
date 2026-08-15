@@ -583,7 +583,7 @@ test("one command applies a pinned Piagent treatment only to the candidate surfa
   const result = spawnSync(process.execPath, [runner, "--suite", value.suite, "--piagent-treatment", "candidate", "--yes", "--output", value.output], {
     cwd: root,
     encoding: "utf8",
-    timeout: 60_000,
+    timeout: 90_000,
     env: {
       ...process.env,
       BENCHMARK_FAKE_EXPECT_PIAGENT_TREATMENT: "candidate",

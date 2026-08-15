@@ -1,4 +1,5 @@
 # Publish cho team dùng
+<!-- language: vi; english-index: docs-site/content/en/team.html -->
 
 ## Mục tiêu
 

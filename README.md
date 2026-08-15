@@ -248,8 +248,8 @@ Handled by Pi's native UI: `/model` or `Ctrl+L` to pick, `Ctrl+P` to cycle the s
 | Preset | Includes |
 |---|---|
 | `core` | Context7, Chrome DevTools, GitHub |
-| `popular` | core + Playwright + Figma remote |
-| `all` | popular + Figma desktop/local |
+| `popular` | core + Playwright + Figma desktop/local |
+| `all` | popular + Figma remote (requires an approved Figma MCP client) |
 
 Seeding writes server definitions; it does not start or authenticate anything. Servers connect lazily, so each one needs its own prerequisite before its first call: Chrome DevTools needs a local Chrome, and GitHub needs Docker running plus `GITHUB_PERSONAL_ACCESS_TOKEN` exported. `piagent-mcp --list` prints what each server requires. Project-scope `.mcp.json` files ship empty on purpose — the shared baseline is the global config, not the project one.
 
@@ -343,7 +343,7 @@ This repository intentionally excludes:
 
 ## Maturity
 
-The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.3.1` or a reviewed commit.
+The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.4.0` or a reviewed commit.
 
 Ready for:
 

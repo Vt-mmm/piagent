@@ -1,4 +1,5 @@
 # Model selector and scope
+<!-- language: vi; english-index: docs-site/content/en/quickstart.html -->
 
 Pi Agent Platform không khóa vào một provider. Hai họ model dưới đây đều là first-class option: **model OpenAI Codex** (provider id `openai-codex`) và **model Claude của Anthropic** (provider id `anthropic`).
 

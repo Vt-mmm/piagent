@@ -1,14 +1,18 @@
+import { createHash } from "node:crypto";
+
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 import type { TaskContract } from "../../extensions/guard-types.ts";
 import {
   buildActivityInspector,
   formatActivityInspector,
-  inspectWorkingTreeFiles,
   type ActivityInspectorEvent,
   type CurrentActivity
 } from "../product/activity-inspector.ts";
 import { formatActivityFooter, formatActivityPanel } from "../product/activity-inspector-footer.ts";
+import { adaptActivityTelemetryEvent, runtimeStartedEventDraft } from "../inspection/activity-event-adapter.ts";
+import { RuntimeEventStore, type RuntimeEventRevision } from "../inspection/runtime-event-store.ts";
+import { WEBUI_RUNTIME_INSTANCE_REF, webUiProjectRef, webUiSessionRef } from "../inspection/webui-snapshot.ts";
 import { prefixCompletions, registerRuntimeCommand } from "./extension-registration.ts";
 
 const INSPECTOR_ACTIONS = ["summary", "files", "commands", "security", "context", "toggle", "help"] as const;
@@ -25,10 +29,28 @@ type InspectorDependencies = {
     defaultValue?: string
   ) => Promise<string | undefined>;
   emit: (ctx: ExtensionContext, customType: string, content: string, details?: Record<string, unknown>) => void;
+  protectedPaths?: (ctx: ExtensionContext) => string[];
 };
 
 function sessionKey(ctx: ExtensionContext): string {
   return `${ctx.cwd}\u0000${ctx.sessionManager.getSessionId()}`;
+}
+
+function revisionToken(prefix: string, value: unknown): string {
+  return `${prefix}.${createHash("sha256").update(JSON.stringify(value)).digest("hex")}`;
+}
+
+function eventRevision(ctx: ExtensionContext, task?: TaskContract): RuntimeEventRevision {
+  return {
+    runtimeRevision: revisionToken("runtime-rev", [WEBUI_RUNTIME_INSTANCE_REF, ctx.sessionManager.getSessionId()]),
+    taskRevision: task ? revisionToken("task-rev", [task.taskRunId, task.updatedAt, task.trace.outcome]) : null,
+    controlRevision: task ? revisionToken("control-rev", [task.taskRunId, task.trace.outcome]) : null,
+    workspaceRevision: null,
+    indexRevision: null,
+    approvalRevision: null,
+    sessionOptionRevision: null,
+    queueRevision: null
+  };
 }
 
 function clipped(value: unknown, maximum = 96): string | undefined {
@@ -67,7 +89,23 @@ export function registerActivityInspector(pi: ExtensionAPI, dependencies: Inspec
   const running = new Map<string, Map<string, CurrentActivity>>();
   const lastActivity = new Map<string, CurrentActivity>();
   const enabled = new Map<string, boolean>();
-  const cached = new Map<string, { at: number; view: ReturnType<typeof buildActivityInspector> }>();
+  const cached = new Map<string, { at: number; view: Awaited<ReturnType<typeof buildActivityInspector>> }>();
+  const eventStores = new Map<string, RuntimeEventStore>();
+
+  function eventStore(ctx: ExtensionContext): RuntimeEventStore {
+    const key = sessionKey(ctx);
+    const existing = eventStores.get(key);
+    if (existing) return existing;
+    const projectRef = webUiProjectRef(ctx.cwd), sessionRef = webUiSessionRef(ctx.sessionManager.getSessionId());
+    const created = new RuntimeEventStore({ projectRoot: ctx.cwd, projectRef, runtimeInstanceId: WEBUI_RUNTIME_INSTANCE_REF, sessionRef });
+    eventStores.set(key, created);
+    if (!created.resyncRequired() && created.replay(null, 1).lastAvailableSequence === null) {
+      const now = new Date().toISOString();
+      created.append(runtimeStartedEventDraft({ identity: { projectRef, runtimeInstanceId: WEBUI_RUNTIME_INSTANCE_REF, sessionRef },
+        revision: eventRevision(ctx), sourceObservedAt: now, buildRef: "runtime-build.unavailable", capabilitySnapshotRef: "capabilities.inspect-only" }), now);
+    }
+    return created;
+  }
 
   function sessionEvents(ctx: ExtensionContext): ActivityInspectorEvent[] {
     let persisted: ActivityInspectorEvent[] = [];
@@ -85,14 +123,15 @@ export function registerActivityInspector(pi: ExtensionAPI, dependencies: Inspec
     return active.length > 0 ? active : lastActivity.has(key) ? [lastActivity.get(key) as CurrentActivity] : [];
   }
 
-  function project(ctx: ExtensionContext, force = false, exactFiles = false) {
+  async function project(ctx: ExtensionContext, force = false) {
     const key = sessionKey(ctx);
     const previous = cached.get(key);
     const current = currentFor(ctx);
-    if (!exactFiles && !force && previous && Date.now() - previous.at < 400) {
+    if (!force && previous && Date.now() - previous.at < 400) {
       return { ...previous.view, state: { ...previous.view.state, running: current.filter((activity) => activity.status === "running").length, current } };
     }
-    const view = buildActivityInspector({
+    const events = eventStore(ctx);
+    const view = await buildActivityInspector({
       cwd: ctx.cwd,
       sessionId: ctx.sessionManager.getSessionId(),
       task: dependencies.activeTask(ctx),
@@ -100,8 +139,11 @@ export function registerActivityInspector(pi: ExtensionAPI, dependencies: Inspec
       sessionEntries: ctx.sessionManager.getBranch(),
       contextUsage: ctx.getContextUsage(),
       current,
-      fileEvidenceMode: exactFiles ? "exact" : "observed",
-      workingTreeFiles: exactFiles ? undefined : inspectWorkingTreeFiles(ctx.cwd)
+      protectedPaths: dependencies.protectedPaths?.(ctx),
+      runtimeInstanceId: WEBUI_RUNTIME_INSTANCE_REF,
+      eventCursor: events.currentCursor(),
+      resyncRequired: events.resyncRequired(),
+      eventReplay: events.retention()
     });
     cached.set(key, { at: Date.now(), view });
     return view;
@@ -112,7 +154,7 @@ export function registerActivityInspector(pi: ExtensionAPI, dependencies: Inspec
     if (typeof ctx.ui?.setWidget === "function") ctx.ui.setWidget("piagent-inspector", undefined);
   }
 
-  function renderSurface(ctx: ExtensionContext, force = false): void {
+  async function renderSurface(ctx: ExtensionContext, force = false): Promise<void> {
     const canUseStatus = typeof ctx.ui?.setStatus === "function";
     const canUseWidget = typeof ctx.ui?.setWidget === "function";
     if (ctx.hasUI === false || (!canUseStatus && !canUseWidget)) return;
@@ -122,7 +164,7 @@ export function registerActivityInspector(pi: ExtensionAPI, dependencies: Inspec
       return;
     }
     try {
-      const view = project(ctx, force);
+      const view = await project(ctx, force);
       const color = process.env.NO_COLOR === undefined && process.env.TERM !== "dumb";
       if (canUseWidget) {
         ctx.ui.setWidget("piagent-inspector", formatActivityPanel(view, { color }), { placement: "belowEditor" });
@@ -148,6 +190,15 @@ export function registerActivityInspector(pi: ExtensionAPI, dependencies: Inspec
     };
     const stored = [...(memoryEvents.get(key) ?? []), event].slice(-1_000);
     memoryEvents.set(key, stored);
+    try {
+      const store = eventStore(ctx);
+      const draft = adaptActivityTelemetryEvent({ event, identity: { projectRef: webUiProjectRef(ctx.cwd), runtimeInstanceId: WEBUI_RUNTIME_INSTANCE_REF,
+        sessionRef: webUiSessionRef(ctx.sessionManager.getSessionId()), taskId: task?.taskId ?? null, taskRunId: task?.taskRunId ?? null },
+      revision: eventRevision(ctx, task) });
+      if (draft) store.append(draft);
+    } catch {
+      // Event replay is an optional projection. Terminal execution remains authoritative.
+    }
     let active = running.get(key);
     if (!active) {
       active = new Map();
@@ -182,7 +233,7 @@ export function registerActivityInspector(pi: ExtensionAPI, dependencies: Inspec
       }
     }
     cached.delete(key);
-    renderSurface(ctx, event.event === "tool_result" || event.event === "tool_decision");
+    void renderSurface(ctx, event.event === "tool_result" || event.event === "tool_decision");
   }
 
   function emitHelp(ctx: ExtensionContext): void {
@@ -235,14 +286,14 @@ export function registerActivityInspector(pi: ExtensionAPI, dependencies: Inspec
         const key = sessionKey(ctx);
         const next = enabled.get(key) === false;
         enabled.set(key, next);
-        renderSurface(ctx, true);
+        await renderSurface(ctx, true);
         ctx.ui.notify(`Piagent Inspector footer panel: ${next ? "on" : "off"}`, "info");
         return;
       }
-      const view = project(ctx, true, action === "files" || action === "security");
+      const view = await project(ctx, true);
       const content = json ? JSON.stringify({ action, inspector: view }) : formatActivityInspector(view, action);
       dependencies.emit(ctx, `piagent-inspector-${action}`, content, { action, inspector: view });
-      renderSurface(ctx);
+      void renderSurface(ctx);
     }
   });
 
@@ -254,12 +305,14 @@ export function registerActivityInspector(pi: ExtensionAPI, dependencies: Inspec
     lastActivity.delete(key);
     enabled.delete(key);
     cached.delete(key);
+    eventStores.delete(key);
   }
 
   return {
     observe,
     refresh: (ctx: ExtensionContext) => renderSurface(ctx, true),
-    project: (ctx: ExtensionContext) => project(ctx, true, true),
+    project: (ctx: ExtensionContext) => project(ctx, true),
+    replay: (ctx: ExtensionContext, afterCursor: string | null, limit?: number) => eventStore(ctx).replay(afterCursor, limit),
     dispose
   };
 }

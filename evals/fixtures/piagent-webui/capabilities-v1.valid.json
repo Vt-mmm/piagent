@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-capabilities-v1",
+  "generatedAt": "2026-08-13T09:00:00.000Z",
+  "protocolMin": 1,
+  "protocolMax": 1,
+  "supportedSnapshotVersions": [1],
+  "supportedEventVersions": [2],
+  "mode": "inspect-only",
+  "compatibility": {
+    "state": "compatible",
+    "reason": null
+  },
+  "identity": {
+    "projectRef": "project_01",
+    "runtimeInstanceId": "runtime_01",
+    "sessionRef": "session_01",
+    "taskId": null,
+    "taskRunId": null,
+    "agentOperationId": null,
+    "toolCallId": null
+  },
+  "runtimeBuild": {
+    "state": "available",
+    "buildId": "runtime_build_01",
+    "version": "0.84.1",
+    "reason": null
+  },
+  "serverBuild": {
+    "state": "available",
+    "buildId": "server_build_01",
+    "version": "1.0.0",
+    "reason": null
+  },
+  "capabilities": {
+    "inspect": {
+      "status": "available",
+      "version": 1,
+      "reason": null,
+      "sourceViews": ["task", "working-tree", "staged"]
+    },
+    "control.chat": {
+      "status": "unavailable",
+      "version": null,
+      "reason": {
+        "code": "bridge-not-proven",
+        "message": "Same-session dispatch acknowledgement is not available."
+      }
+    },
+    "control.lifecycle": {
+      "status": "unavailable",
+      "version": null,
+      "reason": {
+        "code": "bridge-not-proven",
+        "message": "Awaited lifecycle settlement is not available."
+      }
+    },
+    "control.resumeAndContinue": {
+      "status": "unavailable",
+      "version": null,
+      "reason": {
+        "code": "compound-control-not-proven",
+        "message": "Atomic resume and same-session dispatch are not available."
+      }
+    },
+    "control.sessionOptions": {
+      "status": "unavailable",
+      "version": null,
+      "reason": {
+        "code": "effect-scope-unproven",
+        "message": "The model setting effect scope has not been proved."
+      }
+    },
+    "attachments": {
+      "status": "unavailable",
+      "version": null,
+      "reason": {
+        "code": "attachments-not-implemented",
+        "message": "Attachment staging is not implemented."
+      }
+    },
+    "approve": {
+      "status": "unavailable",
+      "version": null,
+      "reason": {
+        "code": "approval-broker-not-implemented",
+        "message": "The runtime approval broker is not implemented."
+      }
+    },
+    "reviewActions": {
+      "status": "unavailable",
+      "version": null,
+      "reason": {
+        "code": "review-actions-not-implemented",
+        "message": "Review mutations are not implemented."
+      }
+    }
+  },
+  "replay": {
+    "eventRetentionCount": 10000,
+    "eventRetentionSeconds": 3600,
+    "resyncSupported": true
+  },
+  "limits": {
+    "maxRequestBodyBytes": 1048576,
+    "maxEventPayloadBytes": 65536,
+    "maxReplayEvents": 10000,
+    "maxDiffBytes": 4194304,
+    "maxDiffLines": 5000,
+    "maxDiffHunks": 256,
+    "maxLogPreviewBytes": 65536,
+    "maxLogPreviewLines": 500,
+    "maxAttachmentCount": 16,
+    "maxAttachmentFileBytes": 10485760,
+    "maxAttachmentTotalBytes": 33554432,
+    "maxQueueItems": 100,
+    "maxMessageBytes": 65536,
+    "maxSseClients": 8,
+    "maxGitProcesses": 4,
+    "requestTimeoutMs": 30000
+  }
+}

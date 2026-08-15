@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/source-mutation-v1.schema.json",
+  "title": "Piagent WebUI guarded selected-file source mutation preview v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "version", "generatedAt", "identity", "action", "state", "target", "reasonCode", "health"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "version": { "const": "piagent-webui-source-mutation-v1" },
+    "generatedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+    "identity": { "$ref": "common-v1.schema.json#/$defs/identity" },
+    "action": { "enum": ["source.stage", "source.unstage"] },
+    "state": { "enum": ["ready", "unavailable"] },
+    "target": {
+      "anyOf": [
+        { "$ref": "#/$defs/mutationTarget" },
+        { "type": "null" }
+      ]
+    },
+    "reasonCode": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" },
+    "health": { "$ref": "common-v1.schema.json#/$defs/health" }
+  },
+  "allOf": [
+    {
+      "properties": {
+        "identity": {
+          "type": "object",
+          "properties": {
+            "taskId": { "$ref": "common-v1.schema.json#/$defs/publicId" },
+            "taskRunId": { "$ref": "common-v1.schema.json#/$defs/publicId" },
+            "agentOperationId": { "type": "null" },
+            "toolCallId": { "type": "null" }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "state": { "const": "ready" } }, "required": ["state"] },
+      "then": {
+        "properties": {
+          "target": { "$ref": "#/$defs/mutationTarget" },
+          "reasonCode": { "type": "null" },
+          "health": { "type": "object", "properties": { "state": { "const": "ok" } } }
+        }
+      },
+      "else": {
+        "properties": {
+          "target": { "type": "null" },
+          "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" },
+          "health": { "type": "object", "properties": { "state": { "enum": ["unavailable", "error"] } } }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "action": { "const": "source.stage" } }, "required": ["action"] },
+      "then": { "properties": { "target": { "type": "object", "properties": { "view": { "const": "working-tree" }, "effect": { "const": "copy-worktree-to-index" } } } } }
+    },
+    {
+      "if": { "properties": { "action": { "const": "source.unstage" } }, "required": ["action"] },
+      "then": { "properties": { "target": { "type": "object", "properties": { "view": { "const": "staged" }, "effect": { "const": "restore-index-from-head" } } } } }
+    }
+  ],
+  "$defs": {
+    "mutationTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["view", "repoRef", "fileRef", "diffRef", "status", "path", "oldPath", "effect", "taskRevision", "workspaceRevision", "indexRevision", "viewRevision", "fileRevision", "workspacePreimage", "indexPreimage", "patchPreimage", "contentDigest", "hunkRefs"],
+      "properties": {
+        "view": { "enum": ["working-tree", "staged"] },
+        "repoRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "fileRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "diffRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "status": { "enum": ["A", "M", "D", "R", "U"] },
+        "path": { "$ref": "common-v1.schema.json#/$defs/safeDisplayPath" },
+        "oldPath": { "$ref": "common-v1.schema.json#/$defs/nullableSafeDisplayPath" },
+        "effect": { "enum": ["copy-worktree-to-index", "restore-index-from-head"] },
+        "taskRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "workspaceRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "indexRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "viewRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "fileRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "workspacePreimage": { "$ref": "common-v1.schema.json#/$defs/workingTreeDigest" },
+        "indexPreimage": { "$ref": "common-v1.schema.json#/$defs/digest" },
+        "patchPreimage": { "$ref": "common-v1.schema.json#/$defs/digest" },
+        "contentDigest": { "$ref": "common-v1.schema.json#/$defs/digest" },
+        "hunkRefs": {
+          "type": "array",
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" }
+        }
+      }
+    }
+  }
+}

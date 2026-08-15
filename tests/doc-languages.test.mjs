@@ -31,6 +31,9 @@ describe("documentation languages", () => {
     assert.deepEqual(result.errors, []);
     assert.equal(result.ok, true);
     assert.ok(result.pairs >= 4);
+    assert.ok(result.rootDocuments >= 30);
+    assert.ok(result.languages.en > 0);
+    assert.ok(result.languages.vi > 0);
     assert.ok(result.terms.includes("MCP"));
   });
 

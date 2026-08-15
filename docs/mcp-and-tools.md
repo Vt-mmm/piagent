@@ -1,4 +1,5 @@
 # MCP và tool policy
+<!-- language: vi; english-index: docs-site/content/en/mcp.html -->
 
 ## Kết luận hiện tại
 
@@ -85,11 +86,13 @@ Chặn theo hai lớp: tên field nghe như credential, và giá trị tự nó 
 
 ## Login vào account MCP
 
-Platform **không tự chạy OAuth và không giữ token**. `pi-mcp-adapter` đã sở hữu luồng đó — nó đăng ký `/mcp` và `/mcp-auth`, giữ callback server và OAuth provider — và dựng kho credential thứ ba cho credential của bên khác là lựa chọn tệ hơn. Việc của platform là phát hiện và chỉ đường:
+Platform **không tự giữ token**. WebUI chỉ điều phối luồng OAuth do `pi-mcp-adapter` sở hữu; adapter giữ callback server, OAuth provider và credential store. Remote server vẫn có thể giới hạn client nào được phép đăng ký.
 
 ```text
-/mcp-auth figma
+/mcp-auth <approved-remote-server>
 ```
+
+Figma Desktop không cần OAuth. Figma Remote chỉ dùng được sau khi Piagent có trong Figma MCP Catalog.
 
 `/piagent-mcp doctor` (hoặc `piagent-mcp doctor` ngoài terminal) phân loại từng server:
 
@@ -227,7 +230,7 @@ Trong Pi:
 /mcp setup
 /mcp tools
 /mcp reconnect
-/mcp-auth figma
+/mcp-auth <approved-remote-server>
 ```
 
 ## MCP config layers
@@ -257,12 +260,12 @@ Quy ước của platform:
 | `docs` | Context7 | docs mới của framework/library |
 | `browser` | Chrome DevTools, Playwright | inspect UI/runtime/browser automation |
 | `github` | GitHub MCP | issue/PR/repo/release workflow |
-| `design` | Figma remote | design-to-code qua Figma OAuth |
-| `design-local` | Figma desktop | Figma desktop Dev Mode MCP local |
+| `design` | Figma desktop | design-to-code qua Figma desktop Dev Mode MCP |
+| `design-local` | Figma desktop | alias tương thích cho preset local cũ |
 | `web` | Context7, Chrome DevTools, Playwright | FE/web workflow |
 | `core` | Context7, Chrome DevTools, GitHub | default team baseline |
-| `popular` | core + Playwright + Figma remote | baseline nhiều team dev dùng |
-| `all` | popular + Figma desktop | đầy đủ, dùng khi muốn sẵn cả local Figma |
+| `popular` | core + Playwright + Figma desktop | baseline nhiều team dev dùng |
+| `all` | popular + Figma remote | thêm cấu hình remote cho client đã được Figma duyệt |
 
 ## Server baseline
 
@@ -300,7 +303,7 @@ export CONTEXT7_API_KEY=ctx7sk_...
 
 ### Figma
 
-Remote MCP:
+Remote MCP (chỉ dùng được khi client đã được Figma duyệt trong MCP Catalog):
 
 ```json
 {
@@ -331,7 +334,9 @@ Local desktop MCP:
 
 Khuyến nghị thực tế:
 
-- dùng remote Figma MCP khi account/org hỗ trợ OAuth;
+- Piagent mặc định dùng desktop local vì Figma Remote hiện chỉ chấp nhận các client có trong Figma MCP Catalog;
+- lỗi `mcp-oauth-client-not-approved` nghĩa là Figma từ chối đăng ký client, không phải lỗi account hay token của người dùng;
+- dùng remote Figma MCP sau khi Piagent được Figma duyệt;
 - dùng desktop local khi cần selection-based Dev Mode trong app Figma;
 - nếu muốn Pi-native thay vì MCP, có thể cài `pi install npm:pi-mono-figma@0.2.2` sau khi hoàn tất security và license review.
 

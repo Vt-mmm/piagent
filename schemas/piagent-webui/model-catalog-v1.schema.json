@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/model-catalog-v1.schema.json",
+  "title": "Piagent WebUI authenticated model catalog v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "version", "generatedAt", "identity", "revision", "state", "catalogScope", "effectScope", "activeModelRef", "activeThinkingLevel", "models", "reasonCode"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "version": { "const": "piagent-webui-model-catalog-v1" },
+    "generatedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+    "identity": { "$ref": "common-v1.schema.json#/$defs/identity" },
+    "revision": { "$ref": "common-v1.schema.json#/$defs/domainRevision" },
+    "state": { "enum": ["ready", "unavailable"] },
+    "catalogScope": { "enum": ["authenticated-all", "session-scoped", "unavailable"] },
+    "effectScope": { "const": "session-and-user-default" },
+    "activeModelRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+    "activeThinkingLevel": { "$ref": "#/$defs/nullableThinkingLevel" },
+    "models": {
+      "type": "array",
+      "maxItems": 300,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/model" }
+    },
+    "reasonCode": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "state": { "const": "ready" } }, "required": ["state"] },
+      "then": {
+        "properties": {
+          "catalogScope": { "enum": ["authenticated-all", "session-scoped"] },
+          "activeModelRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+          "activeThinkingLevel": { "$ref": "#/$defs/thinkingLevel" },
+          "models": { "type": "array", "minItems": 1 },
+          "reasonCode": { "type": "null" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "state": { "const": "unavailable" } }, "required": ["state"] },
+      "then": {
+        "properties": {
+          "catalogScope": { "const": "unavailable" },
+          "activeModelRef": { "type": "null" },
+          "activeThinkingLevel": { "type": "null" },
+          "models": { "type": "array", "maxItems": 0 },
+          "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "thinkingLevel": { "enum": ["off", "minimal", "low", "medium", "high", "xhigh", "max"] },
+    "nullableThinkingLevel": {
+      "anyOf": [
+        { "$ref": "#/$defs/thinkingLevel" },
+        { "type": "null" }
+      ]
+    },
+    "safeName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160,
+      "pattern": "^[^\\u0000-\\u001F\\u007F]*$"
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["modelRef", "provider", "modelId", "displayName", "reasoning", "inputCapabilities", "supportedThinkingLevels", "contextWindow", "maxOutputTokens"],
+      "properties": {
+        "modelRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "provider": { "$ref": "common-v1.schema.json#/$defs/publicId" },
+        "modelId": { "$ref": "common-v1.schema.json#/$defs/publicId" },
+        "displayName": { "$ref": "#/$defs/safeName" },
+        "reasoning": { "type": "boolean" },
+        "inputCapabilities": {
+          "type": "array",
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": { "enum": ["text", "image"] }
+        },
+        "supportedThinkingLevels": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 7,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/thinkingLevel" }
+        },
+        "contextWindow": { "type": "integer", "minimum": 1, "maximum": 100000000 },
+        "maxOutputTokens": { "type": "integer", "minimum": 1, "maximum": 100000000 }
+      }
+    }
+  }
+}

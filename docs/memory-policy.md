@@ -1,4 +1,5 @@
 # Memory policy cho Pi Agent Platform
+<!-- language: vi; english-index: docs-site/content/en/runtime.html -->
 
 ## Tóm tắt quyết định
 

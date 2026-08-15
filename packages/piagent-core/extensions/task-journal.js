@@ -282,6 +282,23 @@ export function appendTaskJournalEventAtMost(cwd, event, options = {}) {
   }
 }
 
+export function transactTaskJournal(cwd, transaction) {
+  if (typeof transaction !== "function") throw new TypeError("Task journal transaction must be a function");
+  const safePaths = writableJournalPaths(cwd);
+  const release = acquireLock(safePaths);
+  try {
+    const journal = recoverIncompleteJournalTail(cwd, safePaths, readTaskJournal(cwd));
+    if (journal.corruptions.length > 0) throw new Error(`Task journal chain is corrupt: ${journal.corruptions[0]}`);
+    const decision = transaction({ events: [...journal.events], head: journal.head ? { ...journal.head } : undefined });
+    if (!decision || typeof decision !== "object" || Array.isArray(decision)) throw new Error("Task journal transaction returned an invalid decision");
+    if (!decision.event) return { appended: false, record: undefined, result: decision.result };
+    const record = appendJournalRecord(safePaths, journal, decision.event, decision.recordedAt);
+    return { appended: true, record, result: decision.result };
+  } finally {
+    release();
+  }
+}
+
 export function readTaskJournal(cwd, options = {}) {
   const paths = taskJournalPaths(cwd);
   let safePath;
@@ -290,7 +307,17 @@ export function readTaskJournal(cwd, options = {}) {
   } catch {
     return { events: [], corruptions: ["journal path is unsafe"], head: undefined };
   }
-  if (!fs.existsSync(safePath)) return { events: [], corruptions: [], head: undefined };
+  if (!fs.existsSync(safePath)) return { events: [], corruptions: [], head: undefined, inputTruncated: false, omittedEvents: 0 };
+  if (Number.isInteger(options.maximumBytes) && options.maximumBytes > 0) {
+    try {
+      const stat = fs.lstatSync(safePath);
+      if (!stat.isFile() || stat.isSymbolicLink() || stat.size > options.maximumBytes) {
+        return { events: [], corruptions: ["journal exceeds bounded inspection size"], head: undefined, inputTruncated: true, omittedEvents: 0 };
+      }
+    } catch {
+      return { events: [], corruptions: ["journal size could not be inspected"], head: undefined, inputTruncated: false, omittedEvents: 0 };
+    }
+  }
   const content = fs.readFileSync(safePath);
   const finalNewline = content.length === 0 || content.at(-1) === 0x0a;
   const lastNewline = finalNewline ? content.length - 1 : content.lastIndexOf(0x0a);
@@ -329,6 +356,8 @@ export function readTaskJournal(cwd, options = {}) {
   return {
     events: visibleEvents,
     corruptions,
+    inputTruncated: visibleEvents.length < events.length,
+    omittedEvents: Math.max(0, events.length - visibleEvents.length),
     recoverableTailBytes,
     validBytes,
     head: events.at(-1)

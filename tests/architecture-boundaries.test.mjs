@@ -26,6 +26,10 @@ describe("architecture boundaries", () => {
     assert.equal(layerFor("packages/piagent-core/extensions/piagent-guard.ts", config), "composition");
     assert.equal(layerFor("packages/piagent-core/extensions/policy-core.js", config), "core");
     assert.equal(layerFor("packages/piagent-core/runtime/session/usage.ts", config), "runtime");
+    assert.equal(layerFor("packages/piagent-webui/contracts/generated/snapshot-v1.ts", config), "webui-contracts");
+    assert.equal(layerFor("packages/piagent-webui/client/src/App.tsx", config), "webui-client");
+    assert.equal(layerFor("packages/piagent-webui/server/main.ts", config), "webui-server");
+    assert.equal(layerFor("packages/piagent-webui/vite.config.ts", config), "webui-build");
   });
 
   it("counts source lines without charging the final newline", () => {
@@ -67,5 +71,22 @@ describe("architecture boundaries", () => {
     assert.equal(result.ok, false);
     assert.ok(result.errors.some((error) => /runtime cannot import composition/.test(error)), result.errors.join("\n"));
     assert.ok(result.errors.some((error) => /exceeds the runtime budget of 500/.test(error)), result.errors.join("\n"));
+  });
+
+  it("rejects client-to-server and runtime-to-WebUI imports", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-webui-architecture-"));
+    temporaryRoots.add(root);
+    const client = path.join(root, "packages/piagent-webui/client/src/bad.ts");
+    const server = path.join(root, "packages/piagent-webui/server/main.ts");
+    const runtime = path.join(root, "packages/piagent-core/runtime/bad.ts");
+    fs.mkdirSync(path.dirname(client), { recursive: true }); fs.mkdirSync(path.dirname(server), { recursive: true });
+    fs.mkdirSync(path.dirname(runtime), { recursive: true });
+    fs.writeFileSync(client, `import "../../server/main.ts";\n`);
+    fs.writeFileSync(server, "export const server = true;\n");
+    fs.writeFileSync(runtime, `import "../../piagent-webui/contracts/generated/index.ts";\n`);
+    const result = inspectArchitecture({ root, config });
+    assert.equal(result.ok, false);
+    assert.ok(result.errors.some((error) => /webui-client cannot import webui-server/.test(error)), result.errors.join("\n"));
+    assert.ok(result.errors.some((error) => /runtime cannot import webui-contracts/.test(error)), result.errors.join("\n"));
   });
 });

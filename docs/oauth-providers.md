@@ -1,4 +1,5 @@
 # OAuth providers trong Pi
+<!-- language: vi; english-index: docs-site/content/en/mcp-auth.html -->
 
 ## Mục tiêu
 

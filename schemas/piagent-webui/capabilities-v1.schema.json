@@ -1,0 +1,729 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/capabilities-v1.schema.json",
+  "title": "Piagent WebUI capability handshake v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "version",
+    "generatedAt",
+    "protocolMin",
+    "protocolMax",
+    "supportedSnapshotVersions",
+    "supportedEventVersions",
+    "mode",
+    "compatibility",
+    "identity",
+    "runtimeBuild",
+    "serverBuild",
+    "capabilities",
+    "replay",
+    "limits"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "version": { "const": "piagent-webui-capabilities-v1" },
+    "generatedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+    "protocolMin": { "const": 1 },
+    "protocolMax": { "const": 1 },
+    "supportedSnapshotVersions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": { "type": "integer", "minimum": 1, "maximum": 65535 }
+    },
+    "supportedEventVersions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": { "type": "integer", "minimum": 1, "maximum": 65535 }
+    },
+    "mode": { "enum": ["unavailable", "inspect-only", "control-enabled"] },
+    "compatibility": { "$ref": "#/$defs/compatibility" },
+    "identity": { "$ref": "common-v1.schema.json#/$defs/identity" },
+    "runtimeBuild": { "$ref": "#/$defs/buildIdentity" },
+    "serverBuild": { "$ref": "#/$defs/buildIdentity" },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inspect",
+        "control.chat",
+        "control.lifecycle",
+        "control.resumeAndContinue",
+        "control.sessionOptions",
+        "attachments",
+        "approve",
+        "reviewActions"
+      ],
+      "properties": {
+        "inspect": { "$ref": "#/$defs/inspectCapability" },
+        "control.chat": { "$ref": "#/$defs/chatCapability" },
+        "control.lifecycle": { "$ref": "#/$defs/lifecycleCapability" },
+        "control.resumeAndContinue": { "$ref": "#/$defs/resumeAndContinueCapability" },
+        "control.sessionOptions": { "$ref": "#/$defs/sessionOptionsCapability" },
+        "attachments": { "$ref": "#/$defs/attachmentsCapability" },
+        "approve": { "$ref": "#/$defs/approveCapability" },
+        "reviewActions": { "$ref": "#/$defs/reviewActionsCapability" }
+      }
+    },
+    "replay": { "$ref": "#/$defs/replay" },
+    "limits": { "$ref": "#/$defs/resourceLimits" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "mode": { "const": "unavailable" } } },
+      "then": {
+        "properties": {
+          "capabilities": {
+            "type": "object",
+            "properties": {
+              "inspect": { "$ref": "#/$defs/unavailableCapability" },
+              "control.chat": { "$ref": "#/$defs/unavailableCapability" },
+              "control.lifecycle": { "$ref": "#/$defs/unavailableCapability" },
+              "control.resumeAndContinue": { "$ref": "#/$defs/unavailableCapability" },
+              "control.sessionOptions": { "$ref": "#/$defs/unavailableCapability" },
+              "attachments": { "$ref": "#/$defs/unavailableCapability" },
+              "approve": { "$ref": "#/$defs/unavailableCapability" },
+              "reviewActions": { "$ref": "#/$defs/unavailableCapability" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "mode": { "const": "inspect-only" } } },
+      "then": {
+        "properties": {
+          "capabilities": {
+            "type": "object",
+            "properties": {
+              "inspect": { "$ref": "#/$defs/availableInspectCapability" },
+              "control.chat": { "$ref": "#/$defs/unavailableCapability" },
+              "control.lifecycle": { "$ref": "#/$defs/unavailableCapability" },
+              "control.resumeAndContinue": { "$ref": "#/$defs/unavailableCapability" },
+              "control.sessionOptions": { "$ref": "#/$defs/unavailableCapability" },
+              "attachments": { "$ref": "#/$defs/unavailableCapability" },
+              "approve": { "$ref": "#/$defs/unavailableCapability" },
+              "reviewActions": { "$ref": "#/$defs/unavailableCapability" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "mode": { "const": "control-enabled" } } },
+      "then": {
+        "properties": {
+          "capabilities": {
+            "type": "object",
+            "properties": {
+              "inspect": { "$ref": "#/$defs/availableInspectCapability" }
+            },
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "control.chat": {
+                    "type": "object",
+                    "properties": { "status": { "const": "available" } }
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "control.lifecycle": {
+                    "type": "object",
+                    "properties": { "status": { "const": "available" } }
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "control.resumeAndContinue": {
+                    "type": "object",
+                    "properties": { "status": { "const": "available" } }
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "control.sessionOptions": {
+                    "type": "object",
+                    "properties": { "status": { "const": "available" } }
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "attachments": {
+                    "type": "object",
+                    "properties": { "status": { "const": "available" } }
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "approve": {
+                    "type": "object",
+                    "properties": { "status": { "const": "available" } }
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "reviewActions": {
+                    "type": "object",
+                    "properties": { "status": { "const": "available" } }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "required": ["capabilities"],
+        "properties": {
+          "capabilities": {
+            "type": "object",
+            "required": ["control.resumeAndContinue"],
+            "properties": {
+              "control.resumeAndContinue": {
+                "type": "object",
+                "required": ["status"],
+                "properties": {
+                  "status": { "const": "available" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "capabilities": {
+            "type": "object",
+            "properties": {
+              "control.chat": {
+                "type": "object",
+                "properties": {
+                  "status": { "const": "available" }
+                }
+              },
+              "control.lifecycle": {
+                "type": "object",
+                "properties": {
+                  "status": { "const": "available" },
+                  "actions": {
+                    "type": "object",
+                    "properties": {
+                      "resume": {
+                        "type": "object",
+                        "properties": {
+                          "available": { "const": true }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "required": ["compatibility"],
+        "properties": {
+          "compatibility": {
+            "type": "object",
+            "required": ["state"],
+            "properties": {
+              "state": { "enum": ["incompatible", "resync-required"] }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "mode": { "enum": ["unavailable", "inspect-only"] },
+          "capabilities": {
+            "type": "object",
+            "properties": {
+              "control.chat": { "$ref": "#/$defs/unavailableCapability" },
+              "control.lifecycle": { "$ref": "#/$defs/unavailableCapability" },
+              "control.resumeAndContinue": { "$ref": "#/$defs/unavailableCapability" },
+              "control.sessionOptions": { "$ref": "#/$defs/unavailableCapability" },
+              "attachments": { "$ref": "#/$defs/unavailableCapability" },
+              "approve": { "$ref": "#/$defs/unavailableCapability" },
+              "reviewActions": { "$ref": "#/$defs/unavailableCapability" }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "unavailableCapability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "version", "reason"],
+      "properties": {
+        "status": { "const": "unavailable" },
+        "version": { "type": "null" },
+        "reason": { "$ref": "common-v1.schema.json#/$defs/stateReason" }
+      }
+    },
+    "availableCapabilityBase": {
+      "type": "object",
+      "required": ["status", "version", "reason"],
+      "properties": {
+        "status": { "const": "available" },
+        "version": { "const": 1 },
+        "reason": { "type": "null" }
+      }
+    },
+    "availableInspectCapability": {
+      "allOf": [
+        { "$ref": "#/$defs/availableCapabilityBase" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "version", "reason", "sourceViews"],
+          "properties": {
+            "status": { "const": "available" },
+            "version": { "const": 1 },
+            "reason": { "type": "null" },
+            "sourceViews": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 3,
+              "uniqueItems": true,
+              "items": { "enum": ["task", "working-tree", "staged"] }
+            }
+          }
+        }
+      ]
+    },
+    "inspectCapability": {
+      "oneOf": [
+        { "$ref": "#/$defs/availableInspectCapability" },
+        { "$ref": "#/$defs/unavailableCapability" }
+      ]
+    },
+    "actionAvailability": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["available", "reasonCode"],
+          "properties": {
+            "available": { "const": true },
+            "reasonCode": { "type": "null" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["available", "reasonCode"],
+          "properties": {
+            "available": { "const": false },
+            "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+          }
+        }
+      ]
+    },
+    "availableChatCapability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "version", "reason", "queuePersistence", "actions"],
+      "properties": {
+        "status": { "const": "available" },
+        "version": { "const": 1 },
+        "reason": { "type": "null" },
+        "queuePersistence": { "enum": ["runtime-lifetime", "runtime-restart-revalidation"] },
+        "actions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["send", "hold", "editHeld", "deleteHeld", "dispatchHeld", "interruptAndSend"],
+          "properties": {
+            "send": { "$ref": "#/$defs/actionAvailability" },
+            "hold": { "$ref": "#/$defs/actionAvailability" },
+            "editHeld": { "$ref": "#/$defs/actionAvailability" },
+            "deleteHeld": { "$ref": "#/$defs/actionAvailability" },
+            "dispatchHeld": { "$ref": "#/$defs/actionAvailability" },
+            "interruptAndSend": { "$ref": "#/$defs/actionAvailability" }
+          }
+        }
+      }
+    },
+    "chatCapability": {
+      "oneOf": [
+        { "$ref": "#/$defs/availableChatCapability" },
+        { "$ref": "#/$defs/unavailableCapability" }
+      ]
+    },
+    "operationPhase": {
+      "$ref": "common-v1.schema.json#/$defs/operationPhase"
+    },
+    "phaseStopSupport": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["stop", "reasonCode"],
+          "properties": {
+            "stop": { "const": "supported" },
+            "reasonCode": { "type": "null" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["stop", "reasonCode"],
+          "properties": {
+            "stop": { "enum": ["unsupported", "unknown"] },
+            "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+          }
+        }
+      ]
+    },
+    "availableLifecycleCapability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "version", "reason", "currentPhase", "actions", "stopPhaseSupport"],
+      "properties": {
+        "status": { "const": "available" },
+        "version": { "const": 1 },
+        "reason": { "type": "null" },
+        "currentPhase": { "$ref": "#/$defs/operationPhase" },
+        "actions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["pause", "resume"],
+          "properties": {
+            "pause": { "$ref": "#/$defs/actionAvailability" },
+            "resume": { "$ref": "#/$defs/actionAvailability" }
+          }
+        },
+        "stopPhaseSupport": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "idle",
+            "input-preflight",
+            "model",
+            "tool-preflight",
+            "waiting-approval",
+            "tool",
+            "retry",
+            "compaction",
+            "branch-summary",
+            "direct-bash",
+            "settling",
+            "other",
+            "unknown"
+          ],
+          "properties": {
+            "idle": { "$ref": "#/$defs/phaseStopSupport" },
+            "input-preflight": { "$ref": "#/$defs/phaseStopSupport" },
+            "model": { "$ref": "#/$defs/phaseStopSupport" },
+            "tool-preflight": { "$ref": "#/$defs/phaseStopSupport" },
+            "waiting-approval": { "$ref": "#/$defs/phaseStopSupport" },
+            "tool": { "$ref": "#/$defs/phaseStopSupport" },
+            "retry": { "$ref": "#/$defs/phaseStopSupport" },
+            "compaction": { "$ref": "#/$defs/phaseStopSupport" },
+            "branch-summary": { "$ref": "#/$defs/phaseStopSupport" },
+            "direct-bash": { "$ref": "#/$defs/phaseStopSupport" },
+            "settling": { "$ref": "#/$defs/phaseStopSupport" },
+            "other": { "$ref": "#/$defs/phaseStopSupport" },
+            "unknown": { "$ref": "#/$defs/phaseStopSupport" }
+          }
+        }
+      }
+    },
+    "lifecycleCapability": {
+      "oneOf": [
+        { "$ref": "#/$defs/availableLifecycleCapability" },
+        { "$ref": "#/$defs/unavailableCapability" }
+      ]
+    },
+    "availableResumeAndContinueCapability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "version", "reason", "delivery", "requires"],
+      "properties": {
+        "status": { "const": "available" },
+        "version": { "const": 1 },
+        "reason": { "type": "null" },
+        "delivery": { "const": "new-operation" },
+        "requires": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "prefixItems": [
+            { "const": "control.lifecycle" },
+            { "const": "control.chat" }
+          ],
+          "items": false
+        }
+      }
+    },
+    "resumeAndContinueCapability": {
+      "oneOf": [
+        { "$ref": "#/$defs/availableResumeAndContinueCapability" },
+        { "$ref": "#/$defs/unavailableCapability" }
+      ]
+    },
+    "availableSessionOptionsCapability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "version", "reason", "effectScope", "allowedLifecyclePoints", "actions"],
+      "properties": {
+        "status": { "const": "available" },
+        "version": { "const": 1 },
+        "reason": { "type": "null" },
+        "effectScope": { "enum": ["session", "session-and-user-default"] },
+        "allowedLifecyclePoints": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": { "enum": ["idle", "pre-fresh-task"] }
+        },
+        "actions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["setModel", "setThinking"],
+          "properties": {
+            "setModel": { "$ref": "#/$defs/actionAvailability" },
+            "setThinking": { "$ref": "#/$defs/actionAvailability" }
+          }
+        }
+      }
+    },
+    "sessionOptionsCapability": {
+      "oneOf": [
+        { "$ref": "#/$defs/availableSessionOptionsCapability" },
+        { "$ref": "#/$defs/unavailableCapability" }
+      ]
+    },
+    "availableAttachmentsCapability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "version", "reason", "kinds", "mimeTypes"],
+      "properties": {
+        "status": { "const": "available" },
+        "version": { "const": 1 },
+        "reason": { "type": "null" },
+        "kinds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": { "enum": ["file", "image"] }
+        },
+        "mimeTypes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 127,
+            "pattern": "^[a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+*-]+$"
+          }
+        }
+      }
+    },
+    "attachmentsCapability": {
+      "oneOf": [
+        { "$ref": "#/$defs/availableAttachmentsCapability" },
+        { "$ref": "#/$defs/unavailableCapability" }
+      ]
+    },
+    "availableApproveCapability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "version", "reason", "decisions", "arbitration"],
+      "properties": {
+        "status": { "const": "available" },
+        "version": { "const": 1 },
+        "reason": { "type": "null" },
+        "decisions": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": { "enum": ["allow", "deny"] }
+        },
+        "arbitration": { "const": "first-valid-cas" }
+      }
+    },
+    "approveCapability": {
+      "oneOf": [
+        { "$ref": "#/$defs/availableApproveCapability" },
+        { "$ref": "#/$defs/unavailableCapability" }
+      ]
+    },
+    "availableReviewActionsCapability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "version", "reason", "actions"],
+      "properties": {
+        "status": { "const": "available" },
+        "version": { "const": 1 },
+        "reason": { "type": "null" },
+        "actions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "reviewMark",
+            "stage",
+            "unstage",
+            "revert",
+            "openInVsCode",
+            "generateCommitSummaryDeterministic",
+            "generateCommitSummaryModel"
+          ],
+          "properties": {
+            "reviewMark": { "$ref": "#/$defs/actionAvailability" },
+            "stage": { "$ref": "#/$defs/actionAvailability" },
+            "unstage": { "$ref": "#/$defs/actionAvailability" },
+            "revert": { "$ref": "#/$defs/actionAvailability" },
+            "openInVsCode": { "$ref": "#/$defs/actionAvailability" },
+            "generateCommitSummaryDeterministic": { "$ref": "#/$defs/actionAvailability" },
+            "generateCommitSummaryModel": { "$ref": "#/$defs/actionAvailability" }
+          }
+        }
+      }
+    },
+    "reviewActionsCapability": {
+      "oneOf": [
+        { "$ref": "#/$defs/availableReviewActionsCapability" },
+        { "$ref": "#/$defs/unavailableCapability" }
+      ]
+    },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "reason"],
+      "properties": {
+        "state": { "enum": ["compatible", "degraded", "incompatible", "resync-required"] },
+        "reason": {
+          "anyOf": [
+            { "$ref": "common-v1.schema.json#/$defs/stateReason" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "const": "compatible" } } },
+          "then": { "properties": { "reason": { "type": "null" } } },
+          "else": { "properties": { "reason": { "$ref": "common-v1.schema.json#/$defs/stateReason" } } }
+        }
+      ]
+    },
+    "availableBuildIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "buildId", "version", "reason"],
+      "properties": {
+        "state": { "const": "available" },
+        "buildId": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._+~-]{0,159}$"
+        },
+        "reason": { "type": "null" }
+      }
+    },
+    "unavailableBuildIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "buildId", "version", "reason"],
+      "properties": {
+        "state": { "const": "unavailable" },
+        "buildId": { "type": "null" },
+        "version": { "type": "null" },
+        "reason": { "$ref": "common-v1.schema.json#/$defs/stateReason" }
+      }
+    },
+    "buildIdentity": {
+      "oneOf": [
+        { "$ref": "#/$defs/availableBuildIdentity" },
+        { "$ref": "#/$defs/unavailableBuildIdentity" }
+      ]
+    },
+    "replay": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventRetentionCount", "eventRetentionSeconds", "resyncSupported"],
+      "properties": {
+        "eventRetentionCount": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+        "eventRetentionSeconds": { "type": "integer", "minimum": 0, "maximum": 2592000 },
+        "resyncSupported": { "const": true }
+      }
+    },
+    "resourceLimits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maxRequestBodyBytes",
+        "maxEventPayloadBytes",
+        "maxReplayEvents",
+        "maxDiffBytes",
+        "maxDiffLines",
+        "maxDiffHunks",
+        "maxLogPreviewBytes",
+        "maxLogPreviewLines",
+        "maxAttachmentCount",
+        "maxAttachmentFileBytes",
+        "maxAttachmentTotalBytes",
+        "maxQueueItems",
+        "maxMessageBytes",
+        "maxSseClients",
+        "maxGitProcesses",
+        "requestTimeoutMs"
+      ],
+      "properties": {
+        "maxRequestBodyBytes": { "type": "integer", "minimum": 1024, "maximum": 104857600 },
+        "maxEventPayloadBytes": { "type": "integer", "minimum": 256, "maximum": 10485760 },
+        "maxReplayEvents": { "type": "integer", "minimum": 0, "maximum": 100000 },
+        "maxDiffBytes": { "type": "integer", "minimum": 1024, "maximum": 52428800 },
+        "maxDiffLines": { "type": "integer", "minimum": 1, "maximum": 200000 },
+        "maxDiffHunks": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "maxLogPreviewBytes": { "type": "integer", "minimum": 256, "maximum": 1048576 },
+        "maxLogPreviewLines": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "maxAttachmentCount": { "type": "integer", "minimum": 0, "maximum": 64 },
+        "maxAttachmentFileBytes": { "type": "integer", "minimum": 0, "maximum": 104857600 },
+        "maxAttachmentTotalBytes": { "type": "integer", "minimum": 0, "maximum": 536870912 },
+        "maxQueueItems": { "type": "integer", "minimum": 0, "maximum": 1000 },
+        "maxMessageBytes": { "type": "integer", "minimum": 1, "maximum": 1048576 },
+        "maxSseClients": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "maxGitProcesses": { "type": "integer", "minimum": 1, "maximum": 32 },
+        "requestTimeoutMs": { "type": "integer", "minimum": 100, "maximum": 300000 }
+      }
+    }
+  }
+}

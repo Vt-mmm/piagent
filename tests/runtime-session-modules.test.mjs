@@ -655,8 +655,9 @@ describe("runtime session modules", () => {
     const state = {
       taskIdentity: () => ({ taskId: task.taskId, taskRunId: task.taskRunId }),
       observedContext: () => [], consumeShellMutationSnapshot: () => preSnapshot,
-      completeAuthorizedModelMutation: (_identity, _call, _success, snapshot) => {
-        downstreamSnapshots.push(snapshot); return { changedPaths: [], recordedDigests: {} };
+      completeAuthorizedModelMutationEvidence: (_identity, _call, _success, snapshot) => {
+        downstreamSnapshots.push(snapshot); return { changedPaths: [], recordedDigests: {}, beforeSnapshot: null,
+          targetPaths: [], recordedContentDigests: {}, proofModes: {} };
       },
       invalidateSuccessfulModelMutationPaths() {},
       completePerformanceReviewTool: (_run, _call, result) => {

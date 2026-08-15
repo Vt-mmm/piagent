@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-diff-v1",
+  "generatedAt": "2026-08-13T09:08:00.000Z",
+  "identity": {
+    "projectRef": "project_01",
+    "runtimeInstanceId": "runtime_01",
+    "sessionRef": "session_01",
+    "taskId": null,
+    "taskRunId": null,
+    "agentOperationId": null,
+    "toolCallId": null
+  },
+  "view": "working-tree",
+  "basis": {
+    "basisRef": "basis_01",
+    "repoRef": "repo_01",
+    "view": "working-tree",
+    "state": "current",
+    "reasonCode": null,
+    "basisRevision": "basis_rev_01",
+    "headState": "head",
+    "headRef": "head_01",
+    "workspaceRevision": "workspace_rev_01",
+    "indexRevision": "index_rev_01"
+  },
+  "precondition": {
+    "expectedViewRevision": "workspace_rev_01",
+    "expectedFileRevision": "file_rev_01",
+    "expectedBaseDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "expectedCurrentDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "observed": {
+    "viewRevision": "workspace_rev_01",
+    "fileRevision": "file_rev_01",
+    "baseDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "currentDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "file": {
+    "repoRef": "repo_01",
+    "basisRef": "basis_01",
+    "fileRef": "file_01",
+    "fileRevision": "file_rev_01",
+    "path": "src/example.ts",
+    "oldPath": null,
+    "pathDisplay": "exact-safe",
+    "status": "M",
+    "git": {
+      "indexStatus": ".",
+      "worktreeStatus": "M",
+      "conflict": false
+    },
+    "baseDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "currentDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "content": {
+      "kind": "text",
+      "access": "available",
+      "reasonCode": null
+    },
+    "stats": {
+      "state": "exact",
+      "additions": 1,
+      "deletions": 1,
+      "reasonCode": null
+    },
+    "provenance": {
+      "classification": "pre-existing-user",
+      "evidence": "exact",
+      "baselineEvidenceRef": "baseline_01",
+      "mutationEvidenceRefs": [],
+      "reasonCode": null
+    },
+    "criterionIds": ["criterion-01"],
+    "verifierAttemptIds": ["verifier-01"],
+    "health": {
+      "state": "ok",
+      "reasonCode": null,
+      "message": null
+    }
+  },
+  "availability": {
+    "state": "current",
+    "reasonCode": null,
+    "message": null,
+    "retryable": false
+  },
+  "fallback": {
+    "kind": "none",
+    "reasonCode": null,
+    "message": null
+  },
+  "hunks": [
+    {
+      "hunkRef": "hunk_01",
+      "oldStart": 1,
+      "oldLineCount": 1,
+      "newStart": 1,
+      "newLineCount": 1,
+      "header": "@@ -1 +1 @@",
+      "lines": [
+        {
+          "lineRef": "line_01",
+          "kind": "deleted",
+          "marker": "-",
+          "oldLineNumber": 1,
+          "newLineNumber": null,
+          "text": "export const value = 1;",
+          "redacted": false
+        },
+        {
+          "lineRef": "line_02",
+          "kind": "added",
+          "marker": "+",
+          "oldLineNumber": null,
+          "newLineNumber": 1,
+          "text": "export const value = 2;",
+          "redacted": false
+        }
+      ]
+    }
+  ],
+  "unchangedRegions": [],
+  "truncation": {
+    "truncated": false,
+    "reasonCode": null,
+    "omittedHunks": 0,
+    "omittedLines": 0,
+    "nextCursor": null
+  },
+  "redaction": {
+    "applied": false,
+    "valuesRemoved": 0,
+    "truncated": false
+  },
+  "health": {
+    "state": "ok",
+    "reasonCode": null,
+    "message": null
+  },
+  "issues": []
+}

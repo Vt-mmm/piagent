@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/recovery-history-v1.schema.json",
+  "title": "Piagent WebUI bounded compaction and recovery history v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "version", "generatedAt", "identity", "runRef", "state", "historyRevision", "completeness", "summary", "recovery", "retainedContent", "events", "page", "warnings", "health"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "version": { "const": "piagent-webui-recovery-history-v1" },
+    "generatedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+    "identity": { "$ref": "common-v1.schema.json#/$defs/identity" },
+    "runRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+    "state": { "enum": ["ready", "unavailable"] },
+    "historyRevision": { "$ref": "common-v1.schema.json#/$defs/nullableRevisionToken" },
+    "completeness": { "enum": ["complete", "partial", "missing", "unknown"] },
+    "summary": { "$ref": "#/$defs/summary" },
+    "recovery": { "$ref": "#/$defs/recovery" },
+    "retainedContent": { "$ref": "#/$defs/retainedContent" },
+    "events": { "type": "array", "maxItems": 300, "items": { "$ref": "#/$defs/event" } },
+    "page": { "$ref": "#/$defs/page" },
+    "warnings": { "type": "array", "maxItems": 8, "items": { "$ref": "#/$defs/warning" } },
+    "health": { "$ref": "common-v1.schema.json#/$defs/health" }
+  },
+  "allOf": [
+    { "properties": { "identity": { "type": "object", "properties": {
+      "taskId": { "$ref": "common-v1.schema.json#/$defs/publicId" },
+      "taskRunId": { "$ref": "common-v1.schema.json#/$defs/publicId" },
+      "agentOperationId": { "type": "null" },
+      "toolCallId": { "type": "null" }
+    } } } },
+    {
+      "if": { "properties": { "state": { "const": "ready" } }, "required": ["state"] },
+      "then": {
+        "properties": {
+          "historyRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+          "completeness": { "enum": ["complete", "partial", "missing"] },
+          "recovery": { "type": "object", "properties": {
+            "decision": { "enum": ["resume", "retry", "paused", "terminal", "blocked"] },
+            "enforcementSafe": { "type": "boolean" },
+            "verifierState": { "enum": ["current", "stale", "not-current"] },
+            "invalidatedFileCount": { "type": "integer", "minimum": 0, "maximum": 100000 },
+            "handoffState": { "enum": ["none", "available", "invalid"] }
+          } },
+          "health": { "type": "object", "properties": { "state": { "enum": ["ok", "degraded"] } } }
+        }
+      },
+      "else": {
+        "properties": {
+          "historyRevision": { "type": "null" },
+          "completeness": { "const": "unknown" },
+          "summary": { "type": "object", "properties": { "contextCompactions": { "const": 0 }, "toolResultCompactions": { "const": 0 }, "compactedToolResults": { "const": 0 } } },
+          "recovery": { "type": "object", "properties": {
+            "decision": { "const": "unknown" }, "enforcementSafe": { "type": "null" }, "latestCheckpointRef": { "type": "null" },
+            "verifierState": { "const": "unknown" }, "invalidatedFileCount": { "type": "null" }, "invalidatedFilesKnown": { "const": false },
+            "handoffState": { "const": "unknown" }
+          } },
+          "events": { "type": "array", "maxItems": 0 },
+          "page": { "type": "object", "properties": { "total": { "const": 0 }, "returned": { "const": 0 }, "truncated": { "const": false } } },
+          "health": { "type": "object", "properties": { "state": { "enum": ["unavailable", "error"] } } }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "nullableCount": { "anyOf": [{ "type": "integer", "minimum": 0, "maximum": 1000000000 }, { "type": "null" }] },
+    "summary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contextCompactions", "toolResultCompactions", "compactedToolResults"],
+      "properties": {
+        "contextCompactions": { "type": "integer", "minimum": 0, "maximum": 100000 },
+        "toolResultCompactions": { "type": "integer", "minimum": 0, "maximum": 100000 },
+        "compactedToolResults": { "type": "integer", "minimum": 0, "maximum": 1000000000 }
+      }
+    },
+    "recovery": {
+      "type": "object", "additionalProperties": false,
+      "required": ["decision", "enforcementSafe", "latestCheckpointRef", "verifierState", "invalidatedFileCount", "invalidatedFilesKnown", "handoffState", "reasonCode"],
+      "properties": {
+        "decision": { "enum": ["resume", "retry", "paused", "terminal", "blocked", "unknown"] },
+        "enforcementSafe": { "anyOf": [{ "type": "boolean" }, { "type": "null" }] },
+        "latestCheckpointRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+        "verifierState": { "enum": ["current", "stale", "not-current", "unknown"] },
+        "invalidatedFileCount": { "anyOf": [{ "type": "integer", "minimum": 0, "maximum": 100000 }, { "type": "null" }] },
+        "invalidatedFilesKnown": { "type": "boolean" },
+        "handoffState": { "enum": ["none", "available", "invalid", "unknown"] },
+        "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+      }
+    },
+    "retainedContent": {
+      "type": "object", "additionalProperties": false,
+      "required": ["access", "exposed", "reasonCode"],
+      "properties": {
+        "access": { "const": "omitted" }, "exposed": { "const": false },
+        "reasonCode": { "const": "protected-runtime-evidence" }
+      }
+    },
+    "event": {
+      "type": "object", "additionalProperties": false,
+      "required": ["eventRef", "evidenceRef", "sequence", "recordedAt", "kind", "title", "detail", "toolName", "originalChars", "originalLines", "captureCount", "willRetry", "fromExtension"],
+      "properties": {
+        "eventRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "evidenceRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "sequence": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "recordedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+        "kind": { "enum": ["context-compaction", "tool-result-compaction"] },
+        "title": { "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText" },
+        "detail": { "$ref": "common-v1.schema.json#/$defs/nullableDisplayText" },
+        "toolName": { "$ref": "common-v1.schema.json#/$defs/nullableDisplayText" },
+        "originalChars": { "$ref": "#/$defs/nullableCount" },
+        "originalLines": { "$ref": "#/$defs/nullableCount" },
+        "captureCount": { "$ref": "#/$defs/nullableCount" },
+        "willRetry": { "anyOf": [{ "type": "boolean" }, { "type": "null" }] },
+        "fromExtension": { "anyOf": [{ "type": "boolean" }, { "type": "null" }] }
+      },
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "context-compaction" } }, "required": ["kind"] }, "then": { "properties": {
+          "toolName": { "type": "null" }, "originalChars": { "type": "null" }, "originalLines": { "type": "null" }, "captureCount": { "type": "null" },
+          "willRetry": { "type": "boolean" }, "fromExtension": { "type": "boolean" }
+        } } },
+        { "if": { "properties": { "kind": { "const": "tool-result-compaction" } }, "required": ["kind"] }, "then": { "properties": {
+          "toolName": { "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText" }, "captureCount": { "type": "integer", "minimum": 1, "maximum": 10000 },
+          "willRetry": { "type": "null" }, "fromExtension": { "type": "null" }
+        } } }
+      ]
+    },
+    "page": {
+      "type": "object", "additionalProperties": false, "required": ["total", "returned", "truncated"],
+      "properties": {
+        "total": { "type": "integer", "minimum": 0, "maximum": 100000 },
+        "returned": { "type": "integer", "minimum": 0, "maximum": 300 },
+        "truncated": { "type": "boolean" }
+      }
+    },
+    "warning": {
+      "type": "object", "additionalProperties": false, "required": ["code", "count", "message"],
+      "properties": {
+        "code": { "enum": ["telemetry-missing", "telemetry-corrupt", "telemetry-incomplete-tail", "telemetry-input-truncated", "history-truncated"] },
+        "count": { "type": "integer", "minimum": 1, "maximum": 1000000000 },
+        "message": { "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText" }
+      }
+    }
+  }
+}

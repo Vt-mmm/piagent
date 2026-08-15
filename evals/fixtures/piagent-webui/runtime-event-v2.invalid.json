@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 2,
+  "eventId": "event_01",
+  "eventCursor": "cursor_01",
+  "writerSequence": 1,
+  "recordedAt": "2026-08-13T09:06:00.000Z",
+  "sourceObservedAt": "2026-08-13T09:06:00.000Z",
+  "projectRef": "project_01",
+  "runtimeInstanceId": "runtime_01",
+  "sessionRef": "session_01",
+  "taskId": null,
+  "taskRunId": null,
+  "agentOperationId": null,
+  "turnIndex": null,
+  "messageRef": null,
+  "toolCallId": null,
+  "revision": {
+    "runtimeRevision": "runtime_rev_01",
+    "taskRevision": null,
+    "controlRevision": null,
+    "workspaceRevision": null,
+    "indexRevision": null,
+    "approvalRevision": null,
+    "sessionOptionRevision": null,
+    "queueRevision": null
+  },
+  "kind": "runtime.started",
+  "correlation": {
+    "commandId": null,
+    "messageRequestId": null,
+    "replacementId": null,
+    "approvalRequestId": null,
+    "causationEventId": null,
+    "idempotencyKeyDigest": null
+  },
+  "evidence": "observed",
+  "payload": {
+    "connectionState": "connected",
+    "operationState": "idle",
+    "buildRef": "runtime_build_01",
+    "capabilitySnapshotRef": "capabilities_01",
+    "sessionFile": "/private/session.jsonl"
+  },
+  "redaction": {
+    "applied": false,
+    "valuesRemoved": 0,
+    "truncated": false
+  }
+}

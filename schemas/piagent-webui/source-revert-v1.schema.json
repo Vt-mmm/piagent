@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/source-revert-v1.schema.json",
+  "title": "Piagent WebUI confirmed exact source revert preview v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "version", "generatedAt", "identity", "action", "state", "target", "preview", "reasonCode", "health"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "version": { "const": "piagent-webui-source-revert-v1" },
+    "generatedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+    "identity": { "$ref": "common-v1.schema.json#/$defs/identity" },
+    "action": { "const": "source.revert" },
+    "state": { "enum": ["ready", "unavailable"] },
+    "target": { "anyOf": [{ "$ref": "#/$defs/revertTarget" }, { "type": "null" }] },
+    "preview": { "anyOf": [{ "$ref": "#/$defs/revertPreview" }, { "type": "null" }] },
+    "reasonCode": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" },
+    "health": { "$ref": "common-v1.schema.json#/$defs/health" }
+  },
+  "allOf": [
+    {
+      "properties": {
+        "identity": {
+          "type": "object",
+          "properties": {
+            "taskId": { "$ref": "common-v1.schema.json#/$defs/publicId" },
+            "taskRunId": { "$ref": "common-v1.schema.json#/$defs/publicId" },
+            "agentOperationId": { "type": "null" },
+            "toolCallId": { "type": "null" }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "state": { "const": "ready" } }, "required": ["state"] },
+      "then": {
+        "properties": {
+          "target": { "$ref": "#/$defs/revertTarget" },
+          "preview": { "$ref": "#/$defs/revertPreview" },
+          "reasonCode": { "type": "null" },
+          "health": { "type": "object", "properties": { "state": { "const": "ok" } } }
+        }
+      },
+      "else": {
+        "properties": {
+          "target": { "type": "null" },
+          "preview": { "type": "null" },
+          "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" },
+          "health": { "type": "object", "properties": { "state": { "enum": ["unavailable", "error"] } } }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "revertPreview": {
+      "type": "object", "additionalProperties": false,
+      "required": ["basis", "hunks", "truncated"],
+      "properties": {
+        "basis": { "const": "index-to-working-tree" },
+        "hunks": {
+          "type": "array", "minItems": 1, "maxItems": 128,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["hunkRef", "header", "lines"],
+            "properties": {
+              "hunkRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+              "header": { "type": "string", "minLength": 1, "maxLength": 1024 },
+              "lines": {
+                "type": "array", "maxItems": 5000,
+                "items": {
+                  "type": "object", "additionalProperties": false,
+                  "required": ["kind", "marker", "text"],
+                  "properties": {
+                    "kind": { "enum": ["added", "deleted", "context", "meta"] },
+                    "marker": { "enum": ["+", "-", " ", "\\"] },
+                    "text": { "type": "string", "maxLength": 16384 }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "truncated": { "const": false }
+      }
+    },
+    "revertTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["view", "repoRef", "fileRef", "diffRef", "status", "path", "oldPath", "effect", "taskRevision", "workspaceRevision", "indexRevision", "viewRevision", "fileRevision", "workspacePreimage", "indexPreimage", "patchPreimage", "contentDigest", "hunkRefs", "previewRef", "confirmedPreviewDigest", "expiresAt", "summary"],
+      "properties": {
+        "view": { "const": "working-tree" },
+        "repoRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "fileRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "diffRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "status": { "const": "M" },
+        "path": { "$ref": "common-v1.schema.json#/$defs/safeDisplayPath" },
+        "oldPath": { "type": "null" },
+        "effect": { "const": "restore-worktree-from-index" },
+        "taskRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "workspaceRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "indexRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "viewRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "fileRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "workspacePreimage": { "$ref": "common-v1.schema.json#/$defs/workingTreeDigest" },
+        "indexPreimage": { "$ref": "common-v1.schema.json#/$defs/digest" },
+        "patchPreimage": { "$ref": "common-v1.schema.json#/$defs/digest" },
+        "contentDigest": { "$ref": "common-v1.schema.json#/$defs/digest" },
+        "hunkRefs": {
+          "type": "array", "maxItems": 1, "uniqueItems": true,
+          "items": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" }
+        },
+        "previewRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "confirmedPreviewDigest": { "$ref": "common-v1.schema.json#/$defs/digest" },
+        "expiresAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+        "summary": {
+          "type": "object", "additionalProperties": false,
+          "required": ["files", "hunks", "additionsDiscarded", "deletionsRestored", "effect", "recovery"],
+          "properties": {
+            "files": { "const": 1 },
+            "hunks": { "type": "integer", "minimum": 1, "maximum": 128 },
+            "additionsDiscarded": { "type": "integer", "minimum": 0, "maximum": 65536 },
+            "deletionsRestored": { "type": "integer", "minimum": 0, "maximum": 65536 },
+            "effect": { "const": "discard-unstaged-keep-index" },
+            "recovery": { "const": "not-guaranteed" }
+          }
+        }
+      }
+    }
+  }
+}

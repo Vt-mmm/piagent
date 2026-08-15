@@ -1,0 +1,390 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/session-command-v1.schema.json",
+  "title": "Piagent Gateway session command and receipt v1",
+  "oneOf": [
+    { "$ref": "#/$defs/command" },
+    { "$ref": "#/$defs/receipt" }
+  ],
+  "$defs": {
+    "idempotencyKey": {
+      "type": "string",
+      "minLength": 22,
+      "maxLength": 96,
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "thinkingLevel": { "enum": ["off", "minimal", "low", "medium", "high", "xhigh", "max"] },
+    "permissionMode": { "enum": ["read-only", "workspace-write", "trusted-full-access"] },
+    "baseCommandProperties": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion", "version", "messageType", "commandId", "idempotencyKey", "action",
+        "requestedAt", "expiresAt", "sessionRef", "expectedCatalogRevision", "expectedSessionRevision", "payload"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "version": { "const": "piagent-session-command-v1" },
+        "messageType": { "const": "command" },
+        "commandId": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "idempotencyKey": { "$ref": "#/$defs/idempotencyKey" },
+        "action": { "enum": ["session.create", "session.send", "session.abort", "session.set-model", "session.set-thinking", "session.set-permission", "session.rename", "session.pin", "session.archive", "session.unarchive", "session.fork", "session.acquire", "session.release"] },
+        "requestedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+        "expiresAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+        "sessionRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+        "expectedCatalogRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "expectedSessionRevision": { "$ref": "common-v1.schema.json#/$defs/nullableRevisionToken" },
+        "payload": { "type": "object" }
+      }
+    },
+    "createCommand": {
+      "allOf": [
+        { "$ref": "#/$defs/baseCommandProperties" },
+        {
+          "type": "object",
+          "properties": {
+            "action": { "const": "session.create" },
+            "sessionRef": { "type": "null" },
+            "expectedSessionRevision": { "type": "null" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["projectRef", "placeRef", "modelRef", "thinkingLevel", "message", "messageRequestId"],
+              "properties": {
+                "projectRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+                "placeRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+                "modelRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+                "thinkingLevel": { "$ref": "#/$defs/thinkingLevel" },
+                "message": { "type": "string", "minLength": 1, "maxLength": 32768, "pattern": "^[^\\u0000]*$" },
+                "messageRequestId": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "sendCommand": {
+      "allOf": [
+        { "$ref": "#/$defs/baseCommandProperties" },
+        {
+          "type": "object",
+          "properties": {
+            "action": { "const": "session.send" },
+            "sessionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+            "expectedSessionRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["delivery", "message", "messageRequestId", "expectedOperationRef"],
+              "properties": {
+                "delivery": { "enum": ["new-operation", "follow-up", "steer"] },
+                "message": { "type": "string", "minLength": 1, "maxLength": 32768, "pattern": "^[^\\u0000]*$" },
+                "messageRequestId": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+                "expectedOperationRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" }
+              },
+              "allOf": [
+                {
+                  "if": { "properties": { "delivery": { "enum": ["follow-up", "steer"] } }, "required": ["delivery"] },
+                  "then": { "properties": { "expectedOperationRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" } } }
+                },
+                {
+                  "if": { "properties": { "delivery": { "const": "new-operation" } }, "required": ["delivery"] },
+                  "then": { "properties": { "expectedOperationRef": { "type": "null" } } }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "abortCommand": {
+      "allOf": [
+        { "$ref": "#/$defs/baseCommandProperties" },
+        {
+          "type": "object",
+          "properties": {
+            "action": { "const": "session.abort" },
+            "sessionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+            "expectedSessionRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["operationRef", "clearQueued"],
+              "properties": {
+                "operationRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+                "clearQueued": { "type": "boolean" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "sessionOptionCommand": {
+      "allOf": [
+        { "$ref": "#/$defs/baseCommandProperties" },
+        {
+          "type": "object",
+          "properties": {
+            "action": { "enum": ["session.set-model", "session.set-thinking", "session.set-permission"] },
+            "sessionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+            "expectedSessionRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+            "payload": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["modelRef"],
+                  "properties": { "modelRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" } }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["thinkingLevel"],
+                  "properties": { "thinkingLevel": { "$ref": "#/$defs/thinkingLevel" } }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["permissionMode"],
+                  "properties": { "permissionMode": { "$ref": "#/$defs/permissionMode" } }
+                }
+              ]
+            }
+          },
+          "allOf": [
+            {
+              "if": { "properties": { "action": { "const": "session.set-model" } }, "required": ["action"] },
+              "then": { "properties": { "payload": { "type": "object", "required": ["modelRef"],
+                "properties": { "modelRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" } } } } }
+            },
+            {
+              "if": { "properties": { "action": { "const": "session.set-thinking" } }, "required": ["action"] },
+              "then": { "properties": { "payload": { "type": "object", "required": ["thinkingLevel"],
+                "properties": { "thinkingLevel": { "$ref": "#/$defs/thinkingLevel" } } } } }
+            },
+            {
+              "if": { "properties": { "action": { "const": "session.set-permission" } }, "required": ["action"] },
+              "then": { "properties": { "payload": { "type": "object", "required": ["permissionMode"],
+                "properties": { "permissionMode": { "$ref": "#/$defs/permissionMode" } } } } }
+            }
+          ]
+        }
+      ]
+    },
+    "renameCommand": {
+      "allOf": [
+        { "$ref": "#/$defs/baseCommandProperties" },
+        {
+          "type": "object",
+          "properties": {
+            "action": { "const": "session.rename" },
+            "sessionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+            "expectedSessionRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["title"],
+              "properties": { "title": { "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText" } }
+            }
+          }
+        }
+      ]
+    },
+    "pinCommand": {
+      "allOf": [
+        { "$ref": "#/$defs/baseCommandProperties" },
+        {
+          "type": "object",
+          "properties": {
+            "action": { "const": "session.pin" },
+            "sessionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+            "expectedSessionRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["pinned"],
+              "properties": { "pinned": { "type": "boolean" } }
+            }
+          }
+        }
+      ]
+    },
+    "emptySessionCommand": {
+      "allOf": [
+        { "$ref": "#/$defs/baseCommandProperties" },
+        {
+          "type": "object",
+          "properties": {
+            "action": { "enum": ["session.archive", "session.unarchive", "session.acquire", "session.release"] },
+            "sessionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+            "expectedSessionRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+            "payload": { "type": "object", "additionalProperties": false, "maxProperties": 0 }
+          }
+        }
+      ]
+    },
+    "forkCommand": {
+      "allOf": [
+        { "$ref": "#/$defs/baseCommandProperties" },
+        {
+          "type": "object",
+          "properties": {
+            "action": { "const": "session.fork" },
+            "sessionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+            "expectedSessionRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["entryRef", "title"],
+              "properties": {
+                "entryRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+                "title": { "$ref": "common-v1.schema.json#/$defs/nullableDisplayText" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "command": {
+      "oneOf": [
+        { "$ref": "#/$defs/createCommand" },
+        { "$ref": "#/$defs/sendCommand" },
+        { "$ref": "#/$defs/abortCommand" },
+        { "$ref": "#/$defs/sessionOptionCommand" },
+        { "$ref": "#/$defs/renameCommand" },
+        { "$ref": "#/$defs/pinCommand" },
+        { "$ref": "#/$defs/emptySessionCommand" },
+        { "$ref": "#/$defs/forkCommand" }
+      ]
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion", "version", "messageType", "commandId", "idempotencyKeyDigest", "action", "phase",
+        "resultCode", "requestedAt", "settledAt", "sessionRef", "operationRef", "catalogRevisionAfter",
+        "sessionRevisionAfter", "deduplicated", "evidenceRef", "error"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "version": { "const": "piagent-session-receipt-v1" },
+        "messageType": { "const": "receipt" },
+        "commandId": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "idempotencyKeyDigest": { "$ref": "common-v1.schema.json#/$defs/digest" },
+        "action": { "enum": ["session.create", "session.send", "session.abort", "session.set-model", "session.set-thinking", "session.set-permission", "session.rename", "session.pin", "session.archive", "session.unarchive", "session.fork", "session.acquire", "session.release"] },
+        "phase": { "enum": ["accepted", "settled", "uncertain", "rejected"] },
+        "resultCode": { "enum": ["accepted", "created", "started", "queued", "steered", "aborted", "model-changed", "thinking-changed", "permission-changed", "renamed", "pinned", "unpinned", "archived", "unarchived", "forked", "acquired", "released", "no-change", "stale-revision", "owner-conflict", "recovery-required", "invalid-command", "expired", "unavailable", "effect-unknown"] },
+        "requestedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+        "settledAt": { "anyOf": [{ "$ref": "common-v1.schema.json#/$defs/timestamp" }, { "type": "null" }] },
+        "sessionRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+        "operationRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+        "catalogRevisionAfter": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "sessionRevisionAfter": { "$ref": "common-v1.schema.json#/$defs/nullableRevisionToken" },
+        "deduplicated": { "type": "boolean" },
+        "evidenceRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+        "error": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["code", "message"],
+              "properties": {
+                "code": { "$ref": "common-v1.schema.json#/$defs/reasonCode" },
+                "message": { "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText" }
+              }
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "phase": { "const": "accepted" } }, "required": ["phase"] },
+          "then": { "properties": { "resultCode": { "const": "accepted" }, "settledAt": { "type": "null" }, "evidenceRef": { "type": "null" }, "error": { "type": "null" } } }
+        },
+        {
+          "if": { "properties": { "phase": { "const": "settled" } }, "required": ["phase"] },
+          "then": {
+            "properties": {
+              "resultCode": { "enum": ["created", "started", "queued", "steered", "aborted", "model-changed", "thinking-changed", "permission-changed", "renamed", "pinned", "unpinned", "archived", "unarchived", "forked", "acquired", "released", "no-change"] },
+              "settledAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+              "evidenceRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+              "error": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "phase": { "const": "uncertain" } }, "required": ["phase"] },
+          "then": { "properties": { "resultCode": { "const": "effect-unknown" }, "settledAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" }, "error": { "type": "object" } } }
+        },
+        {
+          "if": { "properties": { "phase": { "const": "rejected" } }, "required": ["phase"] },
+          "then": {
+            "properties": {
+              "resultCode": { "enum": ["stale-revision", "owner-conflict", "recovery-required", "invalid-command", "expired", "unavailable"] },
+              "settledAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+              "evidenceRef": { "type": "null" },
+              "error": { "type": "object" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "action": { "const": "session.create" }, "phase": { "const": "settled" } }, "required": ["action", "phase"] },
+          "then": { "properties": { "resultCode": { "enum": ["created", "started"] }, "sessionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" }, "sessionRevisionAfter": { "$ref": "common-v1.schema.json#/$defs/revisionToken" } } }
+        },
+        {
+          "if": { "properties": { "action": { "not": { "const": "session.create" } } }, "required": ["action"] },
+          "then": { "properties": { "sessionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" } } }
+        },
+        {
+          "if": { "properties": { "action": { "const": "session.set-model" }, "phase": { "const": "settled" } }, "required": ["action", "phase"] },
+          "then": { "properties": { "resultCode": { "enum": ["model-changed", "no-change"] } } }
+        },
+        {
+          "if": { "properties": { "action": { "const": "session.set-thinking" }, "phase": { "const": "settled" } }, "required": ["action", "phase"] },
+          "then": { "properties": { "resultCode": { "enum": ["thinking-changed", "no-change"] } } }
+        },
+        {
+          "if": { "properties": { "action": { "const": "session.set-permission" }, "phase": { "const": "settled" } }, "required": ["action", "phase"] },
+          "then": { "properties": { "resultCode": { "enum": ["permission-changed", "no-change"] } } }
+        },
+        {
+          "if": { "properties": { "action": { "const": "session.send" }, "phase": { "const": "settled" } }, "required": ["action", "phase"] },
+          "then": { "properties": { "resultCode": { "enum": ["started", "queued", "steered"] }, "operationRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" } } }
+        },
+        {
+          "if": { "properties": { "action": { "const": "session.abort" }, "phase": { "const": "settled" } }, "required": ["action", "phase"] },
+          "then": { "properties": { "resultCode": { "enum": ["aborted", "no-change"] }, "operationRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" } } }
+        },
+        {
+          "if": { "properties": { "action": { "const": "session.rename" }, "phase": { "const": "settled" } }, "required": ["action", "phase"] },
+          "then": { "properties": { "resultCode": { "enum": ["renamed", "no-change"] } } }
+        },
+        {
+          "if": { "properties": { "action": { "const": "session.pin" }, "phase": { "const": "settled" } }, "required": ["action", "phase"] },
+          "then": { "properties": { "resultCode": { "enum": ["pinned", "unpinned", "no-change"] } } }
+        },
+        {
+          "if": { "properties": { "action": { "const": "session.archive" }, "phase": { "const": "settled" } }, "required": ["action", "phase"] },
+          "then": { "properties": { "resultCode": { "enum": ["archived", "no-change"] } } }
+        },
+        {
+          "if": { "properties": { "action": { "const": "session.unarchive" }, "phase": { "const": "settled" } }, "required": ["action", "phase"] },
+          "then": { "properties": { "resultCode": { "enum": ["unarchived", "no-change"] } } }
+        },
+        {
+          "if": { "properties": { "action": { "const": "session.fork" }, "phase": { "const": "settled" } }, "required": ["action", "phase"] },
+          "then": { "properties": { "resultCode": { "const": "forked" }, "sessionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" }, "sessionRevisionAfter": { "$ref": "common-v1.schema.json#/$defs/revisionToken" } } }
+        },
+        {
+          "if": { "properties": { "action": { "const": "session.acquire" }, "phase": { "const": "settled" } }, "required": ["action", "phase"] },
+          "then": { "properties": { "resultCode": { "enum": ["acquired", "no-change"] } } }
+        },
+        {
+          "if": { "properties": { "action": { "const": "session.release" }, "phase": { "const": "settled" } }, "required": ["action", "phase"] },
+          "then": { "properties": { "resultCode": { "enum": ["released", "no-change"] } } }
+        }
+      ]
+    }
+  }
+}

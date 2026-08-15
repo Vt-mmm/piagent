@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/gateway-capabilities-v1.schema.json",
+  "title": "Piagent Gateway capability handshake v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "version", "generatedAt", "gatewayInstanceRef", "protocol", "mode", "capabilities", "reasonCode"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "version": { "const": "piagent-gateway-capabilities-v1" },
+    "generatedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+    "gatewayInstanceRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+    "protocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimum", "maximum", "selected", "compatibility"],
+      "properties": {
+        "minimum": { "const": 1 },
+        "maximum": { "const": 1 },
+        "selected": { "type": ["integer", "null"], "minimum": 1, "maximum": 1 },
+        "compatibility": { "enum": ["ready", "incompatible", "resync-required"] }
+      }
+    },
+    "mode": { "enum": ["full", "read-only", "unavailable"] },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["catalog", "events", "terminalAdapter", "sessionRuntime", "sessionActions"],
+      "properties": {
+        "catalog": { "$ref": "#/$defs/capability" },
+        "events": { "$ref": "#/$defs/capability" },
+        "terminalAdapter": { "$ref": "#/$defs/capability" },
+        "sessionRuntime": { "$ref": "#/$defs/capability" },
+        "sessionActions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["create", "send", "abort", "setModel", "setThinking", "setPermission", "rename", "pin", "archive", "unarchive", "fork", "acquire", "release"],
+          "properties": {
+            "create": { "$ref": "#/$defs/capability" },
+            "send": { "$ref": "#/$defs/capability" },
+            "abort": { "$ref": "#/$defs/capability" },
+            "setModel": { "$ref": "#/$defs/capability" },
+            "setThinking": { "$ref": "#/$defs/capability" },
+            "setPermission": { "$ref": "#/$defs/capability" },
+            "rename": { "$ref": "#/$defs/capability" },
+            "pin": { "$ref": "#/$defs/capability" },
+            "archive": { "$ref": "#/$defs/capability" },
+            "unarchive": { "$ref": "#/$defs/capability" },
+            "fork": { "$ref": "#/$defs/capability" },
+            "acquire": { "$ref": "#/$defs/capability" },
+            "release": { "$ref": "#/$defs/capability" }
+          }
+        }
+      }
+    },
+    "reasonCode": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "protocol": { "type": "object", "properties": { "compatibility": { "const": "ready" } }, "required": ["compatibility"] } }, "required": ["protocol"] },
+      "then": { "properties": { "protocol": { "type": "object", "properties": { "selected": { "const": 1 } }, "required": ["selected"] }, "reasonCode": { "type": "null" } } }
+    },
+    {
+      "if": { "properties": { "protocol": { "type": "object", "properties": { "compatibility": { "enum": ["incompatible", "resync-required"] } }, "required": ["compatibility"] } }, "required": ["protocol"] },
+      "then": {
+        "properties": {
+          "mode": { "enum": ["read-only", "unavailable"] },
+          "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" },
+          "capabilities": {
+            "type": "object",
+            "properties": {
+              "sessionRuntime": { "type": "object", "properties": { "status": { "const": "unavailable" } }, "required": ["status"] },
+              "sessionActions": {
+                "type": "object",
+                "properties": {
+                  "create": { "type": "object", "properties": { "status": { "const": "unavailable" } }, "required": ["status"] },
+                  "send": { "type": "object", "properties": { "status": { "const": "unavailable" } }, "required": ["status"] },
+                  "abort": { "type": "object", "properties": { "status": { "const": "unavailable" } }, "required": ["status"] },
+                  "setModel": { "type": "object", "properties": { "status": { "const": "unavailable" } }, "required": ["status"] },
+                  "setThinking": { "type": "object", "properties": { "status": { "const": "unavailable" } }, "required": ["status"] },
+                  "setPermission": { "type": "object", "properties": { "status": { "const": "unavailable" } }, "required": ["status"] },
+                  "rename": { "type": "object", "properties": { "status": { "const": "unavailable" } }, "required": ["status"] },
+                  "pin": { "type": "object", "properties": { "status": { "const": "unavailable" } }, "required": ["status"] },
+                  "archive": { "type": "object", "properties": { "status": { "const": "unavailable" } }, "required": ["status"] },
+                  "unarchive": { "type": "object", "properties": { "status": { "const": "unavailable" } }, "required": ["status"] },
+                  "fork": { "type": "object", "properties": { "status": { "const": "unavailable" } }, "required": ["status"] },
+                  "acquire": { "type": "object", "properties": { "status": { "const": "unavailable" } }, "required": ["status"] },
+                  "release": { "type": "object", "properties": { "status": { "const": "unavailable" } }, "required": ["status"] }
+                },
+                "required": ["create", "send", "abort", "setModel", "setThinking", "setPermission", "rename", "pin", "archive", "unarchive", "fork", "acquire", "release"]
+              }
+            },
+            "required": ["sessionRuntime", "sessionActions"]
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "mode": { "const": "unavailable" } }, "required": ["mode"] },
+      "then": {
+        "properties": {
+          "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" },
+          "capabilities": {
+            "type": "object",
+            "properties": {
+              "catalog": { "type": "object", "properties": { "status": { "const": "unavailable" } }, "required": ["status"] },
+              "events": { "type": "object", "properties": { "status": { "const": "unavailable" } }, "required": ["status"] },
+              "terminalAdapter": { "type": "object", "properties": { "status": { "const": "unavailable" } }, "required": ["status"] },
+              "sessionRuntime": { "type": "object", "properties": { "status": { "const": "unavailable" } }, "required": ["status"] }
+            },
+            "required": ["catalog", "events", "terminalAdapter", "sessionRuntime"]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "version", "reasonCode"],
+      "properties": {
+        "status": { "enum": ["available", "unavailable"] },
+        "version": { "type": ["integer", "null"], "minimum": 1, "maximum": 1000 },
+        "reasonCode": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "available" } }, "required": ["status"] },
+          "then": { "properties": { "version": { "type": "integer" }, "reasonCode": { "type": "null" } } },
+          "else": { "properties": { "version": { "type": "null" }, "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" } } }
+        }
+      ]
+    }
+  }
+}

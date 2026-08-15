@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-session-catalog-v1",
+  "generatedAt": "2026-08-14T04:30:00.000Z",
+  "gatewayInstanceRef": "gateway_01",
+  "state": "ready",
+  "catalogRevision": "catalog_rev_01",
+  "sessions": [
+    {
+      "sessionRef": "session_01",
+      "projectRef": "project_01",
+      "title": "Build the Session Hub",
+      "projectLabel": "pi-company-platform",
+      "preview": "Implementing the durable gateway contract.",
+      "createdAt": "2026-08-14T03:00:00.000Z",
+      "updatedAt": "2026-08-14T04:29:59.000Z",
+      "state": "gateway-owned",
+      "liveState": "idle",
+      "pinned": true,
+      "archived": false,
+      "unread": false,
+      "composerAvailable": true,
+      "needsAttention": false,
+      "modelLabel": "Claude Sonnet",
+      "thinkingLevel": "high",
+      "contextUsage": {
+        "usedTokens": 24000,
+        "contextWindow": 200000,
+        "ratio": 0.12,
+        "state": "known"
+      },
+      "task": {
+        "taskRef": "task_01",
+        "summary": "Ship durable session management",
+        "outcome": "pending",
+        "progressCompleted": 2,
+        "progressTotal": 8
+      },
+      "owner": {
+        "kind": "gateway",
+        "ownerEpoch": "owner_epoch_01",
+        "gatewayInstanceRef": "gateway_01",
+        "runtimeInstanceRef": "runtime_01",
+        "continuity": "exact"
+      },
+      "sessionRevision": "session_rev_01",
+      "reasonCode": null
+    }
+  ],
+  "page": {
+    "limit": 50,
+    "returned": 1,
+    "total": 1,
+    "nextCursor": null,
+    "truncated": false
+  },
+  "reasonCode": null
+}

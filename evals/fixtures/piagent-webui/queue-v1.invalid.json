@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-queue-v1",
+  "generatedAt": "2026-08-13T14:00:00.000Z",
+  "identity": {
+    "projectRef": "project_01",
+    "runtimeInstanceId": "runtime_01",
+    "sessionRef": "session_01",
+    "taskId": null,
+    "taskRunId": null,
+    "agentOperationId": null,
+    "toolCallId": null
+  },
+  "revision": {
+    "runtimeRevision": "runtime_rev_01",
+    "taskRevision": null,
+    "controlRevision": null,
+    "workspaceRevision": null,
+    "indexRevision": null,
+    "approvalRevision": null,
+    "sessionOptionRevision": null,
+    "queueRevision": "queue_rev_01"
+  },
+  "state": "unavailable",
+  "heldCount": 1,
+  "quarantinedCount": 0,
+  "items": [{ "queueItemRef": "raw-secret", "exactText": "secret" }],
+  "reasonCode": null
+}

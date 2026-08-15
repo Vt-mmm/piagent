@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { containsSensitiveText } from "../security/sensitive-data.js";
 import { resolveProjectProfileDocument } from "./project-profile.js";
-import { CORE_RUNTIME_INTEGRITY_FILES } from "./runtime-integrity.js";
+import { discoverRuntimeIntegrityFiles } from "./runtime-integrity.js";
 
 const API_VERSION = "piagent/v1";
 const CORE_API_VERSION = 1;
@@ -798,7 +798,7 @@ function buildCoreIntegrity(root) {
     "packages/piagent-core/capabilities/project-profile.js",
     "packages/piagent-core/security/sensitive-data.js",
     "packages/piagent-core/extensions/piagent-guard.ts",
-    ...CORE_RUNTIME_INTEGRITY_FILES,
+    ...discoverRuntimeIntegrityFiles(root),
     // context-engine.js decides which repository content enters the model
     // context and records the resulting telemetry, so it is part of the
     // runtime trust boundary enforced by the profile lock.

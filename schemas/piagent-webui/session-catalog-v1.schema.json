@@ -1,0 +1,222 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/session-catalog-v1.schema.json",
+  "title": "Piagent Gateway durable session catalog v1",
+  "oneOf": [
+    { "$ref": "#/$defs/catalog" },
+    { "$ref": "#/$defs/sessionDetail" }
+  ],
+  "$defs": {
+    "owner": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "ownerEpoch", "gatewayInstanceRef", "runtimeInstanceRef", "continuity"],
+          "properties": {
+            "kind": { "const": "none" },
+            "ownerEpoch": { "type": "null" },
+            "gatewayInstanceRef": { "type": "null" },
+            "runtimeInstanceRef": { "type": "null" },
+            "continuity": { "enum": ["released", "unknown"] }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "ownerEpoch", "gatewayInstanceRef", "runtimeInstanceRef", "continuity"],
+          "properties": {
+            "kind": { "const": "gateway" },
+            "ownerEpoch": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+            "gatewayInstanceRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+            "runtimeInstanceRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+            "continuity": { "enum": ["exact", "uncertain"] }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "ownerEpoch", "gatewayInstanceRef", "runtimeInstanceRef", "continuity"],
+          "properties": {
+            "kind": { "const": "terminal" },
+            "ownerEpoch": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+            "gatewayInstanceRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+            "runtimeInstanceRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+            "continuity": { "enum": ["exact", "uncertain"] }
+          }
+        }
+      ]
+    },
+    "contextUsage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["usedTokens", "contextWindow", "ratio", "state"],
+      "properties": {
+        "usedTokens": { "type": ["integer", "null"], "minimum": 0, "maximum": 1000000000 },
+        "contextWindow": { "type": ["integer", "null"], "minimum": 1, "maximum": 1000000000 },
+        "ratio": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "state": { "enum": ["known", "unknown"] }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "const": "unknown" } }, "required": ["state"] },
+          "then": { "properties": { "usedTokens": { "type": "null" }, "contextWindow": { "type": "null" }, "ratio": { "type": "null" } } }
+        },
+        {
+          "if": { "properties": { "state": { "const": "known" } }, "required": ["state"] },
+          "then": { "properties": { "usedTokens": { "type": "integer" }, "contextWindow": { "type": "integer" }, "ratio": { "type": "number" } } }
+        }
+      ]
+    },
+    "sessionRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sessionRef", "projectRef", "title", "projectLabel", "preview", "createdAt", "updatedAt",
+        "state", "liveState", "pinned", "archived", "unread", "composerAvailable", "needsAttention",
+        "modelLabel", "thinkingLevel", "contextUsage", "task", "owner", "sessionRevision", "reasonCode"
+      ],
+      "properties": {
+        "sessionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "projectRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "title": { "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText" },
+        "projectLabel": { "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText" },
+        "preview": { "type": "string", "maxLength": 280, "pattern": "^[^\\u0000-\\u001F\\u007F]*$" },
+        "createdAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+        "updatedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+        "state": { "enum": ["offline", "gateway-starting", "gateway-owned", "terminal-owned", "handoff-pending", "recovery-required", "archived"] },
+        "liveState": { "enum": ["offline", "idle", "running", "paused", "waiting-approval", "uncertain"] },
+        "pinned": { "type": "boolean" },
+        "archived": { "type": "boolean" },
+        "unread": { "type": "boolean" },
+        "composerAvailable": { "type": "boolean" },
+        "needsAttention": { "type": "boolean" },
+        "modelLabel": { "$ref": "common-v1.schema.json#/$defs/nullableDisplayText" },
+        "thinkingLevel": { "enum": ["off", "minimal", "low", "medium", "high", "xhigh", "max", "unknown"] },
+        "contextUsage": { "$ref": "#/$defs/contextUsage" },
+        "task": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["taskRef", "summary", "outcome", "progressCompleted", "progressTotal"],
+              "properties": {
+                "taskRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+                "summary": { "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText" },
+                "outcome": { "enum": ["pending", "completed", "blocked", "partial", "failed", "unknown"] },
+                "progressCompleted": { "type": "integer", "minimum": 0, "maximum": 10000 },
+                "progressTotal": { "type": "integer", "minimum": 0, "maximum": 10000 }
+              }
+            }
+          ]
+        },
+        "owner": { "$ref": "#/$defs/owner" },
+        "sessionRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "reasonCode": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "const": "offline" } }, "required": ["state"] },
+          "then": {
+            "properties": {
+              "liveState": { "const": "offline" },
+              "owner": { "type": "object", "properties": { "kind": { "const": "none" } }, "required": ["kind"] }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "state": { "const": "gateway-owned" } }, "required": ["state"] },
+          "then": { "properties": { "owner": { "type": "object", "properties": { "kind": { "const": "gateway" } }, "required": ["kind"] } } }
+        },
+        {
+          "if": { "properties": { "state": { "const": "terminal-owned" } }, "required": ["state"] },
+          "then": { "properties": { "owner": { "type": "object", "properties": { "kind": { "const": "terminal" } }, "required": ["kind"] } } }
+        },
+        {
+          "if": { "properties": { "archived": { "const": true } }, "required": ["archived"] },
+          "then": {
+            "properties": {
+              "state": { "const": "archived" },
+              "liveState": { "const": "offline" },
+              "composerAvailable": { "const": false },
+              "owner": { "type": "object", "properties": { "kind": { "const": "none" } }, "required": ["kind"] }
+            }
+          },
+          "else": { "properties": { "state": { "not": { "const": "archived" } } } }
+        },
+        {
+          "if": { "properties": { "state": { "enum": ["handoff-pending", "recovery-required"] } }, "required": ["state"] },
+          "then": { "properties": { "composerAvailable": { "const": false }, "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" } } }
+        }
+      ]
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["limit", "returned", "total", "nextCursor", "truncated"],
+      "properties": {
+        "limit": { "type": "integer", "minimum": 1, "maximum": 200 },
+        "returned": { "type": "integer", "minimum": 0, "maximum": 200 },
+        "total": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+        "nextCursor": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+        "truncated": { "type": "boolean" }
+      }
+    },
+    "catalog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "version", "generatedAt", "gatewayInstanceRef", "state", "catalogRevision", "sessions", "page", "reasonCode"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "version": { "const": "piagent-session-catalog-v1" },
+        "generatedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+        "gatewayInstanceRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "state": { "enum": ["ready", "unavailable"] },
+        "catalogRevision": { "$ref": "common-v1.schema.json#/$defs/nullableRevisionToken" },
+        "sessions": { "type": "array", "maxItems": 200, "items": { "$ref": "#/$defs/sessionRow" } },
+        "page": { "$ref": "#/$defs/page" },
+        "reasonCode": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "const": "ready" } }, "required": ["state"] },
+          "then": { "properties": { "catalogRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" }, "reasonCode": { "type": "null" } } }
+        },
+        {
+          "if": { "properties": { "state": { "const": "unavailable" } }, "required": ["state"] },
+          "then": {
+            "properties": {
+              "catalogRevision": { "type": "null" },
+              "sessions": { "type": "array", "maxItems": 0 },
+              "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" },
+              "page": {
+                "type": "object",
+                "properties": {
+                  "returned": { "const": 0 },
+                  "total": { "const": 0 },
+                  "nextCursor": { "type": "null" },
+                  "truncated": { "const": false }
+                },
+                "required": ["returned", "total", "nextCursor", "truncated"]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "sessionDetail": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "version", "generatedAt", "gatewayInstanceRef", "catalogRevision", "session"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "version": { "const": "piagent-session-detail-v1" },
+        "generatedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+        "gatewayInstanceRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "catalogRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "session": { "$ref": "#/$defs/sessionRow" }
+      }
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-source-mutation-v1",
+  "generatedAt": "2026-08-14T08:00:00.000Z",
+  "identity": {
+    "projectRef": "project_01",
+    "runtimeInstanceId": "runtime_01",
+    "sessionRef": "session_01",
+    "taskId": "task_01",
+    "taskRunId": "task_run_01",
+    "agentOperationId": null,
+    "toolCallId": null
+  },
+  "action": "source.stage",
+  "state": "ready",
+  "target": {
+    "view": "working-tree",
+    "repoRef": "repo_01",
+    "fileRef": "file_01",
+    "diffRef": "diff_01",
+    "status": "M",
+    "path": "src/example.ts",
+    "oldPath": null,
+    "effect": "copy-worktree-to-index",
+    "taskRevision": "task_revision_01",
+    "workspaceRevision": "workspace_revision_01",
+    "indexRevision": "index_revision_01",
+    "viewRevision": "view_revision_01",
+    "fileRevision": "file_revision_01",
+    "workspacePreimage": "wt-content-v2:1111111111111111111111111111111111111111111111111111111111111111",
+    "indexPreimage": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "patchPreimage": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "contentDigest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "hunkRefs": ["hunk_01"]
+  },
+  "reasonCode": null,
+  "health": { "state": "ok", "reasonCode": null, "message": null }
+}

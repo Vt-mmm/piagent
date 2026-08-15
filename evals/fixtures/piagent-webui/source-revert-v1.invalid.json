@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-source-revert-v1",
+  "generatedAt": "2026-08-14T00:00:00.000Z",
+  "identity": {
+    "projectRef": "project_01",
+    "runtimeInstanceId": "runtime_01",
+    "sessionRef": "session_01",
+    "taskId": "task-01",
+    "taskRunId": "task-run-01",
+    "agentOperationId": null,
+    "toolCallId": null
+  },
+  "action": "source.revert",
+  "state": "ready",
+  "target": null,
+  "preview": null,
+  "reasonCode": null,
+  "health": { "state": "ok", "reasonCode": null, "message": null }
+}

@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-capabilities-v1",
+  "generatedAt": "2026-08-13T09:00:00.000Z",
+  "protocolMin": 1,
+  "protocolMax": 1,
+  "supportedSnapshotVersions": [1],
+  "supportedEventVersions": [2],
+  "mode": "inspect-only",
+  "compatibility": { "state": "compatible", "reason": null },
+  "identity": {
+    "projectRef": "project_01",
+    "runtimeInstanceId": "runtime_01",
+    "sessionRef": "session_01",
+    "taskId": null,
+    "taskRunId": null,
+    "agentOperationId": null,
+    "toolCallId": null
+  },
+  "runtimeBuild": { "state": "available", "buildId": "runtime_build_01", "version": "0.84.1", "reason": null },
+  "serverBuild": { "state": "available", "buildId": "server_build_01", "version": "1.0.0", "reason": null },
+  "capabilities": {
+    "inspect": { "status": "available", "version": 1, "reason": null, "sourceViews": ["task"] },
+    "control.chat": { "status": "available", "version": 1, "reason": null, "queuePersistence": "runtime-lifetime", "actions": { "send": { "available": true, "reasonCode": null }, "hold": { "available": true, "reasonCode": null }, "editHeld": { "available": true, "reasonCode": null }, "deleteHeld": { "available": true, "reasonCode": null }, "dispatchHeld": { "available": true, "reasonCode": null }, "interruptAndSend": { "available": true, "reasonCode": null } } },
+    "control.lifecycle": { "status": "unavailable", "version": null, "reason": { "code": "not-proven", "message": "Unavailable." } },
+    "control.resumeAndContinue": { "status": "unavailable", "version": null, "reason": { "code": "not-proven", "message": "Unavailable." } },
+    "control.sessionOptions": { "status": "unavailable", "version": null, "reason": { "code": "not-proven", "message": "Unavailable." } },
+    "attachments": { "status": "unavailable", "version": null, "reason": { "code": "not-proven", "message": "Unavailable." } },
+    "approve": { "status": "unavailable", "version": null, "reason": { "code": "not-proven", "message": "Unavailable." } },
+    "reviewActions": { "status": "unavailable", "version": null, "reason": { "code": "not-proven", "message": "Unavailable." } }
+  },
+  "replay": { "eventRetentionCount": 100, "eventRetentionSeconds": 60, "resyncSupported": true },
+  "limits": {
+    "maxRequestBodyBytes": 1024,
+    "maxEventPayloadBytes": 256,
+    "maxReplayEvents": 100,
+    "maxDiffBytes": 1024,
+    "maxDiffLines": 1,
+    "maxDiffHunks": 1,
+    "maxLogPreviewBytes": 256,
+    "maxLogPreviewLines": 1,
+    "maxAttachmentCount": 0,
+    "maxAttachmentFileBytes": 0,
+    "maxAttachmentTotalBytes": 0,
+    "maxQueueItems": 0,
+    "maxMessageBytes": 1,
+    "maxSseClients": 1,
+    "maxGitProcesses": 1,
+    "requestTimeoutMs": 100
+  }
+}

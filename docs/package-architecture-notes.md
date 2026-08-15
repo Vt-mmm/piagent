@@ -1,4 +1,5 @@
 # Package architecture notes
+<!-- language: en -->
 
 This path is retained for stable links. The maintained architecture documents are:
 

@@ -6,6 +6,7 @@ import path from "node:path";
 import { describe, it } from "node:test";
 
 import { recordVerificationCheckpoint } from "../packages/piagent-core/extensions/task-runtime-audit.js";
+import { hashEvidenceCommand } from "../packages/piagent-core/extensions/runtime-evidence.js";
 import { readTaskJournal, replayTaskCheckpoints, taskJournalPaths } from "../packages/piagent-core/extensions/task-journal.js";
 import { workingTreeSnapshot } from "../packages/piagent-core/extensions/task-state.js";
 import { compileCriterionGraph } from "../packages/piagent-core/extensions/criterion-graph.js";
@@ -14,6 +15,7 @@ import { RESUME_CONTEXT_MAX_CHARS, buildTaskResumeContext, inspectTaskResumeStat
 import { createBoundTaskAuthority } from "../packages/piagent-core/runtime/policy/task-authority-runtime.ts";
 import { createTrajectoryState, createTrajectoryTransition, reduceTrajectory } from "../packages/piagent-core/runtime/trajectory/trajectory-state.ts";
 import { writeTrajectoryState } from "../packages/piagent-core/runtime/trajectory/trajectory-store.ts";
+import { captureVerifierFileSnapshot } from "../packages/piagent-core/runtime/inspection/verifier-snapshot-store.ts";
 
 const fixture = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, "../evals/fixtures/task-contract.valid.json"), "utf8"));
 
@@ -66,13 +68,19 @@ describe("safe task resume state", () => {
       command: "npm test", exitCode: 0, summary: "pass", recordedAt: "2026-08-08T00:00:03.000Z",
       observed: true, observedAt: "2026-08-08T00:00:03.000Z", matchedProfileCommand: true, workingTreeDigest: verifiedDigest
     }];
+    captureVerifierFileSnapshot({
+      projectRoot: cwd, taskId: current.taskId, taskRunId: current.taskRunId, sessionId: current.sessionId,
+      toolCallId: "verify-call", commandHash: hashEvidenceCommand("npm test"),
+      observedAt: "2026-08-08T00:00:03.000Z", capturedAt: "2026-08-08T00:00:04.000Z",
+      exitCode: 0, treeDigest: verifiedDigest, snapshot: workingTreeSnapshot(cwd)
+    });
     recordVerificationCheckpoint({ cwd, ui: { notify() {} } }, current, {
       commandHash: "b".repeat(64), workingTreeDigest: verifiedDigest, exitCode: 0,
       evidence: { command: "npm test", workingTreeDigest: verifiedDigest }
     });
     writeVerifyTrajectory(cwd, current);
     fs.writeFileSync(path.join(cwd, "src", "a.ts"), "export const a = 2;\n");
-    const resume = inspectTaskResumeState(cwd, current, current.sessionId);
+    const resume = inspectTaskResumeState(cwd, current, current.sessionId, undefined, { protectedPaths: [] });
     assert.equal(resume.enforcementSafe, true);
     assert.equal(resume.decision, "resume");
     assert.equal(resume.phase, "verify");
@@ -80,9 +88,27 @@ describe("safe task resume state", () => {
     assert.equal(resume.verifierEvidenceCurrent, false);
     assert.equal(resume.staleVerifierEvidence, true);
     assert.deepEqual(resume.invalidatedVerifierCommands, ["npm test"]);
+    assert.deepEqual(resume.invalidatedVerifierFiles, ["src/a.ts"]);
+    assert.equal(resume.invalidatedVerifierFilesKnown, true);
     assert.match(resume.reason, /must be refreshed/);
     assert.equal(resume.reconstruction.nextAction.action, "rerun-exact-verifier");
     assert.deepEqual(resume.reconstruction.nextAction.exactCommands, ["npm test"]);
+  });
+
+  it("keeps stale legacy verifier files explicitly unknown when no sidecar exists", () => {
+    const cwd = workspace();
+    const current = task();
+    const verifiedDigest = workingTreeEvidenceDigest(workingTreeSnapshot(cwd));
+    current.verifyEvidence = [{
+      command: "npm test", exitCode: 0, summary: "legacy pass", recordedAt: "2026-08-08T00:00:03.000Z",
+      observed: true, observedAt: "2026-08-08T00:00:03.000Z", matchedProfileCommand: true, workingTreeDigest: verifiedDigest
+    }];
+    writeVerifyTrajectory(cwd, current);
+    fs.writeFileSync(path.join(cwd, "src", "a.ts"), "export const a = 3;\n");
+    const resume = inspectTaskResumeState(cwd, current, current.sessionId);
+    assert.equal(resume.staleVerifierEvidence, true);
+    assert.deepEqual(resume.invalidatedVerifierFiles, []);
+    assert.equal(resume.invalidatedVerifierFilesKnown, false);
   });
 
   it("reconstructs a bounded task, plan, progress, verifier, and next action for a new process", () => {

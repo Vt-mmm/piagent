@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-mutation-provenance-v1",
+  "recordId": "provenance.invalid",
+  "evidenceRef": "mutation.invalid",
+  "taskId": "task-01",
+  "taskRunId": "task-01-run-01",
+  "sessionIdentityHash": "raw-session",
+  "toolCallIdentityHash": "raw-tool-call",
+  "toolName": "shell",
+  "recordedAt": "not-a-time",
+  "evidenceMode": "exact-runtime",
+  "beforeTreeDigest": "unknown",
+  "afterTreeDigest": "unknown",
+  "changes": [],
+  "integrityDigest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+}

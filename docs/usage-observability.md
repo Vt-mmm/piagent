@@ -1,4 +1,5 @@
 # Usage observability
+<!-- language: vi; english-index: docs-site/content/en/runtime.html -->
 
 Mục tiêu: biết Pi session đang tiêu hao token/context/cost như nào mà không phải hỏi model bằng ngôn ngữ tự nhiên.
 

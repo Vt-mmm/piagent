@@ -1,0 +1,654 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/approval-v1.schema.json",
+  "title": "Piagent WebUI exact-action approval wire records v1",
+  "oneOf": [
+    { "$ref": "#/$defs/approvalRequest" },
+    { "$ref": "#/$defs/approvalDecision" },
+    { "$ref": "#/$defs/approvalReceipt" }
+  ],
+  "$defs": {
+    "approvalIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "projectRef",
+        "runtimeInstanceId",
+        "sessionRef",
+        "taskId",
+        "taskRunId",
+        "agentOperationId",
+        "toolCallId"
+      ],
+      "properties": {
+        "projectRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "runtimeInstanceId": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "sessionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "taskId": { "$ref": "common-v1.schema.json#/$defs/publicId" },
+        "taskRunId": { "$ref": "common-v1.schema.json#/$defs/publicId" },
+        "agentOperationId": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "toolCallId": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" }
+      }
+    },
+    "expectedRevisions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runtimeRevision",
+        "taskRevision",
+        "controlRevision",
+        "approvalRevision",
+        "treePrecondition"
+      ],
+      "properties": {
+        "runtimeRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "taskRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "controlRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "approvalRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "treePrecondition": {
+          "anyOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/treePrecondition" }
+          ]
+        }
+      }
+    },
+    "treePrecondition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["workspaceRevision", "indexRevision", "preimageDigest"],
+      "properties": {
+        "workspaceRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "indexRevision": { "$ref": "common-v1.schema.json#/$defs/nullableRevisionToken" },
+        "preimageDigest": { "$ref": "common-v1.schema.json#/$defs/digest" }
+      }
+    },
+    "nullableLongDisplayText": {
+      "anyOf": [
+        { "$ref": "#/$defs/boundedRedactedPreview" },
+        { "type": "null" }
+      ]
+    },
+    "boundedRedactedPreview": {
+      "type": "string",
+      "maxLength": 4000,
+      "pattern": "^[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]*$"
+    },
+    "oneTimeDecisionToken": {
+      "type": "string",
+      "minLength": 32,
+      "maxLength": 160,
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "safeUrlOrigin": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 255,
+      "pattern": "^https?://(?:[A-Za-z0-9-]+\\.)*[A-Za-z0-9-]+(?::[0-9]{1,5})?$"
+    },
+    "approvalActionKind": {
+      "enum": [
+        "external-provider-action",
+        "filesystem-write",
+        "filesystem-delete",
+        "workspace-patch",
+        "source-stage",
+        "source-unstage",
+        "source-revert"
+      ]
+    },
+    "preconditionClass": {
+      "enum": [
+        "runtime-only",
+        "workspace-tree",
+        "workspace-index"
+      ]
+    },
+    "targetEvidence": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state", "reasonCode"],
+          "properties": {
+            "state": { "const": "provided" },
+            "reasonCode": { "type": "null" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state", "reasonCode"],
+          "properties": {
+            "state": { "const": "redacted" },
+            "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+          }
+        }
+      ]
+    },
+    "approvalAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "preconditionClass",
+        "toolName",
+        "actionDigest",
+        "canonicalization",
+        "previewPolicy",
+        "commandPreview",
+        "parameterPreview",
+        "targetEvidence",
+        "cwdRef",
+        "cwdDisplay",
+        "targetRefs",
+        "targetPaths",
+        "targetSummaries",
+        "providerRef",
+        "urlOrigin",
+        "requestedScope",
+        "reason",
+        "riskClass",
+        "consequences",
+        "redaction"
+      ],
+      "properties": {
+        "kind": { "$ref": "#/$defs/approvalActionKind" },
+        "preconditionClass": { "$ref": "#/$defs/preconditionClass" },
+        "toolName": { "$ref": "common-v1.schema.json#/$defs/publicId" },
+        "actionDigest": { "$ref": "common-v1.schema.json#/$defs/digest" },
+        "canonicalization": { "const": "digest-bound-action-v1" },
+        "previewPolicy": { "const": "redacted-no-secrets-v1" },
+        "commandPreview": { "$ref": "#/$defs/nullableLongDisplayText" },
+        "parameterPreview": { "$ref": "#/$defs/boundedRedactedPreview" },
+        "targetEvidence": { "$ref": "#/$defs/targetEvidence" },
+        "cwdRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "cwdDisplay": { "$ref": "common-v1.schema.json#/$defs/nullableSafeDisplayPath" },
+        "targetRefs": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" }
+        },
+        "targetPaths": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": { "$ref": "common-v1.schema.json#/$defs/safeDisplayPath" }
+        },
+        "targetSummaries": {
+          "type": "array",
+          "maxItems": 32,
+          "items": { "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText" }
+        },
+        "providerRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+        "urlOrigin": {
+          "anyOf": [
+            { "$ref": "#/$defs/safeUrlOrigin" },
+            { "type": "null" }
+          ]
+        },
+        "requestedScope": { "$ref": "common-v1.schema.json#/$defs/reasonCode" },
+        "reason": { "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText" },
+        "riskClass": { "enum": ["low", "medium", "high", "critical"] },
+        "consequences": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["allow", "deny"],
+          "properties": {
+            "allow": { "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText" },
+            "deny": { "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText" }
+          }
+        },
+        "redaction": { "$ref": "common-v1.schema.json#/$defs/redaction" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "targetEvidence": {
+                "type": "object",
+                "properties": { "state": { "const": "provided" } },
+                "required": ["state"]
+              }
+            },
+            "required": ["targetEvidence"]
+          },
+          "then": {
+            "anyOf": [
+              { "type": "object", "properties": { "targetRefs": { "type": "array", "minItems": 1 } } },
+              { "type": "object", "properties": { "targetPaths": { "type": "array", "minItems": 1 } } },
+              { "type": "object", "properties": { "targetSummaries": { "type": "array", "minItems": 1 } } }
+            ]
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "targetRefs": { "type": "array", "maxItems": 0 },
+              "targetPaths": { "type": "array", "maxItems": 0 },
+              "targetSummaries": { "type": "array", "maxItems": 0 }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": { "const": "external-provider-action" }
+            },
+            "required": ["kind"]
+          },
+          "then": {
+            "properties": {
+              "preconditionClass": { "const": "runtime-only" }
+            },
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": { "providerRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" } }
+              },
+              {
+                "type": "object",
+                "properties": { "urlOrigin": { "$ref": "#/$defs/safeUrlOrigin" } }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "filesystem-write",
+                  "filesystem-delete",
+                  "workspace-patch",
+                  "source-revert"
+                ]
+              }
+            },
+            "required": ["kind"]
+          },
+          "then": {
+            "properties": {
+              "preconditionClass": { "const": "workspace-tree" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": ["source-stage", "source-unstage"]
+              }
+            },
+            "required": ["kind"]
+          },
+          "then": {
+            "properties": {
+              "preconditionClass": { "const": "workspace-index" }
+            }
+          }
+        }
+      ]
+    },
+    "approvalRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "version",
+        "recordType",
+        "approvalRef",
+        "decisionToken",
+        "identity",
+        "action",
+        "expectedRevisions",
+        "state",
+        "requestedAt",
+        "expiresAt",
+        "executor",
+        "directExecution"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "version": { "const": "piagent-webui-approval-v1" },
+        "recordType": { "const": "request" },
+        "approvalRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "decisionToken": { "$ref": "#/$defs/oneTimeDecisionToken" },
+        "identity": { "$ref": "#/$defs/approvalIdentity" },
+        "action": { "$ref": "#/$defs/approvalAction" },
+        "expectedRevisions": { "$ref": "#/$defs/expectedRevisions" },
+        "state": { "const": "waiting" },
+        "requestedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+        "expiresAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+        "executor": { "const": "pi-guard" },
+        "directExecution": { "const": false }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "type": "object",
+                "properties": {
+                  "preconditionClass": { "const": "runtime-only" }
+                },
+                "required": ["preconditionClass"]
+              }
+            },
+            "required": ["action"]
+          },
+          "then": {
+            "properties": {
+              "expectedRevisions": {
+                "type": "object",
+                "properties": {
+                  "treePrecondition": { "type": "null" }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "type": "object",
+                "properties": {
+                  "preconditionClass": { "const": "workspace-tree" }
+                },
+                "required": ["preconditionClass"]
+              }
+            },
+            "required": ["action"]
+          },
+          "then": {
+            "properties": {
+              "expectedRevisions": {
+                "type": "object",
+                "properties": {
+                  "treePrecondition": { "$ref": "#/$defs/treePrecondition" }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "type": "object",
+                "properties": {
+                  "preconditionClass": { "const": "workspace-index" }
+                },
+                "required": ["preconditionClass"]
+              }
+            },
+            "required": ["action"]
+          },
+          "then": {
+            "properties": {
+              "expectedRevisions": {
+                "type": "object",
+                "properties": {
+                  "treePrecondition": {
+                    "allOf": [
+                      { "$ref": "#/$defs/treePrecondition" },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "indexRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "approvalDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "version",
+        "recordType",
+        "approvalRef",
+        "decisionId",
+        "decisionToken",
+        "identity",
+        "actionDigest",
+        "expectedRevisions",
+        "decision",
+        "reason",
+        "decidedAt",
+        "expiresAt",
+        "decisionSurface",
+        "executor",
+        "directExecution"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "version": { "const": "piagent-webui-approval-v1" },
+        "recordType": { "const": "decision" },
+        "approvalRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "decisionId": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "decisionToken": { "$ref": "#/$defs/oneTimeDecisionToken" },
+        "identity": { "$ref": "#/$defs/approvalIdentity" },
+        "actionDigest": { "$ref": "common-v1.schema.json#/$defs/digest" },
+        "expectedRevisions": { "$ref": "#/$defs/expectedRevisions" },
+        "decision": { "enum": ["allow", "deny"] },
+        "reason": { "$ref": "common-v1.schema.json#/$defs/nullableDisplayText" },
+        "decidedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+        "expiresAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+        "decisionSurface": { "const": "webui" },
+        "executor": { "const": "pi-guard" },
+        "directExecution": { "const": false }
+      }
+    },
+    "receiptRevisions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runtimeRevision", "taskRevision", "controlRevision", "approvalRevision"],
+      "properties": {
+        "runtimeRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "taskRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "controlRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "approvalRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" }
+      }
+    },
+    "permitNotIssued": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "issuedAt", "consumedAt", "reasonCode"],
+      "properties": {
+        "status": { "const": "not-issued" },
+        "issuedAt": { "type": "null" },
+        "consumedAt": { "type": "null" },
+        "reasonCode": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" }
+      }
+    },
+    "permitProvisional": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "issuedAt", "consumedAt", "reasonCode"],
+      "properties": {
+        "status": { "const": "provisional" },
+        "issuedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+        "consumedAt": { "type": "null" },
+        "reasonCode": { "type": "null" }
+      }
+    },
+    "permitConsumed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "issuedAt", "consumedAt", "reasonCode"],
+      "properties": {
+        "status": { "const": "consumed" },
+        "issuedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+        "consumedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+        "reasonCode": { "type": "null" }
+      }
+    },
+    "permitCancelled": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "issuedAt", "consumedAt", "reasonCode"],
+      "properties": {
+        "status": { "enum": ["cancelled", "expired"] },
+        "issuedAt": {
+          "anyOf": [
+            { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+            { "type": "null" }
+          ]
+        },
+        "consumedAt": { "type": "null" },
+        "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+      }
+    },
+    "permit": {
+      "oneOf": [
+        { "$ref": "#/$defs/permitNotIssued" },
+        { "$ref": "#/$defs/permitProvisional" },
+        { "$ref": "#/$defs/permitConsumed" },
+        { "$ref": "#/$defs/permitCancelled" }
+      ]
+    },
+    "approvalReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "version",
+        "recordType",
+        "approvalRef",
+        "decisionId",
+        "identity",
+        "actionDigest",
+        "state",
+        "decision",
+        "winnerSurface",
+        "resolutionReason",
+        "resolvedAt",
+        "preRevisions",
+        "postRevisions",
+        "permit",
+        "deduplicated",
+        "auditRef",
+        "executor",
+        "directExecution"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "version": { "const": "piagent-webui-approval-v1" },
+        "recordType": { "const": "receipt" },
+        "approvalRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "decisionId": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+        "identity": { "$ref": "#/$defs/approvalIdentity" },
+        "actionDigest": { "$ref": "common-v1.schema.json#/$defs/digest" },
+        "state": { "enum": ["resolved", "expired", "cancelled"] },
+        "decision": {
+          "anyOf": [
+            { "enum": ["allow", "deny"] },
+            { "type": "null" }
+          ]
+        },
+        "winnerSurface": { "enum": ["webui", "terminal", "runtime-expiry", "runtime-control", "runtime-restart"] },
+        "resolutionReason": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" },
+        "resolvedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+        "preRevisions": { "$ref": "#/$defs/expectedRevisions" },
+        "postRevisions": { "$ref": "#/$defs/receiptRevisions" },
+        "permit": { "$ref": "#/$defs/permit" },
+        "deduplicated": { "type": "boolean" },
+        "auditRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "executor": { "const": "pi-guard" },
+        "directExecution": { "const": false }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "const": "resolved" } } },
+          "then": {
+            "properties": {
+              "decisionId": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+              "decision": { "enum": ["allow", "deny"] },
+              "winnerSurface": { "enum": ["webui", "terminal"] }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": { "const": "resolved" },
+              "decision": { "const": "deny" }
+            },
+            "required": ["state", "decision"]
+          },
+          "then": { "properties": { "permit": { "$ref": "#/$defs/permitNotIssued" } } }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": { "const": "resolved" },
+              "decision": { "const": "allow" }
+            },
+            "required": ["state", "decision"]
+          },
+          "then": {
+            "properties": {
+              "permit": {
+                "oneOf": [
+                  { "$ref": "#/$defs/permitProvisional" },
+                  { "$ref": "#/$defs/permitConsumed" },
+                  { "$ref": "#/$defs/permitCancelled" }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "state": { "const": "expired" } } },
+          "then": {
+            "properties": {
+              "decisionId": { "type": "null" },
+              "decision": { "type": "null" },
+              "winnerSurface": { "const": "runtime-expiry" },
+              "resolutionReason": { "$ref": "common-v1.schema.json#/$defs/reasonCode" },
+              "permit": {
+                "allOf": [
+                  { "$ref": "#/$defs/permitCancelled" },
+                  {
+                    "type": "object",
+                    "properties": { "status": { "const": "expired" } }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "state": { "const": "cancelled" } } },
+          "then": {
+            "properties": {
+              "decisionId": { "type": "null" },
+              "decision": { "type": "null" },
+              "winnerSurface": { "enum": ["runtime-control", "runtime-restart"] },
+              "resolutionReason": { "$ref": "common-v1.schema.json#/$defs/reasonCode" },
+              "permit": {
+                "allOf": [
+                  { "$ref": "#/$defs/permitCancelled" },
+                  {
+                    "type": "object",
+                    "properties": { "status": { "const": "cancelled" } }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-session-command-v1",
+  "messageType": "command",
+  "commandId": "command_01",
+  "idempotencyKey": "session_send_01_abcdefgh",
+  "action": "session.send",
+  "requestedAt": "2026-08-14T04:30:00.000Z",
+  "expiresAt": "2026-08-14T04:35:00.000Z",
+  "sessionRef": "session_01",
+  "expectedCatalogRevision": "catalog_rev_01",
+  "expectedSessionRevision": "session_rev_01",
+  "payload": {
+    "delivery": "steer",
+    "message": "Change direction.",
+    "messageRequestId": "message_request_01",
+    "expectedOperationRef": null
+  }
+}

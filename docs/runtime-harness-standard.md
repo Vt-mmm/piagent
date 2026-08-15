@@ -1,4 +1,5 @@
 # Runtime harness standard
+<!-- language: vi; english-index: docs-site/content/en/runtime.html -->
 
 ## Mục tiêu
 

@@ -1,4 +1,5 @@
 # Project adapters
+<!-- language: vi; english-index: docs-site/content/en/profiles.html -->
 
 ## Mục tiêu
 

@@ -1,0 +1,456 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/gateway-protocol-v1.schema.json",
+  "title": "Piagent Gateway protocol envelope v1",
+  "oneOf": [
+    { "$ref": "#/$defs/connect" },
+    { "$ref": "#/$defs/hello" },
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/successResponse" },
+    { "$ref": "#/$defs/errorResponse" },
+    { "$ref": "#/$defs/event" }
+  ],
+  "$defs": {
+    "requestId": {
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 96,
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "stateVersion": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "method": {
+      "enum": ["gateway.health", "sessions.list", "sessions.get", "sessions.command"]
+    },
+    "connect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "version", "messageType", "clientRef", "minimumProtocol", "maximumProtocol", "lastEventSequence", "catalogRevision"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "version": { "const": "piagent-gateway-protocol-v1" },
+        "messageType": { "const": "connect" },
+        "clientRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "minimumProtocol": { "const": 1 },
+        "maximumProtocol": { "const": 1 },
+        "lastEventSequence": {
+          "anyOf": [
+            { "$ref": "#/$defs/stateVersion" },
+            { "type": "null" }
+          ]
+        },
+        "catalogRevision": { "$ref": "common-v1.schema.json#/$defs/nullableRevisionToken" }
+      }
+    },
+    "hello": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "version", "messageType", "capabilities"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "version": { "const": "piagent-gateway-protocol-v1" },
+        "messageType": { "const": "hello" },
+        "capabilities": { "$ref": "gateway-capabilities-v1.schema.json" }
+      }
+    },
+    "requestBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "version", "messageType", "requestId", "method", "params"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "version": { "const": "piagent-gateway-protocol-v1" },
+        "messageType": { "const": "request" },
+        "requestId": { "$ref": "#/$defs/requestId" },
+        "method": { "$ref": "#/$defs/method" },
+        "params": { "type": "object" }
+      }
+    },
+    "healthRequest": {
+      "allOf": [
+        { "$ref": "#/$defs/requestBase" },
+        {
+          "type": "object",
+          "properties": {
+            "method": { "const": "gateway.health" },
+            "params": { "type": "object", "additionalProperties": false, "maxProperties": 0 }
+          }
+        }
+      ]
+    },
+    "listRequest": {
+      "allOf": [
+        { "$ref": "#/$defs/requestBase" },
+        {
+          "type": "object",
+          "properties": {
+            "method": { "const": "sessions.list" },
+            "params": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["cursor", "limit", "filter", "query", "projectRef"],
+              "properties": {
+                "cursor": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+                "limit": { "type": "integer", "minimum": 1, "maximum": 200 },
+                "filter": { "enum": ["active", "archived", "all"] },
+                "query": {
+                  "type": ["string", "null"],
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "pattern": "^[^\\u0000-\\u001F\\u007F]+$"
+                },
+                "projectRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "getRequest": {
+      "allOf": [
+        { "$ref": "#/$defs/requestBase" },
+        {
+          "type": "object",
+          "properties": {
+            "method": { "const": "sessions.get" },
+            "params": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["sessionRef"],
+              "properties": {
+                "sessionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "commandRequest": {
+      "allOf": [
+        { "$ref": "#/$defs/requestBase" },
+        {
+          "type": "object",
+          "properties": {
+            "method": { "const": "sessions.command" },
+            "params": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["command"],
+              "properties": {
+                "command": { "$ref": "session-command-v1.schema.json#/$defs/command" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "request": {
+      "oneOf": [
+        { "$ref": "#/$defs/healthRequest" },
+        { "$ref": "#/$defs/listRequest" },
+        { "$ref": "#/$defs/getRequest" },
+        { "$ref": "#/$defs/commandRequest" }
+      ]
+    },
+    "responseBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "version", "messageType", "requestId", "method", "ok", "stateVersion", "result", "error"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "version": { "const": "piagent-gateway-protocol-v1" },
+        "messageType": { "const": "response" },
+        "requestId": { "$ref": "#/$defs/requestId" },
+        "method": { "$ref": "#/$defs/method" },
+        "ok": { "type": "boolean" },
+        "stateVersion": { "$ref": "#/$defs/stateVersion" },
+        "result": {},
+        "error": {}
+      }
+    },
+    "healthResponse": {
+      "allOf": [
+        { "$ref": "#/$defs/responseBase" },
+        {
+          "type": "object",
+          "properties": {
+            "method": { "const": "gateway.health" },
+            "ok": { "const": true },
+            "result": { "$ref": "gateway-capabilities-v1.schema.json" },
+            "error": { "type": "null" }
+          }
+        }
+      ]
+    },
+    "listResponse": {
+      "allOf": [
+        { "$ref": "#/$defs/responseBase" },
+        {
+          "type": "object",
+          "properties": {
+            "method": { "const": "sessions.list" },
+            "ok": { "const": true },
+            "result": { "$ref": "session-catalog-v1.schema.json#/$defs/catalog" },
+            "error": { "type": "null" }
+          }
+        }
+      ]
+    },
+    "getResponse": {
+      "allOf": [
+        { "$ref": "#/$defs/responseBase" },
+        {
+          "type": "object",
+          "properties": {
+            "method": { "const": "sessions.get" },
+            "ok": { "const": true },
+            "result": { "$ref": "session-catalog-v1.schema.json#/$defs/sessionDetail" },
+            "error": { "type": "null" }
+          }
+        }
+      ]
+    },
+    "commandResponse": {
+      "allOf": [
+        { "$ref": "#/$defs/responseBase" },
+        {
+          "type": "object",
+          "properties": {
+            "method": { "const": "sessions.command" },
+            "ok": { "const": true },
+            "result": { "$ref": "session-command-v1.schema.json#/$defs/receipt" },
+            "error": { "type": "null" }
+          }
+        }
+      ]
+    },
+    "successResponse": {
+      "oneOf": [
+        { "$ref": "#/$defs/healthResponse" },
+        { "$ref": "#/$defs/listResponse" },
+        { "$ref": "#/$defs/getResponse" },
+        { "$ref": "#/$defs/commandResponse" }
+      ]
+    },
+    "protocolError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "retryable"],
+      "properties": {
+        "code": { "$ref": "common-v1.schema.json#/$defs/reasonCode" },
+        "message": { "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText" },
+        "retryable": { "type": "boolean" }
+      }
+    },
+    "errorResponse": {
+      "allOf": [
+        { "$ref": "#/$defs/responseBase" },
+        {
+          "type": "object",
+          "properties": {
+            "ok": { "const": false },
+            "result": { "type": "null" },
+            "error": { "$ref": "#/$defs/protocolError" }
+          }
+        }
+      ]
+    },
+    "eventBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "version", "messageType", "sequence", "stateVersion", "generatedAt", "kind", "payload"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "version": { "const": "piagent-gateway-protocol-v1" },
+        "messageType": { "const": "event" },
+        "sequence": { "$ref": "#/$defs/stateVersion" },
+        "stateVersion": { "$ref": "#/$defs/stateVersion" },
+        "generatedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+        "kind": { "enum": ["catalog.changed", "session.changed", "runtime.changed", "resync.required", "message.delta", "message.completed", "tool.started", "tool.completed"] },
+        "payload": { "type": "object" }
+      }
+    },
+    "catalogChangedEvent": {
+      "allOf": [
+        { "$ref": "#/$defs/eventBase" },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "catalog.changed" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["catalogRevision"],
+              "properties": { "catalogRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" } }
+            }
+          }
+        }
+      ]
+    },
+    "sessionChangedEvent": {
+      "allOf": [
+        { "$ref": "#/$defs/eventBase" },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "session.changed" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["catalogRevision", "session"],
+              "properties": {
+                "catalogRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+                "session": { "$ref": "session-catalog-v1.schema.json#/$defs/sessionRow" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "runtimeChangedEvent": {
+      "allOf": [
+        { "$ref": "#/$defs/eventBase" },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "runtime.changed" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["sessionRef", "sessionRevision", "liveState", "operationRef", "reasonCode"],
+              "properties": {
+                "sessionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+                "sessionRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+                "liveState": { "enum": ["offline", "idle", "running", "paused", "waiting-approval", "uncertain"] },
+                "operationRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+                "reasonCode": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" }
+              },
+              "allOf": [
+                {
+                  "if": { "properties": { "liveState": { "enum": ["running", "paused", "waiting-approval"] } }, "required": ["liveState"] },
+                  "then": { "properties": { "operationRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" } } }
+                },
+                {
+                  "if": { "properties": { "liveState": { "const": "uncertain" } }, "required": ["liveState"] },
+                  "then": { "properties": { "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" } } },
+                  "else": { "properties": { "reasonCode": { "type": "null" } } }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "resyncRequiredEvent": {
+      "allOf": [
+        { "$ref": "#/$defs/eventBase" },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "resync.required" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["reasonCode", "earliestSequence", "currentSequence"],
+              "properties": {
+                "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" },
+                "earliestSequence": { "$ref": "#/$defs/stateVersion" },
+                "currentSequence": { "$ref": "#/$defs/stateVersion" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "messageDeltaEvent": {
+      "allOf": [
+        { "$ref": "#/$defs/eventBase" },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "message.delta" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["sessionRef", "operationRef", "messageRef", "messageSequence", "delta"],
+              "properties": {
+                "sessionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+                "operationRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+                "messageRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+                "messageSequence": { "$ref": "#/$defs/stateVersion" },
+                "delta": { "type": "string", "maxLength": 16384, "pattern": "^[^\\u0000]*$" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "messageCompletedEvent": {
+      "allOf": [
+        { "$ref": "#/$defs/eventBase" },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "message.completed" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["sessionRef", "operationRef", "messageRef", "sessionRevision", "truncated"],
+              "properties": {
+                "sessionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+                "operationRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+                "messageRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+                "sessionRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+                "truncated": { "type": "boolean" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "toolEvent": {
+      "allOf": [
+        { "$ref": "#/$defs/eventBase" },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "enum": ["tool.started", "tool.completed"] },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["sessionRef", "operationRef", "toolCallRef", "toolLabel", "isError"],
+              "properties": {
+                "sessionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+                "operationRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+                "toolCallRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+                "toolLabel": { "type": "string", "minLength": 1, "maxLength": 160, "pattern": "^[^\\u0000-\\u001F\\u007F]+$" },
+                "isError": { "type": ["boolean", "null"] }
+              }
+            }
+          },
+          "allOf": [
+            {
+              "if": { "properties": { "kind": { "const": "tool.started" } }, "required": ["kind"] },
+              "then": { "properties": { "payload": { "type": "object", "properties": { "isError": { "type": "null" } } } } },
+              "else": { "properties": { "payload": { "type": "object", "properties": { "isError": { "type": "boolean" } } } } }
+            }
+          ]
+        }
+      ]
+    },
+    "event": {
+      "oneOf": [
+        { "$ref": "#/$defs/catalogChangedEvent" },
+        { "$ref": "#/$defs/sessionChangedEvent" },
+        { "$ref": "#/$defs/runtimeChangedEvent" },
+        { "$ref": "#/$defs/resyncRequiredEvent" },
+        { "$ref": "#/$defs/messageDeltaEvent" },
+        { "$ref": "#/$defs/messageCompletedEvent" },
+        { "$ref": "#/$defs/toolEvent" }
+      ]
+    }
+  }
+}

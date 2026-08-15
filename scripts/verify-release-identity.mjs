@@ -74,7 +74,10 @@ if (!version?.includes("-") && rootPackage.publishConfig?.tag !== undefined) fai
 // something different from the manifest on the registry.
 if (rootPackage.repository?.url !== "git+https://github.com/Vt-mmm/piagent.git") fail("root package repository URL is not canonical");
 if (corePackage.repository?.url !== rootPackage.repository.url) fail("core package repository URL does not match the root package");
-if (rootPackage.dependencies && Object.keys(rootPackage.dependencies).length > 0) fail("root package has unexpected runtime dependencies");
+const runtimeDependencies = rootPackage.dependencies ?? {};
+if (JSON.stringify(runtimeDependencies) !== JSON.stringify({ ws: "8.21.3" })) {
+  fail("root package runtime dependencies must contain only the pinned local Gateway WebSocket transport");
+}
 if (packageLock.name !== rootPackage.name || packageLock.packages?.[""]?.name !== rootPackage.name) fail("package-lock root identity does not match package.json");
 if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version ?? "")) fail("package.json version is not a supported release version");
 if (corePackage.version !== version) fail("root and core package versions do not match");

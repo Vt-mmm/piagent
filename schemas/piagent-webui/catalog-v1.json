@@ -1,0 +1,240 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": "piagent-webui-schema-catalog-v1",
+  "documents": [
+    {
+      "name": "common-v1",
+      "file": "common-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/common-v1.schema.json",
+      "documentVersion": 1,
+      "role": "definitions",
+      "supported": true,
+      "current": true
+    },
+    {
+      "name": "snapshot-v1",
+      "file": "snapshot-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/snapshot-v1.schema.json",
+      "documentVersion": 1,
+      "role": "snapshot",
+      "supported": true,
+      "current": true
+    },
+    {
+      "name": "runtime-event-v2",
+      "file": "runtime-event-v2.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/runtime-event-v2.schema.json",
+      "documentVersion": 2,
+      "role": "event",
+      "supported": true,
+      "current": true
+    },
+    {
+      "name": "source-change-v1",
+      "file": "source-change-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/source-change-v1.schema.json",
+      "documentVersion": 1,
+      "role": "read-model",
+      "supported": true,
+      "current": true
+    },
+    {
+      "name": "diff-v1",
+      "file": "diff-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/diff-v1.schema.json",
+      "documentVersion": 1,
+      "role": "read-model",
+      "supported": true,
+      "current": true
+    },
+    {
+      "name": "review-state-v1",
+      "file": "review-state-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/review-state-v1.schema.json",
+      "documentVersion": 1,
+      "role": "read-model",
+      "supported": true,
+      "current": true
+    },
+    {
+      "name": "source-mutation-v1",
+      "file": "source-mutation-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/source-mutation-v1.schema.json",
+      "documentVersion": 1,
+      "role": "read-model",
+      "supported": true,
+      "current": true
+    },
+    {
+      "name": "source-revert-v1",
+      "file": "source-revert-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/source-revert-v1.schema.json",
+      "documentVersion": 1,
+      "role": "read-model",
+      "supported": true,
+      "current": true
+    },
+    {
+      "name": "commit-summary-v1",
+      "file": "commit-summary-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/commit-summary-v1.schema.json",
+      "documentVersion": 1,
+      "role": "read-model",
+      "supported": true,
+      "current": true
+    },
+    {
+      "name": "task-index-v1",
+      "file": "task-index-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/task-index-v1.schema.json",
+      "documentVersion": 1,
+      "role": "read-model",
+      "supported": true,
+      "current": true
+    },
+    {
+      "name": "task-timeline-v1",
+      "file": "task-timeline-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/task-timeline-v1.schema.json",
+      "documentVersion": 1,
+      "role": "read-model",
+      "supported": true,
+      "current": true
+    },
+    {
+      "name": "recovery-history-v1",
+      "file": "recovery-history-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/recovery-history-v1.schema.json",
+      "documentVersion": 1,
+      "role": "read-model",
+      "supported": true,
+      "current": true
+    },
+    {
+      "name": "handoff-history-v1",
+      "file": "handoff-history-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/handoff-history-v1.schema.json",
+      "documentVersion": 1,
+      "role": "read-model",
+      "supported": true,
+      "current": true
+    },
+    {
+      "name": "subagent-tree-v1",
+      "file": "subagent-tree-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/subagent-tree-v1.schema.json",
+      "documentVersion": 1,
+      "role": "read-model",
+      "supported": true,
+      "current": true
+    },
+    {
+      "name": "release-monitor-v1",
+      "file": "release-monitor-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/release-monitor-v1.schema.json",
+      "documentVersion": 1,
+      "role": "read-model",
+      "supported": true,
+      "current": true
+    },
+    {
+      "name": "transcript-v1",
+      "file": "transcript-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/transcript-v1.schema.json",
+      "documentVersion": 1,
+      "role": "read-model",
+      "supported": true,
+      "current": true
+    },
+    {
+      "name": "queue-v1",
+      "file": "queue-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/queue-v1.schema.json",
+      "documentVersion": 1,
+      "role": "read-model",
+      "supported": true,
+      "current": true
+    },
+    {
+      "name": "model-catalog-v1",
+      "file": "model-catalog-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/model-catalog-v1.schema.json",
+      "documentVersion": 1,
+      "role": "read-model",
+      "supported": true,
+      "current": true
+    },
+    {
+      "name": "attachment-v1",
+      "file": "attachment-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/attachment-v1.schema.json",
+      "documentVersion": 1,
+      "role": "command",
+      "supported": true,
+      "current": true
+    },
+    {
+      "name": "control-command-v1",
+      "file": "control-command-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/control-command-v1.schema.json",
+      "documentVersion": 1,
+      "role": "command",
+      "supported": true,
+      "current": true
+    },
+    {
+      "name": "approval-v1",
+      "file": "approval-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/approval-v1.schema.json",
+      "documentVersion": 1,
+      "role": "command",
+      "supported": true,
+      "current": true
+    },
+    {
+      "name": "capabilities-v1",
+      "file": "capabilities-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/capabilities-v1.schema.json",
+      "documentVersion": 1,
+      "role": "handshake",
+      "supported": true,
+      "current": true
+    },
+    {
+      "name": "session-catalog-v1",
+      "file": "session-catalog-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/session-catalog-v1.schema.json",
+      "documentVersion": 1,
+      "role": "read-model",
+      "supported": true,
+      "current": true
+    },
+    {
+      "name": "session-command-v1",
+      "file": "session-command-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/session-command-v1.schema.json",
+      "documentVersion": 1,
+      "role": "command",
+      "supported": true,
+      "current": true
+    },
+    {
+      "name": "gateway-capabilities-v1",
+      "file": "gateway-capabilities-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/gateway-capabilities-v1.schema.json",
+      "documentVersion": 1,
+      "role": "handshake",
+      "supported": true,
+      "current": true
+    },
+    {
+      "name": "gateway-protocol-v1",
+      "file": "gateway-protocol-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/gateway-protocol-v1.schema.json",
+      "documentVersion": 1,
+      "role": "transport",
+      "supported": true,
+      "current": true
+    }
+  ]
+}

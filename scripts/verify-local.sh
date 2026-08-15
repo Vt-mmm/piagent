@@ -41,6 +41,7 @@ required_files=(
   "$ROOT/.npmignore"
   "$ROOT/package.json"
   "$ROOT/package-lock.json"
+  "$ROOT/playwright.webui.config.mjs"
   "$ROOT/tsconfig.json"
   "$ROOT/.github/workflows/verify.yml"
   "$ROOT/.github/workflows/codeql.yml"
@@ -152,6 +153,7 @@ required_files=(
   "$ROOT/docs/package-architecture-notes.md"
   "$ROOT/docs/capability-packs.md"
   "$ROOT/docs/runtime-policy-design.md"
+  "$ROOT/docs/third-party-neutrality.md"
   "$ROOT/docs-site/index.html"
   "$ROOT/docs-site/mcp.html"
   "$ROOT/docs-site/en/index.html"
@@ -171,6 +173,9 @@ required_files=(
   "$ROOT/scripts/build-docs-site.mjs"
   "$ROOT/scripts/check-architecture.mjs"
   "$ROOT/scripts/check-doc-languages.mjs"
+  "$ROOT/scripts/check-third-party-neutrality.mjs"
+  "$ROOT/governance/piagent-webui/wui5-18-acceptance-matrix.v1.json"
+  "$ROOT/tests/piagent-webui-wui5-18-gate.test.mjs"
   "$ROOT/architecture/layers.json"
   "$ROOT/scripts/context-engine.mjs"
   "$ROOT/scripts/preview-docs-site.mjs"
@@ -180,6 +185,218 @@ required_files=(
   "$ROOT/schemas/capability-recipe.schema.json"
   "$ROOT/schemas/eval-scenario.schema.json"
   "$ROOT/schemas/action-proposal.schema.json"
+  "$ROOT/schemas/piagent-webui/catalog-v1.json"
+  "$ROOT/schemas/piagent-webui/common-v1.schema.json"
+  "$ROOT/schemas/piagent-webui/snapshot-v1.schema.json"
+  "$ROOT/schemas/piagent-webui/runtime-event-v2.schema.json"
+  "$ROOT/schemas/piagent-webui/source-change-v1.schema.json"
+  "$ROOT/schemas/piagent-webui/diff-v1.schema.json"
+  "$ROOT/schemas/piagent-webui/review-state-v1.schema.json"
+  "$ROOT/schemas/piagent-webui/source-mutation-v1.schema.json"
+  "$ROOT/schemas/piagent-webui/source-revert-v1.schema.json"
+  "$ROOT/schemas/piagent-webui/commit-summary-v1.schema.json"
+  "$ROOT/schemas/piagent-webui/task-index-v1.schema.json"
+  "$ROOT/schemas/piagent-webui/task-timeline-v1.schema.json"
+  "$ROOT/schemas/piagent-webui/recovery-history-v1.schema.json"
+  "$ROOT/schemas/piagent-webui/handoff-history-v1.schema.json"
+  "$ROOT/schemas/piagent-webui/subagent-tree-v1.schema.json"
+  "$ROOT/schemas/piagent-webui/release-monitor-v1.schema.json"
+  "$ROOT/schemas/piagent-webui/transcript-v1.schema.json"
+  "$ROOT/schemas/piagent-webui/queue-v1.schema.json"
+  "$ROOT/schemas/piagent-webui/model-catalog-v1.schema.json"
+  "$ROOT/schemas/piagent-webui/attachment-v1.schema.json"
+  "$ROOT/schemas/piagent-webui/control-command-v1.schema.json"
+  "$ROOT/schemas/piagent-webui/approval-v1.schema.json"
+  "$ROOT/schemas/piagent-webui/capabilities-v1.schema.json"
+  "$ROOT/schemas/piagent-webui/session-catalog-v1.schema.json"
+  "$ROOT/schemas/piagent-webui/session-command-v1.schema.json"
+  "$ROOT/schemas/piagent-webui/gateway-capabilities-v1.schema.json"
+  "$ROOT/schemas/piagent-webui/gateway-protocol-v1.schema.json"
+  "$ROOT/packages/piagent-webui/package.json"
+  "$ROOT/packages/piagent-webui/tsconfig.json"
+  "$ROOT/packages/piagent-webui/vite.config.ts"
+  "$ROOT/packages/piagent-webui/scripts/generate-contracts.mjs"
+  "$ROOT/packages/piagent-webui/benchmark/benchmark.mjs"
+  "$ROOT/packages/piagent-webui/contracts/generated/index.ts"
+  "$ROOT/packages/piagent-webui/contracts/generated/review-state-v1.ts"
+  "$ROOT/packages/piagent-webui/contracts/generated/source-mutation-v1.ts"
+  "$ROOT/packages/piagent-webui/contracts/generated/source-revert-v1.ts"
+  "$ROOT/packages/piagent-webui/contracts/generated/commit-summary-v1.ts"
+  "$ROOT/packages/piagent-webui/contracts/generated/task-index-v1.ts"
+  "$ROOT/packages/piagent-webui/contracts/generated/task-timeline-v1.ts"
+  "$ROOT/packages/piagent-webui/contracts/generated/recovery-history-v1.ts"
+  "$ROOT/packages/piagent-webui/contracts/generated/handoff-history-v1.ts"
+  "$ROOT/packages/piagent-webui/contracts/generated/subagent-tree-v1.ts"
+  "$ROOT/packages/piagent-webui/contracts/generated/release-monitor-v1.ts"
+  "$ROOT/packages/piagent-webui/contracts/generated/queue-v1.ts"
+  "$ROOT/packages/piagent-webui/contracts/generated/model-catalog-v1.ts"
+  "$ROOT/packages/piagent-webui/contracts/generated/attachment-v1.ts"
+  "$ROOT/packages/piagent-webui/contracts/generated/session-catalog-v1.ts"
+  "$ROOT/packages/piagent-webui/contracts/generated/session-command-v1.ts"
+  "$ROOT/packages/piagent-webui/contracts/generated/gateway-capabilities-v1.ts"
+  "$ROOT/packages/piagent-webui/contracts/generated/gateway-protocol-v1.ts"
+  "$ROOT/packages/piagent-webui/client/index.html"
+  "$ROOT/packages/piagent-webui/client/src/App.tsx"
+  "$ROOT/packages/piagent-webui/client/src/api.ts"
+  "$ROOT/packages/piagent-webui/client/src/use-inspection.ts"
+  "$ROOT/packages/piagent-webui/client/src/view-model.ts"
+  "$ROOT/packages/piagent-webui/client/src/source-view-model.ts"
+  "$ROOT/packages/piagent-webui/client/src/SourceWorkspace.tsx"
+  "$ROOT/packages/piagent-webui/client/src/TaskRunIndexPanel.tsx"
+  "$ROOT/packages/piagent-webui/client/src/activity-view-model.ts"
+  "$ROOT/packages/piagent-webui/client/src/ActivityPanel.tsx"
+  "$ROOT/packages/piagent-webui/client/src/evidence-view-model.ts"
+  "$ROOT/packages/piagent-webui/client/src/EvidencePanels.tsx"
+  "$ROOT/packages/piagent-webui/client/src/ChatPanel.tsx"
+  "$ROOT/packages/piagent-webui/client/src/chat-view-model.ts"
+  "$ROOT/packages/piagent-webui/client/src/chat-command.ts"
+  "$ROOT/packages/piagent-webui/client/src/review-command.ts"
+  "$ROOT/packages/piagent-webui/client/src/source-mutation-command.ts"
+  "$ROOT/packages/piagent-webui/client/src/source-revert-command.ts"
+  "$ROOT/packages/piagent-webui/client/src/source-open-command.ts"
+  "$ROOT/packages/piagent-webui/client/src/approval-command.ts"
+  "$ROOT/packages/piagent-webui/client/src/ApprovalPanel.tsx"
+  "$ROOT/packages/piagent-webui/client/src/SessionOptionsPanel.tsx"
+  "$ROOT/packages/piagent-webui/client/src/LifecyclePanel.tsx"
+  "$ROOT/packages/piagent-webui/client/src/SessionHubApp.tsx"
+  "$ROOT/packages/piagent-webui/client/src/NewSessionPage.tsx"
+  "$ROOT/packages/piagent-webui/client/src/SessionComposerControls.tsx"
+  "$ROOT/packages/piagent-webui/client/src/McpConnectionActions.tsx"
+  "$ROOT/packages/piagent-webui/client/src/ProviderAccounts.tsx"
+  "$ROOT/packages/piagent-webui/client/src/SettingsPage.tsx"
+  "$ROOT/packages/piagent-webui/client/src/SessionInspectorDrawer.tsx"
+  "$ROOT/packages/piagent-webui/client/src/ServiceIcon.tsx"
+  "$ROOT/packages/piagent-webui/client/src/use-session-hub.ts"
+  "$ROOT/packages/piagent-webui/server/http-security.ts"
+  "$ROOT/packages/piagent-webui/server/session-auth.ts"
+  "$ROOT/packages/piagent-webui/server/static-bundle.ts"
+  "$ROOT/packages/piagent-webui/server/loopback-server.ts"
+  "$ROOT/packages/piagent-webui/server/read-model-provider.ts"
+  "$ROOT/packages/piagent-webui/server/read-only-router.ts"
+  "$ROOT/packages/piagent-webui/server/sse-hub.ts"
+  "$ROOT/packages/piagent-webui/server/core-inspection-provider.ts"
+  "$ROOT/packages/piagent-webui/server/ipc-read-model-client.ts"
+  "$ROOT/packages/piagent-webui/server/sidecar-main.ts"
+  "$ROOT/packages/piagent-webui/server/transcript-projection.ts"
+  "$ROOT/packages/piagent-webui/gateway/control-socket.ts"
+  "$ROOT/packages/piagent-webui/gateway/gateway-service.ts"
+  "$ROOT/packages/piagent-webui/gateway/gateway-events.ts"
+  "$ROOT/packages/piagent-webui/gateway/gateway-protocol-service.ts"
+  "$ROOT/packages/piagent-webui/gateway/gateway-session-stream.ts"
+  "$ROOT/packages/piagent-webui/gateway/pi-host.ts"
+  "$ROOT/packages/piagent-webui/gateway/profile-state.ts"
+  "$ROOT/packages/piagent-webui/gateway/project-registry.ts"
+  "$ROOT/packages/piagent-webui/gateway/native-project-picker.ts"
+  "$ROOT/packages/piagent-webui/gateway/provider-auth-broker.ts"
+  "$ROOT/packages/piagent-webui/gateway/mcp-auth-broker.ts"
+  "$ROOT/tests/piagent-webui-mcp-auth.test.mjs"
+  "$ROOT/packages/piagent-webui/gateway/session-catalog.ts"
+  "$ROOT/packages/piagent-webui/gateway/session-command-controller.ts"
+  "$ROOT/packages/piagent-webui/gateway/session-command-store.ts"
+  "$ROOT/packages/piagent-webui/gateway/session-lease-store.ts"
+  "$ROOT/packages/piagent-webui/gateway/session-metadata-store.ts"
+  "$ROOT/packages/piagent-webui/gateway/session-runtime-supervisor.ts"
+  "$ROOT/packages/piagent-webui/server/gateway-websocket.ts"
+  "$ROOT/packages/piagent-webui/extension/piagent-webui.ts"
+  "$ROOT/packages/piagent-webui/extension/review-controller.ts"
+  "$ROOT/packages/piagent-webui/extension/source-mutation-controller.ts"
+  "$ROOT/packages/piagent-webui/extension/source-revert-controller.ts"
+  "$ROOT/packages/piagent-webui/extension/source-open-controller.ts"
+  "$ROOT/packages/piagent-webui/extension/vscode-handoff.ts"
+  "$ROOT/packages/piagent-core/runtime/inspection/review-state-contract.ts"
+  "$ROOT/packages/piagent-core/runtime/inspection/mcp-control.ts"
+  "$ROOT/packages/piagent-core/runtime/inspection/review-state-projection.ts"
+  "$ROOT/packages/piagent-core/runtime/inspection/review-state-store.ts"
+  "$ROOT/packages/piagent-core/runtime/inspection/source-mutation-projection.ts"
+  "$ROOT/packages/piagent-core/runtime/inspection/source-mutation-store.ts"
+  "$ROOT/packages/piagent-core/runtime/inspection/source-revert-projection.ts"
+  "$ROOT/packages/piagent-core/runtime/inspection/source-handoff-store.ts"
+  "$ROOT/packages/piagent-core/runtime/inspection/source-open-target.ts"
+  "$ROOT/packages/piagent-core/runtime/inspection/commit-summary-projection.ts"
+  "$ROOT/packages/piagent-core/runtime/inspection/task-run-index.ts"
+  "$ROOT/packages/piagent-core/runtime/inspection/task-recovery-timeline.ts"
+  "$ROOT/packages/piagent-core/runtime/inspection/task-compaction-history.ts"
+  "$ROOT/packages/piagent-core/runtime/inspection/context-telemetry-inspection.ts"
+  "$ROOT/packages/piagent-core/runtime/inspection/task-handoff-history.ts"
+  "$ROOT/packages/piagent-core/runtime/inspection/task-subagent-tree.ts"
+  "$ROOT/packages/piagent-webui/server/benchmark-release-monitor.ts"
+  "$ROOT/packages/piagent-webui/client/src/ReleaseMonitorPanel.tsx"
+  "$ROOT/packages/piagent-core/runtime/inspection/git-filter-safety.ts"
+  "$ROOT/packages/piagent-core/runtime/policy/source-index-transaction.ts"
+  "$ROOT/packages/piagent-core/runtime/policy/source-mutation-guard-binding.ts"
+  "$ROOT/packages/piagent-core/runtime/policy/source-mutation-guard.ts"
+  "$ROOT/packages/piagent-core/runtime/policy/source-worktree-transaction.ts"
+  "$ROOT/tests/piagent-webui-review-state.test.mjs"
+  "$ROOT/tests/piagent-webui-source-mutation.test.mjs"
+  "$ROOT/tests/piagent-webui-source-revert.test.mjs"
+  "$ROOT/tests/piagent-webui-source-open.test.mjs"
+  "$ROOT/tests/piagent-webui-commit-summary.test.mjs"
+  "$ROOT/tests/piagent-webui-mutation-invalidation.test.mjs"
+  "$ROOT/tests/piagent-webui-task-index.test.mjs"
+  "$ROOT/tests/piagent-webui-task-timeline.test.mjs"
+  "$ROOT/tests/piagent-webui-recovery-history.test.mjs"
+  "$ROOT/tests/piagent-webui-handoff-history.test.mjs"
+  "$ROOT/tests/piagent-webui-subagent-tree.test.mjs"
+  "$ROOT/tests/piagent-webui-release-monitor.test.mjs"
+  "$ROOT/tests/piagent-webui-long-task-scale.test.mjs"
+  "$ROOT/governance/piagent-webui/decisions/WUI4-06-benchmark-release-monitoring.md"
+  "$ROOT/governance/piagent-webui/decisions/WUI4-07-retention-corrupt-scale-gate.md"
+  "$ROOT/governance/piagent-webui/decisions/WUI4-08-independent-webui4-gate.md"
+  "$ROOT/packages/piagent-webui/extension/same-session-bridge.ts"
+  "$ROOT/packages/piagent-webui/extension/held-message-queue.ts"
+  "$ROOT/packages/piagent-webui/extension/session-options-controller.ts"
+  "$ROOT/packages/piagent-webui/extension/session-stream-adapter.ts"
+  "$ROOT/packages/piagent-webui/extension/attachment-store.ts"
+  "$ROOT/packages/piagent-webui/extension/lifecycle-controller.ts"
+  "$ROOT/packages/piagent-webui/extension/lifecycle-event-adapter.ts"
+  "$ROOT/packages/piagent-core/runtime/inspection/approval-broker.ts"
+  "$ROOT/packages/piagent-core/runtime/inspection/task-control-journal.ts"
+  "$ROOT/tests/piagent-webui-production-bridge.test.mjs"
+  "$ROOT/tests/piagent-webui-bridge-message-e2e.test.mjs"
+  "$ROOT/tests/piagent-webui-transcript-projection.test.mjs"
+  "$ROOT/tests/piagent-webui-session-stream.test.mjs"
+  "$ROOT/tests/piagent-webui-chat-client.test.mjs"
+  "$ROOT/tests/piagent-webui-held-message-queue.test.mjs"
+  "$ROOT/tests/piagent-webui-session-options.test.mjs"
+  "$ROOT/tests/piagent-webui-attachment-store.test.mjs"
+  "$ROOT/tests/piagent-webui-approval-broker.test.mjs"
+  "$ROOT/tests/piagent-webui-lifecycle-control.test.mjs"
+  "$ROOT/tests/piagent-webui-lifecycle-client.test.mjs"
+  "$ROOT/scripts/piagent-webui-launcher.mjs"
+  "$ROOT/tests/piagent-webui-package-boundary.test.mjs"
+  "$ROOT/tests/helpers/piagent-webui-build.mjs"
+  "$ROOT/tests/piagent-webui-loopback-server.test.mjs"
+  "$ROOT/tests/piagent-webui-project-registry.test.mjs"
+  "$ROOT/tests/piagent-webui-provider-auth.test.mjs"
+  "$ROOT/tests/piagent-webui-session-hub.e2e.mjs"
+  "$ROOT/governance/piagent-webui/decisions/WUI5-11-session-first-mui-shell.md"
+  "$ROOT/tests/piagent-webui-read-routes-sse.test.mjs"
+  "$ROOT/tests/piagent-webui-task-dashboard.test.mjs"
+  "$ROOT/tests/piagent-webui-source-diff-client.test.mjs"
+  "$ROOT/tests/piagent-webui-activity-client.test.mjs"
+  "$ROOT/tests/piagent-webui-evidence-client.test.mjs"
+  "$ROOT/tests/piagent-webui-accessibility-client.test.mjs"
+  "$ROOT/tests/piagent-webui-isolation.test.mjs"
+  "$ROOT/tests/piagent-webui-launcher-integration.test.mjs"
+  "$ROOT/tests/piagent-webui-browser.e2e.mjs"
+  "$ROOT/tests/piagent-webui-session-hub.e2e.mjs"
+  "$ROOT/tests/piagent-webui-session-hub-schema.test.mjs"
+  "$ROOT/tests/piagent-webui-session-runtime-spike.test.mjs"
+  "$ROOT/tests/piagent-webui-gateway.test.mjs"
+  "$ROOT/tests/piagent-webui-session-metadata.test.mjs"
+  "$ROOT/tests/piagent-webui-session-lease-runtime.test.mjs"
+  "$ROOT/tests/piagent-webui-session-command-admission.test.mjs"
+  "$ROOT/tests/piagent-webui-gateway-transport.test.mjs"
+  "$ROOT/scripts/piagent-dashboard.mjs"
+  "$ROOT/governance/piagent-webui/40-session-hub-master-plan.md"
+  "$ROOT/governance/piagent-webui/decisions/WUI5-01-session-hub-product-contract.md"
+  "$ROOT/governance/piagent-webui/decisions/WUI5-02-gateway-wire-contract.md"
+  "$ROOT/governance/piagent-webui/decisions/WUI5-03-pi-sdk-session-runtime-proof.md"
+  "$ROOT/governance/piagent-webui/decisions/WUI5-04-gateway-lease-crash-threat-model.md"
+  "$ROOT/governance/piagent-webui/decisions/WUI5-05-one-per-profile-gateway-cli.md"
+  "$ROOT/governance/piagent-webui/decisions/WUI5-06-bounded-session-catalog-metadata.md"
+  "$ROOT/governance/piagent-webui/decisions/WUI5-07-authenticated-gateway-transport.md"
+  "$ROOT/governance/piagent-webui/decisions/WUI5-08-owner-lease-runtime-supervisor.md"
   "$ROOT/packs/engineering-base/pack.json"
   "$ROOT/packs/engineering-base/recipes/bounded-change.json"
   "$ROOT/packs/web-delivery/pack.json"
@@ -306,6 +523,8 @@ const jsonFiles = [
   ".pi/piagent-profile.json",
   ".pi/piagent-profile.lock.json",
   "packages/piagent-core/package.json",
+  "packages/piagent-webui/package.json",
+  "packages/piagent-webui/tsconfig.json",
   "packages/piagent-core/policies/base-policy.json",
   "adapters/generic/profile.json",
   "adapters/backend-api/profile.json",
@@ -332,6 +551,35 @@ const jsonFiles = [
   "schemas/eval-scenario.schema.json",
   "schemas/action-proposal.schema.json",
   "schemas/benchmark-assurance-evidence.schema.json",
+  "schemas/piagent-webui/catalog-v1.json",
+  "schemas/piagent-webui/common-v1.schema.json",
+  "schemas/piagent-webui/snapshot-v1.schema.json",
+  "schemas/piagent-webui/runtime-event-v2.schema.json",
+  "schemas/piagent-webui/source-change-v1.schema.json",
+  "schemas/piagent-webui/diff-v1.schema.json",
+  "schemas/piagent-webui/review-state-v1.schema.json",
+  "schemas/piagent-webui/source-mutation-v1.schema.json",
+  "schemas/piagent-webui/source-revert-v1.schema.json",
+  "schemas/piagent-webui/commit-summary-v1.schema.json",
+  "schemas/piagent-webui/task-index-v1.schema.json",
+  "schemas/piagent-webui/task-timeline-v1.schema.json",
+  "schemas/piagent-webui/recovery-history-v1.schema.json",
+  "schemas/piagent-webui/handoff-history-v1.schema.json",
+  "schemas/piagent-webui/subagent-tree-v1.schema.json",
+  "schemas/piagent-webui/release-monitor-v1.schema.json",
+  "schemas/piagent-webui/transcript-v1.schema.json",
+  "schemas/piagent-webui/queue-v1.schema.json",
+  "schemas/piagent-webui/model-catalog-v1.schema.json",
+  "schemas/piagent-webui/control-command-v1.schema.json",
+  "schemas/piagent-webui/approval-v1.schema.json",
+  "schemas/piagent-webui/capabilities-v1.schema.json",
+  "schemas/piagent-webui/session-catalog-v1.schema.json",
+  "schemas/piagent-webui/session-command-v1.schema.json",
+  "schemas/piagent-webui/gateway-capabilities-v1.schema.json",
+  "schemas/piagent-webui/gateway-protocol-v1.schema.json",
+  "schemas/task-baseline-manifest.schema.json",
+  "schemas/mutation-provenance-record.schema.json",
+  "schemas/verifier-file-snapshot.schema.json",
   "packs/engineering-base/pack.json",
   "packs/engineering-base/recipes/bounded-change.json",
   "packs/web-delivery/pack.json",
@@ -653,6 +901,8 @@ node --check "$ROOT/packages/piagent-core/capabilities/capability-core.js" >/dev
 node --check "$ROOT/packages/piagent-core/capabilities/capability-sources.js" >/dev/null
 node --check "$ROOT/scripts/capability-catalog.mjs" >/dev/null
 node --check "$ROOT/scripts/piagent-cli.mjs" >/dev/null
+node --check "$ROOT/scripts/piagent-webui-launcher.mjs" >/dev/null
+node --check "$ROOT/playwright.webui.config.mjs" >/dev/null
 node --check "$ROOT/scripts/benchmark-runner.mjs" >/dev/null
 node --check "$ROOT/scripts/context-engine.mjs" >/dev/null
 node --check "$ROOT/scripts/pi-usage-history.mjs" >/dev/null
@@ -664,7 +914,10 @@ node --check "$ROOT/scripts/build-docs-site.mjs" >/dev/null
 node --check "$ROOT/scripts/preview-docs-site.mjs" >/dev/null
 node "$ROOT/scripts/check-architecture.mjs" >/dev/null
 node "$ROOT/scripts/check-doc-languages.mjs" >/dev/null
+node "$ROOT/scripts/check-third-party-neutrality.mjs" >/dev/null
+run_quietly "npm run build --workspace @piagent/webui" npm run build --workspace @piagent/webui
 run_quietly "npm test" npm test
+run_quietly "npm run test:webui:e2e" npm run test:webui:e2e
 if [[ -x "$ROOT/node_modules/.bin/tsc" ]]; then
   run_quietly "npm run typecheck" npm run typecheck
 fi

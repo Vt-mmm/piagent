@@ -1,0 +1,2622 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/snapshot-v1.schema.json",
+  "title": "Piagent WebUI canonical snapshot v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "version",
+    "generatedAt",
+    "identity",
+    "revision",
+    "capabilities",
+    "session",
+    "task",
+    "sourceChanges",
+    "activity",
+    "approvals",
+    "verification",
+    "usage",
+    "continuation",
+    "handoff",
+    "health"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "version": {
+      "const": "piagent-webui-snapshot-v1"
+    },
+    "generatedAt": {
+      "$ref": "common-v1.schema.json#/$defs/timestamp"
+    },
+    "identity": {
+      "$ref": "common-v1.schema.json#/$defs/identity"
+    },
+    "revision": {
+      "$ref": "common-v1.schema.json#/$defs/snapshotRevision"
+    },
+    "capabilities": {
+      "$ref": "capabilities-v1.schema.json"
+    },
+    "session": {
+      "$ref": "#/$defs/session"
+    },
+    "task": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/task"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sourceChanges": {
+      "$ref": "#/$defs/sourceChanges"
+    },
+    "activity": {
+      "$ref": "#/$defs/activitySummary"
+    },
+    "approvals": {
+      "$ref": "#/$defs/approvalSummary"
+    },
+    "verification": {
+      "$ref": "#/$defs/verification"
+    },
+    "usage": {
+      "$ref": "#/$defs/usage"
+    },
+    "continuation": {
+      "$ref": "#/$defs/continuation"
+    },
+    "handoff": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/handoff"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "health": {
+      "$ref": "#/$defs/aggregateHealth"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "identity": {
+            "properties": {
+              "toolCallId": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "then": {
+        "properties": {
+          "identity": {
+            "properties": {
+              "agentOperationId": {
+                "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "identity": {
+            "properties": {
+              "taskRunId": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "then": {
+        "properties": {
+          "identity": {
+            "properties": {
+              "taskId": {
+                "$ref": "common-v1.schema.json#/$defs/publicId"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "task": {
+            "type": "null"
+          }
+        },
+        "type": "object"
+      },
+      "then": {
+        "properties": {
+          "identity": {
+            "properties": {
+              "taskId": {
+                "type": "null"
+              },
+              "taskRunId": {
+                "type": "null"
+              }
+            },
+            "type": "object"
+          },
+          "revision": {
+            "properties": {
+              "taskRevision": {
+                "type": "null"
+              },
+              "controlRevision": {
+                "type": "null"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "else": {
+        "properties": {
+          "identity": {
+            "properties": {
+              "taskId": {
+                "$ref": "common-v1.schema.json#/$defs/publicId"
+              },
+              "taskRunId": {
+                "$ref": "common-v1.schema.json#/$defs/publicId"
+              }
+            },
+            "type": "object"
+          },
+          "revision": {
+            "properties": {
+              "taskRevision": {
+                "$ref": "common-v1.schema.json#/$defs/revisionToken"
+              },
+              "controlRevision": {
+                "$ref": "common-v1.schema.json#/$defs/revisionToken"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      }
+    },
+    {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "session": { "type": "object", "properties": { "verificationState": { "const": "not-run" } } },
+            "verification": { "type": "object", "properties": { "state": { "const": "not-run" } } }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": { "type": "object", "properties": { "verificationState": { "const": "running" } } },
+            "verification": { "type": "object", "properties": { "state": { "const": "running" } } }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": { "type": "object", "properties": { "verificationState": { "const": "current" } } },
+            "verification": { "type": "object", "properties": { "state": { "const": "current" } } }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": { "type": "object", "properties": { "verificationState": { "const": "failed" } } },
+            "verification": { "type": "object", "properties": { "state": { "const": "failed" } } }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": { "type": "object", "properties": { "verificationState": { "const": "stale" } } },
+            "verification": { "type": "object", "properties": { "state": { "const": "stale" } } }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": { "type": "object", "properties": { "verificationState": { "const": "unavailable" } } },
+            "verification": { "type": "object", "properties": { "state": { "const": "unavailable" } } }
+          }
+        }
+      ]
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": { "task": { "type": "null" } },
+        "required": ["task"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "session": { "type": "object", "properties": { "taskOutcome": { "type": "null" } } }
+        }
+      },
+      "else": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "task": { "type": "object", "properties": { "outcome": { "const": "pending" } } },
+              "session": { "type": "object", "properties": { "taskOutcome": { "const": "pending" } } }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "task": { "type": "object", "properties": { "outcome": { "const": "completed" } } },
+              "session": { "type": "object", "properties": { "taskOutcome": { "const": "completed" } } }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "task": { "type": "object", "properties": { "outcome": { "const": "blocked" } } },
+              "session": { "type": "object", "properties": { "taskOutcome": { "const": "blocked" } } }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "task": { "type": "object", "properties": { "outcome": { "const": "partial" } } },
+              "session": { "type": "object", "properties": { "taskOutcome": { "const": "partial" } } }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "task": { "type": "object", "properties": { "outcome": { "const": "failed" } } },
+              "session": { "type": "object", "properties": { "taskOutcome": { "const": "failed" } } }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "task": { "type": "object", "properties": { "outcome": { "const": "pending" } }, "required": ["outcome"] }
+        },
+        "required": ["task"]
+      },
+      "then": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "task": { "type": "object", "properties": { "controlState": { "const": "active" } } },
+              "session": { "type": "object", "properties": { "controlState": { "const": "active" } } }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "task": { "type": "object", "properties": { "controlState": { "const": "pause-requested" } } },
+              "session": { "type": "object", "properties": { "controlState": { "const": "pause-requested" } } }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "task": { "type": "object", "properties": { "controlState": { "const": "paused" } } },
+              "session": { "type": "object", "properties": { "controlState": { "const": "paused" } } }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "task": { "type": "object", "properties": { "controlState": { "const": "unknown" } } },
+              "session": { "type": "object", "properties": { "controlState": { "const": "unknown" } } }
+            }
+          }
+        ]
+      },
+      "else": {
+        "if": {
+          "type": "object",
+          "properties": { "task": { "type": "object" } },
+          "required": ["task"]
+        },
+        "then": {
+          "type": "object",
+          "properties": {
+            "task": { "type": "object", "properties": { "controlState": { "const": "terminal" } } },
+            "session": { "type": "object", "properties": { "controlState": { "const": "terminal" } } }
+          }
+        }
+      }
+    },
+    {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "session": { "type": "object", "properties": { "approvalState": { "const": "none" } } },
+            "approvals": { "type": "object", "properties": { "state": { "const": "none" } } }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": { "type": "object", "properties": { "approvalState": { "const": "waiting" } } },
+            "approvals": { "type": "object", "properties": { "state": { "const": "waiting" } } }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": { "type": "object", "properties": { "approvalState": { "const": "resolved" } } },
+            "approvals": { "type": "object", "properties": { "state": { "const": "resolved" } } }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": { "type": "object", "properties": { "approvalState": { "const": "expired" } } },
+            "approvals": { "type": "object", "properties": { "state": { "const": "expired" } } }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": { "type": "object", "properties": { "approvalState": { "const": "unknown" } } },
+            "approvals": { "type": "object", "properties": { "state": { "const": "unknown" } } }
+          }
+        }
+      ]
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": { "task": { "type": "null" } },
+        "required": ["task"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "sourceChanges": {
+            "type": "object",
+            "properties": {
+              "task": {
+                "type": "object",
+                "properties": { "state": { "const": "unavailable" } }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "knownFactState": {
+      "enum": [
+        "known",
+        "unknown",
+        "unavailable",
+        "disconnected",
+        "resync-required"
+      ]
+    },
+    "factMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "evidence",
+        "reasonCode"
+      ],
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/knownFactState"
+        },
+        "evidence": {
+          "anyOf": [
+            {
+              "enum": [
+                "observed",
+                "derived"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reasonCode": {
+          "$ref": "common-v1.schema.json#/$defs/nullableReasonCode"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "known"
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "evidence": {
+                "enum": [
+                  "observed",
+                  "derived"
+                ]
+              },
+              "reasonCode": {
+                "type": "null"
+              }
+            },
+            "type": "object"
+          },
+          "else": {
+            "properties": {
+              "evidence": {
+                "type": "null"
+              },
+              "reasonCode": {
+                "$ref": "common-v1.schema.json#/$defs/reasonCode"
+              }
+            },
+            "type": "object"
+          }
+        }
+      ]
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "modelRef",
+        "provider",
+        "modelId",
+        "displayName",
+        "reasoning",
+        "inputCapabilities",
+        "supportedThinkingLevels",
+        "contextWindow",
+        "maxOutputTokens"
+      ],
+      "properties": {
+        "modelRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "provider": {
+          "$ref": "common-v1.schema.json#/$defs/publicId"
+        },
+        "modelId": {
+          "$ref": "common-v1.schema.json#/$defs/publicId"
+        },
+        "displayName": {
+          "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText"
+        },
+        "reasoning": {
+          "type": "boolean"
+        },
+        "inputCapabilities": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "text",
+              "image",
+              "audio",
+              "document"
+            ]
+          }
+        },
+        "supportedThinkingLevels": {
+          "type": "array",
+          "maxItems": 7,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "off",
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        },
+        "contextWindow": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000000
+        },
+        "maxOutputTokens": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000000
+        }
+      }
+    },
+    "modelFact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "value",
+        "evidence",
+        "reasonCode"
+      ],
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/knownFactState"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/model"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "observed",
+            "derived",
+            null
+          ]
+        },
+        "reasonCode": {
+          "$ref": "common-v1.schema.json#/$defs/nullableReasonCode"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "known"
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "$ref": "#/$defs/model"
+              },
+              "evidence": {
+                "enum": [
+                  "observed",
+                  "derived"
+                ]
+              },
+              "reasonCode": {
+                "type": "null"
+              }
+            },
+            "type": "object"
+          },
+          "else": {
+            "properties": {
+              "value": {
+                "type": "null"
+              },
+              "evidence": {
+                "type": "null"
+              },
+              "reasonCode": {
+                "$ref": "common-v1.schema.json#/$defs/reasonCode"
+              }
+            },
+            "type": "object"
+          }
+        }
+      ]
+    },
+    "thinkingFact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "value",
+        "evidence",
+        "reasonCode"
+      ],
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/knownFactState"
+        },
+        "value": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "off",
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max",
+            null
+          ]
+        },
+        "evidence": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "observed",
+            "derived",
+            null
+          ]
+        },
+        "reasonCode": {
+          "$ref": "common-v1.schema.json#/$defs/nullableReasonCode"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "known"
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "enum": [
+                  "off",
+                  "minimal",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ]
+              },
+              "evidence": {
+                "enum": [
+                  "observed",
+                  "derived"
+                ]
+              },
+              "reasonCode": {
+                "type": "null"
+              }
+            },
+            "type": "object"
+          },
+          "else": {
+            "properties": {
+              "value": {
+                "type": "null"
+              },
+              "evidence": {
+                "type": "null"
+              },
+              "reasonCode": {
+                "$ref": "common-v1.schema.json#/$defs/reasonCode"
+              }
+            },
+            "type": "object"
+          }
+        }
+      ]
+    },
+    "hostPhaseFact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "value",
+        "evidence",
+        "reasonCode"
+      ],
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/knownFactState"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "common-v1.schema.json#/$defs/operationPhase"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "observed",
+            "derived",
+            null
+          ]
+        },
+        "reasonCode": {
+          "$ref": "common-v1.schema.json#/$defs/nullableReasonCode"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "known"
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "enum": [
+                  "idle",
+                  "input-preflight",
+                  "model",
+                  "tool-preflight",
+                  "waiting-approval",
+                  "tool",
+                  "retry",
+                  "compaction",
+                  "branch-summary",
+                  "direct-bash",
+                  "settling",
+                  "other"
+                ]
+              },
+              "evidence": {
+                "enum": [
+                  "observed",
+                  "derived"
+                ]
+              },
+              "reasonCode": {
+                "type": "null"
+              }
+            },
+            "type": "object"
+          },
+          "else": {
+            "properties": {
+              "value": {
+                "type": "null"
+              },
+              "evidence": {
+                "type": "null"
+              },
+              "reasonCode": {
+                "$ref": "common-v1.schema.json#/$defs/reasonCode"
+              }
+            },
+            "type": "object"
+          }
+        }
+      ]
+    },
+    "session": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "connectionState",
+        "connectionReason",
+        "displayName",
+        "operation",
+        "controlState",
+        "taskOutcome",
+        "approvalState",
+        "verificationState",
+        "permissionProfile",
+        "model",
+        "thinking",
+        "queue",
+        "context"
+      ],
+      "properties": {
+        "connectionState": {
+          "enum": [
+            "connected",
+            "disconnected",
+            "reconnecting",
+            "resync-required",
+            "unknown"
+          ]
+        },
+        "connectionReason": {
+          "$ref": "common-v1.schema.json#/$defs/nullableReasonCode"
+        },
+        "displayName": {
+          "$ref": "common-v1.schema.json#/$defs/nullableDisplayText"
+        },
+        "operation": {
+          "$ref": "#/$defs/operation"
+        },
+        "controlState": {
+          "enum": [
+            "active",
+            "pause-requested",
+            "paused",
+            "terminal",
+            "unknown"
+          ]
+        },
+        "taskOutcome": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "pending",
+            "completed",
+            "blocked",
+            "partial",
+            "failed",
+            null
+          ]
+        },
+        "approvalState": {
+          "enum": [
+            "none",
+            "waiting",
+            "resolved",
+            "expired",
+            "unknown"
+          ]
+        },
+        "verificationState": {
+          "enum": [
+            "not-run",
+            "running",
+            "current",
+            "failed",
+            "stale",
+            "unavailable"
+          ]
+        },
+        "permissionProfile": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "state",
+            "value",
+            "evidence",
+            "reasonCode"
+          ],
+          "properties": {
+            "state": {
+              "$ref": "#/$defs/knownFactState"
+            },
+            "value": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                "read-only",
+                "workspace-write",
+                "trusted-full-access",
+                null
+              ]
+            },
+            "evidence": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                "observed",
+                "derived",
+                null
+              ]
+            },
+            "reasonCode": {
+              "$ref": "common-v1.schema.json#/$defs/nullableReasonCode"
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "type": "object",
+                "properties": { "state": { "const": "known" } },
+                "required": ["state"]
+              },
+              "then": {
+                "type": "object",
+                "properties": {
+                  "value": { "enum": ["read-only", "workspace-write", "trusted-full-access"] },
+                  "evidence": { "enum": ["observed", "derived"] },
+                  "reasonCode": { "type": "null" }
+                }
+              },
+              "else": {
+                "type": "object",
+                "properties": {
+                  "value": { "type": "null" },
+                  "evidence": { "type": "null" },
+                  "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+                }
+              }
+            }
+          ]
+        },
+        "model": {
+          "$ref": "#/$defs/modelFact"
+        },
+        "thinking": {
+          "$ref": "#/$defs/thinkingFact"
+        },
+        "queue": {
+          "$ref": "#/$defs/queue"
+        },
+        "context": {
+          "$ref": "#/$defs/contextUsage"
+        }
+      }
+    },
+    "operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "liveness",
+        "operationRef",
+        "hostPhase",
+        "startedAt",
+        "settledAt",
+        "reasonCode"
+      ],
+      "properties": {
+        "liveness": {
+          "enum": [
+            "idle",
+            "running",
+            "stopping",
+            "settled",
+            "unknown"
+          ]
+        },
+        "operationRef": {
+          "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef"
+        },
+        "hostPhase": {
+          "$ref": "#/$defs/hostPhaseFact"
+        },
+        "startedAt": {
+          "anyOf": [
+            {
+              "$ref": "common-v1.schema.json#/$defs/timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "settledAt": {
+          "anyOf": [
+            {
+              "$ref": "common-v1.schema.json#/$defs/timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reasonCode": {
+          "$ref": "common-v1.schema.json#/$defs/nullableReasonCode"
+        }
+      }
+    },
+    "queue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "hasPending",
+        "heldCount",
+        "revision",
+        "reasonCode"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "known",
+            "unknown",
+            "unavailable",
+            "disconnected",
+            "resync-required"
+          ]
+        },
+        "hasPending": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "heldCount": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "revision": {
+          "$ref": "common-v1.schema.json#/$defs/nullableRevisionToken"
+        },
+        "reasonCode": {
+          "$ref": "common-v1.schema.json#/$defs/nullableReasonCode"
+        }
+      },
+      "allOf": [
+        {
+          "if": { "type": "object", "properties": { "state": { "const": "known" } }, "required": ["state"] },
+          "then": {
+            "type": "object",
+            "properties": {
+              "hasPending": { "type": "boolean" },
+              "heldCount": { "type": "integer", "minimum": 0, "maximum": 1000 },
+              "revision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+              "reasonCode": { "type": "null" }
+            }
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "hasPending": { "type": "null" },
+              "heldCount": { "type": "null" },
+              "revision": { "type": "null" },
+              "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+            }
+          }
+        }
+      ]
+    },
+    "contextUsage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "tokens",
+        "contextWindow",
+        "percent",
+        "capturedAt",
+        "reasonCode"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "known",
+            "unknown",
+            "unavailable",
+            "disconnected"
+          ]
+        },
+        "tokens": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1000000000
+        },
+        "contextWindow": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 1000000000
+        },
+        "percent": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "capturedAt": {
+          "anyOf": [
+            {
+              "$ref": "common-v1.schema.json#/$defs/timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reasonCode": {
+          "$ref": "common-v1.schema.json#/$defs/nullableReasonCode"
+        }
+      },
+      "allOf": [
+        {
+          "if": { "type": "object", "properties": { "state": { "const": "known" } }, "required": ["state"] },
+          "then": {
+            "type": "object",
+            "properties": {
+              "tokens": { "type": "integer", "minimum": 0, "maximum": 1000000000 },
+              "contextWindow": { "type": "integer", "minimum": 1, "maximum": 1000000000 },
+              "percent": { "type": "number", "minimum": 0, "maximum": 100 },
+              "capturedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+              "reasonCode": { "type": "null" }
+            }
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "tokens": { "type": "null" },
+              "contextWindow": { "type": "null" },
+              "percent": { "type": "null" },
+              "capturedAt": { "type": "null" },
+              "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+            }
+          }
+        }
+      ]
+    },
+    "criterion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "criterionId",
+        "obligation",
+        "priority",
+        "state",
+        "evidence",
+        "relatedFileRefs",
+        "verifierAttemptRefs",
+        "reasonCode"
+      ],
+      "properties": {
+        "criterionId": {
+          "$ref": "common-v1.schema.json#/$defs/publicId"
+        },
+        "obligation": {
+          "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText"
+        },
+        "priority": {
+          "enum": [
+            "normal",
+            "critical"
+          ]
+        },
+        "state": {
+          "enum": [
+            "pending",
+            "satisfied",
+            "blocked",
+            "unknown"
+          ]
+        },
+        "evidence": {
+          "enum": [
+            "observed",
+            "derived",
+            "unavailable"
+          ]
+        },
+        "relatedFileRefs": {
+          "type": "array",
+          "maxItems": 300,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+          }
+        },
+        "verifierAttemptRefs": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+          }
+        },
+        "reasonCode": {
+          "$ref": "common-v1.schema.json#/$defs/nullableReasonCode"
+        }
+      }
+    },
+    "workPlanStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stepId",
+        "summary",
+        "status",
+        "criterionIds"
+      ],
+      "properties": {
+        "stepId": {
+          "$ref": "common-v1.schema.json#/$defs/publicId"
+        },
+        "summary": {
+          "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText"
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "in-progress",
+            "done",
+            "skipped",
+            "failed"
+          ]
+        },
+        "criterionIds": {
+          "type": "array",
+          "maxItems": 12,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "common-v1.schema.json#/$defs/publicId"
+          }
+        }
+      }
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "taskId",
+        "taskRunId",
+        "summary",
+        "changeMode",
+        "riskLane",
+        "outcome",
+        "controlState",
+        "criteria",
+        "workPlan",
+        "scope",
+        "outOfScope",
+        "progress",
+        "blocker",
+        "reasonCode"
+      ],
+      "properties": {
+        "taskId": {
+          "$ref": "common-v1.schema.json#/$defs/publicId"
+        },
+        "taskRunId": {
+          "$ref": "common-v1.schema.json#/$defs/publicId"
+        },
+        "summary": {
+          "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText"
+        },
+        "changeMode": {
+          "enum": [
+            "source-change",
+            "read-only"
+          ]
+        },
+        "riskLane": {
+          "enum": [
+            "low-risk",
+            "high-risk"
+          ]
+        },
+        "outcome": {
+          "enum": [
+            "pending",
+            "completed",
+            "blocked",
+            "partial",
+            "failed"
+          ]
+        },
+        "controlState": {
+          "enum": [
+            "active",
+            "pause-requested",
+            "paused",
+            "terminal",
+            "unknown"
+          ]
+        },
+        "criteria": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/criterion"
+          }
+        },
+        "workPlan": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/workPlanStep"
+          }
+        },
+        "scope": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText"
+          }
+        },
+        "outOfScope": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText"
+          }
+        },
+        "progress": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "completed",
+            "total",
+            "percent"
+          ],
+          "properties": {
+            "completed": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "total": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "percent": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            }
+          }
+        },
+        "blocker": {
+          "$ref": "common-v1.schema.json#/$defs/nullableDisplayText"
+        },
+        "reasonCode": {
+          "$ref": "common-v1.schema.json#/$defs/nullableReasonCode"
+        }
+      }
+    },
+    "sourceViewSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "view",
+        "base",
+        "state",
+        "revision",
+        "counts",
+        "health"
+      ],
+      "properties": {
+        "view": {
+          "enum": [
+            "task",
+            "working-tree",
+            "staged"
+          ]
+        },
+        "base": {
+          "enum": [
+            "task-baseline",
+            "HEAD",
+            "index"
+          ]
+        },
+        "state": {
+          "enum": [
+            "ready",
+            "loading",
+            "stale",
+            "unavailable",
+            "unknown"
+          ]
+        },
+        "revision": {
+          "$ref": "common-v1.schema.json#/$defs/nullableRevisionToken"
+        },
+        "counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "files",
+            "added",
+            "modified",
+            "deleted",
+            "renamed",
+            "untracked",
+            "conflicted",
+            "additions",
+            "deletions"
+          ],
+          "properties": {
+            "files": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000
+            },
+            "added": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000
+            },
+            "modified": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000
+            },
+            "deleted": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000
+            },
+            "renamed": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000
+            },
+            "untracked": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000
+            },
+            "conflicted": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000
+            },
+            "additions": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1000000000
+            },
+            "deletions": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1000000000
+            }
+          }
+        },
+        "health": {
+          "$ref": "common-v1.schema.json#/$defs/health"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": { "state": { "const": "ready" } },
+            "required": ["state"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "revision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+              "health": {
+                "type": "object",
+                "properties": { "state": { "const": "ok" } }
+              }
+            }
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "health": {
+                "type": "object",
+                "properties": { "state": { "enum": ["degraded", "error", "unavailable", "unknown"] } }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "state": { "enum": ["unavailable", "unknown"] } },
+            "required": ["state"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "revision": { "type": "null" },
+              "counts": {
+                "type": "object",
+                "properties": {
+                  "files": { "const": 0 },
+                  "added": { "const": 0 },
+                  "modified": { "const": 0 },
+                  "deleted": { "const": 0 },
+                  "renamed": { "const": 0 },
+                  "untracked": { "const": 0 },
+                  "conflicted": { "const": 0 },
+                  "additions": { "type": "null" },
+                  "deletions": { "type": "null" }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "view": {
+                "const": "task"
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "base": {
+                "const": "task-baseline"
+              }
+            },
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "view": {
+                "const": "working-tree"
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "base": {
+                "const": "HEAD"
+              }
+            },
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "view": {
+                "const": "staged"
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "base": {
+                "const": "HEAD"
+              }
+            },
+            "type": "object"
+          }
+        }
+      ]
+    },
+    "sourceChanges": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task",
+        "workingTree",
+        "staged"
+      ],
+      "properties": {
+        "task": {
+          "allOf": [
+            { "$ref": "#/$defs/sourceViewSummary" },
+            {
+              "type": "object",
+              "properties": { "view": { "const": "task" } }
+            }
+          ]
+        },
+        "workingTree": {
+          "allOf": [
+            { "$ref": "#/$defs/sourceViewSummary" },
+            {
+              "type": "object",
+              "properties": { "view": { "const": "working-tree" } }
+            }
+          ]
+        },
+        "staged": {
+          "allOf": [
+            { "$ref": "#/$defs/sourceViewSummary" },
+            {
+              "type": "object",
+              "properties": { "view": { "const": "staged" } }
+            }
+          ]
+        }
+      }
+    },
+    "activity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "activityRef",
+        "kind",
+        "state",
+        "label",
+        "preview",
+        "toolCallId",
+        "toolName",
+        "commandDigest",
+        "logRef",
+        "exitCode",
+        "exitCodeExact",
+        "startedAt",
+        "finishedAt"
+      ],
+      "properties": {
+        "activityRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "kind": {
+          "enum": [
+            "tool",
+            "command",
+            "verifier",
+            "approval",
+            "system"
+          ]
+        },
+        "state": {
+          "enum": [
+            "requested",
+            "running",
+            "passed",
+            "failed",
+            "blocked",
+            "aborted",
+            "unknown"
+          ]
+        },
+        "label": {
+          "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText"
+        },
+        "preview": {
+          "type": "string",
+          "maxLength": 65536,
+          "pattern": "^[^\\u0000]*$"
+        },
+        "toolCallId": {
+          "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef"
+        },
+        "toolName": {
+          "$ref": "common-v1.schema.json#/$defs/nullablePublicId"
+        },
+        "commandDigest": {
+          "anyOf": [
+            {
+              "$ref": "common-v1.schema.json#/$defs/digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "logRef": {
+          "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef"
+        },
+        "exitCode": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        "exitCodeExact": {
+          "type": "boolean"
+        },
+        "startedAt": {
+          "$ref": "common-v1.schema.json#/$defs/timestamp"
+        },
+        "finishedAt": {
+          "anyOf": [
+            {
+              "$ref": "common-v1.schema.json#/$defs/timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "activitySummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "running",
+        "recent",
+        "page",
+        "health"
+      ],
+      "properties": {
+        "running": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/activity"
+          }
+        },
+        "recent": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "$ref": "#/$defs/activity"
+          }
+        },
+        "page": {
+          "$ref": "common-v1.schema.json#/$defs/page"
+        },
+        "health": {
+          "$ref": "common-v1.schema.json#/$defs/health"
+        }
+      }
+    },
+    "approvalSummaryItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "approvalRef",
+        "state",
+        "resolution",
+        "actionSummary",
+        "toolCallId",
+        "expiresAt",
+        "reasonCode"
+      ],
+      "properties": {
+        "approvalRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "state": {
+          "enum": [
+            "waiting",
+            "resolved",
+            "expired",
+            "unknown"
+          ]
+        },
+        "resolution": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "allow",
+            "deny",
+            "cancelled",
+            "expired",
+            null
+          ]
+        },
+        "actionSummary": {
+          "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText"
+        },
+        "toolCallId": {
+          "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef"
+        },
+        "expiresAt": {
+          "anyOf": [
+            {
+              "$ref": "common-v1.schema.json#/$defs/timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reasonCode": {
+          "$ref": "common-v1.schema.json#/$defs/nullableReasonCode"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": { "state": { "const": "waiting" } },
+            "required": ["state"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "resolution": { "type": "null" },
+              "toolCallId": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+              "expiresAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+              "reasonCode": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "state": { "const": "resolved" } },
+            "required": ["state"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "resolution": { "enum": ["allow", "deny", "cancelled"] },
+              "reasonCode": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "state": { "const": "expired" } },
+            "required": ["state"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "resolution": { "const": "expired" },
+              "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "state": { "const": "unknown" } },
+            "required": ["state"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "resolution": { "type": "null" },
+              "toolCallId": { "type": "null" },
+              "expiresAt": { "type": "null" },
+              "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+            }
+          }
+        }
+      ]
+    },
+    "approvalSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "pending",
+        "recent",
+        "health"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "none",
+            "waiting",
+            "resolved",
+            "expired",
+            "unknown"
+          ]
+        },
+        "pending": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/approvalSummaryItem"
+          }
+        },
+        "recent": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/approvalSummaryItem"
+          }
+        },
+        "health": {
+          "$ref": "common-v1.schema.json#/$defs/health"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": { "state": { "const": "waiting" } },
+            "required": ["state"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "pending": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "allOf": [
+                    { "$ref": "#/$defs/approvalSummaryItem" },
+                    { "type": "object", "properties": { "state": { "const": "waiting" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "else": {
+            "type": "object",
+            "properties": { "pending": { "type": "array", "maxItems": 0 } }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "state": { "const": "none" } },
+            "required": ["state"]
+          },
+          "then": {
+            "type": "object",
+            "properties": { "recent": { "type": "array", "maxItems": 0 } }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "state": { "const": "resolved" } },
+            "required": ["state"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "recent": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "allOf": [
+                    { "$ref": "#/$defs/approvalSummaryItem" },
+                    { "type": "object", "properties": { "state": { "const": "resolved" } } }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "state": { "const": "expired" } },
+            "required": ["state"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "recent": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "allOf": [
+                    { "$ref": "#/$defs/approvalSummaryItem" },
+                    { "type": "object", "properties": { "state": { "const": "expired" } } }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "verifierAttempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attemptRef",
+        "command",
+        "commandDigest",
+        "exact",
+        "state",
+        "exitCode",
+        "exitCodeExact",
+        "treeDigest",
+        "startedAt",
+        "finishedAt",
+        "staleByFileRefs",
+        "staleByPaths",
+        "staleFilesKnown"
+      ],
+      "properties": {
+        "attemptRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000,
+          "pattern": "^[^\\u0000]*$"
+        },
+        "commandDigest": {
+          "$ref": "common-v1.schema.json#/$defs/digest"
+        },
+        "exact": {
+          "type": "boolean"
+        },
+        "state": {
+          "enum": [
+            "running",
+            "passed",
+            "failed",
+            "blocked",
+            "aborted",
+            "stale",
+            "unknown"
+          ]
+        },
+        "exitCode": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        "exitCodeExact": {
+          "type": "boolean"
+        },
+        "treeDigest": {
+          "$ref": "common-v1.schema.json#/$defs/nullableWorkingTreeDigest"
+        },
+        "startedAt": {
+          "$ref": "common-v1.schema.json#/$defs/timestamp"
+        },
+        "finishedAt": {
+          "anyOf": [
+            {
+              "$ref": "common-v1.schema.json#/$defs/timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "staleByFileRefs": {
+          "type": "array",
+          "maxItems": 300,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+          }
+        },
+        "staleByPaths": {
+          "type": "array",
+          "maxItems": 300,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "common-v1.schema.json#/$defs/safeDisplayPath"
+          }
+        },
+        "staleFilesKnown": {
+          "type": "boolean"
+        }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "latest",
+        "requiredCommands",
+        "reasonCode",
+        "health"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "not-run",
+            "running",
+            "current",
+            "failed",
+            "stale",
+            "unavailable"
+          ]
+        },
+        "latest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/verifierAttempt"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "requiredCommands": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000,
+            "pattern": "^[^\\u0000]*$"
+          }
+        },
+        "reasonCode": {
+          "$ref": "common-v1.schema.json#/$defs/nullableReasonCode"
+        },
+        "health": {
+          "$ref": "common-v1.schema.json#/$defs/health"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": { "state": { "enum": ["not-run", "unavailable"] } },
+            "required": ["state"]
+          },
+          "then": {
+            "type": "object",
+            "properties": { "latest": { "type": "null" } }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "state": { "const": "not-run" } },
+            "required": ["state"]
+          },
+          "then": {
+            "type": "object",
+            "properties": { "reasonCode": { "type": "null" } }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "state": { "const": "unavailable" } },
+            "required": ["state"]
+          },
+          "then": {
+            "type": "object",
+            "properties": { "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" } }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "state": { "const": "running" } },
+            "required": ["state"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "latest": {
+                "allOf": [
+                  { "$ref": "#/$defs/verifierAttempt" },
+                  {
+                    "type": "object",
+                    "properties": { "state": { "const": "running" }, "finishedAt": { "type": "null" } }
+                  }
+                ]
+              },
+              "reasonCode": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "state": { "const": "current" } },
+            "required": ["state"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "latest": {
+                "allOf": [
+                  { "$ref": "#/$defs/verifierAttempt" },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "state": { "const": "passed" },
+                      "exact": { "const": true },
+                      "treeDigest": { "$ref": "common-v1.schema.json#/$defs/workingTreeDigest" },
+                      "finishedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+                      "staleByFileRefs": { "type": "array", "maxItems": 0 },
+                      "staleByPaths": { "type": "array", "maxItems": 0 }
+                    }
+                  }
+                ]
+              },
+              "reasonCode": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "state": { "const": "failed" } },
+            "required": ["state"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "latest": {
+                "allOf": [
+                  { "$ref": "#/$defs/verifierAttempt" },
+                  { "type": "object", "properties": { "state": { "enum": ["failed", "blocked", "aborted"] } } }
+                ]
+              },
+              "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "state": { "const": "stale" } },
+            "required": ["state"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "latest": {
+                "allOf": [
+                  { "$ref": "#/$defs/verifierAttempt" },
+                  { "type": "object", "properties": { "state": { "const": "stale" } } }
+                ]
+              },
+              "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+            }
+          }
+        }
+      ]
+    },
+    "usageCounter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "input",
+        "output",
+        "cacheRead",
+        "cacheWrite",
+        "cost",
+        "currency",
+        "reasonCode"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "known",
+            "unknown",
+            "unavailable"
+          ]
+        },
+        "input": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1000000000000
+        },
+        "output": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1000000000000
+        },
+        "cacheRead": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1000000000000
+        },
+        "cacheWrite": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1000000000000
+        },
+        "cost": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1000000000
+        },
+        "currency": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "USD",
+            null
+          ]
+        },
+        "reasonCode": {
+          "$ref": "common-v1.schema.json#/$defs/nullableReasonCode"
+        }
+      },
+      "allOf": [
+        {
+          "if": { "type": "object", "properties": { "state": { "const": "known" } }, "required": ["state"] },
+          "then": {
+            "type": "object",
+            "properties": {
+              "input": { "type": "integer", "minimum": 0, "maximum": 1000000000000 },
+              "output": { "type": "integer", "minimum": 0, "maximum": 1000000000000 },
+              "cacheRead": { "type": "integer", "minimum": 0, "maximum": 1000000000000 },
+              "cacheWrite": { "type": "integer", "minimum": 0, "maximum": 1000000000000 },
+              "cost": { "type": "number", "minimum": 0, "maximum": 1000000000 },
+              "currency": { "const": "USD" },
+              "reasonCode": { "type": "null" }
+            }
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "input": { "type": "null" },
+              "output": { "type": "null" },
+              "cacheRead": { "type": "null" },
+              "cacheWrite": { "type": "null" },
+              "cost": { "type": "null" },
+              "currency": { "type": "null" },
+              "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+            }
+          }
+        }
+      ]
+    },
+    "usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "context",
+        "latestTurn",
+        "sessionTotal",
+        "taskTotal",
+        "capturedAt",
+        "health"
+      ],
+      "properties": {
+        "context": {
+          "$ref": "#/$defs/contextUsage"
+        },
+        "latestTurn": {
+          "$ref": "#/$defs/usageCounter"
+        },
+        "sessionTotal": {
+          "$ref": "#/$defs/usageCounter"
+        },
+        "taskTotal": {
+          "$ref": "#/$defs/usageCounter"
+        },
+        "capturedAt": {
+          "$ref": "common-v1.schema.json#/$defs/timestamp"
+        },
+        "health": {
+          "$ref": "common-v1.schema.json#/$defs/health"
+        }
+      }
+    },
+    "continuation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "consumed",
+        "maximum",
+        "remaining",
+        "reservationRef",
+        "reasonCode"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "available",
+            "reserved",
+            "exhausted",
+            "not-applicable",
+            "unknown"
+          ]
+        },
+        "consumed": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "maximum": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "remaining": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "reservationRef": {
+          "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef"
+        },
+        "reasonCode": {
+          "$ref": "common-v1.schema.json#/$defs/nullableReasonCode"
+        }
+      },
+      "allOf": [
+        {
+          "if": { "type": "object", "properties": { "state": { "enum": ["available", "reserved", "exhausted"] } }, "required": ["state"] },
+          "then": {
+            "type": "object",
+            "properties": {
+              "consumed": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+              "maximum": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+              "remaining": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+              "reasonCode": { "type": "null" }
+            }
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "consumed": { "type": "null" },
+              "maximum": { "type": "null" },
+              "remaining": { "type": "null" },
+              "reservationRef": { "type": "null" },
+              "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+            }
+          }
+        },
+        {
+          "if": { "type": "object", "properties": { "state": { "const": "reserved" } }, "required": ["state"] },
+          "then": { "type": "object", "properties": { "reservationRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" } } },
+          "else": { "type": "object", "properties": { "reservationRef": { "type": "null" } } }
+        }
+      ]
+    },
+    "handoff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "handoffRef",
+        "state",
+        "summary",
+        "blocker",
+        "nextSafeAction",
+        "evidenceRefs",
+        "generatedAt",
+        "reasonCode"
+      ],
+      "properties": {
+        "handoffRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "state": {
+          "enum": [
+            "ready",
+            "stale",
+            "unavailable",
+            "unknown"
+          ]
+        },
+        "summary": {
+          "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText"
+        },
+        "blocker": {
+          "$ref": "common-v1.schema.json#/$defs/nullableDisplayText"
+        },
+        "nextSafeAction": {
+          "$ref": "common-v1.schema.json#/$defs/nullableDisplayText"
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+          }
+        },
+        "generatedAt": {
+          "$ref": "common-v1.schema.json#/$defs/timestamp"
+        },
+        "reasonCode": {
+          "$ref": "common-v1.schema.json#/$defs/nullableReasonCode"
+        }
+      }
+    },
+    "aggregateHealth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "issues",
+        "resyncRequired",
+        "generatedFromRevision"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "ok",
+            "degraded",
+            "error",
+            "unavailable",
+            "unknown"
+          ]
+        },
+        "issues": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "$ref": "common-v1.schema.json#/$defs/issue"
+          }
+        },
+        "resyncRequired": {
+          "type": "boolean"
+        },
+        "generatedFromRevision": {
+          "$ref": "common-v1.schema.json#/$defs/revisionToken"
+        }
+      }
+    }
+  }
+}

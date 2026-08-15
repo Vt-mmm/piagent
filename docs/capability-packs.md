@@ -1,4 +1,5 @@
 # Capability packs
+<!-- language: vi; english-index: docs-site/content/en/scope.html -->
 
 ## Tổng quan
 

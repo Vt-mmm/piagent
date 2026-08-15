@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/release-monitor-v1.schema.json",
+  "title": "Piagent WebUI bounded benchmark and release monitor v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "version", "generatedAt", "identity", "state", "monitorRevision", "benchmark", "release", "actions", "health"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "version": { "const": "piagent-webui-release-monitor-v1" },
+    "generatedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+    "identity": { "$ref": "common-v1.schema.json#/$defs/identity" },
+    "state": { "enum": ["ready", "unavailable"] },
+    "monitorRevision": { "$ref": "common-v1.schema.json#/$defs/nullableRevisionToken" },
+    "benchmark": { "$ref": "#/$defs/benchmark" },
+    "release": { "$ref": "#/$defs/release" },
+    "actions": { "$ref": "#/$defs/actions" },
+    "health": { "$ref": "common-v1.schema.json#/$defs/health" }
+  },
+  "allOf": [
+    {
+      "properties": {
+        "identity": { "type": "object", "properties": { "agentOperationId": { "type": "null" }, "toolCallId": { "type": "null" } } }
+      }
+    },
+    {
+      "if": { "properties": { "state": { "const": "ready" } }, "required": ["state"] },
+      "then": {
+        "properties": {
+          "monitorRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+          "health": { "type": "object", "properties": { "state": { "enum": ["ok", "degraded"] } } }
+        }
+      },
+      "else": {
+        "properties": {
+          "monitorRevision": { "type": "null" },
+          "benchmark": {
+            "type": "object",
+            "properties": {
+              "state": { "const": "unavailable" },
+              "runs": { "type": "array", "maxItems": 0 },
+              "warnings": { "type": "array", "maxItems": 0 },
+              "page": { "type": "object", "properties": { "total": { "const": 0 }, "returned": { "const": 0 }, "truncated": { "const": false } } }
+            }
+          },
+          "release": { "type": "object", "properties": { "state": { "const": "unavailable" } } },
+          "health": { "type": "object", "properties": { "state": { "const": "error" } } }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "benchmark": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "runs", "warnings", "page"],
+      "properties": {
+        "state": { "enum": ["ready", "missing", "unavailable"] },
+        "runs": { "type": "array", "maxItems": 20, "items": { "$ref": "#/$defs/run" } },
+        "warnings": { "type": "array", "maxItems": 8, "items": { "$ref": "#/$defs/warning" } },
+        "page": { "$ref": "#/$defs/page" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "const": "ready" } }, "required": ["state"] },
+          "then": { "properties": { "runs": { "type": "array", "minItems": 1 } } },
+          "else": { "properties": { "runs": { "type": "array", "maxItems": 0 } } }
+        }
+      ]
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runRef", "suiteId", "lifecycle", "evidenceState", "sourceState", "startedAt", "updatedAt", "completedRuns", "expectedRuns", "verdict", "releaseGate", "tokenClaimAllowed", "claimTier", "scores"],
+      "properties": {
+        "runRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "suiteId": { "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText" },
+        "lifecycle": { "enum": ["completed", "paused", "interrupted", "stopped", "aborted", "in-progress", "incomplete"] },
+        "evidenceState": { "enum": ["complete", "partial"] },
+        "sourceState": { "enum": ["current", "stale"] },
+        "startedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+        "updatedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+        "completedRuns": { "type": "integer", "minimum": 0, "maximum": 1000 },
+        "expectedRuns": { "type": "integer", "minimum": 0, "maximum": 1000 },
+        "verdict": { "$ref": "common-v1.schema.json#/$defs/nullableDisplayText" },
+        "releaseGate": { "enum": ["passed", "failed", "not-applicable", "unknown"] },
+        "tokenClaimAllowed": { "type": ["boolean", "null"] },
+        "claimTier": { "enum": ["smoke", "public-regression", "capability", "private-holdout", "production-shadow", "unknown"] },
+        "scores": { "$ref": "#/$defs/scores" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "lifecycle": { "const": "completed" } }, "required": ["lifecycle"] },
+          "then": { "properties": { "evidenceState": { "const": "complete" }, "releaseGate": { "enum": ["passed", "failed", "not-applicable"] } } },
+          "else": { "properties": { "evidenceState": { "const": "partial" }, "verdict": { "type": "null" }, "releaseGate": { "const": "unknown" }, "tokenClaimAllowed": { "type": "null" }, "claimTier": { "const": "unknown" } } }
+        }
+      ]
+    },
+    "scores": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["quality", "safety", "reliability", "workflow", "efficiency", "overall"],
+      "properties": {
+        "quality": { "$ref": "#/$defs/nullableScore" },
+        "safety": { "$ref": "#/$defs/nullableScore" },
+        "reliability": { "$ref": "#/$defs/nullableScore" },
+        "workflow": { "$ref": "#/$defs/nullableScore" },
+        "efficiency": { "$ref": "#/$defs/nullableScore" },
+        "overall": { "$ref": "#/$defs/nullableScore" }
+      }
+    },
+    "nullableScore": { "type": ["number", "null"], "minimum": 0, "maximum": 10 },
+    "warning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "count", "message"],
+      "properties": {
+        "code": { "enum": ["benchmark-evidence-corrupt", "benchmark-directory-truncated"] },
+        "count": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+        "message": { "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText" }
+      }
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "returned", "truncated"],
+      "properties": {
+        "total": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+        "returned": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "truncated": { "type": "boolean" }
+      }
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "reportRef", "generatedAt", "sourceState", "localSafeGate", "rcAssembly", "beta", "gaRelease", "blockerCount", "blockers", "authorization"],
+      "properties": {
+        "state": { "enum": ["ready", "stale", "missing", "unavailable"] },
+        "reportRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+        "generatedAt": { "anyOf": [{ "$ref": "common-v1.schema.json#/$defs/timestamp" }, { "type": "null" }] },
+        "sourceState": { "enum": ["current", "stale", "unknown"] },
+        "localSafeGate": { "enum": ["passed", "failed", "unknown"] },
+        "rcAssembly": { "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText" },
+        "beta": { "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText" },
+        "gaRelease": { "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText" },
+        "blockerCount": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "blockers": { "type": "array", "maxItems": 8, "items": { "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText" } },
+        "authorization": { "$ref": "#/$defs/releaseAuthorization" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "enum": ["ready", "stale"] } }, "required": ["state"] },
+          "then": { "properties": { "reportRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" }, "generatedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" }, "sourceState": { "enum": ["current", "stale"] } } },
+          "else": { "properties": { "reportRef": { "type": "null" }, "generatedAt": { "type": "null" }, "sourceState": { "const": "unknown" }, "localSafeGate": { "const": "unknown" }, "rcAssembly": { "const": "unknown" }, "beta": { "const": "unknown" }, "gaRelease": { "const": "unknown" }, "blockerCount": { "const": 0 }, "blockers": { "type": "array", "maxItems": 0 } } }
+        },
+        { "if": { "properties": { "state": { "const": "ready" } }, "required": ["state"] }, "then": { "properties": { "sourceState": { "const": "current" } } } },
+        { "if": { "properties": { "state": { "const": "stale" } }, "required": ["state"] }, "then": { "properties": { "sourceState": { "const": "stale" } } } }
+      ]
+    },
+    "releaseAuthorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["releaseCommit", "tag", "publish", "push"],
+      "properties": { "releaseCommit": { "const": false }, "tag": { "const": false }, "publish": { "const": false }, "push": { "const": false } }
+    },
+    "actions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runBenchmark", "resumeBenchmark", "releaseCommit", "tag", "publish", "push"],
+      "properties": { "runBenchmark": { "const": false }, "resumeBenchmark": { "const": false }, "releaseCommit": { "const": false }, "tag": { "const": false }, "publish": { "const": false }, "push": { "const": false } }
+    }
+  }
+}

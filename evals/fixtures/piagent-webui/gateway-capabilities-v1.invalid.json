@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-gateway-capabilities-v1",
+  "generatedAt": "2026-08-14T04:30:00.000Z",
+  "gatewayInstanceRef": "gateway_01",
+  "protocol": {
+    "minimum": 1,
+    "maximum": 1,
+    "selected": null,
+    "compatibility": "incompatible"
+  },
+  "mode": "full",
+  "capabilities": {
+    "catalog": { "status": "available", "version": 1, "reasonCode": null },
+    "events": { "status": "available", "version": 1, "reasonCode": null },
+    "terminalAdapter": { "status": "available", "version": 1, "reasonCode": null },
+    "sessionRuntime": { "status": "available", "version": 1, "reasonCode": null },
+    "sessionActions": {
+      "create": { "status": "available", "version": 1, "reasonCode": null },
+      "send": { "status": "available", "version": 1, "reasonCode": null },
+      "abort": { "status": "available", "version": 1, "reasonCode": null },
+      "setModel": { "status": "available", "version": 1, "reasonCode": null },
+      "setThinking": { "status": "available", "version": 1, "reasonCode": null },
+      "setPermission": { "status": "available", "version": 1, "reasonCode": null },
+      "rename": { "status": "available", "version": 1, "reasonCode": null },
+      "pin": { "status": "available", "version": 1, "reasonCode": null },
+      "archive": { "status": "available", "version": 1, "reasonCode": null },
+      "unarchive": { "status": "available", "version": 1, "reasonCode": null },
+      "fork": { "status": "available", "version": 1, "reasonCode": null },
+      "acquire": { "status": "available", "version": 1, "reasonCode": null },
+      "release": { "status": "available", "version": 1, "reasonCode": null }
+    }
+  },
+  "reasonCode": "protocol-incompatible"
+}

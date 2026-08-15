@@ -677,7 +677,7 @@ echo "  /login"
 echo "  /model          # or Ctrl+L: select provider/model from Pi selector"
 echo "  /scoped-models  # optional: edit Ctrl+P model cycle scope"
 if [[ "$WITH_MCP" == true ]]; then
-  echo "  /mcp            # inspect MCP servers; authenticate Figma/GitHub only when needed"
+  echo "  /mcp            # inspect MCP servers; authenticate approved remote servers only when needed"
 fi
 echo "  /subagents-doctor"
 echo "  /workflow task Implement <task>  # parent may auto-delegate scout/planner/reviewer"

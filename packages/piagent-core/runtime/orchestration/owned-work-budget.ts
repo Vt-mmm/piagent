@@ -13,15 +13,19 @@ export const AUTOMATIC_OWNED_WORK_CEILINGS: OwnedWorkCeilings = Object.freeze({ 
 const LOCK_WAIT_MS = 5;
 const LOCK_WAIT_CEILING_MS = 250;
 const STALE_LOCK_MS = 30_000;
-type Reservation = { id: string; deduplicationKey: string; role: HelperRole; authority: string; status: "active" | "succeeded" | "failed" | "cancelled" | "orphaned"; reservedAt: string; expiresAt: string; completedAt: string | null; usageRef: { calls: number; tokens: number; outputDigest: string | null } | null };
-type BudgetState = { version: typeof OWNED_WORK_BUDGET_VERSION; taskId: string; taskRunId: string; terminal: boolean; reservations: Reservation[]; updatedAt: string };
-export type HelperReleaseResult = { accepted: boolean; status: Reservation["status"] | "stale"; reason: "released" | "helper-call-budget-exceeded" | "helper-token-budget-exceeded" | "reservation-not-active" };
+export type OwnedWorkReservation = { id: string; deduplicationKey: string; role: HelperRole; authority: "read-only" | "single-writer"; status: "active" | "succeeded" | "failed" | "cancelled" | "orphaned"; reservedAt: string; expiresAt: string; completedAt: string | null; usageRef: { calls: number; tokens: number; outputDigest: string | null } | null };
+type BudgetState = { version: typeof OWNED_WORK_BUDGET_VERSION; taskId: string; taskRunId: string; terminal: boolean; reservations: OwnedWorkReservation[]; updatedAt: string };
+export type OwnedWorkBudgetInspection = {
+  state: "missing" | "ready" | "corrupt"; terminal: boolean | null; reservations: OwnedWorkReservation[];
+  updatedAt: string | null; derivedOrphans: number; reasonCode: string | null;
+};
+export type HelperReleaseResult = { accepted: boolean; status: OwnedWorkReservation["status"] | "stale"; reason: "released" | "helper-call-budget-exceeded" | "helper-token-budget-exceeded" | "reservation-not-active" };
 
 function digest(value: unknown): string { return crypto.createHash("sha256").update(String(value ?? "")).digest("hex"); }
 function statePath(cwd: string, taskRunId: string): string { return path.join(cwd, ".pi", "piagent-state", "helper-budgets", `${safeTaskId(taskRunId)}.json`); }
 function lockPath(cwd: string, taskRunId: string): string { return `${statePath(cwd, taskRunId)}.lock`; }
 function empty(request: HelperRequest, now: string): BudgetState { return { version: OWNED_WORK_BUDGET_VERSION, taskId: request.taskId, taskRunId: request.taskRunId, terminal: false, reservations: [], updatedAt: now }; }
-function active(state: BudgetState): Reservation[] { return state.reservations.filter((item) => item.status === "active"); }
+function active(state: BudgetState): OwnedWorkReservation[] { return state.reservations.filter((item) => item.status === "active"); }
 function roleLimit(role: HelperRole): number { return role === "scout" || role === "retriever" || role === "researcher" ? 1 : role === "planner" ? 1 : role === "reviewer" ? 1 : role === "oracle" ? 1 : role === "worker" ? 1 : 0; }
 
 function read(cwd: string, request: HelperRequest, now: string): BudgetState {
@@ -61,6 +65,66 @@ function recoverOrphans(state: BudgetState, now: string): number {
   let recovered = 0; const instant = Date.parse(now);
   for (const item of state.reservations) if (item.status === "active" && Date.parse(item.expiresAt) <= instant) { item.status = "orphaned"; item.completedAt = now; recovered += 1; }
   return recovered;
+}
+
+function exactTimestamp(value: unknown): value is string {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)
+    && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
+}
+function exactFields(value: Record<string, unknown>, fields: string[]): boolean {
+  return Object.keys(value).length === fields.length && fields.every((field) => field in value);
+}
+function validInspectionState(value: unknown, taskId: string, taskRunId: string): value is BudgetState {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const state = value as Record<string, any>;
+  if (!exactFields(state, ["version", "taskId", "taskRunId", "terminal", "reservations", "updatedAt"])
+    || state.version !== OWNED_WORK_BUDGET_VERSION || state.taskId !== taskId || state.taskRunId !== taskRunId
+    || typeof state.terminal !== "boolean" || !exactTimestamp(state.updatedAt) || !Array.isArray(state.reservations)
+    || state.reservations.length > 64) return false;
+  const ids = new Set<string>(); let activeWriters = 0;
+  for (const item of state.reservations) {
+    if (!item || typeof item !== "object" || Array.isArray(item)
+      || !exactFields(item, ["id", "deduplicationKey", "role", "authority", "status", "reservedAt", "expiresAt", "completedAt", "usageRef"])
+      || typeof item.id !== "string" || !/^[a-f0-9]{32}$/.test(item.id) || ids.has(item.id)
+      || typeof item.deduplicationKey !== "string" || !/^[a-f0-9]{64}$/.test(item.deduplicationKey)
+      || !["retriever", "scout", "planner", "worker", "reviewer", "oracle", "researcher"].includes(item.role)
+      || !["read-only", "single-writer"].includes(item.authority)
+      || !["active", "succeeded", "failed", "cancelled", "orphaned"].includes(item.status)
+      || !exactTimestamp(item.reservedAt) || !exactTimestamp(item.expiresAt) || Date.parse(item.expiresAt) < Date.parse(item.reservedAt)
+      || item.completedAt !== null && !exactTimestamp(item.completedAt)
+      || item.status === "active" && item.completedAt !== null || item.status !== "active" && item.completedAt === null) return false;
+    ids.add(item.id); if (item.status === "active" && item.authority === "single-writer") activeWriters += 1;
+    if (item.usageRef !== null) {
+      if (typeof item.usageRef !== "object" || Array.isArray(item.usageRef)
+        || !exactFields(item.usageRef, ["calls", "tokens", "outputDigest"])
+        || !Number.isInteger(item.usageRef.calls) || item.usageRef.calls < 0 || item.usageRef.calls > 101
+        || !Number.isInteger(item.usageRef.tokens) || item.usageRef.tokens < 0 || item.usageRef.tokens > 100001
+        || item.usageRef.outputDigest !== null && (typeof item.usageRef.outputDigest !== "string" || !/^[a-f0-9]{64}$/.test(item.usageRef.outputDigest))) return false;
+    }
+  }
+  return activeWriters <= 1 && (!state.terminal || !state.reservations.some((item: any) => item.status === "active"));
+}
+
+/** Read-only projection input. It never repairs, locks, or writes helper state. */
+export function inspectOwnedWorkBudget(cwd: string, taskId: string, taskRunId: string, now = new Date().toISOString()): OwnedWorkBudgetInspection {
+  try {
+    if (!exactTimestamp(now)) return { state: "corrupt", terminal: null, reservations: [], updatedAt: null, derivedOrphans: 0, reasonCode: "invalid-inspection-time" };
+    const target = statePath(cwd, taskRunId); if (!fs.existsSync(target)) return { state: "missing", terminal: null, reservations: [], updatedAt: null, derivedOrphans: 0, reasonCode: "helper-budget-missing" };
+    const resolved = resolveLocalStatePath(cwd, target, { label: "Helper budget state", kind: "file" });
+    const descriptor = fs.openSync(resolved, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0)); let value;
+    try {
+      const before = fs.fstatSync(descriptor, { bigint: true }); if (!before.isFile() || before.size > BigInt(1024 * 1024)) throw new Error("helper-budget-size");
+      value = JSON.parse(fs.readFileSync(descriptor, "utf8")); const after = fs.fstatSync(descriptor, { bigint: true });
+      const fields = ["dev", "ino", "mode", "size", "mtimeNs", "ctimeNs"] as const;
+      if (fields.some((field) => before[field] !== after[field])) throw new Error("helper-budget-changed");
+    } finally { fs.closeSync(descriptor); }
+    if (!validInspectionState(value, taskId, taskRunId)) return { state: "corrupt", terminal: null, reservations: [], updatedAt: null, derivedOrphans: 0, reasonCode: "helper-budget-invalid" };
+    const clone = structuredClone(value), derivedOrphans = recoverOrphans(clone, now);
+    return { state: "ready", terminal: clone.terminal, reservations: clone.reservations, updatedAt: clone.updatedAt, derivedOrphans,
+      reasonCode: derivedOrphans ? "expired-helper-derived-orphan" : null };
+  } catch {
+    return { state: "corrupt", terminal: null, reservations: [], updatedAt: null, derivedOrphans: 0, reasonCode: "helper-budget-unreadable" };
+  }
 }
 
 export class OwnedWorkBudgetController {

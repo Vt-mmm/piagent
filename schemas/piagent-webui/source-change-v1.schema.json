@@ -1,0 +1,763 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/source-change-v1.schema.json",
+  "title": "Piagent WebUI source change view v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "version",
+    "generatedAt",
+    "identity",
+    "view",
+    "viewRevision",
+    "bases",
+    "availability",
+    "files",
+    "page",
+    "truncationReason",
+    "redaction",
+    "health",
+    "issues"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "version": { "const": "piagent-webui-source-change-v1" },
+    "generatedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+    "identity": { "$ref": "common-v1.schema.json#/$defs/identity" },
+    "view": { "$ref": "#/$defs/view" },
+    "viewRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+    "bases": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": { "$ref": "#/$defs/viewBasis" }
+    },
+    "availability": { "$ref": "#/$defs/availability" },
+    "files": {
+      "type": "array",
+      "maxItems": 2000,
+      "items": { "$ref": "#/$defs/fileChange" }
+    },
+    "page": { "$ref": "common-v1.schema.json#/$defs/page" },
+    "truncationReason": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" },
+    "redaction": { "$ref": "common-v1.schema.json#/$defs/redaction" },
+    "health": { "$ref": "common-v1.schema.json#/$defs/health" },
+    "issues": {
+      "type": "array",
+      "maxItems": 64,
+      "items": { "$ref": "common-v1.schema.json#/$defs/issue" }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "type": "object",
+        "properties": { "view": { "const": "task" } },
+        "required": ["view"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "identity": {
+            "type": "object",
+            "properties": {
+              "taskId": { "$ref": "common-v1.schema.json#/$defs/publicId" },
+              "taskRunId": { "$ref": "common-v1.schema.json#/$defs/publicId" }
+            }
+          },
+          "bases": { "type": "array", "items": { "$ref": "#/$defs/taskBasis" } }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": { "view": { "const": "working-tree" } },
+        "required": ["view"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "bases": { "type": "array", "items": { "$ref": "#/$defs/workingTreeBasis" } }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": { "view": { "const": "staged" } },
+        "required": ["view"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "bases": { "type": "array", "items": { "$ref": "#/$defs/stagedBasis" } },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "status": { "enum": ["A", "M", "D", "R", "C"] }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "availability": {
+            "type": "object",
+            "properties": { "state": { "const": "unavailable" } },
+            "required": ["state"]
+          }
+        },
+        "required": ["availability"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "files": { "type": "array", "maxItems": 0 },
+          "page": {
+            "type": "object",
+            "properties": {
+              "total": { "const": 0 },
+              "returned": { "const": 0 },
+              "truncated": { "const": false },
+              "nextCursor": { "type": "null" }
+            }
+          },
+          "truncationReason": { "type": "null" }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "object",
+            "properties": { "truncated": { "const": true } },
+            "required": ["truncated"]
+          }
+        },
+        "required": ["page"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "object",
+            "properties": {
+              "nextCursor": { "$ref": "common-v1.schema.json#/$defs/revisionToken" }
+            }
+          },
+          "truncationReason": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+        }
+      },
+      "else": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "object",
+            "properties": { "nextCursor": { "type": "null" } }
+          },
+          "truncationReason": { "type": "null" }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "view": {
+      "enum": ["task", "working-tree", "staged"]
+    },
+    "availability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "reasonCode", "message"],
+      "properties": {
+        "state": { "enum": ["current", "stale", "unavailable"] },
+        "reasonCode": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" },
+        "message": { "$ref": "common-v1.schema.json#/$defs/nullableDisplayText" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": { "state": { "const": "current" } },
+            "required": ["state"]
+          },
+          "then": {
+            "type": "object",
+            "properties": { "reasonCode": { "type": "null" } }
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+            }
+          }
+        }
+      ]
+    },
+    "taskBasis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "basisRef",
+        "repoRef",
+        "view",
+        "state",
+        "reasonCode",
+        "basisRevision",
+        "taskRunId",
+        "taskRevision",
+        "workspaceRevision",
+        "baselineManifestRef",
+        "baselineTreeDigest"
+      ],
+      "properties": {
+        "basisRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "repoRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "view": { "const": "task" },
+        "state": { "enum": ["current", "stale", "unavailable"] },
+        "reasonCode": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" },
+        "basisRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "taskRunId": { "$ref": "common-v1.schema.json#/$defs/publicId" },
+        "taskRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "workspaceRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "baselineManifestRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+        "baselineTreeDigest": { "$ref": "common-v1.schema.json#/$defs/nullableWorkingTreeDigest" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": { "state": { "const": "current" } },
+            "required": ["state"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "reasonCode": { "type": "null" },
+              "baselineManifestRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+              "baselineTreeDigest": { "$ref": "common-v1.schema.json#/$defs/workingTreeDigest" }
+            }
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+            }
+          }
+        }
+      ]
+    },
+    "workingTreeBasis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "basisRef",
+        "repoRef",
+        "view",
+        "state",
+        "reasonCode",
+        "basisRevision",
+        "headState",
+        "headRef",
+        "workspaceRevision",
+        "indexRevision"
+      ],
+      "properties": {
+        "basisRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "repoRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "view": { "const": "working-tree" },
+        "state": { "enum": ["current", "stale", "unavailable"] },
+        "reasonCode": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" },
+        "basisRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "headState": { "enum": ["head", "unborn", "unavailable"] },
+        "headRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+        "workspaceRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "indexRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": { "headState": { "const": "head" } },
+            "required": ["headState"]
+          },
+          "then": {
+            "type": "object",
+            "properties": { "headRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" } }
+          },
+          "else": {
+            "type": "object",
+            "properties": { "headRef": { "type": "null" } }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "state": { "const": "current" } },
+            "required": ["state"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "reasonCode": { "type": "null" },
+              "headState": { "enum": ["head", "unborn"] }
+            }
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+            }
+          }
+        }
+      ]
+    },
+    "stagedBasis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "basisRef",
+        "repoRef",
+        "view",
+        "state",
+        "reasonCode",
+        "basisRevision",
+        "headState",
+        "headRef",
+        "indexRevision",
+        "workspaceRevision"
+      ],
+      "properties": {
+        "basisRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "repoRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "view": { "const": "staged" },
+        "state": { "enum": ["current", "stale", "unavailable"] },
+        "reasonCode": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" },
+        "basisRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "headState": { "enum": ["head", "unborn", "unavailable"] },
+        "headRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+        "indexRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "workspaceRevision": { "$ref": "common-v1.schema.json#/$defs/nullableRevisionToken" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": { "headState": { "const": "head" } },
+            "required": ["headState"]
+          },
+          "then": {
+            "type": "object",
+            "properties": { "headRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" } }
+          },
+          "else": {
+            "type": "object",
+            "properties": { "headRef": { "type": "null" } }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "state": { "const": "current" } },
+            "required": ["state"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "reasonCode": { "type": "null" },
+              "headState": { "enum": ["head", "unborn"] }
+            }
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+            }
+          }
+        }
+      ]
+    },
+    "viewBasis": {
+      "oneOf": [
+        { "$ref": "#/$defs/taskBasis" },
+        { "$ref": "#/$defs/workingTreeBasis" },
+        { "$ref": "#/$defs/stagedBasis" }
+      ]
+    },
+    "rawGitStatus": {
+      "anyOf": [
+        { "enum": [".", "M", "T", "A", "D", "R", "C", "U", "?", "!"] },
+        { "type": "null" }
+      ]
+    },
+    "gitState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["indexStatus", "worktreeStatus", "conflict"],
+      "properties": {
+        "indexStatus": { "$ref": "#/$defs/rawGitStatus" },
+        "worktreeStatus": { "$ref": "#/$defs/rawGitStatus" },
+        "conflict": { "type": "boolean" }
+      }
+    },
+    "contentState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "access", "reasonCode"],
+      "properties": {
+        "kind": { "enum": ["text", "binary", "symlink", "submodule", "unknown"] },
+        "access": { "enum": ["available", "protected", "oversized", "unavailable"] },
+        "reasonCode": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": { "access": { "const": "available" } },
+            "required": ["access"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "kind": { "enum": ["text", "binary", "symlink", "submodule"] },
+              "reasonCode": { "type": "null" }
+            }
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+            }
+          }
+        }
+      ]
+    },
+    "lineStats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "additions", "deletions", "reasonCode"],
+      "properties": {
+        "state": { "enum": ["exact", "unavailable"] },
+        "additions": {
+          "anyOf": [
+            { "type": "integer", "minimum": 0, "maximum": 10000000 },
+            { "type": "null" }
+          ]
+        },
+        "deletions": {
+          "anyOf": [
+            { "type": "integer", "minimum": 0, "maximum": 10000000 },
+            { "type": "null" }
+          ]
+        },
+        "reasonCode": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": { "state": { "const": "exact" } },
+            "required": ["state"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "additions": { "type": "integer", "minimum": 0, "maximum": 10000000 },
+              "deletions": { "type": "integer", "minimum": 0, "maximum": 10000000 },
+              "reasonCode": { "type": "null" }
+            }
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "additions": { "type": "null" },
+              "deletions": { "type": "null" },
+              "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+            }
+          }
+        }
+      ]
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "classification",
+        "evidence",
+        "baselineEvidenceRef",
+        "mutationEvidenceRefs",
+        "reasonCode"
+      ],
+      "properties": {
+        "classification": {
+          "enum": [
+            "pre-existing-user",
+            "runtime-observed-agent",
+            "post-baseline-unattributed",
+            "mixed"
+          ]
+        },
+        "evidence": { "enum": ["exact", "derived", "unavailable"] },
+        "baselineEvidenceRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+        "mutationEvidenceRefs": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" }
+        },
+        "reasonCode": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": { "classification": { "const": "runtime-observed-agent" } },
+            "required": ["classification"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "evidence": { "const": "exact" },
+              "mutationEvidenceRefs": { "type": "array", "minItems": 1 },
+              "reasonCode": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "classification": { "const": "mixed" } },
+            "required": ["classification"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "evidence": { "const": "exact" },
+              "baselineEvidenceRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+              "mutationEvidenceRefs": { "type": "array", "minItems": 1 },
+              "reasonCode": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "classification": { "const": "pre-existing-user" } },
+            "required": ["classification"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "evidence": { "enum": ["exact", "derived"] },
+              "baselineEvidenceRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+              "mutationEvidenceRefs": { "type": "array", "maxItems": 0 },
+              "reasonCode": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "classification": { "const": "post-baseline-unattributed" } },
+            "required": ["classification"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "evidence": { "enum": ["derived", "unavailable"] },
+              "mutationEvidenceRefs": { "type": "array", "maxItems": 0 },
+              "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "evidence": { "const": "unavailable" } },
+            "required": ["evidence"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "baselineEvidenceRef": { "type": "null" },
+              "mutationEvidenceRefs": { "type": "array", "maxItems": 0 },
+              "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+            }
+          }
+        }
+      ]
+    },
+    "fileChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repoRef",
+        "basisRef",
+        "fileRef",
+        "fileRevision",
+        "path",
+        "oldPath",
+        "pathDisplay",
+        "status",
+        "git",
+        "baseDigest",
+        "currentDigest",
+        "content",
+        "stats",
+        "provenance",
+        "criterionIds",
+        "verifierAttemptIds",
+        "health"
+      ],
+      "properties": {
+        "repoRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "basisRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "fileRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "fileRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "path": { "$ref": "common-v1.schema.json#/$defs/safeDisplayPath" },
+        "oldPath": { "$ref": "common-v1.schema.json#/$defs/nullableSafeDisplayPath" },
+        "pathDisplay": { "enum": ["exact-safe", "escaped", "redacted"] },
+        "status": { "enum": ["A", "M", "D", "R", "U", "C"] },
+        "git": { "$ref": "#/$defs/gitState" },
+        "baseDigest": {
+          "anyOf": [
+            { "$ref": "common-v1.schema.json#/$defs/digest" },
+            { "type": "null" }
+          ]
+        },
+        "currentDigest": {
+          "anyOf": [
+            { "$ref": "common-v1.schema.json#/$defs/digest" },
+            { "type": "null" }
+          ]
+        },
+        "content": { "$ref": "#/$defs/contentState" },
+        "stats": { "$ref": "#/$defs/lineStats" },
+        "provenance": { "$ref": "#/$defs/provenance" },
+        "criterionIds": {
+          "type": "array",
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": { "$ref": "common-v1.schema.json#/$defs/publicId" }
+        },
+        "verifierAttemptIds": {
+          "type": "array",
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": { "$ref": "common-v1.schema.json#/$defs/publicId" }
+        },
+        "health": { "$ref": "common-v1.schema.json#/$defs/health" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": { "status": { "const": "R" } },
+            "required": ["status"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "oldPath": { "$ref": "common-v1.schema.json#/$defs/safeDisplayPath" }
+            }
+          },
+          "else": {
+            "type": "object",
+            "properties": { "oldPath": { "type": "null" } }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "status": { "const": "C" } },
+            "required": ["status"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "git": {
+                "type": "object",
+                "properties": { "conflict": { "const": true } }
+              },
+              "stats": {
+                "type": "object",
+                "properties": { "state": { "const": "unavailable" } }
+              }
+            }
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "git": {
+                "type": "object",
+                "properties": { "conflict": { "const": false } }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "status": { "enum": ["A", "U"] } },
+            "required": ["status"]
+          },
+          "then": {
+            "type": "object",
+            "properties": { "baseDigest": { "type": "null" } }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "status": { "const": "D" } },
+            "required": ["status"]
+          },
+          "then": {
+            "type": "object",
+            "properties": { "currentDigest": { "type": "null" } }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "content": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": { "kind": { "enum": ["binary", "symlink", "submodule", "unknown"] } },
+                    "required": ["kind"]
+                  },
+                  {
+                    "type": "object",
+                    "properties": { "access": { "enum": ["protected", "oversized", "unavailable"] } },
+                    "required": ["access"]
+                  }
+                ]
+              }
+            },
+            "required": ["content"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "stats": {
+                "type": "object",
+                "properties": { "state": { "const": "unavailable" } }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

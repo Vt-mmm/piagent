@@ -1,4 +1,5 @@
 # Capability authority manifest
+<!-- language: en -->
 
 The capability authority manifest is the versioned policy source for Piagent
 1.3 tasks. It includes every shipped capability without granting every

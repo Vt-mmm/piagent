@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-approval-v1",
+  "recordType": "request",
+  "approvalRef": "approval_01",
+  "decisionToken": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+  "identity": {
+    "projectRef": "project_01",
+    "runtimeInstanceId": "runtime_01",
+    "sessionRef": "session_01",
+    "taskId": "task-01",
+    "taskRunId": "task-01-run-01",
+    "agentOperationId": "operation_01",
+    "toolCallId": "tool_01"
+  },
+  "action": {
+    "kind": "external-provider-action",
+    "preconditionClass": "runtime-only",
+    "toolName": "bash",
+    "actionDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "canonicalization": "digest-bound-action-v1",
+    "previewPolicy": "redacted-no-secrets-v1",
+    "commandPreview": "git push origin feature",
+    "parameterPreview": "External repository update",
+    "targetEvidence": { "state": "provided", "reasonCode": null },
+    "cwdRef": "cwd_01",
+    "cwdDisplay": ".",
+    "targetRefs": ["target_01"],
+    "targetPaths": [],
+    "targetSummaries": ["Origin remote"],
+    "providerRef": "provider_01",
+    "urlOrigin": "https://github.com",
+    "requestedScope": "repository-write",
+    "reason": "The command updates an external repository.",
+    "riskClass": "high",
+    "consequences": {
+      "allow": "Pi guard may start this exact digest-bound action.",
+      "deny": "The action remains blocked."
+    },
+    "redaction": {
+      "applied": false,
+      "valuesRemoved": 0,
+      "truncated": false
+    }
+  },
+  "expectedRevisions": {
+    "runtimeRevision": "runtime_rev_01",
+    "taskRevision": "task_rev_01",
+    "controlRevision": "control_rev_01",
+    "approvalRevision": "approval_rev_01",
+    "treePrecondition": null
+  },
+  "state": "waiting",
+  "requestedAt": "2026-08-13T09:02:00.000Z",
+  "expiresAt": "2026-08-13T09:03:00.000Z",
+  "executor": "pi-guard",
+  "directExecution": false
+}

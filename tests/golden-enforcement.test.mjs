@@ -26,6 +26,9 @@ import { validateTrajectoryState, validateTrajectoryTransition } from "../packag
 import { validateHelperRequest, validateRolePolicy } from "../packages/piagent-core/runtime/orchestration/role-policy.ts";
 import { validateAuthorityManifest, validateTaskAuthoritySnapshot } from "../packages/piagent-core/runtime/policy/authority-manifest.ts";
 import { benchmarkAssuranceEvidenceValidationErrors } from "../packages/piagent-core/benchmark/benchmark-assurance.js";
+import { validateTaskBaselineManifest } from "../packages/piagent-core/runtime/inspection/source-evidence-contract.ts";
+import { validateMutationProvenanceRecord } from "../packages/piagent-core/runtime/inspection/mutation-provenance-contract.ts";
+import { validateVerifierFileSnapshot } from "../packages/piagent-core/runtime/inspection/verifier-snapshot-contract.ts";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const golden = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "evals", "golden", "enforcement-decisions.json"), "utf8"));
@@ -213,7 +216,10 @@ describe("golden enforcement decisions", () => {
       "helper-request": validateHelperRequest,
       "authority-manifest": validateAuthorityManifest,
       "task-authority-snapshot": validateTaskAuthoritySnapshotFixture,
-      "benchmark-assurance-evidence": validateBenchmarkAssuranceEvidence
+      "benchmark-assurance-evidence": validateBenchmarkAssuranceEvidence,
+      "task-baseline-manifest": validateTaskBaselineManifest,
+      "mutation-provenance-record": validateMutationProvenanceRecord,
+      "verifier-file-snapshot": validateVerifierFileSnapshot
     };
 
     for (const [name, validate] of Object.entries(validators)) {

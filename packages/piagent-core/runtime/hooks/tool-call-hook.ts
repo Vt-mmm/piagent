@@ -17,6 +17,7 @@ type ToolCallHookDependencies = {
   beforeAuthorize?: (event: ToolCallEvent, ctx: ExtensionContext) => Promise<ToolCallDecision> | ToolCallDecision;
   authorize: (event: ToolCallEvent, ctx: ExtensionContext) => Promise<ToolCallDecision> | ToolCallDecision;
   reviewBudgetDecision?: (event: ToolCallEvent, ctx: ExtensionContext) => ToolCallDecision;
+  beforeStart?: (event: ToolCallEvent, ctx: ExtensionContext) => ToolCallDecision;
   afterDecision?: (
     event: ToolCallEvent,
     ctx: ExtensionContext,
@@ -72,7 +73,9 @@ export function registerToolCallHook(pi: ExtensionAPI, dependencies: ToolCallHoo
     const decision = authorizationDecision && typeof authorizationDecision === "object" && authorizationDecision.block
       ? authorizationDecision
       : dependencies.reviewBudgetDecision?.(resolvedEvent, ctx);
-    const blockedDecision = decision && typeof decision === "object" ? decision : undefined;
+    const startDecision = !(decision && typeof decision === "object" && decision.block) ? dependencies.beforeStart?.(resolvedEvent, ctx) : undefined;
+    const finalDecision = startDecision && typeof startDecision === "object" && startDecision.block ? startDecision : decision;
+    const blockedDecision = finalDecision && typeof finalDecision === "object" ? finalDecision : undefined;
     record(ctx, {
       activityId: `decision:${toolCallId}`,
       event: "tool_decision",
@@ -88,6 +91,6 @@ export function registerToolCallHook(pi: ExtensionAPI, dependencies: ToolCallHoo
       observeTrajectorySync(ctx, dependencies.afterAuthorized?.(resolvedEvent, ctx, { toolCallId }), dependencies.telemetry);
     }
     dependencies.afterDecision?.(resolvedEvent, ctx, { toolCallId, allowed: !blockedDecision?.block, reason: blockedDecision?.reason });
-    return decision;
+    return finalDecision;
   });
 }

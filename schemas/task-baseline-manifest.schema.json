@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/task-baseline-manifest.schema.json",
+  "title": "Piagent task baseline manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "version", "taskId", "taskRunId", "sessionIdentityHash",
+    "capturedAt", "retentionUntil", "baselineDigestAlgorithm", "baselineTreeDigest",
+    "captureState", "reasonCode", "limits", "roots", "integrityDigest"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "version": { "const": "piagent-task-baseline-manifest-v1" },
+    "taskId": { "$ref": "#/$defs/publicId" },
+    "taskRunId": { "$ref": "#/$defs/publicId" },
+    "sessionIdentityHash": { "$ref": "#/$defs/digest" },
+    "capturedAt": { "$ref": "#/$defs/timestamp" },
+    "retentionUntil": { "$ref": "#/$defs/timestamp" },
+    "baselineDigestAlgorithm": { "const": "wt-content-v2" },
+    "baselineTreeDigest": { "type": "string", "pattern": "^wt-content-v2:[a-f0-9]{64}$" },
+    "captureState": { "enum": ["current", "degraded", "unavailable"] },
+    "reasonCode": { "$ref": "#/$defs/nullableReasonCode" },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxEntries", "maxFileBytes", "maxTotalBytes", "capturedBytes"],
+      "properties": {
+        "maxEntries": { "type": "integer", "minimum": 1, "maximum": 2000 },
+        "maxFileBytes": { "type": "integer", "minimum": 1024, "maximum": 16777216 },
+        "maxTotalBytes": { "type": "integer", "minimum": 1048576, "maximum": 268435456 },
+        "capturedBytes": { "type": "integer", "minimum": 0, "maximum": 268435456 }
+      }
+    },
+    "roots": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": { "$ref": "#/$defs/root" }
+    },
+    "integrityDigest": { "$ref": "#/$defs/digest" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "captureState": { "const": "current" } }, "required": ["captureState"] },
+      "then": { "properties": { "reasonCode": { "type": "null" } } },
+      "else": { "properties": { "reasonCode": { "$ref": "#/$defs/reasonCode" } } }
+    }
+  ],
+  "$defs": {
+    "publicId": { "type": "string", "minLength": 1, "maxLength": 160, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@~-]{0,159}$" },
+    "opaqueRef": { "type": "string", "minLength": 1, "maxLength": 160, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,159}$" },
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "timestamp": { "type": "string", "format": "date-time", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$" },
+    "reasonCode": { "type": "string", "minLength": 1, "maxLength": 96, "pattern": "^[a-z0-9][a-z0-9.-]{0,95}$" },
+    "nullableReasonCode": { "anyOf": [{ "$ref": "#/$defs/reasonCode" }, { "type": "null" }] },
+    "oid": { "anyOf": [{ "type": "string", "pattern": "^[a-f0-9]{40,64}$" }, { "type": "null" }] },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pathRef", "pathDigest", "repoPathBase64", "state", "reasonCode", "contentRef",
+        "byteLength", "mode", "headObject", "indexObject"
+      ],
+      "properties": {
+        "pathRef": { "$ref": "#/$defs/opaqueRef" },
+        "pathDigest": { "$ref": "#/$defs/digest" },
+        "repoPathBase64": { "anyOf": [{ "type": "string", "maxLength": 4096, "pattern": "^[A-Za-z0-9_-]*$" }, { "type": "null" }] },
+        "state": { "enum": ["blob", "absent", "symlink", "submodule", "protected", "oversized", "unavailable"] },
+        "reasonCode": { "$ref": "#/$defs/nullableReasonCode" },
+        "contentRef": { "anyOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }] },
+        "byteLength": { "type": "integer", "minimum": 0, "maximum": 16777216 },
+        "mode": { "type": "string", "pattern": "^[0-7]{6}$" },
+        "headObject": { "$ref": "#/$defs/oid" },
+        "indexObject": { "$ref": "#/$defs/oid" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "enum": ["blob", "symlink"] } }, "required": ["state"] },
+          "then": { "properties": { "contentRef": { "$ref": "#/$defs/digest" }, "reasonCode": { "type": "null" } } },
+          "else": { "properties": { "contentRef": { "type": "null" } } }
+        },
+        {
+          "if": { "properties": { "state": { "enum": ["protected", "oversized", "unavailable"] } }, "required": ["state"] },
+          "then": { "properties": { "reasonCode": { "$ref": "#/$defs/reasonCode" } } },
+          "else": { "properties": { "reasonCode": { "type": "null" } } }
+        }
+      ]
+    },
+    "root": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repoRef", "projectPath", "headState", "headOid", "workspaceRevision",
+        "indexRevision", "state", "reasonCode", "entries"
+      ],
+      "properties": {
+        "repoRef": { "$ref": "#/$defs/opaqueRef" },
+        "projectPath": { "type": "string", "maxLength": 1024, "pattern": "^(?:\\.|(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000-\\u001F\\u007F\\\\]+)$" },
+        "headState": { "enum": ["head", "unborn", "unavailable"] },
+        "headOid": { "$ref": "#/$defs/oid" },
+        "workspaceRevision": { "$ref": "#/$defs/opaqueRef" },
+        "indexRevision": { "$ref": "#/$defs/opaqueRef" },
+        "state": { "enum": ["current", "unavailable"] },
+        "reasonCode": { "$ref": "#/$defs/nullableReasonCode" },
+        "entries": { "type": "array", "maxItems": 2000, "items": { "$ref": "#/$defs/entry" } }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "headState": { "const": "head" } }, "required": ["headState"] },
+          "then": { "properties": { "headOid": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" } } },
+          "else": { "properties": { "headOid": { "type": "null" } } }
+        },
+        {
+          "if": { "properties": { "state": { "const": "current" } }, "required": ["state"] },
+          "then": { "properties": { "reasonCode": { "type": "null" } } },
+          "else": { "properties": { "reasonCode": { "$ref": "#/$defs/reasonCode" } } }
+        }
+      ]
+    }
+  }
+}

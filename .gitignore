@@ -36,6 +36,7 @@ dist/
 !benchmarks/e2-framework-v1/project/vendor/hono/dist/**
 coverage/
 *.tsbuildinfo
+/.tmp/
 
 # OS/editor
 .DS_Store

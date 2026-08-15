@@ -1,4 +1,5 @@
 # Herdr workflow
+<!-- language: vi; english-index: docs-site/content/en/workflows.html -->
 
 ## Mục tiêu
 

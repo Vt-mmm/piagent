@@ -1,0 +1,826 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/diff-v1.schema.json",
+  "title": "Piagent WebUI bounded file diff v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "version",
+    "generatedAt",
+    "identity",
+    "view",
+    "basis",
+    "precondition",
+    "observed",
+    "file",
+    "availability",
+    "fallback",
+    "hunks",
+    "unchangedRegions",
+    "truncation",
+    "redaction",
+    "health",
+    "issues"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "version": { "const": "piagent-webui-diff-v1" },
+    "generatedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
+    "identity": { "$ref": "common-v1.schema.json#/$defs/identity" },
+    "view": { "$ref": "source-change-v1.schema.json#/$defs/view" },
+    "basis": { "$ref": "source-change-v1.schema.json#/$defs/viewBasis" },
+    "precondition": { "$ref": "#/$defs/precondition" },
+    "observed": { "$ref": "#/$defs/observedRevision" },
+    "file": { "$ref": "source-change-v1.schema.json#/$defs/fileChange" },
+    "availability": { "$ref": "#/$defs/availability" },
+    "fallback": { "$ref": "#/$defs/fallback" },
+    "hunks": {
+      "type": "array",
+      "maxItems": 128,
+      "items": { "$ref": "#/$defs/hunk" }
+    },
+    "unchangedRegions": {
+      "type": "array",
+      "maxItems": 129,
+      "items": { "$ref": "#/$defs/unchangedRegion" }
+    },
+    "truncation": { "$ref": "#/$defs/truncation" },
+    "redaction": { "$ref": "common-v1.schema.json#/$defs/redaction" },
+    "health": { "$ref": "common-v1.schema.json#/$defs/health" },
+    "issues": {
+      "type": "array",
+      "maxItems": 64,
+      "items": { "$ref": "common-v1.schema.json#/$defs/issue" }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "type": "object",
+        "properties": { "view": { "const": "task" } },
+        "required": ["view"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "identity": {
+            "type": "object",
+            "properties": {
+              "taskId": { "$ref": "common-v1.schema.json#/$defs/publicId" },
+              "taskRunId": { "$ref": "common-v1.schema.json#/$defs/publicId" }
+            }
+          },
+          "basis": { "$ref": "source-change-v1.schema.json#/$defs/taskBasis" }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": { "view": { "const": "working-tree" } },
+        "required": ["view"]
+      },
+      "then": {
+        "type": "object",
+        "properties": { "basis": { "$ref": "source-change-v1.schema.json#/$defs/workingTreeBasis" } }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": { "view": { "const": "staged" } },
+        "required": ["view"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "basis": { "$ref": "source-change-v1.schema.json#/$defs/stagedBasis" },
+          "file": {
+            "type": "object",
+            "properties": {
+              "status": { "enum": ["A", "M", "D", "R", "C"] }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "availability": {
+            "type": "object",
+            "properties": { "state": { "const": "stale" } },
+            "required": ["state"]
+          }
+        },
+        "required": ["availability"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "availability": {
+            "type": "object",
+            "properties": {
+              "reasonCode": { "const": "stale-retry" },
+              "retryable": { "const": true }
+            }
+          },
+          "fallback": {
+            "type": "object",
+            "properties": { "kind": { "const": "stale" } }
+          },
+          "hunks": { "type": "array", "maxItems": 0 },
+          "unchangedRegions": { "type": "array", "maxItems": 0 },
+          "truncation": {
+            "type": "object",
+            "properties": { "truncated": { "const": false } }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "availability": {
+            "type": "object",
+            "properties": { "state": { "const": "unavailable" } },
+            "required": ["state"]
+          }
+        },
+        "required": ["availability"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "fallback": {
+            "type": "object",
+            "properties": {
+              "kind": { "enum": ["protected", "oversized", "unavailable"] }
+            }
+          },
+          "hunks": { "type": "array", "maxItems": 0 },
+          "unchangedRegions": { "type": "array", "maxItems": 0 },
+          "truncation": {
+            "type": "object",
+            "properties": { "truncated": { "const": false } }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "fallback": {
+            "type": "object",
+            "properties": { "kind": { "const": "none" } },
+            "required": ["kind"]
+          }
+        },
+        "required": ["fallback"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "availability": {
+            "type": "object",
+            "properties": { "state": { "const": "current" } }
+          },
+          "file": {
+            "type": "object",
+            "properties": {
+              "status": { "enum": ["A", "M", "D", "R", "U"] },
+              "content": {
+                "type": "object",
+                "properties": {
+                  "kind": { "const": "text" },
+                  "access": { "const": "available" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "type": "object",
+        "properties": {
+          "hunks": { "type": "array", "maxItems": 0 },
+          "unchangedRegions": { "type": "array", "maxItems": 0 }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "availability": {
+            "type": "object",
+            "properties": { "state": { "const": "current" } },
+            "required": ["state"]
+          }
+        },
+        "required": ["availability"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "fallback": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "enum": ["none", "binary", "symlink", "submodule", "conflict"]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "availability": {
+            "type": "object",
+            "properties": { "state": { "const": "current" } },
+            "required": ["state"]
+          },
+          "file": {
+            "type": "object",
+            "properties": {
+              "status": { "enum": ["A", "M", "D", "R", "U"] },
+              "content": {
+                "type": "object",
+                "properties": {
+                  "kind": { "const": "binary" },
+                  "access": { "const": "available" }
+                },
+                "required": ["kind", "access"]
+              }
+            },
+            "required": ["status", "content"]
+          }
+        },
+        "required": ["availability", "file"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "fallback": { "type": "object", "properties": { "kind": { "const": "binary" } } },
+          "hunks": { "type": "array", "maxItems": 0 },
+          "unchangedRegions": { "type": "array", "maxItems": 0 }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "availability": {
+            "type": "object",
+            "properties": { "state": { "const": "current" } },
+            "required": ["state"]
+          },
+          "file": {
+            "type": "object",
+            "properties": {
+              "status": { "enum": ["A", "M", "D", "R", "U"] },
+              "content": {
+                "type": "object",
+                "properties": {
+                  "kind": { "const": "symlink" },
+                  "access": { "const": "available" }
+                },
+                "required": ["kind", "access"]
+              }
+            },
+            "required": ["status", "content"]
+          }
+        },
+        "required": ["availability", "file"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "fallback": { "type": "object", "properties": { "kind": { "const": "symlink" } } },
+          "hunks": { "type": "array", "maxItems": 0 },
+          "unchangedRegions": { "type": "array", "maxItems": 0 }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "availability": {
+            "type": "object",
+            "properties": { "state": { "const": "current" } },
+            "required": ["state"]
+          },
+          "file": {
+            "type": "object",
+            "properties": {
+              "status": { "enum": ["A", "M", "D", "R", "U"] },
+              "content": {
+                "type": "object",
+                "properties": {
+                  "kind": { "const": "submodule" },
+                  "access": { "const": "available" }
+                },
+                "required": ["kind", "access"]
+              }
+            },
+            "required": ["status", "content"]
+          }
+        },
+        "required": ["availability", "file"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "fallback": { "type": "object", "properties": { "kind": { "const": "submodule" } } },
+          "hunks": { "type": "array", "maxItems": 0 },
+          "unchangedRegions": { "type": "array", "maxItems": 0 }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "availability": {
+            "type": "object",
+            "properties": {
+              "state": { "enum": ["current", "unavailable"] }
+            },
+            "required": ["state"]
+          },
+          "file": {
+            "type": "object",
+            "properties": {
+              "content": {
+                "type": "object",
+                "properties": { "access": { "const": "protected" } },
+                "required": ["access"]
+              }
+            },
+            "required": ["content"]
+          }
+        },
+        "required": ["availability", "file"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "availability": { "type": "object", "properties": { "state": { "const": "unavailable" } } },
+          "fallback": { "type": "object", "properties": { "kind": { "const": "protected" } } },
+          "hunks": { "type": "array", "maxItems": 0 },
+          "unchangedRegions": { "type": "array", "maxItems": 0 }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "availability": {
+            "type": "object",
+            "properties": {
+              "state": { "enum": ["current", "unavailable"] }
+            },
+            "required": ["state"]
+          },
+          "file": {
+            "type": "object",
+            "properties": {
+              "content": {
+                "type": "object",
+                "properties": { "access": { "const": "oversized" } },
+                "required": ["access"]
+              }
+            },
+            "required": ["content"]
+          }
+        },
+        "required": ["availability", "file"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "availability": { "type": "object", "properties": { "state": { "const": "unavailable" } } },
+          "fallback": { "type": "object", "properties": { "kind": { "const": "oversized" } } },
+          "hunks": { "type": "array", "maxItems": 0 },
+          "unchangedRegions": { "type": "array", "maxItems": 0 }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "availability": {
+            "type": "object",
+            "properties": {
+              "state": { "enum": ["current", "unavailable"] }
+            },
+            "required": ["state"]
+          },
+          "file": {
+            "type": "object",
+            "properties": {
+              "content": {
+                "type": "object",
+                "properties": { "access": { "const": "unavailable" } },
+                "required": ["access"]
+              }
+            },
+            "required": ["content"]
+          }
+        },
+        "required": ["availability", "file"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "availability": { "type": "object", "properties": { "state": { "const": "unavailable" } } },
+          "fallback": { "type": "object", "properties": { "kind": { "const": "unavailable" } } },
+          "hunks": { "type": "array", "maxItems": 0 },
+          "unchangedRegions": { "type": "array", "maxItems": 0 }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "availability": {
+            "type": "object",
+            "properties": { "state": { "const": "current" } },
+            "required": ["state"]
+          },
+          "file": {
+            "type": "object",
+            "properties": {
+              "status": { "const": "C" },
+              "content": {
+                "type": "object",
+                "properties": { "access": { "const": "available" } },
+                "required": ["access"]
+              }
+            },
+            "required": ["status", "content"]
+          }
+        },
+        "required": ["availability", "file"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "fallback": { "type": "object", "properties": { "kind": { "const": "conflict" } } },
+          "hunks": { "type": "array", "maxItems": 0 },
+          "unchangedRegions": { "type": "array", "maxItems": 0 }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "truncation": {
+            "type": "object",
+            "properties": { "truncated": { "const": true } },
+            "required": ["truncated"]
+          }
+        },
+        "required": ["truncation"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "availability": { "type": "object", "properties": { "state": { "const": "current" } } },
+          "fallback": { "type": "object", "properties": { "kind": { "const": "none" } } },
+          "truncation": {
+            "type": "object",
+            "properties": {
+              "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" },
+              "nextCursor": { "$ref": "common-v1.schema.json#/$defs/revisionToken" }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "precondition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expectedViewRevision",
+        "expectedFileRevision",
+        "expectedBaseDigest",
+        "expectedCurrentDigest"
+      ],
+      "properties": {
+        "expectedViewRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "expectedFileRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "expectedBaseDigest": {
+          "anyOf": [
+            { "$ref": "common-v1.schema.json#/$defs/digest" },
+            { "type": "null" }
+          ]
+        },
+        "expectedCurrentDigest": {
+          "anyOf": [
+            { "$ref": "common-v1.schema.json#/$defs/digest" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "observedRevision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["viewRevision", "fileRevision", "baseDigest", "currentDigest"],
+      "properties": {
+        "viewRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "fileRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "baseDigest": {
+          "anyOf": [
+            { "$ref": "common-v1.schema.json#/$defs/digest" },
+            { "type": "null" }
+          ]
+        },
+        "currentDigest": {
+          "anyOf": [
+            { "$ref": "common-v1.schema.json#/$defs/digest" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "availability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "reasonCode", "message", "retryable"],
+      "properties": {
+        "state": { "enum": ["current", "stale", "unavailable"] },
+        "reasonCode": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" },
+        "message": { "$ref": "common-v1.schema.json#/$defs/nullableDisplayText" },
+        "retryable": { "type": "boolean" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": { "state": { "const": "current" } },
+            "required": ["state"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "reasonCode": { "type": "null" },
+              "retryable": { "const": false }
+            }
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+            }
+          }
+        }
+      ]
+    },
+    "fallback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "reasonCode", "message"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "none",
+            "binary",
+            "symlink",
+            "submodule",
+            "protected",
+            "oversized",
+            "conflict",
+            "unavailable",
+            "stale"
+          ]
+        },
+        "reasonCode": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" },
+        "message": { "$ref": "common-v1.schema.json#/$defs/nullableDisplayText" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": { "kind": { "const": "none" } },
+            "required": ["kind"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "reasonCode": { "type": "null" },
+              "message": { "type": "null" }
+            }
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+            }
+          }
+        }
+      ]
+    },
+    "diffLineText": {
+      "type": "string",
+      "maxLength": 16384,
+      "pattern": "^[^\\u0000-\\u0008\\u000A-\\u001F\\u007F]*$"
+    },
+    "contextLine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lineRef", "kind", "marker", "oldLineNumber", "newLineNumber", "text", "redacted"],
+      "properties": {
+        "lineRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "kind": { "const": "context" },
+        "marker": { "const": " " },
+        "oldLineNumber": { "type": "integer", "minimum": 1, "maximum": 1000000000 },
+        "newLineNumber": { "type": "integer", "minimum": 1, "maximum": 1000000000 },
+        "text": { "$ref": "#/$defs/diffLineText" },
+        "redacted": { "type": "boolean" }
+      }
+    },
+    "addedLine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lineRef", "kind", "marker", "oldLineNumber", "newLineNumber", "text", "redacted"],
+      "properties": {
+        "lineRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "kind": { "const": "added" },
+        "marker": { "const": "+" },
+        "oldLineNumber": { "type": "null" },
+        "newLineNumber": { "type": "integer", "minimum": 1, "maximum": 1000000000 },
+        "text": { "$ref": "#/$defs/diffLineText" },
+        "redacted": { "type": "boolean" }
+      }
+    },
+    "deletedLine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lineRef", "kind", "marker", "oldLineNumber", "newLineNumber", "text", "redacted"],
+      "properties": {
+        "lineRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "kind": { "const": "deleted" },
+        "marker": { "const": "-" },
+        "oldLineNumber": { "type": "integer", "minimum": 1, "maximum": 1000000000 },
+        "newLineNumber": { "type": "null" },
+        "text": { "$ref": "#/$defs/diffLineText" },
+        "redacted": { "type": "boolean" }
+      }
+    },
+    "noNewlineMarker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lineRef", "kind", "marker", "oldLineNumber", "newLineNumber", "text", "redacted"],
+      "properties": {
+        "lineRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "kind": { "const": "no-newline-marker" },
+        "marker": { "const": "\\" },
+        "oldLineNumber": { "type": "null" },
+        "newLineNumber": { "type": "null" },
+        "text": { "$ref": "#/$defs/diffLineText" },
+        "redacted": { "const": false }
+      }
+    },
+    "diffLine": {
+      "oneOf": [
+        { "$ref": "#/$defs/contextLine" },
+        { "$ref": "#/$defs/addedLine" },
+        { "$ref": "#/$defs/deletedLine" },
+        { "$ref": "#/$defs/noNewlineMarker" }
+      ]
+    },
+    "hunk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hunkRef",
+        "oldStart",
+        "oldLineCount",
+        "newStart",
+        "newLineCount",
+        "header",
+        "lines"
+      ],
+      "properties": {
+        "hunkRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "oldStart": { "type": "integer", "minimum": 0, "maximum": 1000000000 },
+        "oldLineCount": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+        "newStart": { "type": "integer", "minimum": 0, "maximum": 1000000000 },
+        "newLineCount": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+        "header": { "$ref": "common-v1.schema.json#/$defs/longDisplayText" },
+        "lines": {
+          "type": "array",
+          "maxItems": 512,
+          "items": { "$ref": "#/$defs/diffLine" }
+        }
+      }
+    },
+    "unchangedRegion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "regionRef",
+        "oldStart",
+        "newStart",
+        "lineCount",
+        "beforeHunkRef",
+        "afterHunkRef",
+        "contentState",
+        "expansionRef",
+        "reasonCode"
+      ],
+      "properties": {
+        "regionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "oldStart": { "type": "integer", "minimum": 1, "maximum": 1000000000 },
+        "newStart": { "type": "integer", "minimum": 1, "maximum": 1000000000 },
+        "lineCount": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+        "beforeHunkRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+        "afterHunkRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+        "contentState": { "enum": ["available", "unavailable"] },
+        "expansionRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+        "reasonCode": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": { "contentState": { "const": "available" } },
+            "required": ["contentState"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "expansionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+              "reasonCode": { "type": "null" }
+            }
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "expansionRef": { "type": "null" },
+              "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+            }
+          }
+        }
+      ]
+    },
+    "truncation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["truncated", "reasonCode", "omittedHunks", "omittedLines", "nextCursor"],
+      "properties": {
+        "truncated": { "type": "boolean" },
+        "reasonCode": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" },
+        "omittedHunks": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+        "omittedLines": { "type": "integer", "minimum": 0, "maximum": 100000000 },
+        "nextCursor": { "$ref": "common-v1.schema.json#/$defs/nullableRevisionToken" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": { "truncated": { "const": true } },
+            "required": ["truncated"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" },
+              "nextCursor": { "$ref": "common-v1.schema.json#/$defs/revisionToken" }
+            },
+            "anyOf": [
+              { "type": "object", "properties": { "omittedHunks": { "type": "integer", "minimum": 1 } } },
+              { "type": "object", "properties": { "omittedLines": { "type": "integer", "minimum": 1 } } }
+            ]
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "reasonCode": { "type": "null" },
+              "omittedHunks": { "const": 0 },
+              "omittedLines": { "const": 0 },
+              "nextCursor": { "type": "null" }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

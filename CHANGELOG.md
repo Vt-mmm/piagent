@@ -2,6 +2,45 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## v1.4.0 - 2026-08-15
+
+### Local Session Hub and WebUI
+
+- Added a local, one-per-profile Gateway and `piagent dashboard` experience for
+  creating, reopening, resuming, renaming, pinning, archiving, unarchiving, and
+  forking durable Pi sessions without starting an extra model turn for views.
+- Rebuilt the browser client as a conversation-first MUI application with a
+  compact composer, project and model controls, light/dark themes, Vietnamese
+  and English UI, responsive layouts, and an Agent Inspector for tasks, source
+  changes, activity, verification, usage, and handoff evidence.
+- Added exact Gateway-owned chat streaming, held-message queues, bounded
+  attachments, model/thinking controls, lifecycle controls, and Pi-owned
+  approval cards while preserving one authoritative writer per session.
+
+### Source review, recovery, and security
+
+- Added Task Changes, Working Tree, and Staged projections with bounded diffs,
+  provenance, criterion/verifier links, protected-path enforcement, and guarded
+  stage, unstage, revert, and editor handoff actions.
+- Added durable session leases, terminal compatibility ownership, restart and
+  stale-owner recovery, idempotent command receipts, replay/resync, doctor with
+  explicit repair, and corrupt-state fail-closed behavior.
+- Hardened the TypeScript loader, local control socket creation, runtime
+  integrity inventory, browser authentication, redaction, event bounds, and
+  provider/MCP credential handling.
+
+### Documentation and release gates
+
+- Classified every root operating document by language, retained canonical
+  English/Vietnamese entry points, and added a gate that rejects unclassified
+  or unindexed Vietnamese documentation.
+- Added a provider-neutral product-language gate while retaining third-party
+  names only where they describe real integrations, dependencies, or operator
+  commands.
+- Added the executable WUI5-18 release matrix covering durable sessions,
+  ownership, recovery, approvals, protected data, transport validation,
+  accessibility, themes, and zero-model-turn navigation.
+
 ## v1.3.1 - 2026-08-13
 
 ### Security and reliability hardening

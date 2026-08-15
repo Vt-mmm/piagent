@@ -6,10 +6,12 @@ import { criterionGraphGuidance } from "../../extensions/criterion-graph.js";
 import { replayTaskCheckpoints, taskRecoveryDecision } from "../../extensions/task-journal.js";
 import { taskDigestMigrationArchiveStatus, workingTreeSnapshot, workingTreeSnapshotHasUnavailableEvidence } from "../../extensions/task-state.js";
 import { workingTreeEvidenceDigest } from "../../extensions/task-lifecycle.js";
+import { hashEvidenceCommand } from "../../extensions/runtime-evidence.js";
 import { WORKING_TREE_DIGEST_ALGORITHM, isCurrentWorkingTreeDigest, workingTreeSnapshotUsesCurrentAlgorithm } from "../../extensions/working-tree-digest.js";
 import { handoffProjectionPath, readHandoffProjection } from "./handoff-projection.ts";
 import { inspectTaskAuthorityResumePolicy, type AuthorityResumeDecision } from "../policy/authority-resume-policy.ts";
 import { readTrajectoryStore } from "../trajectory/trajectory-store.ts";
+import { findVerifierFileSnapshot, inspectVerifierStaleness, readVerifierFileSnapshots } from "../inspection/verifier-snapshot-store.ts";
 
 export const RESUME_STATE_VERSION = "resume-v1" as const;
 export const RESUME_CONTEXT_VERSION = "resume-context-v1" as const;
@@ -45,6 +47,8 @@ export type ResumeState = {
   verifierEvidenceCurrent: boolean;
   staleVerifierEvidence: boolean;
   invalidatedVerifierCommands: string[];
+  invalidatedVerifierFiles: string[];
+  invalidatedVerifierFilesKnown: boolean;
   journal: { checkpoints: number; corruptions: string[] };
   trajectory: { status: string; warnings: string[] };
   handoff: { path: string; exists: boolean; valid: boolean };
@@ -58,6 +62,33 @@ export type ResumeState = {
 
 function strings(values: unknown, maximum = 20): string[] {
   return [...new Set((Array.isArray(values) ? values : []).filter((value) => typeof value === "string" && value.trim()).map((value) => value.trim().slice(0, 500)))].slice(0, maximum);
+}
+
+function staleVerifierFiles(
+  cwd: string,
+  task: TaskContract,
+  evidence: TaskContract["verifyEvidence"],
+  currentDigests: Record<string, string>,
+  currentTreeDigest: string,
+  protectedPaths: string[] | null
+): { files: string[]; known: boolean } {
+  const stale = evidence.filter((item) => item.workingTreeDigest !== currentTreeDigest);
+  if (stale.length === 0) return { files: [], known: true };
+  const ledger = readVerifierFileSnapshots(cwd, task.taskRunId);
+  if (ledger.corruptions.length > 0) return { files: [], known: false };
+  const files = new Set<string>();
+  let known = true;
+  for (const item of stale) {
+    const commandHash = hashEvidenceCommand(item.command);
+    const commandDigest = /^[a-f0-9]{64}$/.test(commandHash) ? `sha256:${commandHash}` : "";
+    const record = commandDigest && item.observedAt && item.workingTreeDigest
+      ? findVerifierFileSnapshot(ledger.records, { commandDigest, observedAt: item.observedAt, treeDigest: item.workingTreeDigest, exitCode: item.exitCode })
+      : undefined;
+    const result = inspectVerifierStaleness(record, currentDigests, protectedPaths);
+    if (result.state === "unknown" || !result.filesKnown) known = false;
+    for (const file of result.invalidatedByFiles) files.add(file);
+  }
+  return { files: [...files].sort().slice(0, 300), known: known && files.size <= 300 };
 }
 
 function resumePlan(task: TaskContract): { plan: ResumePlanStep[]; currentStepId: string | null } {
@@ -183,7 +214,8 @@ export function inspectTaskResumeState(
   cwd: string,
   task: TaskContract,
   sessionId: string,
-  currentDigests: Record<string, string> = workingTreeSnapshot(cwd) as Record<string, string>
+  currentDigests: Record<string, string> = workingTreeSnapshot(cwd) as Record<string, string>,
+  options: { protectedPaths?: string[] } = {}
 ): ResumeState {
   const currentTreeDigest = workingTreeEvidenceDigest(currentDigests);
   const authorityPolicy = inspectTaskAuthorityResumePolicy(cwd, task);
@@ -213,6 +245,9 @@ export function inspectTaskResumeState(
   const invalidatedVerifierCommands = strings(passingEvidence.filter((evidence) => !isCurrentWorkingTreeDigest(evidence.workingTreeDigest) || evidence.workingTreeDigest !== currentTreeDigest).map((evidence) => evidence.command), 50);
   const verifierEvidenceCurrent = algorithmReady && !refreshRequired && (task.changeMode === "read-only" || allVerifyCommandsPassCurrentTree(task, currentTreeDigest));
   const staleVerifierEvidence = refreshRequired || (invalidatedVerifierCommands.length > 0 && !verifierEvidenceCurrent);
+  const invalidatedFiles = staleVerifierEvidence
+    ? staleVerifierFiles(cwd, task, passingEvidence, currentDigests, currentTreeDigest, options.protectedPaths ?? null)
+    : { files: [], known: true };
   if (staleVerifierEvidence) warnings.push("working tree changed after the latest passing verifier; prior evidence is stale");
   const latest = journal.checkpoints.at(-1);
   const latestCheckpoint = latest ? {
@@ -275,6 +310,8 @@ export function inspectTaskResumeState(
     verifierEvidenceCurrent,
     staleVerifierEvidence,
     invalidatedVerifierCommands,
+    invalidatedVerifierFiles: invalidatedFiles.files,
+    invalidatedVerifierFilesKnown: invalidatedFiles.known,
     journal: { checkpoints: journal.checkpoints.length, corruptions: strings(journal.corruptions) },
     trajectory: { status: trajectory.status, warnings: strings(trajectory.warnings) },
     handoff: { path: path.relative(cwd, handoffProjectionPath(cwd, task.taskRunId)).split(path.sep).join("/"), exists: handoffExists, valid: handoffValid },

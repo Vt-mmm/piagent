@@ -44,6 +44,48 @@
       ]
     },
     {
+      "name": "webui-contracts",
+      "roots": [
+        "packages/piagent-webui/contracts"
+      ]
+    },
+    {
+      "name": "webui-client",
+      "roots": [
+        "packages/piagent-webui/client"
+      ]
+    },
+    {
+      "name": "webui-server",
+      "roots": [
+        "packages/piagent-webui/server"
+      ]
+    },
+    {
+      "name": "webui-extension",
+      "roots": [
+        "packages/piagent-webui/extension"
+      ]
+    },
+    {
+      "name": "webui-gateway",
+      "roots": [
+        "packages/piagent-webui/gateway"
+      ]
+    },
+    {
+      "name": "webui-ownership",
+      "roots": [
+        "packages/piagent-webui/ownership"
+      ]
+    },
+    {
+      "name": "webui-build",
+      "roots": [
+        "packages/piagent-webui"
+      ]
+    },
+    {
       "name": "entrypoints",
       "roots": [
         "scripts"
@@ -86,6 +128,49 @@
     "benchmark": [
       "benchmark"
     ],
+    "webui-contracts": [
+      "webui-contracts"
+    ],
+    "webui-client": [
+      "webui-client",
+      "webui-contracts"
+    ],
+    "webui-server": [
+      "webui-server",
+      "webui-contracts",
+      "runtime",
+      "core",
+      "security",
+      "benchmark"
+    ],
+    "webui-extension": [
+      "webui-extension",
+      "webui-server",
+      "webui-ownership",
+      "runtime",
+      "core",
+      "security"
+    ],
+    "webui-gateway": [
+      "webui-gateway",
+      "webui-ownership",
+      "webui-server",
+      "webui-contracts",
+      "runtime",
+      "core",
+      "security"
+    ],
+    "webui-ownership": [
+      "webui-ownership"
+    ],
+    "webui-build": [
+      "webui-build",
+      "webui-contracts",
+      "webui-client",
+      "webui-server",
+      "webui-gateway",
+      "webui-ownership"
+    ],
     "entrypoints": [
       "entrypoints",
       "runtime",
@@ -93,7 +178,10 @@
       "mcp",
       "capabilities",
       "security",
-      "benchmark"
+      "benchmark",
+      "webui-gateway",
+      "webui-ownership",
+      "webui-server"
     ]
   },
   "lineBudgets": {
@@ -105,6 +193,13 @@
       "capabilities": 1200,
       "security": 400,
       "benchmark": 1000,
+      "webui-contracts": 2000,
+      "webui-client": 500,
+      "webui-server": 500,
+      "webui-extension": 500,
+      "webui-gateway": 500,
+      "webui-ownership": 500,
+      "webui-build": 500,
       "entrypoints": 800
     },
     "files": {

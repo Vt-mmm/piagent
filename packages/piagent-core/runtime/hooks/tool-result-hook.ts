@@ -11,6 +11,7 @@ import { redactForStorage, redactSensitiveText } from "../../extensions/redactio
 import { appendObservedBashResult, hashEvidenceCommand, observedBashResultFromToolResultEvent } from "../../extensions/runtime-evidence.js";
 import { workingTreeSnapshot, workingTreeSnapshotHasUnavailableEvidence } from "../../extensions/task-state.js";
 import { workingTreeObservation } from "../../extensions/working-tree-digest.js";
+import { recordMutationResult } from "../inspection/mutation-provenance-recorder.ts";
 import { boundedGitDiffReview } from "../quality/performance-assurance.ts";
 import { currentFileContentDigests } from "../quality/model-mutation-proof.ts";
 import { boundedPerformanceReviewResultText } from "../quality/performance-review-evidence.ts";
@@ -18,6 +19,7 @@ import { attachToolResultCompactionDetails, compactToolResultDetails, compactToo
 import { RuntimeSessionState, type ObservedTaskContext } from "../session/runtime-state.ts";
 import { observeTrajectorySync } from "../trajectory/trajectory-observability.ts";
 import type { TrajectorySyncResult } from "../trajectory/trajectory-runtime.ts";
+import { patchLineStats } from "./tool-result-metadata.ts";
 
 type ToolResultEvent = { toolCallId?: string; toolName: string; input?: unknown; content?: unknown; details?: unknown; isError?: boolean; usage?: unknown };
 type ObservedBashResult = NonNullable<ReturnType<typeof observedBashResultFromToolResultEvent>>;
@@ -50,7 +52,8 @@ type ToolResultHookDependencies = {
     ctx: ExtensionContext,
     observed: ObservedVerificationResult,
     pendingContext: ObservedTaskContext[],
-    maxManifestFiles: number, shellSnapshotBefore?: Record<string, string>, eventTree?: WorkingTreeObservation
+    maxManifestFiles: number, shellSnapshotBefore?: Record<string, string>, eventTree?: WorkingTreeObservation,
+    readProtectedPaths?: string[]
   ) => unknown;
   extractLikelyPath: (cwd: string, input: Record<string, unknown>) => string | undefined;
   mutationTargets: (cwd: string, toolName: string, input: Record<string, unknown>) => string[];
@@ -122,20 +125,6 @@ function boundedToolResultText(content: unknown): string {
           .join("\n")
       : "";
   return text.slice(-20_000);
-}
-
-function patchLineStats(details: unknown): { additions?: number; deletions?: number } {
-  if (!details || typeof details !== "object") return {};
-  const patch = (details as Record<string, unknown>).patch;
-  if (typeof patch !== "string" || !patch.trim()) return {};
-  let additions = 0;
-  let deletions = 0;
-  for (const line of patch.split(/\r?\n/)) {
-    if (line.startsWith("+++ ") || line.startsWith("--- ")) continue;
-    if (line.startsWith("+")) additions += 1;
-    else if (line.startsWith("-")) deletions += 1;
-  }
-  return { additions, deletions };
 }
 
 function countChangedStringLeaves(before: unknown, after: unknown): number {
@@ -270,9 +259,9 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
       dependencies.recordObservedTaskVerification(
         pi,
         ctx,
-        { ...observed, outputText: boundedToolResultText(event.content) },
+        { ...observed, toolCallId: observed.toolCallId ?? resultToolCallId, outputText: boundedToolResultText(event.content) },
         pendingContext,
-        dependencies.maxManifestFiles, shellSnapshotBefore, eventTree
+        dependencies.maxManifestFiles, shellSnapshotBefore, eventTree, readProtectedPaths
       );
     }
 
@@ -287,19 +276,31 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
     const currentSnapshot = taskIdentity ? eventTree?.snapshot : undefined;
     const currentTreeDigest = taskIdentity ? eventTree?.digest : undefined;
     const directMutationResult = modelMutationIdentity && currentSnapshot
-      ? dependencies.state.completeAuthorizedModelMutation(
+      ? dependencies.state.completeAuthorizedModelMutationEvidence(
           modelMutationIdentity,
           resultToolCallId,
           successfulToolResult(event),
           currentSnapshot,
           currentFileContentDigests(ctx.cwd, directMutationTargets)
         )
-      : { changedPaths: [] as string[], recordedDigests: {} as Record<string, string> };
+      : { changedPaths: [] as string[], recordedDigests: {} as Record<string, string>, beforeSnapshot: null,
+          targetPaths: [] as string[], recordedContentDigests: {} as Record<string, string>, proofModes: {} as Record<string, "full-content" | "exact-replacement"> };
     const shellChangedPaths = taskIdentity && currentSnapshot && shellSnapshotBefore
       ? changedSnapshotFiles(shellSnapshotBefore, currentSnapshot)
       : [];
     if (modelMutationIdentity && shellChangedPaths.length > 0) {
       dependencies.state.invalidateSuccessfulModelMutationPaths(modelMutationIdentity, shellChangedPaths);
+    }
+    if (modelMutationIdentity && currentSnapshot) {
+      try {
+        recordMutationResult({
+          projectRoot: ctx.cwd, identity: modelMutationIdentity, toolCallId: resultToolCallId, toolName: event.toolName,
+          recordedAt: dependencies.now(), successful: successfulToolResult(event), currentSnapshot,
+          completion: directMutationResult, shellSnapshotBefore, shellChangedPaths, protectedPaths: readProtectedPaths
+        });
+      } catch (error) {
+        ctx.ui.notify(`Piagent could not persist mutation provenance: ${error instanceof Error ? error.message : String(error)}`, "warn");
+      }
     }
     const outputText = boundedToolResultText(event.content);
     const performanceReviewOutputText = boundedPerformanceReviewResultText(event.content);

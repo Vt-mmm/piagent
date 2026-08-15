@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-verifier-file-snapshot-v1",
+  "attemptId": "verifier.165224a1269311b35faa7c68a3285dec225f563a761d8984b3f0e5525a3837d9",
+  "attemptRef": "verifier-evidence.165224a1269311b35faa7c68a3285dec225f563a761d8984b3f0e5525a3837d9",
+  "taskId": "task-01",
+  "taskRunId": "task-01-run-01",
+  "sessionIdentityHash": "sha256:6e165fadbb274b7254278eadb81c25aaa7fda6b62c3f2c6f8ca393b34f90834e",
+  "toolCallIdentityHash": "sha256:4dd7feedf5ee29f32ee3a58080756f540d67d815fb658d836f77d959b6c33c49",
+  "commandDigest": "sha256:328e123c63857fd8473bd4bd3581e655b08b7440d7f5d2c31cc375607582f539",
+  "observedAt": "2026-08-13T16:00:00.000Z",
+  "capturedAt": "2026-08-13T16:00:01.000Z",
+  "retentionUntil": "2026-09-12T16:00:01.000Z",
+  "exitCode": 0,
+  "outcome": "passed",
+  "treeDigest": "wt-content-v2:19d7d78c84028ca50754225c92b10733bc8a5bf2fe4dbf89042aa14352159f46",
+  "fileCount": 0,
+  "exposedPathCount": 0,
+  "files": [],
+  "integrityDigest": "sha256:afcb27f99d5ba2c52410075f4c42a3bb00209354df9edb8349ee463579e1fc66"
+}

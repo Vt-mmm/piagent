@@ -1,0 +1,1780 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/control-command-v1.schema.json",
+  "title": "Piagent WebUI control command and receipt v1",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/command"
+    },
+    {
+      "$ref": "#/$defs/receipt"
+    }
+  ],
+  "$defs": {
+    "action": {
+      "enum": [
+        "chat.send",
+        "queue.update",
+        "queue.delete",
+        "queue.dispatch",
+        "lifecycle.stop",
+        "lifecycle.pause",
+        "lifecycle.resume",
+        "lifecycle.resume-and-continue",
+        "session-options.set-model",
+        "session-options.set-thinking",
+        "review.mark",
+        "source.stage",
+        "source.unstage",
+        "source.revert",
+        "source.open-in-vscode",
+        "commit-summary.generate"
+      ]
+    },
+    "capabilityScope": {
+      "enum": [
+        "control.chat",
+        "control.lifecycle",
+        "control.resumeAndContinue",
+        "control.sessionOptions",
+        "reviewActions"
+      ]
+    },
+    "expectedRevisions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runtimeRevision",
+        "taskRevision",
+        "controlRevision",
+        "workspaceRevision",
+        "indexRevision",
+        "approvalRevision",
+        "sessionOptionRevision",
+        "queueRevision",
+        "workspacePreimage",
+        "indexPreimage",
+        "patchPreimage"
+      ],
+      "properties": {
+        "runtimeRevision": {
+          "$ref": "common-v1.schema.json#/$defs/revisionToken"
+        },
+        "taskRevision": {
+          "$ref": "common-v1.schema.json#/$defs/nullableRevisionToken"
+        },
+        "controlRevision": {
+          "$ref": "common-v1.schema.json#/$defs/nullableRevisionToken"
+        },
+        "workspaceRevision": {
+          "$ref": "common-v1.schema.json#/$defs/nullableRevisionToken"
+        },
+        "indexRevision": {
+          "$ref": "common-v1.schema.json#/$defs/nullableRevisionToken"
+        },
+        "approvalRevision": {
+          "$ref": "common-v1.schema.json#/$defs/nullableRevisionToken"
+        },
+        "sessionOptionRevision": {
+          "$ref": "common-v1.schema.json#/$defs/nullableRevisionToken"
+        },
+        "queueRevision": {
+          "$ref": "common-v1.schema.json#/$defs/nullableRevisionToken"
+        },
+        "workspacePreimage": {
+          "anyOf": [
+            {
+              "$ref": "common-v1.schema.json#/$defs/workingTreeDigest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "indexPreimage": {
+          "anyOf": [
+            {
+              "$ref": "common-v1.schema.json#/$defs/digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "patchPreimage": {
+          "anyOf": [
+            {
+              "$ref": "common-v1.schema.json#/$defs/digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "messageContent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "messageRequestId",
+        "capabilityAction",
+        "delivery",
+        "text",
+        "attachmentRefs",
+        "contentDigest"
+      ],
+      "properties": {
+        "messageRequestId": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "capabilityAction": {
+          "enum": ["send", "hold", "interruptAndSend"]
+        },
+        "delivery": {
+          "enum": [
+            "new-operation",
+            "steer",
+            "follow-up",
+            "hold"
+          ]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 65536,
+          "pattern": "^[^\\u0000]*$"
+        },
+        "attachmentRefs": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+          }
+        },
+        "contentDigest": {
+          "$ref": "common-v1.schema.json#/$defs/digest"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": { "delivery": { "enum": ["new-operation", "follow-up"] } },
+            "required": ["delivery"]
+          },
+          "then": {
+            "type": "object",
+            "properties": { "capabilityAction": { "const": "send" } }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "delivery": { "const": "hold" } },
+            "required": ["delivery"]
+          },
+          "then": {
+            "type": "object",
+            "properties": { "capabilityAction": { "const": "hold" } }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "delivery": { "const": "steer" } },
+            "required": ["delivery"]
+          },
+          "then": {
+            "type": "object",
+            "properties": { "capabilityAction": { "const": "interruptAndSend" } }
+          }
+        }
+      ]
+    },
+    "queueUpdatePayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "queueItemRef",
+        "text",
+        "attachmentRefs",
+        "contentDigest"
+      ],
+      "properties": {
+        "queueItemRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 65536,
+          "pattern": "^[^\\u0000]*$"
+        },
+        "attachmentRefs": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+          }
+        },
+        "contentDigest": {
+          "$ref": "common-v1.schema.json#/$defs/digest"
+        }
+      }
+    },
+    "queueDeletePayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "queueItemRef"
+      ],
+      "properties": {
+        "queueItemRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        }
+      }
+    },
+    "queueDispatchPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "queueItemRef",
+        "messageRequestId"
+      ],
+      "properties": {
+        "queueItemRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "messageRequestId": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        }
+      }
+    },
+    "stopPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requestedScope"
+      ],
+      "properties": {
+        "requestedScope": {
+          "const": "current-agent-operation"
+        }
+      }
+    },
+    "pausePayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "safePointPolicy"
+      ],
+      "properties": {
+        "safePointPolicy": {
+          "const": "after-current-atomic-unit"
+        }
+      }
+    },
+    "emptyPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "maxProperties": 0
+    },
+    "modelPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "modelRef",
+        "effectScopeAcknowledged"
+      ],
+      "properties": {
+        "modelRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "effectScopeAcknowledged": {
+          "enum": [
+            "session",
+            "session-and-user-default"
+          ]
+        }
+      }
+    },
+    "thinkingPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "thinkingLevel",
+        "effectScopeAcknowledged"
+      ],
+      "properties": {
+        "thinkingLevel": {
+          "enum": [
+            "off",
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ]
+        },
+        "effectScopeAcknowledged": {
+          "enum": [
+            "session",
+            "session-and-user-default"
+          ]
+        }
+      }
+    },
+    "reviewMarkPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "view",
+        "fileRef",
+        "diffRef",
+        "reviewState",
+        "contentDigest"
+      ],
+      "properties": {
+        "view": {
+          "$ref": "source-change-v1.schema.json#/$defs/view"
+        },
+        "fileRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "diffRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "reviewState": {
+          "enum": [
+            "reviewed",
+            "unreviewed"
+          ]
+        },
+        "contentDigest": {
+          "$ref": "common-v1.schema.json#/$defs/digest"
+        }
+      }
+    },
+    "sourceMutationPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fileRef",
+        "hunkRefs",
+        "contentDigest"
+      ],
+      "properties": {
+        "fileRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "hunkRefs": {
+          "type": "array",
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+          }
+        },
+        "contentDigest": {
+          "$ref": "common-v1.schema.json#/$defs/digest"
+        }
+      }
+    },
+    "revertPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fileRef",
+        "hunkRefs",
+        "previewRef",
+        "confirmedPreviewDigest",
+        "contentDigest"
+      ],
+      "properties": {
+        "fileRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "hunkRefs": {
+          "type": "array",
+          "maxItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+          }
+        },
+        "previewRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "confirmedPreviewDigest": {
+          "$ref": "common-v1.schema.json#/$defs/digest"
+        },
+        "contentDigest": {
+          "$ref": "common-v1.schema.json#/$defs/digest"
+        }
+      }
+    },
+    "openPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fileRef",
+        "line",
+        "column"
+      ],
+      "properties": {
+        "fileRef": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "line": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 100000000
+        },
+        "column": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 1000000
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "column": { "type": "integer" } },
+            "required": ["column"]
+          },
+          "then": {
+            "properties": { "line": { "type": "integer" } }
+          }
+        }
+      ]
+    },
+    "commitSummaryPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "modelTurnAcknowledged"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "deterministic",
+            "model"
+          ]
+        },
+        "modelTurnAcknowledged": {
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "model"
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "modelTurnAcknowledged": {
+                "const": true
+              }
+            },
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "deterministic"
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "modelTurnAcknowledged": {
+                "const": false
+              }
+            },
+            "type": "object"
+          }
+        }
+      ]
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "version",
+        "messageType",
+        "commandId",
+        "idempotencyKey",
+        "requestedAt",
+        "expiresAt",
+        "capabilityScope",
+        "action",
+        "actionDigest",
+        "identity",
+        "expectedRevisions",
+        "payload"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "version": {
+          "const": "piagent-webui-control-v1"
+        },
+        "messageType": {
+          "const": "command"
+        },
+        "commandId": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 32,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9._~-]+$"
+        },
+        "requestedAt": {
+          "$ref": "common-v1.schema.json#/$defs/timestamp"
+        },
+        "expiresAt": {
+          "$ref": "common-v1.schema.json#/$defs/timestamp"
+        },
+        "capabilityScope": {
+          "$ref": "#/$defs/capabilityScope"
+        },
+        "action": {
+          "$ref": "#/$defs/action"
+        },
+        "actionDigest": {
+          "$ref": "common-v1.schema.json#/$defs/digest"
+        },
+        "identity": {
+          "$ref": "common-v1.schema.json#/$defs/identity"
+        },
+        "expectedRevisions": {
+          "$ref": "#/$defs/expectedRevisions"
+        },
+        "payload": {
+          "type": "object",
+          "maxProperties": 6
+        }
+      },
+      "allOf": [
+        {
+          "$ref": "#/$defs/commandActionBindings"
+        }
+      ]
+    },
+    "commandActionBindings": {
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "chat.send"
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "capabilityScope": {
+                "const": "control.chat"
+              },
+              "payload": {
+                "$ref": "#/$defs/messageContent"
+              },
+              "expectedRevisions": {
+                "properties": {
+                  "queueRevision": {
+                    "$ref": "common-v1.schema.json#/$defs/revisionToken"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "queue.update"
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "capabilityScope": {
+                "const": "control.chat"
+              },
+              "payload": {
+                "$ref": "#/$defs/queueUpdatePayload"
+              },
+              "expectedRevisions": {
+                "properties": {
+                  "queueRevision": {
+                    "$ref": "common-v1.schema.json#/$defs/revisionToken"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "queue.delete"
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "capabilityScope": {
+                "const": "control.chat"
+              },
+              "payload": {
+                "$ref": "#/$defs/queueDeletePayload"
+              },
+              "expectedRevisions": {
+                "properties": {
+                  "queueRevision": {
+                    "$ref": "common-v1.schema.json#/$defs/revisionToken"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "queue.dispatch"
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "capabilityScope": {
+                "const": "control.chat"
+              },
+              "payload": {
+                "$ref": "#/$defs/queueDispatchPayload"
+              },
+              "expectedRevisions": {
+                "properties": {
+                  "queueRevision": {
+                    "$ref": "common-v1.schema.json#/$defs/revisionToken"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "lifecycle.stop"
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "capabilityScope": {
+                "const": "control.lifecycle"
+              },
+              "payload": {
+                "$ref": "#/$defs/stopPayload"
+              },
+              "identity": {
+                "properties": {
+                  "agentOperationId": {
+                    "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "lifecycle.pause"
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "capabilityScope": {
+                "const": "control.lifecycle"
+              },
+              "payload": {
+                "$ref": "#/$defs/pausePayload"
+              },
+              "identity": {
+                "properties": {
+                  "taskId": {
+                    "$ref": "common-v1.schema.json#/$defs/publicId"
+                  },
+                  "taskRunId": {
+                    "$ref": "common-v1.schema.json#/$defs/publicId"
+                  }
+                },
+                "type": "object"
+              },
+              "expectedRevisions": {
+                "properties": {
+                  "taskRevision": {
+                    "$ref": "common-v1.schema.json#/$defs/revisionToken"
+                  },
+                  "controlRevision": {
+                    "$ref": "common-v1.schema.json#/$defs/revisionToken"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "lifecycle.resume"
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "capabilityScope": {
+                "const": "control.lifecycle"
+              },
+              "payload": {
+                "$ref": "#/$defs/emptyPayload"
+              },
+              "identity": {
+                "properties": {
+                  "taskId": {
+                    "$ref": "common-v1.schema.json#/$defs/publicId"
+                  },
+                  "taskRunId": {
+                    "$ref": "common-v1.schema.json#/$defs/publicId"
+                  }
+                },
+                "type": "object"
+              },
+              "expectedRevisions": {
+                "properties": {
+                  "taskRevision": {
+                    "$ref": "common-v1.schema.json#/$defs/revisionToken"
+                  },
+                  "controlRevision": {
+                    "$ref": "common-v1.schema.json#/$defs/revisionToken"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "lifecycle.resume-and-continue"
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "capabilityScope": {
+                "const": "control.resumeAndContinue"
+              },
+              "payload": {
+                "$ref": "#/$defs/messageContent",
+                "properties": {
+                  "delivery": {
+                    "const": "new-operation"
+                  }
+                },
+                "type": "object"
+              },
+              "identity": {
+                "properties": {
+                  "taskId": {
+                    "$ref": "common-v1.schema.json#/$defs/publicId"
+                  },
+                  "taskRunId": {
+                    "$ref": "common-v1.schema.json#/$defs/publicId"
+                  }
+                },
+                "type": "object"
+              },
+              "expectedRevisions": {
+                "properties": {
+                  "taskRevision": {
+                    "$ref": "common-v1.schema.json#/$defs/revisionToken"
+                  },
+                  "controlRevision": {
+                    "$ref": "common-v1.schema.json#/$defs/revisionToken"
+                  },
+                  "queueRevision": {
+                    "$ref": "common-v1.schema.json#/$defs/revisionToken"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "session-options.set-model"
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "capabilityScope": {
+                "const": "control.sessionOptions"
+              },
+              "payload": {
+                "$ref": "#/$defs/modelPayload"
+              },
+              "expectedRevisions": {
+                "properties": {
+                  "sessionOptionRevision": {
+                    "$ref": "common-v1.schema.json#/$defs/revisionToken"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "session-options.set-thinking"
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "capabilityScope": {
+                "const": "control.sessionOptions"
+              },
+              "payload": {
+                "$ref": "#/$defs/thinkingPayload"
+              },
+              "expectedRevisions": {
+                "properties": {
+                  "sessionOptionRevision": {
+                    "$ref": "common-v1.schema.json#/$defs/revisionToken"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "review.mark"
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "capabilityScope": {
+                "const": "reviewActions"
+              },
+              "payload": {
+                "$ref": "#/$defs/reviewMarkPayload"
+              },
+              "expectedRevisions": {
+                "properties": {
+                  "taskRevision": {
+                    "$ref": "common-v1.schema.json#/$defs/revisionToken"
+                  },
+                  "workspaceRevision": {
+                    "$ref": "common-v1.schema.json#/$defs/revisionToken"
+                  },
+                  "patchPreimage": {
+                    "$ref": "common-v1.schema.json#/$defs/digest"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "enum": [
+                  "source.stage",
+                  "source.unstage"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "capabilityScope": {
+                "const": "reviewActions"
+              },
+              "payload": {
+                "$ref": "#/$defs/sourceMutationPayload"
+              },
+              "expectedRevisions": {
+                "properties": {
+                  "taskRevision": {
+                    "$ref": "common-v1.schema.json#/$defs/revisionToken"
+                  },
+                  "workspaceRevision": {
+                    "$ref": "common-v1.schema.json#/$defs/revisionToken"
+                  },
+                  "indexRevision": {
+                    "$ref": "common-v1.schema.json#/$defs/revisionToken"
+                  },
+                  "workspacePreimage": {
+                    "$ref": "common-v1.schema.json#/$defs/workingTreeDigest"
+                  },
+                  "indexPreimage": {
+                    "$ref": "common-v1.schema.json#/$defs/digest"
+                  },
+                  "patchPreimage": {
+                    "$ref": "common-v1.schema.json#/$defs/digest"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "source.revert"
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "capabilityScope": {
+                "const": "reviewActions"
+              },
+              "payload": {
+                "$ref": "#/$defs/revertPayload"
+              },
+              "expectedRevisions": {
+                "properties": {
+                  "taskRevision": {
+                    "$ref": "common-v1.schema.json#/$defs/revisionToken"
+                  },
+                  "workspaceRevision": {
+                    "$ref": "common-v1.schema.json#/$defs/revisionToken"
+                  },
+                  "indexRevision": {
+                    "$ref": "common-v1.schema.json#/$defs/revisionToken"
+                  },
+                  "workspacePreimage": {
+                    "$ref": "common-v1.schema.json#/$defs/workingTreeDigest"
+                  },
+                  "indexPreimage": {
+                    "$ref": "common-v1.schema.json#/$defs/digest"
+                  },
+                  "patchPreimage": {
+                    "$ref": "common-v1.schema.json#/$defs/digest"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "source.open-in-vscode"
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "capabilityScope": {
+                "const": "reviewActions"
+              },
+              "payload": {
+                "$ref": "#/$defs/openPayload"
+              },
+              "expectedRevisions": {
+                "properties": {
+                  "taskRevision": {
+                    "$ref": "common-v1.schema.json#/$defs/revisionToken"
+                  },
+                  "workspaceRevision": {
+                    "$ref": "common-v1.schema.json#/$defs/revisionToken"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "commit-summary.generate"
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "capabilityScope": {
+                "const": "reviewActions"
+              },
+              "payload": {
+                "$ref": "#/$defs/commitSummaryPayload"
+              },
+              "expectedRevisions": {
+                "properties": {
+                  "taskRevision": {
+                    "$ref": "common-v1.schema.json#/$defs/revisionToken"
+                  },
+                  "indexRevision": {
+                    "$ref": "common-v1.schema.json#/$defs/revisionToken"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "action": { "const": "chat.send" },
+              "payload": {
+                "type": "object",
+                "properties": { "delivery": { "const": "steer" } },
+                "required": ["delivery"]
+              }
+            },
+            "required": ["action", "payload"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "identity": {
+                "type": "object",
+                "properties": {
+                  "agentOperationId": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" }
+                }
+              },
+              "expectedRevisions": {
+                "type": "object",
+                "properties": {
+                  "controlRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "action": {
+                "enum": [
+                  "lifecycle.pause",
+                  "lifecycle.resume",
+                  "lifecycle.resume-and-continue",
+                  "review.mark",
+                  "source.stage",
+                  "source.unstage",
+                  "source.revert",
+                  "source.open-in-vscode",
+                  "commit-summary.generate"
+                ]
+              }
+            },
+            "required": ["action"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "identity": {
+                "type": "object",
+                "properties": {
+                  "taskId": { "$ref": "common-v1.schema.json#/$defs/publicId" },
+                  "taskRunId": { "$ref": "common-v1.schema.json#/$defs/publicId" }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "genericRejectedResultCode": {
+      "enum": [
+        "stale-revision",
+        "identity-mismatch",
+        "capability-unavailable",
+        "replay",
+        "idempotency-payload-mismatch",
+        "terminal-task",
+        "expired",
+        "invalid-command",
+        "resync-required"
+      ]
+    },
+    "receiptActionResultBinding": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "resultCode": {
+              "$ref": "#/$defs/genericRejectedResultCode"
+            }
+          },
+          "required": [
+            "resultCode"
+          ]
+        },
+        {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "action": { "const": "chat.send" },
+                "resultCode": {
+                  "enum": [
+                    "held",
+                    "dispatch-requested",
+                    "dispatch-observed",
+                    "dispatch-rejected",
+                    "dispatch-unknown"
+                  ]
+                }
+              },
+              "required": ["action", "resultCode"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "action": { "const": "queue.update" },
+                "resultCode": { "const": "updated" }
+              },
+              "required": ["action", "resultCode"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "action": { "const": "queue.delete" },
+                "resultCode": { "const": "deleted" }
+              },
+              "required": ["action", "resultCode"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "action": { "const": "queue.dispatch" },
+                "resultCode": {
+                  "enum": [
+                    "dispatch-requested",
+                    "dispatch-observed",
+                    "dispatch-rejected",
+                    "dispatch-unknown"
+                  ]
+                }
+              },
+              "required": ["action", "resultCode"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "action": { "const": "lifecycle.stop" },
+                "resultCode": {
+                  "enum": [
+                    "already-idle",
+                    "stop-requested",
+                    "stopped",
+                    "unsupported-operation-phase",
+                    "settlement-unknown",
+                    "emergency-stop",
+                    "audit-unavailable"
+                  ]
+                }
+              },
+              "required": ["action", "resultCode"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "action": { "const": "lifecycle.pause" },
+                "resultCode": {
+                  "enum": [
+                    "pause-requested",
+                    "paused",
+                    "already-pausing",
+                    "already-paused",
+                    "pause-unconfirmed"
+                  ]
+                }
+              },
+              "required": ["action", "resultCode"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "action": { "const": "lifecycle.resume" },
+                "resultCode": {
+                  "enum": [
+                    "resumed",
+                    "already-active",
+                    "pause-cancelled",
+                    "resume-rejected"
+                  ]
+                }
+              },
+              "required": ["action", "resultCode"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "action": { "const": "lifecycle.resume-and-continue" },
+                "resultCode": {
+                  "enum": [
+                    "dispatch-requested",
+                    "dispatch-observed",
+                    "dispatch-rejected",
+                    "dispatch-unknown",
+                    "resumed-not-dispatched"
+                  ]
+                }
+              },
+              "required": ["action", "resultCode"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "enum": [
+                    "session-options.set-model",
+                    "session-options.set-thinking"
+                  ]
+                },
+                "resultCode": {
+                  "enum": [
+                    "changed",
+                    "unchanged",
+                    "effect-unknown"
+                  ]
+                }
+              },
+              "required": ["action", "resultCode"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "action": { "const": "review.mark" },
+                "resultCode": { "enum": ["reviewed", "unreviewed"] }
+              },
+              "required": ["action", "resultCode"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "action": { "const": "source.stage" },
+                "resultCode": { "enum": ["staged", "effect-unknown"] }
+              },
+              "required": ["action", "resultCode"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "action": { "const": "source.unstage" },
+                "resultCode": { "enum": ["unstaged", "effect-unknown"] }
+              },
+              "required": ["action", "resultCode"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "action": { "const": "source.revert" },
+                "resultCode": { "enum": ["reverted", "effect-unknown"] }
+              },
+              "required": ["action", "resultCode"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "action": { "const": "source.open-in-vscode" },
+                "resultCode": { "enum": ["opened", "effect-unknown"] }
+              },
+              "required": ["action", "resultCode"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "action": { "const": "commit-summary.generate" },
+                "resultCode": { "const": "summary-generated" }
+              },
+              "required": ["action", "resultCode"]
+            }
+          ]
+        }
+      ]
+    },
+    "receiptPhaseResultBinding": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "phase": { "const": "requested" },
+            "resultCode": {
+              "enum": [
+                "stop-requested",
+                "pause-requested",
+                "dispatch-requested"
+              ]
+            },
+            "settledAt": { "type": "null" },
+            "settlementEvidenceRef": { "type": "null" },
+            "error": { "type": "null" }
+          },
+          "required": ["phase", "resultCode", "settledAt", "settlementEvidenceRef", "error"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "phase": { "const": "accepted" },
+            "resultCode": {
+              "enum": [
+                "held",
+                "stop-requested",
+                "pause-requested",
+                "dispatch-requested"
+              ]
+            },
+            "settledAt": { "type": "null" },
+            "settlementEvidenceRef": { "type": "null" },
+            "error": { "type": "null" }
+          },
+          "required": ["phase", "resultCode", "settledAt", "settlementEvidenceRef", "error"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "phase": { "const": "settled" },
+            "resultCode": {
+              "enum": [
+                "already-idle",
+                "stopped",
+                "emergency-stop",
+                "paused",
+                "already-pausing",
+                "already-paused",
+                "resumed",
+                "already-active",
+                "pause-cancelled",
+                "updated",
+                "deleted",
+                "dispatch-observed",
+                "changed",
+                "unchanged",
+                "reviewed",
+                "unreviewed",
+                "staged",
+                "unstaged",
+                "reverted",
+                "opened",
+                "summary-generated"
+              ]
+            },
+            "settledAt": {
+              "$ref": "common-v1.schema.json#/$defs/timestamp"
+            },
+            "settlementEvidenceRef": {
+              "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+            },
+            "error": { "type": "null" }
+          },
+          "required": ["phase", "resultCode", "settledAt", "settlementEvidenceRef", "error"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "phase": { "const": "rejected" },
+            "resultCode": {
+              "anyOf": [
+                { "$ref": "#/$defs/genericRejectedResultCode" },
+                {
+                  "enum": [
+                    "unsupported-operation-phase",
+                    "resume-rejected",
+                    "dispatch-rejected"
+                  ]
+                }
+              ]
+            },
+            "settledAt": {
+              "$ref": "common-v1.schema.json#/$defs/timestamp"
+            },
+            "settlementEvidenceRef": { "type": "null" },
+            "error": { "$ref": "#/$defs/controlError" }
+          },
+          "required": ["phase", "resultCode", "settledAt", "settlementEvidenceRef", "error"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "phase": { "const": "uncertain" },
+            "resultCode": {
+              "enum": [
+                "settlement-unknown",
+                "audit-unavailable",
+                "pause-unconfirmed",
+                "dispatch-unknown",
+                "effect-unknown",
+                "resumed-not-dispatched"
+              ]
+            },
+            "settledAt": {
+              "$ref": "common-v1.schema.json#/$defs/timestamp"
+            },
+            "settlementEvidenceRef": { "type": "null" },
+            "error": { "$ref": "#/$defs/controlError" }
+          },
+          "required": ["phase", "resultCode", "settledAt", "settlementEvidenceRef", "error"]
+        }
+      ]
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "version",
+        "messageType",
+        "commandId",
+        "idempotencyKeyDigest",
+        "action",
+        "actionDigest",
+        "identity",
+        "phase",
+        "resultCode",
+        "requestedAt",
+        "settledAt",
+        "observedRevisionsBefore",
+        "observedRevisionsAfter",
+        "deduplicated",
+        "auditRef",
+        "settlementEvidenceRef",
+        "error"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "version": {
+          "const": "piagent-webui-control-v1"
+        },
+        "messageType": {
+          "const": "receipt"
+        },
+        "commandId": {
+          "$ref": "common-v1.schema.json#/$defs/opaqueRef"
+        },
+        "idempotencyKeyDigest": {
+          "$ref": "common-v1.schema.json#/$defs/digest"
+        },
+        "action": {
+          "$ref": "#/$defs/action"
+        },
+        "actionDigest": {
+          "$ref": "common-v1.schema.json#/$defs/digest"
+        },
+        "identity": {
+          "$ref": "common-v1.schema.json#/$defs/identity"
+        },
+        "phase": {
+          "enum": [
+            "rejected",
+            "requested",
+            "accepted",
+            "settled",
+            "uncertain"
+          ]
+        },
+        "resultCode": {
+          "enum": [
+            "already-idle",
+            "stop-requested",
+            "stopped",
+            "unsupported-operation-phase",
+            "settlement-unknown",
+            "emergency-stop",
+            "audit-unavailable",
+            "pause-requested",
+            "paused",
+            "already-pausing",
+            "already-paused",
+            "pause-unconfirmed",
+            "resumed",
+            "already-active",
+            "pause-cancelled",
+            "resume-rejected",
+            "resumed-not-dispatched",
+            "held",
+            "updated",
+            "deleted",
+            "dispatch-requested",
+            "dispatch-observed",
+            "dispatch-rejected",
+            "dispatch-unknown",
+            "changed",
+            "unchanged",
+            "effect-unknown",
+            "reviewed",
+            "unreviewed",
+            "staged",
+            "unstaged",
+            "reverted",
+            "opened",
+            "summary-generated",
+            "stale-revision",
+            "identity-mismatch",
+            "capability-unavailable",
+            "replay",
+            "idempotency-payload-mismatch",
+            "terminal-task",
+            "expired",
+            "invalid-command",
+            "resync-required"
+          ]
+        },
+        "requestedAt": {
+          "$ref": "common-v1.schema.json#/$defs/timestamp"
+        },
+        "settledAt": {
+          "anyOf": [
+            {
+              "$ref": "common-v1.schema.json#/$defs/timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observedRevisionsBefore": {
+          "$ref": "common-v1.schema.json#/$defs/domainRevision"
+        },
+        "observedRevisionsAfter": {
+          "$ref": "common-v1.schema.json#/$defs/domainRevision"
+        },
+        "deduplicated": {
+          "type": "boolean"
+        },
+        "auditRef": {
+          "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef"
+        },
+        "settlementEvidenceRef": {
+          "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/controlError"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "$ref": "#/$defs/receiptActionResultBinding"
+        },
+        {
+          "$ref": "#/$defs/receiptPhaseResultBinding"
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "action": { "const": "lifecycle.stop" }
+            },
+            "required": ["action"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "identity": {
+                "type": "object",
+                "properties": {
+                  "agentOperationId": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "action": {
+                "enum": [
+                  "lifecycle.pause",
+                  "lifecycle.resume",
+                  "lifecycle.resume-and-continue",
+                  "review.mark",
+                  "source.stage",
+                  "source.unstage",
+                  "source.revert",
+                  "source.open-in-vscode",
+                  "commit-summary.generate"
+                ]
+              }
+            },
+            "required": ["action"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "identity": {
+                "type": "object",
+                "properties": {
+                  "taskId": { "$ref": "common-v1.schema.json#/$defs/publicId" },
+                  "taskRunId": { "$ref": "common-v1.schema.json#/$defs/publicId" }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": { "resultCode": { "const": "dispatch-observed" } },
+            "required": ["resultCode"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "identity": {
+                "type": "object",
+                "properties": {
+                  "agentOperationId": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "resultCode": { "const": "replay" }
+            },
+            "required": ["resultCode"]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "deduplicated": { "const": true }
+            }
+          }
+        }
+      ]
+    },
+    "controlError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message",
+        "retryable"
+      ],
+      "properties": {
+        "code": {
+          "$ref": "common-v1.schema.json#/$defs/reasonCode"
+        },
+        "message": {
+          "$ref": "common-v1.schema.json#/$defs/nonEmptyDisplayText"
+        },
+        "retryable": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

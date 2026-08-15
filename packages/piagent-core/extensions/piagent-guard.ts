@@ -12,17 +12,8 @@ import {
   globMatchesPath, matchesProtectedPath, normalizePathCandidate, matchesAnyPath
 } from "./policy-core.js";
 import { extractShellWritePathCandidates, shellHasFileWriteRedirection } from "./shell-write-targets.js";
-import {
-  commandMatchesVerifyPlan,
-  createBashResultLedger,
-  findMatchingObservedBashResult,
-  readObservedBashResults
-} from "./runtime-evidence.js";
-import {
-  findPackageRoot,
-  findPlatformRoot,
-  readJsonFile
-} from "./guard-io.js";
+import { commandMatchesVerifyPlan, createBashResultLedger, findMatchingObservedBashResult, readObservedBashResults } from "./runtime-evidence.js";
+import { findPackageRoot, findPlatformRoot, readJsonFile } from "./guard-io.js";
 import {
   DOCUMENT_EXTENSIONS,
   extractDocument,
@@ -94,6 +85,9 @@ import { completeTaskDigestRefresh } from "./task-digest-migration.js";
 import { WORKING_TREE_DIGEST_ALGORITHM, isCurrentWorkingTreeDigest, workingTreeObservation, workingTreeSnapshotUsesCurrentAlgorithm } from "./working-tree-digest.js";
 import { appendJsonlBounded } from "./state-retention.js";
 import { ensurePrivateStateDirectory, resolveLocalStatePath } from "./local-state-path.js";
+import { piApprovalBroker, type ApprovalActionDraft } from "../runtime/inspection/approval-broker.ts";
+import { inspectTaskControlState } from "../runtime/inspection/task-control-journal.ts";
+import { createSourceMutationGuardBindings } from "../runtime/policy/source-mutation-guard-binding.ts";
 import {
   TOOL_RESULT_CAPTURE_MAX_CHARS,
   TOOL_RESULT_COMPACT_CHAR_THRESHOLD,
@@ -160,6 +154,7 @@ import { buildLiveTaskStatus, formatLiveTaskStatus } from "../runtime/product/op
 import { buildTaskEfficiencyMetrics } from "../runtime/product/efficiency-metrics.ts";
 import { performanceReviewToolDecision, performanceReviewToolKind } from "../runtime/quality/performance-assurance.ts";
 import { expectedModelMutationProof } from "../runtime/quality/model-mutation-proof.ts";
+import { captureVerifierFileSnapshot } from "../runtime/inspection/verifier-snapshot-store.ts";
 import { prefixCompletions, registerPiagentTool, registerRuntimeCommand, registerRuntimeTool } from "../runtime/registration/extension-registration.ts";
 import { FRESH_COMMAND_ACTIONS, FRESH_COMMAND_HELP, ONBOARDING_COMMAND_ACTIONS, WORKFLOW_COMMAND_EXCLUSIONS } from "../runtime/registration/operator-catalogs.ts";
 import { registerPiagentStatusCommand } from "../runtime/registration/runtime-model-status.ts";
@@ -2188,10 +2183,12 @@ function recordObservedTaskVerification(
     isError?: boolean;
     recordedAt?: string;
     outputText?: string;
+    toolCallId?: string;
   },
   pendingContext: ObservedTaskContext[],
   maxManifestFiles: number, shellSnapshotBefore?: Record<string, string>,
-  eventTree?: ReturnType<typeof workingTreeObservation>
+  eventTree?: ReturnType<typeof workingTreeObservation>,
+  readProtectedPaths: string[] = []
 ): TaskContract | undefined {
   const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
   if (!task || task.trace.outcome !== "pending") return;
@@ -2220,19 +2217,31 @@ function recordObservedTaskVerification(
   ));
   const contextAdded = mergeObservedTaskContext(task, pendingContext, maxManifestFiles, redactText);
   if (!duplicate) {
+    const evidenceRecordedAt = nowIso();
+    const observedAt = observed.recordedAt ?? evidenceRecordedAt;
     task.verifyEvidence.push({
       command: redactText(command),
       exitCode,
       summary: `Runtime observed configured verifier exit ${exitCode} (${classification.category}${classification.retryable ? ", retryable" : ""}).`,
-      recordedAt: nowIso(),
+      recordedAt: evidenceRecordedAt,
       observed: true,
-      observedAt: observed.recordedAt ?? nowIso(),
+      observedAt,
       isError: observed.isError === true,
       matchedProfileCommand: true,
       preWorkingTreeDigest,
       workingTreeDigest: currentDigest
     });
     task.verifyEvidence = task.verifyEvidence.slice(-100);
+    try {
+      captureVerifierFileSnapshot({
+        projectRoot: ctx.cwd, taskId: task.taskId, taskRunId: task.taskRunId, sessionId: task.sessionId,
+        toolCallId: observed.toolCallId ?? "", commandHash: observed.commandHash, observedAt,
+        capturedAt: evidenceRecordedAt, exitCode, treeDigest: currentDigest, snapshot: currentDigests,
+        protectedPaths: readProtectedPaths
+      });
+    } catch (error) {
+      ctx.ui.notify(`Piagent could not persist verifier file snapshot: ${error instanceof Error ? error.message : String(error)}`, "warn");
+    }
   }
 
   const hasChanges = taskChangedFileEvidence(ctx.cwd, task, currentDigests).expected.length > 0;
@@ -4034,6 +4043,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
   const runtimeState = new RuntimeSessionState({
     maxObservedContext: contextBudgetConfig(policy).maxManifestFiles
   });
+  const sourceMutationGuardBindings = createSourceMutationGuardBindings(policy, loadProfileFromContext);
   const runtimeSnapshotCapture = new RuntimeSnapshotCapture(), runtimeVersions = readRuntimeVersionMetadata(PLATFORM_ROOT);
   const solverShadow = solverMode === "off" ? undefined : new SolverShadowRuntime(solverMode);
   const modelRouteRuntime = new ModelRouteRuntime(parentRoutingMode, routingObjective);
@@ -4242,6 +4252,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
   const activityInspector = registerActivityInspector(pi, {
     activeTask: (ctx) => activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined,
     readEvents: (cwd) => readContextTelemetry(cwd, { limit: 5_000 }) as any[],
+    protectedPaths: (ctx) => effectiveProtectedPaths(policy, loadProfile(ctx.cwd)).readProtectedPaths,
     selectAction: selectRuntimeAction,
     emit: emitRuntimeMessage
   });
@@ -4268,7 +4279,9 @@ export default function piagentGuard(pi: ExtensionAPI) {
     mcpReadinessNotice,
     updateAvailabilityNotice,
     contextExcludePatterns: (profile) => contextIndexExcludePatterns(policy, profile),
-    inspectResume: inspectTaskResumeState,
+    inspectResume: (cwd, task, sessionId) => inspectTaskResumeState(cwd, task, sessionId, undefined, {
+      protectedPaths: effectiveProtectedPaths(policy, loadProfile(cwd)).readProtectedPaths
+    }),
     syncTrajectory: (ctx, task) => {
       const snapshot = workingTreeSnapshot(ctx.cwd) as Record<string, string>;
       const resume = workingTreeSnapshotHasUnavailableEvidence(snapshot)
@@ -4286,7 +4299,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
       })));
     },
     telemetry,
-    afterStart: activityInspector.refresh
+    afterStart: async (ctx) => { sourceMutationGuardBindings.bind(ctx); await activityInspector.refresh(ctx); }
   });
 
   registerSessionHooks(pi, {
@@ -4301,6 +4314,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
     onTurnEnd: activityInspector.refresh,
     onAgentSettled: activityInspector.refresh,
     beforeShutdown: (ctx) => {
+      sourceMutationGuardBindings.unbind(ctx);
       activityInspector.dispose(ctx);
       sessionCapabilityDigests.delete(`${ctx.cwd}\0${ctx.sessionManager.getSessionId()}`);
     }
@@ -4497,6 +4511,11 @@ export default function piagentGuard(pi: ExtensionAPI) {
       if (reviewDecision) runtimeState.denyPerformanceReviewTool(task.taskRunId);
       return reviewDecision;
     },
+    beforeStart: (_event, ctx) => {
+      const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
+      const control = task?.trace.outcome === "pending" ? inspectTaskControlState(ctx.cwd, task) : null;
+      if (control?.dispatchBlocked) return { block: true, reason: `Task lifecycle control blocks tool start while state is ${control.state}.` };
+    },
     afterDecision: (_event, ctx, metadata) => {
       if (metadata.allowed) return;
       const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
@@ -4631,13 +4650,13 @@ export default function piagentGuard(pi: ExtensionAPI) {
     if (approvalDecision.block) {
       return { block: true, reason: approvalDecision.reason };
     }
-
     let shellProjectMutation = false;
     let shellMutationTargets: string[] = [];
     let shellMutationTargetBounded = false;
     let configuredVerifierShell = false;
     let authorizedShellCommand = "";
     let authorizedShellSegments: Array<{ words: string[] }> = [];
+    let pendingHumanApproval: { prompt: string; title: string; action: Omit<ApprovalActionDraft, "treePrecondition"> } | null = null;
     if (SHELL_TOOL_NAMES.has(event.toolName)) {
       const shellInput = extractShellCommandInput(toolInput);
       if (!shellInput.command) {
@@ -4695,17 +4714,14 @@ export default function piagentGuard(pi: ExtensionAPI) {
         return { block: true, reason: unresolvedExpansionReason("Command", unresolvedExpansions) };
       }
 
-      const confirmationReasons = execDecision.mode !== "off" && execDecision.decision === "prompt"
-        ? [...execDecision.reasons]
-        : [];
+      const confirmationReasons = execDecision.mode !== "off" && execDecision.decision === "prompt" ? [...execDecision.reasons] : [];
       const externalReason = findShellExternalConfirmationReason(execDecision.segments, externalActionPolicyConfig(policy));
       if (externalReason) confirmationReasons.push(externalReason);
       if (confirmationReasons.length > 0) {
-        const ok = await ctx.ui.confirm(
-          `Command requires confirmation.\n\n${confirmationReasons.join("\n")}\n\nAllow?`,
-          "Piagent exec policy confirmation"
-        );
-        if (!ok) return { block: true, reason: `User denied command: ${confirmationReasons.join("; ")}` };
+        pendingHumanApproval = { prompt: `Command requires confirmation.\n\n${confirmationReasons.join("\n")}\n\nAllow?`, title: "Piagent exec policy confirmation",
+          action: { kind: externalReason ? "external-provider-action" : "workspace-patch", preconditionClass: externalReason ? "runtime-only" : "workspace-tree", toolName: event.toolName, rawAction: { toolName: event.toolName, command, input: preparedInput.input },
+            commandPreview: command, parameterPreview: preparedInput.confirmationSummary ?? "Shell command", targetPaths: shellMutationTargets, targetSummaries: confirmationReasons, provider: externalReason ? "shell-external" : null, urlOrigin: null,
+            requestedScope: "one-shell-command", reason: confirmationReasons.join("; "), riskClass: shellProjectMutation ? "high" : "medium", allowConsequence: "Run this exact command once after the guard rechecks the task and working tree.", denyConsequence: "Block this command and return the denial to the active Pi operation." } };
       }
     }
 
@@ -4717,7 +4733,6 @@ export default function piagentGuard(pi: ExtensionAPI) {
     if (proxyShellDecision.block) {
       return { block: true, reason: proxyShellDecision.reason };
     }
-
     const policyToolIdentity = preparedInput.proxyToolName ?? event.toolName;
     const usesKnownExternalProvider = externalActionPolicyConfig(policy).providerKeywords
       .some((provider) => actionTextMatchesAny(policyToolIdentity, [provider]));
@@ -4754,16 +4769,11 @@ export default function piagentGuard(pi: ExtensionAPI) {
           }
         : classifiedExternalAction;
       if (externalAction.decision === "confirm") {
-        const inputSummary = preparedInput.confirmationSummary
-          ? `\ninput: ${preparedInput.confirmationSummary}`
-          : "";
-        const ok = await ctx.ui.confirm(
-          `External provider action requires confirmation.\n\nprovider: ${externalAction.provider}\naction: ${externalAction.action}\ntool: ${event.toolName}${inputSummary}\n\nAllow?`,
-          "Piagent external action confirmation"
-        );
-        if (!ok) {
-          return { block: true, reason: `User denied external provider action: ${event.toolName}` };
-        }
+        const inputSummary = preparedInput.confirmationSummary ? `\ninput: ${preparedInput.confirmationSummary}` : "";
+        pendingHumanApproval = { prompt: `External provider action requires confirmation.\n\nprovider: ${externalAction.provider}\naction: ${externalAction.action}\ntool: ${event.toolName}${inputSummary}\n\nAllow?`, title: "Piagent external action confirmation",
+          action: { kind: "external-provider-action", preconditionClass: "runtime-only", toolName: event.toolName, rawAction: { toolName: event.toolName, input: preparedInput.input, provider: externalAction.provider, action: externalAction.action },
+            commandPreview: null, parameterPreview: preparedInput.confirmationSummary ?? String(externalAction.action), targetPaths: [], targetSummaries: [], provider: String(externalAction.provider),
+            urlOrigin: null, requestedScope: "one-external-action", reason: `External provider action ${String(externalAction.action)} requires confirmation`, riskClass: "high", allowConsequence: "Release this exact provider action once after the guard rechecks runtime authority.", denyConsequence: "Block the provider action without changing external state." } };
       }
     }
 
@@ -4805,6 +4815,11 @@ export default function piagentGuard(pi: ExtensionAPI) {
       verificationCarrier: SHELL_TOOL_NAMES.has(event.toolName)
     });
     if (phaseMutationDecision) return phaseMutationDecision;
+    if (pendingHumanApproval && !sessionTask) {
+      const approval = await piApprovalBroker.request({ cwd: ctx.cwd, rawSessionId: ctx.sessionManager.getSessionId(), toolCallId: String(event.toolCallId), expectedTask: null, action: { ...pendingHumanApproval.action, preconditionClass: "runtime-only", treePrecondition: null }, terminalConfirm: () => ctx.ui.confirm(pendingHumanApproval!.prompt, pendingHumanApproval!.title) });
+      if (!approval.allowed) return { block: true, reason: pendingHumanApproval.action.kind === "external-provider-action" && !SHELL_TOOL_NAMES.has(event.toolName) ? `User denied external provider action: ${event.toolName}` : `User denied command: ${pendingHumanApproval.action.reason}` };
+      pendingHumanApproval = null;
+    }
     if (sessionTask && sessionTask.trace.outcome !== "pending" && (shellProjectMutation || directProjectMutation)) {
       return {
         block: true,
@@ -4855,6 +4870,17 @@ export default function piagentGuard(pi: ExtensionAPI) {
       }
     }
 
+    if (pendingHumanApproval) {
+      const currentTreeDigest = semanticSnapshot && !workingTreeSnapshotHasUnavailableEvidence(semanticSnapshot) ? workingTreeEvidenceDigest(semanticSnapshot) : null;
+      const treePrecondition = pendingHumanApproval.action.preconditionClass === "runtime-only" || !currentTreeDigest ? null
+        : { workspaceRevision: `workspace-rev.${crypto.createHash("sha256").update(currentTreeDigest).digest("hex")}`, indexRevision: null, preimageDigest: currentTreeDigest };
+      const approval = await piApprovalBroker.request({ cwd: ctx.cwd, rawSessionId: ctx.sessionManager.getSessionId(), toolCallId: String(event.toolCallId), expectedTask: sessionTask ? { taskId: sessionTask.taskId, taskRunId: sessionTask.taskRunId } : null,
+        action: { ...pendingHumanApproval.action, treePrecondition }, terminalConfirm: () => ctx.ui.confirm(pendingHumanApproval!.prompt, pendingHumanApproval!.title),
+        recheck: () => !treePrecondition || (() => { const current = workingTreeSnapshot(ctx.cwd);
+          return !workingTreeSnapshotHasUnavailableEvidence(current) && workingTreeEvidenceDigest(current) === treePrecondition.preimageDigest; })() });
+      if (!approval.allowed) return { block: true, reason: pendingHumanApproval.action.kind === "external-provider-action" && !SHELL_TOOL_NAMES.has(event.toolName) ? `User denied external provider action: ${event.toolName}` : `User denied command: ${pendingHumanApproval.action.reason}` };
+      if (!approval.consume()) return { block: true, reason: "Approval became stale before tool start; the action was blocked." };
+    }
     if (
       sessionTask?.trace.outcome === "pending"
       && sessionTask.changeMode === "source-change"
@@ -4864,7 +4890,6 @@ export default function piagentGuard(pi: ExtensionAPI) {
     }
     }
   });
-
   const registrationDeps = {
     CONTEXT_INDEX_EDGE_KINDS, CONTEXT_INDEX_NODE_KINDS, DEFAULT_MAX_TASK_ATTEMPTS, FRESH_COMMAND_ACTIONS, FRESH_COMMAND_HELP,
     ONBOARDING_COMMAND_ACTIONS, ORCHESTRATION_ROLES, PIAGENT_TOOL_NAMES, READ_ONLY_TOOL_NAMES, REVIEW_LENSES,

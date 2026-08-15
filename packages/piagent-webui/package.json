@@ -1,0 +1,33 @@
+{
+  "name": "@piagent/webui",
+  "version": "0.0.0-private",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate:contracts": "node scripts/generate-contracts.mjs --write",
+    "check:contracts": "node scripts/generate-contracts.mjs --check",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "npm run check:contracts && vite build",
+    "benchmark": "node benchmark/benchmark.mjs"
+  },
+  "dependencies": {
+    "@emotion/cache": "^11.14.0",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^9.3.1",
+    "@mui/material": "^9.3.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "@vitejs/plugin-react": "6.0.5",
+    "json-schema-to-typescript": "15.0.4",
+    "typescript": "7.0.2",
+    "vite": "8.2.1"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}

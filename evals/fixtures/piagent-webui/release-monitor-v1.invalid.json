@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-release-monitor-v1",
+  "generatedAt": "2026-08-14T12:00:00.000Z",
+  "identity": { "projectRef": "project.fixture", "runtimeInstanceId": "runtime.fixture", "sessionRef": "session.fixture", "taskId": null, "taskRunId": null, "agentOperationId": null, "toolCallId": null },
+  "state": "ready",
+  "monitorRevision": "release-monitor.fixture",
+  "benchmark": { "state": "missing", "runs": [], "warnings": [], "page": { "total": 0, "returned": 0, "truncated": false } },
+  "release": { "state": "missing", "reportRef": null, "generatedAt": null, "sourceState": "unknown", "localSafeGate": "unknown", "rcAssembly": "unknown", "beta": "unknown", "gaRelease": "unknown", "blockerCount": 0, "blockers": [], "authorization": { "releaseCommit": false, "tag": false, "publish": true, "push": false } },
+  "actions": { "runBenchmark": true, "resumeBenchmark": false, "releaseCommit": false, "tag": false, "publish": false, "push": false },
+  "health": { "state": "ok", "reasonCode": null, "message": null }
+}

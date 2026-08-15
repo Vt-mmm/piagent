@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-source-mutation-v1",
+  "generatedAt": "2026-08-14T08:00:00.000Z",
+  "identity": {
+    "projectRef": "project_01",
+    "runtimeInstanceId": "runtime_01",
+    "sessionRef": "session_01",
+    "taskId": "task_01",
+    "taskRunId": "task_run_01",
+    "agentOperationId": null,
+    "toolCallId": null
+  },
+  "action": "source.stage",
+  "state": "ready",
+  "target": null,
+  "reasonCode": null,
+  "health": { "state": "ok", "reasonCode": null, "message": null }
+}

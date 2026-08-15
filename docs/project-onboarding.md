@@ -1,4 +1,5 @@
 # Project onboarding snapshot
+<!-- language: vi; english-index: docs-site/content/en/team.html -->
 
 ## Mục tiêu
 
