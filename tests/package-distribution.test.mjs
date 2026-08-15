@@ -280,6 +280,8 @@ describe("package distribution", () => {
     const workflow = fs.readFileSync(path.join(repositoryRoot, ".github", "workflows", "publish.yml"), "utf8");
     assert.match(workflow, /fetch-depth:\s*0/, "publish checkout must include release-tag history");
     assert.match(workflow, /apt-get install --yes ripgrep/, "publish job must install its Linux test prerequisite");
+    assert.match(workflow, /- name: Install WebUI Chromium\s*\n\s*run: npx playwright install --with-deps chromium/,
+      "publish job must install the browser used by local verification");
     assert.match(workflow, /if \[\[ "\$version" == \*-\* \]\]; then tag="next"; fi/);
     assert.match(workflow, /npm publish --tag "\$\{\{ steps\.npm-tag\.outputs\.value \}\}"/);
   });
