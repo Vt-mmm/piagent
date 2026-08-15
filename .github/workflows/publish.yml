@@ -66,6 +66,9 @@ jobs:
       - name: Build WebUI release assets
         run: npm run build --workspace @piagent/webui
 
+      - name: Install WebUI Chromium
+        run: npx playwright install --with-deps chromium
+
       - name: Typecheck
         run: npm run typecheck
 
