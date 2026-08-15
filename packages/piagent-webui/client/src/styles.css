@@ -259,7 +259,7 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
 .diff-context .additions { margin-left: auto; color: var(--accent); }
 .diff-context .deletions { color: var(--red); }
 .diff-hunk { min-width: 0; overflow: auto; }
-.hunk-header { position: sticky; left: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 12px; border-bottom: 1px solid rgba(117, 167, 255, .14); color: #85a8e8; background: rgba(117, 167, 255, .07); font-family: ui-monospace, monospace; font-size: 9px; }
+.hunk-header { position: sticky; left: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 12px; border-bottom: 1px solid rgba(117, 167, 255, .14); color: var(--blue); background: rgba(117, 167, 255, .07); font-family: ui-monospace, monospace; font-size: 9px; }
 .hunk-header button { min-height: 25px; padding: 0 9px; border: 1px solid rgba(117, 167, 255, .34); border-radius: 6px; color: #bcd0f5; background: rgba(117, 167, 255, .10); font: 700 9px Inter, sans-serif; }
 .hunk-header button:disabled { cursor: not-allowed; opacity: .45; }
 .hunk-actions { display: inline-flex; align-items: center; gap: 6px; }
