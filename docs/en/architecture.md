@@ -43,8 +43,21 @@ The machine-readable rule is `architecture/layers.json`; `npm run architecture:c
 | Capabilities | `packages/piagent-core/capabilities/` | Profile resolution, pack validation, locks, source roots | Pi session lifecycle |
 | Security foundation | `packages/piagent-core/security/` | Sensitive-data primitives | Workflow behavior |
 | Benchmark | `packages/piagent-core/benchmark/`, `benchmarks/` | Suite validation, scoring, evidence | Runtime enforcement |
+| WebUI contracts | `packages/piagent-webui/contracts/` | Wire types shared by browser and server | Any runtime behavior; it depends on nothing |
+| WebUI client | `packages/piagent-webui/client/` | Browser views, view models, UI preferences | Server state, filesystem, Pi APIs |
+| WebUI server | `packages/piagent-webui/server/` | HTTP/WS endpoints, session reads, diff assembly | Browser rendering; it may not import the client |
+| WebUI extension | `packages/piagent-webui/extension/` | The in-Pi `/piagent-webui` command surface | Wire types the client also needs |
+| WebUI gateway | `packages/piagent-webui/gateway/` | Standalone `piagent dashboard` process, port and lifecycle | Feature logic that belongs to the server |
+| WebUI ownership | `packages/piagent-webui/ownership/` | Single-owner claims over a session directory | Transport and rendering; it depends on nothing |
+| WebUI build | `packages/piagent-webui/` (package root) | Bundling the client and packaging the served assets | Source of any one WebUI layer |
 | Entrypoints | `scripts/` | CLI arguments and use-case invocation | Duplicate domain logic |
 | Product assets | `prompts/`, `skills/`, `subagents/`, `adapters/`, `packs/`, `schemas/` | Declarative behavior and contracts | Hidden runtime state |
+
+The WebUI layers are a second dependency spine, not a branch of the first. `contracts` and
+`ownership` sit at the bottom and import nothing; `client` may only reach `contracts`, so the
+browser bundle can never pull in server or Pi code. `server`, `extension`, and `gateway` reach
+down into `runtime`/`core`/`security` — never the reverse, so the platform runs headless with
+the WebUI absent. `npm run architecture:check` enforces every edge above.
 
 `extensions/` still contains several historical service modules. The name is legacy; only `piagent-guard.ts` is loaded as a Pi extension. Services move by cohesive feature, with compatibility preserved until the migration is complete.
 

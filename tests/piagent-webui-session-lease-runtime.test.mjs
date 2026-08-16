@@ -10,6 +10,7 @@ import { webUiModelRef } from "../packages/piagent-core/runtime/inspection/webui
 import { piApprovalBroker } from "../packages/piagent-core/runtime/inspection/approval-broker.ts";
 import { buildSessionCatalog, projectRefForCwd, sessionRefForPath } from "../packages/piagent-webui/gateway/session-catalog.ts";
 import { SessionLeaseStore } from "../packages/piagent-webui/gateway/session-lease-store.ts";
+import { preferAuthoritativePiagentGuard } from "../packages/piagent-webui/gateway/extension-authority.ts";
 import { SessionRuntimeSupervisor } from "../packages/piagent-webui/gateway/session-runtime-supervisor.ts";
 import { installedPiHostRoot, loadPinnedPiHost } from "../packages/piagent-webui/gateway/pi-host.ts";
 import { TerminalSessionAdapter } from "../packages/piagent-webui/extension/terminal-session-adapter.ts";
@@ -59,6 +60,32 @@ function info(root, name = "session.jsonl") {
 }
 
 describe("Piagent Session Hub owner lease and lazy runtime supervisor", () => {
+  it("keeps one authoritative Piagent Guard while preserving every unrelated extension diagnostic", () => {
+    const authoritative = path.join(repositoryRoot, "installed", "packages", "piagent-core", "extensions", "piagent-guard.ts");
+    const configured = path.join(repositoryRoot, "configured", "packages", "piagent-core", "extensions", "piagent-guard.ts");
+    const mcp = path.join(repositoryRoot, "configured", "extensions", "mcp.ts");
+    const base = {
+      extensions: [
+        { path: authoritative, resolvedPath: authoritative },
+        { path: configured, resolvedPath: configured },
+        { path: mcp, resolvedPath: mcp }
+      ],
+      errors: [
+        { path: configured, error: `Tool \"piagent_tools\" conflicts with ${authoritative}` },
+        { path: configured, error: "Configured Guard also has an unrelated load failure" },
+        { path: mcp, error: "MCP extension failed independently" }
+      ],
+      runtime: { authority: "shared" }
+    };
+    const filtered = preferAuthoritativePiagentGuard(authoritative)(base);
+    assert.deepEqual(filtered.extensions.map((extension) => extension.resolvedPath), [authoritative, mcp]);
+    assert.deepEqual(filtered.errors, [base.errors[1], base.errors[2]]);
+    assert.equal(filtered.runtime, base.runtime);
+
+    const missingAuthority = { ...base, extensions: base.extensions.slice(1) };
+    assert.equal(preferAuthoritativePiagentGuard(authoritative)(missingAuthority), missingAuthority);
+  });
+
   it("persists an owner-only HMAC chain and fails closed on conflict or corruption", (t) => {
     const { root, key } = state(t), store = new SessionLeaseStore(root, key), sessionRef = "session_lease_store_test";
     assert.equal(store.inspect(sessionRef).state, "released");

@@ -536,7 +536,7 @@ function commandPreset(args) {
       presets: CATALOG_PRESETS,
       servers: Object.fromEntries(Object.entries(CATALOG_SERVERS).map(([name, server]) => [
         name,
-        { description: server.description, requires: CATALOG_PREREQUISITES[name] ?? [] }
+        { description: server.description, maturity: server.maturity ?? "stable", requires: CATALOG_PREREQUISITES[name] ?? [] }
       ]))
     }, null, 2)}\n`);
     return 0;
@@ -563,7 +563,9 @@ function commandPreset(args) {
   const added = [];
   const kept = [];
   const replaced = [];
-  for (const server of resolvePreset(presetName)) {
+  const resolvedPreset = resolvePreset(presetName);
+  const experimental = resolvedPreset.filter((server) => server.maturity === "experimental").map((server) => server.name);
+  for (const server of resolvedPreset) {
     if (Object.hasOwn(config.mcpServers, server.name)) {
       if (!replace) {
         kept.push(server.name);
@@ -585,6 +587,7 @@ function commandPreset(args) {
     added,
     kept,
     replaced,
+    experimental,
     serverCount: Object.keys(config.mcpServers).length
   };
 
@@ -594,11 +597,21 @@ function commandPreset(args) {
     return 0;
   }
 
+  // Warn before the write. Naming a Google preset is explicit, but it is not
+  // evidence that the operator knows the endpoint is pre-GA or that Pi OAuth
+  // has not passed a credentialed release gate yet.
+  if (experimental.length > 0) {
+    process.stderr.write(
+      `\nEXPERIMENTAL: ${experimental.join(", ")} use Google Workspace Developer Preview endpoints. `
+      + "They are not part of the default presets and have no Pi OAuth end-to-end release proof yet.\n"
+    );
+  }
+
   writeMcpConfig(file, config);
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
 
-  // stdout stays machine-readable; the operator note goes to stderr.
-  const lines = resolvePreset(presetName).flatMap((server) => server.requires.map((item) => `  ${server.name}: ${item}`));
+  // stdout stays machine-readable; operator notes go to stderr.
+  const lines = resolvedPreset.flatMap((server) => server.requires.map((item) => `  ${server.name}: ${item}`));
   if (lines.length > 0) {
     process.stderr.write("\nServer definitions are written. Each still needs this before it can connect:\n");
     for (const line of lines) process.stderr.write(`${line}\n`);

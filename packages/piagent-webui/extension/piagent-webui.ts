@@ -398,10 +398,10 @@ export default function piagentWebUiExtension(pi: ExtensionAPI): void {
     }
   });
 
-  pi.on("tool_call", (_event, ctx) => { publishPersisted(ctx); if (!isGatewayRuntimeContext(ctx) && !terminalAdapter?.dispatchAllowed(ctx)) return { block: true,
+  pi.on("tool_call", (event, ctx) => { publishPersisted(ctx); if (!isGatewayRuntimeContext(ctx) && !terminalAdapter?.dispatchAllowed(ctx)) return { block: true,
     reason: `Piagent cannot prove this terminal owns the session (${terminalAdapter?.reasonCode() ?? "terminal-session-adapter-unavailable"}).` };
-    if (!lifecycle.dispatchAllowed(ctx)) return { block: true,
-    reason: "Piagent lifecycle control blocks new tool work while the task is paused or stopping." }; });
+    if (!lifecycle.toolAllowed(String(event.toolName ?? ""), ctx)) return { block: true,
+    reason: "Piagent lifecycle control blocks tool work while the task is paused, stopping, or terminal. A terminal task may only start its successor." }; });
   pi.on("tool_result", (_event, ctx) => publishPersisted(ctx));
   pi.on("input", (event, ctx) => {
     if (!isGatewayRuntimeContext(ctx) && !terminalAdapter?.dispatchAllowed(ctx)) {
@@ -409,7 +409,7 @@ export default function piagentWebUiExtension(pi: ExtensionAPI): void {
       catch { /* optional UI */ }
       return { action: "handled" } as const;
     }
-    if (!lifecycle.dispatchAllowed(ctx)) {
+    if (!lifecycle.inputAllowed(ctx)) {
       try { ctx.ui.notify("Piagent task is paused or stopping. Resume it before sending new work.", "warning"); } catch { /* optional UI */ }
       return { action: "handled" } as const;
     }

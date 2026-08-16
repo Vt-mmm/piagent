@@ -46,6 +46,17 @@ export function relatedEvidence(file: FileChange, locale: "vi" | "en" = "vi"): s
     : `${file.criterionIds.length} criteria · ${file.verifierAttemptIds.length} verifiers`;
 }
 
+// Which file the diff pane is showing. Selection is derived from the list that
+// is actually loaded rather than remembered beside it: the workspace clears the
+// remembered ref from several places, and a clear that landed after the list had
+// loaded left the pane asking the reader to pick a file while the list beside it
+// held exactly one. Falling back to the first file is what the reader would do,
+// so no later clear can produce that state again.
+export function activeFileRef(files: FileChange[], remembered: string | null): string | null {
+  if (remembered && files.some((file) => file.fileRef === remembered)) return remembered;
+  return files[0]?.fileRef ?? null;
+}
+
 export function nextSourceView(current: View, key: "ArrowLeft" | "ArrowRight" | "Home" | "End"): View {
   const index = sourceTabs.findIndex((tab) => tab.view === current);
   if (key === "Home") return sourceTabs[0].view;

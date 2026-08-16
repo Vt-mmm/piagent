@@ -139,6 +139,20 @@ function readJsonl(filePath) {
   return fs.readFileSync(filePath, "utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
 }
 
+function explainCommand(command, cwd) {
+  try {
+    const stdout = execFileSync(process.execPath, [
+      "--disable-warning=ExperimentalWarning",
+      "--import", path.join(repoRoot, "scripts", "register-typescript-loader.mjs"),
+      path.join(repoRoot, "scripts", "explain-command.mjs"),
+      command, "--project", cwd, "--json"
+    ], { cwd: repoRoot, encoding: "utf8", env: { ...process.env, PIAGENT_PROFILE: "" } });
+    return { status: 0, result: JSON.parse(stdout) };
+  } catch (error) {
+    return { status: error.status, result: JSON.parse(error.stdout) };
+  }
+}
+
 async function toolExecutionError(operation) {
   try {
     await operation;
@@ -2350,15 +2364,20 @@ describe("piagent guard integration", () => {
     assert.equal(mutatedAfterDone.block, true);
     assert.match(mutatedAfterDone.reason, /is completed/);
 
-    const secondTask = await toolExecutionError(harness.tools.get("piagent_task_start").execute("same-session-second-task", {
+    fs.writeFileSync(path.join(cwd, "src", "other.ts"), "export const other = true;\n");
+    const secondTask = await harness.tools.get("piagent_task_start").execute("same-session-second-task", {
       taskId: "TASK-102",
-      summary: "Attempt to reuse one Pi session for a different task",
+      summary: "Continue the same conversation with a different governed task",
       riskLane: "tiny",
-      expectedOutput: "The second task is refused in the original session.",
-      acceptanceCriteria: ["One session remains bound to one task"],
+      expectedOutput: "The session points to the new pending task while terminal evidence stays immutable.",
+      acceptanceCriteria: ["Only one task is pending in the session"],
       scope: ["src/other.ts"]
-    }, undefined, undefined, ctx));
-    assert.match(secondTask.message, /one Pi session per task/);
+    }, undefined, undefined, ctx);
+    assert.equal(secondTask.isError, undefined);
+    assert.equal(secondTask.details.taskId, "task-102");
+    assert.notEqual(secondTask.details.taskRunId, started.details.taskRunId);
+    assert.equal(activeSessionTask(cwd, ctx.sessionManager.getSessionId()).taskRunId, secondTask.details.taskRunId);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(cwd, ".pi", "piagent-state", "tasks", `${started.details.taskRunId}.json`), "utf8")).trace.outcome, "completed");
   });
 
   it("collects tiny-task evidence passively, invalidates stale verification, and bounds recovery", async () => {
@@ -3212,6 +3231,16 @@ describe("piagent guard integration", () => {
     assert.match(write.reason, /Task Implementation Contract is required/);
     assert.equal(shellWrite.block, true);
     assert.match(shellWrite.reason, /Task Implementation Contract is required/);
+
+    // The standalone explainer sees the same static shell facts but cannot own
+    // this live session's Task Contract. It must therefore refuse to turn its
+    // static pass into an "exact allow" that contradicts the real guard above.
+    const explained = explainCommand("printf x > src/pre-task.ts", cwd);
+    assert.equal(explained.status, 2);
+    assert.equal(explained.result.decision, "indeterminate");
+    assert.equal(explained.result.staticDecision, "allow");
+    assert.equal(explained.result.confidence, "runtime-required");
+    assert.ok(explained.result.remainingGates.includes("task-contract"));
   });
 
   it("fails closed for source tasks outside Git while preserving read-only scouting", async () => {
@@ -3452,7 +3481,7 @@ describe("piagent guard integration", () => {
     assert.deepEqual(task.changedFiles, []);
   });
 
-  it("locks retry limits across attempts and carries failure evidence forward", async () => {
+  it("locks retry limits across attempts and carries failure evidence forward in one conversation", async () => {
     const { root, piagentGuard } = await loadGuardFixture();
     const cwd = createProject(root);
     const harness = createPiHarness();
@@ -3478,7 +3507,7 @@ describe("piagent guard integration", () => {
       ruledOut: "Do not retry the original parser strategy."
     }, undefined, undefined, firstCtx);
 
-    const secondCtx = createContext(cwd, { sessionId: "retry-b", sessionName: "RETRY-1 B" });
+    const secondCtx = firstCtx;
     const second = await taskStart.execute("retry-2", { ...taskParams, maxAttempts: 10 }, undefined, undefined, secondCtx);
     assert.equal(second.details.attempt, 2);
     assert.equal(second.details.maxAttempts, 2);
@@ -3495,7 +3524,7 @@ describe("piagent guard integration", () => {
     tamperedSecond.maxAttempts = 10;
     fs.writeFileSync(secondPath, `${JSON.stringify(tamperedSecond, null, 2)}\n`);
 
-    const thirdCtx = createContext(cwd, { sessionId: "retry-c", sessionName: "RETRY-1 C" });
+    const thirdCtx = firstCtx;
     const third = await toolExecutionError(taskStart.execute("retry-3", taskParams, undefined, undefined, thirdCtx));
     assert.match(third.message, /retry limit \(2\/2\)/);
   });

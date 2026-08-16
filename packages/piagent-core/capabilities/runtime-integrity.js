@@ -164,6 +164,11 @@ const EXECUTABLE_SOURCE = /\.(?:[cm]?js|ts|json|sh)$/;
 const IMPORT_SPECIFIER = /(?:\bimport\s*(?:type\s+)?(?:[^"'`]*?\s+from\s*)?|\bexport\s+(?:type\s+)?[^"'`]*?\s+from\s*)["']([^"']+)["']/g;
 const DYNAMIC_IMPORT = /\bimport\(\s*["']([^"']+)["']\s*\)/g;
 const RUNTIME_LITERAL = /["']((?:packages|scripts)\/[A-Za-z0-9_./-]+\.(?:[cm]?js|ts|json|sh))["']/g;
+// A shell entrypoint reaches a sibling program through the directory it computed
+// for itself -- `"$SCRIPT_DIR/pi-usage-history.mjs"` -- so the repository-relative
+// literal the scanner above looks for never appears in the source. `piagent-usage`
+// is a pinned command that ran a 567-line unpinned program this way.
+const SHELL_SIBLING = /\$(?:\{)?(?:SCRIPT_DIR|ROOT|REPO_ROOT|PLATFORM_ROOT)(?:\})?\/([A-Za-z0-9_./-]+\.(?:[cm]?js|ts|json|sh))/g;
 const MAX_INTEGRITY_FILES = 5_000;
 
 function normalizedRelative(root, absolute) {
@@ -172,7 +177,16 @@ function normalizedRelative(root, absolute) {
   return relative.split(path.sep).join("/");
 }
 
-function executableFilesBelow(root, relativeDirectory) {
+// A served bundle is more than its scripts: the document names which script runs,
+// so pinning the JavaScript while leaving the HTML free would leave the choice of
+// program unpinned.
+const SERVED_BUNDLE_ASSET = /\.(?:[cm]?js|css|html|json|svg|woff2)$/;
+
+function bundleFilesBelow(root, relativeDirectory) {
+  return executableFilesBelow(root, relativeDirectory, SERVED_BUNDLE_ASSET);
+}
+
+function executableFilesBelow(root, relativeDirectory, accept = EXECUTABLE_SOURCE) {
   const directory = path.join(root, relativeDirectory);
   if (!fs.existsSync(directory)) return [];
   const files = [];
@@ -182,7 +196,7 @@ function executableFilesBelow(root, relativeDirectory) {
       const target = path.join(absolute, entry.name), stat = fs.lstatSync(target);
       if (stat.isSymbolicLink()) throw new Error(`runtime-integrity-symlink:${normalizedRelative(root, target) ?? "outside-root"}`);
       if (stat.isDirectory()) visit(target);
-      else if (stat.isFile() && EXECUTABLE_SOURCE.test(entry.name)) files.push(normalizedRelative(root, target));
+      else if (stat.isFile() && accept.test(entry.name)) files.push(normalizedRelative(root, target));
     }
   };
   visit(directory);
@@ -192,7 +206,13 @@ function executableFilesBelow(root, relativeDirectory) {
 function localImportTarget(root, importer, specifier) {
   if (!specifier.startsWith(".")) return undefined;
   const base = path.resolve(path.dirname(path.join(root, importer)), specifier);
-  const candidates = [base, `${base}.ts`, `${base}.js`, `${base}.mjs`, path.join(base, "index.ts"), path.join(base, "index.js")];
+  // TypeScript sources import a sibling module by its emitted name, so `./x.js`
+  // is how a `.ts` file refers to `x.ts`. Without that rewrite the specifier
+  // resolves to nothing and the reference is dropped in silence -- a module
+  // that decides what the guard enforces would then sit outside the lock while
+  // this list still claimed to cover the whole import graph.
+  const rewritten = base.endsWith(".js") ? [`${base.slice(0, -3)}.ts`] : [];
+  const candidates = [base, ...rewritten, `${base}.ts`, `${base}.js`, `${base}.mjs`, path.join(base, "index.ts"), path.join(base, "index.js")];
   for (const candidate of candidates) {
     const relative = normalizedRelative(root, candidate);
     if (!relative || !fs.existsSync(candidate)) continue;
@@ -204,8 +224,24 @@ function localImportTarget(root, importer, specifier) {
 }
 
 function sourceReferences(root, relativeFile) {
-  if (!/\.(?:[cm]?js|ts)$/.test(relativeFile)) return [];
+  // Shell entrypoints are scanned too. They were skipped here, so a pinned
+  // command could execute an unpinned program and the lock reported a complete
+  // graph while missing it.
+  const shell = relativeFile.endsWith(".sh");
+  if (!shell && !/\.(?:[cm]?js|ts)$/.test(relativeFile)) return [];
   const source = fs.readFileSync(path.join(root, relativeFile), "utf8"), references = new Set();
+  if (shell) {
+    const directory = path.posix.dirname(relativeFile);
+    for (const pattern of [RUNTIME_LITERAL, SHELL_SIBLING]) {
+      pattern.lastIndex = 0;
+      for (let match = pattern.exec(source); match; match = pattern.exec(source)) {
+        const candidate = pattern === SHELL_SIBLING ? path.posix.join(directory, match[1]) : match[1];
+        const absolute = path.join(root, candidate), relative = normalizedRelative(root, absolute);
+        if (relative && fs.existsSync(absolute) && fs.lstatSync(absolute).isFile()) references.add(relative);
+      }
+    }
+    return [...references];
+  }
   for (const pattern of [IMPORT_SPECIFIER, DYNAMIC_IMPORT]) {
     pattern.lastIndex = 0;
     for (let match = pattern.exec(source); match; match = pattern.exec(source)) {
@@ -231,6 +267,17 @@ export function discoverRuntimeIntegrityFiles(root) {
     ...CORE_RUNTIME_INTEGRITY_FILES,
     "packages/piagent-core/extensions/piagent-guard.ts",
     ...executableFilesBelow(root, "packages/piagent-core/runtime"),
+    // The browser bundle the WebUI serves. The published package ships the built
+    // assets and not the sources they came from, so on an installed platform
+    // this code cannot be regenerated or cross-checked against anything -- and it
+    // runs inside the origin that holds the session cookie and the CSRF token,
+    // with the authority to drive session commands, source mutation and provider
+    // auth. The server that serves it was pinned; what it serves was not.
+    //
+    // The tree is absent in a source checkout until the workspace is built, and
+    // absence is not a failure here: a lock recorded with these entries still
+    // fails verification if they later disappear.
+    ...bundleFilesBelow(root, "packages/piagent-webui/dist/client"),
     ...declaredExtensions,
     ...declaredBins,
     ...declaredEntrypoints

@@ -44,10 +44,11 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
   const taskStartTool = {
     name: "piagent_task_start",
     label: "Piagent Task Start",
-    description: "Create a Task Implementation Contract for the current project before editing.",
-    promptSnippet: "Start a governed implementation task and persist the task contract.",
+    description: "Create a Task Implementation Contract before governed project inspection, command execution, or source changes.",
+    promptSnippet: "Start a governed project task and persist the task contract.",
     promptGuidelines: [
       "Call this exactly once before source edits in a project managed by Pi Agent Platform.",
+      "Use source-change for project command execution, including tests, builds, lint, typecheck, verification, and package dry-runs, even when the operator requires source files to remain unchanged. Read-only intentionally blocks shell execution.",
       "Do not call context, status, policy, evidence-recording, trace, or gate tools first; runtime hooks provide those checks automatically.",
       "Use tiny for a bounded low-risk change, normal for ordinary multi-file work, and high-risk for security, data, release, migration, or external-impact work.",
       "Every scope entry must be a project-relative path or glob such as src/file.ts, src/**, or test/**; never put prose in scope.",
@@ -58,7 +59,9 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       taskId: Type.Optional(Type.String({ minLength: 1 })),
       summary: Type.String({ minLength: 10 }),
       riskLane: StringEnum(["tiny", "normal", "high-risk"] as const),
-      changeMode: Type.Optional(StringEnum(["source-change", "read-only"] as const)),
+      changeMode: Type.Optional(StringEnum(["source-change", "read-only"] as const, {
+        description: "Use source-change for project command execution as well as edits; use read-only only for inspection that needs no shell execution."
+      })),
       maxAttempts: Type.Optional(Type.Number({ minimum: 1, maximum: 10 })),
       expectedOutput: Type.String({ minLength: 10 }),
       acceptanceCriteria: Type.Array(Type.String({ minLength: 1 }), { minItems: 1, maxItems: 12 }),
@@ -103,15 +106,8 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       const migrationRetry = active?.taskId === taskId
         && active?.workingTreeDigestMigration?.status === "new-attempt-required";
       const authorityRetry = active?.taskId === taskId && activeAuthorityReplacement?.required === true;
-      if (active && !migrationRetry && !authorityRetry) {
+      if (active?.trace.outcome === "pending" && !migrationRetry && !authorityRetry) {
         if (active.taskId === taskId) {
-          if (active.trace.outcome !== "pending") {
-            return {
-              content: [{ type: "text", text: `Session already belongs to terminal task ${active.taskId} (${active.trace.outcome}). Start a fresh Pi session for a retry or new task.` }],
-              details: active,
-              isError: true
-            };
-          }
           const manifest = repositoryFileManifest(ctx.cwd);
           const currentScopeResolution = resolveTaskScopePatterns(active.scope, manifest);
           const proposedScopeResolution = Array.isArray(params.scope)
@@ -151,7 +147,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
           };
         }
         return {
-          content: [{ type: "text", text: `Session already belongs to task ${active.taskId} (${active.taskRunId}, ${active.trace.outcome}). Use one Pi session per task and start a fresh session before another task.` }],
+          content: [{ type: "text", text: `Session already has pending task ${active.taskId} (${active.taskRunId}). Complete or stop it before starting another task in this conversation.` }],
           details: active,
           isError: true
         };
@@ -428,7 +424,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
     const started = await taskStartTool.execute(
       `runtime-intake-${ctx.sessionManager.getSessionId()}`,
       {
-        taskId: hasOperatorSessionName(sessionName) ? sessionName : summary,
+        taskId: active && active.trace.outcome !== "pending" ? summary : hasOperatorSessionName(sessionName) ? sessionName : summary,
         summary,
         riskLane: automaticTaskRiskLane(prompt),
         intakeMode: "runtime",

@@ -1,6 +1,7 @@
 import { createContext, useContext, type ReactNode } from "react";
 
-export type UiLocale = "vi" | "en";
+export type { UiLocale } from "./locale-preference.ts";
+import type { UiLocale } from "./locale-preference.ts";
 export type UiColorMode = "light" | "dark";
 
 export type UiPreferences = {

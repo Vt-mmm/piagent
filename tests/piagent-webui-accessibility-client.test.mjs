@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, it } from "node:test";
 
 import { nextSourceView } from "../packages/piagent-webui/client/src/source-view-model.ts";
+import { preferredLocale } from "../packages/piagent-webui/client/src/locale-preference.ts";
 
 const root = path.resolve(import.meta.dirname, "..");
 
@@ -14,6 +15,19 @@ describe("Piagent WebUI responsive and accessibility contract", () => {
     assert.equal(nextSourceView("task", "ArrowLeft"), "staged");
     assert.equal(nextSourceView("working-tree", "Home"), "task");
     assert.equal(nextSourceView("working-tree", "End"), "staged");
+  });
+
+  it("opens in the language the browser asked for", () => {
+    // Colour mode has always followed the browser; the language did not, and
+    // started in Vietnamese for every reader on earth.
+    assert.equal(preferredLocale(["vi-VN", "en-US"]), "vi");
+    assert.equal(preferredLocale(["vi"]), "vi");
+    assert.equal(preferredLocale(["en-GB", "vi"]), "en");
+    assert.equal(preferredLocale(["de-DE"]), "en");
+    assert.equal(preferredLocale(["pt-BR", "es"]), "en");
+    // No answer from the browser is not a reason to pick Vietnamese.
+    assert.equal(preferredLocale([]), "en");
+    assert.equal(preferredLocale(undefined), "en");
   });
 
   it("provides landmarks, skip navigation, tab relationships and live status", () => {

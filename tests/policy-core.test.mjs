@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 import { describe, it } from "node:test";
 import {
   evaluateExecPolicyCore,
@@ -1204,4 +1206,38 @@ describe("exec policy git workflow confirmations", () => {
       ["from", "to", "src/sibling.js"]
     );
   });
+});
+
+describe("guard fallback policy", () => {
+  // `DEFAULT_POLICY` is the policy the guard uses when `policies/base-policy.json`
+  // cannot be read -- that is, when something is already wrong. It had drifted
+  // behind the file and silently dropped `.pi/piagent-state/**`, the guard's own
+  // state, along with the `sudo ` and `chmod -R 777` blocks. A missing policy file
+  // must never be a quiet downgrade.
+  //
+  // It is compared as source text because the guard module imports the Pi host
+  // runtime and cannot be loaded outside a Pi session.
+  const guardSource = fs.readFileSync(
+    path.join(import.meta.dirname, "..", "packages", "piagent-core", "extensions", "piagent-guard.ts"), "utf8"
+  );
+  const basePolicy = JSON.parse(fs.readFileSync(
+    path.join(import.meta.dirname, "..", "packages", "piagent-core", "policies", "base-policy.json"), "utf8"
+  ));
+  const fallbackList = (field) => {
+    const match = guardSource.match(new RegExp(`const DEFAULT_POLICY[\\s\\S]*?\\n  ${field}: \\[([^\\]]*)\\]`));
+    assert.ok(match, `DEFAULT_POLICY.${field} not found in the guard source`);
+    return match[1]
+      .split(",")
+      .map((entry) => entry.trim().replace(/^"|"$/g, ""))
+      .filter(Boolean)
+      // `CONTEXT_INDEX_FILE` is the same value the policy file spells out.
+      .map((entry) => (entry === "CONTEXT_INDEX_FILE" ? ".pi/context-index.json" : entry));
+  };
+
+  for (const field of ["protectedPaths", "shellProtectedPaths", "blockedCommandPatterns"]) {
+    it(`never protects less than the policy file for ${field}`, () => {
+      const missing = basePolicy[field].filter((entry) => !fallbackList(field).includes(entry));
+      assert.deepEqual(missing, [], `the fallback policy drops ${missing.join(", ")}`);
+    });
+  }
 });

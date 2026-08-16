@@ -668,3 +668,157 @@ describe("piagent-mcp server management", () => {
     assert.match(dispatcher, /"piagent-mcp": "scripts\/mcp-manage\.mjs"/);
   });
 });
+
+describe("catalog credential blast radius", () => {
+  // Adding Gmail and Drive to this catalog changes what an install can reach:
+  // from source code to a mailbox. `core` is what runs when nobody names a
+  // preset and `popular` is what people pick without reading the list, so an
+  // entry landing in either would grant mail and file access to operators who
+  // never chose it. That is the failure this file exists to make impossible.
+  const CREDENTIAL_BEARING = ["gmail", "google-drive", "google-docs", "google-sheets"];
+
+  it("keeps every Google server out of the presets nobody types", async () => {
+    const { CATALOG_PRESETS } = await import("../packages/piagent-core/mcp/mcp-server-catalog.js");
+    for (const preset of ["core", "popular", "minimal", "docs", "browser", "web", "github", "design", "design-local"]) {
+      const leaked = CATALOG_PRESETS[preset].filter((server) => CREDENTIAL_BEARING.includes(server));
+      assert.deepEqual(leaked, [], `${preset} would grant ${leaked.join(", ")} without being asked for`);
+    }
+  });
+
+  it("still offers them where they were asked for", async () => {
+    const { CATALOG_PRESETS } = await import("../packages/piagent-core/mcp/mcp-server-catalog.js");
+    // Without this, deleting the servers entirely would satisfy the test above.
+    assert.deepEqual(CATALOG_PRESETS["google-all"].sort(), [...CREDENTIAL_BEARING].sort());
+    assert.ok(CATALOG_PRESETS.all.includes("gmail"));
+    assert.ok(CATALOG_PRESETS.documents.includes("markitdown"));
+    assert.deepEqual(CATALOG_PRESETS.documents, ["markitdown"],
+      "the generic documents preset must not opt into Developer Preview Google endpoints");
+    // The mailbox is the one surface not bundled with the document servers.
+    assert.equal(CATALOG_PRESETS.google.includes("gmail"), false);
+    assert.equal(CATALOG_PRESETS.documents.includes("gmail"), false);
+    // ...and it stays grantable on its own. Without a mail-only preset the
+    // cheapest way to get a mailbox is `google-all`, which hands over Drive and
+    // every document too -- the opposite of splitting them in the first place.
+    assert.deepEqual(CATALOG_PRESETS["google-mail"], ["gmail"]);
+  });
+
+  it("lets every credential-bearing server be granted without the others", async () => {
+    // One product per grant is the whole reason these are four servers instead
+    // of one: reading a spec must not require a session that can also read mail.
+    const { CATALOG_PRESETS } = await import("../packages/piagent-core/mcp/mcp-server-catalog.js");
+    for (const server of CREDENTIAL_BEARING) {
+      const narrowest = Object.values(CATALOG_PRESETS)
+        .filter((servers) => servers.includes(server))
+        .reduce((best, servers) => (best === null || servers.length < best.length ? servers : best), null);
+      const others = narrowest.filter((name) => CREDENTIAL_BEARING.includes(name) && name !== server);
+      assert.deepEqual(others, [],
+        `the narrowest way to get ${server} also grants ${others.join(", ")}`);
+    }
+  });
+
+  it("states the prerequisites for every server that needs credentials or a runtime", async () => {
+    const { CATALOG_SERVERS, CATALOG_PREREQUISITES } = await import("../packages/piagent-core/mcp/mcp-server-catalog.js");
+    for (const [name, server] of Object.entries(CATALOG_SERVERS)) {
+      const needsSetup = server.config.auth === "oauth"
+        || typeof server.config.env === "object"
+        || server.config.command === "uvx"
+        || server.config.command === "docker";
+      if (!needsSetup) continue;
+      assert.ok(CATALOG_PREREQUISITES[name]?.length,
+        `${name} needs setup the operator must do, and says nothing about it`);
+    }
+  });
+
+  it("labels every Google Workspace server experimental in catalog and preset projections", async () => {
+    const { CATALOG_SERVERS, resolvePreset } = await import("../packages/piagent-core/mcp/mcp-server-catalog.js");
+    for (const name of CREDENTIAL_BEARING) {
+      assert.equal(CATALOG_SERVERS[name].maturity, "experimental", `${name} is not marked experimental`);
+      assert.match(CATALOG_SERVERS[name].description, /Developer Preview/i);
+    }
+    assert.equal(resolvePreset("google-all").every((server) => server.maturity === "experimental"), true);
+  });
+
+  it("shows maturity in the CLI catalog and warns before an experimental preset is used", () => {
+    const fixture = createFixture();
+    const listed = run(fixture, ["--list"]);
+    assert.equal(listed.status, 0, listed.stderr);
+    const catalog = JSON.parse(listed.stdout);
+    assert.equal(catalog.servers["google-drive"].maturity, "experimental");
+    assert.equal(catalog.servers.context7.maturity, "stable");
+
+    const seeded = run(fixture, ["--preset", "google-drive", "--scope", "global"]);
+    assert.equal(seeded.status, 0, seeded.stdout + seeded.stderr);
+    assert.match(seeded.stderr, /EXPERIMENTAL.*Google Workspace Developer Preview/is);
+    const report = JSON.parse(seeded.stdout);
+    assert.deepEqual(report.experimental, ["google-drive"]);
+    assert.deepEqual(Object.keys(readConfig(path.join(fixture.home, ".config", "mcp", "mcp.json")).mcpServers), ["google-drive"]);
+  });
+
+  it("routes every catalog server through the approval gate", async () => {
+    // directTools: true would hand the model a mailbox tool without the gate.
+    const { CATALOG_SERVERS } = await import("../packages/piagent-core/mcp/mcp-server-catalog.js");
+    for (const [name, server] of Object.entries(CATALOG_SERVERS)) {
+      assert.equal(server.config.directTools, false, `${name} exposes direct tools`);
+      assert.equal(server.config.lifecycle, "lazy", `${name} is not lazy, so it starts before it is wanted`);
+    }
+  });
+
+  it("pins every locally executed server and embeds no secret", async () => {
+    const { CATALOG_SERVERS } = await import("../packages/piagent-core/mcp/mcp-server-catalog.js");
+    for (const [name, server] of Object.entries(CATALOG_SERVERS)) {
+      const argv = (server.config.args ?? []).join(" ");
+      if (server.config.command) {
+        assert.match(argv, /(@|:)[0-9]|sha256:/, `${name} runs a floating version: ${argv}`);
+      }
+      // Credentials are referenced, never written. Plain flags like
+      // CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS=1 are not credentials and are
+      // deliberately literal; the rule is about the ones whose name says secret.
+      for (const [key, value] of Object.entries(server.config.env ?? {})) {
+        if (!/TOKEN|KEY|SECRET|PASSWORD|CREDENTIAL/i.test(key)) continue;
+        assert.match(String(value), /^\$\{[A-Z0-9_]+\}$/,
+          `${name} writes ${key} as a literal instead of an environment reference`);
+      }
+    }
+  });
+});
+
+describe("catalog oauth scope defaults", () => {
+  // A scope is the only thing standing between "read a spec" and "send mail as
+  // me", and it is granted once and then forgotten about. Whatever ships as the
+  // default is what almost every install will run forever, so the default has
+  // to be the grant that cannot lose anything.
+  it("requests read-only scopes for every Google server", async () => {
+    const { CATALOG_SERVERS } = await import("../packages/piagent-core/mcp/mcp-server-catalog.js");
+    const googleServers = Object.entries(CATALOG_SERVERS)
+      .filter(([, server]) => String(server.config.url ?? "").includes("mcp.googleapis.com"));
+    assert.equal(googleServers.length, 4, "expected four Google servers");
+
+    for (const [name, server] of googleServers) {
+      const scopes = server.config.oauth?.scopes;
+      assert.ok(Array.isArray(scopes) && scopes.length, `${name} declares no scopes, so consent asks for whatever it likes`);
+      for (const scope of scopes) {
+        assert.match(scope, /\.readonly$/, `${name} defaults to the write scope ${scope}`);
+      }
+    }
+  });
+
+  it("embeds no OAuth client id, because each operator registers their own", async () => {
+    const { CATALOG_SERVERS } = await import("../packages/piagent-core/mcp/mcp-server-catalog.js");
+    for (const [name, server] of Object.entries(CATALOG_SERVERS)) {
+      assert.equal(server.config.oauth?.clientId, undefined,
+        `${name} ships a client id, so consent would be answered by someone else's project`);
+    }
+  });
+
+  it("does not claim unverified Pi OAuth compatibility", async () => {
+    // These endpoints publish no discovery metadata, so Pi cannot register a
+    // client itself. Without the command spelled out, the operator is left with
+    // a server that reports "oauth" forever and no way to act on it.
+    const { CATALOG_PREREQUISITES } = await import("../packages/piagent-core/mcp/mcp-server-catalog.js");
+    for (const name of ["google-drive", "gmail", "google-docs", "google-sheets"]) {
+      const text = CATALOG_PREREQUISITES[name].join(" ");
+      assert.match(text, /OAuth client id/i, `${name} never mentions the client id from Google's supported flow`);
+      assert.match(text, /unverified/i, `${name} presents an unproved OAuth path as release-ready`);
+    }
+  });
+});

@@ -20,7 +20,7 @@ Agent Watch/report hien ten task ma operator da dat.
 | Nhom | Field | Quy tac |
 |---|---|---|
 | Schema | `schemaVersion` | Luon la `2`. |
-| Identity | `taskRunId`, `taskId`, `sessionId`, `sessionName`, `intakeMode` | Run ID/Task ID normalized; mot session chi co mot task; intake la `runtime` hoac `model`. |
+| Identity | `taskRunId`, `taskId`, `sessionId`, `sessionName`, `intakeMode` | Run ID/Task ID normalized; mot session chi co mot task pending, nhung co the chua nhieu task terminal tuan tu; intake la `runtime` hoac `model`. |
 | Mode | `changeMode` | `source-change` hoac `read-only`. |
 | Retry | `attempt`, `maxAttempts`, `previousAttempts` | Tran lay tu attempt dau, khong duoc nang o retry sau. |
 | Intent | `summary`, `riskLane`, `expectedOutput`, `acceptanceCriteria` | Chot truoc khi implementation. |
@@ -31,6 +31,11 @@ Agent Watch/report hien ten task ma operator da dat.
 | Changes | baseline/observed/final file lists va digests, `changedFiles` | Phan biet dirty truoc task voi thay doi trong task; ghi ca hai dau rename. |
 | Outcome | `trace`, `failedAt`, `failureReason`, `ruledOut` | Terminal contract immutable. |
 | Time | `createdAt`, `updatedAt` | Timestamp parseable, dung de sap xep/migration/report. |
+
+`source-change` la mode co quyen thuc thi command cua project, khong phai loi
+khai rang task bat buoc sua source. Yeu cau chi chay test/build/lint/typecheck
+hoac package dry-run van dung mode nay va co the hoan tat voi working tree khong
+doi. `read-only` danh cho inspection khong can shell execution.
 
 Template day du nam tai
 [`templates/project/.pi/task-contract.template.json`](../templates/project/.pi/task-contract.template.json).
@@ -56,7 +61,7 @@ context/verify/trace/gate tools are recovery surfaces for custom/high-risk work.
 
 Task start tu choi khi:
 
-- session da thuoc task khac hoac task terminal;
+- session dang co mot task pending khac;
 - cung `taskId` dang pending o session khac;
 - task da completed;
 - retry vuot `maxAttempts`;
@@ -111,8 +116,10 @@ failed step can note moi; step done/skipped khong duoc mo lai. Khi trace da
 terminal, cac tool progress/context/memory/verify/trace va project mutations deu
 bi chan cho session do.
 
-Retry chay o session moi. `previousAttempts` giu outcome, phase failure, reason,
-ruled-out hypothesis va timestamp de agent khong lap lai cach da that bai.
+Retry co the chay tiep trong cung session sau khi attempt truoc da terminal.
+`previousAttempts` giu outcome, phase failure, reason, ruled-out hypothesis va
+timestamp de agent khong lap lai cach da that bai. Session binding luon tro den
+task moi nhat; task terminal cu van immutable va con nguyen evidence.
 
 ## Migration v1 -> v2
 

@@ -10,6 +10,7 @@ import { loadPinnedPiHost } from "../packages/piagent-webui/gateway/pi-host.ts";
 import { gatewayProfileState, readGatewayDescriptor } from "../packages/piagent-webui/gateway/profile-state.ts";
 import { startPiagentGateway } from "../packages/piagent-webui/gateway/gateway-service.ts";
 import { SessionInspectionRegistry } from "../packages/piagent-webui/gateway/session-inspection-registry.ts";
+import { sessionRefForPath } from "../packages/piagent-webui/gateway/session-catalog.ts";
 import { createWebUiSchemaRegistry, validateFixture } from "./helpers/piagent-webui-schema-registry.mjs";
 import { ensureWebUiBuild } from "./helpers/piagent-webui-build.mjs";
 
@@ -62,6 +63,34 @@ describe("Piagent local Session Hub Gateway", () => {
     assert.equal(JSON.stringify(projected).includes("abcdefghijklmnopqrstuvwxyz"), false);
   });
 
+  it("projects persisted context usage for a saved session without starting a model turn", async (t) => {
+    const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-saved-context-"));
+    t.after(() => fs.rmSync(temporary, { recursive: true, force: true }));
+    fs.mkdirSync(path.join(temporary, ".git"));
+    const key = Buffer.alloc(32, 5), sessionPath = path.join(temporary, "session.jsonl");
+    const savedAssistant = assistantMessage("saved answer");
+    savedAssistant.usage.totalTokens = 1_000;
+    const messages = [{ role: "user", content: [{ type: "text", text: "saved context" }], timestamp: Date.now() }, savedAssistant];
+    const entries = messages.map((message, index) => ({ type: "message", id: `entry_${index}`, message }));
+    const info = { path: sessionPath, id: "saved-session", cwd: temporary, created: new Date(), modified: new Date(),
+      messageCount: entries.length, firstMessage: "saved context", allMessagesText: "saved context saved answer" };
+    const inspection = new SessionInspectionRegistry({ gatewayInstanceRef: "gateway_saved_context", key, packageRoot: root,
+      host: {
+        SessionManager: { listAll: async () => [info], open: () => ({ getBranch: () => entries,
+          buildSessionContext: () => ({ model: { provider: "fixture", modelId: "saved-model" }, thinkingLevel: "high", messages }) }) },
+        calculateContextTokens: (usage) => Number(usage?.totalTokens ?? 0),
+        estimateTokens: () => 10,
+        getLatestCompactionEntry: () => null
+      },
+      models: { getModel: () => ({ provider: "fixture", id: "saved-model", name: "Saved model", reasoning: true,
+        contextWindow: 16_000 }), getAvailableSnapshot: () => [] } });
+
+    const provider = await inspection.provider(sessionRefForPath(key, sessionPath));
+    const snapshot = await provider.snapshot();
+    assert.deepEqual(snapshot.usage.context, { state: "known", tokens: 1_000, contextWindow: 16_000, percent: 6.25,
+      capturedAt: snapshot.generatedAt, reasonCode: null });
+  });
+
   it("reports owner-safe lifecycle health and repairs an invalid stopped descriptor only when requested", (t) => {
     ensureWebUiBuild(root);
     const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-gateway-doctor-")), agentDir = path.join(temporary, "agent");
@@ -82,6 +111,33 @@ describe("Piagent local Session Hub Gateway", () => {
     const verified = invoke();
     assert.equal(verified.status, 0, verified.stderr);
     assert.equal(JSON.parse(verified.stdout).ok, true);
+  });
+
+  it("returns from the launcher while its detached Gateway stays healthy", async (t) => {
+    ensureWebUiBuild(root);
+    const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-gateway-detached-"));
+    const agentDir = path.join(temporary, "agent");
+    const invoke = (action, timeout = 10_000) => spawnSync(process.execPath, ["--disable-warning=ExperimentalWarning", "--import",
+      path.join(root, "scripts", "register-typescript-loader.mjs"), path.join(root, "scripts", "piagent-dashboard.mjs"),
+      action, "--no-open", "--agent-dir", agentDir], { cwd: root, encoding: "utf8", timeout });
+    t.after(() => {
+      invoke("stop");
+      fs.rmSync(temporary, { recursive: true, force: true });
+    });
+
+    const startedAt = Date.now();
+    const launch = invoke("open");
+    assert.equal(launch.status, 0, launch.stderr);
+    assert.ok(Date.now() - startedAt < 5_000, "the detached launcher must return promptly");
+    assert.match(launch.stdout.trim(), /^http:\/\/127\.0\.0\.1:\d+\/#bootstrap=/);
+    const state = gatewayProfileState(agentDir), descriptor = readGatewayDescriptor(state);
+    assert.ok(descriptor);
+    assert.doesNotThrow(() => process.kill(descriptor.pid, 0));
+    const health = await requestGatewayControl(state.controlSocket, { action: "health" });
+    assert.equal(health.ok, true);
+    const errorLog = path.join(state.root, "gateway-stderr.log");
+    assert.equal(fs.statSync(errorLog).mode & 0o777, 0o600);
+    assert.equal(fs.readFileSync(errorLog, "utf8"), "");
   });
 
   it("runs once per profile, serves a schema-valid redacted catalog, and restarts with new authority", async (t) => {

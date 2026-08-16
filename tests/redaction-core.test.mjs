@@ -22,7 +22,13 @@ describe("sensitive text redaction", () => {
     ["Bearer token", joined("Authorization: Bearer ", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9", ".payloadSignature123")],
     ["JWT token", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature123456"],
     ["OpenAI style key", dashJoined("sk", "abcdefghijklmnopqrstuvwxyz1234567890")],
-    ["PEM block", joined("-----BEGIN ", "PRIVATE KEY-----\nabc123\n-----END PRIVATE KEY-----")]
+    ["PEM block", joined("-----BEGIN ", "PRIVATE KEY-----\nabc123\n-----END PRIVATE KEY-----")],
+    // Recognised only where something named it until now: `NPM_TOKEN=` caught the
+    // assignment and a field called `token` caught the field, so the one place an
+    // npm credential actually appears went through untouched.
+    ["npm automation token", underscoreJoined("npm", "abcdefghijklmnopqrstuvwxyz0123456789")],
+    ["npmrc auth line", joined("//registry.npmjs.org/:_authToken=", underscoreJoined("npm", "abcdefghijklmnopqrstuvwxyz0123456789"))],
+    ["failing publish log", joined("npm ERR! Incorrect or missing password for ", underscoreJoined("npm", "abcdefghijklmnopqrstuvwxyz0123456789"))]
   ];
 
   for (const [name, text] of leakedSecrets) {
@@ -39,7 +45,8 @@ describe("sensitive text redaction", () => {
         joined("AI", "za"),
         "eyJhbGci",
         "abcdefghijklmnopqrstuvwxyz1234567890",
-        "PRIVATE KEY"
+        "PRIVATE KEY",
+        underscoreJoined("npm", "")
       ]) {
         assert.equal(result.text.includes(fragment), false, `${name} leaked ${fragment}`);
       }
@@ -53,7 +60,10 @@ describe("sensitive text redaction", () => {
     "api_key: placeholder",
     "password: short",
     "password: <not-set>",
-    "Set api_key = your-key-here in the config"
+    "Set api_key = your-key-here in the config",
+    // A short identifier that merely starts the same way is not a credential.
+    "run npm_test to check",
+    "npm_install"
   ];
 
   for (const text of benignTexts) {

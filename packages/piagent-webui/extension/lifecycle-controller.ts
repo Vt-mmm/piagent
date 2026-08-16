@@ -131,6 +131,21 @@ export class LifecycleController {
     return !inspectTaskControlState(current.cwd, task).dispatchBlocked && !this.#pendingStop;
   }
 
+  inputAllowed(ctx?: ExtensionContext): boolean {
+    const current = ctx ?? this.#ctx; if (!current || !this.#sameSession(current) || this.#pendingStop) return false;
+    const task = this.#task(current); if (!task) return true;
+    const state = inspectTaskControlState(current.cwd, task).state;
+    return state === "active" || state === "terminal";
+  }
+
+  toolAllowed(toolName: string, ctx?: ExtensionContext): boolean {
+    if (this.dispatchAllowed(ctx)) return true;
+    const current = ctx ?? this.#ctx; if (!current || !this.#sameSession(current) || this.#pendingStop) return false;
+    const task = this.#task(current);
+    return toolName === "piagent_task_start" && Boolean(task)
+      && inspectTaskControlState(current.cwd, task).state === "terminal";
+  }
+
   observeAgentStart(ctx: ExtensionContext): void { if (!this.#sameSession(ctx)) return; this.#phase = "model"; }
   observeToolStart(ctx: ExtensionContext): void { if (!this.#sameSession(ctx)) return; this.#toolDepth += 1; this.#phase = "tool"; }
   observeToolEnd(ctx: ExtensionContext): void { if (!this.#sameSession(ctx)) return; this.#toolDepth = Math.max(0, this.#toolDepth - 1);

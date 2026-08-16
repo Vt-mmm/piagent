@@ -50,3 +50,33 @@ describe("release identity", () => {
     }
   });
 });
+
+describe("release history coverage", () => {
+  // docs/publishing-for-teams.md carries the team-facing release history. It
+  // stopped at 1.2.11 while the changelog went on to 1.4.0, because nothing
+  // connected the two. Derive the expected versions from CHANGELOG.md so the
+  // list cannot fall behind again. Prereleases are deliberately excluded: the
+  // history is for teams choosing a stable pin.
+  const changelog = fs.readFileSync(path.join(repositoryRoot, "CHANGELOG.md"), "utf8");
+  const stableReleases = [...changelog.matchAll(/^## v(\d+\.\d+\.\d+) - /gm)].map(([, v]) => v);
+
+  it("reads a plausible set of stable releases out of the changelog", () => {
+    assert.ok(stableReleases.length >= 20, `only found ${stableReleases.length} stable releases`);
+    assert.ok(stableReleases.includes(releaseTag.slice(1)), `${releaseTag} is missing from the changelog`);
+  });
+
+  it("lists every stable release from the point the history starts", () => {
+    const history = fs.readFileSync(path.join(repositoryRoot, "docs/publishing-for-teams.md"), "utf8");
+    const listed = [...history.matchAll(/^- `(\d+\.\d+\.\d+)`:/gm)].map(([, v]) => v);
+    assert.ok(listed.length > 0, "the release history has no version entries");
+
+    const order = (v) => v.split(".").map(Number).reduce((a, n) => a * 1000 + n, 0);
+    // Pre-1.0.2 releases are summarised as a single `0.2.x` line on purpose;
+    // the itemised history begins at whatever its own oldest entry is. Anything
+    // released at or after that point has to be there.
+    const floor = Math.min(...listed.map(order));
+    const known = new Set(listed);
+    const missing = stableReleases.filter((v) => order(v) >= floor && !known.has(v));
+    assert.deepEqual(missing, [], `released but absent from the team history: ${missing.join(", ")}`);
+  });
+});

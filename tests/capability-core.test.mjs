@@ -223,6 +223,50 @@ describe("capability catalog and profile lock", () => {
       "packages/piagent-webui/gateway/session-command-controller.ts",
       "packages/piagent-webui/gateway/session-runtime-supervisor.ts"
     ]) assert.equal(discoveredIntegrityFiles.includes(entry), true, `${entry} must be discovered without a hand-maintained test list`);
+    // A TypeScript module imported by its emitted name -- `./x.js` for `x.ts`,
+    // which is the ordinary TypeScript convention -- must still be discovered.
+    // The resolver used to try `x.js.ts` for that specifier, find nothing, and
+    // drop the reference in silence, which would put a module that decides what
+    // the guard enforces outside a lock still claiming to cover the whole graph.
+    // A pinned shell entrypoint reaches a sibling program through the directory
+    // it computed for itself, so the repository-relative literal never appears.
+    // `piagent-usage` ran an unpinned program that way while the lock reported a
+    // complete graph.
+    assert.equal(
+      discoveredIntegrityFiles.includes("scripts/pi-usage-history.mjs"), true,
+      "a program a pinned shell entrypoint executes must be discovered"
+    );
+    // The published package ships the built browser bundle and not the sources
+    // it came from, so on an installed platform this code cannot be regenerated
+    // or cross-checked against anything -- while it runs inside the origin that
+    // holds the session cookie and CSRF token. The server serving it was pinned;
+    // what it served was not.
+    if (fs.existsSync(path.join(repositoryRoot, "packages/piagent-webui/dist/client"))) {
+      for (const asset of ["packages/piagent-webui/dist/client/index.html"]) {
+        assert.equal(discoveredIntegrityFiles.includes(asset), true, `${asset} must be pinned`);
+      }
+      // The document names which script runs, so pinning scripts alone would
+      // leave the choice of program unpinned.
+      assert.ok(
+        discoveredIntegrityFiles.some((entry) => /^packages\/piagent-webui\/dist\/client\/assets\/.+\.js$/.test(entry)),
+        "the served browser bundle must be pinned"
+      );
+    }
+    const emittedNameRoot = createPlatformFixture();
+    // The importer sits under `runtime/`, which is seeded wholesale. The target
+    // must sit outside it, or it would be discovered as a seed and this would
+    // assert nothing about following the import at all.
+    const seededDirectory = path.join(emittedNameRoot, "packages", "piagent-core", "runtime");
+    const targetDirectory = path.join(emittedNameRoot, "packages", "piagent-core", "extensions");
+    fs.mkdirSync(seededDirectory, { recursive: true });
+    fs.mkdirSync(targetDirectory, { recursive: true });
+    fs.writeFileSync(path.join(seededDirectory, "emitted-name-entry.ts"), "import { value } from \"../extensions/emitted-name-target.js\";\nexport const entry = value;\n");
+    fs.writeFileSync(path.join(targetDirectory, "emitted-name-target.ts"), "export const value = 1;\n");
+    const emittedDiscovery = discoverRuntimeIntegrityFiles(emittedNameRoot);
+    assert.equal(
+      emittedDiscovery.includes("packages/piagent-core/extensions/emitted-name-target.ts"), true,
+      "a .ts module imported as .js must be discovered, not silently dropped"
+    );
     assert.deepEqual(
       lock.core.runtimeFiles
         .map((entry) => entry.path)

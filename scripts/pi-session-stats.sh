@@ -108,8 +108,13 @@ RPC_OUTPUT="$(
     | pi -ne --mode rpc --session "$SESSION_FILE" --offline --approve
 )"
 
-node --input-type=module - "$RPC_OUTPUT" <<'NODE'
+node --input-type=module - "$RPC_OUTPUT" "$SCRIPT_DIR/../packages/piagent-core/runtime/session/token-economics.js" <<'NODE'
+import { pathToFileURL } from "node:url";
+
 const input = process.argv[2] ?? "";
+// The token arithmetic lives in a module both this command and its test can
+// read, so the terminal cannot drift from the definition the benchmark uses.
+const { sessionTokenEconomics, formatTokenEconomics } = await import(pathToFileURL(process.argv[3]).href);
 
   const line = input
     .split(/\n+/)
@@ -126,6 +131,7 @@ const input = process.argv[2] ?? "";
   const data = response.data;
   const tokens = data.tokens ?? {};
   const context = data.contextUsage ?? {};
+  const economics = sessionTokenEconomics(tokens);
   const number = (value) => value === null || value === undefined ? "unknown" : Math.round(Number(value)).toLocaleString("en-US");
   const money = (value) => value === null || value === undefined ? "unknown" : `$${Number(value).toFixed(6)}`;
   const percent = (value) => value === null || value === undefined ? "unknown" : `${Number(value).toFixed(1)}%`;
@@ -144,7 +150,8 @@ const input = process.argv[2] ?? "";
       output: tokens.output ?? null,
       cacheRead: tokens.cacheRead ?? null,
       cacheWrite: tokens.cacheWrite ?? null,
-      total: tokens.total ?? null
+      total: tokens.total ?? null,
+      ...economics
     },
     cost: data.cost ?? null,
     contextUsage: context.tokens === undefined ? null : {
@@ -154,6 +161,7 @@ const input = process.argv[2] ?? "";
     },
     summary: {
       tokens: `${number(tokens.total)} total (${number(tokens.input)} input, ${number(tokens.output)} output, ${number(tokens.cacheRead)} cache read, ${number(tokens.cacheWrite)} cache write)`,
+      ...formatTokenEconomics(economics, number, percent),
       cost: money(data.cost),
       context: context.tokens === undefined ? "unknown" : `${number(context.tokens)} / ${number(context.contextWindow)} (${percent(context.percent)})`
     }

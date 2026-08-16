@@ -12,6 +12,7 @@ import { SessionLeaseStore, type SessionLeaseSnapshot } from "./session-lease-st
 import { GatewayEventStore } from "./gateway-events.ts";
 import { GatewaySessionStream } from "./gateway-session-stream.ts";
 import { GATEWAY_RUNTIME_UI_MARKER } from "../ownership/gateway-runtime-context.ts";
+import { preferAuthoritativePiagentGuard } from "./extension-authority.ts";
 
 const MAX_WARM_RUNTIMES = 10;
 
@@ -55,7 +56,10 @@ function productionRuntimeFactory(options: { host: any; agentDir: string; packag
     const createRuntime = async ({ cwd, agentDir, sessionManager, sessionStartEvent }: any) => {
       const services = await options.host.createAgentSessionServices({
         cwd, agentDir, modelRuntime: options.modelRuntime,
-        resourceLoaderOptions: { additionalExtensionPaths: [guard] }
+        resourceLoaderOptions: {
+          additionalExtensionPaths: [guard],
+          extensionsOverride: preferAuthoritativePiagentGuard(guard)
+        }
       });
       const extensionErrors = services.resourceLoader.getExtensions().errors;
       if (extensionErrors.length) throw new Error("session-runtime-extension-load-failed");

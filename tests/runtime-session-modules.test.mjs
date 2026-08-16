@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { redactSensitiveText } from "../packages/piagent-core/extensions/redaction-core.js";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -803,6 +804,18 @@ describe("runtime session modules", () => {
       automaticTaskIntakeMode("Investigate logs/incident.log as a read-only task. Do not edit any file.", []),
       "read-only"
     );
+    assert.equal(
+      automaticTaskIntakeMode("Run all tests, typecheck, and npm pack --dry-run. Do not edit source files.", []),
+      "source-change"
+    );
+    assert.equal(
+      automaticTaskIntakeMode("Create an execution task limited to test/build/package dry-run. Do not edit source.", []),
+      "source-change"
+    );
+    assert.equal(
+      automaticTaskIntakeMode("Chay release gate va package dry-run tren working tree hien tai. Khong sua source.", []),
+      "source-change"
+    );
     assert.deepEqual(
       automaticTaskScope("Fix src/cart.ts and tests", [{ path: "src/helper.ts" }]),
       ["src/cart.ts", "src/helper.ts", "test/**", "tests/**", "spec/**", "__tests__/**"]
@@ -1237,6 +1250,30 @@ describe("runtime session modules", () => {
     );
     assert.equal(listed.redactedLines, 1);
     assert.doesNotMatch(listed.content[0].text, /^private$/m);
+  });
+
+  it("redacts a tool result before it is compacted, so no secret reaches the capture file", () => {
+    // The hook redacts and then compacts, and that order is the only thing
+    // keeping a secret out of the capture written to disk: compaction copies the
+    // text it is given. Nothing pinned the order, so reversing the two calls
+    // would have written credentials into project state and passed every test.
+    const cwd = temporaryProject();
+    const ctx = extensionContext(cwd);
+    const secret = "AKIAIOSFODNN7EXAMPLE";
+    const raw = [{ type: "text", text: `header\n${secret}\n${"z".repeat(20_000)}` }];
+    const redacted = raw.map((block) => {
+      const safe = redactSensitiveText(block.text);
+      return safe.redacted ? { ...block, text: safe.text } : block;
+    });
+    assert.equal(JSON.stringify(redacted).includes(secret), false, "redaction must remove the credential first");
+
+    const result = compactToolResultTextContent(cwd, { toolName: "bash", input: {} }, ctx, redacted, new Map());
+    assert.equal(result.captures.length, 1);
+    assert.equal(JSON.stringify(result.content).includes(secret), false, "the preview must not carry the credential");
+    const capture = fs.readFileSync(path.join(cwd, result.captures[0].path), "utf8");
+    assert.equal(capture.includes(secret), false, "the capture written to project state must not carry the credential");
+    // The capture is still the real output, not an empty file.
+    assert.ok(capture.length > 1_000);
   });
 
   it("stores long intake and compacted tool output under private project state", () => {

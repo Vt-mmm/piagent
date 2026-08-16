@@ -173,6 +173,7 @@ required_files=(
   "$ROOT/scripts/build-docs-site.mjs"
   "$ROOT/scripts/check-architecture.mjs"
   "$ROOT/scripts/check-doc-languages.mjs"
+  "$ROOT/scripts/verify-translation-pairing.mjs"
   "$ROOT/scripts/check-third-party-neutrality.mjs"
   "$ROOT/governance/piagent-webui/wui5-18-acceptance-matrix.v1.json"
   "$ROOT/tests/piagent-webui-wui5-18-gate.test.mjs"
@@ -914,6 +915,9 @@ node --check "$ROOT/scripts/build-docs-site.mjs" >/dev/null
 node --check "$ROOT/scripts/preview-docs-site.mjs" >/dev/null
 node "$ROOT/scripts/check-architecture.mjs" >/dev/null
 node "$ROOT/scripts/check-doc-languages.mjs" >/dev/null
+# check-doc-languages proves the peer exists. This proves neither side moved
+# without the other, which is the way a translation actually goes stale.
+node "$ROOT/scripts/verify-translation-pairing.mjs" >/dev/null
 node "$ROOT/scripts/check-third-party-neutrality.mjs" >/dev/null
 run_quietly "npm run build --workspace @piagent/webui" npm run build --workspace @piagent/webui
 run_quietly "npm test" npm test

@@ -90,3 +90,27 @@ describe("architecture boundaries", () => {
     assert.ok(result.errors.some((error) => /runtime cannot import webui-contracts/.test(error)), result.errors.join("\n"));
   });
 });
+
+describe("architecture documentation", () => {
+  // architecture/layers.json is the enforced rule; the physical-layer table in
+  // the architecture docs is prose beside it. The seven WebUI layers were
+  // enforced but undocumented in both languages. Check the docs against the
+  // config instead of restating the layer list here, so a new layer cannot ship
+  // with the table silently short.
+  const documents = ["docs/en/architecture.md", "docs/vi/architecture.md"];
+  const layerRoots = config.layers.flatMap((layer) => layer.roots ?? layer.files ?? []);
+
+  for (const document of documents) {
+    it(`${document} documents every enforced layer`, () => {
+      const text = fs.readFileSync(path.join(repoRoot, document), "utf8");
+      const start = text.indexOf("| Layer |") === -1 ? text.indexOf("|---|---|---|---|") : text.indexOf("| Layer |");
+      assert.notEqual(start, -1, `${document} has no physical-layer table`);
+      const rest = text.slice(start);
+      const end = rest.indexOf("\n## ");
+      const table = end === -1 ? rest : rest.slice(0, end);
+
+      const missing = layerRoots.filter((root) => !table.includes(`\`${root}/\``) && !table.includes(`\`${root}\``));
+      assert.deepEqual(missing, [], `layers enforced but absent from the ${document} table: ${missing.join(", ")}`);
+    });
+  }
+});

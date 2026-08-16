@@ -18,11 +18,27 @@ export const PINNED_EXTERNAL_TRANSFORM = Object.freeze({
 async function pinnedTransformRoot(url) {
   const configured = process.env.PIAGENT_PINNED_TS_TRANSFORM_ROOT;
   if (!configured || process.versions.node !== PINNED_EXTERNAL_TRANSFORM.nodeVersion) return false;
-  const root = await fs.realpath(configured), target = await fs.realpath(fileURLToPath(url));
+  // This asks one question: is the file being loaded inside the pinned adapter?
+  // A configured root that is absent, unreadable or not that adapter answers
+  // "no". It used to throw instead, and the throw escaped `load` on the first
+  // `.ts` file of any kind -- so a machine without pi-mcp-adapter installed
+  // could not start the gateway at all, for a reason that had nothing to do
+  // with the file it died on. Answering "no" falls back to `strip`, which is
+  // the stricter of the two modes: this can only refuse a transform, never
+  // grant one.
+  let root;
+  let metadata;
+  try {
+    root = await fs.realpath(configured);
+    metadata = JSON.parse(await fs.readFile(path.join(root, "package.json"), "utf8"));
+  } catch {
+    return false;
+  }
+  if (metadata?.name !== PINNED_EXTERNAL_TRANSFORM.packageName
+    || metadata?.version !== PINNED_EXTERNAL_TRANSFORM.packageVersion) return false;
+  const target = await fs.realpath(fileURLToPath(url));
   const relative = path.relative(root, target);
-  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) return false;
-  const metadata = JSON.parse(await fs.readFile(path.join(root, "package.json"), "utf8"));
-  return metadata.name === PINNED_EXTERNAL_TRANSFORM.packageName && metadata.version === PINNED_EXTERNAL_TRANSFORM.packageVersion;
+  return Boolean(relative) && !relative.startsWith("..") && !path.isAbsolute(relative);
 }
 
 export async function load(url, context, nextLoad) {

@@ -87,7 +87,7 @@ tool context mang tính advisory chỉ được nạp khi task thực sự cần
 
 ```text
 1. Intake
-   - one Pi session per task
+   - one pending task per Pi session; terminal tasks remain immutable while the conversation may continue with a successor task
    - runtime auto-start for bounded source changes; manual fallback for broad/high-risk/ambiguous scope
    - source-change or read-only
    - risk lane

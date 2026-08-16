@@ -80,6 +80,46 @@ run_cmd() {
   fi
 }
 
+# The helper can live under a non-default npm prefix: install falls back to a
+# user-writable root when the configured one is not writable, and --npm-prefix
+# picks one deliberately. A bare `npm uninstall -g` resolves against the
+# configured prefix instead, so it removes nothing and still reports success.
+# Derive the prefix from where this script actually runs, the same way
+# update-global.mjs does, and only add --prefix when it differs.
+installed_helper_prefix() {
+  local root="$ROOT"
+  [[ "$(basename "$root")" == "platform" ]] || return 0
+  local scope_root node_modules_root parent
+  scope_root="$(dirname "$root")"
+  [[ "$(basename "$scope_root")" == "@piagent" ]] || return 0
+  node_modules_root="$(dirname "$scope_root")"
+  [[ "$(basename "$node_modules_root")" == "node_modules" ]] || return 0
+  parent="$(dirname "$node_modules_root")"
+  # An npx run lives in a prunable cache that owns no bin on anyone's PATH;
+  # uninstalling from there would claim to remove an install nobody has.
+  case "$parent" in
+    */_npx/*|*/_npx) return 0 ;;
+  esac
+  if [[ "$(basename "$parent")" == "lib" ]]; then
+    dirname "$parent"
+  else
+    printf '%s' "$parent"
+  fi
+}
+
+# The prefix npm has to be pointed at, or empty when the helper already lives
+# under the configured one and the plain command is correct. Returns a single
+# value rather than an argument list: macOS still ships bash 3.2, where
+# expanding an empty array under `set -u` aborts the script.
+npm_prefix_override() {
+  local helper_prefix configured
+  helper_prefix="$(installed_helper_prefix)"
+  [[ -n "$helper_prefix" ]] || return 0
+  configured="$(npm prefix -g 2>/dev/null || true)"
+  [[ "$helper_prefix" != "$configured" ]] || return 0
+  printf '%s' "$helper_prefix"
+}
+
 # Reads the package sources Pi has registered, so removal targets what is
 # actually installed rather than what this version happens to install today. An
 # older release registered a different source shape, and it still has to come
@@ -174,7 +214,13 @@ if [[ "$WITH_HOST" == true ]]; then
   echo
   if command -v npm >/dev/null 2>&1; then
     echo "Uninstalling Pi host:"
-    run_cmd npm uninstall -g "$PI_HOST_PACKAGE"
+    HOST_PREFIX="$(npm_prefix_override)"
+    if [[ -n "$HOST_PREFIX" ]]; then
+      echo "  (prefix $HOST_PREFIX, where this helper is installed)"
+      run_cmd npm uninstall -g --prefix "$HOST_PREFIX" "$PI_HOST_PACKAGE"
+    else
+      run_cmd npm uninstall -g "$PI_HOST_PACKAGE"
+    fi
   else
     echo "WARN: npm is not on PATH; cannot uninstall $PI_HOST_PACKAGE." >&2
   fi
@@ -231,7 +277,12 @@ echo
 if [[ "$APPLY" == true ]]; then
   echo "Uninstall complete."
   echo "The npm-global helper is separate and stays until you remove it:"
-  echo "  npm uninstall -g $PLATFORM_PACKAGE"
+  HELPER_PREFIX="$(npm_prefix_override)"
+  if [[ -n "$HELPER_PREFIX" ]]; then
+    echo "  npm uninstall -g --prefix $HELPER_PREFIX $PLATFORM_PACKAGE"
+  else
+    echo "  npm uninstall -g $PLATFORM_PACKAGE"
+  fi
 else
   echo "Dry run only. Nothing was removed. Re-run with --apply to perform it."
 fi

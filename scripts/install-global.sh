@@ -4,7 +4,32 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  scripts/install-global.sh [--stable|--dev|--local|--channel <stable|dev|local>] [--version <tag>] [--resolve-tag] [--package-source <source>] [--dry-run] [--with-mcp|--no-mcp] [--mcp-preset <preset>] [--with-subagents|--no-subagents] [--subagents-preset <preset>] [--with-web-access|--no-web-access] [--with-herdr] [--model-scope <preset>|--no-model-scope]
+  scripts/install-global.sh [--stable|--dev|--local|--channel <stable|dev|local>] [--version <tag>] [--resolve-tag] [--package-source <source>] [--dry-run] [--with-mcp|--no-mcp] [--mcp-preset <preset>] [--with-subagents|--no-subagents] [--subagents-preset <preset>] [--subagents-model-scope <scope>] [--with-web-access|--no-web-access] [--with-herdr] [--model-scope <preset>|--no-model-scope] [--default-model <model>] [-h|--help]
+
+Options:
+  --channel <stable|dev|local>    Package channel; --stable/--dev/--local are shorthands.
+  --version, --tag <tag>          Pin a release tag (pair with --resolve-tag for a SHA).
+  --resolve-tag                   Resolve the tag to a commit SHA before installing.
+  --package-source <source>       Explicit package source; overrides the channel.
+  --dry-run                       Print the planned steps without changing user config.
+  --with-mcp | --no-mcp           Install the MCP adapter (default: install).
+  --mcp-preset <preset>           MCP server set (default: core).
+  --with-subagents | --no-subagents
+                                  Install pi-subagents (default: only if already present).
+  --subagents-preset <minimal|safe|async|parallel>
+                                  Subagent runtime preset (default: safe).
+  --subagents-model-scope <none|piagent|codex|claude>
+                                  Model family the subagents run on (default: none).
+  --with-web-access | --no-web-access
+                                  Install pi-web-access for the researcher subagent (default: install).
+  --with-herdr                    Also configure Herdr integration.
+  --model-scope <full|codex|claude>
+                                  Model families to enable in Pi (default: full).
+  --no-model-scope                Leave the user's enabledModels untouched.
+  --default-model <provider/model[:thinking]>
+                                  Default model written to Pi settings
+                                  (default: openai-codex/gpt-5.5:high).
+  -h, --help                      Print this help and exit.
 
 Purpose:
   Install the piagent Pi package into the current user's global Pi settings.
@@ -74,6 +99,7 @@ RESOLVE_TAG=false
 RESOLVED_PACKAGE_TAG=""
 RESOLVED_PACKAGE_COMMIT=""
 CLI_PACKAGE_SELECTOR=""
+LOCAL_HELPER_PREFIX="${PIAGENT_LOCAL_HELPER_PREFIX:-}"
 PI_MCP_ADAPTER_SOURCE="npm:pi-mcp-adapter@2.15.0"
 PI_SUBAGENTS_SOURCE="npm:pi-subagents@0.38.0"
 PI_WEB_ACCESS_SOURCE="npm:pi-web-access@0.17.0"
@@ -181,6 +207,61 @@ run_cmd() {
   fi
 }
 
+active_piagent_helper_prefix() {
+  if [[ -n "$LOCAL_HELPER_PREFIX" ]]; then
+    printf '%s\n' "$LOCAL_HELPER_PREFIX"
+    return 0
+  fi
+
+  local helper_command
+  helper_command="$(command -v piagent 2>/dev/null || true)"
+  [[ -n "$helper_command" ]] || return 1
+
+  node --input-type=module - "$helper_command" <<'NODE'
+import fs from "node:fs";
+import path from "node:path";
+
+try {
+  const command = path.resolve(process.argv[2]);
+  if (path.basename(path.dirname(command)) === "bin") {
+    process.stdout.write(`${path.dirname(path.dirname(command))}\n`);
+    process.exit(0);
+  }
+  const target = fs.realpathSync(command);
+  const marker = `${path.sep}lib${path.sep}node_modules${path.sep}@piagent${path.sep}platform${path.sep}`;
+  const index = target.indexOf(marker);
+  if (index <= 0) process.exit(1);
+  process.stdout.write(`${target.slice(0, index)}\n`);
+} catch {
+  process.exit(1);
+}
+NODE
+}
+
+sync_local_helper() {
+  [[ "$RESOLVED_CHANNEL_LABEL" == "local" ]] || return 0
+
+  if ! command -v npm >/dev/null 2>&1; then
+    echo "FAIL: npm is required to synchronize the local Piagent helper and Gateway runtime." >&2
+    exit 1
+  fi
+
+  local prefix="" used_fallback=false
+  prefix="$(active_piagent_helper_prefix 2>/dev/null || true)"
+  if [[ -z "$prefix" ]]; then
+    prefix="${HOME}/.pi/npm-global"
+    used_fallback=true
+  fi
+
+  echo "Synchronizing local terminal helper and Gateway runtime:"
+  run_cmd npm install -g --ignore-scripts --prefix "$prefix" "$PLATFORM_ROOT"
+
+  if [[ "$used_fallback" == true ]]; then
+    echo "NOTE: no existing Piagent helper was found; the local helper was installed under $prefix." >&2
+    echo "NOTE: add $prefix/bin to PATH if piagent is not found after this run." >&2
+  fi
+}
+
 resolve_user_package_path() {
   local source="$1"
   local pi_agent_dir="${PI_CODING_AGENT_DIR:-"${HOME}/.pi/agent"}"
@@ -285,10 +366,29 @@ verify_npm_integrity() {
     echo "FAIL: npm is required to verify package integrity for $package_spec." >&2
     exit 1
   fi
-  local actual
-  actual="$(npm view "$package_spec" dist.integrity 2>/dev/null | tr -d '\r\n')"
+  # The status is captured rather than left to `set -e`. Declaring `local actual`
+  # and assigning on the next line makes the command substitution's own status the
+  # status of the assignment, so under `pipefail` an unreachable registry -- no
+  # network, a proxy, a private registry, an npm outage -- killed the script on
+  # this line. The `FAIL:` below was never reached and npm's stderr was already
+  # discarded, so the run ended with an empty screen and exit 1, after `pi install`
+  # had already succeeded. The operator was left half-installed with no reason
+  # given. (Writing `local actual="$(...)"` also avoids the exit, but by hiding the
+  # failure inside the empty-value branch, which then reports a digest mismatch --
+  # a security message for what is usually a network problem.)
+  local actual="" status=0
+  actual="$(npm view "$package_spec" dist.integrity 2>/dev/null | tr -d '\r\n')" || status=$?
+  if [[ "$status" -ne 0 ]]; then
+    echo "FAIL: could not reach the npm registry to verify $package_spec (npm exited $status)." >&2
+    echo "      Nothing further was installed. Check network, proxy, or registry auth," >&2
+    echo "      then re-run. To see npm's own message: npm view $package_spec dist.integrity" >&2
+    exit 1
+  fi
   if [[ -z "$actual" || "$actual" != "$expected" ]]; then
     echo "FAIL: registry integrity does not match the approved digest for $package_spec." >&2
+    echo "      approved: $expected" >&2
+    echo "      registry: ${actual:-<empty>}" >&2
+    echo "      Do not proceed. The published package differs from the reviewed release." >&2
     exit 1
   fi
 }
@@ -609,6 +709,7 @@ if [[ -n "$RESOLVED_PACKAGE_COMMIT" ]]; then
   echo "  resolvedCommit: $RESOLVED_PACKAGE_COMMIT"
 fi
 echo "  source: $PACKAGE_SOURCE"
+sync_local_helper
 echo "Removing previous Pi Agent Platform package registrations:"
 remove_existing_piagent_platform_sources
 run_cmd pi install "$PACKAGE_SOURCE"

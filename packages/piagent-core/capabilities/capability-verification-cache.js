@@ -148,12 +148,21 @@ function lexicalAncestors(target) {
   return ancestors;
 }
 
-function metadataSignature(targets) {
+// The directories above every target, sorted, derived once per snapshot. The
+// set is a pure function of the target list, and a cached entry's target list
+// cannot change while the entry lives, so deriving it per call was repeating
+// work that could not produce a different answer -- and at 296 pinned files it
+// was the single most expensive part of a cache hit, more than every `lstat`
+// this function performs put together.
+function ancestorPaths(targets) {
+  return [...new Set(targets.flatMap((target) => lexicalAncestors(target.path)))].sort(compare);
+}
+
+function metadataSignature(targets, ancestors) {
   if (!targets) return undefined;
   const records = [];
-  const ancestors = new Set(targets.flatMap((target) => lexicalAncestors(target.path)));
   try {
-    for (const ancestor of [...ancestors].sort(compare)) {
+    for (const ancestor of ancestors ?? ancestorPaths(targets)) {
       const stat = fs.lstatSync(ancestor, { bigint: true });
       const symbolic = stat.isSymbolicLink();
       const identity = symbolic ? statIdentity(stat, true) : ancestorIdentity(stat);
@@ -194,13 +203,14 @@ function cacheIdentity(lockDocument, options = {}) {
 }
 
 function snapshotTargets(targets) {
-  const signature = metadataSignature(targets);
-  return signature ? { signature, targets } : undefined;
+  const ancestors = ancestorPaths(targets);
+  const signature = metadataSignature(targets, ancestors);
+  return signature ? { signature, targets, ancestors } : undefined;
 }
 
 function stableSnapshot(snapshot) {
   if (!snapshot) return false;
-  const current = metadataSignature(snapshot.targets);
+  const current = metadataSignature(snapshot.targets, snapshot.ancestors);
   return Boolean(current && current === snapshot.signature);
 }
 
@@ -209,7 +219,7 @@ export function verifyCapabilityLockCached(cache, root, profilePath, lockPath, l
   const identity = cacheIdentity(lockDocument, options);
   const cached = options.forceFull === true ? undefined : cache?.get(key);
   if (cached?.identity === identity) {
-    const signature = metadataSignature(cached.targets);
+    const signature = metadataSignature(cached.targets, cached.ancestors);
     if (signature && signature === cached.signature) return { ...cached.verification, cacheStatus: "hit" };
   }
   cache?.delete(key);

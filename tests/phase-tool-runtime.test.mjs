@@ -381,6 +381,8 @@ describe("phase tool activation runtime", () => {
     assert.equal(runtime.mutationDecision(context, { projectMutation: false, verificationCarrier: false }), undefined);
 
     migrationStatus = "refreshed";
+    assert.equal(runtime.toolDecision(context, "piagent_task_start"), undefined,
+      "a terminal task always exposes the bounded successor-task transition");
     assert.match(runtime.mutationDecision(context, { projectMutation: false, exactSourceVerifier: true, verificationCarrier: true }).reason, /verification is allowed only/);
   });
 

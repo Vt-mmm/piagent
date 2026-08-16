@@ -11,7 +11,7 @@ This file is the canonical install, update, rollback, and release checklist. Oth
 
 All supported environments require Node.js `>=22.19.0` and Pi Coding Agent `0.84.1`. The Pi host is installed as a Node CLI; Pi Agent Platform still defines its own release matrix because the terminal helpers and shell policy rely on Bash/POSIX behavior.
 
-| Surface | Status for v1.4.0 | Rollout guidance |
+| Surface | Status for v1.4.1 | Rollout guidance |
 |---|---|---|
 | macOS Apple Silicon (`darwin/arm64`) + Bash | Verified for this release. | Safe default for team rollout after normal project smoke tests. |
 | Linux x64 + Bash | Verified in GitHub Actions. | Safe default for CI/server usage after normal project smoke tests. |
@@ -100,13 +100,13 @@ token/generalization claim.
 | Terminal helper | `npm install -g --ignore-scripts @piagent/platform@X.Y.Z` | `piagent-*` commands on `PATH`. |
 | Pi package | `piagent-install`, or `pi install ...` | Extensions, prompts, skills, and subagents loaded by Pi. |
 
-These three components are versioned independently. A full install, update, or rollback must use the exact Pi host declared by the target release, then install the target terminal helper, then let that helper install its matching Pi package. `piagent-install` changes only the Pi package; it does not replace the Pi host or the npm-global terminal helper currently executing. In installer output, `currentRelease` is the terminal helper package version.
+These three components are versioned independently. A full install, update, or rollback must use the exact Pi host declared by the target release, then install the target terminal helper, then let that helper install its matching Pi package. Stable, exact, dev, and custom `piagent-install` channels change only the Pi package; they do not replace the Pi host or the npm-global terminal helper currently executing. The local channel is the deliberate development exception: `install-global.sh --local` synchronizes the active terminal helper and Gateway runtime from the same checkout before registering that checkout as the Pi package. This prevents the terminal and WebUI Gateway from running different source bytes under the same version number. In installer output, `currentRelease` is the terminal helper package version before any local synchronization.
 
 ## Release channels
 
 | Channel | Source shape | Mutability | Use when |
 |---|---|---:|---|
-| `stable` | `git:github.com/Vt-mmm/piagent@<resolved-commit-sha>` from `v1.4.0` | Fixed after resolution | Default for team rollout. |
+| `stable` | `git:github.com/Vt-mmm/piagent@<resolved-commit-sha>` from `v1.4.1` | Fixed after resolution | Default for team rollout. |
 | `exact` | Tag, reviewed commit, or a tag resolved with `--resolve-tag` | Fixed when using a commit SHA | Pi-package-only roll forward, rollback, or reproduction. |
 | `dev` | `git:github.com/Vt-mmm/piagent` | Moving | Personal machine or sandbox only. |
 | `local` | `/path/to/piagent` | Local workspace | Platform development and dry-run validation. |
@@ -126,7 +126,7 @@ Use this flow when the team needs both terminal commands and the Pi package:
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.84.1
-npm install -g --ignore-scripts @piagent/platform@1.4.0
+npm install -g --ignore-scripts @piagent/platform@1.4.1
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -134,8 +134,8 @@ piagent-install --stable
 The stable preview and apply output includes:
 
 ```text
-currentRelease: v1.4.0 (helper package version)
-tag: v1.4.0
+currentRelease: v1.4.1 (helper package version)
+tag: v1.4.1
 resolvedCommit: <40-char-sha>
 source: git:github.com/Vt-mmm/piagent@<40-char-sha>
 ```
@@ -152,7 +152,7 @@ bash scripts/install-global.sh --stable
 Use this only when terminal commands are not needed:
 
 ```bash
-pi install git:github.com/Vt-mmm/piagent@v1.4.0
+pi install git:github.com/Vt-mmm/piagent@v1.4.1
 ```
 
 Direct `pi install` does not create `piagent-*` commands on `PATH`.
@@ -212,7 +212,7 @@ For a fresh machine that does not have `piagent-update` yet, bootstrap the same 
 npm exec -y --package @piagent/platform@X.Y.Z -- piagent-update --version X.Y.Z --force
 ```
 
-Running it from a git checkout is refused rather than replacing that checkout's commands with a published build; update a checkout with `git pull` and `install-global.sh --local`.
+Running it from a git checkout is refused rather than replacing that checkout's commands with a published build; update a checkout with `git pull` and `install-global.sh --local`. The local installer keeps the active npm prefix, synchronizes the helper/Gateway from the checkout, and then registers the same checkout with Pi. Restart an already-running Dashboard after the update so its existing process releases the old loaded modules.
 
 The same sequence by hand, which must keep this order because `piagent-install` fails against a host that does not match the version it pins and does not install one itself:
 
@@ -290,6 +290,19 @@ npm uninstall -g @piagent/platform                    # the npm-global helper, r
 ```
 
 Removal reads the package entries registered in Pi's settings rather than assuming what the running version installs. A machine that first installed the platform before the namespace rename still has that older entry removed.
+
+### Which package source each scope gets
+
+`setup.sh` writes two different scopes and they do not take the same answer. A project's `.pi/settings.json` pin is authority over that project; the global install is what every project on the machine gets, so one project may not decide it.
+
+| Scope | Order |
+|---|---|
+| Global install | `--package-source` → the running helper's own `name@version` → local path (with a warning) |
+| Project init | `--package-source` → the project's committed pin → the running helper → local path (with a warning) |
+
+When both scopes run and the two answers differ, setup prints the divergence and keeps both: the project keeps its pin, the machine keeps the running helper. Pass `--package-source <source>` to make them the same deliberately.
+
+On a machine whose helper lives under a non-default npm prefix — because the configured global root was not writable at install time, or because `piagent-update --npm-prefix` chose one — a bare `npm uninstall -g` resolves against the *configured* prefix and removes nothing while still exiting `0`. Uninstall therefore derives the prefix from where the running helper actually sits and passes `--prefix` when the two differ; the final line it prints already carries the right prefix, so copy that command rather than the generic one above. Run `npm prefix -g` and compare against `dirname $(dirname $(which piagent-uninstall))` if you want to confirm which case you are in.
 
 ### What uninstall will not remove
 

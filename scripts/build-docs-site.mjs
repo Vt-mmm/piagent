@@ -24,6 +24,26 @@ const SITE = {
   facebook: "https://www.facebook.com/vinhtam0544/"
 };
 
+// Vercel Web Analytics, added here rather than to a page so all locales and
+// every generated page carry the same one. It is cookieless and stores no
+// identifier in the browser, so the site needs no consent banner -- which is
+// the reason to prefer it over an analytics product that would.
+//
+// The route only exists once Web Analytics is enabled for the Vercel project
+// (dashboard -> Analytics -> Enable) and the site is redeployed. Until then the
+// request 404s and the page is otherwise unaffected: the inline shim below
+// queues calls instead of throwing on an undefined `window.va`.
+//
+// Enabling also provisions a second, project-unique route that ad blockers do
+// not recognise. Swapping this src for that path collects more of the traffic;
+// this stable one is used because it does not embed a per-project secret in a
+// public repository.
+const ANALYTICS_SNIPPET = `    <script>
+      window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js"></script>
+`;
+
 // Order here is the order in the sidebar, and it is also the order of the
 // previous/next links at the foot of each page.
 const NAV = [
@@ -527,7 +547,7 @@ ${renderPager(index, pages, locale)}
         <nav data-toc></nav>
       </aside>
     </div>
-  </body>
+${ANALYTICS_SNIPPET}  </body>
 </html>
 `;
 }

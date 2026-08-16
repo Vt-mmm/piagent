@@ -29,8 +29,11 @@ export function ActionConfirmationDialog({ open, title, description, confirmLabe
       {description}
     </DialogContentText></DialogContent>
     <DialogActions sx={{ px: 2.5, pb: 2, gap: .75 }}>
-      <Button color="inherit" onClick={onCancel}>{cancelLabel}</Button>
-      <Button variant="contained" color="warning" onClick={onConfirm} autoFocus>{confirmLabel}</Button>
+      {/* The safe choice takes focus. This dialog only ever asks one question --
+          whether to grant full access -- so focusing confirm meant a reflex
+          Enter granted the widest authority in the product. */}
+      <Button color="inherit" onClick={onCancel} autoFocus>{cancelLabel}</Button>
+      <Button variant="contained" color="warning" onClick={onConfirm}>{confirmLabel}</Button>
     </DialogActions>
   </Dialog>;
 }

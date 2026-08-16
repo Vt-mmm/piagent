@@ -43,8 +43,21 @@ Rule máy đọc nằm tại `architecture/layers.json`; chạy `npm run archite
 | Capabilities | `packages/piagent-core/capabilities/` | Profile resolution, pack validation, lock, source root | Pi session lifecycle |
 | Security foundation | `packages/piagent-core/security/` | Sensitive-data primitive | Workflow behavior |
 | Benchmark | `packages/piagent-core/benchmark/`, `benchmarks/` | Suite validation, scoring, evidence | Runtime enforcement |
+| WebUI contracts | `packages/piagent-webui/contracts/` | Wire type dùng chung giữa browser và server | Mọi hành vi runtime; layer này không phụ thuộc gì |
+| WebUI client | `packages/piagent-webui/client/` | View trên browser, view model, UI preference | Server state, filesystem, Pi API |
+| WebUI server | `packages/piagent-webui/server/` | HTTP/WS endpoint, đọc session, dựng diff | Render phía browser; không được import client |
+| WebUI extension | `packages/piagent-webui/extension/` | Lệnh `/piagent-webui` chạy trong Pi | Wire type mà client cũng cần |
+| WebUI gateway | `packages/piagent-webui/gateway/` | Tiến trình `piagent dashboard` độc lập, port và lifecycle | Feature logic thuộc về server |
+| WebUI ownership | `packages/piagent-webui/ownership/` | Claim single-owner trên một session directory | Transport và render; layer này không phụ thuộc gì |
+| WebUI build | `packages/piagent-webui/` (gốc package) | Bundle client và đóng gói asset được serve | Source của bất kỳ WebUI layer nào |
 | Entrypoints | `scripts/` | CLI argument và gọi use case | Domain logic trùng lặp |
 | Product assets | `prompts/`, `skills/`, `subagents/`, `adapters/`, `packs/`, `schemas/` | Declarative behavior và contract | Hidden runtime state |
+
+Các layer WebUI là một trục dependency thứ hai, không phải nhánh của trục đầu. `contracts` và
+`ownership` nằm dưới cùng và không import gì; `client` chỉ được với tới `contracts`, nên bundle
+browser không bao giờ kéo theo code server hay Pi. `server`, `extension`, `gateway` với xuống
+`runtime`/`core`/`security` — không bao giờ ngược lại, nên platform vẫn chạy headless khi không
+có WebUI. `npm run architecture:check` enforce toàn bộ edge trên.
 
 Folder `extensions/` vẫn chứa một số service module do lịch sử. Tên folder này là legacy; chỉ `piagent-guard.ts` được Pi load như extension. Mỗi lần migrate phải tách theo một feature trọn vẹn và giữ compatibility cho đến khi migration hoàn tất.
 

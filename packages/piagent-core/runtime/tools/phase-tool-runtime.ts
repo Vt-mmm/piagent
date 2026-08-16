@@ -80,7 +80,8 @@ export class PhaseToolRuntime {
 
   toolDecision(ctx: ExtensionContext, toolName: string): { block: true; reason: string } | undefined {
     if (this.effectiveMode(ctx) !== "on") return undefined;
-    if (toolName === "piagent_task_start" && this.digestMigrationStatus(ctx) === "new-attempt-required") return undefined;
+    if (toolName === "piagent_task_start"
+      && (this.digestMigrationStatus(ctx) === "new-attempt-required" || this.states.get(this.key(ctx))?.currentPhase === "terminal")) return undefined;
     const state = this.states.get(this.key(ctx));
     if (!state) return undefined;
     const policy = phaseToolPolicy(state.currentPhase, state.changeMode);

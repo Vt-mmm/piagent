@@ -22,6 +22,8 @@ const json = args.includes("--json");
 const repair = args.includes("--repair");
 const agentDirIndex = args.indexOf("--agent-dir");
 const agentDir = agentDirIndex >= 0 ? args[agentDirIndex + 1] : undefined;
+const GATEWAY_ERROR_LOG = "gateway-stderr.log";
+const GATEWAY_ERROR_MAX_BYTES = 4_000;
 
 function output(value) {
   process.stdout.write(`${json ? JSON.stringify(value) : value}\n`);
@@ -68,6 +70,42 @@ function removeOwnedSocket(target) {
   } catch { return false; }
 }
 
+function gatewayErrorLog(state) {
+  return path.join(state.root, GATEWAY_ERROR_LOG);
+}
+
+function writeGatewayErrorLog(state, message = "") {
+  const target = gatewayErrorLog(state);
+  const descriptor = fs.openSync(target, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC
+    | (fs.constants.O_NOFOLLOW ?? 0), 0o600);
+  try {
+    const stat = fs.fstatSync(descriptor);
+    if (!stat.isFile() || typeof process.getuid === "function" && stat.uid !== process.getuid()) {
+      throw new Error("gateway-error-log-invalid");
+    }
+    fs.fchmodSync(descriptor, 0o600);
+    if (message) fs.writeFileSync(descriptor, message.slice(-GATEWAY_ERROR_MAX_BYTES));
+  } finally { fs.closeSync(descriptor); }
+}
+
+function readGatewayErrorLog(state) {
+  const target = gatewayErrorLog(state);
+  try {
+    const before = fs.lstatSync(target);
+    if (!before.isFile() || before.isSymbolicLink()
+      || typeof process.getuid === "function" && before.uid !== process.getuid()) return "";
+    const descriptor = fs.openSync(target, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+    try {
+      const stat = fs.fstatSync(descriptor);
+      if (!stat.isFile() || stat.dev !== before.dev || stat.ino !== before.ino) return "";
+      const length = Math.min(stat.size, GATEWAY_ERROR_MAX_BYTES);
+      const body = Buffer.alloc(length);
+      fs.readSync(descriptor, body, 0, length, Math.max(0, stat.size - length));
+      return body.toString("utf8");
+    } finally { fs.closeSync(descriptor); }
+  } catch { return ""; }
+}
+
 async function control(action, timeoutMs = 1_500) {
   const state = gatewayProfileState(agentDir);
   return await requestGatewayControl(state.controlSocket, { action }, timeoutMs);
@@ -88,6 +126,8 @@ async function ensureStarted() {
   const existing = await currentLaunchUrl();
   if (existing) return existing;
   const effectiveAgentDir = path.resolve(agentDir ?? process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi", "agent"));
+  const state = gatewayProfileState(effectiveAgentDir);
+  writeGatewayErrorLog(state);
   const child = spawn(process.execPath, [
     "--disable-warning=ExperimentalWarning",
     "--import", path.join(packageRoot, "scripts", "register-typescript-loader.mjs"),
@@ -97,14 +137,23 @@ async function ensureStarted() {
   ], { cwd: process.cwd(), env: { ...process.env,
     PIAGENT_PINNED_TS_TRANSFORM_ROOT: path.join(effectiveAgentDir, "npm", "node_modules", "pi-mcp-adapter") },
     detached: true, stdio: "ignore" });
+  let exit = null;
+  child.on("exit", (code, signal) => { exit = signal ? `signal ${signal}` : `exit code ${code}`; });
   child.unref();
   const deadline = Date.now() + 12_000;
   while (Date.now() < deadline) {
     const url = await currentLaunchUrl();
     if (url) return url;
+    // A child that has already exited is never going to publish a URL, so
+    // waiting out the rest of the deadline only delays the report.
+    if (exit !== null) break;
     await new Promise((resolve) => setTimeout(resolve, 80));
   }
-  throw new Error("gateway-start-timeout");
+  const detail = [exit && `The gateway process ended with ${exit}.`, readGatewayErrorLog(state).trim()]
+    .filter(Boolean).join("\n");
+  throw new Error(detail
+    ? `gateway-start-failed\n${detail}`
+    : "gateway-start-timeout\nThe gateway did not publish a URL within 12s and wrote nothing to stderr.");
 }
 
 async function serve() {
@@ -203,6 +252,10 @@ async function main() {
 }
 
 main().catch((error) => {
-  process.stderr.write(`Piagent dashboard failed: ${error instanceof Error ? error.message : String(error)}\n`);
+  const message = `Piagent dashboard failed: ${error instanceof Error ? error.message : String(error)}\n`;
+  if (command === "serve") {
+    try { writeGatewayErrorLog(gatewayProfileState(agentDir), message); } catch { /* stderr still reports the failure. */ }
+  }
+  process.stderr.write(message);
   process.exitCode = 1;
 });

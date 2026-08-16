@@ -65,6 +65,22 @@ describe("Piagent WebUI bounded transcript projection", () => {
     assert.equal(JSON.stringify(value).includes(secret), false);
   });
 
+  it("projects empty provider failures as closed safe reasons instead of blank assistant messages", () => {
+    const secret = "sk-proj-abcdefghijklmnopqrstuvwxyz";
+    const expired = project([entry("entry_7", "assistant", [], { stopReason: "error",
+      errorMessage: `Provided authentication token is expired. ${secret}` })]);
+    expectValid(expired);
+    assert.deepEqual(expired.items[0].content, { state: "unavailable", text: null, textChars: null, digest: null,
+      truncated: false, redacted: false, imageCount: 0, reasonCode: "provider-auth-expired" });
+    assert.equal(JSON.stringify(expired).includes(secret), false);
+    assert.equal(JSON.stringify(expired).includes("Provided authentication token"), false);
+
+    const unknown = project([entry("entry_8", "assistant", [], { stopReason: "error", errorMessage: "private provider failure" })]);
+    expectValid(unknown);
+    assert.equal(unknown.items[0].content.reasonCode, "provider-response-failed");
+    assert.equal(JSON.stringify(unknown).includes("private provider failure"), false);
+  });
+
   it("pages backward by opaque cursor and fails closed on gaps or oversized history", () => {
     const entries = [1, 2, 3].map((index) => entry(`entry_${index}`, "user", `message ${index}`));
     const latest = project(entries, { limit: 2 });

@@ -179,8 +179,9 @@ Project-local state belongs in `.pi/.gitignore`.
 Task files use schema v2 and bind one unique `taskRunId` to one Pi `sessionId`.
 They record attempt/max-attempt history, dependency-safe work-plan progress,
 Git baseline/final digests, observed changes, all exact verify results and final
-trace. A terminal task is immutable; retry starts in a fresh session and carries
-the prior failure/ruled-out evidence. Legacy v1 state is migrated and archived
+trace. A terminal task is immutable; the same conversation may bind a new task
+or retry attempt after the prior task closes, while keeping only one task pending
+at a time and carrying prior failure/ruled-out evidence. Legacy v1 state is migrated and archived
 without requiring project onboarding again.
 
 Local state directories are owner-only. Task state, context telemetry, trace,

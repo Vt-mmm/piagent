@@ -50,10 +50,16 @@ function stageGlobalInstall({
   npmViewFails = false,
   npmInstallFails = "",
   defaultPrefixWritable = true,
-  activePrefixWritable = true
+  activePrefixWritable = true,
+  // `npm exec` runs the helper out of the npx cache. That tree is a node_modules
+  // like any other, so the updater treated the cache hash directory as the prefix
+  // to install into.
+  layout = "global"
 } = {}) {
   const root = temporaryDirectory();
-  const platformRoot = path.join(root, "lib", "node_modules", "@piagent", "platform");
+  const platformRoot = layout === "npx-cache"
+    ? path.join(root, ".npm", "_npx", "a1b2c3d4e5f6", "node_modules", "@piagent", "platform")
+    : path.join(root, "lib", "node_modules", "@piagent", "platform");
   fs.mkdirSync(path.join(platformRoot, "scripts"), { recursive: true });
   fs.copyFileSync(
     path.join(repositoryRoot, "scripts/update-global.mjs"),
@@ -172,6 +178,51 @@ function runUpdate(stage, args, { env = {} } = {}) {
 }
 
 describe("piagent-update", () => {
+  it("decides about the pi the run will actually use, not the one PATH resolved first", () => {
+    // The host version is read before the run prepends the install prefix's bin.
+    // With `--npm-prefix`, or a default global root that is not writable, every
+    // step after that point uses a different `pi` -- so "(already current)" could
+    // be describing a binary this run never touches.
+    const stage = stageGlobalInstall({ helperVersion: "1.1.4", registryVersion: "1.1.4", installedHost: "0.82.0" });
+    const prefix = path.join(stage.root, "explicit-prefix");
+    fs.mkdirSync(path.join(prefix, "bin"), { recursive: true });
+    fs.writeFileSync(path.join(prefix, "bin", "pi"), "#!/usr/bin/env bash\nprintf '%s\\n' 0.70.0\n");
+    fs.chmodSync(path.join(prefix, "bin", "pi"), 0o755);
+
+    const result = runUpdate(stage, ["--dry-run", "--npm-prefix", prefix]);
+    assert.equal(result.status, 0, result.stderr);
+    // The first line said 0.82.0 was already current; the prefix actually in use
+    // has 0.70.0, and the run must say so and act on the second answer.
+    assert.match(result.stdout, /the active prefix resolves pi 0\.70\.0/);
+    assert.match(result.stdout, /0\.70\.0 -> 0\.82\.0/);
+    // Under --dry-run npm is never invoked, so the plan is the evidence.
+    assert.match(
+      result.stdout, /DRY RUN: npm install .*@earendil-works\/pi-coding-agent@0\.82\.0/,
+      "the host must be planned once the active prefix turns out to be behind"
+    );
+  });
+
+  it("never installs into the npx cache the documented bootstrap runs from", () => {
+    // `npm exec -y --package @piagent/platform@X.Y.Z -- piagent-update` is the
+    // documented way to bootstrap a machine that has no helper yet. It runs the
+    // helper out of `~/.npm/_npx/<hash>/node_modules/@piagent/platform`, which is
+    // a node_modules tree, so the updater reported that hash directory as the
+    // prefix and installed host and helper into a cache npm is free to prune --
+    // with a bin directory on nobody's PATH. The command said it succeeded and
+    // the machine had nothing installed.
+    const stage = stageGlobalInstall({ layout: "npx-cache", helperVersion: "1.1.0", registryVersion: "1.1.4" });
+    const result = runUpdate(stage, ["--dry-run", "--force"]);
+
+    assert.equal(result.status, 0, result.stderr);
+    // The cache path legitimately appears as the path of the script being run;
+    // what must never happen is an install *into* it.
+    assert.doesNotMatch(result.stdout, /npm:\s+.*_npx/, "the cache must not be reported as the install prefix");
+    for (const line of result.commands.filter((entry) => entry.startsWith("npm install"))) {
+      assert.equal(/--prefix\s+\S*_npx/.test(line), false, `no install may target the npx cache: ${line}`);
+      assert.match(line, /\s-g\s/, `installs must use the global prefix: ${line}`);
+    }
+  });
+
   it("reports what is available without installing anything", () => {
     const stage = stageGlobalInstall({ helperVersion: "1.1.0", registryVersion: "1.1.4", installedHost: "0.81.0" });
     const result = runUpdate(stage, ["--check"]);

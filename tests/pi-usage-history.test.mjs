@@ -189,4 +189,22 @@ describe("Pi usage history", () => {
     assert.equal(report.projects.length, 2);
     assert.equal(report.totals.tokens.total, 2545);
   });
+
+  // docs/usage-observability.md documents the --json shape as a table of
+  // top-level keys. That table went four keys stale because nothing tied it to
+  // the emitted object. Compare the two directly so a new key has to be
+  // documented, and a dropped key cannot leave a phantom row in the docs.
+  it("emits exactly the top-level keys the docs describe", () => {
+    const fixture = makeFixture();
+    const report = runJson(["--all-projects", "--sessions-dir", fixture.sessions]);
+    const doc = fs.readFileSync(path.join(repositoryRoot, "docs/usage-observability.md"), "utf8");
+    const start = doc.indexOf("### Shape của `--json`");
+    assert.notEqual(start, -1, "the --json shape section is gone from the docs");
+    const rest = doc.slice(start);
+    const end = rest.indexOf("\n## ");
+    const section = end === -1 ? rest : rest.slice(0, end);
+    const documented = [...section.matchAll(/^\| `([a-zA-Z]+)` \|/gm)].map(([, key]) => key);
+
+    assert.deepEqual(documented.sort(), Object.keys(report).sort());
+  });
 });

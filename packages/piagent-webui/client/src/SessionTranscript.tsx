@@ -45,6 +45,22 @@ function ToolRows({ item, locale }: { item: TranscriptItem; locale: UiLocale }) 
   </Stack>;
 }
 
+function unavailableMessage(reasonCode: string | null, locale: UiLocale): string {
+  if (reasonCode === "provider-auth-expired") return localize(locale,
+    "Phiên đăng nhập model đã hết hạn. Mở Cài đặt → Nhà cung cấp & model để kết nối lại.",
+    "The model sign-in has expired. Open Settings → Providers & models to reconnect.");
+  if (reasonCode === "provider-auth-required") return localize(locale,
+    "Provider chưa được đăng nhập. Mở Cài đặt → Nhà cung cấp & model để kết nối.",
+    "The provider is not signed in. Open Settings → Providers & models to connect.");
+  if (reasonCode === "provider-rate-limited") return localize(locale,
+    "Provider đang giới hạn yêu cầu. Hãy thử lại sau.", "The provider is rate limiting requests. Try again later.");
+  if (reasonCode === "provider-unavailable") return localize(locale,
+    "Không thể kết nối tới provider. Hãy kiểm tra kết nối rồi thử lại.", "The provider could not be reached. Check the connection and try again.");
+  if (reasonCode === "provider-response-failed") return localize(locale,
+    "Model không thể trả lời. Hãy kiểm tra kết nối provider rồi thử lại.", "The model could not respond. Check the provider connection and try again.");
+  return localize(locale, "Nội dung này không khả dụng.", "This content is unavailable.");
+}
+
 function TranscriptMessage({ item, locale }: { item: TranscriptItem; locale: UiLocale }) {
   const text = item.content.text;
   if (item.role === "tool-result") return <ToolRows item={item} locale={locale} />;
@@ -57,8 +73,8 @@ function TranscriptMessage({ item, locale }: { item: TranscriptItem; locale: UiL
   return <Box sx={{ display: "flex", gap: 1.5, alignItems: "flex-start" }}><Box className="brand-mark" aria-hidden="true">π</Box>
     <Box sx={{ minWidth: 0, flex: 1 }}><Typography sx={{ fontWeight: 600 }}>Piagent</Typography>
       {text && <Typography sx={{ mt: .6, whiteSpace: "pre-wrap", overflowWrap: "anywhere", lineHeight: 1.75 }}>{text}</Typography>}
-      {!text && item.content.state !== "available" && <Typography color="text.secondary" sx={{ mt: .6 }}>
-        {localize(locale, "Nội dung này không khả dụng.", "This content is unavailable.")}</Typography>}
+      {!text && item.content.state !== "available" && <Alert severity="warning" sx={{ mt: 1 }}>
+        {unavailableMessage(item.content.reasonCode, locale)}</Alert>}
       <ToolRows item={item} locale={locale} />
       {(item.content.redacted || item.content.truncated) && <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .8 }}>
         {item.content.redacted ? localize(locale, "Đã ẩn dữ liệu nhạy cảm", "Sensitive data hidden") : localize(locale, "Nội dung đã rút gọn", "Content truncated")}

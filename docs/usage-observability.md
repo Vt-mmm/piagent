@@ -183,6 +183,76 @@ Format hỗ trợ:
 | CSV | `piagent-usage --history <project> --csv` |
 | Markdown | `piagent-usage --history <project> --markdown` |
 
+### Shape của `--json`
+
+Table/CSV/Markdown chỉ in một phần report. `--json` trả nguyên object, gồm **6 key top-level**:
+
+| Key | Nội dung |
+|---|---|
+| `generatedAt` | ISO timestamp lúc chạy lệnh. Dùng để so hai report với nhau. |
+| `scope` | `projectPath` (null khi `--all-projects`), `allProjects`, `includeSubagents`, `sessionsDir`, `since`, `until`. Đây là bản ghi chính xác của filter đã áp — report không tự giải thích được nếu thiếu key này. |
+| `totals` | `sessions` / `mainSessions` / `subagentSessions`, `messages` (`user`, `assistant`, `toolCalls`, `toolResults`, `total`), `promptChars`, và `tokens` (xem bảng "Cách đọc số"). |
+| `projects` | Một dòng cho mỗi `cwd`, sort giảm dần theo `tokens.total`: `cwd`, `sessions`, `mainSessions`, `subagentSessions`, `tokens`, `cost`. |
+| `tools` | `{ name, count }` cho mỗi tool đã gọi, sort giảm dần theo `count`. Đây là chỗ nhìn ra tool nào đang đốt tool-call budget. |
+| `sessions` | Một dòng cho mỗi session, mới nhất trước: `id`, `name`, `cwd`, `file`, `isSubagent`, `provider`, `modelId`, `thinkingLevel`, `firstTimestamp`, `lastTimestamp`, `messages`, `tokens`. |
+
+Mọi `Date` đều được serialize thành ISO string, nên output an toàn để `jq` hoặc
+đẩy thẳng vào báo cáo.
+
+```bash
+# Top 10 tool tốn nhiều call nhất trong 7 ngày, toàn máy
+piagent-usage --history --all-projects --days 7 --json | jq '.tools[:10]'
+
+# Cost theo từng project
+piagent-usage --history --all-projects --days 7 --json | jq '.projects[] | {cwd, cost}'
+```
+
+## Đo lượt dùng từ bên ngoài
+
+Ba kênh khác nhau, ba bộ đếm khác nhau — **không cộng vào nhau**:
+
+| Kênh | Đếm gì | Lấy ở đâu |
+|---|---|---|
+| npm downloads | cài qua `npm install` | `api.npmjs.org/downloads/point/last-week/@piagent/platform` |
+| GitHub clones | cài qua `pi install git:…` (mỗi lần là một `git clone`) | `gh api repos/<owner>/<repo>/traffic/clones` |
+| Docs site | người đọc tài liệu | Vercel Web Analytics |
+
+Đọc số npm cẩn thận: với package còn mới, mirror và scanner chiếm phần lớn.
+Dấu hiệu nhận ra là **phân bổ đều giữa nhiều version**, kể cả prerelease cũ —
+người thật dồn vào bản mới nhất, bot thì kéo tất.
+
+### Traffic GitHub chỉ sống 14 ngày
+
+API traffic chỉ trả cửa sổ trượt 14 ngày và **xoá hẳn** phần cũ hơn: không có
+endpoint nào lấy lại được. Workflow `traffic-snapshot` chạy hằng ngày và gộp
+vào CSV cộng dồn trên nhánh `traffic-data`, nên lịch sử không mất. Khoảng trống
+dài hơn 14 ngày là vĩnh viễn.
+
+```bash
+# chạy tay, ghi vào ./traffic
+TRAFFIC_TOKEN="$(gh auth token)" node scripts/traffic-snapshot.mjs --repository Vt-mmm/piagent
+```
+
+Traffic endpoint đòi quyền **push** trên repo. Nếu `GITHUB_TOKEN` mặc định của
+Actions không đủ, script sẽ báo `HTTP 403` kèm đúng cách sửa: tạo fine-grained
+PAT có quyền `Administration: read` rồi lưu thành secret `TRAFFIC_TOKEN`.
+
+### Docs site
+
+Site dùng **Vercel Web Analytics** — cookieless, không lưu định danh trên
+trình duyệt, nên không cần banner đồng ý. Snippet nằm trong shell của
+`build-docs-site.mjs` nên mọi trang và cả hai ngôn ngữ đều có; test chặn
+trường hợp thêm trang mới mà quên.
+
+Phải bật trong Vercel dashboard (**Analytics → Enable**) rồi deploy lại thì
+route `/_vercel/insights/*` mới tồn tại. Trước đó request 404 và trang vẫn chạy
+bình thường.
+
+Runtime của piagent **không gửi gì ra ngoài**: `telemetry()` ghi local qua
+`appendContextTelemetry(cwd, …)`, package không có `postinstall`. Đó là chủ ý —
+một sản phẩm bán bằng lời hứa owner-only local state thì không nên có lệnh gọi
+mạng ngầm.
+
 ## Cách đọc số
 
 | Field | Ý nghĩa |

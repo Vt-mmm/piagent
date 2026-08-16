@@ -7,6 +7,9 @@ import type { HelperRequest, HelperRole } from "./role-policy.ts";
 import { validateHelperRequest } from "./role-policy.ts";
 
 export const OWNED_WORK_BUDGET_VERSION = "owned-work-budget-v1" as const;
+// `maxRepairPasses` is declared for the repair lane, which reserves no helper
+// role here, so this mechanism never reads it. It is named rather than removed
+// because the repair lane is bounded elsewhere; nothing in this file enforces it.
 export type OwnedWorkCeilings = Readonly<{ maxConcurrentHelpers: number; maxTotalHelpers: number; maxScoutPasses: number; maxPlannerPasses: number; maxReviewPasses: number; maxOracleCalls: number; maxRepairPasses: number; maxWriters: number }>;
 export const DEFAULT_OWNED_WORK_CEILINGS: OwnedWorkCeilings = Object.freeze({ maxConcurrentHelpers: 2, maxTotalHelpers: 3, maxScoutPasses: 1, maxPlannerPasses: 1, maxReviewPasses: 1, maxOracleCalls: 1, maxRepairPasses: 1, maxWriters: 1 });
 export const AUTOMATIC_OWNED_WORK_CEILINGS: OwnedWorkCeilings = Object.freeze({ ...DEFAULT_OWNED_WORK_CEILINGS, maxConcurrentHelpers: 1, maxTotalHelpers: 1 });
@@ -26,7 +29,27 @@ function statePath(cwd: string, taskRunId: string): string { return path.join(cw
 function lockPath(cwd: string, taskRunId: string): string { return `${statePath(cwd, taskRunId)}.lock`; }
 function empty(request: HelperRequest, now: string): BudgetState { return { version: OWNED_WORK_BUDGET_VERSION, taskId: request.taskId, taskRunId: request.taskRunId, terminal: false, reservations: [], updatedAt: now }; }
 function active(state: BudgetState): OwnedWorkReservation[] { return state.reservations.filter((item) => item.status === "active"); }
-function roleLimit(role: HelperRole): number { return role === "scout" || role === "retriever" || role === "researcher" ? 1 : role === "planner" ? 1 : role === "reviewer" ? 1 : role === "oracle" ? 1 : role === "worker" ? 1 : 0; }
+// The per-role ceiling, read from the ceilings the caller passed rather than
+// from constants written here. These limits were real but fixed at one apiece,
+// so `OwnedWorkCeilings` advertised six numbers that nothing ever read: a
+// profile could raise `maxScoutPasses` and be silently ignored, while the two
+// neighbouring fields in the same object did take effect. Half-honoured
+// configuration is worse than none, because the half that works teaches the
+// reader to trust the half that does not.
+//
+// Every default is one, so this changes no behaviour under the shipped
+// ceilings; it makes the object mean what it says.
+function roleLimit(role: HelperRole, ceilings: OwnedWorkCeilings): number {
+  switch (role) {
+    case "scout": case "retriever": case "researcher": return ceilings.maxScoutPasses;
+    case "planner": return ceilings.maxPlannerPasses;
+    case "reviewer": return ceilings.maxReviewPasses;
+    case "oracle": return ceilings.maxOracleCalls;
+    case "worker": return ceilings.maxWriters;
+    // An unknown role reserves nothing rather than defaulting to a limit.
+    default: return 0;
+  }
+}
 
 function read(cwd: string, request: HelperRequest, now: string): BudgetState {
   const target = statePath(cwd, request.taskRunId); if (!fs.existsSync(target)) return empty(request, now);
@@ -136,7 +159,7 @@ export class OwnedWorkBudgetController {
       const duplicate = state.reservations.find((item) => item.deduplicationKey === request.deduplicationKey && ["active", "succeeded"].includes(item.status));
       if (duplicate) return { decision: "duplicate", reason: "equivalent-helper-already-owned", reservationId: duplicate.id, recoveredOrphans };
       if (active(state).length >= ceilings.maxConcurrentHelpers || state.reservations.length >= ceilings.maxTotalHelpers) return { decision: "blocked", reason: "helper-budget-exhausted", reservationId: null, recoveredOrphans };
-      if (state.reservations.filter((item) => item.role === request.role).length >= roleLimit(request.role)) return { decision: "blocked", reason: `${request.role}-ceiling-reached`, reservationId: null, recoveredOrphans };
+      if (state.reservations.filter((item) => item.role === request.role).length >= roleLimit(request.role, ceilings)) return { decision: "blocked", reason: `${request.role}-ceiling-reached`, reservationId: null, recoveredOrphans };
       if (request.authority === "single-writer" && active(state).some((item) => item.authority === "single-writer")) return { decision: "blocked", reason: "single-writer-already-owned", reservationId: null, recoveredOrphans };
       const id = digest(`${request.taskRunId}:${request.deduplicationKey}:${state.reservations.length}`).slice(0, 32);
       state.reservations.push({ id, deduplicationKey: request.deduplicationKey, role: request.role, authority: request.authority, status: "active", reservedAt: now, expiresAt: new Date(Date.parse(now) + request.ceilings.timeSeconds * 1000).toISOString(), completedAt: null, usageRef: null });

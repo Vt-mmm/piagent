@@ -19,6 +19,55 @@
 </section>
 
 <section class="section">
+  <p class="section-kicker">Production V1 · historical public regression evidence</p>
+  <h2 id="evidence">Measured, not asserted</h2>
+  <p class="section-lead">108 sessions on the same model and thinking level, graded automatically, against an isolated <code>codex-cli</code> surface. This is the production-v1 measurement; it is not a re-measurement of v1.4.0.</p>
+
+  <div class="benchmark-metrics" aria-label="Headline benchmark numbers">
+    <div class="benchmark-metric">
+      <span>Overall</span>
+      <strong>9.92 / 10</strong>
+      <small>Quality, Safety, Reliability all 10/10</small>
+    </div>
+    <div class="benchmark-metric">
+      <span>Tasks resolved</span>
+      <strong>54/54</strong>
+      <small>100% on both surfaces</small>
+    </div>
+    <div class="benchmark-metric">
+      <span>Fresh tokens</span>
+      <strong>-51.11%</strong>
+      <small>paired geometric mean, 47/54 pair wins</small>
+    </div>
+    <div class="benchmark-metric">
+      <span>Infrastructure</span>
+      <strong>0 retries</strong>
+      <small>108 valid runs</small>
+    </div>
+  </div>
+
+  <div class="benchmark-legend" aria-label="Chart legend">
+    <span><i class="piagent-swatch"></i>Piagent</span>
+    <span><i class="codex-swatch"></i>codex-cli</span>
+  </div>
+
+  <div class="benchmark-usage-chart" aria-label="Median fresh tokens per run: Piagent 7,368, codex-cli 18,476">
+    <div class="benchmark-usage-group">
+      <h3>Fresh tokens, median per run</h3>
+      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 39.88%"></i></div><strong>7,368</strong></div>
+      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 100%"></i></div><strong>18,476</strong></div>
+    </div>
+    <div class="benchmark-usage-group">
+      <h3>Tool calls, median per run</h3>
+      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 62.5%"></i></div><strong>5</strong></div>
+      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 100%"></i></div><strong>8</strong></div>
+    </div>
+  </div>
+
+  <p>The 95% confidence interval on the paired ratio is <strong>0.3809–0.6276</strong>; the upper bound stays below 1.0, so the token-saving claim holds. <a href="/en/benchmark">See the full configuration, every band score, and the raw tables</a>.</p>
+</section>
+
+<section class="section">
   <h2 id="install">Install with two commands</h2>
   <p>Requires Node.js <span class="inline-code">&gt;=22.19.0</span>. Run these commands from the project you want to configure.</p>
   <pre><code>npm install -g @piagent/platform

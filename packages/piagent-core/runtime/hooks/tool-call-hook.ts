@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 import { toolResultFingerprint } from "../../extensions/context-engine.js";
+import { withRemedy } from "../policy/block-remedy.ts";
 import { observeTrajectorySync } from "../trajectory/trajectory-observability.ts";
 import type { TrajectorySyncResult } from "../trajectory/trajectory-runtime.ts";
 
@@ -75,7 +76,13 @@ export function registerToolCallHook(pi: ExtensionAPI, dependencies: ToolCallHoo
       : dependencies.reviewBudgetDecision?.(resolvedEvent, ctx);
     const startDecision = !(decision && typeof decision === "object" && decision.block) ? dependencies.beforeStart?.(resolvedEvent, ctx) : undefined;
     const finalDecision = startDecision && typeof startDecision === "object" && startDecision.block ? startDecision : decision;
-    const blockedDecision = finalDecision && typeof finalDecision === "object" ? finalDecision : undefined;
+    // Every refusal leaves through here, so this is where it is answered. A
+    // remedy attached at the 29 sites that build one is a remedy the next site
+    // will forget.
+    const answered = finalDecision && typeof finalDecision === "object" && finalDecision.block
+      ? withRemedy(finalDecision)
+      : finalDecision;
+    const blockedDecision = answered && typeof answered === "object" ? answered : undefined;
     record(ctx, {
       activityId: `decision:${toolCallId}`,
       event: "tool_decision",
@@ -91,6 +98,6 @@ export function registerToolCallHook(pi: ExtensionAPI, dependencies: ToolCallHoo
       observeTrajectorySync(ctx, dependencies.afterAuthorized?.(resolvedEvent, ctx, { toolCallId }), dependencies.telemetry);
     }
     dependencies.afterDecision?.(resolvedEvent, ctx, { toolCallId, allowed: !blockedDecision?.block, reason: blockedDecision?.reason });
-    return finalDecision;
+    return answered;
   });
 }

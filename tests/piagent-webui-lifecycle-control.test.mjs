@@ -229,3 +229,57 @@ test("a durable paused barrier survives runtime reconstruction without browser a
     treeDigest: () => `wt-content-v2:${"a".repeat(64)}` }); next.bind(current.ctx);
   assert.equal(next.snapshot().state, "paused"); assert.equal(next.dispatchAllowed(current.ctx), false);
 });
+
+test("a terminal task accepts conversation input and only the successor task-start tool", (t) => {
+  const current = fixture(t); current.task.trace = { outcome: "blocked" };
+  assert.equal(current.lifecycle.dispatchAllowed(current.ctx), false);
+  assert.equal(current.lifecycle.inputAllowed(current.ctx), true);
+  assert.equal(current.lifecycle.toolAllowed("bash", current.ctx), false);
+  assert.equal(current.lifecycle.toolAllowed("piagent_task_start", current.ctx), true);
+});
+
+// A stop request is only counted as pending if its commandId is truthy: the
+// projection does `if (eventType === "task-control.stop-requested" && commandId)
+// pendingStops.add(commandId)`. So an empty commandId does not fail loudly — it
+// records the stop and then reports nothing pending, which is the one outcome an
+// operator pressing stop must never get. The journal writers do not check the
+// shape (validTaskControlBinding exists for it and is called nowhere); the only
+// thing standing between the wire and that state is REF.test in the controller's
+// structural validation. Nothing pinned that, so loosening the regex would have
+// opened it silently.
+test("a commandId that could not be counted as a pending stop never reaches the journal", async (t) => {
+  const current = fixture(t);
+  const before = inspectTaskControlState(current.cwd, current.task);
+
+  // Empty is the dangerous one; the rest are the shapes REF exists to exclude.
+  const rejected = ["", " ", "-leading-dash", "a".repeat(200), "has space", "has/slash", "has:colon"];
+  for (const commandId of rejected) {
+    const value = command(current, "lifecycle.pause", { commandId });
+    value.actionDigest = controlActionDigest(value);
+    const receipt = await current.lifecycle.execute(value);
+    valid(receipt);
+    assert.equal(receipt.resultCode, "invalid-command", `accepted commandId ${JSON.stringify(commandId)}`);
+    assert.equal(receipt.error?.code, "invalid-command-metadata", JSON.stringify(commandId));
+    // The rejection receipt must not echo the bad value back either; it carries
+    // a fixed placeholder so nothing downstream stores an uncheckable id.
+    assert.equal(receipt.commandId, "command.invalid", JSON.stringify(commandId));
+  }
+
+  // Nothing was written, so control state is untouched and no stop is pending.
+  const after = inspectTaskControlState(current.cwd, current.task);
+  assert.equal(after.state, before.state);
+  assert.equal(after.controlRevision, before.controlRevision);
+  assert.equal(after.stopPending, false);
+  assert.equal(current.aborts, 0);
+});
+
+test("a well-formed commandId is still accepted, so the check is not blanket refusal", async (t) => {
+  // Without this, deleting the transition entirely would pass the test above.
+  const current = fixture(t);
+  const value = command(current, "lifecycle.pause", { commandId: "command_shape_ok-1.2~3" });
+  value.actionDigest = controlActionDigest(value);
+  const receipt = await current.lifecycle.execute(value);
+  valid(receipt);
+  assert.notEqual(receipt.resultCode, "invalid-command");
+  assert.notEqual(inspectTaskControlState(current.cwd, current.task).controlRevision, "control-rev.stale");
+});

@@ -58,11 +58,22 @@ function numericExitCode(value) {
   return undefined;
 }
 
+// `isError: false` is Pi stating that the command succeeded, so it is evidence
+// and a claim of zero matches it. An observation that states neither an exit code
+// nor an error flag says nothing at all, and nothing is not evidence of success:
+// without this an empty record satisfied a claim of zero, which is the one
+// direction a ledger built to catch forged verification must never fail in.
+//
+// Both shapes are unreachable through `observedBashResultFromToolResultEvent` and
+// `readObservedBashResults`, which always set a boolean flag. The guard is here
+// because a reader of this function should not have to prove that to know the
+// answer is safe.
 export function claimedExitMatchesObserved(exitCode, observed) {
   const claimed = numericExitCode(exitCode);
   if (claimed === undefined) return false;
   if (typeof observed?.exitCode === "number") return observed.exitCode === claimed;
-  return observed?.isError === true ? claimed !== 0 : claimed === 0;
+  if (typeof observed?.isError !== "boolean") return false;
+  return observed.isError ? claimed !== 0 : claimed === 0;
 }
 
 export function extractBashCommandFromToolResultEvent(event) {

@@ -11,6 +11,11 @@ import {
   evaluateExecPolicyCore, extractShellGlobCandidates, extractShellPathCandidates, findProtectedPathInCommand, unresolvedPathExpansions,
   globMatchesPath, matchesProtectedPath, normalizePathCandidate, matchesAnyPath
 } from "./policy-core.js";
+import {
+  expandSimpleGlobAlternatives, findResolvedProtectedPathInCommand, normalizeRelative, protectedPatternExamples,
+  resolveRepositoryPathCandidate, shellGlobMatchesPath, shellGlobSegmentMatches, shellGlobTargetsProtectedPath,
+  unresolvedExpansionReason
+} from "./shell-reach.ts";
 import { extractShellWritePathCandidates, shellHasFileWriteRedirection } from "./shell-write-targets.js";
 import { commandMatchesVerifyPlan, createBashResultLedger, findMatchingObservedBashResult, readObservedBashResults } from "./runtime-evidence.js";
 import { findPackageRoot, findPlatformRoot, readJsonFile } from "./guard-io.js";
@@ -374,10 +379,16 @@ const SHELL_TOOL_NAMES = new Set(["bash", "shell", "exec"]);
 const MAX_MCP_PROXY_ARGS_CHARS = 131_072;
 const SESSION_PERMISSION_OVERRIDES = new Map<string, PermissionProfileMode>();
 
+// The policy used when `policies/base-policy.json` cannot be read. It runs in
+// exactly the case where something is already wrong, so it must never be the
+// looser of the two: this copy had drifted behind the file and silently dropped
+// `.pi/piagent-state/**` -- the guard's own state -- along with the `sudo ` and
+// `chmod -R 777` blocks. A missing policy file is a reason to be stricter, not a
+// quiet downgrade. `tests/policy-core.test.mjs` fails if this drifts again.
 const DEFAULT_POLICY: BasePolicy = {
-  protectedPaths: [".git/**", "**/auth.json", "**/.env", "**/.env.*", ".pi/settings.json", ".pi/piagent-profile.json", ".pi/piagent-profile.lock.json", CONTEXT_INDEX_FILE],
-  shellProtectedPaths: [".git/**", "**/auth.json", "**/.env", "**/.env.*", ".pi/settings.json", ".pi/piagent-profile.json", ".pi/piagent-profile.lock.json", CONTEXT_INDEX_FILE],
-  blockedCommandPatterns: ["rm -rf /", "rm -rf ~", "rm -rf $HOME", "git reset --hard", "git clean -fd"],
+  protectedPaths: [".git/**", "**/auth.json", "**/.env", "**/.env.*", "**/node_modules/**", "**/dist/**", ".pi/piagent-state/**", ".pi/settings.json", ".pi/piagent-profile.json", ".pi/piagent-profile.lock.json", CONTEXT_INDEX_FILE],
+  shellProtectedPaths: [".git/**", "**/auth.json", "**/.env", "**/.env.*", ".pi/piagent-state/**", ".pi/settings.json", ".pi/piagent-profile.json", ".pi/piagent-profile.lock.json", CONTEXT_INDEX_FILE],
+  blockedCommandPatterns: ["rm -rf /", "rm -rf ~", "rm -rf $HOME", "git reset --hard", "git clean -fd", "sudo ", "chmod -R 777"],
   requireConfirmationPatterns: ["deploy", "release", "publish", "migration", "gh pr merge", "git push"],
   defaultRequiredContext: ["AGENTS.md", "README.md"],
   permissionProfiles: {
@@ -644,26 +655,6 @@ function legacyProjectStateWarning(cwd: string): string | undefined {
   return current
     ? `${detail} The current profile is active, so these are leftovers; remove them with \`piagent-migrate . --apply --remove-old\`.`
     : `${detail} No .pi/piagent-profile.json exists, so this project is running unprofiled and its protected paths and verify commands are NOT enforced. Convert it with \`piagent-migrate . --apply\`.`;
-}
-
-function normalizeRelative(cwd: string, candidate: unknown): string | undefined {
-  if (typeof candidate !== "string" || candidate.trim().length === 0) return undefined;
-  let raw = candidate.trim();
-  try {
-    raw = decodeURIComponent(raw);
-  } catch {
-    return undefined;
-  }
-  if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(raw)) {
-    if (!raw.toLowerCase().startsWith("file://")) return undefined;
-    try {
-      raw = fileURLToPath(raw);
-    } catch {
-      return undefined;
-    }
-  }
-  const absolute = path.isAbsolute(raw) ? raw : path.resolve(cwd, raw);
-  return path.relative(cwd, absolute).split(path.sep).join("/");
 }
 
 function slugify(input: string): string {
@@ -957,60 +948,6 @@ function inspectRepositoryPathBoundary(cwd: string, candidate: string): { reason
   return {};
 }
 
-function resolveRepositoryPathCandidate(cwd: string, candidate: string): string | undefined {
-  const normalized = normalizePathCandidate(candidate);
-  if (normalized === ".." || normalized.startsWith("../")) return undefined;
-
-  const relative = path.posix.isAbsolute(normalized)
-    ? path.relative(cwd, normalized).split(path.sep).join("/")
-    : normalized;
-  if (relative === ".." || relative.startsWith("../")) return undefined;
-
-  const pending = relative.split("/").filter((item) => item && item !== ".");
-  let current = cwd;
-  let resolvedDepth = 0;
-  for (let index = 0; index < pending.length; index += 1) {
-    const next = path.join(current, pending[index]);
-    try {
-      fs.lstatSync(next);
-      current = next;
-      resolvedDepth = index + 1;
-    } catch (error) {
-      const code = error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code) : "";
-      if (code !== "ENOENT") return undefined;
-      break;
-    }
-  }
-
-  let canonicalBase: string;
-  try {
-    canonicalBase = fs.realpathSync.native(current);
-  } catch {
-    return undefined;
-  }
-  const canonical = path.resolve(canonicalBase, ...pending.slice(resolvedDepth));
-  const canonicalRoot = fs.realpathSync.native(cwd);
-  const canonicalRelative = path.relative(canonicalRoot, canonical).split(path.sep).join("/");
-  if (canonicalRelative === ".." || canonicalRelative.startsWith("../") || path.isAbsolute(canonicalRelative)) return undefined;
-  return canonicalRelative || ".";
-}
-
-function findResolvedProtectedPathInCommand(
-  cwd: string,
-  command: string,
-  protectedPatterns: string[]
-): { candidate: string; resolved: string; pattern: string } | undefined {
-  for (const candidate of extractShellPathCandidates(command)) {
-    const relative = normalizeRelative(cwd, candidate);
-    if (!relative) continue;
-    const resolved = resolveRepositoryPathCandidate(cwd, relative);
-    if (!resolved || resolved === relative) continue;
-    const pattern = matchesProtectedPath(resolved, protectedPatterns);
-    if (pattern) return { candidate, resolved, pattern };
-  }
-  return undefined;
-}
-
 const MAX_TOOL_INPUT_INSPECTION_DEPTH = 32;
 
 type StringInputWalkResult = {
@@ -1088,130 +1025,6 @@ function extractLikelyPathFromInput(cwd: string, input: Record<string, unknown>)
   return extractPathInputsFromInput(cwd, input)[0]?.path;
 }
 
-function expandSimpleGlobAlternatives(pattern: string, max = 24): { values: string[]; complete: boolean } {
-  let results = [pattern];
-  let changed = true;
-  let complete = true;
-
-  while (changed) {
-    changed = false;
-    const expanded: string[] = [];
-    for (const item of results) {
-      const match = item.match(/\{([^{}]+)\}/);
-      if (!match) {
-        expanded.push(item);
-        continue;
-      }
-      changed = true;
-      const options = match[1].split(",").map((option) => option.trim());
-      for (const option of options) {
-        expanded.push(`${item.slice(0, match.index)}${option}${item.slice((match.index ?? 0) + match[0].length)}`);
-        if (expanded.length >= max) {
-          complete = false;
-          break;
-        }
-      }
-      if (expanded.length >= max) break;
-    }
-    results = expanded.slice(0, max);
-  }
-
-  return { values: results, complete };
-}
-
-function shellGlobSegmentMatches(patternSegment: string, candidateSegment: string): boolean {
-  if (candidateSegment.startsWith(".") && !patternSegment.startsWith(".")) return false;
-  let source = "";
-  for (let index = 0; index < patternSegment.length; index += 1) {
-    const char = patternSegment[index];
-    if (char === "*") {
-      source += "[^/]*";
-      continue;
-    }
-    if (char === "?") {
-      source += "[^/]";
-      continue;
-    }
-    if (char === "[") {
-      const end = patternSegment.indexOf("]", index + 1);
-      const body = end > index + 1 ? patternSegment.slice(index + 1, end) : "";
-      if (body && /^[!^A-Za-z0-9_-]+$/.test(body)) {
-        const negated = body.startsWith("!") ? `^${body.slice(1)}` : body;
-        source += `[${negated}]`;
-        index = end;
-        continue;
-      }
-    }
-    source += char.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
-  }
-  return new RegExp(`^${source}$`, "i").test(candidateSegment);
-}
-
-function shellGlobMatchesPath(pattern: string, candidate: string): boolean {
-  const patternSegments = normalizePathCandidate(pattern).split("/").filter(Boolean);
-  const candidateSegments = normalizePathCandidate(candidate).split("/").filter(Boolean);
-
-  function match(patternIndex: number, candidateIndex: number): boolean {
-    if (patternIndex === patternSegments.length) return candidateIndex === candidateSegments.length;
-    const patternSegment = patternSegments[patternIndex];
-    if (patternSegment === "**") {
-      if (match(patternIndex + 1, candidateIndex)) return true;
-      for (let next = candidateIndex; next < candidateSegments.length; next += 1) {
-        if (match(patternIndex + 1, next + 1)) return true;
-      }
-      return false;
-    }
-    if (candidateIndex >= candidateSegments.length) return false;
-    return shellGlobSegmentMatches(patternSegment, candidateSegments[candidateIndex])
-      && match(patternIndex + 1, candidateIndex + 1);
-  }
-
-  return patternSegments.length > 0 && candidateSegments.length > 0 && match(0, 0);
-}
-
-function protectedPatternExamples(pattern: string): string[] {
-  const normalized = normalizePathCandidate(pattern);
-  if (!normalized) return [];
-
-  const examples = new Set<string>();
-  const add = (value: string | undefined) => {
-    const normalizedValue = normalizePathCandidate(value ?? "");
-    if (normalizedValue) examples.add(normalizedValue);
-  };
-
-  add(normalized);
-
-  if (normalized.endsWith("/**")) {
-    const base = normalized.slice(0, -3);
-    add(base);
-    add(`${base}/probe`);
-  }
-
-  if (normalized.startsWith("**/")) {
-    const tail = normalized.slice(3);
-    const concreteTail = tail
-      .replace(/\*\*/g, "nested")
-      .replace(/\*/g, tail.includes(".env.") ? "local" : "probe");
-    add(tail);
-    add(concreteTail);
-    add(`nested/${concreteTail}`);
-  }
-
-  const concrete = normalized
-    .replace(/^\*\*\//, "")
-    .replace(/\/\*\*$/, "/probe")
-    .replace(/\*\*/g, "nested")
-    .replace(/\*/g, normalized.includes(".env.") ? "local" : "probe");
-  add(concrete);
-
-  for (const example of [...examples]) {
-    const base = path.posix.basename(example);
-    if (base && base !== "probe") examples.add(base);
-  }
-
-  return [...examples];
-}
-
 function protectedLiteralHints(pattern: string): string[] {
   const normalized = normalizePathCandidate(pattern).toLowerCase();
   if (!normalized) return [];
@@ -1263,32 +1076,6 @@ function globTargetsProtectedPath(glob: unknown, protectedPatterns: string[]): {
             || globMatchesPath(candidateGlob, path.posix.basename(example))
           ) {
             return { glob: trimmed, pattern, example };
-          }
-        }
-      }
-    }
-  }
-  return undefined;
-}
-
-function shellGlobTargetsProtectedPath(
-  command: string,
-  protectedPatterns: string[]
-): { glob: string; pattern: string; example: string } | undefined {
-  for (const candidate of extractShellGlobCandidates(command)) {
-    if (!/[*?{\[]/.test(candidate)) continue;
-    const expanded = expandSimpleGlobAlternatives(candidate);
-    if (!expanded.complete) return { glob: candidate, pattern: "bounded glob expansion", example: "a protected path" };
-    for (const candidateGlob of expanded.values) {
-      for (const pattern of protectedPatterns) {
-        for (const example of protectedPatternExamples(pattern)) {
-          if (/[*?{\[\]]/.test(example)) continue;
-          if (
-            shellGlobMatchesPath(candidateGlob, example)
-            || shellGlobMatchesPath(`**/${candidateGlob}`, example)
-            || shellGlobMatchesPath(candidateGlob, path.posix.basename(example))
-          ) {
-            return { glob: candidate, pattern, example };
           }
         }
       }
@@ -2550,13 +2337,6 @@ function evaluateMcpApproval(
 // running the substitution. Matching the literal half against the protected
 // patterns answers a different question than the one being asked, so refuse
 // rather than let an unknown filename through unchecked.
-function unresolvedExpansionReason(subject: string, words: string[]): string {
-  const listed = words.map((word) => `\`${word}\``).join(", ");
-  return `${subject} builds a filename this guard cannot resolve: ${listed}. `
-    + "The literal text around the expansion makes it a path, but its value is only known at run time, "
-    + "so it cannot be checked against the protected paths. Write the path out, or put the expansion in its own argument.";
-}
-
 function evaluateMcpProxyShellProtectedAccess(
   cwd: string,
   prepared: PreparedToolInput,
@@ -4829,7 +4609,10 @@ export default function piagentGuard(pi: ExtensionAPI) {
     if (!sessionTask && taskContractRequired && (shellProjectMutation || directProjectMutation)) {
       return {
         block: true,
-        reason: "A session-bound Task Implementation Contract is required before project files can be mutated. Start the task first."
+        // Naming the tool matters: this is the first wall a new operator hits,
+        // and "start the task first" does not say with what.
+        reason: "A session-bound Task Implementation Contract is required before project files can be mutated."
+          + " Call `piagent_task_start` once with explicit project-relative scope, then retry."
       };
     }
     if (sessionTask?.trace.outcome === "pending" && sessionTask.changeMode === "source-change") {

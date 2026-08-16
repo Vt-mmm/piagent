@@ -8,6 +8,7 @@ import { ThemeProvider } from "@mui/material/styles";
 import { App } from "./App.tsx";
 import { SessionHubApp } from "./SessionHubApp.tsx";
 import { createPiagentTheme } from "./theme.ts";
+import { preferredLocale } from "./locale-preference.ts";
 import { UiPreferencesProvider, type UiColorMode, type UiLocale } from "./ui-preferences.tsx";
 import { useInspection } from "./use-inspection.ts";
 import { useSessionHub } from "./use-session-hub.ts";
@@ -38,7 +39,7 @@ function storedPreference<T extends string>(key: string, allowed: readonly T[], 
 }
 
 function PiagentUiRoot() {
-  const [locale, setLocale] = useState<UiLocale>(() => storedPreference("piagent-webui-locale", ["vi", "en"], "vi"));
+  const [locale, setLocale] = useState<UiLocale>(() => storedPreference("piagent-webui-locale", ["vi", "en"], preferredLocale(window.navigator?.languages ?? [window.navigator?.language ?? ""])));
   const [colorMode, setColorMode] = useState<UiColorMode>(() => storedPreference("piagent-webui-color-mode", ["light", "dark"],
     window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark"));
   const theme = useMemo(() => createPiagentTheme(colorMode), [colorMode]);

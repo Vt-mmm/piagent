@@ -85,6 +85,27 @@ describe("bilingual docs site", () => {
     }
   });
 
+  it("documents every terminal command the package installs", () => {
+    // Ten shipped commands appeared nowhere on the site, including the two the
+    // v1.4.0 headline feature is driven by. A command a user cannot find is a
+    // command they do not have, and nothing failed when one was added without
+    // a page to mention it.
+    const bins = Object.keys(JSON.parse(
+      fs.readFileSync(path.join(repositoryRoot, "package.json"), "utf8")
+    ).bin);
+    const content = fs.readdirSync(path.join(repositoryRoot, "docs-site", "content"), { recursive: true })
+      .filter((entry) => String(entry).endsWith(".html"))
+      .map((entry) => fs.readFileSync(path.join(repositoryRoot, "docs-site", "content", String(entry)), "utf8"))
+      .join("\n");
+    // `piagent-dashboard` and `piagent-explain` are documented in their
+    // subcommand form, which is the form a reader should learn, so either
+    // spelling counts as documented.
+    const documented = (bin) =>
+      content.includes(bin) || content.includes(bin.replace(/^piagent-/, "piagent "));
+    assert.deepEqual(bins.filter((bin) => !documented(bin)), [],
+      "every installed command must appear somewhere in docs-site/content");
+  });
+
   it("resolves every generated internal link to a committed static file", () => {
     const outputs = build();
     const siteRoot = path.join(repositoryRoot, "docs-site");
@@ -109,5 +130,45 @@ describe("bilingual docs site", () => {
     assert.ok(mobileOverride > desktopTocRule, "mobile override must follow the desktop TOC grid");
     assert.match(css.slice(mobileOverride), /\.layout\.with-toc\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\)/);
     assert.match(css.slice(mobileOverride), /\.toc\s*\{\s*display:\s*none/);
+  });
+});
+
+describe("docs site analytics", () => {
+  // The snippet lives in the shell rather than in any page fragment, so a page
+  // added later inherits it. Assert that across every generated page: a page
+  // that silently opts out of measurement is invisible in exactly the way that
+  // makes traffic numbers wrong without looking wrong.
+  const pages = fs.readdirSync(path.join(repositoryRoot, "docs-site"))
+    .filter((name) => name.endsWith(".html"))
+    .map((name) => path.join("docs-site", name))
+    .concat(fs.readdirSync(path.join(repositoryRoot, "docs-site", "en"))
+      .filter((name) => name.endsWith(".html"))
+      .map((name) => path.join("docs-site", "en", name)));
+
+  it("generates both locales", () => {
+    assert.ok(pages.length >= 30, `only found ${pages.length} pages`);
+  });
+
+  for (const page of pages) {
+    it(`${page} loads the analytics script exactly once`, () => {
+      const html = fs.readFileSync(path.join(repositoryRoot, page), "utf8");
+      assert.equal((html.match(/_vercel\/insights\/script\.js/g) ?? []).length, 1, page);
+      // The shim has to be there too: without it a call made before the
+      // deferred script lands throws on an undefined window.va.
+      assert.match(html, /window\.va = window\.va \|\|/);
+      // Deferred, so measurement never blocks first paint on a docs page.
+      assert.match(html, /<script defer src="\/_vercel\/insights\/script\.js"><\/script>/);
+      // Inside the document, before </body> -- a tag after it is not parsed
+      // where it was written and silently moves.
+      assert.ok(html.indexOf("_vercel/insights") < html.indexOf("</body>"), page);
+    });
+  }
+
+  it("keeps the analytics host first-party so no consent banner is owed", () => {
+    // A third-party analytics origin would need a cookie banner on a docs site
+    // that currently ships none. Same-origin /_vercel/* is what avoids that.
+    const html = fs.readFileSync(path.join(repositoryRoot, "docs-site", "index.html"), "utf8");
+    const sources = [...html.matchAll(/<script[^>]*\bsrc="([^"]+)"/g)].map(([, src]) => src);
+    for (const src of sources) assert.ok(src.startsWith("/"), `third-party script: ${src}`);
   });
 });

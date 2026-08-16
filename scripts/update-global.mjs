@@ -213,8 +213,21 @@ function binForPrefix(prefix) {
   return process.platform === "win32" ? prefix : path.join(prefix, "bin");
 }
 
+// The npx cache is a `node_modules` tree like any other, so the documented
+// bootstrap -- `npm exec -y --package @piagent/platform@X.Y.Z -- piagent-update`
+// -- ran the helper from `~/.npm/_npx/<hash>/node_modules/@piagent/platform` and
+// this function happily reported that hash directory as the prefix to install
+// into. Host and helper then landed in a cache npm is free to prune, with a `bin`
+// that is on nobody's PATH: the command reported success and the machine had
+// nothing installed. A cache is never an install target, so it is refused here
+// and the caller falls back to a real global prefix.
+function isNpxCacheRoot(root) {
+  return root.split(path.sep).some((segment) => segment === "_npx" || segment === "_cacache");
+}
+
 function npmPrefixForInstalledHelper(root) {
   if (path.basename(root) !== "platform") return undefined;
+  if (isNpxCacheRoot(root)) return undefined;
   const scopeRoot = path.dirname(root);
   if (path.basename(scopeRoot) !== "@piagent") return undefined;
   const nodeModulesRoot = path.dirname(scopeRoot);
@@ -444,10 +457,29 @@ function main() {
     console.log(`  npm:     using explicit global prefix ${npmTarget.prefix}`);
   }
 
+  // The host version above was read before this prepend, so it described whatever
+  // `pi` the caller's PATH happened to resolve. Once the prefix moves -- a default
+  // global root that is not writable, an explicit `--npm-prefix`, or a helper
+  // already installed elsewhere -- every step below uses a different `pi`, and
+  // "(already current)" could be describing a binary this run never touches. The
+  // decision belongs to the `pi` that will actually be used, so it is taken again
+  // here rather than trusted from before the move.
+  let effectiveHost = currentHost;
+  let effectiveHostNeedsChange = hostNeedsChange;
+  if (npmTarget.bin) {
+    const activeHost = installedHostVersion();
+    if (activeHost !== currentHost) {
+      effectiveHost = activeHost;
+      effectiveHostNeedsChange = options.host && (options.force || activeHost !== targetHost);
+      console.log(`  host:    the active prefix resolves pi ${activeHost ?? "not installed"}, not ${currentHost ?? "not installed"};`
+        + ` using ${effectiveHost ?? "not installed"} -> ${targetHost}${effectiveHostNeedsChange ? "" : " (already current)"}`);
+    }
+  }
+
   // Host first: piagent-install refuses to run against a host that does not match
   // the version its package.json pins, so a helper installed ahead of the host
   // would fail on its very next step.
-  if (hostNeedsChange) {
+  if (effectiveHostNeedsChange) {
     const args = npmInstallArgs(`${HOST_PACKAGE}@${targetHost}`, npmTarget);
     describeStep(options.dryRun, "npm", args);
     if (!options.dryRun && !run("npm", args).ok) fail(`could not install ${HOST_PACKAGE}@${targetHost}`);

@@ -71,7 +71,13 @@ export function SessionComposerControls({ session, snapshot, connections, locale
   const [permissionValue, setPermissionValue] = useState<string | null>(permission?.state === "known" ? permission.value ?? null : null);
   useEffect(() => { setPermissionValue(null); }, [session.sessionRef]);
   useEffect(() => { if (permission?.state === "known") setPermissionValue(permission.value ?? null); }, [permission?.state, permission?.value]);
-  const contextPercent = session.contextUsage.ratio === null ? "—" : `${Math.round(session.contextUsage.ratio * 100)}%`;
+  const snapshotContext = snapshot?.usage.context;
+  const contextKnown = snapshotContext?.state === "known";
+  const contextTokens = contextKnown ? snapshotContext.tokens : session.contextUsage.usedTokens;
+  const contextWindow = contextKnown ? snapshotContext.contextWindow : session.contextUsage.contextWindow;
+  const contextPercentValue = contextKnown ? snapshotContext.percent
+    : session.contextUsage.ratio === null ? null : session.contextUsage.ratio * 100;
+  const contextPercent = contextPercentValue === null || contextPercentValue === undefined ? "—" : `${Math.round(contextPercentValue)}%`;
   const activeModelRef = snapshot?.session.model.state === "known" && snapshot.session.model.value ? snapshot.session.model.value.modelRef : "";
   const activeModel = options?.models.find((model) => model.modelRef === activeModelRef);
   const thinkingLevels = useMemo(() => activeModel?.thinkingLevels ?? ["off", "minimal", "low", "medium", "high", "xhigh", "max"], [activeModel]);
@@ -128,8 +134,8 @@ export function SessionComposerControls({ session, snapshot, connections, locale
         {optionError && <Typography role="status" color="error" variant="caption">{optionError}</Typography>}
       </Stack>}
       {panel === "context" && <Box sx={{ px: .5, pt: .75 }}><Stat name={localize(locale, "Đã dùng", "Used")} value={contextPercent} />
-        <Stat name="Tokens" value={session.contextUsage.usedTokens === null ? "—" : new Intl.NumberFormat().format(session.contextUsage.usedTokens)} />
-        <Stat name="Window" value={session.contextUsage.contextWindow === null ? "—" : new Intl.NumberFormat().format(session.contextUsage.contextWindow)} /></Box>}
+        <Stat name="Tokens" value={contextTokens === null ? "—" : new Intl.NumberFormat().format(contextTokens)} />
+        <Stat name="Window" value={contextWindow === null ? "—" : new Intl.NumberFormat().format(contextWindow)} /></Box>}
       {panel === "connections" && <List dense disablePadding sx={{ pt: .5 }}>{(connections?.connections ?? []).map((connection) => <ListItem key={connection.connectionRef}
         sx={{ alignItems: "center", gap: .5 }}>
         <ListItemIcon sx={{ minWidth: 38 }}><ServiceIcon name={connection.name} size={28} /></ListItemIcon>

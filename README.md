@@ -272,11 +272,17 @@ piagent/
 ├─ evals/                            governed evaluation scenarios
 ├─ packs/                            versioned capability manifests and recipes
 ├─ packages/
-│  └─ piagent-core/               Pi package: extensions, prompts, skills
+│  ├─ piagent-core/                  Pi package: extensions, runtime, prompts, skills
+│  └─ piagent-webui/                 dashboard: contracts, client, server, gateway, ownership
 ├─ schemas/                          JSON schemas
 ├─ scripts/                          setup, doctor, verification helpers
 └─ templates/                        project/global templates
 ```
+
+`piagent-core` is the Pi extension and runs headless on its own. `piagent-webui` is the
+`piagent dashboard` surface — a separate dependency spine that reads the platform but is
+never read by it, so the runtime keeps working with the dashboard absent. Both layer maps
+are enforced by `npm run architecture:check`; see [Architecture](docs/en/architecture.md).
 
 ## Verification
 
@@ -343,7 +349,7 @@ This repository intentionally excludes:
 
 ## Maturity
 
-The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.4.0` or a reviewed commit.
+The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.4.1` or a reviewed commit.
 
 Ready for:
 

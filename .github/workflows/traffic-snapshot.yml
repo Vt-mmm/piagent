@@ -1,0 +1,84 @@
+name: traffic-snapshot
+
+# GitHub serves repository traffic as a rolling 14-day window and discards
+# everything older, with no endpoint to recover it. This archives the counts
+# daily so the history survives. A gap longer than 14 days is permanent, which
+# is why this runs every day rather than weekly.
+#
+# The archive lives on its own `traffic-data` branch. Committing a row a day to
+# `main` would bury the product history under bookkeeping, and nothing on that
+# branch is part of the published package.
+
+on:
+  schedule:
+    # 02:30 UTC. Not on the hour: scheduled workflows queue behind everyone
+    # else's, and GitHub drops runs it cannot start.
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+
+concurrency:
+  # Two runs writing the same branch would race on the push. The scheduled run
+  # is not worth cancelling a manual one for, so the later run waits.
+  group: traffic-snapshot
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    name: snapshot traffic
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 10
+    steps:
+      - name: Checkout the scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.19.0"
+
+      - name: Check out the archive branch
+        # The branch may not exist yet, and an orphan is correct for it: the
+        # archive shares no history with the product and never should.
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code --heads origin traffic-data >/dev/null 2>&1; then
+            git fetch --depth 1 origin traffic-data
+            git worktree add ../archive FETCH_HEAD
+            git -C ../archive switch -c traffic-data
+          else
+            git worktree add --detach ../archive
+            git -C ../archive checkout --orphan traffic-data
+            git -C ../archive rm -rf --quiet . || true
+          fi
+
+      - name: Snapshot traffic
+        env:
+          # A fine-grained token with "Administration: read" if the default
+          # workflow token turns out not to reach the traffic endpoints. The
+          # script says exactly this when it gets a 403, so the first red run
+          # tells you which case you are in.
+          TRAFFIC_TOKEN: ${{ secrets.TRAFFIC_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/traffic-snapshot.mjs --repository "$GITHUB_REPOSITORY" --out ../archive/traffic
+
+      - name: Commit and push if anything changed
+        env:
+          TOKEN: ${{ secrets.TRAFFIC_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          cd ../archive
+          git add traffic
+          if git diff --cached --quiet; then
+            echo "No traffic change to record."
+            exit 0
+          fi
+          git commit -m "traffic: $(date -u +%F)"
+          # persist-credentials is off on the checkout, so the remote is set
+          # here rather than leaving a usable token in the runner's git config.
+          git push "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" traffic-data

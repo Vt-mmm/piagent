@@ -1,19 +1,30 @@
 {
   "name": "@piagent/platform",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "license": "MIT",
   "publishConfig": {
     "access": "public",
     "provenance": true
   },
   "type": "module",
-  "description": "Reusable Pi agent platform, project adapters, MCP/tool policy, and coding workflow harness.",
+  "description": "Guardrails for AI coding agents: blocks secret reads, destructive commands, and unapproved MCP servers before the tool call runs. Ships project profiles, capability locks, a context engine, and task verification.",
   "homepage": "https://piagent.io.vn",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Vt-mmm/piagent.git"
   },
   "keywords": [
+    "ai-agent",
+    "coding-agent",
+    "agent-guardrails",
+    "agent-security",
+    "llm-tool-policy",
+    "prompt-injection",
+    "mcp",
+    "mcp-security",
+    "secret-redaction",
+    "context-engineering",
+    "developer-tools",
     "pi-package",
     "pi-extension",
     "pi-skill",
@@ -75,6 +86,7 @@
     "piagent-import-instructions": "scripts/piagent-cli.mjs",
     "piagent-auto": "scripts/piagent-cli.mjs",
     "piagent-context": "scripts/piagent-cli.mjs",
+    "piagent-explain": "scripts/piagent-cli.mjs",
     "piagent-webui": "scripts/piagent-cli.mjs"
   },
   "pi": {

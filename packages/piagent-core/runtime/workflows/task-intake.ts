@@ -12,6 +12,7 @@ const AUTO_INTAKE_READ_ONLY_LEAD = /^\s*\/?(?:analy[sz]e|audit|check|discuss|exp
 const AUTO_INTAKE_MANUAL_RISK = /\b(?:credential|database|deploy|destructive|encryption|external provider|payment|permission|production|publish|secret|token rotation)\b/i;
 const AUTO_READ_ONLY_INTENT = /\b(?:analy[sz]e|audit|check|diagnos(?:e|is)|explain|inspect|investigate|plan|research|review|scout|summari[sz]e|triage|kiem tra|nghien cuu|giai thich|danh gia)\b/i;
 const AUTO_READ_ONLY_BOUNDARY = /\b(?:read-only|no edits?|do not edit(?: files?| source| project| repo)?|do not change (?:files?|source|project|repo)|do not mutate (?:files?|source|project|repo|workspace)|khong sua(?: file| source| project)?|khong edit(?: file| source| project)?|khong doi(?: file| source| project)?)\b/i;
+const AUTO_EXECUTION_INTENT = /(?:\b(?:run|execute|execution|rerun|re-run|chay)\b.{0,80}\b(?:tests?|build|checks?|gates?|lint|typecheck|package|pack|verify|verification)\b|\b(?:npm|pnpm|yarn|bun)\s+(?:test|pack|run\s+(?:build|check|lint|typecheck|verify))\b)/i;
 
 export const AUTO_INTAKE_SNAPSHOT_PATTERNS = [
   "src/**", "app/**", "lib/**", "packages/**", "test/**", "tests/**", "spec/**", "__tests__/**"
@@ -49,6 +50,10 @@ export function automaticTaskIntakeEligible(prompt: string, readProtectedPaths: 
   const text = String(prompt ?? "").trim();
   if (!text || text.length > AUTO_INTAKE_MAX_PROMPT_CHARS) return false;
   const signal = classifyContextTask(text);
+  if (AUTO_EXECUTION_INTENT.test(text)) {
+    if (/\bpiagent_task_start\b/i.test(text)) return false;
+    return !signal.paths.some((candidate) => matchesProtectedPath(candidate, readProtectedPaths));
+  }
   if (signal.workflow !== "task" || !AUTO_INTAKE_CHANGE_INTENT.test(text)) return false;
   if (AUTO_INTAKE_READ_ONLY_LEAD.test(text) || AUTO_INTAKE_MANUAL_RISK.test(text)) return false;
   if (/\bpiagent_task_start\b/i.test(text)) return false;

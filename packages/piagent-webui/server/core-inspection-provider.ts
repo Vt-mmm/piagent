@@ -101,7 +101,7 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
     if (control?.state === "ready" && control.identity && control.revisions && !this.#input.eventStore.resyncRequired()) {
       const available = { available: true, reasonCode: null }, disabled = (reasonCode: string) => ({ available: false, reasonCode });
       const lifecycle = this.#input.lifecycleControl?.(), terminal = control.taskState === "terminal";
-      const dispatchBlocked = terminal || lifecycle?.dispatchBlocked === true;
+      const dispatchBlocked = lifecycle?.dispatchBlocked === true && lifecycle.state !== "terminal";
       value.snapshot.identity = structuredClone(control.identity);
       value.snapshot.capabilities.identity = structuredClone(control.identity);
       for (const name of ["runtimeRevision", "taskRevision", "controlRevision", "sessionOptionRevision", "queueRevision"])
@@ -109,11 +109,11 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
       value.snapshot.capabilities.mode = "control-enabled";
       value.snapshot.capabilities.capabilities["control.chat"] = {
         status: "available", version: 1, reason: null, queuePersistence: "runtime-lifetime",
-        actions: { send: dispatchBlocked ? disabled(terminal ? "task-terminal" : "task-control-gate-closed") : available, hold: available, editHeld: available,
-          deleteHeld: available, dispatchHeld: dispatchBlocked ? disabled(terminal ? "task-terminal" : "task-control-gate-closed") : available,
-          interruptAndSend: dispatchBlocked ? disabled(terminal ? "task-terminal" : "task-control-gate-closed") : control.liveness === "running" ? available : disabled("agent-not-running") }
+        actions: { send: dispatchBlocked ? disabled("task-control-gate-closed") : available, hold: available, editHeld: available,
+          deleteHeld: available, dispatchHeld: dispatchBlocked ? disabled("task-control-gate-closed") : available,
+          interruptAndSend: dispatchBlocked ? disabled("task-control-gate-closed") : control.liveness === "running" ? available : disabled("agent-not-running") }
       };
-      if (!terminal && this.#input.attachmentCapability) {
+      if (this.#input.attachmentCapability) {
         const attachment = this.#input.attachmentCapability();
         value.snapshot.capabilities.capabilities.attachments = { status: "available", version: 1, reason: null,
           kinds: attachment.kinds, mimeTypes: attachment.mimeTypes };

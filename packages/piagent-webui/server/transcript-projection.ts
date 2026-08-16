@@ -41,6 +41,19 @@ function messageText(message: any): string {
   if (!Array.isArray(message?.content)) return "";
   return message.content.filter((item: any) => item?.type === "text" && typeof item.text === "string").map((item: any) => item.text).join("\n");
 }
+function assistantFailureReason(message: any): string | null {
+  if (message?.role !== "assistant" || message?.stopReason !== "error") return null;
+  const detail = String(message?.errorMessage ?? "").toLowerCase();
+  if (/(?:authentication|auth|token|credential).{0,48}expired|expired.{0,48}(?:authentication|auth|token|credential)/.test(detail)) {
+    return "provider-auth-expired";
+  }
+  if (/(?:authentication|unauthorized|forbidden|credential|api[ _-]?key|log[ -]?in|sign[ -]?in)/.test(detail)) {
+    return "provider-auth-required";
+  }
+  if (/(?:rate[ _-]?limit|too many requests|quota)/.test(detail)) return "provider-rate-limited";
+  if (/(?:network|fetch failed|econn|timed? ?out|unavailable)/.test(detail)) return "provider-unavailable";
+  return "provider-response-failed";
+}
 function safeText(value: string): { full: string; preview: string; redacted: boolean; truncated: boolean } {
   const clean = value.replace(ANSI, "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, " ");
   const redaction = redactSensitiveText(clean);
@@ -78,6 +91,8 @@ function item(entry: any, identity: TranscriptIdentity): TranscriptItem | null {
   if (!itemRole || !recordedAt || typeof entry.id !== "string" || entry.id.length === 0) return null;
   const content = itemRole === "tool-result" ? unavailableContent("tool-output-in-activity-preview") : (() => {
     const projected = safeText(messageText(entry.message));
+    const failureReason = projected.full.length === 0 ? assistantFailureReason(entry.message) : null;
+    if (failureReason) return unavailableContent(failureReason);
     return { state: projected.redacted ? "redacted" as const : "available" as const, text: projected.preview,
       textChars: Math.min(1_000_000_000, projected.full.length), digest: `sha256:${hash(projected.full)}`, truncated: projected.truncated,
       redacted: projected.redacted, imageCount: imageCount(entry.message), reasonCode: projected.redacted ? "sensitive-values-redacted" as const : null };

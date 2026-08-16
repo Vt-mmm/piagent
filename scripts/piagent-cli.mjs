@@ -24,6 +24,7 @@ const scriptByCommand = {
   "piagent-import-instructions": "scripts/import-agent-instructions.mjs",
   "piagent-auto": "scripts/pi-auto.sh",
   "piagent-context": "scripts/context-engine.mjs",
+  "piagent-explain": "scripts/explain-command.mjs",
   "piagent-webui": "scripts/piagent-webui-launcher.mjs",
   "piagent-dashboard": "scripts/piagent-dashboard.mjs"
 };
@@ -38,8 +39,20 @@ if (invokedAs === "piagent") {
   if (subcommand === "dashboard") {
     script = "scripts/piagent-dashboard.mjs";
     forwardedArgs = forwardedArgs.slice(1);
+  } else if (subcommand === "explain") {
+    script = "scripts/explain-command.mjs";
+    forwardedArgs = forwardedArgs.slice(1);
   } else if ([undefined, "help", "--help", "-h"].includes(subcommand)) {
-    console.log("Usage: piagent dashboard [open|status|stop|restart|doctor] [--no-open] [--json]");
+    // Subcommands are listed, their flags are not. Restating them here meant a
+    // second copy that drifts: this line still advertised the dashboard without
+    // `--repair` after that flag shipped. Each command states its own surface.
+    console.log("Usage: piagent <command> [options]");
+    console.log("");
+    console.log("Commands:");
+    console.log("  dashboard   Open and manage the local session hub");
+    console.log("  explain     Say why the guard would allow or block a shell command");
+    console.log("");
+    console.log("Run `piagent <command> --help` for that command's options.");
     process.exit(0);
   }
 }

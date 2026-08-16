@@ -2,6 +2,99 @@
 
 This file records release-facing changes for Pi Agent Platform. Copy the relevant version block into GitHub Releases when publishing a tag.
 
+## Unreleased
+
+## v1.4.1 - 2026-08-17
+
+- Local installs now synchronize the terminal helper and WebUI Gateway from the same checkout before registering the Pi package, preventing a stale global Gateway from enforcing older session/task lifecycle rules.
+
+### Integrity boundary
+
+- The runtime integrity graph skipped shell entrypoints entirely, so a pinned command could execute an unpinned program: `piagent-usage` ran a 567-line reader of `~/.pi/agent/sessions/**` that the lock had never seen, because the path was built from `$SCRIPT_DIR` and the repository-relative literal never appeared in the source. Shell sources are now scanned, and a sibling reached through a computed directory is followed.
+
+- The published package ships the built browser bundle and not the sources it came from, so on an installed platform that 725 KB of JavaScript could not be regenerated or checked against anything — while it runs inside the origin that holds the session cookie and the CSRF token, with the authority to drive session commands, source mutation and provider auth. The server that serves it was pinned; what it served was not. The served bundle is now pinned, document included, because the document names which script runs.
+
+- A TypeScript module imported by its emitted name — `./x.js` for `x.ts`, the ordinary TypeScript convention — resolved to nothing and was dropped in silence. No module was outside the lock because of it, but a module that decides what the guard enforces could have been, while the graph still claimed to be complete.
+
+### Agent control
+
+- Command-only test/build/typecheck/package requests now enter an execution-capable governed task even when the operator forbids source edits; read-only remains a strict inspection mode instead of failing halfway through the first verifier command.
+
+- A terminal Task Contract used to terminate the conversation with it: WebUI swallowed the next operator message before Pi persisted it, the Gateway could only report `session-command-effect-unknown`, and `piagent_task_start` then demanded a fresh Pi session. Conversations may now bind sequential Task Contracts. The closed task remains immutable, paused/stopping tasks remain closed, and the terminal boundary admits only new conversation input plus the exact successor-task start transition.
+
+- `OwnedWorkCeilings` advertised eight limits and six of them were never read: the per-role ceilings were real but fixed at one apiece, so raising `maxScoutPasses` in a profile did nothing while `maxTotalHelpers` beside it took effect. Half-honoured configuration reads as working configuration. The ceilings are now read from the object the caller passes; every default is one, so no shipped behaviour changes, and automatic mode is pinned against widening.
+
+- A blocked tool call is the only conversation most operators have with this policy, and it was one-sided: of 43 distinct refusals, three said what to do next. Remedies are now attached at the single point every decision leaves through, so a refusal added later is answered without anyone remembering to. The refusal that stops the whole session says which command explains it.
+
+- `piagent explain '<command>'` reports conclusive static refusals and the guard readers that found them. A static pass is now explicitly `indeterminate` until the live Pi runtime evaluates Task Contract, scope, permission, lifecycle, approval and budget state; the standalone CLI can no longer issue an "exact allow" that the real guard later blocks. `--scope` lists the static boundary in effect.
+
+### Redaction and evidence
+
+- An npm token was recognised only where something named it, so `//registry.npmjs.org/:_authToken=npm_…` — the whole of an `.npmrc`, and what a failing publish prints — went through unredacted. Every other provider here is matched by the shape of its token.
+
+- Redaction runs before tool-result compaction, and that order was the only thing keeping a credential out of the capture written to project state. Nothing pinned it; reversing the two calls would have written credentials to disk and passed every test.
+
+- An observation that states neither an exit code nor an error flag no longer satisfies a claim of success. It is unreachable through the recorded shapes, but a reader of the function that guards forged verification should not have to prove that.
+
+### Cost and clarity
+
+- `piagent-usage` reports fresh tokens and the cache hit rate, using the benchmark's own definition of a fresh token so the terminal and the published measurement cannot mean two different things. The rate is reported beside the count and never instead of it: in the published benchmark the baseline surface held the higher hit rate while spending more than twice the fresh tokens.
+
+- Capability verification derived the ancestor set on every cache hit, which at 296 pinned files cost more than every `lstat` it performed put together. Deriving it once per snapshot took a hit from 4.28 ms to 1.61 ms with no loss of tamper detection.
+
+- The WebUI opens in the language the browser asked for instead of always starting in Vietnamese; the confirmation for full access focuses the safe choice, so a reflex Enter dismisses it rather than granting it; and the file a diff shows is derived from the list that is loaded, so no later clear can leave the pane asking for a file beside a list holding one.
+
+### Install and uninstall
+
+- Running the documented two-command install downgraded the machine-wide Pi package to whatever pin the project being initialised happened to carry, including a project the operator only meant to open once. One resolved value served both scopes and read the project pin first, so a pin that is authority over its own project quietly became authority over the machine. The two scopes now resolve separately: the global install takes the running helper, the project keeps its pin, an explicit `--package-source` still beats both, and a divergence between them is printed instead of silently resolved.
+
+- Uninstall removed nothing on any machine whose helper sits under a non-default npm prefix — the fallback the installer takes when the configured global root is not writable, and whatever `piagent-update --npm-prefix` was given. `npm uninstall -g` resolves against the configured prefix, so the run exited `0` and reported completion over an install that was still there. The prefix is now derived from where the running helper actually is, the same way the updater derives it, and the follow-up command printed for the operator to copy carries that prefix too. An npx cache root is still never claimed, because it owns no bin on anyone's PATH.
+
+### Agent control coverage
+
+- A stop request only counts as pending if its `commandId` is truthy, so an empty one records the stop and then reports nothing pending — the single outcome an operator pressing stop must never get. The journal writers never check the shape, and the only thing preventing it was a regex in the browser command validator that no test named. Malformed identifiers are now pinned as rejected at that boundary, together with the proof that a well-formed one still passes, so the guard cannot be loosened or widened into blanket refusal without a test failing.
+
+### The dashboard starts without the MCP adapter
+
+- `piagent dashboard` could not start on any machine where `pi-mcp-adapter` was not installed under the agent directory — an install run with `--no-mcp`, or anyone trying the package through `npx` before setting anything up. The gateway is spawned with `PIAGENT_PINNED_TS_TRANSFORM_ROOT` pointing at that adapter, and the TypeScript loader called `realpath` on it before deciding anything. That function answers one question — is the file being loaded inside the pinned adapter — and it threw instead of answering "no", so the throw escaped the loader on the first `.ts` file of any kind and killed the process. It now answers "no", which falls back to `strip`: the stricter of the two modes, so this can only ever refuse a transform, never grant one. The exception for the reviewed adapter, its exact version, and containment within its root are all unchanged.
+
+- The failure was also unreadable. The gateway child was spawned with its stderr discarded, so a process that died on its first line looked exactly like a slow one: twelve seconds of waiting, then `gateway-start-timeout` and nothing else. The child's stderr is now kept, bounded, and reported, an early exit stops the wait instead of running out the clock, and the two cases are named differently — a process that died and a process that never answered are different problems.
+
+### Bilingual documentation
+
+- The language gate proved a Vietnamese peer existed, which is not the same as saying the same thing: editing the English side and forgetting the other passed every check in this repository, and left a reader with a document describing a design that had changed. Each pair now records the content digest of both sides as of the last time somebody confirmed them consistent, and a side that moves alone fails the gate naming the file that has to follow. A two-sided edit is reported separately, because it is probably a paired edit and calling it drift would teach people to skip the gate. What it cannot do is read the two documents and decide they agree; it records that a human looked.
+
+### Google Workspace and document conversion
+
+- Added Google's own remote MCP servers for Drive, Gmail, Docs and Sheets, one per product rather than a single server holding every scope, because that separation is the point: reading a spreadsheet should not cost a grant over Drive and every document in it, let alone the mailbox. Each has its own preset, so the narrowest useful grant is always available.
+- Google Workspace MCP is Developer Preview and has no credentialed Pi OAuth E2E proof in this release. The four entries are marked experimental, print that status through catalog/preset output, and stay out of the generic `documents` preset as well as every default preset. Official endpoints and readonly scopes remain available through explicitly named Google presets for controlled testing.
+
+- None of them appear in `core` or `popular`. `core` is what an install writes when nobody names a preset and `popular` is what people pick without reading the list, so an entry in either would hand an operator mail and file access they never chose. A test fails if one leaks in, if a catalog server exposes direct tools instead of going through the approval gate, or if a server that needs credentials ships without saying so.
+
+- Connecting Gmail changes the threat model rather than extending it: until now the untrusted input reaching an agent was source code, and it becomes any mail anyone can send. The approval gate still stands between a message and an action, but the documentation now states plainly what the product cannot prevent, and recommends read-only scopes and the narrowest preset.
+
+- Added MarkItDown for converting local `.docx`, `.xlsx`, `.pptx`, `.pdf` and `.html` to Markdown. It runs offline for `file:` URIs, which is the reason to prefer it: a document worth converting is usually one worth not uploading. It is pinned at its published alpha, and needs `uv`.
+
+### Adoption measurement
+
+- GitHub serves repository traffic as a rolling 14-day window and discards everything older, with no endpoint that returns it. `traffic-snapshot` archives clones, views, referrers and paths daily into growing CSV files on a separate `traffic-data` branch, so the history survives and the product branch is not buried under a row a day. A day still filling when the run happens is overwritten by the next run rather than frozen partial, and a gap under 14 days loses nothing. The traffic endpoints need push access, so a 403 names the exact fix — a fine-grained token with `Administration: read` stored as `TRAFFIC_TOKEN` — instead of leaving a nightly job red.
+
+- The documentation site now carries Vercel Web Analytics, which is cookieless and stores no browser identifier, so the site still owes no consent banner. The snippet is emitted from the site shell rather than any page, so both locales and every future page inherit it, and a test fails if a generated page ships without it or if a script from another origin appears. The runtime remains free of any network call: `telemetry()` writes locally and the package has no install hook.
+
+### Documentation parity
+
+Four documents restated something the code already knew, and each had drifted. They are now checked against their source, so the next drift fails a test instead of reaching a reader.
+
+- `install-global.sh --help` omitted `--default-model` and `--subagents-model-scope`, which had been accepted for four releases. The help text now carries every flag with its valid values, and the parity check reads the flag list out of the parser.
+
+- The `piagent-usage --json` documentation described two of the six top-level keys. `scope`, `projects`, `tools` and `generatedAt` were undocumented, including the record of which filters produced the report — without which a saved report cannot explain itself. All six are documented with their fields, and compared against the emitted object in both directions.
+
+- The architecture documents listed nine physical layers while `architecture/layers.json` enforced fifteen: every WebUI layer was enforced and undocumented, in both languages. The seven are now described with what they own and may not own, alongside why they form a second dependency spine rather than a branch of the first.
+
+- The team release history stopped at `1.2.11` while releases continued to `1.4.0`, and `1.1.1` had been skipped earlier. Twelve entries were added, and the list is now checked against the changelog from its own oldest entry forward, so a gap anywhere in it fails.
+
+- The repository layout in the README showed one package where there are two, leaving `piagent-webui` — the dashboard, its client, server, gateway and ownership layers — invisible to anyone reading the map before the tree.
+
 ## v1.4.0 - 2026-08-15
 
 ### Local Session Hub and WebUI

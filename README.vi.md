@@ -84,6 +84,30 @@ npm run architecture:check
 - [Operator manual tiếng Việt](docs/operator-manual-vietnamese.md)
 - [Command reference tiếng Việt](docs/command-reference-vietnamese.md)
 
+## Cấu trúc repository
+
+```text
+piagent/
+├─ architecture/                      quy tắc layer và giới hạn file cho máy kiểm tra
+├─ adapters/                          profile project tái sử dụng
+├─ catalog/                           capability index xác định
+├─ docs/                              tài liệu chuẩn EN/VI và hướng dẫn vận hành ổn định
+├─ evals/                             kịch bản đánh giá có governance
+├─ packs/                             capability manifest và recipe có version
+├─ packages/
+│  ├─ piagent-core/                   Pi package: extension, runtime, prompt, skill
+│  └─ piagent-webui/                  dashboard: contract, client, server, gateway, ownership
+├─ schemas/                           JSON schema
+├─ scripts/                           setup, doctor và helper kiểm tra
+└─ templates/                         template project/global
+```
+
+`piagent-core` là Pi extension và có thể chạy headless độc lập. `piagent-webui`
+là giao diện `piagent dashboard`, nằm trên một dependency spine riêng: WebUI đọc
+platform nhưng platform không phụ thuộc ngược vào WebUI, nên runtime vẫn hoạt động
+khi không mở dashboard. Cả hai sơ đồ layer đều được kiểm tra bằng
+`npm run architecture:check`; xem [Architecture](docs/vi/architecture.md).
+
 ## Adaptive model routing
 
 Adaptive model routing cho fresh task dùng `piagent-route --prompt "<task>" --json`.
@@ -97,6 +121,9 @@ npm run verify
 ```
 
 Gate này chạy architecture check, test, typecheck, capability validation, runtime smoke và docs consistency trước khi release.
+
+Bản phát hành hiện tại là `v1.4.1`. Với team hoặc production, hãy pin tag này
+hoặc một commit đã review thay vì dựa vào nguồn package không cố định.
 
 ## Security
 

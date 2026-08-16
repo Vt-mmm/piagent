@@ -124,6 +124,16 @@ describe("runtime verify evidence ledger", () => {
     assert.equal(claimedExitMatchesObserved(1, { isError: true }), true);
     assert.equal(claimedExitMatchesObserved(0, { isError: true }), false);
     assert.equal(claimedExitMatchesObserved(0, { isError: false }), true);
+    // `isError: false` is Pi stating success, so it is evidence. An observation
+    // that states neither an exit code nor an error flag is not: nothing must
+    // never satisfy a claim of success in a ledger built to catch forged
+    // verification.
+    assert.equal(claimedExitMatchesObserved(0, {}), false);
+    assert.equal(claimedExitMatchesObserved(0, null), false);
+    assert.equal(claimedExitMatchesObserved(0, undefined), false);
+    assert.equal(claimedExitMatchesObserved(0, { isError: "false" }), false);
+    // An exit code still decides on its own when one is present.
+    assert.equal(claimedExitMatchesObserved(0, { exitCode: 0, isError: true }), true);
   });
 
   it("extracts observed bash result from Pi tool_result shape", () => {

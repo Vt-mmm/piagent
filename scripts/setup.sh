@@ -22,7 +22,7 @@ Options:
   --project-only, --no-global    Only initialize project, skip global install
   --no-project                   Skip project initialization
   --with-mcp / --no-mcp          Install/skip Pi MCP adapter during global install (default: install)
-  --mcp-preset <minimal|core|popular|all|docs|browser|github|design|design-local|web>
+  --mcp-preset <minimal|core|popular|all|docs|browser|github|design|design-local|web|documents|google|google-mail|google-all>
                                   Configure shared global MCP baseline when --with-mcp is enabled (default: core)
   --with-subagents / --no-subagents
                                   Install/skip pi-subagents during global install (default: install)
@@ -244,15 +244,11 @@ if [[ "$WITH_MCP" == false && "$MCP_PRESET_EXPLICIT" == true ]]; then
   exit 2
 fi
 
-resolve_package_source() {
-  if [[ -n "$PACKAGE_SOURCE" ]]; then
-    printf '%s\n' "$PACKAGE_SOURCE"
-    return
-  fi
-
-  if [[ "$DO_PROJECT" == true && -n "$PROJECT_PATH" && -f "$PROJECT_PATH/.pi/settings.json" ]]; then
-    local existing_source
-    existing_source="$(node --input-type=module - "$PROJECT_PATH/.pi/settings.json" <<'NODE'
+# The pin a project has committed, or empty. It is authority over that project
+# and nothing else -- one project may not decide what the machine runs.
+project_pinned_source() {
+  [[ "$DO_PROJECT" == true && -n "$PROJECT_PATH" && -f "$PROJECT_PATH/.pi/settings.json" ]] || return 0
+  node --input-type=module - "$PROJECT_PATH/.pi/settings.json" <<'NODE'
 import fs from "node:fs";
 const settings = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
 const source = Array.isArray(settings.packages)
@@ -260,30 +256,51 @@ const source = Array.isArray(settings.packages)
   : undefined;
 if (source) process.stdout.write(source);
 NODE
-)"
-    if [[ -n "$existing_source" ]]; then
-      printf '%s\n' "$existing_source"
-      return
-    fi
-  fi
+}
 
-  # Running from an installed package rather than a checkout. The name and
-  # version on disk are exactly what a teammate resolves from the registry, so
-  # they are a portable source; the install path is not, and project settings
-  # are meant to be committed.
-  if [[ "$PLATFORM_ROOT" == */node_modules/* ]]; then
-    local installed_name installed_version
-    installed_name="$(node -e 'const fs=require("node:fs"); process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1], "utf8")).name ?? "");' "$PLATFORM_ROOT/package.json")"
-    installed_version="$(node -e 'const fs=require("node:fs"); process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1], "utf8")).version ?? "");' "$PLATFORM_ROOT/package.json")"
-    if [[ -n "$installed_name" && "$installed_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
-      printf 'npm:%s@%s\n' "$installed_name" "$installed_version"
-      return
-    fi
+# Running from an installed package rather than a checkout. The name and version
+# on disk are exactly what a teammate resolves from the registry, so they are a
+# portable source; the install path is not, and project settings are meant to be
+# committed.
+running_helper_source() {
+  [[ "$PLATFORM_ROOT" == */node_modules/* ]] || return 0
+  local installed_name installed_version
+  installed_name="$(node -e 'const fs=require("node:fs"); process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1], "utf8")).name ?? "");' "$PLATFORM_ROOT/package.json")"
+  installed_version="$(node -e 'const fs=require("node:fs"); process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1], "utf8")).version ?? "");' "$PLATFORM_ROOT/package.json")"
+  if [[ -n "$installed_name" && "$installed_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+    printf 'npm:%s@%s' "$installed_name" "$installed_version"
   fi
+}
 
+local_path_source() {
   echo "WARN: No exact package source provided." >&2
   echo "WARN: using local platform path; do not commit project .pi/settings.json with this value for team rollout." >&2
-  printf '%s\n' "$PLATFORM_ROOT"
+  printf '%s' "$PLATFORM_ROOT"
+}
+
+# One resolved value used to serve both consumers, and the two do not want the
+# same answer. A project pin is what that project's team agreed to run; the
+# global install is what every project on this machine gets. Reading the pin
+# first meant the documented two-command install silently downgraded the
+# machine-wide package to whatever one project happened to pin -- including
+# projects the operator only meant to open once.
+resolve_global_package_source() {
+  if [[ -n "$PACKAGE_SOURCE" ]]; then printf '%s\n' "$PACKAGE_SOURCE"; return; fi
+  local helper
+  helper="$(running_helper_source)"
+  if [[ -n "$helper" ]]; then printf '%s\n' "$helper"; return; fi
+  printf '%s\n' "$(local_path_source)"
+}
+
+resolve_project_package_source() {
+  if [[ -n "$PACKAGE_SOURCE" ]]; then printf '%s\n' "$PACKAGE_SOURCE"; return; fi
+  local pinned
+  pinned="$(project_pinned_source)"
+  if [[ -n "$pinned" ]]; then printf '%s\n' "$pinned"; return; fi
+  local helper
+  helper="$(running_helper_source)"
+  if [[ -n "$helper" ]]; then printf '%s\n' "$helper"; return; fi
+  printf '%s\n' "$(local_path_source)"
 }
 
 print_cmd() {
@@ -385,22 +402,41 @@ if [[ "$DO_PROJECT" == true ]]; then
   PROJECT_PATH="$(cd "$PROJECT_PATH" && pwd)"
 fi
 
-PACKAGE_SOURCE="$(resolve_package_source)"
+GLOBAL_PACKAGE_SOURCE="$(resolve_global_package_source)"
+PROJECT_PACKAGE_SOURCE="$(resolve_project_package_source)"
 
 echo "Pi Agent Platform setup"
 echo "  platform: $PLATFORM_ROOT"
-echo "  packageSource: $PACKAGE_SOURCE"
+if [[ "$DO_GLOBAL" == true ]]; then
+  echo "  globalPackageSource: $GLOBAL_PACKAGE_SOURCE"
+fi
+if [[ "$DO_PROJECT" == true ]]; then
+  echo "  projectPackageSource: $PROJECT_PACKAGE_SOURCE"
+fi
 echo "  globalInstall: $DO_GLOBAL"
 echo "  projectInit: $DO_PROJECT"
 if [[ "$DO_PROJECT" == true ]]; then
   echo "  project: $PROJECT_PATH"
   echo "  profile: $PROFILE_INPUT"
 fi
+
+# The operator asked for both scopes and the project wants a different build
+# than the one about to be installed machine-wide. Neither choice is wrong, so
+# neither is overridden -- but a divergence they cannot see is how the old
+# silent downgrade went unnoticed.
+if [[ "$DO_GLOBAL" == true && "$DO_PROJECT" == true && "$GLOBAL_PACKAGE_SOURCE" != "$PROJECT_PACKAGE_SOURCE" ]]; then
+  echo
+  echo "NOTE: this project pins a different package source than the global install." >&2
+  echo "NOTE:   global:  $GLOBAL_PACKAGE_SOURCE" >&2
+  echo "NOTE:   project: $PROJECT_PACKAGE_SOURCE" >&2
+  echo "NOTE: the project keeps its pin and the machine keeps the running helper." >&2
+  echo "NOTE: pass --package-source <source> to make both the same." >&2
+fi
 echo
 
 if [[ "$DO_GLOBAL" == true ]]; then
   ensure_pi_cli
-  install_args=("$PLATFORM_ROOT/scripts/install-global.sh" "--package-source" "$PACKAGE_SOURCE")
+  install_args=("$PLATFORM_ROOT/scripts/install-global.sh" "--package-source" "$GLOBAL_PACKAGE_SOURCE")
   # The opt-out has to be passed explicitly. The installer defaults MCP on, so
   # saying nothing here would install it against the operator's choice.
   # Subagents also needs an explicit opt-out because the installer now preserves
@@ -432,7 +468,7 @@ if [[ "$DO_GLOBAL" == true ]]; then
 fi
 
 if [[ "$DO_PROJECT" == true ]]; then
-  init_args=("$PLATFORM_ROOT/scripts/init-project.sh" "$PROJECT_PATH" "--profile" "$PROFILE_INPUT" "--package-source" "$PACKAGE_SOURCE")
+  init_args=("$PLATFORM_ROOT/scripts/init-project.sh" "$PROJECT_PATH" "--profile" "$PROFILE_INPUT" "--package-source" "$PROJECT_PACKAGE_SOURCE")
   if [[ "$FORCE_PROFILE" == true ]]; then
     init_args+=("--force-profile")
   fi

@@ -8,6 +8,13 @@ const TOKEN_PATTERNS = [
   /\bsk-(?:(?:proj|svcacct|admin|ant)-)?[A-Za-z0-9_-]{20,}\b/g,
   /\bsk_(?:live|test)_[A-Za-z0-9]{16,}\b/g,
   /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g,
+  // An npm token was recognised only where something named it -- `NPM_TOKEN=...`
+  // caught the assignment, a field called `token` caught the field -- so the one
+  // place it actually appears was missed: `//registry.npmjs.org/:_authToken=npm_…`
+  // is the whole of an `.npmrc`, and a `cat` of that file or a failing publish log
+  // carried the credential through unredacted. Every other provider here is
+  // recognised by the shape of its token; npm was the gap.
+  /\bnpm_[A-Za-z0-9]{30,}\b/g,
   /\bAIza[0-9A-Za-z_-]{20,}\b/g,
   /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g
 ];

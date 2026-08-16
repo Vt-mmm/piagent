@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.4.0 docs · VI</span>
+        <span class="pill"><span class="pill-dot"></span>v1.4.1 docs · VI</span>
         <nav class="language-switch" aria-label="Ngôn ngữ">
           <a class="language-option current" href="/runtime" hreflang="vi" lang="vi" aria-current="true">VI</a>
           <a class="language-option" href="/en/runtime" hreflang="en" lang="en">EN</a>
@@ -156,6 +156,34 @@ piagent-auto --full-access -p "Run the trusted local benchmark suite."</code></p
 piagent-capabilities doctor --profile .pi/piagent-profile.json</code></pre>
     </article>
     <article class="command-card">
+      <header><span>Session Hub</span><button class="clip-btn" data-clip="piagent dashboard&#10;piagent-webui --no-open">Lấy lệnh</button></header>
+      <pre><code>piagent dashboard
+piagent-webui --no-open</code></pre>
+      <p class="command-note">Bí danh: <code>piagent-dashboard</code>, <code>piagent-webui</code>, <code>piagent-explain</code> cũng chạy được như binary riêng.</p>
+    </article>
+    <article class="command-card">
+      <header><span>Giải thích quyết định</span><button class="clip-btn" data-clip="piagent explain &#39;cat .env*&#39;&#10;piagent explain --scope">Lấy lệnh</button></header>
+      <pre><code>piagent explain 'cat .env*'
+piagent explain --scope</code></pre>
+    </article>
+    <article class="command-card">
+      <header><span>Usage và token</span><button class="clip-btn" data-clip="piagent-usage .&#10;piagent-usage --history . --days 7">Lấy lệnh</button></header>
+      <pre><code>piagent-usage .
+piagent-usage --history . --days 7</code></pre>
+    </article>
+    <article class="command-card">
+      <header><span>Model và routing</span><button class="clip-btn" data-clip="piagent-models&#10;piagent-model-scope&#10;piagent-route">Lấy lệnh</button></header>
+      <pre><code>piagent-models
+piagent-model-scope
+piagent-route</code></pre>
+    </article>
+    <article class="command-card">
+      <header><span>Subagents và migration</span><button class="clip-btn" data-clip="piagent-subagents --preset safe&#10;piagent-migrate . --apply&#10;piagent-import-instructions">Lấy lệnh</button></header>
+      <pre><code>piagent-subagents --preset safe
+piagent-migrate . --apply
+piagent-import-instructions</code></pre>
+    </article>
+    <article class="command-card">
       <header><span>Verification</span><button class="clip-btn" data-clip="npm run verify&#10;npm test&#10;npm run typecheck">Lấy lệnh</button></header>
       <pre><code>npm run verify
 npm test
@@ -191,5 +219,9 @@ npm run typecheck</code></pre>
         <nav data-toc></nav>
       </aside>
     </div>
+    <script>
+      window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js"></script>
   </body>
 </html>

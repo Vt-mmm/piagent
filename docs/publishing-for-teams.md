@@ -45,6 +45,7 @@ pi install /path/to/piagent
 - `0.2.x`: có guard ổn định và docs team.
 - `1.0.2`: đủ security review, MCP registry, adapter schema versioned.
 - `1.1.0`: đọc document ngoài project qua `additionalReadRoots`, MCP baseline bật mặc định ở cả hai lệnh install, pin Pi host `0.82.0`.
+- `1.1.1`: `piagent-setup --no-mcp` thật sự không cài MCP (opt-out từng bị default mới của `1.1.0` đè); `site:check` không còn treo khi response vượt body cap và không còn `PASS` khi có địa chỉ chưa kiểm được; `piagent_document_read` từ chối byte không phải UTF-8/UTF-16 thay vì decode thành ký tự thay thế.
 - `1.1.2`: đóng TOCTOU của document reader, hash evidence tính trên text đã redact, publish chờ đủ verify matrix.
 - `1.1.3`: command mang secret không còn được dùng làm verify evidence, document reader từ chối FIFO thay vì treo, redact secret ngắn, redirect phải về đúng trang được kiểm.
 - `1.1.4`: nhận diện secret dạng CLI option (`--token`, `--password`, `--api-key`) và Authorization header ở mọi vị trí argument.
@@ -68,6 +69,41 @@ pi install /path/to/piagent
   progress, Git baseline-aware changed files, scope + all-command final gate,
   hard completion hook, context pack dedupe, fail-closed verifier và bounded
   symlink-safe local state dùng được giữa nhiều Pi session/subagent.
+- `1.2.12`: benchmark release `production-v1` 108 session, Wilson quality
+  interval, so sánh có kiểm soát với surface baseline `codex-cli` trong
+  `CODEX_HOME` riêng, và retry chỉ dành cho lỗi hạ tầng.
+- `1.2.13`: trang benchmark tĩnh với evidence `production-v1` đã verify, chart
+  score/token/paired-win, và snapshot đã sanitize trong quality benchmark guide.
+- `1.2.14`: tách runtime theo layer có enforce bằng máy (dependency direction +
+  file budget), integrity lock pin mọi module vừa tách, maintainer doc EN/VI, và
+  bỏ `/name` custom để không shadow lệnh gốc của Pi.
+- `1.2.15`: update stable chạy được trên máy đang đăng ký Piagent bằng đường dẫn
+  local, kèm regression chặn installer đọc nhầm version Pi hiển thị.
+- `1.2.16`: default Codex chuyển sang `openai-codex/gpt-5.5:high`, fallback khi
+  thiếu thinking suffix là `high`.
+- `1.2.17`: doc site song ngữ đầy đủ — 17 trang có bản EN, chuyển VI/EN cùng chủ
+  đề, và gate kiểm link + locale parity.
+- `1.3.0`: bản stable đầu tiên của Intelligence Engine — Criterion Graph, bounded
+  current-source context, tool surface ổn định, trần một continuation, verify
+  trên cây hiện tại, resume/handoff bền. Pin Pi host `0.84.1`, install stable
+  dùng npm `latest` + tag `v1.3.0`.
+- `1.3.1`: mở rộng integrity inventory sang TypeScript loader/CLI dispatcher và
+  các module task-state/verification còn lại; thay full-file hashing mỗi tool
+  call bằng metadata cache fail-closed; bỏ shell interpolation trong probe
+  `pdftotext`; JSONL state lock publish owner nguyên tử và tự phục hồi khi
+  writer bị kill.
+- `1.4.0`: Local Session Hub — Gateway một-instance-mỗi-profile và
+  `piagent dashboard` để tạo/mở lại/resume/rename/pin/archive/fork session mà
+  không tốn thêm model turn; client MUI conversation-first song ngữ với Agent
+  Inspector; projection Task Changes / Working Tree / Staged có bounded diff,
+  provenance và enforce protected path; session lease bền, recovery khi restart
+  hoặc owner cũ treo, doctor có repair tường minh.
+- `1.4.1`: maintenance release cho Session Hub và guard — session tiếp tục được
+  qua nhiều Task Contract thay vì bị terminal giữa cuộc trò chuyện, task chỉ
+  chạy test/build được cấp đúng execution authority, Gateway/local install luôn
+  đồng bộ cùng checkout, context usage của session đã lưu hiển thị trong WebUI,
+  và integrity/redaction/docs parity được mở rộng tới shell, browser bundle,
+  TypeScript graph, npm token cùng các lệnh remedy có thể thực thi.
 
 ## Không publish
 

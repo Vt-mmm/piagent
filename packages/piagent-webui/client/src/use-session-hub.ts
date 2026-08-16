@@ -11,6 +11,11 @@ export type LiveConversation = { user: string; assistant: string; operationRef: 
 
 function opaque(prefix: string): string { return `${prefix}_${crypto.randomUUID().replaceAll("-", "")}`; }
 
+function revisionStale(receipt: Receipt): boolean {
+  return receipt.phase === "rejected" && receipt.resultCode === "stale-revision"
+    && receipt.error?.code === "session-revision-stale";
+}
+
 export function useSessionHub(): {
   catalog?: Catalog;
   capabilities?: PiagentGatewayCapabilityHandshakeV1;
@@ -34,11 +39,16 @@ export function useSessionHub(): {
   const [connection, setConnection] = useState<ConnectionState>("connecting");
   const [live, setLive] = useState<Record<string, LiveConversation>>({});
   const catalogRef = useRef<Catalog | undefined>(undefined), socketRef = useRef<WebSocket | null>(null), sequenceRef = useRef(0);
+  const refreshStartedRef = useRef(0), refreshAppliedRef = useRef(0);
   const pendingRef = useRef(new Map<string, { resolve(value: Receipt): void; reject(error: Error): void }>());
   const refresh = useCallback(async () => {
+    const refreshSequence = ++refreshStartedRef.current;
     try {
       const value = await readSessionCatalog();
-      catalogRef.current = value; setCatalog(value); setConnection("connected"); return value;
+      if (refreshSequence >= refreshAppliedRef.current) {
+        refreshAppliedRef.current = refreshSequence; catalogRef.current = value; setCatalog(value); setConnection("connected");
+      }
+      return catalogRef.current ?? value;
     } catch { setConnection("reconnecting"); return undefined; }
   }, []);
 
@@ -55,14 +65,23 @@ export function useSessionHub(): {
 
   const create = useCallback(async (options: { projectRef: string; placeRef: string; modelRef: string | null;
     thinkingLevel: string; message: string }) => {
-    const current = catalogRef.current, message = options.message.trim();
+    const current = catalogRef.current, message = options.message.trim(), messageRequestId = opaque("message");
     if (!current?.catalogRevision) throw new Error("catalog-unavailable");
     if (!message) throw new Error("message-empty");
-    const now = new Date(), receipt = await request({ schemaVersion: 1, version: "piagent-session-command-v1", messageType: "command",
-      commandId: opaque("command"), idempotencyKey: opaque("idempotency"), action: "session.create", requestedAt: now.toISOString(),
-      expiresAt: new Date(now.getTime() + 5 * 60_000).toISOString(), sessionRef: null,
-      expectedCatalogRevision: current.catalogRevision, expectedSessionRevision: null,
-      payload: { ...options, message, messageRequestId: opaque("message") } });
+    const submit = (snapshot: Catalog) => {
+      if (!snapshot.catalogRevision) throw new Error("catalog-unavailable");
+      const now = new Date();
+      return request({ schemaVersion: 1, version: "piagent-session-command-v1", messageType: "command",
+        commandId: opaque("command"), idempotencyKey: opaque("idempotency"), action: "session.create", requestedAt: now.toISOString(),
+        expiresAt: new Date(now.getTime() + 5 * 60_000).toISOString(), sessionRef: null,
+        expectedCatalogRevision: snapshot.catalogRevision, expectedSessionRevision: null,
+        payload: { ...options, message, messageRequestId } });
+    };
+    let receipt = await submit(current);
+    if (revisionStale(receipt)) {
+      const latest = await refresh();
+      if (latest?.catalogRevision) receipt = await submit(latest);
+    }
     if (receipt.phase !== "settled" || !receipt.sessionRef) throw new Error(receipt.error?.code ?? receipt.resultCode);
     setLive((value) => ({ ...value, [receipt.sessionRef!]: { ...(value[receipt.sessionRef!]
       ?? { assistant: "", complete: false, error: null }), user: message, operationRef: receipt.operationRef } }));
@@ -72,15 +91,24 @@ export function useSessionHub(): {
   const send = useCallback(async (session: SessionRow, message: string) => {
     const current = catalogRef.current;
     if (!current?.catalogRevision) throw new Error("catalog-unavailable");
-    const text = message.trim(); if (!text) throw new Error("message-empty");
-    const now = new Date(), expires = new Date(now.getTime() + 5 * 60_000);
+    const text = message.trim(), messageRequestId = opaque("message"); if (!text) throw new Error("message-empty");
     setLive((value) => ({ ...value, [session.sessionRef]: { user: text, assistant: "", operationRef: null, complete: false, error: null } }));
     try {
-      const receipt = await request({ schemaVersion: 1, version: "piagent-session-command-v1", messageType: "command",
-        commandId: opaque("command"), idempotencyKey: opaque("idempotency"), action: "session.send", requestedAt: now.toISOString(),
-        expiresAt: expires.toISOString(), sessionRef: session.sessionRef, expectedCatalogRevision: current.catalogRevision,
-        expectedSessionRevision: session.sessionRevision,
-        payload: { delivery: "new-operation", message: text, messageRequestId: opaque("message"), expectedOperationRef: null } });
+      const submit = (snapshot: Catalog) => {
+        const exact = snapshot.sessions.find((item) => item.sessionRef === session.sessionRef);
+        if (!snapshot.catalogRevision || !exact) throw new Error("session-unavailable");
+        const now = new Date();
+        return request({ schemaVersion: 1, version: "piagent-session-command-v1", messageType: "command",
+          commandId: opaque("command"), idempotencyKey: opaque("idempotency"), action: "session.send", requestedAt: now.toISOString(),
+          expiresAt: new Date(now.getTime() + 5 * 60_000).toISOString(), sessionRef: session.sessionRef,
+          expectedCatalogRevision: snapshot.catalogRevision, expectedSessionRevision: exact.sessionRevision,
+          payload: { delivery: "new-operation", message: text, messageRequestId, expectedOperationRef: null } });
+      };
+      let receipt = await submit(current);
+      if (revisionStale(receipt)) {
+        const latest = await refresh();
+        if (latest?.catalogRevision) receipt = await submit(latest);
+      }
       setLive((value) => ({ ...value, [session.sessionRef]: { ...(value[session.sessionRef] ?? { user: text, assistant: "", complete: false, error: null }),
         operationRef: receipt.operationRef } }));
       if (receipt.phase !== "settled") throw new Error(receipt.error?.code ?? receipt.resultCode);

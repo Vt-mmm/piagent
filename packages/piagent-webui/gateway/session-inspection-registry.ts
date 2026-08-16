@@ -19,9 +19,12 @@ type PiHost = {
     listAll(): Promise<PiSessionInfo[]>;
     open(file: string): {
       getBranch(): unknown[];
-      buildSessionContext(): { model: { provider: string; modelId: string } | null; thinkingLevel: string };
+      buildSessionContext(): { model: { provider: string; modelId: string } | null; thinkingLevel: string; messages: unknown[] };
     };
   };
+  calculateContextTokens(usage: unknown): number;
+  estimateTokens(message: unknown): number;
+  getLatestCompactionEntry(entries: unknown[]): unknown | null;
 };
 
 type ModelRuntime = {
@@ -57,6 +60,36 @@ function safeName(value: unknown): string {
 function safeModelId(value: unknown): string | null {
   if (typeof value !== "string" || !PUBLIC_MODEL_ID.test(value)) return null;
   return redactSensitiveText(value).redacted ? null : value;
+}
+
+function persistedContextUsage(host: PiHost, entries: unknown[], messages: unknown[], model: Record<string, unknown> | undefined) {
+  const contextWindow = Number(model?.contextWindow);
+  if (!Number.isFinite(contextWindow) || contextWindow <= 0) return undefined;
+  const latestCompaction = host.getLatestCompactionEntry(entries);
+  if (latestCompaction) {
+    const boundary = entries.lastIndexOf(latestCompaction);
+    let hasPostCompactionUsage = false;
+    for (let index = entries.length - 1; index > boundary; index -= 1) {
+      const entry = entries[index] as { type?: unknown; message?: { role?: unknown; stopReason?: unknown; usage?: unknown } } | undefined;
+      const message = entry?.type === "message" ? entry.message : undefined;
+      if (message?.role === "assistant" && message.usage && message.stopReason !== "aborted" && message.stopReason !== "error"
+        && host.calculateContextTokens(message.usage) > 0) {
+        hasPostCompactionUsage = true;
+        break;
+      }
+    }
+    if (!hasPostCompactionUsage) return { tokens: null, contextWindow, percent: null };
+  }
+  let lastUsageIndex = -1, tokens = 0;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index] as { role?: unknown; stopReason?: unknown; usage?: unknown } | undefined;
+    if (message?.role !== "assistant" || !message.usage || message.stopReason === "aborted" || message.stopReason === "error") continue;
+    const measured = host.calculateContextTokens(message.usage);
+    if (measured > 0) { tokens = measured; lastUsageIndex = index; break; }
+  }
+  for (let index = lastUsageIndex + 1; index < messages.length; index += 1) tokens += host.estimateTokens(messages[index]);
+  if (!Number.isFinite(tokens) || tokens < 0) return undefined;
+  return { tokens, contextWindow, percent: tokens / contextWindow * 100 };
 }
 
 export class SessionInspectionRegistry {
@@ -173,9 +206,10 @@ export class SessionInspectionRegistry {
     let manager: ReturnType<PiHost["SessionManager"]["open"]>;
     try { manager = this.#host.SessionManager.open(info.path); }
     catch { throw new ReadModelNotFound(); }
-    const context = safeRead(() => manager.buildSessionContext(), { model: null, thinkingLevel: "unknown" });
+    const context = safeRead(() => manager.buildSessionContext(), { model: null, thinkingLevel: "unknown", messages: [] });
     const model = context.model ? this.#models?.getModel(context.model.provider, context.model.modelId) : undefined;
     const entries = safeRead(() => manager.getBranch(), []);
+    const contextUsage = safeRead(() => persistedContextUsage(this.#host, entries, context.messages, model), undefined);
     const eventStore = {
       retention: () => ({ eventRetentionCount: 0, eventRetentionSeconds: 0 }),
       currentCursor: () => null,
@@ -191,6 +225,7 @@ export class SessionInspectionRegistry {
       activityEvents: () => safeRead(() => readContextTelemetry(info.cwd, { limit: 5_000 }), []),
       sessionEntries: () => entries,
       protectedPaths: () => runtimeProtectedPaths(this.#packageRoot, info.cwd),
+      contextUsage: () => contextUsage,
       model: () => model,
       thinkingLevel: () => context.thinkingLevel,
       approvalProjection: () => piApprovalBroker.projection(info.cwd, info.id),

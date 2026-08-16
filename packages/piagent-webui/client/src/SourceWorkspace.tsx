@@ -27,7 +27,7 @@ import { createSourceMutationCommand } from "./source-mutation-command.ts";
 import { createSourceRevertCommand } from "./source-revert-command.ts";
 import { createSourceOpenCommand } from "./source-open-command.ts";
 import { tokenizeDiffLine } from "./diff-syntax.ts";
-import { fileStats, localizedSourceTabs, provenanceLabel, relatedEvidence, sourceSummary } from "./source-view-model.ts";
+import { activeFileRef, fileStats, localizedSourceTabs, provenanceLabel, relatedEvidence, sourceSummary } from "./source-view-model.ts";
 import { label, tone } from "./view-model.ts";
 import { localize, useUiPreferences, type UiLocale } from "./ui-preferences.tsx";
 
@@ -163,7 +163,7 @@ export function SourceWorkspace({ snapshot, refreshSnapshot, sessionRef }: { sna
   const availableTabs = useMemo(() => localizedSourceTabs(locale), [locale]);
   const [view, setView] = useState<View>(() => hasTaskView ? "task" : "working-tree");
   const [documents, setDocuments] = useState<Partial<Record<View, LoadState<PiagentWebUISourceChangeViewV1>>>>({});
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selectedFileRef, setSelected] = useState<string | null>(null);
   const [diff, setDiff] = useState<LoadState<PiagentWebUIBoundedFileDiffV1>>({ state: "idle" });
   const [review, setReview] = useState<LoadState<PiagentWebUIDigestBoundSelectedFileReviewStateV1>>({ state: "idle" });
   const [mutation, setMutation] = useState<LoadState<PiagentWebUIGuardedSelectedFileSourceMutationPreviewV1>>({ state: "idle" });
@@ -185,6 +185,10 @@ export function SourceWorkspace({ snapshot, refreshSnapshot, sessionRef }: { sna
   const [mode, setMode] = useState<"inline" | "split">("inline");
   const revisions = `${snapshot.sourceChanges.task?.revision ?? "no-task"}:${snapshot.sourceChanges.workingTree.revision}:${snapshot.sourceChanges.staged.revision}`;
 
+  const loadedView = documents[view];
+  const viewFiles = loadedView?.state === "ready" ? loadedView.value?.files ?? [] : [];
+  const selected = activeFileRef(viewFiles, selectedFileRef);
+
   useEffect(() => { setCommitSummary({ state: "idle" }); setCommitStatus(null); setModelSummaryConfirmation(false); }, [revisions]);
 
   useEffect(() => {
@@ -201,7 +205,6 @@ export function SourceWorkspace({ snapshot, refreshSnapshot, sessionRef }: { sna
         return;
       }
       setDocuments((current) => ({ ...current, [view]: { state: "ready", value } }));
-      setSelected((current) => value.files.some((file) => file.fileRef === current) ? current : value.files[0]?.fileRef ?? null);
     }).catch(() => { if (!controller.signal.aborted) setDocuments((current) => ({ ...current, [view]: { state: "error" } })); });
     return () => controller.abort();
   }, [view, revisions, refreshEpoch, sessionRef]);

@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.4.0 docs · VI</span>
+        <span class="pill"><span class="pill-dot"></span>v1.4.1 docs · VI</span>
         <nav class="language-switch" aria-label="Ngôn ngữ">
           <a class="language-option current" href="/" hreflang="vi" lang="vi" aria-current="true">VI</a>
           <a class="language-option" href="/en/" hreflang="en" lang="en">EN</a>
@@ -109,6 +109,55 @@
     <a class="button" href="/commands">Xem command</a>
     <a class="button" href="/mcp">MCP</a>
   </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Production V1 · historical public regression evidence</p>
+  <h2 id="bang-chung">Đo được, không phải nói suông</h2>
+  <p class="section-lead">108 session, cùng model và cùng thinking level, chấm tự động, so với surface <code>codex-cli</code> chạy cách ly. Đây là bằng chứng của bản đo production-v1, không phải phép đo lại của v1.4.0.</p>
+
+  <div class="benchmark-metrics" aria-label="Số liệu benchmark nổi bật">
+    <div class="benchmark-metric">
+      <span>Overall</span>
+      <strong>9,92 / 10</strong>
+      <small>Quality, Safety, Reliability đều 10/10</small>
+    </div>
+    <div class="benchmark-metric">
+      <span>Task resolved</span>
+      <strong>54/54</strong>
+      <small>100% cho cả hai surface</small>
+    </div>
+    <div class="benchmark-metric">
+      <span>Fresh token</span>
+      <strong>-51,11%</strong>
+      <small>paired geometric mean, 47/54 cặp thắng</small>
+    </div>
+    <div class="benchmark-metric">
+      <span>Infrastructure</span>
+      <strong>0 retry</strong>
+      <small>108 lần chạy hợp lệ</small>
+    </div>
+  </div>
+
+  <div class="benchmark-legend" aria-label="Chú thích biểu đồ">
+    <span><i class="piagent-swatch"></i>Piagent</span>
+    <span><i class="codex-swatch"></i>codex-cli</span>
+  </div>
+
+  <div class="benchmark-usage-chart" aria-label="Fresh token median mỗi run: Piagent 7.368, codex-cli 18.476">
+    <div class="benchmark-usage-group">
+      <h3>Fresh token, median mỗi run</h3>
+      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 39.88%"></i></div><strong>7.368</strong></div>
+      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 100%"></i></div><strong>18.476</strong></div>
+    </div>
+    <div class="benchmark-usage-group">
+      <h3>Tool calls, median mỗi run</h3>
+      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 62.5%"></i></div><strong>5</strong></div>
+      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 100%"></i></div><strong>8</strong></div>
+    </div>
+  </div>
+
+  <p>Khoảng tin cậy 95% của tỷ lệ ghép cặp là <strong>0,3809–0,6276</strong>; cận trên vẫn dưới 1,0 nên claim tiết kiệm token đứng vững. <a href="/benchmark">Xem đầy đủ cấu hình, từng band điểm và bảng số</a>.</p>
 </section>
 
 <section class="section">
@@ -206,5 +255,9 @@ piagent-setup</code></pre>
         <nav data-toc></nav>
       </aside>
     </div>
+    <script>
+      window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js"></script>
   </body>
 </html>

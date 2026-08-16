@@ -37,7 +37,7 @@ export const SERVER_ACTIONS = new Set(["get", "approve", "reject", "reset", "ena
 export const TERMINAL_ONLY = new Map([
   ["add", "piagent-mcp add <name> [--scope <scope>] --url <url> | -- <command> [args...]"],
   ["remove", "piagent-mcp remove <name> --scope <scope>"],
-  ["preset", "piagent-mcp --preset <core|popular|design> --scope <scope>"]
+  ["preset", "piagent-mcp --preset <core|popular|documents|google|design> --scope <scope>"]
 ]);
 
 export const HELP_LINES = [

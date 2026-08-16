@@ -9,7 +9,7 @@ import { workingTreeSnapshot } from "../packages/piagent-core/extensions/task-st
 import { workingTreeEvidenceDigest } from "../packages/piagent-core/extensions/working-tree-digest.js";
 import { captureTaskBaselineManifest } from "../packages/piagent-core/runtime/inspection/source-evidence-store.ts";
 import { createBoundTaskAuthority } from "../packages/piagent-core/runtime/policy/task-authority-runtime.ts";
-import { fileStats, provenanceLabel, relatedEvidence, sourceSummary, sourceTabs } from "../packages/piagent-webui/client/src/source-view-model.ts";
+import { activeFileRef, fileStats, provenanceLabel, relatedEvidence, sourceSummary, sourceTabs } from "../packages/piagent-webui/client/src/source-view-model.ts";
 import { tokenizeDiffLine } from "../packages/piagent-webui/client/src/diff-syntax.ts";
 import { CoreInspectionProvider } from "../packages/piagent-webui/server/core-inspection-provider.ts";
 import { createWebUiSchemaRegistry, validateFixture } from "./helpers/piagent-webui-schema-registry.mjs";
@@ -141,5 +141,20 @@ describe("Piagent WebUI source tabs and diff projection", () => {
     assert.equal(validateFixture(registry, "source-mutation-v1", stagePreview).valid, true);
     assert.equal(stagePreview.state, "ready"); assert.equal(stagePreview.target.view, "working-tree");
     assert.equal(stagePreview.target.fileRef, workingTreeFile.fileRef);
+  });
+
+  it("opens a file whenever the list holds one, whatever the remembered ref says", () => {
+    const files = [{ fileRef: "file_a" }, { fileRef: "file_b" }];
+    // The reader's own choice is kept while it still exists in the list.
+    assert.equal(activeFileRef(files, "file_b"), "file_b");
+    // Nothing remembered, or a ref belonging to a view that is no longer shown,
+    // falls back to the first file rather than leaving the diff pane asking the
+    // reader to pick from a list holding exactly one row.
+    assert.equal(activeFileRef(files, null), "file_a");
+    assert.equal(activeFileRef(files, "file_from_another_view"), "file_a");
+    assert.equal(activeFileRef([{ fileRef: "only" }], null), "only");
+    // An empty list is the one case with nothing to open.
+    assert.equal(activeFileRef([], null), null);
+    assert.equal(activeFileRef([], "file_a"), null);
   });
 });

@@ -12,6 +12,8 @@ import { startLoopbackServer } from "../packages/piagent-webui/server/loopback-s
 const root = path.resolve(import.meta.dirname, "..");
 let server;
 let persistedBrowserConversation = false;
+let sessionCreateAttempts = 0, sessionCreateEffects = 0, createdSessionCounter = 0;
+let sessionSendAttempts = 0, sessionSendEffects = 0;
 const observedSessionActions = [];
 const inspectionSnapshot = JSON.parse(fs.readFileSync(path.join(root, "evals/fixtures/piagent-webui/snapshot-v1.valid.json"), "utf8"));
 const sourceFixture = JSON.parse(fs.readFileSync(path.join(root, "evals/fixtures/piagent-webui/source-change-v1.valid.json"), "utf8"));
@@ -53,8 +55,33 @@ test.beforeAll(async () => {
   let protocol;
   const command = { async execute(value) {
     observedSessionActions.push(value.action);
-    const operationRef = value.action === "session.send" ? "operation_browser_send_01" : null;
+    if (value.action === "session.create") sessionCreateAttempts += 1;
+    if (value.action === "session.send") sessionSendAttempts += 1;
+    const currentRow = value.sessionRef ? catalog.sessions.find((item) => item.sessionRef === value.sessionRef) : null;
+    const stale = value.expectedCatalogRevision !== catalog.catalogRevision || (value.action === "session.create"
+      ? value.expectedSessionRevision !== null : !currentRow || value.expectedSessionRevision !== currentRow.sessionRevision);
+    if (stale) return { schemaVersion: 1, version: "piagent-session-receipt-v1", messageType: "receipt", commandId: value.commandId,
+      idempotencyKeyDigest: `sha256:${"a".repeat(64)}`, action: value.action, phase: "rejected", resultCode: "stale-revision",
+      requestedAt: value.requestedAt, settledAt: new Date().toISOString(), sessionRef: value.sessionRef, operationRef: null,
+      catalogRevisionAfter: catalog.catalogRevision, sessionRevisionAfter: currentRow?.sessionRevision ?? null, deduplicated: false,
+      evidenceRef: null, error: { code: "session-revision-stale", message: "The session command was rejected." } };
+    let targetSessionRef = value.sessionRef, targetSessionRevision = currentRow?.sessionRevision ?? null;
+    const operationRef = value.action === "session.send" ? "operation_browser_send_01"
+      : value.action === "session.create" ? `operation_browser_create_${createdSessionCounter + 1}` : null;
+    if (value.action === "session.create") {
+      createdSessionCounter += 1; sessionCreateEffects += 1;
+      targetSessionRef = `session_browser_created_${createdSessionCounter}`;
+      const created = session(targetSessionRef, "Browser retry session", "pi-company-platform", new Date().toISOString(), {
+        projectRef: value.payload.projectRef, state: "active", liveState: "running"
+      });
+      targetSessionRevision = created.sessionRevision; catalog.sessions.unshift(created);
+      catalog.page.returned = catalog.sessions.length; catalog.page.total = catalog.sessions.length;
+      catalog.catalogRevision = `revision_catalog_created_${createdSessionCounter}`;
+      protocol.events.publish("message.completed", { sessionRef: targetSessionRef, operationRef,
+        messageRef: `message_browser_create_${createdSessionCounter}`, sessionRevision: targetSessionRevision, truncated: false });
+    }
     if (value.action === "session.send") {
+      sessionSendEffects += 1;
       const messageRef = "message_browser_send_01";
       protocol.events.publish("runtime.changed", { sessionRef: value.sessionRef, sessionRevision: value.expectedSessionRevision,
         liveState: "running", operationRef, reasonCode: null });
@@ -69,8 +96,8 @@ test.beforeAll(async () => {
         : value.action === "session.unarchive" ? "unarchived" : value.action === "session.fork" ? "forked" : "started";
     return { schemaVersion: 1, version: "piagent-session-receipt-v1", messageType: "receipt", commandId: value.commandId,
       idempotencyKeyDigest: `sha256:${"a".repeat(64)}`, action: value.action, phase: "settled", resultCode,
-      requestedAt: value.requestedAt, settledAt: new Date().toISOString(), sessionRef: value.sessionRef, operationRef,
-      catalogRevisionAfter: catalog.catalogRevision, sessionRevisionAfter: value.expectedSessionRevision, deduplicated: false,
+      requestedAt: value.requestedAt, settledAt: new Date().toISOString(), sessionRef: targetSessionRef, operationRef,
+      catalogRevisionAfter: catalog.catalogRevision, sessionRevisionAfter: targetSessionRevision, deduplicated: false,
       evidenceRef: "evidence_browser_send_01", error: null };
   } };
   protocol = new GatewayProtocolService({ capabilities: () => capabilities, catalog: async () => catalog, command });
@@ -94,7 +121,10 @@ test.beforeAll(async () => {
         toolCalls: [{ toolCallRef: "tool_history_read", toolName: "read_file", state: "completed" }] },
       { ...transcriptFixture.items[0], messageRef: "message_history_tool", parentMessageRef: "message_history_assistant", role: "tool-result",
         recordedAt: "2026-08-13T14:00:01.000Z", content: { ...transcriptFixture.items[0].content, state: "unavailable", text: null,
-          textChars: null, digest: null, reasonCode: "tool-output-in-activity-preview" }, toolCalls: [] }
+          textChars: null, digest: null, reasonCode: "tool-output-in-activity-preview" }, toolCalls: [] },
+      { ...transcriptFixture.items[0], messageRef: "message_history_auth_error", parentMessageRef: "message_history_user", role: "assistant",
+        recordedAt: "2026-08-13T14:00:02.000Z", content: { ...transcriptFixture.items[0].content, state: "unavailable", text: null,
+          textChars: null, digest: null, truncated: false, redacted: false, imageCount: 0, reasonCode: "provider-auth-expired" }, toolCalls: [] }
     ].concat(persistedBrowserConversation ? [
       { ...transcriptFixture.items[0], messageRef: "message_browser_user", role: "user", recordedAt: "2026-08-14T05:00:00.000Z",
         content: { ...transcriptFixture.items[0].content, text: "Continue from the browser", textChars: 25 }, toolCalls: [] },
@@ -143,6 +173,7 @@ test("renders the session-first hub, compact New chat, popovers, modal Settings,
   await expect(page.getByRole("heading", { name: "Release preparation" })).toBeVisible();
   await expect(page.getByText("Open the persisted release checklist", { exact: true })).toBeVisible();
   await expect(page.getByText("The durable transcript is available.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Phiên đăng nhập model đã hết hạn. Mở Cài đặt → Nhà cung cấp & model để kết nối lại.", { exact: true })).toBeVisible();
   await expect(page.getByText("read_file", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Cuộc trò chuyện mới" }).click();
   await expect(page.getByRole("heading", { name: "Anh muốn làm gì?" })).toBeVisible();
@@ -181,10 +212,20 @@ test("renders the session-first hub, compact New chat, popovers, modal Settings,
   await page.getByRole("button", { name: "Toàn quyền" }).click();
   await expect(page.getByRole("dialog").getByText("Bật toàn quyền?", { exact: true })).toBeVisible();
   await expect(page.getByRole("dialog").getByRole("button", { name: "Bật toàn quyền" })).toBeVisible();
-  await page.getByRole("dialog").getByRole("button", { name: "Hủy" }).click();
+  // The safe choice holds focus. This dialog only ever asks whether to grant
+  // full access, so a reflex Enter must dismiss it rather than grant it.
+  await expect(page.getByRole("dialog").getByRole("button", { name: "Hủy" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog")).toBeHidden();
   await page.getByRole("button", { name: "MCP & kết nối · 1" }).click();
   await expect(page.getByText("context7", { exact: true })).toBeVisible();
   await expect(page.getByRole("switch", { name: "Tắt context7" })).toBeChecked();
+  await page.keyboard.press("Escape");
+  // The session catalog intentionally has no usage totals. The composer must
+  // use the canonical inspection snapshot instead of showing empty metrics.
+  await page.getByRole("button", { name: "Context · 1%" }).click();
+  await expect(page.getByText("1.000", { exact: true })).toBeVisible();
+  await expect(page.getByText("200.000", { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Source Changes", exact: true }).click();
   await expect(page.getByRole("button", { name: "Mở Source Changes" })).toBeVisible();
@@ -214,6 +255,7 @@ test("renders the session-first hub, compact New chat, popovers, modal Settings,
   await page.getByText("Nhà cung cấp & model", { exact: true }).click();
   await expect(page.getByText("GPT-5.6", { exact: true })).toBeVisible();
   await expect(page.getByText("OpenAI Codex", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Kết nối lại", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Kết nối", exact: true }).click();
   await expect(page.getByRole("dialog").getByText("Đã kết nối", { exact: true })).toBeVisible();
   await page.getByRole("dialog").filter({ hasText: "Đã kết nối" }).getByRole("button", { name: "Đóng", exact: true }).click();
@@ -243,6 +285,45 @@ test("renders the session-first hub, compact New chat, popovers, modal Settings,
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await expect(page.locator("html")).toHaveAttribute("data-piagent-color-mode", "light");
+});
+
+test("resyncs and retries a new chat or send once when its revision changes before submit", async ({ page }) => {
+  const originalRevision = catalog.catalogRevision, originalSessions = [...catalog.sessions];
+  const originalPage = { ...catalog.page }, attemptsBefore = sessionCreateAttempts, effectsBefore = sessionCreateEffects;
+  const sendAttemptsBefore = sessionSendAttempts, sendEffectsBefore = sessionSendEffects;
+  try {
+    await page.goto(server.issueLaunchUrl());
+    await expect(page.getByText("Gateway live", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Cuộc trò chuyện mới" }).click();
+    await expect(page.getByRole("heading", { name: "Anh muốn làm gì?" })).toBeVisible();
+
+    // Simulate another session changing after this tab rendered its catalog.
+    // The first command must be rejected before any effect; the client then
+    // refreshes both revisions from one snapshot and retries exactly once.
+    catalog.catalogRevision = "revision_catalog_changed_before_create";
+    await page.getByPlaceholder("Nhắn cho Piagent…").fill("Create after a concurrent catalog update");
+    await page.getByRole("button", { name: "Gửi" }).click();
+
+    await expect(page.getByRole("heading", { name: "Browser retry session" })).toBeVisible();
+    await expect(page.getByText("Create after a concurrent catalog update", { exact: true })).toBeVisible();
+    await expect(page.getByText("session-revision-stale", { exact: true })).toHaveCount(0);
+    assert.equal(sessionCreateAttempts - attemptsBefore, 2);
+    assert.equal(sessionCreateEffects - effectsBefore, 1);
+
+    const created = catalog.sessions.find((item) => item.title === "Browser retry session");
+    assert.ok(created);
+    created.sessionRevision = "revision_session_changed_before_send";
+    catalog.catalogRevision = "revision_catalog_changed_before_send";
+    await page.getByPlaceholder("Nhắn cho Piagent…").fill("Send after a concurrent session update");
+    await page.getByRole("button", { name: "Gửi" }).click();
+    await expect(page.getByText("A streamed Gateway reply.", { exact: true }).last()).toBeVisible();
+    await expect(page.getByText("session-revision-stale", { exact: true })).toHaveCount(0);
+    assert.equal(sessionSendAttempts - sendAttemptsBefore, 2);
+    assert.equal(sessionSendEffects - sendEffectsBefore, 1);
+  } finally {
+    catalog.catalogRevision = originalRevision; catalog.sessions.splice(0, catalog.sessions.length, ...originalSessions);
+    Object.assign(catalog.page, originalPage);
+  }
 });
 
 test("keeps the session sidebar usable on a phone viewport", async ({ page }) => {

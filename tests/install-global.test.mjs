@@ -68,6 +68,21 @@ if [[ "\${1:-}" == "list" ]]; then
 fi
 printf 'pi %s\\n' "$*"
 `);
+  // `npm view` is the only npm call the installer makes, and the integrity check
+  // around it was never exercised: every existing case passes --dry-run, and all
+  // three call sites sit behind `if [[ "$DRY_RUN" == false ]]`.
+  const npm = path.join(root, "npm");
+  fs.writeFileSync(npm, `#!/usr/bin/env bash
+if [[ "\${1:-}" == "view" ]]; then
+  case "\${PI_INSTALL_FAKE_NPM_MODE:-ok}" in
+    view-fails) exit 1 ;;
+    digest-mismatch) printf 'sha512-thisIsNotTheApprovedDigest==\\n'; exit 0 ;;
+    *) printf '%s\\n' "\${PI_INSTALL_FAKE_NPM_DIGEST:-}"; exit 0 ;;
+  esac
+fi
+exit 0
+`);
+  fs.chmodSync(npm, 0o755);
   fs.chmodSync(git, 0o755);
   fs.chmodSync(pi, 0o755);
   return root;
@@ -99,7 +114,53 @@ function runSetup(args, env = {}) {
   });
 }
 
+describe("install-global help text", () => {
+  // The help block is hand-written while the flags live in a case statement, so
+  // the two drift silently: --default-model and --subagents-model-scope shipped
+  // undocumented for four releases. Derive the flag list from the parser itself
+  // instead of restating it here, so a new flag fails this test until it is
+  // documented.
+  const script = fs.readFileSync(path.join(repositoryRoot, "scripts/install-global.sh"), "utf8");
+  const parser = script.slice(script.indexOf("while [[ $# -gt 0 ]]"));
+  const parsedFlags = new Set();
+  for (const [, arm] of parser.matchAll(/^\s{4}(--?[a-z][a-z0-9|-]*)\)$/gm)) {
+    for (const flag of arm.split("|")) parsedFlags.add(flag);
+  }
+
+  it("parses at least the flags the docs promise", () => {
+    assert.ok(parsedFlags.size >= 20, `only found ${parsedFlags.size} flags: ${[...parsedFlags]}`);
+    assert.ok(parsedFlags.has("--default-model"));
+    assert.ok(parsedFlags.has("--subagents-model-scope"));
+  });
+
+  it("documents every flag the parser accepts", () => {
+    const help = spawnSync("bash", [path.join(repositoryRoot, "scripts/install-global.sh"), "--help"], {
+      encoding: "utf8",
+    });
+    assert.equal(help.status, 0, help.stderr);
+    const undocumented = [...parsedFlags].filter((flag) => !help.stdout.includes(flag));
+    assert.deepEqual(undocumented, [], `flags accepted but not in --help: ${undocumented.join(", ")}`);
+  });
+});
+
 describe("install-global release channels", () => {
+  it("keeps the local terminal helper and Gateway runtime on the same checkout as the Pi package", () => {
+    const helperPrefix = path.join(os.tmpdir(), "piagent-local-helper-prefix");
+    const result = runInstaller([
+      "--local", "--dry-run", "--no-mcp", "--no-subagents", "--no-web-access", "--no-model-scope"
+    ], {
+      PIAGENT_LOCAL_HELPER_PREFIX: helperPrefix
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    const helperInstall = `+ npm install -g --ignore-scripts --prefix ${helperPrefix} ${repositoryRoot}`;
+    assert.ok(result.stdout.includes(helperInstall), result.stdout);
+    assert.ok(
+      result.stdout.indexOf(helperInstall) < result.stdout.indexOf(`+ pi install ${repositoryRoot}`),
+      "the helper/Gateway runtime must be synchronized before the Pi package is registered"
+    );
+  });
+
   it("resolves stable tag to a commit SHA before install", () => {
     const result = runInstaller(["--stable", "--dry-run", "--no-model-scope"]);
     assert.equal(result.status, 0, result.stderr);
@@ -547,10 +608,15 @@ describe("setup package source default", () => {
 
     const version = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "package.json"), "utf8")).version;
     assert.equal(result.status, 0, result.stderr);
-    assert.ok(result.stdout.includes(`packageSource: npm:@piagent/platform@${version}`), result.stdout);
+    // With no project pin the two scopes agree, and both have to be the
+    // portable registry identity rather than a path.
+    assert.ok(result.stdout.includes(`globalPackageSource: npm:@piagent/platform@${version}`), result.stdout);
+    assert.ok(result.stdout.includes(`projectPackageSource: npm:@piagent/platform@${version}`), result.stdout);
     // An install path is correct for nobody but the machine that produced it.
-    assert.doesNotMatch(result.stdout, /packageSource: \//);
+    assert.doesNotMatch(result.stdout, /PackageSource: \//);
     assert.doesNotMatch(result.stderr, /No exact package source provided/);
+    // Nothing diverges, so the operator is not warned about a divergence.
+    assert.doesNotMatch(result.stderr, /pins a different package source/);
   });
 
   it("still warns when running from a working checkout", () => {
@@ -562,7 +628,67 @@ describe("setup package source default", () => {
 
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stderr, /No exact package source provided/);
-    assert.match(result.stdout, new RegExp(`packageSource: ${repositoryRoot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+    const root = repositoryRoot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    assert.match(result.stdout, new RegExp(`globalPackageSource: ${root}`));
+    assert.match(result.stdout, new RegExp(`projectPackageSource: ${root}`));
+  });
+
+  // The two scopes used to share one resolved value, and the project pin was
+  // read first. So the documented two-command install downgraded the
+  // machine-wide package to whatever pin the project being initialised happened
+  // to carry -- including a project the operator only meant to open once. A pin
+  // is authority over its own project and nothing else.
+  it("never lets one project's pin decide what the machine installs", () => {
+    const platform = installedCopy();
+    const project = fs.mkdtempSync(path.join(os.tmpdir(), "pi-install-bin-"));
+    temporaryRoots.add(project);
+    fs.mkdirSync(path.join(project, ".pi"), { recursive: true });
+    fs.writeFileSync(path.join(project, ".pi", "settings.json"),
+      JSON.stringify({ packages: ["npm:@piagent/platform@1.2.0"] }, null, 2));
+
+    const result = spawnSync("bash", [path.join(platform, "scripts", "setup.sh"), project, "--dry-run", "--no-model-scope", "--profile", "generic"], {
+      env: { ...process.env, PATH: `${makeFakeBin()}${path.delimiter}${process.env.PATH ?? ""}` },
+      encoding: "utf8"
+    });
+    assert.equal(result.status, 0, result.stderr);
+
+    const version = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "package.json"), "utf8")).version;
+    const globalInstall = result.stdout.split("\n").find((line) => line.includes("install-global.sh"));
+    const projectInit = result.stdout.split("\n").find((line) => line.includes("init-project.sh"));
+    assert.ok(globalInstall, result.stdout);
+    assert.ok(projectInit, result.stdout);
+
+    // The machine gets the helper that is actually running...
+    assert.match(globalInstall, new RegExp(`--package-source npm:@piagent/platform@${version.replace(/\./g, "\\.")}\\b`));
+    assert.doesNotMatch(globalInstall, /--package-source npm:@piagent\/platform@1\.2\.0\b/);
+    // ...and the project keeps the pin its team agreed to.
+    assert.match(projectInit, /--package-source npm:@piagent\/platform@1\.2\.0\b/);
+    // A divergence the operator cannot see is how the downgrade went unnoticed.
+    assert.match(result.stderr, /pins a different package source/);
+  });
+
+  it("still honours an explicit --package-source for both scopes", () => {
+    // The escape hatch has to beat both defaults, or an operator deliberately
+    // pinning a rollout would silently get the running helper instead.
+    const platform = installedCopy();
+    const project = fs.mkdtempSync(path.join(os.tmpdir(), "pi-install-bin-"));
+    temporaryRoots.add(project);
+    fs.mkdirSync(path.join(project, ".pi"), { recursive: true });
+    fs.writeFileSync(path.join(project, ".pi", "settings.json"),
+      JSON.stringify({ packages: ["npm:@piagent/platform@1.2.0"] }, null, 2));
+
+    const result = spawnSync("bash", [path.join(platform, "scripts", "setup.sh"), project, "--dry-run", "--no-model-scope",
+      "--profile", "generic", "--package-source", "npm:@piagent/platform@1.3.1"], {
+      env: { ...process.env, PATH: `${makeFakeBin()}${path.delimiter}${process.env.PATH ?? ""}` },
+      encoding: "utf8"
+    });
+    assert.equal(result.status, 0, result.stderr);
+    for (const script of ["install-global.sh", "init-project.sh"]) {
+      const line = result.stdout.split("\n").find((item) => item.includes(script));
+      assert.ok(line, result.stdout);
+      assert.match(line, /--package-source npm:@piagent\/platform@1\.3\.1\b/);
+    }
+    assert.doesNotMatch(result.stderr, /pins a different package source/);
   });
 
   // piagent-init is the second way a project gets its settings written, so it
@@ -588,5 +714,38 @@ describe("setup package source default", () => {
     const settings = JSON.parse(fs.readFileSync(path.join(project, ".pi", "settings.json"), "utf8"));
     assert.deepEqual(settings.packages, [`npm:@piagent/platform@${version}`]);
     assert.doesNotMatch(result.stderr, /No exact package source provided/);
+  });
+});
+
+describe("registry integrity verification", () => {
+  // This path ran for the first time here. Every other case passes --dry-run, and
+  // all three call sites are gated behind `if [[ "$DRY_RUN" == false ]]`, so the
+  // check that guards what gets installed had no coverage at all.
+  const integrityRun = (mode) => runInstaller(
+    ["--local", "--no-model-scope", "--no-subagents", "--no-web-access"],
+    { PI_INSTALL_FAKE_NPM_MODE: mode }
+  );
+
+  it("says the registry could not be reached instead of dying with an empty screen", () => {
+    // `local actual` on one line and the assignment on the next made the command
+    // substitution's status the assignment's status, so under `pipefail` an
+    // unreachable registry killed the script before the FAIL line could run --
+    // after `pi install` had already succeeded. The operator saw nothing at all.
+    const result = integrityRun("view-fails");
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /could not reach the npm registry/i);
+    assert.match(result.stderr, /Nothing further was installed/i);
+    // The reason must be distinguishable from a digest mismatch, which is a
+    // security event and needs a different response.
+    assert.doesNotMatch(result.stderr, /integrity does not match/i);
+  });
+
+  it("names both digests when the published package differs from the approved one", () => {
+    const result = integrityRun("digest-mismatch");
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /integrity does not match/i);
+    assert.match(result.stderr, /approved:/);
+    assert.match(result.stderr, /registry:/);
+    assert.doesNotMatch(result.stderr, /could not reach/i);
   });
 });

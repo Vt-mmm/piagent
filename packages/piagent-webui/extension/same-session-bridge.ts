@@ -371,11 +371,11 @@ export class SameSessionPiBridge {
       return this.#rejection(command, "stale-revision", "stale-revision", "The current Pi session changed before dispatch.");
     if (this.#sessionOptionPermit)
       return this.#rejection(command, "capability-unavailable", "session-option-change-in-progress", "A model or thinking change is being settled.");
-    const controlState = this.#taskFacts(binding.ctx)?.controlState;
-    if (controlState && controlState !== "active")
-      return this.#rejection(command, "capability-unavailable", controlState === "terminal" ? "task-terminal" : "task-control-gate-closed",
-        controlState === "terminal" ? "A completed task cannot accept another dispatch." : "Task lifecycle control currently blocks dispatch.");
     const delivery = command.payload.delivery;
+    const controlState = this.#taskFacts(binding.ctx)?.controlState;
+    if (controlState && controlState !== "active" && !(controlState === "terminal" && delivery === "new-operation"))
+      return this.#rejection(command, "capability-unavailable", controlState === "terminal" ? "task-terminal" : "task-control-gate-closed",
+        controlState === "terminal" ? "A terminal task accepts only a new operation that can establish its successor." : "Task lifecycle control currently blocks dispatch.");
     if (delivery === "new-operation" && (!binding.ctx.isIdle() || binding.identity.agentOperationId))
       return this.#rejection(command, "dispatch-rejected", "agent-not-idle", "A new operation can start only while the Pi session is idle.");
     if (delivery !== "new-operation" && (binding.ctx.isIdle() || !binding.identity.agentOperationId))

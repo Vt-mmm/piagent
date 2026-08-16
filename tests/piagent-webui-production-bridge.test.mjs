@@ -67,18 +67,23 @@ function assertValidReceipt(receipt) {
 }
 
 describe("Piagent WebUI production same-session bridge", () => {
-  it("rejects dispatch into a terminal task and preserves exact capability evidence", async () => {
+  it("allows one new operation after a terminal task so the session can establish its successor", async () => {
     const surface = context(); let sends = 0;
-    const pi = { appendEntry(customType, data) { surface.append({ type: "custom", customType, data }); }, sendUserMessage() { sends += 1; } };
+    let bridge;
+    const pi = { appendEntry(customType, data) { surface.append({ type: "custom", customType, data }); }, sendUserMessage(text) {
+      sends += 1; bridge.observeInput({ source: "extension", text }, surface.ctx);
+      surface.append({ type: "message", message: { role: "user", content: [{ type: "text", text }] } });
+      queueMicrotask(() => bridge.observeAgentStart(surface.ctx));
+    } };
     const taskFacts = () => ({ taskId: "task_terminal", taskRunId: "task_run_terminal", taskRevision: "task-rev.terminal",
       controlRevision: "control-rev.terminal", controlState: "terminal" });
-    const bridge = new SameSessionPiBridge(pi, { runtimeInstanceId: "runtime_terminal_task", taskFacts,
+    bridge = new SameSessionPiBridge(pi, { runtimeInstanceId: "runtime_terminal_task", taskFacts,
       now: () => new Date("2026-08-13T12:00:01.000Z") });
     bridge.bind(surface.ctx);
     const snapshot = bridge.snapshot(); assert.equal(snapshot.taskState, "terminal");
     const receipt = await bridge.execute(command(snapshot, { commandId: "command_terminal", idempotencyKey: "terminal-task-key-000000000000000000" }));
-    assert.equal(receipt.phase, "rejected"); assert.equal(receipt.resultCode, "capability-unavailable");
-    assert.equal(receipt.error.code, "task-terminal"); assert.equal(sends, 0); assertValidReceipt(receipt);
+    assert.equal(receipt.phase, "settled"); assert.equal(receipt.resultCode, "dispatch-observed");
+    assert.equal(receipt.error, null); assert.equal(sends, 1); assertValidReceipt(receipt);
   });
 
   it("dispatches one idle message, observes it in the bound operation and deduplicates replay", async () => {

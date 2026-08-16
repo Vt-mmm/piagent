@@ -260,8 +260,13 @@ function cacheLatest(home, latest) {
 
 // A cache stamped now keeps the session from starting a real registry probe.
 async function startSession(fixture, env = {}) {
-  const previous = { HOME: process.env.HOME, PIAGENT_NO_UPDATE_CHECK: process.env.PIAGENT_NO_UPDATE_CHECK };
+  const previous = {
+    HOME: process.env.HOME,
+    PIAGENT_NO_UPDATE_CHECK: process.env.PIAGENT_NO_UPDATE_CHECK,
+    PI_CODING_AGENT_DIR: process.env.PI_CODING_AGENT_DIR
+  };
   process.env.HOME = fixture.home;
+  process.env.PI_CODING_AGENT_DIR = path.join(fixture.home, ".pi", "agent");
   delete process.env.PIAGENT_NO_UPDATE_CHECK;
   for (const [key, value] of Object.entries(env)) process.env[key] = value;
   try {

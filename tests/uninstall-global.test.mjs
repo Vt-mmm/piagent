@@ -199,3 +199,99 @@ describe("uninstall", () => {
     assert.match(result.stderr, new RegExp(path.join(agent, "settings.json").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   });
 });
+
+describe("uninstall npm prefix", () => {
+  // install-global falls back to a user-writable npm prefix when the configured
+  // root is not writable, and update-global takes --npm-prefix. Uninstall ran a
+  // bare `npm uninstall -g`, which resolves against the configured prefix: on
+  // those machines it removed nothing and still printed "Uninstall complete".
+  // The prefix has to come from where the helper actually is.
+  function installedAt(root, relative) {
+    const home = path.join(root, relative, "@piagent", "platform");
+    fs.mkdirSync(path.join(home, "scripts"), { recursive: true });
+    fs.copyFileSync(script, path.join(home, "scripts", "uninstall-global.sh"));
+    return path.join(home, "scripts", "uninstall-global.sh");
+  }
+
+  // An npm whose *configured* global prefix is somewhere else entirely.
+  function fakeNpm(root, configuredPrefix) {
+    const bin = path.join(root, "bin");
+    fs.mkdirSync(bin, { recursive: true });
+    fs.writeFileSync(path.join(bin, "npm"), `#!/usr/bin/env bash
+if [[ "\$1" == "prefix" && "\$2" == "-g" ]]; then echo ${JSON.stringify(configuredPrefix)}; exit 0; fi
+echo "NPM CALLED: \$*"
+`);
+    fs.chmodSync(path.join(bin, "npm"), 0o755);
+    return bin;
+  }
+
+  function planFor(entry, root, configuredPrefix, extraArgs = []) {
+    const npmBin = fakeNpm(root, configuredPrefix);
+    const piBin = fakePi(root).bin;
+    const agent = agentDir(root, []);
+    return spawnSync("bash", [entry, "--with-host", ...extraArgs], {
+      env: {
+        ...process.env,
+        PI_CODING_AGENT_DIR: agent,
+        PATH: `${npmBin}${path.delimiter}${piBin}${path.delimiter}${process.env.PATH ?? ""}`
+      },
+      encoding: "utf8"
+    });
+  }
+
+  it("targets the prefix the helper is installed under, not the configured one", () => {
+    const root = scratch();
+    const entry = installedAt(root, path.join("custom", "lib", "node_modules"));
+    const result = planFor(entry, root, "/usr/local");
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok(
+      result.stdout.includes(`npm uninstall -g --prefix ${path.join(root, "custom")} @earendil-works/pi-coding-agent`),
+      result.stdout
+    );
+    assert.doesNotMatch(result.stdout, /npm uninstall -g @earendil-works/);
+  });
+
+  it("prints a helper follow-up command that points at the same prefix", () => {
+    // The operator copies this line by hand. Sending them to the configured
+    // prefix leaves the helper installed while the run reported success.
+    const root = scratch();
+    const entry = installedAt(root, path.join("custom", "lib", "node_modules"));
+    const result = planFor(entry, root, "/usr/local", ["--apply"]);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok(
+      result.stdout.includes(`npm uninstall -g --prefix ${path.join(root, "custom")} @piagent/platform`),
+      result.stdout
+    );
+  });
+
+  it("leaves the command alone when the helper is under the configured prefix", () => {
+    const root = scratch();
+    const entry = installedAt(root, path.join("custom", "lib", "node_modules"));
+    const result = planFor(entry, root, path.join(root, "custom"));
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.doesNotMatch(result.stdout, /--prefix/);
+    assert.match(result.stdout, /npm uninstall -g @earendil-works\/pi-coding-agent/);
+  });
+
+  it("never claims an npx cache root as an install to remove", () => {
+    // npx unpacks into a prunable cache that owns no bin on anyone's PATH.
+    // Pointing npm at it would report removing an install nobody had.
+    const root = scratch();
+    const entry = installedAt(root, path.join("_npx", "a1b2c3d4e5f6", "node_modules"));
+    const result = planFor(entry, root, "/usr/local");
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.doesNotMatch(result.stdout, /--prefix/);
+  });
+
+  it("runs from a working checkout without inventing a prefix", () => {
+    const root = scratch();
+    const result = planFor(script, root, "/usr/local");
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.doesNotMatch(result.stdout, /--prefix/);
+  });
+});

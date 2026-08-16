@@ -57,10 +57,10 @@ export function ProviderAccounts({ catalog, refresh }: { catalog?: ProviderAuthC
     <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(2,minmax(0,1fr))" }, gap: 1 }}>
       {(catalog?.providers ?? []).map((provider) => <Paper variant="outlined" key={provider.providerRef} sx={{ p: 1.75, borderRadius: 2.5 }}>
         <Stack direction="row" sx={{ alignItems: "center", gap: 1.25 }}><ServiceIcon name={provider.name} size={38} />
-          <Typography sx={{ flex: 1, fontWeight: 800 }}>{provider.name}</Typography>{provider.state === "connected"
-            ? <Chip size="small" color="success" variant="outlined" icon={<CheckCircleRounded />} label={localize(locale, "Đã kết nối", "Connected")} />
-            : <Button size="small" variant="outlined" disabled={busy} onClick={() => void start(provider.providerRef)}>
-              {localize(locale, "Kết nối", "Connect")}</Button>}</Stack>
+          <Typography sx={{ flex: 1, fontWeight: 800 }}>{provider.name}</Typography>{provider.state === "connected" &&
+            <Chip size="small" color="success" variant="outlined" icon={<CheckCircleRounded />} label={localize(locale, "Đã kết nối", "Connected")} />}
+          <Button size="small" variant="outlined" disabled={busy} onClick={() => void start(provider.providerRef)}>
+            {provider.state === "connected" ? localize(locale, "Kết nối lại", "Reconnect") : localize(locale, "Kết nối", "Connect")}</Button></Stack>
       </Paper>)}
     </Box>
     {catalog && catalog.providers.length === 0 && <Typography color="text.secondary">{localize(locale, "Pi chưa có provider OAuth", "No OAuth providers available")}</Typography>}
