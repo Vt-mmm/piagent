@@ -750,6 +750,11 @@ test("holds, edits, dispatches and deletes messages through the authenticated cu
     await expect(page.getByText("Đã cập nhật trong Pi và mặc định người dùng", { exact: true })).toBeVisible();
     assert.equal(thinking, "high");
     await page.getByLabel("Chọn model").selectOption({ label: "Model Browser B · browser-provider" });
+    // Changing the selection clears the effect acknowledgement, so the button is
+    // disabled until it is given again. Waiting for that disabled state is what
+    // makes the acknowledgement below land after the reset instead of racing it —
+    // the same wait the thinking change above already performs.
+    await expect(page.getByRole("button", { name: "Đổi model" })).toBeDisabled();
     await effectAck.check(); await page.getByRole("button", { name: "Đổi model" }).click();
     await expect(page.getByText("Đã cập nhật trong Pi và mặc định người dùng", { exact: true })).toBeVisible();
     assert.equal(activeModel.id, "browser-model-b");
