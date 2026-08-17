@@ -4,6 +4,18 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
+## v1.5.1 - 2026-08-17
+
+### Release repair
+
+- Supersedes v1.5.0, which was tagged but never published: its release matrix
+  failed on macOS, so the publish job never ran and the registry stayed on
+  v1.4.1. The content of this release is v1.5.0's, plus the fix below.
+- Fixed a race in the WebUI composer end-to-end test. Changing the model right
+  after changing thinking acknowledged the effect scope without waiting for the
+  panel to clear it, so on a slower runner the reset landed afterwards and left
+  the confirm button permanently disabled.
+
 ## v1.5.0 - 2026-08-17
 
 ### Document workspace and attachments
