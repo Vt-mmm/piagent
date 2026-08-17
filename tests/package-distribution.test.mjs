@@ -172,13 +172,16 @@ describe("package distribution", () => {
       || /^docs\/readiness-assessment\.md$/.test(entry));
     assert.deepEqual(shipsInternalNotes, []);
     const shippedWebUi = entries.filter((entry) => entry.startsWith("packages/piagent-webui/"));
+    assert.ok(entries.includes("packages/piagent-core/runtime/input/attachment-store.ts"));
+    assert.ok(entries.includes("packages/piagent-core/runtime/inspection/session-identity.ts"));
+    assert.ok(entries.includes("packages/piagent-core/runtime/inspection/document-workspace-projection.ts"));
+    assert.ok(shippedWebUi.includes("packages/piagent-webui/gateway/session-attachment-registry.ts"));
     assert.ok(shippedWebUi.includes("packages/piagent-webui/package.json"));
     assert.ok(shippedWebUi.includes("packages/piagent-webui/extension/piagent-webui.ts"));
     assert.ok(shippedWebUi.includes("packages/piagent-webui/extension/same-session-bridge.ts"));
     assert.ok(shippedWebUi.includes("packages/piagent-webui/extension/held-message-queue.ts"));
     assert.ok(shippedWebUi.includes("packages/piagent-webui/extension/session-options-controller.ts"));
     assert.ok(shippedWebUi.includes("packages/piagent-webui/extension/session-stream-adapter.ts"));
-    assert.ok(shippedWebUi.includes("packages/piagent-webui/extension/attachment-store.ts"));
     assert.ok(shippedWebUi.includes("packages/piagent-webui/extension/lifecycle-controller.ts"));
     assert.ok(shippedWebUi.includes("packages/piagent-webui/extension/lifecycle-event-adapter.ts"));
     assert.ok(shippedWebUi.includes("packages/piagent-webui/extension/source-mutation-controller.ts"));

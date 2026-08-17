@@ -22,7 +22,7 @@ type EventStore = {
 };
 
 async function loadCoreInspection() {
-  const [{ collectFileDiff }, { buildWebUiInspectionProjection }, { matchesProtectedPath }, reviewProjection, reviewStore, mutationProjection, revertProjection, openProjection, commitSummaryProjection, taskIndexProjection, taskTimelineProjection, recoveryHistoryProjection, handoffHistoryProjection, subagentTreeProjection, releaseMonitorProjection] = await Promise.all([
+  const [{ collectFileDiff }, { buildWebUiInspectionProjection }, { matchesProtectedPath }, reviewProjection, reviewStore, mutationProjection, revertProjection, openProjection, commitSummaryProjection, taskIndexProjection, taskTimelineProjection, recoveryHistoryProjection, handoffHistoryProjection, subagentTreeProjection, releaseMonitorProjection, documentWorkspaceProjection] = await Promise.all([
     import(`${CORE_ROOT}/runtime/inspection/diff-projection.ts`),
     import(`${CORE_ROOT}/runtime/inspection/webui-snapshot.ts`),
     import(`${CORE_ROOT}/extensions/policy-core.js`),
@@ -37,9 +37,10 @@ async function loadCoreInspection() {
     import(`${CORE_ROOT}/runtime/inspection/task-compaction-history.ts`),
     import(`${CORE_ROOT}/runtime/inspection/task-handoff-history.ts`),
     import(`${CORE_ROOT}/runtime/inspection/task-subagent-tree.ts`),
-    import("./benchmark-release-monitor.ts")
+    import("./benchmark-release-monitor.ts"),
+    import(`${CORE_ROOT}/runtime/inspection/document-workspace-projection.ts`)
   ]);
-  return { collectFileDiff, buildWebUiInspectionProjection, matchesProtectedPath, ...reviewProjection, ...reviewStore, ...mutationProjection, ...revertProjection, ...openProjection, ...commitSummaryProjection, ...taskIndexProjection, ...taskTimelineProjection, ...recoveryHistoryProjection, ...handoffHistoryProjection, ...subagentTreeProjection, ...releaseMonitorProjection };
+  return { collectFileDiff, buildWebUiInspectionProjection, matchesProtectedPath, ...reviewProjection, ...reviewStore, ...mutationProjection, ...revertProjection, ...openProjection, ...commitSummaryProjection, ...taskIndexProjection, ...taskTimelineProjection, ...recoveryHistoryProjection, ...handoffHistoryProjection, ...subagentTreeProjection, ...releaseMonitorProjection, ...documentWorkspaceProjection };
 }
 
 export type CoreInspectionInput = {
@@ -52,12 +53,16 @@ export type CoreInspectionInput = {
   currentActivity?: () => unknown[];
   sessionEntries?: () => unknown[];
   protectedPaths?: () => string[];
+  // Extra directories the operator granted through the profile. The document
+  // workspace lists them beside the project; without them it shows the project
+  // only, which is the same answer a host with no grants gives.
+  documentReadRoots?: () => unknown;
   contextUsage?: () => { tokens: number | null; contextWindow: number; percent: number | null } | undefined;
   model?: () => { provider?: unknown; id?: unknown; name?: unknown; reasoning?: unknown; input?: unknown; thinkingLevelMap?: unknown; contextWindow?: unknown; maxTokens?: unknown } | undefined;
   thinkingLevel?: () => unknown;
   queueProjection?: () => unknown;
   modelCatalog?: () => unknown;
-  attachmentCapability?: () => { kinds: Array<"file" | "image">; mimeTypes: string[] };
+  attachmentCapability?: () => { kinds: Array<"file" | "image" | "document">; mimeTypes: string[] };
   approvalProjection?: () => { revision: string | null; summary: Record<string, unknown> };
   approvalDetail?: (approvalRef: string) => unknown | null;
   sourceMutationGuardAvailable?: () => boolean;
@@ -75,6 +80,7 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
   #cachedProjection: { at: number; value: any } | null = null;
   #invalidationEpoch = 0;
   readonly #diffCache = new Map<string, { at: number; value: unknown }>();
+  #documentCache: { at: number; value: unknown } | null = null;
   readonly #sourceRevertConfirmationKey = randomBytes(32);
 
   constructor(input: CoreInspectionInput) { this.#input = input; }
@@ -83,6 +89,7 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
     this.#invalidationEpoch += 1;
     this.#cachedProjection = null;
     this.#diffCache.clear();
+    this.#documentCache = null;
   }
 
   async #projection() {
@@ -97,6 +104,17 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
       contextUsage: this.#input.contextUsage?.(), model: this.#input.model?.(), thinkingLevel: this.#input.thinkingLevel?.(),
       eventCursor: this.#input.eventStore.currentCursor(), resyncRequired: this.#input.eventStore.resyncRequired(), eventReplay: retention
     });
+    // What the host will accept as an attachment is a property of the machine and
+    // the model, not of chat control. The Gateway drives sessions without a chat
+    // bridge at all, and a capability published only alongside that bridge left
+    // its composer believing no file type was supported.
+    if (this.#input.attachmentCapability) {
+      const attachment = this.#input.attachmentCapability();
+      value.snapshot.capabilities.capabilities.attachments = { status: "available", version: 1, reason: null,
+        kinds: attachment.kinds, mimeTypes: attachment.mimeTypes };
+      Object.assign(value.snapshot.capabilities.limits, { maxRequestBodyBytes: 11_250_000, maxAttachmentCount: 4,
+        maxAttachmentFileBytes: 8_388_608, maxAttachmentTotalBytes: 16_777_216 });
+    }
     const control = this.#input.chatControl?.();
     if (control?.state === "ready" && control.identity && control.revisions && !this.#input.eventStore.resyncRequired()) {
       const available = { available: true, reasonCode: null }, disabled = (reasonCode: string) => ({ available: false, reasonCode });
@@ -113,13 +131,6 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
           deleteHeld: available, dispatchHeld: dispatchBlocked ? disabled("task-control-gate-closed") : available,
           interruptAndSend: dispatchBlocked ? disabled("task-control-gate-closed") : control.liveness === "running" ? available : disabled("agent-not-running") }
       };
-      if (this.#input.attachmentCapability) {
-        const attachment = this.#input.attachmentCapability();
-        value.snapshot.capabilities.capabilities.attachments = { status: "available", version: 1, reason: null,
-          kinds: attachment.kinds, mimeTypes: attachment.mimeTypes };
-        Object.assign(value.snapshot.capabilities.limits, { maxRequestBodyBytes: 11_250_000, maxAttachmentCount: 4,
-          maxAttachmentFileBytes: 8_388_608, maxAttachmentTotalBytes: 16_777_216 });
-      }
       let modelCatalog: any;
       try { modelCatalog = this.#input.modelCatalog?.(); }
       catch { modelCatalog = null; }
@@ -190,6 +201,32 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
     const source = (await this.#projection()).sourceViews;
     return view === "working-tree" ? source.workingTree : source[view];
   }
+  // The listing walks the project and every granted root, so it costs real
+  // filesystem work — hundreds of milliseconds on a large repository. It also
+  // changes only when files change, so a short cache keeps a browser that
+  // re-renders from re-walking the disk, without holding a stale view long
+  // enough for the operator to notice.
+  async documents(): Promise<unknown> {
+    const cached = this.#documentCache;
+    if (cached && Date.now() - cached.at <= 2_000) return cached.value;
+    const core = await loadCoreInspection();
+    const value = core.projectDocumentWorkspaceListing(this.#documentWorkspaceInput(core.matchesProtectedPath));
+    this.#documentCache = { at: Date.now(), value };
+    return value;
+  }
+
+  async document(documentRef: string): Promise<unknown> {
+    const core = await loadCoreInspection();
+    return core.projectDocumentWorkspaceDocument({ ...this.#documentWorkspaceInput(core.matchesProtectedPath), documentRef });
+  }
+
+  #documentWorkspaceInput(matchesProtectedPath: (candidate: string, patterns: string[]) => unknown) {
+    const protectedPaths = this.#input.protectedPaths?.() ?? [];
+    return { cwd: this.#input.cwd, profileRoots: this.#input.documentReadRoots?.(),
+      environmentRoots: process.env.PIAGENT_ADDITIONAL_READ_ROOTS,
+      isProtectedPath: (candidate: string) => Boolean(matchesProtectedPath(candidate, protectedPaths)) };
+  }
+
   async activity(): Promise<unknown> { return (await this.#projection()).snapshot.activity; }
   async logPreview(activityRef: string): Promise<unknown> {
     const activity = (await this.#projection()).snapshot.activity;

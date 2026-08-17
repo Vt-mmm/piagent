@@ -5,11 +5,9 @@ import { webUiProjectRef, webUiSessionRef } from "../../piagent-core/runtime/ins
 export const WEBUI_CONTROL_ENTRY_TYPE = "piagent-webui-control-receipt-v1";
 const REF = /^[A-Za-z0-9][A-Za-z0-9._~-]{0,159}$/, PUBLIC_REF = /^[A-Za-z0-9][A-Za-z0-9._:@~-]{0,159}$/;
 const REVISION = /^[A-Za-z0-9][A-Za-z0-9._:~-]{0,159}$/, DIGEST = /^sha256:[a-f0-9]{64}$/;
-const IDEMPOTENCY = /^[A-Za-z0-9._~-]{32,128}$/;
-const MAX_EVENTS = 256, MAX_SESSION_ENTRIES = 50_000; type NullableRef = string | null;
-export type BridgeIdentity = { projectRef: string; runtimeInstanceId: string; sessionRef: string; taskId: string | null; taskRunId: string | null; agentOperationId: string | null; toolCallId: null };
-export type BridgeRevisions = { runtimeRevision: string; taskRevision: NullableRef; controlRevision: NullableRef; workspaceRevision: NullableRef;
-  indexRevision: NullableRef; approvalRevision: NullableRef; sessionOptionRevision: NullableRef; queueRevision: NullableRef };
+const IDEMPOTENCY = /^[A-Za-z0-9._~-]{32,128}$/, MAX_EVENTS = 256, MAX_SESSION_ENTRIES = 50_000; type NullableRef = string | null;
+export type { BridgeIdentity, BridgeRevisions, BridgeSnapshot } from "../../piagent-core/runtime/inspection/session-identity.ts";
+import type { BridgeIdentity, BridgeRevisions, BridgeSnapshot } from "../../piagent-core/runtime/inspection/session-identity.ts";
 export type BridgeTaskFacts = { taskId: string; taskRunId: string; taskRevision: string; controlRevision: string;
   controlState: "active" | "pause-requested" | "paused" | "terminal" | "unknown" } | null;
 export type NewOperationChatCommand = {
@@ -29,13 +27,11 @@ export type ChatReceipt = {
 };
 export type BridgeEvent = { sequence: number; at: string; kind: "binding.ready" | "binding.closed" | "operation.started" | "operation.settled" | "command.receipt";
   sessionRef: string | null; operationRef: string | null; commandId: string | null; resultCode: string | null };
-export type BridgeSnapshot = { state: "unbound" | "ready" | "replacement-pending" | "shutdown"; identity: BridgeIdentity | null; revisions: BridgeRevisions | null;
-  liveness: "idle" | "running" | "unknown"; taskState: "none" | "active" | "pause-requested" | "paused" | "terminal" | "unknown"; eventSequence: number };
 export type SessionOptionMutationPermit = { commitObservation(record: (before: BridgeRevisions, after: BridgeRevisions) => void): { before: BridgeRevisions; after: BridgeRevisions; recorded: boolean } | null; release(): void };
 type Binding = { ctx: ExtensionContext; rawSessionId: string; identity: BridgeIdentity; revisions: BridgeRevisions; state: BridgeSnapshot["state"] };
 type SessionOptionPermitState = { token: number; generation: number; rawSessionId: string; before: BridgeRevisions; externalConflict: boolean };
 type DispatchContent = Parameters<ExtensionAPI["sendUserMessage"]>[0];
-type PreparedDispatch = { content: DispatchContent; observedText: string };
+type PreparedDispatch = { content: DispatchContent; observedText: string; commit?(): void; release?(): void };
 type PendingDispatch = { command: NewOperationChatCommand; operationId: string; before: BridgeRevisions; leafBefore: string | null; correlationToken: string;
   observedText: string; resolve(receipt: ChatReceipt): void; timer: NodeJS.Timeout; inputObserved: boolean };
 type Stored = { receipt: ChatReceipt; messageRequestId?: string; contentDigest?: string; attachmentRefs?: string[] };
@@ -394,6 +390,7 @@ export class SameSessionPiBridge {
     this.#queueCounter += 1; const before = copy(binding.revisions); this.#refresh();
     const requested = this.#receipt(command, before, "requested", "dispatch-requested", null, false, operationId);
     if (!this.#record(requested, command.payload.messageRequestId, command.payload.contentDigest, command.payload.attachmentRefs)) {
+      prepared.release?.();
       if (delivery === "new-operation") {
         binding.identity.agentOperationId = null; this.#operationCounter += 1; this.#refresh();
       }
@@ -407,7 +404,10 @@ export class SameSessionPiBridge {
         correlationToken, observedText: prepared.observedText, resolve, timer, inputObserved: false };
       try { this.#dispatchContext.run(correlationToken, () => this.#pi.sendUserMessage(prepared.content,
         delivery === "new-operation" ? undefined : { deliverAs: delivery === "steer" ? "steer" : "followUp" })); }
-      catch { this.#settlePending("dispatch-rejected", "rejected", "pi-send-user-message-rejected", false); }
+      catch { prepared.release?.(); this.#messageRequests.delete(command.payload.messageRequestId);
+        this.#settlePending("dispatch-rejected", "rejected", "pi-send-user-message-rejected", false); return; }
+      try { prepared.commit?.(); }
+      catch { this.#settlePending("dispatch-unknown", "uncertain", "attachment-commit-unavailable", false); }
     });
   }
   #validate(command: NewOperationChatCommand): string | null {

@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import AddRounded from "@mui/icons-material/AddRounded";
+import AttachFileRounded from "@mui/icons-material/AttachFileRounded";
 import ArchiveRounded from "@mui/icons-material/ArchiveRounded";
+import CancelRounded from "@mui/icons-material/CancelRounded";
 import ChatBubbleOutlineRounded from "@mui/icons-material/ChatBubbleOutlineRounded";
 import DifferenceRounded from "@mui/icons-material/DifferenceRounded";
 import FolderOpenOutlined from "@mui/icons-material/FolderOpenOutlined";
@@ -36,7 +38,10 @@ import type { PiagentWebUICanonicalSnapshotV1 } from "../../contracts/generated/
 import type { Catalog, SessionRow } from "../../contracts/generated/session-catalog-v1.ts";
 import type { Receipt } from "../../contracts/generated/session-command-v1.ts";
 import type { PiagentGatewayCapabilityHandshakeV1 } from "../../contracts/generated/gateway-capabilities-v1.ts";
-import { readSessionConnections, readSessionInspectionSnapshot, type SessionConnections } from "./api.ts";
+import { readSessionConnections, readSessionInspectionSnapshot, stageSessionAttachment, type SessionConnections } from "./api.ts";
+import type { Attachment } from "../../contracts/generated/attachment-v1.ts";
+import { acceptAttribute, attachmentDetail, discardAttachment, dragCarriesFiles, MAX_ATTACHMENTS,
+  stageFiles } from "./attachment-intake.ts";
 import { NewSessionPage } from "./NewSessionPage.tsx";
 import { SessionComposerControls } from "./SessionComposerControls.tsx";
 import { SessionInspectorDrawer } from "./SessionInspectorDrawer.tsx";
@@ -97,9 +102,55 @@ function StateChip({ session, locale }: { session: SessionRow; locale: UiLocale 
 
 function Conversation({ session, snapshot, locale, live, canSend, send, abort, onInspector }: { session: SessionRow;
   snapshot?: PiagentWebUICanonicalSnapshotV1; locale: UiLocale; live?: LiveConversation; canSend: boolean;
-  send(message: string): Promise<unknown>; abort(): Promise<unknown>; onInspector(value: SessionWorkspaceId): void }) {
+  send(message: string, attachment?: { messageRequestId: string; attachmentRefs: string[]; attachments?: Attachment[] }): Promise<unknown>;
+  abort(): Promise<unknown>; onInspector(value: SessionWorkspaceId): void }) {
   const [draft, setDraft] = useState(""), [submitting, setSubmitting] = useState(false), [connections, setConnections] = useState<SessionConnections>();
-  useEffect(() => setDraft(""), [session.sessionRef]);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [messageRequestId, setMessageRequestId] = useState(() => `message-request.${crypto.randomUUID()}`);
+  const [uploading, setUploading] = useState(false), [attachError, setAttachError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  // dragenter and dragleave fire again for every child the pointer crosses, so a
+  // boolean set on leave clears the highlight while the file is still over the
+  // composer. Counting entries against leaves tracks the region as a whole.
+  const dragDepth = useRef(0);
+  useEffect(() => { setDraft(""); setAttachments([]); setAttachError(null); setMessageRequestId(`message-request.${crypto.randomUUID()}`); }, [session.sessionRef]);
+
+  // A file dropped anywhere the composer does not cover is navigated to by the
+  // browser, which replaces the running session with the file.
+  useEffect(() => {
+    const block = (event: DragEvent) => { if (dragCarriesFiles(event.dataTransfer)) event.preventDefault(); };
+    window.addEventListener("dragover", block); window.addEventListener("drop", block);
+    return () => { window.removeEventListener("dragover", block); window.removeEventListener("drop", block); };
+  }, []);
+
+  const attachmentsCapability = snapshot?.capabilities.capabilities.attachments;
+  const allowedMimeTypes = useMemo(() => new Set<string>(attachmentsCapability?.status === "available" ? attachmentsCapability.mimeTypes : []),
+    [attachmentsCapability]);
+  const acceptTypes = useMemo(() => acceptAttribute(allowedMimeTypes), [allowedMimeTypes]);
+  const canAttach = Boolean(snapshot) && attachmentsCapability?.status === "available" && canSend && !submitting && !uploading
+    && attachments.length < MAX_ATTACHMENTS;
+
+  const takeFiles = async (files: FileList | null) => {
+    if (!files?.length || !snapshot || attachmentsCapability?.status !== "available" || uploading) return;
+    setUploading(true); setAttachError(null);
+    try {
+      const outcome = await stageFiles({ files, snapshot, messageRequestId, existing: attachments, allowed: allowedMimeTypes, locale,
+        stage: (command) => stageSessionAttachment(session.sessionRef, command) });
+      setAttachments(outcome.attachments); setAttachError(outcome.status);
+    } catch { setAttachError(localize(locale, "Không thể đính kèm; file không được gửi vào Pi.", "Unable to attach the file; it was not sent to Pi.")); }
+    finally { setUploading(false); }
+  };
+  const removeAttachment = async (attachmentRef: string) => {
+    if (!snapshot || submitting || uploading) return;
+    setUploading(true); setAttachError(null);
+    try {
+      const outcome = await discardAttachment({ snapshot, messageRequestId, attachmentRef, locale,
+        stage: (command) => stageSessionAttachment(session.sessionRef, command) });
+      if (outcome.discarded) setAttachments((current) => current.filter((entry) => entry.attachmentRef !== attachmentRef));
+      else setAttachError(outcome.status);
+    } catch { setAttachError(localize(locale, "Không thể bỏ file; trạng thái session có thể đã thay đổi.", "Unable to remove the file; session state may have changed.")); }
+    finally { setUploading(false); }
+  };
   useEffect(() => {
     const controller = new AbortController(); setConnections(undefined);
     void readSessionConnections(session.sessionRef, controller.signal).then(setConnections).catch(() => undefined);
@@ -108,7 +159,13 @@ function Conversation({ session, snapshot, locale, live, canSend, send, abort, o
   const submit = async () => {
     const message = draft.trim(); if (!message || submitting) return;
     setSubmitting(true); setDraft("");
-    try { await send(message); } catch { /* bounded live error is rendered below */ }
+    const staged = attachments.map((item) => item.attachmentRef);
+    try {
+      await send(message, staged.length > 0 ? { messageRequestId, attachmentRefs: staged, attachments } : undefined);
+      // Refs are one-shot: the dispatch consumed them, so the next message starts
+      // from a fresh request id rather than reusing refs that no longer exist.
+      setAttachments([]); setAttachError(null); setMessageRequestId(`message-request.${crypto.randomUUID()}`);
+    } catch { /* bounded live error is rendered below */ }
     finally { setSubmitting(false); }
   };
   const refreshConnections = async (value?: SessionConnections) => {
@@ -119,20 +176,64 @@ function Conversation({ session, snapshot, locale, live, canSend, send, abort, o
     <Box sx={{ flex: 1, width: "100%", maxWidth: 860, mx: "auto", px: { xs: 2, sm: 4 }, py: { xs: 3, md: 4 },
       display: "flex", flexDirection: "column", justifyContent: "center" }}>
       <Box sx={{ width: "100%" }}><SessionTranscript sessionRef={session.sessionRef} sessionRevision={session.sessionRevision}
-        live={live} approvals={snapshot?.approvals} locale={locale} /></Box>
+        live={live} approvals={snapshot?.approvals} locale={locale} onOpenActivity={() => onInspector("activity")} /></Box>
     </Box>
     <Box sx={{ position: "sticky", bottom: 0, px: { xs: 1.5, sm: 2.5 }, pb: 2.5,
       background: "linear-gradient(transparent, var(--piagent-palette-background-default) 25%)" }}>
-      <Box sx={{ maxWidth: 860, mx: "auto", border: 1, borderColor: "divider", borderRadius: 3, bgcolor: "background.paper", p: 1.15,
-        boxShadow: "0 14px 44px rgba(0,0,0,.14)" }}>
+      <Box sx={{ position: "relative", maxWidth: 860, mx: "auto", border: 1, borderColor: dragging ? "primary.main" : "divider",
+        borderStyle: dragging ? "dashed" : "solid", borderRadius: 3, bgcolor: "background.paper", p: 1.15,
+        boxShadow: "0 14px 44px rgba(0,0,0,.14)" }}
+      onDragEnter={(event) => { if (dragCarriesFiles(event.dataTransfer)) { dragDepth.current += 1; setDragging(true); } }}
+      onDragOver={(event) => { if (dragCarriesFiles(event.dataTransfer)) { event.preventDefault(); event.dataTransfer.dropEffect = canAttach ? "copy" : "none"; } }}
+      onDragLeave={(event) => { if (dragCarriesFiles(event.dataTransfer)) { dragDepth.current -= 1; if (dragDepth.current <= 0) { dragDepth.current = 0; setDragging(false); } } }}
+      onDrop={(event) => {
+        if (!dragCarriesFiles(event.dataTransfer)) return;
+        event.preventDefault(); dragDepth.current = 0; setDragging(false);
+        if (canAttach) void takeFiles(event.dataTransfer.files);
+      }}>
+        {dragging && <Box role="status" sx={{ position: "absolute", inset: 0, zIndex: 3, display: "grid", alignContent: "center", justifyItems: "center",
+          gap: .5, borderRadius: 3, bgcolor: "background.paper", opacity: .96, pointerEvents: "none", textAlign: "center" }}>
+          <Typography sx={{ fontWeight: 750 }}>{canAttach ? localize(locale, "Thả tài liệu vào đây", "Drop documents here")
+            : attachments.length >= MAX_ATTACHMENTS ? localize(locale, `Đã đủ ${MAX_ATTACHMENTS} file cho tin nhắn này`, `This message already holds ${MAX_ATTACHMENTS} files`)
+              : localize(locale, "Chưa nhận file lúc này", "Files cannot be attached right now")}</Typography>
+          {canAttach && <Typography variant="caption" color="text.secondary">
+            {localize(locale, ".md .txt .csv .json .yaml .docx .pdf và ảnh", ".md .txt .csv .json .yaml .docx .pdf and images")}</Typography>}
+        </Box>}
         <SessionComposerControls session={session} snapshot={snapshot} connections={connections} locale={locale} onOpenChanges={() => onInspector("source")}
           onConnectionsChanged={refreshConnections} />
+        {attachments.length > 0 && <Stack direction="row" sx={{ flexWrap: "wrap", gap: .75, px: .5, pb: .75 }}
+          aria-label={localize(locale, "File sẽ gửi cùng tin nhắn", "Files to send with the message")}>
+          {attachments.map((item) => <Chip key={item.attachmentRef} size="small" variant="outlined"
+            color={item.kind === "document" ? "success" : "default"}
+            label={`${item.displayName} · ${attachmentDetail(item, locale)}`}
+            onDelete={submitting || uploading ? undefined : () => void removeAttachment(item.attachmentRef)}
+            deleteIcon={<CancelRounded aria-label={`${localize(locale, "Bỏ", "Remove")} ${item.displayName}`} role="button" />} />)}
+        </Stack>}
         <TextField fullWidth multiline minRows={2} disabled={!canSend || submitting} value={draft} onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void submit(); } }}
+          onPaste={(event) => {
+            // Only a clipboard actually carrying files is intercepted, so pasting
+            // text — including text copied out of a document — still types.
+            if (!event.clipboardData?.files.length) return;
+            event.preventDefault();
+            if (canAttach) void takeFiles(event.clipboardData.files);
+          }}
           placeholder={localize(locale, "Nhắn cho Piagent…", "Message Piagent…")} variant="standard" slotProps={{ input: { disableUnderline: true } }} />
-        <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mt: .5, gap: 1 }}><Typography variant="caption" color="text.disabled">
-          {canSend ? localize(locale, "Enter để gửi · Shift+Enter xuống dòng", "Enter to send · Shift+Enter for a new line")
-            : localize(locale, "Session hiện chỉ đọc", "Session is currently read only")}</Typography>
+        <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mt: .5, gap: 1 }}>
+          <Stack direction="row" sx={{ minWidth: 0, alignItems: "center", gap: 1 }}>
+            {attachmentsCapability?.status === "available" && <Tooltip title={localize(locale,
+              "Chọn file, hoặc kéo thả / dán thẳng vào khung chat", "Pick a file, or drag and drop / paste straight into the chat")}>
+              <IconButton component="label" size="small" disabled={!canAttach}
+                aria-label={`${localize(locale, "Đính kèm", "Attach")} (${attachments.length}/${MAX_ATTACHMENTS})`}>
+                <AttachFileRounded fontSize="small" />
+                <input type="file" multiple hidden disabled={!canAttach} accept={acceptTypes || undefined}
+                  onChange={(event) => { void takeFiles(event.target.files); event.currentTarget.value = ""; }} />
+              </IconButton></Tooltip>}
+            <Typography variant="caption" color={attachError ? "error" : "text.disabled"} noWrap>
+              {attachError ?? (uploading ? localize(locale, "Đang đọc tài liệu…", "Reading documents…")
+                : canSend ? localize(locale, "Enter để gửi · Shift+Enter xuống dòng", "Enter to send · Shift+Enter for a new line")
+                  : localize(locale, "Session hiện chỉ đọc", "Session is currently read only"))}</Typography>
+          </Stack>
           {live?.operationRef && !live.complete ? <Button color="error" startIcon={<StopCircleRounded />} onClick={() => void abort()}>{localize(locale, "Dừng", "Stop")}</Button>
             : <IconButton aria-label={localize(locale, "Gửi", "Send")} disabled={!canSend || submitting || !draft.trim()} color="primary" onClick={() => void submit()}
               sx={{ bgcolor: "primary.main", color: "primary.contrastText", "&:hover": { bgcolor: "primary.dark" }, "&.Mui-disabled": { bgcolor: "action.disabledBackground" } }}><SendRounded fontSize="small" /></IconButton>}
@@ -157,7 +258,9 @@ export function SessionHubApp({ catalog, capabilities, connection, live, refresh
   rename, pin, archive, unarchive, fork }: { catalog?: Catalog;
   capabilities?: PiagentGatewayCapabilityHandshakeV1; connection: ConnectionState; live: Readonly<Record<string, LiveConversation>>;
   refresh(): Promise<Catalog | undefined>; create(value: { projectRef: string; placeRef: string; modelRef: string | null;
-    thinkingLevel: string; message: string }): Promise<Receipt>; send(session: SessionRow, message: string): Promise<unknown>; abort(session: SessionRow): Promise<unknown>;
+    thinkingLevel: string; message: string; messageRequestId?: string; deferInitialMessage?: boolean }): Promise<Receipt>;
+  send(session: SessionRow, message: string, attachment?: { messageRequestId: string; attachmentRefs: string[]; attachments?: Attachment[] }): Promise<unknown>;
+  abort(session: SessionRow): Promise<unknown>;
     setModel(session: SessionRow, modelRef: string): Promise<unknown>; setThinking(session: SessionRow, thinkingLevel: string): Promise<unknown>;
     setPermission(session: SessionRow, permissionMode: "read-only" | "workspace-write" | "trusted-full-access"): Promise<unknown>;
     rename(session: SessionRow, title: string): Promise<Receipt>; pin(session: SessionRow, pinned: boolean): Promise<Receipt>;
@@ -209,6 +312,45 @@ export function SessionHubApp({ catalog, capabilities, connection, live, refresh
     return () => controller.abort();
   }, [selected?.sessionRef, selected?.sessionRevision]);
   const canCreate = connection === "connected" && capabilities?.capabilities.sessionActions.create.status === "available";
+  const createNewSession = async (value: { projectRef: string; placeRef: string; modelRef: string | null;
+    thinkingLevel: string; message: string; files: readonly File[] }) => {
+    setCreatingSession(true); setCreateError(null);
+    let createdSessionRef: string | null = null;
+    try {
+      const messageRequestId = `message-request.${crypto.randomUUID()}`, withFiles = value.files.length > 0;
+      const receipt = await create({ projectRef: value.projectRef, placeRef: value.placeRef, modelRef: value.modelRef,
+        thinkingLevel: value.thinkingLevel, message: value.message, messageRequestId, deferInitialMessage: withFiles });
+      createdSessionRef = receipt.sessionRef;
+      if (!createdSessionRef) throw new Error("session-create-result-invalid");
+      if (withFiles) {
+        const latest = await refresh(), session = latest?.sessions.find((item) => item.sessionRef === createdSessionRef);
+        if (!session) throw new Error("session-catalog-refresh-failed");
+        const snapshot = await readSessionInspectionSnapshot(createdSessionRef);
+        const attachmentCapability = snapshot.capabilities.capabilities.attachments;
+        if (attachmentCapability.status !== "available") throw new Error(attachmentCapability.reason?.code ?? "session-attachment-unavailable");
+        const staged = await stageFiles({ files: value.files, snapshot, messageRequestId, existing: [],
+          allowed: new Set(attachmentCapability.mimeTypes), locale,
+          stage: (command) => stageSessionAttachment(createdSessionRef!, command) });
+        if (staged.status || staged.attachments.length !== value.files.length) {
+          await Promise.all(staged.attachments.map(async (attachment) => {
+            try { await discardAttachment({ snapshot, messageRequestId, attachmentRef: attachment.attachmentRef, locale,
+              stage: (command) => stageSessionAttachment(createdSessionRef!, command) }); } catch { /* staged bytes expire owner-only */ }
+          }));
+          throw new Error(staged.status ?? "session-attachment-incomplete");
+        }
+        await send(session, value.message, { messageRequestId, attachmentRefs: staged.attachments.map((item) => item.attachmentRef),
+          attachments: staged.attachments });
+      }
+      setSelectedRef(createdSessionRef); setView("chat");
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : "session-create-failed";
+      if (createdSessionRef) {
+        setSelectedRef(createdSessionRef); setView("chat"); setNotice({
+          title: localize(locale, "Session đã tạo nhưng file chưa được gửi", "The session was created, but the files were not sent"), message
+        });
+      } else setCreateError(message);
+    } finally { setCreatingSession(false); }
+  };
   const beginSessionAction = (session: SessionRow, action: SessionMenuAction) => {
     if (action === "pin") { void pin(session, !session.pinned).catch((error) => setNotice({
       title: localize(locale, "Không thể đổi trạng thái ghim", "Could not change pin state"),
@@ -294,11 +436,10 @@ export function SessionHubApp({ catalog, capabilities, connection, live, refresh
     <Box component="main" sx={{ ml: { md: `${SIDEBAR_WIDTH}px` }, mr: { lg: inspectorOpen ? INSPECTOR_WIDTH : 0 }, pt: "68px",
       transition: "margin-right .2s ease" }}>
       {view === "new" ? <NewSessionPage active defaultProjectRef={selected?.projectRef} busy={creatingSession} error={createError} onCancel={() => setView("chat")}
-        onCreate={(value) => { setCreatingSession(true); void create(value).then((receipt) => { if (receipt.sessionRef) { setSelectedRef(receipt.sessionRef); setView("chat"); } })
-          .catch((cause) => setCreateError(cause instanceof Error ? cause.message : "session-create-failed")).finally(() => setCreatingSession(false)); }} />
+        onCreate={(value) => { void createNewSession(value); }} />
         : selected ? <Conversation session={selected} snapshot={inspection} locale={locale} live={live[selected.sessionRef]}
             canSend={connection === "connected" && selected.composerAvailable && capabilities?.capabilities.sessionActions.send.status === "available"}
-            send={(message) => send(selected, message)} abort={() => abort(selected)} onInspector={openInspector} />
+            send={(message, attachment) => send(selected, message, attachment)} abort={() => abort(selected)} onInspector={openInspector} />
             : <EmptyHub locale={locale} canCreate={canCreate} onNew={() => setView("new")} />}
     </Box>
     <SessionInspectorDrawer open={inspectorOpen} active={activeInspector} snapshot={inspection} state={inspectionState} sessionRef={selected?.sessionRef}

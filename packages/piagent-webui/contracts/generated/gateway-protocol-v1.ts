@@ -87,6 +87,10 @@ export type CommandRequest = RequestBase & {
             thinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
             message: string;
             messageRequestId: string;
+            /**
+             * Create the durable session without dispatching the first turn so the client can stage selected attachments against the new session before sending it.
+             */
+            deferInitialMessage?: boolean;
           };
           [k: string]: any;
         })

@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { PiagentGatewayCapabilityHandshakeV1 } from "../../contracts/generated/gateway-capabilities-v1.ts";
+import type { Attachment } from "../../contracts/generated/attachment-v1.ts";
 import type { Catalog, SessionRow } from "../../contracts/generated/session-catalog-v1.ts";
 import type { Receipt } from "../../contracts/generated/session-command-v1.ts";
 import { readSessionCatalog } from "./api.ts";
 import { bootstrapBrowserSession } from "./bootstrap.ts";
 import type { ConnectionState } from "./use-inspection.ts";
 
-export type LiveConversation = { user: string; assistant: string; operationRef: string | null; complete: boolean; error: string | null };
+export type LiveActivity = { toolCallRef: string; toolLabel: string; state: "running" | "completed" | "failed" };
+export type LiveConversation = { user: string; assistant: string; attachments: Attachment[]; activities: LiveActivity[];
+  operationRef: string | null; complete: boolean; error: string | null };
 
 function opaque(prefix: string): string { return `${prefix}_${crypto.randomUUID().replaceAll("-", "")}`; }
 
@@ -22,8 +25,9 @@ export function useSessionHub(): {
   connection: ConnectionState;
   live: Readonly<Record<string, LiveConversation>>;
   refresh(): Promise<Catalog | undefined>;
-  create(options: { projectRef: string; placeRef: string; modelRef: string | null; thinkingLevel: string; message: string }): Promise<Receipt>;
-  send(session: SessionRow, message: string): Promise<Receipt>;
+  create(options: { projectRef: string; placeRef: string; modelRef: string | null; thinkingLevel: string; message: string;
+    messageRequestId?: string; deferInitialMessage?: boolean }): Promise<Receipt>;
+  send(session: SessionRow, message: string, attachment?: { messageRequestId: string; attachmentRefs: string[]; attachments?: Attachment[] }): Promise<Receipt>;
   abort(session: SessionRow): Promise<Receipt>;
   setModel(session: SessionRow, modelRef: string): Promise<Receipt>;
   setThinking(session: SessionRow, thinkingLevel: string): Promise<Receipt>;
@@ -64,8 +68,8 @@ export function useSessionHub(): {
   }, []);
 
   const create = useCallback(async (options: { projectRef: string; placeRef: string; modelRef: string | null;
-    thinkingLevel: string; message: string }) => {
-    const current = catalogRef.current, message = options.message.trim(), messageRequestId = opaque("message");
+    thinkingLevel: string; message: string; messageRequestId?: string; deferInitialMessage?: boolean }) => {
+    const current = catalogRef.current, message = options.message.trim(), messageRequestId = options.messageRequestId ?? opaque("message");
     if (!current?.catalogRevision) throw new Error("catalog-unavailable");
     if (!message) throw new Error("message-empty");
     const submit = (snapshot: Catalog) => {
@@ -75,7 +79,8 @@ export function useSessionHub(): {
         commandId: opaque("command"), idempotencyKey: opaque("idempotency"), action: "session.create", requestedAt: now.toISOString(),
         expiresAt: new Date(now.getTime() + 5 * 60_000).toISOString(), sessionRef: null,
         expectedCatalogRevision: snapshot.catalogRevision, expectedSessionRevision: null,
-        payload: { ...options, message, messageRequestId } });
+        payload: { projectRef: options.projectRef, placeRef: options.placeRef, modelRef: options.modelRef,
+          thinkingLevel: options.thinkingLevel, message, messageRequestId, ...(options.deferInitialMessage ? { deferInitialMessage: true } : {}) } });
     };
     let receipt = await submit(current);
     if (revisionStale(receipt)) {
@@ -83,16 +88,23 @@ export function useSessionHub(): {
       if (latest?.catalogRevision) receipt = await submit(latest);
     }
     if (receipt.phase !== "settled" || !receipt.sessionRef) throw new Error(receipt.error?.code ?? receipt.resultCode);
-    setLive((value) => ({ ...value, [receipt.sessionRef!]: { ...(value[receipt.sessionRef!]
-      ?? { assistant: "", complete: false, error: null }), user: message, operationRef: receipt.operationRef } }));
+    if (!options.deferInitialMessage) setLive((value) => ({ ...value, [receipt.sessionRef!]: { ...(value[receipt.sessionRef!]
+      ?? { assistant: "", attachments: [], activities: [], complete: false, error: null }), user: message, operationRef: receipt.operationRef } }));
     await refresh(); return receipt;
   }, [refresh, request]);
 
-  const send = useCallback(async (session: SessionRow, message: string) => {
+  // The composer owns the messageRequestId whenever it has staged attachments,
+  // because the bytes were staged against that exact id before the message
+  // existed. Without attachments a fresh id per send is still correct.
+  const send = useCallback(async (session: SessionRow, message: string,
+    attachment?: { messageRequestId: string; attachmentRefs: string[]; attachments?: Attachment[] }) => {
     const current = catalogRef.current;
     if (!current?.catalogRevision) throw new Error("catalog-unavailable");
-    const text = message.trim(), messageRequestId = opaque("message"); if (!text) throw new Error("message-empty");
-    setLive((value) => ({ ...value, [session.sessionRef]: { user: text, assistant: "", operationRef: null, complete: false, error: null } }));
+    const text = message.trim(); if (!text) throw new Error("message-empty");
+    const messageRequestId = attachment?.messageRequestId ?? opaque("message");
+    const attachmentRefs = attachment?.attachmentRefs ?? [];
+    setLive((value) => ({ ...value, [session.sessionRef]: { user: text, assistant: "", attachments: attachment?.attachments ?? [], activities: [],
+      operationRef: null, complete: false, error: null } }));
     try {
       const submit = (snapshot: Catalog) => {
         const exact = snapshot.sessions.find((item) => item.sessionRef === session.sessionRef);
@@ -102,19 +114,19 @@ export function useSessionHub(): {
           commandId: opaque("command"), idempotencyKey: opaque("idempotency"), action: "session.send", requestedAt: now.toISOString(),
           expiresAt: new Date(now.getTime() + 5 * 60_000).toISOString(), sessionRef: session.sessionRef,
           expectedCatalogRevision: snapshot.catalogRevision, expectedSessionRevision: exact.sessionRevision,
-          payload: { delivery: "new-operation", message: text, messageRequestId, expectedOperationRef: null } });
+          payload: { delivery: "new-operation", message: text, messageRequestId, expectedOperationRef: null, attachmentRefs } });
       };
       let receipt = await submit(current);
       if (revisionStale(receipt)) {
         const latest = await refresh();
         if (latest?.catalogRevision) receipt = await submit(latest);
       }
-      setLive((value) => ({ ...value, [session.sessionRef]: { ...(value[session.sessionRef] ?? { user: text, assistant: "", complete: false, error: null }),
+      setLive((value) => ({ ...value, [session.sessionRef]: { ...(value[session.sessionRef] ?? { user: text, assistant: "", attachments: [], activities: [], complete: false, error: null }),
         operationRef: receipt.operationRef } }));
       if (receipt.phase !== "settled") throw new Error(receipt.error?.code ?? receipt.resultCode);
       void refresh(); return receipt;
     } catch (error) {
-      setLive((value) => ({ ...value, [session.sessionRef]: { ...(value[session.sessionRef] ?? { user: text, assistant: "", operationRef: null, complete: false }),
+      setLive((value) => ({ ...value, [session.sessionRef]: { ...(value[session.sessionRef] ?? { user: text, assistant: "", attachments: [], activities: [], operationRef: null, complete: false }),
         error: error instanceof Error ? error.message : "session-send-failed" } }));
       throw error;
     }
@@ -201,12 +213,23 @@ export function useSessionHub(): {
         const payload = frame.payload as Record<string, any>;
         if (frame.kind === "message.delta" && typeof payload?.sessionRef === "string" && typeof payload.delta === "string") {
           setLive((current) => ({ ...current, [payload.sessionRef]: { ...(current[payload.sessionRef]
-            ?? { user: "", assistant: "", complete: false, error: null }), operationRef: payload.operationRef,
+            ?? { user: "", assistant: "", attachments: [], activities: [], complete: false, error: null }), operationRef: payload.operationRef,
             assistant: `${current[payload.sessionRef]?.assistant ?? ""}${payload.delta}` } }));
+        }
+        if (["tool.started", "tool.completed"].includes(String(frame.kind)) && typeof payload?.sessionRef === "string"
+          && typeof payload.toolCallRef === "string" && typeof payload.toolLabel === "string") {
+          setLive((current) => {
+            const existing = current[payload.sessionRef] ?? { user: "", assistant: "", attachments: [], activities: [],
+              operationRef: payload.operationRef ?? null, complete: false, error: null };
+            const state: LiveActivity["state"] = frame.kind === "tool.started" ? "running" : payload.isError === true ? "failed" : "completed";
+            const activities = [...existing.activities.filter((item) => item.toolCallRef !== payload.toolCallRef),
+              { toolCallRef: payload.toolCallRef, toolLabel: payload.toolLabel, state }].slice(-16);
+            return { ...current, [payload.sessionRef]: { ...existing, operationRef: payload.operationRef ?? existing.operationRef, activities } };
+          });
         }
         if (frame.kind === "message.completed" && typeof payload?.sessionRef === "string") {
           setLive((current) => ({ ...current, [payload.sessionRef]: { ...(current[payload.sessionRef]
-            ?? { user: "", assistant: "", operationRef: payload.operationRef, error: null }), complete: true } }));
+            ?? { user: "", assistant: "", attachments: [], activities: [], operationRef: payload.operationRef, error: null }), complete: true } }));
         }
         if (["catalog.changed", "session.changed", "runtime.changed", "message.completed", "resync.required"].includes(String(frame.kind))) void refresh();
       });

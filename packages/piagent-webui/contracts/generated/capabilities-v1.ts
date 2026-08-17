@@ -304,9 +304,12 @@ export interface AvailableAttachmentsCapability {
   reason: null;
   /**
    * @minItems 1
-   * @maxItems 2
+   * @maxItems 3
    */
-  kinds: ["file" | "image"] | ["file" | "image", "file" | "image"];
+  kinds:
+    | ["file" | "image" | "document"]
+    | ["file" | "image" | "document", "file" | "image" | "document"]
+    | ["file" | "image" | "document", "file" | "image" | "document", "file" | "image" | "document"];
   /**
    * @minItems 1
    * @maxItems 64

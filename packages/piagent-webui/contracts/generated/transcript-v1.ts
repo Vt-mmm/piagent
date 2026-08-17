@@ -39,6 +39,15 @@ export type TranscriptItem = {
   turnIndex: NullableCount;
   content: Content;
   /**
+   * @maxItems 4
+   */
+  attachments?:
+    | []
+    | [AttachmentSummary]
+    | [AttachmentSummary, AttachmentSummary]
+    | [AttachmentSummary, AttachmentSummary, AttachmentSummary]
+    | [AttachmentSummary, AttachmentSummary, AttachmentSummary, AttachmentSummary];
+  /**
    * @maxItems 64
    */
   toolCalls: ToolCall[];
@@ -77,6 +86,12 @@ export interface DomainRevision {
   approvalRevision: string | null;
   sessionOptionRevision: string | null;
   queueRevision: string | null;
+}
+export interface AttachmentSummary {
+  displayName: string;
+  kind: "file" | "image" | "document";
+  mimeType: string;
+  truncated: boolean;
 }
 export interface ToolCall {
   toolCallRef: string;

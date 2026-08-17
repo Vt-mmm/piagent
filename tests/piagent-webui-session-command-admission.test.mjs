@@ -71,7 +71,13 @@ describe("Piagent durable session command admission", () => {
     assert.equal(receipt.sessionRef, sessionRefForPath(key, createdInfo.path)); assert.equal(receipt.operationRef, "operation_create_01");
     const replay = await controller.execute(command);
     assert.equal(replay.deduplicated, true); assert.equal(replay.sessionRef, receipt.sessionRef);
-    assert.equal(creates, 1); assert.equal(sends, 1);
+    const after = await catalog();
+    const deferredCommand = { ...command, commandId: "command_create_deferred_0001", idempotencyKey: "idempotency_create_deferred_1234567890",
+      expectedCatalogRevision: after.catalogRevision, payload: { ...command.payload, deferInitialMessage: true } };
+    const deferred = await controller.execute(deferredCommand);
+    assert.equal(validateFixture(registry, "session-command-v1", deferred).valid, true);
+    assert.equal(deferred.phase, "settled"); assert.equal(deferred.resultCode, "created"); assert.equal(deferred.operationRef, null);
+    assert.equal(creates, 2); assert.equal(sends, 1);
   });
 
   it("acquires and releases once with schema-valid durable deduplicated receipts", async (t) => {
@@ -213,7 +219,7 @@ describe("Piagent durable session command admission", () => {
     const send = { ...command(row, before.catalogRevision, "session.send", "send_message_01"),
       requestedAt: "2026-08-14T10:05:00.000Z", expiresAt: "2026-08-14T10:10:00.000Z",
       payload: { delivery: "new-operation", message: "Continue this session.", messageRequestId: "message_request_send_01",
-        expectedOperationRef: null } };
+        expectedOperationRef: null, attachmentRefs: [] } };
     const started = await controller.execute(send);
     assert.equal(validateFixture(registry, "session-command-v1", started).valid, true);
     assert.equal(started.resultCode, "started"); assert.match(started.operationRef, /^operation_/); assert.equal(promptText, "Continue this session.");
@@ -233,6 +239,50 @@ describe("Piagent durable session command admission", () => {
     assert.equal((await catalog()).sessions[0].liveState, "idle");
     assert.equal(events.replay(0).events.some((event) => event.kind === "message.completed"), true);
     await runtimes.close();
+  });
+
+  it("rejects attachment preparation before dispatch and releases reservations on proven runtime refusal", async (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-session-attachment-command-")); fs.chmodSync(root, 0o700);
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    const key = Buffer.alloc(32, 31), info = { path: path.join(root, "session.jsonl"), id: "raw-attachment-command",
+      cwd: path.join(root, "project"), name: "Attachment command", created: new Date("2026-08-14T09:00:00.000Z"),
+      modified: new Date("2026-08-14T09:00:01.000Z"), messageCount: 2, firstMessage: "Attachment", allMessagesText: "Attachment" };
+    const catalog = () => buildSessionCatalog({ gatewayInstanceRef: "gateway_attachment_command", key, listSessions: async () => [info] });
+    let mode = "prepare-failure", sends = 0, commits = 0, releases = 0;
+    const runtimes = { async acquire() {}, async send() {
+      sends += 1;
+      if (mode === "runtime-refusal") throw new Error("session-operation-conflict");
+      return { resultCode: "started", operationRef: "operation_attachment_command" };
+    } };
+    const controller = new SessionCommandController({ catalog, runtimes, store: new SessionCommandStore(root, key),
+      events: new GatewayEventStore(), now: () => new Date("2026-08-14T09:06:00.000Z"),
+      async prepareAttachments() {
+        if (mode === "prepare-failure") throw new Error("attachment-reference-unavailable");
+        return { text: "Prepared attachment.", images: [], commit() { commits += 1; }, release() { releases += 1; } };
+      } });
+    const run = async (suffix) => {
+      const current = await catalog(), row = current.sessions[0];
+      return controller.execute({ ...command(row, current.catalogRevision, "session.send", suffix),
+        payload: { delivery: "new-operation", message: "Send attachment.", messageRequestId: `message_${suffix}`,
+          expectedOperationRef: null, attachmentRefs: [`attachment_${suffix}`] } });
+    };
+
+    const unavailable = await run("attachment_missing_01");
+    assert.equal(validateFixture(registry, "session-command-v1", unavailable).valid, true);
+    assert.equal(unavailable.phase, "rejected"); assert.equal(unavailable.resultCode, "unavailable");
+    assert.equal(unavailable.error.code, "attachment-reference-unavailable"); assert.equal(sends, 0);
+
+    mode = "runtime-refusal";
+    const refused = await run("attachment_refused_02");
+    assert.equal(validateFixture(registry, "session-command-v1", refused).valid, true);
+    assert.equal(refused.phase, "rejected"); assert.equal(refused.resultCode, "owner-conflict");
+    assert.equal(releases, 1); assert.equal(commits, 0); assert.equal(sends, 1);
+
+    mode = "success";
+    const accepted = await run("attachment_started_03");
+    assert.equal(validateFixture(registry, "session-command-v1", accepted).valid, true);
+    assert.equal(accepted.phase, "settled"); assert.equal(accepted.resultCode, "started");
+    assert.equal(commits, 1); assert.equal(releases, 1); assert.equal(sends, 2);
   });
 
   it("renames, pins, archives, restores and forks through revision-bound durable commands", async (t) => {

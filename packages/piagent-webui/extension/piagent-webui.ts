@@ -20,7 +20,7 @@ import { piSourceMutationGuard } from "../../piagent-core/runtime/policy/source-
 import { CoreInspectionProvider } from "../server/core-inspection-provider.ts";
 import type { SourceView } from "../server/read-model-provider.ts";
 import { SameSessionPiBridge, type BridgeTaskFacts } from "./same-session-bridge.ts";
-import { AttachmentStore } from "./attachment-store.ts";
+import { AttachmentStore } from "../../piagent-core/runtime/input/attachment-store.ts";
 import { HeldMessageQueue } from "./held-message-queue.ts";
 import { LifecycleController } from "./lifecycle-controller.ts";
 import { lifecycleRuntimeDraft } from "./lifecycle-event-adapter.ts";
@@ -76,6 +76,14 @@ function protectedPaths(ctx: ExtensionContext): string[] {
     const resolved = loadProjectContextIndexPolicy(PLATFORM_ROOT, ctx.cwd);
     return effectiveProtectedPaths(resolved.policy, resolved.profile).readProtectedPaths;
   } catch { return [".pi/piagent-state/**", ".pi/context-index.json"]; }
+}
+
+// The same profile grant `piagent_document_read` honours. Read from the profile
+// on every call rather than captured once, so an operator who adds a directory
+// mid-session sees it in the workspace without restarting Pi.
+function documentReadRoots(ctx: ExtensionContext): unknown {
+  try { return loadProjectContextIndexPolicy(PLATFORM_ROOT, ctx.cwd).profile.additionalReadRoots; }
+  catch { return []; }
 }
 
 function writeDescriptor(ctx: ExtensionContext, value: Record<string, unknown>): string {
@@ -144,6 +152,8 @@ function readMethod(provider: CoreInspectionProvider, queue: HeldMessageQueue, s
   if (method === "handoffHistory" && args.length === 1 && typeof args[0] === "string" && REF.test(args[0])) return provider.handoffHistory(args[0]);
   if (method === "subagentTree" && args.length === 1 && typeof args[0] === "string" && REF.test(args[0])) return provider.subagentTree(args[0]);
   if (method === "releaseMonitor" && args.length === 0) return provider.releaseMonitor();
+  if (method === "documents" && args.length === 0) return provider.documents();
+  if (method === "document" && args.length === 1 && typeof args[0] === "string" && REF.test(args[0])) return provider.document(args[0]);
   if (method === "logPreview" && args.length === 1 && typeof args[0] === "string" && REF.test(args[0])) return provider.logPreview(args[0]);
   if (method === "transcript" && args.length === 2 && (args[0] === null || typeof args[0] === "string" && REF.test(args[0]))
     && Number.isInteger(args[1]) && Number(args[1]) >= 1 && Number(args[1]) <= 200) return provider.transcript(args[0] as string | null, Number(args[1]));
@@ -184,7 +194,9 @@ export default function piagentWebUiExtension(pi: ExtensionAPI): void {
   let approvalBinding: { key: string; unbind(): void; unsubscribe(): void } | null = null;
   const bridge = new SameSessionPiBridge(pi, { runtimeInstanceId, taskFacts,
     prepareAttachments: (refs, request, identity, text) => {
-      if (!attachments) throw new Error("attachment-store-unavailable"); return attachments.claim(refs, request, identity, text);
+      if (!attachments) throw new Error("attachment-store-unavailable");
+      const reservation = attachments.reserve(refs, request, identity, text);
+      return { ...reservation.prepared, commit: reservation.commit, release: reservation.release };
     } });
   try { attachments = new AttachmentStore({ runtimeInstanceId, bridgeSnapshot: () => bridge.snapshot(),
     modelSupportsImages: () => Array.isArray(currentContext?.model?.input) && currentContext.model.input.includes("image") }); }
@@ -301,6 +313,7 @@ export default function piagentWebUiExtension(pi: ExtensionAPI): void {
       task: () => activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()),
       activityEvents: () => readContextTelemetry(ctx.cwd, { limit: 5_000 }) as unknown[],
       currentActivity: () => [], sessionEntries: () => ctx.sessionManager.getBranch(), protectedPaths: () => protectedPaths(ctx),
+      documentReadRoots: () => documentReadRoots(ctx),
       contextUsage: () => ctx.getContextUsage(), model: () => ctx.model,
       thinkingLevel: () => ctx.thinkingLevel ?? pi.getThinkingLevel(),
       queueProjection: () => queue.projection(),

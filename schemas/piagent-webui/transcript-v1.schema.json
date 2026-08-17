@@ -188,6 +188,12 @@
         "agentOperationId": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
         "turnIndex": { "$ref": "#/$defs/nullableCount" },
         "content": { "$ref": "#/$defs/content" },
+        "attachments": {
+          "type": "array",
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/attachmentSummary" }
+        },
         "toolCalls": {
           "type": "array",
           "maxItems": 64,
@@ -216,6 +222,27 @@
           }
         }
       ]
+    },
+    "attachmentSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["displayName", "kind", "mimeType", "truncated"],
+      "properties": {
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[^\\u0000-\\u001F\\u007F/\\\\]*$"
+        },
+        "kind": { "enum": ["file", "image", "document"] },
+        "mimeType": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$"
+        },
+        "truncated": { "type": "boolean" }
+      }
     },
     "page": {
       "type": "object",

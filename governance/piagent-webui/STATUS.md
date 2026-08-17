@@ -151,5 +151,5 @@ Security/performance: lease/owner identity, idempotency, bounded pages and hosti
 Rollback: omit WUI5 Gateway registration; retain accepted current-session WebUI
 Known limitation: optional operating-system service installation is deferred; terminal sessions remain terminal-owned and use the compatibility adapter; remote and multi-user access remain out of scope
 Blocker: none
-Next exact action: publish the verified maintenance follow-up as v1.4.1; the accepted WUI5-18 candidate remains the v1.4.0 baseline
+Next exact action: publish the verified document-workspace and session-activity release as v1.5.0; the accepted WUI5-18 candidate remains the v1.4.0 baseline
 ```

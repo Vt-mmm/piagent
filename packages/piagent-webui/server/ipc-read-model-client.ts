@@ -62,6 +62,8 @@ export class IpcReadModelClient implements WebUiReadModelProvider {
   handoffHistory(runRef: string): Promise<unknown> { return this.#request("handoffHistory", [runRef]); }
   subagentTree(runRef: string): Promise<unknown> { return this.#request("subagentTree", [runRef]); }
   releaseMonitor(): Promise<unknown> { return this.#request("releaseMonitor"); }
+  documents(): Promise<unknown> { return this.#request("documents"); }
+  document(documentRef: string): Promise<unknown> { return this.#request("document", [documentRef]); }
   activity(): Promise<unknown> { return this.#request("activity"); }
   logPreview(activityRef: string): Promise<unknown> { return this.#request("logPreview", [activityRef]); }
   transcript(beforeCursor: string | null, limit: number): Promise<unknown> { return this.#request("transcript", [beforeCursor, limit]); }

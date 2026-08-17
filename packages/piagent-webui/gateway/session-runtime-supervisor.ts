@@ -7,7 +7,7 @@ import { activeSessionTask } from "../../piagent-core/extensions/task-state.js";
 import { inspectTaskControlState } from "../../piagent-core/runtime/inspection/task-control-journal.ts";
 import { piApprovalBroker, type ApprovalAuthority, type ApprovalBrokerEvent } from "../../piagent-core/runtime/inspection/approval-broker.ts";
 import type { SessionOwnerProjection, PiSessionInfo } from "./session-catalog.ts";
-import { projectRefForCwd, sessionRefForPath } from "./session-catalog.ts";
+import { isUserConversationSession, projectRefForCwd, sessionRefForPath } from "./session-catalog.ts";
 import { SessionLeaseStore, type SessionLeaseSnapshot } from "./session-lease-store.ts";
 import { GatewayEventStore } from "./gateway-events.ts";
 import { GatewaySessionStream } from "./gateway-session-stream.ts";
@@ -20,7 +20,7 @@ type RuntimeHandle = { dispose(): Promise<void>; session?: any };
 type RuntimeFactory = (info: PiSessionInfo, runtimeInstanceRef: string, sessionManager?: any) => Promise<RuntimeHandle>;
 type ActiveRuntime = { runtime: RuntimeHandle; lease: SessionLeaseSnapshot; info: PiSessionInfo; operationRef: string | null;
   unsubscribe: (() => void) | null; completion: Promise<void> | null; settling: boolean; approvalWaiting: boolean;
-  unbindApproval: (() => void) | null; unsubscribeApproval: (() => void) | null };
+  unbindApproval: (() => void) | null; unsubscribeApproval: (() => void) | null; sessionManager: any | null };
 type Projection = { sessionRevision: string; liveState: "offline" | "idle" | "running" | "paused" | "waiting-approval" | "uncertain" };
 
 function rpcUiContext(): object {
@@ -129,7 +129,7 @@ export class SessionRuntimeSupervisor {
   setProjectionReader(reader: (sessionRef: string) => Promise<Projection>): void { this.#readProjection = reader; }
 
   async listSessions(): Promise<PiSessionInfo[]> {
-    const persisted = await this.#listSessions();
+    const persisted = (await this.#listSessions()).filter(isUserConversationSession);
     const paths = new Set(persisted.map((info) => info.path));
     for (const [sessionRef, info] of this.#created) {
       if (paths.has(info.path)) this.#created.delete(sessionRef);
@@ -140,7 +140,7 @@ export class SessionRuntimeSupervisor {
   async create(projectRef: string, placeRef: string, modelRef: string | null, thinkingLevel: string): Promise<string> {
     if (this.#closed || !this.#host) throw new Error("session-create-unavailable");
     if (placeRef !== projectRef) throw new Error("session-place-mismatch");
-    const sessions = await this.#listSessions();
+    const sessions = (await this.#listSessions()).filter(isUserConversationSession);
     const imported = this.#resolveProject?.(projectRef) ?? null;
     const candidates = [...new Set([...sessions.filter((info) => projectRefForCwd(this.#key, info.cwd) === projectRef).map((info) => info.cwd),
       ...(imported ? [imported] : [])])];
@@ -166,6 +166,8 @@ export class SessionRuntimeSupervisor {
     return sessionRef;
   }
 
+  liveSessionManager(sessionRef: string): any | null { return this.#active.get(sessionRef)?.sessionManager ?? null; }
+
   async acquire(sessionRef: string): Promise<SessionLeaseSnapshot> {
     if (this.#closed) throw new Error("session-runtime-supervisor-closed");
     const active = this.#active.get(sessionRef);
@@ -179,7 +181,8 @@ export class SessionRuntimeSupervisor {
 
   async #acquire(sessionRef: string): Promise<SessionLeaseSnapshot> {
     if (this.#active.size + this.#opening.size > MAX_WARM_RUNTIMES) throw new Error("session-runtime-capacity");
-    const found = (await this.#listSessions()).filter((info) => sessionRefForPath(this.#key, info.path) === sessionRef);
+    const found = (await this.#listSessions()).filter(isUserConversationSession)
+      .filter((info) => sessionRefForPath(this.#key, info.path) === sessionRef);
     if (found.length !== 1) throw new Error(found.length ? "session-ref-ambiguous" : "session-not-found");
     return await this.#activate(sessionRef, found[0]!);
   }
@@ -201,7 +204,8 @@ export class SessionRuntimeSupervisor {
         throw new Error("session-owner-continuity-lost");
       }
       const active: ActiveRuntime = { runtime, lease: current, info, operationRef: null, unsubscribe: null, completion: null,
-        settling: false, approvalWaiting: false, unbindApproval: null, unsubscribeApproval: null };
+        settling: false, approvalWaiting: false, unbindApproval: null, unsubscribeApproval: null,
+        sessionManager: sessionManager ?? runtime.session?.sessionManager ?? null };
       this.#active.set(sessionRef, active);
       this.#bindApproval(sessionRef, active);
       return current;
@@ -271,15 +275,20 @@ export class SessionRuntimeSupervisor {
     };
   }
 
+  // `message` arrives already carrying any attached document text, and `images`
+  // already split out: the command controller claims staged refs before it calls
+  // here, so this layer only forwards what the host prompt takes.
   async send(sessionRef: string, payload: { delivery: "new-operation" | "follow-up" | "steer"; message: string;
-    expectedOperationRef: string | null }, sessionRevision: string): Promise<{ resultCode: "started" | "queued" | "steered"; operationRef: string }> {
+    expectedOperationRef: string | null; images?: unknown[] }, sessionRevision: string):
+  Promise<{ resultCode: "started" | "queued" | "steered"; operationRef: string }> {
     await this.acquire(sessionRef);
     const active = this.#active.get(sessionRef), session = active?.runtime.session;
     if (!active || !session) throw new Error("session-runtime-unavailable");
     if (payload.delivery !== "new-operation") {
       if (!active.operationRef || active.operationRef !== payload.expectedOperationRef || !session.isStreaming) throw new Error("session-operation-conflict");
-      if (payload.delivery === "follow-up") { await session.followUp(payload.message); return { resultCode: "queued", operationRef: active.operationRef }; }
-      await session.steer(payload.message); return { resultCode: "steered", operationRef: active.operationRef };
+      const images = payload.images?.length ? payload.images : undefined;
+      if (payload.delivery === "follow-up") { await session.followUp(payload.message, images); return { resultCode: "queued", operationRef: active.operationRef }; }
+      await session.steer(payload.message, images); return { resultCode: "steered", operationRef: active.operationRef };
     }
     if (payload.expectedOperationRef !== null || active.operationRef || active.settling || !session.isIdle) throw new Error("session-operation-conflict");
     const operationRef = `operation_${randomBytes(24).toString("base64url")}`;
@@ -292,7 +301,7 @@ export class SessionRuntimeSupervisor {
       created.firstMessage = payload.message; created.allMessagesText = payload.message; created.messageCount = 1; created.modified = new Date();
     }
     let prompt: Promise<void>;
-    try { prompt = session.prompt(payload.message); }
+    try { prompt = session.prompt(payload.message, payload.images?.length ? { images: payload.images } : undefined); }
     catch (error) { await this.#finishOperation(sessionRef, operationRef, stream); throw error; }
     active.completion = prompt.then(() => this.#finishOperation(sessionRef, operationRef, stream),
       () => this.#finishOperation(sessionRef, operationRef, stream));

@@ -51,7 +51,7 @@ export type DocumentExtraction =
   | { status: "ok"; text: string; truncated: boolean; kind: "text" | "docx" | "pdf" }
   | { status: "error"; reason: string };
 
-type DocumentCommandResult = { status: number | null; stdout: string; stderr: string; error?: Error };
+export type DocumentCommandResult = { status: number | null; stdout: string; stderr: string; error?: Error };
 
 export function expandHome(candidate: string, home: string | undefined): string {
   if (candidate === "~") return home ?? candidate;
@@ -450,7 +450,10 @@ export function extractPdfFromDescriptor(
   // stdout out. The converter is handed the already-open descriptor rather than
   // a path, so it reads the file whose identity was verified and cannot be
   // pointed somewhere else by a name that changed in the meantime.
-  const result = run("pdftotext", ["-layout", "-enc", "UTF-8", "-", "-"], fd);
+  return extractPdfCommandResult(run("pdftotext", ["-layout", "-enc", "UTF-8", "-", "-"], fd));
+}
+
+export function extractPdfCommandResult(result: DocumentCommandResult): DocumentExtraction {
   if (result.error) {
     return {
       status: "error",
@@ -471,7 +474,7 @@ export function extractPdfFromDescriptor(
 
 // spawnSync blocks the whole runtime, so an external converter that never
 // returns would hang the session rather than fail the read.
-const PDF_TIMEOUT_MS = 20_000;
+export const PDF_TIMEOUT_MS = 20_000;
 
 export function probeExecutableOnPath(executable: string): DocumentCommandResult {
   const result = spawnSync("/bin/sh", ["-c", 'command -v "$1"', "piagent-command-probe", executable], {

@@ -39,6 +39,7 @@ import {
   buildFreshCommand,
   chooseFreshWorkflow,
   extractTaskRequest,
+  freshRequestParts,
   isFreshOrUtilityInput,
   trimTaskForInline
 } from "../packages/piagent-core/runtime/workflows/input-routing.ts";
@@ -1281,6 +1282,10 @@ describe("runtime session modules", () => {
     const command = buildFreshCommand(cwd, "task", "A".repeat(8_100), "Start clean.");
     const intake = command.match(/from (\.pi\/task-inbox\/[^.]+\.md)/)?.[1];
     assert.ok(intake, command);
+    assert.match(command, /^\/fresh task --session-title "A{64}" Read task intake from /);
+    assert.deepEqual(freshRequestParts(command.replace(/^\/fresh task /, "")), {
+      request: `Read task intake from ${intake}. Start clean.`, sessionTitle: "A".repeat(64)
+    });
     assert.equal(fs.existsSync(path.join(cwd, intake)), true);
 
     const ctx = extensionContext(cwd);

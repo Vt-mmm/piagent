@@ -6,13 +6,16 @@ import { spawnSync } from "node:child_process";
 import { describe, it } from "node:test";
 
 import { requestGatewayControl } from "../packages/piagent-webui/gateway/control-socket.ts";
+import { createAttachmentCommand } from "../packages/piagent-webui/client/src/chat-command.ts";
 import { loadPinnedPiHost } from "../packages/piagent-webui/gateway/pi-host.ts";
 import { gatewayProfileState, readGatewayDescriptor } from "../packages/piagent-webui/gateway/profile-state.ts";
+import { SessionAttachmentRegistry } from "../packages/piagent-webui/gateway/session-attachment-registry.ts";
 import { startPiagentGateway } from "../packages/piagent-webui/gateway/gateway-service.ts";
 import { SessionInspectionRegistry } from "../packages/piagent-webui/gateway/session-inspection-registry.ts";
 import { sessionRefForPath } from "../packages/piagent-webui/gateway/session-catalog.ts";
 import { createWebUiSchemaRegistry, validateFixture } from "./helpers/piagent-webui-schema-registry.mjs";
 import { ensureWebUiBuild } from "./helpers/piagent-webui-build.mjs";
+import { docx, DOCX_MIME } from "./helpers/piagent-docx-fixture.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const expectedPiVersion = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"))
@@ -50,7 +53,7 @@ describe("Piagent local Session Hub Gateway", () => {
       host: { SessionManager: { listAll: async () => [{ path: "/opaque/session.jsonl", id: "raw", cwd,
         created: new Date(), modified: new Date(), messageCount: 2, firstMessage: "safe", allMessagesText: "safe" }] } },
       models: { getModel() {}, getAvailableSnapshot: () => [
-        { provider: "fixture", id: "safe-model", name: "Visible sk-proj-abcdefghijklmnopqrstuvwxyz", reasoning: true },
+        { provider: "fixture", id: "safe-model", name: "Visible sk-proj-abcdefghijklmnopqrstuvwxyz", reasoning: true, input: ["text", "image"] },
         { provider: "fixture", id: "sk-proj-abcdefghijklmnopqrstuvwxyz", name: "Must be omitted", reasoning: true }
       ] } });
     const projected = await registry.creationOptions();
@@ -59,8 +62,41 @@ describe("Piagent local Session Hub Gateway", () => {
     assert.equal(JSON.stringify(projected).includes(cwd), false);
     assert.equal(projected.models.length, 1);
     assert.equal(projected.models[0].modelId, "safe-model");
+    assert.equal(projected.models[0].imageInput, true);
+    assert.equal(projected.webSearch.state, "unavailable");
     assert.equal(projected.models[0].displayName.includes("sk-proj-"), false);
     assert.equal(JSON.stringify(projected).includes("abcdefghijklmnopqrstuvwxyz"), false);
+  });
+
+  it("reports a Codex-first web-search route without projecting credentials", async (t) => {
+    const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-web-search-capability-"));
+    t.after(() => fs.rmSync(agentDir, { recursive: true, force: true }));
+    const packageDir = path.join(agentDir, "npm", "node_modules", "pi-web-access");
+    fs.mkdirSync(packageDir, { recursive: true });
+    fs.writeFileSync(path.join(packageDir, "package.json"), JSON.stringify({ name: "pi-web-access", version: "0.17.0" }));
+    const models = [{ provider: "openai-codex", id: "gpt-safe", name: "GPT Safe", reasoning: true, input: ["text", "image"] }];
+    const inspection = new SessionInspectionRegistry({ gatewayInstanceRef: "gateway_codex_capabilities", key: Buffer.alloc(32, 9),
+      packageRoot: root, agentDir, host: { SessionManager: { listAll: async () => [] } },
+      models: { getModel() {}, getAvailableSnapshot: () => models } });
+    const projected = await inspection.creationOptions();
+    assert.deepEqual(projected.webSearch, { state: "configured", route: "codex-first", provider: "openai-codex",
+      fallbackProvider: "exa", integration: { name: "pi-web-access", version: "0.17.0" }, reasonCode: null });
+    assert.equal(projected.models[0].imageInput, true);
+    assert.equal(JSON.stringify(projected).includes("apiKey"), false);
+  });
+
+  it("does not expose an internal revived subagent through creation options or read models", async () => {
+    const key = Buffer.alloc(32, 10), sessionPath = "/private/agent/sessions/project/revived.jsonl";
+    const hidden = { path: sessionPath, id: "raw-child", cwd: "/private/hidden-project",
+      name: "subagent-piagent-planner-96dfe478-1", parentSessionPath: "/private/agent/sessions/project/parent.jsonl",
+      created: new Date("2026-08-17T07:11:40.620Z"), modified: new Date("2026-08-17T07:15:00.000Z"), messageCount: 3,
+      firstMessage: "Inherited user request", allMessagesText: "Inherited user request\nTask: You are reviving a previous subagent conversation." };
+    const inspection = new SessionInspectionRegistry({ gatewayInstanceRef: "gateway_hidden_subagent", key, packageRoot: root,
+      host: { SessionManager: { listAll: async () => [hidden], open() { throw new Error("must-not-open"); } },
+        calculateContextTokens() { return 0; }, estimateTokens() { return 0; }, getLatestCompactionEntry() { return null; } } });
+    const options = await inspection.creationOptions();
+    assert.deepEqual(options.projects, []);
+    await assert.rejects(() => inspection.provider(sessionRefForPath(key, sessionPath)));
   });
 
   it("projects persisted context usage for a saved session without starting a model turn", async (t) => {
@@ -89,6 +125,38 @@ describe("Piagent local Session Hub Gateway", () => {
     const snapshot = await provider.snapshot();
     assert.deepEqual(snapshot.usage.context, { state: "known", tokens: 1_000, contextWindow: 16_000, percent: 6.25,
       capturedAt: snapshot.generatedAt, reasonCode: null });
+  });
+
+  it("inspects a newly created session from the Gateway session source before the host index refreshes", async (t) => {
+    const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-new-session-inspection-"));
+    t.after(() => fs.rmSync(temporary, { recursive: true, force: true }));
+    fs.mkdirSync(path.join(temporary, ".git"));
+    const key = Buffer.alloc(32, 6), sessionPath = path.join(temporary, "new-session.jsonl");
+    const transient = { path: sessionPath, id: "new-session", cwd: temporary, name: "New conversation",
+      created: new Date(), modified: new Date(), messageCount: 0, firstMessage: "(no messages)", allMessagesText: "" };
+    let liveOpened = 0;
+    const liveManager = { getBranch: () => [], buildSessionContext: () => ({ model: null, thinkingLevel: "high", messages: [] }) };
+    const inspection = new SessionInspectionRegistry({ gatewayInstanceRef: "gateway_new_session_inspection", key, packageRoot: root,
+      listSessions: async () => [transient],
+      openLiveSession(value) { liveOpened += 1; assert.equal(value, sessionRefForPath(key, sessionPath)); return liveManager; },
+      host: {
+        SessionManager: { listAll: async () => [], open() { throw new Error("unpersisted-session-must-use-live-manager"); } },
+        calculateContextTokens: () => 0, estimateTokens: () => 0, getLatestCompactionEntry: () => null
+      } });
+    const provider = await inspection.provider(sessionRefForPath(key, sessionPath));
+    const snapshot = await provider.snapshot();
+    assert.equal(snapshot.version, "piagent-webui-snapshot-v1");
+    assert.match(snapshot.identity.sessionRef, /^session\./);
+    assert.equal(liveOpened, 1);
+    const attachments = new SessionAttachmentRegistry({ inspect: async () => await provider.snapshot(), tempRoot: temporary });
+    t.after(() => attachments.close());
+    const command = await createAttachmentCommand(snapshot, "message-request.new-session-docx", {
+      displayName: "brief.docx", declaredMimeType: DOCX_MIME,
+      dataBase64: docx("Deferred session attachment proof.").toString("base64")
+    });
+    const receipt = await attachments.execute(sessionRefForPath(key, sessionPath), command);
+    assert.equal(receipt.resultCode, "staged");
+    assert.equal(receipt.attachment?.kind, "document");
   });
 
   it("reports owner-safe lifecycle health and repairs an invalid stopped descriptor only when requested", (t) => {

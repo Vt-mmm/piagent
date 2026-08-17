@@ -319,6 +319,24 @@ describe("Piagent WebUI loopback server", () => {
     })).status, 403);
   });
 
+  it("rate-limits controls per authenticated browser session instead of locking every localhost client", async () => {
+    const server = await start({ executeControl: async () => ({ ok: true }) });
+    const open = async (launchUrl) => {
+      const exchange = await request(server.origin, "/api/v1/bootstrap", { method: "POST",
+        headers: { Origin: server.origin, "Content-Type": "application/json" },
+        body: JSON.stringify({ capability: bootstrapValue(launchUrl) }) });
+      const session = JSON.parse(exchange.body), cookie = exchange.headers["set-cookie"][0].split(";", 1)[0];
+      return { Cookie: cookie, Origin: server.origin, "Content-Type": "application/json", "X-Piagent-CSRF": session.csrfToken };
+    };
+    const first = await open(server.launchUrl), body = JSON.stringify({ action: "chat.send" });
+    for (let attempt = 0; attempt < 60; attempt += 1) assert.equal((await request(server.origin, "/api/v1/chat/messages", {
+      method: "POST", headers: first, body })).status, 200);
+    assert.equal((await request(server.origin, "/api/v1/chat/messages", { method: "POST", headers: first, body })).status, 429);
+
+    const second = await open(server.issueLaunchUrl());
+    assert.equal((await request(server.origin, "/api/v1/chat/messages", { method: "POST", headers: second, body })).status, 200);
+  });
+
   it("invalidates browser sessions on restart without touching the capability reader", async () => {
     let reads = 0;
     const first = await startLoopbackServer({ staticRoot: staticRoot(), readCapabilities: () => { reads += 1; return capabilities; } });

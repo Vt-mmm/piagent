@@ -3,16 +3,18 @@ import path from "node:path";
 
 import { readContextTelemetry } from "../../piagent-core/extensions/context-engine.js";
 import { activeSessionTask } from "../../piagent-core/extensions/task-state.js";
-import { runtimeConnectionDefinitions, runtimeProtectedPaths } from "../../piagent-core/runtime/inspection/project-runtime-inspection.ts";
+import { runtimeConnectionDefinitions, runtimeDocumentReadRoots, runtimeProtectedPaths } from "../../piagent-core/runtime/inspection/project-runtime-inspection.ts";
 import { setRuntimeMcpEnabled } from "../../piagent-core/runtime/inspection/mcp-control.ts";
 import { webUiModelRef } from "../../piagent-core/runtime/inspection/webui-snapshot.ts";
 import { redactSensitiveText } from "../../piagent-core/security/sensitive-data.js";
 import { piApprovalBroker } from "../../piagent-core/runtime/inspection/approval-broker.ts";
+import { attachmentCapability } from "../../piagent-core/runtime/input/attachment-store.ts";
 import { CoreInspectionProvider } from "../server/core-inspection-provider.ts";
 import { ReadModelNotFound, type WebUiReadModelProvider } from "../server/read-model-provider.ts";
-import { projectRefForCwd, sessionRefForPath, type PiSessionInfo } from "./session-catalog.ts";
+import { isUserConversationSession, projectRefForCwd, sessionRefForPath, type PiSessionInfo } from "./session-catalog.ts";
 import { nativeProjectPickerAvailable } from "./native-project-picker.ts";
 import type { McpAuthBroker } from "./mcp-auth-broker.ts";
+import { inspectWebSearchCapability } from "./ai-capability-inspection.ts";
 
 type PiHost = {
   SessionManager: {
@@ -95,19 +97,26 @@ function persistedContextUsage(host: PiHost, entries: unknown[], messages: unkno
 export class SessionInspectionRegistry {
   readonly #gatewayInstanceRef: string;
   readonly #host: PiHost;
+  readonly #listSessions: () => Promise<PiSessionInfo[]>;
+  readonly #openLiveSession: ((sessionRef: string) => ReturnType<PiHost["SessionManager"]["open"]> | null) | null;
   readonly #key: Buffer;
   readonly #packageRoot: string;
+  readonly #agentDir?: string;
   readonly #models?: ModelRuntime;
   readonly #projects?: ProjectSource;
   readonly #mcpAuth?: McpAuthBroker;
   readonly #providers = new Map<string, { modifiedAt: string; provider: CoreInspectionProvider }>();
 
-  constructor(options: { gatewayInstanceRef: string; host: PiHost; key: Buffer; packageRoot: string; models?: ModelRuntime; projects?: ProjectSource;
-    mcpAuth?: McpAuthBroker }) {
+  constructor(options: { gatewayInstanceRef: string; host: PiHost; key: Buffer; packageRoot: string; agentDir?: string; models?: ModelRuntime; projects?: ProjectSource;
+    mcpAuth?: McpAuthBroker; listSessions?: () => Promise<PiSessionInfo[]>;
+    openLiveSession?: (sessionRef: string) => ReturnType<PiHost["SessionManager"]["open"]> | null }) {
     this.#gatewayInstanceRef = options.gatewayInstanceRef;
     this.#host = options.host;
+    this.#listSessions = options.listSessions ?? (() => options.host.SessionManager.listAll());
+    this.#openLiveSession = options.openLiveSession ?? null;
     this.#key = options.key;
     this.#packageRoot = options.packageRoot;
+    this.#agentDir = options.agentDir;
     this.#models = options.models;
     this.#projects = options.projects;
     this.#mcpAuth = options.mcpAuth;
@@ -118,7 +127,7 @@ export class SessionInspectionRegistry {
   }
 
   async #sessionInfo(sessionRef: string): Promise<PiSessionInfo> {
-    const sessions = await this.#host.SessionManager.listAll();
+    const sessions = (await this.#listSessions()).filter(isUserConversationSession);
     const found = sessions.filter((candidate) => sessionRefForPath(this.#key, candidate.path) === sessionRef);
     if (found.length !== 1) throw new ReadModelNotFound();
     return found[0]!;
@@ -168,7 +177,7 @@ export class SessionInspectionRegistry {
   }
 
   async creationOptions(): Promise<unknown> {
-    const sessions = await this.#host.SessionManager.listAll();
+    const sessions = (await this.#listSessions()).filter(isUserConversationSession);
     const projects = new Map<string, { projectRef: string; placeRef: string; label: string }>();
     for (const info of sessions) {
       if (!info.cwd) continue;
@@ -179,7 +188,8 @@ export class SessionInspectionRegistry {
     for (const project of safeRead(() => this.#projects?.list() ?? [], [])) {
       if (!projects.has(project.projectRef)) projects.set(project.projectRef, project);
     }
-    const models = (this.#models?.getAvailableSnapshot() ?? []).slice(0, 300).flatMap((value) => {
+    const availableModels = (this.#models?.getAvailableSnapshot() ?? []).slice(0, 300);
+    const models = availableModels.flatMap((value) => {
       const provider = safeModelId(value.provider);
       const modelId = safeModelId(value.id);
       if (!provider || !modelId || typeof value.reasoning !== "boolean") return [];
@@ -187,11 +197,12 @@ export class SessionInspectionRegistry {
         ? value.thinkingLevelMap as Record<string, unknown> : {};
       const thinkingLevels = value.reasoning ? ["off", "minimal", "low", "medium", "high", "xhigh", "max"]
         .filter((level) => mapping[level] !== null && !(["xhigh", "max"].includes(level) && mapping[level] === undefined)) : ["off"];
+      const inputs = Array.isArray(value.input) ? value.input.filter((item): item is string => typeof item === "string") : null;
       return [{ modelRef: webUiModelRef(provider, modelId), provider, modelId, displayName: safeName(value.name ?? modelId),
-        reasoning: value.reasoning, thinkingLevels }];
+        reasoning: value.reasoning, imageInput: inputs ? inputs.includes("image") : null, thinkingLevels }];
     });
     return { schemaVersion: 1, version: "piagent-session-creation-options-v1", generatedAt: new Date().toISOString(),
-      projects: [...projects.values()].slice(0, 200), models,
+      projects: [...projects.values()].slice(0, 200), models, webSearch: inspectWebSearchCapability({ agentDir: this.#agentDir, models: availableModels }),
       projectImport: nativeProjectPickerAvailable() ? { status: "available", reasonCode: null }
         : { status: "unavailable", reasonCode: "native-project-picker-unavailable" },
       reasonCode: projects.size ? null : "no-known-project" };
@@ -204,7 +215,7 @@ export class SessionInspectionRegistry {
     if (cached?.modifiedAt === modifiedAt) return cached.provider;
 
     let manager: ReturnType<PiHost["SessionManager"]["open"]>;
-    try { manager = this.#host.SessionManager.open(info.path); }
+    try { manager = this.#openLiveSession?.(sessionRef) ?? this.#host.SessionManager.open(info.path); }
     catch { throw new ReadModelNotFound(); }
     const context = safeRead(() => manager.buildSessionContext(), { model: null, thinkingLevel: "unknown", messages: [] });
     const model = context.model ? this.#models?.getModel(context.model.provider, context.model.modelId) : undefined;
@@ -225,6 +236,15 @@ export class SessionInspectionRegistry {
       activityEvents: () => safeRead(() => readContextTelemetry(info.cwd, { limit: 5_000 }), []),
       sessionEntries: () => entries,
       protectedPaths: () => runtimeProtectedPaths(this.#packageRoot, info.cwd),
+      // The document workspace lists the project plus whatever the operator
+      // granted in the profile. Without this it silently shows the project only,
+      // which reads as "the grant does not work" rather than "it was not asked for".
+      documentReadRoots: () => safeRead(() => runtimeDocumentReadRoots(this.#packageRoot, info.cwd), []),
+      // Derived from the model and the host, with no store instance involved:
+      // the store for this session is built from the very snapshot this call
+      // helps produce, so asking the store would be circular.
+      attachmentCapability: () => attachmentCapability({
+        images: Array.isArray(model?.input) && model.input.includes("image"), now: Date.now() }),
       contextUsage: () => contextUsage,
       model: () => model,
       thinkingLevel: () => context.thinkingLevel,

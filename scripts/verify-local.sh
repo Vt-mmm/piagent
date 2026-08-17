@@ -206,6 +206,7 @@ required_files=(
   "$ROOT/schemas/piagent-webui/queue-v1.schema.json"
   "$ROOT/schemas/piagent-webui/model-catalog-v1.schema.json"
   "$ROOT/schemas/piagent-webui/attachment-v1.schema.json"
+  "$ROOT/schemas/piagent-webui/document-workspace-v1.schema.json"
   "$ROOT/schemas/piagent-webui/control-command-v1.schema.json"
   "$ROOT/schemas/piagent-webui/approval-v1.schema.json"
   "$ROOT/schemas/piagent-webui/capabilities-v1.schema.json"
@@ -232,6 +233,7 @@ required_files=(
   "$ROOT/packages/piagent-webui/contracts/generated/queue-v1.ts"
   "$ROOT/packages/piagent-webui/contracts/generated/model-catalog-v1.ts"
   "$ROOT/packages/piagent-webui/contracts/generated/attachment-v1.ts"
+  "$ROOT/packages/piagent-webui/contracts/generated/document-workspace-v1.ts"
   "$ROOT/packages/piagent-webui/contracts/generated/session-catalog-v1.ts"
   "$ROOT/packages/piagent-webui/contracts/generated/session-command-v1.ts"
   "$ROOT/packages/piagent-webui/contracts/generated/gateway-capabilities-v1.ts"
@@ -249,6 +251,9 @@ required_files=(
   "$ROOT/packages/piagent-webui/client/src/evidence-view-model.ts"
   "$ROOT/packages/piagent-webui/client/src/EvidencePanels.tsx"
   "$ROOT/packages/piagent-webui/client/src/ChatPanel.tsx"
+  "$ROOT/packages/piagent-webui/client/src/MarkdownMessage.tsx"
+  "$ROOT/packages/piagent-webui/client/src/DocumentWorkspace.tsx"
+  "$ROOT/packages/piagent-webui/client/src/attachment-intake.ts"
   "$ROOT/packages/piagent-webui/client/src/chat-view-model.ts"
   "$ROOT/packages/piagent-webui/client/src/chat-command.ts"
   "$ROOT/packages/piagent-webui/client/src/review-command.ts"
@@ -292,6 +297,8 @@ required_files=(
   "$ROOT/packages/piagent-webui/gateway/mcp-auth-broker.ts"
   "$ROOT/tests/piagent-webui-mcp-auth.test.mjs"
   "$ROOT/packages/piagent-webui/gateway/session-catalog.ts"
+  "$ROOT/packages/piagent-webui/gateway/ai-capability-inspection.ts"
+  "$ROOT/packages/piagent-webui/gateway/session-attachment-registry.ts"
   "$ROOT/packages/piagent-webui/gateway/session-command-controller.ts"
   "$ROOT/packages/piagent-webui/gateway/session-command-store.ts"
   "$ROOT/packages/piagent-webui/gateway/session-lease-store.ts"
@@ -305,6 +312,11 @@ required_files=(
   "$ROOT/packages/piagent-webui/extension/source-open-controller.ts"
   "$ROOT/packages/piagent-webui/extension/vscode-handoff.ts"
   "$ROOT/packages/piagent-core/runtime/inspection/review-state-contract.ts"
+  "$ROOT/packages/piagent-core/runtime/inspection/document-workspace-projection.ts"
+  "$ROOT/packages/piagent-core/runtime/inspection/session-identity.ts"
+  "$ROOT/packages/piagent-core/runtime/input/attachment-reservation.ts"
+  "$ROOT/packages/piagent-core/runtime/input/attachment-document-command.ts"
+  "$ROOT/packages/piagent-core/runtime/input/attachment-store.ts"
   "$ROOT/packages/piagent-core/runtime/inspection/mcp-control.ts"
   "$ROOT/packages/piagent-core/runtime/inspection/review-state-projection.ts"
   "$ROOT/packages/piagent-core/runtime/inspection/review-state-store.ts"
@@ -347,7 +359,6 @@ required_files=(
   "$ROOT/packages/piagent-webui/extension/held-message-queue.ts"
   "$ROOT/packages/piagent-webui/extension/session-options-controller.ts"
   "$ROOT/packages/piagent-webui/extension/session-stream-adapter.ts"
-  "$ROOT/packages/piagent-webui/extension/attachment-store.ts"
   "$ROOT/packages/piagent-webui/extension/lifecycle-controller.ts"
   "$ROOT/packages/piagent-webui/extension/lifecycle-event-adapter.ts"
   "$ROOT/packages/piagent-core/runtime/inspection/approval-broker.ts"
@@ -360,6 +371,8 @@ required_files=(
   "$ROOT/tests/piagent-webui-held-message-queue.test.mjs"
   "$ROOT/tests/piagent-webui-session-options.test.mjs"
   "$ROOT/tests/piagent-webui-attachment-store.test.mjs"
+  "$ROOT/tests/piagent-webui-document-workspace.test.mjs"
+  "$ROOT/tests/helpers/piagent-docx-fixture.mjs"
   "$ROOT/tests/piagent-webui-approval-broker.test.mjs"
   "$ROOT/tests/piagent-webui-lifecycle-control.test.mjs"
   "$ROOT/tests/piagent-webui-lifecycle-client.test.mjs"
@@ -571,6 +584,8 @@ const jsonFiles = [
   "schemas/piagent-webui/transcript-v1.schema.json",
   "schemas/piagent-webui/queue-v1.schema.json",
   "schemas/piagent-webui/model-catalog-v1.schema.json",
+  "schemas/piagent-webui/attachment-v1.schema.json",
+  "schemas/piagent-webui/document-workspace-v1.schema.json",
   "schemas/piagent-webui/control-command-v1.schema.json",
   "schemas/piagent-webui/approval-v1.schema.json",
   "schemas/piagent-webui/capabilities-v1.schema.json",

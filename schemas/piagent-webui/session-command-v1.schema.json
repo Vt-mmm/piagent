@@ -56,7 +56,11 @@
                 "modelRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
                 "thinkingLevel": { "$ref": "#/$defs/thinkingLevel" },
                 "message": { "type": "string", "minLength": 1, "maxLength": 32768, "pattern": "^[^\\u0000]*$" },
-                "messageRequestId": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" }
+                "messageRequestId": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+                "deferInitialMessage": {
+                  "description": "Create the durable session without dispatching the first turn so the client can stage selected attachments against the new session before sending it.",
+                  "type": "boolean"
+                }
               }
             }
           }
@@ -75,12 +79,19 @@
             "payload": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["delivery", "message", "messageRequestId", "expectedOperationRef"],
+              "required": ["delivery", "message", "messageRequestId", "expectedOperationRef", "attachmentRefs"],
               "properties": {
                 "delivery": { "enum": ["new-operation", "follow-up", "steer"] },
                 "message": { "type": "string", "minLength": 1, "maxLength": 32768, "pattern": "^[^\\u0000]*$" },
                 "messageRequestId": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
-                "expectedOperationRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" }
+                "expectedOperationRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+                "attachmentRefs": {
+                  "description": "Refs staged for this exact messageRequestId. Claimed once at dispatch and consumed.",
+                  "type": "array",
+                  "maxItems": 4,
+                  "uniqueItems": true,
+                  "items": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" }
+                }
               },
               "allOf": [
                 {

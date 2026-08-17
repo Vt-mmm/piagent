@@ -98,6 +98,8 @@ pi install /path/to/piagent
   Inspector; projection Task Changes / Working Tree / Staged có bounded diff,
   provenance và enforce protected path; session lease bền, recovery khi restart
   hoặc owner cũ treo, doctor có repair tường minh.
+- `1.5.0`: document workspace, bounded file attachments, deterministic session
+  titles và compact live activity timeline trong Session Hub.
 - `1.4.1`: maintenance release cho Session Hub và guard — session tiếp tục được
   qua nhiều Task Contract thay vì bị terminal giữa cuộc trò chuyện, task chỉ
   chạy test/build được cấp đúng execution authority, Gateway/local install luôn
