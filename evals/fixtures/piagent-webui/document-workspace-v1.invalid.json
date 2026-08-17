@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-document-workspace-v1",
+  "messageType": "document",
+  "generatedAt": "2026-08-17T09:00:00.000Z",
+  "documentRef": "document_01",
+  "state": "unavailable",
+  "name": null,
+  "relativePath": null,
+  "rootRef": null,
+  "format": null,
+  "text": "# Ke hoach quy ba\n\nContent that must never accompany a refusal.\n",
+  "sizeBytes": null,
+  "truncated": false,
+  "redacted": false,
+  "reasonCode": "document-protected"
+}

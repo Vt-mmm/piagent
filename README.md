@@ -235,6 +235,10 @@ Git stays a capability rather than a `/git-*` namespace, so natural language wor
 
 Paste a screenshot path straight into a task and the guard attaches it as `[image1]` before the model sees the prompt: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`, up to 4 images at 8 MB each. The target must be inside the project or a directory listed in `additionalReadRoots`; protected paths, paths outside the resolved filesystem read scope, symlink escapes, and extension-only fake images are refused. The guard also collapses pasted mandatory-flow boilerplate, so there is no need to paste a checklist into every task.
 
+Web research and image understanding remain separate capabilities. The pinned `pi-web-access` integration uses the authenticated `openai-codex` route first when it is available and keeps its automatic search fallback; it never copies provider credentials into project or browser state. Images are passed as native image input to the selected session model rather than through a Piagent-owned OCR service. The dashboard reports both effective facts under **Settings → Providers & models**: `Codex Web Search` when that route is ready, and `Codex Vision` only when the current Codex model advertises image input.
+
+The Session Hub can attach browser-selected images and documents to a new or existing conversation. Markdown, text, PDF and DOCX files use bounded local extraction; the chat keeps a compact file card while the project **Documents** workspace provides a readable preview without starting a model turn. Files over the direct-send limit stay in the project workspace instead of being copied into a prompt, and protected paths, redaction, session binding and one-shot attachment references remain enforced by the runtime.
+
 A spec that lives outside the project — the one just downloaded to `~/Downloads` — is read with `piagent_document_read` once its directory is listed in the profile's `additionalReadRoots`. The grant is read-only, covers `.md`, `.txt`, `.csv`, `.json`, `.yaml`, `.pdf`, and `.docx` only, and does not open anything `protectedPaths` covers. See [command reference](docs/command-reference-vietnamese.md).
 
 ## Model selection
@@ -349,7 +353,7 @@ This repository intentionally excludes:
 
 ## Maturity
 
-The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.4.1` or a reviewed commit.
+The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.5.0` or a reviewed commit.
 
 Ready for:
 

@@ -20,6 +20,7 @@ import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import DashboardRounded from "@mui/icons-material/DashboardRounded";
 import ChatBubbleRounded from "@mui/icons-material/ChatBubbleRounded";
+import DescriptionRounded from "@mui/icons-material/DescriptionRounded";
 import DifferenceRounded from "@mui/icons-material/DifferenceRounded";
 import TerminalRounded from "@mui/icons-material/TerminalRounded";
 import HistoryRounded from "@mui/icons-material/HistoryRounded";
@@ -31,6 +32,7 @@ import DarkModeRounded from "@mui/icons-material/DarkModeRounded";
 import type { PiagentWebUICanonicalSnapshotV1 } from "../../contracts/generated/snapshot-v1.ts";
 import type { ConnectionState } from "./use-inspection.ts";
 import { SourceWorkspace } from "./SourceWorkspace.tsx";
+import { DocumentWorkspace } from "./DocumentWorkspace.tsx";
 import { ActivityPanel } from "./ActivityPanel.tsx";
 import { EvidencePanels } from "./EvidencePanels.tsx";
 import { ChatPanel } from "./ChatPanel.tsx";
@@ -44,13 +46,14 @@ import { compactRef, criterionMeta, label, modelName, permissionName, taskProgre
 import { localize, useUiPreferences, type UiLocale } from "./ui-preferences.tsx";
 
 const DRAWER_WIDTH = 264;
-type WorkspaceId = "overview" | "chat" | "source" | "activity" | "history" | "release";
+type WorkspaceId = "overview" | "chat" | "documents" | "source" | "activity" | "history" | "release";
 type AppProps = { snapshot?: PiagentWebUICanonicalSnapshotV1; connection?: ConnectionState; events?: RuntimeStreamEvent[];
   refreshSnapshot?: () => Promise<PiagentWebUICanonicalSnapshotV1 | undefined> };
 
 const workspaceCopy: Record<WorkspaceId, { vi: [string, string]; en: [string, string] }> = {
   overview: { vi: ["Tổng quan", "Task contract, tiến độ và bằng chứng hoàn thành"], en: ["Overview", "Task contract, progress, and completion evidence"] },
   chat: { vi: ["Chat & điều khiển", "Đúng Pi session hiện tại, không tạo runtime thứ hai"], en: ["Chat & controls", "The exact current Pi session, without a second runtime"] },
+  documents: { vi: ["Tài liệu", "Mở .md, .docx, .pdf, .csv trong project và thư mục đã cấp quyền"], en: ["Documents", "Open .md, .docx, .pdf, and .csv from the project and granted directories"] },
   source: { vi: ["Source Changes", "Review thay đổi theo task baseline, working tree và staged"], en: ["Source Changes", "Review task baseline, working tree, and staged changes"] },
   activity: { vi: ["Activity", "Tool call, command, verifier và log preview"], en: ["Activity", "Tool calls, commands, verifiers, and bounded log previews"] },
   history: { vi: ["Lịch sử task", "Crash, resume, checkpoint, handoff và helper"], en: ["Task history", "Crash, resume, checkpoints, handoffs, and helpers"] },
@@ -125,6 +128,7 @@ function WorkspaceContent({ active, snapshot, events, refreshSnapshot, locale }:
     <EvidencePanels snapshot={snapshot} /></Stack>;
   if (active === "chat") return <Stack className="workspace-stack" spacing={2.25}><LifecyclePanel snapshot={snapshot} refreshSnapshot={refreshSnapshot} />
     <SessionOptionsPanel snapshot={snapshot} refreshSnapshot={refreshSnapshot} /><ChatPanel snapshot={snapshot} events={events} refreshSnapshot={refreshSnapshot} /></Stack>;
+  if (active === "documents") return <DocumentWorkspace />;
   if (active === "source") return <SourceWorkspace snapshot={snapshot} refreshSnapshot={refreshSnapshot} />;
   if (active === "activity") return <ActivityPanel snapshot={snapshot} />;
   if (active === "history") return <TaskRunIndexPanel snapshot={snapshot} />;
@@ -145,6 +149,7 @@ export function App({ snapshot, connection = "connecting", events = [], refreshS
   const nav: Array<{ id: WorkspaceId; label: string; icon: ReactNode; count?: number }> = [
     { id: "overview", label: localize(locale, "Tổng quan", "Overview"), icon: <DashboardRounded /> },
     { id: "chat", label: localize(locale, "Chat & Task", "Chat & Task"), icon: <ChatBubbleRounded />, count: snapshot.session.queue.heldCount ?? 0 },
+    { id: "documents", label: localize(locale, "Tài liệu", "Documents"), icon: <DescriptionRounded /> },
     { id: "source", label: "Source Changes", icon: <DifferenceRounded />, count: sourceCount },
     { id: "activity", label: "Activity", icon: <TerminalRounded />, count: snapshot.activity.running.length },
     { id: "history", label: localize(locale, "Lịch sử", "History"), icon: <HistoryRounded /> },

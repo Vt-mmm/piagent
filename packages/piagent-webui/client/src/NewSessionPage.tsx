@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import AddRounded from "@mui/icons-material/AddRounded";
 import ArrowBackRounded from "@mui/icons-material/ArrowBackRounded";
+import AttachFileRounded from "@mui/icons-material/AttachFileRounded";
+import CancelRounded from "@mui/icons-material/CancelRounded";
 import ExpandMoreRounded from "@mui/icons-material/ExpandMoreRounded";
 import FolderOpenOutlined from "@mui/icons-material/FolderOpenOutlined";
 import ModelTrainingOutlined from "@mui/icons-material/ModelTrainingOutlined";
@@ -8,6 +10,7 @@ import TuneRounded from "@mui/icons-material/TuneRounded";
 import SendRounded from "@mui/icons-material/SendRounded";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import Chip from "@mui/material/Chip";
 import CircularProgress from "@mui/material/CircularProgress";
 import Divider from "@mui/material/Divider";
 import IconButton from "@mui/material/IconButton";
@@ -17,14 +20,16 @@ import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
+import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 
 import { importProjectFolder, readSessionCreationOptions, type SessionCreationOptions, WebUiRequestError } from "./api.ts";
+import { formatSize, MAX_ATTACHMENTS, supportedAttachmentAccept } from "./attachment-intake.ts";
 import { ServiceIcon } from "./ServiceIcon.tsx";
 import { label } from "./view-model.ts";
 import { localize, useUiPreferences } from "./ui-preferences.tsx";
 
-type CreateValue = { projectRef: string; placeRef: string; modelRef: string | null; thinkingLevel: string; message: string };
+type CreateValue = { projectRef: string; placeRef: string; modelRef: string | null; thinkingLevel: string; message: string; files: readonly File[] };
 type MenuKind = "project" | "model" | "thinking" | null;
 
 export function NewSessionPage({ active, defaultProjectRef, busy, error, onCancel, onCreate }: { active: boolean;
@@ -33,11 +38,12 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
   const [options, setOptions] = useState<SessionCreationOptions>();
   const [failed, setFailed] = useState(false), [projectRef, setProjectRef] = useState(""), [modelRef, setModelRef] = useState("");
   const [thinking, setThinking] = useState("high"), [message, setMessage] = useState("");
+  const [files, setFiles] = useState<readonly File[]>([]), [fileError, setFileError] = useState<string | null>(null);
   const [menu, setMenu] = useState<MenuKind>(null), [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [importing, setImporting] = useState(false), [importError, setImportError] = useState<string | null>(null);
   useEffect(() => {
     if (!active) return;
-    const controller = new AbortController(); setOptions(undefined); setFailed(false); setMessage(""); setImportError(null);
+    const controller = new AbortController(); setOptions(undefined); setFailed(false); setMessage(""); setImportError(null); setFiles([]); setFileError(null);
     void readSessionCreationOptions(controller.signal).then((value) => {
       if (controller.signal.aborted) return;
       setOptions(value);
@@ -67,8 +73,19 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
       else setImportError(localize(locale, "Không thể thêm thư mục", "Could not add this folder"));
     } finally { setImporting(false); }
   };
+  const selectFiles = (selected: FileList | null) => {
+    if (!selected?.length) return;
+    const merged = [...files]; let overflow = false;
+    for (const file of [...selected]) {
+      if (merged.some((item) => item.name === file.name && item.size === file.size && item.lastModified === file.lastModified)) continue;
+      if (merged.length === MAX_ATTACHMENTS) { overflow = true; continue; }
+      merged.push(file);
+    }
+    setFiles(merged); setFileError(overflow
+      ? localize(locale, `Mỗi tin nhắn nhận tối đa ${MAX_ATTACHMENTS} file.`, `Each message accepts at most ${MAX_ATTACHMENTS} files.`) : null);
+  };
   const submit = () => project && message.trim() && onCreate({ projectRef, placeRef: project.placeRef, modelRef: modelRef || null,
-    thinkingLevel: thinking, message: message.trim() });
+    thinkingLevel: thinking, message: message.trim(), files });
 
   return <Box sx={{ minHeight: "calc(100vh - 68px)", display: "flex", flexDirection: "column" }}>
     <Box sx={{ p: { xs: 1.5, sm: 2 } }}><IconButton aria-label={localize(locale, "Quay lại", "Back")} onClick={onCancel}><ArrowBackRounded /></IconButton></Box>
@@ -85,6 +102,13 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
               if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submit(); }
             }} placeholder={localize(locale, "Nhắn cho Piagent…", "Message Piagent…")} variant="standard"
             slotProps={{ input: { disableUnderline: true }, htmlInput: { maxLength: 32_768 } }} sx={{ px: .5 }} />
+          {files.length > 0 && <Stack direction="row" sx={{ flexWrap: "wrap", gap: .75, px: .5, pt: .75 }}
+            aria-label={localize(locale, "File sẽ gửi cùng tin nhắn đầu tiên", "Files for the first message")}>
+            {files.map((file) => <Chip key={`${file.name}:${file.size}:${file.lastModified}`} size="small" variant="outlined"
+              label={`${file.name} · ${formatSize(file.size)}`}
+              onDelete={busy ? undefined : () => { setFiles((current) => current.filter((item) => item !== file)); setFileError(null); }}
+              deleteIcon={<CancelRounded aria-label={`${localize(locale, "Bỏ", "Remove")} ${file.name}`} role="button" />} />)}
+          </Stack>}
           <Stack direction="row" sx={{ mt: 1, alignItems: "center", gap: .75, flexWrap: "wrap" }}>
             <Button size="small" color="inherit" startIcon={<FolderOpenOutlined />} endIcon={<ExpandMoreRounded />} onClick={openMenu("project")}>
               {project?.label ?? localize(locale, "Chọn project", "Choose project")}</Button>
@@ -92,13 +116,21 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
               {model?.displayName ?? localize(locale, "Model mặc định", "Default model")}</Button>
             <Button size="small" color="inherit" startIcon={<TuneRounded />} endIcon={<ExpandMoreRounded />} onClick={openMenu("thinking")}>
               {label(thinking, locale)}</Button>
+            <Tooltip title={localize(locale, "Thêm file vào tin nhắn đầu tiên", "Add files to the first message")}>
+              <IconButton component="label" size="small" disabled={busy || files.length >= MAX_ATTACHMENTS}
+                aria-label={`${localize(locale, "Thêm file", "Add files")} (${files.length}/${MAX_ATTACHMENTS})`}>
+                <AttachFileRounded fontSize="small" />
+                <input type="file" hidden multiple disabled={busy || files.length >= MAX_ATTACHMENTS} accept={supportedAttachmentAccept}
+                  onChange={(event) => { selectFiles(event.target.files); event.currentTarget.value = ""; }} />
+              </IconButton>
+            </Tooltip>
             <Box sx={{ flex: 1 }} />
             <IconButton aria-label={localize(locale, "Gửi", "Send")} disabled={busy || failed || !project || !message.trim()} onClick={submit}
               sx={{ bgcolor: "primary.main", color: "primary.contrastText", "&:hover": { bgcolor: "primary.dark" }, "&.Mui-disabled": { bgcolor: "action.disabledBackground" } }}>
               <SendRounded fontSize="small" /></IconButton>
           </Stack></>}
-        {(importError || error || failed) && <Typography role="status" color="error" variant="caption" sx={{ display: "block", px: .5, pt: 1 }}>
-          {importError ?? error ?? localize(locale, "Không tải được lựa chọn", "Could not load choices")}</Typography>}
+        {(fileError || importError || error || failed) && <Typography role="status" color="error" variant="caption" sx={{ display: "block", px: .5, pt: 1 }}>
+          {fileError ?? importError ?? error ?? localize(locale, "Không tải được lựa chọn", "Could not load choices")}</Typography>}
       </Box>
     </Stack>
     <Menu anchorEl={anchor} open={menu === "project"} onClose={closeMenu} slotProps={{ paper: { sx: { width: 310, maxHeight: 380 } } }}>

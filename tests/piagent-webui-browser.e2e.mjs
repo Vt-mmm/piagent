@@ -19,7 +19,8 @@ import { startLoopbackServer } from "../packages/piagent-webui/server/loopback-s
 import { SameSessionPiBridge } from "../packages/piagent-webui/extension/same-session-bridge.ts";
 import { HeldMessageQueue } from "../packages/piagent-webui/extension/held-message-queue.ts";
 import { SessionOptionsController } from "../packages/piagent-webui/extension/session-options-controller.ts";
-import { AttachmentStore } from "../packages/piagent-webui/extension/attachment-store.ts";
+import { AttachmentStore } from "../packages/piagent-core/runtime/input/attachment-store.ts";
+import { DOCX_MIME, docx } from "./helpers/piagent-docx-fixture.mjs";
 import { PiApprovalBroker } from "../packages/piagent-core/runtime/inspection/approval-broker.ts";
 import { inspectTaskControlState } from "../packages/piagent-core/runtime/inspection/task-control-journal.ts";
 import { buildHandoffProjection, writeHandoffProjection } from "../packages/piagent-core/runtime/recovery/handoff-projection.ts";
@@ -68,6 +69,14 @@ async function createFixture() {
   git("config", "user.name", "Piagent Browser Test");
   fs.mkdirSync(path.join(cwd, "src"), { recursive: true });
   fs.writeFileSync(path.join(cwd, "src", "example.ts"), "export const value = 'HEAD BASE';\n");
+  // Documents for the document workspace: one of each rendering path, plus a
+  // file whose extension the reader refuses so the listing has something to omit.
+  fs.mkdirSync(path.join(cwd, "tai-lieu"), { recursive: true });
+  fs.writeFileSync(path.join(cwd, "tai-lieu", "ke-hoach.md"),
+    "# Ke hoach quy ba\n\nMuc tieu la **tang truong**.\n\n- Viec mot\n- Viec hai\n");
+  fs.writeFileSync(path.join(cwd, "tai-lieu", "so-lieu.csv"), 'khu vuc,ghi chu,doanh thu\n"Bac, Trung","Da ""xac minh""",120\nNam,"Hai dong\nvan la mot o",240\n');
+  fs.writeFileSync(path.join(cwd, "tai-lieu", "bao-cao.docx"), docx("Bao cao quy ba.", "Doanh thu dat 360 ty."));
+  fs.writeFileSync(path.join(cwd, "tai-lieu", "khong-doc-duoc.bin"), Buffer.from([0, 1, 2, 3]));
   git("add", ".");
   git("commit", "-qm", "browser fixture baseline");
   fs.writeFileSync(path.join(cwd, "src", "example.ts"), "export const value = 'DIRTY AT TASK START';\n");
@@ -469,6 +478,56 @@ test("passes rendered accessibility checks and stays inside a mobile viewport", 
   await expect(page.getByRole("tablist", { name: "Nguồn thay đổi" })).toBeVisible();
   await openWorkspace(page, "Activity");
   await expect(page.getByRole("heading", { name: "Tool, command và verifier" })).toBeVisible();
+  // The document workspace renders its own list and viewer, so it needs its own
+  // pass — the sweep above only ever saw the overview.
+  await openWorkspace(page, "Tài liệu");
+  await page.getByRole("button", { name: /ke-hoach\.md/ }).click();
+  await expect(page.getByRole("heading", { name: "Ke hoach quy ba" })).toBeVisible();
+  const documents = await new AxeBuilder({ page }).analyze();
+  assert.deepEqual(documents.violations.map((violation) => ({ id: violation.id, nodes: violation.nodes.length })), [], JSON.stringify(
+    documents.violations.map((violation) => ({ id: violation.id, help: violation.help,
+      nodes: violation.nodes.map((node) => ({ target: node.target, html: node.html, failureSummary: node.failureSummary })) })), null, 2
+  ));
+});
+
+test("opens markdown, tabular and .docx documents from the project as a read-only workspace", async ({ page }) => {
+  await page.goto(server.issueLaunchUrl());
+  await openWorkspace(page, "Tài liệu");
+  // Levelled because the app bar titles the workspace with the same words.
+  await expect(page.getByRole("heading", { level: 2, name: "Tài liệu" })).toBeVisible();
+
+  // Only what the reader can turn into text is offered, and the project root is
+  // named as the source it came from.
+  await expect(page.getByRole("button", { name: /ke-hoach\.md/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /so-lieu\.csv/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /bao-cao\.docx/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /khong-doc-duoc\.bin/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /example\.ts/ })).toHaveCount(0);
+
+  // Markdown renders as markdown rather than as its own source.
+  await page.getByRole("button", { name: /ke-hoach\.md/ }).click();
+  await expect(page.getByRole("heading", { name: "Ke hoach quy ba" })).toBeVisible();
+  await expect(page.getByText("tang truong", { exact: true })).toBeVisible();
+  await expect(page.getByText("# Ke hoach quy ba", { exact: true })).toHaveCount(0);
+
+  // A .csv is a table, not a wall of commas.
+  await page.getByRole("button", { name: /so-lieu\.csv/ }).click();
+  await expect(page.getByRole("columnheader", { name: "doanh thu" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "Bac, Trung" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: 'Da "xac minh"' })).toBeVisible();
+  await expect(page.getByRole("cell", { name: /Hai dong\s+van la mot o/ })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "240" })).toBeVisible();
+
+  // The .docx opens as the prose inside it; the archive never reaches the page.
+  await page.getByRole("button", { name: /bao-cao\.docx/ }).click();
+  await expect(page.getByText("Bao cao quy ba.")).toBeVisible();
+  await expect(page.getByText("Doanh thu dat 360 ty.")).toBeVisible();
+  assert.equal((await page.locator("body").innerText()).includes("word/document.xml"), false);
+
+  // The filter narrows the list without refetching the document.
+  await page.getByLabel("Lọc tài liệu").fill("csv");
+  await expect(page.getByRole("button", { name: /so-lieu\.csv/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /ke-hoach\.md/ })).toHaveCount(0);
 });
 
 test("renders and resolves the exact Pi-owned approval card without direct execution", async ({ page }) => {
@@ -647,14 +706,39 @@ test("holds, edits, dispatches and deletes messages through the authenticated cu
     await expect(page.getByText("browser-notes.md", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Bỏ browser-notes.md" }).click();
     await expect(page.getByText("browser-notes.md", { exact: true })).not.toBeVisible(); assert.equal(sends, 0);
-    await fileInput.setInputFiles({ name: "browser-notes.md", mimeType: "text/markdown", buffer: Buffer.from("# Browser attachment\nExact bounded content.\n") });
-    await expect(page.getByText("browser-notes.md", { exact: true })).toBeVisible();
+
+    // Dropping a .docx onto the panel: the format the picker never accepted,
+    // arriving the way the browser used to answer by navigating away from the
+    // session. What Pi receives is the prose, not the archive.
+    const dropped = docx("Chot ngan sach Q3.", "Doi tac ky ngay 12/09.");
+    const dataTransfer = await page.evaluateHandle(([base64, name, type]) => {
+      const binary = atob(base64), bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([bytes], name, { type }));
+      return transfer;
+    }, [dropped.toString("base64"), "ke-hoach.docx", DOCX_MIME]);
+    const chatPanel = page.locator("section.chat-panel");
+    await chatPanel.dispatchEvent("dragenter", { dataTransfer });
+    await expect(page.getByText("Thả tài liệu vào đây")).toBeVisible();
+    await chatPanel.dispatchEvent("drop", { dataTransfer });
+    await expect(page.getByText("ke-hoach.docx", { exact: true })).toBeVisible();
+    await expect(page.getByText("Thả tài liệu vào đây")).not.toBeVisible();
+    // The chip reports the archive it came from and the text Pi will actually read.
+    await expect(page.getByText(/^Tài liệu · .+ → .+ văn bản$/)).toBeVisible();
+
     const composer = page.getByRole("textbox", { name: "Nội dung chat" });
     await composer.fill("Đọc file đính kèm");
     await page.getByRole("button", { name: "Gửi", exact: true }).click();
-    await expect(page.getByText("browser-notes.md", { exact: true })).not.toBeVisible();
+    await expect(page.getByText("ke-hoach.docx", { exact: true })).not.toBeVisible();
     await expect(fileInput).toBeEnabled();
-    assert.equal(sends, 1); assert.match(sentContents[0][1].text, /Exact bounded content/);
+    assert.equal(sends, 1);
+    assert.match(sentContents[0][1].text, /Chot ngan sach Q3\./);
+    assert.match(sentContents[0][1].text, /Doi tac ky ngay 12\/09\./);
+    // No .docx bytes reach Pi, and the data region is fenced by a marker the
+    // document could not have contained.
+    assert.equal(sentContents[0][1].text.includes("word/document.xml"), false);
+    assert.match(sentContents[0][1].text, /BEGIN PIAGENT-ATTACHMENT-[0-9a-f-]{36}/);
     idle = true; bridge.observeAgentSettled(context); assert.equal(bridge.snapshot().liveness, "idle");
     controlEvents.cursor = "event-cursor.browser-control-settled";
     controlProvider.publishObserved({ eventCursor: controlEvents.cursor, kind: "agent-operation.settled" });
@@ -666,6 +750,11 @@ test("holds, edits, dispatches and deletes messages through the authenticated cu
     await expect(page.getByText("Đã cập nhật trong Pi và mặc định người dùng", { exact: true })).toBeVisible();
     assert.equal(thinking, "high");
     await page.getByLabel("Chọn model").selectOption({ label: "Model Browser B · browser-provider" });
+    // Changing the selection clears the effect acknowledgement, so the button is
+    // disabled until it is given again. Waiting for that disabled state is what
+    // makes the acknowledgement below land after the reset instead of racing it —
+    // the same wait the thinking change above already performs.
+    await expect(page.getByRole("button", { name: "Đổi model" })).toBeDisabled();
     await effectAck.check(); await page.getByRole("button", { name: "Đổi model" }).click();
     await expect(page.getByText("Đã cập nhật trong Pi và mặc định người dùng", { exact: true })).toBeVisible();
     assert.equal(activeModel.id, "browser-model-b");

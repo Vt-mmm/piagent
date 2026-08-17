@@ -19,7 +19,8 @@ const MAX_JSON_RESPONSE_BYTES = 16 * 1024 * 1024;
 const CURSOR = /^[A-Za-z0-9][A-Za-z0-9._~-]{0,159}$/;
 
 type ReadCapabilities = () => unknown | Promise<unknown>;
-type RateState = { windowStart: number; requests: number; bootstraps: number; controls: number };
+type RateState = { windowStart: number; requests: number; bootstraps: number };
+type ControlRateState = { windowStart: number; controls: number };
 
 export type LoopbackServer = {
   origin: string;
@@ -57,6 +58,7 @@ export async function startLoopbackServer(options: {
   readSessionCatalog?: () => unknown | Promise<unknown>;
   readSessionCreationOptions?: () => unknown | Promise<unknown>;
   readSessionModel?: (sessionRef: string) => WebUiReadModelProvider | Promise<WebUiReadModelProvider>;
+  executeSessionAttachment?: (sessionRef: string, command: unknown) => unknown | Promise<unknown>;
   readSessionConnections?: (sessionRef: string) => unknown | Promise<unknown>;
   executeSessionConnection?: (command: unknown) => unknown | Promise<unknown>;
   readMcpAuthJob?: (jobRef: string) => unknown | Promise<unknown>;
@@ -82,6 +84,15 @@ export async function startLoopbackServer(options: {
   const auth = new SessionAuthority({ bootstrapTtlMs: options.bootstrapTtlMs, sessionTtlMs: options.sessionTtlMs });
   const sse = options.readModel ? new SseHub(options.readModel) : null;
   const rates = new Map<string, RateState>();
+  const controlRates = new Map<string, ControlRateState>();
+  const consumeControl = (sessionId: string, now: number): boolean => {
+    for (const [id, value] of controlRates) if (now - value.windowStart >= 60_000) controlRates.delete(id);
+    const value = controlRates.get(sessionId) ?? { windowStart: now, controls: 0 };
+    if (now - value.windowStart >= 60_000) Object.assign(value, { windowStart: now, controls: 0 });
+    value.controls += 1; controlRates.set(sessionId, value);
+    while (controlRates.size > 64) controlRates.delete(controlRates.keys().next().value as string);
+    return value.controls <= CONTROLS_PER_MINUTE;
+  };
   let origin = "";
   const server = http.createServer(async (request, response) => {
     applySecurityHeaders(response, styleNonce);
@@ -90,9 +101,16 @@ export async function startLoopbackServer(options: {
     const requestOrigin = request.headers.origin;
     if (requestOrigin && requestOrigin !== origin) return errorResponse(response, 403, "origin-mismatch");
     const remote = request.socket.remoteAddress ?? "unknown", now = Date.now();
-    const rate = rates.get(remote) ?? { windowStart: now, requests: 0, bootstraps: 0, controls: 0 };
-    if (now - rate.windowStart >= 60_000) Object.assign(rate, { windowStart: now, requests: 0, bootstraps: 0, controls: 0 });
-    rate.requests += 1; rates.set(remote, rate);
+    // A browser session is already a launch-scoped authenticated capability.
+    // Charging every tab and every prior launch to one localhost IP lets a
+    // refresh or an unauthenticated local process lock out the active operator.
+    const browserSession = auth.authenticate(request, now);
+    const rateKey = browserSession ? `${remote}:${browserSession.id}` : `remote:${remote}`;
+    for (const [key, value] of rates) if (now - value.windowStart >= 60_000) rates.delete(key);
+    const rate = rates.get(rateKey) ?? { windowStart: now, requests: 0, bootstraps: 0 };
+    if (now - rate.windowStart >= 60_000) Object.assign(rate, { windowStart: now, requests: 0, bootstraps: 0 });
+    rate.requests += 1; rates.set(rateKey, rate);
+    while (rates.size > 128) rates.delete(rates.keys().next().value as string);
     if (rate.requests > REQUESTS_PER_MINUTE) return errorResponse(response, 429, "rate-limit");
     let url: URL;
     try { url = new URL(request.url ?? "/", origin); }
@@ -122,10 +140,10 @@ export async function startLoopbackServer(options: {
 
     if (request.method === "POST" && ["/api/v1/chat/messages", "/api/v1/session-options", "/api/v1/lifecycle",
       "/api/v1/control/resume-and-continue", "/api/v1/reviews", "/api/v1/source-mutations", "/api/v1/source-handoffs"].includes(url.pathname) && options.executeControl) {
-      rate.controls += 1;
-      if (rate.controls > CONTROLS_PER_MINUTE) return errorResponse(response, 429, "control-rate-limit");
       if (requestOrigin !== origin) return errorResponse(response, 403, "origin-required");
-      if (!auth.authorizeMutation(request)) return errorResponse(response, 403, "mutation-authority-rejected");
+      const mutationSession = auth.authorizeMutation(request);
+      if (!mutationSession) return errorResponse(response, 403, "mutation-authority-rejected");
+      if (!consumeControl(mutationSession.id, now)) return errorResponse(response, 429, "control-rate-limit");
       if (!String(request.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) return errorResponse(response, 415, "content-type");
       let command: unknown;
       try { command = JSON.parse((await requestBody(request, MAX_CONTROL_BODY_BYTES)).toString("utf8")); }
@@ -135,10 +153,10 @@ export async function startLoopbackServer(options: {
     }
 
     if (request.method === "POST" && url.pathname === "/api/v1/projects/import" && options.executeProjectImport) {
-      rate.controls += 1;
-      if (rate.controls > CONTROLS_PER_MINUTE) return errorResponse(response, 429, "control-rate-limit");
       if (requestOrigin !== origin) return errorResponse(response, 403, "origin-required");
-      if (!auth.authorizeMutation(request)) return errorResponse(response, 403, "mutation-authority-rejected");
+      const mutationSession = auth.authorizeMutation(request);
+      if (!mutationSession) return errorResponse(response, 403, "mutation-authority-rejected");
+      if (!consumeControl(mutationSession.id, now)) return errorResponse(response, 429, "control-rate-limit");
       if (!String(request.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) return errorResponse(response, 415, "content-type");
       let command: unknown;
       try { command = JSON.parse((await requestBody(request, MAX_BOOTSTRAP_BODY_BYTES)).toString("utf8")); }
@@ -155,10 +173,10 @@ export async function startLoopbackServer(options: {
     }
 
     if (request.method === "POST" && url.pathname === "/api/v1/provider-auth" && options.executeProviderAuth) {
-      rate.controls += 1;
-      if (rate.controls > CONTROLS_PER_MINUTE) return errorResponse(response, 429, "control-rate-limit");
       if (requestOrigin !== origin) return errorResponse(response, 403, "origin-required");
-      if (!auth.authorizeMutation(request)) return errorResponse(response, 403, "mutation-authority-rejected");
+      const mutationSession = auth.authorizeMutation(request);
+      if (!mutationSession) return errorResponse(response, 403, "mutation-authority-rejected");
+      if (!consumeControl(mutationSession.id, now)) return errorResponse(response, 429, "control-rate-limit");
       if (!String(request.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) return errorResponse(response, 415, "content-type");
       let command: unknown;
       try { command = JSON.parse((await requestBody(request, MAX_CONTROL_BODY_BYTES)).toString("utf8")); }
@@ -172,10 +190,10 @@ export async function startLoopbackServer(options: {
     }
 
     if (request.method === "POST" && url.pathname === "/api/v1/session-connections" && options.executeSessionConnection) {
-      rate.controls += 1;
-      if (rate.controls > CONTROLS_PER_MINUTE) return errorResponse(response, 429, "control-rate-limit");
       if (requestOrigin !== origin) return errorResponse(response, 403, "origin-required");
-      if (!auth.authorizeMutation(request)) return errorResponse(response, 403, "mutation-authority-rejected");
+      const mutationSession = auth.authorizeMutation(request);
+      if (!mutationSession) return errorResponse(response, 403, "mutation-authority-rejected");
+      if (!consumeControl(mutationSession.id, now)) return errorResponse(response, 429, "control-rate-limit");
       if (!String(request.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) return errorResponse(response, 415, "content-type");
       let command: unknown;
       try { command = JSON.parse((await requestBody(request, MAX_CONTROL_BODY_BYTES)).toString("utf8")); }
@@ -188,9 +206,10 @@ export async function startLoopbackServer(options: {
     }
 
     if (request.method === "POST" && url.pathname.startsWith("/api/v1/mcp-auth/jobs/") && url.pathname.endsWith("/cancel") && options.cancelMcpAuthJob) {
-      rate.controls += 1;
-      if (rate.controls > CONTROLS_PER_MINUTE) return errorResponse(response, 429, "control-rate-limit");
-      if (requestOrigin !== origin || !auth.authorizeMutation(request)) return errorResponse(response, 403, "mutation-authority-rejected");
+      if (requestOrigin !== origin) return errorResponse(response, 403, "mutation-authority-rejected");
+      const mutationSession = auth.authorizeMutation(request);
+      if (!mutationSession) return errorResponse(response, 403, "mutation-authority-rejected");
+      if (!consumeControl(mutationSession.id, now)) return errorResponse(response, 429, "control-rate-limit");
       const jobRef = url.pathname.slice("/api/v1/mcp-auth/jobs/".length, -"/cancel".length);
       if (!CURSOR.test(jobRef) || jobRef.includes("/") || url.search) return errorResponse(response, 400, "invalid-mcp-auth-job-ref");
       try { return jsonResponse(response, 200, await options.cancelMcpAuthJob(jobRef)); }
@@ -198,10 +217,10 @@ export async function startLoopbackServer(options: {
     }
 
     if (request.method === "POST" && url.pathname === "/api/v1/attachments" && options.executeAttachment) {
-      rate.controls += 1;
-      if (rate.controls > CONTROLS_PER_MINUTE) return errorResponse(response, 429, "control-rate-limit");
       if (requestOrigin !== origin) return errorResponse(response, 403, "origin-required");
-      if (!auth.authorizeMutation(request)) return errorResponse(response, 403, "mutation-authority-rejected");
+      const mutationSession = auth.authorizeMutation(request);
+      if (!mutationSession) return errorResponse(response, 403, "mutation-authority-rejected");
+      if (!consumeControl(mutationSession.id, now)) return errorResponse(response, 429, "control-rate-limit");
       if (!String(request.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) return errorResponse(response, 415, "content-type");
       let command: unknown;
       try { command = JSON.parse((await requestBody(request, MAX_ATTACHMENT_BODY_BYTES)).toString("utf8")); }
@@ -210,11 +229,30 @@ export async function startLoopbackServer(options: {
       catch { return errorResponse(response, 503, "attachment-runtime-unavailable"); }
     }
 
-    if (request.method === "POST" && url.pathname.startsWith("/api/v1/approvals/") && url.pathname.endsWith("/decision") && options.executeApproval) {
-      rate.controls += 1;
-      if (rate.controls > CONTROLS_PER_MINUTE) return errorResponse(response, 429, "control-rate-limit");
+    // The Gateway drives many sessions, so an attachment has to name the one it
+    // belongs to in the path. The body is the same bounded stage/discard command
+    // the single-session route takes, and every guard in front of it is the same.
+    if (request.method === "POST" && url.pathname.startsWith("/api/v1/sessions/") && url.pathname.endsWith("/attachments")
+      && options.executeSessionAttachment) {
       if (requestOrigin !== origin) return errorResponse(response, 403, "origin-required");
-      if (!auth.authorizeMutation(request)) return errorResponse(response, 403, "mutation-authority-rejected");
+      const mutationSession = auth.authorizeMutation(request);
+      if (!mutationSession) return errorResponse(response, 403, "mutation-authority-rejected");
+      if (!consumeControl(mutationSession.id, now)) return errorResponse(response, 429, "control-rate-limit");
+      const sessionRef = url.pathname.slice("/api/v1/sessions/".length, -"/attachments".length);
+      if (!CURSOR.test(sessionRef) || sessionRef.includes("/")) return errorResponse(response, 400, "invalid-session-attachment-ref");
+      if (!String(request.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) return errorResponse(response, 415, "content-type");
+      let command: unknown;
+      try { command = JSON.parse((await requestBody(request, MAX_ATTACHMENT_BODY_BYTES)).toString("utf8")); }
+      catch (error) { return errorResponse(response, (error as Error).message === "body-limit" ? 413 : 400, "invalid-attachment-command"); }
+      try { return jsonResponse(response, 200, await options.executeSessionAttachment(sessionRef, command)); }
+      catch { return errorResponse(response, 503, "attachment-runtime-unavailable"); }
+    }
+
+    if (request.method === "POST" && url.pathname.startsWith("/api/v1/approvals/") && url.pathname.endsWith("/decision") && options.executeApproval) {
+      if (requestOrigin !== origin) return errorResponse(response, 403, "origin-required");
+      const mutationSession = auth.authorizeMutation(request);
+      if (!mutationSession) return errorResponse(response, 403, "mutation-authority-rejected");
+      if (!consumeControl(mutationSession.id, now)) return errorResponse(response, 429, "control-rate-limit");
       if (!String(request.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) return errorResponse(response, 415, "content-type");
       const approvalRef = url.pathname.slice("/api/v1/approvals/".length, -"/decision".length);
       if (!CURSOR.test(approvalRef) || approvalRef.includes("/")) return errorResponse(response, 400, "invalid-approval-ref");

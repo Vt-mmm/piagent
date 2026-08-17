@@ -115,7 +115,7 @@ import {
   activeTaskToolGroups
 } from "../runtime/tools/tool-groups.ts";
 import type { PiagentToolGroup } from "../runtime/tools/tool-groups.ts";
-import { shortTaskLabel } from "../runtime/workflows/input-routing.ts";
+import { freshRequestParts, shortTaskLabel } from "../runtime/workflows/input-routing.ts";
 import {
   automaticAcceptanceCriteria,
   automaticReviewLenses,
@@ -4705,7 +4705,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
     safeTaskId, searchContextIndex, searchContextIndexV2, searchMemoryFiles, selectRuntimeAction,
     selectValueFromUi, selectVerificationPlan, semanticCompactionInstructions, sendWorkflowFollowUp, setPermissionOverrideForContext,
     semanticRepairCompletionBlock: (cwd: string, taskRunId: string) => semanticRepairRuntime.completionBlock(cwd, taskRunId),
-    shellArg, shortTaskLabel, solverShadow, summarizeAttempt, taskChangedFileEvidence,
+    freshRequestParts, shellArg, shortTaskLabel, solverShadow, summarizeAttempt, taskChangedFileEvidence,
     techContextDirPath, techContextFilePath, techContextRelativePath, techOptionById, techStackPath,
     telemetry, toolRegistryConfig, trajectoryRuntime, uniqueStrings, usageExactCommands,
     validTaskScopePattern, validateNewWorkPlan, verifierCommandInstructions, verifyProjectCapabilityState, workingTreeEvidenceDigest,

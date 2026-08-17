@@ -22,6 +22,8 @@ export type WebUiReadModelProvider = {
   handoffHistory(runRef: string): unknown | Promise<unknown>;
   subagentTree(runRef: string): unknown | Promise<unknown>;
   releaseMonitor(): unknown | Promise<unknown>;
+  documents(): unknown | Promise<unknown>;
+  document(documentRef: string): unknown | Promise<unknown>;
   activity(): unknown | Promise<unknown>;
   logPreview(activityRef: string): unknown | Promise<unknown>;
   transcript(beforeCursor: string | null, limit: number): unknown | Promise<unknown>;

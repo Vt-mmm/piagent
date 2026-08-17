@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { redactSensitiveText } from "../../piagent-core/security/sensitive-data.js";
 import type { PiagentGatewayCapabilityHandshakeV1 } from "../contracts/generated/gateway-capabilities-v1.ts";
+import type { PiagentWebUICanonicalSnapshotV1 } from "../contracts/generated/snapshot-v1.ts";
 import { startLoopbackServer } from "../server/loopback-server.ts";
 import { startGatewayControlSocket, type GatewayControlResponse } from "./control-socket.ts";
 import { loadPinnedPiHost } from "./pi-host.ts";
@@ -24,6 +25,7 @@ import { SessionCommandStore } from "./session-command-store.ts";
 import { SessionCommandController } from "./session-command-controller.ts";
 import { GatewayEventStore } from "./gateway-events.ts";
 import { SessionInspectionRegistry } from "./session-inspection-registry.ts";
+import { SessionAttachmentRegistry } from "./session-attachment-registry.ts";
 import { ProjectRegistry } from "./project-registry.ts";
 import { pickNativeProjectFolders } from "./native-project-picker.ts";
 import { ProviderAuthBroker } from "./provider-auth-broker.ts";
@@ -91,6 +93,7 @@ export async function startPiagentGateway(options: {
   let control: Awaited<ReturnType<typeof startGatewayControlSocket>> | null = null;
   let runtimes: SessionRuntimeSupervisor | null = null;
   let mcpAuth: McpAuthBroker | null = null;
+  let attachments: SessionAttachmentRegistry | null = null;
   let closing: Promise<void> | null = null;
   let settleWait: (() => void) | null = null;
   const waited = new Promise<void>((resolve) => { settleWait = resolve; });
@@ -100,6 +103,10 @@ export async function startPiagentGateway(options: {
     closing = (async () => {
       removeGatewayDescriptor(state, gatewayInstanceRef);
       await loopback?.close().catch(() => undefined);
+      // Staged bytes are private temp files. Closing deletes them rather than
+      // leaving a directory per session behind for the TTL sweep that will never
+      // run once this process is gone.
+      try { attachments?.close(); } catch { /* shutdown never fails on cleanup */ }
       await mcpAuth?.close().catch(() => undefined);
       await runtimes?.close().catch(() => undefined);
       await control?.close().catch(() => undefined);
@@ -161,11 +168,23 @@ export async function startPiagentGateway(options: {
       return { sessionRevision: session.sessionRevision, liveState: session.liveState };
     });
     const commands = new SessionCommandController({ catalog: readCatalog, runtimes, metadata,
-      store: new SessionCommandStore(state.root, key), events });
+      store: new SessionCommandStore(state.root, key), events,
+      // Resolved at call time: the attachment registry is built after this
+      // controller, because it reads sessions through the inspection registry.
+      prepareAttachments: (sessionRef, refs, messageRequestId, text) => {
+        if (!attachments) throw new Error("session-attachment-unavailable");
+        return attachments.reserveForPrompt(sessionRef, refs, messageRequestId, text);
+      } });
     const protocol = new GatewayProtocolService({ capabilities: () => capabilities(gatewayInstanceRef, true), catalog: readCatalog,
       events, command: commands });
-    const inspections = new SessionInspectionRegistry({ gatewayInstanceRef, host, key, packageRoot: options.packageRoot,
-      models: inspectionModels, projects, mcpAuth });
+    const inspections = new SessionInspectionRegistry({ gatewayInstanceRef, host, key, packageRoot: options.packageRoot, agentDir: state.agentDir,
+      models: inspectionModels, projects, mcpAuth, listSessions: () => runtimes!.listSessions(),
+      openLiveSession: (sessionRef) => runtimes!.liveSessionManager(sessionRef) });
+    // Staged bytes live beside the inspection projection they were checked
+    // against, so both read the same session through the same registry.
+    attachments = new SessionAttachmentRegistry({
+      inspect: async (sessionRef) => await (await inspections.provider(sessionRef)).snapshot() as PiagentWebUICanonicalSnapshotV1
+    });
     loopback = await startLoopbackServer({
       staticRoot,
       mode: "gateway",
@@ -175,6 +194,7 @@ export async function startPiagentGateway(options: {
       readSessionModel: (sessionRef) => inspections.provider(sessionRef),
       readSessionConnections: (sessionRef) => inspections.connections(sessionRef),
       executeSessionConnection: (command) => inspections.executeConnectionCommand(command),
+      executeSessionAttachment: (sessionRef, command) => attachments.execute(sessionRef, command),
       executeApproval: (approvalRef, decision) => runtimes!.decideApproval(approvalRef, decision),
       readMcpAuthJob: (jobRef) => mcpAuth!.read(jobRef),
       cancelMcpAuthJob: (jobRef) => mcpAuth!.cancel(jobRef),

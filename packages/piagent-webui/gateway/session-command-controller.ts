@@ -35,7 +35,10 @@ function nullableRef(value: unknown): value is string | null { return value === 
 
 function validPayload(action: SessionAction, payload: Record<string, unknown>): boolean {
   if (["session.archive", "session.unarchive", "session.acquire", "session.release"].includes(action)) return exactKeys(payload, []);
-  if (action === "session.send") return exactKeys(payload, ["delivery", "message", "messageRequestId", "expectedOperationRef"])
+  if (action === "session.send") return exactKeys(payload, ["delivery", "message", "messageRequestId", "expectedOperationRef", "attachmentRefs"])
+    && Array.isArray(payload.attachmentRefs) && payload.attachmentRefs.length <= 4
+    && new Set(payload.attachmentRefs as unknown[]).size === payload.attachmentRefs.length
+    && (payload.attachmentRefs as unknown[]).every((item) => typeof item === "string" && REF.test(item))
     && ["new-operation", "follow-up", "steer"].includes(String(payload.delivery)) && typeof payload.message === "string"
     && payload.message.length >= 1 && payload.message.length <= 32_768 && !payload.message.includes("\0") && REF.test(String(payload.messageRequestId))
     && nullableRef(payload.expectedOperationRef) && (payload.delivery === "new-operation" ? payload.expectedOperationRef === null : payload.expectedOperationRef !== null);
@@ -52,11 +55,12 @@ function validPayload(action: SessionAction, payload: Record<string, unknown>): 
   if (action === "session.fork") return exactKeys(payload, ["entryRef", "title"]) && nullableRef(payload.entryRef)
     && (payload.title === null || typeof payload.title === "string" && payload.title.length >= 1 && payload.title.length <= 500
       && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(payload.title));
-  return exactKeys(payload, ["projectRef", "placeRef", "modelRef", "thinkingLevel", "message", "messageRequestId"])
+  const createKeys = ["projectRef", "placeRef", "modelRef", "thinkingLevel", "message", "messageRequestId"];
+  return (exactKeys(payload, createKeys) || exactKeys(payload, [...createKeys, "deferInitialMessage"]))
     && REF.test(String(payload.projectRef)) && REF.test(String(payload.placeRef)) && nullableRef(payload.modelRef)
     && ["off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(String(payload.thinkingLevel))
     && typeof payload.message === "string" && payload.message.length >= 1 && payload.message.length <= 32_768 && !payload.message.includes("\0")
-    && REF.test(String(payload.messageRequestId));
+    && REF.test(String(payload.messageRequestId)) && (payload.deferInitialMessage === undefined || typeof payload.deferInitialMessage === "boolean");
 }
 
 function parseCommand(value: unknown): SessionCommand | null {
@@ -86,10 +90,15 @@ export class SessionCommandController {
   readonly #metadata: SessionMetadataStore | null;
   readonly #now: () => Date;
   readonly #chains = new Map<string, Promise<unknown>>();
+  readonly #prepareAttachments: ((sessionRef: string, refs: string[], messageRequestId: string, text: string) => Promise<{
+    text: string; images: unknown[]; commit(): void; release(): void }>) | undefined;
 
   constructor(options: { catalog(): Promise<Catalog>; runtimes: SessionRuntimeSupervisor; store: SessionCommandStore; events: GatewayEventStore;
     metadata?: SessionMetadataStore;
+    prepareAttachments?(sessionRef: string, refs: string[], messageRequestId: string, text: string): Promise<{
+      text: string; images: unknown[]; commit(): void; release(): void }>;
     now?: () => Date }) {
+    this.#prepareAttachments = options.prepareAttachments;
     this.#catalog = options.catalog; this.#runtimes = options.runtimes; this.#store = options.store; this.#events = options.events;
     this.#metadata = options.metadata ?? null;
     this.#now = options.now ?? (() => new Date());
@@ -129,8 +138,10 @@ export class SessionCommandController {
     try { this.#store.admit(command, this.#now()); }
     catch { return this.#rejected(command, current, row, "unavailable", "session-command-admission-failed"); }
     let targetSessionRef = command.sessionRef;
+    let attachmentReservation: { commit(): void; release(): void } | null = null;
+    let sendAttempted = false;
     try {
-      let resultCode: "acquired" | "released" | "started" | "queued" | "steered" | "aborted" | "model-changed" | "thinking-changed" | "permission-changed"
+      let resultCode: "created" | "acquired" | "released" | "started" | "queued" | "steered" | "aborted" | "model-changed" | "thinking-changed" | "permission-changed"
         | "renamed" | "pinned" | "unpinned" | "archived" | "unarchived" | "forked" | "no-change",
         operationRef: string | null = null;
       if (command.action === "session.create") {
@@ -138,18 +149,32 @@ export class SessionCommandController {
           command.payload.modelRef === null ? null : String(command.payload.modelRef), String(command.payload.thinkingLevel));
         const created = await this.#readyCatalog(), createdRow = created.sessions.find((item) => item.sessionRef === targetSessionRef);
         if (!createdRow) throw new Error("session-catalog-refresh-failed");
-        const sent = await this.#runtimes.send(targetSessionRef, { delivery: "new-operation", message: String(command.payload.message),
-          expectedOperationRef: null }, createdRow.sessionRevision);
-        resultCode = sent.resultCode === "started" ? "started" : sent.resultCode; operationRef = sent.operationRef;
+        if (command.payload.deferInitialMessage === true) resultCode = "created";
+        else {
+          const sent = await this.#runtimes.send(targetSessionRef, { delivery: "new-operation", message: String(command.payload.message),
+            expectedOperationRef: null }, createdRow.sessionRevision);
+          resultCode = sent.resultCode === "started" ? "started" : sent.resultCode; operationRef = sent.operationRef;
+        }
       } else if (command.action === "session.acquire") { await this.#runtimes.acquire(command.sessionRef!); resultCode = "acquired"; }
       else if (command.action === "session.release") { await this.#runtimes.release(command.sessionRef!); resultCode = "released"; }
       else if (command.action === "session.send") {
         await this.#runtimes.acquire(command.sessionRef!);
         const acquired = await this.#readyCatalog(), acquiredRow = acquired.sessions.find((item) => item.sessionRef === command.sessionRef);
         if (!acquiredRow) throw new Error("session-catalog-refresh-failed");
-        const sent = await this.#runtimes.send(command.sessionRef!, command.payload as {
-          delivery: "new-operation" | "follow-up" | "steer"; message: string; expectedOperationRef: string | null
-        }, acquiredRow.sessionRevision);
+        const payload = command.payload as { delivery: "new-operation" | "follow-up" | "steer"; message: string;
+          expectedOperationRef: string | null; messageRequestId: string; attachmentRefs: string[] };
+        // Staged refs are claimed once, here, before the runtime is asked to
+        // dispatch. Documents were turned into text at staging so they join the
+        // message; images travel on the host's own channel.
+        const prepared = this.#prepareAttachments
+          ? await this.#prepareAttachments(command.sessionRef!, payload.attachmentRefs, payload.messageRequestId, payload.message)
+          : { text: payload.message, images: [] as unknown[], commit() {}, release() {} };
+        attachmentReservation = prepared;
+        if (!this.#prepareAttachments && payload.attachmentRefs.length > 0) throw new Error("session-attachment-unavailable");
+        sendAttempted = true;
+        const sent = await this.#runtimes.send(command.sessionRef!, { ...payload, message: prepared.text, images: prepared.images },
+          acquiredRow.sessionRevision);
+        prepared.commit();
         resultCode = sent.resultCode; operationRef = sent.operationRef;
       } else if (command.action === "session.abort") {
         operationRef = String(command.payload.operationRef);
@@ -195,10 +220,18 @@ export class SessionCommandController {
       return receipt;
     } catch (cause) {
       const after = await this.#readyCatalog(), afterRow = after.sessions.find((item) => item.sessionRef === targetSessionRef) ?? row;
-      const code = cause instanceof Error && /recovery/.test(cause.message) ? "recovery-required"
-        : cause instanceof Error && /(owner-conflict|operation-conflict|runtime-busy)/.test(cause.message) ? "owner-conflict" : "effect-unknown";
+      const message = cause instanceof Error ? cause.message : "session-command-failed";
+      const noDispatchEffect = command.action === "session.send" && (!sendAttempted
+        || /^(session-runtime-unavailable|session-operation-conflict|session-owner-conflict|session-runtime-busy)$/.test(message));
+      if (attachmentReservation) {
+        try { if (noDispatchEffect) attachmentReservation.release(); else attachmentReservation.commit(); }
+        catch { /* an attempted dispatch with an unprovable reservation remains uncertain */ }
+      }
+      const code = /recovery/.test(message) ? "recovery-required"
+        : /(owner-conflict|operation-conflict|runtime-busy)/.test(message) ? "owner-conflict"
+          : noDispatchEffect || command.action === "session.send" && !sendAttempted ? "unavailable" : "effect-unknown";
       const receipt = code === "effect-unknown" ? this.#uncertain(command, after, afterRow, "session-command-effect-unknown")
-        : this.#rejected(command, after, afterRow, code, cause instanceof Error ? cause.message : "session-command-failed");
+        : this.#rejected(command, after, afterRow, code, message);
       try { this.#store.settle(command, receipt, this.#now()); } catch { /* intent remains uncertain */ }
       return receipt;
     }
@@ -219,7 +252,7 @@ export class SessionCommandController {
       sessionRevisionAfter: row?.sessionRevision ?? null, deduplicated: false };
   }
   #settled(command: SessionCommand, catalog: Catalog, row: SessionRow,
-    resultCode: "acquired" | "released" | "started" | "queued" | "steered" | "aborted" | "model-changed" | "thinking-changed" | "permission-changed"
+    resultCode: "created" | "acquired" | "released" | "started" | "queued" | "steered" | "aborted" | "model-changed" | "thinking-changed" | "permission-changed"
       | "renamed" | "pinned" | "unpinned" | "archived" | "unarchived" | "forked" | "no-change",
     operationRef: string | null): Receipt {
     return { ...this.#base(command, catalog, row), operationRef, phase: "settled", resultCode, settledAt: this.#now().toISOString(),

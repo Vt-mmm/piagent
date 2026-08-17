@@ -13,12 +13,33 @@ export type PiSessionInfo = {
   id: string;
   cwd: string;
   name?: string;
+  parentSessionPath?: string;
   created: Date;
   modified: Date;
   messageCount: number;
   firstMessage: string;
   allMessagesText: string;
 };
+
+const DELEGATED_TASK_MARKERS = [
+  "Task: You are a delegated subagent running from a fork of the parent session.",
+  "Task: You are reviving a previous subagent conversation."
+] as const;
+const INTERNAL_HELPER_NAME = /^(?:subagent(?:-|$)|piagent-(?:planner|worker|scout|reviewer|oracle)(?:-|$))/i;
+
+export function isUserConversationSession(info: PiSessionInfo): boolean {
+  const segments = path.resolve(info.path).split(path.sep);
+  const sessionsIndex = segments.lastIndexOf("sessions");
+  if (sessionsIndex >= 0 && segments[sessionsIndex + 1] === "subagent") return false;
+  const internalName = INTERNAL_HELPER_NAME.test(String(info.name ?? "").trim());
+  const hasParent = typeof info.parentSessionPath === "string" && info.parentSessionPath.length > 0;
+  const messages = typeof info.allMessagesText === "string" ? info.allMessagesText : "";
+  const internalPrompt = DELEGATED_TASK_MARKERS.some((marker) => messages.includes(marker));
+  // User-created forks also carry parentSessionPath, so lineage alone is not enough. A helper identity or the
+  // runtime-only delegation prompt plus lineage is high-confidence internal evidence. Keep this classification
+  // at the gateway boundary so catalog, read models, commands and live streams all fail closed together.
+  return !((internalName && (hasParent || internalPrompt)) || (hasParent && internalPrompt));
+}
 
 function catalogRef(key: Buffer, namespace: string, value: string): string {
   return `${namespace}_${createHmac("sha256", key).update(value).digest("base64url").slice(0, 43)}`;
@@ -33,6 +54,43 @@ function display(value: unknown, maximum: number, fallback: string): string {
   return (clean || fallback).slice(0, maximum);
 }
 
+const INTERNAL_FRESH_TRANSITION = /(?:^|\b)(?:\/fresh\s+(?:task|scout|be-to-fe)|(?:task|scout|be-to-fe):)\b[\s\S]{0,180}\bRead task intake from \.pi\/task-inbox\//i;
+
+function atWordBoundary(value: string, maximum: number): string {
+  if (value.length <= maximum) return value;
+  const slice = value.slice(0, maximum + 1), boundary = slice.lastIndexOf(" ");
+  return `${slice.slice(0, boundary >= Math.floor(maximum * .6) ? boundary : maximum).trim()}…`;
+}
+
+// Session titles are a local deterministic projection. Asking a model to name
+// every chat would spend a turn and make opening the catalog non-deterministic.
+// Runtime routing commands are control-plane text, so they must never become a
+// title or preview merely because Pi records them as the first user entry.
+export function projectedSessionTitle(info: Pick<PiSessionInfo, "name" | "firstMessage" | "cwd">): { title: string; preview: string } {
+  const projectLabel = display(info.cwd ? path.basename(info.cwd) : "", 120, "Unknown project");
+  const first = info.firstMessage === "(no messages)" ? "" : display(info.firstMessage, 500, "");
+  const rawName = display(info.name, 500, ""), generatedName = /^pi:/i.test(rawName);
+  const suppliedName = rawName.replace(/^pi:\s*/i, "");
+  const normalizedName = suppliedName.toLowerCase();
+  const genericName = !suppliedName || normalizedName === projectLabel.toLowerCase()
+    || ["working", "pi agent platform", "new conversation"].includes(normalizedName);
+  const source = generatedName ? suppliedName || first : genericName ? first || suppliedName : suppliedName;
+  const internal = INTERNAL_FRESH_TRANSITION.test(source) || INTERNAL_FRESH_TRANSITION.test(first)
+    || /\.pi\/task-inbox\//i.test(source);
+  const cleaned = display(source, 500, "")
+    .replace(/^\/(?:fresh\s+)?(?:task|scout|be-to-fe)\s+/i, "")
+    .replace(/^(?:task|scout|be-to-fe):\s*/i, "")
+    .replace(/^[-#*>\s]+/, "")
+    // Keep underscores: the shared redactor deliberately emits
+    // [REDACTED_SECRET], and title cleanup must not mutate that proof marker.
+    .replace(/[`*~]+/g, "")
+    .trim();
+  const title = internal ? "Continued task" : atWordBoundary(cleaned || "New conversation", 72);
+  const preview = INTERNAL_FRESH_TRANSITION.test(first) || /\.pi\/task-inbox\//i.test(first)
+    ? "Continued in a fresh session" : atWordBoundary(first || title, 180);
+  return { title, preview };
+}
+
 function revision(key: Buffer, value: unknown): string {
   return `rev_${createHmac("sha256", key).update(JSON.stringify(value)).digest("hex")}`;
 }
@@ -40,18 +98,13 @@ function revision(key: Buffer, value: unknown): string {
 function row(key: Buffer, info: PiSessionInfo, metadata: SessionMetadata | undefined, metadataReason: string | null,
   ownership?: SessionOwnerProjection, sessionOptions?: SessionOptionProjection): SessionRow {
   const projectLabel = display(info.cwd ? path.basename(info.cwd) : "", 120, "Unknown project");
-  const first = info.firstMessage === "(no messages)" ? "" : info.firstMessage;
-  const suppliedName = display(info.name, 500, "").replace(/^pi:\s*/i, "");
-  const normalizedName = suppliedName.toLowerCase();
-  const genericName = !suppliedName || normalizedName === projectLabel.toLowerCase()
-    || ["working", "pi agent platform", "new conversation"].includes(normalizedName);
-  const title = display(genericName && first ? first : suppliedName || first, 500, "New conversation").replace(/^pi:\s*/i, "") || "New conversation";
+  const projected = projectedSessionTitle(info);
   return {
     sessionRef: sessionRefForPath(key, info.path),
     projectRef: projectRefForCwd(key, info.cwd),
-    title,
+    title: projected.title,
     projectLabel,
-    preview: display(first, 280, "No messages yet"),
+    preview: projected.preview,
     createdAt: info.created.toISOString(),
     updatedAt: info.modified.toISOString(),
     state: metadata?.archived ? "archived" : ownership?.state ?? "offline",
@@ -87,7 +140,7 @@ export async function buildSessionCatalog(options: {
 }): Promise<Catalog> {
   const limit = Math.max(1, Math.min(200, options.limit ?? 200));
   try {
-    const found = await options.listSessions();
+    const found = (await options.listSessions()).filter(isUserConversationSession);
     const metadata = options.readMetadata?.() ?? { state: "ready", revision: null, sessions: new Map(), reasonCode: null };
     const sessions = found.map((info) => {
       const sessionRef = sessionRefForPath(options.key, info.path);

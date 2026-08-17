@@ -49,7 +49,12 @@
             "image/bmp",
             "text/plain",
             "text/markdown",
-            "application/json"
+            "text/csv",
+            "text/tab-separated-values",
+            "application/json",
+            "application/yaml",
+            "application/pdf",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
           ]
         },
         "dataBase64": {
@@ -86,7 +91,7 @@
     "attachment": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["attachmentRef", "messageRequestId", "displayName", "kind", "mimeType", "sizeBytes", "expiresAt"],
+      "required": ["attachmentRef", "messageRequestId", "displayName", "kind", "mimeType", "sizeBytes", "sourceBytes", "truncated", "expiresAt"],
       "properties": {
         "attachmentRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
         "messageRequestId": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
@@ -96,14 +101,29 @@
           "maxLength": 160,
           "pattern": "^[^\\u0000-\\u001F\\u007F/\\\\]*$"
         },
-        "kind": { "enum": ["file", "image"] },
+        "kind": { "enum": ["file", "image", "document"] },
         "mimeType": {
           "type": "string",
           "minLength": 3,
           "maxLength": 127,
           "pattern": "^[a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+*-]+$"
         },
-        "sizeBytes": { "type": "integer", "minimum": 1, "maximum": 8388608 },
+        "sizeBytes": {
+          "description": "Bytes held for dispatch: image bytes, or the UTF-8 text extracted from a text or document file.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8388608
+        },
+        "sourceBytes": {
+          "description": "Bytes of the file the operator selected, before extraction. Equal to sizeBytes for images.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8388608
+        },
+        "truncated": {
+          "description": "True when extraction produced more text than the per-attachment cap, so Pi receives a prefix.",
+          "type": "boolean"
+        },
         "expiresAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" }
       }
     },

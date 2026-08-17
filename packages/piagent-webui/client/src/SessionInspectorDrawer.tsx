@@ -1,5 +1,6 @@
 import CloseRounded from "@mui/icons-material/CloseRounded";
 import DashboardRounded from "@mui/icons-material/DashboardRounded";
+import DescriptionRounded from "@mui/icons-material/DescriptionRounded";
 import DifferenceRounded from "@mui/icons-material/DifferenceRounded";
 import RefreshRounded from "@mui/icons-material/RefreshRounded";
 import TerminalRounded from "@mui/icons-material/TerminalRounded";
@@ -42,6 +43,7 @@ export function SessionInspectorDrawer({ open, active, snapshot, state, sessionR
         <Tab value="task" icon={<DashboardRounded />} iconPosition="start" label={snapshot?.task
           ? `${localize(locale, "Task", "Task")} · ${snapshot.task.progress.completed}/${snapshot.task.progress.total}` : localize(locale, "Task", "Task")} />
         <Tab value="source" icon={<DifferenceRounded />} iconPosition="start" label={`Source Changes${sourceCount ? ` · ${sourceCount}` : ""}`} />
+        <Tab value="documents" icon={<DescriptionRounded />} iconPosition="start" label={localize(locale, "Tài liệu", "Documents")} />
         <Tab value="activity" icon={<TerminalRounded />} iconPosition="start" label={`${localize(locale, "Activity", "Activity")}${snapshot?.activity.running.length ? ` · ${snapshot.activity.running.length}` : ""}`} />
       </Tabs>
     </Box>

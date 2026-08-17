@@ -39,6 +39,7 @@ const primaryContracts = [
   "queue-v1",
   "model-catalog-v1",
   "attachment-v1",
+  "document-workspace-v1",
   "control-command-v1",
   "approval-v1",
   "capabilities-v1",

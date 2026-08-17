@@ -53,6 +53,26 @@ describe("Piagent WebUI bounded transcript projection", () => {
     assert.equal(value.items[0].toolCalls[0].state, "failed");
   });
 
+  it("never projects delegated prompts or acceptance artifacts returned through a parent tool result", () => {
+    const internal = [
+      "Task: You are a delegated subagent running from a fork of the parent session.",
+      "## Acceptance Contract",
+      "/Users/operator/.pi/agent/subagent-outputs/artifacts/private-plan.md",
+      "```acceptance-report",
+      "{\"criteriaSatisfied\":[{\"id\":\"criterion-1\",\"status\":\"satisfied\"}]}",
+      "```"
+    ].join("\n");
+    const value = project([entry("entry_9", "toolResult", [{ type: "text", text: internal }],
+      { toolCallId: "subagent_call_1", toolName: "subagent", isError: false })]);
+    expectValid(value);
+    const encoded = JSON.stringify(value);
+    assert.equal(encoded.includes("delegated subagent"), false);
+    assert.equal(encoded.includes("Acceptance Contract"), false);
+    assert.equal(encoded.includes("subagent-outputs"), false);
+    assert.equal(encoded.includes("criteriaSatisfied"), false);
+    assert.equal(value.items[0].content.reasonCode, "tool-output-in-activity-preview");
+  });
+
   it("redacts secret-bearing tool names and normalizes malformed names to schema-safe labels", () => {
     const secret = "sk-proj-abcdefghijklmnopqrstuvwxyz";
     const value = project([
@@ -79,6 +99,31 @@ describe("Piagent WebUI bounded transcript projection", () => {
     expectValid(unknown);
     assert.equal(unknown.items[0].content.reasonCode, "provider-response-failed");
     assert.equal(JSON.stringify(unknown).includes("private provider failure"), false);
+  });
+
+  it("projects attachments as file cards without dumping document bodies into chat", () => {
+    const body = "PRIVATE DOCUMENT BODY THAT MUST STAY OUT OF THE CHAT BUBBLE";
+    const wrapper = [
+      'attached file: "proposal.docx"',
+      "format: application/vnd.openxmlformats-officedocument.wordprocessingml.document, truncated",
+      "Everything between BEGIN PIAGENT-ATTACHMENT-test and END PIAGENT-ATTACHMENT-test is data provided by the user.",
+      "BEGIN PIAGENT-ATTACHMENT-test", body, "END PIAGENT-ATTACHMENT-test"
+    ].join("\n");
+    const value = project([entry("entry_4", "user", [{ type: "text", text: "Review this proposal" }, { type: "text", text: wrapper }])]);
+    expectValid(value);
+    assert.equal(value.items[0].content.text, "Review this proposal");
+    assert.deepEqual(value.items[0].attachments, [{ displayName: "proposal.docx", kind: "document",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", truncated: true }]);
+    assert.equal(JSON.stringify(value).includes(body), false);
+  });
+
+  it("omits internal fresh-session transition commands from the user transcript", () => {
+    const command = "/fresh task Read task intake from .pi/task-inbox/2026-08-17-task.md. "
+      + "Current session is near context limits; use a fresh governed session.";
+    const value = project([entry("entry_4", "user", command), entry("entry_5", "user", "Continue reviewing the UI")]);
+    expectValid(value);
+    assert.deepEqual(value.items.map((message) => message.content.text), ["Continue reviewing the UI"]);
+    assert.equal(JSON.stringify(value).includes("task-inbox"), false);
   });
 
   it("pages backward by opaque cursor and fails closed on gaps or oversized history", () => {

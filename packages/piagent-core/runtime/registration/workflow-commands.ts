@@ -8,7 +8,7 @@ export function registerWorkflowCommands(pi: ExtensionAPI, deps: Record<string, 
     buildUsageSnapshot, commandArgs, emitProfileStatus, emitProfileTechStatus, emitRuntimeMessage,
     fs, loadProfileFromContext, prefixCompletions, projectContextFilePath, projectProfilePath,
     registerRuntimeCommand, resolveMemorySettings, runProfileTechWizard, selectRuntimeAction, sendWorkflowFollowUp,
-    shortTaskLabel, techStackPath
+    freshRequestParts, shortTaskLabel, techStackPath
   } = deps;
   type WorkflowCommandName = "task" | "scout" | "be-to-fe" | "discuss" | "plan" | "review" | "platform-improve" | "commit" | "pr" | "onboard";
 
@@ -377,17 +377,18 @@ export function registerWorkflowCommands(pi: ExtensionAPI, deps: Record<string, 
   });
 
   async function startFreshWorkflow(workflow: "task" | "scout" | "be-to-fe", args: string, ctx: any) {
-    const request = String(args ?? "").trim();
+    const parsed = freshRequestParts(String(args ?? ""));
+    const request = parsed.request;
     if (!request) {
       ctx.ui.notify(`Usage: /fresh ${workflow} <request>`, "warning");
       return;
     }
 
-    const label = shortTaskLabel(request);
+    const label = parsed.sessionTitle ?? shortTaskLabel(request);
     const command = `/${workflow} ${request}`;
     const result = await ctx.newSession({
       withSession: async (nextCtx) => {
-        pi.setSessionName(`pi:${workflow}:${label}`);
+        pi.setSessionName(`pi:${label}`);
         await nextCtx.sendUserMessage(command);
       }
     });

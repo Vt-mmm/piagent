@@ -46,6 +46,26 @@ chưa ship solver hoặc automatic parent routing. Host execution là mặc đ�
 yêu cầu isolation backend chưa có adapter, mutation bị block thay vì âm thầm
 fallback về host.
 
+## Web search và vision
+
+Web research và đọc ảnh là hai capability tách biệt. Tích hợp `pi-web-access`
+được pin sẽ ưu tiên route `openai-codex` khi Pi đã xác thực và giữ fallback search
+tự động; credential không được đưa vào project hoặc browser state. Ảnh được gửi
+dưới dạng native image input cho model của session, không qua OCR service riêng
+do Piagent vận hành. Dashboard hiển thị đúng route tại **Cài đặt → Nhà cung cấp &
+model**: `Codex Web Search` khi route đó sẵn sàng, và `Codex Vision` chỉ khi model
+Codex hiện tại công bố hỗ trợ image input.
+
+## Workspace tài liệu trên WebUI
+
+Session Hub cho phép đính kèm ảnh hoặc tài liệu do người dùng chọn vào cuộc trò
+chuyện mới hay session đang mở. File Markdown, text, PDF và DOCX được trích xuất
+cục bộ với giới hạn rõ ràng; chat chỉ giữ card file gọn, còn workspace **Tài
+liệu** hiển thị preview dễ đọc mà không tạo model turn. File vượt giới hạn gửi
+trực tiếp vẫn nằm trong workspace của project thay vì bị nhét vào prompt. Runtime
+tiếp tục áp protected path, redaction, session binding và attachment ref dùng một
+lần.
+
 ## Command chính
 
 | Command | Mục đích |
@@ -122,7 +142,7 @@ npm run verify
 
 Gate này chạy architecture check, test, typecheck, capability validation, runtime smoke và docs consistency trước khi release.
 
-Bản phát hành hiện tại là `v1.4.1`. Với team hoặc production, hãy pin tag này
+Bản phát hành hiện tại là `v1.5.0`. Với team hoặc production, hãy pin tag này
 hoặc một commit đã review thay vì dựa vào nguồn package không cố định.
 
 ## Security

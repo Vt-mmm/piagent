@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import CloseRounded from "@mui/icons-material/CloseRounded";
 import DarkModeRounded from "@mui/icons-material/DarkModeRounded";
 import HubRounded from "@mui/icons-material/HubRounded";
+import ImageRounded from "@mui/icons-material/ImageRounded";
 import InfoOutlined from "@mui/icons-material/InfoOutlined";
 import LanguageRounded from "@mui/icons-material/LanguageRounded";
 import LightModeRounded from "@mui/icons-material/LightModeRounded";
@@ -9,6 +10,7 @@ import MemoryRounded from "@mui/icons-material/MemoryRounded";
 import PsychologyRounded from "@mui/icons-material/PsychologyRounded";
 import SecurityRounded from "@mui/icons-material/SecurityRounded";
 import TuneRounded from "@mui/icons-material/TuneRounded";
+import TravelExploreRounded from "@mui/icons-material/TravelExploreRounded";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
@@ -68,6 +70,53 @@ function GeneralSettings() {
   </Paper></>;
 }
 
+function AgentCapabilityCards({ options, snapshot, activeModel, observedProvider }: { options?: SessionCreationOptions;
+  snapshot?: PiagentWebUICanonicalSnapshotV1; activeModel?: SessionCreationOptions["models"][number]; observedProvider?: string | null }) {
+  const { locale } = useUiPreferences(), web = options?.webSearch;
+  const attachment = snapshot?.capabilities.capabilities.attachments;
+  const attachmentVision = attachment?.status === "available" ? attachment.kinds.some((kind) => kind === "image") : null;
+  const observedModel = snapshot?.session.model.state === "known" ? snapshot.session.model.value : null;
+  const observedVision = observedModel ? observedModel.inputCapabilities.some((kind) => kind === "image") : null;
+  const vision = activeModel?.imageInput ?? observedVision ?? attachmentVision;
+  const provider = activeModel?.provider ?? observedProvider ?? null, codexVision = provider === "openai-codex";
+  const cards = [{
+    key: "search", icon: <TravelExploreRounded color="primary" />,
+    title: web?.route === "codex-first" ? "Codex Web Search" : localize(locale, "Tìm kiếm web", "Web search"),
+    detail: web?.route === "codex-first" ? localize(locale,
+      "Dùng đăng nhập Codex của Pi; tự chuyển sang Exa khi Codex Search không khả dụng.",
+      "Uses Pi's Codex sign-in and falls back to Exa when Codex Search is unavailable.") : web?.state === "configured" ? localize(locale,
+      "Route tự động đang hoạt động; kết nối Codex để ưu tiên native Web Search.",
+      "Automatic routing is configured; connect Codex to prefer native Web Search.") : localize(locale,
+      "Chưa tìm thấy tích hợp web search trong Pi runtime.", "The Pi runtime web-search integration was not found."),
+    status: web?.route === "codex-first" ? localize(locale, "Ưu tiên Codex", "Codex first") : web?.state === "configured"
+      ? localize(locale, "Đã cấu hình", "Configured") : localize(locale, "Chưa có", "Unavailable"),
+    ready: web?.state === "configured"
+  }, {
+    key: "vision", icon: <ImageRounded color="primary" />,
+    title: codexVision ? "Codex Vision" : localize(locale, "Vision của model", "Model vision"),
+    detail: vision === true ? localize(locale,
+      "Ảnh đính kèm được gửi trực tiếp cho model của session hiện tại.",
+      "Image attachments are sent directly to the current session model.") : vision === false ? localize(locale,
+      "Model hiện tại chỉ nhận text; hãy chọn model hỗ trợ image input.",
+      "The current model is text-only; select a model that supports image input.") : localize(locale,
+      "Runtime chưa công bố image-input capability của model hiện tại.",
+      "The runtime has not reported the current model's image-input capability."),
+    status: vision === true ? localize(locale, "Đang dùng", "Active") : vision === false
+      ? localize(locale, "Không hỗ trợ", "Unsupported") : localize(locale, "Chưa rõ", "Unknown"),
+    ready: vision === true
+  }];
+  return <><Typography variant="h2" sx={{ mt: 3, mb: .5 }}>{localize(locale, "Tìm kiếm & hình ảnh", "Search & vision")}</Typography>
+    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.25 }}>{localize(locale,
+      "Capability thực tế của Pi runtime và model đang chọn.", "Capabilities reported by the Pi runtime and selected model.")}</Typography>
+    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2,minmax(0,1fr))" }, gap: 1 }}>
+      {cards.map((card) => <Paper variant="outlined" key={card.key} sx={{ p: 1.75, borderRadius: 2.5 }}><Stack direction="row" spacing={1.25} sx={{ alignItems: "flex-start" }}>
+        <Box sx={{ width: 36, height: 36, display: "grid", placeItems: "center", borderRadius: 2, bgcolor: "action.selected", flex: "0 0 auto" }}>{card.icon}</Box>
+        <Box sx={{ flex: 1, minWidth: 0 }}><Typography sx={{ fontWeight: 800 }}>{card.title}</Typography>
+          <Typography variant="body2" color="text.secondary">{card.detail}</Typography></Box>
+        <Chip size="small" color={card.ready ? "success" : "default"} variant="outlined" label={card.status} /></Stack></Paper>)}
+    </Box></>;
+}
+
 function ModelSettings({ options, auth, refreshAuth, session, snapshot, onSetModel, onSetThinking }: { options?: SessionCreationOptions; auth?: ProviderAuthCatalog;
   refreshAuth(): Promise<void>; session?: SessionRow; snapshot?: PiagentWebUICanonicalSnapshotV1;
   onSetModel?(modelRef: string): Promise<unknown>; onSetThinking?(thinking: string): Promise<unknown> }) {
@@ -103,6 +152,7 @@ function ModelSettings({ options, auth, refreshAuth, session, snapshot, onSetMod
         onChange={(event) => void change(() => onSetThinking?.(event.target.value) ?? Promise.resolve())} sx={{ mt: .5 }}>
         {thinkingLevels.map((value) => <MenuItem key={value} value={value}>{label(value, locale)}</MenuItem>)}</Select></Box></Stack>
       {changeError && <Typography role="status" color="error" variant="caption" sx={{ mt: 1 }}>{changeError}</Typography>}</Paper>}
+    <AgentCapabilityCards options={options} snapshot={snapshot} activeModel={activeModel} observedProvider={observedModel?.provider} />
     <Typography variant="h2" sx={{ mt: 3, mb: .5 }}>{localize(locale, "Kết nối nhà cung cấp", "Provider connections")}</Typography>
     <Typography variant="body2" color="text.secondary" sx={{ mb: 1.25 }}>{localize(locale,
       "Kết nối tài khoản để mở khóa model tương ứng.", "Connect an account to make its models available.")}</Typography>

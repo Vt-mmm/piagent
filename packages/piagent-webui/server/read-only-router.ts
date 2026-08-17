@@ -29,6 +29,12 @@ export async function routeReadOnlyRequest(url: URL, provider: WebUiReadModelPro
     if (url.search || !OPAQUE_REF.test(ref) || ref.includes("/")) return { handled: true, status: 400, value: { error: { code: "invalid-task-run-ref" } } };
     return { handled: true, status: 200, value: await provider.subagentTree(ref) };
   }
+  if (url.pathname === "/api/v1/documents" && !url.search) return { handled: true, status: 200, value: await provider.documents() };
+  if (url.pathname.startsWith("/api/v1/documents/")) {
+    const ref = url.pathname.slice("/api/v1/documents/".length);
+    if (url.search || !OPAQUE_REF.test(ref) || ref.includes("/")) return { handled: true, status: 400, value: { error: { code: "invalid-document-ref" } } };
+    return { handled: true, status: 200, value: await provider.document(ref) };
+  }
   if (url.pathname === "/api/v1/chat/queue" && !url.search) return { handled: true, status: 200, value: await provider.queue() };
   if (url.pathname === "/api/v1/session-options/models" && !url.search) return { handled: true, status: 200, value: await provider.modelCatalog() };
   if (url.pathname.startsWith("/api/v1/approvals/")) {

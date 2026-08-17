@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { PiagentWebUICanonicalSnapshotV1 } from "../../contracts/generated/snapshot-v1.ts";
+import type { Attachment, StageCommand } from "../../contracts/generated/attachment-v1.ts";
 import type { PiagentWebUIBoundedTranscriptProjectionV1, TranscriptItem } from "../../contracts/generated/transcript-v1.ts";
 import type { PiagentWebUIHeldMessageQueueProjectionV1 } from "../../contracts/generated/queue-v1.ts";
 import { readHeldQueue, readTranscript, sendResumeAndContinueCommand, stageAttachment } from "./api.ts";
@@ -10,6 +11,8 @@ import { createAttachmentCommand, createAttachmentDiscardCommand, createChatComm
   createResumeAndContinueCommand, queueUpdatePayload } from "./chat-command.ts";
 import { sendChatCommand } from "./api.ts";
 import { localize, useUiPreferences } from "./ui-preferences.tsx";
+import { acceptAttribute, attachmentDetail, dragCarriesFiles, discardAttachment, MAX_ATTACHMENTS,
+  stageFiles } from "./attachment-intake.ts";
 
 export function ChatPanel({ snapshot, events, refreshSnapshot }: { snapshot: PiagentWebUICanonicalSnapshotV1; events: RuntimeStreamEvent[];
   refreshSnapshot?: () => Promise<PiagentWebUICanonicalSnapshotV1 | undefined> }) {
@@ -23,8 +26,13 @@ export function ChatPanel({ snapshot, events, refreshSnapshot }: { snapshot: Pia
   const [editingRef, setEditingRef] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [messageRequestId, setMessageRequestId] = useState(() => `message-request.${crypto.randomUUID()}`);
-  const [attachments, setAttachments] = useState<Array<{ attachmentRef: string; displayName: string; kind: "file" | "image"; mimeType: string; sizeBytes: number }>>([]);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  // dragenter and dragleave fire again for every child the pointer crosses, so a
+  // boolean set on leave clears the highlight while the file is still over the
+  // panel. Counting entries against leaves is what tracks the panel as a whole.
+  const dragDepth = useRef(0);
   const live = useMemo(() => liveChatState(events), [events]);
   const completedCursor = [...events].reverse().find((event) => ["message.completed", "message.failed", "agent-operation.settled"].includes(String(event.kind)))?.eventCursor ?? null;
 
@@ -35,6 +43,15 @@ export function ChatPanel({ snapshot, events, refreshSnapshot }: { snapshot: Pia
   }, [snapshot.identity.sessionRef]);
 
   useEffect(() => { setAttachments([]); setMessageRequestId(`message-request.${crypto.randomUUID()}`); }, [snapshot.identity.sessionRef]);
+
+  // A file dropped anywhere the composer does not cover is navigated to by the
+  // browser, which replaces the running session with the file. Refusing the
+  // default everywhere makes a near miss do nothing instead of losing the page.
+  useEffect(() => {
+    const block = (event: DragEvent) => { if (event.dataTransfer && [...event.dataTransfer.types].includes("Files")) event.preventDefault(); };
+    window.addEventListener("dragover", block); window.addEventListener("drop", block);
+    return () => { window.removeEventListener("dragover", block); window.removeEventListener("drop", block); };
+  }, []);
 
   useEffect(() => {
     if (!completedCursor) return;
@@ -73,6 +90,13 @@ export function ChatPanel({ snapshot, events, refreshSnapshot }: { snapshot: Pia
   const composerAvailable = chatAvailable || compoundAvailable;
   const attachmentCapability = snapshot.capabilities.capabilities.attachments;
   const attachmentAvailable = attachmentCapability.status === "available";
+  const allowedMimeTypes = useMemo(() => new Set<string>(attachmentCapability.status === "available" ? attachmentCapability.mimeTypes : []),
+    [attachmentCapability]);
+  // The picker offers whatever the host publishes, named by extension as well as
+  // by type: a file dialog filtering on MIME alone hides .md and .docx on the
+  // hosts that report no type for them.
+  const acceptTypes = useMemo(() => acceptAttribute(allowedMimeTypes), [allowedMimeTypes]);
+  const canAttach = attachmentAvailable && !sending && !uploading && attachments.length < MAX_ATTACHMENTS;
   const running = snapshot.session.operation.liveness === "running";
   const settleControl = async () => {
     await refreshSnapshot?.();
@@ -101,32 +125,24 @@ export function ChatPanel({ snapshot, events, refreshSnapshot }: { snapshot: Pia
     if (!files?.length || !attachmentAvailable || uploading) return;
     setUploading(true); setSendState(null);
     try {
-      let next = [...attachments];
-      for (const file of [...files].slice(0, Math.max(0, 4 - next.length))) {
-        const extension = file.name.split(".").pop()?.toLowerCase(), declared = file.type || ({ txt: "text/plain", md: "text/markdown", markdown: "text/markdown",
-          json: "application/json", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", bmp: "image/bmp" } as Record<string, string>)[extension ?? ""];
-        if (!declared) { setSendState(`${file.name}: ${localize(locale, "loại file chưa được hỗ trợ.", "unsupported file type.")}`); continue; }
-        const itemLimit = declared.startsWith("image/") ? Math.min(snapshot.capabilities.limits.maxAttachmentFileBytes, 8 * 1024 * 1024) : 256 * 1024;
-        if (file.size < 1 || file.size > itemLimit || next.reduce((sum, item) => sum + item.sizeBytes, 0) + file.size > snapshot.capabilities.limits.maxAttachmentTotalBytes) {
-          setSendState(`${file.name}: ${localize(locale, "vượt giới hạn đính kèm.", "attachment limit exceeded.")}`); continue;
-        }
-        const bytes = new Uint8Array(await file.arrayBuffer()); let binary = "";
-        for (let offset = 0; offset < bytes.length; offset += 32_768) binary += String.fromCharCode(...bytes.subarray(offset, offset + 32_768));
-        const receipt = await stageAttachment(await createAttachmentCommand(snapshot, messageRequestId,
-          { displayName: file.name, declaredMimeType: declared as any, dataBase64: btoa(binary) }));
-        if (receipt.resultCode !== "staged" || !receipt.attachment) { setSendState(`${file.name}: ${label(receipt.error?.code ?? receipt.resultCode, locale)}`); continue; }
-        next = [...next, receipt.attachment]; setAttachments(next);
-      }
+      const outcome = await stageFiles({ files, snapshot, messageRequestId, existing: attachments,
+        allowed: allowedMimeTypes, locale, stage: stageAttachment });
+      setAttachments(outcome.attachments); setSendState(outcome.status);
     } catch { setSendState(localize(locale, "Không thể đính kèm; file không được gửi vào Pi.", "Unable to attach the file; it was not sent to Pi.")); }
     finally { setUploading(false); }
+  };
+  const endDrag = () => { dragDepth.current = 0; setDragging(false); };
+  const onDrop = (event: React.DragEvent<HTMLElement>) => {
+    if (!dragCarriesFiles(event.dataTransfer)) return;
+    event.preventDefault(); endDrag();
+    if (canAttach) void selectFiles(event.dataTransfer.files);
   };
   const removeAttachment = async (attachmentRef: string) => {
     if (sending || uploading) return; setUploading(true); setSendState(null);
     try {
-      const receipt = await stageAttachment(createAttachmentDiscardCommand(snapshot, messageRequestId, attachmentRef));
-      if (receipt.messageType === "discard-receipt" && receipt.resultCode === "discarded")
-        setAttachments((current) => current.filter((entry) => entry.attachmentRef !== attachmentRef));
-      else setSendState(`${localize(locale, "Chưa thể bỏ file", "Unable to remove file")} · ${label(receipt.error?.code ?? receipt.resultCode, locale)}`);
+      const outcome = await discardAttachment({ snapshot, messageRequestId, attachmentRef, locale, stage: stageAttachment });
+      if (outcome.discarded) setAttachments((current) => current.filter((entry) => entry.attachmentRef !== attachmentRef));
+      else setSendState(outcome.status);
     } catch { setSendState(localize(locale, "Không thể bỏ file; trạng thái Pi có thể đã thay đổi.", "Unable to remove the file; Pi state may have changed.")); }
     finally { setUploading(false); }
   };
@@ -146,7 +162,17 @@ export function ChatPanel({ snapshot, events, refreshSnapshot }: { snapshot: Pia
     finally { setSending(false); }
   };
   return (
-    <section className="chat-panel surface" aria-labelledby="chat-heading">
+    <section className="chat-panel surface" aria-labelledby="chat-heading" data-dragging={dragging || undefined}
+      onDragEnter={(event) => { if (dragCarriesFiles(event.dataTransfer)) { dragDepth.current += 1; setDragging(true); } }}
+      onDragOver={(event) => { if (dragCarriesFiles(event.dataTransfer)) { event.preventDefault(); event.dataTransfer.dropEffect = canAttach ? "copy" : "none"; } }}
+      onDragLeave={(event) => { if (dragCarriesFiles(event.dataTransfer)) { dragDepth.current -= 1; if (dragDepth.current <= 0) endDrag(); } }}
+      onDrop={onDrop}>
+      {dragging && <div className="chat-drop-overlay" role="status">
+        <strong>{canAttach ? localize(locale, "Thả tài liệu vào đây", "Drop documents here")
+          : attachments.length >= 4 ? localize(locale, "Đã đủ 4 file cho tin nhắn này", "This message already holds 4 files")
+            : localize(locale, "Chưa nhận file lúc này", "Files cannot be attached right now")}</strong>
+        {canAttach && <small>{localize(locale, ".md .txt .csv .json .yaml .docx .pdf và ảnh", ".md .txt .csv .json .yaml .docx .pdf and images")}</small>}
+      </div>}
       <header className="chat-heading">
         <div><p className="section-kicker">{localize(locale, "Đúng Pi session hiện tại", "Exact current Pi session")}</p><h2 id="chat-heading">Chat</h2></div>
         <div><span>{items.length} {localize(locale, "message gần nhất", "recent messages")}</span><span className="chat-read-state">{localize(locale, "Streaming trực tiếp", "Live streaming")}</span></div>
@@ -200,12 +226,19 @@ export function ChatPanel({ snapshot, events, refreshSnapshot }: { snapshot: Pia
       </section>}
       <footer className="chat-composer-preview">
         {attachments.length > 0 && <ul className="attachment-list" aria-label={localize(locale, "File sẽ gửi cùng message", "Files to send with the message")}>
-          {attachments.map((item) => <li key={item.attachmentRef}><span><strong>{item.displayName}</strong><small>{item.kind === "image" ? localize(locale, "Ảnh", "Image") : "File"} · {(item.sizeBytes / 1024).toFixed(item.sizeBytes < 10240 ? 1 : 0)} KiB</small></span>
+          {attachments.map((item) => <li key={item.attachmentRef} data-kind={item.kind}><span><strong>{item.displayName}</strong><small>{attachmentDetail(item, locale)}</small></span>
             <button type="button" disabled={sending || uploading} aria-label={`${localize(locale, "Bỏ", "Remove")} ${item.displayName}`} onClick={() => void removeAttachment(item.attachmentRef)}>{localize(locale, "Bỏ", "Remove")}</button></li>)}
         </ul>}
         <textarea aria-label={localize(locale, "Nội dung chat", "Chat message")} placeholder={compoundAvailable ? localize(locale, "Nhập việc cần Pi làm ngay sau khi mở lại task…", "Enter work for Pi immediately after the task resumes…")
           : chatAvailable ? localize(locale, "Nhắn vào đúng Pi session này…", "Message this exact Pi session…") : localize(locale, "Chat control chưa khả dụng.", "Chat control is unavailable.")}
-          disabled={!composerAvailable || sending} maxLength={65_536} rows={2} value={draft} onChange={(event) => setDraft(event.target.value)} />
+          disabled={!composerAvailable || sending} maxLength={65_536} rows={2} value={draft} onChange={(event) => setDraft(event.target.value)}
+          onPaste={(event) => {
+            // Only a clipboard actually carrying files is intercepted, so pasting
+            // text — including text copied out of a document — still types.
+            if (!event.clipboardData?.files.length) return;
+            event.preventDefault();
+            if (canAttach) void selectFiles(event.clipboardData.files);
+          }} />
         <div className="composer-actions">
           <button type="button" disabled={!composerAvailable || sending || !draft.trim()}
             onClick={() => void submit(compoundAvailable ? "resume-and-continue" : running ? "follow-up" : "new-operation")}>
@@ -218,11 +251,11 @@ export function ChatPanel({ snapshot, events, refreshSnapshot }: { snapshot: Pia
             || !chatActions?.interruptAndSend.available}
             onClick={() => void submit("steer")}>{localize(locale, "Ngắt & gửi", "Interrupt & send")}</button>}
         </div>
-        <label className={`attachment-picker ${!attachmentAvailable || sending || uploading || attachments.length >= 4 ? "disabled" : ""}`}>
-          <input type="file" multiple disabled={!attachmentAvailable || sending || uploading || attachments.length >= 4}
-            accept={attachmentCapability.status === "available" ? attachmentCapability.mimeTypes.join(",") : undefined}
+        <label className={`attachment-picker ${canAttach ? "" : "disabled"}`}
+          title={localize(locale, "Chọn file, hoặc kéo thả / dán thẳng vào khung chat", "Pick a file, or drag and drop / paste straight into the chat")}>
+          <input type="file" multiple disabled={!canAttach} accept={acceptTypes || undefined}
             onChange={(event) => { void selectFiles(event.target.files); event.currentTarget.value = ""; }} />
-          {uploading ? localize(locale, "Đang kiểm tra file…", "Checking files…") : `${localize(locale, "Đính kèm", "Attach")} (${attachments.length}/4)`}
+          {uploading ? localize(locale, "Đang đọc tài liệu…", "Reading documents…") : `${localize(locale, "Đính kèm hoặc kéo thả", "Attach or drop")} (${attachments.length}/4)`}
         </label>
         {sendState && <small role="status">{sendState}</small>}
       </footer>

@@ -98,7 +98,11 @@ export function buildFreshCommand(cwd: string, workflow: FreshWorkflow, original
   const task = extractTaskRequest(originalText);
   if (originalText.length >= LONG_INPUT_CHARS) {
     const intakePath = writeTaskInbox(cwd, workflow, originalText);
-    return `/fresh ${workflow} Read task intake from ${intakePath}. ${reason}`;
+    // Keep the large intake out of the command/session name, but carry a small
+    // deterministic label across the new-session boundary. The /fresh handler
+    // consumes this private option before it sends the workflow prompt, so it
+    // never becomes task instructions or provider-visible document content.
+    return `/fresh ${workflow} --session-title "${shortTaskLabel(task)}" Read task intake from ${intakePath}. ${reason}`;
   }
   return `/fresh ${workflow} ${trimTaskForInline(task)}`;
 }
@@ -106,8 +110,15 @@ export function buildFreshCommand(cwd: string, workflow: FreshWorkflow, original
 export function shortTaskLabel(text: string): string {
   const compact = text
     .replace(/```[\s\S]*?```/g, " ")
-    .replace(/[^A-Za-z0-9\u00C0-\u1EF9_-]+/g, " ")
+    .replace(/[^\p{L}\p{N}_-]+/gu, " ")
     .trim()
     .slice(0, 64);
   return compact || "piagent task";
+}
+
+export function freshRequestParts(value: string): { request: string; sessionTitle: string | null } {
+  const input = String(value ?? "").trim();
+  const marked = /^--session-title\s+"([^"\r\n]{1,64})"\s+([\s\S]+)$/u.exec(input);
+  if (!marked) return { request: input, sessionTitle: null };
+  return { request: marked[2]!.trim(), sessionTitle: shortTaskLabel(marked[1]!) };
 }

@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-webui-document-workspace-v1",
+  "messageType": "listing",
+  "generatedAt": "2026-08-17T09:00:00.000Z",
+  "state": "ready",
+  "roots": [
+    { "rootRef": "document-root_01", "path": "/workspace/project", "source": "project", "documentCount": 2 },
+    { "rootRef": "document-root_02", "path": "/home/operator/Downloads", "source": "profile", "documentCount": 1 }
+  ],
+  "documents": [
+    {
+      "documentRef": "document_01",
+      "rootRef": "document-root_01",
+      "name": "ke-hoach.md",
+      "relativePath": "tai-lieu/ke-hoach.md",
+      "extension": "md",
+      "sizeBytes": 4096,
+      "modifiedAt": "2026-08-17T08:30:00.000Z"
+    },
+    {
+      "documentRef": "document_02",
+      "rootRef": "document-root_01",
+      "name": "bao-cao.docx",
+      "relativePath": "tai-lieu/bao-cao.docx",
+      "extension": "docx",
+      "sizeBytes": 245760,
+      "modifiedAt": "2026-08-17T08:45:00.000Z"
+    },
+    {
+      "documentRef": "document_03",
+      "rootRef": "document-root_02",
+      "name": "vendor-spec.pdf",
+      "relativePath": "vendor-spec.pdf",
+      "extension": "pdf",
+      "sizeBytes": 1048576,
+      "modifiedAt": "2026-08-16T17:10:00.000Z"
+    }
+  ],
+  "truncated": false,
+  "reasonCode": null
+}

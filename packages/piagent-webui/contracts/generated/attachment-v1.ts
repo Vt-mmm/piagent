@@ -87,16 +87,32 @@ export interface StageFile {
     | "image/bmp"
     | "text/plain"
     | "text/markdown"
-    | "application/json";
+    | "text/csv"
+    | "text/tab-separated-values"
+    | "application/json"
+    | "application/yaml"
+    | "application/pdf"
+    | "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
   dataBase64: string;
 }
 export interface Attachment {
   attachmentRef: string;
   messageRequestId: string;
   displayName: string;
-  kind: "file" | "image";
+  kind: "file" | "image" | "document";
   mimeType: string;
+  /**
+   * Bytes held for dispatch: image bytes, or the UTF-8 text extracted from a text or document file.
+   */
   sizeBytes: number;
+  /**
+   * Bytes of the file the operator selected, before extraction. Equal to sizeBytes for images.
+   */
+  sourceBytes: number;
+  /**
+   * True when extraction produced more text than the per-attachment cap, so Pi receives a prefix.
+   */
+  truncated: boolean;
   expiresAt: string;
 }
 export interface StageError {

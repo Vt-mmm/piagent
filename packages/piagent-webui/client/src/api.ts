@@ -15,6 +15,7 @@ import type { PiagentWebUIBoundedTranscriptProjectionV1 } from "../../contracts/
 import type { PiagentWebUIHeldMessageQueueProjectionV1 } from "../../contracts/generated/queue-v1.ts";
 import type { PiagentWebUIAuthenticatedModelCatalogV1 } from "../../contracts/generated/model-catalog-v1.ts";
 import type { DiscardCommand, DiscardReceipt, StageCommand, StageReceipt } from "../../contracts/generated/attachment-v1.ts";
+import type { Document as DocumentContent, Listing } from "../../contracts/generated/document-workspace-v1.ts";
 import type { Command, Receipt } from "../../contracts/generated/control-command-v1.ts";
 import type { ApprovalDecision, ApprovalReceipt, ApprovalRequest } from "../../contracts/generated/approval-v1.ts";
 import type { Catalog } from "../../contracts/generated/session-catalog-v1.ts";
@@ -44,7 +45,9 @@ export type SessionCreationOptions = {
   version: "piagent-session-creation-options-v1";
   generatedAt: string;
   projects: Array<{ projectRef: string; placeRef: string; label: string }>;
-  models: Array<{ modelRef: string; provider: string; modelId: string; displayName: string; reasoning: boolean; thinkingLevels: string[] }>;
+  models: Array<{ modelRef: string; provider: string; modelId: string; displayName: string; reasoning: boolean; imageInput: boolean | null; thinkingLevels: string[] }>;
+  webSearch?: { state: "configured" | "unavailable"; route: "codex-first" | "automatic" | null; provider: "openai-codex" | null;
+    fallbackProvider: "exa" | null; integration: { name: "pi-web-access"; version: string } | null; reasonCode: string | null };
   projectImport?: { status: "available" | "unavailable"; reasonCode: string | null };
   reasonCode: string | null;
 };
@@ -348,6 +351,27 @@ export async function sendSourceOpenCommand(command: Command, signal?: AbortSign
     headers: { Accept: "application/json", "Content-Type": "application/json", "X-Piagent-CSRF": csrf }, body: JSON.stringify(command) });
   if (!response.ok) throw new WebUiRequestError(response.status);
   return await response.json() as Receipt;
+}
+
+// The Gateway drives many sessions, so its attachment endpoint names the one the
+// bytes belong to. Same bounded command, same receipts as the single-session route.
+export async function stageSessionAttachment(sessionRef: string, command: StageCommand | DiscardCommand,
+  signal?: AbortSignal): Promise<StageReceipt | DiscardReceipt> {
+  const csrf = browserCsrfToken();
+  if (!csrf) throw new WebUiRequestError(403);
+  const response = await fetch(`/api/v1/sessions/${encodeURIComponent(sessionRef)}/attachments`, { method: "POST", credentials: "same-origin", signal,
+    headers: { Accept: "application/json", "Content-Type": "application/json", "X-Piagent-CSRF": csrf }, body: JSON.stringify(command) });
+  if (!response.ok) throw new WebUiRequestError(response.status);
+  return await response.json() as StageReceipt | DiscardReceipt;
+}
+
+export function readDocumentIndex(sessionRef: string | null, signal?: AbortSignal): Promise<Listing> {
+  return readJson(sessionRef ? sessionInspectionPath(sessionRef, "/api/v1/documents") : "/api/v1/documents", signal);
+}
+
+export function readDocument(sessionRef: string | null, documentRef: string, signal?: AbortSignal): Promise<DocumentContent> {
+  const readPath = `/api/v1/documents/${encodeURIComponent(documentRef)}`;
+  return readJson(sessionRef ? sessionInspectionPath(sessionRef, readPath) : readPath, signal);
 }
 
 export async function stageAttachment(command: StageCommand | DiscardCommand, signal?: AbortSignal): Promise<StageReceipt | DiscardReceipt> {

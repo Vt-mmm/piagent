@@ -86,6 +86,61 @@ describe("Piagent Session Hub owner lease and lazy runtime supervisor", () => {
     assert.equal(preferAuthoritativePiagentGuard(authoritative)(missingAuthority), missingAuthority);
   });
 
+  it("forwards prepared text on the prompt and images on the host's own channel", async (t) => {
+    const { root, key } = state(t), target = info(root);
+    const prompts = [];
+    // The supervisor races the prompt against an observed agent_start, so a fake
+    // that resolves without ever emitting one reports the operation as unobserved.
+    let observer = null;
+    const session = { isIdle: true, isStreaming: false, subscribe: (fn) => { observer = fn; return () => {}; },
+      async prompt(text, options) { prompts.push({ text, options }); observer?.({ type: "agent_start" }); } };
+    const supervisor = new SessionRuntimeSupervisor({ gatewayInstanceRef: "gateway_attachment_send", key,
+      leases: new SessionLeaseStore(root, key), listSessions: async () => [target],
+      runtimeFactory: async () => ({ session, async dispose() {} }) });
+    const images = [{ type: "image", data: "aW1hZ2U=", mimeType: "image/png" }];
+    const sent = await supervisor.send(sessionRefForPath(key, target.path), { delivery: "new-operation",
+      message: "Doc hai file nay.\nChot ngan sach Q3.", expectedOperationRef: null, images }, "revision_attachment_send");
+    assert.equal(sent.resultCode, "started");
+    assert.equal(prompts.length, 1);
+    // Document prose is already in the message; the image never becomes prose.
+    assert.match(prompts[0].text, /Chot ngan sach Q3\./);
+    assert.equal(prompts[0].text.includes("aW1hZ2U="), false);
+    assert.deepEqual(prompts[0].options.images, images);
+    await supervisor.close();
+  });
+
+  it("omits the image option entirely when a message carries none", async (t) => {
+    const { root, key } = state(t), target = info(root);
+    const prompts = [];
+    let observer = null;
+    const session = { isIdle: true, isStreaming: false, subscribe: (fn) => { observer = fn; return () => {}; },
+      async prompt(text, options) { prompts.push({ text, options }); observer?.({ type: "agent_start" }); } };
+    const supervisor = new SessionRuntimeSupervisor({ gatewayInstanceRef: "gateway_plain_send", key,
+      leases: new SessionLeaseStore(root, key), listSessions: async () => [target],
+      runtimeFactory: async () => ({ session, async dispose() {} }) });
+    await supervisor.send(sessionRefForPath(key, target.path), { delivery: "new-operation", message: "Khong co file.",
+      expectedOperationRef: null, images: [] }, "revision_plain_send");
+    assert.equal(prompts[0].text, "Khong co file.");
+    assert.equal(prompts[0].options, undefined);
+    await supervisor.close();
+  });
+
+  it("does not acquire an internal subagent session through user-facing runtime authority", async (t) => {
+    const { root, key } = state(t), normal = info(root), hidden = {
+      ...info(root, path.join("sessions", "subagent", "96dfe478", "run-0", "session.jsonl")),
+      name: "subagent-piagent-planner-96dfe478-1", parentSessionPath: normal.path,
+      allMessagesText: `${normal.allMessagesText}\nTask: You are a delegated subagent running from a fork of the parent session.`
+    };
+    let opened = 0;
+    const supervisor = new SessionRuntimeSupervisor({ gatewayInstanceRef: "gateway_hidden_subagent", key,
+      leases: new SessionLeaseStore(root, key), listSessions: async () => [normal, hidden],
+      runtimeFactory: async () => { opened += 1; return { async dispose() {} }; } });
+    assert.deepEqual((await supervisor.listSessions()).map((item) => item.path), [normal.path]);
+    await assert.rejects(() => supervisor.acquire(sessionRefForPath(key, hidden.path)), /session-not-found/);
+    assert.equal(opened, 0);
+    await supervisor.close();
+  });
+
   it("persists an owner-only HMAC chain and fails closed on conflict or corruption", (t) => {
     const { root, key } = state(t), store = new SessionLeaseStore(root, key), sessionRef = "session_lease_store_test";
     assert.equal(store.inspect(sessionRef).state, "released");
@@ -232,7 +287,7 @@ describe("Piagent Session Hub owner lease and lazy runtime supervisor", () => {
     await failedDispose.close();
   });
 
-  it("creates an unpersisted Pi session under one lease and projects it until the first assistant reply persists", async (t) => {
+  it("keeps an unpersisted Pi session under one lease until the first assistant reply persists", async (t) => {
     const { root, key } = state(t), seed = info(root, "seed.jsonl"), newFile = path.join(root, "new-session.jsonl");
     const manager = { getSessionFile: () => newFile, getSessionId: () => "new-session-id" };
     const selectedModel = { provider: "fixture", id: "reasoning-model" };
@@ -254,6 +309,7 @@ describe("Piagent Session Hub owner lease and lazy runtime supervisor", () => {
     assert.equal(passedManager, manager);
     assert.equal(modelSet, selectedModel);
     assert.equal(thinkingSet, "high");
+    assert.equal(supervisor.liveSessionManager(sessionRef), manager);
     assert.equal(supervisor.ownership(sessionRef).state, "gateway-owned");
     assert.equal((await supervisor.listSessions()).find((value) => value.path === newFile)?.firstMessage, "(no messages)");
     await supervisor.release(sessionRef);
@@ -348,7 +404,8 @@ describe("Piagent Session Hub owner lease and lazy runtime supervisor", () => {
     }
     const runtimeHost = { ...host, SessionManager: ScopedSessionManager };
     const supervisor = new SessionRuntimeSupervisor({
-      gatewayInstanceRef: "gateway_real_runtime", key, leases: new SessionLeaseStore(root, key), listSessions: async () => sessions,
+      gatewayInstanceRef: "gateway_real_runtime", key, leases: new SessionLeaseStore(root, key),
+      listSessions: () => host.SessionManager.list(cwd, sessionDir),
       host: runtimeHost, agentDir, packageRoot: repositoryRoot, modelRuntime
     });
     const lease = await supervisor.acquire(sessionRef);
