@@ -4,6 +4,17 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
+## v1.5.2 - 2026-08-18
+
+### Fixed
+
+- The new-chat composer now accepts a dragged or pasted document, not only one
+  chosen through the paperclip. The file picker already carried attachments into
+  a new session; drag and drop was the one entry point that silently did
+  nothing, so a document dropped on that screen was lost with no message.
+- A dropped file that misses the composer no longer navigates the Gateway away
+  from the page, matching the guard the session composer already had.
+
 ## v1.5.1 - 2026-08-17
 
 ### Release repair

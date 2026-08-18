@@ -438,3 +438,41 @@ test("attaches a .docx in the dashboard composer and sends its prose to the sess
   assert.equal(text.includes("word/document.xml"), false);
   assert.match(text, /BEGIN PIAGENT-ATTACHMENT-[0-9a-f-]{36}/);
 });
+
+test("drops a document onto the new chat composer and carries it into the created session", async ({ page }) => {
+  // Cleared first: an earlier test leaves its own dispatch here, and polling on a
+  // stale value passes before this test has sent anything at all.
+  lastSendPayload = null; dispatchedContent = null;
+  await page.goto(server.issueLaunchUrl());
+  await page.getByRole("button", { name: "Cuộc trò chuyện mới" }).click();
+  await expect(page.getByRole("heading", { name: "Anh muốn làm gì?" })).toBeVisible();
+
+  const dropped = docx("Ke hoach onboarding.", "Ban giao ngay 30/09.");
+  const dataTransfer = await page.evaluateHandle(([base64, name, type]) => {
+    const binary = atob(base64), bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([bytes], name, { type }));
+    return transfer;
+  }, [dropped.toString("base64"), "onboarding.docx", DOCX_MIME]);
+
+  const composer = page.getByPlaceholder("Nhắn cho Piagent…").locator("xpath=ancestor::div[contains(@class,'MuiBox-root')][1]");
+  await composer.dispatchEvent("dragenter", { dataTransfer });
+  await expect(page.getByText("Thả tài liệu vào đây")).toBeVisible();
+  await composer.dispatchEvent("drop", { dataTransfer });
+  await expect(page.getByText(/onboarding\.docx · /)).toBeVisible();
+  await expect(page.getByText("Thả tài liệu vào đây")).not.toBeVisible();
+
+  // A dropped file has to travel the same road as a picked one: the session is
+  // created first, the bytes are staged against it, and only then is the first
+  // message sent carrying the refs.
+  await page.getByPlaceholder("Nhắn cho Piagent…").fill("Doc file dinh kem");
+  await page.getByRole("button", { name: "Gửi" }).click();
+  await expect(page.getByText("Doc file dinh kem", { exact: true })).toBeVisible();
+
+  await expect.poll(() => lastSendPayload?.attachmentRefs?.length ?? 0).toBe(1);
+  const text = (dispatchedContent ?? []).filter((part) => part.type === "text").map((part) => part.text).join("\n");
+  assert.match(text, /Ke hoach onboarding\./);
+  assert.match(text, /Ban giao ngay 30\/09\./);
+  assert.equal(text.includes("word/document.xml"), false);
+});

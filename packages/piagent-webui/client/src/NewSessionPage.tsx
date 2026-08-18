@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import AddRounded from "@mui/icons-material/AddRounded";
 import ArrowBackRounded from "@mui/icons-material/ArrowBackRounded";
 import AttachFileRounded from "@mui/icons-material/AttachFileRounded";
@@ -24,7 +24,7 @@ import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 
 import { importProjectFolder, readSessionCreationOptions, type SessionCreationOptions, WebUiRequestError } from "./api.ts";
-import { formatSize, MAX_ATTACHMENTS, supportedAttachmentAccept } from "./attachment-intake.ts";
+import { dragCarriesFiles, formatSize, MAX_ATTACHMENTS, supportedAttachmentAccept } from "./attachment-intake.ts";
 import { ServiceIcon } from "./ServiceIcon.tsx";
 import { label } from "./view-model.ts";
 import { localize, useUiPreferences } from "./ui-preferences.tsx";
@@ -39,11 +39,16 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
   const [failed, setFailed] = useState(false), [projectRef, setProjectRef] = useState(""), [modelRef, setModelRef] = useState("");
   const [thinking, setThinking] = useState("high"), [message, setMessage] = useState("");
   const [files, setFiles] = useState<readonly File[]>([]), [fileError, setFileError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  // dragenter and dragleave fire again for every child the pointer crosses, so a
+  // boolean set on leave clears the highlight while the file is still over the
+  // composer. Counting entries against leaves tracks the region as a whole.
+  const dragDepth = useRef(0);
   const [menu, setMenu] = useState<MenuKind>(null), [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [importing, setImporting] = useState(false), [importError, setImportError] = useState<string | null>(null);
   useEffect(() => {
     if (!active) return;
-    const controller = new AbortController(); setOptions(undefined); setFailed(false); setMessage(""); setImportError(null); setFiles([]); setFileError(null);
+    const controller = new AbortController(); setOptions(undefined); setFailed(false); setMessage(""); setImportError(null); setFiles([]); setFileError(null); setDragging(false); dragDepth.current = 0;
     void readSessionCreationOptions(controller.signal).then((value) => {
       if (controller.signal.aborted) return;
       setOptions(value);
@@ -53,6 +58,14 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
     }).catch(() => { if (!controller.signal.aborted) setFailed(true); });
     return () => controller.abort();
   }, [active, defaultProjectRef]);
+  useEffect(() => {
+    if (!active) return;
+    // A file dropped anywhere the composer does not cover is navigated to by the
+    // browser, which replaces the Gateway with the file.
+    const block = (event: DragEvent) => { if (dragCarriesFiles(event.dataTransfer)) event.preventDefault(); };
+    window.addEventListener("dragover", block); window.addEventListener("drop", block);
+    return () => { window.removeEventListener("dragover", block); window.removeEventListener("drop", block); };
+  }, [active]);
   const project = options?.projects.find((value) => value.projectRef === projectRef);
   const model = options?.models.find((value) => value.modelRef === modelRef);
   const thinkingLevels = useMemo(() => model?.thinkingLevels ?? ["off", "minimal", "low", "medium", "high", "xhigh", "max"], [model]);
@@ -84,6 +97,7 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
     setFiles(merged); setFileError(overflow
       ? localize(locale, `Mỗi tin nhắn nhận tối đa ${MAX_ATTACHMENTS} file.`, `Each message accepts at most ${MAX_ATTACHMENTS} files.`) : null);
   };
+  const canAttach = !busy && !failed && files.length < MAX_ATTACHMENTS;
   const submit = () => project && message.trim() && onCreate({ projectRef, placeRef: project.placeRef, modelRef: modelRef || null,
     thinkingLevel: thinking, message: message.trim(), files });
 
@@ -93,13 +107,34 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
       <Typography component="h1" sx={{ fontSize: { xs: "2rem", md: "2.45rem" }, fontWeight: 500, letterSpacing: "-.035em", textAlign: "center" }}>
         {localize(locale, "Anh muốn làm gì?", "What should we work on?")}
       </Typography>
-      <Box sx={{ width: "100%", maxWidth: 820, border: 1, borderColor: "divider", borderRadius: 3.5, bgcolor: "background.paper",
-        p: 1.25, boxShadow: "0 18px 55px rgba(0,0,0,.13)" }}>
+      <Box sx={{ position: "relative", width: "100%", maxWidth: 820, border: 1, borderColor: dragging ? "primary.main" : "divider",
+        borderStyle: dragging ? "dashed" : "solid", borderRadius: 3.5, bgcolor: "background.paper",
+        p: 1.25, boxShadow: "0 18px 55px rgba(0,0,0,.13)" }}
+      onDragEnter={(event) => { if (dragCarriesFiles(event.dataTransfer)) { dragDepth.current += 1; setDragging(true); } }}
+      onDragOver={(event) => { if (dragCarriesFiles(event.dataTransfer)) { event.preventDefault(); event.dataTransfer.dropEffect = canAttach ? "copy" : "none"; } }}
+      onDragLeave={(event) => { if (dragCarriesFiles(event.dataTransfer)) { dragDepth.current -= 1; if (dragDepth.current <= 0) { dragDepth.current = 0; setDragging(false); } } }}
+      onDrop={(event) => {
+        if (!dragCarriesFiles(event.dataTransfer)) return;
+        event.preventDefault(); dragDepth.current = 0; setDragging(false);
+        if (canAttach) selectFiles(event.dataTransfer.files);
+      }}>
+        {dragging && <Box role="status" sx={{ position: "absolute", inset: 0, zIndex: 3, display: "grid", alignContent: "center",
+          justifyItems: "center", gap: .5, borderRadius: 3.5, bgcolor: "background.paper", opacity: .96, pointerEvents: "none", textAlign: "center" }}>
+          <Typography sx={{ fontWeight: 750 }}>{canAttach ? localize(locale, "Thả tài liệu vào đây", "Drop documents here")
+            : files.length >= MAX_ATTACHMENTS ? localize(locale, `Đã đủ ${MAX_ATTACHMENTS} file cho tin nhắn đầu tiên`, `The first message already holds ${MAX_ATTACHMENTS} files`)
+              : localize(locale, "Chưa nhận file lúc này", "Files cannot be attached right now")}</Typography>
+          {canAttach && <Typography variant="caption" color="text.secondary">
+            {localize(locale, ".md .txt .csv .json .yaml .docx .pdf và ảnh", ".md .txt .csv .json .yaml .docx .pdf and images")}</Typography>}
+        </Box>}
         {!options && !failed ? <Stack direction="row" spacing={1.5} sx={{ minHeight: 126, alignItems: "center", justifyContent: "center" }}>
           <CircularProgress size={20} /><Typography color="text.secondary">{localize(locale, "Đang mở…", "Opening…")}</Typography></Stack>
           : <><TextField autoFocus fullWidth multiline minRows={3} maxRows={8} value={message} disabled={busy || failed}
             onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submit(); }
+            }} onPaste={(event) => {
+              if (!event.clipboardData?.files.length) return;
+              event.preventDefault();
+              if (canAttach) selectFiles(event.clipboardData.files);
             }} placeholder={localize(locale, "Nhắn cho Piagent…", "Message Piagent…")} variant="standard"
             slotProps={{ input: { disableUnderline: true }, htmlInput: { maxLength: 32_768 } }} sx={{ px: .5 }} />
           {files.length > 0 && <Stack direction="row" sx={{ flexWrap: "wrap", gap: .75, px: .5, pt: .75 }}
@@ -117,10 +152,10 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
             <Button size="small" color="inherit" startIcon={<TuneRounded />} endIcon={<ExpandMoreRounded />} onClick={openMenu("thinking")}>
               {label(thinking, locale)}</Button>
             <Tooltip title={localize(locale, "Thêm file vào tin nhắn đầu tiên", "Add files to the first message")}>
-              <IconButton component="label" size="small" disabled={busy || files.length >= MAX_ATTACHMENTS}
+              <IconButton component="label" size="small" disabled={!canAttach}
                 aria-label={`${localize(locale, "Thêm file", "Add files")} (${files.length}/${MAX_ATTACHMENTS})`}>
                 <AttachFileRounded fontSize="small" />
-                <input type="file" hidden multiple disabled={busy || files.length >= MAX_ATTACHMENTS} accept={supportedAttachmentAccept}
+                <input type="file" hidden multiple disabled={!canAttach} accept={supportedAttachmentAccept}
                   onChange={(event) => { selectFiles(event.target.files); event.currentTarget.value = ""; }} />
               </IconButton>
             </Tooltip>
