@@ -98,6 +98,9 @@ pi install /path/to/piagent
   Inspector; projection Task Changes / Working Tree / Staged có bounded diff,
   provenance và enforce protected path; session lease bền, recovery khi restart
   hoặc owner cũ treo, doctor có repair tường minh.
+- `1.5.2`: kéo thả và dán tài liệu vào ô chat mới. Nút kẹp giấy vốn đã đưa file
+  vào session mới; kéo thả là lối vào duy nhất còn im lặng, file thả xuống bị
+  mất mà không báo gì.
 - `1.5.1`: bản phát hành mang nội dung của `1.5.0` tới registry. `1.5.0` được
   tag nhưng release matrix fail trên macOS nên job publish không chạy; tag cũ
   được giữ nguyên thay vì dời, vì bootstrap dựa trên tính bất biến của tag.

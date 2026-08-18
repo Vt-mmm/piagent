@@ -115,18 +115,18 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:dfd56cfe20ff1558ead94fe5e3c95bd0dc5d3ae3b7382e30d862d6e24dcc6915",
+    "packageDigest": "sha256:d838d40159be7c3fdf3d561a51fbe2b7950c7a6edd40298aa4114cdaa3aefada",
     "packageSource": "../",
-    "packageVersion": "1.5.1",
+    "packageVersion": "1.5.2",
     "runtimeFiles": [
       {
         "byteSize": 6058,
-        "digest": "sha256:713183ec5a1e5056aadf7e8ee10d0c94d0776e05c5dbaedfff7c515a3b03c374",
+        "digest": "sha256:3358cfbb9fecdde2bf6afbaa9cda05714dacf6f361c78435b3917a48310cd977",
         "path": "package.json"
       },
       {
         "byteSize": 983,
-        "digest": "sha256:c7019216fbc5976d0a73ee78ba38323395b8baba28c5aa187a0b81fdc7f8b65a",
+        "digest": "sha256:c91c5770999c5e73af830ab709299329e83d12ebbf0bec4ec07b949c340b0c1d",
         "path": "packages/piagent-core/package.json"
       },
       {
@@ -481,7 +481,7 @@
       },
       {
         "byteSize": 983,
-        "digest": "sha256:c7019216fbc5976d0a73ee78ba38323395b8baba28c5aa187a0b81fdc7f8b65a",
+        "digest": "sha256:c91c5770999c5e73af830ab709299329e83d12ebbf0bec4ec07b949c340b0c1d",
         "path": "packages/piagent-core/package.json"
       },
       {
@@ -1210,18 +1210,18 @@
         "path": "packages/piagent-webui/dist/client/assets/index-BV-_03yl.css"
       },
       {
-        "byteSize": 782546,
-        "digest": "sha256:cf4db61ddfea696925f0e45dd2cf5986155b8c0a87e74675ceba6771db3280cb",
-        "path": "packages/piagent-webui/dist/client/assets/index-MBZq8XLV.js"
+        "byteSize": 784073,
+        "digest": "sha256:709c4ce832b5b8689de7908aab18c2d2c7fbddc1589d9f3637759689d4e1f311",
+        "path": "packages/piagent-webui/dist/client/assets/index-CNbYWd-R.js"
       },
       {
         "byteSize": 159565,
-        "digest": "sha256:e4de1f3e213bcf29e7c5cc7662e3485889e9aa4976e07598b2ed1b389bff73aa",
-        "path": "packages/piagent-webui/dist/client/assets/MarkdownMessage-Uouhx1QO.js"
+        "digest": "sha256:7c689b099696038a106f1a78bf5c9dd2ffd3582597884b7c43df4dc5c9bfbc8b",
+        "path": "packages/piagent-webui/dist/client/assets/MarkdownMessage-CbUK4gg2.js"
       },
       {
         "byteSize": 580,
-        "digest": "sha256:0d314afdbe11768dbfbad5651f20a3b4fc31fbcdce92e27c723ab58dbe0df28b",
+        "digest": "sha256:8795904797e2565713c73640f166738a22b7479acd092b81296a5d53a5cc299c",
         "path": "packages/piagent-webui/dist/client/index.html"
       },
       {
