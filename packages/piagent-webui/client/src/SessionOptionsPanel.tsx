@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { PiagentWebUICanonicalSnapshotV1 } from "../../contracts/generated/snapshot-v1.ts";
 import type { PiagentWebUIAuthenticatedModelCatalogV1 } from "../../contracts/generated/model-catalog-v1.ts";
@@ -16,15 +16,24 @@ export function SessionOptionsPanel({ snapshot, refreshSnapshot }: { snapshot: P
   const [acknowledged, setAcknowledged] = useState(false);
   const [pending, setPending] = useState<"model" | "thinking" | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const reloadSequence = useRef(0);
+  const selectionState = useRef({ revision: 0, modelDirty: false, thinkingDirty: false });
   const capability = snapshot.capabilities.capabilities["control.sessionOptions"];
   const actions = capability.status === "available" ? capability.actions : null;
 
   const reload = async (signal?: AbortSignal) => {
+    const sequence = ++reloadSequence.current;
+    const selectionRevision = selectionState.current.revision;
     try {
-      const value = await readModelCatalog(signal); setCatalog(value);
-      if (value.state === "ready") { setModelRef(value.activeModelRef ?? ""); setThinking(value.activeThinkingLevel ?? "off"); }
+      const value = await readModelCatalog(signal);
+      if (sequence !== reloadSequence.current) return value;
+      setCatalog(value);
+      if (value.state === "ready" && selectionRevision === selectionState.current.revision) {
+        if (!selectionState.current.modelDirty) setModelRef(value.activeModelRef ?? "");
+        if (!selectionState.current.thinkingDirty) setThinking(value.activeThinkingLevel ?? "off");
+      }
       return value;
-    } catch { if (!signal?.aborted) setCatalog(undefined); return undefined; }
+    } catch { if (!signal?.aborted && sequence === reloadSequence.current) setCatalog(undefined); return undefined; }
   };
   useEffect(() => {
     const controller = new AbortController(); void reload(controller.signal); return () => controller.abort();
@@ -43,6 +52,9 @@ export function SessionOptionsPanel({ snapshot, refreshSnapshot }: { snapshot: P
           : receipt.resultCode === "effect-unknown" ? localize(locale, "Pi chưa xác nhận được hậu trạng thái; hãy tải lại trước khi thử tiếp", "Pi could not confirm the resulting state; refresh before trying again")
             : `${localize(locale, "Chưa thay đổi", "Not changed")} · ${label(receipt.resultCode, locale)}`);
       setAcknowledged(false);
+      selectionState.current.revision += 1;
+      if (kind === "model") selectionState.current.modelDirty = false;
+      else selectionState.current.thinkingDirty = false;
       await refreshSnapshot?.(); await reload();
     } catch { setStatus(localize(locale, "Không thể đổi; trạng thái Pi có thể đã thay đổi.", "Unable to change the setting; Pi state may have changed.")); }
     finally { setPending(null); }
@@ -57,11 +69,13 @@ export function SessionOptionsPanel({ snapshot, refreshSnapshot }: { snapshot: P
       </div>
       {catalog?.state === "ready" ? <div className="session-options-controls">
         <label><span>Model</span><select aria-label={localize(locale, "Chọn model", "Select model")} value={modelRef} disabled={pending !== null || !actions?.setModel.available}
-          onChange={(event) => { setModelRef(event.target.value); setAcknowledged(false); setStatus(null); }}>
+          onChange={(event) => { selectionState.current.revision += 1; selectionState.current.modelDirty = true;
+            setModelRef(event.target.value); setAcknowledged(false); setStatus(null); }}>
           {catalog.models.map((model) => <option value={model.modelRef} key={model.modelRef}>{model.displayName} · {model.provider}</option>)}
         </select></label>
         <label><span>Thinking</span><select aria-label={localize(locale, "Chọn thinking", "Select thinking")} value={thinking} disabled={pending !== null || !actions?.setThinking.available}
-          onChange={(event) => { setThinking(event.target.value); setAcknowledged(false); setStatus(null); }}>
+          onChange={(event) => { selectionState.current.revision += 1; selectionState.current.thinkingDirty = true;
+            setThinking(event.target.value); setAcknowledged(false); setStatus(null); }}>
           {(activeModel?.supportedThinkingLevels ?? []).map((level) => <option value={level} key={level}>{label(level, locale)}</option>)}
         </select></label>
         <label className="effect-ack"><input type="checkbox" checked={acknowledged} disabled={pending !== null || !actions}

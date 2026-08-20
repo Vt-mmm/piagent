@@ -20,6 +20,10 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 - Localized internal uncertainty status and reconciled workflow-prefixed
   persisted messages with their optimistic UI form so completed turns no
   longer appear twice in the transcript.
+- Prevented a slow background model-catalog refresh from replacing a model or
+  thinking choice the user had just made. Session-option controls now reject
+  stale responses, and the browser regression test deliberately reproduces the
+  delayed-response ordering that previously left the change button disabled.
 
 ## v1.5.3 - 2026-08-20
 

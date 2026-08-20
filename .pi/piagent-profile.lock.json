@@ -115,7 +115,7 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:cec36697857a88bae30d28081bb61b9fbb9c8c2f603d31a3be05c14833025955",
+    "packageDigest": "sha256:e1b6f850e553ff094c88c5824c657162fe6f3b59231ef477162efc469ac137fa",
     "packageSource": "../",
     "packageVersion": "1.5.4",
     "runtimeFiles": [
@@ -1225,23 +1225,23 @@
         "path": "packages/piagent-webui/contracts/generated/snapshot-v1.ts"
       },
       {
-        "byteSize": 806846,
-        "digest": "sha256:6be949259300e1d8562ccd5261c2e0079f704c9fe269dfb71e359f3772c6810b",
-        "path": "packages/piagent-webui/dist/client/assets/index-BeSDOnN-.js"
-      },
-      {
         "byteSize": 52304,
         "digest": "sha256:a32e9c0e5f318bca31c73566a703795ac38ee49a2fdfcfb88e6bb08a88dccd18",
         "path": "packages/piagent-webui/dist/client/assets/index-BV-_03yl.css"
       },
       {
+        "byteSize": 807248,
+        "digest": "sha256:3dac038f5099bd2409810dcecb7cf5c4fd2827702d732c720fb17256adb855c6",
+        "path": "packages/piagent-webui/dist/client/assets/index-BZRFw1u6.js"
+      },
+      {
         "byteSize": 159565,
-        "digest": "sha256:769564a82125c7dad5bb59d4dd5ddf1f5cb3139fc456c4bc7f3352e259c21014",
-        "path": "packages/piagent-webui/dist/client/assets/MarkdownMessage-BL2M6-f6.js"
+        "digest": "sha256:33d8908246d831dd6d26b5d82c9b4d09cc65adc9f01ade04da6d991bd066fb49",
+        "path": "packages/piagent-webui/dist/client/assets/MarkdownMessage-rD9WJKxs.js"
       },
       {
         "byteSize": 580,
-        "digest": "sha256:4162f8b4b89411117fc1652e6d8c1554ab0cefaa5728e8cc2914cafffe2d8cd7",
+        "digest": "sha256:fcd1af57e96cfb24987fafa9892225b76b20589b0b8f5b96a06505f7b5eb75a3",
         "path": "packages/piagent-webui/dist/client/index.html"
       },
       {

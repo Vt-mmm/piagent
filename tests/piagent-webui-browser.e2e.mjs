@@ -649,6 +649,9 @@ test("holds, edits, dispatches and deletes messages through the authenticated cu
       contextWindow: 100_000, maxTokens: 16_000 }
   ];
   const entries = []; let idle = true, sequence = 0, sends = 0, bridge, attachmentStore, activeModel = browserModels[0], thinking = "medium";
+  let armDelayedCatalog = false, catalogReadsAfterThinking = 0, resolveDelayedCatalogStarted, releaseDelayedCatalogResponse;
+  const delayedCatalogStarted = new Promise((resolve) => { resolveDelayedCatalogStarted = resolve; });
+  const delayedCatalogResponse = new Promise((resolve) => { releaseDelayedCatalogResponse = resolve; });
   const sentContents = [];
   const append = (entry) => {
     const value = { id: `control_entry_${++sequence}`, parentId: entries.at(-1)?.id ?? null,
@@ -688,10 +691,22 @@ test("holds, edits, dispatches and deletes messages through the authenticated cu
     attachmentCapability: () => attachmentStore.capability(),
     chatControl: () => { const state = bridge.snapshot(), queueState = heldQueue.snapshot();
       return { ...state, heldCount: queueState.heldCount, queueRevision: queueState.queueRevision }; } });
+  const delayedReadModel = new Proxy(controlProvider, { get(target, property) {
+    if (property === "modelCatalog") return async () => {
+      const value = await target.modelCatalog();
+      if (armDelayedCatalog && ++catalogReadsAfterThinking === 2) {
+        armDelayedCatalog = false; resolveDelayedCatalogStarted(); await delayedCatalogResponse;
+      }
+      return value;
+    };
+    const value = Reflect.get(target, property, target); return typeof value === "function" ? value.bind(target) : value;
+  } });
   const controlServer = await startLoopbackServer({ staticRoot: path.join(root, "packages/piagent-webui/dist/client"),
-    readCapabilities: async () => (await controlProvider.snapshot()).capabilities, readModel: controlProvider,
+    readCapabilities: async () => (await controlProvider.snapshot()).capabilities, readModel: delayedReadModel,
     executeControl: async (command) => { const receipt = String(command?.action ?? "").startsWith("session-options.")
-      ? await sessionOptions.execute(command) : await heldQueue.execute(command); controlProvider.invalidate(); return receipt; },
+      ? await sessionOptions.execute(command) : await heldQueue.execute(command);
+      if (command?.action === "session-options.set-thinking") { armDelayedCatalog = true; catalogReadsAfterThinking = 0; }
+      controlProvider.invalidate(); return receipt; },
     executeAttachment: async (command) => attachmentStore.execute(command) });
   try {
     await page.goto(controlServer.issueLaunchUrl());
@@ -749,11 +764,16 @@ test("holds, edits, dispatches and deletes messages through the authenticated cu
     await effectAck.check(); await page.getByRole("button", { name: "Đổi thinking" }).click();
     await expect(page.getByText("Đã cập nhật trong Pi và mặc định người dùng", { exact: true })).toBeVisible();
     assert.equal(thinking, "high");
+    await delayedCatalogStarted;
+    await expect(page.getByLabel("Chọn model")).toBeEnabled();
     await page.getByLabel("Chọn model").selectOption({ label: "Model Browser B · browser-provider" });
-    // Changing the selection clears the effect acknowledgement, so the button is
-    // disabled until it is given again. Waiting for that disabled state is what
-    // makes the acknowledgement below land after the reset instead of racing it —
-    // the same wait the thinking change above already performs.
+    const selectedModelRef = await page.getByLabel("Chọn model").inputValue();
+    const delayedResponse = page.waitForResponse((response) => response.url().endsWith("/api/v1/session-options/models"));
+    releaseDelayedCatalogResponse(); await delayedResponse;
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await expect(page.getByLabel("Chọn model")).toHaveValue(selectedModelRef);
+    // Changing the selection clears the effect acknowledgement while the stale
+    // background catalog response above must leave the new model choice intact.
     await expect(page.getByRole("button", { name: "Đổi model" })).toBeDisabled();
     await effectAck.check(); await page.getByRole("button", { name: "Đổi model" }).click();
     await expect(page.getByText("Đã cập nhật trong Pi và mặc định người dùng", { exact: true })).toBeVisible();
