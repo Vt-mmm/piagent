@@ -90,8 +90,9 @@ export function useSessionHub(): {
       const latest = await refresh();
       if (latest?.catalogRevision) receipt = await submit(latest);
     }
-    if (receipt.phase !== "settled" || !receipt.sessionRef) throw new Error(receipt.error?.code ?? receipt.resultCode);
-    if (!options.deferInitialMessage) setLive((value) => ({ ...value, [receipt.sessionRef!]: { ...(value[receipt.sessionRef!]
+    const knownUncertainSession = receipt.phase === "uncertain" && Boolean(receipt.sessionRef);
+    if ((!knownUncertainSession && receipt.phase !== "settled") || !receipt.sessionRef) throw new Error(receipt.error?.code ?? receipt.resultCode);
+    if (receipt.phase === "settled" && !options.deferInitialMessage) setLive((value) => ({ ...value, [receipt.sessionRef!]: { ...(value[receipt.sessionRef!]
       ?? { assistant: "", attachments: [], activities: [], complete: false, error: null }), user: message, operationRef: receipt.operationRef } }));
     await refresh(); return receipt;
   }, [refresh, request]);

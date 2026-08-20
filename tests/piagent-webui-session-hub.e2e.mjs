@@ -16,6 +16,7 @@ let server;
 let persistedBrowserConversation = false;
 let sessionCreateAttempts = 0, sessionCreateEffects = 0, createdSessionCounter = 0;
 let sessionSendAttempts = 0, sessionSendEffects = 0;
+let nextCreateUncertain = false;
 let attachments, lastSendPayload = null, dispatchedContent = null;
 let lastCreatePayload = null;
 const observedSessionActions = [];
@@ -119,6 +120,15 @@ test.beforeAll(async () => {
       protocol.events.publish("message.completed", { sessionRef: value.sessionRef, operationRef, messageRef,
         sessionRevision: value.expectedSessionRevision, truncated: false });
       persistedBrowserConversation = true;
+    }
+    if (value.action === "session.create" && nextCreateUncertain) {
+      nextCreateUncertain = false;
+      return { schemaVersion: 1, version: "piagent-session-receipt-v1", messageType: "receipt", commandId: value.commandId,
+        idempotencyKeyDigest: `sha256:${"a".repeat(64)}`, action: value.action, phase: "uncertain", resultCode: "effect-unknown",
+        requestedAt: value.requestedAt, settledAt: new Date().toISOString(), sessionRef: targetSessionRef, operationRef: null,
+        catalogRevisionAfter: catalog.catalogRevision, sessionRevisionAfter: targetSessionRevision, deduplicated: false,
+        evidenceRef: null, error: { code: "session-command-effect-unknown",
+          message: "The command effect cannot be proven. It will not be replayed automatically." } };
     }
     const resultCode = value.action === "session.rename" ? "renamed" : value.action === "session.pin"
       ? value.payload.pinned ? "pinned" : "unpinned" : value.action === "session.archive" ? "archived"
@@ -435,6 +445,28 @@ test("resyncs and retries a new chat or send once when its revision changes befo
   } finally {
     catalog.catalogRevision = originalRevision; catalog.sessions.splice(0, catalog.sessions.length, ...originalSessions);
     Object.assign(catalog.page, originalPage);
+  }
+});
+
+test("opens a known created session instead of exposing an internal uncertainty code", async ({ page }) => {
+  const originalRevision = catalog.catalogRevision, originalSessions = [...catalog.sessions], originalPage = { ...catalog.page };
+  try {
+    await page.goto(server.issueLaunchUrl());
+    await expect(page.getByText("Gateway live", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Cuộc trò chuyện mới" }).click();
+    await expect(page.getByRole("heading", { name: "Anh muốn làm gì?" })).toBeVisible();
+    await page.getByPlaceholder("Nhắn cho Piagent…").fill("Recover a created session without a duplicate run");
+    nextCreateUncertain = true;
+    await page.getByRole("button", { name: "Gửi" }).click();
+
+    await expect(page.getByRole("dialog").getByText("Session đã được tạo", { exact: true })).toBeVisible();
+    await expect(page.getByRole("dialog").getByText(/Không gửi lại để tránh chạy trùng/)).toBeVisible();
+    await expect(page.getByText("session-command-effect-unknown", { exact: true })).toHaveCount(0);
+    await page.getByRole("dialog").getByRole("button", { name: "Đóng" }).click();
+    await expect(page.getByRole("heading", { name: "Browser retry session" })).toBeVisible();
+  } finally {
+    nextCreateUncertain = false; catalog.catalogRevision = originalRevision;
+    catalog.sessions.splice(0, catalog.sessions.length, ...originalSessions); Object.assign(catalog.page, originalPage);
   }
 });
 

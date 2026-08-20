@@ -11,9 +11,10 @@ import { isUserConversationSession, projectRefForCwd, sessionRefForPath } from "
 import { SessionLeaseStore, type SessionLeaseSnapshot } from "./session-lease-store.ts";
 import { GatewayEventStore } from "./gateway-events.ts";
 import { GatewaySessionStream } from "./gateway-session-stream.ts";
-import { GATEWAY_RUNTIME_UI_MARKER } from "../ownership/gateway-runtime-context.ts";
 import { preferAuthoritativePiagentGuard } from "./extension-authority.ts";
 import { executePermissionCommand, executeRuntimeCommand } from "./runtime-session-controls.ts";
+import { rpcUiContext } from "./rpc-ui-context.ts";
+import { waitForOperationStart } from "./session-operation-start.ts";
 
 const MAX_WARM_RUNTIMES = 10;
 
@@ -24,33 +25,6 @@ type ActiveRuntime = { runtime: RuntimeHandle; lease: SessionLeaseSnapshot; info
   unbindApproval: (() => void) | null; unsubscribeApproval: (() => void) | null; sessionManager: any | null };
 type Projection = { sessionRevision: string; liveState: "offline" | "idle" | "running" | "paused" | "waiting-approval" | "uncertain" };
 type RuntimeCommandResult = Awaited<ReturnType<typeof executeRuntimeCommand>>;
-
-function rpcUiContext(): object {
-  const plain = (text: unknown): string => String(text ?? "");
-  const theme = Object.freeze({
-    fg: (_color: unknown, text: unknown) => plain(text),
-    bg: (_color: unknown, text: unknown) => plain(text),
-    bold: plain,
-    italic: plain,
-    underline: plain,
-    inverse: plain,
-    strikethrough: plain,
-    getFgAnsi: () => "",
-    getBgAnsi: () => "",
-    getColorMode: () => "truecolor",
-    getThinkingBorderColor: () => plain,
-    getBashModeBorderColor: () => plain
-  });
-  return new Proxy({}, {
-    get(_target, property) {
-      if (property === GATEWAY_RUNTIME_UI_MARKER) return true;
-      if (property === "theme") return theme;
-      if (property === "confirm") return () => new Promise<boolean>(() => undefined);
-      if (property === "select" || property === "input") return async () => undefined;
-      return () => undefined;
-    }
-  });
-}
 
 function productionRuntimeFactory(options: { host: any; agentDir: string; packageRoot: string; modelRuntime?: any }): RuntimeFactory {
   return async (info, _runtimeInstanceRef, sessionManager) => {
@@ -305,12 +279,18 @@ export class SessionRuntimeSupervisor {
     let prompt: Promise<void>;
     try { prompt = session.prompt(payload.message, payload.images?.length ? { images: payload.images } : undefined); }
     catch (error) { await this.#finishOperation(sessionRef, operationRef, stream); throw error; }
-    active.completion = prompt.then(() => this.#finishOperation(sessionRef, operationRef, stream),
+    const started = waitForOperationStart(stream, prompt);
+    // A normal prompt resolves after the agent settles. A workflow extension
+    // command resolves before its nested agent turn starts. In both cases the
+    // canonical completion boundary is `agent_settled`, not the outer promise.
+    const lifecycle = started.then(async (mode) => {
+      if (mode === "deferred") await stream.settled();
+      else await Promise.race([stream.settled(), prompt]);
+    });
+    active.completion = lifecycle.then(() => this.#finishOperation(sessionRef, operationRef, stream),
       () => this.#finishOperation(sessionRef, operationRef, stream));
-    await Promise.race([
-      stream.started(),
-      prompt.then(() => { throw new Error("session-operation-start-unobserved"); }, (error: unknown) => { throw error; })
-    ]);
+    try { await started; }
+    catch (error) { await active.completion; throw error; }
     return { resultCode: "started", operationRef };
   }
 

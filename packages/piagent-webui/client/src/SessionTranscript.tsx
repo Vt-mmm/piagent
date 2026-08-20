@@ -28,6 +28,7 @@ import { mergeOlderTranscriptPage } from "./chat-view-model.ts";
 import { attachmentDetail } from "./attachment-intake.ts";
 import type { LiveActivity, LiveConversation } from "./use-session-hub.ts";
 import { localize, type UiLocale } from "./ui-preferences.tsx";
+import { label } from "./view-model.ts";
 
 const MarkdownMessage = lazy(async () => ({ default: (await import("./MarkdownMessage.tsx")).MarkdownMessage }));
 
@@ -169,6 +170,11 @@ function TranscriptMessage({ item, locale, finalStates, onOpenActivity }: { item
   </Box>;
 }
 
+function persistedUserMatches(persisted: string | null | undefined, optimistic: string): boolean {
+  const actual = persisted?.trim(), expected = optimistic.trim();
+  return Boolean(actual && expected && (actual === expected || actual.startsWith("/") && actual.endsWith(` ${expected}`)));
+}
+
 export function SessionTranscript({ sessionRef, sessionRevision, live, approvals, locale, onOpenActivity }: { sessionRef: string; sessionRevision: string;
   live?: LiveConversation; approvals?: ApprovalSummary; locale: UiLocale; onOpenActivity?: () => void }) {
   const [transcript, setTranscript] = useState<PiagentWebUIBoundedTranscriptProjectionV1>();
@@ -181,7 +187,8 @@ export function SessionTranscript({ sessionRef, sessionRevision, live, approvals
       void readSessionTranscript(sessionRef, null, 50, controller.signal).then((value) => {
         setTranscript(value);
         if (completionKey && live) {
-          const userPersisted = !live.user || value.items.some((item) => item.role === "user" && item.content.text?.trim() === live.user.trim());
+          const userPersisted = !live.user || value.items.some((item) => item.role === "user"
+            && persistedUserMatches(item.content.text, live.user));
           const assistantPersisted = !live.assistant || value.items.some((item) => item.role === "assistant" && item.content.text?.trim() === live.assistant.trim());
           if (userPersisted && assistantPersisted) setSyncedOperation(completionKey);
         }
@@ -203,7 +210,7 @@ export function SessionTranscript({ sessionRef, sessionRevision, live, approvals
   const liveUserDuplicated = useMemo(() => {
     if (!live?.user || !items.length) return false;
     const lastUser = [...items].reverse().find((item) => item.role === "user");
-    return lastUser?.content.text?.trim() === live.user.trim();
+    return persistedUserMatches(lastUser?.content.text, live.user);
   }, [items, live?.user]);
   const loadOlder = async () => {
     const before = transcript?.page.nextBeforeCursor; if (!before || loadingOlder) return;
@@ -233,7 +240,7 @@ export function SessionTranscript({ sessionRef, sessionRevision, live, approvals
       {(live.assistant || live.activities.length === 0 || live.complete || live.error) && <Box sx={{ display: "flex", gap: 1.5, alignItems: "flex-start" }}><Box className="brand-mark" aria-hidden="true">π</Box><Box sx={{ minWidth: 0, flex: 1 }}>
         <Typography sx={{ fontWeight: 600 }}>Piagent</Typography><Box sx={{ mt: .6 }}><AssistantText>
           {live.assistant || (live.complete ? localize(locale, "Đã hoàn tất.", "Completed.") : localize(locale, "Đang suy nghĩ…", "Thinking…"))}</AssistantText></Box>
-        {live.error && <Alert severity="warning" sx={{ mt: 1.5 }}>{live.error}</Alert>}
+        {live.error && <Alert severity="warning" sx={{ mt: 1.5 }}>{label(live.error, locale)}</Alert>}
       </Box></Box>}
     </>}
   </Stack>;

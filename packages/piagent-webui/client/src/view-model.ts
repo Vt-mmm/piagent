@@ -38,7 +38,8 @@ const statusLabelsVi: Record<string, string> = {
   "document-changed": "File đã thay đổi sau khi liệt kê; chưa đọc gì cả",
   "document-unreadable": "Không đọc được nội dung tài liệu",
   "document-needs-ocr": "Tài liệu là bản scan, cần OCR trước khi đọc được chữ",
-  "document-converter-unavailable": "Host chưa cài pdftotext (poppler) nên chưa đọc được .pdf"
+  "document-converter-unavailable": "Host chưa cài pdftotext (poppler) nên chưa đọc được .pdf",
+  "session-command-effect-unknown": "Pi đã nhận yêu cầu nhưng đang đồng bộ trạng thái; không gửi lại để tránh chạy trùng"
 };
 
 const statusLabelsEn: Record<string, string> = {
@@ -77,7 +78,8 @@ const statusLabelsEn: Record<string, string> = {
   "document-changed": "The file changed after it was listed; nothing was read",
   "document-unreadable": "The document content could not be read",
   "document-needs-ocr": "The document is scanned and needs OCR before it holds text",
-  "document-converter-unavailable": "This host has no pdftotext (poppler), so .pdf cannot be read"
+  "document-converter-unavailable": "This host has no pdftotext (poppler), so .pdf cannot be read",
+  "session-command-effect-unknown": "Pi received the request and is resyncing; do not resend it, to avoid a duplicate run"
 };
 
 export function label(value: string | null | undefined, locale: "vi" | "en" = "vi"): string {

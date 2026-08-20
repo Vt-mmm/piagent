@@ -4,6 +4,23 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
+## v1.5.4 - 2026-08-20
+
+### WebUI workflow hotfix
+
+- Fixed new WebUI sessions incorrectly reporting
+  `session-command-effect-unknown` even though Pi had accepted the selected
+  workflow and started the model turn. The Gateway now retains operation
+  ownership across Pi's deferred workflow dispatch and settles it only after
+  the nested agent turn reaches its canonical lifecycle boundary.
+- Added a fail-safe reconciliation path when the Gateway can identify the
+  created session but cannot yet prove the command effect. The UI opens the
+  known session, explains that synchronization is in progress, and explicitly
+  prevents a blind resend that could run the same request twice.
+- Localized internal uncertainty status and reconciled workflow-prefixed
+  persisted messages with their optimistic UI form so completed turns no
+  longer appear twice in the transcript.
+
 ## v1.5.3 - 2026-08-20
 
 ### WebUI and Terminal parity

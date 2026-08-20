@@ -84,6 +84,51 @@ describe("Piagent durable session command admission", () => {
     assert.equal(creates, 2); assert.equal(sends, 1); assert.equal(permissionChanges, 2);
   });
 
+  it("keeps a deferred workflow turn owned until Pi emits agent_settled", async (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-deferred-workflow-")); fs.chmodSync(root, 0o700);
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    const key = Buffer.alloc(32, 29), info = { path: path.join(root, "session.jsonl"), id: "raw-deferred-workflow",
+      cwd: path.join(root, "project"), name: "Deferred workflow", created: new Date("2026-08-14T09:00:00.000Z"),
+      modified: new Date("2026-08-14T09:00:01.000Z"), messageCount: 2, firstMessage: "Workflow", allMessagesText: "Workflow" };
+    const sessionRef = sessionRefForPath(key, info.path), listeners = new Set(); let promptText = null, disposed = 0;
+    const timers = []; t.after(() => timers.forEach(clearTimeout));
+    const session = {
+      isIdle: true, isStreaming: false,
+      subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+      prompt(text) {
+        promptText = text;
+        // Pi extension commands return from the outer prompt first, then
+        // `sendUserMessage()` starts and settles the nested agent turn.
+        timers.push(setTimeout(() => {
+          this.isIdle = false; this.isStreaming = true;
+          for (const listener of listeners) listener({ type: "agent_start" });
+          timers.push(setTimeout(() => {
+            this.isStreaming = false; this.isIdle = true;
+            for (const listener of listeners) listener({ type: "agent_settled" });
+          }, 25));
+        }, 15));
+        return Promise.resolve();
+      },
+      async abort() {}, clearQueue() {}
+    };
+    const events = new GatewayEventStore(), runtimes = new SessionRuntimeSupervisor({ gatewayInstanceRef: "gateway_deferred_workflow",
+      key, leases: new SessionLeaseStore(root, key), listSessions: async () => [info], events,
+      runtimeFactory: async () => ({ session, async dispose() { disposed += 1; } }) });
+    const started = await runtimes.send(sessionRef, { delivery: "new-operation", message: "/workflow platform-improve Fix the UI.",
+      expectedOperationRef: null }, "revision_deferred_workflow");
+    assert.equal(started.resultCode, "started"); assert.match(started.operationRef, /^operation_/);
+    assert.equal(promptText, "/workflow platform-improve Fix the UI.");
+    assert.equal(runtimes.ownership(sessionRef).liveState, "running");
+    const deadline = Date.now() + 1_000;
+    while (runtimes.ownership(sessionRef).liveState !== "idle" && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(runtimes.ownership(sessionRef).liveState, "idle");
+    assert.equal(events.replay(0).events.some((event) => event.kind === "runtime.changed"
+      && event.payload.operationRef === started.operationRef && event.payload.liveState === "running"), true);
+    await runtimes.close(); assert.equal(disposed, 1);
+  });
+
   it("acquires and releases once with schema-valid durable deduplicated receipts", async (t) => {
     const value = fixture(t), before = await value.catalog(), row = before.sessions[0];
     const acquire = command(row, before.catalogRevision, "session.acquire", "acquire_0001");

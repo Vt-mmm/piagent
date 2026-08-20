@@ -31,6 +31,8 @@ export class GatewaySessionStream {
   #truncated = false;
   #started = false;
   #startListeners: Array<() => void> = [];
+  #settled = false;
+  #settleListeners: Array<() => void> = [];
   readonly #toolRefs = new Map<string, string>();
 
   constructor(options: { sessionRef: string; operationRef: string; events: GatewayEventStore }) {
@@ -42,9 +44,17 @@ export class GatewaySessionStream {
     return new Promise((resolve) => this.#startListeners.push(resolve));
   }
 
+  settled(): Promise<void> {
+    if (this.#settled) return Promise.resolve();
+    return new Promise((resolve) => this.#settleListeners.push(resolve));
+  }
+
   observe(event: any): void {
     if (event?.type === "agent_start") {
       this.#started = true; for (const resolve of this.#startListeners.splice(0)) resolve(); return;
+    }
+    if (event?.type === "agent_settled") {
+      this.#settled = true; for (const resolve of this.#settleListeners.splice(0)) resolve(); return;
     }
     if (event?.type === "message_start" && event.message?.role === "assistant") {
       this.#messageRef = ref("message"); this.#buffer = ""; return;

@@ -98,6 +98,9 @@ pi install /path/to/piagent
   Inspector; projection Task Changes / Working Tree / Staged có bounded diff,
   provenance và enforce protected path; session lease bền, recovery khi restart
   hoặc owner cũ treo, doctor có repair tường minh.
+- `1.5.4`: hotfix WebUI giữ ownership qua workflow dispatch bất đồng bộ, không
+  còn báo `session-command-effect-unknown` giả; session đã tạo được tự đồng bộ
+  mà không gửi lại, và transcript không lặp tin workflow sau khi persisted.
 - `1.5.3`: WebUI có workflow theo từng tin nhắn thay vì khóa cả session, mặc
   định hiển thị rõ GPT-5.6 Sol High, Project Controls typed và UI gọn sau nút
   `+`; benchmark thêm `deep-logic-v1`, WebUI parity provider-free và hai family

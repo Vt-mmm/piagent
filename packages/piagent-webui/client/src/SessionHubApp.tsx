@@ -361,6 +361,15 @@ export function SessionHubApp({ catalog, capabilities, connection, live, refresh
         message: value.message, messageRequestId, deferInitialMessage: withFiles });
       createdSessionRef = receipt.sessionRef;
       if (!createdSessionRef) throw new Error("session-create-result-invalid");
+      if (receipt.phase !== "settled") {
+        setSelectedRef(createdSessionRef); setView("chat"); setNotice({
+          title: localize(locale, "Session đã được tạo", "The session was created"),
+          message: localize(locale,
+            "Pi đã nhận yêu cầu và session đang tự đồng bộ. Không gửi lại để tránh chạy trùng.",
+            "Pi received the request and the session is resyncing. Do not resend it, to avoid a duplicate run.")
+        });
+        return;
+      }
       if (withFiles) {
         const latest = await refresh(), session = latest?.sessions.find((item) => item.sessionRef === createdSessionRef);
         if (!session) throw new Error("session-catalog-refresh-failed");

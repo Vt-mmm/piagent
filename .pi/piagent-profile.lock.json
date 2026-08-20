@@ -115,18 +115,18 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:ebee7ecad2dbcc9374bd8061d29d8e3aa8229826eb69efd84cf24032470edfba",
+    "packageDigest": "sha256:cec36697857a88bae30d28081bb61b9fbb9c8c2f603d31a3be05c14833025955",
     "packageSource": "../",
-    "packageVersion": "1.5.3",
+    "packageVersion": "1.5.4",
     "runtimeFiles": [
       {
         "byteSize": 6323,
-        "digest": "sha256:ef0cee0bec1cc2db078070615b6072570b52c9ea50c633a03455c8f09f9fce61",
+        "digest": "sha256:720679b7c8af16d2604931337953cd9b25b1cd4688f129790f0ae3807d097cc5",
         "path": "package.json"
       },
       {
         "byteSize": 983,
-        "digest": "sha256:fbbbc8aaeac2a03034b819f01c531f6efc2822ae1a7374fe274046946dcfab5c",
+        "digest": "sha256:03921a349f13b4edc281407748c607fcb8782dcbd99cf5412ec00833204858bd",
         "path": "packages/piagent-core/package.json"
       },
       {
@@ -486,7 +486,7 @@
       },
       {
         "byteSize": 983,
-        "digest": "sha256:fbbbc8aaeac2a03034b819f01c531f6efc2822ae1a7374fe274046946dcfab5c",
+        "digest": "sha256:03921a349f13b4edc281407748c607fcb8782dcbd99cf5412ec00833204858bd",
         "path": "packages/piagent-core/package.json"
       },
       {
@@ -1225,23 +1225,23 @@
         "path": "packages/piagent-webui/contracts/generated/snapshot-v1.ts"
       },
       {
+        "byteSize": 806846,
+        "digest": "sha256:6be949259300e1d8562ccd5261c2e0079f704c9fe269dfb71e359f3772c6810b",
+        "path": "packages/piagent-webui/dist/client/assets/index-BeSDOnN-.js"
+      },
+      {
         "byteSize": 52304,
         "digest": "sha256:a32e9c0e5f318bca31c73566a703795ac38ee49a2fdfcfb88e6bb08a88dccd18",
         "path": "packages/piagent-webui/dist/client/assets/index-BV-_03yl.css"
       },
       {
-        "byteSize": 806083,
-        "digest": "sha256:426ffd8bafe2aff2fceac413675afac3e6cacf2b0e44e1e641912fd32556f390",
-        "path": "packages/piagent-webui/dist/client/assets/index-DZg979Ht.js"
-      },
-      {
         "byteSize": 159565,
-        "digest": "sha256:0ebd7e0d83c953dc52497a0b942bfdfd06f730b1f97c89dc73fa81bf6dee9f83",
-        "path": "packages/piagent-webui/dist/client/assets/MarkdownMessage-BnvXTpou.js"
+        "digest": "sha256:769564a82125c7dad5bb59d4dd5ddf1f5cb3139fc456c4bc7f3352e259c21014",
+        "path": "packages/piagent-webui/dist/client/assets/MarkdownMessage-BL2M6-f6.js"
       },
       {
         "byteSize": 580,
-        "digest": "sha256:7554e01c5e2468ed20b7dff0b9ccc3a2752cc495cde5d9cbf8c42c390fe06dc1",
+        "digest": "sha256:4162f8b4b89411117fc1652e6d8c1554ab0cefaa5728e8cc2914cafffe2d8cd7",
         "path": "packages/piagent-webui/dist/client/index.html"
       },
       {
@@ -1340,8 +1340,8 @@
         "path": "packages/piagent-webui/gateway/gateway-service.ts"
       },
       {
-        "byteSize": 5148,
-        "digest": "sha256:aaa5e7748d16c5b7a6c6b892eebe64e859dd56689171855a702e923e430729da",
+        "byteSize": 5520,
+        "digest": "sha256:a451df8e16dd6835001ab510dfa9e9f31d28c3b3c2ccb90bb931a2c2a55a865b",
         "path": "packages/piagent-webui/gateway/gateway-session-stream.ts"
       },
       {
@@ -1373,6 +1373,11 @@
         "byteSize": 11759,
         "digest": "sha256:1b8204dfc6b920763eb93a1b7afbcd49969cf2e63d07275e5b15762850e84831",
         "path": "packages/piagent-webui/gateway/provider-auth-broker.ts"
+      },
+      {
+        "byteSize": 994,
+        "digest": "sha256:e3f812afdcf171bc0f1b36ea79aa318cc4a6b24689193e652ad14ca3021cf7fe",
+        "path": "packages/piagent-webui/gateway/rpc-ui-context.ts"
       },
       {
         "byteSize": 6967,
@@ -1420,8 +1425,13 @@
         "path": "packages/piagent-webui/gateway/session-metadata-store.ts"
       },
       {
-        "byteSize": 28851,
-        "digest": "sha256:39f5617980eaacfbe7127c4e14a81cbd072d4c158ede4bdb1a14417f8c0a3d93",
+        "byteSize": 1274,
+        "digest": "sha256:8a509c5af768ce614b59d031d5d6da52f36c6b3d1d8115901dff8367365dafde",
+        "path": "packages/piagent-webui/gateway/session-operation-start.ts"
+      },
+      {
+        "byteSize": 28368,
+        "digest": "sha256:628cd4efa61862c619d0637de683cd4fc45fce5fd66991de983693be29a76ef9",
         "path": "packages/piagent-webui/gateway/session-runtime-supervisor.ts"
       },
       {
