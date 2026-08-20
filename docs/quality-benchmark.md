@@ -44,6 +44,43 @@ piagent-benchmark --dry-run
 ```
 
 Đây là smoke suite để phát hiện regression nhanh, không phải production claim.
+
+## WebUI parity và bài logic sâu
+
+WebUI không có một bộ prompt/policy riêng. Workflow picker tạo đúng
+`/workflow <id> <request>`; Project Controls tạo typed command rồi Gateway gọi
+đúng slash-command handler của Terminal. Vì vậy benchmark chia hai tầng:
+
+```bash
+npm run benchmark:webui-parity
+```
+
+Tầng provider-free này build production bundle, kiểm tra 10 workflow, 32 runtime
+control, revision/idempotency/confirmation/CSRF, chạy toàn bộ Chromium user flow
+và stress projection ở ba cỡ repository. Receipt của read-only control phải ghi
+`modelCallObserved=false`; nếu runtime vô tình mở model turn, gate trả
+`effect-unknown` thay vì claim 0 token.
+
+Khi cần đo solver logic sâu theo baseline lịch sử Luna/medium với `codex-cli`:
+
+```bash
+npm run benchmark:deep -- --dry-run
+npm run benchmark:deep
+```
+
+`deep-logic-v1` gồm 6 family difficulty `large`: revision-bound event
+reconciliation, capacity/fairness/dependency scheduling, layered fail-closed
+policy, budgeted context graph, out-of-order resumable stream và transactional
+config merge. Mỗi family có run-private value variant, hidden grader, scope gate
+và hai repeat trên hai surface, tổng 24 model session. Script project pin
+`Piagent`/``codex-cli``, `openai-codex/gpt-5.6-luna` và thinking `medium` để kết quả
+so sánh được với baseline cũ. CLI thấp hơn vẫn cho phép truyền cấu hình khác.
+
+Kết quả của `webui-parity-v1` chứng minh transport/logic parity và UI behavior,
+không phải model-quality claim. Kết quả `deep-logic-v1` là diagnostic paired
+benchmark; production/public claim vẫn phải qua `production-v1` và các release
+gate hiện hành.
+
 Public regression diện rộng dùng track `--production` (tên CLI được giữ để
 tương thích, không phải claim production):
 
@@ -52,7 +89,7 @@ piagent-benchmark --production --dry-run \
   --surfaces piagent,codex-cli \
   --model openai-codex/gpt-5.6-luna \
   --thinking medium \
-  --piagent-treatment candidate
+  --piagent-treatment release-defaults
 
 piagent-benchmark --production \
   --surfaces piagent,codex-cli \
@@ -92,12 +129,13 @@ Từ lớp benchmark matrix trong package, Piagent phân ba band:
 | Band | Khi dùng | Mục đích |
 |---|---|---|
 | `core` | thay đổi nhỏ, kiểm tra nhanh | Task quality, scope, safety và exact usage trên 4 scenario |
+| `deep-logic` | phát triển solver/workflow/WebUI logic | `deep-logic-v1`, 6 bài large với interacting invariants, 24 paired session; diagnostic, không phải release claim |
 | `production` | release candidate, đổi model policy, đổi harness | `production-v1`, 18 public-regression scenario, paired baseline, confidence gate; không phải generalization claim |
-| `capability` | tìm trần năng lực sau thay đổi harness | `capability-v1`, 4 bài multi-file/multi-component chưa bão hòa; dùng hill-climbing, không phải release gate |
+| `capability` | tìm trần năng lực sau thay đổi harness | `capability-v1`, 6 bài multi-file/multi-component chưa bão hòa; dùng hill-climbing, không phải release gate |
 | `long-horizon` | thay đổi recovery/context lớn | Lane provider-free chạy ít nhất 30 phút cho hard crash/resume, compaction, handoff, continuation bounded và state-growth; dedicated paid suite chưa phát hành |
 | `private-holdout` | readiness E3 và exact-RC FS7-01 | Tối thiểu 6 family từ 6 repository lineage, giữ ngoài workspace tác giả; chỉ custodian execute-only và human-calibration receipt được chấp nhận |
 
-Hiện `core-v1`, `production-v1`, `capability-v1` và `e2-framework-v1` chạy được bằng CLI. Thay đổi
+Hiện `core-v1`, `deep-logic-v1`, `production-v1`, `capability-v1` và `e2-framework-v1` chạy được bằng CLI. Thay đổi
 recovery/context phải chạy `production-v1` cùng deterministic recovery tests.
 Lane `evals/long-horizon-v1` hiện là `runnable-provider-free`; nó chứng minh
 lifecycle durability và local-state bounds, không tạo model quality, token,
@@ -112,23 +150,24 @@ chốt local readiness và chuẩn bị protocol FS5, nhưng generalization/rele
 khóa cho tới khi custodian độc lập cung cấp receipt thật ở `CF-FS7-01`.
 
 Capability pilot dùng lệnh sau. Suite này chủ ý có các contract xuyên package,
-backend/frontend dùng chung chuẩn hóa, lease ownership/concurrency, và migration
-crash/resume; điểm thấp là tín hiệu năng lực cần nghiên cứu, không phải lý do vá
-regex theo fixture:
+backend/frontend dùng chung chuẩn hóa, lease ownership/concurrency, migration
+crash/resume, WebUI/Terminal control-plane và reconnect timeline có checkpoint;
+điểm thấp là tín hiệu năng lực cần nghiên cứu, không phải lý do vá regex theo
+fixture:
 
 ```bash
 piagent-benchmark --capability \
-  --surfaces raw-pi,piagent \
+  --surfaces piagent,codex-cli \
   --model openai-codex/gpt-5.6-luna \
   --thinking medium \
   --piagent-treatment candidate
 ```
 
-`capability-v1` dùng contract gắn nhãn 16 clause và 47 check atomic có trọng số,
+`capability-v1` dùng contract gắn nhãn 28 clause và 69 check atomic có trọng số,
 thay cho hai mega-check chỉ cho điểm `0` hoặc `10`. Prompt, rubric và grader
-phải có mapping đầy đủ; reference đạt `10/10`, 16 mutation theo clause phải bị
+phải có mapping đầy đủ; reference đạt `10/10`, 28 mutation theo clause phải bị
 đúng check tương ứng bắt, và một implementation tương đương nhưng khác cấu trúc
-phải được chấp nhận. Mỗi check hiện là critical và mỗi scenario có 11–13 check,
+phải được chấp nhận. Mỗi check hiện là critical và mỗi scenario có 10–13 check,
 nên chỉ cần thiếu một check thì task score đã xuống tối đa `9.23` và không thể
 qua hard gate `>9.5`. Điểm lẻ dùng để chẩn đoán obligation nào hỏng; `resolved`
 vẫn yêu cầu toàn bộ critical check pass. Những pilot cũ giữ nguyên suite digest

@@ -1,6 +1,6 @@
 {
   "name": "@piagent/platform",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "license": "MIT",
   "publishConfig": {
     "access": "public",
@@ -157,6 +157,8 @@
     "init-project": "bash scripts/init-project.sh",
     "doctor": "bash scripts/team-doctor.sh",
     "benchmark": "node scripts/benchmark-runner.mjs",
+    "benchmark:deep": "node scripts/benchmark-runner.mjs --deep --surfaces piagent,codex-cli --model openai-codex/gpt-5.6-luna --thinking medium --allow-pi-auth-writeback",
+    "benchmark:webui-parity": "node packages/piagent-webui/benchmark/parity-benchmark.mjs",
     "benchmark:redaction": "node scripts/redaction-benchmark.mjs",
     "audit:runtime": "bash scripts/audit-runtime-host.sh",
     "release:identity": "node scripts/verify-release-identity.mjs",

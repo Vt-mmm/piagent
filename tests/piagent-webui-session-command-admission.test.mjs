@@ -45,15 +45,19 @@ describe("Piagent durable session command admission", () => {
     const key = Buffer.alloc(32, 19), createdInfo = { path: path.join(root, "created.jsonl"), id: "raw-created",
       cwd: path.join(root, "project"), name: "New session", created: new Date("2026-08-14T09:05:01.000Z"),
       modified: new Date("2026-08-14T09:05:02.000Z"), messageCount: 1, firstMessage: "Build safely.", allMessagesText: "Build safely." };
-    let sessions = [], creates = 0, sends = 0;
+    let sessions = [], creates = 0, sends = 0, permissionChanges = 0;
     const catalog = () => buildSessionCatalog({ gatewayInstanceRef: "gateway_create_test", key, listSessions: async () => sessions });
     const runtimes = {
       async create(projectRef, placeRef, modelRef, thinkingLevel) {
         creates += 1; assert.equal(projectRef, placeRef); assert.equal(modelRef, null); assert.equal(thinkingLevel, "high");
         sessions = [createdInfo]; return sessionRefForPath(key, createdInfo.path);
       },
+      async setPermission(sessionRef, mode) {
+        permissionChanges += 1; assert.equal(sessionRef, sessionRefForPath(key, createdInfo.path)); assert.equal(mode, "read-only");
+        return "permission-changed";
+      },
       async send(sessionRef, payload) {
-        sends += 1; assert.equal(sessionRef, sessionRefForPath(key, createdInfo.path)); assert.equal(payload.message, "Build safely.");
+        sends += 1; assert.equal(sessionRef, sessionRefForPath(key, createdInfo.path)); assert.equal(payload.message, "/workflow scout Build safely.");
         return { resultCode: "started", operationRef: "operation_create_01" };
       }
     };
@@ -64,7 +68,7 @@ describe("Piagent durable session command admission", () => {
       requestedAt: "2026-08-14T09:05:00.000Z", expiresAt: "2026-08-14T09:10:00.000Z", sessionRef: null,
       expectedCatalogRevision: before.catalogRevision, expectedSessionRevision: null,
       payload: { projectRef: "project_create_01", placeRef: "project_create_01", modelRef: null, thinkingLevel: "high",
-        message: "Build safely.", messageRequestId: "message_create_01" } };
+        permissionMode: "read-only", workflow: "scout", message: "Build safely.", messageRequestId: "message_create_01" } };
     const receipt = await controller.execute(command);
     assert.equal(validateFixture(registry, "session-command-v1", receipt).valid, true);
     assert.equal(receipt.phase, "settled"); assert.equal(receipt.resultCode, "started");
@@ -77,7 +81,7 @@ describe("Piagent durable session command admission", () => {
     const deferred = await controller.execute(deferredCommand);
     assert.equal(validateFixture(registry, "session-command-v1", deferred).valid, true);
     assert.equal(deferred.phase, "settled"); assert.equal(deferred.resultCode, "created"); assert.equal(deferred.operationRef, null);
-    assert.equal(creates, 2); assert.equal(sends, 1);
+    assert.equal(creates, 2); assert.equal(sends, 1); assert.equal(permissionChanges, 2);
   });
 
   it("acquires and releases once with schema-valid durable deduplicated receipts", async (t) => {
@@ -219,10 +223,11 @@ describe("Piagent durable session command admission", () => {
     const send = { ...command(row, before.catalogRevision, "session.send", "send_message_01"),
       requestedAt: "2026-08-14T10:05:00.000Z", expiresAt: "2026-08-14T10:10:00.000Z",
       payload: { delivery: "new-operation", message: "Continue this session.", messageRequestId: "message_request_send_01",
-        expectedOperationRef: null, attachmentRefs: [] } };
+        expectedOperationRef: null, attachmentRefs: [], workflow: "review" } };
     const started = await controller.execute(send);
     assert.equal(validateFixture(registry, "session-command-v1", started).valid, true);
-    assert.equal(started.resultCode, "started"); assert.match(started.operationRef, /^operation_/); assert.equal(promptText, "Continue this session.");
+    assert.equal(started.resultCode, "started"); assert.match(started.operationRef, /^operation_/);
+    assert.equal(promptText, "/workflow review Continue this session.");
     const streamed = events.replay(0).events;
     for (const event of streamed) assert.equal(validateFixture(registry, "gateway-protocol-v1", event).valid, true);
     assert.equal(streamed.some((event) => event.kind === "message.delta"), true);
@@ -238,6 +243,22 @@ describe("Piagent durable session command admission", () => {
     assert.equal(stopped.resultCode, "aborted"); assert.equal(stopped.operationRef, started.operationRef); assert.equal(aborted, 1);
     assert.equal((await catalog()).sessions[0].liveState, "idle");
     assert.equal(events.replay(0).events.some((event) => event.kind === "message.completed"), true);
+
+    // A workflow is an envelope for one dispatch, not session state. The next
+    // unrelated request is sent verbatim unless the operator chooses another
+    // workflow for that message.
+    const afterAbort = await catalog(), afterAbortRow = afterAbort.sessions[0];
+    const different = { ...command(afterAbortRow, afterAbort.catalogRevision, "session.send", "different_message_02"),
+      requestedAt: "2026-08-14T10:05:40.000Z", expiresAt: "2026-08-14T10:10:00.000Z",
+      payload: { delivery: "new-operation", message: "Start a different piece of work.", messageRequestId: "message_request_send_02",
+        expectedOperationRef: null, attachmentRefs: [] } };
+    const differentStarted = await controller.execute(different);
+    assert.equal(differentStarted.resultCode, "started");
+    assert.equal(promptText, "Start a different piece of work.");
+    const differentRunning = await catalog(), differentRow = differentRunning.sessions[0];
+    await controller.execute({ ...command(differentRow, differentRunning.catalogRevision, "session.abort", "abort_message_02"),
+      requestedAt: "2026-08-14T10:05:50.000Z", expiresAt: "2026-08-14T10:10:00.000Z",
+      payload: { operationRef: differentStarted.operationRef, clearQueued: true } });
     await runtimes.close();
   });
 

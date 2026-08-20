@@ -13,6 +13,7 @@ import { GatewayEventStore } from "./gateway-events.ts";
 import { GatewaySessionStream } from "./gateway-session-stream.ts";
 import { GATEWAY_RUNTIME_UI_MARKER } from "../ownership/gateway-runtime-context.ts";
 import { preferAuthoritativePiagentGuard } from "./extension-authority.ts";
+import { executePermissionCommand, executeRuntimeCommand } from "./runtime-session-controls.ts";
 
 const MAX_WARM_RUNTIMES = 10;
 
@@ -22,6 +23,7 @@ type ActiveRuntime = { runtime: RuntimeHandle; lease: SessionLeaseSnapshot; info
   unsubscribe: (() => void) | null; completion: Promise<void> | null; settling: boolean; approvalWaiting: boolean;
   unbindApproval: (() => void) | null; unsubscribeApproval: (() => void) | null; sessionManager: any | null };
 type Projection = { sessionRevision: string; liveState: "offline" | "idle" | "running" | "paused" | "waiting-approval" | "uncertain" };
+type RuntimeCommandResult = Awaited<ReturnType<typeof executeRuntimeCommand>>;
 
 function rpcUiContext(): object {
   const plain = (text: unknown): string => String(text ?? "");
@@ -389,23 +391,23 @@ export class SessionRuntimeSupervisor {
     return "thinking-changed";
   }
 
-  async setPermission(sessionRef: string, permissionMode: "read-only" | "workspace-write" | "trusted-full-access"):
-    Promise<"permission-changed"> {
+  async setPermission(sessionRef: string, permissionMode: "read-only" | "workspace-write" | "trusted-full-access"): Promise<"permission-changed"> {
     await this.acquire(sessionRef);
     const active = this.#active.get(sessionRef), session = active?.runtime.session;
     if (!active || !session) throw new Error("session-runtime-unavailable");
     if (active.operationRef || !session.isIdle) throw new Error("session-runtime-busy");
-    const before = Array.isArray(session.messages) ? session.messages.length : 0;
-    await session.prompt(`/permission ${permissionMode}`);
-    const messages = Array.isArray(session.messages) ? session.messages.slice(before) : [];
-    const observed = messages.reverse().find((message: any) => message?.role === "custom"
-      && message.customType === "piagent-permission-profile");
-    const profile = observed?.details?.permissionProfile;
-    if (!profile || profile.mode !== permissionMode || profile.warning) throw new Error("session-permission-unavailable");
+    await executePermissionCommand(session, permissionMode);
     this.#touchCreated(sessionRef);
     return "permission-changed";
   }
 
+  async runRuntimeCommand(sessionRef: string, command: string): Promise<RuntimeCommandResult> {
+    await this.acquire(sessionRef);
+    const active = this.#active.get(sessionRef), session = active?.runtime.session;
+    if (!active || !session) throw new Error("session-runtime-unavailable");
+    if (active.operationRef || active.settling || !session.isIdle) throw new Error("session-runtime-busy");
+    const result = await executeRuntimeCommand(session, command); this.#touchCreated(sessionRef); return result;
+  }
   approvalProjection(sessionRef: string): { revision: string | null; summary: Record<string, unknown> } {
     const active = this.#active.get(sessionRef);
     if (!active) return { revision: null, summary: { state: "unknown", pending: [], recent: [],

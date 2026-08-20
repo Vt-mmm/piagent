@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -420,6 +421,251 @@ if (scenario === "multi-package-rollout") {
     const result = await runMigration({ steps: planned, checkpoint, apply: async () => {} });
     result.completed.push("mutated");
     assert.deepEqual(stored, [prepare, transform, finalize]);
+  });
+} else if (scenario === "durable-session-control-plane") {
+  const { routeRuntimeCommand } = await load("packages/session/src/runtime-route.js");
+  const { admitRuntimeCommand, runtimeCommandDigest } = await load("packages/session/src/admission.js");
+  const { controlSummary } = await load("apps/web/src/control-view.js");
+  const objective = data.objective.trim().replace(/\s+/gu, " ");
+  const state = () => ({ revision: 7, receipts: {} });
+  const command = (kind, payload = {}, overrides = {}) => ({
+    idempotencyKey: data.idempotencyKey,
+    expectedRevision: 7,
+    kind,
+    payload,
+    confirmed: false,
+    ...overrides
+  });
+  const canonical = (value) => {
+    if (value === null || typeof value === "string" || typeof value === "boolean") return JSON.stringify(value);
+    if (typeof value === "number" && Number.isFinite(value)) return JSON.stringify(value);
+    if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+    if (!value || typeof value !== "object") throw new TypeError("not canonical JSON");
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`;
+  };
+
+  await check("runtime-route-validation", async (partition) => {
+    await partition("invalid-command-record", () => {
+      for (const value of [null, [], "status"]) typeError(() => routeRuntimeCommand(value));
+    });
+    await partition("unknown-envelope-field", () => typeError(() => routeRuntimeCommand({ ...command("status"), extra: true })));
+    await partition("unknown-kind", () => typeError(() => routeRuntimeCommand(command("restart"))));
+    await partition("invalid-payload-record", () => {
+      for (const payload of [null, [], "payload"]) typeError(() => routeRuntimeCommand(command("status", payload)));
+    });
+    await partition("non-empty-bounded-payload", () => {
+      for (const kind of ["status", "compact", "abort"]) typeError(() => routeRuntimeCommand(command(kind, { extra: true })));
+    });
+    await partition("invalid-scout-payload", () => {
+      typeError(() => routeRuntimeCommand(command("scout", {})));
+      typeError(() => routeRuntimeCommand(command("scout", { objective: "   " })));
+      typeError(() => routeRuntimeCommand(command("scout", { objective: data.objective, extra: true })));
+    });
+  });
+  await check("runtime-route-exact-contract", () => {
+    assert.deepEqual(routeRuntimeCommand(command("status")), { terminalCommand: "/status", confirmationRequired: false, expectedModelCalls: 0, effect: "read" });
+    assert.deepEqual(routeRuntimeCommand(command("scout", { objective: data.objective })), { terminalCommand: `/scout ${objective}`, confirmationRequired: true, expectedModelCalls: "bounded", effect: "model" });
+    assert.deepEqual(routeRuntimeCommand(command("compact")), { terminalCommand: "/compact", confirmationRequired: true, expectedModelCalls: "bounded", effect: "semantic" });
+    assert.deepEqual(routeRuntimeCommand(command("abort")), { terminalCommand: "/abort", confirmationRequired: true, expectedModelCalls: 0, effect: "state" });
+  });
+  await check("runtime-confirmation-authority", () => {
+    assert.equal(admitRuntimeCommand(state(), command("status")).receipt.kind, "status");
+    for (const [kind, payload] of [["scout", { objective: data.objective }], ["compact", {}], ["abort", {}]]) {
+      typeError(() => admitRuntimeCommand(state(), command(kind, payload)));
+      assert.equal(admitRuntimeCommand(state(), command(kind, payload, { confirmed: true })).receipt.kind, kind);
+    }
+  });
+  await check("runtime-revision-validation", () => {
+    for (const revision of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1]) typeError(() => admitRuntimeCommand({ revision, receipts: {} }, command("status")));
+    typeError(() => admitRuntimeCommand({ revision: 7, receipts: null }, command("status")));
+    for (const expectedRevision of [-1, 1.5, 6, Number.MAX_SAFE_INTEGER + 1, undefined]) {
+      typeError(() => admitRuntimeCommand(state(), command("status", {}, { expectedRevision })));
+    }
+    typeError(() => admitRuntimeCommand({ revision: Number.MAX_SAFE_INTEGER, receipts: {} }, command("status", {}, { expectedRevision: Number.MAX_SAFE_INTEGER })));
+  });
+  await check("runtime-idempotent-replay", () => {
+    const first = admitRuntimeCommand(state(), command("scout", { objective: data.objective }, { confirmed: true }));
+    const stored = first.state.receipts[data.idempotencyKey];
+    const replay = admitRuntimeCommand(first.state, command("scout", { objective: data.objective }, { confirmed: true, expectedRevision: 7 }));
+    assert.equal(replay.state, first.state);
+    assert.deepEqual(replay.receipt, { ...stored, replayed: true });
+    assert.equal(stored.replayed, false);
+    assert.notEqual(replay.receipt, stored);
+  });
+  await check("runtime-idempotency-conflict", () => {
+    const first = admitRuntimeCommand(state(), command("status"));
+    typeError(() => admitRuntimeCommand(first.state, command("compact", {}, { confirmed: true, expectedRevision: 7 })));
+    for (const idempotencyKey of ["", "   ", "__proto__", "prototype", "constructor"]) {
+      typeError(() => admitRuntimeCommand(state(), command("status", {}, { idempotencyKey })));
+    }
+  });
+  await check("runtime-digest-canonical", () => {
+    const left = { kind: "probe", payload: { z: 1, nested: { beta: true, alpha: [3, null] }, a: "x" } };
+    const right = { payload: { a: "x", nested: { alpha: [3, null], beta: true }, z: 1 }, kind: "probe" };
+    const expected = crypto.createHash("sha256").update(canonical(left)).digest("hex");
+    assert.equal(runtimeCommandDigest(left), expected);
+    assert.equal(runtimeCommandDigest(right), expected);
+    assert.match(expected, /^[a-f0-9]{64}$/);
+    typeError(() => runtimeCommandDigest({ kind: "probe", payload: { value: Infinity } }));
+    typeError(() => runtimeCommandDigest({ kind: "probe", payload: { value: undefined } }));
+    typeError(() => runtimeCommandDigest({ kind: "probe", payload: {}, extra: true }));
+  });
+  await check("runtime-receipt-shape", () => {
+    const input = command("scout", { objective: data.objective }, { confirmed: true });
+    const result = admitRuntimeCommand(state(), input);
+    assert.deepEqual(Object.keys(result.receipt).sort(), [
+      "commandDigest", "effect", "expectedModelCalls", "idempotencyKey", "kind", "replayed",
+      "revisionAfter", "revisionBefore", "terminalCommand"
+    ]);
+    assert.deepEqual(result.receipt, {
+      idempotencyKey: data.idempotencyKey,
+      commandDigest: runtimeCommandDigest({ kind: "scout", payload: { objective: data.objective } }),
+      kind: "scout", terminalCommand: `/scout ${objective}`, effect: "model", expectedModelCalls: "bounded",
+      revisionBefore: 7, revisionAfter: 8, replayed: false
+    });
+    assert.equal(result.state.revision, 8);
+  });
+  await check("runtime-state-isolation", () => {
+    const originalState = state(); const originalInput = command("scout", { objective: data.objective }, { confirmed: true });
+    const beforeState = structuredClone(originalState); const beforeInput = structuredClone(originalInput);
+    const result = admitRuntimeCommand(originalState, originalInput);
+    assert.deepEqual(originalState, beforeState); assert.deepEqual(originalInput, beforeInput);
+    assert.notEqual(result.state, originalState);
+    assert.notEqual(result.receipt, result.state.receipts[data.idempotencyKey]);
+    result.receipt.effect = "mutated";
+    assert.equal(result.state.receipts[data.idempotencyKey].effect, "model");
+  });
+  await check("runtime-control-summary", () => {
+    const receipt = admitRuntimeCommand(state(), command("scout", { objective: data.objective }, { confirmed: true })).receipt;
+    assert.equal(controlSummary(receipt), `kind=scout; command=${JSON.stringify(`/scout ${objective}`)}; revision=7->8; effect=model; model=bounded; replayed=false`);
+    typeError(() => controlSummary(null));
+    typeError(() => controlSummary([]));
+  });
+} else if (scenario === "causal-timeline-recovery") {
+  const { normalizeTimelineSnapshot, projectTimeline } = await load("packages/timeline/src/project.js");
+  const { encodeTimelineCheckpoint, decodeTimelineCheckpoint } = await load("packages/timeline/src/checkpoint.js");
+  const { renderTimeline } = await load("apps/web/src/timeline-view.js");
+  const eventDigest = (event) => crypto.createHash("sha256").update(JSON.stringify({
+    id: event.id, cursor: event.cursor, messageId: event.messageId,
+    offset: event.offset, text: event.text, complete: event.complete
+  })).digest("hex");
+  const emptySnapshot = () => ({ cursor: 0, messages: [], seen: {} });
+  const event = (id, cursor, messageId, offset, text, complete = false) => ({ id, cursor, messageId, offset, text, complete });
+  const eventA = () => event(data.eventA, 1, data.messageA, 0, data.first, false);
+  const eventB = () => event(data.eventB, 2, data.messageA, data.first.length, data.second, true);
+
+  await check("timeline-snapshot-validation", async (partition) => {
+    const historical = eventA();
+    const source = { cursor: 1, messages: [{ id: data.messageA, text: data.first, complete: false }], seen: { [data.eventA]: eventDigest(historical) } };
+    const normalized = normalizeTimelineSnapshot(source);
+    assert.deepEqual(normalized, source); assert.notEqual(normalized, source); assert.notEqual(normalized.messages, source.messages); assert.notEqual(normalized.messages[0], source.messages[0]); assert.notEqual(normalized.seen, source.seen);
+    await partition("invalid-snapshot-record", () => { for (const value of [null, [], "snapshot"]) typeError(() => normalizeTimelineSnapshot(value)); });
+    await partition("invalid-snapshot-cursor", () => { for (const cursor of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1]) typeError(() => normalizeTimelineSnapshot({ cursor, messages: [], seen: {} })); });
+    await partition("invalid-snapshot-message", () => {
+      typeError(() => normalizeTimelineSnapshot({ cursor: 0, messages: {}, seen: {} }));
+      typeError(() => normalizeTimelineSnapshot({ cursor: 0, messages: [{ id: "", text: "", complete: false }], seen: {} }));
+      typeError(() => normalizeTimelineSnapshot({ cursor: 0, messages: [{ id: "same", text: "", complete: false }, { id: "same", text: "", complete: true }], seen: {} }));
+      typeError(() => normalizeTimelineSnapshot({ cursor: 0, messages: [{ id: "ok", text: 1, complete: false }], seen: {} }));
+    });
+    await partition("invalid-snapshot-seen", () => {
+      typeError(() => normalizeTimelineSnapshot({ cursor: 0, messages: [], seen: null }));
+      typeError(() => normalizeTimelineSnapshot({ cursor: 0, messages: [], seen: { [data.eventA]: "ABC" } }));
+    });
+  });
+  await check("timeline-event-validation", () => {
+    typeError(() => projectTimeline(emptySnapshot(), null, { maxChars: data.maxChars }));
+    for (const options of [null, [], {}, { maxChars: -1 }, { maxChars: 1.5 }, { maxChars: Number.MAX_SAFE_INTEGER + 1 }]) typeError(() => projectTimeline(emptySnapshot(), [], options));
+    const valid = eventA();
+    const invalid = [
+      { ...valid, id: "" }, { ...valid, messageId: "   " }, { ...valid, cursor: 0 }, { ...valid, cursor: 1.5 },
+      { ...valid, offset: -1 }, { ...valid, offset: 1.5 }, { ...valid, text: null }, { ...valid, complete: 1 }
+    ];
+    for (const value of invalid) typeError(() => projectTimeline(emptySnapshot(), [value], { maxChars: data.maxChars }));
+  });
+  await check("timeline-replay-and-conflicts", () => {
+    const first = eventA(); const second = eventB();
+    const replay = projectTimeline(emptySnapshot(), [first, second, { ...second }, { ...first }], { maxChars: data.maxChars * 4 });
+    assert.deepEqual(replay.appliedIds, [data.eventA, data.eventB]);
+    assert.deepEqual(replay.replayedIds, [data.eventA, data.eventB]);
+    typeError(() => projectTimeline(emptySnapshot(), [first, { ...first, text: `${first.text}!` }], { maxChars: data.maxChars * 4 }));
+    typeError(() => projectTimeline(emptySnapshot(), [first, { ...first, id: data.eventB }], { maxChars: data.maxChars * 4 }));
+  });
+  await check("timeline-historical-validation", () => {
+    const historical = eventA(); const digest = eventDigest(historical);
+    const snapshot = { cursor: 1, messages: [{ id: data.messageA, text: data.first, complete: false }], seen: { [data.eventA]: digest } };
+    const result = projectTimeline(snapshot, [historical, { ...historical }], { maxChars: data.maxChars * 4 });
+    assert.deepEqual(result.replayedIds, [data.eventA]); assert.deepEqual(result.appliedIds, []);
+    typeError(() => projectTimeline({ ...snapshot, seen: {} }, [historical], { maxChars: data.maxChars * 4 }));
+    typeError(() => projectTimeline(snapshot, [{ ...historical, text: `${data.first}!` }], { maxChars: data.maxChars * 4 }));
+  });
+  await check("timeline-contiguous-gap", () => {
+    const first = eventA(); const second = eventB();
+    const sorted = projectTimeline(emptySnapshot(), [second, first], { maxChars: data.maxChars * 4 });
+    assert.equal(sorted.cursor, 2); assert.deepEqual(sorted.appliedIds, [data.eventA, data.eventB]); assert.equal(sorted.gap, null); assert.deepEqual(sorted.buffered, []);
+    const later = event(data.eventC, 3, data.messageB, 0, "later", false);
+    const gap = projectTimeline(emptySnapshot(), [later, first], { maxChars: data.maxChars * 4 });
+    assert.equal(gap.cursor, 1); assert.deepEqual(gap.gap, { expected: 2, observed: 3 }); assert.deepEqual(gap.buffered, [later]);
+  });
+  await check("timeline-offset-completion", () => {
+    const projected = projectTimeline(emptySnapshot(), [eventA(), eventB()], { maxChars: data.maxChars * 4 });
+    assert.deepEqual(projected.messages, [{ id: data.messageA, text: `${data.first}${data.second}`, complete: true }]);
+    typeError(() => projectTimeline(emptySnapshot(), [{ ...eventA(), offset: 1 }], { maxChars: data.maxChars * 4 }));
+    const completeSnapshot = { cursor: 1, messages: [{ id: data.messageA, text: data.first, complete: true }], seen: { [data.eventA]: eventDigest(eventA()) } };
+    typeError(() => projectTimeline(completeSnapshot, [eventB()], { maxChars: data.maxChars * 4 }));
+  });
+  await check("timeline-budget-boundary", () => {
+    const source = { cursor: 0, messages: [{ id: data.messageA, text: data.first, complete: false }], seen: {} };
+    const remaining = data.maxChars - data.first.length;
+    assert.ok(remaining >= 0);
+    const exact = event(data.eventA, 1, data.messageB, 0, "x".repeat(remaining), false);
+    const overflow = event(data.eventB, 2, data.messageB, remaining, "z", true);
+    const result = projectTimeline(source, [exact, overflow], { maxChars: data.maxChars });
+    assert.equal(result.cursor, 1); assert.deepEqual(result.appliedIds, [data.eventA]); assert.deepEqual(result.buffered, [overflow]);
+    assert.deepEqual(result.backpressure, { eventId: data.eventB, cursor: 2, neededChars: data.maxChars + 1, maxChars: data.maxChars });
+    assert.deepEqual(result.messages, [source.messages[0], { id: data.messageB, text: "x".repeat(remaining), complete: false }]);
+    assert.equal(Object.hasOwn(result.seen, data.eventB), false);
+  });
+  await check("timeline-input-isolation", () => {
+    const snapshot = emptySnapshot(); const events = [eventA(), eventB()];
+    const snapshotBefore = structuredClone(snapshot); const eventsBefore = structuredClone(events);
+    const result = projectTimeline(snapshot, events, { maxChars: data.maxChars * 4 });
+    assert.deepEqual(snapshot, snapshotBefore); assert.deepEqual(events, eventsBefore);
+    assert.notEqual(result.messages, snapshot.messages); assert.notEqual(result.seen, snapshot.seen); assert.notEqual(result.buffered, events);
+    result.messages[0].text = "mutated"; result.seen[data.eventA] = "0".repeat(64);
+    assert.deepEqual(snapshot, snapshotBefore); assert.deepEqual(events, eventsBefore);
+  });
+  await check("timeline-checkpoint-roundtrip", () => {
+    const stateValue = projectTimeline(emptySnapshot(), [eventA(), eventB()], { maxChars: data.maxChars * 4 });
+    const core = { cursor: stateValue.cursor, messages: stateValue.messages, seen: stateValue.seen };
+    const encoded = encodeTimelineCheckpoint(core); const envelope = JSON.parse(encoded);
+    const canonical = (value) => {
+      if (value === null || typeof value === "string" || typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value))) return JSON.stringify(value);
+      if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+      return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`;
+    };
+    assert.deepEqual(Object.keys(envelope), ["schemaVersion", "payload", "checksum"]);
+    assert.equal(envelope.checksum, crypto.createHash("sha256").update(canonical(envelope.payload)).digest("hex"));
+    const first = decodeTimelineCheckpoint(encoded); const second = decodeTimelineCheckpoint(encoded);
+    assert.deepEqual(first, core); assert.deepEqual(second, core); assert.notEqual(first.messages, second.messages); assert.notEqual(first.seen, second.seen);
+    first.messages[0].text = "mutated"; assert.deepEqual(second, core);
+  });
+  await check("timeline-checkpoint-tamper", () => {
+    const encoded = encodeTimelineCheckpoint(emptySnapshot()); const value = JSON.parse(encoded);
+    typeError(() => decodeTimelineCheckpoint(null));
+    typeError(() => decodeTimelineCheckpoint("{"));
+    typeError(() => decodeTimelineCheckpoint(JSON.stringify({ ...value, schemaVersion: 2 })));
+    typeError(() => decodeTimelineCheckpoint(JSON.stringify({ ...value, checksum: "0".repeat(64) })));
+    typeError(() => decodeTimelineCheckpoint(JSON.stringify({ ...value, payload: { ...value.payload, cursor: 1 } })));
+    typeError(() => decodeTimelineCheckpoint(JSON.stringify({ schemaVersion: 1, payload: {}, checksum: value.checksum })));
+  });
+  await check("timeline-render-exact", () => {
+    const id = `${data.messageA}<&>\"'`; const text = `${data.first}<&>\"'`;
+    const escapedId = `${data.messageA}&lt;&amp;&gt;&quot;&#39;`; const escapedText = `${data.first}&lt;&amp;&gt;&quot;&#39;`;
+    assert.equal(renderTimeline([{ id, text, complete: false }, { id: data.messageB, text: data.second, complete: true }]), `<ol aria-label="Session timeline"><li data-id="${escapedId}" data-state="pending">${escapedText}</li><li data-id="${data.messageB}" data-state="complete">${data.second}</li></ol>`);
+  });
+  await check("timeline-render-validation", () => {
+    typeError(() => renderTimeline(null)); typeError(() => renderTimeline({}));
+    assert.equal(renderTimeline([]), '<ol aria-label="Session timeline"></ol>');
   });
 }
 

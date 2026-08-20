@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import type { Catalog, SessionRow } from "../contracts/generated/session-catalog-v1.ts";
 import type { Receipt } from "../contracts/generated/session-command-v1.ts";
+import { buildWebUiWorkflowCommand, isWebUiWorkflowId, type WebUiWorkflowId } from "../../piagent-core/runtime/workflows/webui-workflow.ts";
 import { GatewayEventStore } from "./gateway-events.ts";
 import { SessionCommandStore, type SessionAction, type SessionCommandIdentity } from "./session-command-store.ts";
 import { SessionRuntimeSupervisor } from "./session-runtime-supervisor.ts";
@@ -27,6 +28,10 @@ function record(value: unknown): value is Record<string, unknown> { return Boole
 function exactKeys(value: Record<string, unknown>, keys: string[]): boolean {
   const found = Object.keys(value); return found.length === keys.length && found.every((key) => keys.includes(key));
 }
+function requiredOptionalKeys(value: Record<string, unknown>, required: string[], optional: string[]): boolean {
+  const found = Object.keys(value), allowed = new Set([...required, ...optional]);
+  return required.every((key) => found.includes(key)) && found.every((key) => allowed.has(key));
+}
 function exactTimestamp(value: unknown): value is string {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)
     && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
@@ -35,13 +40,15 @@ function nullableRef(value: unknown): value is string | null { return value === 
 
 function validPayload(action: SessionAction, payload: Record<string, unknown>): boolean {
   if (["session.archive", "session.unarchive", "session.acquire", "session.release"].includes(action)) return exactKeys(payload, []);
-  if (action === "session.send") return exactKeys(payload, ["delivery", "message", "messageRequestId", "expectedOperationRef", "attachmentRefs"])
+  if (action === "session.send") return requiredOptionalKeys(payload,
+    ["delivery", "message", "messageRequestId", "expectedOperationRef", "attachmentRefs"], ["workflow"])
     && Array.isArray(payload.attachmentRefs) && payload.attachmentRefs.length <= 4
     && new Set(payload.attachmentRefs as unknown[]).size === payload.attachmentRefs.length
     && (payload.attachmentRefs as unknown[]).every((item) => typeof item === "string" && REF.test(item))
     && ["new-operation", "follow-up", "steer"].includes(String(payload.delivery)) && typeof payload.message === "string"
     && payload.message.length >= 1 && payload.message.length <= 32_768 && !payload.message.includes("\0") && REF.test(String(payload.messageRequestId))
-    && nullableRef(payload.expectedOperationRef) && (payload.delivery === "new-operation" ? payload.expectedOperationRef === null : payload.expectedOperationRef !== null);
+    && nullableRef(payload.expectedOperationRef) && (payload.delivery === "new-operation" ? payload.expectedOperationRef === null : payload.expectedOperationRef !== null)
+    && (payload.workflow === undefined || payload.delivery === "new-operation" && isWebUiWorkflowId(payload.workflow));
   if (action === "session.abort") return exactKeys(payload, ["operationRef", "clearQueued"])
     && REF.test(String(payload.operationRef)) && typeof payload.clearQueued === "boolean";
   if (action === "session.set-model") return exactKeys(payload, ["modelRef"]) && REF.test(String(payload.modelRef));
@@ -56,11 +63,13 @@ function validPayload(action: SessionAction, payload: Record<string, unknown>): 
     && (payload.title === null || typeof payload.title === "string" && payload.title.length >= 1 && payload.title.length <= 500
       && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(payload.title));
   const createKeys = ["projectRef", "placeRef", "modelRef", "thinkingLevel", "message", "messageRequestId"];
-  return (exactKeys(payload, createKeys) || exactKeys(payload, [...createKeys, "deferInitialMessage"]))
+  return requiredOptionalKeys(payload, createKeys, ["deferInitialMessage", "permissionMode", "workflow"])
     && REF.test(String(payload.projectRef)) && REF.test(String(payload.placeRef)) && nullableRef(payload.modelRef)
     && ["off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(String(payload.thinkingLevel))
     && typeof payload.message === "string" && payload.message.length >= 1 && payload.message.length <= 32_768 && !payload.message.includes("\0")
-    && REF.test(String(payload.messageRequestId)) && (payload.deferInitialMessage === undefined || typeof payload.deferInitialMessage === "boolean");
+    && REF.test(String(payload.messageRequestId)) && (payload.deferInitialMessage === undefined || typeof payload.deferInitialMessage === "boolean")
+    && (payload.permissionMode === undefined || ["read-only", "workspace-write", "trusted-full-access"].includes(String(payload.permissionMode)))
+    && (payload.workflow === undefined || isWebUiWorkflowId(payload.workflow));
 }
 
 function parseCommand(value: unknown): SessionCommand | null {
@@ -147,11 +156,17 @@ export class SessionCommandController {
       if (command.action === "session.create") {
         targetSessionRef = await this.#runtimes.create(String(command.payload.projectRef), String(command.payload.placeRef),
           command.payload.modelRef === null ? null : String(command.payload.modelRef), String(command.payload.thinkingLevel));
+        if (command.payload.permissionMode !== undefined) {
+          await this.#runtimes.setPermission(targetSessionRef, String(command.payload.permissionMode) as
+            "read-only" | "workspace-write" | "trusted-full-access");
+        }
         const created = await this.#readyCatalog(), createdRow = created.sessions.find((item) => item.sessionRef === targetSessionRef);
         if (!createdRow) throw new Error("session-catalog-refresh-failed");
         if (command.payload.deferInitialMessage === true) resultCode = "created";
         else {
-          const sent = await this.#runtimes.send(targetSessionRef, { delivery: "new-operation", message: String(command.payload.message),
+          const message = buildWebUiWorkflowCommand((command.payload.workflow as WebUiWorkflowId | undefined) ?? null,
+            String(command.payload.message));
+          const sent = await this.#runtimes.send(targetSessionRef, { delivery: "new-operation", message,
             expectedOperationRef: null }, createdRow.sessionRevision);
           resultCode = sent.resultCode === "started" ? "started" : sent.resultCode; operationRef = sent.operationRef;
         }
@@ -162,7 +177,7 @@ export class SessionCommandController {
         const acquired = await this.#readyCatalog(), acquiredRow = acquired.sessions.find((item) => item.sessionRef === command.sessionRef);
         if (!acquiredRow) throw new Error("session-catalog-refresh-failed");
         const payload = command.payload as { delivery: "new-operation" | "follow-up" | "steer"; message: string;
-          expectedOperationRef: string | null; messageRequestId: string; attachmentRefs: string[] };
+          expectedOperationRef: string | null; messageRequestId: string; attachmentRefs: string[]; workflow?: WebUiWorkflowId };
         // Staged refs are claimed once, here, before the runtime is asked to
         // dispatch. Documents were turned into text at staging so they join the
         // message; images travel on the host's own channel.
@@ -172,7 +187,8 @@ export class SessionCommandController {
         attachmentReservation = prepared;
         if (!this.#prepareAttachments && payload.attachmentRefs.length > 0) throw new Error("session-attachment-unavailable");
         sendAttempted = true;
-        const sent = await this.#runtimes.send(command.sessionRef!, { ...payload, message: prepared.text, images: prepared.images },
+        const message = buildWebUiWorkflowCommand(payload.workflow ?? null, prepared.text);
+        const sent = await this.#runtimes.send(command.sessionRef!, { ...payload, message, images: prepared.images },
           acquiredRow.sessionRevision);
         prepared.commit();
         resultCode = sent.resultCode; operationRef = sent.operationRef;

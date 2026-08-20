@@ -387,7 +387,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
               : []),
             ...exactOutputGuidance,
             ...(changeMode === "source-change" && acceptanceProofGuidance(written).length > 0
-              ? [["Critical behavioral proof:", ...acceptanceProofGuidance(written).map((item: string) => `- ${item}`), "Persist focused tests inside task scope; runtime accepts executed project verification, not prose claims."].join("\n")]
+              ? [["Critical behavioral proof:", ...acceptanceProofGuidance(written).map((item: string) => `- ${item}`), "Map every proof item above to a live focused assertion or explicit test matrix before the verifier; happy-path coverage and prose claims are insufficient."].join("\n")]
               : []),
             ...(baselineGuidance.length > 0
               ? [["Existing public contract:", ...baselineGuidance.map((item: string) => `- ${item}`)].join("\n")]
@@ -472,7 +472,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
         "The complete operator request above is the authoritative acceptance contract; runtime keeps its full criteria, so do not restate or re-scout it.",
         `Assurance: ${assurance.tier} (${assurance.reasonCodes.join(", ") || "bounded-runtime"}).`,
         ...(task.changeMode === "source-change" && acceptanceProofGuidance(task).length > 0
-          ? [["Critical behavioral proof:", ...acceptanceProofGuidance(task).map((item: string) => `- ${item}`), "Persist focused tests inside task scope before final verification."].join("\n")]
+          ? [["Critical behavioral proof:", ...acceptanceProofGuidance(task).map((item: string) => `- ${item}`), "Map every proof item above to a live focused assertion or explicit test matrix before the verifier; happy-path coverage is insufficient."].join("\n")]
           : []),
         ...(baselineGuidance.length > 0
           ? [["Existing public contract:", ...baselineGuidance.map((item: string) => `- ${item}`)].join("\n")]

@@ -4,6 +4,38 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
+## v1.5.3 - 2026-08-20
+
+### WebUI and Terminal parity
+
+- Brought the Terminal workflow surface into Session Hub with ten explicit
+  per-message workflows. A workflow no longer binds the whole session: after a
+  message is sent, the composer returns to Freeform so the same conversation
+  can move to a different task under the user's control.
+- Simplified the new-session composer around the essential project, model and
+  send controls. Advanced workflow, thinking, permission and attachment choices
+  now sit behind a progressive `+` control, while the default is named
+  explicitly as GPT-5.6 Sol with High thinking.
+- Added typed Project Controls for runtime and usage inspection, onboarding and
+  profile state, Context Engine, memory and MCP governance. Read-only actions
+  do not open a model turn; mutating and semantic-compaction actions require an
+  explicit confirmation and retain the existing session and revision guards.
+
+### Deeper logic evaluation
+
+- Added the `deep-logic-v1` diagnostic suite: six generated-variant, large
+  problems covering event reconciliation, dependency scheduling, layered
+  policy, context graphs, resumable streams and transactional configuration.
+  Its default paired run uses Piagent and `codex-cli` on GPT-5.6 Luna Medium for
+  24 model sessions.
+- Expanded `capability-v1` from four to six multi-component families, including
+  durable session control and causal timeline recovery, with 28 contract
+  clauses and 69 atomic checks plus stronger mutation and equivalent-solution
+  validation.
+- Added a provider-free WebUI parity benchmark for workflows, runtime controls,
+  contracts, security, Chromium flows and bounded performance stress before
+  any model quota is spent.
+
 ## v1.5.2 - 2026-08-18
 
 ### Fixed
@@ -589,7 +621,7 @@ Four documents restated something the code already knew, and each had drifted. T
   interval for paired fresh-token ratios. Production claims now require all 18
   families, three repeats, quality/reliability/workflow/category scores of at
   least 9, perfect safety and an upper token-ratio bound no greater than 1.
-- Added controlled Codex CLI comparison with a fresh private `CODEX_HOME` for
+- Added controlled `codex-cli` comparison with a fresh private `CODEX_HOME` for
   every measured session and retry, paired seeded execution blocks, strict JSONL
   usage parsing, bounded diagnostics and streaming required/forbidden output
   checks.

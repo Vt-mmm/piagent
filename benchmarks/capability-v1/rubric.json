@@ -55,6 +55,32 @@
       { "id": "migration-skip-write-return", "clause": "M3", "critical": true, "weight": 2 },
       { "id": "migration-crash-resume", "clause": "M4", "critical": true, "weight": 2 },
       { "id": "migration-return-isolation", "clause": "M4", "critical": true, "weight": 2 }
+    ],
+    "durable-session-control-plane": [
+      { "id": "runtime-route-validation", "clause": "D1", "critical": true, "weight": 2 },
+      { "id": "runtime-route-exact-contract", "clause": "D2", "critical": true, "weight": 2 },
+      { "id": "runtime-confirmation-authority", "clause": "D2", "critical": true, "weight": 2 },
+      { "id": "runtime-revision-validation", "clause": "D3", "critical": true, "weight": 2 },
+      { "id": "runtime-idempotent-replay", "clause": "D3", "critical": true, "weight": 2 },
+      { "id": "runtime-idempotency-conflict", "clause": "D3", "critical": true, "weight": 2 },
+      { "id": "runtime-digest-canonical", "clause": "D4", "critical": true, "weight": 2 },
+      { "id": "runtime-receipt-shape", "clause": "D5", "critical": true, "weight": 2 },
+      { "id": "runtime-state-isolation", "clause": "D5", "critical": true, "weight": 2 },
+      { "id": "runtime-control-summary", "clause": "D6", "critical": true, "weight": 2 }
+    ],
+    "causal-timeline-recovery": [
+      { "id": "timeline-snapshot-validation", "clause": "C1", "critical": true, "weight": 2 },
+      { "id": "timeline-event-validation", "clause": "C1", "critical": true, "weight": 2 },
+      { "id": "timeline-replay-and-conflicts", "clause": "C2", "critical": true, "weight": 2 },
+      { "id": "timeline-historical-validation", "clause": "C2", "critical": true, "weight": 2 },
+      { "id": "timeline-contiguous-gap", "clause": "C3", "critical": true, "weight": 2 },
+      { "id": "timeline-offset-completion", "clause": "C3", "critical": true, "weight": 2 },
+      { "id": "timeline-budget-boundary", "clause": "C4", "critical": true, "weight": 2 },
+      { "id": "timeline-input-isolation", "clause": "C4", "critical": true, "weight": 2 },
+      { "id": "timeline-checkpoint-roundtrip", "clause": "C5", "critical": true, "weight": 2 },
+      { "id": "timeline-checkpoint-tamper", "clause": "C5", "critical": true, "weight": 2 },
+      { "id": "timeline-render-exact", "clause": "C6", "critical": true, "weight": 2 },
+      { "id": "timeline-render-validation", "clause": "C6", "critical": true, "weight": 2 }
     ]
   }
 }

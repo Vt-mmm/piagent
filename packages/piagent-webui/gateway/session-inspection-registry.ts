@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import fs from "node:fs";
 import path from "node:path";
 
 import { readContextTelemetry } from "../../piagent-core/extensions/context-engine.js";
@@ -9,6 +10,8 @@ import { webUiModelRef } from "../../piagent-core/runtime/inspection/webui-snaps
 import { redactSensitiveText } from "../../piagent-core/security/sensitive-data.js";
 import { piApprovalBroker } from "../../piagent-core/runtime/inspection/approval-broker.ts";
 import { attachmentCapability } from "../../piagent-core/runtime/input/attachment-store.ts";
+import { WEBUI_WORKFLOW_OPTIONS } from "../../piagent-core/runtime/workflows/webui-workflow.ts";
+import { WEBUI_RUNTIME_ACTIONS } from "../../piagent-core/runtime/workflows/webui-runtime-command.ts";
 import { CoreInspectionProvider } from "../server/core-inspection-provider.ts";
 import { ReadModelNotFound, type WebUiReadModelProvider } from "../server/read-model-provider.ts";
 import { isUserConversationSession, projectRefForCwd, sessionRefForPath, type PiSessionInfo } from "./session-catalog.ts";
@@ -189,6 +192,16 @@ export class SessionInspectionRegistry {
       if (!projects.has(project.projectRef)) projects.set(project.projectRef, project);
     }
     const availableModels = (this.#models?.getAvailableSnapshot() ?? []).slice(0, 300);
+    const profiles = safeRead(() => fs.readdirSync(path.join(this.#packageRoot, "adapters")).flatMap((entry) => {
+      if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(entry)) return [];
+      const file = path.join(this.#packageRoot, "adapters", entry, "profile.json");
+      const stat = fs.lstatSync(file);
+      if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 1_048_576) return [];
+      const value = JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>;
+      return [{ id: entry, displayName: safeName(value.displayName ?? entry),
+        permissionMode: ["read-only", "workspace-write", "trusted-full-access"].includes(String(value.permissionProfile))
+          ? String(value.permissionProfile) : null }];
+    }).slice(0, 100), []);
     const models = availableModels.flatMap((value) => {
       const provider = safeModelId(value.provider);
       const modelId = safeModelId(value.id);
@@ -201,8 +214,16 @@ export class SessionInspectionRegistry {
       return [{ modelRef: webUiModelRef(provider, modelId), provider, modelId, displayName: safeName(value.name ?? modelId),
         reasoning: value.reasoning, imageInput: inputs ? inputs.includes("image") : null, thinkingLevels }];
     });
+    // Keep the WebUI new-session baseline deterministic and visible. If the
+    // preferred model is not authenticated, the host's own default remains the
+    // safe fallback instead of silently substituting another catalog entry.
+    const defaultModel = models.find((value) => value.provider === "openai-codex" && value.modelId === "gpt-5.6-sol");
     return { schemaVersion: 1, version: "piagent-session-creation-options-v1", generatedAt: new Date().toISOString(),
-      projects: [...projects.values()].slice(0, 200), models, webSearch: inspectWebSearchCapability({ agentDir: this.#agentDir, models: availableModels }),
+      projects: [...projects.values()].slice(0, 200), models,
+      defaultModelRef: defaultModel?.modelRef ?? null, defaultThinkingLevel: defaultModel ? "high" : null,
+      profiles, workflows: WEBUI_WORKFLOW_OPTIONS,
+      runtimeActions: WEBUI_RUNTIME_ACTIONS,
+      webSearch: inspectWebSearchCapability({ agentDir: this.#agentDir, models: availableModels }),
       projectImport: nativeProjectPickerAvailable() ? { status: "available", reasonCode: null }
         : { status: "unavailable", reasonCode: "native-project-picker-unavailable" },
       reasonCode: projects.size ? null : "no-known-project" };

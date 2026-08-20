@@ -3,7 +3,7 @@
   "id": "author-visible-evaluation-exposure-v1",
   "taxonomy": {
     "path": "evals/real-task-taxonomy.v1.json",
-    "sha256": "b3fa32c7008ce7b60de4ffebd6853da1601effae8b422f1cfa68810e4ea2150a"
+    "sha256": "d42458d04861a60488a5f98532936db71d43dcccc0298d75b09c2255f2922cb1"
   },
   "visibleSuites": [
     {
@@ -13,8 +13,8 @@
     },
     {
       "id": "capability-v1",
-      "manifestSha256": "378133ad8d10a47e580ecb62b1c0221d562d81a49c8992f3ab8caa46f5980ddc",
-      "scenarioIds": ["multi-package-rollout", "fullstack-search-contract", "concurrent-lease-lifecycle", "resumable-migration-runner"]
+      "manifestSha256": "29bb79e96b047d79056626d747baa0b3a6ca9d4da7ad80b9668c0085e5581706",
+      "scenarioIds": ["multi-package-rollout", "fullstack-search-contract", "concurrent-lease-lifecycle", "resumable-migration-runner", "durable-session-control-plane", "causal-timeline-recovery"]
     },
     {
       "id": "production-v1",

@@ -1,4 +1,5 @@
 import path from "node:path";
+import { acceptanceBoundaryProofGuidance } from "./acceptance-boundary-guidance.js";
 import { evidenceTopLevelArguments, executableRejectionAssertions } from "./acceptance-executable-evidence.js";
 
 const INTEGER_TARGET_STOPWORDS = new Set([
@@ -947,7 +948,7 @@ export function acceptanceInvalidInputEvidence(input = {}) {
 
 export function acceptanceContractProofGuidance(raw) {
   const value = normalizedText(raw);
-  const guidance = [];
+  const guidance = [...acceptanceBoundaryProofGuidance(raw)];
   if (onlyUndefinedContract(raw)) guidance.push("Prove undefined falls through while null, false, 0, and empty string are each preserved at the highest-precedence position.");
   if (/\btypeerror\b/.test(value)) guidance.push("Assert TypeError for every rejected partition named by the request; a different error class is not equivalent.");
   const integerTargets = integerConstraintTargets(raw);
@@ -958,7 +959,7 @@ export function acceptanceContractProofGuidance(raw) {
   if (/\bnon-negative\b/.test(value)) guidance.push("Exercise zero as valid and a negative value as invalid for every non-negative constraint.");
   if (/\binclusive\b|\bthrough\b|\bfrom\b[^.\n]{0,80}\bto\b/.test(value)) guidance.push("Exercise both inclusive endpoints and the nearest value outside each endpoint.");
   if (/\bround(?:ing)?\b|\bceil(?:ing)?\b|\bclamp\b/.test(value)) guidance.push("Exercise zero, exact, partial/rounding, below-minimum, and above-maximum behavior where applicable.");
-  return uniqueStrings(guidance).slice(0, 6);
+  return uniqueStrings(guidance).slice(0, 8);
 }
 
 export function acceptanceContractSemanticConflicts(obligation, taskText, sourceText) {

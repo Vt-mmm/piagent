@@ -98,6 +98,10 @@ pi install /path/to/piagent
   Inspector; projection Task Changes / Working Tree / Staged có bounded diff,
   provenance và enforce protected path; session lease bền, recovery khi restart
   hoặc owner cũ treo, doctor có repair tường minh.
+- `1.5.3`: WebUI có workflow theo từng tin nhắn thay vì khóa cả session, mặc
+  định hiển thị rõ GPT-5.6 Sol High, Project Controls typed và UI gọn sau nút
+  `+`; benchmark thêm `deep-logic-v1`, WebUI parity provider-free và hai family
+  capability cho session control/timeline recovery.
 - `1.5.2`: kéo thả và dán tài liệu vào ô chat mới. Nút kẹp giấy vốn đã đưa file
   vào session mới; kéo thả là lối vào duy nhất còn im lặng, file thả xuống bị
   mất mà không báo gì.

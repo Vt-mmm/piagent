@@ -34,6 +34,7 @@ const webUiSchemaPackageFiles = [
   "schemas/piagent-webui/capabilities-v1.schema.json",
   "schemas/piagent-webui/session-catalog-v1.schema.json",
   "schemas/piagent-webui/session-command-v1.schema.json",
+  "schemas/piagent-webui/runtime-command-v1.schema.json",
   "schemas/piagent-webui/gateway-capabilities-v1.schema.json",
   "schemas/piagent-webui/gateway-protocol-v1.schema.json",
   "schemas/task-baseline-manifest.schema.json",
@@ -102,6 +103,8 @@ const webUiGatewayPackageFiles = [
   "packages/piagent-webui/gateway/session-catalog.ts",
   "packages/piagent-webui/gateway/session-command-controller.ts",
   "packages/piagent-webui/gateway/session-command-store.ts",
+  "packages/piagent-webui/gateway/runtime-command-controller.ts",
+  "packages/piagent-webui/gateway/runtime-session-controls.ts",
   "packages/piagent-webui/gateway/session-lease-store.ts",
   "packages/piagent-webui/gateway/session-metadata-store.ts",
   "packages/piagent-webui/gateway/session-runtime-supervisor.ts",
@@ -206,6 +209,8 @@ describe("package distribution", () => {
     assert.ok(entries.includes("benchmarks/e2-framework-v1/project/vendor/hono/dist/index.js"));
     assert.ok(entries.includes("benchmarks/production-v1/suite.json"));
     assert.ok(entries.includes("benchmarks/production-v1/variant.mjs"));
+    assert.ok(entries.includes("benchmarks/deep-logic-v1/suite.json"));
+    assert.ok(entries.includes("benchmarks/deep-logic-v1/grade.mjs"));
     assert.ok(entries.includes("scripts/benchmark-runner.mjs"));
     assert.ok(entries.includes("scripts/rc-readiness-evaluation.mjs"));
     assert.ok(entries.includes("scripts/ie6-release-freeze.mjs"));

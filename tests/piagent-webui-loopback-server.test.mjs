@@ -255,6 +255,26 @@ describe("Piagent WebUI loopback server", () => {
     assert.equal(cancelled.status, 200); assert.equal(JSON.parse(cancelled.body).state, "cancelled");
   });
 
+  it("keeps typed runtime controls behind exact Origin, cookie, CSRF and body bounds", async () => {
+    const commands = [];
+    const server = await start({ executeRuntimeCommand: (command) => { commands.push(command); return { messageType: "receipt", resultCode: "completed" }; } });
+    const exchange = await request(server.origin, "/api/v1/bootstrap", { method: "POST",
+      headers: { Origin: server.origin, "Content-Type": "application/json" }, body: JSON.stringify({ capability: bootstrapValue(server.launchUrl) }) });
+    const session = JSON.parse(exchange.body), cookie = exchange.headers["set-cookie"][0].split(";", 1)[0];
+    const headers = { Cookie: cookie, Origin: server.origin, "Content-Type": "application/json", "X-Piagent-CSRF": session.csrfToken };
+    const command = { schemaVersion: 1, version: "piagent-runtime-command-v1", messageType: "command", requestId: "runtime_request_01",
+      sessionRef: "session_01", expectedSessionRevision: "session_revision_01", action: "runtime.status", argument: null, confirmed: false };
+    assert.equal((await request(server.origin, "/api/v1/runtime-commands", { method: "POST",
+      headers: { ...headers, "X-Piagent-CSRF": "wrong" }, body: JSON.stringify(command) })).status, 403);
+    assert.equal((await request(server.origin, "/api/v1/runtime-commands", { method: "POST",
+      headers: { ...headers, Origin: "http://attacker.invalid" }, body: JSON.stringify(command) })).status, 403);
+    const accepted = await request(server.origin, "/api/v1/runtime-commands", { method: "POST", headers, body: JSON.stringify(command) });
+    assert.equal(accepted.status, 200); assert.equal(JSON.parse(accepted.body).resultCode, "completed");
+    assert.deepEqual(commands, [command]);
+    assert.equal((await request(server.origin, "/api/v1/runtime-commands", { method: "POST", headers,
+      body: JSON.stringify({ padding: "x".repeat(70_000) }) })).status, 413);
+  });
+
   it("authenticates attachment staging separately and caps bytes before forwarding", async () => {
     const forwarded = [];
     const server = await start({ executeAttachment: async (command) => { forwarded.push(command); return { messageType: "stage-receipt", resultCode: "staged" }; } });

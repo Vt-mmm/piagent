@@ -159,7 +159,11 @@
       "frameworks": ["node-workspace", "react", "nextjs"],
       "lifecycles": ["fresh", "repair"],
       "risks": ["routine", "high-risk"],
-      "historicalPublicScenarios": [{ "suite": "capability-v1", "id": "fullstack-search-contract", "evidenceTier": "historical-capability" }],
+      "historicalPublicScenarios": [
+        { "suite": "capability-v1", "id": "fullstack-search-contract", "evidenceTier": "historical-capability" },
+        { "suite": "capability-v1", "id": "durable-session-control-plane", "evidenceTier": "historical-capability" },
+        { "suite": "capability-v1", "id": "causal-timeline-recovery", "evidenceTier": "historical-capability" }
+      ],
       "nextEvidenceWorkItem": "CF-FS4-02"
     },
     {

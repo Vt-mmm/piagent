@@ -17,8 +17,8 @@
     { "id": "e3-runbook", "path": "evals/private-holdout-v1/CUSTODIAN_RUNBOOK.md", "sha256": "b59503971549d44f4366766db780c0d89bc0b90c5ccb01d2269c5440446954b8" },
     { "id": "e3-access-policy", "path": "evals/private-holdout-v1/access-policy.v1.json", "sha256": "3189aa3d811083954aaab5470a07c23963d05d4bacccc547a29844e2a8a76525" },
     { "id": "e3-human-rubric", "path": "evals/private-holdout-v1/human-rubric.v1.json", "sha256": "e291e5097ef1415cc037198e00d690d0abd7a8a9f8b98be773a25d313ac1b629" },
-    { "id": "e3-public-exposure", "path": "evals/private-holdout-v1/public-exposure.v1.json", "sha256": "b91b86607d1499c13e87d577257e14f29fa347f50b1bd9eccab5e5bb64e1549d" },
-    { "id": "taxonomy", "path": "evals/real-task-taxonomy.v1.json", "sha256": "b3fa32c7008ce7b60de4ffebd6853da1601effae8b422f1cfa68810e4ea2150a" }
+    { "id": "e3-public-exposure", "path": "evals/private-holdout-v1/public-exposure.v1.json", "sha256": "b7bdf8d76f66982410f047b5138ca7b974f9b441115761a7e81817753bfa41b3" },
+    { "id": "taxonomy", "path": "evals/real-task-taxonomy.v1.json", "sha256": "d42458d04861a60488a5f98532936db71d43dcccc0298d75b09c2255f2922cb1" }
   ],
   "deterministicTests": {
     "e0": ["tests/golden-enforcement.test.mjs", "tests/benchmark-core.test.mjs"],

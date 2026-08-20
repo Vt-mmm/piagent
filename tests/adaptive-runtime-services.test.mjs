@@ -632,6 +632,25 @@ test("acceptance receipt derives critical auth and validation obligations withou
     ["Prove undefined falls through while null, false, 0, and empty string are each preserved at the highest-precedence position."]
   );
   assert.ok(acceptanceProofGuidance("Clamp an integer page and throw TypeError for invalid values.").some((item) => /page/.test(item)));
+  const transitionGuidance = acceptanceProofGuidance([
+    "Revision is a non-negative safe\ninteger. A newly admitted command increments revision exactly once.",
+    "Check an idempotency receipt before revision matching: an identical replay succeeds with a stale revision,",
+    "returns the identical state object, and reusing the same key for different content throws TypeError.",
+    "The key must contain at least one non-whitespace character."
+  ].join("\n"));
+  assert.ok(transitionGuidance.some((item) => /Number\.MAX_SAFE_INTEGER/.test(item)));
+  assert.ok(transitionGuidance.some((item) => /same identity with different content/.test(item)));
+  assert.ok(transitionGuidance.some((item) => /stale revision/.test(item)));
+  assert.ok(transitionGuidance.some((item) => /exact prior object/.test(item)));
+  assert.ok(transitionGuidance.some((item) => /whitespace-only/.test(item)));
+
+  const orderingGuidance = acceptanceProofGuidance([
+    "Report replay ids once in first-observed order.",
+    "A maxChars capacity allows equality; stop atomically before an item would exceed it, leave state unchanged, and buffer the remainder."
+  ].join(" "));
+  assert.ok(orderingGuidance.some((item) => /A, B, B, A/.test(item)));
+  assert.ok(orderingGuidance.some((item) => /exact equality/.test(item)));
+  assert.deepEqual(acceptanceProofGuidance("Return the configured display name."), []);
   const generatedGuidanceFixture = buildAcceptanceReceipt({
     summary: "Fix resolveConfig. A value is absent only when it is undefined; null remains valid.",
     expectedOutput: "Configuration precedence is correct.",

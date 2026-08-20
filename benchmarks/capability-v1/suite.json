@@ -1,19 +1,19 @@
 {
   "schemaVersion": 2,
   "id": "capability-v1",
-  "title": "Piagent Public Capability V1 · Calibrated Contract Revision",
-  "description": "Unsaturated multi-file capability tasks with explicit atomic weighted rubrics for diagnosis and hill-climbing; not a release or generalization gate. Historical runs remain identified by their pinned suite digest.",
+  "title": "Piagent Public Capability V1 · Frontier Control-Plane Revision",
+  "description": "Six unsaturated multi-file capability tasks with issue-style repository work, run-private variants, comprehensive execution tests, and explicit atomic weighted rubrics; not a release or generalization gate. Historical runs remain identified by their pinned suite digest.",
   "profile": "node-typescript",
   "defaultRepeats": 3,
   "timeoutSeconds": 1200,
   "assurance": {
-    "taskSource": "maintainer-authored-multi-component-capability-archetypes",
+    "taskSource": "maintainer-authored-multi-component-capability-archetypes-informed-by-swe-terminal-paper-re-tau-bench",
     "visibility": "public-suite-with-run-private-oracles",
     "claimTier": "capability",
     "generatedVariants": true,
     "familyDisjointSplit": false,
     "reviewed": true,
-    "refreshedAt": "2026-08-09"
+    "refreshedAt": "2026-08-20"
   },
   "releaseGate": {
     "minimumQualityScore": 8,
@@ -83,6 +83,34 @@
       "grader": "grade.mjs",
       "variantGenerator": "variant.mjs",
       "allowedChanges": ["packages/migration/src/**", "test/**"]
+    },
+    {
+      "id": "durable-session-control-plane",
+      "title": "Durable WebUI and Terminal session control plane",
+      "kind": "source-change",
+      "category": "operator-runtime",
+      "difficulty": "large",
+      "profile": "fullstack",
+      "lifecycle": "cold-start",
+      "fixture": "project",
+      "prompt": "prompts/durable-session-control-plane.md",
+      "grader": "grade.mjs",
+      "variantGenerator": "variant.mjs",
+      "allowedChanges": ["packages/session/src/**", "apps/web/src/control-view.js", "test/**"]
+    },
+    {
+      "id": "causal-timeline-recovery",
+      "title": "Causal reconnect timeline recovery and checkpoint integrity",
+      "kind": "source-change",
+      "category": "streaming",
+      "difficulty": "large",
+      "profile": "fullstack",
+      "lifecycle": "steady-state",
+      "fixture": "project",
+      "prompt": "prompts/causal-timeline-recovery.md",
+      "grader": "grade.mjs",
+      "variantGenerator": "variant.mjs",
+      "allowedChanges": ["packages/timeline/src/**", "apps/web/src/timeline-view.js", "test/**"]
     }
   ]
 }

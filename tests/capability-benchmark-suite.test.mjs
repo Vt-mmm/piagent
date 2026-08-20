@@ -52,10 +52,10 @@ test("capability-v1 is a public unsaturated multi-component suite", () => {
   assert.equal(suite.assurance.claimTier, "capability");
   assert.equal(suite.assurance.familyDisjointSplit, false);
   assert.equal(suite.releaseGate.minimumOutcomeScoreExclusive, 9.5);
-  assert.equal(suite.scenarios.length, 4);
+  assert.equal(suite.scenarios.length, 6);
   assert.equal(suite.scenarios.every((scenario) => scenario.difficulty === "large"), true);
   assert.equal(suite.scenarios.every((scenario) => scenario.allowedChanges.length >= 2), true);
-  assert.deepEqual(new Set(suite.scenarios.map((scenario) => scenario.category)), new Set(["platform", "fullstack", "reliability", "data"]));
+  assert.deepEqual(new Set(suite.scenarios.map((scenario) => scenario.category)), new Set(["platform", "fullstack", "reliability", "data", "operator-runtime", "streaming"]));
 });
 
 test("every capability grader rejects the seeded regression and accepts its reference solution", (t) => {
@@ -248,6 +248,54 @@ test("one targeted mutation per prompt clause is killed by its atomic rubric", (
       scenario: "resumable-migration-runner", clause: "M4", check: "migration-crash-resume", file: "packages/migration/src/runner.js",
       before: "    await apply(step);\n    completed.push(step.id); completedSet.add(step.id);\n    await checkpoint.write([...completed]);",
       after: "    completed.push(step.id); completedSet.add(step.id);\n    await checkpoint.write([...completed]);\n    await apply(step);"
+    },
+    {
+      scenario: "durable-session-control-plane", clause: "D1", check: "runtime-route-validation", file: "packages/session/src/runtime-route.js",
+      before: "if (!KINDS.has(input.kind))", after: "if (false && !KINDS.has(input.kind))"
+    },
+    {
+      scenario: "durable-session-control-plane", clause: "D2", check: "runtime-route-exact-contract", file: "packages/session/src/runtime-route.js",
+      before: "terminalCommand: \"/status\"", after: "terminalCommand: \"/state\""
+    },
+    {
+      scenario: "durable-session-control-plane", clause: "D3", check: "runtime-revision-validation", file: "packages/session/src/admission.js",
+      before: "input.expectedRevision !== state.revision", after: "input.expectedRevision > state.revision"
+    },
+    {
+      scenario: "durable-session-control-plane", clause: "D4", check: "runtime-digest-canonical", file: "packages/session/src/admission.js",
+      before: "Object.keys(value).sort()", after: "Object.keys(value)"
+    },
+    {
+      scenario: "durable-session-control-plane", clause: "D5", check: "runtime-receipt-shape", file: "packages/session/src/admission.js",
+      before: "const revisionAfter = state.revision + 1;", after: "const revisionAfter = state.revision + 2;"
+    },
+    {
+      scenario: "durable-session-control-plane", clause: "D6", check: "runtime-control-summary", file: "apps/web/src/control-view.js",
+      before: "`kind=${receipt.kind};", after: "`type=${receipt.kind};"
+    },
+    {
+      scenario: "causal-timeline-recovery", clause: "C1", check: "timeline-snapshot-validation", file: "packages/timeline/src/project.js",
+      before: "integer(snapshot.cursor, 0, \"snapshot cursor\")", after: "integer(snapshot.cursor, -1, \"snapshot cursor\")"
+    },
+    {
+      scenario: "causal-timeline-recovery", clause: "C2", check: "timeline-replay-and-conflicts", file: "packages/timeline/src/project.js",
+      before: "if (uniqueById.get(event.id).digest !== digest)", after: "if (false && uniqueById.get(event.id).digest !== digest)"
+    },
+    {
+      scenario: "causal-timeline-recovery", clause: "C3", check: "timeline-contiguous-gap", file: "packages/timeline/src/project.js",
+      before: "if (event.cursor !== expected)", after: "if (event.cursor < expected)"
+    },
+    {
+      scenario: "causal-timeline-recovery", clause: "C4", check: "timeline-budget-boundary", file: "packages/timeline/src/project.js",
+      before: "if (neededChars > maxChars)", after: "if (neededChars >= maxChars)"
+    },
+    {
+      scenario: "causal-timeline-recovery", clause: "C5", check: "timeline-checkpoint-tamper", file: "packages/timeline/src/checkpoint.js",
+      before: "value.checksum !== checksum(value.payload)", after: "false && value.checksum !== checksum(value.payload)"
+    },
+    {
+      scenario: "causal-timeline-recovery", clause: "C6", check: "timeline-render-exact", file: "apps/web/src/timeline-view.js",
+      before: ".replaceAll(\"<\", \"&lt;\")", after: ".replaceAll(\"<\", \"<\")"
     }
   ];
   const expectedClauses = new Set(Object.values(rubric.scenarios).flatMap((items) => items.map((item) => item.clause)));

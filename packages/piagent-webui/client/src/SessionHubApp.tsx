@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import AddRounded from "@mui/icons-material/AddRounded";
+import AccountTreeRounded from "@mui/icons-material/AccountTreeRounded";
 import AttachFileRounded from "@mui/icons-material/AttachFileRounded";
 import ArchiveRounded from "@mui/icons-material/ArchiveRounded";
 import CancelRounded from "@mui/icons-material/CancelRounded";
@@ -18,6 +19,7 @@ import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
 import CircularProgress from "@mui/material/CircularProgress";
+import Collapse from "@mui/material/Collapse";
 import Divider from "@mui/material/Divider";
 import Dialog from "@mui/material/Dialog";
 import Drawer from "@mui/material/Drawer";
@@ -28,6 +30,7 @@ import ListItemButton from "@mui/material/ListItemButton";
 import ListItemText from "@mui/material/ListItemText";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
+import Select from "@mui/material/Select";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Toolbar from "@mui/material/Toolbar";
@@ -36,7 +39,7 @@ import Typography from "@mui/material/Typography";
 
 import type { PiagentWebUICanonicalSnapshotV1 } from "../../contracts/generated/snapshot-v1.ts";
 import type { Catalog, SessionRow } from "../../contracts/generated/session-catalog-v1.ts";
-import type { Receipt } from "../../contracts/generated/session-command-v1.ts";
+import type { PermissionMode, Receipt, Workflow } from "../../contracts/generated/session-command-v1.ts";
 import type { PiagentGatewayCapabilityHandshakeV1 } from "../../contracts/generated/gateway-capabilities-v1.ts";
 import { readSessionConnections, readSessionInspectionSnapshot, stageSessionAttachment, type SessionConnections } from "./api.ts";
 import type { Attachment } from "../../contracts/generated/attachment-v1.ts";
@@ -102,10 +105,12 @@ function StateChip({ session, locale }: { session: SessionRow; locale: UiLocale 
 
 function Conversation({ session, snapshot, locale, live, canSend, send, abort, onInspector }: { session: SessionRow;
   snapshot?: PiagentWebUICanonicalSnapshotV1; locale: UiLocale; live?: LiveConversation; canSend: boolean;
-  send(message: string, attachment?: { messageRequestId: string; attachmentRefs: string[]; attachments?: Attachment[] }): Promise<unknown>;
+  send(message: string, attachment?: { messageRequestId: string; attachmentRefs: string[]; attachments?: Attachment[]; workflow?: Workflow }): Promise<unknown>;
   abort(): Promise<unknown>; onInspector(value: SessionWorkspaceId): void }) {
   const [draft, setDraft] = useState(""), [submitting, setSubmitting] = useState(false), [connections, setConnections] = useState<SessionConnections>();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [workflow, setWorkflow] = useState<Workflow | "continue">("continue");
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [messageRequestId, setMessageRequestId] = useState(() => `message-request.${crypto.randomUUID()}`);
   const [uploading, setUploading] = useState(false), [attachError, setAttachError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -113,7 +118,7 @@ function Conversation({ session, snapshot, locale, live, canSend, send, abort, o
   // boolean set on leave clears the highlight while the file is still over the
   // composer. Counting entries against leaves tracks the region as a whole.
   const dragDepth = useRef(0);
-  useEffect(() => { setDraft(""); setAttachments([]); setAttachError(null); setMessageRequestId(`message-request.${crypto.randomUUID()}`); }, [session.sessionRef]);
+  useEffect(() => { setDraft(""); setWorkflow("continue"); setAdvancedOpen(false); setAttachments([]); setAttachError(null); setMessageRequestId(`message-request.${crypto.randomUUID()}`); }, [session.sessionRef]);
 
   // A file dropped anywhere the composer does not cover is navigated to by the
   // browser, which replaces the running session with the file.
@@ -161,10 +166,11 @@ function Conversation({ session, snapshot, locale, live, canSend, send, abort, o
     setSubmitting(true); setDraft("");
     const staged = attachments.map((item) => item.attachmentRef);
     try {
-      await send(message, staged.length > 0 ? { messageRequestId, attachmentRefs: staged, attachments } : undefined);
+      await send(message, staged.length > 0 || workflow !== "continue"
+        ? { messageRequestId, attachmentRefs: staged, attachments, ...(workflow === "continue" ? {} : { workflow }) } : undefined);
       // Refs are one-shot: the dispatch consumed them, so the next message starts
       // from a fresh request id rather than reusing refs that no longer exist.
-      setAttachments([]); setAttachError(null); setMessageRequestId(`message-request.${crypto.randomUUID()}`);
+      setWorkflow("continue"); setAttachments([]); setAttachError(null); setMessageRequestId(`message-request.${crypto.randomUUID()}`);
     } catch { /* bounded live error is rendered below */ }
     finally { setSubmitting(false); }
   };
@@ -199,8 +205,6 @@ function Conversation({ session, snapshot, locale, live, canSend, send, abort, o
           {canAttach && <Typography variant="caption" color="text.secondary">
             {localize(locale, ".md .txt .csv .json .yaml .docx .pdf và ảnh", ".md .txt .csv .json .yaml .docx .pdf and images")}</Typography>}
         </Box>}
-        <SessionComposerControls session={session} snapshot={snapshot} connections={connections} locale={locale} onOpenChanges={() => onInspector("source")}
-          onConnectionsChanged={refreshConnections} />
         {attachments.length > 0 && <Stack direction="row" sx={{ flexWrap: "wrap", gap: .75, px: .5, pb: .75 }}
           aria-label={localize(locale, "File sẽ gửi cùng tin nhắn", "Files to send with the message")}>
           {attachments.map((item) => <Chip key={item.attachmentRef} size="small" variant="outlined"
@@ -219,17 +223,50 @@ function Conversation({ session, snapshot, locale, live, canSend, send, abort, o
             if (canAttach) void takeFiles(event.clipboardData.files);
           }}
           placeholder={localize(locale, "Nhắn cho Piagent…", "Message Piagent…")} variant="standard" slotProps={{ input: { disableUnderline: true } }} />
+        <Collapse in={advancedOpen} id="piagent-message-options">
+          <Box sx={{ mt: .65, p: .85, borderRadius: 2, bgcolor: "action.hover" }}>
+            <SessionComposerControls session={session} snapshot={snapshot} connections={connections} locale={locale}
+              onOpenChanges={() => onInspector("source")} onConnectionsChanged={refreshConnections} />
+            <Stack direction="row" sx={{ minWidth: 0, alignItems: "center", gap: .75, flexWrap: "wrap" }}>
+              <Select size="small" value={workflow} disabled={!canSend || submitting}
+                onChange={(event) => setWorkflow(event.target.value as Workflow | "continue")}
+                aria-label={localize(locale, "Workflow cho tin nhắn này", "Workflow for this message")}
+                startAdornment={<AccountTreeRounded sx={{ mr: .75, fontSize: 18 }} />}
+                sx={{ minWidth: { xs: 150, sm: 190 }, height: 34, fontSize: 12.5 }}>
+                <MenuItem value="continue">{localize(locale, "Tự do · không workflow", "Freeform · no workflow")}</MenuItem>
+                <MenuItem value="task">Task</MenuItem><MenuItem value="scout">Scout</MenuItem><MenuItem value="be-to-fe">BE → FE</MenuItem>
+                <MenuItem value="discuss">Discuss</MenuItem><MenuItem value="plan">Plan</MenuItem><MenuItem value="review">Review</MenuItem>
+                <MenuItem value="commit">Commit</MenuItem><MenuItem value="pr">PR</MenuItem><MenuItem value="onboard">Onboard</MenuItem>
+                <MenuItem value="platform-improve">Platform improve</MenuItem>
+              </Select>
+              {attachmentsCapability?.status === "available" && <Tooltip title={localize(locale,
+                "Chọn file, hoặc kéo thả / dán thẳng vào khung chat", "Pick a file, or drag and drop / paste straight into the chat")}>
+                <Button component="label" size="small" color="inherit" startIcon={<AttachFileRounded />} disabled={!canAttach}
+                  aria-label={`${localize(locale, "Đính kèm", "Attach")} (${attachments.length}/${MAX_ATTACHMENTS})`}>
+                  {localize(locale, "Đính kèm", "Attach")}
+                  <input type="file" multiple hidden disabled={!canAttach} accept={acceptTypes || undefined}
+                    onChange={(event) => { void takeFiles(event.target.files); event.currentTarget.value = ""; }} />
+                </Button></Tooltip>}
+            </Stack>
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .65 }}>
+              {localize(locale,
+                "Workflow chỉ áp dụng cho tin nhắn này và tự trở về Tự do sau khi gửi. Anh có thể đổi sang việc khác ngay trong cùng session.",
+                "A workflow applies only to this message and resets to Freeform after send. You can switch to different work in the same session.")}
+            </Typography>
+          </Box>
+        </Collapse>
         <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mt: .5, gap: 1 }}>
           <Stack direction="row" sx={{ minWidth: 0, alignItems: "center", gap: 1 }}>
-            {attachmentsCapability?.status === "available" && <Tooltip title={localize(locale,
-              "Chọn file, hoặc kéo thả / dán thẳng vào khung chat", "Pick a file, or drag and drop / paste straight into the chat")}>
-              <IconButton component="label" size="small" disabled={!canAttach}
-                aria-label={`${localize(locale, "Đính kèm", "Attach")} (${attachments.length}/${MAX_ATTACHMENTS})`}>
-                <AttachFileRounded fontSize="small" />
-                <input type="file" multiple hidden disabled={!canAttach} accept={acceptTypes || undefined}
-                  onChange={(event) => { void takeFiles(event.target.files); event.currentTarget.value = ""; }} />
-              </IconButton></Tooltip>}
-            <Typography variant="caption" color={attachError ? "error" : "text.disabled"} noWrap>
+            <Tooltip title={advancedOpen ? localize(locale, "Ẩn tùy chọn", "Hide options") : localize(locale, "Workflow, file và công cụ", "Workflow, files and tools")}>
+              <IconButton size="small" aria-label={advancedOpen ? localize(locale, "Ẩn tùy chọn", "Hide options") : localize(locale, "Thêm tùy chọn", "More options")}
+                aria-expanded={advancedOpen} aria-controls="piagent-message-options" onClick={() => setAdvancedOpen((value) => !value)}
+                sx={{ bgcolor: advancedOpen ? "action.selected" : "transparent" }}>
+                <AddRounded fontSize="small" sx={{ transition: "transform .16s ease", transform: advancedOpen ? "rotate(45deg)" : "none" }} />
+              </IconButton>
+            </Tooltip>
+            {workflow !== "continue" && <Chip size="small" variant="outlined" icon={<AccountTreeRounded />}
+              label={`${workflow.toUpperCase()} · ${localize(locale, "tin nhắn này", "this message")}`} />}
+            <Typography variant="caption" color={attachError ? "error" : "text.disabled"} noWrap sx={{ display: { xs: attachError || uploading ? "block" : "none", sm: "block" } }}>
               {attachError ?? (uploading ? localize(locale, "Đang đọc tài liệu…", "Reading documents…")
                 : canSend ? localize(locale, "Enter để gửi · Shift+Enter xuống dòng", "Enter to send · Shift+Enter for a new line")
                   : localize(locale, "Session hiện chỉ đọc", "Session is currently read only"))}</Typography>
@@ -258,8 +295,9 @@ export function SessionHubApp({ catalog, capabilities, connection, live, refresh
   rename, pin, archive, unarchive, fork }: { catalog?: Catalog;
   capabilities?: PiagentGatewayCapabilityHandshakeV1; connection: ConnectionState; live: Readonly<Record<string, LiveConversation>>;
   refresh(): Promise<Catalog | undefined>; create(value: { projectRef: string; placeRef: string; modelRef: string | null;
-    thinkingLevel: string; message: string; messageRequestId?: string; deferInitialMessage?: boolean }): Promise<Receipt>;
-  send(session: SessionRow, message: string, attachment?: { messageRequestId: string; attachmentRefs: string[]; attachments?: Attachment[] }): Promise<unknown>;
+    thinkingLevel: string; workflow: Workflow; permissionMode: PermissionMode | null; message: string; messageRequestId?: string; deferInitialMessage?: boolean }): Promise<Receipt>;
+  send(session: SessionRow, message: string, attachment?: { messageRequestId: string; attachmentRefs: string[]; attachments?: Attachment[];
+    workflow?: Workflow }): Promise<unknown>;
   abort(session: SessionRow): Promise<unknown>;
     setModel(session: SessionRow, modelRef: string): Promise<unknown>; setThinking(session: SessionRow, thinkingLevel: string): Promise<unknown>;
     setPermission(session: SessionRow, permissionMode: "read-only" | "workspace-write" | "trusted-full-access"): Promise<unknown>;
@@ -313,13 +351,14 @@ export function SessionHubApp({ catalog, capabilities, connection, live, refresh
   }, [selected?.sessionRef, selected?.sessionRevision]);
   const canCreate = connection === "connected" && capabilities?.capabilities.sessionActions.create.status === "available";
   const createNewSession = async (value: { projectRef: string; placeRef: string; modelRef: string | null;
-    thinkingLevel: string; message: string; files: readonly File[] }) => {
+    thinkingLevel: string; workflow: Workflow; permissionMode: PermissionMode | null; message: string; files: readonly File[] }) => {
     setCreatingSession(true); setCreateError(null);
     let createdSessionRef: string | null = null;
     try {
       const messageRequestId = `message-request.${crypto.randomUUID()}`, withFiles = value.files.length > 0;
       const receipt = await create({ projectRef: value.projectRef, placeRef: value.placeRef, modelRef: value.modelRef,
-        thinkingLevel: value.thinkingLevel, message: value.message, messageRequestId, deferInitialMessage: withFiles });
+        thinkingLevel: value.thinkingLevel, workflow: value.workflow, permissionMode: value.permissionMode,
+        message: value.message, messageRequestId, deferInitialMessage: withFiles });
       createdSessionRef = receipt.sessionRef;
       if (!createdSessionRef) throw new Error("session-create-result-invalid");
       if (withFiles) {
@@ -339,7 +378,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, refresh
           throw new Error(staged.status ?? "session-attachment-incomplete");
         }
         await send(session, value.message, { messageRequestId, attachmentRefs: staged.attachments.map((item) => item.attachmentRef),
-          attachments: staged.attachments });
+          attachments: staged.attachments, workflow: value.workflow });
       }
       setSelectedRef(createdSessionRef); setView("chat");
     } catch (cause) {
@@ -451,7 +490,8 @@ export function SessionHubApp({ catalog, capabilities, connection, live, refresh
         snapshot={inspection} capabilities={capabilities} connection={connection}
         onSetModel={selected ? (modelRef) => setModel(selected, modelRef) : undefined}
         onSetThinking={selected ? (value) => setThinking(selected, value) : undefined}
-        onSetPermission={selected ? (value) => setPermission(selected, value) : undefined} />
+        onSetPermission={selected ? (value) => setPermission(selected, value) : undefined}
+        onRuntimeChanged={async () => { await refresh(); await refreshInspection(); }} />
     </Dialog>
     <Dialog open={Boolean(sessionAction)} onClose={() => !actionBusy && setSessionAction(null)} fullWidth maxWidth="xs">
       <Stack spacing={2} sx={{ p: 3 }}><Typography variant="h2">{sessionAction?.kind === "rename"

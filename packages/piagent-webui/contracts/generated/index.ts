@@ -22,5 +22,6 @@ export type * as ApprovalV1 from "./approval-v1.ts";
 export type * as CapabilitiesV1 from "./capabilities-v1.ts";
 export type * as SessionCatalogV1 from "./session-catalog-v1.ts";
 export type * as SessionCommandV1 from "./session-command-v1.ts";
+export type * as RuntimeCommandV1 from "./runtime-command-v1.ts";
 export type * as GatewayCapabilitiesV1 from "./gateway-capabilities-v1.ts";
 export type * as GatewayProtocolV1 from "./gateway-protocol-v1.ts";

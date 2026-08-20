@@ -114,6 +114,12 @@ Removal targets what is registered in Pi's settings rather than what the current
   reports category/lifecycle/profile bands and 95% token-ratio confidence, and
   reads exact JSONL usage plus privacy-safe tool histograms. Production runs
   retry only zero-usage startup failures and disclose every retry separately.
+- `deep-logic-v1` adds six large, generated-variant families for interacting
+  state, orchestration, policy, context-graph, stream-recovery, and
+  transactional-config invariants. It keeps the current Pi model by default
+  and uses two repeats (24 paired sessions). A separate provider-free WebUI
+  parity gate proves the 10 workflow and 32 runtime-control paths before any
+  model quota is used.
 - The v1.2.12 production snapshot resolved 54/54 Piagent tasks, scored 10.00 for
   quality/safety/reliability, 9.58 for workflow, 10.00 for efficiency, and 9.92
   overall. Against controlled `codex-cli` on the same `gpt-5.6-sol`/`xhigh`
@@ -296,7 +302,7 @@ One command runs the full local gate — typecheck, tests, capability catalog, d
 npm run verify
 ```
 
-Individual checks and the contributor flow are in [CONTRIBUTING.md](CONTRIBUTING.md). Token and session follow-up is `/usage` inside Pi; see [Usage observability](docs/usage-observability.md). Preview the smoke benchmark with `piagent-benchmark --dry-run`; preview the 108-session production gate with `piagent-benchmark --production --dry-run`. Compare against `codex-cli` with `--surfaces piagent,codex-cli --model <provider/model> --thinking high`; scoring, isolation, confidence, and quota details are in the [Quality benchmark guide](docs/quality-benchmark.md).
+Individual checks and the contributor flow are in [CONTRIBUTING.md](CONTRIBUTING.md). Token and session follow-up is `/usage` inside Pi; see [Usage observability](docs/usage-observability.md). Run the zero-provider WebUI/Terminal gate with `npm run benchmark:webui-parity`; preview the deeper Piagent/`codex-cli` Luna-medium suite with `npm run benchmark:deep -- --dry-run`. Preview the smoke benchmark with `piagent-benchmark --dry-run`; preview the 108-session production gate with `piagent-benchmark --production --dry-run`. Scoring, isolation, confidence, and quota details are in the [Quality benchmark guide](docs/quality-benchmark.md).
 
 ## Public safety
 
@@ -353,7 +359,7 @@ This repository intentionally excludes:
 
 ## Maturity
 
-The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.5.0` or a reviewed commit.
+The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.5.3` or a reviewed commit.
 
 Ready for:
 

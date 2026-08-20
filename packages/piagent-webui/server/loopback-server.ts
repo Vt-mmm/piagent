@@ -61,6 +61,7 @@ export async function startLoopbackServer(options: {
   executeSessionAttachment?: (sessionRef: string, command: unknown) => unknown | Promise<unknown>;
   readSessionConnections?: (sessionRef: string) => unknown | Promise<unknown>;
   executeSessionConnection?: (command: unknown) => unknown | Promise<unknown>;
+  executeRuntimeCommand?: (command: unknown) => unknown | Promise<unknown>;
   readMcpAuthJob?: (jobRef: string) => unknown | Promise<unknown>;
   cancelMcpAuthJob?: (jobRef: string) => unknown | Promise<unknown>;
   readProviderAuthCatalog?: () => unknown | Promise<unknown>;
@@ -202,6 +203,22 @@ export async function startLoopbackServer(options: {
       catch (error) {
         const code = error instanceof Error ? error.message : "session-connection-unavailable";
         return errorResponse(response, code.includes("not-found") ? 404 : code.includes("invalid") ? 400 : code.includes("supported") ? 409 : 503, code);
+      }
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/v1/runtime-commands" && options.executeRuntimeCommand) {
+      if (requestOrigin !== origin) return errorResponse(response, 403, "origin-required");
+      const mutationSession = auth.authorizeMutation(request);
+      if (!mutationSession) return errorResponse(response, 403, "mutation-authority-rejected");
+      if (!consumeControl(mutationSession.id, now)) return errorResponse(response, 429, "control-rate-limit");
+      if (!String(request.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) return errorResponse(response, 415, "content-type");
+      let command: unknown;
+      try { command = JSON.parse((await requestBody(request, MAX_CONTROL_BODY_BYTES)).toString("utf8")); }
+      catch (error) { return errorResponse(response, (error as Error).message === "body-limit" ? 413 : 400, "invalid-runtime-command"); }
+      try { return jsonResponse(response, 200, await options.executeRuntimeCommand(command)); }
+      catch (error) {
+        const code = error instanceof Error ? error.message : "runtime-command-unavailable";
+        return errorResponse(response, code.includes("invalid") ? 400 : 503, code);
       }
     }
 

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { PiagentGatewayCapabilityHandshakeV1 } from "../../contracts/generated/gateway-capabilities-v1.ts";
 import type { Attachment } from "../../contracts/generated/attachment-v1.ts";
 import type { Catalog, SessionRow } from "../../contracts/generated/session-catalog-v1.ts";
-import type { Receipt } from "../../contracts/generated/session-command-v1.ts";
+import type { PermissionMode, Receipt, Workflow } from "../../contracts/generated/session-command-v1.ts";
 import { readSessionCatalog } from "./api.ts";
 import { bootstrapBrowserSession } from "./bootstrap.ts";
 import type { ConnectionState } from "./use-inspection.ts";
@@ -26,8 +26,9 @@ export function useSessionHub(): {
   live: Readonly<Record<string, LiveConversation>>;
   refresh(): Promise<Catalog | undefined>;
   create(options: { projectRef: string; placeRef: string; modelRef: string | null; thinkingLevel: string; message: string;
-    messageRequestId?: string; deferInitialMessage?: boolean }): Promise<Receipt>;
-  send(session: SessionRow, message: string, attachment?: { messageRequestId: string; attachmentRefs: string[]; attachments?: Attachment[] }): Promise<Receipt>;
+    workflow: Workflow; permissionMode: PermissionMode | null; messageRequestId?: string; deferInitialMessage?: boolean }): Promise<Receipt>;
+  send(session: SessionRow, message: string, attachment?: { messageRequestId: string; attachmentRefs: string[]; attachments?: Attachment[];
+    workflow?: Workflow }): Promise<Receipt>;
   abort(session: SessionRow): Promise<Receipt>;
   setModel(session: SessionRow, modelRef: string): Promise<Receipt>;
   setThinking(session: SessionRow, thinkingLevel: string): Promise<Receipt>;
@@ -68,7 +69,7 @@ export function useSessionHub(): {
   }, []);
 
   const create = useCallback(async (options: { projectRef: string; placeRef: string; modelRef: string | null;
-    thinkingLevel: string; message: string; messageRequestId?: string; deferInitialMessage?: boolean }) => {
+    thinkingLevel: string; workflow: Workflow; permissionMode: PermissionMode | null; message: string; messageRequestId?: string; deferInitialMessage?: boolean }) => {
     const current = catalogRef.current, message = options.message.trim(), messageRequestId = options.messageRequestId ?? opaque("message");
     if (!current?.catalogRevision) throw new Error("catalog-unavailable");
     if (!message) throw new Error("message-empty");
@@ -80,7 +81,9 @@ export function useSessionHub(): {
         expiresAt: new Date(now.getTime() + 5 * 60_000).toISOString(), sessionRef: null,
         expectedCatalogRevision: snapshot.catalogRevision, expectedSessionRevision: null,
         payload: { projectRef: options.projectRef, placeRef: options.placeRef, modelRef: options.modelRef,
-          thinkingLevel: options.thinkingLevel, message, messageRequestId, ...(options.deferInitialMessage ? { deferInitialMessage: true } : {}) } });
+          thinkingLevel: options.thinkingLevel, workflow: options.workflow, message, messageRequestId,
+          ...(options.permissionMode ? { permissionMode: options.permissionMode } : {}),
+          ...(options.deferInitialMessage ? { deferInitialMessage: true } : {}) } });
     };
     let receipt = await submit(current);
     if (revisionStale(receipt)) {
@@ -97,7 +100,7 @@ export function useSessionHub(): {
   // because the bytes were staged against that exact id before the message
   // existed. Without attachments a fresh id per send is still correct.
   const send = useCallback(async (session: SessionRow, message: string,
-    attachment?: { messageRequestId: string; attachmentRefs: string[]; attachments?: Attachment[] }) => {
+    attachment?: { messageRequestId: string; attachmentRefs: string[]; attachments?: Attachment[]; workflow?: Workflow }) => {
     const current = catalogRef.current;
     if (!current?.catalogRevision) throw new Error("catalog-unavailable");
     const text = message.trim(); if (!text) throw new Error("message-empty");
@@ -114,7 +117,8 @@ export function useSessionHub(): {
           commandId: opaque("command"), idempotencyKey: opaque("idempotency"), action: "session.send", requestedAt: now.toISOString(),
           expiresAt: new Date(now.getTime() + 5 * 60_000).toISOString(), sessionRef: session.sessionRef,
           expectedCatalogRevision: snapshot.catalogRevision, expectedSessionRevision: exact.sessionRevision,
-          payload: { delivery: "new-operation", message: text, messageRequestId, expectedOperationRef: null, attachmentRefs } });
+          payload: { delivery: "new-operation", message: text, messageRequestId, expectedOperationRef: null, attachmentRefs,
+            ...(attachment?.workflow ? { workflow: attachment.workflow } : {}) } });
       };
       let receipt = await submit(current);
       if (revisionStale(receipt)) {

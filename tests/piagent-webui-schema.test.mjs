@@ -18,7 +18,8 @@ const authorityContracts = [
   "attachment-v1",
   "control-command-v1",
   "approval-v1",
-  "session-command-v1"
+  "session-command-v1",
+  "runtime-command-v1"
 ];
 const primaryContracts = [
   "snapshot-v1",
@@ -45,6 +46,7 @@ const primaryContracts = [
   "capabilities-v1",
   "session-catalog-v1",
   "session-command-v1",
+  "runtime-command-v1",
   "gateway-capabilities-v1",
   "gateway-protocol-v1"
 ];
@@ -170,6 +172,7 @@ describe("Piagent WebUI wire schemas", () => {
       const variants = name === "control-command-v1" ? [schema.$defs.command, schema.$defs.receipt]
         : name === "attachment-v1" ? [schema.$defs.stageCommand, schema.$defs.discardCommand, schema.$defs.stageReceipt, schema.$defs.discardReceipt]
           : name === "session-command-v1" ? [schema.$defs.baseCommandProperties, schema.$defs.receipt]
+            : name === "runtime-command-v1" ? [schema.$defs.command, schema.$defs.receipt]
             : [schema.$defs.approvalRequest, schema.$defs.approvalDecision, schema.$defs.approvalReceipt];
       variants.forEach((variant) => assert.equal(variant.additionalProperties, false));
     }

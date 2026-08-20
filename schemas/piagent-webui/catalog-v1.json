@@ -228,6 +228,15 @@
       "current": true
     },
     {
+      "name": "runtime-command-v1",
+      "file": "runtime-command-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/runtime-command-v1.schema.json",
+      "documentVersion": 1,
+      "role": "command",
+      "supported": true,
+      "current": true
+    },
+    {
       "name": "gateway-capabilities-v1",
       "file": "gateway-capabilities-v1.schema.json",
       "id": "https://piagent.io.vn/schemas/piagent-webui/gateway-capabilities-v1.schema.json",

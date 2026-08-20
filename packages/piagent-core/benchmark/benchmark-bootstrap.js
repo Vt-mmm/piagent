@@ -15,7 +15,7 @@ import {
 import { benchmarkTreeIdentity } from "./benchmark-tree-identity.js";
 import { benchmarkGitEnvironment, benchmarkHostEnvironment } from "./benchmark-runtime.js";
 
-const builtInSuites = new Set(["core-v1", "capability-v1", "e2-framework-v1", "production-v1"]);
+const builtInSuites = new Set(["core-v1", "capability-v1", "e2-framework-v1", "deep-logic-v1", "production-v1"]);
 const metadataVariable = "PIAGENT_BENCHMARK_BOOTSTRAP_METADATA";
 
 function fail(message) {
@@ -42,7 +42,7 @@ function jsonFile(file, label) {
   catch (error) { fail(`Cannot read ${label} ${file}: ${error.message}`); }
 }
 
-function requestedSuite(argv, cwd, replaySnapshot) {
+export function requestedSuite(argv, cwd, replaySnapshot) {
   const resume = optionValue(argv, "--resume");
   if (resume) {
     const manifestPath = path.join(runRootFromResume(resume, cwd), "run-manifest.json");
@@ -56,6 +56,7 @@ function requestedSuite(argv, cwd, replaySnapshot) {
     return replaySnapshot?.manifest?.suite?.source ?? report?.suite?.source ?? report?.suite?.manifestPath ?? report?.suite?.id ?? "production-v1";
   }
   if (argv.includes("--production")) return "production-v1";
+  if (argv.includes("--deep")) return "deep-logic-v1";
   if (argv.includes("--capability")) return "capability-v1";
   return optionValue(argv, "--suite") ?? "core-v1";
 }

@@ -28,8 +28,8 @@
     "expiresAt": "2099-09-11T00:00:00.000Z"
   },
   "disjointness": {
-    "taxonomyDigest": "b3fa32c7008ce7b60de4ffebd6853da1601effae8b422f1cfa68810e4ea2150a",
-    "publicExposureDigest": "b91b86607d1499c13e87d577257e14f29fa347f50b1bd9eccab5e5bb64e1549d",
+    "taxonomyDigest": "d42458d04861a60488a5f98532936db71d43dcccc0298d75b09c2255f2922cb1",
+    "publicExposureDigest": "b7bdf8d76f66982410f047b5138ca7b974f9b441115761a7e81817753bfa41b3",
     "reportDigest": "5555555555555555555555555555555555555555555555555555555555555555",
     "familyDisjoint": true,
     "repositoryDisjoint": false,

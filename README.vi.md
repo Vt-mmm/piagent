@@ -66,6 +66,14 @@ trực tiếp vẫn nằm trong workspace của project thay vì bị nhét vào
 tiếp tục áp protected path, redaction, session binding và attachment ref dùng một
 lần.
 
+Session Hub cũng đưa các workflow Terminal lên UI: task, scout, BE → FE,
+discuss, plan, review, commit, PR, onboard và platform-improve. Màn hình New chat
+hiển thị preflight workflow/change mode/quyền trước khi gửi. Trong **Cài đặt →
+Điều khiển project**, operator có thể xem runtime/usage, onboarding/profile,
+Context Engine, memory và MCP governance mà không cần nhớ slash command. WebUI
+gửi đúng command vào Pi runtime; thao tác read-only được kiểm tra là 0 model
+token, còn thao tác ghi hoặc semantic compact bắt buộc xác nhận rõ ràng.
+
 ## Command chính
 
 | Command | Mục đích |
@@ -140,9 +148,23 @@ Chỉ `--execute --yes` mới mở provider-backed Pi process; `/model`/CLI pin 
 npm run verify
 ```
 
+Gate riêng cho parity WebUI/Terminal (không gọi provider) và suite logic sâu dùng
+baseline Luna/medium so với `codex-cli`:
+
+```bash
+npm run benchmark:webui-parity
+npm run benchmark:deep -- --dry-run
+npm run benchmark:deep
+```
+
+`deep-logic-v1` có 6 scenario difficulty `large`, 2 repeat và 2 surface (24
+model session), phủ event reconciliation, fair dependency scheduling, layered
+policy, graph-aware context, resumable stream và transactional config. `--dry-run`
+chỉ validate kế hoạch, không dùng quota.
+
 Gate này chạy architecture check, test, typecheck, capability validation, runtime smoke và docs consistency trước khi release.
 
-Bản phát hành hiện tại là `v1.5.0`. Với team hoặc production, hãy pin tag này
+Bản phát hành hiện tại là `v1.5.3`. Với team hoặc production, hãy pin tag này
 hoặc một commit đã review thay vì dựa vào nguồn package không cố định.
 
 ## Security

@@ -970,6 +970,23 @@ describe("runtime session modules", () => {
     });
     assert.equal(graphPlan.requiresReview, true);
 
+    const statefulPlan = analyzePerformanceAssurance({
+      request: [
+        "Revision is a non-negative safe integer and each fresh command increments it exactly once.",
+        "An idempotent replay is checked before revision matching and accepts a stale revision.",
+        "Report replay ids once in first-observed order."
+      ].join(" "),
+      changeMode: "source-change"
+    });
+    assert.equal(statefulPlan.tier, "rigorous");
+    assert.equal(statefulPlan.requiresReview, true);
+    assert.ok(statefulPlan.reasonCodes.includes("boundary-contract"));
+    assert.ok(statefulPlan.reasonCodes.includes("graph-order-contract"));
+    assert.ok(statefulPlan.reasonCodes.includes("concurrency-contract"));
+    assert.ok(statefulPlan.reviewChecks.some((item) => /Number\.MAX_SAFE_INTEGER/.test(item)));
+    assert.ok(statefulPlan.reviewChecks.some((item) => /A, B, B, A/.test(item)));
+    assert.ok(statefulPlan.reviewChecks.some((item) => /stale revision/.test(item)));
+
     const guidance = performanceReviewGuidance({
       summary: "Fix dependency order, preserve stable input order, reject cycles, and do not mutate input.",
       expectedOutput: "Return the existing public representation.",

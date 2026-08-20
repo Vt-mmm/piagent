@@ -43,6 +43,17 @@ if (scenarioId === "multi-package-rollout") {
   oracle.graderData = {
     ids: [token("prepare"), token("transform"), token("finalize")]
   };
+} else if (scenarioId === "durable-session-control-plane") {
+  oracle.graderData = {
+    idempotencyKey: token("command"),
+    objective: `${token("inspect")} production   incident`
+  };
+} else if (scenarioId === "causal-timeline-recovery") {
+  oracle.graderData = {
+    messageA: token("message"), messageB: token("message"),
+    eventA: token("event"), eventB: token("event"), eventC: token("event"),
+    first: token("first"), second: token("second"), maxChars: integer(24, 48)
+  };
 } else throw new Error(`unsupported capability scenario ${scenarioId}`);
 
 fs.writeFileSync(oraclePath, `${JSON.stringify(oracle)}\n`, { mode: 0o600 });

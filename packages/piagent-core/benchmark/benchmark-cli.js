@@ -16,7 +16,8 @@ With no options it uses the built-in core-v1 suite, the current Pi default
 model/thinking setting, and the suite's repeat count.
 
 Options:
-  --suite <id|path>            core-v1, capability-v1, e2-framework-v1, production-v1, or suite.json path.
+  --suite <id|path>            core-v1, capability-v1, e2-framework-v1, deep-logic-v1, production-v1, or suite.json path.
+  --deep                       Alias for --suite deep-logic-v1 (6 large scenarios, current model by default).
   --capability                 Alias for --suite capability-v1.
   --production                 Alias for --suite production-v1.
   --surfaces <a,b>             raw-pi,piagent (default) or piagent,codex-cli.
@@ -109,6 +110,9 @@ export function parseBenchmarkArgs(argv) {
         break;
       case "--production":
         options.suite = "production-v1";
+        break;
+      case "--deep":
+        options.suite = "deep-logic-v1";
         break;
       case "--capability":
         options.suite = "capability-v1";

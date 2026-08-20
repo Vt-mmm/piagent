@@ -54,15 +54,19 @@ describe("Piagent local Session Hub Gateway", () => {
         created: new Date(), modified: new Date(), messageCount: 2, firstMessage: "safe", allMessagesText: "safe" }] } },
       models: { getModel() {}, getAvailableSnapshot: () => [
         { provider: "fixture", id: "safe-model", name: "Visible sk-proj-abcdefghijklmnopqrstuvwxyz", reasoning: true, input: ["text", "image"] },
+        { provider: "openai-codex", id: "gpt-5.6-sol", name: "GPT-5.6 Sol", reasoning: true,
+          thinkingLevelMap: { high: "high", xhigh: "xhigh" }, input: ["text", "image"] },
         { provider: "fixture", id: "sk-proj-abcdefghijklmnopqrstuvwxyz", name: "Must be omitted", reasoning: true }
       ] } });
     const projected = await registry.creationOptions();
     assert.equal(projected.projects.length, 1);
     assert.equal(projected.projects[0].label, "project");
     assert.equal(JSON.stringify(projected).includes(cwd), false);
-    assert.equal(projected.models.length, 1);
+    assert.equal(projected.models.length, 2);
     assert.equal(projected.models[0].modelId, "safe-model");
     assert.equal(projected.models[0].imageInput, true);
+    assert.equal(projected.models.find((model) => model.modelRef === projected.defaultModelRef)?.modelId, "gpt-5.6-sol");
+    assert.equal(projected.defaultThinkingLevel, "high");
     assert.equal(projected.webSearch.state, "unavailable");
     assert.equal(projected.models[0].displayName.includes("sk-proj-"), false);
     assert.equal(JSON.stringify(projected).includes("abcdefghijklmnopqrstuvwxyz"), false);

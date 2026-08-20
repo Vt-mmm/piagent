@@ -11,6 +11,7 @@ import PsychologyRounded from "@mui/icons-material/PsychologyRounded";
 import SecurityRounded from "@mui/icons-material/SecurityRounded";
 import TuneRounded from "@mui/icons-material/TuneRounded";
 import TravelExploreRounded from "@mui/icons-material/TravelExploreRounded";
+import AccountTreeRounded from "@mui/icons-material/AccountTreeRounded";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
@@ -40,8 +41,9 @@ import { ServiceIcon } from "./ServiceIcon.tsx";
 import { ActionConfirmationDialog } from "./ActionConfirmationDialog.tsx";
 import { label } from "./view-model.ts";
 import { localize, useUiPreferences, type UiLocale } from "./ui-preferences.tsx";
+import { RuntimeControlsPanel } from "./RuntimeControlsPanel.tsx";
 
-export type SettingsSection = "general" | "models" | "connections" | "permissions" | "usage" | "about";
+export type SettingsSection = "general" | "models" | "controls" | "connections" | "permissions" | "usage" | "about";
 
 function number(value: number | null | undefined, locale: UiLocale): string {
   return value === null || value === undefined ? "—" : new Intl.NumberFormat(locale === "vi" ? "vi-VN" : "en-US").format(value);
@@ -255,11 +257,12 @@ function AboutSettings({ capabilities, connection }: { capabilities?: PiagentGat
       <Typography sx={{ fontWeight: 760 }}>{String(value)}</Typography></Stack>{index < rows.length - 1 && <Divider />}</Box>)}</Paper></>;
 }
 
-export function SettingsPage({ section, onSection, onBack, session, snapshot, capabilities, connection, onSetModel, onSetThinking, onSetPermission }: { section: SettingsSection;
+export function SettingsPage({ section, onSection, onBack, session, snapshot, capabilities, connection, onSetModel, onSetThinking, onSetPermission, onRuntimeChanged }: { section: SettingsSection;
   onSection(value: SettingsSection): void; onBack(): void; session?: SessionRow; snapshot?: PiagentWebUICanonicalSnapshotV1;
   capabilities?: PiagentGatewayCapabilityHandshakeV1; connection: string; onSetModel?(modelRef: string): Promise<unknown>;
   onSetThinking?(thinking: string): Promise<unknown>;
-  onSetPermission?(mode: "read-only" | "workspace-write" | "trusted-full-access"): Promise<unknown> }) {
+  onSetPermission?(mode: "read-only" | "workspace-write" | "trusted-full-access"): Promise<unknown>;
+  onRuntimeChanged?(): Promise<void> | void }) {
   const { locale } = useUiPreferences();
   const [options, setOptions] = useState<SessionCreationOptions>(), [auth, setAuth] = useState<ProviderAuthCatalog>();
   const [connections, setConnections] = useState<SessionConnections>();
@@ -287,6 +290,7 @@ export function SettingsPage({ section, onSection, onBack, session, snapshot, ca
   const navigation = [
     { id: "general" as const, label: localize(locale, "Giao diện", "Appearance"), icon: <TuneRounded /> },
     { id: "models" as const, label: localize(locale, "Nhà cung cấp & model", "Providers & models"), icon: <PsychologyRounded /> },
+    { id: "controls" as const, label: localize(locale, "Điều khiển project", "Project controls"), icon: <AccountTreeRounded /> },
     { id: "connections" as const, label: localize(locale, "MCP & kết nối", "MCP & connections"), icon: <HubRounded /> },
     { id: "permissions" as const, label: localize(locale, "Quyền truy cập", "Access"), icon: <SecurityRounded /> },
     { id: "usage" as const, label: localize(locale, "Sử dụng & context", "Usage & context"), icon: <MemoryRounded /> },
@@ -307,6 +311,7 @@ export function SettingsPage({ section, onSection, onBack, session, snapshot, ca
       {section === "general" && <GeneralSettings />}{section === "models" && <ModelSettings options={options} auth={auth} refreshAuth={refreshAuth} session={session}
         snapshot={snapshot} onSetModel={onSetModel} onSetThinking={onSetThinking} />}
       {section === "connections" && <ConnectionSettings value={connections} loading={connectionsLoading} sessionRef={session?.sessionRef} onChanged={refreshConnections} />}
+      {section === "controls" && <RuntimeControlsPanel session={session} options={options} connections={connections} onCompleted={onRuntimeChanged} />}
       {section === "permissions" && <PermissionSettings snapshot={snapshot} session={session} onSetPermission={onSetPermission} />}
       {section === "usage" && <UsageSettings session={session} snapshot={snapshot} />}
       {section === "about" && <AboutSettings capabilities={capabilities} connection={connection} />}

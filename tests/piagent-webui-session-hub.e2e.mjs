@@ -17,7 +17,9 @@ let persistedBrowserConversation = false;
 let sessionCreateAttempts = 0, sessionCreateEffects = 0, createdSessionCounter = 0;
 let sessionSendAttempts = 0, sessionSendEffects = 0;
 let attachments, lastSendPayload = null, dispatchedContent = null;
+let lastCreatePayload = null;
 const observedSessionActions = [];
+const observedRuntimeActions = [];
 const inspectionSnapshot = JSON.parse(fs.readFileSync(path.join(root, "evals/fixtures/piagent-webui/snapshot-v1.valid.json"), "utf8"));
 // The Gateway publishes what the host will accept as an attachment, so the hub
 // composer only offers a file picker when this is available. Text formats need
@@ -68,6 +70,7 @@ test.beforeAll(async () => {
   const command = { async execute(value) {
     observedSessionActions.push(value.action);
     if (value.action === "session.create") sessionCreateAttempts += 1;
+    if (value.action === "session.create") lastCreatePayload = structuredClone(value.payload);
     if (value.action === "session.send") {
       sessionSendAttempts += 1;
       // Claim exactly as the runtime supervisor does, so what the assertions see
@@ -177,8 +180,12 @@ test.beforeAll(async () => {
     readSessionCreationOptions: () => ({ schemaVersion: 1, version: "piagent-session-creation-options-v1",
       generatedAt: new Date().toISOString(), projects: [{ projectRef: "project_session_release_prep",
         placeRef: "project_session_release_prep", label: "pi-company-platform" }],
-      models: [{ modelRef: "model_fixture_reasoning", provider: "fixture", modelId: "reasoning",
+      models: [{ modelRef: "model_openai_codex_sol", provider: "openai-codex", modelId: "gpt-5.6-sol",
+        displayName: "GPT-5.6 Sol", reasoning: true, imageInput: true, thinkingLevels: ["off", "medium", "high", "xhigh"] },
+      { modelRef: "model_fixture_reasoning", provider: "fixture", modelId: "reasoning",
         displayName: "Fixture Reasoning", reasoning: true, imageInput: true, thinkingLevels: ["off", "medium", "high"] }],
+      defaultModelRef: "model_openai_codex_sol", defaultThinkingLevel: "high",
+      profiles: [{ id: "node-typescript", displayName: "Node TypeScript Project", permissionMode: "workspace-write" }],
       webSearch: { state: "configured", route: "codex-first", provider: "openai-codex", fallbackProvider: "exa",
         integration: { name: "pi-web-access", version: "0.17.0" }, reasonCode: null },
       projectImport: { status: "available", reasonCode: null }, reasonCode: null }),
@@ -197,7 +204,14 @@ test.beforeAll(async () => {
     readProviderAuthJob: () => { throw new Error("not-found"); },
     executeProviderAuth: (command) => ({ schemaVersion: 1, version: "piagent-provider-auth-job-v1", generatedAt: new Date().toISOString(),
       jobRef: "authjob.browser", providerRef: command.providerRef, providerName: "GitHub Copilot", startedAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 60_000).toISOString(), state: "completed", events: [], prompt: null, reasonCode: null })
+      expiresAt: new Date(Date.now() + 60_000).toISOString(), state: "completed", events: [], prompt: null, reasonCode: null }),
+    executeRuntimeCommand: (command) => {
+      observedRuntimeActions.push(command.action);
+      return { schemaVersion: 1, version: "piagent-runtime-receipt-v1", messageType: "receipt", requestId: command.requestId,
+        sessionRef: command.sessionRef, action: command.action, state: "settled", resultCode: "completed", effect: "read-only",
+        modelCallObserved: false, outputs: [{ customType: "piagent-status", content: "runtime: ready\nprofile: node-typescript",
+          truncated: false, redacted: false }], sessionRevisionAfter: command.expectedSessionRevision, reasonCode: null };
+    }
   });
 });
 
@@ -229,8 +243,10 @@ test("renders the session-first hub, compact New chat, popovers, modal Settings,
   await page.getByRole("button", { name: /pi-company-platform/ }).click();
   await page.getByRole("menuitem", { name: "Thêm một hoặc nhiều folder" }).click();
   await expect(page.getByRole("button", { name: /imported-project/ })).toBeVisible();
-  await page.getByRole("button", { name: /Model mặc định/ }).click();
+  await expect(page.getByRole("button", { name: "Model: GPT-5.6 Sol" })).toContainText("GPT-5.6 Sol · mặc định");
+  await page.getByRole("button", { name: "Model: GPT-5.6 Sol" }).click();
   await page.getByRole("menuitem", { name: /Fixture Reasoning/ }).click();
+  await page.getByRole("button", { name: "Thêm tùy chọn" }).click();
   await page.getByRole("button", { name: "Cao" }).click();
   await page.getByRole("menuitem", { name: "Trung bình" }).click();
   await page.getByPlaceholder("Nhắn cho Piagent…").fill("Start a durable WebUI session");
@@ -266,6 +282,7 @@ test("renders the session-first hub, compact New chat, popovers, modal Settings,
   await expect(page.getByRole("dialog").getByRole("button", { name: "Hủy" })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("dialog")).toBeHidden();
+  await page.getByRole("button", { name: "Thêm tùy chọn" }).click();
   await page.getByRole("button", { name: "MCP & kết nối · 1" }).click();
   await expect(page.getByText("context7", { exact: true })).toBeVisible();
   await expect(page.getByRole("switch", { name: "Tắt context7" })).toBeChecked();
@@ -279,13 +296,22 @@ test("renders the session-first hub, compact New chat, popovers, modal Settings,
   await page.getByRole("button", { name: "Source Changes", exact: true }).click();
   await expect(page.getByRole("button", { name: "Mở Source Changes" })).toBeVisible();
   await page.keyboard.press("Escape");
+  await page.getByRole("combobox", { name: "Workflow cho tin nhắn này" }).click();
+  await page.getByRole("option", { name: "Review", exact: true }).click();
   await page.getByPlaceholder("Nhắn cho Piagent…").fill("Continue from the browser");
   await page.getByRole("button", { name: "Gửi" }).click();
   await expect(page.getByText("Continue from the browser", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /Đang đọc file/ })).toBeVisible();
   await expect(page.getByText("A streamed Gateway reply.", { exact: true })).toBeVisible();
+  assert.equal(lastSendPayload?.workflow, "review");
   await page.waitForTimeout(250);
   await expect(page.getByText("A streamed Gateway reply.", { exact: true })).toHaveCount(1);
+  await expect(page.getByRole("combobox", { name: "Workflow cho tin nhắn này" })).toHaveText(/Tự do · không workflow/);
+  await page.getByPlaceholder("Nhắn cho Piagent…").fill("Start a different piece of work in this session");
+  await page.getByRole("button", { name: "Gửi" }).click();
+  await expect(page.getByText("Start a different piece of work in this session", { exact: true })).toBeVisible();
+  await expect.poll(() => lastSendPayload?.message).toBe("Start a different piece of work in this session");
+  assert.equal(Object.hasOwn(lastSendPayload, "workflow"), false);
   await page.getByRole("button", { name: "Mở Source Changes Inspector" }).click();
   await expect(page.getByText("Agent Inspector", { exact: true })).toBeVisible();
   await expect(page.getByText("Open the persisted release checklist", { exact: true })).toBeVisible();
@@ -326,6 +352,12 @@ test("renders the session-first hub, compact New chat, popovers, modal Settings,
   await page.getByRole("dialog").filter({ hasText: "Đã kết nối" }).getByRole("button", { name: "Đóng", exact: true }).click();
   await page.getByText("MCP & kết nối", { exact: true }).click();
   await expect(page.getByText("context7", { exact: true })).toBeVisible();
+  await page.getByText("Điều khiển project", { exact: true }).click();
+  await expect(page.getByText("Cùng logic với Terminal:", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Pi status", exact: true }).click();
+  await expect(page.getByText("0 model token", { exact: true })).toBeVisible();
+  await expect(page.getByText("runtime: ready", { exact: false })).toBeVisible();
+  await expect.poll(() => observedRuntimeActions.includes("runtime.status")).toBe(true);
   await page.getByText("Quyền truy cập", { exact: true }).click();
   await page.getByRole("button", { name: "Toàn quyền" }).click();
   await expect(page.getByRole("dialog").getByText("Bật toàn quyền?", { exact: true })).toBeVisible();
@@ -361,6 +393,11 @@ test("resyncs and retries a new chat or send once when its revision changes befo
     await expect(page.getByText("Gateway live", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Cuộc trò chuyện mới" }).click();
     await expect(page.getByRole("heading", { name: "Anh muốn làm gì?" })).toBeVisible();
+    await page.getByRole("button", { name: "Thêm tùy chọn" }).click();
+    await page.getByRole("button", { name: "Thực hiện task", exact: true }).click();
+    await page.getByRole("menuitem", { name: /Khảo sát chỉ đọc/ }).click();
+    await page.getByRole("button", { name: "Quyền theo profile", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Chỉ đọc", exact: true }).click();
 
     // Simulate another session changing after this tab rendered its catalog.
     // The first command must be rejected before any effect; the client then
@@ -377,6 +414,8 @@ test("resyncs and retries a new chat or send once when its revision changes befo
     await expect(page.getByText("session-revision-stale", { exact: true })).toHaveCount(0);
     assert.equal(sessionCreateAttempts - attemptsBefore, 2);
     assert.equal(sessionCreateEffects - effectsBefore, 1);
+    assert.equal(lastCreatePayload?.workflow, "scout");
+    assert.equal(lastCreatePayload?.permissionMode, "read-only");
     assert.equal(lastSendPayload?.attachmentRefs?.length, 1);
     assert.match((dispatchedContent ?? []).filter((part) => part.type === "text").map((part) => part.text).join("\n"),
       /Build the Linux import flow safely/);
@@ -413,6 +452,7 @@ test("keeps the session sidebar usable on a phone viewport", async ({ page }) =>
 test("attaches a .docx in the dashboard composer and sends its prose to the session", async ({ page }) => {
   await page.goto(server.issueLaunchUrl());
   await page.getByRole("button", { name: /Release prep/ }).first().click();
+  await page.getByRole("button", { name: "Thêm tùy chọn" }).click();
   await expect(page.getByRole("button", { name: /Đính kèm/ })).toBeEnabled();
 
   const dropped = docx("Chot ngan sach Q3.", "Doi tac ky ngay 12/09.");

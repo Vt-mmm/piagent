@@ -19,6 +19,8 @@ export type CreateCommand = BaseCommandProperties & {
     placeRef: string;
     modelRef: string | null;
     thinkingLevel: ThinkingLevel;
+    permissionMode?: PermissionMode;
+    workflow?: Workflow;
     message: string;
     messageRequestId: string;
     /**
@@ -30,6 +32,9 @@ export type CreateCommand = BaseCommandProperties & {
 };
 export type IdempotencyKey = string;
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+export type PermissionMode = "read-only" | "workspace-write" | "trusted-full-access";
+export type Workflow =
+  "task" | "scout" | "be-to-fe" | "discuss" | "plan" | "review" | "commit" | "pr" | "onboard" | "platform-improve";
 export type SendCommand = BaseCommandProperties & {
   action?: "session.send";
   sessionRef?: string;

@@ -415,8 +415,8 @@ test("modern run executes suite and Piagent extension from the immutable preflig
 test("capability alias selects the runnable unsaturated suite", () => {
   const result = spawnSync(process.execPath, [runner, "--capability", "--repeats", "1", "--dry-run"], { cwd: root, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /suite:\s+capability-v1 \(4 scenarios\)/);
-  assert.match(result.stdout, /sessions:\s+8/);
+  assert.match(result.stdout, /suite:\s+capability-v1 \(6 scenarios\)/);
+  assert.match(result.stdout, /sessions:\s+12/);
   assert.match(result.stdout, /no model session started/);
 });
 

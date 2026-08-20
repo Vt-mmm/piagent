@@ -23,7 +23,7 @@
     {
       "id": "canary-suite",
       "path": "benchmarks/capability-v1/suite.json",
-      "sha256": "378133ad8d10a47e580ecb62b1c0221d562d81a49c8992f3ab8caa46f5980ddc"
+      "sha256": "29bb79e96b047d79056626d747baa0b3a6ca9d4da7ad80b9668c0085e5581706"
     },
     {
       "id": "pilot-suite",

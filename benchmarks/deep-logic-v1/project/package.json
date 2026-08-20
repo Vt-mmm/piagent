@@ -1,0 +1,6 @@
+{
+  "name": "piagent-deep-logic-fixture",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test test/*.test.js" }
+}

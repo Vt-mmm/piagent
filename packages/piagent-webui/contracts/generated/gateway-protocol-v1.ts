@@ -85,6 +85,18 @@ export type CommandRequest = RequestBase & {
             placeRef: string;
             modelRef: string | null;
             thinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+            permissionMode?: "read-only" | "workspace-write" | "trusted-full-access";
+            workflow?:
+              | "task"
+              | "scout"
+              | "be-to-fe"
+              | "discuss"
+              | "plan"
+              | "review"
+              | "commit"
+              | "pr"
+              | "onboard"
+              | "platform-improve";
             message: string;
             messageRequestId: string;
             /**

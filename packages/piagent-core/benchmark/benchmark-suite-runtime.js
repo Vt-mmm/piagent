@@ -22,6 +22,7 @@ export function loadBenchmarkSuite(input, packageRoot) {
     ["core-v1", path.join(packageRoot, "benchmarks", "core-v1", "suite.json")],
     ["capability-v1", path.join(packageRoot, "benchmarks", "capability-v1", "suite.json")],
     ["e2-framework-v1", path.join(packageRoot, "benchmarks", "e2-framework-v1", "suite.json")],
+    ["deep-logic-v1", path.join(packageRoot, "benchmarks", "deep-logic-v1", "suite.json")],
     ["production-v1", path.join(packageRoot, "benchmarks", "production-v1", "suite.json")]
   ]);
   const candidate = builtIn.get(input) ?? path.resolve(input);

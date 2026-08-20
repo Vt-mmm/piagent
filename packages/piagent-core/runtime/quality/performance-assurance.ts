@@ -1,4 +1,5 @@
 import type { TaskContract } from "../../extensions/guard-types.ts";
+import { acceptanceBoundaryProofGuidance } from "../../extensions/acceptance-boundary-guidance.js";
 import { normalizePathCandidate } from "../../extensions/policy-core.js";
 import { acceptanceLanguageAdapterStatus } from "../../extensions/acceptance-language-adapters.js";
 import {
@@ -51,12 +52,12 @@ type BoundedGitDiffReviewInput = {
 
 const SIGNALS: Array<{ code: string; pattern: RegExp }> = [
   { code: "exact-error-contract", pattern: /\b(?:typeerror|syntaxerror|rangeerror|error (?:class|containing))\b/i },
-  { code: "boundary-contract", pattern: /\b(?:boundary|ceil(?:ing)?|clamp|inclusive|minimum|maximum|round(?:ing)?|basis points?|positive integer|non-negative|falsey|falsy|nullish)\b/i },
+  { code: "boundary-contract", pattern: /\b(?:backpressure|boundary|budget|capacity|ceil(?:ing)?|clamp|inclusive|minimum|maximum|maxchars|overflow|round(?:ing)?|safe[-\s]+integer|basis points?|positive integer|non-negative|falsey|falsy|nullish)\b/i },
   { code: "return-shape-contract", pattern: /\b(?:return shape|returned? (?:element|object|value|representation)s?|preserve (?:the )?return)\b/i },
   { code: "public-api-contract", pattern: /\b(?:exported api|public api|do not change (?:the )?(?:api|signature)|preserve (?:the )?(?:api|input|output|return)|without changing unrelated behavior)\b/i },
-  { code: "graph-order-contract", pattern: /\b(?:dependency|topolog|cycle|stable order|input order|exactly once|before its dependent)\b/i },
+  { code: "graph-order-contract", pattern: /\b(?:dependency|topolog|cycle|stable order|input order|first[-\s]+(?:observed|seen|encountered)[-\s]+order|replay order|deduplicat(?:e|ion).*order|exactly once|before its dependent)\b/i },
   { code: "identity-isolation-contract", pattern: /\b(?:tenant|authorization|permission|cache[- ]?key|collision|isolation|same tuple|cross[- ]tenant)\b/i },
-  { code: "concurrency-contract", pattern: /\b(?:concurren|race condition|stale response|bounded retry|idempot|lock)\b/i },
+  { code: "concurrency-contract", pattern: /\b(?:concurren|race condition|stale response|bounded retry|idempot(?:ent|ency)?|lock)\b/i },
   { code: "data-migration-contract", pattern: /\b(?:migration|schema|money|invoice|ledger|transaction|data loss)\b/i },
   { code: "non-mutation-contract", pattern: /\b(?:do not mutate|must not mutate|without mutating|input unchanged|preserve input)\b/i }
 ];
@@ -142,12 +143,13 @@ export function analyzePerformanceAssurance(input: AssuranceInput): PerformanceA
   if (reasonCodes.includes("data-migration-contract")) {
     reviewChecks.push("Check operation order, rounding/defaulting points, falsey values, and validation before declaring data behavior complete.");
   }
+  reviewChecks.push(...acceptanceBoundaryProofGuidance(request));
 
   return {
     tier,
     requiresReview: reviewRequired,
     reasonCodes: unique(reasonCodes.length > 0 ? reasonCodes : ["bounded-source-change"]),
-    reviewChecks: unique(reviewChecks).slice(0, 8)
+    reviewChecks: unique(reviewChecks).slice(0, 10)
   };
 }
 

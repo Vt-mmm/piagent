@@ -23,6 +23,7 @@ import { SessionLeaseStore } from "./session-lease-store.ts";
 import { SessionRuntimeSupervisor } from "./session-runtime-supervisor.ts";
 import { SessionCommandStore } from "./session-command-store.ts";
 import { SessionCommandController } from "./session-command-controller.ts";
+import { RuntimeCommandController } from "./runtime-command-controller.ts";
 import { GatewayEventStore } from "./gateway-events.ts";
 import { SessionInspectionRegistry } from "./session-inspection-registry.ts";
 import { SessionAttachmentRegistry } from "./session-attachment-registry.ts";
@@ -175,6 +176,7 @@ export async function startPiagentGateway(options: {
         if (!attachments) throw new Error("session-attachment-unavailable");
         return attachments.reserveForPrompt(sessionRef, refs, messageRequestId, text);
       } });
+    const runtimeCommands = new RuntimeCommandController({ catalog: readCatalog, runtimes, events });
     const protocol = new GatewayProtocolService({ capabilities: () => capabilities(gatewayInstanceRef, true), catalog: readCatalog,
       events, command: commands });
     const inspections = new SessionInspectionRegistry({ gatewayInstanceRef, host, key, packageRoot: options.packageRoot, agentDir: state.agentDir,
@@ -194,6 +196,7 @@ export async function startPiagentGateway(options: {
       readSessionModel: (sessionRef) => inspections.provider(sessionRef),
       readSessionConnections: (sessionRef) => inspections.connections(sessionRef),
       executeSessionConnection: (command) => inspections.executeConnectionCommand(command),
+      executeRuntimeCommand: (command) => runtimeCommands.execute(command),
       executeSessionAttachment: (sessionRef, command) => attachments.execute(sessionRef, command),
       executeApproval: (approvalRef, decision) => runtimes!.decideApproval(approvalRef, decision),
       readMcpAuthJob: (jobRef) => mcpAuth!.read(jobRef),

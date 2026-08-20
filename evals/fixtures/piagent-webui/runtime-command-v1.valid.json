@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-runtime-command-v1",
+  "messageType": "command",
+  "requestId": "runtime_request_01",
+  "sessionRef": "session_ref_01",
+  "expectedSessionRevision": "session_revision_01",
+  "action": "context.search",
+  "argument": "runtime command parity",
+  "confirmed": false
+}

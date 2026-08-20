@@ -4,6 +4,8 @@ import type { PiagentWebUIDigestBoundSelectedFileReviewStateV1 } from "../../con
 import type { PiagentWebUIGuardedSelectedFileSourceMutationPreviewV1 } from "../../contracts/generated/source-mutation-v1.ts";
 import type { PiagentWebUIConfirmedExactSourceRevertPreviewV1 } from "../../contracts/generated/source-revert-v1.ts";
 import type { PiagentWebUIDeterministicStagedCommitSummaryV1 } from "../../contracts/generated/commit-summary-v1.ts";
+import type { Workflow } from "../../contracts/generated/session-command-v1.ts";
+import type { Command as RuntimeCommand, Receipt as RuntimeReceipt } from "../../contracts/generated/runtime-command-v1.ts";
 import type { PiagentWebUIAuthoritativeLocalTaskRunIndexV1 } from "../../contracts/generated/task-index-v1.ts";
 import type { PiagentWebUIDurableTaskRecoveryTimelineV1 } from "../../contracts/generated/task-timeline-v1.ts";
 import type { PiagentWebUIBoundedCompactionAndRecoveryHistoryV1 } from "../../contracts/generated/recovery-history-v1.ts";
@@ -46,6 +48,14 @@ export type SessionCreationOptions = {
   generatedAt: string;
   projects: Array<{ projectRef: string; placeRef: string; label: string }>;
   models: Array<{ modelRef: string; provider: string; modelId: string; displayName: string; reasoning: boolean; imageInput: boolean | null; thinkingLevels: string[] }>;
+  defaultModelRef?: string | null;
+  defaultThinkingLevel?: string | null;
+  profiles?: Array<{ id: string; displayName: string; permissionMode: string | null }>;
+  workflows?: Array<{ id: Workflow; changeMode: "source-change" | "read-only" | "plan-only" | "clarification" | "git" | "onboarding" | "platform";
+    modelUse: "required"; recommendedFreshSession: boolean }>;
+  runtimeActions?: Array<{ id: RuntimeCommand["action"]; category: "runtime" | "usage" | "onboarding" | "profile" | "context" | "memory" | "mcp";
+    effect: "read-only" | "workspace-write" | "model-assisted"; argument: "none" | "optional-text" | "required-text" | "profile" | "connection";
+    requiresConfirmation: boolean }>;
   webSearch?: { state: "configured" | "unavailable"; route: "codex-first" | "automatic" | null; provider: "openai-codex" | null;
     fallbackProvider: "exa" | null; integration: { name: "pi-web-access"; version: string } | null; reasonCode: string | null };
   projectImport?: { status: "available" | "unavailable"; reasonCode: string | null };
@@ -192,6 +202,14 @@ export async function executeSessionConnection(command: { action: "mcp.enable" |
 
 export function readMcpAuthJob(jobRef: string, signal?: AbortSignal): Promise<McpAuthJob> {
   return readJson(`/api/v1/mcp-auth/jobs/${encodeURIComponent(jobRef)}`, signal);
+}
+
+export async function executeRuntimeCommand(command: RuntimeCommand, signal?: AbortSignal): Promise<RuntimeReceipt> {
+  const csrf = browserCsrfToken(); if (!csrf) throw new WebUiRequestError(403);
+  const response = await fetch("/api/v1/runtime-commands", { method: "POST", credentials: "same-origin", signal,
+    headers: { Accept: "application/json", "Content-Type": "application/json", "X-Piagent-CSRF": csrf }, body: JSON.stringify(command) });
+  if (!response.ok) throw new WebUiRequestError(response.status);
+  return await response.json() as RuntimeReceipt;
 }
 
 export async function cancelMcpAuthJob(jobRef: string, signal?: AbortSignal): Promise<McpAuthJob> {

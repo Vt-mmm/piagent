@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://piagent.io.vn/schemas/piagent-webui/runtime-command-v1.schema.json",
+  "title": "Piagent WebUI typed runtime command and receipt v1",
+  "oneOf": [
+    { "$ref": "#/$defs/command" },
+    { "$ref": "#/$defs/receipt" }
+  ],
+  "$defs": {
+    "action": {
+      "enum": [
+        "runtime.status", "runtime.inspector", "runtime.commands", "orchestration.status",
+        "usage.live", "usage.history", "usage.logs", "usage.efficiency", "usage.preflight",
+        "onboarding.status", "onboarding.profile", "onboarding.tech",
+        "profile.status", "profile.options", "profile.tech-options", "profile.apply", "profile.auto",
+        "context.status", "context.rebuild", "context.search", "context.pack", "context.impact", "context.efficiency", "context.preflight", "context.compact",
+        "memory.status",
+        "mcp.status", "mcp.doctor", "mcp.detail", "mcp.approve", "mcp.reject", "mcp.reset"
+      ]
+    },
+    "effect": { "enum": ["read-only", "workspace-write", "model-assisted"] },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["customType", "content", "truncated", "redacted"],
+      "properties": {
+        "customType": { "type": "string", "minLength": 1, "maxLength": 120, "pattern": "^[A-Za-z0-9._-]+$" },
+        "content": { "type": "string", "maxLength": 12000, "pattern": "^[^\\u0000]*$" },
+        "truncated": { "type": "boolean" },
+        "redacted": { "type": "boolean" }
+      }
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "version", "messageType", "requestId", "sessionRef", "expectedSessionRevision", "action", "argument", "confirmed"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "version": { "const": "piagent-runtime-command-v1" },
+        "messageType": { "const": "command" },
+        "requestId": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "sessionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "expectedSessionRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "action": { "$ref": "#/$defs/action" },
+        "argument": { "type": ["string", "null"], "maxLength": 2048, "pattern": "^[^\\u0000]*$" },
+        "confirmed": { "type": "boolean" }
+      }
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "version", "messageType", "requestId", "sessionRef", "action", "state", "resultCode", "effect", "modelCallObserved", "outputs", "sessionRevisionAfter", "reasonCode"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "version": { "const": "piagent-runtime-receipt-v1" },
+        "messageType": { "const": "receipt" },
+        "requestId": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "sessionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "action": { "$ref": "#/$defs/action" },
+        "state": { "enum": ["settled", "rejected", "uncertain"] },
+        "resultCode": { "enum": ["completed", "stale-revision", "confirmation-required", "runtime-busy", "invalid-command", "effect-unknown", "unavailable"] },
+        "effect": { "$ref": "#/$defs/effect" },
+        "modelCallObserved": { "type": "boolean" },
+        "outputs": { "type": "array", "maxItems": 8, "items": { "$ref": "#/$defs/output" } },
+        "sessionRevisionAfter": { "$ref": "common-v1.schema.json#/$defs/nullableRevisionToken" },
+        "reasonCode": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" }
+      }
+    }
+  }
+}
