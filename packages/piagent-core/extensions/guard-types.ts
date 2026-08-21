@@ -446,6 +446,7 @@ export type CommandRule = {
   id: string;
   action: "allow" | "prompt" | "forbid";
   match: "prefix" | "contains" | "regex";
+  ignoreSearchArguments?: boolean;
   value: string | string[];
   reason: string;
 };

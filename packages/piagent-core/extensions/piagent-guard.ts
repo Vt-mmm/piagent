@@ -90,7 +90,7 @@ import { completeTaskDigestRefresh } from "./task-digest-migration.js";
 import { WORKING_TREE_DIGEST_ALGORITHM, isCurrentWorkingTreeDigest, workingTreeObservation, workingTreeSnapshotUsesCurrentAlgorithm } from "./working-tree-digest.js";
 import { appendJsonlBounded } from "./state-retention.js";
 import { ensurePrivateStateDirectory, resolveLocalStatePath } from "./local-state-path.js";
-import { piApprovalBroker, type ApprovalActionDraft } from "../runtime/inspection/approval-broker.ts";
+import { piApprovalBroker, type ApprovalActionDraft, type ApprovalUnavailableFallback } from "../runtime/inspection/approval-broker.ts";
 import { inspectTaskControlState } from "../runtime/inspection/task-control-journal.ts";
 import { createSourceMutationGuardBindings } from "../runtime/policy/source-mutation-guard-binding.ts";
 import {
@@ -1088,6 +1088,20 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
+}
+
+function approvalUnavailableFallback(ctx: Pick<ExtensionContext, "ui">): ApprovalUnavailableFallback {
+  // The symbol is a cross-package runtime marker, not an import, so piagent-core
+  // remains independent of the WebUI package. A Gateway has no interactive
+  // terminal behind `ctx.ui.confirm`; if brokering is unavailable it must fail
+  // closed immediately instead of awaiting an impossible terminal response.
+  try {
+    return Reflect.get(ctx.ui as object, Symbol.for("piagent.webui.gateway-runtime-ui.v1")) === true
+      ? "deny"
+      : "terminal-confirm";
+  } catch {
+    return "terminal-confirm";
+  }
 }
 
 function evaluatePathLikeToolAccess(
@@ -4596,7 +4610,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
     });
     if (phaseMutationDecision) return phaseMutationDecision;
     if (pendingHumanApproval && !sessionTask) {
-      const approval = await piApprovalBroker.request({ cwd: ctx.cwd, rawSessionId: ctx.sessionManager.getSessionId(), toolCallId: String(event.toolCallId), expectedTask: null, action: { ...pendingHumanApproval.action, preconditionClass: "runtime-only", treePrecondition: null }, terminalConfirm: () => ctx.ui.confirm(pendingHumanApproval!.prompt, pendingHumanApproval!.title) });
+      const approval = await piApprovalBroker.request({ cwd: ctx.cwd, rawSessionId: ctx.sessionManager.getSessionId(), toolCallId: String(event.toolCallId), expectedTask: null, action: { ...pendingHumanApproval.action, preconditionClass: "runtime-only", treePrecondition: null }, terminalConfirm: () => ctx.ui.confirm(pendingHumanApproval!.prompt, pendingHumanApproval!.title), unavailableFallback: approvalUnavailableFallback(ctx) });
       if (!approval.allowed) return { block: true, reason: pendingHumanApproval.action.kind === "external-provider-action" && !SHELL_TOOL_NAMES.has(event.toolName) ? `User denied external provider action: ${event.toolName}` : `User denied command: ${pendingHumanApproval.action.reason}` };
       pendingHumanApproval = null;
     }
@@ -4659,6 +4673,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
         : { workspaceRevision: `workspace-rev.${crypto.createHash("sha256").update(currentTreeDigest).digest("hex")}`, indexRevision: null, preimageDigest: currentTreeDigest };
       const approval = await piApprovalBroker.request({ cwd: ctx.cwd, rawSessionId: ctx.sessionManager.getSessionId(), toolCallId: String(event.toolCallId), expectedTask: sessionTask ? { taskId: sessionTask.taskId, taskRunId: sessionTask.taskRunId } : null,
         action: { ...pendingHumanApproval.action, treePrecondition }, terminalConfirm: () => ctx.ui.confirm(pendingHumanApproval!.prompt, pendingHumanApproval!.title),
+        unavailableFallback: approvalUnavailableFallback(ctx),
         recheck: () => !treePrecondition || (() => { const current = workingTreeSnapshot(ctx.cwd);
           return !workingTreeSnapshotHasUnavailableEvidence(current) && workingTreeEvidenceDigest(current) === treePrecondition.preimageDigest; })() });
       if (!approval.allowed) return { block: true, reason: pendingHumanApproval.action.kind === "external-provider-action" && !SHELL_TOOL_NAMES.has(event.toolName) ? `User denied external provider action: ${event.toolName}` : `User denied command: ${pendingHumanApproval.action.reason}` };

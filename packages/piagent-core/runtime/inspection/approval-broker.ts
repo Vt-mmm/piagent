@@ -42,6 +42,7 @@ type Pending = { request: Request; resolve(value: ApprovalGuardDecision): void; 
 export type ApprovalBrokerEvent = { kind: "requested" | "resolved" | "expired" | "cancelled"; approvalRef: string; request?: Request; receipt?: Receipt };
 export type ApprovalGuardDecision = { allowed: boolean; brokered: boolean; receipt: Receipt | null;
   consume(): boolean; cancel(reasonCode?: string): void };
+export type ApprovalUnavailableFallback = "terminal-confirm" | "deny";
 
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
@@ -59,6 +60,10 @@ function exactKeys(value: unknown, keys: string[]): boolean {
 }
 function ref(prefix: string, secret: Buffer, value: unknown): string {
   return `${prefix}.${createHmac("sha256", secret).update(canonical(value)).digest("hex")}`;
+}
+function providerRef(prefix: string, secret: Buffer, value: string): string | null {
+  if (!value) return null;
+  return REF.test(value) ? value : ref(prefix, secret, value);
 }
 function digest(secret: Buffer, value: unknown): string { return `sha256:${createHmac("sha256", secret).update(canonical(value)).digest("hex")}`; }
 function safe(value: unknown, maximum: number): { text: string; redacted: boolean; truncated: boolean } {
@@ -104,6 +109,13 @@ export class PiApprovalBroker {
     return targets.length;
   }
 
+  cancelForOperation(cwd: string, rawSessionId: string, agentOperationId: string, reason = "operation-aborted"): number {
+    const binding = this.#bindings.get(key(cwd, rawSessionId)); if (!binding) return 0;
+    const targets = [...binding.pending.entries()].filter(([, pending]) => pending.request.identity.agentOperationId === agentOperationId);
+    for (const [approvalRef] of targets) this.#cancelPending(binding, approvalRef, reason, "runtime-control", "cancelled");
+    return targets.length;
+  }
+
   projection(cwd: string, rawSessionId: string): { revision: string | null; summary: Record<string, unknown> } {
     const binding = this.#bindings.get(key(cwd, rawSessionId));
     if (!binding) return { revision: null, summary: { state: "unknown", pending: [], recent: [],
@@ -123,22 +135,29 @@ export class PiApprovalBroker {
   }
 
   async request(input: { cwd: string; rawSessionId: string; toolCallId: string; action: ApprovalActionDraft;
-    expectedTask?: { taskId: string; taskRunId: string } | null; terminalConfirm(): Promise<boolean>; recheck?(): boolean; ttlMs?: number }): Promise<ApprovalGuardDecision> {
+    expectedTask?: { taskId: string; taskRunId: string } | null; terminalConfirm(): Promise<boolean>;
+    unavailableFallback?: ApprovalUnavailableFallback; recheck?(): boolean; ttlMs?: number }): Promise<ApprovalGuardDecision> {
     const binding = this.#bindings.get(key(input.cwd, input.rawSessionId));
     const authority = binding?.authority();
+    // Provider tool-call IDs are opaque. OpenAI Responses IDs, for example,
+    // can contain `|`, while public WebUI refs deliberately cannot. Rejecting
+    // the provider alphabet sent Gateway approvals into the terminal fallback,
+    // where no terminal exists. Keep the provider value private and bind the
+    // approval to a deterministic broker-local ref instead.
+    const toolCallId = binding ? providerRef("tool", binding.secret, input.toolCallId) : null;
     if (!binding || !authority || authority.taskState !== "active" || input.expectedTask && (authority.identity.taskId !== input.expectedTask.taskId || authority.identity.taskRunId !== input.expectedTask.taskRunId)
       || !REF.test(authority.identity.agentOperationId)
-      || !REF.test(input.toolCallId) || binding.pending.size >= MAX_PENDING) return this.#terminalOnly(input.terminalConfirm);
+      || !toolCallId || binding.pending.size >= MAX_PENDING) return this.#unavailable(input);
     const now = Date.now(), requestedAt = new Date(now).toISOString(), expiresAt = new Date(now + Math.min(Math.max(input.ttlMs ?? DEFAULT_TTL_MS, 5_000), DEFAULT_TTL_MS)).toISOString();
-    const approvalRef = ref("approval", binding.secret, [input.toolCallId, now, randomUUID()]);
+    const approvalRef = ref("approval", binding.secret, [toolCallId, now, randomUUID()]);
     const decisionToken = randomBytes(32).toString("base64url");
     const nextRevision = this.#nextRevision(binding, "requested", approvalRef);
-    const identity: Identity = { ...authority.identity, toolCallId: input.toolCallId };
+    const identity: Identity = { ...authority.identity, toolCallId };
     const action = this.#action(binding, input.action, input.cwd);
     const expectedRevisions: Revisions = { ...authority.revisions, approvalRevision: nextRevision,
       treePrecondition: input.action.preconditionClass === "runtime-only" ? null : input.action.treePrecondition ?? null };
     if ((input.action.preconditionClass !== "runtime-only" && !expectedRevisions.treePrecondition)
-      || !this.#validTree(expectedRevisions.treePrecondition)) return this.#terminalOnly(input.terminalConfirm);
+      || !this.#validTree(expectedRevisions.treePrecondition)) return this.#unavailable(input);
     const request: Request = { schemaVersion: 1, version: "piagent-webui-approval-v1", recordType: "request", approvalRef, decisionToken,
       identity, action, expectedRevisions, state: "waiting", requestedAt, expiresAt, executor: "pi-guard", directExecution: false };
     const result = new Promise<ApprovalGuardDecision>((resolve) => {
@@ -181,6 +200,11 @@ export class PiApprovalBroker {
     return Promise.resolve().then(confirm).then((allowed) => ({ allowed, brokered: false, receipt: null,
       consume: () => allowed, cancel: () => undefined }), () => ({ allowed: false, brokered: false, receipt: null,
       consume: () => false, cancel: () => undefined }));
+  }
+
+  #unavailable(input: { terminalConfirm(): Promise<boolean>; unavailableFallback?: ApprovalUnavailableFallback }): Promise<ApprovalGuardDecision> {
+    if (input.unavailableFallback !== "deny") return this.#terminalOnly(input.terminalConfirm);
+    return Promise.resolve({ allowed: false, brokered: false, receipt: null, consume: () => false, cancel: () => undefined });
   }
 
   #action(binding: Binding, draft: ApprovalActionDraft, cwd: string): Record<string, unknown> {

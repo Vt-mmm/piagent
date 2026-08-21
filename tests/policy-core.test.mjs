@@ -1208,6 +1208,26 @@ describe("exec policy git workflow confirmations", () => {
   });
 });
 
+describe("exec policy action text is distinct from search text", () => {
+  const basePolicy = JSON.parse(fs.readFileSync(
+    path.join(import.meta.dirname, "..", "packages", "piagent-core", "policies", "base-policy.json"), "utf8"
+  ));
+  const assessmentSearch = "rg -n \"normalizeTaskContract|migrate.*schema|migratedFromSchemaVersion\" packages/piagent-core/extensions/task-state.js | head -120";
+
+  it("allows a read-only source search whose pattern contains migrate", () => {
+    const result = evaluateExecPolicyCore(assessmentSearch, { policy: basePolicy, mode: "enforce" });
+    assert.equal(result.decision, "allow", JSON.stringify(result, null, 2));
+  });
+
+  it("still prompts for an actual database migration command", () => {
+    for (const command of ["prisma migrate deploy", "npx prisma migrate dev", "npm run migrate"]) {
+      const result = evaluateExecPolicyCore(command, { policy: basePolicy, mode: "enforce" });
+      assert.equal(result.decision, "prompt", `${command}\n${JSON.stringify(result, null, 2)}`);
+      assert.match(result.reasons.join("\n"), /prompt-database-migration/);
+    }
+  });
+});
+
 describe("guard fallback policy", () => {
   // `DEFAULT_POLICY` is the policy the guard uses when `policies/base-policy.json`
   // cannot be read -- that is, when something is already wrong. It had drifted

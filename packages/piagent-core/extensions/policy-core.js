@@ -664,7 +664,7 @@ function commandRuleMatches(rule, segment, words) {
     return arrayStartsWith(words, prefix);
   }
   const raw = Array.isArray(rule.value) ? rule.value.join(" ") : rule.value;
-  if (rule.match === "contains") return segment.toLowerCase().includes(raw.toLowerCase());
+  if (rule.match === "contains") return !(rule.ignoreSearchArguments && ["grep", "egrep", "fgrep", "rg"].includes(commandBasename(stripWrapper(words)[0] ?? ""))) && segment.toLowerCase().includes(raw.toLowerCase());
   try {
     return new RegExp(raw, "i").test(segment);
   } catch {

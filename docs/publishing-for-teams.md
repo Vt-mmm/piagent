@@ -98,6 +98,10 @@ pi install /path/to/piagent
   Inspector; projection Task Changes / Working Tree / Staged có bounded diff,
   provenance và enforce protected path; session lease bền, recovery khi restart
   hoặc owner cũ treo, doctor có repair tường minh.
+- `1.5.5`: hotfix WebUI command execution — approval nhận đúng opaque tool-call
+  ID, lệnh tìm kiếm không còn bị nhận nhầm thành migration, Stop hủy approval
+  đang chờ, activity chỉ báo running sau khi command thật sự chạy, và restart
+  không tái sử dụng process treo.
 - `1.5.4`: hotfix WebUI giữ ownership qua workflow dispatch bất đồng bộ, không
   còn báo `session-command-effect-unknown` giả; session đã tạo được tự đồng bộ
   mà không gửi lại, và transcript không lặp tin workflow sau khi persisted.

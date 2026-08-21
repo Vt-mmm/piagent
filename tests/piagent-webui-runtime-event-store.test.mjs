@@ -40,6 +40,8 @@ describe("Piagent WebUI runtime event store", () => {
     const failed = events.append(activity(3, "tool_result", { exitCode: 1, isError: true }, true), at(3)).event;
     const blocked = events.append(activity(4, "tool_decision", { decision: "blocked", reason: "operator denied" }), at(4)).event;
     for (const event of [started, legacy, native, failed, blocked]) expectSchema(event);
+    assert.equal(legacy.kind, "activity.requested");
+    assert.equal(native.kind, "activity.requested");
     assert.equal(legacy.payload.activityType, "command");
     assert.equal(legacy.agentOperationId, null);
     assert.equal(legacy.toolCallId, null);

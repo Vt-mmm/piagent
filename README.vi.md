@@ -164,7 +164,7 @@ chỉ validate kế hoạch, không dùng quota.
 
 Gate này chạy architecture check, test, typecheck, capability validation, runtime smoke và docs consistency trước khi release.
 
-Bản phát hành hiện tại là `v1.5.4`. Với team hoặc production, hãy pin tag này
+Bản phát hành hiện tại là `v1.5.5`. Với team hoặc production, hãy pin tag này
 hoặc một commit đã review thay vì dựa vào nguồn package không cố định.
 
 ## Security

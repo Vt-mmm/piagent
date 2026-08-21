@@ -217,7 +217,7 @@ describe("Piagent activity inspector", () => {
     inspector.observe(context, { event: "tool_call", activityId: "live-call-1", toolCallId: "live-tool-1", toolName: "read", targetPath: "src/checkout.ts", recordedAt: "2026-08-13T04:00:00.000Z" });
     const replay = inspector.replay(context, beforeCursor, 10);
     assert.equal(replay.state, "current");
-    assert.deepEqual(replay.events.map((event) => event.kind), ["activity.started"]);
+    assert.deepEqual(replay.events.map((event) => event.kind), ["activity.requested"]);
     assert.equal((await inspector.project(context)).snapshot.revision.eventCursor, replay.latestCursor);
     await commands.get("piagent-inspector").handler("toggle", context);
     assert.equal(statuses.at(-1).value, undefined);

@@ -122,6 +122,17 @@ async function currentLaunchUrl() {
   return null;
 }
 
+async function waitForGatewayStopped(previous, timeoutMs = 8_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const previousAlive = Boolean(previous && processAlive(previous.pid));
+    const liveUrl = await currentLaunchUrl();
+    if (!previousAlive && !liveUrl) return;
+    await new Promise((resolve) => setTimeout(resolve, 80));
+  }
+  throw new Error("gateway-restart-stop-timeout\nThe previous Gateway did not stop; restart refused to reuse the old process.");
+}
+
 async function ensureStarted() {
   const existing = await currentLaunchUrl();
   if (existing) return existing;
@@ -199,8 +210,9 @@ async function main() {
     return;
   }
   if (command === "restart") {
+    const previous = readGatewayDescriptor(gatewayProfileState(agentDir));
     try { await control("stop"); } catch { /* already stopped */ }
-    await new Promise((resolve) => setTimeout(resolve, 150));
+    await waitForGatewayStopped(previous);
     const launchUrl = await ensureStarted();
     output(json ? { state: "running", launchUrl } : launchUrl);
     openBrowser(launchUrl);

@@ -54,7 +54,11 @@ export function adaptActivityTelemetryEvent(input: ActivityEventAdapterInput): R
   const activityType = hasOperation ? "tool" : ["bash", "shell", "exec"].includes(toolName) ? "command" : "other";
   const failed = eventName === "tool_result" && (event.isError === true || typeof event.exitCode === "number" && event.exitCode !== 0);
   const blocked = eventName === "tool_decision";
-  const state = eventName === "tool_call" ? "started" : blocked ? "blocked" : failed ? "failed" : "finished";
+  // `tool_call` is emitted before policy authorization. Calling it "started"
+  // made the Dashboard claim a command was running while it was still waiting
+  // for (or had failed to obtain) permission. Native Gateway
+  // `tool_execution_start` remains the authoritative running boundary.
+  const state = eventName === "tool_call" ? "requested" : blocked ? "blocked" : failed ? "failed" : "finished";
   const kind = `activity.${state}`;
   const previewValue = blocked ? event.reason : event.command ?? event.targetPath ?? event.toolName;
   const preview = safeText(previewValue, 4000);

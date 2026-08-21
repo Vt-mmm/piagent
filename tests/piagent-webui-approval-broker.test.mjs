@@ -60,6 +60,30 @@ test("WebUI allow is provisional, redacted, exact-bound and consumed once", asyn
   assert.equal(replay.deduplicated, true); assert.equal(replay.permit.status, "consumed");
 });
 
+test("provider tool-call IDs outside the public ref alphabet are brokered as opaque refs", async () => {
+  const current = setup();
+  const providerToolCallId = "call_ZS4wdqvNqZ2VUAl2NNAXIRJU|fc_0a7bbd5bd03d96fb016a872a10be0081";
+  const promise = current.broker.request({ cwd: "/repo", rawSessionId: "raw-session", toolCallId: providerToolCallId,
+    action: shellAction, terminalConfirm: () => current.terminal.promise, recheck: () => true, ttlMs: 30_000 });
+  await new Promise((resolve) => setImmediate(resolve));
+  const projection = current.broker.projection("/repo", "raw-session");
+  assert.equal(projection.summary.state, "waiting");
+  const request = current.broker.detail("/repo", "raw-session", projection.summary.pending[0].approvalRef);
+  assert.match(request.identity.toolCallId, /^tool\.[a-f0-9]{64}$/);
+  assert.equal(JSON.stringify(request).includes(providerToolCallId), false);
+  const receiptPromise = current.broker.decide("/repo", "raw-session", request.approvalRef, decision(request));
+  const guard = await promise;
+  assert.equal(guard.allowed, true); assert.equal(guard.consume(), true);
+  assert.equal((await receiptPromise).permit.status, "consumed");
+});
+
+test("Gateway fallback denies immediately when approval brokering is unavailable", async () => {
+  const broker = new PiApprovalBroker();
+  const guard = await broker.request({ cwd: "/repo", rawSessionId: "missing-session", toolCallId: "tool.missing",
+    action: externalAction, terminalConfirm: () => new Promise(() => undefined), unavailableFallback: "deny" });
+  assert.equal(guard.allowed, false); assert.equal(guard.brokered, false); assert.equal(guard.consume(), false);
+});
+
 test("terminal and WebUI race has exactly one winner", async () => {
   const terminalFirst = setup(), one = await pending(terminalFirst);
   terminalFirst.terminal.resolve(false); const denied = await one.promise;
@@ -102,6 +126,14 @@ test("runtime replacement cancels pending approval and rejects the old token", a
   const guard = await item.promise;
   assert.equal(guard.allowed, false); assert.equal(guard.receipt.winnerSurface, "runtime-restart");
   await assert.rejects(() => current.broker.decide("/repo", "raw-session", item.request.approvalRef, decision(item.request)), /pending/);
+});
+
+test("operation abort resolves its exact pending approval", async () => {
+  const current = setup(), item = await pending(current);
+  assert.equal(current.broker.cancelForOperation("/repo", "raw-session", identity.agentOperationId), 1);
+  const guard = await item.promise;
+  assert.equal(guard.allowed, false); assert.equal(guard.receipt.winnerSurface, "runtime-control");
+  assert.equal(guard.receipt.resolutionReason, "operation-aborted");
 });
 
 test("runtime expiry defaults to deny and never issues a permit", async () => {

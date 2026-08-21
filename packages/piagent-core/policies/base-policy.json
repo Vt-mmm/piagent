@@ -99,6 +99,7 @@
         "id": "prompt-database-migration",
         "action": "prompt",
         "match": "contains",
+        "ignoreSearchArguments": true,
         "value": "migrate",
         "reason": "Database migrations require explicit human confirmation."
       }

@@ -4,6 +4,25 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
+## v1.5.5 - 2026-08-21
+
+### WebUI command execution hotfix
+
+- Fixed provider tool-call identifiers containing characters outside the
+  public WebUI reference alphabet. Gateway approvals now bind those opaque
+  identifiers to private deterministic references instead of falling back to
+  a terminal confirmation that does not exist in WebUI.
+- Prevented search commands such as `rg` and `grep` from being mistaken for
+  migration execution merely because their search arguments contain
+  `migrate`. Real migration commands still require explicit confirmation.
+- Made Stop cancel the exact pending approval before aborting the model
+  operation, so a session cannot remain stuck waiting for an approval after
+  the user stops it. Gateway approval failures now deny immediately rather
+  than waiting indefinitely.
+- Corrected activity reporting so a tool call remains requested until native
+  execution actually starts, and strengthened Dashboard restart to wait for
+  the previous process to exit instead of silently reusing a hung instance.
+
 ## v1.5.4 - 2026-08-20
 
 ### WebUI workflow hotfix

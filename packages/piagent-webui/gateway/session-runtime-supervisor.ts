@@ -298,6 +298,10 @@ export class SessionRuntimeSupervisor {
     const active = this.#active.get(sessionRef), session = active?.runtime.session;
     if (!active || !session || active.operationRef !== operationRef) throw new Error("session-operation-conflict");
     const completion = active.completion;
+    // Extension hooks do not receive the Agent abort signal while awaiting a
+    // human approval. Resolve the exact operation's broker promise first so a
+    // stop request can reach the host instead of waiting for approval expiry.
+    piApprovalBroker.cancelForOperation(active.info.cwd, active.info.id, operationRef);
     await session.abort();
     if (clearQueued) session.clearQueue();
     await completion;
