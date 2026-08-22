@@ -469,6 +469,12 @@
         "read-only"
       ]
     },
+    "mutationPolicy": {
+      "enum": [
+        "required",
+        "forbidden"
+      ]
+    },
     "attempt": {
       "type": "integer",
       "minimum": 1,
@@ -863,6 +869,10 @@
     }
   },
   "allOf": [
+    {
+      "if": { "properties": { "changeMode": { "const": "read-only" } }, "required": ["changeMode"] },
+      "then": { "properties": { "mutationPolicy": { "const": "forbidden" } } }
+    },
     {
       "if": { "properties": { "workingTreeDigestAlgorithm": { "const": "legacy-untrusted" } }, "required": ["workingTreeDigestAlgorithm"] },
       "then": {

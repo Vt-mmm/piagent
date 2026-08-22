@@ -44,6 +44,7 @@ The machine-readable rule is `architecture/layers.json`; `npm run architecture:c
 | Security foundation | `packages/piagent-core/security/` | Sensitive-data primitives | Workflow behavior |
 | Benchmark | `packages/piagent-core/benchmark/`, `benchmarks/` | Suite validation, scoring, evidence | Runtime enforcement |
 | WebUI contracts | `packages/piagent-webui/contracts/` | Wire types shared by browser and server | Any runtime behavior; it depends on nothing |
+| WebUI shared | `packages/piagent-webui/shared/` | Dependency-free deterministic helpers shared by browser, server, and gateway | Browser state, transport, filesystem access, or runtime policy |
 | WebUI client | `packages/piagent-webui/client/` | Browser views, view models, UI preferences | Server state, filesystem, Pi APIs |
 | WebUI server | `packages/piagent-webui/server/` | HTTP/WS endpoints, session reads, diff assembly | Browser rendering; it may not import the client |
 | WebUI extension | `packages/piagent-webui/extension/` | The in-Pi `/piagent-webui` command surface | Wire types the client also needs |

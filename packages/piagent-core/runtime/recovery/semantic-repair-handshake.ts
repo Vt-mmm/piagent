@@ -17,6 +17,7 @@ export const MAX_SEMANTIC_REPAIR_PATHS = 12;
 export const MAX_SEMANTIC_REPAIR_REVISIONS = 2;
 export const MAX_SEMANTIC_REPAIR_MUTATIONS = 8;
 export const MAX_SEMANTIC_REPAIR_UNSUCCESSFUL_CALLS = 3;
+export const BOUNDED_RECOVERY_CONFLICT_CODE = "post-verifier-model-omission";
 
 type RepairStatus = "reserved" | "authorized" | "active" | "retry-ready" | "verifier-pending" | "passed" | "cancelled" | "locked";
 type RepairPendingCall = {
@@ -171,6 +172,46 @@ export function decideSemanticRepairHandshake(input: {
   const eligibleTargets = targets.filter((target) => eligiblePaths.includes(target));
   const includesConflictingSource = targets.some((target) => sourcePaths.includes(target));
   return { authorized: includesConflictingSource && targets.length === eligibleTargets.length, conflictCodes, eligibleTargets, eligiblePaths, pathConflictCodes };
+}
+
+/**
+ * Grant a single fail-closed recovery entry when the model notices an omission
+ * after a current exact verifier has already moved the task into verify.
+ *
+ * This is intentionally narrower than semantic repair: every target must be
+ * an actual current task delta, must have been observed in this task, and must
+ * still carry successful structured-mutation authorship for the exact task,
+ * run, and session. The caller separately enforces task scope and CAP-09/12/13
+ * authority before persisting the reservation.
+ */
+export function decideBoundedRecoveryHandshake(input: {
+  task: TaskContract;
+  mutationTargets: string[];
+  currentDeltaPaths: string[];
+  observedChangedPaths: string[];
+  authoredFileDigests: Record<string, string>;
+  verifierCurrent: boolean;
+}): SemanticRepairHandshakeDecision {
+  const targets = uniquePaths(input.mutationTargets);
+  const empty = { authorized: false, conflictCodes: [], eligibleTargets: [], eligiblePaths: [], pathConflictCodes: {} };
+  if (!input.verifierCurrent || targets.length === 0 || targets.length > MAX_SEMANTIC_REPAIR_PATHS) return empty;
+
+  const delta = new Set(uniquePaths(input.currentDeltaPaths));
+  const observed = new Set(uniquePaths(input.observedChangedPaths));
+  const authored = new Set(uniquePaths(Object.entries(input.authoredFileDigests)
+    .filter(([, digest]) => typeof digest === "string" && digest.length > 0)
+    .map(([file]) => file)));
+  const eligibleTargets = targets.filter((file) => delta.has(file) && observed.has(file) && authored.has(file));
+  if (eligibleTargets.length !== targets.length) return empty;
+
+  const pathConflictCodes = Object.fromEntries(targets.map((file) => [file, [BOUNDED_RECOVERY_CONFLICT_CODE]]));
+  return {
+    authorized: true,
+    conflictCodes: [BOUNDED_RECOVERY_CONFLICT_CODE],
+    eligibleTargets: targets,
+    eligiblePaths: targets,
+    pathConflictCodes
+  };
 }
 
 export function semanticRepairStatePath(cwd: string, taskRunId: string): string {
@@ -364,6 +405,7 @@ export function authorizeSemanticRepairCall(input: {
     return { handled: true, allowed: true, bypassPhase: false, state: writeState(input.cwd, state) };
   }
   if (state.status !== "active") return { handled: true, allowed: false, bypassPhase: false, reason: `semantic repair is ${state.status}` };
+  const boundedRecovery = state.conflictCodes.includes(BOUNDED_RECOVERY_CONFLICT_CODE);
   if (input.exactVerifier) {
     if (state.successfulMutationsInRevision < 1) return denyActiveCall(input.cwd, state, "semantic repair verifier requires a successful mutation in this revision", input.recordedAt);
     state.status = "verifier-pending";
@@ -372,6 +414,7 @@ export function authorizeSemanticRepairCall(input: {
     return { handled: true, allowed: true, bypassPhase: false, state: writeState(input.cwd, state) };
   }
   if (input.projectMutation) {
+    if (boundedRecovery) return denyActiveCall(input.cwd, state, "bounded recovery permits exactly one successful mutation before the exact verifier", input.recordedAt);
     const targets = uniquePaths(input.targetPaths);
     if (input.targetExtractionComplete === false) return denyActiveCall(input.cwd, state, "semantic repair mutation targets are not statically complete", input.recordedAt);
     if (targets.length === 0 || targets.some((file) => !state.eligiblePaths.includes(file))) return denyActiveCall(input.cwd, state, "semantic repair mutation is outside the exact persisted grant", input.recordedAt);
@@ -402,6 +445,7 @@ export function pendingSemanticRepairCall(cwd: string, taskRunId: string, toolCa
 export function completeSemanticRepairCall(input: {
   cwd: string; taskRunId: string; toolCallId: string; success: boolean; exitCode?: number;
   currentDigest: string; changedPaths: string[]; retryableFailure?: boolean; correctiveFailure?: boolean; recordedAt?: string;
+  authoredChangedPaths?: string[];
 }): { result: "unmatched" | "opened" | "recorded" | "retry" | "correction" | "passed" | "cancelled" | "locked"; state?: SemanticRepairState } {
   const view = readSemanticRepairState(input.cwd, input.taskRunId), state = view.state;
   if (!view.enforcementSafe || !state?.pending || state.pending.toolCallId !== input.toolCallId) return { result: "unmatched", state };
@@ -410,6 +454,7 @@ export function completeSemanticRepairCall(input: {
     return { result: "locked", state: writeState(input.cwd, state) };
   }
   const pending = state.pending, changed = uniquePaths(input.changedPaths), treeChanged = input.currentDigest !== pending.preDigest;
+  const boundedRecovery = state.conflictCodes.includes(BOUNDED_RECOVERY_CONFLICT_CODE);
   const now = input.recordedAt ?? new Date().toISOString();
   if (!pending.authorized) { state.status = "locked"; state.pending = null; state.updatedAt = now; return { result: "locked", state: writeState(input.cwd, state) }; }
   if (pending.kind === "verifier") {
@@ -418,12 +463,20 @@ export function completeSemanticRepairCall(input: {
     state.failedCalls += 1;
     if (treeChanged || unsuccessful(state) >= MAX_SEMANTIC_REPAIR_UNSUCCESSFUL_CALLS) state.status = "locked";
     else if (input.retryableFailure && !state.transientRetryUsed) { state.transientRetryUsed = true; state.status = "retry-ready"; }
-    else if (input.correctiveFailure && state.revision < MAX_SEMANTIC_REPAIR_REVISIONS) { state.revision += 1; state.successfulMutationsInRevision = 0; state.status = "active"; }
+    else if (!boundedRecovery && input.correctiveFailure && state.revision < MAX_SEMANTIC_REPAIR_REVISIONS) { state.revision += 1; state.successfulMutationsInRevision = 0; state.status = "active"; }
     else state.status = "locked";
     const result = state.status === "retry-ready" ? "retry" : state.status === "active" ? "correction" : "locked";
     return { result, state: writeState(input.cwd, state) };
   }
-  const unexpected = changed.length === 0 || changed.some((file) => !pending.targetPaths.includes(file) || !state.eligiblePaths.includes(file));
+  const authoredChanged = uniquePaths(input.authoredChangedPaths ?? []);
+  const boundedTargetMismatch = boundedRecovery
+    && (changed.length !== pending.targetPaths.length || changed.some((file, index) => pending.targetPaths[index] !== file));
+  const boundedAuthorshipMissing = boundedRecovery
+    && (authoredChanged.length !== changed.length || changed.some((file, index) => authoredChanged[index] !== file));
+  const unexpected = changed.length === 0
+    || changed.some((file) => !pending.targetPaths.includes(file) || !state.eligiblePaths.includes(file))
+    || boundedTargetMismatch
+    || boundedAuthorshipMissing;
   if (treeChanged && (!input.success || unexpected)) { state.status = "locked"; state.pending = null; state.updatedAt = now; return { result: "locked", state: writeState(input.cwd, state) }; }
   if (input.success && treeChanged) {
     if (pending.opensRepair) writeSemanticRepairOrigin(input.cwd, state, input.currentDigest, now);

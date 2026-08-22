@@ -50,6 +50,8 @@ describe("Piagent WebUI runtime event store", () => {
     assert.match(native.toolCallId, /^tool\./);
     assert.equal(failed.kind, "activity.failed");
     assert.equal(failed.payload.reasonCode, "tool-result-failed");
+    const missing = events.append(activity(5, "tool_result", { isError: true, reasonCode: "target-not-found" }, true), at(5)).event;
+    assert.equal(missing.payload.reasonCode, "target-not-found");
     assert.equal(blocked.kind, "activity.blocked");
   });
 

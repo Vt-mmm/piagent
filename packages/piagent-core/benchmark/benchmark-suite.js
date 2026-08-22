@@ -2,7 +2,7 @@ import { benchmarkAssuranceValidationErrors } from "./benchmark-assurance.js";
 
 const SUITE_FIELDS = new Set([
   "schemaVersion", "id", "title", "description", "profile", "defaultRepeats", "timeoutSeconds",
-  "assurance", "releaseGate", "scenarios"
+  "assurance", "releaseGate", "executionContract", "scenarios"
 ]);
 const SCENARIO_FIELDS = new Set([
   "id", "title", "description", "kind", "fixture", "prompt", "grader", "allowedChanges",
@@ -12,11 +12,16 @@ const SCENARIO_FIELDS = new Set([
 const RELEASE_GATE_FIELDS = new Set([
   "minimumQualityScore", "minimumSafetyScore", "minimumReliabilityScore", "minimumWorkflowScore",
   "minimumCategoryScore", "minimumOutcomeScoreExclusive", "minimumPairedScenarios", "minimumRepeats",
-  "minimumComparableEfficiencyScenarios", "maximumFreshTokenRatioUpper95", "requireEfficiencyClaim"
+  "minimumComparableEfficiencyScenarios", "maximumFreshTokenRatioUpper95", "maximumDurationRatioUpper95",
+  "maximumInfrastructureRetries", "primaryEfficiencyEstimand", "requireEfficiencyClaim", "requireFullSuiteForClaim",
+  "requireStableProviderWireSurface"
 ]);
+const EXECUTION_CONTRACT_FIELDS = new Set(["surfaces", "model", "thinking", "codexMode"]);
+const THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
 const SCENARIO_KINDS = new Set(["source-change", "read-only", "safety-refusal"]);
 const SCENARIO_DIFFICULTIES = new Set(["small", "medium", "large"]);
 const SCENARIO_LIFECYCLES = new Set(["steady-state", "cold-start"]);
+const PRIMARY_EFFICIENCY_ESTIMANDS = new Set(["successful-pair-family-ratio", "failure-aware-family-ratio"]);
 const ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 function plainObject(value) {
@@ -86,13 +91,52 @@ export function benchmarkSuiteValidationErrors(input) {
       if (minimumRepeats !== undefined && (!Number.isInteger(minimumRepeats) || minimumRepeats < 1 || minimumRepeats > 10)) {
         errors.push("releaseGate.minimumRepeats must be between 1 and 10");
       }
+      const maximumInfrastructureRetries = input.releaseGate.maximumInfrastructureRetries;
+      if (maximumInfrastructureRetries !== undefined && (!Number.isInteger(maximumInfrastructureRetries) || maximumInfrastructureRetries < 0 || maximumInfrastructureRetries > 1_000)) {
+        errors.push("releaseGate.maximumInfrastructureRetries must be between 0 and 1000");
+      }
       const maximumRatio = input.releaseGate.maximumFreshTokenRatioUpper95;
       if (maximumRatio !== undefined && (!Number.isFinite(maximumRatio) || maximumRatio <= 0 || maximumRatio > 10)) {
         errors.push("releaseGate.maximumFreshTokenRatioUpper95 must be greater than 0 and at most 10");
       }
+      const maximumDurationRatio = input.releaseGate.maximumDurationRatioUpper95;
+      if (maximumDurationRatio !== undefined && (!Number.isFinite(maximumDurationRatio) || maximumDurationRatio <= 0 || maximumDurationRatio > 10)) {
+        errors.push("releaseGate.maximumDurationRatioUpper95 must be greater than 0 and at most 10");
+      }
       if (input.releaseGate.requireEfficiencyClaim !== undefined && typeof input.releaseGate.requireEfficiencyClaim !== "boolean") {
         errors.push("releaseGate.requireEfficiencyClaim must be a boolean");
       }
+      if (input.releaseGate.primaryEfficiencyEstimand !== undefined
+        && !PRIMARY_EFFICIENCY_ESTIMANDS.has(input.releaseGate.primaryEfficiencyEstimand)) {
+        errors.push("releaseGate.primaryEfficiencyEstimand is invalid");
+      }
+      if (input.releaseGate.requireFullSuiteForClaim !== undefined && typeof input.releaseGate.requireFullSuiteForClaim !== "boolean") {
+        errors.push("releaseGate.requireFullSuiteForClaim must be a boolean");
+      }
+      if (input.releaseGate.requireStableProviderWireSurface !== undefined && typeof input.releaseGate.requireStableProviderWireSurface !== "boolean") {
+        errors.push("releaseGate.requireStableProviderWireSurface must be a boolean");
+      }
+    }
+  }
+  if (input.executionContract !== undefined) {
+    if (!plainObject(input.executionContract)) errors.push("executionContract must be an object");
+    else {
+      for (const field of Object.keys(input.executionContract)) {
+        if (!EXECUTION_CONTRACT_FIELDS.has(field)) errors.push(`executionContract has unsupported field ${field}`);
+      }
+      const contract = input.executionContract;
+      if (!Array.isArray(contract.surfaces)
+        || contract.surfaces.length !== 2
+        || contract.surfaces[0] !== "piagent"
+        || contract.surfaces[1] !== "codex-cli") {
+        errors.push("executionContract.surfaces must be exactly piagent,codex-cli");
+      }
+      requiredString(contract.model, "executionContract.model", errors);
+      if (typeof contract.model === "string" && !/^[^/\s]+\/[^/\s]+$/.test(contract.model)) {
+        errors.push("executionContract.model must use provider/model form");
+      }
+      if (!THINKING_LEVELS.has(contract.thinking)) errors.push("executionContract.thinking is invalid");
+      if (contract.codexMode !== "controlled") errors.push("executionContract.codexMode must be controlled");
     }
   }
   if (input.schemaVersion === 2 && (!plainObject(input.assurance) || !plainObject(input.releaseGate))) {
@@ -100,6 +144,16 @@ export function benchmarkSuiteValidationErrors(input) {
   }
   if (input.schemaVersion === 2 && input.releaseGate?.requireEfficiencyClaim === true && !Number.isInteger(input.releaseGate?.minimumComparableEfficiencyScenarios)) {
     errors.push("schemaVersion 2 efficiency claims require releaseGate.minimumComparableEfficiencyScenarios");
+  }
+  if (input.schemaVersion === 2 && input.releaseGate?.requireEfficiencyClaim === true
+    && (!Number.isFinite(input.releaseGate?.maximumFreshTokenRatioUpper95) || input.releaseGate.maximumFreshTokenRatioUpper95 > 0.8)) {
+    errors.push("schemaVersion 2 token-saving claims require releaseGate.maximumFreshTokenRatioUpper95 at or below 0.8");
+  }
+  if (input.schemaVersion === 2 && input.releaseGate?.requireEfficiencyClaim === true && input.releaseGate?.requireFullSuiteForClaim !== true) {
+    errors.push("schemaVersion 2 token-saving claims require releaseGate.requireFullSuiteForClaim true");
+  }
+  if (input.schemaVersion === 2 && input.releaseGate?.requireEfficiencyClaim === true && input.releaseGate?.requireStableProviderWireSurface !== true) {
+    errors.push("schemaVersion 2 token-saving claims require releaseGate.requireStableProviderWireSurface true");
   }
   if (!Array.isArray(input.scenarios) || input.scenarios.length === 0 || input.scenarios.length > 50) {
     errors.push("scenarios must contain between 1 and 50 entries");

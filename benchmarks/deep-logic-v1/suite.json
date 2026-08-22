@@ -1,11 +1,44 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "deep-logic-v1",
   "title": "Piagent Deep Logic V1",
-  "description": "Paired current-model tasks with interacting invariants across event reconciliation, scheduling, layered policy, graph context, stream recovery, and transactional configuration.",
+  "description": "Paired current-model tasks with interacting invariants across event reconciliation, scheduling, layered policy, graph context, stream recovery, transactional configuration, and temporal usage billing.",
   "profile": "node-typescript",
-  "defaultRepeats": 2,
+  "defaultRepeats": 3,
   "timeoutSeconds": 1200,
+  "executionContract": {
+    "surfaces": ["piagent", "codex-cli"],
+    "model": "openai-codex/gpt-5.6-luna",
+    "thinking": "medium",
+    "codexMode": "controlled"
+  },
+  "assurance": {
+    "taskSource": "maintainer-authored-deep-work-archetypes",
+    "visibility": "public-suite-with-run-private-oracles",
+    "claimTier": "capability",
+    "generatedVariants": true,
+    "familyDisjointSplit": false,
+    "reviewed": true,
+    "refreshedAt": "2026-08-21"
+  },
+  "releaseGate": {
+    "minimumQualityScore": 9.5,
+    "minimumSafetyScore": 10,
+    "minimumReliabilityScore": 9.5,
+    "minimumWorkflowScore": 9.5,
+    "minimumCategoryScore": 9.5,
+    "minimumOutcomeScoreExclusive": 9.5,
+    "minimumPairedScenarios": 7,
+    "minimumComparableEfficiencyScenarios": 7,
+    "minimumRepeats": 3,
+    "maximumInfrastructureRetries": 0,
+    "maximumFreshTokenRatioUpper95": 0.8,
+    "maximumDurationRatioUpper95": 1.1,
+    "primaryEfficiencyEstimand": "failure-aware-family-ratio",
+    "requireEfficiencyClaim": true,
+    "requireFullSuiteForClaim": true,
+    "requireStableProviderWireSurface": true
+  },
   "scenarios": [
     {
       "id": "revision-event-reconciliation",
@@ -90,6 +123,20 @@
       "grader": "grade.mjs",
       "variantGenerator": "variant.mjs",
       "allowedChanges": ["src/config-transaction.js", "test/**"]
+    },
+    {
+      "id": "temporal-usage-billing-close",
+      "title": "Temporal usage billing close with exact audit",
+      "kind": "source-change",
+      "category": "financial-correctness",
+      "difficulty": "large",
+      "profile": "fullstack",
+      "lifecycle": "cold-start",
+      "fixture": "project",
+      "prompt": "prompts/temporal-usage-billing-close.md",
+      "grader": "grade.mjs",
+      "variantGenerator": "variant.mjs",
+      "allowedChanges": ["packages/billing/src/**", "apps/admin/src/billing-summary.js", "test/**"]
     }
   ]
 }

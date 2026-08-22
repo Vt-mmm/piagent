@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { durableContextEvidenceEntries } from "../../extensions/context-evidence.js";
 import type { TaskContract } from "../../extensions/guard-types.js";
 
 const MAX_EVIDENCE_BYTES = 256 * 1024;
@@ -71,7 +72,7 @@ export function evaluateExactFinalOutputContract(
 
   const evidencePaths: string[] = [];
   const observedValues = new Set<string>();
-  for (const entry of task.contextManifest ?? []) {
+  for (const entry of durableContextEvidenceEntries(task)) {
     const observed = safeObservedFile(cwd, entry.path);
     if (!observed) continue;
     const values = valuesForKey(directive.key, observed.text);

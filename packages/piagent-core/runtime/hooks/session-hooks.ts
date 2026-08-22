@@ -4,6 +4,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import type { TaskContract } from "../../extensions/guard-types.js";
 import { RuntimeSessionState } from "../session/runtime-state.ts";
 import type { ObservedTaskContext } from "../session/runtime-state.ts";
+import { confirmContextDelivery, contextDeliveryIdFromDetails } from "../context/context-delivery.ts";
 
 type TelemetryWriter = (ctx: ExtensionContext, payload: Record<string, unknown>) => void;
 
@@ -38,6 +39,20 @@ export function registerSessionHooks(pi: ExtensionAPI, dependencies: SessionHook
     appendTrace,
     flushObservedTaskContext
   } = dependencies;
+
+  pi.on("message_start", async (event, ctx) => {
+    const message = event.message as unknown as { role?: unknown; details?: unknown };
+    if (message.role !== "custom") return;
+    const deliveryId = contextDeliveryIdFromDetails(message.details);
+    if (!deliveryId) return;
+    confirmContextDelivery(pi, ctx, deliveryId, {
+      state,
+      maxManifestFiles,
+      activeTask: (deliveryContext) => activeTask(deliveryContext.cwd, deliveryContext.sessionManager.getSessionId()),
+      flushObservedTaskContext,
+      telemetry
+    });
+  });
 
   pi.on("session_info_changed", async (event, ctx) => {
     const sessionId = ctx.sessionManager.getSessionId();
@@ -96,7 +111,7 @@ export function registerSessionHooks(pi: ExtensionAPI, dependencies: SessionHook
     flushObservedTaskContext(
       pi,
       ctx,
-      state.observedContext(ctx),
+      state.qualifiedTaskContext(ctx),
       maxManifestFiles,
       "context_observed_before_shutdown"
     );

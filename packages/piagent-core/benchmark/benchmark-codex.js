@@ -9,7 +9,9 @@ export function codexModelName(model) {
 
 export function codexThinkingEffort(thinking) {
   if (!thinking) throw Object.assign(new Error("Codex CLI comparisons require --thinking"), { exitCode: 1 });
-  return thinking === "off" ? "none" : thinking;
+  if (thinking === "off") return "none";
+  if (thinking === "minimal") return "low";
+  return thinking;
 }
 
 export function codexExecArgs({ workspace, options, disabledFeatures = [] }) {

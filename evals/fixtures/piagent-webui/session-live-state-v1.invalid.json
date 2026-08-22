@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-session-live-state-v1",
+  "generatedAt": "2026-08-21T08:00:00.000Z",
+  "gatewayInstanceRef": "gateway_fixture_01",
+  "eventSequence": 42,
+  "state": "ready",
+  "operations": [
+    {
+      "sessionRef": "session_fixture_01",
+      "operationRef": "operation_fixture_01",
+      "state": "settling",
+      "abortable": true
+    }
+  ],
+  "settlements": [],
+  "reasonCode": null
+}

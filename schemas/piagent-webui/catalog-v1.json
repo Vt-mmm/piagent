@@ -219,6 +219,15 @@
       "current": true
     },
     {
+      "name": "session-live-state-v1",
+      "file": "session-live-state-v1.schema.json",
+      "id": "https://piagent.io.vn/schemas/piagent-webui/session-live-state-v1.schema.json",
+      "documentVersion": 1,
+      "role": "read-model",
+      "supported": true,
+      "current": true
+    },
+    {
       "name": "session-command-v1",
       "file": "session-command-v1.schema.json",
       "id": "https://piagent.io.vn/schemas/piagent-webui/session-command-v1.schema.json",

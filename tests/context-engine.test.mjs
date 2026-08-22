@@ -20,6 +20,9 @@ import {
   searchContextIndexV2
 } from "../packages/piagent-core/extensions/context-engine.js";
 import { buildSelectedContextPack } from "../packages/piagent-core/extensions/criterion-context-pack.js";
+import { buildPrefixTelemetry } from "../packages/piagent-core/runtime/context/prefix-telemetry.ts";
+import { injectionEfficiencyMetrics } from "../packages/piagent-core/extensions/context-efficiency-metrics.js";
+import { measureContextDeltaShadow } from "../packages/piagent-core/runtime/context/context-delta-shadow.ts";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 
@@ -617,10 +620,15 @@ test("writes Agent Watch compatible telemetry and transparent context waste metr
   appendContextTelemetry(cwd, {
     event: "agent_prompt",
     sessionId: "session-1",
+    turnId: "turn-1",
     activeTools: 30,
     systemPromptTokens: 10_000,
-    toolSchemaTokens: 2_000
+    toolSchemaTokens: 2_000,
+    prefixSurfaceHash: "prefix-a"
   });
+  appendContextTelemetry(cwd, { event: "turn_task_bound", sessionId: "session-1", turnId: "turn-1", taskRunId: "run-1" });
+  appendContextTelemetry(cwd, { event: "agent_prompt", sessionId: "session-1", taskRunId: "run-1", activeTools: 30, systemPromptTokens: 10_000, toolSchemaTokens: 2_000, prefixSurfaceHash: "prefix-a" });
+  appendContextTelemetry(cwd, { event: "agent_prompt", sessionId: "session-1", taskRunId: "run-1", activeTools: 30, systemPromptTokens: 10_000, toolSchemaTokens: 2_000, prefixSurfaceHash: "prefix-b" });
   appendContextTelemetry(cwd, { event: "tool_call", toolName: "read", inputHash: "same", targetHash: "same" });
   appendContextTelemetry(cwd, { event: "tool_call", toolName: "read", inputHash: "same", targetHash: "same" });
   appendContextTelemetry(cwd, { event: "tool_result", toolName: "read", outputChars: 1_000, repeated: false });
@@ -631,21 +639,32 @@ test("writes Agent Watch compatible telemetry and transparent context waste metr
     confidence: "low",
     selectedPaths: ["src/math.ts", "src/service.ts"]
   });
+  const injection = { event: "context_pack_injected", sessionId: "session-1", taskRunId: "run-1", source: "auto-pack", selectedPaths: ["src/math.ts"], selectedItems: [{ path: "src/math.ts", estimatedTokens: 50, fileContentHash: "file-1", payloadHash: "payload-1", representation: "snippet", ranges: [{ start: 1, end: 3 }], generation: 1 }] };
+  appendContextTelemetry(cwd, injection);
+  appendContextTelemetry(cwd, injection);
   appendContextTelemetry(cwd, {
     event: "tool_call",
     sessionId: "session-1",
+    taskRunId: "run-1",
     toolName: "read",
     targetPath: "src/math.ts",
     inputHash: "math-read"
   });
 
   const report = buildContextEfficiencyReport(cwd);
+  assert.equal(report.schemaVersion, 2);
   assert.equal(report.source, "piagent");
+  assert.equal(report.sample.contextPacks, 1);
+  assert.equal(report.sample.contextPacksInjected, 2);
   assert.equal(report.metrics.duplicateReads, 1);
   assert.equal(report.metrics.duplicateOutputChars, 1_000);
   assert.equal(report.metrics.contextSelections, 2);
   assert.equal(report.metrics.contextSelectionsUsed, 1);
   assert.equal(report.metrics.contextUtilizationRate, 0.5);
+  assert.equal(report.metrics.prefixChangeRate, 0.5);
+  assert.equal(report.metrics.averageTurnsPerPrefixEpoch, 1.5);
+  assert.equal(report.metrics.duplicateInjectionRate, 0.5);
+  assert.equal(report.metrics.duplicateInjectionTokenRate, 0.5);
   assert.ok(report.metrics.contextWasteScore > 0);
   assert.match(report.methodology.note, /not a quality verdict/);
   assert.match(report.methodology.retrievalFeedback, /Positive-only/);
@@ -658,13 +677,16 @@ test("uses only evidenced positive feedback as a weak retrieval signal", async (
   await buildContextIndexV2(cwd, { excludePatterns: [] });
 
   appendContextTelemetry(cwd, {
-    event: "context_pack",
+    event: "context_pack_injected",
     sessionId: "session-feedback",
-    selectedPaths: ["src/math.ts", "src/service.ts"]
+    taskRunId: "feedback-run",
+    selectedPaths: ["src/math.ts", "src/service.ts"],
+    selectedItems: [{ path: "src/math.ts", estimatedTokens: 20 }, { path: "src/service.ts", estimatedTokens: 20 }]
   });
   appendContextTelemetry(cwd, {
     event: "tool_call",
     sessionId: "session-feedback",
+    taskRunId: "feedback-run",
     toolName: "read",
     targetPath: "src/math.ts"
   });
@@ -677,4 +699,62 @@ test("uses only evidenced positive feedback as a weak retrieval signal", async (
   const unused = search.results.find((result) => result.path === "src/service.ts");
   assert.ok(used?.sources.includes("feedback"));
   assert.equal(unused?.sources.includes("feedback") ?? false, false);
+});
+
+test("canonical prefix hashes ignore tool and nested schema key ordering", () => {
+  const leftTools = [
+    { name: "zeta", description: "Z", parameters: { type: "object", properties: { b: { type: "number" }, a: { type: "string" } } } },
+    { name: "alpha", description: "A", parameters: { required: ["value"], type: "object" } }
+  ];
+  const rightTools = [
+    { parameters: { type: "object", required: ["value"] }, description: "A", name: "alpha" },
+    { parameters: { properties: { a: { type: "string" }, b: { type: "number" } }, type: "object" }, name: "zeta", description: "Z" }
+  ];
+  const left = buildPrefixTelemetry("system", leftTools);
+  const right = buildPrefixTelemetry("system", rightTools);
+  assert.equal(left.toolSchemaHash, right.toolSchemaHash);
+  assert.equal(left.prefixSurfaceHash, right.prefixSurfaceHash);
+  assert.notEqual(buildPrefixTelemetry("changed", rightTools).prefixSurfaceHash, right.prefixSurfaceHash);
+});
+
+test("duplicate injection metrics stay task/session-bound and fail safe on incomplete receipts", () => {
+  const item = { path: "src/math.ts", estimatedTokens: 30, fileContentHash: "file-1", payloadHash: "payload-1", representation: "snippet", ranges: [{ start: 1, end: 3 }], generation: 1 };
+  const metrics = injectionEfficiencyMetrics([
+    { event: "context_pack", sessionId: "session-a", taskRunId: "run-a", selectedItems: [item] },
+    { event: "context_pack_injected", sessionId: "session-a", taskRunId: "run-a", selectedItems: [item] },
+    { event: "context_pack_injected", sessionId: "session-a", taskRunId: "run-a", selectedItems: [item] },
+    { event: "context_pack_injected", sessionId: "session-b", taskRunId: "run-b", selectedItems: [item] },
+    { event: "context_pack_injected", sessionId: "session-a", taskRunId: "run-a", selectedItems: [{ path: "src/incomplete.ts", estimatedTokens: 10 }] },
+    { event: "context_pack_injected", sessionId: "session-a", taskRunId: "run-a", source: "compaction-rehydrate", selectedItems: [item] }
+  ]);
+  assert.equal(metrics.injectedPathOccurrences, 5);
+  assert.equal(metrics.comparableInjectionItems, 3);
+  assert.equal(metrics.duplicateInjections, 1);
+  assert.equal(Number(metrics.duplicateInjectionRate.toFixed(4)), 0.2);
+  assert.equal(Number(metrics.duplicateInjectionTokenRate.toFixed(4)), 0.2308);
+  assert.deepEqual(injectionEfficiencyMetrics([]), {
+    injectedPathOccurrences: 0, comparableInjectionItems: 0, duplicateInjections: 0,
+    duplicateInjectionRate: 0, macroDuplicateInjectionRate: 0, injectedPathTokens: 0,
+    duplicateInjectionTokens: 0, duplicateInjectionTokenRate: 0
+  });
+});
+
+test("delta shadow measures manifested candidates without injecting or running under pressure", async (t) => {
+  const cwd = fixture();
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  await buildContextIndexV2(cwd, { excludePatterns: [] });
+  const events = [];
+  const task = { taskRunId: "shadow-run", contextManifest: [{ path: "src/math.ts", reason: "Runtime observed successful source read." }] };
+  const ctx = { cwd, getContextUsage: () => ({ percent: 20 }) };
+  await measureContextDeltaShadow({ ctx, query: "invoice total math service", turnId: "shadow-turn", task, mode: "on", protectedTarget: false, excludePatterns: [], telemetry: (_ctx, event) => events.push(event) });
+  assert.equal(events.length, 1);
+  assert.equal(events[0].event, "context_delta_shadow");
+  assert.ok(events[0].candidatePaths.includes("src/math.ts"));
+  assert.ok(events[0].pathsAlreadyManifested.includes("src/math.ts"));
+  assert.ok(events[0].duplicateCandidateTokens > 0);
+  assert.deepEqual(task.contextManifest, [{ path: "src/math.ts", reason: "Runtime observed successful source read." }]);
+  await measureContextDeltaShadow({ ctx: { ...ctx, getContextUsage: () => ({ percent: 90 }) }, query: "invoice total math service", turnId: "pressure-turn", task, mode: "on", protectedTarget: false, excludePatterns: [], telemetry: (_ctx, event) => events.push(event) });
+  assert.equal(events.length, 1, "high context pressure skips shadow selection");
+  await measureContextDeltaShadow({ ctx, query: "inspect .env secret", turnId: "protected-turn", task, mode: "on", protectedTarget: true, excludePatterns: ["**/.env"], telemetry: (_ctx, event) => events.push(event) });
+  assert.equal(events.length, 1, "protected targets never enter shadow telemetry");
 });

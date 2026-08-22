@@ -6,6 +6,8 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { after, describe, it } from "node:test";
 
+import { summarizeSession } from "../scripts/pi-usage-history.mjs";
+
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const script = path.join(repositoryRoot, "scripts", "pi-usage-history.mjs");
 const temporaryRoots = new Set();
@@ -188,6 +190,24 @@ describe("Pi usage history", () => {
     assert.equal(report.totals.sessions, 3);
     assert.equal(report.projects.length, 2);
     assert.equal(report.totals.tokens.total, 2545);
+  });
+
+  it("fails closed on incomplete benchmark token telemetry while keeping history mode tolerant", () => {
+    const fixture = makeFixture();
+    const target = path.join(fixture.root, "strict.jsonl");
+    const incomplete = usage(3, 2, 1, 0, 1, 6, 0); delete incomplete.cacheWrite;
+    writeJsonl(target, [
+      { type: "session", id: "strict", cwd: fixture.project },
+      { type: "message", message: { role: "assistant", content: [], usage: incomplete } }
+    ]);
+    assert.throws(() => summarizeSession(target, { strictUsage: true }), /cacheWrite must be a non-negative safe integer/);
+    assert.equal(summarizeSession(target, {}).tokens.total, 6);
+    writeJsonl(target, [
+      { type: "session", id: "strict", cwd: fixture.project },
+      { type: "message", message: { role: "assistant", content: [], usage: usage(3, 2, 1, 0, 1, 6, 0) } }
+    ]);
+    fs.appendFileSync(target, "not-json\n");
+    assert.throws(() => summarizeSession(target, { strictUsage: true }), /line 3 is not valid JSON/);
   });
 
   // docs/usage-observability.md documents the --json shape as a table of

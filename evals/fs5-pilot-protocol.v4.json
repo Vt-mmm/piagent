@@ -17,14 +17,14 @@
   "artifactBindings": [
     { "id": "authority-manifest", "path": "packages/piagent-core/policy/authority-manifest.v1.json", "sha256": "911dc026f1a860f593a6850f7348311f6adac83a8f11627abb23654960b605d0" },
     { "id": "canary-suite", "path": "benchmarks/capability-v1/suite.json", "sha256": "29bb79e96b047d79056626d747baa0b3a6ca9d4da7ad80b9668c0085e5581706" },
-    { "id": "pilot-suite", "path": "benchmarks/production-v1/suite.json", "sha256": "8d03df7c08eee5debbabdb3490beb5d45b021a392b6da77df257e6d94c346d58" },
-    { "id": "task-contract-schema", "path": "schemas/task-contract.schema.json", "sha256": "432a253af865f5c79527b3c7e5e65fc3b6cfea43d19f9e915f3bda792a358bb4" },
+    { "id": "pilot-suite", "path": "benchmarks/production-v1/suite.json", "sha256": "d483c1a8b6def71aaaf217fe6bf2044ec37fc08cf17d01aee7fb4d75be80cafc" },
+    { "id": "task-contract-schema", "path": "schemas/task-contract.schema.json", "sha256": "dc6da752c0d3bc6a82f7e168566359d94f52699b32a6309e929083ba52c845d8" },
     { "id": "assurance-schema", "path": "schemas/benchmark-assurance-evidence.schema.json", "sha256": "5d937632d2cfff34dbbb781dd367bb78feb64c36d571c36ca15f2cc40c576af8" },
-    { "id": "failure-and-operational-classifier", "path": "packages/piagent-core/benchmark/benchmark-forensics.js", "sha256": "4c0a2d011f48bc356b5edd50dd849d520b66ad91b8ccd47c6eb23ff3e5f5e9fb" },
+    { "id": "failure-and-operational-classifier", "path": "packages/piagent-core/benchmark/benchmark-forensics.js", "sha256": "f49033871839f167aad0f1738f729cf0600a0a735fbacb345eb60925c27e2364" },
     { "id": "phase-attribution", "path": "packages/piagent-core/benchmark/benchmark-phase-attribution.js", "sha256": "9c07bda5bfe7bb7b0959844ccea6790735cc9f154d8d5972e18785148cea6d9a" },
     { "id": "record-validator", "path": "packages/piagent-core/benchmark/benchmark-record-validation.js", "sha256": "70bccd4db24ab44b68af590c67aa82caf2b7fedc3b83333a097858001235848a" },
     { "id": "protocol-enforcement", "path": "packages/piagent-core/benchmark/fs5-pilot-protocol.js", "sha256": "2bcc0cf6c18eee0c080c30e727610b0f10a278f5862855d920ba5797f07a2f2d" },
-    { "id": "runner-core", "path": "scripts/benchmark-runner-core.mjs", "sha256": "9081c4fb90747b682ccbd41adebae4536239b9742a9a3e930245ae676a9ff322" }
+    { "id": "runner-core", "path": "scripts/benchmark-runner-core.mjs", "sha256": "a10f900ecd155c5e3fa55c7d9311e0759ec7b735187ca984e453c6eeff4bd01a" }
   ],
   "runIdentityContract": {
     "required": [

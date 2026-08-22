@@ -74,7 +74,9 @@ export function buildSelectedContextPack(cwd, entries, options = {}) {
     try {
       const bytes = fs.readFileSync(file.descriptor);
       if (!textBuffer(bytes)) continue;
-      const item = { path: relative, content: bytes.toString("utf8"), contentDigest: crypto.createHash("sha256").update(bytes).digest("hex"), size: file.size };
+      const content = bytes.toString("utf8");
+      const item = { path: relative, content, contentDigest: crypto.createHash("sha256").update(bytes).digest("hex"), size: file.size,
+        estimatedTokens: estimateContextTokens(`### ${relative}\n${content}`) };
       if (estimateContextTokens(render([...selected, item])) <= budgetTokens) selected.push(item);
     } finally {
       fs.closeSync(file.descriptor);

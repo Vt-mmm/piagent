@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { parseBenchmarkArgs } from "../packages/piagent-core/benchmark/benchmark-cli.js";
+import { codexThinkingEffort } from "../packages/piagent-core/benchmark/benchmark-codex.js";
 import {
   benchmarkEnvironment,
   piagentProcessEnvironment,
@@ -9,7 +10,9 @@ import {
 } from "../packages/piagent-core/benchmark/benchmark-runtime.js";
 
 test("parses and validates explicit Piagent benchmark treatments", () => {
-  assert.equal(parseBenchmarkArgs([]).piagentTreatment, "release-defaults");
+  const defaults = parseBenchmarkArgs([]);
+  assert.equal(defaults.piagentTreatment, "release-defaults");
+  assert.deepEqual(defaults.surfaces, ["piagent", "codex-cli"]);
   assert.equal(parseBenchmarkArgs(["--piagent-treatment", "candidate"]).piagentTreatment, "candidate");
   assert.equal(parseBenchmarkArgs(["--piagent-treatment", "causal-phase-enforce"]).piagentTreatment, "causal-phase-enforce");
   assert.equal(parseBenchmarkArgs(["--piagent-treatment", "intelligence-engine"]).piagentTreatment, "intelligence-engine");
@@ -17,6 +20,12 @@ test("parses and validates explicit Piagent benchmark treatments", () => {
     () => parseBenchmarkArgs(["--piagent-treatment", "unknown"]),
     /release-defaults, local-safe, mechanical-core, intelligence-engine, causal-phase-enforce, candidate, feature-off/
   );
+});
+
+test("maps host thinking names to the exact Codex provider effort", () => {
+  assert.equal(codexThinkingEffort("off"), "none");
+  assert.equal(codexThinkingEffort("minimal"), "low");
+  assert.equal(codexThinkingEffort("medium"), "medium");
 });
 
 test("applies candidate treatment after stripping inherited Piagent overrides", () => {

@@ -35,7 +35,10 @@ function bounded(promise, label, timeoutMs = 2_000) {
     .finally(() => clearTimeout(timer));
 }
 
-function opened(socket) { return bounded(new Promise((resolve, reject) => { socket.once("open", resolve); socket.once("error", reject); }), "websocket-open"); }
+function opened(socket) { return bounded(new Promise((resolve, reject) => {
+  socket.once("open", resolve); socket.once("error", reject);
+  socket.once("unexpected-response", (_request, response) => { const status = response.statusCode; response.resume(); reject(new Error(`websocket-response-${status}`)); });
+}), "websocket-open"); }
 function inbox(socket) {
   const queued = [], waiting = [];
   socket.on("message", (data) => {
@@ -52,6 +55,89 @@ function inbox(socket) {
 }
 
 describe("Piagent authenticated typed Gateway transport", () => {
+  it("retains one bounded, redacted Activity settlement per failed operation", () => {
+    const events = new GatewayEventStore({ maximumCount: 100, maximumAgeMs: 60_000 });
+    const observed = []; events.subscribe((event) => observed.push(event));
+    const base = Date.parse("2026-08-21T08:00:00.000Z");
+    const publish = (operationRef, settlement, reasonCode, offset) => events.publish("operation.settled", {
+      sessionRef: "session_terminal_activity", operationRef, messageRef: null, sessionRevision: null, settlement, reasonCode
+    }, new Date(base + offset));
+    publish("operation_success", "completed", null, 1);
+    publish("operation_provider", "error", "assistant-response-failed", 2);
+    publish("operation_provider", "aborted", "operation-aborted", 3);
+    publish("operation_blocked", "blocked", "completion-gate-not-approved", 4);
+    publish("operation_aborted", "aborted", "operation-aborted", 5);
+    publish("operation_watchdog", "error", "operation-inactivity-timeout", 6);
+    publish("operation_projection", "error", "session-projection-timeout", 7);
+    publish("operation_unknown", "unknown", "session-projection-unavailable", 8);
+    publish("operation_redacted", "error", "raw provider secret must not escape", 9);
+    publish("operation_token_shaped", "error", `sk-proj-${"a".repeat(40)}`, 10);
+
+    const settlements = events.recentOperationSettlements(100, new Date(base + 11));
+    assert.deepEqual(settlements.map((item) => item.operationRef), ["operation_token_shaped", "operation_redacted", "operation_unknown",
+      "operation_projection", "operation_watchdog", "operation_aborted", "operation_blocked", "operation_provider"]);
+    assert.equal(settlements.find((item) => item.operationRef === "operation_provider").settlement, "error");
+    assert.equal(settlements.find((item) => item.operationRef === "operation_provider").sequence, 2);
+    assert.deepEqual(observed.filter((item) => item.payload.operationRef === "operation_provider")
+      .map((item) => item.payload.settlement), ["error", "error"]);
+    assert.equal(settlements.find((item) => item.operationRef === "operation_redacted").reasonCode, "operation-failed");
+    assert.equal(settlements.find((item) => item.operationRef === "operation_token_shaped").reasonCode, "operation-failed");
+    assert.equal(observed.find((item) => item.payload.operationRef === "operation_token_shaped").payload.reasonCode, "operation-failed");
+    assert.equal(JSON.stringify({ settlements, observed }).includes("sk-proj-"), false);
+    assert.equal(JSON.stringify(settlements).includes("raw provider secret"), false);
+
+    const pressure = new GatewayEventStore({ maximumCount: 2, maximumAgeMs: 1_000 });
+    pressure.publish("operation.settled", { sessionRef: "session_pressure", operationRef: "operation_failure_retained",
+      settlement: "error", reasonCode: "provider-response-failed" }, new Date(base + 100));
+    pressure.publish("operation.settled", { sessionRef: "session_pressure", operationRef: "operation_completed_first",
+      settlement: "completed", reasonCode: null }, new Date(base + 101));
+    const contradictory = pressure.publish("operation.settled", { sessionRef: "session_pressure", operationRef: "operation_completed_first",
+      settlement: "error", reasonCode: "contradictory-late-error" }, new Date(base + 102));
+    assert.equal(contradictory.payload.settlement, "completed");
+    assert.equal(contradictory.payload.reasonCode, null);
+    for (let index = 0; index < 125; index += 1) pressure.publish("operation.settled", {
+      sessionRef: "session_pressure", operationRef: `operation_success_${index}`, settlement: "completed", reasonCode: null
+    }, new Date(base + 103 + index));
+    for (let index = 0; index < 1_001; index += 1) pressure.publish("catalog.changed", {
+      catalogRevision: `revision_pressure_${index}`
+    }, new Date(base + 300 + index));
+    const retainedUnderPressure = pressure.recentOperationSettlements(100, new Date(base + 1_500));
+    assert.deepEqual(retainedUnderPressure.map((item) => item.operationRef), ["operation_failure_retained"]);
+    assert.equal(pressure.replay(0).state, "resync-required");
+
+    const bounded = new GatewayEventStore({ maximumCount: 1 });
+    for (let index = 0; index < 105; index += 1) bounded.publish("operation.settled", {
+      sessionRef: "session_bounded", operationRef: `operation_failure_${index}`, settlement: "error", reasonCode: "operation-failed"
+    }, new Date(base + index));
+    const latestFailures = bounded.recentOperationSettlements(100, new Date(base + 200));
+    assert.equal(latestFailures.length, 100);
+    assert.equal(latestFailures[0].operationRef, "operation_failure_104");
+    assert.equal(latestFailures.at(-1).operationRef, "operation_failure_5");
+
+    const decisionPressure = new GatewayEventStore({ maximumCount: 1, settlementDecisionCount: 3 });
+    decisionPressure.publish("operation.settled", { sessionRef: "session_decision_pressure",
+      operationRef: "operation_retained_failure", settlement: "error", reasonCode: "provider-response-failed"
+    }, new Date(base + 1));
+    for (let index = 0; index < 4; index += 1) decisionPressure.publish("operation.settled", {
+      sessionRef: "session_decision_pressure", operationRef: `operation_decision_success_${index}`,
+      settlement: "completed", reasonCode: null
+    }, new Date(base + 2 + index));
+    const replayedFailure = decisionPressure.publish("operation.settled", { sessionRef: "session_decision_pressure",
+      operationRef: "operation_retained_failure", settlement: "completed", reasonCode: null
+    }, new Date(base + 8));
+    assert.equal(replayedFailure.payload.settlement, "error");
+    assert.equal(replayedFailure.payload.reasonCode, "provider-response-failed");
+    assert.deepEqual(decisionPressure.recentOperationSettlements(100, new Date(base + 9))
+      .map((item) => item.operationRef), ["operation_retained_failure"]);
+
+    const expired = new GatewayEventStore({ maximumAgeMs: 1_000 });
+    expired.publish("operation.settled", { sessionRef: "session_expired", operationRef: "operation_expired",
+      settlement: "error", reasonCode: "operation-failed" }, new Date(base));
+    assert.equal(expired.recentOperationSettlements(100, new Date(base + 2_000)).length, 1,
+      "generic replay age must not shorten terminal Activity retention");
+    assert.deepEqual(expired.recentOperationSettlements(100, new Date(base + 60 * 60_000 + 1)), []);
+  });
+
   it("negotiates, filters reads, replays events and requires canonical resync after a cursor gap", async (t) => {
     const staticRoot = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-gateway-transport-static-"));
     fs.mkdirSync(path.join(staticRoot, "assets"));
@@ -60,12 +146,22 @@ describe("Piagent authenticated typed Gateway transport", () => {
     t.after(() => fs.rmSync(staticRoot, { recursive: true, force: true }));
     const capabilities = JSON.parse(fs.readFileSync(path.join(root, "evals/fixtures/piagent-webui/gateway-capabilities-v1.valid.json"), "utf8"));
     const catalog = JSON.parse(fs.readFileSync(path.join(root, "evals/fixtures/piagent-webui/session-catalog-v1.valid.json"), "utf8"));
+    const liveState = JSON.parse(fs.readFileSync(path.join(root, "evals/fixtures/piagent-webui/session-live-state-v1.valid.json"), "utf8"));
     const events = new GatewayEventStore({ maximumCount: 1, maximumAgeMs: 60_000 });
     const protocol = new GatewayProtocolService({ capabilities: () => capabilities, catalog: async () => catalog, events });
     const server = await startLoopbackServer({ staticRoot, mode: "gateway",
-      readCapabilities: () => capabilities, readSessionCatalog: () => catalog, gatewayProtocol: protocol });
+      readCapabilities: () => capabilities, readSessionCatalog: () => catalog, readSessionLiveState: () => liveState, gatewayProtocol: protocol });
     t.after(() => server.close());
-    const auth = await authenticate(server), socket = connect(auth.origin, auth.cookie); t.after(() => socket.terminate());
+    const auth = await authenticate(server);
+    assert.equal((await fetch(`${auth.origin}/api/v1/session-live-state`)).status, 401);
+    const projected = await (await fetch(`${auth.origin}/api/v1/session-live-state`, {
+      headers: { Origin: auth.origin, Cookie: auth.cookie }
+    })).json();
+    assert.equal(validateFixture(registry, "session-live-state-v1", projected).valid, true);
+    assert.equal((await fetch(`${auth.origin}/api/v1/session-live-state?raw=1`, {
+      headers: { Origin: auth.origin, Cookie: auth.cookie }
+    })).status, 400);
+    const socket = connect(auth.origin, auth.cookie); t.after(() => socket.terminate());
     const messages = inbox(socket);
     await opened(socket);
     socket.send(JSON.stringify({ schemaVersion: 1, version: "piagent-gateway-protocol-v1", messageType: "connect",
@@ -98,6 +194,13 @@ describe("Piagent authenticated typed Gateway transport", () => {
     assert.equal(validateFixture(registry, "gateway-protocol-v1", resync).valid, true);
     assert.equal(resync.kind, "resync.required");
     assert.equal(resync.payload.currentSequence, 2);
+
+    assert.equal(events.replay(9_999).state, "resync-required");
+    assert.equal(events.replay(9_999).currentSequence, 2);
+    const pruned = new GatewayEventStore({ maximumCount: 1, maximumAgeMs: 1_000 });
+    pruned.publish("catalog.changed", { catalogRevision: "catalog_pruned_01" }, new Date(Date.now() - 5_000));
+    assert.equal(pruned.replay(0).state, "resync-required");
+    assert.equal(pruned.replay(1).state, "current");
 
     const unauthorized = connect(auth.origin, "piagent_webui_session=invalid"); t.after(() => unauthorized.terminate());
     const denied = await bounded(new Promise((resolve) => {

@@ -15,6 +15,9 @@ import {
   contextPlanAcceptsConfidence,
   planAdaptiveContext
 } from "../context/adaptive-planner.ts";
+import { stageContextDelivery } from "../context/context-delivery.ts";
+import { measureContextDeltaShadow, type ContextDeltaShadowMode } from "../context/context-delta-shadow.ts";
+import { buildPrefixTelemetry } from "../context/prefix-telemetry.ts";
 import { modelCapabilityFromContext } from "../model/capabilities.ts";
 import type { RuntimeModelSnapshot } from "../model/runtime-snapshot.ts";
 import { runtimeModelSnapshotDigest } from "../model/runtime-snapshot.ts";
@@ -42,11 +45,13 @@ type RuntimeIntakeResult = {
   started: boolean;
   text: string;
   task?: TaskContract;
+  plannedContext?: Array<{ path: string; reason: string }>;
 };
 
 type AgentStartHookDependencies = {
   state: RuntimeSessionState;
   autoContextEnabled: boolean;
+  contextDeltaShadowMode: ContextDeltaShadowMode;
   activeTask: (ctx: ExtensionContext) => TaskContract | undefined;
   readProtectedPaths: (ctx: ExtensionContext) => string[];
   contextExcludePatterns: (ctx: ExtensionContext) => string[];
@@ -97,7 +102,9 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
     const projectInstructions = rewriteLegacyProjectInstructions(event.systemPrompt);
     const query = looksLikeGovernedBoilerplate(event.prompt) ? extractTaskRequest(event.prompt) : event.prompt.trim();
     const signal = classifyContextTask(query);
+    const turn = dependencies.state.currentTurn(ctx, signal.promptHash) ?? dependencies.state.beginTurn(ctx, signal.promptHash);
     const readProtectedPaths = dependencies.readProtectedPaths(ctx);
+    const protectedTarget = signal.paths.some((candidate) => matchesProtectedPath(candidate, readProtectedPaths));
     const protectedOnlyTarget = signal.paths.length > 0
       && signal.paths.every((candidate) => matchesProtectedPath(candidate, readProtectedPaths));
     const activeTask = dependencies.activeTask(ctx);
@@ -122,10 +129,10 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
       .map((tool) => ({
         name: tool.name,
         description: tool.description,
-        parameters: tool.parameters,
-        promptGuidelines: tool.promptGuidelines
+        parameters: tool.parameters
       }));
-    const toolSchemaTokens = estimateContextTokens(JSON.stringify(toolMetadata));
+    const prefix = buildPrefixTelemetry(effectiveSystemPrompt, toolMetadata);
+    const toolSchemaTokens = estimateContextTokens(prefix.canonicalToolSurface);
     const systemPromptTokens = estimateContextTokens(effectiveSystemPrompt);
     const autoPackUseful = activeTask?.trace.outcome !== "pending"
       && (runtimeIntake || signal.paths.length === 0);
@@ -154,6 +161,7 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
     if (activeTask) observeTrajectorySync(ctx, dependencies.syncTrajectory?.(ctx, activeTask, { sourceHook: "agent-start", recommendationRef }), dependencies.telemetry);
     dependencies.telemetry(ctx, {
       event: "agent_prompt",
+      turnId: turn.turnId,
       promptHash: signal.promptHash,
       promptChars: signal.promptChars,
       workflow: signal.workflow,
@@ -162,7 +170,10 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
       activePiagentTools: [...active].filter((toolName) => PIAGENT_TOOL_NAMES.has(toolName)).length,
       toolSchemaTokens,
       systemPromptTokens,
-      systemPromptHash: crypto.createHash("sha256").update(effectiveSystemPrompt).digest("hex"),
+      systemPromptHash: prefix.systemPromptHash,
+      toolSchemaHash: prefix.toolSchemaHash,
+      prefixSurfaceHash: prefix.prefixSurfaceHash,
+      taskRunId: activeTask?.taskRunId,
       legacyProjectInstructionsRewritten: projectInstructions.rewritten,
       managedInstructionsCompacted: compactedInstructions.compacted,
       contextUsage: ctx.getContextUsage(),
@@ -226,7 +237,7 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
       if (intake?.task) observeTrajectorySync(ctx, dependencies.syncTrajectory?.(ctx, intake.task, { sourceHook: "agent-start", recommendationRef }), dependencies.telemetry);
       if (!selectedContext && !intake) return systemPromptUpdate;
       const criterionContext = !selectedContext && intake?.task?.criterionGraph?.mode === "criterion-graph"
-        ? buildSelectedContextPack(ctx.cwd, intake.task.contextManifest.filter((entry) => /^criterion-/.test(entry.reason)), {
+        ? buildSelectedContextPack(ctx.cwd, intake.plannedContext ?? [], {
             budgetTokens: CONTEXT_PACK_MAX_TOKENS, limit: 6, excludePatterns: readProtectedPaths
           })
         : undefined;
@@ -235,6 +246,52 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
         estimatedTokens: criterionContext.estimatedTokens, selectedPaths: criterionContext.selected.map((entry) => entry.path)
       });
       const content = [selectedContext?.content, intake?.text, criterionContext?.text].filter(Boolean).join("\n\n");
+      const deliveryTask = intake?.task ?? activeTask;
+      const selectedPackPaths = selectedContext?.customType === "piagent-context-pack-v2" && Array.isArray(selectedContext.details.paths)
+        ? selectedContext.details.paths.filter((value): value is string => typeof value === "string")
+        : [];
+      const criterionPaths = criterionContext?.selected.map((entry) => entry.path) ?? [];
+      const selectedPackItems = (selectedContext?.details.selectedItems as Array<{ path: string; estimatedTokens: number }> | undefined) ?? selectedPackPaths.map((path) => ({ path, estimatedTokens: 0 }));
+      const injectionItems = [...new Map([...selectedPackItems, ...(criterionContext?.selected.map((item) => ({ path: item.path, estimatedTokens: item.estimatedTokens, fileContentHash: `context-file-v1:${item.contentDigest}`, representation: "full" })) ?? [])].map((item) => [item.path, item])).values()];
+      const deliveryEntries = new Map<string, { path: string; reason: string }>();
+      for (const filePath of selectedPackPaths) {
+        deliveryEntries.set(filePath, {
+          path: filePath,
+          reason: "Runtime confirmed delivery of a bounded Context Engine navigation pack."
+        });
+      }
+      for (const filePath of criterionPaths) {
+        deliveryEntries.set(filePath, {
+          path: filePath,
+          reason: "Runtime confirmed delivery of criterion-selected context."
+        });
+      }
+      const deliveryId = deliveryTask && deliveryEntries.size > 0 ? crypto.randomUUID() : undefined;
+      if (deliveryTask && deliveryId) {
+        const retrievalKey = typeof selectedContext?.details.retrievalKey === "string" ? selectedContext.details.retrievalKey : undefined;
+        stageContextDelivery(ctx, {
+          deliveryId,
+          taskRunId: deliveryTask.taskRunId,
+          turnId: turn.turnId,
+          entries: [...deliveryEntries.values()],
+          pack: retrievalKey
+            ? {
+                retrievalKey,
+                queryHash: String(selectedContext?.details.queryHash ?? ""),
+                confidence: String(selectedContext?.details.confidence ?? "unknown"),
+                estimatedTokens: Number(selectedContext?.details.estimatedTokens ?? 0),
+                paths: selectedPackPaths
+              }
+            : undefined,
+          injection: {
+            source: selectedContext?.customType === "piagent-context-pack-v2" ? "auto-pack" : "criterion-seed",
+            queryHash: String(selectedContext?.details.queryHash ?? signal.promptHash),
+            confidence: String(selectedContext?.details.confidence ?? (criterionPaths.length > 0 ? "high" : "unknown")),
+            estimatedTokens: Number(selectedContext?.details.estimatedTokens ?? criterionContext?.estimatedTokens ?? 0),
+            selectedItems: injectionItems
+          }
+        }, { state: dependencies.state, telemetry: dependencies.telemetry });
+      }
       return {
         ...(systemPromptUpdate ?? {}),
         message: {
@@ -243,10 +300,13 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
           display: false,
           details: {
             ...(selectedContext?.details ?? {}),
+            contextDelivery: deliveryId ? { schemaVersion: 1, deliveryId } : undefined,
             runtimeTask: intake?.task
               ? {
                   taskId: intake.task.taskId,
                   taskRunId: intake.task.taskRunId,
+                  changeMode: intake.task.changeMode,
+                  mutationPolicy: intake.task.mutationPolicy,
                   scope: intake.task.scope,
                   verifyCommands: intake.task.verifyCommands,
                   criterionGraph: intake.task.criterionGraph ? { mode: intake.task.criterionGraph.mode, graphDigest: intake.task.criterionGraph.graphDigest, nodes: intake.task.criterionGraph.nodes.length } : null,
@@ -263,6 +323,9 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
     };
 
     const packKey = dependencies.promptPackKey(ctx, signal.promptHash);
+    if (!autoPackUseful && activeTask?.trace.outcome === "pending" && query.length >= 20 && signal.workflow !== "usage" && dependencies.autoContextEnabled) {
+      await measureContextDeltaShadow({ ctx, query, turnId: turn.turnId, task: activeTask, mode: dependencies.contextDeltaShadowMode, protectedTarget, excludePatterns: dependencies.contextExcludePatterns(ctx), telemetry: dependencies.telemetry });
+    }
     if (
       query.length < 20
       || signal.workflow === "usage"
@@ -304,6 +367,7 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
       if (!status.exists || status.stale) {
         dependencies.telemetry(ctx, {
           event: "context_pack",
+          turnId: turn.turnId,
           queryHash: signal.promptHash,
           confidence: "none",
           candidates: 0,
@@ -348,6 +412,7 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
       });
       dependencies.telemetry(ctx, {
         event: "context_pack",
+        turnId: turn.turnId,
         queryHash: pack.queryHash,
         confidence: pack.confidence,
         candidates: pack.candidates,
@@ -392,27 +457,17 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
         estimatedTokens: estimateContextTokens(memoryHints.text),
         planReceipt: plan.receipt
       });
-      dependencies.state.rememberInjectedContextPack(ctx, dependencies.retrievalKey(ctx, query), {
-        queryHash: pack.queryHash,
-        confidence: pack.confidence,
-        estimatedTokens: pack.estimatedTokens,
-        paths: pack.selected.map((item) => item.path)
-      });
-      for (const selected of pack.selected) {
-        dependencies.state.rememberObservedContext(ctx, {
-          path: selected.path,
-          reason: "Runtime injected a bounded Context Engine navigation pack."
-        });
-      }
       return finishAgentStart({
         customType: "piagent-context-pack-v2",
         content: [pack.text, memoryHints.text].filter(Boolean).join("\n\n"),
         details: {
           schemaVersion: 2,
           queryHash: pack.queryHash,
+          retrievalKey: dependencies.retrievalKey(ctx, query),
           confidence: pack.confidence,
           estimatedTokens: pack.estimatedTokens,
           paths: pack.selected.map((item) => item.path),
+          selectedItems: pack.selected.map((item) => ({ path: item.path, estimatedTokens: item.estimatedTokens })),
           repositoryMemoryIds: memoryHints.ids,
           currentSnapshot: plan.currentSnapshot,
           contextPlan: plan
@@ -421,6 +476,7 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
     } catch (error) {
       dependencies.telemetry(ctx, {
         event: "context_pack",
+        turnId: turn.turnId,
         queryHash: signal.promptHash,
         confidence: "none",
         candidates: 0,

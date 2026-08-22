@@ -11,6 +11,7 @@ import { buildHandoffProjection, writeHandoffProjection } from "../recovery/hand
 import { buildContextPreflight, buildUsageSnapshot } from "../session/usage.ts";
 import { activeTaskToolGroups, toolGroupsForPrompt } from "../tools/tool-groups.ts";
 import type { PiagentToolGroup } from "../tools/tool-groups.ts";
+import type { RuntimeSessionState } from "../session/runtime-state.ts";
 import {
   buildFreshCommand,
   chooseFreshWorkflow,
@@ -26,6 +27,7 @@ import {
 } from "../workflows/task-intake.ts";
 
 type InputHookDependencies = {
+  state: RuntimeSessionState;
   boilerplateCollapseChars: number;
   activeTask: (ctx: ExtensionContext) => TaskContract | undefined;
   authorityPolicy: (ctx: ExtensionContext, task: TaskContract) => AuthorityResumeDecision;
@@ -44,6 +46,7 @@ export function registerInputHook(pi: ExtensionAPI, dependencies: InputHookDepen
     }
 
     const taskSignal = classifyContextTask(text);
+    const turn = dependencies.state.beginTurn(ctx, taskSignal.promptHash);
     const activeTask = dependencies.activeTask(ctx);
     const authorityPolicy = activeTask?.trace.outcome === "pending" ? dependencies.authorityPolicy(ctx, activeTask) : undefined;
     let authorityHandoffReady = false;
@@ -79,6 +82,7 @@ export function registerInputHook(pi: ExtensionAPI, dependencies: InputHookDepen
       : promptGroups);
     dependencies.telemetry(ctx, {
       event: "user_input",
+      turnId: turn.turnId,
       source: event.source,
       promptHash: taskSignal.promptHash,
       promptChars: taskSignal.promptChars,

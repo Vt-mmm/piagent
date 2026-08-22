@@ -31,16 +31,20 @@ const ASSISTED_READ_ONLY_PLAN = [
   { id: "review", role: "piagent-reviewer", mode: "review", dependsOn: ["scout"] }
 ];
 
+function mutationForbidden(task) {
+  return task?.changeMode === "read-only" || task?.mutationPolicy === "forbidden";
+}
+
 export function runtimeLifecycleMode(task) {
   if (!Array.isArray(task?.workPlan)) return "manual";
   if (
-    task.changeMode === "read-only"
+    mutationForbidden(task)
     && (task.riskLane === "tiny" || (task.intakeMode === "runtime" && task.riskLane === "normal"))
     && task.workPlan.length === AUTOMATIC_READ_ONLY_PLAN.length
     && task.workPlan.every((step, index) => matchesStep(step, AUTOMATIC_READ_ONLY_PLAN[index]))
   ) return "automatic-readonly";
   if (
-    task.changeMode === "read-only"
+    mutationForbidden(task)
     && task.riskLane === "normal"
     && task.workPlan.length === ASSISTED_READ_ONLY_PLAN.length
     && task.workPlan.every((step, index) => matchesStep(step, ASSISTED_READ_ONLY_PLAN[index]))
@@ -68,6 +72,7 @@ function nonEmptyStrings(value) {
 function sourceContractReady(task) {
   return task?.schemaVersion === 2
     && task.changeMode === "source-change"
+    && task.mutationPolicy !== "forbidden"
     && task.trace?.outcome === "pending"
     && nonEmptyStrings(task.acceptanceCriteria)
     && nonEmptyStrings(task.scope)

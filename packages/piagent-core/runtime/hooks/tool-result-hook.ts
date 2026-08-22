@@ -3,7 +3,6 @@ import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 import { toolResultFingerprint } from "../../extensions/context-engine.js";
-import type { TaskContract } from "../../extensions/guard-types.ts";
 import { matchesProtectedPath } from "../../extensions/policy-core.js";
 import { changedSnapshotFiles, taskDeltaFilesFromSnapshot } from "../../extensions/task-contract-view.js";
 import { classifyVerificationFailure } from "../../extensions/verification-intelligence.js";
@@ -11,25 +10,24 @@ import { redactForStorage, redactSensitiveText } from "../../extensions/redactio
 import { appendObservedBashResult, hashEvidenceCommand, observedBashResultFromToolResultEvent } from "../../extensions/runtime-evidence.js";
 import { workingTreeSnapshot, workingTreeSnapshotHasUnavailableEvidence } from "../../extensions/task-state.js";
 import { workingTreeObservation } from "../../extensions/working-tree-digest.js";
+import { recordObservedContextEvidence } from "../context/context-evidence-qualification.ts";
+import { confirmContextDeliveryFromToolResult, type ContextDeliveryConfirmationDependencies } from "../context/context-delivery.ts";
 import { recordMutationResult } from "../inspection/mutation-provenance-recorder.ts";
+import { classifyToolFailure } from "../inspection/tool-failure-classification.ts";
 import { boundedGitDiffReview } from "../quality/performance-assurance.ts";
 import { currentFileContentDigests } from "../quality/model-mutation-proof.ts";
 import { boundedPerformanceReviewResultText } from "../quality/performance-review-evidence.ts";
 import { attachToolResultCompactionDetails, compactToolResultDetails, compactToolResultTextContent, type ToolResultCaptureSummary } from "../session/tool-result-compaction.ts";
-import { RuntimeSessionState, type ObservedTaskContext } from "../session/runtime-state.ts";
+import type { ObservedTaskContext } from "../session/runtime-state.ts";
 import { observeTrajectorySync } from "../trajectory/trajectory-observability.ts";
 import type { TrajectorySyncResult } from "../trajectory/trajectory-runtime.ts";
 import { patchLineStats } from "./tool-result-metadata.ts";
-
 type ToolResultEvent = { toolCallId?: string; toolName: string; input?: unknown; content?: unknown; details?: unknown; isError?: boolean; usage?: unknown };
 type ObservedBashResult = NonNullable<ReturnType<typeof observedBashResultFromToolResultEvent>>;
 type ObservedVerificationResult = ObservedBashResult & { outputText?: string };
 type WorkingTreeObservation = ReturnType<typeof workingTreeObservation>;
 
-type ToolResultHookDependencies = {
-  state: RuntimeSessionState;
-  activeTask: (ctx: ExtensionContext) => TaskContract | undefined;
-  maxManifestFiles: number;
+type ToolResultHookDependencies = ContextDeliveryConfirmationDependencies & {
   readProtectedPaths: (ctx: ExtensionContext) => string[];
   recordObservedBash: (observed: ObservedBashResult) => void;
   observedBashLedgerPath: (cwd: string) => string;
@@ -69,7 +67,7 @@ type ToolResultHookDependencies = {
       success: boolean;
       exitCode: number;
       currentWorkingTreeDigest: string;
-      changedPaths: string[];
+      changedPaths: string[]; authoredChangedPaths: string[];
       retryableFailure: boolean; correctiveFailure: boolean;
     }
   ) => TrajectorySyncResult | undefined;
@@ -227,6 +225,7 @@ export function filterProtectedPathListContent(
 
 export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResultHookDependencies): void {
   pi.on("tool_result", async (event, ctx) => {
+    confirmContextDeliveryFromToolResult(pi, ctx, event, dependencies);
     const taskIdentity = dependencies.state.taskIdentity(ctx);
     const resultToolCallId = event.toolCallId ?? toolResultFingerprint(event.toolName, event.input, []).key;
     const readProtectedPaths = dependencies.readProtectedPaths(ctx);
@@ -245,8 +244,8 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
     }
 
     const observedContextEntry = dependencies.observedTaskContext(ctx.cwd, event, readProtectedPaths);
-    if (observedContextEntry) dependencies.state.rememberObservedContext(ctx, observedContextEntry);
-    const pendingContext = dependencies.state.observedContext(ctx);
+    recordObservedContextEvidence(ctx, observedContextEntry, taskIdentity, dependencies);
+    const pendingContext = dependencies.state.qualifiedTaskContext(ctx);
     const shellSnapshotBefore = dependencies.isShellTool(event.toolName)
       ? dependencies.state.consumeShellMutationSnapshot(ctx, event.toolName, event.input)
       : undefined;
@@ -326,6 +325,7 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
           exitCode: observedExitCode,
           currentWorkingTreeDigest: currentTreeDigest,
           changedPaths: [...new Set([...directMutationResult.changedPaths, ...shellChangedPaths])].sort(),
+          authoredChangedPaths: Object.keys(directMutationResult.recordedDigests).sort(),
           retryableFailure: failure?.retryable === true, correctiveFailure: failure?.sourceMutationPermission === "eligible-in-scope" && failure?.confidence === "high"
         })
       : undefined;
@@ -484,6 +484,7 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
       compactedCaptures: compactionCaptures.length,
       sensitiveValuesRedacted,
       isError: event.isError,
+      reasonCode: classifyToolFailure(event.toolName, event.isError === true, event.content, event.input),
       exitCode: observed?.exitCode ?? (dependencies.isShellTool(event.toolName) ? event.isError ? 1 : 0 : undefined),
       exitCodeExact: observed?.exitCode !== undefined,
       ...lineStats,

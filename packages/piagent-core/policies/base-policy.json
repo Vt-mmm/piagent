@@ -107,6 +107,7 @@
   },
   "contextBudget": {
     "defaultMode": "enforce",
+    "contextDeltaShadow": "sample",
     "maxContextFileChars": 50000,
     "maxMemoryFileChars": 20000,
     "maxManifestFiles": 80,

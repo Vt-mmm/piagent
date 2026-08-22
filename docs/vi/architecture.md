@@ -44,6 +44,7 @@ Rule máy đọc nằm tại `architecture/layers.json`; chạy `npm run archite
 | Security foundation | `packages/piagent-core/security/` | Sensitive-data primitive | Workflow behavior |
 | Benchmark | `packages/piagent-core/benchmark/`, `benchmarks/` | Suite validation, scoring, evidence | Runtime enforcement |
 | WebUI contracts | `packages/piagent-webui/contracts/` | Wire type dùng chung giữa browser và server | Mọi hành vi runtime; layer này không phụ thuộc gì |
+| WebUI shared | `packages/piagent-webui/shared/` | Helper xác định, không có dependency, dùng chung cho browser, server và gateway | Browser state, transport, truy cập filesystem hoặc runtime policy |
 | WebUI client | `packages/piagent-webui/client/` | View trên browser, view model, UI preference | Server state, filesystem, Pi API |
 | WebUI server | `packages/piagent-webui/server/` | HTTP/WS endpoint, đọc session, dựng diff | Render phía browser; không được import client |
 | WebUI extension | `packages/piagent-webui/extension/` | Lệnh `/piagent-webui` chạy trong Pi | Wire type mà client cũng cần |

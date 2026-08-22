@@ -19,12 +19,12 @@ Support matrix release hiện tại: macOS Apple Silicon + Bash và Linux x64 + 
 ```bash
 node --version  # >= 22.19.0
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.84.1
-npm install -g --ignore-scripts @piagent/platform@1.5.5
+npm install -g --ignore-scripts @piagent/platform@1.6.0
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
 
-Khi seed `.pi/settings.json` cho team/repo cần audit lặp lại, giữ package source dạng pinned tag như `git:github.com/Vt-mmm/piagent@v1.5.5`. Máy cá nhân có thể dùng `git:github.com/Vt-mmm/piagent` để theo latest.
+Khi seed `.pi/settings.json` cho team/repo cần audit lặp lại, giữ package source dạng pinned tag như `git:github.com/Vt-mmm/piagent@v1.6.0`. Máy cá nhân có thể dùng `git:github.com/Vt-mmm/piagent` để theo latest.
 
 Nếu đang ở source checkout của platform, dùng helper theo channel để preview trước khi đổi:
 
@@ -100,7 +100,7 @@ install package once
 
 ```bash
 npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.84.1
-npm install -g --ignore-scripts @piagent/platform@1.5.5
+npm install -g --ignore-scripts @piagent/platform@1.6.0
 piagent-install --stable --dry-run
 piagent-install --stable
 ```
@@ -283,7 +283,7 @@ Không phải daily default. Dùng khi muốn tạo sẵn `.pi` files cho projec
 bash /path/to/piagent/scripts/setup.sh /path/to/project \
   --project-only \
   --profile auto \
-  --package-source git:github.com/Vt-mmm/piagent@v1.5.5 \
+  --package-source git:github.com/Vt-mmm/piagent@v1.6.0 \
   --mcp-preset core \
   --subagents-preset safe
 ```
@@ -673,7 +673,8 @@ piagent-benchmark
 piagent-benchmark --production --dry-run
 ```
 
-Lệnh mặc định tự chạy 4 scenario trên Raw Pi và Piagent, mỗi bên 3 lần; token,
+Lệnh mặc định tự chạy 4 scenario trên Piagent và controlled `codex-cli` bằng
+Luna/medium, mỗi bên 3 lần; token,
 cost, model và thinking được đọc từ Pi session thay vì nhập tay. Runner chỉ cho
 phép kết luận tiết kiệm token khi safety đạt `10/10` và các gate quality,
 reliability, workflow của suite đều pass. Production yêu cầu các điểm tổng hợp
@@ -688,9 +689,10 @@ profile/lifecycle/difficulty và cận trên 95% của paired token ratio. Seed/
 động không đi vào agent workspace; root seed chỉ nằm trong private report để
 tái lập bằng `--seed`.
 
-Production runner mặc định retry tối đa hai lần, cách nhau 60 giây, chỉ khi process chết trước
-khi ghi usage. Timeout hoặc task đã tiêu token rồi fail vẫn là reliability failure thật,
-không được retry. Report hiện số retry và giữ chi tiết local trong
+Production/deep runner mặc định không retry và release gate yêu cầu đúng zero
+retry cùng zero unknown provider-attempt usage. Override retry chỉ dùng để chẩn
+đoán recovery và sẽ làm claim fail. Timeout hoặc task đã tiêu token rồi fail vẫn
+là reliability failure thật. Report hiện số retry và giữ chi tiết local trong
 `infrastructure-attempts.jsonl`. Dùng `--scenarios <id,id> --repeats 1` để debug
 rubric; subset không thể vượt production release gate.
 
@@ -1042,8 +1044,8 @@ Watchdog là optional adversarial reviewer ở cuối turn, không bật mặc �
 
 | Command | Dùng để |
 |---|---|
-| `npm install -g --ignore-scripts @piagent/platform@1.5.5` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
-| `pi install git:github.com/Vt-mmm/piagent@v1.5.5` | Install pinned release cho reproducible team setup. |
+| `npm install -g --ignore-scripts @piagent/platform@1.6.0` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
+| `pi install git:github.com/Vt-mmm/piagent@v1.6.0` | Install pinned release cho reproducible team setup. |
 | `pi install git:github.com/Vt-mmm/piagent` | Install latest platform package cho máy cá nhân/sandbox. |
 | Cài exact Pi host của release, rồi `npm install -g --ignore-scripts @piagent/platform@X.Y.Z` và `piagent-install --stable` | Full update: đồng bộ host, terminal helper và Pi package. Mỗi release pin một Pi host chính xác; lấy đúng version của release đang cài trong [release/install policy](release-install-policy.md). |
 | Cài exact Pi host ghi trong release cũ, rồi helper `vPREVIOUS` và `piagent-install --stable` | Full rollback; đánh giá lại dependency findings của host cũ trước khi hạ version. |
@@ -1155,7 +1157,7 @@ Mở lại Pi session sau khi install.
 Cài lại terminal helper đúng release rồi kiểm tra `PATH`:
 
 ```bash
-npm install -g --ignore-scripts @piagent/platform@1.5.5
+npm install -g --ignore-scripts @piagent/platform@1.6.0
 command -v piagent-install
 ```
 

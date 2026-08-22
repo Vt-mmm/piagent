@@ -80,6 +80,12 @@
       ]
     },
     {
+      "name": "webui-shared",
+      "roots": [
+        "packages/piagent-webui/shared"
+      ]
+    },
+    {
       "name": "webui-build",
       "roots": [
         "packages/piagent-webui"
@@ -133,11 +139,13 @@
     ],
     "webui-client": [
       "webui-client",
-      "webui-contracts"
+      "webui-contracts",
+      "webui-shared"
     ],
     "webui-server": [
       "webui-server",
       "webui-contracts",
+      "webui-shared",
       "runtime",
       "core",
       "security",
@@ -156,6 +164,7 @@
       "webui-ownership",
       "webui-server",
       "webui-contracts",
+      "webui-shared",
       "runtime",
       "core",
       "security"
@@ -163,13 +172,17 @@
     "webui-ownership": [
       "webui-ownership"
     ],
+    "webui-shared": [
+      "webui-shared"
+    ],
     "webui-build": [
       "webui-build",
       "webui-contracts",
       "webui-client",
       "webui-server",
       "webui-gateway",
-      "webui-ownership"
+      "webui-ownership",
+      "webui-shared"
     ],
     "entrypoints": [
       "entrypoints",
@@ -181,7 +194,8 @@
       "benchmark",
       "webui-gateway",
       "webui-ownership",
-      "webui-server"
+      "webui-server",
+      "webui-shared"
     ]
   },
   "lineBudgets": {
@@ -199,6 +213,7 @@
       "webui-extension": 500,
       "webui-gateway": 500,
       "webui-ownership": 500,
+      "webui-shared": 200,
       "webui-build": 500,
       "entrypoints": 800
     },

@@ -138,3 +138,20 @@ test("classifies only a terminal Pi overload after paid usage as infrastructure"
   ]);
   assert.equal(terminalPiSessionError([file], sessionId), undefined, "a recovered transient error is not terminal");
 });
+
+test("keeps exact token evidence independent from cost and never retries a paid process exit", () => {
+  const usage = { sessions: 1, input: 60, output: 15, cacheRead: 20, cacheWrite: 5, reasoning: 4, total: 100, fresh: 75, cost: null };
+  assert.deepEqual(classifyPreUsageFailure({ code: 1, timedOut: false }, usage, "process ended"), {
+    failure: "agent-exit-1-after-measured-usage",
+    class: "agent-process",
+    usageStatus: "measured-but-unaccepted",
+    retryable: false
+  });
+  assert.deepEqual(classifyPreUsageFailure({ code: 1, timedOut: false }, usage, "provider safety policy refusal"), {
+    failure: "provider-policy-refusal-after-measured-usage",
+    class: "provider-policy",
+    usageStatus: "measured-but-unaccepted",
+    retryable: false
+  });
+  assert.equal(classifyPreUsageFailure({ code: 1, timedOut: false }, { ...usage, total: 99 }, "process ended").usageStatus, "unknown-after-provider-start");
+});

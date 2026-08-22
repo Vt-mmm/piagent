@@ -54,7 +54,10 @@ Shift+Ctrl+P    # cycle ngược
 Shift+Tab       # cycle thinking level
 ```
 
-Global setup của repo sẽ seed `enabledModels` vào `~/.pi/agent/settings.json`, nên sau OAuth anh chọn/đổi model bằng option selector của Pi.
+Global setup của repo sẽ seed các preset đã kiểm chứng và một catch-all
+`openai-codex/*` vào `~/.pi/agent/settings.json`. Vì các preset đứng trước glob,
+chúng giữ thinking level khuyến nghị; model Codex mới trong authenticated catalog
+vẫn tự xuất hiện trong scope mà không cần chờ Piagent phát hành lại.
 
 ## Kiểm tra model hiện có
 
@@ -97,7 +100,7 @@ off, minimal, low, medium, high, xhigh, max
 Không phải model nào cũng hỗ trợ mọi level. Pi sẽ clamp theo capability của model. Cách chọn:
 
 ```bash
-pi --model openai-codex/gpt-5.5:high
+pi --model openai-codex/gpt-5.6-sol:high
 pi --model anthropic/claude-sonnet-5:xhigh
 pi --thinking medium
 ```
@@ -113,7 +116,7 @@ pi --thinking medium
 | `openai-codex/gpt-5.3-codex-spark` | fast scout | hỏi nhanh, thao tác nhỏ, chi phí thấp |
 | `openai-codex/gpt-5.4-mini` | fast/cheap | scout nhẹ, docs, simple fix |
 | `openai-codex/gpt-5.4` | balanced | task bình thường |
-| `openai-codex/gpt-5.5` | balanced/hard default | default mạnh cho implement |
+| `openai-codex/gpt-5.5` | balanced/hard | model thế hệ trước vẫn được hỗ trợ khi có trong authenticated catalog |
 | `openai-codex/gpt-5.6-luna` | cost-sensitive/high-volume | workload nhanh, nhiều lượt, ưu tiên latency và chi phí |
 | `openai-codex/gpt-5.6-terra` | balanced | công việc hằng ngày cần cân bằng capability, speed và cost |
 | `openai-codex/gpt-5.6-sol` | frontier/quality-first | task phức tạp, long-horizon hoặc cần chất lượng cao nhất |
@@ -143,7 +146,7 @@ available nào trong authenticated provider catalog.
 | Preset | Model OpenAI Codex | Model Claude (Anthropic) | Khi dùng |
 |---|---|---|---|
 | Fast scout | `openai-codex/gpt-5.4-mini:low` | `anthropic/claude-haiku-4-5:low` | đọc nhanh, hỏi đáp, grep/scout nhẹ |
-| Balanced implement | `openai-codex/gpt-5.5:medium` | `anthropic/claude-sonnet-5:medium` | task source bình thường |
+| Balanced implement | `openai-codex/gpt-5.6-terra:medium` | `anthropic/claude-sonnet-5:medium` | task source bình thường |
 | Cost-sensitive volume | `openai-codex/gpt-5.6-luna:medium` | `anthropic/claude-haiku-4-5:low` | workload nhanh, nhiều lượt; đo quality gate trước khi promote |
 | Balanced implement | `openai-codex/gpt-5.6-terra:high` hoặc `openai-codex/gpt-5.5:high` | `anthropic/claude-sonnet-5:high` | task source hằng ngày, cân bằng capability/cost |
 | Frontier/quality-first | `openai-codex/gpt-5.6-sol:high` | `anthropic/claude-opus-4-7:xhigh` hoặc `anthropic/claude-opus-4-8:xhigh` | architecture, long-horizon, high-risk review |
@@ -155,7 +158,7 @@ Tên model có thể đổi theo Pi model catalog. Khi không chắc, ưu tiên 
 Global setup mặc định:
 
 ```bash
-piagent-model-scope --preset full --default-model openai-codex/gpt-5.5:high
+piagent-model-scope --preset full --default-model openai-codex/gpt-5.6-sol:high
 ```
 
 Scope này ghi vào settings:

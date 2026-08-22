@@ -269,7 +269,7 @@
         "sequence": { "$ref": "#/$defs/stateVersion" },
         "stateVersion": { "$ref": "#/$defs/stateVersion" },
         "generatedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
-        "kind": { "enum": ["catalog.changed", "session.changed", "runtime.changed", "resync.required", "message.delta", "message.completed", "tool.started", "tool.completed"] },
+        "kind": { "enum": ["catalog.changed", "session.changed", "runtime.changed", "resync.required", "message.delta", "message.completed", "operation.settled", "tool.started", "tool.completed"] },
         "payload": { "type": "object" }
       }
     },
@@ -411,6 +411,54 @@
         }
       ]
     },
+    "operationCompletedPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sessionRef", "operationRef", "messageRef", "sessionRevision", "settlement", "reasonCode"],
+      "properties": {
+        "sessionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "operationRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "messageRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "sessionRevision": { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+        "settlement": { "const": "completed" },
+        "reasonCode": { "type": "null" }
+      }
+    },
+    "operationIncompletePayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sessionRef", "operationRef", "messageRef", "sessionRevision", "settlement", "reasonCode"],
+      "properties": {
+        "sessionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "operationRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "messageRef": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+        "sessionRevision": {
+          "anyOf": [
+            { "$ref": "common-v1.schema.json#/$defs/revisionToken" },
+            { "type": "null" }
+          ]
+        },
+        "settlement": { "enum": ["blocked", "aborted", "error", "unknown"] },
+        "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" }
+      }
+    },
+    "operationSettledEvent": {
+      "allOf": [
+        { "$ref": "#/$defs/eventBase" },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "operation.settled" },
+            "payload": {
+              "oneOf": [
+                { "$ref": "#/$defs/operationCompletedPayload" },
+                { "$ref": "#/$defs/operationIncompletePayload" }
+              ]
+            }
+          }
+        }
+      ]
+    },
     "toolEvent": {
       "allOf": [
         { "$ref": "#/$defs/eventBase" },
@@ -421,13 +469,14 @@
             "payload": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["sessionRef", "operationRef", "toolCallRef", "toolLabel", "isError"],
+              "required": ["sessionRef", "operationRef", "toolCallRef", "toolLabel", "isError", "reasonCode"],
               "properties": {
                 "sessionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
                 "operationRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
                 "toolCallRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
                 "toolLabel": { "type": "string", "minLength": 1, "maxLength": 160, "pattern": "^[^\\u0000-\\u001F\\u007F]+$" },
-                "isError": { "type": ["boolean", "null"] }
+                "isError": { "type": ["boolean", "null"] },
+                "reasonCode": { "$ref": "common-v1.schema.json#/$defs/nullableReasonCode" }
               }
             }
           },
@@ -449,6 +498,7 @@
         { "$ref": "#/$defs/resyncRequiredEvent" },
         { "$ref": "#/$defs/messageDeltaEvent" },
         { "$ref": "#/$defs/messageCompletedEvent" },
+        { "$ref": "#/$defs/operationSettledEvent" },
         { "$ref": "#/$defs/toolEvent" }
       ]
     }

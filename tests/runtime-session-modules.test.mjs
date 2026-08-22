@@ -49,6 +49,7 @@ import {
   automaticTaskSummary,
   automaticTaskIntakeEligible,
   automaticTaskIntakeMode,
+  automaticTaskMutationPolicy,
   automaticTaskScope,
   boundedRuntimeIntakeMessage,
   resolveTaskScopePatterns,
@@ -71,6 +72,7 @@ import {
   readChatImage
 } from "../packages/piagent-core/runtime/input/chat-images.ts";
 import { registerSessionHooks } from "../packages/piagent-core/runtime/hooks/session-hooks.ts";
+import { stageContextDelivery } from "../packages/piagent-core/runtime/context/context-delivery.ts";
 import { registerInputHook } from "../packages/piagent-core/runtime/hooks/input-hook.ts";
 import { taskDeltaFilesFromSnapshot } from "../packages/piagent-core/extensions/task-contract-view.js";
 import { filterGrepProtectedContent, filterProtectedPathListContent, registerToolResultHook } from "../packages/piagent-core/runtime/hooks/tool-result-hook.ts";
@@ -195,6 +197,9 @@ describe("runtime session modules", () => {
     const rewritten = rewriteLegacyProjectInstructions(legacy);
     assert.equal(rewritten.rewritten, true);
     assert.match(rewritten.systemPrompt, /Piagent runtime-managed task flow/);
+    assert.match(rewritten.systemPrompt, /do not probe that destination with read first/);
+    assert.match(rewritten.systemPrompt, /Keep one writer, bound helper delegation/);
+    assert.match(rewritten.systemPrompt, /report unresolved risk/);
     assert.doesNotMatch(rewritten.systemPrompt, /legacy steps/);
 
     const compacted = compactManagedProjectInstructions(
@@ -203,6 +208,9 @@ describe("runtime session modules", () => {
     );
     assert.equal(compacted.compacted, true);
     assert.match(compacted.systemPrompt, /Root project instructions are already loaded/);
+    assert.match(compacted.systemPrompt, /create it without a speculative read/);
+    assert.match(compacted.systemPrompt, /Treat current source and the durable Task Contract as authoritative/);
+    assert.match(compacted.systemPrompt, /preserve the user's exact scope, keep one writer, bound helpers, and report unresolved risk/);
     assert.doesNotMatch(compacted.systemPrompt, /long text/);
   });
 
@@ -267,6 +275,9 @@ describe("runtime session modules", () => {
     state.rememberObservedContext(first, { path: "src/a.ts", reason: "read" });
     state.rememberObservedContext(first, { path: "src/b.ts", reason: "read" });
     state.rememberObservedContext(first, { path: "src/c.ts", reason: "read" });
+    state.rememberQualifiedContextEvidence(first, "run-1", {
+      path: "src/c.ts", reason: "Runtime observed successful source read."
+    });
     state.rememberAdvisedTool(first, "bash");
     state.rememberToolResult(first, "same-call", { outputHash: "hash-1", recordedAt: "now" });
     state.rememberInjectedContextPack(first, "same-query", {
@@ -275,6 +286,12 @@ describe("runtime session modules", () => {
       estimatedTokens: 10,
       paths: ["src/a.ts"]
     });
+    state.stageContextDelivery(first, {
+      deliveryId: "delivery-1",
+      taskRunId: "run-1",
+      entries: [{ path: "src/a.ts", reason: "confirmed delivery" }]
+    });
+    const firstTurn = state.beginTurn(first, "prompt-1");
     state.rememberPerformanceReviewCheckpoint("run-1", "a".repeat(64), 1);
     state.rememberPerformanceReviewCredit("run-1", {
       workingTreeDigest: "b".repeat(64),
@@ -286,11 +303,48 @@ describe("runtime session modules", () => {
     assert.deepEqual(state.taskIdentity(first), { taskId: "TASK-1", taskRunId: "run-1" });
     assert.deepEqual(state.observedContext(first).map((item) => item.path), ["src/b.ts", "src/c.ts"]);
     assert.deepEqual(state.observedContext(second), []);
+    assert.deepEqual(state.qualifiedContextEvidence(first, "run-1"), [{
+      path: "src/c.ts", reason: "Runtime observed successful source read."
+    }]);
+    assert.deepEqual(state.qualifiedContextEvidence(first, "run-2"), []);
+    assert.deepEqual(state.qualifiedContextEvidence(second, "run-1"), []);
     assert.equal(state.hasAdvisedTool(first, "bash"), true);
     assert.equal(state.hasAdvisedTool(second, "bash"), false);
     assert.equal(state.previousToolResult(second, "same-call"), undefined);
     assert.equal(state.injectedContextPack(second, "same-query"), undefined);
     assert.equal(state.injectedContextPack(first, "same-query")?.queryHash, "query-1");
+    assert.equal(state.takeContextDelivery(second, "delivery-1"), undefined);
+    assert.deepEqual(state.takeContextDelivery(first, "delivery-1"), {
+      deliveryId: "delivery-1",
+      taskRunId: "run-1",
+      entries: [{ path: "src/a.ts", reason: "confirmed delivery" }]
+    });
+    assert.equal(state.takeContextDelivery(first, "delivery-1"), undefined, "delivery confirmation is one-shot");
+    assert.equal(state.currentTurn(first, "prompt-1")?.turnId, firstTurn.turnId);
+    assert.equal(state.currentTurn(first, "different"), undefined);
+    assert.equal(state.currentTurn(second), undefined);
+    state.rememberPreTaskContext(first, { path: "src/model-claim.ts", reason: "model says it read this" });
+    assert.deepEqual(state.preTaskContext(first), [], "non-runtime evidence cannot enter the intake epoch");
+    state.rememberPreTaskContext(first, {
+      path: "src/turn-1.ts", reason: "Runtime observed successful source read."
+    });
+    assert.deepEqual(state.preTaskContext(first).map((item) => item.path), ["src/turn-1.ts"]);
+    assert.deepEqual(state.preTaskContext(second), [], "pre-task evidence is session-bound");
+    const secondTurn = state.beginTurn(first, "prompt-2");
+    assert.notEqual(secondTurn.turnId, firstTurn.turnId);
+    assert.deepEqual(state.preTaskContext(first), [], "a new intake turn drops stale pre-task evidence");
+    state.rememberPreTaskContext(first, {
+      path: "src/turn-2.ts", reason: "Runtime observed successful source read."
+    });
+    state.promotePreTaskContext(first, "run-turn-2", [{
+      path: "src/turn-2.ts", reason: "Runtime observed successful source read."
+    }, {
+      path: "src/not-observed.ts", reason: "Runtime observed successful source read."
+    }]);
+    assert.deepEqual(state.qualifiedContextEvidence(first, "run-turn-2"), [{
+      path: "src/turn-2.ts", reason: "Runtime observed successful source read."
+    }]);
+    assert.deepEqual(state.preTaskContext(first), [], "promotion consumes the current intake epoch");
     assert.deepEqual(state.performanceReviewCheckpoint("run-1"), {
       workingTreeDigest: "a".repeat(64),
       attempt: 1,
@@ -449,6 +503,7 @@ describe("runtime session modules", () => {
     assert.equal(state.resumeState("run-1"), undefined);
     assert.equal(state.performanceReviewCheckpoint("run-1"), undefined);
     assert.equal(state.performanceReviewCredit("run-1"), undefined);
+    assert.deepEqual(state.qualifiedContextEvidence(first, "run-1"), []);
     assert.deepEqual(state.completeAuthorizedModelMutation(mutationIdentity, "stale-reservation", true, { "src/stale.ts": "digest" }), { changedPaths: [], recordedDigests: {} });
     assert.equal(state.consumeShellMutationSnapshot(first, "bash", { command: "printf x" }), undefined);
 
@@ -656,7 +711,7 @@ describe("runtime session modules", () => {
     };
     const state = {
       taskIdentity: () => ({ taskId: task.taskId, taskRunId: task.taskRunId }),
-      observedContext: () => [], consumeShellMutationSnapshot: () => preSnapshot,
+      observedContext: () => [], qualifiedTaskContext: () => [], consumeShellMutationSnapshot: () => preSnapshot,
       completeAuthorizedModelMutationEvidence: (_identity, _call, _success, snapshot) => {
         downstreamSnapshots.push(snapshot); return { changedPaths: [], recordedDigests: {}, beforeSnapshot: null,
           targetPaths: [], recordedContentDigests: {}, proofModes: {} };
@@ -672,7 +727,7 @@ describe("runtime session modules", () => {
     const pi = { on: (name, handler) => handlers.set(name, handler) };
     const ctx = { ...extensionContext(cwd), ui: { notify() {} } };
     registerToolResultHook(pi, {
-      state, activeTask: () => task, maxManifestFiles: 10, readProtectedPaths: () => [],
+      state, activeTask: () => task, maxManifestFiles: 10, flushObservedTaskContext: () => undefined, readProtectedPaths: () => [],
       recordObservedBash() {}, observedBashLedgerPath: () => "", redactText: (value) => value,
       observedTaskContext: () => undefined,
       recordObservedTaskChanges: (_pi, _ctx, _event, _pending, _maximum, _before, eventTree) => {
@@ -712,10 +767,11 @@ describe("runtime session modules", () => {
 
     state.cacheTaskIdentity(ctx, task);
     state.rememberObservedContext(ctx, { path: "src/a.ts", reason: "read" });
+    const writeTelemetry = (_ctx, payload) => telemetry.push(payload);
     registerSessionHooks(pi, {
       state,
       maxManifestFiles: 4,
-      telemetry: (_ctx, payload) => telemetry.push(payload),
+      telemetry: writeTelemetry,
       activeTask: () => task,
       writeTask: (_cwd, value) => value,
       bindTask: (...args) => bindings.push(args),
@@ -727,6 +783,7 @@ describe("runtime session modules", () => {
     });
 
     assert.deepEqual([...handlers.keys()], [
+      "message_start",
       "session_info_changed",
       "turn_end",
       "agent_settled",
@@ -738,13 +795,31 @@ describe("runtime session modules", () => {
     assert.equal(bindings.length, 1);
     assert.equal(traces[0].event, "task_session_renamed");
 
+    stageContextDelivery(ctx, {
+      deliveryId: "delivery-1",
+      taskRunId: "run-1",
+      turnId: "turn-1",
+      entries: [{ path: "src/delivered.ts", reason: "confirmed delivery" }],
+      pack: { retrievalKey: "query-key", queryHash: "query-hash", confidence: "high", estimatedTokens: 10, paths: ["src/delivered.ts"] },
+      injection: { source: "test", queryHash: "query-hash", confidence: "high", estimatedTokens: 10, selectedItems: [{ path: "src/delivered.ts", estimatedTokens: 10 }] }
+    }, { state, telemetry: writeTelemetry });
+    assert.equal(flushed.length, 0, "offered context is not durable evidence before host confirmation");
+    await handlers.get("message_start")({ message: {
+      role: "custom",
+      details: { contextDelivery: { schemaVersion: 1, deliveryId: "delivery-1" } }
+    } }, ctx);
+    assert.equal(state.injectedContextPack(ctx, "query-key")?.queryHash, "query-hash");
+    assert.equal(flushed[0].event, "context_delivery_confirmed");
+
     await handlers.get("turn_end")({ message: { role: "assistant" }, turnIndex: 2, toolResults: [] }, ctx);
     await handlers.get("agent_settled")({}, ctx);
     await handlers.get("session_compact")({ reason: "threshold", willRetry: false, fromExtension: false }, ctx);
     await handlers.get("session_shutdown")({ reason: "quit", targetSessionFile: "/tmp/session.jsonl" }, ctx);
-    assert.deepEqual(telemetry.map((entry) => entry.event), ["turn_end", "agent_settled", "session_compact", "session_shutdown"]);
+    assert.deepEqual(telemetry.map((entry) => entry.event), ["context_pack_offered", "context_delivery_confirmed", "context_pack_injected", "turn_end", "agent_settled", "session_compact", "session_shutdown"]);
     assert.equal(telemetry.at(-1).targetSessionFile, "session.jsonl");
-    assert.deepEqual(flushed[0].pending, [{ path: "src/a.ts", reason: "read" }]);
+    assert.deepEqual(flushed[0].pending, [
+      { path: "src/delivered.ts", reason: "confirmed delivery" }
+    ]);
     assert.equal(state.taskIdentity(ctx), undefined);
   });
 
@@ -757,6 +832,7 @@ describe("runtime session modules", () => {
     const activated = [];
     const telemetry = [];
     registerInputHook(pi, {
+      state: new RuntimeSessionState({ maxObservedContext: 2 }),
       boilerplateCollapseChars: 300,
       activeTask: () => undefined,
       readProtectedPaths: () => [],
@@ -776,6 +852,7 @@ describe("runtime session modules", () => {
     );
     assert.deepEqual(activated, [[]]);
     assert.equal(telemetry[0].event, "user_input");
+    assert.equal(typeof telemetry[0].turnId, "string");
     assert.equal(telemetry[0].intakeMode, "runtime");
   });
 
@@ -809,6 +886,11 @@ describe("runtime session modules", () => {
       automaticTaskIntakeMode("Run all tests, typecheck, and npm pack --dry-run. Do not edit source files.", []),
       "source-change"
     );
+    assert.equal(
+      automaticTaskMutationPolicy("Run all tests, typecheck, and npm pack --dry-run. Do not edit source files.", "source-change"),
+      "forbidden"
+    );
+    assert.equal(automaticTaskMutationPolicy("Fix src/cart.ts and run the tests.", "source-change"), "required");
     assert.equal(
       automaticTaskIntakeMode("Create an execution task limited to test/build/package dry-run. Do not edit source.", []),
       "source-change"
@@ -885,6 +967,131 @@ describe("runtime session modules", () => {
       source: "runtime"
     });
     assert.equal(built.acceptanceCriteria.some((criterion) => criterion.startsWith("Focused tests prove same-identity allow")), false);
+  });
+
+  it("does not reinterpret tenant fairness as an access-control boundary", () => {
+    const prompt = fs.readFileSync(path.resolve(import.meta.dirname, "../benchmarks/deep-logic-v1/prompts/fair-dependency-scheduler.md"), "utf8");
+    const built = buildAcceptanceReceipt({
+      summary: automaticTaskSummary(prompt),
+      expectedOutput: "The scheduler satisfies the requested dependency, capacity, and fairness contract.",
+      acceptanceCriteria: automaticAcceptanceCriteria(prompt),
+      changeMode: "source-change",
+      source: "runtime"
+    });
+    assert.equal(built.receipt.criteria.some((criterion) => criterion.obligation === "tenant-boundary"), false);
+    assert.equal(built.receipt.criteria.some((criterion) => criterion.obligation === "tenant-storage-isolation"), false);
+
+    const crossTenantAccess = buildAcceptanceReceipt({
+      summary: "Block cross-tenant access and allow an active administrator only when tenantId values match.",
+      expectedOutput: "Unauthorized access is denied.",
+      changeMode: "source-change"
+    });
+    assert.equal(crossTenantAccess.receipt.criteria.some((criterion) => criterion.obligation === "tenant-boundary"), true);
+
+    const tenantCache = buildAcceptanceReceipt({
+      summary: "Keep TenantCache entries isolated by tenantId and entity without composite-key collisions.",
+      expectedOutput: "Distinct tenant storage identities never collide.",
+      changeMode: "source-change"
+    });
+    assert.equal(tenantCache.receipt.criteria.some((criterion) => criterion.obligation === "tenant-storage-isolation"), true);
+
+    const billingPrompt = fs.readFileSync(path.resolve(import.meta.dirname, "../benchmarks/deep-logic-v1/prompts/temporal-usage-billing-close.md"), "utf8");
+    const billing = buildAcceptanceReceipt({
+      summary: automaticTaskSummary(billingPrompt),
+      expectedOutput: "The temporal close and admin summary satisfy the billing contract.",
+      acceptanceCriteria: automaticAcceptanceCriteria(billingPrompt),
+      changeMode: "source-change",
+      source: "runtime"
+    });
+    assert.equal(billing.receipt.criteria.some((criterion) => criterion.obligation === "tenant-boundary"), false);
+
+    const rolloutPrompt = fs.readFileSync(path.resolve(import.meta.dirname, "../benchmarks/capability-v1/prompts/multi-package-rollout.md"), "utf8");
+    const rollout = buildAcceptanceReceipt({
+      summary: automaticTaskSummary(rolloutPrompt),
+      expectedOutput: "The feature rollout contract is implemented and verified.",
+      acceptanceCriteria: automaticAcceptanceCriteria(rolloutPrompt),
+      changeMode: "source-change",
+      source: "runtime"
+    });
+    assert.equal(rollout.receipt.criteria.some((criterion) => criterion.obligation === "authorization-deny-case"), false);
+    assert.equal(rollout.receipt.criteria.some((criterion) => criterion.obligation === "tenant-boundary"), false);
+  });
+
+  it("caps automatic acceptance criteria with deterministic whole-prompt coverage", () => {
+    const earlyAndMiddle = Array.from({ length: 20 }, (_entry, index) => (
+      `- [C${String(index + 1).padStart(2, "0")}] The implementation must preserve obligation ${index + 1}.`
+    ));
+    const prompt = [
+      "Implement the bounded billing change.",
+      "",
+      ...earlyAndMiddle,
+      "",
+      "Missing plans or meters fail closed."
+    ].join("\n");
+
+    const first = automaticAcceptanceCriteria(prompt);
+    const second = automaticAcceptanceCriteria(prompt);
+
+    assert.deepEqual(second, first);
+    assert.equal(first.length, 12);
+    assert.equal(first[0].startsWith("[C01] "), true);
+    assert.equal(first.some((criterion) => criterion.startsWith("[C20] ")), false, "the cap is not a first-criteria prefix");
+    assert.equal(first.includes("Missing plans or meters fail closed."), true);
+    const selectedNumbers = first.slice(0, -1).map((criterion) => Number(criterion.match(/^\[C(\d+)\]/)?.[1]));
+    assert.deepEqual([...selectedNumbers].sort((left, right) => left - right), selectedNumbers);
+  });
+
+  it("recognizes an unbulleted missing plan or meter fail-closed obligation", () => {
+    const criteria = automaticAcceptanceCriteria([
+      "Implement closeUsagePeriod in src/billing.js.",
+      "",
+      "Resolve reversals before rating.",
+      "",
+      "Missing plans or meters fail closed."
+    ].join("\n"));
+
+    assert.equal(criteria.includes("Missing plans or meters fail closed."), true);
+  });
+
+  it("recognizes exact output obligations expressed as returns and emits", () => {
+    const criteria = automaticAcceptanceCriteria([
+      "billingSummary(result) returns an exact Terminal/WebUI summary.",
+      "Then emit one line per invoice."
+    ].join("\n"));
+
+    assert.equal(criteria.includes("billingSummary(result) returns an exact Terminal/WebUI summary. Then emit one line per invoice."), true);
+  });
+
+  it("keeps high-signal safety and exact-output obligations stable when the prompt grows", () => {
+    const filler = Array.from({ length: 18 }, (_entry, index) => (
+      `- The implementation emits diagnostic field ${index + 1}.`
+    ));
+    const missing = "A missing active plan is invalid input: throw TypeError; never skip it.";
+    const lineFeed = "The summary must join lines with an actual LF and never a literal backslash-n.";
+    const criteria = automaticAcceptanceCriteria([
+      "Implement the complete contract.",
+      ...filler.slice(0, 9),
+      missing,
+      ...filler.slice(9),
+      lineFeed
+    ].join("\n\n"));
+
+    assert.equal(criteria.length, 12);
+    assert.equal(criteria.includes(missing), true);
+    assert.equal(criteria.includes(lineFeed), true);
+  });
+
+  it("does not spend the acceptance cap on path-only scope bullets", () => {
+    const criteria = automaticAcceptanceCriteria([
+      "Implement the billing close across:",
+      "- `packages/billing/src/plan-timeline.js`",
+      "- `packages/billing/src/close-period.js`",
+      "",
+      "The implementation must reject an unavailable meter."
+    ].join("\n"));
+
+    assert.equal(criteria.some((criterion) => criterion.includes("packages/billing/")), false);
+    assert.equal(criteria.includes("The implementation must reject an unavailable meter."), true);
   });
 
   it("derives exact capability source scope and resolves basename ambiguity deterministically", () => {
@@ -969,6 +1176,20 @@ describe("runtime session modules", () => {
       changeMode: "source-change"
     });
     assert.equal(graphPlan.requiresReview, true);
+
+    const fairSchedulerPrompt = fs.readFileSync(path.resolve(import.meta.dirname, "../benchmarks/deep-logic-v1/prompts/fair-dependency-scheduler.md"), "utf8");
+    const fairSchedulerPlan = analyzePerformanceAssurance({ request: fairSchedulerPrompt, changeMode: "source-change" });
+    assert.equal(fairSchedulerPlan.tier, "rigorous");
+    assert.equal(fairSchedulerPlan.requiresReview, true);
+    assert.ok(fairSchedulerPlan.reasonCodes.includes("graph-order-contract"));
+    assert.equal(fairSchedulerPlan.reasonCodes.includes("identity-isolation-contract"), false);
+    assert.equal(fairSchedulerPlan.reviewChecks.some((item) => /same-, cross-, and missing-identity|allow\/deny or storage isolation/.test(item)), false);
+
+    const tenantIsolationPlan = analyzePerformanceAssurance({
+      request: "Keep usage counters isolated between tenants and meters without changing the public return shape.",
+      changeMode: "source-change"
+    });
+    assert.ok(tenantIsolationPlan.reasonCodes.includes("identity-isolation-contract"));
 
     const statefulPlan = analyzePerformanceAssurance({
       request: [

@@ -6,6 +6,7 @@ import {
   acceptanceCriticalRecoveryProjection,
   applyAcceptanceRecoveryProvenance
 } from "../../extensions/acceptance-receipt.js";
+import { hasDurableContextEvidence } from "../../extensions/context-evidence.js";
 import type { TaskContract } from "../../extensions/guard-types.js";
 import { runtimeLifecycleMode, workingTreeEvidenceDigest } from "../../extensions/task-lifecycle.js";
 import { recordCompletionAudit } from "../../extensions/task-runtime-audit.js";
@@ -18,8 +19,7 @@ import {
   looksLikeCompletionClaim,
   looksLikeIncompleteHandoff
 } from "../session/message-signals.ts";
-import { RuntimeSessionState } from "../session/runtime-state.ts";
-import type { ObservedTaskContext } from "../session/runtime-state.ts";
+import { RuntimeSessionState, type ObservedTaskContext } from "../session/runtime-state.ts";
 import type { RecoveryDecision } from "../recovery/recovery-policy.ts";
 import { buildHandoffProjection, handoffProjectionPath, writeHandoffProjection } from "../recovery/handoff-projection.ts";
 import { evaluateExactFinalOutputContract } from "../quality/exact-output-contract.ts";
@@ -177,7 +177,7 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
     let task = flushObservedTaskContext(
       pi,
       ctx,
-      state.observedContext(ctx),
+      state.qualifiedTaskContext(ctx),
       maxManifestFiles,
       "context_observed_before_handoff"
     ) ?? activeTask(ctx);
@@ -187,7 +187,7 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
     const completionClaim = looksLikeCompletionClaim(text);
     const incompleteHandoff = looksLikeIncompleteHandoff(text);
     if (task.trace.outcome !== "pending") return;
-    const readOnlyEvidenceObserved = task.changeMode === "read-only" && task.contextManifest.length > 0;
+    const readOnlyEvidenceObserved = (task.changeMode === "read-only" || task.mutationPolicy === "forbidden") && hasDurableContextEvidence(task);
     const latestExactVerifier = latestObservedVerification(task.verifyEvidence.filter((evidence) => evidence.matchedProfileCommand === true));
     const potentiallyFinalEvidence = task.observedChangedFiles.length > 0
       || latestExactVerifier?.exitCode === 0
@@ -387,7 +387,7 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
             ...verifierInstructions(gate.missingVerifyCommands),
             "Do not broaden task scope, repeat a failed hypothesis, expand permission, or perform an external action."
           ]
-        : selectedRecovery.reasonCodes.includes("unknown-diagnostic-pass") || task.changeMode === "read-only"
+        : selectedRecovery.reasonCodes.includes("unknown-diagnostic-pass") || task.changeMode === "read-only" || task.mutationPolicy === "forbidden"
         ? [
             ...(gate.missingVerifyCommands.length > 0
               ? ["Run only the missing exact verifier commands against the current working tree.", ...verifierInstructions(gate.missingVerifyCommands)]

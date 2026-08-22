@@ -10,8 +10,10 @@ piagent-benchmark
 ```
 
 Lệnh mặc định dùng suite `core-v1`, tạo workspace Git sạch cho từng lần chạy,
-chạy cùng task trên `raw-pi` và `piagent`, chấm bằng hidden grader, rồi đọc usage
-trực tiếp từ Pi session JSONL. Runner cũng có thể dùng surface `codex-cli` làm baseline.
+chạy cùng task trên `piagent` và controlled `codex-cli` bằng
+`openai-codex/gpt-5.6-luna:medium`, chấm bằng hidden grader, rồi đọc usage
+trực tiếp từ Pi/Codex JSONL. `raw-pi` chỉ còn là ablation diagnostic khi truyền
+`--surfaces raw-pi,piagent`, không phải baseline mặc định.
 Không nhập tay kết quả hay token.
 
 Default suite đo task ở trạng thái steady-state: runner init profile, ghi một
@@ -68,18 +70,36 @@ npm run benchmark:deep -- --dry-run
 npm run benchmark:deep
 ```
 
-`deep-logic-v1` gồm 6 family difficulty `large`: revision-bound event
+`deep-logic-v1` gồm 7 family difficulty `large`: revision-bound event
 reconciliation, capacity/fairness/dependency scheduling, layered fail-closed
 policy, budgeted context graph, out-of-order resumable stream và transactional
-config merge. Mỗi family có run-private value variant, hidden grader, scope gate
-và hai repeat trên hai surface, tổng 24 model session. Script project pin
-`Piagent`/``codex-cli``, `openai-codex/gpt-5.6-luna` và thinking `medium` để kết quả
-so sánh được với baseline cũ. CLI thấp hơn vẫn cho phép truyền cấu hình khác.
+config merge, cộng thêm temporal usage billing với plan timeline, tier lũy tiến,
+reversal, `BigInt`, round-half-even và canonical audit digest. Mỗi family có
+run-private value variant, hidden grader, scope gate và ba repeat trên hai
+surface, tổng 42 model session. Suite khóa `Piagent`/`codex-cli`,
+`openai-codex/gpt-5.6-luna` và thinking `medium`; truyền model, effort, surface
+hoặc Codex mode khác sẽ bị từ chối trước khi gọi provider.
+
+Token report tách `fresh input`, `output`, `cache read`, `cache write`,
+`reasoning` (là tập con của output), `fresh = input + output` và
+`total = input + cache read + cache write + output`. Report cũng ghi nguồn đo,
+độ đầy đủ từng attempt và token của failed/retry attempt; cost không quyết định
+token có được xem là exact hay không.
 
 Kết quả của `webui-parity-v1` chứng minh transport/logic parity và UI behavior,
-không phải model-quality claim. Kết quả `deep-logic-v1` là diagnostic paired
-benchmark; production/public claim vẫn phải qua `production-v1` và các release
-gate hiện hành.
+không phải model-quality claim. `deep-logic-v1` là capability-tier paired gate:
+chỉ full suite 7 family × 3 repeat, randomized order, không retry, đủ quality và
+cả token/performance confidence mới được nhận bounded claim. Production/public
+claim vẫn phải qua `production-v1` và các release gate hiện hành.
+
+Suite deep khai báo trước `primaryEfficiencyEstimand` là
+`failure-aware-family-ratio`. Mỗi family tính tổng fresh token chính xác của mọi
+attempt chia cho số outcome đã resolved ở từng surface; tỷ lệ Piagent/Codex của
+7 family sau đó được gộp bằng geometric mean và CI 95% trên log-ratio. Usage
+unknown, thiếu repeat hoặc một surface không có outcome làm evidence fail-closed.
+Thống kê successful-pair vẫn được giữ riêng và vẫn là guardrail bắt buộc, nên
+primary failure-aware không che được regression chất lượng hay một family thiếu
+đối chứng thành công.
 
 Public regression diện rộng dùng track `--production` (tên CLI được giữ để
 tương thích, không phải claim production):
@@ -129,7 +149,7 @@ Từ lớp benchmark matrix trong package, Piagent phân ba band:
 | Band | Khi dùng | Mục đích |
 |---|---|---|
 | `core` | thay đổi nhỏ, kiểm tra nhanh | Task quality, scope, safety và exact usage trên 4 scenario |
-| `deep-logic` | phát triển solver/workflow/WebUI logic | `deep-logic-v1`, 6 bài large với interacting invariants, 24 paired session; diagnostic, không phải release claim |
+| `deep-logic` | phát triển solver/workflow/WebUI logic | `deep-logic-v1`, 7 bài large với interacting invariants, 42 paired session; capability-tier full-suite gate, không phải production claim |
 | `production` | release candidate, đổi model policy, đổi harness | `production-v1`, 18 public-regression scenario, paired baseline, confidence gate; không phải generalization claim |
 | `capability` | tìm trần năng lực sau thay đổi harness | `capability-v1`, 6 bài multi-file/multi-component chưa bão hòa; dùng hill-climbing, không phải release gate |
 | `long-horizon` | thay đổi recovery/context lớn | Lane provider-free chạy ít nhất 30 phút cho hard crash/resume, compaction, handoff, continuation bounded và state-growth; dedicated paid suite chưa phát hành |
@@ -329,11 +349,12 @@ gate.
 Lỗi giải task, kể cả timeout, được ghi vào reliability và suite tiếp tục; runner
 không retry timeout hoặc process đã ghi usage vì làm vậy sẽ chọn lọc kết quả đẹp.
 Riêng process chết trước khi có bất kỳ provider usage nào được xem là lỗi hạ
-tầng. Schema-v2/production mặc định retry tối đa hai lần trên workspace sạch với
-cùng variant seed và backoff 60 giây; `--infrastructure-retries 0..3` cùng
-`--retry-delay 0..120` cho phép override. Lần hỏng
-được ghi riêng trong `infrastructure-attempts.jsonl`, còn report chỉ chấm lần
-đo hợp lệ cuối và công khai số retry.
+tầng. `production-v1` và `deep-logic-v1` mặc định không retry: acceptance gate
+đặt `maximumInfrastructureRetries: 0`. Có thể truyền
+`--infrastructure-retries 0..3` để chẩn đoán recovery, nhưng bất kỳ accepted run
+nào đi qua retry (hoặc provider-started attempt có usage không biết) đều làm
+stability gate, verdict và token claim fail. Mọi lần hỏng vẫn được ghi riêng
+trong `infrastructure-attempts.jsonl`.
 
 Lỗi deterministic như không init được profile, không tạo được Git baseline,
 grader không chạy được, hoặc process tiếp tục chết hết retry budget sẽ dừng
@@ -476,16 +497,18 @@ Ties         0
 - Tổng chi phí Piagent ghi nhận là `$5.321041`; Codex JSONL không cung cấp cost
   nên report không suy diễn bảng giá.
 
-Cận trên confidence interval vẫn thấp hơn baseline `1.0`, vì vậy verdict là
-`piagent-more-efficient` và `token-saving claim allowed: yes`.
+Cận trên confidence interval thấp hơn baseline `1.0`, nhưng snapshot lịch sử
+này chỉ còn là observational evidence: nó chạy trên source tree dirty và trước
+release gate schema v2 hiện tại, nên `token-saving claim allowed: no`.
 
 ### Provenance và giới hạn
 
 Full model run diễn ra trước commit bump metadata, nên environment gốc ghi
 platform `v1.2.11`, source working tree dirty. Candidate được test chính là logic
 sau đó phát hành trong `v1.2.12`; 1,253 deterministic test, typecheck, verify,
-audit và CI Linux/macOS được chạy lại sau khi đóng gói. Không chạy lại 108 model
-session chỉ để đổi version metadata.
+audit và CI Linux/macOS được chạy lại sau khi đóng gói. Các số liệu model vẫn có
+giá trị chẩn đoán, nhưng không được nâng thành release claim nếu không chạy lại
+full suite trên exact clean commit.
 
 Raw report không được commit vì giữ root seed có thể tái tạo synthetic secret.
 Snapshot này cố ý chỉ công khai summary, suite digest và provenance không nhạy
@@ -577,8 +600,8 @@ chiếu provenance này trước khi đọc token delta.
 acceptance summary, safety/scope, exact fresh/cache/output/reasoning usage,
 context usage provenance, tool histogram, infrastructure retry, duration,
 model và thinking level; đồng thời thêm claim tier, comparison purpose, paired
-outcome coverage, paired regression và failure-aware fresh tokens trên mỗi
-resolved outcome. Runtime nào chưa báo context usage phải ghi
+outcome coverage, paired regression, failure-aware fresh tokens trên mỗi
+resolved outcome, paired duration ratio và stability gate. Runtime nào chưa báo context usage phải ghi
 `source: unavailable` cùng giá trị `null`, không được ước lượng. Các field
 route/phase/helper chưa tồn tại ở measurement schema v1 và không được phát ra
 giá trị giả; phase sau sẽ tăng version khi thêm measurement có nghĩa ổn định.
@@ -588,18 +611,32 @@ Wilson 95% interval cho resolved/quality rate; và 95% interval cho fresh-token
 ratio. Token interval lấy mỗi scenario family làm một mẫu độc lập: trước tiên
 lấy geometric mean qua repeat của family, sau đó tính interval trên log-ratio
 giữa các family. Vì vậy ba repeat của cùng một bài không bị giả thành ba loại
-task độc lập.
+task độc lập. Với schema v2, point estimate successful-pair và CI bắt buộc dùng
+chính cùng tập family hoàn chỉnh; geometric mean trên mọi successful pair chỉ
+được ghi là số mô tả và không điều khiển gate.
 
 `production-v1` chỉ pass public-regression gate khi quality/reliability/workflow và mọi
 category đạt ít nhất `9.5`, safety đạt `10`, và hard gate xác nhận mọi task cùng
 mọi category/profile/lifecycle/difficulty band đều lớn hơn `9.5`. Gate còn yêu
 cầu đủ cả 18 paired outcome family, quality không thấp hơn baseline, không có
 cặp baseline-pass/Piagent-fail, và cận trên 95% của fresh-token ratio không vượt
-`1.0`. Efficiency CI cần tối thiểu 12 family có đủ ba repeat resolved ở cả hai
+`0.80`. Duration phải có point estimate không chậm hơn baseline (`<= 1.0`) và
+cận trên 95% không vượt `1.10`; accepted run phải có zero infrastructure retry
+và zero unknown provider-attempt usage. Mỗi Piagent run còn phải có provider-wire
+evidence đầy đủ: mọi request dùng đúng model/effort đã yêu cầu (`off→none`,
+`minimal→low`), đúng một base instructions hash và một ordered base-tool hash.
+Hai hash base phải ổn định giữa các repeat của cùng scenario/profile/lifecycle;
+deferred tool-search batches được report riêng và không bị coi là base-prefix
+drift. Evidence thiếu, unknown, mismatch hoặc drift đều làm comparison protocol,
+stability gate, verdict và token claim fail. Efficiency CI cần tối thiểu 12 family có đủ ba repeat resolved ở cả hai
 arm; outcome coverage và comparable efficiency là hai gate khác nhau. Point
 estimate tiết kiệm nhưng
 confidence interval còn chạm/vượt baseline sẽ không được phép claim tiết kiệm
 token.
+
+`--scenarios` luôn là diagnostic subset: production/deep suite còn yêu cầu
+`requireFullSuiteForClaim`, nên subset không thể nhận verdict/claim dù các bài
+được chọn đều pass.
 
 `--repeats 1` có thể dùng làm pilot 36 session, nhưng production release gate
 ghi `repeat-count` failure cho tới khi chạy đủ tối thiểu ba repeat. Override
@@ -611,8 +648,11 @@ fail nhưng Piagent pass, family vẫn tính vào đủ 18 outcome coverage và 
 là candidate-only dominance, nhưng không được đưa vào conditional successful-pair
 CI. Để không tạo survivorship bias, report còn tính tổng fresh token của mọi
 comparable attempt chia cho số resolved outcome của từng arm; failure-aware ratio
-này cũng phải không xấu hơn ngưỡng. Baseline failure vì vậy không làm gate bất
-khả thi, đồng thời cũng không biến mất khỏi chi phí đạt kết quả.
+này cũng phải không xấu hơn ngưỡng. Khi suite khai báo
+`failure-aware-family-ratio`, report còn yêu cầu đủ family/category và cận trên
+95% của estimand này. Baseline failure vì vậy không biến mất khỏi chi phí đạt
+kết quả; đồng thời successful-pair evidence vẫn fail nếu thiếu family theo đúng
+ngưỡng đã khai báo trước, không được retry chọn lọc để làm xanh report.
 
 Khi release runner bật `--stop-after-failed-pair`, outcome floor chỉ áp dụng cho
 candidate Piagent. Baseline-only failure vẫn được giữ nguyên trong ledger dưới
@@ -720,8 +760,12 @@ claim production token/cost/quality non-regression.
 
 ## Adaptive model routing là protocol riêng
 
-Same-model `production-v1` với `raw-pi` là ablation gần nhất để đo causal effect
-của harness. So với `codex-cli` chỉ là external-product reference vì tool
+`raw-pi` chỉ là ablation diagnostic tường minh để điều tra harness và luôn giữ
+token efficiency ở mức observational; kể cả gắn suite production nó cũng không
+được phép tạo product/release token claim. Release claim chỉ dùng paired
+controlled `codex-cli`, full suite schema v2 với cận trên 95% `<= 0.80`, và
+candidate bind vào exact clean Git commit. So với `codex-cli` là
+external-product reference vì tool
 protocol, system context và client accounting khác nhau dù model/thinking được
 pin. Không dùng hai report này để claim router chọn model tốt, và không dùng
 mixed-model report để claim same-model token saving.

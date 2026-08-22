@@ -1551,6 +1551,23 @@ test("acceptance receipt recognizes read-only boundaries inside source-change pl
   });
   assert.ok(acceptance.receipt.criteria.some((criterion) => criterion.obligation === "read-only-evidence"));
 
+  const plannedOnly = refreshAcceptanceReceipt(contract({
+    summary: "Create backend-to-frontend markdown plan files without touching backend sources.",
+    expectedOutput: "Document BE read-only boundary and keep v-nexus-backend out of scope.",
+    acceptanceCriteria: acceptance.acceptanceCriteria,
+    acceptanceReceipt: acceptance.receipt,
+    scope: ["plans/**"],
+    outOfScope: ["v-nexus-backend/**"],
+    changedFiles: ["plans/2026-08-04-be-to-fe-remediation/plan.md"],
+    contextManifest: [{ path: "v-nexus-frontend/docs/frontend/structure-guide.md", reason: "criterion-01 scope target" }]
+  }), {
+    cwd,
+    changedFiles: ["plans/2026-08-04-be-to-fe-remediation/plan.md"],
+    currentWorkingTreeDigest: currentDigest
+  });
+  assert.equal(plannedOnly.criticalMissing.some((criterion) => criterion.obligation === "read-only-evidence"), true,
+    "planned criterion context is not observed read-only evidence");
+
   const complete = refreshAcceptanceReceipt(contract({
     summary: "Create backend-to-frontend markdown plan files without touching backend sources.",
     expectedOutput: "Document BE read-only boundary and keep v-nexus-backend out of scope.",
@@ -1622,6 +1639,11 @@ test("exact final-output contracts reject truncated source-derived values", (t) 
   );
   assert.equal(exact.applicable, true);
   assert.equal(exact.passed, true);
+  const plannedOnly = evaluateExactFinalOutputContract({
+    ...task,
+    contextManifest: [{ path: "logs/incident.log", reason: "criterion-01 scope target" }]
+  }, "ROOT_CAUSE=QUEUE_SATURATION_E99CEB030A", cwd);
+  assert.equal(plannedOnly.applicable, false, "planned context cannot become exact-output evidence");
   assert.equal(evaluateExactFinalOutputContract({ ...task, summary: "Summarize the incident." }, "Done", cwd).applicable, false);
 });
 
@@ -1641,6 +1663,7 @@ test("execution backend contract keeps OAuth with Pi host and gates experimental
 
 test("benchmark trust helpers pick production for release-sensitive changes", () => {
   assert.equal(BENCHMARK_SCOPE_BANDS.find((band) => band.id === "production").scenarios, 18);
+  assert.equal(BENCHMARK_SCOPE_BANDS.find((band) => band.id === "deep-logic").scenarios, 7);
   const longHorizon = BENCHMARK_SCOPE_BANDS.find((band) => band.id === "long-horizon");
   assert.equal(longHorizon.availability, "runnable-provider-free");
   assert.equal(longHorizon.scenarios, 1);
@@ -1663,6 +1686,7 @@ test("benchmark trust helpers pick production for release-sensitive changes", ()
       workflowGate: true,
       qualityNonInferior: true,
       efficiencyEvidenceGate: true,
+      primaryEfficiencyGate: true,
       comparisonProtocolGate: { passed: true },
       tokenClaimAllowed: true
     }
@@ -1678,6 +1702,7 @@ test("benchmark trust helpers pick production for release-sensitive changes", ()
     hasOutcomeEvidenceGate: false,
     hasPairedRegressionGate: false,
     hasFailureAwareEfficiencyGate: false,
+    hasPrimaryEfficiencyGate: true,
     hasComparisonProtocolGate: true,
     achievedClaimTier: "unavailable",
     generalizationClaimAllowed: false,

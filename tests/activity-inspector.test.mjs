@@ -171,6 +171,39 @@ describe("Piagent activity inspector", () => {
     assert.equal(entry.deletions, 0);
   });
 
+  it("projects a failed read as recovered after the same path is created and verified", async () => {
+    const cwd = workspace();
+    const recoveryEvents = [
+      { sessionId: "inspect-session", event: "user_input", recordedAt: "2026-08-13T04:00:00.000Z" },
+      { sessionId: "inspect-session", event: "tool_call", toolCallId: "read-missing", toolName: "read", targetPath: "docs/plan.md", recordedAt: "2026-08-13T04:00:01.000Z" },
+      { sessionId: "inspect-session", event: "tool_result", toolCallId: "read-missing", toolName: "read", targetPath: "docs/plan.md", isError: true, reasonCode: "target-not-found", recordedAt: "2026-08-13T04:00:02.000Z" },
+      { sessionId: "inspect-session", event: "tool_call", toolCallId: "write-plan", toolName: "write", targetPath: "docs/plan.md", recordedAt: "2026-08-13T04:00:03.000Z" },
+      { sessionId: "inspect-session", event: "tool_result", toolCallId: "write-plan", toolName: "write", targetPath: "docs/plan.md", isError: false, recordedAt: "2026-08-13T04:00:04.000Z" }
+    ];
+    const view = await buildActivityInspector({ cwd, sessionId: "inspect-session", events: recoveryEvents });
+    const recovered = view.snapshot.activity.recent.find((activity) => activity.label === "read recovered");
+    assert.equal(recovered?.state, "passed");
+    assert.equal(view.snapshot.activity.recent.some((activity) => activity.label === "read failed"), false);
+  });
+
+  it("reclassifies a historical multi-target search error as a handled warning from raw session evidence", async () => {
+    const cwd = workspace();
+    const searchEvents = [
+      { sessionId: "inspect-session", event: "tool_call", toolCallId: "search-1", toolName: "bash", command: "rg -n match missing.ts src", recordedAt: "2026-08-13T04:00:01.000Z" },
+      { sessionId: "inspect-session", event: "tool_result", toolCallId: "search-1", toolName: "bash", isError: true, exitCode: 1, reasonCode: "tool-result-failed", recordedAt: "2026-08-13T04:00:02.000Z" }
+    ];
+    const sessionEntries = [
+      { type: "message", message: { role: "assistant", content: [{ type: "toolCall", id: "search-1", name: "bash", arguments: { command: "rg -n match missing.ts src" } }] } },
+      { type: "message", message: { role: "toolResult", toolCallId: "search-1", toolName: "bash", isError: true,
+        content: [{ type: "text", text: "rg: missing.ts: No such file or directory (os error 2)\nsrc/found.ts:12:match\nCommand exited with code 2" }] } }
+    ];
+    const view = await buildActivityInspector({ cwd, sessionId: "inspect-session", events: searchEvents, sessionEntries });
+    assert.equal(view.snapshot.activity.recent[0]?.label, "bash warning");
+    assert.equal(view.snapshot.activity.recent[0]?.state, "passed");
+    assert.equal(view.commands.failed, 0);
+    assert.equal(view.tools.failed, 0);
+  });
+
   it("registers one compact namespace with menu options and a session-local widget toggle", async () => {
     const cwd = workspace();
     const commands = new Map();

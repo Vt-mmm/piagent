@@ -364,6 +364,7 @@ export type TaskContract = {
   sessionId: string;
   sessionName?: string;
   changeMode: "source-change" | "read-only";
+  mutationPolicy?: "required" | "forbidden";
   attempt: number;
   maxAttempts: number;
   previousAttempts: TaskAttemptSummary[];
@@ -459,6 +460,7 @@ export type ExecPolicyConfig = {
 
 export type ContextBudgetConfig = {
   defaultMode?: "advisory" | "enforce";
+  contextDeltaShadow?: "off" | "sample" | "on";
   maxContextFileChars?: number;
   maxMemoryFileChars?: number;
   maxManifestFiles?: number;

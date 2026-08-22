@@ -12,3 +12,5 @@ Semantics:
 - Return `{ allowed, effect, layer, ruleIndex, protected, reason }` without exposing or changing inputs.
 
 Keep matching deterministic and do not use shell or filesystem glob expansion.
+
+Run `npm test` when complete; it includes a fixed public happy-path contract for this scenario.

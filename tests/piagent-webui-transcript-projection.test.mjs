@@ -23,19 +23,22 @@ function expectValid(value) {
 }
 
 describe("Piagent WebUI bounded transcript projection", () => {
-  it("projects user/assistant text, removes thinking and redacts secrets without exposing raw session IDs", () => {
+  it("projects only terminal assistant success, removes thinking and redacts secrets without exposing raw session IDs", () => {
     const secret = "sk-proj-abcdefghijklmnopqrstuvwxyz";
     const value = project([
       entry("entry_1", "user", [{ type: "text", text: `Use token ${secret}` }, { type: "image", data: "not-forwarded" }]),
-      entry("entry_2", "assistant", [{ type: "thinking", thinking: "private chain of thought" }, { type: "text", text: "Done." },
-        { type: "toolCall", id: "raw_tool_call_123", name: "read_file", arguments: { path: "/private/path" } }])
+      entry("entry_2", "assistant", [{ type: "thinking", thinking: "private chain of thought" }, { type: "text", text: "Reading now." },
+        { type: "toolCall", id: "raw_tool_call_123", name: "read_file", arguments: { path: "/private/path" } }], { stopReason: "toolUse" }),
+      entry("entry_3", "assistant", [{ type: "text", text: "Done." }], { stopReason: "stop" })
     ]);
     expectValid(value);
-    assert.equal(value.items.length, 2);
+    assert.equal(value.items.length, 3);
     assert.equal(value.items[0].content.state, "redacted");
     assert.equal(value.items[0].content.text.includes(secret), false);
     assert.equal(value.items[0].content.imageCount, 1);
-    assert.equal(value.items[1].content.text, "Done.");
+    assert.equal(value.items[1].content.state, "unavailable");
+    assert.equal(value.items[1].content.reasonCode, "assistant-intermediate-output");
+    assert.equal(value.items[2].content.text, "Done.");
     assert.equal(JSON.stringify(value).includes("private chain of thought"), false);
     assert.equal(JSON.stringify(value).includes("raw_tool_call_123"), false);
     assert.equal(JSON.stringify(value).includes("/private/path"), false);
@@ -99,6 +102,41 @@ describe("Piagent WebUI bounded transcript projection", () => {
     expectValid(unknown);
     assert.equal(unknown.items[0].content.reasonCode, "provider-response-failed");
     assert.equal(JSON.stringify(unknown).includes("private provider failure"), false);
+  });
+
+  it("projects visually empty assistant success as unavailable and preserves visible Unicode", () => {
+    const value = project([
+      entry("entry_1", "assistant", [{ type: "text", text: "\u200b\u200c\u2060\ufeff" }], { stopReason: "stop" }),
+      entry("entry_2", "assistant", [{ type: "text", text: "\u001b[31m\u001b[0m" }], { stopReason: "stop" }),
+      entry("entry_3", "assistant", [{ type: "text", text: "Đã xong 👩‍💻" }], { stopReason: "stop" })
+    ]);
+    expectValid(value);
+    assert.deepEqual(value.items.slice(0, 2).map((item) => item.content.reasonCode),
+      ["assistant-message-empty", "assistant-message-empty"]);
+    assert.equal(value.items.slice(0, 2).every((item) => item.content.text === null), true);
+    assert.equal(value.items[2].content.text, "Đã xong 👩‍💻");
+  });
+
+  it("keeps partial error, abort, and completion-gate drafts out of transcript prose", () => {
+    const value = project([
+      entry("entry_1", "assistant", [{ type: "text", text: "Partial provider output" }],
+        { stopReason: "error", errorMessage: "private provider failure" }),
+      entry("entry_2", "assistant", [{ type: "text", text: "Partial abort output" }], { stopReason: "aborted" }),
+      entry("entry_3", "assistant", [{ type: "text", text: "[Piagent completion gate: CONTINUING]\nInternal.\n\nInterim." }], { stopReason: "stop" }),
+      entry("entry_4", "assistant", [{ type: "text", text: "[Piagent completion gate: NOT APPROVED] Task open.\n\nDraft." }], { stopReason: "stop" }),
+      entry("entry_5", "assistant", [{ type: "text", text: "Unclassified assistant draft" }])
+    ]);
+    expectValid(value);
+    assert.deepEqual(value.items.map((item) => item.content.reasonCode), [
+      "provider-response-failed", "assistant-message-aborted", "assistant-completion-continuing", "assistant-completion-not-approved",
+      "assistant-settlement-unknown"
+    ]);
+    assert.equal(value.items.every((item) => item.content.text === null), true);
+    assert.equal(JSON.stringify(value).includes("Partial provider output"), false);
+    assert.equal(JSON.stringify(value).includes("Partial abort output"), false);
+    assert.equal(JSON.stringify(value).includes("Interim."), false);
+    assert.equal(JSON.stringify(value).includes("Draft."), false);
+    assert.equal(JSON.stringify(value).includes("Unclassified assistant draft"), false);
   });
 
   it("projects attachments as file cards without dumping document bodies into chat", () => {

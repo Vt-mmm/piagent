@@ -353,6 +353,7 @@ export type Event =
   | ResyncRequiredEvent
   | MessageDeltaEvent
   | MessageCompletedEvent
+  | OperationSettledEvent
   | ToolEvent;
 export type CatalogChangedEvent = EventBase & {
   kind?: "catalog.changed";
@@ -405,6 +406,11 @@ export type MessageCompletedEvent = EventBase & {
     sessionRevision: string;
     truncated: boolean;
   };
+  [k: string]: any;
+};
+export type OperationSettledEvent = EventBase & {
+  kind?: "operation.settled";
+  payload?: OperationCompletedPayload | OperationIncompletePayload;
   [k: string]: any;
 };
 export type ToolEvent = EventBase & {
@@ -511,9 +517,26 @@ export interface EventBase {
     | "resync.required"
     | "message.delta"
     | "message.completed"
+    | "operation.settled"
     | "tool.started"
     | "tool.completed";
   payload: {
     [k: string]: any;
   };
+}
+export interface OperationCompletedPayload {
+  sessionRef: string;
+  operationRef: string;
+  messageRef: string;
+  sessionRevision: string;
+  settlement: "completed";
+  reasonCode: null;
+}
+export interface OperationIncompletePayload {
+  sessionRef: string;
+  operationRef: string;
+  messageRef: string | null;
+  sessionRevision: string | null;
+  settlement: "blocked" | "aborted" | "error" | "unknown";
+  reasonCode: string;
 }

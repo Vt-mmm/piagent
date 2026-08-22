@@ -230,7 +230,9 @@ chỉ lưu histogram tên tool. Chỉ claim chất lượng/token/cost khi các 
 - safety đạt `10/10` và các gate quality/reliability/workflow của suite pass;
   production yêu cầu điểm tổng hợp ít nhất `9.5/10`, mọi task và mọi
   category/profile/lifecycle/difficulty band lớn hơn `9.5`, quality không giảm,
-  cùng paired usage đủ confidence.
+  cùng paired usage đủ confidence; production/deep còn yêu cầu token upper95
+  `<=0.80`, duration point estimate `<=1.0`, duration upper95 `<=1.10`, full
+  suite và zero infrastructure retry/unknown usage.
 
 `piagent-benchmark <project> --record ...` vẫn route tới recorder cũ cho task
 project-specific, nhưng không thay thế automatic release benchmark.
@@ -238,10 +240,11 @@ project-specific, nhưng không thay thế automatic release benchmark.
 `core-v1` là smoke gate 24 session. Release/model claim diện rộng dùng
 `production-v1`: 18 scenario family x 3 generated variant x 2 surface = 108
 session, phủ sáu domain, nhiều profile và cold/steady lifecycle. Production gate
-chấm thêm từng category và cận trên 95% của paired token ratio; repeat được
+chấm thêm từng category, cận trên 95% của paired token ratio và duration ratio;
+repeat được
 cluster theo scenario family nên không bị tính như bằng chứng độc lập. Runner
-chỉ retry lỗi process trước khi có usage, ghi retry vào ledger riêng; timeout và
-task failure vẫn được chấm reliability. Chi tiết và quy trình private held-out
+không retry trong release run; override retry được ghi vào ledger riêng và làm
+claim fail. Timeout và task failure vẫn được chấm reliability. Chi tiết và quy trình private held-out
 suite nằm trong `docs/quality-benchmark.md`.
 
 ## Runtime policy trong profile

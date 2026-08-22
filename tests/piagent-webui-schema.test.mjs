@@ -45,6 +45,7 @@ const primaryContracts = [
   "approval-v1",
   "capabilities-v1",
   "session-catalog-v1",
+  "session-live-state-v1",
   "session-command-v1",
   "runtime-command-v1",
   "gateway-capabilities-v1",

@@ -28,12 +28,12 @@
     {
       "id": "pilot-suite",
       "path": "benchmarks/production-v1/suite.json",
-      "sha256": "8d03df7c08eee5debbabdb3490beb5d45b021a392b6da77df257e6d94c346d58"
+      "sha256": "d483c1a8b6def71aaaf217fe6bf2044ec37fc08cf17d01aee7fb4d75be80cafc"
     },
     {
       "id": "task-contract-schema",
       "path": "schemas/task-contract.schema.json",
-      "sha256": "432a253af865f5c79527b3c7e5e65fc3b6cfea43d19f9e915f3bda792a358bb4"
+      "sha256": "dc6da752c0d3bc6a82f7e168566359d94f52699b32a6309e929083ba52c845d8"
     },
     {
       "id": "assurance-schema",

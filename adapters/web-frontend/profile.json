@@ -42,12 +42,10 @@
       "test -s README.md"
     ],
     "source": [
-      "npm run type-check",
-      "npm run lint",
-      "npm test"
+      "node -e \"const s=require('./package.json').scripts||{}; const n=['type-check','typecheck','lint','test']; if(!n.some(k=>s[k])){console.error('No Node source verifier is configured');process.exit(2)}\" && npm run type-check --if-present && npm run typecheck --if-present && npm run lint --if-present && npm test --if-present"
     ],
     "runtime": [
-      "npm run test:e2e"
+      "node -e \"const s=require('./package.json').scripts||{}; if(!s['test:e2e']){console.error('No web frontend runtime verifier is configured');process.exit(2)}\" && npm run test:e2e"
     ]
   },
   "mcpCapabilities": [

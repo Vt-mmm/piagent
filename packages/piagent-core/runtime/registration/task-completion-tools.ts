@@ -1,4 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { durableContextEvidenceEntries, isRuntimeOwnedContextEvidenceEntry } from "../../extensions/context-evidence.js";
+import { mergeObservedTaskContext } from "../../extensions/task-contract-view.js";
 import { buildHandoffProjection, writeHandoffProjection } from "../recovery/handoff-projection.ts";
 import { buildCompletionReceiptView } from "../product/operator-projections.ts";
 import { semanticRepairProvenance } from "../recovery/semantic-repair-handshake.ts";
@@ -41,13 +43,50 @@ export function registerTaskCompletionTools(pi: ExtensionAPI, deps: Record<strin
       if (task.trace.outcome !== "pending") {
         return { content: [{ type: "text", text: `Task ${task.taskId} is immutable after ${task.trace.outcome}; context evidence was not changed.` }], details: task, isError: true };
       }
-      if (runtime.contextBudget !== "off" && task.contextManifest.length + params.files.length > budget.maxManifestFiles) {
+      const activeIdentity = runtimeState.taskIdentity(ctx);
+      if (!activeIdentity || activeIdentity.taskId !== task.taskId || activeIdentity.taskRunId !== task.taskRunId) {
         return {
-          content: [{ type: "text", text: `Context manifest budget exceeded: ${task.contextManifest.length + params.files.length} files > ${budget.maxManifestFiles}` }],
+          content: [{ type: "text", text: `Context evidence rejected for ${task.taskId}: the active runtime task identity does not match this session task.` }],
+          details: { reasonCode: "context-evidence-task-identity-mismatch" },
           isError: true
         };
       }
-      const fileBudget = params.files.map((file) => candidateFileBudget(ctx.cwd, file.path, budget));
+      const observedPaths = new Set(runtimeState.observedContext(ctx)
+        .map((entry: { path: string }) => normalizeRelative(ctx.cwd, entry.path))
+        .filter((filePath: string | undefined): filePath is string => Boolean(filePath)));
+      const qualifiedByPath = new Map<string, { path: string; reason: string }>();
+      for (const entry of runtimeState.qualifiedContextEvidence(ctx, task.taskRunId)) {
+        const filePath = normalizeRelative(ctx.cwd, entry.path);
+        if (filePath && isRuntimeOwnedContextEvidenceEntry(entry)) qualifiedByPath.set(filePath, entry);
+      }
+      const qualifiedFiles = new Map<string, { path: string; reason: string }>();
+      const unprovenPaths: string[] = [];
+      for (const file of params.files) {
+        const filePath = normalizeRelative(ctx.cwd, file.path);
+        const evidence = filePath ? qualifiedByPath.get(filePath) : undefined;
+        if (!filePath || !observedPaths.has(filePath) || !evidence) {
+          unprovenPaths.push(redactText(file.path));
+          continue;
+        }
+        qualifiedFiles.set(filePath, { path: filePath, reason: evidence.reason });
+      }
+      if (unprovenPaths.length > 0) {
+        return {
+          content: [{ type: "text", text: `Context evidence rejected for ${task.taskId}: no runtime-observed read or host-confirmed delivery exists in this task/session for ${unprovenPaths.join(", ")}. Read the exact file successfully in this task or rely on automatic delivery confirmation.` }],
+          details: { reasonCode: "context-evidence-unproven", paths: unprovenPaths },
+          isError: true
+        };
+      }
+      const safeFiles = [...qualifiedFiles.values()];
+      const evidencePaths = new Set(durableContextEvidenceEntries(task).map((item) => item.path));
+      const projectedManifestFiles = evidencePaths.size + new Set(safeFiles.map((item) => item.path).filter((filePath) => !evidencePaths.has(filePath))).size;
+      if (runtime.contextBudget !== "off" && projectedManifestFiles > budget.maxManifestFiles) {
+        return {
+          content: [{ type: "text", text: `Context manifest budget exceeded: ${projectedManifestFiles} files > ${budget.maxManifestFiles}` }],
+          isError: true
+        };
+      }
+      const fileBudget = safeFiles.map((file) => candidateFileBudget(ctx.cwd, file.path, budget));
       const overLimit = fileBudget.filter((item) => item.overLimit);
       if (runtime.contextBudget === "enforce" && overLimit.length > 0) {
         return {
@@ -56,17 +95,8 @@ export function registerTaskCompletionTools(pi: ExtensionAPI, deps: Record<strin
           isError: true
         };
       }
-
-      const safeFiles = params.files.map((file) => ({
-        path: file.path,
-        reason: redactText(file.reason)
-      }));
-      const seen = new Set(task.contextManifest.map((item) => `${item.path}\u0000${item.reason}`));
-      for (const file of safeFiles) {
-        const key = `${file.path}\u0000${file.reason}`;
-        if (!seen.has(key)) task.contextManifest.push(file);
-      }
-      const lifecycle = task.changeMode === "read-only"
+      mergeObservedTaskContext(task, safeFiles, budget.maxManifestFiles, (value) => value);
+      const lifecycle = task.changeMode === "read-only" || task.mutationPolicy === "forbidden"
         ? applyRuntimeLifecycleObservation(task, "context-complete", nowIso())
         : { changed: false, mode: runtimeLifecycleMode(task) };
       const written = writeTask(ctx.cwd, task);
@@ -74,7 +104,7 @@ export function registerTaskCompletionTools(pi: ExtensionAPI, deps: Record<strin
       appendSessionTrace(pi, { taskId: task.taskId, taskRunId: task.taskRunId, sessionId: task.sessionId, event: "context_record", files: safeFiles, lifecycleMode: lifecycle.mode, lifecycleAdvanced: lifecycle.changed });
 
       return {
-        content: [{ type: "text", text: `Context recorded for ${task.taskId}: ${params.files.length} file(s)` }],
+        content: [{ type: "text", text: `Context recorded for ${task.taskId}: ${safeFiles.length} runtime-qualified file(s)` }],
         details: compactTaskDetails(written)
       };
     }
@@ -296,7 +326,10 @@ export function registerTaskCompletionTools(pi: ExtensionAPI, deps: Record<strin
         currentDigests: finalFileDigests,
         currentWorkingTreeDigest: workingTreeEvidenceDigest(finalFileDigests)
       });
-      const semanticBlock = taskAuthorityDecision(nextTask, "CAP-13", "block").allowed ? semanticRepairCompletionBlock?.(ctx.cwd, nextTask.taskRunId) : undefined;
+      const semanticBlock = (taskAuthorityDecision(nextTask, "CAP-13", "block").allowed
+        || taskAuthorityDecision(nextTask, "CAP-12", "mutate").allowed)
+        ? semanticRepairCompletionBlock?.(ctx.cwd, nextTask.taskRunId)
+        : undefined;
       if (semanticBlock) gate = { ...gate, decision: "fail", missing: [...new Set([...gate.missing, semanticBlock])] };
       if (params.outcome === "completed" && (semanticBlock || (runtime.finalGate === "enforce" && gate.decision === "fail"))) {
         const blockedTrace = {

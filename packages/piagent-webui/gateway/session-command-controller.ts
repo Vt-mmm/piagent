@@ -154,8 +154,18 @@ export class SessionCommandController {
         | "renamed" | "pinned" | "unpinned" | "archived" | "unarchived" | "forked" | "no-change",
         operationRef: string | null = null;
       if (command.action === "session.create") {
-        targetSessionRef = await this.#runtimes.create(String(command.payload.projectRef), String(command.payload.placeRef),
-          command.payload.modelRef === null ? null : String(command.payload.modelRef), String(command.payload.thinkingLevel));
+        const createWithReadback = (this.#runtimes as any).createWithReadback;
+        if (typeof createWithReadback === "function") {
+          const created = await createWithReadback.call(this.#runtimes, String(command.payload.projectRef), String(command.payload.placeRef),
+            command.payload.modelRef === null ? null : String(command.payload.modelRef), String(command.payload.thinkingLevel));
+          targetSessionRef = String(created.sessionRef);
+          if (created.effectiveOptions?.state !== "confirmed") throw new Error(
+            typeof created.effectiveOptions?.reasonCode === "string" ? created.effectiveOptions.reasonCode : "session-create-options-effect-unknown");
+        } else {
+          // Compatibility with older embedded supervisors and test doubles.
+          targetSessionRef = await this.#runtimes.create(String(command.payload.projectRef), String(command.payload.placeRef),
+            command.payload.modelRef === null ? null : String(command.payload.modelRef), String(command.payload.thinkingLevel));
+        }
         if (command.payload.permissionMode !== undefined) {
           await this.#runtimes.setPermission(targetSessionRef, String(command.payload.permissionMode) as
             "read-only" | "workspace-write" | "trusted-full-access");
@@ -246,9 +256,14 @@ export class SessionCommandController {
       const code = /recovery/.test(message) ? "recovery-required"
         : /(owner-conflict|operation-conflict|runtime-busy)/.test(message) ? "owner-conflict"
           : noDispatchEffect || command.action === "session.send" && !sendAttempted ? "unavailable" : "effect-unknown";
-      const receipt = code === "effect-unknown" ? this.#uncertain(command, after, afterRow, "session-command-effect-unknown")
+      const specificCreateUncertainty = command.action === "session.create" && /^[a-z0-9][a-z0-9.-]{0,95}$/.test(message)
+        ? message : "session-command-effect-unknown";
+      const receipt = code === "effect-unknown" ? this.#uncertain(command, after, afterRow, specificCreateUncertainty)
         : this.#rejected(command, after, afterRow, code, message);
       try { this.#store.settle(command, receipt, this.#now()); } catch { /* intent remains uncertain */ }
+      if (command.action === "session.create" && afterRow) {
+        this.#events.publish("session.changed", { catalogRevision: after.catalogRevision, session: afterRow });
+      }
       return receipt;
     }
   }

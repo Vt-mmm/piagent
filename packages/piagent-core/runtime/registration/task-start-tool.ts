@@ -7,9 +7,7 @@ import { createEnvironmentBoundTaskAuthority } from "../policy/task-authority-ru
 import { authorityReplacementState } from "../policy/authority-resume-policy.ts";
 import { compileCriterionGraph, criterionGraphContextSelection, criterionGraphGuidance, criterionGraphMode } from "../../extensions/criterion-graph.js";
 import { captureTaskStartBaseline } from "../inspection/task-baseline-start-capture.ts";
-type ExtensionContext = any;
-type TaskContract = any;
-type TaskStartParameters = any;
+type ExtensionContext = any; type TaskContract = any; type TaskStartParameters = any;
 function sameStringRecord(left: Record<string, string>, right: Record<string, string>): boolean {
   const leftEntries = Object.entries(left).sort(([a], [b]) => a.localeCompare(b));
   const rightEntries = Object.entries(right).sort(([a], [b]) => a.localeCompare(b));
@@ -32,13 +30,13 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
   const {
     DEFAULT_MAX_TASK_ATTEMPTS, ORCHESTRATION_ROLES, REVIEW_LENSES, StringEnum, Type,
     activateToolGroups, activeSessionTask, activeTaskToolGroups, appendSessionTrace, appendTrace,
-    applyRuntimeLifecycleObservation, automaticAcceptanceCriteria, automaticReadOnlyTaskScope, automaticReviewLenses, automaticTaskIntakeMode, automaticTaskRiskLane, automaticTaskScope,
+    applyRuntimeLifecycleObservation, automaticAcceptanceCriteria, automaticReadOnlyTaskScope, automaticReviewLenses, automaticTaskIntakeMode, automaticTaskMutationPolicy, automaticTaskRiskLane, automaticTaskScope,
     acceptanceBaselineGuidance, acceptanceProofGuidance, bindSessionTask, buildAcceptanceReceipt, compactTaskDetails, contextBudgetConfig, createTaskRunId,
     currentSessionName, defaultWorkPlan, effectiveProtectedPaths, hasGitEvidenceRoot, hasOperatorSessionName,
     loadProfileFromContext, matchesProtectedPath, normalizeReviewLenses, normalizeWorkPlanSteps, nowIso, policy,
     priorTaskAttempts, recordTaskStartCheckpoint, redactText, redactTextArray, registerRuntimeTool,
     repositoryFileManifest, resolveOrchestrationPolicy, resolveTaskScopePatterns, runtimeLifecycleMode, runtimeState, safeTaskId, selectVerificationPlan,
-    summarizeAttempt, validTaskScopePattern, validateNewWorkPlan, verifierCommandInstructions, workingTreeEvidenceDigest, workingTreeSnapshot, workingTreeSnapshotHasUnavailableEvidence,
+    summarizeAttempt, telemetry, validTaskScopePattern, validateNewWorkPlan, verifierCommandInstructions, workingTreeEvidenceDigest, workingTreeSnapshot, workingTreeSnapshotHasUnavailableEvidence,
     writeTask
   } = deps;
   const taskStartTool = {
@@ -48,7 +46,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
     promptSnippet: "Start a governed project task and persist the task contract.",
     promptGuidelines: [
       "Call this exactly once before source edits in a project managed by Pi Agent Platform.",
-      "Use source-change for project command execution, including tests, builds, lint, typecheck, verification, and package dry-runs, even when the operator requires source files to remain unchanged. Read-only intentionally blocks shell execution.",
+      "Use source-change for project verifier execution or edits. For an assessment, report, or plan with no source changes, set mutationPolicy=forbidden; use read-only when no project verifier needs to execute.",
       "Do not call context, status, policy, evidence-recording, trace, or gate tools first; runtime hooks provide those checks automatically.",
       "Use tiny for a bounded low-risk change, normal for ordinary multi-file work, and high-risk for security, data, release, migration, or external-impact work.",
       "Every scope entry must be a project-relative path or glob such as src/file.ts, src/**, or test/**; never put prose in scope.",
@@ -60,8 +58,9 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       summary: Type.String({ minLength: 10 }),
       riskLane: StringEnum(["tiny", "normal", "high-risk"] as const),
       changeMode: Type.Optional(StringEnum(["source-change", "read-only"] as const, {
-        description: "Use source-change for project command execution as well as edits; use read-only only for inspection that needs no shell execution."
+        description: "Use source-change for project verifier execution or edits; use read-only for bounded inspection."
       })),
+      mutationPolicy: Type.Optional(StringEnum(["required", "forbidden"] as const, { description: "Required demands a final diff; forbidden allows exact verification, rejects source mutation, and requires a zero task delta." })),
       maxAttempts: Type.Optional(Type.Number({ minimum: 1, maximum: 10 })),
       expectedOutput: Type.String({ minLength: 10 }),
       acceptanceCriteria: Type.Array(Type.String({ minLength: 1 }), { minItems: 1, maxItems: 12 }),
@@ -246,6 +245,8 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       }
       const orchestration = resolveOrchestrationPolicy(profile, policy);
       const changeMode = params.changeMode === "read-only" ? "read-only" : "source-change";
+      const mutationPolicy = changeMode === "read-only" || params.mutationPolicy === "forbidden" ? "forbidden" : "required";
+      if (changeMode === "read-only" && params.mutationPolicy === "required") return { content: [{ type: "text", text: "Task start refused: read-only tasks cannot require source mutation." }], isError: true };
       if (changeMode === "source-change" && !hasGitEvidenceRoot(ctx.cwd)) {
         return {
           content: [{ type: "text", text: "Task start refused: source-change tasks require a Git working tree, or a workspace parent with direct child Git repositories, so changed-file evidence cannot silently disappear. Initialize Git, open the parent that contains the repos, or use read-only mode." }],
@@ -263,7 +264,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       const reviewLenses = normalizeReviewLenses(params.reviewLenses, orchestration.defaultReviewLenses);
       const providedWorkPlan = normalizeWorkPlanSteps(params.workPlan);
       const defaultPlanLane = params.intakeMode === "runtime" && params.riskLane === "normal" ? "tiny" : params.riskLane;
-      const workPlan = providedWorkPlan.length ? providedWorkPlan : defaultWorkPlan(safeSummary, defaultPlanLane, changeMode);
+      const workPlan = providedWorkPlan.length ? providedWorkPlan : defaultWorkPlan(safeSummary, defaultPlanLane, changeMode, mutationPolicy);
       const workPlanError = validateNewWorkPlan(workPlan);
       if (workPlanError) {
         return { content: [{ type: "text", text: `Task start refused: ${workPlanError}.` }], details: workPlan, isError: true };
@@ -298,7 +299,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       });
       const criterionGraph = compileCriterionGraph({ acceptanceCriteria: acceptance.acceptanceCriteria, scope: resolvedScope,
         verifyCommands: verifyPlan.commands, changeMode, mode: criterionGraphMode(), createdAt });
-      const seededContext = criterionGraphContextSelection(criterionGraph, repositoryFileManifest(ctx.cwd), runtimeState.observedContext(ctx), contextBudgetConfig(policy).maxManifestFiles);
+      const maxManifestFiles = contextBudgetConfig(policy).maxManifestFiles, plannedContext = criterionGraphContextSelection(criterionGraph, repositoryFileManifest(ctx.cwd), [], maxManifestFiles), observedContext = criterionGraphContextSelection(undefined, [], runtimeState.preTaskContext(ctx), maxManifestFiles);
       const task: TaskContract = {
         schemaVersion: 2,
         taskRunId,
@@ -306,6 +307,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
         sessionId,
         sessionName,
         changeMode,
+        mutationPolicy,
         attempt,
         maxAttempts,
         previousAttempts: priorAttempts.filter((task) => task.trace.outcome !== "pending").slice(0, 10).reverse().map(summarizeAttempt),
@@ -319,7 +321,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
         outOfScope: redactTextArray(params.outOfScope),
         protectedPaths: profile.protectedPaths ?? [],
         requiredContext: profile.requiredContext ?? [],
-        contextManifest: seededContext,
+        contextManifest: observedContext,
         memoryCitations: [],
         mcpCapabilities: profile.mcpCapabilities ?? [],
         verifyGroup: verifyPlan.group,
@@ -347,14 +349,15 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
         createdAt,
         updatedAt: createdAt
       };
-      if (changeMode === "read-only" && seededContext.length > 0) {
+      if (mutationPolicy === "forbidden" && observedContext.length > 0) {
         applyRuntimeLifecycleObservation(task, "context-complete", createdAt);
       }
       const written = writeTask(ctx.cwd, task);
-      const baselineGuidance = changeMode === "source-change"
+      runtimeState.promotePreTaskContext(ctx, written.taskRunId, observedContext);
+      const baselineGuidance = changeMode === "source-change" && mutationPolicy === "required"
         ? acceptanceBaselineGuidance(written, { cwd: ctx.cwd })
         : [];
-      const exactOutputGuidance = changeMode === "read-only"
+      const exactOutputGuidance = mutationPolicy === "forbidden"
         ? exactFinalOutputGuidance(written.summary)
         : [];
       bindSessionTask(ctx.cwd, sessionId, sessionName, written);
@@ -367,8 +370,9 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       }
       const lifecycleMode = runtimeLifecycleMode(written);
       const scopeMappings = scopeResolution.mappings.map((item) => `${item.from} -> ${item.to}`);
-      appendTrace(ctx.cwd, { taskId, taskRunId, sessionId, sessionName, attempt, event: "task_start", summary: task.summary, riskLane: params.riskLane, intakeMode: task.intakeMode, changeMode: task.changeMode, lifecycleMode, criterionGraphMode: written.criterionGraph.mode, criterionGraphDigest: written.criterionGraph.graphDigest, authorityProfile: written.authoritySnapshot.profile, authoritySnapshotDigest: written.authoritySnapshot.snapshotDigest, scopeMappings, seededContext: seededContext.map((item) => item.path) });
-      appendSessionTrace(pi, { taskId, taskRunId, sessionId, sessionName, attempt, event: "task_start", summary: task.summary, riskLane: params.riskLane, intakeMode: task.intakeMode, changeMode: task.changeMode, lifecycleMode, criterionGraphMode: written.criterionGraph.mode, criterionGraphDigest: written.criterionGraph.graphDigest, authorityProfile: written.authoritySnapshot.profile, authoritySnapshotDigest: written.authoritySnapshot.snapshotDigest, scopeMappings, seededContext: seededContext.map((item) => item.path) });
+      appendTrace(ctx.cwd, { taskId, taskRunId, sessionId, sessionName, attempt, event: "task_start", turnId: runtimeState.currentTurn(ctx)?.turnId, summary: task.summary, riskLane: params.riskLane, intakeMode: task.intakeMode, changeMode: task.changeMode, mutationPolicy: task.mutationPolicy, lifecycleMode, criterionGraphMode: written.criterionGraph.mode, criterionGraphDigest: written.criterionGraph.graphDigest, authorityProfile: written.authoritySnapshot.profile, authoritySnapshotDigest: written.authoritySnapshot.snapshotDigest, scopeMappings, plannedContext: plannedContext.map((item) => item.path), observedContext: observedContext.map((item) => item.path) });
+      appendSessionTrace(pi, { taskId, taskRunId, sessionId, sessionName, attempt, event: "task_start", turnId: runtimeState.currentTurn(ctx)?.turnId, summary: task.summary, riskLane: params.riskLane, intakeMode: task.intakeMode, changeMode: task.changeMode, mutationPolicy: task.mutationPolicy, lifecycleMode, criterionGraphMode: written.criterionGraph.mode, criterionGraphDigest: written.criterionGraph.graphDigest, authorityProfile: written.authoritySnapshot.profile, authoritySnapshotDigest: written.authoritySnapshot.snapshotDigest, scopeMappings, plannedContext: plannedContext.map((item) => item.path), observedContext: observedContext.map((item) => item.path) });
+      telemetry(ctx, { event: "turn_task_bound", turnId: runtimeState.currentTurn(ctx)?.turnId, taskRunId });
       recordTaskStartCheckpoint(ctx, written, firstReady.id, lifecycleMode);
       return {
         content: [{
@@ -386,7 +390,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
               ? [["Execution map (planning only; verifier remains authoritative):", ...criterionGraphGuidance(written.criterionGraph).map((line: string) => `- ${line}`)].join("\n")]
               : []),
             ...exactOutputGuidance,
-            ...(changeMode === "source-change" && acceptanceProofGuidance(written).length > 0
+            ...(changeMode === "source-change" && mutationPolicy === "required" && acceptanceProofGuidance(written).length > 0
               ? [["Critical behavioral proof:", ...acceptanceProofGuidance(written).map((item: string) => `- ${item}`), "Map every proof item above to a live focused assertion or explicit test matrix before the verifier; happy-path coverage and prose claims are insufficient."].join("\n")]
               : []),
             ...(baselineGuidance.length > 0
@@ -396,6 +400,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
               ? "Runtime records targeted reads and final completion automatically. Stay read-only and report cited evidence."
               : lifecycleMode === "assisted-readonly"
                 ? "Runtime records read-only evidence automatically; complete only the explicit evidence-review step before handoff."
+                : mutationPolicy === "forbidden" ? "Runtime permits bounded inspection and exact configured verifier commands only. Source mutation is blocked, and completion requires a zero task delta."
                 : lifecycleMode === "automatic"
               ? "Runtime will record reads, changes, exact verifier results, and final completion automatically. Continue with ordinary read/edit/bash work."
                   : lifecycleMode === "assisted"
@@ -408,19 +413,19 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
     }
   };
   registerRuntimeTool(pi, taskStartTool);
-  async function maybeStartAutomaticTask(prompt: string, ctx: ExtensionContext): Promise<{ started: boolean; text: string; task?: TaskContract } | undefined> {
+  async function maybeStartAutomaticTask(prompt: string, ctx: ExtensionContext): Promise<{ started: boolean; text: string; task?: TaskContract; plannedContext?: Array<{ path: string; reason: string }> } | undefined> {
     const profile = loadProfileFromContext(ctx);
     const readProtectedPaths = effectiveProtectedPaths(policy, profile).readProtectedPaths;
     const intakeMode = automaticTaskIntakeMode(prompt, readProtectedPaths);
     if (!intakeMode) return undefined;
-    const active = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
+    const mutationPolicy = automaticTaskMutationPolicy(prompt, intakeMode), active = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
     if (active?.trace.outcome === "pending") return undefined;
     const summary = redactText(automaticTaskSummary(prompt));
     const sessionName = currentSessionName(ctx);
     const projectFiles = repositoryFileManifest(ctx.cwd);
     const scope = intakeMode === "read-only"
-      ? automaticReadOnlyTaskScope(prompt, runtimeState.observedContext(ctx))
-      : automaticTaskScope(prompt, runtimeState.observedContext(ctx), projectFiles);
+      ? automaticReadOnlyTaskScope(prompt, runtimeState.preTaskContext(ctx))
+      : automaticTaskScope(prompt, runtimeState.preTaskContext(ctx), projectFiles);
     const started = await taskStartTool.execute(
       `runtime-intake-${ctx.sessionManager.getSessionId()}`,
       {
@@ -429,10 +434,10 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
         riskLane: automaticTaskRiskLane(prompt),
         intakeMode: "runtime",
         changeMode: intakeMode,
-        expectedOutput: intakeMode === "read-only"
-          ? "The requested read-only investigation is answered from observed project evidence without mutating files."
+        mutationPolicy,
+        expectedOutput: mutationPolicy === "forbidden" ? "The requested read-only investigation is answered from observed project evidence without mutating files."
           : "The requested bounded change is implemented and passes the configured verification.",
-        acceptanceCriteria: automaticAcceptanceCriteria(prompt, intakeMode),
+        acceptanceCriteria: automaticAcceptanceCriteria(prompt, mutationPolicy === "forbidden" ? "read-only" : intakeMode),
         scope,
         outOfScope: ["Unrelated files and behavior outside the operator request."],
         reviewLenses: automaticReviewLenses(prompt)
@@ -458,20 +463,20 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       };
     }
     const assurance = taskPerformanceAssurance(task);
-    const baselineGuidance = task.changeMode === "source-change"
+    const plannedContext = criterionGraphContextSelection(task.criterionGraph, projectFiles, [], contextBudgetConfig(policy).maxManifestFiles);
+    const baselineGuidance = task.changeMode === "source-change" && task.mutationPolicy !== "forbidden"
       ? acceptanceBaselineGuidance(task, { cwd: ctx.cwd })
       : [];
-    const exactOutputGuidance = task.changeMode === "read-only"
-      ? exactFinalOutputGuidance(task.summary)
-      : [];
+    const exactOutputGuidance = task.changeMode === "read-only" || task.mutationPolicy === "forbidden" ? exactFinalOutputGuidance(task.summary) : [];
     return {
       started: true,
       task,
+      plannedContext,
       text: boundedRuntimeIntakeMessage([
         `Piagent runtime task: ${task.taskId}; scope: ${task.scope.join(", ")}.`,
         "The complete operator request above is the authoritative acceptance contract; runtime keeps its full criteria, so do not restate or re-scout it.",
         `Assurance: ${assurance.tier} (${assurance.reasonCodes.join(", ") || "bounded-runtime"}).`,
-        ...(task.changeMode === "source-change" && acceptanceProofGuidance(task).length > 0
+        ...(task.changeMode === "source-change" && task.mutationPolicy !== "forbidden" && acceptanceProofGuidance(task).length > 0
           ? [["Critical behavioral proof:", ...acceptanceProofGuidance(task).map((item: string) => `- ${item}`), "Map every proof item above to a live focused assertion or explicit test matrix before the verifier; happy-path coverage is insufficient."].join("\n")]
           : []),
         ...(baselineGuidance.length > 0
@@ -482,14 +487,14 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
         ...(task.verifyCommands.length > 0 ? verifierCommandInstructions(task.verifyCommands) : ["none"]),
         ...(criterionGraphGuidance(task.criterionGraph).length > 0 ? [["Execution map (planning only):", ...criterionGraphGuidance(task.criterionGraph).map((line: string) => `- ${line}`)].join("\n")] : []),
         "Root project instructions are loaded. Do not re-read root AGENTS.md or inspect Piagent/platform files; work directly in relevant source/tests with ordinary tools.",
-        task.changeMode === "read-only"
-          ? "Stay read-only. Runtime records targeted reads and completion evidence; do not call task-management tools."
+        task.changeMode === "read-only" || task.mutationPolicy === "forbidden"
+          ? task.changeMode === "source-change" ? "Stay mutation-free. Runtime permits bounded inspection and the exact configured verifier, records completion evidence, and requires a zero task delta."
+            : "Stay read-only. Runtime records targeted reads and completion evidence; do not call task-management tools."
           : task.criterionGraph?.mode === "criterion-graph"
             ? "Follow the execution map: batch context reads by target, implement dependency-ready criteria, then run the exact verifier once; rerun only after a later mutation. The map plans work but never overrides the operator request or verifier."
             : "Before mutating, privately map every operator criterion to implementation and focused-test coverage; batch independent reads or writes. Finish intended edits and one criterion-by-criterion self-review, then run the exact verifier once; rerun only after a later mutation. Runtime records evidence and completion; do not call task-management tools."
       ].join("\n"))
     };
   }
-
   return maybeStartAutomaticTask;
 }

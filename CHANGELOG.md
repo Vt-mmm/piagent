@@ -4,6 +4,51 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
+## v1.6.0 - 2026-08-22
+
+### Runtime intelligence and context integrity
+
+- Bound context evidence to the exact turn, session and task run that observed
+  it. Planning selections no longer masquerade as delivered context, and stale
+  evidence cannot cross a task boundary or complete a later task.
+- Added bounded context-efficiency telemetry, delivery qualification, prefix
+  accounting and provider-wire fingerprints without exposing prompts,
+  credentials or raw provider payloads.
+- Preserved authenticated Codex model identifiers and supported reasoning
+  levels end to end. New installations default visibly to GPT-5.6 Sol with
+  High thinking while still allowing the user to choose another available
+  model for any message or session.
+- Added one fail-closed CAP-12 correction after a current exact verifier when
+  the model discovers an omission in a file it already authored in the same
+  task/run/session. The runtime opens repair only after an exact structured
+  mutation succeeds, permits no second source edit, and requires the exact
+  verifier again before completion.
+
+### WebUI continuity and operator clarity
+
+- Added a canonical live-state bootstrap and replay-gap recovery path so reloads
+  and multiple browser tabs agree on the running operation before reporting the
+  Gateway as live.
+- Added inactivity, absolute-runtime, termination and projection watchdogs.
+  Concurrent Stop requests share one termination, and uncertain ownership is
+  quarantined instead of being projected as an idle session.
+- Kept the conversation surface success-only: drafts, tool failures, retries,
+  completion-gate work in progress and abort details stay in Activity. Empty or
+  non-rendering provider output can no longer create a blank success bubble.
+- Made operation settlement first-terminal-wins and retained recent failures
+  independently from high-volume event traffic, preventing a retry or catalog
+  refresh from presenting contradictory outcomes.
+
+### Deeper benchmark and assurance contracts
+
+- Expanded the deep-logic benchmark with a multi-package temporal billing close
+  problem, stricter held-out variants, provider-wire checks, usage provenance,
+  statistical comparison gates and explicit Codex CLI controls.
+- Hardened benchmark accounting so unknown usage, infrastructure retries or an
+  unmatched provider attempt cannot support a token or production claim.
+- This release does not make a new provider-backed token-reduction claim; the
+  benchmark was intentionally left stopped after the operator requested it.
+
 ## v1.5.5 - 2026-08-21
 
 ### WebUI command execution hotfix

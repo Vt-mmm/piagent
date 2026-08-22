@@ -25,8 +25,12 @@
     "minimumPairedScenarios": 18,
     "minimumComparableEfficiencyScenarios": 12,
     "minimumRepeats": 3,
-    "maximumFreshTokenRatioUpper95": 1,
-    "requireEfficiencyClaim": true
+    "maximumInfrastructureRetries": 0,
+    "maximumFreshTokenRatioUpper95": 0.8,
+    "maximumDurationRatioUpper95": 1.1,
+    "requireEfficiencyClaim": true,
+    "requireFullSuiteForClaim": true,
+    "requireStableProviderWireSurface": true
   },
   "scenarios": [
     {

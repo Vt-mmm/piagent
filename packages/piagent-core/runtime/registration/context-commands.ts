@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { stageContextDelivery } from "../context/context-delivery.ts";
 
 type ExtensionContext = any;
 
@@ -10,7 +11,7 @@ export function registerContextCommands(pi: ExtensionAPI, deps: Record<string, a
     contextIndexV2Status, crypto, emitRuntimeMessage, ensureContextIndexV2, estimateContextTokens,
     formatContextPreflight,
     formatCount, formatPercent, fs, helpersMode, loadProfileFromContext, memoryHandbookPath,
-    policy, projectFilePath, resolveMemorySettings, resolveOrchestrationPolicy, searchContextIndex,
+    policy, projectFilePath, resolveMemorySettings, resolveOrchestrationPolicy, retrievalKey, runtimeState, searchContextIndex,
     searchContextIndexV2, selectRuntimeAction, semanticCompactionInstructions, telemetry
   } = deps;
   function emitContextIndexSearch(ctx: ExtensionContext, query: string): void {
@@ -123,6 +124,7 @@ export function registerContextCommands(pi: ExtensionAPI, deps: Record<string, a
     });
     telemetry(ctx, {
       event: "context_pack",
+      turnId: runtimeState.currentTurn(ctx)?.turnId,
       queryHash: pack.queryHash,
       confidence: pack.confidence,
       candidates: pack.candidates,
@@ -131,12 +133,40 @@ export function registerContextCommands(pi: ExtensionAPI, deps: Record<string, a
       selectedPaths: pack.selected.map((item) => item.path),
       source: "command"
     });
+    const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId());
+    const deliveryId = task?.trace?.outcome === "pending" && pack.selected.length > 0 ? crypto.randomUUID() : undefined;
+    if (deliveryId) {
+      stageContextDelivery(ctx, {
+        deliveryId,
+        taskRunId: task.taskRunId,
+        turnId: runtimeState.currentTurn(ctx)?.turnId,
+        entries: pack.selected.map((item) => ({
+          path: item.path,
+          reason: "Runtime confirmed delivery of a /context pack message."
+        })),
+        pack: {
+          retrievalKey: retrievalKey(ctx, query),
+          queryHash: pack.queryHash,
+          confidence: pack.confidence,
+          estimatedTokens: pack.estimatedTokens,
+          paths: pack.selected.map((item) => item.path)
+        },
+        injection: {
+          source: "context-command",
+          queryHash: pack.queryHash,
+          confidence: pack.confidence,
+          estimatedTokens: pack.estimatedTokens,
+          selectedItems: pack.selected.map((item) => ({ path: item.path, estimatedTokens: item.estimatedTokens }))
+        }
+      }, { state: runtimeState, telemetry });
+    }
     emitRuntimeMessage(ctx, "piagent-context-pack-v2", pack.text, {
       queryHash: pack.queryHash,
       confidence: pack.confidence,
       estimatedTokens: pack.estimatedTokens,
       paths: pack.selected.map((item) => item.path),
-      finderRecommended: pack.finderRecommended
+      finderRecommended: pack.finderRecommended,
+      contextDelivery: deliveryId ? { schemaVersion: 1, deliveryId } : undefined
     });
   }
 

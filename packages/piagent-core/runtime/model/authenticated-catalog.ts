@@ -50,14 +50,22 @@ function positiveInteger(value: unknown): number | null {
   return Number.isInteger(value) && Number(value) > 0 && Number(value) <= 10_000_000 ? Number(value) : null;
 }
 
-function thinkingLevels(value: unknown): string[] | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const levels = Object.entries(value)
-    .filter(([, mapped]) => mapped !== null && mapped !== false)
-    .map(([level]) => text(level))
-    .filter(Boolean)
-    .sort();
-  return levels.length > 0 ? [...new Set(levels)].slice(0, 16) : [];
+const PI_THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+
+function thinkingLevels(value: ModelLike): string[] | null {
+  if (typeof value.reasoning !== "boolean") return null;
+  if (!value.reasoning) return ["off"];
+  const mapping = value.thinkingLevelMap && typeof value.thinkingLevelMap === "object" && !Array.isArray(value.thinkingLevelMap)
+    ? value.thinkingLevelMap as Record<string, unknown>
+    : {};
+  // Match Pi's getSupportedThinkingLevels semantics. Reasoning models support
+  // the standard host levels through `high` unless a model explicitly marks a
+  // level null. `xhigh` and `max` are opt-in capabilities.
+  return PI_THINKING_LEVELS.filter((level) => {
+    const mapped = mapping[level];
+    if (mapped === null) return false;
+    return level === "xhigh" || level === "max" ? mapped !== undefined : true;
+  });
 }
 
 function boundedModel(value: ModelLike): AuthenticatedModelCatalogEntry | undefined {
@@ -71,7 +79,7 @@ function boundedModel(value: ModelLike): AuthenticatedModelCatalogEntry | undefi
     contextWindow: positiveInteger(value.contextWindow),
     reasoning: typeof value.reasoning === "boolean" ? value.reasoning : null,
     imageInput: input ? input.includes("image") : null,
-    supportedThinkingLevels: thinkingLevels(value.thinkingLevelMap)
+    supportedThinkingLevels: thinkingLevels(value)
   };
 }
 

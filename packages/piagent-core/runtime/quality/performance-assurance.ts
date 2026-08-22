@@ -56,7 +56,7 @@ const SIGNALS: Array<{ code: string; pattern: RegExp }> = [
   { code: "return-shape-contract", pattern: /\b(?:return shape|returned? (?:element|object|value|representation)s?|preserve (?:the )?return)\b/i },
   { code: "public-api-contract", pattern: /\b(?:exported api|public api|do not change (?:the )?(?:api|signature)|preserve (?:the )?(?:api|input|output|return)|without changing unrelated behavior)\b/i },
   { code: "graph-order-contract", pattern: /\b(?:dependency|topolog|cycle|stable order|input order|first[-\s]+(?:observed|seen|encountered)[-\s]+order|replay order|deduplicat(?:e|ion).*order|exactly once|before its dependent)\b/i },
-  { code: "identity-isolation-contract", pattern: /\b(?:tenant|authorization|permission|cache[- ]?key|collision|isolation|same tuple|cross[- ]tenant)\b/i },
+  { code: "identity-isolation-contract", pattern: /\b(?:auth(?:orization)?|unauthoriz(?:ed|ation)|permission|cache[- ]?key|collision|same tuple|cross[- ]tenant|same[- ]tenant|tenant boundary|tenant[- ]scoped (?:cache|storage))\b/i },
   { code: "concurrency-contract", pattern: /\b(?:concurren|race condition|stale response|bounded retry|idempot(?:ent|ency)?|lock)\b/i },
   { code: "data-migration-contract", pattern: /\b(?:migration|schema|money|invoice|ledger|transaction|data loss)\b/i },
   { code: "non-mutation-contract", pattern: /\b(?:do not mutate|must not mutate|without mutating|input unchanged|preserve input)\b/i }
@@ -97,6 +97,9 @@ export function analyzePerformanceAssurance(input: AssuranceInput): PerformanceA
   }
 
   const reasonCodes = SIGNALS.filter((signal) => signal.pattern.test(request)).map((signal) => signal.code);
+  if (/\b(?:tenants?|tenantid)\b/i.test(request) && /\bisolat(?:e|ed|es|ing|ion)\b/i.test(request)) {
+    reasonCodes.push("identity-isolation-contract");
+  }
   if (request.length >= 320) reasonCodes.push("long-contract");
   if (namedEntrypoints(request) > 1) reasonCodes.push("multiple-entrypoints");
   const exactnessSignals = reasonCodes.filter((code) => [

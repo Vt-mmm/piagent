@@ -7,15 +7,17 @@ import { RuntimeOverview, TaskDashboard } from "./App.tsx";
 import { SourceWorkspace } from "./SourceWorkspace.tsx";
 import { DocumentWorkspace } from "./DocumentWorkspace.tsx";
 import { useUiPreferences } from "./ui-preferences.tsx";
+import type { TerminalOperationActivity } from "./live-state-view-model.ts";
 
 export type SessionWorkspaceId = "task" | "source" | "documents" | "activity";
 
-export function SessionAgentWorkspace({ active, snapshot, sessionRef, refresh }: { active: SessionWorkspaceId;
-  snapshot: PiagentWebUICanonicalSnapshotV1; sessionRef: string; refresh(): Promise<PiagentWebUICanonicalSnapshotV1 | undefined> }) {
+export function SessionAgentWorkspace({ active, snapshot, sessionRef, terminalActivities, refresh }: { active: SessionWorkspaceId;
+  snapshot: PiagentWebUICanonicalSnapshotV1; sessionRef: string; terminalActivities?: readonly TerminalOperationActivity[];
+  refresh(): Promise<PiagentWebUICanonicalSnapshotV1 | undefined> }) {
   const { locale } = useUiPreferences();
   if (active === "source") return <SourceWorkspace snapshot={snapshot} sessionRef={sessionRef} refreshSnapshot={refresh} />;
   if (active === "documents") return <DocumentWorkspace sessionRef={sessionRef} />;
-  if (active === "activity") return <ActivityPanel snapshot={snapshot} sessionRef={sessionRef} />;
+  if (active === "activity") return <ActivityPanel snapshot={snapshot} sessionRef={sessionRef} terminalActivities={terminalActivities} />;
   return <Stack spacing={2.25}><RuntimeOverview snapshot={snapshot} locale={locale} />
     <TaskDashboard snapshot={snapshot} locale={locale} /><EvidencePanels snapshot={snapshot} /></Stack>;
 }

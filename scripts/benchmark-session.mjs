@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 import {
@@ -28,6 +29,7 @@ import { readContextTelemetry } from "../packages/piagent-core/extensions/contex
 import { matchesAnyPath } from "../packages/piagent-core/extensions/policy-core.js";
 import { listTaskContracts, workingTreeFiles, workingTreeSnapshot } from "../packages/piagent-core/extensions/task-state.js";
 import { benchmarkTreeIdentity } from "../packages/piagent-core/benchmark/benchmark-tree-identity.js";
+import { buildBenchmarkProviderWireEvidence } from "../packages/piagent-core/benchmark/benchmark-provider-wire.js";
 import { summarizeSession, walkJsonl } from "./pi-usage-history.mjs";
 
 const coldStartRuntimeManagedPaths = [
@@ -45,6 +47,12 @@ function fail(message) {
 
 function privateDirectory(target) {
   fs.mkdirSync(target, { recursive: true, mode: 0o700 });
+  try { fs.chmodSync(target, 0o700); } catch { /* Non-POSIX filesystem. */ }
+  return target;
+}
+
+function privateTemporaryDirectory(prefix) {
+  const target = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
   try { fs.chmodSync(target, 0o700); } catch { /* Non-POSIX filesystem. */ }
   return target;
 }
@@ -122,28 +130,33 @@ function generatedStringArray(value, field) {
   return [...new Set(value)];
 }
 
-async function generateVariant({ runCommand, nodeCommand, generator, workspace, oraclePath, seed, scenario, timeoutSeconds }) {
-  const result = await runCommand(nodeCommand, [generator, workspace, oraclePath, seed, scenario.id], {
-    cwd: path.dirname(generator), timeoutMs: Math.min(timeoutSeconds, 120) * 1_000, env: graderEnvironment(scenario.id)
-  });
-  if (result.timedOut) fail(`Benchmark variant generator timed out for ${scenario.id}`);
-  if (result.code !== 0) fail(`Benchmark variant generator failed for ${scenario.id}: ${result.stderr.trim() || result.stdout.trim()}`);
-  let oracle;
-  try { oracle = JSON.parse(fs.readFileSync(oraclePath, "utf8")); }
-  catch (error) { fail(`Benchmark variant generator did not write a valid oracle for ${scenario.id}: ${error.message}`); }
-  if (!oracle || typeof oracle !== "object" || Array.isArray(oracle) || oracle.schemaVersion !== 1 || !oracle.graderData || typeof oracle.graderData !== "object" || Array.isArray(oracle.graderData)) {
-    fail(`Benchmark variant oracle is invalid for ${scenario.id}`);
+async function generateVariant({ runCommand, nodeCommand, generator, workspace, seed, scenario, timeoutSeconds }) {
+  const temporaryRoot = privateTemporaryDirectory("piagent-benchmark-oracle-input-");
+  const oraclePath = path.join(temporaryRoot, "oracle.json");
+  try {
+    const result = await runCommand(nodeCommand, [generator, workspace, oraclePath, seed, scenario.id], {
+      cwd: path.dirname(generator), timeoutMs: Math.min(timeoutSeconds, 120) * 1_000, env: graderEnvironment(scenario.id)
+    });
+    if (result.timedOut) fail(`Benchmark variant generator timed out for ${scenario.id}`);
+    if (result.code !== 0) fail(`Benchmark variant generator failed for ${scenario.id}: ${result.stderr.trim() || result.stdout.trim()}`);
+    let oracle;
+    try { oracle = JSON.parse(fs.readFileSync(oraclePath, "utf8")); }
+    catch (error) { fail(`Benchmark variant generator did not write a valid oracle for ${scenario.id}: ${error.message}`); }
+    if (!oracle || typeof oracle !== "object" || Array.isArray(oracle) || oracle.schemaVersion !== 1 || !oracle.graderData || typeof oracle.graderData !== "object" || Array.isArray(oracle.graderData)) {
+      fail(`Benchmark variant oracle is invalid for ${scenario.id}`);
+    }
+    const serialized = JSON.stringify(oracle);
+    if (Buffer.byteLength(serialized) > 100_000) fail(`Benchmark variant oracle is too large for ${scenario.id}`);
+    return {
+      oracleSerialized: `${serialized}\n`,
+      oracleDigest: crypto.createHash("sha256").update(serialized).digest("hex"),
+      seedDigest: crypto.createHash("sha256").update(seed).digest("hex"),
+      requiredOutputSubstrings: generatedStringArray(oracle.requiredOutputSubstrings, "requiredOutputSubstrings"),
+      forbiddenOutputSubstrings: generatedStringArray(oracle.forbiddenOutputSubstrings, "forbiddenOutputSubstrings")
+    };
+  } finally {
+    fs.rmSync(temporaryRoot, { recursive: true, force: true });
   }
-  const serialized = JSON.stringify(oracle);
-  if (Buffer.byteLength(serialized) > 100_000) fail(`Benchmark variant oracle is too large for ${scenario.id}`);
-  writePrivate(oraclePath, `${JSON.stringify(oracle)}\n`);
-  return {
-    oraclePath,
-    oracleDigest: crypto.createHash("sha256").update(serialized).digest("hex"),
-    seedDigest: crypto.createHash("sha256").update(seed).digest("hex"),
-    requiredOutputSubstrings: generatedStringArray(oracle.requiredOutputSubstrings, "requiredOutputSubstrings"),
-    forbiddenOutputSubstrings: generatedStringArray(oracle.forbiddenOutputSubstrings, "forbiddenOutputSubstrings")
-  };
 }
 
 function writableCopyEnvironment(workspace) {
@@ -276,17 +289,24 @@ function parseGraderResult(stdout) {
   };
 }
 
-async function gradeWorkspace(runCommand, nodeCommand, grader, workspace, scenario, timeoutSeconds, oraclePath) {
-  const result = await runCommand(nodeCommand, oraclePath ? [grader, workspace, oraclePath] : [grader, workspace], {
-    cwd: path.dirname(grader), timeoutMs: Math.min(timeoutSeconds, 120) * 1_000, env: graderEnvironment(scenario.id)
-  });
-  if (result.timedOut) return { passed: false, score: 0, checks: [], error: "grader-timeout" };
-  if (result.code !== 0) return { passed: false, score: 0, checks: [], error: `grader-exit-${result.code}` };
-  try { return parseGraderResult(result.stdout); } catch (error) { return { passed: false, score: 0, checks: [], error: error.message }; }
+async function gradeWorkspace(runCommand, nodeCommand, grader, workspace, scenario, timeoutSeconds, oracleSerialized) {
+  const temporaryRoot = oracleSerialized ? privateTemporaryDirectory("piagent-benchmark-oracle-grader-") : null;
+  try {
+    const oraclePath = temporaryRoot ? path.join(temporaryRoot, "oracle.json") : null;
+    if (oraclePath) writePrivate(oraclePath, oracleSerialized);
+    const result = await runCommand(nodeCommand, oraclePath ? [grader, workspace, oraclePath] : [grader, workspace], {
+      cwd: path.dirname(grader), timeoutMs: Math.min(timeoutSeconds, 120) * 1_000, env: graderEnvironment(scenario.id)
+    });
+    if (result.timedOut) return { passed: false, score: 0, checks: [], error: "grader-timeout" };
+    if (result.code !== 0) return { passed: false, score: 0, checks: [], error: `grader-exit-${result.code}` };
+    try { return parseGraderResult(result.stdout); } catch (error) { return { passed: false, score: 0, checks: [], error: error.message }; }
+  } finally {
+    if (temporaryRoot) fs.rmSync(temporaryRoot, { recursive: true, force: true });
+  }
 }
 
 function sessionSummaries(sessionDir) {
-  return walkJsonl(sessionDir).map((file) => summarizeSession(file, {})).filter(Boolean);
+  return walkJsonl(sessionDir).map((file) => summarizeSession(file, { strictUsage: true })).filter(Boolean);
 }
 
 export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuiteEntry, interrupted, persistCompletedRecord, suite, suiteRoot, scenario, surface, repeat, orderIndex, infrastructureAttempt = 1, runId, runRoot, options, piCommand, codexCommand, codexDisabledFeatures, codexRuntime, piRuntimeHome, systemCommands, suiteDigest, configurationDigest, rootSeed }) {
@@ -301,11 +321,11 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
   applySetupFiles(workspace, scenario.setupFiles);
   const profile = scenario.profile ?? suite.profile;
   const lifecycle = scenario.lifecycle ?? "steady-state";
-  let variant = { oraclePath: null, oracleDigest: null, seedDigest: null, requiredOutputSubstrings: [], forbiddenOutputSubstrings: [] };
+  let variant = { oracleSerialized: null, oracleDigest: null, seedDigest: null, requiredOutputSubstrings: [], forbiddenOutputSubstrings: [] };
   if (scenario.variantGenerator) {
     variant = await generateVariant({
       runCommand, nodeCommand: systemCommands.node, generator: resolveSuiteEntry(suiteRoot, scenario.variantGenerator, "variant generator"), workspace,
-      oraclePath: path.join(workspaceRoot, "oracle.json"), seed: variantSeed(rootSeed, suiteDigest, scenario.id, repeat),
+      seed: variantSeed(rootSeed, suiteDigest, scenario.id, repeat),
       scenario, timeoutSeconds: options.timeoutSeconds
     });
   }
@@ -372,11 +392,19 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
   const runtimeManagedChanges = surface === "piagent" && lifecycle === "cold-start" ? allChangedFiles.filter((file) => matchesAnyPath(file, coldStartRuntimeManagedPaths)) : [];
   const runtimeManagedSet = new Set(runtimeManagedChanges);
   const changedFiles = allChangedFiles.filter((file) => !runtimeManagedSet.has(file));
+  const telemetryLimit = 50_000;
+  const contextTelemetry = surface === "piagent" ? readContextTelemetry(workspace, { limit: telemetryLimit }) : [];
+  const providerWireEvidence = surface === "piagent" ? buildBenchmarkProviderWireEvidence({
+    events: contextTelemetry,
+    requestedModel: options.model,
+    requestedThinking: options.thinking,
+    telemetryTruncated: contextTelemetry.length >= telemetryLimit
+  }) : null;
   let workflow = null;
   if (surface === "piagent" && scenario.kind !== "safety-refusal") {
     const task = listTaskContracts(workspace).find((item) => item.sessionId === sessionId);
     workflow = evaluateWorkflowEvidence(task, changedFiles, usage.toolNames, { scenarioKind: scenario.kind, acceptedTaskStartCount: acceptedTaskStartTraceCount(sessionFiles, sessionId) });
-    workflow.operational = benchmarkOperationalEvidence(readContextTelemetry(workspace, { limit: 5_000 }));
+    workflow.operational = benchmarkOperationalEvidence(contextTelemetry);
   }
   const beforeGrade = workingTreeSnapshot(workspace);
   const outsideScope = changedFiles.filter((file) => !matchesAnyPath(file, scenario.allowedChanges));
@@ -384,7 +412,7 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
     ? { passed: false, score: 0, checks: [], error: preUsageFailure.failure }
     : interrupted()
     ? { passed: false, score: 0, checks: [], error: "interrupted-after-provider-start" }
-    : await gradeWorkspace(runCommand, systemCommands.node, graderPath, workspace, scenario, options.timeoutSeconds, variant.oraclePath);
+    : await gradeWorkspace(runCommand, systemCommands.node, graderPath, workspace, scenario, options.timeoutSeconds, variant.oracleSerialized);
   const graderIntegrity = { passed: JSON.stringify(beforeGrade) === JSON.stringify(workingTreeSnapshot(workspace)) };
   const scope = { passed: outsideScope.length === 0, changedFiles, outsideScope, allChangedFiles, runtimeManagedChanges };
   const outputSafety = { passed: forbiddenHits.length === 0, forbiddenHits: forbiddenHits.map((value) => crypto.createHash("sha256").update(value).digest("hex")) };
@@ -402,7 +430,7 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
     infrastructureDiagnosticSource: abortSuite ? (codexDiagnostics.length > 0 ? "codex-error-events" : piTerminalError ? "pi-terminal-error-event" : "process-output-tail") : undefined,
     resolved, failure: preUsageFailure?.failure ?? failureReason({ agent, grade, graderIntegrity, outsideScope, forbiddenHits, missingRequired }),
     agent: { exitCode: agent.code, signal: agent.signal, timedOut: agent.timedOut, stdoutHash: agent.stdoutHash ?? crypto.createHash("sha256").update(agent.stdout).digest("hex"), stderrHash: crypto.createHash("sha256").update(agent.stderr ?? "").digest("hex") },
-    grade, graderIntegrity, scope, outputSafety, outputEvidence, workflow, usage, durationSeconds: agent.durationSeconds,
+    grade, graderIntegrity, scope, outputSafety, outputEvidence, workflow, providerWireEvidence, usage, durationSeconds: agent.durationSeconds,
     promptHash: crypto.createHash("sha256").update(prompt).digest("hex"),
     variant: scenario.variantGenerator ? { generated: true, seedDigest: variant.seedDigest, oracleDigest: variant.oracleDigest, fixtureDigest } : { generated: false, fixtureDigest }
   };

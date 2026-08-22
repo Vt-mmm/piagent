@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "version": "piagent-session-live-state-v1",
+  "generatedAt": "2026-08-21T08:00:00.000Z",
+  "gatewayInstanceRef": "gateway_fixture_01",
+  "eventSequence": 42,
+  "state": "ready",
+  "operations": [
+    {
+      "sessionRef": "session_fixture_01",
+      "operationRef": "operation_fixture_01",
+      "state": "running",
+      "abortable": true
+    }
+  ],
+  "settlements": [
+    {
+      "sessionRef": "session_fixture_02",
+      "operationRef": "operation_fixture_02",
+      "settlement": "error",
+      "reasonCode": "assistant-response-failed",
+      "settledAt": "2026-08-21T07:59:59.000Z",
+      "sequence": 41
+    }
+  ],
+  "reasonCode": null
+}

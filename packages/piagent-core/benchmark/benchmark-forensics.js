@@ -440,12 +440,13 @@ export function classifyPreUsageFailure(agent, usage, diagnosticInput, { termina
   const measuredUsage = Number.isInteger(usage?.sessions) && usage.sessions > 0
     && ["input", "output", "cacheRead", "cacheWrite", "reasoning", "total", "fresh"]
       .every((field) => Number.isFinite(usage?.[field]) && Number(usage[field]) >= 0)
-    && Number.isFinite(usage?.cost) && Number(usage.cost) >= 0;
+    && usage.fresh === usage.input + usage.output
+    && usage.total === usage.input + usage.output + usage.cacheRead + usage.cacheWrite;
   const measuredZeroUsage = measuredUsage
-    && ["input", "output", "cacheRead", "cacheWrite", "reasoning", "total", "fresh", "cost"]
+    && ["input", "output", "cacheRead", "cacheWrite", "reasoning", "total", "fresh"]
       .every((field) => Number(usage[field]) === 0);
   const providerUnavailable = /\b(?:server(?:s)? (?:are )?(?:currently )?overloaded|temporarily unavailable|service unavailable|try again later)\b/.test(diagnostic);
-  if (agent.code === 0 && terminalProviderError && measuredUsage && providerUnavailable) {
+  if ((terminalProviderError || agent.code !== 0) && measuredUsage && providerUnavailable) {
     const afterUsage = Number(usage.fresh) > 0;
     return {
       failure: afterUsage
@@ -467,7 +468,10 @@ export function classifyPreUsageFailure(agent, usage, diagnosticInput, { termina
   }
   if (agent.code === 0) return undefined;
   if (/\b(?:provider|safety|policy|refus(?:al|ed|e)|disallowed|not allowed|cannot assist|can't assist|cyber safety)\b/.test(diagnostic)) {
-    return { failure: "provider-policy-refusal-with-usage-unavailable", class: "provider-policy", usageStatus: "unknown-after-provider-start", retryable: false };
+    return measuredUsage
+      ? { failure: "provider-policy-refusal-after-measured-usage", class: "provider-policy", usageStatus: "measured-but-unaccepted", retryable: false }
+      : { failure: "provider-policy-refusal-with-usage-unavailable", class: "provider-policy", usageStatus: "unknown-after-provider-start", retryable: false };
   }
+  if (measuredUsage) return { failure: `agent-exit-${agent.code}-after-measured-usage`, class: "agent-process", usageStatus: "measured-but-unaccepted", retryable: false };
   return { failure: `agent-exit-${agent.code}-with-usage-unavailable`, class: "unknown-cost", usageStatus: "unknown-after-provider-start", retryable: true };
 }

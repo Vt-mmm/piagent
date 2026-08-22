@@ -30,12 +30,28 @@ describe("authenticated model catalog", () => {
         apiKey: "sk-synthetic-secret-value-that-must-not-appear",
         headers: { Authorization: "Bearer synthetic-secret" },
         input: ["text", "image"],
-        thinkingLevelMap: { low: 1, medium: 2, high: null }
+        thinkingLevelMap: { low: "low", medium: "medium", high: null }
       })]
     }, { capturedAt });
     assert.equal(result.models[0].imageInput, true);
-    assert.deepEqual(result.models[0].supportedThinkingLevels, ["low", "medium"]);
+    assert.deepEqual(result.models[0].supportedThinkingLevels, ["off", "minimal", "low", "medium"]);
     assert.doesNotMatch(JSON.stringify(result), /apiKey|Authorization|synthetic-secret/);
+  });
+
+  it("matches Pi implicit standard levels and explicit extended-level capability maps", async () => {
+    const realGpt56Map = { minimal: "low", xhigh: "xhigh", max: "max" };
+    const result = await captureAuthenticatedModelCatalog({
+      getAvailable: () => [
+        model("openai-codex", "gpt-5.6-luna", { thinkingLevelMap: realGpt56Map }),
+        model("openai-codex", "gpt-5.6-terra", { thinkingLevelMap: realGpt56Map }),
+        model("openai-codex", "gpt-5.6-sol", { thinkingLevelMap: realGpt56Map }),
+        model("plain", "non-reasoning", { reasoning: false })
+      ]
+    }, { capturedAt });
+    for (const entry of result.models.filter((entry) => entry.provider === "openai-codex")) {
+      assert.deepEqual(entry.supportedThinkingLevels, ["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
+    }
+    assert.deepEqual(result.models.find((entry) => entry.modelId === "non-reasoning").supportedThinkingLevels, ["off"]);
   });
 
   it("keeps partial records explicit instead of guessing missing capability values", async () => {

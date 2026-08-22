@@ -56,6 +56,7 @@ export async function startLoopbackServer(options: {
   mode?: "session" | "gateway";
   readCapabilities: ReadCapabilities;
   readSessionCatalog?: () => unknown | Promise<unknown>;
+  readSessionLiveState?: () => unknown | Promise<unknown>;
   readSessionCreationOptions?: () => unknown | Promise<unknown>;
   readSessionModel?: (sessionRef: string) => WebUiReadModelProvider | Promise<WebUiReadModelProvider>;
   executeSessionAttachment?: (sessionRef: string, command: unknown) => unknown | Promise<unknown>;
@@ -294,6 +295,13 @@ export async function startLoopbackServer(options: {
       if (url.search) return errorResponse(response, 400, "invalid-catalog-query");
       try { return jsonResponse(response, 200, await options.readSessionCatalog()); }
       catch { return errorResponse(response, 503, "session-catalog-unavailable"); }
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/v1/session-live-state" && options.readSessionLiveState) {
+      if (!auth.authenticate(request)) return errorResponse(response, 401, "authentication-required");
+      if (url.search) return errorResponse(response, 400, "invalid-session-live-state-query");
+      try { return jsonResponse(response, 200, await options.readSessionLiveState()); }
+      catch { return errorResponse(response, 503, "session-live-state-unavailable"); }
     }
 
     if (request.method === "GET" && url.pathname === "/api/v1/session-creation-options" && options.readSessionCreationOptions) {
