@@ -13,6 +13,7 @@ import { ensurePrivateStateDirectory, resolveLocalStatePath } from "./local-stat
 import { contextMetricPartition } from "./context-efficiency-metrics.js";
 import { writeContextEfficiencyReport } from "./context-efficiency-report.js";
 import { inspectContextTelemetryIntegrity } from "./context-telemetry-integrity.js";
+import { directExplicitImportLinks, extractJavaScriptModuleImports } from "./context-import-links.js";
 import { redactSensitiveProjectFileText } from "../security/sensitive-data.js";
 const INDEX_SCHEMA_VERSION = 2;
 const TELEMETRY_SCHEMA_VERSION = 2;
@@ -423,12 +424,12 @@ function extractSymbols(text, language) {
   return symbols;
 }
 
-function extractImports(text, language) {
+function extractImports(text, language, filePath = "") {
   const lines = text.split(/\r?\n/);
   const imports = [];
   const patterns = [];
   if (["typescript", "javascript", "svelte", "vue"].includes(language)) {
-    patterns.push(/\bfrom\s+["']([^"']+)["']/, /\brequire\(\s*["']([^"']+)["']\s*\)/, /\bimport\(\s*["']([^"']+)["']\s*\)/);
+    return extractJavaScriptModuleImports(text, { embedded: ["svelte", "vue"].includes(language), jsx: /\.[jt]sx$/i.test(filePath) });
   } else if (language === "python") {
     patterns.push(/^\s*from\s+([A-Za-z_][\w.]*)\s+import\b/, /^\s*import\s+([A-Za-z_][\w.]*)/);
   } else if (["java", "kotlin", "scala"].includes(language)) {
@@ -633,7 +634,7 @@ export async function buildContextIndexV2(cwd, options = {}) {
     for (const item of changed) {
       const language = languageForPath(item.relativePath);
       const symbols = extractSymbols(item.text, language);
-      const imports = extractImports(item.text, language);
+      const imports = extractImports(item.text, language, item.relativePath);
       insertFile.run(item.relativePath, item.contentHash, item.stat.size, item.stat.mtimeMs, language, indexedAt);
       insertFts.run(item.relativePath, item.text, symbols.map((symbol) => symbol.name).join(" "));
       for (const symbol of symbols) {
@@ -982,15 +983,15 @@ export async function searchContextIndexV2(cwd, query, options = {}) {
     const allFiles = db.prepare("SELECT path, mtime_ms FROM files").all().filter((file) => pathAllowed(file.path));
     const explicitRows = [];
     for (const file of allFiles) {
+      const normalizedFile = file.path.toLowerCase();
       const basename = path.posix.basename(file.path).toLowerCase();
       const matched = explicitPaths.some((candidate) => {
         const normalized = candidate.toLowerCase();
-        return file.path.toLowerCase() === normalized || file.path.toLowerCase().endsWith(`/${normalized}`) || basename === path.posix.basename(normalized);
+        return normalizedFile === normalized || (!normalized.includes("/") && basename === normalized);
       });
       if (matched) explicitRows.push({ path: file.path, exact: true });
     }
     addRankedList(scores, explicitRows, "explicit", 3);
-
     let lexicalRows = [];
     if (terms.length > 0) {
       lexicalRows = db.prepare(`
@@ -999,7 +1000,6 @@ export async function searchContextIndexV2(cwd, query, options = {}) {
       `).all(ftsQuery(terms), Math.max(limit * 4, 30)).filter((row) => pathAllowed(row.path));
       addRankedList(scores, lexicalRows, "lexical", 1.5);
     }
-
     const symbolRows = [];
     const symbolStatement = db.prepare(`
       SELECT file_path, name, kind, line, end_line, signature
@@ -1014,13 +1014,11 @@ export async function searchContextIndexV2(cwd, query, options = {}) {
 
     const changedRows = gitChangedFiles(cwd).map((filePath) => ({ path: filePath })).filter((row) => scores.has(row.path));
     addRankedList(scores, changedRows, "git-change", 0.8);
-
     const testRows = allFiles
       .filter((file) => /(^|\/)(?:test|tests|__tests__)(\/|$)|(?:\.test|\.spec|_test)\./i.test(file.path))
       .filter((file) => terms.some((term) => file.path.toLowerCase().includes(term)))
       .map((file) => ({ path: file.path }));
     addRankedList(scores, testRows, "test", 1.1);
-
     // Feedback is deliberately positive-only and weak. A file is boosted only
     // after a prior context pack selected it and the same session actually used
     // it. New files and unused historical candidates are never penalized.
@@ -1028,12 +1026,13 @@ export async function searchContextIndexV2(cwd, query, options = {}) {
     addRankedList(scores, feedbackRows, "feedback", 0.45);
 
     const graphSeeds = new Map([...scores.entries()].map(([filePath, value]) => [filePath, value.score]));
-    const importRows = db.prepare("SELECT file_path, target_path FROM imports WHERE target_path IS NOT NULL")
+    const importRows = db.prepare("SELECT file_path, specifier, target_path FROM imports WHERE target_path IS NOT NULL")
       .all()
       .filter((row) => pathAllowed(row.file_path) && pathAllowed(row.target_path));
+    const directLinks = directExplicitImportLinks(importRows, explicitRows);
+    addRankedList(scores, directLinks.rankingRows, "import", 1.8);
     const graphRows = personalizedPageRank(importRows, graphSeeds).slice(0, Math.max(limit * 3, 30));
     addRankedList(scores, graphRows, "graph", 1);
-
     const ranked = [...scores.values()]
       .filter((candidate) => (
         shouldIndexPath(candidate.path, { excludePatterns })
@@ -1053,6 +1052,7 @@ export async function searchContextIndexV2(cwd, query, options = {}) {
         path: candidate.path,
         score: Number(candidate.score.toFixed(6)),
         sources: [...candidate.sources],
+        links: directLinks.byPath.get(candidate.path) ?? [],
         symbols
       };
     });

@@ -1,7 +1,6 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
 import { ensurePrivateStateDirectory, resolveLocalStatePath } from "./local-state-path.js";
 import { appendTaskJournalEvent, readTaskJournal } from "./task-journal.js";
 import {
@@ -28,6 +27,19 @@ import {
   unavailableWorkingTreeHash,
   versionWorkingTreeHash
 } from "./working-tree-digest.js";
+import {
+  directChildGitEvidenceRoots,
+  gitEvidenceRootDetails,
+  gitEvidenceRoots,
+  gitOutput,
+  isGitWorkingTree,
+  nonGitWorkspaceFileDetails,
+  nonGitWorkspaceFiles,
+  normalizedGitPath,
+  pathWithinNonGitWorkspaceEvidenceRoot,
+  prefixedGitPath
+} from "./workspace-evidence-roots.js";
+export { isGitWorkingTree } from "./workspace-evidence-roots.js";
 
 export const TASK_CONTRACT_SCHEMA_VERSION = 2; export const DEFAULT_MAX_TASK_ATTEMPTS = 3;
 const TASK_OUTCOMES = ["pending", "completed", "blocked", "partial", "failed"], TERMINAL_TASK_OUTCOMES = new Set(["completed", "blocked", "partial", "failed"]);
@@ -47,14 +59,6 @@ const ORCHESTRATION_FIELDS = new Set(["mode", "subagents", "reason", "fieldGuide
 const MODEL_ROLE_FIELDS = new Set(["planner", "worker", "reviewer", "watchdog"]);
 const VERIFY_EVIDENCE_FIELDS = new Set(["command", "exitCode", "summary", "recordedAt", "observed", "observedAt", "isError", "matchedProfileCommand", "preWorkingTreeDigest", "workingTreeDigest"]);
 const TRACE_FIELDS = new Set(["outcome", "friction", "notes", "recordedAt"]);
-const WORKSPACE_EVIDENCE_MAX_FILES = 2000;
-const WORKSPACE_EVIDENCE_SKIP_NAMES = new Set([
-  ".git", ".hg", ".svn", ".pi", "node_modules", "dist", "build", ".next", "coverage"
-]);
-const WORKSPACE_EVIDENCE_PRIORITY_NAMES = new Map([
-  ["plans", 0]
-]);
-
 export function safeTaskId(value) {
   const normalized = String(value ?? "")
     .trim()
@@ -229,6 +233,7 @@ export function taskContractValidationErrors(input) {
   }
   if (Array.isArray(input.acceptanceCriteria) && input.acceptanceCriteria.length === 0) errors.push("acceptanceCriteria must not be empty");
   if (Array.isArray(input.scope) && input.scope.length === 0) errors.push("scope must not be empty");
+  if (Array.isArray(input.scope) && input.scope.length > 2000) errors.push("scope must contain at most 2000 entries");
   if (Array.isArray(input.previousAttempts) && input.previousAttempts.length > 10) errors.push("previousAttempts must contain at most 10 entries");
   if (Array.isArray(input.workPlan) && input.workPlan.length > 12) errors.push("workPlan must contain at most 12 entries");
   if (Array.isArray(input.reviewLenses)) {
@@ -579,13 +584,6 @@ export function summarizeAttempt(task) {
   };
 }
 
-function gitOutput(cwd, args, options = {}) {
-  return execFileSync("git", ["-C", cwd, ...args], {
-    encoding: options.encoding ?? "utf8",
-    maxBuffer: options.maxBuffer ?? 16 * 1024 * 1024,
-    stdio: ["ignore", "pipe", "ignore"]
-  });
-}
 function gitHasHead(cwd) {
   try {
     gitOutput(cwd, ["rev-parse", "--verify", "HEAD"]);
@@ -593,20 +591,6 @@ function gitHasHead(cwd) {
   } catch {
     return false;
   }
-}
-export function isGitWorkingTree(cwd) {
-  try {
-    return gitOutput(cwd, ["rev-parse", "--is-inside-work-tree"]).trim() === "true";
-  } catch {
-    return false;
-  }
-}
-function normalizedGitPath(value) {
-  return String(value ?? "").replaceAll("\\", "/").replace(/^\/+/, "");
-}
-function prefixedGitPath(prefix, file) {
-  const normalized = normalizedGitPath(file);
-  return prefix ? `${prefix}/${normalized}` : normalized;
 }
 
 function workingTreeFilesForGitRoot(cwd, observeRename) {
@@ -618,89 +602,7 @@ function workingTreeFilesForGitRoot(cwd, observeRename) {
   return [...new Set([...changed, ...untracked].map(normalizedGitPath).filter((item) => item && !item.startsWith(".pi/piagent-state/")))].sort();
 }
 
-function directChildGitEvidenceRoots(cwd) {
-  const roots = [];
-  let entries;
-  try {
-    entries = fs.readdirSync(cwd, { withFileTypes: true });
-  } catch {
-    return roots;
-  }
-  for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name.startsWith(".") || entry.name === "node_modules") continue;
-    const child = path.join(cwd, entry.name);
-    try {
-      if (fs.lstatSync(child).isSymbolicLink()) continue;
-      if (!isGitWorkingTree(child)) continue;
-      const topLevel = gitOutput(child, ["rev-parse", "--show-toplevel"]).trim();
-      if (fs.realpathSync(topLevel) !== fs.realpathSync(child)) continue;
-      roots.push({ cwd: child, prefix: normalizedGitPath(entry.name) });
-    } catch {
-      // Ignore unreadable or non-standard child folders; source-change start
-      // only needs at least one reliable evidence root.
-    }
-  }
-  return roots.sort((left, right) => left.prefix.localeCompare(right.prefix));
-}
-
-function gitEvidenceRoots(cwd) {
-  if (isGitWorkingTree(cwd)) return [{ cwd, prefix: "" }];
-  return directChildGitEvidenceRoots(cwd);
-}
-
-function nonGitWorkspaceFiles(cwd, gitRootPrefixes) {
-  const files = [];
-  const gitRoots = new Set(gitRootPrefixes.filter(Boolean));
-  function orderedEntries(entries) {
-    return [...entries].sort((left, right) => {
-      const leftPriority = WORKSPACE_EVIDENCE_PRIORITY_NAMES.get(left.name.toLowerCase()) ?? 10;
-      const rightPriority = WORKSPACE_EVIDENCE_PRIORITY_NAMES.get(right.name.toLowerCase()) ?? 10;
-      if (leftPriority !== rightPriority) return leftPriority - rightPriority;
-      return left.name.localeCompare(right.name, "en-US");
-    });
-  }
-  function visit(directory, relativeDirectory) {
-    if (files.length >= WORKSPACE_EVIDENCE_MAX_FILES) return;
-    let entries;
-    try {
-      entries = fs.readdirSync(directory, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const entry of orderedEntries(entries)) {
-      if (files.length >= WORKSPACE_EVIDENCE_MAX_FILES) return;
-      if (WORKSPACE_EVIDENCE_SKIP_NAMES.has(entry.name)) continue;
-      const relative = relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name;
-      const topSegment = relative.split("/")[0];
-      if (gitRoots.has(topSegment)) continue;
-      const absolute = path.join(directory, entry.name);
-      try {
-        if (fs.lstatSync(absolute).isSymbolicLink()) continue;
-      } catch {
-        continue;
-      }
-      if (entry.isDirectory()) {
-        visit(absolute, relative);
-      } else if (entry.isFile()) {
-        files.push(normalizedGitPath(relative));
-      }
-    }
-  }
-  visit(cwd, "");
-  return files.sort();
-}
-
 function nonGitWorkspaceFileDigest(cwd, file, protectedProjectPath = null) { return streamedWorkingTreeFileDigest(cwd, file, false, protectedProjectPath); }
-
-function pathWithinNonGitWorkspaceEvidenceRoot(candidate, gitRootPrefixes) {
-  const topSegment = candidate.split("/")[0];
-  return Boolean(
-    topSegment
-    && !WORKSPACE_EVIDENCE_SKIP_NAMES.has(topSegment)
-    && !topSegment.startsWith(".")
-    && !gitRootPrefixes.includes(topSegment)
-  );
-}
 
 export function hasGitEvidenceRoot(cwd) {
   return gitEvidenceRoots(cwd).length > 0;
@@ -742,35 +644,36 @@ export function workingTreeFiles(cwd) {
     return [];
   }
 }
-
-export function repositoryFileManifest(cwd, maxFiles = 10_000) {
-  const limit = Number.isInteger(maxFiles) ? Math.max(1, Math.min(50_000, maxFiles)) : 10_000;
-  const files = [];
+export function repositoryFileManifestDetails(cwd, maxFiles = 10_000) {
+  const limit = Number.isInteger(maxFiles) ? Math.max(1, Math.min(50_000, maxFiles)) : 10_000, files = new Set();
   try {
-    for (const root of gitEvidenceRoots(cwd)) {
-      const listed = gitOutput(root.cwd, ["ls-files", "--cached", "--others", "--exclude-standard", "-z"])
-        .split("\0")
-        .filter(Boolean);
+    const rootDetails = gitEvidenceRootDetails(cwd), roots = rootDetails.roots;
+    const add = (candidate) => {
+      if (!candidate || candidate.startsWith(".pi/") || candidate.startsWith(".git/") || candidate.split("/").includes("node_modules")
+        || /(?:^|\/)\.env(?:\.|$)/i.test(candidate) || /(?:^|\/)(?:auth|credentials?|secrets?|tokens?)\.json$/i.test(candidate)) return true;
+      files.add(candidate);
+      return files.size <= limit;
+    };
+    for (const root of roots) {
+      const listed = gitOutput(root.cwd, ["ls-files", "--cached", "--others", "--exclude-standard", "-z"]).split("\0").filter(Boolean);
       for (const file of listed) {
         const candidate = prefixedGitPath(root.prefix, file);
-        if (
-          !candidate
-          || candidate.startsWith(".pi/")
-          || candidate.startsWith(".git/")
-          || candidate.split("/").includes("node_modules")
-          || /(?:^|\/)\.env(?:\.|$)/i.test(candidate)
-          || /(?:^|\/)(?:auth|credentials?|secrets?|tokens?)\.json$/i.test(candidate)
-        ) continue;
-        files.push(candidate);
-        if (files.length >= limit) return [...new Set(files)].sort();
+        if (!add(candidate)) return { files: [...files].slice(0, limit).sort(), complete: false, candidateCount: files.size };
       }
     }
+    if (!isGitWorkingTree(cwd) && roots.length > 0) {
+      const looseDetails = nonGitWorkspaceFileDetails(cwd, roots.map((root) => root.prefix));
+      const looseFiles = looseDetails.files;
+      for (const file of looseFiles) if (!add(file)) return { files: [...files].slice(0, limit).sort(), complete: false, candidateCount: files.size };
+      if (!looseDetails.complete) return { files: [...files].sort(), complete: false, candidateCount: files.size };
+    }
+    if (!rootDetails.complete) return { files: [...files].sort(), complete: false, candidateCount: files.size };
   } catch {
-    return [];
+    return { files: [], complete: false, candidateCount: 0 };
   }
-  return [...new Set(files)].sort();
+  return { files: [...files].sort(), complete: true, candidateCount: files.size };
 }
-
+export function repositoryFileManifest(cwd, maxFiles = 10_000) { return repositoryFileManifestDetails(cwd, maxFiles).files; }
 function changedPathsFromNameStatus(output, observeRename) {
   const fields = String(output ?? "").split("\0").filter(Boolean);
   const files = [];

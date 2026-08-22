@@ -1,6 +1,7 @@
 import fs from "node:fs";
 
 import {
+  editRecoveryContextMetrics,
   injectionEfficiencyMetrics,
   prefixEfficiencyMetrics,
   readEfficiencyMetrics
@@ -41,6 +42,7 @@ export function writeContextEfficiencyReport(cwd, events, dependencies) {
   const lowConfidencePacks = comparableConfidencePacks.filter((event) => ["none", "low"].includes(event.confidence)).length;
   const feedback = dependencies.retrievalFeedback();
   const prefixMetrics = prefixEfficiencyMetrics(events), injectionMetrics = injectionEfficiencyMetrics(events);
+  const editRecoveryMetrics = editRecoveryContextMetrics(events);
   const duplicateOutputRate = ratio(duplicateOutputChars, outputChars);
   const schemaToSystemRatio = ratio(averageToolSchemaTokens, averageSystemPromptTokens);
   const schemaPrefixShare = ratio(averageToolSchemaTokens, averageSystemPromptTokens + averageToolSchemaTokens);
@@ -74,6 +76,8 @@ export function writeContextEfficiencyReport(cwd, events, dependencies) {
   if (packs.length > 0 && contextPackEvidenceCoverage < 1) recommendations.push("Context-pack telemetry coverage is incomplete; low-confidence rates exclude packs without a recognized confidence value.");
   if (injectionMetrics.injectionReceipts > 0 && injectionMetrics.injectionReceiptCoverage < 1) recommendations.push("Injection receipt coverage is incomplete; zero duplicate injection waste is not established for unattributed receipts.");
   if (injectionMetrics.injectedPathOccurrences > 0 && injectionMetrics.injectionItemCoverage < 1) recommendations.push("Injection item coverage is incomplete; duplicate injection rates exclude selected paths without canonical content and payload receipts.");
+  if (editRecoveryMetrics.editRecoveryContextEvents > 0 && editRecoveryMetrics.editRecoveryContextEvidenceCoverage < 1) recommendations.push("Edit-recovery telemetry coverage is incomplete; recovery context totals exclude malformed or unbounded recovery receipts.");
+  if (editRecoveryMetrics.editRecoveryFailures > 0 && editRecoveryMetrics.editRecoveryFailureEvidenceCoverage < 1) recommendations.push("Edit-recovery failure classification coverage is incomplete; a missing recovery context cannot be interpreted as a policy decision.");
   if (!scoreEvidenceComplete) recommendations.push("Context-waste score is unavailable because one or more weighted telemetry lanes have incomplete evidence; do not interpret missing observations as zero waste.");
   if (recommendations.length === 0) recommendations.push("No dominant context waste signal was detected in the sampled events.");
   const report = {
@@ -87,7 +91,9 @@ export function writeContextEfficiencyReport(cwd, events, dependencies) {
       toolResults: toolResults.length,
       contextPacks: packs.length,
       contextPacksOffered: offeredPacks.length, contextPacksInjected: injectedPacks.length,
-      compactions: compactions.length
+      compactions: compactions.length,
+      editRecoveryContexts: editRecoveryMetrics.editRecoveryContextEvents,
+      editRecoveryFailures: editRecoveryMetrics.editRecoveryFailures
     },
     metrics: {
       averageActiveTools: Number(averageActiveTools.toFixed(2)),
@@ -116,6 +122,7 @@ export function writeContextEfficiencyReport(cwd, events, dependencies) {
       contextFallbackRereads: feedback.fallbackRereads,
       contextFallbackRereadRate: Number(feedback.fallbackRereadRate.toFixed(4)),
       ...Object.fromEntries(Object.entries({ ...prefixMetrics, ...injectionMetrics }).map(([key, value]) => [key, Number(value.toFixed(4))])),
+      ...Object.fromEntries(Object.entries(editRecoveryMetrics).map(([key, value]) => [key, Number(value.toFixed(4))])),
       contextWasteScore: scoreEvidenceComplete ? wasteScore : null,
       contextWasteScoreEstimate: wasteScore,
       contextWasteScoreEvidenceCoverage: Number(scoreEvidenceCoverage.toFixed(4))
@@ -127,6 +134,8 @@ export function writeContextEfficiencyReport(cwd, events, dependencies) {
       prefixPrompts: { status: evidenceStatus(prefixMetrics.prefixPrompts, prefixMetrics.comparablePrefixPrompts), observed: prefixMetrics.prefixPrompts, comparable: prefixMetrics.comparablePrefixPrompts, rate: Number(prefixMetrics.prefixEvidenceCoverage.toFixed(4)) },
       injectionReceipts: { status: evidenceStatus(injectionMetrics.injectionReceipts, injectionMetrics.comparableInjectionReceipts), observed: injectionMetrics.injectionReceipts, comparable: injectionMetrics.comparableInjectionReceipts, rate: Number(injectionMetrics.injectionReceiptCoverage.toFixed(4)) },
       injectionItems: { status: evidenceStatus(injectionMetrics.injectedPathOccurrences, injectionMetrics.comparableInjectionItems), observed: injectionMetrics.injectedPathOccurrences, comparable: injectionMetrics.comparableInjectionItems, rate: Number(injectionMetrics.injectionItemCoverage.toFixed(4)) },
+      editRecoveryContexts: { status: evidenceStatus(editRecoveryMetrics.editRecoveryContextEvents, editRecoveryMetrics.comparableEditRecoveryContextEvents), observed: editRecoveryMetrics.editRecoveryContextEvents, comparable: editRecoveryMetrics.comparableEditRecoveryContextEvents, rate: Number(editRecoveryMetrics.editRecoveryContextEvidenceCoverage.toFixed(4)) },
+      editRecoveryFailures: { status: evidenceStatus(editRecoveryMetrics.editRecoveryFailures, editRecoveryMetrics.comparableEditRecoveryFailures), observed: editRecoveryMetrics.editRecoveryFailures, comparable: editRecoveryMetrics.comparableEditRecoveryFailures, rate: Number(editRecoveryMetrics.editRecoveryFailureEvidenceCoverage.toFixed(4)) },
       retrievalSelections: { status: evidenceStatus(feedback.observedSelected, feedback.selected), observed: feedback.observedSelected, comparable: feedback.selected, rate: Number(ratio(feedback.selected, feedback.observedSelected).toFixed(4)) },
       wasteScore: { status: scoreEvidenceStatus, rate: Number(scoreEvidenceCoverage.toFixed(4)) }
     },
@@ -144,6 +153,7 @@ export function writeContextEfficiencyReport(cwd, events, dependencies) {
       outputMetrics: "Duplicate-output rates use only tool results with a finite non-negative outputChars value and an explicit boolean repeated classification. Coverage exposes every excluded result instead of treating missing evidence as zero output or non-duplicate output.",
       confidenceMetrics: "Low-confidence rates use only context-pack events with a recognized none/low/medium/high confidence value. Coverage exposes missing or unknown confidence instead of counting it as a non-low result.",
       prefixMetrics: "Canonical provider tool schemas are compared only within session, task, model, and thinking-level partitions. First-turn task attribution uses turn_task_bound. Coverage distinguishes missing prefix evidence from a stable prefix.", injectionMetrics: "Duplicates require the same path, file hash, payload hash, representation, ranges, and generation within one task/session partition. Unconfirmed and post-compaction rehydration events are excluded from duplicate attribution; coverage exposes excluded receipts/items.",
+      editRecoveryMetrics: "Recovery count, characters, and estimated tokens require one versioned session capability marker plus an exact standalone edit_recovery_context receipt/tool_result pair. Original tool-result outputChars stays separate, so the failed tool output and the returned current-file snapshot are never added together.",
       schemaMetrics: "toolSchemaPrefixShare is tool schema tokens divided by system-plus-tool-schema tokens. toolSchemaToSystemRatio preserves the former tool/system diagnostic explicitly; toolSchemaShare is a compatibility alias for the corrected prefix share.",
       note: "This is an operational signal, not a quality verdict. Compare it with task acceptance and verification results."
     },
@@ -155,4 +165,3 @@ export function writeContextEfficiencyReport(cwd, events, dependencies) {
   fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
   return report;
 }
-

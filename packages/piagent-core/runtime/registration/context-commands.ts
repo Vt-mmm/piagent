@@ -160,6 +160,7 @@ export function registerContextCommands(pi: ExtensionAPI, deps: Record<string, a
             path: item.path,
             estimatedTokens: item.estimatedTokens,
             sources: item.sources,
+            links: item.links,
             fileContentHash: item.fileContentHash,
             ...(item.sanitizedContentDigest ? { sanitizedContentDigest: item.sanitizedContentDigest } : {}),
             payloadHash: item.payloadHash,
@@ -180,6 +181,7 @@ export function registerContextCommands(pi: ExtensionAPI, deps: Record<string, a
         path: item.path,
         estimatedTokens: item.estimatedTokens,
         sources: item.sources,
+        links: item.links,
         fileContentHash: item.fileContentHash,
         ...(item.sanitizedContentDigest ? { sanitizedContentDigest: item.sanitizedContentDigest } : {}),
         payloadHash: item.payloadHash,
@@ -221,6 +223,7 @@ export function registerContextCommands(pi: ExtensionAPI, deps: Record<string, a
       `fallbackRereads: ${report.metrics.contextFallbackRereads}/${report.metrics.contextSelections}`,
       `duplicateOutput: ${formatPercent(report.metrics.duplicateOutputRate)}`,
       `lowConfidencePacks: ${report.metrics.lowConfidencePacks}/${report.sample.contextPacks}`,
+      `editRecovery: ${report.metrics.editRecoveryContextCount}/${report.metrics.editRecoveryFailures} failures returned context; ${report.metrics.editRecoverySuppressedFailures} suppressed; ${report.metrics.editRecoveryEstimatedTokens} estimated tokens; classification coverage ${formatPercent(report.metrics.editRecoveryFailureEvidenceCoverage)}`,
       `taskEfficiency: ${taskEfficiency ? `${taskEfficiency.solver.route}; verify=${taskEfficiency.verification.attempts}; outcome=${taskEfficiency.outcome.task}` : "no active task"}`,
       ...report.recommendations.map((recommendation) => `- ${recommendation}`)
     ].join("\n"), { ...report, taskEfficiency });

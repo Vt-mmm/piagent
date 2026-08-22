@@ -44,6 +44,7 @@ export type ContextInjectionItem = {
   path: string;
   estimatedTokens: number;
   sources?: string[];
+  links?: Array<{ kind: string; path: string }>;
   fileContentHash?: string;
   sanitizedContentDigest?: string;
   payloadHash?: string;

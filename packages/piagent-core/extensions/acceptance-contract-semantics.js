@@ -1,9 +1,11 @@
 import path from "node:path";
 import { acceptanceBoundaryProofGuidance } from "./acceptance-boundary-guidance.js";
 import { evidenceTopLevelArguments, executableRejectionAssertions } from "./acceptance-executable-evidence.js";
-import { assertionsProveErrorMapping, ERROR_CONSTRUCTORS, ERROR_CONSTRUCTOR_DISPLAY_NAMES, errorMappingsProveContract,
+import { ERROR_CONSTRUCTORS, ERROR_CONSTRUCTOR_DISPLAY_NAMES, errorMappingsProveContract,
   hasAmbiguousErrorClassIntent, rejectionStatementErrorClass, requestedErrorClasses, requestedErrorPartitionMapping } from "./acceptance-error-classes.js";
-
+import { statefulTerminalRejectionEvidence } from "./acceptance-state-machine-evidence.js";
+import { boundRejectionTestEvidence, callableAssertionMode } from "./acceptance-test-binding-evidence.js";
+import { regexCanStartAfterLexicalChunks } from "./javascript-regex-evidence.js";
 const INTEGER_TARGET_STOPWORDS = new Set([
   "and", "basis", "cents", "input", "inputs", "items", "money", "number", "numbers", "or", "points", "typeerror", "value", "values"
 ]);
@@ -21,6 +23,7 @@ function erasedLexeme(value) {
 
 function stringLiteralSentinel(value) {
   if (value.length === 0) return "__pi_empty_string_literal__";
+  if (value === '"') return "__pi_double_quote_string_literal__";
   if (/^(?:\s|\\[nrtvf0])+$/u.test(value)) return "__pi_whitespace_string_literal__";
   if (["assert", "assert/strict", "node:assert", "node:assert/strict"].includes(value.trim().toLowerCase())) {
     return "__pi_node_assert_module_literal__";
@@ -30,14 +33,6 @@ function stringLiteralSentinel(value) {
   const errorName = value.trim().toLowerCase().match(/^(typeerror|rangeerror|syntaxerror|referenceerror|urierror|evalerror|aggregateerror|error)$/)?.[1];
   if (errorName) return `__pi_error_name_${errorName}_literal__`;
   return "__pi_string_literal__";
-}
-
-function regexCanStart(source, offset) {
-  const prefix = source.slice(0, offset).replace(/\s+$/u, "");
-  if (!prefix) return true;
-  const previous = prefix.at(-1);
-  if (/[([{,:;=!?&|+*%^~<>-]/u.test(previous)) return true;
-  return /\b(?:await|case|delete|do|else|in|instanceof|new|of|return|throw|typeof|void|yield)$/u.test(prefix);
 }
 
 /**
@@ -120,7 +115,7 @@ function lexJavaScriptEvidence(value, bindStrings = false) {
       index = end;
       continue;
     }
-    if (current === "/" && next !== "=" && regexCanStart(source, index)) {
+    if (current === "/" && next !== "=" && regexCanStartAfterLexicalChunks(output)) {
       let end = index + 1;
       let inClass = false;
       let closed = false;
@@ -162,6 +157,7 @@ export function sanitizeJavaScriptEvidence(value) {
 function uniqueStrings(values) {
   return [...new Set((Array.isArray(values) ? values : []).filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim()))];
 }
+function hasReservedEvidenceIdentifier(value) { return /\b__pi_[a-z0-9_]*\b/i.test(String(value ?? "")); }
 
 function escapeRegex(value) {
   return String(value ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -416,15 +412,24 @@ function namedTargetBindings(sourceEntries, testEntries, namedTargets) {
   return namedTargets.map((target) => {
     const matches = exports.filter((item) => item.contractName === target
       && sourceCallableBindingIsStable(sourceEntries.find((entry) => entryPath(entry?.path) === item.sourcePath), item.sourceName));
-    if (matches.length !== 1) return { target, sourcePath: null, sourceName: null, testNames: [] };
+    if (matches.length !== 1) return { target, sourcePath: null, sourceName: null, testNames: [], testBindings: [] };
     const exported = matches[0];
-    const testNames = [];
+    const testBindings = [];
     for (const binding of imports.filter((item) => importResolvesTo(item, exported.sourcePath))) {
       const testName = binding.importName === "*" ? `${binding.localName}.${exported.exportName}` : binding.localName;
       if ((binding.importName === exported.exportName || binding.importName === "*")
-        && !importedBindingIsShadowed(entries.get(binding.testPath), testName)) testNames.push(testName);
+        && !importedBindingIsShadowed(entries.get(binding.testPath), testName)) {
+        testBindings.push({ testName, testPath: binding.testPath });
+      }
     }
-    return { target, sourcePath: exported.sourcePath, sourceName: exported.sourceName, testNames: uniqueStrings(testNames) };
+    const uniqueBindings = [...new Map(testBindings.map((item) => [`${item.testPath}\u0000${item.testName}`, item])).values()];
+    return {
+      target,
+      sourcePath: exported.sourcePath,
+      sourceName: exported.sourceName,
+      testNames: uniqueStrings(uniqueBindings.map((item) => item.testName)),
+      testBindings: uniqueBindings
+    };
   });
 }
 
@@ -454,25 +459,23 @@ function formalParameterNames(parameters) {
 
 function callableBodies(code) {
   const bodies = new Map();
-  const addBraced = (name, parameters, open) => {
+  const addBraced = (name, parameters, open, asynchronous = false) => {
     const end = evidenceBalancedEnd(code, open, "{", "}");
     if (end !== -1 && !bodies.has(name)) bodies.set(name, {
       body: code.slice(open + 1, end - 1),
-      parameters: formalParameterNames(parameters),
-      sourceCode: code
+      parameters: formalParameterNames(parameters), sourceCode: code, asynchronous
     });
   };
-  for (const match of code.matchAll(/\bfunction\s+([a-z_$][a-z0-9_$]*)\s*\(([^)]*)\)\s*\{/gi)) addBraced(match[1].toLowerCase(), match[2], match.index + match[0].lastIndexOf("{"));
+  for (const match of code.matchAll(/\b(?:async\s+)?function\s+([a-z_$][a-z0-9_$]*)\s*\(([^)]*)\)\s*\{/gi)) addBraced(match[1].toLowerCase(), match[2], match.index + match[0].lastIndexOf("{"), /^async\b/i.test(match[0]));
   for (const match of code.matchAll(/^\s*(?:async\s+)?([a-z_$][a-z0-9_$]*)\s*\(([^)]*)\)\s*\{/gim)) {
-    if (!["catch", "for", "if", "switch", "while", "with"].includes(match[1].toLowerCase())) addBraced(match[1].toLowerCase(), match[2], match.index + match[0].lastIndexOf("{"));
+    if (!["catch", "for", "if", "switch", "while", "with"].includes(match[1].toLowerCase())) addBraced(match[1].toLowerCase(), match[2], match.index + match[0].lastIndexOf("{"), /^\s*async\b/i.test(match[0]));
   }
   for (const match of code.matchAll(/\b(?:const|let|var)\s+([a-z_$][a-z0-9_$]*)\s*=\s*(?:async\s*)?(?:\(([^)]*)\)|([a-z_$][a-z0-9_$]*))\s*=>\s*/gi)) {
     const start = match.index + match[0].length;
-    if (code[start] === "{") addBraced(match[1].toLowerCase(), match[2] ?? match[3], start);
+    if (code[start] === "{") addBraced(match[1].toLowerCase(), match[2] ?? match[3], start, /=\s*async\b/i.test(match[0]));
     else bodies.set(match[1].toLowerCase(), {
       body: code.slice(start, [code.indexOf(";", start), code.indexOf("\n", start)].filter((item) => item >= 0).sort((a, b) => a - b)[0] ?? code.length),
-      parameters: formalParameterNames(match[2] ?? match[3]),
-      sourceCode: code
+      parameters: formalParameterNames(match[2] ?? match[3]), sourceCode: code, asynchronous: /=\s*async\b/i.test(match[0])
     });
   }
   return bodies;
@@ -708,7 +711,7 @@ function inputNameWrittenBefore(callable, name, offset) {
   return new RegExp(`(?:\\+\\+|--)\\s*\\b${escaped}\\b`, "i").test(prefix);
 }
 
-function conditionalRejection(callable, requestedErrors, bodies) {
+function conditionalRejection(callable, requestedErrors, bodies, contractText = "", contractTarget = "") {
   const proof = { generic: false, partitions: new Set(), errorMappings: [] };
   const names = inputDerivedNames(callable);
   for (const match of callable.body.matchAll(/\bif\s*\(/g)) {
@@ -746,19 +749,18 @@ function conditionalRejection(callable, requestedErrors, bodies) {
       for (const partition of validation.partitions) proof.errorMappings.push({ partition, errorClass: followingError });
     }
   }
+  proof.generic ||= statefulTerminalRejectionEvidence(callable.body, callable.parameters, requestedErrors, contractText, contractTarget, callable.sourceCode);
   return { ...proof, names };
 }
-
 function sourceCallableProvesErrorMapping(bodies, name, mapping) {
   const observed = sourceCallableProof(bodies, name, []).errorMappings ?? [];
   return errorMappingsProveContract(observed, mapping);
 }
-
-function sourceCallableProof(bodies, name, requestedErrors, visited = new Set()) {
+function sourceCallableProof(bodies, name, requestedErrors, visited = new Set(), contractText = "", contractTarget = name) {
   if (visited.has(name) || visited.size >= 12) return { generic: false, partitions: new Set() };
   const callable = bodies.get(name);
   if (!callable) return { generic: false, partitions: new Set() };
-  const proof = conditionalRejection(callable, requestedErrors, bodies);
+  const proof = conditionalRejection(callable, requestedErrors, bodies, contractText, contractTarget);
   const nextVisited = new Set(visited).add(name);
   for (const match of callable.body.matchAll(/\b([a-z_$][a-z0-9_$]*)\s*\(/gi)) {
     const helper = match[1].toLowerCase();
@@ -768,17 +770,17 @@ function sourceCallableProof(bodies, name, requestedErrors, visited = new Set())
     const argumentsText = end === -1 ? "" : callable.body.slice(open + 1, end - 1);
     if (!proof.names.some((candidate) => !inputNameWrittenBefore(callable, candidate, match.index)
       && new RegExp(`\\b${escapeRegex(candidate)}\\b`).test(argumentsText))) continue;
-    const helperProof = sourceCallableProof(bodies, helper, requestedErrors, nextVisited);
+    const helperProof = sourceCallableProof(bodies, helper, requestedErrors, nextVisited, contractText, contractTarget);
     proof.generic ||= helperProof.generic;
     for (const partition of helperProof.partitions) proof.partitions.add(partition);
   }
   return proof;
 }
-
-function sourceCallableProves(bodies, name, requestedErrors, requestedPartitions) {
-  const proof = sourceCallableProof(bodies, name, requestedErrors);
+function sourceCallableProves(bodies, name, requestedErrors, requestedPartitions, contractText = "") {
+  const proof = sourceCallableProof(bodies, name, requestedErrors, new Set(), contractText, name);
   return proof.generic && requestedPartitions.every((partition) => partitionCovered(partition, proof.partitions));
 }
+
 function evidenceCallableNames(sourceText) {
   const names = new Set();
   const ignored = new Set(["catch", "for", "if", "switch", "while", "with"]);
@@ -903,8 +905,8 @@ export function acceptanceInvalidInputEvidence(input = {}) {
     .filter((entry) => entry && typeof entry.path === "string" && typeof entry.text === "string");
   const bodyMaps = new Map(sourceEntries.map((entry) => [entryPath(entry.path), callableBodies(normalizedText(sanitizeJavaScriptEvidence(entry.text)))]));
   if (sourceEntries.length === 0) bodyMaps.set("", callableBodies(sourceText));
-  const sourceLexicalOk = sourceEntries.length > 0 ? sourceEntries.every((entry) => lexicalEvidenceIsNonReflective(normalizedText(sanitizeJavaScriptEvidence(entry.text)))) : lexicalEvidenceIsNonReflective(sourceText);
-  const testLexicalOk = testEntries.length > 0 ? testEntries.every((entry) => lexicalEvidenceIsNonReflective(normalizedText(sanitizeJavaScriptEvidence(entry.text)))) : lexicalEvidenceIsNonReflective(testText);
+  const sourceLexicalOk = sourceEntries.length > 0 ? sourceEntries.every((entry) => !hasReservedEvidenceIdentifier(entry.text) && lexicalEvidenceIsNonReflective(normalizedText(sanitizeJavaScriptEvidence(entry.text)))) : !hasReservedEvidenceIdentifier(input.sourceText) && lexicalEvidenceIsNonReflective(sourceText);
+  const testLexicalOk = testEntries.length > 0 ? testEntries.every((entry) => !hasReservedEvidenceIdentifier(entry.text) && lexicalEvidenceIsNonReflective(normalizedText(sanitizeJavaScriptEvidence(entry.text)))) : !hasReservedEvidenceIdentifier(input.testText) && lexicalEvidenceIsNonReflective(testText);
   const sourceConstructorOk = requestedErrors.length === 0 || (sourceEntries.length > 0
     ? sourceEntries.every((entry) => intrinsicErrorBindingsUntampered(normalizedText(sanitizeJavaScriptEvidence(entry.text)), requestedErrors))
     : intrinsicErrorBindingsUntampered(sourceText, requestedErrors));
@@ -925,37 +927,35 @@ export function acceptanceInvalidInputEvidence(input = {}) {
         && (requestedErrors.length === 0 || requestedErrors.some((name) => assertion.errorClasses.includes(name))))
       .map((assertion) => ({ assertion, binding }));
   });
-  const testCallables = new Set([...bindings.flatMap((binding) => binding.testNames), ...structuralTargets.map((target) => `*.${target}`)]);
-  const allNamedAssertions = namedTargets.length > 0 ? executableRejectionAssertions(testText, testCallables) : [];
-  const namedAssertions = allNamedAssertions.filter((assertion) => requestedErrors.length === 0
-    || requestedErrors.some((name) => assertion.errorClasses.includes(name)));
-  const assertions = namedTargets.length > 0 ? namedAssertions : inferredAssertions.map((item) => item.assertion);
-  const mappingTargetGroups = [...bindings.map((binding) => binding.testNames),
-    ...structuralTargets.map((target) => [`*.${target}`])];
-  const mappingTestOk = requestedErrors.length <= 1 || Boolean(requestedErrorMapping && namedTargets.length > 0
-    && mappingTargetGroups.length > 0
-    && mappingTargetGroups.every((targets) => assertionsProveErrorMapping(allNamedAssertions, targets, requestedErrorMapping)));
-  const targetOk = assertions.length > 0 && (namedTargets.length === 0 || (
-    bindings.every((binding) => binding.testNames.length > 0 && binding.testNames.some((name) => assertions.some((assertion) => assertion.targets.includes(name))))
-    && structuralTargets.every((target) => assertions.some((assertion) => assertion.targets.includes(`*.${target}`)))
-  ));
+  const boundTestEvidence = boundRejectionTestEvidence({
+    bindings, structuralTargets, requestedErrors, requestedErrorMapping,
+    testCodeEntries: testEntries.map((entry) => ({ path: entryPath(entry.path), code: normalizedText(sanitizeJavaScriptEvidence(entry.text)) })),
+    fallbackTestCode: testText, bodyMaps
+  });
+  const assertions = namedTargets.length > 0 ? boundTestEvidence.assertions : inferredAssertions.map((item) => item.assertion);
+  const mappingTestOk = namedTargets.length > 0 ? boundTestEvidence.mappingOk : requestedErrors.length <= 1;
+  const targetOk = namedTargets.length > 0 ? boundTestEvidence.targetOk : assertions.length > 0;
   const sourceOk = sourceLexicalOk && sourceConstructorOk && (namedTargets.length > 0
     ? bindings.length === strictTargets.length
-      && bindings.every((binding) => Boolean(binding.sourcePath) && Boolean(binding.sourceName) && sourceCallableProves(bodyMaps.get(binding.sourcePath) ?? new Map(), binding.sourceName, requestedErrors, requestedPartitions))
+      && bindings.every((binding) => Boolean(binding.sourcePath) && Boolean(binding.sourceName) && sourceCallableProves(bodyMaps.get(binding.sourcePath) ?? new Map(), binding.sourceName, requestedErrors, requestedPartitions, taskText))
       && structuralTargets.every((target) => [...bodyMaps.values()].filter((bodies) => bodies.has(target)).length === 1
-        && [...bodyMaps.values()].some((bodies) => sourceCallableProves(bodies, target, requestedErrors, requestedPartitions)))
+        && [...bodyMaps.values()].some((bodies) => sourceCallableProves(bodies, target, requestedErrors, requestedPartitions, taskText)))
     : inferredAssertions.length > 0 && inferredAssertions.every(({ binding }) => (
-        sourceCallableProves(bodyMaps.get(binding.sourcePath) ?? new Map(), binding.sourceName, requestedErrors, requestedPartitions)
+        sourceCallableProves(bodyMaps.get(binding.sourcePath) ?? new Map(), binding.sourceName, requestedErrors, requestedPartitions, taskText)
       ))) && (requestedErrors.length <= 1 || Boolean(requestedErrorMapping && namedTargets.length > 0
         && bindings.every((binding) => sourceCallableProvesErrorMapping(
           bodyMaps.get(binding.sourcePath) ?? new Map(), binding.sourceName, requestedErrorMapping
         ))
         && structuralTargets.every((target) => [...bodyMaps.values()].filter((bodies) => bodies.has(target)).length === 1
           && [...bodyMaps.values()].some((bodies) => sourceCallableProvesErrorMapping(bodies, target, requestedErrorMapping)))));
+  const assertionModeOk = namedTargets.length > 0 ? boundTestEvidence.modeOk
+    : inferredAssertions.length > 0 && inferredAssertions.every(({ assertion, binding }) => (
+        assertion.mode === callableAssertionMode(bodyMaps.get(binding.sourcePath) ?? new Map(), binding.sourceName)
+      ));
   const partitions = new Set(assertions.flatMap((assertion) => [...assertion.partitions]));
   const partitionOk = requestedPartitions.every((partition) => partitionCovered(partition, partitions));
   return { sourceOk: sourceOk && !ambiguousErrorIntent,
-    testOk: testLexicalOk && testConstructorOk && targetOk && partitionOk && mappingTestOk && !ambiguousErrorIntent };
+    testOk: testLexicalOk && testConstructorOk && targetOk && partitionOk && mappingTestOk && assertionModeOk && !ambiguousErrorIntent };
 }
 
 export function acceptanceContractProofGuidance(raw) {

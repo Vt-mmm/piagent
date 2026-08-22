@@ -67,7 +67,7 @@ import {
 } from "./context-index-policy.js";
 import {
   DEFAULT_MAX_TASK_ATTEMPTS, activeSessionTask, bindSessionTask, createTaskRunId, hasGitEvidenceRoot, listTaskContracts,
-  pathWithinChangeEvidenceRoot, priorTaskAttempts, repositoryFileManifest, resolveTaskContract, safeTaskId, summarizeAttempt, taskContractValidationErrors, taskDigestMigrationArchiveStatus,
+  pathWithinChangeEvidenceRoot, priorTaskAttempts, repositoryFileManifest, repositoryFileManifestDetails, resolveTaskContract, safeTaskId, summarizeAttempt, taskContractValidationErrors, taskDigestMigrationArchiveStatus,
   workPlanDependencyError, workingTreeSnapshot, workingTreeSnapshotHasUnavailableEvidence, writeTaskContract
 } from "./task-state.js";
 import { classifyRecordedVerificationFailure, classifyVerificationFailure, latestObservedVerification, meaningfulVerificationCommands, selectCompletionRecoveryClassification, selectVerificationPlan } from "./verification-intelligence.js";
@@ -4828,7 +4828,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
     techContextDirPath, techContextFilePath, techContextRelativePath, techOptionById, techStackPath,
     telemetry, toolRegistryConfig, trajectoryRuntime, uniqueStrings, usageExactCommands,
     validTaskScopePattern, validateNewWorkPlan, verifierCommandInstructions, verifyProjectCapabilityState, workingTreeEvidenceDigest,
-    repositoryFileManifest, resolveTaskScopePatterns,
+    repositoryFileManifest, repositoryFileManifestDetails, resolveTaskScopePatterns,
     workingTreeSnapshot, workingTreeSnapshotHasUnavailableEvidence, writeContextIndex, writeProfileDocumentWithLock, writeProfileFromAdapter, writeProjectOnboarding,
     writeTask, writeTechStackSelection
   };

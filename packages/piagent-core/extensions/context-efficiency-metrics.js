@@ -16,6 +16,117 @@ function evidenceCoverage(comparable, observed) {
   return ratio(comparable, observed);
 }
 
+const MAX_CONTEXT_METRIC_AGGREGATE = 1_000_000_000;
+
+function boundedContextMetricInteger(value, { positive = false } = {}) {
+  return Number.isSafeInteger(value)
+    && value >= (positive ? 1 : 0)
+    && value <= MAX_CONTEXT_METRIC_AGGREGATE;
+}
+
+export function editRecoveryContextMetrics(events) {
+  const sessionStarts = new Map();
+  for (const [index, event] of events.entries()) {
+    if (event.event !== "session_start" || typeof event.sessionId !== "string" || !event.sessionId) continue;
+    const existing = sessionStarts.get(event.sessionId) ?? { firstIndex: index, valid: true };
+    existing.valid &&= event.editRecoveryContextTelemetryVersion === 1;
+    sessionStarts.set(event.sessionId, existing);
+  }
+  const receipts = new Map(), results = new Map();
+  let invalidReceipts = 0, invalidResults = 0;
+  let recoveryFailures = 0, comparableRecoveryFailures = 0, suppressedRecoveryFailures = 0;
+  const recoveryKey = (event) => typeof event.sessionId === "string" && event.sessionId
+    && typeof event.toolCallId === "string" && event.toolCallId && event.toolCallId.length <= 200
+    ? `${event.sessionId}\0${event.toolCallId}` : "";
+  const recoveryPath = (value) => {
+    const normalized = normalizeRelative(value);
+    if (!normalized || normalized === "." || normalized === ".." || normalized.startsWith("../")
+      || normalized.startsWith("/") || /^[A-Za-z]:\//.test(normalized)) return "";
+    return normalized;
+  };
+  for (const [index, event] of events.entries()) {
+    if (event.event === "edit_recovery_context") {
+      const key = recoveryKey(event), targetPath = recoveryPath(event.targetPath);
+      const valid = key && targetPath && /^[a-f0-9]{64}$/.test(String(event.contentHash ?? ""))
+        && boundedContextMetricInteger(event.originalChars)
+        && boundedContextMetricInteger(event.injectedChars, { positive: true })
+        && event.injectedChars > event.originalChars
+        && boundedContextMetricInteger(event.injectedEstimatedTokens, { positive: true })
+        && event.sensitiveContentRedacted === false;
+      if (!valid) {
+        invalidReceipts += 1;
+        continue;
+      }
+      const values = receipts.get(key) ?? [];
+      values.push({ ...event, index, targetPath });
+      receipts.set(key, values);
+      continue;
+    }
+    if (event.event !== "tool_result") continue;
+    const recoveryFailure = ["edit-anchor-not-unique", "edit-anchor-stale"].includes(event.reasonCode);
+    if (!recoveryFailure) {
+      if (event.editRecoveryContext !== undefined) invalidResults += 1;
+      continue;
+    }
+    recoveryFailures += 1;
+    const key = recoveryKey(event), targetPath = recoveryPath(event.targetPath);
+    const valid = key && targetPath && String(event.toolName ?? "").toLowerCase() === "edit"
+      && event.isError === true && typeof event.editRecoveryContext === "boolean"
+      && (event.editRecoveryContext === true
+        ? boundedContextMetricInteger(event.editRecoveryInjectedChars, { positive: true })
+          && boundedContextMetricInteger(event.editRecoveryEstimatedTokens, { positive: true })
+        : event.editRecoveryInjectedChars === undefined && event.editRecoveryEstimatedTokens === undefined);
+    if (!valid) {
+      continue;
+    }
+    const capability = sessionStarts.get(event.sessionId);
+    if (capability?.valid === true && capability.firstIndex < index) {
+      comparableRecoveryFailures += 1;
+      if (event.editRecoveryContext === false) suppressedRecoveryFailures += 1;
+    }
+    if (event.editRecoveryContext === false) continue;
+    const values = results.get(key) ?? [];
+    values.push({ ...event, index, targetPath });
+    results.set(key, values);
+  }
+  const recoveryKeys = new Set([...receipts.keys(), ...results.keys()]);
+  let recoveryEvents = invalidReceipts + invalidResults;
+  let comparableEvents = 0;
+  let injectedChars = 0;
+  let injectedEstimatedTokens = 0;
+  for (const key of recoveryKeys) {
+    const receiptGroup = receipts.get(key) ?? [], resultGroup = results.get(key) ?? [];
+    recoveryEvents += Math.max(receiptGroup.length, resultGroup.length);
+    if (receiptGroup.length !== 1 || resultGroup.length !== 1) continue;
+    const receipt = receiptGroup[0], result = resultGroup[0];
+    const capability = sessionStarts.get(receipt.sessionId);
+    if (capability?.valid !== true || capability.firstIndex >= receipt.index
+      || receipt.index >= result.index || receipt.targetPath !== result.targetPath
+      || String(receipt.taskRunId ?? "") !== String(result.taskRunId ?? "")
+      || receipt.injectedChars !== result.editRecoveryInjectedChars
+      || receipt.injectedEstimatedTokens !== result.editRecoveryEstimatedTokens
+      || injectedChars + receipt.injectedChars > MAX_CONTEXT_METRIC_AGGREGATE
+      || injectedEstimatedTokens + receipt.injectedEstimatedTokens > MAX_CONTEXT_METRIC_AGGREGATE) continue;
+    comparableEvents += 1;
+    injectedChars += receipt.injectedChars;
+    injectedEstimatedTokens += receipt.injectedEstimatedTokens;
+  }
+  return {
+    editRecoveryContextEvents: recoveryEvents,
+    comparableEditRecoveryContextEvents: comparableEvents,
+    uncomparableEditRecoveryContextEvents: recoveryEvents - comparableEvents,
+    editRecoveryContextEvidenceCoverage: evidenceCoverage(comparableEvents, recoveryEvents),
+    editRecoveryContextCount: comparableEvents,
+    editRecoveryInjectedChars: injectedChars,
+    editRecoveryEstimatedTokens: injectedEstimatedTokens,
+    editRecoveryFailures: recoveryFailures,
+    comparableEditRecoveryFailures: comparableRecoveryFailures,
+    uncomparableEditRecoveryFailures: recoveryFailures - comparableRecoveryFailures,
+    editRecoveryFailureEvidenceCoverage: evidenceCoverage(comparableRecoveryFailures, recoveryFailures),
+    editRecoverySuppressedFailures: suppressedRecoveryFailures
+  };
+}
+
 export function contextMetricPartition(event, taskByTurn = new Map()) {
   const sessionId = typeof event.sessionId === "string" ? event.sessionId : "";
   const turnId = typeof event.turnId === "string" ? event.turnId : "";

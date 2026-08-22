@@ -78,6 +78,7 @@ import { taskDeltaFilesFromSnapshot } from "../packages/piagent-core/extensions/
 import { filterGrepProtectedContent, filterProtectedPathListContent, registerToolResultHook } from "../packages/piagent-core/runtime/hooks/tool-result-hook.ts";
 import { workingTreeSnapshot } from "../packages/piagent-core/extensions/task-state.js";
 import { workingTreeEvidenceDigest } from "../packages/piagent-core/extensions/working-tree-digest.js";
+import { estimateContextTokens } from "../packages/piagent-core/extensions/context-engine.js";
 import { boundedPerformanceReviewResultText } from "../packages/piagent-core/runtime/quality/performance-review-evidence.ts";
 import {
   prefixCompletions,
@@ -796,6 +797,84 @@ describe("runtime session modules", () => {
     assert.deepEqual(semanticDigests, [observations[0].digest]);
     assert.deepEqual(telemetry.find((entry) => entry.event === "tool_result")?.changedPaths, ["src/event.ts"]);
     assert.notEqual(workingTreeEvidenceDigest(workingTreeSnapshot(cwd)), observations[0].digest, "a later mutation belongs to the next event, not this one");
+  });
+
+  it("delivers a small current-file recovery snapshot once after an edit anchor mismatch", async () => {
+    const cwd = temporaryProject();
+    fs.mkdirSync(path.join(cwd, "src"), { recursive: true });
+    const currentSource = Array.from({ length: 220 }, (_, index) => index === 0
+      ? 'export const greeting = "Xin chào Việt Nam — kiểm tra Unicode 🚀";'
+      : `export const line${String(index).padStart(3, "0")} = ${index};`).join("\n") + "\n";
+    fs.writeFileSync(path.join(cwd, "src", "small.js"), currentSource);
+    const handlers = new Map();
+    const telemetry = [];
+    const state = new RuntimeSessionState({ maxObservedContext: 2 });
+    const pi = { on: (name, handler) => handlers.set(name, handler) };
+    const ctx = { ...extensionContext(cwd), ui: { notify() {} } };
+    registerToolResultHook(pi, {
+      state,
+      activeTask: () => undefined,
+      maxManifestFiles: 2,
+      flushObservedTaskContext: () => undefined,
+      readProtectedPaths: () => [],
+      recordObservedBash() {},
+      observedBashLedgerPath: () => "",
+      redactText: (value) => value,
+      observedTaskContext: () => undefined,
+      recordObservedTaskChanges() {},
+      recordObservedTaskVerification() {},
+      extractLikelyPath: (_cwd, input) => input.path,
+      mutationTargets: () => [],
+      isShellTool: () => false,
+      telemetry: (_ctx, payload) => telemetry.push(payload),
+      now: () => "2026-08-10T00:00:00.000Z"
+    });
+    const event = {
+      toolCallId: "edit-mismatch-1",
+      toolName: "edit",
+      input: { path: "src/small.js", edits: [{ oldText: "missing", newText: "replacement" }] },
+      content: [{ type: "text", text: "Could not find the exact text. The old text must match exactly." }],
+      isError: true
+    };
+
+    const first = await handlers.get("tool_result")(event, ctx);
+    const firstText = first.content.map((block) => block.text ?? "").join("\n");
+    assert.match(firstText, /export const line100 = 100/, "a line-dense recovery snapshot must not be compacted into a partial preview");
+    assert.match(firstText, /replaces a separate reread/);
+    assert.equal(first.details.piagentEditRecovery.targetPath, "src/small.js");
+    assert.ok(first.details.piagentEditRecovery.injectedChars > first.details.piagentEditRecovery.originalChars);
+    assert.ok(firstText.length >= first.details.piagentEditRecovery.injectedChars);
+    const recoveryText = first.content.at(-1).text;
+    const exactRecoveryEstimate = estimateContextTokens(recoveryText);
+    assert.equal(first.details.piagentEditRecovery.injectedEstimatedTokens, exactRecoveryEstimate);
+    assert.notEqual(exactRecoveryEstimate, Math.ceil(recoveryText.length / 4), "non-ASCII recovery must not use the legacy chars/4 estimate");
+    assert.equal(telemetry.filter((entry) => entry.event === "edit_recovery_context").length, 1);
+    assert.equal(telemetry.find((entry) => entry.event === "edit_recovery_context")?.injectedEstimatedTokens, exactRecoveryEstimate);
+    assert.equal(telemetry.find((entry) => entry.event === "tool_result")?.editRecoveryEstimatedTokens, exactRecoveryEstimate);
+    assert.equal(telemetry.find((entry) => entry.event === "tool_result")?.reasonCode, "edit-anchor-stale");
+
+    const second = await handlers.get("tool_result")({ ...event, toolCallId: "edit-mismatch-2" }, ctx);
+    assert.equal(second, undefined, "the same current file snapshot is not injected twice in one session");
+    assert.equal(telemetry.filter((entry) => entry.event === "edit_recovery_context").length, 1);
+    assert.equal(telemetry.find((entry) => entry.event === "tool_result" && entry.toolCallId === "edit-mismatch-2")?.editRecoveryContext, false,
+      "a suppressed duplicate remains an explicit recovery-policy decision");
+
+    await handlers.get("session_compact")({}, ctx);
+    const afterCompaction = await handlers.get("tool_result")({ ...event, toolCallId: "edit-mismatch-3" }, ctx);
+    assert.match(afterCompaction.content.at(-1).text, /export const line100 = 100/);
+    assert.equal(telemetry.filter((entry) => entry.event === "edit_recovery_context").length, 2,
+      "a compacted-away snapshot may be delivered once in the new context epoch");
+
+    fs.writeFileSync(path.join(cwd, ".netrc"), "machine api.example login alice password hunter2\n");
+    const credentialResult = await handlers.get("tool_result")({
+      ...event,
+      toolCallId: "edit-credential-1",
+      input: { path: ".netrc", edits: [{ oldText: "missing", newText: "replacement" }] }
+    }, ctx);
+    assert.equal(credentialResult, undefined, "credential dotfiles never enter edit recovery through the real hook");
+    assert.equal(telemetry.filter((entry) => entry.event === "edit_recovery_context").length, 2);
+    assert.equal(telemetry.find((entry) => entry.event === "tool_result" && entry.toolCallId === "edit-credential-1")?.editRecoveryContext, false,
+      "an ineligible private target is explicit rather than indistinguishable from missing instrumentation");
   });
 
   it("registers session lifecycle hooks around one shared state owner", async () => {

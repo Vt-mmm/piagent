@@ -243,7 +243,7 @@ function rejectionAssertionHelpers(testText, assertionCarriers) {
   for (const declaration of assertionHelperDeclarations(testText)) {
     if (/\b(?:if|for|while|switch|try|catch|return|throw|class|function)\b|\.(?:skip|todo)\b/.test(declaration.body)) continue;
     const parameters = [...declaration.parameters.matchAll(/[a-z_$][a-z0-9_$]*/gi)].map((match) => match[0].toLowerCase()).slice(0, 8);
-    for (const match of declaration.body.matchAll(/\b([a-z_$][a-z0-9_$]*)\.(?:throws|rejects)\s*\(/gi)) {
+    for (const match of declaration.body.matchAll(/\b([a-z_$][a-z0-9_$]*)\.(throws|rejects)\s*\(/gi)) {
       if (!assertionCarriers.has(match[1].toLowerCase())) continue;
       const open = declaration.body.indexOf("(", match.index);
       const end = balancedEnd(declaration.body, open);
@@ -254,7 +254,7 @@ function rejectionAssertionHelpers(testText, assertionCarriers) {
       const before = declaration.body.slice(0, match.index).replace(/^\s*\{?\s*(?:return\s+|await\s+)?/, "");
       const after = declaration.body.slice(end).replace(/;?\s*\}?\s*$/, "");
       if (errorClasses.length > 0 && directParameter && !before && !after) {
-        helpers.push({ ...declaration, errorClasses });
+        helpers.push({ ...declaration, errorClasses, mode: match[2].toLowerCase() });
         break;
       }
     }
@@ -283,7 +283,7 @@ function callbackBodyRange(text, argument) {
   return end === -1 || end > argument.end + 1 ? undefined : { start: bodyStart + 1, end: end - 1, braced: true };
 }
 
-export function executableRejectionAssertions(testText, callableNames) {
+export function executableRejectionAssertions(testText, callableNames, modeHintsOnly = false) {
   const assertions = [];
   const carrierBindings = assertionCarrierBindings(testText);
   const assertionCarriers = new Set((assertionEvidenceFileSupported(testText)
@@ -420,6 +420,7 @@ export function executableRejectionAssertions(testText, callableNames) {
     const forOf = header.match(/^\s*(?:const|let)\s+([a-z_$][a-z0-9_$]*)\s+of\s+([\s\S]+?)\s*$/i);
     const iterable = forOf && iterationLiteral(forOf[2], match.index);
     if (iterable) iterationRanges.push({ ...iterationBody, ...iterable, kind: "for-of", variable: forOf[1] });
+    else if (modeHintsOnly && forOf) iterationRanges.push({ ...iterationBody, kind: "for-of", variable: forOf[1] });
     else unsupportedControlRanges.push(body);
   }
   for (const match of testText.matchAll(/\.foreach\s*\(/g)) {
@@ -460,7 +461,7 @@ export function executableRejectionAssertions(testText, callableNames) {
     const prefix = testText.slice(range.start, start);
     return !new RegExp(`\\b(?:const|let|var|function|class)\\s+${escaped}\\b|\\b${escaped}\\b\\s*(?:\\+\\+|--|[+*/%&|^-]=|=(?!=|>))|(?:\\+\\+|--)\\s*\\b${escaped}\\b`, "i").test(prefix);
   };
-  const record = (start, end, errorClasses, operation) => {
+  const record = (start, end, errorClasses, operation, mode) => {
     if (end === -1) return;
     if ([...declarationRanges, ...skippedRanges, ...conditionalRanges, ...unsupportedControlRanges]
       .some((range) => start >= range.start && start < range.end)) return;
@@ -495,16 +496,17 @@ export function executableRejectionAssertions(testText, callableNames) {
     if (targets.length === 0) return;
     const partitions = evidencePartitionSignals(assertion);
     for (const range of referencedIterations) {
-      for (const signal of literalArrayPartitionSignals(range.literal)) partitions.add(signal);
+      if (range.literal) for (const signal of literalArrayPartitionSignals(range.literal)) partitions.add(signal);
     }
-    assertions.push({ targets, errorClasses, partitions });
+    assertions.push({ targets, errorClasses, partitions, mode });
   };
   for (const match of testText.matchAll(/\b([a-z_$][a-z0-9_$]*)\.(?:throws|rejects)\s*\(/gi)) {
     if (!assertionCarriers.has(match[1].toLowerCase())) continue;
     const open = testText.indexOf("(", match.index);
     const end = balancedEnd(testText, open);
     const argumentsList = end === -1 ? [] : topLevelArgumentRanges(testText, open, end);
-    record(match.index, end, evidenceErrorClasses(end === -1 ? "" : testText.slice(match.index, end)), argumentsList[0]?.text);
+    record(match.index, end, evidenceErrorClasses(end === -1 ? "" : testText.slice(match.index, end)), argumentsList[0]?.text,
+      /\.rejects\s*\(/i.test(match[0]) ? "rejects" : "throws");
   }
   for (const helper of rejectionAssertionHelpers(testText, assertionCarriers)) {
     for (const match of testText.matchAll(new RegExp(`\\b${escapeRegex(helper.name)}\\s*\\(`, "g"))) {
@@ -512,7 +514,7 @@ export function executableRejectionAssertions(testText, callableNames) {
       const open = testText.indexOf("(", match.index);
       const end = balancedEnd(testText, open);
       const argumentsList = end === -1 ? [] : topLevelArgumentRanges(testText, open, end);
-      record(match.index, end, helper.errorClasses, argumentsList[0]?.text);
+      record(match.index, end, helper.errorClasses, argumentsList[0]?.text, helper.mode);
     }
   }
   for (const match of testText.matchAll(/\bexpect\s*\(/g)) {
@@ -525,7 +527,8 @@ export function executableRejectionAssertions(testText, callableNames) {
     const throwOpen = testText.indexOf("(", expectEnd + chain.index);
     const end = balancedEnd(testText, throwOpen);
     const argumentsList = topLevelArgumentRanges(testText, open, expectEnd);
-    record(match.index, end, evidenceErrorClasses(end === -1 ? "" : testText.slice(match.index, end)), argumentsList[0]?.text);
+    record(match.index, end, evidenceErrorClasses(end === -1 ? "" : testText.slice(match.index, end)), argumentsList[0]?.text,
+      /\.rejects/i.test(chain[0]) ? "rejects" : "throws");
   }
   return assertions.slice(0, 64);
 }

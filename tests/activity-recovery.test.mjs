@@ -77,4 +77,11 @@ describe("Piagent logical activity recovery", () => {
     assert.equal(classifyToolFailure("bash", true, [{ type: "text", text: "rg: missing.ts: No such file or directory" }],
       { command: "rg -n match missing.ts" }), "tool-result-failed");
   });
+
+  it("classifies edit anchor failures without hiding them as handled", () => {
+    assert.equal(classifyToolFailure("edit", true, [{ type: "text", text: "Found 2 occurrences of edits[0]. Each oldText must be unique." }]), "edit-anchor-not-unique");
+    assert.equal(classifyToolFailure("edit", true, [{ type: "text", text: "Could not find the exact text. The old text must match exactly." }]), "edit-anchor-stale");
+    assert.equal(classifyToolFailure("replace", true, [{ type: "text", text: "Could not find exact text; oldText mismatch." }]), "tool-result-failed");
+    assert.equal(classifyToolFailure("edit", true, [{ type: "text", text: "permission denied" }]), "tool-result-failed");
+  });
 });

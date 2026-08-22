@@ -281,14 +281,17 @@ function projectRelative(value) {
 
 function scopePatternMatches(pattern, file) {
   if (pattern === file) return true;
+  const directory = pattern.replace(/\/+$/, "");
+  if (directory && !/[*?{}[\]]/.test(directory) && file.startsWith(`${directory}/`)) return true;
   const escaped = pattern.replace(/[.+^$()|[\]\\]/g, "\\$&")
     .replaceAll("**", "\u0000").replaceAll("*", "[^/]*").replaceAll("?", "[^/]").replaceAll("\u0000", ".*");
   try { return new RegExp(`^${escaped}$`).test(file); } catch { return false; }
 }
 
-export function criterionGraphContextSelection(graph, projectFiles, observedContext = [], maximum = 8) {
+export function criterionGraphContextSelectionDetails(graph, projectFiles, observedContext = [], maximum = 8, inputComplete = true, taskScope = []) {
   const limit = Number.isInteger(maximum) ? Math.max(0, Math.min(50, maximum)) : 8;
-  const files = uniqueStrings(projectFiles, 20_000).filter(projectRelative);
+  const availableFiles = uniqueStrings(projectFiles, 20_001).filter(projectRelative);
+  const files = availableFiles.slice(0, 20_000);
   const selected = [];
   if (graph?.mode === "criterion-graph") {
     for (const node of graph.nodes ?? []) {
@@ -301,9 +304,24 @@ export function criterionGraphContextSelection(graph, projectFiles, observedCont
   }
   selected.push(...(Array.isArray(observedContext) ? observedContext : []));
   const seen = new Set();
-  return selected.filter((entry) => {
+  const candidates = selected.filter((entry) => {
     if (!entry || typeof entry.path !== "string" || !entry.path.trim() || typeof entry.reason !== "string" || !entry.reason.trim() || seen.has(entry.path)) return false;
     seen.add(entry.path);
     return true;
-  }).slice(0, limit).map((entry) => ({ path: entry.path.trim().replaceAll("\\", "/"), reason: entry.reason.trim() }));
+  }).map((entry) => ({ path: entry.path.trim().replaceAll("\\", "/"), reason: entry.reason.trim() }));
+  const selectedPaths = new Set(candidates.map((entry) => entry.path));
+  const scopeInput = uniqueStrings(taskScope, 2001), scopePatterns = scopeInput.slice(0, 2000);
+  const scopeSyntaxComplete = scopePatterns.every((pattern) => !/[{}[\]]/.test(pattern));
+  const scopeCovered = scopePatterns.length === 0 || files
+    .filter((file) => scopePatterns.some((pattern) => scopePatternMatches(pattern, file)))
+    .every((file) => selectedPaths.has(file));
+  return {
+    entries: candidates.slice(0, limit),
+    candidateCount: candidates.length,
+    complete: inputComplete === true && scopeInput.length <= 2000 && scopeSyntaxComplete && availableFiles.length <= 20_000 && candidates.length <= limit && scopeCovered
+  };
+}
+
+export function criterionGraphContextSelection(graph, projectFiles, observedContext = [], maximum = 8, inputComplete = true, taskScope = []) {
+  return criterionGraphContextSelectionDetails(graph, projectFiles, observedContext, maximum, inputComplete, taskScope).entries;
 }

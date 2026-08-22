@@ -331,13 +331,17 @@ export function benchmarkOperationalEvidence(events) {
 
 const causalContextReadTools = new Set(["read", "grep", "find", "ls"]);
 const causalContextShellTools = new Set(["bash", "shell", "exec"]);
-const causalContextCoverageLanes = Object.freeze([
+const causalContextCoverageLanesV1 = Object.freeze([
   "telemetry-window",
   "session-lifecycle",
   "criterion-initial-pack",
   "pack-lifecycle",
   "direct-fallback-rereads",
   "managed-prefix"
+]);
+const causalContextCoverageLanes = Object.freeze([
+  ...causalContextCoverageLanesV1,
+  "edit-recovery-context"
 ]);
 const causalContextCriterionReasons = new Set([
   "selected",
@@ -400,6 +404,26 @@ function causalContextTask(event, taskByTurn) {
   if (typeof event?.taskRunId === "string" && event.taskRunId) return event.taskRunId;
   if (typeof event?.turnId !== "string" || !event.turnId) return "";
   return taskByTurn.get(event.turnId) ?? "";
+}
+
+function causalEditRecoveryEvent(event) {
+  const toolCallId = event?.toolCallId;
+  const targetPath = normalizeCausalPath(event.targetPath);
+  if (typeof toolCallId !== "string" || !toolCallId || toolCallId.length > 200
+    || targetPath === null
+    || !/^[a-f0-9]{64}$/.test(String(event.contentHash ?? ""))
+    || !boundedCausalInteger(event.originalChars)
+    || !boundedCausalInteger(event.injectedChars) || event.injectedChars === 0
+    || event.injectedChars <= event.originalChars
+    || !boundedCausalInteger(event.injectedEstimatedTokens) || event.injectedEstimatedTokens === 0
+    || event.sensitiveContentRedacted !== false) return null;
+  return {
+    toolCallId,
+    targetPath,
+    taskRunId: typeof event.taskRunId === "string" ? event.taskRunId : "",
+    injectedChars: event.injectedChars,
+    injectedEstimatedTokens: event.injectedEstimatedTokens
+  };
 }
 
 /**
@@ -583,6 +607,65 @@ export function benchmarkCausalContextReceipt(events, {
   }
   if (pendingDirectReads.size > 0) fallbackEvidenceComplete = false;
 
+  const recoverySessionStarts = visible.filter((event) => event.event === "session_start");
+  const firstRecoverySessionStart = visible.findIndex((event) => event.event === "session_start");
+  const recoveryCapabilityComplete = recoverySessionStarts.length > 0
+    && recoverySessionStarts.every((event) => event.editRecoveryContextTelemetryVersion === 1);
+  const editRecoveryReceipts = new Map(), editRecoveryResults = new Map();
+  let editRecoveryEvidenceComplete = recoveryCapabilityComplete;
+  for (const [index, event] of visible.entries()) {
+    if (event.event === "edit_recovery_context") {
+      const value = causalEditRecoveryEvent(event);
+      if (!value || index <= firstRecoverySessionStart || editRecoveryReceipts.has(value.toolCallId)) editRecoveryEvidenceComplete = false;
+      else editRecoveryReceipts.set(value.toolCallId, { ...value, index });
+      continue;
+    }
+    if (event.event !== "tool_result") continue;
+    const recoveryFailure = ["edit-anchor-not-unique", "edit-anchor-stale"].includes(event.reasonCode);
+    if (!recoveryFailure) {
+      if (event.editRecoveryContext !== undefined) editRecoveryEvidenceComplete = false;
+      continue;
+    }
+    const toolCallId = event.toolCallId;
+    if (typeof toolCallId !== "string" || !toolCallId || toolCallId.length > 200
+      || editRecoveryResults.has(toolCallId)
+      || index <= firstRecoverySessionStart
+      || String(event.toolName ?? "").toLowerCase() !== "edit"
+      || event.isError !== true
+      || typeof event.editRecoveryContext !== "boolean"
+      || normalizeCausalPath(event.targetPath) === null
+      || (event.editRecoveryContext === true
+        && (!boundedCausalInteger(event.editRecoveryInjectedChars) || event.editRecoveryInjectedChars === 0
+          || !boundedCausalInteger(event.editRecoveryEstimatedTokens) || event.editRecoveryEstimatedTokens === 0))
+      || (event.editRecoveryContext === false
+        && (event.editRecoveryInjectedChars !== undefined || event.editRecoveryEstimatedTokens !== undefined))) {
+      editRecoveryEvidenceComplete = false;
+      continue;
+    }
+    editRecoveryResults.set(toolCallId, {
+      index,
+      injected: event.editRecoveryContext,
+      targetPath: normalizeCausalPath(event.targetPath),
+      taskRunId: typeof event.taskRunId === "string" ? event.taskRunId : "",
+      injectedChars: event.editRecoveryInjectedChars,
+      injectedEstimatedTokens: event.editRecoveryEstimatedTokens
+    });
+  }
+  for (const [toolCallId, receipt] of editRecoveryReceipts) {
+    const result = editRecoveryResults.get(toolCallId);
+    if (!result || result.injected !== true || receipt.index >= result.index
+      || receipt.targetPath !== result.targetPath
+      || receipt.taskRunId !== result.taskRunId
+      || receipt.injectedChars !== result.injectedChars
+      || receipt.injectedEstimatedTokens !== result.injectedEstimatedTokens) editRecoveryEvidenceComplete = false;
+  }
+  for (const [toolCallId, result] of editRecoveryResults) {
+    if (result.injected !== editRecoveryReceipts.has(toolCallId)) editRecoveryEvidenceComplete = false;
+  }
+  const editRecoveryInjectedChars = boundedCausalSum([...editRecoveryReceipts.values()].map((item) => item.injectedChars));
+  const editRecoveryEstimatedTokens = boundedCausalSum([...editRecoveryReceipts.values()].map((item) => item.injectedEstimatedTokens));
+  editRecoveryEvidenceComplete &&= editRecoveryInjectedChars !== null && editRecoveryEstimatedTokens !== null;
+
   const prompts = visible.map((event, index) => ({ event, index }))
     .filter((item) => item.event.event === "agent_prompt");
   const managedPrefixComplete = prompts.length > 0
@@ -615,7 +698,8 @@ export function benchmarkCausalContextReceipt(events, {
     "criterion-initial-pack": criterionEvidenceComplete,
     "pack-lifecycle": packLifecycleComplete,
     "direct-fallback-rereads": fallbackEvidenceComplete,
-    "managed-prefix": managedPrefixComplete
+    "managed-prefix": managedPrefixComplete,
+    "edit-recovery-context": editRecoveryEvidenceComplete
   };
   const missingLanes = causalContextCoverageLanes.filter((lane) => lanes[lane] !== true);
   const observedLanes = causalContextCoverageLanes.length - missingLanes.length;
@@ -625,8 +709,8 @@ export function benchmarkCausalContextReceipt(events, {
     ? "uncompacted"
     : compactedPrompts === prompts.length ? "compacted" : "mixed";
   return {
-    schemaVersion: 1,
-    evidenceSource: "context-telemetry-closed-aggregate-v1",
+    schemaVersion: 2,
+    evidenceSource: "context-telemetry-closed-aggregate-v2",
     applicability: "piagent",
     available,
     coverage: {
@@ -655,6 +739,20 @@ export function benchmarkCausalContextReceipt(events, {
         successfulCalls: directFallbackRereadCalls,
         shellToolCallsObserved,
         definition: "successful-direct-path-tool-call-v1"
+      },
+      editRecoveryContext: {
+        count: editRecoveryReceipts.size,
+        failuresObserved: editRecoveryResults.size,
+        suppressedFailures: [...editRecoveryResults.values()].filter((item) => item.injected === false).length,
+        injectedChars: editRecoveryInjectedChars,
+        injectedEstimatedTokens: editRecoveryEstimatedTokens,
+        evidenceCoverage: {
+          status: "complete",
+          observed: editRecoveryReceipts.size,
+          comparable: editRecoveryReceipts.size,
+          rate: 1
+        },
+        definition: "matched-edit-recovery-context-receipt-v1"
       },
       compaction: { eventsObserved: compactions, state: compactions > 0 ? "observed" : "not-observed" },
       managedPrefix: { promptsObserved: prompts.length, compactedPrompts, state: managedPrefixState }

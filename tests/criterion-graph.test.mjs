@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   compileCriterionGraph,
   criterionGraphContextSelection,
+  criterionGraphContextSelectionDetails,
   criterionGraphGuidance,
   criterionGraphMode,
   criterionGraphValidationErrors,
@@ -191,6 +192,48 @@ test("context selection resolves only graph-scoped project files and preserves b
   assert.deepEqual(selected.map((entry) => entry.path), ["src/search.js", "src/other.js", "test/search.test.js", "README.md"]);
   assert.match(selected[0].reason, /^criterion-/);
   assert.equal(selected.some((entry) => entry.path === ".pi/private.json"), false);
+  const truncated = criterionGraphContextSelectionDetails(
+    graph,
+    ["src/search.js", "src/other.js", "test/search.test.js"],
+    [{ path: "README.md", reason: "already observed" }],
+    2
+  );
+  assert.equal(truncated.entries.length, 2);
+  assert.equal(truncated.complete, false);
+  assert.equal(truncated.candidateCount, 4);
+  const incompleteInput = criterionGraphContextSelectionDetails(
+    graph,
+    ["src/search.js", "test/search.test.js"],
+    [],
+    8,
+    false
+  );
+  assert.equal(incompleteInput.complete, false);
+  assert.equal(incompleteInput.candidateCount, 2);
+  const wideScope = ["src/a.ts", "src/b.ts", "src/c.ts", "test/a.test.js", "test/b.test.js"];
+  const wideGraph = compileCriterionGraph({
+    ...contract,
+    acceptanceCriteria: ["Preserve malformed-input behavior and add durable coverage."],
+    scope: wideScope,
+    mode: "criterion-graph",
+    createdAt
+  });
+  assert.equal(wideGraph.nodes[0].targetHints.length, 4, "the graph keeps its bounded navigation hints");
+  const scopeTruncated = criterionGraphContextSelectionDetails(wideGraph, wideScope, [], 8, true, wideScope);
+  assert.equal(scopeTruncated.complete, false, "omitted task-scope files prevent a false singleton proof");
+  assert.equal(scopeTruncated.entries.some((entry) => entry.path === "test/b.test.js"), false);
+  const overflowScope = ["test/a.test.js", ...Array.from({ length: 1999 }, (_, index) => `src/f${index}.js`), "test/b.test.js"];
+  const overflowGraph = { mode: "criterion-graph", nodes: [{ id: "criterion-01", kind: "behavior", targetHints: ["test/a.test.js"] }] };
+  const scopeOverflow = criterionGraphContextSelectionDetails(overflowGraph, ["test/a.test.js", "test/b.test.js"], [], 8, true, overflowScope);
+  assert.equal(scopeOverflow.complete, false, "a 2001st scope entry cannot be truncated into false completeness");
+  const sourceOnlyGraph = { mode: "criterion-graph", nodes: [{ id: "criterion-01", kind: "behavior", targetHints: ["src/foo.js"] }] };
+  const scopedFiles = ["src/foo.js", "tests/a.test.js", "tests/b.test.js"];
+  const directoryScope = criterionGraphContextSelectionDetails(sourceOnlyGraph, scopedFiles, [], 8, true, ["src/foo.js", "tests"]);
+  assert.equal(directoryScope.complete, false, "an omitted directory subtree prevents false completeness");
+  for (const pattern of ["tests/{a,b}.test.js", "tests/[ab].test.js"]) {
+    const unsupportedGlob = criterionGraphContextSelectionDetails(sourceOnlyGraph, scopedFiles, [], 8, true, ["src/foo.js", pattern]);
+    assert.equal(unsupportedGlob.complete, false, `${pattern} must fail closed until its glob semantics are proved`);
+  }
   assert.deepEqual(criterionGraphContextSelection({ ...graph, mode: "mechanical" }, ["src/search.js"], [{ path: "README.md", reason: "observed" }], 8), [
     { path: "README.md", reason: "observed" }
   ]);

@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-import { toolResultFingerprint } from "../../extensions/context-engine.js";
+import { estimateContextTokens, toolResultFingerprint } from "../../extensions/context-engine.js";
 import { matchesProtectedPath } from "../../extensions/policy-core.js";
 import { changedSnapshotFiles, taskDeltaFilesFromSnapshot } from "../../extensions/task-contract-view.js";
 import { classifyVerificationFailure } from "../../extensions/verification-intelligence.js";
@@ -15,6 +15,8 @@ import { classifyToolFailure } from "../inspection/tool-failure-classification.t
 import { boundedGitDiffReview } from "../quality/performance-assurance.ts";
 import { currentFileContentDigests } from "../quality/model-mutation-proof.ts";
 import { boundedPerformanceReviewResultText } from "../quality/performance-review-evidence.ts";
+import { buildEditRecoveryContext, type EditRecoveryContext } from "../recovery/edit-recovery-context.ts";
+import { EditRecoveryDeliveryState } from "../recovery/edit-recovery-delivery.ts";
 import { attachToolResultCompactionDetails, compactToolResultDetails, compactToolResultTextContent, type ToolResultCaptureSummary } from "../session/tool-result-compaction.ts";
 import type { ObservedTaskContext } from "../session/runtime-state.ts";
 import { observeTrajectorySync } from "../trajectory/trajectory-observability.ts";
@@ -133,7 +135,17 @@ function redactToolResultTextContent(content: unknown): { content: unknown; reda
   return { content: safeContent, redacted };
 }
 
+function appendToolResultText(content: unknown, text: string): unknown[] {
+  const block = { type: "text", text };
+  if (Array.isArray(content)) return [...content, block];
+  if (typeof content === "string" && content) return [{ type: "text", text: content }, block];
+  return [block];
+}
+
 export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResultHookDependencies): void {
+  const editRecoveryDelivery = new EditRecoveryDeliveryState();
+  pi.on("session_compact", async (_event, ctx) => editRecoveryDelivery.advanceEpoch(ctx));
+  pi.on("session_shutdown", async (_event, ctx) => editRecoveryDelivery.clearSession(ctx));
   pi.on("tool_result", async (event, ctx) => {
     confirmContextDeliveryFromToolResult(pi, ctx, event, dependencies);
     const taskIdentity = dependencies.state.taskIdentity(ctx);
@@ -212,6 +224,7 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
       }
     }
     const outputText = boundedToolResultText(event.content);
+    const failureReasonCode = classifyToolFailure(event.toolName, event.isError === true, event.content, event.input);
     const performanceReviewOutputText = boundedPerformanceReviewResultText(event.content);
     const observedExitCode = observed?.exitCode
       ?? numericExitCode(isPlainRecord(event.details) ? event.details.exitCode ?? event.details.status : undefined)
@@ -299,6 +312,8 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
     let resultContent: unknown = event.content;
     let resultDetails: unknown = event.details;
     let resultChanged = false;
+    let editRecovery: EditRecoveryContext | undefined;
+    const resultTarget = dependencies.extractLikelyPath(ctx.cwd, isPlainRecord(event.input) ? event.input : {});
     if (event.toolName === "grep") {
       const filtered = filterGrepProtectedContent(resultContent, readProtectedPaths);
       if (filtered.changed) {
@@ -319,6 +334,44 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
           ? { ...resultDetails, protectedPathsRedacted: filtered.redactedLines }
           : { protectedPathsRedacted: filtered.redactedLines };
         resultChanged = true;
+      }
+    }
+
+    const recovery = buildEditRecoveryContext({
+      cwd: ctx.cwd,
+      targetPath: resultTarget,
+      reasonCode: failureReasonCode,
+      protectedPaths: readProtectedPaths
+    });
+    if (recovery) {
+      if (editRecoveryDelivery.reserve(ctx, taskIdentity?.taskRunId ?? "", recovery.key)) {
+        editRecovery = recovery;
+        const injectedChars = recovery.text.length;
+        const injectedEstimatedTokens = estimateContextTokens(recovery.text);
+        const recoveryDetails = {
+          schemaVersion: 1,
+          targetPath: dependencies.redactText(recovery.targetPath),
+          contentHash: recovery.contentHash,
+          originalChars: recovery.originalChars,
+          injectedChars,
+          injectedEstimatedTokens,
+          sensitiveContentRedacted: recovery.redacted
+        };
+        resultDetails = isPlainRecord(resultDetails)
+          ? { ...resultDetails, piagentEditRecovery: recoveryDetails }
+          : { ...(resultDetails === undefined ? {} : { value: resultDetails }), piagentEditRecovery: recoveryDetails };
+        resultChanged = true;
+        dependencies.telemetry(ctx, {
+          event: "edit_recovery_context",
+          toolCallId: resultToolCallId,
+          taskRunId: taskIdentity?.taskRunId,
+          targetPath: dependencies.redactText(recovery.targetPath),
+          contentHash: recovery.contentHash,
+          originalChars: recovery.originalChars,
+          injectedChars,
+          injectedEstimatedTokens,
+          sensitiveContentRedacted: recovery.redacted
+        });
       }
     }
 
@@ -373,15 +426,22 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
     if (compactionCaptures.length > 0) {
       resultDetails = attachToolResultCompactionDetails(resultDetails, compactionCaptures);
     }
+    // Compact the original error independently, then append the already bounded
+    // and sanitized recovery snapshot. Otherwise a small but line-dense file can
+    // be compacted into a preview and cease to be a complete one-shot recovery.
+    if (editRecovery) {
+      resultContent = appendToolResultText(resultContent, editRecovery.text);
+      resultChanged = true;
+    }
 
     const resultFingerprintId = event.toolCallId ?? fingerprint.key;
     const record = dependencies.activity ?? dependencies.telemetry;
-    const resultTarget = dependencies.extractLikelyPath(ctx.cwd, isPlainRecord(event.input) ? event.input : {});
     const changedPaths = [...new Set([...directMutationResult.changedPaths, ...shellChangedPaths])]
       .filter((filePath) => !matchesProtectedPath(filePath, readProtectedPaths))
       .map((filePath) => dependencies.redactText(filePath))
       .sort();
     const lineStats = patchLineStats(event.details);
+    const editRecoveryFailure = ["edit-anchor-not-unique", "edit-anchor-stale"].includes(String(failureReasonCode));
     record(ctx, {
       activityId: `result:${resultFingerprintId}`,
       event: "tool_result",
@@ -399,7 +459,13 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
       compactedCaptures: compactionCaptures.length,
       sensitiveValuesRedacted,
       isError: event.isError,
-      reasonCode: classifyToolFailure(event.toolName, event.isError === true, event.content, event.input),
+      reasonCode: failureReasonCode,
+      // An explicit false is evidence too: it proves that every classified
+      // edit-anchor failure passed through the recovery policy even when the
+      // target was too large, private, protected, or otherwise ineligible.
+      editRecoveryContext: editRecoveryFailure ? Boolean(editRecovery) : undefined,
+      editRecoveryInjectedChars: editRecovery?.text.length,
+      editRecoveryEstimatedTokens: editRecovery ? estimateContextTokens(editRecovery.text) : undefined,
       exitCode: observed?.exitCode ?? (dependencies.isShellTool(event.toolName) ? event.isError ? 1 : 0 : undefined),
       exitCodeExact: observed?.exitCode !== undefined,
       ...lineStats,

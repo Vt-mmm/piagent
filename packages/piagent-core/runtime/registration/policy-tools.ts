@@ -173,6 +173,7 @@ export function registerPolicyTools(pi: ExtensionAPI, deps: Record<string, any>)
                 path: item.path,
                 estimatedTokens: item.estimatedTokens,
                 sources: item.sources,
+                links: item.links,
                 fileContentHash: item.fileContentHash,
                 ...(item.sanitizedContentDigest ? { sanitizedContentDigest: item.sanitizedContentDigest } : {}),
                 payloadHash: item.payloadHash,

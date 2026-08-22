@@ -24,7 +24,7 @@ type ProofTask = {
   criterionGraph?: CriterionGraph;
 };
 
-export const RUNTIME_SOURCE_REUSE_GUIDANCE = "Use runtime-delivered source; do not reread it. If an edit reports generation/drift/oldText mismatch, make one bounded reread of the affected region. Otherwise read only missing source or a named criterion-focused test. Wildcard test scope is permission, not a file target; directories/globs are not files.";
+export const RUNTIME_SOURCE_REUSE_GUIDANCE = "Use runtime-delivered source; do not reread it. On edit drift/oldText mismatch, use attached recovery; otherwise reread the affected region once. Never retry guessed anchors. Otherwise read only missing source or a named criterion-focused test. Globs/directories grant scope, not file targets.";
 
 export const EXACT_VERIFIER_EXECUTION_GUIDANCE = "Keep each exact verifier command separate and unmodified. Run the set once on the final tree; rerun only after a later mutation or a runtime-authorized same-tree infrastructure retry.";
 

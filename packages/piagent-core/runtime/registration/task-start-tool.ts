@@ -5,7 +5,7 @@ import { automaticTaskSummary, boundedRuntimeIntakeMessage } from "../workflows/
 import { WORKING_TREE_DIGEST_ALGORITHM } from "../../extensions/working-tree-digest.js";
 import { createEnvironmentBoundTaskAuthority } from "../policy/task-authority-runtime.ts";
 import { authorityReplacementState } from "../policy/authority-resume-policy.ts";
-import { compileCriterionGraph, criterionGraphContextSelection, criterionGraphGuidance, criterionGraphMode } from "../../extensions/criterion-graph.js";
+import { compileCriterionGraph, criterionGraphContextSelection, criterionGraphContextSelectionDetails, criterionGraphGuidance, criterionGraphMode } from "../../extensions/criterion-graph.js";
 import { captureTaskStartBaseline } from "../inspection/task-baseline-start-capture.ts";
 import { sameStringRecord, satisfiesAuthorityReplacement } from "./task-start-retry-helpers.ts";
 import {
@@ -13,7 +13,6 @@ import {
   taskCriticalProofSection
 } from "./task-start-guidance.ts";
 type ExtensionContext = any; type TaskContract = any; type TaskStartParameters = any;
-
 export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any>): any {
   const {
     DEFAULT_MAX_TASK_ATTEMPTS, ORCHESTRATION_ROLES, REVIEW_LENSES, StringEnum, Type,
@@ -23,7 +22,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
     currentSessionName, defaultWorkPlan, effectiveProtectedPaths, hasGitEvidenceRoot, hasOperatorSessionName,
     isAcceptanceTestPath, loadProfileFromContext, matchesProtectedPath, normalizeReviewLenses, normalizeWorkPlanSteps, nowIso, policy,
     priorTaskAttempts, recordTaskStartCheckpoint, redactText, redactTextArray, registerRuntimeTool,
-    repositoryFileManifest, resolveOrchestrationPolicy, resolveTaskScopePatterns, runtimeLifecycleMode, runtimeState, safeTaskId, selectVerificationPlan,
+    repositoryFileManifest, repositoryFileManifestDetails, resolveOrchestrationPolicy, resolveTaskScopePatterns, runtimeLifecycleMode, runtimeState, safeTaskId, selectVerificationPlan,
     summarizeAttempt, telemetry, validTaskScopePattern, validateNewWorkPlan, verifierCommandInstructions, workingTreeEvidenceDigest, workingTreeSnapshot, workingTreeSnapshotHasUnavailableEvidence,
     writeTask
   } = deps;
@@ -55,7 +54,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       scope: Type.Array(Type.String({
         minLength: 1,
         description: "Project-relative path or glob only (for example src/file.ts, src/**, or test/**); do not use prose."
-      }), { minItems: 1 }),
+      }), { minItems: 1, maxItems: 2000 }),
       outOfScope: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
       reviewLenses: Type.Optional(Type.Array(StringEnum(REVIEW_LENSES))),
       workPlan: Type.Optional(Type.Array(Type.Object({
@@ -293,8 +292,11 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       });
       const criterionGraph = compileCriterionGraph({ acceptanceCriteria: acceptance.acceptanceCriteria, scope: resolvedScope,
         verifyCommands: verifyPlan.commands, changeMode, mode: criterionGraphMode(), createdAt });
-      const projectFiles = repositoryFileManifest(ctx.cwd);
-      const maxManifestFiles = contextBudgetConfig(policy).maxManifestFiles, plannedContext = criterionGraphContextSelection(criterionGraph, projectFiles, [], maxManifestFiles), observedContext = criterionGraphContextSelection(undefined, [], runtimeState.preTaskContext(ctx), maxManifestFiles);
+      const projectManifest = repositoryFileManifestDetails(ctx.cwd), projectFiles = projectManifest.files;
+      const maxManifestFiles = contextBudgetConfig(policy).maxManifestFiles;
+      const plannedSelection = criterionGraphContextSelectionDetails(criterionGraph, projectFiles, [], maxManifestFiles, projectManifest.complete, resolvedScope);
+      const plannedContext = plannedSelection.entries;
+      const observedContext = criterionGraphContextSelection(undefined, [], runtimeState.preTaskContext(ctx), maxManifestFiles);
       const task: TaskContract = {
         schemaVersion: 2,
         taskRunId,
@@ -368,8 +370,8 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       }
       const lifecycleMode = runtimeLifecycleMode(written);
       const scopeMappings = scopeResolution.mappings.map((item) => `${item.from} -> ${item.to}`);
-      appendTrace(ctx.cwd, { taskId, taskRunId, sessionId, sessionName, attempt, event: "task_start", turnId: runtimeState.currentTurn(ctx)?.turnId, summary: task.summary, riskLane: params.riskLane, intakeMode: task.intakeMode, changeMode: task.changeMode, mutationPolicy: task.mutationPolicy, lifecycleMode, criterionGraphMode: written.criterionGraph.mode, criterionGraphDigest: written.criterionGraph.graphDigest, authorityProfile: written.authoritySnapshot.profile, authoritySnapshotDigest: written.authoritySnapshot.snapshotDigest, scopeMappings, plannedContext: plannedContext.map((item) => item.path), observedContext: observedContext.map((item) => item.path) });
-      appendSessionTrace(pi, { taskId, taskRunId, sessionId, sessionName, attempt, event: "task_start", turnId: runtimeState.currentTurn(ctx)?.turnId, summary: task.summary, riskLane: params.riskLane, intakeMode: task.intakeMode, changeMode: task.changeMode, mutationPolicy: task.mutationPolicy, lifecycleMode, criterionGraphMode: written.criterionGraph.mode, criterionGraphDigest: written.criterionGraph.graphDigest, authorityProfile: written.authoritySnapshot.profile, authoritySnapshotDigest: written.authoritySnapshot.snapshotDigest, scopeMappings, plannedContext: plannedContext.map((item) => item.path), observedContext: observedContext.map((item) => item.path) });
+      appendTrace(ctx.cwd, { taskId, taskRunId, sessionId, sessionName, attempt, event: "task_start", turnId: runtimeState.currentTurn(ctx)?.turnId, summary: task.summary, riskLane: params.riskLane, intakeMode: task.intakeMode, changeMode: task.changeMode, mutationPolicy: task.mutationPolicy, lifecycleMode, criterionGraphMode: written.criterionGraph.mode, criterionGraphDigest: written.criterionGraph.graphDigest, authorityProfile: written.authoritySnapshot.profile, authoritySnapshotDigest: written.authoritySnapshot.snapshotDigest, scopeMappings, plannedContext: plannedContext.map((item) => item.path), plannedContextComplete: plannedSelection.complete, plannedContextCandidateCount: plannedSelection.candidateCount, observedContext: observedContext.map((item) => item.path) });
+      appendSessionTrace(pi, { taskId, taskRunId, sessionId, sessionName, attempt, event: "task_start", turnId: runtimeState.currentTurn(ctx)?.turnId, summary: task.summary, riskLane: params.riskLane, intakeMode: task.intakeMode, changeMode: task.changeMode, mutationPolicy: task.mutationPolicy, lifecycleMode, criterionGraphMode: written.criterionGraph.mode, criterionGraphDigest: written.criterionGraph.graphDigest, authorityProfile: written.authoritySnapshot.profile, authoritySnapshotDigest: written.authoritySnapshot.snapshotDigest, scopeMappings, plannedContext: plannedContext.map((item) => item.path), plannedContextComplete: plannedSelection.complete, plannedContextCandidateCount: plannedSelection.candidateCount, observedContext: observedContext.map((item) => item.path) });
       telemetry(ctx, { event: "turn_task_bound", turnId: runtimeState.currentTurn(ctx)?.turnId, taskRunId });
       recordTaskStartCheckpoint(ctx, written, firstReady.id, lifecycleMode);
       return {
@@ -412,7 +414,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
     }
   };
   registerRuntimeTool(pi, taskStartTool);
-  async function maybeStartAutomaticTask(prompt: string, ctx: ExtensionContext): Promise<{ started: boolean; text: string; task?: TaskContract; plannedContext?: Array<{ path: string; reason: string }> } | undefined> {
+  async function maybeStartAutomaticTask(prompt: string, ctx: ExtensionContext): Promise<{ started: boolean; text: string; task?: TaskContract; plannedContext?: Array<{ path: string; reason: string }>; plannedContextComplete?: boolean } | undefined> {
     const profile = loadProfileFromContext(ctx);
     const readProtectedPaths = effectiveProtectedPaths(policy, profile).readProtectedPaths;
     const intakeMode = automaticTaskIntakeMode(prompt, readProtectedPaths);
@@ -421,7 +423,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
     if (active?.trace.outcome === "pending") return undefined;
     const summary = redactText(automaticTaskSummary(prompt));
     const sessionName = currentSessionName(ctx);
-    const projectFiles = repositoryFileManifest(ctx.cwd);
+    const projectManifest = repositoryFileManifestDetails(ctx.cwd), projectFiles = projectManifest.files;
     const scope = intakeMode === "read-only"
       ? automaticReadOnlyTaskScope(prompt, runtimeState.preTaskContext(ctx))
       : automaticTaskScope(prompt, runtimeState.preTaskContext(ctx), projectFiles);
@@ -462,7 +464,8 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       };
     }
     const assurance = taskPerformanceAssurance(task);
-    const plannedContext = criterionGraphContextSelection(task.criterionGraph, projectFiles, [], contextBudgetConfig(policy).maxManifestFiles);
+    const plannedSelection = criterionGraphContextSelectionDetails(task.criterionGraph, projectFiles, [], contextBudgetConfig(policy).maxManifestFiles, projectManifest.complete, task.scope);
+    const plannedContext = plannedSelection.entries;
     const baselineGuidance = task.changeMode === "source-change" && task.mutationPolicy !== "forbidden"
       ? acceptanceBaselineGuidance(task, { cwd: ctx.cwd })
       : [];
@@ -474,6 +477,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       started: true,
       task,
       plannedContext,
+      plannedContextComplete: plannedSelection.complete,
       text: boundedRuntimeIntakeMessage([
         `Piagent runtime task: ${task.taskId}; scope: ${task.scope.join(", ")}.`,
         "The complete operator request above is the authoritative acceptance contract; runtime keeps its full criteria, so do not restate or re-scout it.",

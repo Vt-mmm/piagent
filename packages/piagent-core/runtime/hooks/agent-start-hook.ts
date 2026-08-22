@@ -50,6 +50,7 @@ type RuntimeIntakeResult = {
   text: string;
   task?: TaskContract;
   plannedContext?: Array<{ path: string; reason: string }>;
+  plannedContextComplete?: boolean;
 };
 
 type AgentStartHookDependencies = {
@@ -197,6 +198,7 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
             explicitPaths: signal.paths,
             criteria: intake.task.acceptanceCriteria,
             plannedEntries: intake.plannedContext ?? [],
+            plannedSelectionComplete: intake.plannedContextComplete === true,
             retrievedItems: discoveryItems
           }, { limit: criterionLimit })
         : [];
@@ -461,6 +463,7 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
             path: item.path,
             estimatedTokens: item.estimatedTokens,
             sources: item.sources,
+            links: item.links,
             fileContentHash: item.fileContentHash,
             ...(item.sanitizedContentDigest ? { sanitizedContentDigest: item.sanitizedContentDigest } : {}),
             payloadHash: item.payloadHash,

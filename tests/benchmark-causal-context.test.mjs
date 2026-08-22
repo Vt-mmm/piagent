@@ -7,6 +7,7 @@ import test from "node:test";
 import { benchmarkCausalContextReceipt } from "../packages/piagent-core/benchmark/benchmark-forensics.js";
 import {
   completedBenchmarkRecord,
+  summarizeBenchmarkCausalContextEvidence,
   validBenchmarkCausalContextReceipt
 } from "../packages/piagent-core/benchmark/benchmark-record-validation.js";
 import {
@@ -48,6 +49,7 @@ function completeEvents(sessionId = "session-a") {
     payloadHash: `context-payload-v1:${"b".repeat(64)}`
   }];
   return [
+    { event: "session_start", sessionId, editRecoveryContextTelemetryVersion: 1 },
     { event: "turn_task_bound", sessionId, turnId: "turn-private", taskRunId: "run-private" },
     { event: "agent_prompt", sessionId, turnId: "turn-private", managedInstructionsCompacted: true },
     { event: "criterion_context_pack", sessionId, turnId: "turn-private", selected: 1, candidates: 2, estimatedTokens: 100, reasonCode: "selected" },
@@ -112,6 +114,7 @@ test("persists a complete causal aggregate without paths, hashes, prompts, or id
     ...completeEvents("other-session").map((event) => ({ ...event, estimatedTokens: 999_999 }))
   ];
   const receipt = benchmarkCausalContextReceipt(events, { surface: "piagent", sessionId: "session-a" });
+  assert.equal(receipt.schemaVersion, 2);
   assert.equal(receipt.available, true);
   assert.equal(receipt.coverage.status, "complete");
   assert.deepEqual(receipt.aggregates.packCounts, { offered: 1, delivered: 1, injected: 1 });
@@ -124,12 +127,138 @@ test("persists a complete causal aggregate without paths, hashes, prompts, or id
     definition: "successful-direct-path-tool-call-v1"
   });
   assert.deepEqual(receipt.aggregates.managedPrefix, { promptsObserved: 1, compactedPrompts: 1, state: "compacted" });
+  assert.deepEqual(receipt.aggregates.editRecoveryContext, {
+    count: 0,
+    failuresObserved: 0,
+    suppressedFailures: 0,
+    injectedChars: 0,
+    injectedEstimatedTokens: 0,
+    evidenceCoverage: { status: "complete", observed: 0, comparable: 0, rate: 1 },
+    definition: "matched-edit-recovery-context-receipt-v1"
+  });
   const serialized = JSON.stringify(receipt);
   for (const forbidden of ["private-target", "delivery-private", "turn-private", "run-private", "context-file-v1", "context-payload-v1", "999999"]) {
     assert.equal(serialized.includes(forbidden), false, forbidden);
   }
   assert.equal(validBenchmarkCausalContextReceipt(receipt, "piagent"), true);
   assert.equal(completedBenchmarkRecord(completedRecord("piagent", receipt)), true);
+});
+
+test("aggregates matched edit recovery receipts without folding in failed tool output", () => {
+  const events = completeEvents();
+  events.splice(-1, 0,
+    telemetryEvent({
+      event: "edit_recovery_context",
+      sessionId: "session-a",
+      taskRunId: "run-private",
+      toolCallId: "edit-recovery-1",
+      targetPath: "src/private-target.ts",
+      contentHash: "c".repeat(64),
+      originalChars: 300,
+      injectedChars: 480,
+      injectedEstimatedTokens: 220,
+      sensitiveContentRedacted: false
+    }),
+    telemetryEvent({
+      event: "tool_result",
+      sessionId: "session-a",
+      taskRunId: "run-private",
+      toolCallId: "edit-recovery-1",
+      toolName: "edit",
+      targetPath: "src/private-target.ts",
+      isError: true,
+      reasonCode: "edit-anchor-stale",
+      outputChars: 9_999,
+      editRecoveryContext: true,
+      editRecoveryInjectedChars: 480,
+      editRecoveryEstimatedTokens: 220
+    })
+  );
+  const receipt = benchmarkCausalContextReceipt(events, { surface: "piagent", sessionId: "session-a" });
+  assert.equal(receipt.available, true);
+  assert.deepEqual(receipt.aggregates.editRecoveryContext, {
+    count: 1,
+    failuresObserved: 1,
+    suppressedFailures: 0,
+    injectedChars: 480,
+    injectedEstimatedTokens: 220,
+    evidenceCoverage: { status: "complete", observed: 1, comparable: 1, rate: 1 },
+    definition: "matched-edit-recovery-context-receipt-v1"
+  });
+  assert.notEqual(receipt.aggregates.editRecoveryContext.injectedChars, 10_479,
+    "original failed-tool output is not part of recovery injection totals");
+  assert.equal(validBenchmarkCausalContextReceipt(receipt, "piagent"), true);
+
+  const summary = summarizeBenchmarkCausalContextEvidence([
+    completedRecord("piagent", receipt),
+    completedRecord("piagent", benchmarkCausalContextReceipt(completeEvents("session-b"), { surface: "piagent", sessionId: "session-b" }))
+  ], { required: true });
+  assert.equal(summary.aggregates.editRecoveryContext.count, 1);
+  assert.equal(summary.aggregates.editRecoveryContext.failuresObserved, 1);
+  assert.equal(summary.aggregates.editRecoveryContext.suppressedFailures, 0);
+  assert.equal(summary.aggregates.editRecoveryContext.injectedChars, 480);
+  assert.equal(summary.aggregates.editRecoveryContext.injectedEstimatedTokens, 220);
+  assert.deepEqual(summary.aggregates.editRecoveryContext.evidenceCoverage, {
+    status: "complete",
+    runs: 2,
+    comparableRuns: 2,
+    rate: 1
+  });
+
+  const mismatched = events.map((event) => event.event === "tool_result" && event.toolCallId === "edit-recovery-1"
+    ? { ...event, editRecoveryEstimatedTokens: 221 }
+    : event);
+  const rejected = benchmarkCausalContextReceipt(mismatched, { surface: "piagent", sessionId: "session-a" });
+  assert.equal(rejected.available, false);
+  assert.ok(rejected.coverage.missingLanes.includes("edit-recovery-context"));
+});
+
+test("does not report a genuine zero-recovery lane without a versioned runtime capability marker", () => {
+  const legacyLike = completeEvents().filter((event) => event.event !== "session_start");
+  const receipt = benchmarkCausalContextReceipt(legacyLike, { surface: "piagent", sessionId: "session-a" });
+  assert.equal(receipt.available, false);
+  assert.equal(receipt.aggregates, null);
+  assert.ok(receipt.coverage.missingLanes.includes("edit-recovery-context"));
+});
+
+test("continues to validate already persisted schema-v1 Piagent causal receipts", () => {
+  const current = benchmarkCausalContextReceipt(completeEvents(), { surface: "piagent", sessionId: "session-a" });
+  const { editRecoveryContext: _recovery, ...legacyAggregates } = current.aggregates;
+  const legacy = {
+    ...current,
+    schemaVersion: 1,
+    evidenceSource: "context-telemetry-closed-aggregate-v1",
+    coverage: { ...current.coverage, observedLanes: 6, requiredLanes: 6, missingLanes: [] },
+    aggregates: legacyAggregates
+  };
+  assert.equal(validBenchmarkCausalContextReceipt(legacy, "piagent"), true);
+  assert.equal(completedBenchmarkRecord(completedRecord("piagent", legacy)), true);
+});
+
+test("requires an explicit recovery policy decision for every classified edit-anchor failure", () => {
+  const withoutDecision = completeEvents();
+  withoutDecision.splice(-1, 0, telemetryEvent({
+    event: "tool_result",
+    sessionId: "session-a",
+    taskRunId: "run-private",
+    toolCallId: "edit-suppressed-1",
+    toolName: "edit",
+    targetPath: "src/private-target.ts",
+    isError: true,
+    reasonCode: "edit-anchor-stale"
+  }));
+  const rejected = benchmarkCausalContextReceipt(withoutDecision, { surface: "piagent", sessionId: "session-a" });
+  assert.equal(rejected.available, false);
+  assert.ok(rejected.coverage.missingLanes.includes("edit-recovery-context"));
+
+  const classified = withoutDecision.map((event) => event.toolCallId === "edit-suppressed-1"
+    ? { ...event, editRecoveryContext: false }
+    : event);
+  const accepted = benchmarkCausalContextReceipt(classified, { surface: "piagent", sessionId: "session-a" });
+  assert.equal(accepted.available, true);
+  assert.equal(accepted.aggregates.editRecoveryContext.count, 0);
+  assert.equal(accepted.aggregates.editRecoveryContext.failuresObserved, 1);
+  assert.equal(accepted.aggregates.editRecoveryContext.suppressedFailures, 1);
 });
 
 test("context telemetry seals its provenance envelope after applying event fields", () => {
@@ -154,6 +283,7 @@ test("context telemetry seals its provenance envelope after applying event field
 
 test("treats a fully observed zero-selection criterion attempt as measured zero", () => {
   const receipt = benchmarkCausalContextReceipt([
+    telemetryEvent({ event: "session_start", sessionId: "session-zero", editRecoveryContextTelemetryVersion: 1 }),
     telemetryEvent({ event: "agent_prompt", sessionId: "session-zero", turnId: "turn-zero", managedInstructionsCompacted: false }),
     telemetryEvent({ event: "criterion_context_pack", sessionId: "session-zero", turnId: "turn-zero", selected: 0, candidates: 0, estimatedTokens: 0, reasonCode: "no-candidates" }),
     telemetryEvent({ event: "agent_settled", sessionId: "session-zero" })

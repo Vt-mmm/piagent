@@ -62,7 +62,16 @@ export function createPiHarness(options = {}) {
   let sessionName = options.sessionName ?? "";
   const pi = {
     on(name, handler) {
-      handlers.set(name, handler);
+      const previous = handlers.get(name);
+      if (!previous) {
+        handlers.set(name, handler);
+        return;
+      }
+      handlers.set(name, async (...args) => {
+        const previousResult = await previous(...args);
+        const nextResult = await handler(...args);
+        return nextResult === undefined ? previousResult : nextResult;
+      });
     },
     registerTool(tool) {
       tools.set(tool.name, tool);

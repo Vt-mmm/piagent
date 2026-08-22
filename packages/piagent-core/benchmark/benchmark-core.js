@@ -376,7 +376,7 @@ export function summarizeBenchmark({
     : null;
   const causalContextEvidence = summarizeBenchmarkCausalContextEvidence(candidateRuns, { required: requiresCausalContextReceipt });
   const causalContextEvidenceGate = requiresCausalContextReceipt
-    ? candidateSurface === "piagent" && causalContextEvidence.coverageStatus === "complete"
+    ? candidateSurface === "piagent" && causalContextEvidence.currentCoverageStatus === "complete"
     : null;
   const providerWireFailureCounts = {};
   if (requiresProviderWireSurface) {
@@ -657,8 +657,9 @@ export function summarizeBenchmark({
       providerWireRuns: candidateRuns.length,
       providerWireGroups: providerWireGroups.length,
       providerWireDriftGroups: providerWireDriftGroups.length,
-      causalContextAvailableRuns: causalContextEvidence.availableRuns,
-      causalContextRuns: causalContextEvidence.runs
+      causalContextAvailableRuns: causalContextEvidence.currentAvailableRuns,
+      causalContextRuns: causalContextEvidence.runs,
+      causalContextRequiredSchemaVersion: causalContextEvidence.requiredSchemaVersion
     }
   } : null;
   const baselineKey = surfaceReportKey(baselineSurface);

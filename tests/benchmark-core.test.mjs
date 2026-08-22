@@ -611,8 +611,8 @@ function causalContextReceipt(surface) {
     aggregates: null
   };
   return {
-    schemaVersion: 1,
-    evidenceSource: "context-telemetry-closed-aggregate-v1",
+    schemaVersion: 2,
+    evidenceSource: "context-telemetry-closed-aggregate-v2",
     applicability: "piagent",
     available: true,
     coverage: {
@@ -622,8 +622,8 @@ function causalContextReceipt(surface) {
       recoverableTailBytes: 0,
       criterionExpected: true,
       sessionEventsObserved: 10,
-      observedLanes: 6,
-      requiredLanes: 6,
+      observedLanes: 7,
+      requiredLanes: 7,
       missingLanes: []
     },
     aggregates: {
@@ -651,6 +651,15 @@ function causalContextReceipt(surface) {
         successfulCalls: 0,
         shellToolCallsObserved: 0,
         definition: "successful-direct-path-tool-call-v1"
+      },
+      editRecoveryContext: {
+        count: 0,
+        failuresObserved: 0,
+        suppressedFailures: 0,
+        injectedChars: 0,
+        injectedEstimatedTokens: 0,
+        evidenceCoverage: { status: "complete", observed: 0, comparable: 0, rate: 1 },
+        definition: "matched-edit-recovery-context-receipt-v1"
       },
       compaction: { eventsObserved: 0, state: "not-observed" },
       managedPrefix: { promptsObserved: 1, compactedPrompts: 1, state: "compacted" }
@@ -1207,11 +1216,36 @@ test("production release gate uses independent scenario families and the upper 9
   assert.equal(report.comparison.pairedQualityEvidence.comparablePairs, 9);
   assert.equal(report.comparison.productionGate.passed, true);
 
+  const historicalV1Runs = structuredClone(runs);
+  for (const run of historicalV1Runs.filter((item) => item.surface === "piagent")) {
+    run.causalContextReceipt.schemaVersion = 1;
+    run.causalContextReceipt.evidenceSource = "context-telemetry-closed-aggregate-v1";
+    run.causalContextReceipt.coverage.observedLanes = 6;
+    run.causalContextReceipt.coverage.requiredLanes = 6;
+    delete run.causalContextReceipt.aggregates.editRecoveryContext;
+  }
+  const historicalV1 = summarizeProductionBenchmark({
+    suite: testSuite,
+    runId: "historical-causal-v1",
+    startedAt: "2026-08-01T00:00:00.000Z",
+    completedAt: "2026-08-01T00:01:00.000Z",
+    repeats: 3,
+    environment,
+    runs: historicalV1Runs
+  });
+  assert.equal(historicalV1.comparison.causalContextEvidence.coverageStatus, "complete",
+    "historical v1 receipts remain readable as complete records");
+  assert.equal(historicalV1.comparison.causalContextEvidence.currentCoverageStatus, "unavailable",
+    "historical v1 receipts do not prove the current recovery capability");
+  assert.equal(historicalV1.comparison.causalContextEvidenceGate, false);
+  assert.equal(historicalV1.comparison.tokenClaimAllowed, false);
+  assert.ok(historicalV1.comparison.productionGate.failures.includes("causal-context-evidence"));
+
   const unavailableCausalRuns = structuredClone(runs);
   const unavailableReceipt = unavailableCausalRuns.find((item) => item.surface === "piagent").causalContextReceipt;
   unavailableReceipt.available = false;
   unavailableReceipt.coverage.status = "partial";
-  unavailableReceipt.coverage.observedLanes = 5;
+  unavailableReceipt.coverage.observedLanes = 6;
   unavailableReceipt.coverage.missingLanes = ["telemetry-window"];
   unavailableReceipt.aggregates = null;
   const unavailableCausal = summarizeProductionBenchmark({

@@ -25,6 +25,7 @@ import {
   buildSelectedContextPack,
   composeCriterionContextEntries
 } from "../packages/piagent-core/extensions/criterion-context-pack.js";
+import { extractJavaScriptModuleImports } from "../packages/piagent-core/extensions/context-import-links.js";
 import { buildPrefixTelemetry } from "../packages/piagent-core/runtime/context/prefix-telemetry.ts";
 import { injectionEfficiencyMetrics, readEfficiencyMetrics } from "../packages/piagent-core/extensions/context-efficiency-metrics.js";
 import { measureContextDeltaShadow } from "../packages/piagent-core/runtime/context/context-delta-shadow.ts";
@@ -187,6 +188,29 @@ test("builds an incremental local index and retrieves symbols with hybrid eviden
   assert.ok(search.results[0].sources.includes("symbol"));
   assert.ok(["high", "medium"].includes(search.confidence));
   assert.equal(search.results.some((result) => result.path === ".env"), false);
+
+  const explicitSearch = await searchContextIndexV2(cwd, "Inspect src/math.ts", {
+    limit: 8,
+    excludePatterns: []
+  });
+  const directImporter = explicitSearch.results.find((result) => result.path === "src/service.ts");
+  assert.ok(directImporter?.sources.includes("import"));
+  assert.deepEqual(directImporter?.links, [{ kind: "candidate-imports-explicit", path: "src/math.ts" }]);
+  const directTest = explicitSearch.results.find((result) => result.path === "tests/math.test.ts");
+  assert.ok(directTest?.sources.includes("import"));
+  assert.deepEqual(directTest?.links, [{ kind: "candidate-imports-explicit", path: "src/math.ts" }]);
+  const composed = composeCriterionContextEntries({
+    explicitPaths: ["src/math.ts"],
+    criteria: ["Preserve calculateInvoiceTotal and its focused behavior."],
+    plannedEntries: [{ path: "src/math.ts", reason: "criterion source" }],
+    plannedSelectionComplete: false,
+    retrievedItems: explicitSearch.results
+  }, { limit: 2 });
+  assert.deepEqual(composed.map((entry) => entry.path), ["src/math.ts", "tests/math.test.ts"]);
+
+  const importerSearch = await searchContextIndexV2(cwd, "Inspect src/service.ts", { limit: 8, excludePatterns: [] });
+  const directDependency = importerSearch.results.find((result) => result.path === "src/math.ts");
+  assert.deepEqual(directDependency?.links, [{ kind: "explicit-imports-candidate", path: "src/service.ts" }]);
 
   const status = await contextIndexV2Status(cwd, { excludePatterns: [] });
   assert.equal(status.exists, true);
@@ -685,6 +709,336 @@ test("falls back to one planned criterion source and its focused test when retri
     }, { limit: 4 });
     assert.deepEqual(entries.map((entry) => entry.path), ["src/invoice.ts", "tests/invoice.test.ts"]);
   }
+});
+
+test("delivers the sole scoped executable test and rejects unrelated retrieval for an explicit source", () => {
+  const entries = composeCriterionContextEntries({
+    explicitPaths: ["src/reliability/expiry.js"],
+    criteria: ["Reject malformed expiry values with TypeError and add durable focused coverage."],
+    plannedEntries: [
+      { path: "src/reliability/expiry.js", reason: "criterion-01 boundary target" },
+      { path: "test/smoke.test.js", reason: "criterion-01 test scope target" }
+    ],
+    plannedSelectionComplete: true,
+    retrievedItems: [
+      { path: "src/platform/workspace.js", sources: ["lexical"] }
+    ]
+  }, { limit: 3 });
+
+  assert.deepEqual(entries.map((entry) => entry.path), [
+    "src/reliability/expiry.js",
+    "test/smoke.test.js"
+  ]);
+  assert.match(entries[1].reason, /Sole proven scoped test target.*not acceptance proof/);
+});
+
+test("prefers a proven direct import neighbor over singleton fallback and rejects a symbol collision", () => {
+  const linked = composeCriterionContextEntries({
+    explicitPaths: ["src/backend/auth.js"],
+    criteria: ["Preserve canManage authorization behavior."],
+    plannedEntries: [
+      { path: "src/backend/auth.js", reason: "criterion source" },
+      { path: "test/smoke.test.js", reason: "test scope" }
+    ],
+    plannedSelectionComplete: true,
+    retrievedItems: [{
+      path: "lib/identity/tenant.js",
+      sources: ["import"],
+      links: [{ kind: "explicit-imports-candidate", path: "src/backend/auth.js" }]
+    }]
+  }, { limit: 2 });
+  assert.deepEqual(linked.map((entry) => entry.path), ["src/backend/auth.js", "lib/identity/tenant.js"]);
+
+  const collision = composeCriterionContextEntries({
+    explicitPaths: ["src/backend/auth.js"],
+    criteria: ["Preserve canManage authorization behavior."],
+    plannedEntries: [{ path: "src/backend/auth.js", reason: "criterion source" }],
+    plannedSelectionComplete: true,
+    retrievedItems: [{ path: "lib/identity/tenant.js", sources: ["symbol"] }]
+  }, { limit: 3 });
+  assert.deepEqual(collision.map((entry) => entry.path), ["src/backend/auth.js"]);
+
+  const sameStemCollision = composeCriterionContextEntries({
+    explicitPaths: ["src/a/user.ts"],
+    criteria: ["Preserve the user lookup."],
+    plannedEntries: [{ path: "src/a/user.ts", reason: "criterion source" }],
+    plannedSelectionComplete: true,
+    retrievedItems: [{ path: "src/b/user.ts", sources: ["symbol"] }]
+  }, { limit: 3 });
+  assert.deepEqual(sameStemCollision.map((entry) => entry.path), ["src/a/user.ts"]);
+
+  const sameStemTestCollision = composeCriterionContextEntries({
+    explicitPaths: ["src/a/user.ts"],
+    criteria: ["Preserve user lookup behavior."],
+    plannedEntries: [{ path: "src/a/user.ts", reason: "criterion source" }],
+    plannedSelectionComplete: false,
+    retrievedItems: [{ path: "packages/other/user.test.ts", sources: ["lexical"] }]
+  }, { limit: 3 });
+  assert.deepEqual(sameStemTestCollision.map((entry) => entry.path), ["src/a/user.ts"]);
+
+  const ownerPair = (source, focusedTest) => composeCriterionContextEntries({
+    explicitPaths: [source],
+    criteria: ["Preserve lookup behavior with focused coverage."],
+    plannedEntries: [{ path: source, reason: "criterion source" }],
+    plannedSelectionComplete: false,
+    retrievedItems: [{ path: focusedTest, sources: ["lexical"] }]
+  }, { limit: 3 }).map((entry) => entry.path);
+  assert.deepEqual(ownerPair("src/user.ts", "tests/user.test.ts"), ["src/user.ts", "tests/user.test.ts"]);
+  assert.deepEqual(ownerPair("src/user.ts", "tests/unrelated.test.ts"), ["src/user.ts"]);
+  assert.deepEqual(ownerPair("packages/team/a/src/user.ts", "packages/team/a/tests/user.test.ts"), [
+    "packages/team/a/src/user.ts", "packages/team/a/tests/user.test.ts"
+  ]);
+  assert.deepEqual(ownerPair("packages/team/a/src/user.ts", "packages/team/b/tests/user.test.ts"), ["packages/team/a/src/user.ts"]);
+  assert.deepEqual(ownerPair("src/features/a/user.ts", "tests/features/b/user.test.ts"), ["src/features/a/user.ts"]);
+  assert.deepEqual(ownerPair("apps/foo/src/user.ts", "packages/foo/tests/user.test.ts"), ["apps/foo/src/user.ts"]);
+  assert.deepEqual(ownerPair("packages/lib/src/user.ts", "packages/lib/tests/user.test.ts"), [
+    "packages/lib/src/user.ts", "packages/lib/tests/user.test.ts"
+  ]);
+  assert.deepEqual(ownerPair("packages/app/src/user.ts", "packages/test/src/user.test.ts"), ["packages/app/src/user.ts"]);
+  assert.deepEqual(ownerPair("packages/lib/src/user.ts", "packages/tests/src/user.test.ts"), ["packages/lib/src/user.ts"]);
+  assert.deepEqual(ownerPair("apps/app/src/user.ts", "apps/test/src/user.test.ts"), ["apps/app/src/user.ts"]);
+  assert.deepEqual(ownerPair("modules/lib/src/user.ts", "modules/lib/tests/user.test.ts"), [
+    "modules/lib/src/user.ts", "modules/lib/tests/user.test.ts"
+  ]);
+  assert.deepEqual(ownerPair("modules/app/src/user.ts", "modules/test/src/user.test.ts"), ["modules/app/src/user.ts"]);
+  assert.deepEqual(ownerPair("packages/src/lib/user.ts", "packages/lib/src/user.test.ts"), ["packages/src/lib/user.ts"]);
+  assert.deepEqual(ownerPair("apps/src/lib/user.ts", "apps/lib/src/user.test.ts"), ["apps/src/lib/user.ts"]);
+  assert.deepEqual(ownerPair("modules/src/lib/user.ts", "modules/lib/src/user.test.ts"), ["modules/src/lib/user.ts"]);
+  assert.deepEqual(ownerPair("packages/spec/lib/user.ts", "packages/lib/spec/user.test.ts"), ["packages/spec/lib/user.ts"]);
+  assert.deepEqual(ownerPair("packages/foo/lib/src/user.ts", "packages/foo/src/lib/user.test.ts"), ["packages/foo/lib/src/user.ts"]);
+  assert.deepEqual(ownerPair("packages/foo/app/src/user.ts", "packages/foo/src/app/user.test.ts"), ["packages/foo/app/src/user.ts"]);
+  assert.deepEqual(ownerPair("services/foo/lib/src/user.ts", "services/foo/src/lib/user.test.ts"), ["services/foo/lib/src/user.ts"]);
+  assert.deepEqual(ownerPair("lib/src/user.ts", "src/lib/user.test.ts"), ["lib/src/user.ts"]);
+  assert.deepEqual(ownerPair("app/src/user.ts", "src/app/user.test.ts"), ["app/src/user.ts"]);
+  assert.deepEqual(ownerPair("packages/lib/src/user.ts", "packages/lib/tests/user.test.ts"), [
+    "packages/lib/src/user.ts", "packages/lib/tests/user.test.ts"
+  ]);
+  assert.deepEqual(ownerPair("src/lib/user.ts", "tests/lib/user.test.ts"), ["src/lib/user.ts", "tests/lib/user.test.ts"]);
+  assert.deepEqual(ownerPair("src/app/user.ts", "tests/app/user.test.ts"), ["src/app/user.ts", "tests/app/user.test.ts"]);
+  assert.deepEqual(ownerPair("packages/foo/src/lib/user.ts", "packages/foo/tests/lib/user.test.ts"), [
+    "packages/foo/src/lib/user.ts", "packages/foo/tests/lib/user.test.ts"
+  ]);
+
+  const directlyLinkedTest = composeCriterionContextEntries({
+    explicitPaths: ["src/data/csv.js"],
+    criteria: ["Throw SyntaxError for malformed CSV."],
+    plannedEntries: [{ path: "src/data/csv.js", reason: "criterion source" }],
+    plannedSelectionComplete: false,
+    retrievedItems: [{
+      path: "test/parser.test.js",
+      sources: ["import"],
+      links: [{ kind: "candidate-imports-explicit", path: "src/data/csv.js" }]
+    }]
+  }, { limit: 2 });
+  assert.deepEqual(directlyLinkedTest.map((entry) => entry.path), ["src/data/csv.js", "test/parser.test.js"]);
+});
+
+test("does not promote directory-qualified basename collisions or bare package imports", async (t) => {
+  const cwd = fixture();
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(cwd, "src", "a"), { recursive: true });
+  fs.mkdirSync(path.join(cwd, "src", "b"), { recursive: true });
+  fs.mkdirSync(path.join(cwd, "packages", "nested", "src", "a"), { recursive: true });
+  fs.mkdirSync(path.join(cwd, "lib"), { recursive: true });
+  fs.writeFileSync(path.join(cwd, "src", "a", "config.ts"), "export const aConfig = true;\n");
+  fs.writeFileSync(path.join(cwd, "src", "b", "config.ts"), "export const bConfig = true;\n");
+  fs.writeFileSync(path.join(cwd, "packages", "nested", "src", "a", "config.ts"), "export const nestedConfig = true;\n");
+  fs.writeFileSync(path.join(cwd, "src", "controller.ts"), "import express from 'express'; export const app = express;\n");
+  fs.writeFileSync(path.join(cwd, "lib", "express.ts"), "export const localExpress = true;\n");
+  await buildContextIndexV2(cwd, { excludePatterns: [] });
+
+  const qualified = await searchContextIndexV2(cwd, "Inspect src/a/config.ts", { limit: 12, excludePatterns: [] });
+  assert.ok(qualified.results.find((entry) => entry.path === "src/a/config.ts")?.sources.includes("explicit"));
+  assert.equal(qualified.results.find((entry) => entry.path === "src/b/config.ts")?.sources.includes("explicit") ?? false, false);
+  assert.equal(qualified.results.find((entry) => entry.path === "packages/nested/src/a/config.ts")?.sources.includes("explicit") ?? false, false);
+  const composed = composeCriterionContextEntries({
+    explicitPaths: ["src/a/config.ts"],
+    criteria: ["Change only src/a/config.ts and preserve its behavior."],
+    plannedEntries: [{ path: "src/a/config.ts", reason: "criterion source" }],
+    plannedSelectionComplete: false,
+    retrievedItems: qualified.results
+  }, { limit: 4 });
+  assert.deepEqual(composed.map((entry) => entry.path), ["src/a/config.ts"]);
+
+  const packageImport = await searchContextIndexV2(cwd, "Inspect src/controller.ts", { limit: 12, excludePatterns: [] });
+  const localCollision = packageImport.results.find((entry) => entry.path === "lib/express.ts");
+  assert.equal(localCollision?.sources.includes("import") ?? false, false);
+  assert.deepEqual(localCollision?.links ?? [], []);
+});
+
+test("derives direct import links only from executable JavaScript module syntax", async (t) => {
+  const cwd = fixture();
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(cwd, "src"), { recursive: true });
+  fs.writeFileSync(path.join(cwd, "src", "target.ts"), [
+    "// import { commented } from './commented';",
+    "const documentation = \"require('./documented')\";",
+    "const template = `import('./templated')`;",
+    "const templateExpression = `${import('./template-expression')}`;",
+    "const pattern = /import\(\".\\/regex-decoy\"\)/;",
+    "if (true) /import(\".\\/control-regex-decoy\")/.test('');",
+    "const afterBlockComment = true ? /* erased before regex classification */ /import(\".\\/block-regex-decoy\")/ : /unused/;",
+    "if (true) {} /import(\".\\/block-close-regex-decoy\")/;",
+    "/* const ignored = import('./blocked'); */",
+    "import { esm } from './esm';",
+    "import './side-effect';",
+    "const cjs = require('./cjs');",
+    "const dynamic = import('./dynamic');",
+    "export { reexported } from './reexported';",
+    "export const target = { esm, cjs, dynamic };"
+  ].join("\n"));
+  for (const name of ["commented", "documented", "templated", "template-expression", "regex-decoy", "control-regex-decoy", "block-regex-decoy", "block-close-regex-decoy", "blocked", "esm", "side-effect", "cjs", "dynamic", "reexported"]) {
+    fs.writeFileSync(path.join(cwd, "src", `${name}.ts`), `export const ${name.replaceAll("-", "_")} = true;\n`);
+  }
+  await buildContextIndexV2(cwd, { excludePatterns: [] });
+
+  const result = await searchContextIndexV2(cwd, "Inspect src/target.ts", { limit: 20, excludePatterns: [] });
+  const direct = new Set(result.results
+    .filter((entry) => entry.links?.some((link) => link.path === "src/target.ts"))
+    .map((entry) => entry.path));
+  assert.deepEqual([...direct].sort(), [
+    "src/cjs.ts", "src/dynamic.ts", "src/esm.ts", "src/reexported.ts", "src/side-effect.ts", "src/template-expression.ts"
+  ]);
+  for (const decoy of ["src/blocked.ts", "src/commented.ts", "src/documented.ts", "src/templated.ts", "src/regex-decoy.ts", "src/control-regex-decoy.ts", "src/block-regex-decoy.ts", "src/block-close-regex-decoy.ts"]) {
+    assert.equal(direct.has(decoy), false);
+  }
+});
+
+test("does not treat JSX text or a shadowed require binding as a module edge", async (t) => {
+  const cwd = fixture();
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(cwd, "src"), { recursive: true });
+  fs.writeFileSync(path.join(cwd, "src", "view.tsx"), [
+    "const require = (value: string) => value;",
+    "const shadowed = require('./shadowed');",
+    "export const View = () => <section>",
+    "  import(\"./jsx-text\")",
+    "  <span>require(\"./nested-jsx-text\")</span>",
+    "  {import('./jsx-expression')}",
+    "</section>;"
+  ].join("\n"));
+  for (const name of ["shadowed", "jsx-text", "nested-jsx-text", "jsx-expression"]) {
+    fs.writeFileSync(path.join(cwd, "src", `${name}.ts`), `export const ${name.replaceAll("-", "_")} = true;\n`);
+  }
+  await buildContextIndexV2(cwd, { excludePatterns: [] });
+
+  const result = await searchContextIndexV2(cwd, "Inspect src/view.tsx", { limit: 20, excludePatterns: [] });
+  const direct = new Set(result.results
+    .filter((entry) => entry.links?.some((link) => link.path === "src/view.tsx"))
+    .map((entry) => entry.path));
+  assert.deepEqual([...direct], ["src/jsx-expression.ts"]);
+});
+
+test("classifies a large JSX text corpus without rescanning from byte zero per import decoy", () => {
+  const rows = ["export const View = () => <section>"];
+  for (let index = 0; index < 8_000; index += 1) rows.push(`import(\"./decoy-${index}\")`);
+  rows.push("{import('./live')}", "</section>;");
+  const startedAt = performance.now();
+  const imports = extractJavaScriptModuleImports(rows.join("\n"), { jsx: true });
+  const elapsed = performance.now() - startedAt;
+  assert.deepEqual(imports, [{ specifier: "./live", line: 8_002 }]);
+  assert.ok(elapsed < 1_500, `large JSX lexical classification took ${elapsed.toFixed(1)}ms`);
+});
+
+test("fails closed when imports or compound assignments shadow CommonJS require", () => {
+  const specifiers = (source) => extractJavaScriptModuleImports(source).map((entry) => entry.specifier);
+  assert.deepEqual(specifiers([
+    "const value = `raw import('./raw-decoy') ${flag ? import('./live') : `nested ${import('./nested-live')}`}`;",
+    "const escaped = `\\${import('./escaped-decoy')}`;"
+  ].join("\n")), ["./live", "./nested-live"]);
+  assert.deepEqual(specifiers("const malformed = `${import('./unclosed')"), []);
+  assert.deepEqual(specifiers("import require from './shim'; require('./decoy');"), ["./shim"]);
+  assert.deepEqual(specifiers("import { require } from './shim'; require('./decoy');"), ["./shim"]);
+  assert.deepEqual(specifiers("import { loader as require } from './shim'; require('./decoy');"), ["./shim"]);
+  for (const operator of ["||=", "??=", "&&=", "+=", "**="]) {
+    assert.deepEqual(specifiers(`require ${operator} loader; require('./decoy');`), []);
+  }
+});
+
+test("ignores script-tag examples inside Vue comments while retaining the live SFC script", async (t) => {
+  const cwd = fixture();
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(cwd, "src"), { recursive: true });
+  fs.writeFileSync(path.join(cwd, "src", "component.vue"), [
+    "<!--",
+    "<script>import { decoy } from './vue-decoy';</script>",
+    "-->",
+    "<script setup lang=\"ts\">",
+    "import { live } from './vue-live';",
+    "</script>",
+    "<template><p>{{ live }}</p></template>"
+  ].join("\n"));
+  fs.writeFileSync(path.join(cwd, "src", "vue-decoy.ts"), "export const decoy = true;\n");
+  fs.writeFileSync(path.join(cwd, "src", "vue-live.ts"), "export const live = true;\n");
+  await buildContextIndexV2(cwd, { excludePatterns: [] });
+
+  const result = await searchContextIndexV2(cwd, "Inspect src/component.vue", { limit: 20, excludePatterns: [] });
+  const direct = new Set(result.results
+    .filter((entry) => entry.links?.some((link) => link.path === "src/component.vue"))
+    .map((entry) => entry.path));
+  assert.deepEqual([...direct], ["src/vue-live.ts"]);
+});
+
+test("does not guess among incomplete or multiple scoped tests or treat setup and neutral fixtures as executable", () => {
+  const common = {
+    explicitPaths: ["src/data/csv.js"],
+    criteria: ["Throw SyntaxError for malformed CSV and add durable focused coverage."],
+    retrievedItems: []
+  };
+  const ambiguous = composeCriterionContextEntries({
+    ...common,
+    plannedSelectionComplete: true,
+    plannedEntries: [
+      { path: "src/data/csv.js", reason: "criterion source" },
+      { path: "test/a.test.js", reason: "test scope" },
+      { path: "test/b.test.js", reason: "test scope" }
+    ]
+  }, { limit: 4 });
+  assert.deepEqual(ambiguous.map((entry) => entry.path), ["src/data/csv.js"]);
+
+  const neutral = composeCriterionContextEntries({
+    ...common,
+    plannedSelectionComplete: true,
+    plannedEntries: [
+      { path: "src/data/csv.js", reason: "criterion source" },
+      { path: "test/README.md", reason: "test scope" }
+    ]
+  }, { limit: 4 });
+  assert.deepEqual(neutral.map((entry) => entry.path), ["src/data/csv.js"]);
+
+  const setup = composeCriterionContextEntries({
+    ...common,
+    plannedSelectionComplete: true,
+    plannedEntries: [
+      { path: "src/data/csv.js", reason: "criterion source" },
+      { path: "test/setup.js", reason: "test scope" }
+    ]
+  }, { limit: 4 });
+  assert.deepEqual(setup.map((entry) => entry.path), ["src/data/csv.js"]);
+
+  const truncated = composeCriterionContextEntries({
+    ...common,
+    plannedSelectionComplete: false,
+    plannedEntries: [
+      { path: "src/data/csv.js", reason: "criterion source" },
+      { path: "test/visible.test.js", reason: "truncated test scope" }
+    ]
+  }, { limit: 4 });
+  assert.deepEqual(truncated.map((entry) => entry.path), ["src/data/csv.js"]);
+});
+
+test("chooses a proven singleton test before a weak retrieved test match", () => {
+  const entries = composeCriterionContextEntries({
+    explicitPaths: ["src/feature/value.js"],
+    criteria: ["Reject malformed values and add durable focused coverage."],
+    plannedEntries: [
+      { path: "src/feature/value.js", reason: "criterion source" },
+      { path: "test/smoke.test.js", reason: "test scope" }
+    ],
+    plannedSelectionComplete: true,
+    retrievedItems: [{ path: "src/feature/unrelated.test.js", sources: ["lexical"] }]
+  }, { limit: 2 });
+  assert.deepEqual(entries.map((entry) => entry.path), ["src/feature/value.js", "test/smoke.test.js"]);
 });
 
 test("uses a current bounded snippet with a complete receipt when an explicit target is large", (t) => {
@@ -1349,6 +1703,78 @@ test("reports partial duplicate-output evidence instead of rewarding unclassifie
   assert.equal(report.metrics.contextWasteScore, null);
   assert.equal(typeof report.metrics.contextWasteScoreEstimate, "number");
   assert.match(report.recommendations.join("\n"), /tool-result telemetry coverage is incomplete/i);
+});
+
+test("aggregates edit recovery context independently with explicit evidence coverage", (t) => {
+  const cwd = fixture();
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  appendContextTelemetry(cwd, {
+    event: "session_start",
+    sessionId: "session-a",
+    editRecoveryContextTelemetryVersion: 1
+  });
+  appendContextTelemetry(cwd, { event: "tool_result", toolName: "edit", outputChars: 40, repeated: false });
+  appendContextTelemetry(cwd, {
+    event: "edit_recovery_context",
+    sessionId: "session-a",
+    taskRunId: "task-a",
+    toolCallId: "edit-a",
+    targetPath: "src/value.ts",
+    contentHash: "a".repeat(64),
+    originalChars: 240,
+    injectedChars: 400,
+    injectedEstimatedTokens: 180,
+    sensitiveContentRedacted: false
+  });
+  appendContextTelemetry(cwd, {
+    event: "tool_result",
+    sessionId: "session-a",
+    taskRunId: "task-a",
+    toolCallId: "edit-a",
+    toolName: "edit",
+    targetPath: "src/value.ts",
+    isError: true,
+    reasonCode: "edit-anchor-stale",
+    editRecoveryContext: true,
+    editRecoveryInjectedChars: 400,
+    editRecoveryEstimatedTokens: 180
+  });
+  appendContextTelemetry(cwd, {
+    event: "edit_recovery_context",
+    sessionId: "session-a",
+    taskRunId: "task-a",
+    toolCallId: "edit-orphan",
+    targetPath: "src/orphan.ts",
+    contentHash: "b".repeat(64),
+    originalChars: 100,
+    injectedChars: 200,
+    injectedEstimatedTokens: 80,
+    sensitiveContentRedacted: false
+  });
+
+  const report = buildContextEfficiencyReport(cwd);
+  assert.equal(report.sample.editRecoveryContexts, 2);
+  assert.equal(report.metrics.editRecoveryContextCount, 1);
+  assert.equal(report.metrics.editRecoveryInjectedChars, 400);
+  assert.equal(report.metrics.editRecoveryEstimatedTokens, 180);
+  assert.equal(report.metrics.editRecoveryFailures, 1);
+  assert.equal(report.metrics.comparableEditRecoveryFailures, 1);
+  assert.equal(report.metrics.editRecoverySuppressedFailures, 0);
+  assert.equal(report.metrics.outputChars, 40, "recovery context must not be folded into original tool output");
+  assert.deepEqual(report.coverage.editRecoveryContexts, {
+    status: "partial",
+    observed: 2,
+    comparable: 1,
+    rate: 0.5
+  });
+  assert.deepEqual(report.coverage.editRecoveryFailures, {
+    status: "complete",
+    observed: 1,
+    comparable: 1,
+    rate: 1
+  });
+  assert.match(report.recommendations.join("\n"), /Edit-recovery telemetry coverage is incomplete/i);
+  assert.match(report.methodology.editRecoveryMetrics, /receipt\/tool_result pair/);
 });
 
 test("reports partial injection-item coverage independently from complete receipt coverage", (t) => {

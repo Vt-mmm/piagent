@@ -1,7 +1,8 @@
 const benchmarkSurfaces = new Set(["raw-pi", "piagent", "codex-cli"]);
-const causalCoverageLanes = new Set([
+const causalCoverageLanesV1 = new Set([
   "telemetry-window", "session-lifecycle", "criterion-initial-pack", "pack-lifecycle", "direct-fallback-rereads", "managed-prefix"
 ]);
+const causalCoverageLanesV2 = new Set([...causalCoverageLanesV1, "edit-recovery-context"]);
 const causalMaximumAggregate = 1_000_000_000;
 
 function exactKeys(value, keys) {
@@ -37,8 +38,25 @@ function validCriterionAggregate(value, aggregate) {
     && value.estimatedTokens <= aggregate.estimatedTokens.offered;
 }
 
-function validCausalAggregates(value, criterionExpected) {
-  if (!exactKeys(value, ["packCounts", "estimatedTokens", "selectedItemEstimatedTokens", "selectedItemCounts", "criterionInitialPack", "directFallbackRereads", "compaction", "managedPrefix"])
+function validEditRecoveryAggregate(value) {
+  if (!exactKeys(value, ["count", "failuresObserved", "suppressedFailures", "injectedChars", "injectedEstimatedTokens", "evidenceCoverage", "definition"])
+    || ![value.count, value.failuresObserved, value.suppressedFailures, value.injectedChars, value.injectedEstimatedTokens].every(boundedInteger)
+    || value.failuresObserved !== value.count + value.suppressedFailures
+    || !exactKeys(value.evidenceCoverage, ["status", "observed", "comparable", "rate"])
+    || value.evidenceCoverage.status !== "complete"
+    || ![value.evidenceCoverage.observed, value.evidenceCoverage.comparable].every(boundedInteger)
+    || value.evidenceCoverage.observed !== value.count || value.evidenceCoverage.comparable !== value.count
+    || value.evidenceCoverage.rate !== 1
+    || value.definition !== "matched-edit-recovery-context-receipt-v1") return false;
+  return value.count === 0
+    ? value.injectedChars === 0 && value.injectedEstimatedTokens === 0
+    : value.injectedChars > 0 && value.injectedEstimatedTokens > 0;
+}
+
+function validCausalAggregates(value, criterionExpected, schemaVersion) {
+  const expectedKeys = ["packCounts", "estimatedTokens", "selectedItemEstimatedTokens", "selectedItemCounts", "criterionInitialPack", "directFallbackRereads", "compaction", "managedPrefix"];
+  if (schemaVersion === 2) expectedKeys.splice(6, 0, "editRecoveryContext");
+  if (!exactKeys(value, expectedKeys)
     || !validCausalTriplet(value.packCounts)
     || !validCausalTriplet(value.estimatedTokens)
     || !validCausalTriplet(value.selectedItemEstimatedTokens)
@@ -55,7 +73,8 @@ function validCausalAggregates(value, criterionExpected) {
     || !boundedInteger(value.managedPrefix.promptsObserved) || value.managedPrefix.promptsObserved === 0
     || !boundedInteger(value.managedPrefix.compactedPrompts)
     || value.managedPrefix.compactedPrompts > value.managedPrefix.promptsObserved
-    || !["compacted", "uncompacted", "mixed"].includes(value.managedPrefix.state)) return false;
+    || !["compacted", "uncompacted", "mixed"].includes(value.managedPrefix.state)
+    || (schemaVersion === 2 && !validEditRecoveryAggregate(value.editRecoveryContext))) return false;
   const compacted = value.managedPrefix.compactedPrompts;
   const prompts = value.managedPrefix.promptsObserved;
   const expectedState = compacted === 0 ? "uncompacted" : compacted === prompts ? "compacted" : "mixed";
@@ -66,28 +85,30 @@ function validCausalAggregates(value, criterionExpected) {
 
 export function validBenchmarkCausalContextReceipt(receipt, surface) {
   if (!exactKeys(receipt, ["schemaVersion", "evidenceSource", "applicability", "available", "coverage", "aggregates"])
-    || receipt.schemaVersion !== 1 || typeof receipt.available !== "boolean"
+    || ![1, 2].includes(receipt.schemaVersion) || typeof receipt.available !== "boolean"
     || !exactKeys(receipt.coverage, ["status", "telemetryTruncated", "telemetryIntegrityFailures", "recoverableTailBytes", "criterionExpected", "sessionEventsObserved", "observedLanes", "requiredLanes", "missingLanes"])) return false;
   const coverage = receipt.coverage;
-  if (surface !== "piagent") return receipt.evidenceSource === "not-applicable"
+  if (surface !== "piagent") return receipt.schemaVersion === 1 && receipt.evidenceSource === "not-applicable"
     && receipt.applicability === "not-applicable" && receipt.available === false && receipt.aggregates === null
     && coverage.status === "not-applicable" && coverage.telemetryTruncated === false
     && coverage.telemetryIntegrityFailures === 0 && coverage.recoverableTailBytes === 0
     && coverage.criterionExpected === false && coverage.sessionEventsObserved === 0
     && coverage.observedLanes === 0 && coverage.requiredLanes === 0
     && Array.isArray(coverage.missingLanes) && coverage.missingLanes.length === 0;
-  if (receipt.evidenceSource !== "context-telemetry-closed-aggregate-v1" || receipt.applicability !== "piagent"
+  const coverageLanes = receipt.schemaVersion === 2 ? causalCoverageLanesV2 : causalCoverageLanesV1;
+  const evidenceSource = `context-telemetry-closed-aggregate-v${receipt.schemaVersion}`;
+  if (receipt.evidenceSource !== evidenceSource || receipt.applicability !== "piagent"
     || typeof coverage.telemetryTruncated !== "boolean" || typeof coverage.criterionExpected !== "boolean"
     || ![coverage.telemetryIntegrityFailures, coverage.recoverableTailBytes, coverage.sessionEventsObserved,
       coverage.observedLanes, coverage.requiredLanes].every(boundedInteger)
-    || coverage.requiredLanes !== causalCoverageLanes.size || !Array.isArray(coverage.missingLanes)
+    || coverage.requiredLanes !== coverageLanes.size || !Array.isArray(coverage.missingLanes)
     || new Set(coverage.missingLanes).size !== coverage.missingLanes.length
-    || coverage.missingLanes.some((lane) => !causalCoverageLanes.has(lane))
+    || coverage.missingLanes.some((lane) => !coverageLanes.has(lane))
     || coverage.observedLanes + coverage.missingLanes.length !== coverage.requiredLanes) return false;
   if (receipt.available) return coverage.status === "complete" && coverage.missingLanes.length === 0
     && coverage.telemetryTruncated === false && coverage.telemetryIntegrityFailures === 0
     && coverage.recoverableTailBytes === 0 && coverage.sessionEventsObserved > 0
-    && validCausalAggregates(receipt.aggregates, coverage.criterionExpected);
+    && validCausalAggregates(receipt.aggregates, coverage.criterionExpected, receipt.schemaVersion);
   return ["partial", "unavailable"].includes(coverage.status)
     && coverage.missingLanes.length > 0 && receipt.aggregates === null;
 }
@@ -99,7 +120,10 @@ export function summarizeBenchmarkCausalContextEvidence(runs, { required = false
     && run.causalContextReceipt.coverage.status === "complete"
     && run.causalContextReceipt.aggregates);
   const fullyCovered = piagentRuns.length > 0 && complete.length === piagentRuns.length;
+  const recoveryComplete = complete.filter((run) => run.causalContextReceipt.schemaVersion === 2);
+  const recoveryFullyCovered = fullyCovered && recoveryComplete.length === piagentRuns.length;
   const sum = (select) => complete.reduce((total, run) => total + select(run.causalContextReceipt.aggregates), 0);
+  const sumRecovery = (select) => recoveryComplete.reduce((total, run) => total + select(run.causalContextReceipt.aggregates.editRecoveryContext), 0);
   const triplet = (field) => Object.fromEntries(["offered", "delivered", "injected"]
     .map((lane) => [lane, sum((value) => value[field][lane])]));
   const criterion = fullyCovered ? complete.reduce((total, run) => {
@@ -122,6 +146,10 @@ export function summarizeBenchmarkCausalContextEvidence(runs, { required = false
     availableRuns: complete.length,
     unavailableRuns: piagentRuns.length - complete.length,
     coverageStatus: fullyCovered ? "complete" : complete.length > 0 ? "partial" : "unavailable",
+    requiredSchemaVersion: 2,
+    currentAvailableRuns: recoveryComplete.length,
+    currentUnavailableRuns: piagentRuns.length - recoveryComplete.length,
+    currentCoverageStatus: recoveryFullyCovered ? "complete" : recoveryComplete.length > 0 ? "partial" : "unavailable",
     aggregates: fullyCovered ? {
       packCounts: triplet("packCounts"),
       estimatedTokens: triplet("estimatedTokens"),
@@ -132,6 +160,20 @@ export function summarizeBenchmarkCausalContextEvidence(runs, { required = false
         successfulCalls: sum((value) => value.directFallbackRereads.successfulCalls),
         shellToolCallsObserved: sum((value) => value.directFallbackRereads.shellToolCallsObserved),
         definition: "successful-direct-path-tool-call-v1"
+      },
+      editRecoveryContext: {
+        count: recoveryFullyCovered ? sumRecovery((value) => value.count) : null,
+        failuresObserved: recoveryFullyCovered ? sumRecovery((value) => value.failuresObserved) : null,
+        suppressedFailures: recoveryFullyCovered ? sumRecovery((value) => value.suppressedFailures) : null,
+        injectedChars: recoveryFullyCovered ? sumRecovery((value) => value.injectedChars) : null,
+        injectedEstimatedTokens: recoveryFullyCovered ? sumRecovery((value) => value.injectedEstimatedTokens) : null,
+        evidenceCoverage: {
+          status: recoveryFullyCovered ? "complete" : recoveryComplete.length > 0 ? "partial" : "unavailable",
+          runs: piagentRuns.length,
+          comparableRuns: recoveryComplete.length,
+          rate: piagentRuns.length > 0 ? recoveryComplete.length / piagentRuns.length : 0
+        },
+        definition: "matched-edit-recovery-context-receipt-v1"
       },
       compactionEventsObserved: sum((value) => value.compaction.eventsObserved),
       managedPrefixPromptsObserved: sum((value) => value.managedPrefix.promptsObserved),

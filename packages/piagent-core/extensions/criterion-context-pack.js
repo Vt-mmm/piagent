@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { estimateContextTokens, shouldIndexPath } from "./context-engine.js";
+import { acceptanceLanguageAdapterForPath } from "./acceptance-language-adapters.js";
 import { matchesProtectedPath } from "./policy-core.js";
 import { redactSensitiveProjectFileText } from "../security/sensitive-data.js";
 
@@ -28,6 +29,33 @@ function testPath(value) {
   return /(^|\/)(?:test|tests|spec|__tests__)(\/|$)|(?:\.test|\.spec|_test)\.[^/]+$/i.test(value);
 }
 
+function executablePlannedTest(candidate, plannedPaths, plannedSelectionComplete) {
+  const basename = path.posix.basename(candidate.path);
+  return testPath(candidate.path)
+    && plannedPaths.has(candidate.path)
+    && plannedSelectionComplete
+    && acceptanceLanguageAdapterForPath(candidate.path).disposition === "supported"
+    && !/\.d\.[cm]?ts$/i.test(candidate.path)
+    && /(?:^|[._-])(?:test|tests|spec)(?:[._-]|$)/i.test(basename);
+}
+
+const DIRECT_EXPLICIT_LINK_KINDS = new Set(["explicit-imports-candidate", "candidate-imports-explicit"]);
+
+function normalizedLinks(value) {
+  const seen = new Set();
+  const links = [];
+  for (const entry of Array.isArray(value) ? value : []) {
+    const kind = String(entry?.kind ?? "").trim().toLowerCase();
+    const linkedPath = relativePath(entry?.path);
+    const key = `${kind}\0${linkedPath}`;
+    if (!DIRECT_EXPLICIT_LINK_KINDS.has(kind) || !linkedPath || seen.has(key)) continue;
+    seen.add(key);
+    links.push({ kind, path: linkedPath });
+    if (links.length >= 20) break;
+  }
+  return links;
+}
+
 const GENERIC_STEMS = new Set([
   "app", "code", "common", "component", "core", "file", "helper", "index", "lib", "main", "module",
   "service", "source", "spec", "src", "test", "tests", "type", "types", "util", "utils"
@@ -44,8 +72,8 @@ function pathTerms(value) {
 function textExplicitlyReferencesPath(text, filePath) {
   const lower = String(text ?? "").toLowerCase().replaceAll("\\", "/");
   const normalized = filePath.toLowerCase();
-  const basename = path.posix.basename(normalized);
-  return lower.includes(normalized) || (basename.length >= 5 && lower.includes(basename));
+  const escaped = normalized.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?:^|[^\\p{L}\\p{N}_.@/\\\\-])${escaped}(?![\\p{L}\\p{N}_.@/\\\\-])`, "u").test(lower);
 }
 
 function textReferencesPath(text, filePath) {
@@ -60,13 +88,33 @@ function sharedPathTerms(left, right) {
   return pathTerms(left).filter((term) => rightTerms.has(term)).length;
 }
 
+const STRONG_CONTENT_ROOT_SEGMENTS = new Set(["src", "spec", "test", "tests", "__tests__"]);
+const WEAK_CONTENT_ROOT_SEGMENTS = new Set(["app", "lib"]);
+const MONOREPO_CONTAINER_SEGMENTS = new Set(["apps", "examples", "modules", "packages", "services"]);
+
+function ownerChain(value) {
+  const directories = value.split("/").slice(0, -1);
+  const contentSearchStart = directories.length >= 2 && MONOREPO_CONTAINER_SEGMENTS.has(directories[0].toLowerCase()) ? 2 : 0;
+  // Use the first plausible content root after any fixed container/package
+  // prefix. Preferring a later `src` over an earlier `lib` aliases
+  // `pkg/lib/src` with `pkg/src/lib`, including in a single-package layout.
+  const contentRoot = directories.findIndex((part, index) => index >= contentSearchStart
+    && (STRONG_CONTENT_ROOT_SEGMENTS.has(part.toLowerCase()) || WEAK_CONTENT_ROOT_SEGMENTS.has(part.toLowerCase())));
+  if (contentRoot < contentSearchStart) return directories;
+  return [...directories.slice(0, contentRoot), ...directories.slice(contentRoot + 1)];
+}
+
 function commonDirectoryDepth(left, right) {
-  const ignored = new Set(["app", "lib", "src", "spec", "test", "tests", "__tests__"]);
-  const leftParts = left.split("/").slice(0, -1).filter((part) => !ignored.has(part.toLowerCase()));
-  const rightParts = right.split("/").slice(0, -1).filter((part) => !ignored.has(part.toLowerCase()));
+  const leftParts = ownerChain(left), rightParts = ownerChain(right);
+  if (!leftParts || !rightParts) return 0;
   let depth = 0;
   while (depth < leftParts.length && depth < rightParts.length && leftParts[depth] === rightParts[depth]) depth += 1;
   return depth;
+}
+
+function sameOwnerChain(left, right) {
+  const leftOwner = ownerChain(left), rightOwner = ownerChain(right);
+  return Boolean(leftOwner && rightOwner && leftOwner.length === rightOwner.length && leftOwner.every((part, index) => part === rightOwner[index]));
 }
 
 function normalizedCandidate(entry, origin, order) {
@@ -78,6 +126,7 @@ function normalizedCandidate(entry, origin, order) {
     path: filePath,
     reason: typeof entry?.reason === "string" && entry.reason.trim() ? entry.reason.trim() : `${origin} context candidate`,
     sources,
+    links: normalizedLinks(entry?.links),
     origin,
     order
   };
@@ -124,6 +173,7 @@ export function composeCriterionContextEntries(input = {}, options = {}) {
       ranges: candidate.ranges ?? current.ranges,
       reason: current.origin === "explicit" ? current.reason : candidate.origin === "explicit" ? candidate.reason : current.reason,
       sources: uniqueStrings([...(current.sources ?? []), ...(candidate.sources ?? [])], 20),
+      links: normalizedLinks([...(current.links ?? []), ...(candidate.links ?? [])]),
       origin: current.origin === "explicit" || candidate.origin === "explicit" ? "explicit"
         : current.origin === "retrieval" || candidate.origin === "retrieval" ? "retrieval" : "criterion",
       order: Math.min(current.order, candidate.order)
@@ -133,11 +183,19 @@ export function composeCriterionContextEntries(input = {}, options = {}) {
   const values = [...merged.values()];
   const exact = new Set(explicitPaths);
   const strongRetrieval = (candidate) => candidate.origin === "retrieval"
-    && candidate.sources.some((source) => ["explicit", "lexical", "symbol", "test"].includes(source));
+    && candidate.sources.some((source) => ["explicit", "import", "lexical", "symbol", "test"].includes(source));
   const graphOnly = (candidate) => candidate.origin === "retrieval" && candidate.sources.length > 0
     && candidate.sources.every((source) => ["feedback", "git-change", "graph"].includes(source));
   const plannedCriterionLink = (candidate) => plannedPaths.has(candidate.path)
     && textReferencesPath(criteriaText, candidate.path);
+  const directlyLinkedToExplicitTarget = (candidate) => candidate.links.some((link) => (
+    DIRECT_EXPLICIT_LINK_KINDS.has(link.kind) && exact.has(link.path)
+  ));
+  const sourceRelatedToExplicitTarget = (candidate) => explicitPaths.length === 0
+    || exact.has(candidate.path)
+    || textExplicitlyReferencesPath(criteriaText, candidate.path)
+    || directlyLinkedToExplicitTarget(candidate)
+    || explicitPaths.some((target) => candidate.sources.length >= 2 && sameOwnerChain(target, candidate.path));
 
   const selected = [];
   const add = (candidate, reason) => {
@@ -146,10 +204,9 @@ export function composeCriterionContextEntries(input = {}, options = {}) {
     selected.push({ ...entry, reason });
   };
   const testRelation = (candidate) => {
-    if (!testPath(candidate.path)) return { linked: false, score: 0 };
-    if (exact.has(candidate.path)) return { linked: true, score: 1_000 };
-    const criterionLinked = textExplicitlyReferencesPath(criteriaText, candidate.path)
-      || ((strongRetrieval(candidate) || plannedPaths.has(candidate.path)) && textReferencesPath(criteriaText, candidate.path));
+    if (!testPath(candidate.path)) return { linked: false, strong: false, score: 0 };
+    if (exact.has(candidate.path)) return { linked: true, strong: true, score: 1_000 };
+    const directlyLinked = directlyLinkedToExplicitTarget(candidate);
     const anchors = uniqueStrings([
       ...explicitPaths,
       ...selected.filter((entry) => !testPath(entry.path)).map((entry) => entry.path)
@@ -158,9 +215,15 @@ export function composeCriterionContextEntries(input = {}, options = {}) {
     const stemLink = Math.max(0, ...stemLinks);
     const directoryLink = Math.max(0, ...anchors.map((target) => commonDirectoryDepth(target, candidate.path)));
     const retrieved = strongRetrieval(candidate);
+    const ownershipLinked = anchors.some((target) => sameOwnerChain(target, candidate.path));
+    const stemScoped = stemLink > 0 && ownershipLinked;
+    const criterionLinked = textExplicitlyReferencesPath(criteriaText, candidate.path)
+      || ((retrieved || plannedPaths.has(candidate.path)) && textReferencesPath(criteriaText, candidate.path)
+        && (anchors.length === 0 || ownershipLinked));
     return {
-      linked: criterionLinked || stemLink > 0 || (retrieved && directoryLink > 0) || (retrieved && anchors.length === 0),
-      score: (criterionLinked ? 500 : 0) + (stemLink * 120) + (directoryLink * 20) + (retrieved ? 40 : 0)
+      linked: directlyLinked || criterionLinked || stemScoped || (retrieved && anchors.length === 0),
+      strong: directlyLinked || criterionLinked || stemScoped,
+      score: (directlyLinked ? 700 : 0) + (criterionLinked ? 500 : 0) + (stemLink * 120) + (directoryLink * 20) + (retrieved ? 40 : 0)
     };
   };
 
@@ -170,10 +233,11 @@ export function composeCriterionContextEntries(input = {}, options = {}) {
 
   const rankedSources = values
     .filter((candidate) => !testPath(candidate.path) && !graphOnly(candidate))
-    .filter((candidate) => exact.has(candidate.path) || textExplicitlyReferencesPath(criteriaText, candidate.path) || strongRetrieval(candidate))
+    .filter((candidate) => exact.has(candidate.path) || textExplicitlyReferencesPath(criteriaText, candidate.path)
+      || (strongRetrieval(candidate) && sourceRelatedToExplicitTarget(candidate)))
     .sort((left, right) => {
-      const leftScore = (exact.has(left.path) ? 1_000 : 0) + (textExplicitlyReferencesPath(criteriaText, left.path) ? 400 : 0) + (strongRetrieval(left) ? 100 : 0);
-      const rightScore = (exact.has(right.path) ? 1_000 : 0) + (textExplicitlyReferencesPath(criteriaText, right.path) ? 400 : 0) + (strongRetrieval(right) ? 100 : 0);
+      const leftScore = (exact.has(left.path) ? 1_000 : 0) + (directlyLinkedToExplicitTarget(left) ? 700 : 0) + (textExplicitlyReferencesPath(criteriaText, left.path) ? 400 : 0) + (strongRetrieval(left) ? 100 : 0);
+      const rightScore = (exact.has(right.path) ? 1_000 : 0) + (directlyLinkedToExplicitTarget(right) ? 700 : 0) + (textExplicitlyReferencesPath(criteriaText, right.path) ? 400 : 0) + (strongRetrieval(right) ? 100 : 0);
       return rightScore - leftScore || left.order - right.order || left.path.localeCompare(right.path);
     });
 
@@ -196,13 +260,35 @@ export function composeCriterionContextEntries(input = {}, options = {}) {
     }
   }
 
-  values
+  const relatedTests = values
     .map((candidate) => ({ candidate, relation: testRelation(candidate) }))
     .filter(({ relation }) => relation.linked)
-    .sort((left, right) => right.relation.score - left.relation.score || left.candidate.order - right.candidate.order || left.candidate.path.localeCompare(right.candidate.path))
+    .sort((left, right) => right.relation.score - left.relation.score || left.candidate.order - right.candidate.order || left.candidate.path.localeCompare(right.candidate.path));
+
+  relatedTests
+    .filter(({ relation }) => relation.strong)
     .forEach(({ candidate }) => add(candidate, textExplicitlyReferencesPath(criteriaText, candidate.path)
       ? "Acceptance-criterion-linked test"
       : "Nearest relevant test for an explicit target"));
+
+  // Direct import neighbors are stronger navigation evidence than a generic
+  // singleton test fallback and must not be displaced when the item limit is tight.
+  rankedSources
+    .filter(directlyLinkedToExplicitTarget)
+    .forEach((candidate) => add(candidate, "Direct import neighbor of an explicit target"));
+
+  // A broad test glob is never proof. Only a complete criterion selection can
+  // establish singleton cardinality, and only a test-shaped JS/TS filename is
+  // eligible. This remains navigation context; acceptance still depends on a
+  // changed live assertion and final verification.
+  if (!selected.some((entry) => testPath(entry.path))) {
+    const scopedTests = values.filter((candidate) => executablePlannedTest(candidate, plannedPaths, input.plannedSelectionComplete === true));
+    if (scopedTests.length === 1) add(scopedTests[0], "Sole proven scoped test target (navigation context; not acceptance proof)");
+  }
+
+  relatedTests
+    .filter(({ relation }) => !relation.strong)
+    .forEach(({ candidate }) => add(candidate, "Weak current-task test navigation match"));
 
   rankedSources
     .forEach((candidate) => add(candidate, textExplicitlyReferencesPath(criteriaText, candidate.path)

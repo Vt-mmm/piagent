@@ -472,9 +472,9 @@ export function buildBenchmarkStageDiagnostic({
     && wireDriftGroups.length === 0;
   const causalContextRequired = suite?.releaseGate?.requireCausalContextReceipt === true;
   const causalContextSummary = summarizeBenchmarkCausalContextEvidence(piRuns, { required: causalContextRequired });
-  const causalContextAvailableRuns = causalContextSummary.availableRuns;
+  const causalContextAvailableRuns = causalContextSummary.currentAvailableRuns;
   const causalContextPassed = !causalContextRequired
-    || causalContextSummary.coverageStatus === "complete";
+    || causalContextSummary.currentCoverageStatus === "complete";
 
   const freshEfficiency = pairRatioEvidence(pairRecords, ({ candidate, baseline }) => ({
     baseline: baseline?.usage?.fresh,

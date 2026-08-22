@@ -136,8 +136,19 @@ export function assertionsProveErrorMapping(assertions, targets, mapping) {
 }
 
 export function rejectionStatementErrorClass(text, requestedErrors) {
-  const errorClass = text.match(/^\s*throw\s+(?:new\s+)?([a-z_$][a-z0-9_$]*)\s*\(/)?.[1]?.toLowerCase();
+  const match = text.match(/^\s*throw\s+(?:new\s+)?([a-z_$][a-z0-9_$]*)\s*\(/);
+  const errorClass = match?.[1]?.toLowerCase();
   if (!errorClass || !ERROR_CONSTRUCTORS.includes(errorClass)) return null;
+  const open = match[0].lastIndexOf("(");
+  let depth = 0, close = -1;
+  for (let index = open; index < Math.min(text.length, open + 2_000); index += 1) {
+    if (text[index] === "(") depth += 1;
+    else if (text[index] === ")" && --depth === 0) { close = index + 1; break; }
+  }
+  if (close === -1) return null;
+  const argument = text.slice(open + 1, close - 1).trim();
+  if (argument && !/^__pi_(?:(?:empty|double_quote|whitespace)_string|string|node_assert_module|code_generation_module|module_loader_module|error_name_[a-z]+)_literal__$/i.test(argument)) return null;
+  if (!/^(?:[ \t]*;|[ \t]*(?:\}|$))/u.test(text.slice(close))) return null;
   return requestedErrors.length === 0 || requestedErrors.includes(errorClass) ? errorClass : null;
 }
 

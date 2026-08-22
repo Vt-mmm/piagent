@@ -19,6 +19,7 @@ import {
   migrateTaskState,
   normalizeTaskContract,
   pathWithinChangeEvidenceRoot,
+  repositoryFileManifestDetails,
   resolveTaskContract,
   safeTaskId,
   taskContractValidationErrors,
@@ -84,6 +85,18 @@ function fixture() {
   return cwd;
 }
 
+test("repository manifest reports truncation instead of claiming a complete singleton", (t) => {
+  const cwd = fixture();
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(cwd, "a.test.js"), "a\n");
+  fs.writeFileSync(path.join(cwd, "b.test.js"), "b\n");
+  fs.writeFileSync(path.join(cwd, "c.test.js"), "c\n");
+  const manifest = repositoryFileManifestDetails(cwd, 2);
+  assert.equal(manifest.files.length, 2);
+  assert.equal(manifest.complete, false);
+  assert.equal(manifest.candidateCount, 3);
+});
+
 function childGitRepo(cwd, files) {
   fs.mkdirSync(cwd, { recursive: true });
   execFileSync("git", ["init", "-q", cwd]);
@@ -97,6 +110,73 @@ function childGitRepo(cwd, files) {
   execFileSync("git", ["-C", cwd, "add", "."]);
   execFileSync("git", ["-C", cwd, "commit", "-qm", "fixture"]);
 }
+
+test("repository manifest includes loose workspace files beside nested git roots", (t) => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-manifest-workspace-"));
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  childGitRepo(path.join(cwd, "service"), { "src/value.js": "export const value = 1;\n" });
+  fs.mkdirSync(path.join(cwd, "test"), { recursive: true });
+  fs.writeFileSync(path.join(cwd, "test", "workspace.test.js"), "test('workspace', () => {});\n");
+
+  const manifest = repositoryFileManifestDetails(cwd);
+  assert.equal(manifest.complete, true);
+  assert.deepEqual(manifest.files, ["service/src/value.js", "test/workspace.test.js"]);
+  const truncated = repositoryFileManifestDetails(cwd, 1);
+  assert.equal(truncated.complete, false);
+  assert.equal(truncated.candidateCount, 2);
+});
+
+test("repository manifest excludes hidden loose trust and credential state beside nested git roots", (t) => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-manifest-hidden-workspace-"));
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  childGitRepo(path.join(cwd, "service"), { "src/value.js": "export const value = 1;\n" });
+  fs.mkdirSync(path.join(cwd, ".codex"), { recursive: true });
+  fs.mkdirSync(path.join(cwd, "notes", ".cursor"), { recursive: true });
+  fs.writeFileSync(path.join(cwd, ".codex", "instructions.md"), "local trust state\n");
+  fs.writeFileSync(path.join(cwd, "notes", ".cursor", "rules.md"), "local editor state\n");
+  fs.writeFileSync(path.join(cwd, ".npmrc"), "registry=https://registry.example.invalid/\n");
+  fs.writeFileSync(path.join(cwd, "notes", "visible.md"), "workspace note\n");
+
+  const manifest = repositoryFileManifestDetails(cwd);
+  assert.equal(manifest.complete, true);
+  assert.deepEqual(manifest.files, ["notes/visible.md", "service/src/value.js"]);
+  assert.equal(pathWithinChangeEvidenceRoot(cwd, ".codex/instructions.md"), false);
+  assert.equal(pathWithinChangeEvidenceRoot(cwd, "notes/.cursor/rules.md"), false);
+});
+
+test("repository manifest fails completeness closed for unreadable loose workspace directories", {
+  skip: process.platform === "win32" || typeof process.getuid !== "function" || process.getuid() === 0
+}, (t) => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-manifest-unreadable-"));
+  const locked = path.join(cwd, "locked");
+  t.after(() => {
+    try { fs.chmodSync(locked, 0o700); } catch {}
+    fs.rmSync(cwd, { recursive: true, force: true });
+  });
+  childGitRepo(path.join(cwd, "service"), { "src/value.js": "export const value = 1;\n" });
+  fs.mkdirSync(locked);
+  fs.writeFileSync(path.join(locked, "missed.test.js"), "test('missed', () => {});\n");
+  fs.chmodSync(locked, 0o000);
+
+  const manifest = repositoryFileManifestDetails(cwd);
+  assert.equal(manifest.complete, false);
+  assert.equal(manifest.files.includes("locked/missed.test.js"), false);
+  assert.equal(manifest.files.includes("service/src/value.js"), true);
+});
+
+test("repository manifest fails completeness closed for a broken child git root", (t) => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-manifest-broken-root-"));
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  childGitRepo(path.join(cwd, "service"), { "src/value.js": "export const value = 1;\n" });
+  const broken = path.join(cwd, "broken");
+  fs.mkdirSync(broken);
+  fs.writeFileSync(path.join(broken, ".git"), "gitdir: /definitely/missing/piagent-git-dir\n");
+  fs.writeFileSync(path.join(broken, "missed.test.js"), "test('missed', () => {});\n");
+
+  const manifest = repositoryFileManifestDetails(cwd);
+  assert.equal(manifest.complete, false);
+  assert.equal(manifest.files.includes("service/src/value.js"), true);
+});
 
 function contract(overrides = {}) {
   const now = "2026-07-31T01:02:03.000Z";
@@ -139,6 +219,13 @@ function contract(overrides = {}) {
     ...overrides
   };
 }
+
+test("Task Contract validation rejects scope beyond the criterion graph binding cap", () => {
+  const oversized = contract({ scope: Array.from({ length: 2001 }, (_, index) => `src/file-${index}.js`) });
+  assert.match(taskContractValidationErrors(oversized).join("; "), /scope must contain at most 2000 entries/);
+  const schema = JSON.parse(fs.readFileSync(path.join(process.cwd(), "schemas", "task-contract.schema.json"), "utf8"));
+  assert.equal(schema.properties.scope.allOf[1].maxItems, 2000);
+});
 
 function persistLegacyV2(cwd, overrides = {}) {
   const task = contract({ workingTreeDigestAlgorithm: undefined, ...overrides });

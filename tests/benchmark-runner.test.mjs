@@ -75,8 +75,8 @@ function stageCausalContextReceipt(surface) {
     aggregates: null
   };
   return {
-    schemaVersion: 1, evidenceSource: "context-telemetry-closed-aggregate-v1", applicability: "piagent", available: true,
-    coverage: { status: "complete", telemetryTruncated: false, telemetryIntegrityFailures: 0, recoverableTailBytes: 0, criterionExpected: true, sessionEventsObserved: 8, observedLanes: 6, requiredLanes: 6, missingLanes: [] },
+    schemaVersion: 2, evidenceSource: "context-telemetry-closed-aggregate-v2", applicability: "piagent", available: true,
+    coverage: { status: "complete", telemetryTruncated: false, telemetryIntegrityFailures: 0, recoverableTailBytes: 0, criterionExpected: true, sessionEventsObserved: 8, observedLanes: 7, requiredLanes: 7, missingLanes: [] },
     aggregates: {
       packCounts: { offered: 1, delivered: 1, injected: 1 },
       estimatedTokens: { offered: 100, delivered: 100, injected: 100 },
@@ -84,6 +84,8 @@ function stageCausalContextReceipt(surface) {
       selectedItemCounts: { offered: 1, delivered: 1, injected: 1 },
       criterionInitialPack: { attempts: 1, selectedAttempts: 1, candidates: 1, selectedItems: 1, estimatedTokens: 100, zeroSelectionReasonCounts: { autoContextDisabled: 0, criterionGraphUnavailable: 0, noCandidates: 0, noReadableSelection: 0 }, offered: 1, delivered: 1, injected: 1 },
       directFallbackRereads: { successfulCalls: 0, shellToolCallsObserved: 0, definition: "successful-direct-path-tool-call-v1" },
+      editRecoveryContext: { count: 0, failuresObserved: 0, suppressedFailures: 0, injectedChars: 0, injectedEstimatedTokens: 0,
+        evidenceCoverage: { status: "complete", observed: 0, comparable: 0, rate: 1 }, definition: "matched-edit-recovery-context-receipt-v1" },
       compaction: { eventsObserved: 0, state: "not-observed" },
       managedPrefix: { promptsObserved: 1, compactedPrompts: 1, state: "compacted" }
     }
@@ -259,6 +261,7 @@ const appendTelemetry = (event) => {
   }) + "\\n");
 };
 if (surface === "piagent") {
+  appendTelemetry({ event: "session_start", editRecoveryContextTelemetryVersion: 1 });
   appendTelemetry({ event: "agent_prompt", turnId: "benchmark-turn", managedInstructionsCompacted: true });
   appendTelemetry({
     event: "criterion_context_pack",
@@ -1557,7 +1560,7 @@ test("provider-free pause diagnostic allows only a clean observed pair and fails
   const missingReceipt = missingCausalRuns.find((run) => run.surface === "piagent").causalContextReceipt;
   missingReceipt.available = false;
   missingReceipt.coverage.status = "partial";
-  missingReceipt.coverage.observedLanes = 5;
+  missingReceipt.coverage.observedLanes = 6;
   missingReceipt.coverage.missingLanes = ["telemetry-window"];
   missingReceipt.aggregates = null;
   const missingCausal = buildBenchmarkStageDiagnostic({ ...input, runs: missingCausalRuns });

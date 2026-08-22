@@ -1,4 +1,9 @@
-export type ToolFailureReasonCode = "target-not-found" | "search-target-missing" | "tool-result-failed";
+export type ToolFailureReasonCode =
+  | "target-not-found"
+  | "search-target-missing"
+  | "edit-anchor-not-unique"
+  | "edit-anchor-stale"
+  | "tool-result-failed";
 
 function boundedText(content: unknown): string {
   const text = typeof content === "string" ? content : Array.isArray(content)
@@ -20,6 +25,17 @@ function commandFromInput(input: unknown): string {
 export function classifyToolFailure(toolName: string, isError: boolean, content: unknown, input?: unknown): ToolFailureReasonCode | null {
   if (!isError) return null;
   const text = boundedText(content);
+  // Only the registered, policy-governed `edit` tool may receive an automatic
+  // current-file recovery snapshot. A similarly named third-party `replace`
+  // tool is not necessarily covered by Piagent's mutation guard.
+  if (/^edit$/i.test(toolName)) {
+    if (/\b(?:oldtext|old text)\b[^\n]{0,240}\b(?:unique|occurrences?)\b|\bfound\s+\d+\s+occurrences?\b/i.test(text)) {
+      return "edit-anchor-not-unique";
+    }
+    if (/could not find (?:the )?exact text|\b(?:oldtext|old text)\b[^\n]{0,240}\b(?:match|mismatch|stale|changed|find)\b|\b(?:generation|content) drift\b/i.test(text)) {
+      return "edit-anchor-stale";
+    }
+  }
   const readLike = /(?:^|[._-])(?:read|document[_-]?read)(?:$|[._-])/i.test(toolName);
   if (readLike && /\bENOENT\b|no such file or directory|file (?:does not exist|not found)|cannot find the (?:file|path)/i.test(text)) {
     return "target-not-found";

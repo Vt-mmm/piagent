@@ -418,6 +418,66 @@ describe("acceptance evidence lexical truth", () => {
     });
   }
 
+  it("settles the historical terminal CSV state machine but keeps unreachable lookalikes pending", () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-stateful-receipt-"));
+    try {
+      fs.mkdirSync(path.join(cwd, "src", "data"), { recursive: true });
+      fs.mkdirSync(path.join(cwd, "test"), { recursive: true });
+      const criterion = "`parseCsv(input)` must throw `SyntaxError` for an unterminated quoted field.";
+      const source = [
+        "export function parseCsv(input) {",
+        "  const text = String(input);",
+        "  let inQuotes = false;",
+        "  for (let index = 0; index < text.length; index += 1) {",
+        "    const character = text[index];",
+        "    if (inQuotes) {",
+        "      if (character === '\"') inQuotes = false;",
+        "      continue;",
+        "    }",
+        "    if (character === '\"') inQuotes = true;",
+        "  }",
+        "  if (inQuotes) throw new SyntaxError('unterminated quoted field');",
+        "  return [];",
+        "}",
+        ""
+      ].join("\n");
+      const testText = [
+        "import assert from 'node:assert/strict';",
+        "import { parseCsv } from '../src/data/csv.js';",
+        "assert.throws(() => parseCsv('\"unterminated'), SyntaxError);",
+        ""
+      ].join("\n");
+      const changedFiles = ["src/data/csv.js", "test/contract.test.js"];
+      fs.writeFileSync(path.join(cwd, changedFiles[0]), source);
+      fs.writeFileSync(path.join(cwd, changedFiles[1]), testText);
+      const acceptedTask = invalidInputTask(criterion, changedFiles);
+      const accepted = refreshAcceptanceReceipt(acceptedTask, {
+        cwd, changedFiles, currentWorkingTreeDigest: treeDigest("d")
+      });
+      assert.equal(accepted.criticalMissing.some((item) => item.obligation === "invalid-input-rejection"), false);
+      assert.equal(accepted.receipt.criteria.find((item) => item.obligation === "invalid-input-rejection")?.status, "satisfied");
+      assert.deepEqual(acceptanceCriticalRecoveryProjection({ ...acceptedTask, acceptanceReceipt: accepted.receipt }, {
+        cwd, changedFiles, currentWorkingTreeDigest: treeDigest("d")
+      }), []);
+
+      const unreachable = source.replace(
+        "    if (inQuotes) {\n      if (character === '\"') inQuotes = false;\n      continue;\n    }\n    if (character === '\"') inQuotes = true;",
+        "    if (character) { continue; inQuotes = true; inQuotes = false; }"
+      );
+      fs.writeFileSync(path.join(cwd, changedFiles[0]), unreachable);
+      const rejectedTask = invalidInputTask(criterion, changedFiles);
+      const rejected = refreshAcceptanceReceipt(rejectedTask, {
+        cwd, changedFiles, currentWorkingTreeDigest: treeDigest("d")
+      });
+      assert.equal(rejected.criticalMissing.some((item) => item.obligation === "invalid-input-rejection"), true);
+      assert.deepEqual(acceptanceCriticalRecoveryProjection(rejectedTask, {
+        cwd, changedFiles, currentWorkingTreeDigest: treeDigest("d")
+      })[0]?.missingDimensions, ["source-rejection"]);
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("erases comment, string, template, and regex payloads before semantic conflict analysis", () => {
     const source = [
       "export function take(limit) {",
@@ -425,6 +485,9 @@ describe("acceptance evidence lexical truth", () => {
       "  const quoted = \"Number.isSafeInteger(limit); throw new TypeError('fake'); RangeError\";",
       "  const templated = `Number.isSafeInteger(limit); TypeError`;",
       "  const patterned = /Number\\.isSafeInteger\\(limit\\)|TypeError/;",
+      "  const afterBlockComment = true ? /* erased before regex classification */ /assert.throws TypeError/ : /unused/;",
+      "  if (true) /assert.throws TypeError/;",
+      "  if (true) {} /assert.throws TypeError/;",
       "  return limit;",
       "}",
       ""
@@ -588,6 +651,48 @@ describe("acceptance evidence lexical truth", () => {
     } finally {
       fs.rmSync(cwd, { recursive: true, force: true });
     }
+  });
+
+  it("keeps same-name aliases bound to the test file that imports the product target", () => {
+    const source = [
+      "export function parseCount(value) {",
+      "  if (!Number.isSafeInteger(value)) throw new TypeError('value');",
+      "  return value;",
+      "}",
+      ""
+    ].join("\n");
+    const productTest = [
+      "import assert from 'node:assert/strict';",
+      "import { parseCount as check } from '../src/count.js';",
+      "assert.equal(check(1), 1);",
+      ""
+    ].join("\n");
+    const unrelatedTest = [
+      "import assert from 'node:assert/strict';",
+      "import { unrelated as check } from '../src/other.js';",
+      "assert.throws(() => check(1.5), TypeError);",
+      ""
+    ].join("\n");
+    const input = {
+      taskText: "`parseCount(value)` rejects fractional values with `TypeError`.",
+      sourceText: source,
+      testText: `${productTest}\n${unrelatedTest}`,
+      sourceEntries: [{ path: "src/count.js", text: source }],
+      testEntries: [
+        { path: "test/count.test.js", text: productTest },
+        { path: "test/other.test.js", text: unrelatedTest }
+      ],
+      namedTargets: ["parseCount"],
+      provenanceTargets: ["parseCount"]
+    };
+    assert.deepEqual(acceptanceInvalidInputEvidence(input), { sourceOk: true, testOk: false });
+
+    input.testEntries[0].text = productTest.replace(
+      "assert.equal(check(1), 1);",
+      "assert.throws(() => check(1.5), TypeError);"
+    );
+    input.testText = `${input.testEntries[0].text}\n${unrelatedTest}`;
+    assert.deepEqual(acceptanceInvalidInputEvidence(input), { sourceOk: true, testOk: true });
   });
 
   it("binds CommonJS exports through destructured, direct, namespace, and dynamic literal imports", () => {

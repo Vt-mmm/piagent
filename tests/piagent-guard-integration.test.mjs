@@ -272,6 +272,10 @@ describe("piagent guard integration", () => {
     assert.equal(harness.getSessionName(), "pi:Integration Project");
     assert.match(ctx.ui.notices[0].message, /Piagent Pi guard loaded: Integration Project/);
     assert.match(ctx.ui.notices[0].message, /permission=workspace-write/);
+    const sessionStartEvent = readJsonl(path.join(cwd, ".pi", "piagent-state", "context-engine", "events.jsonl"))
+      .find((event) => event.event === "session_start");
+    assert.equal(sessionStartEvent?.editRecoveryContextTelemetryVersion, 1,
+      "zero edit recovery is comparable only when the runtime advertises the receipt protocol");
   });
 
   it("normalizes only GPT-5.6 Codex off requests to provider effort none", async () => {
@@ -434,7 +438,7 @@ describe("piagent guard integration", () => {
     assert.match(started.systemPrompt, /Piagent runtime task is injected below/);
     assert.match(started.systemPrompt, /do not re-read root AGENTS\.md/);
     assert.match(started.systemPrompt, /Use complete runtime-delivered source directly without rereading it normally/);
-    assert.match(started.systemPrompt, /oldText mismatch.*bounded reread of only the affected region/);
+    assert.match(started.systemPrompt, /oldText mismatch.*attached recovery.*reread the affected region once/);
     assert.match(started.systemPrompt, /Preserve every runtime verifier exactly and keep commands separate/);
     assert.match(started.systemPrompt, /runtime-authorized same-tree infrastructure retry/);
     assert.doesNotMatch(started.systemPrompt, /For an ordinary source task/);
@@ -446,8 +450,8 @@ describe("piagent guard integration", () => {
     assert.match(started.message.content, /Do not re-read root AGENTS\.md or inspect Piagent\/platform files/);
     assert.match(started.message.content, /Execution map \(planning only\)/);
     assert.match(started.message.content, /Use runtime-delivered source; do not reread it/);
-    assert.match(started.message.content, /edit reports generation\/drift\/oldText mismatch, make one bounded reread of the affected region/);
-    assert.match(started.message.content, /Wildcard test scope is permission, not a file target/);
+    assert.match(started.message.content, /edit drift\/oldText mismatch.*attached recovery.*reread the affected region once/);
+    assert.match(started.message.content, /Globs\/directories grant scope, not file targets/);
     assert.doesNotMatch(started.message.content, /batch context reads by target/);
     assert.match(started.message.content, /Follow the execution map and implement dependency-ready criteria/);
     assert.doesNotMatch(started.message.content, /sequentially|never combine or parallelize/);
@@ -1522,7 +1526,7 @@ describe("piagent guard integration", () => {
     assert.match(result.systemPrompt, /Piagent runtime-managed task flow/);
     assert.match(result.systemPrompt, /piagent_task_start` exactly once/);
     assert.match(result.systemPrompt, /Use complete runtime-delivered source directly; do not reread it normally/);
-    assert.match(result.systemPrompt, /oldText mismatch.*bounded reread of only the affected region/);
+    assert.match(result.systemPrompt, /oldText mismatch.*attached recovery.*reread the affected region once/);
     assert.match(result.systemPrompt, /Preserve every runtime-provided verifier exactly and keep commands separate/);
     assert.match(result.systemPrompt, /runtime-authorized same-tree infrastructure retry/);
     assert.doesNotMatch(result.systemPrompt, /piagent_context_record/);
@@ -1538,8 +1542,9 @@ describe("piagent guard integration", () => {
       "}",
       ""
     ].join("\n"));
-    fs.writeFileSync(path.join(cwd, "src", "invoice.test.ts"), [
-      "import { calculateInvoiceTotal } from './invoice';",
+    fs.mkdirSync(path.join(cwd, "test"), { recursive: true });
+    fs.writeFileSync(path.join(cwd, "test", "contract.test.ts"), [
+      "import { calculateInvoiceTotal } from '../src/invoice';",
       "test('total', () => calculateInvoiceTotal([1, 2]));",
       ""
     ].join("\n"));
@@ -1566,7 +1571,7 @@ describe("piagent guard integration", () => {
     );
     assert.match(rebuilt.content[0].text, /indexV2: rebuilt/);
 
-    const prompt = "Implement invoice total behavior across the service and its focused tests";
+    const prompt = "Implement invoice total behavior in src/invoice.ts and its directly importing focused tests";
     await harness.handlers.get("input")({ text: prompt, source: "user" }, ctx);
     const injected = await harness.handlers.get("before_agent_start")({
       prompt,
@@ -1576,13 +1581,17 @@ describe("piagent guard integration", () => {
     assert.equal(injected.message.customType, "piagent-runtime-task-intake");
     assert.match(injected.message.content, /criterion context snapshot/);
     assert.match(injected.message.content, /src\/invoice\.ts/);
-    assert.match(injected.message.content, /src\/invoice\.test\.ts/);
+    assert.match(injected.message.content, /test\/contract\.test\.ts/);
     assert.doesNotMatch(injected.message.content, /repository memory: advisory only/);
     assert.doesNotMatch(injected.message.content, /unrelated/);
     assert.equal(injected.message.content.includes(memoryFact.fact), false);
     assert.doesNotMatch(injected.message.content, /\.env/);
     assert.ok(injected.message.details.estimatedTokens <= 680);
     assert.ok(injected.message.details.selectedItems.length >= 2);
+    const startTrace = harness.entries.find((entry) => entry.type === "piagent-task-trace"
+      && entry.payload?.event === "task_start" && entry.payload?.taskRunId === injected.message.details.runtimeTask.taskRunId);
+    assert.equal(startTrace?.payload?.plannedContextComplete, true);
+    assert.ok(startTrace?.payload?.plannedContextCandidateCount >= 2);
     for (const item of injected.message.details.selectedItems) {
       assert.match(item.fileContentHash, /^context-file-v1:[a-f0-9]{64}$/);
       assert.match(item.payloadHash, /^context-payload-v1:[a-f0-9]{64}$/);
@@ -1592,6 +1601,19 @@ describe("piagent guard integration", () => {
     }
     assert.equal(typeof injected.message.details.contextDelivery.deliveryId, "string");
     await harness.handlers.get("message_start")({ message: { role: "custom", ...injected.message } }, ctx);
+    const taskAfterInjection = JSON.parse(fs.readFileSync(path.join(
+      cwd,
+      ".pi",
+      "piagent-state",
+      "tasks",
+      `${injected.message.details.runtimeTask.taskRunId}.json`
+    ), "utf8"));
+    assert.equal(
+      taskAfterInjection.acceptanceReceipt.criteria.filter((criterion) => criterion.priority === "critical")
+        .every((criterion) => criterion.status === "pending"),
+      true,
+      "an injected but unchanged test is navigation context, never acceptance proof"
+    );
     const injectedReceipt = readJsonl(path.join(cwd, ".pi", "piagent-state", "context-engine", "events.jsonl"))
       .filter((event) => event.event === "context_pack_injected")
       .at(-1);
@@ -1611,6 +1633,9 @@ describe("piagent guard integration", () => {
       .filter((event) => event.event === "context_pack_offered" && event.source === "context-tool")
       .at(-1);
     assert.ok(toolOffer.selectedItems.length > 0);
+    assert.ok(toolOffer.selectedItems.some((item) => item.links?.some((link) => (
+      link.kind === "candidate-imports-explicit" && link.path === "src/invoice.ts"
+    ))), "context-tool delivery preserves direct import evidence");
     for (const item of toolOffer.selectedItems) {
       assert.match(item.fileContentHash, /^context-file-v1:[a-f0-9]{64}$/);
       assert.match(item.payloadHash, /^context-payload-v1:[a-f0-9]{64}$/);
@@ -1628,6 +1653,9 @@ describe("piagent guard integration", () => {
       .filter((event) => event.event === "context_pack_offered" && event.source === "context-command")
       .at(-1);
     assert.deepEqual(commandOffer.selectedItems, commandMessage.details.selectedItems);
+    assert.ok(commandOffer.selectedItems.some((item) => item.links?.some((link) => (
+      link.kind === "candidate-imports-explicit" && link.path === "src/invoice.ts"
+    ))), "context-command delivery preserves direct import evidence");
     assert.equal(commandOffer.selectedItems.every((item) => item.fileContentHash && item.payloadHash && item.representation && Array.isArray(item.ranges)), true);
 
     const repeated = await harness.handlers.get("before_agent_start")({

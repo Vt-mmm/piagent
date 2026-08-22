@@ -66,6 +66,26 @@ Luna Medium production run had a fresh-token ratio of `0.3833` with upper-95%
 deep-logic diagnostic at `0.817` was a smaller dirty subset; it is not the
 current production estimate.
 
+The latest closed S12 diagnostic used `openai-codex/gpt-5.6-luna:medium` and
+measured `67,507` Piagent fresh tokens versus `106,109` for Codex CLI: ratio
+`0.6362`, or `36.38%` reduction. API-equivalent text-token cost fell `32.88%`
+and pooled Piagent duration was `4.93%` lower, with all six paired grades at
+`10/10`; the stage still failed and is permanently closed because the 40%
+token/cost contract was missed and the `quoted-csv` family regressed to a
+`1.4314` token ratio and `1.4259` duration ratio. Its Piagent trajectory used
+20 tool calls and recorded four edit/test errors, while the other five families
+had a pooled fresh-token ratio of `0.4229`. This isolates recovery churn and
+test-selection ambiguity as candidate causes rather than excess context-pack
+payload (the affected pack injected only about 100 tokens).
+
+The next candidate therefore remains deliberately narrow: prefer only proven
+direct import neighbors or a complete singleton executable-test selection;
+attach one bounded, secret-safe current-file snapshot after an exact edit-anchor
+mismatch; and recognize a narrowly proven input-driven terminal state machine
+in acceptance evidence. These behaviors require offline verification and a new
+clean commit before a brand-new S0/S12 ledger; the closed S12 ledger must never
+be resumed or relabeled.
+
 After this candidate passes the complete offline verification and is bound to
 one clean commit, authorize S0 and then S12 only. S12 may advance only with no
 paired quality/performance regression, exact usage, stable provider wire and a

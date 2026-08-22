@@ -218,6 +218,10 @@ export function registerSessionStartHook(pi: ExtensionAPI, dependencies: Session
     }
     dependencies.telemetry(ctx, {
       event: "session_start",
+      // Benchmark and efficiency projections must be able to distinguish a
+      // genuine zero-recovery session from telemetry produced before this
+      // receipt/result protocol existed.
+      editRecoveryContextTelemetryVersion: 1,
       activeTools: pi.getActiveTools().length,
       index: engineStatus,
       taskMigration: migration,

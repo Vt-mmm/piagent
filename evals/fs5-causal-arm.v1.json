@@ -37,7 +37,7 @@
     },
     {
       "path": "evals/fs5-pilot-protocol.v1.json",
-      "sha256": "9e9651f5390a69a98d6e0be103f1d0ead83c88e8b269e176e55b5ccf97b37513"
+      "sha256": "6aafbf145ed1454828aeaf31c094e02448d41db8f233afb33aaca202803bf6d7"
     }
   ],
   "localReproducer": {
