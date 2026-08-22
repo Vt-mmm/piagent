@@ -84,6 +84,7 @@ import {
   invalidateAcceptanceReceiptAfterMutation,
   refreshAcceptanceReceipt
 } from "./acceptance-receipt.js";
+import { acceptanceLanguageAdapterForPath, isAcceptanceTestPath } from "./acceptance-language-adapters.js";
 import { allVerifyCommandsPassCurrentTree, changedSnapshotFiles, compactTaskDetails, mergeObservedTaskContext, passingVerifyCommandsForDigest, taskDeltaFilesFromSnapshot } from "./task-contract-view.js";
 import { applyRuntimeLifecycleObservation, runtimeLifecycleMode, workingTreeEvidenceDigest } from "./task-lifecycle.js";
 import { completeTaskDigestRefresh } from "./task-digest-migration.js";
@@ -3580,7 +3581,7 @@ function taskScopeIncludesPath(scope: string[], file: string): boolean {
 }
 
 function verifierCommandInstructions(commands: string[]): string[] {
-  return commands.map((command, index) => `Verifier ${index + 1} (run as its own shell call): ${command}`);
+  return commands.map((command, index) => `Verifier ${index + 1} (run as an exact standalone shell command): ${command}`);
 }
 
 function evaluateTaskGate(
@@ -4797,7 +4798,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
     StringEnum, TECH_STACK_MANIFEST_FILE, TOOL_RESULT_CAPTURE_MAX_CHARS, TOOL_RESULT_COMPACT_CHAR_THRESHOLD, TOOL_RESULT_COMPACT_LINE_THRESHOLD,
     TOOL_RESULT_PREVIEW_MAX_CHARS, Type, WORKFLOW_COMMAND_EXCLUSIONS, activateToolGroups, activeSessionTask,
     activeTaskToolGroups, allVerifyCommandsPassCurrentTree, appendMemoryNote, appendSessionTrace, appendTrace,
-    acceptanceBaselineGuidance, acceptanceProofGuidance, applyAcceptanceRecoveryProvenance, applyRuntimeLifecycleObservation, automaticAcceptanceCriteria, automaticReadOnlyTaskScope, automaticReviewLenses, automaticTaskIntakeMode, automaticTaskMutationPolicy, automaticTaskRiskLane, automaticTaskScope,
+    acceptanceBaselineGuidance, acceptanceLanguageAdapterForPath, acceptanceProofGuidance, applyAcceptanceRecoveryProvenance, applyRuntimeLifecycleObservation, automaticAcceptanceCriteria, automaticReadOnlyTaskScope, automaticReviewLenses, automaticTaskIntakeMode, automaticTaskMutationPolicy, automaticTaskRiskLane, automaticTaskScope,
     bashResults, bindSessionTask, buildAcceptanceReceipt, buildContextEfficiencyReport, buildContextIndexStatus, buildLiveTaskStatus, buildTaskEfficiencyMetrics,
     buildContextIndexV2, buildContextPack, buildContextPreflight, buildProfileOptions, buildProfileTechOptions,
     buildTestImpact, buildUsageSnapshot, candidateFileBudget, checkoutReferenceRepo, classifyContextTask,
@@ -4809,7 +4810,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
     extensionDir, externalActionPolicyConfig, extractDocument, finalGateConfig, findMatchingObservedBashResult,
     formatContextPreflight, formatCount, formatLiveTaskStatus, formatPercent, formatTechOptionsText, formatTechSelectionSummary,
     formatToolResultCaptureStatus, formatUsageSnapshot, fs, hasGitEvidenceRoot, hasOperatorSessionName, helpersMode,
-    loadProfileFromContext, matchesAnyPath, matchesProtectedPath, mcpActions, mcpApprovalCache,
+    isAcceptanceTestPath, loadProfileFromContext, matchesAnyPath, matchesProtectedPath, mcpActions, mcpApprovalCache,
     memoryHandbookPath, memoryLocalDir, memorySummaryPath, normalizeProjectProfileName, normalizeRelative,
     normalizeReviewLenses, normalizeTechSelections, normalizeWorkPlanSteps, nowIso, observedBashLedgerPath,
     path, permissionOverrideFromContext, permissionProfilesConfig, policy, prefixCompletions,

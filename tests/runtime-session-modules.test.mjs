@@ -1233,6 +1233,62 @@ describe("runtime session modules", () => {
     });
     assert.equal(graphPlan.requiresReview, true);
 
+    for (const request of [
+      "Update dependency version for the CSV parser.",
+      "Use dependency injection for the CSV parser service.",
+      "Remove the unused dependency from the CSV parser package.",
+      "Keep the CSV parser dependency-free.",
+      "Send each invoice exactly once.",
+      "Update the monthly billing cycle.",
+      "Run scheduled jobs during each billing cycle.",
+      "Refresh the network topology diagram.",
+      "Run tests after the dependency installation completes",
+      "Preserve input order for CSV records"
+    ]) {
+      const benignDependencyPlan = analyzePerformanceAssurance({ request, changeMode: "source-change" });
+      assert.equal(benignDependencyPlan.reasonCodes.includes("graph-order-contract"), false, request);
+      assert.equal(benignDependencyPlan.requiresReview, false, request);
+    }
+
+    const dependencyFreeErrorPlan = analyzePerformanceAssurance({
+      request: "Build a dependency-free CSV parser that rejects malformed quoted fields with SyntaxError and run configured verification.",
+      changeMode: "source-change"
+    });
+    assert.ok(dependencyFreeErrorPlan.reasonCodes.includes("exact-error-contract"));
+    assert.equal(dependencyFreeErrorPlan.reasonCodes.includes("graph-order-contract"), false);
+    assert.equal(dependencyFreeErrorPlan.requiresReview, false);
+
+    for (const request of [
+      "Preserve dependency order when scheduling jobs.",
+      "Validate the dependency graph before scheduling jobs.",
+      "Emit each prerequisite before its dependent.",
+      "A job may run only after all dependencies complete.",
+      "Execute each dependency first.",
+      "Each prerequisite must precede the job.",
+      "A job cannot begin until its dependencies have finished.",
+      "Start a task only once every prerequisite is complete.",
+      "Jobs wait for their dependencies to finish.",
+      "Do not schedule a dependent before its dependencies.",
+      "Reject cycles in the job graph.",
+      "Return jobs in topological order.",
+      "The scheduler must remain a DAG.",
+      "Dependencies must complete before dependent jobs start",
+      "B depends on A and must be scheduled afterward",
+      "Wait for all dependencies before running a job",
+      "Dependency A must run before job B",
+      "Prerequisites need to finish prior to starting the task.",
+      "A job is eligible when every dependency is done.",
+      "B depends on A; schedule A first.",
+      "Run dependencies, followed by the dependent job.",
+      "Schedule A before B because B depends on A.",
+      "Preserve stable input order when ranks tie",
+      "Preserve stable order for rank ties"
+    ]) {
+      const dependencyRelationPlan = analyzePerformanceAssurance({ request, changeMode: "source-change" });
+      assert.equal(dependencyRelationPlan.reasonCodes.includes("graph-order-contract"), true, request);
+      assert.equal(dependencyRelationPlan.requiresReview, true, request);
+    }
+
     const fairSchedulerPrompt = fs.readFileSync(path.resolve(import.meta.dirname, "../benchmarks/deep-logic-v1/prompts/fair-dependency-scheduler.md"), "utf8");
     const fairSchedulerPlan = analyzePerformanceAssurance({ request: fairSchedulerPrompt, changeMode: "source-change" });
     assert.equal(fairSchedulerPlan.tier, "rigorous");

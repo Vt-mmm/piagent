@@ -221,7 +221,9 @@ describe("capability catalog and profile lock", () => {
       "packages/piagent-webui/gateway/mcp-auth-broker.ts",
       "packages/piagent-webui/gateway/provider-auth-broker.ts",
       "packages/piagent-webui/gateway/session-command-controller.ts",
-      "packages/piagent-webui/gateway/session-runtime-supervisor.ts"
+      "packages/piagent-webui/gateway/session-runtime-supervisor.ts",
+      "scripts/benchmark-runner-core.mjs",
+      "packages/piagent-core/benchmark/benchmark-process.js"
     ]) assert.equal(discoveredIntegrityFiles.includes(entry), true, `${entry} must be discovered without a hand-maintained test list`);
     // A TypeScript module imported by its emitted name -- `./x.js` for `x.ts`,
     // which is the ordinary TypeScript convention -- must still be discovered.

@@ -36,11 +36,63 @@ function criterionContract(input) {
   };
 }
 
-function kindFor(obligation, changeMode) {
+const VERIFICATION_NAMED_TARGET = String.raw`(?:verification(?:\s+commands?)?|verifiers?)`;
+const VERIFICATION_TEST_TARGET = String.raw`tests?`;
+const VERIFICATION_COMMAND_TARGET = String.raw`(?:typechecks?|lint|build)`;
+const COMMAND_LIKE_TEST_PREFIX = String.raw`(?:npm|npx|pnpm|yarn|bun|node|deno|python3?|pytest|cargo|go|make|gradle|mvn|dotnet|bash|sh|jest|vitest|mocha|ava|tap|playwright|no)`;
+const VERIFICATION_DESCRIPTION = String.raw`(?:(?!(?:and|then)\b)[a-z0-9_./:+-]+\s+){0,5}`;
+const VERIFICATION_TEST_DESCRIPTION = String.raw`(?:(?!(?:and|then|${COMMAND_LIKE_TEST_PREFIX})\b)[a-z0-9_./:+-]+\s+){0,5}`;
+const VERIFICATION_CONTEXT = String.raw`(?:\s+(?:after\s+(?:the\s+)?(?:final\s+)?(?:intended\s+)?(?:implementation|mutation)|(?:on|against)\s+(?:the\s+)?(?:current|final)\s+(?:tree|workspace)))?`;
+const VERIFICATION_TEST_SUBJECT = String.raw`(?:(?:the|an?|all|each|every)\s+)?(?:${VERIFICATION_DESCRIPTION}${VERIFICATION_NAMED_TARGET}|${VERIFICATION_TEST_DESCRIPTION}${VERIFICATION_TEST_TARGET})`;
+const VERIFICATION_COMMAND_SUBJECT = String.raw`(?:the\s+)?(?:(?:configured|exact|focused|project|workspace)\s+)?${VERIFICATION_COMMAND_TARGET}`;
+const VERIFICATION_SUBJECT = String.raw`(?:only\s+)?(?:${VERIFICATION_TEST_SUBJECT}|${VERIFICATION_COMMAND_SUBJECT})`;
+const VERIFICATION_MODAL = String.raw`(?:(?:must|should|shall)\s+)?`;
+const VERIFICATION_IMPERATIVE = String.raw`${VERIFICATION_MODAL}(?:run|execute|rerun|re-run)\s+${VERIFICATION_SUBJECT}${VERIFICATION_CONTEXT}`;
+const VERIFICATION_DECLARATION = String.raw`${VERIFICATION_SUBJECT}\s+${VERIFICATION_MODAL}(?:pass(?:es)?|run(?:s)?)${VERIFICATION_CONTEXT}`;
+const FULL_VERIFICATION_CLAUSE = new RegExp(`^(?:${VERIFICATION_IMPERATIVE}|${VERIFICATION_DECLARATION})[.!?]?\\s*$`, "i");
+const TERMINAL_VERIFICATION_CLAUSE = new RegExp(`(?:[,;.]\\s*|\\s+(?:and|then)\\s+)(?:${VERIFICATION_IMPERATIVE}|${VERIFICATION_DECLARATION})[.!?]?\\s*$`, "i");
+const BACKTICKED_COMMAND = String.raw`\x60([^\x60\r\n]+)\x60`;
+const EXACT_COMMAND_IMPERATIVE = String.raw`${VERIFICATION_MODAL}(?:run|execute|rerun|re-run)\s+${BACKTICKED_COMMAND}${VERIFICATION_CONTEXT}`;
+const EXACT_COMMAND_DECLARATION = String.raw`${BACKTICKED_COMMAND}\s+${VERIFICATION_MODAL}(?:pass(?:es)?|run(?:s)?)${VERIFICATION_CONTEXT}`;
+const BARE_COMMAND_IMPERATIVE = String.raw`${VERIFICATION_MODAL}(?:run|execute|rerun|re-run)\s+([^\r\n]+?)`;
+const BARE_COMMAND_DECLARATION = String.raw`([^\r\n]+?)\s+${VERIFICATION_MODAL}(?:pass(?:es)?|run(?:s)?)${VERIFICATION_CONTEXT}`;
+const FULL_EXACT_COMMAND_CLAUSES = [EXACT_COMMAND_IMPERATIVE, EXACT_COMMAND_DECLARATION, BARE_COMMAND_IMPERATIVE, BARE_COMMAND_DECLARATION]
+  .map((source) => new RegExp(`^(?:${source})[.!?]?\\s*$`, "i"));
+const TERMINAL_EXACT_COMMAND_CLAUSES = [EXACT_COMMAND_IMPERATIVE, EXACT_COMMAND_DECLARATION, BARE_COMMAND_IMPERATIVE, BARE_COMMAND_DECLARATION]
+  .map((source) => new RegExp(`(?:[,;.]\\s*|\\s+(?:and|then)\\s+)(?:${source})[.!?]?\\s*$`, "i"));
+
+function normalizedVerifierCommand(command) {
+  return String(command ?? "").replace(/\s+/g, " ").trim();
+}
+
+function exactConfiguredCommandMatch(text, patterns, verifyCommands) {
+  const configured = new Set(uniqueStrings(verifyCommands).map(normalizedVerifierCommand));
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    const command = normalizedVerifierCommand(match?.[1]);
+    if (match && !/^no\s+tests?\b/i.test(command) && configured.has(command)) return match;
+  }
+  return undefined;
+}
+
+function withoutTerminalVerificationClause(obligation, verifyCommands) {
+  const text = obligation.replace(/^\s*\[[a-z][a-z0-9_-]{0,20}\]\s*/i, "").trim();
+  const terminal = text.match(TERMINAL_VERIFICATION_CLAUSE)
+    ?? exactConfiguredCommandMatch(text, TERMINAL_EXACT_COMMAND_CLAUSES, verifyCommands);
+  if (terminal && terminal.index !== undefined) {
+    return { text: text.slice(0, terminal.index).replace(/[,;.]\s*$/, "").trim(), verification: true };
+  }
+  const verificationOnly = FULL_VERIFICATION_CLAUSE.test(text)
+    || Boolean(exactConfiguredCommandMatch(text, FULL_EXACT_COMMAND_CLAUSES, verifyCommands));
+  return verificationOnly ? { text: "", verification: true } : { text, verification: false };
+}
+
+function kindFor(obligation, changeMode, verifyCommands) {
   if (changeMode === "read-only") return "investigation";
-  const text = obligation.toLowerCase();
+  const terminal = withoutTerminalVerificationClause(obligation, verifyCommands);
+  if (!terminal.text && terminal.verification) return "verification";
+  const text = terminal.text.toLowerCase();
   if (/\b(scope|out[- ]of[- ]scope|unrelated files?|only (?:touch|change|modify)|changed files?)\b/.test(text)) return "scope";
-  if (/\b(verif(?:y|ier|ication)|tests? pass|typecheck|lint|build passes?|exact command)\b/.test(text)) return "verification";
   if (/\b(invalid|malformed|reject|throw|error|failure|negative|fractional|null|undefined|empty input)\b/.test(text)) return "boundary";
   if (/\b(output|return|render|format|serialize|response|result)\b/.test(text)) return "output";
   return "behavior";
@@ -101,7 +153,7 @@ export function compileCriterionGraph(input) {
   });
   const nodes = contract.acceptanceCriteria.map((obligation, criterionIndex) => {
     const id = `criterion-${String(criterionIndex + 1).padStart(2, "0")}`;
-    const kind = kindFor(obligation, contract.changeMode);
+    const kind = kindFor(obligation, contract.changeMode, contract.verifyCommands);
     const explicit = explicitDependencyLabels(obligation).map((label) => labels.get(label)).filter((dependency) => (
       dependency && Number(dependency.slice(-2)) - 1 < criterionIndex
     ));

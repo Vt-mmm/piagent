@@ -8,15 +8,20 @@ import { authorityReplacementState } from "../policy/authority-resume-policy.ts"
 import { compileCriterionGraph, criterionGraphContextSelection, criterionGraphGuidance, criterionGraphMode } from "../../extensions/criterion-graph.js";
 import { captureTaskStartBaseline } from "../inspection/task-baseline-start-capture.ts";
 import { sameStringRecord, satisfiesAuthorityReplacement } from "./task-start-retry-helpers.ts";
+import {
+  automaticTaskExecutionGuidance, EXACT_VERIFIER_EXECUTION_GUIDANCE, RUNTIME_SOURCE_REUSE_GUIDANCE,
+  taskCriticalProofSection
+} from "./task-start-guidance.ts";
 type ExtensionContext = any; type TaskContract = any; type TaskStartParameters = any;
+
 export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any>): any {
   const {
     DEFAULT_MAX_TASK_ATTEMPTS, ORCHESTRATION_ROLES, REVIEW_LENSES, StringEnum, Type,
     activateToolGroups, activeSessionTask, activeTaskToolGroups, appendSessionTrace, appendTrace,
     applyRuntimeLifecycleObservation, automaticAcceptanceCriteria, automaticReadOnlyTaskScope, automaticReviewLenses, automaticTaskIntakeMode, automaticTaskMutationPolicy, automaticTaskRiskLane, automaticTaskScope,
-    acceptanceBaselineGuidance, acceptanceProofGuidance, bindSessionTask, buildAcceptanceReceipt, compactTaskDetails, contextBudgetConfig, createTaskRunId,
+    acceptanceBaselineGuidance, acceptanceLanguageAdapterForPath, acceptanceProofGuidance, bindSessionTask, buildAcceptanceReceipt, compactTaskDetails, contextBudgetConfig, createTaskRunId,
     currentSessionName, defaultWorkPlan, effectiveProtectedPaths, hasGitEvidenceRoot, hasOperatorSessionName,
-    loadProfileFromContext, matchesProtectedPath, normalizeReviewLenses, normalizeWorkPlanSteps, nowIso, policy,
+    isAcceptanceTestPath, loadProfileFromContext, matchesProtectedPath, normalizeReviewLenses, normalizeWorkPlanSteps, nowIso, policy,
     priorTaskAttempts, recordTaskStartCheckpoint, redactText, redactTextArray, registerRuntimeTool,
     repositoryFileManifest, resolveOrchestrationPolicy, resolveTaskScopePatterns, runtimeLifecycleMode, runtimeState, safeTaskId, selectVerificationPlan,
     summarizeAttempt, telemetry, validTaskScopePattern, validateNewWorkPlan, verifierCommandInstructions, workingTreeEvidenceDigest, workingTreeSnapshot, workingTreeSnapshotHasUnavailableEvidence,
@@ -288,7 +293,8 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       });
       const criterionGraph = compileCriterionGraph({ acceptanceCriteria: acceptance.acceptanceCriteria, scope: resolvedScope,
         verifyCommands: verifyPlan.commands, changeMode, mode: criterionGraphMode(), createdAt });
-      const maxManifestFiles = contextBudgetConfig(policy).maxManifestFiles, plannedContext = criterionGraphContextSelection(criterionGraph, repositoryFileManifest(ctx.cwd), [], maxManifestFiles), observedContext = criterionGraphContextSelection(undefined, [], runtimeState.preTaskContext(ctx), maxManifestFiles);
+      const projectFiles = repositoryFileManifest(ctx.cwd);
+      const maxManifestFiles = contextBudgetConfig(policy).maxManifestFiles, plannedContext = criterionGraphContextSelection(criterionGraph, projectFiles, [], maxManifestFiles), observedContext = criterionGraphContextSelection(undefined, [], runtimeState.preTaskContext(ctx), maxManifestFiles);
       const task: TaskContract = {
         schemaVersion: 2,
         taskRunId,
@@ -349,6 +355,9 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       const exactOutputGuidance = mutationPolicy === "forbidden"
         ? exactFinalOutputGuidance(written.summary)
         : [];
+      const criticalProof = taskCriticalProofSection(
+        written, plannedContext, projectFiles, acceptanceProofGuidance, isAcceptanceTestPath, acceptanceLanguageAdapterForPath
+      );
       bindSessionTask(ctx.cwd, sessionId, sessionName, written);
       runtimeState.cacheTaskIdentity(ctx, written);
       if (written.intakeMode !== "runtime") {
@@ -372,6 +381,9 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
             written.verifyCommands.length > 0
               ? ["Exact verifier commands:", ...verifierCommandInstructions(written.verifyCommands)].join("\n")
               : "Verify: none (read-only).",
+            ...(written.verifyCommands.length > 0
+              ? [EXACT_VERIFIER_EXECUTION_GUIDANCE]
+              : []),
             written.acceptanceCriteria.length > 0
               ? ["Acceptance focus:", ...written.acceptanceCriteria.map((criterion, index) => `${index + 1}. ${criterion}`)].join("\n")
               : "Acceptance focus: not recorded.",
@@ -379,9 +391,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
               ? [["Execution map (planning only; verifier remains authoritative):", ...criterionGraphGuidance(written.criterionGraph).map((line: string) => `- ${line}`)].join("\n")]
               : []),
             ...exactOutputGuidance,
-            ...(changeMode === "source-change" && mutationPolicy === "required" && acceptanceProofGuidance(written).length > 0
-              ? [["Critical behavioral proof:", ...acceptanceProofGuidance(written).map((item: string) => `- ${item}`), "Map every proof item above to a live focused assertion or explicit test matrix before the verifier; happy-path coverage and prose claims are insufficient."].join("\n")]
-              : []),
+            ...criticalProof,
             ...(baselineGuidance.length > 0
               ? [["Existing public contract:", ...baselineGuidance.map((item: string) => `- ${item}`)].join("\n")]
               : []),
@@ -457,6 +467,9 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       ? acceptanceBaselineGuidance(task, { cwd: ctx.cwd })
       : [];
     const exactOutputGuidance = task.changeMode === "read-only" || task.mutationPolicy === "forbidden" ? exactFinalOutputGuidance(task.summary) : [];
+    const criticalProof = taskCriticalProofSection(
+      task, plannedContext, projectFiles, acceptanceProofGuidance, isAcceptanceTestPath, acceptanceLanguageAdapterForPath
+    );
     return {
       started: true,
       task,
@@ -465,9 +478,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
         `Piagent runtime task: ${task.taskId}; scope: ${task.scope.join(", ")}.`,
         "The complete operator request above is the authoritative acceptance contract; runtime keeps its full criteria, so do not restate or re-scout it.",
         `Assurance: ${assurance.tier} (${assurance.reasonCodes.join(", ") || "bounded-runtime"}).`,
-        ...(task.changeMode === "source-change" && task.mutationPolicy !== "forbidden" && acceptanceProofGuidance(task).length > 0
-          ? [["Critical behavioral proof:", ...acceptanceProofGuidance(task).map((item: string) => `- ${item}`), "Map every proof item above to a live focused assertion or explicit test matrix before the verifier; happy-path coverage is insufficient."].join("\n")]
-          : []),
+        ...criticalProof,
         ...(baselineGuidance.length > 0
           ? [["Existing public contract:", ...baselineGuidance.map((item: string) => `- ${item}`)].join("\n")]
           : []),
@@ -475,13 +486,9 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
         "Exact verifier commands:",
         ...(task.verifyCommands.length > 0 ? verifierCommandInstructions(task.verifyCommands) : ["none"]),
         ...(criterionGraphGuidance(task.criterionGraph).length > 0 ? [["Execution map (planning only):", ...criterionGraphGuidance(task.criterionGraph).map((line: string) => `- ${line}`)].join("\n")] : []),
+        RUNTIME_SOURCE_REUSE_GUIDANCE,
         "Root project instructions are loaded. Do not re-read root AGENTS.md or inspect Piagent/platform files; work directly in relevant source/tests with ordinary tools.",
-        task.changeMode === "read-only" || task.mutationPolicy === "forbidden"
-          ? task.changeMode === "source-change" ? "Stay mutation-free. Runtime permits bounded inspection and the exact configured verifier, records completion evidence, and requires a zero task delta."
-            : "Stay read-only. Runtime records targeted reads and completion evidence; do not call task-management tools."
-          : task.criterionGraph?.mode === "criterion-graph"
-            ? "Follow the execution map: batch context reads by target, implement dependency-ready criteria, then run the exact verifier once; rerun only after a later mutation. The map plans work but never overrides the operator request or verifier."
-            : "Before mutating, privately map every operator criterion to implementation and focused-test coverage; batch independent reads or writes. Finish intended edits and one criterion-by-criterion self-review, then run the exact verifier once; rerun only after a later mutation. Runtime records evidence and completion; do not call task-management tools."
+        automaticTaskExecutionGuidance(task)
       ].join("\n"))
     };
   }

@@ -62,3 +62,20 @@ test("process runner waits for a detached descendant that closes inherited strea
   assert.equal(result.code, 0);
   await waitForProcessExit(pid);
 });
+
+test("process runner measures duration independently of wall-clock jumps", async (t) => {
+  const originalDateNow = Date.now;
+  let wallClockOffsetMs = 0;
+  Date.now = () => originalDateNow() + wallClockOffsetMs;
+  t.after(() => { Date.now = originalDateNow; });
+
+  const controller = createBenchmarkProcessController(() => false);
+  const pending = controller.run(process.execPath, ["-e", "setTimeout(() => {}, 50)"], { timeoutMs: 5_000 });
+  wallClockOffsetMs = 60 * 60 * 1_000;
+  const result = await pending;
+
+  assert.equal(result.code, 0);
+  assert.ok(Number.isFinite(result.durationSeconds));
+  assert.ok(result.durationSeconds >= 0);
+  assert.ok(result.durationSeconds < 60, `duration followed a wall-clock jump: ${result.durationSeconds}s`);
+});

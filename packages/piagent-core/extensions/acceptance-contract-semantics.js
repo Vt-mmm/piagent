@@ -1,6 +1,8 @@
 import path from "node:path";
 import { acceptanceBoundaryProofGuidance } from "./acceptance-boundary-guidance.js";
 import { evidenceTopLevelArguments, executableRejectionAssertions } from "./acceptance-executable-evidence.js";
+import { assertionsProveErrorMapping, ERROR_CONSTRUCTORS, ERROR_CONSTRUCTOR_DISPLAY_NAMES, errorMappingsProveContract,
+  hasAmbiguousErrorClassIntent, rejectionStatementErrorClass, requestedErrorClasses, requestedErrorPartitionMapping } from "./acceptance-error-classes.js";
 
 const INTEGER_TARGET_STOPWORDS = new Set([
   "and", "basis", "cents", "input", "inputs", "items", "money", "number", "numbers", "or", "points", "typeerror", "value", "values"
@@ -207,8 +209,6 @@ function nullRejectingDefaultTargets(text, sourceText = "") {
   return uniqueTargets.filter((target) => new RegExp(`(?:\\.${escapeRegex(target)}\\b|\\b${escapeRegex(target)}\\b)\\s*\\?\\?`, "i").test(source));
 }
 
-const ERROR_CONSTRUCTORS = ["typeerror", "rangeerror", "syntaxerror", "referenceerror", "urierror", "evalerror", "aggregateerror", "error"];
-
 function evidenceBalancedEnd(text, openIndex, opening = "(", closing = ")", ceiling = 8_000) {
   if (text[openIndex] !== opening) return -1;
   let depth = 0;
@@ -217,13 +217,6 @@ function evidenceBalancedEnd(text, openIndex, opening = "(", closing = ")", ceil
     else if (text[index] === closing && --depth === 0) return index + 1;
   }
   return -1;
-}
-
-function requestedErrorClasses(text) {
-  const value = normalizedText(text);
-  const specific = ERROR_CONSTRUCTORS.slice(0, -1).filter((name) => new RegExp(`\\b${name}\\b`).test(value));
-  if (specific.length > 0) return specific;
-  return /\b(?:throw(?:s|ing)?|reject(?:s|ed|ion)?)\b[^.\n]{0,80}\berror\b/.test(value) ? ["error"] : [];
 }
 
 function simpleConstantValue(raw) {
@@ -624,12 +617,6 @@ function validationConditionProof(condition, names, bodies) {
   return proof;
 }
 
-function rejectionStatementProves(text, requestedErrors) {
-  return requestedErrors.length === 0
-    ? /^\s*throw\s+(?:new\s+)?[a-z_$][a-z0-9_$]*(?:\s*\(|\b)/.test(text)
-    : requestedErrors.some((name) => new RegExp(`^\\s*throw\\s+(?:new\\s+)?${escapeRegex(name)}\\s*\\(`).test(text));
-}
-
 function exactHelperCall(text) {
   let value = String(text ?? "").trim();
   if (value.startsWith("{") && evidenceBalancedEnd(value, 0, "{", "}") === value.length) {
@@ -722,7 +709,7 @@ function inputNameWrittenBefore(callable, name, offset) {
 }
 
 function conditionalRejection(callable, requestedErrors, bodies) {
-  const proof = { generic: false, partitions: new Set() };
+  const proof = { generic: false, partitions: new Set(), errorMappings: [] };
   const names = inputDerivedNames(callable);
   for (const match of callable.body.matchAll(/\bif\s*\(/g)) {
     if (sourceBraceDepthAt(callable.body, match.index) !== 0 || priorUnconditionalExit(callable.body, match.index)) continue;
@@ -737,8 +724,11 @@ function conditionalRejection(callable, requestedErrors, bodies) {
     const consequent = callable.body.slice(consequentStart, consequentEnd === -1 ? callable.body.length : consequentEnd);
     const condition = callable.body.slice(conditionOpen + 1, conditionEnd - 1);
     const liveNames = names.filter((name) => !inputNameWrittenBefore(callable, name, match.index));
-    if (rejectionStatementProves(consequent.replace(/^\s*\{/, ""), requestedErrors)) {
-      mergeValidationProof(proof, validationConditionProof(condition, liveNames, bodies));
+    const consequentError = rejectionStatementErrorClass(consequent.replace(/^\s*\{/, ""), requestedErrors);
+    if (consequentError) {
+      const validation = validationConditionProof(condition, liveNames, bodies);
+      mergeValidationProof(proof, validation);
+      for (const partition of validation.partitions) proof.errorMappings.push({ partition, errorClass: consequentError });
       continue;
     }
     const throwingHelper = exactHelperCall(consequent);
@@ -749,11 +739,19 @@ function conditionalRejection(callable, requestedErrors, bodies) {
     }
     if (!/^\s*\{?\s*return\b/.test(consequent)) continue;
     const following = callable.body.slice(consequentEnd === -1 ? callable.body.length : consequentEnd);
-    if (rejectionStatementProves(following, requestedErrors)) {
-      mergeValidationProof(proof, positiveValidationConditionProof(condition, liveNames, bodies));
+    const followingError = rejectionStatementErrorClass(following, requestedErrors);
+    if (followingError) {
+      const validation = positiveValidationConditionProof(condition, liveNames, bodies);
+      mergeValidationProof(proof, validation);
+      for (const partition of validation.partitions) proof.errorMappings.push({ partition, errorClass: followingError });
     }
   }
   return { ...proof, names };
+}
+
+function sourceCallableProvesErrorMapping(bodies, name, mapping) {
+  const observed = sourceCallableProof(bodies, name, []).errorMappings ?? [];
+  return errorMappingsProveContract(observed, mapping);
 }
 
 function sourceCallableProof(bodies, name, requestedErrors, visited = new Set()) {
@@ -891,7 +889,12 @@ export function acceptanceInvalidInputEvidence(input = {}) {
   const sourceText = normalizedText(sanitizeJavaScriptEvidence(input.sourceText));
   const testText = normalizedText(sanitizeJavaScriptEvidence(input.testText));
   const requestedErrors = requestedErrorClasses(taskText);
+  const ambiguousErrorIntent = hasAmbiguousErrorClassIntent(taskText);
   const requestedPartitions = requestedInvalidPartitions(taskText);
+  // A constructor set alone cannot prove a mapping. Mixed-class evidence uses a narrow grammar;
+  // ambiguous prose or indirect source/test proof abstains fail-closed.
+  const requestedErrorMapping = requestedErrors.length > 1
+    ? requestedErrorPartitionMapping(taskText, requestedErrors, requestedPartitions) : null;
   const namedTargets = uniqueStrings(input.namedTargets).map((item) => item.toLowerCase());
   const provenanceTargets = new Set(uniqueStrings(input.provenanceTargets).map((item) => item.toLowerCase()));
   const sourceEntries = (Array.isArray(input.sourceEntries) ? input.sourceEntries : [])
@@ -923,12 +926,15 @@ export function acceptanceInvalidInputEvidence(input = {}) {
       .map((assertion) => ({ assertion, binding }));
   });
   const testCallables = new Set([...bindings.flatMap((binding) => binding.testNames), ...structuralTargets.map((target) => `*.${target}`)]);
-  const namedAssertions = namedTargets.length > 0
-    ? executableRejectionAssertions(testText, testCallables).filter((assertion) => (
-        requestedErrors.length === 0 || requestedErrors.some((name) => assertion.errorClasses.includes(name))
-      ))
-    : [];
+  const allNamedAssertions = namedTargets.length > 0 ? executableRejectionAssertions(testText, testCallables) : [];
+  const namedAssertions = allNamedAssertions.filter((assertion) => requestedErrors.length === 0
+    || requestedErrors.some((name) => assertion.errorClasses.includes(name)));
   const assertions = namedTargets.length > 0 ? namedAssertions : inferredAssertions.map((item) => item.assertion);
+  const mappingTargetGroups = [...bindings.map((binding) => binding.testNames),
+    ...structuralTargets.map((target) => [`*.${target}`])];
+  const mappingTestOk = requestedErrors.length <= 1 || Boolean(requestedErrorMapping && namedTargets.length > 0
+    && mappingTargetGroups.length > 0
+    && mappingTargetGroups.every((targets) => assertionsProveErrorMapping(allNamedAssertions, targets, requestedErrorMapping)));
   const targetOk = assertions.length > 0 && (namedTargets.length === 0 || (
     bindings.every((binding) => binding.testNames.length > 0 && binding.testNames.some((name) => assertions.some((assertion) => assertion.targets.includes(name))))
     && structuralTargets.every((target) => assertions.some((assertion) => assertion.targets.includes(`*.${target}`)))
@@ -940,17 +946,25 @@ export function acceptanceInvalidInputEvidence(input = {}) {
         && [...bodyMaps.values()].some((bodies) => sourceCallableProves(bodies, target, requestedErrors, requestedPartitions)))
     : inferredAssertions.length > 0 && inferredAssertions.every(({ binding }) => (
         sourceCallableProves(bodyMaps.get(binding.sourcePath) ?? new Map(), binding.sourceName, requestedErrors, requestedPartitions)
-      )));
+      ))) && (requestedErrors.length <= 1 || Boolean(requestedErrorMapping && namedTargets.length > 0
+        && bindings.every((binding) => sourceCallableProvesErrorMapping(
+          bodyMaps.get(binding.sourcePath) ?? new Map(), binding.sourceName, requestedErrorMapping
+        ))
+        && structuralTargets.every((target) => [...bodyMaps.values()].filter((bodies) => bodies.has(target)).length === 1
+          && [...bodyMaps.values()].some((bodies) => sourceCallableProvesErrorMapping(bodies, target, requestedErrorMapping)))));
   const partitions = new Set(assertions.flatMap((assertion) => [...assertion.partitions]));
   const partitionOk = requestedPartitions.every((partition) => partitionCovered(partition, partitions));
-  return { sourceOk, testOk: testLexicalOk && testConstructorOk && targetOk && partitionOk };
+  return { sourceOk: sourceOk && !ambiguousErrorIntent,
+    testOk: testLexicalOk && testConstructorOk && targetOk && partitionOk && mappingTestOk && !ambiguousErrorIntent };
 }
 
 export function acceptanceContractProofGuidance(raw) {
   const value = normalizedText(raw);
   const guidance = [...acceptanceBoundaryProofGuidance(raw)];
   if (onlyUndefinedContract(raw)) guidance.push("Prove undefined falls through while null, false, 0, and empty string are each preserved at the highest-precedence position.");
-  if (/\btypeerror\b/.test(value)) guidance.push("Assert TypeError for every rejected partition named by the request; a different error class is not equivalent.");
+  const requestedSpecificErrors = hasAmbiguousErrorClassIntent(raw) ? [] : requestedErrorClasses(raw).map((errorClass) => ERROR_CONSTRUCTOR_DISPLAY_NAMES[errorClass]).filter(Boolean);
+  if (requestedSpecificErrors.length === 1) guidance.push(`Assert ${requestedSpecificErrors[0]} for every rejected partition named by the request; a different error class is not equivalent.`);
+  if (requestedSpecificErrors.length > 1) guidance.push(`Preserve the request's partition-to-error mapping: assert each rejected partition with its explicitly named class (${requestedSpecificErrors.join(", ")}); do not apply one class to every partition.`);
   const integerTargets = integerConstraintTargets(raw);
   if (integerTargets.length > 0) guidance.push(`Reject fractional values for every integer-constrained argument (${integerTargets.join(", ")}).`);
   const nullRejectingTargets = nullRejectingDefaultTargets(raw);

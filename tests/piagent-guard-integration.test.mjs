@@ -433,6 +433,10 @@ describe("piagent guard integration", () => {
     }, ctx);
     assert.match(started.systemPrompt, /Piagent runtime task is injected below/);
     assert.match(started.systemPrompt, /do not re-read root AGENTS\.md/);
+    assert.match(started.systemPrompt, /Use complete runtime-delivered source directly without rereading it normally/);
+    assert.match(started.systemPrompt, /oldText mismatch.*bounded reread of only the affected region/);
+    assert.match(started.systemPrompt, /Preserve every runtime verifier exactly and keep commands separate/);
+    assert.match(started.systemPrompt, /runtime-authorized same-tree infrastructure retry/);
     assert.doesNotMatch(started.systemPrompt, /For an ordinary source task/);
     assert.equal(started.message.customType, "piagent-runtime-task-intake");
     assert.match(started.message.content, /Piagent runtime task: ticket-101/);
@@ -441,13 +445,17 @@ describe("piagent guard integration", () => {
     assert.ok(started.message.content.length < 2_000, `runtime intake should stay compact, got ${started.message.content.length} chars`);
     assert.match(started.message.content, /Do not re-read root AGENTS\.md or inspect Piagent\/platform files/);
     assert.match(started.message.content, /Execution map \(planning only\)/);
-    assert.match(started.message.content, /batch context reads by target/);
-    assert.match(started.message.content, /implement dependency-ready criteria, then run the exact verifier once/);
+    assert.match(started.message.content, /Use runtime-delivered source; do not reread it/);
+    assert.match(started.message.content, /edit reports generation\/drift\/oldText mismatch, make one bounded reread of the affected region/);
+    assert.match(started.message.content, /Wildcard test scope is permission, not a file target/);
+    assert.doesNotMatch(started.message.content, /batch context reads by target/);
+    assert.match(started.message.content, /Follow the execution map and implement dependency-ready criteria/);
+    assert.doesNotMatch(started.message.content, /sequentially|never combine or parallelize/);
     assert.match(started.message.content, /src\/invoice\.ts/);
     assert.match(started.message.content, /test\/\*\*/);
     assert.match(started.message.content, /Existing public return elements in src\/invoice\.ts are names\/identifiers, not object values/);
-    assert.match(started.message.content, /Verifier 1 \(run as its own shell call\): git diff --check/);
-    assert.match(started.message.content, /Verifier 2 \(run as its own shell call\): npm test/);
+    assert.match(started.message.content, /Verifier 1 \(run as an exact standalone shell command\): git diff --check/);
+    assert.match(started.message.content, /Verifier 2 \(run as an exact standalone shell command\): npm test/);
     assert.doesNotMatch(started.message.content, /git diff --check\s*\|\s*npm test/);
     assert.equal(started.message.details.runtimeTask.intakeMode, "runtime");
     assert.deepEqual(started.message.details.runtimeTask.verifyCommands, ["git diff --check", "npm test"]);
@@ -602,7 +610,7 @@ describe("piagent guard integration", () => {
       const initialSurface = [...harness.activeTools];
       piagentGuard(harness.pi);
       await harness.handlers.get("session_start")({}, ctx);
-      const prompt = "Update src/invoice.ts, reject invalid fractional quantities, and run focused tests.";
+      const prompt = "Update src/invoice.ts so quantity must be a positive integer; reject zero, negative, and fractional values, then run focused tests.";
       await harness.handlers.get("input")({ text: prompt, source: "user" }, ctx);
       const started = await harness.handlers.get("before_agent_start")({
         prompt,
@@ -611,7 +619,16 @@ describe("piagent guard integration", () => {
       }, ctx);
       assert.match(started.message.content, /Execution map \(planning only\)/);
       assert.match(started.message.content, /criterion-[0-9]{2} boundary/);
-      assert.match(started.message.content, /map plans work but never overrides the operator request or verifier/);
+      assert.match(started.message.content, /Critical behavioral proof/);
+      assert.match(started.message.content, /No concrete criterion-linked focused test was selected/);
+      assert.match(started.message.content, /\[criterion-[0-9]{2}:fallback\]/);
+      assert.match(started.message.content, /Each fallback tag requires adding\/updating a durable scoped focused test with live assertions/);
+      assert.match(started.message.content, /test scope is unavailable, report missing durable proof and do not claim completion/);
+      assert.match(started.message.content, /after the criterion's final intended mutation and before exact verifiers/i);
+      assert.match(started.message.content, /later target mutation or a runtime-authorized same-tree infrastructure retry/);
+      assert.match(started.message.content, /Transient\/print-only probes and prose are insufficient/);
+      assert.doesNotMatch(started.message.content, /assertion matrix/);
+      assert.match(started.message.content, /map plans work but never overrides the operator request or exact verifiers/);
       assert.equal(started.message.details.runtimeTask.criterionGraph.mode, "criterion-graph");
       const taskPath = path.join(cwd, ".pi", "piagent-state", "tasks", `${started.message.details.runtimeTask.taskRunId}.json`);
       const task = JSON.parse(fs.readFileSync(taskPath, "utf8"));
@@ -1504,6 +1521,10 @@ describe("piagent guard integration", () => {
     }, ctx);
     assert.match(result.systemPrompt, /Piagent runtime-managed task flow/);
     assert.match(result.systemPrompt, /piagent_task_start` exactly once/);
+    assert.match(result.systemPrompt, /Use complete runtime-delivered source directly; do not reread it normally/);
+    assert.match(result.systemPrompt, /oldText mismatch.*bounded reread of only the affected region/);
+    assert.match(result.systemPrompt, /Preserve every runtime-provided verifier exactly and keep commands separate/);
+    assert.match(result.systemPrompt, /runtime-authorized same-tree infrastructure retry/);
     assert.doesNotMatch(result.systemPrompt, /piagent_context_record/);
     assert.match(result.systemPrompt, /Project-specific tail/);
   });
@@ -2525,8 +2546,11 @@ describe("piagent guard integration", () => {
     assert.equal(started.details.schemaVersion, 2);
     assert.equal(started.details.sessionId, "session-lifecycle");
     assert.equal(started.details.verifyGroup, "test");
-    assert.match(started.content[0].text, /Verifier 1 \(run as its own shell call\): npm test/);
-    assert.match(started.content[0].text, /Verifier 2 \(run as its own shell call\): npm run lint/);
+    assert.match(started.content[0].text, /Verifier 1 \(run as an exact standalone shell command\): npm test/);
+    assert.match(started.content[0].text, /Verifier 2 \(run as an exact standalone shell command\): npm run lint/);
+    assert.match(started.content[0].text, /Keep each exact verifier command separate and unmodified/);
+    assert.match(started.content[0].text, /rerun only after a later mutation or a runtime-authorized same-tree infrastructure retry/);
+    assert.doesNotMatch(started.content[0].text, /sequentially|never combine or parallelize/);
     assert.doesNotMatch(started.content[0].text, /npm test\s*\|\s*npm run lint/);
     assert.deepEqual(started.details.workPlan.map((step) => step.status), ["in-progress", "pending", "pending"]);
 

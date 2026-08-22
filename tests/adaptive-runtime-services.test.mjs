@@ -43,6 +43,8 @@ import {
   buildAcceptanceReceipt,
   refreshAcceptanceReceipt
 } from "../packages/piagent-core/extensions/acceptance-receipt.js";
+import { acceptanceInvalidInputEvidence } from "../packages/piagent-core/extensions/acceptance-contract-semantics.js";
+import { requestedErrorClasses } from "../packages/piagent-core/extensions/acceptance-error-classes.js";
 import { versionWorkingTreeHash, workingTreeCarrierDigest } from "../packages/piagent-core/extensions/working-tree-digest.js";
 import {
   BENCHMARK_SCOPE_BANDS,
@@ -632,6 +634,45 @@ test("acceptance receipt derives critical auth and validation obligations withou
     ["Prove undefined falls through while null, false, 0, and empty string are each preserved at the highest-precedence position."]
   );
   assert.ok(acceptanceProofGuidance("Clamp an integer page and throw TypeError for invalid values.").some((item) => /page/.test(item)));
+  assert.deepEqual(
+    acceptanceProofGuidance("Throw SyntaxError for an unterminated quoted CSV field."),
+    ["Assert SyntaxError for every rejected partition named by the request; a different error class is not equivalent."]
+  );
+  assert.deepEqual(
+    acceptanceProofGuidance("Reject non-string input with TypeError and out-of-range input with RangeError."),
+    ["Preserve the request's partition-to-error mapping: assert each rejected partition with its explicitly named class (TypeError, RangeError); do not apply one class to every partition."]
+  );
+  for (const request of [
+    "Throw TypeError for invalid input, never RangeError.",
+    "Use TypeError rather than RangeError for invalid input.",
+    "Throw TypeError for invalid input, not a RangeError.",
+    "Throw TypeError for invalid input; must not throw RangeError."
+  ]) {
+    assert.deepEqual(
+      acceptanceProofGuidance(request),
+      ["Assert TypeError for every rejected partition named by the request; a different error class is not equivalent."],
+      request
+    );
+  }
+  for (const request of [
+    "Catch RangeError and return a fallback.",
+    "When the dependency throws TypeError, retry once.",
+    "Without throwing RangeError, return false.",
+    "Avoid throwing RangeError.",
+    "Throw anything except RangeError.",
+    "RangeError isn't allowed.",
+    "Must not throw Error; return false."
+  ]) {
+    assert.deepEqual(requestedErrorClasses(request), [], request);
+    assert.deepEqual(acceptanceProofGuidance(request), [], request);
+  }
+  assert.deepEqual(requestedErrorClasses("Convert RangeError into TypeError."), ["typeerror"]);
+  assert.deepEqual(
+    acceptanceProofGuidance("Convert RangeError into TypeError."),
+    ["Assert TypeError for every rejected partition named by the request; a different error class is not equivalent."]
+  );
+  assert.deepEqual(requestedErrorClasses("Reject with a TypeError."), ["typeerror"]);
+  assert.deepEqual(requestedErrorClasses("Invalid input results in RangeError."), ["rangeerror"]);
   const transitionGuidance = acceptanceProofGuidance([
     "Revision is a non-negative safe\ninteger. A newly admitted command increments revision exactly once.",
     "Check an idempotency receipt before revision matching: an identical replay succeeds with a stale revision,",
@@ -1080,6 +1121,75 @@ test("acceptance receipt derives critical auth and validation obligations withou
     currentWorkingTreeDigest: currentDigest
   });
   assert.deepEqual(retryReceipt.criticalMissing.map((criterion) => criterion.obligation), []);
+});
+
+test("mixed error-class acceptance proves the exact executable partition mapping", () => {
+  const taskText = "Reject null input with TypeError and negative input with RangeError.";
+  const source = (nullClass, negativeClass) => [
+    "export function parse(value) {",
+    `  if (value === null) throw new ${nullClass}('null');`,
+    `  if (value < 0) throw new ${negativeClass}('negative');`,
+    "  return value;",
+    "}",
+    ""
+  ].join("\n");
+  const testText = (nullClass, negativeClass) => [
+    "import assert from 'node:assert/strict';",
+    "import { parse } from '../src/parse.js';",
+    `assert.throws(() => parse(null), ${nullClass});`,
+    `assert.throws(() => parse(-1), ${negativeClass});`,
+    ""
+  ].join("\n");
+  const evidence = (sourceClasses, testClasses, contractText = taskText) => {
+    const sourceCode = source(...sourceClasses), testCode = testText(...testClasses);
+    return acceptanceInvalidInputEvidence({
+      taskText: contractText,
+      sourceText: sourceCode,
+      testText: testCode,
+      sourceEntries: [{ path: "src/parse.js", text: sourceCode }],
+      testEntries: [{ path: "test/parse.test.js", text: testCode }],
+      namedTargets: ["parse"],
+      provenanceTargets: ["parse"]
+    });
+  };
+
+  assert.deepEqual(evidence(["TypeError", "RangeError"], ["TypeError", "RangeError"]), {
+    sourceOk: true, testOk: true
+  });
+  assert.deepEqual(evidence(["TypeError", "TypeError"], ["TypeError", "TypeError"]), {
+    sourceOk: false, testOk: false
+  });
+  assert.deepEqual(evidence(["RangeError", "TypeError"], ["TypeError", "RangeError"]), {
+    sourceOk: false, testOk: true
+  });
+  assert.deepEqual(evidence(["TypeError", "RangeError"], ["RangeError", "TypeError"]), {
+    sourceOk: true, testOk: false
+  });
+  assert.deepEqual(evidence(
+    ["TypeError", "RangeError"],
+    ["TypeError", "RangeError"],
+    "Reject null input with either TypeError or RangeError."
+  ), { sourceOk: false, testOk: false });
+
+  for (const [contractText, secondClass, requested] of [
+    ["Throw TypeError for null; RangeError for negative.", "RangeError", ["typeerror", "rangeerror"]],
+    ["Throw TypeError for null and Error for negative.", "Error", ["typeerror", "error"]]
+  ]) {
+    assert.deepEqual(requestedErrorClasses(contractText), requested, contractText);
+    assert.deepEqual(evidence(["TypeError", secondClass], ["TypeError", secondClass], contractText), {
+      sourceOk: true, testOk: true
+    }, `${contractText} correct mapping`);
+    assert.deepEqual(evidence(["TypeError", "TypeError"], ["TypeError", "TypeError"], contractText), {
+      sourceOk: false, testOk: false
+    }, `${contractText} one class for all partitions`);
+    assert.deepEqual(evidence([secondClass, "TypeError"], [secondClass, "TypeError"], contractText), {
+      sourceOk: false, testOk: false
+    }, `${contractText} swapped mapping`);
+  }
+  assert.deepEqual(evidence(
+    ["TypeError", "TypeError"], ["TypeError", "TypeError"],
+    "Throw TypeError for null; RangeError applies to negative."
+  ), { sourceOk: false, testOk: false });
 });
 
 test("acceptance proof scopes named entrypoints to their originating contract clause", (t) => {

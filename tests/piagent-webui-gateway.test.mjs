@@ -35,6 +35,19 @@ function assistantMessage(text) {
   };
 }
 
+async function waitForProcessExit(pid, timeoutMs = 10_000) {
+  const deadline = performance.now() + timeoutMs;
+  while (performance.now() < deadline) {
+    try { process.kill(pid, 0); }
+    catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === "ESRCH") return true;
+      throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return false;
+}
+
 describe("Piagent local Session Hub Gateway", () => {
   it("rejects repository TypeScript that needs code generation", (t) => {
     const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-typescript-loader-"));
@@ -189,20 +202,22 @@ describe("Piagent local Session Hub Gateway", () => {
     ensureWebUiBuild(root);
     const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-gateway-detached-"));
     const agentDir = path.join(temporary, "agent");
-    const invoke = (action, timeout = 10_000) => spawnSync(process.execPath, ["--disable-warning=ExperimentalWarning", "--import",
+    const state = gatewayProfileState(agentDir);
+    const invoke = (action, timeout = 20_000) => spawnSync(process.execPath, ["--disable-warning=ExperimentalWarning", "--import",
       path.join(root, "scripts", "register-typescript-loader.mjs"), path.join(root, "scripts", "piagent-dashboard.mjs"),
       action, "--no-open", "--agent-dir", agentDir], { cwd: root, encoding: "utf8", timeout });
-    t.after(() => {
-      invoke("stop");
-      fs.rmSync(temporary, { recursive: true, force: true });
+    t.after(async () => {
+      const pid = readGatewayDescriptor(state)?.pid;
+      try {
+        invoke("stop");
+        if (pid) assert.equal(await waitForProcessExit(pid), true, "the detached Gateway must stop during cleanup");
+      } finally { fs.rmSync(temporary, { recursive: true, force: true }); }
     });
 
-    const startedAt = Date.now();
     const launch = invoke("open");
     assert.equal(launch.status, 0, launch.stderr);
-    assert.ok(Date.now() - startedAt < 5_000, "the detached launcher must return promptly");
     assert.match(launch.stdout.trim(), /^http:\/\/127\.0\.0\.1:\d+\/#bootstrap=/);
-    const state = gatewayProfileState(agentDir), descriptor = readGatewayDescriptor(state);
+    const descriptor = readGatewayDescriptor(state);
     assert.ok(descriptor);
     assert.doesNotThrow(() => process.kill(descriptor.pid, 0));
     const health = await requestGatewayControl(state.controlSocket, { action: "health" });

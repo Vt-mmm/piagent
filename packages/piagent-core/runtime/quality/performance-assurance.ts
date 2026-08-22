@@ -2,6 +2,7 @@ import type { TaskContract } from "../../extensions/guard-types.ts";
 import { acceptanceBoundaryProofGuidance } from "../../extensions/acceptance-boundary-guidance.js";
 import { normalizePathCandidate } from "../../extensions/policy-core.js";
 import { acceptanceLanguageAdapterStatus } from "../../extensions/acceptance-language-adapters.js";
+import { hasGraphOrderContract } from "./performance-assurance-signals.ts";
 import {
   MAX_PERFORMANCE_MUTATIONS_PER_REVISION,
   MAX_PERFORMANCE_REPAIR_PATHS,
@@ -55,7 +56,6 @@ const SIGNALS: Array<{ code: string; pattern: RegExp }> = [
   { code: "boundary-contract", pattern: /\b(?:backpressure|boundary|budget|capacity|ceil(?:ing)?|clamp|inclusive|minimum|maximum|maxchars|overflow|round(?:ing)?|safe[-\s]+integer|basis points?|positive integer|non-negative|falsey|falsy|nullish)\b/i },
   { code: "return-shape-contract", pattern: /\b(?:return shape|returned? (?:element|object|value|representation)s?|preserve (?:the )?return)\b/i },
   { code: "public-api-contract", pattern: /\b(?:exported api|public api|do not change (?:the )?(?:api|signature)|preserve (?:the )?(?:api|input|output|return)|without changing unrelated behavior)\b/i },
-  { code: "graph-order-contract", pattern: /\b(?:dependency|topolog|cycle|stable order|input order|first[-\s]+(?:observed|seen|encountered)[-\s]+order|replay order|deduplicat(?:e|ion).*order|exactly once|before its dependent)\b/i },
   { code: "identity-isolation-contract", pattern: /\b(?:auth(?:orization)?|unauthoriz(?:ed|ation)|permission|cache[- ]?key|collision|same tuple|cross[- ]tenant|same[- ]tenant|tenant boundary|tenant[- ]scoped (?:cache|storage))\b/i },
   { code: "concurrency-contract", pattern: /\b(?:concurren|race condition|stale response|bounded retry|idempot(?:ent|ency)?|lock)\b/i },
   { code: "data-migration-contract", pattern: /\b(?:migration|schema|money|invoice|ledger|transaction|data loss)\b/i },
@@ -97,6 +97,7 @@ export function analyzePerformanceAssurance(input: AssuranceInput): PerformanceA
   }
 
   const reasonCodes = SIGNALS.filter((signal) => signal.pattern.test(request)).map((signal) => signal.code);
+  if (hasGraphOrderContract(request)) reasonCodes.push("graph-order-contract");
   if (/\b(?:tenants?|tenantid)\b/i.test(request) && /\bisolat(?:e|ed|es|ing|ion)\b/i.test(request)) {
     reasonCodes.push("identity-isolation-contract");
   }

@@ -110,6 +110,7 @@
   "piagent": {
     "runtimeIntegrityEntrypoints": [
       "packages/piagent-webui/server/sidecar-main.ts",
+      "scripts/benchmark-runner-core.mjs",
       "scripts/register-typescript-loader.mjs",
       "scripts/typescript-loader.mjs"
     ]

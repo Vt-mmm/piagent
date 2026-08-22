@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { spawn } from "node:child_process";
+import { performance } from "node:perf_hooks";
 
 const outputLimit = 4 * 1024 * 1024;
 
@@ -43,7 +44,7 @@ export function createBenchmarkProcessController(interrupted) {
       reject(new Error("Benchmark was interrupted before the child process started"));
       return;
     }
-    const started = Date.now();
+    const started = performance.now();
     const child = spawn(command, args, {
       cwd: options.cwd,
       env: options.env ?? process.env,
@@ -116,7 +117,7 @@ export function createBenchmarkProcessController(interrupted) {
         if (settled) return;
         settled = true;
         cleanup();
-        resolve({ code: code ?? 1, signal, timedOut, stdout, stdoutHash: options.inherit ? undefined : stdoutDigest.digest("hex"), stderr, forbiddenHits: [...forbiddenHits], requiredHits: [...requiredHits], durationSeconds: (Date.now() - started) / 1000 });
+        resolve({ code: code ?? 1, signal, timedOut, stdout, stdoutHash: options.inherit ? undefined : stdoutDigest.digest("hex"), stderr, forbiddenHits: [...forbiddenHits], requiredHits: [...requiredHits], durationSeconds: (performance.now() - started) / 1000 });
       };
       if (!groupAlive(child)) {
         finish();
@@ -125,10 +126,10 @@ export function createBenchmarkProcessController(interrupted) {
       // A detached descendant can close its inherited stdio before exiting. Keep
       // the process group owned until TERM has had time to work and the bounded
       // KILL escalation has run, rather than treating stream close as cleanup.
-      const deadline = Date.now() + 1_000;
+      const deadline = performance.now() + 1_000;
       const drain = () => {
         if (!groupAlive(child)) finish();
-        else if (Date.now() >= deadline) {
+        else if (performance.now() >= deadline) {
           settled = true;
           cleanup();
           reject(new Error(`Benchmark child process group ${child.pid} survived bounded SIGKILL cleanup`));
