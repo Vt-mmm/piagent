@@ -1,5 +1,6 @@
 export const BENCHMARK_SCOPE_BANDS = [
   { id: "core", suite: "core-v1", scenarios: 4, availability: "runnable", purpose: "Fast regression check for task quality, scope, safety, and exact usage." },
+  { id: "deep-logic", suite: "deep-logic-v1", scenarios: 7, availability: "runnable", claimTier: "capability", purpose: "Luna-medium-locked specialist regression across seven generated families, including exact temporal usage billing; full-suite only, not a generalization claim." },
   { id: "production", suite: "production-v1", scenarios: 18, availability: "runnable", claimTier: "public-regression", purpose: "Broader public regression matrix across archetypes, lifecycle states, and verifier profiles; not a generalization or production-stability claim." },
   { id: "capability", suite: "capability-v1", scenarios: 6, availability: "runnable", claimTier: "capability", purpose: "Unsaturated multi-file and multi-component tasks for hill-climbing; not a release gate." },
   { id: "e2-framework", suite: "e2-framework-v1", scenarios: 4, availability: "runnable", claimTier: "capability", purpose: "Taxonomy-bound real Hono, SQLite, and workspace tasks with reference, mutation, alternative-valid, scope, and grader-sensitivity calibration; not a release gate." },
@@ -35,7 +36,11 @@ export function benchmarkTrustChecklist(report = {}) {
   const outcomeEvidencePassed = comparison.outcomeEvidenceGate !== false;
   const pairedRegressionPassed = comparison.pairedRegressionGate !== false;
   const failureAwareEfficiencyPassed = comparison.failureAwareEfficiencyGate !== false;
+  const primaryEfficiencyPassed = comparison.primaryEfficiencyGate === true;
   const comparisonProtocolPassed = comparison.comparisonProtocolGate?.passed === true;
+  const fullSuitePassed = comparison.fullSuiteGate !== false;
+  const performancePassed = comparison.performanceGate !== false;
+  const stabilityPassed = comparison.stabilityGate !== false;
   return {
     hasPairedUsage,
     hasQualityGate: typeof comparison.qualityGate === "boolean",
@@ -48,6 +53,7 @@ export function benchmarkTrustChecklist(report = {}) {
     hasOutcomeEvidenceGate: typeof comparison.outcomeEvidenceGate === "boolean",
     hasPairedRegressionGate: typeof comparison.pairedRegressionGate === "boolean",
     hasFailureAwareEfficiencyGate: typeof comparison.failureAwareEfficiencyGate === "boolean",
+    hasPrimaryEfficiencyGate: typeof comparison.primaryEfficiencyGate === "boolean",
     hasComparisonProtocolGate: typeof comparison.comparisonProtocolGate?.passed === "boolean",
     achievedClaimTier: comparison.claimEligibility?.achievedTier ?? "unavailable",
     generalizationClaimAllowed: comparison.claimEligibility?.generalizationClaimAllowed === true,
@@ -63,6 +69,10 @@ export function benchmarkTrustChecklist(report = {}) {
       && outcomeEvidencePassed
       && pairedRegressionPassed
       && failureAwareEfficiencyPassed
+      && primaryEfficiencyPassed
+      && fullSuitePassed
+      && performancePassed
+      && stabilityPassed
       && comparisonProtocolPassed
   };
 }

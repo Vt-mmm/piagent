@@ -112,12 +112,13 @@ Removal targets what is registered in Pi's settings rather than what the current
   data, platform, reliability, and security. It compares Piagent with Raw Pi or
   controlled `codex-cli`, grades hidden acceptance/safety/workflow evidence,
   reports category/lifecycle/profile bands and 95% token-ratio confidence, and
-  reads exact JSONL usage plus privacy-safe tool histograms. Production runs
-  retry only zero-usage startup failures and disclose every retry separately.
-- `deep-logic-v1` adds six large, generated-variant families for interacting
-  state, orchestration, policy, context-graph, stream-recovery, and
-  transactional-config invariants. It keeps the current Pi model by default
-  and uses two repeats (24 paired sessions). A separate provider-free WebUI
+  reads exact JSONL usage plus privacy-safe tool histograms. Production claims
+  require zero retries; diagnostic retry overrides remain visible and fail the gate.
+- `deep-logic-v1` adds seven large, generated-variant families for interacting
+  state, orchestration, policy, context-graph, stream-recovery,
+  transactional-config, and exact temporal-billing invariants. It locks
+  Piagent/`codex-cli` to Luna/medium and uses three repeats (42 paired sessions) with token, duration,
+  full-suite, and zero-retry gates. A separate provider-free WebUI
   parity gate proves the 10 workflow and 32 runtime-control paths before any
   model quota is used.
 - The v1.2.12 production snapshot resolved 54/54 Piagent tasks, scored 10.00 for
@@ -359,7 +360,7 @@ This repository intentionally excludes:
 
 ## Maturity
 
-The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.5.5` or a reviewed commit.
+The current package version is read from package metadata and release tags. Personal machines may follow the unpinned package source when accepting ongoing updates; production/team quickstarts and committed project settings should pin an explicit tag such as `v1.6.0` or a reviewed commit.
 
 Ready for:
 

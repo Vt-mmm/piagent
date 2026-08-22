@@ -1260,4 +1260,11 @@ describe("guard fallback policy", () => {
       assert.deepEqual(missing, [], `the fallback policy drops ${missing.join(", ")}`);
     });
   }
+
+  it("keeps context delta shadow mode aligned with the typed base policy", () => {
+    const match = guardSource.match(/const DEFAULT_POLICY[\s\S]*?contextBudget:\s*\{[\s\S]*?contextDeltaShadow:\s*"([^"]+)"/);
+    assert.ok(match, "DEFAULT_POLICY.contextBudget.contextDeltaShadow not found");
+    assert.equal(match[1], basePolicy.contextBudget.contextDeltaShadow);
+    assert.ok(["off", "sample", "on"].includes(match[1]));
+  });
 });

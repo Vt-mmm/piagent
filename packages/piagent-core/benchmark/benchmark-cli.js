@@ -11,16 +11,16 @@ export const benchmarkUsage = `Usage:
   piagent-benchmark <project-path> --record ...   Legacy recorder
   piagent-benchmark <project-path> --init         Legacy scenario notes
 
-Runs a clean, paired baseline vs Piagent benchmark and grades it automatically.
-With no options it uses the built-in core-v1 suite, the current Pi default
-model/thinking setting, and the suite's repeat count.
+Runs a clean, paired Codex CLI vs Piagent benchmark and grades it automatically.
+With no options it uses the built-in core-v1 suite, GPT-5.6 Luna at medium
+thinking on both surfaces, and the suite's repeat count.
 
 Options:
   --suite <id|path>            core-v1, capability-v1, e2-framework-v1, deep-logic-v1, production-v1, or suite.json path.
-  --deep                       Alias for --suite deep-logic-v1 (6 large scenarios, current model by default).
+  --deep                       Alias for --suite deep-logic-v1 (7 large scenarios, locked to Luna/medium).
   --capability                 Alias for --suite capability-v1.
   --production                 Alias for --suite production-v1.
-  --surfaces <a,b>             raw-pi,piagent (default) or piagent,codex-cli.
+  --surfaces <a,b>             piagent,codex-cli (default); raw-pi is diagnostic ablation only.
   --model <provider/model>     Pin one model identity for both surfaces.
   --thinking <level>           off|minimal|low|medium|high|xhigh|max.
   --codex-mode <mode>          controlled isolated home (default) or native user configuration.
@@ -47,7 +47,7 @@ Options:
 
 Outputs report.json, report.html, summary.txt, and runs.jsonl with mode 0600.
 No token/result value is entered manually; usage comes from Pi session JSONL
-or Codex exec JSONL. Codex CLI comparisons require --model and --thinking.
+or Codex exec JSONL. Override --model and --thinking together for another parity target.
 `;
 
 function fail(message, code = 2) {
@@ -72,7 +72,7 @@ function positiveInteger(raw, name, minimum, maximum) {
 export function parseBenchmarkArgs(argv) {
   const options = {
     suite: "core-v1",
-    surfaces: ["raw-pi", "piagent"],
+    surfaces: ["piagent", "codex-cli"],
     model: undefined,
     thinking: undefined,
     codexMode: "controlled",

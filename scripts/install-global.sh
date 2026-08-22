@@ -28,7 +28,7 @@ Options:
   --no-model-scope                Leave the user's enabledModels untouched.
   --default-model <provider/model[:thinking]>
                                   Default model written to Pi settings
-                                  (default: openai-codex/gpt-5.5:high).
+                                  (default: openai-codex/gpt-5.6-sol:high).
   -h, --help                      Print this help and exit.
 
 Purpose:
@@ -91,7 +91,7 @@ WITH_WEB_ACCESS=true
 WITH_HERDR=false
 CONFIGURE_MODEL_SCOPE=true
 MODEL_SCOPE_PRESET="full"
-DEFAULT_MODEL="openai-codex/gpt-5.5:high"
+DEFAULT_MODEL="openai-codex/gpt-5.6-sol:high"
 DRY_RUN=false
 FLOATING_PACKAGE_SOURCE=false
 RESOLVED_CHANNEL_LABEL="custom"

@@ -12,3 +12,5 @@ Requirements:
 - Reject malformed objects, unsafe sequence numbers, non-string IDs/revisions, arrays as patches, and prototype-pollution keys (`__proto__`, `prototype`, `constructor`). Fail closed.
 
 Add focused tests if useful. Keep the implementation dependency-free and deterministic.
+
+Run `npm test` when complete; it includes a fixed public happy-path contract for this scenario.

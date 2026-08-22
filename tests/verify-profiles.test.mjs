@@ -5,6 +5,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import { selectVerificationPlan } from "../packages/piagent-core/extensions/verification-intelligence.js";
+
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 
 function profile(name) {
@@ -50,15 +52,27 @@ test("default source verify plans fail closed when a project has no applicable v
 });
 
 test("Node-family defaults run configured checks and tolerate only missing optional siblings", (t) => {
-  for (const name of ["node-typescript", "fullstack", "backend-api", "be-readonly-fe"]) {
+  for (const name of ["node-typescript", "fullstack", "backend-api", "be-readonly-fe", "web-frontend"]) {
     const cwd = fixture();
     t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
     fs.writeFileSync(path.join(cwd, "package.json"), JSON.stringify({ scripts: { test: "node -e \"process.exit(0)\"" } }));
     const group = name === "be-readonly-fe" ? "frontendSource" : "source";
-    const command = profile(name).verifyCommands[group][0];
+    const commands = profile(name).verifyCommands[group];
+    assert.equal(commands.length, 1, `${name}.${group} must record one composite verifier result`);
+    const command = commands[0];
     const result = run(command, cwd);
     assert.equal(result.status, 0, `${name} did not run its configured test: ${result.stderr || result.stdout}`);
   }
+});
+
+test("web frontend narrows its fail-closed source verifier to scripts the project declares", (t) => {
+  const cwd = fixture();
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(cwd, "package.json"), JSON.stringify({ scripts: { test: "node --test" } }));
+  assert.deepEqual(
+    selectVerificationPlan(profile("web-frontend"), undefined, "source-change", cwd, ["src/stream.js"]),
+    { group: "source", commands: ["npm test"] }
+  );
 });
 
 test("docs verification remains usable for a repository with explicit documentation", (t) => {

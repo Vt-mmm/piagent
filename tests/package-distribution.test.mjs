@@ -33,6 +33,7 @@ const webUiSchemaPackageFiles = [
   "schemas/piagent-webui/approval-v1.schema.json",
   "schemas/piagent-webui/capabilities-v1.schema.json",
   "schemas/piagent-webui/session-catalog-v1.schema.json",
+  "schemas/piagent-webui/session-live-state-v1.schema.json",
   "schemas/piagent-webui/session-command-v1.schema.json",
   "schemas/piagent-webui/runtime-command-v1.schema.json",
   "schemas/piagent-webui/gateway-capabilities-v1.schema.json",
@@ -101,12 +102,14 @@ const webUiGatewayPackageFiles = [
   "packages/piagent-webui/gateway/provider-auth-broker.ts",
   "packages/piagent-webui/gateway/mcp-auth-broker.ts",
   "packages/piagent-webui/gateway/session-catalog.ts",
+  "packages/piagent-webui/gateway/session-live-state.ts",
   "packages/piagent-webui/gateway/session-command-controller.ts",
   "packages/piagent-webui/gateway/session-command-store.ts",
   "packages/piagent-webui/gateway/runtime-command-controller.ts",
   "packages/piagent-webui/gateway/runtime-session-controls.ts",
   "packages/piagent-webui/gateway/session-lease-store.ts",
   "packages/piagent-webui/gateway/session-metadata-store.ts",
+  "packages/piagent-webui/gateway/session-operation-watchdog.ts",
   "packages/piagent-webui/gateway/session-runtime-supervisor.ts",
   "packages/piagent-webui/ownership/profile-state.ts",
   "packages/piagent-webui/ownership/session-lease-store.ts",
@@ -196,6 +199,7 @@ describe("package distribution", () => {
     assert.ok(shippedWebUi.includes("packages/piagent-webui/server/transcript-projection.ts"));
     assert.ok(shippedWebUi.includes("packages/piagent-webui/server/benchmark-release-monitor.ts"));
     assert.ok(shippedWebUi.includes("packages/piagent-webui/server/sidecar-main.ts"));
+    assert.ok(shippedWebUi.includes("packages/piagent-webui/shared/text-visibility.ts"));
     assert.ok(shippedWebUi.includes("packages/piagent-webui/dist/client/index.html"));
     assert.ok(entries.includes("scripts/piagent-webui-launcher.mjs"));
     assert.equal(shippedWebUi.some((entry) => /\/(?:client\/src|benchmark|scripts|contracts)\//.test(entry)), false,
@@ -211,6 +215,7 @@ describe("package distribution", () => {
     assert.ok(entries.includes("benchmarks/production-v1/variant.mjs"));
     assert.ok(entries.includes("benchmarks/deep-logic-v1/suite.json"));
     assert.ok(entries.includes("benchmarks/deep-logic-v1/grade.mjs"));
+    assert.ok(entries.includes("benchmarks/deep-logic-v1/project/benchmark-contract/public-smoke.test.js"));
     assert.ok(entries.includes("scripts/benchmark-runner.mjs"));
     assert.ok(entries.includes("scripts/rc-readiness-evaluation.mjs"));
     assert.ok(entries.includes("scripts/ie6-release-freeze.mjs"));
@@ -396,6 +401,7 @@ describe("package distribution", () => {
     assert.equal(files.has("benchmarks/production-v1/suite.json"), true);
     assert.equal(files.has("benchmarks/production-v1/grade.mjs"), true);
     assert.equal(files.has("benchmarks/production-v1/project/package.json"), true);
+    assert.equal(files.has("benchmarks/deep-logic-v1/project/benchmark-contract/public-smoke.test.js"), true);
     assert.equal(files.has("scripts/verify-vercel-link.mjs"), true);
     assert.equal(files.has("templates/project/.pi/gitignore.template"), true);
     assert.equal(files.has("templates/project/.pi/context-index.json"), true);

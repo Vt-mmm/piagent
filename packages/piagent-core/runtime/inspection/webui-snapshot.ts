@@ -8,6 +8,8 @@ import { workingTreeEvidenceDigest, workingTreeSnapshotUsesCurrentAlgorithm } fr
 import { inspectTaskContinuationBudget } from "../recovery/continuation-budget.ts";
 import { readHandoffProjection } from "../recovery/handoff-projection.ts";
 import type { ActivityInspectorEvent, CurrentActivity } from "../product/activity-inspector.ts";
+import { recoveredToolCalls } from "./activity-recovery.ts";
+import { classifyToolFailure, handledToolFailure } from "./tool-failure-classification.ts";
 import { projectCriteriaFileVerifier, type CriteriaLinkProjection } from "./criteria-links.ts";
 import { collectSourceChangeViews, type SourceChangeDocument, type WebUiIdentity } from "./source-change-projection.ts";
 
@@ -82,6 +84,27 @@ function scopedEvents(events: ActivityInspectorEvent[], sessionId: string, task?
   return [...deduped.values()].sort((left, right) => String(left.recordedAt).localeCompare(String(right.recordedAt))).slice(-2_000);
 }
 
+function enrichedFailureReasons(events: ActivityInspectorEvent[], sessionEntries: unknown[]): ActivityInspectorEvent[] {
+  const inputs = new Map<string, unknown>(), results = new Map<string, { content: unknown; isError: boolean; toolName: string }>();
+  for (const entry of sessionEntries) {
+    if (!entry || typeof entry !== "object" || (entry as any).type !== "message") continue;
+    const message = (entry as any).message;
+    if (message?.role === "assistant" && Array.isArray(message.content)) {
+      for (const block of message.content) if (block?.type === "toolCall" && typeof block.id === "string") inputs.set(block.id, block.arguments);
+    }
+    if (message?.role === "toolResult" && typeof message.toolCallId === "string") {
+      results.set(message.toolCallId, { content: message.content, isError: message.isError === true, toolName: String(message.toolName ?? "unknown") });
+    }
+  }
+  return events.map((event) => {
+    if (event.event !== "tool_result" || !event.toolCallId || !event.isError) return event;
+    const raw = results.get(event.toolCallId);
+    if (!raw) return event;
+    const reasonCode = classifyToolFailure(raw.toolName, raw.isError, raw.content, inputs.get(event.toolCallId));
+    return reasonCode ? { ...event, reasonCode } : event;
+  });
+}
+
 function sourceSummary(document: SourceChangeDocument | null, view: "task" | "working-tree" | "staged") {
   if (!document || document.availability.state === "unavailable") return {
     view, base: view === "task" ? "task-baseline" : "HEAD", state: "unavailable", revision: null,
@@ -109,21 +132,26 @@ function sourceSummary(document: SourceChangeDocument | null, view: "task" | "wo
 function activityProjection(events: ActivityInspectorEvent[], current: CurrentActivity[]) {
   const results = new Map(events.filter((event) => event.event === "tool_result").map((event) => [event.toolCallId, event]));
   const decisions = new Map(events.filter((event) => event.event === "tool_decision").map((event) => [event.toolCallId, event]));
+  const recoveries = recoveredToolCalls(events);
   const calls = events.filter((event) => event.event === "tool_call").slice(-200);
   const projected = calls.map((call) => {
     const result = results.get(call.toolCallId), decision = decisions.get(call.toolCallId);
     const blocked = decision?.decision === "blocked";
-    const failed = !blocked && Boolean(result && (result.isError === true || (typeof result.exitCode === "number" && result.exitCode !== 0)));
-    const state = blocked ? "blocked" : !result ? "running" : failed ? "failed" : "passed";
+    const handled = Boolean(result && handledToolFailure(result.reasonCode));
+    const failed = !blocked && !handled && Boolean(result && (result.isError === true || (typeof result.exitCode === "number" && result.exitCode !== 0)));
+    const recovery = call.toolCallId ? recoveries.get(call.toolCallId) : undefined;
+    const state = blocked ? "blocked" : !result ? "running" : failed && !recovery ? "failed" : "passed";
     const toolName = display(call.toolName ?? "unknown", 80).replace(/[^A-Za-z0-9._:@~-]/g, "-") || "unknown";
     const rawId = String(call.toolCallId ?? call.activityId ?? `${call.recordedAt}:${toolName}`);
     const command = display(call.command ?? call.targetPath ?? toolName, 65_536);
     return {
       activityRef: token("activity", [rawId, call.recordedAt]), kind: ["bash", "shell", "exec"].includes(toolName) ? "command" : "tool", state,
-      label: display(state === "running" ? `${toolName} running` : `${toolName} ${state}`, 500), preview: command,
+      label: display(recovery ? `${toolName} recovered` : handled ? `${toolName} warning` : state === "running" ? `${toolName} running` : `${toolName} ${state}`, 500), preview: command,
       toolCallId: token("tool", rawId), toolName, commandDigest: call.command ? `sha256:${hash(call.command)}` : null,
-      logRef: null, exitCode: typeof result?.exitCode === "number" ? result.exitCode : null, exitCodeExact: result?.exitCodeExact === true,
-      startedAt: timestamp(call.recordedAt), finishedAt: result || blocked ? timestamp(result?.recordedAt ?? decision?.recordedAt, timestamp(call.recordedAt)) : null
+      logRef: null, exitCode: recovery?.exitCode ?? (typeof result?.exitCode === "number" ? result.exitCode : null),
+      exitCodeExact: recovery?.exitCodeExact ?? (result?.exitCodeExact === true),
+      startedAt: timestamp(call.recordedAt), finishedAt: recovery ? timestamp(recovery.recoveredAt, timestamp(call.recordedAt))
+        : result || blocked ? timestamp(result?.recordedAt ?? decision?.recordedAt, timestamp(call.recordedAt)) : null
     };
   });
   const callIds = new Set(calls.map((call) => String(call.toolCallId ?? "")));
@@ -274,7 +302,7 @@ export async function buildWebUiInspectionProjection(input: {
   const taskRevision = input.task ? webUiTaskRevision(input.task) : null;
   const views = await collectSourceChangeViews({ cwd: input.cwd, identity, generatedAt, taskRevision,
     isProtectedPath: (_root, repoPath) => Boolean(matchesProtectedPath(repoPath, effectiveProtectedPaths)) });
-  const events = scopedEvents(input.events ?? [], input.sessionId, input.task);
+  const events = enrichedFailureReasons(scopedEvents(input.events ?? [], input.sessionId, input.task), input.sessionEntries ?? []);
   const linked = projectCriteriaFileVerifier({ cwd: input.cwd, task: input.task, sourceViews: views, currentSnapshot,
     protectedPaths: input.protectedPaths, events, at: new Date(generatedAt) });
   const sourceChanges = { task: sourceSummary(linked.sourceViews.task, "task"), workingTree: sourceSummary(linked.sourceViews.workingTree, "working-tree"), staged: sourceSummary(linked.sourceViews.staged, "staged") };

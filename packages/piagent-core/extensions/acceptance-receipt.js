@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import path from "node:path";
 import { changedFileAcceptanceCorpus, emptyAcceptanceCorpus, isAcceptanceTestPath } from "./acceptance-language-adapters.js";
+import { durableContextEvidenceEntries, hasDurableContextEvidence } from "./context-evidence.js";
 import { matchesAnyPath, normalizePathCandidate } from "./policy-core.js";
 import { baselineReturnRepresentationConflicts, returnRepresentationGuidance } from "./return-contract.js";
 import { hasLengthPrefixedIdentityKey, tenantAssertionSignals } from "./tenant-contract.js";
@@ -103,23 +104,46 @@ function changedFilesRespectBoundaries(changedFiles, boundaryPatterns) {
 
 export function inferAcceptanceObligations(text, changeMode = "source-change") {
   const value = normalizedText(text);
+  const accessControlText = value
+    .replace(/`[^`\n]*`/g, " ")
+    .replace(/\b(?:[a-z0-9_.@-]+\/)+[a-z0-9_.@/-]+\b/g, " ");
   const obligations = [];
   if (changeMode === "read-only" || READ_ONLY_BOUNDARY.test(value)) {
     obligations.push("read-only-evidence");
   }
-  const explicitAuthorization = includesAny(value, [
-    /\bauth(?:orization)?\b/, /\bunauthoriz(?:ed|ation)\b/, /\bpermission\b/, /\brole\b/, /\badmin\b/, /\bdeny\b/, /\bdenied\b/
+  const actorAccessControl = includesAny(accessControlText, [
+    /\b(?:admins?|roles?|owners?|users?|callers?|resources?)\b[\s\S]{0,80}\b(?:access|allow(?:ed)?|deny|denied|block(?:ed)?|forbid(?:den)?|manag(?:e|es|ed|ing))\b/,
+    /\b(?:access|allow(?:ed)?|deny|denied|block(?:ed)?|forbid(?:den)?|manag(?:e|es|ed|ing))\b[\s\S]{0,80}\b(?:admins?|roles?|owners?|users?|callers?|resources?)\b/
   ]);
-  const ownerAccessControl = /\bowner\b/.test(value) && includesAny(value, [
+  const explicitAuthorization = includesAny(accessControlText, [
+    /\bauth(?:orization)?\b/, /\bunauthoriz(?:ed|ation)\b/, /\bpermission\b/
+  ]) || actorAccessControl;
+  const ownerAccessControl = /\bowner\b/.test(accessControlText) && includesAny(accessControlText, [
     /\busers?\b/, /\bresources?\b/, /\baccess\b/, /\bmanag(?:e|es|ed|ing)\b/, /\bauth(?:orization)?\b/, /\bpermission\b/, /\broles?\b/
   ]);
   if (explicitAuthorization || ownerAccessControl) {
     obligations.push("authorization-deny-case");
   }
-  if (includesAny(value, [/\btenant\b/, /\bcross-tenant\b/, /\bsame tenant\b/, /\btenantid\b/])) {
-    if (includesAny(value, [/\bcache\b/, /\bcache[- ]?key\b/, /\bstorage\b/, /\bcollision\b/, /\bentity\b/, /\bsame tuple\b/])) {
+  const tenantMentioned = includesAny(value, [/\btenants?\b/, /\bcross[- ]tenant\b/, /\bsame[- ]tenant\b/, /\btenantid\b/]);
+  const tenantStorage = tenantMentioned && includesAny(value, [
+    /\bcache\b/, /\bcache[- ]?key\b/, /\bstorage\b/, /\bcollision\b/, /\bentity\b/, /\bsame tuple\b/
+  ]);
+  const strongAuthorization = includesAny(accessControlText, [
+    /\bauth(?:orization)?\b/, /\bunauthoriz(?:ed|ation)\b/, /\bpermission\b/
+  ]);
+  const tenantActorAccess = tenantMentioned && actorAccessControl;
+  const explicitTenantAccessBoundary = includesAny(value, [
+    /\bcross[- ]tenant\b/, /\bsame[- ]tenant\b/, /\btenant boundary\b/,
+    /\btenantid\b[\s\S]{0,100}\b(?:equal|match|same non-empty|access|allow|deny|block|forbid)/,
+    /\b(?:access|allow|deny|block|forbid)[\s\S]{0,100}\btenantid\b/
+  ]) && includesAny(value, [
+    /\baccess\b/, /\ballow(?:ed)?\b/, /\b(?:deny|denied)\b/, /\bblock(?:ed)?\b/, /\bforbid(?:den)?\b/,
+    /\bequal\b/, /\bmatch(?:es|ed|ing)?\b/, /\bsame non-empty\b/
+  ]);
+  if (tenantMentioned) {
+    if (tenantStorage) {
       obligations.push("tenant-storage-isolation");
-    } else {
+    } else if (strongAuthorization || ownerAccessControl || tenantActorAccess || explicitTenantAccessBoundary) {
       obligations.push("tenant-boundary");
     }
   }
@@ -674,14 +698,14 @@ function evidenceForObligation(obligation, task, corpus, currentWorkingTreeDiges
   if (semanticConflictReasons(obligation, task, corpus, criterion).length > 0) return undefined;
 
   if (obligation === "read-only-evidence") {
+    const readOnlyEvidence = durableContextEvidenceEntries(task);
     const readOnlyOk = task.changeMode === "read-only"
       && corpus.files.length === 0
-      && Array.isArray(task.contextManifest)
-      && task.contextManifest.length > 0;
+      && hasDurableContextEvidence(task);
     if (readOnlyOk) return {
       kind: "read-only-context",
       summary: "Read-only context was observed and no project files changed.",
-      paths: task.contextManifest.map((item) => item.path).slice(0, 8)
+      paths: readOnlyEvidence.map((item) => item.path).slice(0, 8)
     };
     if (task.changeMode === "source-change") {
       const boundaryPatterns = uniqueStrings([...(task.outOfScope ?? []), ...(task.protectedPaths ?? [])]);
@@ -695,8 +719,7 @@ function evidenceForObligation(obligation, task, corpus, currentWorkingTreeDiges
         && READ_ONLY_BOUNDARY.test(normalizedText(combinedText))
         && changedFilesRespectBoundaries(corpus.files, boundaryPatterns)
         && (boundaryPatterns.length === 0 || pathBoundaryMentioned(combinedText, boundaryPatterns))
-        && Array.isArray(task.contextManifest)
-        && task.contextManifest.length > 0;
+        && hasDurableContextEvidence(task);
       if (sourceChangeReadOnlyOk) {
         return {
           kind: "source-change-read-only-boundary",

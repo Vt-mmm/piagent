@@ -1,4 +1,5 @@
 import { acceptanceReceiptProvenanceSummary, acceptanceReceiptSummary } from "./acceptance-receipt.js";
+import { isDurableContextEvidenceEntry } from "./context-evidence.js";
 import { runtimeLifecycleMode } from "./task-lifecycle.js";
 import { latestObservedVerificationEvidence, meaningfulVerificationCommands, verificationEvidenceProvesStableTree } from "./verification-intelligence.js";
 import { isCurrentWorkingTreeDigest, WORKING_TREE_DIGEST_ALGORITHM } from "./working-tree-digest.js";
@@ -25,6 +26,7 @@ export function compactTaskDetails(task) {
     sessionId: task.sessionId,
     sessionName: task.sessionName,
     changeMode: task.changeMode,
+    mutationPolicy: task.mutationPolicy ?? (task.changeMode === "read-only" ? "forbidden" : "required"),
     attempt: task.attempt,
     maxAttempts: task.maxAttempts,
     previousAttempts: task.previousAttempts,
@@ -51,12 +53,24 @@ export function compactTaskDetails(task) {
 }
 
 export function mergeObservedTaskContext(task, entries, maxManifestFiles, redact = (value) => String(value ?? "")) {
-  const known = new Set((task.contextManifest ?? []).map((item) => item.path));
+  const known = new Map((task.contextManifest ?? []).map((item, index) => [item.path, index]));
+  let durableCount = (task.contextManifest ?? []).filter(isDurableContextEvidenceEntry).length;
   const added = [];
   for (const entry of entries ?? []) {
-    if (task.contextManifest.length >= maxManifestFiles || known.has(entry.path)) continue;
+    const existingIndex = known.get(entry.path);
+    if (existingIndex !== undefined) {
+      const existing = task.contextManifest[existingIndex];
+      if (isDurableContextEvidenceEntry(existing) || !isDurableContextEvidenceEntry(entry)) continue;
+      if (durableCount >= maxManifestFiles) continue;
+      task.contextManifest[existingIndex] = { path: entry.path, reason: redact(entry.reason) };
+      durableCount += 1;
+      added.push(entry.path);
+      continue;
+    }
+    if (durableCount >= maxManifestFiles || !isDurableContextEvidenceEntry(entry)) continue;
     task.contextManifest.push({ path: entry.path, reason: redact(entry.reason) });
-    known.add(entry.path);
+    durableCount += 1;
+    known.set(entry.path, task.contextManifest.length - 1);
     added.push(entry.path);
   }
   return added;

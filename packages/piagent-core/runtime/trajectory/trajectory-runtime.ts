@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 
+import { hasDurableContextEvidence } from "../../extensions/context-evidence.js";
 import type { TaskContract } from "../../extensions/guard-types.ts";
 import { runtimeAutomaticSourceExecutionReady, sourceExecutionAuthorized, sourcePlanningAuthorized } from "../../extensions/task-lifecycle.js";
 import { latestObservedVerification, verificationEvidenceProvesStableTree } from "../../extensions/verification-intelligence.js";
@@ -59,7 +60,7 @@ function phaseObservation(
   currentTreeDigest?: string | null
 ): TrajectoryTransitionEvent["cause"] | undefined {
   const latest = latestVerification(task);
-  if (phase === "scout" && (options.contextObserved === true || task.contextManifest.length > 0 || stepObserved(task, ["scope", "challenge", "scout"]))) return "context-observed";
+  if (phase === "scout" && (options.contextObserved === true || hasDurableContextEvidence(task) || stepObserved(task, ["scope", "challenge", "scout"]))) return "context-observed";
   if (phase === "plan" && stepObserved(task, ["plan"])) return "plan-observed";
   if (phase === "execute") {
     if (sourceExecutionAuthorized(task)) return "execution-authorized";

@@ -21,6 +21,7 @@ import { SessionMetadataStore } from "./session-metadata-store.ts";
 import { GatewayProtocolService } from "./gateway-protocol-service.ts";
 import { SessionLeaseStore } from "./session-lease-store.ts";
 import { SessionRuntimeSupervisor } from "./session-runtime-supervisor.ts";
+import { buildSessionLiveState } from "./session-live-state.ts";
 import { SessionCommandStore } from "./session-command-store.ts";
 import { SessionCommandController } from "./session-command-controller.ts";
 import { RuntimeCommandController } from "./runtime-command-controller.ts";
@@ -192,6 +193,8 @@ export async function startPiagentGateway(options: {
       mode: "gateway",
       readCapabilities: () => capabilities(gatewayInstanceRef, true),
       readSessionCatalog: readCatalog,
+      readSessionLiveState: () => buildSessionLiveState({ gatewayInstanceRef, eventSequence: events.stateVersion,
+        operations: runtimes!.currentOperations(), settlements: events.recentOperationSettlements() }),
       readSessionCreationOptions: () => inspections.creationOptions(),
       readSessionModel: (sessionRef) => inspections.provider(sessionRef),
       readSessionConnections: (sessionRef) => inspections.connections(sessionRef),

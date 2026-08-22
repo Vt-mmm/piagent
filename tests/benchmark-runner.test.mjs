@@ -10,6 +10,7 @@ import test, { after } from "node:test";
 const root = path.resolve(import.meta.dirname, "..");
 const runner = path.join(root, "scripts", "benchmark-runner.mjs");
 const runnerCore = path.join(root, "scripts", "benchmark-runner-core.mjs");
+const rawDiagnosticSurfaces = ["--surfaces", "raw-pi,piagent"];
 const platformVersion = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).version;
 const defaultOperatorPiHome = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-benchmark-test-operator-home-"));
 const inheritedPiHome = process.env.PI_CODING_AGENT_DIR;
@@ -148,6 +149,13 @@ const sessionDir = value("--session-dir");
 const sessionId = value("--session-id");
 const now = new Date().toISOString();
 const surface = process.env.PIAGENT_BENCHMARK_SURFACE;
+if (process.env.BENCHMARK_FAKE_ORACLE_PROBE_LOG) {
+  fs.appendFileSync(process.env.BENCHMARK_FAKE_ORACLE_PROBE_LOG, JSON.stringify({
+    surface,
+    oracleVisible: fs.existsSync(path.join(process.cwd(), "..", "oracle.json")),
+    variantFixtureVisible: fs.existsSync(path.join(process.cwd(), "variant-fixture.txt"))
+  }) + "\\n");
+}
 probePiHome("session");
 if (process.env.BENCHMARK_FAKE_PROVIDER_OVERLOAD_ONCE) {
   const marker = process.env.BENCHMARK_FAKE_PROVIDER_OVERLOAD_ONCE;
@@ -330,6 +338,13 @@ const value = (name) => args[args.indexOf(name) + 1];
 if (!args.includes("--json") || !args.includes("--ephemeral") || !args.includes("--ignore-user-config") || !args.includes("--ignore-rules")) process.exit(8);
 if (!args.includes("--disable") || !args.includes("apps") || value("-s") !== "workspace-write" || value("-m") !== "fake-model") process.exit(9);
 const workspace = value("-C");
+if (process.env.BENCHMARK_FAKE_ORACLE_PROBE_LOG) {
+  fs.appendFileSync(process.env.BENCHMARK_FAKE_ORACLE_PROBE_LOG, JSON.stringify({
+    surface: "codex-cli",
+    oracleVisible: fs.existsSync(path.join(workspace, "..", "oracle.json")),
+    variantFixtureVisible: fs.existsSync(path.join(workspace, "variant-fixture.txt"))
+  }) + "\\n");
+}
 fs.writeFileSync(path.join(workspace, "result.txt"), process.env.BENCHMARK_FAKE_FAIL_CODEX === "1" ? "wrong\\n" : "correct\\n");
 const events = [
   { type: "thread.started", thread_id: "fake-codex-thread" },
@@ -349,7 +364,45 @@ test("dry-run validates the built-in suite without starting a model", () => {
   const result = spawnSync(process.execPath, [runner, "--dry-run"], { cwd: root, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /sessions:\s+24/);
+  assert.match(result.stdout, /surfaces:\s+piagent, codex-cli/);
+  assert.match(result.stdout, /model:\s+openai-codex\/gpt-5\.6-luna/);
+  assert.match(result.stdout, /thinking:\s+medium/);
   assert.match(result.stdout, /no model session started/);
+});
+
+test("release-grade built-in suites default to zero infrastructure retries", () => {
+  for (const [flag, sessions] of [["--deep", 42], ["--production", 108]]) {
+    const result = spawnSync(process.execPath, [runner, flag, "--dry-run"], { cwd: root, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, new RegExp(`sessions:\\s+${sessions}`));
+    assert.match(result.stdout, /retries:\s+0 infrastructure-only · 0s backoff/);
+    assert.match(result.stdout, /ordering:\s+seeded paired blocks/);
+  }
+});
+
+test("deep specialist suite refuses model, effort, surface, and Codex-mode drift", () => {
+  const accepted = spawnSync(process.execPath, [runner, "--deep", "--dry-run"], { cwd: root, encoding: "utf8" });
+  assert.equal(accepted.status, 0, accepted.stderr);
+  assert.match(accepted.stdout, /model:\s+openai-codex\/gpt-5\.6-luna/);
+  assert.match(accepted.stdout, /thinking:\s+medium/);
+  for (const args of [
+    ["--model", "openai-codex/gpt-5.6-sol"],
+    ["--thinking", "high"],
+    ["--surfaces", "piagent,raw-pi"],
+    ["--codex-mode", "native"]
+  ]) {
+    const rejected = spawnSync(process.execPath, [runner, "--deep", ...args, "--dry-run"], { cwd: root, encoding: "utf8" });
+    assert.equal(rejected.status, 1, `${args.join(" ")}\n${rejected.stdout}\n${rejected.stderr}`);
+    assert.match(rejected.stderr, /locks (?:model|thinking|surfaces|codexMode) to/);
+  }
+});
+
+test("custom suites also default to Piagent versus controlled Codex CLI", (t) => {
+  const value = fixture(t);
+  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, "--dry-run"], { cwd: root, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /surfaces:\s+piagent, codex-cli/);
+  assert.match(result.stdout, /codex:\s+controlled mode · model gpt-5\.6-luna · effort medium/);
 });
 
 test("modern wrapper refuses inherited Node code-loading overrides before freezing claims", () => {
@@ -364,7 +417,7 @@ test("modern wrapper refuses inherited Node code-loading overrides before freezi
 
 test("direct modern core invocation cannot bypass immutable bootstrap", (t) => {
   const value = fixture(t);
-  const result = spawnSync(process.execPath, [runnerCore, "--suite", value.suite, "--repeats", "1", "--yes", "--output", value.output], {
+  const result = spawnSync(process.execPath, [runnerCore, "--suite", value.suite, ...rawDiagnosticSurfaces, "--repeats", "1", "--yes", "--output", value.output], {
     cwd: root,
     encoding: "utf8",
     env: { ...process.env, PIAGENT_BENCHMARK_PI_COMMAND: value.fakePi }
@@ -379,7 +432,7 @@ test("modern run executes suite and Piagent extension from the immutable preflig
   const ready = path.join(value.dir, "snapshot-ready");
   const release = path.join(value.dir, "release-preflight");
   const originalPrompt = "Write correct to result.txt and verify the task.";
-  const child = spawn(process.execPath, [runner, "--suite", value.suite, "--repeats", "1", "--yes", "--output", value.output], {
+  const child = spawn(process.execPath, [runner, "--suite", value.suite, ...rawDiagnosticSurfaces, "--repeats", "1", "--yes", "--output", value.output], {
     cwd: root,
     stdio: ["ignore", "pipe", "pipe"],
     env: {
@@ -422,7 +475,7 @@ test("capability alias selects the runnable unsaturated suite", () => {
 
 test("paid outcome is retained and token claims close when a frozen asset changes", (t) => {
   const value = fixture(t);
-  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, "--repeats", "1", "--yes", "--output", value.output], {
+  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, ...rawDiagnosticSurfaces, "--repeats", "1", "--yes", "--output", value.output], {
     cwd: root,
     encoding: "utf8",
     timeout: 60_000,
@@ -483,10 +536,10 @@ test("private assurance manifest fails closed on surviving mutations or digest m
   assert.match(expired.stderr, /access receipt is not currently valid/);
 });
 
-test("Codex CLI dry-run requires explicit parity settings and prints the mapped plan", () => {
-  const missing = spawnSync(process.execPath, [runner, "--surfaces", "piagent,codex-cli", "--dry-run"], { cwd: root, encoding: "utf8" });
-  assert.equal(missing.status, 1);
-  assert.match(missing.stderr, /require --model/);
+test("Codex CLI dry-run uses parity defaults and accepts an explicit override", () => {
+  const defaults = spawnSync(process.execPath, [runner, "--surfaces", "piagent,codex-cli", "--dry-run"], { cwd: root, encoding: "utf8" });
+  assert.equal(defaults.status, 0, defaults.stderr);
+  assert.match(defaults.stdout, /codex:\s+controlled mode · model gpt-5\.6-luna · effort medium/);
 
   const valid = spawnSync(process.execPath, [
     runner,
@@ -561,7 +614,7 @@ test("rejects a suite that exposes its hidden grader inside the agent fixture", 
   const suite = JSON.parse(fs.readFileSync(value.suite, "utf8"));
   suite.scenarios[0].fixture = ".";
   fs.writeFileSync(value.suite, `${JSON.stringify(suite, null, 2)}\n`);
-  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, "--dry-run"], { cwd: root, encoding: "utf8" });
+  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, ...rawDiagnosticSurfaces, "--dry-run"], { cwd: root, encoding: "utf8" });
   assert.equal(result.status, 1);
   assert.match(result.stderr, /prompt and grader must stay outside the agent fixture/);
 });
@@ -580,7 +633,7 @@ test("keeps the legacy project recorder available through the same command", (t)
 
 test("one command applies a pinned Piagent treatment only to the candidate surface", (t) => {
   const value = fixture(t);
-  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, "--piagent-treatment", "candidate", "--yes", "--output", value.output], {
+  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, ...rawDiagnosticSurfaces, "--piagent-treatment", "candidate", "--yes", "--output", value.output], {
     cwd: root,
     encoding: "utf8",
     timeout: 90_000,
@@ -618,8 +671,8 @@ test("one command applies a pinned Piagent treatment only to the candidate surfa
   assert.equal(report.runs.find((run) => run.surface === "piagent").workflow.taskEvidence.outcome, "completed");
   assert.deepEqual(report.surfaces.piagent.usage.toolNames, { piagent_task_start: 3 });
   assert.equal(report.surfaces.piagent.usage.allMeasuredRuns.medianToolCalls, 1);
-  assert.equal(report.comparison.tokenClaimAllowed, true);
-  assert.equal(report.trustChecklist.tokenSavingClaimAllowed, true);
+  assert.equal(report.comparison.tokenClaimAllowed, false);
+  assert.equal(report.trustChecklist.tokenSavingClaimAllowed, false);
   assert.equal(report.trustChecklist.hasSafetyGate, true);
   assert.equal(report.trustChecklist.hasComparisonProtocolGate, true);
   assert.equal(report.surfaces.piagent.scores.overall, 10);
@@ -638,7 +691,7 @@ test("uses one writable private Pi home, preserves auth rotation, resets ephemer
   fs.writeFileSync(path.join(operatorPiHome, "settings.json"), '{"theme":"dark"}\n', { mode: 0o600 });
   fs.writeFileSync(path.join(operatorPiHome, "models.json"), '{"models":[],"apiKey":"MODEL_PRIVATE_CANARY"}\n', { mode: 0o600 });
   fs.writeFileSync(path.join(operatorPiHome, "APPEND_SYSTEM.md"), `${appendCanary}\n`, { mode: 0o600 });
-  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, "--repeats", "1", "--allow-pi-auth-writeback", "--yes", "--output", value.output], {
+  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, ...rawDiagnosticSurfaces, "--repeats", "1", "--allow-pi-auth-writeback", "--yes", "--output", value.output], {
     cwd: root,
     encoding: "utf8",
     timeout: 60_000,
@@ -678,7 +731,7 @@ test("replaces operator package settings with deterministic offline benchmark se
   fs.mkdirSync(operatorPiHome, { mode: 0o700 });
   fs.writeFileSync(path.join(operatorPiHome, "auth.json"), `${JSON.stringify({ test: { type: "api_key", key: "FAKE_TEST_ONLY" } })}\n`, { mode: 0o600 });
   fs.writeFileSync(path.join(operatorPiHome, "settings.json"), `${JSON.stringify({ packages: [packageCanary], extensions: [packageCanary], theme: "operator-specific" })}\n`, { mode: 0o600 });
-  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, "--repeats", "1", "--yes", "--output", value.output], {
+  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, ...rawDiagnosticSurfaces, "--repeats", "1", "--yes", "--output", value.output], {
     cwd: root,
     encoding: "utf8",
     timeout: 60_000,
@@ -707,7 +760,7 @@ test("fails closed when the writable Pi runtime changes behavioral configuration
   fs.mkdirSync(operatorPiHome, { mode: 0o700 });
   fs.writeFileSync(path.join(operatorPiHome, "auth.json"), `${JSON.stringify({ test: { type: "oauth", accountId: "fake-account", access: authCanary, refresh: "initial" } })}\n`, { mode: 0o600 });
   fs.writeFileSync(path.join(operatorPiHome, "settings.json"), '{"theme":"dark"}\n', { mode: 0o600 });
-  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, "--repeats", "1", "--allow-pi-auth-writeback", "--yes", "--output", value.output], {
+  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, ...rawDiagnosticSurfaces, "--repeats", "1", "--allow-pi-auth-writeback", "--yes", "--output", value.output], {
     cwd: root,
     encoding: "utf8",
     timeout: 60_000,
@@ -741,7 +794,7 @@ test("rejects an unusable stored OAuth credential before a provider process star
   const log = path.join(value.dir, "provider-start.log");
   fs.mkdirSync(operatorPiHome, { mode: 0o700 });
   fs.writeFileSync(path.join(operatorPiHome, "auth.json"), `${JSON.stringify({ "openai-codex": { type: "oauth", access: "EXPIRED_PRIVATE_CANARY", expires: 1 } })}\n`, { mode: 0o600 });
-  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, "--repeats", "1", "--model", "openai-codex/fake-model", "--yes", "--output", value.output], {
+  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, ...rawDiagnosticSurfaces, "--repeats", "1", "--model", "openai-codex/fake-model", "--yes", "--output", value.output], {
     cwd: root,
     encoding: "utf8",
     timeout: 60_000,
@@ -769,7 +822,7 @@ test("requires explicit consent before a billed run can rotate OAuth credentials
   fs.mkdirSync(operatorPiHome, { mode: 0o700 });
   fs.writeFileSync(path.join(operatorPiHome, "auth.json"), `${JSON.stringify({ "openai-codex": { type: "oauth", accountId: "fake-account", access: "PRIVATE", refresh: "initial", expires: Date.now() + 60_000 } })}\n`, { mode: 0o600 });
   fs.writeFileSync(path.join(operatorPiHome, "settings.json"), '{"defaultProvider":"openai-codex"}\n', { mode: 0o600 });
-  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, "--repeats", "1", "--model", "openai-codex/fake-model", "--yes", "--output", value.output], {
+  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, ...rawDiagnosticSurfaces, "--repeats", "1", "--model", "openai-codex/fake-model", "--yes", "--output", value.output], {
     cwd: root,
     encoding: "utf8",
     timeout: 60_000,
@@ -790,7 +843,7 @@ test("OAuth rotation survives a paired pause and resume through same-account CAS
   fs.writeFileSync(path.join(operatorPiHome, "auth.json"), `${JSON.stringify({ test: { type: "oauth", accountId: "fake-account", access: authCanary, refresh: "initial" } })}\n`, { mode: 0o600 });
   fs.writeFileSync(path.join(operatorPiHome, "settings.json"), '{"defaultProvider":"test"}\n', { mode: 0o600 });
   const env = { ...process.env, PI_CODING_AGENT_DIR: operatorPiHome, BENCHMARK_FAKE_PI_HOME_PROBE: "1", BENCHMARK_FAKE_PI_HOME_LOG: log, BENCHMARK_FAKE_PI_AUTH_CANARY: authCanary, PIAGENT_BENCHMARK_PI_COMMAND: value.fakePi, PIAGENT_BENCHMARK_TASK_FIXTURE: path.join(root, "evals", "fixtures", "task-contract.valid.json") };
-  const first = spawnSync(process.execPath, [runner, "--suite", value.suite, "--repeats", "2", "--max-sessions", "2", "--allow-pi-auth-writeback", "--yes", "--output", value.output], { cwd: root, encoding: "utf8", timeout: 60_000, env });
+  const first = spawnSync(process.execPath, [runner, "--suite", value.suite, ...rawDiagnosticSurfaces, "--repeats", "2", "--max-sessions", "2", "--allow-pi-auth-writeback", "--yes", "--output", value.output], { cwd: root, encoding: "utf8", timeout: 60_000, env });
   assert.equal(first.status, 0, `${first.stdout}\n${first.stderr}`);
   const firstObservations = fs.readFileSync(log, "utf8").trim().split("\n").map(JSON.parse);
   const firstCount = firstObservations.length;
@@ -809,7 +862,7 @@ test("OAuth rotation survives a paired pause and resume through same-account CAS
 
 test("rejects leftover Pi locks and account switching without leaking private diagnostics", (t) => {
   const locked = fixture(t);
-  const lockResult = spawnSync(process.execPath, [runner, "--suite", locked.suite, "--repeats", "1", "--yes", "--output", locked.output], {
+  const lockResult = spawnSync(process.execPath, [runner, "--suite", locked.suite, ...rawDiagnosticSurfaces, "--repeats", "1", "--yes", "--output", locked.output], {
     cwd: root, encoding: "utf8", timeout: 60_000,
     env: { ...process.env, BENCHMARK_FAKE_PI_HOME_PROBE: "1", BENCHMARK_FAKE_PI_LEAVE_LOCK: "1", BENCHMARK_FAKE_PI_AUTH_CANARY: "FAKE_TEST_ONLY", PIAGENT_BENCHMARK_PI_COMMAND: locked.fakePi }
   });
@@ -823,7 +876,7 @@ test("rejects leftover Pi locks and account switching without leaking private di
   fs.mkdirSync(operatorPiHome, { mode: 0o700 });
   fs.writeFileSync(path.join(operatorPiHome, "auth.json"), `${JSON.stringify({ test: { type: "oauth", accountId: "fake-account", access: secret, refresh: "initial" } })}\n`, { mode: 0o600 });
   fs.writeFileSync(path.join(operatorPiHome, "settings.json"), '{"defaultProvider":"test"}\n', { mode: 0o600 });
-  const switchResult = spawnSync(process.execPath, [runner, "--suite", switched.suite, "--repeats", "1", "--allow-pi-auth-writeback", "--yes", "--output", switched.output], {
+  const switchResult = spawnSync(process.execPath, [runner, "--suite", switched.suite, ...rawDiagnosticSurfaces, "--repeats", "1", "--allow-pi-auth-writeback", "--yes", "--output", switched.output], {
     cwd: root, encoding: "utf8", timeout: 60_000,
     env: { ...process.env, PI_CODING_AGENT_DIR: operatorPiHome, BENCHMARK_FAKE_PI_HOME_PROBE: "1", BENCHMARK_FAKE_PI_HOME_LOG: log, BENCHMARK_FAKE_PI_AUTH_CANARY: secret, BENCHMARK_FAKE_PI_SWITCH_ACCOUNT: "1", PIAGENT_BENCHMARK_PI_COMMAND: switched.fakePi, PIAGENT_BENCHMARK_TASK_FIXTURE: path.join(root, "evals", "fixtures", "task-contract.valid.json") }
   });
@@ -836,7 +889,7 @@ test("rejects leftover Pi locks and account switching without leaking private di
 
 test("hashes provider failures so credential bytes and runtime paths never enter evidence", (t) => {
   const value = fixture(t);
-  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, "--repeats", "1", "--yes", "--output", value.output], {
+  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, ...rawDiagnosticSurfaces, "--repeats", "1", "--yes", "--output", value.output], {
     cwd: root, encoding: "utf8", timeout: 60_000,
     env: { ...process.env, BENCHMARK_FAKE_PI_PRIVATE_FAILURE: "1", PIAGENT_BENCHMARK_PI_COMMAND: value.fakePi, PIAGENT_BENCHMARK_TASK_FIXTURE: path.join(root, "evals", "fixtures", "task-contract.valid.json") }
   });
@@ -850,7 +903,7 @@ test("hashes provider failures so credential bytes and runtime paths never enter
 test("classifies execution-guard filesystem failures without persisting private vault paths", (t) => {
   const value = fixture(t);
   const log = path.join(value.dir, "deleted-vault.log");
-  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, "--repeats", "1", "--yes", "--output", value.output], {
+  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, ...rawDiagnosticSurfaces, "--repeats", "1", "--yes", "--output", value.output], {
     cwd: root, encoding: "utf8", timeout: 60_000,
     env: { ...process.env, BENCHMARK_FAKE_PI_HOME_PROBE: "1", BENCHMARK_FAKE_PI_HOME_LOG: log, BENCHMARK_FAKE_PI_AUTH_CANARY: "FAKE_TEST_ONLY", BENCHMARK_FAKE_PI_DELETE_HOME: "1", PIAGENT_BENCHMARK_PI_COMMAND: value.fakePi, PIAGENT_BENCHMARK_TASK_FIXTURE: path.join(root, "evals", "fixtures", "task-contract.valid.json") }
   });
@@ -866,7 +919,7 @@ test("classifies execution-guard filesystem failures without persisting private 
 test("default report output stays under the operator Pi home, not the temporary provider home", (t) => {
   const value = fixture(t);
   const operatorPiHome = path.join(value.dir, "operator-pi-home");
-  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, "--repeats", "1", "--yes"], {
+  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, ...rawDiagnosticSurfaces, "--repeats", "1", "--yes"], {
     cwd: root,
     encoding: "utf8",
     timeout: 60_000,
@@ -892,7 +945,7 @@ test("fixture Git initialization ignores inherited template hooks", (t) => {
   fs.mkdirSync(path.join(template, "hooks"), { recursive: true });
   const hook = path.join(template, "hooks", "post-commit");
   fs.writeFileSync(hook, `#!/bin/sh\nprintf hostile > ${JSON.stringify(marker)}\n`, { mode: 0o755 });
-  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, "--repeats", "1", "--yes", "--output", value.output], {
+  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, ...rawDiagnosticSurfaces, "--repeats", "1", "--yes", "--output", value.output], {
     cwd: root,
     encoding: "utf8",
     timeout: 60_000,
@@ -912,6 +965,7 @@ test("uses persisted task-start traces for workflow while retaining refused-call
   const result = spawnSync(process.execPath, [
     runner,
     "--suite", value.suite,
+    ...rawDiagnosticSurfaces,
     "--repeats", "2",
     "--yes",
     "--output", value.output
@@ -961,7 +1015,7 @@ const marker = "PIAGENT_BENCHMARK_REQUIRED_MARKER";
 const secret = crypto.createHash("sha256").update(seed).digest("hex").slice(0, 16);
 fs.writeFileSync(process.argv[3], JSON.stringify({ schemaVersion: 1, graderData: { secretHash: secret }, requiredOutputSubstrings: [marker], forbiddenOutputSubstrings: ["DYNAMIC_SECRET_" + secret] }));
 `);
-  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, "--seed", "paired-seed", "--yes", "--output", value.output], {
+  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, ...rawDiagnosticSurfaces, "--seed", "paired-seed", "--yes", "--output", value.output], {
     cwd: root,
     encoding: "utf8",
     timeout: 60_000,
@@ -985,6 +1039,135 @@ fs.writeFileSync(process.argv[3], JSON.stringify({ schemaVersion: 1, graderData:
   assert.equal(new Set(report.runs.map((run) => run.variant.oracleDigest)).size, 3);
   assert.equal(JSON.stringify(report).includes("PIAGENT_BENCHMARK_REQUIRED_MARKER"), false);
   assert.equal(JSON.stringify(report).includes("DYNAMIC_SECRET_"), false);
+});
+
+test("keeps generated oracle data outside both provider workspaces while preserving generated fixtures and grading", (t) => {
+  const value = fixture(t);
+  const suiteRoot = path.dirname(value.suite);
+  const suite = JSON.parse(fs.readFileSync(value.suite, "utf8"));
+  suite.schemaVersion = 2;
+  suite.assurance = { taskSource: "test", visibility: "test", claimTier: "public-regression", generatedVariants: true, familyDisjointSplit: false, reviewed: true, refreshedAt: "2026-08-02" };
+  suite.releaseGate = { minimumQualityScore: 9, minimumSafetyScore: 10, minimumReliabilityScore: 9, minimumWorkflowScore: 10, minimumCategoryScore: 9, minimumPairedScenarios: 1 };
+  Object.assign(suite.scenarios[0], {
+    category: "platform",
+    difficulty: "small",
+    lifecycle: "cold-start",
+    variantGenerator: "variant.mjs"
+  });
+  fs.writeFileSync(value.suite, JSON.stringify(suite, null, 2) + "\n");
+  fs.writeFileSync(path.join(suiteRoot, "variant.mjs"), [
+    'import fs from "node:fs";',
+    'import path from "node:path";',
+    'const [workspace, oraclePath, seed] = process.argv.slice(2);',
+    'const secret = "oracle-" + seed.slice(0, 16);',
+    'fs.writeFileSync(path.join(workspace, "variant-fixture.txt"), secret + "\\n");',
+    'fs.writeFileSync(oraclePath, JSON.stringify({ schemaVersion: 1, graderData: { secret } }));',
+    ''
+  ].join("\n"));
+  fs.writeFileSync(path.join(suiteRoot, "grade.mjs"), [
+    'import fs from "node:fs";',
+    'import path from "node:path";',
+    'const workspace = process.argv[2];',
+    'const oracle = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));',
+    'const fixture = fs.readFileSync(path.join(workspace, "variant-fixture.txt"), "utf8");',
+    'const result = fs.readFileSync(path.join(workspace, "result.txt"), "utf8");',
+    'const passed = fixture === oracle.graderData.secret + "\\n" && result === "correct\\n";',
+    'process.stdout.write(JSON.stringify({ passed, checks: [{ id: "private-oracle-grade", passed }] }) + "\\n");',
+    ''
+  ].join("\n"));
+  const probeLog = path.join(value.dir, "oracle-provider-probe.jsonl");
+  const temporaryRoot = path.join(value.dir, "temporary");
+  fs.mkdirSync(temporaryRoot, { mode: 0o700 });
+  const result = spawnSync(process.execPath, [
+    runner,
+    "--suite", value.suite,
+    "--surfaces", "piagent,codex-cli",
+    "--model", "test/fake-model",
+    "--thinking", "high",
+    "--repeats", "1",
+    "--seed", "oracle-isolation-seed",
+    "--keep-workspaces",
+    "--yes",
+    "--output", value.output
+  ], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: 60_000,
+    env: {
+      ...process.env,
+      TMPDIR: temporaryRoot,
+      BENCHMARK_FAKE_ORACLE_PROBE_LOG: probeLog,
+      CODEX_HOME: value.operatorCodexHome,
+      PIAGENT_BENCHMARK_PI_COMMAND: value.fakePi,
+      PIAGENT_BENCHMARK_CODEX_COMMAND: value.fakeCodex,
+      PIAGENT_BENCHMARK_TASK_FIXTURE: path.join(root, "evals", "fixtures", "task-contract.valid.json")
+    }
+  });
+  assert.equal(result.status, 0, result.stdout + "\n" + result.stderr);
+  const probes = fs.readFileSync(probeLog, "utf8").trim().split("\n").map(JSON.parse);
+  assert.equal(probes.length, 2);
+  assert.deepEqual(new Set(probes.map((entry) => entry.surface)), new Set(["piagent", "codex-cli"]));
+  assert.equal(probes.every((entry) => entry.oracleVisible === false), true);
+  assert.equal(probes.every((entry) => entry.variantFixtureVisible === true), true);
+  const report = JSON.parse(fs.readFileSync(path.join(value.output, "report.json"), "utf8"));
+  assert.equal(report.runs.every((run) => run.resolved && run.grade.checks[0]?.id === "private-oracle-grade"), true);
+  assert.equal(new Set(report.runs.map((run) => run.variant.oracleDigest)).size, 1);
+  const workspaceRoots = fs.readdirSync(path.join(value.output, "workspaces")).map((name) => path.join(value.output, "workspaces", name));
+  assert.equal(workspaceRoots.every((workspaceRoot) => !fs.existsSync(path.join(workspaceRoot, "oracle.json"))), true);
+  assert.deepEqual(fs.readdirSync(temporaryRoot).filter((name) => name.startsWith("piagent-benchmark-oracle-")), []);
+});
+
+test("removes grader-only oracle material after a failing grader", (t) => {
+  const value = fixture(t);
+  const suiteRoot = path.dirname(value.suite);
+  const suite = JSON.parse(fs.readFileSync(value.suite, "utf8"));
+  suite.schemaVersion = 2;
+  suite.assurance = { taskSource: "test", visibility: "test", claimTier: "public-regression", generatedVariants: true, familyDisjointSplit: false, reviewed: true, refreshedAt: "2026-08-02" };
+  suite.releaseGate = { minimumQualityScore: 9, minimumSafetyScore: 10, minimumReliabilityScore: 9, minimumWorkflowScore: 10, minimumCategoryScore: 9, minimumPairedScenarios: 1 };
+  Object.assign(suite.scenarios[0], {
+    category: "platform",
+    difficulty: "small",
+    lifecycle: "cold-start",
+    variantGenerator: "variant.mjs"
+  });
+  fs.writeFileSync(value.suite, JSON.stringify(suite, null, 2) + "\n");
+  fs.writeFileSync(path.join(suiteRoot, "variant.mjs"), [
+    'import fs from "node:fs";',
+    'fs.writeFileSync(process.argv[3], JSON.stringify({ schemaVersion: 1, graderData: { secret: "grader-cleanup-canary" } }));',
+    ''
+  ].join("\n"));
+  fs.writeFileSync(path.join(suiteRoot, "grade.mjs"), [
+    'import fs from "node:fs";',
+    'const oracle = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));',
+    'if (oracle.graderData.secret !== "grader-cleanup-canary") process.exit(16);',
+    'process.exit(17);',
+    ''
+  ].join("\n"));
+  const temporaryRoot = path.join(value.dir, "temporary");
+  fs.mkdirSync(temporaryRoot, { mode: 0o700 });
+  const result = spawnSync(process.execPath, [
+    runner,
+    "--suite", value.suite,
+    ...rawDiagnosticSurfaces,
+    "--repeats", "1",
+    "--keep-workspaces",
+    "--yes",
+    "--output", value.output
+  ], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: 60_000,
+    env: {
+      ...process.env,
+      TMPDIR: temporaryRoot,
+      PIAGENT_BENCHMARK_PI_COMMAND: value.fakePi,
+      PIAGENT_BENCHMARK_TASK_FIXTURE: path.join(root, "evals", "fixtures", "task-contract.valid.json")
+    }
+  });
+  assert.equal(result.status, 1, result.stdout + "\n" + result.stderr);
+  const workspaceRoots = fs.readdirSync(path.join(value.output, "workspaces")).map((name) => path.join(value.output, "workspaces", name));
+  assert.equal(workspaceRoots.every((workspaceRoot) => !fs.existsSync(path.join(workspaceRoot, "oracle.json"))), true);
+  assert.deepEqual(fs.readdirSync(temporaryRoot).filter((name) => name.startsWith("piagent-benchmark-oracle-")), []);
 });
 
 test("dry-run can replay failed pairs from a previous report", (t) => {
@@ -1033,7 +1216,7 @@ test("authenticated replay reuses the frozen source of a custom suite and stays 
     PIAGENT_BENCHMARK_PI_COMMAND: value.fakePi,
     PIAGENT_BENCHMARK_TASK_FIXTURE: path.join(root, "evals", "fixtures", "task-contract.valid.json")
   };
-  const initial = spawnSync(process.execPath, [runner, "--suite", suitePath, "--repeats", "1", "--yes", "--output", value.output], {
+  const initial = spawnSync(process.execPath, [runner, "--suite", suitePath, ...rawDiagnosticSurfaces, "--repeats", "1", "--yes", "--output", value.output], {
     cwd: root, encoding: "utf8", timeout: 60_000, env: baseEnv
   });
   assert.equal(initial.status, 1, `${initial.stdout}\n${initial.stderr}`);
@@ -1051,6 +1234,9 @@ test("authenticated replay reuses the frozen source of a custom suite and stays 
 
 test("can pause a benchmark chunk and resume only the missing sessions", (t) => {
   const value = fixture(t);
+  const suite = JSON.parse(fs.readFileSync(value.suite, "utf8"));
+  suite.releaseGate = { minimumOutcomeScoreExclusive: 9.5 };
+  fs.writeFileSync(value.suite, `${JSON.stringify(suite, null, 2)}\n`);
   const env = {
     ...process.env,
     PIAGENT_BENCHMARK_PI_COMMAND: value.fakePi,
@@ -1059,8 +1245,10 @@ test("can pause a benchmark chunk and resume only the missing sessions", (t) => 
   const first = spawnSync(process.execPath, [
     runner,
     "--suite", value.suite,
+    ...rawDiagnosticSurfaces,
     "--repeats", "2",
     "--piagent-treatment", "candidate",
+    "--stop-after-failed-pair",
     "--max-sessions", "2",
     "--yes",
     "--output", value.output
@@ -1077,6 +1265,7 @@ test("can pause a benchmark chunk and resume only the missing sessions", (t) => 
   ]);
   assert.match(manifest.candidateProvenance.contentDigest, /^[a-f0-9]{64}$/);
   assert.equal(manifest.candidateProvenance.fileCount > 0, true);
+  assert.equal(manifest.stopAfterFailedPair, true);
   assert.equal(fs.existsSync(path.join(value.output, "paused.json")), true);
   assert.equal(fs.existsSync(path.join(value.output, "report.json")), false);
   const ledgerPrefix = fs.readFileSync(path.join(value.output, "runs.jsonl"));
@@ -1117,7 +1306,7 @@ test("resume ignores operator settings drift because benchmark settings are dete
     PIAGENT_BENCHMARK_PI_COMMAND: value.fakePi,
     PIAGENT_BENCHMARK_TASK_FIXTURE: path.join(root, "evals", "fixtures", "task-contract.valid.json")
   };
-  const first = spawnSync(process.execPath, [runner, "--suite", value.suite, "--repeats", "2", "--max-sessions", "2", "--allow-pi-auth-writeback", "--yes", "--output", value.output], {
+  const first = spawnSync(process.execPath, [runner, "--suite", value.suite, ...rawDiagnosticSurfaces, "--repeats", "2", "--max-sessions", "2", "--allow-pi-auth-writeback", "--yes", "--output", value.output], {
     cwd: root, encoding: "utf8", timeout: 60_000, env
   });
   assert.equal(first.status, 0, `${first.stdout}\n${first.stderr}`);
@@ -1144,6 +1333,7 @@ test("resume aborts on candidate provenance mismatch without rewriting completed
   const first = spawnSync(process.execPath, [
     runner,
     "--suite", value.suite,
+    ...rawDiagnosticSurfaces,
     "--repeats", "2",
     "--max-sessions", "2",
     "--yes",
@@ -1234,8 +1424,8 @@ test("one command compares Piagent with controlled Codex CLI using strict JSONL 
   assert.equal(report.comparison.pairedCostRuns, 0);
   assert.equal(report.comparison.comparisonProtocolGate.passed, true);
   assert.equal(report.environment.piagentTreatment.id, "release-defaults");
-  assert.equal(report.comparison.tokenClaimAllowed, true);
-  assert.equal(report.verdict.status, "piagent-more-efficient");
+  assert.equal(report.comparison.tokenClaimAllowed, false);
+  assert.equal(report.verdict.status, "observational-efficiency-only");
   assert.match(result.stdout, /Comparison: Piagent vs Codex CLI/);
   assert.match(result.stdout, /cost n\/a/);
   const codexHomes = fs.readFileSync(codexHomeLog, "utf8").trim().split("\n");
@@ -1319,7 +1509,7 @@ test("streams Codex JSONL larger than the retained process-output tail", (t) => 
 
 test("catches a forbidden value from the live process stream even when the session omits it", (t) => {
   const value = fixture(t);
-  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, "--repeats", "1", "--yes", "--output", value.output], {
+  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, ...rawDiagnosticSurfaces, "--repeats", "1", "--yes", "--output", value.output], {
     cwd: root,
     encoding: "utf8",
     timeout: 60_000,
@@ -1345,7 +1535,7 @@ test("catches a forbidden value from the live process stream even when the sessi
 
 test("retains resolved Piagent workspaces that fail workflow evidence", (t) => {
   const value = fixture(t);
-  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, "--repeats", "1", "--yes", "--output", value.output], {
+  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, ...rawDiagnosticSurfaces, "--repeats", "1", "--yes", "--output", value.output], {
     cwd: root,
     encoding: "utf8",
     timeout: 60_000,
@@ -1377,7 +1567,7 @@ test("aborts after the first infrastructure failure instead of starting later mo
   const suite = JSON.parse(fs.readFileSync(value.suite, "utf8"));
   suite.profile = "missing-benchmark-profile";
   fs.writeFileSync(value.suite, `${JSON.stringify(suite, null, 2)}\n`);
-  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, "--yes", "--output", value.output], {
+  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, ...rawDiagnosticSurfaces, "--yes", "--output", value.output], {
     cwd: root,
     encoding: "utf8",
     timeout: 60_000,
@@ -1397,7 +1587,7 @@ test("aborts after the first infrastructure failure instead of starting later mo
 
 test("aborts when Pi exits before recording usage", (t) => {
   const value = fixture(t);
-  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, "--yes", "--output", value.output], {
+  const result = spawnSync(process.execPath, [runner, "--suite", value.suite, ...rawDiagnosticSurfaces, "--yes", "--output", value.output], {
     cwd: root,
     encoding: "utf8",
     timeout: 60_000,
@@ -1423,6 +1613,7 @@ test("retries one zero-usage infrastructure failure without counting it as a mea
   const result = spawnSync(process.execPath, [
     runner,
     "--suite", value.suite,
+    ...rawDiagnosticSurfaces,
     "--repeats", "1",
     "--infrastructure-retries", "1",
     "--yes",
@@ -1467,6 +1658,7 @@ test("retries one measured-zero provider overload instead of misclassifying it a
   const result = spawnSync(process.execPath, [
     runner,
     "--suite", value.suite,
+    ...rawDiagnosticSurfaces,
     "--repeats", "1",
     "--infrastructure-retries", "1",
     "--retry-delay", "0",
@@ -1515,6 +1707,7 @@ test("aborts a terminal provider overload after measured usage instead of gradin
   const result = spawnSync(process.execPath, [
     runner,
     "--suite", value.suite,
+    ...rawDiagnosticSurfaces,
     "--repeats", "1",
     "--infrastructure-retries", "1",
     "--retry-delay", "0",
@@ -1589,7 +1782,7 @@ test("classifies provider policy refusal before usage separately from local infr
 test("forwards interruption and durably retains the unaccepted paid attempt", async (t) => {
   const value = fixture(t);
   const signalFile = path.join(value.dir, "signal.txt");
-  const child = spawn(process.execPath, [runner, "--suite", value.suite, "--repeats", "1", "--infrastructure-retries", "1", "--retry-delay", "0", "--yes", "--output", value.output], {
+  const child = spawn(process.execPath, [runner, "--suite", value.suite, ...rawDiagnosticSurfaces, "--repeats", "1", "--infrastructure-retries", "1", "--retry-delay", "0", "--yes", "--output", value.output], {
     cwd: root,
     stdio: ["ignore", "pipe", "pipe"],
     env: {

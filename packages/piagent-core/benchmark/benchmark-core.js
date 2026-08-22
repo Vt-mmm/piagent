@@ -1,22 +1,35 @@
-import { StringDecoder } from "node:string_decoder";
-
 import { benchmarkClaimEligibility } from "./benchmark-assurance.js";
 import {
   comparableAttemptUsage,
+  comparableDuration,
   comparisonProtocol,
   completeCategoryCoverage,
   completePairedScenarioCount,
+  familyClusteredFailureAwareUsage,
+  pairedUsageBands,
   tokensPerResolvedOutcome
 } from "./benchmark-comparison.js";
+import { benchmarkProviderWireEvidenceMatchesRequest } from "./benchmark-provider-wire.js";
+import {
+  clamp,
+  geometricMean,
+  geometricMeanConfidence95,
+  median,
+  rounded,
+  wilsonInterval
+} from "./benchmark-statistics.js";
 import {
   isCurrentTaskWorkingTreeDigest,
   taskWorkingTreeEvidenceDigest,
   taskWorkingTreeSnapshotUsesCurrentAlgorithm
 } from "./benchmark-tree-identity.js";
+import { benchmarkTokenAccounting as buildBenchmarkTokenAccounting } from "./benchmark-usage.js";
 
 export { renderBenchmarkHtml, renderBenchmarkText } from "./benchmark-report.js";
 export { benchmarkAssuranceEvidenceValidationErrors, benchmarkClaimEligibility } from "./benchmark-assurance.js";
+export { median } from "./benchmark-statistics.js";
 export { benchmarkSuiteValidationErrors, validateBenchmarkSuite } from "./benchmark-suite.js";
+export { aggregateSessionUsage, benchmarkTokenAccounting, createCodexExecJsonlCollector, parseCodexExecJsonl } from "./benchmark-usage.js";
 const SURFACE_LABELS = Object.freeze({
   "raw-pi": "Raw Pi",
   piagent: "Piagent",
@@ -27,266 +40,38 @@ const SURFACE_REPORT_KEYS = Object.freeze({
   piagent: "piagent",
   "codex-cli": "codexCli"
 });
-const CODEX_NON_TOOL_ITEMS = new Set(["agent_message", "reasoning", "plan", "user_message"]);
 export const BENCHMARK_MEASUREMENT_SCHEMA_VERSION = 2;
+const RELEASE_FAILURE_MESSAGES = Object.freeze({
+  "quality-regression": "Piagent quality is below the paired baseline.",
+  quality: "Piagent quality is below the suite minimum.",
+  safety: "Piagent safety is below the suite minimum.",
+  reliability: "Piagent reliability is below the suite minimum.",
+  workflow: "Piagent workflow evidence is below the suite minimum.",
+  category: "At least one category score is below the suite minimum.",
+  "outcome-score-floor": "At least one task, aggregate, or band score does not clear the exclusive outcome floor.",
+  "paired-candidate-regression": "At least one paired task passed on the baseline and failed on Piagent.",
+  "comparison-protocol": "The same-model, same-effort, isolation, or randomized-order comparison protocol is incomplete.",
+  "full-suite": "This run selected only part of a suite that requires full-suite evidence.",
+  "paired-outcome-evidence": "Too few scenario families have complete paired outcomes.",
+  "efficiency-evidence": "Too few scenario families have complete comparable token measurements.",
+  "efficiency-category-coverage": "Comparable token evidence does not cover every required category.",
+  "failure-aware-efficiency": "Tokens per resolved outcome exceed the suite limit or failed-attempt usage is unknown.",
+  "primary-efficiency": "The predeclared primary efficiency estimand lacks complete family/category evidence or its upper 95% ratio exceeds the suite limit.",
+  "repeat-count": "The run used fewer repeats than the suite minimum.",
+  "efficiency-confidence": "The upper 95% token-ratio bound exceeds the suite limit.",
+  "performance-evidence": "Too few scenario families have complete paired duration measurements.",
+  "performance-point-regression": "The paired duration point estimate is slower than the baseline.",
+  "performance-confidence": "The upper 95% duration-ratio bound exceeds the suite limit.",
+  "infrastructure-retries": "Accepted benchmark runs used more recovered infrastructure retries than the suite permits.",
+  "unknown-infrastructure-usage": "At least one provider-started infrastructure attempt has unknown terminal usage.",
+  "release-claim-configuration": "Token-saving claims require schema v2, an explicit upper-95 token ratio at or below 0.80, full-suite enforcement, and provider-wire stability evidence.",
+  "codex-baseline": "Token-saving product claims require controlled Codex CLI as the paired baseline.",
+  "clean-release-source": "Release claims require an exact clean Git commit; dirty or unbound source trees are diagnostic only.",
+  "provider-wire-surface": "Every Piagent run must expose known provider-wire evidence with the exact requested model and effort plus one stable base instructions hash and one stable ordered tool-surface hash."
+});
 
 function plainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-export function median(values) {
-  const finite = values.filter(Number.isFinite).sort((left, right) => left - right);
-  if (finite.length === 0) return null;
-  const middle = Math.floor(finite.length / 2);
-  return finite.length % 2 ? finite[middle] : (finite[middle - 1] + finite[middle]) / 2;
-}
-
-function geometricMean(values) {
-  if (!Array.isArray(values) || values.length === 0) return null;
-  if (values.some((value) => !Number.isFinite(value) || value <= 0)) return null;
-  return Math.exp(values.reduce((sum, value) => sum + Math.log(value), 0) / values.length);
-}
-
-function rounded(value, digits = 3) {
-  if (!Number.isFinite(value)) return null;
-  const factor = 10 ** digits;
-  return Math.round(value * factor) / factor;
-}
-
-function clamp(value, minimum = 0, maximum = 10) {
-  return Math.max(minimum, Math.min(maximum, value));
-}
-
-function wilsonInterval(successes, total, z = 1.959963984540054) {
-  if (!Number.isInteger(total) || total <= 0 || !Number.isInteger(successes) || successes < 0 || successes > total) return null;
-  const proportion = successes / total;
-  const zSquared = z ** 2;
-  const denominator = 1 + (zSquared / total);
-  const center = (proportion + (zSquared / (2 * total))) / denominator;
-  const margin = (z / denominator) * Math.sqrt(((proportion * (1 - proportion)) / total) + (zSquared / (4 * total ** 2)));
-  return { lower: rounded(Math.max(0, center - margin), 4), upper: rounded(Math.min(1, center + margin), 4) };
-}
-
-const STUDENT_T_975 = Object.freeze([
-  null, 12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262,
-  2.228, 2.201, 2.179, 2.16, 2.145, 2.131, 2.12, 2.11, 2.101, 2.093,
-  2.086, 2.08, 2.074, 2.069, 2.064, 2.06, 2.056, 2.052, 2.048, 2.045, 2.042
-]);
-
-function geometricMeanConfidence95(values) {
-  if (!Array.isArray(values) || values.length < 2 || values.some((value) => !Number.isFinite(value) || value <= 0)) return null;
-  const logs = values.map(Math.log);
-  const mean = logs.reduce((sum, value) => sum + value, 0) / logs.length;
-  const variance = logs.reduce((sum, value) => sum + ((value - mean) ** 2), 0) / (logs.length - 1);
-  const critical = STUDENT_T_975[logs.length - 1] ?? 1.96;
-  const margin = critical * Math.sqrt(variance / logs.length);
-  return {
-    lower: rounded(Math.exp(mean - margin), 4),
-    upper: rounded(Math.exp(mean + margin), 4),
-    sampleUnit: "scenario-family",
-    scenarioCount: logs.length
-  };
-}
-
-export function aggregateSessionUsage(sessions) {
-  const totals = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, total: 0, cost: 0 };
-  const models = new Set();
-  const thinkingLevels = new Set();
-  const toolNames = {};
-  let toolCalls = 0;
-  let messages = 0;
-  const contextSnapshots = [];
-  for (const session of sessions) {
-    for (const key of Object.keys(totals)) totals[key] += Number(session.tokens?.[key] ?? 0);
-    if (session.modelId || session.provider) models.add(`${session.provider || "unknown"}/${session.modelId || "unknown"}`);
-    if (session.thinkingLevel) thinkingLevels.add(session.thinkingLevel);
-    toolCalls += Number(session.messages?.toolCalls ?? 0);
-    messages += Number(session.messages?.total ?? 0);
-    if (plainObject(session.contextUsage)) {
-      const snapshot = {
-        tokens: Number.isFinite(session.contextUsage.tokens) ? session.contextUsage.tokens : null,
-        contextWindow: Number.isFinite(session.contextUsage.contextWindow) ? session.contextUsage.contextWindow : null,
-        percent: Number.isFinite(session.contextUsage.percent) ? session.contextUsage.percent : null
-      };
-      if (Object.values(snapshot).some(Number.isFinite)) contextSnapshots.push(snapshot);
-    }
-    for (const [name, count] of Object.entries(session.toolNames ?? {})) {
-      toolNames[name] = (toolNames[name] ?? 0) + Number(count ?? 0);
-    }
-  }
-  return {
-    ...totals,
-    fresh: totals.input + totals.output,
-    sessions: sessions.length,
-    subagentSessions: sessions.filter((session) => session.isSubagent).length,
-    toolCalls,
-    toolNames: Object.fromEntries(Object.entries(toolNames).sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))),
-    messages,
-    model: models.size === 1 ? [...models][0] : models.size === 0 ? "unknown" : "mixed",
-    thinkingLevel: thinkingLevels.size === 1 ? [...thinkingLevels][0] : thinkingLevels.size === 0 ? "unknown" : "mixed",
-    contextUsage: contextSnapshots.length > 0 ? {
-      source: "session-reported",
-      observations: contextSnapshots.length,
-      peakTokens: contextSnapshots.some((item) => Number.isFinite(item.tokens))
-        ? Math.max(...contextSnapshots.map((item) => item.tokens).filter(Number.isFinite))
-        : null,
-      contextWindow: new Set(contextSnapshots.map((item) => item.contextWindow).filter(Number.isFinite)).size === 1
-        ? contextSnapshots.map((item) => item.contextWindow).find(Number.isFinite)
-        : null,
-      peakPercent: contextSnapshots.some((item) => Number.isFinite(item.percent))
-        ? Math.max(...contextSnapshots.map((item) => item.percent).filter(Number.isFinite))
-        : null
-    } : {
-      source: "unavailable",
-      observations: 0,
-      peakTokens: null,
-      contextWindow: null,
-      peakPercent: null
-    }
-  };
-}
-
-function requiredCodexToken(value, field) {
-  if (!Number.isSafeInteger(value) || value < 0) {
-    throw new Error(`Codex JSONL usage.${field} must be a non-negative integer`);
-  }
-  return value;
-}
-
-function consumeCodexEvent(state, event, lineNumber) {
-  if (!plainObject(event) || typeof event.type !== "string") {
-    throw new Error(`Codex JSONL line ${lineNumber} is not an event object`);
-  }
-  state.onEvent?.(event);
-  if (event.type === "error" || event.type === "turn.failed") {
-    const nested = plainObject(event.error) ? event.error : {};
-    const message = [event.message, nested.message, nested.additional_details]
-      .find((value) => typeof value === "string" && value.trim());
-    state.diagnostics.push({ type: event.type, message: message ? message.trim().slice(0, 2_000) : "unspecified Codex error" });
-    return;
-  }
-  if (event.type === "thread.started" && typeof event.thread_id === "string" && event.thread_id) {
-    state.threadId = event.thread_id;
-    return;
-  }
-  if (event.type === "item.completed" && plainObject(event.item)) {
-    const type = event.item.type;
-    if (type === "agent_message") state.messages += 1;
-    else if (typeof type === "string" && type && !CODEX_NON_TOOL_ITEMS.has(type)) {
-      state.toolNames[type] = (state.toolNames[type] ?? 0) + 1;
-    }
-    return;
-  }
-  if (event.type === "turn.completed") {
-    state.completedTurns += 1;
-    if (state.completedTurns > 1) throw new Error("Codex JSONL contains more than one completed root turn");
-    if (!plainObject(event.usage)) throw new Error("Codex JSONL turn.completed is missing usage");
-    state.completedUsage = event.usage;
-  }
-}
-
-function finishCodexUsage(state) {
-  if (!state.threadId) throw new Error("Codex JSONL is missing thread.started");
-  if (!state.completedUsage) throw new Error("Codex JSONL is missing turn.completed usage");
-  const providerInput = requiredCodexToken(state.completedUsage.input_tokens, "input_tokens");
-  const cacheRead = requiredCodexToken(state.completedUsage.cached_input_tokens ?? 0, "cached_input_tokens");
-  const cacheWrite = requiredCodexToken(state.completedUsage.cache_write_input_tokens ?? 0, "cache_write_input_tokens");
-  const output = requiredCodexToken(state.completedUsage.output_tokens, "output_tokens");
-  const reasoning = requiredCodexToken(state.completedUsage.reasoning_output_tokens ?? 0, "reasoning_output_tokens");
-  if (cacheRead > providerInput) throw new Error("Codex JSONL cached_input_tokens exceeds input_tokens");
-  if (reasoning > output) throw new Error("Codex JSONL reasoning_output_tokens exceeds output_tokens");
-  const input = providerInput - cacheRead;
-  const sortedTools = Object.fromEntries(Object.entries(state.toolNames).sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0])));
-  return {
-    input,
-    providerInput,
-    output,
-    cacheRead,
-    cacheWrite,
-    reasoning,
-    total: providerInput + output,
-    fresh: input + output,
-    cost: null,
-    costSource: "unavailable",
-    sessions: 1,
-    subagentSessions: 0,
-    toolCalls: Object.values(sortedTools).reduce((sum, value) => sum + value, 0),
-    toolNames: sortedTools,
-    messages: state.messages,
-    model: typeof state.model === "string" && state.model ? state.model : "unknown",
-    thinkingLevel: typeof state.thinkingLevel === "string" && state.thinkingLevel ? state.thinkingLevel : "unknown",
-    contextUsage: {
-      source: "unavailable",
-      observations: 0,
-      peakTokens: null,
-      contextWindow: null,
-      peakPercent: null
-    },
-    providerSessionId: state.threadId
-  };
-}
-
-export function createCodexExecJsonlCollector(options = {}) {
-  const state = {
-    model: options.model,
-    thinkingLevel: options.thinkingLevel,
-    onEvent: typeof options.onEvent === "function" ? options.onEvent : undefined,
-    threadId: undefined,
-    completedUsage: undefined,
-    completedTurns: 0,
-    messages: 0,
-    toolNames: {},
-    diagnostics: []
-  };
-  let buffer = "";
-  let lineNumber = 0;
-  let failure;
-  const decoder = new StringDecoder("utf8");
-  const consumeLine = (rawLine) => {
-    lineNumber += 1;
-    const line = rawLine.trim();
-    if (!line) return;
-    let event;
-    try { event = JSON.parse(line); }
-    catch { throw new Error(`Codex JSONL line ${lineNumber} is not valid JSON`); }
-    consumeCodexEvent(state, event, lineNumber);
-  };
-  return {
-    write(chunk) {
-      if (failure) return;
-      try {
-        buffer += typeof chunk === "string" ? chunk : decoder.write(Buffer.from(chunk));
-        let newline;
-        while ((newline = buffer.indexOf("\n")) >= 0) {
-          consumeLine(buffer.slice(0, newline));
-          buffer = buffer.slice(newline + 1);
-        }
-        if (buffer.length > 64 * 1024 * 1024) throw new Error("Codex JSONL event exceeds the 64 MiB safety limit");
-      } catch (error) {
-        failure = error;
-        buffer = "";
-      }
-    },
-    finish() {
-      if (!failure) buffer += decoder.end();
-      if (!failure && buffer) {
-        try { consumeLine(buffer); } catch (error) { failure = error; }
-        buffer = "";
-      }
-      if (failure) throw failure;
-      return finishCodexUsage(state);
-    },
-    diagnostics() {
-      return state.diagnostics.map((item) => ({ ...item }));
-    }
-  };
-}
-
-export function parseCodexExecJsonl(stdout, options = {}) {
-  if (typeof stdout !== "string") throw new Error("Codex JSONL output must be a string");
-  const collector = createCodexExecJsonlCollector(options);
-  collector.write(stdout);
-  return collector.finish();
 }
 
 export function benchmarkSurfaceLabel(surface) {
@@ -304,7 +89,9 @@ function usageMedians(runs) {
     medianInputTokens: median(runs.map((run) => run.usage?.input)),
     medianOutputTokens: median(runs.map((run) => run.usage?.output)),
     medianCacheReadTokens: median(runs.map((run) => run.usage?.cacheRead)),
+    medianCacheWriteTokens: median(runs.map((run) => run.usage?.cacheWrite)),
     medianReasoningTokens: median(runs.map((run) => run.usage?.reasoning)),
+    medianTotalTokens: median(runs.map((run) => run.usage?.total)),
     medianCost: median(runs.map((run) => run.usage?.cost)),
     medianDurationSeconds: median(runs.map((run) => run.durationSeconds)),
     medianToolCalls: median(runs.map((run) => run.usage?.toolCalls))
@@ -436,7 +223,11 @@ export function evaluateWorkflowEvidence(task, changedFiles, toolNames = {}, opt
     ...(scenarioKind === "read-only" ? [] : [
       { id: "truthful-changed-files", passed: actual.length > 0 && JSON.stringify(actual) === JSON.stringify(claimed), weight: 1 }
     ]),
-    ...(acceptanceCriteria.length > 0 && requireSemanticAcceptanceEvidence ? [
+    // Keep advisory semantic coverage visible for every source-change run, but
+    // do not let a finite proof classifier override an independently graded
+    // correct outcome when CAP-13 is not part of the task's authority. Strict
+    // profiles retain the full workflow weight.
+    ...(acceptanceCriteria.length > 0 && (scenarioKind === "source-change" || requireSemanticAcceptanceEvidence) ? [
       {
         id: "criterion-linked-evidence",
         passed: (criticalAcceptance.length ? criticalAcceptance : acceptanceCriteria).every((criterion) => criterion.status === "satisfied"
@@ -444,7 +235,7 @@ export function evaluateWorkflowEvidence(task, changedFiles, toolNames = {}, opt
           && (scenarioKind === "read-only"
             ? criterion.evidence.length > 0
             : Boolean(terminalVerifierDigest) && criterion.evidence.some((evidence) => evidence?.workingTreeDigest === terminalVerifierDigest))),
-        weight: 1
+        weight: requireSemanticAcceptanceEvidence ? 1 : 0.25
       }
     ] : []),
     {
@@ -599,37 +390,6 @@ function pairedOutcomeCounts(pairs, predicate) {
   return counts;
 }
 
-function pairedUsageBands(tokenPairs, field) {
-  const grouped = new Map();
-  for (const pair of tokenPairs) {
-    const key = typeof pair.candidate?.[field] === "string" && pair.candidate[field] ? pair.candidate[field] : "unspecified";
-    const values = grouped.get(key) ?? [];
-    values.push(pair);
-    grouped.set(key, values);
-  }
-  return Object.fromEntries([...grouped.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([key, values]) => {
-    const ratios = values.map((pair) => pair.candidate.usage.fresh / pair.baseline.usage.fresh);
-    const deltas = values.map((pair) => pair.candidate.usage.fresh - pair.baseline.usage.fresh);
-    const byScenario = new Map();
-    for (const [index, pair] of values.entries()) {
-      const scenarioRatios = byScenario.get(pair.candidate.scenarioId) ?? [];
-      scenarioRatios.push(ratios[index]);
-      byScenario.set(pair.candidate.scenarioId, scenarioRatios);
-    }
-    const scenarioRatios = [...byScenario.values()].map(geometricMean);
-    return [key, {
-      pairs: values.length,
-      scenarioFamilies: byScenario.size,
-      freshTokenRatio: rounded(geometricMean(ratios), 4),
-      freshTokenRatioConfidence95: geometricMeanConfidence95(scenarioRatios),
-      medianFreshTokenDelta: rounded(median(deltas), 2),
-      candidateWins: deltas.filter((value) => value < 0).length,
-      baselineWins: deltas.filter((value) => value > 0).length,
-      ties: deltas.filter((value) => value === 0).length
-    }];
-  }));
-}
-
 export function summarizeBenchmark({
   suite,
   runId,
@@ -673,6 +433,20 @@ export function summarizeBenchmark({
     pairs: ratios.length
   }));
   const completeScenarioFreshRatios = scenarioFreshRatios.filter((item) => item.pairs === repeats);
+  const durationPairs = allPairs.filter(comparableDuration);
+  const durationRatios = durationPairs.map((pair) => pair.candidate.durationSeconds / pair.baseline.durationSeconds);
+  const durationRatiosByScenario = new Map();
+  for (const pair of durationPairs) {
+    const ratios = durationRatiosByScenario.get(pair.candidate.scenarioId) ?? [];
+    ratios.push(pair.candidate.durationSeconds / pair.baseline.durationSeconds);
+    durationRatiosByScenario.set(pair.candidate.scenarioId, ratios);
+  }
+  const scenarioDurationRatios = [...durationRatiosByScenario.entries()].map(([scenarioId, ratios]) => ({
+    scenarioId,
+    ratio: geometricMean(ratios),
+    pairs: ratios.length
+  }));
+  const completeScenarioDurationRatios = scenarioDurationRatios.filter((item) => item.pairs === repeats);
   const costPairs = tokenPairs.filter((pair) => (
     Number.isFinite(pair.baseline.usage.cost)
     && Number.isFinite(pair.candidate.usage.cost)
@@ -680,14 +454,24 @@ export function summarizeBenchmark({
     && pair.candidate.usage.cost > 0
   ));
   const costRatios = costPairs.map((pair) => pair.candidate.usage.cost / pair.baseline.usage.cost);
-  const freshRatio = geometricMean(freshRatios);
+  const allSuccessfulPairsFreshRatio = geometricMean(freshRatios);
   const confidenceScenarioRatios = suite.schemaVersion === 2 ? completeScenarioFreshRatios : scenarioFreshRatios;
+  const freshRatio = suite.schemaVersion === 2
+    ? geometricMean(confidenceScenarioRatios.map((item) => item.ratio))
+    : allSuccessfulPairsFreshRatio;
   const freshRatioConfidence95 = geometricMeanConfidence95(confidenceScenarioRatios.map((item) => item.ratio));
+  const durationRatio = geometricMean(durationRatios);
+  const confidenceScenarioDurationRatios = suite.schemaVersion === 2 ? completeScenarioDurationRatios : scenarioDurationRatios;
+  const durationRatioConfidence95 = geometricMeanConfidence95(confidenceScenarioDurationRatios.map((item) => item.ratio));
   const costRatio = geometricMean(costRatios);
   const freshDeltas = tokenPairs.map((pair) => pair.candidate.usage.fresh - pair.baseline.usage.fresh);
   const freshWins = freshDeltas.filter((delta) => delta < 0).length;
   const freshLosses = freshDeltas.filter((delta) => delta > 0).length;
   const freshTies = freshDeltas.length - freshWins - freshLosses;
+  const durationDeltas = durationPairs.map((pair) => pair.candidate.durationSeconds - pair.baseline.durationSeconds);
+  const durationWins = durationDeltas.filter((delta) => delta < 0).length;
+  const durationLosses = durationDeltas.filter((delta) => delta > 0).length;
+  const durationTies = durationDeltas.length - durationWins - durationLosses;
   const baselineFreshPerResolvedOutcome = tokensPerResolvedOutcome(allPairs, "baseline");
   const candidateFreshPerResolvedOutcome = tokensPerResolvedOutcome(allPairs, "candidate");
   const failureAwareFreshTokenRatio = Number.isFinite(baselineFreshPerResolvedOutcome)
@@ -695,8 +479,19 @@ export function summarizeBenchmark({
     && Number.isFinite(candidateFreshPerResolvedOutcome)
       ? candidateFreshPerResolvedOutcome / baselineFreshPerResolvedOutcome
       : null;
-  candidate.scores.efficiency = efficiencyScore(freshRatio);
+  const familyClusteredFailureAware = familyClusteredFailureAwareUsage(suite, allPairs, repeats);
   baseline.scores.efficiency = tokenPairs.length ? 5 : null;
+  const infrastructureFailures = runs.flatMap((run) => run.infrastructureFailures ?? []);
+  const infrastructureFailureCounts = {};
+  const infrastructureClassCounts = {};
+  for (const failure of infrastructureFailures) {
+    const name = failure.failure ?? "unknown";
+    infrastructureFailureCounts[name] = (infrastructureFailureCounts[name] ?? 0) + 1;
+    const className = failure.class ?? failure.infrastructureClass ?? "unknown";
+    infrastructureClassCounts[className] = (infrastructureClassCounts[className] ?? 0) + 1;
+  }
+  const infrastructureRetries = runs.reduce((sum, run) => sum + (run.infrastructureRetries ?? 0), 0);
+  const unknownInfrastructureUsage = infrastructureFailures.filter((failure) => failure.usageStatus === "unknown-after-provider-start").length;
   const releaseGate = suite.releaseGate ?? {};
   const qualityThreshold = releaseGate.minimumQualityScore ?? 9;
   const safetyThreshold = releaseGate.minimumSafetyScore ?? 10;
@@ -708,8 +503,37 @@ export function summarizeBenchmark({
   const minimumComparableEfficiencyScenarios = releaseGate.minimumComparableEfficiencyScenarios ?? minimumPairedScenarios;
   const minimumRepeats = releaseGate.minimumRepeats;
   const maximumFreshTokenRatioUpper95 = releaseGate.maximumFreshTokenRatioUpper95;
+  const maximumDurationRatioUpper95 = releaseGate.maximumDurationRatioUpper95;
+  const maximumInfrastructureRetries = releaseGate.maximumInfrastructureRetries;
+  const primaryEfficiencyEstimand = releaseGate.primaryEfficiencyEstimand ?? "successful-pair-family-ratio";
+  const primaryUsesFailureAware = primaryEfficiencyEstimand === "failure-aware-family-ratio";
+  const primaryEfficiencyRatio = primaryUsesFailureAware ? familyClusteredFailureAware.ratio : freshRatio;
+  const primaryEfficiencyRatioConfidence95 = primaryUsesFailureAware
+    ? familyClusteredFailureAware.confidence95
+    : freshRatioConfidence95;
+  const primaryEfficiencyScenarioRatios = primaryUsesFailureAware
+    ? familyClusteredFailureAware.families.filter((item) => Number.isFinite(item.ratio))
+    : completeScenarioFreshRatios;
+  const primaryEfficiencyCompleteScenarios = primaryEfficiencyScenarioRatios.length;
+  const primaryEfficiencyCategoryCoverage = completeCategoryCoverage(suite, primaryEfficiencyScenarioRatios);
   const requiresConfidenceEfficiency = Number.isFinite(maximumFreshTokenRatioUpper95) || releaseGate.requireEfficiencyClaim === true;
   const requiresSuiteEfficiency = requiresConfidenceEfficiency;
+  const requiresPerformance = Number.isFinite(maximumDurationRatioUpper95);
+  const requiresStability = Number.isInteger(maximumInfrastructureRetries);
+  const requiresFullSuite = releaseGate.requireFullSuiteForClaim === true;
+  const requiresProviderWireSurface = releaseGate.requireStableProviderWireSurface === true;
+  const requestsTokenSavingClaim = releaseGate.requireEfficiencyClaim === true;
+  const releaseClaimConfigurationGate = requestsTokenSavingClaim
+    ? suite.schemaVersion === 2 && Number.isFinite(maximumFreshTokenRatioUpper95)
+      && maximumFreshTokenRatioUpper95 <= 0.8 && requiresFullSuite && requiresProviderWireSurface
+      && ["successful-pair-family-ratio", "failure-aware-family-ratio"].includes(primaryEfficiencyEstimand)
+    : null;
+  const codexBaselineGate = requestsTokenSavingClaim ? baselineSurface === "codex-cli" : null;
+  const cleanReleaseSourceGate = requestsTokenSavingClaim
+    ? environment.source?.kind === "git-working-tree"
+      && environment.source.dirty === false
+      && /^[a-f0-9]{40,64}$/.test(environment.source.commit ?? "")
+    : null;
   const qualityNonInferior = candidate.scores.quality >= baseline.scores.quality;
   const qualityGate = candidate.scores.quality >= qualityThreshold;
   const safetyGate = candidate.scores.safety >= safetyThreshold;
@@ -746,16 +570,131 @@ export function summarizeBenchmark({
     : tokenPairs.length >= 3;
   const efficiencyCategoryCoverage = completeCategoryCoverage(suite, completeScenarioFreshRatios);
   const efficiencyBandCoverageGate = suite.schemaVersion === 2 ? efficiencyCategoryCoverage.passed : true;
+  const primaryEfficiencyEvidenceGate = Number.isInteger(minimumComparableEfficiencyScenarios)
+    ? primaryEfficiencyCompleteScenarios >= minimumComparableEfficiencyScenarios
+    : primaryEfficiencyCompleteScenarios >= 3;
+  const primaryEfficiencyBandCoverageGate = suite.schemaVersion === 2
+    ? primaryEfficiencyCategoryCoverage.passed
+    : true;
   const repeatGate = Number.isInteger(minimumRepeats) ? repeats >= minimumRepeats : null;
-  const protocol = comparisonProtocol(environment, suite, baselineSurface);
+  const providerWireVerifiedRuns = candidateRuns.filter((run) => benchmarkProviderWireEvidenceMatchesRequest(
+    run.providerWireEvidence,
+    environment.requestedModel,
+    environment.requestedThinking
+  ));
+  const providerWireGroupMap = new Map();
+  for (const run of candidateRuns) {
+    const key = `${run.scenarioId}\0${run.profile ?? "unspecified"}\0${run.lifecycle ?? "unspecified"}`;
+    const group = providerWireGroupMap.get(key) ?? {
+      scenarioId: run.scenarioId,
+      profile: run.profile ?? "unspecified",
+      lifecycle: run.lifecycle ?? "unspecified",
+      runs: 0,
+      rawInstructionHashes: new Set(),
+      instructionHashes: new Set(),
+      orderedToolSurfaceHashes: new Set(),
+      deferredToolSurfaceHashes: new Set()
+    };
+    group.runs += 1;
+    for (const value of run.providerWireEvidence?.instructionHashes ?? []) group.rawInstructionHashes.add(value);
+    for (const value of run.providerWireEvidence?.baseInstructionHashes ?? []) group.instructionHashes.add(value);
+    for (const value of run.providerWireEvidence?.orderedToolSurfaceHashes ?? []) group.orderedToolSurfaceHashes.add(value);
+    for (const value of run.providerWireEvidence?.deferred?.toolSurfaceHashes ?? []) group.deferredToolSurfaceHashes.add(value);
+    providerWireGroupMap.set(key, group);
+  }
+  const providerWireGroups = [...providerWireGroupMap.values()].map((group) => ({
+    scenarioId: group.scenarioId,
+    profile: group.profile,
+    lifecycle: group.lifecycle,
+    runs: group.runs,
+    rawInstructionHashCount: group.rawInstructionHashes.size,
+    instructionHashCount: group.instructionHashes.size,
+    orderedToolSurfaceHashCount: group.orderedToolSurfaceHashes.size,
+    deferredToolSurfaceHashCount: group.deferredToolSurfaceHashes.size,
+    basePrefixStable: group.instructionHashes.size === 1 && group.orderedToolSurfaceHashes.size === 1
+  })).sort((left, right) => left.scenarioId.localeCompare(right.scenarioId));
+  const providerWireDriftGroups = providerWireGroups.filter((group) => !group.basePrefixStable);
+  const providerWireSurfaceGate = requiresProviderWireSurface
+    ? candidateSurface === "piagent"
+      && candidateRuns.length > 0
+      && providerWireVerifiedRuns.length === candidateRuns.length
+      && providerWireGroups.length > 0
+      && providerWireDriftGroups.length === 0
+    : null;
+  const providerWireFailureCounts = {};
+  if (requiresProviderWireSurface) {
+    for (const run of candidateRuns) {
+      const evidence = run.providerWireEvidence;
+      if (!evidence) {
+        providerWireFailureCounts["missing-evidence"] = (providerWireFailureCounts["missing-evidence"] ?? 0) + 1;
+        continue;
+      }
+      for (const [id, passed] of Object.entries(evidence.checks ?? {})) {
+        if (passed === true) continue;
+        providerWireFailureCounts[id] = (providerWireFailureCounts[id] ?? 0) + 1;
+      }
+      if (evidence.expectedModelId !== (environment.requestedModel ?? "").split("/").at(-1)) {
+        providerWireFailureCounts["evidence-request-model-binding"] = (providerWireFailureCounts["evidence-request-model-binding"] ?? 0) + 1;
+      }
+      const requestedEffort = environment.requestedThinking === "off" ? "none" : environment.requestedThinking === "minimal" ? "low" : environment.requestedThinking;
+      if (evidence.expectedReasoningEffort !== requestedEffort) {
+        providerWireFailureCounts["evidence-request-effort-binding"] = (providerWireFailureCounts["evidence-request-effort-binding"] ?? 0) + 1;
+      }
+    }
+    if (providerWireDriftGroups.length > 0) providerWireFailureCounts["cross-repeat-base-prefix-drift"] = providerWireDriftGroups.length;
+  }
+  const baseProtocol = comparisonProtocol(environment, suite, baselineSurface);
+  const protocol = requiresProviderWireSurface ? {
+    ...baseProtocol,
+    required: true,
+    passed: baseProtocol.passed && providerWireSurfaceGate === true,
+    checks: { ...baseProtocol.checks, "provider-wire-surface": providerWireSurfaceGate === true },
+    failedChecks: [
+      ...baseProtocol.failedChecks,
+      ...(providerWireSurfaceGate === true ? [] : ["provider-wire-surface"])
+    ]
+  } : baseProtocol;
+  const fullSuiteGate = requiresFullSuite ? environment.suiteCoverage?.fullSuite === true : null;
   const efficiencyConfidenceGate = requiresConfidenceEfficiency
     ? Boolean(freshRatioConfidence95 && freshRatioConfidence95.upper <= (maximumFreshTokenRatioUpper95 ?? 1))
+    : null;
+  const primaryEfficiencyConfidenceGate = requiresConfidenceEfficiency
+    ? Boolean(primaryEfficiencyRatioConfidence95
+      && primaryEfficiencyRatioConfidence95.upper <= (maximumFreshTokenRatioUpper95 ?? 1))
+    : null;
+  const primaryEfficiencyGate = requiresSuiteEfficiency
+    ? primaryEfficiencyEvidenceGate
+      && primaryEfficiencyBandCoverageGate
+      && Number.isFinite(primaryEfficiencyRatio)
+      && (!requiresConfidenceEfficiency || primaryEfficiencyConfidenceGate)
+    : null;
+  const performanceEvidenceGate = requiresPerformance
+    ? completeScenarioDurationRatios.length >= (minimumPairedScenarios ?? 2)
+    : null;
+  const performancePointEstimateGate = requiresPerformance
+    ? Number.isFinite(durationRatio) && durationRatio <= 1
+    : null;
+  const performanceConfidenceGate = requiresPerformance
+    ? Boolean(durationRatioConfidence95 && durationRatioConfidence95.upper <= maximumDurationRatioUpper95)
+    : null;
+  const performanceGate = requiresPerformance
+    ? performanceEvidenceGate && performancePointEstimateGate && performanceConfidenceGate
+    : null;
+  const infrastructureRetryGate = requiresStability
+    ? infrastructureRetries <= maximumInfrastructureRetries
+    : null;
+  const unknownInfrastructureUsageGate = requiresStability
+    ? unknownInfrastructureUsage === 0
+    : null;
+  const stabilityGate = requiresStability || requiresProviderWireSurface
+    ? infrastructureRetryGate !== false && unknownInfrastructureUsageGate !== false && providerWireSurfaceGate !== false
     : null;
   const pairedResolvedOutcomes = pairedOutcomeCounts(allPairs, (run) => run?.resolved === true);
   const pairedRegressionGate = pairedResolvedOutcomes.baselineOnlyPass === 0;
   const failureAwareEfficiencyGate = Number.isFinite(failureAwareFreshTokenRatio)
     ? failureAwareFreshTokenRatio <= (maximumFreshTokenRatioUpper95 ?? 1)
     : null;
+  candidate.scores.efficiency = efficiencyScore(primaryEfficiencyRatio);
   if (
     qualityGate
     && safetyGate
@@ -766,12 +705,16 @@ export function summarizeBenchmark({
     && outcomeScoreGate !== false
     && pairedRegressionGate
     && protocol.passed
+    && fullSuiteGate !== false
+    && stabilityGate !== false
     && outcomeEvidenceGate
     && efficiencyEvidenceGate
     && efficiencyBandCoverageGate
     && failureAwareEfficiencyGate
+    && primaryEfficiencyGate !== false
     && repeatGate !== false
     && (!requiresConfidenceEfficiency || efficiencyConfidenceGate)
+    && (!requiresPerformance || performanceGate)
     && candidate.scores.efficiency !== null
   ) {
     const workflowScore = candidate.scores.workflow ?? 10;
@@ -784,6 +727,10 @@ export function summarizeBenchmark({
     );
   }
   const tokenClaimAllowed = Boolean(safetyGate
+    && requestsTokenSavingClaim
+    && releaseClaimConfigurationGate
+    && codexBaselineGate
+    && cleanReleaseSourceGate
     && qualityGate
     && reliabilityGate
     && qualityNonInferior
@@ -792,12 +739,16 @@ export function summarizeBenchmark({
     && outcomeScoreGate !== false
     && pairedRegressionGate
     && protocol.passed
+    && fullSuiteGate !== false
+    && stabilityGate !== false
     && outcomeEvidenceGate
     && efficiencyEvidenceGate
     && efficiencyBandCoverageGate
     && repeatGate !== false
     && Number.isFinite(freshRatio)
     && failureAwareEfficiencyGate
+    && primaryEfficiencyGate
+    && (!requiresPerformance || performanceGate)
     && (requiresConfidenceEfficiency ? efficiencyConfidenceGate : freshRatio < 1));
   const releaseFailures = [
     !qualityNonInferior ? "quality-regression" : null,
@@ -808,17 +759,29 @@ export function summarizeBenchmark({
     categoryGate === false ? "category" : null,
     outcomeScoreGate === false ? "outcome-score-floor" : null,
     !pairedRegressionGate ? "paired-candidate-regression" : null,
-    !protocol.passed ? "comparison-protocol" : null,
+    !baseProtocol.passed ? "comparison-protocol" : null,
+    requiresProviderWireSurface && !providerWireSurfaceGate ? "provider-wire-surface" : null,
+    requestsTokenSavingClaim && !releaseClaimConfigurationGate ? "release-claim-configuration" : null,
+    requestsTokenSavingClaim && !codexBaselineGate ? "codex-baseline" : null,
+    requestsTokenSavingClaim && !cleanReleaseSourceGate ? "clean-release-source" : null,
+    requiresFullSuite && fullSuiteGate === false ? "full-suite" : null,
+    requiresStability && !infrastructureRetryGate ? "infrastructure-retries" : null,
+    requiresStability && !unknownInfrastructureUsageGate ? "unknown-infrastructure-usage" : null,
     !outcomeEvidenceGate ? "paired-outcome-evidence" : null,
     requiresSuiteEfficiency && !efficiencyEvidenceGate ? "efficiency-evidence" : null,
     requiresSuiteEfficiency && !efficiencyBandCoverageGate ? "efficiency-category-coverage" : null,
     requiresSuiteEfficiency && !failureAwareEfficiencyGate ? "failure-aware-efficiency" : null,
+    requiresSuiteEfficiency && !primaryEfficiencyGate ? "primary-efficiency" : null,
     repeatGate === false ? "repeat-count" : null,
-    requiresConfidenceEfficiency && !efficiencyConfidenceGate ? "efficiency-confidence" : null
+    requiresConfidenceEfficiency && !efficiencyConfidenceGate ? "efficiency-confidence" : null,
+    requiresPerformance && !performanceEvidenceGate ? "performance-evidence" : null,
+    requiresPerformance && performanceEvidenceGate && !performancePointEstimateGate ? "performance-point-regression" : null,
+    requiresPerformance && performanceEvidenceGate && performancePointEstimateGate && !performanceConfidenceGate ? "performance-confidence" : null
   ].filter(Boolean);
   const suiteGate = suite.schemaVersion === 2 ? {
     passed: releaseFailures.length === 0,
     failures: releaseFailures,
+    failureReasons: releaseFailures.map((id) => ({ id, message: RELEASE_FAILURE_MESSAGES[id] ?? id })),
     thresholds: {
       quality: qualityThreshold,
       safety: safetyThreshold,
@@ -828,22 +791,44 @@ export function summarizeBenchmark({
       outcomeScoreExclusive: outcomeScoreThresholdExclusive ?? null,
       pairedOutcomeScenarios: minimumPairedScenarios ?? null,
       comparableEfficiencyScenarios: minimumComparableEfficiencyScenarios ?? null,
+      primaryEfficiencyEstimand,
       repeats: minimumRepeats ?? null,
-      freshTokenRatioUpper95: maximumFreshTokenRatioUpper95 ?? null
+      freshTokenRatioUpper95: maximumFreshTokenRatioUpper95 ?? null,
+      durationRatioPointEstimate: requiresPerformance ? 1 : null,
+      durationRatioUpper95: maximumDurationRatioUpper95 ?? null,
+      infrastructureRetries: maximumInfrastructureRetries ?? null,
+      tokenSavingClaimUpper95Maximum: requestsTokenSavingClaim ? 0.8 : null,
+      baselineSurface: requestsTokenSavingClaim ? "codex-cli" : null,
+      cleanSource: requestsTokenSavingClaim,
+      requireFullSuite: requiresFullSuite,
+      stableProviderWireSurface: requiresProviderWireSurface
+    },
+    observed: {
+      completeOutcomeScenarios,
+      completeEfficiencyScenarios: completeScenarioFreshRatios.length,
+      completeDurationScenarios: completeScenarioDurationRatios.length,
+      repeats,
+      freshTokenRatioUpper95: freshRatioConfidence95?.upper ?? null,
+      primaryEfficiencyCompleteScenarios,
+      primaryEfficiencyRatio: rounded(primaryEfficiencyRatio, 4),
+      primaryEfficiencyRatioUpper95: primaryEfficiencyRatioConfidence95?.upper ?? null,
+      durationRatio: rounded(durationRatio, 4),
+      durationRatioUpper95: durationRatioConfidence95?.upper ?? null,
+      infrastructureRetries,
+      unknownInfrastructureUsage,
+      baselineSurface,
+      sourceKind: environment.source?.kind ?? null,
+      sourceCommit: environment.source?.commit ?? null,
+      sourceDirty: environment.source?.dirty ?? null,
+      fullSuite: environment.suiteCoverage?.fullSuite ?? null,
+      providerWireVerifiedRuns: providerWireVerifiedRuns.length,
+      providerWireRuns: candidateRuns.length,
+      providerWireGroups: providerWireGroups.length,
+      providerWireDriftGroups: providerWireDriftGroups.length
     }
   } : null;
   const baselineKey = surfaceReportKey(baselineSurface);
   const candidateKey = surfaceReportKey(candidateSurface);
-  const infrastructureFailures = runs.flatMap((run) => run.infrastructureFailures ?? []);
-  const infrastructureFailureCounts = {};
-  const infrastructureClassCounts = {};
-  for (const failure of infrastructureFailures) {
-    const name = failure.failure ?? "unknown";
-    infrastructureFailureCounts[name] = (infrastructureFailureCounts[name] ?? 0) + 1;
-    const className = failure.class ?? failure.infrastructureClass ?? "unknown";
-    infrastructureClassCounts[className] = (infrastructureClassCounts[className] ?? 0) + 1;
-  }
-  const infrastructureRetries = runs.reduce((sum, run) => sum + (run.infrastructureRetries ?? 0), 0);
   const claimEligibility = benchmarkClaimEligibility({
     suite,
     environment,
@@ -868,18 +853,24 @@ export function summarizeBenchmark({
       failureCounts: infrastructureFailureCounts,
       classCounts: infrastructureClassCounts
     },
+    tokenAccounting: buildBenchmarkTokenAccounting(runs),
     surfaces: { [baselineKey]: baseline, [candidateKey]: candidate },
     comparison: {
       baselineSurface,
       candidateSurface,
       purpose: claimEligibility.comparisonPurpose,
       usageEstimator: "paired-geometric-mean-ratio",
+      durationEstimator: "paired-geometric-mean-ratio-clustered-by-scenario-family",
       failureAwareUsageEstimator: "total-comparable-attempt-fresh-tokens-per-resolved-outcome",
+      failureAwareFamilyUsageEstimator: "geometric-mean-of-family-total-comparable-attempt-fresh-tokens-per-resolved-outcome-ratios",
       pairedOutcomeScenarios: completeOutcomeScenarios,
       pairedSuccessfulRuns: pairs.length,
       pairedUsageRuns: tokenPairs.length,
       pairedUsageScenarios: scenarioFreshRatios.length,
       pairedCompleteScenarios: completeScenarioFreshRatios.length,
+      pairedDurationRuns: durationPairs.length,
+      pairedDurationScenarios: scenarioDurationRatios.length,
+      pairedCompleteDurationScenarios: completeScenarioDurationRatios.length,
       pairedCostRuns: costPairs.length,
       pairedOutcomes: {
         resolved: pairedResolvedOutcomes,
@@ -894,6 +885,8 @@ export function summarizeBenchmark({
       },
       pairedFreshTokenWins: { [candidateKey]: freshWins, [baselineKey]: freshLosses, ties: freshTies },
       medianPairedFreshTokenDelta: rounded(median(freshDeltas), 2),
+      pairedDurationWins: { [candidateKey]: durationWins, [baselineKey]: durationLosses, ties: durationTies },
+      medianPairedDurationDeltaSeconds: rounded(median(durationDeltas), 2),
       medianFreshTokens: { [baselineKey]: baselineFresh, [candidateKey]: candidateFresh },
       medianCost: { [baselineKey]: baselineCost, [candidateKey]: candidateCost },
       freshTokensPerResolvedOutcome: {
@@ -901,9 +894,39 @@ export function summarizeBenchmark({
         [candidateKey]: rounded(candidateFreshPerResolvedOutcome, 2)
       },
       failureAwareFreshTokenRatio: rounded(failureAwareFreshTokenRatio, 4),
+      failureAwareFamilyFreshTokenRatio: rounded(familyClusteredFailureAware.ratio, 4),
+      failureAwareFamilyFreshTokenRatioConfidence95: familyClusteredFailureAware.confidence95,
+      failureAwareFamilyCoverage: {
+        complete: familyClusteredFailureAware.complete,
+        expectedScenarioFamilies: familyClusteredFailureAware.expectedScenarioFamilies,
+        usableScenarioFamilies: familyClusteredFailureAware.usableScenarioFamilies,
+        sampleUnit: familyClusteredFailureAware.sampleUnit,
+        scenarioIds: familyClusteredFailureAware.scenarioIds
+      },
+      failureAwareFamilyRatios: familyClusteredFailureAware.families,
+      allSuccessfulPairsFreshTokenRatio: rounded(allSuccessfulPairsFreshRatio, 4),
       freshTokenRatio: rounded(freshRatio, 4),
       freshTokenRatioConfidence95: freshRatioConfidence95,
+      freshTokenRatioSample: {
+        sampleUnit: "scenario-family",
+        scenarioCount: confidenceScenarioRatios.length,
+        scenarioIds: confidenceScenarioRatios.map((item) => item.scenarioId)
+      },
+      primaryEfficiencyEstimand,
+      primaryEfficiencyRatio: rounded(primaryEfficiencyRatio, 4),
+      primaryEfficiencyRatioConfidence95,
+      primaryEfficiencySample: {
+        sampleUnit: "scenario-family",
+        scenarioCount: primaryEfficiencyCompleteScenarios,
+        scenarioIds: primaryEfficiencyScenarioRatios.map((item) => item.scenarioId)
+      },
+      primaryEfficiencyDeltaPercent: Number.isFinite(primaryEfficiencyRatio)
+        ? rounded((primaryEfficiencyRatio - 1) * 100, 2)
+        : null,
       freshTokenDeltaPercent: Number.isFinite(freshRatio) ? rounded((freshRatio - 1) * 100, 2) : null,
+      durationRatio: rounded(durationRatio, 4),
+      durationRatioConfidence95,
+      durationDeltaPercent: Number.isFinite(durationRatio) ? rounded((durationRatio - 1) * 100, 2) : null,
       costRatio: rounded(costRatio, 4),
       costDeltaPercent: Number.isFinite(costRatio) ? rounded((costRatio - 1) * 100, 2) : null,
       qualityNonInferior,
@@ -917,13 +940,39 @@ export function summarizeBenchmark({
       outcomeScoreFailures,
       pairedRegressionGate,
       comparisonProtocolGate: protocol,
+      providerWireSurfaceGate,
+      providerWireEvidence: {
+        required: requiresProviderWireSurface,
+        runs: candidateRuns.length,
+        verifiedRuns: providerWireVerifiedRuns.length,
+        groups: providerWireGroups,
+        driftGroups: providerWireDriftGroups,
+        failureCounts: providerWireFailureCounts,
+        deferredChangesAreBaseDrift: false
+      },
+      releaseClaimConfigurationGate,
+      codexBaselineGate,
+      cleanReleaseSourceGate,
+      fullSuiteGate,
       outcomeEvidenceGate,
       efficiencyEvidenceGate,
       efficiencyBandCoverageGate,
       efficiencyCategoryCoverage,
       failureAwareEfficiencyGate,
+      primaryEfficiencyEvidenceGate,
+      primaryEfficiencyBandCoverageGate,
+      primaryEfficiencyCategoryCoverage,
+      primaryEfficiencyConfidenceGate,
+      primaryEfficiencyGate,
       repeatGate,
       efficiencyConfidenceGate,
+      performanceEvidenceGate,
+      performancePointEstimateGate,
+      performanceConfidenceGate,
+      performanceGate,
+      infrastructureRetryGate,
+      unknownInfrastructureUsageGate,
+      stabilityGate,
       suiteGate,
       productionGate: suite.id === "production-v1" ? suiteGate : null,
       tokenClaimAllowed,
@@ -938,24 +987,46 @@ export function summarizeBenchmark({
             ? "quality-gate-failed"
             : !reliabilityGate
               ? "reliability-gate-failed"
-              : !protocol.passed
+              : !baseProtocol.passed
                 ? "comparison-protocol-gate-failed"
                 : workflowGate === false
                   ? "workflow-gate-failed"
-                : categoryGate === false
-                  ? "category-gate-failed"
-                  : outcomeScoreGate === false
-                    ? "outcome-score-floor-gate-failed"
-                    : !pairedRegressionGate
-                      ? "paired-candidate-regression"
-                  : repeatGate === false
-                      ? "repeat-gate-failed"
-                      : requiresConfidenceEfficiency && efficiencyConfidenceGate === false
-                        ? "efficiency-confidence-gate-failed"
-                        : tokenClaimAllowed
-                          ? `${candidateSurface}-more-efficient`
-                          : "insufficient-efficiency-evidence",
-      note: `Raw metrics and hidden verifier results are authoritative. Successful-pair efficiency uses matched ${benchmarkSurfaceLabel(candidateSurface)}/${benchmarkSurfaceLabel(baselineSurface)} ratios; failure-aware effort includes every comparable attempt and divides by resolved outcomes. Confidence intervals cluster repeats by scenario family. Claim scope is ${claimEligibility.achievedTier}; generated value variants are not treated as independent task families.`
+                  : categoryGate === false
+                    ? "category-gate-failed"
+                    : outcomeScoreGate === false
+                      ? "outcome-score-floor-gate-failed"
+                      : !pairedRegressionGate
+                        ? "paired-candidate-regression"
+                        : requestsTokenSavingClaim && releaseClaimConfigurationGate === false
+                          ? "release-claim-configuration-gate-failed"
+                          : requestsTokenSavingClaim && codexBaselineGate === false
+                            ? "codex-baseline-gate-failed"
+                            : requestsTokenSavingClaim && cleanReleaseSourceGate === false
+                              ? "clean-release-source-gate-failed"
+                              : requiresProviderWireSurface && providerWireSurfaceGate === false
+                                ? "provider-wire-surface-gate-failed"
+                                : fullSuiteGate === false
+                                  ? "full-suite-gate-failed"
+                                  : requiresStability && infrastructureRetryGate === false
+                                    ? "stability-infrastructure-retry-gate-failed"
+                                    : requiresStability && unknownInfrastructureUsageGate === false
+                                      ? "stability-unknown-usage-gate-failed"
+                                    : !outcomeEvidenceGate
+                                      ? "paired-outcome-evidence-gate-failed"
+                                      : repeatGate === false
+                                        ? "repeat-gate-failed"
+                                        : requiresPerformance && performanceEvidenceGate === false
+                                          ? "performance-evidence-gate-failed"
+                                          : requiresPerformance && performancePointEstimateGate === false
+                                            ? "performance-point-regression"
+                                            : requiresPerformance && performanceConfidenceGate === false
+                                              ? "performance-confidence-gate-failed"
+                                              : requiresConfidenceEfficiency && efficiencyConfidenceGate === false
+                                                ? "efficiency-confidence-gate-failed"
+                                                : tokenClaimAllowed
+                                                  ? `${candidateSurface}-more-efficient`
+                                                  : "observational-efficiency-only",
+      note: `Raw metrics and hidden verifier results are authoritative. Successful-pair efficiency uses matched ${benchmarkSurfaceLabel(candidateSurface)}/${benchmarkSurfaceLabel(baselineSurface)} ratios; failure-aware effort includes every comparable attempt and divides by resolved outcomes. Duration compares all matched runs with compatible model and effort evidence. Provider-wire evidence verifies the requested model and effort plus stable base instructions/tools within each scenario/profile/lifecycle across repeats; deferred tool-search batches are reported separately. Confidence intervals cluster repeats by scenario family. Claim scope is ${claimEligibility.achievedTier}; generated value variants are not treated as independent task families.`
     },
     runs
   };

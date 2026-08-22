@@ -502,8 +502,8 @@ Các lệnh này chạy ngoài Pi.
 | Command | Dùng khi nào |
 |---|---|
 | `npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.84.1` | Cài Pi CLI tương thích với release hiện tại. |
-| `npm install -g --ignore-scripts @piagent/platform@1.5.5` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
-| `pi install git:github.com/Vt-mmm/piagent@v1.5.5` | Cài pinned release khi cần reproducible team setup. |
+| `npm install -g --ignore-scripts @piagent/platform@1.6.0` | Cài terminal helper `piagent-*` từ release tag hiện tại. |
+| `pi install git:github.com/Vt-mmm/piagent@v1.6.0` | Cài pinned release khi cần reproducible team setup. |
 | `pi install git:github.com/Vt-mmm/piagent` | Cài latest package platform cho máy cá nhân/sandbox. |
 | `piagent-update --check` | Báo version hiện tại vs version sẽ lên cho cả ba thành phần; không cài gì. |
 | `piagent-update` | Full update global một lệnh cho cả máy: Pi host → npm-global helper → Pi package, đúng thứ tự release yêu cầu. |
@@ -547,17 +547,17 @@ Các lệnh này chạy ngoài Pi.
 | `piagent-uninstall --apply` | Gỡ Pi package của platform khỏi Pi settings global. |
 | `piagent-uninstall --apply --with-addons --with-host` | Gỡ thêm pi-mcp-adapter, pi-subagents, pi-web-access và Pi host. |
 | `piagent-uninstall --apply --project /path/to/project` | Gỡ thêm state của platform trong project: profile, lock, `piagent-state/`. |
-| `piagent-benchmark` | Chạy smoke suite `core-v1`: paired Raw Pi/Piagent, 24 session, hidden grader + scope + workflow + exact usage. |
+| `piagent-benchmark` | Chạy smoke suite `core-v1`: paired Piagent/controlled `codex-cli` bằng Luna/medium, 24 session, hidden grader + scope + workflow + exact usage. |
 | `piagent-benchmark --dry-run` | Validate suite và xem số model session, không gọi model. |
-| `npm run benchmark:deep -- --dry-run` | Validate `deep-logic-v1`: 6 family difficulty large x 2 repeat x Piagent/`codex-cli` = 24 session, pin Luna/medium và chưa dùng quota. |
-| `npm run benchmark:deep` | Chạy paired deep-logic benchmark Luna/medium cho event/state, scheduler, policy, context graph, stream recovery và transactional config. |
+| `npm run benchmark:deep -- --dry-run` | Validate `deep-logic-v1`: 7 family difficulty large × 3 repeat × Piagent/`codex-cli` = 42 session, khóa Luna/medium và chưa dùng quota. |
+| `npm run benchmark:deep` | Chạy paired deep-logic benchmark Luna/medium cho event/state, scheduler, policy, context graph, stream recovery, transactional config và temporal usage billing chính xác. |
 | `piagent-benchmark --production --dry-run` | Xem ma trận production 18 family x 3 variant x 2 surface = 108 session, chưa dùng quota. |
 | `piagent-benchmark --production --surfaces piagent,codex-cli --model <provider/model> --thinking high --piagent-treatment candidate` | Chạy production release gate đa domain/profile/lifecycle với controlled Codex, treatment Piagent đã pin, paired outcome và 95% token-ratio confidence. |
 | `piagent-benchmark --piagent-treatment release-defaults\|local-safe\|candidate\|feature-off ...` | Pin treatment Piagent; chỉ surface `piagent` nhận feature env, manifest/resume/replay/report giữ nguyên treatment. |
 | `piagent-benchmark --codex-mode native ...` | Đo UX Codex theo cấu hình operator; protocol gate fail closed nên report không được claim tiết kiệm token. |
 | `piagent-benchmark --production --seed <value> ...` | Tái lập đúng generated variant của một production report riêng tư. |
 | `piagent-benchmark --production --scenarios <id,id> --repeats 1 ...` | Chẩn đoán family/rubric đã chọn; không đủ điều kiện nhận production verdict. |
-| `piagent-benchmark --production --infrastructure-retries 2 ...` | Retry đúng lỗi process chết trước usage; timeout/task failure không retry và vẫn chấm reliability. |
+| `piagent-benchmark --production --infrastructure-retries 2 ...` | Diagnostic recovery run; retry chỉ áp lỗi process chết trước usage, được report đầy đủ và làm production claim fail. |
 | `piagent-benchmark --production --retry-delay 60 ...` | Đặt backoff trước infrastructure retry; production mặc định 60 giây. |
 | `bash scripts/verify-local.sh` | Verify repo platform trước khi commit/tag. |
 | `bash scripts/verify-local.sh --offline` | Verify trong CI/máy sạch, bỏ qua local Pi model catalog. |

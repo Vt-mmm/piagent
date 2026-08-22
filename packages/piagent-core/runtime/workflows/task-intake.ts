@@ -77,6 +77,13 @@ export function automaticTaskIntakeMode(prompt: string, readProtectedPaths: stri
   return undefined;
 }
 
+export function automaticTaskMutationPolicy(
+  prompt: string,
+  changeMode: "source-change" | "read-only"
+): "required" | "forbidden" {
+  return changeMode === "read-only" || AUTO_READ_ONLY_BOUNDARY.test(String(prompt ?? "")) ? "forbidden" : "required";
+}
+
 export function automaticTaskRiskLane(prompt: string): "tiny" | "normal" {
   return classifyContextTask(prompt).lane === "tiny" ? "tiny" : "normal";
 }
@@ -107,16 +114,46 @@ function splitAcceptanceCriterion(value: string): string[] {
   return fragments;
 }
 
+function isPathOnlyCriterion(value: string): boolean {
+  const normalized = value
+    .replace(/^\s*(?:[-*+] |\d+[.)]\s+)/, "")
+    .replace(/^`|`$/g, "")
+    .trim();
+  return /^(?:[A-Za-z0-9_@.-]+\/)+[A-Za-z0-9_@.-]+$/.test(normalized);
+}
+
+function evenlySpacedCriteria(values: string[], limit: number): string[] {
+  if (limit <= 0) return [];
+  if (values.length <= limit) return values;
+  if (limit === 1) return [values[values.length - 1]];
+  return Array.from({ length: limit }, (_entry, index) => (
+    values[Math.round((index * (values.length - 1)) / (limit - 1))]
+  ));
+}
+
+function boundedAcceptanceCriteria(values: string[], limit: number): string[] {
+  if (limit <= 0 || values.length === 0) return [];
+  if (values.length <= limit) return values;
+  const highSignal = /\b(?:do not|fail(?:s|ed)?(?:[-\s]+)closed|invalid|missing|must|never|reject(?:s|ed|ion)?|throws?|typeerror|without mutat(?:e|ing)|unchanged)\b/i;
+  const required = values.filter((criterion) => highSignal.test(criterion));
+  const selectedRequired = evenlySpacedCriteria(required, Math.min(limit, required.length));
+  const selected = new Set(selectedRequired);
+  const remaining = values.filter((criterion) => !selected.has(criterion));
+  for (const criterion of evenlySpacedCriteria(remaining, limit - selected.size)) selected.add(criterion);
+  return values.filter((criterion) => selected.has(criterion));
+}
+
 export function automaticAcceptanceCriteria(
   prompt: string,
   changeMode: "source-change" | "read-only" = "source-change"
 ): string[] {
   const lines = String(prompt ?? "").split(/\r?\n/);
   const criteria: string[] = [];
-  const obligation = /\b(?:add|change only|do not|ensure|exactly|invalid|must|never|preserve|reject|return|throw|without)\b/i;
+  const obligation = /\b(?:add|change only|do not|emits?|ensure|exactly|fail(?:s|ed)?(?:[-\s]+)closed|invalid|missing|must|never|preserve|reject|returns?|throw|without)\b/i;
   let current = "";
   let currentIsBullet = false;
   const push = (value: string) => {
+    if (isPathOnlyCriterion(value)) return;
     criteria.push(...splitAcceptanceCriterion(value));
   };
   const flush = () => {
@@ -142,7 +179,11 @@ export function automaticAcceptanceCriteria(
   const generic = changeMode === "read-only"
     ? ["No project files are changed.", "The final response addresses the requested diagnostic result."]
     : ["Changes stay within the runtime-derived task scope.", "The configured verification command passes after the final mutation."];
-  return uniqueStrings([...criteria, ...generic]).slice(0, AUTO_ACCEPTANCE_CRITERIA_MAX);
+  const uniqueCriteria = uniqueStrings(criteria);
+  const selected = boundedAcceptanceCriteria(uniqueCriteria, AUTO_ACCEPTANCE_CRITERIA_MAX);
+  if (selected.length === AUTO_ACCEPTANCE_CRITERIA_MAX) return selected;
+  const missingGeneric = generic.filter((criterion) => !selected.includes(criterion));
+  return [...selected, ...missingGeneric].slice(0, AUTO_ACCEPTANCE_CRITERIA_MAX);
 }
 
 export function manualTaskIntakeEligible(prompt: string, readProtectedPaths: string[]): boolean {

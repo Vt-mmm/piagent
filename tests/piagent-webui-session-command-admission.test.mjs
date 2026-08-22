@@ -84,6 +84,44 @@ describe("Piagent durable session command admission", () => {
     assert.equal(creates, 2); assert.equal(sends, 1); assert.equal(permissionChanges, 2);
   });
 
+  it("keeps a created session identity when effective options mismatch and returns v1-compatible uncertainty", async (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-session-create-readback-")); fs.chmodSync(root, 0o700);
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    const key = Buffer.alloc(32, 41), createdInfo = { path: path.join(root, "created-readback.jsonl"), id: "raw-created-readback",
+      cwd: path.join(root, "project"), name: "Readback session", created: new Date("2026-08-14T09:05:01.000Z"),
+      modified: new Date("2026-08-14T09:05:02.000Z"), messageCount: 0, firstMessage: "(no messages)", allMessagesText: "" };
+    let sessions = [], sends = 0;
+    const catalog = () => buildSessionCatalog({ gatewayInstanceRef: "gateway_create_readback", key, listSessions: async () => sessions,
+      readSessionOptions: () => ({ modelLabel: "Effective model", thinkingLevel: "medium" }) });
+    const runtimes = {
+      async createWithReadback() {
+        sessions = [createdInfo];
+        return { sessionRef: sessionRefForPath(key, createdInfo.path), effectiveOptions: { state: "mismatch",
+          modelRef: webUiModelRef("fixture", "effective"), thinkingLevel: "medium", reasonCode: "session-model-mismatch" } };
+      },
+      async send() { sends += 1; throw new Error("must-not-send-after-create-mismatch"); }
+    };
+    const events = new GatewayEventStore(), before = await catalog();
+    const controller = new SessionCommandController({ catalog, runtimes, store: new SessionCommandStore(root, key), events,
+      now: () => new Date("2026-08-14T09:06:00.000Z") });
+    const receipt = await controller.execute({ schemaVersion: 1, version: "piagent-session-command-v1", messageType: "command",
+      commandId: "command_create_readback_0001", idempotencyKey: "idempotency_create_readback_1234567890", action: "session.create",
+      requestedAt: "2026-08-14T09:05:00.000Z", expiresAt: "2026-08-14T09:10:00.000Z", sessionRef: null,
+      expectedCatalogRevision: before.catalogRevision, expectedSessionRevision: null,
+      payload: { projectRef: "project_create_readback", placeRef: "project_create_readback",
+        modelRef: webUiModelRef("fixture", "requested"), thinkingLevel: "high", message: "Do not dispatch on mismatch.",
+        messageRequestId: "message_create_readback" } });
+    assert.equal(validateFixture(registry, "session-command-v1", receipt).valid, true);
+    assert.equal(receipt.phase, "uncertain"); assert.equal(receipt.resultCode, "effect-unknown");
+    assert.equal(receipt.sessionRef, sessionRefForPath(key, createdInfo.path));
+    assert.equal(receipt.error.code, "session-model-mismatch");
+    assert.equal(Object.hasOwn(receipt, "effectiveOptions"), false);
+    assert.equal(sends, 0);
+    assert.equal((await catalog()).sessions.some((row) => row.sessionRef === receipt.sessionRef), true);
+    assert.equal(events.replay(0).events.some((event) => event.kind === "session.changed"
+      && event.payload.session.sessionRef === receipt.sessionRef), true);
+  });
+
   it("keeps a deferred workflow turn owned until Pi emits agent_settled", async (t) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-deferred-workflow-")); fs.chmodSync(root, 0o700);
     t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -158,10 +196,18 @@ describe("Piagent durable session command admission", () => {
       name: "Options", created: new Date("2026-08-14T09:00:00.000Z"), modified: new Date("2026-08-14T09:00:01.000Z"),
       messageCount: 2, firstMessage: "Options", allMessagesText: "Options" };
     let modelLabel = "Fixture One", thinkingLevel = "high", modelCalls = 0, thinkingCalls = 0, permissionCalls = 0;
+    let modelEffect = "apply", thinkingEffect = "apply";
     const models = [{ provider: "fixture", id: "one", name: "Fixture One" }, { provider: "fixture", id: "two", name: "Fixture Two" }];
     const session = { isIdle: true, model: models[0], thinkingLevel, messages: [], modelRuntime: { getAvailableSnapshot: () => models },
-      async setModel(value) { this.model = value; modelLabel = value.name; modelCalls += 1; },
-      setThinkingLevel(value) { this.thinkingLevel = value; thinkingLevel = value; thinkingCalls += 1; },
+      async setModel(value) {
+        modelCalls += 1;
+        if (modelEffect === "apply") { this.model = value; modelLabel = value.name; }
+      },
+      setThinkingLevel(value) {
+        thinkingCalls += 1;
+        const effective = thinkingEffect === "clamp" ? "medium" : value;
+        this.thinkingLevel = effective; thinkingLevel = effective;
+      },
       async prompt(text) { const mode = text.replace("/permission ", ""); permissionCalls += 1; this.messages.push({ role: "custom",
         customType: "piagent-permission-profile", details: { permissionProfile: { mode, warning: null } } }); } };
     const leases = new SessionLeaseStore(root, key), events = new GatewayEventStore();
@@ -191,6 +237,20 @@ describe("Piagent durable session command admission", () => {
     const permissionReceipt = await controller.execute(setPermission);
     assert.equal(validateFixture(registry, "session-command-v1", permissionReceipt).valid, true);
     assert.equal(permissionReceipt.resultCode, "permission-changed"); assert.equal(permissionCalls, 1);
+
+    modelEffect = "clamp"; current = await catalog(); row = current.sessions[0];
+    const clampedModel = await controller.execute({ ...command(row, current.catalogRevision, "session.set-model", "set_model_clamped_001"),
+      payload: { modelRef: webUiModelRef("fixture", "one") } });
+    assert.equal(validateFixture(registry, "session-command-v1", clampedModel).valid, true);
+    assert.equal(clampedModel.phase, "uncertain"); assert.equal(clampedModel.resultCode, "effect-unknown");
+    assert.notEqual(clampedModel.resultCode, "model-changed");
+
+    thinkingEffect = "clamp"; current = await catalog(); row = current.sessions[0];
+    const clampedThinking = await controller.execute({ ...command(row, current.catalogRevision, "session.set-thinking", "set_thinking_clamped_001"),
+      payload: { thinkingLevel: "high" } });
+    assert.equal(validateFixture(registry, "session-command-v1", clampedThinking).valid, true);
+    assert.equal(clampedThinking.phase, "uncertain"); assert.equal(clampedThinking.resultCode, "effect-unknown");
+    assert.notEqual(clampedThinking.resultCode, "thinking-changed");
     await runtimes.close();
   });
 
@@ -287,7 +347,15 @@ describe("Piagent durable session command admission", () => {
     assert.equal(validateFixture(registry, "session-command-v1", stopped).valid, true);
     assert.equal(stopped.resultCode, "aborted"); assert.equal(stopped.operationRef, started.operationRef); assert.equal(aborted, 1);
     assert.equal((await catalog()).sessions[0].liveState, "idle");
-    assert.equal(events.replay(0).events.some((event) => event.kind === "message.completed"), true);
+    const abortedEvents = events.replay(0).events;
+    assert.equal(abortedEvents.some((event) => event.kind === "message.completed"
+      && event.payload.operationRef === started.operationRef), false);
+    const abortedSettlement = abortedEvents.find((event) => event.kind === "operation.settled"
+      && event.payload.operationRef === started.operationRef);
+    assert.ok(abortedSettlement);
+    assert.equal(abortedSettlement.payload.settlement, "aborted");
+    assert.equal(abortedSettlement.payload.reasonCode, "operation-aborted");
+    assert.equal(validateFixture(registry, "gateway-protocol-v1", abortedSettlement).valid, true);
 
     // A workflow is an envelope for one dispatch, not session state. The next
     // unrelated request is sent verbatim unless the operator chooses another

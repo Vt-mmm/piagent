@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { stageContextDelivery } from "../context/context-delivery.ts";
 
 type PiagentToolGroup = any;
 type TechStackManifest = any;
@@ -6,7 +7,7 @@ type TechStackManifest = any;
 
 export function registerPolicyTools(pi: ExtensionAPI, deps: Record<string, any>): void {
   const {
-    PIAGENT_TOOL_NAMES, READ_ONLY_TOOL_NAMES, StringEnum, Type, activateToolGroups,
+    PIAGENT_TOOL_NAMES, READ_ONLY_TOOL_NAMES, StringEnum, Type, activateToolGroups, activeSessionTask,
     buildContextEfficiencyReport, buildContextIndexStatus, buildContextIndexV2, buildContextPack, buildContextPreflight,
     buildTestImpact, buildUsageSnapshot, candidateFileBudget, contextBudgetConfig, contextIndexExcludePatterns,
     contextIndexV2Status, crypto, dynamicToolsEnabled, effectiveProtectedPaths, ensureContextIndexV2,
@@ -142,7 +143,36 @@ export function registerPolicyTools(pi: ExtensionAPI, deps: Record<string, any>)
           limit: 18,
           excludePatterns
         });
-        result = { ...pack, text: undefined, status };
+        telemetry(ctx, { event: "context_pack", turnId: runtimeState.currentTurn(ctx)?.turnId, source: "context-tool", queryHash: pack.queryHash, confidence: pack.confidence, candidates: pack.candidates, selected: pack.selected.length, estimatedTokens: pack.estimatedTokens, selectedPaths: pack.selected.map((item) => item.path) });
+        const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId());
+        const deliveryId = task?.trace?.outcome === "pending" && pack.selected.length > 0 ? crypto.randomUUID() : undefined;
+        if (deliveryId) {
+          const packRetrievalKey = retrievalKey(ctx, params.query);
+          stageContextDelivery(ctx, {
+            deliveryId,
+            taskRunId: task.taskRunId,
+            turnId: runtimeState.currentTurn(ctx)?.turnId,
+            entries: pack.selected.map((item) => ({
+              path: item.path,
+              reason: "Runtime confirmed delivery of an explicit Context Engine tool pack."
+            })),
+            pack: {
+              retrievalKey: packRetrievalKey,
+              queryHash: pack.queryHash,
+              confidence: pack.confidence,
+              estimatedTokens: pack.estimatedTokens,
+              paths: pack.selected.map((item) => item.path)
+            },
+            injection: {
+              source: "context-tool",
+              queryHash: pack.queryHash,
+              confidence: pack.confidence,
+              estimatedTokens: pack.estimatedTokens,
+              selectedItems: pack.selected.map((item) => ({ path: item.path, estimatedTokens: item.estimatedTokens }))
+            }
+          }, { state: runtimeState, telemetry });
+        }
+        result = { ...pack, text: undefined, status, contextDelivery: deliveryId ? { schemaVersion: 1, deliveryId } : undefined };
         text = pack.text;
       } else if (params.action === "impact") {
         await ensureContextIndexV2(ctx.cwd, { excludePatterns, rebuildMissing: false });

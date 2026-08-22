@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import { redactSensitiveText } from "../../extensions/redaction-core.js";
 import type { ActivityInspectorEvent } from "../product/activity-inspector.ts";
+import { handledToolFailure } from "./tool-failure-classification.ts";
 import type { RuntimeEventDraft, RuntimeEventRevision } from "./runtime-event-store.ts";
 
 export type RuntimeEventIdentity = {
@@ -52,7 +53,8 @@ export function adaptActivityTelemetryEvent(input: ActivityEventAdapterInput): R
   const operationRef = hasOperation ? opaque("operation", input.identity.agentOperationId) : null;
   const toolCallRef = hasOperation ? opaque("tool", rawToolCall) : null;
   const activityType = hasOperation ? "tool" : ["bash", "shell", "exec"].includes(toolName) ? "command" : "other";
-  const failed = eventName === "tool_result" && (event.isError === true || typeof event.exitCode === "number" && event.exitCode !== 0);
+  const resultFailure = eventName === "tool_result" && (event.isError === true || typeof event.exitCode === "number" && event.exitCode !== 0);
+  const failed = resultFailure && !handledToolFailure(event.reasonCode);
   const blocked = eventName === "tool_decision";
   // `tool_call` is emitted before policy authorization. Calling it "started"
   // made the Dashboard claim a command was running while it was still waiting
@@ -64,7 +66,7 @@ export function adaptActivityTelemetryEvent(input: ActivityEventAdapterInput): R
   const preview = safeText(previewValue, 4000);
   const storedRedactions = typeof event.sensitiveValuesRedacted === "number" && Number.isInteger(event.sensitiveValuesRedacted)
     ? Math.max(0, Math.min(10_000, event.sensitiveValuesRedacted)) : 0;
-  const reasonCode = blocked ? "policy-blocked" : failed ? "tool-result-failed" : null;
+  const reasonCode = blocked ? "policy-blocked" : resultFailure ? safeText(event.reasonCode ?? "tool-result-failed", 80).text || "tool-result-failed" : null;
   return {
     ...base(input.identity, input.revision, observedAt), agentOperationId: operationRef, toolCallId: toolCallRef,
     kind, evidence: "derived",

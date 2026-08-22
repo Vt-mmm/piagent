@@ -26,8 +26,8 @@
           "path": "evals/scenarios/capability-resolution.json"
         },
         {
-          "byteSize": 6271,
-          "digest": "sha256:90dafc5b6c0bd555b932d89b10785b9eb50104ed22dcb06cfb8a2d306cc26d2f",
+          "byteSize": 6307,
+          "digest": "sha256:e9ab9144491944f228a07b6034ffa2bce117197f592cb69c7e363311277d66bb",
           "id": "base-policy",
           "kind": "policies",
           "path": "packages/piagent-core/policies/base-policy.json"
@@ -151,8 +151,8 @@
       },
       "artifacts": [
         {
-          "byteSize": 1950,
-          "digest": "sha256:84ac29dcbe0c692070be302707424ea16130a5938cff309c5d7755204b6c2dc1",
+          "byteSize": 2378,
+          "digest": "sha256:35d6757d0a8d2f8644b967fe82645fba3de430b53f23b5577c2e5e104dcccdc1",
           "id": "web-frontend",
           "kind": "adapters",
           "path": "adapters/web-frontend/profile.json"

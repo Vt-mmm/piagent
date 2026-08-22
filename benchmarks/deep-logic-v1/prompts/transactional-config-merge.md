@@ -11,3 +11,5 @@ Requirements:
 - The operation is transactional: any validation failure throws and yields no partial object.
 
 Use Node's standard library only. Add focused tests if useful.
+
+Run `npm test` when complete; it includes a fixed public happy-path contract for this scenario.

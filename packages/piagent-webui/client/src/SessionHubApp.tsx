@@ -15,6 +15,7 @@ import SendRounded from "@mui/icons-material/SendRounded";
 import SettingsRounded from "@mui/icons-material/SettingsRounded";
 import StopCircleRounded from "@mui/icons-material/StopCircleRounded";
 import AppBar from "@mui/material/AppBar";
+import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
@@ -52,11 +53,11 @@ import { SessionTranscript } from "./SessionTranscript.tsx";
 import type { SessionWorkspaceId } from "./SessionAgentWorkspace.tsx";
 import { SettingsPage, type SettingsSection } from "./SettingsPage.tsx";
 import type { ConnectionState } from "./use-inspection.ts";
-import type { LiveConversation } from "./use-session-hub.ts";
+import type { LiveConversation, TerminalOperationActivity } from "./live-state-view-model.ts";
 import { localize, useUiPreferences, type UiLocale } from "./ui-preferences.tsx";
 
 const SIDEBAR_WIDTH = 288;
-const INSPECTOR_WIDTH = "min(54vw, 980px)";
+const INSPECTOR_WIDTH = "min(44vw, 860px)";
 type HubView = "chat" | "new";
 
 function relativeTime(value: string, locale: UiLocale): string {
@@ -103,22 +104,25 @@ function StateChip({ session, locale }: { session: SessionRow; locale: UiLocale 
       : session.state === "recovery-required" ? localize(locale, "Cần khôi phục", "Recovery needed") : localize(locale, "Đã lưu", "Saved")} />;
 }
 
-function Conversation({ session, snapshot, locale, live, canSend, send, abort, onInspector }: { session: SessionRow;
+function Conversation({ session, snapshot, locale, live, canSend, canRestart, send, abort, restart, onInspector }: { session: SessionRow;
   snapshot?: PiagentWebUICanonicalSnapshotV1; locale: UiLocale; live?: LiveConversation; canSend: boolean;
   send(message: string, attachment?: { messageRequestId: string; attachmentRefs: string[]; attachments?: Attachment[]; workflow?: Workflow }): Promise<unknown>;
-  abort(): Promise<unknown>; onInspector(value: SessionWorkspaceId): void }) {
+  abort(): Promise<unknown>; restart(): Promise<unknown>; canRestart: boolean; onInspector(value: SessionWorkspaceId): void }) {
   const [draft, setDraft] = useState(""), [submitting, setSubmitting] = useState(false), [connections, setConnections] = useState<SessionConnections>();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [workflow, setWorkflow] = useState<Workflow | "continue">("continue");
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [messageRequestId, setMessageRequestId] = useState(() => `message-request.${crypto.randomUUID()}`);
   const [uploading, setUploading] = useState(false), [attachError, setAttachError] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [restartingRuntime, setRestartingRuntime] = useState(false);
   const [dragging, setDragging] = useState(false);
   // dragenter and dragleave fire again for every child the pointer crosses, so a
   // boolean set on leave clears the highlight while the file is still over the
   // composer. Counting entries against leaves tracks the region as a whole.
   const dragDepth = useRef(0);
-  useEffect(() => { setDraft(""); setWorkflow("continue"); setAdvancedOpen(false); setAttachments([]); setAttachError(null); setMessageRequestId(`message-request.${crypto.randomUUID()}`); }, [session.sessionRef]);
+  useEffect(() => { setDraft(""); setWorkflow("continue"); setAdvancedOpen(false); setAttachments([]); setAttachError(null); setSendError(null);
+    setMessageRequestId(`message-request.${crypto.randomUUID()}`); }, [session.sessionRef]);
 
   // A file dropped anywhere the composer does not cover is navigated to by the
   // browser, which replaces the running session with the file.
@@ -163,21 +167,36 @@ function Conversation({ session, snapshot, locale, live, canSend, send, abort, o
   }, [session.sessionRef, session.sessionRevision]);
   const submit = async () => {
     const message = draft.trim(); if (!message || submitting) return;
-    setSubmitting(true); setDraft("");
+    setSubmitting(true); setSendError(null);
     const staged = attachments.map((item) => item.attachmentRef);
     try {
       await send(message, staged.length > 0 || workflow !== "continue"
         ? { messageRequestId, attachmentRefs: staged, attachments, ...(workflow === "continue" ? {} : { workflow }) } : undefined);
       // Refs are one-shot: the dispatch consumed them, so the next message starts
       // from a fresh request id rather than reusing refs that no longer exist.
-      setWorkflow("continue"); setAttachments([]); setAttachError(null); setMessageRequestId(`message-request.${crypto.randomUUID()}`);
-    } catch { /* bounded live error is rendered below */ }
+      setDraft(""); setWorkflow("continue"); setAttachments([]); setAttachError(null); setMessageRequestId(`message-request.${crypto.randomUUID()}`);
+    } catch {
+      // Keep both text and one-shot staged refs in the composer. A missing or
+      // rejected admission receipt must never consume the operator's draft or
+      // appear as a failed chat message.
+      setSendError(localize(locale,
+        "Chưa xác nhận gửi được. Nội dung và file vẫn được giữ; hãy kiểm tra trạng thái session trước khi gửi lại.",
+        "Send was not confirmed. Your message and files are preserved; check the session state before sending again."));
+    }
     finally { setSubmitting(false); }
   };
   const refreshConnections = async (value?: SessionConnections) => {
     if (value) { setConnections(value); return; }
     setConnections(await readSessionConnections(session.sessionRef).catch(() => connections));
   };
+  const restartRuntime = async () => {
+    if (restartingRuntime) return;
+    setRestartingRuntime(true);
+    try { await restart(); }
+    catch { /* the recovery alert remains actionable and the catalog refresh carries authoritative state */ }
+    finally { setRestartingRuntime(false); }
+  };
+  const recovery = live?.runtimeRecovery ?? null;
   return <Box sx={{ minHeight: "calc(100vh - 68px)", display: "flex", flexDirection: "column" }}>
     <Box sx={{ flex: 1, width: "100%", maxWidth: 860, mx: "auto", px: { xs: 2, sm: 4 }, py: { xs: 3, md: 4 },
       display: "flex", flexDirection: "column", justifyContent: "center" }}>
@@ -186,6 +205,20 @@ function Conversation({ session, snapshot, locale, live, canSend, send, abort, o
     </Box>
     <Box sx={{ position: "sticky", bottom: 0, px: { xs: 1.5, sm: 2.5 }, pb: 2.5,
       background: "linear-gradient(transparent, var(--piagent-palette-background-default) 25%)" }}>
+      {recovery && <Alert severity={recovery === "recovered" ? "success" : recovery === "failed" ? "error" : "warning"}
+        action={(recovery === "failed" || recovery === "required") && canRestart && session.liveState !== "running"
+          ? <Button color="inherit" size="small" disabled={restartingRuntime} onClick={() => void restartRuntime()}>
+            {restartingRuntime ? localize(locale, "Đang khởi động…", "Restarting…") : localize(locale, "Khởi động lại phiên", "Restart session")}
+          </Button> : undefined}
+        sx={{ maxWidth: 860, mx: "auto", mb: 1 }}>
+        {recovery === "recovered"
+          ? localize(locale, "Runtime mới đã được xác minh; lịch sử và context của session được giữ nguyên.", "The new runtime is verified; session history and context were preserved.")
+          : recovery === "failed"
+            ? localize(locale, "Runtime đã đổi nhưng chưa khởi động lại được. Hãy dùng nút bên cạnh hoặc restart Dashboard.", "The runtime changed but could not restart. Use the action here or restart the Dashboard.")
+            : recovery === "restarting"
+              ? localize(locale, "Runtime vừa được cập nhật. Piagent đang khởi động lại session an toàn sau lượt hiện tại.", "The runtime was updated. Piagent is safely restarting the session after the current turn.")
+              : localize(locale, "Phát hiện runtime mới. Piagent sẽ giữ câu trả lời hiện tại rồi tự khởi động lại session.", "A new runtime was detected. Piagent will preserve the current response and restart the session automatically.")}
+      </Alert>}
       <Box sx={{ position: "relative", maxWidth: 860, mx: "auto", border: 1, borderColor: dragging ? "primary.main" : "divider",
         borderStyle: dragging ? "dashed" : "solid", borderRadius: 3, bgcolor: "background.paper", p: 1.15,
         boxShadow: "0 14px 44px rgba(0,0,0,.14)" }}
@@ -213,7 +246,7 @@ function Conversation({ session, snapshot, locale, live, canSend, send, abort, o
             onDelete={submitting || uploading ? undefined : () => void removeAttachment(item.attachmentRef)}
             deleteIcon={<CancelRounded aria-label={`${localize(locale, "Bỏ", "Remove")} ${item.displayName}`} role="button" />} />)}
         </Stack>}
-        <TextField fullWidth multiline minRows={2} disabled={!canSend || submitting} value={draft} onChange={(event) => setDraft(event.target.value)}
+        <TextField fullWidth multiline minRows={2} disabled={!canSend || submitting} value={draft} onChange={(event) => { setDraft(event.target.value); setSendError(null); }}
           onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void submit(); } }}
           onPaste={(event) => {
             // Only a clipboard actually carrying files is intercepted, so pasting
@@ -266,12 +299,17 @@ function Conversation({ session, snapshot, locale, live, canSend, send, abort, o
             </Tooltip>
             {workflow !== "continue" && <Chip size="small" variant="outlined" icon={<AccountTreeRounded />}
               label={`${workflow.toUpperCase()} · ${localize(locale, "tin nhắn này", "this message")}`} />}
-            <Typography variant="caption" color={attachError ? "error" : "text.disabled"} noWrap sx={{ display: { xs: attachError || uploading ? "block" : "none", sm: "block" } }}>
-              {attachError ?? (uploading ? localize(locale, "Đang đọc tài liệu…", "Reading documents…")
-                : canSend ? localize(locale, "Enter để gửi · Shift+Enter xuống dòng", "Enter to send · Shift+Enter for a new line")
+            <Typography variant="caption" color={attachError || sendError ? "error" : "text.disabled"} noWrap={!sendError}
+              sx={{ display: { xs: attachError || sendError || uploading ? "block" : "none", sm: "block" } }}>
+              {sendError ?? attachError ?? (uploading ? localize(locale, "Đang đọc tài liệu…", "Reading documents…")
+                : live && !live.complete
+                  ? localize(locale, "Piagent đang xử lý; anh có thể gửi việc tiếp theo khi hoàn tất.",
+                    "Piagent is working; you can send the next task when it finishes.")
+                  : canSend ? localize(locale, "Enter để gửi · Shift+Enter xuống dòng", "Enter to send · Shift+Enter for a new line")
                   : localize(locale, "Session hiện chỉ đọc", "Session is currently read only"))}</Typography>
           </Stack>
-          {live?.operationRef && !live.complete ? <Button color="error" startIcon={<StopCircleRounded />} onClick={() => void abort()}>{localize(locale, "Dừng", "Stop")}</Button>
+          {live?.operationRef && !live.complete && live.abortable !== false
+            ? <Button color="error" startIcon={<StopCircleRounded />} onClick={() => void abort()}>{localize(locale, "Dừng", "Stop")}</Button>
             : <IconButton aria-label={localize(locale, "Gửi", "Send")} disabled={!canSend || submitting || !draft.trim()} color="primary" onClick={() => void submit()}
               sx={{ bgcolor: "primary.main", color: "primary.contrastText", "&:hover": { bgcolor: "primary.dark" }, "&.Mui-disabled": { bgcolor: "action.disabledBackground" } }}><SendRounded fontSize="small" /></IconButton>}
         </Stack>
@@ -291,14 +329,16 @@ function EmptyHub({ locale, canCreate, onNew }: { locale: UiLocale; canCreate: b
   </Stack>;
 }
 
-export function SessionHubApp({ catalog, capabilities, connection, live, refresh, create, send, abort, setModel, setThinking, setPermission,
+export function SessionHubApp({ catalog, capabilities, connection, live, terminalActivities, refresh, create, send, abort, restart, setModel, setThinking, setPermission,
   rename, pin, archive, unarchive, fork }: { catalog?: Catalog;
   capabilities?: PiagentGatewayCapabilityHandshakeV1; connection: ConnectionState; live: Readonly<Record<string, LiveConversation>>;
+  terminalActivities: Readonly<Record<string, TerminalOperationActivity[]>>;
   refresh(): Promise<Catalog | undefined>; create(value: { projectRef: string; placeRef: string; modelRef: string | null;
     thinkingLevel: string; workflow: Workflow; permissionMode: PermissionMode | null; message: string; messageRequestId?: string; deferInitialMessage?: boolean }): Promise<Receipt>;
   send(session: SessionRow, message: string, attachment?: { messageRequestId: string; attachmentRefs: string[]; attachments?: Attachment[];
     workflow?: Workflow }): Promise<unknown>;
   abort(session: SessionRow): Promise<unknown>;
+    restart(session: SessionRow): Promise<unknown>;
     setModel(session: SessionRow, modelRef: string): Promise<unknown>; setThinking(session: SessionRow, thinkingLevel: string): Promise<unknown>;
     setPermission(session: SessionRow, permissionMode: "read-only" | "workspace-write" | "trusted-full-access"): Promise<unknown>;
     rename(session: SessionRow, title: string): Promise<Receipt>; pin(session: SessionRow, pinned: boolean): Promise<Receipt>;
@@ -332,6 +372,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, refresh
   const archivedCount = catalog?.sessions.filter((item) => item.archived).length ?? 0;
   useEffect(() => { if (!selectedRef || !(catalog?.sessions ?? []).some((item) => item.sessionRef === selectedRef)) setSelectedRef((catalog?.sessions ?? []).find((item) => !item.archived)?.sessionRef); }, [selectedRef, catalog]);
   const selected = (catalog?.sessions ?? []).find((item) => item.sessionRef === selectedRef);
+  const selectedLive = selected ? live[selected.sessionRef] : undefined;
   const choose = (value: string) => { setSelectedRef(value); setView("chat"); setMobileOpen(false); };
   const openSettings = (section: SettingsSection) => { setSettingsSection(section); setSettingsOpen(true); };
   const openInspector = (active: SessionWorkspaceId) => { setActiveInspector(active); setInspectorOpen(true); };
@@ -349,6 +390,20 @@ export function SessionHubApp({ catalog, capabilities, connection, live, refresh
     }).catch(() => { if (!controller.signal.aborted) setInspectionState("error"); });
     return () => controller.abort();
   }, [selected?.sessionRef, selected?.sessionRevision]);
+  useEffect(() => {
+    if (!inspectorOpen || activeInspector !== "activity" || !selected || !selectedLive?.operationRef || selectedLive.complete) return;
+    let stopped = false, timer: number | undefined;
+    const controller = new AbortController();
+    const tick = async () => {
+      try {
+        const value = await readSessionInspectionSnapshot(selected.sessionRef, controller.signal);
+        if (!stopped) { setInspection(value); setInspectionState("ready"); }
+      } catch { /* Keep the last canonical snapshot; the next bounded tick may recover. */ }
+      if (!stopped) timer = window.setTimeout(() => void tick(), 2_000);
+    };
+    timer = window.setTimeout(() => void tick(), 2_000);
+    return () => { stopped = true; if (timer !== undefined) window.clearTimeout(timer); controller.abort(); };
+  }, [inspectorOpen, activeInspector, selected?.sessionRef, selectedLive?.operationRef, selectedLive?.complete]);
   const canCreate = connection === "connected" && capabilities?.capabilities.sessionActions.create.status === "available";
   const createNewSession = async (value: { projectRef: string; placeRef: string; modelRef: string | null;
     thinkingLevel: string; workflow: Workflow; permissionMode: PermissionMode | null; message: string; files: readonly File[] }) => {
@@ -461,7 +516,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, refresh
     <CircularProgress size={24} /><Typography>{localize(locale, "Đang mở Piagent…", "Opening Piagent…")}</Typography></Stack>;
   const title = view === "new" ? localize(locale, "Cuộc trò chuyện mới", "New chat") : selected?.title ?? "Piagent";
   return <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
-    <AppBar position="fixed" color="transparent" elevation={0} sx={{ left: { md: `${SIDEBAR_WIDTH}px` }, right: { lg: inspectorOpen ? INSPECTOR_WIDTH : 0 },
+    <AppBar position="fixed" color="transparent" elevation={0} sx={{ left: { md: `${SIDEBAR_WIDTH}px` }, right: { xl: inspectorOpen ? INSPECTOR_WIDTH : 0 },
       width: { xs: "100%", md: "auto" }, borderBottom: 1, transition: "right .2s ease",
       borderColor: "divider", bgcolor: "rgba(var(--piagent-palette-background-defaultChannel) / .9)", backdropFilter: "blur(18px)" }}><Toolbar sx={{ minHeight: "68px !important", gap: 1 }}>
       <IconButton aria-label={localize(locale, "Mở điều hướng", "Open navigation")} onClick={() => setMobileOpen(true)} sx={{ display: { md: "none" } }}><MenuRounded /></IconButton>
@@ -481,16 +536,21 @@ export function SessionHubApp({ catalog, capabilities, connection, live, refresh
     <Box component="nav" sx={{ width: { md: SIDEBAR_WIDTH } }}><Drawer variant="temporary" open={mobileOpen} onClose={() => setMobileOpen(false)}
       sx={{ display: { xs: "block", md: "none" }, "& .MuiDrawer-paper": { width: SIDEBAR_WIDTH } }}>{sidebar}</Drawer><Drawer variant="permanent"
       sx={{ display: { xs: "none", md: "block" }, "& .MuiDrawer-paper": { width: SIDEBAR_WIDTH, borderRight: 1, borderColor: "divider" } }}>{sidebar}</Drawer></Box>
-    <Box component="main" sx={{ ml: { md: `${SIDEBAR_WIDTH}px` }, mr: { lg: inspectorOpen ? INSPECTOR_WIDTH : 0 }, pt: "68px",
+    <Box component="main" sx={{ ml: { md: `${SIDEBAR_WIDTH}px` }, mr: { xl: inspectorOpen ? INSPECTOR_WIDTH : 0 }, pt: "68px",
       transition: "margin-right .2s ease" }}>
       {view === "new" ? <NewSessionPage active defaultProjectRef={selected?.projectRef} busy={creatingSession} error={createError} onCancel={() => setView("chat")}
         onCreate={(value) => { void createNewSession(value); }} />
         : selected ? <Conversation session={selected} snapshot={inspection} locale={locale} live={live[selected.sessionRef]}
-            canSend={connection === "connected" && selected.composerAvailable && capabilities?.capabilities.sessionActions.send.status === "available"}
-            send={(message, attachment) => send(selected, message, attachment)} abort={() => abort(selected)} onInspector={openInspector} />
+            canSend={connection === "connected" && selected.composerAvailable && capabilities?.capabilities.sessionActions.send.status === "available"
+              && (!selectedLive || selectedLive.complete)
+              && !["required", "restarting", "failed"].includes(String(live[selected.sessionRef]?.runtimeRecovery))}
+            canRestart={connection === "connected" && capabilities?.capabilities.sessionActions.release.status === "available"
+              && capabilities?.capabilities.sessionActions.acquire.status === "available"}
+            send={(message, attachment) => send(selected, message, attachment)} abort={() => abort(selected)} restart={() => restart(selected)} onInspector={openInspector} />
             : <EmptyHub locale={locale} canCreate={canCreate} onNew={() => setView("new")} />}
     </Box>
     <SessionInspectorDrawer open={inspectorOpen} active={activeInspector} snapshot={inspection} state={inspectionState} sessionRef={selected?.sessionRef}
+      terminalActivities={selected ? terminalActivities[selected.sessionRef] : undefined}
       onClose={() => setInspectorOpen(false)} onActive={setActiveInspector} refresh={refreshInspection} />
     <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)} fullWidth maxWidth="lg" aria-labelledby="piagent-settings-title"
       slotProps={{ paper: { sx: { m: { xs: 0, sm: 2 }, width: { xs: "100%", sm: "calc(100% - 32px)" },

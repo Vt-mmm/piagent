@@ -11,3 +11,5 @@ Required behavior:
 - Return `{ selected, usedTokens, omitted, confidence }`; selected/omitted entries include `id`, `path`, `tokens`, `directScore`, `score`. Confidence is `none`, `low`, `medium`, or `high` using maximum selected score thresholds 0, <0.34, <0.67, otherwise high.
 
 The hidden graph contains ties, cycles (propagation is still one hop), Unicode terms, required zero-score nodes, and candidates larger than the remaining budget.
+
+Run `npm test` when complete; it includes a fixed public happy-path contract for this scenario.

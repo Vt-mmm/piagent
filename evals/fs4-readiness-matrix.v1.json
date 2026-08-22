@@ -5,7 +5,7 @@
   "purpose": "Independently classify deterministic E0, public-regression E1, calibrated-capability E2, private-holdout-readiness E3, and provider-free long-horizon evidence without widening any claim.",
   "artifacts": [
     { "id": "e0-core-suite", "path": "benchmarks/core-v1/suite.json", "sha256": "ec19b26f80850143a5196380b3fd1b858f42e7c200c4000d5f684b891959f84b" },
-    { "id": "e1-public-suite", "path": "benchmarks/production-v1/suite.json", "sha256": "8d03df7c08eee5debbabdb3490beb5d45b021a392b6da77df257e6d94c346d58" },
+    { "id": "e1-public-suite", "path": "benchmarks/production-v1/suite.json", "sha256": "d483c1a8b6def71aaaf217fe6bf2044ec37fc08cf17d01aee7fb4d75be80cafc" },
     { "id": "e2-suite", "path": "benchmarks/e2-framework-v1/suite.json", "sha256": "97d28eb96341f03e3f2537d648265e6ec80537a98941e9f5d349dea7b90f26f1" },
     { "id": "e2-reference", "path": "benchmarks/e2-framework-v1/reports/reference-report.v1.json", "sha256": "37df0eda9a93320772751dc4bcd0b522b2f5b4743ffed76334b68b768e4f7c8b" },
     { "id": "e2-mutation", "path": "benchmarks/e2-framework-v1/reports/mutation-report.v1.json", "sha256": "859c8863f6c8c671d8b71e7f379f53097c8e967046825a0e55e36930b0eb4135" },
@@ -17,7 +17,7 @@
     { "id": "e3-runbook", "path": "evals/private-holdout-v1/CUSTODIAN_RUNBOOK.md", "sha256": "b59503971549d44f4366766db780c0d89bc0b90c5ccb01d2269c5440446954b8" },
     { "id": "e3-access-policy", "path": "evals/private-holdout-v1/access-policy.v1.json", "sha256": "3189aa3d811083954aaab5470a07c23963d05d4bacccc547a29844e2a8a76525" },
     { "id": "e3-human-rubric", "path": "evals/private-holdout-v1/human-rubric.v1.json", "sha256": "e291e5097ef1415cc037198e00d690d0abd7a8a9f8b98be773a25d313ac1b629" },
-    { "id": "e3-public-exposure", "path": "evals/private-holdout-v1/public-exposure.v1.json", "sha256": "b7bdf8d76f66982410f047b5138ca7b974f9b441115761a7e81817753bfa41b3" },
+    { "id": "e3-public-exposure", "path": "evals/private-holdout-v1/public-exposure.v1.json", "sha256": "13592cc0c4d385d26464b36214a89001a38614ec7b8051976cce7c3005a05c4b" },
     { "id": "taxonomy", "path": "evals/real-task-taxonomy.v1.json", "sha256": "d42458d04861a60488a5f98532936db71d43dcccc0298d75b09c2255f2922cb1" }
   ],
   "deterministicTests": {

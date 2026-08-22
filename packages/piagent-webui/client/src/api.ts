@@ -21,6 +21,7 @@ import type { Document as DocumentContent, Listing } from "../../contracts/gener
 import type { Command, Receipt } from "../../contracts/generated/control-command-v1.ts";
 import type { ApprovalDecision, ApprovalReceipt, ApprovalRequest } from "../../contracts/generated/approval-v1.ts";
 import type { Catalog } from "../../contracts/generated/session-catalog-v1.ts";
+import type { PiagentWebUICanonicalVolatileSessionOperationStateV1 } from "../../contracts/generated/session-live-state-v1.ts";
 import { browserCsrfToken } from "./bootstrap.ts";
 
 export class WebUiRequestError extends Error {
@@ -40,6 +41,10 @@ export async function readSnapshot(signal?: AbortSignal): Promise<PiagentWebUICa
 
 export function readSessionCatalog(signal?: AbortSignal): Promise<Catalog> {
   return readJson("/api/v1/session-catalog", signal);
+}
+
+export function readSessionLiveState(signal?: AbortSignal): Promise<PiagentWebUICanonicalVolatileSessionOperationStateV1> {
+  return readJson("/api/v1/session-live-state", signal);
 }
 
 export type SessionCreationOptions = {

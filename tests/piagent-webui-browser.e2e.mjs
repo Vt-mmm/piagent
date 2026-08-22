@@ -477,7 +477,7 @@ test("passes rendered accessibility checks and stays inside a mobile viewport", 
   await openWorkspace(page, "Source Changes");
   await expect(page.getByRole("tablist", { name: "Nguồn thay đổi" })).toBeVisible();
   await openWorkspace(page, "Activity");
-  await expect(page.getByRole("heading", { name: "Tool, command và verifier" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tool, command và kết quả lượt chạy" })).toBeVisible();
   // The document workspace renders its own list and viewer, so it needs its own
   // pass — the sweep above only ever saw the overview.
   await openWorkspace(page, "Tài liệu");

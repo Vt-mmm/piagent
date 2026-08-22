@@ -255,8 +255,10 @@ describe("piagent guard integration", () => {
     assert.deepEqual([...harness.handlers.keys()].sort(), [
       "agent_settled",
       "before_agent_start",
+      "before_provider_request",
       "input",
       "message_end",
+      "message_start",
       "model_select",
       "session_compact",
       "session_info_changed",
@@ -270,6 +272,42 @@ describe("piagent guard integration", () => {
     assert.equal(harness.getSessionName(), "pi:Integration Project");
     assert.match(ctx.ui.notices[0].message, /Piagent Pi guard loaded: Integration Project/);
     assert.match(ctx.ui.notices[0].message, /permission=workspace-write/);
+  });
+
+  it("normalizes only GPT-5.6 Codex off requests to provider effort none", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const ctx = createContext(cwd);
+    ctx.model = { provider: "openai-codex", id: "gpt-5.6-sol" };
+    const harness = createPiHarness();
+    harness.pi.getThinkingLevel = () => "off";
+    piagentGuard(harness.pi);
+
+    const payload = { model: "gpt-5.6-sol", stream: true, instructions: "private fixture" };
+    const normalized = await harness.handlers.get("before_provider_request")({ payload }, ctx);
+    assert.notEqual(normalized, payload);
+    assert.deepEqual(normalized.reasoning, { effort: "none", summary: "auto" });
+    assert.equal(payload.reasoning, undefined, "the provider hook must not mutate the host-owned payload in place");
+    const reasoningEvent = readJsonl(path.join(cwd, ".pi", "piagent-state", "context-engine", "events.jsonl"))
+      .find((event) => event.event === "provider_request_reasoning");
+    assert.equal(reasoningEvent.hostThinkingLevel, "off");
+    assert.equal(reasoningEvent.providerReasoningEffort, "none");
+    assert.equal(reasoningEvent.expectedProviderReasoningEffort, "none");
+    assert.equal(reasoningEvent.providerReasoningEffortMatches, true);
+    assert.equal(reasoningEvent.providerReasoningNormalized, true);
+    assert.doesNotMatch(JSON.stringify(reasoningEvent), /private fixture/);
+    const wireEvent = readJsonl(path.join(cwd, ".pi", "piagent-state", "context-engine", "events.jsonl"))
+      .find((event) => event.event === "provider_request_wire_surface");
+    assert.equal(wireEvent.state, "known");
+    assert.equal(wireEvent.providerModelId, "gpt-5.6-sol");
+    assert.equal(wireEvent.providerReasoningEffort, "none");
+    assert.equal(wireEvent.providerToolCount, 0);
+    assert.equal(typeof wireEvent.instructionsHash, "string");
+    assert.equal(typeof wireEvent.requestPrefixFingerprint, "string");
+    assert.doesNotMatch(JSON.stringify(wireEvent), /private fixture/);
+
+    ctx.model = { provider: "anthropic", id: "claude-sonnet-5" };
+    assert.equal(await harness.handlers.get("before_provider_request")({ payload: { model: "claude-sonnet-5" } }, ctx), undefined);
   });
 
   it("keeps a small stable tool surface and activates workflow groups on demand", async () => {
@@ -433,7 +471,29 @@ describe("piagent guard integration", () => {
     assert.equal(baseline.reasonCode, "protected-path");
     assert.equal(baseline.roots.some((root) => root.entries.some((entry) => entry.state === "protected" && entry.contentRef === null)), true);
     assert.equal(JSON.stringify(baseline).includes("runtime-intake-session"), false, "private baseline evidence must not persist the raw session identity");
-    assert.deepEqual(task.contextManifest, [{ path: "src/invoice.ts", reason: "criterion-01 scope target" }]);
+    assert.deepEqual(task.contextManifest, [], "criterion planning is not durable observed context");
+    assert.equal(typeof started.message.details.contextDelivery.deliveryId, "string");
+    await harness.handlers.get("message_start")({ message: { role: "custom", ...started.message } }, ctx);
+    const deliveredTask = JSON.parse(fs.readFileSync(
+      fs.readdirSync(path.join(cwd, ".pi", "piagent-state", "tasks"))
+        .map((file) => path.join(cwd, ".pi", "piagent-state", "tasks", file))[0],
+      "utf8"
+    ));
+    assert.deepEqual(deliveredTask.contextManifest, [{
+      path: "src/invoice.ts",
+      reason: "Runtime confirmed delivery of criterion-selected context."
+    }]);
+    const contextEvents = readJsonl(path.join(cwd, ".pi", "piagent-state", "context-engine", "events.jsonl"));
+    const userInputEvent = contextEvents.find((event) => event.event === "user_input");
+    const agentPromptEvent = contextEvents.find((event) => event.event === "agent_prompt");
+    const taskBoundEvent = contextEvents.find((event) => event.event === "turn_task_bound");
+    const offeredEvent = contextEvents.find((event) => event.event === "context_pack_offered");
+    const injectedEvent = contextEvents.find((event) => event.event === "context_pack_injected");
+    assert.equal(agentPromptEvent.turnId, userInputEvent.turnId);
+    assert.equal(taskBoundEvent.turnId, userInputEvent.turnId);
+    assert.equal(taskBoundEvent.taskRunId, deliveredTask.taskRunId);
+    assert.equal(offeredEvent.deliveryId, injectedEvent.injectionId);
+    assert.equal(injectedEvent.turnId, userInputEvent.turnId);
     assert.equal(harness.entries.filter((entry) => entry.type === "user-message" || entry.type === "message").length, 0,
       "runtime intake and bounded context are injected into the current turn, never a provider follow-up");
 
@@ -500,6 +560,36 @@ describe("piagent guard integration", () => {
     assert.equal(harness.entries.filter((entry) => entry.type === "user-message" || entry.type === "message").length, 0);
   });
 
+  it("derives a mutation-forbidden runtime task when verification is requested without edits", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const ctx = createContext(cwd, { sessionId: "runtime-verify-only", sessionName: "VERIFY-ONLY-AUTO" });
+    const harness = createPiHarness({ activeTools: ["read", "bash", "edit", "write"] });
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+    const prompt = "Run the configured verification and report the architecture assessment. Do not edit source files.";
+    await harness.handlers.get("input")({ text: prompt, source: "user" }, ctx);
+    const started = await harness.handlers.get("before_agent_start")({
+      prompt,
+      systemPrompt: "stable system prompt",
+      systemPromptOptions: { cwd, selectedTools: [...harness.activeTools] }
+    }, ctx);
+    assert.equal(started.message.details.runtimeTask.changeMode, "source-change");
+    assert.equal(started.message.details.runtimeTask.mutationPolicy, "forbidden");
+    assert.match(started.message.content, /Stay mutation-free/);
+    assert.match(started.message.content, /exact configured verifier/);
+    assert.doesNotMatch(started.message.content, /Existing public contract:/);
+
+    const blocked = await callToolCall(harness.handlers.get("tool_call"), ctx, "write", {
+      path: "src/runtime-verify-only.ts", content: "export const changed = true;\n"
+    });
+    assert.equal(blocked.block, true);
+    assert.match(blocked.reason, /forbids source mutation/i);
+    const verifier = started.message.details.runtimeTask.verifyCommands[0];
+    const allowed = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", { command: verifier });
+    assert.notEqual(allowed.block, true, allowed.reason);
+  });
+
   it("persists and presents the criterion graph only when the intelligence engine is explicitly enabled", async () => {
     const previous = process.env.PIAGENT_INTELLIGENCE_ENGINE;
     process.env.PIAGENT_INTELLIGENCE_ENGINE = "on";
@@ -529,7 +619,15 @@ describe("piagent guard integration", () => {
       assert.equal(task.criterionGraph.nodes.length, task.acceptanceCriteria.length);
       assert.deepEqual(task.criterionGraph.nodes.map((node) => node.obligation), task.acceptanceCriteria);
       assert.ok(task.criterionGraph.nodes.every((node) => !Object.hasOwn(node, "status")));
-      assert.ok(task.contextManifest.some((entry) => entry.path === "src/invoice.ts" && /^criterion-/.test(entry.reason)));
+      assert.deepEqual(task.contextManifest, [], "criterion targets remain planning data until the host confirms delivery");
+      assert.equal(typeof started.message.details.contextDelivery.deliveryId, "string");
+      await harness.handlers.get("message_start")({ message: { role: "custom", ...started.message } }, ctx);
+      const deliveredTask = JSON.parse(fs.readFileSync(taskPath, "utf8"));
+      assert.ok(deliveredTask.contextManifest.some((entry) => (
+        entry.path === "src/invoice.ts"
+        && entry.reason === "Runtime confirmed delivery of criterion-selected context."
+      )));
+      assert.equal(deliveredTask.contextManifest.some((entry) => /^criterion-/.test(entry.reason)), false);
       assert.deepEqual([...harness.activeTools], initialSurface, "criterion planning does not replace or reorder provider-visible tool schemas");
       assert.equal(harness.entries.filter((entry) => entry.type === "user-message" || entry.type === "message").length, 0,
         "criterion planning adds no provider follow-up turn");
@@ -1267,6 +1365,8 @@ describe("piagent guard integration", () => {
     assert.deepEqual(injected.message.details.repositoryMemoryIds, [memoryFact.id]);
     assert.doesNotMatch(injected.message.content, /\.env/);
     assert.ok(injected.message.details.estimatedTokens <= 1_200);
+    assert.equal(typeof injected.message.details.contextDelivery.deliveryId, "string");
+    await harness.handlers.get("message_start")({ message: { role: "custom", ...injected.message } }, ctx);
 
     const reused = await harness.tools.get("piagent_context_engine").execute(
       "engine-pack-reuse",
@@ -2223,11 +2323,31 @@ describe("piagent guard integration", () => {
     assert.match(premature.message.content[0].text, /CONTINUING/);
     assert.equal(harness.entries.filter((entry) => entry.type === "message").length, 1);
 
+    const unprovenContextRecord = await toolExecutionError(harness.tools.get("piagent_context_record").execute("context-unproven", {
+      taskId: "TASK-101",
+      files: [{ path: "README.md", reason: "Model claims this file was read." }]
+    }, undefined, undefined, ctx));
+    assert.match(unprovenContextRecord.message, /no runtime-observed read or host-confirmed delivery/i);
+    assert.equal(unprovenContextRecord.details.reasonCode, "context-evidence-unproven");
+
+    await harness.handlers.get("tool_result")({
+      toolName: "read",
+      input: { path: "README.md" },
+      content: [{ type: "text", text: "# Fixture" }],
+      isError: false
+    }, ctx);
     const contextRecord = await harness.tools.get("piagent_context_record").execute("context", {
       taskId: "TASK-101",
-      files: [{ path: "README.md", reason: "Fixture instructions" }]
+      files: [{ path: "./README.md", reason: "Model-provided reason must not become durable." }]
     }, undefined, undefined, ctx);
     assert.equal(contextRecord.isError, undefined);
+    const contextRecordedTask = JSON.parse(fs.readFileSync(
+      path.join(cwd, ".pi", "piagent-state", "tasks", `${started.details.taskRunId}.json`),
+      "utf8"
+    ));
+    assert.deepEqual(contextRecordedTask.contextManifest, [{
+      path: "README.md", reason: "Runtime observed successful source read."
+    }]);
 
     await progress.execute("implement", {
       taskId: "TASK-101",
@@ -2380,6 +2500,51 @@ describe("piagent guard integration", () => {
     assert.equal(JSON.parse(fs.readFileSync(path.join(cwd, ".pi", "piagent-state", "tasks", `${started.details.taskRunId}.json`), "utf8")).trace.outcome, "completed");
   });
 
+  it("binds pre-task read evidence to the exact intake turn and session", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const params = (taskId, scope) => ({
+      taskId,
+      summary: `Implement the bounded ${taskId} fixture from current-turn evidence`,
+      riskLane: "tiny",
+      expectedOutput: "The bounded fixture starts without importing unrelated read evidence.",
+      acceptanceCriteria: ["Only evidence from the task intake turn may become durable"],
+      scope: [scope]
+    });
+
+    const crossTurnCwd = createProject(root);
+    const crossTurnCtx = createContext(crossTurnCwd, { sessionId: "context-cross-turn" });
+    const crossTurnHarness = createPiHarness({ activeTools: ["read", "bash", "edit", "write"] });
+    piagentGuard(crossTurnHarness.pi);
+    await crossTurnHarness.handlers.get("input")({ text: "Scout README.md for an unrelated question", source: "user" }, crossTurnCtx);
+    await crossTurnHarness.handlers.get("tool_result")({
+      toolName: "read", input: { path: "README.md" },
+      content: [{ type: "text", text: "# Fixture" }], isError: false
+    }, crossTurnCtx);
+    await crossTurnHarness.handlers.get("input")({ text: "Start a new task for src/cross-turn.ts", source: "user" }, crossTurnCtx);
+    const crossTurnTask = await crossTurnHarness.tools.get("piagent_task_start").execute(
+      "cross-turn-start", params("CROSS-TURN", "src/cross-turn.ts"), undefined, undefined, crossTurnCtx
+    );
+    assert.equal(crossTurnTask.isError, undefined);
+    assert.deepEqual(activeSessionTask(crossTurnCwd, "context-cross-turn").contextManifest, [], "an earlier turn cannot seed task evidence");
+
+    const crossSessionCwd = createProject(root);
+    const sourceCtx = createContext(crossSessionCwd, { sessionId: "context-source-session" });
+    const targetCtx = createContext(crossSessionCwd, { sessionId: "context-target-session" });
+    const crossSessionHarness = createPiHarness({ activeTools: ["read", "bash", "edit", "write"] });
+    piagentGuard(crossSessionHarness.pi);
+    await crossSessionHarness.handlers.get("input")({ text: "Scout README.md in the source session", source: "user" }, sourceCtx);
+    await crossSessionHarness.handlers.get("tool_result")({
+      toolName: "read", input: { path: "README.md" },
+      content: [{ type: "text", text: "# Fixture" }], isError: false
+    }, sourceCtx);
+    await crossSessionHarness.handlers.get("input")({ text: "Start a target-session task for src/cross-session.ts", source: "user" }, targetCtx);
+    const crossSessionTask = await crossSessionHarness.tools.get("piagent_task_start").execute(
+      "cross-session-start", params("CROSS-SESSION", "src/cross-session.ts"), undefined, undefined, targetCtx
+    );
+    assert.equal(crossSessionTask.isError, undefined);
+    assert.deepEqual(activeSessionTask(crossSessionCwd, "context-target-session").contextManifest, [], "another session cannot seed task evidence");
+  });
+
   it("collects tiny-task evidence passively, invalidates stale verification, and bounds recovery", async () => {
     const { root, piagentGuard } = await loadGuardFixture();
     const cwd = createProject(root);
@@ -2387,6 +2552,12 @@ describe("piagent guard integration", () => {
     const harness = createPiHarness({ activeTools: ["read", "bash", "edit", "write"] });
     piagentGuard(harness.pi);
     await harness.handlers.get("session_start")({}, ctx);
+
+    await harness.handlers.get("input")({
+      text: "Implement the tiny lifecycle fixture in src/auto.ts and run focused tests",
+      source: "user"
+    }, ctx);
+    assert.equal((await callToolCall(harness.handlers.get("tool_call"), ctx, "read", { path: "README.md" })).block, undefined);
 
     await harness.handlers.get("tool_result")({
       toolName: "read",
@@ -2405,6 +2576,9 @@ describe("piagent guard integration", () => {
     }, undefined, undefined, ctx);
     assert.equal(started.isError, undefined);
     assert.equal(started.details.lifecycleMode, "automatic");
+    assert.deepEqual(activeSessionTask(cwd, "session-auto").contextManifest, [{
+      path: "README.md", reason: "Runtime observed successful source read."
+    }], "a successful read in the task-start turn is promoted");
     assert.equal(harness.activeTools.has("piagent_task_progress"), false);
     assert.equal(harness.activeTools.has("piagent_task_start"), false, "a direct runtime-less fixture does not expose inactive management schemas");
     assert.equal(harness.activeTools.has("piagent_verify_record"), false);
@@ -2573,6 +2747,10 @@ describe("piagent guard integration", () => {
         else process.env.PIAGENT_PHASE_TOOLS = previousPhaseTools;
       }
       await harness.handlers.get("session_start")({}, ctx);
+      await harness.handlers.get("input")({
+        text: "Fix dependency order in src/order.js and verify test/order.test.js",
+        source: "user"
+      }, ctx);
       await harness.handlers.get("tool_result")({
         toolName: "read",
         input: { path: "src/order.js" },
@@ -3057,7 +3235,7 @@ describe("piagent guard integration", () => {
   });
 
   it("keeps broad-default semantic evidence advisory while exact current-tree verification remains a hard completion invariant", async () => {
-    async function runCase(label, mutateAfterVerifier) {
+    async function runCase(label, mutateAfterVerifier, benchmarkBound = false) {
       const { root, piagentGuard } = await loadGuardFixture();
       const cwd = createProject(root);
       fs.mkdirSync(path.join(cwd, "src", "backend"), { recursive: true });
@@ -3086,7 +3264,23 @@ describe("piagent guard integration", () => {
       assert.equal((await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", { command: "npm test" })).block, undefined);
       await harness.handlers.get("tool_result")({ toolName: "bash", input: { command: "npm test" }, content: [{ type: "text", text: "pass" }], details: { exitCode: 0 }, isError: false, timestamp: Date.now() }, ctx);
       if (mutateAfterVerifier) fs.appendFileSync(path.join(cwd, writeInput.path), "// changed after verification\n");
-      const claim = await harness.handlers.get("message_end")({ message: { role: "assistant", content: [{ type: "text", text: "The bounded authorization change is complete." }] } }, ctx);
+      const benchmarkEnvironment = {
+        PIAGENT_BENCHMARK_RUN_ID: `run-${label}`,
+        PIAGENT_BENCHMARK_SCENARIO: `scenario-${label}`,
+        PIAGENT_BENCHMARK_SURFACE: "piagent",
+        PIAGENT_BENCHMARK_SESSION_ID: ctx.sessionManager.getSessionId()
+      };
+      const previousEnvironment = Object.fromEntries(Object.keys(benchmarkEnvironment).map((key) => [key, process.env[key]]));
+      if (benchmarkBound) Object.assign(process.env, benchmarkEnvironment);
+      let claim;
+      try {
+        claim = await harness.handlers.get("message_end")({ message: { role: "assistant", content: [{ type: "text", text: "The bounded authorization change is complete." }] } }, ctx);
+      } finally {
+        for (const [key, value] of Object.entries(previousEnvironment)) {
+          if (value === undefined) delete process.env[key];
+          else process.env[key] = value;
+        }
+      }
       const task = JSON.parse(fs.readFileSync(path.join(cwd, ".pi", "piagent-state", "tasks", `${started.details.taskRunId}.json`), "utf8"));
       return { claim, harness, task };
     }
@@ -3102,6 +3296,13 @@ describe("piagent guard integration", () => {
     const recovery = stale.harness.entries.filter((entry) => entry.payload?.customType === "piagent-completion-recovery").at(-1);
     assert.ok(recovery.payload.details.missing.some((item) => /observed passing verify evidence/.test(item)));
     assert.equal(recovery.payload.details.missing.some((item) => /critical acceptance evidence/.test(item)), false);
+
+    const benchmark = await runCase("BENCHMARK", false, true);
+    assert.equal(benchmark.claim, undefined);
+    assert.equal(benchmark.task.trace.outcome, "completed");
+    assert.equal(benchmark.task.authoritySnapshot.profile, "broad-default");
+    assert.ok(benchmark.task.acceptanceReceipt.criteria.some((criterion) => criterion.priority === "critical" && criterion.status === "pending"));
+    assert.equal(benchmark.harness.entries.some((entry) => entry.payload?.customType === "piagent-completion-recovery"), false);
   });
 
   it("binds read-only diagnostic prompts to automatic task evidence", async () => {
@@ -3478,6 +3679,59 @@ describe("piagent guard integration", () => {
     const taskPath = path.join(cwd, ".pi", "piagent-state", "tasks", `${started.details.taskRunId}.json`);
     const task = JSON.parse(fs.readFileSync(taskPath, "utf8"));
     assert.equal(task.trace.outcome, "completed");
+    assert.deepEqual(task.changedFiles, []);
+  });
+
+  it("runs exact verification without inventing changed files when source mutation is forbidden", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    fs.writeFileSync(path.join(cwd, "src", "auth.ts"), "export const auth = true;\n");
+    const ctx = createContext(cwd, { sessionId: "session-verification-only", sessionName: "VERIFY-ONLY-1" });
+    const harness = createPiHarness({ activeTools: ["read", "bash", "write"] });
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+
+    const started = await harness.tools.get("piagent_task_start").execute("start-verification-only", {
+      taskId: "VERIFY-ONLY-1",
+      summary: "Inspect authentication and run exact verification without source mutation",
+      riskLane: "tiny",
+      changeMode: "source-change",
+      mutationPolicy: "forbidden",
+      expectedOutput: "A verification-backed assessment with no source mutation.",
+      acceptanceCriteria: ["The report cites observed auth behavior and the exact verifier result"],
+      scope: ["src/**"]
+    }, undefined, undefined, ctx);
+    assert.equal(started.isError, undefined, started.content?.[0]?.text);
+    assert.equal(started.details.mutationPolicy, "forbidden");
+    assert.equal(started.details.lifecycleMode, "automatic-readonly");
+    assert.ok(started.details.verifyCommands.length > 0);
+
+    const blockedWrite = await callToolCall(harness.handlers.get("tool_call"), ctx, "write", {
+      path: "src/auth.ts", content: "export const auth = false;\n"
+    });
+    assert.equal(blockedWrite.block, true);
+    assert.match(blockedWrite.reason, /forbids source mutation/i);
+
+    await harness.handlers.get("tool_result")({
+      toolName: "read", input: { path: "src/auth.ts" },
+      content: [{ type: "text", text: "export const auth = true;" }], isError: false
+    }, ctx);
+    const verifier = started.details.verifyCommands[0];
+    const allowedVerifier = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", { command: verifier });
+    assert.notEqual(allowedVerifier.block, true, allowedVerifier.reason);
+    await harness.handlers.get("tool_result")({
+      toolName: "bash", input: { command: verifier }, content: [{ type: "text", text: "pass" }],
+      details: { exitCode: 0 }, isError: false, timestamp: Date.now()
+    }, ctx);
+
+    const final = await harness.handlers.get("message_end")({
+      message: { role: "assistant", content: [{ type: "text", text: "Assessment complete: auth is enabled and the exact verifier passed." }] }
+    }, ctx);
+    assert.equal(final, undefined);
+    const taskPath = path.join(cwd, ".pi", "piagent-state", "tasks", `${started.details.taskRunId}.json`);
+    const task = JSON.parse(fs.readFileSync(taskPath, "utf8"));
+    assert.equal(task.trace.outcome, "completed");
+    assert.equal(task.mutationPolicy, "forbidden");
     assert.deepEqual(task.changedFiles, []);
   });
 

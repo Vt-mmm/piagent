@@ -157,14 +157,17 @@ npm run benchmark:deep -- --dry-run
 npm run benchmark:deep
 ```
 
-`deep-logic-v1` có 6 scenario difficulty `large`, 2 repeat và 2 surface (24
-model session), phủ event reconciliation, fair dependency scheduling, layered
-policy, graph-aware context, resumable stream và transactional config. `--dry-run`
-chỉ validate kế hoạch, không dùng quota.
+`deep-logic-v1` có 7 scenario difficulty `large`, khóa Piagent/`codex-cli` ở
+Luna/medium và chạy 3 repeat trên 2 surface (42 model session). Suite phủ event
+reconciliation, fair dependency scheduling, layered policy, graph-aware context,
+resumable stream, transactional config và temporal usage billing chính xác; claim chỉ được phép khi đủ full suite,
+token và duration gate, đồng thời không có retry. Retry diagnostic vẫn được ghi
+rõ nhưng làm release gate fail. `--dry-run` chỉ validate kế hoạch, không dùng
+quota.
 
 Gate này chạy architecture check, test, typecheck, capability validation, runtime smoke và docs consistency trước khi release.
 
-Bản phát hành hiện tại là `v1.5.5`. Với team hoặc production, hãy pin tag này
+Bản phát hành hiện tại là `v1.6.0`. Với team hoặc production, hãy pin tag này
 hoặc một commit đã review thay vì dựa vào nguồn package không cố định.
 
 ## Security

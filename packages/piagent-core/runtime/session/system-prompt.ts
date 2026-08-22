@@ -8,9 +8,9 @@ const RUNTIME_MANAGED_PROJECT_INSTRUCTIONS = [
   "Piagent runtime-managed task flow:",
   "1. Runtime creates the task contract automatically for a bounded source-changing request before the model starts.",
   "2. Only when runtime intake pauses for broad, high-risk, or ambiguous scope, call `piagent_task_start` exactly once with project-relative path/glob scope; reuse an active contract.",
-  "3. Read the narrow target and nearest relevant test, then use ordinary read/edit/bash tools.",
+  "3. Read the narrow target and nearest relevant test, then use ordinary read/edit/bash tools. When creating an explicitly requested new path, do not probe that destination with read first; create it, then read back or verify it. If existence matters, use a non-erroring existence check.",
   "4. Run every exact runtime-provided verifier after the latest mutation. Automatic tasks need no management calls.",
-  "5. Runtime hooks enforce policy and record context, changes, current-tree verification, trace and final gate. Diagnostic groups appear only for explicit requests or manual high-risk checkpoints."
+  "5. Treat the current source and durable Task Contract as authoritative. Keep one writer, bound helper delegation, preserve the user's exact scope, and report unresolved risk. Runtime hooks enforce policy and record context, changes, current-tree verification, trace and final gate. Diagnostic groups appear only for explicit requests or manual high-risk checkpoints."
 ].join("\n");
 
 export function rewriteLegacyProjectInstructions(systemPrompt: string): {
@@ -34,7 +34,7 @@ export function compactManagedProjectInstructions(
 ): { systemPrompt: string; compacted: boolean } {
   const concise = mode === "protected"
     ? "Piagent protected-path policy: do not read, disclose, or mutate protected content. Refuse without tool calls."
-    : "Piagent runtime task is injected below. Root project instructions are already loaded; do not re-read root AGENTS.md. Use task-relevant source/tests and ordinary tools, run the exact verifier after final edits, and make no task-management calls.";
+    : "Piagent runtime task is injected below. Root project instructions are already loaded; do not re-read root AGENTS.md. Treat current source and the durable Task Contract as authoritative; preserve the user's exact scope, keep one writer, bound helpers, and report unresolved risk. Use task-relevant source/tests and ordinary tools. For an explicitly requested new path, create it without a speculative read, then read back or verify it. Run the exact verifier after final edits, and make no task-management calls.";
   const markerStart = "<!-- piagent-managed:start -->";
   const markerEnd = "<!-- piagent-managed:end -->";
   const start = systemPrompt.indexOf(markerStart);

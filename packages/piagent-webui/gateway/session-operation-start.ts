@@ -12,7 +12,10 @@ export async function waitForOperationStart(
     prompt.then(() => ({ state: "prompt-resolved" as const }),
       (error: unknown) => ({ state: "prompt-rejected" as const, error }))
   ]);
-  if (first.state === "started") return "prompt-owned";
+  if (first.state === "started") {
+    if (stream.lifecycleTerminationReasonCode) throw new Error(stream.lifecycleTerminationReasonCode);
+    return "prompt-owned";
+  }
   if (first.state === "prompt-rejected") throw first.error;
 
   // Extension commands such as `/workflow` launch their agent turn through
@@ -27,6 +30,7 @@ export async function waitForOperationStart(
           DEFERRED_OPERATION_START_GRACE_MS);
       })
     ]);
+    if (stream.lifecycleTerminationReasonCode) throw new Error(stream.lifecycleTerminationReasonCode);
     return "deferred";
   } finally {
     if (timer) clearTimeout(timer);

@@ -20,8 +20,29 @@ switch (scenarioId) {
   }; break;
   case "layered-policy-resolution": oracle.graderData = { protectedPath: `private/${token("vault")}/secret.json`, operation: token("read") }; break;
   case "budgeted-context-graph": oracle.graderData = { term: token("resolver"), budget: integer(8, 14) }; break;
-  case "resumable-stream-assembly": oracle.graderData = { first: token("hello"), second: token("world"), message: token("message") }; break;
+  case "resumable-stream-assembly": {
+    const astral = ["🙂", "🧠", "🚀"][integer(0, 2)];
+    oracle.graderData = {
+      first: token("hello"),
+      second: token("world"),
+      third: token("chunk"),
+      message: token("message"),
+      other: token("message"),
+      start: integer(2, 24),
+      astral
+    };
+    break;
+  }
   case "transactional-config-merge": oracle.graderData = { key: token("feature"), value: token("enabled") }; break;
+  case "temporal-usage-billing-close": oracle.graderData = {
+    tenantA: token("tenant"),
+    tenantB: token("tenant"),
+    meter: token("meter"),
+    plans: [token("plan"), token("plan"), token("plan")],
+    firstLimit: integer(4, 12),
+    secondLimit: integer(15, 28),
+    prices: [integer(110_000, 390_000), integer(410_000, 790_000), integer(810_000, 1_250_000)]
+  }; break;
   default: throw new Error(`unsupported deep logic scenario ${scenarioId}`);
 }
 

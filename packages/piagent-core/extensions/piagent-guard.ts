@@ -90,6 +90,7 @@ import { completeTaskDigestRefresh } from "./task-digest-migration.js";
 import { WORKING_TREE_DIGEST_ALGORITHM, isCurrentWorkingTreeDigest, workingTreeObservation, workingTreeSnapshotUsesCurrentAlgorithm } from "./working-tree-digest.js";
 import { appendJsonlBounded } from "./state-retention.js";
 import { ensurePrivateStateDirectory, resolveLocalStatePath } from "./local-state-path.js";
+import { hasDurableContextEvidence } from "./context-evidence.js";
 import { piApprovalBroker, type ApprovalActionDraft, type ApprovalUnavailableFallback } from "../runtime/inspection/approval-broker.ts";
 import { inspectTaskControlState } from "../runtime/inspection/task-control-journal.ts";
 import { createSourceMutationGuardBindings } from "../runtime/policy/source-mutation-guard-binding.ts";
@@ -121,6 +122,7 @@ import {
   automaticReviewLenses,
   automaticReadOnlyTaskScope,
   automaticTaskIntakeMode,
+  automaticTaskMutationPolicy,
   automaticTaskRiskLane,
   automaticTaskScope,
   resolveTaskScopePatterns,
@@ -137,6 +139,8 @@ import { registerToolResultHook } from "../runtime/hooks/tool-result-hook.ts";
 import { readRuntimeVersionMetadata, RuntimeSnapshotCapture } from "../runtime/model/runtime-snapshot.ts";
 import { recordRuntimeSnapshotTelemetry } from "../runtime/model/snapshot-telemetry.ts";
 import { captureAuthenticatedModelCatalogFromContext } from "../runtime/model/authenticated-catalog.ts";
+import { normalizeOpenAiCodexReasoningPayload } from "../runtime/model/openai-codex-reasoning.ts";
+import { buildOpenAiCodexWireFingerprint } from "../runtime/model/provider-wire-fingerprint.ts";
 import { ModelRouteRuntime, readModelRouteEvents } from "../runtime/model/model-route-runtime.ts";
 import { parentRoutingModeFromEnvironment, routingObjectiveFromEnvironment } from "../runtime/model/model-route-policy.ts";
 import { ModelSelectionProvenanceTracker } from "../runtime/model/model-selection-provenance.ts";
@@ -226,6 +230,7 @@ type TaskStartParameters = {
   riskLane: "tiny" | "normal" | "high-risk";
   intakeMode?: "model" | "runtime";
   changeMode?: "source-change" | "read-only";
+  mutationPolicy?: "required" | "forbidden";
   verifyGroup?: string;
   maxAttempts?: number;
   expectedOutput: string;
@@ -424,6 +429,7 @@ const DEFAULT_POLICY: BasePolicy = {
   },
   contextBudget: {
     defaultMode: "enforce",
+    contextDeltaShadow: "sample",
     maxContextFileChars: 50000,
     maxMemoryFileChars: 20000,
     maxManifestFiles: 80,
@@ -1395,6 +1401,7 @@ function evaluatePermissionProfileToolAccess(
 function contextBudgetConfig(policy: BasePolicy): Required<ContextBudgetConfig> {
   return {
     defaultMode: policy.contextBudget?.defaultMode ?? DEFAULT_POLICY.contextBudget?.defaultMode ?? "enforce",
+    contextDeltaShadow: policy.contextBudget?.contextDeltaShadow ?? DEFAULT_POLICY.contextBudget?.contextDeltaShadow ?? "off",
     maxContextFileChars: policy.contextBudget?.maxContextFileChars ?? DEFAULT_POLICY.contextBudget?.maxContextFileChars ?? 50000,
     maxMemoryFileChars: policy.contextBudget?.maxMemoryFileChars ?? DEFAULT_POLICY.contextBudget?.maxMemoryFileChars ?? 20000,
     maxManifestFiles: policy.contextBudget?.maxManifestFiles ?? DEFAULT_POLICY.contextBudget?.maxManifestFiles ?? 80,
@@ -1544,9 +1551,10 @@ function normalizeWorkPlanSteps(values: unknown): WorkPlanStep[] {
 function defaultWorkPlan(
   summary: string,
   riskLane: TaskContract["riskLane"],
-  changeMode: TaskContract["changeMode"]
+  changeMode: TaskContract["changeMode"],
+  mutationPolicy: NonNullable<TaskContract["mutationPolicy"]> = changeMode === "read-only" ? "forbidden" : "required"
 ): WorkPlanStep[] {
-  if (changeMode === "read-only") {
+  if (changeMode === "read-only" || mutationPolicy === "forbidden") {
     if (riskLane === "tiny") {
       return [{
         id: "scout",
@@ -2102,7 +2110,7 @@ function flushObservedTaskContext(
   const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
   if (!task || task.trace.outcome !== "pending") return task;
   const added = mergeObservedTaskContext(task, pendingContext, maxManifestFiles, redactText);
-  const lifecycle = task.changeMode === "read-only" && task.contextManifest.length > 0
+  const lifecycle = (task.changeMode === "read-only" || task.mutationPolicy === "forbidden") && hasDurableContextEvidence(task)
     ? applyRuntimeLifecycleObservation(task, "context-complete", nowIso())
     : { changed: false, mode: runtimeLifecycleMode(task) };
   if (added.length === 0 && !lifecycle.changed) return task;
@@ -3605,7 +3613,7 @@ function evaluateTaskGate(
   if (task.attempt > task.maxAttempts) missing.push(`attempt within maxAttempts (${task.attempt}/${task.maxAttempts})`);
   const plannedVerifyCommands = meaningfulVerificationCommands(task.verifyCommands);
   if (task.changeMode === "source-change" && plannedVerifyCommands.length === 0) missing.push("meaningful verify command");
-  if (finalGate.requireContextManifest && task.contextManifest.length === 0) missing.push("context manifest");
+  if (finalGate.requireContextManifest && !hasDurableContextEvidence(task)) missing.push("context manifest");
   if (task.changeMode === "source-change" && finalGate.requireVerifyEvidence && task.verifyEvidence.length === 0) missing.push("verify evidence");
   if (task.verifyEvidence.some((evidence) => evidence.observed !== true)) {
     warnings.push("Unobserved verify evidence is ignored by the passing verify gate.");
@@ -3632,14 +3640,14 @@ function evaluateTaskGate(
     missing.push(`completed work plan (${incompleteSteps.map((step) => `${step.id}:${step.status}`).join(", ")})`);
   }
   const changedFileEvidence = taskChangedFileEvidence(cwd, task, currentDigests);
-  if (task.changeMode === "source-change" && task.trace.outcome === "completed") {
+  if (task.changeMode === "source-change" && task.trace.outcome === "completed" && task.mutationPolicy !== "forbidden") {
     if (task.changedFiles.length === 0) missing.push("changed files");
     if (changedFileEvidence.undeclared.length > 0) missing.push(`declared observed changes (${changedFileEvidence.undeclared.join(", ")})`);
     if (changedFileEvidence.unsupportedClaims.length > 0) missing.push(`supported changed-file claims (${changedFileEvidence.unsupportedClaims.join(", ")})`);
     if (changedFileEvidence.outsideScope.length > 0) missing.push(`changes within task scope (${changedFileEvidence.outsideScope.join(", ")})`);
   }
-  if (task.changeMode === "read-only" && changedFileEvidence.expected.length > 0) {
-    missing.push(`read-only task has observed changes (${changedFileEvidence.expected.join(", ")})`);
+  if ((task.changeMode === "read-only" || task.mutationPolicy === "forbidden") && changedFileEvidence.expected.length > 0) {
+    missing.push(`mutation-forbidden task has observed changes (${changedFileEvidence.expected.join(", ")})`);
   }
   const acceptance = refreshAcceptanceReceipt(task, {
     cwd,
@@ -3866,6 +3874,55 @@ export default function piagentGuard(pi: ExtensionAPI) {
   });
   pi.on("thinking_level_select", (_event, ctx) => {
     modelSelectionProvenance.observeThinkingSelection(ctx.sessionManager.getSessionId());
+  });
+  pi.on("before_provider_request", (event, ctx) => {
+    const normalized = normalizeOpenAiCodexReasoningPayload({
+      payload: event.payload,
+      provider: ctx.model?.provider,
+      modelId: ctx.model?.id,
+      hostThinkingLevel: pi.getThinkingLevel()
+    });
+    if (normalized.applicable) {
+      telemetry(ctx, {
+        event: "provider_request_reasoning",
+        hostThinkingLevel: normalized.hostThinkingLevel,
+        providerReasoningEffort: normalized.providerEffort,
+        expectedProviderReasoningEffort: normalized.expectedProviderEffort,
+        providerReasoningEffortMatches: normalized.providerEffort === normalized.expectedProviderEffort,
+        providerReasoningNormalized: normalized.changed,
+        providerReasoningReasonCode: normalized.reasonCode
+      });
+    }
+    const wire = buildOpenAiCodexWireFingerprint({
+      payload: normalized.changed ? normalized.payload : event.payload,
+      provider: ctx.model?.provider,
+      modelId: ctx.model?.id,
+      workingDirectory: ctx.cwd,
+      platformRoot: PLATFORM_ROOT
+    });
+    if (wire.applicable) {
+      telemetry(ctx, {
+        event: "provider_request_wire_surface",
+        state: wire.state,
+        reasonCode: wire.reasonCode,
+        providerModelId: wire.modelId,
+        instructionsHash: wire.instructionsHash,
+        baseInstructionsHash: wire.baseInstructionsHash,
+        instructionNormalization: wire.instructionNormalization,
+        instructionChars: wire.instructionChars,
+        orderedToolSurfaceHash: wire.orderedToolSurfaceHash,
+        providerToolCount: wire.toolCount,
+        deferredToolSurfaceHash: wire.deferredToolSurfaceHash,
+        deferredToolCount: wire.deferredToolCount,
+        deferredToolBatchCount: wire.deferredToolBatchCount,
+        providerReasoningEffort: wire.reasoningEffort,
+        providerTextVerbosity: wire.textVerbosity,
+        providerToolChoiceKind: wire.toolChoiceKind,
+        providerToolChoiceHash: wire.toolChoiceHash,
+        requestPrefixFingerprint: wire.requestPrefixFingerprint
+      });
+    }
+    return normalized.changed ? normalized.payload : undefined;
   });
 
   function freshModelRouteBoundary(ctx: ExtensionContext): boolean {
@@ -4115,6 +4172,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
   });
 
   registerInputHook(pi, {
+    state: runtimeState,
     boilerplateCollapseChars: BOILERPLATE_COLLAPSE_CHARS,
     activeTask: (ctx) => activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined, authorityPolicy: (ctx, task) => ensureTaskAuthorityResumePolicy(ctx.cwd, task, { authorityProfile: loadProfileFromContext(ctx).authorityProfile, environment: process.env }),
     readProtectedPaths: (ctx) => effectiveProtectedPaths(policy, loadProfileFromContext(ctx)).readProtectedPaths,
@@ -4141,6 +4199,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
   registerAgentStartHook(pi, {
     state: runtimeState,
     autoContextEnabled,
+    contextDeltaShadowMode: contextBudgetConfig(policy).contextDeltaShadow,
     activeTask: (ctx) => activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined,
     readProtectedPaths: (ctx) => effectiveProtectedPaths(policy, loadProfileFromContext(ctx)).readProtectedPaths,
     contextExcludePatterns: (ctx) => contextIndexExcludePatterns(policy, loadProfileFromContext(ctx)),
@@ -4187,6 +4246,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
     state: runtimeState,
     activeTask: (ctx) => activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined,
     maxManifestFiles: contextBudgetConfig(policy).maxManifestFiles,
+    flushObservedTaskContext,
     readProtectedPaths: (ctx) => effectiveProtectedPaths(policy, loadProfileFromContext(ctx)).readProtectedPaths,
     recordObservedBash: (observed) => bashResults.record(observed),
     observedBashLedgerPath,
@@ -4427,10 +4487,11 @@ export default function piagentGuard(pi: ExtensionAPI) {
     const taskContractRequired = governedTaskProfile
       && runtime.finalGate === "enforce"
       && finalGateConfig(policy).requireTaskContract;
-    if (sessionTask?.trace.outcome === "pending" && sessionTask.changeMode === "read-only" && !SHELL_TOOL_NAMES.has(event.toolName) && isTaskMutationTool(event.toolName, toolInput)) {
+    if (sessionTask?.trace.outcome === "pending" && (sessionTask.changeMode === "read-only" || sessionTask.mutationPolicy === "forbidden")
+      && !SHELL_TOOL_NAMES.has(event.toolName) && isTaskMutationTool(event.toolName, toolInput)) {
       return {
         block: true,
-        reason: `Task ${sessionTask.taskId} is read-only; ${event.toolName} cannot mutate project or external state in this task. Start a source-change task for implementation.`
+        reason: `Task ${sessionTask.taskId} ${sessionTask.changeMode === "read-only" ? "is read-only" : "forbids source mutation"}; ${event.toolName} cannot mutate project or external state in this task. Start a mutation-required source task for implementation.`
       };
     }
     const preparedInput = prepareToolInputForPolicy(event.toolName, toolInput, policy);
@@ -4473,10 +4534,13 @@ export default function piagentGuard(pi: ExtensionAPI) {
           && !candidate.startsWith("../")
           && !candidate.startsWith(".pi/piagent-state/")
         ));
-      if (sessionTask?.trace.outcome === "pending" && sessionTask.changeMode === "read-only" && !isReadOnlyTaskShellCommand(command, execDecision.segments)) {
+      const mutationForbidden = sessionTask?.trace.outcome === "pending"
+        && (sessionTask.changeMode === "read-only" || sessionTask.mutationPolicy === "forbidden");
+      const exactForbiddenTaskVerifier = mutationForbidden && sessionTask.changeMode === "source-change" && configuredVerifierShell;
+      if (mutationForbidden && !exactForbiddenTaskVerifier && !isReadOnlyTaskShellCommand(command, execDecision.segments)) {
         return {
           block: true,
-          reason: `Task ${sessionTask.taskId} is read-only; this shell command is not in the read-only inspection allowlist.`
+          reason: `Task ${sessionTask.taskId} ${sessionTask.changeMode === "read-only" ? "is read-only; this shell command is not in the read-only inspection allowlist" : "forbids source mutation; this shell command is neither bounded inspection nor an exact configured verifier"}.`
         };
       }
       if (execDecision.mode !== "off" && execDecision.decision === "forbid") {
@@ -4694,7 +4758,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
     StringEnum, TECH_STACK_MANIFEST_FILE, TOOL_RESULT_CAPTURE_MAX_CHARS, TOOL_RESULT_COMPACT_CHAR_THRESHOLD, TOOL_RESULT_COMPACT_LINE_THRESHOLD,
     TOOL_RESULT_PREVIEW_MAX_CHARS, Type, WORKFLOW_COMMAND_EXCLUSIONS, activateToolGroups, activeSessionTask,
     activeTaskToolGroups, allVerifyCommandsPassCurrentTree, appendMemoryNote, appendSessionTrace, appendTrace,
-    acceptanceBaselineGuidance, acceptanceProofGuidance, applyAcceptanceRecoveryProvenance, applyRuntimeLifecycleObservation, automaticAcceptanceCriteria, automaticReadOnlyTaskScope, automaticReviewLenses, automaticTaskIntakeMode, automaticTaskRiskLane, automaticTaskScope,
+    acceptanceBaselineGuidance, acceptanceProofGuidance, applyAcceptanceRecoveryProvenance, applyRuntimeLifecycleObservation, automaticAcceptanceCriteria, automaticReadOnlyTaskScope, automaticReviewLenses, automaticTaskIntakeMode, automaticTaskMutationPolicy, automaticTaskRiskLane, automaticTaskScope,
     bashResults, bindSessionTask, buildAcceptanceReceipt, buildContextEfficiencyReport, buildContextIndexStatus, buildLiveTaskStatus, buildTaskEfficiencyMetrics,
     buildContextIndexV2, buildContextPack, buildContextPreflight, buildProfileOptions, buildProfileTechOptions,
     buildTestImpact, buildUsageSnapshot, candidateFileBudget, checkoutReferenceRepo, classifyContextTask,

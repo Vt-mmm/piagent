@@ -98,6 +98,11 @@ pi install /path/to/piagent
   Inspector; projection Task Changes / Working Tree / Staged có bounded diff,
   provenance và enforce protected path; session lease bền, recovery khi restart
   hoặc owner cũ treo, doctor có repair tường minh.
+- `1.6.0`: context evidence khóa đúng turn/session/task run; WebUI có canonical
+  live state, watchdog và Stop an toàn qua reload/multi-tab; chat chỉ hiện kết
+  quả thành công còn retry/lỗi nằm trong Activity; deep-logic benchmark có bài
+  temporal billing nhiều package và accounting fail-closed. Release này không
+  đưa ra claim token mới vì production benchmark đã được operator dừng.
 - `1.5.5`: hotfix WebUI command execution — approval nhận đúng opaque tool-call
   ID, lệnh tìm kiếm không còn bị nhận nhầm thành migration, Stop hủy approval
   đang chờ, activity chỉ báo running sau khi command thật sự chạy, và restart

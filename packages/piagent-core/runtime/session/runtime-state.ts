@@ -1,5 +1,7 @@
+import crypto from "node:crypto";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
+import { isRuntimeOwnedContextEvidenceEntry } from "../../extensions/context-evidence.js";
 import { toolResultFingerprint } from "../../extensions/context-engine.js";
 import { workingTreeSnapshot } from "../../extensions/task-state.js";
 import type { TaskContract } from "../../extensions/guard-types.ts";
@@ -38,6 +40,35 @@ export type InjectedContextPack = {
   paths: string[];
 };
 
+export type ContextInjectionItem = {
+  path: string;
+  estimatedTokens: number;
+  fileContentHash?: string;
+  payloadHash?: string;
+  representation?: string;
+  ranges?: Array<{ start: number; end: number }>;
+  generation?: number;
+};
+
+export type ContextInjectionTelemetry = {
+  source: string;
+  queryHash: string;
+  confidence: string;
+  estimatedTokens: number;
+  selectedItems: ContextInjectionItem[];
+};
+
+export type PendingContextDelivery = {
+  deliveryId: string;
+  taskRunId: string;
+  turnId?: string;
+  entries: ObservedTaskContext[];
+  pack?: InjectedContextPack & { retrievalKey: string };
+  injection?: ContextInjectionTelemetry;
+};
+
+export type RuntimeTurn = { turnId: string; promptHash: string };
+
 function evictOldest<K, V>(map: Map<K, V>, maximum: number): void {
   while (map.size > maximum) map.delete(map.keys().next().value as K);
 }
@@ -48,6 +79,8 @@ export class RuntimeSessionState {
   readonly #seenToolResults = new Map<string, { outputHash: string; recordedAt: string }>();
   readonly #autoPackedPrompts = new Set<string>();
   readonly #injectedContextPacks = new Map<string, InjectedContextPack>();
+  readonly #pendingContextDeliveries = new Map<string, PendingContextDelivery>();
+  readonly #turnBySession = new Map<string, RuntimeTurn>();
   readonly #modelAuthorship = new ModelAuthorshipState();
   readonly #performanceReview = new PerformanceReviewState();
   readonly #recoveryHistoryByTask = new Map<string, RecoveryHistoryEntry[]>();
@@ -55,6 +88,8 @@ export class RuntimeSessionState {
   readonly #deliveredResumeContexts = new Set<string>();
   readonly #taskIdentityBySession = new Map<string, { taskId: string; taskRunId: string }>();
   readonly #observedContextBySession = new Map<string, Map<string, ObservedTaskContext>>();
+  readonly #preTaskContextBySession = new Map<string, { turnId: string; entries: Map<string, ObservedTaskContext> }>();
+  readonly #qualifiedContextEvidenceByTask = new Map<string, Map<string, ObservedTaskContext>>();
   readonly #shellMutationSnapshots = new Map<string, Record<string, string>>();
 
   constructor(options: { maxObservedContext: number }) {
@@ -74,6 +109,21 @@ export class RuntimeSessionState {
 
   taskIdentity(ctx: ExtensionContext): { taskId: string; taskRunId: string } | undefined {
     return this.#taskIdentityBySession.get(this.sessionKey(ctx));
+  }
+
+  beginTurn(ctx: ExtensionContext, promptHash: string): RuntimeTurn {
+    const turn = { turnId: crypto.randomUUID(), promptHash };
+    const sessionKey = this.sessionKey(ctx);
+    this.#turnBySession.set(sessionKey, turn);
+    this.#preTaskContextBySession.set(sessionKey, { turnId: turn.turnId, entries: new Map() });
+    evictOldest(this.#turnBySession, 100);
+    evictOldest(this.#preTaskContextBySession, 100);
+    return { ...turn };
+  }
+
+  currentTurn(ctx: ExtensionContext, promptHash?: string): RuntimeTurn | undefined {
+    const turn = this.#turnBySession.get(this.sessionKey(ctx));
+    return turn && (!promptHash || turn.promptHash === promptHash) ? { ...turn } : undefined;
   }
 
   hasAdvisedTool(ctx: ExtensionContext, toolName: string): boolean {
@@ -103,8 +153,66 @@ export class RuntimeSessionState {
     return [...(this.#observedContextBySession.get(this.sessionKey(ctx))?.values() ?? [])];
   }
 
+  rememberPreTaskContext(ctx: ExtensionContext, entry: ObservedTaskContext): void {
+    const turn = this.currentTurn(ctx);
+    const epoch = this.#preTaskContextBySession.get(this.sessionKey(ctx));
+    if (!turn || !epoch || epoch.turnId !== turn.turnId || !isRuntimeOwnedContextEvidenceEntry(entry)) return;
+    epoch.entries.set(entry.path, structuredClone(entry));
+    evictOldest(epoch.entries, this.#maxObservedContext);
+  }
+
+  preTaskContext(ctx: ExtensionContext): ObservedTaskContext[] {
+    const turn = this.currentTurn(ctx);
+    const epoch = this.#preTaskContextBySession.get(this.sessionKey(ctx));
+    if (!turn || !epoch || epoch.turnId !== turn.turnId) return [];
+    return [...epoch.entries.values()].map((entry) => structuredClone(entry));
+  }
+
+  promotePreTaskContext(ctx: ExtensionContext, taskRunId: string, selected: ObservedTaskContext[]): void {
+    const eligible = new Map(this.preTaskContext(ctx).map((entry) => [entry.path, entry]));
+    for (const entry of selected) {
+      const observed = eligible.get(entry.path);
+      if (observed) this.rememberQualifiedContextEvidence(ctx, taskRunId, observed);
+    }
+    const epoch = this.#preTaskContextBySession.get(this.sessionKey(ctx));
+    if (epoch) epoch.entries.clear();
+  }
+
+  qualifiedTaskContext(ctx: ExtensionContext): ObservedTaskContext[] {
+    const taskRunId = this.taskIdentity(ctx)?.taskRunId;
+    return taskRunId ? this.qualifiedContextEvidence(ctx, taskRunId) : [];
+  }
+
   clearObservedContext(ctx: ExtensionContext): void {
-    this.#observedContextBySession.delete(this.sessionKey(ctx));
+    const sessionKey = this.sessionKey(ctx);
+    this.#observedContextBySession.delete(sessionKey);
+    this.#preTaskContextBySession.delete(sessionKey);
+    const prefix = `${sessionKey}\u0000`;
+    for (const key of this.#qualifiedContextEvidenceByTask.keys()) {
+      if (key.startsWith(prefix)) this.#qualifiedContextEvidenceByTask.delete(key);
+    }
+  }
+
+  rememberQualifiedContextEvidence(
+    ctx: ExtensionContext,
+    taskRunId: string,
+    entry: ObservedTaskContext
+  ): void {
+    if (!taskRunId || !entry.path) return;
+    const key = `${this.sessionKey(ctx)}\u0000${taskRunId}`;
+    let evidence = this.#qualifiedContextEvidenceByTask.get(key);
+    if (!evidence) {
+      evidence = new Map();
+      this.#qualifiedContextEvidenceByTask.set(key, evidence);
+    }
+    evidence.set(entry.path, structuredClone(entry));
+    evictOldest(evidence, this.#maxObservedContext);
+    evictOldest(this.#qualifiedContextEvidenceByTask, 100);
+  }
+
+  qualifiedContextEvidence(ctx: ExtensionContext, taskRunId: string): ObservedTaskContext[] {
+    const key = `${this.sessionKey(ctx)}\u0000${taskRunId}`;
+    return [...(this.#qualifiedContextEvidenceByTask.get(key)?.values() ?? [])].map((entry) => structuredClone(entry));
   }
 
   #shellMutationSnapshotKey(ctx: ExtensionContext, toolName: string, input: unknown): string {
@@ -151,6 +259,18 @@ export class RuntimeSessionState {
 
   injectedContextPack(ctx: ExtensionContext, key: string): InjectedContextPack | undefined {
     return this.#injectedContextPacks.get(`${this.sessionKey(ctx)}\u0000${key}`);
+  }
+
+  stageContextDelivery(ctx: ExtensionContext, delivery: PendingContextDelivery): void {
+    this.#pendingContextDeliveries.set(`${this.sessionKey(ctx)}\u0000${delivery.deliveryId}`, structuredClone(delivery));
+    evictOldest(this.#pendingContextDeliveries, 100);
+  }
+
+  takeContextDelivery(ctx: ExtensionContext, deliveryId: string): PendingContextDelivery | undefined {
+    const key = `${this.sessionKey(ctx)}\u0000${deliveryId}`;
+    const delivery = this.#pendingContextDeliveries.get(key);
+    this.#pendingContextDeliveries.delete(key);
+    return delivery ? structuredClone(delivery) : undefined;
   }
 
   performanceReviewCheckpoint(taskRunId: string): PerformanceReviewCheckpoint | undefined {
@@ -300,6 +420,7 @@ export class RuntimeSessionState {
     this.#recoveryHistoryByTask.delete(taskId);
     this.#resumeStateByTaskRun.delete(taskRunId);
     this.#deliveredResumeContexts.delete(`${this.sessionKey(ctx)}\u0000${taskRunId}`);
+    this.#qualifiedContextEvidenceByTask.delete(`${this.sessionKey(ctx)}\u0000${taskRunId}`);
     this.clearShellMutationSnapshots(ctx);
   }
 
@@ -324,7 +445,9 @@ export class RuntimeSessionState {
     const prefix = `${sessionKey}\u0000`;
     const taskIdentity = this.#taskIdentityBySession.get(sessionKey);
     this.#taskIdentityBySession.delete(sessionKey);
+    this.#turnBySession.delete(sessionKey);
     this.#observedContextBySession.delete(sessionKey);
+    this.#preTaskContextBySession.delete(sessionKey);
     this.clearShellMutationSnapshots(ctx);
     if (taskIdentity) {
       this.#performanceReview.clearTask(taskIdentity.taskRunId);
@@ -335,7 +458,7 @@ export class RuntimeSessionState {
         if (key.startsWith(prefix)) values.delete(key);
       }
     }
-    for (const values of [this.#seenToolResults, this.#injectedContextPacks]) {
+    for (const values of [this.#seenToolResults, this.#injectedContextPacks, this.#pendingContextDeliveries, this.#qualifiedContextEvidenceByTask]) {
       for (const key of values.keys()) {
         if (key.startsWith(prefix)) values.delete(key);
       }

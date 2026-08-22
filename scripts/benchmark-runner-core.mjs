@@ -19,6 +19,7 @@ import { applyBenchmarkClaimRestrictions } from "../packages/piagent-core/benchm
 import { benchmarkEnvironment, benchmarkEnvironmentPolicy, comparisonSurfaces, createCodexRuntime, piagentTreatment } from "../packages/piagent-core/benchmark/benchmark-runtime.js";
 import { assertBenchmarkPiCredentialReady, assertBenchmarkPiCredentialWritebackPolicy, cleanupBenchmarkPiRuntimeHome, createBenchmarkPiRuntimeHome, resetBenchmarkPiRuntimeEphemeralState, withBenchmarkPiCredentialWriteback } from "../packages/piagent-core/benchmark/benchmark-pi-home.js";
 import { benchmarkPreflight, benchmarkPreflightReceipt } from "../packages/piagent-core/benchmark/benchmark-preflight.js";
+import { applyBenchmarkExecutionDefaults, benchmarkSuiteCoverage } from "../packages/piagent-core/benchmark/benchmark-runner-policy.js";
 import {
   cleanupUnretainedWorkspaces,
   appendPrivateJsonl,
@@ -264,6 +265,7 @@ async function main() {
     options.timeoutSeconds = manifest.timeoutSeconds;
     options.infrastructureRetries = manifest.infrastructureRetries;
     options.retryDelaySeconds = manifest.retryDelaySeconds;
+    options.stopAfterFailedPair = manifest.stopAfterFailedPair === true;
     options.output = resumeState.runRoot;
   }
   if (options.replayFailures) {
@@ -305,12 +307,11 @@ async function main() {
     if (missing.length) fail(`Replay report references unknown scenario: ${missing.join(", ")}`, 1);
     suite.scenarios = [...new Set(options.replayRuns.map((run) => run.scenarioId))].map((id) => byId.get(id));
   }
-  options.repeats = options.repeats ?? suite.defaultRepeats;
-  options.infrastructureRetries = options.infrastructureRetries ?? (suite.schemaVersion === 2 ? 2 : 0);
-  options.retryDelaySeconds = options.retryDelaySeconds ?? (suite.schemaVersion === 2 ? 60 : 0);
-  options.timeoutSeconds = options.timeoutSeconds ?? suite.timeoutSeconds;
+  applyBenchmarkExecutionDefaults(options, suite);
   if (options.stopAfterFailedPair && !Number.isFinite(suite.releaseGate?.minimumOutcomeScoreExclusive)) fail("--stop-after-failed-pair requires a suite outcome floor", 1);
   if (options.surfaces.includes("codex-cli")) {
+    options.model = options.model ?? "openai-codex/gpt-5.6-luna";
+    options.thinking = options.thinking ?? "medium";
     codexModelName(options.model);
     codexThinkingEffort(options.thinking);
   }
@@ -882,6 +883,7 @@ async function main() {
       codexDisabledFeatures: runtime.codexDisabledFeatures,
       surfaces: options.surfaces,
       scenarioSelection: options.scenarioIds ?? null,
+      suiteCoverage: benchmarkSuiteCoverage(declaredScenarioCount, suite.scenarios.length),
       surfaceModels: options.surfaces.includes("codex-cli") ? {
         piagent: options.model,
         "codex-cli": codexModelName(options.model)

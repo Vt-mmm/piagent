@@ -11,6 +11,7 @@ import {
 import { matchesAnyPath, matchesProtectedPath } from "./policy-core.js";
 import { appendJsonlBounded, readJsonlTail } from "./state-retention.js";
 import { ensurePrivateStateDirectory, resolveLocalStatePath } from "./local-state-path.js";
+import { contextMetricPartition, injectionEfficiencyMetrics, prefixEfficiencyMetrics } from "./context-efficiency-metrics.js";
 
 const INDEX_SCHEMA_VERSION = 2;
 const TELEMETRY_SCHEMA_VERSION = 1;
@@ -871,29 +872,31 @@ function retrievalFeedback(cwd) {
   const events = readContextTelemetry(cwd, { limit: 12_000, maxBytes: 12 * 1024 * 1024 });
   const selectedCounts = new Map();
   const usedCounts = new Map();
-  const latestPackBySession = new Map();
+  const latestPackByPartition = new Map();
+  const taskByTurn = new Map(events.filter((event) => event.event === "turn_task_bound" && typeof event.sessionId === "string" && typeof event.turnId === "string" && typeof event.taskRunId === "string")
+    .map((event) => [`${event.sessionId}\0${event.turnId}`, event.taskRunId]));
   let selected = 0;
   let used = 0;
 
   for (const event of events) {
-    const sessionId = typeof event.sessionId === "string" ? event.sessionId : "";
-    if (event.event === "context_pack" && sessionId) {
+    const partition = contextMetricPartition(event, taskByTurn);
+    if (event.event === "context_pack_injected" && partition) {
       const selectedPaths = [...new Set(
         (Array.isArray(event.selectedPaths) ? event.selectedPaths : [])
           .map(normalizeRelative)
           .filter((filePath) => shouldIndexPath(filePath, {}))
       )];
       const pack = { selectedPaths: new Set(selectedPaths), usedPaths: new Set() };
-      latestPackBySession.set(sessionId, pack);
+      latestPackByPartition.set(partition, pack);
       for (const filePath of selectedPaths) {
         selectedCounts.set(filePath, (selectedCounts.get(filePath) ?? 0) + 1);
         selected += 1;
       }
       continue;
     }
-    if (event.event !== "tool_call" || !sessionId) continue;
+    if (event.event !== "tool_call" || !partition) continue;
     const targetPath = normalizeRelative(event.targetPath);
-    const pack = latestPackBySession.get(sessionId);
+    const pack = latestPackByPartition.get(partition);
     if (!targetPath || !pack?.selectedPaths.has(targetPath) || pack.usedPaths.has(targetPath)) continue;
     pack.usedPaths.add(targetPath);
     usedCounts.set(targetPath, (usedCounts.get(targetPath) ?? 0) + 1);
@@ -1218,17 +1221,13 @@ export function readContextTelemetry(cwd, options = {}) {
   const maxBytes = clampInteger(options.maxBytes, MAX_TELEMETRY_READ_BYTES, 64 * 1024, 256 * 1024 * 1024);
   return readJsonlTail(target, { limit, maxBytes, projectRoot: cwd });
 }
-
 function ratio(numerator, denominator) {
   return denominator > 0 ? numerator / denominator : 0;
 }
-
 export function buildContextEfficiencyReport(cwd, options = {}) {
   const events = readContextTelemetry(cwd, options);
-  const prompts = events.filter((event) => event.event === "agent_prompt");
-  const toolCalls = events.filter((event) => event.event === "tool_call");
-  const toolResults = events.filter((event) => event.event === "tool_result");
-  const packs = events.filter((event) => event.event === "context_pack");
+  const prompts = events.filter((event) => event.event === "agent_prompt"), toolCalls = events.filter((event) => event.event === "tool_call"), toolResults = events.filter((event) => event.event === "tool_result"), packs = events.filter((event) => event.event === "context_pack");
+  const offeredPacks = events.filter((event) => event.event === "context_pack_offered"), injectedPacks = events.filter((event) => event.event === "context_pack_injected");
   const compactions = events.filter((event) => event.event === "session_compact");
   const seenReads = new Set();
   let duplicateReads = 0;
@@ -1253,6 +1252,7 @@ export function buildContextEfficiencyReport(cwd, options = {}) {
     : 0;
   const lowConfidencePacks = packs.filter((event) => ["none", "low"].includes(event.confidence)).length;
   const feedback = retrievalFeedback(cwd);
+  const prefixMetrics = prefixEfficiencyMetrics(events), injectionMetrics = injectionEfficiencyMetrics(events);
   const duplicateReadRate = ratio(duplicateReads, readCalls);
   const duplicateOutputRate = ratio(duplicateOutputChars, outputChars);
   const schemaShare = ratio(averageToolSchemaTokens, averageSystemPromptTokens);
@@ -1273,7 +1273,7 @@ export function buildContextEfficiencyReport(cwd, options = {}) {
   if (feedback.selected >= 4 && feedback.utilizationRate < 0.45) recommendations.push("Context-pack utilization is low; reduce pack breadth or improve task-specific ranking signals.");
   if (recommendations.length === 0) recommendations.push("No dominant context waste signal was detected in the sampled events.");
   const report = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     source: "piagent",
     generatedAt: nowIso(),
     sample: {
@@ -1282,6 +1282,7 @@ export function buildContextEfficiencyReport(cwd, options = {}) {
       toolCalls: toolCalls.length,
       toolResults: toolResults.length,
       contextPacks: packs.length,
+      contextPacksOffered: offeredPacks.length, contextPacksInjected: injectedPacks.length,
       compactions: compactions.length
     },
     metrics: {
@@ -1301,6 +1302,7 @@ export function buildContextEfficiencyReport(cwd, options = {}) {
       contextSelectionsUsed: feedback.used,
       contextSelectionsUnused: feedback.unused,
       contextUtilizationRate: Number(feedback.utilizationRate.toFixed(4)),
+      ...Object.fromEntries(Object.entries({ ...prefixMetrics, ...injectionMetrics }).map(([key, value]) => [key, Number(value.toFixed(4))])),
       contextWasteScore: wasteScore
     },
     methodology: {
@@ -1312,7 +1314,8 @@ export function buildContextEfficiencyReport(cwd, options = {}) {
         lowConfidenceRetrieval: 0.15,
         activeToolExcess: 0.1
       },
-      retrievalFeedback: "Positive-only reranking: a path receives a weak boost only when a prior pack selected it and the same session later used it. Unseen and unused paths are not penalized.",
+      retrievalFeedback: "Positive-only reranking consumes host-confirmed context_pack_injected events only. A path receives a weak boost when the same session later uses it; unseen and unused paths are not penalized.",
+      prefixMetrics: "Canonical provider tool schemas are compared only within session, task, model, and thinking-level partitions. First-turn task attribution uses turn_task_bound.", injectionMetrics: "Duplicates require the same path, file hash, payload hash, representation, ranges, and generation within one task/session partition. Unconfirmed and post-compaction rehydration events are excluded from duplicate attribution.",
       note: "This is an operational signal, not a quality verdict. Compare it with task acceptance and verification results."
     },
     recommendations

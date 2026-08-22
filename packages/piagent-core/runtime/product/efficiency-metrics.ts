@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 
+import { durableContextEvidenceEntries } from "../../extensions/context-evidence.js";
 import type { TaskContract } from "../../extensions/guard-types.ts";
 import { readSolverShadowEvents } from "../solver/solver-shadow.ts";
 import { readTrajectoryStore } from "../trajectory/trajectory-store.ts";
@@ -52,8 +53,9 @@ export function buildTaskEfficiencyMetrics(
   const decision = solverEvent?.decision;
   const helperUsage = task.acceptanceReceipt?.helperUsage;
   const provenance = task.acceptanceReceipt?.provenance;
+  const contextEvidence = durableContextEvidenceEntries(task);
   const relevantEvent = trajectory.events.find((event) => event.cause === "context-observed");
-  const relevantFileMs = relevantEvent && task.contextManifest.length > 0 ? duration(task.createdAt, relevantEvent.observedAt) : null;
+  const relevantFileMs = relevantEvent && contextEvidence.length > 0 ? duration(task.createdAt, relevantEvent.observedAt) : null;
   const recommendedTools = decision?.toolGroups ?? [];
   const activeTools = [...new Set(input.activeToolGroups ?? [])].sort();
   const exactUsage = input.exactUsage && (input.exactUsage.tokens !== null || input.exactUsage.cost !== null)
@@ -83,7 +85,7 @@ export function buildTaskEfficiencyMetrics(
     },
     context: {
       requiredFiles: task.requiredContext.length,
-      manifestedFiles: task.contextManifest.length,
+      manifestedFiles: contextEvidence.length,
       memoryCitations: task.memoryCitations.length,
       recommendedBudget: decision?.context.budgetBand ?? "unknown",
       timeToRelevantFileMs: relevantFileMs,

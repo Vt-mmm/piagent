@@ -211,6 +211,7 @@ required_files=(
   "$ROOT/schemas/piagent-webui/approval-v1.schema.json"
   "$ROOT/schemas/piagent-webui/capabilities-v1.schema.json"
   "$ROOT/schemas/piagent-webui/session-catalog-v1.schema.json"
+  "$ROOT/schemas/piagent-webui/session-live-state-v1.schema.json"
   "$ROOT/schemas/piagent-webui/session-command-v1.schema.json"
   "$ROOT/schemas/piagent-webui/gateway-capabilities-v1.schema.json"
   "$ROOT/schemas/piagent-webui/gateway-protocol-v1.schema.json"
@@ -235,6 +236,7 @@ required_files=(
   "$ROOT/packages/piagent-webui/contracts/generated/attachment-v1.ts"
   "$ROOT/packages/piagent-webui/contracts/generated/document-workspace-v1.ts"
   "$ROOT/packages/piagent-webui/contracts/generated/session-catalog-v1.ts"
+  "$ROOT/packages/piagent-webui/contracts/generated/session-live-state-v1.ts"
   "$ROOT/packages/piagent-webui/contracts/generated/session-command-v1.ts"
   "$ROOT/packages/piagent-webui/contracts/generated/gateway-capabilities-v1.ts"
   "$ROOT/packages/piagent-webui/contracts/generated/gateway-protocol-v1.ts"
@@ -303,6 +305,7 @@ required_files=(
   "$ROOT/packages/piagent-webui/gateway/session-command-store.ts"
   "$ROOT/packages/piagent-webui/gateway/session-lease-store.ts"
   "$ROOT/packages/piagent-webui/gateway/session-metadata-store.ts"
+  "$ROOT/packages/piagent-webui/gateway/session-operation-watchdog.ts"
   "$ROOT/packages/piagent-webui/gateway/session-runtime-supervisor.ts"
   "$ROOT/packages/piagent-webui/server/gateway-websocket.ts"
   "$ROOT/packages/piagent-webui/extension/piagent-webui.ts"
@@ -590,6 +593,7 @@ const jsonFiles = [
   "schemas/piagent-webui/approval-v1.schema.json",
   "schemas/piagent-webui/capabilities-v1.schema.json",
   "schemas/piagent-webui/session-catalog-v1.schema.json",
+  "schemas/piagent-webui/session-live-state-v1.schema.json",
   "schemas/piagent-webui/session-command-v1.schema.json",
   "schemas/piagent-webui/gateway-capabilities-v1.schema.json",
   "schemas/piagent-webui/gateway-protocol-v1.schema.json",
@@ -959,7 +963,7 @@ if [[ "$OFFLINE" == true || "${PIAGENT_VERIFY_OFFLINE:-}" == "1" || "${CI:-}" ==
 else
   bash "$ROOT/scripts/pi-model-catalog.sh" --json >/dev/null
 fi
-bash "$ROOT/scripts/configure-model-scope.sh" --dry-run --preset full --default-model openai-codex/gpt-5.5:high >/dev/null
+bash "$ROOT/scripts/configure-model-scope.sh" --dry-run --preset full --default-model openai-codex/gpt-5.6-sol:high >/dev/null
 node "$ROOT/scripts/mcp-manage.mjs" --list >/dev/null
 node "$ROOT/scripts/mcp-manage.mjs" --dry-run --preset popular --scope project --project "$ROOT" >/dev/null
 node --input-type=module - "$ROOT" <<'NODE'

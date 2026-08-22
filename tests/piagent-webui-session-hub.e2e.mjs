@@ -12,11 +12,12 @@ import { startLoopbackServer } from "../packages/piagent-webui/server/loopback-s
 import { DOCX_MIME, docx } from "./helpers/piagent-docx-fixture.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
-let server;
+let server, protocol;
 let persistedBrowserConversation = false;
 let sessionCreateAttempts = 0, sessionCreateEffects = 0, createdSessionCounter = 0;
 let sessionSendAttempts = 0, sessionSendEffects = 0;
-let nextCreateUncertain = false;
+let nextCreateUncertain = false, nextSendRejected = false;
+let liveStateUnavailable = false, liveStateReadCount = 0;
 let attachments, lastSendPayload = null, dispatchedContent = null;
 let lastCreatePayload = null;
 const observedSessionActions = [];
@@ -31,6 +32,12 @@ inspectionSnapshot.capabilities.capabilities.attachments = { status: "available"
     "application/yaml", "text/csv", "text/markdown", "text/plain", "text/tab-separated-values"] };
 Object.assign(inspectionSnapshot.capabilities.limits, { maxRequestBodyBytes: 11_250_000, maxAttachmentCount: 4,
   maxAttachmentFileBytes: 8_388_608, maxAttachmentTotalBytes: 16_777_216 });
+inspectionSnapshot.activity.recent = [{
+  activityRef: "activity_browser_read", kind: "tool", state: "passed", label: "read passed", preview: "src/example.ts",
+  toolCallId: "tool_browser_read", toolName: "read", commandDigest: null, logRef: null, exitCode: null, exitCodeExact: false,
+  startedAt: "2026-08-13T14:00:00.000Z", finishedAt: "2026-08-13T14:00:01.000Z"
+}];
+Object.assign(inspectionSnapshot.activity.page, { total: 1, returned: 1 });
 const sourceFixture = JSON.parse(fs.readFileSync(path.join(root, "evals/fixtures/piagent-webui/source-change-v1.valid.json"), "utf8"));
 const transcriptFixture = JSON.parse(fs.readFileSync(path.join(root, "evals/fixtures/piagent-webui/transcript-v1.valid.json"), "utf8"));
 
@@ -67,21 +74,28 @@ test.beforeAll(async () => {
       sessionRuntime: { status: "available", version: 1, reasonCode: null }, sessionActions: Object.fromEntries(
         ["create", "send", "abort", "setModel", "setThinking", "setPermission", "rename", "pin", "archive", "unarchive", "fork", "acquire", "release"].map((name) =>
           [name, { status: "available", version: 1, reasonCode: null }])) }, reasonCode: null };
-  let protocol;
   const command = { async execute(value) {
     observedSessionActions.push(value.action);
     if (value.action === "session.create") sessionCreateAttempts += 1;
     if (value.action === "session.create") lastCreatePayload = structuredClone(value.payload);
+    const currentRow = value.sessionRef ? catalog.sessions.find((item) => item.sessionRef === value.sessionRef) : null;
     if (value.action === "session.send") {
       sessionSendAttempts += 1;
+      lastSendPayload = structuredClone(value.payload);
+      if (nextSendRejected) {
+        nextSendRejected = false;
+        return { schemaVersion: 1, version: "piagent-session-receipt-v1", messageType: "receipt", commandId: value.commandId,
+          idempotencyKeyDigest: `sha256:${"a".repeat(64)}`, action: value.action, phase: "rejected", resultCode: "unavailable",
+          requestedAt: value.requestedAt, settledAt: new Date().toISOString(), sessionRef: value.sessionRef, operationRef: null,
+          catalogRevisionAfter: catalog.catalogRevision, sessionRevisionAfter: currentRow?.sessionRevision ?? null, deduplicated: false,
+          evidenceRef: null, error: { code: "fixture-send-rejected", message: "The session command was rejected." } };
+      }
       // Claim exactly as the runtime supervisor does, so what the assertions see
       // is what a real session would have been prompted with.
-      lastSendPayload = structuredClone(value.payload);
       dispatchedContent = value.payload.attachmentRefs?.length
         ? (await attachments.claim(value.sessionRef, value.payload.attachmentRefs, value.payload.messageRequestId, value.payload.message)).content
         : null;
     }
-    const currentRow = value.sessionRef ? catalog.sessions.find((item) => item.sessionRef === value.sessionRef) : null;
     const stale = value.expectedCatalogRevision !== catalog.catalogRevision || (value.action === "session.create"
       ? value.expectedSessionRevision !== null : !currentRow || value.expectedSessionRevision !== currentRow.sessionRevision);
     if (stale) return { schemaVersion: 1, version: "piagent-session-receipt-v1", messageType: "receipt", commandId: value.commandId,
@@ -102,8 +116,13 @@ test.beforeAll(async () => {
       targetSessionRevision = created.sessionRevision; catalog.sessions.unshift(created);
       catalog.page.returned = catalog.sessions.length; catalog.page.total = catalog.sessions.length;
       catalog.catalogRevision = `revision_catalog_created_${createdSessionCounter}`;
-      if (!deferredCreate) protocol.events.publish("message.completed", { sessionRef: targetSessionRef, operationRef,
-        messageRef: `message_browser_create_${createdSessionCounter}`, sessionRevision: targetSessionRevision, truncated: false });
+      if (!deferredCreate) {
+        const messageRef = `message_browser_create_${createdSessionCounter}`;
+        protocol.events.publish("message.completed", { sessionRef: targetSessionRef, operationRef,
+          messageRef, sessionRevision: targetSessionRevision, truncated: false });
+        protocol.events.publish("operation.settled", { sessionRef: targetSessionRef, operationRef, messageRef,
+          sessionRevision: targetSessionRevision, settlement: "completed", reasonCode: null });
+      }
     }
     if (value.action === "session.send") {
       sessionSendEffects += 1;
@@ -111,14 +130,16 @@ test.beforeAll(async () => {
       protocol.events.publish("runtime.changed", { sessionRef: value.sessionRef, sessionRevision: value.expectedSessionRevision,
         liveState: "running", operationRef, reasonCode: null });
       protocol.events.publish("tool.started", { sessionRef: value.sessionRef, operationRef,
-        toolCallRef: "tool_browser_read_01", toolLabel: "read_file", isError: null });
+        toolCallRef: "tool_browser_read_01", toolLabel: "read_file", isError: null, reasonCode: null });
       await new Promise((resolve) => setTimeout(resolve, 400));
       protocol.events.publish("tool.completed", { sessionRef: value.sessionRef, operationRef,
-        toolCallRef: "tool_browser_read_01", toolLabel: "read_file", isError: false });
+        toolCallRef: "tool_browser_read_01", toolLabel: "read_file", isError: false, reasonCode: null });
       protocol.events.publish("message.delta", { sessionRef: value.sessionRef, operationRef, messageRef, messageSequence: 0,
         delta: "A streamed Gateway reply." });
       protocol.events.publish("message.completed", { sessionRef: value.sessionRef, operationRef, messageRef,
         sessionRevision: value.expectedSessionRevision, truncated: false });
+      protocol.events.publish("operation.settled", { sessionRef: value.sessionRef, operationRef, messageRef,
+        sessionRevision: value.expectedSessionRevision, settlement: "completed", reasonCode: null });
       persistedBrowserConversation = true;
     }
     if (value.action === "session.create" && nextCreateUncertain) {
@@ -168,7 +189,7 @@ test.beforeAll(async () => {
         recordedAt: "2026-08-13T14:00:00.000Z", content: { ...transcriptFixture.items[0].content,
           text: "## Implementation result\n\n**Status:** ready.\n\nThe durable transcript is available.\n\n- Session isolation\n- Formatted output\n\n| Gate | State |\n| --- | --- |\n| Chromium | Pass |\n\n![remote preview](https://example.invalid/track.png) [unsafe](javascript:alert(1))",
           textChars: 258 },
-        toolCalls: [{ toolCallRef: "tool_history_read", toolName: "read_file", state: "completed" }] },
+        toolCalls: [] },
       { ...transcriptFixture.items[0], messageRef: "message_history_tool", parentMessageRef: "message_history_assistant", role: "tool-result",
         recordedAt: "2026-08-13T14:00:01.000Z", content: { ...transcriptFixture.items[0].content, state: "unavailable", text: null,
           textChars: null, digest: null, reasonCode: "tool-output-in-activity-preview" }, toolCalls: [] },
@@ -186,7 +207,15 @@ test.beforeAll(async () => {
   };
   server = await startLoopbackServer({
     staticRoot: path.join(root, "packages/piagent-webui/dist/client"), mode: "gateway",
-    readCapabilities: () => capabilities, readSessionCatalog: () => catalog, gatewayProtocol: protocol,
+    readCapabilities: () => capabilities, readSessionCatalog: () => catalog,
+    readSessionLiveState: () => {
+      liveStateReadCount += 1;
+      if (liveStateUnavailable) throw new Error("fixture-session-live-state-unavailable");
+      return { schemaVersion: 1, version: "piagent-session-live-state-v1", generatedAt: new Date().toISOString(),
+        gatewayInstanceRef: catalog.gatewayInstanceRef, eventSequence: protocol.events.stateVersion, state: "ready",
+        operations: [], settlements: protocol.events.recentOperationSettlements(), reasonCode: null };
+    },
+    gatewayProtocol: protocol,
     readSessionCreationOptions: () => ({ schemaVersion: 1, version: "piagent-session-creation-options-v1",
       generatedAt: new Date().toISOString(), projects: [{ projectRef: "project_session_release_prep",
         placeRef: "project_session_release_prep", label: "pi-company-platform" }],
@@ -227,6 +256,61 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => { await server?.close(); attachments?.close(); });
 
+test("waits for canonical live state on bootstrap and after a replay gap", async ({ page }) => {
+  await page.addInitScript(() => {
+    const NativeWebSocket = window.WebSocket;
+    window.__piagentTestSockets = [];
+    window.__piagentTestFrames = [];
+    window.__piagentTestReceived = [];
+    window.__piagentTestCloses = [];
+    window.__piagentTestCloseCalls = [];
+    window.WebSocket = class extends NativeWebSocket {
+      constructor(...args) {
+        super(...args); window.__piagentTestSockets.push(this);
+        this.addEventListener("message", (event) => window.__piagentTestReceived.push(String(event.data)));
+        this.addEventListener("close", (event) => window.__piagentTestCloses.push({ code: event.code, reason: event.reason }));
+      }
+      send(value) { window.__piagentTestFrames.push(String(value)); return super.send(value); }
+      close(code, reason) { window.__piagentTestCloseCalls.push({ code, reason }); return super.close(code, reason); }
+    };
+  });
+  const bootstrapReadsBefore = liveStateReadCount; liveStateUnavailable = true;
+  try {
+    await page.goto(server.issueLaunchUrl());
+    await expect.poll(() => liveStateReadCount - bootstrapReadsBefore).toBeGreaterThanOrEqual(1);
+    await expect(page.getByText("Gateway live", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("reconnecting", { exact: true })).toBeVisible();
+    liveStateUnavailable = false;
+    await expect(page.getByText("Gateway live", { exact: true })).toBeVisible();
+    expect(liveStateReadCount - bootstrapReadsBefore).toBeGreaterThanOrEqual(2);
+
+    const resyncReadsBefore = liveStateReadCount; liveStateUnavailable = true;
+    await page.evaluate(() => new Promise((resolve) => {
+      const socket = window.__piagentTestSockets.at(-1);
+      socket.addEventListener("close", resolve, { once: true }); socket.close(1000, "fixture-replay-gap");
+    }));
+    await expect(page.getByText("reconnecting", { exact: true })).toBeVisible();
+    for (let index = 0; index < 1_002; index += 1) {
+      protocol.events.publish("catalog.changed", { catalogRevision: `revision_gap_${index}` });
+    }
+    await expect.poll(() => page.evaluate(() => window.__piagentTestSockets.length)).toBeGreaterThanOrEqual(2);
+    const connectFrames = await page.evaluate(() => window.__piagentTestFrames.map((value) => JSON.parse(value))
+      .filter((value) => value.messageType === "connect"));
+    assert.equal(connectFrames.length >= 2, true);
+    assert.equal(connectFrames.at(-1).lastEventSequence, 0);
+    await expect.poll(() => page.evaluate(() => window.__piagentTestReceived.map((value) => JSON.parse(value))
+      .some((value) => value.kind === "resync.required"))).toBe(true);
+    await expect.poll(() => page.evaluate(() => window.__piagentTestCloseCalls
+      .some((value) => value.reason === "canonical-resync-required"))).toBe(true);
+    await expect.poll(() => page.evaluate(() => window.__piagentTestCloses.length)).toBeGreaterThanOrEqual(2);
+    await expect.poll(() => liveStateReadCount - resyncReadsBefore).toBeGreaterThanOrEqual(1);
+    await expect(page.getByText("Gateway live", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("reconnecting", { exact: true })).toBeVisible();
+    liveStateUnavailable = false;
+    await expect(page.getByText("Gateway live", { exact: true })).toBeVisible();
+  } finally { liveStateUnavailable = false; }
+});
+
 test("renders the session-first hub, compact New chat, popovers, modal Settings, and a split Agent Inspector", async ({ page }) => {
   persistedBrowserConversation = false;
   observedSessionActions.length = 0;
@@ -242,12 +326,8 @@ test("renders the session-first hub, compact New chat, popovers, modal Settings,
   await expect(page.getByRole("cell", { name: "Pass" })).toBeVisible();
   await expect(page.locator('img[alt="remote preview"]')).toHaveCount(0);
   await expect(page.locator('a[href^="javascript:"]')).toHaveCount(0);
-  await expect(page.getByText("Phiên đăng nhập model đã hết hạn. Mở Cài đặt → Nhà cung cấp & model để kết nối lại.", { exact: true })).toBeVisible();
-  const persistedActivity = page.getByRole("button", { name: /Đã đọc file/ });
-  await expect(persistedActivity).toBeVisible();
-  await persistedActivity.click();
-  await expect(page.getByText("read_file", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Mở Activity" })).toBeVisible();
+  await expect(page.getByText("Phiên đăng nhập model đã hết hạn. Mở Cài đặt → Nhà cung cấp & model để kết nối lại.", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Đã đọc file/ })).toHaveCount(0);
   await page.getByRole("button", { name: "Cuộc trò chuyện mới" }).click();
   await expect(page.getByRole("heading", { name: "Anh muốn làm gì?" })).toBeVisible();
   await page.getByRole("button", { name: /pi-company-platform/ }).click();
@@ -311,7 +391,8 @@ test("renders the session-first hub, compact New chat, popovers, modal Settings,
   await page.getByPlaceholder("Nhắn cho Piagent…").fill("Continue from the browser");
   await page.getByRole("button", { name: "Gửi" }).click();
   await expect(page.getByText("Continue from the browser", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Đang đọc file/ })).toBeVisible();
+  await expect(page.getByText("Piagent đang xử lý…", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Đang đọc file/ })).toHaveCount(0);
   await expect(page.getByText("A streamed Gateway reply.", { exact: true })).toBeVisible();
   assert.equal(lastSendPayload?.workflow, "review");
   await page.waitForTimeout(250);
@@ -325,7 +406,9 @@ test("renders the session-first hub, compact New chat, popovers, modal Settings,
   await page.getByRole("button", { name: "Mở Source Changes Inspector" }).click();
   await expect(page.getByText("Agent Inspector", { exact: true })).toBeVisible();
   await expect(page.getByText("Open the persisted release checklist", { exact: true })).toBeVisible();
-  await expect(page.locator(".MuiBackdrop-root")).toHaveCount(0);
+  // Below the xl split-layout breakpoint, Inspector is modal so the
+  // conversation and header never collapse underneath it.
+  await expect(page.locator(".MuiBackdrop-root")).toHaveCount(1);
   await page.getByRole("tab", { name: /Task/ }).click();
   await expect(page.getByText("Model", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Verifier, usage và handoff", { exact: true })).toBeVisible();
@@ -345,6 +428,9 @@ test("renders the session-first hub, compact New chat, popovers, modal Settings,
   await page.getByRole("button", { name: /ke-hoach\.md/ }).click();
   await expect(page.getByRole("heading", { name: "Ke hoach quy ba" })).toBeVisible();
   await expect(page.getByText("tang truong", { exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "Activity", exact: true }).click();
+  await expect(page.getByText("read passed", { exact: true })).toBeVisible();
+  await expect(page.getByText("src/example.ts", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Đóng Inspector" }).click();
   await page.getByRole("button", { name: "Cài đặt" }).click();
   await expect(page.getByRole("dialog").getByText("Cài đặt", { exact: true })).toBeVisible();
@@ -470,6 +556,24 @@ test("opens a known created session instead of exposing an internal uncertainty 
   }
 });
 
+test("preserves the composer draft and staged file when send admission is rejected", async ({ page }) => {
+  await page.goto(server.issueLaunchUrl());
+  await page.getByRole("button", { name: /Release prep/ }).first().click();
+  await page.getByRole("button", { name: "Thêm tùy chọn" }).click();
+  await page.getByRole("button", { name: /Đính kèm/ }).locator('input[type="file"]').setInputFiles({
+    name: "retry-brief.md", mimeType: "text/markdown", buffer: Buffer.from("# Retry brief\n\nKeep this staged.\n")
+  });
+  await expect(page.getByText(/retry-brief\.md · /)).toBeVisible();
+  const composer = page.getByPlaceholder("Nhắn cho Piagent…");
+  await composer.fill("Preserve this rejected draft");
+  nextSendRejected = true;
+  await page.getByRole("button", { name: "Gửi" }).click();
+  await expect(composer).toHaveValue("Preserve this rejected draft");
+  await expect(page.getByText(/retry-brief\.md · /)).toBeVisible();
+  await expect(page.getByText(/Nội dung và file vẫn được giữ/)).toBeVisible();
+  await expect(page.locator("p").filter({ hasText: /^Preserve this rejected draft$/ })).toHaveCount(0);
+});
+
 test("keeps the session sidebar usable on a phone viewport", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(server.issueLaunchUrl());
@@ -516,6 +620,7 @@ test("drops a document onto the new chat composer and carries it into the create
   // stale value passes before this test has sent anything at all.
   lastSendPayload = null; dispatchedContent = null;
   await page.goto(server.issueLaunchUrl());
+  await expect(page.getByText("Gateway live", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Cuộc trò chuyện mới" }).click();
   await expect(page.getByRole("heading", { name: "Anh muốn làm gì?" })).toBeVisible();
 

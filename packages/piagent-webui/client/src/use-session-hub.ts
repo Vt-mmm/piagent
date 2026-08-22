@@ -4,13 +4,32 @@ import type { PiagentGatewayCapabilityHandshakeV1 } from "../../contracts/genera
 import type { Attachment } from "../../contracts/generated/attachment-v1.ts";
 import type { Catalog, SessionRow } from "../../contracts/generated/session-catalog-v1.ts";
 import type { PermissionMode, Receipt, Workflow } from "../../contracts/generated/session-command-v1.ts";
-import { readSessionCatalog } from "./api.ts";
+import { readSessionCatalog, readSessionLiveState } from "./api.ts";
 import { bootstrapBrowserSession } from "./bootstrap.ts";
+import { applyOperationSettlement, canonicalLiveStateSequence, connectionStateAfterCatalogRefresh, liveStateConfirmsAbort,
+  mergeTerminalOperationActivities, reconcileSessionLiveState,
+  reconcileTerminalOperationActivities, terminalOperationActivity, type LiveActivity, type LiveConversation,
+  type TerminalOperationActivity } from "./live-state-view-model.ts";
 import type { ConnectionState } from "./use-inspection.ts";
 
-export type LiveActivity = { toolCallRef: string; toolLabel: string; state: "running" | "completed" | "failed" };
-export type LiveConversation = { user: string; assistant: string; attachments: Attachment[]; activities: LiveActivity[];
-  operationRef: string | null; complete: boolean; error: string | null };
+export { applyOperationSettlement, canonicalLiveStateSequence, connectionStateAfterCatalogRefresh, liveStateConfirmsAbort,
+  mergeTerminalOperationActivities, reconcileSessionLiveState,
+  reconcileTerminalOperationActivities, terminalOperationActivity };
+export type { LiveActivity, LiveConversation, TerminalOperationActivity };
+
+type GatewayCursor = { gatewayInstanceRef: string; sequence: number };
+const GATEWAY_CURSOR_KEY = "piagent-gateway-event-cursor-v1";
+const COMMAND_RESPONSE_TIMEOUT_MS = 30_000;
+const CANONICAL_RESYNC_CLOSE_CODE = 4_001;
+
+export function parseGatewayCursor(raw: string | null, gatewayInstanceRef: string): number | null {
+  if (!raw) return null;
+  try {
+    const value = JSON.parse(raw) as Partial<GatewayCursor>;
+    return value.gatewayInstanceRef === gatewayInstanceRef && Number.isSafeInteger(value.sequence) && Number(value.sequence) >= 0
+      ? Number(value.sequence) : null;
+  } catch { return null; }
+}
 
 function opaque(prefix: string): string { return `${prefix}_${crypto.randomUUID().replaceAll("-", "")}`; }
 
@@ -24,12 +43,14 @@ export function useSessionHub(): {
   capabilities?: PiagentGatewayCapabilityHandshakeV1;
   connection: ConnectionState;
   live: Readonly<Record<string, LiveConversation>>;
+  terminalActivities: Readonly<Record<string, TerminalOperationActivity[]>>;
   refresh(): Promise<Catalog | undefined>;
   create(options: { projectRef: string; placeRef: string; modelRef: string | null; thinkingLevel: string; message: string;
     workflow: Workflow; permissionMode: PermissionMode | null; messageRequestId?: string; deferInitialMessage?: boolean }): Promise<Receipt>;
   send(session: SessionRow, message: string, attachment?: { messageRequestId: string; attachmentRefs: string[]; attachments?: Attachment[];
     workflow?: Workflow }): Promise<Receipt>;
   abort(session: SessionRow): Promise<Receipt>;
+  restart(session: SessionRow): Promise<Receipt>;
   setModel(session: SessionRow, modelRef: string): Promise<Receipt>;
   setThinking(session: SessionRow, thinkingLevel: string): Promise<Receipt>;
   setPermission(session: SessionRow, permissionMode: "read-only" | "workspace-write" | "trusted-full-access"): Promise<Receipt>;
@@ -43,28 +64,74 @@ export function useSessionHub(): {
   const [capabilities, setCapabilities] = useState<PiagentGatewayCapabilityHandshakeV1>();
   const [connection, setConnection] = useState<ConnectionState>("connecting");
   const [live, setLive] = useState<Record<string, LiveConversation>>({});
-  const catalogRef = useRef<Catalog | undefined>(undefined), socketRef = useRef<WebSocket | null>(null), sequenceRef = useRef(0);
+  const [terminalActivities, setTerminalActivities] = useState<Record<string, TerminalOperationActivity[]>>({});
+  const catalogRef = useRef<Catalog | undefined>(undefined), socketRef = useRef<WebSocket | null>(null), sequenceRef = useRef<number | null>(null);
+  const gatewayInstanceRef = useRef<string | null>(null);
+  const canonicalRefreshRequiredRef = useRef(true);
   const refreshStartedRef = useRef(0), refreshAppliedRef = useRef(0);
-  const pendingRef = useRef(new Map<string, { resolve(value: Receipt): void; reject(error: Error): void }>());
-  const refresh = useCallback(async () => {
+  const pendingRef = useRef(new Map<string, { resolve(value: Receipt): void; reject(error: Error): void; timeout: number }>());
+  const persistCursor = useCallback((gatewayRef: string, sequence: number | null) => {
+    if (sequence === null) return;
+    try { window.sessionStorage.setItem(GATEWAY_CURSOR_KEY, JSON.stringify({ gatewayInstanceRef: gatewayRef, sequence })); }
+    catch { /* Cursor persistence is an optimization; live-state remains canonical. */ }
+  }, []);
+  const refresh = useCallback(async (options: { requireLiveState?: boolean } = {}) => {
     const refreshSequence = ++refreshStartedRef.current;
     try {
-      const value = await readSessionCatalog();
+      const [value, liveState] = await Promise.all([readSessionCatalog(), readSessionLiveState().catch(() => undefined)]);
+      const canonicalSequence = canonicalLiveStateSequence(liveState, value.gatewayInstanceRef);
+      let canonicalApplied = false;
       if (refreshSequence >= refreshAppliedRef.current) {
-        refreshAppliedRef.current = refreshSequence; catalogRef.current = value; setCatalog(value); setConnection("connected");
+        refreshAppliedRef.current = refreshSequence; catalogRef.current = value; setCatalog(value);
+        const previousGateway = gatewayInstanceRef.current;
+        if (previousGateway !== null && previousGateway !== value.gatewayInstanceRef) canonicalRefreshRequiredRef.current = true;
+        gatewayInstanceRef.current = value.gatewayInstanceRef;
+        const canonicalRequired = options.requireLiveState || canonicalRefreshRequiredRef.current;
+        // A live-state sequence is a bootstrap/resync cursor, never a shortcut
+        // over frames already queued on an open socket. Advancing it during an
+        // ordinary catalog refresh could skip the terminal settlement outcome.
+        const socketOpen = socketRef.current?.readyState === WebSocket.OPEN;
+        setConnection(connectionStateAfterCatalogRefresh(socketOpen, canonicalRequired));
+        if (!socketOpen && liveState && canonicalSequence !== null) {
+          sequenceRef.current = canonicalSequence; persistCursor(value.gatewayInstanceRef, canonicalSequence);
+          setLive((current) => reconcileSessionLiveState(current, liveState));
+          setTerminalActivities(reconcileTerminalOperationActivities(liveState));
+          canonicalRefreshRequiredRef.current = false;
+          canonicalApplied = true;
+        } else if (previousGateway !== value.gatewayInstanceRef) {
+          // Terminal Activity is volatile to one Gateway epoch. Never carry an
+          // old outcome into a restarted Gateway that cannot prove it.
+          setTerminalActivities({});
+          if (canonicalRequired) sequenceRef.current = null;
+          else {
+            let stored: string | null = null;
+            try { stored = window.sessionStorage.getItem(GATEWAY_CURSOR_KEY); } catch { /* unavailable storage */ }
+            sequenceRef.current = parseGatewayCursor(stored, value.gatewayInstanceRef);
+          }
+        }
       }
+      if (options.requireLiveState && !canonicalApplied) return undefined;
       return catalogRef.current ?? value;
     } catch { setConnection("reconnecting"); return undefined; }
-  }, []);
+  }, [persistCursor]);
 
   const request = useCallback((command: unknown): Promise<Receipt> => {
     const socket = socketRef.current;
     if (!socket || socket.readyState !== WebSocket.OPEN) return Promise.reject(new Error("gateway-not-connected"));
     const requestId = opaque("request");
     return new Promise((resolve, reject) => {
-      pendingRef.current.set(requestId, { resolve, reject });
-      socket.send(JSON.stringify({ schemaVersion: 1, version: "piagent-gateway-protocol-v1", messageType: "request",
-        requestId, method: "sessions.command", params: { command } }));
+      const timeout = window.setTimeout(() => {
+        if (!pendingRef.current.delete(requestId)) return;
+        reject(new Error("gateway-command-response-timeout"));
+      }, COMMAND_RESPONSE_TIMEOUT_MS);
+      pendingRef.current.set(requestId, { resolve, reject, timeout });
+      try {
+        socket.send(JSON.stringify({ schemaVersion: 1, version: "piagent-gateway-protocol-v1", messageType: "request",
+          requestId, method: "sessions.command", params: { command } }));
+      } catch (error) {
+        window.clearTimeout(timeout); pendingRef.current.delete(requestId);
+        reject(error instanceof Error ? error : new Error("gateway-request-failed"));
+      }
     });
   }, []);
 
@@ -92,8 +159,12 @@ export function useSessionHub(): {
     }
     const knownUncertainSession = receipt.phase === "uncertain" && Boolean(receipt.sessionRef);
     if ((!knownUncertainSession && receipt.phase !== "settled") || !receipt.sessionRef) throw new Error(receipt.error?.code ?? receipt.resultCode);
-    if (receipt.phase === "settled" && !options.deferInitialMessage) setLive((value) => ({ ...value, [receipt.sessionRef!]: { ...(value[receipt.sessionRef!]
-      ?? { assistant: "", attachments: [], activities: [], complete: false, error: null }), user: message, operationRef: receipt.operationRef } }));
+    if (receipt.phase === "settled" && !options.deferInitialMessage) setLive((value) => {
+      const existing = value[receipt.sessionRef!];
+      return { ...value, [receipt.sessionRef!]: { ...(existing
+        ?? { assistant: "", attachments: [], activities: [], complete: false, error: null }), user: message,
+        operationRef: receipt.operationRef, abortable: existing?.complete ? false : Boolean(receipt.operationRef) } };
+    });
     await refresh(); return receipt;
   }, [refresh, request]);
 
@@ -107,8 +178,6 @@ export function useSessionHub(): {
     const text = message.trim(); if (!text) throw new Error("message-empty");
     const messageRequestId = attachment?.messageRequestId ?? opaque("message");
     const attachmentRefs = attachment?.attachmentRefs ?? [];
-    setLive((value) => ({ ...value, [session.sessionRef]: { user: text, assistant: "", attachments: attachment?.attachments ?? [], activities: [],
-      operationRef: null, complete: false, error: null } }));
     try {
       const submit = (snapshot: Catalog) => {
         const exact = snapshot.sessions.find((item) => item.sessionRef === session.sessionRef);
@@ -126,29 +195,75 @@ export function useSessionHub(): {
         const latest = await refresh();
         if (latest?.catalogRevision) receipt = await submit(latest);
       }
-      setLive((value) => ({ ...value, [session.sessionRef]: { ...(value[session.sessionRef] ?? { user: text, assistant: "", attachments: [], activities: [], complete: false, error: null }),
-        operationRef: receipt.operationRef } }));
       if (receipt.phase !== "settled") throw new Error(receipt.error?.code ?? receipt.resultCode);
+      // Only an admitted operation may enter the transcript. Runtime events can
+      // arrive before the receipt; merge the user message into that exact live
+      // operation without showing rejected/unsent input optimistically.
+      setLive((value) => {
+        const existing = value[session.sessionRef];
+        return { ...value, [session.sessionRef]: { ...(existing ?? { assistant: "", activities: [], complete: false,
+          error: null }), user: text, attachments: attachment?.attachments ?? [], operationRef: receipt.operationRef,
+          abortable: existing?.complete ? false : Boolean(receipt.operationRef) } };
+      });
       void refresh(); return receipt;
-    } catch (error) {
-      setLive((value) => ({ ...value, [session.sessionRef]: { ...(value[session.sessionRef] ?? { user: text, assistant: "", attachments: [], activities: [], operationRef: null, complete: false }),
-        error: error instanceof Error ? error.message : "session-send-failed" } }));
-      throw error;
-    }
+    } catch (error) { throw error; }
   }, [refresh, request]);
 
   const abort = useCallback(async (session: SessionRow) => {
     const current = catalogRef.current, operationRef = live[session.sessionRef]?.operationRef;
     const exact = current?.sessions.find((item) => item.sessionRef === session.sessionRef);
-    if (!current?.catalogRevision || !exact || !operationRef) throw new Error("operation-unavailable");
-    const now = new Date(), receipt = await request({ schemaVersion: 1, version: "piagent-session-command-v1", messageType: "command",
-      commandId: opaque("command"), idempotencyKey: opaque("idempotency"), action: "session.abort", requestedAt: now.toISOString(),
-      expiresAt: new Date(now.getTime() + 5 * 60_000).toISOString(), sessionRef: session.sessionRef,
-      expectedCatalogRevision: current.catalogRevision, expectedSessionRevision: exact.sessionRevision,
-      payload: { operationRef, clearQueued: true } });
+    if (!current?.catalogRevision || !exact || !operationRef || live[session.sessionRef]?.abortable === false) throw new Error("operation-unavailable");
+    const submit = (snapshot: Catalog) => {
+      const row = snapshot.sessions.find((item) => item.sessionRef === session.sessionRef);
+      if (!snapshot.catalogRevision || !row) throw new Error("operation-unavailable");
+      const now = new Date();
+      return request({ schemaVersion: 1, version: "piagent-session-command-v1", messageType: "command",
+        commandId: opaque("command"), idempotencyKey: opaque("idempotency"), action: "session.abort", requestedAt: now.toISOString(),
+        expiresAt: new Date(now.getTime() + 5 * 60_000).toISOString(), sessionRef: session.sessionRef,
+        expectedCatalogRevision: snapshot.catalogRevision, expectedSessionRevision: row.sessionRevision,
+        payload: { operationRef, clearQueued: true } });
+    };
+    let receipt = await submit(current);
+    if (revisionStale(receipt)) {
+      const [latest, liveState] = await Promise.all([refresh(), readSessionLiveState().catch(() => undefined)]);
+      // One stale-revision retry is safe only when the canonical volatile model
+      // still proves this exact operation is active and abortable.
+      if (!latest || !liveStateConfirmsAbort(liveState, latest.gatewayInstanceRef, session.sessionRef, operationRef)) {
+        throw new Error("operation-unavailable");
+      }
+      receipt = await submit(latest);
+    }
     if (receipt.phase !== "settled") throw new Error(receipt.error?.code ?? receipt.resultCode);
     void refresh(); return receipt;
   }, [live, refresh, request]);
+
+  const restart = useCallback(async (session: SessionRow) => {
+    const invoke = async (action: "session.release" | "session.acquire"): Promise<Receipt> => {
+      const current = await refresh(), exact = current?.sessions.find((item) => item.sessionRef === session.sessionRef);
+      if (!current?.catalogRevision || !exact) throw new Error("session-unavailable");
+      const now = new Date(), receipt = await request({ schemaVersion: 1, version: "piagent-session-command-v1", messageType: "command",
+        commandId: opaque("command"), idempotencyKey: opaque("idempotency"), action, requestedAt: now.toISOString(),
+        expiresAt: new Date(now.getTime() + 5 * 60_000).toISOString(), sessionRef: session.sessionRef,
+        expectedCatalogRevision: current.catalogRevision, expectedSessionRevision: exact.sessionRevision, payload: {} });
+      if (receipt.phase !== "settled") throw new Error(receipt.error?.code ?? receipt.resultCode);
+      return receipt;
+    };
+    setLive((current) => ({ ...current, [session.sessionRef]: { ...(current[session.sessionRef]
+      ?? { user: "", assistant: "", attachments: [], activities: [], operationRef: null, complete: true, error: null }), runtimeRecovery: "restarting" } }));
+    try {
+      const current = await refresh(), exact = current?.sessions.find((item) => item.sessionRef === session.sessionRef);
+      if (!exact) throw new Error("session-unavailable");
+      if (exact.state === "gateway-owned") await invoke("session.release");
+      const receipt = await invoke("session.acquire");
+      setLive((value) => ({ ...value, [session.sessionRef]: { ...(value[session.sessionRef]
+        ?? { user: "", assistant: "", attachments: [], activities: [], operationRef: null, complete: true, error: null }), runtimeRecovery: "recovered" } }));
+      await refresh(); return receipt;
+    } catch (error) {
+      setLive((value) => ({ ...value, [session.sessionRef]: { ...(value[session.sessionRef]
+        ?? { user: "", assistant: "", attachments: [], activities: [], operationRef: null, complete: true, error: null }), runtimeRecovery: "failed" } }));
+      throw error;
+    }
+  }, [refresh, request]);
 
   const setSessionOption = useCallback(async (session: SessionRow, action: "session.set-model" | "session.set-thinking" | "session.set-permission",
     payload: { modelRef: string } | { thinkingLevel: string } | { permissionMode: "read-only" | "workspace-write" | "trusted-full-access" }) => {
@@ -184,7 +299,7 @@ export function useSessionHub(): {
   const fork = useCallback((session: SessionRow, title: string | null) => mutateSession(session, "session.fork", { entryRef: null, title }), [mutateSession]);
 
   useEffect(() => {
-    let stopped = false, reconnectTimer: number | undefined, attempt = 0;
+    let stopped = false, reconnectTimer: number | undefined, attempt = 0, canonicalResync = false;
     const clientRef = (() => {
       try {
         const stored = window.localStorage.getItem("piagent-gateway-client-ref");
@@ -205,59 +320,135 @@ export function useSessionHub(): {
         let value: unknown; try { value = JSON.parse(String(message.data)); } catch { socket.close(1007, "invalid-json"); return; }
         if (!value || typeof value !== "object") { socket.close(1008, "invalid-frame"); return; }
         const frame = value as Record<string, any>;
-        if (frame.messageType === "hello") { window.clearTimeout(helloTimeout); attempt = 0; setCapabilities(frame.capabilities); setConnection("connected"); return; }
+        if (frame.messageType === "hello") {
+          window.clearTimeout(helloTimeout);
+          const helloGateway = typeof frame.capabilities?.gatewayInstanceRef === "string" ? frame.capabilities.gatewayInstanceRef : null;
+          if (!helloGateway || gatewayInstanceRef.current && helloGateway !== gatewayInstanceRef.current) {
+            sequenceRef.current = null; canonicalRefreshRequiredRef.current = true;
+            canonicalResync = true; socket.close(CANONICAL_RESYNC_CLOSE_CODE, "gateway-epoch-changed"); return;
+          }
+          gatewayInstanceRef.current = helloGateway; attempt = 0; setCapabilities(frame.capabilities); setConnection("connected"); return;
+        }
         if (frame.messageType === "response") {
           const pending = pendingRef.current.get(String(frame.requestId)); if (!pending) return;
-          pendingRef.current.delete(String(frame.requestId));
+          pendingRef.current.delete(String(frame.requestId)); window.clearTimeout(pending.timeout);
           if (frame.ok === true && frame.result) pending.resolve(frame.result as Receipt);
           else pending.reject(new Error(String(frame.error?.code ?? "gateway-request-failed")));
           return;
         }
         if (frame.messageType !== "event" || !Number.isSafeInteger(frame.sequence)) return;
-        sequenceRef.current = Math.max(sequenceRef.current, Number(frame.sequence));
         const payload = frame.payload as Record<string, any>;
+        if (frame.kind === "resync.required") {
+          canonicalRefreshRequiredRef.current = true;
+          canonicalResync = true; socket.close(CANONICAL_RESYNC_CLOSE_CODE, "canonical-resync-required"); return;
+        }
+        const incoming = Number(frame.sequence), previous = sequenceRef.current;
+        if (previous !== null && incoming <= previous) return;
+        if (previous !== null && incoming !== previous + 1) {
+          canonicalRefreshRequiredRef.current = true;
+          canonicalResync = true; socket.close(CANONICAL_RESYNC_CLOSE_CODE, "gateway-event-sequence-gap"); return;
+        }
+        sequenceRef.current = incoming;
+        if (gatewayInstanceRef.current) persistCursor(gatewayInstanceRef.current, incoming);
         if (frame.kind === "message.delta" && typeof payload?.sessionRef === "string" && typeof payload.delta === "string") {
           setLive((current) => ({ ...current, [payload.sessionRef]: { ...(current[payload.sessionRef]
             ?? { user: "", assistant: "", attachments: [], activities: [], complete: false, error: null }), operationRef: payload.operationRef,
+            abortable: true,
             assistant: `${current[payload.sessionRef]?.assistant ?? ""}${payload.delta}` } }));
         }
         if (["tool.started", "tool.completed"].includes(String(frame.kind)) && typeof payload?.sessionRef === "string"
           && typeof payload.toolCallRef === "string" && typeof payload.toolLabel === "string") {
           setLive((current) => {
             const existing = current[payload.sessionRef] ?? { user: "", assistant: "", attachments: [], activities: [],
-              operationRef: payload.operationRef ?? null, complete: false, error: null };
+              operationRef: payload.operationRef ?? null, abortable: true, complete: false, error: null, runtimeRecovery: null };
             const state: LiveActivity["state"] = frame.kind === "tool.started" ? "running" : payload.isError === true ? "failed" : "completed";
             const activities = [...existing.activities.filter((item) => item.toolCallRef !== payload.toolCallRef),
-              { toolCallRef: payload.toolCallRef, toolLabel: payload.toolLabel, state }].slice(-16);
-            return { ...current, [payload.sessionRef]: { ...existing, operationRef: payload.operationRef ?? existing.operationRef, activities } };
+              { toolCallRef: payload.toolCallRef, toolLabel: payload.toolLabel, state, reasonCode: payload.reasonCode ?? null }].slice(-16);
+            const runtimeRecovery = payload.reasonCode === "runtime-restart-required" ? "required" : existing.runtimeRecovery;
+            return { ...current, [payload.sessionRef]: { ...existing, operationRef: payload.operationRef ?? existing.operationRef, activities, runtimeRecovery } };
+          });
+        }
+        if (frame.kind === "runtime.changed" && typeof payload?.sessionRef === "string") {
+          setLive((current) => {
+            const active = ["running", "paused", "waiting-approval"].includes(String(payload.liveState));
+            const existing = current[payload.sessionRef] ?? (active && typeof payload.operationRef === "string"
+              ? { user: "", assistant: "", attachments: [], activities: [], operationRef: payload.operationRef,
+                abortable: true, complete: false, settlement: null, error: null, runtimeRecovery: null }
+              : null);
+            if (!existing) return current;
+            const runtimeRecovery = payload.reasonCode === "runtime-restart-required" ? "restarting"
+              : payload.reasonCode === "runtime-restart-failed" ? "failed"
+                : ["required", "restarting"].includes(String(existing.runtimeRecovery)) && payload.liveState === "idle" ? "recovered"
+                  : existing.runtimeRecovery;
+            if (active) {
+              return { ...current, [payload.sessionRef]: { ...existing, operationRef: payload.operationRef ?? existing.operationRef,
+                abortable: true, complete: false, settlement: null, runtimeRecovery } };
+            }
+            if (!existing.complete && payload.operationRef === null) {
+              return { ...current, [payload.sessionRef]: { ...existing, assistant: "", abortable: false, complete: true, settlement: "unknown",
+                error: payload.reasonCode ?? "operation-settlement-unknown", runtimeRecovery } };
+            }
+            return runtimeRecovery === existing.runtimeRecovery ? current
+              : { ...current, [payload.sessionRef]: { ...existing, runtimeRecovery } };
           });
         }
         if (frame.kind === "message.completed" && typeof payload?.sessionRef === "string") {
           setLive((current) => ({ ...current, [payload.sessionRef]: { ...(current[payload.sessionRef]
-            ?? { user: "", assistant: "", attachments: [], activities: [], operationRef: payload.operationRef, error: null }), complete: true } }));
+            ?? { user: "", assistant: "", attachments: [], activities: [], operationRef: payload.operationRef, error: null }),
+            operationRef: payload.operationRef, abortable: false, complete: true, settlement: "completed", error: null } }));
         }
-        if (["catalog.changed", "session.changed", "runtime.changed", "message.completed", "resync.required"].includes(String(frame.kind))) void refresh();
+        if (frame.kind === "operation.settled" && typeof payload?.sessionRef === "string"
+          && typeof payload.operationRef === "string") {
+          setLive((current) => {
+            const existing = current[payload.sessionRef] ?? { user: "", assistant: "", attachments: [], activities: [],
+              operationRef: payload.operationRef, complete: false, error: null, runtimeRecovery: null };
+            if (existing.operationRef && existing.operationRef !== payload.operationRef) return current;
+            return { ...current, [payload.sessionRef]: applyOperationSettlement(existing, {
+              operationRef: payload.operationRef, settlement: payload.settlement, reasonCode: payload.reasonCode
+            }) };
+          });
+          const terminal = terminalOperationActivity({ operationRef: payload.operationRef, settlement: payload.settlement,
+            reasonCode: payload.reasonCode, settledAt: frame.generatedAt, sequence: incoming });
+          if (terminal) setTerminalActivities((current) => ({ ...current,
+            [payload.sessionRef]: mergeTerminalOperationActivities(current[payload.sessionRef] ?? [], [terminal]) }));
+        }
+        if (["catalog.changed", "session.changed", "runtime.changed", "message.completed", "operation.settled"].includes(String(frame.kind))) void refresh();
       });
       socket.addEventListener("close", () => {
-        window.clearTimeout(helloTimeout); if (stopped) return; setConnection("reconnecting");
-        for (const pending of pendingRef.current.values()) pending.reject(new Error("gateway-connection-lost")); pendingRef.current.clear();
+        window.clearTimeout(helloTimeout);
+        for (const pending of pendingRef.current.values()) { window.clearTimeout(pending.timeout); pending.reject(new Error("gateway-connection-lost")); }
+        pendingRef.current.clear();
+        if (stopped) return; setConnection("reconnecting");
+        if (canonicalResync) {
+          canonicalResync = false;
+          void requireCanonicalAndConnect();
+          return;
+        }
         attempt += 1; reconnectTimer = window.setTimeout(connect, Math.min(5_000, 250 * 2 ** Math.min(attempt, 5)));
       });
       socket.addEventListener("error", () => { /* close owns reconnect */ });
     };
+    const requireCanonicalAndConnect = async () => {
+      if (stopped) return;
+      const value = await refresh({ requireLiveState: true });
+      if (stopped) return;
+      if (value) { attempt = 0; connect(); return; }
+      setConnection("reconnecting"); attempt += 1;
+      reconnectTimer = window.setTimeout(() => void requireCanonicalAndConnect(), Math.min(5_000, 250 * 2 ** Math.min(attempt, 5)));
+    };
     void (async () => {
       const bootstrap = await bootstrapBrowserSession(); if (stopped) return;
       if (bootstrap === "failed") { setConnection("failed"); return; }
-      const value = await readSessionCatalog().catch(() => undefined); if (stopped) return;
-      if (!value) { setConnection("failed"); return; }
-      catalogRef.current = value; setCatalog(value); connect();
+      await requireCanonicalAndConnect();
     })();
     const visible = () => { if (!stopped && document.visibilityState === "visible") void refresh(); };
     document.addEventListener("visibilitychange", visible);
-    return () => { stopped = true; if (reconnectTimer) window.clearTimeout(reconnectTimer); socketRef.current?.close(1000, "client-unmount");
+    return () => { stopped = true; if (reconnectTimer) window.clearTimeout(reconnectTimer);
+      for (const pending of pendingRef.current.values()) { window.clearTimeout(pending.timeout); pending.reject(new Error("gateway-client-unmounted")); }
+      pendingRef.current.clear(); socketRef.current?.close(1000, "client-unmount");
       document.removeEventListener("visibilitychange", visible); };
-  }, [refresh]);
+  }, [persistCursor, refresh]);
 
-  return { catalog, capabilities, connection, live, refresh, create, send, abort, setModel, setThinking, setPermission,
+  return { catalog, capabilities, connection, live, terminalActivities, refresh, create, send, abort, restart, setModel, setThinking, setPermission,
     rename, pin, archive, unarchive, fork };
 }

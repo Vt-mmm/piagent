@@ -1,11 +1,13 @@
 import { createHash } from "node:crypto";
 
 import { redactSensitiveText } from "../../piagent-core/extensions/redaction-core.js";
+import { hasVisibleText } from "../shared/text-visibility.ts";
 
 const MAX_ENTRIES = 50_000;
 const MAX_ITEMS = 200;
 const MAX_TEXT = 16_384;
-const ANSI = /\u001b(?:[@-_]|\[[0-?]*[ -/]*[@-~])/g;
+const ANSI = /\u001b(?:\[[0-?]*[ -/]*[@-~]|[@-_])/g;
+const COMPLETION_GATE = /^\[Piagent completion gate: (CONTINUING|NOT APPROVED)\]/i;
 
 type TranscriptIdentity = { projectRef: string; runtimeInstanceId: string; sessionRef: string; taskId: string | null; taskRunId: string | null;
   agentOperationId: null; toolCallId: null };
@@ -87,6 +89,21 @@ function assistantFailureReason(message: any): string | null {
   if (/(?:network|fetch failed|econn|timed? ?out|unavailable)/.test(detail)) return "provider-unavailable";
   return "provider-response-failed";
 }
+function assistantUnavailableReason(message: any, text: string, projectedToolCalls: TranscriptItem["toolCalls"]): string | null {
+  if (message?.role !== "assistant") return null;
+  const stopReason = String(message?.stopReason ?? "");
+  if (stopReason === "error") return assistantFailureReason(message) ?? "provider-response-failed";
+  if (stopReason === "aborted") return "assistant-message-aborted";
+  if (stopReason === "length") return "assistant-output-incomplete";
+  const gate = COMPLETION_GATE.exec(text.trimStart());
+  if (gate) return gate[1]?.toUpperCase() === "CONTINUING"
+    ? "assistant-completion-continuing" : "assistant-completion-not-approved";
+  if (projectedToolCalls.length > 0 || ["toolUse", "pending", "deferred"].includes(stopReason)) return "assistant-intermediate-output";
+  if (!stopReason) return "assistant-settlement-unknown";
+  if (stopReason && stopReason !== "stop") return "assistant-settlement-unknown";
+  if (!hasVisibleText(text)) return "assistant-message-empty";
+  return null;
+}
 function safeText(value: string): { full: string; preview: string; redacted: boolean; truncated: boolean } {
   const clean = value.replace(ANSI, "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, " ");
   const redaction = redactSensitiveText(clean);
@@ -129,17 +146,18 @@ function item(entry: any, identity: TranscriptIdentity): TranscriptItem | null {
   const itemRole = role(entry.message), recordedAt = timestamp(entry.timestamp ?? entry.message.timestamp);
   if (!itemRole || !recordedAt || typeof entry.id !== "string" || entry.id.length === 0) return null;
   const userProjection = userMessageProjection(entry.message);
+  const projectedToolCalls = toolCalls(entry.message, identity.sessionRef, itemRole);
   const content = itemRole === "tool-result" ? unavailableContent("tool-output-in-activity-preview") : (() => {
     const projected = safeText(itemRole === "user" ? userProjection.text : messageText(entry.message));
-    const failureReason = projected.full.length === 0 ? assistantFailureReason(entry.message) : null;
-    if (failureReason) return unavailableContent(failureReason);
+    const unavailableReason = assistantUnavailableReason(entry.message, projected.full, projectedToolCalls);
+    if (unavailableReason) return unavailableContent(unavailableReason);
     return { state: projected.redacted ? "redacted" as const : "available" as const, text: projected.preview,
       textChars: Math.min(1_000_000_000, projected.full.length), digest: `sha256:${hash(projected.full)}`, truncated: projected.truncated,
       redacted: projected.redacted, imageCount: imageCount(entry.message), reasonCode: projected.redacted ? "sensitive-values-redacted" as const : null };
   })();
   return { messageRef: opaque("message", [identity.sessionRef, entry.id]), parentMessageRef: null, role: itemRole, recordedAt,
     agentOperationId: null, turnIndex: null, content, ...(userProjection.attachments.length ? { attachments: userProjection.attachments } : {}),
-    toolCalls: toolCalls(entry.message, identity.sessionRef, itemRole) };
+    toolCalls: projectedToolCalls };
 }
 function unavailable(input: TranscriptProjectionInput, reasonCode: string, limit: number): TranscriptDocument {
   return { schemaVersion: 1, version: "piagent-webui-transcript-v1", generatedAt: input.generatedAt ?? new Date().toISOString(),

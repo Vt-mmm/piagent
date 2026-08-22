@@ -11,3 +11,5 @@ Required invariants:
 - Never mutate the input. Every job appears exactly once, or the function throws.
 
 The hidden cases include dependencies that unlock across waves, weights that temporarily do not fit, punctuation in IDs, cycles, and three-tenant fairness. Add tests if useful.
+
+Run `npm test` when complete; it includes a fixed public happy-path contract for this scenario.

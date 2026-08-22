@@ -19,20 +19,24 @@ import useMediaQuery from "@mui/material/useMediaQuery";
 import { useTheme } from "@mui/material/styles";
 
 import type { PiagentWebUICanonicalSnapshotV1 } from "../../contracts/generated/snapshot-v1.ts";
+import { ActivityPanel } from "./ActivityPanel.tsx";
 import { SessionAgentWorkspace, type SessionWorkspaceId } from "./SessionAgentWorkspace.tsx";
 import { localize, useUiPreferences } from "./ui-preferences.tsx";
+import type { TerminalOperationActivity } from "./live-state-view-model.ts";
 
-const INSPECTOR_WIDTH = "min(54vw, 980px)";
+const INSPECTOR_WIDTH = "min(44vw, 860px)";
 
-export function SessionInspectorDrawer({ open, active, snapshot, state, sessionRef, onClose, onActive, refresh }: { open: boolean;
+export function SessionInspectorDrawer({ open, active, snapshot, state, sessionRef, terminalActivities, onClose, onActive, refresh }: { open: boolean;
   active: SessionWorkspaceId; snapshot?: PiagentWebUICanonicalSnapshotV1; state: "idle" | "loading" | "ready" | "error";
-  sessionRef?: string; onClose(): void; onActive(value: SessionWorkspaceId): void;
+  sessionRef?: string; terminalActivities?: readonly TerminalOperationActivity[]; onClose(): void; onActive(value: SessionWorkspaceId): void;
   refresh(): Promise<PiagentWebUICanonicalSnapshotV1 | undefined> }) {
   const { locale } = useUiPreferences();
-  const theme = useTheme(), desktop = useMediaQuery(theme.breakpoints.up("lg"));
+  // Keep the inspector modal until there is enough room for the navigation,
+  // conversation and inspector to coexist without collapsing the app bar.
+  const theme = useTheme(), desktop = useMediaQuery(theme.breakpoints.up("xl"));
   const sourceCount = snapshot?.sourceChanges.workingTree.counts.files ?? 0;
   return <Drawer anchor="right" variant={desktop ? "persistent" : "temporary"} open={open} onClose={onClose}
-    sx={{ "& .MuiDrawer-paper": { width: { xs: "100%", sm: "min(88vw, 980px)", lg: INSPECTOR_WIDTH }, bgcolor: "background.default" } }}>
+    sx={{ "& .MuiDrawer-paper": { width: { xs: "100%", sm: "min(88vw, 980px)", xl: INSPECTOR_WIDTH }, bgcolor: "background.default" } }}>
     <Box sx={{ position: "sticky", top: 0, zIndex: 3, bgcolor: "background.paper", borderBottom: 1, borderColor: "divider" }}>
       <Stack direction="row" sx={{ minHeight: 64, px: { xs: 1.5, md: 2 }, alignItems: "center", gap: 1 }}><Box sx={{ flex: 1, minWidth: 0 }}>
         <Typography sx={{ fontWeight: 820 }}>{localize(locale, "Agent Inspector", "Agent Inspector")}</Typography>
@@ -49,11 +53,14 @@ export function SessionInspectorDrawer({ open, active, snapshot, state, sessionR
     </Box>
     {state === "loading" ? <Stack sx={{ alignItems: "center", py: 12 }} spacing={1.5}><CircularProgress size={25} /><Typography color="text.secondary">
       {localize(locale, "Đang dựng Inspector từ session và Git…", "Building the Inspector from the session and Git…")}</Typography></Stack>
-      : state === "error" || !snapshot || !sessionRef ? <Stack sx={{ p: 3, maxWidth: 720 }} spacing={2}><Alert severity="warning">{localize(locale,
+      : (state === "error" || !snapshot) && sessionRef && active === "activity" && terminalActivities?.length
+        ? <Box sx={{ p: { xs: 1.5, sm: 2.5, xl: 3 }, maxWidth: 1500, mx: "auto", width: "100%" }}>
+          <ActivityPanel sessionRef={sessionRef} terminalActivities={terminalActivities} /></Box>
+        : state === "error" || !snapshot || !sessionRef ? <Stack sx={{ p: 3, maxWidth: 720 }} spacing={2}><Alert severity="warning">{localize(locale,
         "Không thể dựng Inspector cho session này. Chat vẫn an toàn; hãy kiểm tra project còn tồn tại và thử làm mới.",
         "The Inspector could not be built for this session. Chat remains safe; check that the project still exists and refresh.")}</Alert>
         <Button variant="outlined" onClick={() => void refresh()}>{localize(locale, "Thử lại", "Try again")}</Button></Stack>
         : <Box sx={{ p: active === "source" ? { xs: 1, md: 1.5 } : { xs: 1.5, sm: 2.5, xl: 3 }, maxWidth: active === "source" ? "none" : 1500, mx: "auto", width: "100%" }}>
-          <SessionAgentWorkspace active={active} snapshot={snapshot} sessionRef={sessionRef} refresh={refresh} /></Box>}
+          <SessionAgentWorkspace active={active} snapshot={snapshot} sessionRef={sessionRef} terminalActivities={terminalActivities} refresh={refresh} /></Box>}
   </Drawer>;
 }

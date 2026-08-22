@@ -202,14 +202,29 @@ function emptyTotals() {
   };
 }
 
-function addTotals(target, usage) {
-  target.input += numberValue(usage.input);
-  target.output += numberValue(usage.output);
-  target.cacheRead += numberValue(usage.cacheRead);
-  target.cacheWrite += numberValue(usage.cacheWrite);
-  target.reasoning += numberValue(usage.reasoning);
-  target.total += numberValue(usage.totalTokens)
-    || numberValue(usage.input) + numberValue(usage.output) + numberValue(usage.cacheRead) + numberValue(usage.cacheWrite);
+function exactToken(raw, label) {
+  if (!Number.isSafeInteger(raw) || raw < 0) throw new Error(`${label} must be a non-negative safe integer`);
+  return raw;
+}
+
+function addTotals(target, usage, { strict = false, label = "usage" } = {}) {
+  const values = strict ? {
+    input: exactToken(usage?.input, `${label}.input`),
+    output: exactToken(usage?.output, `${label}.output`),
+    cacheRead: exactToken(usage?.cacheRead, `${label}.cacheRead`),
+    cacheWrite: exactToken(usage?.cacheWrite, `${label}.cacheWrite`),
+    reasoning: exactToken(usage?.reasoning, `${label}.reasoning`),
+    total: exactToken(usage?.totalTokens, `${label}.totalTokens`)
+  } : {
+    input: numberValue(usage.input), output: numberValue(usage.output), cacheRead: numberValue(usage.cacheRead),
+    cacheWrite: numberValue(usage.cacheWrite), reasoning: numberValue(usage.reasoning),
+    total: numberValue(usage.totalTokens) || numberValue(usage.input) + numberValue(usage.output) + numberValue(usage.cacheRead) + numberValue(usage.cacheWrite)
+  };
+  if (strict && values.total !== values.input + values.output + values.cacheRead + values.cacheWrite) {
+    throw new Error(`${label}.totalTokens does not equal the reported token categories`);
+  }
+  if (strict && values.reasoning > values.output) throw new Error(`${label}.reasoning exceeds output`);
+  for (const field of ["input", "output", "cacheRead", "cacheWrite", "reasoning", "total"]) target[field] += values[field];
   const cost = usage.cost;
   target.cost += typeof cost === "object" && cost !== null
     ? numberValue(cost.total)
@@ -254,6 +269,7 @@ function summarizeSession(file, options) {
     messages: { user: 0, assistant: 0, toolCalls: 0, toolResults: 0, total: 0 },
     promptChars: 0,
     tokens: emptyTotals(),
+    usageIntegrity: { exact: options.strictUsage === true, source: "pi-session-jsonl", assistantMessages: 0, usageMessages: 0 },
     toolNames: {},
     sizeBytes: stat.size,
     mtime: stat.mtime
@@ -261,12 +277,13 @@ function summarizeSession(file, options) {
 
   let hasCountedActivity = false;
   const lines = fs.readFileSync(file, "utf8").split(/\n/);
-  for (const line of lines) {
+  for (const [lineIndex, line] of lines.entries()) {
     if (!line) continue;
     let entry;
     try {
       entry = JSON.parse(line);
     } catch {
+      if (options.strictUsage) throw new Error(`Pi session JSONL line ${lineIndex + 1} is not valid JSON`);
       continue;
     }
 
@@ -311,9 +328,16 @@ function summarizeSession(file, options) {
       summary.promptChars += extractTextLength(message.content);
     } else if (role === "assistant") {
       summary.messages.assistant += 1;
+      summary.usageIntegrity.assistantMessages += 1;
       if (message.provider && !summary.provider) summary.provider = String(message.provider);
       if (message.model && !summary.modelId) summary.modelId = String(message.model);
-      if (message.usage) addTotals(summary.tokens, message.usage);
+      if (options.strictUsage && (!message.usage || typeof message.usage !== "object" || Array.isArray(message.usage))) {
+        throw new Error(`Pi assistant message at line ${lineIndex + 1} is missing usage`);
+      }
+      if (message.usage) {
+        addTotals(summary.tokens, message.usage, { strict: options.strictUsage === true, label: `Pi session JSONL line ${lineIndex + 1} usage` });
+        summary.usageIntegrity.usageMessages += 1;
+      }
       if (Array.isArray(message.content)) {
         for (const block of message.content) {
           if (block?.type !== "toolCall") continue;
@@ -336,6 +360,9 @@ function summarizeSession(file, options) {
   if (!summary.countedLastTimestamp) summary.countedLastTimestamp = summary.lastTimestamp;
 
   if (!hasCountedActivity && (options.since || options.until)) return undefined;
+  if (options.strictUsage && summary.usageIntegrity.assistantMessages !== summary.usageIntegrity.usageMessages) {
+    throw new Error("Pi session JSONL usage coverage is incomplete");
+  }
   return summary;
 }
 

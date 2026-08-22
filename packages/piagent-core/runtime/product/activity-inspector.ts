@@ -3,6 +3,8 @@ import {
   buildWebUiInspectionProjection,
   type WebUiInspectionProjection
 } from "../inspection/webui-snapshot.ts";
+import { recoveredToolCalls } from "../inspection/activity-recovery.ts";
+import { handledToolFailure } from "../inspection/tool-failure-classification.ts";
 
 export const ACTIVITY_INSPECTOR_VERSION = "activity-inspector-v2" as const;
 
@@ -18,6 +20,7 @@ export type ActivityInspectorEvent = {
   command?: string;
   decision?: string;
   reason?: string;
+  reasonCode?: string;
   warningKind?: string;
   isError?: boolean;
   exitCode?: number;
@@ -46,13 +49,15 @@ function isTestPath(file: string): boolean { return /(^|\/)(?:test|tests|spec|__
 function failedToolResult(event: ActivityInspectorEvent): boolean { return event.isError === true || (typeof event.exitCode === "number" && event.exitCode !== 0); }
 
 function commandProjection(events: ActivityInspectorEvent[]) {
+  const recoveries = recoveredToolCalls(events);
   const calls = events.filter((event) => event.event === "tool_call" && ["bash", "shell", "exec"].includes(String(event.toolName)));
   const results = new Map(events.filter((event) => event.event === "tool_result").map((event) => [event.toolCallId, event]));
   const decisions = new Map(events.filter((event) => event.event === "tool_decision").map((event) => [event.toolCallId, event]));
   const entries = calls.map((call) => {
     const decision = decisions.get(call.toolCallId), result = results.get(call.toolCallId);
     const blocked = decision?.decision === "blocked";
-    const failed = !blocked && Boolean(result && failedToolResult(result));
+    const recovered = Boolean(call.toolCallId && recoveries.has(call.toolCallId));
+    const failed = !blocked && !recovered && !handledToolFailure(result?.reasonCode) && Boolean(result && failedToolResult(result));
     return { toolCallId: call.toolCallId ?? "unknown", command: call.command ?? "[redacted or unavailable]",
       status: blocked ? "blocked" : !result ? "running" : failed ? "failed" : "passed",
       exitCode: result?.exitCode ?? null, exitCodeExact: result?.exitCodeExact === true,
@@ -121,7 +126,7 @@ export async function buildActivityInspector(input: {
       phase: snapshot.session.operation.hostPhase.state === "known" && snapshot.session.operation.hostPhase.value !== "idle" ? snapshot.session.operation.hostPhase.value : null,
       outcome: snapshot.task?.outcome ?? "idle", running: snapshot.activity.running.length, current: input.current ?? [] },
     criteria: snapshot.task?.criteria ?? [], sourceChanges: snapshot.sourceChanges, files,
-    tools: { calls: calls.length, results: results.length, failed: results.filter(failedToolResult).length,
+    tools: { calls: calls.length, results: results.length, failed: results.filter((event) => failedToolResult(event) && !handledToolFailure(event.reasonCode)).length,
       blocked: events.filter((event) => event.event === "tool_decision" && event.decision === "blocked").length, byName,
       perToolTokens: null, perToolTokensReason: "Pi reports model usage by response/turn; built-in tool calls do not carry attributable model-token totals." },
     commands, safety,

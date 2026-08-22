@@ -9,7 +9,7 @@ Usage:
 Options:
   --preset <full|codex|claude>       Model families to enable (default: full = both)
   --default-model <provider/model[:thinking]>
-                                     Default model (default: openai-codex/gpt-5.5:high)
+                                     Default model (default: openai-codex/gpt-5.6-sol:high)
   --settings <path>                  Pi settings file (default: ~/.pi/agent/settings.json)
   --dry-run                          Print resulting settings JSON without writing
   -h, --help
@@ -30,7 +30,7 @@ USAGE
 }
 
 PRESET="full"
-DEFAULT_MODEL="openai-codex/gpt-5.5:high"
+DEFAULT_MODEL="openai-codex/gpt-5.6-sol:high"
 SETTINGS_PATH="${PI_CODING_AGENT_DIR:-"${HOME}/.pi/agent"}/settings.json"
 DRY_RUN=false
 
@@ -102,7 +102,8 @@ const codexModels = [
   "openai-codex/gpt-5.5:high",
   "openai-codex/gpt-5.6-luna:medium",
   "openai-codex/gpt-5.6-terra:high",
-  "openai-codex/gpt-5.6-sol:high"
+  "openai-codex/gpt-5.6-sol:high",
+  "openai-codex/*"
 ];
 
 const claudeModels = [
