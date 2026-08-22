@@ -4137,7 +4137,8 @@ export default function piagentGuard(pi: ExtensionAPI) {
       const snapshot = workingTreeSnapshot(ctx.cwd) as Record<string, string>;
       const resume = workingTreeSnapshotHasUnavailableEvidence(snapshot)
         ? { openRepair: false }
-        : { openRepair: taskAuthorityDecision(task, "CAP-13", "block").allowed && semanticRepairRuntime.resume({
+        : { openRepair: (taskAuthorityDecision(task, "CAP-13", "block").allowed
+          || taskAuthorityDecision(task, "CAP-12", "mutate").allowed) && semanticRepairRuntime.resume({
             cwd: ctx.cwd,
             task,
             sessionId: ctx.sessionManager.getSessionId(),
@@ -4227,7 +4228,10 @@ export default function piagentGuard(pi: ExtensionAPI) {
     completionProjection: completionTaskProjection,
     evaluateGate: (cwd, task, currentDigests, currentDigest) => {
       const gate = evaluateTaskGate(cwd, task, policy, { currentDigests, currentWorkingTreeDigest: currentDigest });
-      const repairBlock = taskAuthorityDecision(task, "CAP-13", "block").allowed ? semanticRepairRuntime.completionBlock(cwd, task.taskRunId) : undefined;
+      const repairBlock = (taskAuthorityDecision(task, "CAP-13", "block").allowed
+        || taskAuthorityDecision(task, "CAP-12", "mutate").allowed)
+        ? semanticRepairRuntime.completionBlock(cwd, task.taskRunId)
+        : undefined;
       return repairBlock ? { ...gate, decision: "fail", missing: [...new Set([...gate.missing, repairBlock])] } : gate;
     },
     writeTask,
@@ -4262,7 +4266,10 @@ export default function piagentGuard(pi: ExtensionAPI) {
     now: nowIso,
     completeSemanticRepair: (ctx, event, metadata) => {
       const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
-      return task && taskAuthorityDecision(task, "CAP-13", "mutate").allowed ? semanticRepairRuntime.complete(ctx, task, event, metadata) : undefined;
+      return task && (taskAuthorityDecision(task, "CAP-13", "mutate").allowed
+        || taskAuthorityDecision(task, "CAP-12", "mutate").allowed)
+        ? semanticRepairRuntime.complete(ctx, task, event, metadata)
+        : undefined;
     },
     syncTrajectory: (ctx, contextObserved) => {
       const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
@@ -4279,7 +4286,13 @@ export default function piagentGuard(pi: ExtensionAPI) {
       if (!["edit", "write", "apply_patch"].includes(event.toolName)) return;
       const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
       if (!task || task.trace.outcome !== "pending" || task.changeMode !== "source-change") return;
-      if (!taskAuthorityDecision(task, "CAP-13", "mutate").allowed) return;
+      const semanticRepairEnabled = taskAuthorityDecision(task, "CAP-13", "mutate").allowed;
+      const semanticRepairExactlyOff = !taskAuthorityDecision(task, "CAP-13", "observe").allowed;
+      const boundedRecoveryEnabled = autoRecoveryEnabled
+        && taskAuthorityDecision(task, "CAP-09", "block").allowed
+        && taskAuthorityDecision(task, "CAP-12", "mutate").allowed
+        && semanticRepairExactlyOff;
+      if (!semanticRepairEnabled && !boundedRecoveryEnabled) return;
       const phase = trajectoryRuntime.status(ctx.cwd, task.taskRunId);
       if (!phase.enforcementSafe || !["verify", "review"].includes(String(phase.phase))) return;
 
@@ -4291,11 +4304,37 @@ export default function piagentGuard(pi: ExtensionAPI) {
       const targets = taskMutationTargets(ctx.cwd, event.toolName, toolInput);
       const boundedInScopeMutation = targets.length > 0
         && targets.every((file) => taskScopeIncludesPath(task.scope, file));
+      const verifierCurrent = allVerifyCommandsPassCurrentTree(task, currentDigest);
 
-      if (phase.phase === "verify" && boundedInScopeMutation && semanticRepairRuntime.prepare({
+      if (phase.phase === "verify" && boundedInScopeMutation && semanticRepairEnabled && semanticRepairRuntime.prepare({
         ctx, task, event, currentDigest, currentDeltaPaths: expectedReviewPaths, targetPaths: targets,
-        verifierCurrent: allVerifyCommandsPassCurrentTree(task, currentDigest)
+        verifierCurrent
       })) return;
+
+      // A public verifier can pass before every explicit user criterion is
+      // covered. CAP-12 therefore reserves one exact structured call when the
+      // model catches its own omission in the same task/run/session. The call
+      // still traverses every normal authorization check; verify -> repair is
+      // committed only by the tool-result hook after a successful tree change.
+      if (phase.phase === "verify" && boundedRecoveryEnabled && verifierCurrent && boundedInScopeMutation) {
+        const authoredFileDigests = runtimeState.successfulModelMutationDigests(
+          { taskId: task.taskId, taskRunId: task.taskRunId, sessionId: task.sessionId },
+          currentSnapshot
+        );
+        if (semanticRepairRuntime.prepareBoundedRecovery({
+          ctx,
+          task,
+          event,
+          currentDigest,
+          currentDeltaPaths: expectedReviewPaths,
+          observedChangedPaths: task.observedChangedFiles,
+          authoredFileDigests,
+          targetPaths: targets,
+          verifierCurrent
+        })) return;
+      }
+
+      if (!semanticRepairEnabled) return;
 
       let checkpoint = runtimeState.performanceReviewCheckpoint(task.taskRunId);
       const checkpointReady = checkpoint?.workingTreeDigest === currentDigest

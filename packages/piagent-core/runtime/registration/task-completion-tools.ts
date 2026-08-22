@@ -326,7 +326,10 @@ export function registerTaskCompletionTools(pi: ExtensionAPI, deps: Record<strin
         currentDigests: finalFileDigests,
         currentWorkingTreeDigest: workingTreeEvidenceDigest(finalFileDigests)
       });
-      const semanticBlock = taskAuthorityDecision(nextTask, "CAP-13", "block").allowed ? semanticRepairCompletionBlock?.(ctx.cwd, nextTask.taskRunId) : undefined;
+      const semanticBlock = (taskAuthorityDecision(nextTask, "CAP-13", "block").allowed
+        || taskAuthorityDecision(nextTask, "CAP-12", "mutate").allowed)
+        ? semanticRepairCompletionBlock?.(ctx.cwd, nextTask.taskRunId)
+        : undefined;
       if (semanticBlock) gate = { ...gate, decision: "fail", missing: [...new Set([...gate.missing, semanticBlock])] };
       if (params.outcome === "completed" && (semanticBlock || (runtime.finalGate === "enforce" && gate.decision === "fail"))) {
         const blockedTrace = {

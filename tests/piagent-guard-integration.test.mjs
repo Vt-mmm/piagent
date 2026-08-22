@@ -1184,7 +1184,7 @@ describe("piagent guard integration", () => {
       assert.equal(traces.filter((entry) => entry.event === "semantic_repair_passed").length, 1);
 
       const clean = await loadGuardFixture();
-      const cleanCwd = createProject(clean.root);
+      const cleanCwd = createProject(clean.root, { authorityProfile: "strict-high-risk" });
       const cleanCtx = createContext(cleanCwd, { sessionId: "phase-speculative", sessionName: "PHASE-SPECULATIVE" });
       const cleanHarness = createPiHarness({ activeTools: ["read", "bash", "edit", "write"] });
       clean.piagentGuard(cleanHarness.pi);
@@ -1216,6 +1216,197 @@ describe("piagent guard integration", () => {
     } finally {
       if (previous === undefined) delete process.env.PIAGENT_PHASE_TOOLS;
       else process.env.PIAGENT_PHASE_TOOLS = previous;
+    }
+  });
+
+  it("allows one CAP-12 repair of the model-authored cli double-dash delta after an exact verifier pass", async () => {
+    const environmentKeys = ["PIAGENT_PHASE_TOOLS", "PIAGENT_AUTO_RECOVERY", "PIAGENT_SEMANTIC_REPAIR"];
+    const previousEnvironment = Object.fromEntries(environmentKeys.map((key) => [key, process.env[key]]));
+    Object.assign(process.env, {
+      PIAGENT_PHASE_TOOLS: "on",
+      PIAGENT_AUTO_RECOVERY: "on",
+      PIAGENT_SEMANTIC_REPAIR: "off"
+    });
+    try {
+      const { root, piagentGuard } = await loadGuardFixture();
+      const cwd = createProject(root);
+      fs.mkdirSync(path.join(cwd, "src", "platform"), { recursive: true });
+      const sourcePath = "src/platform/args.js";
+      const untouchedPath = "src/platform/untouched.js";
+      fs.writeFileSync(path.join(cwd, sourcePath), "export function parseArgs(argv) { return { flags: {}, positional: [...argv] }; }\n");
+      fs.writeFileSync(path.join(cwd, untouchedPath), "export const untouched = true;\n");
+      execFileSync("git", ["-C", cwd, "config", "user.email", "test@example.com"]);
+      execFileSync("git", ["-C", cwd, "config", "user.name", "Piagent Test"]);
+      execFileSync("git", ["-C", cwd, "add", "."]);
+      execFileSync("git", ["-C", cwd, "commit", "-qm", "cli double-dash baseline"]);
+
+      const ctx = createContext(cwd, { sessionId: "session-cli-double-dash", sessionName: "CLI-DOUBLE-DASH" });
+      const harness = createPiHarness({ activeTools: ["read", "bash", "edit", "write"] });
+      piagentGuard(harness.pi);
+      await harness.handlers.get("session_start")({}, ctx);
+      const started = await harness.tools.get("piagent_task_start").execute("cli-double-dash-start", {
+        taskId: "CLI-DOUBLE-DASH",
+        summary: "Repair parseArgs without mutating argv and preserve the standalone double-dash boundary.",
+        riskLane: "tiny",
+        expectedOutput: "The exact configured verifier proves the CLI parser on the current tree.",
+        acceptanceCriteria: [
+          "Support --name value, --name=value, boolean flags, repeated flags, and positional tokens after the first standalone --."
+        ],
+        scope: ["src/platform/**"]
+      }, undefined, undefined, ctx);
+      assert.equal(started.isError, undefined, started.content?.[0]?.text);
+
+      const taskPath = path.join(cwd, ".pi", "piagent-state", "tasks", `${started.details.taskRunId}.json`);
+      let task = JSON.parse(fs.readFileSync(taskPath, "utf8"));
+      const authority = Object.fromEntries(task.authoritySnapshot.capabilities.map((entry) => [entry.id, entry.authority]));
+      assert.equal(task.authoritySnapshot.profile, "broad-default");
+      assert.equal(authority["CAP-09"], "enforce");
+      assert.equal(authority["CAP-12"], "enforce");
+      assert.equal(authority["CAP-13"], "off");
+
+      const toolCall = harness.handlers.get("tool_call");
+      const initialSource = [
+        "export function parseArgs(argv) {",
+        "  const flags = {}; const positional = []; let parsingFlags = true;",
+        "  for (let index = 0; index < argv.length; index += 1) {",
+        "    const value = argv[index];",
+        "    if (parsingFlags && value === '--') { parsingFlags = false; continue; }",
+        "    if (parsingFlags && value.startsWith('--')) {",
+        "      const equal = value.indexOf('=');",
+        "      const name = value.slice(2, equal < 0 ? undefined : equal);",
+        "      const next = argv[index + 1];",
+        "      if (equal >= 0) flags[name] = value.slice(equal + 1);",
+        "      else if (next !== undefined && next !== '--') flags[name] = argv[++index];",
+        "      else flags[name] = true;",
+        "    } else positional.push(value);",
+        "  }",
+        "  return { flags, positional };",
+        "}",
+        ""
+      ].join("\n");
+      const initialWrite = { path: sourcePath, content: initialSource };
+      assert.equal((await callToolCall(toolCall, ctx, "write", initialWrite)).block, undefined);
+      fs.writeFileSync(path.join(cwd, sourcePath), initialSource);
+      await harness.handlers.get("tool_result")({
+        toolName: "write",
+        input: initialWrite,
+        content: [{ type: "text", text: `Wrote ${sourcePath}` }],
+        isError: false
+      }, ctx);
+      const initialProvenance = readMutationProvenance(cwd, started.details.taskRunId);
+      assert.deepEqual(initialProvenance.corruptions, []);
+      assert.equal(initialProvenance.records.length, 1);
+      assert.equal(initialProvenance.records[0].toolName, "write");
+      assert.equal(initialProvenance.records[0].evidenceMode, "exact-runtime");
+      assert.deepEqual(
+        initialProvenance.records[0].changes.map((change) => Buffer.from(change.repoPathBase64, "base64url").toString("utf8")),
+        [sourcePath]
+      );
+
+      const exactVerifier = { command: "npm test" };
+      assert.equal((await callToolCall(toolCall, ctx, "bash", exactVerifier)).block, undefined);
+      await harness.handlers.get("tool_result")({
+        toolName: "bash",
+        input: exactVerifier,
+        content: [{ type: "text", text: "pass" }],
+        details: { exitCode: 0 },
+        isError: false,
+        timestamp: Date.now()
+      }, ctx);
+      task = JSON.parse(fs.readFileSync(taskPath, "utf8"));
+      assert.deepEqual(task.observedChangedFiles, [sourcePath]);
+
+      const trajectoryRoot = path.join(cwd, ".pi", "piagent-state", "trajectory");
+      const trajectoryPath = path.join(trajectoryRoot, `${started.details.taskRunId}.json`);
+      const trajectoryEventsPath = path.join(trajectoryRoot, `${started.details.taskRunId}.events.jsonl`);
+      assert.equal(JSON.parse(fs.readFileSync(trajectoryPath, "utf8")).currentPhase, "verify");
+
+      const deniedBeforeFallback = [
+        await callToolCall(toolCall, ctx, "edit", { path: "src/outside.js", oldText: "before", newText: "after" }),
+        await callToolCall(toolCall, ctx, "write", { path: "src/platform/new-args.js", content: "export const newPath = true;\n" }),
+        await callToolCall(toolCall, ctx, "bash", { command: "printf unsafe > src/platform/args.js" }),
+        await callToolCall(toolCall, ctx, "edit", { path: untouchedPath, oldText: "true", newText: "false" })
+      ];
+      for (const decision of deniedBeforeFallback) {
+        assert.equal(decision.block, true);
+        assert.match(decision.reason, /Phase verify does not allow host tool|Phase verify does not authorize project mutation/);
+      }
+      assert.equal(fs.existsSync(path.join(cwd, "src", "platform", "new-args.js")), false);
+      assert.equal(fs.readFileSync(path.join(cwd, sourcePath), "utf8"), initialSource);
+      assert.equal(fs.readFileSync(path.join(cwd, untouchedPath), "utf8"), "export const untouched = true;\n");
+      assert.equal(fs.existsSync(path.join(cwd, ".pi", "piagent-state", "semantic-repair", `${started.details.taskRunId}.json`)), false);
+
+      const repairEdit = {
+        path: sourcePath,
+        oldText: "next !== undefined && next !== '--'",
+        newText: "next !== undefined && !next.startsWith('--')"
+      };
+      const repairDecision = await callToolCall(toolCall, ctx, "edit", repairEdit);
+      assert.equal(repairDecision.block, undefined, repairDecision.reason);
+      let transitions = readJsonl(trajectoryEventsPath);
+      assert.equal(JSON.parse(fs.readFileSync(trajectoryPath, "utf8")).currentPhase, "verify");
+      assert.equal(transitions.filter((entry) => entry.from === "verify" && entry.to === "repair" && entry.cause === "recovery-requested").length, 0, "authorization alone must remain in verify");
+
+      fs.writeFileSync(path.join(cwd, sourcePath), initialSource.replace(repairEdit.oldText, repairEdit.newText));
+      await harness.handlers.get("tool_result")({
+        toolName: "edit",
+        input: repairEdit,
+        content: [{ type: "text", text: `Edited ${sourcePath}` }],
+        isError: false
+      }, ctx);
+      transitions = readJsonl(trajectoryEventsPath);
+      assert.equal(JSON.parse(fs.readFileSync(trajectoryPath, "utf8")).currentPhase, "repair");
+      assert.equal(transitions.filter((entry) => entry.from === "verify" && entry.to === "repair" && entry.cause === "recovery-requested").length, 1);
+
+      const secondMutationBeforeVerifier = await callToolCall(toolCall, ctx, "edit", {
+        path: sourcePath,
+        oldText: "const flags = {};",
+        newText: "const flags = Object.create(null);"
+      });
+      assert.equal(secondMutationBeforeVerifier.block, true);
+      assert.match(secondMutationBeforeVerifier.reason, /exactly one successful mutation/);
+
+      const approximateVerifier = await callToolCall(toolCall, ctx, "bash", { command: "npm test -- --runInBand" });
+      assert.equal(approximateVerifier.block, true);
+      assert.match(approximateVerifier.reason, /exact verifier|opaque carrier/i);
+      assert.equal((await callToolCall(toolCall, ctx, "bash", exactVerifier)).block, undefined);
+      await harness.handlers.get("tool_result")({
+        toolName: "bash",
+        input: exactVerifier,
+        content: [{ type: "text", text: "pass" }],
+        details: { exitCode: 0 },
+        isError: false,
+        timestamp: Date.now()
+      }, ctx);
+      assert.equal(JSON.parse(fs.readFileSync(trajectoryPath, "utf8")).currentPhase, "verify");
+
+      const statePath = path.join(cwd, ".pi", "piagent-state", "semantic-repair", `${started.details.taskRunId}.json`);
+      const repairState = JSON.parse(fs.readFileSync(statePath, "utf8"));
+      assert.equal(repairState.status, "passed");
+      assert.equal(repairState.revision, 1);
+      assert.equal(repairState.successfulMutations, 1);
+      const tracesBeforeSecondFallback = readJsonl(path.join(cwd, ".pi", "piagent-state", "traces.jsonl"));
+      assert.equal(tracesBeforeSecondFallback.filter((entry) => entry.event === "bounded_recovery_repair_reserved").length, 1);
+      assert.equal(tracesBeforeSecondFallback.filter((entry) => entry.event === "bounded_recovery_repair_opened").length, 1);
+      assert.equal(tracesBeforeSecondFallback.filter((entry) => entry.event === "bounded_recovery_repair_passed").length, 1);
+
+      const secondFallback = await callToolCall(toolCall, ctx, "edit", {
+        path: sourcePath,
+        oldText: "const flags = {};",
+        newText: "const flags = Object.create(null);"
+      });
+      assert.equal(secondFallback.block, true);
+      assert.match(secondFallback.reason, /Phase verify does not allow host tool|Phase verify does not authorize project mutation/);
+      transitions = readJsonl(trajectoryEventsPath);
+      assert.equal(transitions.filter((entry) => entry.from === "verify" && entry.to === "repair" && entry.cause === "recovery-requested").length, 1);
+      const finalTraces = readJsonl(path.join(cwd, ".pi", "piagent-state", "traces.jsonl"));
+      assert.equal(finalTraces.filter((entry) => entry.event === "bounded_recovery_repair_reserved").length, 1, "a passed task-run must not receive a second CAP-12 fallback");
+      assert.equal(JSON.parse(fs.readFileSync(statePath, "utf8")).status, "passed");
+    } finally {
+      for (const [key, value] of Object.entries(previousEnvironment)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
     }
   });
 

@@ -8,6 +8,7 @@ import { buildAcceptanceReceipt } from "../packages/piagent-core/extensions/acce
 import {
   authorizeSemanticRepairCall,
   completeSemanticRepairCall,
+  decideBoundedRecoveryHandshake,
   decideSemanticRepairHandshake,
   pendingSemanticRepairCall,
   readSemanticRepairState,
@@ -94,6 +95,239 @@ function authorizeExactVerifier(cwd, task, toolCallId, digest = hash("b")) {
     targetPaths: [], projectMutation: false, exactVerifier: true, shellLike: true
   });
 }
+
+function boundedRecoveryEvidence(overrides = {}) {
+  return {
+    currentDeltaPaths: ["src/limit.js", "test/limit.test.js"],
+    observedChangedPaths: ["src/limit.js", "test/limit.test.js"],
+    authoredFileDigests: {
+      "src/limit.js": "current-source-digest",
+      "test/limit.test.js": "current-test-digest"
+    },
+    targetPaths: ["src/limit.js"],
+    verifierCurrent: true,
+    ...overrides
+  };
+}
+
+function boundedRecoveryContext(cwd, task) {
+  return { cwd, sessionManager: { getSessionId: () => task.sessionId } };
+}
+
+function authorizePreparedRecovery(runtime, cwd, task, event, currentDigest = hash("a"), targetPaths = ["src/limit.js"]) {
+  return runtime.authorize({
+    cwd,
+    task,
+    sessionId: task.sessionId,
+    toolCallId: event.toolCallId,
+    toolName: event.toolName,
+    currentDigest,
+    targetPaths,
+    projectMutation: true,
+    exactVerifier: false,
+    shellLike: false
+  });
+}
+
+test("bounded recovery requires a current verifier and exact current authorship provenance for every target", () => {
+  const task = taskContract();
+  const decide = (overrides = {}) => {
+    const evidence = boundedRecoveryEvidence(overrides);
+    return decideBoundedRecoveryHandshake({
+      task,
+      mutationTargets: evidence.targetPaths,
+      currentDeltaPaths: evidence.currentDeltaPaths,
+      observedChangedPaths: evidence.observedChangedPaths,
+      authoredFileDigests: evidence.authoredFileDigests,
+      verifierCurrent: evidence.verifierCurrent
+    });
+  };
+
+  const granted = decide();
+  assert.equal(granted.authorized, true);
+  assert.deepEqual(granted.eligibleTargets, ["src/limit.js"]);
+  assert.deepEqual(granted.eligiblePaths, ["src/limit.js"]);
+
+  for (const [label, overrides] of [
+    ["empty target", { targetPaths: [] }],
+    ["missing current verifier", { verifierCurrent: false }],
+    ["target absent from actual delta", { currentDeltaPaths: [] }],
+    ["target absent from observed task changes", { observedChangedPaths: [] }],
+    ["target without model-authored provenance", { authoredFileDigests: {} }],
+    ["target with empty current authorship digest", { authoredFileDigests: { "src/limit.js": "" } }],
+    ["new path despite other provenance", {
+      targetPaths: ["src/new.js"],
+      observedChangedPaths: ["src/new.js"],
+      authoredFileDigests: { "src/new.js": "current-new-digest" }
+    }],
+    ["mixed valid and new targets", {
+      targetPaths: ["src/limit.js", "src/new.js"],
+      observedChangedPaths: ["src/limit.js", "src/new.js"],
+      authoredFileDigests: {
+        "src/limit.js": "current-source-digest",
+        "src/new.js": "current-new-digest"
+      }
+    }]
+  ]) {
+    const denied = decide(overrides);
+    assert.equal(denied.authorized, false, label);
+    assert.deepEqual(denied.eligibleTargets, [], `${label} must not leave a partial target grant`);
+    assert.deepEqual(denied.eligiblePaths, [], `${label} must fail closed`);
+  }
+});
+
+test("bounded recovery reservation is one-shot after rejection", () => {
+  const cwd = project();
+  const task = { ...taskContract(), taskRunId: "bounded-recovery-rejected" };
+  const ctx = boundedRecoveryContext(cwd, task);
+  const opened = [];
+  const runtime = new SemanticRepairRuntime({
+    now: () => "2026-08-22T00:00:00.000Z",
+    trace() {},
+    openRepair(...args) { opened.push(args); return { enforcementSafe: true }; }
+  });
+  const first = { toolCallId: "bounded-first", toolName: "edit", input: { path: "src/limit.js" } };
+  const evidence = boundedRecoveryEvidence();
+
+  assert.equal(runtime.prepareBoundedRecovery({ ctx, task, event: first, currentDigest: hash("a"), ...evidence }), true);
+  assert.equal(runtime.reservedCallMatches({
+    cwd,
+    taskRunId: task.taskRunId,
+    sessionId: task.sessionId,
+    toolCallId: first.toolCallId,
+    toolName: first.toolName,
+    currentDigest: hash("a"),
+    targetPaths: evidence.targetPaths
+  }), true);
+  assert.equal(runtime.reject({ cwd, taskRunId: task.taskRunId, toolCallId: first.toolCallId }).status, "cancelled");
+
+  const second = { toolCallId: "bounded-second", toolName: "edit", input: { path: "src/limit.js" } };
+  assert.equal(runtime.prepareBoundedRecovery({ ctx, task, event: second, currentDigest: hash("a"), ...evidence }), false);
+  assert.equal(opened.length, 0);
+});
+
+test("bounded recovery opens repair only after an authorized successful changed mutation", () => {
+  for (const scenario of [
+    { name: "changed success", success: true, nextDigest: hash("b"), changedPaths: ["src/limit.js"], authoredChangedPaths: ["src/limit.js"], expectedStatus: "active", opens: true },
+    { name: "changed success without authorship proof", success: true, nextDigest: hash("b"), changedPaths: ["src/limit.js"], authoredChangedPaths: [], expectedStatus: "locked", opens: false },
+    { name: "partial multi-target success", success: true, nextDigest: hash("b"), targetPaths: ["src/limit.js", "test/limit.test.js"], changedPaths: ["src/limit.js"], authoredChangedPaths: ["src/limit.js"], expectedStatus: "locked", opens: false },
+    { name: "successful no-op", success: true, nextDigest: hash("a"), changedPaths: [], authoredChangedPaths: [], expectedStatus: "cancelled", opens: false },
+    { name: "failed changed mutation", success: false, nextDigest: hash("b"), changedPaths: ["src/limit.js"], authoredChangedPaths: [], expectedStatus: "locked", opens: false }
+  ]) {
+    const cwd = project();
+    const task = { ...taskContract(), taskRunId: `bounded-recovery-${scenario.name.replaceAll(" ", "-")}` };
+    const ctx = boundedRecoveryContext(cwd, task);
+    const opened = [];
+    const openResult = { enforcementSafe: true, state: { currentPhase: "repair" } };
+    const runtime = new SemanticRepairRuntime({
+      now: () => "2026-08-22T00:00:00.000Z",
+      trace() {},
+      openRepair(...args) { opened.push(args); return openResult; }
+    });
+    const event = { toolCallId: `bounded-${scenario.name}`, toolName: "edit", input: { path: "src/limit.js" } };
+    const evidence = boundedRecoveryEvidence(scenario.targetPaths ? { targetPaths: scenario.targetPaths } : {});
+
+    assert.equal(runtime.prepareBoundedRecovery({ ctx, task, event, currentDigest: hash("a"), ...evidence }), true, scenario.name);
+    assert.equal(opened.length, 0, `${scenario.name} must not open repair at reservation time`);
+    const authorization = authorizePreparedRecovery(runtime, cwd, task, event, hash("a"), evidence.targetPaths);
+    assert.equal(authorization.handled, true, scenario.name);
+    assert.equal(authorization.allowed, true, scenario.name);
+    assert.equal(authorization.bypassPhase, true, scenario.name);
+    assert.equal(opened.length, 0, `${scenario.name} must not open repair at authorization time`);
+
+    const completion = runtime.complete(ctx, task, event, {
+      toolCallId: event.toolCallId,
+      success: scenario.success,
+      exitCode: scenario.success ? 0 : 1,
+      currentWorkingTreeDigest: scenario.nextDigest,
+      changedPaths: scenario.changedPaths,
+      authoredChangedPaths: scenario.authoredChangedPaths,
+      retryableFailure: false,
+      correctiveFailure: false
+    });
+    assert.equal(readSemanticRepairState(cwd, task.taskRunId).state.status, scenario.expectedStatus, scenario.name);
+    assert.equal(opened.length, scenario.opens ? 1 : 0, scenario.name);
+    assert.equal(completion, scenario.opens ? openResult : undefined, scenario.name);
+
+    const second = { toolCallId: `${event.toolCallId}-second`, toolName: "edit", input: { path: "src/limit.js" } };
+    assert.equal(runtime.prepareBoundedRecovery({
+      ctx,
+      task,
+      event: second,
+      currentDigest: scenario.nextDigest,
+      ...evidence
+    }), false, `${scenario.name} must consume the one-shot reservation`);
+  }
+});
+
+test("bounded recovery allows no second mutation and never opens a corrective source revision", () => {
+  const run = ({ suffix, verifierSuccess, correctiveFailure }) => {
+    const cwd = project();
+    const task = { ...taskContract(), taskRunId: `bounded-recovery-final-${suffix}` };
+    const ctx = boundedRecoveryContext(cwd, task);
+    const opened = [];
+    const runtime = new SemanticRepairRuntime({
+      now: () => "2026-08-22T00:00:00.000Z",
+      trace() {},
+      openRepair(...args) { opened.push(args); return { enforcementSafe: true, state: { currentPhase: "repair" } }; }
+    });
+    const mutation = { toolCallId: `bounded-source-${suffix}`, toolName: "edit", input: { path: "src/limit.js" } };
+    const evidence = boundedRecoveryEvidence();
+    assert.equal(runtime.prepareBoundedRecovery({ ctx, task, event: mutation, currentDigest: hash("a"), ...evidence }), true);
+    assert.equal(authorizePreparedRecovery(runtime, cwd, task, mutation).allowed, true);
+    runtime.complete(ctx, task, mutation, {
+      toolCallId: mutation.toolCallId,
+      success: true,
+      exitCode: 0,
+      currentWorkingTreeDigest: hash("b"),
+      changedPaths: ["src/limit.js"],
+      authoredChangedPaths: ["src/limit.js"],
+      retryableFailure: false,
+      correctiveFailure: false
+    });
+    assert.equal(opened.length, 1);
+
+    const secondMutation = runtime.authorize({
+      cwd,
+      task,
+      sessionId: task.sessionId,
+      toolCallId: `bounded-second-${suffix}`,
+      toolName: "edit",
+      currentDigest: hash("b"),
+      targetPaths: ["src/limit.js"],
+      projectMutation: true,
+      exactVerifier: false,
+      shellLike: false
+    });
+    assert.equal(secondMutation.handled, true);
+    assert.equal(secondMutation.allowed, false);
+    assert.match(secondMutation.reason, /exactly one successful mutation/);
+
+    const verifier = authorizeExactVerifier(cwd, task, `bounded-verifier-${suffix}`);
+    assert.equal(verifier.allowed, true);
+    const completed = completeSemanticRepairCall({
+      cwd,
+      taskRunId: task.taskRunId,
+      toolCallId: `bounded-verifier-${suffix}`,
+      success: verifierSuccess,
+      exitCode: verifierSuccess ? 0 : 1,
+      currentDigest: hash("b"),
+      changedPaths: [],
+      retryableFailure: false,
+      correctiveFailure
+    });
+    return { cwd, task, opened, completed };
+  };
+
+  const passed = run({ suffix: "passed", verifierSuccess: true, correctiveFailure: false });
+  assert.equal(passed.completed.result, "passed");
+  assert.equal(readSemanticRepairState(passed.cwd, passed.task.taskRunId).state.status, "passed");
+
+  const failed = run({ suffix: "failed", verifierSuccess: false, correctiveFailure: true });
+  assert.equal(failed.completed.result, "locked");
+  assert.equal(readSemanticRepairState(failed.cwd, failed.task.taskRunId).state.status, "locked");
+  assert.equal(failed.opened.length, 1, "a corrective verifier failure must not open a second source-repair turn");
+});
 
 test("semantic repair eligibility is per conflicting path and links only executable companion tests", () => {
   const cwd = project(), task = taskContract();

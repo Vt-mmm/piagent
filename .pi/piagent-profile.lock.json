@@ -115,7 +115,7 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:eb41e177589d1b87078fe649b893461e6f32eb1f531c70e60ff3ec3b87205b1c",
+    "packageDigest": "sha256:df3f8475df17a3d00e019065131f76ffc9e22ed7f324129df23d8c3b4ccf022f",
     "packageSource": "../",
     "packageVersion": "1.6.0",
     "runtimeFiles": [
@@ -160,8 +160,8 @@
         "path": "packages/piagent-core/security/sensitive-data.js"
       },
       {
-        "byteSize": 230205,
-        "digest": "sha256:909e0fdf301fef19173c8b8467e8541bea7d6e79d5f2cb26d8b1125beaf10fe6",
+        "byteSize": 232023,
+        "digest": "sha256:635e3ed67fba989851b2c2b91896dba13d4c25da6fb8bbd78d5db712580b5ec6",
         "path": "packages/piagent-core/extensions/piagent-guard.ts"
       },
       {
@@ -330,8 +330,8 @@
         "path": "packages/piagent-core/extensions/local-state-path.js"
       },
       {
-        "byteSize": 230205,
-        "digest": "sha256:909e0fdf301fef19173c8b8467e8541bea7d6e79d5f2cb26d8b1125beaf10fe6",
+        "byteSize": 232023,
+        "digest": "sha256:635e3ed67fba989851b2c2b91896dba13d4c25da6fb8bbd78d5db712580b5ec6",
         "path": "packages/piagent-core/extensions/piagent-guard.ts"
       },
       {
@@ -570,8 +570,8 @@
         "path": "packages/piagent-core/runtime/hooks/tool-call-hook.ts"
       },
       {
-        "byteSize": 24346,
-        "digest": "sha256:dbc5ff55cfff0afa46313e64b1e2770ddbe1e689d47b4b38e223bc90d05726c1",
+        "byteSize": 24468,
+        "digest": "sha256:7c86df2890a7069e636f5ac6211777a7348bf02d7e43c3f6677fc44f08d0df91",
         "path": "packages/piagent-core/runtime/hooks/tool-result-hook.ts"
       },
       {
@@ -1015,13 +1015,13 @@
         "path": "packages/piagent-core/runtime/recovery/resume-state.ts"
       },
       {
-        "byteSize": 32848,
-        "digest": "sha256:241f9cd1b0973a0f723798acddde35c10d33c9ce88068d47293e7ccfa95f67d7",
+        "byteSize": 35694,
+        "digest": "sha256:07552cbe1f58ed7f89245135c3a197936d924b3cdea8af1fc46a18b7595aa862",
         "path": "packages/piagent-core/runtime/recovery/semantic-repair-handshake.ts"
       },
       {
-        "byteSize": 6928,
-        "digest": "sha256:89801984314a2f2984df640dc325d49770038ad0f275665fbb7b17d330111e94",
+        "byteSize": 9356,
+        "digest": "sha256:17c5c88a6564d9151513a9da75864665f87be922b57ab8170bd850c0010e2f46",
         "path": "packages/piagent-core/runtime/recovery/semantic-repair-runtime.ts"
       },
       {
@@ -1085,8 +1085,8 @@
         "path": "packages/piagent-core/runtime/registration/session-commands.ts"
       },
       {
-        "byteSize": 22348,
-        "digest": "sha256:763eaee401b2824036d9d0f0ea39f0d3c5f24eaaf74b29dbf3ec045d641bc105",
+        "byteSize": 22437,
+        "digest": "sha256:2fda20b7f65463d53ca36efc0de6a95370c274213701934fbbfcd87ef1ee3a8d",
         "path": "packages/piagent-core/runtime/registration/task-completion-tools.ts"
       },
       {

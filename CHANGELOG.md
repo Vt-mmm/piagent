@@ -18,6 +18,11 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
   levels end to end. New installations default visibly to GPT-5.6 Sol with
   High thinking while still allowing the user to choose another available
   model for any message or session.
+- Added one fail-closed CAP-12 correction after a current exact verifier when
+  the model discovers an omission in a file it already authored in the same
+  task/run/session. The runtime opens repair only after an exact structured
+  mutation succeeds, permits no second source edit, and requires the exact
+  verifier again before completion.
 
 ### WebUI continuity and operator clarity
 

@@ -67,7 +67,7 @@ type ToolResultHookDependencies = ContextDeliveryConfirmationDependencies & {
       success: boolean;
       exitCode: number;
       currentWorkingTreeDigest: string;
-      changedPaths: string[];
+      changedPaths: string[]; authoredChangedPaths: string[];
       retryableFailure: boolean; correctiveFailure: boolean;
     }
   ) => TrajectorySyncResult | undefined;
@@ -325,6 +325,7 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
           exitCode: observedExitCode,
           currentWorkingTreeDigest: currentTreeDigest,
           changedPaths: [...new Set([...directMutationResult.changedPaths, ...shellChangedPaths])].sort(),
+          authoredChangedPaths: Object.keys(directMutationResult.recordedDigests).sort(),
           retryableFailure: failure?.retryable === true, correctiveFailure: failure?.sourceMutationPermission === "eligible-in-scope" && failure?.confidence === "high"
         })
       : undefined;

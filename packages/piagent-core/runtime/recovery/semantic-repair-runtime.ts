@@ -3,8 +3,10 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { TaskContract } from "../../extensions/guard-types.ts";
 import type { TrajectorySyncResult } from "../trajectory/trajectory-runtime.ts";
 import {
+  BOUNDED_RECOVERY_CONFLICT_CODE,
   authorizeSemanticRepairCall,
   completeSemanticRepairCall,
+  decideBoundedRecoveryHandshake,
   decideSemanticRepairHandshake,
   pendingSemanticRepairCall,
   readSemanticRepairState,
@@ -31,6 +33,7 @@ export type SemanticRepairCompletionMetadata = {
   exitCode: number;
   currentWorkingTreeDigest: string;
   changedPaths: string[];
+  authoredChangedPaths?: string[];
   retryableFailure: boolean; correctiveFailure: boolean;
 };
 
@@ -100,6 +103,52 @@ export class SemanticRepairRuntime {
     return true;
   }
 
+  prepareBoundedRecovery(input: {
+    ctx: ExtensionContext; task: TaskContract; event: ToolEvent; currentDigest: string;
+    currentDeltaPaths: string[]; observedChangedPaths: string[];
+    authoredFileDigests: Record<string, string>; targetPaths: string[]; verifierCurrent: boolean;
+  }): boolean {
+    // This path is a one-shot CAP-12 bridge, not CAP-13's multi-revision
+    // semantic-repair protocol. Any durable state, including a cancelled or
+    // interrupted reservation, consumes the task-run grant and fails closed.
+    if (readSemanticRepairState(input.ctx.cwd, input.task.taskRunId).status !== "missing"
+      || semanticRepairStateRequired(input.ctx.cwd, input.task.taskRunId)) return false;
+    const decision = decideBoundedRecoveryHandshake({
+      task: input.task,
+      mutationTargets: input.targetPaths,
+      currentDeltaPaths: input.currentDeltaPaths,
+      observedChangedPaths: input.observedChangedPaths,
+      authoredFileDigests: input.authoredFileDigests,
+      verifierCurrent: input.verifierCurrent
+    });
+    if (!decision.authorized) return false;
+    const toolCallId = String(input.event.toolCallId);
+    const reserved = reserveSemanticRepairCall({
+      cwd: input.ctx.cwd,
+      task: input.task,
+      sessionId: input.ctx.sessionManager.getSessionId(),
+      toolCallId,
+      toolName: input.event.toolName,
+      currentDigest: input.currentDigest,
+      decision,
+      targetPaths: input.targetPaths,
+      recordedAt: this.dependencies.now()
+    });
+    if (!reserved.reserved) return false;
+    this.reservationTokens.set(
+      this.reservationKey(input.ctx.cwd, input.task.taskRunId, toolCallId),
+      reserved.reservationToken!
+    );
+    this.dependencies.trace(input.ctx, input.task, {
+      event: "bounded_recovery_repair_reserved",
+      workingTreeDigest: input.currentDigest,
+      reasonCode: BOUNDED_RECOVERY_CONFLICT_CODE,
+      eligiblePaths: decision.eligiblePaths,
+      targetCount: input.targetPaths.length
+    });
+    return true;
+  }
+
   reservedCallMatches(input: {
     cwd: string; taskRunId: string; sessionId: string; toolCallId: string;
     toolName: string; currentDigest: string; targetPaths: string[];
@@ -131,7 +180,8 @@ export class SemanticRepairRuntime {
     if (view.state.successfulMutations > 0 && !semanticRepairOriginMatches(cwd, view.state)) return "semantic repair durable origin is missing or invalid";
     if (view.state.status === "passed") return;
     if (view.state.successfulMutations === 0 && view.state.pending === null && !semanticRepairStateRequired(cwd, taskRunId)) return;
-    return `semantic repair exact final verifier is not satisfied (${view.state.status})`;
+    const label = view.state.conflictCodes.includes(BOUNDED_RECOVERY_CONFLICT_CODE) ? "bounded recovery" : "semantic repair";
+    return `${label} exact final verifier is not satisfied (${view.state.status})`;
   }
 
   complete(
@@ -148,13 +198,16 @@ export class SemanticRepairRuntime {
       exitCode: metadata.exitCode,
       currentDigest: metadata.currentWorkingTreeDigest,
       changedPaths: metadata.changedPaths,
+      authoredChangedPaths: metadata.authoredChangedPaths,
       retryableFailure: metadata.retryableFailure,
       correctiveFailure: metadata.correctiveFailure,
       recordedAt: this.dependencies.now()
     });
     if (completion.result === "unmatched") return;
     this.dependencies.trace(ctx, task, {
-      event: completion.result === "opened" ? "semantic_contradiction_repair_opened" : `semantic_repair_${completion.result}`,
+      event: completion.state?.conflictCodes.includes(BOUNDED_RECOVERY_CONFLICT_CODE)
+        ? `bounded_recovery_repair_${completion.result}`
+        : completion.result === "opened" ? "semantic_contradiction_repair_opened" : `semantic_repair_${completion.result}`,
       toolName: event.toolName,
       revision: completion.state?.revision,
       successfulMutations: completion.state?.successfulMutations,
