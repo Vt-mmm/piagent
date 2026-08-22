@@ -19,6 +19,27 @@ import { workingTreeEvidenceDigest } from "../packages/piagent-core/extensions/w
 
 const hash = "a".repeat(64);
 
+function notApplicableCausalContextReceipt() {
+  return {
+    schemaVersion: 1,
+    evidenceSource: "not-applicable",
+    applicability: "not-applicable",
+    available: false,
+    coverage: {
+      status: "not-applicable",
+      telemetryTruncated: false,
+      telemetryIntegrityFailures: 0,
+      recoverableTailBytes: 0,
+      criterionExpected: false,
+      sessionEventsObserved: 0,
+      observedLanes: 0,
+      requiredLanes: 0,
+      missingLanes: []
+    },
+    aggregates: null
+  };
+}
+
 function git(cwd, args) {
   return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 }
@@ -33,6 +54,7 @@ function record(overrides = {}) {
     grade: { passed: true, score: 10, checks: [] }, graderIntegrity: { passed: true },
     scope: { passed: true, changedFiles: [], outsideScope: [] }, outputSafety: { passed: true, forbiddenHits: [] },
     outputEvidence: { passed: true, requiredCount: 0 }, durationSeconds: 1, promptHash: hash,
+    causalContextReceipt: notApplicableCausalContextReceipt(),
     variant: { generated: false, fixtureDigest: hash },
     usageStatus: "measured", usage: { sessions: 1, fresh: 3, input: 2, output: 1, cacheRead: 0, cacheWrite: 0, reasoning: 0, total: 3, cost: null, costSource: "unavailable" },
     ...overrides

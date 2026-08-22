@@ -19,7 +19,8 @@ function plainObject(value) {
 }
 
 function exactMeasuredUsage(usage) {
-  return Number.isInteger(usage?.sessions) && usage.sessions > 0
+  return usage?.usageCompleteness === "exact"
+    && Number.isInteger(usage?.sessions) && usage.sessions > 0
     && TOKEN_FIELDS.every((field) => Number.isFinite(usage?.[field]) && usage[field] >= 0)
     && usage.fresh === usage.input + usage.output
     && usage.total === usage.input + usage.cacheRead + usage.cacheWrite + usage.output

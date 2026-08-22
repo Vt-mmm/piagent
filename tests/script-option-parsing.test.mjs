@@ -147,6 +147,8 @@ describe("the refusal holds when the scripts actually run", () => {
     assert.equal(record.cacheReadTokens, 400);
     assert.equal(record.firstCorrectEditSeconds, 42);
     assert.equal(record.reworkCount, 1);
-    assert.equal(typeof record.contextEfficiency.metrics.contextWasteScore, "number");
+    assert.equal(record.contextEfficiency.metrics.contextWasteScore, null);
+    assert.equal(typeof record.contextEfficiency.metrics.contextWasteScoreEstimate, "number");
+    assert.equal(record.contextEfficiency.metrics.contextWasteScoreEvidenceCoverage, 0);
   });
 });

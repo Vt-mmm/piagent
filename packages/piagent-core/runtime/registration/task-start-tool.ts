@@ -7,25 +7,8 @@ import { createEnvironmentBoundTaskAuthority } from "../policy/task-authority-ru
 import { authorityReplacementState } from "../policy/authority-resume-policy.ts";
 import { compileCriterionGraph, criterionGraphContextSelection, criterionGraphGuidance, criterionGraphMode } from "../../extensions/criterion-graph.js";
 import { captureTaskStartBaseline } from "../inspection/task-baseline-start-capture.ts";
+import { sameStringRecord, satisfiesAuthorityReplacement } from "./task-start-retry-helpers.ts";
 type ExtensionContext = any; type TaskContract = any; type TaskStartParameters = any;
-function sameStringRecord(left: Record<string, string>, right: Record<string, string>): boolean {
-  const leftEntries = Object.entries(left).sort(([a], [b]) => a.localeCompare(b));
-  const rightEntries = Object.entries(right).sort(([a], [b]) => a.localeCompare(b));
-  return leftEntries.length === rightEntries.length
-    && leftEntries.every(([key, value], index) => rightEntries[index]?.[0] === key && rightEntries[index]?.[1] === value);
-}
-function satisfiesAuthorityReplacement(task: TaskContract, state: ReturnType<typeof authorityReplacementState>): boolean {
-  if (!task.authoritySnapshot) return false;
-  if (state.reason === "mechanical-rollback-requested") {
-    return task.authoritySnapshot.profile === "mechanical-only";
-  }
-  if (state.reason === "capability-kill-switch-requested") {
-    return state.killedCapabilities.length > 0 && state.killedCapabilities.every((capabilityId) => (
-      task.authoritySnapshot.capabilities.some((entry: any) => entry.id === capabilityId && entry.authority === "off")
-    ));
-  }
-  return true;
-}
 export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any>): any {
   const {
     DEFAULT_MAX_TASK_ATTEMPTS, ORCHESTRATION_ROLES, REVIEW_LENSES, StringEnum, Type,
@@ -94,6 +77,12 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       const sessionId = ctx.sessionManager.getSessionId();
       const sessionName = currentSessionName(ctx);
       const active = activeSessionTask(ctx.cwd, sessionId) as TaskContract | undefined;
+      if (active && active.trace.outcome !== "pending" && runtimeState.taskIdentity(ctx)?.taskRunId === active.taskRunId) {
+        runtimeState.clearTaskBoundary(ctx, active.taskRunId);
+      } else if (!active) {
+        const cachedTask = runtimeState.taskIdentity(ctx);
+        if (cachedTask) runtimeState.clearTaskBoundary(ctx, cachedTask.taskRunId);
+      }
       const activeAuthorityReplacement = active ? authorityReplacementState(ctx.cwd, active) : undefined;
       if (activeAuthorityReplacement && !activeAuthorityReplacement.enforcementSafe) {
         return {

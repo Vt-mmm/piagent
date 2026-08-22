@@ -60,7 +60,7 @@ export function projectTaskHandoffHistory(input: { cwd: string; task: Task; iden
     const matching = inspected.records.flatMap((record: any, ordinal: number) => {
       if (record?.event !== "handoff_projection_written" || record.taskId !== input.task.taskId
         || record.taskRunId !== input.task.taskRunId || record.sessionId !== input.task.sessionId) return [];
-      if (record.schemaVersion !== 1 || !timestamp(record.recordedAt) || typeof record.completionApproved !== "boolean") { malformed += 1; return []; }
+      if (![1, 2].includes(record.schemaVersion) || !timestamp(record.recordedAt) || typeof record.completionApproved !== "boolean") { malformed += 1; return []; }
       const action = display(record.recoveryAction, 80) || "unknown", phase = display(record.phase, 64) || null;
       return [{ ordinal, recordedAt: record.recordedAt, phase, completionApproved: record.completionApproved, projectedAction: action }];
     });

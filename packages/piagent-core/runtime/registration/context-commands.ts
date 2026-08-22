@@ -156,7 +156,18 @@ export function registerContextCommands(pi: ExtensionAPI, deps: Record<string, a
           queryHash: pack.queryHash,
           confidence: pack.confidence,
           estimatedTokens: pack.estimatedTokens,
-          selectedItems: pack.selected.map((item) => ({ path: item.path, estimatedTokens: item.estimatedTokens }))
+          selectedItems: pack.selected.map((item) => ({
+            path: item.path,
+            estimatedTokens: item.estimatedTokens,
+            sources: item.sources,
+            fileContentHash: item.fileContentHash,
+            ...(item.sanitizedContentDigest ? { sanitizedContentDigest: item.sanitizedContentDigest } : {}),
+            payloadHash: item.payloadHash,
+            representation: item.representation,
+            ranges: item.ranges,
+            generation: item.generation,
+            sensitiveContentRedacted: item.sensitiveContentRedacted
+          }))
         }
       }, { state: runtimeState, telemetry });
     }
@@ -165,6 +176,18 @@ export function registerContextCommands(pi: ExtensionAPI, deps: Record<string, a
       confidence: pack.confidence,
       estimatedTokens: pack.estimatedTokens,
       paths: pack.selected.map((item) => item.path),
+      selectedItems: pack.selected.map((item) => ({
+        path: item.path,
+        estimatedTokens: item.estimatedTokens,
+        sources: item.sources,
+        fileContentHash: item.fileContentHash,
+        ...(item.sanitizedContentDigest ? { sanitizedContentDigest: item.sanitizedContentDigest } : {}),
+        payloadHash: item.payloadHash,
+        representation: item.representation,
+        ranges: item.ranges,
+        generation: item.generation,
+        sensitiveContentRedacted: item.sensitiveContentRedacted
+      })),
       finderRecommended: pack.finderRecommended,
       contextDelivery: deliveryId ? { schemaVersion: 1, deliveryId } : undefined
     });
@@ -186,11 +209,16 @@ export function registerContextCommands(pi: ExtensionAPI, deps: Record<string, a
     const report = buildContextEfficiencyReport(ctx.cwd);
     const task = activeSessionTask(ctx);
     const taskEfficiency = task ? buildTaskEfficiencyMetrics(ctx.cwd, task) : null;
+    const wasteScore = report.metrics.contextWasteScore === null
+      ? `unavailable (diagnostic estimate ${report.metrics.contextWasteScoreEstimate}/100; evidence ${formatPercent(report.metrics.contextWasteScoreEvidenceCoverage)}, ${report.coverage.wasteScore.status})`
+      : `${report.metrics.contextWasteScore}/100 (lower is better; evidence ${formatPercent(report.metrics.contextWasteScoreEvidenceCoverage)}, ${report.coverage.wasteScore.status})`;
     emitRuntimeMessage(ctx, "piagent-context-efficiency", [
-      `contextWasteScore: ${report.metrics.contextWasteScore}/100 (lower is better)`,
+      `contextWasteScore: ${wasteScore}`,
       `activeTools: ${report.metrics.averageActiveTools}`,
-      `toolSchemaShare: ${formatPercent(report.metrics.toolSchemaShare)}`,
-      `duplicateReads: ${report.metrics.duplicateReads}/${report.metrics.readCalls}`,
+      `toolSchemaPrefixShare: ${formatPercent(report.metrics.toolSchemaPrefixShare)}`,
+      `toolSchemaToSystemRatio: ${report.metrics.toolSchemaToSystemRatio}`,
+      `duplicateReads: ${report.metrics.duplicateReads}/${report.metrics.comparableReadCalls} comparable (${report.metrics.readCalls} observed; coverage ${formatPercent(report.metrics.readEvidenceCoverage)})`,
+      `fallbackRereads: ${report.metrics.contextFallbackRereads}/${report.metrics.contextSelections}`,
       `duplicateOutput: ${formatPercent(report.metrics.duplicateOutputRate)}`,
       `lowConfidencePacks: ${report.metrics.lowConfidencePacks}/${report.sample.contextPacks}`,
       `taskEfficiency: ${taskEfficiency ? `${taskEfficiency.solver.route}; verify=${taskEfficiency.verification.attempts}; outcome=${taskEfficiency.outcome.task}` : "no active task"}`,

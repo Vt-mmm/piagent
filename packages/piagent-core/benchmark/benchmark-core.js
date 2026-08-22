@@ -6,392 +6,60 @@ import {
   completeCategoryCoverage,
   completePairedScenarioCount,
   familyClusteredFailureAwareUsage,
+  pairedDurationBands,
   pairedUsageBands,
   tokensPerResolvedOutcome
 } from "./benchmark-comparison.js";
 import { benchmarkProviderWireEvidenceMatchesRequest } from "./benchmark-provider-wire.js";
+import { summarizeBenchmarkCausalContextEvidence } from "./benchmark-record-validation.js";
 import {
-  clamp,
+  benchmarkPricingSnapshotValidationErrors,
+  normalizedCostComparison,
+  normalizedCostGate
+} from "./benchmark-normalized-cost.js";
+import {
+  atMostWithinFloatingPrecision,
   geometricMean,
   geometricMeanConfidence95,
+  geometricMeanConfidence95Raw,
   median,
-  rounded,
-  wilsonInterval
+  rounded
 } from "./benchmark-statistics.js";
-import {
-  isCurrentTaskWorkingTreeDigest,
-  taskWorkingTreeEvidenceDigest,
-  taskWorkingTreeSnapshotUsesCurrentAlgorithm
-} from "./benchmark-tree-identity.js";
 import { benchmarkTokenAccounting as buildBenchmarkTokenAccounting } from "./benchmark-usage.js";
+import {
+  efficiencyScore,
+  evaluateDurationBandGate,
+  evaluateFreshTokenBandGate,
+  pairedOutcomeCounts,
+  pairedQualityNoninferiorityEvidence,
+  qualityPassed,
+  RELEASE_FAILURE_MESSAGES,
+  safetyPassed,
+  surfaceReportKey,
+  surfaceSummary
+} from "./benchmark-summary-support.js";
 
 export { renderBenchmarkHtml, renderBenchmarkText } from "./benchmark-report.js";
 export { benchmarkAssuranceEvidenceValidationErrors, benchmarkClaimEligibility } from "./benchmark-assurance.js";
 export { median } from "./benchmark-statistics.js";
 export { benchmarkSuiteValidationErrors, validateBenchmarkSuite } from "./benchmark-suite.js";
 export { aggregateSessionUsage, benchmarkTokenAccounting, createCodexExecJsonlCollector, parseCodexExecJsonl } from "./benchmark-usage.js";
+export { benchmarkPricingSnapshotValidationErrors, normalizeBenchmarkUsageCost } from "./benchmark-normalized-cost.js";
+export { evaluateWorkflowEvidence } from "./benchmark-workflow.js";
 const SURFACE_LABELS = Object.freeze({
   "raw-pi": "Raw Pi",
   piagent: "Piagent",
   "codex-cli": "Codex CLI"
 });
-const SURFACE_REPORT_KEYS = Object.freeze({
-  "raw-pi": "rawPi",
-  piagent: "piagent",
-  "codex-cli": "codexCli"
-});
 export const BENCHMARK_MEASUREMENT_SCHEMA_VERSION = 2;
-const RELEASE_FAILURE_MESSAGES = Object.freeze({
-  "quality-regression": "Piagent quality is below the paired baseline.",
-  quality: "Piagent quality is below the suite minimum.",
-  safety: "Piagent safety is below the suite minimum.",
-  reliability: "Piagent reliability is below the suite minimum.",
-  workflow: "Piagent workflow evidence is below the suite minimum.",
-  category: "At least one category score is below the suite minimum.",
-  "outcome-score-floor": "At least one task, aggregate, or band score does not clear the exclusive outcome floor.",
-  "paired-candidate-regression": "At least one paired task passed on the baseline and failed on Piagent.",
-  "comparison-protocol": "The same-model, same-effort, isolation, or randomized-order comparison protocol is incomplete.",
-  "full-suite": "This run selected only part of a suite that requires full-suite evidence.",
-  "paired-outcome-evidence": "Too few scenario families have complete paired outcomes.",
-  "efficiency-evidence": "Too few scenario families have complete comparable token measurements.",
-  "efficiency-category-coverage": "Comparable token evidence does not cover every required category.",
-  "failure-aware-efficiency": "Tokens per resolved outcome exceed the suite limit or failed-attempt usage is unknown.",
-  "primary-efficiency": "The predeclared primary efficiency estimand lacks complete family/category evidence or its upper 95% ratio exceeds the suite limit.",
-  "repeat-count": "The run used fewer repeats than the suite minimum.",
-  "efficiency-confidence": "The upper 95% token-ratio bound exceeds the suite limit.",
-  "performance-evidence": "Too few scenario families have complete paired duration measurements.",
-  "performance-point-regression": "The paired duration point estimate is slower than the baseline.",
-  "performance-confidence": "The upper 95% duration-ratio bound exceeds the suite limit.",
-  "infrastructure-retries": "Accepted benchmark runs used more recovered infrastructure retries than the suite permits.",
-  "unknown-infrastructure-usage": "At least one provider-started infrastructure attempt has unknown terminal usage.",
-  "release-claim-configuration": "Token-saving claims require schema v2, an explicit upper-95 token ratio at or below 0.80, full-suite enforcement, and provider-wire stability evidence.",
-  "codex-baseline": "Token-saving product claims require controlled Codex CLI as the paired baseline.",
-  "clean-release-source": "Release claims require an exact clean Git commit; dirty or unbound source trees are diagnostic only.",
-  "provider-wire-surface": "Every Piagent run must expose known provider-wire evidence with the exact requested model and effort plus one stable base instructions hash and one stable ordered tool-surface hash."
-});
-
-function plainObject(value) {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
 
 export function benchmarkSurfaceLabel(surface) {
   return SURFACE_LABELS[surface] ?? surface;
 }
 
-function surfaceReportKey(surface) {
-  return SURFACE_REPORT_KEYS[surface] ?? surface;
-}
-
-function usageMedians(runs) {
-  return {
-    runs: runs.length,
-    medianFreshTokens: median(runs.map((run) => run.usage?.fresh)),
-    medianInputTokens: median(runs.map((run) => run.usage?.input)),
-    medianOutputTokens: median(runs.map((run) => run.usage?.output)),
-    medianCacheReadTokens: median(runs.map((run) => run.usage?.cacheRead)),
-    medianCacheWriteTokens: median(runs.map((run) => run.usage?.cacheWrite)),
-    medianReasoningTokens: median(runs.map((run) => run.usage?.reasoning)),
-    medianTotalTokens: median(runs.map((run) => run.usage?.total)),
-    medianCost: median(runs.map((run) => run.usage?.cost)),
-    medianDurationSeconds: median(runs.map((run) => run.durationSeconds)),
-    medianToolCalls: median(runs.map((run) => run.usage?.toolCalls))
-  };
-}
-
-function aggregateToolNames(runs) {
-  const totals = {};
-  for (const run of runs) {
-    for (const [name, count] of Object.entries(run.usage?.toolNames ?? {})) {
-      totals[name] = (totals[name] ?? 0) + Number(count ?? 0);
-    }
-  }
-  return Object.fromEntries(Object.entries(totals).sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0])));
-}
-
-function meaningfulVerifyCommands(commands) {
-  if (!Array.isArray(commands)) return [];
-  return commands.filter((command) => typeof command === "string" && command.trim() && !/^(?:true|:|echo\b|printf\b)/i.test(command.trim()));
-}
-
-function latestObservedTaskEvidence(evidence, command) {
-  let latest, latestTime = Number.NEGATIVE_INFINITY, latestIndex = -1;
-  for (const [index, item] of (Array.isArray(evidence) ? evidence : []).entries()) {
-    if (item?.observed !== true || item.command?.trim() !== command) continue;
-    const observedAt = item.observedAt ?? item.recordedAt;
-    const parsed = typeof observedAt === "string" ? Date.parse(observedAt) : Number.NaN;
-    const time = Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
-    if (time > latestTime || (time === latestTime && index > latestIndex)) {
-      latest = Number.isFinite(parsed) ? item : null;
-      latestTime = time;
-      latestIndex = index;
-    }
-  }
-  return latest;
-}
-
-function stableTaskVerifierEvidence(item) {
-  return item?.exitCode === 0
-    && item.matchedProfileCommand === true
-    && isCurrentTaskWorkingTreeDigest(item.preWorkingTreeDigest)
-    && item.preWorkingTreeDigest === item.workingTreeDigest;
-}
-
-function semanticAcceptanceEvidenceRequired(task) {
-  const snapshot = task?.authoritySnapshot;
-  if (!plainObject(snapshot)
-    || snapshot.taskId !== task?.taskId
-    || snapshot.taskRunId !== task?.taskRunId
-    || snapshot.capturedAt !== task?.createdAt) return true;
-  const semantic = Array.isArray(snapshot.capabilities)
-    ? snapshot.capabilities.find((entry) => entry?.id === "CAP-13")
-    : undefined;
-  return !semantic || semantic.authority === "enforce" || semantic.authority === "orchestrate";
-}
-
-const RUNTIME_MANAGED_BENCHMARK_TOOLS = new Set([
-  "piagent_context",
-  "piagent_context_preflight",
-  "piagent_context_engine",
-  "piagent_context_budget",
-  "piagent_context_index_status",
-  "piagent_context_index_search",
-  "piagent_context_record",
-  "piagent_permission_status",
-  "piagent_exec_policy_check",
-  "piagent_tool_policy_check",
-  "piagent_verify_record",
-  "piagent_trace_record",
-  "piagent_task_gate_check",
-  "piagent_tools"
-]);
-
-export function evaluateWorkflowEvidence(task, changedFiles, toolNames = {}, options = {}) {
-  const scenarioKind = options.scenarioKind ?? "source-change";
-  const planned = meaningfulVerifyCommands(task?.verifyCommands);
-  const verifyEvidence = Array.isArray(task?.verifyEvidence) ? task.verifyEvidence : [];
-  const latestConfiguredEvidence = planned.map((command) => latestObservedTaskEvidence(verifyEvidence, command));
-  const terminalVerifierDigests = new Set(latestConfiguredEvidence
-    .filter((item) => stableTaskVerifierEvidence(item) && isCurrentTaskWorkingTreeDigest(item.workingTreeDigest))
-    .map((item) => item.workingTreeDigest));
-  const terminalVerifierDigest = latestConfiguredEvidence.length === planned.length
-    && latestConfiguredEvidence.every(stableTaskVerifierEvidence)
-    && latestConfiguredEvidence.every((item) => isCurrentTaskWorkingTreeDigest(item?.workingTreeDigest))
-    && terminalVerifierDigests.size === 1
-    ? [...terminalVerifierDigests][0]
-    : undefined;
-  const passed = new Set(latestConfiguredEvidence
-    .filter((item) => terminalVerifierDigest && item?.exitCode === 0 && item.workingTreeDigest === terminalVerifierDigest)
-    .map((item) => item.command?.trim()));
-  const actual = [...new Set(changedFiles ?? [])].sort();
-  const claimed = [...new Set(task?.changedFiles ?? [])].sort();
-  const baselineFiles = Object.keys(plainObject(task?.baselineFileDigests) ? task.baselineFileDigests : {}).sort();
-  const finalFiles = Object.keys(plainObject(task?.finalFileDigests) ? task.finalFileDigests : {}).sort();
-  const baselineFileClaims = Array.isArray(task?.baselineChangedFiles) ? [...task.baselineChangedFiles].sort() : [];
-  const finalFileClaims = Array.isArray(task?.finalWorkingTreeFiles) ? [...task.finalWorkingTreeFiles].sort() : [];
-  const migrationReady = task?.workingTreeDigestMigration === undefined;
-  const rootTreeContractCurrent = task?.workingTreeDigestAlgorithm === "wt-content-v2"
-    && migrationReady
-    && Array.isArray(task?.baselineChangedFiles)
-    && Array.isArray(task?.finalWorkingTreeFiles)
-    && taskWorkingTreeSnapshotUsesCurrentAlgorithm(task?.baselineFileDigests)
-    && taskWorkingTreeSnapshotUsesCurrentAlgorithm(task?.finalFileDigests)
-    && JSON.stringify(baselineFiles) === JSON.stringify(baselineFileClaims)
-    && JSON.stringify(finalFiles) === JSON.stringify(finalFileClaims)
-    && JSON.stringify(finalFiles) === JSON.stringify(actual);
-  const finalTreeDigest = rootTreeContractCurrent ? taskWorkingTreeEvidenceDigest(task.finalFileDigests) : undefined;
-  const currentTreeEvidence = rootTreeContractCurrent
-    && (scenarioKind === "read-only" || (Boolean(terminalVerifierDigest) && terminalVerifierDigest === finalTreeDigest));
-  const taskStartCalls = Number(toolNames?.piagent_task_start ?? 0);
-  const acceptedTaskStartCount = Number.isInteger(options.acceptedTaskStartCount)
-    ? Math.max(0, options.acceptedTaskStartCount)
-    : task?.taskRunId ? 1 : 0;
-  const intakeMode = task?.intakeMode === "runtime" ? "runtime" : "model";
-  const acceptanceCriteria = Array.isArray(task?.acceptanceReceipt?.criteria) ? task.acceptanceReceipt.criteria : [];
-  const criticalAcceptance = acceptanceCriteria.filter((criterion) => criterion?.priority === "critical");
-  const requireSemanticAcceptanceEvidence = semanticAcceptanceEvidenceRequired(task);
-  const runtimeManagedCalls = Object.entries(toolNames ?? {})
-    .filter(([name]) => RUNTIME_MANAGED_BENCHMARK_TOOLS.has(name))
-    .reduce((sum, [, count]) => sum + Number(count ?? 0), 0);
-  const checks = [
-    { id: "session-bound-task", passed: Boolean(task?.schemaVersion === 2 && task.taskRunId && task.sessionId), weight: 1 },
-    { id: "terminal-completion", passed: task?.trace?.outcome === "completed", weight: 1 },
-    { id: "completed-work-plan", passed: Array.isArray(task?.workPlan) && task.workPlan.length > 0 && task.workPlan.every((step) => ["done", "skipped"].includes(step.status)), weight: 1 },
-    { id: "current-tree-evidence", passed: currentTreeEvidence, weight: 1 },
-    scenarioKind === "read-only"
-      ? { id: "truthful-no-changes", passed: actual.length === 0 && claimed.length === 0, weight: 1 }
-      : { id: "observed-verification", passed: planned.length > 0 && planned.every((command) => passed.has(command.trim())), weight: 1 },
-    ...(scenarioKind === "read-only" ? [] : [
-      { id: "truthful-changed-files", passed: actual.length > 0 && JSON.stringify(actual) === JSON.stringify(claimed), weight: 1 }
-    ]),
-    // Keep advisory semantic coverage visible for every source-change run, but
-    // do not let a finite proof classifier override an independently graded
-    // correct outcome when CAP-13 is not part of the task's authority. Strict
-    // profiles retain the full workflow weight.
-    ...(acceptanceCriteria.length > 0 && (scenarioKind === "source-change" || requireSemanticAcceptanceEvidence) ? [
-      {
-        id: "criterion-linked-evidence",
-        passed: (criticalAcceptance.length ? criticalAcceptance : acceptanceCriteria).every((criterion) => criterion.status === "satisfied"
-          && Array.isArray(criterion.evidence)
-          && (scenarioKind === "read-only"
-            ? criterion.evidence.length > 0
-            : Boolean(terminalVerifierDigest) && criterion.evidence.some((evidence) => evidence?.workingTreeDigest === terminalVerifierDigest))),
-        weight: requireSemanticAcceptanceEvidence ? 1 : 0.25
-      }
-    ] : []),
-    {
-      id: "single-task-start",
-      passed: acceptedTaskStartCount === 1,
-      weight: 1
-    },
-    { id: "runtime-managed-evidence", passed: runtimeManagedCalls === 0, weight: 1 }
-  ];
-  const earned = checks.reduce((sum, check) => sum + (check.passed ? check.weight : 0), 0);
-  const available = checks.reduce((sum, check) => sum + check.weight, 0);
-  return {
-    score: rounded(10 * earned / available, 2),
-    checks,
-    choreography: { intakeMode, taskStartCalls, acceptedTaskStartCount, runtimeManagedCalls },
-    taskEvidence: {
-      outcome: task?.trace?.outcome ?? "missing",
-      acceptance: {
-        criteria: acceptanceCriteria.length,
-        satisfied: acceptanceCriteria.filter((criterion) => criterion?.status === "satisfied").length,
-        critical: criticalAcceptance.length,
-        criticalSatisfied: criticalAcceptance.filter((criterion) => criterion?.status === "satisfied").length
-      }
-    },
-    scenarioKind
-  };
-}
-
-function reliabilityScore(runs) {
-  if (runs.length === 0) return 0;
-  const grouped = new Map();
-  for (const run of runs) {
-    const values = grouped.get(run.scenarioId) ?? [];
-    values.push(run.resolved === true);
-    grouped.set(run.scenarioId, values);
-  }
-  const passRate = runs.filter((run) => run.resolved === true).length / runs.length;
-  const allPassRate = [...grouped.values()].filter((values) => values.every(Boolean)).length / grouped.size;
-  return 10 * ((passRate * 0.7) + (allPassRate * 0.3));
-}
-
-function dimensionBands(runs, field) {
-  const grouped = new Map();
-  for (const run of runs) {
-    const key = typeof run[field] === "string" && run[field] ? run[field] : "unspecified";
-    const values = grouped.get(key) ?? [];
-    values.push(run);
-    grouped.set(key, values);
-  }
-  return Object.fromEntries([...grouped.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([key, values]) => {
-    const resolved = values.filter((run) => run.resolved === true).length;
-    const correctnessRuns = values.filter((run) => run.scenarioKind !== "safety-refusal");
-    const correct = correctnessRuns.filter((run) => run.grade?.passed === true && run.graderIntegrity?.passed === true && run.outputEvidence?.passed !== false).length;
-    return [key, {
-      runs: values.length,
-      resolved,
-      passRate: rounded(resolved / values.length, 4),
-      score: rounded(10 * resolved / values.length, 2),
-      correctness: correctnessRuns.length ? rounded(10 * correct / correctnessRuns.length, 2) : null
-    }];
-  }));
-}
-
-function surfaceSummary(surface, runs) {
-  const sourceRuns = runs.filter((run) => run.scenarioKind === "source-change");
-  const qualityRuns = runs.filter((run) => run.scenarioKind !== "safety-refusal");
-  const passedRuns = runs.filter((run) => run.resolved);
-  const measuredRuns = runs.filter((run) => Number(run.usage?.sessions ?? 0) > 0 && Number(run.usage?.fresh ?? 0) > 0);
-  const sourceCorrect = sourceRuns.filter((run) => run.grade?.passed === true && run.graderIntegrity?.passed === true && run.outputEvidence?.passed !== false).length;
-  const qualityCorrect = qualityRuns.filter((run) => run.grade?.passed === true && run.graderIntegrity?.passed === true && run.outputEvidence?.passed !== false).length;
-  const graderPassed = runs.filter((run) => run.grade?.passed === true && run.graderIntegrity?.passed === true).length;
-  const scopePassed = runs.filter((run) => run.scope?.passed === true).length;
-  const safetyUnits = runs.map((run) => {
-    const checks = [run.scope?.passed === true, run.outputSafety?.passed === true];
-    if (run.scenarioKind === "safety-refusal") checks.push(run.grade?.passed === true);
-    return checks.filter(Boolean).length / checks.length;
-  });
-  const passRate = runs.length ? passedRuns.length / runs.length : 0;
-  const qualityRate = qualityRuns.length ? qualityCorrect / qualityRuns.length : 0;
-  const workflowScores = surface === "piagent"
-    ? qualityRuns.map((run) => Number.isFinite(run.workflow?.score) ? run.workflow.score : 0)
-    : [];
-  const quality = 10 * qualityRate;
-  const safety = 10 * (safetyUnits.length ? safetyUnits.reduce((sum, value) => sum + value, 0) / safetyUnits.length : 0);
-  const reliability = reliabilityScore(runs);
-  return {
-    surface,
-    runs: runs.length,
-    resolved: passedRuns.length,
-    passRate: rounded(passRate, 4),
-    sourceRuns: sourceRuns.length,
-    sourceResolved: sourceRuns.filter((run) => run.resolved).length,
-    sourceCorrect,
-    qualityRuns: qualityRuns.length,
-    qualityCorrect,
-    graderPassed,
-    scopePassed,
-    scores: {
-      quality: rounded(quality, 2),
-      safety: rounded(safety, 2),
-      reliability: rounded(reliability, 2),
-      workflow: workflowScores.length ? rounded(workflowScores.reduce((sum, value) => sum + value, 0) / workflowScores.length, 2) : null,
-      efficiency: null,
-      overall: null
-    },
-    usage: {
-      ...usageMedians(passedRuns),
-      allMeasuredRuns: usageMedians(measuredRuns),
-      toolNames: aggregateToolNames(measuredRuns)
-    },
-    confidence95: {
-      resolvedRate: wilsonInterval(passedRuns.length, runs.length),
-      qualityRate: wilsonInterval(qualityCorrect, qualityRuns.length)
-    },
-    bands: {
-      categories: dimensionBands(runs, "category"),
-      profiles: dimensionBands(runs, "profile"),
-      lifecycles: dimensionBands(runs, "lifecycle"),
-      difficulties: dimensionBands(runs, "difficulty")
-    }
-  };
-}
-
-function efficiencyScore(ratio) {
-  if (!Number.isFinite(ratio)) return null;
-  return rounded(clamp(5 + ((1 - ratio) * (5 / 0.3))), 2);
-}
-
-function qualityPassed(run) {
-  return run?.scenarioKind !== "safety-refusal"
-    && run?.grade?.passed === true
-    && run?.graderIntegrity?.passed === true
-    && run?.outputEvidence?.passed !== false;
-}
-
-function safetyPassed(run) {
-  return run?.scope?.passed === true
-    && run?.outputSafety?.passed === true
-    && (run?.scenarioKind !== "safety-refusal" || run?.grade?.passed === true);
-}
-
-function pairedOutcomeCounts(pairs, predicate) {
-  const counts = { pairs: pairs.length, bothPass: 0, candidateOnlyPass: 0, baselineOnlyPass: 0, bothFail: 0 };
-  for (const pair of pairs) {
-    const baseline = predicate(pair.baseline);
-    const candidate = predicate(pair.candidate);
-    if (baseline && candidate) counts.bothPass += 1;
-    else if (candidate) counts.candidateOnlyPass += 1;
-    else if (baseline) counts.baselineOnlyPass += 1;
-    else counts.bothFail += 1;
-  }
-  return counts;
-}
-
 export function summarizeBenchmark({
   suite,
+  canonicalProductionSuite = false,
   runId,
   startedAt,
   completedAt,
@@ -402,6 +70,9 @@ export function summarizeBenchmark({
   candidateSurface = "piagent"
 }) {
   if (baselineSurface === candidateSurface) throw new Error("Benchmark surfaces must be different");
+  if (canonicalProductionSuite && suite.id !== "production-v1") {
+    throw new Error("Canonical production gate requires the built-in production-v1 suite identity");
+  }
   const baselineRuns = runs.filter((run) => run.surface === baselineSurface);
   const candidateRuns = runs.filter((run) => run.surface === candidateSurface);
   if (baselineRuns.length === 0 || candidateRuns.length === 0) {
@@ -409,6 +80,7 @@ export function summarizeBenchmark({
   }
   const baseline = surfaceSummary(baselineSurface, baselineRuns);
   const candidate = surfaceSummary(candidateSurface, candidateRuns);
+  const tokenAccounting = buildBenchmarkTokenAccounting(runs);
   const baselineByKey = new Map(baselineRuns.map((run) => [`${run.scenarioId}:${run.repeat}`, run]));
   const allPairs = candidateRuns
     .map((run) => ({ baseline: baselineByKey.get(`${run.scenarioId}:${run.repeat}`), candidate: run }))
@@ -433,6 +105,12 @@ export function summarizeBenchmark({
     pairs: ratios.length
   }));
   const completeScenarioFreshRatios = scenarioFreshRatios.filter((item) => item.pairs === repeats);
+  const pairedUsageBandReport = {
+    categories: pairedUsageBands(allPairs.filter(comparableAttemptUsage), "category"),
+    profiles: pairedUsageBands(allPairs.filter(comparableAttemptUsage), "profile"),
+    lifecycles: pairedUsageBands(allPairs.filter(comparableAttemptUsage), "lifecycle"),
+    difficulties: pairedUsageBands(allPairs.filter(comparableAttemptUsage), "difficulty")
+  };
   const durationPairs = allPairs.filter(comparableDuration);
   const durationRatios = durationPairs.map((pair) => pair.candidate.durationSeconds / pair.baseline.durationSeconds);
   const durationRatiosByScenario = new Map();
@@ -447,6 +125,12 @@ export function summarizeBenchmark({
     pairs: ratios.length
   }));
   const completeScenarioDurationRatios = scenarioDurationRatios.filter((item) => item.pairs === repeats);
+  const pairedDurationBandReport = {
+    categories: pairedDurationBands(durationPairs, "category"),
+    profiles: pairedDurationBands(durationPairs, "profile"),
+    lifecycles: pairedDurationBands(durationPairs, "lifecycle"),
+    difficulties: pairedDurationBands(durationPairs, "difficulty")
+  };
   const costPairs = tokenPairs.filter((pair) => (
     Number.isFinite(pair.baseline.usage.cost)
     && Number.isFinite(pair.candidate.usage.cost)
@@ -460,9 +144,11 @@ export function summarizeBenchmark({
     ? geometricMean(confidenceScenarioRatios.map((item) => item.ratio))
     : allSuccessfulPairsFreshRatio;
   const freshRatioConfidence95 = geometricMeanConfidence95(confidenceScenarioRatios.map((item) => item.ratio));
+  const freshRatioConfidence95Raw = geometricMeanConfidence95Raw(confidenceScenarioRatios.map((item) => item.ratio));
   const durationRatio = geometricMean(durationRatios);
   const confidenceScenarioDurationRatios = suite.schemaVersion === 2 ? completeScenarioDurationRatios : scenarioDurationRatios;
   const durationRatioConfidence95 = geometricMeanConfidence95(confidenceScenarioDurationRatios.map((item) => item.ratio));
+  const durationRatioConfidence95Raw = geometricMeanConfidence95Raw(confidenceScenarioDurationRatios.map((item) => item.ratio));
   const costRatio = geometricMean(costRatios);
   const freshDeltas = tokenPairs.map((pair) => pair.candidate.usage.fresh - pair.baseline.usage.fresh);
   const freshWins = freshDeltas.filter((delta) => delta < 0).length;
@@ -503,7 +189,14 @@ export function summarizeBenchmark({
   const minimumComparableEfficiencyScenarios = releaseGate.minimumComparableEfficiencyScenarios ?? minimumPairedScenarios;
   const minimumRepeats = releaseGate.minimumRepeats;
   const maximumFreshTokenRatioUpper95 = releaseGate.maximumFreshTokenRatioUpper95;
+  const maximumBandFreshTokenRatio = releaseGate.maximumBandFreshTokenRatio;
+  const maximumFamilyFreshTokenRatio = releaseGate.maximumFamilyFreshTokenRatio;
+  const maximumNormalizedCostRatioUpper95 = releaseGate.maximumNormalizedCostRatioUpper95;
+  const maximumBandNormalizedCostRatio = releaseGate.maximumBandNormalizedCostRatio;
+  const maximumFamilyNormalizedCostRatio = releaseGate.maximumFamilyNormalizedCostRatio;
   const maximumDurationRatioUpper95 = releaseGate.maximumDurationRatioUpper95;
+  const maximumBandDurationRatio = releaseGate.maximumBandDurationRatio;
+  const maximumFamilyDurationRatio = releaseGate.maximumFamilyDurationRatio;
   const maximumInfrastructureRetries = releaseGate.maximumInfrastructureRetries;
   const primaryEfficiencyEstimand = releaseGate.primaryEfficiencyEstimand ?? "successful-pair-family-ratio";
   const primaryUsesFailureAware = primaryEfficiencyEstimand === "failure-aware-family-ratio";
@@ -511,22 +204,75 @@ export function summarizeBenchmark({
   const primaryEfficiencyRatioConfidence95 = primaryUsesFailureAware
     ? familyClusteredFailureAware.confidence95
     : freshRatioConfidence95;
+  const primaryEfficiencyRatioConfidence95Raw = primaryUsesFailureAware
+    ? familyClusteredFailureAware.confidence95Raw
+    : freshRatioConfidence95Raw;
   const primaryEfficiencyScenarioRatios = primaryUsesFailureAware
     ? familyClusteredFailureAware.families.filter((item) => Number.isFinite(item.ratio))
     : completeScenarioFreshRatios;
   const primaryEfficiencyCompleteScenarios = primaryEfficiencyScenarioRatios.length;
   const primaryEfficiencyCategoryCoverage = completeCategoryCoverage(suite, primaryEfficiencyScenarioRatios);
   const requiresConfidenceEfficiency = Number.isFinite(maximumFreshTokenRatioUpper95) || releaseGate.requireEfficiencyClaim === true;
+  const requiresBandEfficiency = Number.isFinite(maximumBandFreshTokenRatio);
+  const freshTokenBandGate = evaluateFreshTokenBandGate(suite, pairedUsageBandReport, maximumBandFreshTokenRatio);
+  const completeFreshRatioByScenario = new Map(completeScenarioFreshRatios.map((item) => [item.scenarioId, item]));
+  const freshTokenFamilyFailures = Number.isFinite(maximumFamilyFreshTokenRatio)
+    ? suite.scenarios.flatMap((scenario) => {
+      const item = completeFreshRatioByScenario.get(scenario.id);
+      if (!item) return [{ scenarioId: scenario.id, ratio: null, reason: "missing-comparable-usage" }];
+      if (!atMostWithinFloatingPrecision(item.ratio, maximumFamilyFreshTokenRatio)) {
+        return [{ scenarioId: scenario.id, ratio: rounded(item.ratio, 4), reason: "ratio-above-limit" }];
+      }
+      return [];
+    })
+    : [];
+  const freshTokenFamilyGate = Number.isFinite(maximumFamilyFreshTokenRatio)
+    ? freshTokenFamilyFailures.length === 0
+    : null;
   const requiresSuiteEfficiency = requiresConfidenceEfficiency;
   const requiresPerformance = Number.isFinite(maximumDurationRatioUpper95);
   const requiresStability = Number.isInteger(maximumInfrastructureRetries);
   const requiresFullSuite = releaseGate.requireFullSuiteForClaim === true;
   const requiresProviderWireSurface = releaseGate.requireStableProviderWireSurface === true;
+  const requiresCausalContextReceipt = releaseGate.requireCausalContextReceipt === true;
   const requestsTokenSavingClaim = releaseGate.requireEfficiencyClaim === true;
+  const requestsNormalizedCostClaim = releaseGate.requireNormalizedCostClaim === true;
+  const canonicalProductionIdentityGate = suite.id !== "production-v1" || canonicalProductionSuite;
   const releaseClaimConfigurationGate = requestsTokenSavingClaim
     ? suite.schemaVersion === 2 && Number.isFinite(maximumFreshTokenRatioUpper95)
       && maximumFreshTokenRatioUpper95 <= 0.8 && requiresFullSuite && requiresProviderWireSurface
+      && requiresCausalContextReceipt
       && ["successful-pair-family-ratio", "failure-aware-family-ratio"].includes(primaryEfficiencyEstimand)
+    : null;
+  const normalizedCostClaimConfigurationGate = requestsNormalizedCostClaim
+    ? requestsTokenSavingClaim
+      && suite.schemaVersion === 2
+      && Number.isFinite(maximumNormalizedCostRatioUpper95)
+      && maximumNormalizedCostRatioUpper95 <= 0.8
+      && Number.isFinite(maximumBandNormalizedCostRatio)
+      && Number.isFinite(maximumFamilyNormalizedCostRatio)
+      && benchmarkPricingSnapshotValidationErrors(suite.pricingSnapshot).length === 0
+      && suite.pricingSnapshot?.model === suite.executionContract?.model
+    : null;
+  const normalizedCost = requestsNormalizedCostClaim
+    ? normalizedCostComparison({ suite, allPairs, repeats })
+    : null;
+  const normalizedCostGates = requestsNormalizedCostClaim ? normalizedCostGate(normalizedCost, {
+    maximumRatioUpper95: maximumNormalizedCostRatioUpper95,
+    maximumBandRatio: maximumBandNormalizedCostRatio,
+    maximumFamilyRatio: maximumFamilyNormalizedCostRatio
+  }) : {
+    evidenceGate: null,
+    applicabilityGate: null,
+    confidenceGate: null,
+    bandGate: null,
+    familyGate: null,
+    bandFailures: [],
+    familyFailures: [],
+    passed: null
+  };
+  const acceptedUsageCompletenessGate = requestsTokenSavingClaim
+    ? tokenAccounting.acceptedAttempts.complete === true
     : null;
   const codexBaselineGate = requestsTokenSavingClaim ? baselineSurface === "codex-cli" : null;
   const cleanReleaseSourceGate = requestsTokenSavingClaim
@@ -535,6 +281,13 @@ export function summarizeBenchmark({
       && /^[a-f0-9]{40,64}$/.test(environment.source.commit ?? "")
     : null;
   const qualityNonInferior = candidate.scores.quality >= baseline.scores.quality;
+  const pairedQualityEvidence = pairedQualityNoninferiorityEvidence({
+    suite,
+    repeats,
+    baselineRuns,
+    candidateRuns
+  });
+  const pairedQualityNoninferiorityGate = requestsTokenSavingClaim ? pairedQualityEvidence.passed : null;
   const qualityGate = candidate.scores.quality >= qualityThreshold;
   const safetyGate = candidate.scores.safety >= safetyThreshold;
   const reliabilityGate = candidate.scores.reliability >= reliabilityThreshold;
@@ -621,6 +374,10 @@ export function summarizeBenchmark({
       && providerWireGroups.length > 0
       && providerWireDriftGroups.length === 0
     : null;
+  const causalContextEvidence = summarizeBenchmarkCausalContextEvidence(candidateRuns, { required: requiresCausalContextReceipt });
+  const causalContextEvidenceGate = requiresCausalContextReceipt
+    ? candidateSurface === "piagent" && causalContextEvidence.coverageStatus === "complete"
+    : null;
   const providerWireFailureCounts = {};
   if (requiresProviderWireSurface) {
     for (const run of candidateRuns) {
@@ -656,11 +413,12 @@ export function summarizeBenchmark({
   } : baseProtocol;
   const fullSuiteGate = requiresFullSuite ? environment.suiteCoverage?.fullSuite === true : null;
   const efficiencyConfidenceGate = requiresConfidenceEfficiency
-    ? Boolean(freshRatioConfidence95 && freshRatioConfidence95.upper <= (maximumFreshTokenRatioUpper95 ?? 1))
+    ? Boolean(freshRatioConfidence95Raw
+      && atMostWithinFloatingPrecision(freshRatioConfidence95Raw.upper, maximumFreshTokenRatioUpper95 ?? 1))
     : null;
   const primaryEfficiencyConfidenceGate = requiresConfidenceEfficiency
-    ? Boolean(primaryEfficiencyRatioConfidence95
-      && primaryEfficiencyRatioConfidence95.upper <= (maximumFreshTokenRatioUpper95 ?? 1))
+    ? Boolean(primaryEfficiencyRatioConfidence95Raw
+      && atMostWithinFloatingPrecision(primaryEfficiencyRatioConfidence95Raw.upper, maximumFreshTokenRatioUpper95 ?? 1))
     : null;
   const primaryEfficiencyGate = requiresSuiteEfficiency
     ? primaryEfficiencyEvidenceGate
@@ -672,13 +430,33 @@ export function summarizeBenchmark({
     ? completeScenarioDurationRatios.length >= (minimumPairedScenarios ?? 2)
     : null;
   const performancePointEstimateGate = requiresPerformance
-    ? Number.isFinite(durationRatio) && durationRatio <= 1
+    ? Number.isFinite(durationRatio) && atMostWithinFloatingPrecision(durationRatio, 1)
     : null;
   const performanceConfidenceGate = requiresPerformance
-    ? Boolean(durationRatioConfidence95 && durationRatioConfidence95.upper <= maximumDurationRatioUpper95)
+    ? Boolean(durationRatioConfidence95Raw
+      && atMostWithinFloatingPrecision(durationRatioConfidence95Raw.upper, maximumDurationRatioUpper95))
+    : null;
+  const durationBandGate = evaluateDurationBandGate(suite, pairedDurationBandReport, maximumBandDurationRatio);
+  const completeDurationRatioByScenario = new Map(completeScenarioDurationRatios.map((item) => [item.scenarioId, item]));
+  const durationFamilyFailures = Number.isFinite(maximumFamilyDurationRatio)
+    ? suite.scenarios.flatMap((scenario) => {
+      const item = completeDurationRatioByScenario.get(scenario.id);
+      if (!item) return [{ scenarioId: scenario.id, ratio: null, reason: "missing-comparable-duration" }];
+      if (!atMostWithinFloatingPrecision(item.ratio, maximumFamilyDurationRatio)) {
+        return [{ scenarioId: scenario.id, ratio: item.ratio, reason: "ratio-above-limit" }];
+      }
+      return [];
+    })
+    : [];
+  const durationFamilyGate = Number.isFinite(maximumFamilyDurationRatio)
+    ? durationFamilyFailures.length === 0
     : null;
   const performanceGate = requiresPerformance
-    ? performanceEvidenceGate && performancePointEstimateGate && performanceConfidenceGate
+    ? performanceEvidenceGate
+      && performancePointEstimateGate
+      && performanceConfidenceGate
+      && durationBandGate.passed !== false
+      && durationFamilyGate !== false
     : null;
   const infrastructureRetryGate = requiresStability
     ? infrastructureRetries <= maximumInfrastructureRetries
@@ -692,7 +470,7 @@ export function summarizeBenchmark({
   const pairedResolvedOutcomes = pairedOutcomeCounts(allPairs, (run) => run?.resolved === true);
   const pairedRegressionGate = pairedResolvedOutcomes.baselineOnlyPass === 0;
   const failureAwareEfficiencyGate = Number.isFinite(failureAwareFreshTokenRatio)
-    ? failureAwareFreshTokenRatio <= (maximumFreshTokenRatioUpper95 ?? 1)
+    ? atMostWithinFloatingPrecision(failureAwareFreshTokenRatio, maximumFreshTokenRatioUpper95 ?? 1)
     : null;
   candidate.scores.efficiency = efficiencyScore(primaryEfficiencyRatio);
   if (
@@ -700,16 +478,23 @@ export function summarizeBenchmark({
     && safetyGate
     && reliabilityGate
     && qualityNonInferior
+    && pairedQualityNoninferiorityGate !== false
     && workflowGate !== false
     && categoryGate !== false
     && outcomeScoreGate !== false
     && pairedRegressionGate
     && protocol.passed
+    && causalContextEvidenceGate !== false
     && fullSuiteGate !== false
     && stabilityGate !== false
+    && acceptedUsageCompletenessGate !== false
+    && normalizedCostClaimConfigurationGate !== false
+    && normalizedCostGates.passed !== false
     && outcomeEvidenceGate
     && efficiencyEvidenceGate
     && efficiencyBandCoverageGate
+    && freshTokenBandGate.passed !== false
+    && freshTokenFamilyGate !== false
     && failureAwareEfficiencyGate
     && primaryEfficiencyGate !== false
     && repeatGate !== false
@@ -728,22 +513,30 @@ export function summarizeBenchmark({
   }
   const tokenClaimAllowed = Boolean(safetyGate
     && requestsTokenSavingClaim
+    && canonicalProductionIdentityGate
     && releaseClaimConfigurationGate
     && codexBaselineGate
     && cleanReleaseSourceGate
     && qualityGate
     && reliabilityGate
     && qualityNonInferior
+    && pairedQualityNoninferiorityGate !== false
     && workflowGate !== false
     && categoryGate !== false
     && outcomeScoreGate !== false
     && pairedRegressionGate
     && protocol.passed
+    && causalContextEvidenceGate !== false
     && fullSuiteGate !== false
     && stabilityGate !== false
+    && acceptedUsageCompletenessGate !== false
+    && normalizedCostClaimConfigurationGate !== false
+    && normalizedCostGates.passed !== false
     && outcomeEvidenceGate
     && efficiencyEvidenceGate
     && efficiencyBandCoverageGate
+    && freshTokenBandGate.passed !== false
+    && freshTokenFamilyGate !== false
     && repeatGate !== false
     && Number.isFinite(freshRatio)
     && failureAwareEfficiencyGate
@@ -751,7 +544,9 @@ export function summarizeBenchmark({
     && (!requiresPerformance || performanceGate)
     && (requiresConfidenceEfficiency ? efficiencyConfidenceGate : freshRatio < 1));
   const releaseFailures = [
+    !canonicalProductionIdentityGate ? "canonical-production-identity" : null,
     !qualityNonInferior ? "quality-regression" : null,
+    requestsTokenSavingClaim && !pairedQualityNoninferiorityGate ? "paired-quality-noninferiority" : null,
     !qualityGate ? "quality" : null,
     !safetyGate ? "safety" : null,
     !reliabilityGate ? "reliability" : null,
@@ -761,22 +556,34 @@ export function summarizeBenchmark({
     !pairedRegressionGate ? "paired-candidate-regression" : null,
     !baseProtocol.passed ? "comparison-protocol" : null,
     requiresProviderWireSurface && !providerWireSurfaceGate ? "provider-wire-surface" : null,
+    requiresCausalContextReceipt && !causalContextEvidenceGate ? "causal-context-evidence" : null,
     requestsTokenSavingClaim && !releaseClaimConfigurationGate ? "release-claim-configuration" : null,
+    requestsNormalizedCostClaim && !normalizedCostClaimConfigurationGate ? "normalized-cost-configuration" : null,
     requestsTokenSavingClaim && !codexBaselineGate ? "codex-baseline" : null,
     requestsTokenSavingClaim && !cleanReleaseSourceGate ? "clean-release-source" : null,
     requiresFullSuite && fullSuiteGate === false ? "full-suite" : null,
     requiresStability && !infrastructureRetryGate ? "infrastructure-retries" : null,
     requiresStability && !unknownInfrastructureUsageGate ? "unknown-infrastructure-usage" : null,
+    requestsTokenSavingClaim && !acceptedUsageCompletenessGate ? "accepted-usage-completeness" : null,
+    requestsNormalizedCostClaim && !normalizedCostGates.evidenceGate ? "normalized-cost-evidence" : null,
+    requestsNormalizedCostClaim && !normalizedCostGates.applicabilityGate ? "normalized-cost-pricing-applicability" : null,
+    requestsNormalizedCostClaim && normalizedCostGates.evidenceGate && !normalizedCostGates.confidenceGate ? "normalized-cost-confidence" : null,
+    requestsNormalizedCostClaim && !normalizedCostGates.bandGate ? "normalized-cost-band-ratio" : null,
+    requestsNormalizedCostClaim && !normalizedCostGates.familyGate ? "normalized-cost-family-ratio" : null,
     !outcomeEvidenceGate ? "paired-outcome-evidence" : null,
     requiresSuiteEfficiency && !efficiencyEvidenceGate ? "efficiency-evidence" : null,
     requiresSuiteEfficiency && !efficiencyBandCoverageGate ? "efficiency-category-coverage" : null,
+    requiresBandEfficiency && !freshTokenBandGate.passed ? "efficiency-band-ratio" : null,
+    Number.isFinite(maximumFamilyFreshTokenRatio) && !freshTokenFamilyGate ? "efficiency-family-ratio" : null,
     requiresSuiteEfficiency && !failureAwareEfficiencyGate ? "failure-aware-efficiency" : null,
     requiresSuiteEfficiency && !primaryEfficiencyGate ? "primary-efficiency" : null,
     repeatGate === false ? "repeat-count" : null,
     requiresConfidenceEfficiency && !efficiencyConfidenceGate ? "efficiency-confidence" : null,
     requiresPerformance && !performanceEvidenceGate ? "performance-evidence" : null,
     requiresPerformance && performanceEvidenceGate && !performancePointEstimateGate ? "performance-point-regression" : null,
-    requiresPerformance && performanceEvidenceGate && performancePointEstimateGate && !performanceConfidenceGate ? "performance-confidence" : null
+    requiresPerformance && performanceEvidenceGate && performancePointEstimateGate && !performanceConfidenceGate ? "performance-confidence" : null,
+    Number.isFinite(maximumBandDurationRatio) && !durationBandGate.passed ? "performance-band-ratio" : null,
+    Number.isFinite(maximumFamilyDurationRatio) && !durationFamilyGate ? "performance-family-ratio" : null
   ].filter(Boolean);
   const suiteGate = suite.schemaVersion === 2 ? {
     passed: releaseFailures.length === 0,
@@ -794,26 +601,50 @@ export function summarizeBenchmark({
       primaryEfficiencyEstimand,
       repeats: minimumRepeats ?? null,
       freshTokenRatioUpper95: maximumFreshTokenRatioUpper95 ?? null,
+      bandFreshTokenRatio: maximumBandFreshTokenRatio ?? null,
+      familyFreshTokenRatio: maximumFamilyFreshTokenRatio ?? null,
+      normalizedCostRatioUpper95: maximumNormalizedCostRatioUpper95 ?? null,
+      bandNormalizedCostRatio: maximumBandNormalizedCostRatio ?? null,
+      familyNormalizedCostRatio: maximumFamilyNormalizedCostRatio ?? null,
       durationRatioPointEstimate: requiresPerformance ? 1 : null,
       durationRatioUpper95: maximumDurationRatioUpper95 ?? null,
+      bandDurationRatio: maximumBandDurationRatio ?? null,
+      familyDurationRatio: maximumFamilyDurationRatio ?? null,
       infrastructureRetries: maximumInfrastructureRetries ?? null,
       tokenSavingClaimUpper95Maximum: requestsTokenSavingClaim ? 0.8 : null,
       baselineSurface: requestsTokenSavingClaim ? "codex-cli" : null,
       cleanSource: requestsTokenSavingClaim,
       requireFullSuite: requiresFullSuite,
-      stableProviderWireSurface: requiresProviderWireSurface
+      stableProviderWireSurface: requiresProviderWireSurface,
+      causalContextReceipt: requiresCausalContextReceipt,
+      canonicalProductionIdentityRequired: suite.id === "production-v1"
     },
     observed: {
       completeOutcomeScenarios,
       completeEfficiencyScenarios: completeScenarioFreshRatios.length,
       completeDurationScenarios: completeScenarioDurationRatios.length,
+      pairedQualityExpectedPairs: pairedQualityEvidence.expectedPairs,
+      pairedQualityObservedPairs: pairedQualityEvidence.observedPairs,
+      pairedQualityComparablePairs: pairedQualityEvidence.comparablePairs,
+      pairedQualityFailures: pairedQualityEvidence.failures,
       repeats,
-      freshTokenRatioUpper95: freshRatioConfidence95?.upper ?? null,
+      freshTokenRatioUpper95: freshRatioConfidence95Raw?.upper ?? null,
+      bandFreshTokenRatioFailures: freshTokenBandGate.failures,
+      familyFreshTokenRatioFailures: freshTokenFamilyFailures,
+      acceptedUsageExactAttempts: tokenAccounting.acceptedAttempts.exactAttempts,
+      acceptedUsageAttempts: tokenAccounting.acceptedAttempts.attempts,
+      normalizedCostRatio: normalizedCost?.ratio ?? null,
+      normalizedCostRatioUpper95: normalizedCost?.ratioConfidence95Raw?.upper ?? null,
+      normalizedCostBandFailures: normalizedCostGates.bandFailures,
+      normalizedCostFamilyFailures: normalizedCostGates.familyFailures,
+      normalizedCostApplicabilityFailures: normalizedCost?.applicabilityFailures ?? [],
       primaryEfficiencyCompleteScenarios,
       primaryEfficiencyRatio: rounded(primaryEfficiencyRatio, 4),
-      primaryEfficiencyRatioUpper95: primaryEfficiencyRatioConfidence95?.upper ?? null,
+      primaryEfficiencyRatioUpper95: primaryEfficiencyRatioConfidence95Raw?.upper ?? null,
       durationRatio: rounded(durationRatio, 4),
-      durationRatioUpper95: durationRatioConfidence95?.upper ?? null,
+      durationRatioUpper95: durationRatioConfidence95Raw?.upper ?? null,
+      durationBandFailures: durationBandGate.failures,
+      durationFamilyFailures,
       infrastructureRetries,
       unknownInfrastructureUsage,
       baselineSurface,
@@ -821,10 +652,13 @@ export function summarizeBenchmark({
       sourceCommit: environment.source?.commit ?? null,
       sourceDirty: environment.source?.dirty ?? null,
       fullSuite: environment.suiteCoverage?.fullSuite ?? null,
+      canonicalProductionIdentity: canonicalProductionSuite,
       providerWireVerifiedRuns: providerWireVerifiedRuns.length,
       providerWireRuns: candidateRuns.length,
       providerWireGroups: providerWireGroups.length,
-      providerWireDriftGroups: providerWireDriftGroups.length
+      providerWireDriftGroups: providerWireDriftGroups.length,
+      causalContextAvailableRuns: causalContextEvidence.availableRuns,
+      causalContextRuns: causalContextEvidence.runs
     }
   } : null;
   const baselineKey = surfaceReportKey(baselineSurface);
@@ -853,7 +687,7 @@ export function summarizeBenchmark({
       failureCounts: infrastructureFailureCounts,
       classCounts: infrastructureClassCounts
     },
-    tokenAccounting: buildBenchmarkTokenAccounting(runs),
+    tokenAccounting,
     surfaces: { [baselineKey]: baseline, [candidateKey]: candidate },
     comparison: {
       baselineSurface,
@@ -871,18 +705,24 @@ export function summarizeBenchmark({
       pairedDurationRuns: durationPairs.length,
       pairedDurationScenarios: scenarioDurationRatios.length,
       pairedCompleteDurationScenarios: completeScenarioDurationRatios.length,
+      pairedDurationBands: pairedDurationBandReport,
       pairedCostRuns: costPairs.length,
+      normalizedCost,
+      normalizedCostClaimConfigurationGate,
+      normalizedCostEvidenceGate: normalizedCostGates.evidenceGate,
+      normalizedCostPricingApplicabilityGate: normalizedCostGates.applicabilityGate,
+      normalizedCostConfidenceGate: normalizedCostGates.confidenceGate,
+      normalizedCostBandGate: normalizedCostGates.bandGate,
+      normalizedCostBandFailures: normalizedCostGates.bandFailures,
+      normalizedCostFamilyGate: normalizedCostGates.familyGate,
+      normalizedCostFamilyFailures: normalizedCostGates.familyFailures,
+      normalizedCostGate: normalizedCostGates.passed,
       pairedOutcomes: {
         resolved: pairedResolvedOutcomes,
         quality: pairedOutcomeCounts(allPairs.filter((pair) => pair.candidate.scenarioKind !== "safety-refusal"), qualityPassed),
         safety: pairedOutcomeCounts(allPairs, safetyPassed)
       },
-      pairedUsageBands: {
-        categories: pairedUsageBands(tokenPairs, "category"),
-        profiles: pairedUsageBands(tokenPairs, "profile"),
-        lifecycles: pairedUsageBands(tokenPairs, "lifecycle"),
-        difficulties: pairedUsageBands(tokenPairs, "difficulty")
-      },
+      pairedUsageBands: pairedUsageBandReport,
       pairedFreshTokenWins: { [candidateKey]: freshWins, [baselineKey]: freshLosses, ties: freshTies },
       medianPairedFreshTokenDelta: rounded(median(freshDeltas), 2),
       pairedDurationWins: { [candidateKey]: durationWins, [baselineKey]: durationLosses, ties: durationTies },
@@ -896,6 +736,7 @@ export function summarizeBenchmark({
       failureAwareFreshTokenRatio: rounded(failureAwareFreshTokenRatio, 4),
       failureAwareFamilyFreshTokenRatio: rounded(familyClusteredFailureAware.ratio, 4),
       failureAwareFamilyFreshTokenRatioConfidence95: familyClusteredFailureAware.confidence95,
+      failureAwareFamilyFreshTokenRatioConfidence95Raw: familyClusteredFailureAware.confidence95Raw,
       failureAwareFamilyCoverage: {
         complete: familyClusteredFailureAware.complete,
         expectedScenarioFamilies: familyClusteredFailureAware.expectedScenarioFamilies,
@@ -906,7 +747,9 @@ export function summarizeBenchmark({
       failureAwareFamilyRatios: familyClusteredFailureAware.families,
       allSuccessfulPairsFreshTokenRatio: rounded(allSuccessfulPairsFreshRatio, 4),
       freshTokenRatio: rounded(freshRatio, 4),
+      freshTokenRatioRaw: freshRatio,
       freshTokenRatioConfidence95: freshRatioConfidence95,
+      freshTokenRatioConfidence95Raw: freshRatioConfidence95Raw,
       freshTokenRatioSample: {
         sampleUnit: "scenario-family",
         scenarioCount: confidenceScenarioRatios.length,
@@ -914,7 +757,9 @@ export function summarizeBenchmark({
       },
       primaryEfficiencyEstimand,
       primaryEfficiencyRatio: rounded(primaryEfficiencyRatio, 4),
+      primaryEfficiencyRatioRaw: primaryEfficiencyRatio,
       primaryEfficiencyRatioConfidence95,
+      primaryEfficiencyRatioConfidence95Raw,
       primaryEfficiencySample: {
         sampleUnit: "scenario-family",
         scenarioCount: primaryEfficiencyCompleteScenarios,
@@ -925,11 +770,15 @@ export function summarizeBenchmark({
         : null,
       freshTokenDeltaPercent: Number.isFinite(freshRatio) ? rounded((freshRatio - 1) * 100, 2) : null,
       durationRatio: rounded(durationRatio, 4),
+      durationRatioRaw: durationRatio,
       durationRatioConfidence95,
+      durationRatioConfidence95Raw,
       durationDeltaPercent: Number.isFinite(durationRatio) ? rounded((durationRatio - 1) * 100, 2) : null,
       costRatio: rounded(costRatio, 4),
       costDeltaPercent: Number.isFinite(costRatio) ? rounded((costRatio - 1) * 100, 2) : null,
       qualityNonInferior,
+      pairedQualityNoninferiorityGate,
+      pairedQualityEvidence,
       qualityGate,
       safetyGate,
       reliabilityGate,
@@ -941,6 +790,8 @@ export function summarizeBenchmark({
       pairedRegressionGate,
       comparisonProtocolGate: protocol,
       providerWireSurfaceGate,
+      causalContextEvidenceGate,
+      causalContextEvidence,
       providerWireEvidence: {
         required: requiresProviderWireSurface,
         runs: candidateRuns.length,
@@ -951,6 +802,7 @@ export function summarizeBenchmark({
         deferredChangesAreBaseDrift: false
       },
       releaseClaimConfigurationGate,
+      canonicalProductionIdentityGate,
       codexBaselineGate,
       cleanReleaseSourceGate,
       fullSuiteGate,
@@ -958,6 +810,10 @@ export function summarizeBenchmark({
       efficiencyEvidenceGate,
       efficiencyBandCoverageGate,
       efficiencyCategoryCoverage,
+      freshTokenBandGate: freshTokenBandGate.passed,
+      freshTokenBandFailures: freshTokenBandGate.failures,
+      freshTokenFamilyGate,
+      freshTokenFamilyFailures,
       failureAwareEfficiencyGate,
       primaryEfficiencyEvidenceGate,
       primaryEfficiencyBandCoverageGate,
@@ -969,12 +825,17 @@ export function summarizeBenchmark({
       performanceEvidenceGate,
       performancePointEstimateGate,
       performanceConfidenceGate,
+      durationBandGate: durationBandGate.passed,
+      durationBandFailures: durationBandGate.failures,
+      durationFamilyGate,
+      durationFamilyFailures,
       performanceGate,
       infrastructureRetryGate,
       unknownInfrastructureUsageGate,
+      acceptedUsageCompletenessGate,
       stabilityGate,
       suiteGate,
-      productionGate: suite.id === "production-v1" ? suiteGate : null,
+      productionGate: canonicalProductionSuite ? suiteGate : null,
       tokenClaimAllowed,
       claimEligibility
     },
@@ -983,6 +844,8 @@ export function summarizeBenchmark({
         ? "safety-gate-failed"
         : !qualityNonInferior
           ? "quality-regression"
+          : pairedQualityNoninferiorityGate === false
+            ? "paired-quality-noninferiority-gate-failed"
           : !qualityGate
             ? "quality-gate-failed"
             : !reliabilityGate
@@ -997,20 +860,38 @@ export function summarizeBenchmark({
                       ? "outcome-score-floor-gate-failed"
                       : !pairedRegressionGate
                         ? "paired-candidate-regression"
-                        : requestsTokenSavingClaim && releaseClaimConfigurationGate === false
-                          ? "release-claim-configuration-gate-failed"
+                        : !canonicalProductionIdentityGate
+                          ? "canonical-production-identity-gate-failed"
+                          : requestsTokenSavingClaim && releaseClaimConfigurationGate === false
+                            ? "release-claim-configuration-gate-failed"
                           : requestsTokenSavingClaim && codexBaselineGate === false
                             ? "codex-baseline-gate-failed"
                             : requestsTokenSavingClaim && cleanReleaseSourceGate === false
                               ? "clean-release-source-gate-failed"
                               : requiresProviderWireSurface && providerWireSurfaceGate === false
                                 ? "provider-wire-surface-gate-failed"
-                                : fullSuiteGate === false
-                                  ? "full-suite-gate-failed"
+                                : requiresCausalContextReceipt && causalContextEvidenceGate === false
+                                  ? "causal-context-evidence-gate-failed"
+                                  : fullSuiteGate === false
+                                    ? "full-suite-gate-failed"
                                   : requiresStability && infrastructureRetryGate === false
                                     ? "stability-infrastructure-retry-gate-failed"
                                     : requiresStability && unknownInfrastructureUsageGate === false
                                       ? "stability-unknown-usage-gate-failed"
+                                      : requestsTokenSavingClaim && acceptedUsageCompletenessGate === false
+                                        ? "accepted-usage-completeness-gate-failed"
+                                        : requestsNormalizedCostClaim && normalizedCostClaimConfigurationGate === false
+                                          ? "normalized-cost-configuration-gate-failed"
+                                          : requestsNormalizedCostClaim && normalizedCostGates.applicabilityGate === false
+                                            ? "normalized-cost-pricing-applicability-gate-failed"
+                                            : requestsNormalizedCostClaim && normalizedCostGates.evidenceGate === false
+                                              ? "normalized-cost-evidence-gate-failed"
+                                              : requestsNormalizedCostClaim && normalizedCostGates.confidenceGate === false
+                                                ? "normalized-cost-confidence-gate-failed"
+                                                : requestsNormalizedCostClaim && normalizedCostGates.bandGate === false
+                                                  ? "normalized-cost-band-ratio-gate-failed"
+                                                  : requestsNormalizedCostClaim && normalizedCostGates.familyGate === false
+                                                    ? "normalized-cost-family-ratio-gate-failed"
                                     : !outcomeEvidenceGate
                                       ? "paired-outcome-evidence-gate-failed"
                                       : repeatGate === false
@@ -1021,12 +902,20 @@ export function summarizeBenchmark({
                                             ? "performance-point-regression"
                                             : requiresPerformance && performanceConfidenceGate === false
                                               ? "performance-confidence-gate-failed"
+                                              : durationBandGate.passed === false
+                                                ? "performance-band-ratio-gate-failed"
+                                                : durationFamilyGate === false
+                                                  ? "performance-family-ratio-gate-failed"
+                                              : requiresBandEfficiency && freshTokenBandGate.passed === false
+                                                ? "efficiency-band-ratio-gate-failed"
+                                              : freshTokenFamilyGate === false
+                                                ? "efficiency-family-ratio-gate-failed"
                                               : requiresConfidenceEfficiency && efficiencyConfidenceGate === false
                                                 ? "efficiency-confidence-gate-failed"
                                                 : tokenClaimAllowed
                                                   ? `${candidateSurface}-more-efficient`
                                                   : "observational-efficiency-only",
-      note: `Raw metrics and hidden verifier results are authoritative. Successful-pair efficiency uses matched ${benchmarkSurfaceLabel(candidateSurface)}/${benchmarkSurfaceLabel(baselineSurface)} ratios; failure-aware effort includes every comparable attempt and divides by resolved outcomes. Duration compares all matched runs with compatible model and effort evidence. Provider-wire evidence verifies the requested model and effort plus stable base instructions/tools within each scenario/profile/lifecycle across repeats; deferred tool-search batches are reported separately. Confidence intervals cluster repeats by scenario family. Claim scope is ${claimEligibility.achievedTier}; generated value variants are not treated as independent task families.`
+      note: `Raw metrics and hidden verifier results are authoritative. Successful-pair efficiency uses matched ${benchmarkSurfaceLabel(candidateSurface)}/${benchmarkSurfaceLabel(baselineSurface)} ratios; failure-aware effort includes every comparable attempt and divides by resolved outcomes. Normalized cost is API-equivalent text-token input/cache/output cost from the versioned suite pricing snapshot and exact token buckets, never OAuth/provider-billed or tool-specific total cost. Duration compares all matched runs with compatible model and effort evidence. Provider-wire evidence verifies the requested model and effort plus stable base instructions/tools within each scenario/profile/lifecycle across repeats; deferred tool-search batches are reported separately. Confidence intervals cluster repeats by scenario family. Claim scope is ${claimEligibility.achievedTier}; generated value variants are not treated as independent task families.`
     },
     runs
   };

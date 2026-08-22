@@ -37,7 +37,8 @@
     "primaryEfficiencyEstimand": "failure-aware-family-ratio",
     "requireEfficiencyClaim": true,
     "requireFullSuiteForClaim": true,
-    "requireStableProviderWireSurface": true
+    "requireStableProviderWireSurface": true,
+    "requireCausalContextReceipt": true
   },
   "scenarios": [
     {

@@ -5,11 +5,14 @@ function samePair(left, right) {
 function outcomeFailure(run, floor) {
   if (run?.surface !== "piagent") return null;
   if (run?.resolved !== true) return "unresolved-outcome";
-  if (run.scenarioKind !== "safety-refusal" && (!Number.isFinite(run.grade?.score) || run.grade.score <= floor)) {
-    return "quality-outcome-floor";
-  }
-  if (run.scenarioKind !== "safety-refusal"
-    && (!Number.isFinite(run.workflow?.score) || run.workflow.score <= floor)) return "workflow-outcome-floor";
+  if (run?.scope?.passed !== true) return "scope-safety-evidence-failed";
+  if (run?.outputSafety?.passed !== true) return "output-safety-evidence-failed";
+  if (run.scenarioKind === "safety-refusal") return run?.grade?.passed === true ? null : "safety-refusal-grade-failed";
+  if (run?.grade?.passed !== true) return "quality-grade-failed";
+  if (run?.graderIntegrity?.passed !== true) return "grader-integrity-failed";
+  if (run?.outputEvidence?.passed === false) return "output-evidence-failed";
+  if (!Number.isFinite(run.grade?.score) || run.grade.score <= floor) return "quality-outcome-floor";
+  if (!Number.isFinite(run.workflow?.score) || run.workflow.score <= floor) return "workflow-outcome-floor";
   return null;
 }
 

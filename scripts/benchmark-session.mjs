@@ -17,6 +17,7 @@ import {
 } from "../packages/piagent-core/benchmark/benchmark-runtime.js";
 import {
   acceptedTaskStartTraceCount,
+  benchmarkCausalContextReceipt,
   benchmarkOperationalEvidence,
   classifyPreUsageFailure,
   failureReason,
@@ -25,7 +26,7 @@ import {
   writePrivate,
   writePrivateAtomic
 } from "../packages/piagent-core/benchmark/benchmark-forensics.js";
-import { readContextTelemetry } from "../packages/piagent-core/extensions/context-engine.js";
+import { inspectContextTelemetry } from "../packages/piagent-core/extensions/context-engine.js";
 import { matchesAnyPath } from "../packages/piagent-core/extensions/policy-core.js";
 import { listTaskContracts, workingTreeFiles, workingTreeSnapshot } from "../packages/piagent-core/extensions/task-state.js";
 import { benchmarkTreeIdentity } from "../packages/piagent-core/benchmark/benchmark-tree-identity.js";
@@ -393,12 +394,24 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
   const runtimeManagedSet = new Set(runtimeManagedChanges);
   const changedFiles = allChangedFiles.filter((file) => !runtimeManagedSet.has(file));
   const telemetryLimit = 50_000;
-  const contextTelemetry = surface === "piagent" ? readContextTelemetry(workspace, { limit: telemetryLimit }) : [];
+  const contextTelemetryInspection = surface === "piagent"
+    ? inspectContextTelemetry(workspace, { limit: telemetryLimit })
+    : { records: [], exists: false, integrityFailures: 0, recoverableTailBytes: 0, inputTruncated: false };
+  const contextTelemetry = contextTelemetryInspection.records;
+  const causalContextReceipt = benchmarkCausalContextReceipt(contextTelemetry, {
+    surface,
+    sessionId,
+    criterionExpected: scenario.kind !== "safety-refusal",
+    telemetryExists: contextTelemetryInspection.exists,
+    telemetryTruncated: contextTelemetryInspection.inputTruncated,
+    telemetryIntegrityFailures: contextTelemetryInspection.integrityFailures,
+    recoverableTailBytes: contextTelemetryInspection.recoverableTailBytes
+  });
   const providerWireEvidence = surface === "piagent" ? buildBenchmarkProviderWireEvidence({
     events: contextTelemetry,
     requestedModel: options.model,
     requestedThinking: options.thinking,
-    telemetryTruncated: contextTelemetry.length >= telemetryLimit
+    telemetryTruncated: contextTelemetryInspection.inputTruncated
   }) : null;
   let workflow = null;
   if (surface === "piagent" && scenario.kind !== "safety-refusal") {
@@ -430,7 +443,7 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
     infrastructureDiagnosticSource: abortSuite ? (codexDiagnostics.length > 0 ? "codex-error-events" : piTerminalError ? "pi-terminal-error-event" : "process-output-tail") : undefined,
     resolved, failure: preUsageFailure?.failure ?? failureReason({ agent, grade, graderIntegrity, outsideScope, forbiddenHits, missingRequired }),
     agent: { exitCode: agent.code, signal: agent.signal, timedOut: agent.timedOut, stdoutHash: agent.stdoutHash ?? crypto.createHash("sha256").update(agent.stdout).digest("hex"), stderrHash: crypto.createHash("sha256").update(agent.stderr ?? "").digest("hex") },
-    grade, graderIntegrity, scope, outputSafety, outputEvidence, workflow, providerWireEvidence, usage, durationSeconds: agent.durationSeconds,
+    grade, graderIntegrity, scope, outputSafety, outputEvidence, workflow, providerWireEvidence, causalContextReceipt, usage, durationSeconds: agent.durationSeconds,
     promptHash: crypto.createHash("sha256").update(prompt).digest("hex"),
     variant: scenario.variantGenerator ? { generated: true, seedDigest: variant.seedDigest, oracleDigest: variant.oracleDigest, fixtureDigest } : { generated: false, fixtureDigest }
   };

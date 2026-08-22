@@ -1508,7 +1508,7 @@ describe("piagent guard integration", () => {
     assert.match(result.systemPrompt, /Project-specific tail/);
   });
 
-  it("builds and injects a bounded navigation pack without exposing protected files", async () => {
+  it("builds and injects one criterion-aware intake pack without unrelated graph siblings", async () => {
     const { root, piagentGuard } = await loadGuardFixture();
     const cwd = createProject(root);
     fs.writeFileSync(path.join(cwd, "src", "invoice.ts"), [
@@ -1522,6 +1522,8 @@ describe("piagent guard integration", () => {
       "test('total', () => calculateInvoiceTotal([1, 2]));",
       ""
     ].join("\n"));
+    fs.writeFileSync(path.join(cwd, "src", "unrelated.ts"), "export const unrelated = true;\n");
+    fs.writeFileSync(path.join(cwd, "src", "unrelated.test.ts"), "test('unrelated', () => {});\n");
     const memoryFact = appendRepositoryMemoryFact(cwd, {
       kind: "decision",
       fact: "Invoice totals are implemented in the invoice service module.",
@@ -1550,14 +1552,30 @@ describe("piagent guard integration", () => {
       systemPrompt: "stable test system prompt",
       systemPromptOptions: { cwd, selectedTools: [...harness.activeTools] }
     }, ctx);
-    assert.equal(injected.message.customType, "piagent-context-pack-v2");
+    assert.equal(injected.message.customType, "piagent-runtime-task-intake");
+    assert.match(injected.message.content, /criterion context snapshot/);
     assert.match(injected.message.content, /src\/invoice\.ts/);
-    assert.match(injected.message.content, /repository memory: advisory only/);
-    assert.deepEqual(injected.message.details.repositoryMemoryIds, [memoryFact.id]);
+    assert.match(injected.message.content, /src\/invoice\.test\.ts/);
+    assert.doesNotMatch(injected.message.content, /repository memory: advisory only/);
+    assert.doesNotMatch(injected.message.content, /unrelated/);
+    assert.equal(injected.message.content.includes(memoryFact.fact), false);
     assert.doesNotMatch(injected.message.content, /\.env/);
-    assert.ok(injected.message.details.estimatedTokens <= 1_200);
+    assert.ok(injected.message.details.estimatedTokens <= 680);
+    assert.ok(injected.message.details.selectedItems.length >= 2);
+    for (const item of injected.message.details.selectedItems) {
+      assert.match(item.fileContentHash, /^context-file-v1:[a-f0-9]{64}$/);
+      assert.match(item.payloadHash, /^context-payload-v1:[a-f0-9]{64}$/);
+      assert.ok(["full", "snippet"].includes(item.representation));
+      assert.ok(Array.isArray(item.ranges));
+      assert.equal(item.generation, 1);
+    }
     assert.equal(typeof injected.message.details.contextDelivery.deliveryId, "string");
     await harness.handlers.get("message_start")({ message: { role: "custom", ...injected.message } }, ctx);
+    const injectedReceipt = readJsonl(path.join(cwd, ".pi", "piagent-state", "context-engine", "events.jsonl"))
+      .filter((event) => event.event === "context_pack_injected")
+      .at(-1);
+    assert.equal(injectedReceipt.source, "criterion-pack");
+    assert.deepEqual(injectedReceipt.selectedItems, injected.message.details.selectedItems);
 
     const reused = await harness.tools.get("piagent_context_engine").execute(
       "engine-pack-reuse",
@@ -1566,9 +1584,30 @@ describe("piagent guard integration", () => {
       () => {},
       ctx
     );
-    assert.equal(reused.details.reusedInjectedPack, true);
-    assert.match(reused.content[0].text, /duplicate payload skipped/);
-    assert.ok(reused.content[0].text.length < injected.message.content.length);
+    assert.notEqual(reused.details.reusedInjectedPack, true, "discovery candidates are not recorded as the delivered criterion pack");
+    assert.match(reused.content[0].text, /Pi Context Pack v2/);
+    const toolOffer = readJsonl(path.join(cwd, ".pi", "piagent-state", "context-engine", "events.jsonl"))
+      .filter((event) => event.event === "context_pack_offered" && event.source === "context-tool")
+      .at(-1);
+    assert.ok(toolOffer.selectedItems.length > 0);
+    for (const item of toolOffer.selectedItems) {
+      assert.match(item.fileContentHash, /^context-file-v1:[a-f0-9]{64}$/);
+      assert.match(item.payloadHash, /^context-payload-v1:[a-f0-9]{64}$/);
+      assert.equal(typeof item.representation, "string");
+      assert.ok(Array.isArray(item.ranges));
+      assert.equal(item.generation, 1);
+    }
+
+    await harness.commands.get("context").handler(`pack ${prompt}`, ctx);
+    const commandMessage = harness.entries
+      .filter((entry) => entry.type === "message" && entry.payload.customType === "piagent-context-pack-v2")
+      .at(-1)?.payload;
+    assert.ok(commandMessage.details.selectedItems.length > 0);
+    const commandOffer = readJsonl(path.join(cwd, ".pi", "piagent-state", "context-engine", "events.jsonl"))
+      .filter((event) => event.event === "context_pack_offered" && event.source === "context-command")
+      .at(-1);
+    assert.deepEqual(commandOffer.selectedItems, commandMessage.details.selectedItems);
+    assert.equal(commandOffer.selectedItems.every((item) => item.fileContentHash && item.payloadHash && item.representation && Array.isArray(item.ranges)), true);
 
     const repeated = await harness.handlers.get("before_agent_start")({
       prompt,
@@ -1584,7 +1623,8 @@ describe("piagent guard integration", () => {
       systemPrompt: "stable test system prompt",
       systemPromptOptions: { cwd, selectedTools: [...harness.activeTools] }
     }, secondSession);
-    assert.equal(secondInjected.message.customType, "piagent-context-pack-v2");
+    assert.equal(secondInjected.message.customType, "piagent-runtime-task-intake");
+    assert.doesNotMatch(secondInjected.message.content, /unrelated/);
 
     const explicitSession = createContext(cwd, { sessionId: "context-session-explicit", sessionName: "CONTEXT-EXPLICIT" });
     const explicitPrompt = "Fix invoice totals in src/invoice.ts and run its focused test";
@@ -1594,12 +1634,12 @@ describe("piagent guard integration", () => {
       systemPrompt: "stable test system prompt",
       systemPromptOptions: { cwd, selectedTools: [...harness.activeTools] }
     }, explicitSession);
-    assert.equal(explicitResult.message.customType, "piagent-context-pack-v2");
-    assert.match(explicitResult.message.content, /Pi Context Pack v2/);
-    assert.match(explicitResult.message.content, /Current-turn source snapshot/);
+    assert.equal(explicitResult.message.customType, "piagent-runtime-task-intake");
+    assert.match(explicitResult.message.content, /criterion context snapshot/);
     assert.match(explicitResult.message.content, /calculateInvoiceTotal/);
     assert.doesNotMatch(explicitResult.message.content, /(?:### |- )(?:package\.json|AGENTS\.md)/);
     assert.match(explicitResult.message.content, /src\/invoice\.ts/);
+    assert.ok(explicitResult.message.details.estimatedTokens <= 420);
   });
 
   it("rebuilds a context index created under weaker exclusions before packing it", async () => {
@@ -2676,6 +2716,13 @@ describe("piagent guard integration", () => {
     assert.match(mutatedAfterDone.reason, /is completed/);
 
     fs.writeFileSync(path.join(cwd, "src", "other.ts"), "export const other = true;\n");
+    const successorPrompt = "Start a different task in this same session for src/other.ts";
+    await harness.handlers.get("input")({ text: successorPrompt, source: "user" }, ctx);
+    const successorInput = readJsonl(path.join(cwd, ".pi", "piagent-state", "context-engine", "events.jsonl"))
+      .filter((event) => event.event === "user_input")
+      .at(-1);
+    assert.equal(successorInput.taskRunId, undefined, "the successor request must not be attributed to the completed task");
+    assert.equal(successorInput.taskId, undefined, "completed task identity must not leak into the successor turn");
     const secondTask = await harness.tools.get("piagent_task_start").execute("same-session-second-task", {
       taskId: "TASK-102",
       summary: "Continue the same conversation with a different governed task",
@@ -4054,7 +4101,18 @@ describe("piagent guard integration", () => {
     piagentGuard(harness.pi);
     const originalCtx = createContext(cwd, { sessionId: "identity-a", sessionName: "IDENTITY-A" });
     await harness.handlers.get("session_start")({}, originalCtx);
+    const repeatedPrompt = "Inspect README.md and explain the current fixture state";
+    await harness.handlers.get("input")({ text: repeatedPrompt, source: "user" }, originalCtx);
+    const predecessorTurn = readJsonl(path.join(cwd, ".pi", "piagent-state", "context-engine", "events.jsonl"))
+      .filter((event) => event.event === "user_input")
+      .at(-1)?.turnId;
+    assert.equal(typeof predecessorTurn, "string");
     const started = await startSourceTask(harness, originalCtx, "identity-bound", ["src/**"]);
+    const repeatedReadEvent = {
+      toolName: "read", input: { path: "README.md" },
+      content: [{ type: "text", text: "# Fixture" }], isError: false
+    };
+    assert.equal(await harness.handlers.get("tool_result")(repeatedReadEvent, originalCtx), undefined);
     const conflictCtx = createContext(cwd, {
       sessionId: "identity-b",
       sessionName: "IDENTITY-B",
@@ -4074,6 +4132,50 @@ describe("piagent guard integration", () => {
     const terminalResume = createContext(cwd, { sessionId: "identity-a", sessionName: "RENAMED-TERMINAL" });
     await harness.handlers.get("session_start")({ reason: "resume" }, terminalResume);
     assert.deepEqual(fs.readFileSync(taskPath), before, "terminal resume must not rewrite task state or session name");
+    assert.equal(await harness.handlers.get("tool_result")(repeatedReadEvent, terminalResume), undefined,
+      "terminal session re-entry must not reuse the predecessor task's repeated-read cache");
+    await harness.handlers.get("before_agent_start")({
+      prompt: repeatedPrompt,
+      systemPrompt: "stable terminal re-entry prompt",
+      systemPromptOptions: { cwd, selectedTools: [...harness.activeTools] }
+    }, terminalResume);
+    const resumedTurn = readJsonl(path.join(cwd, ".pi", "piagent-state", "context-engine", "events.jsonl"))
+      .filter((event) => event.event === "agent_prompt")
+      .at(-1)?.turnId;
+    assert.equal(typeof resumedTurn, "string");
+    assert.notEqual(resumedTurn, predecessorTurn, "terminal session re-entry must start a fresh turn epoch even for the same prompt");
+  });
+
+  it("clears cached task state before a direct task start when the durable session binding disappeared", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const sessionId = "missing-binding-session";
+    const ctx = createContext(cwd, { sessionId, sessionName: "MISSING-BINDING" });
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+    await startSourceTask(harness, ctx, "binding-predecessor", ["src/**"]);
+    const repeatedReadEvent = {
+      toolName: "read", input: { path: "README.md" },
+      content: [{ type: "text", text: "# Fixture" }], isError: false
+    };
+    assert.equal(await harness.handlers.get("tool_result")(repeatedReadEvent, ctx), undefined);
+
+    const bindingDigest = crypto.createHash("sha256").update(sessionId).digest("hex");
+    fs.rmSync(path.join(cwd, ".pi", "piagent-state", "session-tasks", `${bindingDigest}.json`));
+    assert.equal(activeSessionTask(cwd, sessionId), undefined);
+
+    const successor = await harness.tools.get("piagent_task_start").execute("missing-binding-successor", {
+      taskId: "binding-successor",
+      summary: "Start a clean successor after the durable session binding disappeared",
+      riskLane: "tiny",
+      expectedOutput: "A new task owns the session without predecessor runtime cache.",
+      acceptanceCriteria: ["The successor does not inherit predecessor tool-result state"],
+      scope: ["src/**"]
+    }, undefined, undefined, ctx);
+    assert.equal(successor.isError, undefined, successor.content?.[0]?.text);
+    assert.equal(await harness.handlers.get("tool_result")(repeatedReadEvent, ctx), undefined,
+      "direct task start must clear predecessor repeated-result state when durable binding is absent");
   });
 
   it("blocks mutation when a resumed task journal has a corrupt tail", async () => {

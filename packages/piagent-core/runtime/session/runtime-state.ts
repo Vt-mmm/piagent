@@ -43,11 +43,14 @@ export type InjectedContextPack = {
 export type ContextInjectionItem = {
   path: string;
   estimatedTokens: number;
+  sources?: string[];
   fileContentHash?: string;
+  sanitizedContentDigest?: string;
   payloadHash?: string;
   representation?: string;
   ranges?: Array<{ start: number; end: number }>;
   generation?: number;
+  sensitiveContentRedacted?: boolean;
 };
 
 export type ContextInjectionTelemetry = {
@@ -438,6 +441,31 @@ export class RuntimeSessionState {
   ): void {
     this.#seenToolResults.set(`${this.sessionKey(ctx)}\u0000${fingerprintKey}`, value);
     evictOldest(this.#seenToolResults, 500);
+  }
+
+  clearTaskBoundary(ctx: ExtensionContext, taskRunId: string): void {
+    const sessionKey = this.sessionKey(ctx);
+    const prefix = `${sessionKey}\u0000`;
+    const taskIdentity = this.#taskIdentityBySession.get(sessionKey);
+    if (taskIdentity && taskIdentity.taskRunId !== taskRunId) return;
+    this.#taskIdentityBySession.delete(sessionKey);
+    this.#observedContextBySession.delete(sessionKey);
+    this.#preTaskContextBySession.delete(sessionKey);
+    this.clearShellMutationSnapshots(ctx);
+    this.#performanceReview.clearTask(taskRunId);
+    this.#modelAuthorship.clear(taskRunId);
+    this.#deliveredResumeContexts.delete(`${prefix}${taskRunId}`);
+    this.#qualifiedContextEvidenceByTask.delete(`${prefix}${taskRunId}`);
+    for (const values of [this.#autoPackedPrompts, this.#deliveredResumeContexts]) {
+      for (const key of values) {
+        if (key.startsWith(prefix)) values.delete(key);
+      }
+    }
+    for (const values of [this.#seenToolResults, this.#injectedContextPacks, this.#pendingContextDeliveries]) {
+      for (const key of values.keys()) {
+        if (key.startsWith(prefix)) values.delete(key);
+      }
+    }
   }
 
   clearSession(ctx: ExtensionContext): void {

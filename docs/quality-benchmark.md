@@ -123,19 +123,117 @@ mỗi family và 2 surface, tổng cộng 108 model session. Bộ này dùng đ�
 regression của harness/model policy, không tự chứng minh generalization hoặc độ
 ổn định production.
 
+Contract hiện tại chỉ cho phép claim production-v1 khi cận trên 95% của
+fresh-token ratio không vượt `0.60`, tức bảo đảm ít nhất 40% fresh-token
+reduction trên public-regression này. Cùng ngưỡng `0.60` còn áp dụng fail-closed
+cho point ratio của từng category, profile, lifecycle và difficulty band; CI của
+band vẫn được report để chẩn đoán nhưng không thay global upper95 gate. Mỗi
+comparable scenario family còn có guardrail point ratio `<=1.00`, nên không thể
+lấy nhiều family tiết kiệm mạnh để che một family tốn token hơn baseline CLI.
+Mọi attempt được chấp nhận phải có exact terminal token buckets và đủ cả 18/18
+family; thiếu một family không được bỏ qua bởi ngưỡng mẫu tối thiểu.
+
+Codex OAuth không cung cấp billed monetary cost, nên `usage.cost` vẫn là `n/a`.
+Production-v1 đo riêng **API-equivalent text-token cost** bằng pricing snapshot
+có version trong suite: GPT-5.6 Luna ở `$0.20/M` fresh input, `$0.02/M` cached
+input, `$1.20/M` output và cache write bằng `1.25x` fresh-input rate. Gate độc
+lập yêu cầu family-clustered upper95 `<=0.60`, point ratio của từng category,
+profile, lifecycle, difficulty `<=0.60`, và từng family `<=1.00`. Đây chỉ là
+input/cache/output text-token normalization, không bao gồm tool-specific charge
+và không phải hóa đơn OAuth. Snapshot dẫn nguồn
+[OpenAI GPT-5.6 Luna model page](https://developers.openai.com/api/docs/models/gpt-5.6-luna).
+
+Long-context multiplier là thuộc tính từng request: request input trên 272K
+dùng input `2x` và output `1.5x`. Report chỉ dùng standard tier khi tổng prompt
+tokens của run không vượt 272K, vì tổng đó là upper bound của từng request. Nếu
+tổng lớn hơn nhưng không có exact per-request usage, applicability là `unknown`
+và cost gate fail-closed; runner không nhân mù trên aggregate. Nhãn
+`steady-state` ở suite này nghĩa là project đã được onboarding/build Context
+Engine trước một request mới; nó không phải bằng chứng multi-turn hay session
+continuity trong công việc thực tế.
+
+Production suite khóa exact surface/model/thinking ở Piagent và baseline CLI,
+`openai-codex/gpt-5.6-luna`, thinking `medium`, controlled Codex home. Kế hoạch
+chi tiêu được freeze tại `benchmarks/production-v1/spend-control.v1.json` với
+seed impact-first cố định: pair đầu là `cli-double-dash` (regression từng xuất
+hiện muộn), còn 12 session đầu phủ đủ sáu category, cả hai lifecycle và ba mức
+difficulty. Seed chỉ sắp xếp phát hiện lỗi sớm; claim cuối vẫn dùng toàn bộ 108
+session.
+
 Production suite có thể chạy lâu vì mọi session chạy tuần tự để giữ baseline
-sạch. Không nên để một terminal chạy mù nhiều giờ. Dùng chunk/resume cho gate
-thủ công:
+sạch. Chạy theo các mốc tích lũy `S0/12/36/72/108`; chỉ `S108` được xét claim.
+Mọi stage trước chỉ là spend-control diagnostic. `--max-sessions` tính số session
+mới của chunk hiện tại, vì vậy các lần resume lần lượt dùng `24`, `36`, `36`:
 
 ```bash
 piagent-benchmark --production \
   --surfaces piagent,codex-cli \
   --model openai-codex/gpt-5.6-luna \
   --thinking medium \
-  --max-runtime-minutes 90
+  --seed production-v1-40-gate-v1-1370 \
+  --infrastructure-retries 0 \
+  --stop-after-failed-pair \
+  --preflight-only
 
-piagent-benchmark --resume /path/to/report-dir --yes
+piagent-benchmark --production \
+  --seed production-v1-40-gate-v1-1370 \
+  --stop-after-failed-pair \
+  --max-sessions 12 \
+  --output /path/to/report-dir \
+  --yes
+
+piagent-benchmark --resume /path/to/report-dir --max-sessions 24 --yes
+piagent-benchmark --resume /path/to/report-dir --max-sessions 36 --yes
+piagent-benchmark --resume /path/to/report-dir --max-sessions 36 --yes
 ```
+
+Không mở stage kế tiếp nếu có Piagent unresolved/score không vượt floor,
+baseline-pass/Piagent-fail, unknown provider-attempt usage, infrastructure retry,
+model/thinking/provider-wire drift hoặc candidate provenance drift. Early success
+không phải stopping rule: chưa đủ 108 session thì tuyệt đối không claim đạt 40%.
+File spend-control là contract được test; runner đọc trực tiếp các mốc session,
+từ chối chunk đầu hoặc chunk resume không đúng phần còn lại của window đã duyệt.
+Seed, surface, model, thinking, repeat, zero-retry và terminal pair-stop cũng được
+bind trực tiếp trước provider; truyền đủ cả 18 scenario qua `--scenarios` không
+tắt được spend control. `--preflight-only` không cần `--max-sessions` vì không
+khởi động model. Mỗi pause in sẵn lệnh resume với exact chunk còn lại; lệnh sai
+bị từ chối trước khi durable stage state được mở sang window mới.
+Built-in production claim còn yêu cầu source Git sạch ngay trước auth/tool
+preflight; một candidate đã biết claim-ineligible không được phép tiêu S12–S108.
+Outcome-floor,
+infrastructure/unknown-usage và provenance có đường dừng/abort tự động. Tại mỗi
+điểm dừng `--max-sessions` hoặc `--max-runtime-minutes`, runner ghi atomic private
+`stage-diagnostic.json`. Với `production-v1`, lệnh `--resume` tự tính lại
+diagnostic từ ledger đã chấp nhận và từ chối chạy thêm model session nếu
+`stageAdvanceAllowed` không phải `true`; không thể vượt gate chỉ bằng cách sửa
+file diagnostic đã ghi ở lần pause.
+Artifact provider-free này kiểm tra pair boundary, candidate outcome floor,
+baseline-pass/Piagent-fail, observed paired grade non-inferiority, exact accepted
+usage, model/thinking/provider-wire, retry/unknown usage và pricing applicability.
+Mỗi Piagent record còn phải có causal context receipt hoàn chỉnh. Receipt chỉ
+giữ aggregate, không giữ prompt, path, hash hay ID; nó bind provenance của
+telemetry, thứ tự prompt/terminal và exact offer/delivery/injection lifecycle.
+Baseline CLI dùng sentinel `not-applicable`. Receipt thiếu hoặc sai vẫn giữ record
+usage đã trả phí trong ledger, nhưng chặn stage kế tiếp và chặn claim cuối.
+Tại S12, diagnostic tổng hợp estimated pack token, lý do criterion chọn 0,
+managed-prefix compaction, successful direct-path reread và số shell call sau
+injection. Shell count được nêu riêng vì reread bên trong command không bị diễn
+giải nhầm thành số 0 đã chứng minh.
+Nó còn dừng để review nếu bất kỳ
+observed pair hoặc observed family nào có fresh-token, API-equivalent text-token
+cost hoặc duration ratio lớn hơn `1`. Pair chưa bắt đầu vẫn được liệt kê nhưng
+không chặn một pause đúng pair boundary. Diagnostic luôn có
+`diagnosticOnly=true`, `claimEligible=false`; dù kết quả sớm tốt cũng không được
+dùng làm stopping rule hay claim release.
+
+Durable stage state, không phải `paused.json`, quyết định quyền resume. Nếu tiến
+trình chết đúng sau record cuối của S12/S36/S72, resume nhận diện lại boundary,
+chạy gate provider-free rồi mới mở đúng window kế tiếp. Nếu chết sau record thứ
+108 nhưng trước khi ghi report, runner không áp lại heuristic của stage sớm và
+không chạy auth/tool/provider preflight. Nó hash lại candidate, suite, runtime-
+dependency tree và ledger hiện tại, đồng thời dùng lại command/auth/preflight
+identity đã được freeze cùng các measurement; sau đó các gate cuối, không phải
+heuristic của stage sớm, quyết định verdict.
 
 Runner ghi `run-manifest.json` ngay khi bắt đầu để giữ root seed, suite digest,
 surface, repeat và execution order. Nếu máy sleep, terminal bị ngắt hoặc đạt
@@ -339,8 +437,10 @@ fresh token = fresh input + output_tokens
 được parse streaming nên command output lớn không phụ thuộc giới hạn phần log
 giữ trong RAM; report chỉ lưu hash toàn bộ stdout, tool histogram và số usage,
 không lưu raw assistant/tool output. Codex OAuth JSONL không báo chi phí tiền,
-vì vậy cost hiển thị `n/a` và không tham gia cost ratio thay vì bị giả thành
-`$0` hay dùng bảng giá có thể thay đổi.
+vì vậy provider-reported cost hiển thị `n/a` thay vì bị giả thành `$0`.
+Production report giữ metric đó tách biệt với API-equivalent text-token cost;
+metric chuẩn hóa chỉ tồn tại khi exact buckets, model binding và pricing
+applicability đều pass snapshot có version.
 
 Trong CI hoặc terminal không tương tác, phải thêm `--yes`. Đây là xác nhận cho
 phép runner bắt đầu các model session có thể tính phí, không phải bỏ qua safety
@@ -543,6 +643,8 @@ Runner chỉ cho phép kết luận tiết kiệm token khi:
 
 - có ít nhất 3 cặp run mà cả baseline và Piagent cùng pass, đều có fresh token
   dương và ghi nhận cùng model/thinking;
+- production-v1 có exact accepted usage và complete comparable evidence cho đủ
+  18/18 family; thiếu một attempt/family làm token và normalized-cost claim fail;
 - quality Piagent không thấp hơn baseline;
 - quality và reliability Piagent đạt ngưỡng suite; production yêu cầu ít nhất
   `9.5/10` và mọi outcome riêng lẻ phải lớn hơn `9.5`;
@@ -550,7 +652,9 @@ Runner chỉ cho phép kết luận tiết kiệm token khi:
 - workflow Piagent đạt ngưỡng của suite (`10/10` cho smoke, ít nhất `9.5/10`
   cho production), đồng thời không task nào được bằng hoặc thấp hơn `9.5`;
   report vẫn phải công khai mọi workflow check bị hụt;
-- geometric mean của các tỷ lệ fresh token theo cặp nhỏ hơn `1`.
+- geometric mean của các tỷ lệ fresh token theo cặp nhỏ hơn `1`;
+- nếu suite yêu cầu normalized cost, exact API-equivalent text-token pricing
+  applicability, global upper95, mọi band và mọi family guardrail đều pass.
 
 Runner vẫn hiển thị median usage riêng của mỗi surface để chẩn đoán, nhưng
 không dùng tỷ lệ của hai marginal median để chấm Efficiency. Hai median độc lập
@@ -559,8 +663,10 @@ nhau. Report ghi rõ `usageEstimator`, số cặp thắng và median delta theo 
 
 `fresh token = input + output`, trong đó `input` đã loại cache read.
 `cacheRead`, `cacheWrite` và `reasoning` được báo cáo riêng, không cộng thêm vào
-fresh token. Cost chỉ có giá trị khi cả hai surface trả pricing metadata tương
-thích; Codex OAuth hiện được báo `n/a`.
+fresh token. Provider-reported cost chỉ có giá trị khi cả hai surface trả pricing
+metadata tương thích; Codex OAuth hiện được báo `n/a`. `production-v1` báo thêm
+API-equivalent text-token cost từ snapshot đã khóa, gắn `billedCost=false` và
+không được trình bày như số tiền thực tế bị charge.
 
 ## Báo cáo
 
@@ -620,15 +726,21 @@ category đạt ít nhất `9.5`, safety đạt `10`, và hard gate xác nhận 
 mọi category/profile/lifecycle/difficulty band đều lớn hơn `9.5`. Gate còn yêu
 cầu đủ cả 18 paired outcome family, quality không thấp hơn baseline, không có
 cặp baseline-pass/Piagent-fail, và cận trên 95% của fresh-token ratio không vượt
-`0.80`. Duration phải có point estimate không chậm hơn baseline (`<= 1.0`) và
-cận trên 95% không vượt `1.10`; accepted run phải có zero infrastructure retry
+`0.60`; mọi category/profile/lifecycle/difficulty band cũng không được vượt
+`0.60`, mọi declared family phải có complete evidence và ratio `<=1.00`.
+API-equivalent text-token cost áp cùng global upper95/band `<=0.60` và family
+`<=1.00`, tách khỏi provider-reported billing. Duration phải có point estimate không chậm hơn baseline (`<= 1.0`) và
+cận trên 95% cũng không vượt `1.00`; mỗi category/profile/lifecycle/difficulty
+duration point ratio và từng declared-family duration ratio đều phải `<=1.00`,
+thiếu family duration evidence thì fail-closed. Accepted run phải có zero infrastructure retry
 và zero unknown provider-attempt usage. Mỗi Piagent run còn phải có provider-wire
 evidence đầy đủ: mọi request dùng đúng model/effort đã yêu cầu (`off→none`,
 `minimal→low`), đúng một base instructions hash và một ordered base-tool hash.
 Hai hash base phải ổn định giữa các repeat của cùng scenario/profile/lifecycle;
 deferred tool-search batches được report riêng và không bị coi là base-prefix
 drift. Evidence thiếu, unknown, mismatch hoặc drift đều làm comparison protocol,
-stability gate, verdict và token claim fail. Efficiency CI cần tối thiểu 12 family có đủ ba repeat resolved ở cả hai
+stability gate, verdict và token claim fail. Efficiency CI cần đủ 18 family có
+đủ ba repeat resolved ở cả hai
 arm; outcome coverage và comparable efficiency là hai gate khác nhau. Point
 estimate tiết kiệm nhưng
 confidence interval còn chạm/vượt baseline sẽ không được phép claim tiết kiệm
@@ -763,8 +875,9 @@ claim production token/cost/quality non-regression.
 `raw-pi` chỉ là ablation diagnostic tường minh để điều tra harness và luôn giữ
 token efficiency ở mức observational; kể cả gắn suite production nó cũng không
 được phép tạo product/release token claim. Release claim chỉ dùng paired
-controlled `codex-cli`, full suite schema v2 với cận trên 95% `<= 0.80`, và
-candidate bind vào exact clean Git commit. So với `codex-cli` là
+controlled `codex-cli`; riêng production-v1 yêu cầu full suite schema v2 với
+cận trên 95% `<= 0.60`, và candidate bind vào exact clean Git commit. So với
+`codex-cli` là
 external-product reference vì tool
 protocol, system context và client accounting khác nhau dù model/thinking được
 pin. Không dùng hai report này để claim router chọn model tốt, và không dùng

@@ -57,6 +57,9 @@ piagent_context_preflight
 `contextWasteScore`: duplicate reads, duplicate output, tool-schema share,
 low-confidence retrieval, và active-tool excess. Score này phải đi cùng task
 gate/verify result; nó không tự kết luận model hoặc nhân viên làm tốt/xấu. Nếu
+evidence của bất kỳ lane có trọng số nào chưa đầy đủ, score chính là `null` và
+UI ghi `unavailable`; `contextWasteScoreEstimate` chỉ là chẩn đoán partial, không
+được diễn giải thành “không có waste”. Nếu
 session có Task Contract, JSON detail còn có `taskEfficiency`: hashed
 session/task/run identity, solver route/mode/override, persisted phase duration,
 context/tool-group utilization, verify/repair/retry count, digest-only helper
@@ -169,8 +172,10 @@ Alias ngắn `/setname ABC-123 Short task name` vẫn chạy. Nếu tắt nhầm
 
 Task Contract v2 lưu cả `sessionId`, `sessionName`, `taskId` và `taskRunId`, nên
 Agent Watch/report có thể map usage vào đúng attempt kể cả session đã resume hoặc
-được đổi tên sau khi bắt đầu. Một session không được tái sử dụng cho task khác;
-retry dùng session mới và giữ liên kết qua cùng `taskId`.
+được đổi tên sau khi bắt đầu. Người dùng có thể giao việc khác ngay trong cùng
+session; runtime kết thúc partition cũ và tạo `taskRunId` mới thay vì khóa session
+vào một workflow. Retry có thể dùng session mới và vẫn giữ liên kết qua cùng
+`taskId`.
 
 Mặc định history mode **bao gồm subagent session files** vì đó là usage thật của máy. Dùng `--no-subagents` khi chỉ muốn parent/main sessions.
 

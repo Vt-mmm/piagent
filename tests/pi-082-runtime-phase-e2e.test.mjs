@@ -543,7 +543,7 @@ test("the pinned Pi host executes Piagent runtime tasks end to end without a pro
       assert.ok(runtimeIntake, `${item.file}: provider context is missing runtime intake`);
       assert.match(runtimeIntake, /complete operator request above is the authoritative acceptance contract/);
       assert.doesNotMatch(runtimeIntake, /Acceptance focus:|Pre-completion contract review:/);
-      assert.match(runtimeIntake, /criterion context snapshot/);
+      assert.doesNotMatch(runtimeIntake, /criterion context snapshot/, "PIAGENT_AUTO_CONTEXT=0 must disable automatic file-content injection");
       assert.match(runtimeIntake, new RegExp(item.sources[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
       assert.ok(runtimeIntake.length < 3_600, `${item.file}: runtime intake expanded to ${runtimeIntake.length} chars`);
       assert.equal(toolEvent(run.events, callId)?.isError, false, item.file);

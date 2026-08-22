@@ -1,27 +1,17 @@
 #!/usr/bin/env node
 import crypto from "node:crypto";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import readline from "node:readline/promises";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
-import {
-  aggregateSessionUsage, benchmarkSurfaceLabel,
-  renderBenchmarkHtml,
-  renderBenchmarkText,
-  summarizeBenchmark
-} from "../packages/piagent-core/benchmark/benchmark-core.js";
+import { aggregateSessionUsage, benchmarkSurfaceLabel } from "../packages/piagent-core/benchmark/benchmark-core.js";
 import { benchmarkUsage, parseBenchmarkArgs } from "../packages/piagent-core/benchmark/benchmark-cli.js";
 import { codexModelName, codexThinkingEffort } from "../packages/piagent-core/benchmark/benchmark-codex.js";
-import { benchmarkTrustChecklist } from "../packages/piagent-core/benchmark/benchmark-matrix.js";
-import { applyBenchmarkClaimRestrictions } from "../packages/piagent-core/benchmark/benchmark-claim-restrictions.js";
 import { benchmarkEnvironment, benchmarkEnvironmentPolicy, comparisonSurfaces, createCodexRuntime, piagentTreatment } from "../packages/piagent-core/benchmark/benchmark-runtime.js";
 import { assertBenchmarkPiCredentialReady, assertBenchmarkPiCredentialWritebackPolicy, cleanupBenchmarkPiRuntimeHome, createBenchmarkPiRuntimeHome, resetBenchmarkPiRuntimeEphemeralState, withBenchmarkPiCredentialWriteback } from "../packages/piagent-core/benchmark/benchmark-pi-home.js";
 import { benchmarkPreflight, benchmarkPreflightReceipt } from "../packages/piagent-core/benchmark/benchmark-preflight.js";
-import { applyBenchmarkExecutionDefaults, benchmarkSuiteCoverage } from "../packages/piagent-core/benchmark/benchmark-runner-policy.js";
+import { applyBenchmarkExecutionDefaults } from "../packages/piagent-core/benchmark/benchmark-runner-policy.js";
 import {
-  cleanupUnretainedWorkspaces,
   appendPrivateJsonl,
   createBenchmarkCandidateGuard,
   loadReplayFailurePlan,
@@ -29,7 +19,6 @@ import {
   safeInfrastructureDiagnostic,
   writeBenchmarkAbort,
   writeBenchmarkRunManifest,
-  writePrivate,
   writePrivateAtomic
 } from "../packages/piagent-core/benchmark/benchmark-forensics.js";
 import { benchmarkBootstrapCandidateIndex, benchmarkBootstrapMetadata } from "../packages/piagent-core/benchmark/benchmark-bootstrap.js";
@@ -38,8 +27,16 @@ import { benchmarkCommandIdentity } from "../packages/piagent-core/benchmark/ben
 import { benchmarkTreeIdentity } from "../packages/piagent-core/benchmark/benchmark-tree-identity.js";
 import { completedBenchmarkRecord, expectedBenchmarkRecord } from "../packages/piagent-core/benchmark/benchmark-record-validation.js";
 import { pairedOutcomeFloorStop } from "../packages/piagent-core/benchmark/benchmark-stop-policy.js";
+import {
+  approveProductionStageControl,
+  buildBenchmarkStageDiagnostic,
+  createProductionStageControl,
+  durablePairedOutcomeFloorStop,
+  productionSpendControlValidationErrors,
+  productionStageResumeDisposition
+} from "../packages/piagent-core/benchmark/benchmark-stage-diagnostic.js";
 import { loadBenchmarkAssuranceEvidence, loadBenchmarkSuite, resolveBenchmarkSuiteEntry, validateBenchmarkSuiteFiles } from "../packages/piagent-core/benchmark/benchmark-suite-runtime.js";
-import { appendBenchmarkLedger, assertBenchmarkLedgerBinding, benchmarkLedgerCheckpoint, emptyBenchmarkLedgerBinding, inspectBenchmarkLedger, validateBenchmarkLedgerPrefix } from "../packages/piagent-core/benchmark/benchmark-ledger.js";
+import { appendBenchmarkLedger, assertBenchmarkLedgerBinding, emptyBenchmarkLedgerBinding, inspectBenchmarkLedger, validateBenchmarkLedgerPrefix } from "../packages/piagent-core/benchmark/benchmark-ledger.js";
 import { acquireBenchmarkRunLock } from "../packages/piagent-core/benchmark/benchmark-run-lock.js";
 import { createBenchmarkProcessController } from "../packages/piagent-core/benchmark/benchmark-process.js";
 import {
@@ -50,6 +47,26 @@ import {
   recoverPendingBenchmarkRecord,
   stageMeasuredBenchmarkRecord
 } from "../packages/piagent-core/benchmark/benchmark-resume-recovery.js";
+import { finalizeBenchmarkRun } from "./benchmark-runner-finalization.mjs";
+import {
+  benchmarkRunKey,
+  confirmPlan,
+  createRunId,
+  defaultOutputRoot,
+  ensureEmptyOutput,
+  executionOrder,
+  fail,
+  formatDuration,
+  frozenRuntimeCommandsForFinalization,
+  invokedAsEntrypoint,
+  isLegacyInvocation,
+  loadResumeState,
+  pairedChunk,
+  privateDirectory,
+  readJsonFile,
+  samePairedBlock,
+  sameStringList
+} from "./benchmark-runner-support.mjs";
 import { runBenchmarkSession } from "./benchmark-session.mjs";
 export { parseBenchmarkArgs };
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -59,11 +76,6 @@ const bootstrapCandidateIndex = bootstrapMetadata ? benchmarkBootstrapCandidateI
 let interruptedSignal;
 const processController = createBenchmarkProcessController(() => Boolean(interruptedSignal));
 const runCommand = processController.run;
-function fail(message, code = 2) {
-  const error = new Error(message);
-  error.exitCode = code;
-  throw error;
-}
 
 function installSignalForwarding() {
   const handlers = new Map();
@@ -79,154 +91,6 @@ function installSignalForwarding() {
   return () => {
     for (const [signal, handler] of handlers) process.off(signal, handler);
   };
-}
-
-function isLegacyInvocation(argv) {
-  return argv.includes("--record") || argv.includes("--init");
-}
-
-function privateDirectory(target) {
-  fs.mkdirSync(target, { recursive: true, mode: 0o700 });
-  try { fs.chmodSync(target, 0o700); } catch { /* Non-POSIX filesystem. */ }
-  return target;
-}
-
-function defaultOutputRoot() {
-  if (bootstrapMetadata?.defaultOutputRoot) return bootstrapMetadata.defaultOutputRoot;
-  const agentRoot = process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent");
-  return path.join(agentRoot, "benchmarks", "piagent");
-}
-
-function createRunId(suiteId) {
-  const timestamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
-  return `${suiteId}-${timestamp}-${crypto.randomBytes(3).toString("hex")}`;
-}
-
-function ensureEmptyOutput(target) {
-  if (fs.existsSync(target) && fs.readdirSync(target).length > 0) fail(`Output directory is not empty: ${target}`, 1);
-  return privateDirectory(target);
-}
-
-function benchmarkRunKey(value) {
-  return `${value.scenarioId ?? value.scenario?.id}\0${value.surface}\0${value.repeat}`;
-}
-
-function samePairedBlock(left, right) {
-  return left?.scenario?.id === right?.scenario?.id && left?.repeat === right?.repeat;
-}
-
-function pairedChunk(order, maximum) {
-  if (maximum === undefined || order.length <= maximum) return order;
-  let length = maximum;
-  while (length > 0 && samePairedBlock(order[length - 1], order[length])) length -= 1;
-  if (length === 0) fail(`--max-sessions ${maximum} would split the first paired benchmark block; increase the chunk size`, 1);
-  return order.slice(0, length);
-}
-
-function readJsonFile(file, label) {
-  try {
-    return JSON.parse(fs.readFileSync(file, "utf8"));
-  } catch (error) {
-    fail(`Cannot read ${label} ${file}: ${error.message}`, 1);
-  }
-}
-
-function resolveResumeRunRoot(input) {
-  const target = path.resolve(input);
-  try {
-    const stat = fs.statSync(target);
-    if (stat.isDirectory()) return target;
-    if (stat.isFile()) return path.dirname(target);
-  } catch (error) {
-    fail(`Cannot resume benchmark; path does not exist: ${target}`, 1);
-  }
-  fail(`Cannot resume benchmark; path is not a file or directory: ${target}`, 1);
-}
-
-function loadResumeState(input) {
-  const runRoot = resolveResumeRunRoot(input);
-  const releaseRunLock = acquireBenchmarkRunLock(runRoot, "resume-pending");
-  try {
-    const manifestPath = path.join(runRoot, "run-manifest.json");
-    if (!fs.existsSync(manifestPath)) {
-      fail(`Cannot resume ${runRoot}: missing run-manifest.json. This run was created before resume metadata was written, so its root seed cannot be recovered safely. Start a new run with --max-sessions or --max-runtime-minutes to make it resumable.`, 1);
-    }
-    const manifest = readJsonFile(manifestPath, "benchmark resume manifest");
-    if (fs.existsSync(path.join(runRoot, "stopped.json"))) fail(`Cannot resume ${runRoot}: the paired release stop is terminal`, 1);
-    if (manifest?.schemaVersion !== 1 || typeof manifest.runId !== "string") {
-      fail(`Cannot resume ${runRoot}: run-manifest.json has an unsupported shape`, 1);
-    }
-    const ledger = benchmarkLedgerCheckpoint(
-      manifest.ledger,
-      inspectBenchmarkLedger(path.join(runRoot, "runs.jsonl")),
-      "benchmark resume ledger"
-    );
-    const pendingPath = path.join(runRoot, "pending-record.json");
-    const pendingRecord = fs.existsSync(pendingPath) ? readJsonFile(pendingPath, "benchmark pending record") : null;
-    const measuredPath = path.join(runRoot, "measured-record-ready.json");
-    const measuredReady = fs.existsSync(measuredPath) ? readJsonFile(measuredPath, "measured benchmark record") : null;
-    return {
-      runRoot,
-      manifest,
-      completedRuns: ledger.records,
-      ledgerBinding: ledger.binding,
-      recoveredLedgerSuffix: ledger.recovered,
-      pendingRecord,
-      measuredReady,
-      releaseRunLock
-    };
-  } catch (error) {
-    releaseRunLock();
-    throw error;
-  }
-}
-
-function sameStringList(left, right) {
-  return Array.isArray(left)
-    && Array.isArray(right)
-    && left.length === right.length
-    && left.every((value, index) => value === right[index]);
-}
-
-function formatDuration(ms) {
-  const totalSeconds = Math.max(0, Math.round(ms / 1_000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  if (hours > 0) return `${hours}h${String(minutes).padStart(2, "0")}m`;
-  if (minutes > 0) return `${minutes}m${String(seconds).padStart(2, "0")}s`;
-  return `${seconds}s`;
-}
-
-function executionOrder(suite, repeats, surfaces, rootSeed) {
-  const order = [];
-  for (let repeat = 1; repeat <= repeats; repeat += 1) {
-    const scenarios = suite.schemaVersion === 2
-      ? [...suite.scenarios].sort((left, right) => {
-        const rank = (scenario) => crypto.createHmac("sha256", rootSeed).update(`order\0${repeat}\0${scenario.id}`).digest("hex");
-        return rank(left).localeCompare(rank(right));
-      })
-      : suite.scenarios;
-    for (const [index, scenario] of scenarios.entries()) {
-      const reverse = suite.schemaVersion === 2
-        ? (crypto.createHmac("sha256", rootSeed).update(`surface\0${repeat}\0${scenario.id}`).digest()[0] & 1) === 1
-        : (repeat + index) % 2 !== 0;
-      const ordered = reverse ? [...surfaces].reverse() : surfaces;
-      for (const surface of ordered) order.push({ scenario, surface, repeat });
-    }
-  }
-  return order;
-}
-
-async function confirmPlan(message) {
-  if (!process.stdin.isTTY || !process.stdout.isTTY) fail("Refusing to start billed model runs without --yes in a non-interactive terminal", 1);
-  const terminal = readline.createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    const answer = await terminal.question(`${message}\nContinue? [y/N] `);
-    return /^(?:y|yes)$/i.test(answer.trim());
-  } finally {
-    terminal.close();
-  }
 }
 
 async function runLegacy(argv) {
@@ -285,14 +149,41 @@ async function main() {
       evidenceComplete: bootstrapMetadata?.replay?.evidenceComplete ?? replay.source.evidenceComplete
     };
   }
-  if (bootstrapMetadata?.suite?.snapshot) options.suite = bootstrapMetadata.suite.snapshot;
+  if (bootstrapMetadata?.suite?.builtInId) options.suite = bootstrapMetadata.suite.builtInId;
+  else if (bootstrapMetadata?.suite?.snapshot) options.suite = bootstrapMetadata.suite.snapshot;
   if (options.help) {
     process.stdout.write(benchmarkUsage);
     return;
   }
   piagentTreatment(options.piagentTreatment);
-  const { suite, manifestPath, suiteRoot } = loadBenchmarkSuite(options.suite, packageRoot);
+  const { suite, manifestPath, suiteRoot, builtInId } = loadBenchmarkSuite(options.suite, packageRoot);
   validateBenchmarkSuiteFiles(suite, suiteRoot);
+  if (bootstrapMetadata && bootstrapMetadata.suite.builtInId !== builtInId) {
+    fail("Frozen benchmark suite origin no longer matches its canonical built-in identity", 1);
+  }
+  const canonicalProductionSuite = builtInId === "production-v1";
+  const productionSpendControlPath = path.join(suiteRoot, "spend-control.v1.json");
+  const productionSpendControl = canonicalProductionSuite || fs.existsSync(productionSpendControlPath)
+    ? readJsonFile(productionSpendControlPath, "production spend-control contract")
+    : null;
+  const productionExpectedSessions = productionSpendControl
+    && Number.isSafeInteger(productionSpendControl.execution?.repeats)
+    && Array.isArray(productionSpendControl.execution?.surfaces)
+    ? suite.scenarios.length * productionSpendControl.execution.repeats * productionSpendControl.execution.surfaces.length
+    : undefined;
+  const productionSpendControlErrors = productionSpendControl
+    ? productionSpendControlValidationErrors(productionSpendControl, {
+        suiteId: suite.id,
+        expectedSessions: productionExpectedSessions
+      })
+    : [];
+  if (productionSpendControlErrors.length > 0) {
+    fail(`Production spend-control contract is invalid (${productionSpendControlErrors.join(", ")})`, 1);
+  }
+  const productionAllStageBoundaries = productionSpendControl
+    ? productionSpendControl.stages.map((stage) => stage.cumulativeSessions)
+    : [];
+  const productionStageBoundaries = productionAllStageBoundaries.slice(1);
   const assuranceEvidence = loadBenchmarkAssuranceEvidence(suite, suiteRoot);
   const declaredScenarioCount = suite.scenarios.length;
   if (options.scenarioIds) {
@@ -308,6 +199,19 @@ async function main() {
     suite.scenarios = [...new Set(options.replayRuns.map((run) => run.scenarioId))].map((id) => byId.get(id));
   }
   applyBenchmarkExecutionDefaults(options, suite);
+  const productionFullMatrixRequested = Boolean(productionSpendControl)
+    && !options.replayRuns
+    && suite.scenarios.length === declaredScenarioCount;
+  if (productionFullMatrixRequested) {
+    const spendExecution = productionSpendControl.execution;
+    if (options.seed === undefined) options.seed = productionSpendControl.rootSeed;
+    if (options.seed !== productionSpendControl.rootSeed) fail("Production spend control requires its frozen root seed", 1);
+    if (!sameStringList(options.surfaces, spendExecution.surfaces)) fail("Production spend control requires its frozen surface order", 1);
+    if ((options.model ?? null) !== spendExecution.model) fail("Production spend control requires its frozen model", 1);
+    if ((options.thinking ?? null) !== spendExecution.thinking) fail("Production spend control requires its frozen thinking level", 1);
+    if (options.repeats !== spendExecution.repeats) fail("Production spend control requires its frozen repeat count", 1);
+    if (options.infrastructureRetries !== spendExecution.infrastructureRetries) fail("Production spend control requires zero infrastructure retries", 1);
+  }
   if (options.stopAfterFailedPair && !Number.isFinite(suite.releaseGate?.minimumOutcomeScoreExclusive)) fail("--stop-after-failed-pair requires a suite outcome floor", 1);
   if (options.surfaces.includes("codex-cli")) {
     options.model = options.model ?? "openai-codex/gpt-5.6-luna";
@@ -335,6 +239,14 @@ async function main() {
         repeat: run.repeat
       }))
     : executionOrder(suite, options.repeats, options.surfaces, rootSeed);
+  const productionSpendControlled = productionFullMatrixRequested;
+  const productionReleaseClaimRun = productionSpendControlled
+    && suite.schemaVersion === 2
+    && suite.releaseGate?.requireEfficiencyClaim === true
+    && suite.releaseGate?.requireFullSuiteForClaim === true;
+  if (productionSpendControlled && productionStageBoundaries.at(-1) !== fullOrder.length) {
+    fail("Production spend control final stage does not match the frozen full execution order", 1);
+  }
   if (resumeState) {
     const manifest = resumeState.manifest;
     if (manifest.suiteDigest !== suiteDigest) fail("Cannot resume benchmark: suite files changed since the original run", 1);
@@ -382,7 +294,87 @@ async function main() {
       });
       throw provenanceError;
     }
+    const recoveredTerminalStop = durablePairedOutcomeFloorStop({
+      enabled: options.stopAfterFailedPair,
+      suite,
+      runs: resumeState.completedRuns,
+      fullOrder
+    });
+    if (recoveredTerminalStop) {
+      for (const marker of ["paused.json", "stage-diagnostic.json", "interrupted.json", "aborted.json"]) {
+        fs.rmSync(path.join(resumeState.runRoot, marker), { force: true });
+      }
+      writePrivateAtomic(path.join(resumeState.runRoot, "stopped.json"), `${JSON.stringify({
+        ...recoveredTerminalStop,
+        runId: manifest.runId,
+        completedRuns: resumeState.completedRuns.length,
+        expectedRuns: fullOrder.length,
+        stoppedAt: new Date().toISOString(),
+        resumeAllowed: false,
+        recoveredFromAcceptedLedger: true,
+        ledger: resumeState.ledgerBinding,
+        provenanceStamp: candidateGuard.stamp("resume-terminal-floor")
+      }, null, 2)}\n`);
+      fail("Cannot resume benchmark: the accepted ledger already contains a terminal paired outcome-floor failure", 1);
+    }
+    if (productionSpendControlled) {
+      const stageDisposition = productionStageResumeDisposition(manifest.stageControl, {
+        completedRuns: resumeState.completedRuns.length,
+        ledger: resumeState.ledgerBinding,
+        stageBoundaries: productionAllStageBoundaries
+      });
+      if (!stageDisposition.passed) {
+        fail(`Cannot resume production benchmark: invalid durable stage-control state (${stageDisposition.errors.join(", ")}). Start a new staged run.`, 1);
+      }
+      if (stageDisposition.requiresStageGate && resumeState.completedRuns.length < fullOrder.length) {
+        const recoveredBoundaryReason = `max-sessions:recovered:${resumeState.completedRuns.length}`;
+        const resumeStageDiagnostic = buildBenchmarkStageDiagnostic({
+          runId: manifest.runId,
+          reason: manifest.stageControl.pendingBoundary?.reason ?? recoveredBoundaryReason,
+          runs: resumeState.completedRuns,
+          fullOrder,
+          candidateSurface: comparison.candidateSurface,
+          baselineSurface: comparison.baselineSurface,
+          requestedModel: options.model,
+          requestedThinking: options.thinking,
+          suite,
+          manifest
+        });
+        writePrivateAtomic(path.join(resumeState.runRoot, "stage-diagnostic.json"), `${JSON.stringify(resumeStageDiagnostic, null, 2)}\n`);
+        if (!resumeStageDiagnostic.stageAdvanceAllowed) {
+          fail(`Cannot resume production benchmark: the provider-free stage gate blocked further paid sessions (${resumeStageDiagnostic.blockingReasons.join(", ")}). Fix the candidate and start a new staged run.`, 1);
+        }
+        const currentWindow = manifest.stageControl.authorizedThroughRuns;
+        const nextAuthorizedThroughRuns = resumeState.completedRuns.length < currentWindow
+          ? currentWindow
+          : productionStageBoundaries.find((boundary) => boundary > resumeState.completedRuns.length);
+        if (!Number.isSafeInteger(nextAuthorizedThroughRuns)) {
+          fail("Cannot resume production benchmark: no bounded spend-control window remains", 1);
+        }
+        const requiredResumeSessions = nextAuthorizedThroughRuns - resumeState.completedRuns.length;
+        if (!options.dryRun && options.maxSessions !== requiredResumeSessions) {
+          fail(`Production spend control requires --max-sessions ${requiredResumeSessions} for the next authorized window; durable stage state was not changed.`, 1);
+        }
+        if (!options.dryRun) {
+          manifest.stageControl = approveProductionStageControl(manifest.stageControl, {
+            completedRuns: resumeState.completedRuns.length,
+            authorizedThroughRuns: nextAuthorizedThroughRuns
+          });
+          manifest.ledger = resumeState.ledgerBinding;
+          writeBenchmarkRunManifest(resumeState.runRoot, manifest);
+        }
+      } else if (stageDisposition.requiresStageGate) {
+        // A crash after the final accepted record must not change the verdict by
+        // applying an early-stage heuristic. The complete report gates the same
+        // frozen ledger without starting another provider session.
+        manifest.ledger = resumeState.ledgerBinding;
+        writeBenchmarkRunManifest(resumeState.runRoot, manifest);
+      }
+    }
   }
+  const productionFinalizationOnly = productionSpendControlled
+    && Boolean(resumeState)
+    && resumeState.completedRuns.length === fullOrder.length;
   const pendingOrder = resumeState
     ? fullOrder.filter((item) => !resumeState.completedKeys.has(benchmarkRunKey(item)))
     : fullOrder;
@@ -421,20 +413,44 @@ async function main() {
     process.stdout.write(`${plan}${codexPlan}\n  manifest:  ${manifestPath}\nDRY RUN: no model session started.\n`);
     return;
   }
+  if (productionSpendControlled) {
+    if (options.stopAfterFailedPair !== productionSpendControl.execution.stopAfterFailedPair) {
+      fail("Production spend control requires --stop-after-failed-pair before any provider session", 1);
+    }
+    const completedRuns = resumeState?.completedRuns.length ?? 0;
+    const authorizedThroughRuns = resumeState?.manifest.stageControl?.authorizedThroughRuns ?? productionStageBoundaries[0];
+    const requiredChunkSessions = authorizedThroughRuns - completedRuns;
+    if (!options.preflightOnly && !productionFinalizationOnly
+      && (!Number.isSafeInteger(requiredChunkSessions) || requiredChunkSessions <= 0
+        || options.maxSessions !== requiredChunkSessions)) {
+      fail(`Production spend control requires --max-sessions ${requiredChunkSessions} for the current authorized window; refusing an unbounded or oversized paid chunk.`, 1);
+    }
+  }
   if (!bootstrapMetadata) fail("Modern billed benchmarks must start through scripts/benchmark-runner.mjs so execution assets are frozen", 1);
+  if (productionReleaseClaimRun && bootstrapMetadata.sourceIdentity.dirty !== false) {
+    fail("Production benchmark requires a clean release source before auth, tool preflight, or any provider session", 1);
+  }
   if (options.replayFailures && bootstrapMetadata.replay?.evidenceComplete !== true) {
     fail("Billed replay requires the original run-manifest.json and runs.jsonl beside the source report", 1);
   }
-  const runtimeCommands = {
-    pi: benchmarkCommandIdentity(piCommand, { cwd: bootstrapMetadata?.originalCwd ?? process.cwd() }),
-    codex: options.surfaces.includes("codex-cli")
-      ? benchmarkCommandIdentity(codexCommand, { cwd: bootstrapMetadata?.originalCwd ?? process.cwd() })
-      : null,
-    node: benchmarkCommandIdentity(process.execPath),
-    git: benchmarkCommandIdentity("git"),
-    bash: benchmarkCommandIdentity("bash")
-  };
+  const runtimeCommands = productionFinalizationOnly
+    ? frozenRuntimeCommandsForFinalization(resumeState.manifest, options.surfaces)
+    : {
+        pi: benchmarkCommandIdentity(piCommand, { cwd: bootstrapMetadata?.originalCwd ?? process.cwd() }),
+        codex: options.surfaces.includes("codex-cli")
+          ? benchmarkCommandIdentity(codexCommand, { cwd: bootstrapMetadata?.originalCwd ?? process.cwd() })
+          : null,
+        node: benchmarkCommandIdentity(process.execPath),
+        git: benchmarkCommandIdentity("git"),
+        bash: benchmarkCommandIdentity("bash")
+      };
   const environmentPolicy = benchmarkEnvironmentPolicy();
+  const configurationPiAgentHome = productionFinalizationOnly
+    ? resumeState.manifest.piAgentHome?.identity
+    : bootstrapMetadata.piAgentHome.identity;
+  const configurationCodexCredential = productionFinalizationOnly
+    ? resumeState.manifest.codexCredentialIdentity ?? null
+    : bootstrapMetadata.codexCredential?.identity ?? null;
   const configuration = {
     schemaVersion: 1,
     source: bootstrapMetadata.sourceIdentity,
@@ -443,8 +459,8 @@ async function main() {
     runtimeDependencyDigest: bootstrapMetadata.runtimeDependencies?.digest ?? null,
     runtimeCommands,
     environmentPolicy,
-    piAgentHome: bootstrapMetadata.piAgentHome.identity,
-    codexCredential: bootstrapMetadata.codexCredential?.identity ?? null,
+    piAgentHome: configurationPiAgentHome,
+    codexCredential: configurationCodexCredential,
     rootSeedDigest,
     surfaces: options.surfaces,
     model: options.model ?? null,
@@ -480,23 +496,46 @@ async function main() {
     candidateGuard,
     suiteRoot,
     suiteIdentity: bootstrapMetadata?.suite?.identity ?? suiteIdentity,
-    piAgentHome: bootstrapMetadata?.piAgentHome,
-    codexCredential: bootstrapMetadata?.codexCredential,
+    piAgentHome: productionFinalizationOnly ? null : bootstrapMetadata?.piAgentHome,
+    codexCredential: productionFinalizationOnly ? null : bootstrapMetadata?.codexCredential,
     runtimeDependencies: bootstrapMetadata?.runtimeDependencies,
-    commands: runtimeCommands
+    commands: runtimeCommands,
+    verifyCommandAssets: !productionFinalizationOnly
   });
-  assertBenchmarkPiCredentialReady(bootstrapMetadata.piAgentHome.credentialReadiness, options.model);
-  assertBenchmarkPiCredentialWritebackPolicy(bootstrapMetadata.piAgentHome);
-  piRuntimeHome = createBenchmarkPiRuntimeHome(bootstrapMetadata.piAgentHome);
-  const preflightAssetError = executionGuard.check("before-preflight", [piRuntimeHome]);
-  if (preflightAssetError) throw preflightAssetError;
-  codexRuntime = createCodexRuntime(options);
   let runtime;
-  try { runtime = await withBenchmarkPiCredentialWriteback(bootstrapMetadata.piAgentHome, piRuntimeHome, () => benchmarkPreflight({ runCommand, packageRoot, piCommand, piEnvironment: benchmarkEnvironment({ PI_CODING_AGENT_DIR: piRuntimeHome.path }), codexCommand, gitCommand: runtimeCommands.git.resolvedPath, surfaces: options.surfaces, codexMode: options.codexMode, codexRuntime })); }
-  catch (error) { preservePiRuntime ||= error.code === "BENCHMARK_PI_CREDENTIAL_RECONCILIATION_FAILED"; throw error; }
-  const postPreflightAssetError = executionGuard.check("after-preflight", [piRuntimeHome]);
-  if (postPreflightAssetError) throw postPreflightAssetError;
-  resetBenchmarkPiRuntimeEphemeralState(piRuntimeHome);
+  let codexCredentialBridge;
+  if (productionFinalizationOnly) {
+    runtime = resumeState.manifest.preflightRuntime;
+    if (!runtime || typeof runtime.gitVersion !== "string" || typeof runtime.piVersion !== "string"
+      || !Array.isArray(runtime.codexDisabledFeatures)
+      || (options.surfaces.includes("codex-cli") && typeof runtime.codexVersion !== "string")) {
+      fail("Cannot finalize production benchmark provider-free: frozen preflight runtime evidence is missing or invalid", 1);
+    }
+    codexCredentialBridge = resumeState.manifest.codexCredentialBridge ?? null;
+    const finalizationAssetError = executionGuard.check("provider-free-finalization");
+    if (finalizationAssetError) throw finalizationAssetError;
+  } else {
+    assertBenchmarkPiCredentialReady(bootstrapMetadata.piAgentHome.credentialReadiness, options.model);
+    assertBenchmarkPiCredentialWritebackPolicy(bootstrapMetadata.piAgentHome);
+    piRuntimeHome = createBenchmarkPiRuntimeHome(bootstrapMetadata.piAgentHome);
+    const preflightAssetError = executionGuard.check("before-preflight", [piRuntimeHome]);
+    if (preflightAssetError) throw preflightAssetError;
+    codexRuntime = createCodexRuntime(options);
+    try { runtime = await withBenchmarkPiCredentialWriteback(bootstrapMetadata.piAgentHome, piRuntimeHome, () => benchmarkPreflight({ runCommand, packageRoot, piCommand, piEnvironment: benchmarkEnvironment({ PI_CODING_AGENT_DIR: piRuntimeHome.path }), codexCommand, gitCommand: runtimeCommands.git.resolvedPath, surfaces: options.surfaces, codexMode: options.codexMode, codexRuntime })); }
+    catch (error) { preservePiRuntime ||= error.code === "BENCHMARK_PI_CREDENTIAL_RECONCILIATION_FAILED"; throw error; }
+    const postPreflightAssetError = executionGuard.check("after-preflight", [piRuntimeHome]);
+    if (postPreflightAssetError) throw postPreflightAssetError;
+    resetBenchmarkPiRuntimeEphemeralState(piRuntimeHome);
+    codexCredentialBridge = codexRuntime.credentialBridge;
+    if (resumeState && resumeState.manifest.preflightRuntime !== undefined
+      && JSON.stringify(resumeState.manifest.preflightRuntime) !== JSON.stringify(runtime)) {
+      fail("Cannot resume benchmark: provider-free preflight runtime evidence changed since the original run", 1);
+    }
+    if (resumeState && resumeState.manifest.codexCredentialBridge !== undefined
+      && resumeState.manifest.codexCredentialBridge !== codexCredentialBridge) {
+      fail("Cannot resume benchmark: Codex credential bridge changed since the original run", 1);
+    }
+  }
   const source = bootstrapMetadata?.sourceIdentity;
   if (!source) fail("Modern benchmark is missing its frozen Git source identity", 1);
   if (options.preflightOnly) {
@@ -507,7 +546,9 @@ async function main() {
   const nativeWarning = options.surfaces.includes("codex-cli") && options.codexMode === "native"
     ? "\nNative Codex mode loads the operator's global AGENTS.md, configuration, rules, hooks, MCP servers, and plugins."
     : "";
-  if (options.yes) {
+  if (productionFinalizationOnly) {
+    process.stdout.write(`${plan}${codexPlan}\n  mode:      provider-free finalization of the complete frozen ledger\n`);
+  } else if (options.yes) {
     process.stdout.write(`${plan}${codexPlan}${nativeWarning}\n`);
   } else {
     if (!(await confirmPlan(`${plan}${codexPlan}${nativeWarning}\nThis may use paid model quota.`))) {
@@ -517,7 +558,7 @@ async function main() {
   }
   candidateGuard.freeze();
   const runId = resumeState?.manifest.runId ?? createRunId(suite.id);
-  const output = options.output ?? path.join(defaultOutputRoot(), runId);
+  const output = options.output ?? path.join(defaultOutputRoot(bootstrapMetadata), runId);
   const runRoot = resumeState ? privateDirectory(output) : ensureEmptyOutput(output);
   releaseRunLock ??= acquireBenchmarkRunLock(runRoot, runId);
   privateDirectory(path.join(runRoot, "workspaces"));
@@ -536,13 +577,17 @@ async function main() {
     suite: {
       id: suite.id,
       source: bootstrapMetadata?.suite?.origin ?? manifestPath,
-      manifestPath: bootstrapMetadata?.suite?.snapshot ? bootstrapMetadata.suite.origin : null
+      manifestPath: bootstrapMetadata?.suite?.snapshot ? bootstrapMetadata.suite.origin : null,
+      builtInId
     },
     suiteDigest,
     suiteIdentity,
     candidateProvenance: candidateGuard.provenance,
     runtimeDependencies: bootstrapMetadata?.runtimeDependencies ?? null,
     runtimeCommands,
+    preflightRuntime: runtime,
+    codexCredentialIdentity: bootstrapMetadata.codexCredential?.identity ?? null,
+    codexCredentialBridge,
     configurationDigest,
     environmentPolicy,
     piAgentHome: {
@@ -570,6 +615,12 @@ async function main() {
     retryDelaySeconds: options.retryDelaySeconds,
     stopAfterFailedPair: options.stopAfterFailedPair,
     scenarioIds: options.scenarioIds ?? null,
+    ...(productionSpendControlled ? {
+      stageControl: createProductionStageControl({
+        authorizedThroughRuns: productionStageBoundaries[0],
+        generatedAt: startedAt
+      })
+    } : {}),
     order: fullOrder.map((item) => ({
       scenarioId: item.scenario.id,
       surface: item.surface,
@@ -577,6 +628,12 @@ async function main() {
     }))
   };
   writeBenchmarkRunManifest(runRoot, manifest);
+  if (resumeState) {
+    fs.rmSync(path.join(runRoot, "stage-diagnostic.json"), { force: true });
+    if (productionSpendControlled && manifest.stageControl?.state === "window-authorized") {
+      fs.rmSync(path.join(runRoot, "paused.json"), { force: true });
+    }
+  }
   const fullIndexByKey = new Map(fullOrder.map((item, index) => [benchmarkRunKey(item), index + 1]));
   const wallStartedAt = Date.now();
   const runtimeDeadline = options.maxRuntimeMinutes === undefined
@@ -786,148 +843,18 @@ async function main() {
     finalizationReceipt = executionGuard.receipt("finalization", [piRuntimeHome]);
     fatalRunError = finalizationReceipt.error;
   }
-  if (interruptedSignal) {
-    const provenanceStamp = executionGuard.stamp("interrupted", [piRuntimeHome]);
-    piRuntimeHome = undefined;
-    recoverOrphanedBenchmarkAttempts({ runRoot, manifest, fullOrder, completedKeys: new Set(runs.map(benchmarkRunKey)) });
-    cleanupUnretainedWorkspaces(runRoot, options.keepWorkspaces);
-    writePrivateAtomic(path.join(runRoot, "interrupted.json"), `${JSON.stringify({ schemaVersion: 1, runId, signal: interruptedSignal, completedRuns: runs.filter(completedBenchmarkRecord).length, expectedRuns: fullOrder.length, interruptedAt: new Date().toISOString(), resumeCommand: `piagent-benchmark --resume ${runRoot} --yes`, ledger: ledgerBinding, provenanceStamp }, null, 2)}\n`);
-    process.stderr.write(`Benchmark interrupted by ${interruptedSignal}. Partial ledger: ${ledgerPath}\n`);
-    process.exitCode = interruptedSignal === "SIGINT" ? 130 : interruptedSignal === "SIGHUP" ? 129 : 143;
-    return;
-  }
-  if (fatalRunError) {
-    const provenanceStamp = finalizationReceipt?.stamp ?? fatalExecutionReceipt?.stamp ?? executionGuard.stamp("fatal", piRuntimeHome ? [piRuntimeHome] : []);
-    if (!preservePiRuntime) cleanupBenchmarkPiRuntimeHome(bootstrapMetadata.piAgentHome, piRuntimeHome);
-    piRuntimeHome = undefined;
-    recoverOrphanedBenchmarkAttempts({ runRoot, manifest, fullOrder, completedKeys: new Set(runs.map(benchmarkRunKey)) });
-    cleanupUnretainedWorkspaces(runRoot, options.keepWorkspaces);
-    const provenanceFailure = writeBenchmarkAbort(runRoot, { runId, completedRuns: runs.filter(completedBenchmarkRecord).length, expectedRuns: fullOrder.length }, fatalRunError, {
-      ledger: ledgerBinding,
-      provenanceStamp
-    });
-    process.stderr.write(provenanceFailure
-      ? `Benchmark aborted because candidate provenance changed. Partial ledger: ${ledgerPath}\n`
-      : `Benchmark aborted after an infrastructure error. Partial ledger: ${ledgerPath}\n`);
-    process.exitCode = 1;
-    return;
-  }
-  if (terminalStop) {
-    cleanupBenchmarkPiRuntimeHome(bootstrapMetadata.piAgentHome, piRuntimeHome); piRuntimeHome = undefined;
-    cleanupUnretainedWorkspaces(runRoot, options.keepWorkspaces);
-    for (const marker of ["paused.json", "interrupted.json", "aborted.json"]) fs.rmSync(path.join(runRoot, marker), { force: true });
-    writePrivateAtomic(path.join(runRoot, "stopped.json"), `${JSON.stringify({ ...terminalStop, runId, completedRuns: runs.filter(completedBenchmarkRecord).length, expectedRuns: fullOrder.length, stoppedAt: new Date().toISOString(), resumeAllowed: false, ledger: ledgerBinding, provenanceStamp: finalizationReceipt.stamp }, null, 2)}\n`);
-    process.stderr.write(`Benchmark terminal-stopped after paired outcome-floor failure. Partial ledger: ${ledgerPath}\n`);
-    process.exitCode = 1;
-    return;
-  }
-  const completedRuns = runs.filter(completedBenchmarkRecord);
-  if (completedRuns.length < fullOrder.length) {
-    piRuntimeHome = undefined;
-    cleanupUnretainedWorkspaces(runRoot, options.keepWorkspaces);
-    const paused = {
-      schemaVersion: 1,
-      runId,
-      reason: pauseReason ?? "partial-run",
-      completedRuns: completedRuns.length,
-      expectedRuns: fullOrder.length,
-      remainingRuns: fullOrder.length - completedRuns.length,
-      pausedAt: new Date().toISOString(),
-      resumeCommand: `piagent-benchmark --resume ${runRoot} --yes`,
-      ledger: ledgerBinding,
-      provenanceStamp: executionGuard.stamp("paused")
-    };
-    writePrivateAtomic(path.join(runRoot, "paused.json"), `${JSON.stringify(paused, null, 2)}\n`);
-    process.stdout.write(`Benchmark paused after ${completedRuns.length}/${fullOrder.length} completed sessions (${paused.reason}).\nResume: ${paused.resumeCommand}\nPartial ledger: ${ledgerPath}\n`);
-    return;
-  }
-  cleanupBenchmarkPiRuntimeHome(bootstrapMetadata.piAgentHome, piRuntimeHome); piRuntimeHome = undefined;
-  const report = summarizeBenchmark({
-    suite,
-    runId,
-    startedAt,
-    completedAt: new Date().toISOString(),
-    repeats: options.repeats,
-    environment: {
-      platformVersion: packageManifest.version,
-      suiteDigest,
-      variantRootSeed: suite.scenarios.some((scenario) => scenario.variantGenerator) ? rootSeed : null,
-      variantRootSeedDigest: suite.scenarios.some((scenario) => scenario.variantGenerator) ? rootSeedDigest : null,
-      executionOrder: suite.schemaVersion === 2 ? "seeded-paired-block-randomized" : "paired-alternating",
-      replaySource: options.replaySource ?? null,
-      profile: suite.profile,
-      requestedModel: options.model ?? null,
-      requestedThinking: options.thinking ?? null,
-      piagentTreatment: piagentTreatment(options.piagentTreatment),
-      treatmentBaseline: lifecycles.length === 1 && lifecycles[0] === "steady-state"
-        ? options.surfaces.includes("codex-cli")
-          ? "piagent-initialized-and-onboarded; codex-clean-fixture"
-          : "initialized-and-onboarded"
-        : "scenario-defined-mixed-lifecycle",
-      timeoutSeconds: options.timeoutSeconds,
-      nodeVersion: process.version,
-      piVersion: runtime.piVersion,
-      codexVersion: runtime.codexVersion ?? null,
-      codexMode: options.surfaces.includes("codex-cli") ? options.codexMode : null,
-      codexAuth: runtime.codexAuth ?? null,
-      codexIsolation: options.surfaces.includes("codex-cli")
-        ? options.codexMode === "controlled" ? "per-session-temporary-home" : "operator-home"
-        : null,
-      codexCredentialBridge: options.surfaces.includes("codex-cli") ? codexRuntime.credentialBridge : null,
-      codexGlobalInstructions: options.surfaces.includes("codex-cli")
-        ? options.codexMode === "controlled" ? "excluded" : "operator-home"
-        : null,
-      piGlobalInstructions: "excluded",
-      piAgentHome: manifest.piAgentHome,
-      usageIntegrity: manifest.tokenClaimsUnavailableReason ?? "measured",
-      codexDisabledFeatures: runtime.codexDisabledFeatures,
-      surfaces: options.surfaces,
-      scenarioSelection: options.scenarioIds ?? null,
-      suiteCoverage: benchmarkSuiteCoverage(declaredScenarioCount, suite.scenarios.length),
-      surfaceModels: options.surfaces.includes("codex-cli") ? {
-        piagent: options.model,
-        "codex-cli": codexModelName(options.model)
-      } : { "raw-pi": options.model ?? null, piagent: options.model ?? null },
-      modelParityEvidence: options.surfaces.includes("codex-cli") ? "command-line-pinned" : "session-reported",
-      gitVersion: runtime.gitVersion,
-      source,
-      candidateProvenance: candidateGuard.report(),
-      suiteIdentity,
-      runtimeCommands,
-      configurationDigest,
-      environmentPolicy,
-      runtimeDependencies: bootstrapMetadata?.runtimeDependencies ?? null,
-      assuranceEvidence
-    },
-    runs: completedRuns,
-    ...comparison
+  finalizeBenchmarkRun({
+    assuranceEvidence, bootstrapMetadata, candidateGuard, canonicalProductionSuite,
+    codexCredentialBridge, comparison, configurationDigest, declaredScenarioCount,
+    detachPiRuntimeHome: () => { piRuntimeHome = undefined; },
+    environmentPolicy, executionGuard, fatalExecutionReceipt, fatalRunError,
+    finalizationReceipt, fullOrder, interruptedSignal, ledgerBinding, ledgerPath,
+    lifecycles, manifest, options, packageVersion: packageManifest.version,
+    pauseReason, piRuntimeHome, preservePiRuntime,
+    productionAllStageBoundaries, productionSpendControlled, rootSeed, rootSeedDigest,
+    runId, runRoot, runs, runtime, runtimeCommands, source, startedAt, suite,
+    suiteDigest, suiteIdentity, terminalStop
   });
-  report.ledger = ledgerBinding;
-  applyBenchmarkClaimRestrictions(report, { tokenReason: manifest.tokenClaimsUnavailableReason, replaySource: options.replaySource, codexMode: options.codexMode, surfaces: options.surfaces });
-  report.trustChecklist = benchmarkTrustChecklist(report);
-  const text = renderBenchmarkText(report);
-  const reportLedger = inspectBenchmarkLedger(ledgerPath);
-  assertBenchmarkLedgerBinding(ledgerBinding, reportLedger.binding, "benchmark report ledger");
-  validateBenchmarkLedgerPrefix(reportLedger.records, fullOrder, (record, index, expected) => expectedBenchmarkRecord(record, index, expected, runId, suite, configurationDigest));
-  writePrivate(path.join(runRoot, "report.html"), renderBenchmarkHtml(report));
-  writePrivate(path.join(runRoot, "summary.txt"), text);
-  cleanupUnretainedWorkspaces(runRoot, options.keepWorkspaces);
-  const prepublishReceipt = executionGuard.receipt("prepublish");
-  const prepublishError = prepublishReceipt.error;
-  if (prepublishError) { writeBenchmarkAbort(runRoot, { runId, completedRuns: completedRuns.length, expectedRuns: fullOrder.length }, prepublishError, { ledger: ledgerBinding, provenanceStamp: prepublishReceipt.stamp }); throw prepublishError; }
-  for (const marker of ["paused.json", "interrupted.json", "aborted.json", "stopped.json"]) fs.rmSync(path.join(runRoot, marker), { force: true });
-  writePrivateAtomic(path.join(runRoot, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
-  process.stdout.write(options.json ? `${JSON.stringify(report, null, 2)}\n` : text);
-  process.stdout.write(`Reports: ${runRoot}\n`);
-  if (
-    report.comparison.qualityGate === false
-    || report.comparison.safetyGate === false
-    || report.comparison.reliabilityGate === false
-    || report.comparison.qualityNonInferior === false
-    || report.comparison.workflowGate === false
-    || report.comparison.categoryGate === false
-    || report.comparison.suiteGate?.passed === false
-  ) process.exitCode = 1;
   } finally {
     releaseRunLock?.();
     codexRuntime?.cleanup();
@@ -935,12 +862,7 @@ async function main() {
   }
 }
 
-function invokedAsEntrypoint() {
-  try { return fs.realpathSync(fileURLToPath(import.meta.url)) === fs.realpathSync(process.argv[1] || ""); }
-  catch { return import.meta.url === pathToFileURL(process.argv[1] || "").href; }
-}
-
-if (invokedAsEntrypoint()) {
+if (invokedAsEntrypoint(import.meta.url, process.argv[1])) {
   main().catch((error) => {
     console.error(`FAIL: ${error.message}`);
     process.exit(error.exitCode ?? 1);

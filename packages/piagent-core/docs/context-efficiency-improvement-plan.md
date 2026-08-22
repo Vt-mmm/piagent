@@ -4,10 +4,10 @@
 
 - **Scope:** `packages/piagent-core`
 - **Purpose:** Improve prompt-prefix stability, context reuse, delta injection, verification feedback, and adaptive context budgeting.
-- **Verified against:** repository state on 2026-08-21.
+- **Verified against:** repository state on 2026-08-23.
 - **Review disposition:** Approved for sequential implementation only after the PR-0A evidence-semantics foundation and the release non-regression gates below.
 - **Implementation order:** PR-0A → PR-0 → PR-1 → PR-2 → PR-3B. PR-3A may start after PR-0A in recommend-only mode.
-- **Implementation progress (2026-08-21):** PR-0A and PR-0 are implemented locally and verified. Before PR-1 changes runtime behavior, the Codex CLI comparison, token, performance, stability, and UI terminal-state gates must be enforceable. No residency or delta-injection claim is made yet.
+- **Implementation progress (2026-08-23):** PR-0A and PR-0 are implemented locally and verified. The first behavior slice now composes one criterion-aware, source-sanitized initial snapshot; cleans volatile state at a terminal/missing-binding task boundary; measures evidence coverage without rewarding missing telemetry; and enforces the provider-free 40% token/API-equivalent-cost contract. Redacted items retain only sanitized-text provenance, not a raw-content digest. Production execution is staged at S12/S36/S72/S108 with a ledger-bound durable resume gate. Every Piagent record carries a privacy-safe causal aggregate whose provenance, prompt/terminal order and offer/delivery/injection lifecycle fail closed; S12 exposes the aggregate needed to decide whether residency/delta work is justified. The runner consumes the frozen seed/execution/stage contract, cannot bypass it by explicitly selecting all scenarios, and finalizes an already complete ledger without another provider preflight. It does not implement residency/delta suppression, verifier batching, or semantic tool-result compaction, and makes no new provider-backed claim yet.
 - **Primary safety rule:** Never trade verification coverage or context correctness for token savings.
 
 The implementation scope is primarily `packages/piagent-core`, but policy-backed configuration also requires coordinated changes to root `schemas/`, `adapters/`, capability catalogs/locks, and their tests. These are part of the delivery scope when a phase introduces `contextDeltaShadow`, `contextRuntime`, or `fastVerify` settings.
@@ -24,19 +24,25 @@ The release comparison must:
   Codex model, thinking level, prompt, repository tree, verifier, and repeat;
 - run the complete declared suite on an exact clean candidate with seeded,
   randomized pair order and at least three repeats;
-- require the family-clustered upper 95% fresh-token ratio to be at most `0.80`
-  for the minimum claim (at least 20% reduction); `0.70` is the stretch target;
+- require the family-clustered upper 95% fresh-token ratio to be at most `0.60`
+  for the production-v1 claim (at least 40% fresh-token reduction), the point
+  ratio of every category/profile/lifecycle/difficulty band to be at most
+  `0.60`, and every comparable scenario family to be at most `1.00`;
 - reject a token claim when candidate quality, safety, reliability, workflow,
   resolved outcomes, or evidence completeness is worse than the Codex CLI
-  baseline;
-- require end-to-end duration to be non-inferior: point ratio at most `1.00`
-  and upper 95% ratio at most `1.10`, with zero timeout, orphaned operation,
+  baseline; in addition to aggregate gates, every declared scenario/repeat must
+  have exactly one finite paired grade and Piagent may not score below Codex CLI
+  on any pair;
+- require end-to-end duration to be non-inferior: point ratio and upper 95%
+  ratio both at most `1.00`, with zero timeout, orphaned operation,
   or unknown terminal state in the release cohort;
 - require stable system/tool prefix telemetry, with no unexplained prefix drift,
   while keeping model identity and reasoning effort outside the prefix hash;
-- run the default `openai-codex/gpt-5.6-sol:high` release lane, the efficiency
-  `openai-codex/gpt-5.6-luna:medium` lane, and compatibility smoke tests for
-  every model returned by the authenticated `openai-codex` catalog.
+- run the exact production efficiency comparison on
+  `openai-codex/gpt-5.6-luna:medium`. The product default
+  `openai-codex/gpt-5.6-sol:high` and the authenticated Codex catalog remain
+  separate compatibility smoke lanes; they are not mixed into the 108-session
+  Luna efficiency estimand.
 
 Partial, dirty-tree, provider-free, subset, or retry-recovered runs may report
 observations but may not produce a release token-saving claim. Web UI release
@@ -44,6 +50,39 @@ validation is a companion hard gate: every operation must reach one canonical
 terminal settlement; only successful assistant output belongs in the chat;
 drafts, retries, commands, and failures belong in Activity; reload/resync must
 not strand a running indicator or remove Stop/recovery controls.
+
+Codex OAuth usage currently exposes exact token categories but no authoritative
+monetary charge. Production-v1 now binds a versioned official pricing snapshot
+and therefore may report an API-equivalent text-token cost comparison for the
+exact model/input/cache/output buckets. This remains explicitly distinct from
+provider-billed, OAuth-plan, tool, storage, or total currency spend.
+
+## Current paid-run decision
+
+Do not start another 108-session run directly. The closest clean historical
+Luna Medium production run had a fresh-token ratio of `0.3833` with upper-95%
+`0.4832`, so the 40% target is plausible, but that run is not a valid claim: one
+`cli-double-dash` pair regressed and closed the quality/category gates. A prior
+deep-logic diagnostic at `0.817` was a smaller dirty subset; it is not the
+current production estimate.
+
+After this candidate passes the complete offline verification and is bound to
+one clean commit, authorize S0 and then S12 only. S12 may advance only with no
+paired quality/performance regression, exact usage, stable provider wire and a
+complete causal receipt for every Piagent row. Use its aggregate to choose the
+next code change:
+
+- unexpected injected tokens or successful direct fallback rereads justify
+  residency/delta work;
+- uncompacted managed prefixes justify prefix reduction;
+- unexpected criterion zero-selection reasons justify retrieval repair;
+- high shell-call exposure keeps reread attribution open and must not be
+  reported as proven zero waste.
+
+If S12 fails, close that candidate and fix it without spending the remaining 96
+sessions. If S12 is clean but does not identify residency/delta waste, do not
+add those stateful mechanisms merely to chase the target; proceed through the
+predeclared S36/S72 windows and let the final S108 gate decide the claim.
 
 ## 1. Current-state findings
 
@@ -926,8 +965,9 @@ Every behavior-changing PR must verify:
 - Duplicate injected token rate falls by at least 50% in the canary cohort.
 - An internal canary may use 10% as a diagnostic milestone, but it cannot make a
   product claim. Promotion requires the complete release cohort to meet the
-  upper-95% ratio `<= 0.80` (at least 20% reduction); `<= 0.70` is the stretch
-  target for repetitive work classes.
+  family-clustered upper-95% ratio `<= 0.60` (at least 40% reduction). The same
+  `<= 0.60` point-ratio ceiling applies to every declared workload band, while
+  each scenario family must remain at or below `1.00`.
 - Verification retry/failure and partial/blocked rates do not regress.
 - End-to-end duration point estimate does not regress and its paired upper-95%
   ratio stays within the declared non-inferiority margin.

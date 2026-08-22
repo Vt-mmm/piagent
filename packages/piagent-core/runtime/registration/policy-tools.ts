@@ -1,5 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { stageContextDelivery } from "../context/context-delivery.ts";
+import { formatContextEfficiencyReport } from "../context/context-efficiency-format.ts";
 
 type PiagentToolGroup = any;
 type TechStackManifest = any;
@@ -168,7 +169,18 @@ export function registerPolicyTools(pi: ExtensionAPI, deps: Record<string, any>)
               queryHash: pack.queryHash,
               confidence: pack.confidence,
               estimatedTokens: pack.estimatedTokens,
-              selectedItems: pack.selected.map((item) => ({ path: item.path, estimatedTokens: item.estimatedTokens }))
+              selectedItems: pack.selected.map((item) => ({
+                path: item.path,
+                estimatedTokens: item.estimatedTokens,
+                sources: item.sources,
+                fileContentHash: item.fileContentHash,
+                ...(item.sanitizedContentDigest ? { sanitizedContentDigest: item.sanitizedContentDigest } : {}),
+                payloadHash: item.payloadHash,
+                representation: item.representation,
+                ranges: item.ranges,
+                generation: item.generation,
+                sensitiveContentRedacted: item.sensitiveContentRedacted
+              }))
             }
           }, { state: runtimeState, telemetry });
         }
@@ -186,15 +198,7 @@ export function registerPolicyTools(pi: ExtensionAPI, deps: Record<string, any>)
       } else {
         result = buildContextEfficiencyReport(ctx.cwd);
         const report = result as ReturnType<typeof buildContextEfficiencyReport>;
-        text = [
-          `contextWasteScore: ${report.metrics.contextWasteScore}/100 (lower is better)`,
-          `activeTools: ${report.metrics.averageActiveTools}`,
-          `toolSchemaShare: ${formatPercent(report.metrics.toolSchemaShare)}`,
-          `duplicateReads: ${report.metrics.duplicateReads}/${report.metrics.readCalls}`,
-          `duplicateOutput: ${formatPercent(report.metrics.duplicateOutputRate)}`,
-          `lowConfidencePacks: ${report.metrics.lowConfidencePacks}/${report.sample.contextPacks}`,
-          ...report.recommendations.map((recommendation) => `- ${recommendation}`)
-        ].join("\n");
+        text = formatContextEfficiencyReport(report, formatPercent);
       }
       telemetry(ctx, {
         event: "context_engine_action",

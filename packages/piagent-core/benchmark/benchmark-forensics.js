@@ -329,6 +329,339 @@ export function benchmarkOperationalEvidence(events) {
   };
 }
 
+const causalContextReadTools = new Set(["read", "grep", "find", "ls"]);
+const causalContextShellTools = new Set(["bash", "shell", "exec"]);
+const causalContextCoverageLanes = Object.freeze([
+  "telemetry-window",
+  "session-lifecycle",
+  "criterion-initial-pack",
+  "pack-lifecycle",
+  "direct-fallback-rereads",
+  "managed-prefix"
+]);
+const causalContextCriterionReasons = new Set([
+  "selected",
+  "auto-context-disabled",
+  "criterion-graph-unavailable",
+  "no-candidates",
+  "no-readable-selection"
+]);
+const causalContextMaximumAggregate = 1_000_000_000;
+
+function boundedCausalInteger(value) {
+  return Number.isSafeInteger(value) && value >= 0 && value <= causalContextMaximumAggregate;
+}
+
+function boundedCausalSum(values) {
+  let total = 0;
+  for (const value of values) {
+    if (!boundedCausalInteger(value) || total + value > causalContextMaximumAggregate) return null;
+    total += value;
+  }
+  return total;
+}
+
+function normalizeCausalPath(value) {
+  if (typeof value !== "string" || !value || value.length > 4_096) return null;
+  const normalized = path.posix.normalize(value.replaceAll("\\", "/").replace(/^\.\/+/, "").replace(/\/+/g, "/"));
+  if (!normalized || normalized === "." || path.posix.isAbsolute(normalized)
+    || normalized === ".." || normalized.startsWith("../")) return null;
+  return normalized;
+}
+
+function causalContextPackEvent(event, idField) {
+  const id = event?.[idField];
+  if (typeof id !== "string" || !id || id.length > 200 || !Array.isArray(event.selectedItems)
+    || event.selectedItems.length > 10_000 || !boundedCausalInteger(event.estimatedTokens)
+    || typeof event.source !== "string" || !event.source || event.source.length > 100) return null;
+  const paths = event.selectedItems.map((item) => normalizeCausalPath(item?.path));
+  if (paths.some((item) => item === null)) return null;
+  const selectedItemEstimatedTokens = boundedCausalSum(event.selectedItems.map((item) => item?.estimatedTokens));
+  if (selectedItemEstimatedTokens === null) return null;
+  let binding;
+  try {
+    binding = JSON.stringify([event.source, event.queryHash ?? null, event.confidence ?? null,
+      event.estimatedTokens, event.selectedItems]);
+  } catch {
+    return null;
+  }
+  return {
+    id,
+    estimatedTokens: event.estimatedTokens,
+    selectedItems: event.selectedItems.length,
+    selectedItemEstimatedTokens,
+    criterion: event.source === "criterion-pack",
+    paths,
+    binding
+  };
+}
+
+function causalContextTask(event, taskByTurn) {
+  if (typeof event?.taskRunId === "string" && event.taskRunId) return event.taskRunId;
+  if (typeof event?.turnId !== "string" || !event.turnId) return "";
+  return taskByTurn.get(event.turnId) ?? "";
+}
+
+/**
+ * Persistable causal context evidence for one benchmark session. The projection
+ * deliberately drops every path, prompt, hash, identifier and timestamp. Any
+ * incomplete lane nulls the aggregate payload so missing telemetry cannot be
+ * interpreted as zero context work.
+ */
+export function benchmarkCausalContextReceipt(events, {
+  surface,
+  sessionId,
+  criterionExpected = true,
+  telemetryTruncated = false,
+  telemetryExists = true,
+  telemetryIntegrityFailures = 0,
+  recoverableTailBytes = 0
+} = {}) {
+  if (surface !== "piagent") return {
+    schemaVersion: 1,
+    evidenceSource: "not-applicable",
+    applicability: "not-applicable",
+    available: false,
+    coverage: {
+      status: "not-applicable",
+      telemetryTruncated: false,
+      telemetryIntegrityFailures: 0,
+      recoverableTailBytes: 0,
+      criterionExpected: false,
+      sessionEventsObserved: 0,
+      observedLanes: 0,
+      requiredLanes: 0,
+      missingLanes: []
+    },
+    aggregates: null
+  };
+
+  const visible = Array.isArray(events) && typeof sessionId === "string" && sessionId
+    ? events.filter((event) => event && typeof event === "object" && event.sessionId === sessionId)
+    : [];
+  const envelopeFailures = visible.filter((event) => event.schemaVersion !== 2 || event.telemetrySource !== "piagent").length;
+  const suppliedIntegrityFailures = boundedCausalInteger(telemetryIntegrityFailures)
+    ? telemetryIntegrityFailures
+    : causalContextMaximumAggregate;
+  const totalIntegrityFailures = boundedCausalSum([suppliedIntegrityFailures, envelopeFailures])
+    ?? causalContextMaximumAggregate;
+  const promptIndexByTurn = new Map();
+  for (const [index, event] of visible.entries()) {
+    if (event.event !== "agent_prompt" || typeof event.turnId !== "string" || !event.turnId) continue;
+    if (promptIndexByTurn.has(event.turnId)) promptIndexByTurn.set(event.turnId, null);
+    else promptIndexByTurn.set(event.turnId, index);
+  }
+  const offered = new Map(), delivered = new Map(), injected = new Map();
+  const criterion = {
+    attempts: 0,
+    selectedAttempts: 0,
+    candidates: 0,
+    selectedItems: 0,
+    estimatedTokens: 0,
+    zeroSelectionReasonCounts: {
+      autoContextDisabled: 0,
+      criterionGraphUnavailable: 0,
+      noCandidates: 0,
+      noReadableSelection: 0
+    }
+  };
+  let criterionEvidenceComplete = true, packLifecycleComplete = true;
+  for (const [index, event] of visible.entries()) {
+    if (event.event === "criterion_context_pack") {
+      const promptIndex = promptIndexByTurn.get(event.turnId);
+      const valid = boundedCausalInteger(event.selected) && boundedCausalInteger(event.candidates)
+        && boundedCausalInteger(event.estimatedTokens) && causalContextCriterionReasons.has(event.reasonCode)
+        && event.candidates >= event.selected
+        && Number.isInteger(promptIndex) && promptIndex < index
+        && ((event.selected > 0 && event.reasonCode === "selected") || (event.selected === 0 && event.reasonCode !== "selected"));
+      if (!valid) {
+        criterionEvidenceComplete = false;
+        continue;
+      }
+      criterion.attempts += 1;
+      criterion.selectedAttempts += event.selected > 0 ? 1 : 0;
+      criterion.candidates += event.candidates;
+      criterion.selectedItems += event.selected;
+      criterion.estimatedTokens += event.estimatedTokens;
+      if (event.selected === 0) {
+        const key = {
+          "auto-context-disabled": "autoContextDisabled",
+          "criterion-graph-unavailable": "criterionGraphUnavailable",
+          "no-candidates": "noCandidates",
+          "no-readable-selection": "noReadableSelection"
+        }[event.reasonCode];
+        criterion.zeroSelectionReasonCounts[key] += 1;
+      }
+      if (![criterion.attempts, criterion.selectedAttempts, criterion.candidates, criterion.selectedItems, criterion.estimatedTokens]
+        .every(boundedCausalInteger)) criterionEvidenceComplete = false;
+    } else if (event.event === "context_pack_offered") {
+      const value = causalContextPackEvent(event, "deliveryId");
+      if (!value || offered.has(value.id)) packLifecycleComplete = false;
+      else offered.set(value.id, { ...value, index });
+    } else if (event.event === "context_delivery_confirmed") {
+      const id = event.deliveryId;
+      if (typeof id !== "string" || !id || id.length > 200 || !boundedCausalInteger(event.selected) || delivered.has(id)) {
+        packLifecycleComplete = false;
+      } else delivered.set(id, { id, selectedItems: event.selected, index });
+    } else if (event.event === "context_pack_injected") {
+      const value = causalContextPackEvent(event, "injectionId");
+      if (!value || injected.has(value.id)) packLifecycleComplete = false;
+      else injected.set(value.id, { ...value, index });
+    }
+  }
+  for (const [id, delivery] of delivered) {
+    const offer = offered.get(id), injection = injected.get(id);
+    if (!offer || !injection || offer.index >= delivery.index || delivery.index >= injection.index
+      || offer.selectedItems !== delivery.selectedItems || delivery.selectedItems !== injection.selectedItems
+      || offer.estimatedTokens !== injection.estimatedTokens
+      || offer.selectedItemEstimatedTokens !== injection.selectedItemEstimatedTokens
+      || offer.binding !== injection.binding) packLifecycleComplete = false;
+  }
+  for (const id of offered.keys()) if (!delivered.has(id) || !injected.has(id)) packLifecycleComplete = false;
+  for (const id of delivered.keys()) if (!offered.has(id) || !injected.has(id)) packLifecycleComplete = false;
+  for (const id of injected.keys()) if (!delivered.has(id)) packLifecycleComplete = false;
+  const criterionOffered = [...offered.values()].filter((item) => item.criterion);
+  const criterionDelivered = [...delivered.keys()].filter((id) => offered.get(id)?.criterion);
+  const criterionInjected = [...injected.values()].filter((item) => item.criterion);
+  if (criterionExpected === true && criterion.attempts === 0) criterionEvidenceComplete = false;
+  if (criterion.selectedAttempts !== criterionOffered.length
+    || criterion.selectedItems !== boundedCausalSum(criterionOffered.map((item) => item.selectedItems))
+    || criterion.estimatedTokens !== boundedCausalSum(criterionOffered.map((item) => item.estimatedTokens))
+    || criterionOffered.length !== criterionDelivered.length
+    || criterionDelivered.length !== criterionInjected.length) criterionEvidenceComplete = false;
+
+  const taskByTurn = new Map(visible
+    .filter((event) => event.event === "turn_task_bound" && typeof event.turnId === "string"
+      && event.turnId && typeof event.taskRunId === "string" && event.taskRunId)
+    .map((event) => [event.turnId, event.taskRunId]));
+  const activePackByTask = new Map();
+  const pendingDirectReads = new Map(), seenDirectReadIds = new Set();
+  let directFallbackRereadCalls = 0, shellToolCallsObserved = 0;
+  let fallbackEvidenceComplete = packLifecycleComplete;
+  for (const event of visible) {
+    if (event.event === "context_pack_injected") {
+      const taskRunId = causalContextTask(event, taskByTurn);
+      const paths = injected.get(event.injectionId)?.paths;
+      if (!taskRunId || !paths) {
+        fallbackEvidenceComplete = false;
+        continue;
+      }
+      const selected = activePackByTask.get(taskRunId) ?? new Set();
+      for (const selectedPath of paths) selected.add(selectedPath);
+      activePackByTask.set(taskRunId, selected);
+      continue;
+    }
+    if (event.event === "tool_call") {
+      const toolName = String(event.toolName ?? "").toLowerCase();
+      const taskRunId = causalContextTask(event, taskByTurn);
+      const selected = activePackByTask.get(taskRunId);
+      if (selected && causalContextShellTools.has(toolName)) shellToolCallsObserved += 1;
+      if (!selected || !causalContextReadTools.has(toolName)) continue;
+      const target = normalizeCausalPath(event.targetPath);
+      if (!target || typeof event.toolCallId !== "string" || !event.toolCallId || event.toolCallId.length > 200) {
+        fallbackEvidenceComplete = false;
+        continue;
+      }
+      if (!selected.has(target)) continue;
+      if (seenDirectReadIds.has(event.toolCallId)) fallbackEvidenceComplete = false;
+      else {
+        seenDirectReadIds.add(event.toolCallId);
+        pendingDirectReads.set(event.toolCallId, target);
+      }
+      continue;
+    }
+    const toolCallId = typeof event.toolCallId === "string" ? event.toolCallId : "";
+    if (!toolCallId || !pendingDirectReads.has(toolCallId)) continue;
+    if (event.event === "tool_decision" && event.decision === "blocked") {
+      pendingDirectReads.delete(toolCallId);
+      continue;
+    }
+    if (event.event === "tool_result") {
+      if (event.isError !== true) directFallbackRereadCalls += 1;
+      pendingDirectReads.delete(toolCallId);
+    }
+  }
+  if (pendingDirectReads.size > 0) fallbackEvidenceComplete = false;
+
+  const prompts = visible.map((event, index) => ({ event, index }))
+    .filter((item) => item.event.event === "agent_prompt");
+  const managedPrefixComplete = prompts.length > 0
+    && prompts.every((item) => typeof item.event.managedInstructionsCompacted === "boolean");
+  const compactedPrompts = prompts.filter((item) => item.event.managedInstructionsCompacted === true).length;
+  const lastPromptIndex = prompts.at(-1)?.index ?? -1;
+  const lifecycleComplete = prompts.length > 0
+    && visible.some((event, index) => index > lastPromptIndex
+      && (event.event === "agent_settled" || event.event === "session_shutdown"));
+  const offeredTokens = boundedCausalSum([...offered.values()].map((item) => item.estimatedTokens));
+  const deliveredTokens = boundedCausalSum([...delivered.keys()].map((id) => offered.get(id)?.estimatedTokens));
+  const injectedTokens = boundedCausalSum([...injected.values()].map((item) => item.estimatedTokens));
+  const offeredItemTokens = boundedCausalSum([...offered.values()].map((item) => item.selectedItemEstimatedTokens));
+  const deliveredItemTokens = boundedCausalSum([...delivered.keys()].map((id) => offered.get(id)?.selectedItemEstimatedTokens));
+  const injectedItemTokens = boundedCausalSum([...injected.values()].map((item) => item.selectedItemEstimatedTokens));
+  const offeredItems = boundedCausalSum([...offered.values()].map((item) => item.selectedItems));
+  const deliveredItems = boundedCausalSum([...delivered.values()].map((item) => item.selectedItems));
+  const injectedItems = boundedCausalSum([...injected.values()].map((item) => item.selectedItems));
+  const aggregateBoundsComplete = [offeredTokens, deliveredTokens, injectedTokens, offeredItemTokens, deliveredItemTokens,
+    injectedItemTokens, offeredItems, deliveredItems, injectedItems]
+    .every((value) => value !== null) && boundedCausalInteger(directFallbackRereadCalls)
+    && boundedCausalInteger(shellToolCallsObserved);
+  packLifecycleComplete &&= aggregateBoundsComplete;
+  fallbackEvidenceComplete &&= aggregateBoundsComplete;
+
+  const lanes = {
+    "telemetry-window": telemetryExists === true && telemetryTruncated !== true
+      && totalIntegrityFailures === 0 && recoverableTailBytes === 0,
+    "session-lifecycle": lifecycleComplete,
+    "criterion-initial-pack": criterionEvidenceComplete,
+    "pack-lifecycle": packLifecycleComplete,
+    "direct-fallback-rereads": fallbackEvidenceComplete,
+    "managed-prefix": managedPrefixComplete
+  };
+  const missingLanes = causalContextCoverageLanes.filter((lane) => lanes[lane] !== true);
+  const observedLanes = causalContextCoverageLanes.length - missingLanes.length;
+  const available = missingLanes.length === 0;
+  const compactions = visible.filter((event) => event.event === "session_compact").length;
+  const managedPrefixState = compactedPrompts === 0
+    ? "uncompacted"
+    : compactedPrompts === prompts.length ? "compacted" : "mixed";
+  return {
+    schemaVersion: 1,
+    evidenceSource: "context-telemetry-closed-aggregate-v1",
+    applicability: "piagent",
+    available,
+    coverage: {
+      status: available ? "complete" : visible.length === 0 || !lifecycleComplete ? "unavailable" : "partial",
+      telemetryTruncated: telemetryTruncated === true,
+      telemetryIntegrityFailures: totalIntegrityFailures,
+      recoverableTailBytes: boundedCausalInteger(recoverableTailBytes) ? recoverableTailBytes : causalContextMaximumAggregate,
+      criterionExpected: criterionExpected === true,
+      sessionEventsObserved: visible.length,
+      observedLanes,
+      requiredLanes: causalContextCoverageLanes.length,
+      missingLanes
+    },
+    aggregates: available ? {
+      packCounts: { offered: offered.size, delivered: delivered.size, injected: injected.size },
+      estimatedTokens: { offered: offeredTokens, delivered: deliveredTokens, injected: injectedTokens },
+      selectedItemEstimatedTokens: { offered: offeredItemTokens, delivered: deliveredItemTokens, injected: injectedItemTokens },
+      selectedItemCounts: { offered: offeredItems, delivered: deliveredItems, injected: injectedItems },
+      criterionInitialPack: {
+        ...criterion,
+        offered: criterionOffered.length,
+        delivered: criterionDelivered.length,
+        injected: criterionInjected.length
+      },
+      directFallbackRereads: {
+        successfulCalls: directFallbackRereadCalls,
+        shellToolCallsObserved,
+        definition: "successful-direct-path-tool-call-v1"
+      },
+      compaction: { eventsObserved: compactions, state: compactions > 0 ? "observed" : "not-observed" },
+      managedPrefix: { promptsObserved: prompts.length, compactedPrompts, state: managedPrefixState }
+    } : null
+  };
+}
+
 export function loadReplayFailurePlan(reportPath) {
   let report;
   try {

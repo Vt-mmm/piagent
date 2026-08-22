@@ -516,6 +516,48 @@ describe("runtime session modules", () => {
     assert.equal(state.performanceReviewCredit("run-1"), undefined);
   });
 
+  it("clears volatile task state at a terminal boundary without poisoning a successor task", () => {
+    const cwd = temporaryProject();
+    const first = extensionContext(cwd, "session-boundary");
+    const second = extensionContext(cwd, "session-other");
+    const state = new RuntimeSessionState({ maxObservedContext: 4 });
+    const packedKey = `${cwd}\u0000session-boundary\u0000prompt-a`;
+
+    state.cacheTaskIdentity(first, { taskId: "TASK-A", taskRunId: "run-a" });
+    state.beginTurn(first, "prompt-a");
+    state.rememberObservedContext(first, { path: "src/a.ts", reason: "read" });
+    state.rememberQualifiedContextEvidence(first, "run-a", { path: "src/a.ts", reason: "read" });
+    state.rememberToolResult(first, "same-read", { outputHash: "old-output", recordedAt: "now" });
+    state.rememberInjectedContextPack(first, "same-query", {
+      queryHash: "old-query", confidence: "high", estimatedTokens: 20, paths: ["src/a.ts"]
+    });
+    state.stageContextDelivery(first, {
+      deliveryId: "old-delivery", taskRunId: "run-a", entries: [{ path: "src/a.ts", reason: "old" }]
+    });
+    state.rememberAutoPackedPrompt(packedKey);
+    state.rememberAdvisedTool(first, "bash");
+    state.rememberToolResult(second, "same-read", { outputHash: "other-session", recordedAt: "now" });
+
+    state.clearTaskBoundary(first, "run-a");
+
+    assert.equal(state.taskIdentity(first), undefined);
+    assert.deepEqual(state.observedContext(first), []);
+    assert.deepEqual(state.qualifiedContextEvidence(first, "run-a"), []);
+    assert.equal(state.previousToolResult(first, "same-read"), undefined);
+    assert.equal(state.injectedContextPack(first, "same-query"), undefined);
+    assert.equal(state.takeContextDelivery(first, "old-delivery"), undefined);
+    assert.equal(state.hasAutoPackedPrompt(packedKey), false);
+    assert.equal(state.hasAdvisedTool(first, "bash"), true, "session-level policy advice is not task context");
+    assert.equal(state.previousToolResult(second, "same-read")?.outputHash, "other-session");
+    assert.equal(state.currentTurn(first)?.promptHash, "prompt-a", "the host may still settle the terminal turn");
+
+    state.cacheTaskIdentity(first, { taskId: "TASK-B", taskRunId: "run-b" });
+    state.rememberToolResult(first, "new-read", { outputHash: "new-output", recordedAt: "later" });
+    state.clearTaskBoundary(first, "run-a");
+    assert.deepEqual(state.taskIdentity(first), { taskId: "TASK-B", taskRunId: "run-b" });
+    assert.equal(state.previousToolResult(first, "new-read")?.outputHash, "new-output", "a late old-task settlement cannot clear successor state");
+  });
+
   it("predicts only byte-exact edit and apply-patch update post-images", () => {
     const cwd = temporaryProject();
     fs.mkdirSync(path.join(cwd, "test"), { recursive: true });
@@ -699,19 +741,21 @@ describe("runtime session modules", () => {
     fs.writeFileSync(path.join(cwd, "src", "event.ts"), "export const value = 0;\n");
     execFileSync("git", ["-C", cwd, "add", "."]);
     execFileSync("git", ["-C", cwd, "commit", "-qm", "fixture"]);
+    const shellSnapshotBefore = workingTreeSnapshot(cwd);
     fs.writeFileSync(path.join(cwd, "src", "event.ts"), "export const value = 1;\n");
     const preSnapshot = workingTreeSnapshot(cwd);
     const handlers = new Map();
     const observations = [];
     const semanticDigests = [];
     const downstreamSnapshots = [];
+    const telemetry = [];
     const task = {
       taskId: "TREE-EVENT", taskRunId: "tree-event-run", sessionId: "session-1",
       trace: { outcome: "pending" }, baselineFileDigests: preSnapshot
     };
     const state = {
       taskIdentity: () => ({ taskId: task.taskId, taskRunId: task.taskRunId }),
-      observedContext: () => [], qualifiedTaskContext: () => [], consumeShellMutationSnapshot: () => preSnapshot,
+      observedContext: () => [], qualifiedTaskContext: () => [], consumeShellMutationSnapshot: () => shellSnapshotBefore,
       completeAuthorizedModelMutationEvidence: (_identity, _call, _success, snapshot) => {
         downstreamSnapshots.push(snapshot); return { changedPaths: [], recordedDigests: {}, beforeSnapshot: null,
           targetPaths: [], recordedContentDigests: {}, proofModes: {} };
@@ -736,7 +780,7 @@ describe("runtime session modules", () => {
       },
       recordObservedTaskVerification: (_pi, _ctx, _event, _pending, _maximum, _before, eventTree) => observations.push(eventTree),
       extractLikelyPath: () => undefined, mutationTargets: () => [], isShellTool: () => true,
-      telemetry() {}, now: () => "2026-08-10T00:00:00.000Z",
+      telemetry: (_ctx, payload) => telemetry.push(payload), now: () => "2026-08-10T00:00:00.000Z",
       completeSemanticRepair: (_ctx, _event, metadata) => { semanticDigests.push(metadata.currentWorkingTreeDigest); }
     });
 
@@ -750,6 +794,7 @@ describe("runtime session modules", () => {
     assert.equal(observations[0].digest, workingTreeEvidenceDigest(observations[0].snapshot));
     assert.deepEqual(downstreamSnapshots, [observations[0].snapshot, observations[0].snapshot], "authorship and review reuse the same post-event snapshot");
     assert.deepEqual(semanticDigests, [observations[0].digest]);
+    assert.deepEqual(telemetry.find((entry) => entry.event === "tool_result")?.changedPaths, ["src/event.ts"]);
     assert.notEqual(workingTreeEvidenceDigest(workingTreeSnapshot(cwd)), observations[0].digest, "a later mutation belongs to the next event, not this one");
   });
 
@@ -811,7 +856,12 @@ describe("runtime session modules", () => {
     assert.equal(state.injectedContextPack(ctx, "query-key")?.queryHash, "query-hash");
     assert.equal(flushed[0].event, "context_delivery_confirmed");
 
-    await handlers.get("turn_end")({ message: { role: "assistant" }, turnIndex: 2, toolResults: [] }, ctx);
+    task.trace = { outcome: "completed" };
+    await handlers.get("turn_end")({ message: { role: "assistant", stopReason: "stop", usage: { input: 10, output: 2 } }, turnIndex: 2, toolResults: [] }, ctx);
+    const terminalTurn = telemetry.find((entry) => entry.event === "turn_end");
+    assert.equal(terminalTurn.taskRunId, "run-1", "terminal usage remains attributed before volatile state is cleared");
+    assert.equal(terminalTurn.taskOutcome, "completed");
+    assert.equal(state.taskIdentity(ctx), undefined, "terminal cleanup happens after turn-end telemetry");
     await handlers.get("agent_settled")({}, ctx);
     await handlers.get("session_compact")({ reason: "threshold", willRetry: false, fromExtension: false }, ctx);
     await handlers.get("session_shutdown")({ reason: "quit", targetSessionFile: "/tmp/session.jsonl" }, ctx);
@@ -831,8 +881,9 @@ describe("runtime session modules", () => {
     };
     const activated = [];
     const telemetry = [];
+    const state = new RuntimeSessionState({ maxObservedContext: 2 });
     registerInputHook(pi, {
-      state: new RuntimeSessionState({ maxObservedContext: 2 }),
+      state,
       boilerplateCollapseChars: 300,
       activeTask: () => undefined,
       readProtectedPaths: () => [],
@@ -846,6 +897,8 @@ describe("runtime session modules", () => {
       await handlers.get("input")({ text: "/piagent-workflow scout auth", source: "interactive" }, ctx),
       { action: "transform", text: "/workflow scout auth" }
     );
+    state.cacheTaskIdentity(ctx, { taskId: "STALE", taskRunId: "stale-run" });
+    state.rememberToolResult(ctx, "stale-read", { outputHash: "old-output", recordedAt: "earlier" });
     assert.deepEqual(
       await handlers.get("input")({ text: "Fix src/cart.ts quantity calculation", source: "interactive", images: [] }, ctx),
       { action: "continue" }
@@ -854,6 +907,9 @@ describe("runtime session modules", () => {
     assert.equal(telemetry[0].event, "user_input");
     assert.equal(typeof telemetry[0].turnId, "string");
     assert.equal(telemetry[0].intakeMode, "runtime");
+    assert.equal(telemetry[0].taskRunId, undefined, "a missing durable task cannot inherit cached task attribution");
+    assert.equal(state.taskIdentity(ctx), undefined);
+    assert.equal(state.previousToolResult(ctx, "stale-read"), undefined, "stale task tool-result state is cleared before intake");
   });
 
   it("keeps tool activation and task intake policy deterministic", () => {

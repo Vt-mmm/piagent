@@ -46,8 +46,14 @@ export function registerInputHook(pi: ExtensionAPI, dependencies: InputHookDepen
     }
 
     const taskSignal = classifyContextTask(text);
+    const sessionTask = dependencies.activeTask(ctx);
+    if (sessionTask && sessionTask.trace.outcome !== "pending") dependencies.state.clearTaskBoundary(ctx, sessionTask.taskRunId);
+    else if (!sessionTask) {
+      const cachedTask = dependencies.state.taskIdentity(ctx);
+      if (cachedTask) dependencies.state.clearTaskBoundary(ctx, cachedTask.taskRunId);
+    }
+    const activeTask = sessionTask?.trace.outcome === "pending" ? sessionTask : undefined;
     const turn = dependencies.state.beginTurn(ctx, taskSignal.promptHash);
-    const activeTask = dependencies.activeTask(ctx);
     const authorityPolicy = activeTask?.trace.outcome === "pending" ? dependencies.authorityPolicy(ctx, activeTask) : undefined;
     let authorityHandoffReady = false;
     if (activeTask && authorityPolicy?.disposition === "new-attempt-required") {

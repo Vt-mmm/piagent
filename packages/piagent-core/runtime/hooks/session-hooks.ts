@@ -73,6 +73,7 @@ export function registerSessionHooks(pi: ExtensionAPI, dependencies: SessionHook
 
   pi.on("turn_end", async (event, ctx) => {
     const message = event.message as unknown as { usage?: unknown; stopReason?: unknown; role?: unknown };
+    const task = activeTask(ctx.cwd, ctx.sessionManager.getSessionId());
     telemetry(ctx, {
       event: "turn_end",
       turnIndex: event.turnIndex,
@@ -80,9 +81,13 @@ export function registerSessionHooks(pi: ExtensionAPI, dependencies: SessionHook
       role: message.role,
       stopReason: message.stopReason,
       usage: message.usage,
-      contextUsage: ctx.getContextUsage()
+      contextUsage: ctx.getContextUsage(),
+      taskId: task?.taskId,
+      taskRunId: task?.taskRunId,
+      taskOutcome: task?.trace.outcome
     });
     dependencies.onTurnEnd?.(ctx);
+    if (task && task.trace.outcome !== "pending") state.clearTaskBoundary(ctx, task.taskRunId);
   });
 
   pi.on("agent_settled", async (_event, ctx) => {

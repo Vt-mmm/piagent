@@ -1,5 +1,5 @@
 import { PIAGENT_BENCHMARK_TREATMENTS } from "./benchmark-runtime.js";
-import { geometricMean, geometricMeanConfidence95, median, rounded } from "./benchmark-statistics.js";
+import { geometricMean, geometricMeanConfidence95, geometricMeanConfidence95Raw, median, rounded } from "./benchmark-statistics.js";
 
 function plainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -127,9 +127,39 @@ export function pairedUsageBands(tokenPairs, field) {
     return [key, {
       pairs: values.length,
       scenarioFamilies: byScenario.size,
-      freshTokenRatio: rounded(geometricMean(ratios), 4),
+      freshTokenRatio: geometricMean(ratios),
       freshTokenRatioConfidence95: geometricMeanConfidence95([...byScenario.values()].map(geometricMean)),
       medianFreshTokenDelta: rounded(median(deltas), 2),
+      candidateWins: deltas.filter((value) => value < 0).length,
+      baselineWins: deltas.filter((value) => value > 0).length,
+      ties: deltas.filter((value) => value === 0).length
+    }];
+  }));
+}
+
+export function pairedDurationBands(durationPairs, field) {
+  const grouped = new Map();
+  for (const pair of durationPairs) {
+    const key = typeof pair.candidate?.[field] === "string" && pair.candidate[field] ? pair.candidate[field] : "unspecified";
+    const values = grouped.get(key) ?? [];
+    values.push(pair);
+    grouped.set(key, values);
+  }
+  return Object.fromEntries([...grouped.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([key, values]) => {
+    const ratios = values.map((pair) => pair.candidate.durationSeconds / pair.baseline.durationSeconds);
+    const deltas = values.map((pair) => pair.candidate.durationSeconds - pair.baseline.durationSeconds);
+    const byScenario = new Map();
+    for (const [index, pair] of values.entries()) {
+      const scenarioRatios = byScenario.get(pair.candidate.scenarioId) ?? [];
+      scenarioRatios.push(ratios[index]);
+      byScenario.set(pair.candidate.scenarioId, scenarioRatios);
+    }
+    return [key, {
+      pairs: values.length,
+      scenarioFamilies: byScenario.size,
+      durationRatio: geometricMean(ratios),
+      durationRatioConfidence95: geometricMeanConfidence95([...byScenario.values()].map(geometricMean)),
+      medianDurationDeltaSeconds: rounded(median(deltas), 4),
       candidateWins: deltas.filter((value) => value < 0).length,
       baselineWins: deltas.filter((value) => value > 0).length,
       ties: deltas.filter((value) => value === 0).length
@@ -212,6 +242,7 @@ export function familyClusteredFailureAwareUsage(suite, allPairs, repeats) {
     scenarioIds: complete ? usableRatios.map((item) => item.scenarioId) : [],
     ratio: complete ? geometricMean(values) : null,
     confidence95: complete ? geometricMeanConfidence95(values) : null,
+    confidence95Raw: complete ? geometricMeanConfidence95Raw(values) : null,
     families: familyRatios
   };
 }

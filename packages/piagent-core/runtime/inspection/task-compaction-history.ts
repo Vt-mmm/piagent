@@ -96,7 +96,7 @@ export function projectTaskCompactionHistory(input: {
     let malformed = inspected.corruptions;
     const matching = inspected.records.flatMap((record: any, ordinal: number) => {
       if (record?.taskId !== input.task.taskId || record?.taskRunId !== input.task.taskRunId || record?.sessionId !== input.task.sessionId) return [];
-      if (record.schemaVersion !== 1 || !timestamp(record.recordedAt)) { malformed += 1; return []; }
+      if (![1, 2].includes(record.schemaVersion) || !timestamp(record.recordedAt)) { malformed += 1; return []; }
       if (record.event === "session_compact") {
         if (typeof record.willRetry !== "boolean" || typeof record.fromExtension !== "boolean") { malformed += 1; return []; }
         return [{ ordinal, recordedAt: record.recordedAt, kind: "context-compaction", title: "Context đã được compact",

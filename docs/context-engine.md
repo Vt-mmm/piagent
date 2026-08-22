@@ -46,6 +46,10 @@ task
 - Telemetry không lưu prompt hoặc tool output thô. Nó lưu hash, kích thước, tool,
   model, thinking, active-tool count, usage, retrieval confidence và đường dẫn
   tương đối đã được guard redaction.
+- Mỗi telemetry row có provenance envelope do writer đóng sau payload; event
+  không thể ghi đè schema/provenance. Nếu source snapshot phải redact, receipt
+  chỉ giữ `sanitizedContentDigest` và `fileContentHash` trên nội dung đã sanitize;
+  raw-content digest không được tính hoặc lưu.
 
 Bốn cơ chế `PIAGENT_DYNAMIC_TOOLS`, `PIAGENT_AUTO_CONTEXT`,
 `PIAGENT_CONTEXT_TELEMETRY` và `PIAGENT_AUTO_RECOVERY` đều **bật mặc định**.
@@ -180,7 +184,9 @@ không bị trừ điểm. `contextSelections`, `contextSelectionsUsed` và
 ranking. Runtime chỉ đọc phần đuôi telemetry có giới hạn khi tính report hoặc
 feedback, nên lịch sử dài không làm chậm từng prompt theo thời gian.
 
-`contextWasteScore` nằm trong khoảng `0..100`, thấp hơn là tốt hơn:
+Khi toàn bộ evidence lane đầy đủ, `contextWasteScore` nằm trong khoảng `0..100`,
+thấp hơn là tốt hơn. Nếu coverage chưa đầy đủ, score chính là `null` và chỉ
+`contextWasteScoreEstimate` được giữ như chẩn đoán partial:
 
 ```text
 30% duplicate read rate

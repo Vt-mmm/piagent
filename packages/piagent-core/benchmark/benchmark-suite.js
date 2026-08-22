@@ -1,8 +1,9 @@
 import { benchmarkAssuranceValidationErrors } from "./benchmark-assurance.js";
+import { benchmarkPricingSnapshotValidationErrors } from "./benchmark-normalized-cost.js";
 
 const SUITE_FIELDS = new Set([
   "schemaVersion", "id", "title", "description", "profile", "defaultRepeats", "timeoutSeconds",
-  "assurance", "releaseGate", "executionContract", "scenarios"
+  "assurance", "releaseGate", "executionContract", "pricingSnapshot", "scenarios"
 ]);
 const SCENARIO_FIELDS = new Set([
   "id", "title", "description", "kind", "fixture", "prompt", "grader", "allowedChanges",
@@ -13,8 +14,11 @@ const RELEASE_GATE_FIELDS = new Set([
   "minimumQualityScore", "minimumSafetyScore", "minimumReliabilityScore", "minimumWorkflowScore",
   "minimumCategoryScore", "minimumOutcomeScoreExclusive", "minimumPairedScenarios", "minimumRepeats",
   "minimumComparableEfficiencyScenarios", "maximumFreshTokenRatioUpper95", "maximumDurationRatioUpper95",
+  "maximumBandDurationRatio", "maximumFamilyDurationRatio",
+  "maximumBandFreshTokenRatio", "maximumFamilyFreshTokenRatio",
+  "maximumNormalizedCostRatioUpper95", "maximumBandNormalizedCostRatio", "maximumFamilyNormalizedCostRatio",
   "maximumInfrastructureRetries", "primaryEfficiencyEstimand", "requireEfficiencyClaim", "requireFullSuiteForClaim",
-  "requireStableProviderWireSurface"
+  "requireStableProviderWireSurface", "requireNormalizedCostClaim", "requireCausalContextReceipt"
 ]);
 const EXECUTION_CONTRACT_FIELDS = new Set(["surfaces", "model", "thinking", "codexMode"]);
 const THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
@@ -99,9 +103,31 @@ export function benchmarkSuiteValidationErrors(input) {
       if (maximumRatio !== undefined && (!Number.isFinite(maximumRatio) || maximumRatio <= 0 || maximumRatio > 10)) {
         errors.push("releaseGate.maximumFreshTokenRatioUpper95 must be greater than 0 and at most 10");
       }
+      const maximumBandRatio = input.releaseGate.maximumBandFreshTokenRatio;
+      if (maximumBandRatio !== undefined && (!Number.isFinite(maximumBandRatio) || maximumBandRatio <= 0 || maximumBandRatio > 10)) {
+        errors.push("releaseGate.maximumBandFreshTokenRatio must be greater than 0 and at most 10");
+      }
+      const maximumFamilyRatio = input.releaseGate.maximumFamilyFreshTokenRatio;
+      if (maximumFamilyRatio !== undefined && (!Number.isFinite(maximumFamilyRatio) || maximumFamilyRatio <= 0 || maximumFamilyRatio > 10)) {
+        errors.push("releaseGate.maximumFamilyFreshTokenRatio must be greater than 0 and at most 10");
+      }
       const maximumDurationRatio = input.releaseGate.maximumDurationRatioUpper95;
       if (maximumDurationRatio !== undefined && (!Number.isFinite(maximumDurationRatio) || maximumDurationRatio <= 0 || maximumDurationRatio > 10)) {
         errors.push("releaseGate.maximumDurationRatioUpper95 must be greater than 0 and at most 10");
+      }
+      for (const field of ["maximumBandDurationRatio", "maximumFamilyDurationRatio"]) {
+        const value = input.releaseGate[field];
+        if (value !== undefined && (!Number.isFinite(value) || value <= 0 || value > 10)) {
+          errors.push(`releaseGate.${field} must be greater than 0 and at most 10`);
+        }
+      }
+      for (const field of [
+        "maximumNormalizedCostRatioUpper95", "maximumBandNormalizedCostRatio", "maximumFamilyNormalizedCostRatio"
+      ]) {
+        const value = input.releaseGate[field];
+        if (value !== undefined && (!Number.isFinite(value) || value <= 0 || value > 10)) {
+          errors.push(`releaseGate.${field} must be greater than 0 and at most 10`);
+        }
       }
       if (input.releaseGate.requireEfficiencyClaim !== undefined && typeof input.releaseGate.requireEfficiencyClaim !== "boolean") {
         errors.push("releaseGate.requireEfficiencyClaim must be a boolean");
@@ -116,6 +142,18 @@ export function benchmarkSuiteValidationErrors(input) {
       if (input.releaseGate.requireStableProviderWireSurface !== undefined && typeof input.releaseGate.requireStableProviderWireSurface !== "boolean") {
         errors.push("releaseGate.requireStableProviderWireSurface must be a boolean");
       }
+      if (input.releaseGate.requireNormalizedCostClaim !== undefined && typeof input.releaseGate.requireNormalizedCostClaim !== "boolean") {
+        errors.push("releaseGate.requireNormalizedCostClaim must be a boolean");
+      }
+      if (input.releaseGate.requireCausalContextReceipt !== undefined && typeof input.releaseGate.requireCausalContextReceipt !== "boolean") {
+        errors.push("releaseGate.requireCausalContextReceipt must be a boolean");
+      }
+    }
+  }
+  if (input.pricingSnapshot !== undefined) {
+    errors.push(...benchmarkPricingSnapshotValidationErrors(input.pricingSnapshot));
+    if (plainObject(input.executionContract) && input.pricingSnapshot?.model !== input.executionContract.model) {
+      errors.push("pricingSnapshot.model must match executionContract.model");
     }
   }
   if (input.executionContract !== undefined) {
@@ -154,6 +192,25 @@ export function benchmarkSuiteValidationErrors(input) {
   }
   if (input.schemaVersion === 2 && input.releaseGate?.requireEfficiencyClaim === true && input.releaseGate?.requireStableProviderWireSurface !== true) {
     errors.push("schemaVersion 2 token-saving claims require releaseGate.requireStableProviderWireSurface true");
+  }
+  if (input.schemaVersion === 2 && input.releaseGate?.requireEfficiencyClaim === true && input.releaseGate?.requireCausalContextReceipt !== true) {
+    errors.push("schemaVersion 2 token-saving claims require releaseGate.requireCausalContextReceipt true");
+  }
+  if (input.schemaVersion === 2 && input.releaseGate?.requireNormalizedCostClaim === true) {
+    if (!plainObject(input.pricingSnapshot)) errors.push("schemaVersion 2 normalized-cost claims require pricingSnapshot");
+    if (!Number.isFinite(input.releaseGate.maximumNormalizedCostRatioUpper95)
+      || input.releaseGate.maximumNormalizedCostRatioUpper95 > 0.8) {
+      errors.push("schemaVersion 2 normalized-cost claims require releaseGate.maximumNormalizedCostRatioUpper95 at or below 0.8");
+    }
+    if (!Number.isFinite(input.releaseGate.maximumBandNormalizedCostRatio)) {
+      errors.push("schemaVersion 2 normalized-cost claims require releaseGate.maximumBandNormalizedCostRatio");
+    }
+    if (!Number.isFinite(input.releaseGate.maximumFamilyNormalizedCostRatio)) {
+      errors.push("schemaVersion 2 normalized-cost claims require releaseGate.maximumFamilyNormalizedCostRatio");
+    }
+    if (input.releaseGate.requireEfficiencyClaim !== true) {
+      errors.push("schemaVersion 2 normalized-cost claims require releaseGate.requireEfficiencyClaim true");
+    }
   }
   if (!Array.isArray(input.scenarios) || input.scenarios.length === 0 || input.scenarios.length > 50) {
     errors.push("scenarios must contain between 1 and 50 entries");

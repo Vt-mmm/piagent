@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "production-v1",
+  "purpose": "Provider-spend control before the one claim-eligible 108-session public-regression result.",
+  "rootSeed": "production-v1-40-gate-v1-1370",
+  "execution": {
+    "surfaces": ["piagent", "codex-cli"],
+    "model": "openai-codex/gpt-5.6-luna",
+    "thinking": "medium",
+    "repeats": 3,
+    "infrastructureRetries": 0,
+    "stopAfterFailedPair": true
+  },
+  "stages": [
+    { "id": "S0", "cumulativeSessions": 0, "newSessions": 0, "mode": "preflight-only", "claimEligible": false },
+    { "id": "S12", "cumulativeSessions": 12, "newSessions": 12, "mode": "execute-and-pause", "claimEligible": false },
+    { "id": "S36", "cumulativeSessions": 36, "newSessions": 24, "mode": "resume-and-pause", "claimEligible": false },
+    { "id": "S72", "cumulativeSessions": 72, "newSessions": 36, "mode": "resume-and-pause", "claimEligible": false },
+    { "id": "S108", "cumulativeSessions": 108, "newSessions": 36, "mode": "resume-and-finalize", "claimEligible": true }
+  ],
+  "earlyDetection": {
+    "expectedFirstRepeatScenarioIds": [
+      "cli-double-dash",
+      "destructive-history-refusal",
+      "tenant-role-authorization",
+      "expiry-boundary",
+      "quoted-csv",
+      "unicode-search"
+    ],
+    "requiredCategoryCoverage": ["backend", "frontend", "data", "platform", "reliability", "security"],
+    "requiredLifecycleCoverage": ["steady-state", "cold-start"],
+    "requiredDifficultyCoverage": ["small", "medium", "large"]
+  },
+  "enforcement": {
+    "runnerConsumesThisArtifact": true,
+    "runnerBindsFrozenSeedAndExecution": true,
+    "runnerWritesAtomicPrivateStageDiagnostic": true,
+    "runnerBlocksProductionResumeWhenStageDiagnosticFails": true,
+    "durableStageStateSurvivesMissingPauseMarker": true,
+    "completeLedgerFinalizesWithoutProviderPreflight": true,
+    "stageDiagnosticArtifact": "stage-diagnostic.json",
+    "automaticTerminalOrAbortRules": [
+      "dirty-release-source-before-auth-tool-or-provider-preflight",
+      "piagent-unresolved-or-outcome-score-at-or-below-floor-via-stop-after-failed-pair",
+      "infrastructure-error-or-unknown-provider-attempt-usage-via-runner-abort",
+      "candidate-provenance-drift-via-execution-guard"
+    ],
+    "stageAdvanceRules": [
+      "clean-release-source",
+      "no-baseline-pass-piagent-fail",
+      "no-observed-paired-grade-regression",
+      "all-observed-piagent-outcomes-remain-above-the-release-floor",
+      "no-model-thinking-or-provider-wire-parity-drift",
+      "complete-privacy-safe-causal-context-receipt-with-closed-session-lifecycle",
+      "no-accepted-usage-completeness-failure",
+      "no-normalized-cost-pricing-applicability-failure",
+      "no-infrastructure-retry",
+      "no-observed-pair-or-family-fresh-token-normalized-cost-or-duration-ratio-above-1"
+    ],
+    "operatorRule": "The commands pass this artifact's frozen values explicitly. After every production-v1 pause, resume recomputes the provider-free diagnostic from the accepted ledger and is blocked unless stageAdvanceAllowed=true. The diagnostic is claim-ineligible; early success is never a stopping rule or release claim."
+  },
+  "claimBoundary": "Only S108 may be evaluated for the production-v1 public-regression claim; S0, S12, S36 and S72 are spend-control diagnostics and cannot support a release claim."
+}

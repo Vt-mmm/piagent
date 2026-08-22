@@ -2,7 +2,6 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-
 import {
   contextIndexExcludeDigest,
   contextIndexExcludePolicyVersion,
@@ -11,10 +10,12 @@ import {
 import { matchesAnyPath, matchesProtectedPath } from "./policy-core.js";
 import { appendJsonlBounded, readJsonlTail } from "./state-retention.js";
 import { ensurePrivateStateDirectory, resolveLocalStatePath } from "./local-state-path.js";
-import { contextMetricPartition, injectionEfficiencyMetrics, prefixEfficiencyMetrics } from "./context-efficiency-metrics.js";
-
+import { contextMetricPartition } from "./context-efficiency-metrics.js";
+import { writeContextEfficiencyReport } from "./context-efficiency-report.js";
+import { inspectContextTelemetryIntegrity } from "./context-telemetry-integrity.js";
+import { redactSensitiveProjectFileText } from "../security/sensitive-data.js";
 const INDEX_SCHEMA_VERSION = 2;
-const TELEMETRY_SCHEMA_VERSION = 1;
+const TELEMETRY_SCHEMA_VERSION = 2;
 const RRF_K = 60;
 const DEFAULT_MAX_FILE_BYTES = 512 * 1024;
 const DEFAULT_MAX_FILES = 8_000;
@@ -74,6 +75,10 @@ function clampInteger(value, fallback, min, max) {
   const number = Number(value);
   if (!Number.isFinite(number)) return fallback;
   return Math.max(min, Math.min(max, Math.trunc(number)));
+}
+
+function ratio(numerator, denominator) {
+  return denominator > 0 ? numerator / denominator : 0;
 }
 
 function requireExplicitExcludePatterns(options, operation) {
@@ -259,7 +264,7 @@ function isTextBuffer(buffer) {
   return sample.length === 0 || suspicious / sample.length < 0.02;
 }
 
-function shouldIndexPath(relativePath, options) {
+export function shouldIndexPath(relativePath, options = {}) {
   const rel = normalizeRelative(relativePath);
   if (!rel || path.isAbsolute(rel) || rel.startsWith("../")) return false;
   const segments = rel.split("/");
@@ -860,10 +865,13 @@ function retrievalFeedback(cwd) {
   } catch {
     return {
       rows: [],
+      observedSelected: 0,
       selected: 0,
       used: 0,
       unused: 0,
-      utilizationRate: 0
+      utilizationRate: 0,
+      fallbackRereads: 0,
+      fallbackRereadRate: 0
     };
   }
   const cached = retrievalFeedbackCache.get(cwd);
@@ -872,21 +880,37 @@ function retrievalFeedback(cwd) {
   const events = readContextTelemetry(cwd, { limit: 12_000, maxBytes: 12 * 1024 * 1024 });
   const selectedCounts = new Map();
   const usedCounts = new Map();
+  const fallbackReadCounts = new Map();
   const latestPackByPartition = new Map();
   const taskByTurn = new Map(events.filter((event) => event.event === "turn_task_bound" && typeof event.sessionId === "string" && typeof event.turnId === "string" && typeof event.taskRunId === "string")
     .map((event) => [`${event.sessionId}\0${event.turnId}`, event.taskRunId]));
-  let selected = 0;
-  let used = 0;
+  let observedSelected = 0, selected = 0, used = 0, fallbackRereads = 0;
+
+  const eventPaths = (event) => [...new Set([
+    ...(Array.isArray(event.selectedPaths) ? event.selectedPaths : []),
+    ...(Array.isArray(event.selectedItems) ? event.selectedItems.map((item) => item?.path) : [])
+  ].map(normalizeRelative).filter((filePath) => shouldIndexPath(filePath, {})))];
+  const successfulMutationPaths = (event) => {
+    if (event.event !== "tool_result" || event.isError === true) return [];
+    const explicit = [event.changedPaths, event.mutationPaths, event.targetPaths]
+      .find((value) => Array.isArray(value));
+    if (explicit) return [...new Set(explicit.map(normalizeRelative).filter(Boolean))];
+    // These tools have direct file-mutation semantics. Shell and opaque MCP
+    // results are intentionally excluded unless they carry explicit changed
+    // paths; a zero exit code alone is not mutation evidence.
+    const toolName = String(event.toolName ?? "").toLowerCase();
+    if (!["write", "edit", "apply_patch", "patch"].includes(toolName)) return [];
+    const targetPath = normalizeRelative(event.targetPath);
+    return targetPath ? [targetPath] : [];
+  };
 
   for (const event of events) {
     const partition = contextMetricPartition(event, taskByTurn);
-    if (event.event === "context_pack_injected" && partition) {
-      const selectedPaths = [...new Set(
-        (Array.isArray(event.selectedPaths) ? event.selectedPaths : [])
-          .map(normalizeRelative)
-          .filter((filePath) => shouldIndexPath(filePath, {}))
-      )];
-      const pack = { selectedPaths: new Set(selectedPaths), usedPaths: new Set() };
+    if (event.event === "context_pack_injected") {
+      const selectedPaths = eventPaths(event);
+      observedSelected += selectedPaths.length;
+      if (!partition) continue;
+      const pack = { selectedPaths: new Set(selectedPaths), usedPaths: new Set(), fallbackReadPaths: new Set() };
       latestPackByPartition.set(partition, pack);
       for (const filePath of selectedPaths) {
         selectedCounts.set(filePath, (selectedCounts.get(filePath) ?? 0) + 1);
@@ -894,13 +918,23 @@ function retrievalFeedback(cwd) {
       }
       continue;
     }
-    if (event.event !== "tool_call" || !partition) continue;
-    const targetPath = normalizeRelative(event.targetPath);
+    if (!partition) continue;
     const pack = latestPackByPartition.get(partition);
-    if (!targetPath || !pack?.selectedPaths.has(targetPath) || pack.usedPaths.has(targetPath)) continue;
-    pack.usedPaths.add(targetPath);
-    usedCounts.set(targetPath, (usedCounts.get(targetPath) ?? 0) + 1);
-    used += 1;
+    if (!pack) continue;
+    const targetPath = normalizeRelative(event.targetPath);
+    if (event.event === "tool_call" && ["read", "grep", "find", "ls"].includes(event.toolName)
+      && targetPath && pack.selectedPaths.has(targetPath) && !pack.fallbackReadPaths.has(targetPath)) {
+      pack.fallbackReadPaths.add(targetPath);
+      fallbackReadCounts.set(targetPath, (fallbackReadCounts.get(targetPath) ?? 0) + 1);
+      fallbackRereads += 1;
+      continue;
+    }
+    for (const mutationPath of successfulMutationPaths(event)) {
+      if (!pack.selectedPaths.has(mutationPath) || pack.usedPaths.has(mutationPath)) continue;
+      pack.usedPaths.add(mutationPath);
+      usedCounts.set(mutationPath, (usedCounts.get(mutationPath) ?? 0) + 1);
+      used += 1;
+    }
   }
 
   const rows = [...usedCounts.entries()]
@@ -912,16 +946,20 @@ function retrievalFeedback(cwd) {
         path: filePath,
         selectedCount,
         usedCount,
+        fallbackRereadCount: fallbackReadCounts.get(filePath) ?? 0,
         feedbackScore: utilization * evidence
       };
     })
     .sort((left, right) => right.feedbackScore - left.feedbackScore || right.usedCount - left.usedCount || left.path.localeCompare(right.path));
   const value = {
     rows,
+    observedSelected,
     selected,
     used,
     unused: Math.max(0, selected - used),
-    utilizationRate: ratio(used, selected)
+    utilizationRate: ratio(used, selected),
+    fallbackRereads,
+    fallbackRereadRate: ratio(fallbackRereads, selected)
   };
   retrievalFeedbackCache.set(cwd, { signature, value });
   return value;
@@ -1108,31 +1146,79 @@ export async function buildContextPack(cwd, query, options = {}) {
   }
 
   for (const result of rankedResults) {
-    let text;
+    let text, fileContentHash, sanitizedContentDigest, sensitiveContentRedacted = false;
+    let safeResult = result;
     try {
       const file = projectFileInfo(cwd, result.path, projectRoot, directoryCache);
       if (!file) continue;
-      text = fs.readFileSync(file.absolute, "utf8");
+      const bytes = fs.readFileSync(file.absolute);
+      const sanitized = redactSensitiveProjectFileText(result.path, bytes.toString("utf8"));
+      if (!sanitized.lineCountPreserved) continue;
+      text = sanitized.text;
+      sensitiveContentRedacted = sanitized.redacted;
+      safeResult = {
+        ...result,
+        symbols: result.symbols.map((symbol) => ({
+          ...symbol,
+          signature: redactSensitiveProjectFileText(result.path, String(symbol.signature ?? "")).text
+        }))
+      };
+      sanitizedContentDigest = sanitized.redacted
+        ? `context-sanitized-file-v1:${sha256(sanitized.text)}`
+        : undefined;
+      fileContentHash = sanitizedContentDigest ?? `context-file-v1:${sha256(bytes)}`;
     } catch {
       continue;
     }
-    const snippets = lineRangesForFile(text, result, search.terms, includeCode);
+    const snippets = lineRangesForFile(text, safeResult, search.terms, includeCode);
     const body = snippets.length > 0
       ? snippets.map((snippet) => `lines ${snippet.start}-${snippet.end}\n${snippet.text}`).join("\n\n")
-      : result.symbols.slice(0, 8).map((symbol) => `line ${symbol.line}: ${symbol.signature}`).join("\n");
+      : safeResult.symbols.slice(0, 8).map((symbol) => `line ${symbol.line}: ${symbol.signature}`).join("\n");
     const itemText = [`### ${result.path}`, `why: ${result.sources.join(", ")}`, body].filter(Boolean).join("\n");
     const tokens = estimateContextTokens(itemText);
-    const item = { ...result, text: itemText, estimatedTokens: tokens, truncated: false };
+    const itemRanges = snippets.length > 0
+      ? snippets.map(({ start, end }) => ({ start, end }))
+      : safeResult.symbols.slice(0, 8).map((symbol) => ({ start: symbol.line, end: symbol.endLine ?? symbol.line }));
+    const representation = snippets.length > 0 ? "snippet" : body ? "symbol-map" : "navigation";
+    const item = {
+      ...safeResult,
+      text: itemText,
+      estimatedTokens: tokens,
+      truncated: false,
+      fileContentHash,
+      ...(sanitizedContentDigest ? { sanitizedContentDigest } : {}),
+      payloadHash: `context-payload-v1:${sha256(itemText)}`,
+      representation,
+      ranges: itemRanges,
+      generation: 1,
+      sensitiveContentRedacted
+    };
     if (estimateContextTokens(renderPack([...selected, item])) > budgetTokens) {
       if (selected.length === 0) {
         const remaining = budgetTokens - estimateContextTokens(renderPack([]));
         let chars = Math.max(0, remaining * 4 - 16);
-        let truncated = { ...result, text: itemText.slice(0, chars), estimatedTokens: remaining, truncated: true };
+        let truncated = {
+          ...safeResult,
+          text: itemText.slice(0, chars),
+          estimatedTokens: remaining,
+          truncated: true,
+          fileContentHash,
+          ...(sanitizedContentDigest ? { sanitizedContentDigest } : {}),
+          payloadHash: "",
+          representation: `${representation}-truncated`,
+          ranges: [],
+          generation: 1,
+          sensitiveContentRedacted
+        };
         while (chars > 0 && estimateContextTokens(renderPack([truncated])) > budgetTokens) {
           chars = Math.max(0, chars - 16);
           truncated = { ...truncated, text: itemText.slice(0, chars) };
         }
-        if (chars > 0) selected.push(truncated);
+        if (chars > 0) selected.push({
+          ...truncated,
+          estimatedTokens: estimateContextTokens(truncated.text),
+          payloadHash: `context-payload-v1:${sha256(truncated.text)}`
+        });
       }
       continue;
     }
@@ -1206,10 +1292,10 @@ export async function buildTestImpact(cwd, changedFiles = [], options = {}) {
 export function appendContextTelemetry(cwd, event) {
   const paths = contextEnginePaths(cwd);
   const record = {
-    schemaVersion: TELEMETRY_SCHEMA_VERSION,
     source: "piagent",
-    recordedAt: nowIso(),
-    ...event
+    ...event,
+    schemaVersion: TELEMETRY_SCHEMA_VERSION, telemetrySource: "piagent",
+    recordedAt: typeof event?.recordedAt === "string" ? event.recordedAt : nowIso()
   };
   appendJsonlBounded(paths.telemetry, record, { maxBytes: MAX_TELEMETRY_FILE_BYTES, mode: 0o600, projectRoot: cwd });
   return record;
@@ -1221,114 +1307,28 @@ export function readContextTelemetry(cwd, options = {}) {
   const maxBytes = clampInteger(options.maxBytes, MAX_TELEMETRY_READ_BYTES, 64 * 1024, 256 * 1024 * 1024);
   return readJsonlTail(target, { limit, maxBytes, projectRoot: cwd });
 }
-function ratio(numerator, denominator) {
-  return denominator > 0 ? numerator / denominator : 0;
+
+/** Fail-closed telemetry inspection for benchmark evidence. */
+export function inspectContextTelemetry(cwd, options = {}) {
+  return inspectContextTelemetryIntegrity(cwd, contextEnginePaths(cwd).telemetry, options);
 }
 export function buildContextEfficiencyReport(cwd, options = {}) {
   const events = readContextTelemetry(cwd, options);
-  const prompts = events.filter((event) => event.event === "agent_prompt"), toolCalls = events.filter((event) => event.event === "tool_call"), toolResults = events.filter((event) => event.event === "tool_result"), packs = events.filter((event) => event.event === "context_pack");
-  const offeredPacks = events.filter((event) => event.event === "context_pack_offered"), injectedPacks = events.filter((event) => event.event === "context_pack_injected");
-  const compactions = events.filter((event) => event.event === "session_compact");
-  const seenReads = new Set();
-  let duplicateReads = 0;
-  let readCalls = 0;
-  for (const event of toolCalls) {
-    if (!["read", "grep", "find", "ls"].includes(event.toolName)) continue;
-    readCalls += 1;
-    const key = `${event.toolName}:${event.targetHash ?? event.inputHash ?? ""}`;
-    if (seenReads.has(key)) duplicateReads += 1;
-    else seenReads.add(key);
-  }
-  const outputChars = toolResults.reduce((sum, event) => sum + Number(event.outputChars ?? 0), 0);
-  const duplicateOutputChars = toolResults.reduce((sum, event) => sum + (event.repeated ? Number(event.outputChars ?? 0) : 0), 0);
-  const averageActiveTools = prompts.length > 0
-    ? prompts.reduce((sum, event) => sum + Number(event.activeTools ?? 0), 0) / prompts.length
-    : 0;
-  const averageSystemPromptTokens = prompts.length > 0
-    ? prompts.reduce((sum, event) => sum + Number(event.systemPromptTokens ?? 0), 0) / prompts.length
-    : 0;
-  const averageToolSchemaTokens = prompts.length > 0
-    ? prompts.reduce((sum, event) => sum + Number(event.toolSchemaTokens ?? 0), 0) / prompts.length
-    : 0;
-  const lowConfidencePacks = packs.filter((event) => ["none", "low"].includes(event.confidence)).length;
-  const feedback = retrievalFeedback(cwd);
-  const prefixMetrics = prefixEfficiencyMetrics(events), injectionMetrics = injectionEfficiencyMetrics(events);
-  const duplicateReadRate = ratio(duplicateReads, readCalls);
-  const duplicateOutputRate = ratio(duplicateOutputChars, outputChars);
-  const schemaShare = ratio(averageToolSchemaTokens, averageSystemPromptTokens);
-  const lowConfidenceRate = ratio(lowConfidencePacks, packs.length);
-  const activeToolPenalty = Math.max(0, Math.min(1, (averageActiveTools - 12) / 24));
-  const wasteScore = Math.round(100 * (
-    duplicateReadRate * 0.3
-    + duplicateOutputRate * 0.25
-    + Math.min(1, schemaShare * 3) * 0.2
-    + lowConfidenceRate * 0.15
-    + activeToolPenalty * 0.1
-  ));
-  const recommendations = [];
-  if (duplicateReadRate > 0.2) recommendations.push("Repeated reads are high; reuse the current working set before searching again.");
-  if (duplicateOutputRate > 0.15) recommendations.push("Repeated tool output is high; prefer delta results and narrower verification.");
-  if (schemaShare > 0.15 || averageActiveTools > 20) recommendations.push("Tool surface is large; activate only the workflow groups needed for the next turn.");
-  if (lowConfidenceRate > 0.4) recommendations.push("Retrieval confidence is low; rebuild the index or run one bounded finder pass.");
-  if (feedback.selected >= 4 && feedback.utilizationRate < 0.45) recommendations.push("Context-pack utilization is low; reduce pack breadth or improve task-specific ranking signals.");
-  if (recommendations.length === 0) recommendations.push("No dominant context waste signal was detected in the sampled events.");
-  const report = {
-    schemaVersion: 2,
-    source: "piagent",
-    generatedAt: nowIso(),
-    sample: {
-      events: events.length,
-      prompts: prompts.length,
-      toolCalls: toolCalls.length,
-      toolResults: toolResults.length,
-      contextPacks: packs.length,
-      contextPacksOffered: offeredPacks.length, contextPacksInjected: injectedPacks.length,
-      compactions: compactions.length
-    },
-    metrics: {
-      averageActiveTools: Number(averageActiveTools.toFixed(2)),
-      averageSystemPromptTokens: Math.round(averageSystemPromptTokens),
-      averageToolSchemaTokens: Math.round(averageToolSchemaTokens),
-      toolSchemaShare: Number(schemaShare.toFixed(4)),
-      readCalls,
-      duplicateReads,
-      duplicateReadRate: Number(duplicateReadRate.toFixed(4)),
-      outputChars,
-      duplicateOutputChars,
-      duplicateOutputRate: Number(duplicateOutputRate.toFixed(4)),
-      lowConfidencePacks,
-      lowConfidenceRate: Number(lowConfidenceRate.toFixed(4)),
-      contextSelections: feedback.selected,
-      contextSelectionsUsed: feedback.used,
-      contextSelectionsUnused: feedback.unused,
-      contextUtilizationRate: Number(feedback.utilizationRate.toFixed(4)),
-      ...Object.fromEntries(Object.entries({ ...prefixMetrics, ...injectionMetrics }).map(([key, value]) => [key, Number(value.toFixed(4))])),
-      contextWasteScore: wasteScore
-    },
-    methodology: {
-      scoreRange: "0-100; lower is better",
-      weights: {
-        duplicateReads: 0.3,
-        duplicateOutput: 0.25,
-        toolSchemaShare: 0.2,
-        lowConfidenceRetrieval: 0.15,
-        activeToolExcess: 0.1
-      },
-      retrievalFeedback: "Positive-only reranking consumes host-confirmed context_pack_injected events only. A path receives a weak boost when the same session later uses it; unseen and unused paths are not penalized.",
-      prefixMetrics: "Canonical provider tool schemas are compared only within session, task, model, and thinking-level partitions. First-turn task attribution uses turn_task_bound.", injectionMetrics: "Duplicates require the same path, file hash, payload hash, representation, ranges, and generation within one task/session partition. Unconfirmed and post-compaction rehydration events are excluded from duplicate attribution.",
-      note: "This is an operational signal, not a quality verdict. Compare it with task acceptance and verification results."
-    },
-    recommendations
-  };
-  const paths = contextEnginePaths(cwd);
-  ensurePrivateStateDirectory(cwd, paths.root, "Context report directory");
-  const reportPath = resolveLocalStatePath(cwd, paths.report, { label: "Context efficiency report" });
-  fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
-  return report;
+  return writeContextEfficiencyReport(cwd, events, {
+    contextEnginePaths: () => contextEnginePaths(cwd),
+    nowIso,
+    retrievalFeedback: () => retrievalFeedback(cwd)
+  });
+}
+function canonicalJson(value) {
+  return JSON.stringify(value, (_key, nested) => {
+    if (!nested || typeof nested !== "object" || Array.isArray(nested)) return nested;
+    return Object.fromEntries(Object.keys(nested).sort().map((key) => [key, nested[key]]));
+  });
 }
 
 export function toolResultFingerprint(toolName, input, content) {
-  const inputHash = sha256(JSON.stringify(input ?? {}));
+  const inputHash = sha256(canonicalJson(input ?? {}));
   const text = Array.isArray(content)
     ? content.filter((block) => block && typeof block === "object" && block.type === "text").map((block) => block.text ?? "").join("\n")
     : String(content ?? "");

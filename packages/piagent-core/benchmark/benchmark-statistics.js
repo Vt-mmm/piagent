@@ -37,7 +37,7 @@ const STUDENT_T_975 = Object.freeze([
   2.086, 2.08, 2.074, 2.069, 2.064, 2.06, 2.056, 2.052, 2.048, 2.045, 2.042
 ]);
 
-export function geometricMeanConfidence95(values) {
+export function geometricMeanConfidence95Raw(values) {
   if (!Array.isArray(values) || values.length < 2 || values.some((value) => !Number.isFinite(value) || value <= 0)) return null;
   const logs = values.map(Math.log);
   const mean = logs.reduce((sum, value) => sum + value, 0) / logs.length;
@@ -45,9 +45,20 @@ export function geometricMeanConfidence95(values) {
   const critical = STUDENT_T_975[logs.length - 1] ?? 1.96;
   const margin = critical * Math.sqrt(variance / logs.length);
   return {
-    lower: rounded(Math.exp(mean - margin), 4),
-    upper: rounded(Math.exp(mean + margin), 4),
+    lower: Math.exp(mean - margin),
+    upper: Math.exp(mean + margin),
     sampleUnit: "scenario-family",
     scenarioCount: logs.length
   };
+}
+
+export function geometricMeanConfidence95(values) {
+  const interval = geometricMeanConfidence95Raw(values);
+  return interval ? { ...interval, lower: rounded(interval.lower, 4), upper: rounded(interval.upper, 4) } : null;
+}
+
+export function atMostWithinFloatingPrecision(value, maximum) {
+  if (!Number.isFinite(value) || !Number.isFinite(maximum)) return false;
+  const tolerance = Number.EPSILON * Math.max(1, Math.abs(value), Math.abs(maximum)) * 8;
+  return value <= maximum || Math.abs(value - maximum) <= tolerance;
 }

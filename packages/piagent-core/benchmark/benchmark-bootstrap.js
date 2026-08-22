@@ -13,9 +13,14 @@ import {
   recoverBenchmarkPiCredentialWriteback
 } from "./benchmark-pi-home.js";
 import { benchmarkTreeIdentity } from "./benchmark-tree-identity.js";
+import { inspectBenchmarkLedger } from "./benchmark-ledger.js";
+import { completedBenchmarkRecord } from "./benchmark-record-validation.js";
 import { benchmarkGitEnvironment, benchmarkHostEnvironment } from "./benchmark-runtime.js";
+import {
+  canonicalBuiltInBenchmarkSuiteId,
+  isReservedBenchmarkSuiteId
+} from "./benchmark-suite-identity.js";
 
-const builtInSuites = new Set(["core-v1", "capability-v1", "e2-framework-v1", "deep-logic-v1", "production-v1"]);
 const metadataVariable = "PIAGENT_BENCHMARK_BOOTSTRAP_METADATA";
 
 function fail(message) {
@@ -35,6 +40,67 @@ function runRootFromResume(input, cwd) {
   try { stat = fs.statSync(target); }
   catch { fail(`Cannot inspect benchmark resume source: ${target}`); }
   return stat.isDirectory() ? target : path.dirname(target);
+}
+
+function sameLedgerBinding(left, right) {
+  return ["schemaVersion", "algorithm", "digest", "records", "bytes"]
+    .every((field) => left?.[field] === right?.[field]);
+}
+
+function recordMatchesManifestOrder(record, index, manifest) {
+  const expected = manifest.order[index];
+  return completedBenchmarkRecord(record)
+    && record.runId === manifest.runId
+    && record.configurationDigest === manifest.configurationDigest
+    && record.orderIndex === index + 1
+    && record.scenarioId === expected?.scenarioId
+    && record.surface === expected?.surface
+    && record.repeat === expected?.repeat;
+}
+
+function ledgerMatchesManifestPrefix(records, manifest) {
+  const sessions = new Set();
+  const keys = new Set();
+  for (const [index, record] of records.entries()) {
+    const key = `${record?.scenarioId}\0${record?.surface}\0${record?.repeat}`;
+    if (!recordMatchesManifestOrder(record, index, manifest) || sessions.has(record.sessionId) || keys.has(key)) return false;
+    sessions.add(record.sessionId);
+    keys.add(key);
+  }
+  return true;
+}
+
+export function productionResumeHasCompleteLedger(argv, cwd) {
+  const resume = optionValue(argv, "--resume");
+  if (!resume) return false;
+  const runRoot = runRootFromResume(resume, cwd);
+  const manifestPath = path.join(runRoot, "run-manifest.json");
+  if (!fs.existsSync(manifestPath)) return false;
+  const manifest = jsonFile(manifestPath, "benchmark resume manifest");
+  if (manifest?.stageControl?.policy !== "production-v1-provider-spend-v1"
+    || !Array.isArray(manifest.order) || manifest.order.length === 0) return false;
+  const ledgerPath = path.join(runRoot, "runs.jsonl");
+  const ledger = inspectBenchmarkLedger(ledgerPath);
+  if (!ledgerMatchesManifestPrefix(ledger.records, manifest)) return false;
+  if (ledger.records.length === manifest.order.length) return true;
+  if (ledger.records.length !== manifest.order.length - 1) return false;
+
+  const pendingPath = path.join(runRoot, "pending-record.json");
+  if (!fs.existsSync(pendingPath)) return false;
+  const pending = jsonFile(pendingPath, "benchmark pending record");
+  const finalIndex = manifest.order.length - 1;
+  if (pending?.schemaVersion !== 2
+    || pending.postSessionGuard?.matched !== true
+    || !String(pending.postSessionGuard.stage ?? "").startsWith("after-session:")
+    || !sameLedgerBinding(pending.previousLedger, ledger.binding)
+    || !recordMatchesManifestOrder(pending.record, finalIndex, manifest)) return false;
+
+  const measuredPath = path.join(runRoot, "measured-record-ready.json");
+  if (!fs.existsSync(measuredPath)) return true;
+  const measured = jsonFile(measuredPath, "measured benchmark record");
+  return measured?.schemaVersion === 1
+    && sameLedgerBinding(measured.previousLedger, ledger.binding)
+    && JSON.stringify(measured.record) === JSON.stringify(pending.record);
 }
 
 function jsonFile(file, label) {
@@ -98,15 +164,22 @@ function snapshotReplay(argv, cwd, temporaryRoot) {
   };
 }
 
-function resolveSuiteManifest(source, cwd) {
-  if (builtInSuites.has(source)) return { origin: source, manifest: null };
+function resolveSuiteManifest(source, cwd, liveRoot) {
+  if (isReservedBenchmarkSuiteId(source)) return { origin: source, manifest: null, builtInId: source };
   const target = path.resolve(cwd, source);
   let stat;
   try { stat = fs.statSync(target); }
   catch (error) { fail(`Cannot snapshot benchmark suite ${target}: ${error.message}`); }
   const manifest = stat.isDirectory() ? path.join(target, "suite.json") : target;
   if (!fs.statSync(manifest).isFile()) fail(`Benchmark suite manifest is not a file: ${manifest}`);
-  return { origin: fs.realpathSync(manifest), manifest: fs.realpathSync(manifest) };
+  const resolvedManifest = fs.realpathSync(manifest);
+  const builtInId = canonicalBuiltInBenchmarkSuiteId(liveRoot, resolvedManifest);
+  if (builtInId) return { origin: builtInId, manifest: null, builtInId };
+  const suite = jsonFile(resolvedManifest, "benchmark suite manifest");
+  if (isReservedBenchmarkSuiteId(suite?.id)) {
+    fail(`Benchmark suite id ${suite.id} is reserved for its canonical built-in suite`);
+  }
+  return { origin: resolvedManifest, manifest: resolvedManifest, builtInId: null };
 }
 
 function inside(root, target) {
@@ -273,12 +346,12 @@ function requestedPiProvider(model, configRoot, credentials) {
   return credentials.length === 1 ? credentials[0].providerId : null;
 }
 
-function snapshotPiAgentHome(temporaryRoot, runtimeParent, argv, cwd, replay) {
+function snapshotPiAgentHome(temporaryRoot, runtimeParent, argv, cwd, replay, { providerFreeFinalization = false } = {}) {
   const sourceRoot = path.resolve(process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent"));
   const configRoot = path.join(temporaryRoot, "pi-agent-config");
   fs.mkdirSync(configRoot, { recursive: true, mode: 0o700 });
   const copied = [];
-  for (const name of ["auth.json", "models.json"]) {
+  for (const name of providerFreeFinalization ? [] : ["auth.json", "models.json"]) {
     const source = path.join(sourceRoot, name);
     const configTarget = path.join(configRoot, name);
     try { copyBenchmarkPiConfigFile(source, configTarget, 0o400); }
@@ -395,10 +468,13 @@ export function createBenchmarkExecutionSnapshot({ liveRoot, argv, cwd }) {
     }
     const candidateIndex = writeBoundJson(path.join(temporaryRoot, "candidate-index.json"), candidate.index);
     const replay = snapshotReplay(argv, cwd, temporaryRoot);
-    const piAgentHome = snapshotPiAgentHome(temporaryRoot, runtimeParent, argv, cwd, replay);
-    const codexCredential = requestsCodexSurface(argv, cwd, replay) ? snapshotCodexCredential(temporaryRoot) : null;
-    const suite = resolveSuiteManifest(requestedSuite(argv, cwd, replay), cwd);
+    const suite = resolveSuiteManifest(requestedSuite(argv, cwd, replay), cwd, root);
     validateOutputIsolation(argv, cwd, root, suite.manifest);
+    const providerFreeFinalization = productionResumeHasCompleteLedger(argv, cwd);
+    const piAgentHome = snapshotPiAgentHome(temporaryRoot, runtimeParent, argv, cwd, replay, { providerFreeFinalization });
+    const codexCredential = !providerFreeFinalization && requestsCodexSurface(argv, cwd, replay)
+      ? snapshotCodexCredential(temporaryRoot)
+      : null;
     let suiteSnapshot = null;
     let suiteRoot;
     if (suite.manifest) {
@@ -421,6 +497,7 @@ export function createBenchmarkExecutionSnapshot({ liveRoot, argv, cwd }) {
       candidateProvenance: candidate.provenance,
       candidateIndex,
       runtimeDependencies: runtimeDependencies(candidateRoot, root),
+      providerFreeFinalization,
       piAgentHome,
       codexCredential,
       replay: replay ? {
@@ -432,6 +509,7 @@ export function createBenchmarkExecutionSnapshot({ liveRoot, argv, cwd }) {
       suite: {
         origin: suite.origin,
         snapshot: suiteSnapshot,
+        builtInId: suite.builtInId,
         identity: benchmarkTreeIdentity(suiteRoot, { rejectSymlinks: true })
       }
     };
@@ -485,6 +563,7 @@ export function benchmarkBootstrapMetadata(env = process.env) {
     || typeof value.candidateIndex?.path !== "string"
     || !/^[a-f0-9]{64}$/.test(String(value.candidateIndex?.digest ?? ""))
     || typeof value.runtimeDependencies?.digest !== "string"
+    || typeof value.providerFreeFinalization !== "boolean"
     || typeof value.piAgentHome?.configRoot !== "string"
     || typeof value.piAgentHome?.runtimeParent !== "string"
     || typeof value.piAgentHome?.vaultRoot !== "string"
@@ -503,6 +582,9 @@ export function benchmarkBootstrapMetadata(env = process.env) {
       || typeof value.codexCredential?.privateIdentity?.contentDigest !== "string"
     ))
     || typeof value.suite?.origin !== "string"
+    || !(value.suite?.builtInId === null || isReservedBenchmarkSuiteId(value.suite?.builtInId))
+    || (value.suite?.builtInId === null && typeof value.suite?.snapshot !== "string")
+    || (value.suite?.builtInId !== null && (value.suite?.origin !== value.suite?.builtInId || value.suite?.snapshot !== null))
     || typeof value.suite?.identity?.contentDigest !== "string"
     || (value.replay !== null && (
       typeof value.replay?.snapshot !== "string"

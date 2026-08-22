@@ -6,6 +6,38 @@
   "profile": "node-typescript",
   "defaultRepeats": 3,
   "timeoutSeconds": 900,
+  "executionContract": {
+    "surfaces": ["piagent", "codex-cli"],
+    "model": "openai-codex/gpt-5.6-luna",
+    "thinking": "medium",
+    "codexMode": "controlled"
+  },
+  "pricingSnapshot": {
+    "schemaVersion": 1,
+    "id": "openai-gpt-5-6-luna-2026-08-22",
+    "model": "openai-codex/gpt-5.6-luna",
+    "currency": "USD",
+    "unitTokens": 1000000,
+    "rates": {
+      "freshInput": 0.2,
+      "cachedInput": 0.02,
+      "output": 1.2
+    },
+    "cacheWrite": {
+      "basis": "fresh-input",
+      "multiplier": 1.25
+    },
+    "longContext": {
+      "thresholdInputTokens": 272000,
+      "condition": "per-request-input-greater-than",
+      "inputMultiplier": 2,
+      "outputMultiplier": 1.5
+    },
+    "source": {
+      "url": "https://developers.openai.com/api/docs/models/gpt-5.6-luna",
+      "retrievedAt": "2026-08-22"
+    }
+  },
   "assurance": {
     "taskSource": "maintainer-authored-production-archetypes",
     "visibility": "public-suite-with-run-private-oracles",
@@ -23,14 +55,23 @@
     "minimumCategoryScore": 9.5,
     "minimumOutcomeScoreExclusive": 9.5,
     "minimumPairedScenarios": 18,
-    "minimumComparableEfficiencyScenarios": 12,
+    "minimumComparableEfficiencyScenarios": 18,
     "minimumRepeats": 3,
     "maximumInfrastructureRetries": 0,
-    "maximumFreshTokenRatioUpper95": 0.8,
-    "maximumDurationRatioUpper95": 1.1,
+    "maximumFreshTokenRatioUpper95": 0.6,
+    "maximumBandFreshTokenRatio": 0.6,
+    "maximumFamilyFreshTokenRatio": 1,
+    "maximumNormalizedCostRatioUpper95": 0.6,
+    "maximumBandNormalizedCostRatio": 0.6,
+    "maximumFamilyNormalizedCostRatio": 1,
+    "maximumDurationRatioUpper95": 1,
+    "maximumBandDurationRatio": 1,
+    "maximumFamilyDurationRatio": 1,
     "requireEfficiencyClaim": true,
+    "requireNormalizedCostClaim": true,
     "requireFullSuiteForClaim": true,
-    "requireStableProviderWireSurface": true
+    "requireStableProviderWireSurface": true,
+    "requireCausalContextReceipt": true
   },
   "scenarios": [
     {

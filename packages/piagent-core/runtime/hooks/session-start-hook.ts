@@ -139,8 +139,9 @@ export function registerSessionStartHook(pi: ExtensionAPI, dependencies: Session
       dependencies.bindTask(ctx.cwd, sessionId, sessionName, resumedTask);
     }
     if (resumedTask?.workingTreeDigestMigration && resumedTask.workingTreeDigestMigration.status !== "refreshed") dependencies.state.clearDigestMigrationState(ctx, resumedTask.taskRunId, resumedTask.taskId);
-    dependencies.state.cacheTaskIdentity(ctx, resumedTask);
-    const resumeState = resumedTask ? dependencies.inspectResume(ctx.cwd, resumedTask, sessionId) : undefined;
+    if (resumedTask?.trace.outcome === "pending") dependencies.state.cacheTaskIdentity(ctx, resumedTask);
+    else dependencies.state.clearSession(ctx);
+    const resumeState = resumedTask?.trace.outcome === "pending" ? dependencies.inspectResume(ctx.cwd, resumedTask, sessionId) : undefined;
     if (resumeState) dependencies.state.rememberResumeState(resumeState);
     if (resumedTask && resumeState?.enforcementSafe) observeTrajectorySync(ctx, dependencies.syncTrajectory?.(ctx, resumedTask), dependencies.telemetry);
     let taskRecovery: Record<string, unknown> | undefined;

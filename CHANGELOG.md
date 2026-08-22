@@ -4,6 +4,72 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
+### Context efficiency and source safety
+
+- Replaced overlapping automatic discovery and criterion snapshots with one
+  criterion-aware initial pack. It prioritizes explicit targets and their
+  linked tests, excludes unrelated graph-only files, uses bounded snippets for
+  large files and records content/payload receipts for every injected item.
+- Corrected context-efficiency accounting so exact repeated reads are measured
+  only within a session/task/model/thinking partition, missing evidence remains
+  visible as unavailable, fallback rereads do not reward retrieval ranking, and
+  tool-schema share is reported against the complete system-plus-tool prefix.
+  Duplicate-output and retrieval-confidence rates now exclude unclassified
+  historical rows and expose their partial coverage instead of treating them
+  as zero waste. The aggregate context-waste score is now `null` unless every
+  weighted telemetry lane is complete; partial data is labeled only as a
+  diagnostic estimate.
+- Sanitized automatic source snapshots before provider injection while
+  preserving pure dynamic credential references. Sensitive literals, including
+  short values and numeric fallbacks, are redacted in common source syntax and
+  structured YAML, XML, HTML, CSS and Objective-C inputs with line-count-
+  preserving receipts. A redacted item retains only a digest of the sanitized
+  text; neither the raw-content digest nor another guessable verifier for the
+  original bytes is persisted. Sanitization of deeply nested calls is bounded.
+- Preserved one planned criterion source and its focused test when retrieval is
+  unavailable or stale, and retained complete per-item receipts for automatic,
+  command and tool-delivered context packs.
+- Cleared task identity, repeated-result state and pending context delivery at
+  terminal boundaries while preserving terminal-turn usage attribution. A new
+  request or workflow in the same session now starts clean, including after a
+  missing binding or terminal session restart.
+
+### Forty-percent benchmark contract and spend control
+
+- Raised the canonical production-v1 contract to require a family-clustered
+  fresh-token upper-95 ratio at or below `0.60`, the same point-ratio ceiling
+  for every workload band, and a `1.00` guardrail for every family. Every
+  declared scenario/repeat must also have an exact finite grade pair with no
+  Piagent quality regression.
+- Added a separate GPT-5.6 Luna API-equivalent text-token cost gate with the same
+  `0.60` global/band and `1.00` family limits. This metric prices exact text
+  token buckets and remains explicitly distinct from OAuth/provider billing.
+- Added duration non-inferiority gates globally, by workload band and by family;
+  a faster aggregate can no longer hide one slower workload segment.
+- Froze production-v1 to Luna Medium and a ledger-bound S0/12/36/72/108 spend
+  sequence. Only S108 is claim-eligible; every earlier pause recomputes a
+  provider-free diagnostic and prints the exact bounded resume command.
+- Bound seed, surfaces, model, thinking, repeats, zero retries, paired terminal
+  stop and clean source identity before paid work. Reserved built-in suite IDs
+  cannot be impersonated by external suites, including through direct report
+  summarization.
+- Added a privacy-safe causal context receipt for every Piagent measurement.
+  The receipt binds telemetry provenance, current prompt/terminal order and the
+  exact offer/delivery/injection lifecycle before dropping paths, hashes and
+  identifiers. Missing, malformed, orphaned or mismatched evidence preserves
+  the paid ledger row but blocks S12 advancement and the final token claim.
+  S12 now reports aggregate pack tokens, zero-selection reasons, managed-prefix
+  compaction, successful direct fallback reads and shell-call exposure.
+- Reconstructs a missing terminal stop from the accepted ledger before any paid
+  resume, so a crash between the durable append and stop marker cannot spend the
+  rest of an authorized window.
+- Finalizes a complete ledger or valid final post-guard WAL without live auth,
+  provider preflight or installed Pi/Codex executables. Finalization rehashes the
+  current candidate, suite, runtime-dependency tree and ledger while reusing the
+  frozen command/auth/preflight identities bound to the accepted measurements.
+- No new provider-backed 40% result is claimed by these changes; the production
+  model run remains intentionally unstarted.
+
 ## v1.6.0 - 2026-08-22
 
 ### Runtime intelligence and context integrity

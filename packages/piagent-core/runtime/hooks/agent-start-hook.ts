@@ -7,7 +7,10 @@ import {
   ensureContextIndexV2,
   estimateContextTokens
 } from "../../extensions/context-engine.js";
-import { buildSelectedContextPack } from "../../extensions/criterion-context-pack.js";
+import {
+  buildSelectedContextPack,
+  composeCriterionContextEntries
+} from "../../extensions/criterion-context-pack.js";
 import { matchesProtectedPath } from "../../extensions/policy-core.js";
 import { selectRepositoryMemoryFacts } from "../../extensions/repository-memory.js";
 import type { TaskContract } from "../../extensions/guard-types.js";
@@ -18,9 +21,9 @@ import {
 import { stageContextDelivery } from "../context/context-delivery.ts";
 import { measureContextDeltaShadow, type ContextDeltaShadowMode } from "../context/context-delta-shadow.ts";
 import { buildPrefixTelemetry } from "../context/prefix-telemetry.ts";
+import { formatRepositoryMemoryHints } from "../context/repository-memory-hints.ts";
 import { modelCapabilityFromContext } from "../model/capabilities.ts";
 import type { RuntimeModelSnapshot } from "../model/runtime-snapshot.ts";
-import { runtimeModelSnapshotDigest } from "../model/runtime-snapshot.ts";
 import type { ModelRouteEvaluation } from "../model/model-route-runtime.ts";
 import { buildTaskResumeContext } from "../recovery/resume-state.ts";
 import { planRetrievalRoute } from "../context/retrieval-route-policy.ts";
@@ -28,7 +31,7 @@ import type { SolverShadowEvaluation } from "../solver/solver-shadow.ts";
 import { observeTrajectorySync } from "../trajectory/trajectory-observability.ts";
 import type { TrajectorySyncOptions, TrajectorySyncResult } from "../trajectory/trajectory-runtime.ts";
 import { trajectoryRecommendationRef } from "../trajectory/trajectory-runtime.ts";
-import { RuntimeSessionState } from "../session/runtime-state.ts";
+import { RuntimeSessionState, type ContextInjectionItem } from "../session/runtime-state.ts";
 import {
   compactManagedProjectInstructions,
   rewriteLegacyProjectInstructions
@@ -40,6 +43,7 @@ import {
   automaticTaskIntakeMode
 } from "../workflows/task-intake.ts";
 import { CONTEXT_PACK_MAX_TOKENS } from "../runtime-limits.ts";
+import { modelRouteTelemetry, runtimeSnapshotTelemetry, solverShadowTelemetry } from "./agent-prompt-telemetry.ts";
 
 type RuntimeIntakeResult = {
   started: boolean;
@@ -76,27 +80,6 @@ type AgentStartHookDependencies = {
   telemetry: (ctx: ExtensionContext, payload: Record<string, unknown>) => void;
 };
 
-function formatRepositoryMemoryHints(candidates: Array<{
-  record: { id?: string; fact: string; citations: Array<{ path: string }> };
-  matchedTerms: string[];
-}>, budgetTokens: number): { text: string; ids: string[] } {
-  if (budgetTokens < 80 || candidates.length === 0) return { text: "", ids: [] };
-  const lines = [
-    "[Piagent repository memory: advisory only]",
-    "Verify every hint against the cited current file before relying on it."
-  ];
-  const ids: string[] = [];
-  for (const candidate of candidates) {
-    const paths = candidate.record.citations.slice(0, 4).map((citation) => citation.path).join(", ");
-    const line = `- ${candidate.record.fact.slice(0, 320)} [sources: ${paths}]`;
-    const proposed = [...lines, line].join("\n");
-    if (estimateContextTokens(proposed) > budgetTokens) break;
-    lines.push(line);
-    if (candidate.record.id) ids.push(candidate.record.id);
-  }
-  return ids.length > 0 ? { text: lines.join("\n"), ids } : { text: "", ids: [] };
-}
-
 export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStartHookDependencies): void {
   pi.on("before_agent_start", async (event, ctx) => {
     const projectInstructions = rewriteLegacyProjectInstructions(event.systemPrompt);
@@ -107,7 +90,8 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
     const protectedTarget = signal.paths.some((candidate) => matchesProtectedPath(candidate, readProtectedPaths));
     const protectedOnlyTarget = signal.paths.length > 0
       && signal.paths.every((candidate) => matchesProtectedPath(candidate, readProtectedPaths));
-    const activeTask = dependencies.activeTask(ctx);
+    const sessionTask = dependencies.activeTask(ctx);
+    const activeTask = sessionTask?.trace.outcome === "pending" ? sessionTask : undefined;
     const runtimeIntakeMode = !activeTask ? automaticTaskIntakeMode(query, readProtectedPaths) : undefined;
     const runtimeIntake = Boolean(runtimeIntakeMode);
     const compactMode = protectedOnlyTarget
@@ -177,52 +161,9 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
       legacyProjectInstructionsRewritten: projectInstructions.rewritten,
       managedInstructionsCompacted: compactedInstructions.compacted,
       contextUsage: ctx.getContextUsage(),
-      runtimeSnapshot: runtimeSnapshot
-        ? {
-            schemaVersion: runtimeSnapshot.schemaVersion,
-            digest: runtimeModelSnapshotDigest(runtimeSnapshot),
-            provider: runtimeSnapshot.provider,
-            modelId: runtimeSnapshot.modelId,
-            contextWindow: runtimeSnapshot.contextWindow,
-            requestedThinkingLevel: runtimeSnapshot.requestedThinkingLevel,
-            effectiveThinkingLevel: runtimeSnapshot.effectiveThinkingLevel,
-            warningCount: runtimeSnapshot.warnings.length
-          }
-        : undefined,
-      solverShadow: solverShadow?.status === "ok"
-        ? {
-            mode: solverShadow.decision.mode,
-            route: solverShadow.decision.route,
-            featureHash: solverShadow.features.featureHash,
-            reasonCodes: solverShadow.decision.reasonCodes,
-            confidence: solverShadow.decision.confidence,
-            reused: solverShadow.reused,
-            persisted: solverShadow.persisted,
-            durationMs: solverShadow.durationMs,
-            warnings: solverShadow.warnings
-          }
-        : solverShadow,
-      modelRoute: modelRoute?.status === "ok"
-        ? {
-            mode: modelRoute.decision.mode,
-            objective: modelRoute.decision.objective,
-            capabilityBand: modelRoute.decision.capabilityBand,
-            safetyFloor: modelRoute.decision.safetyFloor,
-            disposition: modelRoute.decision.disposition,
-            selectionSource: modelRoute.decision.selectionSource,
-            provider: modelRoute.decision.provider,
-            modelId: modelRoute.decision.modelId,
-            effort: modelRoute.decision.effort,
-            downgradeSteps: modelRoute.decision.downgradeSteps,
-            enforced: modelRoute.decision.enforced,
-            decisionDigest: modelRoute.decision.decisionDigest,
-            reasonCodes: modelRoute.decision.reasonCodes,
-            reused: modelRoute.reused,
-            persisted: modelRoute.persisted,
-            durationMs: modelRoute.durationMs,
-            warnings: modelRoute.warnings
-          }
-        : modelRoute
+      runtimeSnapshot: runtimeSnapshotTelemetry(runtimeSnapshot),
+      solverShadow: solverShadowTelemetry(solverShadow),
+      modelRoute: modelRouteTelemetry(modelRoute)
     });
 
     const finishAgentStart = async (contextMessage?: {
@@ -236,23 +177,63 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
       const intake = await dependencies.startAutomaticTask(query, ctx);
       if (intake?.task) observeTrajectorySync(ctx, dependencies.syncTrajectory?.(ctx, intake.task, { sourceHook: "agent-start", recommendationRef }), dependencies.telemetry);
       if (!selectedContext && !intake) return systemPromptUpdate;
-      const criterionContext = !selectedContext && intake?.task?.criterionGraph?.mode === "criterion-graph"
-        ? buildSelectedContextPack(ctx.cwd, intake.plannedContext ?? [], {
-            budgetTokens: CONTEXT_PACK_MAX_TOKENS, limit: 6, excludePatterns: readProtectedPaths
+      const discoveryItems = selectedContext?.customType === "piagent-context-pack-v2" && Array.isArray(selectedContext.details.selectedItems)
+        ? selectedContext.details.selectedItems as Array<Record<string, unknown>>
+        : [];
+      const discoveryPlan = selectedContext?.customType === "piagent-context-pack-v2"
+        && selectedContext.details.contextPlan && typeof selectedContext.details.contextPlan === "object"
+        ? selectedContext.details.contextPlan as { budgetTokens?: unknown; limit?: unknown }
+        : undefined;
+      const fallbackBudget = signal.paths.length === 0 ? 680 : signal.lane === "tiny" ? 420 : 560;
+      const criterionBudget = Number.isFinite(Number(discoveryPlan?.budgetTokens))
+        ? Math.max(100, Math.min(CONTEXT_PACK_MAX_TOKENS, Math.trunc(Number(discoveryPlan?.budgetTokens))))
+        : fallbackBudget;
+      const criterionLimit = Number.isFinite(Number(discoveryPlan?.limit))
+        ? Math.max(1, Math.min(6, Math.trunc(Number(discoveryPlan?.limit))))
+        : signal.paths.length > 0 ? 3 : 4;
+      const criterionMode = dependencies.autoContextEnabled && intake?.task?.criterionGraph?.mode === "criterion-graph";
+      const criterionEntries = intake?.task?.criterionGraph?.mode === "criterion-graph"
+        ? composeCriterionContextEntries({
+            explicitPaths: signal.paths,
+            criteria: intake.task.acceptanceCriteria,
+            plannedEntries: intake.plannedContext ?? [],
+            retrievedItems: discoveryItems
+          }, { limit: criterionLimit })
+        : [];
+      const criterionContext = criterionMode
+        ? buildSelectedContextPack(ctx.cwd, criterionEntries, {
+            budgetTokens: criterionBudget,
+            limit: criterionLimit,
+            focusText: [query, ...intake.task.acceptanceCriteria].join("\n"),
+            excludePatterns: dependencies.contextExcludePatterns(ctx)
           })
         : undefined;
-      if (criterionContext?.selected.length) dependencies.telemetry(ctx, {
-        event: "criterion_context_pack", selected: criterionContext.selected.length,
-        estimatedTokens: criterionContext.estimatedTokens, selectedPaths: criterionContext.selected.map((entry) => entry.path)
+      const criterionReasonCode = !dependencies.autoContextEnabled
+        ? "auto-context-disabled"
+        : intake?.task?.criterionGraph?.mode !== "criterion-graph"
+          ? "criterion-graph-unavailable"
+          : criterionEntries.length === 0
+            ? "no-candidates"
+            : !criterionContext?.selected.length ? "no-readable-selection" : "selected";
+      if (intake?.task) dependencies.telemetry(ctx, {
+        event: "criterion_context_pack", turnId: turn.turnId, selected: criterionContext?.selected.length ?? 0,
+        candidates: criterionEntries.length,
+        budgetTokens: criterionBudget,
+        estimatedTokens: criterionContext?.estimatedTokens ?? 0,
+        reasonCode: criterionReasonCode,
+        selectedPaths: criterionContext?.selected.map((entry) => entry.path) ?? []
       });
-      const content = [selectedContext?.content, intake?.text, criterionContext?.text].filter(Boolean).join("\n\n");
+      const composedContext = criterionContext?.selected.length ? criterionContext : undefined;
+      const deliveredSelectedContext = criterionMode ? undefined : selectedContext;
+      const content = [deliveredSelectedContext?.content, intake?.text, composedContext?.text].filter(Boolean).join("\n\n");
       const deliveryTask = intake?.task ?? activeTask;
-      const selectedPackPaths = selectedContext?.customType === "piagent-context-pack-v2" && Array.isArray(selectedContext.details.paths)
-        ? selectedContext.details.paths.filter((value): value is string => typeof value === "string")
+      const selectedPackPaths = deliveredSelectedContext?.customType === "piagent-context-pack-v2" && Array.isArray(deliveredSelectedContext.details.paths)
+        ? deliveredSelectedContext.details.paths.filter((value): value is string => typeof value === "string")
         : [];
-      const criterionPaths = criterionContext?.selected.map((entry) => entry.path) ?? [];
-      const selectedPackItems = (selectedContext?.details.selectedItems as Array<{ path: string; estimatedTokens: number }> | undefined) ?? selectedPackPaths.map((path) => ({ path, estimatedTokens: 0 }));
-      const injectionItems = [...new Map([...selectedPackItems, ...(criterionContext?.selected.map((item) => ({ path: item.path, estimatedTokens: item.estimatedTokens, fileContentHash: `context-file-v1:${item.contentDigest}`, representation: "full" })) ?? [])].map((item) => [item.path, item])).values()];
+      const criterionPaths = composedContext?.selected.map((entry) => entry.path) ?? [];
+      const selectedPackItems = (deliveredSelectedContext?.details.selectedItems as ContextInjectionItem[] | undefined)
+        ?? selectedPackPaths.map((path) => ({ path, estimatedTokens: 0 }));
+      const injectionItems: ContextInjectionItem[] = composedContext?.selected ?? selectedPackItems;
       const deliveryEntries = new Map<string, { path: string; reason: string }>();
       for (const filePath of selectedPackPaths) {
         deliveryEntries.set(filePath, {
@@ -268,7 +249,7 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
       }
       const deliveryId = deliveryTask && deliveryEntries.size > 0 ? crypto.randomUUID() : undefined;
       if (deliveryTask && deliveryId) {
-        const retrievalKey = typeof selectedContext?.details.retrievalKey === "string" ? selectedContext.details.retrievalKey : undefined;
+        const retrievalKey = typeof deliveredSelectedContext?.details.retrievalKey === "string" ? deliveredSelectedContext.details.retrievalKey : undefined;
         stageContextDelivery(ctx, {
           deliveryId,
           taskRunId: deliveryTask.taskRunId,
@@ -277,17 +258,17 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
           pack: retrievalKey
             ? {
                 retrievalKey,
-                queryHash: String(selectedContext?.details.queryHash ?? ""),
-                confidence: String(selectedContext?.details.confidence ?? "unknown"),
-                estimatedTokens: Number(selectedContext?.details.estimatedTokens ?? 0),
+                queryHash: String(deliveredSelectedContext?.details.queryHash ?? ""),
+                confidence: String(deliveredSelectedContext?.details.confidence ?? "unknown"),
+                estimatedTokens: Number(deliveredSelectedContext?.details.estimatedTokens ?? 0),
                 paths: selectedPackPaths
               }
             : undefined,
           injection: {
-            source: selectedContext?.customType === "piagent-context-pack-v2" ? "auto-pack" : "criterion-seed",
-            queryHash: String(selectedContext?.details.queryHash ?? signal.promptHash),
-            confidence: String(selectedContext?.details.confidence ?? (criterionPaths.length > 0 ? "high" : "unknown")),
-            estimatedTokens: Number(selectedContext?.details.estimatedTokens ?? criterionContext?.estimatedTokens ?? 0),
+            source: composedContext ? "criterion-pack" : deliveredSelectedContext?.customType === "piagent-context-pack-v2" ? "auto-pack" : "criterion-seed",
+            queryHash: String(deliveredSelectedContext?.details.queryHash ?? signal.promptHash),
+            confidence: String(deliveredSelectedContext?.details.confidence ?? (criterionPaths.length > 0 ? "high" : "unknown")),
+            estimatedTokens: Number(deliveredSelectedContext?.details.estimatedTokens ?? composedContext?.estimatedTokens ?? 0),
             selectedItems: injectionItems
           }
         }, { state: dependencies.state, telemetry: dependencies.telemetry });
@@ -295,11 +276,18 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
       return {
         ...(systemPromptUpdate ?? {}),
         message: {
-          customType: selectedContext?.customType ?? "piagent-runtime-task-intake",
+          customType: deliveredSelectedContext?.customType ?? "piagent-runtime-task-intake",
           content,
           display: false,
           details: {
-            ...(selectedContext?.details ?? {}),
+            ...(deliveredSelectedContext?.details ?? {}),
+            ...(composedContext ? {
+              schemaVersion: 1,
+              queryHash: signal.promptHash,
+              estimatedTokens: composedContext.estimatedTokens,
+              paths: composedContext.selected.map((entry) => entry.path),
+              selectedItems: composedContext.selected
+            } : {}),
             contextDelivery: deliveryId ? { schemaVersion: 1, deliveryId } : undefined,
             runtimeTask: intake?.task
               ? {
@@ -313,8 +301,8 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
                   intakeMode: intake.task.intakeMode
                 }
               : undefined,
-            criterionContext: criterionContext?.selected.length ? {
-              paths: criterionContext.selected.map((entry) => entry.path), estimatedTokens: criterionContext.estimatedTokens
+            criterionContext: composedContext ? {
+              paths: composedContext.selected.map((entry) => entry.path), estimatedTokens: composedContext.estimatedTokens
             } : undefined,
             runtimeIntakeStarted: intake?.started ?? false
           }
@@ -444,10 +432,12 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
       }
       if (!contextPlanAcceptsConfidence(plan, pack.confidence) || pack.selected.length === 0) return finishAgentStart();
       const memoryBudgetTokens = Math.max(0, plan.budgetTokens - pack.estimatedTokens);
-      const memoryHints = formatRepositoryMemoryHints(
-        selectRepositoryMemoryFacts(ctx.cwd, query, { limit: 2, excludePatterns }),
-        memoryBudgetTokens
-      );
+      const memoryHints = runtimeIntake
+        ? { text: "", ids: [] }
+        : formatRepositoryMemoryHints(
+            selectRepositoryMemoryFacts(ctx.cwd, query, { limit: 2, excludePatterns }),
+            memoryBudgetTokens
+          );
       dependencies.telemetry(ctx, {
         event: "repository_memory_selected",
         queryHash: signal.promptHash,
@@ -467,7 +457,18 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
           confidence: pack.confidence,
           estimatedTokens: pack.estimatedTokens,
           paths: pack.selected.map((item) => item.path),
-          selectedItems: pack.selected.map((item) => ({ path: item.path, estimatedTokens: item.estimatedTokens })),
+          selectedItems: pack.selected.map((item) => ({
+            path: item.path,
+            estimatedTokens: item.estimatedTokens,
+            sources: item.sources,
+            fileContentHash: item.fileContentHash,
+            ...(item.sanitizedContentDigest ? { sanitizedContentDigest: item.sanitizedContentDigest } : {}),
+            payloadHash: item.payloadHash,
+            representation: item.representation,
+            ranges: item.ranges,
+            generation: item.generation,
+            sensitiveContentRedacted: item.sensitiveContentRedacted
+          })),
           repositoryMemoryIds: memoryHints.ids,
           currentSnapshot: plan.currentSnapshot,
           contextPlan: plan

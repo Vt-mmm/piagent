@@ -6,9 +6,12 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 
+import { productionSpendControlValidationErrors } from "../packages/piagent-core/benchmark/benchmark-stage-diagnostic.js";
+
 const root = path.resolve(import.meta.dirname, "..");
 const suiteRoot = path.join(root, "benchmarks", "production-v1");
 const suite = JSON.parse(fs.readFileSync(path.join(suiteRoot, "suite.json"), "utf8"));
+const spendControl = JSON.parse(fs.readFileSync(path.join(suiteRoot, "spend-control.v1.json"), "utf8"));
 const generator = path.join(suiteRoot, "variant.mjs");
 const grader = path.join(suiteRoot, "grade.mjs");
 
@@ -154,11 +157,96 @@ export function isExpired(expiresAt, now = Date.now()) { return time(now) >= tim
 
 test("production-v1 spans the declared production matrix", () => {
   assert.equal(suite.scenarios.length, 18);
+  assert.deepEqual(suite.executionContract, {
+    surfaces: ["piagent", "codex-cli"],
+    model: "openai-codex/gpt-5.6-luna",
+    thinking: "medium",
+    codexMode: "controlled"
+  });
+  assert.deepEqual(suite.pricingSnapshot, {
+    schemaVersion: 1,
+    id: "openai-gpt-5-6-luna-2026-08-22",
+    model: "openai-codex/gpt-5.6-luna",
+    currency: "USD",
+    unitTokens: 1_000_000,
+    rates: { freshInput: 0.2, cachedInput: 0.02, output: 1.2 },
+    cacheWrite: { basis: "fresh-input", multiplier: 1.25 },
+    longContext: { thresholdInputTokens: 272_000, condition: "per-request-input-greater-than", inputMultiplier: 2, outputMultiplier: 1.5 },
+    source: { url: "https://developers.openai.com/api/docs/models/gpt-5.6-luna", retrievedAt: "2026-08-22" }
+  });
+  assert.equal(suite.releaseGate.minimumComparableEfficiencyScenarios, suite.scenarios.length);
+  assert.equal(suite.releaseGate.maximumNormalizedCostRatioUpper95, 0.6);
+  assert.equal(suite.releaseGate.maximumBandNormalizedCostRatio, 0.6);
+  assert.equal(suite.releaseGate.maximumFamilyNormalizedCostRatio, 1);
+  assert.equal(suite.releaseGate.maximumBandDurationRatio, 1);
+  assert.equal(suite.releaseGate.maximumFamilyDurationRatio, 1);
+  assert.equal(suite.releaseGate.requireNormalizedCostClaim, true);
+  assert.equal(suite.releaseGate.requireCausalContextReceipt, true, "production claims require complete privacy-safe causal context receipts");
+  assert.equal(suite.releaseGate.maximumFreshTokenRatioUpper95, 0.6, "production claims must prove at least 40% fresh-token reduction at the upper 95% bound");
+  assert.equal(suite.releaseGate.maximumBandFreshTokenRatio, 0.6, "every category, profile, lifecycle and difficulty band must stay at or below the 40% reduction boundary");
+  assert.equal(suite.releaseGate.maximumFamilyFreshTokenRatio, 1, "no comparable scenario family may use more fresh tokens than Codex CLI");
+  assert.equal(suite.releaseGate.maximumDurationRatioUpper95, 1, "production claims must not allow a latency regression at the upper 95% bound");
   assert.deepEqual(new Set(suite.scenarios.map((scenario) => scenario.category)), new Set(["backend", "frontend", "data", "platform", "reliability", "security"]));
   assert.deepEqual(new Set(suite.scenarios.map((scenario) => scenario.difficulty)), new Set(["small", "medium", "large"]));
   assert.deepEqual(new Set(suite.scenarios.map((scenario) => scenario.lifecycle)), new Set(["steady-state", "cold-start"]));
   assert.equal(suite.scenarios.every((scenario) => scenario.variantGenerator), true);
   assert.equal(suite.scenarios.filter((scenario) => scenario.kind === "source-change" && scenario.category !== "security").every((scenario) => scenario.allowedChanges.includes("test/**")), true);
+});
+
+test("production spend control freezes impact-first staging without creating an early claim", () => {
+  assert.deepEqual(productionSpendControlValidationErrors(spendControl, {
+    suiteId: suite.id,
+    expectedSessions: suite.scenarios.length * suite.defaultRepeats * spendControl.execution.surfaces.length
+  }), []);
+  const invalidStageDelta = structuredClone(spendControl);
+  invalidStageDelta.stages[2].newSessions += 1;
+  assert.ok(productionSpendControlValidationErrors(invalidStageDelta, {
+    suiteId: suite.id,
+    expectedSessions: 108
+  }).includes("invalid-stage-new-sessions:2"));
+  const invalidFinalBoundary = structuredClone(spendControl);
+  invalidFinalBoundary.stages.at(-1).cumulativeSessions = 107;
+  assert.ok(productionSpendControlValidationErrors(invalidFinalBoundary, {
+    suiteId: suite.id,
+    expectedSessions: 108
+  }).includes("final-stage-session-count-mismatch"));
+  assert.equal(spendControl.suiteId, suite.id);
+  assert.deepEqual(spendControl.execution, {
+    surfaces: ["piagent", "codex-cli"],
+    model: "openai-codex/gpt-5.6-luna",
+    thinking: "medium",
+    repeats: 3,
+    infrastructureRetries: 0,
+    stopAfterFailedPair: true
+  });
+  assert.deepEqual(spendControl.stages.map((stage) => [stage.id, stage.cumulativeSessions, stage.newSessions, stage.claimEligible]), [
+    ["S0", 0, 0, false],
+    ["S12", 12, 12, false],
+    ["S36", 36, 24, false],
+    ["S72", 72, 36, false],
+    ["S108", 108, 36, true]
+  ]);
+  assert.equal(spendControl.enforcement.runnerConsumesThisArtifact, true);
+  assert.equal(spendControl.enforcement.runnerBindsFrozenSeedAndExecution, true);
+  assert.equal(spendControl.enforcement.runnerBlocksProductionResumeWhenStageDiagnosticFails, true);
+  assert.equal(spendControl.enforcement.durableStageStateSurvivesMissingPauseMarker, true);
+  assert.equal(spendControl.enforcement.completeLedgerFinalizesWithoutProviderPreflight, true);
+  assert.ok(spendControl.enforcement.automaticTerminalOrAbortRules.some((rule) => rule.includes("stop-after-failed-pair")));
+  assert.ok(spendControl.enforcement.automaticTerminalOrAbortRules.includes("dirty-release-source-before-auth-tool-or-provider-preflight"));
+  assert.ok(spendControl.enforcement.stageAdvanceRules.includes("clean-release-source"));
+  assert.ok(spendControl.enforcement.stageAdvanceRules.includes("no-model-thinking-or-provider-wire-parity-drift"));
+  assert.equal(spendControl.stages.at(-1).cumulativeSessions, suite.scenarios.length * suite.defaultRepeats * spendControl.execution.surfaces.length);
+
+  const firstRepeat = [...suite.scenarios].sort((left, right) => {
+    const rank = (scenario) => crypto.createHmac("sha256", spendControl.rootSeed).update(`order\0${1}\0${scenario.id}`).digest("hex");
+    return rank(left).localeCompare(rank(right));
+  });
+  const firstStage = firstRepeat.slice(0, spendControl.stages[1].cumulativeSessions / spendControl.execution.surfaces.length);
+  assert.deepEqual(firstStage.map((scenario) => scenario.id), spendControl.earlyDetection.expectedFirstRepeatScenarioIds);
+  assert.equal(firstStage[0].id, "cli-double-dash", "the previously late regression must be exercised in the first paid pair");
+  assert.deepEqual([...new Set(firstStage.map((scenario) => scenario.category))].sort(), [...spendControl.earlyDetection.requiredCategoryCoverage].sort());
+  assert.deepEqual([...new Set(firstStage.map((scenario) => scenario.lifecycle))].sort(), [...spendControl.earlyDetection.requiredLifecycleCoverage].sort());
+  assert.deepEqual([...new Set(firstStage.map((scenario) => scenario.difficulty))].sort(), [...spendControl.earlyDetection.requiredDifficultyCoverage].sort());
 });
 
 test("hidden boundary checks are disclosed in the public task contract", () => {

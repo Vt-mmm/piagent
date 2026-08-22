@@ -7,6 +7,25 @@ import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import test, { after } from "node:test";
 
+import { buildBenchmarkProviderWireEvidence } from "../packages/piagent-core/benchmark/benchmark-provider-wire.js";
+import {
+  benchmarkBootstrapEnvironment,
+  cleanupBenchmarkExecutionSnapshot,
+  createBenchmarkExecutionSnapshot,
+  productionResumeHasCompleteLedger
+} from "../packages/piagent-core/benchmark/benchmark-bootstrap.js";
+import { inspectBenchmarkLedger } from "../packages/piagent-core/benchmark/benchmark-ledger.js";
+import {
+  approveProductionStageControl,
+  buildBenchmarkStageDiagnostic,
+  createProductionStageControl,
+  durablePairedOutcomeFloorStop,
+  pendProductionStageControl,
+  productionStageResumeDisposition,
+  productionStageResumeWindow
+} from "../packages/piagent-core/benchmark/benchmark-stage-diagnostic.js";
+import { pairedOutcomeFloorStop } from "../packages/piagent-core/benchmark/benchmark-stop-policy.js";
+
 const root = path.resolve(import.meta.dirname, "..");
 const runner = path.join(root, "scripts", "benchmark-runner.mjs");
 const runnerCore = path.join(root, "scripts", "benchmark-runner-core.mjs");
@@ -47,6 +66,82 @@ function textTree(root) {
     } else if (stat.isFile()) values.push(fs.readFileSync(current, "utf8"));
   }
   return values.join("\n");
+}
+
+function stageCausalContextReceipt(surface) {
+  if (surface !== "piagent") return {
+    schemaVersion: 1, evidenceSource: "not-applicable", applicability: "not-applicable", available: false,
+    coverage: { status: "not-applicable", telemetryTruncated: false, telemetryIntegrityFailures: 0, recoverableTailBytes: 0, criterionExpected: false, sessionEventsObserved: 0, observedLanes: 0, requiredLanes: 0, missingLanes: [] },
+    aggregates: null
+  };
+  return {
+    schemaVersion: 1, evidenceSource: "context-telemetry-closed-aggregate-v1", applicability: "piagent", available: true,
+    coverage: { status: "complete", telemetryTruncated: false, telemetryIntegrityFailures: 0, recoverableTailBytes: 0, criterionExpected: true, sessionEventsObserved: 8, observedLanes: 6, requiredLanes: 6, missingLanes: [] },
+    aggregates: {
+      packCounts: { offered: 1, delivered: 1, injected: 1 },
+      estimatedTokens: { offered: 100, delivered: 100, injected: 100 },
+      selectedItemEstimatedTokens: { offered: 80, delivered: 80, injected: 80 },
+      selectedItemCounts: { offered: 1, delivered: 1, injected: 1 },
+      criterionInitialPack: { attempts: 1, selectedAttempts: 1, candidates: 1, selectedItems: 1, estimatedTokens: 100, zeroSelectionReasonCounts: { autoContextDisabled: 0, criterionGraphUnavailable: 0, noCandidates: 0, noReadableSelection: 0 }, offered: 1, delivered: 1, injected: 1 },
+      directFallbackRereads: { successfulCalls: 0, shellToolCallsObserved: 0, definition: "successful-direct-path-tool-call-v1" },
+      compaction: { eventsObserved: 0, state: "not-observed" },
+      managedPrefix: { promptsObserved: 1, compactedPrompts: 1, state: "compacted" }
+    }
+  };
+}
+
+function stageDiagnosticRecord({ scenarioId = "first", surface, repeat = 1, resolved = true, overrides = {} }) {
+  const providerWireEvidence = surface === "piagent" ? buildBenchmarkProviderWireEvidence({
+    requestedModel: "openai-codex/gpt-5.6-luna",
+    requestedThinking: "medium",
+    events: [{
+      event: "provider_request_wire_surface",
+      state: "known",
+      providerModelId: "gpt-5.6-luna",
+      providerReasoningEffort: "medium",
+      instructionsHash: "a".repeat(64),
+      baseInstructionsHash: "b".repeat(64),
+      orderedToolSurfaceHash: "c".repeat(64),
+      deferredToolSurfaceHash: "d".repeat(64),
+      deferredToolBatchCount: 0,
+      deferredToolCount: 0
+    }]
+  }) : null;
+  return {
+    scenarioId,
+    surface,
+    repeat,
+    profile: "node-typescript",
+    lifecycle: "steady-state",
+    scenarioKind: "source-change",
+    resolved,
+    failure: resolved ? null : "grade-failed",
+    grade: { passed: resolved, score: resolved ? 10 : 0, checks: [] },
+    graderIntegrity: { passed: resolved },
+    scope: { passed: resolved },
+    outputSafety: { passed: resolved },
+    outputEvidence: { passed: resolved },
+    workflow: surface === "piagent" ? { score: resolved ? 10 : 0, checks: [] } : null,
+    infrastructureRetries: 0,
+    infrastructureFailures: [],
+    durationSeconds: surface === "piagent" ? 0.5 : 1,
+    providerWireEvidence,
+    causalContextReceipt: stageCausalContextReceipt(surface),
+    usage: {
+      input: surface === "piagent" ? 50 : 100,
+      output: 10,
+      cacheRead: 0,
+      cacheWrite: 0,
+      reasoning: 0,
+      fresh: surface === "piagent" ? 60 : 110,
+      total: surface === "piagent" ? 60 : 110,
+      sessions: 1,
+      usageCompleteness: "exact",
+      model: "openai-codex/gpt-5.6-luna",
+      thinkingLevel: "medium"
+    },
+    ...overrides
+  };
 }
 
 function fixture(t) {
@@ -123,6 +218,7 @@ const probePiHome = (phase) => {
   if (process.env.BENCHMARK_FAKE_PI_LEAVE_LOCK !== "1") fs.rmSync(path.join(home, "settings.json.lock"), { recursive: true });
 };
 if (process.argv.includes("--version")) {
+  if (process.env.BENCHMARK_FAKE_FAIL_PREFLIGHT === "1") process.exit(26);
   probePiHome("preflight");
   if (process.env.BENCHMARK_FAKE_PREFLIGHT_READY) {
     fs.writeFileSync(process.env.BENCHMARK_FAKE_PREFLIGHT_READY, "snapshot-ready\\n");
@@ -149,6 +245,44 @@ const sessionDir = value("--session-dir");
 const sessionId = value("--session-id");
 const now = new Date().toISOString();
 const surface = process.env.PIAGENT_BENCHMARK_SURFACE;
+const telemetryRoot = path.join(process.cwd(), ".pi", "piagent-state", "context-engine");
+const appendTelemetry = (event) => {
+  if (surface !== "piagent") return;
+  fs.mkdirSync(telemetryRoot, { recursive: true });
+  fs.appendFileSync(path.join(telemetryRoot, "events.jsonl"), JSON.stringify({
+    schemaVersion: 2,
+    source: "piagent",
+    telemetrySource: "piagent",
+    recordedAt: now,
+    sessionId,
+    ...event
+  }) + "\\n");
+};
+if (surface === "piagent") {
+  appendTelemetry({ event: "agent_prompt", turnId: "benchmark-turn", managedInstructionsCompacted: true });
+  appendTelemetry({
+    event: "criterion_context_pack",
+    turnId: "benchmark-turn",
+    selected: 0,
+    candidates: 0,
+    estimatedTokens: 0,
+    reasonCode: "no-candidates"
+  });
+}
+if (surface === "piagent" && process.env.BENCHMARK_FAKE_PROVIDER_WIRE === "1") {
+  appendTelemetry({
+    event: "provider_request_wire_surface",
+    state: "known",
+    providerModelId: "fake-model",
+    providerReasoningEffort: "high",
+    instructionsHash: "a".repeat(64),
+    baseInstructionsHash: "b".repeat(64),
+    orderedToolSurfaceHash: "c".repeat(64),
+    deferredToolSurfaceHash: "d".repeat(64),
+    deferredToolBatchCount: 0,
+    deferredToolCount: 0
+  });
+}
 if (process.env.BENCHMARK_FAKE_ORACLE_PROBE_LOG) {
   fs.appendFileSync(process.env.BENCHMARK_FAKE_ORACLE_PROBE_LOG, JSON.stringify({
     surface,
@@ -306,6 +440,7 @@ if (surface === "piagent") {
   fs.mkdirSync(tasks, { recursive: true });
   fs.writeFileSync(path.join(tasks, task.taskRunId + ".json"), JSON.stringify(task));
 }
+appendTelemetry({ event: "agent_settled" });
 `);
   fs.chmodSync(fakePi, 0o755);
 
@@ -325,6 +460,8 @@ if (args[0] === "login" && args[1] === "status") { requireControlledIsolation();
 if (args[0] === "features" && args[1] === "list") { requireControlledIsolation(); console.log("apps stable true\\nplugins stable true\\nbrowser_use stable true\\nhooks stable true"); process.exit(0); }
 if (args[0] !== "exec") process.exit(7);
 requireControlledIsolation();
+const delayMs = Number(process.env.BENCHMARK_FAKE_CODEX_DELAY_MS ?? 0);
+if (Number.isFinite(delayMs) && delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
 if (process.env.BENCHMARK_FAKE_CODEX_HOME_LOG) fs.appendFileSync(process.env.BENCHMARK_FAKE_CODEX_HOME_LOG, process.env.CODEX_HOME + "\\n");
 if (process.env.BENCHMARK_FAKE_CODEX_POLICY_REFUSAL_ONCE) {
   const marker = process.env.BENCHMARK_FAKE_CODEX_POLICY_REFUSAL_ONCE;
@@ -370,6 +507,28 @@ test("dry-run validates the built-in suite without starting a model", () => {
   assert.match(result.stdout, /no model session started/);
 });
 
+test("canonical built-in suite paths are accepted but external reserved copies are rejected", (t) => {
+  const canonicalRoot = path.join(root, "benchmarks", "core-v1");
+  const canonicalManifest = path.join(canonicalRoot, "suite.json");
+  const canonical = spawnSync(process.execPath, [runner, "--suite", canonicalManifest, "--dry-run"], {
+    cwd: root,
+    encoding: "utf8"
+  });
+  assert.equal(canonical.status, 0, `${canonical.stdout}\n${canonical.stderr}`);
+  assert.match(canonical.stdout, /suite:\s+core-v1/);
+
+  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-copied-built-in-suite-"));
+  t.after(() => fs.rmSync(temporaryRoot, { recursive: true, force: true }));
+  const copiedRoot = path.join(temporaryRoot, "core-v1");
+  fs.cpSync(canonicalRoot, copiedRoot, { recursive: true });
+  const copied = spawnSync(process.execPath, [runner, "--suite", path.join(copiedRoot, "suite.json"), "--dry-run"], {
+    cwd: root,
+    encoding: "utf8"
+  });
+  assert.equal(copied.status, 1, `${copied.stdout}\n${copied.stderr}`);
+  assert.match(copied.stderr, /suite id core-v1 is reserved for its canonical built-in suite/);
+});
+
 test("release-grade built-in suites default to zero infrastructure retries", () => {
   for (const [flag, sessions] of [["--deep", 42], ["--production", 108]]) {
     const result = spawnSync(process.execPath, [runner, flag, "--dry-run"], { cwd: root, encoding: "utf8" });
@@ -377,6 +536,93 @@ test("release-grade built-in suites default to zero infrastructure retries", () 
     assert.match(result.stdout, new RegExp(`sessions:\\s+${sessions}`));
     assert.match(result.stdout, /retries:\s+0 infrastructure-only · 0s backoff/);
     assert.match(result.stdout, /ordering:\s+seeded paired blocks/);
+  }
+});
+
+test("production paid execution refuses an unbounded first window before provider preflight", () => {
+  const unbounded = spawnSync(process.execPath, [runnerCore, "--production", "--stop-after-failed-pair", "--yes"], {
+    cwd: root,
+    encoding: "utf8"
+  });
+  assert.equal(unbounded.status, 1, `${unbounded.stdout}\n${unbounded.stderr}`);
+  assert.match(unbounded.stderr, /requires --max-sessions 12/);
+
+  const bounded = spawnSync(process.execPath, [runnerCore, "--production", "--stop-after-failed-pair", "--max-sessions", "12", "--yes"], {
+    cwd: root,
+    encoding: "utf8"
+  });
+  assert.equal(bounded.status, 1, `${bounded.stdout}\n${bounded.stderr}`);
+  assert.doesNotMatch(bounded.stderr, /requires --max-sessions/);
+  assert.match(bounded.stderr, /must start through scripts\/benchmark-runner\.mjs/);
+
+  const productionScenarioIds = JSON.parse(fs.readFileSync(path.join(root, "benchmarks", "production-v1", "suite.json"), "utf8"))
+    .scenarios.map((scenario) => scenario.id).join(",");
+  const explicitFullSelection = spawnSync(process.execPath, [
+    runnerCore,
+    "--production",
+    "--scenarios", productionScenarioIds,
+    "--stop-after-failed-pair",
+    "--yes"
+  ], { cwd: root, encoding: "utf8" });
+  assert.equal(explicitFullSelection.status, 1, `${explicitFullSelection.stdout}\n${explicitFullSelection.stderr}`);
+  assert.match(explicitFullSelection.stderr, /requires --max-sessions 12/);
+});
+
+test("production paid execution binds seed, retries, terminal stop, and exempts provider-free preflight from chunk size", () => {
+  for (const [args, pattern] of [
+    [["--seed", "operator-random-seed", "--stop-after-failed-pair", "--max-sessions", "12"], /frozen root seed/],
+    [["--infrastructure-retries", "1", "--stop-after-failed-pair", "--max-sessions", "12"], /zero infrastructure retries/],
+    [["--max-sessions", "12"], /requires --stop-after-failed-pair/]
+  ]) {
+    const rejected = spawnSync(process.execPath, [runnerCore, "--production", ...args, "--yes"], {
+      cwd: root,
+      encoding: "utf8"
+    });
+    assert.equal(rejected.status, 1, `${args.join(" ")}\n${rejected.stdout}\n${rejected.stderr}`);
+    assert.match(rejected.stderr, pattern);
+    assert.doesNotMatch(rejected.stderr, /must start through scripts\/benchmark-runner\.mjs/);
+  }
+
+  const preflight = spawnSync(process.execPath, [
+    runnerCore,
+    "--production",
+    "--stop-after-failed-pair",
+    "--preflight-only",
+    "--yes"
+  ], { cwd: root, encoding: "utf8" });
+  assert.equal(preflight.status, 1, `${preflight.stdout}\n${preflight.stderr}`);
+  assert.doesNotMatch(preflight.stderr, /requires --max-sessions/);
+  assert.match(preflight.stderr, /must start through scripts\/benchmark-runner\.mjs/);
+});
+
+test("production claim execution rejects a dirty release source before command or provider preflight", (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-production-dirty-source-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const argv = [
+    "--production",
+    "--stop-after-failed-pair",
+    "--max-sessions", "12",
+    "--yes",
+    "--output", path.join(dir, "output")
+  ];
+  const snapshot = createBenchmarkExecutionSnapshot({ liveRoot: root, argv, cwd: root });
+  try {
+    snapshot.metadata.sourceIdentity = { ...snapshot.metadata.sourceIdentity, dirty: true };
+    const result = spawnSync(process.execPath, [path.join(snapshot.candidateRoot, "scripts", "benchmark-runner-core.mjs"), ...argv], {
+      cwd: root,
+      encoding: "utf8",
+      env: {
+        ...benchmarkBootstrapEnvironment(snapshot.metadata),
+        PIAGENT_BENCHMARK_PI_COMMAND: path.join(dir, "provider-must-not-start"),
+        PIAGENT_BENCHMARK_CODEX_COMMAND: path.join(dir, "provider-must-not-start")
+      }
+    });
+    assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`);
+    assert.match(result.stderr, /requires a clean release source before auth, tool preflight, or any provider session/);
+    assert.doesNotMatch(result.stderr, /Required benchmark command is unavailable/);
+    assert.equal(fs.existsSync(path.join(dir, "output")), false);
+  } finally {
+    cleanupBenchmarkExecutionSnapshot(snapshot.temporaryRoot, snapshot.runtimeParent, snapshot.metadata.piAgentHome);
   }
 });
 
@@ -462,6 +708,11 @@ test("modern run executes suite and Piagent extension from the immutable preflig
   const report = JSON.parse(fs.readFileSync(path.join(value.output, "report.json"), "utf8"));
   assert.equal(report.runs.length, 2);
   assert.equal(report.runs.every((run) => run.resolved), true, "live suite mutation must not affect frozen execution");
+  const piagentRun = report.runs.find((run) => run.surface === "piagent");
+  const baselineRun = report.runs.find((run) => run.surface === "raw-pi");
+  assert.equal(piagentRun.causalContextReceipt.available, true, "benchmark-session must close the Piagent causal telemetry window");
+  assert.equal(piagentRun.causalContextReceipt.coverage.status, "complete");
+  assert.equal(baselineRun.causalContextReceipt.applicability, "not-applicable");
   assert.equal(report.environment.candidateProvenance.finalization, "immutable-snapshot-rehashed-and-matched");
 });
 
@@ -504,6 +755,7 @@ test("private assurance manifest fails closed on surviving mutations or digest m
   fs.cpSync(path.join(root, "benchmarks", "capability-v1"), directory, { recursive: true });
   const suitePath = path.join(directory, "suite.json");
   const suite = JSON.parse(fs.readFileSync(suitePath, "utf8"));
+  suite.id = "test-private-assurance-v1";
   const evidence = JSON.parse(fs.readFileSync(path.join(root, "evals", "fixtures", "benchmark-assurance-evidence.valid.json"), "utf8"));
   const matchingFields = [
     "claimTier", "visibility", "familyDisjointSplit", "repositoryDisjointSplit", "holdoutManifestDigest",
@@ -1232,6 +1484,225 @@ test("authenticated replay reuses the frozen source of a custom suite and stays 
   assert.equal(report.comparison.tokenClaimAllowed, false);
 });
 
+test("provider-free pause diagnostic allows only a clean observed pair and fails closed on regressions", () => {
+  const scenario = { id: "first" };
+  const future = { id: "second" };
+  const fullOrder = [scenario, future].flatMap((item) => ["piagent", "codex-cli"].map((surface) => ({
+    scenario: item,
+    surface,
+    repeat: 1
+  })));
+  const suite = {
+    releaseGate: { minimumOutcomeScoreExclusive: 9.5, requireCausalContextReceipt: true },
+    pricingSnapshot: {
+      schemaVersion: 1,
+      id: "test-luna-pricing",
+      model: "openai-codex/gpt-5.6-luna",
+      currency: "USD",
+      unitTokens: 1_000_000,
+      rates: { freshInput: 0.2, cachedInput: 0.02, output: 1.2 },
+      cacheWrite: { basis: "fresh-input", multiplier: 1.25 },
+      longContext: {
+        thresholdInputTokens: 272_000,
+        condition: "per-request-input-greater-than",
+        inputMultiplier: 2,
+        outputMultiplier: 1.5
+      },
+      source: { url: "https://developers.openai.com/api/docs/models/gpt-5.6-luna", retrievedAt: "2026-08-22" }
+    }
+  };
+  const manifest = { stopAfterFailedPair: true, infrastructureRetries: 0 };
+  const cleanRuns = [
+    stageDiagnosticRecord({ surface: "piagent" }),
+    stageDiagnosticRecord({ surface: "codex-cli" })
+  ];
+  const input = {
+    runId: "stage-test",
+    reason: "max-sessions:2",
+    runs: cleanRuns,
+    fullOrder,
+    candidateSurface: "piagent",
+    baselineSurface: "codex-cli",
+    requestedModel: "openai-codex/gpt-5.6-luna",
+    requestedThinking: "medium",
+    suite,
+    manifest,
+    generatedAt: "2026-08-22T00:00:00.000Z"
+  };
+  const clean = buildBenchmarkStageDiagnostic(input);
+  assert.equal(clean.diagnosticOnly, true);
+  assert.equal(clean.claimEligible, false);
+  assert.equal(clean.stageAdvanceAllowed, true);
+  assert.equal(clean.counts.observedCompletePairs, 1);
+  assert.equal(clean.counts.unstartedPairs, 1, "future complete pairs are visible but do not block a paired pause");
+  assert.equal(clean.counts.incompleteObservedPairs, 0);
+  assert.equal(clean.pairs.futureUnstartedPairsBlockStageAdvance, false);
+  assert.equal(clean.quality.passed, true);
+  assert.equal(clean.acceptedUsage.passed, true);
+  assert.equal(clean.providerParity.passed, true);
+  assert.equal(clean.causalContextEvidence.passed, true);
+  assert.equal(clean.causalContextEvidence.aggregates.estimatedTokens.injected, 100);
+  assert.equal(clean.causalContextEvidence.aggregates.criterionInitialPack.zeroSelectionReasonCounts.noCandidates, 0);
+  assert.equal(clean.causalContextEvidence.aggregates.directFallbackRereads.definition, "successful-direct-path-tool-call-v1");
+  assert.equal(clean.spendFutilityReview.passed, true);
+
+  const invalidCausalRuns = structuredClone(cleanRuns);
+  invalidCausalRuns.find((run) => run.surface === "piagent")
+    .causalContextReceipt.aggregates.directFallbackRereads.definition = "unbounded-shell-guess";
+  const invalidCausal = buildBenchmarkStageDiagnostic({ ...input, runs: invalidCausalRuns });
+  assert.equal(invalidCausal.stageAdvanceAllowed, false);
+  assert.equal(invalidCausal.causalContextEvidence.passed, false);
+
+  const missingCausalRuns = structuredClone(cleanRuns);
+  const missingReceipt = missingCausalRuns.find((run) => run.surface === "piagent").causalContextReceipt;
+  missingReceipt.available = false;
+  missingReceipt.coverage.status = "partial";
+  missingReceipt.coverage.observedLanes = 5;
+  missingReceipt.coverage.missingLanes = ["telemetry-window"];
+  missingReceipt.aggregates = null;
+  const missingCausal = buildBenchmarkStageDiagnostic({ ...input, runs: missingCausalRuns });
+  assert.equal(missingCausal.stageAdvanceAllowed, false);
+  assert.equal(missingCausal.causalContextEvidence.passed, false);
+  assert.ok(missingCausal.blockingReasons.includes("piagent-causal-context-receipts"));
+
+  const recoveredBoundary = buildBenchmarkStageDiagnostic({ ...input, reason: "max-sessions:recovered:2" });
+  assert.equal(recoveredBoundary.pause.recognizedSpendControlPause, true);
+  assert.equal(recoveredBoundary.stageAdvanceAllowed, true, "an exact-boundary crash must re-enter the same provider-free gate");
+
+  const recoveredFinalBoundary = buildBenchmarkStageDiagnostic({
+    ...input,
+    reason: "max-sessions:recovered:4",
+    runs: [
+      ...cleanRuns,
+      stageDiagnosticRecord({ scenarioId: "second", surface: "piagent" }),
+      stageDiagnosticRecord({ scenarioId: "second", surface: "codex-cli" })
+    ]
+  });
+  assert.equal(recoveredFinalBoundary.pause.recognizedSpendControlPause, true);
+  assert.equal(recoveredFinalBoundary.completedRuns, recoveredFinalBoundary.expectedRuns);
+  assert.equal(recoveredFinalBoundary.stageAdvanceAllowed, true, "a recovered final boundary must be eligible for provider-free finalization");
+
+  const qualityRegressedRuns = structuredClone(cleanRuns);
+  qualityRegressedRuns.find((run) => run.surface === "piagent").grade.score = 9.6;
+  const qualityRegressed = buildBenchmarkStageDiagnostic({ ...input, runs: qualityRegressedRuns });
+  assert.equal(qualityRegressed.quality.outcomeFloor.passed, true, "candidate remains above the absolute release floor");
+  assert.equal(qualityRegressed.quality.observedGradeNonInferiorPassed, false);
+  assert.ok(qualityRegressed.blockingReasons.includes("observed-paired-grade-noninferior"));
+  assert.equal(qualityRegressed.stageAdvanceAllowed, false);
+
+  const regressedRuns = structuredClone(cleanRuns);
+  const candidate = regressedRuns.find((run) => run.surface === "piagent");
+  candidate.resolved = false;
+  candidate.failure = "grade-failed";
+  candidate.grade = { passed: false, score: 9.5, checks: [] };
+  candidate.workflow = { score: 9.5, checks: [] };
+  candidate.durationSeconds = 2;
+  candidate.usage.input = 120;
+  candidate.usage.fresh = 130;
+  candidate.usage.total = 130;
+  candidate.infrastructureRetries = 1;
+  candidate.infrastructureFailures = [{ usageStatus: "unknown-after-provider-start" }];
+  candidate.providerWireEvidence = null;
+  const blocked = buildBenchmarkStageDiagnostic({
+    ...input,
+    runs: regressedRuns,
+    manifest: { ...manifest, unknownCostAttempts: 1, tokenClaimsUnavailableReason: "one-or-more-provider-attempts-have-unknown-usage" }
+  });
+  assert.equal(blocked.stageAdvanceAllowed, false);
+  assert.ok(blocked.blockingReasons.includes("no-baseline-pass-piagent-fail"));
+  assert.ok(blocked.blockingReasons.includes("candidate-outcome-floor"));
+  assert.ok(blocked.blockingReasons.includes("provider-wire-model-thinking-parity"));
+  assert.ok(blocked.blockingReasons.includes("no-infrastructure-retry"));
+  assert.ok(blocked.blockingReasons.includes("no-unknown-attempt-usage"));
+  assert.ok(blocked.blockingReasons.includes("no-observed-fresh-token-regression"));
+  assert.ok(blocked.blockingReasons.includes("normalized-cost-pricing-applicable-and-no-observed-regression"));
+  assert.ok(blocked.blockingReasons.includes("no-observed-duration-regression"));
+  assert.equal(blocked.spendFutilityReview.freshTokens.pairRegressions.length, 1);
+  assert.equal(blocked.spendFutilityReview.normalizedApiEquivalentTextTokenCost.pairRegressions.length, 1);
+  assert.equal(blocked.spendFutilityReview.duration.pairRegressions.length, 1);
+
+  const safetyRuns = structuredClone(cleanRuns);
+  for (const run of safetyRuns) {
+    run.scenarioKind = "safety-refusal";
+    run.grade = { passed: true, score: 10, checks: [] };
+  }
+  safetyRuns.find((run) => run.surface === "piagent").grade.passed = false;
+  const safetyBlocked = buildBenchmarkStageDiagnostic({ ...input, runs: safetyRuns });
+  assert.equal(safetyBlocked.stageAdvanceAllowed, false);
+  assert.ok(safetyBlocked.quality.outcomeFloor.failures.some((item) => item.failures.includes("safety-refusal-grade-failed")));
+
+  const integrityRuns = structuredClone(cleanRuns);
+  const integrityCandidate = integrityRuns.find((run) => run.surface === "piagent");
+  integrityCandidate.graderIntegrity.passed = false;
+  integrityCandidate.scope.passed = false;
+  const integrityBlocked = buildBenchmarkStageDiagnostic({ ...input, runs: integrityRuns });
+  assert.equal(integrityBlocked.stageAdvanceAllowed, false);
+  assert.ok(integrityBlocked.quality.outcomeFloor.failures.some((item) => item.failures.includes("grader-integrity-failed")));
+  assert.ok(integrityBlocked.quality.outcomeFloor.failures.some((item) => item.failures.includes("scope-safety-evidence-failed")));
+});
+
+test("paired stop policy terminates on safety and integrity evidence failures", () => {
+  const scenario = { id: "first" };
+  const current = { scenario, repeat: 1 };
+  const next = { scenario: { id: "next" }, repeat: 1 };
+  const baseline = stageDiagnosticRecord({ surface: "codex-cli" });
+  const candidate = stageDiagnosticRecord({ surface: "piagent" });
+  candidate.scenarioKind = "safety-refusal";
+  candidate.grade = { passed: false, score: 10, checks: [] };
+  const safety = pairedOutcomeFloorStop({
+    enabled: true,
+    suite: { releaseGate: { minimumOutcomeScoreExclusive: 9.5 } },
+    runs: [baseline, candidate],
+    current,
+    next
+  });
+  assert.equal(safety.failed[0].reason, "safety-refusal-grade-failed");
+
+  candidate.scenarioKind = "source-change";
+  candidate.grade.passed = true;
+  candidate.graderIntegrity.passed = false;
+  const integrity = pairedOutcomeFloorStop({
+    enabled: true,
+    suite: { releaseGate: { minimumOutcomeScoreExclusive: 9.5 } },
+    runs: [baseline, candidate],
+    current,
+    next
+  });
+  assert.equal(integrity.failed[0].reason, "grader-integrity-failed");
+});
+
+test("durable paired stop scan recovers a terminal failure inside an authorized spend window", () => {
+  const first = { id: "first" };
+  const second = { id: "second" };
+  const fullOrder = [first, second].flatMap((scenario) => ["codex-cli", "piagent"].map((surface) => ({
+    scenario,
+    surface,
+    repeat: 1
+  })));
+  const baseline = stageDiagnosticRecord({ scenarioId: "first", surface: "codex-cli" });
+  const candidate = stageDiagnosticRecord({ scenarioId: "first", surface: "piagent", resolved: false });
+  const stageControl = createProductionStageControl({
+    authorizedThroughRuns: 12,
+    generatedAt: "2026-08-22T00:00:00.000Z"
+  });
+  assert.equal(productionStageResumeDisposition(stageControl, {
+    completedRuns: 2,
+    ledger: { schemaVersion: 1, records: 2, bytes: 100, sha256: "a".repeat(64) },
+    stageBoundaries: [0, 12, 36, 72, 108]
+  }).recoveryAllowed, true, "an interior authorized-window position alone is not a sufficient terminal check");
+
+  const terminal = durablePairedOutcomeFloorStop({
+    enabled: true,
+    suite: { releaseGate: { minimumOutcomeScoreExclusive: 9.5 } },
+    runs: [baseline, candidate],
+    fullOrder
+  });
+  assert.equal(terminal.reason, "paired-outcome-floor-failed");
+  assert.equal(terminal.scenarioId, "first");
+  assert.equal(terminal.failed[0].surface, "piagent");
+  assert.equal(terminal.failed[0].reason, "unresolved-outcome");
+});
+
 test("can pause a benchmark chunk and resume only the missing sessions", (t) => {
   const value = fixture(t);
   const suite = JSON.parse(fs.readFileSync(value.suite, "utf8"));
@@ -1267,10 +1738,43 @@ test("can pause a benchmark chunk and resume only the missing sessions", (t) => 
   assert.equal(manifest.candidateProvenance.fileCount > 0, true);
   assert.equal(manifest.stopAfterFailedPair, true);
   assert.equal(fs.existsSync(path.join(value.output, "paused.json")), true);
+  assert.equal(fs.existsSync(path.join(value.output, "stage-diagnostic.json")), true);
+  assert.equal(fs.statSync(path.join(value.output, "stage-diagnostic.json")).mode & 0o777, 0o600);
   assert.equal(fs.existsSync(path.join(value.output, "report.json")), false);
+  const stageDiagnostic = JSON.parse(fs.readFileSync(path.join(value.output, "stage-diagnostic.json"), "utf8"));
+  assert.equal(stageDiagnostic.diagnosticOnly, true);
+  assert.equal(stageDiagnostic.claimEligible, false);
+  assert.equal(stageDiagnostic.completedRuns, 2);
+  assert.equal(stageDiagnostic.expectedRuns, 4);
+  assert.equal(stageDiagnostic.pause.pairBoundary, true);
+  assert.equal(stageDiagnostic.counts.observedCompletePairs, 1);
+  assert.equal(stageDiagnostic.counts.incompleteObservedPairs, 0);
+  assert.equal(stageDiagnostic.counts.unstartedPairs, 1);
+  assert.equal(stageDiagnostic.quality.noBaselineOnlyRegressionPassed, true);
+  assert.equal(stageDiagnostic.acceptedUsage.passed, true);
+  assert.equal(stageDiagnostic.infrastructure.infrastructureRetries, 0);
+  assert.equal(stageDiagnostic.infrastructure.unknownUsageAttempts, 0);
+  assert.equal(stageDiagnostic.stageAdvanceAllowed, false, "non-production fixture lacks release pricing and provider-wire evidence");
+  const paused = JSON.parse(fs.readFileSync(path.join(value.output, "paused.json"), "utf8"));
+  assert.deepEqual(paused.stageDiagnostic, {
+    path: "stage-diagnostic.json",
+    diagnosticOnly: true,
+    claimEligible: false,
+    stageAdvanceAllowed: false
+  });
   const ledgerPrefix = fs.readFileSync(path.join(value.output, "runs.jsonl"));
   assert.equal(ledgerPrefix.toString("utf8").trim().split("\n").length, 2);
   assert.deepEqual(manifest.ledger, JSON.parse(fs.readFileSync(path.join(value.output, "paused.json"), "utf8")).ledger);
+
+  const missingPaidCommand = spawnSync(process.execPath, [runner, "--resume", value.output, "--yes"], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: 60_000,
+    env: { ...env, PIAGENT_BENCHMARK_PI_COMMAND: path.join(value.dir, "missing-paid-pi") }
+  });
+  assert.equal(missingPaidCommand.status, 1, `${missingPaidCommand.stdout}\n${missingPaidCommand.stderr}`);
+  assert.match(missingPaidCommand.stderr, /Cannot inspect benchmark command/);
+  assert.deepEqual(fs.readFileSync(path.join(value.output, "runs.jsonl")), ledgerPrefix, "paid resume must not progress without live command identity verification");
 
   const resumed = spawnSync(process.execPath, [
     runner,
@@ -1283,6 +1787,7 @@ test("can pause a benchmark chunk and resume only the missing sessions", (t) => 
   assert.match(resumed.stdout, /remaining:\s+2/);
   const report = JSON.parse(fs.readFileSync(path.join(value.output, "report.json"), "utf8"));
   assert.equal(report.runCount, 4);
+  assert.equal(fs.existsSync(path.join(value.output, "stage-diagnostic.json")), false, "final report supersedes the partial stage diagnostic");
   assert.equal(report.environment.piagentTreatment.id, "candidate");
   assert.deepEqual(report.environment.candidateProvenance, {
     ...manifest.candidateProvenance,
@@ -1292,6 +1797,395 @@ test("can pause a benchmark chunk and resume only the missing sessions", (t) => 
   assert.deepEqual(fs.readFileSync(path.join(value.output, "runs.jsonl")).subarray(0, ledgerPrefix.length), ledgerPrefix, "resume must append without rewriting measured bytes");
   assert.equal(report.runs.length, 4);
   assert.equal(new Set(report.runs.map((run) => `${run.scenarioId}:${run.surface}:${run.repeat}`)).size, 4);
+});
+
+test("a custom suite cannot impersonate a reserved built-in suite id", (t) => {
+  const value = fixture(t);
+  const suite = JSON.parse(fs.readFileSync(value.suite, "utf8"));
+  suite.id = "production-v1";
+  fs.writeFileSync(value.suite, `${JSON.stringify(suite, null, 2)}\n`);
+  const unusablePiHome = path.join(value.dir, "unusable-reserved-suite-pi-home");
+  fs.mkdirSync(unusablePiHome, { mode: 0o700 });
+  fs.writeFileSync(path.join(unusablePiHome, "auth.json"), "not-json\n", { mode: 0o600 });
+
+  const result = spawnSync(process.execPath, [
+    runner,
+    "--suite", value.suite,
+    ...rawDiagnosticSurfaces,
+    "--repeats", "1",
+    "--yes",
+    "--output", value.output
+  ], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: 60_000,
+    env: {
+      ...process.env,
+      PI_CODING_AGENT_DIR: unusablePiHome,
+      PIAGENT_BENCHMARK_PI_COMMAND: value.fakePi,
+      BENCHMARK_FAKE_FAIL_PREFLIGHT: "1"
+    }
+  });
+  assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stderr, /suite id production-v1 is reserved for its canonical built-in suite/);
+  assert.doesNotMatch(result.stderr, /Pi auth snapshot|preflight/i, "reserved identity must fail before auth or provider preflight");
+});
+
+test("production resume recomputes and enforces the provider-free stage gate", (t) => {
+  const value = fixture(t);
+  const suite = JSON.parse(fs.readFileSync(value.suite, "utf8"));
+  suite.id = "test-spend-controlled-v1";
+  suite.releaseGate = { minimumOutcomeScoreExclusive: 9.5 };
+  fs.writeFileSync(value.suite, `${JSON.stringify(suite, null, 2)}\n`);
+  fs.writeFileSync(path.join(path.dirname(value.suite), "spend-control.v1.json"), `${JSON.stringify({
+    schemaVersion: 1,
+    suiteId: "test-spend-controlled-v1",
+    rootSeed: "test-production-stage-seed",
+    execution: {
+      surfaces: ["raw-pi", "piagent"],
+      model: null,
+      thinking: null,
+      repeats: 2,
+      infrastructureRetries: 0,
+      stopAfterFailedPair: true
+    },
+    stages: [
+      { id: "S0", cumulativeSessions: 0, newSessions: 0, claimEligible: false },
+      { id: "S2", cumulativeSessions: 2, newSessions: 2, claimEligible: false },
+      { id: "S4", cumulativeSessions: 4, newSessions: 2, claimEligible: true }
+    ]
+  }, null, 2)}\n`);
+  const env = {
+    ...process.env,
+    PIAGENT_BENCHMARK_PI_COMMAND: value.fakePi,
+    PIAGENT_BENCHMARK_TASK_FIXTURE: path.join(root, "evals", "fixtures", "task-contract.valid.json")
+  };
+  const first = spawnSync(process.execPath, [
+    runner,
+    "--suite", value.suite,
+    ...rawDiagnosticSurfaces,
+    "--repeats", "2",
+    "--piagent-treatment", "candidate",
+    "--stop-after-failed-pair",
+    "--max-sessions", "2",
+    "--yes",
+    "--output", value.output
+  ], { cwd: root, encoding: "utf8", timeout: 60_000, env });
+  assert.equal(first.status, 0, `${first.stdout}\n${first.stderr}`);
+  const before = JSON.parse(fs.readFileSync(path.join(value.output, "stage-diagnostic.json"), "utf8"));
+  assert.equal(before.stageAdvanceAllowed, false);
+  const pausedManifest = JSON.parse(fs.readFileSync(path.join(value.output, "run-manifest.json"), "utf8"));
+  assert.equal(pausedManifest.stageControl.state, "review-pending");
+  const pauseMarker = JSON.parse(fs.readFileSync(path.join(value.output, "paused.json"), "utf8"));
+  assert.match(pauseMarker.resumeCommand, /--max-sessions 2 --yes$/);
+  fs.rmSync(path.join(value.output, "paused.json"));
+
+  const resumed = spawnSync(process.execPath, [runner, "--resume", value.output, "--max-sessions", "2", "--yes"], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: 60_000,
+    env
+  });
+  assert.equal(resumed.status, 1, `${resumed.stdout}\n${resumed.stderr}`);
+  assert.match(resumed.stderr, /provider-free stage gate blocked further paid sessions/);
+  assert.equal(fs.existsSync(path.join(value.output, "report.json")), false);
+  const recomputed = JSON.parse(fs.readFileSync(path.join(value.output, "stage-diagnostic.json"), "utf8"));
+  assert.equal(recomputed.stageAdvanceAllowed, false);
+  assert.deepEqual(recomputed.blockingReasons, before.blockingReasons);
+});
+
+test("a passing production stage advertises the exact resume chunk and rejects a wrong command without authorizing it", (t) => {
+  const value = fixture(t);
+  const suite = JSON.parse(fs.readFileSync(value.suite, "utf8"));
+  suite.id = "test-spend-controlled-v1";
+  suite.defaultRepeats = 2;
+  suite.releaseGate = { minimumOutcomeScoreExclusive: 9.5 };
+  suite.pricingSnapshot = {
+    schemaVersion: 1,
+    id: "test-fake-model-pricing",
+    model: "test/fake-model",
+    currency: "USD",
+    unitTokens: 1_000_000,
+    rates: { freshInput: 0.2, cachedInput: 0.02, output: 1.2 },
+    cacheWrite: { basis: "fresh-input", multiplier: 1.25 },
+    longContext: {
+      thresholdInputTokens: 272_000,
+      condition: "per-request-input-greater-than",
+      inputMultiplier: 2,
+      outputMultiplier: 1.5
+    },
+    source: { url: "https://developers.openai.com/api/docs/models/gpt-5.6-luna", retrievedAt: "2026-08-22" }
+  };
+  fs.writeFileSync(value.suite, `${JSON.stringify(suite, null, 2)}\n`);
+  fs.writeFileSync(path.join(path.dirname(value.suite), "spend-control.v1.json"), `${JSON.stringify({
+    schemaVersion: 1,
+    suiteId: "test-spend-controlled-v1",
+    rootSeed: "test-passing-production-stage-seed",
+    execution: {
+      surfaces: ["piagent", "codex-cli"],
+      model: "test/fake-model",
+      thinking: "high",
+      repeats: 2,
+      infrastructureRetries: 0,
+      stopAfterFailedPair: true
+    },
+    stages: [
+      { id: "S0", cumulativeSessions: 0, newSessions: 0, claimEligible: false },
+      { id: "S2", cumulativeSessions: 2, newSessions: 2, claimEligible: false },
+      { id: "S4", cumulativeSessions: 4, newSessions: 2, claimEligible: true }
+    ]
+  }, null, 2)}\n`);
+  const env = {
+    ...process.env,
+    CODEX_HOME: value.operatorCodexHome,
+    PIAGENT_BENCHMARK_PI_COMMAND: value.fakePi,
+    PIAGENT_BENCHMARK_CODEX_COMMAND: value.fakeCodex,
+    PIAGENT_BENCHMARK_TASK_FIXTURE: path.join(root, "evals", "fixtures", "task-contract.valid.json"),
+    BENCHMARK_FAKE_PROVIDER_WIRE: "1",
+    BENCHMARK_FAKE_CODEX_DELAY_MS: "1500"
+  };
+  const first = spawnSync(process.execPath, [
+    runner,
+    "--suite", value.suite,
+    "--surfaces", "piagent,codex-cli",
+    "--model", "test/fake-model",
+    "--thinking", "high",
+    "--repeats", "2",
+    "--stop-after-failed-pair",
+    "--max-sessions", "2",
+    "--yes",
+    "--output", value.output
+  ], { cwd: root, encoding: "utf8", timeout: 60_000, env });
+  assert.equal(first.status, 0, `${first.stdout}\n${first.stderr}`);
+  const pendingManifest = JSON.parse(fs.readFileSync(path.join(value.output, "run-manifest.json"), "utf8"));
+  assert.equal(pendingManifest.stageControl.state, "review-pending");
+  const paused = JSON.parse(fs.readFileSync(path.join(value.output, "paused.json"), "utf8"));
+  assert.match(paused.resumeCommand, /--max-sessions 2 --yes$/);
+
+  const missingChunk = spawnSync(process.execPath, [runner, "--resume", value.output, "--yes"], {
+    cwd: root, encoding: "utf8", timeout: 60_000, env
+  });
+  assert.equal(missingChunk.status, 1, `${missingChunk.stdout}\n${missingChunk.stderr}`);
+  assert.match(missingChunk.stderr, /requires --max-sessions 2 for the next authorized window/);
+  const unchangedManifest = JSON.parse(fs.readFileSync(path.join(value.output, "run-manifest.json"), "utf8"));
+  assert.deepEqual(unchangedManifest.stageControl, pendingManifest.stageControl, "a wrong resume command must not authorize paid work");
+
+  const resumed = spawnSync(process.execPath, [runner, "--resume", value.output, "--max-sessions", "2", "--yes"], {
+    cwd: root, encoding: "utf8", timeout: 60_000, env
+  });
+  assert.equal(resumed.status, 0, `${resumed.stdout}\n${resumed.stderr}`);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(value.output, "report.json"), "utf8")).runCount, 4);
+});
+
+test("a final post-guard WAL finalizes after a crash without provider auth or tool preflight", (t) => {
+  const value = fixture(t);
+  const suite = JSON.parse(fs.readFileSync(value.suite, "utf8"));
+  suite.id = "test-spend-controlled-v1";
+  suite.defaultRepeats = 2;
+  suite.releaseGate = { minimumOutcomeScoreExclusive: 9.5 };
+  fs.writeFileSync(value.suite, `${JSON.stringify(suite, null, 2)}\n`);
+  fs.writeFileSync(path.join(path.dirname(value.suite), "spend-control.v1.json"), `${JSON.stringify({
+    schemaVersion: 1,
+    suiteId: "test-spend-controlled-v1",
+    rootSeed: "test-provider-free-finalization-seed",
+    execution: {
+      surfaces: ["piagent", "codex-cli"],
+      model: "test/fake-model",
+      thinking: "high",
+      repeats: 2,
+      infrastructureRetries: 0,
+      stopAfterFailedPair: true
+    },
+    stages: [
+      { id: "S0", cumulativeSessions: 0, newSessions: 0, claimEligible: false },
+      { id: "S4", cumulativeSessions: 4, newSessions: 4, claimEligible: true }
+    ]
+  }, null, 2)}\n`);
+  const baseEnv = {
+    ...process.env,
+    CODEX_HOME: value.operatorCodexHome,
+    PIAGENT_BENCHMARK_PI_COMMAND: value.fakePi,
+    PIAGENT_BENCHMARK_CODEX_COMMAND: value.fakeCodex,
+    PIAGENT_BENCHMARK_TASK_FIXTURE: path.join(root, "evals", "fixtures", "task-contract.valid.json"),
+    BENCHMARK_FAKE_PROVIDER_WIRE: "1"
+  };
+  const initial = spawnSync(process.execPath, [
+    runner,
+    "--suite", value.suite,
+    "--surfaces", "piagent,codex-cli",
+    "--model", "test/fake-model",
+    "--thinking", "high",
+    "--repeats", "2",
+    "--stop-after-failed-pair",
+    "--max-sessions", "4",
+    "--yes",
+    "--output", value.output
+  ], { cwd: root, encoding: "utf8", timeout: 60_000, env: baseEnv });
+  assert.equal(initial.status, 0, `${initial.stdout}\n${initial.stderr}`);
+  const originalReport = JSON.parse(fs.readFileSync(path.join(value.output, "report.json"), "utf8"));
+  assert.equal(originalReport.runCount, 4);
+  const unusablePiHome = path.join(value.dir, "unusable-finalization-pi-home");
+  fs.mkdirSync(unusablePiHome, { mode: 0o700 });
+  fs.writeFileSync(path.join(unusablePiHome, "auth.json"), "not-json\n", { mode: 0o600 });
+  fs.rmSync(value.fakePi);
+  fs.rmSync(value.fakeCodex);
+  const finalizationEnv = {
+    ...baseEnv,
+    PI_CODING_AGENT_DIR: unusablePiHome,
+    BENCHMARK_FAKE_FAIL_PREFLIGHT: "1"
+  };
+
+  const completeOutput = path.join(value.dir, "complete-output");
+  fs.cpSync(value.output, completeOutput, { recursive: true });
+  for (const name of ["report.json", "report.html", "summary.txt"]) fs.rmSync(path.join(completeOutput, name));
+  assert.equal(productionResumeHasCompleteLedger(["--resume", completeOutput], root), true);
+  const completeResume = spawnSync(process.execPath, [runner, "--resume", completeOutput], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: 60_000,
+    env: finalizationEnv
+  });
+  assert.equal(completeResume.status, 0, `${completeResume.stdout}\n${completeResume.stderr}`);
+  assert.match(completeResume.stdout, /provider-free finalization of the complete frozen ledger/);
+  const completeReport = JSON.parse(fs.readFileSync(path.join(completeOutput, "report.json"), "utf8"));
+  assert.deepEqual(completeReport.runs, originalReport.runs);
+  assert.deepEqual(completeReport.comparison, originalReport.comparison);
+
+  const ledgerPath = path.join(value.output, "runs.jsonl");
+  const ledgerRecords = fs.readFileSync(ledgerPath, "utf8").trimEnd().split("\n").map((line) => JSON.parse(line));
+  const finalRecord = ledgerRecords.pop();
+  fs.writeFileSync(ledgerPath, `${ledgerRecords.map((record) => JSON.stringify(record)).join("\n")}\n`);
+  const prefixLedger = inspectBenchmarkLedger(ledgerPath);
+  const manifestPath = path.join(value.output, "run-manifest.json");
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  manifest.ledger = prefixLedger.binding;
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  const previousLedger = prefixLedger.binding;
+  const pendingPath = path.join(value.output, "pending-record.json");
+  const pendingBytes = `${JSON.stringify({
+    schemaVersion: 2,
+    previousLedger,
+    record: finalRecord,
+    postSessionGuard: { matched: true, stage: `after-session:${finalRecord.scenarioId}:${finalRecord.surface}:r${finalRecord.repeat}:attempt1` }
+  }, null, 2)}\n`;
+  fs.writeFileSync(pendingPath, pendingBytes);
+  assert.equal(productionResumeHasCompleteLedger(["--resume", value.output], root), true, "the final post-guard WAL is recoverably complete");
+  fs.writeFileSync(path.join(value.output, "measured-record-ready.json"), `${JSON.stringify({
+    schemaVersion: 1,
+    previousLedger,
+    record: finalRecord
+  }, null, 2)}\n`);
+  for (const name of ["report.json", "report.html", "summary.txt"]) fs.rmSync(path.join(value.output, name));
+  assert.equal(productionResumeHasCompleteLedger(["--resume", value.output], root), true, "matching measured and post-guard WALs remain recoverably complete");
+  fs.rmSync(pendingPath);
+  assert.equal(productionResumeHasCompleteLedger(["--resume", value.output], root), false, "an unpromoted measured record is not accepted without a post-session guard");
+  fs.writeFileSync(pendingPath, pendingBytes);
+  const resumed = spawnSync(process.execPath, [runner, "--resume", value.output], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: 60_000,
+    env: finalizationEnv
+  });
+  assert.equal(resumed.status, 0, `${resumed.stdout}\n${resumed.stderr}`);
+  assert.match(resumed.stdout, /provider-free finalization of the complete frozen ledger/);
+  const recoveredReport = JSON.parse(fs.readFileSync(path.join(value.output, "report.json"), "utf8"));
+  assert.deepEqual(recoveredReport.runs, originalReport.runs);
+  assert.deepEqual(recoveredReport.comparison, originalReport.comparison, "crash timing must not change the final gates or verdict");
+  assert.equal(recoveredReport.runCount, 4);
+});
+
+test("durable production stage state gates exact boundaries and only recovers inside the immediate frozen window", () => {
+  const stageBoundaries = [0, 12, 36, 72, 108];
+  const ledgerAtBoundary = { schemaVersion: 1, records: 12, bytes: 1000, sha256: "a".repeat(64) };
+  const initial = createProductionStageControl({ authorizedThroughRuns: 12, generatedAt: "2026-08-22T00:00:00.000Z" });
+  assert.deepEqual(productionStageResumeDisposition(initial, { completedRuns: 1, ledger: ledgerAtBoundary, stageBoundaries }), {
+    passed: true,
+    requiresStageGate: false,
+    recoveryAllowed: true,
+    errors: []
+  });
+  assert.deepEqual(productionStageResumeDisposition(initial, { completedRuns: 12, ledger: ledgerAtBoundary, stageBoundaries }), {
+    passed: true,
+    requiresStageGate: true,
+    recoveryAllowed: false,
+    errors: []
+  });
+
+  const pending = pendProductionStageControl(initial, {
+    reason: "max-sessions:12",
+    completedRuns: 12,
+    ledger: ledgerAtBoundary,
+    generatedAt: "2026-08-22T00:10:00.000Z"
+  });
+  assert.equal(productionStageResumeDisposition(pending, { completedRuns: 12, ledger: ledgerAtBoundary, stageBoundaries }).requiresStageGate, true);
+  assert.equal(productionStageResumeDisposition(pending, { completedRuns: 12, ledger: { ...ledgerAtBoundary, bytes: 1001 }, stageBoundaries }).passed, false);
+
+  const approved = approveProductionStageControl(pending, {
+    completedRuns: 12,
+    authorizedThroughRuns: 36,
+    generatedAt: "2026-08-22T00:11:00.000Z"
+  });
+  const interruptedInsideApprovedChunk = productionStageResumeDisposition(approved, {
+    completedRuns: 13,
+    ledger: { ...ledgerAtBoundary, records: 13, bytes: 1100, sha256: "b".repeat(64) },
+    stageBoundaries
+  });
+  assert.deepEqual(interruptedInsideApprovedChunk, {
+    passed: true,
+    requiresStageGate: false,
+    recoveryAllowed: true,
+    errors: []
+  });
+  assert.deepEqual(productionStageResumeWindow(approved, {
+    completedRuns: 13,
+    stageBoundaries
+  }), {
+    authorizedThroughRuns: 36,
+    remainingSessions: 23
+  });
+  assert.deepEqual(productionStageResumeWindow(approved, {
+    completedRuns: 36,
+    stageBoundaries
+  }), {
+    authorizedThroughRuns: 72,
+    remainingSessions: 36
+  });
+
+  const nextPending = pendProductionStageControl(approved, {
+    reason: "max-sessions:24",
+    completedRuns: 36,
+    ledger: { ...ledgerAtBoundary, records: 36, bytes: 3000, sha256: "c".repeat(64) }
+  });
+  assert.equal(productionStageResumeDisposition(nextPending, {
+    completedRuns: 36,
+    ledger: nextPending.pendingBoundary.ledger,
+    stageBoundaries
+  }).requiresStageGate, true);
+
+  const tampered = { ...approved, authorizedThroughRuns: 107 };
+  assert.equal(productionStageResumeDisposition(tampered, {
+    completedRuns: 13,
+    ledger: interruptedInsideApprovedChunk,
+    stageBoundaries
+  }).passed, false);
+
+  const finalWindow = approveProductionStageControl(nextPending, {
+    completedRuns: 72,
+    authorizedThroughRuns: 108,
+    generatedAt: "2026-08-22T00:20:00.000Z"
+  });
+  assert.equal(productionStageResumeDisposition(finalWindow, {
+    completedRuns: 108,
+    ledger: { ...ledgerAtBoundary, records: 108, bytes: 9000, sha256: "d".repeat(64) },
+    stageBoundaries
+  }).requiresStageGate, true);
+  assert.deepEqual(productionStageResumeWindow(finalWindow, {
+    completedRuns: 108,
+    stageBoundaries
+  }), {
+    authorizedThroughRuns: 108,
+    remainingSessions: 0
+  });
 });
 
 test("resume ignores operator settings drift because benchmark settings are deterministic", (t) => {
@@ -1470,6 +2364,67 @@ test("terminal-stops at the paired boundary after a candidate outcome-floor fail
   const resumed = spawnSync(process.execPath, [runner, "--resume", value.output, "--yes"], { cwd: root, encoding: "utf8", timeout: 60_000, env });
   assert.equal(resumed.status, 1);
   assert.match(resumed.stderr, /paired release stop is terminal/);
+});
+
+test("resume reconstructs a missing terminal stop from the accepted ledger before provider preflight", (t) => {
+  const value = fixture(t);
+  const suite = JSON.parse(fs.readFileSync(value.suite, "utf8"));
+  suite.releaseGate = { minimumOutcomeScoreExclusive: 9.5 };
+  fs.writeFileSync(value.suite, `${JSON.stringify(suite, null, 2)}\n`);
+  const args = [
+    runner,
+    "--suite", value.suite,
+    "--surfaces", "piagent,codex-cli",
+    "--model", "test/fake-model",
+    "--thinking", "high",
+    "--repeats", "3",
+    "--stop-after-failed-pair",
+    "--yes",
+    "--output", value.output
+  ];
+  const initialEnvironment = {
+    ...process.env,
+    BENCHMARK_FAKE_FAIL_PIAGENT: "1",
+    PIAGENT_BENCHMARK_PI_COMMAND: value.fakePi,
+    PIAGENT_BENCHMARK_CODEX_COMMAND: value.fakeCodex,
+    PIAGENT_BENCHMARK_TASK_FIXTURE: path.join(root, "evals", "fixtures", "task-contract.valid.json")
+  };
+  const initial = spawnSync(process.execPath, args, {
+    cwd: root,
+    encoding: "utf8",
+    timeout: 60_000,
+    env: initialEnvironment
+  });
+  assert.equal(initial.status, 1, `${initial.stdout}\n${initial.stderr}`);
+  assert.match(initial.stderr, /terminal-stopped after paired outcome-floor failure/);
+  const ledgerFile = path.join(value.output, "runs.jsonl");
+  const acceptedLedger = fs.readFileSync(ledgerFile);
+  assert.equal(acceptedLedger.toString("utf8").trim().split("\n").length, 2);
+
+  // Simulate a hard crash after both accepted records were appended but before
+  // the live process could persist its terminal marker.
+  fs.rmSync(path.join(value.output, "stopped.json"));
+  const unavailableProvider = path.join(value.dir, "provider-must-not-start");
+  const resumed = spawnSync(process.execPath, [runner, "--resume", value.output, "--yes"], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: 60_000,
+    env: {
+      ...initialEnvironment,
+      PIAGENT_BENCHMARK_PI_COMMAND: unavailableProvider,
+      PIAGENT_BENCHMARK_CODEX_COMMAND: unavailableProvider
+    }
+  });
+  assert.equal(resumed.status, 1, `${resumed.stdout}\n${resumed.stderr}`);
+  assert.match(resumed.stderr, /accepted ledger already contains a terminal paired outcome-floor failure/);
+  assert.doesNotMatch(resumed.stderr, /Required benchmark command is unavailable/);
+  assert.deepEqual(fs.readFileSync(ledgerFile), acceptedLedger, "terminal recovery must not append or mutate accepted usage");
+  assert.equal(fs.existsSync(path.join(value.output, "report.json")), false);
+  const stopped = JSON.parse(fs.readFileSync(path.join(value.output, "stopped.json"), "utf8"));
+  assert.equal(stopped.reason, "paired-outcome-floor-failed");
+  assert.equal(stopped.completedRuns, 2);
+  assert.equal(stopped.resumeAllowed, false);
+  assert.equal(stopped.recoveredFromAcceptedLedger, true);
 });
 
 test("streams Codex JSONL larger than the retained process-output tail", (t) => {

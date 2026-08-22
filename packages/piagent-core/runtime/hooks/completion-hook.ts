@@ -298,7 +298,6 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
         projected = withRecoveryProvenance(ctx, projected, projectedGate, currentDigests, null);
         task = writeTask(ctx.cwd, projected);
         observeTrajectorySync(ctx, syncTrajectory?.(ctx, task, { sourceHook: "completion" }), telemetry);
-        state.cacheTaskIdentity(ctx, task);
         state.clearPerformanceReview(task.taskRunId);
         state.clearObservedContext(ctx);
         activateBaseTools(ctx);

@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { benchmarkCandidateProvenance } from "../packages/piagent-core/benchmark/benchmark-forensics.js";
+import { benchmarkCandidateProvenance, benchmarkCausalContextReceipt } from "../packages/piagent-core/benchmark/benchmark-forensics.js";
 import { appendBenchmarkLedger, emptyBenchmarkLedgerBinding } from "../packages/piagent-core/benchmark/benchmark-ledger.js";
 import { projectBenchmarkReleaseMonitor } from "../packages/piagent-webui/server/benchmark-release-monitor.ts";
 import { routeReadOnlyRequest } from "../packages/piagent-webui/server/read-only-router.ts";
@@ -28,6 +28,11 @@ function candidateDigest(cwd) {
   return digest.digest("hex");
 }
 function record(runId) {
+  const causalContextReceipt = benchmarkCausalContextReceipt([
+    { sessionId: "causal-fixture", event: "agent_prompt", managedInstructionsCompacted: false },
+    { sessionId: "causal-fixture", event: "criterion_context_pack", selected: 0, candidates: 0, estimatedTokens: 0, reasonCode: "no-candidates" },
+    { sessionId: "causal-fixture", event: "agent_settled" }
+  ], { surface: "piagent", sessionId: "causal-fixture", criterionExpected: true });
   return { schemaVersion: 1, runId, attemptId: "attempt.secret-session", configurationDigest: hash, orderIndex: 1,
     scenarioId: "task", scenarioTitle: "Task", scenarioKind: "source-change", category: "code", difficulty: "small",
     profile: "node", lifecycle: "steady-state", surface: "piagent", repeat: 1, infrastructureAttempt: 1, infrastructureAttempts: 1,
@@ -35,7 +40,7 @@ function record(runId) {
     agent: { exitCode: 0, timedOut: false, stdoutHash: hash, stderrHash: hash },
     grade: { passed: true, score: 10, checks: [] }, graderIntegrity: { passed: true },
     scope: { passed: true, changedFiles: [], outsideScope: [] }, outputSafety: { passed: true, forbiddenHits: [] },
-    outputEvidence: { passed: true, requiredCount: 0 }, durationSeconds: 1, promptHash: hash,
+    outputEvidence: { passed: true, requiredCount: 0 }, causalContextReceipt, durationSeconds: 1, promptHash: hash,
     variant: { generated: false, fixtureDigest: hash },
     usage: { sessions: 1, fresh: 3, input: 2, output: 1, cacheRead: 0, cacheWrite: 0, reasoning: 0, total: 3, cost: null, costSource: "unavailable" } };
 }

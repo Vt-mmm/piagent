@@ -25,7 +25,7 @@ function assetError(stage, asset, cause) {
   return error;
 }
 
-export function createBenchmarkExecutionGuard({ candidateGuard, suiteRoot, suiteIdentity, piAgentHome, codexCredential, runtimeDependencies, commands }) {
+export function createBenchmarkExecutionGuard({ candidateGuard, suiteRoot, suiteIdentity, piAgentHome, codexCredential, runtimeDependencies, commands, verifyCommandAssets = true }) {
   const observeAssets = (stage, runtimeHomes = []) => {
     try {
       const suite = benchmarkTreeIdentity(suiteRoot, { rejectSymlinks: true });
@@ -61,10 +61,12 @@ export function createBenchmarkExecutionGuard({ candidateGuard, suiteRoot, suite
         throw assetError(stage, "codex-credential", error);
       }
     }
-    for (const [label, identity] of Object.entries(commands ?? {})) {
-      if (!identity) continue;
-      try { verifyBenchmarkCommandIdentity(identity, label, { fullPackageClosure: stage === "finalization" || stage === "prepublish" }); }
-      catch (error) { throw assetError(stage, `command:${label}`, error); }
+    if (verifyCommandAssets) {
+      for (const [label, identity] of Object.entries(commands ?? {})) {
+        if (!identity) continue;
+        try { verifyBenchmarkCommandIdentity(identity, label, { fullPackageClosure: stage === "finalization" || stage === "prepublish" }); }
+        catch (error) { throw assetError(stage, `command:${label}`, error); }
+      }
     }
   };
   const receipt = (stage, runtimeHomes = []) => {

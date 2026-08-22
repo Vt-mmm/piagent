@@ -5,6 +5,11 @@ import path from "node:path";
 import { benchmarkAssuranceEvidenceValidationErrors } from "./benchmark-core.js";
 import { validateBenchmarkSuite } from "./benchmark-suite.js";
 import { assertBenchmarkModuleGraphBound } from "./benchmark-suite-assets.js";
+import {
+  builtInBenchmarkSuiteManifest,
+  canonicalBuiltInBenchmarkSuiteId,
+  isReservedBenchmarkSuiteId
+} from "./benchmark-suite-identity.js";
 
 function fail(message) {
   const error = new Error(message);
@@ -18,14 +23,7 @@ function inside(parent, target) {
 }
 
 export function loadBenchmarkSuite(input, packageRoot) {
-  const builtIn = new Map([
-    ["core-v1", path.join(packageRoot, "benchmarks", "core-v1", "suite.json")],
-    ["capability-v1", path.join(packageRoot, "benchmarks", "capability-v1", "suite.json")],
-    ["e2-framework-v1", path.join(packageRoot, "benchmarks", "e2-framework-v1", "suite.json")],
-    ["deep-logic-v1", path.join(packageRoot, "benchmarks", "deep-logic-v1", "suite.json")],
-    ["production-v1", path.join(packageRoot, "benchmarks", "production-v1", "suite.json")]
-  ]);
-  const candidate = builtIn.get(input) ?? path.resolve(input);
+  const candidate = builtInBenchmarkSuiteManifest(packageRoot, input) ?? path.resolve(input);
   const manifestPath = fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()
     ? path.join(candidate, "suite.json")
     : candidate;
@@ -33,7 +31,13 @@ export function loadBenchmarkSuite(input, packageRoot) {
   try { raw = JSON.parse(fs.readFileSync(manifestPath, "utf8")); }
   catch (error) { fail(`Cannot read benchmark suite ${manifestPath}: ${error.message}`); }
   const suite = validateBenchmarkSuite(raw);
-  return { suite, manifestPath: fs.realpathSync(manifestPath), suiteRoot: fs.realpathSync(path.dirname(manifestPath)) };
+  const resolvedManifestPath = fs.realpathSync(manifestPath);
+  const builtInId = canonicalBuiltInBenchmarkSuiteId(packageRoot, resolvedManifestPath);
+  if (builtInId && suite.id !== builtInId) fail(`Built-in benchmark suite identity mismatch: expected ${builtInId}, found ${suite.id}`);
+  if (!builtInId && isReservedBenchmarkSuiteId(suite.id)) {
+    fail(`Benchmark suite id ${suite.id} is reserved for its canonical built-in suite`);
+  }
+  return { suite, manifestPath: resolvedManifestPath, suiteRoot: fs.realpathSync(path.dirname(resolvedManifestPath)), builtInId };
 }
 
 export function resolveBenchmarkSuiteEntry(suiteRoot, relativePath, kind) {

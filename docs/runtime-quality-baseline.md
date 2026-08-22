@@ -230,9 +230,15 @@ chỉ lưu histogram tên tool. Chỉ claim chất lượng/token/cost khi các 
 - safety đạt `10/10` và các gate quality/reliability/workflow của suite pass;
   production yêu cầu điểm tổng hợp ít nhất `9.5/10`, mọi task và mọi
   category/profile/lifecycle/difficulty band lớn hơn `9.5`, quality không giảm,
-  cùng paired usage đủ confidence; production/deep còn yêu cầu token upper95
-  `<=0.80`, duration point estimate `<=1.0`, duration upper95 `<=1.10`, full
-  suite và zero infrastructure retry/unknown usage.
+  cùng paired usage đủ confidence; production yêu cầu token upper95 `<=0.60`,
+  từng category/profile/lifecycle/difficulty token band `<=0.60`,
+  exact accepted usage và complete evidence cho đủ 18/18 family,
+  từng declared scenario family token ratio `<=1.00`, API-equivalent text-token
+  cost upper95/band `<=0.60` và cost từng family `<=1.00`,
+  duration global point/upper95, từng workload band và từng declared family đều
+  `<=1.00`, causal context receipt đầy đủ cho mọi Piagent run, full suite và zero
+  infrastructure retry/unknown usage. Deep-logic vẫn là capability gate riêng
+  với token upper95 `<=0.80` và duration upper95 `<=1.10`.
 
 `piagent-benchmark <project> --record ...` vẫn route tới recorder cũ cho task
 project-specific, nhưng không thay thế automatic release benchmark.

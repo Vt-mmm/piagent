@@ -33,6 +33,7 @@ describe("deep logic benchmark", () => {
     assert.equal(suite.releaseGate.primaryEfficiencyEstimand, "failure-aware-family-ratio");
     assert.equal(suite.releaseGate.requireFullSuiteForClaim, true);
     assert.equal(suite.releaseGate.requireStableProviderWireSurface, true);
+    assert.equal(suite.releaseGate.requireCausalContextReceipt, true);
     assert.deepEqual(suite.executionContract, {
       surfaces: ["piagent", "codex-cli"],
       model: "openai-codex/gpt-5.6-luna",

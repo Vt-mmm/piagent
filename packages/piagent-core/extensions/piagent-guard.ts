@@ -3985,7 +3985,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
       let taskIdentity = runtimeState.taskIdentity(ctx);
       if (!taskIdentity) {
         const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
-        if (task) {
+        if (task?.trace.outcome === "pending") {
           runtimeState.cacheTaskIdentity(ctx, task);
           taskIdentity = { taskId: task.taskId, taskRunId: task.taskRunId };
         }
