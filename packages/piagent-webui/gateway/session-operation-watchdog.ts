@@ -76,7 +76,9 @@ export class SessionOperationWatchdog {
     this.#expire = expire;
     this.#armIdle();
     this.#maximumTimer = setTimeout(() => this.#deadline("operation-deadline-exceeded"), this.policy.maximumDurationMs);
-    this.#maximumTimer.unref?.();
+    // An accepted operation owns live runtime work until it settles. Keep both
+    // deadline timers referenced so a headless Gateway cannot let Node exit
+    // while the provider promise is pending and silently skip recovery.
   }
 
   progress(): void {
@@ -100,7 +102,6 @@ export class SessionOperationWatchdog {
   #armIdle(): void {
     if (this.#idleTimer) clearTimeout(this.#idleTimer);
     this.#idleTimer = setTimeout(() => this.#deadline("operation-inactivity-timeout"), this.policy.inactivityTimeoutMs);
-    this.#idleTimer.unref?.();
   }
 
   #deadline(reason: SessionOperationDeadlineReason): void {

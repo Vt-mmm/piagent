@@ -115,7 +115,7 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:bb6a9b3794ea45060e8e000231ff955dfb271278b66de25c7acde6972fee2f46",
+    "packageDigest": "sha256:eb41e177589d1b87078fe649b893461e6f32eb1f531c70e60ff3ec3b87205b1c",
     "packageSource": "../",
     "packageVersion": "1.6.0",
     "runtimeFiles": [
@@ -1495,8 +1495,8 @@
         "path": "packages/piagent-webui/gateway/session-operation-start.ts"
       },
       {
-        "byteSize": 7409,
-        "digest": "sha256:56e72f141efe0d890a9d1ede1b2ccbcccb0b382f5778f0e7c05cc66a494abc3c",
+        "byteSize": 7574,
+        "digest": "sha256:fd98fc254cb53bcf013543811a26760518d24008598d1d9dafa763eead4fede5",
         "path": "packages/piagent-webui/gateway/session-operation-watchdog.ts"
       },
       {

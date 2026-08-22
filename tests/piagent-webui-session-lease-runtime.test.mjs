@@ -195,6 +195,20 @@ describe("Piagent Session Hub owner lease and lazy runtime supervisor", () => {
     assert.equal(forced, "operation-termination-cleanup-failed"); assert.equal(aborts, 1);
   });
 
+  it("keeps a headless Gateway alive until an active operation deadline settles", () => {
+    const watchdogModule = pathToFileURL(path.join(repositoryRoot,
+      "packages/piagent-webui/gateway/session-operation-watchdog.ts")).href;
+    const script = `import { SessionOperationWatchdog, sessionOperationDeadlinePolicy } from ${JSON.stringify(watchdogModule)};
+const watchdog = new SessionOperationWatchdog(sessionOperationDeadlinePolicy({ inactivityTimeoutMs: 20,
+  maximumDurationMs: 100, terminationTimeoutMs: 10, projectionTimeoutMs: 5 }));
+watchdog.start((reason) => process.stdout.write(reason));`;
+    const output = execFileSync(process.execPath, ["--disable-warning=ExperimentalWarning", "--import",
+      path.join(repositoryRoot, "scripts/register-typescript-loader.mjs"), "--input-type=module", "--eval", script], {
+      cwd: repositoryRoot, encoding: "utf8", timeout: 1_000
+    });
+    assert.equal(output, "operation-inactivity-timeout");
+  });
+
   it("settles the operation when canonical projection fails and does not publish draft success", async (t) => {
     const { root, key } = state(t), target = info(root, "projection-failure-session.jsonl");
     const sessionRef = sessionRefForPath(key, target.path), events = new GatewayEventStore(), observed = [];
