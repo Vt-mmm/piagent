@@ -11,6 +11,18 @@
     "infrastructureRetries": 0,
     "stopAfterFailedPair": true
   },
+  "hostReadiness": {
+    "schemaVersion": 1,
+    "required": true,
+    "sampleCount": 3,
+    "sampleIntervalMilliseconds": 60000,
+    "cpuSampleMilliseconds": 1000,
+    "maximumNormalizedLoad1": 0.25,
+    "minimumCpuIdlePercent": 80,
+    "maximumTimingOverrunRatio": 0.25,
+    "maximumStartDelayMilliseconds": 120000,
+    "failFast": true
+  },
   "stages": [
     { "id": "S0", "cumulativeSessions": 0, "newSessions": 0, "mode": "preflight-only", "claimEligible": false },
     { "id": "S12", "cumulativeSessions": 12, "newSessions": 12, "mode": "execute-and-pause", "claimEligible": false },
@@ -41,12 +53,14 @@
     "stageDiagnosticArtifact": "stage-diagnostic.json",
     "automaticTerminalOrAbortRules": [
       "dirty-release-source-before-auth-tool-or-provider-preflight",
+      "host-readiness-failure-before-auth-tool-or-provider-preflight",
       "piagent-unresolved-or-outcome-score-at-or-below-floor-via-stop-after-failed-pair",
       "infrastructure-error-or-unknown-provider-attempt-usage-via-runner-abort",
       "candidate-provenance-drift-via-execution-guard"
     ],
     "stageAdvanceRules": [
       "clean-release-source",
+      "fresh-run-and-configuration-bound-privacy-safe-host-readiness-receipt-for-every-paid-invocation",
       "no-baseline-pass-piagent-fail",
       "no-observed-paired-grade-regression",
       "all-observed-piagent-outcomes-remain-above-the-release-floor",

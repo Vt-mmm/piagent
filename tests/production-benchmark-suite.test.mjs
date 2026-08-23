@@ -219,6 +219,24 @@ test("production spend control freezes impact-first staging without creating an 
     infrastructureRetries: 0,
     stopAfterFailedPair: true
   });
+  assert.deepEqual(spendControl.hostReadiness, {
+    schemaVersion: 1,
+    required: true,
+    sampleCount: 3,
+    sampleIntervalMilliseconds: 60_000,
+    cpuSampleMilliseconds: 1_000,
+    maximumNormalizedLoad1: 0.25,
+    minimumCpuIdlePercent: 80,
+    maximumTimingOverrunRatio: 0.25,
+    maximumStartDelayMilliseconds: 120_000,
+    failFast: true
+  });
+  const invalidHostReadiness = structuredClone(spendControl);
+  invalidHostReadiness.hostReadiness.sampleCount = 2;
+  assert.ok(productionSpendControlValidationErrors(invalidHostReadiness, {
+    suiteId: suite.id,
+    expectedSessions: 108
+  }).some((error) => error.includes("host-readiness-policy-sample-count-must-be-3")));
   assert.deepEqual(spendControl.stages.map((stage) => [stage.id, stage.cumulativeSessions, stage.newSessions, stage.claimEligible]), [
     ["S0", 0, 0, false],
     ["S12", 12, 12, false],
@@ -233,7 +251,9 @@ test("production spend control freezes impact-first staging without creating an 
   assert.equal(spendControl.enforcement.completeLedgerFinalizesWithoutProviderPreflight, true);
   assert.ok(spendControl.enforcement.automaticTerminalOrAbortRules.some((rule) => rule.includes("stop-after-failed-pair")));
   assert.ok(spendControl.enforcement.automaticTerminalOrAbortRules.includes("dirty-release-source-before-auth-tool-or-provider-preflight"));
+  assert.ok(spendControl.enforcement.automaticTerminalOrAbortRules.includes("host-readiness-failure-before-auth-tool-or-provider-preflight"));
   assert.ok(spendControl.enforcement.stageAdvanceRules.includes("clean-release-source"));
+  assert.ok(spendControl.enforcement.stageAdvanceRules.includes("fresh-run-and-configuration-bound-privacy-safe-host-readiness-receipt-for-every-paid-invocation"));
   assert.ok(spendControl.enforcement.stageAdvanceRules.includes("no-model-thinking-or-provider-wire-parity-drift"));
   assert.equal(spendControl.stages.at(-1).cumulativeSessions, suite.scenarios.length * suite.defaultRepeats * spendControl.execution.surfaces.length);
 

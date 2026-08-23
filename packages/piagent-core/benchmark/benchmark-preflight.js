@@ -59,7 +59,7 @@ function publicCommandIdentity(value) {
 export function benchmarkPreflightReceipt({
   packageVersion, source, candidateProvenance, suite, suiteDigest,
   runtimeDependencies, runtimeCommands, environmentPolicy, configurationDigest,
-  rootSeedDigest, options, runtime
+  rootSeedDigest, options, runtime, hostReadinessPolicyDigest = null, hostReadiness = null
 }) {
   return {
     schemaVersion: 1,
@@ -72,6 +72,7 @@ export function benchmarkPreflightReceipt({
     suite: { id: suite.id, contentDigest: suiteDigest, scenarioCount: suite.scenarios.length },
     configuration: {
       contentDigest: configurationDigest,
+      ...(hostReadinessPolicyDigest ? { hostReadinessPolicyDigest } : {}),
       runtimeDependencyDigest: runtimeDependencies?.digest ?? null,
       environmentPolicyDigest: environmentPolicy.digest,
       rootSeedDigest,
@@ -87,6 +88,7 @@ export function benchmarkPreflightReceipt({
       maxSessions: options.maxSessions ?? null,
       stopAfterFailedPair: options.stopAfterFailedPair
     },
+    ...(hostReadiness ? { hostReadiness } : {}),
     runtime: {
       gitVersion: runtime.gitVersion,
       piVersion: runtime.piVersion,

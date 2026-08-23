@@ -4,6 +4,11 @@ import {
   normalizeBenchmarkUsageCost
 } from "./benchmark-normalized-cost.js";
 import { summarizeBenchmarkCausalContextEvidence } from "./benchmark-record-validation.js";
+import {
+  benchmarkHostReadinessPolicyDigest,
+  benchmarkHostReadinessPolicyValidationErrors,
+  summarizeBenchmarkHostReadinessHistory
+} from "./benchmark-host-readiness.js";
 import { atMostWithinFloatingPrecision, geometricMean } from "./benchmark-statistics.js";
 import { pairedOutcomeFloorStop } from "./benchmark-stop-policy.js";
 import { summarizeBenchmarkTimingDiagnostics } from "./benchmark-timing-diagnostics.js";
@@ -24,7 +29,11 @@ function validStageBoundaries(stageBoundaries) {
       && (index === 0 || value > stageBoundaries[index - 1]));
 }
 
-export function productionSpendControlValidationErrors(control, { suiteId, expectedSessions } = {}) {
+export function productionSpendControlValidationErrors(control, {
+  suiteId,
+  expectedSessions,
+  requireHostReadiness = suiteId === "production-v1"
+} = {}) {
   const errors = [];
   if (!control || typeof control !== "object" || Array.isArray(control)) return ["contract-must-be-an-object"];
   if (control.schemaVersion !== 1) errors.push("unsupported-schema-version");
@@ -43,6 +52,14 @@ export function productionSpendControlValidationErrors(control, { suiteId, expec
     if (!Number.isSafeInteger(execution.repeats) || execution.repeats <= 0) errors.push("invalid-execution-repeats");
     if (execution.infrastructureRetries !== 0) errors.push("infrastructure-retries-must-be-zero");
     if (execution.stopAfterFailedPair !== true) errors.push("stop-after-failed-pair-must-be-enabled");
+  }
+
+  if (requireHostReadiness) {
+    errors.push(...benchmarkHostReadinessPolicyValidationErrors(control.hostReadiness)
+      .map((error) => `host-readiness:${error}`));
+  } else if (control.hostReadiness !== undefined) {
+    errors.push(...benchmarkHostReadinessPolicyValidationErrors(control.hostReadiness)
+      .map((error) => `host-readiness:${error}`));
   }
 
   if (!Array.isArray(control.stages) || control.stages.length < 2) errors.push("missing-stage-boundaries");
@@ -365,6 +382,8 @@ export function buildBenchmarkStageDiagnostic({
   requestedThinking,
   suite,
   manifest,
+  hostReadinessPolicy = null,
+  hostReadinessStageBoundaries = null,
   generatedAt = new Date().toISOString()
 }) {
   const acceptedRuns = Array.isArray(runs) ? runs : [];
@@ -559,6 +578,31 @@ export function buildBenchmarkStageDiagnostic({
     && suite?.releaseGate?.requireEfficiencyClaim === true
     && suite?.releaseGate?.requireFullSuiteForClaim === true;
   const cleanReleaseSourcePassed = !cleanReleaseSourceRequired || manifest?.sourceIdentity?.dirty === false;
+  const hostReadinessRequired = suite?.id === "production-v1";
+  const summarizedHostReadinessHistory = hostReadinessRequired
+    ? summarizeBenchmarkHostReadinessHistory({
+        policy: hostReadinessPolicy,
+        receipts: manifest?.hostReadinessReceipts,
+        completedRuns: acceptedRuns.length,
+        authorizedThroughRuns: manifest?.stageControl?.authorizedThroughRuns,
+        runId: manifest?.runId ?? runId,
+        configurationDigest: manifest?.configurationDigest,
+        stageBoundaries: hostReadinessStageBoundaries
+      })
+    : null;
+  const hostReadinessPolicyBindingValid = !hostReadinessRequired
+    || (benchmarkHostReadinessPolicyValidationErrors(hostReadinessPolicy).length === 0
+      && manifest?.hostReadinessPolicyDigest === benchmarkHostReadinessPolicyDigest(hostReadinessPolicy));
+  const hostReadinessHistory = summarizedHostReadinessHistory && !hostReadinessPolicyBindingValid
+    ? {
+        ...summarizedHostReadinessHistory,
+        valid: false,
+        ready: false,
+        errors: [...summarizedHostReadinessHistory.errors, "host-readiness-manifest-policy-digest-mismatch"]
+      }
+    : summarizedHostReadinessHistory;
+  const hostReadinessPassed = !hostReadinessRequired
+    || (hostReadinessHistory.valid === true && hostReadinessHistory.ready === true);
   const checks = [
     diagnosticCheck("recognized-spend-control-pause", recognizedPause, { reason }),
     diagnosticCheck("paired-contract", pairContractPassed, { candidateSurface, baselineSurface }),
@@ -569,6 +613,12 @@ export function buildBenchmarkStageDiagnostic({
     diagnosticCheck("clean-release-source", cleanReleaseSourcePassed, {
       required: cleanReleaseSourceRequired,
       dirty: typeof manifest?.sourceIdentity?.dirty === "boolean" ? manifest.sourceIdentity.dirty : null
+    }),
+    diagnosticCheck("host-readiness-receipt-history", hostReadinessPassed, {
+      required: hostReadinessRequired,
+      validReceipts: hostReadinessHistory?.validReceiptCount ?? 0,
+      receipts: hostReadinessHistory?.receiptCount ?? 0,
+      coverage: hostReadinessHistory?.windowCoverage ?? null
     }),
     diagnosticCheck("pause-on-pair-boundary", pairBoundary, { incompleteObservedPairs: incompleteObservedPairs.length }),
     diagnosticCheck("observed-complete-pair", completePairs.length > 0, { observedCompletePairs: completePairs.length }),
@@ -697,6 +747,7 @@ export function buildBenchmarkStageDiagnostic({
       manifestUnknownUsage,
       tokenClaimsUnavailableReason
     },
+    hostReadiness: hostReadinessHistory,
     timingDiagnostics: summarizeBenchmarkTimingDiagnostics(acceptedRuns),
     spendFutilityReview: {
       rule: "observed-pair-and-observed-family-point-ratios-must-not-exceed-1; this-is-not-the-final-40-percent-claim-gate",

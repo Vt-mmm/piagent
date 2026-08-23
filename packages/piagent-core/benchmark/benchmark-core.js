@@ -289,6 +289,12 @@ export function summarizeBenchmark({
       && environment.source.dirty === false
       && /^[a-f0-9]{40,64}$/.test(environment.source.commit ?? "")
     : null;
+  const hostReadinessHistory = environment.hostReadinessHistory ?? null;
+  const hostReadinessGate = canonicalProductionSuite
+    ? hostReadinessHistory?.valid === true
+      && hostReadinessHistory?.ready === true
+      && hostReadinessHistory?.windowCoverage === "complete"
+    : null;
   const qualityNonInferior = candidate.scores.quality >= baseline.scores.quality;
   const pairedQualityEvidence = pairedQualityNoninferiorityEvidence({
     suite,
@@ -526,6 +532,7 @@ export function summarizeBenchmark({
     && releaseClaimConfigurationGate
     && codexBaselineGate
     && cleanReleaseSourceGate
+    && hostReadinessGate !== false
     && qualityGate
     && reliabilityGate
     && qualityNonInferior
@@ -570,6 +577,7 @@ export function summarizeBenchmark({
     requestsNormalizedCostClaim && !normalizedCostClaimConfigurationGate ? "normalized-cost-configuration" : null,
     requestsTokenSavingClaim && !codexBaselineGate ? "codex-baseline" : null,
     requestsTokenSavingClaim && !cleanReleaseSourceGate ? "clean-release-source" : null,
+    canonicalProductionSuite && !hostReadinessGate ? "host-readiness-history" : null,
     requiresFullSuite && fullSuiteGate === false ? "full-suite" : null,
     requiresStability && !infrastructureRetryGate ? "infrastructure-retries" : null,
     requiresStability && !unknownInfrastructureUsageGate ? "unknown-infrastructure-usage" : null,
@@ -623,6 +631,7 @@ export function summarizeBenchmark({
       tokenSavingClaimUpper95Maximum: requestsTokenSavingClaim ? 0.8 : null,
       baselineSurface: requestsTokenSavingClaim ? "codex-cli" : null,
       cleanSource: requestsTokenSavingClaim,
+      hostReadinessHistory: canonicalProductionSuite,
       requireFullSuite: requiresFullSuite,
       stableProviderWireSurface: requiresProviderWireSurface,
       causalContextReceipt: requiresCausalContextReceipt,
@@ -660,6 +669,9 @@ export function summarizeBenchmark({
       sourceKind: environment.source?.kind ?? null,
       sourceCommit: environment.source?.commit ?? null,
       sourceDirty: environment.source?.dirty ?? null,
+      hostReadinessValidReceipts: hostReadinessHistory?.validReceiptCount ?? null,
+      hostReadinessReceipts: hostReadinessHistory?.receiptCount ?? null,
+      hostReadinessCoverage: hostReadinessHistory?.windowCoverage ?? null,
       fullSuite: environment.suiteCoverage?.fullSuite ?? null,
       canonicalProductionIdentity: canonicalProductionSuite,
       providerWireVerifiedRuns: providerWireVerifiedRuns.length,
@@ -816,6 +828,7 @@ export function summarizeBenchmark({
       canonicalProductionIdentityGate,
       codexBaselineGate,
       cleanReleaseSourceGate,
+      hostReadinessGate,
       fullSuiteGate,
       outcomeEvidenceGate,
       efficiencyEvidenceGate,
@@ -877,8 +890,10 @@ export function summarizeBenchmark({
                             ? "release-claim-configuration-gate-failed"
                           : requestsTokenSavingClaim && codexBaselineGate === false
                             ? "codex-baseline-gate-failed"
-                            : requestsTokenSavingClaim && cleanReleaseSourceGate === false
+                          : requestsTokenSavingClaim && cleanReleaseSourceGate === false
                               ? "clean-release-source-gate-failed"
+                            : canonicalProductionSuite && hostReadinessGate === false
+                              ? "host-readiness-history-gate-failed"
                               : requiresProviderWireSurface && providerWireSurfaceGate === false
                                 ? "provider-wire-surface-gate-failed"
                                 : requiresCausalContextReceipt && causalContextEvidenceGate === false

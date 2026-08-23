@@ -15,6 +15,7 @@ import {
   productionResumeHasCompleteLedger
 } from "../packages/piagent-core/benchmark/benchmark-bootstrap.js";
 import { inspectBenchmarkLedger } from "../packages/piagent-core/benchmark/benchmark-ledger.js";
+import { collectBenchmarkHostReadinessReceipt } from "../packages/piagent-core/benchmark/benchmark-host-readiness.js";
 import {
   approveProductionStageControl,
   buildBenchmarkStageDiagnostic,
@@ -1670,6 +1671,100 @@ test("provider-free pause diagnostic allows only a clean observed pair and fails
   assert.equal(integrityBlocked.stageAdvanceAllowed, false);
   assert.ok(integrityBlocked.quality.outcomeFloor.failures.some((item) => item.failures.includes("grader-integrity-failed")));
   assert.ok(integrityBlocked.quality.outcomeFloor.failures.some((item) => item.failures.includes("scope-safety-evidence-failed")));
+});
+
+test("canonical production stage diagnostic fails closed on missing or tampered host-readiness history", async () => {
+  const policy = {
+    schemaVersion: 1,
+    required: true,
+    sampleCount: 3,
+    sampleIntervalMilliseconds: 0,
+    cpuSampleMilliseconds: 1,
+    maximumNormalizedLoad1: 0.25,
+    minimumCpuIdlePercent: 80,
+    maximumTimingOverrunRatio: 0.25,
+    maximumStartDelayMilliseconds: 120_000,
+    failFast: true
+  };
+  const runId = "host-stage-test";
+  const configurationDigest = "a".repeat(64);
+  let monotonic = 0;
+  let idle = 0;
+  const receipt = await collectBenchmarkHostReadinessReceipt({
+    policy,
+    completedRuns: 0,
+    authorizedThroughRuns: 2,
+    runId,
+    configurationDigest
+  }, {
+    platform: () => "darwin",
+    arch: () => "arm64",
+    loadavg: () => [0.1, 0.1, 0.1],
+    cpus: () => [{ times: { user: 0, nice: 0, sys: 0, idle: idle += 100, irq: 0 } }],
+    monotonicNow: () => monotonic,
+    wallClockNow: () => Date.parse("2026-08-22T00:00:00.000Z"),
+    sleep: async (milliseconds) => { monotonic += Math.max(1, milliseconds); }
+  });
+  const scenario = { id: "first" };
+  const fullOrder = ["piagent", "codex-cli"].map((surface) => ({ scenario, surface, repeat: 1 }));
+  const runs = [
+    stageDiagnosticRecord({ surface: "piagent" }),
+    stageDiagnosticRecord({ surface: "codex-cli" })
+  ];
+  const suite = {
+    id: "production-v1",
+    releaseGate: { minimumOutcomeScoreExclusive: 9.5, requireCausalContextReceipt: true },
+    pricingSnapshot: {
+      schemaVersion: 1,
+      id: "test-luna-pricing",
+      model: "openai-codex/gpt-5.6-luna",
+      currency: "USD",
+      unitTokens: 1_000_000,
+      rates: { freshInput: 0.2, cachedInput: 0.02, output: 1.2 },
+      cacheWrite: { basis: "fresh-input", multiplier: 1.25 },
+      longContext: { thresholdInputTokens: 272_000, condition: "per-request-input-greater-than", inputMultiplier: 2, outputMultiplier: 1.5 },
+      source: { url: "https://developers.openai.com/api/docs/models/gpt-5.6-luna", retrievedAt: "2026-08-22" }
+    }
+  };
+  const base = {
+    runId,
+    reason: "max-sessions:2",
+    runs,
+    fullOrder,
+    candidateSurface: "piagent",
+    baselineSurface: "codex-cli",
+    requestedModel: "openai-codex/gpt-5.6-luna",
+    requestedThinking: "medium",
+    suite,
+    hostReadinessPolicy: policy,
+    hostReadinessStageBoundaries: [0, 2],
+    generatedAt: "2026-08-22T00:00:00.000Z"
+  };
+  const manifest = {
+    runId,
+    configurationDigest,
+    stopAfterFailedPair: true,
+    infrastructureRetries: 0,
+    stageControl: { authorizedThroughRuns: 2 },
+    hostReadinessPolicyDigest: receipt.policyDigest,
+    hostReadinessReceipts: [receipt]
+  };
+  const ready = buildBenchmarkStageDiagnostic({ ...base, manifest });
+  assert.equal(ready.stageAdvanceAllowed, true, ready.blockingReasons.join(", "));
+  assert.equal(ready.hostReadiness.ready, true);
+
+  const missing = buildBenchmarkStageDiagnostic({ ...base, manifest: { ...manifest, hostReadinessReceipts: [] } });
+  assert.equal(missing.stageAdvanceAllowed, false);
+  assert.ok(missing.blockingReasons.includes("host-readiness-receipt-history"));
+
+  const tamperedReceipt = structuredClone(receipt);
+  tamperedReceipt.samples[0].normalizedLoad1 = 0.2;
+  const tampered = buildBenchmarkStageDiagnostic({
+    ...base,
+    manifest: { ...manifest, hostReadinessReceipts: [tamperedReceipt] }
+  });
+  assert.equal(tampered.stageAdvanceAllowed, false);
+  assert.ok(tampered.hostReadiness.errors.some((error) => error.includes("digest-mismatch")));
 });
 
 test("paired stop policy terminates on safety and integrity evidence failures", () => {

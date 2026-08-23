@@ -26,7 +26,7 @@
     { "id": "record-validator", "path": "packages/piagent-core/benchmark/benchmark-record-validation.js", "sha256": "262a1b934c30032663ecfc570e039c3bfdc1511e2b47115e7ccfd08bf1cfcd72" },
     { "id": "timing-diagnostics", "path": "packages/piagent-core/benchmark/benchmark-timing-diagnostics.js", "sha256": "5f52293f4c5c6d8444a35f94c6ccfd9e9183db8c8fa0e755c3da5b0cb847c2aa" },
     { "id": "protocol-enforcement", "path": "packages/piagent-core/benchmark/fs5-pilot-protocol.js", "sha256": "2bcc0cf6c18eee0c080c30e727610b0f10a278f5862855d920ba5797f07a2f2d" },
-    { "id": "runner-core", "path": "scripts/benchmark-runner-core.mjs", "sha256": "7766e00ab11e4dec8481ab61a422be606166139036a08c75046b66786c89db6f" }
+    { "id": "runner-core", "path": "scripts/benchmark-runner-core.mjs", "sha256": "1851adbecd3b0b8b17c8205e4e2ddc62293349888e2df7bb6d9c40ab7c1ca38e" }
   ],
   "runIdentityContract": {
     "required": [

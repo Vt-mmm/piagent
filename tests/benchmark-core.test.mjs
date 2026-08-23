@@ -13,10 +13,12 @@ import {
   evaluateWorkflowEvidence,
   normalizeBenchmarkUsageCost,
   parseCodexExecJsonl,
+  renderBenchmarkHtml,
   renderBenchmarkText,
   summarizeBenchmark,
   validateBenchmarkSuite
 } from "../packages/piagent-core/benchmark/benchmark-core.js";
+import { applyBenchmarkClaimRestrictions } from "../packages/piagent-core/benchmark/benchmark-claim-restrictions.js";
 import { taskWorkingTreeEvidenceDigest } from "../packages/piagent-core/benchmark/benchmark-tree-identity.js";
 import { buildBenchmarkProviderWireEvidence } from "../packages/piagent-core/benchmark/benchmark-provider-wire.js";
 import { versionWorkingTreeHash } from "../packages/piagent-core/extensions/working-tree-digest.js";
@@ -741,6 +743,21 @@ function productionEnvironment(overrides = {}) {
     codexGlobalInstructions: "excluded",
     source: { kind: "git-working-tree", commit: "a".repeat(40), dirty: false },
     suiteCoverage: { declaredScenarios: 18, selectedScenarios: 18, fullSuite: true },
+    hostReadinessHistory: {
+      schemaVersion: 1,
+      policyDigest: "b".repeat(64),
+      receiptCount: 4,
+      validReceiptCount: 4,
+      hostFingerprintDigest: "c".repeat(64),
+      completedRuns: 108,
+      windowStartedAtRuns: 72,
+      authorizedThroughRuns: 108,
+      windowCoverage: "complete",
+      valid: true,
+      ready: true,
+      errors: [],
+      blockingReasons: []
+    },
     piagentTreatment: {
       id: "candidate",
       explicit: true,
@@ -1219,7 +1236,78 @@ test("production release gate uses independent scenario families and the upper 9
   assert.equal(report.comparison.pairedQualityNoninferiorityGate, true);
   assert.equal(report.comparison.pairedQualityEvidence.expectedPairs, 9);
   assert.equal(report.comparison.pairedQualityEvidence.comparablePairs, 9);
+  assert.equal(report.comparison.hostReadinessGate, true);
   assert.equal(report.comparison.productionGate.passed, true);
+  assert.equal(report.comparison.tokenClaimAllowed, true);
+  assert.equal(report.verdict.status, "piagent-more-efficient");
+
+  const tokenRestricted = structuredClone(report);
+  const rawTokenAccounting = structuredClone(tokenRestricted.tokenAccounting);
+  const rawSurfaces = structuredClone(tokenRestricted.surfaces);
+  applyBenchmarkClaimRestrictions(tokenRestricted, {
+    tokenReason: "one-or-more-provider-attempts-have-unknown-usage",
+    replaySource: null,
+    codexMode: "controlled",
+    surfaces: ["piagent", "codex-cli"]
+  });
+  assert.equal(tokenRestricted.comparison.tokenClaimAllowed, false);
+  assert.equal(tokenRestricted.comparison.claimEligibility.tokenClaimScope, "unavailable");
+  assert.equal(tokenRestricted.comparison.tokenClaimUnavailableReason, "one-or-more-provider-attempts-have-unknown-usage");
+  assert.equal(tokenRestricted.verdict.status, "token-claim-withheld");
+  assert.equal(tokenRestricted.verdict.claimRestrictionReason, "one-or-more-provider-attempts-have-unknown-usage");
+  assert.deepEqual(tokenRestricted.tokenAccounting, rawTokenAccounting);
+  assert.deepEqual(tokenRestricted.surfaces, rawSurfaces);
+  assert.equal(tokenRestricted.comparison.freshTokenRatio, report.comparison.freshTokenRatio);
+  assert.equal(tokenRestricted.comparison.durationRatio, report.comparison.durationRatio);
+  assert.match(renderBenchmarkText(tokenRestricted), /Token claim restriction: one-or-more-provider-attempts-have-unknown-usage/);
+  assert.match(renderBenchmarkHtml(tokenRestricted), /Token claim restriction:<\/strong> one-or-more-provider-attempts-have-unknown-usage/);
+
+  const replayRestricted = structuredClone(report);
+  applyBenchmarkClaimRestrictions(replayRestricted, {
+    tokenReason: null,
+    replaySource: { runId: "prior-run" },
+    codexMode: "controlled",
+    surfaces: ["piagent", "codex-cli"]
+  });
+  assert.equal(replayRestricted.comparison.claimEligibility.tokenClaimScope, "unavailable");
+  assert.equal(replayRestricted.comparison.claimEligibility.achievedTier, "diagnostic-replay");
+  assert.equal(replayRestricted.verdict.status, "diagnostic-replay");
+
+  const failingRestricted = structuredClone(report);
+  failingRestricted.verdict.status = "quality-gate-failed";
+  applyBenchmarkClaimRestrictions(failingRestricted, {
+    tokenReason: null,
+    replaySource: { runId: "prior-run" },
+    codexMode: "controlled",
+    surfaces: ["piagent", "codex-cli"]
+  });
+  assert.equal(failingRestricted.verdict.status, "quality-gate-failed", "a diagnostic restriction must not hide a stronger gate failure");
+
+  for (const [id, hostReadinessHistory] of [
+    ["missing", null],
+    ["blocked", { ...environment.hostReadinessHistory, ready: false, windowCoverage: "complete" }]
+  ]) {
+    const hostBlocked = summarizeProductionBenchmark({
+      suite: testSuite,
+      runId: `production-host-${id}`,
+      startedAt: "2026-08-01T00:00:00.000Z",
+      completedAt: "2026-08-01T00:01:00.000Z",
+      repeats: 3,
+      environment: productionEnvironment({ hostReadinessHistory }),
+      runs
+    });
+    assert.equal(hostBlocked.comparison.hostReadinessGate, false);
+    assert.equal(hostBlocked.comparison.tokenClaimAllowed, false);
+    assert.equal(hostBlocked.comparison.claimEligibility.tokenClaimScope, "unavailable");
+    assert.equal(hostBlocked.comparison.productionGate.passed, false);
+    assert.ok(hostBlocked.comparison.productionGate.failures.includes("host-readiness-history"));
+    assert.equal(hostBlocked.verdict.status, "host-readiness-history-gate-failed");
+    assert.deepEqual(hostBlocked.tokenAccounting, report.tokenAccounting, "host evidence must not alter token measurements");
+    assert.deepEqual(hostBlocked.surfaces, report.surfaces, "host evidence must not alter quality measurements");
+    assert.equal(hostBlocked.comparison.freshTokenRatio, report.comparison.freshTokenRatio);
+    assert.equal(hostBlocked.comparison.durationRatio, report.comparison.durationRatio);
+    assert.match(renderBenchmarkText(hostBlocked), /Host-readiness history gate: fail/);
+  }
 
   const malformedTimingRuns = structuredClone(runs);
   for (const run of malformedTimingRuns) run.timingDiagnostics = { rawPayload: "must remain observational" };

@@ -51,6 +51,7 @@ export const RELEASE_FAILURE_MESSAGES = Object.freeze({
   "release-claim-configuration": "Token-saving claims require schema v2, an explicit upper-95 token ratio at or below 0.80, full-suite enforcement, and provider-wire stability evidence.",
   "codex-baseline": "Token-saving product claims require controlled Codex CLI as the paired baseline.",
   "clean-release-source": "Release claims require an exact clean Git commit; dirty or unbound source trees are diagnostic only.",
+  "host-readiness-history": "Production claims require fresh run/configuration-bound privacy-safe host-readiness receipts on every paid invocation with continuous frozen-stage coverage.",
   "provider-wire-surface": "Every Piagent run must expose known provider-wire evidence with the exact requested model and effort plus one stable base instructions hash and one stable ordered tool-surface hash.",
   "causal-context-evidence": "Every Piagent run must preserve a complete privacy-safe causal context receipt before workspace cleanup."
 });

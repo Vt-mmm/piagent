@@ -68,6 +68,12 @@ import {
   sameStringList
 } from "./benchmark-runner-support.mjs";
 import { runBenchmarkSession } from "./benchmark-session.mjs";
+import {
+  assertBenchmarkHostReadinessStartReady,
+  assertExistingBenchmarkHostReadiness,
+  benchmarkHostReadinessPolicyDigest,
+  collectReadyBenchmarkHostReadiness
+} from "./benchmark-runner-host-readiness.mjs";
 export { parseBenchmarkArgs };
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const packageManifest = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"));
@@ -174,7 +180,8 @@ async function main() {
   const productionSpendControlErrors = productionSpendControl
     ? productionSpendControlValidationErrors(productionSpendControl, {
         suiteId: suite.id,
-        expectedSessions: productionExpectedSessions
+        expectedSessions: productionExpectedSessions,
+        requireHostReadiness: canonicalProductionSuite
       })
     : [];
   if (productionSpendControlErrors.length > 0) {
@@ -240,6 +247,13 @@ async function main() {
       }))
     : executionOrder(suite, options.repeats, options.surfaces, rootSeed);
   const productionSpendControlled = productionFullMatrixRequested;
+  const productionHostReadinessRequired = productionSpendControlled && canonicalProductionSuite;
+  const productionHostReadinessPolicy = productionHostReadinessRequired
+    ? productionSpendControl.hostReadiness
+    : null;
+  const productionHostReadinessPolicyDigest = productionHostReadinessRequired
+    ? benchmarkHostReadinessPolicyDigest(productionHostReadinessPolicy)
+    : null;
   const productionReleaseClaimRun = productionSpendControlled
     && suite.schemaVersion === 2
     && suite.releaseGate?.requireEfficiencyClaim === true
@@ -247,6 +261,7 @@ async function main() {
   if (productionSpendControlled && productionStageBoundaries.at(-1) !== fullOrder.length) {
     fail("Production spend control final stage does not match the frozen full execution order", 1);
   }
+  let deferredProductionStageApproval;
   if (resumeState) {
     const manifest = resumeState.manifest;
     if (manifest.suiteDigest !== suiteDigest) fail("Cannot resume benchmark: suite files changed since the original run", 1);
@@ -318,6 +333,23 @@ async function main() {
       fail("Cannot resume benchmark: the accepted ledger already contains a terminal paired outcome-floor failure", 1);
     }
     if (productionSpendControlled) {
+      if (productionHostReadinessRequired) {
+        if (manifest.hostReadinessPolicyDigest !== productionHostReadinessPolicyDigest
+          && resumeState.completedRuns.length < fullOrder.length) {
+          fail("Cannot resume production benchmark: host-readiness policy binding is missing or changed. Start a new staged run.", 1);
+        }
+        if (resumeState.completedRuns.length < fullOrder.length) {
+          assertExistingBenchmarkHostReadiness({
+            policy: productionHostReadinessPolicy,
+            receipts: manifest.hostReadinessReceipts,
+            completedRuns: resumeState.completedRuns.length,
+            authorizedThroughRuns: manifest.stageControl?.authorizedThroughRuns,
+            runId: manifest.runId,
+            configurationDigest: manifest.configurationDigest,
+            stageBoundaries: productionAllStageBoundaries
+          });
+        }
+      }
       const stageDisposition = productionStageResumeDisposition(manifest.stageControl, {
         completedRuns: resumeState.completedRuns.length,
         ledger: resumeState.ledgerBinding,
@@ -338,7 +370,9 @@ async function main() {
           requestedModel: options.model,
           requestedThinking: options.thinking,
           suite,
-          manifest
+          manifest,
+          hostReadinessPolicy: productionHostReadinessPolicy,
+          hostReadinessStageBoundaries: productionAllStageBoundaries
         });
         writePrivateAtomic(path.join(resumeState.runRoot, "stage-diagnostic.json"), `${JSON.stringify(resumeStageDiagnostic, null, 2)}\n`);
         if (!resumeStageDiagnostic.stageAdvanceAllowed) {
@@ -356,12 +390,10 @@ async function main() {
           fail(`Production spend control requires --max-sessions ${requiredResumeSessions} for the next authorized window; durable stage state was not changed.`, 1);
         }
         if (!options.dryRun) {
-          manifest.stageControl = approveProductionStageControl(manifest.stageControl, {
+          deferredProductionStageApproval = {
             completedRuns: resumeState.completedRuns.length,
             authorizedThroughRuns: nextAuthorizedThroughRuns
-          });
-          manifest.ledger = resumeState.ledgerBinding;
-          writeBenchmarkRunManifest(resumeState.runRoot, manifest);
+          };
         }
       } else if (stageDisposition.requiresStageGate) {
         // A crash after the final accepted record must not change the verdict by
@@ -409,6 +441,9 @@ async function main() {
   const codexPlan = options.surfaces.includes("codex-cli")
     ? `\n  codex:     ${options.codexMode} mode · model ${codexModelName(options.model)} · effort ${codexThinkingEffort(options.thinking)}${options.codexMode === "controlled" ? " · isolated home" : ""}`
     : "";
+  const nativeWarning = options.surfaces.includes("codex-cli") && options.codexMode === "native"
+    ? "\nNative Codex mode loads the operator's global AGENTS.md, configuration, rules, hooks, MCP servers, and plugins."
+    : "";
   if (options.dryRun) {
     process.stdout.write(`${plan}${codexPlan}\n  manifest:  ${manifestPath}\nDRY RUN: no model session started.\n`);
     return;
@@ -418,7 +453,9 @@ async function main() {
       fail("Production spend control requires --stop-after-failed-pair before any provider session", 1);
     }
     const completedRuns = resumeState?.completedRuns.length ?? 0;
-    const authorizedThroughRuns = resumeState?.manifest.stageControl?.authorizedThroughRuns ?? productionStageBoundaries[0];
+    const authorizedThroughRuns = deferredProductionStageApproval?.authorizedThroughRuns
+      ?? resumeState?.manifest.stageControl?.authorizedThroughRuns
+      ?? productionStageBoundaries[0];
     const requiredChunkSessions = authorizedThroughRuns - completedRuns;
     if (!options.preflightOnly && !productionFinalizationOnly
       && (!Number.isSafeInteger(requiredChunkSessions) || requiredChunkSessions <= 0
@@ -433,6 +470,17 @@ async function main() {
   if (options.replayFailures && bootstrapMetadata.replay?.evidenceComplete !== true) {
     fail("Billed replay requires the original run-manifest.json and runs.jsonl beside the source report", 1);
   }
+  if (!options.preflightOnly) {
+    if (productionFinalizationOnly) {
+      process.stdout.write(`${plan}${codexPlan}\n  mode:      provider-free finalization of the complete frozen ledger\n`);
+    } else if (options.yes) {
+      process.stdout.write(`${plan}${codexPlan}${nativeWarning}\n`);
+    } else if (!(await confirmPlan(`${plan}${codexPlan}${nativeWarning}\nThis may use paid model quota.`))) {
+      process.stdout.write("Benchmark cancelled; no model session started.\n");
+      return;
+    }
+  }
+  const runId = resumeState?.manifest.runId ?? createRunId(suite.id);
   const runtimeCommands = productionFinalizationOnly
     ? frozenRuntimeCommandsForFinalization(resumeState.manifest, options.surfaces)
     : {
@@ -459,6 +507,7 @@ async function main() {
     runtimeDependencyDigest: bootstrapMetadata.runtimeDependencies?.digest ?? null,
     runtimeCommands,
     environmentPolicy,
+    ...(productionHostReadinessRequired ? { hostReadinessPolicyDigest: productionHostReadinessPolicyDigest } : {}),
     piAgentHome: configurationPiAgentHome,
     codexCredential: configurationCodexCredential,
     rootSeedDigest,
@@ -492,6 +541,27 @@ async function main() {
       completedKeys: resumeState.completedKeys
     });
   }
+  let hostReadinessReceipt = null;
+  const currentAuthorizedThroughRuns = resumeState?.manifest.stageControl?.authorizedThroughRuns
+    ?? productionStageBoundaries[0];
+  const nextAuthorizedThroughRuns = deferredProductionStageApproval?.authorizedThroughRuns
+    ?? currentAuthorizedThroughRuns;
+  if (productionHostReadinessRequired && !productionFinalizationOnly) {
+    hostReadinessReceipt = await collectReadyBenchmarkHostReadiness({
+      policy: productionHostReadinessPolicy,
+      completedRuns: resumeState?.completedRuns.length ?? 0,
+      authorizedThroughRuns: nextAuthorizedThroughRuns,
+      runId,
+      configurationDigest,
+      stageBoundaries: productionAllStageBoundaries,
+      existingReceipts: resumeState?.manifest.hostReadinessReceipts ?? []
+    });
+  }
+  const assertHostReadinessStartReady = () => assertBenchmarkHostReadinessStartReady(hostReadinessReceipt, {
+    policy: productionHostReadinessPolicy,
+    runId,
+    configurationDigest
+  });
   const executionGuard = createBenchmarkExecutionGuard({
     candidateGuard,
     suiteRoot,
@@ -536,28 +606,15 @@ async function main() {
       fail("Cannot resume benchmark: Codex credential bridge changed since the original run", 1);
     }
   }
+  assertHostReadinessStartReady();
   const source = bootstrapMetadata?.sourceIdentity;
   if (!source) fail("Modern benchmark is missing its frozen Git source identity", 1);
   if (options.preflightOnly) {
-    const receipt = benchmarkPreflightReceipt({ packageVersion: packageManifest.version, source, candidateProvenance: candidateGuard.report(), suite, suiteDigest, runtimeDependencies: bootstrapMetadata.runtimeDependencies, runtimeCommands, environmentPolicy, configurationDigest, rootSeedDigest, options, runtime });
+    const receipt = benchmarkPreflightReceipt({ packageVersion: packageManifest.version, source, candidateProvenance: candidateGuard.report(), suite, suiteDigest, runtimeDependencies: bootstrapMetadata.runtimeDependencies, runtimeCommands, environmentPolicy, configurationDigest, rootSeedDigest, options, runtime, hostReadinessPolicyDigest: productionHostReadinessPolicyDigest, hostReadiness: hostReadinessReceipt });
     process.stdout.write(options.json ? `${JSON.stringify(receipt, null, 2)}\n` : `${plan}${codexPlan}\nPREFLIGHT READY: no model session started.\n${JSON.stringify(receipt, null, 2)}\n`);
     return;
   }
-  const nativeWarning = options.surfaces.includes("codex-cli") && options.codexMode === "native"
-    ? "\nNative Codex mode loads the operator's global AGENTS.md, configuration, rules, hooks, MCP servers, and plugins."
-    : "";
-  if (productionFinalizationOnly) {
-    process.stdout.write(`${plan}${codexPlan}\n  mode:      provider-free finalization of the complete frozen ledger\n`);
-  } else if (options.yes) {
-    process.stdout.write(`${plan}${codexPlan}${nativeWarning}\n`);
-  } else {
-    if (!(await confirmPlan(`${plan}${codexPlan}${nativeWarning}\nThis may use paid model quota.`))) {
-      process.stdout.write("Benchmark cancelled; no model session started.\n");
-      return;
-    }
-  }
   candidateGuard.freeze();
-  const runId = resumeState?.manifest.runId ?? createRunId(suite.id);
   const output = options.output ?? path.join(defaultOutputRoot(bootstrapMetadata), runId);
   const runRoot = resumeState ? privateDirectory(output) : ensureEmptyOutput(output);
   releaseRunLock ??= acquireBenchmarkRunLock(runRoot, runId);
@@ -619,7 +676,11 @@ async function main() {
       stageControl: createProductionStageControl({
         authorizedThroughRuns: productionStageBoundaries[0],
         generatedAt: startedAt
-      })
+      }),
+      ...(productionHostReadinessRequired ? {
+        hostReadinessPolicyDigest: productionHostReadinessPolicyDigest,
+        hostReadinessReceipts: []
+      } : {})
     } : {}),
     order: fullOrder.map((item) => ({
       scenarioId: item.scenario.id,
@@ -627,6 +688,14 @@ async function main() {
       repeat: item.repeat
     }))
   };
+  assertHostReadinessStartReady();
+  if (productionSpendControlled && deferredProductionStageApproval) {
+    manifest.stageControl = approveProductionStageControl(manifest.stageControl, deferredProductionStageApproval);
+  }
+  if (productionHostReadinessRequired && hostReadinessReceipt) {
+    manifest.hostReadinessPolicyDigest = productionHostReadinessPolicyDigest;
+    manifest.hostReadinessReceipts = [...(manifest.hostReadinessReceipts ?? []), hostReadinessReceipt];
+  }
   writeBenchmarkRunManifest(runRoot, manifest);
   if (resumeState) {
     fs.rmSync(path.join(runRoot, "stage-diagnostic.json"), { force: true });
@@ -851,7 +920,7 @@ async function main() {
     finalizationReceipt, fullOrder, interruptedSignal, ledgerBinding, ledgerPath,
     lifecycles, manifest, options, packageVersion: packageManifest.version,
     pauseReason, piRuntimeHome, preservePiRuntime,
-    productionAllStageBoundaries, productionSpendControlled, rootSeed, rootSeedDigest,
+    productionAllStageBoundaries, productionHostReadinessPolicy, productionSpendControlled, rootSeed, rootSeedDigest,
     runId, runRoot, runs, runtime, runtimeCommands, source, startedAt, suite,
     suiteDigest, suiteIdentity, terminalStop
   });

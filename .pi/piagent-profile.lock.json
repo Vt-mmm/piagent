@@ -115,7 +115,7 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:d7c5ab6bedb9e601ef6ecdd8ade368d7e785a5d45d19e43d258723f911e6d151",
+    "packageDigest": "sha256:847353c680cdfadf919ddd3337fcaf48ed353b4b1720a60ac6be73a99462ac7a",
     "packageSource": "../",
     "packageVersion": "1.6.0",
     "runtimeFiles": [
@@ -180,8 +180,8 @@
         "path": "packages/piagent-core/benchmark/benchmark-candidate.js"
       },
       {
-        "byteSize": 1502,
-        "digest": "sha256:2c850c651887f3ba200a2f64f7ed19ee63605d64ee1d085201a64b23a7c6ead9",
+        "byteSize": 2601,
+        "digest": "sha256:f439f685f45ca91f06c9ec977d7ec351fa1ade2baa602315b1966a7d05543dd9",
         "path": "packages/piagent-core/benchmark/benchmark-claim-restrictions.js"
       },
       {
@@ -200,8 +200,8 @@
         "path": "packages/piagent-core/benchmark/benchmark-comparison.js"
       },
       {
-        "byteSize": 52877,
-        "digest": "sha256:73b633caacb3287d07f9d08e3c003139ad7409bfb15c383fde59db5542f09b3e",
+        "byteSize": 53749,
+        "digest": "sha256:9209aaa98d5932cdc0b0b6fd6fab776f77d53fe3903d75c3e5df0e27e0b21cbd",
         "path": "packages/piagent-core/benchmark/benchmark-core.js"
       },
       {
@@ -213,6 +213,11 @@
         "byteSize": 43619,
         "digest": "sha256:6afec2ca572b15771f0c110f9f352e4bba364a460b61ed9fe8df03bbc52f470a",
         "path": "packages/piagent-core/benchmark/benchmark-forensics.js"
+      },
+      {
+        "byteSize": 32266,
+        "digest": "sha256:f0d2752771e8a6bb2f4794784274c59e3b3f770634fa2817f70f0f5a05f4b7af",
+        "path": "packages/piagent-core/benchmark/benchmark-host-readiness.js"
       },
       {
         "byteSize": 7552,
@@ -240,8 +245,8 @@
         "path": "packages/piagent-core/benchmark/benchmark-pi-home.js"
       },
       {
-        "byteSize": 4823,
-        "digest": "sha256:4aa15f4dd3edf499feb1fd59d2b6806b88600e8b504f697992c0360127ad02e1",
+        "byteSize": 5003,
+        "digest": "sha256:3bf80d3aa8271e482c877dfdbce6439789a988e01f5afacc65e2204f6e2688e9",
         "path": "packages/piagent-core/benchmark/benchmark-preflight.js"
       },
       {
@@ -260,8 +265,8 @@
         "path": "packages/piagent-core/benchmark/benchmark-record-validation.js"
       },
       {
-        "byteSize": 37466,
-        "digest": "sha256:12ad4f0bc630c875f63aa97acf9f3756ca04747eeaebd49dd98dd6ff22872cbd",
+        "byteSize": 38791,
+        "digest": "sha256:8bb3e8a6bba8967914c7ea28f52239da6c894c565a68a96b700bfc70c0bcd1cf",
         "path": "packages/piagent-core/benchmark/benchmark-report.js"
       },
       {
@@ -290,8 +295,8 @@
         "path": "packages/piagent-core/benchmark/benchmark-runtime.js"
       },
       {
-        "byteSize": 35787,
-        "digest": "sha256:ba5f169ed8a3ab45aadb87437a2890f5eb4896e800562149e14a0d400e01786c",
+        "byteSize": 38107,
+        "digest": "sha256:697d261125a7791d6aeeb99f28886938b7fef6dee58a92d298b8e4482e4cf3af",
         "path": "packages/piagent-core/benchmark/benchmark-stage-diagnostic.js"
       },
       {
@@ -325,8 +330,8 @@
         "path": "packages/piagent-core/benchmark/benchmark-suite.js"
       },
       {
-        "byteSize": 17363,
-        "digest": "sha256:072aafa0b030f2d4c426a05048e398913cd39f92a84f6162f6d5eb0997acfb79",
+        "byteSize": 17551,
+        "digest": "sha256:6d926cbf51f3f23e1e9280d649e1c356417ed851bae8216fc59fccb49e3ef921",
         "path": "packages/piagent-core/benchmark/benchmark-summary-support.js"
       },
       {
@@ -1850,14 +1855,19 @@
         "path": "packages/piagent-webui/shared/text-visibility.ts"
       },
       {
-        "byteSize": 49722,
-        "digest": "sha256:7766e00ab11e4dec8481ab61a422be606166139036a08c75046b66786c89db6f",
+        "byteSize": 53282,
+        "digest": "sha256:1851adbecd3b0b8b17c8205e4e2ddc62293349888e2df7bb6d9c40ab7c1ca38e",
         "path": "scripts/benchmark-runner-core.mjs"
       },
       {
-        "byteSize": 13160,
-        "digest": "sha256:739a1cd88c50025cb47e34f87f92c59e416bc0aa1cbc6ee9aec4419a99894385",
+        "byteSize": 14544,
+        "digest": "sha256:f15ca4d6fdb2876f1d2bceeabfe5ebefb0afdbde79f555f4ad90dfbef9e56714",
         "path": "scripts/benchmark-runner-finalization.mjs"
+      },
+      {
+        "byteSize": 2976,
+        "digest": "sha256:18cc2122e110945634f8a183757da18b21d52d9c219cba2a30ebd3029c0496ea",
+        "path": "scripts/benchmark-runner-host-readiness.mjs"
       },
       {
         "byteSize": 8505,

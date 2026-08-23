@@ -13,6 +13,10 @@ import { piagentTreatment } from "../packages/piagent-core/benchmark/benchmark-r
 import { cleanupBenchmarkPiRuntimeHome } from "../packages/piagent-core/benchmark/benchmark-pi-home.js";
 import { benchmarkSuiteCoverage } from "../packages/piagent-core/benchmark/benchmark-runner-policy.js";
 import {
+  benchmarkHostReadinessPolicyDigest,
+  summarizeBenchmarkHostReadinessHistory
+} from "../packages/piagent-core/benchmark/benchmark-host-readiness.js";
+import {
   cleanupUnretainedWorkspaces,
   writeBenchmarkAbort,
   writeBenchmarkRunManifest,
@@ -63,6 +67,7 @@ export function finalizeBenchmarkRun(context) {
     piRuntimeHome,
     preservePiRuntime,
     productionAllStageBoundaries,
+    productionHostReadinessPolicy,
     productionSpendControlled,
     rootSeed,
     rootSeedDigest,
@@ -125,6 +130,27 @@ export function finalizeBenchmarkRun(context) {
   }
 
   const completedRuns = runs.filter(completedBenchmarkRecord);
+  const summarizedHostReadinessHistory = productionHostReadinessPolicy
+    ? summarizeBenchmarkHostReadinessHistory({
+        policy: productionHostReadinessPolicy,
+        receipts: manifest.hostReadinessReceipts,
+        completedRuns: completedRuns.length,
+        authorizedThroughRuns: manifest.stageControl?.authorizedThroughRuns,
+        runId: manifest.runId,
+        configurationDigest: manifest.configurationDigest,
+        stageBoundaries: productionAllStageBoundaries
+      })
+    : null;
+  const hostReadinessPolicyBindingValid = !productionHostReadinessPolicy
+    || manifest.hostReadinessPolicyDigest === benchmarkHostReadinessPolicyDigest(productionHostReadinessPolicy);
+  const hostReadinessHistory = summarizedHostReadinessHistory && !hostReadinessPolicyBindingValid
+    ? {
+        ...summarizedHostReadinessHistory,
+        valid: false,
+        ready: false,
+        errors: [...summarizedHostReadinessHistory.errors, "host-readiness-manifest-policy-digest-mismatch"]
+      }
+    : summarizedHostReadinessHistory;
   if (completedRuns.length < fullOrder.length) {
     detachPiRuntimeHome();
     cleanupUnretainedWorkspaces(runRoot, options.keepWorkspaces);
@@ -157,7 +183,9 @@ export function finalizeBenchmarkRun(context) {
       requestedModel: options.model,
       requestedThinking: options.thinking,
       suite,
-      manifest
+      manifest,
+      hostReadinessPolicy: productionHostReadinessPolicy,
+      hostReadinessStageBoundaries: productionAllStageBoundaries
     });
     if (productionSpendControlled) {
       manifest.stageControl = pendProductionStageControl(manifest.stageControl, {
@@ -237,6 +265,7 @@ export function finalizeBenchmarkRun(context) {
       suiteIdentity,
       runtimeCommands,
       configurationDigest,
+      hostReadinessHistory,
       environmentPolicy,
       runtimeDependencies: bootstrapMetadata?.runtimeDependencies ?? null,
       assuranceEvidence
