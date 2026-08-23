@@ -75,6 +75,38 @@ test("web frontend narrows its fail-closed source verifier to scripts the projec
   );
 });
 
+test("Node-family source verification keeps declared scripts in one ordered fail-fast command", (t) => {
+  const cwd = fixture();
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(cwd, "package.json"), JSON.stringify({
+    scripts: {
+      "type-check": "node -e \"require('fs').appendFileSync('verify.log','type\\n')\"",
+      lint: "node -e \"require('fs').appendFileSync('verify.log','lint\\n')\"",
+      test: "node -e \"require('fs').appendFileSync('verify.log','test\\n')\""
+    }
+  }));
+  const plan = selectVerificationPlan(profile("node-typescript"), undefined, "source-change", cwd, ["src/value.js"]);
+  assert.deepEqual(plan, {
+    group: "source",
+    commands: ["npm run type-check && npm run lint && npm test"]
+  });
+  const result = run(plan.commands[0], cwd);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.equal(fs.readFileSync(path.join(cwd, "verify.log"), "utf8"), "type\nlint\ntest\n");
+
+  fs.rmSync(path.join(cwd, "verify.log"));
+  fs.writeFileSync(path.join(cwd, "package.json"), JSON.stringify({
+    scripts: {
+      "type-check": "node -e \"require('fs').appendFileSync('verify.log','type\\n')\"",
+      lint: "node -e \"require('fs').appendFileSync('verify.log','lint\\n');process.exit(7)\"",
+      test: "node -e \"require('fs').appendFileSync('verify.log','test\\n')\""
+    }
+  }));
+  const failed = run(plan.commands[0], cwd);
+  assert.equal(failed.status, 7);
+  assert.equal(fs.readFileSync(path.join(cwd, "verify.log"), "utf8"), "type\nlint\n");
+});
+
 test("docs verification remains usable for a repository with explicit documentation", (t) => {
   const cwd = fixture();
   t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));

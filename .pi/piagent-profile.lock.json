@@ -115,7 +115,7 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:c60a1b22111d05e45aaff0c2b4fabfa13f2d0265410cf8c2638bfcf38aa21993",
+    "packageDigest": "sha256:d7c5ab6bedb9e601ef6ecdd8ade368d7e785a5d45d19e43d258723f911e6d151",
     "packageSource": "../",
     "packageVersion": "1.6.0",
     "runtimeFiles": [
@@ -615,8 +615,8 @@
         "path": "packages/piagent-core/extensions/update-check.js"
       },
       {
-        "byteSize": 17155,
-        "digest": "sha256:a729299a23d25ce18c4f99bb4c874f7ed12ea6379a4239b3139885d25833e653",
+        "byteSize": 17192,
+        "digest": "sha256:3f344a836a22e6272c7a83057a361e02e7b0546d974738a3df1d6197e8ca54ac",
         "path": "packages/piagent-core/extensions/verification-intelligence.js"
       },
       {

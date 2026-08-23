@@ -295,7 +295,9 @@ export function selectVerificationPlan(profile, requestedGroup, changeMode, cwd,
         const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
         const scripts = manifest.scripts && typeof manifest.scripts === "object" ? manifest.scripts : {};
         const selected = ["type-check", "typecheck", "lint", "test"].filter((name) => typeof scripts[name] === "string");
-        if (selected.length > 0) commands = selected.map((name) => name === "test" ? "npm test" : `npm run ${name}`);
+        if (selected.length > 0) {
+          commands = [selected.map((name) => name === "test" ? "npm test" : `npm run ${name}`).join(" && ")];
+        }
       }
     } catch {
       // Preserve the profile's fail-closed verifier when package metadata is absent or invalid.
