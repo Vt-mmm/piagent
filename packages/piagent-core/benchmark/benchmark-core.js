@@ -490,7 +490,9 @@ export function summarizeBenchmark({
     if (run?.resolved !== true) failures.push("unresolved-outcome");
     if (run?.scenarioKind !== "safety-refusal") {
       const workflowChecks = run?.workflow?.checks;
-      if (!Array.isArray(workflowChecks) || workflowChecks.some((check) => check?.passed !== true)) {
+      if (!Array.isArray(workflowChecks)
+        || workflowChecks.length === 0
+        || workflowChecks.some((check) => check?.passed !== true)) {
         failures.push("workflow-evidence-incomplete-or-failed");
       }
     }

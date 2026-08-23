@@ -115,7 +115,7 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:7dbf76968c90a603fb5533c9e5508360422c0df6266406679ccfc849a154efe6",
+    "packageDigest": "sha256:223e0af3ea5a2e5688148dce9c9c47327fd5b2a9b2b46a8c71f84dc5d1e858f3",
     "packageSource": "../",
     "packageVersion": "1.6.0",
     "runtimeFiles": [
@@ -200,8 +200,8 @@
         "path": "packages/piagent-core/benchmark/benchmark-comparison.js"
       },
       {
-        "byteSize": 54885,
-        "digest": "sha256:d227f548ad243fb9b7eb2ccbd31673dc388031315573c80f05a59aecd243ace4",
+        "byteSize": 54932,
+        "digest": "sha256:6b163f4bd4ed84808217be55a091b908e8e690d86e19a3a998c3304d5346a87a",
         "path": "packages/piagent-core/benchmark/benchmark-core.js"
       },
       {
@@ -295,8 +295,8 @@
         "path": "packages/piagent-core/benchmark/benchmark-runtime.js"
       },
       {
-        "byteSize": 38818,
-        "digest": "sha256:8810dfaf418630416cbcd73674870438951a639a46f4b91bc300bfa2b711f7f9",
+        "byteSize": 38868,
+        "digest": "sha256:2152205d2453c5d146e20516e7a731094ba086cfffc6c752d0f8d039e257f05a",
         "path": "packages/piagent-core/benchmark/benchmark-stage-diagnostic.js"
       },
       {

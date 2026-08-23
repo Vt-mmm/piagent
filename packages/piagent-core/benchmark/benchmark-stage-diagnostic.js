@@ -355,6 +355,7 @@ function candidateOutcomeFailures(pairRecords, floor) {
       if (!Number.isFinite(candidate?.grade?.score) || candidate.grade.score <= floor) failures.push("quality-outcome-floor");
       if (!Number.isFinite(candidate?.workflow?.score) || candidate.workflow.score <= floor) failures.push("workflow-outcome-floor");
       if (!Array.isArray(candidate?.workflow?.checks)
+        || candidate.workflow.checks.length === 0
         || candidate.workflow.checks.some((check) => check?.passed !== true)) {
         failures.push("workflow-evidence-incomplete-or-failed");
       }

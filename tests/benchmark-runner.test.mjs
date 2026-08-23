@@ -124,7 +124,9 @@ function stageDiagnosticRecord({ scenarioId = "first", surface, repeat = 1, reso
     scope: { passed: resolved },
     outputSafety: { passed: resolved },
     outputEvidence: { passed: resolved },
-    workflow: surface === "piagent" ? { score: resolved ? 10 : 0, checks: [] } : null,
+    workflow: surface === "piagent"
+      ? { score: resolved ? 10 : 0, checks: [{ id: "terminal-completion", passed: resolved }] }
+      : null,
     infrastructureRetries: 0,
     infrastructureFailures: [],
     durationSeconds: surface === "piagent" ? 0.5 : 1,
@@ -1635,7 +1637,25 @@ test("provider-free pause diagnostic blocks quality and continuity while keeping
   });
   assert.equal(recoveredFinalBoundary.pause.recognizedSpendControlPause, true);
   assert.equal(recoveredFinalBoundary.completedRuns, recoveredFinalBoundary.expectedRuns);
+  assert.equal(recoveredFinalBoundary.claimEligible, false, "a stage diagnostic never issues the final S108 claim");
   assert.equal(recoveredFinalBoundary.stageAdvanceAllowed, true, "a recovered final boundary must be eligible for provider-free finalization");
+
+  for (const [id, checks] of [
+    ["missing", undefined],
+    ["empty", []],
+    ["failed", [{ id: "terminal-completion", passed: false }]]
+  ]) {
+    const continuityRuns = structuredClone(cleanRuns);
+    const continuityCandidate = continuityRuns.find((run) => run.surface === "piagent");
+    if (checks === undefined) delete continuityCandidate.workflow.checks;
+    else continuityCandidate.workflow.checks = checks;
+    const continuityBlocked = buildBenchmarkStageDiagnostic({ ...input, runs: continuityRuns });
+    assert.equal(continuityBlocked.stageAdvanceAllowed, false, id);
+    assert.ok(continuityBlocked.blockingReasons.includes("candidate-outcome-floor"), id);
+    assert.ok(continuityBlocked.quality.outcomeFloor.failures.some((item) => (
+      item.failures.includes("workflow-evidence-incomplete-or-failed")
+    )), id);
+  }
 
   const qualityRegressedRuns = structuredClone(cleanRuns);
   qualityRegressedRuns.find((run) => run.surface === "piagent").grade.score = 9.6;
@@ -1917,6 +1937,7 @@ test("can pause a benchmark chunk and resume only the missing sessions", (t) => 
   assert.match(first.stdout, /remaining 4/);
   assert.match(first.stdout, /repeat 1\/2/);
   assert.match(first.stdout, /Benchmark paused after 2\/4 completed sessions/);
+  assert.equal(fs.existsSync(path.join(value.output, "report.json")), false, "a partial ledger cannot issue a final benchmark verdict");
   assert.equal(fs.existsSync(path.join(value.output, "run-manifest.json")), true);
   assert.equal(fs.statSync(path.join(value.output, "run-manifest.json")).mode & 0o777, 0o600);
   const manifest = JSON.parse(fs.readFileSync(path.join(value.output, "run-manifest.json"), "utf8"));

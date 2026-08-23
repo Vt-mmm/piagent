@@ -700,7 +700,9 @@ function runRecord(scenario, surface, repeat, fresh) {
     graderIntegrity: { passed: true },
     scope: { passed: true, changedFiles: scenario.kind === "source-change" ? ["src/a.js"] : [], outsideScope: [] },
     outputSafety: { passed: true, forbiddenHits: [] },
-    workflow: surface === "piagent" && scenario.kind !== "safety-refusal" ? { score: 10, checks: [] } : null,
+    workflow: surface === "piagent" && scenario.kind !== "safety-refusal"
+      ? { score: 10, checks: [{ id: "terminal-completion", passed: true }] }
+      : null,
     providerWireEvidence,
     causalContextReceipt: causalContextReceipt(surface),
     usage: { fresh, input: fresh, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, total: fresh, cost: fresh / 100_000, costSource: "test-fixture", usageCompleteness: "exact", sessions: 1, model: "openai-codex/gpt-5.6-luna", thinkingLevel: "medium", toolCalls: 2, toolNames: { read: 1, bash: 1 } },
@@ -1241,6 +1243,47 @@ test("production release gate uses independent scenario families and the upper 9
   assert.equal(report.comparison.productionGate.passed, true);
   assert.equal(report.comparison.tokenClaimAllowed, true);
   assert.equal(report.verdict.status, "piagent-more-efficient");
+
+  for (const [id, mutateChecks] of [
+    ["missing", (run) => { delete run.workflow.checks; }],
+    ["empty", (run) => { run.workflow.checks = []; }],
+    ["failed", (run) => { run.workflow.checks = [{ id: "terminal-completion", passed: false }]; }]
+  ]) {
+    const continuityRuns = structuredClone(runs);
+    mutateChecks(continuityRuns.find((run) => run.surface === "piagent"));
+    const continuityBlocked = summarizeProductionBenchmark({
+      suite: testSuite,
+      runId: `production-workflow-check-${id}`,
+      startedAt: "2026-08-01T00:00:00.000Z",
+      completedAt: "2026-08-01T00:01:00.000Z",
+      repeats: 3,
+      environment,
+      runs: continuityRuns
+    });
+    assert.equal(continuityBlocked.comparison.candidateTaskContinuityGate, false);
+    assert.ok(continuityBlocked.comparison.productionGate.failures.includes("candidate-task-continuity"));
+    assert.equal(continuityBlocked.comparison.tokenClaimAllowed, false);
+    assert.equal(continuityBlocked.verdict.status, "candidate-task-continuity-gate-failed");
+  }
+
+  const outputHeavyRuns = structuredClone(runs);
+  for (const run of outputHeavyRuns) {
+    run.usage.input = run.surface === "piagent" ? 0 : run.usage.fresh;
+    run.usage.output = run.surface === "piagent" ? run.usage.fresh : 0;
+  }
+  const outputHeavy = summarizeProductionBenchmark({
+    suite: testSuite,
+    runId: "production-observational-cost-regression",
+    startedAt: "2026-08-01T00:00:00.000Z",
+    completedAt: "2026-08-01T00:01:00.000Z",
+    repeats: 3,
+    environment,
+    runs: outputHeavyRuns
+  });
+  assert.ok(outputHeavy.comparison.normalizedCost.ratio > 1);
+  assert.equal(outputHeavy.comparison.normalizedCostGate, null);
+  assert.equal(outputHeavy.comparison.productionGate.passed, true);
+  assert.equal(outputHeavy.comparison.tokenClaimAllowed, true);
 
   const tokenRestricted = structuredClone(report);
   const rawTokenAccounting = structuredClone(tokenRestricted.tokenAccounting);
