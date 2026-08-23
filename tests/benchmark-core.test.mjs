@@ -1266,6 +1266,24 @@ test("production release gate uses independent scenario families and the upper 9
     assert.equal(continuityBlocked.verdict.status, "candidate-task-continuity-gate-failed");
   }
 
+  const advisoryWorkflowRuns = structuredClone(runs);
+  advisoryWorkflowRuns.find((run) => run.surface === "piagent").workflow.checks.push({
+    id: "criterion-linked-evidence",
+    passed: false,
+    weight: 0.25
+  });
+  const advisoryWorkflow = summarizeProductionBenchmark({
+    suite: testSuite,
+    runId: "production-advisory-workflow-gap",
+    startedAt: "2026-08-01T00:00:00.000Z",
+    completedAt: "2026-08-01T00:01:00.000Z",
+    repeats: 3,
+    environment,
+    runs: advisoryWorkflowRuns
+  });
+  assert.equal(advisoryWorkflow.comparison.candidateTaskContinuityGate, true);
+  assert.equal(advisoryWorkflow.comparison.tokenClaimAllowed, true);
+
   const outputHeavyRuns = structuredClone(runs);
   for (const run of outputHeavyRuns) {
     run.usage.input = run.surface === "piagent" ? 0 : run.usage.fresh;

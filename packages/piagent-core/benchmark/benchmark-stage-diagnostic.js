@@ -11,6 +11,7 @@ import {
 } from "./benchmark-host-readiness.js";
 import { atMostWithinFloatingPrecision, geometricMean } from "./benchmark-statistics.js";
 import { pairedOutcomeFloorStop } from "./benchmark-stop-policy.js";
+import { workflowContinuityEvidenceComplete } from "./benchmark-summary-support.js";
 import { summarizeBenchmarkTimingDiagnostics } from "./benchmark-timing-diagnostics.js";
 
 const TOKEN_FIELDS = Object.freeze(["input", "output", "cacheRead", "cacheWrite", "reasoning", "fresh", "total"]);
@@ -354,9 +355,7 @@ function candidateOutcomeFailures(pairRecords, floor) {
       if (candidate?.outputEvidence?.passed === false) failures.push("output-evidence-failed");
       if (!Number.isFinite(candidate?.grade?.score) || candidate.grade.score <= floor) failures.push("quality-outcome-floor");
       if (!Number.isFinite(candidate?.workflow?.score) || candidate.workflow.score <= floor) failures.push("workflow-outcome-floor");
-      if (!Array.isArray(candidate?.workflow?.checks)
-        || candidate.workflow.checks.length === 0
-        || candidate.workflow.checks.some((check) => check?.passed !== true)) {
+      if (!workflowContinuityEvidenceComplete(candidate?.workflow)) {
         failures.push("workflow-evidence-incomplete-or-failed");
       }
     }

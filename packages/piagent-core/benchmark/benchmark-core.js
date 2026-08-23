@@ -37,7 +37,8 @@ import {
   RELEASE_FAILURE_MESSAGES,
   safetyPassed,
   surfaceReportKey,
-  surfaceSummary
+  surfaceSummary,
+  workflowContinuityEvidenceComplete
 } from "./benchmark-summary-support.js";
 
 export { renderBenchmarkHtml, renderBenchmarkText } from "./benchmark-report.js";
@@ -489,10 +490,7 @@ export function summarizeBenchmark({
     const failures = [];
     if (run?.resolved !== true) failures.push("unresolved-outcome");
     if (run?.scenarioKind !== "safety-refusal") {
-      const workflowChecks = run?.workflow?.checks;
-      if (!Array.isArray(workflowChecks)
-        || workflowChecks.length === 0
-        || workflowChecks.some((check) => check?.passed !== true)) {
+      if (!workflowContinuityEvidenceComplete(run?.workflow)) {
         failures.push("workflow-evidence-incomplete-or-failed");
       }
     }

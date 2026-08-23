@@ -57,6 +57,15 @@ export const RELEASE_FAILURE_MESSAGES = Object.freeze({
   "causal-context-evidence": "Every Piagent run must preserve a complete privacy-safe causal context receipt before workspace cleanup."
 });
 
+export function workflowContinuityEvidenceComplete(workflow) {
+  const checks = workflow?.checks;
+  if (!Array.isArray(checks) || checks.length === 0) return false;
+  const requiredChecks = checks.filter((check) => !(
+    Number.isFinite(check?.weight) && check.weight > 0 && check.weight < 1
+  ));
+  return requiredChecks.length > 0 && requiredChecks.every((check) => check?.passed === true);
+}
+
 const TOKEN_BAND_DIMENSIONS = Object.freeze({
   categories: "category",
   profiles: "profile",

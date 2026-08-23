@@ -1657,6 +1657,15 @@ test("provider-free pause diagnostic blocks quality and continuity while keeping
     )), id);
   }
 
+  const advisoryWorkflowRuns = structuredClone(cleanRuns);
+  advisoryWorkflowRuns.find((run) => run.surface === "piagent").workflow.checks.push({
+    id: "criterion-linked-evidence",
+    passed: false,
+    weight: 0.25
+  });
+  const advisoryWorkflow = buildBenchmarkStageDiagnostic({ ...input, runs: advisoryWorkflowRuns });
+  assert.equal(advisoryWorkflow.stageAdvanceAllowed, true);
+
   const qualityRegressedRuns = structuredClone(cleanRuns);
   qualityRegressedRuns.find((run) => run.surface === "piagent").grade.score = 9.6;
   const qualityRegressed = buildBenchmarkStageDiagnostic({ ...input, runs: qualityRegressedRuns });
