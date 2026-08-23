@@ -1,5 +1,6 @@
 import { PIAGENT_BENCHMARK_TREATMENTS } from "./benchmark-runtime.js";
 import { geometricMean, geometricMeanConfidence95, geometricMeanConfidence95Raw, median, rounded } from "./benchmark-statistics.js";
+import { exactBenchmarkAttemptUsage } from "./benchmark-usage.js";
 
 function plainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -50,11 +51,27 @@ export function completeCategoryCoverage(suite, completeScenarioFreshRatios) {
   return { passed: missing.length === 0, required: [...required].sort(), observed: [...observed].sort(), missing };
 }
 
+export function selectPrimaryEfficiencyEstimate(estimand, successfulPair, failureAware, fixedWorkload) {
+  const selected = estimand === "fixed-workload-family-ratio"
+    ? fixedWorkload
+    : estimand === "failure-aware-family-ratio"
+      ? failureAware
+      : successfulPair;
+  return {
+    ratio: selected.ratio,
+    confidence95: selected.confidence95,
+    confidence95Raw: selected.confidence95Raw,
+    scenarioRatios: Array.isArray(selected.families)
+      ? selected.families.filter((item) => Number.isFinite(item.ratio))
+      : successfulPair.scenarioRatios
+  };
+}
+
 export function comparableAttemptUsage(pair) {
   const baselineUsage = pair.baseline?.usage;
   const candidateUsage = pair.candidate?.usage;
-  return baselineUsage?.sessions > 0
-    && candidateUsage?.sessions > 0
+  return exactBenchmarkAttemptUsage(baselineUsage, pair.baseline?.usageStatus ?? "measured")
+    && exactBenchmarkAttemptUsage(candidateUsage, pair.candidate?.usageStatus ?? "measured")
     && baselineUsage.fresh > 0
     && candidateUsage.fresh > 0
     && baselineUsage.model !== "unknown"
@@ -168,13 +185,12 @@ export function pairedDurationBands(durationPairs, field) {
 }
 
 function exactFailedAttemptFreshTokens(run) {
-  if (run?.infrastructureFailures === undefined) return { exact: true, fresh: 0 };
   if (!Array.isArray(run.infrastructureFailures)) return { exact: false, fresh: null };
   let fresh = 0;
   for (const failure of run.infrastructureFailures) {
-    if (failure?.usageStatus === "unknown-after-provider-start") return { exact: false, fresh: null };
-    if (!Number.isFinite(failure?.usage?.fresh) || failure.usage.fresh < 0) return { exact: false, fresh: null };
-    fresh += failure.usage.fresh;
+    const status = failure?.usageStatus ?? "unknown-after-provider-start";
+    if (!exactBenchmarkAttemptUsage(failure?.usage, status)) return { exact: false, fresh: null };
+    fresh += Number(failure.usage?.fresh ?? 0);
   }
   return { exact: true, fresh };
 }
@@ -244,5 +260,103 @@ export function familyClusteredFailureAwareUsage(suite, allPairs, repeats) {
     confidence95: complete ? geometricMeanConfidence95(values) : null,
     confidence95Raw: complete ? geometricMeanConfidence95Raw(values) : null,
     families: familyRatios
+  };
+}
+
+function fixedWorkloadOutcomeRelation(baselineResolvedOutcomes, candidateResolvedOutcomes, expectedAttempts) {
+  if (baselineResolvedOutcomes === expectedAttempts && candidateResolvedOutcomes === expectedAttempts) {
+    return "both-fully-resolved";
+  }
+  if (candidateResolvedOutcomes > baselineResolvedOutcomes) return "candidate-dominates";
+  if (baselineResolvedOutcomes > candidateResolvedOutcomes) return "baseline-dominates";
+  if (baselineResolvedOutcomes === candidateResolvedOutcomes) return "both-incomplete";
+  return "mixed";
+}
+
+export function familyClusteredFixedWorkloadUsage(suite, allPairs, repeats) {
+  const pairsByScenario = new Map();
+  for (const pair of allPairs) {
+    const scenarioId = pair.candidate?.scenarioId ?? pair.baseline?.scenarioId;
+    if (typeof scenarioId !== "string") continue;
+    const pairs = pairsByScenario.get(scenarioId) ?? [];
+    pairs.push(pair);
+    pairsByScenario.set(scenarioId, pairs);
+  }
+  const expectedAttempts = Number.isInteger(repeats) && repeats > 0 ? repeats : null;
+  const families = suite.scenarios.map((scenario) => {
+    const pairs = pairsByScenario.get(scenario.id) ?? [];
+    const repeatCount = new Set(pairs.map((pair) => pair.candidate?.repeat ?? pair.baseline?.repeat)).size;
+    const comparablePairs = pairs.filter(comparableAttemptUsage);
+    const baselineFailedUsage = pairs.map((pair) => exactFailedAttemptFreshTokens(pair.baseline));
+    const candidateFailedUsage = pairs.map((pair) => exactFailedAttemptFreshTokens(pair.candidate));
+    const issues = [];
+    if (expectedAttempts === null || pairs.length !== expectedAttempts || repeatCount !== expectedAttempts) {
+      issues.push("incomplete-paired-attempt-coverage");
+    }
+    if (comparablePairs.length !== pairs.length) issues.push("inexact-or-incomparable-accepted-usage");
+    if (baselineFailedUsage.some((item) => !item.exact)) issues.push("unknown-baseline-failed-attempt-usage");
+    if (candidateFailedUsage.some((item) => !item.exact)) issues.push("unknown-candidate-failed-attempt-usage");
+    const exactCoverage = issues.length === 0;
+    const baselineResolvedOutcomes = pairs.filter((pair) => pair.baseline?.resolved === true).length;
+    const candidateResolvedOutcomes = pairs.filter((pair) => pair.candidate?.resolved === true).length;
+    const baselineFreshTokens = exactCoverage
+      ? pairs.reduce((sum, pair, index) => sum + pair.baseline.usage.fresh + baselineFailedUsage[index].fresh, 0)
+      : null;
+    const candidateFreshTokens = exactCoverage
+      ? pairs.reduce((sum, pair, index) => sum + pair.candidate.usage.fresh + candidateFailedUsage[index].fresh, 0)
+      : null;
+    const ratio = exactCoverage
+      && Number.isFinite(baselineFreshTokens)
+      && baselineFreshTokens > 0
+      && Number.isFinite(candidateFreshTokens)
+      && candidateFreshTokens > 0
+        ? candidateFreshTokens / baselineFreshTokens
+        : null;
+    if (exactCoverage && !Number.isFinite(ratio)) issues.push("non-positive-fixed-workload-usage");
+    return {
+      scenarioId: scenario.id,
+      expectedAttempts,
+      pairedAttempts: pairs.length,
+      exactComparableAttempts: comparablePairs.length,
+      exactCoverage,
+      baselineResolvedOutcomes,
+      candidateResolvedOutcomes,
+      baselineFreshTokens: rounded(baselineFreshTokens, 2),
+      candidateFreshTokens: rounded(candidateFreshTokens, 2),
+      ratio,
+      outcomeRelation: fixedWorkloadOutcomeRelation(
+        baselineResolvedOutcomes,
+        candidateResolvedOutcomes,
+        expectedAttempts
+      ),
+      issues
+    };
+  });
+  const usableFamilies = families.filter((item) => Number.isFinite(item.ratio) && item.ratio > 0);
+  const complete = usableFamilies.length === families.length && families.length > 0;
+  const ratios = complete ? usableFamilies.map((item) => item.ratio) : [];
+  const aggregateBaselineFreshTokens = complete
+    ? usableFamilies.reduce((sum, item) => sum + item.baselineFreshTokens, 0)
+    : null;
+  const aggregateCandidateFreshTokens = complete
+    ? usableFamilies.reduce((sum, item) => sum + item.candidateFreshTokens, 0)
+    : null;
+  return {
+    complete,
+    expectedScenarioFamilies: families.length,
+    usableScenarioFamilies: usableFamilies.length,
+    expectedAttemptsPerFamily: expectedAttempts,
+    sampleUnit: "scenario-family",
+    outcomeConditioning: "none",
+    aggregation: "geometric-mean-of-family-total-ratios",
+    attemptPolicy: "accepted-plus-exact-provider-started-failed-attempts",
+    scenarioIds: complete ? usableFamilies.map((item) => item.scenarioId) : [],
+    ratio: complete ? geometricMean(ratios) : null,
+    confidence95: complete ? geometricMeanConfidence95(ratios) : null,
+    confidence95Raw: complete ? geometricMeanConfidence95Raw(ratios) : null,
+    aggregateFreshTokenRatio: complete && aggregateBaselineFreshTokens > 0
+      ? aggregateCandidateFreshTokens / aggregateBaselineFreshTokens
+      : null,
+    families
   };
 }

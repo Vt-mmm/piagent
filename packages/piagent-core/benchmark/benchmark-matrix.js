@@ -26,6 +26,8 @@ export function requiresLongHorizonEvidence({ recoveryChange = false, contextCha
 export function benchmarkTrustChecklist(report = {}) {
   const comparison = report.comparison ?? {};
   const hasPairedUsage = Number(comparison.pairedUsageRuns ?? 0) > 0;
+  const successfulPairEfficiencyRequired = comparison.successfulPairEfficiencyRole !== "diagnostic";
+  const failureAwareEfficiencyRequired = comparison.failureAwareEfficiencyRole !== "diagnostic";
   const qualityPassed = comparison.qualityGate === true;
   const safetyPassed = comparison.safetyGate === true;
   const reliabilityPassed = comparison.reliabilityGate === true;
@@ -36,6 +38,8 @@ export function benchmarkTrustChecklist(report = {}) {
   const outcomeEvidencePassed = comparison.outcomeEvidenceGate !== false;
   const pairedRegressionPassed = comparison.pairedRegressionGate !== false;
   const failureAwareEfficiencyPassed = comparison.failureAwareEfficiencyGate !== false;
+  const primaryEfficiencyEvidencePassed = comparison.primaryEfficiencyEvidenceGate === true;
+  const primaryEfficiencyBandCoveragePassed = comparison.primaryEfficiencyBandCoverageGate !== false;
   const primaryEfficiencyPassed = comparison.primaryEfficiencyGate === true;
   const comparisonProtocolPassed = comparison.comparisonProtocolGate?.passed === true;
   const fullSuitePassed = comparison.fullSuiteGate !== false;
@@ -53,22 +57,26 @@ export function benchmarkTrustChecklist(report = {}) {
     hasOutcomeEvidenceGate: typeof comparison.outcomeEvidenceGate === "boolean",
     hasPairedRegressionGate: typeof comparison.pairedRegressionGate === "boolean",
     hasFailureAwareEfficiencyGate: typeof comparison.failureAwareEfficiencyGate === "boolean",
+    hasPrimaryEfficiencyEvidenceGate: typeof comparison.primaryEfficiencyEvidenceGate === "boolean",
+    hasPrimaryEfficiencyBandCoverageGate: typeof comparison.primaryEfficiencyBandCoverageGate === "boolean",
     hasPrimaryEfficiencyGate: typeof comparison.primaryEfficiencyGate === "boolean",
     hasComparisonProtocolGate: typeof comparison.comparisonProtocolGate?.passed === "boolean",
     achievedClaimTier: comparison.claimEligibility?.achievedTier ?? "unavailable",
     generalizationClaimAllowed: comparison.claimEligibility?.generalizationClaimAllowed === true,
     tokenSavingClaimAllowed: comparison.tokenClaimAllowed === true
-      && hasPairedUsage
+      && (!successfulPairEfficiencyRequired || hasPairedUsage)
       && qualityPassed
       && safetyPassed
       && reliabilityPassed
       && workflowPassed
       && qualityNonInferior
-      && efficiencyEvidencePassed
-      && efficiencyBandCoveragePassed
+      && (!successfulPairEfficiencyRequired || efficiencyEvidencePassed)
+      && (!successfulPairEfficiencyRequired || efficiencyBandCoveragePassed)
       && outcomeEvidencePassed
       && pairedRegressionPassed
-      && failureAwareEfficiencyPassed
+      && (!failureAwareEfficiencyRequired || failureAwareEfficiencyPassed)
+      && primaryEfficiencyEvidencePassed
+      && primaryEfficiencyBandCoveragePassed
       && primaryEfficiencyPassed
       && fullSuitePassed
       && performancePassed

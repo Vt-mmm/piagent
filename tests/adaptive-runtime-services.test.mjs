@@ -1796,6 +1796,8 @@ test("benchmark trust helpers pick production for release-sensitive changes", ()
       workflowGate: true,
       qualityNonInferior: true,
       efficiencyEvidenceGate: true,
+      primaryEfficiencyEvidenceGate: true,
+      primaryEfficiencyBandCoverageGate: true,
       primaryEfficiencyGate: true,
       comparisonProtocolGate: { passed: true },
       tokenClaimAllowed: true
@@ -1812,6 +1814,8 @@ test("benchmark trust helpers pick production for release-sensitive changes", ()
     hasOutcomeEvidenceGate: false,
     hasPairedRegressionGate: false,
     hasFailureAwareEfficiencyGate: false,
+    hasPrimaryEfficiencyEvidenceGate: true,
+    hasPrimaryEfficiencyBandCoverageGate: true,
     hasPrimaryEfficiencyGate: true,
     hasComparisonProtocolGate: true,
     achievedClaimTier: "unavailable",

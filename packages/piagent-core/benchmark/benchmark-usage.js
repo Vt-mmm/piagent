@@ -18,7 +18,7 @@ function plainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function exactMeasuredUsage(usage) {
+export function exactBenchmarkMeasuredUsage(usage) {
   return usage?.usageCompleteness === "exact"
     && Number.isInteger(usage?.sessions) && usage.sessions > 0
     && TOKEN_FIELDS.every((field) => Number.isFinite(usage?.[field]) && usage[field] >= 0)
@@ -33,13 +33,17 @@ function knownPreProviderZero(usage, status) {
     && TOKEN_FIELDS.every((field) => Number(usage?.[field] ?? 0) === 0);
 }
 
+export function exactBenchmarkAttemptUsage(usage, status) {
+  return status !== "unknown-after-provider-start"
+    && (exactBenchmarkMeasuredUsage(usage) || knownPreProviderZero(usage, status));
+}
+
 function tokenBucket(entries) {
   const totals = Object.fromEntries(TOKEN_FIELDS.map((field) => [field, 0]));
   const bySurface = {};
   let exactAttempts = 0;
   for (const entry of entries) {
-    const exact = entry.status !== "unknown-after-provider-start"
-      && (exactMeasuredUsage(entry.usage) || knownPreProviderZero(entry.usage, entry.status));
+    const exact = exactBenchmarkAttemptUsage(entry.usage, entry.status);
     if (!exact) continue;
     exactAttempts += 1;
     const surface = bySurface[entry.surface] ?? { attempts: 0, tokens: Object.fromEntries(TOKEN_FIELDS.map((field) => [field, 0])) };
@@ -75,6 +79,30 @@ export function benchmarkTokenAccounting(runs) {
     failedAttempts: tokenBucket(failed),
     allAttempts: tokenBucket([...accepted, ...failed])
   };
+}
+
+export function benchmarkInfrastructureFailureLedgerIssues(runs) {
+  return runs.flatMap((run) => {
+    const issues = [];
+    if (!Number.isInteger(run.infrastructureRetries) || run.infrastructureRetries < 0) {
+      issues.push("invalid-infrastructure-retry-count");
+    }
+    if (!Array.isArray(run.infrastructureFailures)) {
+      issues.push("missing-infrastructure-failure-ledger");
+    } else if (Number.isInteger(run.infrastructureRetries) && run.infrastructureFailures.length !== run.infrastructureRetries) {
+      issues.push("retry-ledger-count-mismatch");
+    }
+    if (!Number.isInteger(run.infrastructureAttempts)
+      || run.infrastructureAttempts !== (Number.isInteger(run.infrastructureRetries) ? run.infrastructureRetries + 1 : -1)) {
+      issues.push("attempt-ledger-count-mismatch");
+    }
+    return issues.length > 0 ? [{
+      scenarioId: run.scenarioId ?? null,
+      surface: run.surface ?? null,
+      repeat: run.repeat ?? null,
+      issues
+    }] : [];
+  });
 }
 
 export function aggregateSessionUsage(sessions) {

@@ -28,7 +28,7 @@
     {
       "id": "pilot-suite",
       "path": "benchmarks/production-v1/suite.json",
-      "sha256": "83afbf4266737924d467177a3954ec5031d05bf7321fee02025bda892eb0299e"
+      "sha256": "194a5d36c70ca46c318bc12eb1858b9a345638e8e3613a63693980e228b3c4d1"
     },
     {
       "id": "task-contract-schema",

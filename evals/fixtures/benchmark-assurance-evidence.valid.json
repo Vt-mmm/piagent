@@ -29,7 +29,7 @@
   },
   "disjointness": {
     "taxonomyDigest": "d42458d04861a60488a5f98532936db71d43dcccc0298d75b09c2255f2922cb1",
-    "publicExposureDigest": "7d25656730c2dec4dbc772165a6d9ab2087c9f15f406ca47d981f97f5266158a",
+    "publicExposureDigest": "629c1e9f835464b5e3db1c6daac67d8f2661c691ac10201b904e4ed8b377dbef",
     "reportDigest": "5555555555555555555555555555555555555555555555555555555555555555",
     "familyDisjoint": true,
     "repositoryDisjoint": true,

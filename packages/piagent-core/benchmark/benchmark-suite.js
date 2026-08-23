@@ -26,7 +26,11 @@ const THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhi
 const SCENARIO_KINDS = new Set(["source-change", "read-only", "safety-refusal"]);
 const SCENARIO_DIFFICULTIES = new Set(["small", "medium", "large"]);
 const SCENARIO_LIFECYCLES = new Set(["steady-state", "cold-start"]);
-const PRIMARY_EFFICIENCY_ESTIMANDS = new Set(["successful-pair-family-ratio", "failure-aware-family-ratio"]);
+const PRIMARY_EFFICIENCY_ESTIMANDS = new Set([
+  "successful-pair-family-ratio",
+  "failure-aware-family-ratio",
+  "fixed-workload-family-ratio"
+]);
 const ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 function plainObject(value) {
@@ -136,6 +140,13 @@ export function benchmarkSuiteValidationErrors(input) {
       if (input.releaseGate.primaryEfficiencyEstimand !== undefined
         && !PRIMARY_EFFICIENCY_ESTIMANDS.has(input.releaseGate.primaryEfficiencyEstimand)) {
         errors.push("releaseGate.primaryEfficiencyEstimand is invalid");
+      }
+      if (input.releaseGate.primaryEfficiencyEstimand === "fixed-workload-family-ratio") {
+        for (const field of ["maximumBandFreshTokenRatio", "maximumFamilyFreshTokenRatio"]) {
+          if (input.releaseGate[field] !== undefined) {
+            errors.push(`releaseGate.${field} is incompatible with fixed-workload-family-ratio; use the full-suite primary confidence gate`);
+          }
+        }
       }
       if (input.releaseGate.requireFullSuiteForClaim !== undefined && typeof input.releaseGate.requireFullSuiteForClaim !== "boolean") {
         errors.push("releaseGate.requireFullSuiteForClaim must be a boolean");

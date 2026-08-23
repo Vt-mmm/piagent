@@ -175,6 +175,7 @@ test("production-v1 spans the declared production matrix", () => {
     source: { url: "https://developers.openai.com/api/docs/models/gpt-5.6-luna", retrievedAt: "2026-08-22" }
   });
   assert.equal(suite.releaseGate.minimumComparableEfficiencyScenarios, suite.scenarios.length);
+  assert.equal(suite.releaseGate.primaryEfficiencyEstimand, "fixed-workload-family-ratio");
   assert.equal(suite.releaseGate.maximumNormalizedCostRatioUpper95, undefined);
   assert.equal(suite.releaseGate.maximumBandNormalizedCostRatio, undefined);
   assert.equal(suite.releaseGate.maximumFamilyNormalizedCostRatio, undefined);

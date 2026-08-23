@@ -58,6 +58,7 @@
     "minimumComparableEfficiencyScenarios": 18,
     "minimumRepeats": 3,
     "maximumInfrastructureRetries": 0,
+    "primaryEfficiencyEstimand": "fixed-workload-family-ratio",
     "maximumFreshTokenRatioUpper95": 0.6,
     "requireEfficiencyClaim": true,
     "requireNormalizedCostClaim": false,

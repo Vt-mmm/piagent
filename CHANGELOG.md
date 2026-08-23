@@ -36,11 +36,13 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ### Forty-percent benchmark contract and spend control
 
-- Raised the canonical production-v1 contract to require a family-clustered
-  fresh-token upper-95 ratio at or below `0.60`, the same point-ratio ceiling
-  for every workload band, and a `1.00` guardrail for every family. Every
-  declared scenario/repeat must also have an exact finite grade pair with no
-  Piagent quality regression.
+- Raised the canonical production-v1 contract to require a fixed-workload,
+  family-clustered fresh-token upper-95 ratio at or below `0.60`. The estimator
+  includes all three predeclared attempts per surface in every family, including
+  exact provider-started failed-attempt usage, and does not condition token
+  measurement on task outcome. Every declared scenario/repeat must still have
+  an exact finite grade pair with no Piagent quality regression, and all Piagent
+  sessions must satisfy the independent continuity gates.
 - Added a separate GPT-5.6 Luna API-equivalent text-token cost gate with the same
   `0.60` global/band and `1.00` family limits. This metric prices exact text
   token buckets and remains explicitly distinct from OAuth/provider billing.
@@ -67,8 +69,10 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
   provider preflight or installed Pi/Codex executables. Finalization rehashes the
   current candidate, suite, runtime-dependency tree and ledger while reusing the
   frozen command/auth/preflight identities bound to the accepted measurements.
-- No new provider-backed 40% result is claimed by these changes; the production
-  model run remains intentionally unstarted.
+- Preserved the completed 108-session r3 ledger as observational evidence under
+  its original successful-pair contract. It is not retroactively promoted: a
+  new provider run is required after this predeclared estimator and suite digest
+  are frozen before a 40% claim can be approved.
 
 ## v1.6.0 - 2026-08-22
 

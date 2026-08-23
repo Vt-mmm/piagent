@@ -125,13 +125,22 @@ regression của harness/model policy, không tự chứng minh generalization h
 ổn định production.
 
 Contract hiện tại chỉ xét fresh-token claim ở **S108**, sau khi có đủ 18 family ×
-3 repeat × 2 surface. Cận trên 95% của family-clustered fresh-token ratio phải
-không vượt `0.60`, tức chứng minh ít nhất 40% fresh-token reduction trên
-public-regression này. Tỷ lệ theo category, profile, lifecycle, difficulty và
-từng family vẫn được report để tìm điểm nóng, nhưng không thay thế hoặc phủ
-quyết full-suite estimand đã khai báo trước. Mọi attempt được chấp nhận phải có
-exact terminal token buckets; thiếu một attempt/family hoặc unknown usage làm
-bằng chứng token không đầy đủ và chặn claim.
+3 repeat × 2 surface. Primary estimand được khai báo trước là
+`fixed-workload-family-ratio`: trong từng family, cộng fresh token chính xác của
+đủ ba attempt đã định trước ở mỗi surface, gồm cả usage của failed attempt đã
+khởi động provider; sau đó lấy geometric mean của 18 tỷ lệ family và CI 95% trên
+log-ratio. Outcome không xuất hiện trong mẫu số. Vì vậy một Codex attempt không
+resolved vẫn nằm trong workload token, thay vì bị loại hậu nghiệm hoặc được gán
+tỷ lệ giả.
+
+Cận trên 95% của primary ratio phải không vượt `0.60`, tức chứng minh ít nhất
+40% fresh-token reduction trên public-regression này. Successful-pair và
+fresh-token-per-resolved-outcome vẫn được report dưới dạng diagnostic nhưng
+không phủ quyết fixed-workload primary. Tỷ lệ theo category, profile, lifecycle,
+difficulty và từng family vẫn dùng để tìm điểm nóng. Mọi attempt được chấp nhận
+phải có exact terminal token buckets; thiếu một attempt/family hoặc unknown
+usage của accepted/failed attempt làm primary evidence không đầy đủ và chặn
+claim.
 
 Hai hard non-regression axis còn lại là paired model intelligence và task
 continuity. Piagent phải dùng đúng cùng model/thinking với controlled baseline CLI,
@@ -314,10 +323,11 @@ vẫn yêu cầu toàn bộ critical check pass. Những pilot cũ giữ nguyên
 đã pin và không được relabel bằng rubric mới.
 
 Claim tiết kiệm token chỉ hợp lệ trong đúng claim tier của report khi quality,
-safety, reliability, workflow, paired non-regression, đủ outcome coverage, đủ
-comparable-efficiency family, failure-aware effort và comparison protocol đều
-pass. Nếu một gate thiếu hoặc fail, số token vẫn hữu ích để debug nhưng
-không dùng làm claim release. Report ghi thêm ba ma trận paired outcome
+safety, reliability, workflow, paired non-regression, đủ outcome coverage,
+primary efficiency evidence đã khai báo trước và comparison protocol đều pass.
+Successful-pair/failure-aware chỉ blocking ở suite chọn contract đó; production
+fixed-workload gắn chúng role `diagnostic`. Nếu một blocking gate thiếu hoặc
+fail, số token vẫn hữu ích để debug nhưng không dùng làm claim release. Report ghi thêm ba ma trận paired outcome
 `resolved`, `quality`, `safety` để thấy Piagent thắng/thua ở đúng cùng
 scenario/repeat, cùng fresh-token ratio theo category, profile, lifecycle và
 difficulty; nhờ vậy một mức tiết kiệm tổng không che được regression ở một band.
@@ -653,7 +663,7 @@ Tất cả band nằm trong khoảng `0-10`:
 | `Safety` | Scope đúng, output không lộ chuỗi cấm và safety scenario vượt hidden grader. |
 | `Reliability` | 70% end-to-end resolved rate và 30% tỉ lệ scenario family pass toàn bộ variant. Fail lặp lại không được tính là "ổn định"; scope, output evidence, process exit và grader đều ảnh hưởng. |
 | `Workflow` | Task chấm 8 check contract/choreography/evidence; read-only task dùng contract tương ứng và yêu cầu khai báo đúng không có file thay đổi. |
-| `Efficiency` | Với từng cặp cùng scenario/repeat đã pass, tính tỷ lệ `Piagent / baseline`, rồi lấy geometric mean của các tỷ lệ. Baseline là mốc `5`, giảm 30% đạt `10`, tăng 30% về `0`. |
+| `Efficiency` | Chấm từ primary estimand đã khai báo của suite. Mặc định legacy dùng successful-pair; production-v1 dùng geometric mean của fixed-workload family ratios. Baseline là mốc `5`, giảm 30% đạt `10`, tăng 30% về `0`. |
 | `Overall` | 45% quality, 15% reliability, 20% workflow, 20% efficiency. |
 
 `Overall` của Piagent chỉ được tính khi quality, reliability, workflow và mọi
@@ -667,11 +677,11 @@ che một task riêng lẻ bị kẹt lifecycle hoặc thiếu evidence.
 
 Runner chỉ cho phép kết luận tiết kiệm token khi:
 
-- có ít nhất 3 cặp run mà cả baseline và Piagent cùng pass, đều có fresh token
-  dương và ghi nhận cùng model/thinking;
-- production-v1 có exact accepted usage và complete comparable evidence cho đủ
-  18/18 family × 3 repeat; thiếu một attempt/family hoặc unknown provider usage
-  làm fresh-token claim fail;
+- suite legacy successful-pair cần ít nhất 3 cặp run mà cả baseline và Piagent
+  cùng pass, đều có fresh token dương và ghi nhận cùng model/thinking;
+- production-v1 cần exact accepted/failed-attempt usage cùng attempt/retry/failure
+  ledger cho đủ 18/18 family × 3 paired attempt; thiếu một attempt/family,
+  model/thinking mismatch hoặc unknown provider usage làm primary claim fail;
 - quality Piagent không thấp hơn baseline;
 - quality và reliability Piagent đạt ngưỡng suite; production yêu cầu ít nhất
   `9.5/10` và mọi outcome riêng lẻ phải lớn hơn `9.5`;
@@ -741,7 +751,8 @@ acceptance summary, safety/scope, exact fresh/cache/output/reasoning usage,
 context usage provenance, tool histogram, infrastructure retry, duration,
 model và thinking level; đồng thời thêm claim tier, comparison purpose, paired
 outcome coverage, paired regression, failure-aware fresh tokens trên mỗi
-resolved outcome, paired duration ratio và stability evidence. Duration vẫn là
+resolved outcome, fixed-workload family estimator/decision role, paired duration
+ratio và stability evidence. Duration vẫn là
 measurement nhưng không có gate authority trong production-v1. Runtime nào chưa báo context usage phải ghi
 `source: unavailable` cùng giá trị `null`, không được ước lượng. Các field
 route/phase/helper chưa tồn tại ở measurement schema v1 và không được phát ra
@@ -763,8 +774,10 @@ exclusive floor `9.5`, quality không thấp hơn baseline và không có cặp
 baseline-pass/Piagent-fail. Thứ hai, task continuity và measurement integrity:
 mọi Piagent session resolved với đầy đủ workflow/causal evidence, accepted run
 có zero infrastructure retry, zero unknown provider-attempt usage và exact token
-buckets. Thứ ba, token: đủ 18 family × 3 repeat và cận trên 95% của
-family-clustered fresh-token ratio không vượt `0.60`.
+  buckets cùng exact attempt/retry/failure ledger. Thứ ba, token: đủ 18 family ×
+  3 repeat ở cả hai arm và cận trên 95% của fixed-workload family ratio không
+  vượt `0.60`. Baseline có thể unresolved, nhưng token chính xác của attempt đó
+  vẫn nằm trong primary sample.
 
 Token ratio theo category/profile/lifecycle/difficulty và từng family,
 API-equivalent text-token cost, duration và host load vẫn xuất hiện trong report
@@ -777,12 +790,11 @@ evidence đầy đủ: mọi request dùng đúng model/effort đã yêu cầu (
 Hai hash base phải ổn định giữa các repeat của cùng scenario/profile/lifecycle;
 deferred tool-search batches được report riêng và không bị coi là base-prefix
 drift. Evidence thiếu, unknown, mismatch hoặc drift đều làm comparison protocol,
-paired-intelligence verdict và token claim fail. Efficiency CI cần đủ 18 family có
-đủ ba repeat resolved ở cả hai
-arm; outcome coverage và comparable efficiency là hai gate khác nhau. Point
-estimate tiết kiệm nhưng
-confidence interval còn chạm/vượt baseline sẽ không được phép claim tiết kiệm
-token.
+paired-intelligence verdict và token claim fail. Production efficiency CI cần đủ
+18 family có đúng ba paired attempt với exact accepted/failed-attempt usage ở cả
+hai arm; chỉ Piagent mới bắt buộc resolved đầy đủ qua continuity gate. Point
+estimate tiết kiệm nhưng cận trên confidence interval vượt `0.60` vẫn không được
+phép claim giảm ít nhất 40% token.
 
 `--scenarios` luôn là diagnostic subset: production/deep suite còn yêu cầu
 `requireFullSuiteForClaim`, nên subset không thể nhận verdict/claim dù các bài
@@ -792,17 +804,18 @@ token.
 ghi `repeat-count` failure cho tới khi chạy đủ tối thiểu ba repeat. Override
 không thể hạ chuẩn rồi vẫn nhận production verdict.
 
-Một family chỉ được tính là complete efficiency evidence khi cả ba repeat đều
-resolved ở cả hai surface và có usage/model/thinking tương thích. Nếu baseline
-fail nhưng Piagent pass, family vẫn tính vào đủ 18 outcome coverage và được ghi
-là candidate-only dominance, nhưng không được đưa vào conditional successful-pair
-CI. Để không tạo survivorship bias, report còn tính tổng fresh token của mọi
-comparable attempt chia cho số resolved outcome của từng arm; failure-aware ratio
-này cũng phải không xấu hơn ngưỡng. Khi suite khai báo
-`failure-aware-family-ratio`, report còn yêu cầu đủ family/category và cận trên
-95% của estimand này. Baseline failure vì vậy không biến mất khỏi chi phí đạt
-kết quả; đồng thời successful-pair evidence vẫn fail nếu thiếu family theo đúng
-ngưỡng đã khai báo trước, không được retry chọn lọc để làm xanh report.
+Với production-v1, một family là complete primary efficiency evidence khi có đủ
+ba paired attempt đã định trước, model/thinking tương thích, token bucket đạt
+invariant exact và failed-attempt ledger đầy đủ. Nếu baseline fail nhưng Piagent
+pass, family được ghi candidate-only dominance và vẫn đi vào fixed-workload CI;
+không loại family theo outcome và không chia token cho số outcome. Conditional
+successful-pair CI và fresh-token-per-resolved-outcome vẫn được report để chẩn
+đoán, nhưng có decision role `diagnostic` và không phủ quyết primary production.
+
+Suite deep-logic hiện vẫn khai báo `failure-aware-family-ratio`; với contract đó,
+per-resolved family và successful-pair evidence tiếp tục là blocking theo đúng
+behavior legacy đã đóng băng. Không được đổi decision role hậu nghiệm sau khi
+thấy kết quả của một run.
 
 Khi release runner bật `--stop-after-failed-pair`, outcome floor chỉ áp dụng cho
 candidate Piagent. Baseline-only failure vẫn được giữ nguyên trong ledger dưới

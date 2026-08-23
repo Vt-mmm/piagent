@@ -181,12 +181,15 @@ export function benchmarkClaimEligibility({ suite, environment = {}, baselineSur
   if (baselineSurface === "codex-cli") limitations.push("codex-comparison-is-external-and-non-causal");
   if ((suite.defaultRepeats ?? 0) <= 3) limitations.push("three-repeats-do-not-support-an-always-claim");
   if (assurance.generatedVariants === true && assurance.familyDisjointSplit !== true) limitations.push("generated-value-variants-are-not-independent-task-families");
+  const tokenClaimScope = suite.releaseGate?.primaryEfficiencyEstimand === "fixed-workload-family-ratio"
+    ? "bounded-to-predeclared-fixed-workload-families"
+    : "bounded-to-observed-comparable-pairs-and-failure-aware-effort";
   return {
     declaredTier, achievedTier, comparisonPurpose,
     causalAttributionAllowed: comparisonPurpose === "causal-harness-ablation" && protocolPassed,
     generalizationClaimAllowed: privateHoldoutEligible,
     productionStabilityClaimAllowed: productionShadowEligible,
-    tokenClaimScope: tokenClaimAllowed ? "bounded-to-observed-comparable-pairs-and-failure-aware-effort" : "unavailable",
+    tokenClaimScope: tokenClaimAllowed ? tokenClaimScope : "unavailable",
     privateHoldoutChecks: privateChecks,
     limitations
   };

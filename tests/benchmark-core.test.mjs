@@ -107,6 +107,13 @@ test("validates production schema metadata and generated scenario controls", () 
   assert.match(errors, /assurance\.claimTier/);
   assert.match(errors, /minimumComparableEfficiencyScenarios/);
 
+  const incompatibleFixedWorkloadGuard = structuredClone(productionSuite);
+  incompatibleFixedWorkloadGuard.releaseGate.maximumFamilyFreshTokenRatio = 1;
+  assert.match(
+    benchmarkSuiteValidationErrors(incompatibleFixedWorkloadGuard).join("; "),
+    /maximumFamilyFreshTokenRatio is incompatible with fixed-workload-family-ratio/
+  );
+
   const missingCausalReceipt = structuredClone(productionSuite);
   delete missingCausalReceipt.releaseGate.requireCausalContextReceipt;
   assert.match(benchmarkSuiteValidationErrors(missingCausalReceipt).join("; "), /requireCausalContextReceipt true/);
@@ -705,6 +712,10 @@ function runRecord(scenario, surface, repeat, fresh) {
       : null,
     providerWireEvidence,
     causalContextReceipt: causalContextReceipt(surface),
+    infrastructureAttempt: 1,
+    infrastructureAttempts: 1,
+    infrastructureRetries: 0,
+    infrastructureFailures: [],
     usage: { fresh, input: fresh, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, total: fresh, cost: fresh / 100_000, costSource: "test-fixture", usageCompleteness: "exact", sessions: 1, model: "openai-codex/gpt-5.6-luna", thinkingLevel: "medium", toolCalls: 2, toolNames: { read: 1, bash: 1 } },
     durationSeconds: 1
   };
@@ -838,7 +849,17 @@ test("charges known failed-attempt usage without changing accepted-pair efficien
   candidate.infrastructureFailures = [{
     attempt: 1,
     usageStatus: "measured",
-    usage: { fresh: 100 }
+    usage: {
+      usageCompleteness: "exact",
+      sessions: 1,
+      input: 100,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      reasoning: 0,
+      fresh: 100,
+      total: 100
+    }
   }];
   const report = summarizeBenchmark({
     suite: { ...suite, scenarios },
@@ -855,6 +876,9 @@ test("charges known failed-attempt usage without changing accepted-pair efficien
   assert.equal(report.comparison.failureAwareFamilyFreshTokenRatio, 1.5);
   assert.equal(report.comparison.failureAwareFamilyFreshTokenRatioConfidence95, null);
   assert.equal(report.comparison.failureAwareFamilyCoverage.complete, true);
+  assert.equal(report.comparison.fixedWorkloadFamilyFreshTokenRatio, 1.5);
+  assert.equal(report.comparison.fixedWorkloadFamilyCoverage.complete, true);
+  assert.equal(report.comparison.fixedWorkloadFamilyRatios[0].candidateFreshTokens, 150);
   assert.equal(report.comparison.failureAwareEfficiencyGate, false);
 });
 
@@ -882,6 +906,9 @@ test("withholds failure-aware metrics and token claims for unknown provider-atte
   assert.equal(report.comparison.failureAwareFamilyFreshTokenRatioConfidence95, null);
   assert.equal(report.comparison.failureAwareFamilyCoverage.complete, false);
   assert.deepEqual(report.comparison.failureAwareFamilyRatios[0].issues, ["unknown-candidate-failed-attempt-usage"]);
+  assert.equal(report.comparison.fixedWorkloadFamilyFreshTokenRatio, null);
+  assert.equal(report.comparison.fixedWorkloadFamilyCoverage.complete, false);
+  assert.deepEqual(report.comparison.fixedWorkloadFamilyRatios[0].issues, ["unknown-candidate-failed-attempt-usage"]);
   assert.equal(report.comparison.failureAwareEfficiencyGate, null);
   assert.equal(report.comparison.tokenClaimAllowed, false);
 });
@@ -1360,7 +1387,7 @@ test("production release gate uses independent scenario families and the upper 9
     });
     assert.equal(hostBlocked.comparison.hostReadinessGate, null);
     assert.equal(hostBlocked.comparison.tokenClaimAllowed, true);
-    assert.equal(hostBlocked.comparison.claimEligibility.tokenClaimScope, "bounded-to-observed-comparable-pairs-and-failure-aware-effort");
+    assert.equal(hostBlocked.comparison.claimEligibility.tokenClaimScope, "bounded-to-predeclared-fixed-workload-families");
     assert.equal(hostBlocked.comparison.productionGate.passed, true);
     assert.equal(hostBlocked.comparison.productionGate.failures.includes("host-readiness-history"), false);
     assert.equal(hostBlocked.verdict.status, "piagent-more-efficient");
@@ -1469,11 +1496,16 @@ test("production release gate uses independent scenario families and the upper 9
   for (const run of overTokenBudgetRuns.filter((item) => item.surface === "piagent")) {
     run.usage.fresh = 61;
     run.usage.input = 51;
+    run.usage.output = 10;
+    run.usage.total = 61;
   }
   const overTokenBudget = summarizeProductionBenchmark({ suite: testSuite, runId: "over-token-budget", startedAt: "2026-08-01T00:00:00.000Z", completedAt: "2026-08-01T00:01:00.000Z", repeats: 3, environment, runs: overTokenBudgetRuns });
   assert.equal(overTokenBudget.comparison.freshTokenRatioConfidence95.upper, 0.61);
   assert.equal(overTokenBudget.comparison.efficiencyConfidenceGate, false);
-  assert.ok(overTokenBudget.comparison.productionGate.failures.includes("efficiency-confidence"));
+  assert.equal(overTokenBudget.comparison.primaryEfficiencyRatioConfidence95.upper, 0.61);
+  assert.equal(overTokenBudget.comparison.primaryEfficiencyConfidenceGate, false);
+  assert.ok(overTokenBudget.comparison.productionGate.failures.includes("primary-efficiency"));
+  assert.equal(overTokenBudget.comparison.productionGate.failures.includes("efficiency-confidence"), false);
 
   const slowerRuns = structuredClone(runs);
   for (const run of slowerRuns.filter((item) => item.surface === "piagent")) run.durationSeconds = 1.05;
@@ -1520,6 +1552,38 @@ test("production release gate uses independent scenario families and the upper 9
   assert.equal(recoveredReport.comparison.tokenClaimAllowed, false);
   assert.equal(recoveredReport.verdict.status, "stability-infrastructure-retry-gate-failed");
 
+  const missingFailureLedgerRuns = structuredClone(runs);
+  delete missingFailureLedgerRuns.find((item) => item.surface === "piagent").infrastructureFailures;
+  const missingFailureLedger = summarizeProductionBenchmark({ suite: testSuite, runId: "missing-failure-ledger", startedAt: "2026-08-01T00:00:00.000Z", completedAt: "2026-08-01T00:01:00.000Z", repeats: 3, environment, runs: missingFailureLedgerRuns });
+  assert.equal(missingFailureLedger.comparison.infrastructureFailureLedgerGate, false);
+  assert.deepEqual(missingFailureLedger.comparison.infrastructureFailureLedgerIssues[0].issues, ["missing-infrastructure-failure-ledger"]);
+  assert.ok(missingFailureLedger.comparison.productionGate.failures.includes("infrastructure-failure-ledger"));
+  assert.equal(missingFailureLedger.comparison.tokenClaimAllowed, false);
+  assert.equal(missingFailureLedger.verdict.status, "stability-failure-ledger-gate-failed");
+
+  const malformedFailedUsageSuite = structuredClone(testSuite);
+  malformedFailedUsageSuite.releaseGate.maximumInfrastructureRetries = 1;
+  const malformedFailedUsageRuns = structuredClone(runs);
+  const malformedFailedUsageRun = malformedFailedUsageRuns.find((item) => item.surface === "piagent");
+  malformedFailedUsageRun.infrastructureAttempts = 2;
+  malformedFailedUsageRun.infrastructureRetries = 1;
+  malformedFailedUsageRun.infrastructureFailures = [{
+    attempt: 1,
+    usageStatus: "measured",
+    usage: { fresh: 10 }
+  }];
+  const malformedFailedUsage = summarizeProductionBenchmark({ suite: malformedFailedUsageSuite, runId: "malformed-failed-usage", startedAt: "2026-08-01T00:00:00.000Z", completedAt: "2026-08-01T00:01:00.000Z", repeats: 3, environment, runs: malformedFailedUsageRuns });
+  assert.equal(malformedFailedUsage.comparison.infrastructureRetryGate, true);
+  assert.equal(malformedFailedUsage.comparison.infrastructureFailureLedgerGate, true);
+  assert.equal(malformedFailedUsage.comparison.failedUsageCompletenessGate, false);
+  assert.equal(malformedFailedUsage.comparison.allAttemptUsageCompletenessGate, false);
+  assert.equal(malformedFailedUsage.comparison.fixedWorkloadFamilyCoverage.complete, false);
+  assert.equal(malformedFailedUsage.comparison.primaryEfficiencyEvidenceGate, false);
+  assert.ok(malformedFailedUsage.comparison.productionGate.failures.includes("all-attempt-usage-completeness"));
+  assert.ok(malformedFailedUsage.comparison.productionGate.failures.includes("primary-efficiency"));
+  assert.equal(malformedFailedUsage.comparison.tokenClaimAllowed, false);
+  assert.equal(malformedFailedUsage.verdict.status, "all-attempt-usage-completeness-gate-failed");
+
   const prefixDriftRuns = structuredClone(runs);
   prefixDriftRuns.find((item) => item.surface === "piagent" && item.repeat === 2).providerWireEvidence.baseInstructionHashes = ["d".repeat(64)];
   const prefixDrift = summarizeProductionBenchmark({ suite: testSuite, runId: "prefix-drift", startedAt: "2026-08-01T00:00:00.000Z", completedAt: "2026-08-01T00:01:00.000Z", repeats: 3, environment, runs: prefixDriftRuns });
@@ -1549,6 +1613,9 @@ test("production release gate uses independent scenario families and the upper 9
   unknownUsageRuns.find((item) => item.surface === "piagent").infrastructureFailures = [{ attempt: 1, failure: "unknown-terminal", class: "unknown-cost", usageStatus: "unknown-after-provider-start", usage: { fresh: 0 } }];
   const unknownUsage = summarizeProductionBenchmark({ suite: testSuite, runId: "unknown-usage", startedAt: "2026-08-01T00:00:00.000Z", completedAt: "2026-08-01T00:01:00.000Z", repeats: 3, environment, runs: unknownUsageRuns });
   assert.equal(unknownUsage.comparison.unknownInfrastructureUsageGate, false);
+  assert.equal(unknownUsage.comparison.fixedWorkloadFamilyCoverage.complete, false);
+  assert.equal(unknownUsage.comparison.primaryEfficiencyEvidenceGate, false);
+  assert.ok(unknownUsage.comparison.productionGate.failures.includes("primary-efficiency"));
   assert.ok(unknownUsage.comparison.productionGate.failures.includes("unknown-infrastructure-usage"));
   assert.equal(unknownUsage.verdict.status, "stability-unknown-usage-gate-failed");
 
@@ -1803,7 +1870,7 @@ test("production token claims fail closed for raw diagnostics and dirty source t
   assert.match(renderBenchmarkText(raw), /Token-saving claim allowed: no/);
 });
 
-test("keeps outcome coverage visible but withholds a claim when one family lacks successful-pair usage", () => {
+test("uses every fixed-workload family when the baseline fails but Piagent remains correct", () => {
   const scenarios = productionSuite.scenarios.slice(0, 3);
   const testSuite = {
     ...productionSuite,
@@ -1840,14 +1907,60 @@ test("keeps outcome coverage visible but withholds a claim when one family lacks
   assert.equal(report.comparison.pairedCompleteScenarios, 2);
   assert.equal(report.comparison.outcomeEvidenceGate, true);
   assert.equal(report.comparison.efficiencyEvidenceGate, false);
+  assert.equal(report.comparison.successfulPairEfficiencyRole, "diagnostic");
   assert.equal(report.comparison.pairedOutcomes.resolved.candidateOnlyPass, 3);
   assert.equal(report.comparison.pairedRegressionGate, true);
   assert.equal(report.comparison.failureAwareEfficiencyGate, true);
+  assert.equal(report.comparison.failureAwareEfficiencyRole, "diagnostic");
+  assert.equal(report.comparison.fixedWorkloadFamilyFreshTokenRatio, 0.5);
+  assert.equal(report.comparison.fixedWorkloadFamilyCoverage.complete, true);
+  assert.equal(report.comparison.fixedWorkloadFamilyCoverage.usableScenarioFamilies, 3);
+  assert.equal(report.comparison.fixedWorkloadFamilyRatios[0].outcomeRelation, "candidate-dominates");
+  assert.equal(report.comparison.primaryEfficiencyEstimand, "fixed-workload-family-ratio");
+  assert.equal(report.comparison.primaryEfficiencySample.scenarioCount, 3);
+  assert.equal(report.comparison.primaryEfficiencySample.outcomeConditioning, "none");
+  assert.equal(report.comparison.primaryEfficiencyGate, true);
   assert.equal(report.comparison.freshTokenFamilyGate, null);
   assert.deepEqual(report.comparison.freshTokenFamilyFailures, []);
-  assert.equal(report.comparison.tokenClaimAllowed, false);
+  assert.equal(report.comparison.suiteGate.failures.includes("efficiency-evidence"), false);
+  assert.equal(report.comparison.suiteGate.passed, true);
+  assert.equal(report.comparison.tokenClaimAllowed, true);
   assert.equal(report.comparison.claimEligibility.achievedTier, "public-regression");
   assert.equal(report.comparison.claimEligibility.generalizationClaimAllowed, false);
+  assert.match(renderBenchmarkText(report), /Successful-pair evidence \(diagnostic\): incomplete/);
+
+  const incompatibleGuardSuite = structuredClone(testSuite);
+  incompatibleGuardSuite.releaseGate.maximumFamilyFreshTokenRatio = 1;
+  const incompatibleGuard = summarizeProductionBenchmark({
+    suite: incompatibleGuardSuite,
+    runId: "fixed-workload-incompatible-successful-pair-guard",
+    startedAt: "2026-08-01T00:00:00.000Z",
+    completedAt: "2026-08-01T00:01:00.000Z",
+    repeats: 3,
+    environment: productionEnvironment(),
+    runs
+  });
+  assert.equal(incompatibleGuard.comparison.releaseClaimConfigurationGate, false);
+  assert.ok(incompatibleGuard.comparison.productionGate.failures.includes("release-claim-configuration"));
+  assert.equal(incompatibleGuard.comparison.tokenClaimAllowed, false);
+
+  const candidateFailureRuns = structuredClone(runs);
+  const candidateFailure = candidateFailureRuns.find((run) => run.surface === "piagent");
+  candidateFailure.resolved = false;
+  candidateFailure.grade.passed = false;
+  candidateFailure.grade.score = 0;
+  const candidateFailureReport = summarizeProductionBenchmark({
+    suite: testSuite,
+    runId: "fixed-workload-candidate-failure",
+    startedAt: "2026-08-01T00:00:00.000Z",
+    completedAt: "2026-08-01T00:01:00.000Z",
+    repeats: 3,
+    environment: productionEnvironment(),
+    runs: candidateFailureRuns
+  });
+  assert.equal(candidateFailureReport.comparison.fixedWorkloadFamilyCoverage.complete, true);
+  assert.equal(candidateFailureReport.comparison.candidateTaskContinuityGate, false);
+  assert.equal(candidateFailureReport.comparison.tokenClaimAllowed, false);
 });
 
 test("uses a predeclared failure-aware family estimand without relaxing successful-pair or quality gates", () => {
