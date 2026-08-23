@@ -65,6 +65,7 @@ test("expected record binds exact surface and repeat before append", () => {
   const suite = { profile: "node" };
   const expected = { scenario: { id: "task", title: "Task", kind: "source-change", category: "code", difficulty: "small" }, surface: "raw-pi", repeat: 1 };
   assert.equal(expectedBenchmarkRecord(record(), 0, expected, "run", suite, hash), true);
+  assert.equal(expectedBenchmarkRecord(record({ timingDiagnostics: { schemaVersion: "malformed-observational-only" } }), 0, expected, "run", suite, hash), true);
   assert.equal(expectedBenchmarkRecord(record({ surface: "piagent" }), 0, expected, "run", suite, hash), false);
   assert.equal(expectedBenchmarkRecord(record({ repeat: 2 }), 0, expected, "run", suite, hash), false);
 });
@@ -95,8 +96,9 @@ test("measured-session WAL without a post-session guard stays unaccepted on resu
   const expected = { scenario: { id: "task", title: "Task", kind: "source-change", category: "code", difficulty: "small" }, surface: "raw-pi", repeat: 1 };
   const ledger = emptyBenchmarkLedgerBinding();
   const manifest = { schemaVersion: 1, runId: "run", configurationDigest: hash, ledger };
-  const measured = record();
+  const measured = record({ timingDiagnostics: { schemaVersion: "malformed-observational-only" } });
   stageMeasuredBenchmarkRecord({ runRoot, manifest, ledgerBinding: ledger, record: measured, infrastructureFailures: [], index: 0, expected, runId: "run", suite, configurationDigest: hash, runs: [] });
+  assert.equal(Object.hasOwn(measured, "timingDiagnostics"), false, "invalid timing is omitted without rejecting the paid result");
   const measuredPath = path.join(runRoot, "measured-record-ready.json");
   const measuredReady = JSON.parse(fs.readFileSync(measuredPath));
   const recovered = recoverPendingBenchmarkRecord({ runRoot, manifest, ledgerBinding: ledger, completedRuns: [], pending: null, measuredReady, fullOrder: [expected], suite });
@@ -114,15 +116,18 @@ test("post-session guard receipt makes the completed WAL promotable byte-identic
   const expected = { scenario: { id: "task", title: "Task", kind: "source-change", category: "code", difficulty: "small" }, surface: "raw-pi", repeat: 1 };
   const ledger = emptyBenchmarkLedgerBinding();
   const manifest = { schemaVersion: 1, runId: "run", configurationDigest: hash, ledger };
-  const measured = record();
+  const measured = record({ timingDiagnostics: { schemaVersion: "malformed-observational-only" } });
   stageMeasuredBenchmarkRecord({ runRoot, manifest, ledgerBinding: ledger, record: measured, infrastructureFailures: [], index: 0, expected, runId: "run", suite, configurationDigest: hash, runs: [] });
+  assert.equal(Object.hasOwn(measured, "timingDiagnostics"), false);
   promoteMeasuredBenchmarkRecord({ runRoot, ledgerBinding: ledger, record: measured, postSessionGuard: { stage: "after-session:task:raw-pi:r1:attempt1", matched: true } });
   const pendingPath = path.join(runRoot, "pending-record.json");
   const pendingBytes = fs.readFileSync(pendingPath);
   const pending = JSON.parse(pendingBytes);
+  pending.record.timingDiagnostics = { rawPayload: "legacy invalid timing must not survive resume promotion" };
   const recovered = recoverPendingBenchmarkRecord({ runRoot, manifest, ledgerBinding: ledger, completedRuns: [], pending, measuredReady: null, fullOrder: [expected], suite });
   assert.equal(recovered.completedRuns.length, 1);
   assert.deepEqual(recovered.completedRuns[0], measured);
+  assert.equal(Object.hasOwn(recovered.completedRuns[0], "timingDiagnostics"), false);
   assert.equal(fs.existsSync(pendingPath), false);
   assert.deepEqual(inspectBenchmarkLedger(path.join(runRoot, "runs.jsonl")).records, [measured]);
   assert.ok(pendingBytes.length > 0);

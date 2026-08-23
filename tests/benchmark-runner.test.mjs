@@ -385,6 +385,27 @@ const entries = [
   { type: "thinking_level_change", thinkingLevel: "high", timestamp: now },
   { type: "message", timestamp: now, message: { role: "assistant", content: [{ type: "text", text: "done" }, ...toolCalls], usage: { input, output: 10, cacheRead: 0, cacheWrite: 0, reasoning: 0, totalTokens: input + 10, cost: { total: input / 100000 } } } }
 ];
+const wireAssistant = { role: "assistant", content: [{ type: "text", text: "done" }, ...toolCalls] };
+const wireToolResults = toolCalls.map((call) => ({ role: "toolResult", toolCallId: call.id, toolName, content: [{ type: "text", text: "ok" }], isError: false }));
+const wireEvents = [
+  { type: "session", version: 3, id: sessionId, timestamp: now, cwd: process.cwd() },
+  { type: "agent_start" },
+  { type: "turn_start" },
+  { type: "message_start", message: { role: "user", content: "benchmark fixture prompt" } },
+  { type: "message_end", message: { role: "user", content: "benchmark fixture prompt" } },
+  { type: "message_start", message: { role: "assistant", content: [] } },
+  { type: "message_end", message: wireAssistant },
+  ...toolCalls.flatMap((call, index) => [
+    { type: "tool_execution_start", toolCallId: call.id, toolName, args: call.arguments },
+    { type: "tool_execution_end", toolCallId: call.id, toolName, result: wireToolResults[index], isError: false },
+    { type: "message_start", message: wireToolResults[index] },
+    { type: "message_end", message: wireToolResults[index] }
+  ]),
+  { type: "turn_end", message: wireAssistant, toolResults: wireToolResults },
+  { type: "agent_end", messages: [{ role: "user", content: "benchmark fixture prompt" }, wireAssistant, ...wireToolResults], willRetry: false },
+  { type: "agent_settled" }
+];
+for (const event of wireEvents) console.log(JSON.stringify(event));
 if (surface === "piagent") entries.push({
   type: "custom",
   customType: "piagent-task-trace",
@@ -490,7 +511,7 @@ const events = [
   { type: "thread.started", thread_id: "fake-codex-thread" },
   { type: "turn.started" },
   { type: "item.completed", item: { id: "message", type: "agent_message", text: "done" } },
-  { type: "item.completed", item: { id: "edit", type: "file_change", status: "completed" } },
+  { type: "item.completed", item: { id: "edit", type: "file_change", status: "completed", changes: [{ path: "result.txt", kind: "update" }] } },
   { type: "turn.completed", usage: { input_tokens: 100, cached_input_tokens: 20, cache_write_input_tokens: 0, output_tokens: 10, reasoning_output_tokens: 2 } }
 ];
 if (process.env.BENCHMARK_FAKE_CODEX_LARGE_OUTPUT === "1") events.splice(events.length - 1, 0, { type: "item.completed", item: { id: "large", type: "command_execution", aggregated_output: "x".repeat(5 * 1024 * 1024), exit_code: 0, status: "completed" } });
@@ -1547,7 +1568,14 @@ test("provider-free pause diagnostic allows only a clean observed pair and fails
   assert.equal(clean.causalContextEvidence.aggregates.estimatedTokens.injected, 100);
   assert.equal(clean.causalContextEvidence.aggregates.criterionInitialPack.zeroSelectionReasonCounts.noCandidates, 0);
   assert.equal(clean.causalContextEvidence.aggregates.directFallbackRereads.definition, "successful-direct-path-tool-call-v1");
+  assert.equal(clean.timingDiagnostics.gateImpact, "none");
+  assert.equal(clean.timingDiagnostics.surfaces.piagent.validDiagnostics, 0);
   assert.equal(clean.spendFutilityReview.passed, true);
+
+  const malformedTimingRuns = structuredClone(cleanRuns);
+  for (const run of malformedTimingRuns) run.timingDiagnostics = { rawPayload: "must remain outside stage authority" };
+  const malformedTiming = buildBenchmarkStageDiagnostic({ ...input, runs: malformedTimingRuns });
+  assert.deepEqual(malformedTiming, clean, "malformed observational timing cannot alter stage or resume authorization");
 
   const invalidCausalRuns = structuredClone(cleanRuns);
   invalidCausalRuns.find((run) => run.surface === "piagent")
@@ -2317,6 +2345,15 @@ test("one command compares Piagent with controlled Codex CLI using strict JSONL 
   assert.equal(report.surfaces.codexCli.usage.allMeasuredRuns.medianCost, null);
   assert.deepEqual(report.surfaces.codexCli.usage.toolNames, { file_change: 3 });
   assert.equal(report.surfaces.piagent.resolved, 3);
+  assert.equal(report.timingDiagnostics.gateImpact, "none");
+  assert.equal(report.timingDiagnostics.surfaces.piagent.validDiagnostics, 3);
+  assert.equal(report.timingDiagnostics.surfaces["codex-cli"].validDiagnostics, 3);
+  assert.equal(report.runs.every((run) => run.timingDiagnostics?.privacy?.promptsStored === false
+    && run.timingDiagnostics?.privacy?.commandsStored === false
+    && run.timingDiagnostics?.privacy?.pathsStored === false), true);
+  assert.equal(report.runs.filter((run) => run.surface === "piagent")
+    .every((run) => run.timingDiagnostics?.observations?.turnStarts === 1
+      && run.timingDiagnostics?.observations?.turnCompletions === 1), true);
   assert.equal(report.comparison.pairedUsageRuns, 3);
   assert.equal(report.comparison.pairedCostRuns, 0);
   assert.equal(report.comparison.comparisonProtocolGate.passed, true);

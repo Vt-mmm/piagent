@@ -21,9 +21,10 @@
     { "id": "task-contract-schema", "path": "schemas/task-contract.schema.json", "sha256": "7b3cf9d0284e15db3636049f4ab298d0adedcc6c614030517e4b119c9f3bf6e6" },
     { "id": "assurance-schema", "path": "schemas/benchmark-assurance-evidence.schema.json", "sha256": "5d937632d2cfff34dbbb781dd367bb78feb64c36d571c36ca15f2cc40c576af8" },
     { "id": "failure-and-operational-classifier", "path": "packages/piagent-core/benchmark/benchmark-forensics.js", "sha256": "6afec2ca572b15771f0c110f9f352e4bba364a460b61ed9fe8df03bbc52f470a" },
-    { "id": "session-orchestration", "path": "scripts/benchmark-session.mjs", "sha256": "9c8eadb913a763d4be72389463b2bca91aa3389d31214814c85ff3faddffe644" },
+    { "id": "session-orchestration", "path": "scripts/benchmark-session.mjs", "sha256": "085ef089b37b98361e6e43f16d42413848130ead93756cf6b9a3057a0ad29cb7" },
     { "id": "phase-attribution", "path": "packages/piagent-core/benchmark/benchmark-phase-attribution.js", "sha256": "9c07bda5bfe7bb7b0959844ccea6790735cc9f154d8d5972e18785148cea6d9a" },
     { "id": "record-validator", "path": "packages/piagent-core/benchmark/benchmark-record-validation.js", "sha256": "262a1b934c30032663ecfc570e039c3bfdc1511e2b47115e7ccfd08bf1cfcd72" },
+    { "id": "timing-diagnostics", "path": "packages/piagent-core/benchmark/benchmark-timing-diagnostics.js", "sha256": "5f52293f4c5c6d8444a35f94c6ccfd9e9183db8c8fa0e755c3da5b0cb847c2aa" },
     { "id": "protocol-enforcement", "path": "packages/piagent-core/benchmark/fs5-pilot-protocol.js", "sha256": "2bcc0cf6c18eee0c080c30e727610b0f10a278f5862855d920ba5797f07a2f2d" },
     { "id": "runner-core", "path": "scripts/benchmark-runner-core.mjs", "sha256": "7766e00ab11e4dec8481ab61a422be606166139036a08c75046b66786c89db6f" }
   ],

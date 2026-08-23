@@ -79,3 +79,16 @@ test("process runner measures duration independently of wall-clock jumps", async
   assert.ok(result.durationSeconds >= 0);
   assert.ok(result.durationSeconds < 60, `duration followed a wall-clock jump: ${result.durationSeconds}s`);
 });
+
+test("process runner exposes monotonic stdout receipt offsets without changing duration", async () => {
+  const observations = [];
+  const controller = createBenchmarkProcessController(() => false);
+  const result = await controller.run(process.execPath, ["-e", "console.log('one'); setTimeout(() => console.log('two'), 20)"], {
+    timeoutMs: 5_000,
+    onStdoutChunk(_chunk, observation) { observations.push(observation.observedAtSeconds); }
+  });
+  assert.equal(result.code, 0);
+  assert.ok(observations.length >= 1);
+  assert.ok(observations.every((value) => Number.isFinite(value) && value >= 0 && value <= result.durationSeconds));
+  assert.ok(observations.every((value, index) => index === 0 || value >= observations[index - 1]));
+});

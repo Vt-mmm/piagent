@@ -138,7 +138,7 @@ Project profiles can declare a runtime `permissionProfile`:
 
 | Profile | Use when | Guard behavior |
 |---|---|---|
-| `read-only` | Scout, audit, review | Allows `read`, `grep`, `find`, `ls`, and piagent state tools; blocks shell, write/edit, and unknown tools. |
+| `read-only` | Scout, audit, review | Allows `read`, `grep`, `find`, `ls`, and piagent state tools; blocks shell, `write`/`edit`/`apply_patch`, and unknown tools. |
 | `workspace-write` | Normal implementation | Default profile. Keeps current protected-path, shell, capability, task, and verify gates. |
 | `trusted-full-access` | Trusted local automation | Expands workspace tool/scope autonomy, but still enforces protected paths, secret redaction, capability lock integrity, and destructive/external confirmation. |
 

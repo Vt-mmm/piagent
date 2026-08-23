@@ -1,7 +1,7 @@
 ---
 name: piagent-worker
 description: Piagent implementation worker for bounded approved tasks
-tools: read, grep, find, ls, bash, edit, write, contact_supervisor
+tools: read, grep, find, ls, bash, edit, write, apply_patch, contact_supervisor
 thinking: high
 systemPromptMode: replace
 inheritProjectContext: true

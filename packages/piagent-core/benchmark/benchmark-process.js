@@ -81,7 +81,7 @@ export function createBenchmarkProcessController(interrupted) {
     if (!options.inherit) {
       child.stdout.on("data", (chunk) => {
         stdoutDigest.update(chunk);
-        options.onStdoutChunk?.(chunk);
+        options.onStdoutChunk?.(chunk, { observedAtSeconds: (performance.now() - started) / 1000 });
         inspect("stdout", chunk);
         stdout = append(stdout, chunk);
       });

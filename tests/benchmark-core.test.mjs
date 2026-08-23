@@ -771,6 +771,7 @@ test("keeps schema-v1 smoke efficiency observational after paired quality and sa
   }
   const report = summarizeBenchmark({ suite: { ...suite, scenarios }, runId: "run", startedAt: "2026-08-01T00:00:00.000Z", completedAt: "2026-08-01T00:01:00.000Z", repeats: 3, runs });
   assert.equal(report.measurementSchemaVersion, 2);
+  assert.equal(report.timingDiagnostics.gateImpact, "none");
   assert.equal(report.tokenAccounting.acceptedAttempts.exactAttempts, 12);
   assert.equal(report.tokenAccounting.acceptedAttempts.unknownAttempts, 0);
   assert.equal(report.tokenAccounting.failedAttempts.attempts, 0);
@@ -782,6 +783,10 @@ test("keeps schema-v1 smoke efficiency observational after paired quality and sa
   assert.equal(report.verdict.status, "observational-efficiency-only");
   assert.equal(report.comparison.workflowGate, true);
   assert.equal(report.surfaces.piagent.scores.overall, 10);
+  const rendered = renderBenchmarkText(report);
+  assert.match(rendered, /model-turn wait/);
+  assert.match(rendered, /Timing authority: privacy-safe monotonic JSONL receipt boundaries only/);
+  assert.doesNotMatch(rendered, /provider\/model wait/);
 
   runs.find((run) => run.surface === "piagent").outputSafety.passed = false;
   const unsafe = summarizeBenchmark({ suite: { ...suite, scenarios }, runId: "unsafe", startedAt: "2026-08-01T00:00:00.000Z", completedAt: "2026-08-01T00:01:00.000Z", repeats: 3, runs });
@@ -1215,6 +1220,28 @@ test("production release gate uses independent scenario families and the upper 9
   assert.equal(report.comparison.pairedQualityEvidence.expectedPairs, 9);
   assert.equal(report.comparison.pairedQualityEvidence.comparablePairs, 9);
   assert.equal(report.comparison.productionGate.passed, true);
+
+  const malformedTimingRuns = structuredClone(runs);
+  for (const run of malformedTimingRuns) run.timingDiagnostics = { rawPayload: "must remain observational" };
+  const malformedTiming = summarizeProductionBenchmark({
+    suite: testSuite,
+    runId: "production-malformed-timing",
+    startedAt: "2026-08-01T00:00:00.000Z",
+    completedAt: "2026-08-01T00:01:00.000Z",
+    repeats: 3,
+    environment,
+    runs: malformedTimingRuns
+  });
+  assert.deepEqual(malformedTiming.tokenAccounting, report.tokenAccounting);
+  assert.deepEqual(malformedTiming.surfaces, report.surfaces);
+  assert.deepEqual(malformedTiming.comparison, report.comparison);
+  assert.deepEqual(malformedTiming.verdict, report.verdict);
+  assert.equal(malformedTiming.comparison.pairedUsageRuns, 9);
+  assert.equal(malformedTiming.comparison.tokenClaimAllowed, true);
+  assert.equal(malformedTiming.timingDiagnostics.surfaces.piagent.validDiagnostics, 0);
+  assert.equal(malformedTiming.timingDiagnostics.surfaces.piagent.phases.processStartup.unavailableRuns, 9);
+  assert.equal(malformedTiming.runs.every((run) => !Object.hasOwn(run, "timingDiagnostics")), true);
+  assert.equal(JSON.stringify(malformedTiming).includes("must remain observational"), false);
 
   const historicalV1Runs = structuredClone(runs);
   for (const run of historicalV1Runs.filter((item) => item.surface === "piagent")) {

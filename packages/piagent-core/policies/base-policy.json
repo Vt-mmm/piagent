@@ -156,6 +156,7 @@
       "ls": ["filesystem-readonly"],
       "write": ["filesystem-write"],
       "edit": ["filesystem-write"],
+      "apply_patch": ["filesystem-write"],
       "browser": ["browser"],
       "github": ["github"]
     }

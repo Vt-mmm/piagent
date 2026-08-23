@@ -27,7 +27,7 @@ piagent_permission_status
 
 Runtime behavior:
 
-- `read-only` chặn shell, write/edit, và unknown non-piagent tools;
+- `read-only` chặn shell, `write`/`edit`/`apply_patch`, và unknown non-piagent tools;
 - `workspace-write` là default cho implementation có guard;
 - `trusted-full-access` nới tool/scope autonomy trong môi trường trusted nhưng không tắt protected paths, redaction, capability lock, hoặc human gate cho destructive/external action.
 - `/permission full-access <task>` bật `trusted-full-access` cho session hiện tại rồi gửi phần task còn lại cho agent; `/permission status` hiển thị mode và boundary đang active. Alias `/full-access <task>` và `/permission-status` vẫn chạy.
@@ -45,7 +45,7 @@ Runtime behavior:
 - phân tích shell command trước khi chạy lệnh rủi ro;
 - block destructive patterns;
 - đệ quy vào shell wrapper phổ biến như `sudo`, `env`, `bash -c`, subshell, command substitution, và backtick;
-- check `shellProtectedPaths` cho bash, mặc định bảo vệ `.git`, `auth.json`, `.env`, `.env.*`; path chỉ nằm trong `shellProtectedPaths` là shell-only và không chặn write/edit;
+- check `shellProtectedPaths` cho bash, mặc định bảo vệ `.git`, `auth.json`, `.env`, `.env.*`; path chỉ nằm trong `shellProtectedPaths` là shell-only và không chặn `write`/`edit`/`apply_patch`;
 - kiểm tra cả bare filename, partial glob (`*`, `?`, character class, brace), symbolic-link alias đã canonicalize, và redirect shell có hoặc không có khoảng trắng;
 - redact sensitive text trong text result và JSON-like result details trước khi output được trả về model; non-text media block được giữ nguyên;
 - cảnh báo broad command prefix như `bash`, `python`, `node`, `git`, `sudo`;

@@ -12,6 +12,7 @@ describe("role policy and deterministic binder", () => {
   it("keeps read-only roles free of mutation tools and worker disabled", () => {
     for (const role of ["retriever", "scout", "planner", "reviewer", "oracle", "researcher"]) assert.deepEqual(rolePolicyValidationErrors(defaultRolePolicy(role)), []);
     const worker = defaultRolePolicy("worker"); assert.equal(worker.enabledByDefault, false); assert.equal(worker.authority, "single-writer");
+    assert.equal(worker.allowedTools.includes("apply_patch"), true);
   });
   it("refuses helper scope/tool broadening and requires writer ownership", () => {
     const policy = defaultRolePolicy("scout", ["src/**"]);

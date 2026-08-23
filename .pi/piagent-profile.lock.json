@@ -17,8 +17,8 @@
       "path": "evals/scenarios/capability-resolution.json"
     },
     {
-      "byteSize": 6307,
-      "digest": "sha256:e9ab9144491944f228a07b6034ffa2bce117197f592cb69c7e363311277d66bb",
+      "byteSize": 6350,
+      "digest": "sha256:3e0f3a94bd3a19df8c24c3e234078d6c3edc664b20a7a4838919450f4225ffca",
       "id": "base-policy",
       "kind": "policies",
       "pack": "engineering-base@0.1.1",
@@ -105,8 +105,8 @@
       "path": "packages/piagent-core/subagents/piagent-scout.md"
     },
     {
-      "byteSize": 2146,
-      "digest": "sha256:e8e18e1ef3a43db2acd559c40a99b31d8cd994cbfaaf1adc5ef9d2cc5e3721a6",
+      "byteSize": 2159,
+      "digest": "sha256:3e0b7071c80f471fb7ea67f91477c1f5e6d3f2574db492c3a9fae6788374a95d",
       "id": "piagent-worker",
       "kind": "subagents",
       "pack": "engineering-base@0.1.1",
@@ -115,7 +115,7 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:2fa42ece2469f941e18250092df9fc795ac4e5256c58844ff537942ff96776aa",
+    "packageDigest": "sha256:c60a1b22111d05e45aaff0c2b4fabfa13f2d0265410cf8c2638bfcf38aa21993",
     "packageSource": "../",
     "packageVersion": "1.6.0",
     "runtimeFiles": [
@@ -130,8 +130,8 @@
         "path": "packages/piagent-core/package.json"
       },
       {
-        "byteSize": 6307,
-        "digest": "sha256:e9ab9144491944f228a07b6034ffa2bce117197f592cb69c7e363311277d66bb",
+        "byteSize": 6350,
+        "digest": "sha256:3e0f3a94bd3a19df8c24c3e234078d6c3edc664b20a7a4838919450f4225ffca",
         "path": "packages/piagent-core/policies/base-policy.json"
       },
       {
@@ -160,8 +160,8 @@
         "path": "packages/piagent-core/security/sensitive-data.js"
       },
       {
-        "byteSize": 232293,
-        "digest": "sha256:8add045bb9c07c60d3cbf1b25cf0d64135a1e0815c910a54898e52a7f9854a55",
+        "byteSize": 237216,
+        "digest": "sha256:4ba0cd1bc49bd80f7b197f880af15824e52f2060da877e010d8ec101b4ed2448",
         "path": "packages/piagent-core/extensions/piagent-guard.ts"
       },
       {
@@ -200,8 +200,8 @@
         "path": "packages/piagent-core/benchmark/benchmark-comparison.js"
       },
       {
-        "byteSize": 52303,
-        "digest": "sha256:c8c89ae0a3c44f5c1ea10df64a317ef0d98afcc5377b65303255c9a7d3be7b18",
+        "byteSize": 52877,
+        "digest": "sha256:73b633caacb3287d07f9d08e3c003139ad7409bfb15c383fde59db5542f09b3e",
         "path": "packages/piagent-core/benchmark/benchmark-core.js"
       },
       {
@@ -245,8 +245,8 @@
         "path": "packages/piagent-core/benchmark/benchmark-preflight.js"
       },
       {
-        "byteSize": 5334,
-        "digest": "sha256:819b00a504d2b517ad84e2b5fe8310e327450771a5ca4baae2d95534aa05838b",
+        "byteSize": 5395,
+        "digest": "sha256:6f30ec5ff5d4c82d9a8d0d027150aa9e411f66042c161cc35bcedeb52b3e9275",
         "path": "packages/piagent-core/benchmark/benchmark-process.js"
       },
       {
@@ -260,13 +260,13 @@
         "path": "packages/piagent-core/benchmark/benchmark-record-validation.js"
       },
       {
-        "byteSize": 36028,
-        "digest": "sha256:3f62c0ce9a6911cefd197ea4f175245f450f8c89676b2ad65292d6466560ccd3",
+        "byteSize": 37466,
+        "digest": "sha256:12ad4f0bc630c875f63aa97acf9f3756ca04747eeaebd49dd98dd6ff22872cbd",
         "path": "packages/piagent-core/benchmark/benchmark-report.js"
       },
       {
-        "byteSize": 14026,
-        "digest": "sha256:6482c8a924ecd057c2e530e062b95117083eea589c583a337800d643ed6ca47b",
+        "byteSize": 14719,
+        "digest": "sha256:fd2138a5c096be22536de535d6596dc5467302a584f53247f568889396acb34d",
         "path": "packages/piagent-core/benchmark/benchmark-resume-recovery.js"
       },
       {
@@ -290,8 +290,8 @@
         "path": "packages/piagent-core/benchmark/benchmark-runtime.js"
       },
       {
-        "byteSize": 35624,
-        "digest": "sha256:58eeea9ef3f6052c02fdd173b6b7f0de495d43c5e5978f57a531fa19eab24cc7",
+        "byteSize": 35787,
+        "digest": "sha256:ba5f169ed8a3ab45aadb87437a2890f5eb4896e800562149e14a0d400e01786c",
         "path": "packages/piagent-core/benchmark/benchmark-stage-diagnostic.js"
       },
       {
@@ -328,6 +328,11 @@
         "byteSize": 17363,
         "digest": "sha256:072aafa0b030f2d4c426a05048e398913cd39f92a84f6162f6d5eb0997acfb79",
         "path": "packages/piagent-core/benchmark/benchmark-summary-support.js"
+      },
+      {
+        "byteSize": 47039,
+        "digest": "sha256:5f52293f4c5c6d8444a35f94c6ccfd9e9183db8c8fa0e755c3da5b0cb847c2aa",
+        "path": "packages/piagent-core/benchmark/benchmark-timing-diagnostics.js"
       },
       {
         "byteSize": 8511,
@@ -500,8 +505,8 @@
         "path": "packages/piagent-core/extensions/local-state-path.js"
       },
       {
-        "byteSize": 232293,
-        "digest": "sha256:8add045bb9c07c60d3cbf1b25cf0d64135a1e0815c910a54898e52a7f9854a55",
+        "byteSize": 237216,
+        "digest": "sha256:4ba0cd1bc49bd80f7b197f880af15824e52f2060da877e010d8ec101b4ed2448",
         "path": "packages/piagent-core/extensions/piagent-guard.ts"
       },
       {
@@ -675,8 +680,8 @@
         "path": "packages/piagent-core/package.json"
       },
       {
-        "byteSize": 6307,
-        "digest": "sha256:e9ab9144491944f228a07b6034ffa2bce117197f592cb69c7e363311277d66bb",
+        "byteSize": 6350,
+        "digest": "sha256:3e0f3a94bd3a19df8c24c3e234078d6c3edc664b20a7a4838919450f4225ffca",
         "path": "packages/piagent-core/policies/base-policy.json"
       },
       {
@@ -1105,8 +1110,8 @@
         "path": "packages/piagent-core/runtime/orchestration/role-binder.ts"
       },
       {
-        "byteSize": 12658,
-        "digest": "sha256:fc3f7edf28f11a6c430e9956b69945a54d26c23413c4b175f3c8b6ba6b9b9e63",
+        "byteSize": 12673,
+        "digest": "sha256:2dcaa86cf5c5a7cab8209f359c8b57070c1fb38305378664323db4e5f6afa426",
         "path": "packages/piagent-core/runtime/orchestration/role-policy.ts"
       },
       {
@@ -1403,6 +1408,11 @@
         "byteSize": 6857,
         "digest": "sha256:821c57d3c77ddc96b984302ac2c02df40008fd6d7c71574104f40f97ffab9a35",
         "path": "packages/piagent-core/runtime/solver/task-features.ts"
+      },
+      {
+        "byteSize": 23372,
+        "digest": "sha256:af67f017873489b33218f1d474f3ba648b282a865ccbc19b4913a829bcee1ef8",
+        "path": "packages/piagent-core/runtime/tools/apply-patch-tool.ts"
       },
       {
         "byteSize": 7837,
@@ -1860,8 +1870,8 @@
         "path": "scripts/benchmark-runner.mjs"
       },
       {
-        "byteSize": 28385,
-        "digest": "sha256:9c8eadb913a763d4be72389463b2bca91aa3389d31214814c85ff3faddffe644",
+        "byteSize": 28860,
+        "digest": "sha256:085ef089b37b98361e6e43f16d42413848130ead93756cf6b9a3057a0ad29cb7",
         "path": "scripts/benchmark-session.mjs"
       },
       {

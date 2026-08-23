@@ -6,7 +6,7 @@ import { describe, it } from "node:test";
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const subagentsDir = path.join(repoRoot, "packages", "piagent-core", "subagents");
 const readOnlyTools = new Set(["read", "grep", "find", "ls"]);
-const mutationTools = new Set(["bash", "edit", "write"]);
+const mutationTools = new Set(["bash", "edit", "write", "apply_patch"]);
 
 function frontmatter(file) {
   const text = fs.readFileSync(file, "utf8");

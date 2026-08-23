@@ -29,6 +29,7 @@ Trong session Pi đầu tiên của project, chạy `/onboard`. Hằng ngày, d�
 - Mỗi task dùng một session có tên rõ ràng.
 - Slash command chỉ chạy handler đã đăng ký; agent không phải scout lại command.
 - Prompt hướng dẫn model, còn policy quan trọng được enforce tại runtime.
+- Permission `read-only` chỉ cho phép kiểm tra; shell và các tool ghi `write`/`edit`/`apply_patch` đều bị chặn.
 - MCP config không chứa token hoặc OAuth credential.
 - Task source-changing cần scope, verify evidence và final gate.
 - Local state nằm trong `.pi/piagent-state/`, có owner-only permission và bounded retention.

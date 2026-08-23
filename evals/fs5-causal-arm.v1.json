@@ -33,7 +33,7 @@
     },
     {
       "path": "tests/phase-tools-evaluation.test.mjs",
-      "sha256": "357182d50f6b97e9edfdbcdf959315c2f10910691e297c44d5e85f2300681d49"
+      "sha256": "6a3686db841273e6003279c026a2c7a9907601d457bb42d1f5621577c8f70357"
     },
     {
       "path": "evals/fs5-pilot-protocol.v1.json",

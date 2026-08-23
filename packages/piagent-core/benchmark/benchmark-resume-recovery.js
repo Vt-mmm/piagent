@@ -4,6 +4,7 @@ import path from "node:path";
 import { hardenPrivateRetentionRoot, retainedWorkspaceMarker, writeBenchmarkRunManifest, writePrivateAtomic } from "./benchmark-forensics.js";
 import { appendBenchmarkLedger, assertBenchmarkLedgerBinding, validateBenchmarkLedgerPrefix } from "./benchmark-ledger.js";
 import { expectedBenchmarkRecord, pairedBenchmarkVariantMatched } from "./benchmark-record-validation.js";
+import { canonicalBenchmarkTimingDiagnostics } from "./benchmark-timing-diagnostics.js";
 
 function fail(message) {
   const error = new Error(message);
@@ -27,6 +28,14 @@ function exactUsage(usage, usageStatus) {
     && ["fresh", "input", "output", "cacheRead", "cacheWrite", "reasoning", "total"].every((field) => nonnegative(usage?.[field]))
     && usage.fresh === usage.input + usage.output
     && usage.total === usage.input + usage.output + usage.cacheRead + usage.cacheWrite;
+}
+
+function omitInvalidTimingDiagnostics(record) {
+  if (!record || typeof record !== "object") return record;
+  const timing = canonicalBenchmarkTimingDiagnostics(record.timingDiagnostics, record.surface, record.durationSeconds);
+  if (timing === undefined) delete record.timingDiagnostics;
+  else record.timingDiagnostics = timing;
+  return record;
 }
 
 export function persistUnacceptedBenchmarkAttempt({ runRoot, manifest, record, reason, forceTokenUnavailable = false }) {
@@ -63,6 +72,7 @@ export function clearRecoveredBenchmarkAttempts(manifest, record) {
 }
 
 export function stageMeasuredBenchmarkRecord({ runRoot, manifest, ledgerBinding, record, infrastructureFailures, index, expected, runId, suite, configurationDigest, runs }) {
+  omitInvalidTimingDiagnostics(record);
   record.infrastructureAttempts = record.infrastructureAttempt ?? 1;
   record.infrastructureRetries = Math.max(0, record.infrastructureAttempts - 1);
   record.infrastructureFailures = infrastructureFailures;
@@ -91,6 +101,7 @@ export function promoteMeasuredBenchmarkRecord({ runRoot, ledgerBinding, record,
 export function recoverPendingBenchmarkRecord({ runRoot, manifest, ledgerBinding, completedRuns, pending, measuredReady, fullOrder, suite }) {
   let binding = ledgerBinding;
   const runs = completedRuns;
+  let pendingRecordSanitized = false;
   if (pending) {
     if (pending.schemaVersion !== 2 || !pending.previousLedger || !pending.record || pending.postSessionGuard?.matched !== true
       || !String(pending.postSessionGuard.stage ?? "").startsWith("after-session:")) fail("Benchmark pending record is missing its post-session execution guard receipt");
@@ -100,6 +111,8 @@ export function recoverPendingBenchmarkRecord({ runRoot, manifest, ledgerBinding
     }
     if (binding.records === pending.previousLedger.records) {
       assertBenchmarkLedgerBinding(pending.previousLedger, binding, "pending-record previous ledger");
+      omitInvalidTimingDiagnostics(pending.record);
+      pendingRecordSanitized = true;
       binding = appendBenchmarkLedger(path.join(runRoot, "runs.jsonl"), pending.record, binding);
       runs.push(pending.record);
     } else if (binding.records === pending.previousLedger.records + 1) {
@@ -123,6 +136,7 @@ export function recoverPendingBenchmarkRecord({ runRoot, manifest, ledgerBinding
       fail("Measured benchmark record WAL does not match the frozen execution order");
     }
     if (pending) {
+      if (pendingRecordSanitized) omitInvalidTimingDiagnostics(measuredReady.record);
       assertBenchmarkLedgerBinding(measuredReady.previousLedger, pending.previousLedger, "measured/pending previous ledger");
       if (JSON.stringify(measuredReady.record) !== JSON.stringify(pending.record)) fail("Measured and post-guard pending records differ");
     } else {

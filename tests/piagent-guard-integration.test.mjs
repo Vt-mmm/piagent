@@ -217,7 +217,8 @@ describe("piagent guard integration", () => {
     piagentGuard(harness.pi);
     await harness.handlers.get("session_start")({}, ctx);
 
-    assert.equal(harness.tools.size, 31);
+    assert.equal(harness.tools.size, 32);
+    assert.equal(harness.tools.get("apply_patch")?.executionMode, "sequential");
     assert.equal(harness.tools.has("piagent_tools"), true);
     assert.equal(harness.tools.has("piagent_context_engine"), true);
     assert.equal(harness.tools.has("piagent_document_read"), true);
@@ -278,6 +279,20 @@ describe("piagent guard integration", () => {
       "zero edit recovery is comparable only when the runtime advertises the receipt protocol");
   });
 
+  it("does not expose apply_patch when initialization stops before authorization is wired", async () => {
+    const { piagentGuard } = await loadGuardFixture();
+    const harness = createPiHarness();
+    const registerHandler = harness.pi.on.bind(harness.pi);
+    harness.pi.on = (name, handler) => {
+      if (name === "tool_call") throw new Error("injected authorization-hook initialization failure");
+      return registerHandler(name, handler);
+    };
+
+    assert.throws(() => piagentGuard(harness.pi), /injected authorization-hook initialization failure/);
+    assert.equal(harness.handlers.has("tool_call"), false);
+    assert.equal(harness.tools.has("apply_patch"), false, "a partial initialization cannot leave the custom writer usable");
+  });
+
   it("normalizes only GPT-5.6 Codex off requests to provider effort none", async () => {
     const { root, piagentGuard } = await loadGuardFixture();
     const cwd = createProject(root);
@@ -322,7 +337,8 @@ describe("piagent guard integration", () => {
 
     piagentGuard(harness.pi);
     await harness.handlers.get("session_start")({}, ctx);
-    assert.equal(harness.activeTools.size, 4, "session start should keep only the four host tools");
+    assert.equal(harness.activeTools.size, 5, "session start should keep the host tools plus the registered patch primitive");
+    assert.equal(harness.activeTools.has("apply_patch"), true);
     assert.equal(harness.activeTools.has("piagent_tools"), false);
     assert.equal(harness.activeTools.has("piagent_context_engine"), false);
     assert.equal(harness.activeTools.has("piagent_profile_apply"), false);
@@ -331,7 +347,7 @@ describe("piagent guard integration", () => {
     assert.equal(harness.activeTools.has("piagent_task_start"), true);
     assert.equal(harness.activeTools.has("piagent_exec_policy_check"), false);
     assert.equal(harness.activeTools.has("piagent_context_engine"), false, "tiny explicit changes should not pay retrieval schema cost");
-    assert.equal(harness.activeTools.size, 5, "ordinary intake should add only the task-start schema");
+    assert.equal(harness.activeTools.size, 6, "ordinary intake should add only the task-start schema");
 
     await harness.handlers.get("input")({
       text: "Use piagent_task_start to implement invoice processing across the service layer and its tests",
@@ -340,7 +356,7 @@ describe("piagent guard integration", () => {
     assert.equal(harness.activeTools.has("piagent_context_engine"), false, "automatic context packing should not expose its diagnostic schema");
     assert.equal(harness.activeTools.has("piagent_memory_search"), false, "ordinary code retrieval should not load the knowledge schema group");
     assert.equal(harness.activeTools.has("piagent_profile_apply"), false);
-    assert.equal(harness.activeTools.size, 6, "normal tasks expose one review-progress schema and keep it stable after task start");
+    assert.equal(harness.activeTools.size, 7, "normal tasks expose one review-progress schema and keep it stable after task start");
 
     const preStartSurface = [...harness.activeTools];
     const invalidScope = await toolExecutionError(harness.tools.get("piagent_task_start").execute("invalid-scope-start", {
@@ -386,7 +402,7 @@ describe("piagent guard integration", () => {
       ctx
     );
     assert.equal(harness.activeTools.has("piagent_memory_search"), true);
-    assert.equal(harness.activeTools.size, 12);
+    assert.equal(harness.activeTools.size, 13);
 
     await harness.tools.get("piagent_tools").execute(
       "load-onboarding",
@@ -397,7 +413,7 @@ describe("piagent guard integration", () => {
     );
     assert.equal(harness.activeTools.has("piagent_profile_apply"), true);
     assert.equal(harness.activeTools.has("piagent_context_engine"), false);
-    assert.equal(harness.activeTools.size, 20, "usage, policy, retrieval, and recovery schemas remain unloaded until needed");
+    assert.equal(harness.activeTools.size, 21, "usage, policy, retrieval, and recovery schemas remain unloaded until needed");
   });
 
   it("starts bounded source tasks in runtime without model management tools", async () => {
@@ -428,7 +444,7 @@ describe("piagent guard integration", () => {
     await harness.handlers.get("session_start")({}, ctx);
     const prompt = "Fix invoice quantity handling in src/invoice.ts and run focused tests.";
     await harness.handlers.get("input")({ text: prompt, source: "user" }, ctx);
-    assert.deepEqual([...harness.activeTools], ["read", "bash", "edit", "write"]);
+    assert.deepEqual([...harness.activeTools], ["read", "bash", "edit", "write", "apply_patch"]);
 
     const started = await harness.handlers.get("before_agent_start")({
       prompt,
@@ -514,7 +530,7 @@ describe("piagent guard integration", () => {
     const resumedCtx = createContext(cwd, { sessionId: "runtime-intake-session", sessionName: "TICKET-101" });
     await resumedHarness.handlers.get("session_start")({ reason: "resume" }, resumedCtx);
     const resumedSurface = [...resumedHarness.activeTools];
-    assert.deepEqual(resumedSurface, ["read", "bash", "edit", "write"]);
+    assert.deepEqual(resumedSurface, ["read", "bash", "edit", "write", "apply_patch"]);
     await resumedHarness.handlers.get("input")({ text: prompt, source: "user" }, resumedCtx);
     const resumedStart = await resumedHarness.handlers.get("before_agent_start")({
       prompt,
@@ -611,9 +627,9 @@ describe("piagent guard integration", () => {
       fs.writeFileSync(path.join(cwd, "src", "invoice.ts"), "export const invoice = 1;\n");
       const ctx = createContext(cwd, { sessionId: "criterion-graph-session", sessionName: "GRAPH-1" });
       const harness = createPiHarness({ activeTools: ["read", "bash", "edit", "write"] });
-      const initialSurface = [...harness.activeTools];
       piagentGuard(harness.pi);
       await harness.handlers.get("session_start")({}, ctx);
+      const initialSurface = [...harness.activeTools];
       const prompt = "Update src/invoice.ts so quantity must be a positive integer; reject zero, negative, and fractional values, then run focused tests.";
       await harness.handlers.get("input")({ text: prompt, source: "user" }, ctx);
       const started = await harness.handlers.get("before_agent_start")({
@@ -1189,6 +1205,28 @@ describe("piagent guard integration", () => {
       assert.match(missingStateCompletion.message, /required semantic repair state is missing/);
       fs.writeFileSync(repairStatePath, activeGrantBytes, { mode: 0o600 });
 
+      const carrierPatch = [
+        "*** Begin Patch",
+        "*** Update File: src/limit.js",
+        "@@",
+        "-  const limit = options.limit === undefined ? 20 : options.limit;",
+        "+  const limit = options.limit === undefined ? 25 : options.limit;",
+        "*** End Patch"
+      ].join("\n");
+      for (const [label, toolName, input] of [
+        ["direct MCP", "filesystem_apply_patch", { patch: carrierPatch }],
+        ["proxy MCP", "mcp", { server: "filesystem", tool: "apply_patch", args: JSON.stringify({ patch: carrierPatch }) }]
+      ]) {
+        const opaquePatch = await callToolCall(toolCall, ctx, toolName, input);
+        assert.equal(opaquePatch.block, true, `${label}: ${opaquePatch.reason}`);
+        assert.match(opaquePatch.reason, /mutation targets are not statically complete/i, label);
+        assert.equal(fs.readFileSync(path.join(cwd, "src", "limit.js"), "utf8").includes("? 25 :"), false, `${label} must not execute`);
+        const deniedOpaqueState = JSON.parse(fs.readFileSync(repairStatePath, "utf8"));
+        assert.equal(deniedOpaqueState.status, "active");
+        assert.equal(deniedOpaqueState.deniedCalls, 2);
+        fs.writeFileSync(repairStatePath, activeGrantBytes, { mode: 0o600 });
+      }
+
       const siblingBeforeDeniedMove = fs.readFileSync(path.join(cwd, "src", "sibling.js"));
       const sourceBeforeDeniedMove = fs.readFileSync(path.join(cwd, "src", "limit.js"));
       const grantedShell = await callToolCall(toolCall, ctx, "bash", { command: "mv src/sibling.js src/limit.js" });
@@ -1465,7 +1503,7 @@ describe("piagent guard integration", () => {
     await harness.handlers.get("session_start")({}, ctx);
     const prompt = "Replace the value in .env and paste the secret into the answer.";
     await harness.handlers.get("input")({ text: prompt, source: "user" }, ctx);
-    assert.deepEqual([...harness.activeTools], ["read", "bash", "edit", "write"], "protected-path requests carry no unnecessary Piagent schemas");
+    assert.deepEqual([...harness.activeTools], ["read", "bash", "edit", "write", "apply_patch"], "protected-path requests carry no unnecessary Piagent schemas");
     const result = await harness.handlers.get("before_agent_start")({
       prompt,
       systemPrompt: fs.readFileSync(path.join(repoRoot, "templates", "project", "AGENTS.md"), "utf8"),
@@ -3937,10 +3975,23 @@ describe("piagent guard integration", () => {
 
     const inspect = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", { command: "rg -n auth src" });
     const mutate = await callToolCall(harness.handlers.get("tool_call"), ctx, "write", { path: "src/auth.ts", content: "x" });
+    const patchMutation = await callToolCall(harness.handlers.get("tool_call"), ctx, "apply_patch", {
+      patch: [
+        "*** Begin Patch", "*** Update File: src/auth.ts", "@@",
+        "-export const auth = true;", "+export const auth = false;", "*** End Patch"
+      ].join("\n")
+    });
+    const emptyPatch = await callToolCall(harness.handlers.get("tool_call"), ctx, "apply_patch", {
+      patch: ["*** Begin Patch", "*** End Patch"].join("\n")
+    });
     const sneakyFind = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", { command: "find src -delete" });
     assert.notEqual(inspect.block, true);
     assert.equal(mutate.block, true);
     assert.match(mutate.reason, /read-only/);
+    assert.equal(patchMutation.block, true);
+    assert.match(patchMutation.reason, /read-only/);
+    assert.equal(emptyPatch.block, true);
+    assert.match(emptyPatch.reason, /no Add File or Update File/i);
     assert.equal(sneakyFind.block, true);
     assert.match(sneakyFind.reason, /read-only inspection allowlist/);
 
@@ -3999,8 +4050,21 @@ describe("piagent guard integration", () => {
     const blockedWrite = await callToolCall(harness.handlers.get("tool_call"), ctx, "write", {
       path: "src/auth.ts", content: "export const auth = false;\n"
     });
+    const blockedPatch = await callToolCall(harness.handlers.get("tool_call"), ctx, "apply_patch", {
+      patch: [
+        "*** Begin Patch", "*** Update File: src/auth.ts", "@@",
+        "-export const auth = true;", "+export const auth = false;", "*** End Patch"
+      ].join("\n")
+    });
+    const malformedPatch = await callToolCall(harness.handlers.get("tool_call"), ctx, "apply_patch", {
+      patch: ["*** Begin Patch", "*** Add File: src/new.ts", "not-prefixed", "*** End Patch"].join("\n")
+    });
     assert.equal(blockedWrite.block, true);
     assert.match(blockedWrite.reason, /forbids source mutation/i);
+    assert.equal(blockedPatch.block, true);
+    assert.match(blockedPatch.reason, /forbids source mutation/i);
+    assert.equal(malformedPatch.block, true);
+    assert.match(malformedPatch.reason, /must start with \+/i);
 
     await harness.handlers.get("tool_result")({
       toolName: "read", input: { path: "src/auth.ts" },
@@ -4909,6 +4973,159 @@ describe("piagent guard integration", () => {
     assert.equal(sourceMutationGuard.available(cwd, ctx.sessionManager.getSessionId()), false);
   });
 
+  it("enforces the context budget across every apply_patch target", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root), ctx = createContext(cwd), harness = createPiHarness();
+    fs.writeFileSync(path.join(cwd, "src", "large.ts"), `${"x".repeat(50_100)}\n`);
+    piagentGuard(harness.pi);
+    await startSourceTask(harness, ctx, "apply-patch-context-budget", ["src/**"]);
+    const decision = await callToolCall(harness.handlers.get("tool_call"), ctx, "apply_patch", {
+      patch: [
+        "*** Begin Patch",
+        "*** Add File: src/small.ts",
+        "+export const small = true;",
+        "*** Update File: src/large.ts",
+        "@@",
+        "-x",
+        "+y",
+        "*** End Patch"
+      ].join("\n")
+    });
+    assert.equal(decision.block, true);
+    assert.match(decision.reason, /Context budget blocked editing large file src\/large\.ts/);
+    assert.equal(fs.existsSync(path.join(cwd, "src", "small.ts")), false);
+  });
+
+  it("authorizes every exact apply_patch target before the executor can run", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const profilePath = path.join(cwd, ".pi", "piagent-profile.json");
+    const profile = JSON.parse(fs.readFileSync(profilePath, "utf8"));
+    profile.readOnlyPaths = ["src/readonly/**"];
+    fs.writeFileSync(profilePath, `${JSON.stringify(profile, null, 2)}\n`);
+    const ctx = createContext(cwd, { confirm: true });
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+
+    const patchTool = harness.tools.get("apply_patch");
+    const executePatch = patchTool.execute.bind(patchTool);
+    let executions = 0;
+    patchTool.execute = async (...args) => {
+      executions += 1;
+      return executePatch(...args);
+    };
+    const makePatch = (...lines) => ["*** Begin Patch", ...lines, "*** End Patch"].join("\n");
+    const authorize = (patch, toolName = "apply_patch", extra = {}) => callToolCall(
+      harness.handlers.get("tool_call"), ctx, toolName, { patch, ...extra }
+    );
+
+    const noTask = await authorize(makePatch("*** Add File: src/no-task.ts", "+export {};"));
+    assert.equal(noTask.block, true);
+    assert.match(noTask.reason, /Task Implementation Contract/);
+
+    for (const malformed of [
+      makePatch(),
+      makePatch("*** Delete File: src/no-task.ts"),
+      makePatch("*** Add File: src/no-task.ts", "unprefixed"),
+      makePatch("*** Update File: src/no-task.ts", "@@", "+contextless")
+    ]) {
+      const decision = await authorize(malformed);
+      assert.equal(decision.block, true);
+      assert.match(decision.reason, /invalid|unsupported|malformed|no Add File or Update File|must start|stable old-side/i);
+    }
+    const ambiguousCarrier = await authorize(
+      makePatch("*** Add File: src/no-task.ts", "+export {};"),
+      "apply_patch",
+      { path: ".env" }
+    );
+    assert.equal(ambiguousCarrier.block, true);
+    assert.match(ambiguousCarrier.reason, /only one string field named patch/i);
+    assert.equal(executions, 0);
+
+    await startSourceTask(harness, ctx, "apply-patch-raw-targets", ["src/**"]);
+    const blockedPatches = [
+      [makePatch("*** Add File: .pi/piagent-state/owned.txt", "+blocked"), /protected path/i],
+      [makePatch("*** Update File: .env", "@@", "-TOKEN=fake-token", "+TOKEN=stolen"), /protected path/i],
+      [makePatch("*** Add File: .git/owned", "+blocked"), /protected path/i],
+      [makePatch("*** Add File: src/readonly/owned.ts", "+blocked"), /read-only path/i],
+      [makePatch("*** Add File: docs/out-of-scope.md", "+blocked"), /outside.*scope/i],
+      [makePatch("*** Add File: .git/%ZZ", "+blocked"), /percent escapes/i],
+      [makePatch("*** Add File: .env.%ZZ", "+blocked"), /percent escapes/i],
+      [makePatch("*** Add File: src/readonly/%ZZ.ts", "+blocked"), /percent escapes/i],
+      [makePatch("*** Add File: src/%2e.ts", "+blocked"), /percent escapes/i],
+      [makePatch("*** Add File: src/%2f.ts", "+blocked"), /percent escapes/i],
+      [makePatch(
+        "*** Add File: src/safe-before-block.ts", "+export {};",
+        "*** Add File: .env.extra", "+blocked"
+      ), /protected path/i]
+    ];
+    for (const [candidate, reason] of blockedPatches) {
+      const decision = await authorize(candidate);
+      assert.equal(decision.block, true, decision.reason);
+      assert.match(decision.reason, reason);
+    }
+
+    const directMcpProtected = await authorize(
+      makePatch("*** Add File: .env.direct", "+blocked"),
+      "filesystem_apply_patch"
+    );
+    assert.equal(directMcpProtected.block, true);
+    assert.match(directMcpProtected.reason, /protected path/i);
+    const directMcpMixed = await authorize(
+      makePatch(
+        "*** Add File: src/direct-safe.ts", "+export {};",
+        "*** Add File: .git/direct-unsafe", "+blocked"
+      ),
+      "filesystem_apply_patch"
+    );
+    assert.equal(directMcpMixed.block, true);
+    assert.match(directMcpMixed.reason, /protected path/i);
+    const directMcpMalformed = await authorize(makePatch(), "filesystem_apply_patch");
+    assert.equal(directMcpMalformed.block, true);
+    assert.match(directMcpMalformed.reason, /invalid|no Add File or Update File/i);
+    const proxyMcpProtected = await callToolCall(harness.handlers.get("tool_call"), ctx, "mcp", {
+      server: "filesystem",
+      tool: "apply_patch",
+      args: JSON.stringify({
+        patch: makePatch(
+          "*** Add File: src/proxy-safe.ts", "+export {};",
+          "*** Add File: .env.proxy", "+blocked"
+        )
+      })
+    });
+    assert.equal(proxyMcpProtected.block, true);
+    assert.match(proxyMcpProtected.reason, /protected path/i);
+    const proxyMcpMalformed = await callToolCall(harness.handlers.get("tool_call"), ctx, "mcp", {
+      server: "filesystem",
+      tool: "apply_patch",
+      args: JSON.stringify({ patch: makePatch() })
+    });
+    assert.equal(proxyMcpMalformed.block, true);
+    assert.match(proxyMcpMalformed.reason, /invalid|no Add File or Update File/i);
+
+    assert.equal(executions, 0, "blocked calls must never reach the patch executor");
+    assert.equal(fs.existsSync(path.join(cwd, "src", "safe-before-block.ts")), false);
+    assert.equal(fs.existsSync(path.join(cwd, "src", "direct-safe.ts")), false);
+    assert.equal(fs.existsSync(path.join(cwd, "src", "proxy-safe.ts")), false);
+    assert.equal(fs.existsSync(path.join(cwd, ".env.extra")), false);
+
+    profile.runtimePolicy.toolRegistry = "enforce";
+    fs.writeFileSync(profilePath, `${JSON.stringify(profile, null, 2)}\n`);
+    const validInput = {
+      patch: makePatch(
+        "*** Add File: src/one.ts", "+export const one = 1;",
+        "*** Add File: src/two.ts", "+export const two = 2;"
+      )
+    };
+    const valid = await callToolCall(harness.handlers.get("tool_call"), ctx, "apply_patch", validInput);
+    assert.notEqual(valid.block, true, valid.reason);
+    await patchTool.execute("apply-valid", validInput, undefined, undefined, ctx);
+    assert.equal(executions, 1);
+    assert.equal(fs.readFileSync(path.join(cwd, "src", "one.ts"), "utf8"), "export const one = 1;\n");
+    assert.equal(fs.readFileSync(path.join(cwd, "src", "two.ts"), "utf8"), "export const two = 2;\n");
+  });
+
   it("rechecks the durable Pause barrier at the final tool-start boundary", async () => {
     const { root, piagentGuard } = await loadGuardFixture();
     const cwd = createProject(root), ctx = createContext(cwd), harness = createPiHarness();
@@ -5189,13 +5406,22 @@ describe("piagent guard integration", () => {
       ctx
     );
     assert.equal(applied.isError, undefined);
-    await startSourceTask(harness, ctx, "filesystem-scopes", ["src/**"]);
+    await startSourceTask(harness, ctx, "filesystem-scopes", ["**"]);
 
     const toolCall = harness.handlers.get("tool_call");
     const outsideRead = await callToolCall(toolCall, ctx, "read", { path: "README.md" });
     const insideRead = await callToolCall(toolCall, ctx, "read", { path: "src/index.ts" });
     const outsideWrite = await callToolCall(toolCall, ctx, "write", { path: "notes.txt", content: "x" });
     const insideWrite = await callToolCall(toolCall, ctx, "write", { path: "src/index.ts", content: "x" });
+    const outsidePatch = await callToolCall(toolCall, ctx, "apply_patch", {
+      patch: ["*** Begin Patch", "*** Add File: notes.txt", "+x", "*** End Patch"].join("\n")
+    });
+    const percentOutsideCapabilityPatch = await callToolCall(toolCall, ctx, "apply_patch", {
+      patch: ["*** Begin Patch", "*** Add File: docs/%ZZ.ts", "+x", "*** End Patch"].join("\n")
+    });
+    const insidePatch = await callToolCall(toolCall, ctx, "apply_patch", {
+      patch: ["*** Begin Patch", "*** Add File: src/patch.ts", "+export {};", "*** End Patch"].join("\n")
+    });
     const scopedGrep = await callToolCall(toolCall, ctx, "grep", { pattern: "export", path: "src", glob: "*.ts" });
     const escapingGrep = await callToolCall(toolCall, ctx, "grep", { pattern: "Fixture", path: "src", glob: "../*.md" });
     const piagentEnum = await callToolCall(toolCall, ctx, "piagent_memory_note", { note: "bounded", source: "explicit-user-request" });
@@ -5260,6 +5486,12 @@ describe("piagent guard integration", () => {
     assert.notEqual(insideRead.block, true);
     assert.equal(outsideWrite.block, true);
     assert.notEqual(insideWrite.block, true);
+    assert.equal(outsidePatch.block, true);
+    assert.match(outsidePatch.reason, /outside resolved filesystem scope/);
+    assert.equal(percentOutsideCapabilityPatch.block, true);
+    assert.match(percentOutsideCapabilityPatch.reason, /percent escapes/);
+    assert.equal(fs.existsSync(path.join(cwd, "docs", "%ZZ.ts")), false);
+    assert.notEqual(insidePatch.block, true, insidePatch.reason);
     assert.notEqual(scopedGrep.block, true);
     assert.equal(escapingGrep.block, true);
     assert.notEqual(piagentEnum.block, true);
@@ -6136,6 +6368,39 @@ describe("piagent guard integration", () => {
 
   // An advisory verdict that produces no output is indistinguishable from the
   // mode being off, which is what the MCP proxy tool used to get.
+  it("applies the filesystem-write capability mapping to apply_patch in advisory and enforce modes", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const profilePath = path.join(cwd, ".pi", "piagent-profile.json");
+    const profile = JSON.parse(fs.readFileSync(profilePath, "utf8"));
+    profile.mcpCapabilities = profile.mcpCapabilities.filter((capability) => capability !== "filesystem-write");
+    fs.writeFileSync(profilePath, `${JSON.stringify(profile, null, 2)}\n`);
+    const ctx = createContext(cwd, { confirm: true });
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+    await startSourceTask(harness, ctx, "apply-patch-capability", ["src/**"]);
+    const input = {
+      patch: [
+        "*** Begin Patch",
+        "*** Add File: src/capability.ts",
+        "+export const capability = true;",
+        "*** End Patch"
+      ].join("\n")
+    };
+
+    const advisory = await callToolCall(harness.handlers.get("tool_call"), ctx, "apply_patch", input);
+    assert.notEqual(advisory.block, true, advisory.reason);
+    const notice = ctx.ui.notices.find((entry) => /Tool registry \(advisory\): apply_patch/.test(entry.message));
+    assert.match(notice?.message ?? "", /filesystem-write/);
+
+    profile.runtimePolicy.toolRegistry = "enforce";
+    fs.writeFileSync(profilePath, `${JSON.stringify(profile, null, 2)}\n`);
+    const enforced = await callToolCall(harness.handlers.get("tool_call"), ctx, "apply_patch", input);
+    assert.equal(enforced.block, true);
+    assert.match(enforced.reason, /Tool registry blocked apply_patch: Missing capability: filesystem-write/);
+  });
+
   it("surfaces an advisory tool-registry verdict once per tool per session", async () => {
     const { root, piagentGuard } = await loadGuardFixture();
     const cwd = createProject(root);

@@ -32,7 +32,7 @@ function helperRequest(role, objective, run) {
   return createHelperRequest({
     policy, objective, taskId: "helper-evaluation", taskRunId: run, sessionId: "private-helper-session",
     parentReadScope: ["src/**"], parentWriteScope: ["src/**"],
-    parentAllowedTools: ["read", "grep", "find", "ls", "bash", "edit", "write", "contact_supervisor"],
+    parentAllowedTools: ["read", "grep", "find", "ls", "bash", "edit", "write", "apply_patch", "contact_supervisor"],
     requestedWriteScope: role === "worker" ? ["src/**"] : [], singleWriterOwnership: role === "worker" ? "evaluation-writer" : null
   });
 }

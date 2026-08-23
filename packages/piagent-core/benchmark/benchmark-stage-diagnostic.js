@@ -6,6 +6,7 @@ import {
 import { summarizeBenchmarkCausalContextEvidence } from "./benchmark-record-validation.js";
 import { atMostWithinFloatingPrecision, geometricMean } from "./benchmark-statistics.js";
 import { pairedOutcomeFloorStop } from "./benchmark-stop-policy.js";
+import { summarizeBenchmarkTimingDiagnostics } from "./benchmark-timing-diagnostics.js";
 
 const TOKEN_FIELDS = Object.freeze(["input", "output", "cacheRead", "cacheWrite", "reasoning", "fresh", "total"]);
 const PRODUCTION_STAGE_CONTROL_POLICY = "production-v1-provider-spend-v1";
@@ -696,6 +697,7 @@ export function buildBenchmarkStageDiagnostic({
       manifestUnknownUsage,
       tokenClaimsUnavailableReason
     },
+    timingDiagnostics: summarizeBenchmarkTimingDiagnostics(acceptedRuns),
     spendFutilityReview: {
       rule: "observed-pair-and-observed-family-point-ratios-must-not-exceed-1; this-is-not-the-final-40-percent-claim-gate",
       passed: freshEfficiencyPassed && normalizedCostPassed && durationEfficiencyPassed,

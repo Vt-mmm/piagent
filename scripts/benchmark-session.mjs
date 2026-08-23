@@ -31,6 +31,7 @@ import { matchesAnyPath } from "../packages/piagent-core/extensions/policy-core.
 import { listTaskContracts, workingTreeFiles, workingTreeSnapshot } from "../packages/piagent-core/extensions/task-state.js";
 import { benchmarkTreeIdentity } from "../packages/piagent-core/benchmark/benchmark-tree-identity.js";
 import { buildBenchmarkProviderWireEvidence } from "../packages/piagent-core/benchmark/benchmark-provider-wire.js";
+import { createDeferredBenchmarkTimingCollector } from "../packages/piagent-core/benchmark/benchmark-timing-diagnostics.js";
 import { summarizeSession, walkJsonl } from "./pi-usage-history.mjs";
 
 const coldStartRuntimeManagedPaths = [
@@ -358,6 +359,7 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
   const args = surface === "codex-cli" ? codexExecArgs({ workspace, options, disabledFeatures: codexDisabledFeatures }) : piArgs;
   const codexForbiddenHits = new Set();
   const codexCollector = surface === "codex-cli" ? createCodexExecJsonlCollector({ model: options.model, thinkingLevel: options.thinking, onEvent: (event) => inspectForbiddenValue(event, forbiddenOutputSubstrings, codexForbiddenHits) }) : undefined;
+  const timingCollector = createDeferredBenchmarkTimingCollector({ surface });
   const environment = {
     PIAGENT_NO_UPDATE_CHECK: "1", PIAGENT_BENCHMARK_RUN_ID: runId, PIAGENT_BENCHMARK_SCENARIO: scenario.id,
     PIAGENT_BENCHMARK_SURFACE: surface, PIAGENT_BENCHMARK_SESSION_ID: sessionId, PIAGENT_BENCHMARK_PROFILE: profile,
@@ -365,12 +367,22 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
   };
   const inflightPath = path.join(workspaceRoot, "inflight.json");
   writePrivateAtomic(inflightPath, `${JSON.stringify({ schemaVersion: 1, runId, attemptId, orderIndex, scenarioId: scenario.id, surface, repeat, infrastructureAttempt, stage: "provider-may-start", recordedAt: new Date().toISOString() }, null, 2)}\n`);
-  const agent = await runCommand(command, args, {
-    cwd: workspace, input: surface === "codex-cli" ? prompt : undefined, timeoutMs: options.timeoutSeconds * 1_000,
-    forbiddenSubstrings: forbiddenOutputSubstrings, requiredSubstrings: requiredOutputSubstrings,
-    onStdoutChunk: codexCollector ? (chunk) => codexCollector.write(chunk) : undefined,
-    env: surface === "codex-cli" ? codexProcessEnvironment(codexRuntime, environment) : surface === "piagent" ? piagentProcessEnvironment(options.piagentTreatment, { ...environment, PI_CODING_AGENT_DIR: piRuntimeHome.path }) : benchmarkEnvironment({ ...environment, PI_CODING_AGENT_DIR: piRuntimeHome.path })
-  });
+  let agent;
+  try {
+    agent = await runCommand(command, args, {
+      cwd: workspace, input: surface === "codex-cli" ? prompt : undefined, timeoutMs: options.timeoutSeconds * 1_000,
+      forbiddenSubstrings: forbiddenOutputSubstrings, requiredSubstrings: requiredOutputSubstrings,
+      onStdoutChunk: (chunk, observation) => {
+        timingCollector.write(chunk, observation?.observedAtSeconds);
+        codexCollector?.write(chunk);
+      },
+      env: surface === "codex-cli" ? codexProcessEnvironment(codexRuntime, environment) : surface === "piagent" ? piagentProcessEnvironment(options.piagentTreatment, { ...environment, PI_CODING_AGENT_DIR: piRuntimeHome.path }) : benchmarkEnvironment({ ...environment, PI_CODING_AGENT_DIR: piRuntimeHome.path })
+    });
+  } catch (error) {
+    timingCollector.discard();
+    throw error;
+  }
+  const timingDiagnostics = timingCollector.finish(agent.durationSeconds);
   const sessionFiles = surface === "codex-cli" ? [] : walkJsonl(sessions);
   let usage;
   let codexDiagnostics = [];
@@ -443,7 +455,8 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
     infrastructureDiagnosticSource: abortSuite ? (codexDiagnostics.length > 0 ? "codex-error-events" : piTerminalError ? "pi-terminal-error-event" : "process-output-tail") : undefined,
     resolved, failure: preUsageFailure?.failure ?? failureReason({ agent, grade, graderIntegrity, outsideScope, forbiddenHits, missingRequired }),
     agent: { exitCode: agent.code, signal: agent.signal, timedOut: agent.timedOut, stdoutHash: agent.stdoutHash ?? crypto.createHash("sha256").update(agent.stdout).digest("hex"), stderrHash: crypto.createHash("sha256").update(agent.stderr ?? "").digest("hex") },
-    grade, graderIntegrity, scope, outputSafety, outputEvidence, workflow, providerWireEvidence, causalContextReceipt, usage, durationSeconds: agent.durationSeconds,
+    grade, graderIntegrity, scope, outputSafety, outputEvidence, workflow, providerWireEvidence, causalContextReceipt, usage,
+    durationSeconds: agent.durationSeconds, timingDiagnostics,
     promptHash: crypto.createHash("sha256").update(prompt).digest("hex"),
     variant: scenario.variantGenerator ? { generated: true, seedDigest: variant.seedDigest, oracleDigest: variant.oracleDigest, fixtureDigest } : { generated: false, fixtureDigest }
   };

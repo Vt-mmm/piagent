@@ -10,6 +10,7 @@ import {
   summarizeBenchmarkCausalContextEvidence,
   validBenchmarkCausalContextReceipt
 } from "../packages/piagent-core/benchmark/benchmark-record-validation.js";
+import { createBenchmarkTimingCollector } from "../packages/piagent-core/benchmark/benchmark-timing-diagnostics.js";
 import {
   appendContextTelemetry,
   contextEnginePaths,
@@ -107,6 +108,19 @@ function completedRecord(surface, causalContextReceipt) {
     }
   };
 }
+
+test("keeps observational timing outside authoritative record acceptance", () => {
+  const record = completedRecord("codex-cli", notApplicableReceipt());
+  assert.equal(completedBenchmarkRecord(record), true);
+  record.timingDiagnostics = { rawPayload: "must-not-affect-paid-result-acceptance" };
+  assert.equal(completedBenchmarkRecord(record), true);
+  const collector = createBenchmarkTimingCollector({ surface: "codex-cli" });
+  collector.write(`${JSON.stringify({ type: "thread.started", thread_id: "timing-thread" })}\n`, 0.05);
+  collector.write(`${JSON.stringify({ type: "turn.started" })}\n`, 0.1);
+  collector.write(`${JSON.stringify({ type: "turn.completed", usage: {} })}\n`, 0.9);
+  record.timingDiagnostics = collector.finish(1);
+  assert.equal(completedBenchmarkRecord(record), true);
+});
 
 test("persists a complete causal aggregate without paths, hashes, prompts, or identifiers", () => {
   const events = [

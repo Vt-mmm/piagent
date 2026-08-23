@@ -51,7 +51,7 @@ Profiles define:
 - `rootMarkers`
 - `protectedPaths`
 - `shellProtectedPaths` — shell-only deny list for bash/exec parsing.
-- `readOnlyPaths` — path tools may read, but write/edit and shell access are denied.
+- `readOnlyPaths` — path tools may read, but `write`/`edit`/`apply_patch` and shell access are denied.
 - `requiredContext`
 - `verifyCommands`
 - `mcpCapabilities`
@@ -60,9 +60,9 @@ Profiles define:
 
 The same platform can operate as `web-frontend`, `backend-api`, `fullstack`, `be-readonly-fe`, `data`, `devops`, `docs`, `python`, `node-typescript`, or `mobile` by switching profile.
 
-`protectedPaths` blocks read/write path-tool access and is also used for shell matching when `shellProtectedPaths` is omitted. `readOnlyPaths` is for contracts such as `be-readonly-fe`: path tools may inspect these files with `read`, `grep`, `find`, and `ls`, but write/edit and shell access are blocked automatically.
+`protectedPaths` blocks `read`/`write`/`edit`/`apply_patch` access and is also used for shell matching when `shellProtectedPaths` is omitted. `readOnlyPaths` is for contracts such as `be-readonly-fe`: path tools may inspect these files with `read`, `grep`, `find`, and `ls`, but `write`/`edit`/`apply_patch` and shell access are blocked automatically.
 
-`shellProtectedPaths` is intentionally shell-only. A path declared only there blocks `bash`/`exec` access, but does not block `read`, `write`, or `edit` path tools. `profile-doctor` and `team-doctor` warn on shell-only entries so older custom profiles can migrate write-sensitive paths to `protectedPaths` or `readOnlyPaths`.
+`shellProtectedPaths` is intentionally shell-only. A path declared only there blocks `bash`/`exec` access, but does not block `read`, `write`, `edit`, or `apply_patch`. `profile-doctor` and `team-doctor` warn on shell-only entries so older custom profiles can migrate write-sensitive paths to `protectedPaths` or `readOnlyPaths`.
 
 ## Permission profiles
 
@@ -70,7 +70,7 @@ The runtime separates the active autonomy profile from the project profile:
 
 | Profile | Meaning |
 |---|---|
-| `read-only` | Allows source inspection through `read`, `grep`, `find`, `ls`, plus piagent state tools. Blocks shell, write/edit, and unknown non-piagent tools before execution. |
+| `read-only` | Allows source inspection through `read`, `grep`, `find`, `ls`, plus piagent state tools. Blocks shell, `write`/`edit`/`apply_patch`, and unknown non-piagent tools before execution. |
 | `workspace-write` | Default governed implementation mode. Existing protected-path, shell, capability, context, verify, and final gates remain active. |
 | `trusted-full-access` | Trusted automation mode for known repos. It can relax tool-registry blocks and capability filesystem scopes inside the guard, but protected paths, secret redaction, capability-lock integrity, and destructive/external confirmation still apply. |
 

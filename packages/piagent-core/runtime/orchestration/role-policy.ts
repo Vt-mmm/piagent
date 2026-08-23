@@ -87,7 +87,7 @@ export function defaultRolePolicy(role: HelperRole, scope: string[] = ["**"]): R
   const readOnly = role !== "worker";
   const policy: RolePolicy = {
     schemaVersion: 1, policyVersion: ROLE_POLICY_VERSION, role, authority: readOnly ? "read-only" : "single-writer",
-    enabledByDefault: readOnly, readScope: [...scope], writeScope: [], allowedTools: readOnly ? [...READ_TOOLS] : [...READ_TOOLS, "bash", "edit", "write", "contact_supervisor"],
+    enabledByDefault: readOnly, readScope: [...scope], writeScope: [], allowedTools: readOnly ? [...READ_TOOLS] : [...READ_TOOLS, "bash", "edit", "write", "apply_patch", "contact_supervisor"],
     modelSelectionSource: "runtime-catalog", effortSelectionSource: "runtime-snapshot", contextBudget: role === "oracle" ? 12000 : role === "reviewer" ? 9000 : 6000,
     ceilings: { timeSeconds: role === "oracle" ? 900 : 600, calls: role === "retriever" ? 20 : 40, retries: 0 },
     outputSchema: `${role}-result-v1`, stoppingRule: "Stop when the bounded objective is answered or evidence is insufficient; return uncertainty.",

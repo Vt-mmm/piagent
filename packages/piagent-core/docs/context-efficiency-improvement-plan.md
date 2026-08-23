@@ -78,13 +78,31 @@ had a pooled fresh-token ratio of `0.4229`. This isolates recovery churn and
 test-selection ambiguity as candidate causes rather than excess context-pack
 payload (the affected pack injected only about 100 tokens).
 
-The next candidate therefore remains deliberately narrow: prefer only proven
-direct import neighbors or a complete singleton executable-test selection;
-attach one bounded, secret-safe current-file snapshot after an exact edit-anchor
-mismatch; and recognize a narrowly proven input-driven terminal state machine
-in acceptance evidence. These behaviors require offline verification and a new
-clean commit before a brand-new S0/S12 ledger; the closed S12 ledger must never
-be resumed or relabeled.
+A subsequent clean candidate at `9cc16de` completed a brand-new S12 with all six
+pairs at `10/10`, exact Luna Medium provider parity, no retries, and complete
+schema-v2 causal receipts. It measured `45,474` Piagent fresh tokens versus
+`105,618` for Codex CLI (ratio `0.4306`, or `56.94%` reduction) and an
+API-equivalent text-token cost ratio of `0.4527` (`54.73%` reduction). Aggregate
+Piagent duration was `23.04%` lower. The stage is nevertheless permanently
+closed and may not advance: `unicode-search:r1` took `45.9048s` in Piagent versus
+`43.0316s` in Codex CLI, a `1.0668` ratio that correctly failed the strict
+no-observed-duration-regression gate. The other five duration pairs did not
+regress. Recovery correctness was covered offline, but the paid S12 observed no
+edit failures or recovery injections and therefore cannot support a paid-run
+recovery-effectiveness claim.
+
+The `9cc16de` candidate implemented the planned direct-import, singleton-test,
+bounded edit-recovery, and terminal-state evidence changes and removed the prior
+`quoted-csv` regression. The next candidate remains deliberately narrow and
+does not weaken verification or the latency gate: add one guarded multi-file
+`apply_patch` operation so a legitimate source-plus-regression-test change can
+be emitted in one model/tool turn, and add privacy-safe observational timing for
+process startup, model-turn wait, tool execution, and unattributed remainder.
+Timing uses monotonic JSONL receipt boundaries, stores no prompt, command, path,
+or identifier, leaves ambiguous boundaries unavailable, and has no gate impact.
+These behaviors require offline verification and another clean commit before a
+brand-new S0/S12 ledger; both closed S12 ledgers must never be resumed or
+relabeled.
 
 After this candidate passes the complete offline verification and is bound to
 one clean commit, authorize S0 and then S12 only. S12 may advance only with no

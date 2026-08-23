@@ -11,6 +11,7 @@ import {
   tokensPerResolvedOutcome
 } from "./benchmark-comparison.js";
 import { benchmarkProviderWireEvidenceMatchesRequest } from "./benchmark-provider-wire.js";
+import { canonicalBenchmarkTimingDiagnostics, summarizeBenchmarkTimingDiagnostics } from "./benchmark-timing-diagnostics.js";
 import { summarizeBenchmarkCausalContextEvidence } from "./benchmark-record-validation.js";
 import {
   benchmarkPricingSnapshotValidationErrors,
@@ -81,6 +82,14 @@ export function summarizeBenchmark({
   const baseline = surfaceSummary(baselineSurface, baselineRuns);
   const candidate = surfaceSummary(candidateSurface, candidateRuns);
   const tokenAccounting = buildBenchmarkTokenAccounting(runs);
+  const timingDiagnostics = summarizeBenchmarkTimingDiagnostics(runs);
+  const reportRuns = runs.map((run) => {
+    const timing = canonicalBenchmarkTimingDiagnostics(run.timingDiagnostics, run.surface, run.durationSeconds);
+    if (timing !== undefined || !Object.hasOwn(run, "timingDiagnostics")) return run;
+    const sanitized = { ...run };
+    delete sanitized.timingDiagnostics;
+    return sanitized;
+  });
   const baselineByKey = new Map(baselineRuns.map((run) => [`${run.scenarioId}:${run.repeat}`, run]));
   const allPairs = candidateRuns
     .map((run) => ({ baseline: baselineByKey.get(`${run.scenarioId}:${run.repeat}`), candidate: run }))
@@ -689,6 +698,7 @@ export function summarizeBenchmark({
       classCounts: infrastructureClassCounts
     },
     tokenAccounting,
+    timingDiagnostics,
     surfaces: { [baselineKey]: baseline, [candidateKey]: candidate },
     comparison: {
       baselineSurface,
@@ -918,6 +928,6 @@ export function summarizeBenchmark({
                                                   : "observational-efficiency-only",
       note: `Raw metrics and hidden verifier results are authoritative. Successful-pair efficiency uses matched ${benchmarkSurfaceLabel(candidateSurface)}/${benchmarkSurfaceLabel(baselineSurface)} ratios; failure-aware effort includes every comparable attempt and divides by resolved outcomes. Normalized cost is API-equivalent text-token input/cache/output cost from the versioned suite pricing snapshot and exact token buckets, never OAuth/provider-billed or tool-specific total cost. Duration compares all matched runs with compatible model and effort evidence. Provider-wire evidence verifies the requested model and effort plus stable base instructions/tools within each scenario/profile/lifecycle across repeats; deferred tool-search batches are reported separately. Confidence intervals cluster repeats by scenario family. Claim scope is ${claimEligibility.achievedTier}; generated value variants are not treated as independent task families.`
     },
-    runs
+    runs: reportRuns
   };
 }

@@ -14,7 +14,7 @@ it("reproduces the P3 trajectory and phase-schema gate", () => {
     execFileSync(process.execPath, ["scripts/phase-tools-evaluation.mjs", "--output", output], { cwd: repoRoot, stdio: "pipe" });
     const report = JSON.parse(fs.readFileSync(output, "utf8"));
     assert.equal(report.gatePassed, true);
-    assert.equal(report.registeredPiagentTools, 31);
+    assert.equal(report.registeredPiagentTools, 32);
     assert.equal(report.evaluatedTurns, 17);
     assert.ok(report.schemaReduction >= 0.2, "the historical counterfactual remains reproducible but is not a provider-schema claim");
     assert.equal(report.schemaReductionSemantics, "counterfactual-intended-surface-only");

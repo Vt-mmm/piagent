@@ -66,8 +66,8 @@ Adapter mô tả project cho Pi core. Core không biết domain/project cụ th�
 Path policy fields have distinct meanings:
 
 - `protectedPaths`: block read/write path-tool access and protect these paths from shell parsing when `shellProtectedPaths` is omitted.
-- `readOnlyPaths`: allow `read`/`grep`/`find`/`ls`, but block `write`/`edit` and shell access.
-- `shellProtectedPaths`: block shell access only. Do not rely on this field to block write/edit; `profile-doctor` and `team-doctor` warn when a path is present only here.
+- `readOnlyPaths`: allow `read`/`grep`/`find`/`ls`, but block `write`/`edit`/`apply_patch` and shell access.
+- `shellProtectedPaths`: block shell access only. Do not rely on this field to block `write`/`edit`/`apply_patch`; `profile-doctor` and `team-doctor` warn when a path is present only here.
 
 Glob trong các field này neo từ project root, nên `backend/**` chỉ khớp backend nằm ở root. Với monorepo, phải liệt kê đúng vị trí thật (`packages/api/**`, `services/*/**`). Không dùng `**/api/**`: nó khớp luôn `packages/web/src/api/` — thư mục HTTP client của frontend — và biến chính phần được phép sửa thành read-only.
 

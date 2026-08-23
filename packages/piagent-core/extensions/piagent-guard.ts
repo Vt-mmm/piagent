@@ -152,6 +152,7 @@ import { SolverShadowRuntime, solverModeFromEnvironment } from "../runtime/solve
 import { observeTrajectorySync } from "../runtime/trajectory/trajectory-observability.ts";
 import { TrajectoryRuntime } from "../runtime/trajectory/trajectory-runtime.ts";
 import { PhaseToolRuntime, phaseToolModeFromEnvironment } from "../runtime/tools/phase-tool-runtime.ts";
+import { parseApplyPatchTargets, registerApplyPatchTool } from "../runtime/tools/apply-patch-tool.ts";
 import { authorityReplacementState, ensureTaskAuthorityResumePolicy } from "../runtime/policy/authority-resume-policy.ts";
 import { taskAuthorityDecision } from "../runtime/policy/task-authority-runtime.ts";
 import { selectRecoveryDecision } from "../runtime/recovery/recovery-policy.ts";
@@ -479,6 +480,7 @@ const DEFAULT_POLICY: BasePolicy = {
       ls: ["filesystem-readonly"],
       write: ["filesystem-write"],
       edit: ["filesystem-write"],
+      apply_patch: ["filesystem-write"],
       browser: ["browser"],
       github: ["github"]
     }
@@ -1760,6 +1762,69 @@ function collectPatchTargetPaths(value: unknown, key = "", depth = 0): string[] 
   return paths;
 }
 
+type ApplyPatchTargetInspection =
+  | { carrier: false; exactLocalExecutor: false; targets: [] }
+  | { carrier: true; exactLocalExecutor: boolean; targets: string[]; reason?: undefined }
+  | { carrier: true; exactLocalExecutor: boolean; targets: []; reason: string };
+
+function isApplyPatchToolName(toolName: string): boolean {
+  const tokens = new Set(actionTokens(toolName));
+  // Pi direct MCP tools are named <server-prefix>_<tool>, for example
+  // filesystem_apply_patch; they never carry an mcp__ prefix. Treat every
+  // apply+patch action carrier as this exact fail-closed protocol so a custom
+  // prefix cannot bypass target extraction.
+  return tokens.has("apply") && tokens.has("patch");
+}
+
+function inspectApplyPatchAuthorizationTargets(
+  toolName: string,
+  input: Record<string, unknown>
+): ApplyPatchTargetInspection {
+  let carrier = toolName;
+  let payload = input;
+  const exactLocalExecutor = toolName === "apply_patch";
+  if (normalizeActionToken(toolName) === "mcp") {
+    const proxyTool = typeof input.tool === "string" ? input.tool.trim() : "";
+    if (!isApplyPatchToolName(proxyTool)) return { carrier: false, exactLocalExecutor: false, targets: [] };
+    carrier = proxyTool;
+    if (typeof input.args !== "string" || input.args.length > MAX_MCP_PROXY_ARGS_CHARS) {
+      return { carrier: true, exactLocalExecutor: false, targets: [], reason: "MCP apply_patch args must be a bounded JSON object string" };
+    }
+    try {
+      const parsed = JSON.parse(input.args);
+      if (!isPlainRecord(parsed)) return { carrier: true, exactLocalExecutor: false, targets: [], reason: "MCP apply_patch args must decode to a JSON object" };
+      payload = parsed;
+    } catch {
+      return { carrier: true, exactLocalExecutor: false, targets: [], reason: "MCP apply_patch args must be valid JSON" };
+    }
+  }
+  if (!isApplyPatchToolName(carrier)) return { carrier: false, exactLocalExecutor: false, targets: [] };
+  const keys = Object.keys(payload);
+  if (keys.length !== 1 || keys[0] !== "patch" || typeof payload.patch !== "string") {
+    return { carrier: true, exactLocalExecutor, targets: [], reason: "apply_patch input must contain only one string field named patch" };
+  }
+  try {
+    return { carrier: true, exactLocalExecutor, targets: parseApplyPatchTargets(payload.patch) };
+  } catch (error) {
+    return {
+      carrier: true,
+      exactLocalExecutor,
+      targets: [],
+      reason: error instanceof Error ? error.message : "apply_patch target extraction failed"
+    };
+  }
+}
+
+function authorizationMutationTargetInspection(
+  cwd: string,
+  toolName: string,
+  input: Record<string, unknown>
+): { targets: string[]; patchCarrier: boolean; exactLocalPatchExecutor: boolean; reason?: string } {
+  const patch = inspectApplyPatchAuthorizationTargets(toolName, input);
+  if (patch.carrier) return { targets: patch.targets, patchCarrier: true, exactLocalPatchExecutor: patch.exactLocalExecutor, reason: patch.reason };
+  return { targets: taskMutationTargets(cwd, toolName, input), patchCarrier: false, exactLocalPatchExecutor: false };
+}
+
 function taskMutationIdentity(toolName: string, input: Record<string, unknown>): string {
   if (normalizeActionToken(toolName) !== "mcp") return toolName;
   const proxyTool = typeof input.tool === "string" ? input.tool.trim() : "";
@@ -2182,9 +2247,13 @@ function prepareToolInputForPolicy(
       return { input, reason: "MCP proxy args must be valid JSON" };
     }
     if (!isPlainRecord(parsed)) return { input, reason: "MCP proxy args must decode to a JSON object" };
-    const patchTargets = actionTokens(proxyTool).includes("patch")
-      ? collectPatchTargetPaths(parsed)
-      : [];
+    const exactPatch = inspectApplyPatchAuthorizationTargets(toolName, input);
+    if (exactPatch.carrier && exactPatch.reason) return { input, reason: exactPatch.reason };
+    const patchTargets = exactPatch.carrier
+      ? exactPatch.targets
+      : actionTokens(proxyTool).includes("patch")
+        ? collectPatchTargetPaths(parsed)
+        : [];
     policyInput = patchTargets.length > 0
       ? { ...input, proxyArgs: parsed, proxyPatchTargets: { paths: patchTargets } }
       : { ...input, proxyArgs: parsed };
@@ -4284,7 +4353,10 @@ export default function piagentGuard(pi: ExtensionAPI) {
     telemetry,
     activity: recordActivity,
     beforeAuthorize: (event, ctx) => {
-      if (!["edit", "write", "apply_patch"].includes(event.toolName)) return;
+      const toolInput = isPlainRecord(event.input) ? event.input : {};
+      const targetInspection = authorizationMutationTargetInspection(ctx.cwd, event.toolName, toolInput);
+      if (targetInspection.reason) return { block: true, reason: `Blocked ${event.toolName}: ${targetInspection.reason}.` };
+      if (!["edit", "write"].includes(event.toolName) && !targetInspection.exactLocalPatchExecutor) return;
       const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
       if (!task || task.trace.outcome !== "pending" || task.changeMode !== "source-change") return;
       const semanticRepairEnabled = taskAuthorityDecision(task, "CAP-13", "mutate").allowed;
@@ -4301,8 +4373,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
       if (workingTreeSnapshotHasUnavailableEvidence(currentSnapshot)) return;
       const currentDigest = workingTreeEvidenceDigest(currentSnapshot);
       const expectedReviewPaths = taskDeltaFilesFromSnapshot(task, currentSnapshot);
-      const toolInput = isPlainRecord(event.input) ? event.input : {};
-      const targets = taskMutationTargets(ctx.cwd, event.toolName, toolInput);
+      const targets = targetInspection.targets;
       const boundedInScopeMutation = targets.length > 0
         && targets.every((file) => taskScopeIncludesPath(task.scope, file));
       const verifierCurrent = allVerifyCommandsPassCurrentTree(task, currentDigest);
@@ -4386,8 +4457,10 @@ export default function piagentGuard(pi: ExtensionAPI) {
       const currentDigest = workingTreeEvidenceDigest(workingTreeSnapshot(ctx.cwd) as Record<string, string>);
       const phase = trajectoryRuntime.status(ctx.cwd, task.taskRunId);
       const toolInput = isPlainRecord(event.input) ? event.input : {};
-      const targets = taskMutationTargets(ctx.cwd, event.toolName, toolInput);
-      if (["edit", "write", "apply_patch"].includes(event.toolName) && (
+      const targetInspection = authorizationMutationTargetInspection(ctx.cwd, event.toolName, toolInput);
+      if (targetInspection.reason) return { block: true, reason: `Blocked ${event.toolName}: ${targetInspection.reason}.` };
+      const targets = targetInspection.targets;
+      if ((["edit", "write"].includes(event.toolName) || targetInspection.patchCarrier) && (
         targets.length === 0 || targets.some((file) => !taskScopeIncludesPath(task.scope, file))
       )) {
         runtimeState.denyPerformanceReviewTool(task.taskRunId);
@@ -4461,6 +4534,11 @@ export default function piagentGuard(pi: ExtensionAPI) {
     authorize: async (event, ctx) => {
     const preTask = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
     const preInput = isPlainRecord(event.input) ? event.input : {};
+    const authorizationTargetInspection = authorizationMutationTargetInspection(ctx.cwd, event.toolName, preInput);
+    if (authorizationTargetInspection.reason) {
+      return { block: true, reason: `Blocked ${event.toolName}: ${authorizationTargetInspection.reason}.` };
+    }
+    const authorizationTargets = authorizationTargetInspection.targets;
     const preSnapshot = preTask ? workingTreeSnapshot(ctx.cwd) as Record<string, string> : undefined;
     const reservedFirstCall = Boolean(preTask && preSnapshot && !workingTreeSnapshotHasUnavailableEvidence(preSnapshot) && semanticRepairRuntime.reservedCallMatches({
       cwd: ctx.cwd,
@@ -4469,7 +4547,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
       toolCallId: String(event.toolCallId),
       toolName: event.toolName,
       currentDigest: workingTreeEvidenceDigest(preSnapshot),
-      targetPaths: taskMutationTargets(ctx.cwd, event.toolName, preInput)
+      targetPaths: authorizationTargets
     }));
     const phaseDecision = reservedFirstCall || (preTask?.workingTreeDigestMigration?.status === "verification-refresh-required" && SHELL_TOOL_NAMES.has(event.toolName)) ? undefined : phaseToolRuntime.toolDecision(ctx, event.toolName);
     if (phaseDecision) return phaseDecision;
@@ -4637,18 +4715,21 @@ export default function piagentGuard(pi: ExtensionAPI) {
     // Shell inputs need command grammar, not field-by-field path guessing: an
     // exclusion selector in `args` is not an accessed path. The semantic shell
     // checks above already inspect the normalized command, including redirects.
+    const policyPathInput = authorizationTargetInspection.patchCarrier
+      ? { paths: authorizationTargets }
+      : preparedInput.input;
     const pathDecision = SHELL_TOOL_NAMES.has(event.toolName) ? { block: false, reason: undefined } : evaluatePathLikeToolAccess(
       ctx.cwd,
       preparedInput.proxyToolName ?? event.toolName,
-      preparedInput.input,
+      policyPathInput,
       pathPolicy.writeProtectedPaths,
       pathPolicy.readProtectedPaths,
       pathPolicy.readOnlyPaths,
       permissionProfile.mode === "trusted-full-access" ? undefined : capabilityState.filesystemRead,
       permissionProfile.mode === "trusted-full-access" ? undefined : capabilityState.filesystemWrite,
       {
-        forceScopeAware: Boolean(preparedInput.proxyToolName),
-        forceWrite: preparedInput.proxyAction?.decision === "confirm",
+        forceScopeAware: authorizationTargetInspection.patchCarrier || Boolean(preparedInput.proxyToolName),
+        forceWrite: authorizationTargetInspection.patchCarrier || preparedInput.proxyAction?.decision === "confirm",
         allowAmbiguousFilesystemContentFields: !usesKnownExternalProvider && !isPiagentTool(event.toolName)
       }
     );
@@ -4677,7 +4758,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
 
     const mutationTargets = SHELL_TOOL_NAMES.has(event.toolName)
       ? shellMutationTargets
-      : taskMutationTargets(ctx.cwd, event.toolName, toolInput);
+      : authorizationTargets;
     const directProjectMutation = !SHELL_TOOL_NAMES.has(event.toolName) && (
       WRITE_TOOL_NAMES.has(event.toolName)
       || mutationTargets.length > 0
@@ -4701,7 +4782,9 @@ export default function piagentGuard(pi: ExtensionAPI) {
           opaqueCarrier: semanticOpaqueCarrier,
           targetExtractionComplete: SHELL_TOOL_NAMES.has(event.toolName)
             ? !shellHasOpaqueWritePrimitive(authorizedShellCommand)
-            : !semanticOpaqueCarrier && preparedInput.proxyShellCarrier !== true,
+            : authorizationTargetInspection.patchCarrier
+              ? authorizationTargetInspection.exactLocalPatchExecutor
+              : !semanticOpaqueCarrier && preparedInput.proxyShellCarrier !== true,
           recordedAt: nowIso()
         })
       : { handled: false, allowed: false, bypassPhase: false };
@@ -4760,10 +4843,12 @@ export default function piagentGuard(pi: ExtensionAPI) {
         };
       }
     }
-    if (runtime.contextBudget !== "off" && ["write", "edit"].includes(event.toolName)) {
-      const relativePath = extractLikelyPathFromInput(ctx.cwd, event.input as Record<string, unknown>);
-      if (relativePath) {
-        const budget = contextBudgetConfig(policy);
+    if (runtime.contextBudget !== "off" && (["write", "edit"].includes(event.toolName) || authorizationTargetInspection.patchCarrier)) {
+      const budgetTargets = authorizationTargetInspection.patchCarrier
+        ? authorizationTargets
+        : [extractLikelyPathFromInput(ctx.cwd, preInput)].filter((item): item is string => Boolean(item));
+      const budget = contextBudgetConfig(policy);
+      for (const relativePath of budgetTargets) {
         const stats = candidateFileBudget(ctx.cwd, relativePath, budget);
         if (runtime.contextBudget === "enforce" && stats.exists && stats.overLimit) {
           return { block: true, reason: `Context budget blocked editing large file ${relativePath}: ${stats.chars} chars > ${budget.maxContextFileChars}` };
@@ -4792,6 +4877,9 @@ export default function piagentGuard(pi: ExtensionAPI) {
     }
     }
   });
+  // Register only after authorization is live. The same-name override is intentional:
+  // guard target parsing, provenance, and atomicity require this exact tool contract.
+  registerApplyPatchTool(pi, Type);
   const registrationDeps = {
     CONTEXT_INDEX_EDGE_KINDS, CONTEXT_INDEX_NODE_KINDS, DEFAULT_MAX_TASK_ATTEMPTS, FRESH_COMMAND_ACTIONS, FRESH_COMMAND_HELP,
     ONBOARDING_COMMAND_ACTIONS, ORCHESTRATION_ROLES, PIAGENT_TOOL_NAMES, READ_ONLY_TOOL_NAMES, REVIEW_LENSES,

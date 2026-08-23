@@ -1261,6 +1261,14 @@ describe("guard fallback policy", () => {
     });
   }
 
+  it("requires exactly filesystem-write for apply_patch in file and fallback policy", () => {
+    assert.deepEqual(basePolicy.toolRegistry.toolCapabilities.apply_patch, ["filesystem-write"]);
+    assert.match(
+      guardSource,
+      /const DEFAULT_POLICY[\s\S]*?toolCapabilities:\s*\{[\s\S]*?apply_patch:\s*\["filesystem-write"\]/
+    );
+  });
+
   it("keeps context delta shadow mode aligned with the typed base policy", () => {
     const match = guardSource.match(/const DEFAULT_POLICY[\s\S]*?contextBudget:\s*\{[\s\S]*?contextDeltaShadow:\s*"([^"]+)"/);
     assert.ok(match, "DEFAULT_POLICY.contextBudget.contextDeltaShadow not found");

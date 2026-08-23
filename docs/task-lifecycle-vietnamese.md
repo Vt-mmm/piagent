@@ -73,13 +73,13 @@ chuyen sang `execute` khi contract do runtime tao co bounded scope, exact
 verifier, acceptance receipt va mot step `single-writer` dang `in-progress` voi
 toan bo dependency da xong. Runtime ghi ro phase nao khong ton tai trong automatic
 plan neu can bo qua. Manual/high-risk task vao phase `plan` de doc, tim va cap
-nhat checkpoint; edit/write/bash ghi file van bi chan cho den khi plan/challenge
+nhat checkpoint; `edit`/`write`/`apply_patch` va `bash` ghi file van bi chan cho den khi plan/challenge
 hoan tat va step `single-writer` thuc su dependency-ready.
 
 ### 3. Execute
 
 Truoc khi co task contract, project da onboard chi cho inspection co gioi han;
-write/edit va shell command that su ghi file bi chan. Sau khi task bat dau:
+`write`/`edit`/`apply_patch` va shell command that su ghi file bi chan. Sau khi task bat dau:
 
 - phase `intake`, `scout` va `plan` chi cho discovery; `execute`/`repair` moi co
   mutation tools, con read-only task khong bao gio nhan quyen mutation;
