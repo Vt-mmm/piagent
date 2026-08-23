@@ -32,7 +32,7 @@ function validStageBoundaries(stageBoundaries) {
 export function productionSpendControlValidationErrors(control, {
   suiteId,
   expectedSessions,
-  requireHostReadiness = suiteId === "production-v1"
+  requireHostReadiness = control?.hostReadiness?.required === true
 } = {}) {
   const errors = [];
   if (!control || typeof control !== "object" || Array.isArray(control)) return ["contract-must-be-an-object"];
@@ -292,8 +292,8 @@ function providerWireGroups(piRuns) {
   })).sort((left, right) => left.scenarioId.localeCompare(right.scenarioId));
 }
 
-function diagnosticCheck(id, passed, details = {}) {
-  return { id, passed: passed === true, ...details };
+function diagnosticCheck(id, passed, details = {}, decisionRole = "blocking") {
+  return { id, passed: passed === true, decisionRole, ...details };
 }
 
 function pairRatioEvidence(pairRecords, valueFor) {
@@ -354,6 +354,10 @@ function candidateOutcomeFailures(pairRecords, floor) {
       if (candidate?.outputEvidence?.passed === false) failures.push("output-evidence-failed");
       if (!Number.isFinite(candidate?.grade?.score) || candidate.grade.score <= floor) failures.push("quality-outcome-floor");
       if (!Number.isFinite(candidate?.workflow?.score) || candidate.workflow.score <= floor) failures.push("workflow-outcome-floor");
+      if (!Array.isArray(candidate?.workflow?.checks)
+        || candidate.workflow.checks.some((check) => check?.passed !== true)) {
+        failures.push("workflow-evidence-incomplete-or-failed");
+      }
     }
     return {
       pairId: pair.id,
@@ -578,7 +582,7 @@ export function buildBenchmarkStageDiagnostic({
     && suite?.releaseGate?.requireEfficiencyClaim === true
     && suite?.releaseGate?.requireFullSuiteForClaim === true;
   const cleanReleaseSourcePassed = !cleanReleaseSourceRequired || manifest?.sourceIdentity?.dirty === false;
-  const hostReadinessRequired = suite?.id === "production-v1";
+  const hostReadinessRequired = suite?.releaseGate?.requireHostReadinessForClaim === true;
   const summarizedHostReadinessHistory = hostReadinessRequired
     ? summarizeBenchmarkHostReadinessHistory({
         policy: hostReadinessPolicy,
@@ -619,7 +623,7 @@ export function buildBenchmarkStageDiagnostic({
       validReceipts: hostReadinessHistory?.validReceiptCount ?? 0,
       receipts: hostReadinessHistory?.receiptCount ?? 0,
       coverage: hostReadinessHistory?.windowCoverage ?? null
-    }),
+    }, hostReadinessRequired ? "blocking" : "observational"),
     diagnosticCheck("pause-on-pair-boundary", pairBoundary, { incompleteObservedPairs: incompleteObservedPairs.length }),
     diagnosticCheck("observed-complete-pair", completePairs.length > 0, { observedCompletePairs: completePairs.length }),
     diagnosticCheck("no-baseline-pass-piagent-fail", noBaselineOnlyRegressionPassed, { regressions: baselineOnlyRegressions.length }),
@@ -645,20 +649,22 @@ export function buildBenchmarkStageDiagnostic({
       incomparablePairs: freshEfficiency.incomparablePairs.length,
       pairRegressions: freshEfficiency.pairRegressions.length,
       familyRegressions: freshEfficiency.familyRegressions.length
-    }),
+    }, "final-only"),
     diagnosticCheck("normalized-cost-pricing-applicable-and-no-observed-regression", normalizedCostPassed, {
       pricingSnapshotErrors: pricingSnapshotErrors.length,
       incomparablePairs: normalizedCostEvidence.incomparablePairs.length,
       pairRegressions: normalizedCostEvidence.pairRegressions.length,
       familyRegressions: normalizedCostEvidence.familyRegressions.length
-    }),
+    }, "observational"),
     diagnosticCheck("no-observed-duration-regression", durationEfficiencyPassed, {
       incomparablePairs: durationEfficiency.incomparablePairs.length,
       pairRegressions: durationEfficiency.pairRegressions.length,
       familyRegressions: durationEfficiency.familyRegressions.length
-    })
+    }, "observational")
   ];
-  const blockingReasons = checks.filter((check) => !check.passed).map((check) => check.id);
+  const blockingReasons = checks
+    .filter((check) => check.decisionRole === "blocking" && !check.passed)
+    .map((check) => check.id);
 
   return {
     schemaVersion: 1,
@@ -766,6 +772,11 @@ export function buildBenchmarkStageDiagnostic({
     checks,
     blockingReasons,
     stageAdvanceAllowed: blockingReasons.length === 0,
-    claimBoundary: "Provider-free partial-run diagnostic only; never eligible for a quality, efficiency, cost, latency, generalization, or release claim."
+    decisionContract: {
+      blocking: "quality-model-parity-task-continuity-and-exact-usage-only",
+      finalOnly: ["fresh-token-reduction"],
+      observational: ["normalized-api-equivalent-text-token-cost", "duration", "host-load"]
+    },
+    claimBoundary: "Provider-free partial-run diagnostic only. Intermediate token measurements cannot make a claim; cost, duration, and host load are observational and non-blocking."
   };
 }

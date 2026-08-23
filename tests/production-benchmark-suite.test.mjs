@@ -175,17 +175,18 @@ test("production-v1 spans the declared production matrix", () => {
     source: { url: "https://developers.openai.com/api/docs/models/gpt-5.6-luna", retrievedAt: "2026-08-22" }
   });
   assert.equal(suite.releaseGate.minimumComparableEfficiencyScenarios, suite.scenarios.length);
-  assert.equal(suite.releaseGate.maximumNormalizedCostRatioUpper95, 0.6);
-  assert.equal(suite.releaseGate.maximumBandNormalizedCostRatio, 0.6);
-  assert.equal(suite.releaseGate.maximumFamilyNormalizedCostRatio, 1);
-  assert.equal(suite.releaseGate.maximumBandDurationRatio, 1);
-  assert.equal(suite.releaseGate.maximumFamilyDurationRatio, 1);
-  assert.equal(suite.releaseGate.requireNormalizedCostClaim, true);
+  assert.equal(suite.releaseGate.maximumNormalizedCostRatioUpper95, undefined);
+  assert.equal(suite.releaseGate.maximumBandNormalizedCostRatio, undefined);
+  assert.equal(suite.releaseGate.maximumFamilyNormalizedCostRatio, undefined);
+  assert.equal(suite.releaseGate.maximumDurationRatioUpper95, undefined);
+  assert.equal(suite.releaseGate.maximumBandDurationRatio, undefined);
+  assert.equal(suite.releaseGate.maximumFamilyDurationRatio, undefined);
+  assert.equal(suite.releaseGate.requireNormalizedCostClaim, false);
+  assert.equal(suite.releaseGate.requireHostReadinessForClaim, false);
   assert.equal(suite.releaseGate.requireCausalContextReceipt, true, "production claims require complete privacy-safe causal context receipts");
   assert.equal(suite.releaseGate.maximumFreshTokenRatioUpper95, 0.6, "production claims must prove at least 40% fresh-token reduction at the upper 95% bound");
-  assert.equal(suite.releaseGate.maximumBandFreshTokenRatio, 0.6, "every category, profile, lifecycle and difficulty band must stay at or below the 40% reduction boundary");
-  assert.equal(suite.releaseGate.maximumFamilyFreshTokenRatio, 1, "no comparable scenario family may use more fresh tokens than Codex CLI");
-  assert.equal(suite.releaseGate.maximumDurationRatioUpper95, 1, "production claims must not allow a latency regression at the upper 95% bound");
+  assert.equal(suite.releaseGate.maximumBandFreshTokenRatio, undefined, "workload-band token ratios are reported but do not override the full-suite estimand");
+  assert.equal(suite.releaseGate.maximumFamilyFreshTokenRatio, undefined, "individual family token ratios are diagnostic rather than independent claim gates");
   assert.deepEqual(new Set(suite.scenarios.map((scenario) => scenario.category)), new Set(["backend", "frontend", "data", "platform", "reliability", "security"]));
   assert.deepEqual(new Set(suite.scenarios.map((scenario) => scenario.difficulty)), new Set(["small", "medium", "large"]));
   assert.deepEqual(new Set(suite.scenarios.map((scenario) => scenario.lifecycle)), new Set(["steady-state", "cold-start"]));
@@ -219,7 +220,9 @@ test("production spend control freezes impact-first staging without creating an 
     infrastructureRetries: 0,
     stopAfterFailedPair: true
   });
-  assert.deepEqual(spendControl.hostReadiness, {
+  assert.equal(spendControl.hostReadiness, undefined, "host load must not delay a token-quality-continuity run");
+  const invalidHostReadiness = structuredClone(spendControl);
+  invalidHostReadiness.hostReadiness = {
     schemaVersion: 1,
     required: true,
     sampleCount: 3,
@@ -230,8 +233,7 @@ test("production spend control freezes impact-first staging without creating an 
     maximumTimingOverrunRatio: 0.25,
     maximumStartDelayMilliseconds: 120_000,
     failFast: true
-  });
-  const invalidHostReadiness = structuredClone(spendControl);
+  };
   invalidHostReadiness.hostReadiness.sampleCount = 2;
   assert.ok(productionSpendControlValidationErrors(invalidHostReadiness, {
     suiteId: suite.id,
@@ -251,10 +253,16 @@ test("production spend control freezes impact-first staging without creating an 
   assert.equal(spendControl.enforcement.completeLedgerFinalizesWithoutProviderPreflight, true);
   assert.ok(spendControl.enforcement.automaticTerminalOrAbortRules.some((rule) => rule.includes("stop-after-failed-pair")));
   assert.ok(spendControl.enforcement.automaticTerminalOrAbortRules.includes("dirty-release-source-before-auth-tool-or-provider-preflight"));
-  assert.ok(spendControl.enforcement.automaticTerminalOrAbortRules.includes("host-readiness-failure-before-auth-tool-or-provider-preflight"));
+  assert.equal(spendControl.enforcement.automaticTerminalOrAbortRules.includes("host-readiness-failure-before-auth-tool-or-provider-preflight"), false);
   assert.ok(spendControl.enforcement.stageAdvanceRules.includes("clean-release-source"));
-  assert.ok(spendControl.enforcement.stageAdvanceRules.includes("fresh-run-and-configuration-bound-privacy-safe-host-readiness-receipt-for-every-paid-invocation"));
+  assert.equal(spendControl.enforcement.stageAdvanceRules.includes("fresh-run-and-configuration-bound-privacy-safe-host-readiness-receipt-for-every-paid-invocation"), false);
   assert.ok(spendControl.enforcement.stageAdvanceRules.includes("no-model-thinking-or-provider-wire-parity-drift"));
+  assert.deepEqual(spendControl.enforcement.nonBlockingDiagnostics, [
+    "intermediate-fresh-token-ratios",
+    "normalized-api-equivalent-text-token-cost",
+    "duration",
+    "host-load"
+  ]);
   assert.equal(spendControl.stages.at(-1).cumulativeSessions, suite.scenarios.length * suite.defaultRepeats * spendControl.execution.surfaces.length);
 
   const firstRepeat = [...suite.scenarios].sort((left, right) => {

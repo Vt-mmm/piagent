@@ -18,7 +18,8 @@ const RELEASE_GATE_FIELDS = new Set([
   "maximumBandFreshTokenRatio", "maximumFamilyFreshTokenRatio",
   "maximumNormalizedCostRatioUpper95", "maximumBandNormalizedCostRatio", "maximumFamilyNormalizedCostRatio",
   "maximumInfrastructureRetries", "primaryEfficiencyEstimand", "requireEfficiencyClaim", "requireFullSuiteForClaim",
-  "requireStableProviderWireSurface", "requireNormalizedCostClaim", "requireCausalContextReceipt"
+  "requireStableProviderWireSurface", "requireNormalizedCostClaim", "requireHostReadinessForClaim",
+  "requireCausalContextReceipt"
 ]);
 const EXECUTION_CONTRACT_FIELDS = new Set(["surfaces", "model", "thinking", "codexMode"]);
 const THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
@@ -144,6 +145,9 @@ export function benchmarkSuiteValidationErrors(input) {
       }
       if (input.releaseGate.requireNormalizedCostClaim !== undefined && typeof input.releaseGate.requireNormalizedCostClaim !== "boolean") {
         errors.push("releaseGate.requireNormalizedCostClaim must be a boolean");
+      }
+      if (input.releaseGate.requireHostReadinessForClaim !== undefined && typeof input.releaseGate.requireHostReadinessForClaim !== "boolean") {
+        errors.push("releaseGate.requireHostReadinessForClaim must be a boolean");
       }
       if (input.releaseGate.requireCausalContextReceipt !== undefined && typeof input.releaseGate.requireCausalContextReceipt !== "boolean") {
         errors.push("releaseGate.requireCausalContextReceipt must be a boolean");

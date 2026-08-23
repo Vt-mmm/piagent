@@ -115,7 +115,7 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:847353c680cdfadf919ddd3337fcaf48ed353b4b1720a60ac6be73a99462ac7a",
+    "packageDigest": "sha256:7dbf76968c90a603fb5533c9e5508360422c0df6266406679ccfc849a154efe6",
     "packageSource": "../",
     "packageVersion": "1.6.0",
     "runtimeFiles": [
@@ -200,8 +200,8 @@
         "path": "packages/piagent-core/benchmark/benchmark-comparison.js"
       },
       {
-        "byteSize": 53749,
-        "digest": "sha256:9209aaa98d5932cdc0b0b6fd6fab776f77d53fe3903d75c3e5df0e27e0b21cbd",
+        "byteSize": 54885,
+        "digest": "sha256:d227f548ad243fb9b7eb2ccbd31673dc388031315573c80f05a59aecd243ace4",
         "path": "packages/piagent-core/benchmark/benchmark-core.js"
       },
       {
@@ -295,8 +295,8 @@
         "path": "packages/piagent-core/benchmark/benchmark-runtime.js"
       },
       {
-        "byteSize": 38107,
-        "digest": "sha256:697d261125a7791d6aeeb99f28886938b7fef6dee58a92d298b8e4482e4cf3af",
+        "byteSize": 38818,
+        "digest": "sha256:8810dfaf418630416cbcd73674870438951a639a46f4b91bc300bfa2b711f7f9",
         "path": "packages/piagent-core/benchmark/benchmark-stage-diagnostic.js"
       },
       {
@@ -325,13 +325,13 @@
         "path": "packages/piagent-core/benchmark/benchmark-suite-runtime.js"
       },
       {
-        "byteSize": 18170,
-        "digest": "sha256:27c1540b807a0b7d725f964cadc7e6870983c1c2cde10acb5d28de1dd84a2125",
+        "byteSize": 18440,
+        "digest": "sha256:c7f735171f65f20f27c253a7f90c3478ba8bc955494b5febf892b071e0e08ef0",
         "path": "packages/piagent-core/benchmark/benchmark-suite.js"
       },
       {
-        "byteSize": 17551,
-        "digest": "sha256:6d926cbf51f3f23e1e9280d649e1c356417ed851bae8216fc59fccb49e3ef921",
+        "byteSize": 17676,
+        "digest": "sha256:84d0c67bc8fc91444b05127ede0bfa9d8999cb63418952ef3ce902e5c36dd301",
         "path": "packages/piagent-core/benchmark/benchmark-summary-support.js"
       },
       {
@@ -1855,13 +1855,13 @@
         "path": "packages/piagent-webui/shared/text-visibility.ts"
       },
       {
-        "byteSize": 53282,
-        "digest": "sha256:1851adbecd3b0b8b17c8205e4e2ddc62293349888e2df7bb6d9c40ab7c1ca38e",
+        "byteSize": 53432,
+        "digest": "sha256:ba9abb58f9d3962cd79d1cae7cbb4fb07df642da254bf9bf1976b5f2bcab7df6",
         "path": "scripts/benchmark-runner-core.mjs"
       },
       {
-        "byteSize": 14544,
-        "digest": "sha256:f15ca4d6fdb2876f1d2bceeabfe5ebefb0afdbde79f555f4ad90dfbef9e56714",
+        "byteSize": 14751,
+        "digest": "sha256:fe1542b21e6a8b1a50ca83266faf3423d2f73a70f003f9b952ffe35ccf028bf0",
         "path": "scripts/benchmark-runner-finalization.mjs"
       },
       {

@@ -700,7 +700,7 @@ function runRecord(scenario, surface, repeat, fresh) {
     graderIntegrity: { passed: true },
     scope: { passed: true, changedFiles: scenario.kind === "source-change" ? ["src/a.js"] : [], outsideScope: [] },
     outputSafety: { passed: true, forbiddenHits: [] },
-    workflow: surface === "piagent" && scenario.kind === "source-change" ? { score: 10, checks: [] } : null,
+    workflow: surface === "piagent" && scenario.kind !== "safety-refusal" ? { score: 10, checks: [] } : null,
     providerWireEvidence,
     causalContextReceipt: causalContextReceipt(surface),
     usage: { fresh, input: fresh, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, total: fresh, cost: fresh / 100_000, costSource: "test-fixture", usageCompleteness: "exact", sessions: 1, model: "openai-codex/gpt-5.6-luna", thinkingLevel: "medium", toolCalls: 2, toolNames: { read: 1, bash: 1 } },
@@ -1214,11 +1214,11 @@ test("production release gate uses independent scenario families and the upper 9
   assert.deepEqual(report.comparison.freshTokenRatioConfidence95, { lower: 0.6, upper: 0.6, sampleUnit: "scenario-family", scenarioCount: 3 });
   assert.equal(report.comparison.efficiencyConfidenceGate, true);
   assert.deepEqual(report.comparison.durationRatioConfidence95, { lower: 1, upper: 1, sampleUnit: "scenario-family", scenarioCount: 3 });
-  assert.equal(report.comparison.performancePointEstimateGate, true);
-  assert.equal(report.comparison.performanceConfidenceGate, true);
-  assert.equal(report.comparison.durationBandGate, true);
-  assert.equal(report.comparison.durationFamilyGate, true);
-  assert.equal(report.comparison.performanceGate, true);
+  assert.equal(report.comparison.performancePointEstimateGate, null);
+  assert.equal(report.comparison.performanceConfidenceGate, null);
+  assert.equal(report.comparison.durationBandGate, null);
+  assert.equal(report.comparison.durationFamilyGate, null);
+  assert.equal(report.comparison.performanceGate, null);
   assert.equal(report.comparison.providerWireSurfaceGate, true);
   assert.equal(report.comparison.providerWireEvidence.verifiedRuns, 9);
   assert.equal(report.comparison.providerWireEvidence.groups.length, 3);
@@ -1228,15 +1228,16 @@ test("production release gate uses independent scenario families and the upper 9
   assert.equal(report.comparison.normalizedCost.billedCost, false);
   assert.equal(report.comparison.normalizedCost.ratio, 0.6);
   assert.deepEqual(report.comparison.normalizedCost.ratioConfidence95, { lower: 0.6, upper: 0.6, sampleUnit: "scenario-family", scenarioCount: 3 });
-  assert.equal(report.comparison.normalizedCostPricingApplicabilityGate, true);
-  assert.equal(report.comparison.normalizedCostConfidenceGate, true);
-  assert.equal(report.comparison.normalizedCostBandGate, true);
-  assert.equal(report.comparison.normalizedCostFamilyGate, true);
-  assert.equal(report.comparison.normalizedCostGate, true);
+  assert.equal(report.comparison.normalizedCostPricingApplicabilityGate, null);
+  assert.equal(report.comparison.normalizedCostConfidenceGate, null);
+  assert.equal(report.comparison.normalizedCostBandGate, null);
+  assert.equal(report.comparison.normalizedCostFamilyGate, null);
+  assert.equal(report.comparison.normalizedCostGate, null);
   assert.equal(report.comparison.pairedQualityNoninferiorityGate, true);
   assert.equal(report.comparison.pairedQualityEvidence.expectedPairs, 9);
   assert.equal(report.comparison.pairedQualityEvidence.comparablePairs, 9);
-  assert.equal(report.comparison.hostReadinessGate, true);
+  assert.equal(report.comparison.hostReadinessGate, null);
+  assert.equal(report.comparison.candidateTaskContinuityGate, true);
   assert.equal(report.comparison.productionGate.passed, true);
   assert.equal(report.comparison.tokenClaimAllowed, true);
   assert.equal(report.verdict.status, "piagent-more-efficient");
@@ -1296,17 +1297,17 @@ test("production release gate uses independent scenario families and the upper 9
       environment: productionEnvironment({ hostReadinessHistory }),
       runs
     });
-    assert.equal(hostBlocked.comparison.hostReadinessGate, false);
-    assert.equal(hostBlocked.comparison.tokenClaimAllowed, false);
-    assert.equal(hostBlocked.comparison.claimEligibility.tokenClaimScope, "unavailable");
-    assert.equal(hostBlocked.comparison.productionGate.passed, false);
-    assert.ok(hostBlocked.comparison.productionGate.failures.includes("host-readiness-history"));
-    assert.equal(hostBlocked.verdict.status, "host-readiness-history-gate-failed");
+    assert.equal(hostBlocked.comparison.hostReadinessGate, null);
+    assert.equal(hostBlocked.comparison.tokenClaimAllowed, true);
+    assert.equal(hostBlocked.comparison.claimEligibility.tokenClaimScope, "bounded-to-observed-comparable-pairs-and-failure-aware-effort");
+    assert.equal(hostBlocked.comparison.productionGate.passed, true);
+    assert.equal(hostBlocked.comparison.productionGate.failures.includes("host-readiness-history"), false);
+    assert.equal(hostBlocked.verdict.status, "piagent-more-efficient");
     assert.deepEqual(hostBlocked.tokenAccounting, report.tokenAccounting, "host evidence must not alter token measurements");
     assert.deepEqual(hostBlocked.surfaces, report.surfaces, "host evidence must not alter quality measurements");
     assert.equal(hostBlocked.comparison.freshTokenRatio, report.comparison.freshTokenRatio);
     assert.equal(hostBlocked.comparison.durationRatio, report.comparison.durationRatio);
-    assert.match(renderBenchmarkText(hostBlocked), /Host-readiness history gate: fail/);
+    assert.match(renderBenchmarkText(hostBlocked), /Host-readiness history gate: n\/a/);
   }
 
   const malformedTimingRuns = structuredClone(runs);
@@ -1417,13 +1418,14 @@ test("production release gate uses independent scenario families and the upper 9
   for (const run of slowerRuns.filter((item) => item.surface === "piagent")) run.durationSeconds = 1.05;
   const slower = summarizeProductionBenchmark({ suite: testSuite, runId: "slower", startedAt: "2026-08-01T00:00:00.000Z", completedAt: "2026-08-01T00:01:00.000Z", repeats: 3, environment, runs: slowerRuns });
   assert.equal(slower.comparison.durationRatio, 1.05);
-  assert.equal(slower.comparison.performancePointEstimateGate, false);
-  assert.equal(slower.comparison.performanceConfidenceGate, false);
-  assert.equal(slower.comparison.performanceGate, false);
-  assert.equal(slower.comparison.durationBandGate, false);
-  assert.equal(slower.comparison.durationFamilyGate, false);
-  assert.ok(slower.comparison.productionGate.failures.includes("performance-point-regression"));
-  assert.equal(slower.verdict.status, "performance-point-regression");
+  assert.equal(slower.comparison.performancePointEstimateGate, null);
+  assert.equal(slower.comparison.performanceConfidenceGate, null);
+  assert.equal(slower.comparison.performanceGate, null);
+  assert.equal(slower.comparison.durationBandGate, null);
+  assert.equal(slower.comparison.durationFamilyGate, null);
+  assert.equal(slower.comparison.productionGate.failures.includes("performance-point-regression"), false);
+  assert.equal(slower.comparison.tokenClaimAllowed, true);
+  assert.equal(slower.verdict.status, "piagent-more-efficient");
 
   const uncertainRuns = structuredClone(runs);
   const familyDurationRatios = [0.5, 0.5, 1.5];
@@ -1431,22 +1433,19 @@ test("production release gate uses independent scenario families and the upper 9
     run.durationSeconds = familyDurationRatios[scenarios.findIndex((scenario) => scenario.id === run.scenarioId)];
   }
   const uncertain = summarizeProductionBenchmark({ suite: testSuite, runId: "uncertain-duration", startedAt: "2026-08-01T00:00:00.000Z", completedAt: "2026-08-01T00:01:00.000Z", repeats: 3, environment, runs: uncertainRuns });
-  assert.equal(uncertain.comparison.performancePointEstimateGate, true);
-  assert.equal(uncertain.comparison.performanceConfidenceGate, false);
-  assert.ok(uncertain.comparison.productionGate.failures.includes("performance-confidence"));
-  assert.match(renderBenchmarkText(uncertain), /performance-confidence: The upper 95% duration-ratio bound exceeds the suite limit/);
+  assert.equal(uncertain.comparison.performancePointEstimateGate, null);
+  assert.equal(uncertain.comparison.performanceConfidenceGate, null);
+  assert.equal(uncertain.comparison.productionGate.failures.includes("performance-confidence"), false);
+  assert.equal(uncertain.comparison.tokenClaimAllowed, true);
 
   const missingDurationRuns = structuredClone(runs);
   for (const run of missingDurationRuns.filter((item) => item.surface === "piagent" && item.scenarioId === scenarios[0].id)) run.durationSeconds = null;
   const missingDuration = summarizeProductionBenchmark({ suite: testSuite, runId: "missing-duration", startedAt: "2026-08-01T00:00:00.000Z", completedAt: "2026-08-01T00:01:00.000Z", repeats: 3, environment, runs: missingDurationRuns });
   assert.equal(missingDuration.comparison.pairedCompleteDurationScenarios, 2);
-  assert.equal(missingDuration.comparison.performanceEvidenceGate, false);
-  assert.deepEqual(missingDuration.comparison.productionGate.failures.filter((item) => item.startsWith("performance-")), [
-    "performance-evidence",
-    "performance-band-ratio",
-    "performance-family-ratio"
-  ]);
-  assert.ok(missingDuration.comparison.durationFamilyFailures.some((item) => item.scenarioId === scenarios[0].id && item.reason === "missing-comparable-duration"));
+  assert.equal(missingDuration.comparison.performanceEvidenceGate, null);
+  assert.deepEqual(missingDuration.comparison.productionGate.failures.filter((item) => item.startsWith("performance-")), []);
+  assert.deepEqual(missingDuration.comparison.durationFamilyFailures, []);
+  assert.equal(missingDuration.comparison.tokenClaimAllowed, true);
 
   const recoveredRuns = structuredClone(runs);
   const recovered = recoveredRuns.find((item) => item.surface === "piagent");
@@ -1509,9 +1508,11 @@ test("production release gate uses independent scenario families and the upper 9
   assert.equal(incomplete.comparison.pairedUsageScenarios, 3);
   assert.equal(incomplete.comparison.pairedCompleteScenarios, 2);
   assert.equal(incomplete.comparison.efficiencyEvidenceGate, false);
+  assert.equal(incomplete.comparison.candidateTaskContinuityGate, false);
+  assert.ok(incomplete.comparison.productionGate.failures.includes("candidate-task-continuity"));
 });
 
-test("production band gate prevents aggregate savings from hiding a high-token workload segment", () => {
+test("production reports a high-token workload segment without replacing the full-suite estimand", () => {
   const runs = [];
   for (let repeat = 1; repeat <= 3; repeat += 1) {
     for (const scenario of productionSuite.scenarios) {
@@ -1529,15 +1530,14 @@ test("production band gate prevents aggregate savings from hiding a high-token w
     runs
   });
   assert.equal(report.comparison.efficiencyConfidenceGate, true, "the aggregate confidence gate alone would pass");
-  assert.equal(report.comparison.freshTokenBandGate, false);
-  assert.ok(report.comparison.freshTokenBandFailures.some((item) => item.dimension === "categories"
-    && item.name === "platform" && Math.abs(item.observedBound - 0.61) < 1e-12));
-  assert.equal(report.comparison.tokenClaimAllowed, false);
-  assert.ok(report.comparison.productionGate.failures.includes("efficiency-band-ratio"));
-  assert.match(renderBenchmarkText(report), /efficiency-band-ratio: At least one category, profile, lifecycle, or difficulty fresh-token ratio exceeds the suite limit/);
+  assert.equal(report.comparison.freshTokenBandGate, null);
+  assert.equal(report.comparison.freshTokenBandFailures.length, 0);
+  assert.ok(report.comparison.pairedUsageBands.categories.platform.freshTokenRatio > 0.6);
+  assert.equal(report.comparison.tokenClaimAllowed, true);
+  assert.equal(report.comparison.productionGate.failures.includes("efficiency-band-ratio"), false);
 });
 
-test("strict 0.60 token and normalized-cost gates do not round a 0.60004 ratio down", () => {
+test("strict 0.60 full-suite token gate does not round a 0.60004 ratio down", () => {
   const runs = [];
   for (let repeat = 1; repeat <= 3; repeat += 1) {
     for (const scenario of productionSuite.scenarios) {
@@ -1555,13 +1555,14 @@ test("strict 0.60 token and normalized-cost gates do not round a 0.60004 ratio d
     runs
   });
   assert.ok(report.comparison.pairedUsageBands.categories.backend.freshTokenRatio > 0.6);
-  assert.equal(report.comparison.freshTokenBandGate, false);
+  assert.equal(report.comparison.freshTokenBandGate, null);
   assert.ok(report.comparison.normalizedCost.bands.categories.backend.ratio > 0.6);
-  assert.equal(report.comparison.normalizedCostBandGate, false);
+  assert.equal(report.comparison.normalizedCostBandGate, null);
+  assert.equal(report.comparison.efficiencyConfidenceGate, false);
   assert.equal(report.comparison.tokenClaimAllowed, false);
 });
 
-test("strict duration band and family gates do not round 1.00004 down", () => {
+test("duration remains exact and observational above 1.00004", () => {
   const runs = [];
   for (let repeat = 1; repeat <= 3; repeat += 1) {
     for (const scenario of productionSuite.scenarios) {
@@ -1581,13 +1582,13 @@ test("strict duration band and family gates do not round 1.00004 down", () => {
     runs
   });
   assert.ok(report.comparison.pairedDurationBands.categories.backend.durationRatio > 1);
-  assert.equal(report.comparison.durationBandGate, false);
-  assert.equal(report.comparison.durationFamilyGate, false);
-  assert.equal(report.comparison.performanceGate, false);
-  assert.equal(report.comparison.tokenClaimAllowed, false);
+  assert.equal(report.comparison.durationBandGate, null);
+  assert.equal(report.comparison.durationFamilyGate, null);
+  assert.equal(report.comparison.performanceGate, null);
+  assert.equal(report.comparison.tokenClaimAllowed, true);
 });
 
-test("duration family guardrail catches one regression hidden by aggregate and workload bands", () => {
+test("duration family regression is reported without blocking the token claim", () => {
   const regressedScenarioId = "cli-double-dash";
   const runs = [];
   for (let repeat = 1; repeat <= 3; repeat += 1) {
@@ -1607,20 +1608,17 @@ test("duration family guardrail catches one regression hidden by aggregate and w
     environment: productionEnvironment(),
     runs
   });
-  assert.equal(report.comparison.performancePointEstimateGate, true);
-  assert.equal(report.comparison.performanceConfidenceGate, true);
-  assert.equal(report.comparison.durationBandGate, true);
-  assert.equal(report.comparison.durationFamilyGate, false);
-  assert.deepEqual(report.comparison.durationFamilyFailures, [{
-    scenarioId: regressedScenarioId,
-    ratio: 1.01,
-    reason: "ratio-above-limit"
-  }]);
-  assert.ok(report.comparison.productionGate.failures.includes("performance-family-ratio"));
-  assert.equal(report.comparison.tokenClaimAllowed, false);
+  assert.equal(report.comparison.performancePointEstimateGate, null);
+  assert.equal(report.comparison.performanceConfidenceGate, null);
+  assert.equal(report.comparison.durationBandGate, null);
+  assert.equal(report.comparison.durationFamilyGate, null);
+  assert.equal(report.comparison.durationFamilyFailures.length, 0);
+  assert.ok(report.comparison.pairedDurationBands.categories.platform.durationRatio > 0);
+  assert.equal(report.comparison.productionGate.failures.includes("performance-family-ratio"), false);
+  assert.equal(report.comparison.tokenClaimAllowed, true);
 });
 
-test("production family guardrail prevents aggregate and band savings from hiding one token regression", () => {
+test("production reports one token-heavy family while the full-suite estimand remains authoritative", () => {
   const regressedScenarioId = "cli-double-dash";
   const runs = [];
   for (let repeat = 1; repeat <= 3; repeat += 1) {
@@ -1639,11 +1637,12 @@ test("production family guardrail prevents aggregate and band savings from hidin
     runs
   });
   assert.equal(report.comparison.efficiencyConfidenceGate, true);
-  assert.equal(report.comparison.freshTokenBandGate, true);
-  assert.equal(report.comparison.freshTokenFamilyGate, false);
-  assert.deepEqual(report.comparison.freshTokenFamilyFailures, [{ scenarioId: regressedScenarioId, ratio: 1.01, reason: "ratio-above-limit" }]);
-  assert.equal(report.comparison.tokenClaimAllowed, false);
-  assert.ok(report.comparison.productionGate.failures.includes("efficiency-family-ratio"));
+  assert.equal(report.comparison.freshTokenBandGate, null);
+  assert.equal(report.comparison.freshTokenFamilyGate, null);
+  assert.equal(report.comparison.freshTokenFamilyFailures.length, 0);
+  assert.equal(report.comparison.failureAwareFamilyRatios.find((item) => item.scenarioId === regressedScenarioId).ratio, 1.01);
+  assert.equal(report.comparison.tokenClaimAllowed, true);
+  assert.equal(report.comparison.productionGate.failures.includes("efficiency-family-ratio"), false);
 });
 
 test("production claims fail closed on one missing family or one inexact accepted usage", () => {
@@ -1668,10 +1667,10 @@ test("production claims fail closed on one missing family or one inexact accepte
     runs: missingFamilyRuns
   });
   assert.equal(missingFamily.comparison.efficiencyEvidenceGate, false);
-  assert.equal(missingFamily.comparison.freshTokenFamilyGate, false);
-  assert.ok(missingFamily.comparison.freshTokenFamilyFailures.some((item) => item.scenarioId === missing.scenarioId && item.reason === "missing-comparable-usage"));
-  assert.equal(missingFamily.comparison.normalizedCostEvidenceGate, false);
-  assert.equal(missingFamily.comparison.normalizedCostFamilyGate, false);
+  assert.equal(missingFamily.comparison.freshTokenFamilyGate, null);
+  assert.equal(missingFamily.comparison.freshTokenFamilyFailures.length, 0);
+  assert.equal(missingFamily.comparison.normalizedCostEvidenceGate, null);
+  assert.equal(missingFamily.comparison.normalizedCostFamilyGate, null);
   assert.equal(missingFamily.comparison.normalizedCost.expectedPairs, productionSuite.scenarios.length * 3);
   assert.equal(missingFamily.comparison.normalizedCost.observedPairs, (productionSuite.scenarios.length * 3) - 1);
   assert.equal(missingFamily.comparison.tokenClaimAllowed, false);
@@ -1688,9 +1687,9 @@ test("production claims fail closed on one missing family or one inexact accepte
     runs: inexactRuns
   });
   assert.equal(inexact.comparison.acceptedUsageCompletenessGate, false);
-  assert.equal(inexact.comparison.normalizedCostPricingApplicabilityGate, false);
+  assert.equal(inexact.comparison.normalizedCostPricingApplicabilityGate, null);
   assert.ok(inexact.comparison.productionGate.failures.includes("accepted-usage-completeness"));
-  assert.ok(inexact.comparison.productionGate.failures.includes("normalized-cost-pricing-applicability"));
+  assert.equal(inexact.comparison.productionGate.failures.includes("normalized-cost-pricing-applicability"), false);
   assert.equal(inexact.comparison.tokenClaimAllowed, false);
 });
 
@@ -1751,7 +1750,7 @@ test("keeps outcome coverage visible but withholds a claim when one family lacks
     releaseGate: {
       ...productionSuite.releaseGate,
       minimumPairedScenarios: 3,
-      minimumComparableEfficiencyScenarios: 2
+      minimumComparableEfficiencyScenarios: 3
     }
   };
   const runs = [];
@@ -1779,16 +1778,12 @@ test("keeps outcome coverage visible but withholds a claim when one family lacks
   assert.equal(report.comparison.pairedOutcomeScenarios, 3);
   assert.equal(report.comparison.pairedCompleteScenarios, 2);
   assert.equal(report.comparison.outcomeEvidenceGate, true);
-  assert.equal(report.comparison.efficiencyEvidenceGate, true);
+  assert.equal(report.comparison.efficiencyEvidenceGate, false);
   assert.equal(report.comparison.pairedOutcomes.resolved.candidateOnlyPass, 3);
   assert.equal(report.comparison.pairedRegressionGate, true);
   assert.equal(report.comparison.failureAwareEfficiencyGate, true);
-  assert.equal(report.comparison.freshTokenFamilyGate, false);
-  assert.deepEqual(report.comparison.freshTokenFamilyFailures, [{
-    scenarioId: scenarios[0].id,
-    ratio: null,
-    reason: "missing-comparable-usage"
-  }]);
+  assert.equal(report.comparison.freshTokenFamilyGate, null);
+  assert.deepEqual(report.comparison.freshTokenFamilyFailures, []);
   assert.equal(report.comparison.tokenClaimAllowed, false);
   assert.equal(report.comparison.claimEligibility.achievedTier, "public-regression");
   assert.equal(report.comparison.claimEligibility.generalizationClaimAllowed, false);

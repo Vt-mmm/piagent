@@ -1509,7 +1509,7 @@ test("authenticated replay reuses the frozen source of a custom suite and stays 
   assert.equal(report.comparison.tokenClaimAllowed, false);
 });
 
-test("provider-free pause diagnostic allows only a clean observed pair and fails closed on regressions", () => {
+test("provider-free pause diagnostic blocks quality and continuity while keeping intermediate efficiency observational", () => {
   const scenario = { id: "first" };
   const future = { id: "second" };
   const fullOrder = [scenario, future].flatMap((item) => ["piagent", "codex-cli"].map((surface) => ({
@@ -1572,6 +1572,29 @@ test("provider-free pause diagnostic allows only a clean observed pair and fails
   assert.equal(clean.timingDiagnostics.gateImpact, "none");
   assert.equal(clean.timingDiagnostics.surfaces.piagent.validDiagnostics, 0);
   assert.equal(clean.spendFutilityReview.passed, true);
+  assert.deepEqual(clean.decisionContract, {
+    blocking: "quality-model-parity-task-continuity-and-exact-usage-only",
+    finalOnly: ["fresh-token-reduction"],
+    observational: ["normalized-api-equivalent-text-token-cost", "duration", "host-load"]
+  });
+
+  const inefficientRuns = structuredClone(cleanRuns);
+  const inefficientCandidate = inefficientRuns.find((run) => run.surface === "piagent");
+  inefficientCandidate.durationSeconds = 2;
+  inefficientCandidate.usage.input = 120;
+  inefficientCandidate.usage.fresh = 130;
+  inefficientCandidate.usage.total = 130;
+  const inefficient = buildBenchmarkStageDiagnostic({ ...input, runs: inefficientRuns });
+  assert.equal(inefficient.stageAdvanceAllowed, true,
+    "an intermediate token, normalized-cost, or duration regression cannot reject a potentially passing final 108-session result");
+  assert.deepEqual(inefficient.blockingReasons, []);
+  assert.equal(inefficient.spendFutilityReview.passed, false);
+  assert.equal(inefficient.spendFutilityReview.freshTokens.pairRegressions.length, 1);
+  assert.equal(inefficient.spendFutilityReview.normalizedApiEquivalentTextTokenCost.pairRegressions.length, 1);
+  assert.equal(inefficient.spendFutilityReview.duration.pairRegressions.length, 1);
+  assert.equal(inefficient.checks.find((check) => check.id === "no-observed-fresh-token-regression").decisionRole, "final-only");
+  assert.equal(inefficient.checks.find((check) => check.id === "normalized-cost-pricing-applicable-and-no-observed-regression").decisionRole, "observational");
+  assert.equal(inefficient.checks.find((check) => check.id === "no-observed-duration-regression").decisionRole, "observational");
 
   const malformedTimingRuns = structuredClone(cleanRuns);
   for (const run of malformedTimingRuns) run.timingDiagnostics = { rawPayload: "must remain outside stage authority" };
@@ -1646,12 +1669,18 @@ test("provider-free pause diagnostic allows only a clean observed pair and fails
   assert.ok(blocked.blockingReasons.includes("provider-wire-model-thinking-parity"));
   assert.ok(blocked.blockingReasons.includes("no-infrastructure-retry"));
   assert.ok(blocked.blockingReasons.includes("no-unknown-attempt-usage"));
-  assert.ok(blocked.blockingReasons.includes("no-observed-fresh-token-regression"));
-  assert.ok(blocked.blockingReasons.includes("normalized-cost-pricing-applicable-and-no-observed-regression"));
-  assert.ok(blocked.blockingReasons.includes("no-observed-duration-regression"));
+  assert.equal(blocked.blockingReasons.includes("no-observed-fresh-token-regression"), false);
+  assert.equal(blocked.blockingReasons.includes("normalized-cost-pricing-applicable-and-no-observed-regression"), false);
+  assert.equal(blocked.blockingReasons.includes("no-observed-duration-regression"), false);
   assert.equal(blocked.spendFutilityReview.freshTokens.pairRegressions.length, 1);
   assert.equal(blocked.spendFutilityReview.normalizedApiEquivalentTextTokenCost.pairRegressions.length, 1);
   assert.equal(blocked.spendFutilityReview.duration.pairRegressions.length, 1);
+
+  const inexactRuns = structuredClone(cleanRuns);
+  inexactRuns.find((run) => run.surface === "piagent").usage.usageCompleteness = "unverified";
+  const inexact = buildBenchmarkStageDiagnostic({ ...input, runs: inexactRuns });
+  assert.equal(inexact.stageAdvanceAllowed, false);
+  assert.ok(inexact.blockingReasons.includes("accepted-usage-exact"));
 
   const safetyRuns = structuredClone(cleanRuns);
   for (const run of safetyRuns) {
@@ -1673,7 +1702,7 @@ test("provider-free pause diagnostic allows only a clean observed pair and fails
   assert.ok(integrityBlocked.quality.outcomeFloor.failures.some((item) => item.failures.includes("scope-safety-evidence-failed")));
 });
 
-test("canonical production stage diagnostic fails closed on missing or tampered host-readiness history", async () => {
+test("host readiness is observational unless the suite explicitly requires it for the claim", async () => {
   const policy = {
     schemaVersion: 1,
     required: true,
@@ -1751,11 +1780,20 @@ test("canonical production stage diagnostic fails closed on missing or tampered 
   };
   const ready = buildBenchmarkStageDiagnostic({ ...base, manifest });
   assert.equal(ready.stageAdvanceAllowed, true, ready.blockingReasons.join(", "));
-  assert.equal(ready.hostReadiness.ready, true);
+  assert.equal(ready.hostReadiness, null);
+  assert.deepEqual(ready.checks.find((check) => check.id === "host-readiness-receipt-history"), {
+    id: "host-readiness-receipt-history",
+    passed: true,
+    decisionRole: "observational",
+    required: false,
+    validReceipts: 0,
+    receipts: 0,
+    coverage: null
+  });
 
   const missing = buildBenchmarkStageDiagnostic({ ...base, manifest: { ...manifest, hostReadinessReceipts: [] } });
-  assert.equal(missing.stageAdvanceAllowed, false);
-  assert.ok(missing.blockingReasons.includes("host-readiness-receipt-history"));
+  assert.equal(missing.stageAdvanceAllowed, true);
+  assert.equal(missing.blockingReasons.includes("host-readiness-receipt-history"), false);
 
   const tamperedReceipt = structuredClone(receipt);
   tamperedReceipt.samples[0].normalizedLoad1 = 0.2;
@@ -1763,8 +1801,33 @@ test("canonical production stage diagnostic fails closed on missing or tampered 
     ...base,
     manifest: { ...manifest, hostReadinessReceipts: [tamperedReceipt] }
   });
-  assert.equal(tampered.stageAdvanceAllowed, false);
-  assert.ok(tampered.hostReadiness.errors.some((error) => error.includes("digest-mismatch")));
+  assert.equal(tampered.stageAdvanceAllowed, true);
+  assert.equal(tampered.hostReadiness, null);
+
+  const requiredBase = {
+    ...base,
+    suite: {
+      ...suite,
+      releaseGate: { ...suite.releaseGate, requireHostReadinessForClaim: true }
+    }
+  };
+  const requiredReady = buildBenchmarkStageDiagnostic({ ...requiredBase, manifest });
+  assert.equal(requiredReady.stageAdvanceAllowed, true, requiredReady.blockingReasons.join(", "));
+  assert.equal(requiredReady.hostReadiness.ready, true);
+
+  const requiredMissing = buildBenchmarkStageDiagnostic({
+    ...requiredBase,
+    manifest: { ...manifest, hostReadinessReceipts: [] }
+  });
+  assert.equal(requiredMissing.stageAdvanceAllowed, false);
+  assert.ok(requiredMissing.blockingReasons.includes("host-readiness-receipt-history"));
+
+  const requiredTampered = buildBenchmarkStageDiagnostic({
+    ...requiredBase,
+    manifest: { ...manifest, hostReadinessReceipts: [tamperedReceipt] }
+  });
+  assert.equal(requiredTampered.stageAdvanceAllowed, false);
+  assert.ok(requiredTampered.hostReadiness.errors.some((error) => error.includes("digest-mismatch")));
 });
 
 test("paired stop policy terminates on safety and integrity evidence failures", () => {

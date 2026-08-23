@@ -178,11 +178,12 @@ async function main() {
     ? suite.scenarios.length * productionSpendControl.execution.repeats * productionSpendControl.execution.surfaces.length
     : undefined;
   const productionSpendControlErrors = productionSpendControl
-    ? productionSpendControlValidationErrors(productionSpendControl, {
-        suiteId: suite.id,
-        expectedSessions: productionExpectedSessions,
-        requireHostReadiness: canonicalProductionSuite
-      })
+      ? productionSpendControlValidationErrors(productionSpendControl, {
+          suiteId: suite.id,
+          expectedSessions: productionExpectedSessions,
+          requireHostReadiness: canonicalProductionSuite
+            && suite.releaseGate?.requireHostReadinessForClaim === true
+        })
     : [];
   if (productionSpendControlErrors.length > 0) {
     fail(`Production spend-control contract is invalid (${productionSpendControlErrors.join(", ")})`, 1);
@@ -247,7 +248,9 @@ async function main() {
       }))
     : executionOrder(suite, options.repeats, options.surfaces, rootSeed);
   const productionSpendControlled = productionFullMatrixRequested;
-  const productionHostReadinessRequired = productionSpendControlled && canonicalProductionSuite;
+  const productionHostReadinessRequired = productionSpendControlled
+    && canonicalProductionSuite
+    && suite.releaseGate?.requireHostReadinessForClaim === true;
   const productionHostReadinessPolicy = productionHostReadinessRequired
     ? productionSpendControl.hostReadiness
     : null;

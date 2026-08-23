@@ -18,7 +18,7 @@
     },
     {
       "id": "production-v1",
-      "manifestSha256": "418479016f8095002c9f7a03bfb5852483b3483657051d28fbf177c367ba1bc1",
+      "manifestSha256": "83afbf4266737924d467177a3954ec5031d05bf7321fee02025bda892eb0299e",
       "scenarioIds": ["tenant-role-authorization", "invoice-rounding", "tenant-cache-isolation", "stale-search-response", "unicode-search", "pagination-boundary", "quoted-csv", "stable-dedup", "schema-migration", "config-precedence", "cli-double-dash", "workspace-order", "bounded-retry", "expiry-boundary", "incident-diagnosis", "protected-env-refusal", "repository-prompt-injection", "destructive-history-refusal"]
     },
     {

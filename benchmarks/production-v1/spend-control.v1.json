@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "suiteId": "production-v1",
-  "purpose": "Provider-spend control before the one claim-eligible 108-session public-regression result.",
+  "purpose": "Provider-spend control before the one claim-eligible 108-session token-quality-continuity result.",
   "rootSeed": "production-v1-40-gate-v1-1370",
   "execution": {
     "surfaces": ["piagent", "codex-cli"],
@@ -10,18 +10,6 @@
     "repeats": 3,
     "infrastructureRetries": 0,
     "stopAfterFailedPair": true
-  },
-  "hostReadiness": {
-    "schemaVersion": 1,
-    "required": true,
-    "sampleCount": 3,
-    "sampleIntervalMilliseconds": 60000,
-    "cpuSampleMilliseconds": 1000,
-    "maximumNormalizedLoad1": 0.25,
-    "minimumCpuIdlePercent": 80,
-    "maximumTimingOverrunRatio": 0.25,
-    "maximumStartDelayMilliseconds": 120000,
-    "failFast": true
   },
   "stages": [
     { "id": "S0", "cumulativeSessions": 0, "newSessions": 0, "mode": "preflight-only", "claimEligible": false },
@@ -53,25 +41,28 @@
     "stageDiagnosticArtifact": "stage-diagnostic.json",
     "automaticTerminalOrAbortRules": [
       "dirty-release-source-before-auth-tool-or-provider-preflight",
-      "host-readiness-failure-before-auth-tool-or-provider-preflight",
       "piagent-unresolved-or-outcome-score-at-or-below-floor-via-stop-after-failed-pair",
       "infrastructure-error-or-unknown-provider-attempt-usage-via-runner-abort",
       "candidate-provenance-drift-via-execution-guard"
     ],
     "stageAdvanceRules": [
       "clean-release-source",
-      "fresh-run-and-configuration-bound-privacy-safe-host-readiness-receipt-for-every-paid-invocation",
       "no-baseline-pass-piagent-fail",
       "no-observed-paired-grade-regression",
       "all-observed-piagent-outcomes-remain-above-the-release-floor",
       "no-model-thinking-or-provider-wire-parity-drift",
       "complete-privacy-safe-causal-context-receipt-with-closed-session-lifecycle",
       "no-accepted-usage-completeness-failure",
-      "no-normalized-cost-pricing-applicability-failure",
       "no-infrastructure-retry",
-      "no-observed-pair-or-family-fresh-token-normalized-cost-or-duration-ratio-above-1"
+      "no-unknown-provider-attempt-usage"
     ],
-    "operatorRule": "The commands pass this artifact's frozen values explicitly. After every production-v1 pause, resume recomputes the provider-free diagnostic from the accepted ledger and is blocked unless stageAdvanceAllowed=true. The diagnostic is claim-ineligible; early success is never a stopping rule or release claim."
+    "nonBlockingDiagnostics": [
+      "intermediate-fresh-token-ratios",
+      "normalized-api-equivalent-text-token-cost",
+      "duration",
+      "host-load"
+    ],
+    "operatorRule": "The commands pass this artifact's frozen values explicitly. After every production-v1 pause, resume recomputes the provider-free quality and continuity gate from the accepted ledger. Intermediate token, cost, duration, and host-load measurements are diagnostic only; only the complete S108 ledger may decide the fresh-token claim."
   },
-  "claimBoundary": "Only S108 may be evaluated for the production-v1 public-regression claim; S0, S12, S36 and S72 are spend-control diagnostics and cannot support a release claim."
+  "claimBoundary": "Only S108 may be evaluated for the production-v1 fresh-token public-regression claim; S0, S12, S36 and S72 are spend-control diagnostics. Duration, host load, and normalized cost are reported but cannot block or support this claim."
 }

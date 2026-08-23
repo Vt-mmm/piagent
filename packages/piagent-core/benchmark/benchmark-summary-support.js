@@ -22,6 +22,7 @@ export const RELEASE_FAILURE_MESSAGES = Object.freeze({
   category: "At least one category score is below the suite minimum.",
   "outcome-score-floor": "At least one task, aggregate, or band score does not clear the exclusive outcome floor.",
   "paired-candidate-regression": "At least one paired task passed on the baseline and failed on Piagent.",
+  "candidate-task-continuity": "Every Piagent session must resolve successfully and preserve all required workflow checks.",
   "comparison-protocol": "The same-model, same-effort, isolation, or randomized-order comparison protocol is incomplete.",
   "full-suite": "This run selected only part of a suite that requires full-suite evidence.",
   "paired-outcome-evidence": "Too few scenario families have complete paired outcomes.",

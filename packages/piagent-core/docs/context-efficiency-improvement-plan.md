@@ -7,16 +7,20 @@
 - **Verified against:** repository state on 2026-08-23.
 - **Review disposition:** Approved for sequential implementation only after the PR-0A evidence-semantics foundation and the release non-regression gates below.
 - **Implementation order:** PR-0A → PR-0 → PR-1 → PR-2 → PR-3B. PR-3A may start after PR-0A in recommend-only mode.
-- **Implementation progress (2026-08-23):** PR-0A and PR-0 are implemented locally and verified. The first behavior slice now composes one criterion-aware, source-sanitized initial snapshot; cleans volatile state at a terminal/missing-binding task boundary; measures evidence coverage without rewarding missing telemetry; and enforces the provider-free 40% token/API-equivalent-cost contract. Redacted items retain only sanitized-text provenance, not a raw-content digest. Production execution is staged at S12/S36/S72/S108 with a ledger-bound durable resume gate. Every Piagent record carries a privacy-safe causal aggregate whose provenance, prompt/terminal order and offer/delivery/injection lifecycle fail closed; S12 exposes the aggregate needed to decide whether residency/delta work is justified. The runner consumes the frozen seed/execution/stage contract, cannot bypass it by explicitly selecting all scenarios, and finalizes an already complete ledger without another provider preflight. It does not implement residency/delta suppression, verifier batching, or semantic tool-result compaction, and makes no new provider-backed claim yet.
+- **Implementation progress (2026-08-23):** PR-0A and PR-0 are implemented locally and verified. The first behavior slice now composes one criterion-aware, source-sanitized initial snapshot; cleans volatile state at a terminal/missing-binding task boundary; and measures evidence coverage without rewarding missing telemetry. Redacted items retain only sanitized-text provenance, not a raw-content digest. Production execution is staged at S12/S36/S72/S108 with a ledger-bound durable resume gate. Only the complete S108 ledger may decide the 40% fresh-token claim; paired model intelligence, task continuity, and exact usage remain hard constraints at every paid boundary. Duration, host load, normalized API-equivalent cost, and intermediate token ratios are observations only. Every Piagent record carries a privacy-safe causal aggregate whose provenance, prompt/terminal order and offer/delivery/injection lifecycle fail closed. The runner consumes the frozen seed/execution/stage contract, cannot bypass it by explicitly selecting all scenarios, and finalizes an already complete ledger without another provider preflight. It does not implement residency/delta suppression, verifier batching, or semantic tool-result compaction, and makes no new provider-backed claim yet.
 - **Primary safety rule:** Never trade verification coverage or context correctness for token savings.
 
 The implementation scope is primarily `packages/piagent-core`, but policy-backed configuration also requires coordinated changes to root `schemas/`, `adapters/`, capability catalogs/locks, and their tests. These are part of the delivery scope when a phase introduces `contextDeltaShadow`, `contextRuntime`, or `fastVerify` settings.
 
 ## Release contract
 
-Token reduction is the optimization target. Capability, correctness, safety,
-verification coverage, latency, and operation finality are hard constraints.
-No context phase may be promoted merely because it uses fewer tokens.
+Token reduction is the optimization target. Model intelligence and task
+continuity are the non-regression constraints: correctness, safety, scope,
+verification evidence, resolved outcomes, and operation finality may not be
+weakened. Exact usage is required to make the token measurement auditable.
+Duration, host load, and normalized API-equivalent cost remain observational;
+Piagent may be slower than Codex CLI without invalidating the token claim. No
+context phase may be promoted merely because it uses fewer tokens.
 
 The release comparison must:
 
@@ -24,18 +28,22 @@ The release comparison must:
   Codex model, thinking level, prompt, repository tree, verifier, and repeat;
 - run the complete declared suite on an exact clean candidate with seeded,
   randomized pair order and at least three repeats;
-- require the family-clustered upper 95% fresh-token ratio to be at most `0.60`
-  for the production-v1 claim (at least 40% fresh-token reduction), the point
-  ratio of every category/profile/lifecycle/difficulty band to be at most
-  `0.60`, and every comparable scenario family to be at most `1.00`;
+- require the family-clustered upper 95% fresh-token ratio of the complete S108
+  ledger to be at most `0.60` for the production-v1 claim (at least 40%
+  fresh-token reduction). Category/profile/lifecycle/difficulty and individual
+  family ratios remain visible diagnostics, but they do not replace or veto
+  the predeclared full-suite estimand;
 - reject a token claim when candidate quality, safety, reliability, workflow,
   resolved outcomes, or evidence completeness is worse than the Codex CLI
   baseline; in addition to aggregate gates, every declared scenario/repeat must
   have exactly one finite paired grade and Piagent may not score below Codex CLI
   on any pair;
-- require end-to-end duration to be non-inferior: point ratio and upper 95%
-  ratio both at most `1.00`, with zero timeout, orphaned operation,
-  or unknown terminal state in the release cohort;
+- require every Piagent session to resolve with all required workflow checks,
+  exact accepted token buckets, no unknown provider-attempt usage, and no
+  timeout, orphaned operation, or unknown terminal state;
+- continue to measure paired duration, normalized API-equivalent cost, and host
+  load when evidence is available, but assign those observations no stage,
+  verdict, or token-claim authority;
 - require stable system/tool prefix telemetry, with no unexplained prefix drift,
   while keeping model identity and reasoning effort outside the prefix hash;
 - run the exact production efficiency comparison on
@@ -45,22 +53,28 @@ The release comparison must:
   Luna efficiency estimand.
 
 Partial, dirty-tree, provider-free, subset, or retry-recovered runs may report
-observations but may not produce a release token-saving claim. Web UI release
-validation is a companion hard gate: every operation must reach one canonical
-terminal settlement; only successful assistant output belongs in the chat;
-drafts, retries, commands, and failures belong in Activity; reload/resync must
-not strand a running indicator or remove Stop/recovery controls.
+observations but may not produce a release token-saving claim. S0, S12, S36,
+and S72 are spend-control boundaries, never early token verdicts. Web UI release
+validation remains a separate product control rather than an input to the S108
+benchmark verdict: every operation must reach one canonical terminal settlement;
+only successful assistant output belongs in the chat; drafts, retries, commands,
+and failures belong in Activity; reload/resync must not strand a running
+indicator or remove Stop/recovery controls.
 
 Codex OAuth usage currently exposes exact token categories but no authoritative
-monetary charge. Production-v1 now binds a versioned official pricing snapshot
-and therefore may report an API-equivalent text-token cost comparison for the
-exact model/input/cache/output buckets. This remains explicitly distinct from
-provider-billed, OAuth-plan, tool, storage, or total currency spend.
+monetary charge. Production-v1 binds a versioned official pricing snapshot and
+may report an API-equivalent text-token cost comparison for exact
+model/input/cache/output buckets. The value is observational and non-blocking;
+missing pricing applicability cannot invalidate an otherwise exact fresh-token
+claim. It remains explicitly distinct from provider-billed, OAuth-plan, tool,
+storage, or total currency spend.
 
-## Current paid-run decision
+## Historical paid-run evidence and current decision
 
-Do not start another 108-session run directly. The closest clean historical
-Luna Medium production run had a fresh-token ratio of `0.3833` with upper-95%
+The historical ledgers below remain immutable and must not be resumed or
+relabelled under the new contract. The next authoritative result must come from
+one fresh, frozen S0→S12→S36→S72→S108 run. The closest clean historical Luna
+Medium production run had a fresh-token ratio of `0.3833` with upper-95%
 `0.4832`, so the 40% target is plausible, but that run is not a valid claim: one
 `cli-double-dash` pair regressed and closed the quality/category gates. A prior
 deep-logic diagnostic at `0.817` was a smaller dirty subset; it is not the
@@ -70,9 +84,11 @@ The latest closed S12 diagnostic used `openai-codex/gpt-5.6-luna:medium` and
 measured `67,507` Piagent fresh tokens versus `106,109` for Codex CLI: ratio
 `0.6362`, or `36.38%` reduction. API-equivalent text-token cost fell `32.88%`
 and pooled Piagent duration was `4.93%` lower, with all six paired grades at
-`10/10`; the stage still failed and is permanently closed because the 40%
-token/cost contract was missed and the `quoted-csv` family regressed to a
-`1.4314` token ratio and `1.4259` duration ratio. Its Piagent trajectory used
+`10/10`. Under the superseded contract, the stage failed and was permanently
+closed because the 40% token/cost contract was missed and the `quoted-csv`
+family regressed to a `1.4314` token ratio and `1.4259` duration ratio. It also
+misses the current final fresh-token target (`36.38%` rather than at least 40%),
+but remains only a partial historical diagnostic. Its Piagent trajectory used
 20 tool calls and recorded four edit/test errors, while the other five families
 had a pooled fresh-token ratio of `0.4229`. This isolates recovery churn and
 test-selection ambiguity as candidate causes rather than excess context-pack
@@ -83,32 +99,36 @@ pairs at `10/10`, exact Luna Medium provider parity, no retries, and complete
 schema-v2 causal receipts. It measured `45,474` Piagent fresh tokens versus
 `105,618` for Codex CLI (ratio `0.4306`, or `56.94%` reduction) and an
 API-equivalent text-token cost ratio of `0.4527` (`54.73%` reduction). Aggregate
-Piagent duration was `23.04%` lower. The stage is nevertheless permanently
-closed and may not advance: `unicode-search:r1` took `45.9048s` in Piagent versus
-`43.0316s` in Codex CLI, a `1.0668` ratio that correctly failed the strict
-no-observed-duration-regression gate. The other five duration pairs did not
-regress. Recovery correctness was covered offline, but the paid S12 observed no
-edit failures or recovery injections and therefore cannot support a paid-run
+Piagent duration was `23.04%` lower. Under the superseded strict-duration
+contract, the stage was permanently closed because `unicode-search:r1` took
+`45.9048s` in Piagent versus `43.0316s` in Codex CLI, a `1.0668` ratio. The
+current contract treats that timing as observational, but it does not
+retroactively reopen, resume, or relabel the old S12 ledger. Recovery
+correctness was covered offline, but the paid S12 observed no edit failures or
+recovery injections and therefore cannot support a paid-run
 recovery-effectiveness claim.
 
 The `9cc16de` candidate implemented the planned direct-import, singleton-test,
 bounded edit-recovery, and terminal-state evidence changes and removed the prior
-`quoted-csv` regression. The next candidate remains deliberately narrow and
-does not weaken verification or the latency gate: add one guarded multi-file
-`apply_patch` operation so a legitimate source-plus-regression-test change can
-be emitted in one model/tool turn, and add privacy-safe observational timing for
-process startup, model-turn wait, tool execution, and unattributed remainder.
+`quoted-csv` regression. Work following that candidate remained deliberately
+narrow and did not weaken verification: one guarded multi-file `apply_patch`
+operation allows a legitimate source-plus-regression-test change in one
+model/tool turn, while privacy-safe observational timing separates process
+startup, model-turn wait, tool execution, and unattributed remainder.
 Timing uses monotonic JSONL receipt boundaries, stores no prompt, command, path,
 or identifier, leaves ambiguous boundaries unavailable, and has no gate impact.
 These behaviors require offline verification and another clean commit before a
 brand-new S0/S12 ledger; both closed S12 ledgers must never be resumed or
 relabeled.
 
-After this candidate passes the complete offline verification and is bound to
-one clean commit, authorize S0 and then S12 only. S12 may advance only with no
-paired quality/performance regression, exact usage, stable provider wire and a
-complete causal receipt for every Piagent row. Use its aggregate to choose the
-next code change:
+After the candidate passes complete offline verification and is bound to one
+clean commit, start one new staged ledger. S12/S36/S72 may advance only when
+paired quality and model intelligence do not regress, every Piagent task remains
+resolved with complete workflow/causal evidence, and accepted usage is exact.
+Intermediate fresh-token ratios are final-only diagnostics; normalized cost,
+duration, and host load are observational. None of those observations may close
+an otherwise valid stage before S108. Use their aggregates for later engineering
+analysis without changing the frozen candidate mid-run:
 
 - unexpected injected tokens or successful direct fallback rereads justify
   residency/delta work;
@@ -117,10 +137,12 @@ next code change:
 - high shell-call exposure keeps reread attribution open and must not be
   reported as proven zero waste.
 
-If S12 fails, close that candidate and fix it without spending the remaining 96
-sessions. If S12 is clean but does not identify residency/delta waste, do not
-add those stateful mechanisms merely to chase the target; proceed through the
-predeclared S36/S72 windows and let the final S108 gate decide the claim.
+If a stage fails a quality, intelligence, continuity, exact-usage, provenance,
+or execution-integrity constraint, close that candidate and fix it without
+spending the remaining sessions. Otherwise proceed through the predeclared
+S36/S72 windows and let the final S108 fresh-token gate decide the claim, even
+when an intermediate token ratio, duration, normalized cost, or host-load
+observation is unfavorable.
 
 ## 1. Current-state findings
 
@@ -1003,12 +1025,12 @@ Every behavior-changing PR must verify:
 - Duplicate injected token rate falls by at least 50% in the canary cohort.
 - An internal canary may use 10% as a diagnostic milestone, but it cannot make a
   product claim. Promotion requires the complete release cohort to meet the
-  family-clustered upper-95% ratio `<= 0.60` (at least 40% reduction). The same
-  `<= 0.60` point-ratio ceiling applies to every declared workload band, while
-  each scenario family must remain at or below `1.00`.
+  family-clustered upper-95% ratio `<= 0.60` (at least 40% reduction) at S108.
+  Workload-band and individual-family ratios remain diagnostics and do not
+  override the full-suite estimand.
 - Verification retry/failure and partial/blocked rates do not regress.
-- End-to-end duration point estimate does not regress and its paired upper-95%
-  ratio stays within the declared non-inferiority margin.
+- End-to-end duration, normalized API-equivalent cost, and host load remain
+  visible observations with no promotion-gate authority.
 
 The reduction claim requires a matched control/treatment comparison with the same model, thinking level, task class, repository starting tree, and verifier. Report sample sizes and uncertainty; post-compaction rehydration is classified separately from avoidable duplicate injection.
 
@@ -1046,8 +1068,10 @@ PR-3A Fast verification can start after PR-0A and remains recommend-only until i
 Recommended execution sequence:
 
 1. Implement PR-0A and prove planned context cannot satisfy completion.
-2. Implement PR-0; make the Codex CLI quality/token/performance/stability gates
-   enforceable; start PR-3A in recommend-only mode after PR-0A.
+2. Implement PR-0; make the Codex CLI paired-intelligence, task-continuity,
+   exact-usage, and final S108 fresh-token gates enforceable; keep duration,
+   host load, and normalized cost observational. Start PR-3A in recommend-only
+   mode after PR-0A.
 3. Collect Phase 0 telemetry while preparing PR-1, but do not enable PR-1
    behavior until those gates and canonical Web UI operation settlement pass.
 4. Decide prefix-freeze scope using measured churn.

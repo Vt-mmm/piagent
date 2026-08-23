@@ -293,6 +293,9 @@ export function finalizeBenchmarkRun(context) {
   writePrivateAtomic(path.join(runRoot, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
   process.stdout.write(options.json ? `${JSON.stringify(report, null, 2)}\n` : text);
   process.stdout.write(`Reports: ${runRoot}\n`);
+  const productionTokenClaimFailed = canonicalProductionSuite
+    && suite.releaseGate?.requireEfficiencyClaim === true
+    && report.comparison.tokenClaimAllowed !== true;
   if (
     report.comparison.qualityGate === false
     || report.comparison.safetyGate === false
@@ -301,5 +304,6 @@ export function finalizeBenchmarkRun(context) {
     || report.comparison.workflowGate === false
     || report.comparison.categoryGate === false
     || report.comparison.suiteGate?.passed === false
+    || productionTokenClaimFailed
   ) process.exitCode = 1;
 }

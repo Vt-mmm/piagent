@@ -246,6 +246,7 @@ export function summarizeBenchmark({
   const requiresCausalContextReceipt = releaseGate.requireCausalContextReceipt === true;
   const requestsTokenSavingClaim = releaseGate.requireEfficiencyClaim === true;
   const requestsNormalizedCostClaim = releaseGate.requireNormalizedCostClaim === true;
+  const requiresHostReadiness = releaseGate.requireHostReadinessForClaim === true;
   const canonicalProductionIdentityGate = suite.id !== "production-v1" || canonicalProductionSuite;
   const releaseClaimConfigurationGate = requestsTokenSavingClaim
     ? suite.schemaVersion === 2 && Number.isFinite(maximumFreshTokenRatioUpper95)
@@ -263,7 +264,7 @@ export function summarizeBenchmark({
       && benchmarkPricingSnapshotValidationErrors(suite.pricingSnapshot).length === 0
       && suite.pricingSnapshot?.model === suite.executionContract?.model
     : null;
-  const normalizedCost = requestsNormalizedCostClaim
+  const normalizedCost = benchmarkPricingSnapshotValidationErrors(suite.pricingSnapshot).length === 0
     ? normalizedCostComparison({ suite, allPairs, repeats })
     : null;
   const normalizedCostGates = requestsNormalizedCostClaim ? normalizedCostGate(normalizedCost, {
@@ -290,7 +291,7 @@ export function summarizeBenchmark({
       && /^[a-f0-9]{40,64}$/.test(environment.source.commit ?? "")
     : null;
   const hostReadinessHistory = environment.hostReadinessHistory ?? null;
-  const hostReadinessGate = canonicalProductionSuite
+  const hostReadinessGate = requiresHostReadiness
     ? hostReadinessHistory?.valid === true
       && hostReadinessHistory?.ready === true
       && hostReadinessHistory?.windowCoverage === "complete"
@@ -484,6 +485,18 @@ export function summarizeBenchmark({
     : null;
   const pairedResolvedOutcomes = pairedOutcomeCounts(allPairs, (run) => run?.resolved === true);
   const pairedRegressionGate = pairedResolvedOutcomes.baselineOnlyPass === 0;
+  const candidateContinuityFailures = candidateRuns.flatMap((run) => {
+    const failures = [];
+    if (run?.resolved !== true) failures.push("unresolved-outcome");
+    if (run?.scenarioKind !== "safety-refusal") {
+      const workflowChecks = run?.workflow?.checks;
+      if (!Array.isArray(workflowChecks) || workflowChecks.some((check) => check?.passed !== true)) {
+        failures.push("workflow-evidence-incomplete-or-failed");
+      }
+    }
+    return failures.length > 0 ? [{ scenarioId: run?.scenarioId ?? null, repeat: run?.repeat ?? null, failures }] : [];
+  });
+  const candidateTaskContinuityGate = candidateRuns.length > 0 && candidateContinuityFailures.length === 0;
   const failureAwareEfficiencyGate = Number.isFinite(failureAwareFreshTokenRatio)
     ? atMostWithinFloatingPrecision(failureAwareFreshTokenRatio, maximumFreshTokenRatioUpper95 ?? 1)
     : null;
@@ -498,6 +511,7 @@ export function summarizeBenchmark({
     && categoryGate !== false
     && outcomeScoreGate !== false
     && pairedRegressionGate
+    && candidateTaskContinuityGate
     && protocol.passed
     && causalContextEvidenceGate !== false
     && fullSuiteGate !== false
@@ -541,6 +555,7 @@ export function summarizeBenchmark({
     && categoryGate !== false
     && outcomeScoreGate !== false
     && pairedRegressionGate
+    && candidateTaskContinuityGate
     && protocol.passed
     && causalContextEvidenceGate !== false
     && fullSuiteGate !== false
@@ -570,6 +585,7 @@ export function summarizeBenchmark({
     categoryGate === false ? "category" : null,
     outcomeScoreGate === false ? "outcome-score-floor" : null,
     !pairedRegressionGate ? "paired-candidate-regression" : null,
+    !candidateTaskContinuityGate ? "candidate-task-continuity" : null,
     !baseProtocol.passed ? "comparison-protocol" : null,
     requiresProviderWireSurface && !providerWireSurfaceGate ? "provider-wire-surface" : null,
     requiresCausalContextReceipt && !causalContextEvidenceGate ? "causal-context-evidence" : null,
@@ -577,7 +593,7 @@ export function summarizeBenchmark({
     requestsNormalizedCostClaim && !normalizedCostClaimConfigurationGate ? "normalized-cost-configuration" : null,
     requestsTokenSavingClaim && !codexBaselineGate ? "codex-baseline" : null,
     requestsTokenSavingClaim && !cleanReleaseSourceGate ? "clean-release-source" : null,
-    canonicalProductionSuite && !hostReadinessGate ? "host-readiness-history" : null,
+    requiresHostReadiness && !hostReadinessGate ? "host-readiness-history" : null,
     requiresFullSuite && fullSuiteGate === false ? "full-suite" : null,
     requiresStability && !infrastructureRetryGate ? "infrastructure-retries" : null,
     requiresStability && !unknownInfrastructureUsageGate ? "unknown-infrastructure-usage" : null,
@@ -631,7 +647,7 @@ export function summarizeBenchmark({
       tokenSavingClaimUpper95Maximum: requestsTokenSavingClaim ? 0.8 : null,
       baselineSurface: requestsTokenSavingClaim ? "codex-cli" : null,
       cleanSource: requestsTokenSavingClaim,
-      hostReadinessHistory: canonicalProductionSuite,
+      hostReadinessHistory: requiresHostReadiness,
       requireFullSuite: requiresFullSuite,
       stableProviderWireSurface: requiresProviderWireSurface,
       causalContextReceipt: requiresCausalContextReceipt,
@@ -811,6 +827,8 @@ export function summarizeBenchmark({
       outcomeScoreGate,
       outcomeScoreFailures,
       pairedRegressionGate,
+      candidateTaskContinuityGate,
+      candidateContinuityFailures,
       comparisonProtocolGate: protocol,
       providerWireSurfaceGate,
       causalContextEvidenceGate,
@@ -884,6 +902,8 @@ export function summarizeBenchmark({
                       ? "outcome-score-floor-gate-failed"
                       : !pairedRegressionGate
                         ? "paired-candidate-regression"
+                        : !candidateTaskContinuityGate
+                          ? "candidate-task-continuity-gate-failed"
                         : !canonicalProductionIdentityGate
                           ? "canonical-production-identity-gate-failed"
                           : requestsTokenSavingClaim && releaseClaimConfigurationGate === false
@@ -892,7 +912,7 @@ export function summarizeBenchmark({
                             ? "codex-baseline-gate-failed"
                           : requestsTokenSavingClaim && cleanReleaseSourceGate === false
                               ? "clean-release-source-gate-failed"
-                            : canonicalProductionSuite && hostReadinessGate === false
+                            : requiresHostReadiness && hostReadinessGate === false
                               ? "host-readiness-history-gate-failed"
                               : requiresProviderWireSurface && providerWireSurfaceGate === false
                                 ? "provider-wire-surface-gate-failed"
