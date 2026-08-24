@@ -17,7 +17,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
-    timeout-minutes: 20
+    # macOS completes the full policy + offline verification matrix in roughly
+    # 20 minutes on a cold runner. Keep enough headroom for release audits.
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
