@@ -553,6 +553,88 @@ Root seed nằm trong `report.json` riêng tư để điều tra/reproduce. Khô
 report production công khai khi chưa loại trường này, vì suite công khai có thể
 dùng seed để tái tạo synthetic secret.
 
+## Snapshot public regression của v1.6.0
+
+Snapshot này là aggregate public-safe của release gate `production-v1` hiện
+hành. Benchmark chạy trên exact clean commit đã được tag `v1.6.0`; số liệu dưới
+đây dùng primary estimand fixed-workload đã khai báo trước khi quan sát kết quả.
+Raw report, root seed, local path, provider/session identity và ledger theo từng
+run vẫn là dữ liệu riêng tư, không phải public artifact.
+
+| Thuộc tính | Giá trị |
+|---|---|
+| Release | `v1.6.0` |
+| Exact source SHA | `3bba8f0b3ff521bc2a355e1f6bef6d1bbdc09511` |
+| Run | `production-v1-20260824T040017Z-05b7cf` |
+| Suite digest | `308dc2f0a4656cb272421949a01972df2b0717b4ffeb564306ae12aa669ae6b8` |
+| Model | GPT-5.6 Luna cho cả Piagent và `codex-cli` |
+| Thinking | `medium` cho cả hai surface |
+| Ma trận | 18 scenario family x 3 repeat x 2 surface = 108 session |
+| Baseline | `codex-cli` controlled mode |
+| Accounting | 108/108 accepted attempt có exact token bucket; 0 infrastructure retry |
+
+### Outcome, chất lượng và continuity
+
+| Measurement | Piagent | `codex-cli` | Vai trò |
+|---|---:|---:|---|
+| Resolved outcome | **54/54** | 48/54 | Quality/continuity gate độc lập với token |
+| Quality | **10.00** | không công bố aggregate score trong snapshot này | Paired no-quality-regression pass |
+| Safety | **10.00** | không công bố aggregate score trong snapshot này | Scope/output-safety pass |
+| Reliability | **10.00** | không công bố aggregate score trong snapshot này | Mọi Piagent session resolved |
+| Workflow | **9.85** | n/a | Candidate continuity và workflow gate pass |
+| Efficiency | **10.00** | 5.00 baseline | Fixed-workload efficiency gate pass |
+| Overall | **9.97** | n/a | Production gate pass |
+
+Piagent giải đủ 54 task trong khi baseline giải 48. Sáu baseline outcome không
+resolved không bị loại khỏi token sample: token exact của chúng vẫn nằm trong
+workload cố định. Vì vậy kết quả token không được cải thiện giả tạo bằng cách chỉ
+giữ các cặp mà cả hai bên cùng thành công. Production gate và token-claim gate
+đều pass; kết luận chất lượng vẫn là một hard gate riêng, không được suy ra từ
+tỷ lệ token.
+
+### Primary fresh-token estimand
+
+Primary estimand là `fixed-workload-family-ratio`:
+
+1. Với từng family, cộng fresh token exact của ba repeat đã định trước cho mỗi
+   surface, bao gồm mọi accepted outcome dù resolved hay unresolved.
+2. Lấy tỷ lệ tổng Piagent / tổng `codex-cli` trong family đó.
+3. Lấy geometric mean của 18 family ratio; confidence interval cluster theo 18
+   family, không giả ba repeat thành ba đơn vị mẫu độc lập.
+
+| Measurement | Giá trị | Decision role |
+|---|---:|---|
+| Primary fixed-workload family ratio | **0.3857** | Blocking |
+| Primary fresh-token delta | **-61.43%** | Blocking |
+| 95% family-clustered CI | **0.3073..0.4840** | Blocking |
+| Mức giảm tại cận bảo thủ 95% | **51.60%** | Diễn giải từ upper ratio 0.4840 |
+| Family coverage | **18/18** | Blocking |
+| All-attempt fresh token, Piagent | **421,119** | Descriptive aggregate |
+| All-attempt fresh token, `codex-cli` | **951,172** | Descriptive aggregate |
+| Aggregate all-attempt fresh-token ratio | **0.4427** | Descriptive, không điều khiển gate |
+
+Cận trên CI `0.4840` thấp hơn threshold `0.60`, nên snapshot cho phép bounded
+claim: trong workload public-regression đã quan sát, point estimate giảm 61.43%
+fresh token và cận bảo thủ của phép đo tương ứng giảm 51.60%. Không chia hai tổng
+token `421,119 / 951,172` để thay primary estimator; ratio `0.4427` chỉ giúp đọc
+quy mô và sẽ khiến family lớn có trọng số cao hơn family nhỏ.
+
+### Phạm vi của claim
+
+Tên “production gate” chỉ nói đây là release gate của suite, không phải bằng
+chứng rằng độ ổn định production dài hạn đã được chứng minh. Đây là synthetic
+public regression do maintainer xây dựng, không phải independent benchmark và
+không cho phép generalization claim. Snapshot không nói Piagent **luôn** tiết
+kiệm đúng 61.43%, không bảo đảm thắng ở mọi family/session/repository/model, và
+không thay thế family-disjoint holdout, shadow/canary task thực tế hoặc theo dõi
+incident dài hạn.
+
+Fresh token cũng không đồng nghĩa subscription spend hoặc provider-billed cost.
+Duration, API-equivalent cost và host load nếu có trong private report chỉ là
+diagnostic; chúng không điều khiển primary token verdict của contract này.
+Bản trực quan aggregate nằm tại
+[piagent.io.vn/benchmark](https://piagent.io.vn/benchmark).
+
 ## Snapshot public regression lịch sử của v1.2.12
 
 Snapshot dưới đây là public-regression evidence đầu tiên của `production-v1`. Candidate

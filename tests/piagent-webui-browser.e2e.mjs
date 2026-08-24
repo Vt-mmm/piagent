@@ -444,6 +444,7 @@ test("stages and unstages one selected hunk through the guarded WebUI", async ({
     await page.getByRole("button", { name: /selected\.txt/ }).click(); await expect(page.getByRole("button", { name: "Stage hunk" })).toHaveCount(2);
     const firstStageResponse = page.waitForResponse((response) => response.url().endsWith("/api/v1/source-mutations") && response.request().method() === "POST");
     await page.getByRole("button", { name: "Stage hunk" }).first().click(); assert.equal((await (await firstStageResponse).json()).resultCode, "staged");
+    await expect(page.getByRole("button", { name: "Stage hunk" })).toHaveCount(0);
     await page.getByRole("button", { name: /selected\.txt/ }).click(); await expect(page.getByRole("button", { name: "Stage hunk" })).toHaveCount(1);
     const firstOnly = [...baseLines]; firstOnly[1] = changedLines[1];
     assert.equal(runGit("show", ":selected.txt"), `${firstOnly.join("\n")}\n`); assert.equal(fs.readFileSync(path.join(hunkCwd, "selected.txt"), "utf8"), worktree);

@@ -112,30 +112,30 @@
 </section>
 
 <section class="section">
-  <p class="section-kicker">Production V1 · historical public regression evidence</p>
+  <p class="section-kicker">Production V1 · v1.6.0 public regression evidence</p>
   <h2 id="evidence">Measured, not asserted</h2>
-  <p class="section-lead">108 sessions on the same model and thinking level, graded automatically, against an isolated <code>codex-cli</code> surface. This is the production-v1 measurement; it is not a re-measurement of v1.4.0.</p>
+  <p class="section-lead">Release-bound run <code>production-v1-20260824T040017Z-05b7cf</code> measured 108 sessions on GPT-5.6 Luna Medium at tag <code>v1.6.0</code>, exact commit <code>3bba8f0b3ff521bc2a355e1f6bef6d1bbdc09511</code>, with Piagent compared against <code>codex-cli</code>.</p>
 
   <div class="benchmark-metrics" aria-label="Headline benchmark numbers">
     <div class="benchmark-metric">
-      <span>Overall</span>
-      <strong>9.92 / 10</strong>
-      <small>Quality, Safety, Reliability all 10/10</small>
+      <span>Release evidence</span>
+      <strong>v1.6.0</strong>
+      <small>exact commit 3bba8f0</small>
     </div>
     <div class="benchmark-metric">
       <span>Tasks resolved</span>
       <strong>54/54</strong>
-      <small>100% on both surfaces</small>
+      <small>Piagent; codex-cli resolved 48/54</small>
     </div>
     <div class="benchmark-metric">
       <span>Fresh tokens</span>
-      <strong>-51.11%</strong>
-      <small>paired geometric mean, 47/54 pair wins</small>
+      <strong>-61.43%</strong>
+      <small>primary fixed-workload family ratio 0.3857</small>
     </div>
     <div class="benchmark-metric">
-      <span>Infrastructure</span>
-      <strong>0 retries</strong>
-      <small>108 valid runs</small>
+      <span>Usage evidence</span>
+      <strong>108/108 exact</strong>
+      <small>zero retries</small>
     </div>
   </div>
 
@@ -144,20 +144,20 @@
     <span><i class="codex-swatch"></i>codex-cli</span>
   </div>
 
-  <div class="benchmark-usage-chart" aria-label="Median fresh tokens per run: Piagent 7,368, codex-cli 18,476">
+  <div class="benchmark-usage-chart" aria-label="Fixed-workload family fresh-token ratio: Piagent 38.57 percent, codex-cli baseline 100 percent; tasks resolved: Piagent 54 of 54, codex-cli 48 of 54">
     <div class="benchmark-usage-group">
-      <h3>Fresh tokens, median per run</h3>
-      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 39.88%"></i></div><strong>7,368</strong></div>
-      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 100%"></i></div><strong>18,476</strong></div>
+      <h3>Fixed-workload family fresh-token ratio</h3>
+      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 38.57%"></i></div><strong>0.3857</strong></div>
+      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 100%"></i></div><strong>1.0000</strong></div>
     </div>
     <div class="benchmark-usage-group">
-      <h3>Tool calls, median per run</h3>
-      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 62.5%"></i></div><strong>5</strong></div>
-      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 100%"></i></div><strong>8</strong></div>
+      <h3>Tasks resolved</h3>
+      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 100%"></i></div><strong>54/54</strong></div>
+      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 88.89%"></i></div><strong>48/54</strong></div>
     </div>
   </div>
 
-  <p>The 95% confidence interval on the paired ratio is <strong>0.3809–0.6276</strong>; the upper bound stays below 1.0, so the token-saving claim holds. <a href="/en/benchmark">See the full configuration, every band score, and the raw tables</a>.</p>
+  <p>The primary fixed-workload family ratio is <strong>0.3857</strong>, with a 95% confidence interval of <strong>0.3073–0.4840</strong>. The point estimate is 61.43% lower, while the upper confidence bound supports the conservative statement that Piagent used at least 51.60% fewer fresh tokens on this predeclared production-v1 workload and exact release. Usage was exact for all 108 sessions and no retry occurred. <a href="/en/benchmark">See the benchmark methodology and evidence boundary</a>.</p>
 </section>
 
 <section class="section">

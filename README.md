@@ -121,14 +121,17 @@ Removal targets what is registered in Pi's settings rather than what the current
   full-suite, and zero-retry gates. A separate provider-free WebUI
   parity gate proves the 10 workflow and 32 runtime-control paths before any
   model quota is used.
-- The v1.2.12 production snapshot resolved 54/54 Piagent tasks, scored 10.00 for
-  quality/safety/reliability, 9.58 for workflow, 10.00 for efficiency, and 9.92
-  overall. Against controlled `codex-cli` on the same `gpt-5.6-sol`/`xhigh`
-  matrix, Piagent used 51.11% fewer paired fresh tokens with a 95% ratio interval
-  of `0.3809..0.6276`; see the [benchmark evidence](https://piagent.io.vn/benchmark)
-  and [methodology](docs/quality-benchmark.md). This is immutable historical
-  evidence; current production gates additionally require every task and score
-  band to exceed 9.5, so aggregate 9.58 alone is no longer sufficient.
+- The public `v1.6.0` production-v1 run
+  `production-v1-20260824T040017Z-05b7cf`, on exact commit
+  `3bba8f0b3ff521bc2a355e1f6bef6d1bbdc09511` with GPT-5.6 Luna Medium,
+  measured 108 sessions. Piagent resolved 54/54 tasks versus 48/54 for
+  `codex-cli`. Its primary fixed-workload family fresh-token ratio was `0.3857`
+  (61.43% lower), with a 95% interval of `0.3073..0.4840`; the upper bound
+  supports the conservative statement of at least 51.60% fewer fresh tokens on
+  this predeclared workload and exact release. Usage was exact for all 108
+  sessions and no retry occurred. See the
+  [benchmark evidence](https://piagent.io.vn/benchmark) and
+  [methodology](docs/quality-benchmark.md).
 - Built-in profiles for frontend, backend, fullstack, BE-readonly/FE-write, data, DevOps, mobile, docs, Python, and Node TypeScript.
 - Versioned capability packs with deterministic catalog, profile resolution, integrity lock, and permission checks.
 

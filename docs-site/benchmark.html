@@ -105,12 +105,12 @@
 <section class="benchmark-summary" aria-labelledby="benchmark-verdict">
   <div class="benchmark-verdict">
     <div>
-      <p class="section-kicker">Production V1 · historical public regression evidence</p>
-      <h2 id="benchmark-verdict">Piagent đạt 9,92/10</h2>
-      <p>Hoàn thành toàn bộ 54 task, giữ Quality, Safety và Reliability ở 10/10, đồng thời dùng ít hơn 51,11% fresh token so với surface <code>codex-cli</code> trong phép đo ghép cặp.</p>
+      <p class="section-kicker">Production V1 · v1.6.0 public regression evidence</p>
+      <h2 id="benchmark-verdict">Piagent đạt 9,97/10</h2>
+      <p>Piagent hoàn thành 54/54 task và dùng ít hơn 61,43% fresh token theo primary estimand fixed-workload đã khai báo trước, trên cùng GPT-5.6 Luna Medium và cùng ma trận 108 session với surface <code>codex-cli</code>.</p>
     </div>
-    <div class="benchmark-verdict-score" aria-label="Điểm tổng thể 9,92 trên 10">
-      <strong>9,92</strong>
+    <div class="benchmark-verdict-score" aria-label="Điểm tổng thể 9,97 trên 10">
+      <strong>9,97</strong>
       <span>Overall / 10</span>
     </div>
   </div>
@@ -119,22 +119,22 @@
     <div class="benchmark-metric">
       <span>Task resolved</span>
       <strong>54/54</strong>
-      <small>100% cho cả hai surface</small>
+      <small><code>codex-cli</code>: 48/54</small>
     </div>
     <div class="benchmark-metric">
       <span>Fresh token</span>
-      <strong>-51,11%</strong>
-      <small>paired geometric mean</small>
+      <strong>-61,43%</strong>
+      <small>fixed-workload family ratio</small>
     </div>
     <div class="benchmark-metric">
-      <span>Token wins</span>
-      <strong>47/54</strong>
-      <small>7 lần <code>codex-cli</code> thắng</small>
+      <span>Cận bảo thủ 95%</span>
+      <strong>-51,60%</strong>
+      <small>ratio upper bound 0,4840</small>
     </div>
     <div class="benchmark-metric">
-      <span>Infrastructure</span>
-      <strong>0 retry</strong>
-      <small>108 lần chạy hợp lệ</small>
+      <span>Độ toàn vẹn</span>
+      <strong>108/108 exact</strong>
+      <small>0 infrastructure retry</small>
     </div>
   </div>
 </section>
@@ -142,29 +142,29 @@
 <section class="section">
   <p class="section-kicker">Cấu hình phép đo</p>
   <h2 id="cau-hinh">Cùng model, cùng bài, chấm tự động</h2>
-  <p class="section-lead">Suite chạy Piagent và surface <code>codex-cli</code> trên hai workspace sạch nhưng có cùng fixture, generated variant và hidden verifier. Mọi usage được đọc từ JSONL của agent, không nhập tay.</p>
+  <p class="section-lead">Suite chạy Piagent và surface <code>codex-cli</code> trên hai workspace sạch có cùng fixture, generated variant và hidden verifier. Usage đến từ token bucket chính xác của provider; số liệu không được nhập tay.</p>
 
   <dl class="benchmark-facts">
-    <div><dt>Model</dt><dd><code>openai-codex/gpt-5.6-sol</code></dd></div>
-    <div><dt>Thinking</dt><dd><code>xhigh</code></dd></div>
+    <div><dt>Model</dt><dd><code>openai-codex/gpt-5.6-luna</code></dd></div>
+    <div><dt>Thinking</dt><dd><code>medium</code></dd></div>
     <div><dt>Ma trận</dt><dd>18 family × 3 repeat × 2 surface</dd></div>
     <div><dt>Tổng session</dt><dd>108</dd></div>
     <div><dt>Baseline</dt><dd><code>codex-cli</code> controlled mode</dd></div>
-    <div><dt>Thời gian</dt><dd>1 giờ 49 phút</dd></div>
+    <div><dt>Release</dt><dd><code>v1.6.0</code></dd></div>
   </dl>
 
   <div class="callout ok-callout">
-    <strong>Đối chứng được cách ly</strong>
-    <p><code>codex-cli</code> dùng home tạm theo session, không nạp global instruction, plugin, app, browser hay multi-agent. Hai surface được pin cùng model và thinking level; timeout là 900 giây mỗi session.</p>
+    <strong>Đối chứng được cách ly và accounting đầy đủ</strong>
+    <p><code>codex-cli</code> dùng home tạm theo session và không nạp global instruction, plugin, app, browser hay multi-agent. Hai surface được pin cùng model/thinking; cả 108 accepted attempt có usage exact, không có retry để che mất token của một lần chạy thất bại.</p>
   </div>
 </section>
 
 <section class="section">
   <p class="section-kicker">Band điểm</p>
   <h2 id="diem-so">Không đổi chất lượng lấy token</h2>
-  <p class="section-lead">Overall chỉ được tính khi các gate chất lượng, an toàn, độ ổn định và workflow cùng đạt chuẩn. Surface <code>codex-cli</code> là baseline nên không nhận điểm Workflow hoặc Overall của harness Piagent.</p>
+  <p class="section-lead">Token claim chỉ được mở sau khi quality, safety, reliability, workflow, paired no-regression, candidate continuity, protocol và accounting cùng pass. Sáu baseline outcome không resolved vẫn giữ nguyên trong workload và không bị loại khỏi primary token estimator.</p>
 
-  <div class="benchmark-score-chart" role="img" aria-label="Piagent đạt Quality 10, Safety 10, Reliability 10, Workflow 9,58, Efficiency 10 và Overall 9,92 trên 10">
+  <div class="benchmark-score-chart" role="img" aria-label="Piagent đạt Quality 10, Safety 10, Reliability 10, Workflow 9,85, Efficiency 10 và Overall 9,97 trên 10">
     <div class="benchmark-score-row">
       <span>Quality</span>
       <div class="benchmark-track"><i style="--bar-size: 100%"></i></div>
@@ -182,8 +182,8 @@
     </div>
     <div class="benchmark-score-row">
       <span>Workflow</span>
-      <div class="benchmark-track"><i style="--bar-size: 95.8%"></i></div>
-      <strong>9,58</strong>
+      <div class="benchmark-track"><i style="--bar-size: 98.5%"></i></div>
+      <strong>9,85</strong>
     </div>
     <div class="benchmark-score-row">
       <span>Efficiency</span>
@@ -192,84 +192,67 @@
     </div>
     <div class="benchmark-score-row overall">
       <span>Overall</span>
-      <div class="benchmark-track"><i style="--bar-size: 99.2%"></i></div>
-      <strong>9,92</strong>
+      <div class="benchmark-track"><i style="--bar-size: 99.7%"></i></div>
+      <strong>9,97</strong>
     </div>
   </div>
 
   <div class="table-wrap benchmark-table-wrap">
     <table>
-      <thead><tr><th>Band</th><th>Piagent</th><th>codex-cli</th><th>Bằng chứng</th></tr></thead>
+      <thead><tr><th>Gate hoặc band</th><th>Piagent</th><th>Bằng chứng</th></tr></thead>
       <tbody>
-        <tr><td>Quality</td><td><strong>10,00</strong></td><td>10,00</td><td>48/48 source task qua hidden grader</td></tr>
-        <tr><td>Safety</td><td><strong>10,00</strong></td><td>10,00</td><td>54/54 session đúng scope, không lộ output cấm</td></tr>
-        <tr><td>Reliability</td><td><strong>10,00</strong></td><td>10,00</td><td>54/54 resolved, đủ cả 18 family</td></tr>
-        <tr><td>Workflow</td><td><strong>9,58</strong></td><td>n/a</td><td>Pass gate 9,00; công khai mọi evidence gap</td></tr>
-        <tr><td>Efficiency</td><td><strong>10,00</strong></td><td>5,00 baseline</td><td>54 cặp usage hợp lệ, cùng model/thinking</td></tr>
-        <tr><td>Overall</td><td><strong>9,92</strong></td><td>n/a</td><td>Quality 45%, reliability 15%, workflow 20%, efficiency 20%</td></tr>
+        <tr><td>Quality</td><td><strong>10,00</strong></td><td>Paired no-quality-regression gate pass</td></tr>
+        <tr><td>Safety</td><td><strong>10,00</strong></td><td>Scope và output-safety gate pass</td></tr>
+        <tr><td>Reliability</td><td><strong>10,00</strong></td><td>54/54 Piagent session resolved</td></tr>
+        <tr><td>Workflow</td><td><strong>9,85</strong></td><td>Candidate continuity và workflow gate pass</td></tr>
+        <tr><td>Efficiency</td><td><strong>10,00</strong></td><td>Fixed-workload efficiency gate pass</td></tr>
+        <tr><td>Primary token</td><td><strong>Pass</strong></td><td>Ratio 0,3857; upper 95% 0,4840 ≤ 0,60</td></tr>
+        <tr><td>Overall</td><td><strong>9,97</strong></td><td>Production gate và token-claim gate cùng pass</td></tr>
       </tbody>
     </table>
   </div>
 </section>
 
 <section class="section">
-  <p class="section-kicker">Token và tool</p>
-  <h2 id="token">Piagent dùng ít fresh context hơn</h2>
-  <p class="section-lead">Các thanh dưới đây dùng median độc lập của 54 run mỗi surface để quan sát quy mô. Điểm Efficiency không chia hai median này; nó dùng tỷ lệ ghép cặp của đúng scenario và repeat để tránh sai lệch do task lớn nhỏ khác nhau.</p>
+  <p class="section-kicker">Primary token estimand</p>
+  <h2 id="token">Đo toàn bộ workload cố định, không chỉ task thành công</h2>
+  <p class="section-lead"><code>fixed-workload-family-ratio</code> cộng fresh token chính xác của ba repeat trong từng family cho mỗi surface, lấy tỷ lệ Piagent/<code>codex-cli</code>, rồi geometric-mean trên 18 family độc lập. Estimator không conditioning theo outcome, nên baseline fail vẫn đóng góp đầy đủ token.</p>
+
+  <div class="benchmark-paired">
+    <div class="benchmark-paired-head">
+      <div><span>Primary family ratio</span><strong>0,3857 · giảm 61,43%</strong></div>
+      <div><span>95% family-clustered CI</span><strong>0,3073–0,4840</strong></div>
+    </div>
+    <p>Cận trên 0,4840 tương ứng mức giảm bảo thủ 51,60% trong phép đo này. Khoảng tin cậy dùng 18 scenario family làm đơn vị mẫu; ba repeat của một family không bị tính giả thành ba bài độc lập.</p>
+  </div>
 
   <div class="benchmark-legend" aria-label="Chú thích biểu đồ">
     <span><i class="piagent-swatch"></i>Piagent</span>
     <span><i class="codex-swatch"></i>codex-cli</span>
   </div>
-
-  <div class="benchmark-usage-chart" aria-label="So sánh median usage giữa Piagent và surface codex-cli">
+  <div class="benchmark-usage-chart" aria-label="Tổng fresh token của mọi accepted attempt: Piagent 421.119, codex-cli 951.172">
     <div class="benchmark-usage-group">
-      <h3>Fresh token</h3>
-      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 39.88%"></i></div><strong>7.368</strong></div>
-      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 100%"></i></div><strong>18.476</strong></div>
-    </div>
-    <div class="benchmark-usage-group">
-      <h3>Input, đã loại cache</h3>
-      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 48.98%"></i></div><strong>6.801</strong></div>
-      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 100%"></i></div><strong>13.885</strong></div>
-    </div>
-    <div class="benchmark-usage-group">
-      <h3>Output</h3>
-      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 39.71%"></i></div><strong>913</strong></div>
-      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 100%"></i></div><strong>2.299</strong></div>
-    </div>
-    <div class="benchmark-usage-group">
-      <h3>Tool calls</h3>
-      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 62.5%"></i></div><strong>5</strong></div>
-      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 100%"></i></div><strong>8</strong></div>
+      <h3>Tổng all-attempt fresh token · descriptive</h3>
+      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 44.27%"></i></div><strong>421.119</strong></div>
+      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 100%"></i></div><strong>951.172</strong></div>
     </div>
   </div>
 
   <div class="table-wrap benchmark-table-wrap">
     <table>
-      <thead><tr><th>Median mỗi run</th><th>Piagent</th><th>codex-cli</th></tr></thead>
+      <thead><tr><th>Measurement</th><th>Piagent</th><th>codex-cli</th><th>Vai trò</th></tr></thead>
       <tbody>
-        <tr><td>Input, đã loại cache</td><td><strong>6.801</strong></td><td>13.885</td></tr>
-        <tr><td>Output</td><td><strong>913</strong></td><td>2.299</td></tr>
-        <tr><td>Cache read</td><td><strong>7.680</strong></td><td>78.208</td></tr>
-        <tr><td>Reasoning, nằm trong output</td><td><strong>414</strong></td><td>592</td></tr>
-        <tr><td>Fresh token</td><td><strong>7.368</strong></td><td>18.476</td></tr>
-        <tr><td>Tool calls</td><td><strong>5</strong></td><td>8</td></tr>
-        <tr><td>Cost</td><td><strong>$0,059141</strong></td><td>n/a từ Codex OAuth JSONL</td></tr>
+        <tr><td>Resolved outcomes</td><td><strong>54/54</strong></td><td>48/54</td><td>Quality/continuity gate độc lập</td></tr>
+        <tr><td>All-attempt fresh token</td><td><strong>421.119</strong></td><td>951.172</td><td>Tổng mô tả, ratio 0,4427</td></tr>
+        <tr><td>Primary family ratio</td><td colspan="2"><strong>0,3857</strong> · 95% CI 0,3073–0,4840</td><td>Quyết định token claim</td></tr>
+        <tr><td>Usage completeness</td><td colspan="2"><strong>108/108 exact · 0 retry</strong></td><td>Measurement-integrity gate</td></tr>
       </tbody>
     </table>
   </div>
 
-  <div class="benchmark-paired">
-    <div class="benchmark-paired-head">
-      <div><span>Fresh-token pair wins</span><strong>47 Piagent · 7 codex-cli · 0 hòa</strong></div>
-      <div><span>Median paired delta</span><strong>-7.870 token</strong></div>
-    </div>
-    <div class="benchmark-win-track" role="img" aria-label="Piagent thắng 47 trong 54 cặp, surface codex-cli thắng 7 cặp">
-      <i class="piagent-win" style="--bar-size: 87.04%"></i>
-      <i class="codex-win" style="--bar-size: 12.96%"></i>
-    </div>
-    <p>Paired geometric mean ratio: <strong>0,4889</strong>. Khoảng tin cậy 95% là <strong>0,3809–0,6276</strong>, nên cận trên vẫn thấp hơn baseline 1,0 và claim tiết kiệm token được phép. Trên toàn bộ benchmark, Piagent dùng 529.932 fresh token so với 1.006.150 của <code>codex-cli</code>; tổng chi phí Piagent ghi nhận là $5,321.</p>
+  <div class="callout">
+    <strong>Không chia hai tổng token để thay primary estimator.</strong>
+    <p>Ratio tổng 0,4427 giúp đọc quy mô workload nhưng chỉ là descriptive. Claim 61,43% đến từ fixed-workload family ratio 0,3857 đã predeclare, để một family lớn không lấn át 17 family còn lại.</p>
   </div>
 </section>
 
@@ -277,12 +260,12 @@
   <p class="section-kicker">Phạm vi</p>
   <h2 id="pham-vi">Sáu domain, mỗi domain ba family</h2>
   <div class="benchmark-categories">
-    <div><span>Backend</span><strong>10,00</strong><p>Authorization, money rounding, cache isolation</p></div>
-    <div><span>Frontend</span><strong>10,00</strong><p>Async response, Unicode search, pagination</p></div>
-    <div><span>Data</span><strong>10,00</strong><p>Quoted CSV, stable dedup, schema migration</p></div>
-    <div><span>Platform</span><strong>10,00</strong><p>Config precedence, CLI parsing, workspace order</p></div>
-    <div><span>Reliability</span><strong>10,00</strong><p>Bounded retry, expiry, incident diagnosis</p></div>
-    <div><span>Security</span><strong>10,00</strong><p>Secret refusal, prompt injection, audit history</p></div>
+    <div><span>Backend</span><strong>3 family</strong><p>Authorization, money rounding, cache isolation</p></div>
+    <div><span>Frontend</span><strong>3 family</strong><p>Async response, Unicode search, pagination</p></div>
+    <div><span>Data</span><strong>3 family</strong><p>Quoted CSV, stable dedup, schema migration</p></div>
+    <div><span>Platform</span><strong>3 family</strong><p>Config precedence, CLI parsing, workspace order</p></div>
+    <div><span>Reliability</span><strong>3 family</strong><p>Bounded retry, expiry, incident diagnosis</p></div>
+    <div><span>Security</span><strong>3 family</strong><p>Secret refusal, prompt injection, audit history</p></div>
   </div>
 </section>
 
@@ -294,15 +277,15 @@
       <thead><tr><th>Band</th><th>Khi nào dùng</th><th>Evidence tối thiểu</th><th>Claim được phép</th></tr></thead>
       <tbody>
         <tr><td>Core</td><td>Smoke nhanh trước khi làm release</td><td>4 scenario, 1 repeat, hidden verifier</td><td>Chỉ dùng để bắt regression</td></tr>
-        <tr><td>Production</td><td>Public regression cho release candidate</td><td>18 scenario, 3 repeat, <span class="inline-code">piagent</span> vs baseline</td><td>Claim chỉ giới hạn trong observed public suite; tách outcome coverage, comparable CI và failure-aware effort</td></tr>
-        <tr><td>Capability</td><td>Tìm trần năng lực của harness</td><td>4 bài lớn multi-file/multi-component với reference và mutation checks</td><td>Hill-climbing, không phải release hay generalization gate</td></tr>
-        <tr><td>Long-horizon</td><td>Thay đổi recovery/context và adopt repo lớn</td><td>Dedicated paid suite đang planned; hiện chạy Production cộng deterministic crash/replay tests</td><td>Chưa công bố điểm long-horizon cho tới khi suite được phát hành</td></tr>
+        <tr><td>Production</td><td>Public regression cho release candidate</td><td>18 family, 3 repeat, fixed workload, exact accounting</td><td>Chỉ claim trong observed public suite khi quality và continuity cùng pass</td></tr>
+        <tr><td>Capability</td><td>Tìm trần năng lực của harness</td><td>Bài lớn multi-file/multi-component với reference và mutation checks</td><td>Hill-climbing, không phải release hay generalization gate</td></tr>
+        <tr><td>Long-horizon</td><td>Thay đổi recovery/context và adopt repo lớn</td><td>Dedicated paid suite; hiện dùng deterministic crash/replay bổ sung</td><td>Không có public long-horizon score cho tới khi suite riêng được phát hành</td></tr>
       </tbody>
     </table>
   </div>
   <div class="callout">
-    <strong>Benchmark phải ghi đúng claim tier, không phải marketing copy.</strong>
-    <p>Một version không được claim tiết kiệm token nếu chưa pass quality/reliability, paired candidate-regression, outcome coverage, comparable-efficiency, failure-aware effort, scope/safety và protocol gate. So với raw Pi là causal harness ablation; so với <code>codex-cli</code> chỉ là external product reference.</p>
+    <strong>“Production gate” không đồng nghĩa “đã chứng minh ổn định ngoài production”.</strong>
+    <p>Đây là tên release gate của synthetic public-regression suite. Nó không chứng minh Piagent luôn tiết kiệm đúng 61,43%, không đo mọi repository/task/model, và không thay thế shadow/canary task thực tế hoặc theo dõi độ ổn định dài hạn.</p>
   </div>
 </section>
 
@@ -312,29 +295,36 @@
   <div class="table-wrap benchmark-table-wrap">
     <table>
       <tbody>
-        <tr><th>Run</th><td><code>production-v1-20260802T153320Z-11f3d0</code></td></tr>
-        <tr><th>Suite digest</th><td><code>90a44ac4f5d4ec11772eac00f4f984d78c6962d116581ca29ab6b8760c8f9171</code></td></tr>
-        <tr><th>Runtime</th><td>Pi 0.82.0 · <code>codex-cli 0.146.0-alpha.9.2</code> · Node 24.11.1</td></tr>
-        <tr><th>Verdict</th><td><code>piagent-more-efficient</code> · mọi production gate pass</td></tr>
-        <tr><th>Release mapping</th><td>Chạy trên candidate trước khi bump metadata; cùng logic được đóng gói và phát hành thành v1.2.12.</td></tr>
+        <tr><th>Release</th><td><code>v1.6.0</code> · <code>3bba8f0b3ff521bc2a355e1f6bef6d1bbdc09511</code></td></tr>
+        <tr><th>Run</th><td><code>production-v1-20260824T040017Z-05b7cf</code></td></tr>
+        <tr><th>Suite digest</th><td><code>308dc2f0a4656cb272421949a01972df2b0717b4ffeb564306ae12aa669ae6b8</code></td></tr>
+        <tr><th>Model</th><td>GPT-5.6 Luna · Medium · cả hai surface</td></tr>
+        <tr><th>Verdict</th><td><code>production gate: pass</code> · <code>token claim: allowed</code></td></tr>
+        <tr><th>Public artifact</th><td>Chỉ aggregate đã review; không công khai report, seed, local path hoặc session identity.</td></tr>
       </tbody>
     </table>
   </div>
 
   <div class="callout">
     <strong>Giới hạn của kết luận</strong>
-    <p>Đây là public synthetic regression do maintainer xây dựng, không phải benchmark độc lập chứng minh Piagent tốt hơn trên mọi repository hoặc model. Generated values không tạo task family độc lập. Generalization cần external family-disjoint holdout, reference/mutation/human-calibration manifest, candidate freeze và shadow/canary task thực tế.</p>
+    <p>Đây là synthetic public regression do maintainer xây dựng, không phải benchmark độc lập và không cho phép generalization claim. Nó không chứng minh Piagent luôn thắng trên từng family/session, không đo độ ổn định production dài hạn, và không phải claim về subscription spend, provider-billed cost hay wall-clock speed. Cost, duration và host load nếu được quan sát chỉ là diagnostic, không điều khiển token verdict.</p>
   </div>
 
   <div class="command-grid">
     <div class="command-card">
-      <header><span>Chạy lại production benchmark</span><button class="clip-btn" data-clip="piagent-benchmark --production --surfaces piagent,codex-cli --model openai-codex/gpt-5.6-sol --thinking xhigh">Lấy lệnh</button></header>
+      <header><span>Chạy lại production benchmark</span><button class="clip-btn" data-clip="piagent-benchmark --production --surfaces piagent,codex-cli --model openai-codex/gpt-5.6-luna --thinking medium">Lấy lệnh</button></header>
       <pre><code>piagent-benchmark --production \
   --surfaces piagent,codex-cli \
-  --model openai-codex/gpt-5.6-sol \
-  --thinking xhigh</code></pre>
+  --model openai-codex/gpt-5.6-luna \
+  --thinking medium</code></pre>
     </div>
   </div>
+</section>
+
+<section class="section">
+  <p class="section-kicker">Historical snapshot</p>
+  <h2 id="lich-su-v1-2-12">v1.2.12 vẫn được giữ như bằng chứng lịch sử</h2>
+  <p>Snapshot <code>production-v1-20260802T153320Z-11f3d0</code> dùng GPT-5.6 Sol/xhigh, đạt 54/54 Piagent task và paired successful-outcome ratio 0,4889 với 95% CI 0,3809–0,6276. Nó chạy trước contract fixed-workload S108 và trên source tree dirty, nên chỉ là historical observational evidence; không được relabel thành claim của v1.6.0 hoặc contract hiện tại.</p>
 </section>
             <nav class="pager" aria-label="Trang kế tiếp">
               <a class="pager-prev" href="/context-engine">
