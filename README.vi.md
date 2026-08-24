@@ -166,6 +166,17 @@ token và duration gate, đồng thời không có retry. Retry diagnostic vẫn
 rõ nhưng làm release gate fail. `--dry-run` chỉ validate kế hoạch, không dùng
 quota.
 
+Run production-v1 public của `v1.6.0`,
+`production-v1-20260824T040017Z-05b7cf`, được đo trên đúng commit
+`3bba8f0b3ff521bc2a355e1f6bef6d1bbdc09511` bằng GPT-5.6 Luna Medium với
+108 session. Piagent hoàn thành 54/54 task, so với 48/54 của `codex-cli`. Tỷ lệ
+fresh token theo family fixed-workload chính là `0,3857` (thấp hơn 61,43%), với
+khoảng tin cậy 95% `0,3073..0,4840`; cận trên cho phép phát biểu thận trọng rằng
+Piagent dùng ít hơn ít nhất 51,60% fresh token trên đúng workload đã khai báo
+trước và đúng release này. Usage của cả 108 session đều exact và không có retry.
+Xem [bằng chứng benchmark](https://piagent.io.vn/benchmark) và
+[phương pháp](docs/quality-benchmark.md).
+
 Gate này chạy architecture check, test, typecheck, capability validation, runtime smoke và docs consistency trước khi release.
 
 Bản phát hành hiện tại là `v1.6.0`. Với team hoặc production, hãy pin tag này

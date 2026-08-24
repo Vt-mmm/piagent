@@ -112,30 +112,30 @@
 </section>
 
 <section class="section">
-  <p class="section-kicker">Production V1 · historical public regression evidence</p>
+  <p class="section-kicker">Production V1 · bằng chứng public của v1.6.0</p>
   <h2 id="bang-chung">Đo được, không phải nói suông</h2>
-  <p class="section-lead">108 session, cùng model và cùng thinking level, chấm tự động, so với surface <code>codex-cli</code> chạy cách ly. Đây là bằng chứng của bản đo production-v1, không phải phép đo lại của v1.4.0.</p>
+  <p class="section-lead">Run gắn với release <code>production-v1-20260824T040017Z-05b7cf</code> đã đo 108 session bằng GPT-5.6 Luna Medium tại tag <code>v1.6.0</code>, đúng commit <code>3bba8f0b3ff521bc2a355e1f6bef6d1bbdc09511</code>, với Piagent so với <code>codex-cli</code>.</p>
 
   <div class="benchmark-metrics" aria-label="Số liệu benchmark nổi bật">
     <div class="benchmark-metric">
-      <span>Overall</span>
-      <strong>9,92 / 10</strong>
-      <small>Quality, Safety, Reliability đều 10/10</small>
+      <span>Bằng chứng release</span>
+      <strong>v1.6.0</strong>
+      <small>đúng commit 3bba8f0</small>
     </div>
     <div class="benchmark-metric">
       <span>Task resolved</span>
       <strong>54/54</strong>
-      <small>100% cho cả hai surface</small>
+      <small>Piagent; codex-cli đạt 48/54</small>
     </div>
     <div class="benchmark-metric">
       <span>Fresh token</span>
-      <strong>-51,11%</strong>
-      <small>paired geometric mean, 47/54 cặp thắng</small>
+      <strong>-61,43%</strong>
+      <small>tỷ lệ family fixed-workload chính 0,3857</small>
     </div>
     <div class="benchmark-metric">
-      <span>Infrastructure</span>
-      <strong>0 retry</strong>
-      <small>108 lần chạy hợp lệ</small>
+      <span>Bằng chứng usage</span>
+      <strong>108/108 exact</strong>
+      <small>không có retry</small>
     </div>
   </div>
 
@@ -144,20 +144,20 @@
     <span><i class="codex-swatch"></i>codex-cli</span>
   </div>
 
-  <div class="benchmark-usage-chart" aria-label="Fresh token median mỗi run: Piagent 7.368, codex-cli 18.476">
+  <div class="benchmark-usage-chart" aria-label="Tỷ lệ fresh token theo family fixed-workload: Piagent 38,57 phần trăm, baseline codex-cli 100 phần trăm; task hoàn thành: Piagent 54 trên 54, codex-cli 48 trên 54">
     <div class="benchmark-usage-group">
-      <h3>Fresh token, median mỗi run</h3>
-      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 39.88%"></i></div><strong>7.368</strong></div>
-      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 100%"></i></div><strong>18.476</strong></div>
+      <h3>Tỷ lệ fresh token theo family fixed-workload</h3>
+      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 38.57%"></i></div><strong>0,3857</strong></div>
+      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 100%"></i></div><strong>1,0000</strong></div>
     </div>
     <div class="benchmark-usage-group">
-      <h3>Tool calls, median mỗi run</h3>
-      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 62.5%"></i></div><strong>5</strong></div>
-      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 100%"></i></div><strong>8</strong></div>
+      <h3>Task resolved</h3>
+      <div class="benchmark-usage-row"><span>Piagent</span><div class="benchmark-track"><i class="piagent-bar" style="--bar-size: 100%"></i></div><strong>54/54</strong></div>
+      <div class="benchmark-usage-row"><span>codex-cli</span><div class="benchmark-track"><i class="codex-bar" style="--bar-size: 88.89%"></i></div><strong>48/54</strong></div>
     </div>
   </div>
 
-  <p>Khoảng tin cậy 95% của tỷ lệ ghép cặp là <strong>0,3809–0,6276</strong>; cận trên vẫn dưới 1,0 nên claim tiết kiệm token đứng vững. <a href="/benchmark">Xem đầy đủ cấu hình, từng band điểm và bảng số</a>.</p>
+  <p>Tỷ lệ family fixed-workload chính là <strong>0,3857</strong>, với khoảng tin cậy 95% <strong>0,3073–0,4840</strong>. Ước lượng điểm thấp hơn 61,43%; theo cận trên của khoảng tin cậy, có thể phát biểu thận trọng rằng Piagent dùng ít hơn ít nhất 51,60% fresh token trên đúng workload production-v1 đã khai báo trước và đúng release này. Usage của cả 108 session đều exact và không có retry. <a href="/benchmark">Xem phương pháp benchmark và ranh giới bằng chứng</a>.</p>
 </section>
 
 <section class="section">
