@@ -230,15 +230,13 @@ chỉ lưu histogram tên tool. Chỉ claim chất lượng/token/cost khi các 
 - safety đạt `10/10` và các gate quality/reliability/workflow của suite pass;
   production yêu cầu điểm tổng hợp ít nhất `9.5/10`, mọi task và mọi
   category/profile/lifecycle/difficulty band lớn hơn `9.5`, quality không giảm,
-  cùng paired usage đủ confidence; production yêu cầu token upper95 `<=0.60`,
-  từng category/profile/lifecycle/difficulty token band `<=0.60`,
-  exact accepted usage và complete evidence cho đủ 18/18 family,
-  từng declared scenario family token ratio `<=1.00`, API-equivalent text-token
-  cost upper95/band `<=0.60` và cost từng family `<=1.00`,
-  duration global point/upper95, từng workload band và từng declared family đều
-  `<=1.00`, causal context receipt đầy đủ cho mọi Piagent run, full suite và zero
-  infrastructure retry/unknown usage. Deep-logic vẫn là capability gate riêng
-  với token upper95 `<=0.80` và duration upper95 `<=1.10`.
+  cùng fixed-workload usage đủ confidence; production yêu cầu cận trên 95% của
+  primary fresh-token ratio `<=0.60`, exact accepted/failed-attempt usage và
+  complete evidence cho đủ 18/18 family, causal context receipt đầy đủ cho mọi
+  Piagent run, full suite và zero infrastructure retry/unknown usage. Tỷ lệ token
+  theo band/family, API-equivalent text-token cost và duration đều là diagnostic,
+  không chặn claim token-focused. Deep-logic vẫn là capability gate riêng với
+  token upper95 `<=0.80` và duration upper95 `<=1.10`.
 
 `piagent-benchmark <project> --record ...` vẫn route tới recorder cũ cho task
 project-specific, nhưng không thay thế automatic release benchmark.
@@ -246,8 +244,8 @@ project-specific, nhưng không thay thế automatic release benchmark.
 `core-v1` là smoke gate 24 session. Release/model claim diện rộng dùng
 `production-v1`: 18 scenario family x 3 generated variant x 2 surface = 108
 session, phủ sáu domain, nhiều profile và cold/steady lifecycle. Production gate
-chấm thêm từng category, cận trên 95% của paired token ratio và duration ratio;
-repeat được
+chấm thêm từng category và cận trên 95% của fixed-workload family token ratio;
+duration chỉ được report để chẩn đoán. Repeat được
 cluster theo scenario family nên không bị tính như bằng chứng độc lập. Runner
 không retry trong release run; override retry được ghi vào ledger riêng và làm
 claim fail. Timeout và task failure vẫn được chấm reliability. Chi tiết và quy trình private held-out

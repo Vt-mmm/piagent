@@ -258,7 +258,10 @@ export function extractJavaScriptModuleImports(value, { embedded = false, jsx = 
   if (!embedded) imports.push(...executableJavaScriptImports(source, 0, { jsx }));
   else {
     const visible = source.replace(/<!--[\s\S]*?-->/gu, (comment) => erasedLexeme(comment));
-    const script = /^[\t ]*<script\b[^>]*>([\s\S]*?)<\/script\s*>/gimu;
+    // HTML end tags may carry whitespace, a self-closing slash, or ignored
+    // attributes. Stop at the first complete `script` end tag instead of
+    // letting its body absorb later template markup or another script block.
+    const script = /^[\t ]*<script(?:>|[\t\n\f\r /][^>]*>)([\s\S]*?)<\/script(?:>|[\t\n\f\r /][^>]*>)/gimu;
     for (const match of visible.matchAll(script)) {
       const content = match[1];
       const contentOffset = match.index + match[0].indexOf(content);

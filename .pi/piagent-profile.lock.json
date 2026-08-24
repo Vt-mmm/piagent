@@ -115,7 +115,7 @@
   ],
   "core": {
     "apiVersion": 1,
-    "packageDigest": "sha256:2ad085a47485e7192286ac2cfc69ca8260b72f1bc5037e4174ecb926c35818ba",
+    "packageDigest": "sha256:85fb6d2d9e6a453807cf50efff727f7bb9faa801ba6985b7b6f66ef4b5a3bfc7",
     "packageSource": "../",
     "packageVersion": "1.6.0",
     "runtimeFiles": [
@@ -445,8 +445,8 @@
         "path": "packages/piagent-core/extensions/context-evidence.js"
       },
       {
-        "byteSize": 11195,
-        "digest": "sha256:d1d1f3f99613a35c868b589fcc7ab944d9d86b46f6d036c33ef2a0a1fcc37d5d",
+        "byteSize": 11459,
+        "digest": "sha256:8de918185ad8fcb6c7abbbf5efbd640e23bfdd57adeac096f1374b35d64d99db",
         "path": "packages/piagent-core/extensions/context-import-links.js"
       },
       {

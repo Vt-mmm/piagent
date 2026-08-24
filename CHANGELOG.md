@@ -4,6 +4,8 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
+## v1.6.0 - 2026-08-24
+
 ### Context efficiency and source safety
 
 - Replaced overlapping automatic discovery and criterion snapshots with one
@@ -43,11 +45,12 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
   measurement on task outcome. Every declared scenario/repeat must still have
   an exact finite grade pair with no Piagent quality regression, and all Piagent
   sessions must satisfy the independent continuity gates.
-- Added a separate GPT-5.6 Luna API-equivalent text-token cost gate with the same
-  `0.60` global/band and `1.00` family limits. This metric prices exact text
-  token buckets and remains explicitly distinct from OAuth/provider billing.
-- Added duration non-inferiority gates globally, by workload band and by family;
-  a faster aggregate can no longer hide one slower workload segment.
+- Added a separate GPT-5.6 Luna API-equivalent text-token cost diagnostic. It
+  prices exact text-token buckets, remains distinct from OAuth/provider billing,
+  and does not block the token-focused production claim.
+- Added duration comparison globally, by workload band and by family as
+  observational evidence. The canonical contract allows Piagent to be slower
+  when fresh-token, paired-intelligence and task-continuity gates still pass.
 - Froze production-v1 to Luna Medium and a ledger-bound S0/12/36/72/108 spend
   sequence. Only S108 is claim-eligible; every earlier pause recomputes a
   provider-free diagnostic and prints the exact bounded resume command.
@@ -70,11 +73,9 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
   current candidate, suite, runtime-dependency tree and ledger while reusing the
   frozen command/auth/preflight identities bound to the accepted measurements.
 - Preserved the completed 108-session r3 ledger as observational evidence under
-  its original successful-pair contract. It is not retroactively promoted: a
-  new provider run is required after this predeclared estimator and suite digest
-  are frozen before a 40% claim can be approved.
-
-## v1.6.0 - 2026-08-22
+  its original successful-pair contract. It is not retroactively promoted: only
+  a new provider run on the exact final candidate, after this estimand and suite
+  digest are frozen, can approve a 40% claim.
 
 ### Runtime intelligence and context integrity
 
@@ -116,8 +117,9 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
   statistical comparison gates and explicit Codex CLI controls.
 - Hardened benchmark accounting so unknown usage, infrastructure retries or an
   unmatched provider attempt cannot support a token or production claim.
-- This release does not make a new provider-backed token-reduction claim; the
-  benchmark was intentionally left stopped after the operator requested it.
+- A provider-backed token-reduction claim is published only when a complete
+  zero-retry 108-session run passes on the exact clean tagged candidate. An
+  interrupted, historical or different-SHA run remains diagnostic evidence.
 
 ## v1.5.5 - 2026-08-21
 

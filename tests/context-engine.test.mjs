@@ -979,6 +979,27 @@ test("ignores script-tag examples inside Vue comments while retaining the live S
   assert.deepEqual([...direct], ["src/vue-live.ts"]);
 });
 
+test("stops embedded imports at script end tags with ignored HTML attributes", () => {
+  const source = [
+    "<script>",
+    "import './first-live';",
+    "</script\t",
+    " data-extra>",
+    "<template>import('./template-decoy')</template>",
+    "<script type=\"module\">",
+    "const marker = '</script-x>';",
+    "import './second-live';",
+    "</script/ignored>",
+    "<template>require('./second-decoy')</template>",
+    "<script-x>import('./custom-element-decoy')</script-x>"
+  ].join("\n");
+
+  assert.deepEqual(extractJavaScriptModuleImports(source, { embedded: true }), [
+    { specifier: "./first-live", line: 2 },
+    { specifier: "./second-live", line: 8 }
+  ]);
+});
+
 test("does not guess among incomplete or multiple scoped tests or treat setup and neutral fixtures as executable", () => {
   const common = {
     explicitPaths: ["src/data/csv.js"],

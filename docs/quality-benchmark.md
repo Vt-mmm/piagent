@@ -116,7 +116,7 @@ piagent-benchmark --production \
   --surfaces piagent,codex-cli \
   --model openai-codex/gpt-5.6-luna \
   --thinking medium \
-  --piagent-treatment candidate
+  --piagent-treatment release-defaults
 ```
 
 `production-v1` có 18 scenario family công khai, 3 generated value variant cho
