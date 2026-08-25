@@ -18,22 +18,22 @@
     {
       "id": "authority-manifest",
       "path": "packages/piagent-core/policy/authority-manifest.v1.json",
-      "sha256": "911dc026f1a860f593a6850f7348311f6adac83a8f11627abb23654960b605d0"
+      "sha256": "1f073f6d42c093a3182685e0e096144c8b3befd87594aeea1af05ce17653860c"
     },
     {
       "id": "canary-suite",
       "path": "benchmarks/capability-v1/suite.json",
-      "sha256": "378133ad8d10a47e580ecb62b1c0221d562d81a49c8992f3ab8caa46f5980ddc"
+      "sha256": "29bb79e96b047d79056626d747baa0b3a6ca9d4da7ad80b9668c0085e5581706"
     },
     {
       "id": "pilot-suite",
       "path": "benchmarks/production-v1/suite.json",
-      "sha256": "8d03df7c08eee5debbabdb3490beb5d45b021a392b6da77df257e6d94c346d58"
+      "sha256": "194a5d36c70ca46c318bc12eb1858b9a345638e8e3613a63693980e228b3c4d1"
     },
     {
       "id": "task-contract-schema",
       "path": "schemas/task-contract.schema.json",
-      "sha256": "432a253af865f5c79527b3c7e5e65fc3b6cfea43d19f9e915f3bda792a358bb4"
+      "sha256": "4dbd62ce375d1e671d18107a270c8031ed7a700293abdf8aec78aa0b32f52e53"
     },
     {
       "id": "assurance-schema",
@@ -43,22 +43,22 @@
     {
       "id": "failure-classifier",
       "path": "packages/piagent-core/benchmark/benchmark-forensics.js",
-      "sha256": "14ed4528a9f77ca11ff034ef0d27bdae616a308fd2a08ca781e8f4e1e485ac76"
+      "sha256": "976a9908adfd765ee7be0655616f39a44fff64824f5e8535d726082e550b02eb"
     },
     {
       "id": "record-validator",
       "path": "packages/piagent-core/benchmark/benchmark-record-validation.js",
-      "sha256": "70bccd4db24ab44b68af590c67aa82caf2b7fedc3b83333a097858001235848a"
+      "sha256": "37ecc65febe2c5947ac9288ad958bc149e0f08c6beda137edb1c660908853832"
     },
     {
       "id": "protocol-enforcement",
       "path": "packages/piagent-core/benchmark/fs5-pilot-protocol.js",
-      "sha256": "5aa3533785cde5b39b5b59ca5ffcc0e8f4bc764763d48519a8b8d956da749920"
+      "sha256": "2bcc0cf6c18eee0c080c30e727610b0f10a278f5862855d920ba5797f07a2f2d"
     },
     {
       "id": "runner-core",
       "path": "scripts/benchmark-runner-core.mjs",
-      "sha256": "9081c4fb90747b682ccbd41adebae4536239b9742a9a3e930245ae676a9ff322"
+      "sha256": "ba9abb58f9d3962cd79d1cae7cbb4fb07df642da254bf9bf1976b5f2bcab7df6"
     }
   ],
   "runIdentityContract": {

@@ -34,13 +34,16 @@ function setup(t) {
 test("subagent tree projects exact one-level ownership and stale result without raw helper authority", async (t) => {
   const { cwd, task, identity, request } = setup(t), budgets = new OwnedWorkBudgetController();
   budgets.reserve(cwd, request, "2026-08-14T10:00:00.000Z");
-  task.acceptanceReceipt = { helperUsage: { used: true, helpers: [{ role: "scout", disposition: "stale-result",
+  task.acceptanceReceipt = { helperUsage: { used: true, decision: "dispatch", projectedSavingsRatio: 0.35,
+    reasonCodes: ["independent-workstreams-proven", "projected-token-savings-at-least-30pct"], helpers: [{ role: "scout", disposition: "stale-result",
     requestRef: request.deduplicationKey, outputDigest: null, calls: 1, tokens: 20 }] } };
   const value = projectTaskSubagentTree({ cwd, task, identity, generatedAt: "2026-08-14T11:00:00.000Z" });
   const validation = validateFixture(registry, "subagent-tree-v1", value); assert.equal(validation.valid, true, validation.errors);
   assert.equal(value.state, "ready"); assert.equal(value.evidenceState, "complete"); assert.equal(value.children.length, 1);
   assert.equal(value.children[0].lifecycleState, "orphaned"); assert.equal(value.children[0].result.state, "stale-result");
   assert.equal(value.children[0].authority, "read-only"); assert.equal(value.writer.state, "parent");
+  assert.equal(value.delegation.action, "dispatch"); assert.equal(value.delegation.projectedNetSavingsRatio, 0.35);
+  assert.deepEqual(value.delegation.budget, { maxConcurrent: 1, maxTotal: 1, maxRetries: 0, maxWriters: 0 });
   assert.equal(value.nestedLineage.state, "unavailable"); assert.equal(value.summary.staleResults, 1);
   assert.equal(budgets.snapshot(cwd, request).reservations[0].status, "active", "read-only inspection must not repair runtime state");
   const serialized = JSON.stringify(value);
@@ -62,6 +65,7 @@ test("missing helper ledger stays aggregate-only and corrupt ledger removes deta
   const { cwd, task, identity } = setup(t);
   const missing = projectTaskSubagentTree({ cwd, task, identity });
   assert.equal(missing.state, "ready"); assert.equal(missing.evidenceState, "aggregate-only"); assert.deepEqual(missing.children, []);
+  assert.equal(missing.delegation.action, "skip"); assert.ok(missing.delegation.reasonCodes.includes("parent-direct-default"));
   assert.equal(missing.writer.state, "unknown"); assert.ok(missing.warnings.some((warning) => warning.code === "helper-budget-missing"));
   const target = path.join(cwd, ".pi", "piagent-state", "helper-budgets", `${task.taskRunId}.json`);
   fs.mkdirSync(path.dirname(target), { recursive: true }); fs.writeFileSync(target, "{corrupt}", { mode: 0o600 });

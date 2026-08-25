@@ -172,6 +172,15 @@ export function TaskRunIndexPanel({ snapshot }: { snapshot: PiagentWebUICanonica
       {subagentState === "loading" && <p className="task-index-empty">{localize(locale, "Đang xác minh helper ledger bền vững…", "Verifying the durable helper ledger…")}</p>}
       {(subagentState === "error" || subagents?.state === "unavailable") && <p className="task-index-empty error-state">{localize(locale, "Helper ledger không đủ tin cậy; WebUI không suy đoán cây subagent.", "The helper ledger lacks trustworthy evidence; WebUI will not infer a subagent tree.")}</p>}
       {subagentState === "ready" && subagents?.state === "ready" && <>
+        <div className="next-action-card">
+          <div><span>{localize(locale, "Quyết định điều phối", "Delegation decision")}</span><strong>{subagents.delegation.action === "dispatch"
+            ? localize(locale, "Gửi 1 helper chỉ đọc", "Dispatch one read-only helper")
+            : localize(locale, "Parent tự làm", "Parent works directly")}</strong></div>
+          <p>{subagents.delegation.reasonCodes.map((reason) => label(reason, locale)).join(" · ")}</p>
+          <small>{localize(locale, "Tiết kiệm token dự kiến", "Projected net token saving")}: {subagents.delegation.projectedNetSavingsRatio === null
+            ? localize(locale, "chưa được chứng minh", "not proven")
+            : `${Math.round(subagents.delegation.projectedNetSavingsRatio * 100)}%`} · {localize(locale, "ngưỡng", "threshold")} {Math.round(subagents.delegation.minimumRequiredNetSavingsRatio * 100)}% · {localize(locale, "tối đa 1 helper, 0 retry, 0 writer", "max 1 helper, 0 retries, 0 writers")}</small>
+        </div>
         <div className="timeline-continuity subagent-summary">
           <span>{localize(locale, "Tổng helper", "Total helpers")}: <strong>{subagents.summary.total}</strong></span>
           <span>{localize(locale, "Đang chạy", "Running")}: <strong>{subagents.summary.active}</strong></span>

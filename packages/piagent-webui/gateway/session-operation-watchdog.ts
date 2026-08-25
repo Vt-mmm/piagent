@@ -1,3 +1,5 @@
+import { SessionOperationRetryCancellation } from "./session-operation-retry-control.ts";
+
 export type SessionOperationDeadlineReason = "operation-inactivity-timeout" | "operation-deadline-exceeded";
 
 export type SessionOperationDeadlinePolicy = Readonly<{
@@ -113,10 +115,15 @@ export class SessionOperationWatchdog {
 export function armSessionOperationWatchdog(options: {
   watchdog: SessionOperationWatchdog;
   subscribe(listener: (event: unknown) => void): unknown;
-  observe(event: unknown): void;
+  observe(event: unknown): unknown;
+  retrySession?: any;
   expire(reason: SessionOperationDeadlineReason): void;
 }): () => void {
-  const unsubscribe = options.subscribe((event) => { options.watchdog.progress(); options.observe(event); });
+  const retry = new SessionOperationRetryCancellation(options.retrySession);
+  const unsubscribe = options.subscribe((event) => {
+    options.watchdog.progress();
+    retry.observe(options.observe(event) as { retry?: unknown } | null | undefined);
+  });
   if (typeof unsubscribe !== "function") throw new Error("session-operation-subscribe-invalid");
   try { options.watchdog.start(options.expire); }
   catch (error) { try { unsubscribe(); } catch { /* authority is quarantined by the caller */ } throw error; }

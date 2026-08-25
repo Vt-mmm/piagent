@@ -18,7 +18,7 @@
     {
       "id": "authority-manifest",
       "path": "packages/piagent-core/policy/authority-manifest.v1.json",
-      "sha256": "911dc026f1a860f593a6850f7348311f6adac83a8f11627abb23654960b605d0"
+      "sha256": "1f073f6d42c093a3182685e0e096144c8b3befd87594aeea1af05ce17653860c"
     },
     {
       "id": "canary-suite",
@@ -33,7 +33,7 @@
     {
       "id": "task-contract-schema",
       "path": "schemas/task-contract.schema.json",
-      "sha256": "7b3cf9d0284e15db3636049f4ab298d0adedcc6c614030517e4b119c9f3bf6e6"
+      "sha256": "4dbd62ce375d1e671d18107a270c8031ed7a700293abdf8aec78aa0b32f52e53"
     },
     {
       "id": "assurance-schema",

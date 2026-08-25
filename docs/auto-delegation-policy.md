@@ -1,7 +1,7 @@
 # Solo-first orchestration policy
 <!-- language: vi; english-index: docs-site/content/en/workflows.html -->
 
-Mục tiêu: user không phải nhớ `/run`, `/parallel`, `/chain` cho workflow hằng ngày, nhưng platform cũng không tự biến mọi task thành swarm tốn token. Khi anh gõ `/workflow task`, `/workflow be-to-fe`, `/workflow platform-improve`, `/workflow plan`, hoặc `/workflow review`, parent agent đọc `piagent_orchestration_policy`, giữ mặc định **solo-first**, rồi chỉ dùng subagents nếu việc đó giúp giảm nhiễu context, tăng tốc read-heavy work, hoặc tăng chất lượng review. Alias cũ như `/task` vẫn giữ cùng policy.
+Mục tiêu: parent model tự làm trọn task với đầy đủ năng lực. Helper không còn là phase mặc định để scout/plan/review; nó chỉ là một tối ưu token ngoại lệ. Piagent chỉ cho tối đa **một helper read-only, context fresh** khi runtime chứng minh có ít nhất hai lane độc lập và tổng token dự kiến sau handoff/merge giảm tối thiểu **30%**. Alias cũ như `/task` giữ cùng policy.
 
 Kiểm tra policy hiện tại trong Pi:
 
@@ -15,11 +15,11 @@ Slash command này chỉ hiện status compact, không gửi follow-up cho model
 
 Subagent không nên hiểu là “luôn tự sinh khi task lớn”. Hành vi đúng là:
 
-1. Parent agent đánh giá task có phần việc độc lập không.
-2. Nếu có và `pi-subagents`/subagent tool khả dụng, parent có thể tự spawn subagent.
-3. Nếu không có tool/package, parent tiếp tục single-agent và ghi rõ `Subagents: unavailable/not used`.
-4. User vẫn có thể gọi command trực tiếp khi muốn ép orchestration cụ thể.
-5. Parallel read-only có thể dùng cho scout/review; parallel writers không phải default và cần approval + isolation.
+1. Parent làm trực tiếp nếu runtime chưa có bằng chứng định lượng.
+2. Helper chỉ đủ điều kiện khi có ít nhất hai workstream độc lập, helper không chờ output tiếp theo của parent, context transfer không quá 2.048 token, không inherit transcript, và tổng dự kiến tiết kiệm ít nhất 30%.
+3. Mỗi task run chỉ có một lần thử helper. Lỗi runtime/scope xác định không được relaunch.
+4. Helper luôn read-only; worker/writer helper bị tắt. Parent giữ toàn bộ mutation và quyết định.
+5. UI/telemetry phải ghi `dispatch` hoặc `skip`, reason codes, và projected net saving; không có số liệu thì `skip`.
 
 Nếu bundled skill `pi-subagents` có trong skill list của parent, parent nên dùng skill đó cho orchestration patterns thay vì tự đoán syntax. Skill này là parent-only; child subagents không nhận nó.
 
@@ -28,43 +28,45 @@ Nếu bundled skill `pi-subagents` có trong skill list của parent, parent nê
 | Setting | Default |
 |---|---|
 | Mode | `solo-first` |
-| Max concurrent subagents | `2` |
+| Helper budget | `1` read-only total; concurrent `1`; retry `0`; worker `0` |
+| Minimum projected net saving | `30%` |
+| Context transfer | fresh/isolated; tối đa `2.048` token; không inherit parent history |
 | Review lenses | `correctness`, `tests`, `scope` |
 | Field Guide | `.pi/memory/MEMORY.md`, advisory, explicit-write only |
-| Writer policy | Một writer cho một write set. |
+| Writer policy | Parent model là writer duy nhất. |
 
 Model role guidance:
 
 - planner: model mạnh nhất hợp lý cho decomposition, architecture, risk, acceptance criteria;
-- worker: model nhanh/ổn định cho bounded implementation đã có plan;
-- reviewer: model/thinking decorrelated với worker khi review quan trọng;
-- watchdog/oracle: model mạnh chỉ cho final risk/security/release/high-impact.
+- worker: disabled; parent model implement trực tiếp;
+- reviewer/oracle: role read-only ngoại lệ; không tự chạy chỉ vì review quan trọng;
+- builtin agents và watchdog: disabled trong baseline Piagent.
 
 ## Khi nào parent nên tự spawn
 
-Parent nên tự spawn subagents khi có ít nhất một điều kiện:
+Chỉ spawn khi **đồng thời** thỏa tất cả điều kiện:
 
-- cần scout nhiều vùng source độc lập;
-- cần map BE contract read-only trong khi FE implementation là write target;
-- cần đọc external source docs/repo và repo hiện tại song song;
-- cần external research có nguồn dẫn, và `pi-web-access`/web tools đang available;
-- cần tạo context handoff trước task lớn (`context-builder`);
-- cần review nhiều góc độc lập: correctness, tests, security, scope drift;
-- task có từ 3 touchpoint trở lên;
-- task medium/high-risk nhưng có phần audit read-only trước khi edit;
-- context có nguy cơ phình to nếu parent tự đọc toàn bộ log/spec/source.
+- runtime xác định ít nhất hai workstream thật sự độc lập;
+- helper có thể hoàn tất mà không chờ output tiếp theo của parent;
+- helper chỉ cần read/grep/find/ls;
+- request dùng fresh isolated context, seed không quá 2.048 token;
+- estimate gồm parent + helper + transfer + merge thấp hơn solo ít nhất 30%;
+- task run chưa từng launch helper và không retry một lỗi runtime/scope xác định.
 
 ## Khi nào không nên tự spawn
 
 Không spawn nếu:
 
 - task nhỏ, một file, verify đơn giản;
+- không có runtime estimate hoặc projected saving dưới 30%;
 - requirement chưa rõ và cần hỏi user trước;
 - chỉ có một write target nhỏ;
 - subagent tool/package chưa available;
 - repo dirty hoặc write set có nguy cơ overlap mà chưa phân tách được;
 - task high-risk cần human gate trước khi edit;
-- muốn spawn nhiều writer song song nhưng không có worktree isolation/approval.
+- cần bất kỳ mutation nào từ child;
+- muốn planner/reviewer chỉ để “tăng chất lượng” nhưng không giảm tổng token;
+- đã có một helper attempt, kể cả attempt failed/orphaned.
 
 ## Default agent mapping
 
@@ -72,13 +74,10 @@ Không spawn nếu:
 |---|---|---|
 | Map unfamiliar repo/module/spec | `piagent-scout` | read-only |
 | Build implementation plan | `piagent-planner` | read-only |
-| Implement approved bounded change | `piagent-worker` | single writer |
 | Review current diff | `piagent-reviewer` | review-first |
 | Challenge architecture/risk | `piagent-oracle` | read-only |
-| External docs/web research | builtin `researcher` | read-only; requires web tools |
-| Large context handoff | builtin `context-builder` or `piagent-scout` | writes handoff artifact only |
 
-Default rule: parallel read-only is OK; parallel writers are not default.
+Default rule: parent direct. Tối đa một role read-only ở bảng trên; không parallel và không worker.
 
 ## Workflow policy
 
@@ -89,42 +88,26 @@ Parent should:
 1. load piagent context/profile/memory/project context;
 2. load `piagent_orchestration_policy`;
 3. create a compact task tree/workPlan and review lenses in `piagent_task_start`;
-4. decide whether subagents are useful enough to justify extra token cost;
-5. if useful, spawn bounded read-only scout/planner/reviewer before or after implementation;
-6. keep implementation single-writer unless user explicitly approves otherwise;
+4. runtime tính projected total tokens; thiếu estimate hoặc saving dưới 30% thì skip;
+5. nếu đủ điều kiện, spawn đúng một helper fresh/read-only;
+6. parent tự implement và review;
 7. summarize subagent outputs into task contract/context manifest/final response.
 
 ### `/workflow be-to-fe`
 
-Recommended auto-delegation:
-
-- `piagent-scout`: map backend contract read-only;
-- `piagent-scout`: map frontend touchpoints read-only;
-- `piagent-planner`: produce FE implementation plan;
-- parent or `piagent-worker`: implement FE only;
-- `piagent-reviewer`: review diff and verify coverage.
+Parent map BE contract, map FE touchpoints, implement và review. Runtime chỉ được chọn **một** trong hai lane mapping cho `piagent-scout` nếu estimate toàn task đạt ngưỡng 30%; lane còn lại vẫn do parent làm.
 
 ### `/workflow platform-improve`
 
-Recommended auto-delegation:
-
-- `piagent-scout`: inspect current platform source/docs;
-- builtin `researcher`: inspect official docs/web evidence when `pi-web-access` is installed;
-- builtin `context-builder`: create handoff context/meta-prompt for large platform changes;
-- `piagent-scout`: inspect official docs/external source repo targeted evidence;
-- `piagent-planner`: produce implementation matrix;
-- parent or `piagent-worker`: implement bounded changes;
-- `piagent-reviewer`: review docs/runtime behavior.
+Parent inspect, research, plan, implement và review. Một fresh read-only helper chỉ được map một lane độc lập khi runtime estimate tổng token đạt ngưỡng; không dùng chain scout → planner → worker → reviewer.
 
 ### `/review`
 
-Recommended auto-delegation:
+Parent-owned review:
 
 - select explicit review lenses first;
-- optional parallel `piagent-reviewer` for correctness;
-- optional parallel `piagent-reviewer` for tests/verification;
-- optional parallel `piagent-reviewer` for scope/protected-path drift;
-- optional `piagent-oracle` for architecture/high-risk concerns.
+- parent cover các lens trong cùng context;
+- chỉ dùng một fresh read-only reviewer/oracle nếu nó thay thế một lane độc lập và estimate tiết kiệm ít nhất 30%.
 
 If the user explicitly asks for a review loop, use `/review-loop` or an equivalent parent-controlled loop with max rounds. Do not blindly apply all reviewer suggestions.
 
@@ -136,17 +119,7 @@ Single scout:
 Use piagent-scout to map the target module read-only. Return files, ownership, invariants, and likely change points only.
 ```
 
-Parallel scout:
-
-```text
-Run parallel piagent-scout agents: one maps backend contract read-only, one maps frontend touchpoints read-only. Wait for both and summarize the contract-to-FE map.
-```
-
-Parallel review:
-
-```text
-Run parallel piagent-reviewer agents for correctness, tests/verification, and scope/protected-path drift. Wait for all and summarize findings by severity.
-```
+The parent must attach runtime evidence equivalent to: `independent lanes >= 2`, `context=fresh`, `inheritedParentTokens=0`, and `projectedNetSaving>=30%`. Without it, do not call the helper tool.
 
 Tool syntax fallback:
 
@@ -159,7 +132,7 @@ subagent({ agent: "piagent-scout", task: "Map target area read-only. Return conc
 Final response should include one line:
 
 ```text
-Subagents: <not used / unavailable / used: piagent-scout, piagent-reviewer>
+Helper: <skip reason=<code> projectedSaving=<unknown|N%> / dispatch role=<role> projectedSaving=N%>
 ```
 
 If not used, give the reason briefly:
@@ -172,19 +145,11 @@ If not used, give the reason briefly:
 
 ## Token rule
 
-Subagents can reduce parent context pollution, but total token usage can increase because each child does its own model/tool work. Use them for parallelizable read-heavy work and review quality, not as a blanket token-saving switch.
+Projected saving phải so sánh **tổng parent + child + handoff + merge**, không so child với một đoạn parent context riêng lẻ. Ngưỡng 30% là dispatch gate, không phải bằng chứng rằng Piagent đã rẻ hơn `codex-cli` 30–40%; kết luận đó chỉ được đưa ra từ paired benchmark Piagent/`codex-cli` cùng model, thinking, task và success gate.
 
-## Package shortcuts worth using
+## Package shortcuts
 
-| Shortcut | Use when |
-|---|---|
-| `/parallel-review` | Need distinct review angles; add `autofix` only when user permits fixes. |
-| `/review-loop` | Need worker/reviewer/fix loop until clean or capped. |
-| `/parallel-research` | Need external evidence + local code context. |
-| `/parallel-context-build` | Need context/meta-prompt handoff before a large plan. |
-| `/parallel-handoff-plan` | Need research + context-builder + implementation handoff. |
-| `/gather-context-and-clarify` | Need scout/research first, then ask only meaningful questions. |
-| `/parallel-cleanup` | Need post-implementation cleanup review. |
+Các shortcut `/parallel-*`, worker/reviewer loop và grant-spawn-budget thuộc package upstream nhưng không nằm trong Piagent governed default. Absolute Piagent budget vẫn là một read-only helper total; daily workflow không dùng các shortcut này.
 
 See `docs/subagent-orchestration-capabilities.md`.
 

@@ -131,7 +131,7 @@ test.beforeAll(async () => {
         liveState: "running", operationRef, reasonCode: null });
       protocol.events.publish("tool.started", { sessionRef: value.sessionRef, operationRef,
         toolCallRef: "tool_browser_read_01", toolLabel: "read_file", isError: null, reasonCode: null });
-      await new Promise((resolve) => setTimeout(resolve, 400));
+      await new Promise((resolve) => setTimeout(resolve, 700));
       protocol.events.publish("tool.completed", { sessionRef: value.sessionRef, operationRef,
         toolCallRef: "tool_browser_read_01", toolLabel: "read_file", isError: false, reasonCode: null });
       protocol.events.publish("message.delta", { sessionRef: value.sessionRef, operationRef, messageRef, messageSequence: 0,
@@ -391,7 +391,8 @@ test("renders the session-first hub, compact New chat, popovers, modal Settings,
   await page.getByPlaceholder("Nhắn cho Piagent…").fill("Continue from the browser");
   await page.getByRole("button", { name: "Gửi" }).click();
   await expect(page.getByText("Continue from the browser", { exact: true })).toBeVisible();
-  await expect(page.getByText("Piagent đang xử lý…", { exact: true })).toBeVisible();
+  await expect(page.getByText("Piagent đang đọc mã nguồn…", { exact: true })).toBeVisible();
+  await expect(page.getByText("Tiến trình vừa cập nhật", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /Đang đọc file/ })).toHaveCount(0);
   await expect(page.getByText("A streamed Gateway reply.", { exact: true })).toBeVisible();
   assert.equal(lastSendPayload?.workflow, "review");

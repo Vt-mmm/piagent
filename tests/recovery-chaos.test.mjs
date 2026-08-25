@@ -214,10 +214,10 @@ describe("recovery chaos and interruption safety", () => {
     }
   });
 
-  it("hands off an immutable completion scope mismatch without a diagnostic or repair pass", () => {
+  it("hands off an immutable mutation-forbidden mismatch without a diagnostic or repair pass", () => {
     const classification = classifyCompletionGateFailure([
       "critical acceptance evidence (ac-01-boundary-case:boundary-case)",
-      "changes within task scope (apps/web/src/search-view.js, packages/shared/src/search-contract.js)"
+      "mutation-forbidden task has observed changes (apps/web/src/search-view.js, packages/shared/src/search-contract.js)"
     ], "Runtime observed configured verifier exit 0 (passed).", 0);
     const decision = selectRecoveryDecision(recoveryInput(classification, {
       currentTreeMatchesEvidence: false,
@@ -228,7 +228,7 @@ describe("recovery chaos and interruption safety", () => {
     assert.equal(decision.continuation, "none");
     assert.equal(decision.nextPhase, null);
     assert.equal(decision.sourceMutationAllowed, false);
-    assert.deepEqual(decision.reasonCodes, ["scope-replan-required"]);
+    assert.deepEqual(decision.reasonCodes, ["protected-path-forbidden"]);
   });
 
   it("rejects a late tool result after terminal task persistence", () => {

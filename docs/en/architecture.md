@@ -94,10 +94,23 @@ the verified journal second; corruption blocks automatic resume for review.
 The journal hash chain and acceptance receipts are same-runtime operational
 evidence, not independent attestation or a separate audit authority.
 
+The Gateway binds each browser send to one operation lifecycle shared by the
+stream and supervisor. It permits at most one pristine provider retry within an
+8-second delay, and refuses replay after any visible assistant output or tool
+call. Compaction has a separate phase, terminal settlement is emitted once, and
+post-settlement events cannot put the UI back into `Working`. A bounded local
+emission guard removes repeated/filler activity or reviewer notes, while final
+assistant messages always bypass that guard.
+
+Exact edits and local patches may also bind to the full-file digest from the
+latest successful read in the same task run. Proven concurrent drift blocks the
+whole mutation before the first hunk and requires one fresh read; an unobserved
+file retains the host's normal exact-anchor behavior.
+
 Recovery is classification-driven and bounded across task attempts. Only an
-in-scope source-owned failure may receive one repair pass; transient verifier or
+evidence-backed source-owned failure may receive one repair pass; transient verifier or
 provider failures receive at most one exact retry and never source-mutation
-authority. Environment, permission, policy, scope, and unknown failures stay
+authority. Environment, permission, protected-path policy, and unknown failures stay
 non-mutating. `PIAGENT_AUTO_RECOVERY=off` restores ordinary P3 handoff behavior
 without migrating state. Every final path writes a redacted Handoff v1
 projection from operational truth. Resume binds task/session identity, journal
@@ -111,7 +124,7 @@ Semantic specialist review is a separate strict-high-risk CAP-13 path, not a
 universal parser-driven recovery path. It is pinned to one shared continuation,
 one current-tree diff, two targeted reads, exact eligible source/test paths, and
 the configured verifier after any mutation. Denied, failed, no-op, stale,
-out-of-scope, unsupported, or exhausted work locks the opportunity and hands
+target-unresolved, unsupported, or exhausted work locks the opportunity and hands
 off. Broad-default observation/advice never schedules this review or blocks a
 tool call.
 
@@ -127,7 +140,7 @@ Task Contract v2 also carries an additive Criterion Graph v1 planning
 projection. It maps every operator criterion exactly once to a closed planning
 kind, scoped target hints, proof kinds, and dependency order. The graph has no
 `satisfied` state and cannot override acceptance or exact-verifier truth. It
-selects relevant in-scope context before older observations, survives
+selects relevant focus-ranked context before older observations, survives
 compaction/resume by digest, and adds no tool-schema change or provider follow-up
 turn. `PIAGENT_INTELLIGENCE_ENGINE=off` selects the mechanical control for
 causal tests and emergency rollback; new tasks otherwise use the criterion
@@ -166,17 +179,17 @@ authority, and combined automatic dispatch authority is capped at one unit per
 task. These interaction checks are snapshot-bound and cannot change the
 provider-visible tool schema.
 
-Piagent-owned helpers use RolePolicy v1 and HelperRequest v1. The request binds
-a hashed session/task identity, bounded objective, read/write scope, exact tool
+Piagent-owned helpers use RolePolicy v1 and HelperRequest v2. The request binds
+a hashed session/task identity, bounded objective, read-only scope, exact tool
 allowlist, authenticated model/effort source, context/time/call ceilings, output
 schema, stopping rule, approval restrictions, and deduplication key. Read-only
-roles cannot receive mutation tools. Worker remains disabled by default and
-requires an explicit single-writer lease. `PIAGENT_HELPERS_MODE=off|recommend|on`
-defaults to `recommend`; `on` permits only read-only dispatch through an
-installed provider adapter. CAP-14 permits at most one automatic helper dispatch
-per task/run; the lower-level owner budget still caps two concurrent and three
-total explicitly owned helper reservations, deduplicates equivalent work, recovers
-expired reservations without adding budget, and cancels late work when the
+roles cannot receive mutation tools, and worker dispatch is disabled.
+`PIAGENT_HELPERS_MODE=off|recommend|on` defaults to `off`; `on` is explicit
+opt-in but still requires two independent lanes and at least 30% projected net
+token saving. CAP-14 and the lower-level owner budget enforce one fresh read-only
+helper total and concurrent, zero writers, zero retries, eight calls, and at most
+2,048 transferred context tokens. Failed or expired work consumes the only slot,
+and late work is cancelled when the
 parent Task Contract becomes terminal. It does not claim control over unrelated
 Pi sessions or account usage, and never changes the user-pinned parent model.
 Dispatch enforces the request's time, call, and token ceilings at result merge:

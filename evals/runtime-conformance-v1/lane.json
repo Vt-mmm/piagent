@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "id": "runtime-conformance-v1",
+  "title": "Provider-free P0 runtime conformance lane",
+  "providerRequired": false,
+  "modelTokensExpected": 0,
+  "cases": [
+    {
+      "id": "context-small-passthrough",
+      "area": "adaptive-context-governor"
+    },
+    {
+      "id": "context-insufficient-savings-noop",
+      "area": "adaptive-context-governor"
+    },
+    {
+      "id": "context-projection-protocol-safe",
+      "area": "adaptive-context-governor"
+    },
+    {
+      "id": "context-orphan-protocol-fail-closed",
+      "area": "adaptive-context-governor"
+    },
+    {
+      "id": "operation-pristine-retry-bounded",
+      "area": "webui-operation-lifecycle"
+    },
+    {
+      "id": "operation-replay-unsafe-and-exactly-once",
+      "area": "webui-operation-lifecycle"
+    },
+    {
+      "id": "operation-compaction-isolated",
+      "area": "webui-operation-lifecycle"
+    },
+    {
+      "id": "emission-bounded-final-preserved",
+      "area": "bounded-emission-guard"
+    },
+    {
+      "id": "edit-stale-blocked-until-reread",
+      "area": "edit-freshness-guard"
+    }
+  ],
+  "releaseGates": {
+    "allCasesPass": true,
+    "providerCalls": 0,
+    "modelInputTokens": 0,
+    "modelOutputTokens": 0,
+    "toolProtocolOrphans": 0,
+    "unsafeRetriesAllowed": 0,
+    "duplicateTerminalSettlements": 0,
+    "finalMessagesSuppressed": 0,
+    "staleMutationsAllowed": 0
+  },
+  "claimBoundary": "Deterministic provider-free conformance evidence only. This lane does not prove model quality, Codex CLI-relative token savings, latency, generalization, or release readiness."
+}

@@ -2,11 +2,12 @@ import type { Attachment } from "../../contracts/generated/attachment-v1.ts";
 import type { PiagentWebUICanonicalVolatileSessionOperationStateV1 } from "../../contracts/generated/session-live-state-v1.ts";
 
 export type LiveActivity = { toolCallRef: string; toolLabel: string; state: "running" | "completed" | "failed";
-  reasonCode?: string | null };
+  reasonCode?: string | null; startedAt?: string; finishedAt?: string | null };
 export type OperationSettlement = "completed" | "blocked" | "aborted" | "error" | "unknown";
 export type LiveConversation = { user: string; assistant: string; attachments: Attachment[]; activities: LiveActivity[];
   operationRef: string | null; complete: boolean; error: string | null; settlement?: OperationSettlement | null;
-  abortable?: boolean; runtimeRecovery?: "required" | "restarting" | "recovered" | "failed" | null };
+  abortable?: boolean; runtimeRecovery?: "required" | "restarting" | "recovered" | "failed" | null;
+  startedAt?: string; lastEventAt?: string };
 export type TerminalOperationActivity = {
   activityRef: string;
   operationRef: string;
@@ -98,17 +99,46 @@ export function reconcileSessionLiveState(current: Readonly<Record<string, LiveC
     // no longer running. Drop transient draft/output instead of inventing an
     // error or leaving Stop/loading visible forever.
     next[sessionRef] = { ...existing, user: "", assistant: "", attachments: [], activities: [], operationRef: null,
-      abortable: false, complete: true, settlement: "unknown", error: "operation-settlement-unavailable" };
+      abortable: false, complete: true, settlement: "unknown", error: "operation-settlement-unavailable",
+      lastEventAt: projection.generatedAt };
   }
   for (const operation of projection.operations) {
     const existing = current[operation.sessionRef];
     const sameOperation = existing?.operationRef === operation.operationRef;
     next[operation.sessionRef] = sameOperation
-      ? { ...existing, operationRef: operation.operationRef, abortable: operation.abortable, complete: false, settlement: null, error: null }
+      ? { ...existing, operationRef: operation.operationRef, abortable: operation.abortable, complete: false, settlement: null,
+        error: null, lastEventAt: projection.generatedAt }
       : { user: "", assistant: "", attachments: [], activities: [], operationRef: operation.operationRef,
-        abortable: operation.abortable, complete: false, settlement: null, error: null, runtimeRecovery: null };
+        abortable: operation.abortable, complete: false, settlement: null, error: null, runtimeRecovery: null,
+        startedAt: projection.generatedAt, lastEventAt: projection.generatedAt };
   }
   return next;
+}
+
+function liveToolPhase(toolLabel: string, locale: "vi" | "en"): string {
+  const tool = toolLabel.toLowerCase();
+  if (/(subagent|scout|delegate|agent)/.test(tool)) return locale === "vi" ? "phối hợp agent hỗ trợ" : "coordinating a helper agent";
+  if (/(bash|exec|shell|command|terminal)/.test(tool)) return locale === "vi" ? "chạy lệnh" : "running a command";
+  if (/(read|grep|find|list|glob|search_file)/.test(tool)) return locale === "vi" ? "đọc mã nguồn" : "reading source";
+  if (/(edit|write|patch|apply)/.test(tool)) return locale === "vi" ? "cập nhật file" : "updating files";
+  if (/(test|verify|check|lint)/.test(tool)) return locale === "vi" ? "kiểm tra kết quả" : "verifying results";
+  if (/(web|search|browser|fetch)/.test(tool)) return locale === "vi" ? "tìm kiếm thông tin" : "searching";
+  return locale === "vi" ? "chạy công cụ" : "running a tool";
+}
+
+export function liveProgressStatus(live: LiveConversation, locale: "vi" | "en" = "vi", now = Date.now()): {
+  label: string; detail: string } {
+  const running = [...live.activities].reverse().find((activity) => activity.state === "running");
+  const phase = running ? liveToolPhase(running.toolLabel, locale) : live.activities.length
+    ? (locale === "vi" ? "tổng hợp bước tiếp theo" : "preparing the next step")
+    : (locale === "vi" ? "phân tích yêu cầu" : "analyzing the request");
+  const observed = Date.parse(live.lastEventAt ?? running?.startedAt ?? live.startedAt ?? "");
+  const ageSeconds = Number.isFinite(observed) ? Math.max(0, Math.floor((now - observed) / 1_000)) : null;
+  const detail = ageSeconds === null ? (locale === "vi" ? "Đang chờ cập nhật tiến trình đầu tiên" : "Waiting for the first progress update")
+    : ageSeconds < 10 ? (locale === "vi" ? "Tiến trình vừa cập nhật" : "Progress updated just now")
+      : ageSeconds < 60 ? (locale === "vi" ? `Cập nhật ${ageSeconds} giây trước` : `Updated ${ageSeconds}s ago`)
+        : (locale === "vi" ? `Cập nhật ${Math.floor(ageSeconds / 60)} phút trước` : `Updated ${Math.floor(ageSeconds / 60)}m ago`);
+  return { label: locale === "vi" ? `Piagent đang ${phase}…` : `Piagent is ${phase}…`, detail };
 }
 
 export function liveStateConfirmsAbort(projection: PiagentWebUICanonicalVolatileSessionOperationStateV1 | undefined,

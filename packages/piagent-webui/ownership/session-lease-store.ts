@@ -237,8 +237,11 @@ export class SessionLeaseStore {
     if (!Number.isFinite(now.getTime())) throw new Error("session-lease-input-invalid");
     return this.#withMutationLock(sessionRef, () => {
       const current = this.inspect(sessionRef);
-      const pid = current.state === "terminal-owned" ? terminalOwnerPid(current.gatewayInstanceRef)
-        : current.state === "gateway-owned" ? gatewayOwnerPid(current.gatewayInstanceRef) : null;
+      const terminalOwner = current.state === "terminal-owned"
+        || (current.state === "recovery-required" && current.gatewayInstanceRef?.startsWith(TERMINAL_OWNER_PREFIX));
+      const pid = terminalOwner ? terminalOwnerPid(current.gatewayInstanceRef)
+        : current.state === "gateway-owned" || current.state === "recovery-required"
+          ? gatewayOwnerPid(current.gatewayInstanceRef) : null;
       if (!pid || processAlive(pid)) throw new Error("session-owner-not-proven-dead");
       this.#append(sessionRef, { recordedAt: now.toISOString(), sessionRef, event: "recovery-required", ownerEpoch: current.ownerEpoch!,
         gatewayInstanceRef: current.gatewayInstanceRef!, runtimeInstanceRef: current.runtimeInstanceRef!, reasonCode: "owner-process-exited" });

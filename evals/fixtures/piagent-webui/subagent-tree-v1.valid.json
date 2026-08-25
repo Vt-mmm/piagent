@@ -16,6 +16,13 @@
   "treeRevision": "subagent-tree.fixture",
   "evidenceState": "complete",
   "orchestration": { "mode": "bounded-subagents", "subagents": "used" },
+  "delegation": {
+    "action": "dispatch",
+    "reasonCodes": ["independent-lanes", "projected-net-saving"],
+    "projectedNetSavingsRatio": 0.35,
+    "minimumRequiredNetSavingsRatio": 0.3,
+    "budget": { "maxConcurrent": 1, "maxTotal": 1, "maxRetries": 0, "maxWriters": 0 }
+  },
   "parent": { "nodeRef": "parent.fixture", "lifecycleState": "active", "budgetTerminal": false, "mergeOwner": "parent" },
   "children": [
     {

@@ -3,6 +3,8 @@ import { randomBytes } from "node:crypto";
 import { redactSensitiveText } from "../../piagent-core/security/sensitive-data.js";
 import { hasVisibleText } from "../shared/text-visibility.ts";
 import { GatewayEventStore } from "./gateway-events.ts";
+import { SessionOperationLifecycle, type SessionOperationObservation,
+  type SessionOperationPhase, type SessionOperationRetryPolicyOptions } from "./session-operation-lifecycle.ts";
 
 const MAX_BUFFER = 65_536;
 const MAX_EVENTS = 128;
@@ -73,20 +75,20 @@ export class GatewaySessionStream {
   #eventCount = 0;
   #buffer = "";
   #truncated = false;
-  #started = false;
   #startListeners: Array<() => void> = [];
-  #settled = false;
   #runtimeRestartRequired = false;
   #lastMessageRef: string | null = null;
   #settlement: Settlement = { outcome: "unknown", reasonCode: "operation-settlement-unknown" };
   #forcedSettlement: Settlement | null = null;
   #lifecycleTerminationReasonCode: string | null = null;
-  #terminalEmitted = false;
   #settleListeners: Array<() => void> = [];
   readonly #toolRefs = new Map<string, string>();
+  readonly #lifecycle: SessionOperationLifecycle;
 
   get runtimeRestartRequired(): boolean { return this.#runtimeRestartRequired; }
   get lifecycleTerminationReasonCode(): string | null { return this.#lifecycleTerminationReasonCode; }
+  get operationPhase(): SessionOperationPhase { return this.#lifecycle.phase; }
+  get retryAbortRequired(): boolean { return this.#lifecycle.retryAbortRequired; }
 
   markAborted(reasonCode = "operation-aborted"): void { this.#forcedSettlement = { outcome: "aborted", reasonCode }; }
   markError(reasonCode = "operation-failed"): void {
@@ -94,60 +96,70 @@ export class GatewaySessionStream {
   }
   forceLifecycleTermination(reasonCode: string): void {
     this.#lifecycleTerminationReasonCode ??= reasonCode;
-    if (!this.#started) { this.#started = true; for (const resolve of this.#startListeners.splice(0)) resolve(); }
-    if (!this.#settled) { this.#settled = true; for (const resolve of this.#settleListeners.splice(0)) resolve(); }
+    const wasStarted = this.#lifecycle.started, wasSettled = this.#lifecycle.hostSettled;
+    this.#lifecycle.forceHostSettlement();
+    if (!wasStarted) for (const resolve of this.#startListeners.splice(0)) resolve();
+    if (!wasSettled) for (const resolve of this.#settleListeners.splice(0)) resolve();
   }
 
-  constructor(options: { sessionRef: string; operationRef: string; events: GatewayEventStore }) {
+  constructor(options: { sessionRef: string; operationRef: string; events: GatewayEventStore;
+    retryPolicy?: SessionOperationRetryPolicyOptions }) {
     this.sessionRef = options.sessionRef; this.operationRef = options.operationRef; this.#events = options.events;
+    this.#lifecycle = new SessionOperationLifecycle({ operationRef: options.operationRef, retryPolicy: options.retryPolicy });
   }
 
   started(): Promise<void> {
-    if (this.#started) return Promise.resolve();
+    if (this.#lifecycle.started) return Promise.resolve();
     return new Promise((resolve) => this.#startListeners.push(resolve));
   }
 
   settled(): Promise<void> {
-    if (this.#settled) return Promise.resolve();
+    if (this.#lifecycle.hostSettled) return Promise.resolve();
     return new Promise((resolve) => this.#settleListeners.push(resolve));
   }
 
-  observe(event: any): void {
-    if (this.#terminalEmitted) return;
+  observe(event: any): SessionOperationObservation {
+    const wasStarted = this.#lifecycle.started, wasSettled = this.#lifecycle.hostSettled;
+    const observation = this.#lifecycle.observe(event);
+    if (!observation.accepted) return observation;
+    if (!wasStarted && this.#lifecycle.started) for (const resolve of this.#startListeners.splice(0)) resolve();
+    if (!wasSettled && this.#lifecycle.hostSettled) for (const resolve of this.#settleListeners.splice(0)) resolve();
+    if (observation.retry === "abort") this.markError(observation.reasonCode ?? "automatic-retry-blocked");
     if (event?.type === "agent_start") {
-      this.#started = true; for (const resolve of this.#startListeners.splice(0)) resolve(); return;
+      return observation;
     }
     if (event?.type === "agent_settled") {
-      this.#settled = true; for (const resolve of this.#settleListeners.splice(0)) resolve(); return;
+      return observation;
     }
     if (event?.type === "message_start" && event.message?.role === "assistant") {
-      this.#messageRef = ref("message"); this.#buffer = ""; return;
+      this.#messageRef = ref("message"); this.#buffer = ""; return observation;
     }
     if (event?.type === "message_update" && event.assistantMessageEvent?.type === "text_delta"
       && typeof event.assistantMessageEvent.delta === "string") {
       const remaining = MAX_BUFFER - this.#buffer.length;
-      if (remaining <= 0) { this.#truncated = true; return; }
+      if (remaining <= 0) { this.#truncated = true; return observation; }
       this.#buffer += event.assistantMessageEvent.delta.slice(0, remaining);
       if (event.assistantMessageEvent.delta.length > remaining) this.#truncated = true;
-      this.#flush(false); return;
+      this.#flush(false); return observation;
     }
     if (event?.type === "message_end" && event.message?.role === "assistant") {
-      this.#flush(true); this.#lastMessageRef = this.#messageRef; this.#settlement = assistantSettlement(event.message); return;
+      this.#flush(true); this.#lastMessageRef = this.#messageRef; this.#settlement = assistantSettlement(event.message); return observation;
     }
     if (event?.type === "tool_execution_start" && typeof event.toolCallId === "string") {
       const toolCallRef = ref("tool"); this.#toolRefs.set(event.toolCallId, toolCallRef);
       this.#events.publish("tool.started", { sessionRef: this.sessionRef, operationRef: this.operationRef, toolCallRef,
         toolLabel: safeTool(event.toolName), isError: null, reasonCode: null });
-      return;
+      return observation;
     }
     if (event?.type === "tool_execution_end" && typeof event.toolCallId === "string") {
-      const toolCallRef = this.#toolRefs.get(event.toolCallId); if (!toolCallRef) return;
+      const toolCallRef = this.#toolRefs.get(event.toolCallId); if (!toolCallRef) return observation;
       const reasonCode = runtimeRestartReasonCode(event);
       if (reasonCode) this.#runtimeRestartRequired = true;
       this.#events.publish("tool.completed", { sessionRef: this.sessionRef, operationRef: this.operationRef, toolCallRef,
         toolLabel: safeTool(event.toolName), isError: event.isError === true, reasonCode });
       this.#toolRefs.delete(event.toolCallId);
     }
+    return observation;
   }
 
   #flush(final: boolean): void {
@@ -181,8 +193,7 @@ export class GatewaySessionStream {
   }
 
   complete(sessionRevision: string | null): void {
-    if (this.#terminalEmitted) return;
-    this.#terminalEmitted = true;
+    if (!this.#lifecycle.markTerminal()) return;
     this.#flush(true);
     let settlement = this.#forcedSettlement ?? (this.#runtimeRestartRequired
       ? { outcome: "unknown" as const, reasonCode: "runtime-restart-required" }

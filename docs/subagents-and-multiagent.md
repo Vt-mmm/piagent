@@ -19,7 +19,7 @@ Pi core không có subagents built-in. Theo design của Pi, subagents là exten
 
 Từ `v0.3.7`, `scripts/setup.sh` mặc định cài `pi-subagents` và chạy config preset `safe`.
 
-Workflow prompts của platform dùng **solo-first orchestration policy**: khi anh chạy `/workflow task`, `/workflow be-to-fe`, `/workflow platform-improve`, `/workflow plan`, hoặc `/workflow review`, parent agent đọc `piagent_orchestration_policy`, lập task tree/review lenses, rồi mới cân nhắc subagent cho phần việc độc lập. Anh không bắt buộc phải gọi `/run` nếu chỉ muốn task hoàn chỉnh, và platform cũng không spawn swarm khi task nhỏ. Alias cũ như `/task` vẫn giữ cùng policy.
+Workflow prompts của platform dùng **parent-direct orchestration policy**: parent model tự đọc, suy luận và implement. Helper mặc định tắt. Chỉ khi operator bật `PIAGENT_HELPERS_MODE=on`, runtime mới được phép cân nhắc đúng một helper read-only có context fresh; việc dispatch còn phải chứng minh ít nhất hai lane độc lập và tối thiểu 30% projected net token saving sau cả chi phí handoff/merge. Worker, parallel, nested helper và retry đều bị tắt. Alias cũ như `/task` giữ cùng policy.
 
 Kiểm tra nhanh policy trong Pi:
 
@@ -27,22 +27,21 @@ Kiểm tra nhanh policy trong Pi:
 /piagent-orchestration
 ```
 
-Runtime policy dùng `RolePolicy v1` và `HelperRequest v1` để bind objective,
+Runtime policy dùng `RolePolicy v1` và `HelperRequest v2` để bind objective,
 task/session identity hash, scope, exact tool allowlist, model/effort từ
 authenticated runtime catalog, context/time/call ceiling, output schema,
 stopping rule, approval restriction và deduplication key. Chọn mode bằng:
 
 ```bash
 PIAGENT_HELPERS_MODE=off        # không recommend/spawn
-PIAGENT_HELPERS_MODE=recommend  # default; giải thích nhưng không spawn
-PIAGENT_HELPERS_MODE=on         # chỉ read-only role qua provider adapter
+PIAGENT_HELPERS_MODE=recommend  # opt-in quan sát/recommend; không spawn
+PIAGENT_HELPERS_MODE=on         # opt-in; vẫn phải qua evidence gate 30%
 ```
 
-`piagent-worker` vẫn disabled by default và không được auto-delegate cho GA.
-CAP-14 chỉ cho tối đa một automatic helper dispatch cho mỗi task/run. Lower-level
-helper budget chỉ theo dõi child work do Piagent tạo (tối đa 2 concurrent, 3
-explicit owned reservation tổng, 1 pass cho từng scout/planner/reviewer/Oracle,
-tối đa 1 writer); nó không
+`piagent-worker` bị disable trong Piagent config và không được delegate.
+CAP-14 mặc định `off`; chỉ environment opt-in mới có thể bật. Lower-level
+helper budget là trần tuyệt đối: tối đa 1 read-only helper concurrent và tổng,
+0 writer, 0 retry, 8 calls, context handoff tối đa 2.048 token; nó không
 claim account-wide scheduling hay kiểm soát các Pi session không liên quan.
 Mỗi dispatch cưỡng chế đúng time/call/token ceiling của request. Timeout,
 parent cancellation, late/stale result và budget overflow đều fail closed và
@@ -50,7 +49,7 @@ không merge output. Khi thành công, parent chỉ nhận bounded redacted summ
 giữ merge ownership; durable receipt chỉ giữ digest/counters, không giữ raw
 child output hay session identity.
 
-Guard extension vẫn load trong subagent process. Bash verify results do not stay in process-local memory only; they are appended to `.pi/piagent-state/observed-bash.jsonl`. Because parent and child share the same project cwd, parent can validate an exact verify command that a guarded worker subagent ran.
+Guard extension vẫn load trong helper process. Piagent helper chỉ đọc nên không tạo verifier hay source-change authority; parent vẫn là owner duy nhất của implementation và exact verifier cuối.
 
 Xem chi tiết: `docs/auto-delegation-policy.md`.
 
@@ -96,15 +95,15 @@ Nội dung chính:
 
 - `toolDescriptionMode: compact` để giảm prompt/token;
 - `asyncByDefault: false` để không tự chạy background nếu không yêu cầu;
-- `waitTool.enabled: true` để parent có thể đợi async runs khi workflow cần kết quả;
-- `intercomBridge.mode: always` để child có thể hỏi parent qua `contact_supervisor`;
+- `waitTool.enabled: false` để không tạo continuation chờ helper;
+- `intercomBridge.mode: off` để child không mở thêm vòng hỏi/đáp;
 - `singleRunOutputBaseDir` và `defaultSessionDir` stable trong `~/.pi/agent`;
 - `worktreeBaseDir` stable cho parallel writer khi được explicit bật;
 - `scheduledRuns.enabled: false` để không lộ surface schedule nếu user không yêu cầu;
-- `parallel.concurrency: 3`;
-- `parallel.maxTasks: 6`;
+- `parallel.concurrency: 1` và `parallel.maxTasks: 1` (compatibility surface, không phải parallel dispatch);
 - `maxSubagentDepth: 1`;
-- `maxSubagentSpawnsPerSession: 32`;
+- `maxSubagentSpawnsPerSession: 1`;
+- builtin agents và `piagent-worker` bị disable; chỉ custom read-only role có thể được operator bật rõ;
 - async completion batching bật.
 
 Không ép `subagents.modelScope` mặc định. Anh chọn model parent bằng `/model`; builtin subagents sẽ inherit model nếu không override. Nếu muốn ép chỉ provider:
@@ -276,40 +275,15 @@ Platform package exposes these package-level agents:
 |---|---|---|
 | `piagent-scout` | bounded repo mapping | no |
 | `piagent-planner` | implementation plan + verify gates | no |
-| `piagent-worker` | single-writer implementation | yes |
+| `piagent-worker` | compatibility metadata; disabled by config | unavailable |
 | `piagent-reviewer` | review diff/policy/tests/scope | no |
 | `piagent-oracle` | second opinion/risk challenge | no |
 
-Default rule:
-
-- Use `piagent-scout` before touching unfamiliar code.
-- Use `piagent-planner` before medium/high-risk changes.
-- Use `piagent-worker` only for approved, bounded write tasks.
-- Use `piagent-reviewer` before final handoff.
-- Use `piagent-oracle` when architecture/product/risk is uncertain.
+Default rule: parent tự làm. Khi operator opt-in, runtime có thể chọn đúng một trong các read-only role phía trên sau khi qua evidence gate 30%; không role nào được retry hay spawn tiếp.
 
 ## Worktree isolation
 
-Parallel implementation writers can clobber each other in one checkout. Only use `worktree: true` when:
-
-- current repo is a Git repo;
-- working tree is clean;
-- write sets do not overlap;
-- parent will review/merge outputs.
-
-Example:
-
-```text
-subagent({
-  tasks: [
-    { agent: "piagent-worker", task: "Implement feature A" },
-    { agent: "piagent-worker", task: "Implement feature B" }
-  ],
-  worktree: true
-})
-```
-
-For normal solo/internal workflow, prefer one `piagent-worker` plus parallel read-only reviewers.
+Piagent không cấp writer helper và không bật worktree/parallel orchestration. Nếu operator cần các capability upstream này thì đó là một runtime khác ngoài policy/budget/claim của Piagent.
 
 ## Watchdog opt-in
 
@@ -356,10 +330,10 @@ Recommended token policy:
 
 - default `safe` preset;
 - do not set `asyncByDefault` unless anh intentionally wants background-heavy workflow;
-- keep `/piagent-orchestration` at `solo-first` unless team has a measured reason to change it;
-- one writer at a time;
-- parallel reviewers/scouts are OK;
-- use `piagent-scout`/`piagent-planner` to compress context before handing off to `piagent-worker`;
+- giữ parent-direct và `PIAGENT_HELPERS_MODE=off` mặc định;
+- parent là writer duy nhất;
+- không parallel, nested, forked-history hay retry helper;
+- chỉ opt-in một read-only helper khi projected net saving từ 30%;
 - run `/subagents-fleet` to inspect background runs instead of asking parent model to recall everything.
 
 ## Nguồn

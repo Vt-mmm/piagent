@@ -3,6 +3,7 @@ const causalCoverageLanesV1 = new Set([
   "telemetry-window", "session-lifecycle", "criterion-initial-pack", "pack-lifecycle", "direct-fallback-rereads", "managed-prefix"
 ]);
 const causalCoverageLanesV2 = new Set([...causalCoverageLanesV1, "edit-recovery-context"]);
+const causalCoverageLanesV3 = causalCoverageLanesV2;
 const causalMaximumAggregate = 1_000_000_000;
 
 function exactKeys(value, keys) {
@@ -53,9 +54,75 @@ function validEditRecoveryAggregate(value) {
     : value.injectedChars > 0 && value.injectedEstimatedTokens > 0;
 }
 
+function validRuntimeSection(value, evidenceSource) {
+  return exactKeys(value, ["coverageStatus", "observedEvents", "evidenceSource", "aggregate"])
+    && ["not-observed", "partial", "complete"].includes(value.coverageStatus)
+    && boundedInteger(value.observedEvents)
+    && value.evidenceSource === evidenceSource
+    && (value.coverageStatus === "not-observed"
+      ? value.observedEvents === 0 && value.aggregate === null
+      : value.observedEvents > 0 && (value.coverageStatus === "partial") === (value.aggregate === null));
+}
+
+function validAdaptiveContextRuntime(value) {
+  if (!validRuntimeSection(value, "context-telemetry")) return false;
+  if (value.coverageStatus !== "complete") return true;
+  const aggregate = value.aggregate;
+  const fields = ["projected", "noOp", "cancelled", "deterministicCompactions", "hostSummaryFallbacks",
+    "estimatedSavingsTokens", "minimumSavingsTokens", "minimumSavingsMet", "minimumSavingsNotMet",
+    "governorProviderCalls", "deterministicCompactionProviderCalls", "protocolIntegrity", "definition"];
+  if (!exactKeys(aggregate, fields)
+    || !fields.slice(0, -2).every((field) => boundedInteger(aggregate[field]))
+    || aggregate.definition !== "adaptive-context-runtime-receipt-v1"
+    || !exactKeys(aggregate.protocolIntegrity, ["checks", "intact", "failed", "orphanCalls", "orphanResults"])
+    || !Object.values(aggregate.protocolIntegrity).every(boundedInteger)) return false;
+  const eventCount = aggregate.projected + aggregate.noOp + aggregate.cancelled
+    + aggregate.deterministicCompactions + aggregate.hostSummaryFallbacks;
+  const savingsDecisions = aggregate.minimumSavingsMet + aggregate.minimumSavingsNotMet;
+  const protocol = aggregate.protocolIntegrity;
+  return eventCount === value.observedEvents
+    && savingsDecisions <= eventCount
+    && aggregate.deterministicCompactionProviderCalls === 0
+    && protocol.intact + protocol.failed === protocol.checks
+    && (protocol.failed > 0 || protocol.orphanCalls + protocol.orphanResults === 0);
+}
+
+function validEditFreshnessRuntime(value) {
+  if (!validRuntimeSection(value, "context-telemetry")) return false;
+  if (value.coverageStatus !== "complete") return true;
+  const aggregate = value.aggregate;
+  const fields = ["snapshotObservations", "readSnapshots", "mutationSnapshots", "staleDetections",
+    "enforcedStaleDetections", "staleBlocks", "rereadRecoveries", "mutationRecoveries",
+    "incompleteRecoveries", "definition"];
+  if (!exactKeys(aggregate, fields)
+    || !fields.slice(0, -1).every((field) => boundedInteger(aggregate[field]))
+    || aggregate.definition !== "edit-freshness-runtime-receipt-v1") return false;
+  return aggregate.snapshotObservations + aggregate.staleDetections === value.observedEvents
+    && aggregate.readSnapshots + aggregate.mutationSnapshots === aggregate.snapshotObservations
+    && aggregate.enforcedStaleDetections <= aggregate.staleDetections
+    && aggregate.staleBlocks === aggregate.enforcedStaleDetections
+    && aggregate.rereadRecoveries === aggregate.enforcedStaleDetections
+    && aggregate.mutationRecoveries <= aggregate.rereadRecoveries
+    && aggregate.incompleteRecoveries === 0;
+}
+
+function validDelegatedRuntimeSection(value) {
+  return validRuntimeSection(value, "provider-free-runtime-conformance")
+    && value.coverageStatus === "not-observed";
+}
+
+function validRuntimeCausalAggregate(value) {
+  return exactKeys(value, ["adaptiveContext", "operationLifecycle", "boundedEmission", "editFreshness"])
+    && validAdaptiveContextRuntime(value.adaptiveContext)
+    && validDelegatedRuntimeSection(value.operationLifecycle)
+    && validDelegatedRuntimeSection(value.boundedEmission)
+    && validEditFreshnessRuntime(value.editFreshness);
+}
+
 function validCausalAggregates(value, criterionExpected, schemaVersion) {
   const expectedKeys = ["packCounts", "estimatedTokens", "selectedItemEstimatedTokens", "selectedItemCounts", "criterionInitialPack", "directFallbackRereads", "compaction", "managedPrefix"];
-  if (schemaVersion === 2) expectedKeys.splice(6, 0, "editRecoveryContext");
+  if (schemaVersion >= 2) expectedKeys.splice(6, 0, "editRecoveryContext");
+  if (schemaVersion >= 3) expectedKeys.splice(7, 0, "runtimeCausal");
   if (!exactKeys(value, expectedKeys)
     || !validCausalTriplet(value.packCounts)
     || !validCausalTriplet(value.estimatedTokens)
@@ -74,7 +141,8 @@ function validCausalAggregates(value, criterionExpected, schemaVersion) {
     || !boundedInteger(value.managedPrefix.compactedPrompts)
     || value.managedPrefix.compactedPrompts > value.managedPrefix.promptsObserved
     || !["compacted", "uncompacted", "mixed"].includes(value.managedPrefix.state)
-    || (schemaVersion === 2 && !validEditRecoveryAggregate(value.editRecoveryContext))) return false;
+    || (schemaVersion >= 2 && !validEditRecoveryAggregate(value.editRecoveryContext))
+    || (schemaVersion >= 3 && !validRuntimeCausalAggregate(value.runtimeCausal))) return false;
   const compacted = value.managedPrefix.compactedPrompts;
   const prompts = value.managedPrefix.promptsObserved;
   const expectedState = compacted === 0 ? "uncompacted" : compacted === prompts ? "compacted" : "mixed";
@@ -85,7 +153,7 @@ function validCausalAggregates(value, criterionExpected, schemaVersion) {
 
 export function validBenchmarkCausalContextReceipt(receipt, surface) {
   if (!exactKeys(receipt, ["schemaVersion", "evidenceSource", "applicability", "available", "coverage", "aggregates"])
-    || ![1, 2].includes(receipt.schemaVersion) || typeof receipt.available !== "boolean"
+    || ![1, 2, 3].includes(receipt.schemaVersion) || typeof receipt.available !== "boolean"
     || !exactKeys(receipt.coverage, ["status", "telemetryTruncated", "telemetryIntegrityFailures", "recoverableTailBytes", "criterionExpected", "sessionEventsObserved", "observedLanes", "requiredLanes", "missingLanes"])) return false;
   const coverage = receipt.coverage;
   if (surface !== "piagent") return receipt.schemaVersion === 1 && receipt.evidenceSource === "not-applicable"
@@ -95,7 +163,8 @@ export function validBenchmarkCausalContextReceipt(receipt, surface) {
     && coverage.criterionExpected === false && coverage.sessionEventsObserved === 0
     && coverage.observedLanes === 0 && coverage.requiredLanes === 0
     && Array.isArray(coverage.missingLanes) && coverage.missingLanes.length === 0;
-  const coverageLanes = receipt.schemaVersion === 2 ? causalCoverageLanesV2 : causalCoverageLanesV1;
+  const coverageLanes = receipt.schemaVersion === 3 ? causalCoverageLanesV3
+    : receipt.schemaVersion === 2 ? causalCoverageLanesV2 : causalCoverageLanesV1;
   const evidenceSource = `context-telemetry-closed-aggregate-v${receipt.schemaVersion}`;
   if (receipt.evidenceSource !== evidenceSource || receipt.applicability !== "piagent"
     || typeof coverage.telemetryTruncated !== "boolean" || typeof coverage.criterionExpected !== "boolean"
@@ -120,7 +189,7 @@ export function summarizeBenchmarkCausalContextEvidence(runs, { required = false
     && run.causalContextReceipt.coverage.status === "complete"
     && run.causalContextReceipt.aggregates);
   const fullyCovered = piagentRuns.length > 0 && complete.length === piagentRuns.length;
-  const recoveryComplete = complete.filter((run) => run.causalContextReceipt.schemaVersion === 2);
+  const recoveryComplete = complete.filter((run) => run.causalContextReceipt.schemaVersion >= 2);
   const recoveryFullyCovered = fullyCovered && recoveryComplete.length === piagentRuns.length;
   const sum = (select) => complete.reduce((total, run) => total + select(run.causalContextReceipt.aggregates), 0);
   const sumRecovery = (select) => recoveryComplete.reduce((total, run) => total + select(run.causalContextReceipt.aggregates.editRecoveryContext), 0);

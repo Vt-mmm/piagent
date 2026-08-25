@@ -8,10 +8,8 @@ import { authorityReplacementState } from "../policy/authority-resume-policy.ts"
 import { compileCriterionGraph, criterionGraphContextSelection, criterionGraphContextSelectionDetails, criterionGraphGuidance, criterionGraphMode } from "../../extensions/criterion-graph.js";
 import { captureTaskStartBaseline } from "../inspection/task-baseline-start-capture.ts";
 import { sameStringRecord, satisfiesAuthorityReplacement } from "./task-start-retry-helpers.ts";
-import {
-  automaticTaskExecutionGuidance, EXACT_VERIFIER_EXECUTION_GUIDANCE, RUNTIME_SOURCE_REUSE_GUIDANCE,
-  taskCriticalProofSection
-} from "./task-start-guidance.ts";
+import { automaticTaskExecutionGuidance, EXACT_VERIFIER_EXECUTION_GUIDANCE, RUNTIME_SOURCE_REUSE_GUIDANCE, taskCriticalProofSection } from "./task-start-guidance.ts";
+import { resolveTaskStartRepositoryManifestProvider } from "./task-start-manifest.ts";
 type ExtensionContext = any; type TaskContract = any; type TaskStartParameters = any;
 export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any>): any {
   const {
@@ -22,10 +20,11 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
     currentSessionName, defaultWorkPlan, effectiveProtectedPaths, hasGitEvidenceRoot, hasOperatorSessionName,
     isAcceptanceTestPath, loadProfileFromContext, matchesProtectedPath, normalizeReviewLenses, normalizeWorkPlanSteps, nowIso, policy,
     priorTaskAttempts, recordTaskStartCheckpoint, redactText, redactTextArray, registerRuntimeTool,
-    repositoryFileManifest, repositoryFileManifestDetails, resolveOrchestrationPolicy, resolveTaskScopePatterns, runtimeLifecycleMode, runtimeState, safeTaskId, selectVerificationPlan,
+    repositoryFileManifest, resolveOrchestrationPolicy, resolveTaskScopePatterns, runtimeLifecycleMode, runtimeState, safeTaskId, selectVerificationPlan,
     summarizeAttempt, telemetry, validTaskScopePattern, validateNewWorkPlan, verifierCommandInstructions, workingTreeEvidenceDigest, workingTreeSnapshot, workingTreeSnapshotHasUnavailableEvidence,
     writeTask
   } = deps;
+  const repositoryManifestProvider = resolveTaskStartRepositoryManifestProvider(deps);
   const taskStartTool = {
     name: "piagent_task_start",
     label: "Piagent Task Start",
@@ -36,7 +35,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       "Use source-change for project verifier execution or edits. For an assessment, report, or plan with no source changes, set mutationPolicy=forbidden; use read-only when no project verifier needs to execute.",
       "Do not call context, status, policy, evidence-recording, trace, or gate tools first; runtime hooks provide those checks automatically.",
       "Use tiny for a bounded low-risk change, normal for ordinary multi-file work, and high-risk for security, data, release, migration, or external-impact work.",
-      "Every scope entry must be a project-relative path or glob such as src/file.ts, src/**, or test/**; never put prose in scope.",
+      "Every scope entry is an initial retrieval/review focus and must be a project-relative path or glob such as src/file.ts, src/**, or test/**; it is not a source-mutation boundary.",
       "Leave workPlan unset for ordinary tiny/normal tasks so runtime automation stays active; pass a custom workPlan only when the operator explicitly requests custom subagent or checkpoint orchestration.",
       "Tiny tasks use automatic lifecycle evidence; normal tasks retain one explicit review step; high-risk/custom plans keep manual checkpoints."
     ],
@@ -53,7 +52,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       acceptanceCriteria: Type.Array(Type.String({ minLength: 1 }), { minItems: 1, maxItems: 12 }),
       scope: Type.Array(Type.String({
         minLength: 1,
-        description: "Project-relative path or glob only (for example src/file.ts, src/**, or test/**); do not use prose."
+        description: "Advisory retrieval/review focus as a project-relative path or glob (for example src/file.ts, src/**, or test/**); source changes may follow repository evidence beyond it."
       }), { minItems: 1, maxItems: 2000 }),
       outOfScope: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
       reviewLenses: Type.Optional(Type.Array(StringEnum(REVIEW_LENSES))),
@@ -155,24 +154,15 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
         };
       }
       const scopeResolution = resolveTaskScopePatterns(params.scope, repositoryFileManifest(ctx.cwd));
-      if (scopeResolution.ambiguous.length > 0) {
-        const details = scopeResolution.ambiguous
-          .map((item) => `${item.input}: ${item.candidates.join(", ")}`)
-          .join("; ");
-        return {
-          content: [{ type: "text", text: `Task start refused: scope is ambiguous (${details}). Use one exact project-relative candidate for each ambiguous entry.` }],
-          details: scopeResolution,
-          isError: true
-        };
-      }
-      if (scopeResolution.unmatched.length > 0) {
-        return {
-          content: [{ type: "text", text: `Task start refused: scope entries do not identify an existing repository path (${scopeResolution.unmatched.join(", ")}). Use an exact project-relative path for a new file, such as src/name.ts, instead of a basename or guessed top-level alias.` }],
-          details: scopeResolution,
-          isError: true
-        };
-      }
-      const resolvedScope = scopeResolution.scope;
+      // Scope guides context selection and review; it is not filesystem
+      // authority. Keep unresolved focus entries instead of preventing work in
+      // a parent workspace where several child repositories share names such
+      // as src/, app/, tests/, or package.json.
+      const unresolvedFocus = [
+        ...scopeResolution.ambiguous.map((item) => item.input),
+        ...scopeResolution.unmatched
+      ];
+      const resolvedScope = [...new Set([...scopeResolution.scope, ...unresolvedFocus])];
       const priorAttempts = priorTaskAttempts(ctx.cwd, taskId) as TaskContract[];
       const authorityStates = new Map(priorAttempts.map((task) => [task.taskRunId, authorityReplacementState(ctx.cwd, task)]));
       const unsafeAuthorityState = [...authorityStates.entries()].find(([, state]) => !state.enforcementSafe);
@@ -287,12 +277,15 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
         expectedOutput: redactText(params.expectedOutput),
         acceptanceCriteria: redactTextArray(params.acceptanceCriteria),
         changeMode,
+        mutationPolicy,
+        outOfScope: redactTextArray(params.outOfScope),
+        protectedPaths: profile.protectedPaths ?? [],
         source: params.intakeMode === "runtime" ? "runtime" : "model",
         generatedAt: createdAt
       });
       const criterionGraph = compileCriterionGraph({ acceptanceCriteria: acceptance.acceptanceCriteria, scope: resolvedScope,
         verifyCommands: verifyPlan.commands, changeMode, mode: criterionGraphMode(), createdAt });
-      const projectManifest = repositoryFileManifestDetails(ctx.cwd), projectFiles = projectManifest.files;
+      const projectManifest = repositoryManifestProvider.read(ctx.cwd), projectFiles = projectManifest.files;
       const maxManifestFiles = contextBudgetConfig(policy).maxManifestFiles;
       const plannedSelection = criterionGraphContextSelectionDetails(criterionGraph, projectFiles, [], maxManifestFiles, projectManifest.complete, resolvedScope);
       const plannedContext = plannedSelection.entries;
@@ -331,7 +324,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
         orchestration: {
           mode: orchestration.defaultMode,
           subagents: "not-used",
-          reason: "Task starts in solo-first mode; use bounded subagents only for independent scout, planning, or review work.",
+          reason: "Parent works directly by default. One fresh read-only helper is eligible only with two independent lanes and at least 30% projected net token savings; workers and retries are disabled.",
           fieldGuidePath: orchestration.fieldGuide.enabled ? orchestration.fieldGuide.path : undefined,
           modelRoles: orchestration.roleModelGuidance
         },
@@ -370,8 +363,8 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       }
       const lifecycleMode = runtimeLifecycleMode(written);
       const scopeMappings = scopeResolution.mappings.map((item) => `${item.from} -> ${item.to}`);
-      appendTrace(ctx.cwd, { taskId, taskRunId, sessionId, sessionName, attempt, event: "task_start", turnId: runtimeState.currentTurn(ctx)?.turnId, summary: task.summary, riskLane: params.riskLane, intakeMode: task.intakeMode, changeMode: task.changeMode, mutationPolicy: task.mutationPolicy, lifecycleMode, criterionGraphMode: written.criterionGraph.mode, criterionGraphDigest: written.criterionGraph.graphDigest, authorityProfile: written.authoritySnapshot.profile, authoritySnapshotDigest: written.authoritySnapshot.snapshotDigest, scopeMappings, plannedContext: plannedContext.map((item) => item.path), plannedContextComplete: plannedSelection.complete, plannedContextCandidateCount: plannedSelection.candidateCount, observedContext: observedContext.map((item) => item.path) });
-      appendSessionTrace(pi, { taskId, taskRunId, sessionId, sessionName, attempt, event: "task_start", turnId: runtimeState.currentTurn(ctx)?.turnId, summary: task.summary, riskLane: params.riskLane, intakeMode: task.intakeMode, changeMode: task.changeMode, mutationPolicy: task.mutationPolicy, lifecycleMode, criterionGraphMode: written.criterionGraph.mode, criterionGraphDigest: written.criterionGraph.graphDigest, authorityProfile: written.authoritySnapshot.profile, authoritySnapshotDigest: written.authoritySnapshot.snapshotDigest, scopeMappings, plannedContext: plannedContext.map((item) => item.path), plannedContextComplete: plannedSelection.complete, plannedContextCandidateCount: plannedSelection.candidateCount, observedContext: observedContext.map((item) => item.path) });
+      appendTrace(ctx.cwd, { taskId, taskRunId, sessionId, sessionName, attempt, event: "task_start", turnId: runtimeState.currentTurn(ctx)?.turnId, summary: task.summary, riskLane: params.riskLane, intakeMode: task.intakeMode, changeMode: task.changeMode, mutationPolicy: task.mutationPolicy, lifecycleMode, criterionGraphMode: written.criterionGraph.mode, criterionGraphDigest: written.criterionGraph.graphDigest, authorityProfile: written.authoritySnapshot.profile, authoritySnapshotDigest: written.authoritySnapshot.snapshotDigest, scopeMappings, plannedContext: plannedContext.map((item) => item.path), plannedContextComplete: plannedSelection.complete, plannedContextCandidateCount: plannedSelection.candidateCount, repositoryManifestProvider: projectManifest.provider, repositoryManifestCompatibilityReason: projectManifest.compatibilityReason, observedContext: observedContext.map((item) => item.path) });
+      appendSessionTrace(pi, { taskId, taskRunId, sessionId, sessionName, attempt, event: "task_start", turnId: runtimeState.currentTurn(ctx)?.turnId, summary: task.summary, riskLane: params.riskLane, intakeMode: task.intakeMode, changeMode: task.changeMode, mutationPolicy: task.mutationPolicy, lifecycleMode, criterionGraphMode: written.criterionGraph.mode, criterionGraphDigest: written.criterionGraph.graphDigest, authorityProfile: written.authoritySnapshot.profile, authoritySnapshotDigest: written.authoritySnapshot.snapshotDigest, scopeMappings, plannedContext: plannedContext.map((item) => item.path), plannedContextComplete: plannedSelection.complete, plannedContextCandidateCount: plannedSelection.candidateCount, repositoryManifestProvider: projectManifest.provider, repositoryManifestCompatibilityReason: projectManifest.compatibilityReason, observedContext: observedContext.map((item) => item.path) });
       telemetry(ctx, { event: "turn_task_bound", turnId: runtimeState.currentTurn(ctx)?.turnId, taskRunId });
       recordTaskStartCheckpoint(ctx, written, firstReady.id, lifecycleMode);
       return {
@@ -379,7 +372,13 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
           type: "text",
           text: [
             `Task ${taskId} started (${params.riskLane}, ${lifecycleMode}; attempt ${attempt}/${maxAttempts}).`,
-            ...(scopeMappings.length > 0 ? [`Canonical scope: ${scopeMappings.join("; ")}.`] : []),
+            ...(scopeMappings.length > 0 ? [`Initial focus mapping: ${scopeMappings.join("; ")}.`] : []),
+            ...(scopeResolution.ambiguous.length > 0
+              ? [`Ambiguous focus retained as advisory: ${scopeResolution.ambiguous.map((item) => item.input).join(", ")}.`]
+              : []),
+            ...(scopeResolution.unmatched.length > 0
+              ? [`Unmatched focus retained for discovery or new files: ${scopeResolution.unmatched.join(", ")}.`]
+              : []),
             written.verifyCommands.length > 0
               ? ["Exact verifier commands:", ...verifierCommandInstructions(written.verifyCommands)].join("\n")
               : "Verify: none (read-only).",
@@ -423,7 +422,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
     if (active?.trace.outcome === "pending") return undefined;
     const summary = redactText(automaticTaskSummary(prompt));
     const sessionName = currentSessionName(ctx);
-    const projectManifest = repositoryFileManifestDetails(ctx.cwd), projectFiles = projectManifest.files;
+    const projectManifest = repositoryManifestProvider.read(ctx.cwd), projectFiles = projectManifest.files;
     const scope = intakeMode === "read-only"
       ? automaticReadOnlyTaskScope(prompt, runtimeState.preTaskContext(ctx))
       : automaticTaskScope(prompt, runtimeState.preTaskContext(ctx), projectFiles);
@@ -479,7 +478,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       plannedContext,
       plannedContextComplete: plannedSelection.complete,
       text: boundedRuntimeIntakeMessage([
-        `Piagent runtime task: ${task.taskId}; scope: ${task.scope.join(", ")}.`,
+        `Piagent runtime task: ${task.taskId}; initial focus (advisory): ${task.scope.join(", ")}.`,
         "The complete operator request above is the authoritative acceptance contract; runtime keeps its full criteria, so do not restate or re-scout it.",
         `Assurance: ${assurance.tier} (${assurance.reasonCodes.join(", ") || "bounded-runtime"}).`,
         ...criticalProof,

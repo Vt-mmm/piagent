@@ -15,10 +15,13 @@ import {
   extractShellWritePathCandidates,
   shellHasFileWriteRedirection
 } from "../packages/piagent-core/extensions/shell-write-targets.js";
+import { effectiveProtectedPaths } from "../packages/piagent-core/extensions/context-index-policy.js";
+import { WORKSPACE_PRIVATE_STATE_PATTERNS } from "../packages/piagent-core/extensions/workspace-evidence-roots.js";
+import { fallbackBasePolicy } from "../packages/piagent-core/extensions/fallback-base-policy.ts";
 
 const policy = {
-  protectedPaths: [".git/**", "**/auth.json", "**/.env", "**/.env.*", "**/node_modules/**", "**/dist/**", ".pi/piagent-state/**", ".pi/piagent-profile.json"],
-  shellProtectedPaths: [".git/**", "**/auth.json", "**/.env", "**/.env.*", ".pi/piagent-state/**", ".pi/piagent-profile.json"],
+  protectedPaths: [".git/**", ...WORKSPACE_PRIVATE_STATE_PATTERNS, "**/.env", "**/.env.*", "**/node_modules/**", "**/dist/**", ".pi/piagent-state/**", ".pi/piagent-profile.json"],
+  shellProtectedPaths: [".git/**", ...WORKSPACE_PRIVATE_STATE_PATTERNS, "**/.env", "**/.env.*", ".pi/piagent-state/**", ".pi/piagent-profile.json"],
   blockedCommandPatterns: ["rm -rf /", "rm -rf ~", "rm -rf $HOME", "git reset --hard", "git clean -fd", "sudo ", "chmod -R 777"],
   requireConfirmationPatterns: ["deploy", "release", "publish", "migration", "terraform apply", "kubectl apply", "gh pr merge", "git push"],
   execPolicy: {
@@ -44,7 +47,7 @@ const policy = {
 };
 
 describe("protected path glob matching", () => {
-  for (const target of [".env", ".env.local", "auth.json", "src/.env", "src/.env.local", "src/auth.json", ".git/config", ".pi/piagent-state/observed-bash.jsonl", ".pi/piagent-state/tasks/x.json", ".pi/piagent-profile.json"]) {
+  for (const target of [".env", ".env.local", "auth.json", "src/.env", "src/.env.local", "src/auth.json", ".git/config", "frontend/.git/config", ".pi/piagent-state/observed-bash.jsonl", ".pi/piagent-state/tasks/x.json", ".pi/piagent-profile.json", ".pi/private.json", ".aws/credentials", "frontend/.npmrc", ".ssh/id_ed25519", ".kube/config", "secrets.json"]) {
     it(`blocks ${target}`, () => {
       assert.ok(matchesAnyPath(target, policy.protectedPaths), `${target} should match protected paths`);
     });
@@ -59,6 +62,27 @@ describe("protected path glob matching", () => {
   for (const target of [".ENV", ".Env.Local", "AUTH.JSON", ".PI/PIAGENT-PROFILE.JSON"]) {
     it(`blocks protected case variant ${target}`, () => {
       assert.ok(matchesProtectedPath(target, policy.protectedPaths), `${target} should match protected paths`);
+    });
+  }
+});
+
+describe("immutable private workspace-state boundary", () => {
+  const effective = effectiveProtectedPaths({}, {});
+
+  for (const field of ["readProtectedPaths", "writeProtectedPaths", "shellProtectedPaths"]) {
+    it(`keeps private state protected in ${field} even when policy/profile input is empty`, () => {
+      assert.deepEqual(
+        WORKSPACE_PRIVATE_STATE_PATTERNS.filter((entry) => !effective[field].includes(entry)),
+        []
+      );
+      for (const privatePath of [
+        ".env", "frontend/.env.local", ".pi/private.json", ".aws/credentials",
+        ".ssh/id_ed25519", "frontend/.git/config", "frontend/.npmrc", "secrets.json"
+      ]) {
+        assert.ok(matchesProtectedPath(privatePath, effective[field]), `${privatePath} must be protected in ${field}`);
+      }
+      assert.equal(matchesProtectedPath(".claude/scripts/verify/project.sh", effective[field]), undefined);
+      assert.equal(matchesProtectedPath(".agents/skills/project/SKILL.md", effective[field]), undefined);
     });
   }
 });
@@ -1229,50 +1253,38 @@ describe("exec policy action text is distinct from search text", () => {
 });
 
 describe("guard fallback policy", () => {
-  // `DEFAULT_POLICY` is the policy the guard uses when `policies/base-policy.json`
-  // cannot be read -- that is, when something is already wrong. It had drifted
-  // behind the file and silently dropped `.pi/piagent-state/**`, the guard's own
-  // state, along with the `sudo ` and `chmod -R 777` blocks. A missing policy file
-  // must never be a quiet downgrade.
-  //
-  // It is compared as source text because the guard module imports the Pi host
-  // runtime and cannot be loaded outside a Pi session.
-  const guardSource = fs.readFileSync(
-    path.join(import.meta.dirname, "..", "packages", "piagent-core", "extensions", "piagent-guard.ts"), "utf8"
-  );
+  // This pure policy module is the guard's fail-closed recovery path. Test the
+  // object directly so extracting composition from the Pi host entrypoint does
+  // not weaken the alignment check.
   const basePolicy = JSON.parse(fs.readFileSync(
     path.join(import.meta.dirname, "..", "packages", "piagent-core", "policies", "base-policy.json"), "utf8"
   ));
-  const fallbackList = (field) => {
-    const match = guardSource.match(new RegExp(`const DEFAULT_POLICY[\\s\\S]*?\\n  ${field}: \\[([^\\]]*)\\]`));
-    assert.ok(match, `DEFAULT_POLICY.${field} not found in the guard source`);
-    return match[1]
-      .split(",")
-      .map((entry) => entry.trim().replace(/^"|"$/g, ""))
-      .filter(Boolean)
-      // `CONTEXT_INDEX_FILE` is the same value the policy file spells out.
-      .map((entry) => (entry === "CONTEXT_INDEX_FILE" ? ".pi/context-index.json" : entry));
-  };
+  const fallback = fallbackBasePolicy(".pi/context-index.json", {});
 
   for (const field of ["protectedPaths", "shellProtectedPaths", "blockedCommandPatterns"]) {
     it(`never protects less than the policy file for ${field}`, () => {
-      const missing = basePolicy[field].filter((entry) => !fallbackList(field).includes(entry));
+      const missing = basePolicy[field].filter((entry) => !fallback[field].includes(entry));
       assert.deepEqual(missing, [], `the fallback policy drops ${missing.join(", ")}`);
     });
   }
 
+  it("protects every credential and local-state pattern that evidence discovery excludes", () => {
+    for (const field of ["protectedPaths", "shellProtectedPaths"]) {
+      assert.deepEqual(
+        WORKSPACE_PRIVATE_STATE_PATTERNS.filter((entry) => !basePolicy[field].includes(entry)),
+        [],
+        `${field} must protect every evidence-excluded private-state pattern`
+      );
+    }
+  });
+
   it("requires exactly filesystem-write for apply_patch in file and fallback policy", () => {
     assert.deepEqual(basePolicy.toolRegistry.toolCapabilities.apply_patch, ["filesystem-write"]);
-    assert.match(
-      guardSource,
-      /const DEFAULT_POLICY[\s\S]*?toolCapabilities:\s*\{[\s\S]*?apply_patch:\s*\["filesystem-write"\]/
-    );
+    assert.deepEqual(fallback.toolRegistry.toolCapabilities.apply_patch, ["filesystem-write"]);
   });
 
   it("keeps context delta shadow mode aligned with the typed base policy", () => {
-    const match = guardSource.match(/const DEFAULT_POLICY[\s\S]*?contextBudget:\s*\{[\s\S]*?contextDeltaShadow:\s*"([^"]+)"/);
-    assert.ok(match, "DEFAULT_POLICY.contextBudget.contextDeltaShadow not found");
-    assert.equal(match[1], basePolicy.contextBudget.contextDeltaShadow);
-    assert.ok(["off", "sample", "on"].includes(match[1]));
+    assert.equal(fallback.contextBudget.contextDeltaShadow, basePolicy.contextBudget.contextDeltaShadow);
+    assert.ok(["off", "sample", "on"].includes(fallback.contextBudget.contextDeltaShadow));
   });
 });

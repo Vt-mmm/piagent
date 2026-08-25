@@ -115,7 +115,7 @@ describe("versioned capability authority manifest", () => {
     assert.equal(capability(first, "CAP-12").authority, "enforce");
     assert.equal(capability(first, "CAP-12").budgets.systemContinuations, 1);
     assert.equal(capability(first, "CAP-13").authority, "off");
-    assert.equal(capability(first, "CAP-14").authority, "advise");
+    assert.equal(capability(first, "CAP-14").authority, "off");
     assert.equal(capability(first, "CAP-15").authority, "off");
     assert.throws(() => { first.capabilities[0].mode = "off"; }, TypeError);
     assert.notEqual(createTaskAuthoritySnapshot({ ...input, capturedAt: "2026-08-10T01:02:04.000Z" }).snapshotDigest, first.snapshotDigest);
@@ -143,7 +143,7 @@ describe("versioned capability authority manifest", () => {
     const base = { taskId: "task-override", taskRunId: "run-override", capturedAt: "2026-08-10T03:00:00.000Z" };
     assert.throws(() => createTaskAuthoritySnapshot({ ...base, modeOverrides: { "CAP-99": "off" } }), /unknown capability overrides/);
     assert.throws(() => createTaskAuthoritySnapshot({ ...base, modeOverrides: { "CAP-08": "strict" } }), /does not support mode/);
-    assert.throws(() => createTaskAuthoritySnapshot({ ...base, modeOverrides: { "CAP-08": "off" } }), /CAP-14 cannot activate while dependency CAP-08 is off/);
+    assert.throws(() => createTaskAuthoritySnapshot({ ...base, modeOverrides: { "CAP-08": "off", "CAP-14": "recommend" } }), /CAP-14 cannot activate while dependency CAP-08 is off/);
     assert.throws(() => createTaskAuthoritySnapshot({ ...base, modeOverrides: { "CAP-01": "off" } }), /does not support mode/);
   });
 
@@ -158,7 +158,7 @@ describe("versioned capability authority manifest", () => {
       ...base,
       modeOverrides: { "CAP-14": "on", "CAP-15": "auto" }
     }), /combined automatic dispatch budget exceeds the task-global ceiling/);
-    assert.doesNotThrow(() => createTaskAuthoritySnapshot({ ...base, modeOverrides: { "CAP-15": "auto" } }));
+    assert.doesNotThrow(() => createTaskAuthoritySnapshot({ ...base, modeOverrides: { "CAP-14": "recommend", "CAP-15": "auto" } }));
   });
 
   it("migrates only the closed historical feature-mode surface for a new task", () => {
@@ -252,7 +252,7 @@ describe("versioned capability authority manifest", () => {
     assert.equal(taskAuthorityDecision(broad, "CAP-09", "block").allowed, false);
     assert.equal(taskAuthorityDecision(broad, "CAP-11", "model-turn").allowed, false);
     assert.equal(taskAuthorityDecision(broad, "CAP-13", "mutate").allowed, false);
-    assert.equal(taskAuthorityDecision(broad, "CAP-14", "advise").allowed, true);
+    assert.equal(taskAuthorityDecision(broad, "CAP-14", "advise").allowed, false);
     assert.equal(taskAuthorityDecision(broad, "CAP-14", "dispatch").allowed, false);
     assert.equal(taskAuthorityDecision(broad, "CAP-12", "model-turn").allowed, true);
     assert.equal(taskAuthorityDecision(strict, "CAP-09", "block").allowed, true);

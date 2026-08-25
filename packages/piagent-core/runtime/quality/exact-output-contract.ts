@@ -54,7 +54,7 @@ export function exactFinalOutputGuidance(taskText: string): string[] {
   const directive = exactOutputDirective(taskText);
   if (!directive) return [];
   return [
-    `Exact final-output contract: make ${directive.key}=<${directive.placeholder}> the last non-empty response line. Copy the complete value verbatim from observed in-scope evidence and self-check every character before handoff.`
+    `Exact final-output contract: make ${directive.key}=<${directive.placeholder}> the last non-empty response line. Copy the complete value verbatim from observed project evidence and self-check every character before handoff.`
   ];
 }
 

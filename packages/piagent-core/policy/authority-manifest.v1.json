@@ -34,7 +34,7 @@
         "CAP-11": "advisory",
         "CAP-12": "on",
         "CAP-13": "off",
-        "CAP-14": "recommend",
+        "CAP-14": "off",
         "CAP-15": "off",
         "CAP-16": "on",
         "CAP-17": "on"
@@ -80,7 +80,7 @@
         "CAP-11": "advisory",
         "CAP-12": "on",
         "CAP-13": "strict",
-        "CAP-14": "recommend",
+        "CAP-14": "off",
         "CAP-15": "off",
         "CAP-16": "on",
         "CAP-17": "on"
@@ -314,7 +314,7 @@
       "layer": "L3",
       "configKey": "helpers",
       "configSources": ["manifest", "PIAGENT_HELPERS_MODE"],
-      "defaultMode": "recommend",
+      "defaultMode": "off",
       "killSwitchMode": "off",
       "dependencies": ["CAP-02", "CAP-05", "CAP-08"],
       "modeMappings": [

@@ -9,6 +9,7 @@ import { LONG_INPUT_CHARS } from "../runtime-limits.ts";
 import type { AuthorityResumeDecision } from "../policy/authority-resume-policy.ts";
 import { buildHandoffProjection, writeHandoffProjection } from "../recovery/handoff-projection.ts";
 import { buildContextPreflight, buildUsageSnapshot } from "../session/usage.ts";
+import { registerAdaptiveContextGovernor } from "../session/adaptive-context-governor.ts";
 import { activeTaskToolGroups, toolGroupsForPrompt } from "../tools/tool-groups.ts";
 import type { PiagentToolGroup } from "../tools/tool-groups.ts";
 import type { RuntimeSessionState } from "../session/runtime-state.ts";
@@ -38,6 +39,11 @@ type InputHookDependencies = {
 };
 
 export function registerInputHook(pi: ExtensionAPI, dependencies: InputHookDependencies): void {
+  registerAdaptiveContextGovernor(pi, {
+    activeTask: dependencies.activeTask,
+    telemetry: dependencies.telemetry
+  });
+
   pi.on("input", async (event, ctx) => {
     const text = event.text.trim();
     if (!text || isFreshOrUtilityInput(text)) return { action: "continue" };

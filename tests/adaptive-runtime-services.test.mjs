@@ -596,6 +596,17 @@ test("verification intelligence classifies failures and selects targeted groups"
     source: ["npm test"]
   }, ["apps/web/src/Button.tsx"]);
   assert.equal(scope.group, "frontendSource");
+  const siblingFrontend = chooseVerificationScope({
+    frontendSource: ["cd v-nexus-frontend && npm test"],
+    backendSource: ["cd v-nexus-backend && ./mvnw test"]
+  }, ["v-nexus-frontend/src/**", "v-nexus-frontend/e2e/**"]);
+  assert.equal(siblingFrontend.group, "frontendSource");
+  assert.deepEqual(siblingFrontend.commands, ["cd v-nexus-frontend && npm test"]);
+  const siblingBackend = chooseVerificationScope({
+    frontendSource: ["cd v-nexus-frontend && npm test"],
+    backendSource: ["cd v-nexus-backend && ./mvnw test"]
+  }, ["v-nexus-backend/src/**"]);
+  assert.equal(siblingBackend.group, "backendSource");
   const mixed = chooseVerificationScope({
     frontendSource: ["npm run test:web"],
     backendSource: ["npm run test:api"],
@@ -1656,6 +1667,8 @@ test("acceptance receipt recognizes read-only boundaries inside source-change pl
     expectedOutput: "Document BE read-only boundary and keep v-nexus-backend out of scope.",
     acceptanceCriteria: ["Document BE read-only boundary and explicitly keep v-nexus-backend out of scope."],
     changeMode: "source-change",
+    mutationPolicy: "required",
+    outOfScope: ["v-nexus-backend/**"],
     source: "runtime",
     generatedAt: "2026-08-04T00:00:00.000Z"
   });
@@ -1714,6 +1727,77 @@ test("acceptance receipt recognizes read-only boundaries inside source-change pl
     currentWorkingTreeDigest: currentDigest
   });
   assert.equal(backendChanged.criticalMissing.some((criterion) => criterion.obligation === "read-only-evidence"), true);
+});
+
+test("acceptance receipt distinguishes domain read-only behavior from task-wide mutation policy", (t) => {
+  const implementation = buildAcceptanceReceipt({
+    summary: "Implement the frontend ingestion subscription sync.",
+    expectedOutput: "Admin ingestion sources become list/detail read-only while the frontend code and tests are updated.",
+    acceptanceCriteria: ["The list and detail controls render as read-only for admins."],
+    changeMode: "source-change",
+    mutationPolicy: "required",
+    source: "runtime",
+    generatedAt: "2026-08-04T00:00:00.000Z"
+  });
+  assert.equal(
+    implementation.receipt.criteria.some((criterion) => criterion.obligation === "read-only-evidence"),
+    false,
+    "read-only feature semantics must not turn an implementation task into a zero-delta task"
+  );
+  assert.equal(
+    implementation.acceptanceCriteria.includes("The task stays read-only and the answer is grounded in observed in-scope evidence."),
+    false
+  );
+
+  const protectedBoundary = buildAcceptanceReceipt({
+    summary: "Update the frontend without touching backend sources.",
+    expectedOutput: "Backend remains read-only; do not edit v-nexus-backend/**.",
+    acceptanceCriteria: ["Frontend behavior is implemented and the backend boundary is preserved."],
+    changeMode: "source-change",
+    mutationPolicy: "required",
+    protectedPaths: ["v-nexus-backend/**"],
+    source: "runtime",
+    generatedAt: "2026-08-04T00:00:00.000Z"
+  });
+  assert.equal(
+    protectedBoundary.receipt.criteria.some((criterion) => criterion.obligation === "read-only-evidence"),
+    true,
+    "an explicit boundary tied to a durable protected path remains acceptance evidence"
+  );
+
+  const verificationOnly = buildAcceptanceReceipt({
+    summary: "Run the configured verifier and report the result.",
+    expectedOutput: "Verifier evidence is recorded without changing project files.",
+    acceptanceCriteria: ["The configured verifier passes."],
+    changeMode: "source-change",
+    mutationPolicy: "forbidden",
+    source: "runtime",
+    generatedAt: "2026-08-04T00:00:00.000Z"
+  });
+  assert.equal(
+    verificationOnly.receipt.criteria.some((criterion) => criterion.obligation === "read-only-evidence"),
+    true,
+    "a task-wide forbidden mutation policy remains sufficient read-only authority"
+  );
+  const cwd = temporaryProject(t);
+  const verificationOnlyComplete = refreshAcceptanceReceipt(contract({
+    summary: "Run the configured verifier and report the result.",
+    expectedOutput: "Verifier evidence is recorded without changing project files.",
+    acceptanceCriteria: verificationOnly.acceptanceCriteria,
+    acceptanceReceipt: verificationOnly.receipt,
+    mutationPolicy: "forbidden",
+    changedFiles: [],
+    contextManifest: [{ path: "src/runtime.ts", reason: "Runtime observed successful source read." }]
+  }), {
+    cwd,
+    changedFiles: [],
+    currentWorkingTreeDigest: treeDigest("c")
+  });
+  assert.equal(
+    verificationOnlyComplete.criticalMissing.some((criterion) => criterion.obligation === "read-only-evidence"),
+    false,
+    "source-change verifier tasks with forbidden mutation can satisfy task-wide read-only evidence"
+  );
 });
 
 test("exact final-output contracts reject truncated source-derived values", (t) => {

@@ -5,18 +5,19 @@ import type { RuntimeModelSnapshot } from "../model/runtime-snapshot.ts";
 import type { SolverDecision, TaskFeatures } from "../solver/solver-types.ts";
 import { bindRole, type RoleBinding } from "./role-binder.ts";
 import { AUTOMATIC_OWNED_WORK_CEILINGS, OwnedWorkBudgetController } from "./owned-work-budget.ts";
+import { assessMinimalDelegation, type MinimalDelegationEvidence } from "./minimal-delegation-policy.ts";
 import { createHelperRequest, defaultRolePolicy, type HelperRequest, type HelperRole } from "./role-policy.ts";
 
 export const HELPERS_MODE_VALUES = Object.freeze(["off", "recommend", "on"] as const);
 export type HelpersMode = typeof HELPERS_MODE_VALUES[number];
-export type HelperDecision = { mode: HelpersMode; action: "solo" | "recommend" | "dispatch" | "unavailable" | "blocked"; role: HelperRole | null; reasonCodes: string[]; binding: RoleBinding | null; request: HelperRequest | null };
+export type HelperDecision = { mode: HelpersMode; action: "solo" | "recommend" | "dispatch" | "unavailable" | "blocked"; role: HelperRole | null; reasonCodes: string[]; projectedSavingsRatio: number | null; binding: RoleBinding | null; request: HelperRequest | null };
 export type HelperDispatchResult = { status: "succeeded" | "failed" | "timeout" | "cancelled"; calls: number; tokens: number; output: string; summary?: string };
-export type HelperUsageReceipt = { role: HelperRole; disposition: string; reasonCodes: string[]; requestRef: string; outputDigest: string | null; summary: string | null; mergeOwner: "parent" | null; calls: number; tokens: number; helperUsed: boolean };
+export type HelperUsageReceipt = { role: HelperRole; disposition: string; decision: "dispatch" | "skip"; reasonCodes: string[]; projectedSavingsRatio: number | null; requestRef: string; outputDigest: string | null; summary: string | null; mergeOwner: "parent" | null; calls: number; tokens: number; helperUsed: boolean };
 type DispatchAdapter = (request: HelperRequest, signal: AbortSignal) => Promise<HelperDispatchResult>;
 type DispatchOptions = { timeoutMs?: number };
 
 function digest(value: unknown): string { return crypto.createHash("sha256").update(String(value ?? "")).digest("hex"); }
-export function helpersMode(value = process.env.PIAGENT_HELPERS_MODE): HelpersMode { return HELPERS_MODE_VALUES.includes(value as HelpersMode) ? value as HelpersMode : "recommend"; }
+export function helpersMode(value = process.env.PIAGENT_HELPERS_MODE): HelpersMode { return HELPERS_MODE_VALUES.includes(value as HelpersMode) ? value as HelpersMode : "off"; }
 
 export function selectHelperRole(input: { features: TaskFeatures; solver: SolverDecision; confidence?: string; conflictingEvidence?: boolean; repeatedSourceFailure?: boolean; independentReviewUseful?: boolean }): { role: HelperRole | null; reasons: string[] } {
   if (input.features.riskLane === "tiny") return { role: null, reasons: ["tiny-task-solo"] };
@@ -31,20 +32,23 @@ export class HelperLifecycleRuntime {
   readonly #budgets: OwnedWorkBudgetController;
   readonly #active = new Map<string, Set<AbortController>>();
   constructor(budgets = new OwnedWorkBudgetController()) { this.#budgets = budgets; }
-  decide(input: { mode: HelpersMode; objective: string; taskId: string; taskRunId: string; sessionId: string; taskScope: string[]; parentAllowedTools: string[]; features: TaskFeatures; solver: SolverDecision; runtime: RuntimeModelSnapshot; catalog: AuthenticatedModelCatalog; confidence?: string; conflictingEvidence?: boolean; repeatedSourceFailure?: boolean; independentReviewUseful?: boolean }): HelperDecision {
-    if (input.mode === "off") return { mode: input.mode, action: "solo", role: null, reasonCodes: ["helpers-off"], binding: null, request: null };
-    const selection = selectHelperRole(input); if (!selection.role) return { mode: input.mode, action: "solo", role: null, reasonCodes: selection.reasons, binding: null, request: null };
+  decide(input: { mode: HelpersMode; objective: string; taskId: string; taskRunId: string; sessionId: string; taskScope: string[]; parentAllowedTools: string[]; features: TaskFeatures; solver: SolverDecision; runtime: RuntimeModelSnapshot; catalog: AuthenticatedModelCatalog; delegationEvidence?: MinimalDelegationEvidence; confidence?: string; conflictingEvidence?: boolean; repeatedSourceFailure?: boolean; independentReviewUseful?: boolean }): HelperDecision {
+    if (input.mode === "off") return { mode: input.mode, action: "solo", role: null, reasonCodes: ["helpers-off", "parent-direct-default"], projectedSavingsRatio: null, binding: null, request: null };
+    const selection = selectHelperRole(input); if (!selection.role) return { mode: input.mode, action: "solo", role: null, reasonCodes: selection.reasons, projectedSavingsRatio: null, binding: null, request: null };
+    const delegation = assessMinimalDelegation(input.delegationEvidence);
+    if (!delegation.eligible) return { mode: input.mode, action: "solo", role: null, reasonCodes: [...selection.reasons, ...delegation.reasonCodes], projectedSavingsRatio: delegation.projectedSavingsRatio, binding: null, request: null };
     const policy = defaultRolePolicy(selection.role, input.taskScope);
     const binding = bindRole({ policy, features: input.features, solver: input.solver, runtime: input.runtime, catalog: input.catalog, helperBudgetAvailable: true });
-    if (binding.disposition !== "recommended") return { mode: input.mode, action: "unavailable", role: selection.role, reasonCodes: [...selection.reasons, ...binding.reasonCodes], binding, request: null };
+    if (binding.disposition !== "recommended") return { mode: input.mode, action: "unavailable", role: selection.role, reasonCodes: [...selection.reasons, ...delegation.reasonCodes, ...binding.reasonCodes], projectedSavingsRatio: delegation.projectedSavingsRatio, binding, request: null };
     const request = createHelperRequest({ policy, objective: input.objective, taskId: input.taskId, taskRunId: input.taskRunId, sessionId: input.sessionId, parentReadScope: input.taskScope, parentWriteScope: input.taskScope, parentAllowedTools: input.parentAllowedTools, requestedReadScope: input.taskScope, requestedWriteScope: [], model: { provider: binding.provider as string, modelId: binding.modelId as string, effort: binding.effort as string, source: binding.mappingVersion }, singleWriterOwnership: null });
     const action = input.mode === "recommend" ? "recommend" : policy.authority === "read-only" ? "dispatch" : "blocked";
-    return { mode: input.mode, action, role: selection.role, reasonCodes: action === "blocked" ? [...selection.reasons, "automatic-worker-disabled"] : selection.reasons, binding, request };
+    const reasonCodes = [...selection.reasons, ...delegation.reasonCodes];
+    return { mode: input.mode, action, role: selection.role, reasonCodes: action === "blocked" ? [...reasonCodes, "automatic-worker-disabled"] : reasonCodes, projectedSavingsRatio: delegation.projectedSavingsRatio, binding, request };
   }
   async dispatch(cwd: string, decision: HelperDecision, adapter: DispatchAdapter, options: DispatchOptions = {}): Promise<HelperUsageReceipt> {
-    if (decision.action !== "dispatch" || !decision.request || !decision.role) return { role: decision.role ?? "scout", disposition: decision.action, reasonCodes: decision.reasonCodes, requestRef: "none", outputDigest: null, summary: null, mergeOwner: null, calls: 0, tokens: 0, helperUsed: false };
+    if (decision.action !== "dispatch" || !decision.request || !decision.role) return { role: decision.role ?? "scout", disposition: decision.action, decision: "skip", reasonCodes: decision.reasonCodes, projectedSavingsRatio: decision.projectedSavingsRatio, requestRef: "none", outputDigest: null, summary: null, mergeOwner: null, calls: 0, tokens: 0, helperUsed: false };
     const reservation = this.#budgets.reserve(cwd, decision.request, undefined, AUTOMATIC_OWNED_WORK_CEILINGS);
-    if (reservation.decision !== "reserved" || !reservation.reservationId) return { role: decision.role, disposition: reservation.reason, reasonCodes: [...decision.reasonCodes, reservation.reason], requestRef: decision.request.deduplicationKey, outputDigest: null, summary: null, mergeOwner: null, calls: 0, tokens: 0, helperUsed: false };
+    if (reservation.decision !== "reserved" || !reservation.reservationId) return { role: decision.role, disposition: reservation.reason, decision: "skip", reasonCodes: [...decision.reasonCodes, reservation.reason], projectedSavingsRatio: decision.projectedSavingsRatio, requestRef: decision.request.deduplicationKey, outputDigest: null, summary: null, mergeOwner: null, calls: 0, tokens: 0, helperUsed: false };
     const controller = new AbortController(), active = this.#active.get(decision.request.taskRunId) ?? new Set<AbortController>();
     active.add(controller); this.#active.set(decision.request.taskRunId, active);
     const ceilingMs = decision.request.ceilings.timeSeconds * 1000;
@@ -66,10 +70,10 @@ export class HelperLifecycleRuntime {
     const released = this.#budgets.release(cwd, decision.request, reservation.reservationId, terminal, { calls: result.calls, tokens: result.tokens, output: result.output });
     const calls = Math.min(Math.max(0, Number(result.calls) || 0), decision.request.ceilings.calls + 1);
     const tokens = Math.min(Math.max(0, Number(result.tokens) || 0), decision.request.contextBudget + 1);
-    if (!released.accepted) return { role: decision.role, disposition: released.status === "cancelled" ? "cancelled" : "stale-result", reasonCodes: [...decision.reasonCodes, released.reason], requestRef: decision.request.deduplicationKey, outputDigest: null, summary: null, mergeOwner: null, calls, tokens, helperUsed: true };
+    if (!released.accepted) return { role: decision.role, disposition: released.status === "cancelled" ? "cancelled" : "stale-result", decision: "dispatch", reasonCodes: [...decision.reasonCodes, released.reason], projectedSavingsRatio: decision.projectedSavingsRatio, requestRef: decision.request.deduplicationKey, outputDigest: null, summary: null, mergeOwner: null, calls, tokens, helperUsed: true };
     const withinBudget = released.reason === "released", succeeded = result.status === "succeeded" && withinBudget;
     const summary = succeeded && typeof result.summary === "string" ? redactSensitiveText(result.summary).text.replace(/\s+/g, " ").trim().slice(0, 1000) || null : null;
-    return { role: decision.role, disposition: withinBudget ? result.status : "budget-exceeded", reasonCodes: withinBudget ? decision.reasonCodes : [...decision.reasonCodes, released.reason], requestRef: decision.request.deduplicationKey, outputDigest: succeeded && result.output ? digest(result.output) : null, summary, mergeOwner: summary ? "parent" : null, calls, tokens, helperUsed: true };
+    return { role: decision.role, disposition: withinBudget ? result.status : "budget-exceeded", decision: "dispatch", reasonCodes: withinBudget ? decision.reasonCodes : [...decision.reasonCodes, released.reason], projectedSavingsRatio: decision.projectedSavingsRatio, requestRef: decision.request.deduplicationKey, outputDigest: succeeded && result.output ? digest(result.output) : null, summary, mergeOwner: summary ? "parent" : null, calls, tokens, helperUsed: true };
   }
   cancelTask(cwd: string, decision: HelperDecision, now = new Date().toISOString()): number {
     if (!decision.request) return 0;

@@ -1,4 +1,5 @@
 import { benchmarkClaimEligibility } from "./benchmark-assurance.js";
+import { integrateCodexRelativeEfficiencyReport } from "./benchmark-codex-relative-efficiency.js";
 import {
   comparableAttemptUsage,
   comparableDuration,
@@ -42,13 +43,13 @@ import {
   surfaceSummary,
   workflowContinuityEvidenceComplete
 } from "./benchmark-summary-support.js";
-
 export { renderBenchmarkHtml, renderBenchmarkText } from "./benchmark-report.js";
 export { benchmarkAssuranceEvidenceValidationErrors, benchmarkClaimEligibility } from "./benchmark-assurance.js";
 export { median } from "./benchmark-statistics.js";
 export { benchmarkSuiteValidationErrors, validateBenchmarkSuite } from "./benchmark-suite.js";
 export { aggregateSessionUsage, benchmarkTokenAccounting, createCodexExecJsonlCollector, parseCodexExecJsonl } from "./benchmark-usage.js";
 export { benchmarkPricingSnapshotValidationErrors, normalizeBenchmarkUsageCost } from "./benchmark-normalized-cost.js";
+export { CODEX_RELATIVE_EFFICIENCY_POLICY, evaluateCodexRelativeEfficiency } from "./benchmark-codex-relative-efficiency.js";
 export { evaluateWorkflowEvidence } from "./benchmark-workflow.js";
 const SURFACE_LABELS = Object.freeze({
   "raw-pi": "Raw Pi",
@@ -737,7 +738,7 @@ export function summarizeBenchmark({
     protocolPassed: protocol.passed,
     tokenClaimAllowed
   });
-  return {
+  return integrateCodexRelativeEfficiencyReport({
     schemaVersion: 2,
     measurementSchemaVersion: BENCHMARK_MEASUREMENT_SCHEMA_VERSION,
     runId,
@@ -1029,5 +1030,5 @@ export function summarizeBenchmark({
       note: `Raw metrics and hidden verifier results are authoritative. Fixed-workload efficiency includes every predeclared paired attempt, including exact provider-started failed-attempt usage, without conditioning token measurement on task outcome; quality and continuity remain independent hard gates. Successful-pair efficiency uses matched ${benchmarkSurfaceLabel(candidateSurface)}/${benchmarkSurfaceLabel(baselineSurface)} resolved-outcome ratios; failure-aware effort divides every comparable attempt by resolved outcomes. Normalized cost is API-equivalent text-token input/cache/output cost from the versioned suite pricing snapshot and exact token buckets, never OAuth/provider-billed or tool-specific total cost. Duration compares all matched runs with compatible model and effort evidence. Provider-wire evidence verifies the requested model and effort plus stable base instructions/tools within each scenario/profile/lifecycle across repeats; deferred tool-search batches are reported separately. Confidence intervals cluster repeats by scenario family. Claim scope is ${claimEligibility.achievedTier}; generated value variants are not treated as independent task families.`
     },
     runs: reportRuns
-  };
+  }, suite);
 }

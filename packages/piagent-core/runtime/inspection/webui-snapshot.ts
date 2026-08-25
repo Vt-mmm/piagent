@@ -84,8 +84,13 @@ function scopedEvents(events: ActivityInspectorEvent[], sessionId: string, task?
   return [...deduped.values()].sort((left, right) => String(left.recordedAt).localeCompare(String(right.recordedAt))).slice(-2_000);
 }
 
-function enrichedFailureReasons(events: ActivityInspectorEvent[], sessionEntries: unknown[]): ActivityInspectorEvent[] {
-  const inputs = new Map<string, unknown>(), results = new Map<string, { content: unknown; isError: boolean; toolName: string }>();
+type CanonicalToolResult = { content: unknown; isError: boolean; toolName: string; recordedAt?: string };
+
+function canonicalToolEvidence(sessionEntries: unknown[]): {
+  inputs: Map<string, unknown>;
+  results: Map<string, CanonicalToolResult>;
+} {
+  const inputs = new Map<string, unknown>(), results = new Map<string, CanonicalToolResult>();
   for (const entry of sessionEntries) {
     if (!entry || typeof entry !== "object" || (entry as any).type !== "message") continue;
     const message = (entry as any).message;
@@ -93,16 +98,36 @@ function enrichedFailureReasons(events: ActivityInspectorEvent[], sessionEntries
       for (const block of message.content) if (block?.type === "toolCall" && typeof block.id === "string") inputs.set(block.id, block.arguments);
     }
     if (message?.role === "toolResult" && typeof message.toolCallId === "string") {
-      results.set(message.toolCallId, { content: message.content, isError: message.isError === true, toolName: String(message.toolName ?? "unknown") });
+      const recordedAt = TIMESTAMP.test(String((entry as any).timestamp ?? message.timestamp ?? ""))
+        ? String((entry as any).timestamp ?? message.timestamp) : undefined;
+      results.set(message.toolCallId, { content: message.content, isError: message.isError === true,
+        toolName: typeof message.toolName === "string" ? message.toolName : "", recordedAt });
     }
   }
-  return events.map((event) => {
+  return { inputs, results };
+}
+
+function reconciledToolResults(events: ActivityInspectorEvent[], evidence: ReturnType<typeof canonicalToolEvidence>): ActivityInspectorEvent[] {
+  const resultIds = new Set(events.filter((event) => event.event === "tool_result" && event.toolCallId).map((event) => event.toolCallId as string));
+  const reconciled = events.map((event) => {
     if (event.event !== "tool_result" || !event.toolCallId || !event.isError) return event;
-    const raw = results.get(event.toolCallId);
+    const raw = evidence.results.get(event.toolCallId);
     if (!raw) return event;
-    const reasonCode = classifyToolFailure(raw.toolName, raw.isError, raw.content, inputs.get(event.toolCallId));
+    const reasonCode = classifyToolFailure(raw.toolName || event.toolName, raw.isError, raw.content, evidence.inputs.get(event.toolCallId));
     return reasonCode ? { ...event, reasonCode } : event;
   });
+  for (const call of events) {
+    if (call.event !== "tool_call" || !call.toolCallId || resultIds.has(call.toolCallId)) continue;
+    const raw = evidence.results.get(call.toolCallId);
+    if (!raw) continue;
+    const reasonCode = raw.isError
+      ? classifyToolFailure(raw.toolName || call.toolName, raw.isError, raw.content, evidence.inputs.get(call.toolCallId)) : undefined;
+    reconciled.push({ activityId: `canonical-result:${call.toolCallId}`, event: "tool_result",
+      recordedAt: raw.recordedAt ?? call.recordedAt, sessionId: call.sessionId, taskRunId: call.taskRunId,
+      toolCallId: call.toolCallId, toolName: raw.toolName || call.toolName, isError: raw.isError,
+      ...(reasonCode ? { reasonCode } : {}) });
+  }
+  return reconciled.sort((left, right) => String(left.recordedAt ?? "").localeCompare(String(right.recordedAt ?? "")));
 }
 
 function sourceSummary(document: SourceChangeDocument | null, view: "task" | "working-tree" | "staged") {
@@ -302,12 +327,15 @@ export async function buildWebUiInspectionProjection(input: {
   const taskRevision = input.task ? webUiTaskRevision(input.task) : null;
   const views = await collectSourceChangeViews({ cwd: input.cwd, identity, generatedAt, taskRevision,
     isProtectedPath: (_root, repoPath) => Boolean(matchesProtectedPath(repoPath, effectiveProtectedPaths)) });
-  const events = enrichedFailureReasons(scopedEvents(input.events ?? [], input.sessionId, input.task), input.sessionEntries ?? []);
+  const canonicalEvidence = canonicalToolEvidence(input.sessionEntries ?? []);
+  const events = reconciledToolResults(scopedEvents(input.events ?? [], input.sessionId, input.task), canonicalEvidence);
   const linked = projectCriteriaFileVerifier({ cwd: input.cwd, task: input.task, sourceViews: views, currentSnapshot,
     protectedPaths: input.protectedPaths, events, at: new Date(generatedAt) });
   const sourceChanges = { task: sourceSummary(linked.sourceViews.task, "task"), workingTree: sourceSummary(linked.sourceViews.workingTree, "working-tree"), staged: sourceSummary(linked.sourceViews.staged, "staged") };
   const currentDigest = workingTreeSnapshotUsesCurrentAlgorithm(currentSnapshot) ? workingTreeEvidenceDigest(currentSnapshot) : null;
-  const current = input.current ?? [], controlState = input.task?.trace.outcome === "pending" ? "active" as const : "terminal" as const;
+  const current = (input.current ?? []).filter((item) => (item.status ?? "running") !== "running" || !canonicalEvidence.results.has(item.toolCallId));
+  const runningCurrent = current.find((item) => (item.status ?? "running") === "running");
+  const controlState = input.task?.trace.outcome === "pending" ? "active" as const : "terminal" as const;
   const context = contextProjection(input.contextUsage, generatedAt), usageFacts = usage(input.sessionEntries ?? []);
   const eventCursor = input.eventCursor ?? token("event-cursor", events.map((event) => event.activityId ?? [event.event, event.toolCallId, event.recordedAt]));
   const runtimeRevision = token("runtime-rev", [taskRevision, sourceChanges.workingTree.revision, sourceChanges.staged.revision, eventCursor, current]);
@@ -328,8 +356,8 @@ export async function buildWebUiInspectionProjection(input: {
     capabilities: capabilities(identity, generatedAt, input.resyncRequired === true, input.eventReplay),
     session: {
       connectionState: input.resyncRequired ? "resync-required" : "connected", connectionReason: input.resyncRequired ? "event-replay-gap" : null, displayName: input.task?.sessionName ?? null,
-      operation: current.some((item) => (item.status ?? "running") === "running")
-        ? { liveness: "running", operationRef: null, hostPhase: { state: "known", value: "tool", evidence: "derived", reasonCode: null }, startedAt: timestamp(current[0]?.startedAt, generatedAt), settledAt: null, reasonCode: null }
+      operation: runningCurrent
+        ? { liveness: "running", operationRef: null, hostPhase: { state: "known", value: "tool", evidence: "derived", reasonCode: null }, startedAt: timestamp(runningCurrent.startedAt, generatedAt), settledAt: null, reasonCode: null }
         : { liveness: "idle", operationRef: null, hostPhase: { state: "known", value: "idle", evidence: "derived", reasonCode: null }, startedAt: null, settledAt: null, reasonCode: null },
       controlState: input.task ? controlState : "active", taskOutcome: input.task?.trace.outcome ?? null, approvalState: approvals.state,
       verificationState: linked.verification.state, permissionProfile: { state: "unavailable", value: null, evidence: null, reasonCode: "permission-profile-not-projected" },

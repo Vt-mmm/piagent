@@ -3,6 +3,12 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { ensurePrivateStateDirectory, resolveLocalStatePath } from "../../extensions/local-state-path.js";
+import {
+  BoundedEmissionGuard,
+  type BoundedEmissionTelemetry,
+  type EmissionSuppressionReason,
+  runtimeEventEmissionCandidate
+} from "./bounded-emission-guard.ts";
 
 export const RUNTIME_EVENT_SCHEMA_VERSION = 2 as const;
 export type RuntimeEventRevision = {
@@ -57,6 +63,9 @@ export type RuntimeEventReplay = {
   lastAvailableSequence: number | null;
   reasonCode: string | null;
 };
+export type RuntimeEventAppendResult =
+  | { event: RuntimeEventV2; appended: true; suppressionReason: null }
+  | { event: RuntimeEventV2 | null; appended: false; suppressionReason: EmissionSuppressionReason | "event-id-duplicate" };
 
 const EVENT_KINDS = new Set([
   "runtime.started", "runtime.health-changed", "runtime.disconnected", "runtime.resync-required", "runtime.resynced", "runtime.phase-changed",
@@ -158,15 +167,17 @@ function readSegment(root: string, file: string): RuntimeEventV2[] {
 export class RuntimeEventStore {
   readonly directory: string;
   readonly corruptions: string[] = [];
-  readonly options: { projectRoot: string; projectRef: string; runtimeInstanceId: string; sessionRef: string; maxEventsPerSegment?: number; maxSegments?: number };
+  readonly options: { projectRoot: string; projectRef: string; runtimeInstanceId: string; sessionRef: string; maxEventsPerSegment?: number; maxSegments?: number; emissionGuardCapacity?: number };
   private events: RuntimeEventV2[] = [];
   private segments: Array<{ file: string; start: number; count: number }> = [];
   private eventById = new Map<string, RuntimeEventV2>();
+  private readonly emissionGuard: BoundedEmissionGuard;
   private readonly maxEventsPerSegment: number;
   private readonly maxSegments: number;
 
-  constructor(options: { projectRoot: string; projectRef: string; runtimeInstanceId: string; sessionRef: string; maxEventsPerSegment?: number; maxSegments?: number }) {
+  constructor(options: { projectRoot: string; projectRef: string; runtimeInstanceId: string; sessionRef: string; maxEventsPerSegment?: number; maxSegments?: number; emissionGuardCapacity?: number }) {
     this.options = options;
+    this.emissionGuard = new BoundedEmissionGuard({ capacity: options.emissionGuardCapacity });
     this.maxEventsPerSegment = Math.max(2, Math.min(1_000, options.maxEventsPerSegment ?? 500));
     this.maxSegments = Math.max(2, Math.min(20, options.maxSegments ?? 10));
     this.directory = storeDirectory(options.projectRoot, options.runtimeInstanceId, options.sessionRef);
@@ -195,11 +206,13 @@ export class RuntimeEventStore {
           if (previous && record.writerSequence !== previous + 1) throw new Error("event sequence gap");
           if (this.eventById.has(record.eventId)) throw new Error("duplicate event identity");
           previous = record.writerSequence; this.events.push(record); this.eventById.set(record.eventId, record);
+          const candidate = runtimeEventEmissionCandidate(record, record.eventId);
+          if (candidate) this.emissionGuard.prime(candidate);
         }
         this.segments.push({ file: name, start, count: records.length });
       }
     } catch {
-      this.events = []; this.segments = []; this.eventById.clear(); this.corruptions.push("event-store-corrupt");
+      this.events = []; this.segments = []; this.eventById.clear(); this.emissionGuard.reset(); this.corruptions.push("event-store-corrupt");
     }
   }
 
@@ -208,14 +221,27 @@ export class RuntimeEventStore {
   retention(): { eventRetentionCount: number; eventRetentionSeconds: number } {
     return { eventRetentionCount: this.maxEventsPerSegment * this.maxSegments, eventRetentionSeconds: 0 };
   }
+  emissionTelemetry(): BoundedEmissionTelemetry { return this.emissionGuard.telemetry(); }
 
-  append(draft: RuntimeEventDraft, recordedAt = new Date().toISOString()): { event: RuntimeEventV2; appended: boolean } {
+  append(draft: RuntimeEventDraft, recordedAt = new Date().toISOString()): RuntimeEventAppendResult {
     if (this.resyncRequired()) throw new Error("WebUI event store requires resync");
     if (draft.projectRef !== this.options.projectRef || draft.runtimeInstanceId !== this.options.runtimeInstanceId || draft.sessionRef !== this.options.sessionRef) throw new Error("Runtime event identity does not match its store");
     const id = eventId(draft), duplicate = this.eventById.get(id);
-    if (duplicate) return { event: structuredClone(duplicate), appended: false };
+    const candidate = runtimeEventEmissionCandidate(draft, id);
+    if (duplicate) {
+      const decision = candidate ? this.emissionGuard.inspect(candidate) : null;
+      return { event: structuredClone(duplicate), appended: false,
+        suppressionReason: decision?.reason ?? "event-id-duplicate" };
+    }
     const sequence = (this.events.at(-1)?.writerSequence ?? 0) + 1;
     const event = validateRuntimeEventEnvelope({ schemaVersion: 2, eventId: id, eventCursor: eventCursor(sequence, id), writerSequence: sequence, recordedAt, ...structuredClone(draft) });
+    if (candidate) {
+      const decision = this.emissionGuard.inspect(candidate);
+      if (!decision.accepted) {
+        const prior = decision.priorReference ? this.eventById.get(decision.priorReference) ?? null : null;
+        return { event: prior ? structuredClone(prior) : null, appended: false, suppressionReason: decision.reason as EmissionSuppressionReason };
+      }
+    }
     let segment = this.segments.at(-1);
     if (!segment || segment.count >= this.maxEventsPerSegment) {
       segment = { file: segmentName(sequence), start: sequence, count: 0 }; this.segments.push(segment);
@@ -228,8 +254,9 @@ export class RuntimeEventStore {
     const descriptor = fs.openSync(target, flags, 0o600);
     try { fs.writeFileSync(descriptor, `${JSON.stringify(event)}\n`); fs.fsyncSync(descriptor); fs.fchmodSync(descriptor, 0o600); } finally { fs.closeSync(descriptor); }
     segment.count += 1; this.events.push(event); this.eventById.set(event.eventId, event);
+    if (candidate) this.emissionGuard.recordAccepted(candidate);
     try { this.enforceRetention(); } catch { this.corruptions.push("event-retention-failed"); }
-    return { event: structuredClone(event), appended: true };
+    return { event: structuredClone(event), appended: true, suppressionReason: null };
   }
 
   private enforceRetention(): void {
@@ -240,7 +267,10 @@ export class RuntimeEventStore {
       if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("event retention target is unsafe");
       fs.unlinkSync(target);
       const discarded = this.events.splice(0, removed.count);
-      for (const event of discarded) this.eventById.delete(event.eventId);
+      for (const event of discarded) {
+        this.eventById.delete(event.eventId);
+        this.emissionGuard.forget(event.eventId);
+      }
     }
   }
 

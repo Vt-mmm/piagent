@@ -9,8 +9,10 @@ const runtime = { provider: "openai-codex", modelId: "gpt-5.6-sol", effectiveThi
 const catalog = { availability: "authenticated", models: [{ provider: "openai-codex", modelId: "gpt-5.6-terra", supportedThinkingLevels: ["medium", "high"] }] };
 
 describe("role policy and deterministic binder", () => {
-  it("keeps read-only roles free of mutation tools and worker disabled", () => {
-    for (const role of ["retriever", "scout", "planner", "reviewer", "oracle", "researcher"]) assert.deepEqual(rolePolicyValidationErrors(defaultRolePolicy(role)), []);
+  it("keeps every helper opt-in, read-only roles mutation-free, and worker disabled", () => {
+    for (const role of ["retriever", "scout", "planner", "reviewer", "oracle", "researcher"]) {
+      const policy = defaultRolePolicy(role); assert.deepEqual(rolePolicyValidationErrors(policy), []); assert.equal(policy.enabledByDefault, false); assert.equal(policy.ceilings.calls, 8); assert.equal(policy.ceilings.retries, 0);
+    }
     const worker = defaultRolePolicy("worker"); assert.equal(worker.enabledByDefault, false); assert.equal(worker.authority, "single-writer");
     assert.equal(worker.allowedTools.includes("apply_patch"), true);
   });
@@ -19,11 +21,16 @@ describe("role policy and deterministic binder", () => {
     assert.throws(() => createHelperRequest({ policy, objective: "Map source", taskId: "t-1", taskRunId: "t-1-r-1", sessionId: "secret", parentReadScope: ["docs/**"], parentWriteScope: [], parentAllowedTools: ["read", "grep", "find", "ls"] }), /broaden parent scope/);
     const request = createHelperRequest({ policy, objective: "Map source", taskId: "t-1", taskRunId: "t-1-r-1", sessionId: "secret", parentReadScope: ["src/**"], parentWriteScope: [], parentAllowedTools: ["read", "grep", "find", "ls"] });
     assert.deepEqual(helperRequestValidationErrors(request), []); assert.equal(JSON.stringify(request).includes("secret"), false);
+    assert.equal(request.contextTransfer.mode, "isolated-minimal"); assert.equal(request.contextTransfer.inheritParentHistory, false); assert.equal(request.contextTransfer.estimatedSeedTokens <= request.contextTransfer.maxSeedTokens, true);
+    assert.ok(helperRequestValidationErrors({ ...request, contextTransfer: { ...request.contextTransfer, inheritParentHistory: true } }).includes("helper context transfer must be isolated and minimal"));
     for (const requestedReadScope of [["src/../.env"], ["/tmp/outside"], ["src/**", "docs/**"]]) {
       assert.throws(() => createHelperRequest({ policy, objective: "Map source", taskId: "t-1", taskRunId: "t-1-r-1", sessionId: "secret", parentReadScope: ["src/**"], parentWriteScope: [], parentAllowedTools: ["read", "grep", "find", "ls"], requestedReadScope }), /broaden parent scope/);
     }
     const narrowed = createHelperRequest({ policy, objective: "Map one source", taskId: "t-1", taskRunId: "t-1-r-1", sessionId: "secret", parentReadScope: ["src/**"], parentWriteScope: [], parentAllowedTools: ["read", "grep", "find", "ls"], requestedReadScope: ["src/feature/**"] });
     assert.deepEqual(narrowed.readScope, ["src/feature/**"]);
+    const oversizedScope = Array.from({ length: 100 }, (_, index) => `src/${String(index).padStart(3, "0")}-${"segment".repeat(20)}/**`);
+    const oversizedPolicy = defaultRolePolicy("scout", oversizedScope);
+    assert.throws(() => createHelperRequest({ policy: oversizedPolicy, objective: "Map oversized inherited context", taskId: "t-1", taskRunId: "t-1-r-1", sessionId: "secret", parentReadScope: ["**"], parentWriteScope: [], parentAllowedTools: ["read", "grep", "find", "ls"] }), /isolated and minimal/);
   });
   it("binds only exact authenticated candidates and preserves the pinned parent", () => {
     const input = { policy: defaultRolePolicy("planner"), features, solver, runtime, catalog, helperBudgetAvailable: true };

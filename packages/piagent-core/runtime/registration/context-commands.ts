@@ -428,10 +428,10 @@ export function registerContextCommands(pi: ExtensionAPI, deps: Record<string, a
           content: [
             `mode: ${orchestration.defaultMode}`,
             `helpersMode: ${helpersMode()}`,
-            `subagents: bounded read-only scout/planning/review; max ${orchestration.maxConcurrentSubagents}`,
+            `helpers: max ${orchestration.maxConcurrentSubagents} fresh read-only total; requires >=30% projected net token saving`,
             `lenses: ${orchestration.defaultReviewLenses.join(", ")}`,
             `fieldGuide: ${orchestration.fieldGuide.enabled ? `${fieldGuidePath} (${fieldGuideExists ? "exists" : "missing"})` : "off"}`,
-            "writer: single writer by default; parallel writers need explicit approval + isolation"
+            "writer: parent only; helper workers and retries are disabled"
           ].join("\n"),
           display: true,
           details: {

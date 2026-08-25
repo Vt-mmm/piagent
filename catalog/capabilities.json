@@ -26,8 +26,8 @@
           "path": "evals/scenarios/capability-resolution.json"
         },
         {
-          "byteSize": 6350,
-          "digest": "sha256:3e0f3a94bd3a19df8c24c3e234078d6c3edc664b20a7a4838919450f4225ffca",
+          "byteSize": 7158,
+          "digest": "sha256:8edb1cce6716291c8ca642d3d2392c8f6c92e725ca502e93e06ab45abe541a79",
           "id": "base-policy",
           "kind": "policies",
           "path": "packages/piagent-core/policies/base-policy.json"
@@ -40,8 +40,8 @@
           "path": "packages/piagent-core/prompts/commit.md"
         },
         {
-          "byteSize": 1605,
-          "digest": "sha256:1c2ae0893f131ca0c519f0954845f2b4a8e61182360aac245134102dc3324643",
+          "byteSize": 1413,
+          "digest": "sha256:cb6e7bad1305c7b61d34489cbb5d066ca99855dcfc846dee1668d16d17be8a2b",
           "id": "plan",
           "kind": "prompts",
           "path": "packages/piagent-core/prompts/plan.md"
@@ -54,15 +54,15 @@
           "path": "packages/piagent-core/prompts/pr.md"
         },
         {
-          "byteSize": 1314,
-          "digest": "sha256:e1e9caf68957748bebf6ac2d6294905226b298b2734434db8341b35664794388",
+          "byteSize": 1375,
+          "digest": "sha256:bd474a18754c3ab835951d802158c5a19bd5e92f66cffd0dd6b560adcadb795d",
           "id": "review",
           "kind": "prompts",
           "path": "packages/piagent-core/prompts/review.md"
         },
         {
-          "byteSize": 2371,
-          "digest": "sha256:bfe8374f15e06d410eec7ab2c82f85ef011fc7d514a92f23720179b497910a44",
+          "byteSize": 2796,
+          "digest": "sha256:8f1552bac55dce1399f3e65cce0333205b2002cc37d4366d69e25b0b4d5f09f9",
           "id": "task",
           "kind": "prompts",
           "path": "packages/piagent-core/prompts/task.md"
@@ -82,29 +82,29 @@
           "path": "packages/piagent-core/skills/piagent-ops/SKILL.md"
         },
         {
-          "byteSize": 2024,
-          "digest": "sha256:9c6aa91663a6614b72a4fb8c6c4a07c07a466c0889fcfe45528ae3e3f62bac90",
+          "byteSize": 2223,
+          "digest": "sha256:18f865d816c5a5cee50bf3b2b407c23a2e67e1e92d929001a0f24c04d0c20e03",
           "id": "piagent-planner",
           "kind": "subagents",
           "path": "packages/piagent-core/subagents/piagent-planner.md"
         },
         {
-          "byteSize": 1951,
-          "digest": "sha256:6a02cbc7904ea6d8de64aa776ac21ccfbf3c9cc468c4c1c7650e08374ab9e949",
+          "byteSize": 2091,
+          "digest": "sha256:4e514d6480a618d610d4f520af93fa4e151ef60b42b30f5cf94da1a9c96d6ead",
           "id": "piagent-reviewer",
           "kind": "subagents",
           "path": "packages/piagent-core/subagents/piagent-reviewer.md"
         },
         {
-          "byteSize": 1575,
-          "digest": "sha256:ecd432c57c99783ab76844d0a35cccad377e4cd265674577742ded48ea3ffbb4",
+          "byteSize": 1714,
+          "digest": "sha256:37d9638bfbca8d50f86cbee3fee4db3ba9197bf06004d3a7bba08fc2f8249549",
           "id": "piagent-scout",
           "kind": "subagents",
           "path": "packages/piagent-core/subagents/piagent-scout.md"
         },
         {
-          "byteSize": 2159,
-          "digest": "sha256:3e0b7071c80f471fb7ea67f91477c1f5e6d3f2574db492c3a9fae6788374a95d",
+          "byteSize": 2210,
+          "digest": "sha256:aa18041470aae1a2b600cef1c09ddbfcd8b86e1efb6858c1f460e46292120e9d",
           "id": "piagent-worker",
           "kind": "subagents",
           "path": "packages/piagent-core/subagents/piagent-worker.md"

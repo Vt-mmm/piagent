@@ -335,7 +335,7 @@ describe("acceptance receipt recovery provenance", () => {
     }
   });
 
-  it("links an untouched exact-declared repair target to its own semantic conflict", () => {
+  it("links an untouched repair target outside initial task focus to its own semantic conflict", () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-linked-repair-"));
     fs.mkdirSync(path.join(cwd, "src"), { recursive: true });
     fs.mkdirSync(path.join(cwd, "test"), { recursive: true });
@@ -355,7 +355,7 @@ describe("acceptance receipt recovery provenance", () => {
         changeMode: "source-change",
         source: "runtime"
       }).receipt,
-      scope: ["src/limit.js", "src/sibling.js", "test/limit.test.js", "test/new-limit.test.js"]
+      scope: ["test/limit.test.js"]
     };
     const decide = (target) => decideSemanticRepairHandshake({
       cwd,

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { applyOperationSettlement, canonicalLiveStateSequence, connectionStateAfterCatalogRefresh, liveStateConfirmsAbort,
-  mergeTerminalOperationActivities, parseGatewayCursor,
+  liveProgressStatus, mergeTerminalOperationActivities, parseGatewayCursor,
   reconcileSessionLiveState, reconcileTerminalOperationActivities,
   terminalOperationActivity } from "../packages/piagent-webui/client/src/use-session-hub.ts";
 
@@ -12,6 +12,19 @@ function running() {
 }
 
 describe("Piagent WebUI live conversation settlement", () => {
+  it("shows the current execution phase and the age of its latest live signal", () => {
+    const live = { ...running(), startedAt: "2026-08-24T14:00:00.000Z", lastEventAt: "2026-08-24T14:00:05.000Z",
+      activities: [{ toolCallRef: "tool_worker", toolLabel: "piagent-worker", state: "running",
+        startedAt: "2026-08-24T14:00:05.000Z", finishedAt: null }] };
+    assert.deepEqual(liveProgressStatus(live, "vi", Date.parse("2026-08-24T14:00:12.000Z")), {
+      label: "Piagent đang phối hợp agent hỗ trợ…", detail: "Tiến trình vừa cập nhật"
+    });
+    assert.deepEqual(liveProgressStatus({ ...live, activities: [], lastEventAt: "2026-08-24T13:58:00.000Z" }, "en",
+      Date.parse("2026-08-24T14:00:12.000Z")), {
+      label: "Piagent is analyzing the request…", detail: "Updated 2m ago"
+    });
+  });
+
   it("exits loading for every canonical terminal outcome and keeps prose only for success", () => {
     for (const settlement of ["completed", "blocked", "aborted", "error", "unknown"]) {
       const value = applyOperationSettlement(running(), { operationRef: "operation_live_settlement", settlement,

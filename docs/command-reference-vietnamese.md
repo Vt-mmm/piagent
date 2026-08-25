@@ -325,7 +325,7 @@ Các command này thuộc Pi core hoặc package Pi chính. Tên/availability c�
 
 Các command này đến từ package `pi-subagents`. Tên hơi “package terminology”, nên bảng dưới dịch ra nghĩa thực tế.
 
-Quan trọng: daily flow không bắt anh phải nhớ các lệnh này. Các workflow `/workflow task`, `/workflow be-to-fe`, `/workflow platform-improve`, `/workflow plan`, `/workflow review` dùng solo-first orchestration: parent agent lập task tree/review lenses trước, rồi chỉ spawn subagent khi task có phần việc độc lập và đáng token. Slash command dưới đây dùng khi anh muốn ép orchestration cụ thể hoặc debug.
+Quan trọng: Piagent mặc định parent-direct và helpers `off`. Các lệnh dưới đây phần lớn là capability upstream để inspect/debug. Piagent config chặn builtin, worker, parallel, nested và retry; operator chỉ có thể opt-in một helper read-only context fresh, và runtime vẫn yêu cầu hai lane độc lập cùng projected net saving từ 30%.
 
 | Command | Dịch nghĩa dễ hiểu | Dùng khi nào | Kết quả mong đợi |
 |---|---|---|---|
@@ -342,16 +342,10 @@ Quan trọng: daily flow không bắt anh phải nhớ các lệnh này. Các wo
 | `/subagents-generate-profiles <provider>` | Sinh quota/quality profiles | Khi muốn profile model theo quota/chất lượng. | Tạo profile cho provider. |
 | `/subagents-check-profile <name>` | Check profile | Khi profile/model có thể stale. | Re-check model availability/auth. |
 | `/run <agent> "<task>"` | Chạy 1 subagent | Khi cần 1 scout/reviewer/planner riêng context. | Child session chạy task rồi trả summary về parent. |
-| `/run <agent> "<task>" --bg` | Chạy background | Khi muốn agent chạy nền rồi mình xem sau. | Dùng `/subagents-fleet` để follow. |
-| `/run <agent> "<task>" --fork` | Chạy từ forked session | Khi child cần inherited conversation/context branch. | Fork thật từ parent leaf; dùng fresh nếu không cần history. |
-| `/parallel ...` | Chạy nhiều agent song song | Khi các việc độc lập, nhất là read-only review/scout/test analysis. | Parent đợi hoặc gom kết quả tùy flow. |
-| `/chain ...` | Chạy tuần tự | Khi output agent trước là input agent sau. | Dùng `{previous}` để truyền summary trước đó. |
-| `/run-chain <name>` | Chạy chain đã lưu | Khi có workflow lặp lại. | Package chạy recipe chain đã định nghĩa. |
-| `/parallel-review` | Review song song | Khi cần nhiều reviewer theo góc nhìn độc lập. | Có thể thêm `autofix` nếu đã cho phép sửa. |
-| `/review-loop` | Worker/reviewer/fix loop | Khi muốn review đến khi sạch hoặc hết vòng. | Nên set max rounds, thường dùng tối đa 3 vòng. |
-| `/parallel-research` | Research song song | Khi cần external evidence + local scout. | Builtin `researcher` cần `pi-web-access`. |
-| `/parallel-context-build` | Build context handoff | Khi task lớn cần `context.md`/meta-prompt trước planning. | Dùng `context-builder` agents. |
-| `/parallel-handoff-plan` | Research + context + plan | Khi muốn handoff plan đầy đủ cho implementation. | Tốt cho architecture hoặc platform change lớn. |
+| `/run <agent> "<task>" --bg` | Capability upstream | Piagent không bật async mặc định. | Không dùng trong governed default. |
+| `/run <agent> "<task>" --fork` | Capability upstream | Inherit history trái policy context fresh. | Piagent từ chối. |
+| `/parallel ...`, `/chain ...`, `/run-chain ...` | Capability upstream | Nhân số turn/context. | Piagent config giới hạn 1 và không dispatch parallel/chain. |
+| `/parallel-review`, `/review-loop`, `/parallel-research`, `/parallel-context-build`, `/parallel-handoff-plan` | Capability upstream | Tạo nhiều helper hoặc retry loop. | Piagent config không cho dùng. |
 | `/gather-context-and-clarify` | Scout rồi hỏi đúng câu | Khi requirement chưa rõ nhưng cần đọc trước. | Trả clarification questions có evidence. |
 | `/parallel-cleanup` | Cleanup review sau implement | Khi muốn rà cleanup đáng làm. | Có thể thêm `autofix`. |
 
@@ -364,7 +358,7 @@ Glossary:
 | `fleet` | “Đội” child sessions đang chạy hoặc vừa chạy xong. |
 | `scout` | Agent đọc/map code read-only. |
 | `planner` | Agent lập plan và verify gate, không sửa code. |
-| `worker` | Agent sửa code theo plan. |
+| `worker` | Metadata compatibility; bị Piagent disable. |
 | `reviewer` | Agent review diff/test/scope. |
 | `oracle` | Agent phản biện/risk challenge. |
 | `researcher` | Builtin agent nghiên cứu web/docs có nguồn; cần `pi-web-access`. |
@@ -372,7 +366,7 @@ Glossary:
 | `chain` | Làm A rồi dùng kết quả A để làm B. |
 | `parallel` | Làm nhiều nhánh độc lập cùng lúc. |
 | `bg` | Background run, không block parent ngay. |
-| `fork` | Child bắt đầu từ nhánh session hiện tại thay vì context fresh. |
+| `fork` | Capability upstream; Piagent cấm vì helper phải context fresh. |
 | `watchdog` | Opt-in adversarial reviewer ở cuối turn; không phải `reviewer` subagent. |
 | `worktree` | Checkout riêng cho parallel writers để tránh đè file nhau. |
 
@@ -382,7 +376,7 @@ Piagent subagents:
 |---|---|---|
 | `piagent-scout` | Map repo/module/spec trước khi sửa. | Read-only. |
 | `piagent-planner` | Lập implementation plan. | Read-only. |
-| `piagent-worker` | Implement task đã rõ/đã approve. | Có thể write trong scope. |
+| `piagent-worker` | Compatibility metadata; bị Piagent config disable. | Không dispatch. |
 | `piagent-reviewer` | Review diff, verify coverage, scope drift. | Review-first. |
 | `piagent-oracle` | Challenge architecture/risk. | Read-only. |
 
@@ -416,24 +410,21 @@ Một số option hữu ích:
 ```text
 /run reviewer[model=anthropic/claude-sonnet-5:high] "Review this diff"
 /run scout[output=context.md,outputMode=file-only] "Map auth flow"
-/chain scout[output=context.md,as=context] "Scan" -> planner[reads=context.md] "Plan from {outputs.context}"
 subagent({ action: "status", view: "fleet" })
 subagent({ action: "status", id: "<run-id>", view: "transcript", lines: 120 })
-subagent({ action: "grant-spawn-budget", additional: 10 })
 ```
 
 `outputMode=file-only` hữu ích khi child tạo report dài: parent chỉ nhận đường dẫn file, không bị nhồi full report vào context.
 
 ## Khi nào nên spawn subagent
 
-Theo provider docs, subagent tốt nhất cho việc độc lập và bounded:
+Trong Piagent, helper chỉ được dispatch khi tất cả điều kiện sau đúng:
 
-- codebase exploration;
-- map contract/API/schema;
-- đọc docs/spec dài rồi tóm tắt;
-- review correctness/security/tests/scope drift theo nhiều góc nhìn;
-- chạy/test analysis không cần sửa cùng file;
-- compress context trước khi parent/worker implement.
+- operator đã bật `PIAGENT_HELPERS_MODE=on`;
+- runtime chứng minh ít nhất hai lane độc lập;
+- helper không cần chờ output tiếp theo của parent;
+- handoff context fresh, không inherit history, tối đa 2.048 token;
+- projected tổng token sau cả handoff/merge tiết kiệm ít nhất 30%.
 
 Không nên spawn bừa khi:
 
@@ -446,11 +437,11 @@ Không nên spawn bừa khi:
 Default của platform là an toàn:
 
 - `maxSubagentDepth: 1`: parent spawn child, child không fan-out tiếp.
-- `parallel.concurrency: 3`: không mở quá nhiều child cùng lúc.
+- `parallel.concurrency: 1`: compatibility ceiling, không chạy song song.
 - `asyncByDefault: false`: không tự chạy background nếu anh không yêu cầu.
-- Một `piagent-worker` tại một thời điểm; parallel chủ yếu dùng cho scout/reviewer.
+- Tổng 1 read-only helper, 0 worker, 0 retry.
 
-Nếu anh không gọi gì thêm, `/workflow task` vẫn chạy solo-first và chỉ tự dùng subagent theo `docs/auto-delegation-policy.md` khi có scout/planning/review độc lập đáng làm. Alias `/task` giữ cùng policy.
+Nếu anh không bật gì thêm, `/workflow task` chạy parent-direct và không tạo model turn phụ. Alias `/task` giữ cùng policy.
 
 ## Prompt mẫu cho bài toán thật
 
@@ -480,7 +471,7 @@ Use piagent-reviewer before final.
 Nếu muốn parallel read-only:
 
 ```text
-Run parallel piagent-scout agents: one maps backend contract read-only, one maps frontend route/state usage. Wait for both, then plan FE implementation.
+Keep the parent direct. If helper mode was explicitly enabled and the runtime proves at least 30% net saving, run one fresh read-only piagent-scout for the single highest-value independent lane.
 ```
 
 ### Review trước khi ship

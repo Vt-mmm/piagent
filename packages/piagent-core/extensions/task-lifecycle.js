@@ -195,3 +195,35 @@ export function applyRuntimeLifecycleObservation(task, observation, recordedAt =
   }
   return { changed, mode };
 }
+
+/**
+ * A default assisted read-only review is a presentation checkpoint, not a
+ * second reasoning pass. Once runtime-owned read evidence exists and the model
+ * emits its final handoff, completing this one exact checkpoint preserves the
+ * substantive answer instead of forcing a token-heavy retry. Custom/manual
+ * plans and every source-change review remain explicit.
+ */
+export function applyAssistedReadOnlyFinalHandoff(
+  task,
+  { durableReadEvidence = false, finalHandoffObserved = false } = {},
+  recordedAt = new Date().toISOString()
+) {
+  const mode = runtimeLifecycleMode(task);
+  if (mode !== "assisted-readonly" || !durableReadEvidence || !finalHandoffObserved) {
+    return { changed: false, mode };
+  }
+  const scout = task.workPlan.find((step) => step.id === "scout");
+  const review = task.workPlan.find((step) => step.id === "review");
+  if (scout?.status !== "done" || review?.status !== "in-progress") {
+    return { changed: false, mode };
+  }
+  return {
+    changed: setStep(
+      review,
+      "done",
+      "Runtime observed a final handoff grounded in durable read-only evidence.",
+      recordedAt
+    ),
+    mode
+  };
+}

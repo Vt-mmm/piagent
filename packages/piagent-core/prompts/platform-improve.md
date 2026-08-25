@@ -23,18 +23,14 @@ Flow:
 1. Use runtime automatic intake for a bounded platform change. If runtime pauses for broad, high-risk, or ambiguous scope, call `piagent_task_start` exactly once with project-relative path/glob scope and reuse an active contract.
 2. Read the narrow current implementation, its tests, and the relevant policy/schema/docs. Runtime hooks inject bounded navigation context when useful.
 3. Treat memory and generated context as advisory; verify against current files.
-4. Use bounded subagents only when independent lanes justify their extra token/tool cost:
-   - use `piagent-scout` for read-only code/package mapping;
-   - use `piagent-planner` for a plan when multiple modules are affected;
-   - use `piagent-reviewer` for diff, docs, and verification review;
-   - continue single-agent for small, localized edits.
+4. Keep platform analysis, planning, implementation, and review in the parent. At most one fresh read-only helper may map a genuinely independent lane only when runtime evidence projects at least 30% lower total tokens after handoff/merge. Do not delegate writes, fork parent history, run parallel helpers, or retry deterministic runtime/scope failures.
 5. If the task needs external repository context provided by the user, use a targeted read-only checkout when available.
 6. Produce an implementation matrix only when multiple platform areas are affected:
 
     | Area | Current behavior | Target behavior | Files/config | Verification |
     |---|---|---|---|---|
 
-7. Implement only the bounded target behavior with one writer by default.
+7. Implement only the bounded target behavior in the parent.
 8. If runtime behavior changes, update README/docs and add or adjust a decision note when appropriate.
 9. Run every exact command returned in `task.verifyCommands` after the latest mutation. For a normal default plan, review the final diff and mark only its review step done with `piagent_task_progress`.
 10. Let runtime hooks record context, verification, trace, and final-gate state. Use recovery tools only if the runtime reports missing evidence.

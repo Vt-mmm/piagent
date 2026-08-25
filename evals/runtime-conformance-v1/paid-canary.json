@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "runtime-p0-paid-canary-v1",
+  "suiteId": "deep-logic-v1",
+  "scenarioIds": [
+    "budgeted-context-graph",
+    "revision-event-reconciliation",
+    "resumable-stream-assembly",
+    "temporal-usage-billing-close"
+  ],
+  "surfaces": ["piagent", "codex-cli"],
+  "model": "openai-codex/gpt-5.6-luna",
+  "thinking": "medium",
+  "repeats": 1,
+  "expectedSessions": 8,
+  "infrastructureRetries": 0,
+  "gates": {
+    "minimumCandidateQualityScore": 9.5,
+    "minimumCandidateReliabilityScore": 9.5,
+    "minimumCandidateWorkflowScore": 9.5,
+    "minimumCandidateSafetyScore": 10,
+    "minimumOutcomeScoreExclusive": 9.5,
+    "targetTotalTokenTrafficRatioUpper95": 0.7,
+    "targetApiEquivalentCostRatioUpper95": 0.7,
+    "maximumPooledTotalTokenTrafficRatio": 1.1,
+    "maximumFamilyTotalTokenTrafficRatio": 1.25,
+    "maximumSubagentSessionsPerAttempt": 1,
+    "maximumSubagentTrafficShare": 0.05
+  },
+  "claimBoundary": "A paid diagnostic futility gate before production-v1. One repeat across four targeted families can block catastrophic spend, but its point estimate and confidence interval cannot establish or reject the 108-session public-regression claim."
+}

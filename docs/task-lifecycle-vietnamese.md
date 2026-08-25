@@ -105,7 +105,7 @@ Gate completed yeu cau dong thoi:
 - moi verify command co observed result `exitCode=0` va exact match;
 - work plan khong con `pending`, `in-progress` hoac `failed`;
 - declared changed files khop final digest sau baseline; file da revert khong tinh;
-- khong co file ngoai `scope`;
+- moi file thay doi deu co evidence; file ngoai focus `scope` duoc report de review nhung khong block;
 - final trace la `completed`.
 
 `true`, `echo ok`, `npm test || true` hoac command gan giong khong thay the lenh

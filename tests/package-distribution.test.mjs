@@ -232,10 +232,12 @@ describe("package distribution", () => {
     assert.ok(entries.includes("evals/ie6-release-protocol.v1.json"));
     assert.ok(entries.includes("evals/fs5-causal-arm.v1.json"));
     assert.ok(entries.includes("schemas/benchmark-assurance-evidence.schema.json"));
+    assert.ok(entries.includes("schemas/codex-relative-efficiency-v1.schema.json"));
     for (const file of webUiSchemaPackageFiles) assert.ok(entries.includes(file), `missing WebUI wire contract: ${file}`);
     for (const file of webUiInspectionPackageFiles) assert.ok(entries.includes(file), `missing WebUI inspection module: ${file}`);
     for (const file of webUiGatewayPackageFiles) assert.ok(entries.includes(file), `missing WebUI Gateway module: ${file}`);
     assert.ok(entries.includes("packages/piagent-core/benchmark/benchmark-core.js"));
+    assert.ok(entries.includes("packages/piagent-core/benchmark/benchmark-codex-relative-efficiency.js"));
     assert.ok(entries.includes("packages/piagent-core/benchmark/fs4-readiness-gates.js"));
     assert.ok(entries.includes("packages/piagent-core/benchmark/fs5-pilot-protocol.js"));
     assert.ok(entries.includes("packages/piagent-core/benchmark/ie6-release-protocol.js"));
@@ -384,10 +386,12 @@ describe("package distribution", () => {
     assert.equal(files.has("evals/ie6-release-protocol.v1.json"), true);
     assert.equal(files.has("evals/fs5-causal-arm.v1.json"), true);
     assert.equal(files.has("schemas/benchmark-assurance-evidence.schema.json"), true);
+    assert.equal(files.has("schemas/codex-relative-efficiency-v1.schema.json"), true);
     for (const file of webUiSchemaPackageFiles) assert.equal(files.has(file), true, `missing WebUI wire contract: ${file}`);
     for (const file of webUiInspectionPackageFiles) assert.equal(files.has(file), true, `missing WebUI inspection module: ${file}`);
     for (const file of webUiGatewayPackageFiles) assert.equal(files.has(file), true, `missing WebUI Gateway module: ${file}`);
     assert.equal(files.has("packages/piagent-core/benchmark/benchmark-core.js"), true);
+    assert.equal(files.has("packages/piagent-core/benchmark/benchmark-codex-relative-efficiency.js"), true);
     assert.equal(files.has("packages/piagent-core/benchmark/fs4-readiness-gates.js"), true);
     assert.equal(files.has("packages/piagent-core/benchmark/fs5-pilot-protocol.js"), true);
     assert.equal(files.has("packages/piagent-core/benchmark/ie6-release-protocol.js"), true);

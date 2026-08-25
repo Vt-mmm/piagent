@@ -506,7 +506,7 @@ const productReadiness = {
   subagents: { packageAvailable: piHasSubagents, roleDefinitions: rootPackage.pi?.subagents?.agents ?? [] },
   executionBackend: projectProfile?.executionBackend?.type ?? "host",
   executionBoundary: "host execution is not a sandbox",
-  featureModes: { solver: process.env.PIAGENT_SOLVER_MODE ?? "shadow", phaseTools: process.env.PIAGENT_PHASE_TOOLS ?? "shadow", recovery: process.env.PIAGENT_AUTO_RECOVERY ?? "on", helpers: process.env.PIAGENT_HELPERS_MODE ?? "recommend" },
+  featureModes: { solver: process.env.PIAGENT_SOLVER_MODE ?? "shadow", phaseTools: process.env.PIAGENT_PHASE_TOOLS ?? "shadow", recovery: process.env.PIAGENT_AUTO_RECOVERY ?? "on", helpers: process.env.PIAGENT_HELPERS_MODE ?? "off" },
   migrationRecovery: { taskStateExists: fs.existsSync(path.join(stateRoot, "tasks")), handoffStateExists: fs.existsSync(path.join(stateRoot, "handoffs")), action: "run piagent-doctor --json and inspect /piagent-status before deleting state" },
   supportedPlatform: runtime.status,
   rollbackTarget: { packageVersion: rootPackage.version ?? null, instruction: "reinstall the last known-good exact version after operator confirmation; project state is preserved" }

@@ -1,5 +1,16 @@
 import type { Activity } from "../../contracts/generated/snapshot-v1.ts";
-import type { TerminalOperationActivity } from "./live-state-view-model.ts";
+import type { LiveActivity, TerminalOperationActivity } from "./live-state-view-model.ts";
+
+export function liveActivityRow(activity: LiveActivity, locale: "vi" | "en" = "vi"): Activity {
+  const state: Activity["state"] = activity.state === "running" ? "running" : activity.state === "failed" ? "failed" : "passed";
+  const suffix = state === "running" ? (locale === "vi" ? "đang chạy" : "running")
+    : state === "failed" ? (locale === "vi" ? "thất bại" : "failed") : (locale === "vi" ? "hoàn tất" : "completed");
+  const startedAt = activity.startedAt ?? activity.finishedAt ?? "";
+  return { activityRef: `live.${activity.toolCallRef}`, kind: ["bash", "shell", "exec"].includes(activity.toolLabel) ? "command" : "tool",
+    state, label: `${activity.toolLabel} ${suffix}`, preview: locale === "vi" ? "Cập nhật trực tiếp từ Gateway" : "Live update from the Gateway",
+    toolCallId: activity.toolCallRef, toolName: activity.toolLabel, commandDigest: null, logRef: null, exitCode: null,
+    exitCodeExact: false, startedAt, finishedAt: state === "running" ? null : activity.finishedAt ?? startedAt };
+}
 
 export function terminalOperationActivityRow(activity: TerminalOperationActivity, locale: "vi" | "en" = "vi"): Activity {
   const label = activity.state === "failed" ? (locale === "vi" ? "Lượt chạy gặp lỗi" : "Operation failed")
@@ -12,11 +23,24 @@ export function terminalOperationActivityRow(activity: TerminalOperationActivity
 }
 
 export function mergeActivityRows(running: readonly Activity[], recent: readonly Activity[],
-  terminal: readonly TerminalOperationActivity[], locale: "vi" | "en" = "vi"): { rows: Activity[]; terminalCount: number } {
+  terminal: readonly TerminalOperationActivity[], locale: "vi" | "en" = "vi", liveActivities?: readonly LiveActivity[]): {
+    rows: Activity[]; terminalCount: number; runningCount: number } {
   const canonical = [...running, ...recent], canonicalRefs = new Set(canonical.map((activity) => activity.activityRef));
   const overlay = terminal.filter((activity) => !canonicalRefs.has(activity.activityRef))
     .map((activity) => terminalOperationActivityRow(activity, locale));
-  return { rows: [...running, ...overlay, ...recent], terminalCount: overlay.length };
+  if (liveActivities === undefined) return { rows: [...running, ...overlay, ...recent], terminalCount: overlay.length,
+    runningCount: running.length };
+  // While Gateway live state is present it is the authoritative volatile
+  // boundary. Snapshot Activity remains canonical history, but a stale running
+  // row must not survive a matching tool.completed frame.
+  const liveRunning = liveActivities.filter((activity) => activity.state === "running")
+    .map((activity) => liveActivityRow(activity, locale));
+  // Settled live events are intentionally not rendered as history: their
+  // opaque Gateway refs cannot be matched to the durable session tool ids.
+  // The canonical snapshot owns settled rows and replaces this short-lived
+  // overlay on the next bounded Activity refresh.
+  return { rows: [...liveRunning, ...overlay, ...recent], terminalCount: overlay.length,
+    runningCount: liveRunning.length };
 }
 
 export function activityResult(activity: Activity, locale: "vi" | "en" = "vi"): string {

@@ -2,7 +2,6 @@ import path from "node:path";
 
 import type { TaskContract } from "../../extensions/guard-types.ts";
 import { allVerifyCommandsPassCurrentTree } from "../../extensions/task-contract-view.js";
-import { criterionGraphGuidance } from "../../extensions/criterion-graph.js";
 import { replayTaskCheckpoints, taskRecoveryDecision } from "../../extensions/task-journal.js";
 import { taskDigestMigrationArchiveStatus, workingTreeSnapshot, workingTreeSnapshotHasUnavailableEvidence } from "../../extensions/task-state.js";
 import { workingTreeEvidenceDigest } from "../../extensions/task-lifecycle.js";
@@ -10,6 +9,7 @@ import { hashEvidenceCommand } from "../../extensions/runtime-evidence.js";
 import { WORKING_TREE_DIGEST_ALGORITHM, isCurrentWorkingTreeDigest, workingTreeSnapshotUsesCurrentAlgorithm } from "../../extensions/working-tree-digest.js";
 import { handoffProjectionPath, readHandoffProjection } from "./handoff-projection.ts";
 import { inspectTaskAuthorityResumePolicy, type AuthorityResumeDecision } from "../policy/authority-resume-policy.ts";
+import { presentedAcceptanceCriteria, presentedCriterionGraphGuidance } from "../session/task-contract-presentation.ts";
 import { readTrajectoryStore } from "../trajectory/trajectory-store.ts";
 import { findVerifierFileSnapshot, inspectVerifierStaleness, readVerifierFileSnapshots } from "../inspection/verifier-snapshot-store.ts";
 
@@ -158,14 +158,14 @@ export function buildTaskResumeContext(task: TaskContract, resume: ResumeState):
   content: string;
   details: Record<string, unknown>;
 } {
-  const criteria = limitedLines(task.acceptanceCriteria, 8, 180, (value, index) => `- C${index + 1}: ${value}`);
+  const criteria = limitedLines(presentedAcceptanceCriteria(task), 8, 180, (value, index) => `- C${index + 1}: ${value}`);
   const scope = limitedLines(task.scope, 8, 100, (value) => `- ${value}`);
   const plan = resume.reconstruction.plan.slice(0, 12).map((step) => (
     `- ${step.id}: ${step.status}; ${compact(step.title, 140)}${step.dependsOn.length > 0 ? `; after=${step.dependsOn.join(",")}` : ""}`
   ));
   if (resume.reconstruction.plan.length > 12) plan.push(`- [${resume.reconstruction.plan.length - 12} more steps retained in the Task Contract]`);
   const verifiers = limitedLines(task.verifyCommands, 8, 180, (value, index) => `${index + 1}. ${value}`);
-  const executionMap = criterionGraphGuidance(task.criterionGraph, 8).map((line: string) => `- ${line}`);
+  const executionMap = presentedCriterionGraphGuidance(task, 8).map((line: string) => `- ${line}`);
   const next = resume.reconstruction.nextAction;
   const lines = [
     "[Piagent durable task resume]",
@@ -174,7 +174,8 @@ export function buildTaskResumeContext(task: TaskContract, resume: ResumeState):
     `Goal: ${compact(task.summary, 500)}`,
     `Expected output: ${compact(task.expectedOutput, 400)}`,
     "Acceptance focus:", ...criteria,
-    "Scope:", ...scope,
+    "Initial focus (advisory):", ...scope,
+    "Initial focus guides retrieval/review and neither authorizes nor forbids mutation.",
     "Work plan/progress:", ...plan,
     ...(executionMap.length > 0 ? ["Execution map (planning only):", ...executionMap] : []),
     `Current phase/checkpoint: ${resume.phase ?? "unknown"} / ${resume.latestCheckpoint?.checkpointId ?? "none"}`,

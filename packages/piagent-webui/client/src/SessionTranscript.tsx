@@ -18,8 +18,9 @@ import { ApprovalRequestList } from "./ApprovalPanel.tsx";
 import { readSessionTranscript } from "./api.ts";
 import { mergeOlderTranscriptPage } from "./chat-view-model.ts";
 import { attachmentDetail } from "./attachment-intake.ts";
-import type { LiveConversation } from "./live-state-view-model.ts";
-import { conversationTranscriptItems, successfulAssistantText } from "./transcript-view-model.ts";
+import { liveProgressStatus, type LiveConversation } from "./live-state-view-model.ts";
+import { conversationTranscriptItems, persistedConversationHasFinal, persistedConversationMatches, persistedUserTextMatches,
+  successfulAssistantText } from "./transcript-view-model.ts";
 import { localize, type UiLocale } from "./ui-preferences.tsx";
 
 const MarkdownMessage = lazy(async () => ({ default: (await import("./MarkdownMessage.tsx")).MarkdownMessage }));
@@ -66,18 +67,17 @@ function TranscriptMessage({ item, locale }: { item: TranscriptItem; locale: UiL
   </Box>;
 }
 
-function RunningStatus({ locale, onOpenActivity }: { locale: UiLocale; onOpenActivity?: () => void }) {
+function RunningStatus({ live, locale, onOpenActivity }: { live: LiveConversation; locale: UiLocale; onOpenActivity?: () => void }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 10_000); return () => window.clearInterval(timer); }, []);
+  const status = liveProgressStatus(live, locale, now);
   return <Stack direction="row" spacing={1.25} role="status" aria-live="polite" sx={{ alignItems: "center", color: "text.secondary", py: .75 }}>
     <CircularProgress size={19} thickness={4} />
-    <Typography variant="body2" sx={{ fontWeight: 600 }}>{localize(locale, "Piagent đang xử lý…", "Piagent is working…")}</Typography>
+    <Box sx={{ minWidth: 0 }}><Typography variant="body2" sx={{ fontWeight: 600 }}>{status.label}</Typography>
+      <Typography variant="caption" color="text.disabled">{status.detail}</Typography></Box>
     {onOpenActivity && <Button size="small" variant="text" onClick={onOpenActivity} sx={{ ml: "auto !important" }}>
       {localize(locale, "Xem Activity", "View Activity")}</Button>}
   </Stack>;
-}
-
-function persistedUserMatches(persisted: string | null | undefined, optimistic: string): boolean {
-  const actual = persisted?.trim(), expected = optimistic.trim();
-  return Boolean(actual && expected && (actual === expected || actual.startsWith("/") && actual.endsWith(` ${expected}`)));
 }
 
 export function SessionTranscript({ sessionRef, sessionRevision, live, approvals, locale, onOpenActivity }: { sessionRef: string; sessionRevision: string;
@@ -92,10 +92,7 @@ export function SessionTranscript({ sessionRef, sessionRevision, live, approvals
       void readSessionTranscript(sessionRef, null, 50, controller.signal).then((value) => {
         setTranscript(value);
         if (completionKey && live) {
-          const userPersisted = !live.user || value.items.some((item) => item.role === "user"
-            && persistedUserMatches(item.content.text, live.user));
-          const assistantPersisted = !live.assistant || value.items.some((item) => item.role === "assistant" && item.content.text?.trim() === live.assistant.trim());
-          if (userPersisted && assistantPersisted) setSyncedOperation(completionKey);
+          if (persistedConversationMatches(value.items, live.user, live.assistant)) setSyncedOperation(completionKey);
         }
       }).catch(() => { if (!controller.signal.aborted) setError(true); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     }, completionKey ? 100 : 0);
@@ -103,11 +100,12 @@ export function SessionTranscript({ sessionRef, sessionRevision, live, approvals
   }, [sessionRef, sessionRevision, completionKey, live]);
   const items = transcript?.state === "ready" ? transcript.items : [];
   const visibleItems = useMemo(() => conversationTranscriptItems(items), [items]);
-  const liveVisible = Boolean(live && (!live.complete || syncedOperation !== completionKey));
+  const durableFinalVisible = useMemo(() => Boolean(live?.user && persistedConversationHasFinal(items, live.user)), [items, live?.user]);
+  const liveVisible = Boolean(live && !durableFinalVisible && (!live.complete || syncedOperation !== completionKey));
   const liveUserDuplicated = useMemo(() => {
     if (!live?.user || !items.length) return false;
     const lastUser = [...items].reverse().find((item) => item.role === "user");
-    return persistedUserMatches(lastUser?.content.text, live.user);
+    return persistedUserTextMatches(lastUser?.content.text, live.user);
   }, [items, live?.user]);
   const loadOlder = async () => {
     const before = transcript?.page.nextBeforeCursor; if (!before || loadingOlder) return;
@@ -131,7 +129,7 @@ export function SessionTranscript({ sessionRef, sessionRevision, live, approvals
       {live.user && !liveUserDuplicated && <Box sx={{ alignSelf: "flex-end", maxWidth: "82%", bgcolor: "action.selected", borderRadius: 3, px: 2, py: 1.4 }}>
         <AttachmentCards attachments={live.attachments} locale={locale} />
         <Typography sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", lineHeight: 1.7 }}>{live.user}</Typography></Box>}
-      {!live.complete && !live.error && <RunningStatus locale={locale} onOpenActivity={onOpenActivity} />}
+      {!live.complete && !live.error && <RunningStatus live={live} locale={locale} onOpenActivity={onOpenActivity} />}
       {live.complete && !live.error && successfulAssistantText(live.assistant || "") && <Box sx={{ display: "flex", gap: 1.5, alignItems: "flex-start" }}>
         <Box className="brand-mark" aria-hidden="true">π</Box><Box sx={{ minWidth: 0, flex: 1 }}><Typography sx={{ fontWeight: 600 }}>Piagent</Typography>
           <Box sx={{ mt: .6 }}><AssistantText>{successfulAssistantText(live.assistant || "")!}</AssistantText></Box></Box>

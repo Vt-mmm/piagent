@@ -7,7 +7,7 @@ Usage:
   scripts/configure-subagents.sh [options]
 
 Purpose:
-  Configure pi-subagents with a safe, token-conscious baseline.
+  Configure pi-subagents with Piagent's parent-direct, one-read-only-helper ceiling.
 
 Options:
   --preset <minimal|safe|async|parallel>
@@ -27,7 +27,7 @@ After installing/configuring:
   pi
   /subagents-doctor
   /subagents-models
-  /run scout "Map the auth flow"
+  # Piagent stays parent-direct unless runtime evidence proves >=30% net token saving.
 USAGE
 }
 
@@ -103,16 +103,16 @@ const presets = {
     asyncByDefault: false,
     asyncWidget: true,
     forceTopLevelAsync: false,
-    waitTool: { enabled: true },
-    intercomBridge: { mode: "always" },
-    globalConcurrencyLimit: 4,
-    maxSubagentSpawnsPerSession: 16,
+    waitTool: { enabled: false },
+    intercomBridge: { mode: "off", resultDelivery: false },
+    globalConcurrencyLimit: 1,
+    maxSubagentSpawnsPerSession: 1,
     maxSubagentDepth: 1,
     defaultSessionDir: "~/.pi/agent/sessions/subagent",
     singleRunOutputBaseDir: "~/.pi/agent/subagent-outputs",
     worktreeBaseDir: "~/.pi/agent/worktrees/pi-subagents",
-    scheduledRuns: { enabled: false, maxPending: 20, maxLatenessMs: 300000 },
-    parallel: { maxTasks: 4, concurrency: 2 },
+    scheduledRuns: { enabled: false, maxPending: 1, maxLatenessMs: 300000 },
+    parallel: { maxTasks: 1, concurrency: 1 },
     completionBatch: { enabled: true, debounceMs: 150, maxWaitMs: 1000 }
   },
   safe: {
@@ -120,33 +120,33 @@ const presets = {
     asyncByDefault: false,
     asyncWidget: true,
     forceTopLevelAsync: false,
-    waitTool: { enabled: true },
-    intercomBridge: { mode: "always" },
-    globalConcurrencyLimit: 8,
-    maxSubagentSpawnsPerSession: 32,
+    waitTool: { enabled: false },
+    intercomBridge: { mode: "off", resultDelivery: false },
+    globalConcurrencyLimit: 1,
+    maxSubagentSpawnsPerSession: 1,
     maxSubagentDepth: 1,
     defaultSessionDir: "~/.pi/agent/sessions/subagent",
     singleRunOutputBaseDir: "~/.pi/agent/subagent-outputs",
     worktreeBaseDir: "~/.pi/agent/worktrees/pi-subagents",
-    scheduledRuns: { enabled: false, maxPending: 20, maxLatenessMs: 300000 },
-    parallel: { maxTasks: 6, concurrency: 3 },
+    scheduledRuns: { enabled: false, maxPending: 1, maxLatenessMs: 300000 },
+    parallel: { maxTasks: 1, concurrency: 1 },
     completionBatch: { enabled: true, debounceMs: 150, maxWaitMs: 1000, stragglerDebounceMs: 75, stragglerMaxWaitMs: 400, stragglerWindowMs: 2000 }
   },
   async: {
     toolDescriptionMode: "compact",
-    asyncByDefault: true,
+    asyncByDefault: false,
     asyncWidget: true,
     forceTopLevelAsync: false,
-    waitTool: { enabled: true },
-    intercomBridge: { mode: "always" },
-    globalConcurrencyLimit: 8,
-    maxSubagentSpawnsPerSession: 32,
+    waitTool: { enabled: false },
+    intercomBridge: { mode: "off", resultDelivery: false },
+    globalConcurrencyLimit: 1,
+    maxSubagentSpawnsPerSession: 1,
     maxSubagentDepth: 1,
     defaultSessionDir: "~/.pi/agent/sessions/subagent",
     singleRunOutputBaseDir: "~/.pi/agent/subagent-outputs",
     worktreeBaseDir: "~/.pi/agent/worktrees/pi-subagents",
-    scheduledRuns: { enabled: false, maxPending: 20, maxLatenessMs: 300000 },
-    parallel: { maxTasks: 6, concurrency: 3 },
+    scheduledRuns: { enabled: false, maxPending: 1, maxLatenessMs: 300000 },
+    parallel: { maxTasks: 1, concurrency: 1 },
     completionBatch: { enabled: true, debounceMs: 150, maxWaitMs: 1000, stragglerDebounceMs: 75, stragglerMaxWaitMs: 400, stragglerWindowMs: 2000 }
   },
   parallel: {
@@ -154,16 +154,16 @@ const presets = {
     asyncByDefault: false,
     asyncWidget: true,
     forceTopLevelAsync: false,
-    waitTool: { enabled: true },
-    intercomBridge: { mode: "always" },
-    globalConcurrencyLimit: 12,
-    maxSubagentSpawnsPerSession: 64,
+    waitTool: { enabled: false },
+    intercomBridge: { mode: "off", resultDelivery: false },
+    globalConcurrencyLimit: 1,
+    maxSubagentSpawnsPerSession: 1,
     maxSubagentDepth: 1,
     defaultSessionDir: "~/.pi/agent/sessions/subagent",
     singleRunOutputBaseDir: "~/.pi/agent/subagent-outputs",
     worktreeBaseDir: "~/.pi/agent/worktrees/pi-subagents",
-    scheduledRuns: { enabled: false, maxPending: 20, maxLatenessMs: 300000 },
-    parallel: { maxTasks: 10, concurrency: 5 },
+    scheduledRuns: { enabled: false, maxPending: 1, maxLatenessMs: 300000 },
+    parallel: { maxTasks: 1, concurrency: 1 },
     completionBatch: { enabled: true, debounceMs: 150, maxWaitMs: 1000, stragglerDebounceMs: 75, stragglerMaxWaitMs: 400, stragglerWindowMs: 2000 }
   }
 };
@@ -223,10 +223,20 @@ const mergedConfig = mergeObject(existingConfig && typeof existingConfig === "ob
 
 const existingSettings = readJson(settingsPath, {});
 const mergedSettings = existingSettings && typeof existingSettings === "object" && !Array.isArray(existingSettings) ? existingSettings : {};
+mergedSettings.subagents = mergedSettings.subagents && typeof mergedSettings.subagents === "object" && !Array.isArray(mergedSettings.subagents)
+  ? mergedSettings.subagents
+  : {};
+mergedSettings.subagents.disableBuiltins = true;
+mergedSettings.subagents.agentOverrides = mergeObject(
+  mergedSettings.subagents.agentOverrides && typeof mergedSettings.subagents.agentOverrides === "object" && !Array.isArray(mergedSettings.subagents.agentOverrides)
+    ? mergedSettings.subagents.agentOverrides
+    : {},
+  {
+    worker: { disabled: true },
+    "piagent-worker": { disabled: true }
+  }
+);
 if (modelScopes[modelScopeName]) {
-  mergedSettings.subagents = mergedSettings.subagents && typeof mergedSettings.subagents === "object" && !Array.isArray(mergedSettings.subagents)
-    ? mergedSettings.subagents
-    : {};
   mergedSettings.subagents.modelScope = modelScopes[modelScopeName];
 }
 
@@ -245,10 +255,8 @@ if (dryRun) {
 } else {
   fs.mkdirSync(path.dirname(configPath), { recursive: true });
   fs.writeFileSync(configPath, `${JSON.stringify(mergedConfig, null, 2)}\n`);
-  if (modelScopes[modelScopeName]) {
-    fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
-    fs.writeFileSync(settingsPath, `${JSON.stringify(mergedSettings, null, 2)}\n`);
-  }
+  fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+  fs.writeFileSync(settingsPath, `${JSON.stringify(mergedSettings, null, 2)}\n`);
   console.log(JSON.stringify(report, null, 2));
 }
 NODE

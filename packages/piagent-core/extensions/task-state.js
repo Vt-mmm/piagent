@@ -691,6 +691,10 @@ function changedPathsFromNameStatus(output, observeRename) {
 }
 
 const WORKING_TREE_STREAM_CHUNK_BYTES = 1024 * 1024;
+// This path cannot collide with enumerated project evidence because `.pi` is
+// intentionally excluded from workspace discovery. Its unavailable digest
+// turns a partial inventory into an explicitly non-proof-capable snapshot.
+const WORKING_TREE_ENUMERATION_EVIDENCE_PATH = ".pi/piagent-state/.working-tree-enumeration-unavailable";
 function unavailableWorkingTreeDigest(file, reason, stat) {
   return unavailableWorkingTreeHash(crypto.createHash("sha256")
     .update(`${file}\0${reason}\0${stat?.mode ?? ""}\0${stat?.size ?? ""}\0${stat?.mtimeMs ?? ""}\0${stat?.ctimeMs ?? ""}`)
@@ -770,7 +774,18 @@ function streamedWorkingTreeFileDigest(root, file, hasHead, protectedProjectPath
 export function workingTreeSnapshot(cwd, options = {}) {
   const snapshot = {};
   const isProtectedProjectPath = typeof options.isProtectedProjectPath === "function" ? options.isProtectedProjectPath : () => false;
-  const roots = gitEvidenceRoots(cwd);
+  let rootDetails;
+  try {
+    rootDetails = gitEvidenceRootDetails(cwd);
+  } catch (error) {
+    snapshot[WORKING_TREE_ENUMERATION_EVIDENCE_PATH] = unavailableWorkingTreeDigest(
+      WORKING_TREE_ENUMERATION_EVIDENCE_PATH,
+      `root-enumeration:${error?.code ?? "failed"}`
+    );
+    return snapshot;
+  }
+  const roots = rootDetails.roots;
+  const incompleteReasons = rootDetails.complete ? [] : ["root-enumeration-incomplete"];
   for (const root of roots) {
     const protectedAliases = new Set();
     const observeRename = (source, destination) => {
@@ -778,13 +793,33 @@ export function workingTreeSnapshot(cwd, options = {}) {
       if (paths.some((file) => file === ".pi/piagent-state" || file.startsWith(".pi/piagent-state/") || isProtectedProjectPath(prefixedGitPath(root.prefix, file))))
         paths.forEach((file) => protectedAliases.add(file));
     };
-    const hasHead = gitHasHead(root.cwd); for (const file of workingTreeFilesForGitRoot(root.cwd, observeRename)) {
-      const projectPath = prefixedGitPath(root.prefix, file);
-      snapshot[projectPath] = streamedWorkingTreeFileDigest(root.cwd, file, hasHead, isProtectedProjectPath(projectPath) || protectedAliases.has(file) ? projectPath : null);
+    try {
+      const hasHead = gitHasHead(root.cwd); for (const file of workingTreeFilesForGitRoot(root.cwd, observeRename)) {
+        const projectPath = prefixedGitPath(root.prefix, file);
+        snapshot[projectPath] = streamedWorkingTreeFileDigest(root.cwd, file, hasHead, isProtectedProjectPath(projectPath) || protectedAliases.has(file) ? projectPath : null);
+      }
+    } catch {
+      incompleteReasons.push(`git-root-enumeration-incomplete:${root.prefix || "."}`);
     }
-  } if (!isGitWorkingTree(cwd) && roots.length > 0) for (const file of nonGitWorkspaceFiles(cwd, roots.map((root) => root.prefix))) {
+  }
+  if (!roots.some((root) => root.prefix === "") && roots.length > 0) {
+    const looseDetails = nonGitWorkspaceFileDetails(
+      cwd,
+      roots.map((root) => root.prefix),
+      options.maxNonGitWorkspaceFiles
+    );
+    for (const file of looseDetails.files) {
       snapshot[file] = nonGitWorkspaceFileDigest(cwd, file, isProtectedProjectPath(file) ? file : null);
-  } return snapshot;
+    }
+    if (!looseDetails.complete) incompleteReasons.push("non-git-enumeration-incomplete");
+  }
+  if (incompleteReasons.length > 0) {
+    snapshot[WORKING_TREE_ENUMERATION_EVIDENCE_PATH] = unavailableWorkingTreeDigest(
+      WORKING_TREE_ENUMERATION_EVIDENCE_PATH,
+      incompleteReasons.sort().join(",")
+    );
+  }
+  return snapshot;
 }
 
 export function taskStateMigrationStatus(cwd) {

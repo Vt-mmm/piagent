@@ -180,7 +180,7 @@ export function performanceReviewGuidance(task: TaskContract): string[] {
       ? [`Review the pre-change and current behavior for: ${changedFiles.slice(0, 12).join(", ")}.`]
       : []),
     ...plan.reviewChecks,
-    "If no contradiction is found, stop reviewing and complete immediately. If one is found, name it, make the coordinated in-scope source/test edits required for one bounded revision, then run the exact configured verifier. A high-confidence in-scope verifier failure may open one final corrective revision."
+    "If no contradiction is found, stop reviewing and complete immediately. If one is found, name it, make the coordinated evidence-backed source/test edits required for one bounded revision, then run the exact configured verifier. A high-confidence verifier failure may open one final corrective revision."
   ];
 }
 
@@ -489,11 +489,11 @@ export function performanceReviewToolDecision(input: PerformanceReviewToolInput)
     }
     return {
       block: true,
-      reason: "The failed verifier opened a bounded corrective revision. Apply only the evidence-backed in-scope correction before re-running the exact verifier."
+      reason: "The failed verifier opened a bounded corrective revision. Apply only the evidence-backed correction before re-running the exact verifier."
     };
   }
   return {
     block: true,
-    reason: "This semantic-review continuation is limited to bounded diff/read inspection, reviewed in-scope edits, and one exact verifier per bounded revision."
+    reason: "This semantic-review continuation is limited to bounded diff/read inspection, reviewed evidence-backed edits, and one exact verifier per bounded revision."
   };
 }

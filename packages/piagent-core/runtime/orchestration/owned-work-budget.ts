@@ -7,12 +7,12 @@ import type { HelperRequest, HelperRole } from "./role-policy.ts";
 import { validateHelperRequest } from "./role-policy.ts";
 
 export const OWNED_WORK_BUDGET_VERSION = "owned-work-budget-v1" as const;
-// `maxRepairPasses` is declared for the repair lane, which reserves no helper
-// role here, so this mechanism never reads it. It is named rather than removed
-// because the repair lane is bounded elsewhere; nothing in this file enforces it.
+// Keep the complete ceiling shape for persisted/operator projections, but clamp
+// every caller to one read-only helper and zero retries/writers below.
 export type OwnedWorkCeilings = Readonly<{ maxConcurrentHelpers: number; maxTotalHelpers: number; maxScoutPasses: number; maxPlannerPasses: number; maxReviewPasses: number; maxOracleCalls: number; maxRepairPasses: number; maxWriters: number }>;
-export const DEFAULT_OWNED_WORK_CEILINGS: OwnedWorkCeilings = Object.freeze({ maxConcurrentHelpers: 2, maxTotalHelpers: 3, maxScoutPasses: 1, maxPlannerPasses: 1, maxReviewPasses: 1, maxOracleCalls: 1, maxRepairPasses: 1, maxWriters: 1 });
-export const AUTOMATIC_OWNED_WORK_CEILINGS: OwnedWorkCeilings = Object.freeze({ ...DEFAULT_OWNED_WORK_CEILINGS, maxConcurrentHelpers: 1, maxTotalHelpers: 1 });
+export const ABSOLUTE_OWNED_WORK_CEILINGS: OwnedWorkCeilings = Object.freeze({ maxConcurrentHelpers: 1, maxTotalHelpers: 1, maxScoutPasses: 1, maxPlannerPasses: 1, maxReviewPasses: 1, maxOracleCalls: 1, maxRepairPasses: 0, maxWriters: 0 });
+export const DEFAULT_OWNED_WORK_CEILINGS: OwnedWorkCeilings = ABSOLUTE_OWNED_WORK_CEILINGS;
+export const AUTOMATIC_OWNED_WORK_CEILINGS: OwnedWorkCeilings = ABSOLUTE_OWNED_WORK_CEILINGS;
 const LOCK_WAIT_MS = 5;
 const LOCK_WAIT_CEILING_MS = 250;
 const STALE_LOCK_MS = 30_000;
@@ -29,16 +29,6 @@ function statePath(cwd: string, taskRunId: string): string { return path.join(cw
 function lockPath(cwd: string, taskRunId: string): string { return `${statePath(cwd, taskRunId)}.lock`; }
 function empty(request: HelperRequest, now: string): BudgetState { return { version: OWNED_WORK_BUDGET_VERSION, taskId: request.taskId, taskRunId: request.taskRunId, terminal: false, reservations: [], updatedAt: now }; }
 function active(state: BudgetState): OwnedWorkReservation[] { return state.reservations.filter((item) => item.status === "active"); }
-// The per-role ceiling, read from the ceilings the caller passed rather than
-// from constants written here. These limits were real but fixed at one apiece,
-// so `OwnedWorkCeilings` advertised six numbers that nothing ever read: a
-// profile could raise `maxScoutPasses` and be silently ignored, while the two
-// neighbouring fields in the same object did take effect. Half-honoured
-// configuration is worse than none, because the half that works teaches the
-// reader to trust the half that does not.
-//
-// Every default is one, so this changes no behaviour under the shipped
-// ceilings; it makes the object mean what it says.
 function roleLimit(role: HelperRole, ceilings: OwnedWorkCeilings): number {
   switch (role) {
     case "scout": case "retriever": case "researcher": return ceilings.maxScoutPasses;
@@ -49,6 +39,19 @@ function roleLimit(role: HelperRole, ceilings: OwnedWorkCeilings): number {
     // An unknown role reserves nothing rather than defaulting to a limit.
     default: return 0;
   }
+}
+
+function effectiveCeilings(requested: OwnedWorkCeilings): OwnedWorkCeilings {
+  return {
+    maxConcurrentHelpers: Math.min(requested.maxConcurrentHelpers, ABSOLUTE_OWNED_WORK_CEILINGS.maxConcurrentHelpers),
+    maxTotalHelpers: Math.min(requested.maxTotalHelpers, ABSOLUTE_OWNED_WORK_CEILINGS.maxTotalHelpers),
+    maxScoutPasses: Math.min(requested.maxScoutPasses, ABSOLUTE_OWNED_WORK_CEILINGS.maxScoutPasses),
+    maxPlannerPasses: Math.min(requested.maxPlannerPasses, ABSOLUTE_OWNED_WORK_CEILINGS.maxPlannerPasses),
+    maxReviewPasses: Math.min(requested.maxReviewPasses, ABSOLUTE_OWNED_WORK_CEILINGS.maxReviewPasses),
+    maxOracleCalls: Math.min(requested.maxOracleCalls, ABSOLUTE_OWNED_WORK_CEILINGS.maxOracleCalls),
+    maxRepairPasses: 0,
+    maxWriters: 0
+  };
 }
 
 function read(cwd: string, request: HelperRequest, now: string): BudgetState {
@@ -153,14 +156,19 @@ export function inspectOwnedWorkBudget(cwd: string, taskId: string, taskRunId: s
 export class OwnedWorkBudgetController {
   reserve(cwd: string, requestInput: HelperRequest, now = new Date().toISOString(), ceilings: OwnedWorkCeilings = DEFAULT_OWNED_WORK_CEILINGS): { decision: "reserved" | "duplicate" | "blocked"; reason: string; reservationId: string | null; recoveredOrphans: number } {
     const request = validateHelperRequest(structuredClone(requestInput));
+    const limits = effectiveCeilings(ceilings);
     return withLock(cwd, request.taskRunId, () => {
       const state = read(cwd, request, now); const recoveredOrphans = recoverOrphans(state, now);
-      if (state.terminal) return { decision: "blocked", reason: "parent-task-terminal", reservationId: null, recoveredOrphans };
+      const settle = (result: { decision: "reserved" | "duplicate" | "blocked"; reason: string; reservationId: string | null; recoveredOrphans: number }) => {
+        if (recoveredOrphans > 0) { state.updatedAt = now; write(cwd, state); }
+        return result;
+      };
+      if (state.terminal) return settle({ decision: "blocked", reason: "parent-task-terminal", reservationId: null, recoveredOrphans });
       const duplicate = state.reservations.find((item) => item.deduplicationKey === request.deduplicationKey && ["active", "succeeded"].includes(item.status));
-      if (duplicate) return { decision: "duplicate", reason: "equivalent-helper-already-owned", reservationId: duplicate.id, recoveredOrphans };
-      if (active(state).length >= ceilings.maxConcurrentHelpers || state.reservations.length >= ceilings.maxTotalHelpers) return { decision: "blocked", reason: "helper-budget-exhausted", reservationId: null, recoveredOrphans };
-      if (state.reservations.filter((item) => item.role === request.role).length >= roleLimit(request.role, ceilings)) return { decision: "blocked", reason: `${request.role}-ceiling-reached`, reservationId: null, recoveredOrphans };
-      if (request.authority === "single-writer" && active(state).some((item) => item.authority === "single-writer")) return { decision: "blocked", reason: "single-writer-already-owned", reservationId: null, recoveredOrphans };
+      if (duplicate) return settle({ decision: "duplicate", reason: "equivalent-helper-already-owned", reservationId: duplicate.id, recoveredOrphans });
+      if (active(state).length >= limits.maxConcurrentHelpers || state.reservations.length >= limits.maxTotalHelpers) return settle({ decision: "blocked", reason: "helper-budget-exhausted", reservationId: null, recoveredOrphans });
+      if (state.reservations.filter((item) => item.role === request.role).length >= roleLimit(request.role, limits)) return settle({ decision: "blocked", reason: `${request.role}-ceiling-reached`, reservationId: null, recoveredOrphans });
+      if (request.authority === "single-writer" && active(state).some((item) => item.authority === "single-writer")) return settle({ decision: "blocked", reason: "single-writer-already-owned", reservationId: null, recoveredOrphans });
       const id = digest(`${request.taskRunId}:${request.deduplicationKey}:${state.reservations.length}`).slice(0, 32);
       state.reservations.push({ id, deduplicationKey: request.deduplicationKey, role: request.role, authority: request.authority, status: "active", reservedAt: now, expiresAt: new Date(Date.parse(now) + request.ceilings.timeSeconds * 1000).toISOString(), completedAt: null, usageRef: null });
       state.updatedAt = now; write(cwd, state); return { decision: "reserved", reason: "budget-reserved", reservationId: id, recoveredOrphans };

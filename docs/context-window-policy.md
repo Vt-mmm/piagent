@@ -36,7 +36,11 @@ Trước task lớn/risk cao trong Pi TUI:
 /context compact
 ```
 
-Nếu recommendation là `fresh-session`, dùng `/fresh task`, `/fresh scout`, hoặc `/fresh be-to-fe` thay vì tiếp tục nhồi context vào session hiện tại.
+Với task/phase tiếp theo trong cùng phiên hiển thị, runtime tự tạo working set
+gọn trước mỗi provider call; người dùng không phải mở session mới chỉ để đổi từ
+scout sang plan, implement hay verify. `/fresh task`, `/fresh scout` và
+`/fresh be-to-fe` vẫn là đường phục hồi tường minh khi preflight xác định input
+quá lớn hoặc working set không thể rút gọn an toàn.
 
 ## Context manifest
 
@@ -67,6 +71,38 @@ Pi settings template dùng:
   }
 }
 ```
+
+Host compaction trên chỉ là overflow guard. Adaptive context governor của
+Piagent chạy sớm hơn và không đổi model/thinking:
+
+- phát hiện ranh giới task/phase, context pressure, số tool round, read-output
+  cũ và kết quả lặp;
+- giữ yêu cầu/quyết định gần nhất của người dùng, Task Contract, acceptance
+  criteria, changed files, verifier và lỗi chưa giải quyết;
+- bỏ raw read/test log cũ khỏi provider working set nhưng giữ nguyên transcript
+  hiển thị và audit source;
+- giữ nguyên nhóm assistant tool-call/tool-result để không tạo orphan protocol;
+- giữ nguyên tối thiểu 6 nhóm ranh giới gần nhất; nếu transcript hoặc projected
+  candidate đã có orphan tool message thì fail closed và không thay context;
+- chỉ project khi ước tính tiết kiệm đạt ngưỡng thích ứng: ít nhất 8K token,
+  15% transcript occupancy và không đòi quá 20K; không đạt thì no-op thay vì gọi
+  thêm một model summarizer có phí;
+- chỉ ghi durable compaction sau khi agent đã settled; coding task dùng summary
+  deterministic từ state/file-backed evidence để không tốn thêm model call;
+- trước khi lặp exact verifier, dùng current-tree gate: một durable pass trên
+  cùng working-tree digest được tái sử dụng bằng receipt nhỏ thay vì chạy lại.
+  Code đổi, pass thiếu/stale, test từng fail, hoặc operator yêu cầu chạy lại thì
+  verifier thật vẫn chạy;
+- giữ model summarizer cho thảo luận không có Task Contract và ít tool evidence,
+  nơi sắc thái hội thoại quan trọng hơn tiết kiệm tuyệt đối.
+
+Telemetry tách `contextOccupancy` (working set ước tính/được provider báo) khỏi
+`billedTraffic` (input/output/cache thực sự đo được). Vì context hook không có
+usage hóa đơn theo lần gọi, runtime không được suy diễn hai con số này là một.
+
+Mốc vận hành hiện tại bắt đầu tạo áp lực ở khoảng 160K token, giữ provider prompt
+dưới 240K khi có thể và chủ động tránh vùng pricing 272K+. Đây là giới hạn
+working set, không phải giới hạn năng lực hay context window của model.
 
 ## Rule
 

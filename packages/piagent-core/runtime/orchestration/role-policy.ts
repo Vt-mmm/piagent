@@ -3,7 +3,7 @@ import { globMatchesPath, normalizePathCandidate } from "../../extensions/policy
 
 export const ROLE_POLICY_SCHEMA_VERSION = 1 as const;
 export const ROLE_POLICY_VERSION = "role-policy-v1" as const;
-export const HELPER_REQUEST_SCHEMA_VERSION = 1 as const;
+export const HELPER_REQUEST_SCHEMA_VERSION = 2 as const;
 export const HELPER_ROLES = Object.freeze(["retriever", "scout", "planner", "worker", "reviewer", "oracle", "researcher"] as const);
 export type HelperRole = typeof HELPER_ROLES[number];
 export type HelperAuthority = "read-only" | "single-writer";
@@ -15,12 +15,13 @@ export type RolePolicy = {
   outputSchema: string; stoppingRule: string; approvalRestrictions: string[];
 };
 export type HelperRequest = {
-  schemaVersion: 1; policyVersion: typeof ROLE_POLICY_VERSION; role: HelperRole; objectiveHash: string; objectiveText: string;
+  schemaVersion: 2; policyVersion: typeof ROLE_POLICY_VERSION; role: HelperRole; objectiveHash: string; objectiveText: string;
   taskId: string; taskRunId: string; sessionHash: string; authority: HelperAuthority; readScope: string[]; writeScope: string[];
   allowedTools: string[]; model: { provider: string; modelId: string; effort: string; source: string } | null;
   contextBudget: number; ceilings: { timeSeconds: number; calls: number; retries: number }; outputSchema: string;
   stoppingRule: string; approvalRestrictions: string[]; parentAuthorityDigest: string; singleWriterOwnership: string | null;
   deduplicationKey: string;
+  contextTransfer: { mode: "isolated-minimal"; inheritParentHistory: false; maxSeedTokens: number; estimatedSeedTokens: number };
 };
 
 const READ_TOOLS = ["read", "grep", "find", "ls"];
@@ -28,7 +29,7 @@ const MUTATION_TOOLS = new Set(["edit", "write", "apply_patch", "bash", "contact
 const HASH = /^[a-f0-9]{64}$/;
 const REF = /^[a-z0-9][a-z0-9:._/-]{0,255}$/i;
 const ROLE_FIELDS = new Set(["schemaVersion", "policyVersion", "role", "authority", "enabledByDefault", "readScope", "writeScope", "allowedTools", "modelSelectionSource", "effortSelectionSource", "contextBudget", "ceilings", "outputSchema", "stoppingRule", "approvalRestrictions"]);
-const REQUEST_FIELDS = new Set(["schemaVersion", "policyVersion", "role", "objectiveHash", "objectiveText", "taskId", "taskRunId", "sessionHash", "authority", "readScope", "writeScope", "allowedTools", "model", "contextBudget", "ceilings", "outputSchema", "stoppingRule", "approvalRestrictions", "parentAuthorityDigest", "singleWriterOwnership", "deduplicationKey"]);
+const REQUEST_FIELDS = new Set(["schemaVersion", "policyVersion", "role", "objectiveHash", "objectiveText", "taskId", "taskRunId", "sessionHash", "authority", "readScope", "writeScope", "allowedTools", "model", "contextBudget", "ceilings", "outputSchema", "stoppingRule", "approvalRestrictions", "parentAuthorityDigest", "singleWriterOwnership", "deduplicationKey", "contextTransfer"]);
 
 function object(value: unknown): Record<string, any> | undefined { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, any> : undefined; }
 function exact(value: Record<string, any>, fields: Set<string>, label: string): string[] { return [...Object.keys(value).filter((field) => !fields.has(field)).map((field) => `${label} unknown field: ${field}`), ...[...fields].filter((field) => !(field in value)).map((field) => `${label} missing field: ${field}`)]; }
@@ -36,6 +37,15 @@ function strings(value: unknown, max: number, itemMax = 300): value is string[] 
 function ceilings(value: unknown): boolean { const item = object(value); return Boolean(item && exact(item, new Set(["timeSeconds", "calls", "retries"]), "ceilings").length === 0 && Number.isInteger(item.timeSeconds) && item.timeSeconds >= 1 && item.timeSeconds <= 3600 && Number.isInteger(item.calls) && item.calls >= 1 && item.calls <= 100 && Number.isInteger(item.retries) && item.retries >= 0 && item.retries <= 3); }
 function digest(value: unknown): string { return crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex"); }
 function boundedObjective(value: unknown): string { return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, 1000); }
+function estimatedSeedTokens(value: Record<string, any>): number {
+  const seed = {
+    schemaVersion: value.schemaVersion, policyVersion: value.policyVersion, role: value.role, objectiveText: value.objectiveText,
+    taskId: value.taskId, taskRunId: value.taskRunId, authority: value.authority, readScope: value.readScope, writeScope: value.writeScope,
+    allowedTools: value.allowedTools, model: value.model, contextBudget: value.contextBudget, ceilings: value.ceilings,
+    outputSchema: value.outputSchema, stoppingRule: value.stoppingRule, approvalRestrictions: value.approvalRestrictions
+  };
+  return Math.ceil(JSON.stringify(seed).length / 4);
+}
 function safeScopePattern(value: string): boolean {
   const normalized = normalizePathCandidate(value);
   return Boolean(normalized && !/^\/|^[A-Za-z]:\//.test(normalized) && !normalized.split("/").some((part) => part === "." || part === "..") && !/[?\[\]{}\0]/.test(normalized));
@@ -69,7 +79,7 @@ export function validateRolePolicy(input: unknown): RolePolicy { const errors = 
 export function helperRequestValidationErrors(input: unknown): string[] {
   const value = object(input); if (!value) return ["helper request must be an object"];
   const errors = exact(value, REQUEST_FIELDS, "helper request");
-  if (value.schemaVersion !== 1 || value.policyVersion !== ROLE_POLICY_VERSION || !HELPER_ROLES.includes(value.role) || !HASH.test(String(value.objectiveHash)) || !HASH.test(String(value.sessionHash)) || !HASH.test(String(value.parentAuthorityDigest)) || !HASH.test(String(value.deduplicationKey))) errors.push("helper identity/digests are invalid");
+  if (value.schemaVersion !== 2 || value.policyVersion !== ROLE_POLICY_VERSION || !HELPER_ROLES.includes(value.role) || !HASH.test(String(value.objectiveHash)) || !HASH.test(String(value.sessionHash)) || !HASH.test(String(value.parentAuthorityDigest)) || !HASH.test(String(value.deduplicationKey))) errors.push("helper identity/digests are invalid");
   if (typeof value.objectiveText !== "string" || value.objectiveText.length < 3 || value.objectiveText.length > 1000 || !REF.test(String(value.taskId)) || !REF.test(String(value.taskRunId))) errors.push("helper objective/task identity is invalid");
   if (!["read-only", "single-writer"].includes(value.authority) || !strings(value.readScope, 100) || !strings(value.writeScope, 100) || !value.readScope.every(safeScopePattern) || !value.writeScope.every(safeScopePattern) || !strings(value.allowedTools, 32) || !strings(value.approvalRestrictions, 16)) errors.push("helper authority collections are invalid");
   if (value.authority === "read-only" && (value.writeScope.length > 0 || value.allowedTools.some((tool: string) => MUTATION_TOOLS.has(tool)))) errors.push("read-only helper cannot mutate");
@@ -79,6 +89,12 @@ export function helperRequestValidationErrors(input: unknown): string[] {
   if (typeof value.outputSchema !== "string" || value.outputSchema.length > 200 || typeof value.stoppingRule !== "string" || value.stoppingRule.length > 500) errors.push("helper output/stopping contract is invalid");
   const model = value.model === null ? null : object(value.model);
   if (value.model !== null && (!model || exact(model, new Set(["provider", "modelId", "effort", "source"]), "model").length || ![model.provider, model.modelId, model.effort, model.source].every((item) => typeof item === "string" && item.length > 0 && item.length <= 160))) errors.push("helper model binding is invalid");
+  const contextTransfer = object(value.contextTransfer);
+  if (!contextTransfer || exact(contextTransfer, new Set(["mode", "inheritParentHistory", "maxSeedTokens", "estimatedSeedTokens"]), "context transfer").length
+    || contextTransfer.mode !== "isolated-minimal" || contextTransfer.inheritParentHistory !== false
+    || !Number.isInteger(contextTransfer.maxSeedTokens) || contextTransfer.maxSeedTokens < 256 || contextTransfer.maxSeedTokens > 2048
+    || !Number.isInteger(contextTransfer.estimatedSeedTokens) || contextTransfer.estimatedSeedTokens !== estimatedSeedTokens(value)
+    || contextTransfer.estimatedSeedTokens > contextTransfer.maxSeedTokens) errors.push("helper context transfer must be isolated and minimal");
   return errors;
 }
 export function validateHelperRequest(input: unknown): HelperRequest { const errors = helperRequestValidationErrors(input); if (errors.length) throw new Error(errors.join("; ")); return input as HelperRequest; }
@@ -87,9 +103,9 @@ export function defaultRolePolicy(role: HelperRole, scope: string[] = ["**"]): R
   const readOnly = role !== "worker";
   const policy: RolePolicy = {
     schemaVersion: 1, policyVersion: ROLE_POLICY_VERSION, role, authority: readOnly ? "read-only" : "single-writer",
-    enabledByDefault: readOnly, readScope: [...scope], writeScope: [], allowedTools: readOnly ? [...READ_TOOLS] : [...READ_TOOLS, "bash", "edit", "write", "apply_patch", "contact_supervisor"],
-    modelSelectionSource: "runtime-catalog", effortSelectionSource: "runtime-snapshot", contextBudget: role === "oracle" ? 12000 : role === "reviewer" ? 9000 : 6000,
-    ceilings: { timeSeconds: role === "oracle" ? 900 : 600, calls: role === "retriever" ? 20 : 40, retries: 0 },
+    enabledByDefault: false, readScope: [...scope], writeScope: [], allowedTools: readOnly ? [...READ_TOOLS] : [...READ_TOOLS, "bash", "edit", "write", "apply_patch", "contact_supervisor"],
+    modelSelectionSource: "runtime-catalog", effortSelectionSource: "runtime-snapshot", contextBudget: role === "oracle" ? 8000 : role === "reviewer" || role === "planner" ? 6000 : 4000,
+    ceilings: { timeSeconds: 300, calls: 8, retries: 0 },
     outputSchema: `${role}-result-v1`, stoppingRule: "Stop when the bounded objective is answered or evidence is insufficient; return uncertainty.",
     approvalRestrictions: ["no-external-write", "no-destructive-action", "no-permission-expansion"]
   };
@@ -103,11 +119,13 @@ export function createHelperRequest(input: { policy: RolePolicy; objective: stri
   if (policy.allowedTools.some((tool) => !input.parentAllowedTools.includes(tool))) throw new Error("helper request cannot broaden parent tools");
   const authority = policy.authority;
   const request: HelperRequest = {
-    schemaVersion: 1, policyVersion: ROLE_POLICY_VERSION, role: policy.role, objectiveHash: digest(objectiveText), objectiveText,
+    schemaVersion: 2, policyVersion: ROLE_POLICY_VERSION, role: policy.role, objectiveHash: digest(objectiveText), objectiveText,
     taskId: input.taskId, taskRunId: input.taskRunId, sessionHash: digest(input.sessionId), authority, readScope: [...readScope], writeScope: [...writeScope], allowedTools: [...policy.allowedTools],
     model: input.model ?? null, contextBudget: policy.contextBudget, ceilings: { ...policy.ceilings }, outputSchema: policy.outputSchema, stoppingRule: policy.stoppingRule,
     approvalRestrictions: [...policy.approvalRestrictions], parentAuthorityDigest: digest({ read: input.parentReadScope, write: input.parentWriteScope, tools: input.parentAllowedTools }),
-    singleWriterOwnership: input.singleWriterOwnership ?? null, deduplicationKey: digest({ role: policy.role, objective: objectiveText, readScope, writeScope })
+    singleWriterOwnership: input.singleWriterOwnership ?? null, deduplicationKey: digest({ role: policy.role, objective: objectiveText, readScope, writeScope }),
+    contextTransfer: { mode: "isolated-minimal", inheritParentHistory: false, maxSeedTokens: 2048, estimatedSeedTokens: 0 }
   };
+  request.contextTransfer.estimatedSeedTokens = estimatedSeedTokens(request);
   return validateHelperRequest(request);
 }

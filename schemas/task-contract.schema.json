@@ -410,6 +410,8 @@
           "properties": {
             "mode": { "enum": ["off", "recommend", "on"] },
             "used": { "type": "boolean" },
+            "decision": { "enum": ["dispatch", "skip"] },
+            "projectedSavingsRatio": { "type": ["number", "null"], "minimum": -10, "maximum": 1 },
             "reasonCodes": { "type": "array", "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z0-9_.:-]+$" } },
             "helpers": {
               "type": "array", "maxItems": 3,

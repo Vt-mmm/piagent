@@ -14,7 +14,7 @@ function classification(category) {
     environment: ["command not found: docker", 127],
     "provider-network": ["provider API request timed out", 1],
     "permission-policy": ["permission denied", 1],
-    "scope-protected-path": ["outside declared scope", 1],
+    "scope-protected-path": ["protected path is forbidden", 1],
     "flaky-infrastructure": ["EADDRINUSE: port 3000 is already in use", 1],
     unknown: ["opaque failure 773", 1]
   };
@@ -94,7 +94,7 @@ describe("bounded recovery policy v1", () => {
     assert.equal(authorized.sourceMutationAllowed, true);
   });
 
-  it("keeps environment, permission, scope, and read-only failures out of mutation", () => {
+  it("keeps environment, permission, protected-path, and read-only failures out of mutation", () => {
     const expected = new Map([
       ["environment", "ask-operator"],
       ["permission-policy", "ask-operator"],
@@ -110,24 +110,24 @@ describe("bounded recovery policy v1", () => {
     assert.equal(readOnly.sourceMutationAllowed, false);
   });
 
-  it("terminates scope and read-only boundary recovery before stale or diagnostic retries", () => {
-    const scope = input("scope-protected-path", { currentTreeMatchesEvidence: false });
-    const scopeDecision = selectRecoveryDecision(scope);
-    assert.equal(scopeDecision.action, "handoff");
-    assert.equal(scopeDecision.continuation, "none");
-    assert.equal(scopeDecision.sourceMutationAllowed, false);
-    assert.deepEqual(scopeDecision.reasonCodes, ["scope-replan-required"]);
+  it("terminates protected-path and read-only boundary recovery before stale or diagnostic retries", () => {
+    const protectedPath = input("scope-protected-path", { currentTreeMatchesEvidence: false });
+    const protectedPathDecision = selectRecoveryDecision(protectedPath);
+    assert.equal(protectedPathDecision.action, "handoff");
+    assert.equal(protectedPathDecision.continuation, "none");
+    assert.equal(protectedPathDecision.sourceMutationAllowed, false);
+    assert.deepEqual(protectedPathDecision.reasonCodes, ["protected-path-forbidden"]);
 
     const readOnlyBoundary = input("scope-protected-path", {
-      task: { ...scope.task, changeMode: "read-only" },
+      task: { ...protectedPath.task, changeMode: "read-only" },
       currentTreeMatchesEvidence: false,
-      history: [history(scope, "retry")]
+      history: [history(protectedPath, "retry")]
     });
     const readOnlyDecision = selectRecoveryDecision(readOnlyBoundary);
     assert.equal(readOnlyDecision.action, "handoff");
     assert.equal(readOnlyDecision.continuation, "none");
     assert.equal(readOnlyDecision.sourceMutationAllowed, false);
-    assert.deepEqual(readOnlyDecision.reasonCodes, ["scope-replan-required"]);
+    assert.deepEqual(readOnlyDecision.reasonCodes, ["protected-path-forbidden"]);
   });
 
   it("retries an explicitly transient provider failure once, then selects a fresh session", () => {

@@ -21,6 +21,8 @@ import { buildContextPreflight, buildUsageSnapshot } from "../session/usage.ts";
 import { toolResultCaptureRoot } from "../session/tool-result-compaction.ts";
 import { ensureTaskAuthorityResumePolicy } from "../policy/authority-resume-policy.ts";
 import { buildHandoffProjection, writeHandoffProjection } from "../recovery/handoff-projection.ts";
+import { refreshPristineRuntimeTaskVerification } from "../recovery/pristine-task-policy-refresh.ts";
+import { refreshLegacyHiddenWorkspaceEvidenceCoverage } from "../recovery/task-evidence-coverage-refresh.ts";
 import { activeTaskToolGroups } from "../tools/tool-groups.ts";
 import type { PiagentToolGroup } from "../tools/tool-groups.ts";
 import { observeTrajectorySync } from "../trajectory/trajectory-observability.ts";
@@ -40,6 +42,7 @@ type SessionStartHookDependencies = {
   resolveTaskAny: (cwd: string, reference: string) => TaskContract | undefined;
   bindTask: (cwd: string, sessionId: string, sessionName: string | undefined, task: TaskContract) => unknown;
   writeTask: (cwd: string, task: TaskContract) => TaskContract;
+  appendTrace: (cwd: string, payload: Record<string, unknown>) => void;
   capabilityState: (ctx: ExtensionContext) => { ok: boolean; reason?: string; repinned?: string };
   permissionProfile: (ctx: ExtensionContext, profile: ProjectProfile) => { mode: string; warning?: string };
   legacyProjectWarning: (cwd: string) => string | undefined;
@@ -138,6 +141,103 @@ export function registerSessionStartHook(pi: ExtensionAPI, dependencies: Session
       resumedTask = dependencies.writeTask(ctx.cwd, resumedTask);
       dependencies.bindTask(ctx.cwd, sessionId, sessionName, resumedTask);
     }
+    const capabilityState = dependencies.capabilityState(ctx);
+    if (resumedTask?.trace.outcome === "pending"
+      && authorityPolicy?.disposition === "resume-pinned"
+      && capabilityState.ok) {
+      // Re-read from the durable session binding immediately before the
+      // synchronous pristine-tree check and write. This prevents an earlier
+      // session-start projection from overwriting newer same-process task
+      // evidence or work-plan state.
+      const latestTask = dependencies.activeTask(ctx.cwd, sessionId);
+      if (latestTask?.taskRunId === resumedTask.taskRunId) {
+        resumedTask = latestTask;
+        let refreshTask = latestTask;
+        // Coverage reconciliation must precede resume inspection. Otherwise a
+        // path newly visible to the evidence collector looks like a task delta
+        // and can incorrectly block a valid dirty-task resume.
+        const coverage = refreshLegacyHiddenWorkspaceEvidenceCoverage(ctx.cwd, refreshTask);
+        if (coverage.refreshed) {
+          try {
+            resumedTask = dependencies.writeTask(ctx.cwd, coverage.task);
+            refreshTask = resumedTask;
+            try {
+              dependencies.appendTrace(ctx.cwd, {
+                event: "task_evidence_coverage_expanded",
+                taskId: resumedTask.taskId,
+                taskRunId: resumedTask.taskRunId,
+                sessionId,
+                sessionName,
+                reason: coverage.reason,
+                addedPathCount: coverage.addedPaths.length,
+                addedPathExamples: coverage.addedPaths.slice(0, 20),
+                retainedMutationPathCount: coverage.retainedMutationPaths.length,
+                retainedMutationPathExamples: coverage.retainedMutationPaths.slice(0, 20),
+                ambiguousPathCount: coverage.ambiguousPaths.length,
+                ambiguousPathExamples: coverage.ambiguousPaths.slice(0, 20),
+                previousBaselineDigest: coverage.previousBaselineDigest,
+                nextBaselineDigest: coverage.nextBaselineDigest
+              });
+            } catch (error) {
+              try {
+                ctx.ui.notify(`Piagent expanded legacy task evidence coverage, but its auxiliary trace could not be written: ${error instanceof Error ? error.message : String(error)}`, "warning");
+              } catch {
+                // UI availability is not part of the durable coverage commit.
+              }
+            }
+          } catch (error) {
+            try {
+              ctx.ui.notify(`Piagent kept the existing task baseline because its evidence-coverage refresh could not be persisted: ${error instanceof Error ? error.message : String(error)}`, "warning");
+            } catch {
+              // Continue startup with the last durably readable task.
+            }
+            refreshTask = dependencies.activeTask(ctx.cwd, sessionId) ?? latestTask;
+            resumedTask = refreshTask;
+          }
+        }
+        const refreshResume = dependencies.inspectResume(ctx.cwd, refreshTask, sessionId);
+        const refreshAllowed = refreshResume.enforcementSafe
+          && refreshResume.decision !== "blocked"
+          && refreshResume.decision !== "paused";
+        if (refreshAllowed) {
+          const refresh = refreshPristineRuntimeTaskVerification(ctx.cwd, refreshTask, profile);
+          if (refresh.refreshed) {
+            try {
+              resumedTask = dependencies.writeTask(ctx.cwd, refresh.task);
+              try {
+                dependencies.appendTrace(ctx.cwd, {
+                  event: "task_pristine_verifier_refreshed",
+                  taskId: resumedTask.taskId,
+                  taskRunId: resumedTask.taskRunId,
+                  sessionId,
+                  sessionName,
+                  reason: refresh.reason,
+                  verifyGroup: refresh.verifyGroup,
+                  previousCommands: refresh.previousCommands,
+                  verifyCommands: refresh.nextCommands
+                });
+              } catch (error) {
+                // The contract write and its task journal entry are already
+                // durable. An auxiliary trace/notice failure must not abort
+                // session startup or roll the task back to stale commands.
+                try {
+                  ctx.ui.notify(`Piagent refreshed the task verifier, but its auxiliary trace could not be written: ${error instanceof Error ? error.message : String(error)}`, "warning");
+                } catch {
+                  // UI availability is not part of the durable refresh commit.
+                }
+              }
+            } catch (error) {
+              try {
+                ctx.ui.notify(`Piagent kept the existing task verifier because its pristine refresh could not be persisted: ${error instanceof Error ? error.message : String(error)}`, "warning");
+              } catch {
+                // Continue startup with the last durably readable task.
+              }
+              resumedTask = dependencies.activeTask(ctx.cwd, sessionId) ?? refreshTask;
+            }
+          }
+        }
+      }
+    }
     if (resumedTask?.workingTreeDigestMigration && resumedTask.workingTreeDigestMigration.status !== "refreshed") dependencies.state.clearDigestMigrationState(ctx, resumedTask.taskRunId, resumedTask.taskId);
     if (resumedTask?.trace.outcome === "pending") dependencies.state.cacheTaskIdentity(ctx, resumedTask);
     else dependencies.state.clearSession(ctx);
@@ -180,7 +280,6 @@ export function registerSessionStartHook(pi: ExtensionAPI, dependencies: Session
       : " (run /onboard to select a profile)";
     const snapshot = buildUsageSnapshot(ctx, String(pi.getThinkingLevel()));
     const preflight = buildContextPreflight(snapshot, "task", 0);
-    const capabilityState = dependencies.capabilityState(ctx);
     const permissionProfile = dependencies.permissionProfile(ctx, profile);
     const executionBackend = resolveExecutionBackend();
     const contextHint = preflight.recommendation === "fresh-session"

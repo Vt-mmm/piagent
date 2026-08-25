@@ -20,8 +20,8 @@ function plainObject(value) {
 
 export function exactBenchmarkMeasuredUsage(usage) {
   return usage?.usageCompleteness === "exact"
-    && Number.isInteger(usage?.sessions) && usage.sessions > 0
-    && TOKEN_FIELDS.every((field) => Number.isFinite(usage?.[field]) && usage[field] >= 0)
+    && Number.isSafeInteger(usage?.sessions) && usage.sessions > 0
+    && TOKEN_FIELDS.every((field) => Number.isSafeInteger(usage?.[field]) && usage[field] >= 0)
     && usage.fresh === usage.input + usage.output
     && usage.total === usage.input + usage.cacheRead + usage.cacheWrite + usage.output
     && usage.reasoning <= usage.output;
@@ -29,8 +29,10 @@ export function exactBenchmarkMeasuredUsage(usage) {
 
 function knownPreProviderZero(usage, status) {
   return status === "known-pre-provider-zero"
-    && Number(usage?.sessions ?? 0) === 0
-    && TOKEN_FIELDS.every((field) => Number(usage?.[field] ?? 0) === 0);
+    && Number.isSafeInteger(usage?.sessions ?? 0)
+    && (usage?.sessions ?? 0) === 0
+    && TOKEN_FIELDS.every((field) => Number.isSafeInteger(usage?.[field] ?? 0)
+      && (usage?.[field] ?? 0) === 0);
 }
 
 export function exactBenchmarkAttemptUsage(usage, status) {
@@ -107,6 +109,7 @@ export function benchmarkInfrastructureFailureLedgerIssues(runs) {
 
 export function aggregateSessionUsage(sessions) {
   const totals = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, total: 0, cost: 0 };
+  const subagentTokens = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, total: 0 };
   const models = new Set();
   const thinkingLevels = new Set();
   const toolNames = {};
@@ -115,6 +118,9 @@ export function aggregateSessionUsage(sessions) {
   const contextSnapshots = [];
   for (const session of sessions) {
     for (const key of Object.keys(totals)) totals[key] += Number(session.tokens?.[key] ?? 0);
+    if (session.isSubagent) {
+      for (const key of Object.keys(subagentTokens)) subagentTokens[key] += Number(session.tokens?.[key] ?? 0);
+    }
     if (session.modelId || session.provider) models.add(`${session.provider || "unknown"}/${session.modelId || "unknown"}`);
     if (session.thinkingLevel) thinkingLevels.add(session.thinkingLevel);
     toolCalls += Number(session.messages?.toolCalls ?? 0);
@@ -136,6 +142,10 @@ export function aggregateSessionUsage(sessions) {
     fresh: totals.input + totals.output,
     sessions: sessions.length,
     subagentSessions: sessions.filter((session) => session.isSubagent).length,
+    subagentTokens: {
+      ...subagentTokens,
+      fresh: subagentTokens.input + subagentTokens.output
+    },
     toolCalls,
     toolNames: Object.fromEntries(Object.entries(toolNames).sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))),
     messages,
@@ -231,6 +241,7 @@ function finishCodexUsage(state) {
     usageCompleteness: "exact",
     sessions: 1,
     subagentSessions: 0,
+    subagentTokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, fresh: 0, total: 0 },
     toolCalls: Object.values(sortedTools).reduce((sum, value) => sum + value, 0),
     toolNames: sortedTools,
     messages: state.messages,

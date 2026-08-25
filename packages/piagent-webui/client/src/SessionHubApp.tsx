@@ -196,7 +196,7 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
     catch { /* the recovery alert remains actionable and the catalog refresh carries authoritative state */ }
     finally { setRestartingRuntime(false); }
   };
-  const recovery = live?.runtimeRecovery ?? null;
+  const recovery = live?.runtimeRecovery ?? (session.state === "recovery-required" ? "required" : null);
   return <Box sx={{ minHeight: "calc(100vh - 68px)", display: "flex", flexDirection: "column" }}>
     <Box sx={{ flex: 1, width: "100%", maxWidth: 860, mx: "auto", px: { xs: 2, sm: 4 }, py: { xs: 3, md: 4 },
       display: "flex", flexDirection: "column", justifyContent: "center" }}>
@@ -551,6 +551,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
     </Box>
     <SessionInspectorDrawer open={inspectorOpen} active={activeInspector} snapshot={inspection} state={inspectionState} sessionRef={selected?.sessionRef}
       terminalActivities={selected ? terminalActivities[selected.sessionRef] : undefined}
+      liveActivities={selectedLive && !selectedLive.complete ? selectedLive.activities : undefined}
       onClose={() => setInspectorOpen(false)} onActive={setActiveInspector} refresh={refreshInspection} />
     <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)} fullWidth maxWidth="lg" aria-labelledby="piagent-settings-title"
       slotProps={{ paper: { sx: { m: { xs: 0, sm: 2 }, width: { xs: "100%", sm: "calc(100% - 32px)" },

@@ -7,13 +7,13 @@ import type { PermissionMode, Receipt, Workflow } from "../../contracts/generate
 import { readSessionCatalog, readSessionLiveState } from "./api.ts";
 import { bootstrapBrowserSession } from "./bootstrap.ts";
 import { applyOperationSettlement, canonicalLiveStateSequence, connectionStateAfterCatalogRefresh, liveStateConfirmsAbort,
-  mergeTerminalOperationActivities, reconcileSessionLiveState,
+  liveProgressStatus, mergeTerminalOperationActivities, reconcileSessionLiveState,
   reconcileTerminalOperationActivities, terminalOperationActivity, type LiveActivity, type LiveConversation,
   type TerminalOperationActivity } from "./live-state-view-model.ts";
 import type { ConnectionState } from "./use-inspection.ts";
 
 export { applyOperationSettlement, canonicalLiveStateSequence, connectionStateAfterCatalogRefresh, liveStateConfirmsAbort,
-  mergeTerminalOperationActivities, reconcileSessionLiveState,
+  liveProgressStatus, mergeTerminalOperationActivities, reconcileSessionLiveState,
   reconcileTerminalOperationActivities, terminalOperationActivity };
 export type { LiveActivity, LiveConversation, TerminalOperationActivity };
 
@@ -159,11 +159,13 @@ export function useSessionHub(): {
     }
     const knownUncertainSession = receipt.phase === "uncertain" && Boolean(receipt.sessionRef);
     if ((!knownUncertainSession && receipt.phase !== "settled") || !receipt.sessionRef) throw new Error(receipt.error?.code ?? receipt.resultCode);
+    const receiptAt = receipt.settledAt ?? receipt.requestedAt;
     if (receipt.phase === "settled" && !options.deferInitialMessage) setLive((value) => {
       const existing = value[receipt.sessionRef!];
       return { ...value, [receipt.sessionRef!]: { ...(existing
         ?? { assistant: "", attachments: [], activities: [], complete: false, error: null }), user: message,
-        operationRef: receipt.operationRef, abortable: existing?.complete ? false : Boolean(receipt.operationRef) } };
+        operationRef: receipt.operationRef, abortable: existing?.complete ? false : Boolean(receipt.operationRef),
+        startedAt: existing?.startedAt ?? receiptAt, lastEventAt: existing?.lastEventAt ?? receiptAt } };
     });
     await refresh(); return receipt;
   }, [refresh, request]);
@@ -196,6 +198,7 @@ export function useSessionHub(): {
         if (latest?.catalogRevision) receipt = await submit(latest);
       }
       if (receipt.phase !== "settled") throw new Error(receipt.error?.code ?? receipt.resultCode);
+      const receiptAt = receipt.settledAt ?? receipt.requestedAt;
       // Only an admitted operation may enter the transcript. Runtime events can
       // arrive before the receipt; merge the user message into that exact live
       // operation without showing rejected/unsent input optimistically.
@@ -203,7 +206,8 @@ export function useSessionHub(): {
         const existing = value[session.sessionRef];
         return { ...value, [session.sessionRef]: { ...(existing ?? { assistant: "", activities: [], complete: false,
           error: null }), user: text, attachments: attachment?.attachments ?? [], operationRef: receipt.operationRef,
-          abortable: existing?.complete ? false : Boolean(receipt.operationRef) } };
+          abortable: existing?.complete ? false : Boolean(receipt.operationRef),
+          startedAt: existing?.startedAt ?? receiptAt, lastEventAt: existing?.lastEventAt ?? receiptAt } };
       });
       void refresh(); return receipt;
     } catch (error) { throw error; }
@@ -338,6 +342,7 @@ export function useSessionHub(): {
         }
         if (frame.messageType !== "event" || !Number.isSafeInteger(frame.sequence)) return;
         const payload = frame.payload as Record<string, any>;
+        const eventAt = typeof frame.generatedAt === "string" ? frame.generatedAt : new Date().toISOString();
         if (frame.kind === "resync.required") {
           canonicalRefreshRequiredRef.current = true;
           canonicalResync = true; socket.close(CANONICAL_RESYNC_CLOSE_CODE, "canonical-resync-required"); return;
@@ -354,24 +359,28 @@ export function useSessionHub(): {
           setLive((current) => ({ ...current, [payload.sessionRef]: { ...(current[payload.sessionRef]
             ?? { user: "", assistant: "", attachments: [], activities: [], complete: false, error: null }), operationRef: payload.operationRef,
             abortable: true,
-            assistant: `${current[payload.sessionRef]?.assistant ?? ""}${payload.delta}` } }));
+            assistant: `${current[payload.sessionRef]?.assistant ?? ""}${payload.delta}`,
+            startedAt: current[payload.sessionRef]?.startedAt ?? eventAt, lastEventAt: eventAt } }));
         }
         if (["tool.started", "tool.completed"].includes(String(frame.kind)) && typeof payload?.sessionRef === "string"
           && typeof payload.toolCallRef === "string" && typeof payload.toolLabel === "string") {
           setLive((current) => {
-            const existing = current[payload.sessionRef] ?? { user: "", assistant: "", attachments: [], activities: [],
+            const existing: LiveConversation = current[payload.sessionRef] ?? { user: "", assistant: "", attachments: [], activities: [],
               operationRef: payload.operationRef ?? null, abortable: true, complete: false, error: null, runtimeRecovery: null };
             const state: LiveActivity["state"] = frame.kind === "tool.started" ? "running" : payload.isError === true ? "failed" : "completed";
+            const previousActivity = existing.activities.find((item) => item.toolCallRef === payload.toolCallRef);
             const activities = [...existing.activities.filter((item) => item.toolCallRef !== payload.toolCallRef),
-              { toolCallRef: payload.toolCallRef, toolLabel: payload.toolLabel, state, reasonCode: payload.reasonCode ?? null }].slice(-16);
+              { toolCallRef: payload.toolCallRef, toolLabel: payload.toolLabel, state, reasonCode: payload.reasonCode ?? null,
+                startedAt: previousActivity?.startedAt ?? eventAt, finishedAt: state === "running" ? null : eventAt }].slice(-16);
             const runtimeRecovery = payload.reasonCode === "runtime-restart-required" ? "required" : existing.runtimeRecovery;
-            return { ...current, [payload.sessionRef]: { ...existing, operationRef: payload.operationRef ?? existing.operationRef, activities, runtimeRecovery } };
+            return { ...current, [payload.sessionRef]: { ...existing, operationRef: payload.operationRef ?? existing.operationRef,
+              activities, runtimeRecovery, startedAt: existing.startedAt ?? eventAt, lastEventAt: eventAt } };
           });
         }
         if (frame.kind === "runtime.changed" && typeof payload?.sessionRef === "string") {
           setLive((current) => {
             const active = ["running", "paused", "waiting-approval"].includes(String(payload.liveState));
-            const existing = current[payload.sessionRef] ?? (active && typeof payload.operationRef === "string"
+            const existing: LiveConversation | null = current[payload.sessionRef] ?? (active && typeof payload.operationRef === "string"
               ? { user: "", assistant: "", attachments: [], activities: [], operationRef: payload.operationRef,
                 abortable: true, complete: false, settlement: null, error: null, runtimeRecovery: null }
               : null);
@@ -382,11 +391,12 @@ export function useSessionHub(): {
                   : existing.runtimeRecovery;
             if (active) {
               return { ...current, [payload.sessionRef]: { ...existing, operationRef: payload.operationRef ?? existing.operationRef,
-                abortable: true, complete: false, settlement: null, runtimeRecovery } };
+                abortable: true, complete: false, settlement: null, runtimeRecovery,
+                startedAt: existing.startedAt ?? eventAt, lastEventAt: eventAt } };
             }
             if (!existing.complete && payload.operationRef === null) {
               return { ...current, [payload.sessionRef]: { ...existing, assistant: "", abortable: false, complete: true, settlement: "unknown",
-                error: payload.reasonCode ?? "operation-settlement-unknown", runtimeRecovery } };
+                error: payload.reasonCode ?? "operation-settlement-unknown", runtimeRecovery, lastEventAt: eventAt } };
             }
             return runtimeRecovery === existing.runtimeRecovery ? current
               : { ...current, [payload.sessionRef]: { ...existing, runtimeRecovery } };
@@ -395,7 +405,8 @@ export function useSessionHub(): {
         if (frame.kind === "message.completed" && typeof payload?.sessionRef === "string") {
           setLive((current) => ({ ...current, [payload.sessionRef]: { ...(current[payload.sessionRef]
             ?? { user: "", assistant: "", attachments: [], activities: [], operationRef: payload.operationRef, error: null }),
-            operationRef: payload.operationRef, abortable: false, complete: true, settlement: "completed", error: null } }));
+            operationRef: payload.operationRef, abortable: false, complete: true, settlement: "completed", error: null,
+            lastEventAt: eventAt } }));
         }
         if (frame.kind === "operation.settled" && typeof payload?.sessionRef === "string"
           && typeof payload.operationRef === "string") {
@@ -403,9 +414,9 @@ export function useSessionHub(): {
             const existing = current[payload.sessionRef] ?? { user: "", assistant: "", attachments: [], activities: [],
               operationRef: payload.operationRef, complete: false, error: null, runtimeRecovery: null };
             if (existing.operationRef && existing.operationRef !== payload.operationRef) return current;
-            return { ...current, [payload.sessionRef]: applyOperationSettlement(existing, {
+            return { ...current, [payload.sessionRef]: { ...applyOperationSettlement(existing, {
               operationRef: payload.operationRef, settlement: payload.settlement, reasonCode: payload.reasonCode
-            }) };
+            }), lastEventAt: eventAt } };
           });
           const terminal = terminalOperationActivity({ operationRef: payload.operationRef, settlement: payload.settlement,
             reasonCode: payload.reasonCode, settledAt: frame.generatedAt, sequence: incoming });

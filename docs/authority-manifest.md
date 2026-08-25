@@ -170,7 +170,7 @@ directory sibling, unresolved test, denied carrier, failed call, or successful
 no-op locks the opportunity and invalidates reusable review credit. A real
 mutation must be followed by the task's exact verifier on the new tree before
 completion. Retryable infrastructure failure may retry that verifier once on
-the same digest, and a high-confidence in-scope failure may open one final
+the same digest, and a high-confidence evidence-backed failure may open one final
 mutation-bound correction inside the already consumed continuation. Every
 other failure, repeated signature, exhausted budget, stale/corrupt state, or
 unsupported semantic shape produces a deterministic handoff rather than a new

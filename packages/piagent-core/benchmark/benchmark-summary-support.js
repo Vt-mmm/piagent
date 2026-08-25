@@ -30,6 +30,7 @@ export const RELEASE_FAILURE_MESSAGES = Object.freeze({
   "efficiency-category-coverage": "Comparable token evidence does not cover every required category.",
   "failure-aware-efficiency": "Tokens per resolved outcome exceed the suite limit or failed-attempt usage is unknown.",
   "primary-efficiency": "The predeclared primary efficiency estimand lacks complete family/category evidence or its upper 95% ratio exceeds the suite limit.",
+  "codex-relative-efficiency": "The fixed-workload Piagent/Codex CLI comparison lacks exact parity or quality evidence, exceeds 0.70 total token traffic or API-equivalent cost at the point/upper-95 bound, or exceeds the subagent budget.",
   "repeat-count": "The run used fewer repeats than the suite minimum.",
   "efficiency-confidence": "The upper 95% token-ratio bound exceeds the suite limit.",
   "efficiency-band-ratio": "At least one category, profile, lifecycle, or difficulty fresh-token ratio exceeds the suite limit.",

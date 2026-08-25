@@ -186,6 +186,7 @@ required_files=(
   "$ROOT/schemas/capability-recipe.schema.json"
   "$ROOT/schemas/eval-scenario.schema.json"
   "$ROOT/schemas/action-proposal.schema.json"
+  "$ROOT/schemas/codex-relative-efficiency-v1.schema.json"
   "$ROOT/schemas/piagent-webui/catalog-v1.json"
   "$ROOT/schemas/piagent-webui/common-v1.schema.json"
   "$ROOT/schemas/piagent-webui/snapshot-v1.schema.json"
@@ -466,6 +467,7 @@ required_files=(
   "$ROOT/tests/runtime-evidence.test.mjs"
   "$ROOT/tests/golden-enforcement.test.mjs"
   "$ROOT/packages/piagent-core/benchmark/benchmark-core.js"
+  "$ROOT/packages/piagent-core/benchmark/benchmark-codex-relative-efficiency.js"
   "$ROOT/packages/piagent-core/benchmark/benchmark-assurance.js"
   "$ROOT/packages/piagent-core/benchmark/benchmark-comparison.js"
   "$ROOT/packages/piagent-core/benchmark/benchmark-report.js"
@@ -482,6 +484,7 @@ required_files=(
   "$ROOT/tests/fs5-causal-arm.test.mjs"
   "$ROOT/tests/fs-release-transition.test.mjs"
   "$ROOT/schemas/benchmark-assurance-evidence.schema.json"
+  "$ROOT/schemas/codex-relative-efficiency-v1.schema.json"
   "$ROOT/evals/private-holdout-v1/access-policy.v1.json"
   "$ROOT/evals/private-holdout-v1/human-rubric.v1.json"
   "$ROOT/evals/private-holdout-v1/public-exposure.v1.json"
@@ -568,6 +571,7 @@ const jsonFiles = [
   "schemas/eval-scenario.schema.json",
   "schemas/action-proposal.schema.json",
   "schemas/benchmark-assurance-evidence.schema.json",
+  "schemas/codex-relative-efficiency-v1.schema.json",
   "schemas/piagent-webui/catalog-v1.json",
   "schemas/piagent-webui/common-v1.schema.json",
   "schemas/piagent-webui/snapshot-v1.schema.json",
@@ -910,6 +914,7 @@ node --check "$ROOT/packages/piagent-core/extensions/runtime-evidence.js" >/dev/
 node --check "$ROOT/packages/piagent-core/extensions/state-retention.js" >/dev/null
 node --check "$ROOT/packages/piagent-core/extensions/task-state.js" >/dev/null
 node --check "$ROOT/packages/piagent-core/benchmark/benchmark-core.js" >/dev/null
+node --check "$ROOT/packages/piagent-core/benchmark/benchmark-codex-relative-efficiency.js" >/dev/null
 node --check "$ROOT/packages/piagent-core/benchmark/benchmark-assurance.js" >/dev/null
 node --check "$ROOT/packages/piagent-core/benchmark/benchmark-comparison.js" >/dev/null
 node --check "$ROOT/packages/piagent-core/benchmark/benchmark-report.js" >/dev/null

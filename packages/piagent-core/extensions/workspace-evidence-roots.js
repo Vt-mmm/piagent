@@ -2,14 +2,35 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
-const WORKSPACE_EVIDENCE_MAX_FILES = 2000;
+// Parent workspaces commonly carry shared plans, verifier scripts, and agent
+// configuration beside their child repositories. Keep the traversal bounded,
+// but leave enough room for a real multi-repository workspace instead of
+// silently dropping evidence at the former 2,000-file ceiling.
+const WORKSPACE_EVIDENCE_MAX_FILES = 20_000;
+// These names are not merely noisy build output: they carry repository
+// ownership, Piagent authority, or provider credentials. Evidence discovery
+// excludes them and the mutation guard protects them independently of task
+// focus, so broad monorepo access cannot create an unaudited private-state gap.
+export const WORKSPACE_PRIVATE_STATE_PATTERNS = Object.freeze([
+  "**/.git/**", "**/.hg/**", "**/.svn/**", "**/.pi/**",
+  "**/.aws/**", "**/.azure/**", "**/.docker/**", "**/.gnupg/**", "**/.kube/**", "**/.ssh/**",
+  "**/.git-credentials", "**/.netrc", "**/.npmrc", "**/.pypirc",
+  "**/.env", "**/.env.*",
+  "**/auth.json", "**/credential.json", "**/credentials.json", "**/secret.json", "**/secrets.json",
+  "**/token.json", "**/tokens.json"
+]);
 const WORKSPACE_EVIDENCE_SKIP_NAMES = new Set([
-  ".git", ".hg", ".svn", ".pi", "node_modules", "dist", "build", ".next", "coverage"
+  ".git", ".hg", ".svn", ".pi", "node_modules", "dist", "build", ".next", "coverage",
+  ".cache", ".npm", ".pnpm-store", ".yarn", ".turbo", ".aws", ".azure", ".docker",
+  ".gnupg", ".kube", ".ssh", ".ds_store", ".git-credentials", ".netrc", ".npmrc", ".pypirc"
 ]);
 const WORKSPACE_EVIDENCE_PRIORITY_NAMES = new Map([["plans", 0]]);
 
-function hiddenWorkspaceEvidenceSegment(value) {
-  return String(value ?? "").startsWith(".");
+function excludedWorkspaceEvidenceName(value) {
+  const name = String(value ?? "");
+  return WORKSPACE_EVIDENCE_SKIP_NAMES.has(name.toLowerCase())
+    || /^\.env(?:\.|$)/i.test(name)
+    || /^(?:auth|credentials?|secrets?|tokens?)\.json$/i.test(name);
 }
 
 export function gitOutput(cwd, args, options = {}) {
@@ -86,6 +107,15 @@ export function directChildGitEvidenceRoots(cwd) {
 
 export function gitEvidenceRootDetails(cwd) {
   if (isGitWorkingTree(cwd)) return { roots: [{ cwd, prefix: "" }], complete: true };
+  // A present Git marker combined with a failed Git probe is ambiguous (for
+  // example a broken worktree pointer or a transient command failure). Do not
+  // reinterpret that repository as an ordinary complete non-Git directory.
+  try {
+    fs.lstatSync(path.join(cwd, ".git"));
+    return { roots: [], complete: false };
+  } catch (error) {
+    if (error?.code !== "ENOENT") return { roots: [], complete: false };
+  }
   return directChildGitEvidenceRootDetails(cwd);
 }
 
@@ -93,9 +123,16 @@ export function gitEvidenceRoots(cwd) {
   return gitEvidenceRootDetails(cwd).roots;
 }
 
-export function nonGitWorkspaceFileDetails(cwd, gitRootPrefixes) {
+function workspaceEvidenceFileLimit(value) {
+  return Number.isInteger(value)
+    ? Math.max(1, Math.min(WORKSPACE_EVIDENCE_MAX_FILES, value))
+    : WORKSPACE_EVIDENCE_MAX_FILES;
+}
+
+export function nonGitWorkspaceFileDetails(cwd, gitRootPrefixes, maxFiles = WORKSPACE_EVIDENCE_MAX_FILES) {
   const files = [];
   let complete = true;
+  const limit = workspaceEvidenceFileLimit(maxFiles);
   const gitRoots = new Set(gitRootPrefixes.filter(Boolean));
   const orderedEntries = (entries) => [...entries].sort((left, right) => {
     const leftPriority = WORKSPACE_EVIDENCE_PRIORITY_NAMES.get(left.name.toLowerCase()) ?? 10;
@@ -103,7 +140,7 @@ export function nonGitWorkspaceFileDetails(cwd, gitRootPrefixes) {
     return leftPriority - rightPriority || left.name.localeCompare(right.name, "en-US");
   });
   function visit(directory, relativeDirectory) {
-    if (files.length >= WORKSPACE_EVIDENCE_MAX_FILES) {
+    if (files.length >= limit) {
       complete = false;
       return;
     }
@@ -115,15 +152,15 @@ export function nonGitWorkspaceFileDetails(cwd, gitRootPrefixes) {
       return;
     }
     for (const entry of orderedEntries(entries)) {
-      if (files.length >= WORKSPACE_EVIDENCE_MAX_FILES) {
+      if (files.length >= limit) {
         complete = false;
         return;
       }
-      // Loose files beside nested repositories are not governed by either
-      // repository's ignore/trust policy. Keep hidden editor, agent, cloud,
-      // credential, and cache state out of both manifests and change evidence
-      // instead of attempting to maintain an incomplete name blacklist.
-      if (WORKSPACE_EVIDENCE_SKIP_NAMES.has(entry.name) || hiddenWorkspaceEvidenceSegment(entry.name)) continue;
+      // A parent workspace can own real project source in hidden directories
+      // (for example shared verifier scripts). Evidence discovery therefore
+      // excludes explicit private/cache/credential names instead of treating
+      // every dot-prefixed path as non-project state.
+      if (excludedWorkspaceEvidenceName(entry.name)) continue;
       const relative = relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name;
       if (gitRoots.has(relative.split("/")[0])) continue;
       const absolute = path.join(directory, entry.name);
@@ -141,8 +178,8 @@ export function nonGitWorkspaceFileDetails(cwd, gitRootPrefixes) {
   return { files: files.sort(), complete };
 }
 
-export function nonGitWorkspaceFiles(cwd, gitRootPrefixes) {
-  return nonGitWorkspaceFileDetails(cwd, gitRootPrefixes).files;
+export function nonGitWorkspaceFiles(cwd, gitRootPrefixes, maxFiles = WORKSPACE_EVIDENCE_MAX_FILES) {
+  return nonGitWorkspaceFileDetails(cwd, gitRootPrefixes, maxFiles).files;
 }
 
 export function pathWithinNonGitWorkspaceEvidenceRoot(candidate, gitRootPrefixes) {
@@ -150,8 +187,7 @@ export function pathWithinNonGitWorkspaceEvidenceRoot(candidate, gitRootPrefixes
   const topSegment = segments[0];
   return Boolean(
     topSegment
-    && !WORKSPACE_EVIDENCE_SKIP_NAMES.has(topSegment)
-    && !segments.some(hiddenWorkspaceEvidenceSegment)
+    && !segments.some(excludedWorkspaceEvidenceName)
     && !gitRootPrefixes.includes(topSegment)
   );
 }

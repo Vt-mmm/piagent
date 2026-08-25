@@ -211,6 +211,9 @@ function authority(recovery: RecoveryDecision | null): HandoffProjection["requir
   const reasons = strings(recovery.reasonCodes, 20, 120);
   if (recovery.action === "fresh-session") return { required: true, kind: "fresh-session", reasonCodes: reasons };
   if (recovery.reasonCodes.includes("permission-expansion-forbidden")) return { required: true, kind: "permission", reasonCodes: reasons };
+  if (recovery.reasonCodes.includes("protected-path-forbidden")) return { required: true, kind: "permission", reasonCodes: reasons };
+  // Backward-compatible projection for recovery records written before task
+  // scope became advisory.
   if (recovery.reasonCodes.includes("scope-replan-required")) return { required: true, kind: "scope", reasonCodes: reasons };
   if (recovery.action === "ask-operator") return { required: true, kind: "operator", reasonCodes: reasons };
   return { required: false, kind: "none", reasonCodes: reasons };
@@ -292,7 +295,7 @@ export function buildHandoffProjection(
     decisionsAndInvariants: [
       "Task Contract v2 is authoritative for task outcome.",
       "Failure classification never authorizes source mutation by itself.",
-      "Source mutation still requires task scope and hook authorization.",
+      "Source mutation still requires hook authorization; task scope is an advisory retrieval/review focus.",
       "Verifier evidence is current only when its namespaced working-tree digest matches the current tree."
     ],
     contextReferences: {

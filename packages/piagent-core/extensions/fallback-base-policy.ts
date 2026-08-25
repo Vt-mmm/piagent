@@ -1,0 +1,101 @@
+import type { BasePolicy, ResolvedOrchestrationPolicy } from "./guard-types.ts";
+
+/**
+ * Fail-closed policy used only when the packaged JSON policy cannot be read.
+ * Tests lock this copy to the file-backed policy so recovery never becomes the
+ * less restrictive path.
+ */
+export function fallbackBasePolicy(
+  contextIndexFile: string,
+  orchestrationPolicy: ResolvedOrchestrationPolicy
+): BasePolicy {
+  return {
+    protectedPaths: [
+      ".git/**", "**/.git/**", "**/.hg/**", "**/.svn/**", "**/.pi/**",
+      "**/.aws/**", "**/.azure/**", "**/.docker/**", "**/.gnupg/**", "**/.kube/**", "**/.ssh/**",
+      "**/.git-credentials", "**/.netrc", "**/.npmrc", "**/.pypirc",
+      "**/auth.json", "**/credential.json", "**/credentials.json", "**/secret.json", "**/secrets.json", "**/token.json", "**/tokens.json",
+      "**/.env", "**/.env.*", "**/node_modules/**", "**/dist/**", ".pi/piagent-state/**", ".pi/settings.json",
+      ".pi/piagent-profile.json", ".pi/piagent-profile.lock.json", contextIndexFile
+    ],
+    shellProtectedPaths: [
+      ".git/**", "**/.git/**", "**/.hg/**", "**/.svn/**", "**/.pi/**",
+      "**/.aws/**", "**/.azure/**", "**/.docker/**", "**/.gnupg/**", "**/.kube/**", "**/.ssh/**",
+      "**/.git-credentials", "**/.netrc", "**/.npmrc", "**/.pypirc",
+      "**/auth.json", "**/credential.json", "**/credentials.json", "**/secret.json", "**/secrets.json", "**/token.json", "**/tokens.json",
+      "**/.env", "**/.env.*", ".pi/piagent-state/**", ".pi/settings.json", ".pi/piagent-profile.json",
+      ".pi/piagent-profile.lock.json", contextIndexFile
+    ],
+    blockedCommandPatterns: ["rm -rf /", "rm -rf ~", "rm -rf $HOME", "git reset --hard", "git clean -fd", "sudo ", "chmod -R 777"],
+    requireConfirmationPatterns: ["deploy", "release", "publish", "migration", "gh pr merge", "git push"],
+    defaultRequiredContext: ["AGENTS.md", "README.md"],
+    permissionProfiles: {
+      defaultMode: "workspace-write",
+      allowedModes: ["read-only", "workspace-write", "trusted-full-access"]
+    },
+    execPolicy: {
+      defaultMode: "enforce",
+      bannedPrefixSuggestions: [
+        ["python"], ["python3"], ["node"], ["node", "-e"], ["bash"], ["bash", "-lc"],
+        ["sh"], ["sh", "-c"], ["zsh"], ["zsh", "-lc"], ["git"], ["sudo"], ["env"]
+      ],
+      rules: [{
+        id: "prompt-git-add-broad",
+        action: "prompt",
+        match: "regex",
+        value: "(?:^|\\s)git\\s+(?:-C\\s+\\S+\\s+)?add\\s+(?:(?:--all|-A)(?:\\s+(?:\\.|:/))?|--\\s+(?:\\.|:/)|(?:\\.|:/))(?:\\s|$)",
+        reason: "Broad git staging can include unrelated or sensitive changes; inspect git status/diff and confirm the exact scope first."
+      }]
+    },
+    contextBudget: {
+      defaultMode: "enforce",
+      contextDeltaShadow: "sample",
+      maxContextFileChars: 50000,
+      maxMemoryFileChars: 20000,
+      maxManifestFiles: 80,
+      warnFragmentChars: 4000
+    },
+    toolRegistry: {
+      defaultMode: "advisory",
+      alwaysAllowedTools: [
+        "piagent_tools", "piagent_context_engine", "piagent_context", "piagent_permission_status",
+        "piagent_exec_policy_check", "piagent_context_budget", "piagent_tool_policy_check",
+        "piagent_task_gate_check", "piagent_usage_snapshot", "piagent_orchestration_policy",
+        "piagent_memory_status", "piagent_memory_note", "piagent_memory_search",
+        "piagent_memory_citation_record", "piagent_context_index_status", "piagent_context_index_record",
+        "piagent_context_index_search", "piagent_profile_options", "piagent_profile_apply",
+        "piagent_profile_tech_options", "piagent_profile_tech_apply", "piagent_profile_tech_context_record",
+        "piagent_project_onboarding_record", "piagent_task_start", "piagent_task_progress",
+        "piagent_source_checkout", "piagent_context_record", "piagent_verify_record", "piagent_trace_record"
+      ],
+      toolCapabilities: {
+        bash: ["shell"], shell: ["shell"], exec: ["shell"],
+        read: ["filesystem-readonly"], grep: ["filesystem-readonly"], find: ["filesystem-readonly"], ls: ["filesystem-readonly"],
+        write: ["filesystem-write"], edit: ["filesystem-write"], apply_patch: ["filesystem-write"],
+        browser: ["browser"], github: ["github"]
+      }
+    },
+    externalActionPolicy: {
+      defaultMode: "enforce",
+      providerKeywords: [
+        "github", "gitlab", "bitbucket", "vercel", "netlify", "cloudflare", "aws", "gcp", "azure",
+        "slack", "teams", "jira", "linear", "notion", "figma", "stripe", "supabase", "firebase"
+      ],
+      writeVerbs: [
+        "add", "approve", "archive", "assign", "close", "comment", "create", "delete", "deploy",
+        "dispatch", "merge", "open", "post", "publish", "push", "release", "remove", "reopen", "run",
+        "send", "submit", "trigger", "update", "upload", "write"
+      ],
+      safeVerbs: ["fetch", "find", "get", "inspect", "list", "read", "search", "show", "view"]
+    },
+    finalGate: {
+      defaultMode: "enforce",
+      requireTaskContract: true,
+      requireContextManifest: true,
+      requireVerifyEvidence: true,
+      requireTrace: true,
+      requirePassingVerify: true
+    },
+    orchestrationPolicy
+  };
+}

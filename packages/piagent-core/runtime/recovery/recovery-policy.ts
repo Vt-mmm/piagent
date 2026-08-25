@@ -29,6 +29,9 @@ export type RecoveryReasonCode =
   | "provider-transient-retry"
   | "provider-retry-exhausted"
   | "permission-expansion-forbidden"
+  | "protected-path-forbidden"
+  // Legacy persisted recovery records may still carry this value. New runtime
+  // decisions never emit it because task scope is advisory.
   | "scope-replan-required"
   | "transient-verifier-retry"
   | "transient-retry-unavailable"
@@ -185,11 +188,11 @@ export function selectRecoveryDecision(input: RecoveryPolicyInput): RecoveryDeci
   if (input.currentPhase === "terminal") return decision(input, "blocked", ["terminal-phase"]);
   if (input.currentPhase === "handoff") return decision(input, "handoff", ["handoff-already-observed"]);
   if (input.classification.category === "passed") return decision(input, "handoff", ["no-failure"]);
-  // A completion boundary violation cannot be repaired within the immutable
-  // task contract. Stop before stale-verifier or unknown-diagnostic retries so
-  // recovery never spends another turn attempting source work outside scope.
+  // Protected-path evidence cannot be repaired by another model turn. The
+  // failure category also accepts historical scope diagnostics for replay
+  // compatibility, but current task scope itself is advisory.
   if (input.classification.category === "scope-protected-path") {
-    return decision(input, "handoff", ["scope-replan-required"]);
+    return decision(input, "handoff", ["protected-path-forbidden"]);
   }
 
   const counts = countsFor(input);

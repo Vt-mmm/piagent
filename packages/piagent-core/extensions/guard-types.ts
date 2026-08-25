@@ -236,6 +236,8 @@ export type AcceptanceReceipt = {
   helperUsage?: {
     mode: "off" | "recommend" | "on";
     used: boolean;
+    decision?: "dispatch" | "skip";
+    projectedSavingsRatio?: number | null;
     reasonCodes: string[];
     helpers: Array<{
       role: "retriever" | "scout" | "planner" | "worker" | "reviewer" | "oracle" | "researcher";

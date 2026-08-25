@@ -112,6 +112,9 @@ export function buildTaskEfficiencyMetrics(
     helpers: {
       mode: helperUsage?.mode ?? "unknown",
       used: helperUsage?.used ?? false,
+      decision: helperUsage?.decision ?? (helperUsage?.used ? "dispatch" : "skip"),
+      projectedSavingsRatio: helperUsage?.projectedSavingsRatio ?? null,
+      reasonCodes: helperUsage?.reasonCodes ?? ["parent-direct-default"],
       entries: (helperUsage?.helpers ?? []).map((item) => ({
         role: item.role,
         model: null,

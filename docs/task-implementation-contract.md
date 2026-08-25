@@ -24,7 +24,7 @@ Agent Watch/report hien ten task ma operator da dat.
 | Mode | `changeMode` | `source-change` hoac `read-only`. |
 | Retry | `attempt`, `maxAttempts`, `previousAttempts` | Tran lay tu attempt dau, khong duoc nang o retry sau. |
 | Intent | `summary`, `riskLane`, `expectedOutput`, `acceptanceCriteria` | Chot truoc khi implementation. |
-| Scope | `scope`, `outOfScope`, `protectedPaths` | Direct write bi chan ngoai scope; final gate doi chieu Git. |
+| Focus va bao ve | `scope`, `outOfScope`, `protectedPaths` | `scope` dinh huong retrieval/review; protected/read-only policy moi la bien ghi bat buoc. Final gate doi chieu Git va report moi file da doi. |
 | Context | `requiredContext`, `contextManifest`, `memoryCitations`, `mcpCapabilities` | Citation co path va reason. |
 | Verify | `verifyGroup`, `verifyCommands`, `verifyEvidence` | Moi command phai observed, exact-match va pass. |
 | Plan | `workPlan`, `reviewLenses`, `orchestration` | Toi da 12 step, dependency DAG, single writer. |
@@ -89,7 +89,7 @@ Vi vay:
 - file dirty truoc task nhung bi sua tiep se duoc tinh;
 - file da duoc sua roi revert ve baseline chi nam trong audit history, khong pass gate;
 - claim file khong co evidence bi tu choi;
-- thay doi ngoai `scope` bi tu choi;
+- thay doi ngoai `scope` van duoc phep khi can de hoan thanh yeu cau; runtime ghi nhan day la focus expansion de review;
 - delete/missing co digest rieng;
 - staged rename ghi ca old path va new path.
 
@@ -137,7 +137,7 @@ nguyen grant cua project va chi re-pin core khi release moi khong mo rong quyen.
 | Lop | Enforcement |
 |---|---|
 | Prompt/workflow | Huong dan dung tool theo thu tu. |
-| Tool-call guard | Protected path, scope, read-only, destructive/external confirmation. |
+| Tool-call guard | Protected/read-only path, opaque mutation target, destructive/external confirmation. Task `scope` khong chan ghi file. |
 | Tool-result observer | Changed-file va bash evidence tu su kien that. |
 | Persisted contract | Session binding, retry, plan, context, verify, trace. |
 | Completion hook | Chan completion claim khi gate chua pass. |

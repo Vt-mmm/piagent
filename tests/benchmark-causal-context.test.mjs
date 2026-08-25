@@ -128,7 +128,7 @@ test("persists a complete causal aggregate without paths, hashes, prompts, or id
     ...completeEvents("other-session").map((event) => ({ ...event, estimatedTokens: 999_999 }))
   ];
   const receipt = benchmarkCausalContextReceipt(events, { surface: "piagent", sessionId: "session-a" });
-  assert.equal(receipt.schemaVersion, 2);
+  assert.equal(receipt.schemaVersion, 3);
   assert.equal(receipt.available, true);
   assert.equal(receipt.coverage.status, "complete");
   assert.deepEqual(receipt.aggregates.packCounts, { offered: 1, delivered: 1, injected: 1 });
@@ -149,6 +149,12 @@ test("persists a complete causal aggregate without paths, hashes, prompts, or id
     injectedEstimatedTokens: 0,
     evidenceCoverage: { status: "complete", observed: 0, comparable: 0, rate: 1 },
     definition: "matched-edit-recovery-context-receipt-v1"
+  });
+  assert.deepEqual(receipt.aggregates.runtimeCausal, {
+    adaptiveContext: { coverageStatus: "not-observed", observedEvents: 0, evidenceSource: "context-telemetry", aggregate: null },
+    operationLifecycle: { coverageStatus: "not-observed", observedEvents: 0, evidenceSource: "provider-free-runtime-conformance", aggregate: null },
+    boundedEmission: { coverageStatus: "not-observed", observedEvents: 0, evidenceSource: "provider-free-runtime-conformance", aggregate: null },
+    editFreshness: { coverageStatus: "not-observed", observedEvents: 0, evidenceSource: "context-telemetry", aggregate: null }
   });
   const serialized = JSON.stringify(receipt);
   for (const forbidden of ["private-target", "delivery-private", "turn-private", "run-private", "context-file-v1", "context-payload-v1", "999999"]) {
@@ -235,9 +241,18 @@ test("does not report a genuine zero-recovery lane without a versioned runtime c
   assert.ok(receipt.coverage.missingLanes.includes("edit-recovery-context"));
 });
 
-test("continues to validate already persisted schema-v1 Piagent causal receipts", () => {
+test("continues to validate already persisted schema-v1 and schema-v2 Piagent causal receipts", () => {
   const current = benchmarkCausalContextReceipt(completeEvents(), { surface: "piagent", sessionId: "session-a" });
-  const { editRecoveryContext: _recovery, ...legacyAggregates } = current.aggregates;
+  const { runtimeCausal: _runtime, ...schemaV2Aggregates } = current.aggregates;
+  const schemaV2 = {
+    ...current,
+    schemaVersion: 2,
+    evidenceSource: "context-telemetry-closed-aggregate-v2",
+    aggregates: schemaV2Aggregates
+  };
+  assert.equal(validBenchmarkCausalContextReceipt(schemaV2, "piagent"), true);
+  assert.equal(completedBenchmarkRecord(completedRecord("piagent", schemaV2)), true);
+  const { editRecoveryContext: _recovery, ...legacyAggregates } = schemaV2Aggregates;
   const legacy = {
     ...current,
     schemaVersion: 1,
@@ -247,6 +262,111 @@ test("continues to validate already persisted schema-v1 Piagent causal receipts"
   };
   assert.equal(validBenchmarkCausalContextReceipt(legacy, "piagent"), true);
   assert.equal(completedBenchmarkRecord(completedRecord("piagent", legacy)), true);
+});
+
+test("aggregates actual adaptive-context telemetry and keeps WebUI-only lanes delegated", () => {
+  const events = completeEvents();
+  events.splice(-1, 0,
+    telemetryEvent({
+      event: "context_governor_projection", sessionId: "session-a", action: "project",
+      estimatedSavingsTokens: 10_000, minimumSavingsTokens: 8_000,
+      accounting: { billedTraffic: { governorProviderCalls: 0 } }
+    }),
+    telemetryEvent({
+      event: "context_governor_projection_noop", sessionId: "session-a", action: "passthrough",
+      fallback: "insufficient-savings", estimatedSavingsTokens: 2_000, minimumSavingsTokens: 8_000,
+      accounting: { billedTraffic: { governorProviderCalls: 0 } }
+    }),
+    telemetryEvent({
+      event: "context_governor_compaction_cancelled", sessionId: "session-a",
+      fallback: "no-op-unsafe-tool-boundary",
+      protocol: { intact: false, orphanCallIds: ["private-call"], orphanResultIds: ["private-result"] }
+    }),
+    telemetryEvent({
+      event: "context_governor_deterministic_compaction", sessionId: "session-a",
+      accounting: {
+        estimatedSavingsTokens: 9_000, minimumSavingsTokens: 8_000, minimumSavingsMet: true,
+        billedTraffic: { measured: true, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0,
+          scope: "local-deterministic-summary-generation" }
+      }
+    }),
+    telemetryEvent({
+      event: "context_governor_deterministic_compaction_skipped", sessionId: "session-a",
+      fallback: "host-model-directed-summary"
+    })
+  );
+  const receipt = benchmarkCausalContextReceipt(events, { surface: "piagent", sessionId: "session-a" });
+  assert.equal(receipt.aggregates.runtimeCausal.adaptiveContext.coverageStatus, "complete");
+  assert.deepEqual(receipt.aggregates.runtimeCausal.adaptiveContext.aggregate, {
+    projected: 1,
+    noOp: 1,
+    cancelled: 1,
+    deterministicCompactions: 1,
+    hostSummaryFallbacks: 1,
+    estimatedSavingsTokens: 21_000,
+    minimumSavingsTokens: 24_000,
+    minimumSavingsMet: 2,
+    minimumSavingsNotMet: 1,
+    governorProviderCalls: 0,
+    deterministicCompactionProviderCalls: 0,
+    protocolIntegrity: { checks: 6, intact: 5, failed: 1, orphanCalls: 1, orphanResults: 1 },
+    definition: "adaptive-context-runtime-receipt-v1"
+  });
+  assert.equal(receipt.aggregates.runtimeCausal.operationLifecycle.coverageStatus, "not-observed");
+  assert.equal(receipt.aggregates.runtimeCausal.boundedEmission.coverageStatus, "not-observed");
+  assert.equal(JSON.stringify(receipt).includes("private-call"), false);
+  assert.equal(JSON.stringify(receipt).includes("private-result"), false);
+  assert.equal(validBenchmarkCausalContextReceipt(receipt, "piagent"), true);
+
+  const malformed = events.map((event) => event.event === "context_governor_deterministic_compaction"
+    ? { ...event, accounting: { ...event.accounting, billedTraffic: { ...event.accounting.billedTraffic, inputTokens: 1 } } }
+    : event);
+  const rejectedClaim = benchmarkCausalContextReceipt(malformed, { surface: "piagent", sessionId: "session-a" });
+  assert.equal(rejectedClaim.aggregates.runtimeCausal.adaptiveContext.coverageStatus, "partial");
+  assert.equal(rejectedClaim.aggregates.runtimeCausal.adaptiveContext.aggregate, null);
+  assert.equal(validBenchmarkCausalContextReceipt(rejectedClaim, "piagent"), true,
+    "the ledger remains structurally valid while the runtime claim fails closed");
+});
+
+test("proves stale edits are blocked before a reread and reports incomplete recovery as partial", () => {
+  const events = completeEvents();
+  events.splice(-1, 0,
+    telemetryEvent({ event: "edit_freshness_snapshot_observed", sessionId: "session-a",
+      taskRunId: "run-private", source: "read", paths: ["src/private-target.ts"] }),
+    telemetryEvent({ event: "edit_freshness_stale", sessionId: "session-a", taskRunId: "run-private",
+      toolCallId: "stale-edit-private", enforce: true, paths: ["src/private-target.ts"] }),
+    telemetryEvent({ event: "tool_decision", sessionId: "session-a", taskRunId: "run-private",
+      toolCallId: "stale-edit-private", decision: "blocked" }),
+    telemetryEvent({ event: "edit_freshness_snapshot_observed", sessionId: "session-a",
+      taskRunId: "run-private", source: "read", paths: ["src/private-target.ts"] }),
+    telemetryEvent({ event: "edit_freshness_snapshot_observed", sessionId: "session-a",
+      taskRunId: "run-private", source: "mutation", paths: ["src/private-target.ts"] })
+  );
+  const receipt = benchmarkCausalContextReceipt(events, { surface: "piagent", sessionId: "session-a" });
+  assert.deepEqual(receipt.aggregates.runtimeCausal.editFreshness, {
+    coverageStatus: "complete",
+    observedEvents: 4,
+    evidenceSource: "context-telemetry",
+    aggregate: {
+      snapshotObservations: 3,
+      readSnapshots: 2,
+      mutationSnapshots: 1,
+      staleDetections: 1,
+      enforcedStaleDetections: 1,
+      staleBlocks: 1,
+      rereadRecoveries: 1,
+      mutationRecoveries: 1,
+      incompleteRecoveries: 0,
+      definition: "edit-freshness-runtime-receipt-v1"
+    }
+  });
+  assert.equal(validBenchmarkCausalContextReceipt(receipt, "piagent"), true);
+
+  const withoutReread = events.filter((event) => event.event !== "edit_freshness_snapshot_observed" || event.source !== "read"
+    || event === events.find((candidate) => candidate.event === "edit_freshness_snapshot_observed"));
+  const partial = benchmarkCausalContextReceipt(withoutReread, { surface: "piagent", sessionId: "session-a" });
+  assert.equal(partial.aggregates.runtimeCausal.editFreshness.coverageStatus, "partial");
+  assert.equal(partial.aggregates.runtimeCausal.editFreshness.aggregate, null);
 });
 
 test("requires an explicit recovery policy decision for every classified edit-anchor failure", () => {

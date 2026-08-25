@@ -47,6 +47,20 @@ chưa ship solver hoặc automatic parent routing. Host execution là mặc đ�
 yêu cầu isolation backend chưa có adapter, mutation bị block thay vì âm thầm
 fallback về host.
 
+## Điều phối parent-direct
+
+Parent model tự sở hữu suy luận, implementation và verification. Helper mặc định
+tắt. Khi operator chủ động bật, runtime chỉ được dispatch tối đa một helper
+read-only dùng context fresh nếu chứng minh có hai lane độc lập và tổng token dự
+kiến sau handoff/merge giảm ít nhất 30%. Worker, retry, nested helper và parallel
+helper đều bị tắt.
+
+Trong Pi, `/piagent-orchestration` hiển thị mode hiện tại, trần một helper,
+review lens, writer policy và bằng chứng dispatch/skip mà không tạo model turn.
+`piagent-setup` chỉ cài `pi-subagents` như runtime tương thích tùy chọn với preset
+`safe` đã bị clamp; `/subagents-doctor` dùng để kiểm tra health. Chi tiết nằm tại
+[Subagents và multi-agent](docs/subagents-and-multiagent.md).
+
 ## Web search và vision
 
 Web research và đọc ảnh là hai capability tách biệt. Tích hợp `pi-web-access`

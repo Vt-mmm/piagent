@@ -9,7 +9,6 @@ describe("blocked tool calls say what to do next", () => {
       "Command touches protected path: .env matches **/.env",
       "Blocked read write to read-only path from path: backend/x.ts matches backend/**",
       "Blocked read read outside resolved filesystem scope from path: /etc/hosts",
-      "Task t1 cannot mutate paths outside its declared scope: src/other.ts.",
       "Permission profile read-only blocked bash: shell execution is disabled.",
       "Task lifecycle control blocks tool start while state is paused.",
       "path traverses symbolic link: src/link.ts",

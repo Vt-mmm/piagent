@@ -159,6 +159,75 @@ function item(entry: any, identity: TranscriptIdentity): TranscriptItem | null {
     agentOperationId: null, turnIndex: null, content, ...(userProjection.attachments.length ? { attachments: userProjection.attachments } : {}),
     toolCalls: projectedToolCalls };
 }
+
+type ProjectedTranscriptItem = { entry: any; item: TranscriptItem; cursor: string };
+
+function linkTranscriptTurns(values: ProjectedTranscriptItem[]): ProjectedTranscriptItem[] {
+  let userMessageRef: string | null = null;
+  const toolCallOwners = new Map<string, string>();
+  return values.map((value) => {
+    let parentMessageRef: string | null = null;
+    if (value.item.role === "user") userMessageRef = value.item.messageRef;
+    else if (value.item.role === "tool-result") {
+      parentMessageRef = toolCallOwners.get(value.item.toolCalls[0]?.toolCallRef ?? "") ?? userMessageRef;
+    } else parentMessageRef = userMessageRef;
+    const linked = { ...value, item: { ...value.item, parentMessageRef } };
+    if (linked.item.role === "assistant") {
+      for (const toolCall of linked.item.toolCalls) toolCallOwners.set(toolCall.toolCallRef, linked.item.messageRef);
+    }
+    return linked;
+  });
+}
+
+function durableAssistant(item: TranscriptItem): boolean {
+  return item.role === "assistant" && item.toolCalls.length === 0
+    && (item.content.state === "available" || item.content.state === "redacted")
+    && hasVisibleText(item.content.text ?? "");
+}
+
+function compactOversizedTurn(
+  values: ProjectedTranscriptItem[], start: number, end: number, limit: number
+): ProjectedTranscriptItem[] {
+  if (limit === 1) return [values[start]!];
+  const selected = new Set<number>([start]);
+  for (let index = end - 1; index > start; index -= 1) {
+    if (durableAssistant(values[index]!.item)) { selected.add(index); break; }
+  }
+  for (let index = end - 1; index > start && selected.size < limit; index -= 1) selected.add(index);
+  return [...selected].sort((left, right) => left - right).map((index) => values[index]!);
+}
+
+function boundedTurnPage(
+  values: ProjectedTranscriptItem[], end: number, limit: number
+): { selected: ProjectedTranscriptItem[]; start: number; compacted: boolean } {
+  if (end <= 0) return { selected: [], start: 0, compacted: false };
+  const users: number[] = [];
+  for (let index = 0; index < end; index += 1) if (values[index]?.item.role === "user") users.push(index);
+  if (users.length === 0) {
+    const start = Math.max(0, end - limit);
+    return { selected: values.slice(start, end), start, compacted: false };
+  }
+
+  const selected: ProjectedTranscriptItem[] = [];
+  let remaining = limit, turnEnd = end, start = end;
+  for (let userIndex = users.length - 1; userIndex >= 0 && remaining > 0; userIndex -= 1) {
+    const turnStart = users[userIndex]!;
+    const turnSize = turnEnd - turnStart;
+    if (turnSize > remaining) {
+      if (selected.length === 0) {
+        const compacted = compactOversizedTurn(values, turnStart, turnEnd, remaining);
+        return { selected: compacted, start: turnStart, compacted: true };
+      }
+      break;
+    }
+    selected.unshift(...values.slice(turnStart, turnEnd));
+    start = turnStart;
+    remaining -= turnSize;
+    turnEnd = turnStart;
+  }
+  return { selected, start, compacted: false };
+}
+
 function unavailable(input: TranscriptProjectionInput, reasonCode: string, limit: number): TranscriptDocument {
   return { schemaVersion: 1, version: "piagent-webui-transcript-v1", generatedAt: input.generatedAt ?? new Date().toISOString(),
     identity: structuredClone(input.identity), revision: structuredClone(input.revision), eventCursor: input.eventCursor,
@@ -168,17 +237,19 @@ function unavailable(input: TranscriptProjectionInput, reasonCode: string, limit
 export function projectTranscript(input: TranscriptProjectionInput): TranscriptDocument {
   const limit = Math.max(1, Math.min(MAX_ITEMS, Number.isInteger(input.limit) ? Number(input.limit) : 50));
   if (!Array.isArray(input.entries) || input.entries.length > MAX_ENTRIES) return unavailable(input, "transcript-history-unavailable", limit);
-  const projected = input.entries.map((entry) => ({ entry, item: item(entry, input.identity) })).filter((value): value is { entry: any; item: TranscriptItem } => Boolean(value.item));
-  const cursors = projected.map(({ entry }) => opaque("transcript", [input.identity.sessionRef, entry.id]));
+  const projected = linkTranscriptTurns(input.entries.map((entry) => ({ entry, item: item(entry, input.identity),
+    cursor: opaque("transcript", [input.identity.sessionRef, (entry as any)?.id]) }))
+    .filter((value): value is ProjectedTranscriptItem => Boolean(value.item)));
+  const cursors = projected.map((value) => value.cursor);
   let end = projected.length;
   if (input.beforeCursor) {
     const cursorIndex = cursors.indexOf(input.beforeCursor);
     if (cursorIndex < 0) return unavailable(input, "transcript-cursor-gap", limit);
     end = cursorIndex;
   }
-  const start = Math.max(0, end - limit), selected = projected.slice(start, end).map((value) => value.item), hasOlder = start > 0;
+  const page = boundedTurnPage(projected, end, limit), selected = page.selected.map((value) => value.item), hasOlder = page.start > 0;
   return { schemaVersion: 1, version: "piagent-webui-transcript-v1", generatedAt: input.generatedAt ?? new Date().toISOString(),
     identity: structuredClone(input.identity), revision: structuredClone(input.revision), eventCursor: input.eventCursor,
-    state: "ready", items: selected, page: { beforeCursor: input.beforeCursor ?? null, nextBeforeCursor: hasOlder ? cursors[start] : null,
-      hasOlder, limit, truncated: projected.length !== input.entries.filter((entry: any) => entry?.type === "message").length }, reasonCode: null };
+    state: "ready", items: selected, page: { beforeCursor: input.beforeCursor ?? null, nextBeforeCursor: hasOlder ? cursors[page.start] : null,
+      hasOlder, limit, truncated: page.compacted || projected.length !== input.entries.filter((entry: any) => entry?.type === "message").length }, reasonCode: null };
 }

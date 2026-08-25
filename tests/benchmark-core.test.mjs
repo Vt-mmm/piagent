@@ -716,8 +716,10 @@ function runRecord(scenario, surface, repeat, fresh) {
     infrastructureAttempts: 1,
     infrastructureRetries: 0,
     infrastructureFailures: [],
-    usage: { fresh, input: fresh, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, total: fresh, cost: fresh / 100_000, costSource: "test-fixture", usageCompleteness: "exact", sessions: 1, model: "openai-codex/gpt-5.6-luna", thinkingLevel: "medium", toolCalls: 2, toolNames: { read: 1, bash: 1 } },
-    durationSeconds: 1
+    usage: { fresh, input: fresh, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, total: fresh, cost: fresh / 100_000, costSource: "test-fixture", usageCompleteness: "exact", sessions: 1, subagentSessions: 0, subagentTokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, fresh: 0, total: 0 }, model: "openai-codex/gpt-5.6-luna", thinkingLevel: "medium", toolCalls: 2, toolNames: { read: 1, bash: 1 } },
+    durationSeconds: 1,
+    promptHash: "1".repeat(64),
+    variant: { generated: false, fixtureDigest: "2".repeat(64) }
   };
 }
 
@@ -730,6 +732,7 @@ function controlledCodexEnvironment(overrides = {}) {
     codexMode: "controlled",
     codexIsolation: "per-session-temporary-home",
     codexGlobalInstructions: "excluded",
+    comparisonAccessContract: "paired-workspace-write-offline-surface-system",
     piagentTreatment: {
       id: "candidate",
       explicit: true,
@@ -754,6 +757,7 @@ function productionEnvironment(overrides = {}) {
     codexMode: "controlled",
     codexIsolation: "per-session-temporary-home",
     codexGlobalInstructions: "excluded",
+    comparisonAccessContract: "paired-workspace-write-offline-surface-system",
     source: { kind: "git-working-tree", commit: "a".repeat(40), dirty: false },
     suiteCoverage: { declaredScenarios: 18, selectedScenarios: 18, fullSuite: true },
     hostReadinessHistory: {
@@ -1327,8 +1331,40 @@ test("production release gate uses independent scenario families and the upper 9
   });
   assert.ok(outputHeavy.comparison.normalizedCost.ratio > 1);
   assert.equal(outputHeavy.comparison.normalizedCostGate, null);
+  assert.equal(outputHeavy.comparison.codexRelativeEfficiency.required, false);
+  assert.equal(outputHeavy.comparison.codexRelativeEfficiencyGate, null);
   assert.equal(outputHeavy.comparison.productionGate.passed, true);
   assert.equal(outputHeavy.comparison.tokenClaimAllowed, true);
+  assert.equal(outputHeavy.verdict.status, "piagent-more-efficient");
+
+  const costClaimSuite = {
+    ...testSuite,
+    id: "production-v2-test",
+    releaseGate: {
+      ...testSuite.releaseGate,
+      requireNormalizedCostClaim: true,
+      maximumNormalizedCostRatioUpper95: 0.7,
+      maximumBandNormalizedCostRatio: 0.7,
+      maximumFamilyNormalizedCostRatio: 0.7
+    }
+  };
+  const costClaim = summarizeBenchmark({
+    suite: costClaimSuite,
+    runId: "production-explicit-cost-claim",
+    startedAt: "2026-08-01T00:00:00.000Z",
+    completedAt: "2026-08-01T00:01:00.000Z",
+    repeats: 3,
+    environment,
+    runs: outputHeavyRuns,
+    baselineSurface: "codex-cli",
+    candidateSurface: "piagent"
+  });
+  assert.equal(costClaim.comparison.productionGate, null);
+  assert.equal(costClaim.comparison.codexRelativeEfficiency.required, true);
+  assert.equal(costClaim.comparison.codexRelativeEfficiencyGate, false);
+  assert.ok(costClaim.comparison.suiteGate.failures.includes("codex-relative-efficiency"));
+  assert.equal(costClaim.comparison.tokenClaimAllowed, false);
+  assert.equal(costClaim.verdict.status, "normalized-cost-confidence-gate-failed");
 
   const tokenRestricted = structuredClone(report);
   const rawTokenAccounting = structuredClone(tokenRestricted.tokenAccounting);

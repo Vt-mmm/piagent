@@ -62,7 +62,7 @@ async function lifecycleProbes() {
     return {
       duplicateWork: duplicate.decision === "duplicate" ? 0 : 1,
       budgetViolations: overBudget.disposition === "budget-exceeded" && overBudget.outputDigest === null ? 0 : 1,
-      writerInvariantViolations: firstWriter.decision === "reserved" && secondWriter.decision === "blocked" ? 0 : 1,
+      writerInvariantViolations: firstWriter.decision === "blocked" && secondWriter.decision === "blocked" ? 0 : 1,
       automaticWorkerDelegations: defaultRolePolicy("worker").enabledByDefault ? 1 : 0,
       cancellationLatencyMs: Number((performance.now() - cancelStarted).toFixed(3)),
       timeoutCovered: timedOut.disposition === "timeout" && timedOut.outputDigest === null,

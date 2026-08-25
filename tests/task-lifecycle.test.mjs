@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  applyAssistedReadOnlyFinalHandoff,
   applyRuntimeLifecycleObservation,
   runtimeLifecycleMode,
   workingTreeEvidenceDigest
@@ -84,6 +85,43 @@ test("read-only default plans advance from observed context without an implement
   assert.equal(runtimeLifecycleMode(normal), "assisted-readonly");
   applyRuntimeLifecycleObservation(normal, "context-complete", "2026-08-01T00:00:00.000Z");
   assert.deepEqual(normal.workPlan.map((step) => step.status), ["done", "in-progress"]);
+});
+
+test("a final evidence-backed handoff completes only the default assisted read-only review", () => {
+  const task = readOnlyTask();
+  applyRuntimeLifecycleObservation(task, "context-complete", "2026-08-01T00:00:00.000Z");
+
+  assert.equal(applyAssistedReadOnlyFinalHandoff(task, {
+    durableReadEvidence: true,
+    finalHandoffObserved: true
+  }, "2026-08-01T00:01:00.000Z").changed, true);
+  assert.deepEqual(task.workPlan.map((step) => step.status), ["done", "done"]);
+  assert.match(task.workPlan[1].note, /final handoff grounded in durable read-only evidence/);
+
+  const noEvidence = readOnlyTask();
+  applyRuntimeLifecycleObservation(noEvidence, "context-complete");
+  assert.equal(applyAssistedReadOnlyFinalHandoff(noEvidence, {
+    durableReadEvidence: false,
+    finalHandoffObserved: true
+  }).changed, false);
+  assert.equal(noEvidence.workPlan[1].status, "in-progress");
+
+  const custom = readOnlyTask();
+  custom.workPlan[1].role = "parent";
+  applyRuntimeLifecycleObservation(custom, "context-complete");
+  assert.equal(applyAssistedReadOnlyFinalHandoff(custom, {
+    durableReadEvidence: true,
+    finalHandoffObserved: true
+  }).changed, false);
+
+  const sourceChange = normalTask();
+  applyRuntimeLifecycleObservation(sourceChange, "mutation");
+  applyRuntimeLifecycleObservation(sourceChange, "verification-complete");
+  assert.equal(applyAssistedReadOnlyFinalHandoff(sourceChange, {
+    durableReadEvidence: true,
+    finalHandoffObserved: true
+  }).changed, false);
+  assert.equal(sourceChange.workPlan[2].status, "in-progress");
 });
 
 test("custom and high-risk plans remain manual", () => {

@@ -25,7 +25,7 @@
   "artifactBindings": [
     {
       "path": "packages/piagent-core/policy/authority-manifest.v1.json",
-      "sha256": "911dc026f1a860f593a6850f7348311f6adac83a8f11627abb23654960b605d0"
+      "sha256": "1f073f6d42c093a3182685e0e096144c8b3befd87594aeea1af05ce17653860c"
     },
     {
       "path": "scripts/phase-tools-evaluation.mjs",
@@ -37,7 +37,7 @@
     },
     {
       "path": "evals/fs5-pilot-protocol.v1.json",
-      "sha256": "b84377c7d35c8fc70a6bd2142182810518c010f39ca0ee4f8488d9fddbab37fa"
+      "sha256": "c13bdba4f9b05b2807fa14c812c81d7858fadc0bdfee74ec50c406306e0fa207"
     }
   ],
   "localReproducer": {

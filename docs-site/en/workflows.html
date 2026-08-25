@@ -168,8 +168,8 @@
     <p>There is no separate <span class="inline-code">/git</span> namespace. Use <span class="inline-code">/workflow commit</span> for a reviewed local commit and <span class="inline-code">/workflow pr</span> to prepare a pull request. Actions such as <span class="inline-code">git push</span> or broad staging with <span class="inline-code">git add -A</span> still require operator confirmation.</p>
   </div>
   <div class="callout">
-    <strong>Solo-first orchestration</strong>
-    <p>Use <span class="inline-code">/piagent-orchestration</span> to inspect mode, subagent limits, review lenses, Field Guide, and writer policy. The parent agent owns the task by default; subagents are used only when scouting, planning, or review has an independent lane worth the token cost.</p>
+    <strong>Parent-direct orchestration</strong>
+    <p>Use <span class="inline-code">/piagent-orchestration</span> to inspect the one-helper ceiling, dispatch/skip reason, projected token saving, review lenses, Field Guide, and writer policy. Helpers default to off. Explicit opt-in still permits only one fresh read-only helper when two independent lanes and at least 30% projected net saving are proven; workers and retries stay disabled.</p>
   </div>
   <div class="command-grid">
     <article class="command-card"><header><span>Bounded implementation</span><button class="clip-btn" data-clip="/workflow task Fix the failing checkout test and verify.">Copy</button></header><pre><code>/workflow task Fix the failing checkout test and verify.</code></pre></article>

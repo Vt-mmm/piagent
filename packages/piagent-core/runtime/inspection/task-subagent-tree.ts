@@ -5,7 +5,7 @@ import { inspectOwnedWorkBudget, type OwnedWorkReservation } from "../orchestrat
 import { taskRunOpaqueRef } from "./task-run-index.ts";
 
 type Task = { taskId: string; taskRunId: string; trace?: { outcome?: unknown }; orchestration?: Record<string, unknown>;
-  acceptanceReceipt?: { helperUsage?: { used?: unknown; helpers?: unknown[] } }; [key: string]: any };
+  acceptanceReceipt?: { helperUsage?: { used?: unknown; decision?: unknown; projectedSavingsRatio?: unknown; reasonCodes?: unknown; helpers?: unknown[] } }; [key: string]: any };
 type Identity = { projectRef: string; runtimeInstanceId: string; sessionRef: string; taskId: string; taskRunId: string;
   agentOperationId: null; toolCallId: null };
 
@@ -53,9 +53,32 @@ function orchestration(task: Task) {
   };
 }
 
+function delegation(task: Task) {
+  const usage = task.acceptanceReceipt?.helperUsage;
+  const explicitDecision = usage?.decision;
+  const action = explicitDecision === "dispatch" || explicitDecision === "skip"
+    ? explicitDecision
+    : usage?.used === true ? "dispatch" : "skip";
+  const reasonCodes = Array.isArray(usage?.reasonCodes)
+    ? [...new Set(usage.reasonCodes.map((item) => String(item ?? "").trim()).filter((item) => /^[a-z0-9_.:-]+$/.test(item)).slice(0, 16))]
+    : action === "dispatch" ? ["helper-dispatched"] : ["parent-direct-default", "delegation-evidence-missing"];
+  const projected = usage?.projectedSavingsRatio;
+  return {
+    action,
+    reasonCodes,
+    projectedNetSavingsRatio: typeof projected === "number" && Number.isFinite(projected)
+      ? Math.max(-10, Math.min(1, projected))
+      : null,
+    minimumRequiredNetSavingsRatio: 0.3,
+    budget: { maxConcurrent: 1, maxTotal: 1, maxRetries: 0, maxWriters: 0 }
+  };
+}
+
 function unavailable(identity: Identity, runRef: string, generatedAt: string, reasonCode: string) {
   return { schemaVersion: 1, version: "piagent-webui-subagent-tree-v1", generatedAt, identity: structuredClone(identity), runRef,
     state: "unavailable", treeRevision: null, evidenceState: "unknown", orchestration: { mode: "unknown", subagents: "unknown" },
+    delegation: { action: "unknown", reasonCodes: [reasonCode], projectedNetSavingsRatio: null,
+      minimumRequiredNetSavingsRatio: 0.3, budget: { maxConcurrent: 1, maxTotal: 1, maxRetries: 0, maxWriters: 0 } },
     parent: null, children: [], writer: { state: "unknown", ownerNodeRef: null },
     nestedLineage: { state: "unavailable", reasonCode: "no-durable-nested-lineage" },
     summary: { total: 0, active: 0, completed: 0, staleResults: 0, readOnly: 0, singleWriter: 0 }, warnings: [],
@@ -66,7 +89,7 @@ export function projectTaskSubagentTree(input: { cwd: string; task: Task; identi
   const generatedAt = input.generatedAt ?? new Date().toISOString(), runRef = taskRunOpaqueRef(input.task.taskRunId);
   const inspected = inspectOwnedWorkBudget(input.cwd, input.task.taskId, input.task.taskRunId, generatedAt);
   if (inspected.state === "corrupt") return unavailable(input.identity, runRef, generatedAt, inspected.reasonCode ?? "helper-budget-corrupt");
-  const policy = orchestration(input.task), parentRef = opaque("parent", input.task.taskRunId), receipts = helperReceipts(input.task);
+  const policy = orchestration(input.task), delegationDecision = delegation(input.task), parentRef = opaque("parent", input.task.taskRunId), receipts = helperReceipts(input.task);
   const children = inspected.reservations.map((item) => child(input.task.taskRunId, parentRef, item, receipts.get(item.deduplicationKey)));
   const matchedReceipts = new Set(inspected.reservations.map((item) => item.deduplicationKey).filter((key) => receipts.has(key)));
   const unmatchedReceipts = Math.max(0, receipts.size - matchedReceipts.size);
@@ -90,10 +113,10 @@ export function projectTaskSubagentTree(input: { cwd: string; task: Task; identi
     staleResults: children.filter((item) => item.result.state === "stale-result").length,
     readOnly: children.filter((item) => item.authority === "read-only").length,
     singleWriter: children.filter((item) => item.authority === "single-writer").length };
-  const treeRevision = `subagent-tree.${createHash("sha256").update(JSON.stringify({ policy, parentState, terminal: inspected.terminal,
+  const treeRevision = `subagent-tree.${createHash("sha256").update(JSON.stringify({ policy, delegationDecision, parentState, terminal: inspected.terminal,
     children, writer, evidenceState })).digest("hex")}`;
   return { schemaVersion: 1, version: "piagent-webui-subagent-tree-v1", generatedAt, identity: structuredClone(input.identity), runRef,
-    state: "ready", treeRevision, evidenceState, orchestration: policy,
+    state: "ready", treeRevision, evidenceState, orchestration: policy, delegation: delegationDecision,
     parent: { nodeRef: parentRef, lifecycleState: parentState, budgetTerminal: inspected.terminal, mergeOwner: "parent" }, children, writer,
     nestedLineage: { state: "unavailable", reasonCode: "no-durable-nested-lineage" }, summary, warnings,
     health: warnings.length ? { state: "degraded", reasonCode: "subagent-tree-incomplete", message: "Some helper/subagent evidence is incomplete." }

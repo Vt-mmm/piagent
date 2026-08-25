@@ -22,8 +22,11 @@ Architecture boundaries and non-growth file budgets are enforced by `npm run arc
 The root package exposes `piagent-benchmark` for an automatic paired Piagent
 steady-state benchmark against Raw Pi or the `codex-cli` surface. Treatment
 onboarding/context preparation happens before measured model usage;
-post-baseline mutations remain scope violations. Codex runs through a strict
-streaming JSONL adapter and defaults to controlled ephemeral execution with an
+post-baseline mutations remain auditable. Task scope is an advisory retrieval
+and review focus rather than filesystem authority; Codex can follow repository
+evidence across packages and child repositories. Protected/read-only paths,
+destructive commands, and external actions remain governed. Codex runs through a
+strict streaming JSONL adapter and defaults to controlled ephemeral execution with an
 isolated temporary Codex home. Run
 `piagent-benchmark --dry-run` before starting billed model sessions; see
 `docs/quality-benchmark.md` for score and verdict rules.
@@ -130,9 +133,14 @@ When `pi-subagents` is installed, this package exposes:
 
 - `piagent-scout`
 - `piagent-planner`
-- `piagent-worker`
+- `piagent-worker` (compatibility metadata; disabled by Piagent config)
 - `piagent-reviewer`
 - `piagent-oracle`
+
+The parent model works directly. Helpers default to `off`; explicit opt-in still
+allows only one fresh read-only helper after a runtime-owned estimate proves at
+least 30% projected net token saving. Worker, parallel, nested, and retry paths
+remain disabled.
 
 ## Install
 
@@ -197,7 +205,8 @@ rebuild and database vacuum before the new policy is considered clean.
 Passing source final gates require an observed exit `0` result for every
 meaningful entry in `task.verifyCommands`. Other observed commands are traceable
 but advisory. Declared changed files must also differ from the task baseline,
-match observed tool results and remain inside `task.scope`.
+and match observed tool results. Changes beyond `task.scope` are retained as an
+auditable focus expansion and do not block source mutation or completion.
 
 Raw path-like tool access to protected paths is blocked before execution. This includes Pi built-ins (`read`, `write`, `edit`, `grep`, `find`, `ls`) and custom/MCP tools with nested path-like strings, arrays, or `file://` URIs. Path-like strings are percent-decoded once, and input nesting above `MAX_TOOL_INPUT_INSPECTION_DEPTH=32` fails closed. Known content fields such as `content`, `query`, `pattern`, `text`, and `command` are excluded from generic extraction. `grep.glob` and `find.pattern` are checked when they explicitly target protected paths, while broad `grep`, `find`, and `ls` results are filtered so protected content lines or path metadata are redacted before reaching the model.
 

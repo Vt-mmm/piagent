@@ -142,6 +142,40 @@ describe("safe task resume state", () => {
     assert.deepEqual(projection.details.nextAction, resume.reconstruction.nextAction);
   });
 
+  it("hides the legacy runtime-scope criterion from resume presentation without rewriting durable task state", () => {
+    const cwd = workspace();
+    const current = task();
+    const legacyCriterion = "Changes stay within the runtime-derived task scope.";
+    current.scope = ["v-nexus-frontend/src/**", "v-nexus-frontend/e2e/**"];
+    current.acceptanceCriteria = [
+      legacyCriterion,
+      "Frontend implementation matches the approved backend contract.",
+      "Run the configured verification commands."
+    ];
+    current.criterionGraph = compileCriterionGraph({
+      acceptanceCriteria: current.acceptanceCriteria,
+      scope: current.scope,
+      verifyCommands: current.verifyCommands,
+      changeMode: current.changeMode,
+      mode: "criterion-graph",
+      createdAt: current.createdAt
+    });
+    const durableCriteria = structuredClone(current.acceptanceCriteria);
+    const durableGraph = structuredClone(current.criterionGraph);
+    const resume = inspectTaskResumeState(cwd, current, current.sessionId);
+    const projection = buildTaskResumeContext(current, resume);
+
+    assert.doesNotMatch(projection.content, /Changes stay within the runtime-derived task scope/);
+    assert.doesNotMatch(projection.content, /criterion-01/);
+    assert.match(projection.content, /criterion-02 behavior/);
+    assert.match(projection.content, /criterion-03 verification .*after=criterion-02/);
+    assert.match(projection.content, /Initial focus \(advisory\):/);
+    assert.match(projection.content, /neither authorizes nor forbids mutation/);
+    assert.doesNotMatch(projection.content, /\nScope:/);
+    assert.deepEqual(current.acceptanceCriteria, durableCriteria);
+    assert.deepEqual(current.criterionGraph, durableGraph);
+  });
+
   it("reruns the exact verifier before an open plan step when verify has no current stable pass", () => {
     const cwd = workspace();
     const current = task();

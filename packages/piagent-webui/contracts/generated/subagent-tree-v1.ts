@@ -21,6 +21,7 @@ export type PiagentWebUIBoundedSubagentOwnershipTreeV1 = {
   treeRevision: string | null;
   evidenceState: "complete" | "partial" | "aggregate-only" | "missing" | "unknown";
   orchestration: Orchestration;
+  delegation: Delegation;
   parent: Parent | null;
   /**
    * @maxItems 64
@@ -66,6 +67,71 @@ export type Health = {
 export interface Orchestration {
   mode: "solo-first" | "bounded-subagents" | "parallel-readonly" | "unknown";
   subagents: "not-used" | "optional" | "used" | "unknown";
+}
+export interface Delegation {
+  action: "dispatch" | "skip" | "unknown";
+  /**
+   * @maxItems 16
+   */
+  reasonCodes:
+    | []
+    | [string]
+    | [string, string]
+    | [string, string, string]
+    | [string, string, string, string]
+    | [string, string, string, string, string]
+    | [string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string, string, string]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ];
+  projectedNetSavingsRatio: number | null;
+  minimumRequiredNetSavingsRatio: 0.3;
+  budget: {
+    maxConcurrent: 1;
+    maxTotal: 1;
+    maxRetries: 0;
+    maxWriters: 0;
+  };
 }
 export interface Parent {
   nodeRef: string;

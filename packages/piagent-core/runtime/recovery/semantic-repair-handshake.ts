@@ -11,7 +11,6 @@ import { safeTaskId } from "../../extensions/task-state.js";
 import { isCurrentWorkingTreeDigest } from "../../extensions/working-tree-digest.js";
 
 const HASH = /^[a-f0-9]{64}$/;
-const GLOB = /[?*[\]{}]/;
 const MAX_FILE_BYTES = 256 * 1024;
 export const MAX_SEMANTIC_REPAIR_PATHS = 12;
 export const MAX_SEMANTIC_REPAIR_REVISIONS = 2;
@@ -106,13 +105,6 @@ function tokenHash(token: string): string {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
-function exactDeclaredPath(task: TaskContract, target: string): boolean {
-  return (task.scope ?? []).some((candidate) => {
-    const normalized = normalizePathCandidate(candidate);
-    return Boolean(normalized && !GLOB.test(normalized) && normalized === target);
-  });
-}
-
 function isTestPath(file: string): boolean {
   return /(^|\/)(?:test|tests|spec|__tests__)(\/|$)|[._-](?:test|spec)\.[cm]?[jt]sx?$/i.test(file);
 }
@@ -146,12 +138,13 @@ export function decideSemanticRepairHandshake(input: {
   verifierCurrent: boolean;
 }): SemanticRepairHandshakeDecision {
   const targets = uniquePaths(input.mutationTargets), delta = new Set(uniquePaths(input.currentDeltaPaths));
+  const targetSet = new Set(targets);
   const empty = { authorized: false, conflictCodes: [], eligibleTargets: [], eligiblePaths: [], pathConflictCodes: {} };
   if (!input.verifierCurrent || targets.length === 0 || delta.size === 0) return empty;
-  const candidates = uniquePaths([...delta, ...(input.task.scope ?? []).filter((item) => !GLOB.test(item))]);
+  const candidates = uniquePaths([...delta, ...targets]);
   const pathConflictCodes: Record<string, string[]> = {}, sourceTexts = new Map<string, string>();
   for (const file of candidates) {
-    if (isTestPath(file) || (!delta.has(file) && !exactDeclaredPath(input.task, file))) continue;
+    if (isTestPath(file) || (!delta.has(file) && !targetSet.has(file))) continue;
     const source = readSmallFile(input.cwd, file), conflicts = contentLinkedConflictCodes(input.task, source);
     if (conflicts.length === 0) continue;
     pathConflictCodes[file] = conflicts;
@@ -161,7 +154,7 @@ export function decideSemanticRepairHandshake(input: {
   if (sourcePaths.length === 0) return empty;
   const relatedTests = candidates.filter((file) => (
     isTestPath(file)
-    && (delta.has(file) || exactDeclaredPath(input.task, file))
+    && (delta.has(file) || targetSet.has(file))
     && sourcePaths.some((sourcePath) => acceptanceExecutableTestBinding({
       sourceEntry: { path: sourcePath, text: sourceTexts.get(sourcePath) ?? "" },
       testEntry: { path: file, text: readSmallFile(input.cwd, file) }
@@ -181,8 +174,9 @@ export function decideSemanticRepairHandshake(input: {
  * This is intentionally narrower than semantic repair: every target must be
  * an actual current task delta, must have been observed in this task, and must
  * still carry successful structured-mutation authorship for the exact task,
- * run, and session. The caller separately enforces task scope and CAP-09/12/13
- * authority before persisting the reservation.
+ * run, and session. The caller separately enforces CAP-09/12/13 and every
+ * normal protected-path, permission, approval, and exact-target guard before
+ * persisting the reservation; task scope is advisory.
  */
 export function decideBoundedRecoveryHandshake(input: {
   task: TaskContract;

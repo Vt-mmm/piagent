@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { resolveProjectProfileDocument } from "../capabilities/project-profile.js";
+import { WORKSPACE_PRIVATE_STATE_PATTERNS } from "./workspace-evidence-roots.js";
 
 const DEFAULT_CONTEXT_INDEX_PATH = ".pi/context-index.json";
 const CONTEXT_ENGINE_STATE_PATTERN = ".pi/piagent-state/**";
@@ -67,17 +68,20 @@ export function effectiveProtectedPaths(policy = {}, profile = {}) {
   const contextIndexPath = contextIndexStatePath(profile);
   return {
     readProtectedPaths: uniqueStrings([
+      ...WORKSPACE_PRIVATE_STATE_PATTERNS,
       ...baseReadProtectedPaths,
       ...profileProtectedPaths,
       contextIndexPath
     ]),
     writeProtectedPaths: uniqueStrings([
+      ...WORKSPACE_PRIVATE_STATE_PATTERNS,
       ...policyProtectedPaths,
       ...profileProtectedPaths,
       ...readOnlyPaths,
       contextIndexPath
     ]),
     shellProtectedPaths: uniqueStrings([
+      ...WORKSPACE_PRIVATE_STATE_PATTERNS,
       ...baseReadProtectedPaths,
       ...profileShellProtectedPaths,
       ...readOnlyPaths,

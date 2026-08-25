@@ -111,15 +111,15 @@ tool context mang tính advisory chỉ được nạp khi task thực sự cần
 
 4. Implement
    - tool-call hook checks shell, capabilities and external actions automatically
-   - edit only in scope
+   - follow repository evidence across packages/child repositories; task scope is an initial focus
    - avoid protected paths
-   - block direct and shell writes outside scope
+   - block protected/read-only paths and unbounded opaque shell writes
 
 5. Verify
    - run every exact mapped verify command
    - tool-result hook records exact observed evidence after task start
    - bind passing evidence to the current working-tree digest
-   - reconcile changed files against baseline and scope
+   - reconcile every changed file against the baseline; report focus expansion without blocking
    - if verify unavailable: not DONE
 
 6. Trace

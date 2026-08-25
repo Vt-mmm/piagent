@@ -10,6 +10,7 @@ import {
 } from "./benchmark-candidate.js";
 import { assertBenchmarkLedgerBinding, inspectBenchmarkLedger } from "./benchmark-ledger.js";
 import { benchmarkPhaseAttribution } from "./benchmark-phase-attribution.js";
+import { causalRuntimeEvidence } from "./benchmark-runtime-causal.js";
 
 export { materializeBenchmarkCandidate } from "./benchmark-candidate.js";
 
@@ -709,8 +710,8 @@ export function benchmarkCausalContextReceipt(events, {
     ? "uncompacted"
     : compactedPrompts === prompts.length ? "compacted" : "mixed";
   return {
-    schemaVersion: 2,
-    evidenceSource: "context-telemetry-closed-aggregate-v2",
+    schemaVersion: 3,
+    evidenceSource: "context-telemetry-closed-aggregate-v3",
     applicability: "piagent",
     available,
     coverage: {
@@ -754,6 +755,7 @@ export function benchmarkCausalContextReceipt(events, {
         },
         definition: "matched-edit-recovery-context-receipt-v1"
       },
+      runtimeCausal: causalRuntimeEvidence(visible),
       compaction: { eventsObserved: compactions, state: compactions > 0 ? "observed" : "not-observed" },
       managedPrefix: { promptsObserved: prompts.length, compactedPrompts, state: managedPrefixState }
     } : null

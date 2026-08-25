@@ -67,7 +67,7 @@ import {
 } from "./context-index-policy.js";
 import {
   DEFAULT_MAX_TASK_ATTEMPTS, activeSessionTask, bindSessionTask, createTaskRunId, hasGitEvidenceRoot, listTaskContracts,
-  pathWithinChangeEvidenceRoot, priorTaskAttempts, repositoryFileManifest, repositoryFileManifestDetails, resolveTaskContract, safeTaskId, summarizeAttempt, taskContractValidationErrors, taskDigestMigrationArchiveStatus,
+  priorTaskAttempts, repositoryFileManifest, repositoryFileManifestDetails, resolveTaskContract, safeTaskId, summarizeAttempt, taskContractValidationErrors, taskDigestMigrationArchiveStatus,
   workPlanDependencyError, workingTreeSnapshot, workingTreeSnapshotHasUnavailableEvidence, writeTaskContract
 } from "./task-state.js";
 import { classifyRecordedVerificationFailure, classifyVerificationFailure, latestObservedVerification, meaningfulVerificationCommands, selectCompletionRecoveryClassification, selectVerificationPlan } from "./verification-intelligence.js";
@@ -110,6 +110,7 @@ import {
 } from "../runtime/session/tool-result-compaction.ts";
 import { RuntimeSessionState } from "../runtime/session/runtime-state.ts";
 import type { ObservedTaskContext } from "../runtime/session/runtime-state.ts";
+import { reuseCurrentTreeExactVerifier } from "../runtime/verification/exact-verifier-reuse.ts";
 import {
   PIAGENT_TOOL_GROUPS,
   PIAGENT_TOOL_NAMES,
@@ -165,7 +166,9 @@ import { buildLiveTaskStatus, formatLiveTaskStatus } from "../runtime/product/op
 import { buildTaskEfficiencyMetrics } from "../runtime/product/efficiency-metrics.ts";
 import { performanceReviewToolDecision, performanceReviewToolKind } from "../runtime/quality/performance-assurance.ts";
 import { expectedModelMutationProof } from "../runtime/quality/model-mutation-proof.ts";
+import { EditFreshnessGuard, editFreshnessModeFromEnvironment } from "../runtime/quality/edit-freshness-guard.ts";
 import { captureVerifierFileSnapshot } from "../runtime/inspection/verifier-snapshot-store.ts";
+import { fallbackBasePolicy } from "./fallback-base-policy.ts";
 import { prefixCompletions, registerPiagentTool, registerRuntimeCommand, registerRuntimeTool } from "../runtime/registration/extension-registration.ts";
 import { FRESH_COMMAND_ACTIONS, FRESH_COMMAND_HELP, ONBOARDING_COMMAND_ACTIONS, WORKFLOW_COMMAND_EXCLUSIONS } from "../runtime/registration/operator-catalogs.ts";
 import { registerPiagentStatusCommand } from "../runtime/registration/runtime-model-status.ts";
@@ -341,11 +344,11 @@ const DEFAULT_RUNTIME_POLICY: Required<RuntimePolicySettings> = {
 
 const DEFAULT_ORCHESTRATION_POLICY: ResolvedOrchestrationPolicy = {
   defaultMode: "solo-first",
-  maxConcurrentSubagents: 2,
+  maxConcurrentSubagents: 1,
   defaultReviewLenses: ["correctness", "tests", "scope"],
   roleModelGuidance: {
     planner: "Use the strongest available model for decomposition, architecture, risk, and acceptance criteria.",
-    worker: "Use the fastest reliable model for a bounded, already-planned single write set.",
+    worker: "Disabled by default. The parent model owns all implementation and mutation.",
     reviewer: "Use a model or thinking setting decorrelated from the worker when review quality matters.",
     watchdog: "Use a strong model only for final risk review, security, release, or high-impact changes."
   },
@@ -357,9 +360,9 @@ const DEFAULT_ORCHESTRATION_POLICY: ResolvedOrchestrationPolicy = {
     readBeforeTask: true
   },
   rules: [
-    "Default to one parent agent; do not start a swarm for ordinary implementation.",
-    "Use subagents only for bounded read-only scout, planning, review, or a single approved worker.",
-    "Parallel read-only review is allowed when the diff is non-trivial; parallel writers require explicit user approval and isolation.",
+    "Default to the parent model working directly; a helper is an exceptional token optimization, not a reasoning phase.",
+    "Use at most one fresh read-only helper only when runtime evidence proves at least two independent lanes and at least 30% projected net token savings.",
+    "Never delegate implementation, inherit parent history, retry a deterministic helper failure, or run parallel helpers/writers.",
     "Treat Field Guide memory as advisory; verify every durable fact against current repository files.",
     "Keep review lenses explicit so cheap review work catches drift before release."
   ]
@@ -386,176 +389,7 @@ const SHELL_TOOL_NAMES = new Set(["bash", "shell", "exec"]);
 const MAX_MCP_PROXY_ARGS_CHARS = 131_072;
 const SESSION_PERMISSION_OVERRIDES = new Map<string, PermissionProfileMode>();
 
-// The policy used when `policies/base-policy.json` cannot be read. It runs in
-// exactly the case where something is already wrong, so it must never be the
-// looser of the two: this copy had drifted behind the file and silently dropped
-// `.pi/piagent-state/**` -- the guard's own state -- along with the `sudo ` and
-// `chmod -R 777` blocks. A missing policy file is a reason to be stricter, not a
-// quiet downgrade. `tests/policy-core.test.mjs` fails if this drifts again.
-const DEFAULT_POLICY: BasePolicy = {
-  protectedPaths: [".git/**", "**/auth.json", "**/.env", "**/.env.*", "**/node_modules/**", "**/dist/**", ".pi/piagent-state/**", ".pi/settings.json", ".pi/piagent-profile.json", ".pi/piagent-profile.lock.json", CONTEXT_INDEX_FILE],
-  shellProtectedPaths: [".git/**", "**/auth.json", "**/.env", "**/.env.*", ".pi/piagent-state/**", ".pi/settings.json", ".pi/piagent-profile.json", ".pi/piagent-profile.lock.json", CONTEXT_INDEX_FILE],
-  blockedCommandPatterns: ["rm -rf /", "rm -rf ~", "rm -rf $HOME", "git reset --hard", "git clean -fd", "sudo ", "chmod -R 777"],
-  requireConfirmationPatterns: ["deploy", "release", "publish", "migration", "gh pr merge", "git push"],
-  defaultRequiredContext: ["AGENTS.md", "README.md"],
-  permissionProfiles: {
-    defaultMode: "workspace-write",
-    allowedModes: ["read-only", "workspace-write", "trusted-full-access"]
-  },
-  execPolicy: {
-    defaultMode: "enforce",
-    bannedPrefixSuggestions: [
-      ["python"],
-      ["python3"],
-      ["node"],
-      ["node", "-e"],
-      ["bash"],
-      ["bash", "-lc"],
-      ["sh"],
-      ["sh", "-c"],
-      ["zsh"],
-      ["zsh", "-lc"],
-      ["git"],
-      ["sudo"],
-      ["env"]
-    ],
-    rules: [
-      {
-        id: "prompt-git-add-broad",
-        action: "prompt",
-        match: "regex",
-        value: "(?:^|\\s)git\\s+(?:-C\\s+\\S+\\s+)?add\\s+(?:(?:--all|-A)(?:\\s+(?:\\.|:/))?|--\\s+(?:\\.|:/)|(?:\\.|:/))(?:\\s|$)",
-        reason: "Broad git staging can include unrelated or sensitive changes; inspect git status/diff and confirm the exact scope first."
-      }
-    ]
-  },
-  contextBudget: {
-    defaultMode: "enforce",
-    contextDeltaShadow: "sample",
-    maxContextFileChars: 50000,
-    maxMemoryFileChars: 20000,
-    maxManifestFiles: 80,
-    warnFragmentChars: 4000
-  },
-  toolRegistry: {
-    defaultMode: "advisory",
-    alwaysAllowedTools: [
-      "piagent_tools",
-      "piagent_context_engine",
-      "piagent_context",
-      "piagent_permission_status",
-      "piagent_exec_policy_check",
-      "piagent_context_budget",
-      "piagent_tool_policy_check",
-      "piagent_task_gate_check",
-      "piagent_usage_snapshot",
-      "piagent_orchestration_policy",
-      "piagent_memory_status",
-      "piagent_memory_note",
-      "piagent_memory_search",
-      "piagent_memory_citation_record",
-      "piagent_context_index_status",
-      "piagent_context_index_record",
-      "piagent_context_index_search",
-      "piagent_profile_options",
-      "piagent_profile_apply",
-      "piagent_profile_tech_options",
-      "piagent_profile_tech_apply",
-      "piagent_profile_tech_context_record",
-      "piagent_project_onboarding_record",
-      "piagent_task_start",
-      "piagent_task_progress",
-      "piagent_source_checkout",
-      "piagent_context_record",
-      "piagent_verify_record",
-      "piagent_trace_record"
-    ],
-    toolCapabilities: {
-      bash: ["shell"],
-      shell: ["shell"],
-      exec: ["shell"],
-      read: ["filesystem-readonly"],
-      grep: ["filesystem-readonly"],
-      find: ["filesystem-readonly"],
-      ls: ["filesystem-readonly"],
-      write: ["filesystem-write"],
-      edit: ["filesystem-write"],
-      apply_patch: ["filesystem-write"],
-      browser: ["browser"],
-      github: ["github"]
-    }
-  },
-  externalActionPolicy: {
-    defaultMode: "enforce",
-    providerKeywords: [
-      "github",
-      "gitlab",
-      "bitbucket",
-      "vercel",
-      "netlify",
-      "cloudflare",
-      "aws",
-      "gcp",
-      "azure",
-      "slack",
-      "teams",
-      "jira",
-      "linear",
-      "notion",
-      "figma",
-      "stripe",
-      "supabase",
-      "firebase"
-    ],
-    writeVerbs: [
-      "add",
-      "approve",
-      "archive",
-      "assign",
-      "close",
-      "comment",
-      "create",
-      "delete",
-      "deploy",
-      "dispatch",
-      "merge",
-      "open",
-      "post",
-      "publish",
-      "push",
-      "release",
-      "remove",
-      "reopen",
-      "run",
-      "send",
-      "submit",
-      "trigger",
-      "update",
-      "upload",
-      "write"
-    ],
-    safeVerbs: [
-      "fetch",
-      "find",
-      "get",
-      "inspect",
-      "list",
-      "read",
-      "search",
-      "show",
-      "view"
-    ]
-  },
-  finalGate: {
-    defaultMode: "enforce",
-    requireTaskContract: true,
-    requireContextManifest: true,
-    requireVerifyEvidence: true,
-    requireTrace: true,
-    requirePassingVerify: true
-  },
-  orchestrationPolicy: DEFAULT_ORCHESTRATION_POLICY
-};
+const DEFAULT_POLICY = fallbackBasePolicy(CONTEXT_INDEX_FILE, DEFAULT_ORCHESTRATION_POLICY);
 
 // Which platform supplies the adapters is fixed by where this file is installed,
 // so it is resolved once here rather than threaded through every profile load.
@@ -1513,7 +1347,7 @@ function resolveOrchestrationPolicy(profile: ProjectProfile, policy: BasePolicy)
   };
   return {
     defaultMode: normalizeOrchestrationMode(configured.defaultMode, defaultPolicy.defaultMode),
-    maxConcurrentSubagents: boundedInteger(configured.maxConcurrentSubagents, defaultPolicy.maxConcurrentSubagents, 0, 6),
+    maxConcurrentSubagents: Math.min(1, boundedInteger(configured.maxConcurrentSubagents, defaultPolicy.maxConcurrentSubagents, 0, 1)),
     defaultReviewLenses: normalizeReviewLenses(configured.defaultReviewLenses, defaultPolicy.defaultReviewLenses),
     roleModelGuidance,
     fieldGuide: {
@@ -3714,7 +3548,9 @@ function evaluateTaskGate(
     if (task.changedFiles.length === 0) missing.push("changed files");
     if (changedFileEvidence.undeclared.length > 0) missing.push(`declared observed changes (${changedFileEvidence.undeclared.join(", ")})`);
     if (changedFileEvidence.unsupportedClaims.length > 0) missing.push(`supported changed-file claims (${changedFileEvidence.unsupportedClaims.join(", ")})`);
-    if (changedFileEvidence.outsideScope.length > 0) missing.push(`changes within task scope (${changedFileEvidence.outsideScope.join(", ")})`);
+    if (changedFileEvidence.outsideScope.length > 0) {
+      warnings.push(`Task focus expanded beyond the initial scope (${changedFileEvidence.outsideScope.join(", ")}).`);
+    }
   }
   if ((task.changeMode === "read-only" || task.mutationPolicy === "forbidden") && changedFileEvidence.expected.length > 0) {
     missing.push(`mutation-forbidden task has observed changes (${changedFileEvidence.expected.join(", ")})`);
@@ -3915,6 +3751,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
   const runtimeState = new RuntimeSessionState({
     maxObservedContext: contextBudgetConfig(policy).maxManifestFiles
   });
+  const editFreshnessGuard = new EditFreshnessGuard(editFreshnessModeFromEnvironment(process.env.PIAGENT_EDIT_FRESHNESS));
   const sourceMutationGuardBindings = createSourceMutationGuardBindings(policy, loadProfileFromContext);
   const runtimeSnapshotCapture = new RuntimeSnapshotCapture(), runtimeVersions = readRuntimeVersionMetadata(PLATFORM_ROOT);
   const solverShadow = solverMode === "off" ? undefined : new SolverShadowRuntime(solverMode);
@@ -4137,7 +3974,10 @@ export default function piagentGuard(pi: ExtensionAPI) {
       failed?.exitCode ?? 1
     );
     const trajectory = trajectoryRuntime.status(ctx.cwd, task.taskRunId);
-    const dependencyMutationAuthorized = task.scope.some((entry) => /(?:^|\/)(?:package(?:-lock)?\.json|pnpm-lock\.yaml|yarn\.lock|[^/]*(?:config|lock)[^/]*)$/i.test(entry));
+    // Task scope is a retrieval/review hint, not filesystem authority. Recovery
+    // may update a dependency or config file when repository evidence requires
+    // it; protected-path and approval policy still run on the exact call.
+    const dependencyMutationAuthorized = true;
     return selectRecoveryDecision({
       featureEnabled: autoRecoveryEnabled && taskAuthorityDecision(task, "CAP-12", "model-turn").allowed,
       task: {
@@ -4194,6 +4034,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
     resolveTaskAny: (cwd, reference) => resolveTaskContract(cwd, reference, undefined) as TaskContract | undefined,
     bindTask: bindSessionTask,
     writeTask,
+    appendTrace,
     capabilityState: (ctx) => verifyProjectCapabilityState(extensionDir, ctx.cwd, ctx.isProjectTrusted(), { allowRepin: true, forceFull: true, sessionId: ctx.sessionManager.getSessionId() }),
     permissionProfile: (ctx, profile) => resolvePermissionProfile(profile, policy, permissionOverrideFromContext(ctx)),
     legacyProjectWarning: legacyProjectStateWarning,
@@ -4237,6 +4078,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
     onAgentSettled: activityInspector.refresh,
     beforeShutdown: (ctx) => {
       sourceMutationGuardBindings.unbind(ctx);
+      editFreshnessGuard.clear(ctx);
       activityInspector.dispose(ctx);
       sessionCapabilityDigests.delete(`${ctx.cwd}\0${ctx.sessionManager.getSessionId()}`);
     }
@@ -4334,6 +4176,15 @@ export default function piagentGuard(pi: ExtensionAPI) {
     telemetry,
     activity: recordActivity,
     now: nowIso,
+    observeEditFreshness: (ctx, event, metadata) => {
+      if (!metadata.successful || !metadata.taskRunId) return;
+      const protectedPaths = effectiveProtectedPaths(policy, loadProfileFromContext(ctx)).readProtectedPaths;
+      const source = event.toolName === "read" ? "read" : ["edit", "write", "apply_patch"].includes(event.toolName) ? "mutation" : undefined;
+      const candidates = source === "read" && metadata.targetPath ? [metadata.targetPath] : source === "mutation" ? metadata.mutationTargets : [];
+      const safeTargets = candidates.filter((file) => !matchesProtectedPath(file, protectedPaths));
+      const observed = source ? editFreshnessGuard.observe(ctx, metadata.taskRunId, safeTargets, source, nowIso()) : [];
+      if (observed.length) telemetry(ctx, { event: "edit_freshness_snapshot_observed", taskRunId: metadata.taskRunId, source, paths: observed.map(redactText) });
+    },
     completeSemanticRepair: (ctx, event, metadata) => {
       const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
       return task && (taskAuthorityDecision(task, "CAP-13", "mutate").allowed
@@ -4354,10 +4205,21 @@ export default function piagentGuard(pi: ExtensionAPI) {
     activity: recordActivity,
     beforeAuthorize: (event, ctx) => {
       const toolInput = isPlainRecord(event.input) ? event.input : {};
+      const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
+      const verifierReuse = reuseCurrentTreeExactVerifier({ cwd: ctx.cwd, task, toolName: event.toolName, toolInput, sessionEntries: ctx.sessionManager.getEntries() as unknown[] });
+      if (verifierReuse.reused) {
+        telemetry(ctx, { event: "verifier_evidence_reused", recordedAt: nowIso(), taskRunId: task?.taskRunId, toolCallId: event.toolCallId, reasonCode: verifierReuse.reasonCode, commandDigest: verifierReuse.commandDigest, workingTreeDigest: verifierReuse.workingTreeDigest }); return;
+      }
       const targetInspection = authorizationMutationTargetInspection(ctx.cwd, event.toolName, toolInput);
       if (targetInspection.reason) return { block: true, reason: `Blocked ${event.toolName}: ${targetInspection.reason}.` };
+      if (task?.trace.outcome === "pending" && task.changeMode === "source-change" && (event.toolName === "edit" || targetInspection.exactLocalPatchExecutor)) {
+        const freshness = editFreshnessGuard.evaluate(ctx, task.taskRunId, targetInspection.targets);
+        if (freshness.decision === "stale") {
+          telemetry(ctx, { event: "edit_freshness_stale", taskRunId: task.taskRunId, toolCallId: event.toolCallId, enforce: freshness.enforce, paths: freshness.stalePaths.map(redactText) });
+          if (freshness.enforce) return { block: true, reason: `Blocked ${event.toolName}: the previously observed source snapshot is stale for ${freshness.stalePaths.map(redactText).join(", ")}. Reread the affected file once; no patch hunk was started.` };
+        }
+      }
       if (!["edit", "write"].includes(event.toolName) && !targetInspection.exactLocalPatchExecutor) return;
-      const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
       if (!task || task.trace.outcome !== "pending" || task.changeMode !== "source-change") return;
       const semanticRepairEnabled = taskAuthorityDecision(task, "CAP-13", "mutate").allowed;
       const semanticRepairExactlyOff = !taskAuthorityDecision(task, "CAP-13", "observe").allowed;
@@ -4374,11 +4236,10 @@ export default function piagentGuard(pi: ExtensionAPI) {
       const currentDigest = workingTreeEvidenceDigest(currentSnapshot);
       const expectedReviewPaths = taskDeltaFilesFromSnapshot(task, currentSnapshot);
       const targets = targetInspection.targets;
-      const boundedInScopeMutation = targets.length > 0
-        && targets.every((file) => taskScopeIncludesPath(task.scope, file));
+      const boundedTargetMutation = targets.length > 0;
       const verifierCurrent = allVerifyCommandsPassCurrentTree(task, currentDigest);
 
-      if (phase.phase === "verify" && boundedInScopeMutation && semanticRepairEnabled && semanticRepairRuntime.prepare({
+      if (phase.phase === "verify" && boundedTargetMutation && semanticRepairEnabled && semanticRepairRuntime.prepare({
         ctx, task, event, currentDigest, currentDeltaPaths: expectedReviewPaths, targetPaths: targets,
         verifierCurrent
       })) return;
@@ -4388,7 +4249,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
       // model catches its own omission in the same task/run/session. The call
       // still traverses every normal authorization check; verify -> repair is
       // committed only by the tool-result hook after a successful tree change.
-      if (phase.phase === "verify" && boundedRecoveryEnabled && verifierCurrent && boundedInScopeMutation) {
+      if (phase.phase === "verify" && boundedRecoveryEnabled && verifierCurrent && boundedTargetMutation) {
         const authoredFileDigests = runtimeState.successfulModelMutationDigests(
           { taskId: task.taskId, taskRunId: task.taskRunId, sessionId: task.sessionId },
           currentSnapshot
@@ -4436,7 +4297,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
         return reviewDecision;
       }
 
-      if (targets.length === 0 || targets.some((file) => !taskScopeIncludesPath(task.scope, file))) return;
+      if (targets.length === 0) return;
       const result = trajectoryRuntime.sync(ctx.cwd, ctx.sessionManager.getSessionId(), task, {
         sourceHook: "tool-call",
         recoveryRequested: true,
@@ -4460,11 +4321,9 @@ export default function piagentGuard(pi: ExtensionAPI) {
       const targetInspection = authorizationMutationTargetInspection(ctx.cwd, event.toolName, toolInput);
       if (targetInspection.reason) return { block: true, reason: `Blocked ${event.toolName}: ${targetInspection.reason}.` };
       const targets = targetInspection.targets;
-      if ((["edit", "write"].includes(event.toolName) || targetInspection.patchCarrier) && (
-        targets.length === 0 || targets.some((file) => !taskScopeIncludesPath(task.scope, file))
-      )) {
+      if ((["edit", "write"].includes(event.toolName) || targetInspection.patchCarrier) && targets.length === 0) {
         runtimeState.denyPerformanceReviewTool(task.taskRunId);
-        return { block: true, reason: `Task ${task.taskId} semantic repair must stay inside its declared task scope.` };
+        return { block: true, reason: `Task ${task.taskId} semantic repair requires an exact statically bounded target.` };
       }
       const reviewDecision = performanceReviewToolDecision({
         toolName: event.toolName,
@@ -4816,32 +4675,18 @@ export default function piagentGuard(pi: ExtensionAPI) {
           + " Call `piagent_task_start` once with explicit project-relative scope, then retry."
       };
     }
-    if (sessionTask?.trace.outcome === "pending" && sessionTask.changeMode === "source-change") {
-      if (
-        shellProjectMutation
-        && opaqueShellMutationNeedsBoundedTarget(authorizedShellCommand, authorizedShellSegments)
-        && !shellMutationTargetBounded
-        && !configuredVerifierShell
-      ) {
-        return {
-          block: true,
-          reason: `Task ${sessionTask.taskId} cannot run an opaque shell mutation whose write target is not statically bounded. Use edit/write/apply_patch, an explicit in-scope redirection, or the exact configured verifier.`
-        };
-      }
-      const outsideScope = mutationTargets.filter((file) => !taskScopeIncludesPath(sessionTask.scope, file));
-      if (outsideScope.length > 0) {
-        return {
-          block: true,
-          reason: `Task ${sessionTask.taskId} cannot mutate paths outside its declared scope: ${outsideScope.join(", ")}.`
-        };
-      }
-      const outsideEvidenceRoot = mutationTargets.filter((file) => !pathWithinChangeEvidenceRoot(ctx.cwd, file));
-      if (outsideEvidenceRoot.length > 0) {
-        return {
-          block: true,
-          reason: `Task ${sessionTask.taskId} cannot mutate paths outside a change evidence root: ${outsideEvidenceRoot.join(", ")}. In a parent workspace with separate repos, write under a child repo or a scoped workspace directory such as plans/**.`
-        };
-      }
+    if (
+      sessionTask?.trace.outcome === "pending"
+      && sessionTask.changeMode === "source-change"
+      && shellProjectMutation
+      && opaqueShellMutationNeedsBoundedTarget(authorizedShellCommand, authorizedShellSegments)
+      && !shellMutationTargetBounded
+      && !configuredVerifierShell
+    ) {
+      return {
+        block: true,
+        reason: `Task ${sessionTask.taskId} cannot run an opaque shell mutation whose write target is not statically bounded. Use edit/write/apply_patch, an explicit project-local redirection, or the exact configured verifier.`
+      };
     }
     if (runtime.contextBudget !== "off" && (["write", "edit"].includes(event.toolName) || authorizationTargetInspection.patchCarrier)) {
       const budgetTargets = authorizationTargetInspection.patchCarrier

@@ -429,8 +429,8 @@ export function registerPolicyTools(pi: ExtensionAPI, deps: Record<string, any>)
   registerPiagentTool(pi, {
     name: "piagent_task_gate_check",
     label: "Piagent Task Gate Check",
-    description: "Check whether a governed task has enough context, verify evidence, and trace before claiming done.",
-    promptSnippet: "Use this before final on source-changing tasks.",
+    description: "Check whether a governed task has enough context, current-tree exact verifier evidence, and trace before claiming done or rerunning verification.",
+    promptSnippet: "Use before final and before repeating an exact verifier; run only commands listed as missing for the current tree.",
     parameters: Type.Object({
       taskId: Type.String({ minLength: 1 }),
       changedFiles: Type.Optional(Type.Array(Type.String()))

@@ -56,6 +56,7 @@ import {
   validTaskScopePattern
 } from "../packages/piagent-core/runtime/workflows/task-intake.ts";
 import { buildAcceptanceReceipt } from "../packages/piagent-core/extensions/acceptance-receipt.js";
+import { compileCriterionGraph } from "../packages/piagent-core/extensions/criterion-graph.js";
 import {
   RUNTIME_INTAKE_MESSAGE_MAX_CHARS,
   SEMANTIC_COMPACTION_MAX_CHARS,
@@ -87,6 +88,7 @@ import {
   registerRuntimeCommand,
   registerRuntimeTool
 } from "../packages/piagent-core/runtime/registration/extension-registration.ts";
+import { resolveTaskStartRepositoryManifestProvider } from "../packages/piagent-core/runtime/registration/task-start-manifest.ts";
 import {
   FRESH_COMMAND_ACTIONS,
   ONBOARDING_COMMAND_ACTIONS,
@@ -146,6 +148,43 @@ describe("runtime session modules", () => {
     assert.equal(WORKFLOW_COMMAND_EXCLUSIONS.includes("platform"), true);
   });
 
+  it("uses an auditable fail-safe manifest fallback across task-start registration version skew", () => {
+    const legacyCalls = [];
+    const repositoryFileManifest = (cwd, maximum) => {
+      legacyCalls.push({ cwd, maximum });
+      return ["src/b.ts", "src/a.ts", "src/a.ts", null];
+    };
+    for (const [repositoryFileManifestDetails, compatibilityReason] of [
+      [undefined, "missing-details-provider"],
+      ["stale-runtime-export", "nonfunction-details-provider"]
+    ]) {
+      const provider = resolveTaskStartRepositoryManifestProvider({ repositoryFileManifest, repositoryFileManifestDetails });
+      assert.deepEqual(provider.read("/workspace", 12), {
+        files: ["src/b.ts", "src/a.ts"],
+        complete: false,
+        candidateCount: 2,
+        provider: "legacy-array-fallback",
+        compatibilityReason
+      });
+    }
+    assert.deepEqual(legacyCalls, [
+      { cwd: "/workspace", maximum: 12 },
+      { cwd: "/workspace", maximum: 12 }
+    ]);
+
+    const native = resolveTaskStartRepositoryManifestProvider({
+      repositoryFileManifest,
+      repositoryFileManifestDetails: () => ({ files: ["src/a.ts"], complete: true, candidateCount: 4 })
+    }).read("/workspace");
+    assert.deepEqual(native, {
+      files: ["src/a.ts"], complete: true, candidateCount: 4, provider: "details"
+    });
+    assert.throws(
+      () => resolveTaskStartRepositoryManifestProvider({ repositoryFileManifest: null }),
+      /requires repositoryFileManifest to be a function/
+    );
+  });
+
   it("converts legacy Piagent error results into host-visible tool failures", async () => {
     const registered = [];
     const pi = { registerTool: (definition) => registered.push(definition) };
@@ -199,7 +238,8 @@ describe("runtime session modules", () => {
     assert.equal(rewritten.rewritten, true);
     assert.match(rewritten.systemPrompt, /Piagent runtime-managed task flow/);
     assert.match(rewritten.systemPrompt, /do not probe that destination with read first/);
-    assert.match(rewritten.systemPrompt, /Keep one writer, bound helper delegation/);
+    assert.match(rewritten.systemPrompt, /parent model reasons and implements directly/);
+    assert.match(rewritten.systemPrompt, /at least 30% projected net token saving/);
     assert.match(rewritten.systemPrompt, /report unresolved risk/);
     assert.doesNotMatch(rewritten.systemPrompt, /legacy steps/);
 
@@ -210,8 +250,10 @@ describe("runtime session modules", () => {
     assert.equal(compacted.compacted, true);
     assert.match(compacted.systemPrompt, /Root project instructions are already loaded/);
     assert.match(compacted.systemPrompt, /create it without a speculative read/);
-    assert.match(compacted.systemPrompt, /Treat current source and the durable Task Contract as authoritative/);
-    assert.match(compacted.systemPrompt, /preserve the user's exact scope, keep one writer, bound helpers, and report unresolved risk/);
+    assert.match(compacted.systemPrompt, /Treat current source, the operator request, and the durable Task Contract as authoritative/);
+    assert.match(compacted.systemPrompt, /parent reasons and implements directly/);
+    assert.match(compacted.systemPrompt, /never delegate writes, inherit parent history, fan out, or retry a deterministic helper failure/);
+    assert.match(compacted.systemPrompt, /scope is an initial retrieval\/review focus, not a mutation boundary/);
     assert.doesNotMatch(compacted.systemPrompt, /long text/);
   });
 
@@ -244,6 +286,51 @@ describe("runtime session modules", () => {
     assert.match(carryOver, /Exact verify commands:\n1\. npm test/);
     assert.match(carryOver, /Full task truth is file-backed by the durable Task Contract/);
     assert.match(carryOver, /Do not convert assumptions into facts/);
+  });
+
+  it("omits the legacy runtime-scope criterion from semantic carry-over without mutating the contract", () => {
+    const legacyCriterion = "Changes stay within the runtime-derived task scope.";
+    const acceptanceCriteria = [
+      legacyCriterion,
+      "Frontend implementation matches the approved backend contract.",
+      "Run the configured verification commands."
+    ];
+    const scope = ["v-nexus-frontend/src/**", "v-nexus-frontend/e2e/**"];
+    const verifyCommands = ["npm test"];
+    const criterionGraph = compileCriterionGraph({
+      acceptanceCriteria,
+      scope,
+      verifyCommands,
+      changeMode: "source-change",
+      mode: "criterion-graph",
+      createdAt: "2026-08-24T00:00:00.000Z"
+    });
+    const durableCriteria = structuredClone(acceptanceCriteria);
+    const durableGraph = structuredClone(criterionGraph);
+    const carryOver = buildSemanticCompactionInstructions({
+      taskId: "LEGACY-SCOPE",
+      taskRunId: "legacy-scope-run",
+      sessionId: "session-1",
+      sessionName: "LEGACY-SCOPE",
+      riskLane: "normal",
+      summary: "Implement the frontend from the approved backend contract.",
+      acceptanceCriteria,
+      criterionGraph,
+      scope,
+      changedFiles: [],
+      verifyCommands,
+      trace: { outcome: "pending" }
+    });
+
+    assert.doesNotMatch(carryOver, /Changes stay within the runtime-derived task scope/);
+    assert.doesNotMatch(carryOver, /criterion-01/);
+    assert.match(carryOver, /criterion-02 behavior/);
+    assert.match(carryOver, /criterion-03 verification .*after=criterion-02/);
+    assert.match(carryOver, /Initial focus \(advisory\): v-nexus-frontend\/src\/\*\*/);
+    assert.match(carryOver, /neither authorizes nor forbids mutation/);
+    assert.doesNotMatch(carryOver, /\nScope:/);
+    assert.deepEqual(acceptanceCriteria, durableCriteria);
+    assert.deepEqual(criterionGraph, durableGraph);
   });
 
   it("builds usage and preflight decisions from one shared threshold policy", () => {
@@ -1018,11 +1105,54 @@ describe("runtime session modules", () => {
       "read-only"
     );
     assert.equal(
+      automaticTaskIntakeMode(
+        "Inspect src/greeting.js and prepare a governed source task, but do not modify the project yet.",
+        []
+      ),
+      undefined,
+      "a temporary pre-task mutation pause must not become a task-wide read-only contract"
+    );
+    assert.equal(
+      automaticTaskMutationPolicy(
+        "Inspect src/greeting.js and prepare a governed source task, but do not modify the project yet.",
+        "source-change"
+      ),
+      "required"
+    );
+    assert.equal(
       automaticTaskIntakeMode("Run all tests, typecheck, and npm pack --dry-run. Do not edit source files.", []),
       "source-change"
     );
     assert.equal(
       automaticTaskMutationPolicy("Run all tests, typecheck, and npm pack --dry-run. Do not edit source files.", "source-change"),
+      "forbidden"
+    );
+    assert.equal(
+      automaticTaskMutationPolicy(
+        "Implement the frontend update: admin ingestion sources become list/detail read-only, add redirects and E2E. Do not mutate anything outside v-nexus-frontend/src/** and v-nexus-frontend/e2e/**.",
+        "source-change"
+      ),
+      "required"
+    );
+    for (const prompt of [
+      "Implement frontend; do not edit backend files.",
+      "Do not edit backend; update frontend and tests.",
+      "Mutate only v-nexus-frontend/src/**; all other paths read-only.",
+      "Do not edit files outside src/**; update src/app.ts."
+    ]) {
+      assert.equal(automaticTaskIntakeMode(prompt, []), "source-change", prompt);
+      assert.equal(automaticTaskMutationPolicy(prompt, "source-change"), "required", prompt);
+    }
+    for (const prompt of [
+      "Run tests; do not edit source files.",
+      "Run the configured verifier in read-only mode.",
+      "This task must remain read-only.",
+      "No project files are changed."
+    ]) {
+      assert.equal(automaticTaskMutationPolicy(prompt, automaticTaskIntakeMode(prompt, []) ?? "source-change"), "forbidden", prompt);
+    }
+    assert.equal(
+      automaticTaskMutationPolicy("Run the configured verifier in read-only mode and report the result.", "source-change"),
       "forbidden"
     );
     assert.equal(automaticTaskMutationPolicy("Fix src/cart.ts and run the tests.", "source-change"), "required");

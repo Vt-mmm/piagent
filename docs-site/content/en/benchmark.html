@@ -1,9 +1,9 @@
 <section class="benchmark-summary" aria-labelledby="benchmark-verdict">
   <div class="benchmark-verdict">
     <div>
-      <p class="section-kicker">Production V1 · v1.6.0 public regression evidence</p>
-      <h2 id="benchmark-verdict">Piagent scores 9.97/10</h2>
-      <p>Piagent resolved 54/54 tasks and used 61.43% fewer fresh tokens under the predeclared fixed-workload primary estimand, using the same GPT-5.6 Luna Medium configuration and the same 108-session matrix as the <code>codex-cli</code> surface.</p>
+      <p class="section-kicker">Historical Production V1 · v1.6.0 public regression evidence</p>
+      <h2 id="benchmark-verdict">Historical fresh-token score: 9.97/10</h2>
+      <p>Piagent resolved 54/54 tasks and used 61.43% fewer fresh tokens under the v1.6.0 fixed-workload estimand, using the same GPT-5.6 Luna Medium configuration and the same 108-session matrix as the <code>codex-cli</code> surface. Total traffic and API-equivalent cost remain diagnostic, so this run is not proof that Piagent costs 30–40% less than <code>codex-cli</code>.</p>
     </div>
     <div class="benchmark-verdict-score" aria-label="Overall score 9.97 out of 10">
       <strong>9.97</strong>
@@ -52,6 +52,10 @@
   <div class="callout ok-callout">
     <strong>Isolated control surface with complete accounting</strong>
     <p><code>codex-cli</code> uses a temporary home per session and loads no global instructions, plugins, apps, browser, or multi-agent configuration. Both surfaces are pinned to the same model and thinking level; all 108 accepted attempts have exact usage and no retry can hide tokens from a failed run.</p>
+  </div>
+  <div class="callout">
+    <strong>The historical result is not a cost claim.</strong>
+    <p>The new diagnostic counts cache read/write traffic, prices exact input/cache/output buckets with a versioned snapshot, and includes provider-started failed attempts. A future suite may enable the 0.70 cost gate only after exact per-request usage is available; the v1.6.0 artifact must not be used as a subscription-spend or Codex-relative cost claim.</p>
   </div>
 </section>
 
@@ -103,7 +107,7 @@
         <tr><td>Workflow</td><td><strong>9.85</strong></td><td>Candidate continuity and workflow gates passed</td></tr>
         <tr><td>Efficiency</td><td><strong>10.00</strong></td><td>Fixed-workload efficiency gate passed</td></tr>
         <tr><td>Primary tokens</td><td><strong>Pass</strong></td><td>Ratio 0.3857; upper 95% 0.4840 ≤ 0.60</td></tr>
-        <tr><td>Overall</td><td><strong>9.97</strong></td><td>Production and token-claim gates both passed</td></tr>
+        <tr><td>Overall</td><td><strong>9.97</strong></td><td>Historical v1.6.0 fresh-token contract passed; Codex-relative cost remains diagnostic</td></tr>
       </tbody>
     </table>
   </div>
@@ -195,7 +199,7 @@
         <tr><th>Run</th><td><code>production-v1-20260824T040017Z-05b7cf</code></td></tr>
         <tr><th>Suite digest</th><td><code>308dc2f0a4656cb272421949a01972df2b0717b4ffeb564306ae12aa669ae6b8</code></td></tr>
         <tr><th>Model</th><td>GPT-5.6 Luna · Medium · both surfaces</td></tr>
-        <tr><th>Verdict</th><td><code>production gate: pass</code> · <code>token claim: allowed</code></td></tr>
+        <tr><th>Verdict</th><td><code>historical v1.6.0 gate: pass</code> · <code>Codex-relative cost: diagnostic only</code></td></tr>
         <tr><th>Public artifact</th><td>Reviewed aggregates only; no report, seed, local path, or session identity is published.</td></tr>
       </tbody>
     </table>
@@ -203,7 +207,7 @@
 
   <div class="callout">
     <strong>Limits of the conclusion</strong>
-    <p>This is a maintainer-built synthetic public regression, not an independent benchmark, and it does not permit a generalization claim. It does not prove Piagent wins every family or session, does not measure long-term production stability, and is not a claim about subscription spend, provider-billed cost, or wall-clock speed. Cost, duration, and host load, when observed, remain diagnostic and do not control the token verdict.</p>
+    <p>This is a maintainer-built synthetic public regression, not an independent benchmark, and it does not permit a generalization claim. It does not prove Piagent wins every family or session, does not measure long-term production stability, and is not a claim about subscription spend, provider-billed cost, or wall-clock speed. Total traffic and API-equivalent cost may become a hard gate only in a future suite version with exact per-request pricing evidence; this historical run cannot be relabeled.</p>
   </div>
 
   <div class="command-grid">

@@ -924,13 +924,13 @@ Default safe config:
 
 - `toolDescriptionMode: compact`;
 - `asyncByDefault: false`;
-- `parallel.concurrency: 3`;
-- `parallel.maxTasks: 6`;
+- `parallel.concurrency: 1`;
+- `parallel.maxTasks: 1`;
 - `maxSubagentDepth: 1`;
-- `maxSubagentSpawnsPerSession: 32`;
+- `maxSubagentSpawnsPerSession: 1`;
 - scheduled runs off;
 - worktree base stable;
-- intercom bridge on.
+- wait/intercom bridge off; builtin và worker disabled.
 
 ### Piagent agents
 
@@ -938,13 +938,13 @@ Default safe config:
 |---|---|---|
 | `piagent-scout` | Map source/spec read-only. | No write. |
 | `piagent-planner` | Plan implementation + verify gates. | No write. |
-| `piagent-worker` | Implement approved bounded task. | Write in scope. |
+| `piagent-worker` | Compatibility metadata only; Piagent config disables it. | Không được dispatch. |
 | `piagent-reviewer` | Review diff/tests/scope. | Review-first. |
 | `piagent-oracle` | Risk/architecture challenge. | No write. |
 
 ### Auto-delegation
 
-Với `/workflow task`, `/workflow be-to-fe`, `/workflow platform-improve`, `/workflow plan`, `/workflow review`, parent agent dùng solo-first orchestration: lập task tree/review lenses trước, rồi chỉ spawn subagent khi có phần việc độc lập và đáng token. Alias cũ như `/task` vẫn giữ cùng policy.
+Với `/workflow task`, `/workflow be-to-fe`, `/workflow platform-improve`, `/workflow plan`, `/workflow review`, parent agent tự suy luận và implement. Helper mặc định tắt. Khi operator bật rõ, runtime chỉ được dispatch một helper read-only, context fresh, nếu có ít nhất hai lane độc lập và projected net token saving từ 30% sau handoff/merge. Worker, retry, nested và parallel helper đều tắt. Alias cũ như `/task` giữ cùng policy.
 
 Kiểm tra nhanh policy:
 
@@ -954,13 +954,12 @@ Kiểm tra nhanh policy:
 
 Không cần tự gọi `/run` cho task bình thường. Chỉ dùng `/run` khi muốn ép rõ role hoặc debug.
 
-Parent nên spawn khi:
+Helper chỉ đủ điều kiện khi đồng thời:
 
-- cần scout codebase rộng;
-- cần map BE/spec read-only trước khi FE implement;
-- cần reviewer độc lập;
-- cần context builder cho task lớn;
-- cần oracle/risk challenge.
+- operator đã opt-in;
+- có ít nhất hai workstream độc lập và helper không phụ thuộc output tiếp theo của parent;
+- context chuyển giao fresh, tối đa 2.048 token và không inherit history;
+- tổng token parent + helper + handoff + merge được dự báo thấp hơn solo ít nhất 30%.
 
 Không nên spawn khi:
 
@@ -975,27 +974,15 @@ Không nên spawn khi:
 ```text
 /run piagent-scout "Map listing page state flow. Read-only."
 /run piagent-planner "Plan FE implementation from this backend contract."
-/run piagent-worker "Implement the approved plan. Do not touch backend."
 /run piagent-reviewer "Review current diff for correctness, tests, and scope drift."
 /run piagent-oracle "Challenge this architecture decision before implementation."
 ```
 
-Parallel read-only review:
-
-```text
-/parallel piagent-reviewer "Review correctness" -> piagent-reviewer "Review tests" -> piagent-reviewer "Review scope drift"
-```
-
-Chain:
-
-```text
-/chain piagent-scout "Scout target area" -> piagent-planner "Plan from {previous}" -> piagent-worker "Implement from {previous}" -> piagent-reviewer "Review implementation"
-```
+`/parallel`, `/chain` và writer role là capability upstream của package `pi-subagents`, nhưng Piagent config chủ động chặn các surface đó để tránh nhân context và token.
 
 Background:
 
 ```text
-/run piagent-scout "Map this module" --bg
 /subagents-fleet
 ```
 
@@ -1007,26 +994,19 @@ subagent({ action: "status", view: "fleet" })
 subagent({ action: "status", id: "<run-id>", view: "transcript" })
 subagent({ action: "steer", id: "<run-id>", message: "Focus only on tests." })
 subagent({ action: "stop", id: "<run-id>" })
-subagent({ action: "resume", id: "<run-id>", message: "Continue after this clarification." })
 ```
 
 Output file mode để giảm parent context:
 
 ```text
 /run scout[output=context.md,outputMode=file-only] "Map target area"
-/chain scout[output=context.md,as=context] "Scan" -> planner[reads=context.md] "Plan from {outputs.context}"
 ```
 
 ### Worktree isolation
 
-Chỉ bật writer parallel/worktree khi:
+Piagent không bật writer parallel/worktree; parent là writer duy nhất.
 
-- repo là Git repo;
-- worktree clean;
-- write sets không overlap;
-- parent review/merge outputs.
-
-Default solo/internal: một `piagent-worker`, parallel read-only reviewers/scouts.
+Default: parent là writer duy nhất; không worker, không parallel helper.
 
 ### Watchdog
 

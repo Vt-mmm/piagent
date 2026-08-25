@@ -39,6 +39,13 @@ describe("failure intelligence v1", () => {
     assert.equal(result.authorizesSourceMutation, false);
   });
 
+  it("never turns task-scope wording in ordinary verifier output into a policy block", () => {
+    const assertion = classifyVerificationFailure("AssertionError: expected value outside declared scope", 1);
+    assert.equal(assertion.category, "test-assertion");
+    const proseOnly = classifyVerificationFailure("scope violation in the rendered label", 1);
+    assert.equal(proseOnly.category, "unknown");
+  });
+
   it("reconstructs the category from bounded runtime-generated verifier summaries", () => {
     for (const category of ["compile-typecheck", "test-assertion", "lint-format", "dependency-config", "environment", "provider-network", "permission-policy", "scope-protected-path", "flaky-infrastructure"]) {
       const suffix = ["provider-network", "flaky-infrastructure"].includes(category) ? ", retryable" : "";
@@ -56,12 +63,12 @@ describe("failure intelligence v1", () => {
     assert.equal(result.sourceMutationPermission, "eligible-in-scope");
   });
 
-  it("classifies completion boundary violations as terminal scope failures even after a passing verifier", () => {
+  it("classifies protected and mutation-forbidden boundaries as terminal policy failures even after a passing verifier", () => {
     const cases = [
-      "changes within task scope (apps/web/src/search-view.js)",
       "read-only task has observed changes (src/report.js)",
       "completion cannot include a protected path",
-      "mutation landed outside its declared scope"
+      "mutation-forbidden task has observed changes (src/report.js)",
+      "completion changed a read-only path"
     ];
     for (const missing of cases) {
       const result = classifyCompletionGateFailure([missing], "configured verifier passed", 0);
@@ -72,18 +79,18 @@ describe("failure intelligence v1", () => {
     }
   });
 
-  it("gives a completion scope boundary precedence over critical proof and recorded verifier failures", () => {
+  it("gives a completion protected-path boundary precedence over critical proof and recorded verifier failures", () => {
     const recorded = classifyVerificationFailure("AssertionError: focused test failed", 1);
     const result = selectCompletionRecoveryClassification(recorded, [
       "critical acceptance evidence (ac-01-boundary-case:boundary-case)",
-      "changes within task scope (packages/shared/src/search-contract.js)"
+      "completion cannot include protected paths"
     ], "Runtime observed configured verifier exit 1 (test-assertion).", 1);
     assert.equal(recorded.category, "test-assertion");
     assert.equal(result.category, "scope-protected-path");
     assert.equal(result.sourceMutationPermission, "forbidden");
   });
 
-  it("gives structured policy, scope, and provider events precedence over terminal wording", () => {
+  it("gives structured policy, protected-path, and provider events precedence over terminal wording", () => {
     assert.equal(classifyVerificationFailure("TS2322", 1, { structuredEvents: ["protected-path"] }).category, "scope-protected-path");
     assert.equal(classifyVerificationFailure("AssertionError", 1, { structuredEvents: ["permission-denied"] }).category, "permission-policy");
     assert.equal(classifyVerificationFailure("compile error", 1, { structuredEvents: ["provider-network"] }).category, "provider-network");

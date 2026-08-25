@@ -94,10 +94,23 @@ operator review.
 Hash chain của journal và acceptance receipt là operational evidence do cùng
 runtime tạo ra, không phải independent attestation hay một audit authority độc lập.
 
+Gateway bind mỗi lần browser gửi vào đúng một operation lifecycle dùng chung
+giữa stream và supervisor. Runtime chỉ cho tối đa một provider retry còn
+pristine trong khoảng delay 8 giây, và từ chối replay sau khi đã có assistant
+output nhìn thấy hoặc bất kỳ tool call nào. Compaction có phase riêng, terminal
+settlement chỉ phát một lần và event đến muộn không thể đưa UI trở lại
+`Working`. Bounded emission guard cục bộ bỏ activity/reviewer note lặp hoặc câu
+filler; final assistant message luôn đi ngoài guard này.
+
+Exact edit và local patch còn có thể bind vào full-file digest của lần read
+thành công gần nhất trong cùng task run. Concurrent drift đã được chứng minh sẽ
+block toàn bộ mutation trước hunk đầu tiên và yêu cầu một fresh read; file chưa
+có snapshot vẫn dùng exact-anchor behavior bình thường của host.
+
 Recovery dựa trên classification và bị giới hạn xuyên suốt các task attempt.
-Chỉ failure thuộc source và nằm trong scope mới có tối đa một repair pass;
+Chỉ failure có evidence chứng minh thuộc ownership của source mới có tối đa một repair pass;
 transient verifier/provider failure chỉ có tối đa một exact retry và không có
-source-mutation authority. Environment, permission, policy, scope và unknown
+source-mutation authority. Environment, permission, protected-path policy và unknown
 failure luôn non-mutating. `PIAGENT_AUTO_RECOVERY=off` khôi phục ordinary P3
 handoff behavior mà không migrate state. Mọi final path ghi redacted Handoff v1
 projection từ operational truth. Khi resume, runtime bind task/session identity,
@@ -111,7 +124,7 @@ Semantic specialist review là đường CAP-13 riêng cho `strict-high-risk`, k
 phải parser-driven recovery áp dụng phổ quát. Nó bị pin vào một shared
 continuation, một current-tree diff, hai targeted read, đúng source/test path đủ
 điều kiện và configured verifier sau mọi mutation. Call bị deny, fail, no-op,
-stale, ngoài scope, unsupported hoặc hết budget sẽ khóa cơ hội và handoff.
+stale, không xác định được target, unsupported hoặc hết budget sẽ khóa cơ hội và handoff.
 Broad-default observe/advise không schedule review này và không block tool call.
 
 Adaptive Context Planner chạy trước khi runtime auto inject context. Nó dùng
@@ -124,9 +137,9 @@ vào context.
 
 Task Contract v2 còn mang projection lập kế hoạch Criterion Graph v1 theo kiểu
 cộng thêm. Graph map đúng một lần từng criterion của operator sang planning kind
-đóng, target hint nằm trong scope, proof kind và dependency order. Graph không có
+đóng, target hint theo initial focus, proof kind và dependency order. Graph không có
 state `satisfied`, nên không thể thay acceptance hay exact-verifier truth. Graph
-ưu tiên context liên quan trong scope trước observation cũ, giữ nguyên digest qua
+ưu tiên context theo focus relevance trước observation cũ, giữ nguyên digest qua
 compaction/resume, không đổi tool schema và không tạo provider follow-up turn.
 `PIAGENT_INTELLIGENCE_ENGINE=off` chọn mechanical control cho causal test hoặc
 rollback khẩn cấp; task mới mặc định dùng criterion engine và pin mode/digest của
@@ -165,16 +178,16 @@ automatic dispatch của mọi capability bị chặn ở một đơn vị cho m
 interaction check này được bind vào snapshot và không đổi tool schema mà
 provider nhìn thấy.
 
-Helper do Piagent sở hữu dùng RolePolicy v1 và HelperRequest v1. Request bind
-hashed session/task identity, bounded objective, read/write scope, exact tool
+Helper do Piagent sở hữu dùng RolePolicy v1 và HelperRequest v2. Request bind
+hashed session/task identity, bounded objective, read-only scope, exact tool
 allowlist, authenticated model/effort source, context/time/call ceiling, output
 schema, stopping rule, approval restriction và deduplication key. Read-only role
-không thể nhận mutation tool. Worker default off và cần explicit single-writer
-lease. `PIAGENT_HELPERS_MODE=off|recommend|on` mặc định là `recommend`; `on` chỉ
-cho phép read-only dispatch qua provider adapter đã cài. CAP-14 chỉ cho tối đa
-một automatic helper dispatch cho mỗi task/run; lower-level owner budget vẫn
-giới hạn hai helper concurrent và ba explicit owned reservation tổng, deduplicate
-work tương đương, recover reservation hết hạn mà không tăng budget, và cancel
+không thể nhận mutation tool và worker dispatch bị tắt.
+`PIAGENT_HELPERS_MODE=off|recommend|on` mặc định là `off`; `on` là opt-in rõ ràng
+nhưng runtime vẫn phải chứng minh hai lane độc lập và projected net token saving
+từ 30%. CAP-14 cùng owner budget chặn tuyệt đối ở một helper read-only fresh tổng
+và concurrent, 0 writer, 0 retry, 8 calls và tối đa 2.048 context token chuyển giao.
+Failure/reservation hết hạn vẫn dùng hết slot duy nhất, và runtime cancel
 late work khi parent Task Contract terminal. Controller không claim quyền kiểm
 soát Pi session/account usage không liên quan và không đổi user-pinned parent
 model. Dispatch cưỡng chế time/call/token ceiling khi merge result: timeout,

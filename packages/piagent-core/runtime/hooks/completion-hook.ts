@@ -8,7 +8,7 @@ import {
 } from "../../extensions/acceptance-receipt.js";
 import { hasDurableContextEvidence } from "../../extensions/context-evidence.js";
 import type { TaskContract } from "../../extensions/guard-types.js";
-import { runtimeLifecycleMode, workingTreeEvidenceDigest } from "../../extensions/task-lifecycle.js";
+import { applyAssistedReadOnlyFinalHandoff, runtimeLifecycleMode, workingTreeEvidenceDigest } from "../../extensions/task-lifecycle.js";
 import { recordCompletionAudit } from "../../extensions/task-runtime-audit.js";
 import { workingTreeSnapshot } from "../../extensions/task-state.js";
 import { taskDeltaFilesFromSnapshot } from "../../extensions/task-contract-view.js";
@@ -203,6 +203,7 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
     );
     let completionGate: CompletionGate | undefined;
     if (handoffAttempt) {
+      if (applyAssistedReadOnlyFinalHandoff(task, { durableReadEvidence: readOnlyEvidenceObserved, finalHandoffObserved: true }).changed) task = writeTask(ctx.cwd, task);
       let projected = completionProjection(ctx.cwd, task, currentDigests);
       const baseProjectedGate = evaluateGate(ctx.cwd, projected, currentDigests, currentDigest);
       const exactOutput = evaluateExactFinalOutputContract(projected, text, ctx.cwd);
@@ -377,20 +378,20 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
           ? [
             "Continue the same bounded task with one acceptance-proof repair pass.",
             ...criticalRecoveryGuidance,
-            "Add or correct focused in-scope tests for every missing critical obligation. Assert exact boundary partitions and requested error classes; if a focused test exposes a defect, repair the in-scope source before rerunning verification.",
+            "Add or correct focused tests for every missing critical obligation. Assert exact boundary partitions and requested error classes; if a focused test exposes a defect, repair the evidence-backed source before rerunning verification.",
             ...verifierInstructions(gate.missingVerifyCommands),
-            "Do not broaden task scope, repeat a failed hypothesis, expand permission, or perform an external action."
+            "Do not repeat a failed hypothesis, expand permission, or perform an external action."
           ]
           : [
-            "Continue the same bounded task with one targeted in-scope source repair, then run every exact configured verifier.",
+            "Continue the same bounded task with one targeted evidence-backed source repair, then run every exact configured verifier.",
             ...verifierInstructions(gate.missingVerifyCommands),
-            "Do not broaden task scope, repeat a failed hypothesis, expand permission, or perform an external action."
+            "Do not repeat a failed hypothesis, expand permission, or perform an external action."
           ]
         : selectedRecovery.reasonCodes.includes("unknown-diagnostic-pass") || task.changeMode === "read-only" || task.mutationPolicy === "forbidden"
         ? [
             ...(gate.missingVerifyCommands.length > 0
               ? ["Run only the missing exact verifier commands against the current working tree.", ...verifierInstructions(gate.missingVerifyCommands)]
-              : ["Run one bounded diagnostic pass using targeted reads and report the concrete evidence or unknown."]),
+              : [(task.changeMode === "read-only" || task.mutationPolicy === "forbidden") && gate.missing.length > 0 && gate.missing.every((item) => /^completed work plan\b/i.test(item)) ? "Complete only the pending read-only review checkpoint, then re-emit the complete substantive assessment from the immediately preceding response; do not repeat repository reads or replace it with checkpoint evidence." : "Run one bounded diagnostic pass using targeted reads and report the concrete evidence or unknown."]),
             "Do not mutate project source, expand permission, or perform an external action."
           ]
         : [

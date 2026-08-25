@@ -86,10 +86,10 @@ describe("pinned authority rollback and resume policy", () => {
       recordedAt: "2026-08-10T12:02:00.000Z"
     });
     assert.equal(stopped.reason, "capability-kill-switch-requested");
-    assert.deepEqual(stopped.killedCapabilities, ["CAP-09", "CAP-12", "CAP-14"]);
+    assert.deepEqual(stopped.killedCapabilities, ["CAP-09", "CAP-12"]);
     const later = inspectTaskAuthorityResumePolicy(cwd, strict, { environment: { PIAGENT_PHASE_TOOLS: "on", PIAGENT_AUTO_RECOVERY: "on" } });
     assert.equal(later.disposition, "new-attempt-required");
-    assert.deepEqual(later.killedCapabilities, ["CAP-09", "CAP-12", "CAP-14"]);
+    assert.deepEqual(later.killedCapabilities, ["CAP-09", "CAP-12"]);
   });
 
   it("rolls acceptance and semantic enforcement back independently without changing phase or recovery", () => {

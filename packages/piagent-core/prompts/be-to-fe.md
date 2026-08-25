@@ -26,13 +26,7 @@ Flow:
    - BE scout: read-only.
    - FE implementation: source-write.
    - Auth/data migration/external provider: high-risk, ask before implementation.
-4. Use bounded read-only subagents only when BE/FE mapping has independent lanes worth the extra token/tool cost:
-   - `piagent-scout` maps backend contract read-only;
-   - `piagent-scout` maps frontend touchpoints read-only;
-   - builtin `context-builder` may create handoff context when the BE→FE mapping touches multiple journeys/forms/contracts;
-   - `piagent-planner` produces the FE implementation plan when the contract touches multiple layers;
-   - `piagent-reviewer` reviews diff/verification after implementation.
-   Continue single-agent if subagents are unavailable, the task is tiny, or requirements are unresolved.
+4. Keep BE scouting and FE implementation in the parent by default. At most one fresh read-only `piagent-scout` may map either the BE contract or FE touchpoints only when runtime evidence proves two independent lanes and at least 30% projected total token savings after handoff/merge. Never launch two scouts, delegate FE writes/planning/review, inherit the parent transcript, or retry a deterministic helper failure.
 5. Scout backend contract read-only:
    - controller/route/handler;
    - request/response DTO/schema;
@@ -53,7 +47,7 @@ Flow:
    - route/page/component/form;
    - tests/e2e.
 9. Call `piagent_task_start` exactly once before FE source writes and reuse an active contract.
-10. Implement FE only with one writer by default.
+10. Implement FE in the parent; helper workers are disabled.
 11. Run every exact command returned in `task.verifyCommands` after the latest mutation. For a normal default plan, review the final diff and mark only its review step done with `piagent_task_progress`.
 12. Let runtime hooks record context, verification, trace, and final-gate state. Use recovery tools only if the runtime reports missing evidence.
 13. Do not paste full test/build/tool logs into chat or final output. Summarize the signal and quote only relevant failing lines.

@@ -62,6 +62,11 @@ type ToolResultHookDependencies = ContextDeliveryConfirmationDependencies & {
   telemetry: (ctx: ExtensionContext, payload: Record<string, unknown>) => void;
   activity?: (ctx: ExtensionContext, payload: Record<string, unknown>) => void;
   now: () => string;
+  observeEditFreshness?: (
+    ctx: ExtensionContext,
+    event: ToolResultEvent,
+    metadata: { taskRunId?: string; successful: boolean; targetPath?: string; mutationTargets: string[] }
+  ) => void;
   completeSemanticRepair?: (
     ctx: ExtensionContext,
     event: ToolResultEvent,
@@ -314,6 +319,12 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
     let resultChanged = false;
     let editRecovery: EditRecoveryContext | undefined;
     const resultTarget = dependencies.extractLikelyPath(ctx.cwd, isPlainRecord(event.input) ? event.input : {});
+    dependencies.observeEditFreshness?.(ctx, event, {
+      taskRunId: taskIdentity?.taskRunId,
+      successful: successfulToolResult(event),
+      targetPath: resultTarget,
+      mutationTargets: directMutationTargets
+    });
     if (event.toolName === "grep") {
       const filtered = filterGrepProtectedContent(resultContent, readProtectedPaths);
       if (filtered.changed) {

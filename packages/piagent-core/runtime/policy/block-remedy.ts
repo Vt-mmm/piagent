@@ -44,10 +44,6 @@ const REMEDIES: Array<{ match: RegExp; remedy: string }> = [
     remedy: "Work inside the project, or widen the filesystem scope in the active profile and reapply it."
   },
   {
-    match: /cannot mutate paths outside its declared scope|semantic repair must stay inside its declared task scope/i,
-    remedy: "Start a new attempt with `piagent_task_start` listing this path in the scope; a running task cannot widen its own."
-  },
-  {
     match: /Task Implementation Contract is required/i,
     remedy: "Call `piagent_task_start` once with explicit project-relative scope, then retry."
   },

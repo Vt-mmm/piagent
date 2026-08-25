@@ -52,7 +52,7 @@ function normalizedEvidenceDigest(value: string | null | undefined): string | nu
 
 export function continuationClassForRecovery(decision: RecoveryDecision): ContinuationClass {
   if (["permission-policy", "scope-protected-path", "environment"].includes(decision.failureCategory)
-    || decision.reasonCodes.some((code) => ["permission-expansion-forbidden", "scope-replan-required", "operator-environment-action", "dependency-mutation-not-authorized"].includes(code))) return "policy-blocked";
+    || decision.reasonCodes.some((code) => ["permission-expansion-forbidden", "protected-path-forbidden", "scope-replan-required", "operator-environment-action", "dependency-mutation-not-authorized"].includes(code))) return "policy-blocked";
   if (decision.action === "repair") return "source-repair";
   if (decision.failureCategory === "provider-network") return "model-retry";
   if (decision.failureCategory === "flaky-infrastructure") return "infrastructure-retry";

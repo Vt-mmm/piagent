@@ -143,6 +143,33 @@ describe("Piagent Session Hub owner lease and lazy runtime supervisor", () => {
     }
   });
 
+  it("freezes the durable assistant result at agent_settled and ignores post-settlement compaction events", async () => {
+    const events = new GatewayEventStore(), observed = [];
+    events.subscribe((event) => observed.push(event));
+    const stream = new GatewaySessionStream({ sessionRef: "session_settlement_freeze",
+      operationRef: "operation_settlement_freeze", events });
+    stream.observe({ type: "message_start", message: { role: "assistant" } });
+    stream.observe({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Durable final result." } });
+    stream.observe({ type: "message_end", message: { role: "assistant", stopReason: "stop",
+      content: [{ type: "text", text: "Durable final result." }] } });
+    stream.observe({ type: "agent_settled" });
+    await stream.settled();
+
+    stream.observe({ type: "message_start", message: { role: "assistant" } });
+    stream.observe({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Late compaction draft." } });
+    stream.observe({ type: "message_end", message: { role: "assistant", stopReason: "error",
+      content: [{ type: "text", text: "Late compaction draft." }] } });
+    stream.observe({ type: "tool_execution_start", toolCallId: "late-compaction", toolName: "compact" });
+    stream.complete("revision_settlement_freeze");
+
+    const operationEvents = observed.filter((event) => event.payload.operationRef === "operation_settlement_freeze");
+    assert.equal(operationEvents.filter((event) => event.kind === "message.completed").length, 1);
+    assert.equal(operationEvents.filter((event) => event.kind === "operation.settled").length, 1);
+    assert.equal(operationEvents.find((event) => event.kind === "operation.settled")?.payload.settlement, "completed");
+    assert.equal(operationEvents.some((event) => event.kind === "tool.started"), false);
+    assert.equal(JSON.stringify(operationEvents).includes("Late compaction draft"), false);
+  });
+
   it("does not turn visually empty assistant stops into durable success merely because message identity exists", () => {
     const events = new GatewayEventStore(), observed = [];
     events.subscribe((event) => observed.push(event));
@@ -258,6 +285,44 @@ watchdog.start((reason) => process.stdout.write(reason));`;
     assert.equal(supervisor.ownership(sessionRef).liveState, "idle");
     assert.equal(supervisor.currentOperation(sessionRef), null);
     assert.equal(validateFixture(registry, "gateway-protocol-v1", settlement).valid, true);
+    await supervisor.close();
+  });
+
+  it("publishes post-settlement idle even when the durable projection was read while the operation was running", async (t) => {
+    const { root, key } = state(t), target = info(root, "projection-running-session.jsonl");
+    const sessionRef = sessionRefForPath(key, target.path), events = new GatewayEventStore(), observed = [];
+    events.subscribe((event) => observed.push(event));
+    const listeners = new Set();
+    const emit = (event) => { for (const listener of listeners) listener(event); };
+    const session = {
+      isIdle: true, isStreaming: false,
+      subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+      async prompt() {
+        this.isIdle = false; this.isStreaming = true; emit({ type: "agent_start" });
+        emit({ type: "message_start", message: { role: "assistant" } });
+        emit({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Durable answer." } });
+        emit({ type: "message_end", message: { role: "assistant", stopReason: "stop",
+          content: [{ type: "text", text: "Durable answer." }] } });
+        await new Promise((resolve) => setImmediate(resolve));
+        this.isIdle = true; this.isStreaming = false; emit({ type: "agent_settled" });
+      }
+    };
+    const supervisor = new SessionRuntimeSupervisor({ gatewayInstanceRef: "gateway_projection_running", key,
+      leases: new SessionLeaseStore(root, key), listSessions: async () => [target], events,
+      runtimeFactory: async () => ({ session, async dispose() {} }) });
+    // This is the Gateway catalog's real ordering: projection runs before the
+    // supervisor clears operationRef, so its liveness fact is still running.
+    supervisor.setProjectionReader(async () => ({ sessionRevision: "revision_projection_running", liveState: "running" }));
+    const started = await supervisor.send(sessionRef, { delivery: "new-operation", message: "Finish durably.",
+      expectedOperationRef: null }, "revision_projection_running_start");
+    await waitFor(() => observed.some((event) => event.kind === "operation.settled"
+      && event.payload.operationRef === started.operationRef));
+
+    const terminalRuntime = observed.findLast((event) => event.kind === "runtime.changed"
+      && event.payload.sessionRef === sessionRef && event.payload.operationRef === null);
+    assert.equal(terminalRuntime?.payload.liveState, "idle");
+    assert.equal(supervisor.currentOperation(sessionRef), null);
+    assert.equal(supervisor.ownership(sessionRef).liveState, "idle");
     await supervisor.close();
   });
 
@@ -584,6 +649,45 @@ watchdog.start((reason) => process.stdout.write(reason));`;
     assert.equal(dead.state, "gateway-owned");
     assert.equal(store.releaseDeadOwnerForExplicitRecovery(sessionRef, new Date("2026-08-14T08:01:00.000Z")).state, "released");
     assert.equal(store.acquire(sessionRef, `gateway_${process.pid}_new_owner`, "runtime_new_gateway").state, "gateway-owned");
+  });
+
+  it("explicitly releases an already recovery-required lease only when its recorded owner is proven dead", (t) => {
+    const { root, key } = state(t), deadStore = new SessionLeaseStore(root, key), deadRef = "session_dead_recovery_owner";
+    const deadOwnerRef = "gateway_99999999_dead_recovery_owner", deadRuntimeRef = "runtime_dead_recovery_owner";
+    const dead = deadStore.acquire(deadRef, deadOwnerRef, deadRuntimeRef, new Date("2026-08-14T08:00:00.000Z"));
+    deadStore.requireRecovery(deadRef, dead.ownerEpoch, deadOwnerRef, deadRuntimeRef, "session-runtime-open-failed",
+      new Date("2026-08-14T08:01:00.000Z"));
+    assert.equal(deadStore.inspect(deadRef).state, "recovery-required");
+    assert.equal(deadStore.releaseDeadOwnerForExplicitRecovery(deadRef, new Date("2026-08-14T08:02:00.000Z")).state, "released");
+
+    const liveRef = "session_live_recovery_owner", liveOwnerRef = `gateway_${process.pid}_live_recovery_owner`;
+    const liveRuntimeRef = "runtime_live_recovery_owner";
+    const live = deadStore.acquire(liveRef, liveOwnerRef, liveRuntimeRef, new Date("2026-08-14T08:03:00.000Z"));
+    deadStore.requireRecovery(liveRef, live.ownerEpoch, liveOwnerRef, liveRuntimeRef, "session-runtime-open-failed",
+      new Date("2026-08-14T08:04:00.000Z"));
+    assert.throws(() => deadStore.releaseDeadOwnerForExplicitRecovery(liveRef), /session-owner-not-proven-dead/);
+    assert.equal(deadStore.inspect(liveRef).state, "recovery-required");
+    assert.throws(() => deadStore.acquire(liveRef, "gateway_replacement_must_not_open", "runtime_replacement_must_not_open"),
+      /session-recovery-required/);
+  });
+
+  it("acquires a recovery-required session after Dashboard restart when the prior Gateway is proven dead", async (t) => {
+    const { root, key } = state(t), leases = new SessionLeaseStore(root, key), session = info(root, "restart-recovery.jsonl");
+    const sessionRef = sessionRefForPath(key, session.path), deadOwnerRef = "gateway_99999999_dead_dashboard";
+    const deadRuntimeRef = "runtime_dead_dashboard";
+    const dead = leases.acquire(sessionRef, deadOwnerRef, deadRuntimeRef, new Date("2026-08-14T08:00:00.000Z"));
+    leases.requireRecovery(sessionRef, dead.ownerEpoch, deadOwnerRef, deadRuntimeRef, "session-runtime-dispose-failed",
+      new Date("2026-08-14T08:01:00.000Z"));
+    const supervisor = new SessionRuntimeSupervisor({
+      gatewayInstanceRef: `gateway_${process.pid}_restarted_dashboard`, key, leases, listSessions: async () => [session],
+      runtimeFactory: async () => ({ async dispose() {} })
+    });
+
+    const acquired = await supervisor.acquire(sessionRef);
+    assert.equal(acquired.state, "gateway-owned");
+    assert.equal(acquired.gatewayInstanceRef, `gateway_${process.pid}_restarted_dashboard`);
+    assert.equal(supervisor.ownership(sessionRef).state, "gateway-owned");
+    await supervisor.close();
   });
 
   it("reclaims an owner-only mutation lock only after its process is proven dead", (t) => {

@@ -30,6 +30,9 @@ const { workingTreeCarrierDigest, workingTreeEvidenceDigest } = await import(
 const { activeSessionTask, workingTreeSnapshot } = await import(
   pathToFileURL(path.join(repoRoot, "packages", "piagent-core", "extensions", "task-state.js")).href
 );
+const { taskDeltaFilesFromSnapshot } = await import(
+  pathToFileURL(path.join(repoRoot, "packages", "piagent-core", "extensions", "task-contract-view.js")).href
+);
 const { appendTaskJournalEvent, replayTaskCheckpoints } = await import(
   pathToFileURL(path.join(repoRoot, "packages", "piagent-core", "extensions", "task-journal.js")).href
 );
@@ -257,10 +260,12 @@ describe("piagent guard integration", () => {
       "agent_settled",
       "before_agent_start",
       "before_provider_request",
+      "context",
       "input",
       "message_end",
       "message_start",
       "model_select",
+      "session_before_compact",
       "session_compact",
       "session_info_changed",
       "session_shutdown",
@@ -277,6 +282,151 @@ describe("piagent guard integration", () => {
       .find((event) => event.event === "session_start");
     assert.equal(sessionStartEvent?.editRecoveryContextTelemetryVersion, 1,
       "zero edit recovery is comparable only when the runtime advertises the receipt protocol");
+  });
+
+  it("refreshes verifier commands from the same valid group before projecting a pristine runtime resume", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    fs.writeFileSync(path.join(cwd, ".gitignore"), ".pi/\n");
+    const ctx = createContext(cwd, { sessionId: "pristine-refresh", sessionName: "PRISTINE-REFRESH" });
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+
+    const started = await harness.tools.get("piagent_task_start").execute("pristine-refresh-start", {
+      taskId: "PRISTINE-REFRESH",
+      summary: "Implement the source change with the selected test verifier",
+      riskLane: "normal",
+      intakeMode: "runtime",
+      verifyGroup: "test",
+      expectedOutput: "The runtime task keeps its selected verifier group across resume.",
+      acceptanceCriteria: ["The configured verifier proves the final source tree"],
+      scope: ["src/**"]
+    }, undefined, undefined, ctx);
+    assert.equal(started.isError, undefined, started.content?.[0]?.text);
+
+    const profilePath = path.join(cwd, ".pi", "piagent-profile.json");
+    const profile = JSON.parse(fs.readFileSync(profilePath, "utf8"));
+    profile.verifyCommands.test = ["npm run test:updated"];
+    fs.writeFileSync(profilePath, `${JSON.stringify(profile, null, 2)}\n`);
+
+    await harness.handlers.get("session_start")({ reason: "profile-verifier-correction" }, ctx);
+
+    const refreshed = activeSessionTask(cwd, ctx.sessionManager.getSessionId());
+    assert.equal(refreshed.verifyGroup, "test");
+    assert.deepEqual(refreshed.verifyCommands, ["npm run test:updated"]);
+    const trace = readJsonl(path.join(cwd, ".pi", "piagent-state", "traces.jsonl"))
+      .findLast((event) => event.event === "task_pristine_verifier_refreshed");
+    assert.equal(trace?.taskRunId, started.details.taskRunId);
+    assert.equal(trace?.verifyGroup, "test");
+    assert.deepEqual(trace?.verifyCommands, ["npm run test:updated"]);
+  });
+
+  it("does not refresh a pristine task when durable resume enforcement is blocked", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    fs.writeFileSync(path.join(cwd, ".gitignore"), ".pi/\n");
+    const ctx = createContext(cwd, { sessionId: "blocked-refresh", sessionName: "BLOCKED-REFRESH" });
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    const started = await harness.tools.get("piagent_task_start").execute("blocked-refresh-start", {
+      taskId: "BLOCKED-REFRESH",
+      summary: "Keep a blocked durable task unchanged during resume",
+      riskLane: "normal",
+      intakeMode: "runtime",
+      verifyGroup: "test",
+      expectedOutput: "Corrupt recovery evidence blocks verifier-policy mutation.",
+      acceptanceCriteria: ["Blocked recovery remains fail-closed"],
+      scope: ["src/**"]
+    }, undefined, undefined, ctx);
+    assert.equal(started.isError, undefined, started.content?.[0]?.text);
+    const profilePath = path.join(cwd, ".pi", "piagent-profile.json");
+    const profile = JSON.parse(fs.readFileSync(profilePath, "utf8"));
+    profile.verifyCommands.test = ["npm run test:must-not-apply"];
+    fs.writeFileSync(profilePath, `${JSON.stringify(profile, null, 2)}\n`);
+    fs.appendFileSync(path.join(cwd, ".pi", "piagent-state", "task-journal", "events.jsonl"), "{corrupt-tail\n");
+
+    await harness.handlers.get("session_start")({ reason: "blocked-refresh" }, ctx);
+
+    const retained = activeSessionTask(cwd, ctx.sessionManager.getSessionId());
+    assert.deepEqual(retained.verifyCommands, ["npm test"]);
+    assert.equal(ctx.ui.notices.some((notice) => /task recovery is blocked/.test(notice.message)), true);
+    assert.equal(readJsonl(path.join(cwd, ".pi", "piagent-state", "traces.jsonl"))
+      .some((event) => event.event === "task_pristine_verifier_refreshed" && event.taskRunId === started.details.taskRunId), false);
+  });
+
+  it("keeps session startup alive when auxiliary refresh tracing fails after the contract write", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    fs.writeFileSync(path.join(cwd, ".gitignore"), ".pi/\n");
+    const ctx = createContext(cwd, { sessionId: "refresh-trace-failure", sessionName: "REFRESH-TRACE-FAILURE" });
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    const started = await harness.tools.get("piagent_task_start").execute("trace-failure-start", {
+      taskId: "REFRESH-TRACE-FAILURE",
+      summary: "Refresh the verifier despite an unavailable auxiliary trace sink",
+      riskLane: "normal",
+      intakeMode: "runtime",
+      verifyGroup: "test",
+      expectedOutput: "The durable task refresh survives an auxiliary logging failure.",
+      acceptanceCriteria: ["Session startup continues from the refreshed task"],
+      scope: ["src/**"]
+    }, undefined, undefined, ctx);
+    assert.equal(started.isError, undefined, started.content?.[0]?.text);
+    const profilePath = path.join(cwd, ".pi", "piagent-profile.json");
+    const profile = JSON.parse(fs.readFileSync(profilePath, "utf8"));
+    profile.verifyCommands.test = ["npm run test:trace-safe"];
+    fs.writeFileSync(profilePath, `${JSON.stringify(profile, null, 2)}\n`);
+    const tracePath = path.join(cwd, ".pi", "piagent-state", "traces.jsonl");
+    fs.renameSync(tracePath, `${tracePath}.retained`);
+    fs.mkdirSync(tracePath);
+
+    await harness.handlers.get("session_start")({ reason: "trace-failure" }, ctx);
+
+    const refreshed = activeSessionTask(cwd, ctx.sessionManager.getSessionId());
+    assert.deepEqual(refreshed.verifyCommands, ["npm run test:trace-safe"]);
+    assert.equal(ctx.ui.notices.some((notice) => /auxiliary trace could not be written/.test(notice.message)), true);
+  });
+
+  it("starts a governed task when a cached legacy entrypoint omits the details manifest dependency", async () => {
+    const { root, piagentGuard } = await loadGuardFixture({
+      mutatePackage(packageRoot) {
+        const guardPath = path.join(packageRoot, "extensions", "piagent-guard.ts");
+        const source = fs.readFileSync(guardPath, "utf8");
+        const currentWiring = [
+          "validTaskScopePattern, validateNewWorkPlan, verifierCommandInstructions, verifyProjectCapabilityState, workingTreeEvidenceDigest,",
+          "    repositoryFileManifest, repositoryFileManifestDetails, resolveTaskScopePatterns,"
+        ].join("\n");
+        const legacyWiring = [
+          "validTaskScopePattern, validateNewWorkPlan, verifierCommandInstructions, verifyProjectCapabilityState, workingTreeEvidenceDigest,",
+          "    repositoryFileManifest, resolveTaskScopePatterns,"
+        ].join("\n");
+        assert.equal(source.includes(currentWiring), true, "fixture must remove only the current registration dependency");
+        fs.writeFileSync(guardPath, source.replace(currentWiring, legacyWiring));
+      }
+    });
+    const cwd = createProject(root);
+    const ctx = createContext(cwd, { sessionId: "legacy-entrypoint", sessionName: "LEGACY-ENTRYPOINT" });
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+
+    const started = await harness.tools.get("piagent_task_start").execute("legacy-manifest-start", {
+      taskId: "LEGACY-ENTRYPOINT",
+      summary: "Start source work while the host retains a legacy registration entrypoint",
+      riskLane: "normal",
+      expectedOutput: "The governed task starts without losing its auditable compatibility state.",
+      acceptanceCriteria: ["Task start survives rolling runtime version skew"],
+      scope: ["README.md"]
+    }, undefined, undefined, ctx);
+
+    assert.equal(started.isError, undefined, started.content?.[0]?.text);
+    const trace = harness.entries.find((entry) => (
+      entry.type === "piagent-task-trace"
+      && entry.payload?.event === "task_start"
+      && entry.payload?.taskRunId === started.details.taskRunId
+    ));
+    assert.equal(trace?.payload?.repositoryManifestProvider, "legacy-array-fallback");
+    assert.equal(trace?.payload?.repositoryManifestCompatibilityReason, "missing-details-provider");
+    assert.equal(trace?.payload?.plannedContextComplete, false);
   });
 
   it("does not expose apply_patch when initialization stops before authorization is wired", async () => {
@@ -369,15 +519,18 @@ describe("piagent guard integration", () => {
     }, undefined, undefined, ctx));
     assert.match(invalidScope.message, /project-relative paths or globs/);
 
-    const unmatchedScope = await toolExecutionError(harness.tools.get("piagent_task_start").execute("unmatched-scope-start", {
+    const unmatchedCtx = createContext(cwd, { sessionId: "advisory-focus-session", sessionName: "ADVISORY-FOCUS" });
+    const unmatchedScope = await harness.tools.get("piagent_task_start").execute("unmatched-scope-start", {
       taskId: "CACHE-STABLE-UNMATCHED",
-      summary: "Reject a guessed top-level alias before it becomes an immutable task scope",
+      summary: "Retain a guessed top-level alias as an advisory discovery focus",
       riskLane: "normal",
-      expectedOutput: "The task intake requests an exact repository-backed source path.",
-      acceptanceCriteria: ["An unmatched alias cannot bind the task contract"],
+      expectedOutput: "The task starts without turning an incomplete focus hint into write authority.",
+      acceptanceCriteria: ["An unmatched focus does not block task startup"],
       scope: ["catalog-service/**"]
-    }, undefined, undefined, ctx));
-    assert.match(unmatchedScope.message, /do not identify an existing repository path/);
+    }, undefined, undefined, unmatchedCtx);
+    assert.equal(unmatchedScope.isError, undefined);
+    assert.deepEqual(unmatchedScope.details.scope, ["catalog-service/**"]);
+    assert.match(unmatchedScope.content[0].text, /Unmatched focus retained/);
 
     const narrowerTask = await harness.tools.get("piagent_task_start").execute("cache-stable-start", {
       taskId: "CACHE-STABLE-1",
@@ -616,6 +769,93 @@ describe("piagent guard integration", () => {
     const verifier = started.message.details.runtimeTask.verifyCommands[0];
     const allowed = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", { command: verifier });
     assert.notEqual(allowed.block, true, allowed.reason);
+  });
+
+  it("keeps delegated implementation mutation-capable when one feature must become read-only", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const ctx = createContext(cwd, { sessionId: "delegated-feature-readonly", sessionName: "DELEGATED-FEATURE-READONLY" });
+    const harness = createPiHarness({ activeTools: ["read", "bash", "edit", "write"] });
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+    const prompt = [
+      "Exact writable globs: v-nexus-frontend/src/** and v-nexus-frontend/e2e/**.",
+      "Implement the approved frontend changes: admin ingestion sources become list/detail read-only, add locale-preserving redirects, update source and E2E tests.",
+      "Do not mutate anything outside the exact writable globs. No commits."
+    ].join("\n");
+    await harness.handlers.get("input")({ text: prompt, source: "user" }, ctx);
+    const started = await harness.handlers.get("before_agent_start")({
+      prompt,
+      systemPrompt: "stable system prompt",
+      systemPromptOptions: { cwd, selectedTools: [...harness.activeTools] }
+    }, ctx);
+    assert.equal(started.message.details.runtimeTask.changeMode, "source-change");
+    assert.equal(started.message.details.runtimeTask.mutationPolicy, "required");
+    assert.ok(started.message.details.runtimeTask.scope.includes("v-nexus-frontend/src/**"));
+    assert.ok(started.message.details.runtimeTask.scope.includes("v-nexus-frontend/e2e/**"));
+    const persisted = JSON.parse(fs.readFileSync(path.join(
+      cwd, ".pi", "piagent-state", "tasks", `${started.message.details.runtimeTask.taskRunId}.json`
+    ), "utf8"));
+    assert.equal(
+      persisted.acceptanceReceipt.criteria.some((criterion) => criterion.obligation === "read-only-evidence"),
+      false
+    );
+    assert.equal(
+      persisted.acceptanceCriteria.includes("The task stays read-only and the answer is grounded in observed in-scope evidence."),
+      false
+    );
+    assert.doesNotMatch(started.message.content, /Stay mutation-free/);
+    const write = await callToolCall(harness.handlers.get("tool_call"), ctx, "write", {
+      path: "v-nexus-frontend/src/features/ingestion/admin.tsx",
+      content: "export const readOnlyAdmin = true;\n"
+    });
+    assert.notEqual(write.block, true, write.reason);
+  });
+
+  it("rejects a stale read-to-edit snapshot before any mutation starts", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    fs.writeFileSync(path.join(cwd, "src", "freshness.ts"), "export const value = 1;\n");
+    const ctx = createContext(cwd, { sessionId: "edit-freshness", sessionName: "EDIT-FRESHNESS" });
+    const harness = createPiHarness({ activeTools: ["read", "edit", "write", "bash"] });
+    piagentGuard(harness.pi);
+    const started = await startSourceTask(harness, ctx, "EDIT-FRESHNESS", ["src/**"]);
+    await harness.tools.get("piagent_task_progress").execute("freshness-plan", {
+      taskId: started.details.taskId,
+      stepId: "plan",
+      status: "done",
+      note: "Exact source and expected behavior identified."
+    }, undefined, undefined, ctx);
+
+    await harness.handlers.get("tool_result")({
+      toolName: "read",
+      input: { path: "src/freshness.ts" },
+      content: [{ type: "text", text: "export const value = 1;" }],
+      isError: false
+    }, ctx);
+    fs.writeFileSync(path.join(cwd, "src", "freshness.ts"), "// concurrent change\nexport const value = 1;\n");
+
+    const stale = await callToolCall(harness.handlers.get("tool_call"), ctx, "edit", {
+      path: "src/freshness.ts",
+      oldText: "export const value = 1;",
+      newText: "export const value = 2;"
+    });
+    assert.equal(stale.block, true);
+    assert.match(stale.reason, /previously observed source snapshot is stale/);
+    assert.match(stale.reason, /no patch hunk was started/);
+
+    await harness.handlers.get("tool_result")({
+      toolName: "read",
+      input: { path: "src/freshness.ts" },
+      content: [{ type: "text", text: "// concurrent change\nexport const value = 1;" }],
+      isError: false
+    }, ctx);
+    const refreshed = await callToolCall(harness.handlers.get("tool_call"), ctx, "edit", {
+      path: "src/freshness.ts",
+      oldText: "export const value = 1;",
+      newText: "export const value = 2;"
+    });
+    assert.notEqual(refreshed.block, true, refreshed.reason);
   });
 
   it("persists and presents the criterion graph only when the intelligence engine is explicitly enabled", async () => {
@@ -1487,10 +1727,9 @@ describe("piagent guard integration", () => {
     assert.equal(sameA.block, undefined);
     assert.equal(sameB.block, undefined);
     assert.equal(different.block, undefined);
-    assert.equal(outside.block, true);
-    assert.match(outside.reason, /outside its declared scope/);
-    const afterDenied = await callToolCall(authorize, ctx, "write", { path: "src/after-denied.ts", content: "export const ok = true;\n" });
-    assert.equal(afterDenied.block, undefined, "failed authorization leaves no Piagent lock state behind");
+    assert.equal(outside.block, undefined, "task focus is advisory and must not become write authority");
+    const afterExpansion = await callToolCall(authorize, ctx, "write", { path: "src/after-expansion.ts", content: "export const ok = true;\n" });
+    assert.equal(afterExpansion.block, undefined, "focus expansion leaves no Piagent lock state behind");
   });
 
   it("never auto-starts a task that targets a protected path", async () => {
@@ -2505,7 +2744,7 @@ describe("piagent guard integration", () => {
     );
 
     assert.equal(policy.details.defaultMode, "parallel-readonly");
-    assert.equal(policy.details.maxConcurrentSubagents, 2);
+    assert.equal(policy.details.maxConcurrentSubagents, 1);
     assert.deepEqual(policy.details.defaultReviewLenses, ["security", "tests"]);
     assert.equal(policy.details.fieldGuide.path, ".pi/memory/MEMORY.md");
     assert.equal(policy.details.fieldGuide.maxLines, 80);
@@ -3812,6 +4051,11 @@ describe("piagent guard integration", () => {
     createChildGitRepo(path.join(cwd, "v-nexus-backend"), {
       "src/contract.ts": "export const contract = true;\n"
     });
+    fs.mkdirSync(path.join(cwd, ".claude", "scripts", "verify"), { recursive: true });
+    fs.writeFileSync(
+      path.join(cwd, ".claude", "scripts", "verify", "check-fe-form-contract.sh"),
+      "#!/usr/bin/env bash\n"
+    );
     const ctx = createContext(cwd, { sessionId: "multi-repo-workspace" });
     const harness = createPiHarness();
     piagentGuard(harness.pi);
@@ -3832,6 +4076,11 @@ describe("piagent guard integration", () => {
       path: "plans/be-to-fe.md",
       content: "# Plan\n"
     });
+    const writeSharedHiddenVerifier = await callToolCall(toolCall, ctx, "edit", {
+      path: ".claude/scripts/verify/check-fe-form-contract.sh",
+      oldText: "#!/usr/bin/env bash\n",
+      newText: "#!/usr/bin/env bash\nset -euo pipefail\n"
+    });
     const shellMutation = await callToolCall(toolCall, ctx, "bash", { command: "printf x > v-nexus-frontend/src/component.ts" });
 
     assert.notEqual(readBackend.block, true);
@@ -3841,10 +4090,66 @@ describe("piagent guard integration", () => {
     assert.match(shellBackend.reason, /protected path/);
     assert.notEqual(writeFrontendPlan.block, true, writeFrontendPlan.reason);
     assert.notEqual(writeParentPlan.block, true, writeParentPlan.reason);
+    assert.notEqual(writeSharedHiddenVerifier.block, true, writeSharedHiddenVerifier.reason);
     assert.notEqual(shellMutation.block, true, shellMutation.reason);
   });
 
-  it("blocks direct out-of-scope writes and catches shell changes or baseline-only claims at the gate", async () => {
+  it("reconciles legacy hidden evidence coverage before inspecting a dirty parent-workspace resume", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    fs.rmSync(path.join(cwd, ".git"), { recursive: true, force: true });
+    createChildGitRepo(path.join(cwd, "frontend"), {
+      "src/app.ts": "export const app = 'base';\n"
+    });
+    createChildGitRepo(path.join(cwd, "backend"), {
+      "src/api.ts": "export const api = 'base';\n"
+    });
+    fs.mkdirSync(path.join(cwd, ".claude", "scripts", "verify"), { recursive: true });
+    fs.writeFileSync(path.join(cwd, ".claude", "scripts", "verify", "shared.sh"), "#!/usr/bin/env bash\n");
+    const ctx = createContext(cwd, { sessionId: "coverage-resume", sessionName: "COVERAGE-RESUME" });
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+
+    const started = await startSourceTask(harness, ctx, "coverage-resume", ["frontend/src/**"]);
+    const edit = {
+      path: "frontend/src/app.ts",
+      oldText: "export const app = 'base';\n",
+      newText: "export const app = 'changed';\n"
+    };
+    const authorized = await callToolCall(harness.handlers.get("tool_call"), ctx, "edit", edit);
+    assert.notEqual(authorized.block, true, authorized.reason);
+    fs.writeFileSync(path.join(cwd, edit.path), edit.newText);
+    await harness.handlers.get("tool_result")({
+      toolName: "edit",
+      input: edit,
+      content: [{ type: "text", text: `Edited ${edit.path}` }],
+      isError: false
+    }, ctx);
+
+    const taskPath = path.join(cwd, ".pi", "piagent-state", "tasks", `${started.details.taskRunId}.json`);
+    const legacy = JSON.parse(fs.readFileSync(taskPath, "utf8"));
+    delete legacy.baselineFileDigests[".claude/scripts/verify/shared.sh"];
+    legacy.baselineChangedFiles = Object.keys(legacy.baselineFileDigests).sort();
+    fs.writeFileSync(taskPath, `${JSON.stringify(legacy, null, 2)}\n`);
+
+    await harness.handlers.get("session_start")({ reason: "runtime-upgrade" }, ctx);
+
+    const resumed = activeSessionTask(cwd, ctx.sessionManager.getSessionId());
+    assert.ok(resumed.baselineFileDigests[".claude/scripts/verify/shared.sh"]);
+    assert.deepEqual(
+      taskDeltaFilesFromSnapshot(resumed, workingTreeSnapshot(cwd)),
+      ["frontend/src/app.ts"],
+      "coverage expansion must preserve the pre-existing implementation delta without inventing hidden-file changes"
+    );
+    const trace = readJsonl(path.join(cwd, ".pi", "piagent-state", "traces.jsonl"))
+      .findLast((event) => event.event === "task_evidence_coverage_expanded");
+    assert.equal(trace?.taskRunId, started.details.taskRunId);
+    assert.equal(trace?.addedPathCount, 1);
+    assert.deepEqual(trace?.addedPathExamples, [".claude/scripts/verify/shared.sh"]);
+    assert.equal(ctx.ui.notices.some((notice) => /task recovery is blocked/.test(notice.message)), false);
+  });
+
+  it("treats task scope as advisory while preserving exact changed-file evidence at the gate", async () => {
     const { root, piagentGuard } = await loadGuardFixture();
     const cwd = createProject(root);
     fs.writeFileSync(path.join(cwd, "src", "baseline.ts"), "export const baseline = true;\n");
@@ -3853,10 +4158,10 @@ describe("piagent guard integration", () => {
     piagentGuard(harness.pi);
     const started = await harness.tools.get("piagent_task_start").execute("scope-start", {
       taskId: "SCOPE-1",
-      summary: "Change only the explicitly scoped source file",
+      summary: "Implement the requested source behavior and verify the final tree",
       riskLane: "normal",
-      expectedOutput: "Only the allowed source path is changed.",
-      acceptanceCriteria: ["No file outside task scope changes"],
+      expectedOutput: "The requested behavior is implemented with exact changed-file evidence.",
+      acceptanceCriteria: ["The final implementation passes its configured verifier"],
       scope: ["src/allowed.ts"]
     }, undefined, undefined, ctx);
     assert.equal(started.isError, undefined);
@@ -3865,14 +4170,12 @@ describe("piagent guard integration", () => {
       path: "src/outside.ts",
       content: "export const outside = true;\n"
     });
-    assert.equal(direct.block, true);
-    assert.match(direct.reason, /outside its declared scope/);
+    assert.notEqual(direct.block, true, direct.reason);
 
     const shellOutside = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", {
       command: "printf source > src/outside.ts"
     });
-    assert.equal(shellOutside.block, true);
-    assert.match(shellOutside.reason, /outside its declared scope/);
+    assert.notEqual(shellOutside.block, true, shellOutside.reason);
 
     const shellInside = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", {
       command: "printf source > src/allowed.ts"
@@ -3905,8 +4208,36 @@ describe("piagent guard integration", () => {
       changedFiles: ["src/outside.ts", "src/baseline.ts"]
     }, undefined, undefined, ctx);
     assert.equal(gate.details.decision, "fail");
-    assert.match(gate.content[0].text, /changes within task scope \(src\/outside\.ts\)/);
+    assert.doesNotMatch(gate.content[0].text, /changes within task scope/);
+    assert.match(gate.content[0].text, /Task focus expanded beyond the initial scope \(src\/outside\.ts\)/);
     assert.match(gate.content[0].text, /supported changed-file claims \(src\/baseline\.ts\)/);
+  });
+
+  it("allows a monorepo task to follow evidence across FE, BE, tests, and plans beyond its initial focus", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const ctx = createContext(cwd, { sessionId: "advisory-monorepo-scope", sessionName: "ADVISORY-MONOREPO" });
+    const harness = createPiHarness({ activeTools: ["read", "edit", "write", "bash", "apply_patch"] });
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+    await startSourceTask(harness, ctx, "ADVISORY-MONOREPO", ["v-nexus-frontend/src/app/**"]);
+    const authorize = harness.handlers.get("tool_call");
+
+    for (const [toolName, input] of [
+      ["write", { path: "v-nexus-frontend/src/features/subscription/sync.ts", content: "export {};\n" }],
+      ["edit", { path: "v-nexus-frontend/src/constants/routes.ts", oldText: "old", newText: "next" }],
+      ["write", { path: "v-nexus-frontend/e2e/specs/subscription.spec.ts", content: "export {};\n" }],
+      ["write", { path: "v-nexus-backend/src/subscription/sync.ts", content: "export {};\n" }],
+      ["write", { path: "plans/be-to-fe-sync/STATE.md", content: "# State\n" }],
+      ["bash", { command: "printf source > v-nexus-backend/src/subscription/sync.ts" }]
+    ]) {
+      const decision = await callToolCall(authorize, ctx, toolName, input);
+      assert.notEqual(decision.block, true, `${toolName}: ${decision.reason ?? "unexpected block"}`);
+    }
+
+    const protectedWrite = await callToolCall(authorize, ctx, "write", { path: ".env", content: "TOKEN=secret\n" });
+    assert.equal(protectedWrite.block, true);
+    assert.match(protectedWrite.reason, /protected path/);
   });
 
   it("refines a uniquely resolvable legacy basename scope only before mutation", async () => {
@@ -4001,26 +4332,26 @@ describe("piagent guard integration", () => {
       content: [{ type: "text", text: "export const auth = true;" }],
       isError: false
     }, ctx);
-    const reviewRequired = await harness.handlers.get("message_end")({
-      message: { role: "assistant", content: [{ type: "text", text: "Mapped the authentication evidence." }] }
-    }, ctx);
-    assert.match(reviewRequired.message.content[0].text, /CONTINUING/);
-
-    const reviewed = await harness.tools.get("piagent_task_progress").execute("read-review", {
-      taskId: "SCOUT-1",
-      stepId: "review",
-      status: "done",
-      note: "Reviewed cited evidence and stated unknowns."
-    }, undefined, undefined, ctx);
-    assert.equal(reviewed.isError, undefined);
+    const substantiveResponse = [
+      "Authentication evidence mapped with no source changes.",
+      "Evidence: `src/auth.ts` exports the observed authentication flag.",
+      "Limitation: this bounded review did not exercise a live identity provider."
+    ].join("\n\n");
+    const entriesBeforeFinal = harness.entries.length;
     const final = await harness.handlers.get("message_end")({
-      message: { role: "assistant", content: [{ type: "text", text: "Authentication evidence mapped with no source changes." }] }
+      message: { role: "assistant", content: [{ type: "text", text: substantiveResponse }] }
     }, ctx);
     assert.equal(final, undefined);
+    assert.equal(
+      harness.entries.slice(entriesBeforeFinal).some((entry) => entry.type === "message" && entry.options?.deliverAs === "followUp"),
+      false,
+      "the evidence-backed final response must be preserved without a continuation turn"
+    );
     const taskPath = path.join(cwd, ".pi", "piagent-state", "tasks", `${started.details.taskRunId}.json`);
     const task = JSON.parse(fs.readFileSync(taskPath, "utf8"));
     assert.equal(task.trace.outcome, "completed");
     assert.deepEqual(task.changedFiles, []);
+    assert.deepEqual(task.workPlan.map((step) => step.status), ["done", "done"]);
   });
 
   it("runs exact verification without inventing changed files when source mutation is forbidden", async () => {
@@ -5049,7 +5380,6 @@ describe("piagent guard integration", () => {
       [makePatch("*** Update File: .env", "@@", "-TOKEN=fake-token", "+TOKEN=stolen"), /protected path/i],
       [makePatch("*** Add File: .git/owned", "+blocked"), /protected path/i],
       [makePatch("*** Add File: src/readonly/owned.ts", "+blocked"), /read-only path/i],
-      [makePatch("*** Add File: docs/out-of-scope.md", "+blocked"), /outside.*scope/i],
       [makePatch("*** Add File: .git/%ZZ", "+blocked"), /percent escapes/i],
       [makePatch("*** Add File: .env.%ZZ", "+blocked"), /percent escapes/i],
       [makePatch("*** Add File: src/readonly/%ZZ.ts", "+blocked"), /percent escapes/i],
@@ -5065,6 +5395,8 @@ describe("piagent guard integration", () => {
       assert.equal(decision.block, true, decision.reason);
       assert.match(decision.reason, reason);
     }
+    const focusExpansion = await authorize(makePatch("*** Add File: docs/out-of-focus.md", "+allowed"));
+    assert.notEqual(focusExpansion.block, true, focusExpansion.reason);
 
     const directMcpProtected = await authorize(
       makePatch("*** Add File: .env.direct", "+blocked"),
@@ -5901,6 +6233,12 @@ describe("piagent guard integration", () => {
       ["bash", { command: "cat .pi/piagent-profile.lock.json" }],
       ["bash", { command: "cat .pi/settings.json" }],
       ["bash", { command: "cat .pi/context-index.json" }],
+      ["bash", { command: "cat .pi/private.json" }],
+      ["bash", { command: "cat .aws/credentials" }],
+      ["bash", { command: "cat .ssh/id_ed25519" }],
+      ["bash", { command: "cat .kube/config" }],
+      ["bash", { command: "cat .npmrc" }],
+      ["bash", { command: "cat frontend/.git/config" }],
       ["bash", { command: "echo poisoned > .pi/context-index.json" }],
       ["bash", { command: "echo forged >> .pi/piagent-state/observed-bash.jsonl" }],
       ["read", { path: ".env" }],
@@ -5910,6 +6248,12 @@ describe("piagent guard integration", () => {
       ["read", { path: ".pi/piagent-profile.lock.json" }],
       ["read", { path: ".pi/settings.json" }],
       ["read", { path: ".pi/context-index.json" }],
+      ["read", { path: ".pi/private.json" }],
+      ["read", { path: ".aws/credentials" }],
+      ["read", { path: ".ssh/id_ed25519" }],
+      ["read", { path: ".kube/config" }],
+      ["read", { path: ".npmrc" }],
+      ["read", { path: "frontend/.git/config" }],
       ["read", { file_path: ".pi/piagent-profile.json" }],
       ["read", { path: ".pi/piagent-state/tasks/x.json" }],
       ["grep", { pattern: ".", path: ".env", context: 5 }],
@@ -5958,6 +6302,12 @@ describe("piagent guard integration", () => {
       ["write", { path: ".pi/piagent-profile.lock.json", content: "{}" }],
       ["write", { path: ".pi/settings.json", content: "{}" }],
       ["write", { path: ".pi/context-index.json", content: "{}" }],
+      ["write", { path: ".pi/private.json", content: "{}" }],
+      ["write", { path: ".aws/credentials", content: "secret" }],
+      ["write", { path: ".ssh/id_ed25519", content: "secret" }],
+      ["write", { path: ".kube/config", content: "secret" }],
+      ["write", { path: ".npmrc", content: "//registry.example/:_authToken=secret" }],
+      ["write", { path: "frontend/.git/config", content: "[core]" }],
       ["edit", { path: ".pi/piagent-profile.json", old: "x", new: "y" }],
       ["edit", { path: ".pi/piagent-profile.lock.json", old: "x", new: "y" }],
       ["edit", { path: ".pi/settings.json", old: "x", new: "y" }],
@@ -6317,9 +6667,10 @@ describe("piagent guard integration", () => {
       }
     ]);
 
-    assert.equal(lsResult.details.protectedPathsRedacted, 2);
-    assert.match(lsResult.content[0].text, /mcp\.json/);
-    assert.match(lsResult.content[0].text, /redacted 2 protected ls lines/);
+    assert.equal(lsResult.details.protectedPathsRedacted, 3);
+    assert.match(lsResult.content[0].text, /No entries found in non-protected paths/);
+    assert.match(lsResult.content[0].text, /redacted 3 protected ls lines/);
+    assert.doesNotMatch(lsResult.content[0].text, /mcp\.json/);
     assert.doesNotMatch(lsResult.content[0].text, /piagent-profile\.json/);
     assert.doesNotMatch(lsResult.content[0].text, /piagent-state/);
   });

@@ -160,9 +160,9 @@ Inside an active Pi session, use `/permission` for the menu or a session-local s
 
 Legacy aliases still work: `/permission-status`, `/read-only`, `/workspace-write`, and `/full-access`. Full-access also accepts a task after the command. The guard switches the current session to `trusted-full-access`, then forwards the remaining text as the next user request.
 
-## Solo-first orchestration
+## Parent-direct orchestration
 
-Pi Agent Platform supports subagents, but the default operating model is solo-first: one parent agent owns the task contract, uses explicit review lenses, and only calls bounded subagents when scout/planning/review work is independent enough to justify the extra token/tool cost.
+The parent model owns reasoning, implementation, and verification. Helpers are off by default. With explicit opt-in, runtime may dispatch one fresh read-only helper only when it proves two independent lanes and at least 30% projected net token saving after handoff and merge. Workers, retries, nested helpers, and parallel helpers remain disabled.
 
 Inside Pi:
 
@@ -170,7 +170,7 @@ Inside Pi:
 /piagent-orchestration
 ```
 
-This shows the active mode, max subagents, review lenses, Field Guide path, and writer policy without triggering a model follow-up.
+This shows the active mode, one-helper ceiling, review lenses, Field Guide path, writer policy, and dispatch/skip evidence without triggering a model follow-up.
 
 For bounded source work, runtime creates the session-bound contract before the
 model starts and injects its path scope plus concise verifier. Broad, high-risk,
@@ -271,9 +271,9 @@ Keep provider keys in environment variables, never in committed config. Switchin
 
 ## Subagents
 
-`piagent-setup` installs `pi-subagents` with the `safe` preset and `pi-web-access` for web-backed researcher runs unless disabled. Daily task prompts stay solo-first: they delegate bounded scout, planning, research, and review work only when it is independent enough to be worth the cost, and the final handoff states whether subagents were used and why.
+`piagent-setup` installs the optional `pi-subagents` compatibility runtime with a clamped `safe` preset. Daily tasks stay parent-direct; builtin agents and workers are disabled, and explicit helper mode still requires the measured 30% gate. The inspector states dispatch/skip reasons and projected saving.
 
-`/subagents-doctor` runs a health check; `/run piagent-scout "…"` and its planner, worker, and reviewer counterparts dispatch work. See [Subagents and multi-agent](docs/subagents-and-multiagent.md).
+`/subagents-doctor` runs a health check. See [Subagents and multi-agent](docs/subagents-and-multiagent.md) for the one read-only helper opt-in contract.
 
 ## Repository layout
 

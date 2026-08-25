@@ -133,7 +133,7 @@ export class SessionRuntimeSupervisor {
     if (this.#active.has(sessionRef)) throw new Error("session-owner-conflict");
     const runtimeInstanceRef = `runtime_${randomBytes(24).toString("base64url")}`;
     const prior = this.#leases.inspect(sessionRef);
-    if (prior.state === "gateway-owned" || prior.state === "terminal-owned") {
+    if (prior.state === "gateway-owned" || prior.state === "terminal-owned" || prior.state === "recovery-required") {
       try { this.#leases.releaseDeadOwnerForExplicitRecovery(sessionRef); } catch { /* live or unprovable owners stay authoritative */ }
     }
     const lease = this.#leases.acquire(sessionRef, this.#gatewayInstanceRef, runtimeInstanceRef);
@@ -254,7 +254,7 @@ export class SessionRuntimeSupervisor {
     const watchdog = new SessionOperationWatchdog(this.#operationDeadlinePolicy);
     active.operationRef = operationRef; active.stream = stream; active.watchdog = watchdog; active.lastSessionRevision = sessionRevision;
     try {
-      active.unsubscribe = armSessionOperationWatchdog({ watchdog, subscribe: (listener) => session.subscribe(listener),
+      active.unsubscribe = armSessionOperationWatchdog({ watchdog, subscribe: (listener) => session.subscribe(listener), retrySession: session,
         observe: (event) => stream.observe(event), expire: (reasonCode) => { void this.#terminateOperation(sessionRef,
           operationRef, "error", reasonCode, reasonCode, true).catch(() => undefined); } });
     } catch (error) { stream.markError("session-operation-start-failed");
@@ -468,11 +468,12 @@ export class SessionRuntimeSupervisor {
     } catch { /* Canonical refresh failure cannot be replaced by an invented revision. */ }
     if (this.#active.get(sessionRef) !== active || active.operationRef !== operationRef) return;
     if (this.ownership(sessionRef).state !== "gateway-owned") { stream.markError("session-owner-continuity-lost"); await this.#quarantineRuntime(sessionRef, operationRef, active, stream, "session-owner-continuity-lost"); return; }
-    active.operationRef = null;
+    // The pre-clear projection is stale; derive post-settlement liveness from exact ownership.
+    active.operationRef = null; const settledLiveState = this.ownership(sessionRef).liveState;
     if (projection) active.lastSessionRevision = projection.sessionRevision;
     stream.complete(projection?.sessionRevision ?? null);
     if (projection) this.#events.publish("runtime.changed", { sessionRef, sessionRevision: projection.sessionRevision,
-      liveState: restartRequired ? "uncertain" : projection.liveState, operationRef: null,
+      liveState: restartRequired ? "uncertain" : settledLiveState, operationRef: null,
       reasonCode: restartRequired ? "runtime-restart-required" : null });
     if (this.#active.get(sessionRef) === active) { active.completion = null;
       if (!active.watchdog?.terminating) { active.stream = null; active.watchdog = null; active.settling = false; } }

@@ -54,4 +54,23 @@ describe("Piagent WebUI activity and log preview", () => {
     assert.equal(reconciled.rows[0].label, "Canonical operation failure");
     assert.equal(reconciled.terminalCount, 0);
   });
+
+  it("uses Gateway live tools as the volatile running truth without duplicating settled history", () => {
+    const stale = activity("running", { activityRef: "activity.stale", label: "read running", finishedAt: null });
+    const recent = activity("passed", { activityRef: "activity.persisted", label: "read passed" });
+    const live = [
+      { toolCallRef: "tool.live.read", toolLabel: "read", state: "completed",
+        startedAt: "2026-08-24T14:00:00.000Z", finishedAt: "2026-08-24T14:00:01.000Z" },
+      { toolCallRef: "tool.live.worker", toolLabel: "piagent-worker", state: "running",
+        startedAt: "2026-08-24T14:00:02.000Z", finishedAt: null }
+    ];
+    const value = mergeActivityRows([stale], [recent], [], "en", live);
+    assert.equal(value.runningCount, 1);
+    assert.equal(value.rows.some((row) => row.activityRef === "activity.stale"), false);
+    assert.equal(value.rows.some((row) => row.activityRef === "live.tool.live.read"), false,
+      "settled Gateway rows wait for canonical history instead of duplicating it");
+    assert.equal(value.rows[0].activityRef, "live.tool.live.worker");
+    assert.equal(value.rows[0].state, "running");
+    assert.equal(value.rows[1].activityRef, "activity.persisted");
+  });
 });

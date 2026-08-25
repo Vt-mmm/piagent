@@ -175,7 +175,7 @@
         <tr><td>Solver</td><td><span class="inline-code">shadow</span></td><td>Đánh giá route nhưng không đổi parent model hoặc tự chiếm quyền workflow.</td></tr>
         <tr><td>Phase tools</td><td><span class="inline-code">shadow</span></td><td>Tính projection; dùng <span class="inline-code">PIAGENT_PHASE_TOOLS=on</span> để áp tool visibility theo phase.</td></tr>
         <tr><td>Recovery</td><td><span class="inline-code">on</span></td><td>Tự retry/repair trong ceiling; dùng <span class="inline-code">PIAGENT_AUTO_RECOVERY=off</span> để quay về ordinary handoff.</td></tr>
-        <tr><td>Helpers</td><td><span class="inline-code">recommend</span></td><td>Chỉ giải thích recommendation; <span class="inline-code">PIAGENT_HELPERS_MODE=on</span> chỉ dispatch read-only role qua adapter có sẵn.</td></tr>
+        <tr><td>Helpers</td><td><span class="inline-code">off</span></td><td><span class="inline-code">PIAGENT_HELPERS_MODE=on</span> vẫn chỉ cho một helper read-only context fresh sau khi chứng minh hai lane độc lập và projected net saving từ 30%.</td></tr>
         <tr><td>Parent routing + automatic worker</td><td><span class="inline-code">off</span></td><td>Không tự đổi parent model, không tự bật writer và không có multi-writer mặc định.</td></tr>
       </tbody>
     </table>

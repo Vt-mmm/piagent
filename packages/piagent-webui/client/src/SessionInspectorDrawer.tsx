@@ -22,19 +22,22 @@ import type { PiagentWebUICanonicalSnapshotV1 } from "../../contracts/generated/
 import { ActivityPanel } from "./ActivityPanel.tsx";
 import { SessionAgentWorkspace, type SessionWorkspaceId } from "./SessionAgentWorkspace.tsx";
 import { localize, useUiPreferences } from "./ui-preferences.tsx";
-import type { TerminalOperationActivity } from "./live-state-view-model.ts";
+import type { LiveActivity, TerminalOperationActivity } from "./live-state-view-model.ts";
 
 const INSPECTOR_WIDTH = "min(44vw, 860px)";
 
-export function SessionInspectorDrawer({ open, active, snapshot, state, sessionRef, terminalActivities, onClose, onActive, refresh }: { open: boolean;
+export function SessionInspectorDrawer({ open, active, snapshot, state, sessionRef, terminalActivities, liveActivities, onClose, onActive, refresh }: { open: boolean;
   active: SessionWorkspaceId; snapshot?: PiagentWebUICanonicalSnapshotV1; state: "idle" | "loading" | "ready" | "error";
-  sessionRef?: string; terminalActivities?: readonly TerminalOperationActivity[]; onClose(): void; onActive(value: SessionWorkspaceId): void;
+  sessionRef?: string; terminalActivities?: readonly TerminalOperationActivity[]; liveActivities?: readonly LiveActivity[];
+  onClose(): void; onActive(value: SessionWorkspaceId): void;
   refresh(): Promise<PiagentWebUICanonicalSnapshotV1 | undefined> }) {
   const { locale } = useUiPreferences();
   // Keep the inspector modal until there is enough room for the navigation,
   // conversation and inspector to coexist without collapsing the app bar.
   const theme = useTheme(), desktop = useMediaQuery(theme.breakpoints.up("xl"));
   const sourceCount = snapshot?.sourceChanges.workingTree.counts.files ?? 0;
+  const activityRunningCount = liveActivities === undefined ? snapshot?.activity.running.length ?? 0
+    : liveActivities.filter((activity) => activity.state === "running").length;
   return <Drawer anchor="right" variant={desktop ? "persistent" : "temporary"} open={open} onClose={onClose}
     sx={{ "& .MuiDrawer-paper": { width: { xs: "100%", sm: "min(88vw, 980px)", xl: INSPECTOR_WIDTH }, bgcolor: "background.default" } }}>
     <Box sx={{ position: "sticky", top: 0, zIndex: 3, bgcolor: "background.paper", borderBottom: 1, borderColor: "divider" }}>
@@ -48,19 +51,20 @@ export function SessionInspectorDrawer({ open, active, snapshot, state, sessionR
           ? `${localize(locale, "Task", "Task")} · ${snapshot.task.progress.completed}/${snapshot.task.progress.total}` : localize(locale, "Task", "Task")} />
         <Tab value="source" icon={<DifferenceRounded />} iconPosition="start" label={`Source Changes${sourceCount ? ` · ${sourceCount}` : ""}`} />
         <Tab value="documents" icon={<DescriptionRounded />} iconPosition="start" label={localize(locale, "Tài liệu", "Documents")} />
-        <Tab value="activity" icon={<TerminalRounded />} iconPosition="start" label={`${localize(locale, "Activity", "Activity")}${snapshot?.activity.running.length ? ` · ${snapshot.activity.running.length}` : ""}`} />
+        <Tab value="activity" icon={<TerminalRounded />} iconPosition="start" label={`${localize(locale, "Activity", "Activity")}${activityRunningCount ? ` · ${activityRunningCount}` : ""}`} />
       </Tabs>
     </Box>
     {state === "loading" ? <Stack sx={{ alignItems: "center", py: 12 }} spacing={1.5}><CircularProgress size={25} /><Typography color="text.secondary">
       {localize(locale, "Đang dựng Inspector từ session và Git…", "Building the Inspector from the session and Git…")}</Typography></Stack>
       : (state === "error" || !snapshot) && sessionRef && active === "activity" && terminalActivities?.length
         ? <Box sx={{ p: { xs: 1.5, sm: 2.5, xl: 3 }, maxWidth: 1500, mx: "auto", width: "100%" }}>
-          <ActivityPanel sessionRef={sessionRef} terminalActivities={terminalActivities} /></Box>
+          <ActivityPanel sessionRef={sessionRef} terminalActivities={terminalActivities} liveActivities={liveActivities} /></Box>
         : state === "error" || !snapshot || !sessionRef ? <Stack sx={{ p: 3, maxWidth: 720 }} spacing={2}><Alert severity="warning">{localize(locale,
         "Không thể dựng Inspector cho session này. Chat vẫn an toàn; hãy kiểm tra project còn tồn tại và thử làm mới.",
         "The Inspector could not be built for this session. Chat remains safe; check that the project still exists and refresh.")}</Alert>
         <Button variant="outlined" onClick={() => void refresh()}>{localize(locale, "Thử lại", "Try again")}</Button></Stack>
         : <Box sx={{ p: active === "source" ? { xs: 1, md: 1.5 } : { xs: 1.5, sm: 2.5, xl: 3 }, maxWidth: active === "source" ? "none" : 1500, mx: "auto", width: "100%" }}>
-          <SessionAgentWorkspace active={active} snapshot={snapshot} sessionRef={sessionRef} terminalActivities={terminalActivities} refresh={refresh} /></Box>}
+          <SessionAgentWorkspace active={active} snapshot={snapshot} sessionRef={sessionRef} terminalActivities={terminalActivities}
+            liveActivities={liveActivities} refresh={refresh} /></Box>}
   </Drawer>;
 }

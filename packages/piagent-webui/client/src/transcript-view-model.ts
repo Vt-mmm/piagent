@@ -30,14 +30,67 @@ export function successfulAssistantText(text: string): string | null {
   return presentation.completionGate === null && hasVisibleText(presentation.text) ? presentation.text : null;
 }
 
+export function persistedUserTextMatches(persisted: string | null | undefined, optimistic: string): boolean {
+  const actual = persisted?.trim(), expected = optimistic.trim();
+  return Boolean(actual && expected && (actual === expected || actual.startsWith("/") && actual.endsWith(` ${expected}`)));
+}
+
+export function persistedConversationMatches(
+  items: readonly TranscriptItem[], optimisticUser: string, optimisticAssistant: string
+): boolean {
+  const expectedUser = optimisticUser.trim(), expectedAssistant = successfulAssistantText(optimisticAssistant)?.trim() ?? "";
+  let userIndex = -1;
+  if (expectedUser) {
+    for (let index = items.length - 1; index >= 0; index -= 1) {
+      const candidate = items[index];
+      if (candidate?.role === "user" && persistedUserTextMatches(candidate.content.text, expectedUser)) { userIndex = index; break; }
+    }
+    if (userIndex < 0) return false;
+  }
+  if (!expectedAssistant) return true;
+  const userRef = userIndex >= 0 ? items[userIndex]?.messageRef ?? null : null;
+  for (let index = userIndex + 1; index < items.length; index += 1) {
+    const candidate = items[index];
+    if (candidate?.role !== "assistant" || candidate.toolCalls.length > 0) continue;
+    if (userRef && candidate.parentMessageRef && candidate.parentMessageRef !== userRef) continue;
+    if (successfulAssistantText(candidate.content.text ?? "")?.trim() === expectedAssistant) return true;
+  }
+  return false;
+}
+
+export function persistedConversationHasFinal(items: readonly TranscriptItem[], optimisticUser: string): boolean {
+  const expectedUser = optimisticUser.trim();
+  if (!expectedUser) return false;
+  let userIndex = -1;
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const candidate = items[index];
+    if (candidate?.role === "user" && persistedUserTextMatches(candidate.content.text, expectedUser)) { userIndex = index; break; }
+  }
+  if (userIndex < 0) return false;
+  const userRef = items[userIndex]?.messageRef ?? null;
+  for (let index = userIndex + 1; index < items.length; index += 1) {
+    const candidate = items[index];
+    if (candidate?.role === "user") return false;
+    if (candidate?.role !== "assistant" || candidate.toolCalls.length > 0) continue;
+    if (userRef && candidate.parentMessageRef && candidate.parentMessageRef !== userRef) continue;
+    if (successfulAssistantText(candidate.content.text ?? "")) return true;
+  }
+  return false;
+}
+
 export function conversationTranscriptItems(items: readonly TranscriptItem[]): TranscriptItem[] {
   const visible: TranscriptItem[] = [];
   const assistantIndexes = new Map<string, number>();
+  const precedingUsers = new Set<string>();
+  let currentUserRef: string | null = null;
   for (const item of items) {
     if (item.role === "user") {
-      assistantIndexes.clear(); visible.push(item); continue;
+      assistantIndexes.clear(); precedingUsers.add(item.messageRef); currentUserRef = item.messageRef; visible.push(item); continue;
     }
     if (item.role !== "assistant") continue;
+    // A bounded page may begin inside a tool-heavy turn. Never display a
+    // durable response until its user anchor is present earlier in the page.
+    if (item.parentMessageRef ? !precedingUsers.has(item.parentMessageRef) : currentUserRef === null) continue;
     // Assistant prose attached to a tool request is progress, not a terminal
     // response. Its command/result belongs in Activity.
     if (item.toolCalls.length > 0) continue;

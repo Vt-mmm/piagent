@@ -34,7 +34,7 @@ const EVIDENCE_FIELDS = new Set(["kind", "summary", "paths", "command", "exitCod
 const PROVENANCE_FIELDS = new Set(["assurance", "disposition", "repairCount", "retryCount", "finalRecoveryDisposition", "failureRef", "recoveryRef", "handoffRef", "recordedAt"]);
 const FAILURE_REF_FIELDS = new Set(["evidenceDigest", "category", "captureRef"]);
 const RECOVERY_REF_FIELDS = new Set(["policyVersion", "action", "reasonCodes"]);
-const HELPER_USAGE_FIELDS = new Set(["mode", "used", "reasonCodes", "helpers", "recordedAt"]);
+const HELPER_USAGE_FIELDS = new Set(["mode", "used", "decision", "projectedSavingsRatio", "reasonCodes", "helpers", "recordedAt"]);
 const HELPER_ENTRY_FIELDS = new Set(["role", "disposition", "requestRef", "outputDigest", "calls", "tokens"]);
 const HELPER_ROLES = new Set(["retriever", "scout", "planner", "worker", "reviewer", "oracle", "researcher"]);
 const RECEIPT_DISPOSITIONS = new Set(["first-pass-success", "repaired-success", "blocked", "partial", "failed", "pending"]);
@@ -43,7 +43,7 @@ const RECOVERY_ACTIONS = new Set(["repair", "retry", "fresh-session", "ask-opera
 const FAILURE_CATEGORIES = new Set(["passed", "compile-typecheck", "test-assertion", "lint-format", "dependency-config", "environment", "provider-network", "permission-policy", "scope-protected-path", "flaky-infrastructure", "unknown"]);
 const HASH = /^[a-f0-9]{64}$/;
 const SAFE_REF = /^[a-z0-9.][a-z0-9:._/-]{0,511}$/i;
-const READ_ONLY_BOUNDARY = /\b(?:read-only|no edits?|do not edit(?: files?| source| project| repo)?|do not change (?:files?|source|project|repo)|do not mutate (?:files?|source|project|repo|workspace)|khong sua(?: file| source| project)?|khong edit(?: file| source| project)?|khong doi(?: file| source| project)?)\b/;
+const READ_ONLY_BOUNDARY = /\b(?:read-only|no\s+(?:code|source|project|file|workspace|repo(?:sitory)?)?\s*(?:edits?|changes?|mutations?)|do not\s+(?:edit|change|modify|mutate|touch)(?: files?| source| project| repo| workspace)?|leave\s+(?:the\s+)?(?:source|project|repo|workspace)\s+(?:unchanged|unmodified)|khong\s+(?:sua|edit|thay\s+doi)(?: file| source| project)?)\b/;
 
 function sha256(value) {
   return crypto.createHash("sha256").update(String(value ?? "")).digest("hex");
@@ -80,11 +80,9 @@ function normalizedText(value) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
 }
-
 function includesAny(text, patterns) {
   return patterns.some((pattern) => pattern.test(text));
 }
-
 function pathBoundaryMentioned(text, patterns) {
   const value = normalizedText(text);
   return uniqueStrings(patterns).some((pattern) => {
@@ -95,20 +93,35 @@ function pathBoundaryMentioned(text, patterns) {
     return value.includes(lower) || (Boolean(basename) && value.includes(basename));
   });
 }
-
+function readOnlyBoundaryTiedToPattern(text, patterns) {
+  return normalizedText(text)
+    .split(/(?:\r?\n+|[.!?;]+|\s+[—–]\s+)/)
+    .some((clause) => READ_ONLY_BOUNDARY.test(clause) && pathBoundaryMentioned(clause, patterns));
+}
 function changedFilesRespectBoundaries(changedFiles, boundaryPatterns) {
   const patterns = uniqueStrings(boundaryPatterns);
   if (patterns.length === 0) return true;
   return uniqueStrings(changedFiles).every((file) => !matchesAnyPath(file, patterns));
 }
+function acceptanceReadOnlyInferenceOptions(input, text) {
+  const boundaryPatterns = uniqueStrings([
+    ...(Array.isArray(input?.outOfScope) ? input.outOfScope : []),
+    ...(Array.isArray(input?.protectedPaths) ? input.protectedPaths : [])
+  ]);
+  return {
+    mutationPolicy: input?.mutationPolicy,
+    readOnlyBoundary: boundaryPatterns.length > 0
+      && readOnlyBoundaryTiedToPattern(text, boundaryPatterns)
+  };
+}
 
-export function inferAcceptanceObligations(text, changeMode = "source-change") {
+export function inferAcceptanceObligations(text, changeMode = "source-change", options = {}) {
   const value = normalizedText(text);
   const accessControlText = value
     .replace(/`[^`\n]*`/g, " ")
     .replace(/\b(?:[a-z0-9_.@-]+\/)+[a-z0-9_.@/-]+\b/g, " ");
   const obligations = [];
-  if (changeMode === "read-only" || READ_ONLY_BOUNDARY.test(value)) {
+  if (changeMode === "read-only" || options.mutationPolicy === "forbidden" || options.readOnlyBoundary === true) {
     obligations.push("read-only-evidence");
   }
   const actorAccessControl = includesAny(accessControlText, [
@@ -227,8 +240,9 @@ function semanticConflictReasons(obligation, task, corpus, criterion) {
 
 /**
  * Surface a concrete existing return contract before implementation starts.
- * This is intentionally source-derived and bounded to exact in-scope files;
- * it does not guess from benchmark scenario names or hidden expectations.
+ * This is intentionally source-derived and bounded to exact known files; it
+ * does not turn the task's initial focus into write authority or guess from
+ * benchmark scenario names and hidden expectations.
  */
 export function acceptanceBaselineGuidance(task, options = {}) {
   if (!options.cwd) return [];
@@ -247,7 +261,11 @@ export function acceptanceSemanticConflicts(task, options = {}) {
     : { ...emptyAcceptanceCorpus(changedFiles.length > 0 ? changedFiles : ["inline.js"]), sourceText: normalizedText(options.sourceText), allText: normalizedText(options.sourceText) };
   if (!corpus.adapter.proofCapable) return [];
   const obligations = task?.acceptanceReceipt?.criteria?.map((criterion) => criterion.obligation)
-    ?? inferAcceptanceObligations(acceptanceTaskText(task), task?.changeMode);
+    ?? inferAcceptanceObligations(
+      acceptanceTaskText(task),
+      task?.changeMode,
+      acceptanceReadOnlyInferenceOptions(task, acceptanceTaskText(task))
+    );
   return uniqueStrings([
     ...obligations.flatMap((obligation) => semanticConflictReasons(obligation, task, corpus)),
     ...(options.cwd ? baselineReturnRepresentationConflicts(acceptanceTaskText(task), options.cwd, corpus.sourceFiles) : [])
@@ -266,12 +284,20 @@ export function buildAcceptanceReceipt(input = {}) {
     input.expectedOutput,
     ...(Array.isArray(input.acceptanceCriteria) ? input.acceptanceCriteria : [])
   ].filter(Boolean).join("\n");
-  const obligations = inferAcceptanceObligations(baseText, changeMode);
+  const obligations = inferAcceptanceObligations(
+    baseText,
+    changeMode,
+    acceptanceReadOnlyInferenceOptions(input, baseText)
+  );
   const texts = uniqueStrings(Array.isArray(input.acceptanceCriteria) ? input.acceptanceCriteria : []);
   const generatedObligations = new Map();
   for (const obligation of obligations) {
     const generated = generatedCriterionForObligation(obligation);
-    if (!texts.some((text) => inferAcceptanceObligations(text, changeMode).includes(obligation))) {
+    if (!texts.some((text) => inferAcceptanceObligations(
+      text,
+      changeMode,
+      acceptanceReadOnlyInferenceOptions(input, text)
+    ).includes(obligation))) {
       texts.push(generated);
       generatedObligations.set(generated, obligation);
     }
@@ -283,7 +309,11 @@ export function buildAcceptanceReceipt(input = {}) {
   }
   const acceptanceCriteria = texts.slice(0, MAX_CRITERIA);
   const criteria = acceptanceCriteria.map((text, index) => {
-    const inferred = inferAcceptanceObligations(text, changeMode);
+    const inferred = inferAcceptanceObligations(
+      text,
+      changeMode,
+      acceptanceReadOnlyInferenceOptions(input, text)
+    );
     const obligation = generatedObligations.get(text)
       ?? inferred.find((item) => item !== "verification-evidence" && item !== "backward-compatibility")
       ?? inferred[0]
@@ -351,20 +381,30 @@ export function normalizeAcceptanceReceipt(value) {
 
 function normalizeHelperUsage(value) {
   if (!isRecord(value) || !["off", "recommend", "on"].includes(value.mode)) return undefined;
-  const helpers = Array.isArray(value.helpers) ? value.helpers.slice(0, 3).filter(isRecord).map((item) => ({
+  const rawHelpers = Array.isArray(value.helpers) ? value.helpers.slice(0, 3).filter(isRecord) : [];
+  const helpers = rawHelpers.map((item) => ({
     role: HELPER_ROLES.has(item.role) ? item.role : "scout",
     disposition: compactId(item.disposition ?? "unknown"),
     requestRef: HASH.test(String(item.requestRef)) ? item.requestRef : sha256(item.requestRef),
     outputDigest: item.outputDigest === null || HASH.test(String(item.outputDigest)) ? item.outputDigest : null,
     calls: Number.isInteger(item.calls) ? Math.max(0, Math.min(100, item.calls)) : 0,
     tokens: Number.isInteger(item.tokens) ? Math.max(0, Math.min(100_000_000, item.tokens)) : 0
-  })) : [];
-  return { mode: value.mode, used: helpers.some((item) => !["solo", "recommend", "unavailable", "blocked"].includes(item.disposition)), reasonCodes: uniqueStrings(value.reasonCodes).map(compactId).slice(0, 16), helpers, recordedAt: validTimestamp(value.recordedAt) ? value.recordedAt : new Date().toISOString() };
+  }));
+  const used = helpers.some((item) => !["solo", "recommend", "unavailable", "blocked"].includes(item.disposition));
+  const helperDecision = rawHelpers.find((item) => ["dispatch", "skip"].includes(item.decision))?.decision;
+  const decision = ["dispatch", "skip"].includes(value.decision) ? value.decision : helperDecision ?? (used ? "dispatch" : "skip");
+  const rawProjectedSavings = typeof value.projectedSavingsRatio === "number"
+    ? value.projectedSavingsRatio
+    : rawHelpers.find((item) => typeof item.projectedSavingsRatio === "number")?.projectedSavingsRatio;
+  const projectedSavingsRatio = typeof rawProjectedSavings === "number" && Number.isFinite(rawProjectedSavings)
+    ? Math.max(-10, Math.min(1, rawProjectedSavings))
+    : null;
+  return { mode: value.mode, used, decision, projectedSavingsRatio, reasonCodes: uniqueStrings(value.reasonCodes).map(compactId).slice(0, 16), helpers, recordedAt: validTimestamp(value.recordedAt) ? value.recordedAt : new Date().toISOString() };
 }
 
 export function applyAcceptanceHelperUsage(task, input = {}) {
   const receipt = normalizeAcceptanceReceipt(task?.acceptanceReceipt); if (!receipt) return task;
-  const helperUsage = normalizeHelperUsage({ mode: input.mode ?? "off", reasonCodes: input.reasonCodes ?? [], helpers: input.helpers ?? [], recordedAt: input.recordedAt ?? new Date().toISOString() });
+  const helperUsage = normalizeHelperUsage({ mode: input.mode ?? "off", decision: input.decision, projectedSavingsRatio: input.projectedSavingsRatio, reasonCodes: input.reasonCodes ?? [], helpers: input.helpers ?? [], recordedAt: input.recordedAt ?? new Date().toISOString() });
   return { ...task, acceptanceReceipt: { ...receipt, criteria: structuredClone(task.acceptanceReceipt.criteria), helperUsage } };
 }
 
@@ -699,7 +739,7 @@ function evidenceForObligation(obligation, task, corpus, currentWorkingTreeDiges
 
   if (obligation === "read-only-evidence") {
     const readOnlyEvidence = durableContextEvidenceEntries(task);
-    const readOnlyOk = task.changeMode === "read-only"
+    const readOnlyOk = (task.changeMode === "read-only" || task.mutationPolicy === "forbidden")
       && corpus.files.length === 0
       && hasDurableContextEvidence(task);
     if (readOnlyOk) return {
@@ -716,9 +756,9 @@ function evidenceForObligation(obligation, task, corpus, currentWorkingTreeDiges
       ].filter(Boolean).join("\n");
       const combinedText = `${taskText}\n${corpus.allText}`;
       const sourceChangeReadOnlyOk = corpus.files.length > 0
-        && READ_ONLY_BOUNDARY.test(normalizedText(combinedText))
+        && boundaryPatterns.length > 0
+        && readOnlyBoundaryTiedToPattern(combinedText, boundaryPatterns)
         && changedFilesRespectBoundaries(corpus.files, boundaryPatterns)
-        && (boundaryPatterns.length === 0 || pathBoundaryMentioned(combinedText, boundaryPatterns))
         && hasDurableContextEvidence(task);
       if (sourceChangeReadOnlyOk) {
         return {
@@ -902,7 +942,7 @@ export function acceptanceReceiptValidationErrors(value) {
   }
   if (value.helperUsage !== undefined) {
     const usage = value.helperUsage;
-    if (!isRecord(usage) || hasUnsupportedField(usage, HELPER_USAGE_FIELDS) || !["off", "recommend", "on"].includes(usage.mode) || typeof usage.used !== "boolean" || !Array.isArray(usage.reasonCodes) || usage.reasonCodes.length > 16 || usage.reasonCodes.some((item) => typeof item !== "string" || compactId(item) !== item) || !Array.isArray(usage.helpers) || usage.helpers.length > 3 || !validTimestamp(usage.recordedAt)) errors.push("acceptanceReceipt helperUsage is invalid");
+    if (!isRecord(usage) || hasUnsupportedField(usage, HELPER_USAGE_FIELDS) || !["off", "recommend", "on"].includes(usage.mode) || typeof usage.used !== "boolean" || (usage.decision !== undefined && !["dispatch", "skip"].includes(usage.decision)) || (usage.projectedSavingsRatio !== undefined && usage.projectedSavingsRatio !== null && (typeof usage.projectedSavingsRatio !== "number" || !Number.isFinite(usage.projectedSavingsRatio) || usage.projectedSavingsRatio < -10 || usage.projectedSavingsRatio > 1)) || !Array.isArray(usage.reasonCodes) || usage.reasonCodes.length > 16 || usage.reasonCodes.some((item) => typeof item !== "string" || compactId(item) !== item) || !Array.isArray(usage.helpers) || usage.helpers.length > 3 || !validTimestamp(usage.recordedAt)) errors.push("acceptanceReceipt helperUsage is invalid");
     else for (const helper of usage.helpers) if (!isRecord(helper) || hasUnsupportedField(helper, HELPER_ENTRY_FIELDS) || !HELPER_ROLES.has(helper.role) || typeof helper.disposition !== "string" || compactId(helper.disposition) !== helper.disposition || !HASH.test(String(helper.requestRef)) || (helper.outputDigest !== null && !HASH.test(String(helper.outputDigest))) || !Number.isInteger(helper.calls) || helper.calls < 0 || helper.calls > 100 || !Number.isInteger(helper.tokens) || helper.tokens < 0 || helper.tokens > 100_000_000) errors.push("acceptanceReceipt helper entry is invalid");
   }
   if (!Array.isArray(value.criteria) || value.criteria.length === 0 || value.criteria.length > MAX_CRITERIA) {

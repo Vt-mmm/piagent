@@ -164,6 +164,38 @@ describe("Piagent WebUI bounded transcript projection", () => {
     assert.equal(JSON.stringify(value).includes("task-inbox"), false);
   });
 
+  it("keeps the latest user turn and durable response together across a tool-heavy page boundary", () => {
+    const entries = [
+      entry("entry_old_1", "user", "Earlier request"),
+      entry("entry_old_2", "assistant", "Earlier response", { stopReason: "stop" }),
+      entry("entry_latest_3", "user", "Implement the approved change")
+    ];
+    for (let index = 0; index < 40; index += 1) {
+      entries.push(entry(`entry_progress_${index}4`, "assistant", [
+        { type: "text", text: `Internal progress ${index}` },
+        { type: "toolCall", id: `call_${index}`, name: "read", arguments: { path: `src/${index}.ts` } }
+      ], { stopReason: "toolUse" }));
+      entries.push(entry(`entry_result_${index}5`, "toolResult", [{ type: "text", text: `private result ${index}` }],
+        { toolCallId: `call_${index}`, toolName: "read", isError: false }));
+    }
+    entries.push(entry("entry_final_6", "assistant", "Implementation complete.", { stopReason: "stop" }));
+
+    const latest = project(entries, { limit: 8 });
+    expectValid(latest);
+    assert.equal(latest.items.length, 8);
+    assert.equal(latest.items[0].role, "user");
+    assert.equal(latest.items[0].content.text, "Implement the approved change");
+    assert.equal(latest.items.at(-1).content.text, "Implementation complete.");
+    assert.equal(latest.items.at(-1).parentMessageRef, latest.items[0].messageRef);
+    assert.equal(latest.page.truncated, true);
+    assert.equal(latest.page.hasOlder, true);
+
+    const older = project(entries, { limit: 8, beforeCursor: latest.page.nextBeforeCursor });
+    expectValid(older);
+    assert.deepEqual(older.items.map((item) => item.content.text), ["Earlier request", "Earlier response"]);
+    assert.equal(older.items[1].parentMessageRef, older.items[0].messageRef);
+  });
+
   it("pages backward by opaque cursor and fails closed on gaps or oversized history", () => {
     const entries = [1, 2, 3].map((index) => entry(`entry_${index}`, "user", `message ${index}`));
     const latest = project(entries, { limit: 2 });

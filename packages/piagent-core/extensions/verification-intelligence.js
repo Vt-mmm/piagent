@@ -100,7 +100,10 @@ function parsedSignals(text, exitCode, structuredEvents) {
   const lower = text.toLowerCase();
   const signals = structuredEvents.map((event) => STRUCTURED_SIGNALS[event]).filter(Boolean);
   const add = (signal, pattern) => { if (pattern.test(lower)) signals.push(signal); };
-  add("scope-diagnostic", /\b(outside (?:its |the )?declared scope|scope violation|protected path|symlink escape)\b/);
+  // Task scope is advisory. Only concrete filesystem-safety wording may be
+  // inferred from unstructured output; scope policy must arrive as a trusted
+  // structured event so ordinary assertion text cannot stop recovery.
+  add("scope-diagnostic", /\b(protected path|symlink escape)\b/);
   add("policy-diagnostic", /\b(policy (?:blocked|denied|violation)|capability lock|guard blocked)\b/);
   add("permission-diagnostic", /\b(eacces|eperm|permission denied|not authorized|unauthorized|forbidden)\b/);
   add("provider-rate-limit", /\b(?:http\s*)?429\b|\brate[ -]?limit(?:ed|ing)?\b/);
@@ -191,7 +194,7 @@ const RECORDED_CATEGORY_HINTS = Object.freeze({
   environment: "command not found in runtime environment",
   "provider-network": "provider API request timed out",
   "permission-policy": "permission denied by policy",
-  "scope-protected-path": "outside declared scope",
+  "scope-protected-path": "protected path is forbidden",
   "flaky-infrastructure": "EADDRINUSE: port is already in use"
 });
 
@@ -202,16 +205,15 @@ export function classifyRecordedVerificationFailure(summary, exitCode = 1) {
   return classifyVerificationFailure(hint ? `${text}\n${hint}` : text, exitCode);
 }
 
-const COMPLETION_SCOPE_BOUNDARY = /(?:^changes within task scope\b|^read-only task has observed changes\b|\boutside (?:(?:its|the|task) )?(?:declared )?scope\b|\bscope violation\b|\bprotected(?:\/read-only| or read-only)? paths?\b|\bread-only path\b)/i;
+const COMPLETION_POLICY_BOUNDARY = /(?:^read-only task has observed changes\b|^mutation-forbidden task has observed changes\b|\bprotected(?:\/read-only| or read-only)? paths?\b|\bread-only path\b)/i;
 
 export function classifyCompletionGateFailure(missing = [], summary = "", exitCode = 1) {
   const missingItems = Array.isArray(missing) ? missing.map((item) => String(item)) : [];
-  // Scope, protected-path, and read-only mutation boundaries are structural
-  // completion failures. They must outrank verifier/acceptance diagnostics and
-  // remain non-retryable even when the latest exact verifier exited zero.
-  if (missingItems.some((item) => COMPLETION_SCOPE_BOUNDARY.test(item))) {
-    return classifyVerificationFailure("Completion gate rejected a scope or protected-path boundary.", 1, {
-      structuredEvents: ["scope-violation"]
+  // Protected-path and read-only mutation boundaries are structural
+  // completion failures. Task scope is advisory and never enters this path.
+  if (missingItems.some((item) => COMPLETION_POLICY_BOUNDARY.test(item))) {
+    return classifyVerificationFailure("Completion gate rejected a protected-path or read-only boundary.", 1, {
+      structuredEvents: ["protected-path"]
     });
   }
   if (missingItems.some((item) => /^critical acceptance evidence\b/i.test(item))) {
@@ -235,8 +237,8 @@ export function chooseVerificationScope(profileVerifyCommands = {}, changedFiles
     || /^(?:README|CHANGELOG|CONTRIBUTING|SECURITY)(?:\.|$)/i.test(file);
   const hasDocs = files.some(isDocumentationFile);
   const hasDocsOnly = files.length > 0 && files.every(isDocumentationFile);
-  const hasFrontend = files.some((file) => /(^|\/)(?:app|pages|components|frontend|web|client)(\/|$)|\.(?:tsx|jsx|css|scss|vue|svelte)$/i.test(file));
-  const hasBackend = files.some((file) => /(^|\/)(?:api|server|backend|services)(\/|$)|\.(?:go|py|rs|java|kt|cs|rb|php|sql)$/i.test(file));
+  const hasFrontend = files.some((file) => /(^|[\/_-])(?:app|pages|components|frontend|web|client)(?=[\/_-]|$)|\.(?:tsx|jsx|css|scss|vue|svelte)$/i.test(file));
+  const hasBackend = files.some((file) => /(^|[\/_-])(?:api|server|backend|services)(?=[\/_-]|$)|\.(?:go|py|rs|java|kt|cs|rb|php|sql)$/i.test(file));
   const selectedGroups = [];
   if (hasDocsOnly && groups.docs) {
     selectedGroups.push("docs");

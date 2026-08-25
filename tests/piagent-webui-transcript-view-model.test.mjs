@@ -5,6 +5,8 @@ import {
   assistantTextPresentation,
   conversationTranscriptItems,
   finalTranscriptToolStates,
+  persistedConversationHasFinal,
+  persistedConversationMatches,
   recoveredActivityRefs,
   recoveredTranscriptToolRefs,
   settledTranscriptToolRefs,
@@ -65,6 +67,37 @@ describe("Piagent WebUI transcript presentation", () => {
     const user = { role: "user", toolCalls: [], content: { text: "Inspect and report." } };
     assert.equal(successfulAssistantText(blocked.content.text), null);
     assert.deepEqual(conversationTranscriptItems([user, progress, blocked]), [user]);
+  });
+
+  it("never renders a durable response before or without its user request", () => {
+    const user = { messageRef: "message.user", parentMessageRef: null, role: "user", toolCalls: [], content: { text: "Implement it." } };
+    const final = { messageRef: "message.final", parentMessageRef: user.messageRef, role: "assistant", toolCalls: [],
+      content: { text: "Implemented." } };
+    const missingParent = { ...final, messageRef: "message.orphan", parentMessageRef: "message.missing" };
+    assert.deepEqual(conversationTranscriptItems([final, user, missingParent]), [user]);
+    assert.deepEqual(conversationTranscriptItems([user, final]), [user, final]);
+  });
+
+  it("settles an optimistic pair only when the durable response follows the matching user", () => {
+    const user = { messageRef: "message.user", parentMessageRef: null, role: "user", toolCalls: [], content: { text: "Implement it." } };
+    const final = { messageRef: "message.final", parentMessageRef: user.messageRef, role: "assistant", toolCalls: [],
+      content: { text: "Implemented." } };
+    assert.equal(persistedConversationMatches([final, user], "Implement it.", "Implemented."), false);
+    assert.equal(persistedConversationMatches([user, final], "Implement it.", "Implemented."), true);
+    assert.equal(persistedConversationMatches([user, { ...final, parentMessageRef: "message.other" }],
+      "Implement it.", "Implemented."), false);
+  });
+
+  it("recognizes a durable final even when the volatile operation missed its settlement event", () => {
+    const user = { messageRef: "message.user", parentMessageRef: null, role: "user", toolCalls: [],
+      content: { text: "/platform-improve Implement it." } };
+    const progress = { messageRef: "message.progress", parentMessageRef: user.messageRef, role: "assistant",
+      toolCalls: [{ toolCallRef: "tool.read", toolName: "read", state: "requested" }], content: { text: null } };
+    const final = { messageRef: "message.final", parentMessageRef: user.messageRef, role: "assistant", toolCalls: [],
+      content: { text: "Implemented." } };
+    assert.equal(persistedConversationHasFinal([user, progress, final], "Implement it."), true);
+    assert.equal(persistedConversationHasFinal([final, user], "Implement it."), false);
+    assert.equal(persistedConversationHasFinal([user, { ...final, parentMessageRef: "message.other" }], "Implement it."), false);
   });
 
   it("marks a failed activity as recovered only after a later success of the same kind", () => {

@@ -105,9 +105,9 @@
 <section class="benchmark-summary" aria-labelledby="benchmark-verdict">
   <div class="benchmark-verdict">
     <div>
-      <p class="section-kicker">Production V1 · v1.6.0 public regression evidence</p>
-      <h2 id="benchmark-verdict">Piagent đạt 9,97/10</h2>
-      <p>Piagent hoàn thành 54/54 task và dùng ít hơn 61,43% fresh token theo primary estimand fixed-workload đã khai báo trước, trên cùng GPT-5.6 Luna Medium và cùng ma trận 108 session với surface <code>codex-cli</code>.</p>
+      <p class="section-kicker">Historical Production V1 · v1.6.0 public regression evidence</p>
+      <h2 id="benchmark-verdict">Điểm fresh-token lịch sử: 9,97/10</h2>
+      <p>Piagent hoàn thành 54/54 task và dùng ít hơn 61,43% fresh token theo estimand fixed-workload của v1.6.0, trên cùng GPT-5.6 Luna Medium và cùng ma trận 108 session với surface <code>codex-cli</code>. Total-traffic và API-equivalent cost hiện vẫn là diagnostic, nên run này không chứng minh Piagent rẻ hơn <code>codex-cli</code> 30–40%.</p>
     </div>
     <div class="benchmark-verdict-score" aria-label="Điểm tổng thể 9,97 trên 10">
       <strong>9,97</strong>
@@ -156,6 +156,10 @@
   <div class="callout ok-callout">
     <strong>Đối chứng được cách ly và accounting đầy đủ</strong>
     <p><code>codex-cli</code> dùng home tạm theo session và không nạp global instruction, plugin, app, browser hay multi-agent. Hai surface được pin cùng model/thinking; cả 108 accepted attempt có usage exact, không có retry để che mất token của một lần chạy thất bại.</p>
+  </div>
+  <div class="callout">
+    <strong>Kết quả lịch sử không phải cost claim.</strong>
+    <p>Diagnostic mới cộng cache read/write traffic, định giá exact input/cache/output bucket bằng pricing snapshot có version và tính cả provider-started failed attempt. Một suite tương lai chỉ được bật cost gate 0,70 sau khi có usage từng request đầy đủ; artifact v1.6.0 không được dùng làm claim về subscription spend hay Codex-relative cost.</p>
   </div>
 </section>
 
@@ -207,7 +211,7 @@
         <tr><td>Workflow</td><td><strong>9,85</strong></td><td>Candidate continuity và workflow gate pass</td></tr>
         <tr><td>Efficiency</td><td><strong>10,00</strong></td><td>Fixed-workload efficiency gate pass</td></tr>
         <tr><td>Primary token</td><td><strong>Pass</strong></td><td>Ratio 0,3857; upper 95% 0,4840 ≤ 0,60</td></tr>
-        <tr><td>Overall</td><td><strong>9,97</strong></td><td>Production gate và token-claim gate cùng pass</td></tr>
+        <tr><td>Overall</td><td><strong>9,97</strong></td><td>Contract fresh-token lịch sử v1.6.0 pass; Codex-relative cost vẫn là diagnostic</td></tr>
       </tbody>
     </table>
   </div>
@@ -299,7 +303,7 @@
         <tr><th>Run</th><td><code>production-v1-20260824T040017Z-05b7cf</code></td></tr>
         <tr><th>Suite digest</th><td><code>308dc2f0a4656cb272421949a01972df2b0717b4ffeb564306ae12aa669ae6b8</code></td></tr>
         <tr><th>Model</th><td>GPT-5.6 Luna · Medium · cả hai surface</td></tr>
-        <tr><th>Verdict</th><td><code>production gate: pass</code> · <code>token claim: allowed</code></td></tr>
+        <tr><th>Verdict</th><td><code>historical v1.6.0 gate: pass</code> · <code>Codex-relative cost: diagnostic only</code></td></tr>
         <tr><th>Public artifact</th><td>Chỉ aggregate đã review; không công khai report, seed, local path hoặc session identity.</td></tr>
       </tbody>
     </table>
@@ -307,7 +311,7 @@
 
   <div class="callout">
     <strong>Giới hạn của kết luận</strong>
-    <p>Đây là synthetic public regression do maintainer xây dựng, không phải benchmark độc lập và không cho phép generalization claim. Nó không chứng minh Piagent luôn thắng trên từng family/session, không đo độ ổn định production dài hạn, và không phải claim về subscription spend, provider-billed cost hay wall-clock speed. Cost, duration và host load nếu được quan sát chỉ là diagnostic, không điều khiển token verdict.</p>
+    <p>Đây là synthetic public regression do maintainer xây dựng, không phải benchmark độc lập và không cho phép generalization claim. Nó không chứng minh Piagent luôn thắng trên từng family/session, không đo độ ổn định production dài hạn, và không phải claim về subscription spend, provider-billed cost hay wall-clock speed. Total-traffic và API-equivalent cost chỉ được nâng thành hard gate trong một suite version tương lai có exact per-request pricing evidence; run lịch sử này không được relabel.</p>
   </div>
 
   <div class="command-grid">

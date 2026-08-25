@@ -248,6 +248,9 @@ export function finalizeBenchmarkRun(context) {
         ? options.codexMode === "controlled" ? "excluded" : "operator-home"
         : null,
       piGlobalInstructions: "excluded",
+      comparisonAccessContract: options.surfaces.includes("codex-cli") && options.codexMode === "controlled"
+        ? "paired-workspace-write-offline-surface-system"
+        : null,
       piAgentHome: manifest.piAgentHome,
       usageIntegrity: manifest.tokenClaimsUnavailableReason ?? "measured",
       codexDisabledFeatures: runtime.codexDisabledFeatures,

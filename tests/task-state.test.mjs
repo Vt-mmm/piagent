@@ -126,22 +126,47 @@ test("repository manifest includes loose workspace files beside nested git roots
   assert.equal(truncated.candidateCount, 2);
 });
 
-test("repository manifest excludes hidden loose trust and credential state beside nested git roots", (t) => {
+test("repository manifest captures hidden project source but excludes private and credential state", (t) => {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-manifest-hidden-workspace-"));
   t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
   childGitRepo(path.join(cwd, "service"), { "src/value.js": "export const value = 1;\n" });
+  fs.mkdirSync(path.join(cwd, ".claude", "scripts", "verify"), { recursive: true });
   fs.mkdirSync(path.join(cwd, ".codex"), { recursive: true });
   fs.mkdirSync(path.join(cwd, "notes", ".cursor"), { recursive: true });
+  fs.mkdirSync(path.join(cwd, ".pi"), { recursive: true });
+  fs.writeFileSync(path.join(cwd, ".claude", "scripts", "verify", "check-fe-form-contract.sh"), "#!/usr/bin/env bash\n");
   fs.writeFileSync(path.join(cwd, ".codex", "instructions.md"), "local trust state\n");
   fs.writeFileSync(path.join(cwd, "notes", ".cursor", "rules.md"), "local editor state\n");
   fs.writeFileSync(path.join(cwd, ".npmrc"), "registry=https://registry.example.invalid/\n");
+  fs.writeFileSync(path.join(cwd, ".pi", "private.json"), "{}\n");
   fs.writeFileSync(path.join(cwd, "notes", "visible.md"), "workspace note\n");
 
   const manifest = repositoryFileManifestDetails(cwd);
   assert.equal(manifest.complete, true);
-  assert.deepEqual(manifest.files, ["notes/visible.md", "service/src/value.js"]);
-  assert.equal(pathWithinChangeEvidenceRoot(cwd, ".codex/instructions.md"), false);
-  assert.equal(pathWithinChangeEvidenceRoot(cwd, "notes/.cursor/rules.md"), false);
+  assert.deepEqual(manifest.files, [
+    ".claude/scripts/verify/check-fe-form-contract.sh",
+    ".codex/instructions.md",
+    "notes/.cursor/rules.md",
+    "notes/visible.md",
+    "service/src/value.js"
+  ]);
+  assert.equal(pathWithinChangeEvidenceRoot(cwd, ".claude/scripts/verify/check-fe-form-contract.sh"), true);
+  assert.equal(pathWithinChangeEvidenceRoot(cwd, ".codex/instructions.md"), true);
+  assert.equal(pathWithinChangeEvidenceRoot(cwd, "notes/.cursor/rules.md"), true);
+  assert.equal(pathWithinChangeEvidenceRoot(cwd, ".npmrc"), false);
+  assert.equal(pathWithinChangeEvidenceRoot(cwd, ".pi/private.json"), false);
+
+  const before = workingTreeSnapshot(cwd);
+  fs.writeFileSync(
+    path.join(cwd, ".claude", "scripts", "verify", "check-fe-form-contract.sh"),
+    "#!/usr/bin/env bash\nset -euo pipefail\n"
+  );
+  const after = workingTreeSnapshot(cwd);
+  assert.ok(before[".claude/scripts/verify/check-fe-form-contract.sh"]);
+  assert.notEqual(
+    before[".claude/scripts/verify/check-fe-form-contract.sh"],
+    after[".claude/scripts/verify/check-fe-form-contract.sh"]
+  );
 });
 
 test("repository manifest fails completeness closed for unreadable loose workspace directories", {
@@ -176,6 +201,20 @@ test("repository manifest fails completeness closed for a broken child git root"
   const manifest = repositoryFileManifestDetails(cwd);
   assert.equal(manifest.complete, false);
   assert.equal(manifest.files.includes("service/src/value.js"), true);
+  const snapshot = workingTreeSnapshot(cwd);
+  assert.equal(workingTreeSnapshotHasUnavailableEvidence(snapshot), true);
+  assert.match(workingTreeEvidenceDigest(snapshot), /^wt-content-v2-unavailable:/);
+});
+
+test("working-tree snapshots fail closed for a broken root Git marker", (t) => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-snapshot-broken-root-"));
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(cwd, ".git"), "gitdir: /definitely/missing/piagent-root-git-dir\n");
+  fs.writeFileSync(path.join(cwd, "source.ts"), "export const source = true;\n");
+
+  const snapshot = workingTreeSnapshot(cwd);
+  assert.equal(workingTreeSnapshotHasUnavailableEvidence(snapshot), true);
+  assert.match(workingTreeEvidenceDigest(snapshot), /^wt-content-v2-unavailable:/);
 });
 
 function contract(overrides = {}) {
@@ -666,7 +705,7 @@ test("working-tree snapshots aggregate direct child Git repos from a workspace p
   assert.ok(snapshot["v-nexus-backend/src/contract.ts"]);
 });
 
-test("workspace evidence keeps root plans visible when side folders exceed the non-git cap", (t) => {
+test("workspace evidence fully covers root plans and side folders beyond the former non-git cap", (t) => {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-task-multi-repo-large-"));
   t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
   childGitRepo(path.join(cwd, "v-nexus-frontend"), { "src/app.ts": "export const app = 'base';\n" });
@@ -681,8 +720,29 @@ test("workspace evidence keeps root plans visible when side folders exceed the n
 
   const files = workingTreeFiles(cwd);
   assert.ok(files.includes("plans/2026-08-04-be-to-fe-remediation/plan.md"));
+  assert.equal(files.filter((file) => file.startsWith("aaa-bulk/")).length, 2010, "the former 2,000-file ceiling must not truncate a real workspace");
   const snapshot = workingTreeSnapshot(cwd);
   assert.ok(snapshot["plans/2026-08-04-be-to-fe-remediation/plan.md"]);
+  assert.ok(snapshot["aaa-bulk/2009.txt"]);
+  assert.equal(workingTreeSnapshotHasUnavailableEvidence(snapshot), false);
+});
+
+test("working-tree snapshots fail closed when non-git workspace enumeration is incomplete", (t) => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-task-multi-repo-truncated-"));
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  childGitRepo(path.join(cwd, "service"), { "src/app.ts": "export const app = 'base';\n" });
+  const loose = path.join(cwd, "shared");
+  fs.mkdirSync(loose, { recursive: true });
+  for (const name of ["a.txt", "b.txt", "c.txt"]) fs.writeFileSync(path.join(loose, name), `${name}\n`);
+
+  const complete = workingTreeSnapshot(cwd);
+  assert.equal(workingTreeSnapshotHasUnavailableEvidence(complete), false);
+  assert.ok(complete["shared/c.txt"]);
+
+  const incomplete = workingTreeSnapshot(cwd, { maxNonGitWorkspaceFiles: 2 });
+  assert.equal(incomplete["shared/c.txt"], undefined, "the bounded walker exposes the omitted carrier in this fixture");
+  assert.equal(workingTreeSnapshotHasUnavailableEvidence(incomplete), true, "partial enumeration must never remain proof-capable");
+  assert.match(workingTreeEvidenceDigest(incomplete), /^wt-content-v2-unavailable:/);
 });
 
 test("rejects corrupted v2 contracts instead of silently normalizing them", (t) => {

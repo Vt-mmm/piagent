@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "snapshotVersion": "task-authority-snapshot-v1",
   "manifestVersion": "authority-v1",
-  "manifestDigest": "sha256:28112cb62a8868d4371f78c9edefff7489adb0dc6616b9e489c4303b80307393",
+  "manifestDigest": "sha256:26766e0cf6b54b942876c79281b497d2e6b5cab01cc44e461c58ae714d3b2d90",
   "releaseVersion": "1.3.0",
   "profile": "broad-default",
   "taskId": "task-authority-fixture",
@@ -215,8 +215,8 @@
     {
       "id": "CAP-14",
       "owner": "orchestration-maintainer",
-      "mode": "recommend",
-      "authority": "advise",
+      "mode": "off",
+      "authority": "off",
       "dependencies": [
         "CAP-02",
         "CAP-05",
@@ -275,5 +275,5 @@
       }
     }
   ],
-  "snapshotDigest": "sha256:d62518f6f247e435a7666288b8079531215b19869ffc13423211d6d5106f7393"
+  "snapshotDigest": "sha256:c324eeabb8da1c301b8f8ac387da57f386c3450baf7dc989f020bf5d14c7a074"
 }

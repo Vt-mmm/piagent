@@ -3,7 +3,7 @@ import { useState } from "react";
 import type { Activity, PiagentWebUICanonicalSnapshotV1 } from "../../contracts/generated/snapshot-v1.ts";
 import { readLogPreview, readSessionLogPreview, type LogPreview } from "./api.ts";
 import { activityResult, activityTime, mergeActivityRows } from "./activity-view-model.ts";
-import type { TerminalOperationActivity } from "./live-state-view-model.ts";
+import type { LiveActivity, TerminalOperationActivity } from "./live-state-view-model.ts";
 import { tone } from "./view-model.ts";
 import { localize, useUiPreferences, type UiLocale } from "./ui-preferences.tsx";
 
@@ -26,12 +26,12 @@ function ActivityRow({ activity, preview, onPreview, locale }: { activity: Activ
   </article>;
 }
 
-export function ActivityPanel({ snapshot, sessionRef, terminalActivities = [] }: { snapshot?: PiagentWebUICanonicalSnapshotV1;
-  sessionRef?: string; terminalActivities?: readonly TerminalOperationActivity[] }) {
+export function ActivityPanel({ snapshot, sessionRef, terminalActivities = [], liveActivities }: { snapshot?: PiagentWebUICanonicalSnapshotV1;
+  sessionRef?: string; terminalActivities?: readonly TerminalOperationActivity[]; liveActivities?: readonly LiveActivity[] }) {
   const { locale } = useUiPreferences();
   const [previews, setPreviews] = useState<Record<string, PreviewState | undefined>>({});
   const running = snapshot?.activity.running ?? [], recent = snapshot?.activity.recent ?? [];
-  const { rows: activities, terminalCount } = mergeActivityRows(running, recent, terminalActivities, locale);
+  const { rows: activities, terminalCount, runningCount } = mergeActivityRows(running, recent, terminalActivities, locale, liveActivities);
   const toggle = (activity: Activity) => {
     if (previews[activity.activityRef]) { setPreviews((current) => ({ ...current, [activity.activityRef]: undefined })); return; }
     setPreviews((current) => ({ ...current, [activity.activityRef]: { state: "loading" } }));
@@ -41,7 +41,7 @@ export function ActivityPanel({ snapshot, sessionRef, terminalActivities = [] }:
   };
   return <section className="activity-panel surface" aria-labelledby="activity-title">
     <header className="panel-heading"><div><p className="section-kicker">Activity</p><h2 id="activity-title">{localize(locale,
-      "Tool, command và kết quả lượt chạy", "Tools, commands, and operation outcomes")}</h2></div><div><span className="running-count">{running.length} {localize(locale, "đang chạy", "running")}</span><span>{(snapshot?.activity.page.total ?? 0) + terminalCount} {localize(locale, "gần đây", "recent")}</span></div></header>
+      "Tool, command và kết quả lượt chạy", "Tools, commands, and operation outcomes")}</h2></div><div><span className="running-count">{runningCount} {localize(locale, "đang chạy", "running")}</span><span>{recent.length + terminalCount} {localize(locale, "gần đây", "recent")}</span></div></header>
     <div className="activity-list">
       {activities.map((activity) => <ActivityRow key={activity.activityRef} activity={activity} preview={previews[activity.activityRef]}
         onPreview={activity.logRef ? () => toggle(activity) : undefined} locale={locale} />)}

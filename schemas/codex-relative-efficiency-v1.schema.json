@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Vt-mmm/piagent/schemas/codex-relative-efficiency-v1.schema.json",
+  "title": "Piagent Codex-relative efficiency evidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "policy", "required", "claim", "billedOrSubscriptionCost", "costBoundary", "checks", "failures", "passed", "families", "totalTokenTraffic", "apiEquivalentCost", "subagents"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "policy": { "$ref": "#/$defs/policy" },
+    "required": { "type": "boolean" },
+    "claim": { "type": "string", "minLength": 1 },
+    "billedOrSubscriptionCost": { "const": false },
+    "costBoundary": { "type": "string", "minLength": 1 },
+    "checks": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "type": "boolean" }
+    },
+    "failures": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "passed": { "type": "boolean" },
+    "families": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/family" } },
+    "totalTokenTraffic": { "$ref": "#/$defs/aggregateTokens" },
+    "apiEquivalentCost": { "$ref": "#/$defs/aggregateCost" },
+    "subagents": { "$ref": "#/$defs/subagents" }
+  },
+  "$defs": {
+    "nullableNonNegativeNumber": { "type": ["number", "null"], "minimum": 0 },
+    "nullablePositiveNumber": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+    "confidence": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["lower", "upper", "sampleUnit", "scenarioCount"],
+      "properties": {
+        "lower": { "type": "number", "exclusiveMinimum": 0 },
+        "upper": { "type": "number", "exclusiveMinimum": 0 },
+        "sampleUnit": { "const": "scenario-family" },
+        "scenarioCount": { "type": "integer", "minimum": 2 }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "id", "baselineSurface", "candidateSurface", "estimand", "outcomeConditioning", "attemptPolicy", "maximumTotalTokenTrafficRatio", "maximumTotalTokenTrafficRatioUpper95", "maximumApiEquivalentCostRatio", "maximumApiEquivalentCostRatioUpper95", "maximumSubagentSessionsPerAttempt", "maximumSubagentTrafficShare"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "id": { "const": "codex-relative-efficiency-v1" },
+        "baselineSurface": { "const": "codex-cli" },
+        "candidateSurface": { "const": "piagent" },
+        "estimand": { "const": "fixed-workload-family-geometric-mean" },
+        "outcomeConditioning": { "const": "none" },
+        "attemptPolicy": { "const": "accepted-plus-exact-provider-started-failed-attempts" },
+        "maximumTotalTokenTrafficRatio": { "type": "number", "exclusiveMinimum": 0, "maximum": 0.7 },
+        "maximumTotalTokenTrafficRatioUpper95": { "type": "number", "exclusiveMinimum": 0, "maximum": 0.7 },
+        "maximumApiEquivalentCostRatio": { "type": "number", "exclusiveMinimum": 0, "maximum": 0.7 },
+        "maximumApiEquivalentCostRatioUpper95": { "type": "number", "exclusiveMinimum": 0, "maximum": 0.7 },
+        "maximumSubagentSessionsPerAttempt": { "type": "integer", "minimum": 0, "maximum": 1 },
+        "maximumSubagentTrafficShare": { "type": "number", "minimum": 0, "maximum": 0.05 }
+      }
+    },
+    "family": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scenarioId", "expectedAttempts", "pairedAttempts", "exact", "issues", "baselineTokenTraffic", "candidateTokenTraffic", "totalTokenTrafficRatio", "baselineApiEquivalentCostUsd", "candidateApiEquivalentCostUsd", "apiEquivalentCostRatio", "candidateSubagentSessions", "candidateSubagentTraffic", "maximumSubagentSessionsPerAttempt", "candidateAttempts", "subagentEvidenceComplete"],
+      "properties": {
+        "scenarioId": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+        "expectedAttempts": { "type": ["integer", "null"], "minimum": 1 },
+        "pairedAttempts": { "type": "integer", "minimum": 0 },
+        "exact": { "type": "boolean" },
+        "issues": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "baselineTokenTraffic": { "type": "number", "minimum": 0 },
+        "candidateTokenTraffic": { "type": "number", "minimum": 0 },
+        "totalTokenTrafficRatio": { "$ref": "#/$defs/nullablePositiveNumber" },
+        "baselineApiEquivalentCostUsd": { "type": "number", "minimum": 0 },
+        "candidateApiEquivalentCostUsd": { "type": "number", "minimum": 0 },
+        "apiEquivalentCostRatio": { "$ref": "#/$defs/nullablePositiveNumber" },
+        "candidateSubagentSessions": { "type": "integer", "minimum": 0 },
+        "candidateSubagentTraffic": { "type": "integer", "minimum": 0 },
+        "maximumSubagentSessionsPerAttempt": { "type": "integer", "minimum": 0 },
+        "candidateAttempts": { "type": "integer", "minimum": 0 },
+        "subagentEvidenceComplete": { "type": "boolean" }
+      }
+    },
+    "aggregateBase": {
+      "type": "object",
+      "required": ["complete", "expectedScenarioFamilies", "completeScenarioFamilies", "ratio", "ratioConfidence95", "ratioConfidence95Raw", "aggregateRatio", "deltaPercent"],
+      "properties": {
+        "complete": { "type": "boolean" },
+        "expectedScenarioFamilies": { "type": "integer", "minimum": 1 },
+        "completeScenarioFamilies": { "type": "integer", "minimum": 0 },
+        "ratio": { "$ref": "#/$defs/nullablePositiveNumber" },
+        "ratioConfidence95": { "$ref": "#/$defs/confidence" },
+        "ratioConfidence95Raw": { "$ref": "#/$defs/confidence" },
+        "aggregateRatio": { "$ref": "#/$defs/nullableNonNegativeNumber" },
+        "deltaPercent": { "type": ["number", "null"] }
+      }
+    },
+    "aggregateTokens": {
+      "allOf": [
+        { "$ref": "#/$defs/aggregateBase" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["complete", "expectedScenarioFamilies", "completeScenarioFamilies", "ratio", "ratioConfidence95", "ratioConfidence95Raw", "aggregateBaselineTokens", "aggregateCandidateTokens", "aggregateRatio", "deltaPercent"],
+          "properties": {
+            "complete": true,
+            "expectedScenarioFamilies": true,
+            "completeScenarioFamilies": true,
+            "ratio": true,
+            "ratioConfidence95": true,
+            "ratioConfidence95Raw": true,
+            "aggregateRatio": true,
+            "deltaPercent": true,
+            "aggregateBaselineTokens": { "type": "number", "minimum": 0 },
+            "aggregateCandidateTokens": { "type": "number", "minimum": 0 }
+          }
+        }
+      ]
+    },
+    "aggregateCost": {
+      "allOf": [
+        { "$ref": "#/$defs/aggregateBase" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["complete", "expectedScenarioFamilies", "completeScenarioFamilies", "ratio", "ratioConfidence95", "ratioConfidence95Raw", "aggregateBaselineUsd", "aggregateCandidateUsd", "aggregateRatio", "deltaPercent"],
+          "properties": {
+            "complete": true,
+            "expectedScenarioFamilies": true,
+            "completeScenarioFamilies": true,
+            "ratio": true,
+            "ratioConfidence95": true,
+            "ratioConfidence95Raw": true,
+            "aggregateRatio": true,
+            "deltaPercent": true,
+            "aggregateBaselineUsd": { "type": "number", "minimum": 0 },
+            "aggregateCandidateUsd": { "type": "number", "minimum": 0 }
+          }
+        }
+      ]
+    },
+    "subagents": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidateAttempts", "sessions", "tokenTraffic", "trafficShare", "maximumObservedSessionsPerAttempt"],
+      "properties": {
+        "candidateAttempts": { "type": "integer", "minimum": 0 },
+        "sessions": { "type": "integer", "minimum": 0 },
+        "tokenTraffic": { "type": "integer", "minimum": 0 },
+        "trafficShare": { "$ref": "#/$defs/nullableNonNegativeNumber" },
+        "maximumObservedSessionsPerAttempt": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

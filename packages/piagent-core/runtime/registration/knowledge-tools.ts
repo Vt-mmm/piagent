@@ -11,11 +11,11 @@ export function registerKnowledgeTools(pi: ExtensionAPI, deps: Record<string, an
   registerPiagentTool(pi, {
     name: "piagent_orchestration_policy",
     label: "Piagent Orchestration Policy",
-    description: "Return solo-first subagent, review lens, model-role, and Field Guide policy for the current project.",
-    promptSnippet: "Use this before planning medium/large tasks so orchestration stays single-agent-first and token-aware.",
+    description: "Return parent-direct helper limits, review lenses, model-role, and Field Guide policy for the current project.",
+    promptSnippet: "Use this before planning medium/large tasks so the parent stays direct and helper use remains a measured token optimization.",
     promptGuidelines: [
-      "Default to the parent agent plus bounded subagents only when they reduce context risk or improve review quality.",
-      "Use review lenses instead of spawning a broad swarm.",
+      "Default to the parent model working directly; review quality alone does not justify another model run.",
+      "Use at most one fresh read-only helper only with two independent lanes and at least 30% projected total token savings; never delegate implementation or retry a deterministic failure.",
       "Treat Field Guide memory as advisory and verify it against current repository files."
     ],
     parameters: Type.Object({
@@ -45,7 +45,9 @@ export function registerKnowledgeTools(pi: ExtensionAPI, deps: Record<string, an
           path: fieldGuidePath,
           exists: fieldGuideExists
         },
-        stance: "single-agent-first; subagents are opt-in tools for bounded scout, planning, and review"
+        helperBudget: "1-readonly-total/0-retries/0-writers",
+        minimumProjectedNetSaving: 0.3,
+        stance: "parent-direct; one fresh read-only helper only when runtime-measured net token savings justify it"
       };
       const text = params.detail === "full"
         ? JSON.stringify(payload, null, 2)
@@ -53,6 +55,8 @@ export function registerKnowledgeTools(pi: ExtensionAPI, deps: Record<string, an
           `mode: ${payload.defaultMode}`,
           `maxConcurrentSubagents: ${payload.maxConcurrentSubagents}`,
           `helpersMode: ${payload.helpersMode}`,
+          `helperBudget: ${payload.helperBudget}`,
+          `minimumProjectedNetSaving: ${Math.round(payload.minimumProjectedNetSaving * 100)}%`,
           `reviewLenses: ${payload.defaultReviewLenses.join(", ")}`,
           `fieldGuide: ${payload.fieldGuide.enabled ? `${payload.fieldGuide.path} (${payload.fieldGuide.exists ? "exists" : "missing"})` : "off"}`,
           `fieldGuidePolicy: ${payload.fieldGuide.writePolicy}, maxLines=${payload.fieldGuide.maxLines}`,

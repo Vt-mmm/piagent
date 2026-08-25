@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { describe, it } from "node:test";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
@@ -59,5 +61,35 @@ describe("subagent capability policy", () => {
     const reviewer = fs.readFileSync(path.join(subagentsDir, "piagent-reviewer.md"), "utf8");
     assert.match(reviewer, /Never edit files or run mutation commands/);
     assert.doesNotMatch(reviewer, /\b(?:autofix|contact_supervisor|corrective edits?)\b/i);
+  });
+
+  it("keeps every packaged helper on fresh context, zero retry, and a bounded turn budget", () => {
+    for (const name of fs.readdirSync(subagentsDir).filter((entry) => entry.endsWith(".md"))) {
+      const config = frontmatter(path.join(subagentsDir, name));
+      assert.equal(config.inheritProjectContext, "false", `${name} must not inherit parent project history`);
+      assert.equal(config.defaultContext, "fresh", `${name} must start from fresh context`);
+      assert.equal(config.turnBudget, '{"maxTurns":8,"graceTurns":0}', `${name} must fail once without grace retries`);
+      assert.equal(config.helperRequestSchemaVersion, "2", `${name} must require HelperRequest v2`);
+    }
+  });
+
+  it("clamps every compatibility preset to one read-only helper and disables worker surfaces", () => {
+    const script = path.join(repoRoot, "scripts", "configure-subagents.sh");
+    for (const preset of ["minimal", "safe", "async", "parallel"]) {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), `piagent-subagents-${preset}-`));
+      const result = spawnSync("bash", [script, "--preset", preset, "--config", path.join(root, "config.json"), "--settings", path.join(root, "settings.json"), "--dry-run"], { encoding: "utf8" });
+      fs.rmSync(root, { recursive: true, force: true });
+      assert.equal(result.status, 0, result.stderr);
+      const report = JSON.parse(result.stdout);
+      assert.equal(report.config.globalConcurrencyLimit, 1);
+      assert.equal(report.config.maxSubagentSpawnsPerSession, 1);
+      assert.equal(report.config.parallel.maxTasks, 1);
+      assert.equal(report.config.parallel.concurrency, 1);
+      assert.equal(report.config.waitTool.enabled, false);
+      assert.equal(report.config.intercomBridge.mode, "off");
+      assert.equal(report.settingsSubagents.disableBuiltins, true);
+      assert.equal(report.settingsSubagents.agentOverrides.worker.disabled, true);
+      assert.equal(report.settingsSubagents.agentOverrides["piagent-worker"].disabled, true);
+    }
   });
 });

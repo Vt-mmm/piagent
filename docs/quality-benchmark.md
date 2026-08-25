@@ -124,8 +124,9 @@ mỗi family và 2 surface, tổng cộng 108 model session. Bộ này dùng đ�
 regression của harness/model policy, không tự chứng minh generalization hoặc độ
 ổn định production.
 
-Contract hiện tại chỉ xét fresh-token claim ở **S108**, sau khi có đủ 18 family ×
-3 repeat × 2 surface. Primary estimand được khai báo trước là
+Contract hiện tại chỉ xét efficiency claim ở **S108**, sau khi có đủ 18 family ×
+3 repeat × 2 surface. Claim phải qua hai trục độc lập. Primary fresh-token
+estimand được khai báo trước là
 `fixed-workload-family-ratio`: trong từng family, cộng fresh token chính xác của
 đủ ba attempt đã định trước ở mỗi surface, gồm cả usage của failed attempt đã
 khởi động provider; sau đó lấy geometric mean của 18 tỷ lệ family và CI 95% trên
@@ -142,6 +143,17 @@ phải có exact terminal token buckets; thiếu một attempt/family hoặc unk
 usage của accepted/failed attempt làm primary evidence không đầy đủ và chặn
 claim.
 
+Diagnostic Codex-relative thứ hai đo mục tiêu chi phí vận hành: cùng task,
+fixture, model và thinking, cộng **toàn bộ provider token traffic** gồm fresh
+input, output, cache read và cache write của accepted attempt lẫn
+provider-started failed/retry attempt. Contract tùy chọn cho một suite tương lai
+sẽ chỉ cho phép nói "rẻ hơn `codex-cli` ít nhất 30%" khi point estimate lẫn cận
+trên 95% của total-traffic ratio và API-equivalent cost ratio không vượt `0.70`,
+đồng thời chất lượng/task continuity đều đạt. `production-v1` hiện giữ
+`requireNormalizedCostClaim=false`, nên metric này chỉ là diagnostic và không
+được dùng để claim 30–40% cost; hard claim S108 của v1 vẫn là fresh-token ratio
+upper-95 không vượt `0.60`.
+
 Hai hard non-regression axis còn lại là paired model intelligence và task
 continuity. Piagent phải dùng đúng cùng model/thinking với controlled baseline CLI,
 không thấp điểm hơn ở bất kỳ paired grade nào, đạt mọi quality/safety/
@@ -150,14 +162,16 @@ Piagent session phải resolved với đầy đủ workflow cùng causal lifecyc
 evidence. Một task bị đứt, timeout, orphan, terminal state không rõ hoặc thiếu
 evidence không thể được bù bằng token saving ở task khác.
 
-Codex OAuth không cung cấp billed monetary cost, nên `usage.cost` vẫn là `n/a`.
-Production-v1 đo riêng **API-equivalent text-token cost** bằng pricing snapshot
+Codex OAuth không cung cấp billed monetary cost, nên không thể suy tỷ lệ phần
+trăm subscription từ report. Production-v1 đo riêng **API-equivalent text-token
+cost** bằng pricing snapshot
 có version trong suite: GPT-5.6 Luna ở `$0.20/M` fresh input, `$0.02/M` cached
 input, `$1.20/M` output và cache write bằng `1.25x` fresh-input rate. Đây là
-metric quan sát, không phải hard gate: tỷ lệ xấu hơn baseline CLI hoặc pricing
-applicability không đầy đủ không được chặn stage, verdict, hay fresh-token claim.
-Metric chỉ chuẩn hóa input/cache/output text token, không bao gồm tool-specific
-charge và không phải hóa đơn OAuth. Snapshot dẫn nguồn
+diagnostic quan sát của `production-v1`, không phải hóa đơn OAuth và không
+khẳng định mức trừ quota subscription. Chỉ một suite tương lai bật explicit
+cost claim và có usage từng request đầy đủ mới được nâng nó thành hard gate.
+Metric chỉ chuẩn hóa
+input/cache/output text token, không bao gồm tool-specific charge. Snapshot dẫn nguồn
 [OpenAI GPT-5.6 Luna model page](https://developers.openai.com/api/docs/models/gpt-5.6-luna).
 
 Long-context multiplier là thuộc tính từng request: request input trên 272K
@@ -165,8 +179,8 @@ dùng input `2x` và output `1.5x`. Report chỉ dùng standard tier khi tổng 
 tokens của run không vượt 272K, vì tổng đó là upper bound của từng request. Nếu
 tổng lớn hơn nhưng không có exact per-request usage, applicability là `unknown`
 và normalized-cost diagnostic ghi `unavailable`; runner không nhân mù trên
-aggregate và cũng không dùng sự thiếu hụt này để phủ quyết exact fresh-token
-measurement. Nhãn
+aggregate. Điều này không phủ quyết exact token-traffic measurement, nhưng chặn
+mọi optional Codex-relative cost claim thay vì giả định một mức giá có lợi. Nhãn
 `steady-state` ở suite này nghĩa là project đã được onboarding/build Context
 Engine trước một request mới; nó không phải bằng chứng multi-turn hay session
 continuity trong công việc thực tế.
@@ -219,7 +233,10 @@ baseline-pass/Piagent-fail, unknown provider-attempt usage, infrastructure retry
 model/thinking/provider-wire drift hoặc candidate provenance drift. Early success
 không phải stopping rule: chưa đủ 108 session thì tuyệt đối không claim đạt 40%.
 Một intermediate fresh-token ratio xấu, duration chậm, normalized-cost ratio xấu
-hoặc host load cao không tự đóng stage; các giá trị đó chỉ được giữ để chẩn đoán.
+hoặc host load cao không tự đóng stage; các giá trị đó chỉ được giữ để chẩn đoán
+trước S108. Ở S108, `production-v1` chỉ dùng hard gate fresh-token đã khai báo;
+total-traffic và normalized-cost Codex-relative vẫn observational cho tới khi có
+suite version mới bật explicit cost claim và exact per-request pricing evidence.
 File spend-control là contract được test; runner đọc trực tiếp các mốc session,
 từ chối chunk đầu hoặc chunk resume không đúng phần còn lại của window đã duyệt.
 Seed, surface, model, thinking, repeat, zero-retry và terminal pair-stop cũng được
@@ -281,11 +298,26 @@ Từ lớp benchmark matrix trong package, Piagent phân ba band:
 | `deep-logic` | phát triển solver/workflow/WebUI logic | `deep-logic-v1`, 7 bài large với interacting invariants, 42 paired session; capability-tier full-suite gate, không phải production claim |
 | `production` | release candidate, đổi model policy, đổi harness | `production-v1`, 18 public-regression scenario, paired baseline, confidence gate; không phải generalization claim |
 | `capability` | tìm trần năng lực sau thay đổi harness | `capability-v1`, 6 bài multi-file/multi-component chưa bão hòa; dùng hill-climbing, không phải release gate |
+| `runtime-conformance` | thay đổi context governor, retry/settlement WebUI, emission hoặc edit freshness | `runtime-conformance-v1`, 9 ca deterministic provider-free; bắt buộc 0 provider call, 0 model token và mọi safety gate pass; không phải token/quality claim |
 | `long-horizon` | thay đổi recovery/context lớn | Lane provider-free chạy ít nhất 30 phút cho hard crash/resume, compaction, handoff, continuation bounded và state-growth; dedicated paid suite chưa phát hành |
 | `private-holdout` | readiness E3 và exact-RC FS7-01 | Tối thiểu 6 family từ 6 repository lineage, giữ ngoài workspace tác giả; chỉ custodian execute-only và human-calibration receipt được chấp nhận |
 
 Hiện `core-v1`, `deep-logic-v1`, `production-v1`, `capability-v1` và `e2-framework-v1` chạy được bằng CLI. Thay đổi
 recovery/context phải chạy `production-v1` cùng deterministic recovery tests.
+Trước mọi canary trả phí sau thay đổi runtime, chạy lane không dùng model:
+
+```bash
+node evals/runtime-conformance-v1/runner.mjs \
+  --output .pi/benchmarks/runtime-conformance-v1-latest.json
+```
+
+Lane chỉ đạt khi cả 9 ca pass, provider/model usage bằng 0, projection không tạo
+tool orphan, retry sau output/tool-call không được chấp nhận, mỗi operation chỉ
+có một terminal settlement, final response không bị emission guard lọc và stale
+edit bị chặn cho tới khi đọc lại. Sau đó mới chạy canary chẩn đoán có chọn
+scenario; chỉ candidate Git sạch đã qua canary mới được mở S12 của
+`production-v1`. Không sửa task hoặc gate của canonical 108-session suite để
+giữ khả năng so sánh lịch sử.
 Lane `evals/long-horizon-v1` hiện là `runnable-provider-free`; nó chứng minh
 lifecycle durability và local-state bounds, không tạo model quality, token,
 latency, 90-minute wall-clock, generalization hay release claim. Dedicated paid

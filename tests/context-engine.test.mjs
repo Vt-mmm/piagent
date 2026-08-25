@@ -128,6 +128,22 @@ test("classifies task signals without calling a model", () => {
   assert.ok(estimateContextTokens("phân quyền bảo mật") > estimateContextTokens("plain ascii text"));
 });
 
+test("retains explicit safe project globs without accepting traversal or surrounding prose", () => {
+  const result = classifyContextTask([
+    "Exact writable globs: `v-nexus-frontend/src/**`, v-nexus-frontend/e2e/**.",
+    "Also inspect src/**/*.{ts,tsx}; ignore ../secrets/** and v-nexus-frontend/src/../../backend/**.",
+    "The URL https://example.com/docs/** is documentation, not a project path."
+  ].join(" "));
+
+  assert.deepEqual(result.paths, [
+    "v-nexus-frontend/src/**",
+    "v-nexus-frontend/e2e/**",
+    "src/**/*.{ts,tsx}"
+  ]);
+  assert.equal(result.paths.some((candidate) => candidate.includes("..")), false);
+  assert.equal(result.paths.some((candidate) => candidate.startsWith("http")), false);
+});
+
 test("retrieves Vietnamese source signals with accented or unaccented queries", async (t) => {
   const cwd = fixture();
   t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));

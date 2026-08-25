@@ -71,7 +71,7 @@
         <tr><td>Solver</td><td><span class="inline-code">shadow</span></td><td>Evaluates routes without changing the parent model or taking control of the workflow.</td></tr>
         <tr><td>Phase tools</td><td><span class="inline-code">shadow</span></td><td>Computes projections; use <span class="inline-code">PIAGENT_PHASE_TOOLS=on</span> to apply phase-specific tool visibility.</td></tr>
         <tr><td>Recovery</td><td><span class="inline-code">on</span></td><td>Retries or repairs within ceilings; use <span class="inline-code">PIAGENT_AUTO_RECOVERY=off</span> to restore ordinary handoff.</td></tr>
-        <tr><td>Helpers</td><td><span class="inline-code">recommend</span></td><td>Explains recommendations only; <span class="inline-code">PIAGENT_HELPERS_MODE=on</span> dispatches read-only roles only when an adapter is available.</td></tr>
+        <tr><td>Helpers</td><td><span class="inline-code">off</span></td><td>Explicit <span class="inline-code">PIAGENT_HELPERS_MODE=on</span> still allows only one fresh read-only helper after two independent lanes and at least 30% projected net saving are proven.</td></tr>
         <tr><td>Parent routing and automatic workers</td><td><span class="inline-code">off</span></td><td>No automatic parent-model switch, writer dispatch, or default multi-writer behavior.</td></tr>
       </tbody>
     </table>

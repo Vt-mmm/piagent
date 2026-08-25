@@ -14,6 +14,7 @@ import { contextMetricPartition } from "./context-efficiency-metrics.js";
 import { writeContextEfficiencyReport } from "./context-efficiency-report.js";
 import { inspectContextTelemetryIntegrity } from "./context-telemetry-integrity.js";
 import { directExplicitImportLinks, extractJavaScriptModuleImports } from "./context-import-links.js";
+import { queryPathCandidates } from "./context-query-paths.js";
 import { redactSensitiveProjectFileText } from "../security/sensitive-data.js";
 const INDEX_SCHEMA_VERSION = 2;
 const TELEMETRY_SCHEMA_VERSION = 2;
@@ -490,17 +491,6 @@ function tokenizeQuery(query) {
   const expanded = String(query ?? "").replace(/([a-z0-9])([A-Z])/g, "$1 $2").replaceAll("_", " ").replaceAll("-", " ");
   const terms = expanded.match(/[\p{L}][\p{L}\p{N}]{1,63}/gu) ?? [];
   return [...new Set(terms.map((term) => term.toLowerCase()).filter((term) => !STOP_TERMS.has(foldSearchSignal(term))))].slice(0, 16);
-}
-
-function queryPathCandidates(query) {
-  const pattern = /(?:^|[\s"'`(])((?:\.{0,2}\/)?[\p{L}\p{N}_.@-]+(?:\/[\p{L}\p{N}_.@-]+)+|[\p{L}\p{N}_.@-]+\.[\p{L}\p{N}]{1,8}|\.[\p{L}\p{N}_@-]{1,32})(?=$|[\s"'`),:])/gu;
-  const explicitRoots = /^(?:\.github|app|apps|backend|bin|config|docs|examples|frontend|lib|logs|packages|pages|public|scripts|services|spec|src|test|tests|vendor|__tests__)\//i;
-  return [...String(query ?? "").matchAll(pattern)].flatMap((match) => {
-    const raw = match[1], candidate = normalizeRelative(raw);
-    const explicit = candidate && (raw.startsWith("./") || raw.startsWith("../") || explicitRoots.test(candidate)
-      || candidate.split("/").length >= 3 || /(?:^|\/)(?:\.[^/]+|[^/]+\.[\p{L}\p{N}]{1,8})$/u.test(candidate));
-    return explicit ? [candidate] : [];
-  });
 }
 
 function ftsQuery(terms) {

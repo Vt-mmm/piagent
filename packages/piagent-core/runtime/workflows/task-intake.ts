@@ -7,11 +7,34 @@ const AUTO_INTAKE_MAX_PROMPT_CHARS = LONG_INPUT_CHARS;
 const AUTO_TASK_SUMMARY_CHARS = 700;
 const AUTO_ACCEPTANCE_CRITERION_CHARS = 600;
 const AUTO_ACCEPTANCE_CRITERIA_MAX = 12;
-const AUTO_INTAKE_CHANGE_INTENT = /\b(?:add|build|change|correct|create|fix|implement|modify|refactor|remove|rename|repair|replace|update|write|sua|them|doi|cap nhat|xoa|tao)\b/i;
+const AUTO_INTAKE_CHANGE_INTENT = /\b(?:add|build|change|correct|create|fix|implement|modify|mutate|refactor|remove|rename|repair|replace|update|write|sua|them|doi|cap nhat|xoa|tao)\b/i;
 const AUTO_INTAKE_READ_ONLY_LEAD = /^\s*\/?(?:analy[sz]e|audit|check|discuss|explain|inspect|plan|research|review|scout|summari[sz]e|why|how|can\s+(?:you|we)|kiem tra|nghien cuu|giai thich|danh gia)\b/i;
 const AUTO_INTAKE_MANUAL_RISK = /\b(?:credential|database|deploy|destructive|encryption|external provider|payment|permission|production|publish|secret|token rotation)\b/i;
 const AUTO_READ_ONLY_INTENT = /\b(?:analy[sz]e|audit|check|diagnos(?:e|is)|explain|inspect|investigate|plan|research|review|scout|summari[sz]e|triage|kiem tra|nghien cuu|giai thich|danh gia)\b/i;
-const AUTO_READ_ONLY_BOUNDARY = /\b(?:read-only|no edits?|do not edit(?: files?| source| project| repo)?|do not change (?:files?|source|project|repo)|do not mutate (?:files?|source|project|repo|workspace)|khong sua(?: file| source| project)?|khong edit(?: file| source| project)?|khong doi(?: file| source| project)?)\b/i;
+// Candidate wording is separated from the following qualifier. This keeps a
+// durable zero-delta instruction distinct from local path authority and from a
+// temporary "inspect first, edit later" instruction.
+const AUTO_NO_MUTATION_CANDIDATES = [
+  /\b(?:do not|don't|must not|never)\s+(?:edit|change|modify|mutate|touch|write(?:\s+to)?)\s+(?:(?:any|all|the|this|entire)\s+)?(?:files?|code|source(?:\s+files?)?|project(?:\s+files?)?|workspace|repo(?:sitory)?|anything)\b/i,
+  /\b(?:do not|don't|must not|never)\s+make\s+(?:any\s+)?(?:changes?|edits?|mutations?)(?:\s+to\s+(?:(?:any|all|the)\s+)?(?:files?|code|source(?:\s+files?)?|project(?:\s+files?)?|workspace|repo(?:sitory)?))?\b/i,
+  /\b(?:make\s+)?no\s+(?:(?:code|source|project|file|workspace|repo(?:sitory)?)\s+)?(?:changes?|edits?|mutations?)(?:\s+to\s+(?:(?:any|all|the)\s+)?(?:files?|code|source(?:\s+files?)?|project(?:\s+files?)?|workspace|repo(?:sitory)?))?\b/i,
+  /\bno\s+(?:project|source)\s+files?\s+(?:are\s+)?(?:changed|edited|modified|mutated)\b/i,
+  /\bwithout\s+(?:editing|changing|modifying|mutating|touching|writing(?:\s+to)?)\s+(?:(?:any|all|the)\s+)?(?:files?|code|source(?:\s+files?)?|project(?:\s+files?)?|workspace|repo(?:sitory)?)\b/i,
+  /\bleave\s+(?:(?:all|the|this|entire)\s+)?(?:files?|code|source|project|workspace|repo(?:sitory)?)\s+(?:fully\s+)?(?:unchanged|unmodified)\b/i,
+  /\b(?:zero\s+task\s+delta|mutation[- ]free)\b/i,
+  /\bkh(?:o|ô)ng\s+(?:s(?:u|ử)a|edit|thay\s+(?:d|đ)(?:o|ổ)i)\s+(?:b(?:a|ấ)t\s+k(?:y|ỳ)\s+)?(?:file|source|project|workspace|repo)\b/i
+];
+const AUTO_BOUNDARY_TAIL_PREFIX = "^(?:\\s|[,.;:!?()\\[\\]{}—–-])*(?:but\\s+)?";
+const AUTO_LOCAL_BOUNDARY_TAIL = new RegExp(`${AUTO_BOUNDARY_TAIL_PREFIX}(?:outside|beyond|under|within|inside|in|on|for(?!\\s+now\\b)|except(?:\\s+for)?|other\\s+than|apart\\s+from|to\\b|only\\s+(?:(?:edit|change|modify|mutate|touch|write)\\b|(?:in|under|within|outside)\\b|(?:[a-z0-9_.@*?-]+\\/))|ngo(?:a|à)i\\b|tr(?:u|ừ)\\b)`, "i");
+const AUTO_TEMPORARY_BOUNDARY_TAIL = new RegExp(`${AUTO_BOUNDARY_TAIL_PREFIX}(?:(?:not\\s+)?yet\\b|right\\s+now\\b|for\\s+now\\b|at\\s+(?:(?:this|the\\s+current)\\s+(?:step|stage|phase|time)|the\\s+moment)\\b|during\\s+(?:(?:this|the\\s+current)\\s+)?(?:step|stage|phase|planning)\\b|while\\b|unless\\b|until\\b|before\\b|hi(?:e|ệ)n\\s+t(?:a|ạ)i\\b|b(?:a|â)y\\s+gi(?:o|ờ)\\b)`, "i");
+const AUTO_GLOBAL_READ_ONLY_PATTERNS = [
+  /^\s*\/?read-only\s*(?:$|[.!?:;—–-])/im,
+  /^\s*\/?read-only\s+(?:task|run|session)\s*(?:$|[.!?:;—–-]|\b(?:to|for)\b)/im,
+  /^\s*\/?read-only\s+(?:assessment|review)\s*(?:$|[.!?:;—–-]|\b(?:of|for)\b)/im,
+  /\b(?:as|in)\s+(?:a\s+)?read-only\s+(?:mode|task|run|session|assessment|review)\b/i,
+  /\b(?:use|perform|conduct|run)\s+(?:a\s+)?read-only\s+(?:task|run|assessment|review)\b/i,
+  /\b(?:keep\s+)?(?:this\s+|the\s+)?(?:task|run|session|workspace|project|repo|repository)\s+(?:(?:is|must|should)\s+(?:be\s+|remain\s+)?|remain\s+)?read-only\b/i
+];
 const AUTO_EXECUTION_INTENT = /(?:\b(?:run|execute|execution|rerun|re-run|chay)\b.{0,80}\b(?:tests?|build|checks?|gates?|lint|typecheck|package|pack|verify|verification)\b|\b(?:npm|pnpm|yarn|bun)\s+(?:test|pack|run\s+(?:build|check|lint|typecheck|verify))\b)/i;
 
 export const AUTO_INTAKE_SNAPSHOT_PATTERNS = [
@@ -20,6 +43,27 @@ export const AUTO_INTAKE_SNAPSHOT_PATTERNS = [
 
 function uniqueStrings(values: string[]): string[] {
   return [...new Set(values)];
+}
+
+function noMutationBoundarySignals(text: string): { taskWide: boolean; temporary: boolean } {
+  let temporary = false;
+  for (const pattern of AUTO_NO_MUTATION_CANDIDATES) {
+    const matcher = new RegExp(pattern.source, `${pattern.flags}g`);
+    for (const match of text.matchAll(matcher)) {
+      const tail = text.slice((match.index ?? 0) + match[0].length, (match.index ?? 0) + match[0].length + 160);
+      if (AUTO_LOCAL_BOUNDARY_TAIL.test(tail)) continue;
+      if (AUTO_TEMPORARY_BOUNDARY_TAIL.test(tail)) {
+        temporary = true;
+        continue;
+      }
+      return { taskWide: true, temporary };
+    }
+  }
+  return { taskWide: false, temporary };
+}
+
+function hasGlobalReadOnlyBoundary(text: string): boolean {
+  return AUTO_GLOBAL_READ_ONLY_PATTERNS.some((pattern) => pattern.test(text));
 }
 
 const PLAUSIBLE_SCOPE_ROOT = /^(?:\.github|app|apps|bin|config|docs|examples|lib|logs|packages|pages|public|scripts|spec|src|test|tests|vendor|__tests__)(?:\/|$)/i;
@@ -49,6 +93,8 @@ export function boundedRuntimeIntakeMessage(value: string): string {
 export function automaticTaskIntakeEligible(prompt: string, readProtectedPaths: string[]): boolean {
   const text = String(prompt ?? "").trim();
   if (!text || text.length > AUTO_INTAKE_MAX_PROMPT_CHARS) return false;
+  const noMutationBoundary = noMutationBoundarySignals(text);
+  if (noMutationBoundary.temporary && !noMutationBoundary.taskWide) return false;
   const signal = classifyContextTask(text);
   if (AUTO_EXECUTION_INTENT.test(text)) {
     if (/\bpiagent_task_start\b/i.test(text)) return false;
@@ -65,8 +111,9 @@ export function automaticReadOnlyTaskIntakeEligible(prompt: string, readProtecte
   if (!text || text.length > AUTO_INTAKE_MAX_PROMPT_CHARS) return false;
   const signal = classifyContextTask(text);
   if (signal.workflow === "usage" || signal.workflow === "permission" || signal.workflow === "context") return false;
-  if (!AUTO_READ_ONLY_INTENT.test(text) && !AUTO_READ_ONLY_BOUNDARY.test(text)) return false;
-  if (AUTO_INTAKE_CHANGE_INTENT.test(text) && !AUTO_READ_ONLY_BOUNDARY.test(text)) return false;
+  const readOnlyBoundary = noMutationBoundarySignals(text).taskWide || hasGlobalReadOnlyBoundary(text);
+  if (!AUTO_READ_ONLY_INTENT.test(text) && !readOnlyBoundary) return false;
+  if (AUTO_INTAKE_CHANGE_INTENT.test(text) && !readOnlyBoundary) return false;
   if (/\bpiagent_task_start\b/i.test(text)) return false;
   return !signal.paths.some((candidate) => matchesProtectedPath(candidate, readProtectedPaths));
 }
@@ -81,7 +128,16 @@ export function automaticTaskMutationPolicy(
   prompt: string,
   changeMode: "source-change" | "read-only"
 ): "required" | "forbidden" {
-  return changeMode === "read-only" || AUTO_READ_ONLY_BOUNDARY.test(String(prompt ?? "")) ? "forbidden" : "required";
+  const text = String(prompt ?? "");
+  // A feature can intentionally become read-only while the implementation
+  // still requires source changes. Only a task-wide boundary may suppress
+  // mutation; incidental domain wording such as "list/detail read-only" must
+  // never convert a delegated implementation into a zero-delta task.
+  return changeMode === "read-only"
+    || noMutationBoundarySignals(text).taskWide
+    || hasGlobalReadOnlyBoundary(text)
+    ? "forbidden"
+    : "required";
 }
 
 export function automaticTaskRiskLane(prompt: string): "tiny" | "normal" {
@@ -178,7 +234,7 @@ export function automaticAcceptanceCriteria(
   flush();
   const generic = changeMode === "read-only"
     ? ["No project files are changed.", "The final response addresses the requested diagnostic result."]
-    : ["Changes stay within the runtime-derived task scope.", "The configured verification command passes after the final mutation."];
+    : ["The configured verification command passes after the final mutation."];
   const uniqueCriteria = uniqueStrings(criteria);
   const selected = boundedAcceptanceCriteria(uniqueCriteria, AUTO_ACCEPTANCE_CRITERIA_MAX);
   if (selected.length === AUTO_ACCEPTANCE_CRITERIA_MAX) return selected;
