@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { durableContextEvidenceEntries } from "../../extensions/context-evidence.js";
 import type { TaskContract } from "../../extensions/guard-types.js";
+import { operatorRequestDigest } from "../../extensions/task-state.js";
 
 const MAX_EVIDENCE_BYTES = 256 * 1024;
 const EXACT_OUTPUT_TEMPLATE = /\b([A-Z][A-Z0-9_]{2,63})\s*=\s*<([a-z][a-z0-9_-]{1,31})>/g;
@@ -11,6 +12,7 @@ export type ExactOutputContractEvaluation = {
   applicable: boolean;
   passed: boolean;
   key?: string;
+  reason?: "exact-output-evidence-missing" | "exact-output-evidence-ambiguous";
   expectedLines: string[];
   evidencePaths: string[];
 };
@@ -28,6 +30,15 @@ function exactOutputDirective(text: string): { key: string; placeholder: string 
     }
   }
   return undefined;
+}
+
+type ExactOutputTaskText = Pick<TaskContract, "summary" | "expectedOutput" | "acceptanceCriteria" | "operatorRequest" | "operatorRequestDigest">;
+
+function authoritativeTaskText(input: string | ExactOutputTaskText): string {
+  if (typeof input === "string") return input;
+  if (typeof input.operatorRequest === "string"
+    && input.operatorRequestDigest === operatorRequestDigest(input.operatorRequest)) return input.operatorRequest;
+  return [input.summary, input.expectedOutput, ...(input.acceptanceCriteria ?? [])].filter(Boolean).join("\n");
 }
 
 function safeObservedFile(cwd: string, candidate: string): { path: string; text: string } | undefined {
@@ -50,8 +61,8 @@ function valuesForKey(key: string, text: string): string[] {
   return [...text.matchAll(assignment)].map((match) => match[1]);
 }
 
-export function exactFinalOutputGuidance(taskText: string): string[] {
-  const directive = exactOutputDirective(taskText);
+export function exactFinalOutputGuidance(taskText: string | ExactOutputTaskText): string[] {
+  const directive = exactOutputDirective(authoritativeTaskText(taskText));
   if (!directive) return [];
   return [
     `Exact final-output contract: make ${directive.key}=<${directive.placeholder}> the last non-empty response line. Copy the complete value verbatim from observed project evidence and self-check every character before handoff.`
@@ -59,15 +70,11 @@ export function exactFinalOutputGuidance(taskText: string): string[] {
 }
 
 export function evaluateExactFinalOutputContract(
-  task: Pick<TaskContract, "summary" | "expectedOutput" | "acceptanceCriteria" | "contextManifest">,
+  task: Pick<TaskContract, "summary" | "expectedOutput" | "acceptanceCriteria" | "contextManifest" | "operatorRequest" | "operatorRequestDigest">,
   responseText: string,
   cwd: string
 ): ExactOutputContractEvaluation {
-  const directive = exactOutputDirective([
-    task.summary,
-    task.expectedOutput,
-    ...(task.acceptanceCriteria ?? [])
-  ].filter(Boolean).join("\n"));
+  const directive = exactOutputDirective(authoritativeTaskText(task));
   if (!directive) return { applicable: false, passed: true, expectedLines: [], evidencePaths: [] };
 
   const evidencePaths: string[] = [];
@@ -81,10 +88,13 @@ export function evaluateExactFinalOutputContract(
     for (const value of values) observedValues.add(value);
   }
   if (observedValues.size === 0) {
-    return { applicable: false, passed: true, key: directive.key, expectedLines: [], evidencePaths: [] };
+    return { applicable: true, passed: false, key: directive.key, reason: "exact-output-evidence-missing", expectedLines: [], evidencePaths: [] };
   }
 
   const expectedLines = [...observedValues].sort().map((value) => `${directive.key}=${value}`);
+  if (expectedLines.length !== 1) {
+    return { applicable: true, passed: false, key: directive.key, reason: "exact-output-evidence-ambiguous", expectedLines, evidencePaths: [...new Set(evidencePaths)].sort() };
+  }
   const finalLine = String(responseText ?? "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean).at(-1) ?? "";
   return {
     applicable: true,

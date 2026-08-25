@@ -1,6 +1,10 @@
 import type { TaskContract } from "../../extensions/guard-types.ts";
 import { CONTEXT_GOVERNOR_LEDGER_MAX_CHARS } from "../runtime-limits.ts";
 import {
+  losslessOperatorRequestFitsWithin,
+  operatorRequestCarryLines
+} from "./operator-request-carry.ts";
+import {
   GOVERNOR_VERSION,
   analyzeContextResidency,
   estimateGovernorMessagesTokens,
@@ -13,6 +17,20 @@ import {
   type ToolObservation
 } from "./adaptive-context-analysis.ts";
 
+export const ADAPTIVE_CONTEXT_COMPACTION_CANCELLED_PREFIX = "[Piagent adaptive compaction cancelled:";
+
+export function adaptiveContextCompactionCancelled(value: unknown): boolean {
+  return String(value ?? "").startsWith(ADAPTIVE_CONTEXT_COMPACTION_CANCELLED_PREFIX);
+}
+
+export function adaptiveContextCanPreserveTask(task?: TaskContract): boolean {
+  return losslessOperatorRequestFitsWithin(task, CONTEXT_GOVERNOR_LEDGER_MAX_CHARS);
+}
+
+function adaptiveCompactionCancellation(task?: TaskContract): string {
+  return `${ADAPTIVE_CONTEXT_COMPACTION_CANCELLED_PREFIX} authoritative durable task truth and exact verifiers exceed the ${CONTEXT_GOVERNOR_LEDGER_MAX_CHARS}-character ledger target. Keep the source transcript unchanged; do not summarize, hash, truncate, or reconstruct authoritative task truth.${task?.operatorRequestDigest ? ` Contract digest: ${task.operatorRequestDigest}.` : ""}]`;
+}
+
 function list(values: string[], limit: number): string {
   const unique = [...new Set(values.filter(Boolean))];
   if (unique.length === 0) return "none";
@@ -22,19 +40,24 @@ function list(values: string[], limit: number): string {
 
 function taskLedger(task?: TaskContract): string[] {
   if (!task) return ["Durable task: none; use the latest operator request as the goal."];
+  const operatorTruth = operatorRequestCarryLines(task);
   return [
     `Durable task: ${safeText(task.taskId, 140)} / ${safeText(task.taskRunId, 180)}; outcome=${task.trace.outcome}; lane=${task.riskLane}.`,
-    `Goal: ${safeText(task.summary, 700)}`,
-    `Acceptance: ${task.acceptanceCriteria.slice(0, 12).map((item, index) => `${index + 1}. ${safeText(item, 260)}`).join(" | ") || "none recorded"}`,
+    `Goal: ${operatorTruth.length > 0 ? safeText(task.summary, 700) : task.summary}`,
+    ...operatorTruth,
+    ...(operatorTruth.length > 0 ? [] : [`Expected output: ${task.expectedOutput}`]),
+    `Acceptance: ${task.acceptanceCriteria.slice(0, 12).map((item, index) => `${index + 1}. ${operatorTruth.length > 0 ? safeText(item, 260) : item}`).join(" | ") || "none recorded"}`,
     `Explicit exclusions: ${list(task.outOfScope.map((item) => safeText(item, 140)), 12)}.`,
     `Initial focus (advisory): ${list(task.scope.map((item) => safeText(item, 140)), 12)}.`,
     `Changed files: ${list(task.changedFiles.map((item) => safeText(item, 180)), 24)}.`,
-    `Exact verifiers: ${list(task.verifyCommands.map((item) => safeText(item, 300)), 12)}.`,
+    "Exact verifiers:",
+    ...(task.verifyCommands.length > 0 ? task.verifyCommands.map((command, index) => `${index + 1}. ${command}`) : ["none"]),
     `Task blocker: ${safeText(task.trace.friction ?? task.failureReason ?? "none", 500)}.`
   ];
 }
 
 export function buildAdaptiveContextLedger(messages: MessageLike[], task?: TaskContract): string {
+  if (!adaptiveContextCanPreserveTask(task)) return adaptiveCompactionCancellation(task);
   const users = operatorMessages(messages).slice(-5).map((message) => safeText(messageText(message), 1_400));
   const previousCarryOver = messages
     .filter((message) => (
@@ -69,7 +92,46 @@ export function buildAdaptiveContextLedger(messages: MessageLike[], task?: TaskC
   ];
   const ledger = lines.join("\n");
   if (ledger.length <= CONTEXT_GOVERNOR_LEDGER_MAX_CHARS) return ledger;
-  const marker = "\n[Older ledger details omitted; durable task/source remain authoritative.]\n";
+  const operatorTruth = operatorRequestCarryLines(task);
+  if (task && operatorTruth.length > 0) {
+    const fixed = [
+      `[Piagent ${GOVERNOR_VERSION} working-context ledger]`,
+      "This ledger replaces stale tool transcript only; the visible session history is unchanged.",
+      `Durable task: ${safeText(task.taskId, 140)} / ${safeText(task.taskRunId, 180)}; outcome=${task.trace.outcome}; lane=${task.riskLane}.`,
+      ...operatorTruth,
+      `Acceptance: ${task.acceptanceCriteria.slice(0, 8).map((item, index) => `${index + 1}. ${safeText(item, 160)}`).join(" | ") || "none recorded"}`,
+      `Changed files: ${list(task.changedFiles.map((item) => safeText(item, 100)), 12)}.`,
+      "Exact verifiers:", ...(task.verifyCommands.length > 0 ? task.verifyCommands.map((command, index) => `${index + 1}. ${command}`) : ["none"]),
+      `Task blocker: ${safeText(task.trace.friction ?? task.failureReason ?? "none", 300)}.`,
+      "Continue from current source and durable task state. Preserve the authoritative request exactly; discard stale tool logs and speculative reasoning."
+    ];
+    const fixedText = fixed.join("\n");
+    const remaining = CONTEXT_GOVERNOR_LEDGER_MAX_CHARS - fixedText.length - 80;
+    const latestDecision = remaining > 80 ? users.at(-1) : undefined;
+    const fallback = [...fixed, ...(latestDecision ? [`Latest later operator decision: ${safeText(latestDecision, remaining)}`] : [])].join("\n");
+    if (fallback.length <= CONTEXT_GOVERNOR_LEDGER_MAX_CHARS) return fallback;
+    const minimal = [
+      `[Piagent ${GOVERNOR_VERSION} working-context ledger]`,
+      `Durable task: ${safeText(task.taskId, 140)} / ${safeText(task.taskRunId, 180)}; outcome=${task.trace.outcome}.`,
+      ...operatorTruth,
+      "Exact verifiers:", ...task.verifyCommands.map((command, index) => `${index + 1}. ${command}`),
+      "The complete operator request above is the acceptance source of truth. Continue from current source and these exact verifiers."
+    ].join("\n");
+    return minimal.length <= CONTEXT_GOVERNOR_LEDGER_MAX_CHARS ? minimal : adaptiveCompactionCancellation(task);
+  }
+  if (task) {
+    const manual = [
+      `[Piagent ${GOVERNOR_VERSION} working-context ledger]`,
+      `Durable task: ${safeText(task.taskId, 140)} / ${safeText(task.taskRunId, 180)}; outcome=${task.trace.outcome}.`,
+      `Goal: ${task.summary}`,
+      `Expected output: ${task.expectedOutput}`,
+      "Acceptance:", ...task.acceptanceCriteria.map((item, index) => `${index + 1}. ${item}`),
+      "Exact verifiers:", ...task.verifyCommands.map((command, index) => `${index + 1}. ${command}`),
+      "Continue from current source and every durable task clause above."
+    ].join("\n");
+    return manual.length <= CONTEXT_GOVERNOR_LEDGER_MAX_CHARS ? manual : adaptiveCompactionCancellation(task);
+  }
+  const marker = "\n[Older ledger details omitted; no durable task contract was available.]\n";
   const available = CONTEXT_GOVERNOR_LEDGER_MAX_CHARS - marker.length;
   return `${ledger.slice(0, Math.floor(available * 0.78)).trimEnd()}${marker}${ledger.slice(-Math.ceil(available * 0.22)).trimStart()}`;
 }
@@ -129,6 +191,9 @@ export function deterministicTaskCompaction(
     };
   };
 } {
+  if (!adaptiveContextCanPreserveTask(task)) {
+    throw new Error("Deterministic compaction refused: bounded ledger cannot preserve authoritative durable task truth.");
+  }
   const source = [
     ...(preparation.previousSummary
       ? [{ role: "custom", content: `[Previous carry-over]\n${safeText(preparation.previousSummary, 3_000)}`, timestamp: 0 }]
@@ -150,6 +215,9 @@ export function deterministicTaskCompaction(
     ...(fileOps?.readFiles ?? [])
   ])].filter((file) => !modifiedSet.has(file)).sort();
   const summary = buildAdaptiveContextLedger(source, task);
+  if (adaptiveContextCompactionCancelled(summary)) {
+    throw new Error("Deterministic compaction refused: bounded ledger cannot preserve authoritative durable task truth.");
+  }
   const compactableSourceTokens = estimateGovernorMessagesTokens(source);
   const summaryTokens = estimateGovernorMessagesTokens([{
     role: "compactionSummary",

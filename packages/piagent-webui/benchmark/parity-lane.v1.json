@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "id": "webui-parity-v1",
+  "providerRequired": false,
+  "modelTokensExpected": 0,
+  "testGroups": [
+    {
+      "name": "contracts-and-runtime-parity",
+      "files": [
+        "tests/piagent-webui-runtime-command.test.mjs",
+        "tests/piagent-webui-session-hub-schema.test.mjs",
+        "tests/piagent-webui-session-command-admission.test.mjs",
+        "tests/piagent-webui-schema.test.mjs",
+        "tests/deep-logic-benchmark.test.mjs"
+      ]
+    },
+    {
+      "name": "deterministic-ui-stability",
+      "files": [
+        "tests/piagent-webui-chat-client.test.mjs",
+        "tests/piagent-webui-operation-retry.test.mjs",
+        "tests/piagent-webui-live-conversation.test.mjs",
+        "tests/piagent-webui-transcript-projection.test.mjs",
+        "tests/piagent-webui-transcript-view-model.test.mjs",
+        "tests/piagent-webui-activity-reconciliation.test.mjs",
+        "tests/piagent-webui-session-lease-runtime.test.mjs"
+      ]
+    }
+  ],
+  "build": ["npm", "--workspace", "@piagent/webui", "run", "build"],
+  "browser": ["npm", "run", "test:webui:e2e"],
+  "performanceProfiles": [
+    { "name": "medium", "files": 2000, "changed": 200, "samples": 7 },
+    { "name": "large", "files": 10000, "changed": 1000, "samples": 7 },
+    { "name": "stress", "files": 20000, "changed": 2000, "samples": 7 }
+  ],
+  "invariants": {
+    "workflowIngress": 10,
+    "runtimeControls": 32,
+    "browserFlows": "playwright-suite",
+    "performanceProfiles": 3,
+    "deepModelScenariosValidated": 6,
+    "uiStability": "deterministic-current-state",
+    "uiStabilitySuites": 7
+  },
+  "claimBoundary": "Deterministic provider-free WebUI/Terminal parity and current UI-state stability only; no model-quality, token-efficiency, latency, or release claim."
+}

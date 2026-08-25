@@ -121,3 +121,22 @@ test("criterion proof derivation stays attached to the originating behavioral cr
     { criterionId: "criterion-03", guidance: [] }
   ]);
 });
+
+test("behavioral criteria always receive a focused-proof fallback when semantic hints abstain", () => {
+  const graph = {
+    nodes: [{
+      id: "criterion-01",
+      obligation: "Support each named observable input form.",
+      kind: "behavior",
+      proofKinds: ["behavioral-check", "exact-verifier"],
+      targetHints: ["src/args.js"]
+    }]
+  };
+  const criterionProofs = behavioralCriterionProofGuidance(graph, () => []);
+  const section = criticalProofSection([], [], criterionProofs).join("\n");
+
+  assert.match(section, /Critical behavioral proof/);
+  assert.match(section, /\[criterion-01:fallback\].*every tagged observable clause/);
+  assert.match(section, /generic verifier alone is insufficient/);
+  assert.match(section, /never claim unproved behavior/);
+});

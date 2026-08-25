@@ -238,3 +238,16 @@ test("context selection resolves only graph-scoped project files and preserves b
     { path: "README.md", reason: "observed" }
   ]);
 });
+
+test("unmatched criteria leave broad test globs as planning scope rather than proof", () => {
+  const graph = compileCriterionGraph({
+    changeMode: "source-change",
+    acceptanceCriteria: ["Support every requested argument syntax."],
+    scope: ["src/platform/args.js", "test/**", "tests/**"],
+    verifyCommands: ["npm test"],
+    mode: "criterion-graph",
+    createdAt
+  });
+
+  assert.deepEqual(graph.nodes[0].targetHints, ["src/platform/args.js", "test/**", "tests/**"]);
+});

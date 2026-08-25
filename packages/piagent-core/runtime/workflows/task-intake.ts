@@ -1,7 +1,8 @@
 import { classifyContextTask } from "../../extensions/context-engine.js";
 import { matchesAnyPath, matchesProtectedPath, normalizePathCandidate } from "../../extensions/policy-core.js";
 import type { ReviewLens } from "../../extensions/guard-types.js";
-import { LONG_INPUT_CHARS, RUNTIME_INTAKE_MESSAGE_MAX_CHARS } from "../runtime-limits.ts";
+import { LONG_INPUT_CHARS } from "../runtime-limits.ts";
+export { boundedRuntimeIntakeMessage } from "./runtime-intake-compaction.ts";
 
 const AUTO_INTAKE_MAX_PROMPT_CHARS = LONG_INPUT_CHARS;
 const AUTO_TASK_SUMMARY_CHARS = 700;
@@ -81,15 +82,6 @@ export function automaticTaskSummary(prompt: string): string {
   return String(prompt ?? "").replace(/\s+/g, " ").trim().slice(0, AUTO_TASK_SUMMARY_CHARS);
 }
 
-export function boundedRuntimeIntakeMessage(value: string): string {
-  const text = String(value ?? "").replace(/\r\n/g, "\n");
-  if (text.length <= RUNTIME_INTAKE_MESSAGE_MAX_CHARS) return text;
-  const marker = "\n\n[Piagent intake guidance compacted; the complete operator request and durable Task Contract remain authoritative.]\n\n";
-  const available = RUNTIME_INTAKE_MESSAGE_MAX_CHARS - marker.length;
-  const head = Math.floor(available * 0.58);
-  return `${text.slice(0, head).trimEnd()}${marker}${text.slice(-(available - head)).trimStart()}`;
-}
-
 export function automaticTaskIntakeEligible(prompt: string, readProtectedPaths: string[]): boolean {
   const text = String(prompt ?? "").trim();
   if (!text || text.length > AUTO_INTAKE_MAX_PROMPT_CHARS) return false;
@@ -144,29 +136,69 @@ export function automaticTaskRiskLane(prompt: string): "tiny" | "normal" {
   return classifyContextTask(prompt).lane === "tiny" ? "tiny" : "normal";
 }
 
+const ATOMIC_CLAUSE_LEAD = /^(?:accept|add|build|change|correct|create|do not|emit|ensure|fail|fix|handle|implement|invalid|missing|modify|must|never|parse|preserve|reject|repair|return|support|throw|treat|update|verify|without)\b/i;
+
+function topLevelImperativeClauses(value: string): string[] {
+  const clauses: string[] = [];
+  let current = "", quote = "", round = 0, square = 0, curly = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index], previous = value[index - 1] ?? "", next = value[index + 1] ?? "";
+    if (quote) {
+      current += character;
+      if (character === quote && previous !== "\\") quote = "";
+      continue;
+    }
+    const apostropheInsideWord = character === "'" && /[\p{L}\p{N}]/u.test(previous) && /[\p{L}\p{N}]/u.test(next);
+    if ((character === "`" || character === '"' || character === "'") && !apostropheInsideWord) {
+      quote = character; current += character;
+      continue;
+    }
+    if (character === "(") round += 1;
+    else if (character === ")") round = Math.max(0, round - 1);
+    else if (character === "[") square += 1;
+    else if (character === "]") square = Math.max(0, square - 1);
+    else if (character === "{") curly += 1;
+    else if (character === "}") curly = Math.max(0, curly - 1);
+    if (character === ";" && round === 0 && square === 0 && curly === 0 && ATOMIC_CLAUSE_LEAD.test(value.slice(index + 1).trimStart())) {
+      if (current.trim().length >= 8) clauses.push(current.trim());
+      current = "";
+      continue;
+    }
+    current += character;
+  }
+  if (current.trim()) clauses.push(current.trim());
+  return clauses;
+}
+
 function splitAcceptanceCriterion(value: string): string[] {
   const normalized = value.replace(/^\s*(?:[-*+] |\d+[.)]\s+)/, "").replace(/\s+/g, " ").trim();
   if (!normalized || normalized.length < 8) return [];
   const label = normalized.match(/^(\[[^\]\n]{1,40}\])\s+/)?.[1] ?? "";
-  let remaining = label ? normalized.slice(label.length).trim() : normalized;
+  const body = label ? normalized.slice(label.length).trim() : normalized;
   const prefix = label ? `${label} ` : "";
   const available = AUTO_ACCEPTANCE_CRITERION_CHARS - prefix.length;
   const fragments: string[] = [];
-  while (remaining.length > available) {
-    const window = remaining.slice(0, available + 1);
-    const sentence = [...window.matchAll(/[.!?;:]\s+/g)].at(-1);
-    const clause = [...window.matchAll(/,\s+/g)].at(-1);
-    const whitespace = window.lastIndexOf(" ");
-    const preferred = sentence && sentence.index! + sentence[0].trimEnd().length >= Math.floor(available / 3)
-      ? sentence.index! + sentence[0].trimEnd().length
-      : clause && clause.index! + 1 >= Math.floor(available / 2)
-        ? clause.index! + 1
-        : whitespace;
-    const cut = preferred > 0 ? preferred : available;
-    fragments.push(`${prefix}${remaining.slice(0, cut).trim()}`);
-    remaining = remaining.slice(cut).trim();
+  const units = topLevelImperativeClauses(body)
+    .flatMap((clause) => clause.split(/(?<=[.!?])\s+(?=(?:[`"'([{]|[\p{Lu}\p{N}]|(?:do|must|never|verify)\b))/u))
+    .filter((item) => item.trim().length >= 8);
+  for (const unit of units) {
+    let remaining = unit.trim();
+    while (remaining.length > available) {
+      const window = remaining.slice(0, available + 1);
+      const sentence = [...window.matchAll(/[.!?;:]\s+/g)].at(-1);
+      const clause = [...window.matchAll(/,\s+/g)].at(-1);
+      const whitespace = window.lastIndexOf(" ");
+      const preferred = sentence && sentence.index! + sentence[0].trimEnd().length >= Math.floor(available / 3)
+        ? sentence.index! + sentence[0].trimEnd().length
+        : clause && clause.index! + 1 >= Math.floor(available / 2)
+          ? clause.index! + 1
+          : whitespace;
+      const cut = preferred > 0 ? preferred : available;
+      fragments.push(`${prefix}${remaining.slice(0, cut).trim()}`);
+      remaining = remaining.slice(cut).trim();
+    }
+    if (remaining) fragments.push(`${prefix}${remaining}`);
   }
-  if (remaining) fragments.push(`${prefix}${remaining}`);
   return fragments;
 }
 
@@ -199,18 +231,56 @@ function boundedAcceptanceCriteria(values: string[], limit: number): string[] {
   return values.filter((criterion) => selected.has(criterion));
 }
 
-export function automaticAcceptanceCriteria(
-  prompt: string,
-  changeMode: "source-change" | "read-only" = "source-change"
-): string[] {
+type AtomicCriterionGroup = { criteria: string[]; index: number };
+
+function atomicCriterionScore(value: string): number {
+  const weighted = [
+    [/(?:\bdo not\b|\bdoes not\b|\bcannot\b|\bnever\b|\binvalid\b|\breject|\bthrow|\bfail(?:s|ed)?[- ]closed\b)/i, 8],
+    [/(?:\bidentical\b|\breplay|\bcanonical|\bidempoten)/i, 6],
+    [/(?:\bstale\b|changed owner|inclusive boundary)/i, 5],
+    [/\bexact(?:ly)?\b/i, 4],
+    [/(?:\bnon-finite\b|\bnon-json\b|\bmutat|\bdigest\b|\breturn|\boutput\b)/i, 3]
+  ] as const;
+  return weighted.reduce((score, [pattern, weight]) => score + (pattern.test(value) ? weight : 0), 0);
+}
+
+function atomicCoverageCriteria(groups: AtomicCriterionGroup[], limit: number): string[] {
+  const candidates = groups.flatMap((group) => group.criteria.map((criterion, clause) => ({ criterion, group: group.index, clause })));
+  if (candidates.length <= limit) return uniqueStrings(candidates.map((item) => item.criterion));
+  const representatives = groups.filter((group) => group.criteria.length > 0).map((group) => group.criteria.at(-1)!);
+  const selected = new Set(boundedAcceptanceCriteria(representatives, Math.min(limit, representatives.length)));
+  const ranked = candidates.filter((item) => !selected.has(item.criterion)).sort((left, right) => (
+    atomicCriterionScore(right.criterion) - atomicCriterionScore(left.criterion)
+    || left.group - right.group
+    || left.clause - right.clause
+  ));
+  for (const item of ranked) {
+    if (selected.size < limit) { selected.add(item.criterion); continue; }
+    if (groups.length <= limit || atomicCriterionScore(item.criterion) === 0) continue;
+    const sameGroupAlreadyCovered = candidates.some((candidate) => candidate.group === item.group && selected.has(candidate.criterion));
+    if (!sameGroupAlreadyCovered) continue;
+    const removable = candidates
+      .filter((candidate) => selected.has(candidate.criterion) && candidate.group !== item.group)
+      .sort((left, right) => (
+        Number(/^\[/.test(left.criterion)) - Number(/^\[/.test(right.criterion))
+        || atomicCriterionScore(left.criterion) - atomicCriterionScore(right.criterion)
+        || right.group - left.group
+      ))
+      .find((candidate) => atomicCriterionScore(candidate.criterion) < atomicCriterionScore(item.criterion));
+    if (removable) { selected.delete(removable.criterion); selected.add(item.criterion); }
+  }
+  return uniqueStrings(candidates.filter((item) => selected.has(item.criterion)).map((item) => item.criterion)).slice(0, limit);
+}
+
+export function automaticAcceptanceCriteria(prompt: string, changeMode: "source-change" | "read-only" = "source-change"): string[] {
   const lines = String(prompt ?? "").split(/\r?\n/);
-  const criteria: string[] = [];
-  const obligation = /\b(?:add|change only|do not|emits?|ensure|exactly|fail(?:s|ed)?(?:[-\s]+)closed|invalid|missing|must|never|preserve|reject|returns?|throw|without)\b/i;
+  const criterionGroups: AtomicCriterionGroup[] = [];
+  const obligation = /\b(?:accept|add|build|change|change only|correct|create|do not|emits?|ensure|exactly|fail(?:s|ed)?(?:[-\s]+)closed|fix|handle|implement|invalid|missing|modify|must|never|parse|preserve|reject|repair|returns?|support|throw|treat|update|without)\b/i;
   let current = "";
   let currentIsBullet = false;
   const push = (value: string) => {
     if (isPathOnlyCriterion(value)) return;
-    criteria.push(...splitAcceptanceCriterion(value));
+    criterionGroups.push({ criteria: splitAcceptanceCriterion(value), index: criterionGroups.length });
   };
   const flush = () => {
     if (current && (currentIsBullet || obligation.test(current))) push(current);
@@ -235,7 +305,9 @@ export function automaticAcceptanceCriteria(
   const generic = changeMode === "read-only"
     ? ["No project files are changed.", "The final response addresses the requested diagnostic result."]
     : ["The configured verification command passes after the final mutation."];
-  const uniqueCriteria = uniqueStrings(criteria);
+  const groupCount = criterionGroups.filter((group) => group.criteria.length > 0).length;
+  const reservedGeneric = Math.min(generic.length, Math.max(0, AUTO_ACCEPTANCE_CRITERIA_MAX - groupCount));
+  const uniqueCriteria = atomicCoverageCriteria(criterionGroups, AUTO_ACCEPTANCE_CRITERIA_MAX - reservedGeneric);
   const selected = boundedAcceptanceCriteria(uniqueCriteria, AUTO_ACCEPTANCE_CRITERIA_MAX);
   if (selected.length === AUTO_ACCEPTANCE_CRITERIA_MAX) return selected;
   const missingGeneric = generic.filter((criterion) => !selected.includes(criterion));

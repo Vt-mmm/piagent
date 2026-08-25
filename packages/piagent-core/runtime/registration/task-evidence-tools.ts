@@ -2,6 +2,9 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 type WorkPlanStep = any;
 
+function taskErrorDetails(task: any, reasonCode: string): Record<string, unknown> {
+  return { reasonCode, taskId: task.taskId, taskRunId: task.taskRunId, outcome: task.trace?.outcome, attempt: task.attempt };
+}
 
 export function registerTaskEvidenceTools(pi: ExtensionAPI, deps: Record<string, any>): void {
   const {
@@ -37,24 +40,26 @@ export function registerTaskEvidenceTools(pi: ExtensionAPI, deps: Record<string,
         return { content: [{ type: "text", text: `Task not found in this session: ${params.taskId}` }], isError: true };
       }
       if (task.trace.outcome !== "pending") {
-        return { content: [{ type: "text", text: `Task ${task.taskId} is immutable after ${task.trace.outcome}; start a fresh session for another attempt.` }], details: task, isError: true };
+        return { content: [{ type: "text", text: `Task ${task.taskId} is immutable after ${task.trace.outcome}; start a fresh session for another attempt.` }], details: taskErrorDetails(task, "task-immutable"), isError: true };
       }
       const stepId = safeTaskId(params.stepId).slice(0, 40);
       const step = task.workPlan.find((item) => item.id === stepId);
       if (!step) {
-        const valid = task.workPlan.map((item) => `${item.id} (${item.status})`).join(", ");
+        const validSteps = task.workPlan.slice(0, 20).map((item) => ({ id: item.id, status: item.status }));
+        const valid = validSteps.map((item) => `${item.id} (${item.status})`).join(", ");
         const actionable = task.workPlan
           .filter((item) => item.status === "in-progress" || (
             item.status === "pending"
             && (item.dependsOn ?? []).every((dependency) => task.workPlan.some((candidate) => candidate.id === dependency && ["done", "skipped"].includes(candidate.status)))
           ))
-          .map((item) => item.id);
+          .map((item) => item.id)
+          .slice(0, 20);
         return {
           content: [{
             type: "text",
             text: `Work-plan step not found: ${stepId}. Valid step IDs: ${valid || "none"}. Currently actionable: ${actionable.join(", ") || "none"}.`
           }],
-          details: task.workPlan,
+          details: { ...taskErrorDetails(task, "work-plan-step-not-found"), stepId, validSteps, actionable },
           isError: true
         };
       }
@@ -66,7 +71,7 @@ export function registerTaskEvidenceTools(pi: ExtensionAPI, deps: Record<string,
       if ((params.status === "in-progress" || params.status === "done") && unresolved.length > 0) {
         return {
           content: [{ type: "text", text: `Step ${stepId} is blocked by unfinished dependencies: ${unresolved.join(", ")}` }],
-          details: { step, unresolved },
+          details: { ...taskErrorDetails(task, "work-plan-step-blocked"), stepId, unresolved: unresolved.slice(0, 20) },
           isError: true
         };
       }
@@ -75,13 +80,13 @@ export function registerTaskEvidenceTools(pi: ExtensionAPI, deps: Record<string,
         return { content: [{ type: "text", text: `A concrete note is required when step ${stepId} fails.` }], isError: true };
       }
       if ((step.status === "done" || step.status === "skipped") && params.status !== step.status) {
-        return { content: [{ type: "text", text: `Work-plan step ${stepId} is already ${step.status} and cannot be reopened in the same attempt.` }], details: step, isError: true };
+        return { content: [{ type: "text", text: `Work-plan step ${stepId} is already ${step.status} and cannot be reopened in the same attempt.` }], details: { ...taskErrorDetails(task, "work-plan-step-immutable"), stepId, status: step.status }, isError: true };
       }
       if (step.status === params.status) {
-        return { content: [{ type: "text", text: `Work-plan step ${stepId} is already ${params.status}; no state change was recorded.` }], details: step, isError: true };
+        return { content: [{ type: "text", text: `Work-plan step ${stepId} is already ${params.status}; no state change was recorded.` }], details: { ...taskErrorDetails(task, "work-plan-step-unchanged"), stepId, status: step.status }, isError: true };
       }
       if (step.status === "failed" && params.status === "in-progress" && !note) {
-        return { content: [{ type: "text", text: `A concrete note is required to reopen failed step ${stepId} within this attempt.` }], details: step, isError: true };
+        return { content: [{ type: "text", text: `A concrete note is required to reopen failed step ${stepId} within this attempt.` }], details: { ...taskErrorDetails(task, "work-plan-step-reopen-note-required"), stepId, status: step.status }, isError: true };
       }
 
       const recordedAt = nowIso();

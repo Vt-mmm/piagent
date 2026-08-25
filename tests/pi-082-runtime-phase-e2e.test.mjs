@@ -8,6 +8,7 @@ import { pathToFileURL } from "node:url";
 import test from "node:test";
 
 import { workingTreeEvidenceDigest } from "../packages/piagent-core/extensions/working-tree-digest.js";
+import { operatorRequestDigest } from "../packages/piagent-core/extensions/task-state.js";
 
 const require = createRequire(import.meta.url);
 const repoRoot = path.resolve(import.meta.dirname, "..");
@@ -115,7 +116,7 @@ function createProject(temporary, options = {}) {
     shellProtectedPaths: [],
     readOnlyPaths: [],
     requiredContext: [],
-    verifyCommands: { source: ["node --test test/greeting.test.js"] },
+    verifyCommands: { source: options.verifyCommands ?? ["node --test test/greeting.test.js"] },
     mcpCapabilities: ["filesystem-readonly", "filesystem-write", "shell"],
     permissionProfile: "workspace-write",
     runtimePolicy: {
@@ -515,7 +516,9 @@ test("the pinned Pi host executes Piagent runtime tasks end to end without a pro
       }
     ];
     for (const item of cases) {
-      const cwd = createProject(path.join(temporary, "workspaces", item.id));
+      const cwd = createProject(path.join(temporary, "workspaces", item.id), {
+        ...(item.id === "capability-control-plane" ? { verifyCommands: ["npm test"] } : {})
+      });
       const prompt = fs.readFileSync(path.join(capabilityPromptRoot, item.file), "utf8");
       const callId = `read-${item.id}`;
       const run = await runActualSession({
@@ -535,6 +538,13 @@ test("the pinned Pi host executes Piagent runtime tasks end to end without a pro
       assert.ok(task, `${item.file}: errors=${contextText(run.extensionErrors)}; provider=${contextText(run.providerContexts[0])}`);
       assert.equal(task.intakeMode, "runtime", item.file);
       assert.equal(task.changeMode, "source-change", item.file);
+      assert.equal(task.operatorRequest, prompt.trim(), `${item.file}: canonical full operator request was not retained`);
+      assert.equal(task.operatorRequestDigest, operatorRequestDigest(prompt.trim()), `${item.file}: operator request digest mismatch`);
+      const publicTraceSurface = JSON.stringify({
+        persisted: readJsonl(path.join(cwd, ".pi", "piagent-state", "traces.jsonl")),
+        session: run.sessionEntries.filter((entry) => entry.type === "custom" && entry.customType === "piagent-task-trace")
+      });
+      assert.equal(publicTraceSurface.includes(task.operatorRequest), false, `${item.file}: raw operator request leaked into task trace`);
       assert.deepEqual(task.scope, [...item.sources, ...testScope], item.file);
       assert.match(task.acceptanceCriteria.join("\n"), item.finalObligation, item.file);
       const runtimeIntake = run.providerContexts[0]
@@ -546,6 +556,13 @@ test("the pinned Pi host executes Piagent runtime tasks end to end without a pro
       assert.doesNotMatch(runtimeIntake, /criterion context snapshot/, "PIAGENT_AUTO_CONTEXT=0 must disable automatic file-content injection");
       assert.match(runtimeIntake, new RegExp(item.sources[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
       assert.ok(runtimeIntake.length < 3_600, `${item.file}: runtime intake expanded to ${runtimeIntake.length} chars`);
+      if (item.id === "capability-control-plane") {
+        assert.match(runtimeIntake, /Critical behavioral proof:/);
+        assert.match(runtimeIntake, /Exact verifier commands:\nVerifier 1 .*: npm test/);
+        assert.match(runtimeIntake, /Execution map \(planning only\):/);
+        assert.match(runtimeIntake, /Use runtime-delivered source; do not reread it/);
+        assert.match(runtimeIntake, /Follow the execution map and implement dependency-ready criteria/);
+      }
       assert.equal(toolEvent(run.events, callId)?.isError, false, item.file);
       assert.equal(persistedToolResult(run.sessionEntries, callId)?.message?.isError, false, item.file);
       assert.match(persistedToolResult(run.sessionEntries, callId)?.message?.content?.[0]?.text ?? "", /fixture/, item.file);
@@ -875,10 +892,12 @@ test("the pinned Pi host executes Piagent runtime tasks end to end without a pro
       "import test from 'node:test';",
       "import { take } from '../src/limit.js';",
       "const items = Array.from({ length: 25 }, (_, index) => index);",
+      "const itemsBefore = [...items];",
       "test('defaults and validates positive safe-integer limits', () => {",
       "  assert.equal(take(items).length, 20);",
       "  assert.deepEqual(take(items, { limit: 2 }), [0, 1]);",
       "  for (const limit of [0, -1, 1.5]) assert.throws(() => take(items, { limit }), TypeError);",
+      "  assert.deepEqual(items, itemsBefore);",
       "});",
       ""
     ].join("\n");

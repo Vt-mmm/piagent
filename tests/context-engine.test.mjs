@@ -745,7 +745,43 @@ test("delivers the sole scoped executable test and rejects unrelated retrieval f
     "src/reliability/expiry.js",
     "test/smoke.test.js"
   ]);
-  assert.match(entries[1].reason, /Sole proven scoped test target.*not acceptance proof/);
+  assert.match(entries[1].reason, /Operator-requested sole scoped test target.*not acceptance proof/);
+});
+
+test("recognizes explicit specs and assertions wording without enabling a broad test fallback", () => {
+  for (const criteria of [
+    "Add deterministic lifecycle specs for the expiry behavior.",
+    "Prove the expiry boundary with live assertions.",
+    "Ensure behavior is covered by unit tests."
+  ]) {
+    const entries = composeCriterionContextEntries({
+      explicitPaths: ["src/reliability/expiry.js"],
+      criteria: [criteria],
+      plannedEntries: [
+        { path: "src/reliability/expiry.js", reason: "criterion source" },
+        { path: "test/expiry.assertions.js", reason: "sole planned assertion target" }
+      ],
+      plannedSelectionComplete: true,
+      retrievedItems: []
+    }, { limit: 3 });
+    assert.deepEqual(entries.map((entry) => entry.path), ["src/reliability/expiry.js", "test/expiry.assertions.js"]);
+  }
+  for (const criteria of [
+    "Do not inspect unrelated specs or assertions.",
+    "Do not update tests; fix source only."
+  ]) {
+    const unrelated = composeCriterionContextEntries({
+      explicitPaths: ["src/reliability/expiry.js"],
+      criteria: [criteria],
+      plannedEntries: [
+        { path: "src/reliability/expiry.js", reason: "criterion source" },
+        { path: "test/expiry.assertions.js", reason: "unrelated planned test" }
+      ],
+      plannedSelectionComplete: true,
+      retrievedItems: []
+    }, { limit: 3 });
+    assert.deepEqual(unrelated.map((entry) => entry.path), ["src/reliability/expiry.js"]);
+  }
 });
 
 test("prefers a proven direct import neighbor over singleton fallback and rejects a symbol collision", () => {

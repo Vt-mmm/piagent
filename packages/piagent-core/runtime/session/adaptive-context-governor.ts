@@ -18,6 +18,8 @@ import {
   type MessageLike
 } from "./adaptive-context-analysis.ts";
 import {
+  adaptiveContextCompactionCancelled,
+  adaptiveContextCanPreserveTask,
   buildAdaptiveContextLedger,
   deterministicTaskCompaction,
   ledgerMessage
@@ -133,6 +135,12 @@ export function projectAdaptiveContext(messages: MessageLike[], options: Project
     }
   });
   if (selected.reason === "none" || original.length < 6) return passthrough();
+  if (!adaptiveContextCanPreserveTask(options.task)) return passthrough({
+    reason: selected.reason,
+    reasonCodes: [...selected.codes, "lossless-task-truth-exceeds-ledger"],
+    fallback: "no-safe-boundary",
+    minimumSavingsTokens: minimumContextSavingsTokens(residency.estimatedMessageTokens)
+  });
   const originalProtocol = auditToolProtocol(original);
   if (!originalProtocol.intact) return passthrough({
     reason: selected.reason,
@@ -167,7 +175,14 @@ export function projectAdaptiveContext(messages: MessageLike[], options: Project
   });
   const prefix = original.slice(0, suffixStart);
   const suffix = original.slice(suffixStart);
-  const projected = [ledgerMessage(buildAdaptiveContextLedger(prefix, options.task), prefix), ...suffix];
+  const prefixLedger = buildAdaptiveContextLedger(prefix, options.task);
+  if (adaptiveContextCompactionCancelled(prefixLedger)) return passthrough({
+    reason: selected.reason,
+    reasonCodes: [...selected.codes, "lossless-task-truth-exceeds-ledger"],
+    fallback: "no-safe-boundary",
+    minimumSavingsTokens
+  });
+  const projected = [ledgerMessage(prefixLedger, prefix), ...suffix];
   let projectedMessageTokens = estimateGovernorMessagesTokens(projected);
 
   // A single recent group can be large. Tighten once while preserving tool-call
@@ -308,6 +323,22 @@ export function registerAdaptiveContextGovernor(pi: ExtensionAPI, dependencies: 
       ...(event.preparation.turnPrefixMessages as MessageLike[])
     ];
     const residency = analyzeContextResidency(messages);
+    if (!adaptiveContextCanPreserveTask(task)) {
+      const state = stateFor(states, ctx);
+      const fallbackKey = `lossless-task-truth:${event.preparation.firstKeptEntryId}`;
+      if (state.lastCompactionFallbackTelemetryKey !== fallbackKey) {
+        state.lastCompactionFallbackTelemetryKey = fallbackKey;
+        dependencies.telemetry(ctx, {
+          event: "context_governor_compaction_cancelled",
+          reason: event.reason,
+          willRetry: event.willRetry,
+          fallback: "no-op-lossless-task-truth-exceeds-ledger",
+          taskRunId: task?.taskRunId,
+          residency
+        });
+      }
+      return { cancel: true };
+    }
     if (String(event.customInstructions ?? "").trim()) {
       const state = stateFor(states, ctx);
       const fallbackKey = `directed-host-summary:${event.preparation.firstKeptEntryId}`;

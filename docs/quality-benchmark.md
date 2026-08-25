@@ -143,6 +143,14 @@ phải có exact terminal token buckets; thiếu một attempt/family hoặc unk
 usage của accepted/failed attempt làm primary evidence không đầy đủ và chặn
 claim.
 
+Production còn có hard gate ngân sách subagent độc lập với normalized cost:
+mỗi provider attempt của Piagent được phép tối đa một child session, tổng token
+traffic của child không vượt `5%` tổng token traffic candidate, và `sessions`
+phải được giải thích chính xác bằng một root session cộng số child session. Gate
+này tính cả accepted attempt lẫn provider-started failed attempt; thiếu ledger,
+thiếu exact child-token bucket hoặc session không giải thích được đều chặn stage
+và claim, kể cả khi `requireNormalizedCostClaim=false`.
+
 Diagnostic Codex-relative thứ hai đo mục tiêu chi phí vận hành: cùng task,
 fixture, model và thinking, cộng **toàn bộ provider token traffic** gồm fresh
 input, output, cache read và cache write của accepted attempt lẫn
@@ -201,9 +209,12 @@ session.
 
 Production suite có thể chạy lâu vì mọi session chạy tuần tự để giữ baseline
 sạch. Chạy theo các mốc tích lũy `S0/12/36/72/108`; chỉ `S108` được xét claim.
-Mọi stage trước chỉ là spend-control diagnostic; intermediate token ratio không
-phải early verdict, còn duration, host load và normalized cost luôn là
-observational. `--max-sessions` tính số session mới của chunk hiện tại, vì vậy
+Mọi stage trước chỉ là spend-control diagnostic, không cấp early-success
+verdict. Từ S12 và tại mỗi partial stage kế tiếp (S36, S72), runner vẫn dừng
+chi tiêu nếu pooled fresh-token ratio tính trên exact accepted + failed-attempt
+usage vượt `1.10`, hoặc bất kỳ family đã quan sát nào vượt `1.25`. Duration,
+host load và normalized cost luôn là observational. `--max-sessions` tính số
+session mới của chunk hiện tại, vì vậy
 các lần resume lần lượt dùng `24`, `36`, `36`:
 
 ```bash
@@ -228,13 +239,27 @@ piagent-benchmark --resume /path/to/report-dir --max-sessions 36 --yes
 piagent-benchmark --resume /path/to/report-dir --max-sessions 36 --yes
 ```
 
+Trước provider preflight đầu tiên, S0 tự chạy ba lane provider-free trên đúng
+candidate hiện tại: `runtime-conformance-v1`, `long-horizon-v1` (tối thiểu 30
+phút wall-clock) và `webui-parity-v1` gồm bảy deterministic UI-stability suite.
+Receipt có completion time và bind exact clean Git commit, candidate tree,
+production configuration, cùng digest của từng lane config/runner. Receipt được
+cache riêng tư theo toàn bộ binding; resume/S12 chỉ reuse khi mọi digest vẫn
+khớp, còn source/config/runner đổi sẽ bắt buộc chạy lại S0. Vì vậy lần
+`--preflight-only` production đầu tiên trên một binding sạch có thể mất hơn 30
+phút nhưng không gọi provider và không dùng model token.
+
 Không mở stage kế tiếp nếu có Piagent unresolved/score không vượt floor,
 baseline-pass/Piagent-fail, unknown provider-attempt usage, infrastructure retry,
-model/thinking/provider-wire drift hoặc candidate provenance drift. Early success
-không phải stopping rule: chưa đủ 108 session thì tuyệt đối không claim đạt 40%.
-Một intermediate fresh-token ratio xấu, duration chậm, normalized-cost ratio xấu
-hoặc host load cao không tự đóng stage; các giá trị đó chỉ được giữ để chẩn đoán
-trước S108. Ở S108, `production-v1` chỉ dùng hard gate fresh-token đã khai báo;
+model/thinking/provider-wire drift, candidate provenance drift, subagent vượt
+ngân sách, provider-free receipt sai binding, adaptive-context coverage
+`partial`, hoặc catastrophic partial-stage ratio vượt ngưỡng trên. Runtime
+coverage `not-observed` chỉ được chấp nhận khi lane provider-free cùng binding
+đã phủ ca đó. Early success không phải stopping rule: chưa đủ 108 session thì
+tuyệt đối không claim đạt 40%. Fresh ratio dưới ngưỡng catastrophic ở partial
+stage vẫn chỉ là diagnostic; duration chậm, normalized-cost ratio xấu hoặc host
+load cao không tự đóng stage. Ở S108, `production-v1` dùng hard gate fresh-token
+đã khai báo cùng các quality/continuity/evidence gate độc lập;
 total-traffic và normalized-cost Codex-relative vẫn observational cho tới khi có
 suite version mới bật explicit cost claim và exact per-request pricing evidence.
 File spend-control là contract được test; runner đọc trực tiếp các mốc session,
@@ -253,9 +278,13 @@ infrastructure/unknown-usage và provenance có đường dừng/abort tự đ�
 diagnostic từ ledger đã chấp nhận và từ chối chạy thêm model session nếu
 `stageAdvanceAllowed` không phải `true`; không thể vượt gate chỉ bằng cách sửa
 file diagnostic đã ghi ở lần pause.
-Artifact provider-free này kiểm tra pair boundary, candidate outcome floor,
+Artifact provider-free tại mỗi pause kiểm tra pair boundary, candidate outcome floor,
 baseline-pass/Piagent-fail, observed paired grade non-inferiority, exact accepted
-usage, model/thinking/provider-wire và retry/unknown usage. Pricing
+và failed-attempt usage, model/thinking/provider-wire, subagent budget,
+source-bound S0 receipts, adaptive-context coverage và retry/unknown usage. Từ
+S12, artifact còn hard-gate pooled ratio `<=1.10` và mọi observed family
+`<=1.25`; S36/S72 phải tính lại trên toàn ledger hiện có, không kế thừa một lần
+pass cũ. Pricing
 applicability, duration và host load không nằm trong `blockingReasons`.
 Mỗi Piagent record còn phải có causal context receipt hoàn chỉnh. Receipt chỉ
 giữ aggregate, không giữ prompt, path, hash hay ID; nó bind provenance của
@@ -267,10 +296,12 @@ managed-prefix compaction, successful direct-path reread và số shell call sau
 injection. Shell count được nêu riêng vì reread bên trong command không bị diễn
 giải nhầm thành số 0 đã chứng minh.
 Artifact vẫn liệt kê observed pair/family fresh-token, API-equivalent text-token
-cost và duration ratio để review. Intermediate fresh-token checks có
-`decisionRole=final-only`; cost, duration và host load có
-`decisionRole=observational`. Chúng không chặn một pause đúng pair boundary và
-không cấp quyền claim sớm. Diagnostic luôn có
+cost và duration ratio để review. Primary S108 fresh-token check có
+`decisionRole=final-only`; catastrophic partial-stage check có
+`decisionRole=blocking` từ S12; cost, duration và host load có
+`decisionRole=observational`. Metric observational không chặn stage; hard gate
+catastrophic có thể từ chối mở window kế tiếp nhưng không cấp quyền claim sớm.
+Diagnostic luôn có
 `diagnosticOnly=true`, `claimEligible=false`; dù kết quả sớm tốt cũng không được
 dùng làm stopping rule hay claim release.
 
@@ -310,6 +341,11 @@ Trước mọi canary trả phí sau thay đổi runtime, chạy lane không dù
 node evals/runtime-conformance-v1/runner.mjs \
   --output .pi/benchmarks/runtime-conformance-v1-latest.json
 ```
+
+Lệnh trên là vòng lặp developer nhanh, không thay S0 của production. Trước
+provider session đầu tiên, production runner tự chạy hoặc exact-cache-hit cả
+runtime conformance, long-horizon tối thiểu 30 phút và WebUI parity; cả ba phải
+cùng clean source/tree/config/runner binding.
 
 Lane chỉ đạt khi cả 9 ca pass, provider/model usage bằng 0, projection không tạo
 tool orphan, retry sau output/tool-call không được chấp nhận, mỗi operation chỉ
@@ -805,6 +841,12 @@ Runner chỉ cho phép kết luận tiết kiệm token khi:
   report vẫn phải công khai mọi workflow check bị hụt;
 - mọi Piagent session resolved, không timeout/orphan/unknown terminal state và
   có complete causal context receipt;
+- S0 có đủ ba provider-free receipt cùng exact clean source/tree/config/runner
+  binding và completion time hợp lệ; adaptive-context `partial` luôn fail;
+- mỗi Piagent provider attempt có tối đa một subagent, tổng subagent token
+  traffic không quá `5%`, và không có session/failed-attempt usage không giải thích;
+- tại S12/S36/S72, pooled exact fresh ratio không vượt `1.10` và mọi observed
+  family không vượt `1.25`;
 - ở S108, cận trên 95% của family-clustered fresh-token ratio không vượt `0.60`.
 
 Production-v1 vẫn report token ratio theo band/family, normalized

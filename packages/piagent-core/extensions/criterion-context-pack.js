@@ -36,7 +36,20 @@ function executablePlannedTest(candidate, plannedPaths, plannedSelectionComplete
     && plannedSelectionComplete
     && acceptanceLanguageAdapterForPath(candidate.path).disposition === "supported"
     && !/\.d\.[cm]?ts$/i.test(candidate.path)
-    && /(?:^|[._-])(?:test|tests|spec)(?:[._-]|$)/i.test(basename);
+    && /(?:^|[._-])(?:assertions?|test|tests|spec)(?:[._-]|$)/i.test(basename);
+}
+
+function explicitFocusedTestNavigation(text) {
+  const clauses = String(text ?? "").split(/(?:[;\n]+|(?<=[.!?])\s+)/).map((clause) => clause.trim()).filter(Boolean);
+  return clauses.some((clause) => {
+    const positive = /\b(?:add|author|create|include|prove|update|write)\b.{0,80}\b(?:assertions?|coverage|specs?|tests?)\b/i.test(clause)
+      || /\b(?:behavioral|deterministic|directly[- ]linked|durable|executable|focused|integration|live|nearest|scoped)\s+(?:assertions?|coverage|specs?|tests?)\b/i.test(clause)
+      || /\bensure\b.{0,100}\b(?:cover(?:ed|age)?|test(?:ed|s)?|specs?|assert(?:ed|ions?))\b/i.test(clause)
+      || /\bensure\b.{0,80}\b(?:assertions?|coverage|specs?|tests?)\b.{0,60}\bcover(?:ed|s|age)?\b/i.test(clause);
+    const negative = /\b(?:do\s+not|don't|dont|never|without)\b.{0,100}\b(?:assertions?|coverage|specs?|tests?)\b/i.test(clause)
+      || /\b(?:assertions?|coverage|specs?|tests?)\b.{0,30}\b(?:not|never|unchanged|untouched)\b/i.test(clause);
+    return positive && !negative;
+  });
 }
 
 const DIRECT_EXPLICIT_LINK_KINDS = new Set(["explicit-imports-candidate", "candidate-imports-explicit"]);
@@ -281,9 +294,9 @@ export function composeCriterionContextEntries(input = {}, options = {}) {
   // establish singleton cardinality, and only a test-shaped JS/TS filename is
   // eligible. This remains navigation context; acceptance still depends on a
   // changed live assertion and final verification.
-  if (!selected.some((entry) => testPath(entry.path))) {
+  if (!selected.some((entry) => testPath(entry.path)) && explicitFocusedTestNavigation(criteriaText)) {
     const scopedTests = values.filter((candidate) => executablePlannedTest(candidate, plannedPaths, input.plannedSelectionComplete === true));
-    if (scopedTests.length === 1) add(scopedTests[0], "Sole proven scoped test target (navigation context; not acceptance proof)");
+    if (scopedTests.length === 1) add(scopedTests[0], "Operator-requested sole scoped test target (navigation context; not acceptance proof)");
   }
 
   relatedTests

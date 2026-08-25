@@ -102,12 +102,18 @@ export function criticalProofSection(
   acceptanceTests: FocusedTestCandidate[],
   criterionProofs: CriterionProofGuidance[]
 ): string[] {
-  if (proofGuidance.length === 0) return [];
+  if (proofGuidance.length === 0 && criterionProofs.length === 0) return [];
   const candidateMap = new Map<string, string[]>();
   for (const candidate of acceptanceTests) {
     candidateMap.set(candidate.criterionId, [...new Set([...(candidateMap.get(candidate.criterionId) ?? []), candidate.path])]);
   }
   let mappedCandidate = false;
+  const criterionTag = (criterionId: string): string => {
+    const candidates = candidateMap.get(criterionId) ?? [];
+    if (candidates.length === 0) return `[${criterionId}:fallback]`;
+    mappedCandidate = true;
+    return `[${criterionId}:candidate=${candidates.join("|")}]`;
+  };
   const proofLines = proofGuidance.flatMap((proof) => {
     const criterionIds = [...new Set(criterionProofs
       .filter((entry) => entry.guidance.includes(proof))
@@ -115,21 +121,19 @@ export function criticalProofSection(
     if (criterionIds.length === 0) {
       return [`- [fallback] ${proof}`];
     }
-    const tags = criterionIds.map((criterionId) => {
-      const candidates = candidateMap.get(criterionId) ?? [];
-      if (candidates.length === 0) {
-        return `[${criterionId}:fallback]`;
-      }
-      mappedCandidate = true;
-      return `[${criterionId}:candidate=${candidates.join("|")}]`;
-    });
+    const tags = criterionIds.map(criterionTag);
     return [`- ${tags.join("")} ${proof}`];
   });
+  const genericTags = criterionProofs.filter((entry) => entry.guidance.length === 0).map((entry) => criterionTag(entry.criterionId));
+  const genericLines = genericTags.length > 0
+    ? [`- ${genericTags.join("")} Prove every tagged observable clause with linked live assertions; the generic verifier alone is insufficient.`]
+    : [];
   return [[
     "Critical behavioral proof:",
-    ...(!mappedCandidate ? ["No concrete criterion-linked focused test was selected."] : []),
+    ...(!mappedCandidate && genericTags.length === 0 ? ["No concrete criterion-linked focused test was selected."] : []),
     ...proofLines,
-    "Candidate tags are locations, not proof; add/update durable scoped tests with live assertions and changed-test evidence. Each fallback tag requires adding/updating a durable scoped focused test with live assertions. If test scope is unavailable, report missing durable proof and do not claim completion. Run proof after the criterion's final intended mutation and before exact verifiers; rerun after later target mutation or a runtime-authorized same-tree infrastructure retry. Transient/print-only probes and prose are insufficient."
+    ...genericLines,
+    "Candidate tags are locations, not proof; add/update durable scoped tests with live assertions and changed-test evidence. Each fallback tag requires adding/updating a durable scoped focused test with live assertions. If test scope is unavailable, report missing durable proof and do not claim completion. Run proof after the criterion's final intended mutation and before exact verifiers; rerun after later target mutation or a runtime-authorized same-tree infrastructure retry. Transient/print-only probes and prose are insufficient. Claims must match diff/tests; never claim unproved behavior."
   ].join("\n")];
 }
 
@@ -150,7 +154,8 @@ export function taskCriticalProofSection(
   repositoryFiles: string[],
   acceptanceProofGuidance: (taskOrText: unknown) => string[],
   isAcceptanceTestPath: (file: string) => boolean,
-  acceptanceLanguageAdapterForPath: (file: string) => { disposition?: string }
+  acceptanceLanguageAdapterForPath: (file: string) => { disposition?: string },
+  requireGenericFallback = true
 ): string[] {
   const proofGuidance = task.changeMode === "source-change" && task.mutationPolicy !== "forbidden"
     ? acceptanceProofGuidance(task)
@@ -158,6 +163,7 @@ export function taskCriticalProofSection(
   const acceptanceTests = concretePlannedAcceptanceTests(
     plannedContext, repositoryFiles, task.criterionGraph, isAcceptanceTestPath, acceptanceLanguageAdapterForPath
   );
-  const criterionProofs = behavioralCriterionProofGuidance(task.criterionGraph, acceptanceProofGuidance);
+  const criterionProofs = behavioralCriterionProofGuidance(task.criterionGraph, acceptanceProofGuidance)
+    .filter((entry) => requireGenericFallback || entry.guidance.length > 0);
   return criticalProofSection(proofGuidance, acceptanceTests, criterionProofs);
 }

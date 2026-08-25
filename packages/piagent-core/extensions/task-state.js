@@ -20,6 +20,7 @@ import {
 } from "./task-digest-state.js";
 export { taskDigestMigrationArchiveStatus } from "./task-digest-state.js";
 import { acceptanceReceiptWithoutWorkingTreeProof, normalizedTaskDigestFields, taskDigestContractValidationErrors } from "./task-digest-contract.js";
+import { unicodeCodePointLength } from "./verification-intelligence.js";
 import {
   WORKING_TREE_DIGEST_ALGORITHM,
   isCurrentWorkingTreeDigest,
@@ -42,11 +43,16 @@ import {
 export { isGitWorkingTree } from "./workspace-evidence-roots.js";
 
 export const TASK_CONTRACT_SCHEMA_VERSION = 2; export const DEFAULT_MAX_TASK_ATTEMPTS = 3;
+export const OPERATOR_REQUEST_MAX_CHARS = 8_000;
+export const TASK_SUMMARY_MAX_CHARS = 2_000;
+export const TASK_EXPECTED_OUTPUT_MAX_CHARS = 2_000;
+export const TASK_ACCEPTANCE_CRITERION_MAX_CHARS = 1_000;
+export const TASK_ACCEPTANCE_CRITERIA_MAX = 12;
 const TASK_OUTCOMES = ["pending", "completed", "blocked", "partial", "failed"], TERMINAL_TASK_OUTCOMES = new Set(["completed", "blocked", "partial", "failed"]);
 const REVIEW_LENSES = ["correctness", "tests", "scope", "security", "docs", "release", "package"];
 const TASK_CONTRACT_FIELDS = new Set([
   "schemaVersion", "taskRunId", "taskId", "sessionId", "sessionName", "changeMode", "mutationPolicy", "attempt", "maxAttempts",
-  "previousAttempts", "summary", "riskLane", "intakeMode", "expectedOutput", "acceptanceCriteria", "criterionGraph", "scope", "outOfScope",
+  "previousAttempts", "summary", "operatorRequest", "operatorRequestDigest", "riskLane", "intakeMode", "expectedOutput", "acceptanceCriteria", "criterionGraph", "scope", "outOfScope",
   "protectedPaths", "requiredContext", "contextManifest", "memoryCitations", "mcpCapabilities", "verifyGroup",
   "verifyCommands", "workPlan", "reviewLenses", "orchestration", "acceptanceReceipt", "authoritySnapshot", "workingTreeDigestAlgorithm", "workingTreeDigestMigration", "baselineChangedFiles", "baselineFileDigests",
   "observedChangedFiles", "finalWorkingTreeFiles", "finalFileDigests", "changedFiles", "verifyEvidence", "trace",
@@ -136,6 +142,10 @@ function stringArray(value) {
   return Array.isArray(value) ? [...new Set(value.filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim()))] : [];
 }
 
+function exactCommandArray(value) {
+  return Array.isArray(value) ? [...new Set(value.filter((item) => typeof item === "string" && item.trim()))] : [];
+}
+
 function stringRecord(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return Object.fromEntries(Object.entries(value)
@@ -149,6 +159,10 @@ function positiveInteger(value, fallback, maximum = Number.MAX_SAFE_INTEGER) {
 
 function validTimestamp(value) {
   return typeof value === "string" && value.trim().length > 0 && Number.isFinite(Date.parse(value));
+}
+
+export function operatorRequestDigest(value) {
+  return `operator-request-v1:${crypto.createHash("sha256").update(String(value ?? "")).digest("hex")}`;
 }
 
 function normalizedTimestamp(value, fallback) {
@@ -191,6 +205,16 @@ export function taskContractValidationErrors(input) {
   if (typeof input.taskId === "string" && safeTaskId(input.taskId) !== input.taskId) errors.push("taskId must be normalized");
   if (typeof input.summary === "string" && input.summary.trim().length < 10) errors.push("summary must be at least 10 characters");
   if (typeof input.expectedOutput === "string" && input.expectedOutput.trim().length < 10) errors.push("expectedOutput must be at least 10 characters");
+  const hasOperatorRequest = input.operatorRequest !== undefined;
+  const hasOperatorRequestDigest = input.operatorRequestDigest !== undefined;
+  if (hasOperatorRequest !== hasOperatorRequestDigest) errors.push("operatorRequest and operatorRequestDigest must be present together");
+  if (hasOperatorRequest) {
+    if (typeof input.operatorRequest !== "string" || !input.operatorRequest.trim()) errors.push("operatorRequest must be a non-empty string");
+    else {
+      if (unicodeCodePointLength(input.operatorRequest) > OPERATOR_REQUEST_MAX_CHARS) errors.push(`operatorRequest must contain at most ${OPERATOR_REQUEST_MAX_CHARS} Unicode characters`);
+      if (input.operatorRequestDigest !== operatorRequestDigest(input.operatorRequest)) errors.push("operatorRequestDigest does not match operatorRequest");
+    }
+  }
   for (const field of ["createdAt", "updatedAt"]) {
     if (typeof input[field] === "string" && !validTimestamp(input[field])) errors.push(`${field} must be a valid timestamp`);
   }
@@ -402,6 +426,8 @@ export function normalizeTaskContract(input, options = {}) {
     maxAttempts: positiveInteger(input.maxAttempts, DEFAULT_MAX_TASK_ATTEMPTS, 10),
     previousAttempts: Array.isArray(input.previousAttempts) ? input.previousAttempts.slice(-10).map((item) => pickFields(item, PREVIOUS_ATTEMPT_FIELDS)) : [],
     summary: typeof input.summary === "string" ? input.summary : "",
+    operatorRequest: typeof input.operatorRequest === "string" && input.operatorRequest.trim() ? input.operatorRequest : undefined,
+    operatorRequestDigest: typeof input.operatorRequestDigest === "string" && input.operatorRequestDigest.trim() ? input.operatorRequestDigest : undefined,
     riskLane: ["tiny", "normal", "high-risk"].includes(input.riskLane) ? input.riskLane : "normal",
     intakeMode: ["model", "runtime"].includes(input.intakeMode) ? input.intakeMode : "model",
     expectedOutput: typeof input.expectedOutput === "string" ? input.expectedOutput : "", acceptanceCriteria: stringArray(input.acceptanceCriteria),
@@ -413,7 +439,7 @@ export function normalizeTaskContract(input, options = {}) {
     memoryCitations: Array.isArray(input.memoryCitations) ? input.memoryCitations.map((item) => pickFields(item, CITATION_FIELDS)) : [],
     mcpCapabilities: stringArray(input.mcpCapabilities),
     verifyGroup: typeof input.verifyGroup === "string" && input.verifyGroup.trim() ? input.verifyGroup.trim() : undefined,
-    verifyCommands: stringArray(input.verifyCommands),
+    verifyCommands: exactCommandArray(input.verifyCommands),
     workPlan: Array.isArray(input.workPlan) ? input.workPlan.map((item) => pickFields(item, WORK_PLAN_FIELDS)) : [],
     reviewLenses: stringArray(input.reviewLenses),
     acceptanceReceipt: normalizeAcceptanceReceipt(legacyDigestContract

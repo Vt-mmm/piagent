@@ -10,12 +10,20 @@ import { WORKING_TREE_DIGEST_ALGORITHM, isCurrentWorkingTreeDigest, workingTreeS
 import { handoffProjectionPath, readHandoffProjection } from "./handoff-projection.ts";
 import { inspectTaskAuthorityResumePolicy, type AuthorityResumeDecision } from "../policy/authority-resume-policy.ts";
 import { presentedAcceptanceCriteria, presentedCriterionGraphGuidance } from "../session/task-contract-presentation.ts";
+import { operatorRequestCarryLines } from "../session/operator-request-carry.ts";
 import { readTrajectoryStore } from "../trajectory/trajectory-store.ts";
 import { findVerifierFileSnapshot, inspectVerifierStaleness, readVerifierFileSnapshots } from "../inspection/verifier-snapshot-store.ts";
 
 export const RESUME_STATE_VERSION = "resume-v1" as const;
 export const RESUME_CONTEXT_VERSION = "resume-context-v1" as const;
-export const RESUME_CONTEXT_MAX_CHARS = 6_000;
+export const RESUME_CONTEXT_MAX_CHARS = 12_000;
+// Validated task text is bounded in Unicode code points by JSON Schema. Astral
+// characters occupy two UTF-16 code units, so the exceptional resume ceiling
+// must cover the worst valid lossless task even though the normal target stays
+// at 12k. This overflow is explicit and is never used for routine compaction.
+export const RESUME_CONTEXT_LOSSLESS_MAX_CHARS = 40_000;
+export const RESUME_CONTEXT_LOSSLESS_OVERFLOW_MARKER = `[Piagent lossless resume overflow: the ${RESUME_CONTEXT_MAX_CHARS}-character target was exceeded; complete authoritative task truth is retained.]`;
+export const LEGACY_TASK_TRUTH_OVERFLOW_MARKER = `[Piagent legacy-task-truth-overflow: automatic continuation is paused because lossless task truth exceeds the ${RESUME_CONTEXT_LOSSLESS_MAX_CHARS}-character exceptional ceiling.]`;
 type ResumePlanStep = {
   id: string;
   title: string;
@@ -153,26 +161,77 @@ function limitedLines(values: unknown[], maximumItems: number, maximumChars: num
   return selected;
 }
 
+function losslessManualResumeContent(task: TaskContract): string {
+  return [
+    "[Piagent durable task resume]",
+    RESUME_CONTEXT_LOSSLESS_OVERFLOW_MARKER,
+    `Task: ${compact(task.taskId, 120)} (${compact(task.taskRunId, 120)})`,
+    `Goal: ${task.summary}`,
+    `Expected output: ${task.expectedOutput}`,
+    "Acceptance focus:", ...presentedAcceptanceCriteria(task).map((value, index) => `- C${index + 1}: ${value}`),
+    "Exact verifier commands:", ...task.verifyCommands.map((value, index) => `${index + 1}. ${value}`),
+    "Continue only under the current runtime-enforced task state and every durable task clause above; do not infer progress from transcript memory."
+  ].join("\n");
+}
+
+/** Exact UTF-16 traffic size for the smallest lossless automatic legacy resume. */
+export function legacyTaskResumeTruthChars(task: TaskContract): number {
+  return operatorRequestCarryLines(task).length > 0 ? 0 : losslessManualResumeContent(task).length;
+}
+
+function legacyTaskTruthOverflowsAutomaticResume(task: TaskContract): boolean {
+  const chars = legacyTaskResumeTruthChars(task);
+  return chars > RESUME_CONTEXT_LOSSLESS_MAX_CHARS;
+}
+
+function legacyOverflowResumeContent(task: TaskContract): string {
+  return [
+    "[Piagent durable task resume]",
+    LEGACY_TASK_TRUTH_OVERFLOW_MARKER,
+    `Task: ${compact(task.taskId, 120)} (${compact(task.taskRunId, 120)})`,
+    "The durable task remains byte-for-byte intact, but its complete acceptance truth cannot be injected safely in one automatic resume.",
+    "Do not mutate or auto-continue this task. Ask the operator to re-intake the original request as a new bounded task or provide an explicit compact handoff."
+  ].join("\n");
+}
+
 export function buildTaskResumeContext(task: TaskContract, resume: ResumeState): {
   customType: "piagent-runtime-task-resume";
   content: string;
   details: Record<string, unknown>;
 } {
-  const criteria = limitedLines(presentedAcceptanceCriteria(task), 8, 180, (value, index) => `- C${index + 1}: ${value}`);
+  if (legacyTaskTruthOverflowsAutomaticResume(task)) {
+    return {
+      customType: "piagent-runtime-task-resume",
+      content: legacyOverflowResumeContent(task),
+      details: {
+        resumeContextVersion: RESUME_CONTEXT_VERSION, taskId: task.taskId, taskRunId: task.taskRunId,
+        phase: resume.phase, checkpointId: resume.latestCheckpoint?.checkpointId ?? null,
+        decision: "blocked", enforcementSafe: false, verifierEvidenceCurrent: resume.verifierEvidenceCurrent,
+        staleVerifierEvidence: resume.staleVerifierEvidence, losslessOverflow: true,
+        legacyTaskTruthOverflow: true, nextAction: resume.reconstruction.nextAction
+      }
+    };
+  }
+  const operatorTruth = operatorRequestCarryLines(task);
+  const presentedCriteria = presentedAcceptanceCriteria(task);
+  const criteria = operatorTruth.length > 0
+    ? limitedLines(presentedCriteria, 8, 180, (value, index) => `- C${index + 1}: ${value}`)
+    : presentedCriteria.map((value, index) => `- C${index + 1}: ${value}`);
   const scope = limitedLines(task.scope, 8, 100, (value) => `- ${value}`);
   const plan = resume.reconstruction.plan.slice(0, 12).map((step) => (
     `- ${step.id}: ${step.status}; ${compact(step.title, 140)}${step.dependsOn.length > 0 ? `; after=${step.dependsOn.join(",")}` : ""}`
   ));
   if (resume.reconstruction.plan.length > 12) plan.push(`- [${resume.reconstruction.plan.length - 12} more steps retained in the Task Contract]`);
-  const verifiers = limitedLines(task.verifyCommands, 8, 180, (value, index) => `${index + 1}. ${value}`);
+  const verifiers = task.verifyCommands.map((value, index) => `${index + 1}. ${value}`);
   const executionMap = presentedCriterionGraphGuidance(task, 8).map((line: string) => `- ${line}`);
   const next = resume.reconstruction.nextAction;
   const lines = [
     "[Piagent durable task resume]",
     "This brief is reconstructed from the current Task Contract, journal, trajectory, handoff and working tree. Durable files remain authoritative.",
     `Task: ${compact(task.taskId, 160)} (${compact(task.taskRunId, 160)})`,
-    `Goal: ${compact(task.summary, 500)}`,
-    `Expected output: ${compact(task.expectedOutput, 400)}`,
+    `Goal: ${operatorTruth.length > 0 ? compact(task.summary, 500) : task.summary}`,
+    ...operatorTruth,
+    `Expected output: ${operatorTruth.length > 0 ? compact(task.expectedOutput, 400) : task.expectedOutput}`,
     "Acceptance focus:", ...criteria,
     "Initial focus (advisory):", ...scope,
     "Initial focus guides retrieval/review and neither authorizes nor forbids mutation.",
@@ -182,16 +241,49 @@ export function buildTaskResumeContext(task: TaskContract, resume: ResumeState):
     `Verifier state: current=${resume.verifierEvidenceCurrent}; stale=${resume.staleVerifierEvidence}; tree=${resume.currentTreeDigest}`,
     "Exact verifier commands:", ...verifiers,
     `Next safe action: ${next.action}${next.stepId ? ` (${next.stepId})` : ""}. ${compact(next.reason, 500)}`,
-    ...(next.exactCommands.length > 0 ? ["Required commands for that action:", ...limitedLines(next.exactCommands, 8, 180, (value, index) => `${index + 1}. ${value}`)] : []),
+    ...(next.exactCommands.length > 0 ? ["Required commands for that action:", ...next.exactCommands.map((value, index) => `${index + 1}. ${value}`)] : []),
     `Resume safety: decision=${resume.decision}; enforcementSafe=${resume.enforcementSafe}; handoff=${resume.handoff.exists ? resume.handoff.path : "none"}.`,
     "Do not infer progress from transcript memory, reopen completed steps, or mutate when the next action is inspect-handoff, wait-paused, or terminal."
   ];
   let content = lines.join("\n");
   if (content.length > RESUME_CONTEXT_MAX_CHARS) {
-    const marker = "\n[Middle details shortened; complete task truth remains in the Task Contract.]\n";
-    const available = RESUME_CONTEXT_MAX_CHARS - marker.length;
-    const head = Math.floor(available * 0.7);
-    content = `${content.slice(0, head).trimEnd()}${marker}${content.slice(-(available - head)).trimStart()}`;
+    const boundedOperatorTruth = operatorRequestCarryLines(task);
+    content = boundedOperatorTruth.length > 0 ? [
+      "[Piagent durable task resume]",
+      `Task: ${compact(task.taskId, 160)} (${compact(task.taskRunId, 160)})`,
+      ...boundedOperatorTruth,
+      "Acceptance focus:", ...limitedLines(presentedAcceptanceCriteria(task), 8, 160, (value, index) => `- C${index + 1}: ${value}`),
+      `Current phase/checkpoint: ${resume.phase ?? "unknown"} / ${resume.latestCheckpoint?.checkpointId ?? "none"}`,
+      "Exact verifier commands:", ...verifiers,
+      `Next safe action: ${next.action}${next.stepId ? ` (${next.stepId})` : ""}. ${compact(next.reason, 400)}`,
+      `Resume safety: decision=${resume.decision}; enforcementSafe=${resume.enforcementSafe}.`,
+      "Continue from current source. Preserve every operator clause exactly; do not infer progress from transcript memory."
+    ].join("\n") : losslessManualResumeContent(task);
+    if (content.length > RESUME_CONTEXT_MAX_CHARS && boundedOperatorTruth.length > 0) {
+      content = [
+        "[Piagent durable task resume]",
+        RESUME_CONTEXT_LOSSLESS_OVERFLOW_MARKER,
+        `Task: ${compact(task.taskId, 120)} (${compact(task.taskRunId, 120)})`,
+        ...boundedOperatorTruth,
+        "Acceptance focus:", ...limitedLines(presentedAcceptanceCriteria(task), 12, 220, (value, index) => `- C${index + 1}: ${value}`),
+        "Exact verifier commands:", ...verifiers,
+        `Next safe action: ${next.action}${next.stepId ? ` (${next.stepId})` : ""}. ${compact(next.reason, 300)}`,
+        `Resume safety: decision=${resume.decision}; enforcementSafe=${resume.enforcementSafe}.`,
+        "Continue only from current source, the complete operator request, exact verifiers, and durable atomic acceptance facts."
+      ].join("\n");
+      if (content.length > RESUME_CONTEXT_LOSSLESS_MAX_CHARS) {
+        content = [
+          "[Piagent durable task resume]",
+          RESUME_CONTEXT_LOSSLESS_OVERFLOW_MARKER,
+          `Task: ${compact(task.taskId, 120)} (${compact(task.taskRunId, 120)})`,
+          ...boundedOperatorTruth,
+          "Exact verifier commands:", ...verifiers,
+          `Next safe action: ${next.action}${next.stepId ? ` (${next.stepId})` : ""}. ${compact(next.reason, 240)}`,
+          `Resume safety: decision=${resume.decision}; enforcementSafe=${resume.enforcementSafe}.`,
+          "The complete operator request above is the acceptance source of truth. Continue only from current source and these exact verifiers."
+        ].join("\n");
+      }
+    }
   }
   return {
     customType: "piagent-runtime-task-resume",
@@ -206,6 +298,7 @@ export function buildTaskResumeContext(task: TaskContract, resume: ResumeState):
       enforcementSafe: resume.enforcementSafe,
       verifierEvidenceCurrent: resume.verifierEvidenceCurrent,
       staleVerifierEvidence: resume.staleVerifierEvidence,
+      losslessOverflow: content.length > RESUME_CONTEXT_MAX_CHARS,
       nextAction: resume.reconstruction.nextAction
     }
   };
@@ -221,6 +314,7 @@ export function inspectTaskResumeState(
   const currentTreeDigest = workingTreeEvidenceDigest(currentDigests);
   const authorityPolicy = inspectTaskAuthorityResumePolicy(cwd, task);
   const archive = taskDigestMigrationArchiveStatus(cwd, task);
+  const legacyTruthOverflow = task.trace.outcome === "pending" && legacyTaskTruthOverflowsAutomaticResume(task);
   const algorithmReady = task.workingTreeDigestAlgorithm === WORKING_TREE_DIGEST_ALGORITHM
     && isCurrentWorkingTreeDigest(currentTreeDigest)
     && workingTreeSnapshotUsesCurrentAlgorithm(currentDigests)
@@ -266,8 +360,9 @@ export function inspectTaskResumeState(
   if (!trajectory.enforcementSafe) warnings.push(`trajectory state is unsafe: ${trajectory.warnings[0] ?? "unknown error"}`);
   if (!algorithmReady) warnings.push("working-tree digest algorithm/evidence is not current and proof-capable");
   if (!archive.valid) warnings.push(archive.reason);
+  if (legacyTruthOverflow) warnings.push("legacy-task-truth-overflow requires explicit operator re-intake or compact handoff");
   if (refreshRequired) warnings.push("legacy evidence was archived; run each exact configured verifier once against the current wt-content-v2 tree");
-  const enforcementSafe = authorityReady && !identityConflict && algorithmReady && archive.valid && journal.corruptions.length === 0 && trajectory.enforcementSafe && handoffValid;
+  const enforcementSafe = authorityReady && !identityConflict && !legacyTruthOverflow && algorithmReady && archive.valid && journal.corruptions.length === 0 && trajectory.enforcementSafe && handoffValid;
   const recovery = refreshRequired ? { decision: "resume", reason: "Digest migration requires current exact verifier evidence." } : taskRecoveryDecision(task, journal);
   const decision: ResumeState["decision"] = terminal
     ? "terminal"
@@ -282,6 +377,8 @@ export function inspectTaskResumeState(
             : "resume";
   const reason = terminal
     ? `Task contract is immutable after ${task.trace.outcome}.`
+    : legacyTruthOverflow
+      ? "legacy-task-truth-overflow: automatic continuation is paused; ask the operator to re-intake the original request or provide a compact handoff."
     : journal.corruptions.length > 0
       ? `task journal is corrupt: ${journal.corruptions[0]}`
     : !authorityReady

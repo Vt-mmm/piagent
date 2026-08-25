@@ -542,6 +542,15 @@
       "type": "string",
       "minLength": 10
     },
+    "operatorRequest": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8000
+    },
+    "operatorRequestDigest": {
+      "type": "string",
+      "pattern": "^operator-request-v1:[a-f0-9]{64}$"
+    },
     "riskLane": {
       "enum": [
         "tiny",
@@ -870,6 +879,10 @@
       "type": "string",
       "format": "date-time"
     }
+  },
+  "dependentRequired": {
+    "operatorRequest": ["operatorRequestDigest"],
+    "operatorRequestDigest": ["operatorRequest"]
   },
   "allOf": [
     {

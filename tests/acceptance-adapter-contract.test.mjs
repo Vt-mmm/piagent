@@ -90,6 +90,7 @@ describe("finite acceptance language adapters", () => {
       files: { "src/limit.js": esmSource, "test/contract.test.js": esmTest },
       paths: ["src/limit.js", "test/contract.test.js"]
     }, {
+      verifyCommand: "node --test test/contract.test.cjs",
       files: {
         "src/limit.cjs": esmSource.replace("export function take", "function take") + "module.exports = { take };\n",
         "test/contract.test.cjs": [
@@ -103,7 +104,7 @@ describe("finite acceptance language adapters", () => {
     for (const variant of variants) {
       const cwd = writeFiles(variant.files);
       try {
-        const refreshed = refreshAcceptanceReceipt(task(variant.paths), {
+        const refreshed = refreshAcceptanceReceipt(task(variant.paths, treeDigest("d"), variant.verifyCommand), {
           cwd, changedFiles: variant.paths, currentWorkingTreeDigest: treeDigest("d")
         });
         assert.equal(invalidCriterion(refreshed).status, "satisfied");

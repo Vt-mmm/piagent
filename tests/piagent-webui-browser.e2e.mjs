@@ -247,7 +247,7 @@ test("switches and persists English plus the docs-style light theme", async ({ p
   await expect(page.getByRole("button", { name: "Use dark mode" }).filter({ visible: true })).toBeVisible();
 });
 
-test("marks, unmarks and stales an exact selected-file review without changing Git", async ({ page }) => {
+test("marks, unmarks and stales an exact selected-file review without changing Git", async ({ page, browser }) => {
   const runtimeInstanceId = "runtime.browser-review", identity = { projectRef: "project.browser-review", runtimeInstanceId,
     sessionRef: "session.browser-review", taskId: currentTask.taskId, taskRunId: currentTask.taskRunId, agentOperationId: null, toolCallId: null };
   const revisions = { runtimeRevision: "runtime-rev.browser-review", taskRevision: webUiTaskRevision(currentTask),
@@ -262,13 +262,54 @@ test("marks, unmarks and stales an exact selected-file review without changing G
   const reviewServer = await startLoopbackServer({ staticRoot: path.join(root, "packages/piagent-webui/dist/client"),
     readCapabilities: async () => (await reviewProvider.snapshot()).capabilities, readModel: reviewProvider,
     executeControl: async (command) => { const receipt = await controller.execute(command); reviewProvider.invalidate(); return receipt; } });
+  const secondPath = path.join(cwd, "src", "second-review.ts"); let otherContext, otherPage;
   try {
+    fs.writeFileSync(secondPath, "export const second = 'UNTRACKED REVIEW TARGET';\n"); reviewProvider.invalidate();
+    let releaseFirstReview, observeFirstReview; const firstReviewStarted = new Promise((resolve) => { observeFirstReview = resolve; });
+    const firstReviewRelease = new Promise((resolve) => { releaseFirstReview = resolve; }); let reviewPosts = 0;
+    await page.route("**/api/v1/reviews", async (route) => {
+      if (route.request().method() === "POST") {
+        reviewPosts += 1;
+        const response = await route.fetch();
+        if (reviewPosts === 1) {
+          observeFirstReview(); await firstReviewRelease; await route.fulfill({ response }); return;
+        }
+        if (reviewPosts === 2) {
+          const receipt = await response.json();
+          await route.fulfill({ response, json: { ...receipt, resultCode: "unreviewed" } }); return;
+        }
+        await route.fulfill({ response }); return;
+      }
+      await route.continue();
+    });
     const before = fs.readFileSync(path.join(cwd, "src", "example.ts"), "utf8"), indexBefore = git("diff", "--cached", "--", "src/example.ts");
     await page.goto(reviewServer.issueLaunchUrl());
     await openWorkspace(page, "Source Changes");
+    await page.getByRole("tab", { name: /Toàn bộ working tree/ }).click();
     await page.getByRole("button", { name: /src\/example\.ts/ }).click();
     await expect(page.getByText("Chưa review", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Đánh dấu đã review" }).click();
+    await firstReviewStarted;
+    otherContext = await browser.newContext(); otherPage = await otherContext.newPage(); await otherPage.goto(reviewServer.issueLaunchUrl());
+    await openWorkspace(otherPage, "Source Changes");
+    await otherPage.getByRole("tab", { name: /Toàn bộ working tree/ }).click();
+    await otherPage.getByRole("button", { name: /src\/example\.ts/ }).click();
+    await expect(otherPage.getByText("Đã review", { exact: true })).toBeVisible();
+    await otherPage.getByRole("button", { name: "Bỏ dấu review" }).click();
+    await expect(otherPage.getByText("Chưa review", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: /src\/second-review\.ts/ }).click();
+    await expect(page.locator(".diff-toolbar strong")).toHaveText("src/second-review.ts");
+    await page.getByRole("button", { name: /src\/example\.ts/ }).click();
+    await expect(page.getByText("Chưa review", { exact: true })).toBeVisible();
+    releaseFirstReview();
+    await expect(page.getByText("Chưa review", { exact: true })).toBeVisible();
+    await expect(page.getByText("Đã review", { exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "Đánh dấu đã review" }).click();
+    await expect(page.getByText("Không xác nhận được trạng thái review chính xác; hãy tải lại diff.", { exact: true })).toBeVisible();
+    await expect(page.getByText("Chưa review", { exact: true })).toBeVisible();
+    await page.reload(); await openWorkspace(page, "Source Changes");
+    await page.getByRole("tab", { name: /Toàn bộ working tree/ }).click();
+    await page.getByRole("button", { name: /src\/example\.ts/ }).click();
     await expect(page.getByText("Đã review", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Bỏ dấu review" }).click();
     await expect(page.getByText("Chưa review", { exact: true })).toBeVisible();
@@ -279,9 +320,10 @@ test("marks, unmarks and stales an exact selected-file review without changing G
 
     fs.writeFileSync(path.join(cwd, "src", "example.ts"), "export const value = 'CHANGED AFTER REVIEW';\n");
     reviewProvider.invalidate(); await page.reload(); await openWorkspace(page, "Source Changes");
+    await page.getByRole("tab", { name: /Toàn bộ working tree/ }).click();
     await page.getByRole("button", { name: /src\/example\.ts/ }).click();
     await expect(page.getByText("Review đã cũ", { exact: true })).toBeVisible();
-  } finally { await reviewServer.close(); }
+  } finally { await otherContext?.close(); fs.rmSync(secondPath, { force: true }); await reviewServer.close(); }
 });
 
 test("stages and unstages one exact file while preserving worktree content", async ({ page }) => {

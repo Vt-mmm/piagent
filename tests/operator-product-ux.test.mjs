@@ -6,6 +6,7 @@ import path from "node:path";
 import { describe, it } from "node:test";
 
 import { taskJournalPaths } from "../packages/piagent-core/extensions/task-journal.js";
+import { operatorRequestDigest } from "../packages/piagent-core/extensions/task-state.js";
 import { workingTreeEvidenceDigest } from "../packages/piagent-core/extensions/working-tree-digest.js";
 import { buildTaskEfficiencyMetrics } from "../packages/piagent-core/runtime/product/efficiency-metrics.ts";
 import { createBoundTaskAuthority } from "../packages/piagent-core/runtime/policy/task-authority-runtime.ts";
@@ -35,12 +36,15 @@ function workspace() {
 }
 
 function task(overrides = {}) {
+  const operatorRequest = "PRIVATE_OPERATOR_REQUEST_SENTINEL: retain this task truth only in private state and provider carry.";
   const value = {
     ...structuredClone(fixture),
     taskId: "product-101",
     taskRunId: "product-101-run-1",
     sessionId: "product-session",
     sessionName: "PRODUCT-101",
+    operatorRequest,
+    operatorRequestDigest: operatorRequestDigest(operatorRequest),
     scope: ["src/**"],
     contextManifest: [{ path: "src/a.ts", reason: "target" }],
     requiredContext: ["src/a.ts"],
@@ -139,6 +143,7 @@ describe("operator product UX", () => {
     assert.equal(active.state, "active");
     assert.equal(active.task.phase, "verify");
     assert.equal(active.efficiency.trajectory.phaseDurations.length, 4);
+    assert.equal(JSON.stringify(active).includes("PRIVATE_OPERATOR_REQUEST_SENTINEL"), false, "WebUI live status must omit the private operator request");
     assert.match(formatLiveTaskStatus(active), /next:/);
     const currentDigest = workingTreeEvidenceDigest({});
     const observed = (exitCode, observedAt) => ({

@@ -2983,13 +2983,14 @@ describe("piagent guard integration", () => {
       notes: "Acceptance and exact test command verified."
     }, undefined, undefined, ctx);
     assert.equal(traced.isError, undefined, traced.content[0].text);
-    assert.equal(traced.details.task.trace.outcome, "completed");
-    assert.deepEqual(traced.details.task.observedChangedFiles, ["src/lifecycle.ts"]);
-    assert.equal(traced.details.task.acceptanceReceipt.provenance.assurance, "runtime-observed");
-    assert.equal(traced.details.task.acceptanceReceipt.provenance.disposition, "repaired-success");
-    assert.equal(traced.details.task.acceptanceReceipt.provenance.finalRecoveryDisposition, "succeeded");
-    assert.equal(traced.details.task.acceptanceReceipt.provenance.repairCount + traced.details.task.acceptanceReceipt.provenance.retryCount, 1);
-    assert.equal(traced.details.task.acceptanceReceipt.provenance.handoffRef, `.pi/piagent-state/handoffs/${started.details.taskRunId}.json`);
+    const tracedTask = JSON.parse(fs.readFileSync(path.join(cwd, ".pi", "piagent-state", "tasks", `${started.details.taskRunId}.json`), "utf8"));
+    assert.equal(tracedTask.trace.outcome, "completed");
+    assert.deepEqual(tracedTask.observedChangedFiles, ["src/lifecycle.ts"]);
+    assert.equal(tracedTask.acceptanceReceipt.provenance.assurance, "runtime-observed");
+    assert.equal(tracedTask.acceptanceReceipt.provenance.disposition, "repaired-success");
+    assert.equal(tracedTask.acceptanceReceipt.provenance.finalRecoveryDisposition, "succeeded");
+    assert.equal(tracedTask.acceptanceReceipt.provenance.repairCount + tracedTask.acceptanceReceipt.provenance.retryCount, 1);
+    assert.equal(tracedTask.acceptanceReceipt.provenance.handoffRef, `.pi/piagent-state/handoffs/${started.details.taskRunId}.json`);
     assert.equal(traced.details.completionReceipt.completionApproved, true);
     assert.equal(traced.details.completionReceipt.gate.decision, "pass");
     assert.deepEqual(traced.details.completionReceipt.remainingRisk, []);
@@ -3065,6 +3066,87 @@ describe("piagent guard integration", () => {
     assert.notEqual(secondTask.details.taskRunId, started.details.taskRunId);
     assert.equal(activeSessionTask(cwd, ctx.sessionManager.getSessionId()).taskRunId, secondTask.details.taskRunId);
     assert.equal(JSON.parse(fs.readFileSync(path.join(cwd, ".pi", "piagent-state", "tasks", `${started.details.taskRunId}.json`), "utf8")).trace.outcome, "completed");
+  });
+
+  it("keeps private operator requests out of bounded task-tool error and activity surfaces", async () => {
+    const previousTelemetry = process.env.PIAGENT_CONTEXT_TELEMETRY;
+    process.env.PIAGENT_CONTEXT_TELEMETRY = "1";
+    let fixture;
+    try {
+      fixture = await loadGuardFixture();
+    } finally {
+      if (previousTelemetry === undefined) delete process.env.PIAGENT_CONTEXT_TELEMETRY;
+      else process.env.PIAGENT_CONTEXT_TELEMETRY = previousTelemetry;
+    }
+    const { root, piagentGuard } = fixture;
+    const cwd = createProject(root);
+    const ctx = createContext(cwd, { sessionId: "private-error-surfaces", sessionName: "PRIVATE-ERROR" });
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+    const sentinel = "PRIVATE_OPERATOR_REQUEST_SENTINEL_DO_NOT_PROJECT";
+    const operatorRequest = `${sentinel}${"x".repeat(8_000 - sentinel.length)}`;
+    const startParams = {
+      taskId: "PRIVATE-ERROR",
+      summary: "Inspect the bounded private error projection fixture",
+      operatorRequest,
+      intakeMode: "runtime",
+      riskLane: "tiny",
+      changeMode: "read-only",
+      expectedOutput: "Task tool failures remain bounded and omit private operator text.",
+      acceptanceCriteria: ["Private operator text remains in durable task state only"],
+      scope: ["README.md"]
+    };
+    const started = await harness.tools.get("piagent_task_start").execute(
+      "private-start", startParams, undefined, undefined, ctx
+    );
+    assert.equal(started.isError, undefined);
+    const durable = JSON.parse(fs.readFileSync(path.join(cwd, ".pi", "piagent-state", "tasks", `${started.details.taskRunId}.json`), "utf8"));
+    assert.equal(durable.operatorRequest, operatorRequest, "private durable state retains the exact request");
+
+    const duplicate = await harness.tools.get("piagent_task_start").execute("private-duplicate", {
+      ...startParams,
+      scope: ["src/not-yet-created.ts"]
+    }, undefined, undefined, ctx);
+    assert.equal(duplicate.details.reasonCode, "task-already-active");
+    const gateCheck = await harness.tools.get("piagent_task_gate_check").execute("private-gate", {
+      taskId: "PRIVATE-ERROR", changedFiles: []
+    }, undefined, undefined, ctx);
+    assert.equal(gateCheck.details.task.taskId, started.details.taskId);
+    assert.equal(gateCheck.details.task.taskRunId, started.details.taskRunId);
+    assert.ok(["pass", "fail"].includes(gateCheck.details.decision));
+    assert.equal(Object.hasOwn(gateCheck.details.task, "operatorRequest"), false);
+    const evidenceError = await toolExecutionError(harness.tools.get("piagent_task_progress").execute("private-evidence", {
+      taskId: "PRIVATE-ERROR", stepId: "missing-step", status: "done"
+    }, undefined, undefined, ctx));
+    assert.equal(evidenceError.details.reasonCode, "work-plan-step-not-found");
+    await harness.tools.get("piagent_trace_record").execute("private-terminal", {
+      taskId: "PRIVATE-ERROR", outcome: "blocked", friction: "Bounded privacy fixture completed."
+    }, undefined, undefined, ctx);
+    const immutableError = await toolExecutionError(harness.tools.get("piagent_trace_record").execute("private-immutable", {
+      taskId: "PRIVATE-ERROR", outcome: "failed", friction: "Must remain immutable.", failedAt: "review"
+    }, undefined, undefined, ctx));
+    assert.equal(immutableError.details.reasonCode, "task-immutable");
+
+    const publicResults = [duplicate, gateCheck, evidenceError.piagentToolResult, immutableError.piagentToolResult];
+    const publicToolNames = ["piagent_task_start", "piagent_task_gate_check", "piagent_task_progress", "piagent_trace_record"];
+    for (const [index, result] of publicResults.entries()) {
+      const serialized = JSON.stringify(result);
+      assert.equal(serialized.includes(sentinel), false);
+      assert.ok(serialized.length < 2_000, `public task-tool result ${index} was ${serialized.length} chars`);
+      await harness.handlers.get("tool_result")({
+        toolCallId: `private-result-${index}`,
+        toolName: publicToolNames[index],
+        input: { taskId: "PRIVATE-ERROR" },
+        content: result.content,
+        details: result.details,
+        isError: result.isError === true
+      }, ctx);
+    }
+    const activity = readJsonl(path.join(cwd, ".pi", "piagent-state", "context-engine", "events.jsonl"));
+    const publicSurface = JSON.stringify({ publicResults, activity, entries: harness.entries });
+    assert.equal(publicSurface.includes(sentinel), false);
+    assert.ok(publicSurface.length < 12_000, `public error/activity surface was ${publicSurface.length} chars`);
   });
 
   it("binds pre-task read evidence to the exact intake turn and session", async () => {
@@ -3801,6 +3883,72 @@ describe("piagent guard integration", () => {
     assert.match(handoff.failure.recovery.reasonCodes.join("; "), /global-continuation-budget-exhausted/);
   });
 
+  it("hands off unresolved critical adapter proof once without scheduling a model retry", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root, { authorityProfile: "strict-high-risk" });
+    fs.mkdirSync(path.join(cwd, "src", "platform"), { recursive: true });
+    fs.mkdirSync(path.join(cwd, "test"), { recursive: true });
+    fs.writeFileSync(path.join(cwd, "src", "platform", "args.js"), "export function parseArgs() { return null; }\n");
+    fs.writeFileSync(path.join(cwd, "test", "fixture.test.js"), "// fixture\n");
+    execFileSync("git", ["-C", cwd, "config", "user.email", "test@example.com"]);
+    execFileSync("git", ["-C", cwd, "config", "user.name", "Piagent Test"]);
+    execFileSync("git", ["-C", cwd, "add", "src/platform/args.js", "test/fixture.test.js"]);
+    execFileSync("git", ["-C", cwd, "commit", "-qm", "adapter proof baseline"]);
+    const ctx = createContext(cwd, { sessionId: "session-adapter-proof", sessionName: "ADAPTER-PROOF" });
+    const harness = createPiHarness({ activeTools: ["read", "bash", "edit", "write"] });
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+    const started = await harness.tools.get("piagent_task_start").execute("adapter-proof-start", {
+      taskId: "ADAPTER-PROOF",
+      summary: "Repair parseArgs without mutating argv and preserve its return object.",
+      riskLane: "tiny",
+      expectedOutput: "The current verifier proves the parser contract.",
+      acceptanceCriteria: ["Do not mutate argv or change the return shape."],
+      scope: ["src/platform/args.js", "test/**"]
+    }, undefined, undefined, ctx);
+    assert.equal(started.isError, undefined, started.content[0].text);
+    const writes = [
+      { path: "src/platform/args.js", content: "export function parseArgs(argv) { return { flags: {}, positional: [...argv] }; }\n" },
+      { path: "test/args.test.js", content: [
+        "import assert from 'node:assert/strict';",
+        "import { parseArgs as parse } from '@/platform';",
+        "const argv = ['--mode=fast'];",
+        "const before = [...argv];",
+        "const result = parse(argv);",
+        "assert.deepEqual(argv, before);",
+        "assert.deepEqual(result.flags, {});",
+        "assert.deepEqual(result.positional, argv);",
+        ""
+      ].join("\n") }
+    ];
+    for (const input of writes) {
+      assert.equal((await callToolCall(harness.handlers.get("tool_call"), ctx, "write", input)).block, undefined);
+      fs.writeFileSync(path.join(cwd, input.path), input.content);
+      await harness.handlers.get("tool_result")({ toolName: "write", input, content: [{ type: "text", text: `Wrote ${input.path}` }], isError: false }, ctx);
+    }
+    const verifyInput = { command: "npm test" };
+    assert.equal((await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", verifyInput)).block, undefined);
+    await harness.handlers.get("tool_result")({
+      toolName: "bash", input: verifyInput, content: [{ type: "text", text: "pass" }],
+      details: { exitCode: 0 }, isError: false, timestamp: Date.now()
+    }, ctx);
+
+    const claim = await harness.handlers.get("message_end")({
+      message: { role: "assistant", content: [{ type: "text", text: "Parser implementation is complete." }] }
+    }, ctx);
+    assert.match(claim.message.content[0].text, /NOT APPROVED/);
+    assert.match(claim.message.content[0].text, /adapter-unresolved/);
+    assert.match(claim.message.content[0].text, /direct-relative focused test|deterministic adapter/);
+    assert.equal(harness.entries.filter((entry) => entry.type === "message" && entry.payload.customType === "piagent-completion-recovery").length, 0,
+      "unresolved deterministic linkage must not spend a provider continuation");
+    const task = JSON.parse(fs.readFileSync(path.join(cwd, ".pi", "piagent-state", "tasks", `${started.details.taskRunId}.json`), "utf8"));
+    assert.equal(task.trace.outcome, "pending");
+    assert.ok(task.acceptanceReceipt.criteria.some((criterion) => criterion.priority === "critical" && criterion.status === "pending"));
+    const handoff = JSON.parse(fs.readFileSync(path.join(cwd, ".pi", "piagent-state", "handoffs", `${task.taskRunId}.json`), "utf8"));
+    assert.equal(handoff.nextSafeAction.action, "handoff");
+    assert.deepEqual(handoff.failure.recovery.reasonCodes, ["unknown-diagnostic-exhausted"]);
+  });
+
   it("keeps broad-default semantic evidence advisory while exact current-tree verification remains a hard completion invariant", async () => {
     async function runCase(label, mutateAfterVerifier, benchmarkBound = false) {
       const { root, piagentGuard } = await loadGuardFixture();
@@ -3882,13 +4030,23 @@ describe("piagent guard integration", () => {
     piagentGuard(harness.pi);
     await harness.handlers.get("session_start")({}, ctx);
 
+    const prompt = [
+      "Investigate logs/incident.log as a read-only incident task. Do not edit any file.",
+      "PRIVATE_LATE_OUTPUT_SENTINEL", "x".repeat(900),
+      "Finish your response with ROOT_CAUSE=<code> as the last line using the code present in the log."
+    ].join("\n");
     const started = await harness.handlers.get("before_agent_start")({
       systemPrompt: "system",
-      prompt: "Investigate logs/incident.log as a read-only incident task. Do not edit any file. Finish your response with exactly ROOT_CAUSE=<code> using the code present in the log."
+      prompt
     }, ctx);
     assert.equal(started.message.details.runtimeIntakeStarted, true);
     assert.equal(started.message.details.runtimeTask.intakeMode, "runtime");
+    const startedTask = activeSessionTask(cwd, "session-readonly");
+    assert.equal(startedTask.summary.includes("ROOT_CAUSE"), false, "display summary intentionally omits the late directive");
+    assert.equal(startedTask.operatorRequest, prompt, "private task state retains the complete late directive source");
     assert.match(started.message.content, /exact final-output contract/i);
+    assert.match(started.message.content, /ROOT_CAUSE=<code>/);
+    assert.equal(started.message.content.includes("PRIVATE_LATE_OUTPUT_SENTINEL"), false, "intake guidance must not echo unrelated private prompt text");
 
     await harness.handlers.get("tool_result")({
       toolName: "read",

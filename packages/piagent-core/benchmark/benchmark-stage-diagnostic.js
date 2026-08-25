@@ -1,4 +1,6 @@
 import { benchmarkProviderWireEvidenceMatchesRequest } from "./benchmark-provider-wire.js";
+import { productionProviderFreeEvidenceContextValidationErrors } from "./benchmark-provider-free-evidence.js";
+import { summarizeBenchmarkSubagentBudget } from "./benchmark-codex-relative-efficiency.js";
 import {
   benchmarkPricingSnapshotValidationErrors,
   normalizeBenchmarkUsageCost
@@ -13,6 +15,7 @@ import { atMostWithinFloatingPrecision, geometricMean } from "./benchmark-statis
 import { pairedOutcomeFloorStop } from "./benchmark-stop-policy.js";
 import { workflowContinuityEvidenceComplete } from "./benchmark-summary-support.js";
 import { summarizeBenchmarkTimingDiagnostics } from "./benchmark-timing-diagnostics.js";
+import { exactBenchmarkAttemptUsage } from "./benchmark-usage.js";
 
 const TOKEN_FIELDS = Object.freeze(["input", "output", "cacheRead", "cacheWrite", "reasoning", "fresh", "total"]);
 const PRODUCTION_STAGE_CONTROL_POLICY = "production-v1-provider-spend-v1";
@@ -28,6 +31,11 @@ function validStageBoundaries(stageBoundaries) {
     && stageBoundaries.every((value, index) => Number.isSafeInteger(value)
       && value >= 0
       && (index === 0 || value > stageBoundaries[index - 1]));
+}
+
+export function productionGuardBindingMatches(manifest, spendControl) {
+  return JSON.stringify(manifest?.productionGuards ?? null)
+    === JSON.stringify(spendControl?.productionGuards ?? null);
 }
 
 export function productionSpendControlValidationErrors(control, {
@@ -88,6 +96,27 @@ export function productionSpendControlValidationErrors(control, {
     }
     const finalSessions = control.stages.at(-1)?.cumulativeSessions;
     if (Number.isSafeInteger(expectedSessions) && finalSessions !== expectedSessions) errors.push("final-stage-session-count-mismatch");
+  }
+  const guards = control.productionGuards;
+  if (suiteId === "production-v1" && (!guards || typeof guards !== "object" || Array.isArray(guards))) errors.push("missing-production-guards");
+  else if (guards !== undefined) {
+    const subagents = guards.subagents;
+    if (subagents?.required !== true
+      || subagents.maximumSessionsPerAttempt !== 1
+      || subagents.maximumTrafficShare !== 0.05
+      || subagents.requireExactAllAttemptEvidence !== true
+      || subagents.requireExplainedSessionCount !== true) errors.push("invalid-production-subagent-guard");
+    const partial = guards.partialFreshSpend;
+    if (partial?.requiredFromCumulativeSessions !== 12
+      || partial.maximumPooledFreshRatio !== 1.1
+      || partial.maximumObservedFamilyFreshRatio !== 1.25
+      || partial.includeExactFailedAttempts !== true) errors.push("invalid-production-partial-fresh-spend-guard");
+    const providerFree = guards.providerFreeEvidence;
+    if (providerFree?.requiredBeforeFirstPaidSession !== true
+      || JSON.stringify(providerFree.requiredLaneIds) !== JSON.stringify(["runtime-conformance-v1", "long-horizon-v1", "webui-parity-v1"])
+      || providerFree.requireCleanCommitAndTreeBinding !== true
+      || providerFree.requireProductionConfigurationBinding !== true
+      || providerFree.requireRunnerAndLaneConfigurationDigests !== true) errors.push("invalid-production-provider-free-evidence-guard");
   }
   return errors;
 }
@@ -341,6 +370,90 @@ function pairRatioEvidence(pairRecords, valueFor) {
   };
 }
 
+function allAttemptFreshTokens(run) {
+  const failures = Array.isArray(run?.infrastructureFailures) ? run.infrastructureFailures : [];
+  const ledgerExact = Number.isSafeInteger(run?.infrastructureRetries)
+    && Number.isSafeInteger(run?.infrastructureAttempts)
+    && failures.length === run.infrastructureRetries
+    && run.infrastructureAttempts === run.infrastructureRetries + 1;
+  const attempts = [
+    { usage: run?.usage, status: run?.usageStatus ?? "measured" },
+    ...failures.map((failure) => ({
+      usage: failure?.usage,
+      status: failure?.usageStatus ?? "unknown-after-provider-start"
+    }))
+  ];
+  const exact = ledgerExact && attempts.every((attempt) => exactBenchmarkAttemptUsage(attempt.usage, attempt.status));
+  return {
+    exact,
+    attempts: attempts.length,
+    fresh: exact ? attempts.reduce((sum, attempt) => sum + Number(attempt.usage?.fresh ?? 0), 0) : null
+  };
+}
+
+function partialCatastrophicSpendEvidence(pairRecords, {
+  maximumPooledFreshRatio,
+  maximumObservedFamilyFreshRatio
+}) {
+  const records = pairRecords.map(({ pair, candidate, baseline }) => {
+    const candidateUsage = allAttemptFreshTokens(candidate);
+    const baselineUsage = allAttemptFreshTokens(baseline);
+    const exact = candidateUsage.exact && baselineUsage.exact
+      && baselineUsage.fresh > 0 && candidateUsage.fresh >= 0;
+    return {
+      pairId: pair.id,
+      scenarioId: pair.scenarioId,
+      repeat: pair.repeat,
+      exact,
+      baselineFresh: exact ? baselineUsage.fresh : null,
+      candidateFresh: exact ? candidateUsage.fresh : null,
+      baselineAttempts: baselineUsage.attempts,
+      candidateAttempts: candidateUsage.attempts
+    };
+  });
+  const exact = records.length > 0 && records.every((record) => record.exact);
+  const baselineFresh = exact ? records.reduce((sum, record) => sum + record.baselineFresh, 0) : null;
+  const candidateFresh = exact ? records.reduce((sum, record) => sum + record.candidateFresh, 0) : null;
+  const pooledRatio = exact && baselineFresh > 0 ? candidateFresh / baselineFresh : null;
+  const byFamily = new Map();
+  for (const record of records) {
+    const family = byFamily.get(record.scenarioId) ?? { scenarioId: record.scenarioId, records: [] };
+    family.records.push(record);
+    byFamily.set(record.scenarioId, family);
+  }
+  const families = [...byFamily.values()].map((family) => {
+    const familyExact = family.records.length > 0 && family.records.every((record) => record.exact);
+    const baseline = familyExact ? family.records.reduce((sum, record) => sum + record.baselineFresh, 0) : null;
+    const candidate = familyExact ? family.records.reduce((sum, record) => sum + record.candidateFresh, 0) : null;
+    return {
+      scenarioId: family.scenarioId,
+      observedPairs: family.records.length,
+      exact: familyExact,
+      ratio: familyExact && baseline > 0 ? candidate / baseline : null
+    };
+  }).sort((left, right) => left.scenarioId.localeCompare(right.scenarioId));
+  const familyFailures = families.filter((family) => !family.exact
+    || !Number.isFinite(family.ratio)
+    || !atMostWithinFloatingPrecision(family.ratio, maximumObservedFamilyFreshRatio));
+  const passed = exact
+    && Number.isFinite(pooledRatio)
+    && atMostWithinFloatingPrecision(pooledRatio, maximumPooledFreshRatio)
+    && familyFailures.length === 0;
+  return {
+    schemaVersion: 1,
+    exactUsageIncludingFailedAttempts: exact,
+    maximumPooledFreshRatio,
+    maximumObservedFamilyFreshRatio,
+    pooledRatio,
+    baselineFresh,
+    candidateFresh,
+    familyFailures,
+    families,
+    records,
+    passed
+  };
+}
+
 function candidateOutcomeFailures(pairRecords, floor) {
   return pairRecords.map(({ pair, candidate }) => {
     const failures = [];
@@ -499,6 +612,27 @@ export function buildBenchmarkStageDiagnostic({
   const causalContextAvailableRuns = causalContextSummary.currentAvailableRuns;
   const causalContextPassed = !causalContextRequired
     || causalContextSummary.currentCoverageStatus === "complete";
+  const providerFreeGuard = manifest?.productionGuards?.providerFreeEvidence;
+  const providerFreeEvidenceRequired = providerFreeGuard?.requiredBeforeFirstPaidSession === true;
+  const providerFreeEvidenceErrors = providerFreeEvidenceRequired
+    ? productionProviderFreeEvidenceContextValidationErrors(manifest?.providerFreeEvidence, {
+      source: manifest?.sourceIdentity,
+      candidateProvenance: manifest?.candidateProvenance,
+      configurationDigest: manifest?.configurationDigest
+    })
+    : [];
+  const providerFreeObservedLaneIds = Array.isArray(manifest?.providerFreeEvidence?.lanes)
+    ? manifest.providerFreeEvidence.lanes.map((lane) => lane?.id)
+    : [];
+  const providerFreeEvidencePassed = !providerFreeEvidenceRequired
+    || (providerFreeEvidenceErrors.length === 0
+      && Array.isArray(providerFreeGuard.requiredLaneIds)
+      && JSON.stringify(providerFreeObservedLaneIds) === JSON.stringify(providerFreeGuard.requiredLaneIds));
+  const adaptiveContextStatuses = piRuns.map((run) => run?.causalContextReceipt?.aggregates?.runtimeCausal?.adaptiveContext?.coverageStatus ?? "not-observed");
+  const partialAdaptiveContextRuns = adaptiveContextStatuses.filter((status) => status === "partial").length;
+  const notObservedAdaptiveContextRuns = adaptiveContextStatuses.filter((status) => status === "not-observed").length;
+  const adaptiveContextCoveragePassed = !providerFreeEvidenceRequired || (partialAdaptiveContextRuns === 0
+    && (notObservedAdaptiveContextRuns === 0 || providerFreeEvidencePassed));
 
   const freshEfficiency = pairRatioEvidence(pairRecords, ({ candidate, baseline }) => ({
     baseline: baseline?.usage?.fresh,
@@ -508,6 +642,27 @@ export function buildBenchmarkStageDiagnostic({
     && freshEfficiency.incomparablePairs.length === 0
     && freshEfficiency.pairRegressions.length === 0
     && freshEfficiency.familyRegressions.length === 0;
+  const guardPolicy = manifest?.productionGuards;
+  const subagentGuard = guardPolicy?.subagents;
+  const subagentBudget = summarizeBenchmarkSubagentBudget(acceptedRuns, {
+    candidateSurface,
+    policy: {
+      schemaVersion: 1,
+      id: "production-subagent-budget-v1",
+      maximumSubagentSessionsPerAttempt: subagentGuard?.maximumSessionsPerAttempt,
+      maximumSubagentTrafficShare: subagentGuard?.maximumTrafficShare
+    }
+  });
+  const subagentBudgetRequired = subagentGuard?.required === true;
+  const partialGuard = guardPolicy?.partialFreshSpend;
+  const partialSpendRequired = Number.isSafeInteger(partialGuard?.requiredFromCumulativeSessions)
+    && acceptedRuns.length >= partialGuard.requiredFromCumulativeSessions
+    && acceptedRuns.length < expectedRuns.length;
+  const partialSpend = partialCatastrophicSpendEvidence(pairRecords, {
+    maximumPooledFreshRatio: partialGuard?.maximumPooledFreshRatio,
+    maximumObservedFamilyFreshRatio: partialGuard?.maximumObservedFamilyFreshRatio
+  });
+  const partialSpendPassed = !partialSpendRequired || partialSpend.passed;
 
   const pricingSnapshot = suite?.pricingSnapshot;
   const pricingSnapshotErrors = benchmarkPricingSnapshotValidationErrors(pricingSnapshot);
@@ -643,8 +798,35 @@ export function buildBenchmarkStageDiagnostic({
       piagentRuns: piRuns.length,
       unavailableRuns: piRuns.length - causalContextAvailableRuns
     }),
+    diagnosticCheck("source-bound-provider-free-evidence", providerFreeEvidencePassed, {
+      required: providerFreeEvidenceRequired,
+      expectedLaneIds: providerFreeGuard?.requiredLaneIds ?? [],
+      observedLaneIds: providerFreeObservedLaneIds,
+      errors: providerFreeEvidenceErrors
+    }),
+    diagnosticCheck("adaptive-context-runtime-coverage", adaptiveContextCoveragePassed, {
+      partialRuns: partialAdaptiveContextRuns,
+      notObservedRuns: notObservedAdaptiveContextRuns,
+      notObservedCoveredBySameSourceProviderFreeLane: providerFreeEvidencePassed
+    }),
     diagnosticCheck("no-infrastructure-retry", retryGatePassed, { retries: infrastructureRetries }),
     diagnosticCheck("no-unknown-attempt-usage", unknownUsagePassed, { unknownUsageAttempts }),
+    diagnosticCheck("production-subagent-budget", !subagentBudgetRequired || subagentBudget.passed, {
+      required: subagentBudgetRequired,
+      attempts: subagentBudget.attempts,
+      exactAttempts: subagentBudget.exactAttempts,
+      maximumObservedSessionsPerAttempt: subagentBudget.maximumObservedSessionsPerAttempt,
+      trafficShare: subagentBudget.trafficShare,
+      failures: subagentBudget.failures
+    }),
+    diagnosticCheck("partial-stage-catastrophic-fresh-spend", partialSpendPassed, {
+      required: partialSpendRequired,
+      pooledRatio: partialSpend.pooledRatio,
+      maximumPooledFreshRatio: partialSpend.maximumPooledFreshRatio,
+      familyFailures: partialSpend.familyFailures,
+      maximumObservedFamilyFreshRatio: partialSpend.maximumObservedFamilyFreshRatio,
+      exactUsageIncludingFailedAttempts: partialSpend.exactUsageIncludingFailedAttempts
+    }),
     diagnosticCheck("no-observed-fresh-token-regression", freshEfficiencyPassed, {
       incomparablePairs: freshEfficiency.incomparablePairs.length,
       pairRegressions: freshEfficiency.pairRegressions.length,
@@ -741,6 +923,19 @@ export function buildBenchmarkStageDiagnostic({
       piagentRuns: piRuns.length,
       ...causalContextSummary
     },
+    providerFreeEvidence: {
+      required: providerFreeEvidenceRequired,
+      passed: providerFreeEvidencePassed,
+      errors: providerFreeEvidenceErrors,
+      expectedLaneIds: providerFreeGuard?.requiredLaneIds ?? [],
+      observedLaneIds: providerFreeObservedLaneIds
+    },
+    adaptiveContextRuntimeCoverage: {
+      passed: adaptiveContextCoveragePassed,
+      partialRuns: partialAdaptiveContextRuns,
+      notObservedRuns: notObservedAdaptiveContextRuns,
+      delegatedToProviderFreeEvidence: notObservedAdaptiveContextRuns > 0 && providerFreeEvidencePassed
+    },
     infrastructure: {
       retryGatePassed,
       retryEvidenceFailures,
@@ -756,9 +951,11 @@ export function buildBenchmarkStageDiagnostic({
     hostReadiness: hostReadinessHistory,
     timingDiagnostics: summarizeBenchmarkTimingDiagnostics(acceptedRuns),
     spendFutilityReview: {
-      rule: "observed-pair-and-observed-family-point-ratios-must-not-exceed-1; this-is-not-the-final-40-percent-claim-gate",
-      passed: freshEfficiencyPassed && normalizedCostPassed && durationEfficiencyPassed,
+      rule: "partial-stages-from-the-frozen-boundary-enforce-exact-all-attempt-pooled-and-family-fresh-spend-ceilings; this-is-not-the-final-40-percent-claim-gate",
+      passed: partialSpendPassed && (!subagentBudgetRequired || subagentBudget.passed),
       freshTokens: { passed: freshEfficiencyPassed, ...freshEfficiency },
+      partialStageCatastrophicFreshSpend: { required: partialSpendRequired, ...partialSpend },
+      subagentBudget,
       normalizedApiEquivalentTextTokenCost: {
         billedCost: false,
         scope: "model-text-token-input-cache-output-only",
@@ -773,8 +970,8 @@ export function buildBenchmarkStageDiagnostic({
     blockingReasons,
     stageAdvanceAllowed: blockingReasons.length === 0,
     decisionContract: {
-      blocking: "quality-model-parity-task-continuity-and-exact-usage-only",
-      finalOnly: ["fresh-token-reduction"],
+      blocking: "quality-model-parity-task-continuity-exact-usage-subagent-budget-and-partial-stage-catastrophic-fresh-spend",
+      finalOnly: ["0.60-upper95-fresh-token-reduction"],
       observational: ["normalized-api-equivalent-text-token-cost", "duration", "host-load"]
     },
     claimBoundary: "Provider-free partial-run diagnostic only. Intermediate token measurements cannot make a claim; cost, duration, and host load are observational and non-blocking."

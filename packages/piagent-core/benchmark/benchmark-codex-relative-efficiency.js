@@ -8,6 +8,7 @@ import {
   rounded
 } from "./benchmark-statistics.js";
 import { exactBenchmarkAttemptUsage } from "./benchmark-usage.js";
+import { productionProviderFreeEvidenceContextValidationErrors } from "./benchmark-provider-free-evidence.js";
 import { RELEASE_FAILURE_MESSAGES } from "./benchmark-summary-support.js";
 
 const HASH = /^[a-f0-9]{64}$/;
@@ -30,6 +31,13 @@ export const CODEX_RELATIVE_EFFICIENCY_POLICY = Object.freeze({
   maximumTotalTokenTrafficRatioUpper95: 0.7,
   maximumApiEquivalentCostRatio: 0.7,
   maximumApiEquivalentCostRatioUpper95: 0.7,
+  maximumSubagentSessionsPerAttempt: 1,
+  maximumSubagentTrafficShare: 0.05
+});
+
+export const PRODUCTION_SUBAGENT_BUDGET_POLICY = Object.freeze({
+  schemaVersion: 1,
+  id: "production-subagent-budget-v1",
   maximumSubagentSessionsPerAttempt: 1,
   maximumSubagentTrafficShare: 0.05
 });
@@ -79,6 +87,94 @@ function measuredSubagentEvidence(usage, status) {
   return exactSubagentEvidence(usage)
     ? { exact: true, sessions: usage.subagentSessions, traffic: usage.subagentTokens.total }
     : { exact: false, sessions: 0, traffic: 0 };
+}
+
+/**
+ * Measure the candidate child-session budget independently from cost claims.
+ * Every accepted and failed provider attempt must explain its full session
+ * count as one root session plus the exact child-session count. This gate is
+ * deliberately usable on a partial production ledger.
+ */
+export function summarizeBenchmarkSubagentBudget(runs, {
+  candidateSurface = "piagent",
+  policy = PRODUCTION_SUBAGENT_BUDGET_POLICY
+} = {}) {
+  const candidateRuns = (runs ?? []).filter((run) => run?.surface === candidateSurface);
+  const attempts = [];
+  const ledgerIssues = [];
+  for (const run of candidateRuns) {
+    const failures = Array.isArray(run?.infrastructureFailures) ? run.infrastructureFailures : [];
+    const retryCountExact = Number.isSafeInteger(run?.infrastructureRetries) && run.infrastructureRetries >= 0;
+    const attemptCountExact = Number.isSafeInteger(run?.infrastructureAttempts) && run.infrastructureAttempts >= 1;
+    if (!retryCountExact || !attemptCountExact || !Array.isArray(run?.infrastructureFailures)
+      || failures.length !== run.infrastructureRetries
+      || run.infrastructureAttempts !== run.infrastructureRetries + 1) {
+      ledgerIssues.push(`${run?.scenarioId ?? "unknown"}:r${run?.repeat ?? "?"}:attempt-ledger-mismatch`);
+    }
+    const values = [
+      { kind: "accepted", usage: run?.usage, status: run?.usageStatus ?? "measured" },
+      ...failures.map((failure) => ({
+        kind: "failed",
+        usage: failure?.usage,
+        status: failure?.usageStatus ?? "unknown-after-provider-start"
+      }))
+    ];
+    for (const [index, value] of values.entries()) {
+      const evidence = measuredSubagentEvidence(value.usage, value.status);
+      attempts.push({
+        scenarioId: run?.scenarioId ?? null,
+        repeat: run?.repeat ?? null,
+        attempt: index + 1,
+        kind: value.kind,
+        exact: evidence.exact,
+        sessions: evidence.exact ? evidence.sessions : null,
+        subagentTraffic: evidence.exact ? evidence.traffic : null,
+        candidateTraffic: evidence.exact ? Number(value.usage?.total ?? 0) : null
+      });
+    }
+  }
+  const exact = candidateRuns.length > 0
+    && ledgerIssues.length === 0
+    && attempts.length > 0
+    && attempts.every((attempt) => attempt.exact);
+  const exactAttempts = attempts.filter((attempt) => attempt.exact);
+  const subagentSessions = exactAttempts.reduce((sum, attempt) => sum + attempt.sessions, 0);
+  const subagentTraffic = exactAttempts.reduce((sum, attempt) => sum + attempt.subagentTraffic, 0);
+  const candidateTraffic = exactAttempts.reduce((sum, attempt) => sum + attempt.candidateTraffic, 0);
+  const trafficShare = exact && candidateTraffic > 0
+    ? subagentTraffic / candidateTraffic
+    : exact && subagentTraffic === 0 ? 0 : null;
+  const maximumObservedSessionsPerAttempt = exactAttempts.reduce(
+    (maximum, attempt) => Math.max(maximum, attempt.sessions),
+    0
+  );
+  const checks = {
+    "candidate-attempts-observed": candidateRuns.length > 0 && attempts.length > 0,
+    "subagent-usage-exact": exact,
+    "subagent-sessions-explained": exact,
+    "subagent-session-budget": exact
+      && maximumObservedSessionsPerAttempt <= policy.maximumSubagentSessionsPerAttempt,
+    "subagent-traffic-budget": exact
+      && Number.isFinite(trafficShare)
+      && atMostWithinFloatingPrecision(trafficShare, policy.maximumSubagentTrafficShare)
+  };
+  return {
+    schemaVersion: 1,
+    policy,
+    checks,
+    failures: booleanChecks(checks),
+    passed: booleanChecks(checks).length === 0,
+    candidateRuns: candidateRuns.length,
+    attempts: attempts.length,
+    exactAttempts: exactAttempts.length,
+    ledgerIssues,
+    sessions: subagentSessions,
+    tokenTraffic: subagentTraffic,
+    candidateTokenTraffic: candidateTraffic,
+    trafficShare,
+    maximumObservedSessionsPerAttempt,
+    attemptEvidence: attempts
+  };
 }
 
 function measureRun(run, pricingSnapshot, expectedModel, expectedThinking, { candidate }) {
@@ -406,8 +502,8 @@ function pairedRuns(report) {
     .filter((pair) => pair.baseline);
 }
 
-function insertReleaseFailure(gate) {
-  if (!gate || gate.failures.includes("codex-relative-efficiency")) return;
+function insertReleaseFailure(gate, failure = "codex-relative-efficiency") {
+  if (!gate || gate.failures.includes(failure)) return;
   const laterFailures = new Set([
     "repeat-count",
     "efficiency-confidence",
@@ -418,7 +514,7 @@ function insertReleaseFailure(gate) {
     "performance-family-ratio"
   ]);
   const index = gate.failures.findIndex((failure) => laterFailures.has(failure));
-  gate.failures.splice(index < 0 ? gate.failures.length : index, 0, "codex-relative-efficiency");
+  gate.failures.splice(index < 0 ? gate.failures.length : index, 0, failure);
   gate.failureReasons = gate.failures.map((id) => ({ id, message: RELEASE_FAILURE_MESSAGES[id] ?? id }));
   gate.passed = false;
 }
@@ -450,6 +546,35 @@ function codexRelativeChecks(report) {
   };
 }
 
+function productionRuntimeCoverage(report, suite) {
+  const required = suite.releaseGate?.requireProviderFreeEvidence === true;
+  const receipt = report.environment?.providerFreeEvidence ?? null;
+  const providerFreeErrors = required
+    ? productionProviderFreeEvidenceContextValidationErrors(receipt, {
+      source: report.environment?.source,
+      candidateProvenance: report.environment?.candidateProvenance,
+      configurationDigest: report.environment?.configurationDigest
+    })
+    : [];
+  const providerFreePassed = !required || providerFreeErrors.length === 0;
+  const candidateRuns = report.runs.filter((run) => run.surface === report.comparison.candidateSurface);
+  const statuses = candidateRuns.map((run) => run?.causalContextReceipt?.aggregates?.runtimeCausal?.adaptiveContext?.coverageStatus ?? "not-observed");
+  const partialRuns = statuses.filter((status) => status === "partial").length;
+  const notObservedRuns = statuses.filter((status) => status === "not-observed").length;
+  const adaptiveContextPassed = !required || (partialRuns === 0 && (notObservedRuns === 0 || providerFreePassed));
+  return {
+    required,
+    passed: providerFreePassed && adaptiveContextPassed,
+    providerFree: { passed: providerFreePassed, errors: providerFreeErrors, receipt },
+    adaptiveContext: {
+      passed: adaptiveContextPassed,
+      partialRuns,
+      notObservedRuns,
+      notObservedCoveredBySameSourceProviderFreeLane: notObservedRuns > 0 && providerFreePassed
+    }
+  };
+}
+
 /**
  * Add the Codex-relative claim gate after the generic benchmark report is built.
  * Keeping this policy adapter outside benchmark-core prevents one product claim
@@ -474,6 +599,28 @@ export function integrateCodexRelativeEfficiencyReport(report, suite) {
   comparison.codexRelativeEfficiency = evidence;
   comparison.codexRelativeEfficiencyGate = gate;
 
+  const subagentBudgetRequired = suite.releaseGate?.requireSubagentBudget === true
+    && comparison.baselineSurface === CODEX_RELATIVE_EFFICIENCY_POLICY.baselineSurface
+    && comparison.candidateSurface === CODEX_RELATIVE_EFFICIENCY_POLICY.candidateSurface;
+  const subagentBudget = subagentBudgetRequired
+    ? summarizeBenchmarkSubagentBudget(report.runs, {
+      candidateSurface: comparison.candidateSurface,
+      policy: {
+        ...PRODUCTION_SUBAGENT_BUDGET_POLICY,
+        maximumSubagentSessionsPerAttempt: suite.releaseGate.maximumSubagentSessionsPerAttempt,
+        maximumSubagentTrafficShare: suite.releaseGate.maximumSubagentTrafficShare
+      }
+    })
+    : null;
+  const subagentBudgetGate = subagentBudgetRequired ? subagentBudget?.passed === true : null;
+  comparison.productionSubagentBudget = subagentBudget;
+  comparison.productionSubagentBudgetGate = subagentBudgetGate;
+  const runtimeCoverage = productionRuntimeCoverage(report, suite);
+  comparison.productionProviderFreeEvidenceGate = runtimeCoverage.required ? runtimeCoverage.providerFree.passed : null;
+  comparison.productionProviderFreeEvidence = runtimeCoverage.providerFree;
+  comparison.adaptiveContextRuntimeGate = runtimeCoverage.required ? runtimeCoverage.adaptiveContext.passed : null;
+  comparison.adaptiveContextRuntimeCoverage = runtimeCoverage.adaptiveContext;
+
   if (comparison.suiteGate) {
     comparison.suiteGate.observed.codexRelativeMaximumTokenTrafficRatioUpper95 = required
       ? CODEX_RELATIVE_EFFICIENCY_POLICY.maximumTotalTokenTrafficRatioUpper95
@@ -481,6 +628,7 @@ export function integrateCodexRelativeEfficiencyReport(report, suite) {
     comparison.suiteGate.observed.codexRelativeMaximumApiEquivalentCostRatioUpper95 = required
       ? CODEX_RELATIVE_EFFICIENCY_POLICY.maximumApiEquivalentCostRatioUpper95
       : null;
+    comparison.suiteGate.observed.productionSubagentBudget = subagentBudget;
   }
 
   if (required && gate === false) {
@@ -503,10 +651,47 @@ export function integrateCodexRelativeEfficiencyReport(report, suite) {
     }
   }
 
+  if (subagentBudgetRequired && subagentBudgetGate === false) {
+    for (const releaseGate of new Set([comparison.suiteGate, comparison.productionGate])) {
+      insertReleaseFailure(releaseGate, "production-subagent-budget");
+    }
+    comparison.tokenClaimAllowed = false;
+    comparison.claimEligibility = benchmarkClaimEligibility({
+      suite,
+      environment: report.environment,
+      baselineSurface: comparison.baselineSurface,
+      protocolPassed: comparison.comparisonProtocolGate.passed,
+      tokenClaimAllowed: false
+    });
+    comparison.purpose = comparison.claimEligibility.comparisonPurpose;
+    const candidate = Object.values(report.surfaces).find((surface) => surface.surface === comparison.candidateSurface);
+    if (candidate?.scores) candidate.scores.overall = null;
+    if (DOWNSTREAM_VERDICTS.has(report.verdict.status) || report.verdict.status === `${comparison.candidateSurface}-more-efficient`) {
+      report.verdict.status = "production-subagent-budget-gate-failed";
+    }
+  }
+  if (runtimeCoverage.required && runtimeCoverage.passed === false) {
+    for (const releaseGate of new Set([comparison.suiteGate, comparison.productionGate])) {
+      if (!runtimeCoverage.providerFree.passed) insertReleaseFailure(releaseGate, "provider-free-evidence");
+      if (!runtimeCoverage.adaptiveContext.passed) insertReleaseFailure(releaseGate, "adaptive-context-runtime-coverage");
+    }
+    comparison.tokenClaimAllowed = false;
+    comparison.claimEligibility = benchmarkClaimEligibility({ suite, environment: report.environment,
+      baselineSurface: comparison.baselineSurface, protocolPassed: comparison.comparisonProtocolGate.passed, tokenClaimAllowed: false });
+    comparison.purpose = comparison.claimEligibility.comparisonPurpose;
+    const candidate = Object.values(report.surfaces).find((surface) => surface.surface === comparison.candidateSurface);
+    if (candidate?.scores) candidate.scores.overall = null;
+    if (DOWNSTREAM_VERDICTS.has(report.verdict.status) || report.verdict.status === `${comparison.candidateSurface}-more-efficient`) {
+      report.verdict.status = runtimeCoverage.providerFree.passed
+        ? "adaptive-context-runtime-coverage-gate-failed"
+        : "provider-free-evidence-gate-failed";
+    }
+  }
+
   report.verdict.note = report.verdict.note
     .replace(
       "quality and continuity remain independent hard gates. ",
-      "quality and continuity remain independent hard gates. When a suite explicitly enables the optional Codex-relative cost claim, its separate gate requires both total provider token traffic and API-equivalent text-token cost, including cache traffic, to have point and upper-95 ratios at or below 0.70; it is not a subscription-spend claim. "
+      "quality and continuity remain independent hard gates. Production token claims always require exact child-session evidence, at most one subagent per provider attempt, and no more than 5% subagent token traffic. When a suite explicitly enables the optional Codex-relative cost claim, its separate gate requires both total provider token traffic and API-equivalent text-token cost, including cache traffic, to have point and upper-95 ratios at or below 0.70; it is not a subscription-spend claim. "
     )
     .replace(" Normalized cost is API-equivalent text-token input/cache/output cost from the versioned suite pricing snapshot and exact token buckets, never OAuth/provider-billed or tool-specific total cost.", "");
   return report;

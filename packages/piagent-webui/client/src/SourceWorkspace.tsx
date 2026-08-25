@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import FolderOpenRounded from "@mui/icons-material/FolderOpenRounded";
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
@@ -12,6 +12,7 @@ import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import Typography from "@mui/material/Typography";
 
 import type { PiagentWebUICanonicalSnapshotV1 } from "../../contracts/generated/snapshot-v1.ts";
+import type { Command, Receipt } from "../../contracts/generated/control-command-v1.ts";
 import type { PiagentWebUIBoundedFileDiffV1 } from "../../contracts/generated/diff-v1.ts";
 import type { PiagentWebUIDigestBoundSelectedFileReviewStateV1 } from "../../contracts/generated/review-state-v1.ts";
 import type { PiagentWebUIGuardedSelectedFileSourceMutationPreviewV1 } from "../../contracts/generated/source-mutation-v1.ts";
@@ -32,6 +33,41 @@ import { label, tone } from "./view-model.ts";
 import { localize, useUiPreferences, type UiLocale } from "./ui-preferences.tsx";
 
 type LoadState<T> = { state: "idle" | "loading" | "ready" | "error"; value?: T };
+
+function reviewTargetKey(value?: PiagentWebUIDigestBoundSelectedFileReviewStateV1): string {
+  const target = value?.target;
+  if (!target) return "no-target";
+  return [target.view, target.fileRef, target.diffRef, target.taskRevision, target.workspaceRevision, target.indexRevision ?? "",
+    target.viewRevision, target.fileRevision, target.patchPreimage, target.contentDigest].join("\u001f");
+}
+
+function reviewPreimageKey(value?: PiagentWebUIDigestBoundSelectedFileReviewStateV1): string {
+  if (!value) return "no-review-state";
+  return [reviewTargetKey(value), value.state, value.recordedState ?? "", value.recordedAt ?? "", value.evidenceRef ?? ""].join("\u001d");
+}
+
+function sameReviewIdentity(command: Command, receipt: Receipt): boolean {
+  return command.identity.projectRef === receipt.identity.projectRef
+    && command.identity.runtimeInstanceId === receipt.identity.runtimeInstanceId
+    && command.identity.sessionRef === receipt.identity.sessionRef
+    && command.identity.taskId === receipt.identity.taskId
+    && command.identity.taskRunId === receipt.identity.taskRunId
+    && command.identity.agentOperationId === receipt.identity.agentOperationId
+    && command.identity.toolCallId === receipt.identity.toolCallId;
+}
+
+function validReviewSettlement(command: Command, receipt: Receipt, expectedResult: "reviewed" | "unreviewed",
+  idempotencyKeyDigest: string): boolean {
+  return receipt.phase === "settled" && receipt.resultCode === expectedResult && receipt.action === "review.mark"
+    && receipt.commandId === command.commandId && receipt.actionDigest === command.actionDigest
+    && receipt.idempotencyKeyDigest === idempotencyKeyDigest && sameReviewIdentity(command, receipt)
+    && typeof receipt.settledAt === "string" && typeof receipt.settlementEvidenceRef === "string";
+}
+
+async function digestText(value: string): Promise<string> {
+  const bytes = new TextEncoder().encode(value), result = await crypto.subtle.digest("SHA-256", bytes);
+  return `sha256:${[...new Uint8Array(result)].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+}
 
 function CommitSummaryPanel({ state, busy, status, deterministicEnabled, modelEnabled, locale, onGenerate, onCopy, onModel }: {
   state: LoadState<PiagentWebUIDeterministicStagedCommitSummaryV1>; busy: boolean; status: string | null;
@@ -188,6 +224,10 @@ export function SourceWorkspace({ snapshot, refreshSnapshot, sessionRef }: { sna
   const loadedView = documents[view];
   const viewFiles = loadedView?.state === "ready" ? loadedView.value?.files ?? [] : [];
   const selected = activeFileRef(viewFiles, selectedFileRef);
+  const reviewSelectionContextRef = useRef(""), reviewPreimageRef = useRef("");
+  const reviewSelectionContext = [view, selected ?? "no-selection", revisions, reviewTargetKey(review.value)].join("\u001e");
+  reviewSelectionContextRef.current = reviewSelectionContext;
+  reviewPreimageRef.current = reviewPreimageKey(review.value);
 
   useEffect(() => { setCommitSummary({ state: "idle" }); setCommitStatus(null); setModelSummaryConfirmation(false); }, [revisions]);
 
@@ -276,14 +316,35 @@ export function SourceWorkspace({ snapshot, refreshSnapshot, sessionRef }: { sna
   const modelSummaryEnabled = stagedFilesPresent && reviewCapability.status === "available" && reviewCapability.actions.generateCommitSummaryModel.available;
   const markReview = async (next: "reviewed" | "unreviewed") => {
     if (!selected || !review.value || reviewBusy) return;
+    const submittedReview = review.value, submittedPreimage = reviewPreimageKey(submittedReview),
+      submittedSelectionContext = reviewSelectionContextRef.current;
     setReviewBusy(true); setReviewError(null);
     try {
-      const receipt = await sendReviewCommand(await createReviewCommand(snapshot, review.value, next));
-      if (receipt.phase !== "settled" || !["reviewed", "unreviewed"].includes(receipt.resultCode)) {
-        setReviewError(receipt.error?.message ?? localize(locale, "File đã thay đổi; hãy tải lại diff trước khi review.", "The file changed; reload the diff before reviewing.")); return;
+      const command = await createReviewCommand(snapshot, submittedReview, next);
+      if (reviewSelectionContextRef.current !== submittedSelectionContext || reviewPreimageRef.current !== submittedPreimage) return;
+      const idempotencyKeyDigest = await digestText(command.idempotencyKey);
+      if (reviewSelectionContextRef.current !== submittedSelectionContext || reviewPreimageRef.current !== submittedPreimage) return;
+      const receipt = await sendReviewCommand(command);
+      if (!validReviewSettlement(command, receipt, next, idempotencyKeyDigest)) {
+        if (reviewSelectionContextRef.current === submittedSelectionContext && reviewPreimageRef.current === submittedPreimage) setReviewError(receipt.error?.message
+          ?? localize(locale, "Không xác nhận được trạng thái review chính xác; hãy tải lại diff.", "The exact review state could not be confirmed; reload the diff."));
+        return;
       }
-      setReview({ state: "ready", value: sessionRef ? await readSessionReviewState(sessionRef, view, selected) : await readReviewState(view, selected) });
-    } catch { setReviewError(localize(locale, "Không thể ghi trạng thái review. Nội dung source không bị thay đổi.", "Unable to save review state. Source content was not changed.")); }
+      if (reviewSelectionContextRef.current !== submittedSelectionContext || reviewPreimageRef.current !== submittedPreimage) return;
+      setReview((current) => reviewSelectionContextRef.current === submittedSelectionContext && reviewPreimageKey(current.value) === submittedPreimage
+        ? { state: "ready", value: {
+          ...submittedReview, generatedAt: receipt.settledAt!, state: receipt.resultCode as "reviewed" | "unreviewed",
+          recordedState: receipt.resultCode as "reviewed" | "unreviewed", recordedAt: receipt.settledAt!, evidenceRef: receipt.settlementEvidenceRef!,
+          reasonCode: null, health: { state: "ok", reasonCode: null, message: null }
+        } } : current);
+      const refresh = sessionRef ? readSessionReviewState(sessionRef, view, selected) : readReviewState(view, selected);
+      void refresh.then((value) => setReview((current) => reviewSelectionContextRef.current === submittedSelectionContext && current.state === "ready"
+        && current.value?.evidenceRef === receipt.settlementEvidenceRef ? { state: "ready", value } : current)).catch(() => undefined);
+    } catch {
+      if (reviewSelectionContextRef.current === submittedSelectionContext && reviewPreimageRef.current === submittedPreimage)
+        setReviewError(localize(locale, "Không thể ghi trạng thái review. Nội dung source không bị thay đổi.",
+          "Unable to save review state. Source content was not changed."));
+    }
     finally { setReviewBusy(false); }
   };
   const mutateSource = async (hunkRefs: string[] = []) => {

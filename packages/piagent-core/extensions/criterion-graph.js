@@ -114,7 +114,10 @@ function targetHintsFor(obligation, scope, mode) {
     const stem = basename.replace(/\.[a-z0-9]+$/i, "");
     return text.includes(normalized) || (basename.length >= 3 && text.includes(basename)) || (stem.length >= 4 && text.includes(stem));
   });
-  return (matched.length > 0 ? matched : scope).slice(0, 4);
+  const requestedTestScopes = /\btests?\b/i.test(text)
+    ? scope.filter((candidate) => /(?:^|\/)(?:test|tests|spec|__tests__)(?:\/|$)|[._-](?:test|spec)\.[cm]?[jt]sx?$/i.test(candidate))
+    : [];
+  return (matched.length > 0 ? [...new Set([...matched, ...requestedTestScopes])] : scope).slice(0, 4);
 }
 
 function criterionLabel(obligation) {

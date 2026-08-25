@@ -271,6 +271,7 @@ export function finalizeBenchmarkRun(context) {
       hostReadinessHistory,
       environmentPolicy,
       runtimeDependencies: bootstrapMetadata?.runtimeDependencies ?? null,
+      providerFreeEvidence: manifest.providerFreeEvidence ?? null,
       assuranceEvidence
     },
     runs: completedRuns,

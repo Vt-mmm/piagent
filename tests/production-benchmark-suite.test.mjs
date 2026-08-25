@@ -185,6 +185,10 @@ test("production-v1 spans the declared production matrix", () => {
   assert.equal(suite.releaseGate.requireNormalizedCostClaim, false);
   assert.equal(suite.releaseGate.requireHostReadinessForClaim, false);
   assert.equal(suite.releaseGate.requireCausalContextReceipt, true, "production claims require complete privacy-safe causal context receipts");
+  assert.equal(suite.releaseGate.requireProviderFreeEvidence, true, "production claims require exact same-source provider-free lane receipts");
+  assert.equal(suite.releaseGate.requireSubagentBudget, true);
+  assert.equal(suite.releaseGate.maximumSubagentSessionsPerAttempt, 1);
+  assert.equal(suite.releaseGate.maximumSubagentTrafficShare, 0.05);
   assert.equal(suite.releaseGate.maximumFreshTokenRatioUpper95, 0.6, "production claims must prove at least 40% fresh-token reduction at the upper 95% bound");
   assert.equal(suite.releaseGate.maximumBandFreshTokenRatio, undefined, "workload-band token ratios are reported but do not override the full-suite estimand");
   assert.equal(suite.releaseGate.maximumFamilyFreshTokenRatio, undefined, "individual family token ratios are diagnostic rather than independent claim gates");
@@ -222,6 +226,24 @@ test("production spend control freezes impact-first staging without creating an 
     stopAfterFailedPair: true
   });
   assert.equal(spendControl.hostReadiness, undefined, "host load must not delay a token-quality-continuity run");
+  assert.deepEqual(spendControl.productionGuards, {
+    subagents: { required: true, maximumSessionsPerAttempt: 1, maximumTrafficShare: 0.05,
+      requireExactAllAttemptEvidence: true, requireExplainedSessionCount: true },
+    partialFreshSpend: { requiredFromCumulativeSessions: 12, maximumPooledFreshRatio: 1.1,
+      maximumObservedFamilyFreshRatio: 1.25, includeExactFailedAttempts: true },
+    providerFreeEvidence: { requiredBeforeFirstPaidSession: true,
+      requiredLaneIds: ["runtime-conformance-v1", "long-horizon-v1", "webui-parity-v1"],
+      requireCleanCommitAndTreeBinding: true, requireProductionConfigurationBinding: true,
+      requireRunnerAndLaneConfigurationDigests: true }
+  });
+  const invalidSubagentGuard = structuredClone(spendControl);
+  invalidSubagentGuard.productionGuards.subagents.required = false;
+  assert.ok(productionSpendControlValidationErrors(invalidSubagentGuard, { suiteId: suite.id, expectedSessions: 108 })
+    .includes("invalid-production-subagent-guard"));
+  const invalidPartialGuard = structuredClone(spendControl);
+  invalidPartialGuard.productionGuards.partialFreshSpend.maximumPooledFreshRatio = 1.11;
+  assert.ok(productionSpendControlValidationErrors(invalidPartialGuard, { suiteId: suite.id, expectedSessions: 108 })
+    .includes("invalid-production-partial-fresh-spend-guard"));
   const invalidHostReadiness = structuredClone(spendControl);
   invalidHostReadiness.hostReadiness = {
     schemaVersion: 1,
@@ -259,7 +281,6 @@ test("production spend control freezes impact-first staging without creating an 
   assert.equal(spendControl.enforcement.stageAdvanceRules.includes("fresh-run-and-configuration-bound-privacy-safe-host-readiness-receipt-for-every-paid-invocation"), false);
   assert.ok(spendControl.enforcement.stageAdvanceRules.includes("no-model-thinking-or-provider-wire-parity-drift"));
   assert.deepEqual(spendControl.enforcement.nonBlockingDiagnostics, [
-    "intermediate-fresh-token-ratios",
     "normalized-api-equivalent-text-token-cost",
     "duration",
     "host-load"

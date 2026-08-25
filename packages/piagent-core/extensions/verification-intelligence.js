@@ -13,8 +13,22 @@ import {
 } from "./failure-types.ts";
 import { isCurrentWorkingTreeDigest } from "./working-tree-digest.js";
 
+export const MAX_VERIFY_COMMANDS = 2;
+export const MAX_VERIFY_COMMAND_CHARS = 900;
+export const MAX_VERIFY_COMMAND_BYTES = 900;
+export const MAX_VERIFY_COMMAND_TOTAL_BYTES = MAX_VERIFY_COMMANDS * MAX_VERIFY_COMMAND_BYTES;
+export const MAX_VERIFY_COMMAND_TOTAL_CHARS = MAX_VERIFY_COMMANDS * MAX_VERIFY_COMMAND_CHARS;
+
+export function unicodeCodePointLength(value) {
+  return Array.from(String(value ?? "")).length;
+}
+
+export function utf8ByteLength(value) {
+  return Buffer.byteLength(String(value ?? ""), "utf8");
+}
+
 function uniqueStrings(values) {
-  return [...new Set((Array.isArray(values) ? values : []).filter((value) => typeof value === "string" && value.trim()).map((value) => value.trim()))];
+  return [...new Set((Array.isArray(values) ? values : []).filter((value) => typeof value === "string" && value.trim()))];
 }
 
 export function meaningfulVerificationCommands(commands = []) {
@@ -25,6 +39,25 @@ export function meaningfulVerificationCommands(commands = []) {
     if (/^(?:true|:|echo\b|printf\b)/.test(normalized)) return false;
     return true;
   });
+}
+
+export function verifierCommandBoundsError(commands = []) {
+  const supplied = (Array.isArray(commands) ? commands : []).filter((command) => typeof command === "string");
+  if (supplied.some((command) => /[\r\n]/.test(command))) {
+    return "Exact verify commands must be single-line values without CR or LF characters; move multiline logic into a checked-in script before task intake.";
+  }
+  const normalized = uniqueStrings(supplied);
+  if (normalized.length > MAX_VERIFY_COMMANDS) {
+    return `Verify plans support at most ${MAX_VERIFY_COMMANDS} exact commands; consolidate or shorten the project verifier before task intake.`;
+  }
+  const oversized = normalized.find((command) => unicodeCodePointLength(command) > MAX_VERIFY_COMMAND_CHARS);
+  if (oversized) return `An exact verify command exceeds ${MAX_VERIFY_COMMAND_CHARS} characters; shorten it or move verifier logic into a checked-in script before task intake.`;
+  const oversizedTraffic = normalized.find((command) => utf8ByteLength(command) > MAX_VERIFY_COMMAND_BYTES);
+  if (oversizedTraffic) return `An exact verify command exceeds ${MAX_VERIFY_COMMAND_BYTES} UTF-8 bytes; shorten it or move verifier logic into a checked-in script before task intake.`;
+  if (normalized.reduce((total, command) => total + utf8ByteLength(command), 0) > MAX_VERIFY_COMMAND_TOTAL_BYTES) {
+    return `Exact verify commands exceed the ${MAX_VERIFY_COMMAND_TOTAL_BYTES}-byte aggregate limit; consolidate or shorten the project verifier before task intake.`;
+  }
+  return undefined;
 }
 
 /** Return the last durably recorded observed execution for each exact command. */
@@ -312,5 +345,7 @@ export function selectVerificationPlan(profile, requestedGroup, changeMode, cwd,
       error: `Verify group ${group ?? "(none)"} has no meaningful command. Configure .pi/piagent-profile.json before source changes.`
     };
   }
+  const boundsError = verifierCommandBoundsError(commands);
+  if (boundsError) return { group, commands, error: boundsError };
   return { group, commands };
 }

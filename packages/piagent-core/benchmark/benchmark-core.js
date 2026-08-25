@@ -49,7 +49,7 @@ export { median } from "./benchmark-statistics.js";
 export { benchmarkSuiteValidationErrors, validateBenchmarkSuite } from "./benchmark-suite.js";
 export { aggregateSessionUsage, benchmarkTokenAccounting, createCodexExecJsonlCollector, parseCodexExecJsonl } from "./benchmark-usage.js";
 export { benchmarkPricingSnapshotValidationErrors, normalizeBenchmarkUsageCost } from "./benchmark-normalized-cost.js";
-export { CODEX_RELATIVE_EFFICIENCY_POLICY, evaluateCodexRelativeEfficiency } from "./benchmark-codex-relative-efficiency.js";
+export { CODEX_RELATIVE_EFFICIENCY_POLICY, PRODUCTION_SUBAGENT_BUDGET_POLICY, evaluateCodexRelativeEfficiency, summarizeBenchmarkSubagentBudget } from "./benchmark-codex-relative-efficiency.js";
 export { evaluateWorkflowEvidence } from "./benchmark-workflow.js";
 const SURFACE_LABELS = Object.freeze({
   "raw-pi": "Raw Pi",

@@ -22,6 +22,7 @@ import {
   createProductionStageControl,
   durablePairedOutcomeFloorStop,
   pendProductionStageControl,
+  productionGuardBindingMatches,
   productionStageResumeDisposition,
   productionStageResumeWindow
 } from "../packages/piagent-core/benchmark/benchmark-stage-diagnostic.js";
@@ -128,6 +129,7 @@ function stageDiagnosticRecord({ scenarioId = "first", surface, repeat = 1, reso
       ? { score: resolved ? 10 : 0, checks: [{ id: "terminal-completion", passed: resolved }] }
       : null,
     infrastructureRetries: 0,
+    infrastructureAttempts: 1,
     infrastructureFailures: [],
     durationSeconds: surface === "piagent" ? 0.5 : 1,
     providerWireEvidence,
@@ -141,6 +143,8 @@ function stageDiagnosticRecord({ scenarioId = "first", surface, repeat = 1, reso
       fresh: surface === "piagent" ? 60 : 110,
       total: surface === "piagent" ? 60 : 110,
       sessions: 1,
+      subagentSessions: 0,
+      subagentTokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, fresh: 0, total: 0 },
       usageCompleteness: "exact",
       model: "openai-codex/gpt-5.6-luna",
       thinkingLevel: "medium"
@@ -1575,8 +1579,8 @@ test("provider-free pause diagnostic blocks quality and continuity while keeping
   assert.equal(clean.timingDiagnostics.surfaces.piagent.validDiagnostics, 0);
   assert.equal(clean.spendFutilityReview.passed, true);
   assert.deepEqual(clean.decisionContract, {
-    blocking: "quality-model-parity-task-continuity-and-exact-usage-only",
-    finalOnly: ["fresh-token-reduction"],
+    blocking: "quality-model-parity-task-continuity-exact-usage-subagent-budget-and-partial-stage-catastrophic-fresh-spend",
+    finalOnly: ["0.60-upper95-fresh-token-reduction"],
     observational: ["normalized-api-equivalent-text-token-cost", "duration", "host-load"]
   });
 
@@ -1590,7 +1594,8 @@ test("provider-free pause diagnostic blocks quality and continuity while keeping
   assert.equal(inefficient.stageAdvanceAllowed, true,
     "an intermediate token, normalized-cost, or duration regression cannot reject a potentially passing final 108-session result");
   assert.deepEqual(inefficient.blockingReasons, []);
-  assert.equal(inefficient.spendFutilityReview.passed, false);
+  assert.equal(inefficient.spendFutilityReview.passed, true,
+    "before S12 the observed fresh regression remains final-only rather than a paid-stage stop");
   assert.equal(inefficient.spendFutilityReview.freshTokens.pairRegressions.length, 1);
   assert.equal(inefficient.spendFutilityReview.normalizedApiEquivalentTextTokenCost.pairRegressions.length, 1);
   assert.equal(inefficient.spendFutilityReview.duration.pairRegressions.length, 1);
@@ -1729,6 +1734,86 @@ test("provider-free pause diagnostic blocks quality and continuity while keeping
   assert.equal(integrityBlocked.stageAdvanceAllowed, false);
   assert.ok(integrityBlocked.quality.outcomeFloor.failures.some((item) => item.failures.includes("grader-integrity-failed")));
   assert.ok(integrityBlocked.quality.outcomeFloor.failures.some((item) => item.failures.includes("scope-safety-evidence-failed")));
+});
+
+test("production partial stages hard-stop catastrophic fresh spend and exact subagent overuse from S12 onward", () => {
+  const scenarios = Array.from({ length: 20 }, (_, index) => ({ id: `family-${index + 1}` }));
+  const fullOrder = scenarios.flatMap((scenario) => ["piagent", "codex-cli"].map((surface) => ({ scenario, surface, repeat: 1 })));
+  const guards = {
+    subagents: { required: true, maximumSessionsPerAttempt: 1, maximumTrafficShare: 0.05,
+      requireExactAllAttemptEvidence: true, requireExplainedSessionCount: true },
+    partialFreshSpend: { requiredFromCumulativeSessions: 12, maximumPooledFreshRatio: 1.1,
+      maximumObservedFamilyFreshRatio: 1.25, includeExactFailedAttempts: true },
+    providerFreeEvidence: { requiredBeforeFirstPaidSession: false }
+  };
+  const suite = { releaseGate: { minimumOutcomeScoreExclusive: 9.5, requireCausalContextReceipt: true } };
+  const exact = (scenario, surface) => {
+    const run = stageDiagnosticRecord({ scenarioId: scenario.id, surface });
+    run.usage.input = 90; run.usage.output = 10; run.usage.fresh = 100; run.usage.total = 100;
+    return run;
+  };
+  const input = { runId: "partial-spend", fullOrder, candidateSurface: "piagent", baselineSurface: "codex-cli",
+    requestedModel: "openai-codex/gpt-5.6-luna", requestedThinking: "medium", suite,
+    manifest: { stopAfterFailedPair: true, infrastructureRetries: 0, productionGuards: guards },
+    generatedAt: "2026-08-25T00:00:00.000Z" };
+
+  const s12Runs = scenarios.slice(0, 6).flatMap((scenario) => [exact(scenario, "piagent"), exact(scenario, "codex-cli")]);
+  const s12 = buildBenchmarkStageDiagnostic({ ...input, reason: "max-sessions:12", runs: s12Runs });
+  assert.equal(s12.stageAdvanceAllowed, true);
+  assert.equal(s12.spendFutilityReview.partialStageCatastrophicFreshSpend.required, true);
+  assert.equal(s12.spendFutilityReview.partialStageCatastrophicFreshSpend.pooledRatio, 1);
+
+  const familyCatastrophe = structuredClone(s12Runs);
+  const familyCandidate = familyCatastrophe.find((run) => run.surface === "piagent");
+  familyCandidate.usage.input = 116; familyCandidate.usage.fresh = 126; familyCandidate.usage.total = 126;
+  const familyBlocked = buildBenchmarkStageDiagnostic({ ...input, reason: "max-sessions:12", runs: familyCatastrophe });
+  assert.ok(familyBlocked.blockingReasons.includes("partial-stage-catastrophic-fresh-spend"));
+  assert.equal(familyBlocked.spendFutilityReview.partialStageCatastrophicFreshSpend.familyFailures.length, 1);
+
+  const s36Runs = scenarios.slice(0, 18).flatMap((scenario) => [exact(scenario, "piagent"), exact(scenario, "codex-cli")]);
+  for (const run of s36Runs.filter((item) => item.surface === "piagent")) {
+    run.usage.input = 101; run.usage.fresh = 111; run.usage.total = 111;
+  }
+  const s36 = buildBenchmarkStageDiagnostic({ ...input, reason: "max-sessions:36", runs: s36Runs });
+  assert.ok(s36.blockingReasons.includes("partial-stage-catastrophic-fresh-spend"), "S36 must not inherit an earlier S12 pass");
+  assert.ok(s36.spendFutilityReview.partialStageCatastrophicFreshSpend.pooledRatio > 1.1);
+  assert.equal(s36.spendFutilityReview.partialStageCatastrophicFreshSpend.familyFailures.length, 0);
+
+  const subagentRuns = structuredClone(s12Runs);
+  const childHeavy = subagentRuns.find((run) => run.surface === "piagent");
+  childHeavy.usage.sessions = 3; childHeavy.usage.subagentSessions = 2;
+  childHeavy.usage.subagentTokens = { input: 10, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, fresh: 10, total: 10 };
+  const subagentBlocked = buildBenchmarkStageDiagnostic({ ...input, reason: "max-sessions:12", runs: subagentRuns });
+  assert.ok(subagentBlocked.blockingReasons.includes("production-subagent-budget"));
+  assert.ok(subagentBlocked.spendFutilityReview.subagentBudget.failures.includes("subagent-session-budget"));
+
+  const failedAttemptRuns = structuredClone(s12Runs);
+  const retried = failedAttemptRuns.find((run) => run.surface === "piagent");
+  retried.infrastructureRetries = 1; retried.infrastructureAttempts = 2;
+  retried.infrastructureFailures = [{ usageStatus: "measured", usage: { ...retried.usage, input: 20, output: 0,
+    fresh: 20, total: 20, sessions: 1, subagentSessions: 0,
+    subagentTokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, fresh: 0, total: 0 } } }];
+  const withFailedAttempt = buildBenchmarkStageDiagnostic({ ...input, reason: "max-sessions:12", runs: failedAttemptRuns });
+  assert.equal(withFailedAttempt.spendFutilityReview.partialStageCatastrophicFreshSpend.candidateFresh, 620,
+    "the catastrophic ratio includes exact usage from failed started attempts");
+  assert.equal(withFailedAttempt.spendFutilityReview.subagentBudget.attempts, 7);
+});
+
+test("production resume guard binding rejects removed or weakened frozen guards", () => {
+  const spendControl = JSON.parse(fs.readFileSync(path.join(root, "benchmarks/production-v1/spend-control.v1.json"), "utf8"));
+  const manifest = { productionGuards: structuredClone(spendControl.productionGuards) };
+  assert.equal(productionGuardBindingMatches(manifest, spendControl), true);
+  const removed = structuredClone(manifest);
+  delete removed.productionGuards.subagents;
+  assert.equal(productionGuardBindingMatches(removed, spendControl), false);
+  const weakenedSubagents = structuredClone(manifest);
+  weakenedSubagents.productionGuards.subagents.maximumSessionsPerAttempt = 2;
+  weakenedSubagents.productionGuards.subagents.maximumTrafficShare = 0.5;
+  assert.equal(productionGuardBindingMatches(weakenedSubagents, spendControl), false);
+  const weakenedSpend = structuredClone(manifest);
+  weakenedSpend.productionGuards.partialFreshSpend.maximumPooledFreshRatio = 2;
+  weakenedSpend.productionGuards.partialFreshSpend.maximumObservedFamilyFreshRatio = 3;
+  assert.equal(productionGuardBindingMatches(weakenedSpend, spendControl), false);
 });
 
 test("host readiness is observational unless the suite explicitly requires it for the claim", async () => {
@@ -2095,6 +2180,13 @@ test("production resume recomputes and enforces the provider-free stage gate", (
   assert.equal(before.stageAdvanceAllowed, false);
   const pausedManifest = JSON.parse(fs.readFileSync(path.join(value.output, "run-manifest.json"), "utf8"));
   assert.equal(pausedManifest.stageControl.state, "review-pending");
+  fs.writeFileSync(path.join(value.output, "run-manifest.json"), `${JSON.stringify({ ...pausedManifest, productionGuards: {} }, null, 2)}\n`);
+  const guardTampered = spawnSync(process.execPath, [runner, "--resume", value.output, "--max-sessions", "2", "--yes"], {
+    cwd: root, encoding: "utf8", timeout: 60_000, env
+  });
+  assert.equal(guardTampered.status, 1, `${guardTampered.stdout}\n${guardTampered.stderr}`);
+  assert.match(guardTampered.stderr, /frozen production guard binding is missing or changed/);
+  fs.writeFileSync(path.join(value.output, "run-manifest.json"), `${JSON.stringify(pausedManifest, null, 2)}\n`);
   const pauseMarker = JSON.parse(fs.readFileSync(path.join(value.output, "paused.json"), "utf8"));
   assert.match(pauseMarker.resumeCommand, /--max-sessions 2 --yes$/);
   fs.rmSync(path.join(value.output, "paused.json"));

@@ -59,7 +59,8 @@ function publicCommandIdentity(value) {
 export function benchmarkPreflightReceipt({
   packageVersion, source, candidateProvenance, suite, suiteDigest,
   runtimeDependencies, runtimeCommands, environmentPolicy, configurationDigest,
-  rootSeedDigest, options, runtime, hostReadinessPolicyDigest = null, hostReadiness = null
+  rootSeedDigest, options, runtime, hostReadinessPolicyDigest = null, hostReadiness = null,
+  providerFreeEvidence = null
 }) {
   return {
     schemaVersion: 1,
@@ -89,6 +90,7 @@ export function benchmarkPreflightReceipt({
       stopAfterFailedPair: options.stopAfterFailedPair
     },
     ...(hostReadiness ? { hostReadiness } : {}),
+    ...(providerFreeEvidence ? { providerFreeEvidence } : {}),
     runtime: {
       gitVersion: runtime.gitVersion,
       piVersion: runtime.piVersion,

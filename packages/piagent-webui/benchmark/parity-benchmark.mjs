@@ -1,9 +1,16 @@
 #!/usr/bin/env node
+import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+const laneRoot = path.dirname(fileURLToPath(import.meta.url));
+const lane = JSON.parse(fs.readFileSync(path.join(laneRoot, "parity-lane.v1.json"), "utf8"));
+const argumentsList = process.argv.slice(2);
+const outputIndex = argumentsList.indexOf("--output");
+const outputPath = outputIndex >= 0 ? argumentsList[outputIndex + 1] : null;
+if (outputIndex >= 0 && !outputPath) throw new Error("--output requires a path");
 const node = process.execPath;
 const steps = [];
 
@@ -18,22 +25,14 @@ function run(name, command, args, options = {}) {
   return step;
 }
 
+let report;
 try {
-  run("contracts-and-runtime-parity", node, ["--test",
-    "tests/piagent-webui-runtime-command.test.mjs",
-    "tests/piagent-webui-session-hub-schema.test.mjs",
-    "tests/piagent-webui-session-command-admission.test.mjs",
-    "tests/piagent-webui-schema.test.mjs",
-    "tests/deep-logic-benchmark.test.mjs"]);
-  run("production-webui-build", "npm", ["--workspace", "@piagent/webui", "run", "build"]);
-  run("chromium-user-flows", "npm", ["run", "test:webui:e2e"]);
-  for (const profile of [
-    { name: "medium", files: 2_000, changed: 200 },
-    { name: "large", files: 10_000, changed: 1_000 },
-    { name: "stress", files: 20_000, changed: 2_000 }
-  ]) {
+  for (const group of lane.testGroups) run(group.name, node, ["--test", ...group.files]);
+  run("production-webui-build", lane.build[0], lane.build.slice(1));
+  run("chromium-user-flows", lane.browser[0], lane.browser.slice(1));
+  for (const profile of lane.performanceProfiles) {
     const step = run(`performance-${profile.name}`, node, ["packages/piagent-webui/benchmark/benchmark.mjs",
-      `--files=${profile.files}`, `--changed=${profile.changed}`, "--samples=7"], { allowFailure: true });
+      `--files=${profile.files}`, `--changed=${profile.changed}`, `--samples=${profile.samples}`], { allowFailure: true });
     try {
       step.metrics = JSON.parse(step.output);
       const gates = step.metrics.gates ?? {};
@@ -49,12 +48,17 @@ try {
     }
   }
 } catch (error) {
-  process.stderr.write(`${JSON.stringify({ schemaVersion: 1, benchmark: "webui-parity-v1", passed: false,
-    reason: error instanceof Error ? error.message : String(error), steps }, null, 2)}\n`);
+  report = { schemaVersion: 1, benchmark: lane.id, passed: false,
+    providerCalls: 0, modelTokens: 0, reason: error instanceof Error ? error.message : String(error), steps };
+  process.stderr.write(`${JSON.stringify(report, null, 2)}\n`);
   process.exitCode = 1;
 } finally {
-  if (!process.exitCode) process.stdout.write(`${JSON.stringify({ schemaVersion: 1, benchmark: "webui-parity-v1", passed: true,
+  if (!process.exitCode) report = { schemaVersion: 1, benchmark: lane.id, passed: true,
     providerCalls: 0, modelTokens: 0, performanceWarnings: steps.flatMap((step) => (step.warnings ?? []).map((warning) => `${step.name}:${warning}`)),
-    invariants: { workflowIngress: 10, runtimeControls: 32, browserFlows: "playwright-suite",
-      performanceProfiles: 3, deepModelScenariosValidated: 6 }, steps }, null, 2)}\n`);
+    invariants: lane.invariants, claimBoundary: lane.claimBoundary, steps };
+  if (outputPath && report) {
+    fs.mkdirSync(path.dirname(path.resolve(outputPath)), { recursive: true });
+    fs.writeFileSync(path.resolve(outputPath), `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
+  }
+  if (!process.exitCode) process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
 }

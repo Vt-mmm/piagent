@@ -10,6 +10,7 @@ import { codexModelName, codexThinkingEffort } from "../packages/piagent-core/be
 import { benchmarkEnvironment, benchmarkEnvironmentPolicy, comparisonSurfaces, createCodexRuntime, piagentTreatment } from "../packages/piagent-core/benchmark/benchmark-runtime.js";
 import { assertBenchmarkPiCredentialReady, assertBenchmarkPiCredentialWritebackPolicy, cleanupBenchmarkPiRuntimeHome, createBenchmarkPiRuntimeHome, resetBenchmarkPiRuntimeEphemeralState, withBenchmarkPiCredentialWriteback } from "../packages/piagent-core/benchmark/benchmark-pi-home.js";
 import { benchmarkPreflight, benchmarkPreflightReceipt } from "../packages/piagent-core/benchmark/benchmark-preflight.js";
+import { prepareProductionProviderFreeEvidence, productionProviderFreeEvidenceError } from "../packages/piagent-core/benchmark/benchmark-provider-free-evidence.js";
 import { applyBenchmarkExecutionDefaults } from "../packages/piagent-core/benchmark/benchmark-runner-policy.js";
 import {
   appendPrivateJsonl,
@@ -32,7 +33,7 @@ import {
   buildBenchmarkStageDiagnostic,
   createProductionStageControl,
   durablePairedOutcomeFloorStop,
-  productionSpendControlValidationErrors,
+  productionGuardBindingMatches, productionSpendControlValidationErrors,
   productionStageResumeDisposition
 } from "../packages/piagent-core/benchmark/benchmark-stage-diagnostic.js";
 import { loadBenchmarkAssuranceEvidence, loadBenchmarkSuite, resolveBenchmarkSuiteEntry, validateBenchmarkSuiteFiles } from "../packages/piagent-core/benchmark/benchmark-suite-runtime.js";
@@ -103,7 +104,6 @@ async function runLegacy(argv) {
   const result = await runCommand("bash", [path.join(packageRoot, "scripts", "quality-benchmark.sh"), ...argv], { cwd: process.cwd(), inherit: true });
   process.exitCode = result.code;
 }
-
 async function main() {
   const argv = process.argv.slice(2);
   if (isLegacyInvocation(argv)) return runLegacy(argv);
@@ -268,6 +268,7 @@ async function main() {
   if (resumeState) {
     const manifest = resumeState.manifest;
     if (manifest.suiteDigest !== suiteDigest) fail("Cannot resume benchmark: suite files changed since the original run", 1);
+    if (productionSpendControlled && !productionGuardBindingMatches(manifest, productionSpendControl)) fail("Cannot resume production benchmark: frozen production guard binding is missing or changed", 1);
     if (manifest.rootSeed !== rootSeed) fail("Cannot resume benchmark: root seed mismatch", 1);
     if (manifest.repeats !== options.repeats) fail("Cannot resume benchmark: repeat count mismatch", 1);
     if (!sameStringList(manifest.surfaces, options.surfaces)) fail("Cannot resume benchmark: surface list mismatch", 1);
@@ -528,6 +529,10 @@ async function main() {
     order: fullOrder.map((item) => ({ scenarioId: item.scenario.id, surface: item.surface, repeat: item.repeat }))
   };
   const configurationDigest = crypto.createHash("sha256").update(JSON.stringify(configuration)).digest("hex");
+  const source = bootstrapMetadata?.sourceIdentity;
+  if (!source) fail("Modern benchmark is missing its frozen Git source identity", 1);
+  const { receipt: providerFreeEvidence, binding: providerFreeEvidenceBinding } = await prepareProductionProviderFreeEvidence({
+    required: productionSpendControl?.productionGuards?.providerFreeEvidence?.requiredBeforeFirstPaidSession === true, packageRoot, bootstrapMetadata, candidateProvenance: candidateGuard.provenance, configurationDigest, runCommand, resumedReceipt: resumeState ? resumeState.manifest.providerFreeEvidence ?? null : undefined });
   piCommand = runtimeCommands.pi.resolvedPath;
   if (runtimeCommands.codex) codexCommand = runtimeCommands.codex.resolvedPath;
   if (resumeState && JSON.stringify(resumeState.manifest.runtimeCommands ?? null) !== JSON.stringify(runtimeCommands)) {
@@ -610,10 +615,8 @@ async function main() {
     }
   }
   assertHostReadinessStartReady();
-  const source = bootstrapMetadata?.sourceIdentity;
-  if (!source) fail("Modern benchmark is missing its frozen Git source identity", 1);
   if (options.preflightOnly) {
-    const receipt = benchmarkPreflightReceipt({ packageVersion: packageManifest.version, source, candidateProvenance: candidateGuard.report(), suite, suiteDigest, runtimeDependencies: bootstrapMetadata.runtimeDependencies, runtimeCommands, environmentPolicy, configurationDigest, rootSeedDigest, options, runtime, hostReadinessPolicyDigest: productionHostReadinessPolicyDigest, hostReadiness: hostReadinessReceipt });
+    const receipt = benchmarkPreflightReceipt({ packageVersion: packageManifest.version, source, candidateProvenance: candidateGuard.report(), suite, suiteDigest, runtimeDependencies: bootstrapMetadata.runtimeDependencies, runtimeCommands, environmentPolicy, configurationDigest, rootSeedDigest, options, runtime, hostReadinessPolicyDigest: productionHostReadinessPolicyDigest, hostReadiness: hostReadinessReceipt, providerFreeEvidence });
     process.stdout.write(options.json ? `${JSON.stringify(receipt, null, 2)}\n` : `${plan}${codexPlan}\nPREFLIGHT READY: no model session started.\n${JSON.stringify(receipt, null, 2)}\n`);
     return;
   }
@@ -676,6 +679,8 @@ async function main() {
     stopAfterFailedPair: options.stopAfterFailedPair,
     scenarioIds: options.scenarioIds ?? null,
     ...(productionSpendControlled ? {
+      productionGuards: productionSpendControl.productionGuards,
+      providerFreeEvidence,
       stageControl: createProductionStageControl({
         authorizedThroughRuns: productionStageBoundaries[0],
         generatedAt: startedAt
@@ -912,8 +917,11 @@ async function main() {
   }
   let finalizationReceipt;
   if (!interruptedSignal && !fatalRunError) {
+    if (productionSpendControl?.productionGuards?.providerFreeEvidence?.requiredBeforeFirstPaidSession === true) {
+      fatalRunError ??= productionProviderFreeEvidenceError(manifest.providerFreeEvidence, providerFreeEvidenceBinding, "final production provider-free evidence");
+    }
     finalizationReceipt = executionGuard.receipt("finalization", [piRuntimeHome]);
-    fatalRunError = finalizationReceipt.error;
+    fatalRunError ??= finalizationReceipt.error;
   }
   finalizeBenchmarkRun({
     assuranceEvidence, bootstrapMetadata, candidateGuard, canonicalProductionSuite,

@@ -6,8 +6,9 @@ export const CONTEXT_COMPACT_PERCENT = 70;
 export const CONTEXT_FRESH_PERCENT = 82;
 export const LONG_INPUT_CHARS = 8000;
 export const MAX_INLINE_COLLAPSED_TASK_CHARS = 2200;
-export const RUNTIME_INTAKE_MESSAGE_MAX_CHARS = 6_000;
-export const SEMANTIC_COMPACTION_MAX_CHARS = 8_000;
+export const RUNTIME_INTAKE_COMPACT_CHARS = 3_500;
+export const RUNTIME_INTAKE_MESSAGE_MAX_CHARS = 3_500;
+export const SEMANTIC_COMPACTION_MAX_CHARS = 12_000;
 export const CONTEXT_PACK_MAX_TOKENS = 900;
 
 // The host's default compaction reserve is primarily an overflow guard. Piagent's

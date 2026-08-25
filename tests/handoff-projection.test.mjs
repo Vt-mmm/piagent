@@ -5,6 +5,7 @@ import path from "node:path";
 import { describe, it } from "node:test";
 
 import { classifyVerificationFailure } from "../packages/piagent-core/extensions/verification-intelligence.js";
+import { operatorRequestDigest } from "../packages/piagent-core/extensions/task-state.js";
 import { recordCompletionAudit, recordVerificationCheckpoint } from "../packages/piagent-core/extensions/task-runtime-audit.js";
 import { taskJournalPaths } from "../packages/piagent-core/extensions/task-journal.js";
 import { workingTreeEvidenceDigest } from "../packages/piagent-core/extensions/task-lifecycle.js";
@@ -25,6 +26,7 @@ function context(cwd) {
 }
 
 function task() {
+  const operatorRequest = "PRIVATE_OPERATOR_REQUEST_SENTINEL: repair the bounded handoff fixture without exposing this source text.";
   return {
     ...structuredClone(taskFixture),
     taskId: "handoff-101",
@@ -32,6 +34,8 @@ function task() {
     sessionId: "private-session-id",
     sessionName: "HANDOFF-101",
     summary: "Repair the bounded handoff fixture.",
+    operatorRequest,
+    operatorRequestDigest: operatorRequestDigest(operatorRequest),
     expectedOutput: "The handoff can be resumed from operational evidence.",
     acceptanceCriteria: ["The exact verifier passes on the current tree."],
     scope: ["src/a.ts"],
@@ -93,6 +97,7 @@ describe("durable handoff projection v1", () => {
     assert.equal(serialized.includes("super-secret"), false);
     assert.equal(serialized.includes("[REDACTED_SECRET]"), true);
     assert.equal(serialized.includes("private-session-id"), false);
+    assert.equal(serialized.includes("PRIVATE_OPERATOR_REQUEST_SENTINEL"), false, "handoff projection must omit the private operator request");
   });
 
   it("writes owner-only state and reads it back", () => {

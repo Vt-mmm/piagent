@@ -19,7 +19,8 @@ const RELEASE_GATE_FIELDS = new Set([
   "maximumNormalizedCostRatioUpper95", "maximumBandNormalizedCostRatio", "maximumFamilyNormalizedCostRatio",
   "maximumInfrastructureRetries", "primaryEfficiencyEstimand", "requireEfficiencyClaim", "requireFullSuiteForClaim",
   "requireStableProviderWireSurface", "requireNormalizedCostClaim", "requireHostReadinessForClaim",
-  "requireCausalContextReceipt"
+  "requireCausalContextReceipt", "requireSubagentBudget", "maximumSubagentSessionsPerAttempt",
+  "maximumSubagentTrafficShare", "requireProviderFreeEvidence"
 ]);
 const EXECUTION_CONTRACT_FIELDS = new Set(["surfaces", "model", "thinking", "codexMode"]);
 const THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
@@ -162,6 +163,26 @@ export function benchmarkSuiteValidationErrors(input) {
       }
       if (input.releaseGate.requireCausalContextReceipt !== undefined && typeof input.releaseGate.requireCausalContextReceipt !== "boolean") {
         errors.push("releaseGate.requireCausalContextReceipt must be a boolean");
+      }
+      if (input.releaseGate.requireSubagentBudget !== undefined && typeof input.releaseGate.requireSubagentBudget !== "boolean") {
+        errors.push("releaseGate.requireSubagentBudget must be a boolean");
+      }
+      if (input.releaseGate.requireProviderFreeEvidence !== undefined && typeof input.releaseGate.requireProviderFreeEvidence !== "boolean") {
+        errors.push("releaseGate.requireProviderFreeEvidence must be a boolean");
+      }
+      const maximumSubagentSessions = input.releaseGate.maximumSubagentSessionsPerAttempt;
+      if (maximumSubagentSessions !== undefined
+        && (!Number.isSafeInteger(maximumSubagentSessions) || maximumSubagentSessions < 0 || maximumSubagentSessions > 10)) {
+        errors.push("releaseGate.maximumSubagentSessionsPerAttempt must be between 0 and 10");
+      }
+      const maximumSubagentTrafficShare = input.releaseGate.maximumSubagentTrafficShare;
+      if (maximumSubagentTrafficShare !== undefined
+        && (!Number.isFinite(maximumSubagentTrafficShare) || maximumSubagentTrafficShare < 0 || maximumSubagentTrafficShare > 1)) {
+        errors.push("releaseGate.maximumSubagentTrafficShare must be between 0 and 1");
+      }
+      if (input.releaseGate.requireSubagentBudget === true) {
+        if (maximumSubagentSessions === undefined) errors.push("releaseGate.maximumSubagentSessionsPerAttempt is required when requireSubagentBudget is true");
+        if (maximumSubagentTrafficShare === undefined) errors.push("releaseGate.maximumSubagentTrafficShare is required when requireSubagentBudget is true");
       }
     }
   }

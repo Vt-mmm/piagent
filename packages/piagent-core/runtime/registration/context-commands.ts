@@ -1,5 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { stageContextDelivery } from "../context/context-delivery.ts";
+import { semanticCompactionCancelled } from "../session/system-prompt.ts";
 
 type ExtensionContext = any;
 
@@ -236,6 +237,19 @@ export function registerContextCommands(pi: ExtensionAPI, deps: Record<string, a
   function compactCurrentSession(ctx: ExtensionContext): void {
     const sessionId = ctx.sessionManager.getSessionId();
     const instructions = semanticCompactionInstructions(ctx.cwd, sessionId);
+    if (semanticCompactionCancelled(instructions)) {
+      telemetry(ctx, {
+        event: "compaction_cancelled",
+        mode: "semantic",
+        reason: "lossless-task-truth-exceeds-carry-target",
+        hasTaskContract: Boolean(compactSessionTask(ctx.cwd, sessionId))
+      });
+      ctx.ui.notify("Piagent kept the current context because compacting it would lose required task details.", "warning");
+      emitRuntimeMessage(ctx, "piagent-context-compaction-cancelled", instructions, {
+        reason: "lossless-task-truth-exceeds-carry-target"
+      });
+      return;
+    }
     telemetry(ctx, {
       event: "compaction_requested",
       mode: "semantic",

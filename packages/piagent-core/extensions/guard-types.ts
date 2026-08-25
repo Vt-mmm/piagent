@@ -371,6 +371,8 @@ export type TaskContract = {
   maxAttempts: number;
   previousAttempts: TaskAttemptSummary[];
   summary: string;
+  operatorRequest?: string;
+  operatorRequestDigest?: string;
   riskLane: "tiny" | "normal" | "high-risk";
   intakeMode?: "model" | "runtime";
   expectedOutput: string;

@@ -3,6 +3,7 @@ import { exactFinalOutputGuidance } from "../quality/exact-output-contract.ts";
 import { taskPerformanceAssurance } from "../quality/performance-assurance.ts";
 import { automaticTaskSummary, boundedRuntimeIntakeMessage } from "../workflows/task-intake.ts";
 import { WORKING_TREE_DIGEST_ALGORITHM } from "../../extensions/working-tree-digest.js";
+import { TASK_ACCEPTANCE_CRITERIA_MAX, TASK_ACCEPTANCE_CRITERION_MAX_CHARS, TASK_EXPECTED_OUTPUT_MAX_CHARS, TASK_SUMMARY_MAX_CHARS, operatorRequestDigest } from "../../extensions/task-state.js";
 import { createEnvironmentBoundTaskAuthority } from "../policy/task-authority-runtime.ts";
 import { authorityReplacementState } from "../policy/authority-resume-policy.ts";
 import { compileCriterionGraph, criterionGraphContextSelection, criterionGraphContextSelectionDetails, criterionGraphGuidance, criterionGraphMode } from "../../extensions/criterion-graph.js";
@@ -10,7 +11,7 @@ import { captureTaskStartBaseline } from "../inspection/task-baseline-start-capt
 import { sameStringRecord, satisfiesAuthorityReplacement } from "./task-start-retry-helpers.ts";
 import { automaticTaskExecutionGuidance, EXACT_VERIFIER_EXECUTION_GUIDANCE, RUNTIME_SOURCE_REUSE_GUIDANCE, taskCriticalProofSection } from "./task-start-guidance.ts";
 import { resolveTaskStartRepositoryManifestProvider } from "./task-start-manifest.ts";
-type ExtensionContext = any; type TaskContract = any; type TaskStartParameters = any;
+type ExtensionContext = any; type TaskContract = any; type TaskStartParameters = Record<string, any> & { operatorRequest?: string }; function taskReferenceDetails(task: TaskContract, reasonCode: string): Record<string, unknown> { const scope = Array.isArray(task.scope) ? task.scope.slice(0, 50) : []; return { reasonCode, taskId: task.taskId, taskRunId: task.taskRunId, outcome: task.trace?.outcome, attempt: task.attempt, ...(reasonCode === "task-already-active" ? { scope, scopeTruncated: scope.length < task.scope.length } : {}) }; }
 export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any>): any {
   const {
     DEFAULT_MAX_TASK_ATTEMPTS, ORCHESTRATION_ROLES, REVIEW_LENSES, StringEnum, Type,
@@ -41,15 +42,15 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
     ],
     parameters: Type.Object({
       taskId: Type.Optional(Type.String({ minLength: 1 })),
-      summary: Type.String({ minLength: 10 }),
+      summary: Type.String({ minLength: 10, maxLength: TASK_SUMMARY_MAX_CHARS }),
       riskLane: StringEnum(["tiny", "normal", "high-risk"] as const),
       changeMode: Type.Optional(StringEnum(["source-change", "read-only"] as const, {
         description: "Use source-change for project verifier execution or edits; use read-only for bounded inspection."
       })),
       mutationPolicy: Type.Optional(StringEnum(["required", "forbidden"] as const, { description: "Required demands a final diff; forbidden allows exact verification, rejects source mutation, and requires a zero task delta." })),
       maxAttempts: Type.Optional(Type.Number({ minimum: 1, maximum: 10 })),
-      expectedOutput: Type.String({ minLength: 10 }),
-      acceptanceCriteria: Type.Array(Type.String({ minLength: 1 }), { minItems: 1, maxItems: 12 }),
+      expectedOutput: Type.String({ minLength: 10, maxLength: TASK_EXPECTED_OUTPUT_MAX_CHARS }),
+      acceptanceCriteria: Type.Array(Type.String({ minLength: 1, maxLength: TASK_ACCEPTANCE_CRITERION_MAX_CHARS }), { minItems: 1, maxItems: TASK_ACCEPTANCE_CRITERIA_MAX }),
       scope: Type.Array(Type.String({
         minLength: 1,
         description: "Advisory retrieval/review focus as a project-relative path or glob (for example src/file.ts, src/**, or test/**); source changes may follow repository evidence beyond it."
@@ -73,12 +74,10 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       _onUpdate: ((update: unknown) => void) | undefined,
       ctx: ExtensionContext
     ) {
-      const profile = loadProfileFromContext(ctx);
-      const createdAt = nowIso();
-      const safeSummary = redactText(params.summary);
+      const profile = loadProfileFromContext(ctx), createdAt = nowIso();
+      const safeSummary = redactText(params.summary), safeOperatorRequest = params.intakeMode === "runtime" && typeof params.operatorRequest === "string" ? redactText(params.operatorRequest) : undefined;
       const taskId = safeTaskId(redactText(params.taskId ?? params.summary));
-      const sessionId = ctx.sessionManager.getSessionId();
-      const sessionName = currentSessionName(ctx);
+      const sessionId = ctx.sessionManager.getSessionId(), sessionName = currentSessionName(ctx);
       const active = activeSessionTask(ctx.cwd, sessionId) as TaskContract | undefined;
       if (active && active.trace.outcome !== "pending" && runtimeState.taskIdentity(ctx)?.taskRunId === active.taskRunId) {
         runtimeState.clearTaskBoundary(ctx, active.taskRunId);
@@ -134,12 +133,12 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
           }
           return {
             content: [{ type: "text", text: `Task already active in this session: ${active.taskId} (${active.taskRunId}). Reusing it instead of overwriting state.` }],
-            details: compactTaskDetails(active)
+            details: taskReferenceDetails(active, "task-already-active")
           };
         }
         return {
           content: [{ type: "text", text: `Session already has pending task ${active.taskId} (${active.taskRunId}). Complete or stop it before starting another task in this conversation.` }],
-          details: active,
+          details: taskReferenceDetails(active, "session-task-already-pending"),
           isError: true
         };
       }
@@ -179,7 +178,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       if (pendingElsewhere) {
         return {
           content: [{ type: "text", text: `Task ${taskId} is already active in session ${pendingElsewhere.sessionName ?? pendingElsewhere.sessionId} (${pendingElsewhere.taskRunId}).` }],
-          details: pendingElsewhere,
+          details: taskReferenceDetails(pendingElsewhere, "task-active-in-another-session"),
           isError: true
         };
       }
@@ -187,7 +186,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       if (latestCompleted) {
         return {
           content: [{ type: "text", text: `Task ${taskId} already completed as ${latestCompleted.taskRunId}. Use a distinct taskId for new work instead of replacing its evidence.` }],
-          details: latestCompleted,
+          details: taskReferenceDetails(latestCompleted, "task-already-completed"),
           isError: true
         };
       }
@@ -250,11 +249,11 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       const workPlan = providedWorkPlan.length ? providedWorkPlan : defaultWorkPlan(safeSummary, defaultPlanLane, changeMode, mutationPolicy);
       const workPlanError = validateNewWorkPlan(workPlan);
       if (workPlanError) {
-        return { content: [{ type: "text", text: `Task start refused: ${workPlanError}.` }], details: workPlan, isError: true };
+        return { content: [{ type: "text", text: `Task start refused: ${workPlanError}.` }], details: { reasonCode: "invalid-work-plan" }, isError: true };
       }
       const firstReady = workPlan.find((step) => (step.dependsOn ?? []).length === 0);
       if (!firstReady) {
-        return { content: [{ type: "text", text: "Task start refused: work plan has no dependency-ready first step." }], details: workPlan, isError: true };
+        return { content: [{ type: "text", text: "Task start refused: work plan has no dependency-ready first step." }], details: { reasonCode: "work-plan-has-no-ready-step" }, isError: true };
       }
       firstReady.status = "in-progress";
       firstReady.updatedAt = createdAt;
@@ -302,6 +301,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
         maxAttempts,
         previousAttempts: priorAttempts.filter((task) => task.trace.outcome !== "pending").slice(0, 10).reverse().map(summarizeAttempt),
         summary: safeSummary,
+        ...(safeOperatorRequest ? { operatorRequest: safeOperatorRequest, operatorRequestDigest: operatorRequestDigest(safeOperatorRequest) } : {}),
         riskLane: params.riskLane,
         intakeMode: params.intakeMode === "runtime" ? "runtime" : "model",
         expectedOutput: redactText(params.expectedOutput),
@@ -348,11 +348,11 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
         ? acceptanceBaselineGuidance(written, { cwd: ctx.cwd })
         : [];
       const exactOutputGuidance = mutationPolicy === "forbidden"
-        ? exactFinalOutputGuidance(written.summary)
+        ? exactFinalOutputGuidance(written)
         : [];
       const criticalProof = taskCriticalProofSection(
-        written, plannedContext, projectFiles, acceptanceProofGuidance, isAcceptanceTestPath, acceptanceLanguageAdapterForPath
-      );
+        written, plannedContext, projectFiles, acceptanceProofGuidance, isAcceptanceTestPath, acceptanceLanguageAdapterForPath,
+        taskPerformanceAssurance(written).requiresReview);
       bindSessionTask(ctx.cwd, sessionId, sessionName, written);
       runtimeState.cacheTaskIdentity(ctx, written);
       if (written.intakeMode !== "runtime") {
@@ -430,7 +430,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       `runtime-intake-${ctx.sessionManager.getSessionId()}`,
       {
         taskId: active && active.trace.outcome !== "pending" ? summary : hasOperatorSessionName(sessionName) ? sessionName : summary,
-        summary,
+        summary, operatorRequest: prompt,
         riskLane: automaticTaskRiskLane(prompt),
         intakeMode: "runtime",
         changeMode: intakeMode,
@@ -468,9 +468,10 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
     const baselineGuidance = task.changeMode === "source-change" && task.mutationPolicy !== "forbidden"
       ? acceptanceBaselineGuidance(task, { cwd: ctx.cwd })
       : [];
-    const exactOutputGuidance = task.changeMode === "read-only" || task.mutationPolicy === "forbidden" ? exactFinalOutputGuidance(task.summary) : [];
+    const exactOutputGuidance = task.changeMode === "read-only" || task.mutationPolicy === "forbidden" ? exactFinalOutputGuidance(task) : [];
     const criticalProof = taskCriticalProofSection(
-      task, plannedContext, projectFiles, acceptanceProofGuidance, isAcceptanceTestPath, acceptanceLanguageAdapterForPath
+      task, plannedContext, projectFiles, acceptanceProofGuidance, isAcceptanceTestPath, acceptanceLanguageAdapterForPath,
+      assurance.requiresReview
     );
     return {
       started: true,

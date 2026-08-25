@@ -8,14 +8,23 @@ import { describe, it } from "node:test";
 import { recordVerificationCheckpoint } from "../packages/piagent-core/extensions/task-runtime-audit.js";
 import { hashEvidenceCommand } from "../packages/piagent-core/extensions/runtime-evidence.js";
 import { readTaskJournal, replayTaskCheckpoints, taskJournalPaths } from "../packages/piagent-core/extensions/task-journal.js";
-import { workingTreeSnapshot } from "../packages/piagent-core/extensions/task-state.js";
+import { operatorRequestDigest, workingTreeSnapshot } from "../packages/piagent-core/extensions/task-state.js";
 import { compileCriterionGraph } from "../packages/piagent-core/extensions/criterion-graph.js";
 import { workingTreeEvidenceDigest } from "../packages/piagent-core/extensions/task-lifecycle.js";
-import { RESUME_CONTEXT_MAX_CHARS, buildTaskResumeContext, inspectTaskResumeState } from "../packages/piagent-core/runtime/recovery/resume-state.ts";
+import {
+  LEGACY_TASK_TRUTH_OVERFLOW_MARKER,
+  RESUME_CONTEXT_LOSSLESS_MAX_CHARS,
+  RESUME_CONTEXT_LOSSLESS_OVERFLOW_MARKER,
+  RESUME_CONTEXT_MAX_CHARS,
+  buildTaskResumeContext,
+  inspectTaskResumeState,
+  legacyTaskResumeTruthChars
+} from "../packages/piagent-core/runtime/recovery/resume-state.ts";
 import { createBoundTaskAuthority } from "../packages/piagent-core/runtime/policy/task-authority-runtime.ts";
 import { createTrajectoryState, createTrajectoryTransition, reduceTrajectory } from "../packages/piagent-core/runtime/trajectory/trajectory-state.ts";
 import { writeTrajectoryState } from "../packages/piagent-core/runtime/trajectory/trajectory-store.ts";
 import { captureVerifierFileSnapshot } from "../packages/piagent-core/runtime/inspection/verifier-snapshot-store.ts";
+import { automaticAcceptanceCriteria, automaticTaskSummary } from "../packages/piagent-core/runtime/workflows/task-intake.ts";
 
 const fixture = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, "../evals/fixtures/task-contract.valid.json"), "utf8"));
 
@@ -130,6 +139,7 @@ describe("safe task resume state", () => {
     assert.equal(resume.reconstruction.nextAction.stepId, "implement");
     assert.equal(projection.customType, "piagent-runtime-task-resume");
     assert.ok(projection.content.length <= RESUME_CONTEXT_MAX_CHARS, projection.content.length);
+    assert.equal(projection.details.losslessOverflow, false);
     assert.match(projection.content, /Piagent durable task resume/);
     assert.match(projection.content, /Task: resume-101 \(resume-101-run-1\)/);
     assert.match(projection.content, /plan: done/);
@@ -140,6 +150,144 @@ describe("safe task resume state", () => {
     assert.match(projection.content, /Next safe action: continue-plan \(implement\)/);
     assert.doesNotMatch(projection.content, /session-resume/);
     assert.deepEqual(projection.details.nextAction, resume.reconstruction.nextAction);
+  });
+
+  it("restores authoritative clauses omitted from the summary and selected criteria", () => {
+    const cwd = workspace();
+    const cases = [
+      ["concurrent-lease-lifecycle.md", "calls `operation(renew)` with a bare `renew(now)` callback"],
+      ["durable-session-control-plane.md", "The stored receipt contains exactly `idempotencyKey`"]
+    ];
+    for (const [file, omittedClause] of cases) {
+      const operatorRequest = fs.readFileSync(path.resolve(import.meta.dirname, "../benchmarks/capability-v1/prompts", file), "utf8");
+      const current = task();
+      current.summary = automaticTaskSummary(operatorRequest);
+      current.acceptanceCriteria = automaticAcceptanceCriteria(operatorRequest);
+      current.operatorRequest = operatorRequest;
+      current.operatorRequestDigest = operatorRequestDigest(operatorRequest);
+      current.criterionGraph = compileCriterionGraph({
+        acceptanceCriteria: current.acceptanceCriteria, scope: current.scope, verifyCommands: current.verifyCommands,
+        changeMode: current.changeMode, mode: "criterion-graph", createdAt: current.createdAt
+      });
+      const projection = buildTaskResumeContext(current, inspectTaskResumeState(cwd, current, current.sessionId));
+      const escaped = omittedClause.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      assert.doesNotMatch([current.summary, ...current.acceptanceCriteria].join("\n"), new RegExp(escaped));
+      assert.ok(projection.content.length <= RESUME_CONTEXT_MAX_CHARS, `${file}: ${projection.content.length}`);
+      assert.match(projection.content, /Authoritative operator request \(redacted, lossless\): operator-request-v1:/);
+      assert.match(projection.content, new RegExp(escaped));
+    }
+  });
+
+  it("retains maximum astral Unicode operator truth and exact verifiers within the resume cap", () => {
+    const cwd = workspace();
+    const criticalMiddle = "RESUME_MIDDLE_CLAUSE remains mandatory after process restart.";
+    const criticalTail = "RESUME_FINAL_CLAUSE remains mandatory at handoff.";
+    const operatorRequest = `${"🧠".repeat(3_900)}${criticalMiddle}${"🧩".repeat(4_100 - Array.from(criticalMiddle + criticalTail).length)}${criticalTail}`;
+    const prefixOne = "node -e '0' # ", prefixTwo = "npm test -- # ";
+    const verifier = (prefix, glyph) => {
+      const remaining = 900 - Buffer.byteLength(prefix, "utf8"), glyphBytes = Buffer.byteLength(glyph, "utf8");
+      const repeated = glyph.repeat(Math.floor(remaining / glyphBytes));
+      return `${prefix}${repeated}${"x".repeat(remaining - Buffer.byteLength(repeated, "utf8"))}`;
+    };
+    const verifierOne = verifier(prefixOne, "🧪");
+    const verifierTwo = verifier(prefixTwo, "🚀");
+    const current = task();
+    current.summary = "Resume the maximum Unicode task without weakening its operator contract.";
+    current.operatorRequest = operatorRequest;
+    current.operatorRequestDigest = operatorRequestDigest(operatorRequest);
+    current.acceptanceCriteria = [criticalMiddle, criticalTail];
+    current.verifyCommands = [verifierOne, verifierTwo];
+    current.criterionGraph = compileCriterionGraph({
+      acceptanceCriteria: current.acceptanceCriteria, scope: current.scope, verifyCommands: current.verifyCommands,
+      changeMode: current.changeMode, mode: "criterion-graph", createdAt: current.createdAt
+    });
+    const projection = buildTaskResumeContext(current, inspectTaskResumeState(cwd, current, current.sessionId));
+    assert.equal(Array.from(operatorRequest).length, 8_000);
+    assert.ok(projection.content.length > RESUME_CONTEXT_MAX_CHARS, projection.content.length);
+    assert.ok(projection.content.length <= RESUME_CONTEXT_LOSSLESS_MAX_CHARS, projection.content.length);
+    assert.equal(projection.content.includes(RESUME_CONTEXT_LOSSLESS_OVERFLOW_MARKER), true);
+    assert.equal(projection.details.losslessOverflow, true);
+    assert.equal(projection.content.includes(operatorRequest), true, "resume must retain the complete validated operator request");
+    assert.equal(projection.content.includes(verifierOne), true, "resume must retain exact verifier one literally");
+    assert.equal(projection.content.includes(verifierTwo), true, "resume must retain exact verifier two literally");
+    assert.match(projection.content, /RESUME_MIDDLE_CLAUSE/);
+    assert.match(projection.content, /RESUME_FINAL_CLAUSE/);
+  });
+
+  it("uses an explicit lossless overflow for bounded model-authored task truth", () => {
+    const cwd = workspace();
+    const current = task();
+    current.operatorRequest = undefined;
+    current.operatorRequestDigest = undefined;
+    current.summary = `${"🧠".repeat(2_000 - "MANUAL_SUMMARY_TAIL".length)}MANUAL_SUMMARY_TAIL`;
+    current.expectedOutput = `${"🧩".repeat(2_000 - "MANUAL_OUTPUT_TAIL".length)}MANUAL_OUTPUT_TAIL`;
+    current.acceptanceCriteria = Array.from({ length: 12 }, (_item, index) => (
+      `${"🚀".repeat(1_000 - `MANUAL_CRITERION_TAIL_${index + 1}`.length)}MANUAL_CRITERION_TAIL_${index + 1}`
+    ));
+    current.criterionGraph = compileCriterionGraph({
+      acceptanceCriteria: current.acceptanceCriteria, scope: current.scope, verifyCommands: current.verifyCommands,
+      changeMode: current.changeMode, mode: "criterion-graph", createdAt: current.createdAt
+    });
+    const projection = buildTaskResumeContext(current, inspectTaskResumeState(cwd, current, current.sessionId));
+    assert.equal(Array.from(current.summary).length, 2_000);
+    assert.equal(Array.from(current.expectedOutput).length, 2_000);
+    assert.equal(current.acceptanceCriteria.every((criterion) => Array.from(criterion).length === 1_000), true);
+    assert.ok(projection.content.length > RESUME_CONTEXT_MAX_CHARS, projection.content.length);
+    assert.ok(projection.content.length <= RESUME_CONTEXT_LOSSLESS_MAX_CHARS, projection.content.length);
+    assert.equal(projection.content.includes(RESUME_CONTEXT_LOSSLESS_OVERFLOW_MARKER), true);
+    assert.match(projection.content, /MANUAL_SUMMARY_TAIL/);
+    assert.match(projection.content, /MANUAL_OUTPUT_TAIL/);
+    for (let index = 1; index <= 12; index += 1) assert.match(projection.content, new RegExp(`MANUAL_CRITERION_TAIL_${index}`));
+  });
+
+  it("resumes legacy truth at the exact lossless ceiling and blocks one character above it", () => {
+    const cwd = workspace();
+    const atBoundary = task();
+    delete atBoundary.operatorRequest;
+    delete atBoundary.operatorRequestDigest;
+    const padding = RESUME_CONTEXT_LOSSLESS_MAX_CHARS - legacyTaskResumeTruthChars(atBoundary);
+    assert.ok(padding > 0);
+    atBoundary.summary += `${"b".repeat(padding - "LEGACY_BOUNDARY_TAIL".length)}LEGACY_BOUNDARY_TAIL`;
+    assert.equal(legacyTaskResumeTruthChars(atBoundary), RESUME_CONTEXT_LOSSLESS_MAX_CHARS);
+    const boundaryResume = inspectTaskResumeState(cwd, atBoundary, atBoundary.sessionId);
+    const boundaryProjection = buildTaskResumeContext(atBoundary, boundaryResume);
+    assert.equal(boundaryResume.enforcementSafe, true);
+    assert.equal(boundaryResume.decision, "resume");
+    assert.equal(boundaryProjection.content.length, RESUME_CONTEXT_LOSSLESS_MAX_CHARS);
+    assert.match(boundaryProjection.content, /LEGACY_BOUNDARY_TAIL/);
+    assert.equal(boundaryProjection.details.legacyTaskTruthOverflow, undefined);
+
+    const aboveBoundary = structuredClone(atBoundary);
+    aboveBoundary.summary += "x";
+    assert.equal(legacyTaskResumeTruthChars(aboveBoundary), RESUME_CONTEXT_LOSSLESS_MAX_CHARS + 1);
+    const blockedResume = inspectTaskResumeState(cwd, aboveBoundary, aboveBoundary.sessionId);
+    const blockedProjection = buildTaskResumeContext(aboveBoundary, blockedResume);
+    assert.equal(blockedResume.enforcementSafe, false);
+    assert.equal(blockedResume.decision, "blocked");
+    assert.equal(blockedResume.reconstruction.nextAction.action, "inspect-handoff");
+    assert.match(blockedResume.reason, /legacy-task-truth-overflow/);
+    assert.equal(blockedProjection.content.includes(LEGACY_TASK_TRUTH_OVERFLOW_MARKER), true);
+    assert.ok(blockedProjection.content.length < 1_000, blockedProjection.content.length);
+    assert.equal(blockedProjection.details.legacyTaskTruthOverflow, true);
+    assert.doesNotMatch(blockedProjection.content, /LEGACY_BOUNDARY_TAIL/);
+  });
+
+  it("keeps a 100k legacy task private and blocks automatic resume without token-heavy injection", () => {
+    const cwd = workspace();
+    const current = task();
+    delete current.operatorRequest;
+    delete current.operatorRequestDigest;
+    current.summary = `LEGACY_100K_PRIVATE_SENTINEL ${"x".repeat(100_000)}`;
+    const resume = inspectTaskResumeState(cwd, current, current.sessionId);
+    const projection = buildTaskResumeContext(current, resume);
+    assert.equal(resume.decision, "blocked");
+    assert.equal(resume.enforcementSafe, false);
+    assert.ok(projection.content.length < 1_000, projection.content.length);
+    assert.match(projection.content, /legacy-task-truth-overflow/);
+    assert.match(projection.content, /re-intake the original request|compact handoff/);
+    assert.doesNotMatch(projection.content, /LEGACY_100K_PRIVATE_SENTINEL/);
+    assert.doesNotMatch(JSON.stringify(projection.details), /LEGACY_100K_PRIVATE_SENTINEL/);
+    assert.doesNotMatch(projection.content, /\.pi\/piagent-state/);
   });
 
   it("hides the legacy runtime-scope criterion from resume presentation without rewriting durable task state", () => {

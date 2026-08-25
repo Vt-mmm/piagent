@@ -9,6 +9,9 @@ import { readTrajectoryStore } from "../trajectory/trajectory-store.ts";
 
 type TaskContract = any;
 
+function taskErrorDetails(task: TaskContract, reasonCode: string): Record<string, unknown> {
+  return { reasonCode, taskId: task.taskId, taskRunId: task.taskRunId, outcome: task.trace?.outcome, attempt: task.attempt };
+}
 
 export function registerTaskCompletionTools(pi: ExtensionAPI, deps: Record<string, any>): void {
   const {
@@ -41,7 +44,7 @@ export function registerTaskCompletionTools(pi: ExtensionAPI, deps: Record<strin
         return { content: [{ type: "text", text: `Task not found: ${params.taskId}` }], isError: true };
       }
       if (task.trace.outcome !== "pending") {
-        return { content: [{ type: "text", text: `Task ${task.taskId} is immutable after ${task.trace.outcome}; context evidence was not changed.` }], details: task, isError: true };
+        return { content: [{ type: "text", text: `Task ${task.taskId} is immutable after ${task.trace.outcome}; context evidence was not changed.` }], details: taskErrorDetails(task, "task-immutable"), isError: true };
       }
       const activeIdentity = runtimeState.taskIdentity(ctx);
       if (!activeIdentity || activeIdentity.taskId !== task.taskId || activeIdentity.taskRunId !== task.taskRunId) {
@@ -127,7 +130,7 @@ export function registerTaskCompletionTools(pi: ExtensionAPI, deps: Record<strin
         return { content: [{ type: "text", text: `Task not found: ${params.taskId}` }], isError: true };
       }
       if (task.trace.outcome !== "pending") {
-        return { content: [{ type: "text", text: `Task ${task.taskId} is immutable after ${task.trace.outcome}; verify evidence was not changed.` }], details: task, isError: true };
+        return { content: [{ type: "text", text: `Task ${task.taskId} is immutable after ${task.trace.outcome}; verify evidence was not changed.` }], details: taskErrorDetails(task, "task-immutable"), isError: true };
       }
 
       const observedEntries = [
@@ -239,7 +242,7 @@ export function registerTaskCompletionTools(pi: ExtensionAPI, deps: Record<strin
         return { content: [{ type: "text", text: `Task not found: ${params.taskId}` }], isError: true };
       }
       if (task.trace.outcome !== "pending") {
-        return { content: [{ type: "text", text: `Task ${task.taskId} is immutable after ${task.trace.outcome}; memory evidence was not changed.` }], details: task, isError: true };
+        return { content: [{ type: "text", text: `Task ${task.taskId} is immutable after ${task.trace.outcome}; memory evidence was not changed.` }], details: taskErrorDetails(task, "task-immutable"), isError: true };
       }
 
       const safeFiles = params.files.map((file) => ({
@@ -257,7 +260,7 @@ export function registerTaskCompletionTools(pi: ExtensionAPI, deps: Record<strin
 
       return {
         content: [{ type: "text", text: `Memory citations recorded for ${task.taskId}: ${params.files.length} file(s)` }],
-        details: task
+        details: compactTaskDetails(task)
       };
     }
   });
@@ -284,13 +287,13 @@ export function registerTaskCompletionTools(pi: ExtensionAPI, deps: Record<strin
         return { content: [{ type: "text", text: `Task not found: ${params.taskId}` }], isError: true };
       }
       if (task.trace.outcome !== "pending") {
-        return { content: [{ type: "text", text: `Task ${task.taskId} is immutable after ${task.trace.outcome}; its final trace was not replaced.` }], details: task, isError: true };
+        return { content: [{ type: "text", text: `Task ${task.taskId} is immutable after ${task.trace.outcome}; its final trace was not replaced.` }], details: taskErrorDetails(task, "task-immutable"), isError: true };
       }
       if (params.outcome !== "completed" && !params.friction?.trim() && !task.failureReason?.trim()) {
-        return { content: [{ type: "text", text: `Trace ${params.outcome} requires a concrete friction/reason so the next attempt does not repeat the same work.` }], details: task, isError: true };
+        return { content: [{ type: "text", text: `Trace ${params.outcome} requires a concrete friction/reason so the next attempt does not repeat the same work.` }], details: taskErrorDetails(task, "trace-friction-required"), isError: true };
       }
       if (params.outcome === "failed" && !params.failedAt && !task.failedAt) {
-        return { content: [{ type: "text", text: "A failed trace requires failedAt to identify the lifecycle phase." }], details: task, isError: true };
+        return { content: [{ type: "text", text: "A failed trace requires failedAt to identify the lifecycle phase." }], details: taskErrorDetails(task, "trace-failure-phase-required"), isError: true };
       }
 
       const rawChangedFiles = params.changedFiles ?? task.changedFiles;
@@ -363,7 +366,7 @@ export function registerTaskCompletionTools(pi: ExtensionAPI, deps: Record<strin
               ...verifierCommandInstructions(gate.missingVerifyCommands)
             ].join("\n")
           }],
-          details: { gate, task: nextTask },
+          details: { gate, task: taskErrorDetails(nextTask, "completion-gate-blocked") },
           isError: true
         };
       }
@@ -426,7 +429,7 @@ export function registerTaskCompletionTools(pi: ExtensionAPI, deps: Record<strin
 
       return {
         content: [{ type: "text", text: `Trace recorded for ${nextTask.taskId}: ${params.outcome}${gate.decision === "fail" ? ` (gate warning: missing ${gate.missing.join(", ")})` : ""}` }],
-        details: { task: written, gate, completionReceipt: buildCompletionReceiptView(written, { cwd: ctx.cwd, gate }) }
+        details: { task: compactTaskDetails(written), gate, completionReceipt: buildCompletionReceiptView(written, { cwd: ctx.cwd, gate }) }
       };
     }
   });

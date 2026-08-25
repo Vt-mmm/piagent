@@ -21,6 +21,7 @@ import {
 import { applyBenchmarkClaimRestrictions } from "../packages/piagent-core/benchmark/benchmark-claim-restrictions.js";
 import { taskWorkingTreeEvidenceDigest } from "../packages/piagent-core/benchmark/benchmark-tree-identity.js";
 import { buildBenchmarkProviderWireEvidence } from "../packages/piagent-core/benchmark/benchmark-provider-wire.js";
+import { productionProviderFreeEvidenceBinding } from "../packages/piagent-core/benchmark/benchmark-provider-free-evidence.js";
 import { versionWorkingTreeHash } from "../packages/piagent-core/extensions/working-tree-digest.js";
 import { workingTreeEvidenceDigest } from "../packages/piagent-core/extensions/task-lifecycle.js";
 import { createBoundTaskAuthority } from "../packages/piagent-core/runtime/policy/task-authority-runtime.ts";
@@ -29,6 +30,38 @@ const suite = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, "../b
 const productionSuite = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, "../benchmarks/production-v1/suite.json"), "utf8"));
 const privateAssuranceEvidence = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, "../evals/fixtures/benchmark-assurance-evidence.valid.json"), "utf8"));
 const treeDigest = (value) => versionWorkingTreeHash(value.repeat(64));
+const productionSource = { kind: "git-working-tree", commit: "a".repeat(40), dirty: false };
+const productionConfigurationDigest = "d".repeat(64);
+const productionCandidateProvenance = { algorithm: "benchmark-candidate-index-v1", contentDigest: "e".repeat(64) };
+function signedTestReceipt(value) {
+  const copy = structuredClone(value);
+  delete copy.digest;
+  return { ...value, digest: crypto.createHash("sha256").update(JSON.stringify(copy)).digest("hex") };
+}
+function productionProviderFreeEvidence() {
+  const binding = productionProviderFreeEvidenceBinding({
+    packageRoot: path.resolve(import.meta.dirname, ".."),
+    source: productionSource,
+    candidateProvenance: productionCandidateProvenance,
+    configurationDigest: productionConfigurationDigest
+  });
+  const summaries = {
+    "runtime-conformance-v1": { passed: true, configuredCases: 1, executedCases: 1, failedCases: 0, gates: { runtime: true } },
+    "long-horizon-v1": { evidenceClass: "provider-free-long-horizon", wallClockQualified: true, completedFromResume: true, contextWithinCeiling: true, stateGrowthWithinCeiling: true, continuationEnforcementSafe: true, stableCurrentTree: true },
+    "webui-parity-v1": { benchmark: "webui-parity-v1", passed: true, uiStability: "deterministic-current-state", uiStabilitySuites: 7, deterministicStabilityStepPassed: true }
+  };
+  return signedTestReceipt({
+    schemaVersion: 1,
+    kind: "production-provider-free-evidence-v1",
+    completedAt: new Date().toISOString(),
+    binding,
+    lanes: binding.lanes.map((lane) => ({
+      schemaVersion: 1, id: lane.id, passed: true, providerUsed: false, providerCalls: 0, modelTokens: 0,
+      configurationDigest: lane.configurationDigest, runnerDigest: lane.runnerDigest,
+      resultDigest: "f".repeat(64), summary: summaries[lane.id]
+    }))
+  });
+}
 function workflowTree(files = ["src/a.js"], value = "a") {
   const finalFileDigests = Object.fromEntries(files.map((file) => [file, treeDigest(value)]));
   return {
@@ -81,6 +114,7 @@ test("validates production schema metadata and generated scenario controls", () 
   invalid.releaseGate.requireFullSuiteForClaim = "yes";
   invalid.releaseGate.requireStableProviderWireSurface = "yes";
   invalid.releaseGate.requireNormalizedCostClaim = "yes";
+  invalid.releaseGate.requireProviderFreeEvidence = "yes";
   invalid.pricingSnapshot.longContext.condition = "aggregate-run-greater-than";
   invalid.releaseGate.primaryEfficiencyEstimand = "post-hoc-best-result";
   invalid.releaseGate.minimumOutcomeScoreExclusive = 10;
@@ -101,6 +135,7 @@ test("validates production schema metadata and generated scenario controls", () 
   assert.match(errors, /requireFullSuiteForClaim/);
   assert.match(errors, /requireStableProviderWireSurface/);
   assert.match(errors, /requireNormalizedCostClaim/);
+  assert.match(errors, /requireProviderFreeEvidence/);
   assert.match(errors, /per-request-input-greater-than/);
   assert.match(errors, /primaryEfficiencyEstimand/);
   assert.match(errors, /minimumOutcomeScoreExclusive/);
@@ -758,7 +793,10 @@ function productionEnvironment(overrides = {}) {
     codexIsolation: "per-session-temporary-home",
     codexGlobalInstructions: "excluded",
     comparisonAccessContract: "paired-workspace-write-offline-surface-system",
-    source: { kind: "git-working-tree", commit: "a".repeat(40), dirty: false },
+    source: productionSource,
+    candidateProvenance: productionCandidateProvenance,
+    configurationDigest: productionConfigurationDigest,
+    providerFreeEvidence: productionProviderFreeEvidence(),
     suiteCoverage: { declaredScenarios: 18, selectedScenarios: 18, fullSuite: true },
     hostReadinessHistory: {
       schemaVersion: 1,
@@ -1246,6 +1284,9 @@ test("production release gate uses independent scenario families and the upper 9
   assert.equal(report.comparison.pairedCompleteScenarios, 3);
   assert.deepEqual(report.comparison.freshTokenRatioConfidence95, { lower: 0.6, upper: 0.6, sampleUnit: "scenario-family", scenarioCount: 3 });
   assert.equal(report.comparison.efficiencyConfidenceGate, true);
+  assert.equal(report.comparison.productionSubagentBudgetGate, true);
+  assert.equal(report.comparison.productionProviderFreeEvidenceGate, true);
+  assert.equal(report.comparison.adaptiveContextRuntimeGate, true);
   assert.deepEqual(report.comparison.durationRatioConfidence95, { lower: 1, upper: 1, sampleUnit: "scenario-family", scenarioCount: 3 });
   assert.equal(report.comparison.performancePointEstimateGate, null);
   assert.equal(report.comparison.performanceConfidenceGate, null);
@@ -1674,6 +1715,48 @@ test("production release gate uses independent scenario families and the upper 9
   assert.equal(incomplete.comparison.efficiencyEvidenceGate, false);
   assert.equal(incomplete.comparison.candidateTaskContinuityGate, false);
   assert.ok(incomplete.comparison.productionGate.failures.includes("candidate-task-continuity"));
+});
+
+test("production subagent and same-source runtime evidence hard-gate claims independently from normalized cost", () => {
+  const scenarios = productionSuite.scenarios.slice(0, 3);
+  const testSuite = { ...productionSuite, scenarios,
+    releaseGate: { ...productionSuite.releaseGate, minimumPairedScenarios: 3, minimumComparableEfficiencyScenarios: 3 } };
+  const runs = [];
+  for (let repeat = 1; repeat <= 3; repeat += 1) for (const scenario of scenarios) {
+    runs.push(runRecord(scenario, "codex-cli", repeat, 100), runRecord(scenario, "piagent", repeat, 50));
+  }
+  const childTraffic = structuredClone(runs);
+  const child = childTraffic.find((run) => run.surface === "piagent");
+  child.usage.sessions = 2;
+  child.usage.subagentSessions = 1;
+  child.usage.subagentTokens = { input: 30, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, fresh: 30, total: 30 };
+  const budgetBlocked = summarizeProductionBenchmark({ suite: testSuite, runId: "production-child-budget", startedAt: "2026-08-01T00:00:00.000Z",
+    completedAt: "2026-08-01T00:01:00.000Z", repeats: 3, environment: productionEnvironment(), runs: childTraffic });
+  assert.equal(budgetBlocked.comparison.codexRelativeEfficiencyGate, null, "normalized cost is not the production claim gate");
+  assert.equal(budgetBlocked.comparison.productionSubagentBudgetGate, false);
+  assert.ok(budgetBlocked.comparison.productionGate.failures.includes("production-subagent-budget"));
+  assert.equal(budgetBlocked.comparison.tokenClaimAllowed, false);
+
+  const unexplained = structuredClone(runs);
+  unexplained.find((run) => run.surface === "piagent").usage.sessions = 2;
+  const unexplainedReport = summarizeProductionBenchmark({ suite: testSuite, runId: "production-unexplained-session", startedAt: "2026-08-01T00:00:00.000Z",
+    completedAt: "2026-08-01T00:01:00.000Z", repeats: 3, environment: productionEnvironment(), runs: unexplained });
+  assert.equal(unexplainedReport.comparison.productionSubagentBudgetGate, false);
+  assert.ok(unexplainedReport.comparison.productionSubagentBudget.failures.includes("subagent-usage-exact"));
+
+  const noReceipt = summarizeProductionBenchmark({ suite: testSuite, runId: "production-no-provider-free", startedAt: "2026-08-01T00:00:00.000Z",
+    completedAt: "2026-08-01T00:01:00.000Z", repeats: 3, environment: productionEnvironment({ providerFreeEvidence: null }), runs });
+  assert.equal(noReceipt.comparison.productionProviderFreeEvidenceGate, false);
+  assert.ok(noReceipt.comparison.productionGate.failures.includes("provider-free-evidence"));
+
+  const partialRuntimeRuns = structuredClone(runs);
+  partialRuntimeRuns.find((run) => run.surface === "piagent").causalContextReceipt.aggregates.runtimeCausal = {
+    adaptiveContext: { coverageStatus: "partial", observedEvents: 1, evidenceSource: "context-telemetry", aggregate: null }
+  };
+  const partialRuntime = summarizeProductionBenchmark({ suite: testSuite, runId: "production-partial-runtime", startedAt: "2026-08-01T00:00:00.000Z",
+    completedAt: "2026-08-01T00:01:00.000Z", repeats: 3, environment: productionEnvironment(), runs: partialRuntimeRuns });
+  assert.equal(partialRuntime.comparison.adaptiveContextRuntimeGate, false);
+  assert.ok(partialRuntime.comparison.productionGate.failures.includes("adaptive-context-runtime-coverage"));
 });
 
 test("production reports a high-token workload segment without replacing the full-suite estimand", () => {

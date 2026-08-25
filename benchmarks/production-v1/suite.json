@@ -65,7 +65,11 @@
     "requireHostReadinessForClaim": false,
     "requireFullSuiteForClaim": true,
     "requireStableProviderWireSurface": true,
-    "requireCausalContextReceipt": true
+    "requireCausalContextReceipt": true,
+    "requireProviderFreeEvidence": true,
+    "requireSubagentBudget": true,
+    "maximumSubagentSessionsPerAttempt": 1,
+    "maximumSubagentTrafficShare": 0.05
   },
   "scenarios": [
     {

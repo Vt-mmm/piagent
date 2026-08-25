@@ -8,6 +8,7 @@ import test from "node:test";
 
 import { buildAcceptanceReceipt } from "../packages/piagent-core/extensions/acceptance-receipt.js";
 import { createTaskAuthoritySnapshot } from "../packages/piagent-core/capabilities/authority-manifest.ts";
+import { compactTaskDetails } from "../packages/piagent-core/extensions/task-contract-view.js";
 
 import {
   activeSessionTask,
@@ -18,6 +19,8 @@ import {
   listTaskContracts,
   migrateTaskState,
   normalizeTaskContract,
+  OPERATOR_REQUEST_MAX_CHARS,
+  operatorRequestDigest,
   pathWithinChangeEvidenceRoot,
   repositoryFileManifestDetails,
   resolveTaskContract,
@@ -35,6 +38,7 @@ import {
 import { appendTaskJournalEvent, readTaskJournal } from "../packages/piagent-core/extensions/task-journal.js";
 import { taskDigestMigrationEvidenceBindings } from "../packages/piagent-core/extensions/task-digest-state.js";
 import { versionWorkingTreeHash, workingTreeCarrierDigest, workingTreeEvidenceDigest, workingTreeObservation, workingTreeSnapshotUsesCurrentAlgorithm } from "../packages/piagent-core/extensions/working-tree-digest.js";
+import { operatorRequestCarryLines } from "../packages/piagent-core/runtime/session/operator-request-carry.ts";
 
 test("safe task ids stay normalized and idempotent after bounded truncation", () => {
   const longPrompt = "Complete the lease store and withLease lifecycle in packages/lease/src/store.js - preserve every concurrency boundary";
@@ -264,6 +268,64 @@ test("Task Contract validation rejects scope beyond the criterion graph binding 
   assert.match(taskContractValidationErrors(oversized).join("; "), /scope must contain at most 2000 entries/);
   const schema = JSON.parse(fs.readFileSync(path.join(process.cwd(), "schemas", "task-contract.schema.json"), "utf8"));
   assert.equal(schema.properties.scope.allOf[1].maxItems, 2000);
+});
+
+test("existing v2 contracts remain readable losslessly beyond new task-intake traffic limits", (t) => {
+  const cwd = fixture();
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  const legacyCommands = [
+    `node --test ${"x".repeat(901)}`,
+    "npm test\r\nnpm run lint",
+    "  npm test -- --runInBand  "
+  ];
+  const legacyCriteria = Array.from({ length: 13 }, (_item, index) => `Legacy criterion ${index + 1}: ${"c".repeat(1001)}`);
+  const legacy = contract({
+    summary: `LEGACY_100K_PRIVATE_SENTINEL ${"s".repeat(100_000)}`,
+    expectedOutput: `Legacy output ${"e".repeat(2001)}`,
+    acceptanceCriteria: legacyCriteria,
+    verifyCommands: legacyCommands
+  });
+  assert.deepEqual(taskContractValidationErrors(legacy), []);
+  const normalized = normalizeTaskContract(legacy);
+  assert.equal(normalized.summary, legacy.summary);
+  assert.equal(normalized.expectedOutput, legacy.expectedOutput);
+  assert.deepEqual(normalized.acceptanceCriteria, legacyCriteria);
+  assert.deepEqual(normalized.verifyCommands, legacyCommands);
+
+  const tasks = path.join(cwd, ".pi", "piagent-state", "tasks");
+  fs.mkdirSync(tasks, { recursive: true });
+  fs.writeFileSync(path.join(tasks, `${legacy.taskRunId}.json`), `${JSON.stringify(legacy)}\n`);
+  assert.deepEqual(migrateTaskState(cwd), { migrated: 0, current: 1, warnings: [] });
+  const [resumed] = listTaskContracts(cwd);
+  assert.equal(resumed.summary, legacy.summary);
+  assert.deepEqual(resumed.acceptanceCriteria, legacyCriteria);
+  assert.deepEqual(resumed.verifyCommands, legacyCommands);
+
+  const taskSchema = JSON.parse(fs.readFileSync(path.join(process.cwd(), "schemas", "task-contract.schema.json"), "utf8"));
+  const profileSchema = JSON.parse(fs.readFileSync(path.join(process.cwd(), "schemas", "project-profile.schema.json"), "utf8"));
+  assert.equal(taskSchema.properties.summary.maxLength, undefined);
+  assert.equal(taskSchema.properties.expectedOutput.maxLength, undefined);
+  assert.equal(taskSchema.properties.acceptanceCriteria.allOf[1].maxItems, undefined);
+  assert.equal(taskSchema.properties.verifyCommands.$ref, "#/$defs/stringList");
+  assert.equal(profileSchema.properties.verifyCommands.additionalProperties.maxItems, undefined);
+  assert.equal(profileSchema.properties.verifyCommands.additionalProperties.items.maxLength, undefined);
+});
+
+test("Task Contract binds a bounded full operator request to its private digest", () => {
+  const operatorRequest = "PRIVATE_OPERATOR_REQUEST_SENTINEL: implement every clause, including the omitted cleanup ownership rule.";
+  const valid = contract({ operatorRequest, operatorRequestDigest: operatorRequestDigest(operatorRequest) });
+  assert.deepEqual(taskContractValidationErrors(valid), []);
+  const tampered = { ...valid, operatorRequestDigest: operatorRequestDigest(`${operatorRequest}!`) };
+  assert.match(taskContractValidationErrors(tampered).join("; "), /does not match/);
+  assert.deepEqual(operatorRequestCarryLines(tampered), [], "tampered operator truth must never enter provider context");
+  assert.deepEqual(operatorRequestCarryLines(valid).slice(1, 2), [operatorRequest], "valid private truth remains lossless in the provider carry");
+  assert.equal(JSON.stringify(compactTaskDetails(valid)).includes("PRIVATE_OPERATOR_REQUEST_SENTINEL"), false, "public task details must omit the private request");
+  assert.match(taskContractValidationErrors(contract({ operatorRequest })).join("; "), /must be present together/);
+  const overlong = "🧪".repeat(OPERATOR_REQUEST_MAX_CHARS + 1);
+  assert.match(taskContractValidationErrors(contract({ operatorRequest: overlong, operatorRequestDigest: operatorRequestDigest(overlong) })).join("; "), /at most 8000 Unicode characters/);
+  const schema = JSON.parse(fs.readFileSync(path.join(process.cwd(), "schemas", "task-contract.schema.json"), "utf8"));
+  assert.equal(schema.properties.operatorRequest.maxLength, OPERATOR_REQUEST_MAX_CHARS);
+  assert.deepEqual(schema.dependentRequired.operatorRequest, ["operatorRequestDigest"]);
 });
 
 function persistLegacyV2(cwd, overrides = {}) {

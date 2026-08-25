@@ -451,7 +451,7 @@ export function registerPolicyTools(pi: ExtensionAPI, deps: Record<string, any>)
         ...verifierCommandInstructions(result.missingVerifyCommands),
         `warnings: ${result.warnings.join("; ") || "none"}`
       ].join("\n");
-      return { content: [{ type: "text", text }], details: { ...result, task: projected } };
+      return { content: [{ type: "text", text }], details: { ...result, task: projected ? { taskId: projected.taskId, taskRunId: projected.taskRunId } : undefined } };
     }
   });
 

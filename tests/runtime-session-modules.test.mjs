@@ -25,10 +25,12 @@ import {
 } from "../packages/piagent-core/runtime/session/tool-result-compaction.ts";
 import { currentFileContentDigests, expectedModelMutationProof } from "../packages/piagent-core/runtime/quality/model-mutation-proof.ts";
 import { RuntimeSessionState } from "../packages/piagent-core/runtime/session/runtime-state.ts";
+import { buildAdaptiveContextLedger } from "../packages/piagent-core/runtime/session/adaptive-context-ledger.ts";
 import {
   buildSemanticCompactionInstructions,
   compactManagedProjectInstructions,
-  rewriteLegacyProjectInstructions
+  rewriteLegacyProjectInstructions,
+  semanticCompactionCancelled
 } from "../packages/piagent-core/runtime/session/system-prompt.ts";
 import {
   PIAGENT_TOOL_NAMES,
@@ -58,6 +60,8 @@ import {
 import { buildAcceptanceReceipt } from "../packages/piagent-core/extensions/acceptance-receipt.js";
 import { compileCriterionGraph } from "../packages/piagent-core/extensions/criterion-graph.js";
 import {
+  CONTEXT_GOVERNOR_LEDGER_MAX_CHARS,
+  RUNTIME_INTAKE_COMPACT_CHARS,
   RUNTIME_INTAKE_MESSAGE_MAX_CHARS,
   SEMANTIC_COMPACTION_MAX_CHARS,
   TOOL_RESULT_PREVIEW_MAX_CHARS
@@ -77,7 +81,7 @@ import { stageContextDelivery } from "../packages/piagent-core/runtime/context/c
 import { registerInputHook } from "../packages/piagent-core/runtime/hooks/input-hook.ts";
 import { taskDeltaFilesFromSnapshot } from "../packages/piagent-core/extensions/task-contract-view.js";
 import { filterGrepProtectedContent, filterProtectedPathListContent, registerToolResultHook } from "../packages/piagent-core/runtime/hooks/tool-result-hook.ts";
-import { workingTreeSnapshot } from "../packages/piagent-core/extensions/task-state.js";
+import { operatorRequestDigest, workingTreeSnapshot } from "../packages/piagent-core/extensions/task-state.js";
 import { workingTreeEvidenceDigest } from "../packages/piagent-core/extensions/working-tree-digest.js";
 import { estimateContextTokens } from "../packages/piagent-core/extensions/context-engine.js";
 import { boundedPerformanceReviewResultText } from "../packages/piagent-core/runtime/quality/performance-review-evidence.ts";
@@ -106,6 +110,13 @@ function temporaryProject() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-runtime-"));
   temporaryRoots.add(root);
   return root;
+}
+
+function utf8BoundaryCommand(prefix, glyph, maximum = 900) {
+  const remaining = maximum - Buffer.byteLength(prefix, "utf8");
+  const glyphBytes = Buffer.byteLength(glyph, "utf8");
+  const repeated = glyph.repeat(Math.floor(remaining / glyphBytes));
+  return `${prefix}${repeated}${"x".repeat(remaining - Buffer.byteLength(repeated, "utf8"))}`;
 }
 
 function extensionContext(cwd = temporaryProject(), sessionId = "session-1") {
@@ -259,10 +270,123 @@ describe("runtime session modules", () => {
 
   it("bounds runtime intake and semantic carry-over while preserving contract edges", () => {
     const intake = boundedRuntimeIntakeMessage(`HEAD:${"a".repeat(8_000)}:TAIL`);
-    assert.equal(intake.length, RUNTIME_INTAKE_MESSAGE_MAX_CHARS);
+    assert.equal(intake.length, RUNTIME_INTAKE_COMPACT_CHARS);
     assert.match(intake, /^HEAD:/);
     assert.match(intake, /complete operator request and durable Task Contract remain authoritative/);
     assert.match(intake, /:TAIL$/);
+
+    const structured = boundedRuntimeIntakeMessage([
+      "Piagent runtime task: CONTROL; initial focus (advisory): packages/session/src/runtime-route.js.",
+      "The complete operator request above is the authoritative acceptance contract.",
+      "Assurance: rigorous (exact-behavior).",
+      "Critical behavioral proof:",
+      `- [criterion-01:fallback] ${"prove-observable ".repeat(90)}`,
+      "Candidate tags require durable live assertions before completion.",
+      "Existing public contract:",
+      `- ${"optional-baseline ".repeat(180)}`,
+      "Exact verifier commands:",
+      "Verifier 1 (run as an exact standalone shell command): npm test",
+      "Execution map (planning only):",
+      ...Array.from({ length: 12 }, (_item, index) => `- criterion-${String(index + 1).padStart(2, "0")} behavior @packages/session/src/runtime-route.js proof=behavioral-check`),
+      "Use runtime-delivered source; do not reread it. On edit drift, reread the affected region once.",
+      "Root project instructions are loaded.",
+      "Follow the execution map and implement dependency-ready criteria."
+    ].join("\n"));
+    assert.ok(structured.length <= RUNTIME_INTAKE_MESSAGE_MAX_CHARS, structured.length);
+    assert.match(structured, /Critical behavioral proof:/);
+    assert.match(structured, /\[criterion-01:fallback\]/);
+    assert.match(structured, /Exact verifier commands:\nVerifier 1 .*: npm test/);
+    assert.match(structured, /Execution map \(planning only\):/);
+    for (let index = 1; index <= 12; index += 1) assert.match(structured, new RegExp(`criterion-${String(index).padStart(2, "0")}`));
+    assert.match(structured, /Use runtime-delivered source; do not reread it/);
+    assert.match(structured, /Follow the execution map and implement dependency-ready criteria/);
+
+    const withoutCriticalProof = boundedRuntimeIntakeMessage([
+      "Piagent runtime task: BASIC.",
+      `Optional navigation: ${"src/optional.js ".repeat(300)}`,
+      "Exact final-output contract: make BUILD_SHA=<sha> the last non-empty response line. Copy the complete value verbatim from observed project evidence.",
+      "Exact verifier commands:",
+      "Verifier 1 (run as an exact standalone shell command): npm test",
+      "Execution map (planning only):",
+      "- criterion-01 verification after=criterion-00",
+      "Use runtime-delivered source; do not reread it.",
+      "Follow the execution map and implement dependency-ready criteria."
+    ].join("\n"));
+    assert.ok(withoutCriticalProof.length <= RUNTIME_INTAKE_MESSAGE_MAX_CHARS, withoutCriticalProof.length);
+    assert.match(withoutCriticalProof, /Exact final-output contract: make BUILD_SHA=<sha>/);
+    assert.match(withoutCriticalProof, /Exact verifier commands:\nVerifier 1 .*: npm test/);
+    assert.match(withoutCriticalProof, /Execution map \(planning only\):\n- criterion-01 verification/);
+    assert.match(withoutCriticalProof, /Use runtime-delivered source; do not reread it/);
+    assert.match(withoutCriticalProof, /Follow the execution map and implement dependency-ready criteria/);
+
+    const overlongVerifier = boundedRuntimeIntakeMessage([
+      "Piagent runtime task: INVALID-VERIFY.",
+      "The complete operator request above remains authoritative.",
+      "Exact verifier commands:",
+      `Verifier 1 (run as an exact standalone shell command): node --test ${"test/fixture.mjs ".repeat(300)}`,
+      "Execution map (planning only):",
+      "- criterion-01 verification",
+      "Use runtime-delivered source; do not reread it.",
+      "Follow the execution map and implement dependency-ready criteria."
+    ].join("\n"));
+    assert.ok(overlongVerifier.length <= RUNTIME_INTAKE_MESSAGE_MAX_CHARS, overlongVerifier.length);
+    assert.match(overlongVerifier, /Runtime intake refused: An exact verify command exceeds 900 characters/);
+    assert.match(overlongVerifier, /move verifier logic into a checked-in script/);
+    assert.match(overlongVerifier, /No verifier was truncated or accepted as evidence/);
+    assert.doesNotMatch(overlongVerifier, /test\/fixture\.mjs test\/fixture\.mjs/);
+
+    const verifierPrefix = "node -e 'process.exit(0)' # ";
+    const byteExactVerifierPrefix = `  ${verifierPrefix}`;
+    const longestValidVerifier = `${byteExactVerifierPrefix}${"v".repeat(900 - byteExactVerifierPrefix.length - 2)}  `;
+    const secondLongestValidVerifier = `${verifierPrefix}${"w".repeat(900 - verifierPrefix.length)}`;
+    const exactOutputLine = `Exact final-output contract: make ${"K".repeat(64)}=<${"p".repeat(32)}> the last non-empty response line. Copy the complete value verbatim from observed project evidence and self-check every character before handoff.`;
+    assert.equal(longestValidVerifier.length, 900);
+    assert.equal(secondLongestValidVerifier.length, 900);
+    const worstValidStructured = boundedRuntimeIntakeMessage([
+      `Piagent runtime task: VALID-BOUNDARY; ${"initial-focus ".repeat(250)}`,
+      "Critical behavioral proof:",
+      ...Array.from({ length: 12 }, (_item, index) => (
+        `- [criterion-${String(index + 1).padStart(2, "0")}:candidate=${"packages/very/long/path/".repeat(20)}test-${index}.mjs] ${"durable proof ".repeat(80)}`
+      )),
+      exactOutputLine,
+      "Exact verifier commands:",
+      `Verifier 1 (run as an exact standalone shell command): ${longestValidVerifier}`,
+      `Verifier 2 (run as an exact standalone shell command): ${secondLongestValidVerifier}`,
+      "Execution map (planning only):",
+      ...Array.from({ length: 12 }, (_item, index) => (
+        `- criterion-${String(index + 1).padStart(2, "0")} ${"packages/very/long/path/".repeat(20)}target-${index}.ts proof=${"behavioral-check".repeat(20)} after=criterion-${String(index).padStart(2, "0")}`
+      )),
+      `Use runtime-delivered source; ${"do-not-reread ".repeat(100)}`,
+      `Follow the execution map and implement dependency-ready criteria. ${"final-guidance ".repeat(100)}`
+    ].join("\n"));
+    assert.ok(worstValidStructured.length <= RUNTIME_INTAKE_MESSAGE_MAX_CHARS, worstValidStructured.length);
+    assert.match(worstValidStructured, /Critical behavioral proof:/);
+    assert.equal(worstValidStructured.includes(exactOutputLine), true, "the exact final-output contract is preserved byte-for-byte");
+    assert.equal(worstValidStructured.includes(longestValidVerifier), true, "the exact executable verifier is preserved byte-for-byte");
+    assert.equal(worstValidStructured.includes(secondLongestValidVerifier), true, "the second exact executable verifier is preserved byte-for-byte");
+    assert.match(worstValidStructured, /Execution map \(planning only\):/);
+    assert.match(worstValidStructured, /Use runtime-delivered source;/);
+    assert.match(worstValidStructured, /Follow the execution map and implement dependency-ready criteria/);
+
+    const emojiVerifierOne = utf8BoundaryCommand("node -e '0' # ", "🧪");
+    const emojiVerifierTwo = utf8BoundaryCommand("npm test -- # ", "🚀");
+    const astralStructured = boundedRuntimeIntakeMessage([
+      `Piagent runtime task: ASTRAL-BOUNDARY; ${"large-navigation ".repeat(600)}`,
+      "Critical behavioral proof:",
+      "- [criterion-01:fallback] Prove the observable Unicode boundary with a focused live assertion.",
+      "Exact verifier commands:",
+      `Verifier 1 (run as an exact standalone shell command): ${emojiVerifierOne}`,
+      `Verifier 2 (run as an exact standalone shell command): ${emojiVerifierTwo}`,
+      "Execution map (planning only):",
+      "- criterion-01 test/astral.test.mjs proof=behavioral-check",
+      "Use runtime-delivered source; do not reread it.",
+      "Follow the execution map and implement dependency-ready criteria."
+    ].join("\n"));
+    assert.ok(astralStructured.length <= RUNTIME_INTAKE_MESSAGE_MAX_CHARS, astralStructured.length);
+    assert.equal(astralStructured.includes(emojiVerifierOne), true, "provider intake must expose exact verifier one literally");
+    assert.equal(astralStructured.includes(emojiVerifierTwo), true, "provider intake must expose exact verifier two literally");
+    assert.equal(Buffer.byteLength(emojiVerifierOne, "utf8"), 900);
+    assert.equal(Buffer.byteLength(emojiVerifierTwo, "utf8"), 900);
 
     const criteria = Array.from({ length: 12 }, (_item, index) => (
       `[C${index + 1}] preserve obligation head ${"x".repeat(420)} obligation-tail-${index + 1}`
@@ -286,6 +410,86 @@ describe("runtime session modules", () => {
     assert.match(carryOver, /Exact verify commands:\n1\. npm test/);
     assert.match(carryOver, /Full task truth is file-backed by the durable Task Contract/);
     assert.match(carryOver, /Do not convert assumptions into facts/);
+
+    const authoritativeCases = [
+      ["concurrent-lease-lifecycle.md", "calls `operation(renew)` with a bare `renew(now)` callback"],
+      ["durable-session-control-plane.md", "The stored receipt contains exactly `idempotencyKey`"]
+    ];
+    for (const [file, omittedClause] of authoritativeCases) {
+      const operatorRequest = fs.readFileSync(path.resolve(import.meta.dirname, "../benchmarks/capability-v1/prompts", file), "utf8");
+      const summary = automaticTaskSummary(operatorRequest), acceptanceCriteria = automaticAcceptanceCriteria(operatorRequest);
+      assert.doesNotMatch([summary, ...acceptanceCriteria].join("\n"), new RegExp(omittedClause.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+      const durableTask = {
+        taskId: file.replace(/\.md$/, ""), taskRunId: `${file}-run`, sessionId: "session-authoritative", riskLane: "normal",
+        summary, operatorRequest, operatorRequestDigest: operatorRequestDigest(operatorRequest), acceptanceCriteria,
+        scope: ["packages/**", "apps/**", "test/**"], outOfScope: [], changedFiles: [], verifyCommands: ["npm test"],
+        trace: { outcome: "pending" }
+      };
+      const semantic = buildSemanticCompactionInstructions(durableTask);
+      assert.ok(semantic.length <= SEMANTIC_COMPACTION_MAX_CHARS, `${file}: ${semantic.length}`);
+      assert.match(semantic, /Authoritative operator request \(redacted, lossless\): operator-request-v1:/);
+      assert.match(semantic, new RegExp(omittedClause.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+      const ledger = buildAdaptiveContextLedger([{ role: "user", content: operatorRequest }], durableTask);
+      assert.ok(ledger.length <= CONTEXT_GOVERNOR_LEDGER_MAX_CHARS, `${file}: ${ledger.length}`);
+      assert.match(ledger, new RegExp(omittedClause.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    }
+
+    const criticalMiddle = "CRITICAL_MIDDLE_CLAUSE must survive every compaction and resume boundary.";
+    const criticalTail = "FINAL_CRITICAL_CLAUSE must remain authoritative.";
+    const operatorRequest = `${"🧠".repeat(3_900)}${criticalMiddle}${"🧩".repeat(4_100 - Array.from(criticalMiddle + criticalTail).length)}${criticalTail}`;
+    assert.equal(Array.from(operatorRequest).length, 8_000);
+    const unicodeTask = {
+      taskId: "unicode-max", taskRunId: "unicode-max-run", sessionId: "unicode-session", riskLane: "normal",
+      summary: "Preserve the maximum Unicode operator request without losing critical clauses.",
+      operatorRequest, operatorRequestDigest: operatorRequestDigest(operatorRequest),
+      acceptanceCriteria: [criticalMiddle, criticalTail], scope: ["src/**"], outOfScope: [], changedFiles: [],
+      verifyCommands: [emojiVerifierOne, emojiVerifierTwo], trace: { outcome: "pending" }
+    };
+    const unicodeSemantic = buildSemanticCompactionInstructions(unicodeTask);
+    assert.ok(unicodeSemantic.length <= SEMANTIC_COMPACTION_MAX_CHARS, unicodeSemantic.length);
+    assert.equal(semanticCompactionCancelled(unicodeSemantic), true);
+    assert.match(unicodeSemantic, /Keep the current session context unchanged/);
+    assert.equal(unicodeSemantic.includes(operatorRequest), false, "a cancellation notice must not expose private operator truth");
+    const unicodeLedger = buildAdaptiveContextLedger([{ role: "user", content: operatorRequest }], unicodeTask);
+    assert.ok(unicodeLedger.length <= CONTEXT_GOVERNOR_LEDGER_MAX_CHARS, unicodeLedger.length);
+    assert.match(unicodeLedger, /Piagent adaptive compaction cancelled/);
+    assert.match(unicodeLedger, /Keep the source transcript unchanged/);
+    assert.equal(unicodeLedger.includes(operatorRequest), false, "a cancellation notice must not expose private operator truth");
+
+    const manualTask = {
+      taskId: "manual-max", taskRunId: "manual-max-run", sessionId: "manual-session", riskLane: "normal",
+      summary: `${"s".repeat(1_970)}MANUAL_SUMMARY_TAIL`,
+      expectedOutput: `${"e".repeat(1_970)}MANUAL_OUTPUT_TAIL`,
+      acceptanceCriteria: Array.from({ length: 12 }, (_item, index) => `${`criterion-${index + 1} `.padEnd(970, "c")}MANUAL_CRITERION_TAIL_${index + 1}`),
+      scope: ["src/**"], outOfScope: [], changedFiles: [], verifyCommands: [emojiVerifierOne, emojiVerifierTwo], trace: { outcome: "pending" }
+    };
+    const manualSemantic = buildSemanticCompactionInstructions(manualTask);
+    assert.ok(manualSemantic.length <= SEMANTIC_COMPACTION_MAX_CHARS, manualSemantic.length);
+    assert.equal(semanticCompactionCancelled(manualSemantic), true);
+    const manualLedger = buildAdaptiveContextLedger([{ role: "user", content: "manual task" }], manualTask);
+    assert.ok(manualLedger.length <= CONTEXT_GOVERNOR_LEDGER_MAX_CHARS, manualLedger.length);
+    assert.match(manualLedger, /Piagent adaptive compaction cancelled/);
+
+    const maximumOperatorRequest = `${"o".repeat(8_000 - "MAX_OPERATOR_TAIL".length)}MAX_OPERATOR_TAIL`;
+    assert.equal(maximumOperatorRequest.length, 8_000);
+    const maximumTask = {
+      ...manualTask,
+      taskId: "maximum-valid", taskRunId: "maximum-valid-run",
+      operatorRequest: maximumOperatorRequest,
+      operatorRequestDigest: operatorRequestDigest(maximumOperatorRequest),
+      verifyCommands: [longestValidVerifier, secondLongestValidVerifier]
+    };
+    const maximumSemantic = buildSemanticCompactionInstructions(maximumTask);
+    assert.ok(maximumSemantic.length <= SEMANTIC_COMPACTION_MAX_CHARS, maximumSemantic.length);
+    assert.equal(semanticCompactionCancelled(maximumSemantic), false);
+    assert.equal(maximumSemantic.includes(maximumOperatorRequest), true);
+    assert.equal(maximumSemantic.includes(longestValidVerifier), true);
+    assert.equal(maximumSemantic.includes(secondLongestValidVerifier), true);
+    const maximumLedger = buildAdaptiveContextLedger([{ role: "user", content: maximumOperatorRequest }], maximumTask);
+    assert.ok(maximumLedger.length <= CONTEXT_GOVERNOR_LEDGER_MAX_CHARS, maximumLedger.length);
+    assert.equal(maximumLedger.includes(maximumOperatorRequest), true);
+    assert.equal(maximumLedger.includes(longestValidVerifier), true);
+    assert.equal(maximumLedger.includes(secondLongestValidVerifier), true);
   });
 
   it("omits the legacy runtime-scope criterion from semantic carry-over without mutating the contract", () => {
@@ -1203,26 +1407,42 @@ describe("runtime session modules", () => {
     }
     const migrationPrompt = fs.readFileSync(path.resolve(import.meta.dirname, "../benchmarks/capability-v1/prompts/resumable-migration-runner.md"), "utf8");
     const migrationCriteria = automaticAcceptanceCriteria(migrationPrompt);
-    const expectedM3 = migrationPrompt.match(/^- \[M3\][\s\S]*?(?=\n- \[M4\])/m)[0]
-      .replace(/^- /, "").replace(/\s+/g, " ").trim();
-    const m3Fragments = migrationCriteria.filter((criterion) => criterion.startsWith("[M3] "));
-    const reconstructedM3 = `[M3] ${m3Fragments.map((criterion) => criterion.replace(/^\[M3\]\s+/, "")).join(" ")}`;
-    assert.equal(reconstructedM3, expectedM3);
-    assert.deepEqual(
-      migrationCriteria.flatMap((criterion) => criterion.match(/^\[M\d+\]/) ?? []),
-      ["[M1]", "[M2]", "[M3]", "[M3]", "[M4]"]
+    for (const label of ["M1", "M2", "M3", "M4"]) assert.equal(migrationCriteria.some((criterion) => criterion.startsWith(`[${label}] `)), true, label);
+    assert.equal(
+      migrationCriteria.some((criterion) => /Do not require array, object, or function identity.*same loaded module instance\.$/.test(criterion)),
+      true
     );
+    assert.match(migrationCriteria.join("\n"), /does not rerun earlier completed steps/);
     assert.ok(migrationCriteria.every((criterion) => criterion.length <= 600));
-    assert.match(reconstructedM3, /Do not require array, object, or function identity.*same loaded module instance\.$/);
     const rolloutPrompt = fs.readFileSync(path.resolve(import.meta.dirname, "../benchmarks/capability-v1/prompts/multi-package-rollout.md"), "utf8");
     assert.doesNotMatch(automaticTaskSummary(rolloutPrompt), /rolloutSummary/);
+  });
+
+  it("keeps deterministic atomic coverage across long labeled capability contracts", () => {
+    const capability = (file) => automaticAcceptanceCriteria(fs.readFileSync(
+      path.resolve(import.meta.dirname, "../benchmarks/capability-v1/prompts", file), "utf8"
+    ));
+    const lease = capability("concurrent-lease-lifecycle.md");
+    for (const label of ["L1", "L2", "L3", "L4"]) assert.equal(lease.some((criterion) => criterion.startsWith(`[${label}] `)), true, label);
+    assert.equal(lease.includes("[L1] Invalid input throws `TypeError`."), true);
+    assert.equal(lease.includes("[L2] It succeeds when the key is absent, when the prior lease is expired at the inclusive boundary (`now >= expiresAt`), or when the same owner reacquires it."), true);
+    assert.equal(lease.includes("[L4] Its cleanup must not delete a lease that changed owner after expiry."), true);
+
+    const control = capability("durable-session-control-plane.md");
+    for (const label of ["D1", "D2", "D3", "D4", "D5", "D6"]) assert.equal(control.some((criterion) => criterion.startsWith(`[${label}] `)), true, label);
+    assert.equal(control.includes("[D3] Check a prior idempotency receipt before revision matching: an identical replay succeeds even with a stale expected revision, returns the identical state object, and marks only the returned receipt `replayed: true`."), true);
+    assert.equal(control.includes("[D4] Canonicalization must reject non-finite or non-JSON values."), true);
+    assert.equal(control.includes("[D5] Do not mutate caller state/input, and do not share the separately returned receipt object with the stored receipt."), true);
+    assert.equal(control.length, 12);
   });
 
   it("joins wrapped prose obligations before deriving acceptance criteria", () => {
     const prompt = fs.readFileSync(path.resolve(import.meta.dirname, "../benchmarks/production-v1/prompts/tenant-role-authorization.md"), "utf8");
     const criteria = automaticAcceptanceCriteria(prompt);
     const authorization = criteria.find((criterion) => criterion.includes("canManage(user, resource)"));
-    assert.equal(authorization, "`canManage(user, resource)` may return true only when the user is active, has role `owner` or `admin`, and `user.tenantId` and `resource.tenantId` are the same non-empty string. Missing input must be denied. Keep the change focused and run the project verification commands.");
+    assert.equal(authorization, "`canManage(user, resource)` may return true only when the user is active, has role `owner` or `admin`, and `user.tenantId` and `resource.tenantId` are the same non-empty string.");
+    assert.equal(criteria.includes("Missing input must be denied."), true);
+    assert.equal(criteria.includes("Keep the change focused and run the project verification commands."), true);
     assert.equal(criteria.some((criterion) => criterion === "resource. Missing input must be denied. Keep the change focused and run the"), false);
     const built = buildAcceptanceReceipt({
       summary: automaticTaskSummary(prompt),
@@ -1232,6 +1452,74 @@ describe("runtime session modules", () => {
       source: "runtime"
     });
     assert.equal(built.acceptanceCriteria.some((criterion) => criterion.startsWith("Focused tests prove same-identity allow")), false);
+  });
+
+  it("decomposes a wrapped multi-clause CLI contract into atomic acceptance criteria", () => {
+    const prompt = [
+      "Repair `parseArgs(argv)` in `src/platform/args.js`.",
+      "",
+      "Support `--name value`, `--name=value`, and boolean `--flag`. The first standalone",
+      "`--` ends flag parsing and every later token is positional even if it starts",
+      "with dashes. A flag followed by another flag is boolean true. Repeated flags",
+      "use the last value. Do not mutate argv or change the return shape. Verify the",
+      "project."
+    ].join("\n");
+    const criteria = automaticAcceptanceCriteria(prompt);
+
+    for (const expected of [
+      "Repair `parseArgs(argv)` in `src/platform/args.js`.",
+      "Support `--name value`, `--name=value`, and boolean `--flag`.",
+      "The first standalone `--` ends flag parsing and every later token is positional even if it starts with dashes.",
+      "A flag followed by another flag is boolean true.",
+      "Repeated flags use the last value.",
+      "Do not mutate argv or change the return shape.",
+      "Verify the project."
+    ]) assert.equal(criteria.includes(expected), true, expected);
+    assert.equal(criteria.some((criterion) => criterion.includes("boolean `--flag`. The first standalone")), false);
+  });
+
+  it("decomposes a bounded labeled bullet without discarding its label or clauses", () => {
+    const criteria = automaticAcceptanceCriteria([
+      "Implement src/lease.js.",
+      "- [L1] Accept a valid lease object. Reject an expired lease with TypeError.",
+      "- [L2] Preserve the public return shape."
+    ].join("\n"));
+
+    assert.equal(criteria.includes("[L1] Accept a valid lease object."), true);
+    assert.equal(criteria.includes("[L1] Reject an expired lease with TypeError."), true);
+    assert.equal(criteria.includes("[L2] Preserve the public return shape."), true);
+    assert.equal(criteria.some((criterion) => criterion.includes("object. Reject")), false);
+  });
+
+  it("decomposes top-level semicolon obligations while preserving quoted and code literals", () => {
+    const criteria = automaticAcceptanceCriteria([
+      "Implement src/mode.js.",
+      "- [C1] Support mode A; reject invalid mode B; preserve caller state unchanged.",
+      "- [C2] Preserve literals `a;b` and \"c;d\"; reject malformed input."
+    ].join("\n"));
+    const atomic = [
+      "[C1] Support mode A",
+      "[C1] reject invalid mode B",
+      "[C1] preserve caller state unchanged.",
+      "[C2] Preserve literals `a;b` and \"c;d\"",
+      "[C2] reject malformed input."
+    ];
+    for (const expected of atomic) assert.equal(criteria.includes(expected), true, expected);
+    assert.equal(criteria.some((criterion) => criterion.includes("mode A; reject")), false);
+
+    const built = buildAcceptanceReceipt({
+      summary: "Implement atomic mode handling.",
+      expectedOutput: "The mode contract is implemented.",
+      acceptanceCriteria: criteria,
+      changeMode: "source-change",
+      source: "runtime"
+    });
+    for (const expected of atomic.slice(0, 3)) {
+      const index = built.acceptanceCriteria.indexOf(expected);
+      assert.ok(index >= 0, expected);
+      assert.equal(built.receipt.criteria[index].status, "pending", expected);
+    }
+    assert.equal(new Set(built.receipt.criteria.slice(0, 3).map((criterion) => criterion.hash)).size, 3);
   });
 
   it("does not reinterpret tenant fairness as an access-control boundary", () => {
@@ -1324,7 +1612,8 @@ describe("runtime session modules", () => {
       "Then emit one line per invoice."
     ].join("\n"));
 
-    assert.equal(criteria.includes("billingSummary(result) returns an exact Terminal/WebUI summary. Then emit one line per invoice."), true);
+    assert.equal(criteria.includes("billingSummary(result) returns an exact Terminal/WebUI summary."), true);
+    assert.equal(criteria.includes("Then emit one line per invoice."), true);
   });
 
   it("keeps high-signal safety and exact-output obligations stable when the prompt grows", () => {
@@ -1342,7 +1631,8 @@ describe("runtime session modules", () => {
     ].join("\n\n"));
 
     assert.equal(criteria.length, 12);
-    assert.equal(criteria.includes(missing), true);
+    assert.equal(criteria.includes("A missing active plan is invalid input: throw TypeError"), true);
+    assert.equal(criteria.includes("never skip it."), true);
     assert.equal(criteria.includes(lineFeed), true);
   });
 

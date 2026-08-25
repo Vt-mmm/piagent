@@ -3561,9 +3561,11 @@ function evaluateTaskGate(
     currentWorkingTreeDigest
   });
   const semanticEnforcement = taskAuthorityDecision(task, "CAP-13", "block").allowed;
-  if (semanticEnforcement && acceptance.criticalMissing.length > 0) {
-    missing.push(`critical acceptance evidence (${acceptance.criticalMissing.map((criterion) => `${criterion.id}:${criterion.obligation}`).join(", ")})`);
-  }
+  const abstainedIds = new Set(acceptance.adapterAbstained.map((criterion) => criterion.id));
+  const adapterCritical = acceptance.criticalMissing.filter((criterion) => abstainedIds.has(criterion.id));
+  const linkedCritical = acceptance.criticalMissing.filter((criterion) => !abstainedIds.has(criterion.id));
+  if (semanticEnforcement && linkedCritical.length > 0) missing.push(`critical acceptance evidence (${linkedCritical.map((criterion) => `${criterion.id}:${criterion.obligation}`).join(", ")})`);
+  if (semanticEnforcement && adapterCritical.length > 0) missing.push(`critical acceptance evidence adapter-unresolved (${adapterCritical.map((criterion) => `${criterion.id}:${criterion.obligation}`).join(", ")}); remedy: add a direct-relative focused test or configure a deterministic adapter`);
   const acceptanceConflicts = acceptanceSemanticConflicts(task, {
     cwd,
     changedFiles: changedFileEvidence.expected
@@ -3571,7 +3573,11 @@ function evaluateTaskGate(
   if (semanticEnforcement && acceptanceConflicts.length > 0) {
     missing.push(`acceptance semantic conflicts (${acceptanceConflicts.join(", ")})`);
   }
-  const normalMissing = acceptance.missing.filter((criterion) => criterion.priority !== "critical");
+  const criticalIds = new Set(acceptance.criticalMissing.map((criterion) => criterion.id));
+  const normalMissing = acceptance.missing.filter((criterion) => !criticalIds.has(criterion.id));
+  if (semanticEnforcement && acceptance.adapterAbstained.length > 0) {
+    warnings.push(`Acceptance proof adapter abstained; rigorous criteria remain pending and hand off without an automatic model retry: ${acceptance.adapterAbstained.map((criterion) => `${criterion.id}:${criterion.obligation}`).join(", ")}`);
+  }
   if (!semanticEnforcement && (acceptance.criticalMissing.length > 0 || acceptanceConflicts.length > 0)) warnings.push("Acceptance projection is advisory under the pinned task authority and cannot block completion.");
   if (normalMissing.length > 0) {
     warnings.push(`Acceptance criteria pending evidence: ${normalMissing.map((criterion) => `${criterion.id}:${criterion.obligation}`).join(", ")}`);
@@ -3978,7 +3984,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
     // may update a dependency or config file when repository evidence requires
     // it; protected-path and approval policy still run on the exact call.
     const dependencyMutationAuthorized = true;
-    return selectRecoveryDecision({
+    const selected = selectRecoveryDecision({
       featureEnabled: autoRecoveryEnabled && taskAuthorityDecision(task, "CAP-12", "model-turn").allowed,
       task: {
         taskId: task.taskId,
@@ -3997,6 +4003,9 @@ export default function piagentGuard(pi: ExtensionAPI) {
         : true,
       dependencyMutationAuthorized
     });
+    return gate?.missing.some((item) => /^critical acceptance evidence adapter-unresolved\b/i.test(item))
+      ? { ...selected, action: "handoff", continuation: "none", nextPhase: null, sourceMutationAllowed: false, reasonCodes: ["unknown-diagnostic-exhausted"] }
+      : selected;
   }
 
   function trajectoryRecoveryOptions(ctx: ExtensionContext, task: TaskContract, options: any): any {

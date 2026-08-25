@@ -4,6 +4,7 @@ import path from "node:path";
 export const CORE_RUNTIME_INTEGRITY_FILES = Object.freeze([
   "packages/piagent-core/runtime/context/adaptive-planner.ts",
   "packages/piagent-core/runtime/context/retrieval-route-policy.ts",
+  "packages/piagent-core/extensions/acceptance-behavior-proof.js",
   "packages/piagent-core/extensions/acceptance-contract-semantics.js",
   "packages/piagent-core/extensions/acceptance-executable-evidence.js",
   "packages/piagent-core/extensions/acceptance-language-adapters.js",
@@ -133,6 +134,7 @@ export const CORE_RUNTIME_INTEGRITY_FILES = Object.freeze([
   "packages/piagent-core/runtime/runtime-limits.ts",
   "packages/piagent-core/runtime/session/message-signals.ts",
   "packages/piagent-core/runtime/session/model-authorship-state.ts",
+  "packages/piagent-core/runtime/session/operator-request-carry.ts",
   "packages/piagent-core/runtime/session/performance-review-state.ts",
   "packages/piagent-core/runtime/session/runtime-state.ts",
   "packages/piagent-core/runtime/session/system-prompt.ts",
@@ -154,6 +156,7 @@ export const CORE_RUNTIME_INTEGRITY_FILES = Object.freeze([
   "packages/piagent-core/runtime/tools/phase-tools.ts",
   "packages/piagent-core/runtime/tools/phase-tool-runtime.ts",
   "packages/piagent-core/runtime/workflows/input-routing.ts",
+  "packages/piagent-core/runtime/workflows/runtime-intake-compaction.ts",
   "packages/piagent-core/runtime/workflows/task-intake.ts",
   "scripts/piagent-cli.mjs",
   "scripts/register-typescript-loader.mjs",

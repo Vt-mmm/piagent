@@ -16,6 +16,7 @@ import {
   safeSuffixStart,
   toolObservations
 } from "../packages/piagent-core/runtime/session/adaptive-context-analysis.ts";
+import { operatorRequestDigest } from "../packages/piagent-core/extensions/task-state.js";
 
 let timestamp = 1;
 
@@ -55,6 +56,27 @@ function task(overrides = {}) {
     trace: { outcome: "pending" },
     ...overrides
   };
+}
+
+function utf8BoundaryCommand(prefix, glyph) {
+  const remaining = 900 - Buffer.byteLength(prefix, "utf8"), glyphBytes = Buffer.byteLength(glyph, "utf8");
+  const repeated = glyph.repeat(Math.floor(remaining / glyphBytes));
+  return `${prefix}${repeated}${"x".repeat(remaining - Buffer.byteLength(repeated, "utf8"))}`;
+}
+
+function losslessOverflowTask() {
+  const middle = "ADAPTIVE_MIDDLE_CLAUSE must remain available after context pressure.";
+  const tail = "ADAPTIVE_FINAL_CLAUSE must remain available at completion.";
+  const operatorRequest = `${"🧠".repeat(3_900)}${middle}${"🧩".repeat(4_100 - Array.from(middle + tail).length)}${tail}`;
+  return task({
+    operatorRequest,
+    operatorRequestDigest: operatorRequestDigest(operatorRequest),
+    acceptanceCriteria: [middle, tail],
+    verifyCommands: [
+      utf8BoundaryCommand("node -e '0' # ", "🧪"),
+      utf8BoundaryCommand("npm test -- # ", "🚀")
+    ]
+  });
 }
 
 function assertToolProtocol(messages) {
@@ -121,6 +143,57 @@ describe("adaptive context governor", () => {
       reason: "provider-billing-not-exposed-by-context-hook"
     });
     assert.equal(projection.decision.accounting.contextOccupancy.providerReportedTokens, 250_000);
+  });
+
+  it("keeps the full transcript when a bounded ledger cannot preserve lossless Unicode task truth", () => {
+    const currentTask = losslessOverflowTask();
+    const messages = [user(currentTask.operatorRequest)];
+    for (let index = 0; index < 20; index += 1) {
+      messages.push(...toolRound(`lossless-${index}`, "read", { path: `src/lossless-${index}.ts` }, "x".repeat(6_000)));
+    }
+    messages.push(user("Continue without dropping ADAPTIVE_FINAL_CLAUSE."));
+
+    const projection = projectAdaptiveContext(messages, {
+      reportedTokens: 250_000,
+      contextWindow: 400_000,
+      task: currentTask
+    });
+    assert.equal(projection.decision.action, "passthrough");
+    assert.equal(projection.decision.fallback, "no-safe-boundary");
+    assert.ok(projection.decision.reasonCodes.includes("lossless-task-truth-exceeds-ledger"));
+    assert.equal(projection.messages, messages);
+    const preserved = JSON.stringify(projection.messages);
+    assert.match(preserved, /ADAPTIVE_MIDDLE_CLAUSE/);
+    assert.match(preserved, /ADAPTIVE_FINAL_CLAUSE/);
+    assert.equal(preserved.includes(currentTask.operatorRequest), true);
+  });
+
+  it("uses a bounded manual-task fallback without dropping any durable criterion", () => {
+    const currentTask = task({
+      summary: `${"s".repeat(480)}MANUAL_GOAL_TAIL`,
+      expectedOutput: `${"e".repeat(480)}MANUAL_OUTPUT_TAIL`,
+      acceptanceCriteria: Array.from({ length: 12 }, (_item, index) => `${"c".repeat(560)}MANUAL_CRITERION_TAIL_${index + 1}`),
+      verifyCommands: [
+        utf8BoundaryCommand("node -e '0' # ", "x"),
+        utf8BoundaryCommand("npm test -- # ", "y")
+      ]
+    });
+    const messages = [user("Continue the bounded manual task")];
+    for (let index = 0; index < 22; index += 1) {
+      messages.push(...toolRound(`manual-${index}`, "read", { path: `src/manual-${index}.ts` }, "x".repeat(6_000)));
+    }
+    const projection = projectAdaptiveContext(messages, {
+      reportedTokens: 250_000,
+      contextWindow: 400_000,
+      task: currentTask
+    });
+    assert.equal(projection.decision.action, "project");
+    const ledger = String(projection.messages[0].content);
+    assert.ok(ledger.length <= 12_000, ledger.length);
+    assert.match(ledger, /MANUAL_GOAL_TAIL/);
+    assert.match(ledger, /MANUAL_OUTPUT_TAIL/);
+    for (let index = 1; index <= 12; index += 1) assert.match(ledger, new RegExp(`MANUAL_CRITERION_TAIL_${index}`));
+    for (const command of currentTask.verifyCommands) assert.equal(ledger.includes(command), true);
   });
 
   it("fails closed when the source transcript already contains an orphan tool message", () => {
@@ -459,6 +532,47 @@ describe("adaptive context governor", () => {
     assert.deepEqual(result, { cancel: true });
     assert.equal(telemetry.at(-1).fallback, "no-op-unsafe-tool-boundary");
     assert.deepEqual(telemetry.at(-1).protocol.orphanCallIds, ["split-call"]);
+  });
+
+  it("cancels durable compaction when its bounded ledger cannot carry the full operator request", async () => {
+    const handlers = new Map();
+    const telemetry = [];
+    const currentTask = losslessOverflowTask();
+    registerAdaptiveContextGovernor({
+      on(name, handler) {
+        handlers.set(name, handler);
+      }
+    }, {
+      activeTask: () => currentTask,
+      telemetry: (_ctx, payload) => telemetry.push(payload)
+    });
+    const source = [user(currentTask.operatorRequest), ...toolRound("lossless-read", "read", { path: "src/a.ts" }, "source")];
+    const result = await handlers.get("session_before_compact")({
+      reason: "threshold",
+      willRetry: false,
+      preparation: {
+        firstKeptEntryId: "entry-lossless",
+        messagesToSummarize: source,
+        turnPrefixMessages: [],
+        tokensBefore: 190_000,
+        previousSummary: "",
+        fileOps: { read: new Set(), written: new Set(), edited: new Set() }
+      }
+    }, {
+      cwd: "/tmp/project",
+      sessionManager: { getSessionId: () => "session-lossless" }
+    });
+
+    assert.deepEqual(result, { cancel: true });
+    assert.equal(telemetry.at(-1).fallback, "no-op-lossless-task-truth-exceeds-ledger");
+    assert.equal(JSON.stringify(source).includes("ADAPTIVE_MIDDLE_CLAUSE"), true);
+    assert.equal(JSON.stringify(source).includes("ADAPTIVE_FINAL_CLAUSE"), true);
+    assert.throws(() => deterministicTaskCompaction({
+      firstKeptEntryId: "entry-lossless",
+      messagesToSummarize: source,
+      turnPrefixMessages: [],
+      tokensBefore: 190_000
+    }, currentTask), /Deterministic compaction refused/);
   });
 
   it("uses a bounded deterministic override only for an overflow retry", async () => {

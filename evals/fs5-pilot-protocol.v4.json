@@ -17,15 +17,15 @@
   "artifactBindings": [
     { "id": "authority-manifest", "path": "packages/piagent-core/policy/authority-manifest.v1.json", "sha256": "1f073f6d42c093a3182685e0e096144c8b3befd87594aeea1af05ce17653860c" },
     { "id": "canary-suite", "path": "benchmarks/capability-v1/suite.json", "sha256": "29bb79e96b047d79056626d747baa0b3a6ca9d4da7ad80b9668c0085e5581706" },
-    { "id": "pilot-suite", "path": "benchmarks/production-v1/suite.json", "sha256": "194a5d36c70ca46c318bc12eb1858b9a345638e8e3613a63693980e228b3c4d1" },
-    { "id": "task-contract-schema", "path": "schemas/task-contract.schema.json", "sha256": "4dbd62ce375d1e671d18107a270c8031ed7a700293abdf8aec78aa0b32f52e53" },
+    { "id": "pilot-suite", "path": "benchmarks/production-v1/suite.json", "sha256": "1ff46984c5ff668647dfad94248cd9dcfb72384a8aa529279345582f90d7486a" },
+    { "id": "task-contract-schema", "path": "schemas/task-contract.schema.json", "sha256": "62ea354afb6816b148ae9bd95ffb1ee5e29580eb4a22473e1ae19dbb471ec36b" },
     { "id": "assurance-schema", "path": "schemas/benchmark-assurance-evidence.schema.json", "sha256": "5d937632d2cfff34dbbb781dd367bb78feb64c36d571c36ca15f2cc40c576af8" },
     { "id": "failure-and-operational-classifier", "path": "packages/piagent-core/benchmark/benchmark-forensics.js", "sha256": "976a9908adfd765ee7be0655616f39a44fff64824f5e8535d726082e550b02eb" },
     { "id": "phase-attribution", "path": "packages/piagent-core/benchmark/benchmark-phase-attribution.js", "sha256": "9c07bda5bfe7bb7b0959844ccea6790735cc9f154d8d5972e18785148cea6d9a" },
     { "id": "record-validator", "path": "packages/piagent-core/benchmark/benchmark-record-validation.js", "sha256": "37ecc65febe2c5947ac9288ad958bc149e0f08c6beda137edb1c660908853832" },
     { "id": "timing-diagnostics", "path": "packages/piagent-core/benchmark/benchmark-timing-diagnostics.js", "sha256": "5f52293f4c5c6d8444a35f94c6ccfd9e9183db8c8fa0e755c3da5b0cb847c2aa" },
     { "id": "protocol-enforcement", "path": "packages/piagent-core/benchmark/fs5-pilot-protocol.js", "sha256": "2bcc0cf6c18eee0c080c30e727610b0f10a278f5862855d920ba5797f07a2f2d" },
-    { "id": "runner-core", "path": "scripts/benchmark-runner-core.mjs", "sha256": "ba9abb58f9d3962cd79d1cae7cbb4fb07df642da254bf9bf1976b5f2bcab7df6" }
+    { "id": "runner-core", "path": "scripts/benchmark-runner-core.mjs", "sha256": "bf91f69473f48fc3de7c7c55e7ce893ba0511074c4ec930d9f3bcb9615d8e9d5" }
   ],
   "runIdentityContract": {
     "required": [

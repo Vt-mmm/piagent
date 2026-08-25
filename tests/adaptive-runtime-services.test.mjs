@@ -11,6 +11,7 @@ import {
 } from "../packages/piagent-core/runtime/context/adaptive-planner.ts";
 import { modelCapabilityFromContext } from "../packages/piagent-core/runtime/model/capabilities.ts";
 import { CONTEXT_PACK_MAX_TOKENS } from "../packages/piagent-core/runtime/runtime-limits.ts";
+import { automaticAcceptanceCriteria } from "../packages/piagent-core/runtime/workflows/task-intake.ts";
 import {
   evaluateExactFinalOutputContract,
   exactFinalOutputGuidance
@@ -38,14 +39,17 @@ import {
 } from "../packages/piagent-core/extensions/core-services.js";
 import {
   acceptanceBaselineGuidance,
+  acceptanceCriticalRecoveryProjection,
   acceptanceProofGuidance,
   acceptanceSemanticConflicts,
   buildAcceptanceReceipt,
   refreshAcceptanceReceipt
 } from "../packages/piagent-core/extensions/acceptance-receipt.js";
+import { verifierCommandsCoverTests } from "../packages/piagent-core/extensions/acceptance-behavior-proof.js";
 import { acceptanceInvalidInputEvidence } from "../packages/piagent-core/extensions/acceptance-contract-semantics.js";
 import { requestedErrorClasses } from "../packages/piagent-core/extensions/acceptance-error-classes.js";
 import { versionWorkingTreeHash, workingTreeCarrierDigest } from "../packages/piagent-core/extensions/working-tree-digest.js";
+import { operatorRequestDigest } from "../packages/piagent-core/extensions/task-state.js";
 import {
   BENCHMARK_SCOPE_BANDS,
   benchmarkTrustChecklist,
@@ -110,6 +114,759 @@ function contract(overrides = {}) {
     ...overrides
   };
 }
+
+test("operator behavioral criteria require changed executable assertions, not only a generic verifier", (t) => {
+  const cwd = temporaryProject(t, "piagent-requested-behavior-");
+  const currentDigest = treeDigest("a");
+  fs.mkdirSync(path.join(cwd, "src", "platform"), { recursive: true });
+  fs.writeFileSync(path.join(cwd, "src", "platform", "args.js"), "export function parseArgs(argv) { return { flags: {}, positional: [...argv] }; }\n");
+
+  const cliPrompt = [
+    "Repair `parseArgs(argv)` in `src/platform/args.js`.",
+    "",
+    "Support `--name value`, `--name=value`, and boolean `--flag`. The first standalone",
+    "`--` ends flag parsing and every later token is positional even if it starts",
+    "with dashes. A flag followed by another flag is boolean true. Repeated flags",
+    "use the last value. Do not mutate argv or change the return shape. Verify the",
+    "project."
+  ].join("\n");
+  const built = buildAcceptanceReceipt({
+    summary: "Repair parseArgs(argv) in src/platform/args.js.",
+    expectedOutput: "Every requested CLI form is supported.",
+    acceptanceCriteria: automaticAcceptanceCriteria(cliPrompt),
+    changeMode: "source-change",
+    source: "runtime",
+    generatedAt: "2026-08-25T00:00:00.000Z"
+  });
+  assert.equal(built.acceptanceCriteria.includes("A flag followed by another flag is boolean true."), true);
+  assert.equal(built.receipt.criteria.at(-1).obligation, "verification-evidence");
+  const imperativeVerification = buildAcceptanceReceipt({
+    summary: "Implement a bounded source change.",
+    expectedOutput: "The source change is verified.",
+    acceptanceCriteria: ["Run the configured verifier."],
+    changeMode: "source-change",
+    source: "runtime",
+    generatedAt: "2026-08-25T00:00:00.000Z"
+  });
+  assert.equal(imperativeVerification.receipt.criteria[0].obligation, "verification-evidence");
+
+  const verifyEvidence = [{
+    command: "npm test", exitCode: 0, summary: "pass", recordedAt: "2026-08-25T00:01:00.000Z",
+    observed: true, matchedProfileCommand: true,
+    preWorkingTreeDigest: currentDigest, workingTreeDigest: currentDigest
+  }];
+  const sourceOnly = refreshAcceptanceReceipt(contract({
+    summary: "Repair parseArgs(argv) in src/platform/args.js.",
+    expectedOutput: "Every requested CLI form is supported.",
+    acceptanceCriteria: built.acceptanceCriteria,
+    acceptanceReceipt: built.receipt,
+    changedFiles: ["src/platform/args.js"],
+    observedChangedFiles: ["src/platform/args.js"],
+    verifyEvidence
+  }), { cwd, changedFiles: ["src/platform/args.js"], currentWorkingTreeDigest: currentDigest });
+  assert.equal(sourceOnly.missing.some((criterion) => criterion.obligation === "requested-behavior"), true);
+  assert.equal(sourceOnly.criticalMissing.some((criterion) => criterion.obligation === "requested-behavior"), true);
+  assert.equal(sourceOnly.missing.some((criterion) => criterion.obligation === "verification-evidence"), false);
+
+  fs.mkdirSync(path.join(cwd, "test"), { recursive: true });
+  fs.writeFileSync(path.join(cwd, "test", "unrelated.test.js"), "import assert from 'node:assert/strict';\nassert.equal(1, 1);\n");
+  const unrelated = refreshAcceptanceReceipt(contract({
+    summary: "Repair parseArgs(argv) in src/platform/args.js.",
+    expectedOutput: "Every requested CLI form is supported.",
+    acceptanceCriteria: built.acceptanceCriteria,
+    acceptanceReceipt: built.receipt,
+    changedFiles: ["src/platform/args.js", "test/unrelated.test.js"],
+    observedChangedFiles: ["src/platform/args.js", "test/unrelated.test.js"],
+    verifyEvidence
+  }), {
+    cwd,
+    changedFiles: ["src/platform/args.js", "test/unrelated.test.js"],
+    currentWorkingTreeDigest: currentDigest
+  });
+  assert.equal(unrelated.criticalMissing.some((criterion) => criterion.obligation === "requested-behavior"), true);
+
+  fs.writeFileSync(path.join(cwd, "test", "args.test.js"), [
+    "import assert from 'node:assert/strict';",
+    "import { parseArgs } from '../src/platform/args.js';",
+    "assert.equal(parseArgs(['--mode=fast']).flags.mode, 'fast');",
+    ""
+  ].join("\n"));
+  const focused = refreshAcceptanceReceipt(contract({
+    summary: "Repair parseArgs(argv) in src/platform/args.js.",
+    expectedOutput: "Every requested CLI form is supported.",
+    acceptanceCriteria: built.acceptanceCriteria,
+    acceptanceReceipt: built.receipt,
+    changedFiles: ["src/platform/args.js", "test/args.test.js"],
+    observedChangedFiles: ["src/platform/args.js", "test/args.test.js"],
+    verifyEvidence
+  }), {
+    cwd,
+    changedFiles: ["src/platform/args.js", "test/args.test.js"],
+    currentWorkingTreeDigest: currentDigest
+  });
+  const focusedStatuses = new Map(built.acceptanceCriteria.map((criterion, index) => [criterion, focused.receipt.criteria[index].status]));
+  for (const criterion of [
+    "Support `--name value`, `--name=value`, and boolean `--flag`.",
+    "The first standalone `--` ends flag parsing and every later token is positional even if it starts with dashes.",
+    "A flag followed by another flag is boolean true.",
+    "Repeated flags use the last value.",
+    "Do not mutate argv or change the return shape."
+  ]) assert.equal(focusedStatuses.get(criterion), "pending", criterion);
+
+  fs.writeFileSync(path.join(cwd, "test", "args.test.js"), [
+    "import assert from 'node:assert/strict';",
+    "import { parseArgs } from '../src/platform/args.js';",
+    "const ignored = parseArgs(['--verbose', '--dry-run', '--', '--literal', '--mode=first', '--mode=last']);",
+    "void ignored;",
+    "const nonAdjacent = parseArgs(['--verbose', 'value', '--dry-run']);",
+    "assert.equal(nonAdjacent.flags.verbose, true);",
+    "const delimiterWithoutPositionalProof = parseArgs(['--mode=fast', '--', '--literal']);",
+    "assert.equal(delimiterWithoutPositionalProof.flags.mode, 'fast');",
+    "const equals = parseArgs(['--mode=fast']);",
+    "assert.equal(equals.flags.mode, 'fast');",
+    ""
+  ].join("\n"));
+  const unasserted = refreshAcceptanceReceipt(contract({
+    summary: "Repair parseArgs(argv) in src/platform/args.js.",
+    expectedOutput: "Every requested CLI form is supported.",
+    acceptanceCriteria: built.acceptanceCriteria,
+    acceptanceReceipt: built.receipt,
+    changedFiles: ["src/platform/args.js", "test/args.test.js"],
+    observedChangedFiles: ["src/platform/args.js", "test/args.test.js"],
+    verifyEvidence
+  }), {
+    cwd,
+    changedFiles: ["src/platform/args.js", "test/args.test.js"],
+    currentWorkingTreeDigest: currentDigest
+  });
+  const unassertedStatuses = new Map(built.acceptanceCriteria.map((criterion, index) => [criterion, unasserted.receipt.criteria[index].status]));
+  assert.equal(unassertedStatuses.get("The first standalone `--` ends flag parsing and every later token is positional even if it starts with dashes."), "pending");
+  assert.equal(unassertedStatuses.get("A flag followed by another flag is boolean true."), "pending");
+  assert.equal(unassertedStatuses.get("Repeated flags use the last value."), "pending");
+
+  fs.writeFileSync(path.join(cwd, "test", "args.test.js"), [
+    "import assert from 'node:assert/strict';",
+    "import { parseArgs } from '../src/platform/args.js';",
+    "const spaced = parseArgs(['--mode', 'slow']);",
+    "assert.equal(spaced.flags.mode, 'slow');",
+    "const boolean = parseArgs(['--verbose']);",
+    "assert.equal(boolean.flags.verbose, true);",
+    "let equals = parseArgs(['--mode=fast']);",
+    "equals = parseArgs(['--other=fast']);",
+    "assert.equal(equals.flags.mode, 'fast');",
+    "let delimited = parseArgs(['--', '--literal']);",
+    "delimited = parseArgs(['--', 'tail']);",
+    "assert.deepEqual(delimited.positional, ['--literal']);",
+    "let repeated = parseArgs(['--mode=first', '--mode=last']);",
+    "repeated = parseArgs(['--mode=other', '--mode=final']);",
+    "assert.equal(repeated.flags.mode, 'last');",
+    ""
+  ].join("\n"));
+  const reassignedResults = refreshAcceptanceReceipt(contract({
+    summary: "Repair parseArgs(argv) in src/platform/args.js.",
+    expectedOutput: "Every requested CLI form is supported.",
+    acceptanceCriteria: built.acceptanceCriteria,
+    acceptanceReceipt: built.receipt,
+    changedFiles: ["src/platform/args.js", "test/args.test.js"],
+    observedChangedFiles: ["src/platform/args.js", "test/args.test.js"],
+    verifyEvidence
+  }), { cwd, changedFiles: ["src/platform/args.js", "test/args.test.js"], currentWorkingTreeDigest: currentDigest });
+  const reassignedStatuses = new Map(built.acceptanceCriteria.map((criterion, index) => [criterion, reassignedResults.receipt.criteria[index].status]));
+  for (const criterion of [
+    "Support `--name value`, `--name=value`, and boolean `--flag`.",
+    "The first standalone `--` ends flag parsing and every later token is positional even if it starts with dashes.",
+    "Repeated flags use the last value."
+  ]) assert.equal(reassignedStatuses.get(criterion), "pending", `a post-reassignment assertion cannot prove the earlier call: ${criterion}`);
+
+  fs.writeFileSync(path.join(cwd, "test", "args.test.js"), [
+    "import assert from 'node:assert/strict';",
+    "import { parseArgs } from '../src/platform/args.js';",
+    "const equalsWrongKey = parseArgs(['--mode=fast']);",
+    "assert.equal(equalsWrongKey.flags.other, 'fast');",
+    "const equalsWrongValue = parseArgs(['--name=value']);",
+    "assert.equal(equalsWrongValue.flags.name, 'wrong');",
+    "const spaced = parseArgs(['--mode', 'slow']);",
+    "assert.equal(spaced.flags.mode, 'slow');",
+    "const booleanWrongKey = parseArgs(['--verbose']);",
+    "assert.equal(booleanWrongKey.flags.other, true);",
+    "const delimitedWrongSuffix = parseArgs(['--mode=fast', '--', '--literal', 'tail']);",
+    "assert.deepEqual(delimitedWrongSuffix.positional, ['tail']);",
+    "const adjacentWrongKey = parseArgs(['--verbose', '--dry-run']);",
+    "assert.equal(adjacentWrongKey.flags.dryRun, true);",
+    "const adjacentWrongValue = parseArgs(['--verbose', '--dry-run']);",
+    "assert.equal(adjacentWrongValue.flags.verbose, false);",
+    ""
+  ].join("\n"));
+  const wrongCliResults = refreshAcceptanceReceipt(contract({
+    summary: "Repair parseArgs(argv) in src/platform/args.js.",
+    expectedOutput: "Every requested CLI form is supported.",
+    acceptanceCriteria: built.acceptanceCriteria,
+    acceptanceReceipt: built.receipt,
+    changedFiles: ["src/platform/args.js", "test/args.test.js"],
+    observedChangedFiles: ["src/platform/args.js", "test/args.test.js"],
+    verifyEvidence
+  }), { cwd, changedFiles: ["src/platform/args.js", "test/args.test.js"], currentWorkingTreeDigest: currentDigest });
+  const wrongCliStatuses = new Map(built.acceptanceCriteria.map((criterion, index) => [criterion, wrongCliResults.receipt.criteria[index].status]));
+  for (const criterion of [
+    "Support `--name value`, `--name=value`, and boolean `--flag`.",
+    "The first standalone `--` ends flag parsing and every later token is positional even if it starts with dashes.",
+    "A flag followed by another flag is boolean true."
+  ]) assert.equal(wrongCliStatuses.get(criterion), "pending", `wrong asserted CLI result: ${criterion}`);
+
+  fs.writeFileSync(path.join(cwd, "test", "args.test.js"), [
+    "import assert from 'node:assert/strict';",
+    "import { parseArgs } from '../src/platform/args.js';",
+    "const repeated = parseArgs(['--mode=first', '--mode=last']);",
+    "assert.equal(repeated.flags.mode, 'first');",
+    ""
+  ].join("\n"));
+  const wrongRepeatedExpectation = refreshAcceptanceReceipt(contract({
+    summary: "Repair parseArgs(argv) in src/platform/args.js.",
+    expectedOutput: "Every requested CLI form is supported.",
+    acceptanceCriteria: built.acceptanceCriteria,
+    acceptanceReceipt: built.receipt,
+    changedFiles: ["src/platform/args.js", "test/args.test.js"],
+    observedChangedFiles: ["src/platform/args.js", "test/args.test.js"],
+    verifyEvidence
+  }), { cwd, changedFiles: ["src/platform/args.js", "test/args.test.js"], currentWorkingTreeDigest: currentDigest });
+  const wrongRepeatedStatuses = new Map(built.acceptanceCriteria.map((criterion, index) => [criterion, wrongRepeatedExpectation.receipt.criteria[index].status]));
+  assert.equal(wrongRepeatedStatuses.get("Repeated flags use the last value."), "pending",
+    "asserting the first repeated value must not prove last-value-wins semantics");
+
+  fs.writeFileSync(path.join(cwd, "test", "args.test.js"), [
+    "import assert from 'node:assert/strict';",
+    "import { parseArgs } from '../src/platform/args.js';",
+    "const argv = ['--mode=fast'];",
+    "const result = parseArgs(argv);",
+    "assert.deepEqual(argv, ['MUTATED']);",
+    "assert.equal(result.flags, undefined);",
+    "assert.equal(result.positional, undefined);",
+    ""
+  ].join("\n"));
+  const falseInputAndShape = refreshAcceptanceReceipt(contract({
+    summary: "Repair parseArgs(argv) in src/platform/args.js.",
+    expectedOutput: "Every requested CLI form is supported.",
+    acceptanceCriteria: built.acceptanceCriteria,
+    acceptanceReceipt: built.receipt,
+    changedFiles: ["src/platform/args.js", "test/args.test.js"],
+    observedChangedFiles: ["src/platform/args.js", "test/args.test.js"],
+    verifyEvidence
+  }), { cwd, changedFiles: ["src/platform/args.js", "test/args.test.js"], currentWorkingTreeDigest: currentDigest });
+  const falseInputAndShapeStatuses = new Map(built.acceptanceCriteria.map((criterion, index) => [criterion, falseInputAndShape.receipt.criteria[index].status]));
+  assert.equal(falseInputAndShapeStatuses.get("Do not mutate argv or change the return shape."), "pending",
+    "a mutated literal and undefined fields must not prove non-mutation or return shape");
+
+  const shapeBuilt = buildAcceptanceReceipt({
+    summary: "Preserve parseArgs return shape.",
+    expectedOutput: "The returned object keeps flags and positional fields.",
+    acceptanceCriteria: ["Do not mutate argv or change the return shape."],
+    changeMode: "source-change",
+    source: "runtime",
+    generatedAt: "2026-08-25T00:00:00.000Z"
+  });
+  const evaluateShape = (assertions) => {
+    fs.writeFileSync(path.join(cwd, "test", "args.test.js"), [
+      "import assert from 'node:assert/strict';",
+      "import { parseArgs } from '../src/platform/args.js';",
+      "const argv = ['--mode=fast'];",
+      "const before = [...argv];",
+      "const result = parseArgs(argv);",
+      "assert.deepEqual(argv, before);",
+      ...assertions,
+      ""
+    ].join("\n"));
+    return refreshAcceptanceReceipt(contract({
+      summary: "Preserve parseArgs return shape.",
+      expectedOutput: "The returned object keeps flags and positional fields.",
+      acceptanceCriteria: shapeBuilt.acceptanceCriteria,
+      acceptanceReceipt: shapeBuilt.receipt,
+      changedFiles: ["src/platform/args.js", "test/args.test.js"],
+      observedChangedFiles: ["src/platform/args.js", "test/args.test.js"],
+      verifyEvidence
+    }), { cwd, changedFiles: ["src/platform/args.js", "test/args.test.js"], currentWorkingTreeDigest: currentDigest });
+  };
+  for (const assertions of [
+    ["assert.ok(result.flags === undefined);", "assert.ok(result.positional == null);"],
+    ["assert.ok(result.flags !== null);", "assert.ok(result.positional !== null);"],
+    ["assert.ok(!('flags' in result));", "assert.ok(!Object.hasOwn(result, 'positional'));"],
+  ]) {
+    assert.equal(evaluateShape(assertions).receipt.criteria[0].status, "pending",
+      `absence-compatible predicates must not prove return shape: ${assertions.join(" ")}`);
+  }
+  assert.equal(evaluateShape([
+    "assert.deepEqual(result, { flags: {}, positional: [] });"
+  ]).receipt.criteria[0].status, "satisfied",
+  "an exact expected result object proves both shape fields");
+  assert.equal(evaluateShape([
+    "assert.ok(result.flags != null);",
+    "assert.ok(Array.isArray(result.positional));"
+  ]).receipt.criteria[0].status, "satisfied",
+  "positive defined/value predicates prove the returned fields");
+
+  fs.writeFileSync(path.join(cwd, "test", "args.test.js"), [
+    "import assert from 'node:assert/strict';",
+    "import { parseArgs } from '../src/platform/args.js';",
+    "const equals = parseArgs(['--mode=fast']);",
+    "assert.equal(equals.flags.mode, 'fast');",
+    "const spaced = parseArgs(['--mode', 'slow']);",
+    "assert.equal(spaced.flags.mode, 'slow');",
+    "const boolean = parseArgs(['--verbose']);",
+    "assert.equal(boolean.flags.verbose, true);",
+    "const chained = parseArgs(['--verbose', '--dry-run']);",
+    "assert.equal(chained.flags.verbose, true);",
+    "assert.equal(chained.flags.dryRun, true);",
+    "const delimited = parseArgs(['--mode=fast', '--', '--literal']);",
+    "assert.deepEqual(delimited.positional, ['--literal']);",
+    "const repeated = parseArgs(['--mode=first', '--mode=last']);",
+    "assert.equal(repeated.flags.mode, 'last');",
+    "const argv = ['--mode=fast'];",
+    "const before = [...argv];",
+    "const result = parseArgs(argv);",
+    "assert.deepEqual(argv, before);",
+    "assert.deepEqual(result.flags, { mode: 'fast' });",
+    "assert.deepEqual(result.positional, []);",
+    ""
+  ].join("\n"));
+  const complete = refreshAcceptanceReceipt(contract({
+    summary: "Repair parseArgs(argv) in src/platform/args.js.",
+    expectedOutput: "Every requested CLI form is supported.",
+    acceptanceCriteria: built.acceptanceCriteria,
+    acceptanceReceipt: built.receipt,
+    changedFiles: ["src/platform/args.js", "test/args.test.js"],
+    observedChangedFiles: ["src/platform/args.js", "test/args.test.js"],
+    verifyEvidence
+  }), {
+    cwd,
+    changedFiles: ["src/platform/args.js", "test/args.test.js"],
+    currentWorkingTreeDigest: currentDigest
+  });
+  assert.deepEqual(complete.receipt.criteria.map((criterion) => criterion.status),
+    Array.from({ length: complete.receipt.criteria.length }, () => "satisfied"));
+  assert.equal(complete.receipt.criteria[0].evidence[0]?.kind, "verifier-backed-focused-test");
+
+  const withVerifier = (command) => refreshAcceptanceReceipt(contract({
+    summary: "Repair parseArgs(argv) in src/platform/args.js.",
+    expectedOutput: "Every requested CLI form is supported.",
+    acceptanceCriteria: built.acceptanceCriteria,
+    acceptanceReceipt: built.receipt,
+    changedFiles: ["src/platform/args.js", "test/args.test.js"],
+    observedChangedFiles: ["src/platform/args.js", "test/args.test.js"],
+    verifyCommands: [command],
+    verifyEvidence: [{ ...verifyEvidence[0], command }]
+  }), { cwd, changedFiles: ["src/platform/args.js", "test/args.test.js"], currentWorkingTreeDigest: currentDigest });
+  const unrelatedVerifier = withVerifier("node --test test/unrelated.test.js");
+  assert.equal(unrelatedVerifier.receipt.criteria.some((criterion) => criterion.obligation === "requested-behavior" && criterion.status === "satisfied"), false,
+    "a passing verifier for another file cannot execute or prove the changed focused test");
+  const tokenOnlyVerifier = withVerifier("cat test/args.test.js && npm run lint");
+  assert.equal(tokenOnlyVerifier.receipt.criteria.some((criterion) => criterion.obligation === "requested-behavior" && criterion.status === "satisfied"), false,
+    "mentioning a test path outside a recognized test-runner segment cannot prove execution");
+  for (const command of ["node --test test/args.test.js || true", "node --test test/args.test.js | true"]) {
+    const maskedVerifier = withVerifier(command);
+    assert.equal(maskedVerifier.receipt.criteria.some((criterion) => criterion.obligation === "requested-behavior" && criterion.status === "satisfied"), false,
+      `a control operator that masks test failure cannot prove execution: ${command}`);
+  }
+  const shippedAdapterCommands = ["node-typescript", "backend-api"].map((adapter) => (
+    JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, `../adapters/${adapter}/profile.json`), "utf8")).verifyCommands.source[0]
+  ));
+  fs.writeFileSync(path.join(cwd, "package.json"), JSON.stringify({ scripts: { lint: "node --check src/platform/args.js" } }));
+  for (const command of shippedAdapterCommands) {
+    assert.equal(withVerifier(command).receipt.criteria.some((criterion) => criterion.obligation === "requested-behavior" && criterion.status === "satisfied"), false,
+      "npm test --if-present cannot prove test execution when a lint-only manifest has no bound test script");
+  }
+  for (const script of [
+    "if false; then node --test test/args.test.js; else echo skipped; fi",
+    "node --test test/args.test.js || true"
+  ]) {
+    fs.writeFileSync(path.join(cwd, "package.json"), JSON.stringify({ scripts: { test: script } }));
+    assert.equal(withVerifier(shippedAdapterCommands[0]).receipt.criteria.some((criterion) => criterion.obligation === "requested-behavior" && criterion.status === "satisfied"), false,
+      `conditional or exit-masked package test script cannot prove execution: ${script}`);
+  }
+  fs.writeFileSync(path.join(cwd, "package.json"), JSON.stringify({ scripts: { test: "node --test test/*.test.js" } }));
+  for (const command of [
+    "node --test test/args.test.js", "node --test test/*.test.js", "node --test test/**/*.test.js", "node --test", "npm test",
+    ...shippedAdapterCommands
+  ]) {
+    assert.deepEqual(withVerifier(command).receipt.criteria.map((criterion) => criterion.status),
+      Array.from({ length: built.receipt.criteria.length }, () => "satisfied"), `verifier coverage: ${command}`);
+  }
+});
+
+test("verifier coverage resolves only the selected shipped adapter test branch", (t) => {
+  const cwd = temporaryProject(t, "piagent-verifier-branches-");
+  const command = (adapter, group = "source") => JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, `../adapters/${adapter}/profile.json`), "utf8")).verifyCommands[group][0];
+  const covers = (adapter, testPath, group) => verifierCommandsCoverTests({ verifyCommands: [command(adapter, group)] }, [testPath], cwd);
+  const executable = (name) => {
+    const target = path.join(cwd, name);
+    fs.writeFileSync(target, "#!/bin/sh\nexit 0\n");
+    fs.chmodSync(target, 0o755);
+    return target;
+  };
+
+  executable("mvnw");
+  assert.equal(covers("backend-api", "src/test/java/ArgsTest.java"), true);
+  fs.rmSync(path.join(cwd, "mvnw"));
+  executable("gradlew");
+  assert.equal(covers("backend-api", "src/test/java/ArgsTest.java"), true);
+  fs.rmSync(path.join(cwd, "gradlew"));
+  fs.writeFileSync(path.join(cwd, "pyproject.toml"), "[project]\nname='fixture'\n");
+  assert.equal(covers("backend-api", "tests/test_args.py"), true);
+  assert.equal(covers("data", "tests/test_args.py"), true);
+
+  fs.rmSync(path.join(cwd, "pyproject.toml"));
+  fs.writeFileSync(path.join(cwd, "pubspec.yaml"), "name: fixture\n");
+  const bin = path.join(cwd, "bin");
+  fs.mkdirSync(bin);
+  executable("bin/flutter");
+  const previousPath = process.env.PATH;
+  process.env.PATH = `${bin}${path.delimiter}${previousPath ?? ""}`;
+  t.after(() => { process.env.PATH = previousPath; });
+  assert.equal(covers("mobile", "test/widget_test.dart"), true);
+
+  fs.writeFileSync(path.join(cwd, "package.json"), JSON.stringify({ scripts: { lint: "echo lint" } }));
+  executable("mvnw");
+  fs.writeFileSync(path.join(cwd, "pyproject.toml"), "[project]\nname='dormant'\n");
+  assert.equal(covers("backend-api", "test/args.test.js"), false,
+    "a selected lint-only Node branch cannot borrow a dormant Maven or pytest runner");
+
+  for (const target of ["package.json", "mvnw", "pyproject.toml", "pubspec.yaml", "bin"]) {
+    fs.rmSync(path.join(cwd, target), { recursive: true, force: true });
+  }
+  fs.mkdirSync(path.join(cwd, "frontend"), { recursive: true });
+  fs.writeFileSync(path.join(cwd, "frontend", "package.json"), JSON.stringify({ scripts: {
+    test: "node --test test/*.test.js",
+    "test:e2e": "playwright test e2e/*.spec.js"
+  } }));
+  assert.equal(covers("be-readonly-fe", "frontend/test/args.test.js", "frontendSource"), true,
+    "the selected frontend cwd keeps the post-fi source verifier suffix");
+  assert.equal(covers("be-readonly-fe", "frontend/e2e/flow.spec.js", "frontendRuntime"), true,
+    "a bound named runtime script covers its frontend-relative e2e path");
+  assert.equal(covers("be-readonly-fe", "test/args.test.js", "frontendSource"), false,
+    "a nested frontend verifier cannot claim a root test path");
+
+  fs.writeFileSync(path.join(cwd, "package.json"), JSON.stringify({ scripts: { "test:e2e": "playwright test e2e/*.spec.js" } }));
+  assert.equal(covers("fullstack", "e2e/flow.spec.js", "runtime"), true);
+  assert.equal(covers("web-frontend", "e2e/flow.spec.js", "runtime"), true);
+  fs.writeFileSync(path.join(cwd, "package.json"), JSON.stringify({ scripts: { "test:e2e": "playwright test e2e/other.spec.js" } }));
+  assert.equal(covers("fullstack", "e2e/flow.spec.js", "runtime"), false,
+    "a named script remains bound to its own runner path rather than every e2e file");
+});
+
+test("behavior proof ignores inert import text and safely handles alias or indirect linkage", (t) => {
+  const cwd = temporaryProject(t, "piagent-behavior-linkage-");
+  const currentDigest = treeDigest("b");
+  fs.mkdirSync(path.join(cwd, "src", "platform"), { recursive: true });
+  fs.mkdirSync(path.join(cwd, "test"), { recursive: true });
+  fs.writeFileSync(path.join(cwd, "src", "platform", "args.js"),
+    "export function parseArgs(argv) { return { flags: {}, positional: [...argv] }; }\n");
+  const built = buildAcceptanceReceipt({
+    summary: "Repair parseArgs(argv).",
+    expectedOutput: "The exact input and result contracts hold.",
+    acceptanceCriteria: [
+      "Do not mutate argv or change the return shape.",
+      "The configured verification command passes after the final mutation."
+    ],
+    changeMode: "source-change",
+    source: "runtime",
+    generatedAt: "2026-08-25T00:00:00.000Z"
+  });
+  const verifyEvidence = [{
+    command: "npm test", exitCode: 0, summary: "pass", recordedAt: "2026-08-25T00:01:00.000Z",
+    observed: true, matchedProfileCommand: true,
+    preWorkingTreeDigest: currentDigest, workingTreeDigest: currentDigest
+  }];
+  const evaluate = (testSource, acceptance = built) => {
+    fs.writeFileSync(path.join(cwd, "test", "args.test.js"), testSource);
+    return refreshAcceptanceReceipt(contract({
+      summary: "Repair parseArgs(argv).",
+      expectedOutput: "The exact input and result contracts hold.",
+      acceptanceCriteria: acceptance.acceptanceCriteria,
+      acceptanceReceipt: acceptance.receipt,
+      changedFiles: ["src/platform/args.js", "test/args.test.js"],
+      observedChangedFiles: ["src/platform/args.js", "test/args.test.js"],
+      verifyEvidence
+    }), {
+      cwd,
+      changedFiles: ["src/platform/args.js", "test/args.test.js"],
+      currentWorkingTreeDigest: currentDigest
+    });
+  };
+
+  const inert = evaluate([
+    "import assert from 'node:assert/strict';",
+    "// import { parseArgs } from '../src/platform/args.js'; assert.deepEqual(parseArgs(argv).flags, {});",
+    "const documentation = \"import { parseArgs } from '../src/platform/args.js'\";",
+    "assert.equal(documentation.includes('parseArgs'), true);",
+    ""
+  ].join("\n"));
+  assert.equal(inert.receipt.criteria[0].status, "pending",
+    "comments and raw strings must not forge source linkage or executable behavior");
+
+  const opaqueNamedAlias = evaluate([
+    "import assert from 'node:assert/strict';",
+    "import { parseArgs as parse } from '@/platform';",
+    "const argv = ['--mode=fast'];",
+    "const before = [...argv];",
+    "const result = parse(argv);",
+    "assert.deepEqual(argv, before);",
+    "assert.deepEqual(result.flags, {});",
+    "assert.deepEqual(result.positional, argv);",
+    ""
+  ].join("\n"));
+  assert.equal(opaqueNamedAlias.receipt.criteria[0].status, "pending",
+    "an opaque named alias must abstain without resolved provenance");
+  assert.equal(opaqueNamedAlias.criticalMissing.some((criterion) => criterion.id === opaqueNamedAlias.receipt.criteria[0].id), true,
+    "rigorous completion remains fail-closed when deterministic linkage is unavailable");
+  assert.equal(opaqueNamedAlias.adapterAbstained.some((criterion) => criterion.id === opaqueNamedAlias.receipt.criteria[0].id), true);
+  const aliasProjection = acceptanceCriticalRecoveryProjection(opaqueNamedAlias.task, {
+    cwd, changedFiles: ["src/platform/args.js", "test/args.test.js"], currentWorkingTreeDigest: currentDigest
+  });
+  assert.deepEqual(aliasProjection.map((item) => item.missingDimensions), [["adapter-linkage"]]);
+  assert.match(aliasProjection[0].proofHints.join(" "), /direct relative import|deterministic language adapter/i);
+
+  const externalSameName = evaluate([
+    "import assert from 'node:assert/strict';",
+    "import { parseArgs } from 'other-package';",
+    "const argv = ['--mode=fast'];",
+    "const before = [...argv];",
+    "const result = parseArgs(argv);",
+    "assert.deepEqual(argv, before);",
+    "assert.deepEqual(result.flags, {});",
+    "assert.deepEqual(result.positional, argv);",
+    ""
+  ].join("\n"));
+  assert.equal(externalSameName.receipt.criteria[0].status, "pending",
+    "a same-name external export must never link to the changed source by name collision");
+  assert.equal(externalSameName.criticalMissing.some((criterion) => criterion.id === externalSameName.receipt.criteria[0].id), true,
+    "a known unrelated package remains enforceable rather than adapter-abstained");
+
+  const relativeNamespace = evaluate([
+    "import assert from 'node:assert/strict';",
+    "import * as args from '../src/platform/args.js';",
+    "const argv = ['--mode=fast'];",
+    "const before = [...argv];",
+    "const result = args.parseArgs(argv);",
+    "assert.deepEqual(argv, before);",
+    "assert.deepEqual(result.flags, {});",
+    "assert.deepEqual(result.positional, argv);",
+    ""
+  ].join("\n"));
+  assert.equal(relativeNamespace.receipt.criteria[0].status, "satisfied",
+    "a namespace import from the exact changed source binds its exported callable");
+
+  const opaqueAlias = evaluate([
+    "import assert from 'node:assert/strict';",
+    "import parse from '@/platform';",
+    "const argv = ['--mode=fast'];",
+    "const before = [...argv];",
+    "const result = parse(argv);",
+    "assert.deepEqual(argv, before);",
+    "assert.deepEqual(result.flags, {});",
+    "assert.deepEqual(result.positional, argv);",
+    ""
+  ].join("\n"));
+  assert.equal(opaqueAlias.receipt.criteria[0].status, "pending",
+    "opaque alias linkage must abstain instead of falsely marking exact behavior satisfied");
+
+  const indirect = evaluate([
+    "import assert from 'node:assert/strict';",
+    "import { runParser } from './test-helper.js';",
+    "const argv = ['--mode=fast'];",
+    "const before = [...argv];",
+    "const result = runParser(argv);",
+    "assert.deepEqual(argv, before);",
+    "assert.deepEqual(result.flags, {});",
+    "assert.deepEqual(result.positional, argv);",
+    ""
+  ].join("\n"));
+  assert.equal(indirect.receipt.criteria[0].status, "pending",
+    "an unresolved indirect import is unknown proof, not proof of failure or success");
+  assert.equal(indirect.criticalMissing.some((criterion) => criterion.id === indirect.receipt.criteria[0].id), true);
+  assert.equal(indirect.adapterAbstained.some((criterion) => criterion.id === indirect.receipt.criteria[0].id), true);
+
+  const compoundBuilt = buildAcceptanceReceipt({
+    summary: "Exercise parseArgs behavior without changing its return shape.",
+    expectedOutput: "The parser contract remains stable.",
+    acceptanceCriteria: ["parseArgs supports mode lookup; retain parser formatting."],
+    changeMode: "source-change",
+    source: "runtime",
+    generatedAt: "2026-08-25T00:00:00.000Z"
+  });
+  const compound = evaluate([
+    "import assert from 'node:assert/strict';",
+    "import { parseArgs } from '../src/platform/args.js';",
+    "const result = parseArgs(['--mode=fast']);",
+    "assert.deepEqual(result.flags, { mode: 'fast' });",
+    ""
+  ].join("\n"), compoundBuilt);
+  assert.equal(compound.receipt.criteria[0].status, "pending",
+    "one matching anchor cannot prove every clause in a compound semicolon criterion");
+  const mixedCompoundBuilt = buildAcceptanceReceipt({
+    summary: "Preserve parser behavior.",
+    expectedOutput: "Every parser obligation is proven.",
+    acceptanceCriteria: ["Do not mutate input; keep flags/positional return shape; reject invalid values."],
+    changeMode: "source-change",
+    source: "runtime",
+    generatedAt: "2026-08-25T00:00:00.000Z"
+  });
+  const mixedCompound = evaluate([
+    "import assert from 'node:assert/strict';",
+    "import { parseArgs } from '../src/platform/args.js';",
+    "const argv = ['--mode=fast'];",
+    "const before = [...argv];",
+    "const result = parseArgs(argv);",
+    "assert.deepEqual(argv, before);",
+    "assert.deepEqual(result.flags, { mode: 'fast' });",
+    "assert.deepEqual(result.positional, []);",
+    ""
+  ].join("\n"), mixedCompoundBuilt);
+  assert.equal(mixedCompound.receipt.criteria[0].status, "pending",
+    "recognized non-mutation and shape proof cannot hide an unsupported rejection clause");
+
+  const broad = buildAcceptanceReceipt({
+    summary: "Improve parser behavior.",
+    expectedOutput: "Parser mode lookup works.",
+    acceptanceCriteria: ["Support parser mode lookup."],
+    changeMode: "source-change",
+    source: "runtime",
+    generatedAt: "2026-08-25T00:00:00.000Z"
+  });
+  const broadDefault = evaluate("import parse from '@/platform';\nvoid parse;\n", broad);
+  assert.equal(broadDefault.receipt.criteria[0].status, "satisfied",
+    "unknown linkage must not turn ordinary broad-default verification into an unconditional block");
+});
+
+test("shallow freeze is supplemental rather than proof of nested non-mutation", (t) => {
+  const cwd = temporaryProject(t, "piagent-nested-non-mutation-");
+  const currentDigest = treeDigest("e");
+  const sourcePath = "src/platform/state.js";
+  const testPath = "test/state.test.js";
+  fs.mkdirSync(path.join(cwd, "src", "platform"), { recursive: true });
+  fs.mkdirSync(path.join(cwd, "test"), { recursive: true });
+  fs.writeFileSync(path.join(cwd, sourcePath), [
+    "export function updateState(input) {",
+    "  input.nested.value += 1;",
+    "  return { ok: true };",
+    "}",
+    ""
+  ].join("\n"));
+  const built = buildAcceptanceReceipt({
+    summary: "Update nested caller state safely.",
+    expectedOutput: "Caller-owned state remains unchanged.",
+    acceptanceCriteria: [
+      "Do not mutate caller state/input.",
+      "The configured verification command passes after the final mutation."
+    ],
+    changeMode: "source-change",
+    source: "runtime",
+    generatedAt: "2026-08-25T00:00:00.000Z"
+  });
+  const verifyEvidence = [{
+    command: "npm test", exitCode: 0, summary: "pass", recordedAt: "2026-08-25T00:01:00.000Z",
+    observed: true, matchedProfileCommand: true,
+    preWorkingTreeDigest: currentDigest, workingTreeDigest: currentDigest
+  }];
+  const evaluate = (testSource) => {
+    fs.writeFileSync(path.join(cwd, testPath), testSource);
+    return refreshAcceptanceReceipt(contract({
+      summary: "Update nested caller state safely.",
+      expectedOutput: "Caller-owned state remains unchanged.",
+      acceptanceCriteria: built.acceptanceCriteria,
+      acceptanceReceipt: built.receipt,
+      changedFiles: [sourcePath, testPath],
+      observedChangedFiles: [sourcePath, testPath],
+      verifyEvidence
+    }), { cwd, changedFiles: [sourcePath, testPath], currentWorkingTreeDigest: currentDigest });
+  };
+
+  const shallowFreezeOnly = evaluate([
+    "import assert from 'node:assert/strict';",
+    "import { updateState } from '../src/platform/state.js';",
+    "const input = { nested: { value: 1 } };",
+    "Object.freeze(input);",
+    "const result = updateState(input);",
+    "assert.equal(result.ok, true);",
+    ""
+  ].join("\n"));
+  assert.equal(shallowFreezeOnly.receipt.criteria[0].status, "pending",
+    "a shallow-frozen object can still have nested state mutated");
+  assert.equal(shallowFreezeOnly.criticalMissing.some((criterion) => criterion.id === shallowFreezeOnly.receipt.criteria[0].id), true);
+
+  fs.writeFileSync(path.join(cwd, sourcePath), [
+    "export function updateState(items) {",
+    "  items[0].value += 1;",
+    "  return { ok: true };",
+    "}",
+    ""
+  ].join("\n"));
+  const shallowAggregateSnapshot = evaluate([
+    "import assert from 'node:assert/strict';",
+    "import { updateState } from '../src/platform/state.js';",
+    "const items = [{ value: 1 }];",
+    "const before = [...items];",
+    "const result = updateState(items);",
+    "assert.deepEqual(items, before);",
+    "assert.equal(result.ok, true);",
+    ""
+  ].join("\n"));
+  assert.equal(shallowAggregateSnapshot.receipt.criteria[0].status, "pending",
+    "a spread snapshot aliases nested objects and cannot prove aggregate non-mutation");
+
+  const generatedObjectSnapshot = evaluate([
+    "import assert from 'node:assert/strict';",
+    "import { updateState } from '../src/platform/state.js';",
+    "const items = Array.from({ length: 1 }, (_, index) => ({ value: index }));",
+    "const before = [...items];",
+    "const result = updateState(items);",
+    "assert.deepEqual(items, before);",
+    "assert.equal(result.ok, true);",
+    ""
+  ].join("\n"));
+  assert.equal(generatedObjectSnapshot.receipt.criteria[0].status, "pending",
+    "an Array.from callback returning objects cannot turn an aliased shallow snapshot into non-mutation proof");
+
+  fs.writeFileSync(path.join(cwd, sourcePath), "export function updateState(input) { return { ok: input.nested.value > 0 }; }\n");
+  const primitiveArraySnapshot = evaluate([
+    "import assert from 'node:assert/strict';",
+    "import { updateState } from '../src/platform/state.js';",
+    "const input = ['first', 'second'];",
+    "const before = [...input];",
+    "const result = updateState(input);",
+    "assert.deepEqual(input, before);",
+    "assert.equal(result.ok, true);",
+    ""
+  ].join("\n"));
+  assert.equal(primitiveArraySnapshot.receipt.criteria[0].status, "satisfied",
+    "a shallow snapshot is sufficient when every array element is statically primitive");
+
+  fs.writeFileSync(path.join(cwd, sourcePath), "export function updateState(items) { return items.slice(0, 2); }\n");
+  const generatedPrimitiveArraySnapshot = evaluate([
+    "import assert from 'node:assert/strict';",
+    "import { updateState } from '../src/platform/state.js';",
+    "const items = Array.from({ length: 25 }, (_, index) => index);",
+    "const before = [...items];",
+    "updateState(items);",
+    "assert.deepEqual(items, before);",
+    ""
+  ].join("\n"));
+  assert.equal(generatedPrimitiveArraySnapshot.receipt.criteria[0].status, "satisfied",
+    "an index-valued Array.from factory is statically primitive and supports a shallow snapshot");
+
+  for (const assertion of ["deepEqual", "deepStrictEqual"]) {
+    const deepSnapshot = evaluate([
+      "import assert from 'node:assert/strict';",
+      "import { updateState } from '../src/platform/state.js';",
+      "const input = { nested: { value: 1 } };",
+      "const before = structuredClone(input);",
+      "Object.freeze(input);",
+      "const result = updateState(input);",
+      `assert.${assertion}(input, before);`,
+      "assert.equal(result.ok, true);",
+      ""
+    ].join("\n"));
+    assert.equal(deepSnapshot.receipt.criteria[0].status, "satisfied",
+      `${assertion} against a pre-call deep snapshot proves nested non-mutation`);
+  }
+});
 
 test("adaptive planner contracts budget by phase, pressure, and thinking capability", () => {
   const capability = modelCapabilityFromContext(extensionContext(), "xhigh");
@@ -1837,8 +2594,52 @@ test("exact final-output contracts reject truncated source-derived values", (t) 
     ...task,
     contextManifest: [{ path: "logs/incident.log", reason: "criterion-01 scope target" }]
   }, "ROOT_CAUSE=QUEUE_SATURATION_E99CEB030A", cwd);
-  assert.equal(plannedOnly.applicable, false, "planned context cannot become exact-output evidence");
+  assert.equal(plannedOnly.applicable, true, "a detected directive remains mandatory even without qualified evidence");
+  assert.equal(plannedOnly.passed, false, "planned context cannot become exact-output evidence");
+  assert.equal(plannedOnly.reason, "exact-output-evidence-missing");
+  fs.writeFileSync(path.join(cwd, "logs", "unrelated.log"), "service=jobs status=degraded\n");
+  const unrelatedObserved = evaluateExactFinalOutputContract({
+    ...task,
+    contextManifest: [{ path: "logs/unrelated.log", reason: "Runtime observed successful source read." }]
+  }, "Incident reviewed without an output line.", cwd);
+  assert.equal(unrelatedObserved.applicable, true);
+  assert.equal(unrelatedObserved.passed, false);
+  assert.equal(unrelatedObserved.reason, "exact-output-evidence-missing");
+  fs.writeFileSync(path.join(cwd, "logs", "second.log"), "root_cause=DIFFERENT_CAUSE_B\n");
+  const ambiguous = evaluateExactFinalOutputContract({
+    ...task,
+    contextManifest: [
+      { path: "logs/incident.log", reason: "Runtime observed successful source read." },
+      { path: "logs/second.log", reason: "Runtime observed successful source read." }
+    ]
+  }, "ROOT_CAUSE=QUEUE_SATURATION_E99CEB030A", cwd);
+  assert.equal(ambiguous.applicable, true);
+  assert.equal(ambiguous.passed, false);
+  assert.equal(ambiguous.reason, "exact-output-evidence-ambiguous");
   assert.equal(evaluateExactFinalOutputContract({ ...task, summary: "Summarize the incident." }, "Done", cwd).applicable, false);
+
+  const operatorRequest = [
+    "PRIVATE_LATE_DIRECTIVE_SENTINEL: investigate the incident without exposing this full request.",
+    "x".repeat(900),
+    "Finish your response with ROOT_CAUSE=<code> as the last line."
+  ].join("\n");
+  const lateDirective = {
+    ...task,
+    summary: "Investigate the incident from observed evidence.",
+    operatorRequest,
+    operatorRequestDigest: operatorRequestDigest(operatorRequest)
+  };
+  const guidance = exactFinalOutputGuidance(lateDirective).join("\n");
+  assert.match(guidance, /ROOT_CAUSE=<code>.*last non-empty response line/);
+  assert.equal(guidance.includes("PRIVATE_LATE_DIRECTIVE_SENTINEL"), false, "guidance must project only the exact-output contract, not raw private intake");
+  const evaluatedLate = evaluateExactFinalOutputContract(lateDirective, "ROOT_CAUSE=QUEUE_SATURATION_E99CEB030A", cwd);
+  assert.equal(evaluatedLate.applicable, true);
+  assert.equal(evaluatedLate.passed, true);
+  assert.equal(JSON.stringify(evaluatedLate).includes("PRIVATE_LATE_DIRECTIVE_SENTINEL"), false);
+  assert.equal(evaluateExactFinalOutputContract({
+    ...lateDirective,
+    operatorRequestDigest: operatorRequestDigest(`${operatorRequest}!`)
+  }, "ROOT_CAUSE=QUEUE_SATURATION_E99CEB030A", cwd).applicable, false, "tampered operator truth must not activate an output contract");
 });
 
 test("execution backend contract keeps OAuth with Pi host and gates experimental mutation", () => {

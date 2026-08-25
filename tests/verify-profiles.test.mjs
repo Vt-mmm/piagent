@@ -5,7 +5,13 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { selectVerificationPlan } from "../packages/piagent-core/extensions/verification-intelligence.js";
+import {
+  MAX_VERIFY_COMMAND_BYTES,
+  MAX_VERIFY_COMMAND_CHARS,
+  MAX_VERIFY_COMMAND_TOTAL_BYTES,
+  selectVerificationPlan,
+  utf8ByteLength
+} from "../packages/piagent-core/extensions/verification-intelligence.js";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 
@@ -25,6 +31,13 @@ function run(command, cwd) {
 
 function runWithEnv(command, cwd, env) {
   return spawnSync(command, { cwd, shell: true, encoding: "utf8", env: { ...process.env, ...env } });
+}
+
+function utf8BoundaryCommand(prefix, glyph) {
+  const remaining = MAX_VERIFY_COMMAND_BYTES - Buffer.byteLength(prefix, "utf8");
+  const glyphBytes = Buffer.byteLength(glyph, "utf8");
+  const repeated = glyph.repeat(Math.floor(remaining / glyphBytes));
+  return `${prefix}${repeated}${"x".repeat(remaining - Buffer.byteLength(repeated, "utf8"))}`;
 }
 
 test("default source verify plans fail closed when a project has no applicable verifier", (t) => {
@@ -72,6 +85,47 @@ test("web frontend narrows its fail-closed source verifier to scripts the projec
   assert.deepEqual(
     selectVerificationPlan(profile("web-frontend"), undefined, "source-change", cwd, ["src/stream.js"]),
     { group: "source", commands: ["npm test"] }
+  );
+});
+
+test("task intake rejects verifier plans that cannot be injected exactly within the runtime cap", (t) => {
+  const cwd = fixture();
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  const oversized = selectVerificationPlan({ verifyCommands: { source: [`node --test ${"test/fixture.mjs ".repeat(300)}`] } }, undefined, "source-change", cwd, ["src/value.js"]);
+  assert.match(oversized.error, new RegExp(`exceeds ${MAX_VERIFY_COMMAND_CHARS} characters`));
+  assert.match(oversized.error, /checked-in script/);
+
+  assert.equal(MAX_VERIFY_COMMAND_TOTAL_BYTES, MAX_VERIFY_COMMAND_BYTES * 2);
+  const valid = "x".repeat(MAX_VERIFY_COMMAND_BYTES - "node --test ".length);
+  const secondValid = "y".repeat(MAX_VERIFY_COMMAND_BYTES - "npm test -- ".length);
+  assert.deepEqual(
+    selectVerificationPlan({ verifyCommands: { source: [`node --test ${valid}`, `npm test -- ${secondValid}`] } }, undefined, "source-change", cwd, ["src/value.js"]),
+    { group: "source", commands: [`node --test ${valid}`, `npm test -- ${secondValid}`] }
+  );
+  const multiline = selectVerificationPlan({ verifyCommands: { source: ["npm test\nnpm run lint"] } }, undefined, "source-change", cwd, ["src/value.js"]);
+  assert.match(multiline.error, /single-line values without CR or LF/);
+  for (const [name, unicodeBoundary] of [
+    ["Vietnamese", utf8BoundaryCommand("node -e 'process.exit(0)' # ", "ế")],
+    ["emoji", utf8BoundaryCommand("node -e 'process.exit(0)' # ", "🧪")]
+  ]) {
+    assert.equal(utf8ByteLength(unicodeBoundary), MAX_VERIFY_COMMAND_BYTES, name);
+    assert.deepEqual(
+      selectVerificationPlan({ verifyCommands: { source: [unicodeBoundary] } }, undefined, "source-change", cwd, ["src/value.js"]),
+      { group: "source", commands: [unicodeBoundary] },
+      name
+    );
+    const overflow = selectVerificationPlan({ verifyCommands: { source: [`${unicodeBoundary}x`] } }, undefined, "source-change", cwd, ["src/value.js"]);
+    assert.match(overflow.error, new RegExp(`exceeds ${MAX_VERIFY_COMMAND_BYTES} UTF-8 bytes`), name);
+  }
+  const schemaDefense = "🧪".repeat(MAX_VERIFY_COMMAND_CHARS);
+  assert.match(
+    selectVerificationPlan({ verifyCommands: { source: [schemaDefense] } }, undefined, "source-change", cwd, ["src/value.js"]).error,
+    /exceeds 900 UTF-8 bytes/
+  );
+  const byteExact = "  node -e 'process.exit(0)'  ";
+  assert.deepEqual(
+    selectVerificationPlan({ verifyCommands: { source: [byteExact] } }, undefined, "source-change", cwd, ["src/value.js"]),
+    { group: "source", commands: [byteExact] }
   );
 });
 

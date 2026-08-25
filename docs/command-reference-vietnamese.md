@@ -543,7 +543,8 @@ Các lệnh này chạy ngoài Pi.
 | `npm run benchmark:deep -- --dry-run` | Validate `deep-logic-v1`: 7 family difficulty large × 3 repeat × Piagent/`codex-cli` = 42 session, khóa Luna/medium và chưa dùng quota. |
 | `npm run benchmark:deep` | Chạy paired deep-logic benchmark Luna/medium cho event/state, scheduler, policy, context graph, stream recovery, transactional config và temporal usage billing chính xác. |
 | `piagent-benchmark --production --dry-run` | Xem ma trận production 18 family x 3 variant x 2 surface = 108 session, chưa dùng quota. |
-| `piagent-benchmark --production --surfaces piagent,codex-cli --model <provider/model> --thinking high --piagent-treatment candidate` | Chạy production release gate đa domain/profile/lifecycle với controlled Codex, treatment Piagent đã pin, paired outcome và 95% token-ratio confidence. |
+| `piagent-benchmark --production --preflight-only` | Trước lượt trả phí, tự chạy/cache ba lane provider-free cùng exact source/tree/config/runner binding; lần đầu có long-horizon tối thiểu 30 phút, 0 provider call/model token. |
+| `piagent-benchmark --production --surfaces piagent,codex-cli --model openai-codex/gpt-5.6-luna --thinking medium --piagent-treatment candidate` | Chạy production release gate đa domain/profile/lifecycle với controlled Codex; S12/S36/S72 chặn pooled fresh ratio >1.10, observed family >1.25 hoặc subagent vượt 1 attempt/5% traffic; S108 dùng upper-95 <=0.60. |
 | `piagent-benchmark --piagent-treatment release-defaults\|local-safe\|candidate\|feature-off ...` | Pin treatment Piagent; chỉ surface `piagent` nhận feature env, manifest/resume/replay/report giữ nguyên treatment. |
 | `piagent-benchmark --codex-mode native ...` | Đo UX Codex theo cấu hình operator; protocol gate fail closed nên report không được claim tiết kiệm token. |
 | `piagent-benchmark --production --seed <value> ...` | Tái lập đúng generated variant của một production report riêng tư. |
@@ -567,7 +568,7 @@ Khi đang develop chính repo `piagent`, có thể dùng npm scripts tương ứ
 | `npm run init-project -- <project>` | `bash scripts/init-project.sh <project>` |
 | `npm run doctor -- <project> --strict-share` | `bash scripts/team-doctor.sh <project> --strict-share` |
 | `npm run benchmark -- ...` | `node scripts/benchmark-runner.mjs ...` |
-| `npm run benchmark:webui-parity` | Gate provider-free cho 10 workflow, 32 Project Controls, contract/security, Chromium flow và ba cỡ performance stress. |
+| `npm run benchmark:webui-parity` | Gate provider-free cho 10 workflow, 32 Project Controls, contract/security, bảy deterministic UI-stability suite, Chromium flow và ba cỡ performance stress. |
 | `npm run usage -- <project>` | `bash scripts/pi-session-stats.sh <project>` |
 | `npm run usage -- --history <project> --days 7` | `bash scripts/pi-session-stats.sh --history <project> --days 7` |
 | `npm run models` | `bash scripts/pi-model-catalog.sh` |

@@ -5,6 +5,7 @@ import { durableContextEvidenceEntries, hasDurableContextEvidence } from "./cont
 import { matchesAnyPath, normalizePathCandidate } from "./policy-core.js";
 import { baselineReturnRepresentationConflicts, returnRepresentationGuidance } from "./return-contract.js";
 import { hasLengthPrefixedIdentityKey, tenantAssertionSignals } from "./tenant-contract.js";
+import { criterionBehaviorProofDisposition, criterionRequiresBehavioralProof, durableBehaviorProofRequired, genericCriterionEvidence, genericFallbackEvidence, isVerificationOnlyCriterion, verifierCommandsCoverTests } from "./acceptance-behavior-proof.js";
 import { latestObservedVerificationEvidence, meaningfulVerificationCommands, verificationEvidenceProvesStableTree } from "./verification-intelligence.js";
 import {
   acceptanceContractProofGuidance,
@@ -204,7 +205,6 @@ const GENERATED_ACCEPTANCE_TEXTS = new Set([
   "authorization-deny-case", "tenant-boundary", "tenant-storage-isolation", "invalid-input-rejection", "boundary-case",
   "backward-compatibility", "read-only-evidence", "verification-evidence"
 ].map((obligation) => generatedCriterionForObligation(obligation)));
-
 function acceptanceTaskText(task) {
   return [
     task?.summary,
@@ -276,7 +276,6 @@ function criterionId(text, obligation, index) {
   const prefix = compactId(obligation ?? "criterion").slice(0, 24);
   return `ac-${String(index + 1).padStart(2, "0")}-${prefix}-${sha256(text).slice(0, 8)}`.slice(0, 80);
 }
-
 export function buildAcceptanceReceipt(input = {}) {
   const changeMode = input.changeMode === "read-only" ? "read-only" : "source-change";
   const baseText = [
@@ -308,6 +307,7 @@ export function buildAcceptanceReceipt(input = {}) {
       : generatedCriterionForObligation("verification-evidence"));
   }
   const acceptanceCriteria = texts.slice(0, MAX_CRITERIA);
+  const durableBehaviorProof = durableBehaviorProofRequired(baseText, changeMode);
   const criteria = acceptanceCriteria.map((text, index) => {
     const inferred = inferAcceptanceObligations(
       text,
@@ -316,13 +316,14 @@ export function buildAcceptanceReceipt(input = {}) {
     );
     const obligation = generatedObligations.get(text)
       ?? inferred.find((item) => item !== "verification-evidence" && item !== "backward-compatibility")
-      ?? inferred[0]
+      ?? (isVerificationOnlyCriterion(text) ? "verification-evidence" : undefined)
+      ?? (inferred.includes("backward-compatibility") ? "backward-compatibility" : undefined)
       ?? "requested-behavior";
     return {
       id: criterionId(text, obligation, index),
       hash: sha256(text),
       obligation,
-      priority: CRITICAL_OBLIGATIONS.has(obligation) ? "critical" : "normal",
+      priority: CRITICAL_OBLIGATIONS.has(obligation) || (durableBehaviorProof && obligation !== "verification-evidence") ? "critical" : "normal",
       status: "pending",
       evidence: []
     };
@@ -673,8 +674,8 @@ function hasStructuredCompositeIdentity(sourceText) {
   return jsonTuple || nestedLookup || hasLengthPrefixedIdentityKey(text);
 }
 
-function focusedContractEvidence(obligation, task, corpus, verifierEvidence, criterion) {
-  if (!verifierEvidence || corpus.sourceFiles.length === 0 || corpus.testFiles.length === 0) return undefined;
+function focusedContractEvidence(obligation, task, corpus, verifierEvidence, criterion, cwd) {
+  if (!verifierEvidence || corpus.sourceFiles.length === 0 || !verifierCommandsCoverTests(task, corpus.testFiles, cwd)) return undefined;
   const targets = namedCodeTargets(task, criterion, corpus.sourceText);
   const targetCoverage = targets.length === 0 || targets.every((target) => (
     new RegExp(`\\b${escapeRegex(target.toLowerCase())}\\b`).test(corpus.testText)
@@ -721,7 +722,7 @@ function hasCurrentPassingVerifier(task, currentWorkingTreeDigest) {
   });
 }
 
-function evidenceForObligation(obligation, task, corpus, currentWorkingTreeDigest, criterion) {
+function evidenceForObligation(obligation, task, corpus, currentWorkingTreeDigest, criterion, cwd) {
   const passingVerifier = hasCurrentPassingVerifier(task, currentWorkingTreeDigest);
   const latestVerifyEvidence = latestObservedVerificationEvidence(task?.verifyEvidence);
   const verifyEvidence = meaningfulVerificationCommands(task?.verifyCommands ?? [])
@@ -772,23 +773,21 @@ function evidenceForObligation(obligation, task, corpus, currentWorkingTreeDiges
     return undefined;
   }
 
-  if (obligation === "verification-evidence" || obligation === "requested-behavior" || obligation === "backward-compatibility") {
-    if (!passingVerifier) return undefined;
-    return verifierEvidence;
-  }
+  const generic = genericCriterionEvidence({ obligation, task, criterion, taskText: acceptanceTaskText(task), corpus, verifierEvidence, passingVerifier, cwd });
+  if (generic.handled) return generic.evidence;
 
   if (!corpus.adapter.proofCapable) return undefined;
 
   if (obligation === "tenant-boundary") {
-    return focusedContractEvidence(obligation, task, corpus, verifierEvidence, criterion);
+    return focusedContractEvidence(obligation, task, corpus, verifierEvidence, criterion, cwd);
   }
 
   if (obligation === "tenant-storage-isolation") {
-    return focusedContractEvidence(obligation, task, corpus, verifierEvidence, criterion);
+    return focusedContractEvidence(obligation, task, corpus, verifierEvidence, criterion, cwd);
   }
 
   if (obligation === "authorization-deny-case") {
-    return focusedContractEvidence(obligation, task, corpus, verifierEvidence, criterion);
+    return focusedContractEvidence(obligation, task, corpus, verifierEvidence, criterion, cwd);
   }
 
   if (obligation === "invalid-input-rejection") {
@@ -801,7 +800,7 @@ function evidenceForObligation(obligation, task, corpus, currentWorkingTreeDiges
       namedTargets: namedCodeTargets(task, criterion, corpus.sourceText),
       provenanceTargets: explicitlyCallableTargets(task, criterion, corpus.sourceText)
     });
-    if (passingVerifier && corpus.sourceFiles.length > 0 && corpus.testFiles.length > 0 && sourceOk && testOk) {
+    if (passingVerifier && corpus.sourceFiles.length > 0 && verifierCommandsCoverTests(task, corpus.testFiles, cwd) && sourceOk && testOk) {
       return {
         ...verifierEvidence,
         kind: "verifier-backed-focused-test",
@@ -819,7 +818,7 @@ function evidenceForObligation(obligation, task, corpus, currentWorkingTreeDiges
     const sourceOk = /math\.ceil|ceil|clamp|min|max|round|zero|return\s+0|\?\?|nullish|falsey|falsy|default|retrylimit|enabled|label/.test(corpus.sourceText)
       || expirySourceOk
       || (passingVerifier && corpus.sourceFiles.length > 0 && testOk);
-    if (passingVerifier && corpus.sourceFiles.length > 0 && corpus.testFiles.length > 0 && sourceOk && testOk) {
+    if (passingVerifier && corpus.sourceFiles.length > 0 && verifierCommandsCoverTests(task, corpus.testFiles, cwd) && sourceOk && testOk) {
       return {
         ...verifierEvidence,
         kind: "verifier-backed-focused-test",
@@ -830,12 +829,12 @@ function evidenceForObligation(obligation, task, corpus, currentWorkingTreeDiges
     return undefined;
   }
 
-  return passingVerifier ? verifierEvidence : undefined;
+  return genericFallbackEvidence({ behavioral: generic.behavioral, corpus, verifierEvidence, passingVerifier });
 }
 
 export function refreshAcceptanceReceipt(task, options = {}) {
   const receipt = normalizeAcceptanceReceipt(task?.acceptanceReceipt);
-  if (!receipt) return { task, missing: [], criticalMissing: [], changed: false };
+  if (!receipt) return { task, missing: [], criticalMissing: [], adapterAbstained: [], changed: false };
   const cwd = options.cwd;
   const changedFiles = uniqueStrings(options.changedFiles ?? task.changedFiles ?? task.observedChangedFiles ?? []);
   const currentWorkingTreeDigest = options.currentWorkingTreeDigest;
@@ -850,7 +849,7 @@ export function refreshAcceptanceReceipt(task, options = {}) {
       criterion.evidence = [];
       const evidence = task?.workingTreeDigestAlgorithm === WORKING_TREE_DIGEST_ALGORITHM
         && isCurrentWorkingTreeDigest(currentWorkingTreeDigest)
-        ? evidenceForObligation(criterion.obligation, task, corpus, currentWorkingTreeDigest, criterion)
+        ? evidenceForObligation(criterion.obligation, task, corpus, currentWorkingTreeDigest, criterion, cwd)
         : undefined;
       if (evidence) addEvidence(criterion, evidence, recordedAt);
       const nextEvidence = (criterion.evidence ?? []).map(evidenceKey);
@@ -858,17 +857,16 @@ export function refreshAcceptanceReceipt(task, options = {}) {
       continue;
     }
     if (criterion.status === "satisfied") continue;
-    const evidence = evidenceForObligation(criterion.obligation, task, corpus, currentWorkingTreeDigest, criterion);
+    const evidence = evidenceForObligation(criterion.obligation, task, corpus, currentWorkingTreeDigest, criterion, cwd);
     if (evidence) changed = addEvidence(criterion, evidence, recordedAt) || changed;
   }
   const missing = receipt.criteria.filter((criterion) => criterion.status !== "satisfied");
-  const criticalMissing = missing.filter((criterion) => criterion.priority === "critical");
+  const passingVerifier = hasCurrentPassingVerifier(task, currentWorkingTreeDigest);
+  const adapterAbstained = missing.filter((criterion) => criterionBehaviorProofDisposition({ obligation: criterion.obligation, task, criterion, taskText: acceptanceTaskText(task), corpus, passingVerifier }) === "unknown");
+  const criticalMissing = missing.filter((criterion) => (criterion.priority === "critical" || criterionRequiresBehavioralProof(task, criterion, acceptanceTaskText(task))
+  ));
   return {
-    task: { ...task, acceptanceReceipt: receipt },
-    receipt,
-    missing,
-    criticalMissing,
-    changed
+    task: { ...task, acceptanceReceipt: receipt }, receipt, missing, criticalMissing, adapterAbstained, changed
   };
 }
 
@@ -890,9 +888,12 @@ export function acceptanceCriticalRecoveryProjection(task, options = {}) {
   const verifierCurrent = hasCurrentPassingVerifier(task, currentWorkingTreeDigest);
   const projections = [];
   for (const criterion of receipt.criteria.filter((item) => item.priority === "critical")) {
+    const disposition = criterionBehaviorProofDisposition({ obligation: criterion.obligation, task, criterion, taskText: acceptanceTaskText(task), corpus, passingVerifier: verifierCurrent });
     const criterionText = (Array.isArray(task?.acceptanceCriteria) ? task.acceptanceCriteria : [])
       .find((text) => typeof text === "string" && sha256(text) === criterion.hash && !GENERATED_ACCEPTANCE_TEXTS.has(text));
-    if (!criterionText || evidenceForObligation(criterion.obligation, task, corpus, currentWorkingTreeDigest, criterion)) continue;
+    if (!criterionText) continue;
+    if (disposition === "unknown") { projections.push({ criterionId: criterion.id, criterionHash: criterion.hash, criterionText: criterionText.slice(0, 700), targets: [], missingDimensions: ["adapter-linkage"], proofHints: ["Add a focused executable test with a direct relative import to the changed source, or configure a deterministic language adapter that resolves this helper/barrel path; then rerun the exact verifier."] }); continue; }
+    if (evidenceForObligation(criterion.obligation, task, corpus, currentWorkingTreeDigest, criterion, cwd)) continue;
     const targets = namedCodeTargets(task, criterion, corpus.sourceText);
     const missingDimensions = [];
     if (!verifierCurrent) missingDimensions.push("current-verifier");
