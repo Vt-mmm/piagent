@@ -226,8 +226,8 @@ export function taskContractValidationErrors(input) {
   }
   if (input.failedAt !== undefined && !["research", "plan", "execute", "verify", "review"].includes(input.failedAt)) errors.push("failedAt is invalid");
   if (!["source-change", "read-only"].includes(input.changeMode)) errors.push("changeMode is invalid");
-  if (input.mutationPolicy !== undefined && !["required", "forbidden"].includes(input.mutationPolicy)) errors.push("mutationPolicy is invalid");
-  if (input.changeMode === "read-only" && input.mutationPolicy === "required") errors.push("read-only tasks cannot require mutation");
+  if (input.mutationPolicy !== undefined && !["required", "allowed", "forbidden"].includes(input.mutationPolicy)) errors.push("mutationPolicy is invalid");
+  if (input.changeMode === "read-only" && input.mutationPolicy !== undefined && input.mutationPolicy !== "forbidden") errors.push("read-only tasks must forbid mutation");
   if (!["tiny", "normal", "high-risk"].includes(input.riskLane)) errors.push("riskLane is invalid");
   if (input.intakeMode !== undefined && !["model", "runtime"].includes(input.intakeMode)) errors.push("intakeMode is invalid");
   errors.push(...taskDigestContractValidationErrors(input));
@@ -421,7 +421,9 @@ export function normalizeTaskContract(input, options = {}) {
     sessionId,
     sessionName: String(input.sessionName ?? options.sessionName ?? "").trim() || undefined,
     changeMode: input.changeMode === "read-only" ? "read-only" : "source-change",
-    mutationPolicy: input.changeMode === "read-only" || input.mutationPolicy === "forbidden" ? "forbidden" : "required",
+    mutationPolicy: input.changeMode === "read-only" || input.mutationPolicy === "forbidden"
+      ? "forbidden"
+      : input.mutationPolicy === "allowed" ? "allowed" : "required",
     attempt: positiveInteger(input.attempt, 1, 100),
     maxAttempts: positiveInteger(input.maxAttempts, DEFAULT_MAX_TASK_ATTEMPTS, 10),
     previousAttempts: Array.isArray(input.previousAttempts) ? input.previousAttempts.slice(-10).map((item) => pickFields(item, PREVIOUS_ATTEMPT_FIELDS)) : [],

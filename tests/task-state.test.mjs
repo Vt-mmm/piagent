@@ -263,6 +263,17 @@ function contract(overrides = {}) {
   };
 }
 
+test("validates and preserves conditional mutation policy while read-only remains mutation-forbidden", () => {
+  const allowed = contract({ mutationPolicy: "allowed" });
+  assert.deepEqual(taskContractValidationErrors(allowed), []);
+  assert.equal(normalizeTaskContract(allowed).mutationPolicy, "allowed");
+  assert.match(
+    taskContractValidationErrors(contract({ changeMode: "read-only", mutationPolicy: "allowed" })).join("; "),
+    /read-only tasks must forbid mutation/
+  );
+  assert.equal(normalizeTaskContract(contract({ changeMode: "read-only", mutationPolicy: "allowed" })), undefined);
+});
+
 test("Task Contract validation rejects scope beyond the criterion graph binding cap", () => {
   const oversized = contract({ scope: Array.from({ length: 2001 }, (_, index) => `src/file-${index}.js`) });
   assert.match(taskContractValidationErrors(oversized).join("; "), /scope must contain at most 2000 entries/);

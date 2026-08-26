@@ -2,16 +2,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { PiagentGatewayCapabilityHandshakeV1 } from "../../contracts/generated/gateway-capabilities-v1.ts";
 import type { Catalog, SessionRow } from "../../contracts/generated/session-catalog-v1.ts";
 import type { Receipt } from "../../contracts/generated/session-command-v1.ts";
-import { readSessionCatalog, readSessionLiveState, readSessionTranscript } from "./api.ts";
+import { readSessionCatalog, readSessionLiveState } from "./api.ts";
 import { bootstrapBrowserSession } from "./bootstrap.ts";
 import { applyOperationSettlement, canonicalLiveStateSequence, connectionStateAfterCatalogRefresh, liveStateConfirmsAbort,
   liveProgressStatus, mergeTerminalOperationActivities, reconcileSessionLiveState,
-  reconcileTerminalOperationActivities, conversationAfterRejectedSend, markUserMessageDelivery, pendingUserConversation, terminalOperationActivity,
+  reconcileTerminalOperationActivities, conversationAfterRejectedSend, pendingUserConversation, terminalOperationActivity,
   type LiveActivity, type LiveConversation,
   type TerminalOperationActivity } from "./live-state-view-model.ts";
-import { persistedLiveConversationHasFinal, persistedUserTextMatches } from "./transcript-view-model.ts";
-import { canonicalOperationAfter, GatewayCommandTransportError, gatewayCommandMayHaveEffect, newerOperationObservation,
-  sessionSendDisposition, type OperationObservation } from "./session-send-state.ts";
+import { GatewayCommandTransportError, gatewayCommandMayHaveEffect, sessionSendDisposition,
+  type OperationObservation } from "./session-send-state.ts";
+import { conversationAfterObservedSend, observeSessionSendEffect } from "./session-send-observation.ts";
 import { CANONICAL_RESYNC_CLOSE_CODE, COMMAND_RESPONSE_TIMEOUT_MS, GATEWAY_CURSOR_KEY, opaque,
   parseGatewayCursor, persistGatewayCursor, revisionStale, SessionSendRejectedError,
   type SessionHub, type SessionHubCreateOptions, type SessionHubSendAttachment,
@@ -97,34 +97,11 @@ export function useSessionHub(): SessionHub {
     });
   }, []);
 
-  const observeSendEffect = useCallback(async (sessionRef: string, message: string, requestedAt: string,
-    afterSerial: number, priorOperationRef: string | null,
-    messageRequestId: string): Promise<{ operationRef: string | null; complete: boolean } | null> => {
-    const local = newerOperationObservation(operationObservationRef.current.get(sessionRef), afterSerial, priorOperationRef,
-      messageRequestId);
-    if (local) return { operationRef: local.operationRef, complete: local.complete };
-    const [canonical, transcript] = await Promise.all([
-      readSessionLiveState().catch(() => undefined),
-      readSessionTranscript(sessionRef, null, 50).catch(() => undefined)
-    ]);
-    const operation = canonical?.state === "ready"
-      ? canonical.operations.find((item) => item.sessionRef === sessionRef) : undefined;
-    const canonicalEvidence = canonicalOperationAfter(operation, priorOperationRef, messageRequestId);
-    if (canonicalEvidence) return canonicalEvidence;
-    if (transcript?.state !== "ready") return null;
-    const exact = [...transcript.items].reverse().find((item) => item.role === "user"
-      && item.messageRequestId === messageRequestId);
-    if (exact) return { operationRef: exact.agentOperationId,
-      complete: persistedLiveConversationHasFinal(transcript.items, message,
-        { operationRef: exact.agentOperationId, messageRequestId, startedAt: null }) };
-    const requested = Date.parse(requestedAt);
-    const persisted = [...transcript.items].reverse().find((item) => item.role === "user"
-      && !item.messageRequestId && persistedUserTextMatches(item.content.text, message) && Date.parse(item.recordedAt) >= requested);
-    if (!persisted) return null;
-    return { operationRef: persisted.agentOperationId,
-      complete: persistedLiveConversationHasFinal(transcript.items, message,
-        { operationRef: persisted.agentOperationId, messageRequestId: null, startedAt: requestedAt }) };
-  }, []);
+  const observeSendEffect = useCallback((sessionRef: string, message: string, requestedAt: string,
+    afterSerial: number, priorOperationRef: string | null, messageRequestId: string) => observeSessionSendEffect({
+    sessionRef, message, requestedAt, afterSerial, priorOperationRef, messageRequestId,
+    readLocalObservation: () => operationObservationRef.current.get(sessionRef)
+  }), []);
 
   const create = useCallback(async (options: SessionHubCreateOptions) => {
     const current = catalogRef.current, message = options.message.trim(), messageRequestId = options.messageRequestId ?? opaque("message");
@@ -184,17 +161,8 @@ export function useSessionHub(): SessionHub {
       if (restored) next[session.sessionRef] = restored; else delete next[session.sessionRef];
       return next;
     });
-    const markObserved = (evidence: { operationRef: string | null; complete: boolean }, delivery: "admitted" | "unconfirmed") => {
-      setLive((value) => {
-        const existing = value[session.sessionRef];
-        if (!existing || existing.messageRequestId !== messageRequestId) return value;
-        const marked = markUserMessageDelivery(existing, delivery, evidence.operationRef, new Date().toISOString());
-        const complete = delivery === "unconfirmed" || evidence.complete
-          || Boolean(evidence.operationRef && existing.operationRef === evidence.operationRef && existing.complete);
-        return { ...value, [session.sessionRef]: { ...marked, complete,
-          abortable: delivery === "admitted" && !complete && Boolean(evidence.operationRef) } };
-      });
-    };
+    const markObserved = (evidence: { operationRef: string | null; complete: boolean }, delivery: "admitted" | "unconfirmed") =>
+      setLive((value) => conversationAfterObservedSend(value, session.sessionRef, messageRequestId, evidence, delivery));
     let requestedAt = submittedAt, commandSubmitted = false;
     try {
       const command = (snapshot: Catalog) => {

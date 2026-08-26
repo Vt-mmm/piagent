@@ -12,6 +12,7 @@ import { ProjectRegistry } from "../packages/piagent-webui/gateway/project-regis
 
 const PROTOCOL = "piagent-gateway-protocol-v1";
 const OPAQUE_REF = /^[A-Za-z0-9][A-Za-z0-9._~-]{0,159}$/;
+const TERMINAL_SETTLEMENTS = new Set(["completed", "blocked", "aborted", "error", "unknown"]);
 
 function opaque(prefix) {
   return `${prefix}_${randomBytes(18).toString("base64url")}`;
@@ -21,6 +22,28 @@ function fail(message) {
   const error = new Error(message);
   error.code = "BENCHMARK_WEBUI_JOURNEY_FAILED";
   throw error;
+}
+
+function terminalSettlementOutcome(expectedSettlement, observedSettlement, turnIndex) {
+  if (expectedSettlement === observedSettlement) return null;
+  if (!TERMINAL_SETTLEMENTS.has(expectedSettlement) || !TERMINAL_SETTLEMENTS.has(observedSettlement)
+    || !Number.isSafeInteger(turnIndex) || turnIndex < 1) {
+    fail("webui-terminal-settlement-outcome-invalid");
+  }
+  return {
+    schemaVersion: 1,
+    kind: "terminal-settlement-mismatch",
+    expectedSettlement,
+    observedSettlement,
+    turnIndex
+  };
+}
+
+function terminalSettlementError(outcome) {
+  const error = new Error(`webui-turn-${outcome.turnIndex}-${outcome.observedSettlement}-expected-${outcome.expectedSettlement}`);
+  error.code = "BENCHMARK_WEBUI_CANDIDATE_OUTCOME";
+  error.candidateOutcome = outcome;
+  return error;
 }
 
 function remaining(deadline, label) {
@@ -426,8 +449,23 @@ export async function runPiagentWebUiJourney(options) {
         ?? (index === turns.length - 1 ? options.expectedTerminalSettlement : "completed")
         ?? "completed";
       const expectedProtocolSettlement = expectedSettlement === "refused" ? "blocked" : expectedSettlement;
-      if (settlement.payload?.settlement !== expectedProtocolSettlement) {
-        fail(`webui-turn-${index + 1}-${settlement.payload?.settlement ?? "unknown"}-expected-${expectedSettlement}`);
+      const candidateOutcome = terminalSettlementOutcome(expectedProtocolSettlement, settlement.payload?.settlement, index + 1);
+      if (candidateOutcome) {
+        receipt.turns.push({
+          index: index + 1,
+          messageRequestId,
+          operationRef,
+          submittedAt,
+          receiptPhase: commandReceipt?.phase ?? null,
+          receiptResult: commandReceipt?.resultCode ?? null,
+          receiptUncertain: turn.receiptUncertain === true,
+          ...(recovery ? { recovery } : {}),
+          settlement: settlement.payload.settlement,
+          outcome: candidateOutcome,
+          assistantText: "",
+          ...eventSummary(client.events, operationRef)
+        });
+        throw terminalSettlementError(candidateOutcome);
       }
       const durable = await waitForDurableTurn(browser, receipt.sessionRef, turn.message, operationRef,
         messageRequestId, deadline, { allowBlockedAssistant: expectedProtocolSettlement === "blocked",
@@ -456,7 +494,9 @@ export async function runPiagentWebUiJourney(options) {
   } catch (error) {
     const timedOut = String(error?.message ?? "").includes("webui-journey-timeout");
     return { code: 1, signal: null, timedOut, stdout: "", stderr: error instanceof Error ? error.message : String(error),
-      durationSeconds: (Date.now() - started) / 1000, journeyReceipt: receipt, forbiddenHits: [], requiredHits: [] };
+      durationSeconds: (Date.now() - started) / 1000, journeyReceipt: receipt,
+      ...(error?.code === "BENCHMARK_WEBUI_CANDIDATE_OUTCOME" ? { candidateOutcome: error.candidateOutcome } : {}),
+      forbiddenHits: [], requiredHits: [] };
   } finally {
     client?.close();
     await gateway?.close().catch(() => undefined);
@@ -473,5 +513,6 @@ export {
   durableTurnPosition,
   eventSummary,
   launchCapability,
-  recoverOperationFromEvents
+  recoverOperationFromEvents,
+  terminalSettlementOutcome
 };

@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "architecture-conformance-v1",
+  "title": "Provider-free architecture boundary and line-budget lane",
+  "providerRequired": false,
+  "modelTokensExpected": 0,
+  "checker": "scripts/check-architecture.mjs",
+  "configuration": "architecture/layers.json",
+  "releaseGates": {
+    "architectureCheckPasses": true,
+    "sourceCoverageComplete": true,
+    "dependencyBoundariesPass": true,
+    "lineBudgetsPass": true,
+    "providerCalls": 0,
+    "modelTokens": 0
+  },
+  "claimBoundary": "Deterministic provider-free architecture and line-budget evidence only. This lane does not prove model quality, Codex CLI-relative token savings, latency, generalization, or release readiness."
+}

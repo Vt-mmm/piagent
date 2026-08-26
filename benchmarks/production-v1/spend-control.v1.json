@@ -47,7 +47,7 @@
     },
     "providerFreeEvidence": {
       "requiredBeforeFirstPaidSession": true,
-      "requiredLaneIds": ["runtime-conformance-v1", "long-horizon-v1", "webui-parity-v1"],
+      "requiredLaneIds": ["architecture-conformance-v1", "runtime-conformance-v1", "long-horizon-v1", "webui-parity-v1"],
       "requireCleanCommitAndTreeBinding": true,
       "requireProductionConfigurationBinding": true,
       "requireRunnerAndLaneConfigurationDigests": true
@@ -74,7 +74,7 @@
       "all-observed-piagent-outcomes-remain-above-the-release-floor",
       "no-model-thinking-or-provider-wire-parity-drift",
       "complete-privacy-safe-causal-context-receipt-with-closed-session-lifecycle",
-      "source-bound-provider-free-runtime-long-horizon-and-webui-parity-receipts",
+      "source-bound-provider-free-architecture-runtime-long-horizon-and-webui-parity-receipts",
       "exact-subagent-budget-at-most-one-session-per-attempt-and-five-percent-traffic",
       "partial-stage-pooled-fresh-ratio-at-most-1.10-and-every-observed-family-at-most-1.25",
       "no-accepted-usage-completeness-failure",
@@ -86,7 +86,7 @@
       "duration",
       "host-load"
     ],
-    "operatorRule": "The commands pass this artifact's frozen values explicitly. S0 binds clean-source runtime-conformance, long-horizon, and WebUI-parity receipts before paid work. Every partial paid stage from S12 onward hard-stops when pooled fresh traffic exceeds 1.10, any observed family exceeds 1.25, or exact subagent evidence exceeds one child session per attempt or 5% of candidate traffic. Cost, duration, and host load remain observational. Only the complete S108 ledger may decide the 0.60 upper-95 fresh-token claim."
+    "operatorRule": "The commands pass this artifact's frozen values explicitly. S0 binds clean-source architecture, runtime-conformance, long-horizon, and WebUI-parity receipts before paid work. Every partial paid stage from S12 onward hard-stops when pooled fresh traffic exceeds 1.10, any observed family exceeds 1.25, or exact subagent evidence exceeds one child session per attempt or 5% of candidate traffic. Cost, duration, and host load remain observational. Only the complete S108 ledger may decide the 0.60 upper-95 fresh-token claim."
   },
   "claimBoundary": "Only S108 may be evaluated for the production-v1 0.60 upper-95 fresh-token public-regression claim. S12, S36 and S72 enforce catastrophic fresh-spend and subagent safety ceilings but cannot establish the claim. Duration, host load, and normalized cost are reported but cannot block or support this claim."
 }

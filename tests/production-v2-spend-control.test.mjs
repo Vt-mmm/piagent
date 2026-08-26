@@ -27,6 +27,8 @@ test("production-v2 freezes the exact 108-session Luna medium comparison", () =>
     stopAfterFailedPair: true
   });
   assert.deepEqual(control.stages.map((stage) => stage.cumulativeSessions), [0, 12, 18, 54, 108]);
+  assert.deepEqual(control.productionGuards.providerFreeEvidence.requiredLaneIds,
+    ["architecture-conformance-v1", "runtime-conformance-v1", "long-horizon-v1", "webui-parity-v1"]);
 });
 
 test("S12 is diverse and S18 reaches every task family exactly once", () => {

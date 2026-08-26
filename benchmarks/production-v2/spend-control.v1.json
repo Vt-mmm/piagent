@@ -62,7 +62,7 @@
     },
     "providerFreeEvidence": {
       "requiredBeforeFirstPaidSession": true,
-      "requiredLaneIds": ["runtime-conformance-v1", "long-horizon-v1", "webui-parity-v1"],
+      "requiredLaneIds": ["architecture-conformance-v1", "runtime-conformance-v1", "long-horizon-v1", "webui-parity-v1"],
       "requireCleanCommitAndTreeBinding": true,
       "requireProductionConfigurationBinding": true,
       "requireRunnerAndLaneConfigurationDigests": true
@@ -89,7 +89,7 @@
       "all-observed-piagent-outcomes-remain-above-the-release-floor",
       "no-model-thinking-or-provider-wire-parity-drift",
       "complete-privacy-safe-causal-context-receipt-with-closed-session-lifecycle",
-      "source-bound-provider-free-runtime-long-horizon-and-webui-parity-receipts",
+      "source-bound-provider-free-architecture-runtime-long-horizon-and-webui-parity-receipts",
       "exact-subagent-budget-at-most-one-session-per-attempt-and-five-percent-traffic",
       "partial-stage-pooled-fresh-ratio-at-most-1.10-and-every-observed-family-at-most-1.25",
       "no-accepted-usage-completeness-failure",

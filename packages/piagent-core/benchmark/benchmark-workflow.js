@@ -66,10 +66,97 @@ const RUNTIME_MANAGED_BENCHMARK_TOOLS = new Set([
   "piagent_tools"
 ]);
 
-export function evaluateWorkflowEvidence(task, changedFiles, toolNames = {}, options = {}) {
+function uniqueSorted(values) {
+  return [...new Set(values)].sort();
+}
+
+function taskTreeEvidence(task, actual) {
+  const baselineFiles = Object.keys(plainObject(task?.baselineFileDigests) ? task.baselineFileDigests : {}).sort();
+  const finalFiles = Object.keys(plainObject(task?.finalFileDigests) ? task.finalFileDigests : {}).sort();
+  const baselineFileClaims = Array.isArray(task?.baselineChangedFiles) ? [...task.baselineChangedFiles].sort() : [];
+  const finalFileClaims = Array.isArray(task?.finalWorkingTreeFiles) ? [...task.finalWorkingTreeFiles].sort() : [];
+  const migrationReady = task?.workingTreeDigestMigration === undefined;
+  const current = task?.workingTreeDigestAlgorithm === "wt-content-v2"
+    && migrationReady
+    && Array.isArray(task?.baselineChangedFiles)
+    && Array.isArray(task?.finalWorkingTreeFiles)
+    && taskWorkingTreeSnapshotUsesCurrentAlgorithm(task?.baselineFileDigests)
+    && taskWorkingTreeSnapshotUsesCurrentAlgorithm(task?.finalFileDigests)
+    && JSON.stringify(baselineFiles) === JSON.stringify(baselineFileClaims)
+    && JSON.stringify(finalFiles) === JSON.stringify(finalFileClaims)
+    && JSON.stringify(finalFiles) === JSON.stringify(actual);
+  return {
+    current,
+    digest: current ? taskWorkingTreeEvidenceDigest(task.finalFileDigests) : undefined
+  };
+}
+
+function normalizedTasks(taskOrTasks) {
+  return (Array.isArray(taskOrTasks) ? taskOrTasks : taskOrTasks ? [taskOrTasks] : [])
+    .filter((task) => plainObject(task));
+}
+
+function taskStartChoreography(tasks, task, options) {
+  const evidence = plainObject(options.taskStartEvidence) ? options.taskStartEvidence : undefined;
+  const acceptedTaskStartCount = Number.isInteger(evidence?.acceptedTaskStartCount)
+    ? Math.max(0, evidence.acceptedTaskStartCount)
+    : Number.isInteger(options.acceptedTaskStartCount)
+      ? Math.max(0, options.acceptedTaskStartCount)
+      : task?.taskRunId ? 1 : 0;
+  if (tasks.length <= 1) {
+    const starts = Array.isArray(evidence?.starts) ? evidence.starts : [];
+    const structuredBindingValid = !evidence || (
+      starts.length === 1
+      && starts[0]?.taskRunId === task?.taskRunId
+      && Number(evidence.conflictingTaskTurnCount ?? 0) === 0
+      && Number(evidence.duplicateTurnCount ?? 0) === 0
+    );
+    return {
+      acceptedTaskStartCount,
+      passed: acceptedTaskStartCount === 1 && structuredBindingValid,
+      checkId: "single-task-start"
+    };
+  }
+  const starts = Array.isArray(evidence?.starts) ? evidence.starts : [];
+  const expectedTaskRunIds = uniqueSorted(tasks.map((item) => item?.taskRunId).filter(Boolean));
+  const observedTaskRunIds = uniqueSorted(starts.map((item) => item?.taskRunId).filter(Boolean));
+  const expectedTurnCount = Number.isInteger(options.expectedTurnCount) && options.expectedTurnCount > 0
+    ? options.expectedTurnCount
+    : undefined;
+  const distinctTurnCount = Number.isInteger(evidence?.distinctTurnCount) ? evidence.distinctTurnCount : 0;
+  const missingTurnIdCount = Number.isInteger(evidence?.missingTurnIdCount) ? evidence.missingTurnIdCount : acceptedTaskStartCount;
+  const conflictingTaskTurnCount = Number.isInteger(evidence?.conflictingTaskTurnCount) ? evidence.conflictingTaskTurnCount : acceptedTaskStartCount;
+  const duplicateTurnCount = Number.isInteger(evidence?.duplicateTurnCount) ? evidence.duplicateTurnCount : acceptedTaskStartCount;
+  return {
+    acceptedTaskStartCount,
+    distinctTurnCount,
+    missingTurnIdCount,
+    conflictingTaskTurnCount,
+    duplicateTurnCount,
+    passed: Boolean(evidence)
+      && acceptedTaskStartCount > 0
+      && acceptedTaskStartCount === expectedTaskRunIds.length
+      && JSON.stringify(observedTaskRunIds) === JSON.stringify(expectedTaskRunIds)
+      && missingTurnIdCount === 0
+      && conflictingTaskTurnCount === 0
+      && duplicateTurnCount === 0
+      && distinctTurnCount === acceptedTaskStartCount
+      && (expectedTurnCount === undefined || acceptedTaskStartCount <= expectedTurnCount),
+    checkId: "turn-bounded-task-start"
+  };
+}
+
+export function evaluateWorkflowEvidence(taskOrTasks, changedFiles, toolNames = {}, options = {}) {
+  const tasks = normalizedTasks(taskOrTasks);
+  const task = tasks[0];
   const scenarioKind = options.scenarioKind ?? "source-change";
-  const planned = meaningfulVerifyCommands(task?.verifyCommands);
-  const verifyEvidence = Array.isArray(task?.verifyEvidence) ? task.verifyEvidence : [];
+  const evidenceTasks = scenarioKind === "read-only"
+    ? tasks
+    : tasks.filter((item) => item?.changeMode !== "read-only");
+  const planned = [...new Set(evidenceTasks
+    .flatMap((item) => meaningfulVerifyCommands(item?.verifyCommands))
+    .map((command) => command.trim()))];
+  const verifyEvidence = evidenceTasks.flatMap((item) => Array.isArray(item?.verifyEvidence) ? item.verifyEvidence : []);
   const latestConfiguredEvidence = planned.map((command) => latestObservedTaskEvidence(verifyEvidence, command));
   const terminalVerifierDigests = new Set(latestConfiguredEvidence
     .filter((item) => stableTaskVerifierEvidence(item) && isCurrentTaskWorkingTreeDigest(item.workingTreeDigest))
@@ -83,40 +170,41 @@ export function evaluateWorkflowEvidence(task, changedFiles, toolNames = {}, opt
   const passed = new Set(latestConfiguredEvidence
     .filter((item) => terminalVerifierDigest && item?.exitCode === 0 && item.workingTreeDigest === terminalVerifierDigest)
     .map((item) => item.command?.trim()));
-  const actual = [...new Set(changedFiles ?? [])].sort();
-  const claimed = [...new Set(task?.changedFiles ?? [])].sort();
-  const baselineFiles = Object.keys(plainObject(task?.baselineFileDigests) ? task.baselineFileDigests : {}).sort();
-  const finalFiles = Object.keys(plainObject(task?.finalFileDigests) ? task.finalFileDigests : {}).sort();
-  const baselineFileClaims = Array.isArray(task?.baselineChangedFiles) ? [...task.baselineChangedFiles].sort() : [];
-  const finalFileClaims = Array.isArray(task?.finalWorkingTreeFiles) ? [...task.finalWorkingTreeFiles].sort() : [];
-  const migrationReady = task?.workingTreeDigestMigration === undefined;
-  const rootTreeContractCurrent = task?.workingTreeDigestAlgorithm === "wt-content-v2"
-    && migrationReady
-    && Array.isArray(task?.baselineChangedFiles)
-    && Array.isArray(task?.finalWorkingTreeFiles)
-    && taskWorkingTreeSnapshotUsesCurrentAlgorithm(task?.baselineFileDigests)
-    && taskWorkingTreeSnapshotUsesCurrentAlgorithm(task?.finalFileDigests)
-    && JSON.stringify(baselineFiles) === JSON.stringify(baselineFileClaims)
-    && JSON.stringify(finalFiles) === JSON.stringify(finalFileClaims)
-    && JSON.stringify(finalFiles) === JSON.stringify(actual);
-  const finalTreeDigest = rootTreeContractCurrent ? taskWorkingTreeEvidenceDigest(task.finalFileDigests) : undefined;
-  const currentTreeEvidence = rootTreeContractCurrent
-    && (scenarioKind === "read-only" || (Boolean(terminalVerifierDigest) && terminalVerifierDigest === finalTreeDigest));
+  const actual = uniqueSorted(changedFiles ?? []);
+  const claimed = uniqueSorted(tasks.flatMap((item) => Array.isArray(item?.changedFiles) ? item.changedFiles : []));
+  const currentTreeCandidates = evidenceTasks
+    .map((item) => ({ task: item, ...taskTreeEvidence(item, actual) }))
+    .filter((item) => item.current);
+  const finalTreeDigest = scenarioKind === "read-only"
+    ? currentTreeCandidates[0]?.digest
+    : currentTreeCandidates.find((item) => item.digest === terminalVerifierDigest)?.digest;
+  const currentTreeEvidence = Boolean(finalTreeDigest)
+    && (scenarioKind === "read-only" || terminalVerifierDigest === finalTreeDigest);
   const taskStartCalls = Number(toolNames?.piagent_task_start ?? 0);
-  const acceptedTaskStartCount = Number.isInteger(options.acceptedTaskStartCount)
-    ? Math.max(0, options.acceptedTaskStartCount)
-    : task?.taskRunId ? 1 : 0;
-  const intakeMode = task?.intakeMode === "runtime" ? "runtime" : "model";
-  const acceptanceCriteria = Array.isArray(task?.acceptanceReceipt?.criteria) ? task.acceptanceReceipt.criteria : [];
+  const startChoreography = taskStartChoreography(tasks, task, options);
+  const intakeMode = tasks.length > 0 && tasks.every((item) => item?.intakeMode === "runtime") ? "runtime" : "model";
+  const acceptanceCriteria = evidenceTasks.flatMap((item) => Array.isArray(item?.acceptanceReceipt?.criteria) ? item.acceptanceReceipt.criteria : []);
   const criticalAcceptance = acceptanceCriteria.filter((criterion) => criterion?.priority === "critical");
-  const requireSemanticAcceptanceEvidence = semanticAcceptanceEvidenceRequired(task);
+  const requireSemanticAcceptanceEvidence = evidenceTasks.some(semanticAcceptanceEvidenceRequired);
   const runtimeManagedCalls = Object.entries(toolNames ?? {})
     .filter(([name]) => RUNTIME_MANAGED_BENCHMARK_TOOLS.has(name))
     .reduce((sum, [, count]) => sum + Number(count ?? 0), 0);
   const checks = [
-    { id: "session-bound-task", passed: Boolean(task?.schemaVersion === 2 && task.taskRunId && task.sessionId), weight: 1 },
-    { id: "terminal-completion", passed: task?.trace?.outcome === "completed", weight: 1 },
-    { id: "completed-work-plan", passed: Array.isArray(task?.workPlan) && task.workPlan.length > 0 && task.workPlan.every((step) => ["done", "skipped"].includes(step.status)), weight: 1 },
+    {
+      id: "session-bound-task",
+      passed: tasks.length > 0
+        && tasks.every((item) => item?.schemaVersion === 2 && item.taskRunId && item.sessionId)
+        && new Set(tasks.map((item) => item.sessionId)).size === 1,
+      weight: 1
+    },
+    { id: "terminal-completion", passed: tasks.length > 0 && tasks.every((item) => item?.trace?.outcome === "completed"), weight: 1 },
+    {
+      id: "completed-work-plan",
+      passed: tasks.length > 0 && tasks.every((item) => Array.isArray(item?.workPlan)
+        && item.workPlan.length > 0
+        && item.workPlan.every((step) => ["done", "skipped"].includes(step.status))),
+      weight: 1
+    },
     { id: "current-tree-evidence", passed: currentTreeEvidence, weight: 1 },
     scenarioKind === "read-only"
       ? { id: "truthful-no-changes", passed: actual.length === 0 && claimed.length === 0, weight: 1 }
@@ -139,11 +227,7 @@ export function evaluateWorkflowEvidence(task, changedFiles, toolNames = {}, opt
         weight: requireSemanticAcceptanceEvidence ? 1 : 0.25
       }
     ] : []),
-    {
-      id: "single-task-start",
-      passed: acceptedTaskStartCount === 1,
-      weight: 1
-    },
+    { id: startChoreography.checkId, passed: startChoreography.passed, weight: 1 },
     { id: "runtime-managed-evidence", passed: runtimeManagedCalls === 0, weight: 1 }
   ];
   const earned = checks.reduce((sum, check) => sum + (check.passed ? check.weight : 0), 0);
@@ -151,9 +235,23 @@ export function evaluateWorkflowEvidence(task, changedFiles, toolNames = {}, opt
   return {
     score: rounded(10 * earned / available, 2),
     checks,
-    choreography: { intakeMode, taskStartCalls, acceptedTaskStartCount, runtimeManagedCalls },
+    choreography: tasks.length <= 1
+      ? { intakeMode, taskStartCalls, acceptedTaskStartCount: startChoreography.acceptedTaskStartCount, runtimeManagedCalls }
+      : {
+          intakeMode,
+          taskStartCalls,
+          acceptedTaskStartCount: startChoreography.acceptedTaskStartCount,
+          runtimeManagedCalls,
+          taskCount: tasks.length,
+          distinctTaskStartTurns: startChoreography.distinctTurnCount,
+          missingTaskStartTurnIds: startChoreography.missingTurnIdCount,
+          conflictingTaskStartTurns: startChoreography.conflictingTaskTurnCount,
+          duplicateTaskStartTurns: startChoreography.duplicateTurnCount
+        },
     taskEvidence: {
-      outcome: task?.trace?.outcome ?? "missing",
+      outcome: tasks.length > 0 && tasks.every((item) => item?.trace?.outcome === "completed")
+        ? "completed"
+        : tasks.find((item) => item?.trace?.outcome !== "completed")?.trace?.outcome ?? "missing",
       acceptance: {
         criteria: acceptanceCriteria.length,
         satisfied: acceptanceCriteria.filter((criterion) => criterion?.status === "satisfied").length,

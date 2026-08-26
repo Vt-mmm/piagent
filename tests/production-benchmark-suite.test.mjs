@@ -232,7 +232,7 @@ test("production spend control freezes impact-first staging without creating an 
     partialFreshSpend: { requiredFromCumulativeSessions: 12, maximumPooledFreshRatio: 1.1,
       maximumObservedFamilyFreshRatio: 1.25, includeExactFailedAttempts: true },
     providerFreeEvidence: { requiredBeforeFirstPaidSession: true,
-      requiredLaneIds: ["runtime-conformance-v1", "long-horizon-v1", "webui-parity-v1"],
+      requiredLaneIds: ["architecture-conformance-v1", "runtime-conformance-v1", "long-horizon-v1", "webui-parity-v1"],
       requireCleanCommitAndTreeBinding: true, requireProductionConfigurationBinding: true,
       requireRunnerAndLaneConfigurationDigests: true }
   });
@@ -244,6 +244,10 @@ test("production spend control freezes impact-first staging without creating an 
   invalidPartialGuard.productionGuards.partialFreshSpend.maximumPooledFreshRatio = 1.11;
   assert.ok(productionSpendControlValidationErrors(invalidPartialGuard, { suiteId: suite.id, expectedSessions: 108 })
     .includes("invalid-production-partial-fresh-spend-guard"));
+  const missingArchitectureLane = structuredClone(spendControl);
+  missingArchitectureLane.productionGuards.providerFreeEvidence.requiredLaneIds.shift();
+  assert.ok(productionSpendControlValidationErrors(missingArchitectureLane, { suiteId: suite.id, expectedSessions: 108 })
+    .includes("invalid-production-provider-free-evidence-guard"));
   const invalidHostReadiness = structuredClone(spendControl);
   invalidHostReadiness.hostReadiness = {
     schemaVersion: 1,

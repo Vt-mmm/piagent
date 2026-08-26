@@ -11,6 +11,7 @@ import {
 import { assertBenchmarkLedgerBinding, inspectBenchmarkLedger } from "./benchmark-ledger.js";
 import { benchmarkPhaseAttribution } from "./benchmark-phase-attribution.js";
 import { causalRuntimeEvidence } from "./benchmark-runtime-causal.js";
+import { exactBenchmarkMeasuredUsage } from "./benchmark-usage.js";
 
 export { materializeBenchmarkCandidate } from "./benchmark-candidate.js";
 
@@ -259,8 +260,8 @@ export function cleanupUnretainedWorkspaces(runRoot, keepWorkspaces) {
   }
 }
 
-export function acceptedTaskStartTraceCount(sessionFiles, sessionId) {
-  const taskRuns = new Set();
+export function acceptedTaskStartTraceEvidence(sessionFiles, sessionId) {
+  const taskRuns = new Map();
   for (const file of sessionFiles) {
     for (const line of fs.readFileSync(file, "utf8").split("\n")) {
       if (!line) continue;
@@ -275,10 +276,37 @@ export function acceptedTaskStartTraceCount(sessionFiles, sessionId) {
         || typeof trace.taskRunId !== "string"
         || !trace.taskRunId
       ) continue;
-      taskRuns.add(trace.taskRunId);
+      const observed = taskRuns.get(trace.taskRunId) ?? new Set();
+      observed.add(typeof trace.turnId === "string" && trace.turnId ? trace.turnId : null);
+      taskRuns.set(trace.taskRunId, observed);
     }
   }
-  return taskRuns.size;
+  const starts = [...taskRuns.entries()].map(([taskRunId, turnIds]) => {
+    const exact = [...turnIds].filter((turnId) => turnId !== null);
+    return {
+      taskRunId,
+      turnId: exact.length === 1 && !turnIds.has(null) ? exact[0] : null,
+      missingTurnId: turnIds.has(null),
+      conflictingTurnIds: exact.length > 1
+    };
+  });
+  const turnCounts = new Map();
+  for (const start of starts) {
+    if (!start.turnId) continue;
+    turnCounts.set(start.turnId, (turnCounts.get(start.turnId) ?? 0) + 1);
+  }
+  return {
+    acceptedTaskStartCount: starts.length,
+    starts,
+    distinctTurnCount: turnCounts.size,
+    missingTurnIdCount: starts.filter((start) => start.missingTurnId || !start.turnId).length,
+    conflictingTaskTurnCount: starts.filter((start) => start.conflictingTurnIds).length,
+    duplicateTurnCount: [...turnCounts.values()].filter((count) => count > 1).length
+  };
+}
+
+export function acceptedTaskStartTraceCount(sessionFiles, sessionId) {
+  return acceptedTaskStartTraceEvidence(sessionFiles, sessionId).acceptedTaskStartCount;
 }
 
 function blockedDecisionClass(reason) {
@@ -867,17 +895,21 @@ export function terminalPiSessionError(sessionFiles, sessionId) {
   return undefined;
 }
 
-export function classifyPreUsageFailure(agent, usage, diagnosticInput, { terminalProviderError = false } = {}) {
-  if (agent.timedOut) return undefined;
+export function classifyPreUsageFailure(agent, usage, diagnosticInput,
+  { terminalProviderError = false, candidateOutcome = null } = {}) {
   const diagnostic = String(diagnosticInput ?? "").toLowerCase();
-  const measuredUsage = Number.isInteger(usage?.sessions) && usage.sessions > 0
-    && ["input", "output", "cacheRead", "cacheWrite", "reasoning", "total", "fresh"]
-      .every((field) => Number.isFinite(usage?.[field]) && Number(usage[field]) >= 0)
-    && usage.fresh === usage.input + usage.output
-    && usage.total === usage.input + usage.output + usage.cacheRead + usage.cacheWrite;
+  const measuredUsage = exactBenchmarkMeasuredUsage(usage);
   const measuredZeroUsage = measuredUsage
     && ["input", "output", "cacheRead", "cacheWrite", "reasoning", "total", "fresh"]
       .every((field) => Number(usage[field]) === 0);
+  if (agent.timedOut) {
+    return {
+      failure: "agent-timeout-with-terminal-usage-unknown",
+      class: "transport-timeout",
+      usageStatus: "unknown-after-provider-start",
+      retryable: false
+    };
+  }
   const providerUnavailable = /\b(?:server(?:s)? (?:are )?(?:currently )?overloaded|temporarily unavailable|service unavailable|try again later)\b/.test(diagnostic);
   if ((terminalProviderError || agent.code !== 0) && measuredUsage && providerUnavailable) {
     const afterUsage = Number(usage.fresh) > 0;
@@ -899,6 +931,13 @@ export function classifyPreUsageFailure(agent, usage, diagnosticInput, { termina
       retryable: true
     };
   }
+  const validCandidateOutcome = candidateOutcome?.schemaVersion === 1
+    && candidateOutcome.kind === "terminal-settlement-mismatch"
+    && ["completed", "blocked", "aborted", "error", "unknown"].includes(candidateOutcome.expectedSettlement)
+    && ["completed", "blocked", "aborted", "error", "unknown"].includes(candidateOutcome.observedSettlement)
+    && candidateOutcome.expectedSettlement !== candidateOutcome.observedSettlement
+    && Number.isSafeInteger(candidateOutcome.turnIndex) && candidateOutcome.turnIndex > 0;
+  if (agent.code !== 0 && validCandidateOutcome && measuredUsage && usage.fresh > 0) return undefined;
   if (agent.code === 0) return undefined;
   if (/\b(?:provider|safety|policy|refus(?:al|ed|e)|disallowed|not allowed|cannot assist|can't assist|cyber safety)\b/.test(diagnostic)) {
     return measuredUsage

@@ -33,7 +33,7 @@
     {
       "id": "task-contract-schema",
       "path": "schemas/task-contract.schema.json",
-      "sha256": "62ea354afb6816b148ae9bd95ffb1ee5e29580eb4a22473e1ae19dbb471ec36b"
+      "sha256": "b936a604db87a697bf69581c33d753e26d9e5e2ccce40bf9c9b2070948f49919"
     },
     {
       "id": "assurance-schema",

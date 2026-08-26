@@ -32,7 +32,7 @@ export const RELEASE_FAILURE_MESSAGES = Object.freeze({
   "primary-efficiency": "The predeclared primary efficiency estimand lacks complete family/category evidence or its upper 95% ratio exceeds the suite limit.",
   "codex-relative-efficiency": "The fixed-workload Piagent/Codex CLI comparison lacks exact parity or quality evidence, exceeds 0.70 total token traffic or API-equivalent cost at the point/upper-95 bound, or exceeds the subagent budget.",
   "production-subagent-budget": "Production Piagent attempts lack exact child-session accounting, exceed one subagent per attempt, or spend more than 5% of candidate provider traffic on subagents.",
-  "provider-free-evidence": "The production run lacks same-source clean-commit runtime-conformance, long-horizon, or WebUI-parity evidence bound to exact lane configuration and runner bytes.",
+  "provider-free-evidence": "The production run lacks same-source clean-commit architecture, runtime-conformance, long-horizon, or WebUI-parity evidence bound to exact lane configuration and runner bytes.",
   "adaptive-context-runtime-coverage": "At least one Piagent runtime receipt reports partial adaptive-context evidence, or not-observed evidence lacks a same-source provider-free coverage lane.",
   "repeat-count": "The run used fewer repeats than the suite minimum.",
   "efficiency-confidence": "The upper 95% token-ratio bound exceeds the suite limit.",

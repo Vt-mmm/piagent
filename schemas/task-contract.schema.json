@@ -474,6 +474,7 @@
     "mutationPolicy": {
       "enum": [
         "required",
+        "allowed",
         "forbidden"
       ]
     },

@@ -14,7 +14,16 @@ import {
   createBenchmarkExecutionSnapshot,
   productionResumeHasCompleteLedger
 } from "../packages/piagent-core/benchmark/benchmark-bootstrap.js";
-import { inspectBenchmarkLedger } from "../packages/piagent-core/benchmark/benchmark-ledger.js";
+import {
+  appendBenchmarkLedger,
+  emptyBenchmarkLedgerBinding,
+  inspectBenchmarkLedger
+} from "../packages/piagent-core/benchmark/benchmark-ledger.js";
+import {
+  promoteMeasuredBenchmarkRecord,
+  stageMeasuredBenchmarkRecord
+} from "../packages/piagent-core/benchmark/benchmark-resume-recovery.js";
+import { resolveBenchmarkSuiteEntry } from "../packages/piagent-core/benchmark/benchmark-suite-runtime.js";
 import { collectBenchmarkHostReadinessReceipt } from "../packages/piagent-core/benchmark/benchmark-host-readiness.js";
 import {
   approveProductionStageControl,
@@ -27,6 +36,7 @@ import {
   productionStageResumeWindow
 } from "../packages/piagent-core/benchmark/benchmark-stage-diagnostic.js";
 import { pairedOutcomeFloorStop } from "../packages/piagent-core/benchmark/benchmark-stop-policy.js";
+import { runBenchmarkSession } from "../scripts/benchmark-session.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const runner = path.join(root, "scripts", "benchmark-runner.mjs");
@@ -2737,6 +2747,228 @@ test("does not terminal-stop when only the baseline fails the outcome floor", (t
   assert.equal(runs.length, 6);
   assert.equal(fs.existsSync(path.join(value.output, "stopped.json")), false);
   assert.equal(fs.existsSync(path.join(value.output, "report.json")), true);
+});
+
+test("structured WebUI settlement mismatch stays measured through grading, ledger append, and paired stop", async (t) => {
+  const value = fixture(t);
+  const suiteRoot = fs.realpathSync(path.dirname(value.suite));
+  const suite = JSON.parse(fs.readFileSync(value.suite, "utf8"));
+  suite.releaseGate = { minimumOutcomeScoreExclusive: 9.5 };
+  const scenario = suite.scenarios[0];
+  scenario.userJourney = {
+    expectedTerminalSettlement: "completed",
+    turns: [{ id: "implement", prompt: "journey.md" }]
+  };
+  fs.writeFileSync(path.join(suiteRoot, "journey.md"), "Implement the change, verify it, and report the result.\n");
+
+  const runRoot = path.join(value.dir, "settlement-output");
+  const piHome = path.join(value.dir, "settlement-pi-home");
+  fs.mkdirSync(runRoot, { recursive: true, mode: 0o700 });
+  fs.mkdirSync(piHome, { recursive: true, mode: 0o700 });
+  const runId = "structured-settlement-run";
+  const configurationDigest = crypto.createHash("sha256").update("structured-settlement-config").digest("hex");
+  const suiteDigest = crypto.createHash("sha256").update("structured-settlement-suite").digest("hex");
+  const execute = async (command, args, options = {}) => {
+    const started = Date.now();
+    const result = spawnSync(command, args, {
+      cwd: options.cwd,
+      env: options.env,
+      input: options.input,
+      encoding: "utf8",
+      timeout: options.timeoutMs,
+      maxBuffer: 16 * 1024 * 1024
+    });
+    return {
+      code: result.status ?? 1,
+      signal: result.signal ?? null,
+      timedOut: result.error?.code === "ETIMEDOUT",
+      stdout: result.stdout ?? "",
+      stderr: result.stderr ?? String(result.error?.message ?? ""),
+      durationSeconds: (Date.now() - started) / 1_000
+    };
+  };
+  let ledgerBinding = emptyBenchmarkLedgerBinding();
+  const manifest = { schemaVersion: 1, runId, configurationDigest, ledger: ledgerBinding };
+  const expectedCandidate = { scenario, surface: "piagent", repeat: 1 };
+  let stagedCandidate = null;
+  const mismatch = {
+    schemaVersion: 1,
+    kind: "terminal-settlement-mismatch",
+    expectedSettlement: "completed",
+    observedSettlement: "blocked",
+    turnIndex: 1
+  };
+  const piagentWebUiJourney = async ({ agentDir, workspace, environment }) => {
+    const sessionId = "structured-webui-session";
+    const sessionDir = path.join(agentDir, "sessions");
+    const executed = await execute(value.fakePi, ["--session-dir", sessionDir, "--session-id", sessionId], {
+      cwd: workspace,
+      timeoutMs: 30_000,
+      env: {
+        ...environment,
+        PIAGENT_BENCHMARK_TASK_FIXTURE: path.join(root, "evals", "fixtures", "task-contract.valid.json")
+      }
+    });
+    assert.equal(executed.code, 0, `${executed.stdout}\n${executed.stderr}`);
+    return {
+      ...executed,
+      code: 1,
+      candidateOutcome: mismatch,
+      journeyReceipt: {
+        channel: "webui-gateway",
+        completed: false,
+        sessionRef: sessionId,
+        reconnects: 0,
+        turns: [{ index: 1, id: "implement", settlement: "blocked", outcome: mismatch }]
+      }
+    };
+  };
+
+  const session = await runBenchmarkSession({
+    packageRoot: root,
+    runCommand: execute,
+    resolveSuiteEntry: resolveBenchmarkSuiteEntry,
+    interrupted: () => false,
+    persistCompletedRecord: (record) => {
+      stagedCandidate = stageMeasuredBenchmarkRecord({
+        runRoot,
+        manifest,
+        ledgerBinding,
+        record,
+        infrastructureFailures: [],
+        index: 0,
+        expected: expectedCandidate,
+        runId,
+        suite,
+        configurationDigest,
+        runs: []
+      });
+    },
+    suite,
+    suiteRoot,
+    scenario,
+    surface: "piagent",
+    repeat: 1,
+    orderIndex: 1,
+    runId,
+    runRoot,
+    options: { timeoutSeconds: 30, model: "test/fake-model", thinking: "high", piagentTreatment: "release-defaults" },
+    piCommand: value.fakePi,
+    codexCommand: value.fakeCodex,
+    codexDisabledFeatures: [],
+    codexRuntime: null,
+    piRuntimeHome: { path: piHome },
+    systemCommands: { node: process.execPath, git: "git", bash: "bash" },
+    suiteDigest,
+    configurationDigest,
+    rootSeed: "structured-settlement-seed",
+    piagentWebUiJourney
+  });
+
+  const candidate = session.record;
+  assert.equal(stagedCandidate, candidate, "the measured candidate outcome must reach the record WAL");
+  assert.equal(candidate.abortSuite, false);
+  assert.equal(candidate.usageStatus, "measured");
+  assert.equal(candidate.usage.usageCompleteness, "exact");
+  assert.ok(candidate.usage.fresh > 0);
+  assert.equal(candidate.resolved, false);
+  assert.equal(candidate.failure, "webui-terminal-settlement-blocked-expected-completed-turn-1");
+  assert.equal(candidate.grade.passed, true, "the hidden grader still evaluates the resulting tree");
+  assert.equal(candidate.grade.checks.find((check) => check.id === "result")?.passed, true);
+  assert.ok(Number.isFinite(candidate.workflow?.score), "workflow evidence remains evaluated on the failed outcome");
+  assert.ok(candidate.workflow.checks.length > 0);
+  assert.equal(candidate.infrastructureAttempts, 1);
+  assert.equal(candidate.infrastructureRetries, 0);
+  assert.deepEqual(candidate.infrastructureFailures, []);
+  assert.equal(fs.existsSync(path.join(runRoot, "infrastructure-attempts.jsonl")), false);
+
+  promoteMeasuredBenchmarkRecord({
+    runRoot,
+    ledgerBinding,
+    record: candidate,
+    postSessionGuard: { stage: "after-session:write-result:piagent:r1:attempt1", matched: true }
+  });
+  ledgerBinding = appendBenchmarkLedger(path.join(runRoot, "runs.jsonl"), candidate, ledgerBinding);
+  fs.rmSync(path.join(runRoot, "pending-record.json"));
+  const fullOrder = [expectedCandidate, { scenario, surface: "codex-cli", repeat: 1 }];
+  assert.equal(pairedOutcomeFloorStop({
+    enabled: true,
+    suite,
+    runs: [candidate],
+    current: fullOrder[0],
+    next: fullOrder[1]
+  }), null, "the candidate mismatch cannot stop midway through its paired block");
+
+  const baseline = structuredClone(candidate);
+  Object.assign(baseline, {
+    attemptId: crypto.randomUUID(),
+    orderIndex: 2,
+    ingress: "codex-cli-resume",
+    surface: "codex-cli",
+    sessionId: "structured-codex-session",
+    providerSessionId: "structured-codex-thread",
+    resolved: true,
+    failure: null,
+    workflow: null,
+    providerWireEvidence: null,
+    causalContextReceipt: {
+      schemaVersion: 1,
+      evidenceSource: "not-applicable",
+      applicability: "not-applicable",
+      available: false,
+      coverage: {
+        status: "not-applicable",
+        telemetryTruncated: false,
+        telemetryIntegrityFailures: 0,
+        recoverableTailBytes: 0,
+        criterionExpected: false,
+        sessionEventsObserved: 0,
+        observedLanes: 0,
+        requiredLanes: 0,
+        missingLanes: []
+      },
+      aggregates: null
+    },
+    agent: { ...candidate.agent, exitCode: 0 }
+  });
+  delete baseline.journeyReceipt;
+  stageMeasuredBenchmarkRecord({
+    runRoot,
+    manifest,
+    ledgerBinding,
+    record: baseline,
+    infrastructureFailures: [],
+    index: 1,
+    expected: fullOrder[1],
+    runId,
+    suite,
+    configurationDigest,
+    runs: [candidate]
+  });
+  promoteMeasuredBenchmarkRecord({
+    runRoot,
+    ledgerBinding,
+    record: baseline,
+    postSessionGuard: { stage: "after-session:write-result:codex-cli:r1:attempt1", matched: true }
+  });
+  ledgerBinding = appendBenchmarkLedger(path.join(runRoot, "runs.jsonl"), baseline, ledgerBinding);
+  fs.rmSync(path.join(runRoot, "pending-record.json"));
+
+  const inspected = inspectBenchmarkLedger(path.join(runRoot, "runs.jsonl"));
+  assert.deepEqual(inspected.binding, ledgerBinding);
+  assert.equal(inspected.records.length, 2);
+  assert.deepEqual(inspected.records.map((record) => record.surface), ["piagent", "codex-cli"]);
+  assert.equal(inspected.records[0].failure, candidate.failure);
+  const terminalStop = pairedOutcomeFloorStop({
+    enabled: true,
+    suite,
+    runs: inspected.records,
+    current: fullOrder[1],
+    next: undefined
+  });
+  assert.equal(terminalStop?.reason, "paired-outcome-floor-failed");
+  assert.equal(terminalStop?.failed[0]?.surface, "piagent");
+  assert.equal(terminalStop?.failed[0]?.reason, "unresolved-outcome");
 });
 
 test("terminal-stops at the paired boundary after a candidate outcome-floor failure", (t) => {

@@ -6,6 +6,7 @@ import {
   automaticTaskIntakeEligible,
   automaticTaskIntakeMode,
   automaticTaskMutationPolicy,
+  automaticTaskScope,
   isLightweightNonAuthorizingChangeContinuation,
   isNonAuthorizingChangeClarification,
   manualTaskIntakeEligible
@@ -163,4 +164,99 @@ test("explicit task-wide zero-delta language remains forbidden", () => {
   ]) {
     assert.equal(automaticTaskMutationPolicy(prompt, automaticTaskIntakeMode(prompt, []) ?? "source-change"), "forbidden", prompt);
   }
+});
+
+test("conditional verification and review follow-ups allow either zero delta or a guarded repair", () => {
+  for (const prompt of [
+    "Verify the current implementation and fix any failure.",
+    "Verify the implementation against every obligation from the earlier request. Run npm test and fix any failure before reporting completion.",
+    "Review what you just changed; fix issues if found.",
+    "Review the earlier implementation and fix it if necessary.",
+    "Run the tests and fix failures.",
+    "Verify the current implementation and repair failures if any.",
+    "Review the implementation and address any issues.",
+    "Re-run npm test; fix whatever fails.",
+    "Test the current implementation, correcting problems you find.",
+    "Kiểm tra lại phần vừa sửa, nếu có lỗi thì sửa."
+  ]) {
+    assert.equal(automaticTaskIntakeMode(prompt, []), "source-change", prompt);
+    assert.equal(automaticTaskMutationPolicy(prompt, "source-change"), "allowed", prompt);
+  }
+  assert.equal(
+    automaticTaskMutationPolicy("Fix src/cart.ts and run the tests.", "source-change"),
+    "required",
+    "an unconditional implementation still requires a task-local diff"
+  );
+  assert.equal(
+    automaticTaskMutationPolicy("Verify src/cart.ts. Do not edit source files.", "source-change"),
+    "forbidden",
+    "an explicit zero-delta boundary takes precedence over conditional mutation"
+  );
+  for (const prompt of [
+    "Update src/parser.ts to the approved API and review the result.",
+    "Fix the known parser failure and run tests.",
+    "Fix the known parser issue now, then review the result."
+  ]) {
+    assert.equal(automaticTaskIntakeMode(prompt, []), "source-change", prompt);
+    assert.equal(automaticTaskMutationPolicy(prompt, "source-change"), "required", prompt);
+  }
+  const readOnlyReview = "Review the current implementation for issues without changing files.";
+  assert.equal(automaticTaskIntakeMode(readOnlyReview, []), "read-only");
+  assert.equal(automaticTaskMutationPolicy(readOnlyReview, "read-only"), "forbidden");
+});
+
+test("implementation follow-up scope prefers the completed task evidence over unrelated navigation", () => {
+  const priorTask = {
+    trace: { outcome: "completed" },
+    changedFiles: ["src/current.ts"],
+    observedChangedFiles: ["src/current.test.ts"],
+    contextManifest: [{ path: "src/dependency.ts", reason: "Imported dependency" }]
+  };
+  assert.deepEqual(
+    automaticTaskScope(
+      "Review what you just changed; fix issues if found.",
+      [{ path: "src/unrelated-navigation.ts" }],
+      ["src/inferred-but-unrelated.ts"],
+      priorTask
+    ),
+    [
+      "src/current.ts",
+      "src/current.test.ts",
+      "src/dependency.ts",
+      "test/**",
+      "tests/**",
+      "spec/**",
+      "__tests__/**"
+    ]
+  );
+  assert.deepEqual(
+    automaticTaskScope(
+      "Verify the implementation against every obligation from the earlier request. Run npm test and fix any failure before reporting completion.",
+      [{ path: "src/frontend/request-lifecycle.js" }],
+      ["src/frontend/request-lifecycle.js"],
+      {
+        trace: { outcome: "completed" },
+        changedFiles: ["src/platform/config.js", "test/config.test.js"],
+        contextManifest: []
+      }
+    ),
+    [
+      "src/platform/config.js",
+      "test/config.test.js",
+      "test/**",
+      "tests/**",
+      "spec/**",
+      "__tests__/**"
+    ],
+    "the exact benchmark follow-up reuses the earlier task evidence"
+  );
+  assert.ok(
+    automaticTaskScope(
+      "Fix the parser implementation.",
+      [{ path: "src/current-navigation.ts" }],
+      [],
+      priorTask
+    ).includes("src/current-navigation.ts"),
+    "ordinary new work continues to use current navigation context"
+  );
 });

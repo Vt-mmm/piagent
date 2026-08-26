@@ -4821,6 +4821,60 @@ describe("piagent guard integration", () => {
     assert.deepEqual(task.changedFiles, []);
   });
 
+  it("completes an allowed automatic task with exact current-tree verification and zero task delta", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    fs.mkdirSync(path.join(cwd, "src", "platform"), { recursive: true });
+    fs.writeFileSync(path.join(cwd, "src", "platform", "config.js"), "export const enabled = true;\n");
+    const ctx = createContext(cwd, { sessionId: "session-conditional-verify", sessionName: "CONDITIONAL-VERIFY" });
+    const harness = createPiHarness({ activeTools: ["read", "bash", "edit", "write"] });
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+
+    const prompt = "Verify the current implementation and fix any failure before reporting completion.";
+    await harness.handlers.get("input")({ text: prompt, source: "user" }, ctx);
+    const started = await harness.handlers.get("before_agent_start")({
+      prompt,
+      systemPrompt: "stable system prompt",
+      systemPromptOptions: { cwd, selectedTools: [...harness.activeTools] }
+    }, ctx);
+    assert.equal(started.message.details.runtimeTask.changeMode, "source-change");
+    assert.equal(started.message.details.runtimeTask.mutationPolicy, "allowed");
+    assert.match(started.message.content, /zero task delta is valid/i);
+
+    await harness.handlers.get("tool_result")({
+      toolName: "read",
+      input: { path: "src/platform/config.js" },
+      content: [{ type: "text", text: "export const enabled = true;" }],
+      isError: false
+    }, ctx);
+    for (const verifier of started.message.details.runtimeTask.verifyCommands) {
+      const allowed = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", { command: verifier });
+      assert.notEqual(allowed.block, true, allowed.reason);
+      await harness.handlers.get("tool_result")({
+        toolName: "bash",
+        input: { command: verifier },
+        content: [{ type: "text", text: "pass" }],
+        details: { exitCode: 0 },
+        isError: false,
+        timestamp: Date.now()
+      }, ctx);
+    }
+
+    const evidenced = activeSessionTask(cwd, "session-conditional-verify");
+    assert.deepEqual(evidenced.workPlan.map((step) => step.status), ["done", "done"]);
+    assert.deepEqual(evidenced.changedFiles, []);
+    const final = await harness.handlers.get("message_end")({
+      message: { role: "assistant", content: [{ type: "text", text: "Verification complete: every configured verifier passed and no repair was needed." }] }
+    }, ctx);
+    assert.equal(final, undefined);
+    const task = activeSessionTask(cwd, "session-conditional-verify");
+    assert.equal(task.trace.outcome, "completed");
+    assert.equal(task.mutationPolicy, "allowed");
+    assert.deepEqual(task.changedFiles, []);
+    assert.deepEqual(task.workPlan.map((step) => step.status), ["done", "done"]);
+  });
+
   it("locks retry limits across attempts and carries failure evidence forward in one conversation", async () => {
     const { root, piagentGuard } = await loadGuardFixture();
     const cwd = createProject(root);

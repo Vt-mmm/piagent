@@ -7,7 +7,7 @@ import { authorityReplacementState } from "../policy/authority-resume-policy.ts"
 import { compileCriterionGraph, criterionGraphContextSelection, criterionGraphContextSelectionDetails, criterionGraphGuidance, criterionGraphMode } from "../../extensions/criterion-graph.js";
 import { captureTaskStartBaseline } from "../inspection/task-baseline-start-capture.ts";
 import { sameStringRecord, satisfiesAuthorityReplacement } from "./task-start-retry-helpers.ts"; import { automaticTaskExecutionGuidance, EXACT_VERIFIER_EXECUTION_GUIDANCE, RUNTIME_SOURCE_REUSE_GUIDANCE, taskCriticalProofSection } from "./task-start-guidance.ts";
-import { resolveTaskStartRepositoryManifestProvider } from "./task-start-manifest.ts"; import { boundedOperatorRequest, latestOperatorRequest } from "./operator-request-intake.ts";
+import { resolveTaskStartRepositoryManifestProvider } from "./task-start-manifest.ts"; import { boundedOperatorRequest, latestOperatorRequest } from "./operator-request-intake.ts"; import { automaticTaskExpectedOutput, conditionalMutationPreTaskContext, taskStartLifecycleGuidance } from "./task-start-conditional-mutation.ts";
 type ExtensionContext = any; type TaskContract = any; type TaskStartParameters = Record<string, any> & { operatorRequest?: string }; function taskReferenceDetails(task: TaskContract, reasonCode: string): Record<string, unknown> { const scope = Array.isArray(task.scope) ? task.scope.slice(0, 50) : []; return { reasonCode, taskId: task.taskId, taskRunId: task.taskRunId, outcome: task.trace?.outcome, attempt: task.attempt, ...(reasonCode === "task-already-active" ? { scope, scopeTruncated: scope.length < task.scope.length } : {}) }; }
 export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any>): any {
   const {
@@ -16,7 +16,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
     applyRuntimeLifecycleObservation, automaticAcceptanceCriteria, automaticReadOnlyTaskScope, automaticReviewLenses, automaticTaskIntakeMode, automaticTaskMutationPolicy, automaticTaskRiskLane, automaticTaskScope,
     acceptanceBaselineGuidance, acceptanceLanguageAdapterForPath, acceptanceProofGuidance, bindSessionTask, buildAcceptanceReceipt, compactTaskDetails, contextBudgetConfig, createTaskRunId,
     currentSessionName, defaultWorkPlan, effectiveProtectedPaths, hasGitEvidenceRoot, hasOperatorSessionName,
-    isAcceptanceTestPath, loadProfileFromContext, matchesProtectedPath, normalizeReviewLenses, normalizeWorkPlanSteps, nowIso, policy,
+    isAcceptanceTestPath, loadProfileFromContext, matchesAnyPath, matchesProtectedPath, normalizeReviewLenses, normalizeWorkPlanSteps, nowIso, policy,
     priorTaskAttempts, recordTaskStartCheckpoint, redactText, redactTextArray, registerRuntimeTool,
     repositoryFileManifest, resolveOrchestrationPolicy, resolveTaskScopePatterns, runtimeLifecycleMode, runtimeState, safeTaskId, selectVerificationPlan,
     summarizeAttempt, telemetry, validTaskScopePattern, validateNewWorkPlan, verifierCommandInstructions, workingTreeEvidenceDigest, workingTreeSnapshot, workingTreeSnapshotHasUnavailableEvidence,
@@ -30,7 +30,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
     promptSnippet: "Start a governed project task and persist the task contract.",
     promptGuidelines: [
       "Call this exactly once before source edits in a project managed by Pi Agent Platform.",
-      "Use source-change for project verifier execution or edits. For an assessment, report, or plan with no source changes, set mutationPolicy=forbidden; use read-only when no project verifier needs to execute.",
+      "Use source-change for project verifier execution or edits. Set mutationPolicy=required when a task-local diff is mandatory, allowed when verification/review may conditionally repair findings but zero delta is valid, and forbidden when source mutation is prohibited; use read-only when no project verifier needs to execute.",
       "Do not call context, status, policy, evidence-recording, trace, or gate tools first; runtime hooks provide those checks automatically.",
       "Use tiny for a bounded low-risk change, normal for ordinary multi-file work, and high-risk for security, data, release, migration, or external-impact work.",
       "Every scope entry is an initial retrieval/review focus and must be a project-relative path or glob such as src/file.ts, src/**, or test/**; it is not a source-mutation boundary.",
@@ -44,7 +44,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       changeMode: Type.Optional(StringEnum(["source-change", "read-only"] as const, {
         description: "Use source-change for project verifier execution or edits; use read-only for bounded inspection."
       })),
-      mutationPolicy: Type.Optional(StringEnum(["required", "forbidden"] as const, { description: "Required demands a final diff; forbidden allows exact verification, rejects source mutation, and requires a zero task delta." })),
+      mutationPolicy: Type.Optional(StringEnum(["required", "allowed", "forbidden"] as const, { description: "Required demands a final diff; allowed accepts zero or scoped source changes while retaining exact verification and mutation guards; forbidden rejects source mutation and requires a zero task delta." })),
       maxAttempts: Type.Optional(Type.Number({ minimum: 1, maximum: 10 })),
       expectedOutput: Type.String({ minLength: 10, maxLength: TASK_EXPECTED_OUTPUT_MAX_CHARS }),
       acceptanceCriteria: Type.Array(Type.String({ minLength: 1, maxLength: TASK_ACCEPTANCE_CRITERION_MAX_CHARS }), { minItems: 1, maxItems: TASK_ACCEPTANCE_CRITERIA_MAX }),
@@ -227,8 +227,10 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       }
       const orchestration = resolveOrchestrationPolicy(profile, policy);
       const changeMode = params.changeMode === "read-only" ? "read-only" : "source-change";
-      const mutationPolicy = changeMode === "read-only" || params.mutationPolicy === "forbidden" ? "forbidden" : "required";
-      if (changeMode === "read-only" && params.mutationPolicy === "required") return { content: [{ type: "text", text: "Task start refused: read-only tasks cannot require source mutation." }], isError: true };
+      const mutationPolicy = changeMode === "read-only" || params.mutationPolicy === "forbidden"
+        ? "forbidden"
+        : params.mutationPolicy === "allowed" ? "allowed" : "required";
+      if (changeMode === "read-only" && params.mutationPolicy !== undefined && params.mutationPolicy !== "forbidden") return { content: [{ type: "text", text: "Task start refused: read-only tasks must forbid source mutation." }], isError: true };
       if (changeMode === "source-change" && !hasGitEvidenceRoot(ctx.cwd)) {
         return {
           content: [{ type: "text", text: "Task start refused: source-change tasks require a Git working tree, or a workspace parent with direct child Git repositories, so changed-file evidence cannot silently disappear. Initialize Git, open the parent that contains the repos, or use read-only mode." }],
@@ -288,7 +290,8 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       const maxManifestFiles = contextBudgetConfig(policy).maxManifestFiles;
       const plannedSelection = criterionGraphContextSelectionDetails(criterionGraph, projectFiles, [], maxManifestFiles, projectManifest.complete, resolvedScope);
       const plannedContext = plannedSelection.entries;
-      const observedContext = criterionGraphContextSelection(undefined, [], runtimeState.preTaskContext(ctx), maxManifestFiles);
+      const observedContext = criterionGraphContextSelection(undefined, [], conditionalMutationPreTaskContext(runtimeState.preTaskContext(ctx), resolvedScope,
+        params.intakeMode === "runtime" && mutationPolicy === "allowed", matchesAnyPath), maxManifestFiles);
       const task: TaskContract = {
         schemaVersion: 2,
         taskRunId,
@@ -396,16 +399,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
             ...(baselineGuidance.length > 0
               ? [["Existing public contract:", ...baselineGuidance.map((item: string) => `- ${item}`)].join("\n")]
               : []),
-            lifecycleMode === "automatic-readonly"
-              ? "Runtime records targeted reads and final completion automatically. Stay read-only and report cited evidence."
-              : lifecycleMode === "assisted-readonly"
-                ? "Runtime records read-only evidence automatically; complete only the explicit evidence-review step before handoff."
-                : mutationPolicy === "forbidden" ? "Runtime permits bounded inspection and exact configured verifier commands only. Source mutation is blocked, and completion requires a zero task delta."
-                : lifecycleMode === "automatic"
-              ? "Runtime will record reads, changes, exact verifier results, and final completion automatically. Continue with ordinary read/edit/bash work."
-                  : lifecycleMode === "assisted"
-                    ? `Runtime records objective evidence automatically; after verification, complete only step \`review\` with piagent_task_progress using taskId \`${written.taskId}\` and stepId \`review\`.`
-                    : "Use the active progress/recovery tools for the custom or high-risk checkpoints."
+            taskStartLifecycleGuidance(lifecycleMode, mutationPolicy, written.taskId)
           ].join("\n")
         }],
         details: compactTaskDetails(written)
@@ -425,7 +419,7 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
     const projectManifest = repositoryManifestProvider.read(ctx.cwd), projectFiles = projectManifest.files;
     const scope = intakeMode === "read-only"
       ? automaticReadOnlyTaskScope(prompt, runtimeState.preTaskContext(ctx))
-      : automaticTaskScope(prompt, runtimeState.preTaskContext(ctx), projectFiles);
+      : automaticTaskScope(prompt, runtimeState.preTaskContext(ctx), projectFiles, active);
     const started = await taskStartTool.execute(
       `runtime-intake-${ctx.sessionManager.getSessionId()}`,
       {
@@ -435,9 +429,8 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
         intakeMode: "runtime",
         changeMode: intakeMode,
         mutationPolicy,
-        expectedOutput: mutationPolicy === "forbidden" ? "The requested read-only investigation is answered from observed project evidence without mutating files."
-          : "The requested bounded change is implemented and passes the configured verification.",
-        acceptanceCriteria: automaticAcceptanceCriteria(prompt, mutationPolicy === "forbidden" ? "read-only" : intakeMode),
+        expectedOutput: automaticTaskExpectedOutput(mutationPolicy),
+        acceptanceCriteria: automaticAcceptanceCriteria(prompt, mutationPolicy === "forbidden" ? "read-only" : intakeMode, mutationPolicy),
         scope,
         outOfScope: ["Unrelated files and behavior outside the operator request."],
         reviewLenses: automaticReviewLenses(prompt)

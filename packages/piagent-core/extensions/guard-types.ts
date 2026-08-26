@@ -366,7 +366,7 @@ export type TaskContract = {
   sessionId: string;
   sessionName?: string;
   changeMode: "source-change" | "read-only";
-  mutationPolicy?: "required" | "forbidden";
+  mutationPolicy?: "required" | "allowed" | "forbidden";
   attempt: number;
   maxAttempts: number;
   previousAttempts: TaskAttemptSummary[];

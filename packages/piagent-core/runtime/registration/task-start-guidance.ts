@@ -143,6 +143,9 @@ export function automaticTaskExecutionGuidance(task: ProofTask): string {
       ? "Stay mutation-free. Runtime permits bounded inspection and the exact configured verifier, records completion evidence, and requires a zero task delta."
       : "Stay read-only. Runtime records targeted reads and completion evidence; do not call task-management tools.";
   }
+  if (task.mutationPolicy === "allowed") {
+    return "Verify and review the referenced implementation first. Mutate only when observed evidence identifies a repair; zero task delta is valid. Any repair remains subject to the normal mutation guards, and every exact configured verifier must pass against the final working tree. Runtime records evidence and completion; do not call task-management tools.";
+  }
   return task.criterionGraph?.mode === "criterion-graph"
     ? "Follow the execution map and implement dependency-ready criteria. The map plans work but never overrides the operator request or exact verifiers. Runtime records evidence and completion; do not call task-management tools."
     : "Privately map every operator criterion to implementation and durable focused-test coverage before mutating. Finish intended edits and a criterion-by-criterion self-review. Runtime records evidence and completion; do not call task-management tools.";

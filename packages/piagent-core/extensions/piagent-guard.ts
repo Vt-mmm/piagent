@@ -237,7 +237,7 @@ type TaskStartParameters = {
   riskLane: "tiny" | "normal" | "high-risk";
   intakeMode?: "model" | "runtime";
   changeMode?: "source-change" | "read-only";
-  mutationPolicy?: "required" | "forbidden";
+  mutationPolicy?: "required" | "allowed" | "forbidden";
   verifyGroup?: string;
   maxAttempts?: number;
   expectedOutput: string;
@@ -1939,8 +1939,9 @@ function recordObservedTaskVerification(
   }
 
   const hasChanges = taskChangedFileEvidence(ctx.cwd, task, currentDigests).expected.length > 0;
-  const allPassing = hasChanges && allVerifyCommandsPassCurrentTree(task, currentDigest);
-  const lifecycle = hasChanges
+  const verificationCanSettleSourceTask = hasChanges || task.mutationPolicy === "allowed";
+  const allPassing = verificationCanSettleSourceTask && allVerifyCommandsPassCurrentTree(task, currentDigest);
+  const lifecycle = verificationCanSettleSourceTask
     ? applyRuntimeLifecycleObservation(task, allPassing ? "verification-complete" : "verification-pending", nowIso())
     : { changed: false, mode: runtimeLifecycleMode(task) };
   const acceptance = refreshAcceptanceReceipt(task, {
@@ -3530,7 +3531,7 @@ function evaluateTaskGate(
   }
   const changedFileEvidence = taskChangedFileEvidence(cwd, task, currentDigests);
   if (task.changeMode === "source-change" && task.trace.outcome === "completed" && task.mutationPolicy !== "forbidden") {
-    if (task.changedFiles.length === 0) missing.push("changed files");
+    if (task.mutationPolicy !== "allowed" && task.changedFiles.length === 0) missing.push("changed files");
     if (changedFileEvidence.undeclared.length > 0) missing.push(`declared observed changes (${changedFileEvidence.undeclared.join(", ")})`);
     if (changedFileEvidence.unsupportedClaims.length > 0) missing.push(`supported changed-file claims (${changedFileEvidence.unsupportedClaims.join(", ")})`);
     if (changedFileEvidence.outsideScope.length > 0) {

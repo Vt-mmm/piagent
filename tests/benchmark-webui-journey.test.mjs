@@ -17,9 +17,10 @@ import {
   eventSummary,
   GatewayJourneyClient,
   launchCapability,
-  recoverOperationFromEvents
+  recoverOperationFromEvents,
+  terminalSettlementOutcome
 } from "../scripts/benchmark-webui-journey.mjs";
-import { persistedJourneyReceipt } from "../scripts/benchmark-session.mjs";
+import { candidateOutcomeFailureReason, persistedJourneyReceipt } from "../scripts/benchmark-session.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 
@@ -105,10 +106,22 @@ test("uncertain send requires exactly one durable user message before its assist
   }), /uncertain-send-was-resent/);
 });
 
+test("terminal settlement mismatch is a bounded candidate outcome, not a parsed transport string", () => {
+  const outcome = terminalSettlementOutcome("completed", "blocked", 2);
+  assert.deepEqual(outcome, { schemaVersion: 1, kind: "terminal-settlement-mismatch",
+    expectedSettlement: "completed", observedSettlement: "blocked", turnIndex: 2 });
+  assert.equal(candidateOutcomeFailureReason(outcome),
+    "webui-terminal-settlement-blocked-expected-completed-turn-2");
+  assert.equal(terminalSettlementOutcome("completed", "completed", 2), null);
+  assert.throws(() => terminalSettlementOutcome("completed", "not-a-settlement", 2), /outcome-invalid/);
+});
+
 test("persisted uncertain-send recovery keeps only bounded privacy-safe evidence", () => {
   const persisted = persistedJourneyReceipt({
     channel: "webui-gateway", completed: true, sessionRef: "private-session", reconnects: 2,
     turns: [{ index: 2, messageRequestId: "private-message", operationRef: "private-operation", receiptUncertain: true,
+      outcome: { schemaVersion: 1, kind: "terminal-settlement-mismatch", expectedSettlement: "completed",
+        observedSettlement: "blocked", turnIndex: 2, rawReason: "must-also-not-persist" },
       recovery: { responseObserved: true, responseDiscarded: true, connectionDropped: true, replayCursor: 7,
         recoveredFromKind: "runtime.changed", recoveredAtSequence: 8, correlatedByMessageRequestId: true,
         sendAttempts: 1, durableUserCopies: 1, rawResponse: "must-not-persist" } }]
@@ -118,7 +131,10 @@ test("persisted uncertain-send recovery keeps only bounded privacy-safe evidence
     recoveredFromKind: "runtime.changed", recoveredAtSequence: 8, correlatedByMessageRequestId: true,
     sendAttempts: 1, durableUserCopies: 1
   });
+  assert.deepEqual(persisted.turns[0].outcome, { schemaVersion: 1, kind: "terminal-settlement-mismatch",
+    expectedSettlement: "completed", observedSettlement: "blocked", turnIndex: 2 });
   assert.equal(JSON.stringify(persisted).includes("must-not-persist"), false);
+  assert.equal(JSON.stringify(persisted).includes("must-also-not-persist"), false);
   assert.equal(JSON.stringify(persisted).includes("private-message"), false);
   assert.equal(JSON.stringify(persisted).includes("private-operation"), false);
 });
@@ -171,7 +187,13 @@ test("production-v2 candidate resolves its bound ws runtime for dry-run and an i
       "  const index = await fetch(browser.origin);",
       '  if (!index.ok || !(await index.text()).includes("piagent-webui-mode")) throw new Error("production-assets-not-served");',
       '  process.stdout.write(`gateway-started:${gateway.descriptor.origin}\\n`);',
-      "} finally { client?.close(); await gateway?.close(); fs.rmSync(agentDir, { recursive: true, force: true }); }"
+      "} finally {",
+      "  client?.close(); await gateway?.close();",
+      '  const gatewayState = fs.lstatSync(path.join(agentDir, "piagent-gateway"));',
+      '  if (!gatewayState.isDirectory() || gatewayState.isSymbolicLink()) throw new Error("gateway-home-state-not-a-directory");',
+      '  process.stdout.write("gateway-home-state:directory\\n");',
+      "  fs.rmSync(agentDir, { recursive: true, force: true });",
+      "}"
     ].join("\n");
     const gateway = spawnSync(process.execPath, [
       "--disable-warning=ExperimentalWarning",
@@ -184,6 +206,7 @@ test("production-v2 candidate resolves its bound ws runtime for dry-run and an i
     });
     assert.equal(gateway.status, 0, `${gateway.stdout}\n${gateway.stderr}`);
     assert.match(gateway.stdout, /^gateway-started:http:\/\/127\.0\.0\.1:\d+$/m);
+    assert.match(gateway.stdout, /^gateway-home-state:directory$/m);
     assert.doesNotMatch(gateway.stderr, /ERR_MODULE_NOT_FOUND|Cannot find package 'ws'/);
   } finally {
     cleanupBenchmarkExecutionSnapshot(snapshot.temporaryRoot, snapshot.runtimeParent, snapshot.metadata.piAgentHome);

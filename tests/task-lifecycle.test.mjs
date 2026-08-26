@@ -65,6 +65,13 @@ test("tiny default plan is automatic and reopens after a later mutation", () => 
   assert.deepEqual(task.workPlan.map((step) => step.status), ["in-progress", "pending"]);
 });
 
+test("an allowed source task completes its automatic lifecycle after exact verification without a mutation", () => {
+  const task = { ...tinyTask(), mutationPolicy: "allowed" };
+  assert.equal(runtimeLifecycleMode(task), "automatic");
+  applyRuntimeLifecycleObservation(task, "verification-complete", "2026-08-01T00:00:00.000Z");
+  assert.deepEqual(task.workPlan.map((step) => step.status), ["done", "done"]);
+});
+
 test("normal default plan automates objective phases but preserves explicit review", () => {
   const task = normalTask();
   assert.equal(runtimeLifecycleMode(task), "assisted");

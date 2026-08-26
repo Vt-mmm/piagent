@@ -110,6 +110,54 @@ test("Pi runtime is writable, preserves only credential rotation, and resets eph
   assert.equal(fs.existsSync(runtime.path), false);
 });
 
+test("Pi runtime accepts only directory-shaped Gateway state and removes it on reset", (t) => {
+  const { piAgentHome } = controlledHome(t);
+  const runtime = createBenchmarkPiRuntimeHome(piAgentHome);
+  const gatewayRoot = path.join(runtime.path, "piagent-gateway");
+
+  fs.writeFileSync(gatewayRoot, "not-a-directory\n", { mode: 0o600 });
+  let fileError;
+  assert.throws(() => benchmarkPiHomeConfigIdentity(runtime.path, { requiredFileMode: "600" }), (error) => {
+    fileError = error;
+    return /ephemeral path has unsupported type/.test(error.message);
+  });
+  assert.deepEqual(fileError.piHomeMismatch, {
+    classification: "ephemeral-type",
+    entry: "piagent-gateway",
+    observedKind: "regular"
+  });
+  fs.rmSync(gatewayRoot);
+
+  fs.symlinkSync("settings.json", gatewayRoot);
+  let symlinkError;
+  assert.throws(() => benchmarkPiHomeConfigIdentity(runtime.path, { requiredFileMode: "600" }), (error) => {
+    symlinkError = error;
+    return /ephemeral path has unsupported type/.test(error.message);
+  });
+  assert.deepEqual(symlinkError.piHomeMismatch, {
+    classification: "ephemeral-type",
+    entry: "piagent-gateway",
+    observedKind: "symlink"
+  });
+  fs.rmSync(gatewayRoot);
+
+  fs.mkdirSync(gatewayRoot, { mode: 0o700 });
+  fs.writeFileSync(path.join(gatewayRoot, "catalog.key"), "synthetic-gateway-key\n", { mode: 0o600 });
+  assert.doesNotThrow(() => assertBenchmarkPiRuntimeMatchesSeed(
+    piAgentHome.seedIdentity,
+    benchmarkPiHomeConfigIdentity(runtime.path, { requiredFileMode: "600" })
+  ));
+
+  resetBenchmarkPiRuntimeEphemeralState(runtime);
+  assert.equal(fs.existsSync(gatewayRoot), false);
+  assert.deepEqual(fs.readdirSync(runtime.path).sort(), ["auth.json", "models.json", "settings.json"]);
+  assert.doesNotThrow(() => assertBenchmarkPiRuntimeMatchesSeed(
+    piAgentHome.seedIdentity,
+    benchmarkPiHomeConfigIdentity(runtime.path, { requiredFileMode: "600" })
+  ));
+  cleanupBenchmarkPiRuntimeHome(piAgentHome, runtime);
+});
+
 test("Pi OAuth refresh uses a same-account locked CAS bridge and supports crash recovery", (t) => {
   const { piAgentHome } = controlledHome(t);
   const runtime = createBenchmarkPiRuntimeHome(piAgentHome);

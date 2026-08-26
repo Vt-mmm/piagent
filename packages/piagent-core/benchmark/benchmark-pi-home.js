@@ -13,6 +13,7 @@ export const BENCHMARK_PI_HOME_EPHEMERAL_ENTRIES = Object.freeze({
   "models-store.json": "regular",
   "models-store.json.lock": "directory",
   "models.json.lock": "directory",
+  "piagent-gateway": "directory",
   "sessions": "directory",
   "settings.json.lock": "directory",
   "trust.json.lock": "directory"

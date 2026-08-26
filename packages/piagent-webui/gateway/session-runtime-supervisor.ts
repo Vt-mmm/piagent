@@ -15,6 +15,7 @@ import { WEBUI_MESSAGE_CORRELATION_ENTRY_TYPE } from "../shared/message-correlat
 import { armSessionOperationWatchdog, bestEffortUnsubscribe, boundedResult, sessionOperationDeadlinePolicy, SessionOperationWatchdog, terminateWatchedSessionOperation,
   type SessionOperationDeadlinePolicy, type SessionOperationWatchdogOptions } from "./session-operation-watchdog.ts";
 import { createProductionRuntimeFactory, type RuntimeFactory, type RuntimeHandle } from "./session-runtime-factory.ts";
+import { projectSessionRuntimeOwnership } from "./session-runtime-ownership.ts";
 const MAX_WARM_RUNTIMES = 10;
 type ActiveRuntime = { runtime: RuntimeHandle; lease: SessionLeaseSnapshot; info: PiSessionInfo; operationRef: string | null;
   messageRequestId: string | null;
@@ -205,38 +206,8 @@ export class SessionRuntimeSupervisor {
     return result;
   }
   ownership(sessionRef: string): SessionOwnerProjection {
-    const lease = this.#leases.inspect(sessionRef);
-    const active = this.#active.get(sessionRef);
-    if (lease.state === "released") return {
-      state: "offline", liveState: "offline", composerAvailable: true, needsAttention: false,
-      owner: { kind: "none", ownerEpoch: null, gatewayInstanceRef: null, runtimeInstanceRef: null, continuity: "released" },
-      reasonCode: null
-    };
-    if (lease.state === "gateway-owned" && active && active.lease.ownerEpoch === lease.ownerEpoch
-      && lease.gatewayInstanceRef === this.#gatewayInstanceRef && active.lease.runtimeInstanceRef === lease.runtimeInstanceRef) return {
-      state: "gateway-owned", liveState: active.approvalWaiting ? "waiting-approval" : active.operationRef ? "running" : "idle",
-      composerAvailable: true, needsAttention: active.approvalWaiting,
-      owner: { kind: "gateway", ownerEpoch: lease.ownerEpoch!, gatewayInstanceRef: lease.gatewayInstanceRef!,
-        runtimeInstanceRef: lease.runtimeInstanceRef!, continuity: "exact" }, reasonCode: null
-    };
-    if (lease.state === "unavailable") return {
-      state: "recovery-required", liveState: "uncertain", composerAvailable: false, needsAttention: true,
-      owner: { kind: "none", ownerEpoch: null, gatewayInstanceRef: null, runtimeInstanceRef: null, continuity: "unknown" },
-      reasonCode: lease.reasonCode ?? "session-lease-unavailable"
-    };
-    if (lease.state === "terminal-owned") return {
-      state: "terminal-owned", liveState: "uncertain", composerAvailable: false, needsAttention: false,
-      owner: { kind: "terminal", ownerEpoch: lease.ownerEpoch!,
-        gatewayInstanceRef: `terminal_${createHmac("sha256", this.#key).update(lease.gatewayInstanceRef!).digest("base64url").slice(0, 43)}`,
-        runtimeInstanceRef: lease.runtimeInstanceRef!, continuity: "exact" },
-      reasonCode: "terminal-owner-active"
-    };
-    return {
-      state: "recovery-required", liveState: "uncertain", composerAvailable: false, needsAttention: true,
-      owner: { kind: "gateway", ownerEpoch: lease.ownerEpoch!, gatewayInstanceRef: lease.gatewayInstanceRef!,
-        runtimeInstanceRef: lease.runtimeInstanceRef!, continuity: "uncertain" },
-      reasonCode: lease.reasonCode ?? "session-owner-continuity-unknown"
-    };
+    return projectSessionRuntimeOwnership({ lease: this.#leases.inspect(sessionRef), active: this.#active.get(sessionRef),
+      gatewayInstanceRef: this.#gatewayInstanceRef, key: this.#key });
   }
   async send(sessionRef: string, payload: { delivery: "new-operation" | "follow-up" | "steer"; message: string;
     expectedOperationRef: string | null; messageRequestId?: string; images?: unknown[] }, sessionRevision: string, options: { deferDispatch?: boolean } = {}):

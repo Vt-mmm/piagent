@@ -50,9 +50,12 @@ function productionProviderFreeEvidence() {
     configurationDigest: productionConfigurationDigest
   });
   const summaries = {
+    "architecture-conformance-v1": { evidenceClass: "provider-free-architecture-conformance", passed: true,
+      filesChecked: 1, layersChecked: 1, architectureCheckPasses: true, sourceCoverageComplete: true,
+      dependencyBoundariesPass: true, lineBudgetsPass: true },
     "runtime-conformance-v1": { passed: true, configuredCases: 1, executedCases: 1, failedCases: 0, gates: { runtime: true } },
     "long-horizon-v1": { evidenceClass: "provider-free-long-horizon", wallClockQualified: true, completedFromResume: true, contextWithinCeiling: true, stateGrowthWithinCeiling: true, continuationEnforcementSafe: true, stableCurrentTree: true },
-    "webui-parity-v1": { benchmark: "webui-parity-v1", passed: true, uiStability: "deterministic-current-state", uiStabilitySuites: 7, deterministicStabilityStepPassed: true }
+    "webui-parity-v1": { benchmark: "webui-parity-v1", passed: true, uiStability: "deterministic-current-state", uiStabilitySuites: 8, deterministicStabilityStepPassed: true }
   };
   return signedTestReceipt({
     schemaVersion: 1,

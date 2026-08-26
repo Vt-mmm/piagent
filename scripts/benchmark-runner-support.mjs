@@ -163,6 +163,22 @@ export function formatDuration(ms) {
   return `${seconds}s`;
 }
 
+export function bindBenchmarkTerminationSignals({ interrupted, interrupt, terminateAll }) {
+  const handlers = new Map();
+  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+    const handler = () => {
+      if (interrupted()) return;
+      interrupt(signal);
+      terminateAll(signal);
+    };
+    handlers.set(signal, handler);
+    process.on(signal, handler);
+  }
+  return () => {
+    for (const [signal, handler] of handlers) process.off(signal, handler);
+  };
+}
+
 export function executionOrder(suite, repeats, surfaces, rootSeed) {
   const order = [];
   for (let repeat = 1; repeat <= repeats; repeat += 1) {

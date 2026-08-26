@@ -17,7 +17,7 @@ import {
   piagentProcessEnvironment
 } from "../packages/piagent-core/benchmark/benchmark-runtime.js";
 import {
-  acceptedTaskStartTraceCount,
+  acceptedTaskStartTraceEvidence,
   benchmarkCausalContextReceipt,
   benchmarkOperationalEvidence,
   classifyPreUsageFailure,
@@ -329,6 +329,23 @@ function observedSubstrings(value, candidates) {
   return candidates.filter((candidate) => text.includes(candidate));
 }
 
+function safeCandidateOutcome(value) {
+  const settlements = ["completed", "blocked", "aborted", "error", "unknown"];
+  if (value?.schemaVersion !== 1 || value.kind !== "terminal-settlement-mismatch"
+    || !settlements.includes(value.expectedSettlement) || !settlements.includes(value.observedSettlement)
+    || value.expectedSettlement === value.observedSettlement
+    || !Number.isSafeInteger(value.turnIndex) || value.turnIndex < 1) return null;
+  return { schemaVersion: 1, kind: value.kind, expectedSettlement: value.expectedSettlement,
+    observedSettlement: value.observedSettlement, turnIndex: value.turnIndex };
+}
+
+export function candidateOutcomeFailureReason(value) {
+  const outcome = safeCandidateOutcome(value);
+  return outcome
+    ? `webui-terminal-settlement-${outcome.observedSettlement}-expected-${outcome.expectedSettlement}-turn-${outcome.turnIndex}`
+    : null;
+}
+
 export function persistedJourneyReceipt(receipt) {
   if (!receipt || typeof receipt !== "object") return null;
   const digest = (value) => typeof value === "string" && value
@@ -350,6 +367,7 @@ export function persistedJourneyReceipt(receipt) {
       receiptPhase: turn.receiptPhase ?? null,
       receiptResult: turn.receiptResult ?? null,
       receiptUncertain: turn.receiptUncertain === true,
+      ...(safeCandidateOutcome(turn.outcome) ? { outcome: safeCandidateOutcome(turn.outcome) } : {}),
       ...(turn.recovery && typeof turn.recovery === "object" ? { recovery: {
         responseObserved: turn.recovery.responseObserved === true,
         responseDiscarded: turn.recovery.responseDiscarded === true,
@@ -503,7 +521,7 @@ export async function runCodexUserJourney({
   };
 }
 
-export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuiteEntry, interrupted, persistCompletedRecord, suite, suiteRoot, scenario, surface, repeat, orderIndex, infrastructureAttempt = 1, runId, runRoot, options, piCommand, codexCommand, codexDisabledFeatures, codexRuntime, piRuntimeHome, systemCommands, suiteDigest, configurationDigest, rootSeed }) {
+export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuiteEntry, interrupted, persistCompletedRecord, suite, suiteRoot, scenario, surface, repeat, orderIndex, infrastructureAttempt = 1, runId, runRoot, options, piCommand, codexCommand, codexDisabledFeatures, codexRuntime, piRuntimeHome, systemCommands, suiteDigest, configurationDigest, rootSeed, piagentWebUiJourney = runPiagentWebUiJourney }) {
   if (surface !== "codex-cli" && !piRuntimeHome?.path) fail("Pi benchmark session is missing its controlled writable runtime home");
   const attemptSuffix = infrastructureAttempt > 1 ? `-infra-${infrastructureAttempt}` : "";
   const key = `${String(repeat).padStart(2, "0")}-${scenario.id}-${surface}${attemptSuffix}`;
@@ -571,7 +589,7 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
       : benchmarkEnvironment({ ...environment, PI_CODING_AGENT_DIR: piRuntimeHome.path });
   try {
     if (journeyTurns && surface === "piagent") {
-      agent = await runPiagentWebUiJourney({
+      agent = await piagentWebUiJourney({
         packageRoot,
         agentDir: piRuntimeHome.path,
         workspace,
@@ -637,7 +655,10 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
   const diagnosticInput = codexDiagnostics.length > 0
     ? JSON.stringify(codexDiagnostics)
     : piTerminalError ?? `${agent.stderr ?? ""}\n${agent.stdout ?? ""}`;
-  const preUsageFailure = classifyPreUsageFailure(agent, usage, diagnosticInput, { terminalProviderError: Boolean(piTerminalError) });
+  const preUsageFailure = classifyPreUsageFailure(agent, usage, diagnosticInput, {
+    terminalProviderError: Boolean(piTerminalError), candidateOutcome: agent.candidateOutcome ?? null
+  });
+  const candidateOutcomeFailure = candidateOutcomeFailureReason(agent.candidateOutcome);
   writePrivateAtomic(inflightPath, `${JSON.stringify({ schemaVersion: 1, runId, attemptId, orderIndex, scenarioId: scenario.id, surface, repeat, infrastructureAttempt, stage: "provider-returned", usage, recordedAt: new Date().toISOString() }, null, 2)}\n`);
   const forbiddenHits = [...new Set([...(agent.forbiddenHits ?? []), ...(surface === "codex-cli" ? [...codexForbiddenHits] : forbiddenSessionHits(sessionFiles, forbiddenOutputSubstrings))])];
   const requiredHits = new Set(agent.requiredHits ?? []);
@@ -669,8 +690,12 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
   }) : null;
   let workflow = null;
   if (surface === "piagent" && scenario.kind !== "safety-refusal") {
-    const task = listTaskContracts(workspace).find((item) => item.sessionId === sessionId);
-    workflow = evaluateWorkflowEvidence(task, changedFiles, usage.toolNames, { scenarioKind: scenario.kind, acceptedTaskStartCount: acceptedTaskStartTraceCount(sessionFiles, sessionId) });
+    const tasks = listTaskContracts(workspace).filter((item) => item.sessionId === sessionId);
+    workflow = evaluateWorkflowEvidence(tasks, changedFiles, usage.toolNames, {
+      scenarioKind: scenario.kind,
+      taskStartEvidence: acceptedTaskStartTraceEvidence(sessionFiles, sessionId),
+      expectedTurnCount: journeyTurns?.length ?? 1
+    });
     workflow.operational = benchmarkOperationalEvidence(contextTelemetry);
   }
   const beforeGrade = workingTreeSnapshot(workspace);
@@ -701,7 +726,8 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
     usageStatus: preUsageFailure?.usageStatus ?? "measured",
     infrastructureDiagnostic: abortSuite ? safeInfrastructureDiagnostic(diagnosticInput, [...forbiddenOutputSubstrings, piRuntimeHome?.path].filter(Boolean)) : undefined,
     infrastructureDiagnosticSource: abortSuite ? (codexDiagnostics.length > 0 ? "codex-error-events" : piTerminalError ? "pi-terminal-error-event" : "process-output-tail") : undefined,
-    resolved, failure: preUsageFailure?.failure ?? failureReason({ agent, grade, graderIntegrity, outsideScope, forbiddenHits, missingRequired }),
+    resolved, failure: preUsageFailure?.failure ?? candidateOutcomeFailure
+      ?? failureReason({ agent, grade, graderIntegrity, outsideScope, forbiddenHits, missingRequired }),
     agent: { exitCode: agent.code, signal: agent.signal, timedOut: agent.timedOut, stdoutHash: agent.stdoutHash ?? crypto.createHash("sha256").update(agent.stdout).digest("hex"), stderrHash: crypto.createHash("sha256").update(agent.stderr ?? "").digest("hex") },
     grade, graderIntegrity, scope, outputSafety, outputEvidence, workflow, providerWireEvidence, causalContextReceipt, usage,
     durationSeconds: agent.durationSeconds, timingDiagnostics,

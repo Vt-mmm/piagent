@@ -9,6 +9,11 @@ import {
   isLightweightNonAuthorizingChangeLanguage,
   isNonAuthorizingChangeLanguage
 } from "./change-clarification.ts";
+import {
+  completedFollowupScope,
+  hasConditionalRepairIntent,
+  type PriorTaskScopeEvidence
+} from "./task-followup-policy.ts";
 export { boundedRuntimeIntakeMessage } from "./runtime-intake-compaction.ts";
 export { resolveTaskScopePatterns } from "./task-scope-resolution.ts";
 export type { TaskScopeResolution } from "./task-scope-resolution.ts";
@@ -118,10 +123,18 @@ export function automaticTaskIntakeEligible(prompt: string, readProtectedPaths: 
   const noMutationBoundary = noMutationBoundarySignals(text);
   if (noMutationBoundary.temporary && !noMutationBoundary.taskWide) return false;
   const signal = classifyContextTask(text);
+  const conditionalRepair = hasConditionalRepairIntent(text);
   // Explicit non-execution workflows own their operation semantics; an implementation verb inside
-  // /plan, /discuss, /review, or a git workflow must not create a source-change task early.
-  if (signal.workflow !== "task") return false;
+  // /plan, /discuss, or a git workflow must not create a source-change task early.
+  // A review that explicitly makes repair conditional on observed evidence is
+  // different: it needs verifier authority and may legitimately finish with
+  // either zero delta or a scoped repair.
+  if (signal.workflow !== "task" && !(signal.workflow === "review" && conditionalRepair)) return false;
   if (AUTO_EXECUTION_INTENT.test(folded)) {
+    if (/\bpiagent_task_start\b/i.test(text)) return false;
+    return !signal.paths.some((candidate) => matchesProtectedPath(candidate, readProtectedPaths));
+  }
+  if (conditionalRepair) {
     if (/\bpiagent_task_start\b/i.test(text)) return false;
     return !signal.paths.some((candidate) => matchesProtectedPath(candidate, readProtectedPaths));
   }
@@ -153,17 +166,16 @@ export function automaticTaskIntakeMode(prompt: string, readProtectedPaths: stri
 export function automaticTaskMutationPolicy(
   prompt: string,
   changeMode: "source-change" | "read-only"
-): "required" | "forbidden" {
+): "required" | "allowed" | "forbidden" {
   const text = String(prompt ?? "");
   // A feature can intentionally become read-only while the implementation
   // still requires source changes. Only a task-wide boundary may suppress
   // mutation; incidental domain wording such as "list/detail read-only" must
   // never convert a delegated implementation into a zero-delta task.
-  return changeMode === "read-only"
-    || noMutationBoundarySignals(text).taskWide
-    || hasGlobalReadOnlyBoundary(text)
-    ? "forbidden"
-    : "required";
+  if (changeMode === "read-only" || noMutationBoundarySignals(text).taskWide || hasGlobalReadOnlyBoundary(text)) {
+    return "forbidden";
+  }
+  return hasConditionalRepairIntent(text) ? "allowed" : "required";
 }
 
 export function automaticTaskRiskLane(prompt: string): "tiny" | "normal" {
@@ -306,7 +318,11 @@ function atomicCoverageCriteria(groups: AtomicCriterionGroup[], limit: number): 
   return uniqueStrings(candidates.filter((item) => selected.has(item.criterion)).map((item) => item.criterion)).slice(0, limit);
 }
 
-export function automaticAcceptanceCriteria(prompt: string, changeMode: "source-change" | "read-only" = "source-change"): string[] {
+export function automaticAcceptanceCriteria(
+  prompt: string,
+  changeMode: "source-change" | "read-only" = "source-change",
+  mutationPolicy: "required" | "allowed" | "forbidden" = changeMode === "read-only" ? "forbidden" : "required"
+): string[] {
   const lines = String(prompt ?? "").split(/\r?\n/);
   const criterionGroups: AtomicCriterionGroup[] = [];
   const obligation = /\b(?:accept|add|build|change|change only|correct|create|do not|emits?|ensure|exactly|fail(?:s|ed)?(?:[-\s]+)closed|fix|handle|implement|invalid|missing|modify|must|never|parse|preserve|reject|repair|returns?|support|throw|treat|update|without)\b/i;
@@ -336,9 +352,11 @@ export function automaticAcceptanceCriteria(prompt: string, changeMode: "source-
     current = current ? `${current} ${trimmed}` : trimmed;
   }
   flush();
-  const generic = changeMode === "read-only"
+  const generic = changeMode === "read-only" || mutationPolicy === "forbidden"
     ? ["No project files are changed.", "The final response addresses the requested diagnostic result."]
-    : ["The configured verification command passes after the final mutation."];
+    : mutationPolicy === "allowed"
+      ? ["Every configured verification command passes against the final working tree."]
+      : ["The configured verification command passes after the final mutation."];
   const groupCount = criterionGroups.filter((group) => group.criteria.length > 0).length;
   const reservedGeneric = Math.min(generic.length, Math.max(0, AUTO_ACCEPTANCE_CRITERIA_MAX - groupCount));
   const uniqueCriteria = atomicCoverageCriteria(criterionGroups, AUTO_ACCEPTANCE_CRITERIA_MAX - reservedGeneric);
@@ -401,19 +419,27 @@ function inferredProjectScope(prompt: string, projectFiles: string[]): string[] 
     .map((item) => item.path);
 }
 
-export function automaticTaskScope(prompt: string, context: Array<{ path: string }>, projectFiles: string[] = []): string[] {
+export function automaticTaskScope(
+  prompt: string,
+  context: Array<{ path: string }>,
+  projectFiles: string[] = [],
+  priorTask?: PriorTaskScopeEvidence
+): string[] {
   const signal = classifyContextTask(prompt);
   const explicit = signal.paths.filter(plausibleTaskScopePath);
-  const navigated = context
-    .map((item) => normalizePathCandidate(item.path))
-    .filter((candidate): candidate is string => Boolean(
-      candidate
-      && candidate !== "."
-      && !candidate.startsWith(".pi/")
-      && !["AGENTS.md", "README.md", "REVIEW_GUIDELINES.md"].includes(candidate)
-      && /^(?:app|apps|lib|packages|services|spec|src|test|tests|__tests__)\//.test(candidate)
-    ))
-    .slice(0, 8);
+  const completedTaskScope = completedFollowupScope(prompt, priorTask, plausibleTaskScopePath);
+  const navigated = completedTaskScope.length > 0
+    ? completedTaskScope
+    : context
+      .map((item) => normalizePathCandidate(item.path))
+      .filter((candidate): candidate is string => Boolean(
+        candidate
+        && candidate !== "."
+        && !candidate.startsWith(".pi/")
+        && !["AGENTS.md", "README.md", "REVIEW_GUIDELINES.md"].includes(candidate)
+        && /^(?:app|apps|lib|packages|services|spec|src|test|tests|__tests__)\//.test(candidate)
+      ))
+      .slice(0, 8);
   const inferred = explicit.length === 0 && navigated.length === 0
     ? inferredProjectScope(prompt, projectFiles)
     : [];

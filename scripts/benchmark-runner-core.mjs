@@ -50,6 +50,7 @@ import {
 } from "../packages/piagent-core/benchmark/benchmark-resume-recovery.js";
 import { finalizeBenchmarkRun } from "./benchmark-runner-finalization.mjs";
 import {
+  bindBenchmarkTerminationSignals,
   benchmarkRunKey,
   confirmPlan,
   createRunId,
@@ -88,19 +89,9 @@ const processController = createBenchmarkProcessController(() => Boolean(interru
 const runCommand = processController.run;
 
 function installSignalForwarding() {
-  const handlers = new Map();
-  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
-    const handler = () => {
-      if (interruptedSignal) return;
-      interruptedSignal = signal;
-      processController.terminateAll(signal);
-    };
-    handlers.set(signal, handler);
-    process.on(signal, handler);
-  }
-  return () => {
-    for (const [signal, handler] of handlers) process.off(signal, handler);
-  };
+  return bindBenchmarkTerminationSignals({ interrupted: () => Boolean(interruptedSignal),
+    interrupt: (signal) => { interruptedSignal = signal; },
+    terminateAll: (signal) => processController.terminateAll(signal) });
 }
 
 async function runLegacy(argv) {

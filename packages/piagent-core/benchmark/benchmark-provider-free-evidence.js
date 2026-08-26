@@ -7,6 +7,12 @@ const HASH = /^[a-f0-9]{64}$/;
 const COMMIT = /^[a-f0-9]{40,64}$/;
 const LANE_DEFINITIONS = Object.freeze([
   Object.freeze({
+    id: "architecture-conformance-v1",
+    configuration: "evals/architecture-conformance-v1/lane.json",
+    runner: "evals/architecture-conformance-v1/runner.mjs",
+    timeoutMilliseconds: 2 * 60_000
+  }),
+  Object.freeze({
     id: "runtime-conformance-v1",
     configuration: "evals/runtime-conformance-v1/lane.json",
     runner: "evals/runtime-conformance-v1/runner.mjs",
@@ -88,6 +94,28 @@ export function productionProviderFreeEvidenceBinding({
 }
 
 function lanePassed(id, result) {
+  if (id === "architecture-conformance-v1") {
+    return result?.schemaVersion === 1
+      && result.laneId === id
+      && result.evidenceClass === "provider-free-architecture-conformance"
+      && result.passed === true
+      && result?.provider?.required === false
+      && result.provider.used === false
+      && result.provider.calls === 0
+      && result.provider.modelTokens === 0
+      && Number.isSafeInteger(result?.architecture?.filesChecked)
+      && result.architecture.filesChecked > 0
+      && Number.isSafeInteger(result.architecture.layersChecked)
+      && result.architecture.layersChecked > 0
+      && Array.isArray(result.architecture.errors)
+      && result.architecture.errors.length === 0
+      && result?.gates?.architectureCheckPasses === true
+      && result.gates.sourceCoverageComplete === true
+      && result.gates.dependencyBoundariesPass === true
+      && result.gates.lineBudgetsPass === true
+      && result.gates.providerCalls === 0
+      && result.gates.modelTokens === 0;
+  }
   if (id === "runtime-conformance-v1") {
     return result?.summary?.passed === true
       && result?.provider?.used === false
@@ -106,15 +134,26 @@ function lanePassed(id, result) {
       && result?.continuation?.enforcementSafe === true
       && result?.verification?.stableCurrentTree === true;
   }
+  if (id !== "webui-parity-v1") return false;
   return result?.benchmark === "webui-parity-v1"
     && result?.passed === true
     && result?.providerCalls === 0
     && result?.modelTokens === 0
     && result?.invariants?.uiStability === "deterministic-current-state"
-    && result?.invariants?.uiStabilitySuites === 7;
+    && result?.invariants?.uiStabilitySuites === 8;
 }
 
 function laneSummary(id, result) {
+  if (id === "architecture-conformance-v1") return {
+    evidenceClass: result.evidenceClass,
+    passed: result.passed,
+    filesChecked: result.architecture.filesChecked,
+    layersChecked: result.architecture.layersChecked,
+    architectureCheckPasses: result.gates.architectureCheckPasses,
+    sourceCoverageComplete: result.gates.sourceCoverageComplete,
+    dependencyBoundariesPass: result.gates.dependencyBoundariesPass,
+    lineBudgetsPass: result.gates.lineBudgetsPass
+  };
   if (id === "runtime-conformance-v1") return {
     passed: result.summary.passed,
     configuredCases: result.summary.configuredCases,
@@ -141,6 +180,12 @@ function laneSummary(id, result) {
 }
 
 function summaryPassed(id, summary) {
+  if (id === "architecture-conformance-v1") return summary?.evidenceClass === "provider-free-architecture-conformance"
+    && summary.passed === true
+    && Number.isSafeInteger(summary.filesChecked) && summary.filesChecked > 0
+    && Number.isSafeInteger(summary.layersChecked) && summary.layersChecked > 0
+    && summary.architectureCheckPasses === true && summary.sourceCoverageComplete === true
+    && summary.dependencyBoundariesPass === true && summary.lineBudgetsPass === true;
   if (id === "runtime-conformance-v1") return summary?.passed === true
     && summary.configuredCases === summary.executedCases && summary.failedCases === 0
     && Object.values(summary.gates ?? {}).every((value) => value === true);
@@ -148,9 +193,10 @@ function summaryPassed(id, summary) {
     && summary.wallClockQualified === true && summary.completedFromResume === true
     && summary.contextWithinCeiling === true && summary.stateGrowthWithinCeiling === true
     && summary.continuationEnforcementSafe === true && summary.stableCurrentTree === true;
+  if (id !== "webui-parity-v1") return false;
   return summary?.benchmark === "webui-parity-v1" && summary.passed === true
     && summary.uiStability === "deterministic-current-state"
-    && summary.uiStabilitySuites === 7
+    && summary.uiStabilitySuites === 8
     && summary.deterministicStabilityStepPassed === true;
 }
 
@@ -241,8 +287,13 @@ export async function collectProductionProviderFreeEvidence({
   const cacheRoot = path.join(liveRoot, ".pi", "benchmarks", "provider-free-evidence", binding.digest);
   const cachePath = path.join(cacheRoot, "receipt.json");
   if (fs.existsSync(cachePath)) {
-    const cached = JSON.parse(fs.readFileSync(cachePath, "utf8"));
-    if (productionProviderFreeEvidenceValidationErrors(cached, binding).length === 0) return cached;
+    try {
+      const cached = JSON.parse(fs.readFileSync(cachePath, "utf8"));
+      if (productionProviderFreeEvidenceValidationErrors(cached, binding).length === 0) return cached;
+    } catch {
+      // The cache is untrusted local evidence. Malformed bytes are a cache miss,
+      // never a reason to skip or abort the frozen S0 lanes.
+    }
   }
 
   const assertLiveSource = async (stage) => {

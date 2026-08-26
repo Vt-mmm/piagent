@@ -23,6 +23,7 @@
         "tests/piagent-webui-transcript-projection.test.mjs",
         "tests/piagent-webui-transcript-view-model.test.mjs",
         "tests/piagent-webui-activity-reconciliation.test.mjs",
+        "tests/piagent-webui-session-send-observation.test.mjs",
         "tests/piagent-webui-session-lease-runtime.test.mjs"
       ]
     }
@@ -41,7 +42,7 @@
     "performanceProfiles": 3,
     "deepModelScenariosValidated": 6,
     "uiStability": "deterministic-current-state",
-    "uiStabilitySuites": 7
+    "uiStabilitySuites": 8
   },
   "claimBoundary": "Deterministic provider-free WebUI/Terminal parity and current UI-state stability only; no model-quality, token-efficiency, latency, or release claim."
 }

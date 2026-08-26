@@ -239,9 +239,10 @@ piagent-benchmark --resume /path/to/report-dir --max-sessions 36 --yes
 piagent-benchmark --resume /path/to/report-dir --max-sessions 36 --yes
 ```
 
-Trước provider preflight đầu tiên, S0 tự chạy ba lane provider-free trên đúng
-candidate hiện tại: `runtime-conformance-v1`, `long-horizon-v1` (tối thiểu 30
-phút wall-clock) và `webui-parity-v1` gồm bảy deterministic UI-stability suite.
+Trước provider preflight đầu tiên, S0 tự chạy bốn lane provider-free trên đúng
+candidate hiện tại: `architecture-conformance-v1` chạy fail-fast cho dependency
+boundary và line budget, `runtime-conformance-v1`, `long-horizon-v1` (tối thiểu
+30 phút wall-clock) và `webui-parity-v1` gồm tám deterministic UI-stability suite.
 Receipt có completion time và bind exact clean Git commit, candidate tree,
 production configuration, cùng digest của từng lane config/runner. Receipt được
 cache riêng tư theo toàn bộ binding; resume/S12 chỉ reuse khi mọi digest vẫn
@@ -329,6 +330,7 @@ Từ lớp benchmark matrix trong package, Piagent phân ba band:
 | `deep-logic` | phát triển solver/workflow/WebUI logic | `deep-logic-v1`, 7 bài large với interacting invariants, 42 paired session; capability-tier full-suite gate, không phải production claim |
 | `production` | release candidate, đổi model policy, đổi harness | `production-v1`, 18 public-regression scenario, paired baseline, confidence gate; không phải generalization claim |
 | `capability` | tìm trần năng lực sau thay đổi harness | `capability-v1`, 6 bài multi-file/multi-component chưa bão hòa; dùng hill-climbing, không phải release gate |
+| `architecture-conformance` | thay đổi module boundary hoặc file có line budget | Lane deterministic provider-free chạy fail-fast; bắt buộc mọi source được gán layer, dependency boundary và line budget đều pass, 0 provider call và 0 model token |
 | `runtime-conformance` | thay đổi context governor, retry/settlement WebUI, emission hoặc edit freshness | `runtime-conformance-v1`, 9 ca deterministic provider-free; bắt buộc 0 provider call, 0 model token và mọi safety gate pass; không phải token/quality claim |
 | `long-horizon` | thay đổi recovery/context lớn | Lane provider-free chạy ít nhất 30 phút cho hard crash/resume, compaction, handoff, continuation bounded và state-growth; dedicated paid suite chưa phát hành |
 | `private-holdout` | readiness E3 và exact-RC FS7-01 | Tối thiểu 6 family từ 6 repository lineage, giữ ngoài workspace tác giả; chỉ custodian execute-only và human-calibration receipt được chấp nhận |
@@ -344,8 +346,8 @@ node evals/runtime-conformance-v1/runner.mjs \
 
 Lệnh trên là vòng lặp developer nhanh, không thay S0 của production. Trước
 provider session đầu tiên, production runner tự chạy hoặc exact-cache-hit cả
-runtime conformance, long-horizon tối thiểu 30 phút và WebUI parity; cả ba phải
-cùng clean source/tree/config/runner binding.
+architecture conformance, runtime conformance, long-horizon tối thiểu 30 phút
+và WebUI parity; cả bốn phải cùng clean source/tree/config/runner binding.
 
 Lane chỉ đạt khi cả 9 ca pass, provider/model usage bằng 0, projection không tạo
 tool orphan, retry sau output/tool-call không được chấp nhận, mỗi operation chỉ

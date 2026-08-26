@@ -123,7 +123,8 @@ test("classifies only a terminal Pi overload after paid usage as infrastructure"
   assert.equal(terminalPiSessionError([file], sessionId), error);
   assert.deepEqual(classifyPreUsageFailure(
     { code: 0, timedOut: false },
-    { sessions: 1, input: 20, output: 5, cacheRead: 0, cacheWrite: 0, reasoning: 1, total: 25, fresh: 25, cost: 0.002 },
+    { sessions: 1, input: 20, output: 5, cacheRead: 0, cacheWrite: 0, reasoning: 1, total: 25, fresh: 25,
+      usageCompleteness: "exact", cost: 0.002 },
     error,
     { terminalProviderError: true }
   ), {
@@ -140,7 +141,8 @@ test("classifies only a terminal Pi overload after paid usage as infrastructure"
 });
 
 test("keeps exact token evidence independent from cost and never retries a paid process exit", () => {
-  const usage = { sessions: 1, input: 60, output: 15, cacheRead: 20, cacheWrite: 5, reasoning: 4, total: 100, fresh: 75, cost: null };
+  const usage = { sessions: 1, input: 60, output: 15, cacheRead: 20, cacheWrite: 5, reasoning: 4, total: 100,
+    fresh: 75, usageCompleteness: "exact", cost: null };
   assert.deepEqual(classifyPreUsageFailure({ code: 1, timedOut: false }, usage, "process ended"), {
     failure: "agent-exit-1-after-measured-usage",
     class: "agent-process",
@@ -154,4 +156,39 @@ test("keeps exact token evidence independent from cost and never retries a paid 
     retryable: false
   });
   assert.equal(classifyPreUsageFailure({ code: 1, timedOut: false }, { ...usage, total: 99 }, "process ended").usageStatus, "unknown-after-provider-start");
+});
+
+test("accepts only an exact positive-usage structured settlement mismatch as a candidate outcome", () => {
+  const usage = { sessions: 1, input: 60, output: 15, cacheRead: 20, cacheWrite: 5, reasoning: 4, total: 100,
+    fresh: 75, usageCompleteness: "exact", cost: null };
+  const candidateOutcome = { schemaVersion: 1, kind: "terminal-settlement-mismatch",
+    expectedSettlement: "completed", observedSettlement: "blocked", turnIndex: 2 };
+  assert.equal(classifyPreUsageFailure({ code: 1, timedOut: false }, usage, "webui blocked", { candidateOutcome }), undefined);
+  assert.deepEqual(classifyPreUsageFailure({ code: 1, timedOut: false },
+    { ...usage, usageCompleteness: "unverified" }, "webui blocked", { candidateOutcome }), {
+    failure: "agent-exit-1-with-usage-unavailable",
+    class: "unknown-cost",
+    usageStatus: "unknown-after-provider-start",
+    retryable: true
+  });
+  assert.deepEqual(classifyPreUsageFailure({ code: 1, timedOut: false }, usage, "transport closed"), {
+    failure: "agent-exit-1-after-measured-usage",
+    class: "agent-process",
+    usageStatus: "measured-but-unaccepted",
+    retryable: false
+  });
+});
+
+test("keeps every timeout infrastructure fail-closed even when earlier usage is exact", () => {
+  const usage = { sessions: 1, input: 60, output: 15, cacheRead: 20, cacheWrite: 5, reasoning: 4, total: 100,
+    fresh: 75, usageCompleteness: "exact", cost: null };
+  assert.deepEqual(classifyPreUsageFailure({ code: 1, timedOut: true }, usage, "webui-journey-timeout", {
+    candidateOutcome: { schemaVersion: 1, kind: "terminal-settlement-mismatch",
+      expectedSettlement: "completed", observedSettlement: "blocked", turnIndex: 2 }
+  }), {
+    failure: "agent-timeout-with-terminal-usage-unknown",
+    class: "transport-timeout",
+    usageStatus: "unknown-after-provider-start",
+    retryable: false
+  });
 });
