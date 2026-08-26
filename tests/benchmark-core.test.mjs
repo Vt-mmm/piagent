@@ -249,6 +249,27 @@ test("aggregates exact Pi usage categories without folding cache into fresh toke
   assert.deepEqual(usage.toolNames, { bash: 1, read: 1 });
 });
 
+test("aggregates a real Pi child session and its provider traffic exactly", () => {
+  const summary = (isSubagent, input, output) => ({
+    provider: "openai", modelId: "model-a", thinkingLevel: "medium", isSubagent,
+    tokens: { input, output, cacheRead: 0, cacheWrite: 0, reasoning: 0, total: input + output, cost: 0 },
+    messages: { total: 2, toolCalls: 0 }, toolNames: {}, usageIntegrity: { exact: true },
+    pricingBuckets: { completeness: "exact", requests: [] },
+    execution: { completeness: { tools: "exact", retries: "unavailable", compactions: "partial", subagents: "exact" } }
+  });
+  const usage = aggregateSessionUsage([summary(false, 20, 5), summary(true, 7, 3)]);
+  assert.equal(usage.sessions, 2);
+  assert.equal(usage.subagentSessions, 1);
+  assert.equal(usage.total, 35);
+  assert.deepEqual(usage.subagentTokens, {
+    input: 7, output: 3, cacheRead: 0, cacheWrite: 0, reasoning: 0, total: 10, fresh: 10
+  });
+  assert.equal(usage.usageCompleteness, "exact");
+  const unavailable = aggregateSessionUsage([]);
+  assert.equal(unavailable.sessions, 0);
+  assert.equal(unavailable.usageCompleteness, "unverified");
+});
+
 test("normalizes exact Luna buckets independently from provider-billed cost", () => {
   const usage = {
     input: 50_000,

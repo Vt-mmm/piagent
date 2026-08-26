@@ -70,6 +70,11 @@ chưa hoàn tất và không được tính như refusal. Outcome `refused` củ
 được hard-gate bằng fixture không đổi, scope sạch, không lộ secret và hidden
 grade; runner không parse keyword trong lời model để đoán refusal.
 
+Token và subagent accounting của WebUI chỉ đọc Pi session JSONL dưới runtime
+`sessions/`. Gateway admission/index/lease journals không phải provider session
+và không được phép làm tăng session count; thiếu hoặc sai session header vẫn
+fail-closed.
+
 Khi cần đo solver logic sâu theo baseline lịch sử Luna/medium với `codex-cli`:
 
 ```bash

@@ -638,7 +638,7 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
     throw error;
   }
   const timingDiagnostics = timingCollector.finish(agent.durationSeconds);
-  const sessionRoot = journeyTurns && surface === "piagent" ? piRuntimeHome.path : sessions;
+  const sessionRoot = journeyTurns && surface === "piagent" ? path.join(piRuntimeHome.path, "sessions") : sessions;
   const sessionFiles = surface === "codex-cli" ? [] : walkJsonl(sessionRoot);
   const piSummaries = surface === "codex-cli" ? [] : sessionSummaries(sessionRoot);
   if (journeyTurns && surface === "piagent") {

@@ -349,6 +349,8 @@ function summarizeSession(file, options) {
   };
 
   let hasCountedActivity = false;
+  let parsedRecordCount = 0;
+  let sessionHeaderCount = 0;
   const toolCallsById = new Map();
   const toolResultIds = new Set();
   const toolCallFingerprints = new Set();
@@ -363,6 +365,12 @@ function summarizeSession(file, options) {
       continue;
     }
 
+    const isFirstParsedRecord = parsedRecordCount === 0;
+    parsedRecordCount += 1;
+    if (options.strictUsage && isFirstParsedRecord && entry?.type !== "session") {
+      throw new Error("Pi session JSONL is missing its session header as the first record");
+    }
+
     const ts = parseIso(entry.timestamp ?? entry.message?.timestamp);
     if (ts) {
       if (!summary.firstTimestamp || ts < summary.firstTimestamp) summary.firstTimestamp = ts;
@@ -370,6 +378,14 @@ function summarizeSession(file, options) {
     }
 
     if (entry.type === "session") {
+      sessionHeaderCount += 1;
+      if (options.strictUsage && (sessionHeaderCount !== 1 || !isFirstParsedRecord)) {
+        throw new Error("Pi session JSONL must contain exactly one session header as the first record");
+      }
+      if (options.strictUsage && (typeof entry.id !== "string" || !entry.id.trim()
+        || typeof entry.cwd !== "string" || !entry.cwd.trim())) {
+        throw new Error("Pi session JSONL session header must contain non-empty id and cwd strings");
+      }
       if (entry.id) summary.id = String(entry.id);
       if (entry.cwd) summary.cwd = String(entry.cwd);
       continue;
@@ -465,6 +481,9 @@ function summarizeSession(file, options) {
   if (!summary.countedLastTimestamp) summary.countedLastTimestamp = summary.lastTimestamp;
 
   if (!hasCountedActivity && (options.since || options.until)) return undefined;
+  if (options.strictUsage && sessionHeaderCount !== 1) {
+    throw new Error("Pi session JSONL is missing its session header");
+  }
   if (options.strictUsage && summary.usageIntegrity.assistantMessages !== summary.usageIntegrity.usageMessages) {
     throw new Error("Pi session JSONL usage coverage is incomplete");
   }

@@ -208,6 +208,22 @@ describe("Pi usage history", () => {
     ]);
     fs.appendFileSync(target, "not-json\n");
     assert.throws(() => summarizeSession(target, { strictUsage: true }), /line 3 is not valid JSON/);
+    writeJsonl(target, [{ schemaVersion: 1, kind: "gateway-command-admission" }]);
+    assert.throws(() => summarizeSession(target, { strictUsage: true }), /missing its session header/);
+    writeJsonl(target, [
+      { type: "model_change", provider: "openai", modelId: "gpt-5.6-luna" },
+      { type: "session", id: "late", cwd: fixture.project }
+    ]);
+    assert.throws(() => summarizeSession(target, { strictUsage: true }), /first record/);
+    writeJsonl(target, [
+      { type: "session", id: "duplicate", cwd: fixture.project },
+      { type: "session", id: "duplicate", cwd: fixture.project }
+    ]);
+    assert.throws(() => summarizeSession(target, { strictUsage: true }), /exactly one session header/);
+    writeJsonl(target, [{ type: "session", id: "", cwd: fixture.project }]);
+    assert.throws(() => summarizeSession(target, { strictUsage: true }), /non-empty id and cwd strings/);
+    writeJsonl(target, [{ type: "session", id: "missing-cwd" }]);
+    assert.throws(() => summarizeSession(target, { strictUsage: true }), /non-empty id and cwd strings/);
   });
 
   it("emits privacy-safe request pricing and execution accounting", () => {

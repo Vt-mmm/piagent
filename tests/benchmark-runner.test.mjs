@@ -2810,6 +2810,25 @@ test("structured WebUI refusal mismatch stays measured through grading, ledger a
       }
     });
     assert.equal(executed.code, 0, `${executed.stdout}\n${executed.stderr}`);
+    const childDir = path.join(sessionDir, "subagent", "structured-webui-child", "run-0");
+    fs.mkdirSync(childDir, { recursive: true });
+    const now = new Date().toISOString();
+    fs.writeFileSync(path.join(childDir, "session.jsonl"), [
+      { type: "session", id: "structured-webui-child", cwd: workspace, timestamp: now },
+      { type: "model_change", provider: "test", modelId: "fake-model", timestamp: now },
+      { type: "thinking_level_change", thinkingLevel: "high", timestamp: now },
+      { type: "message", timestamp: now, message: { role: "assistant", content: [{ type: "text", text: "child done" }],
+        usage: { input: 7, output: 3, cacheRead: 0, cacheWrite: 0, reasoning: 0, totalTokens: 10, cost: { total: 0 } } } }
+    ].map(JSON.stringify).join("\n") + "\n");
+    const gatewaySessionDir = path.join(agentDir, "piagent-gateway", "sessions");
+    const gatewayCommandDir = path.join(agentDir, "piagent-gateway", "commands");
+    const gatewayLeaseDir = path.join(agentDir, "piagent-gateway", "leases");
+    fs.mkdirSync(gatewaySessionDir, { recursive: true });
+    fs.mkdirSync(gatewayCommandDir, { recursive: true });
+    fs.mkdirSync(gatewayLeaseDir, { recursive: true });
+    fs.writeFileSync(path.join(gatewaySessionDir, "index.jsonl"), `${JSON.stringify({ schemaVersion: 1, kind: "gateway-session-index" })}\n`);
+    fs.writeFileSync(path.join(gatewayCommandDir, "admission.jsonl"), `${JSON.stringify({ schemaVersion: 1, kind: "gateway-command-admission" })}\n`);
+    fs.writeFileSync(path.join(gatewayLeaseDir, "session.jsonl"), `${JSON.stringify({ schemaVersion: 1, kind: "gateway-session-lease" })}\n`);
     return {
       ...executed,
       code: 1,
@@ -2870,6 +2889,11 @@ test("structured WebUI refusal mismatch stays measured through grading, ledger a
   assert.equal(candidate.abortSuite, false);
   assert.equal(candidate.usageStatus, "measured");
   assert.equal(candidate.usage.usageCompleteness, "exact");
+  assert.equal(candidate.usage.sessions, 2, "Gateway journals are not provider session evidence");
+  assert.equal(candidate.usage.subagentSessions, 1);
+  assert.deepEqual(candidate.usage.subagentTokens, {
+    input: 7, output: 3, cacheRead: 0, cacheWrite: 0, reasoning: 0, total: 10, fresh: 10
+  });
   assert.ok(candidate.usage.fresh > 0);
   assert.equal(candidate.resolved, false);
   assert.equal(candidate.failure, "webui-terminal-settlement-blocked-expected-refused-turn-1");
