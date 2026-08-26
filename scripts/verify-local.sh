@@ -402,6 +402,7 @@ required_files=(
   "$ROOT/tests/piagent-webui-session-runtime-spike.test.mjs"
   "$ROOT/tests/piagent-webui-gateway.test.mjs"
   "$ROOT/tests/piagent-webui-session-metadata.test.mjs"
+  "$ROOT/tests/piagent-webui-session-runtime-factory.test.mjs"
   "$ROOT/tests/piagent-webui-session-lease-runtime.test.mjs"
   "$ROOT/tests/piagent-webui-session-command-admission.test.mjs"
   "$ROOT/tests/piagent-webui-gateway-transport.test.mjs"

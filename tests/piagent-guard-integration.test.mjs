@@ -4875,6 +4875,157 @@ describe("piagent guard integration", () => {
     assert.deepEqual(task.workPlan.map((step) => step.status), ["done", "done"]);
   });
 
+  it("binds a zero-delta verification receipt only to the adjacent completed implementation", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    fs.mkdirSync(path.join(cwd, "src", "platform"), { recursive: true });
+    fs.mkdirSync(path.join(cwd, "test"), { recursive: true });
+    fs.writeFileSync(path.join(cwd, "src", "platform", "config.js"), [
+      "export function resolveConfig(cli = {}, defaults = {}) {",
+      "  return { port: cli.port || defaults.port };",
+      "}",
+      ""
+    ].join("\n"));
+    fs.writeFileSync(path.join(cwd, "test", "config.test.js"), "// implementation test baseline\n");
+    execFileSync("git", ["-C", cwd, "config", "user.email", "test@example.com"]);
+    execFileSync("git", ["-C", cwd, "config", "user.name", "Piagent Test"]);
+    execFileSync("git", ["-C", cwd, "add", "src/platform/config.js", "test/config.test.js"]);
+    execFileSync("git", ["-C", cwd, "commit", "-qm", "config baseline"]);
+    fs.writeFileSync(path.join(cwd, "src", "unrelated.js"), "export const unrelated = true;\n");
+    fs.writeFileSync(path.join(cwd, "test", "unrelated.test.js"), "// unrelated pre-existing dirt\n");
+
+    const ctx = createContext(cwd, { sessionId: "session-followup-lineage", sessionName: "FOLLOWUP-LINEAGE" });
+    const harness = createPiHarness({ activeTools: ["read", "bash", "edit", "write"] });
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+    const implementation = await harness.tools.get("piagent_task_start").execute("start-implementation", {
+      taskId: "CONFIG-IMPLEMENT",
+      summary: "Fix resolveConfig so a value is absent only when undefined; preserve null, false, zero, and empty string.",
+      riskLane: "tiny",
+      changeMode: "source-change",
+      mutationPolicy: "required",
+      expectedOutput: "Configuration precedence preserves every valid falsey and null value.",
+      acceptanceCriteria: ["Focused executable tests cover undefined, null, false, zero, and empty-string boundaries."],
+      scope: ["src/platform/config.js", "test/config.test.js"]
+    }, undefined, undefined, ctx);
+    assert.equal(implementation.isError, undefined, implementation.content?.[0]?.text);
+    for (const file of ["src/platform/config.js", "test/config.test.js"]) {
+      await harness.handlers.get("tool_result")({
+        toolName: "read",
+        input: { path: file },
+        content: [{ type: "text", text: fs.readFileSync(path.join(cwd, file), "utf8") }],
+        isError: false
+      }, ctx);
+    }
+
+    const sourceInput = {
+      path: "src/platform/config.js",
+      content: [
+        "const firstDefined = (...values) => values.find((value) => value !== undefined);",
+        "export function resolveConfig(cli = {}, defaults = {}) {",
+        "  return { port: firstDefined(cli.port, defaults.port) };",
+        "}",
+        ""
+      ].join("\n")
+    };
+    const testInput = {
+      path: "test/config.test.js",
+      content: [
+        "import assert from 'node:assert/strict';",
+        "import { resolveConfig } from '../src/platform/config.js';",
+        "assert.deepEqual(resolveConfig({ port: undefined }, { port: 3000 }), { port: 3000 });",
+        "assert.deepEqual(resolveConfig({ port: null }, { port: 3000 }), { port: null });",
+        "assert.deepEqual(resolveConfig({ port: false }, { port: 3000 }), { port: false });",
+        "assert.deepEqual(resolveConfig({ port: 0 }, { port: 3000 }), { port: 0 });",
+        "assert.deepEqual(resolveConfig({ port: '' }, { port: 3000 }), { port: '' });",
+        ""
+      ].join("\n")
+    };
+    for (const [toolCallId, input] of [["write-config", sourceInput], ["write-config-test", testInput]]) {
+      const allowed = await callToolCall(harness.handlers.get("tool_call"), ctx, "write", input);
+      assert.notEqual(allowed.block, true, allowed.reason);
+      fs.writeFileSync(path.join(cwd, input.path), input.content);
+      await harness.handlers.get("tool_result")({
+        toolCallId,
+        toolName: "write",
+        input,
+        content: [{ type: "text", text: "written" }],
+        isError: false
+      }, ctx);
+    }
+    for (const verifier of implementation.details.verifyCommands) {
+      const allowed = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", { command: verifier });
+      assert.notEqual(allowed.block, true, allowed.reason);
+      await harness.handlers.get("tool_result")({
+        toolCallId: "verify-implementation",
+        toolName: "bash",
+        input: { command: verifier },
+        content: [{ type: "text", text: "pass" }],
+        details: { exitCode: 0 },
+        isError: false,
+        timestamp: Date.now()
+      }, ctx);
+    }
+    const completedImplementation = await harness.tools.get("piagent_trace_record").execute("complete-implementation", {
+      taskId: "CONFIG-IMPLEMENT",
+      outcome: "completed",
+      changedFiles: ["src/platform/config.js", "test/config.test.js"],
+      notes: "Implementation and focused verification completed."
+    }, undefined, undefined, ctx);
+    assert.equal(completedImplementation.isError, undefined, completedImplementation.content?.[0]?.text);
+
+    const prompt = "Verify the implementation against every obligation from the earlier request. Run the configured checks and fix any failure in scope.";
+    await harness.handlers.get("input")({ text: prompt, source: "user" }, ctx);
+    const followup = await harness.handlers.get("before_agent_start")({
+      prompt,
+      systemPrompt: "stable system prompt",
+      systemPromptOptions: { cwd, selectedTools: [...harness.activeTools] }
+    }, ctx);
+    const runtimeTask = followup.message.details.runtimeTask;
+    assert.equal(runtimeTask.mutationPolicy, "allowed");
+    assert.ok(runtimeTask.scope.includes("src/platform/config.js"));
+    assert.ok(runtimeTask.scope.includes("test/config.test.js"));
+    await harness.handlers.get("tool_result")({
+      toolName: "read",
+      input: { path: "src/platform/config.js" },
+      content: [{ type: "text", text: fs.readFileSync(path.join(cwd, "src", "platform", "config.js"), "utf8") }],
+      isError: false
+    }, ctx);
+    for (const verifier of runtimeTask.verifyCommands) {
+      const allowed = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", { command: verifier });
+      assert.notEqual(allowed.block, true, allowed.reason);
+      await harness.handlers.get("tool_result")({
+        toolCallId: "verify-followup",
+        toolName: "bash",
+        input: { command: verifier },
+        content: [{ type: "text", text: "pass" }],
+        details: { exitCode: 0 },
+        isError: false,
+        timestamp: Date.now()
+      }, ctx);
+    }
+
+    const evidenced = activeSessionTask(cwd, "session-followup-lineage");
+    assert.deepEqual(evidenced.changedFiles, []);
+    const boundary = evidenced.acceptanceReceipt.criteria.filter((criterion) => criterion.obligation === "boundary-case");
+    assert.ok(boundary.length > 0);
+    assert.equal(boundary.every((criterion) => criterion.status === "satisfied"), true);
+    assert.equal(boundary.every((criterion) => criterion.evidence.every((item) => (
+      item.paths.includes("src/platform/config.js")
+      && item.paths.includes("test/config.test.js")
+      && !item.paths.includes("src/unrelated.js")
+      && !item.paths.includes("test/unrelated.test.js")
+    ))), true);
+
+    const final = await harness.handlers.get("message_end")({
+      message: { role: "assistant", content: [{ type: "text", text: "Verification complete: every obligation passed and no repair was needed." }] }
+    }, ctx);
+    assert.equal(final, undefined);
+    const completed = activeSessionTask(cwd, "session-followup-lineage");
+    assert.equal(completed.trace.outcome, "completed");
+    assert.deepEqual(completed.changedFiles, []);
+  });
+
   it("locks retry limits across attempts and carries failure evidence forward in one conversation", async () => {
     const { root, piagentGuard } = await loadGuardFixture();
     const cwd = createProject(root);

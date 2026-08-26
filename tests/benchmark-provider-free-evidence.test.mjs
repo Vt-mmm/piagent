@@ -76,7 +76,7 @@ test("S0 executes, binds, caches, and revalidates all same-source provider-free 
       wallClockQualified: true, completedFromResume: true, context: { withinCeiling: true }, stateGrowth: { withinCeiling: true },
       continuation: { enforcementSafe: true }, verification: { stableCurrentTree: true } };
     else receipt = { benchmark: "webui-parity-v1", passed: true, providerCalls: 0, modelTokens: 0,
-      invariants: { uiStability: "deterministic-current-state", uiStabilitySuites: 8 }, steps: [{ name: "deterministic-ui-stability", passed: true }] };
+      invariants: { uiStability: "deterministic-current-state", uiStabilitySuites: 9 }, steps: [{ name: "deterministic-ui-stability", passed: true }] };
     fs.writeFileSync(output, `${JSON.stringify(receipt)}\n`);
     return { code: 0, stdout: "", stderr: "" };
   };
@@ -179,6 +179,7 @@ test("WebUI parity binds the current deterministic conversation and activity sta
     "tests/piagent-webui-transcript-view-model.test.mjs",
     "tests/piagent-webui-activity-reconciliation.test.mjs",
     "tests/piagent-webui-session-send-observation.test.mjs",
+    "tests/piagent-webui-session-runtime-factory.test.mjs",
     "tests/piagent-webui-session-lease-runtime.test.mjs"
   ];
   assert.deepEqual(stability.files, required);

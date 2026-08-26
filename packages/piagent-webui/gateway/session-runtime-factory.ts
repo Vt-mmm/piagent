@@ -1,12 +1,14 @@
 import path from "node:path";
 
+import { webUiModelRef } from "../../piagent-core/runtime/inspection/webui-snapshot.ts";
 import type { PiSessionInfo } from "./session-catalog.ts";
 import { preferAuthoritativePiagentGuard } from "./extension-authority.ts";
 import { rpcUiContext } from "./rpc-ui-context.ts";
 
 export type RuntimeHandle = { dispose(): Promise<void>; session?: any };
+export type InitialSessionOptions = { modelRef: string | null; thinkingLevel: string };
 export type RuntimeFactory = (info: PiSessionInfo, runtimeInstanceRef: string,
-  sessionManager?: any) => Promise<RuntimeHandle>;
+  sessionManager?: any, initialOptions?: InitialSessionOptions) => Promise<RuntimeHandle>;
 
 export function createProductionRuntimeFactory(options: {
   host: any;
@@ -14,9 +16,12 @@ export function createProductionRuntimeFactory(options: {
   packageRoot: string;
   modelRuntime?: any;
 }): RuntimeFactory {
-  return async (info, _runtimeInstanceRef, sessionManager) => {
+  return async (info, _runtimeInstanceRef, sessionManager, initialOptions) => {
+    let pendingInitialOptions = initialOptions;
     const guard = path.join(options.packageRoot, "packages", "piagent-core", "extensions", "piagent-guard.ts");
     const createRuntime = async ({ cwd, agentDir, sessionManager, sessionStartEvent }: any) => {
+      const requested = pendingInitialOptions;
+      pendingInitialOptions = undefined;
       const services = await options.host.createAgentSessionServices({
         cwd, agentDir, modelRuntime: options.modelRuntime,
         resourceLoaderOptions: {
@@ -26,7 +31,12 @@ export function createProductionRuntimeFactory(options: {
       });
       const extensionErrors = services.resourceLoader.getExtensions().errors;
       if (extensionErrors.length) throw new Error("session-runtime-extension-load-failed");
-      const created = await options.host.createAgentSessionFromServices({ services, sessionManager, sessionStartEvent });
+      const models = requested?.modelRef ? services.modelRuntime?.getAvailableSnapshot?.() ?? [] : [];
+      const model = requested?.modelRef ? models.find((value: any) => webUiModelRef(String(value.provider ?? ""),
+        String(value.id ?? value.modelId ?? "")) === requested.modelRef) : undefined;
+      if (requested?.modelRef && !model) throw new Error("session-model-unavailable");
+      const created = await options.host.createAgentSessionFromServices({ services, sessionManager, sessionStartEvent,
+        ...(model ? { model } : {}), ...(requested ? { thinkingLevel: requested.thinkingLevel } : {}) });
       return { ...created, services, diagnostics: services.diagnostics };
     };
     const manager = sessionManager ?? options.host.SessionManager.open(info.path);

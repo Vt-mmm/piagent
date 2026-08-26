@@ -11,6 +11,7 @@ import {
   isNonAuthorizingChangeClarification,
   manualTaskIntakeEligible
 } from "../packages/piagent-core/runtime/workflows/task-intake.ts";
+import { completedFollowupAcceptanceEvidenceFiles } from "../packages/piagent-core/runtime/workflows/task-followup-policy.ts";
 
 function policy(prompt) {
   const mode = automaticTaskIntakeMode(prompt, []);
@@ -259,4 +260,72 @@ test("implementation follow-up scope prefers the completed task evidence over un
     ).includes("src/current-navigation.ts"),
     "ordinary new work continues to use current navigation context"
   );
+});
+
+test("acceptance evidence inherits only an adjacent same-session implementation with exact snapshot continuity", () => {
+  const digest = (value) => `wt-content-v2:${value.repeat(64)}`;
+  const parent = {
+    taskRunId: "implement-run",
+    sessionId: "session-a",
+    createdAt: "2026-08-26T10:00:00.000Z",
+    changeMode: "source-change",
+    mutationPolicy: "required",
+    trace: { outcome: "completed" },
+    baselineFileDigests: { "notes/local.md": digest("c") },
+    finalFileDigests: {
+      "notes/local.md": digest("c"),
+      "src/platform/config.js": digest("a"),
+      "test/config.test.js": digest("b")
+    },
+    changedFiles: ["src/platform/config.js", "test/config.test.js"]
+  };
+  const child = {
+    taskRunId: "verify-run",
+    sessionId: "session-a",
+    createdAt: "2026-08-26T10:01:00.000Z",
+    changeMode: "source-change",
+    mutationPolicy: "allowed",
+    intakeMode: "runtime",
+    operatorRequest: "Verify the implementation against every obligation from the earlier request and fix failures if any.",
+    scope: ["src/platform/config.js", "test/config.test.js", "test/**"],
+    baselineFileDigests: parent.finalFileDigests
+  };
+  const current = { ...parent.finalFileDigests };
+  assert.deepEqual(
+    completedFollowupAcceptanceEvidenceFiles(child, [child, parent], [], current),
+    ["src/platform/config.js", "test/config.test.js"],
+    "pre-existing unrelated dirt is excluded because the parent did not own it"
+  );
+  assert.deepEqual(
+    completedFollowupAcceptanceEvidenceFiles(child, [child, parent], ["src/platform/config.js"], {
+      ...current,
+      "src/platform/config.js": digest("c")
+    }),
+    ["src/platform/config.js", "test/config.test.js"],
+    "a guarded repair unions task-local delta with inherited implementation evidence"
+  );
+
+  const readOnlyIntervening = {
+    taskRunId: "read-run",
+    sessionId: "session-a",
+    createdAt: "2026-08-26T10:00:30.000Z",
+    changeMode: "read-only",
+    mutationPolicy: "forbidden",
+    trace: { outcome: "completed" }
+  };
+  const rejected = [
+    { label: "intervening task", task: child, tasks: [child, readOnlyIntervening, parent], current },
+    { label: "different session", task: child, tasks: [child, { ...parent, sessionId: "session-b" }], current },
+    { label: "digest discontinuity", task: { ...child, baselineFileDigests: { ...child.baselineFileDigests, "src/platform/config.js": digest("z") } }, tasks: [child, parent], current },
+    { label: "no prior-work reference", task: { ...child, operatorRequest: "Run all tests and fix failures if any." }, tasks: [child, parent], current },
+    { label: "forbidden mutation", task: { ...child, mutationPolicy: "forbidden" }, tasks: [child, parent], current },
+    { label: "glob-only focus", task: { ...child, scope: ["src/**", "test/**"] }, tasks: [child, parent], current }
+  ];
+  for (const entry of rejected) {
+    assert.deepEqual(
+      completedFollowupAcceptanceEvidenceFiles(entry.task, entry.tasks, [], entry.current),
+      [],
+      entry.label
+    );
+  }
 });

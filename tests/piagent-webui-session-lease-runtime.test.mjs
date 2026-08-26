@@ -804,16 +804,18 @@ watchdog.start((reason) => process.stdout.write(reason));`;
     const { root, key } = state(t), seed = info(root, "seed.jsonl"), newFile = path.join(root, "new-session.jsonl");
     const manager = { getSessionFile: () => newFile, getSessionId: () => "new-session-id" };
     const selectedModel = { provider: "fixture", id: "reasoning-model" };
-    let modelSet = null, thinkingSet = null, disposed = 0, passedManager = null;
+    let disposed = 0, passedManager = null, passedInitialOptions = null;
     const supervisor = new SessionRuntimeSupervisor({
       gatewayInstanceRef: "gateway_create_runtime", key, leases: new SessionLeaseStore(root, key), listSessions: async () => [seed],
       host: { SessionManager: { create(cwd) { assert.equal(cwd, seed.cwd); return manager; } } },
-      runtimeFactory: async (_target, _runtimeRef, value) => {
+      runtimeFactory: async (_target, _runtimeRef, value, initialOptions) => {
         passedManager = value;
+        passedInitialOptions = initialOptions;
         return { session: {
-          model: null, thinkingLevel: "off",
+          model: selectedModel, thinkingLevel: "high",
           modelRuntime: { getAvailableSnapshot: () => [selectedModel] },
-          async setModel(model) { modelSet = model; this.model = model; }, setThinkingLevel(level) { thinkingSet = level; this.thinkingLevel = level; }
+          async setModel() { throw new Error("create-must-not-persist-model-default"); },
+          setThinkingLevel() { throw new Error("create-must-not-persist-thinking-default"); }
         }, async dispose() { disposed += 1; } };
       }
     });
@@ -824,8 +826,7 @@ watchdog.start((reason) => process.stdout.write(reason));`;
       thinkingLevel: "high", reasonCode: null });
     assert.equal(sessionRef, sessionRefForPath(key, newFile));
     assert.equal(passedManager, manager);
-    assert.equal(modelSet, selectedModel);
-    assert.equal(thinkingSet, "high");
+    assert.deepEqual(passedInitialOptions, { modelRef: webUiModelRef("fixture", "reasoning-model"), thinkingLevel: "high" });
     assert.equal(supervisor.liveSessionManager(sessionRef), manager);
     assert.equal(supervisor.ownership(sessionRef).state, "gateway-owned");
     assert.equal((await supervisor.listSessions()).find((value) => value.path === newFile)?.firstMessage, "(no messages)");
@@ -1146,6 +1147,9 @@ watchdog.start((reason) => process.stdout.write(reason));`;
     const { root, key } = state(t);
     const cwd = path.join(root, "project"), agentDir = path.join(root, "agent"), sessionDir = path.join(root, "sessions");
     fs.mkdirSync(cwd); fs.mkdirSync(agentDir); fs.mkdirSync(sessionDir);
+    const globalSettings = path.join(agentDir, "settings.json");
+    fs.writeFileSync(globalSettings, "{}\n");
+    const settingsBefore = fs.readFileSync(globalSettings);
     execFileSync("git", ["init", "-q", cwd]);
     execFileSync("git", ["-C", cwd, "config", "user.email", "test@example.com"]);
     execFileSync("git", ["-C", cwd, "config", "user.name", "Piagent Test"]);
@@ -1197,10 +1201,18 @@ watchdog.start((reason) => process.stdout.write(reason));`;
     assert.equal(supervisor.ownership(sessionRef).state, "offline");
     assert.equal(host.SessionManager.open(sessions[0].path, sessionDir).getSessionId(), "runtime-lease-proof");
     const projectRef = projectRefForCwd(key, cwd);
-    const createdRef = await supervisor.create(projectRef, projectRef, webUiModelRef("fixture", "fixture"), "off");
+    const created = await supervisor.createWithReadback(projectRef, projectRef, webUiModelRef("fixture", "fixture"), "off");
+    const createdRef = created.sessionRef;
+    assert.deepEqual(created.effectiveOptions, { state: "confirmed", modelRef: webUiModelRef("fixture", "fixture"),
+      thinkingLevel: "off", reasonCode: null });
     assert.notEqual(createdRef, sessionRef);
     assert.equal(supervisor.ownership(createdRef).state, "gateway-owned");
     assert.equal((await supervisor.listSessions()).length, 3);
+    const createdBranch = supervisor.liveSessionManager(createdRef).getBranch();
+    assert.equal(createdBranch.filter((entry) => entry.type === "model_change").length, 1);
+    assert.equal(createdBranch.filter((entry) => entry.type === "thinking_level_change").length, 1);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(fs.readFileSync(globalSettings), settingsBefore, "session create must not rewrite user defaults");
     assert.equal(providerTurns, 0);
     await supervisor.release(createdRef);
     assert.equal((await supervisor.listSessions()).length, 2);

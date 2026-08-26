@@ -49,8 +49,9 @@ import {
 import { verifierCommandsCoverTests } from "../packages/piagent-core/extensions/acceptance-behavior-proof.js";
 import { acceptanceInvalidInputEvidence } from "../packages/piagent-core/extensions/acceptance-contract-semantics.js";
 import { requestedErrorClasses } from "../packages/piagent-core/extensions/acceptance-error-classes.js";
-import { versionWorkingTreeHash, workingTreeCarrierDigest } from "../packages/piagent-core/extensions/working-tree-digest.js";
+import { versionWorkingTreeHash, workingTreeCarrierDigest, workingTreeEvidenceDigest } from "../packages/piagent-core/extensions/working-tree-digest.js";
 import { operatorRequestDigest } from "../packages/piagent-core/extensions/task-state.js";
+import { completedFollowupAcceptanceEvidenceFiles } from "../packages/piagent-core/runtime/workflows/task-followup-policy.ts";
 import {
   BENCHMARK_SCOPE_BANDS,
   benchmarkTrustChecklist,
@@ -2582,6 +2583,114 @@ test("acceptance receipt distinguishes domain read-only behavior from task-wide 
     false,
     "source-change verifier tasks with forbidden mutation can satisfy task-wide read-only evidence"
   );
+});
+
+test("zero-delta verification follow-up binds acceptance only through exact implementation lineage", (t) => {
+  const cwd = temporaryProject(t, "piagent-followup-acceptance-");
+  fs.mkdirSync(path.join(cwd, "src", "platform"), { recursive: true });
+  fs.mkdirSync(path.join(cwd, "test"), { recursive: true });
+  fs.writeFileSync(path.join(cwd, "src", "platform", "config.js"), [
+    "const firstDefined = (...values) => values.find((value) => value !== undefined);",
+    "export function resolveConfig(cli = {}, defaults = {}) {",
+    "  return { port: firstDefined(cli.port, defaults.port) };",
+    "}",
+    ""
+  ].join("\n"));
+  fs.writeFileSync(path.join(cwd, "test", "config.test.js"), [
+    "import assert from 'node:assert/strict';",
+    "import { resolveConfig } from '../src/platform/config.js';",
+    "assert.deepEqual(resolveConfig({ port: undefined }, { port: 3000 }), { port: 3000 });",
+    "assert.deepEqual(resolveConfig({ port: null }, { port: 3000 }), { port: null });",
+    "assert.deepEqual(resolveConfig({ port: false }, { port: 3000 }), { port: false });",
+    "assert.deepEqual(resolveConfig({ port: 0 }, { port: 3000 }), { port: 0 });",
+    "assert.deepEqual(resolveConfig({ port: '' }, { port: 3000 }), { port: '' });",
+    ""
+  ].join("\n"));
+
+  const fileDigest = (value) => versionWorkingTreeHash(value.repeat(64));
+  const parentFinal = {
+    "notes/unrelated.md": fileDigest("c"),
+    "src/platform/config.js": fileDigest("a"),
+    "test/config.test.js": fileDigest("b")
+  };
+  const parent = {
+    taskRunId: "implement-run",
+    sessionId: "session-a",
+    createdAt: "2026-08-26T10:00:00.000Z",
+    changeMode: "source-change",
+    mutationPolicy: "required",
+    trace: { outcome: "completed" },
+    baselineFileDigests: { "notes/unrelated.md": parentFinal["notes/unrelated.md"] },
+    finalFileDigests: parentFinal,
+    changedFiles: ["src/platform/config.js", "test/config.test.js"]
+  };
+  const acceptance = buildAcceptanceReceipt({
+    summary: "Verify the implementation from the earlier request. A value is absent only when undefined; preserve null, false, zero, and empty string.",
+    expectedOutput: "Focused and full verification pass against the final working tree.",
+    changeMode: "source-change",
+    mutationPolicy: "allowed"
+  });
+  const currentDigest = workingTreeEvidenceDigest(parentFinal);
+  const child = contract({
+    taskRunId: "verify-run",
+    sessionId: "session-a",
+    createdAt: "2026-08-26T10:01:00.000Z",
+    updatedAt: "2026-08-26T10:01:00.000Z",
+    changeMode: "source-change",
+    mutationPolicy: "allowed",
+    intakeMode: "runtime",
+    operatorRequest: "Verify the implementation against every obligation from the earlier request and fix failures if any.",
+    summary: "Verify the implementation from the earlier request. A value is absent only when undefined; preserve null, false, zero, and empty string.",
+    acceptanceCriteria: acceptance.acceptanceCriteria,
+    acceptanceReceipt: acceptance.receipt,
+    scope: ["src/platform/config.js", "test/config.test.js", "test/**"],
+    baselineChangedFiles: Object.keys(parentFinal).sort(),
+    baselineFileDigests: parentFinal,
+    finalWorkingTreeFiles: Object.keys(parentFinal).sort(),
+    finalFileDigests: parentFinal,
+    changedFiles: [],
+    observedChangedFiles: [],
+    verifyEvidence: [{
+      command: "npm test",
+      exitCode: 0,
+      summary: "pass",
+      recordedAt: "2026-08-26T10:01:30.000Z",
+      observed: true,
+      observedAt: "2026-08-26T10:01:29.000Z",
+      matchedProfileCommand: true,
+      preWorkingTreeDigest: currentDigest,
+      workingTreeDigest: currentDigest
+    }]
+  });
+  const evidenceFiles = completedFollowupAcceptanceEvidenceFiles(child, [child, parent], [], parentFinal);
+  assert.deepEqual(evidenceFiles, ["src/platform/config.js", "test/config.test.js"]);
+  const complete = refreshAcceptanceReceipt(child, {
+    cwd,
+    changedFiles: evidenceFiles,
+    currentWorkingTreeDigest: currentDigest
+  });
+  assert.equal(complete.criticalMissing.some((criterion) => criterion.obligation === "boundary-case"), false);
+  assert.equal(complete.receipt.criteria
+    .filter((criterion) => criterion.obligation === "boundary-case")
+    .every((criterion) => criterion.evidence.every((item) => (
+      item.paths.includes("src/platform/config.js")
+      && item.paths.includes("test/config.test.js")
+      && !item.paths.includes("notes/unrelated.md")
+    ))), true);
+
+  const interveningReadOnly = {
+    taskRunId: "read-run",
+    sessionId: "session-a",
+    createdAt: "2026-08-26T10:00:30.000Z",
+    changeMode: "read-only",
+    mutationPolicy: "forbidden",
+    trace: { outcome: "completed" }
+  };
+  const blockedFiles = completedFollowupAcceptanceEvidenceFiles(child, [child, interveningReadOnly, parent], [], parentFinal);
+  assert.deepEqual(blockedFiles, []);
+  const blocked = refreshAcceptanceReceipt(child, { cwd, changedFiles: blockedFiles, currentWorkingTreeDigest: currentDigest });
+  assert.equal(blocked.criticalMissing.some((criterion) => criterion.obligation === "boundary-case"), true,
+    "an intervening read-only task cannot rescue source acceptance evidence");
 });
 
 test("exact final-output contracts reject truncated source-derived values", (t) => {

@@ -20,7 +20,7 @@ export function registerTaskCompletionTools(pi: ExtensionAPI, deps: Record<strin
     compactTaskDetails, contextBudgetConfig, evaluateTaskGate, findMatchingObservedBashResult, loadProfileFromContext,
     normalizeRelative, nowIso, observedBashLedgerPath, policy, readObservedBashResults,
     readTask, recordCompletionAudit, recordVerificationCheckpoint, redactForStorage, redactText, runtimeState,
-    refreshAcceptanceReceipt, registerPiagentTool, resolveRuntimePolicy, runtimeLifecycleMode, semanticRepairCompletionBlock, taskChangedFileEvidence,
+    refreshAcceptanceReceipt, registerPiagentTool, resolveRuntimePolicy, runtimeLifecycleMode, semanticRepairCompletionBlock, taskAcceptanceEvidenceFiles, taskChangedFileEvidence,
     uniqueStrings, verifierCommandInstructions, workingTreeEvidenceDigest, workingTreeSnapshot, writeTask
   } = deps;
   registerPiagentTool(pi, {
@@ -176,14 +176,15 @@ export function registerTaskCompletionTools(pi: ExtensionAPI, deps: Record<strin
         });
         task.verifyEvidence = task.verifyEvidence.slice(-100);
       }
-      const hasChanges = taskChangedFileEvidence(ctx.cwd, task, currentDigests).expected.length > 0;
-      const allPassing = matchedProfileCommand && hasChanges && allVerifyCommandsPassCurrentTree(task, workingTreeDigest);
-      if (matchedProfileCommand && hasChanges) {
+      const taskLocalDelta = taskChangedFileEvidence(ctx.cwd, task, currentDigests).expected;
+      const verificationCanSettleSourceTask = taskLocalDelta.length > 0 || task.mutationPolicy === "allowed";
+      const allPassing = matchedProfileCommand && verificationCanSettleSourceTask && allVerifyCommandsPassCurrentTree(task, workingTreeDigest);
+      if (matchedProfileCommand && verificationCanSettleSourceTask) {
         applyRuntimeLifecycleObservation(task, allPassing ? "verification-complete" : "verification-pending", nowIso());
       }
       const acceptance = refreshAcceptanceReceipt(task, {
         cwd: ctx.cwd,
-        changedFiles: taskChangedFileEvidence(ctx.cwd, task, currentDigests).expected,
+        changedFiles: taskAcceptanceEvidenceFiles(ctx.cwd, task, currentDigests, taskLocalDelta),
         currentWorkingTreeDigest: workingTreeDigest
       });
       task.acceptanceReceipt = acceptance.task.acceptanceReceipt;
@@ -322,7 +323,7 @@ export function registerTaskCompletionTools(pi: ExtensionAPI, deps: Record<strin
       };
       nextTask = refreshAcceptanceReceipt(nextTask, {
         cwd: ctx.cwd,
-        changedFiles: nextTask.changedFiles,
+        changedFiles: taskAcceptanceEvidenceFiles(ctx.cwd, nextTask, finalFileDigests, nextTask.changedFiles),
         currentWorkingTreeDigest: workingTreeEvidenceDigest(finalFileDigests)
       }).task as TaskContract;
       let gate = evaluateTaskGate(ctx.cwd, nextTask, policy, {

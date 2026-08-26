@@ -89,6 +89,7 @@ type CompletionHookDependencies = {
     currentDigests: Record<string, string>,
     currentDigest: string
   ) => CompletionGate;
+  acceptanceEvidenceFiles: (cwd: string, task: TaskContract, currentDigests: Record<string, string>, taskLocalDelta?: string[]) => string[];
   writeTask: (cwd: string, task: TaskContract) => TaskContract;
   activateBaseTools: (ctx: ExtensionContext) => unknown;
   appendTrace: (cwd: string, payload: Record<string, unknown>) => void;
@@ -106,8 +107,7 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
     maxManifestFiles,
     activeTask,
     flushObservedTaskContext,
-    completionProjection,
-    evaluateGate,
+    completionProjection, evaluateGate, acceptanceEvidenceFiles,
     writeTask,
     activateBaseTools,
     appendTrace,
@@ -366,7 +366,7 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
         try {
           criticalRecovery = acceptanceCriticalRecoveryProjection(task, {
             cwd: ctx.cwd,
-            changedFiles: taskDeltaFilesFromSnapshot(task, currentDigests),
+            changedFiles: acceptanceEvidenceFiles(ctx.cwd, task, currentDigests, taskDeltaFilesFromSnapshot(task, currentDigests)),
             currentWorkingTreeDigest: currentDigest
           }) as CriticalRecoveryProjection[];
         } catch {

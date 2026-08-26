@@ -120,6 +120,7 @@ import {
 } from "../runtime/tools/tool-groups.ts";
 import type { PiagentToolGroup } from "../runtime/tools/tool-groups.ts";
 import { freshRequestParts, shortTaskLabel } from "../runtime/workflows/input-routing.ts";
+import { completedFollowupAcceptanceEvidenceFiles } from "../runtime/workflows/task-followup-policy.ts";
 import {
   automaticAcceptanceCriteria,
   automaticReviewLenses,
@@ -1938,7 +1939,8 @@ function recordObservedTaskVerification(
     }
   }
 
-  const hasChanges = taskChangedFileEvidence(ctx.cwd, task, currentDigests).expected.length > 0;
+  const taskLocalDelta = taskChangedFileEvidence(ctx.cwd, task, currentDigests).expected;
+  const hasChanges = taskLocalDelta.length > 0;
   const verificationCanSettleSourceTask = hasChanges || task.mutationPolicy === "allowed";
   const allPassing = verificationCanSettleSourceTask && allVerifyCommandsPassCurrentTree(task, currentDigest);
   const lifecycle = verificationCanSettleSourceTask
@@ -1946,7 +1948,7 @@ function recordObservedTaskVerification(
     : { changed: false, mode: runtimeLifecycleMode(task) };
   const acceptance = refreshAcceptanceReceipt(task, {
     cwd: ctx.cwd,
-    changedFiles: taskChangedFileEvidence(ctx.cwd, task, currentDigests).expected,
+    changedFiles: taskAcceptanceEvidenceFiles(ctx.cwd, task, currentDigests, taskLocalDelta),
     currentWorkingTreeDigest: currentDigest
   });
   task.acceptanceReceipt = acceptance.task.acceptanceReceipt;
@@ -2030,14 +2032,14 @@ function completionTaskProjection(
     failureReason: undefined,
     ruledOut: undefined,
     trace: {
-      outcome: "completed",
+      outcome: "completed" as const,
       notes: "Runtime finalized from observed context, working-tree changes, current verification, and completed work-plan evidence.",
       recordedAt: nowIso()
     }
   };
   return refreshAcceptanceReceipt(projected, {
     cwd,
-    changedFiles,
+    changedFiles: taskAcceptanceEvidenceFiles(cwd, projected, finalFileDigests, changedFiles),
     currentWorkingTreeDigest: workingTreeEvidenceDigest(finalFileDigests)
   }).task as TaskContract;
 }
@@ -3450,6 +3452,20 @@ function taskChangedFileEvidence(
   };
 }
 
+function taskAcceptanceEvidenceFiles(
+  cwd: string,
+  task: TaskContract,
+  currentDigests: Record<string, string>,
+  taskLocalDelta: string[] = taskChangedFileEvidence(cwd, task, currentDigests).expected
+): string[] {
+  return completedFollowupAcceptanceEvidenceFiles(
+    task,
+    listTaskContracts(cwd) as TaskContract[],
+    taskLocalDelta,
+    currentDigests
+  );
+}
+
 function exactReviewPathCoverage(expectedPaths: string[], reviewedPaths: string[] | undefined): boolean {
   const expected = [...new Set(expectedPaths)].sort();
   const reviewed = [...new Set(reviewedPaths ?? [])].sort();
@@ -3530,6 +3546,7 @@ function evaluateTaskGate(
     missing.push(`completed work plan (${incompleteSteps.map((step) => `${step.id}:${step.status}`).join(", ")})`);
   }
   const changedFileEvidence = taskChangedFileEvidence(cwd, task, currentDigests);
+  const acceptanceEvidenceFiles = taskAcceptanceEvidenceFiles(cwd, task, currentDigests, changedFileEvidence.expected);
   if (task.changeMode === "source-change" && task.trace.outcome === "completed" && task.mutationPolicy !== "forbidden") {
     if (task.mutationPolicy !== "allowed" && task.changedFiles.length === 0) missing.push("changed files");
     if (changedFileEvidence.undeclared.length > 0) missing.push(`declared observed changes (${changedFileEvidence.undeclared.join(", ")})`);
@@ -3543,7 +3560,7 @@ function evaluateTaskGate(
   }
   const acceptance = refreshAcceptanceReceipt(task, {
     cwd,
-    changedFiles: changedFileEvidence.expected,
+    changedFiles: acceptanceEvidenceFiles,
     currentWorkingTreeDigest
   });
   const semanticEnforcement = taskAuthorityDecision(task, "CAP-13", "block").allowed;
@@ -3554,7 +3571,7 @@ function evaluateTaskGate(
   if (semanticEnforcement && adapterCritical.length > 0) missing.push(`critical acceptance evidence adapter-unresolved (${adapterCritical.map((criterion) => `${criterion.id}:${criterion.obligation}`).join(", ")}); remedy: add a direct-relative focused test or configure a deterministic adapter`);
   const acceptanceConflicts = acceptanceSemanticConflicts(task, {
     cwd,
-    changedFiles: changedFileEvidence.expected
+    changedFiles: acceptanceEvidenceFiles
   });
   if (semanticEnforcement && acceptanceConflicts.length > 0) {
     missing.push(`acceptance semantic conflicts (${acceptanceConflicts.join(", ")})`);
@@ -4133,6 +4150,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
     activeTask: (ctx) => activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined,
     flushObservedTaskContext,
     completionProjection: completionTaskProjection,
+    acceptanceEvidenceFiles: taskAcceptanceEvidenceFiles,
     evaluateGate: (cwd, task, currentDigests, currentDigest) => {
       const gate = evaluateTaskGate(cwd, task, policy, { currentDigests, currentWorkingTreeDigest: currentDigest });
       const repairBlock = (taskAuthorityDecision(task, "CAP-13", "block").allowed
@@ -4825,7 +4843,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
     safeTaskId, searchContextIndex, searchContextIndexV2, searchMemoryFiles, selectRuntimeAction,
     selectValueFromUi, selectVerificationPlan, semanticCompactionInstructions, sendWorkflowFollowUp, setPermissionOverrideForContext,
     semanticRepairCompletionBlock: (cwd: string, taskRunId: string) => semanticRepairRuntime.completionBlock(cwd, taskRunId),
-    freshRequestParts, shellArg, shortTaskLabel, solverShadow, summarizeAttempt, taskChangedFileEvidence,
+    freshRequestParts, shellArg, shortTaskLabel, solverShadow, summarizeAttempt, taskAcceptanceEvidenceFiles, taskChangedFileEvidence,
     techContextDirPath, techContextFilePath, techContextRelativePath, techOptionById, techStackPath,
     telemetry, toolRegistryConfig, trajectoryRuntime, uniqueStrings, usageExactCommands,
     validTaskScopePattern, validateNewWorkPlan, verifierCommandInstructions, verifyProjectCapabilityState, workingTreeEvidenceDigest,

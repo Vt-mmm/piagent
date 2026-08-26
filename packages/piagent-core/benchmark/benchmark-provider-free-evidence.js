@@ -140,7 +140,7 @@ function lanePassed(id, result) {
     && result?.providerCalls === 0
     && result?.modelTokens === 0
     && result?.invariants?.uiStability === "deterministic-current-state"
-    && result?.invariants?.uiStabilitySuites === 8;
+    && result?.invariants?.uiStabilitySuites === 9;
 }
 
 function laneSummary(id, result) {
@@ -196,7 +196,7 @@ function summaryPassed(id, summary) {
   if (id !== "webui-parity-v1") return false;
   return summary?.benchmark === "webui-parity-v1" && summary.passed === true
     && summary.uiStability === "deterministic-current-state"
-    && summary.uiStabilitySuites === 8
+    && summary.uiStabilitySuites === 9
     && summary.deterministicStabilityStepPassed === true;
 }
 

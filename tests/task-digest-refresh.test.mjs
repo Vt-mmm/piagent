@@ -30,6 +30,7 @@ test("explicit verify recording cannot bypass the automatic migration pre/post t
     redactText: (value) => value, redactForStorage: (value) => value, commandMatchesVerifyPlan: (command, commands) => commands.includes(command),
     workingTreeSnapshot: () => snapshot, workingTreeEvidenceDigest,
     taskChangedFileEvidence: () => ({ expected: ["src/value.ts"] }),
+    taskAcceptanceEvidenceFiles: (_cwd, _task, _currentDigests, taskLocalDelta) => taskLocalDelta,
     allVerifyCommandsPassCurrentTree: (candidate, digest) => candidate.verifyCommands.every((command) => candidate.verifyEvidence.some((entry) => entry.command === command && entry.exitCode === 0 && entry.workingTreeDigest === digest)),
     applyRuntimeLifecycleObservation: () => ({ changed: true }), nowIso: () => "2026-08-10T00:02:00.000Z",
     refreshAcceptanceReceipt: (candidate) => ({ task: candidate }), writeTask: (_cwd, candidate) => (written = structuredClone(candidate)),

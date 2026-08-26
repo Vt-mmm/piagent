@@ -9,7 +9,7 @@ import { SessionLeaseStore, type SessionLeaseSnapshot } from "./session-lease-st
 import { GatewayEventStore } from "./gateway-events.ts";
 import { GatewaySessionStream } from "./gateway-session-stream.ts";
 import { executePermissionCommand, executeRuntimeCommand } from "./runtime-session-controls.ts";
-import { configureSessionOptions, effectiveModelRef, effectiveThinkingLevel, type EffectiveSessionOptions } from "./session-effective-options.ts";
+import { inspectEffectiveSessionOptions, effectiveModelRef, effectiveThinkingLevel, type EffectiveSessionOptions } from "./session-effective-options.ts";
 import { launchSessionPrompt, type LaunchedSessionPrompt, type SessionSendResult } from "./session-prompt-dispatch.ts";
 import { WEBUI_MESSAGE_CORRELATION_ENTRY_TYPE } from "../shared/message-correlation.ts";
 import { armSessionOperationWatchdog, bestEffortUnsubscribe, boundedResult, sessionOperationDeadlinePolicy, SessionOperationWatchdog, terminateWatchedSessionOperation,
@@ -103,7 +103,7 @@ export class SessionRuntimeSupervisor {
     const sessionRef = sessionRefForPath(this.#key, sessionFile);
     // Retain identity before fallible runtime work so create receipts never point at an orphan.
     this.#created.set(sessionRef, created);
-    try { await this.#activate(sessionRef, created, manager); }
+    try { await this.#activate(sessionRef, created, manager, { modelRef, thinkingLevel }); }
     catch {
       return { sessionRef, effectiveOptions: { state: "unknown", modelRef: null, thinkingLevel: null,
         reasonCode: "session-runtime-open-failed" } };
@@ -111,7 +111,7 @@ export class SessionRuntimeSupervisor {
     const active = this.#active.get(sessionRef), session = active?.runtime.session;
     if (!session) return { sessionRef, effectiveOptions: { state: "unknown", modelRef: null, thinkingLevel: null,
       reasonCode: "session-runtime-unavailable" } };
-    return { sessionRef, effectiveOptions: await configureSessionOptions(session, modelRef, thinkingLevel) };
+    return { sessionRef, effectiveOptions: inspectEffectiveSessionOptions(session, modelRef, thinkingLevel) };
   }
   liveSessionManager(sessionRef: string): any | null { return this.#active.get(sessionRef)?.sessionManager ?? null; }
   async acquire(sessionRef: string): Promise<SessionLeaseSnapshot> {
@@ -131,7 +131,8 @@ export class SessionRuntimeSupervisor {
     if (found.length !== 1) throw new Error(found.length ? "session-ref-ambiguous" : "session-not-found");
     return await this.#activate(sessionRef, found[0]!);
   }
-  async #activate(sessionRef: string, info: PiSessionInfo, sessionManager?: any): Promise<SessionLeaseSnapshot> {
+  async #activate(sessionRef: string, info: PiSessionInfo, sessionManager?: any,
+    initialOptions?: { modelRef: string | null; thinkingLevel: string }): Promise<SessionLeaseSnapshot> {
     if (this.#active.has(sessionRef)) throw new Error("session-owner-conflict");
     const runtimeInstanceRef = `runtime_${randomBytes(24).toString("base64url")}`;
     const prior = this.#leases.inspect(sessionRef);
@@ -140,7 +141,7 @@ export class SessionRuntimeSupervisor {
     }
     const lease = this.#leases.acquire(sessionRef, this.#gatewayInstanceRef, runtimeInstanceRef);
     try {
-      const runtime = await this.#runtimeFactory(info, runtimeInstanceRef, sessionManager);
+      const runtime = await this.#runtimeFactory(info, runtimeInstanceRef, sessionManager, initialOptions);
       const current = this.#leases.inspect(sessionRef);
       if (current.state !== "gateway-owned" || current.ownerEpoch !== lease.ownerEpoch
         || current.gatewayInstanceRef !== this.#gatewayInstanceRef || current.runtimeInstanceRef !== runtimeInstanceRef) {

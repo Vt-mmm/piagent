@@ -25,15 +25,8 @@ export function effectiveThinkingLevel(session: any): string | null {
   return THINKING_LEVELS.has(level) ? level : null;
 }
 
-export async function configureSessionOptions(session: any, modelRef: string | null,
-  thinkingLevel: string): Promise<EffectiveSessionOptions> {
-  if (modelRef) {
-    const models = session.modelRuntime?.getAvailableSnapshot?.() ?? [];
-    const model = models.find((value: any) => webUiModelRef(String(value.provider ?? ""),
-      String(value.id ?? value.modelId ?? "")) === modelRef);
-    try { if (model) await session.setModel(model); } catch { /* Canonical read-back below decides the effect. */ }
-  }
-  try { await session.setThinkingLevel(thinkingLevel); } catch { /* Canonical read-back below decides the effect. */ }
+export function inspectEffectiveSessionOptions(session: any, modelRef: string | null,
+  thinkingLevel: string): EffectiveSessionOptions {
   const effectiveModel = effectiveModelRef(session), effectiveThinking = effectiveThinkingLevel(session);
   if (!effectiveModel) return { state: "unknown", modelRef: null,
     thinkingLevel: effectiveThinking, reasonCode: "session-model-effect-unknown" };
