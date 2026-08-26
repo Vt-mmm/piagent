@@ -54,7 +54,7 @@ export const RELEASE_FAILURE_MESSAGES = Object.freeze({
   "infrastructure-retries": "Accepted benchmark runs used more recovered infrastructure retries than the suite permits.",
   "infrastructure-failure-ledger": "Accepted benchmark runs do not contain an exact attempt/retry/failure ledger.",
   "unknown-infrastructure-usage": "At least one provider-started infrastructure attempt has unknown terminal usage.",
-  "canonical-production-identity": "The production-v1 suite id is reserved for the canonical built-in suite identity.",
+  "canonical-production-identity": "Production suite ids are reserved for their canonical built-in suite identities.",
   "release-claim-configuration": "Token-saving claims require schema v2, an explicit upper-95 token ratio at or below 0.80, full-suite enforcement, and provider-wire stability evidence.",
   "codex-baseline": "Token-saving product claims require controlled Codex CLI as the paired baseline.",
   "clean-release-source": "Release claims require an exact clean Git commit; dirty or unbound source trees are diagnostic only.",

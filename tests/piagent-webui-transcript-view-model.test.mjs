@@ -4,9 +4,13 @@ import { describe, it } from "node:test";
 import {
   assistantTextPresentation,
   conversationTranscriptItems,
+  durableTranscriptRefreshIdentity,
   finalTranscriptToolStates,
   persistedConversationHasFinal,
   persistedConversationMatches,
+  persistedLiveConversationHasFinal,
+  persistedLiveConversationMatches,
+  persistedLiveUserExists,
   recoveredActivityRefs,
   recoveredTranscriptToolRefs,
   settledTranscriptToolRefs,
@@ -18,6 +22,21 @@ function item(role, toolCalls = []) {
 }
 
 describe("Piagent WebUI transcript presentation", () => {
+  it("does not restart the durable transcript read for each live delta", () => {
+    const base = { user: "Implement it.", assistant: "", attachments: [], activities: [], operationRef: "operation_live",
+      complete: false, error: null, lastEventAt: "2026-08-26T08:53:11.000Z" };
+    const first = durableTranscriptRefreshIdentity("session_live", "revision_live", base);
+    const delta = durableTranscriptRefreshIdentity("session_live", "revision_live", {
+      ...base, assistant: "partial text", lastEventAt: "2026-08-26T08:53:12.000Z"
+    });
+    assert.equal(first.key, delta.key);
+    const completed = durableTranscriptRefreshIdentity("session_live", "revision_live", { ...base,
+      assistant: "final text", complete: true });
+    assert.notEqual(delta.key, completed.key);
+    assert.equal(completed.user, "Implement it.");
+    assert.equal(completed.assistant, "final text");
+  });
+
   it("turns a completion-gate prelude into bounded status instead of contradictory raw prose", () => {
     const value = assistantTextPresentation([
       "[Piagent completion gate: NOT APPROVED]",
@@ -98,6 +117,64 @@ describe("Piagent WebUI transcript presentation", () => {
     assert.equal(persistedConversationHasFinal([user, progress, final], "Implement it."), true);
     assert.equal(persistedConversationHasFinal([final, user], "Implement it."), false);
     assert.equal(persistedConversationHasFinal([user, { ...final, parentMessageRef: "message.other" }], "Implement it."), false);
+  });
+
+  it("reconciles repeated identical text only with the current live operation identity", () => {
+    const text = "Vậy bây giờ a cần test hay em có thể fix ngay";
+    const userOne = { messageRef: "message.user-1", parentMessageRef: null, role: "user", agentOperationId: null,
+      recordedAt: "2026-08-26T08:54:19.271Z", toolCalls: [], content: { text } };
+    const finalOne = { messageRef: "message.final-1", parentMessageRef: userOne.messageRef, role: "assistant", agentOperationId: null,
+      recordedAt: "2026-08-26T08:54:59.637Z", toolCalls: [], content: { text: "First answer." } };
+    const liveTwo = { operationRef: "operation-2", startedAt: "2026-08-26T09:44:08.000Z" };
+
+    assert.equal(persistedLiveUserExists([userOne, finalOne], text, liveTwo), false);
+    assert.equal(persistedLiveConversationHasFinal([userOne, finalOne], text, liveTwo), false);
+    assert.equal(persistedLiveConversationMatches([userOne, finalOne], text, "First answer.", liveTwo), false);
+
+    const userTwo = { ...userOne, messageRef: "message.user-2", recordedAt: "2026-08-26T09:44:08.196Z" };
+    assert.equal(persistedLiveUserExists([userOne, finalOne, userTwo], text, liveTwo), true);
+    assert.equal(persistedLiveConversationHasFinal([userOne, finalOne, userTwo], text, liveTwo), false);
+
+    const finalTwo = { ...finalOne, messageRef: "message.final-2", parentMessageRef: userTwo.messageRef,
+      recordedAt: "2026-08-26T09:44:34.822Z", content: { text: "Second answer." } };
+    const current = [userOne, finalOne, userTwo, finalTwo];
+    assert.equal(persistedLiveConversationHasFinal(current, text, liveTwo), true);
+    assert.equal(persistedLiveConversationMatches(current, text, "Second answer.", liveTwo), true);
+  });
+
+  it("requires equal operation ids when both durable and live identities expose them", () => {
+    const user = { messageRef: "message.user-op-1", parentMessageRef: null, role: "user", agentOperationId: "operation-1",
+      recordedAt: "2026-08-26T10:00:01.000Z", toolCalls: [], content: { text: "Repeat this." } };
+    assert.equal(persistedLiveUserExists([user], "Repeat this.",
+      { operationRef: "operation-2", startedAt: "2026-08-26T10:00:00.000Z" }), false);
+    assert.equal(persistedLiveUserExists([user], "Repeat this.", { operationRef: "operation-1", startedAt: null }), true);
+    assert.equal(persistedLiveUserExists([{ ...user, agentOperationId: null }], "Repeat this.",
+      { operationRef: null, startedAt: null }), false);
+  });
+
+  it("uses the exact browser request before timestamps when reconnecting after clock skew", () => {
+    const text = "Repeat this exact prompt.";
+    const oldUser = { messageRef: "message.user-old", parentMessageRef: null, role: "user",
+      messageRequestId: "message-request.old", agentOperationId: "operation.old",
+      recordedAt: "2026-08-26T12:00:00.000Z", toolCalls: [], content: { text } };
+    const oldFinal = { messageRef: "message.final-old", parentMessageRef: oldUser.messageRef, role: "assistant",
+      messageRequestId: "message-request.old", agentOperationId: "operation.old",
+      recordedAt: "2026-08-26T12:00:01.000Z", toolCalls: [], content: { text: "Old answer." } };
+    const currentUser = { ...oldUser, messageRef: "message.user-current", messageRequestId: "message-request.current",
+      agentOperationId: "operation.current", recordedAt: "2026-08-26T12:00:02.000Z" };
+    const currentFinal = { ...oldFinal, messageRef: "message.final-current", parentMessageRef: currentUser.messageRef,
+      messageRequestId: "message-request.current", agentOperationId: "operation.current",
+      recordedAt: "2026-08-26T12:00:03.000Z", content: { text: "Current answer." } };
+    const items = [oldUser, oldFinal, currentUser, currentFinal];
+    // The browser clock is ten minutes ahead of the durable session clock. An
+    // exact request id must still settle the right turn and suppress the
+    // optimistic duplicate that would otherwise render below the response.
+    const live = { operationRef: "operation.current", messageRequestId: "message-request.current",
+      startedAt: "2026-08-26T12:10:00.000Z" };
+    assert.equal(persistedLiveUserExists(items, text, live), true);
+    assert.equal(persistedLiveConversationHasFinal(items, text, live), true);
+    assert.equal(persistedLiveConversationMatches(items, text, "Current answer.", live), true);
+    assert.equal(persistedLiveConversationMatches(items, text, "Old answer.", live), false);
   });
 
   it("marks a failed activity as recovered only after a later success of the same kind", () => {

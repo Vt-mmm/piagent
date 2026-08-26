@@ -334,7 +334,7 @@ Use `/workflow scout` cho payment/auth/data/contract mapping khi mục tiêu là
 
 ### Task mới khi session đã nặng
 
-Nếu `/usage` cho thấy context cao, hoặc Pi báo context overflow, dùng fresh workflow:
+Nếu `/usage` cho thấy context cao, hoặc Pi báo context overflow, dùng fresh workflow. Đây là ba ví dụ thường dùng; `/fresh help` liệt kê đầy đủ catalog canonical:
 
 ```text
 /fresh scout Scout payment FE mapping vs BE contract. Backend read-only. Do not edit source.
@@ -1100,7 +1100,7 @@ Watchdog là optional adversarial reviewer ở cuối turn, không bật mặc �
 | `/usage` | Snapshot context/session. |
 | `/usage logs` | Xem capture output dài đã compact. |
 | `/name` | Đặt/đổi tên session theo task để report dễ map. |
-| `/fresh` | Mở session mới cho task/scout/be-to-fe khi phiên hiện tại nặng. |
+| `/fresh` | Mở session mới cho mọi workflow canonical khi phiên hiện tại nặng; xem lựa chọn bằng `/fresh help`. |
 | `/name <name>` | Đổi tên session cho resume/report. |
 | `/session` | Pi native session stats/info. |
 | `/mcp` / `/mcp tools` | Check MCP. |

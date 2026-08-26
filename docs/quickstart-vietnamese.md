@@ -149,7 +149,7 @@ Muốn chạy nhiều agent song song thì gõ `herdr` thay vì `pi`, rồi mở
 | `/workflow be-to-fe <việc>` | Backend read-only, làm FE. |
 | `/workflow commit <message>` | Commit local có kiểm soát, không push. |
 | `/workflow pr <title>` | Tạo PR, hỏi xác nhận trước khi push. |
-| `/fresh task|scout|be-to-fe <việc>` | Session đang nặng hoặc tràn context. |
+| `/fresh <workflow> <việc>` | Session đang nặng hoặc tràn context; nhận mọi workflow canonical, xem bằng `/fresh help`. |
 
 `/commands` liệt kê hết. Các alias cũ như `/task`, `/scout`, `/be-to-fe`, `/fresh-task`, `/context-index`, `/logs` vẫn chạy nhưng không còn là đường onboard chính. Giải thích từng lệnh: [command-reference-vietnamese.md](command-reference-vietnamese.md). Các workflow ép shape rõ (`/parallel-review`, `/review-loop`, `/parallel-research`, `/parallel-context-build`): [subagents-and-multiagent.md](subagents-and-multiagent.md). Runtime gate tools và cách agent tự dùng chúng: [operator-manual-vietnamese.md](operator-manual-vietnamese.md).
 

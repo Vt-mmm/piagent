@@ -25,7 +25,7 @@ function assetError(stage, asset, cause) {
   return error;
 }
 
-export function createBenchmarkExecutionGuard({ candidateGuard, suiteRoot, suiteIdentity, piAgentHome, codexCredential, runtimeDependencies, commands, verifyCommandAssets = true }) {
+export function createBenchmarkExecutionGuard({ candidateGuard, suiteRoot, suiteIdentity, piAgentHome, codexCredential, runtimeDependencies, webUiAssets, commands, verifyCommandAssets = true }) {
   const observeAssets = (stage, runtimeHomes = []) => {
     try {
       const suite = benchmarkTreeIdentity(suiteRoot, { rejectSymlinks: true });
@@ -39,6 +39,17 @@ export function createBenchmarkExecutionGuard({ candidateGuard, suiteRoot, suite
         assertBenchmarkTreeIdentity(runtimeDependencies.resolutionTree, runtimeTree, "runtime dependency resolution root");
       } catch (error) {
         throw assetError(stage, "runtime-dependencies", error);
+      }
+    }
+    if (webUiAssets) {
+      try {
+        if (webUiAssets.sourceCandidateDigest !== candidateGuard.provenance?.contentDigest) {
+          throw new Error("WebUI asset source candidate binding changed");
+        }
+        const assets = benchmarkTreeIdentity(webUiAssets.root, { rejectSymlinks: true });
+        assertBenchmarkTreeIdentity(webUiAssets.tree, assets, "frozen WebUI assets");
+      } catch (error) {
+        throw assetError(stage, "webui-assets", error);
       }
     }
     if (piAgentHome?.seedIdentity) {
@@ -84,6 +95,7 @@ export function createBenchmarkExecutionGuard({ candidateGuard, suiteRoot, suite
       candidate: candidateReceipt.stamp,
       suite: suiteIdentity,
       runtimeDependencies,
+      webUiAssets: webUiAssets ? Object.fromEntries(Object.entries(webUiAssets).filter(([key]) => key !== "root")) : null,
       piAgentHome: piAgentHome ? {
         copied: piAgentHome.copied,
         globalInstructions: piAgentHome.globalInstructions,

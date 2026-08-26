@@ -332,6 +332,8 @@ describe("Piagent durable session command admission", () => {
     const started = await controller.execute(send);
     assert.equal(validateFixture(registry, "session-command-v1", started).valid, true);
     assert.equal(started.resultCode, "started"); assert.match(started.operationRef, /^operation_/);
+    assert.equal(promptText, null, "the durable receipt must precede expensive prompt hooks");
+    await new Promise((resolve) => setImmediate(resolve));
     assert.equal(promptText, "/workflow review Continue this session.");
     const streamed = events.replay(0).events;
     for (const event of streamed) assert.equal(validateFixture(registry, "gateway-protocol-v1", event).valid, true);
@@ -367,12 +369,109 @@ describe("Piagent durable session command admission", () => {
         expectedOperationRef: null, attachmentRefs: [] } };
     const differentStarted = await controller.execute(different);
     assert.equal(differentStarted.resultCode, "started");
+    await new Promise((resolve) => setImmediate(resolve));
     assert.equal(promptText, "Start a different piece of work.");
     const differentRunning = await catalog(), differentRow = differentRunning.sessions[0];
     await controller.execute({ ...command(differentRow, differentRunning.catalogRevision, "session.abort", "abort_message_02"),
       requestedAt: "2026-08-14T10:05:50.000Z", expiresAt: "2026-08-14T10:10:00.000Z",
       payload: { operationRef: differentStarted.operationRef, clearQueued: true } });
     await runtimes.close();
+  });
+
+  it("persists and returns a send receipt before delayed agent_start while keeping one exact operation", async (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-send-receipt-first-")); fs.chmodSync(root, 0o700);
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    const key = Buffer.alloc(32, 47), info = { path: path.join(root, "session.jsonl"), id: "raw-receipt-first",
+      cwd: path.join(root, "project"), name: "Receipt first", created: new Date("2026-08-14T09:00:00.000Z"),
+      modified: new Date("2026-08-14T09:00:01.000Z"), messageCount: 2, firstMessage: "Prior", allMessagesText: "Prior\nDone" };
+    const listeners = new Set(), correlationEntries = []; let prompts = 0, finishPrompt;
+    const session = { isIdle: true, isStreaming: false,
+      sessionManager: { appendCustomEntry(customType, data) { correlationEntries.push({ customType, data }); } },
+      subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+      prompt() { prompts += 1; return new Promise((resolve) => { finishPrompt = resolve; }); },
+      async abort() {}, clearQueue() {} };
+    const events = new GatewayEventStore(), store = new SessionCommandStore(root, key);
+    const runtimes = new SessionRuntimeSupervisor({ gatewayInstanceRef: "gateway_receipt_first", key,
+      leases: new SessionLeaseStore(root, key), listSessions: async () => [info], events,
+      runtimeFactory: async () => ({ session, async dispose() {} }) });
+    let catalogAvailable = true;
+    const catalog = () => {
+      if (!catalogAvailable) throw new Error("fixture-catalog-unavailable");
+      return buildSessionCatalog({ gatewayInstanceRef: "gateway_receipt_first", key, listSessions: async () => [info],
+        readOwnership: (value) => runtimes.ownership(value) });
+    };
+    runtimes.setProjectionReader(async () => ({ sessionRevision: "revision_receipt_first_final", liveState: "idle" }));
+    const controller = new SessionCommandController({ catalog, runtimes, store, events,
+      now: () => new Date("2026-08-14T09:06:00.000Z") });
+    const before = await catalog(), row = before.sessions[0];
+    const value = { ...command(row, before.catalogRevision, "session.send", "receipt_first_01"),
+      payload: { delivery: "new-operation", message: "Continue after admission.", messageRequestId: "message_receipt_first_01",
+        expectedOperationRef: null, attachmentRefs: [] } };
+    const receipt = await controller.execute(value);
+    assert.equal(receipt.phase, "settled"); assert.equal(receipt.resultCode, "started"); assert.equal(prompts, 0);
+    assert.equal(store.lookup(value).state, "settled");
+    catalogAvailable = false;
+    const replay = await controller.execute(value); catalogAvailable = true;
+    assert.equal(replay.deduplicated, true); assert.equal(replay.operationRef, receipt.operationRef);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(prompts, 1); assert.equal(runtimes.currentOperation(row.sessionRef)?.operationRef, receipt.operationRef);
+    assert.deepEqual(correlationEntries, [{ customType: "piagent-webui-message-correlation", data: {
+      schemaVersion: 1, messageRequestId: "message_receipt_first_01", operationRef: receipt.operationRef
+    } }]);
+    assert.equal(events.replay(0).events.filter((event) => event.kind === "runtime.changed"
+      && event.payload.liveState === "running").length, 1);
+    assert.equal(events.replay(0).events.find((event) => event.kind === "runtime.changed"
+      && event.payload.liveState === "running")?.payload.messageRequestId, "message_receipt_first_01");
+    session.isIdle = false; session.isStreaming = true;
+    for (const listener of listeners) listener({ type: "agent_start" });
+    for (const listener of listeners) listener({ type: "message_start", message: { role: "assistant" } });
+    for (const listener of listeners) listener({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Done." } });
+    for (const listener of listeners) listener({ type: "message_end", message: { role: "assistant", stopReason: "stop",
+      content: [{ type: "text", text: "Done." }] } });
+    session.isIdle = true; session.isStreaming = false;
+    for (const listener of listeners) listener({ type: "agent_settled" }); finishPrompt();
+    for (let index = 0; index < 20 && runtimes.currentOperation(row.sessionRef); index += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    assert.equal(events.replay(0).events.find((event) => event.kind === "message.completed")?.payload.messageRequestId,
+      "message_receipt_first_01");
+    assert.equal(events.replay(0).events.find((event) => event.kind === "operation.settled")?.payload.messageRequestId,
+      "message_receipt_first_01");
+    assert.equal(runtimes.currentOperation(row.sessionRef), null); await runtimes.close();
+  });
+
+  it("cancels a pre-dispatch operation silently when its success receipt is not durable", async (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-send-settle-failure-")); fs.chmodSync(root, 0o700);
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    const key = Buffer.alloc(32, 53), info = { path: path.join(root, "session.jsonl"), id: "raw-settle-failure",
+      cwd: path.join(root, "project"), name: "Settle failure", created: new Date("2026-08-14T09:00:00.000Z"),
+      modified: new Date("2026-08-14T09:00:01.000Z"), messageCount: 2, firstMessage: "Prior", allMessagesText: "Prior\nDone" };
+    let prompts = 0, commits = 0, releases = 0; const listeners = new Set();
+    const session = { isIdle: true, isStreaming: false,
+      subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+      prompt() { prompts += 1; return new Promise(() => undefined); }, async abort() {}, clearQueue() {} };
+    const events = new GatewayEventStore(), store = new SessionCommandStore(root, key);
+    const durableSettle = store.settle.bind(store); store.settle = () => { throw new Error("fixture-settle-failed"); };
+    const runtimes = new SessionRuntimeSupervisor({ gatewayInstanceRef: "gateway_settle_failure", key,
+      leases: new SessionLeaseStore(root, key), listSessions: async () => [info], events,
+      runtimeFactory: async () => ({ session, async dispose() {} }) });
+    const catalog = () => buildSessionCatalog({ gatewayInstanceRef: "gateway_settle_failure", key, listSessions: async () => [info],
+      readOwnership: (value) => runtimes.ownership(value) });
+    const controller = new SessionCommandController({ catalog, runtimes, store, events,
+      now: () => new Date("2026-08-14T09:06:00.000Z"), async prepareAttachments() {
+        return { text: "Prepared but undispatched.", images: [], commit() { commits += 1; }, release() { releases += 1; } };
+      } });
+    const before = await catalog(), row = before.sessions[0];
+    const value = { ...command(row, before.catalogRevision, "session.send", "settle_failure_01"),
+      payload: { delivery: "new-operation", message: "Must not dispatch.", messageRequestId: "message_settle_failure_01",
+        expectedOperationRef: null, attachmentRefs: ["attachment_settle_failure_01"] } };
+    const receipt = await controller.execute(value); await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(receipt.phase, "uncertain"); assert.equal(receipt.error.code, "session-command-settlement-not-durable");
+    assert.equal(prompts, 0); assert.equal(commits, 0); assert.equal(releases, 1);
+    assert.equal(runtimes.currentOperation(row.sessionRef), null);
+    assert.equal(runtimes.ownership(row.sessionRef).liveState, "idle");
+    assert.equal(events.replay(0).events.some((event) => event.kind === "runtime.changed"), false);
+    store.settle = durableSettle; await runtimes.close();
   });
 
   it("rejects attachment preparation before dispatch and releases reservations on proven runtime refusal", async (t) => {

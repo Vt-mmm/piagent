@@ -143,7 +143,8 @@ export function registerActivityInspector(pi: ExtensionAPI, dependencies: Inspec
       runtimeInstanceId: WEBUI_RUNTIME_INSTANCE_REF,
       eventCursor: events.currentCursor(),
       resyncRequired: events.resyncRequired(),
-      eventReplay: events.retention()
+      eventReplay: events.retention(),
+      operationLiveness: typeof ctx.isIdle === "function" ? ctx.isIdle() ? "idle" : "running" : "unknown"
     });
     cached.set(key, { at: Date.now(), view });
     return view;

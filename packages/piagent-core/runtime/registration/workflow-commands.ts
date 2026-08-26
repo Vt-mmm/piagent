@@ -1,48 +1,31 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import {
+  WORKFLOW_OPTIONS,
+  type WorkflowId,
+  resolveWorkflowId,
+  workflowCommandNames,
+  workflowHelpLines,
+  workflowOption
+} from "../workflows/webui-workflow.ts";
 
 type ExtensionContext = any;
 
 export function registerWorkflowCommands(pi: ExtensionAPI, deps: Record<string, any>): any {
   const {
-    FRESH_COMMAND_ACTIONS, FRESH_COMMAND_HELP, ONBOARDING_COMMAND_ACTIONS, WORKFLOW_COMMAND_EXCLUSIONS, buildContextIndexStatus,
+    ONBOARDING_COMMAND_ACTIONS, WORKFLOW_COMMAND_EXCLUSIONS, buildContextIndexStatus,
     buildUsageSnapshot, commandArgs, emitProfileStatus, emitProfileTechStatus, emitRuntimeMessage,
     fs, loadProfileFromContext, prefixCompletions, projectContextFilePath, projectProfilePath,
     registerRuntimeCommand, resolveMemorySettings, runProfileTechWizard, selectRuntimeAction, sendWorkflowFollowUp,
     freshRequestParts, shortTaskLabel, techStackPath
   } = deps;
-  type WorkflowCommandName = "task" | "scout" | "be-to-fe" | "discuss" | "plan" | "review" | "platform-improve" | "commit" | "pr" | "onboard";
-
-  const WORKFLOW_ALIASES: Record<string, WorkflowCommandName> = {
-    task: "task",
-    implement: "task",
-    scout: "scout",
-    audit: "scout",
-    "be-to-fe": "be-to-fe",
-    befe: "be-to-fe",
-    discuss: "discuss",
-    clarify: "discuss",
-    plan: "plan",
-    review: "review",
-    "platform-improve": "platform-improve",
-    platform: "platform-improve",
-    commit: "commit",
-    pr: "pr",
-    onboard: "onboard",
-    "onboard-project": "onboard"
-  };
-
   function workflowChoices(): Array<{ value: string; label: string; description: string; recommended?: boolean }> {
     return [
-      { value: "task", label: "Task", description: "Implement a bounded task", recommended: true },
-      { value: "scout", label: "Scout", description: "Read-only audit/research" },
-      { value: "be-to-fe", label: "BE to FE", description: "Backend read-only, frontend implementation" },
-      { value: "discuss", label: "Discuss", description: "Clarify before planning/editing" },
-      { value: "plan", label: "Plan", description: "Create an implementation plan" },
-      { value: "review", label: "Review", description: "Review diff/source read-only" },
-      { value: "commit", label: "Commit", description: "Guarded local commit workflow" },
-      { value: "pr", label: "PR", description: "Guarded pull request preparation" },
-      { value: "onboard", label: "Onboard", description: "First-read project onboarding scout" },
-      { value: "platform-improve", label: "Platform", description: "Improve Pi Agent Platform itself" },
+      ...WORKFLOW_OPTIONS.map((option) => ({
+        value: option.id,
+        label: option.label,
+        description: option.description,
+        ...(option.id === "task" ? { recommended: true } : {})
+      })),
       { value: "help", label: "Help", description: "Show typed workflow forms" }
     ];
   }
@@ -73,22 +56,17 @@ export function registerWorkflowCommands(pi: ExtensionAPI, deps: Record<string, 
   }
 
   function emitWorkflowHelp(ctx: ExtensionContext): void {
-    emitRuntimeMessage(ctx, "piagent-workflow-help", [
-      "namespace: /workflow",
-      "daily: /workflow task <request>",
-      "readOnly: /workflow scout <area/spec/risk>",
-      "beToFe: /workflow be-to-fe <BE spec/change + FE outcome>",
-      "clarify: /workflow discuss <rough idea>",
-      "plan: /workflow plan <goal>",
-      "review: /workflow review <target or diff>",
-      "git: /workflow commit [message] | /workflow pr [title]",
-      "onboard: /workflow onboard [focus]",
-      "aliases still work: /task, /scout, /be-to-fe, /commit, /pr"
-    ].join("\n"), { workflows: workflowChoices().map((choice) => choice.value) });
+    emitRuntimeMessage(ctx, "piagent-workflow-help", workflowHelpLines().join("\n"), {
+      workflows: WORKFLOW_OPTIONS.map((option) => option.id)
+    });
   }
 
   async function runWorkflowNamespace(raw: string, ctx: ExtensionContext): Promise<void> {
     const { action, rest } = commandArgs(raw);
+    if (action === "help") {
+      emitWorkflowHelp(ctx);
+      return;
+    }
     if (!action) {
       const chosen = await selectRuntimeAction(ctx, "Piagent workflow", workflowChoices(), "task");
       if (!chosen || chosen === "help") {
@@ -107,8 +85,8 @@ export function registerWorkflowCommands(pi: ExtensionAPI, deps: Record<string, 
       ].join("\n"), { workflow: chosen });
       return;
     }
-    const workflow = WORKFLOW_ALIASES[action];
-    if (!workflow || workflow === undefined) {
+    const workflow = resolveWorkflowId(action);
+    if (!workflow) {
       emitRuntimeMessage(ctx, "piagent-workflow-error", `unknown workflow: ${action}\nRun /workflow help`, { action }, { message: `Unknown workflow: ${action}`, level: "warning" });
       return;
     }
@@ -117,7 +95,7 @@ export function registerWorkflowCommands(pi: ExtensionAPI, deps: Record<string, 
       ctx.ui.notify("Workflow launched: onboard", "info");
       return;
     }
-    if (!rest.trim()) {
+    if (!rest.trim() && workflowOption(workflow)?.requestRequired !== false) {
       emitRuntimeMessage(ctx, "piagent-workflow-needs-request", [
         `workflow: ${workflow}`,
         `run: /workflow ${workflow} <request>`,
@@ -125,7 +103,7 @@ export function registerWorkflowCommands(pi: ExtensionAPI, deps: Record<string, 
       ].join("\n"), { workflow });
       return;
     }
-    sendWorkflowFollowUp(`/${workflow} ${rest}`);
+    sendWorkflowFollowUp([`/${workflow}`, rest].filter(Boolean).join(" "));
     ctx.ui.notify(`Workflow launched: ${workflow}`, "info");
   }
 
@@ -152,18 +130,14 @@ export function registerWorkflowCommands(pi: ExtensionAPI, deps: Record<string, 
         "Piagent command surface:",
         "runtime: /workflow | /piagent-inspector | /usage | /context | /permission | /commands | /profile | /memory | /onboard | /fresh",
         "native: /model | /name | /session | /resume | /compact | /mcp",
-        "workflow: /workflow task|scout|be-to-fe|review|commit|pr <request>",
+        `workflow: /workflow ${WORKFLOW_OPTIONS.map((option) => option.id).join("|")} <request>`,
         "mcp: /mcp is Pi native; governed MCP checks stay at /piagent-mcp to avoid collision",
         "legacy: /piagent-* commands still work where they existed",
         "principle: runtime commands run immediately; workflows intentionally launch an agent turn"
       ],
       workflow: [
         "Workflow entrypoint:",
-        "/workflow",
-        "/workflow task <request>",
-        "/workflow scout <read-only request>",
-        "/workflow be-to-fe <BE spec/change + FE outcome>",
-        "/workflow onboard [focus]"
+        ...workflowHelpLines()
       ],
       usage: [
         "Usage/session:",
@@ -171,7 +145,7 @@ export function registerWorkflowCommands(pi: ExtensionAPI, deps: Record<string, 
         "/piagent-inspector",
         "/usage history",
         "Pi native: /name <task name>",
-        "/fresh task|scout|be-to-fe <request>",
+        `/fresh ${WORKFLOW_OPTIONS.map((option) => option.id).join("|")} <request>`,
         "native: /session | /resume"
       ],
       context: [
@@ -339,7 +313,7 @@ export function registerWorkflowCommands(pi: ExtensionAPI, deps: Record<string, 
   registerRuntimeCommand(pi, "workflow", {
     description: "One menu for Piagent task, scout, review, git, and onboarding workflows",
     getArgumentCompletions: (prefix: string) => prefixCompletions(
-      Object.keys(WORKFLOW_ALIASES).filter((name) => !WORKFLOW_COMMAND_EXCLUSIONS.includes(name)),
+      workflowCommandNames().filter((name) => !WORKFLOW_COMMAND_EXCLUSIONS.includes(name)),
       prefix
     ),
     handler: async (args, ctx) => {
@@ -376,16 +350,16 @@ export function registerWorkflowCommands(pi: ExtensionAPI, deps: Record<string, 
     handler: async (args, ctx) => runOnboardingCommand(String(args ?? ""), ctx)
   });
 
-  async function startFreshWorkflow(workflow: "task" | "scout" | "be-to-fe", args: string, ctx: any) {
+  async function startFreshWorkflow(workflow: WorkflowId, args: string, ctx: any) {
     const parsed = freshRequestParts(String(args ?? ""));
     const request = parsed.request;
-    if (!request) {
+    if (!request && workflowOption(workflow)?.requestRequired !== false) {
       ctx.ui.notify(`Usage: /fresh ${workflow} <request>`, "warning");
       return;
     }
 
-    const label = parsed.sessionTitle ?? shortTaskLabel(request);
-    const command = `/${workflow} ${request}`;
+    const label = parsed.sessionTitle ?? shortTaskLabel(request || workflow);
+    const command = [`/${workflow}`, request].filter(Boolean).join(" ");
     const result = await ctx.newSession({
       withSession: async (nextCtx) => {
         pi.setSessionName(`pi:${label}`);
@@ -398,18 +372,20 @@ export function registerWorkflowCommands(pi: ExtensionAPI, deps: Record<string, 
   }
 
   registerRuntimeCommand(pi, "fresh", {
-    description: "Open a fresh governed session for task, scout, or BE-to-FE work",
-    getArgumentCompletions: (prefix: string) => prefixCompletions(FRESH_COMMAND_ACTIONS, prefix),
+    description: "Open a fresh governed session for any Piagent workflow",
+    getArgumentCompletions: (prefix: string) => prefixCompletions([...workflowCommandNames({ aliases: false }), "help"], prefix),
     handler: async (args, ctx) => {
       const { action, rest } = commandArgs(String(args ?? ""));
       if (!action || action === "help") {
-        emitRuntimeMessage(ctx, "piagent-fresh-help", FRESH_COMMAND_HELP.join("\n"));
+        emitRuntimeMessage(ctx, "piagent-fresh-help", [
+          "namespace: /fresh",
+          ...WORKFLOW_OPTIONS.map((option) => `/fresh ${option.id} ${option.argumentHint}`)
+        ].join("\n"));
         return;
       }
-      const workflow = action === "be-to-fe" ? "be-to-fe" : action === "scout" ? "scout" : "task";
-      const request = action === "task" || action === "scout" || action === "be-to-fe"
-        ? rest
-        : [action, rest].filter(Boolean).join(" ");
+      const resolved = resolveWorkflowId(action);
+      const workflow = resolved ?? "task";
+      const request = resolved ? rest : [action, rest].filter(Boolean).join(" ");
       await startFreshWorkflow(workflow, request, ctx);
     }
   });

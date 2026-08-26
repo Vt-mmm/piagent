@@ -74,9 +74,13 @@ export function validateBenchmarkSuiteFiles(suite, suiteRoot) {
     const generator = scenario.variantGenerator
       ? resolveBenchmarkSuiteEntry(suiteRoot, scenario.variantGenerator, "variant generator")
       : null;
+    const journeyPrompts = (scenario.userJourney?.turns ?? []).map((turn) => (
+      resolveBenchmarkSuiteEntry(suiteRoot, turn.prompt, `journey prompt for ${scenario.id}/${turn.id}`)
+    ));
     assertBenchmarkModuleGraphBound(grader, suiteRoot, `${scenario.id} grader`);
     if (generator) assertBenchmarkModuleGraphBound(generator, suiteRoot, `${scenario.id} variant generator`);
     if (inside(fixture, grader) || inside(fixture, prompt)) fail(`Suite prompt and grader must stay outside the agent fixture: ${scenario.id}`);
+    if (journeyPrompts.some((journeyPrompt) => inside(fixture, journeyPrompt))) fail(`Suite journey prompts must stay outside the agent fixture: ${scenario.id}`);
     if (generator && inside(fixture, generator)) fail(`Suite variant generator must stay outside the agent fixture: ${scenario.id}`);
   }
 }

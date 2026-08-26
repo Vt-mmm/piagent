@@ -48,6 +48,7 @@
       "properties": {
         "sessionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
         "operationRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "messageRequestId": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
         "state": { "enum": ["running", "waiting-approval", "settling"] },
         "abortable": { "type": "boolean" }
       },
@@ -66,6 +67,7 @@
       "properties": {
         "sessionRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
         "operationRef": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
+        "messageRequestId": { "$ref": "common-v1.schema.json#/$defs/opaqueRef" },
         "settlement": { "enum": ["blocked", "aborted", "error", "unknown"] },
         "reasonCode": { "$ref": "common-v1.schema.json#/$defs/reasonCode" },
         "settledAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },

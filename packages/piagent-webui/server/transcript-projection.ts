@@ -1,13 +1,21 @@
 import { createHash } from "node:crypto";
 
 import { redactSensitiveText } from "../../piagent-core/extensions/redaction-core.js";
+import { looksLikeCompletionClaim } from "../../piagent-core/runtime/session/completion-signals.ts";
+import { isLightweightNonAuthorizingChangeLanguage } from "../../piagent-core/runtime/workflows/change-clarification.ts";
+import { workflowCommandPattern } from "../../piagent-core/runtime/workflows/webui-workflow.ts";
 import { hasVisibleText } from "../shared/text-visibility.ts";
+import { WEBUI_MESSAGE_CORRELATION_ENTRY_TYPE, webUiMessageCorrelationEntry,
+  type WebUiMessageCorrelation } from "../shared/message-correlation.ts";
 
 const MAX_ENTRIES = 50_000;
 const MAX_ITEMS = 200;
 const MAX_TEXT = 16_384;
 const ANSI = /\u001b(?:\[[0-?]*[ -/]*[@-~]|[@-_])/g;
 const COMPLETION_GATE = /^\[Piagent completion gate: (CONTINUING|NOT APPROVED)\]/i;
+const INTERNAL_FRESH_TRANSITION = new RegExp(
+  `^\\/fresh\\s+(?:${workflowCommandPattern({ aliases: false })})\\s+(?:--session-title\\s+"[^"\\r\\n]{1,64}"\\s+)?Read task intake from \\.pi\\/task-inbox\\/[A-Za-z0-9._-]+\\.md\\.\\s+Current session is near context limits; use a fresh governed session\\.$`, "u"
+);
 
 type TranscriptIdentity = { projectRef: string; runtimeInstanceId: string; sessionRef: string; taskId: string | null; taskRunId: string | null;
   agentOperationId: null; toolCallId: null };
@@ -17,7 +25,7 @@ type TranscriptContent = { state: "available" | "redacted" | "unavailable"; text
   truncated: boolean; redacted: boolean; imageCount: number; reasonCode: string | null };
 type TranscriptAttachment = { displayName: string; kind: "file" | "image" | "document"; mimeType: string; truncated: boolean };
 type TranscriptItem = { messageRef: string; parentMessageRef: string | null; role: "user" | "assistant" | "tool-result"; recordedAt: string;
-  agentOperationId: string | null; turnIndex: number | null; content: TranscriptContent;
+  agentOperationId: string | null; messageRequestId?: string; turnIndex: number | null; content: TranscriptContent;
   attachments?: TranscriptAttachment[];
   toolCalls: Array<{ toolCallRef: string; toolName: string; state: "requested" | "completed" | "failed" | "unknown" }> };
 export type TranscriptDocument = { schemaVersion: 1; version: "piagent-webui-transcript-v1"; generatedAt: string; identity: TranscriptIdentity;
@@ -135,8 +143,7 @@ function role(message: any): TranscriptItem["role"] | null {
 }
 function isInternalFreshTransition(message: any): boolean {
   if (message?.role !== "user") return false;
-  return /^\/fresh\s+(?:task|scout|be-to-fe)\s+(?:--session-title\s+"[^"\r\n]{1,64}"\s+)?Read task intake from \.pi\/task-inbox\/[A-Za-z0-9._-]+\.md\.\s+Current session is near context limits; use a fresh governed session\.$/u
-    .test(messageText(message).trim());
+  return INTERNAL_FRESH_TRANSITION.test(messageText(message).trim());
 }
 function unavailableContent(reasonCode: string): TranscriptContent {
   return { state: "unavailable", text: null, textChars: null, digest: null, truncated: false, redacted: false, imageCount: 0, reasonCode };
@@ -163,6 +170,28 @@ function item(entry: any, identity: TranscriptIdentity): TranscriptItem | null {
 
 type ProjectedTranscriptItem = { entry: any; item: TranscriptItem; cursor: string };
 
+function correlatedTranscriptItems(entries: unknown[], identity: TranscriptIdentity): ProjectedTranscriptItem[] {
+  let pending: WebUiMessageCorrelation | null = null;
+  let turn: WebUiMessageCorrelation | null = null;
+  const values: ProjectedTranscriptItem[] = [];
+  for (const entry of entries as any[]) {
+    if (entry?.type === "custom" && entry.customType === WEBUI_MESSAGE_CORRELATION_ENTRY_TYPE) {
+      // A newer marker supersedes an older marker that never reached a user
+      // message. Invalid markers fail closed instead of leaking correlation
+      // from an earlier admitted-but-undispatched operation into a later turn.
+      pending = webUiMessageCorrelationEntry(entry);
+      continue;
+    }
+    if (role(entry?.message) === "user") { turn = pending; pending = null; }
+    const projected = item(entry, identity);
+    if (!projected) continue;
+    values.push({ entry, item: turn ? { ...projected, agentOperationId: turn.operationRef,
+      messageRequestId: turn.messageRequestId } : projected,
+    cursor: opaque("transcript", [identity.sessionRef, entry?.id]) });
+  }
+  return values;
+}
+
 function linkTranscriptTurns(values: ProjectedTranscriptItem[]): ProjectedTranscriptItem[] {
   let userMessageRef: string | null = null;
   const toolCallOwners = new Map<string, string>();
@@ -187,9 +216,12 @@ function suppressOpenTaskHandoff(values: ProjectedTranscriptItem[], taskOutcome:
     if (values[index]?.item.role === "user") { latestUser = index; break; }
   }
   if (latestUser < 0) return values;
+  const latestPrompt = values[latestUser]?.item.content.text ?? "";
+  if (isLightweightNonAuthorizingChangeLanguage(latestPrompt)) return values;
   return values.map((value, index) => {
     if (index <= latestUser || value.item.role !== "assistant" || value.item.toolCalls.length > 0
-      || !["available", "redacted"].includes(value.item.content.state)) return value;
+      || !["available", "redacted"].includes(value.item.content.state)
+      || !looksLikeCompletionClaim(value.item.content.text ?? "")) return value;
     return { ...value, item: { ...value.item, content: unavailableContent("assistant-task-pending") } };
   });
 }
@@ -252,9 +284,7 @@ function unavailable(input: TranscriptProjectionInput, reasonCode: string, limit
 export function projectTranscript(input: TranscriptProjectionInput): TranscriptDocument {
   const limit = Math.max(1, Math.min(MAX_ITEMS, Number.isInteger(input.limit) ? Number(input.limit) : 50));
   if (!Array.isArray(input.entries) || input.entries.length > MAX_ENTRIES) return unavailable(input, "transcript-history-unavailable", limit);
-  const projected = suppressOpenTaskHandoff(linkTranscriptTurns(input.entries.map((entry) => ({ entry, item: item(entry, input.identity),
-    cursor: opaque("transcript", [input.identity.sessionRef, (entry as any)?.id]) }))
-    .filter((value): value is ProjectedTranscriptItem => Boolean(value.item))), input.taskOutcome);
+  const projected = suppressOpenTaskHandoff(linkTranscriptTurns(correlatedTranscriptItems(input.entries, input.identity)), input.taskOutcome);
   const cursors = projected.map((value) => value.cursor);
   let end = projected.length;
   if (input.beforeCursor) {

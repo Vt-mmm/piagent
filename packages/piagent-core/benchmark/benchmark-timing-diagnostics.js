@@ -25,9 +25,59 @@ const SURFACES = new Set(["raw-pi", "piagent", "codex-cli"]);
 const PHASES = ["processStartup", "modelTurnWait", "toolExecution", "other"];
 const MAX_JSONL_BYTES = 64 * 1024 * 1024;
 const MAX_TIMING_REPLAY_BYTES = 4 * 1024 * 1024;
+const EXECUTION_COUNTER_FIELDS = Object.freeze([
+  "providerStartedAttempts", "toolCalls", "toolResults", "toolFailures", "blockedToolCalls",
+  "declinedToolCalls", "explicitRetries", "retryFailures", "compactions", "abortedCompactions",
+  "summarizationRetries", "repeatedToolCalls", "subagentAttempts", "subagentFailures"
+]);
 
 function plainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function stableValue(value) {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (!plainObject(value)) return value;
+  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stableValue(value[key])]));
+}
+
+function executionFingerprint(name, args) {
+  try { return JSON.stringify([name, stableValue(args)]); }
+  catch { return String(name); }
+}
+
+function piSubagentAttempt(toolName) {
+  const name = String(toolName ?? "").toLowerCase();
+  return ["spawn_agent", "create_agent", "delegate_task", "subagent"].includes(name);
+}
+
+function codexExecutionIdentity(item) {
+  if (item.type === "command_execution") return item.command;
+  if (item.type === "mcp_tool_call") return [item.server, item.tool, item.arguments];
+  if (item.type === "collab_tool_call") return [item.tool, item.prompt];
+  if (item.type === "web_search") return item.action ?? item.query;
+  return item.type;
+}
+
+function structuredStatus(value) {
+  const status = [value?.status, value?.details?.status, value?.result?.status]
+    .find((candidate) => typeof candidate === "string");
+  return status?.toLowerCase() ?? "";
+}
+
+function emptyExecution(source) {
+  return {
+    schemaVersion: 1,
+    source,
+    completeness: {
+      providerAttempts: "unavailable",
+      tools: "unavailable",
+      retries: "unavailable",
+      compactions: "unavailable",
+      subagents: "unavailable"
+    },
+    ...Object.fromEntries(EXECUTION_COUNTER_FIELDS.map((field) => [field, 0]))
+  };
 }
 
 function finiteNonnegative(value) {
@@ -145,6 +195,7 @@ function consumePiEvent(state, event, at) {
       return;
     }
     state.turnStarts += 1;
+    state.execution.providerStartedAttempts += 1;
     if (state.startupBoundary === null) state.startupBoundary = at;
     state.turnOpen = true;
     state.assistantSeenInTurn = false;
@@ -243,8 +294,14 @@ function consumePiEvent(state, event, at) {
       return;
     }
     state.toolStarts += 1;
+    state.execution.toolCalls += 1;
     state.turnToolStarts += 1;
-    state.openTools.set(id, { at, toolName: event.toolName });
+    const subagentAttempt = piSubagentAttempt(event.toolName);
+    const fingerprint = executionFingerprint(event.toolName, event.args);
+    if (state.toolFingerprints.has(fingerprint)) state.execution.repeatedToolCalls += 1;
+    else state.toolFingerprints.add(fingerprint);
+    if (subagentAttempt) state.execution.subagentAttempts += 1;
+    state.openTools.set(id, { at, toolName: event.toolName, subagentAttempt });
     return;
   }
   if (event.type === "tool_execution_end") {
@@ -255,8 +312,15 @@ function consumePiEvent(state, event, at) {
       return;
     }
     state.toolCompletions += 1;
+    state.execution.toolResults += 1;
     state.turnToolCompletions += 1;
     const started = state.openTools.get(id);
+    const status = structuredStatus(event.result);
+    const failed = event.isError === true || status === "failed" || status === "error";
+    if (failed) state.execution.toolFailures += 1;
+    if (status === "blocked") state.execution.blockedToolCalls += 1;
+    if (status === "declined") state.execution.declinedToolCalls += 1;
+    if (started?.subagentAttempt && (failed || status === "blocked" || status === "declined")) state.execution.subagentFailures += 1;
     if (started === undefined || started.toolName !== event.toolName || state.completedTurnTools.has(id)) {
       if (started !== undefined && started.toolName !== event.toolName) invalidateEvent(state);
       state.unmatchedToolCompletions += 1;
@@ -333,6 +397,11 @@ function consumePiEvent(state, event, at) {
   }
   if (PI_CONTROL_EVENTS.has(event.type)) {
     if (!validPiControlEvent(event)) invalidateEvent(state);
+    else if (event.type === "auto_retry_start") state.execution.explicitRetries += 1;
+    else if (event.type === "auto_retry_end" && event.success === false) state.execution.retryFailures += 1;
+    else if (event.type === "compaction_start") state.execution.compactions += 1;
+    else if (event.type === "compaction_end" && event.aborted === true) state.execution.abortedCompactions += 1;
+    else if (event.type === "summarization_retry_scheduled") state.execution.summarizationRetries += 1;
     return;
   }
   invalidateEvent(state);
@@ -459,6 +528,7 @@ function consumeCodexEvent(state, event, at) {
       return;
     }
     state.turnStarts += 1;
+    state.execution.providerStartedAttempts += 1;
     if (state.startupBoundary === null) state.startupBoundary = at;
     state.turnOpen = true;
     state.modelTurnStart = at;
@@ -536,7 +606,13 @@ function consumeCodexEvent(state, event, at) {
     state.seenCodexItemIds.set(id, event.item.type);
     closeCodexModelTurnInterval(state, at);
     state.toolStarts += 1;
-    state.openTools.set(id, { at, type: event.item.type });
+    state.execution.toolCalls += 1;
+    const fingerprint = executionFingerprint(event.item.type, codexExecutionIdentity(event.item));
+    if (state.toolFingerprints.has(fingerprint)) state.execution.repeatedToolCalls += 1;
+    else state.toolFingerprints.add(fingerprint);
+    const subagentAttempt = event.item.type === "collab_tool_call" && event.item.tool === "spawn_agent";
+    if (subagentAttempt) state.execution.subagentAttempts += 1;
+    state.openTools.set(id, { at, type: event.item.type, subagentAttempt });
     return;
   }
   if (kind === "control") {
@@ -554,6 +630,9 @@ function consumeCodexEvent(state, event, at) {
   if (kind === "completed-only-control") return;
   if (kind === "completed-only-tool") {
     state.toolCompletions += 1;
+    state.execution.toolCalls += 1;
+    state.execution.toolResults += 1;
+    if (event.item.status === "failed") state.execution.toolFailures += 1;
     state.unmatchedToolCompletions += 1;
     state.modelTurnIntervalsInvalid = true;
     state.toolIntervalsInvalid = true;
@@ -561,6 +640,7 @@ function consumeCodexEvent(state, event, at) {
   }
   if (kind === "model-output") return;
   state.toolCompletions += 1;
+  state.execution.toolResults += 1;
   const id = safeId(event.item.id);
   if (!id) {
     invalidateEvent(state);
@@ -569,6 +649,13 @@ function consumeCodexEvent(state, event, at) {
   }
   const seenType = state.seenCodexItemIds.get(id);
   const started = state.openTools.get(id);
+  const status = typeof event.item.status === "string" ? event.item.status.toLowerCase() : "";
+  const failed = status === "failed" || event.item.type === "command_execution"
+    && Number.isSafeInteger(event.item.exit_code) && event.item.exit_code !== 0;
+  if (failed) state.execution.toolFailures += 1;
+  if (status === "blocked") state.execution.blockedToolCalls += 1;
+  if (status === "declined") state.execution.declinedToolCalls += 1;
+  if (started?.subagentAttempt && (failed || status === "blocked" || status === "declined")) state.execution.subagentFailures += 1;
   let matched = false;
   if (started === undefined) {
     if (seenType !== undefined) invalidateEvent(state);
@@ -607,7 +694,7 @@ export function unavailableBenchmarkTimingDiagnostics(surface, durationSeconds) 
   if (!SURFACES.has(surface)) throw new Error(`Unsupported benchmark timing surface: ${surface}`);
   const processDurationSeconds = finiteNonnegative(durationSeconds) ? rounded(durationSeconds, 6) : null;
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     authority: "observational-only",
     gateImpact: "none",
     clock: "benchmark-process-monotonic-receipt",
@@ -627,6 +714,7 @@ export function unavailableBenchmarkTimingDiagnostics(surface, durationSeconds) 
       unmatchedToolStarts: 0, unmatchedToolCompletions: 0, unmatchedModelTurnStarts: 0,
       malformedLines: 1, invalidClockBoundaries: 0, coalescedBoundaries: 0
     },
+    execution: emptyExecution("stdout-jsonl-lifecycle"),
     privacy: { rawPayloadStored: false, promptsStored: false, commandsStored: false, pathsStored: false, identifiersStored: false }
   };
 }
@@ -663,8 +751,17 @@ function finish(state, durationSeconds) {
   const otherSeconds = otherAvailable ? Math.max(0, durationSeconds - attributed) : null;
   const availablePhases = [startupAvailable, modelTurnAvailable, toolAvailable, otherAvailable].filter(Boolean).length;
   const status = availablePhases === PHASES.length ? "complete" : availablePhases > 0 ? "partial" : "unavailable";
+  const executionComplete = state.malformedLines === 0 && !state.providerErrorSeen && lifecycleComplete;
+  state.execution.completeness.providerAttempts = executionComplete
+    ? state.surface === "codex-cli" ? "lower-bound" : "exact"
+    : "partial";
+  state.execution.completeness.tools = executionComplete && state.unmatchedToolStarts === 0
+    && state.unmatchedToolCompletions === 0 ? "exact" : "partial";
+  state.execution.completeness.retries = executionComplete && state.surface !== "codex-cli" ? "exact" : "unavailable";
+  state.execution.completeness.compactions = executionComplete && state.surface !== "codex-cli" ? "exact" : "unavailable";
+  state.execution.completeness.subagents = state.execution.completeness.tools;
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     authority: "observational-only",
     gateImpact: "none",
     clock: "benchmark-process-monotonic-receipt",
@@ -705,6 +802,7 @@ function finish(state, durationSeconds) {
       invalidClockBoundaries: state.invalidClockBoundaries,
       coalescedBoundaries: state.coalescedBoundaries
     },
+    execution: state.execution,
     privacy: {
       rawPayloadStored: false,
       promptsStored: false,
@@ -730,6 +828,8 @@ export function createBenchmarkTimingCollector({ surface }) {
     toolIntervals: [],
     toolIntervalsInvalid: false,
     openTools: new Map(),
+    toolFingerprints: new Set(),
+    execution: emptyExecution("stdout-jsonl-lifecycle"),
     completedTurnTools: new Map(),
     turnToolResultIdentities: new Map(),
     openToolResultIdentity: null,
@@ -859,10 +959,34 @@ function validPhase(value, name) {
     && (value.status === "available" ? value.reason === expectedAvailableReason : unavailableReasons.has(value.reason));
 }
 
+function validExecution(value, observations) {
+  const keys = ["schemaVersion", "source", "completeness", ...EXECUTION_COUNTER_FIELDS];
+  if (!plainObject(value) || Object.keys(value).length !== keys.length || !keys.every((key) => Object.hasOwn(value, key))
+    || value.schemaVersion !== 1 || value.source !== "stdout-jsonl-lifecycle"
+    || !plainObject(value.completeness)) return false;
+  const completenessKeys = ["providerAttempts", "tools", "retries", "compactions", "subagents"];
+  if (Object.keys(value.completeness).length !== completenessKeys.length
+    || !completenessKeys.every((key) => Object.hasOwn(value.completeness, key))) return false;
+  if (!["exact", "lower-bound", "partial", "unavailable"].includes(value.completeness.providerAttempts)
+    || !["exact", "partial", "unavailable"].includes(value.completeness.tools)
+    || !["exact", "partial", "unavailable"].includes(value.completeness.retries)
+    || !["exact", "partial", "unavailable"].includes(value.completeness.compactions)
+    || !["exact", "partial", "unavailable"].includes(value.completeness.subagents)) return false;
+  if (!EXECUTION_COUNTER_FIELDS.every((field) => Number.isSafeInteger(value[field]) && value[field] >= 0)) return false;
+  if (value.providerStartedAttempts !== observations.turnStarts || value.toolCalls < observations.toolStarts
+    || value.toolResults !== observations.toolCompletions || value.toolFailures > value.toolResults
+    || value.blockedToolCalls > value.toolResults || value.declinedToolCalls > value.toolResults
+    || value.repeatedToolCalls >= value.toolCalls && value.toolCalls > 0
+    || value.subagentFailures > value.subagentAttempts || value.retryFailures > value.explicitRetries
+    || value.abortedCompactions > value.compactions) return false;
+  if (value.completeness.tools === "exact" && value.toolCalls !== value.toolResults) return false;
+  return true;
+}
+
 export function validBenchmarkTimingDiagnostics(value, surface, durationSeconds) {
-  const topLevelKeys = ["schemaVersion", "authority", "gateImpact", "clock", "surface", "status", "processDurationSeconds", "phases", "observations", "privacy"];
+  const topLevelKeys = ["schemaVersion", "authority", "gateImpact", "clock", "surface", "status", "processDurationSeconds", "phases", "observations", "execution", "privacy"];
   if (!plainObject(value) || Object.keys(value).length !== topLevelKeys.length || !topLevelKeys.every((key) => Object.hasOwn(value, key))
-    || value.schemaVersion !== 1 || value.authority !== "observational-only"
+    || value.schemaVersion !== 2 || value.authority !== "observational-only"
     || value.gateImpact !== "none" || value.clock !== "benchmark-process-monotonic-receipt"
     || value.surface !== surface || !["complete", "partial", "unavailable"].includes(value.status)
     || !finiteNonnegative(value.processDurationSeconds)
@@ -875,6 +999,7 @@ export function validBenchmarkTimingDiagnostics(value, surface, durationSeconds)
   if (!plainObject(value.observations) || Object.keys(value.observations).length !== observationKeys.length
     || !observationKeys.every((key) => Number.isSafeInteger(value.observations[key]) && value.observations[key] >= 0)) return false;
   const observations = value.observations;
+  if (!validExecution(value.execution, observations)) return false;
   const lifecycleEvents = surface === "codex-cli"
     ? observations.threadStarts
     : observations.sessionHeaders + observations.agentStarts + observations.agentEnds + observations.agentSettled;
@@ -958,11 +1083,24 @@ export function summarizeBenchmarkTimingDiagnostics(runs) {
       runs: surfaceRuns.length,
       validDiagnostics: valid.length,
       completeDiagnostics: valid.filter((run) => run.timingDiagnostics.status === "complete").length,
+      execution: {
+        coveredRuns: valid.length,
+        unavailableRuns: surfaceRuns.length - valid.length,
+        counters: Object.fromEntries(EXECUTION_COUNTER_FIELDS.map((field) => [field,
+          valid.reduce((sum, run) => sum + run.timingDiagnostics.execution[field], 0)])),
+        exactRuns: {
+          providerAttempts: valid.filter((run) => run.timingDiagnostics.execution.completeness.providerAttempts === "exact").length,
+          tools: valid.filter((run) => run.timingDiagnostics.execution.completeness.tools === "exact").length,
+          retries: valid.filter((run) => run.timingDiagnostics.execution.completeness.retries === "exact").length,
+          compactions: valid.filter((run) => run.timingDiagnostics.execution.completeness.compactions === "exact").length,
+          subagents: valid.filter((run) => run.timingDiagnostics.execution.completeness.subagents === "exact").length
+        }
+      },
       phases: phaseSummary
     };
   }
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     authority: "observational-only",
     gateImpact: "none",
     clock: "benchmark-process-monotonic-receipt",

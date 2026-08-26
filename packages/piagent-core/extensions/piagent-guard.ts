@@ -17,6 +17,7 @@ import {
   unresolvedExpansionReason
 } from "./shell-reach.ts";
 import { extractShellWritePathCandidates, shellHasFileWriteRedirection } from "./shell-write-targets.js";
+import { isProjectMutatingShellCommand, isReadOnlyTaskShellCommand } from "./readonly-inline-inspection.ts";
 import { commandMatchesVerifyPlan, createBashResultLedger, findMatchingObservedBashResult, readObservedBashResults } from "./runtime-evidence.js";
 import { findPackageRoot, findPlatformRoot, readJsonFile } from "./guard-io.js";
 import {
@@ -1699,32 +1700,6 @@ function isTaskMutationTool(toolName: string, input: Record<string, unknown>): b
     .some((token) => tokens.has(token));
 }
 
-function isReadOnlyTaskShellCommand(
-  command: string,
-  segments: Array<{ words: string[] }>
-): boolean {
-  if (/[<>]|`|\$\(/.test(command)) {
-    return false;
-  }
-  const safeCommands = new Set(["pwd", "ls", "find", "rg", "grep", "cat", "sed", "head", "tail", "wc", "stat", "file", "test", "[", "which", "printf", "sort"]);
-  const safeGitSubcommands = new Set(["status", "diff", "log", "show", "ls-files", "rev-parse"]);
-  return segments.length > 0 && segments.every((segment) => {
-    const words = segment.words.filter(Boolean);
-    const executable = path.basename(words[0] ?? "");
-    if (executable === "sed" && words.some((word) => /^-.*i/.test(word))) return false;
-    if (executable === "find" && words.some((word) => ["-delete", "-exec", "-execdir", "-ok", "-okdir", "-fprint", "-fprint0", "-fprintf", "-fls"].includes(word))) return false;
-    if (executable === "sort" && words.slice(1).some((word) => (
-      word === "--output"
-      || word.startsWith("--output=")
-      || /^-[^-]*o/.test(word)
-    ))) return false;
-    if (safeCommands.has(executable)) return true;
-    if (executable === "git") return safeGitSubcommands.has(words[1] ?? "");
-    if (executable === "command") return words[1] === "-v";
-    return false;
-  });
-}
-
 function shellTouchesGrantedSourceCheckout(cwd: string, command: string, roots: string[]): boolean {
   if (roots.length === 0) return false;
   for (const root of roots) {
@@ -1733,37 +1708,6 @@ function shellTouchesGrantedSourceCheckout(cwd: string, command: string, roots: 
   }
   return extractShellPathCandidates(command)
     .some((candidate) => Boolean(grantedSourceCheckoutRootForPath(cwd, normalizeRelative(cwd, candidate) ?? candidate, roots)));
-}
-
-const PROJECT_MUTATING_EXECUTABLES = new Set([
-  "apply_patch", "bash", "chmod", "chown", "cp", "dd", "install", "ln", "make", "mkdir", "mv", "prename", "rename",
-  "node", "patch", "perl", "php", "python", "python3", "rm", "rmdir", "rsync", "ruby", "scp", "sh",
-  "tee", "touch", "truncate", "zsh"
-]);
-
-function isProjectMutatingShellCommand(command: string, segments: Array<{ words: string[] }>): boolean {
-  if (shellHasFileWriteRedirection(command)) return true;
-  const noAliases = new Map<string, string>();
-  for (const segment of segments) {
-    const words = segment.words.filter(Boolean);
-    if (words.length === 0) continue;
-    if (externalExecutableIndex(words, PROJECT_MUTATING_EXECUTABLES, noAliases) !== undefined) return true;
-    const executable = path.basename(words[0] ?? "").toLowerCase();
-    if (executable === "find" && words.some((word) => ["-delete", "-exec", "-execdir", "-ok", "-okdir", "-fprint", "-fprint0", "-fprintf", "-fls"].includes(word))) return true;
-    if (executable === "sed" && words.some((word) => /^-[^-]*i/.test(word) || word === "--in-place" || word.startsWith("--in-place="))) return true;
-    if (executable === "git") {
-      const subcommand = words.slice(1).find((word, index, values) => {
-        if (!word.startsWith("-")) return index === 0 || !["-C", "-c", "--git-dir", "--work-tree"].includes(values[index - 1]);
-        return false;
-      });
-      if (["apply", "checkout", "clean", "mv", "reset", "restore", "rm", "switch"].includes(subcommand ?? "")) return true;
-    }
-    if (["npm", "pnpm", "yarn", "bun"].includes(executable)) {
-      const subcommand = words.find((word, index) => index > 0 && !word.startsWith("-"));
-      if (["add", "ci", "install", "link", "remove", "uninstall", "update", "upgrade"].includes(subcommand ?? "")) return true;
-    }
-  }
-  return false;
 }
 
 const EXPLICIT_SHELL_MUTATORS = new Set([
@@ -4620,7 +4564,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
           reason: "Shared source checkouts are shell-inaccessible. Inspect the exact session-granted checkout with read, grep, find, or ls; cache mutation is never authorized."
         };
       }
-      shellProjectMutation = isProjectMutatingShellCommand(command, execDecision.segments);
+      shellProjectMutation = isProjectMutatingShellCommand(command, execDecision.segments, ctx.cwd);
       configuredVerifierShell = Boolean(sessionTask && commandMatchesVerifyPlan(command, sessionTask.verifyCommands));
       const shellWriteCandidates = extractShellWritePathCandidates(command);
       shellMutationTargetBounded = shellWriteCandidates.length > 0;
@@ -4636,7 +4580,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
       const mutationForbidden = sessionTask?.trace.outcome === "pending"
         && (sessionTask.changeMode === "read-only" || sessionTask.mutationPolicy === "forbidden");
       const exactForbiddenTaskVerifier = mutationForbidden && sessionTask.changeMode === "source-change" && configuredVerifierShell;
-      if (mutationForbidden && !exactForbiddenTaskVerifier && !isReadOnlyTaskShellCommand(command, execDecision.segments)) {
+      if (mutationForbidden && !exactForbiddenTaskVerifier && !isReadOnlyTaskShellCommand(command, execDecision.segments, ctx.cwd)) {
         return {
           block: true,
           reason: `Task ${sessionTask.taskId} ${sessionTask.changeMode === "read-only" ? "is read-only; this shell command is not in the read-only inspection allowlist" : "forbids source mutation; this shell command is neither bounded inspection nor an exact configured verifier"}.`

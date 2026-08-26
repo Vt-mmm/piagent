@@ -76,7 +76,7 @@ function redaction(applied = false, truncated = false) { return { applied, value
 function identityReady(identity: BridgeIdentity | null): identity is BridgeIdentity & { agentOperationId: string } {
   return Boolean(identity?.agentOperationId);
 }
-function activityPayload(state: "started" | "progress" | "finished" | "failed", activityRef: string, toolName: string,
+function activityPayload(state: "started" | "progress" | "finished" | "failed" | "aborted", activityRef: string, toolName: string,
   reasonCode: string | null = null) {
   return { state, activityType: "tool", activityRef, toolName, inputDigest: null, outputDigest: null, preview: null, previewKind: "none",
     outputBytes: null, outputLines: null, exitCode: null, isError: state === "finished" ? false : state === "failed" ? true : null,
@@ -90,13 +90,14 @@ export class PiSessionStreamAdapter {
   #activeByRole = new Map<MessageRole, ActiveMessage>();
   #lastMessageRef: string | null = null;
   #toolRefs = new Map<string, string>();
+  #toolNames = new Map<string, string>();
   #toolInputs = new Map<string, { command: string } | undefined>();
   #lastToolProgress = new Map<string, number>();
 
   constructor(options: { now?: () => Date } = {}) { this.#now = options.now ?? (() => new Date()); }
   reset(): void {
     this.#turnIndex = null; this.#messageCounter = 0; this.#activeByRole.clear(); this.#lastMessageRef = null;
-    this.#toolRefs.clear(); this.#toolInputs.clear(); this.#lastToolProgress.clear();
+    this.#toolRefs.clear(); this.#toolNames.clear(); this.#toolInputs.clear(); this.#lastToolProgress.clear();
   }
 
   #base(snapshot: BridgeSnapshot, sourceObservedAt?: unknown): Omit<RuntimeEventDraft, "kind" | "payload" | "evidence" | "redaction"> | null {
@@ -217,8 +218,10 @@ export class PiSessionStreamAdapter {
   }
   turnEnded(event: { message?: unknown; toolResults?: unknown[] }, snapshot: BridgeSnapshot): RuntimeEventDraft[] {
     const reason = stopReason(event.message), count = Array.isArray(event.toolResults) ? Math.min(10_000, event.toolResults.length) : 0;
+    const drafts = this.#settleActiveTools(snapshot, "turn-ended-before-tool-result");
     const draft = this.#draft(snapshot, "turn.ended", { phase: "ended", finalMessageRef: this.#lastMessageRef, toolResultCount: count, stopReason: reason });
-    return draft ? [draft] : [];
+    if (draft) drafts.push(draft);
+    return drafts;
   }
   toolStarted(event: { toolCallId?: unknown; toolName?: unknown; args?: unknown }, snapshot: BridgeSnapshot): RuntimeEventDraft[] {
     if (typeof event.toolCallId !== "string" || !event.toolCallId) return [];
@@ -226,7 +229,8 @@ export class PiSessionStreamAdapter {
       ? this.#drainLines(snapshot, this.#activeByRole.get("assistant") as ActiveMessage, false) : [];
     const name = safeToolName(event.toolName);
     const ref = opaque("tool", [snapshot.identity?.sessionRef, event.toolCallId]), activityRef = opaque("activity", [snapshot.identity?.sessionRef, event.toolCallId]);
-    this.#toolRefs.set(event.toolCallId, ref); this.#toolInputs.set(event.toolCallId, toolClassificationInput(event.args));
+    this.#toolRefs.set(event.toolCallId, ref); this.#toolNames.set(event.toolCallId, name);
+    this.#toolInputs.set(event.toolCallId, toolClassificationInput(event.args));
     this.#lastToolProgress.set(event.toolCallId, 0);
     const draft = this.#draft(snapshot, "activity.started", activityPayload("started", activityRef, name), { toolCallId: ref });
     if (draft) drafts.push(draft);
@@ -247,11 +251,27 @@ export class PiSessionStreamAdapter {
     const ref = this.#toolRefs.get(event.toolCallId); if (!ref) return [];
     const name = safeToolName(event.toolName);
     const reasonCode = classifyToolFailure(name, event.isError === true, event.result, this.#toolInputs.get(event.toolCallId));
-    const state = (event.isError === true || reasonCode !== null) && !handledToolFailure(reasonCode) ? "failed" : "finished";
+    const state = (event.isError === true || reasonCode !== null) && !handledToolFailure(reasonCode, name) ? "failed" : "finished";
     const activityRef = opaque("activity", [snapshot.identity?.sessionRef, event.toolCallId]);
-    this.#toolRefs.delete(event.toolCallId); this.#toolInputs.delete(event.toolCallId); this.#lastToolProgress.delete(event.toolCallId);
+    this.#toolRefs.delete(event.toolCallId); this.#toolNames.delete(event.toolCallId);
+    this.#toolInputs.delete(event.toolCallId); this.#lastToolProgress.delete(event.toolCallId);
     const draft = this.#draft(snapshot, `activity.${state}`, activityPayload(state, activityRef, name, reasonCode), { toolCallId: ref });
     return draft ? [draft] : [];
+  }
+  #settleActiveTools(snapshot: BridgeSnapshot, reasonCode: string): RuntimeEventDraft[] {
+    const drafts: RuntimeEventDraft[] = [];
+    for (const [rawToolCallId, ref] of this.#toolRefs) {
+      const toolName = this.#toolNames.get(rawToolCallId) ?? "tool";
+      const activityRef = opaque("activity", [snapshot.identity?.sessionRef, rawToolCallId]);
+      const draft = this.#draft(snapshot, "activity.aborted", activityPayload("aborted", activityRef, toolName, reasonCode),
+        { toolCallId: ref, evidence: "derived" });
+      if (draft) drafts.push(draft);
+    }
+    this.#toolRefs.clear(); this.#toolNames.clear(); this.#toolInputs.clear(); this.#lastToolProgress.clear();
+    return drafts;
+  }
+  operationInterrupted(snapshot: BridgeSnapshot, reasonCode = "session-replaced-before-tool-result"): RuntimeEventDraft[] {
+    return this.#settleActiveTools(snapshot, reasonCode);
   }
   agentSettled(snapshot: BridgeSnapshot, hasPendingMessages: boolean | null): RuntimeEventDraft[] {
     // A queued follow-up belongs to the same logical operation. Do not emit a
@@ -264,9 +284,11 @@ export class PiSessionStreamAdapter {
     // Fail closed here so a missed/late completion hook cannot paint an open
     // task as completed in the WebUI.
     const governedTaskOpen = Boolean(snapshot.identity?.taskRunId) && snapshot.taskState !== "terminal";
+    const drafts = this.#settleActiveTools(snapshot, "operation-settled-before-tool-result");
     const draft = this.#draft(snapshot, "agent-operation.settled", {
       settlement: governedTaskOpen ? "unknown" : "completed", lastStopReason: null, hasPendingMessages: value
     });
-    this.reset(); return draft ? [draft] : [];
+    if (draft) drafts.push(draft);
+    this.reset(); return drafts;
   }
 }

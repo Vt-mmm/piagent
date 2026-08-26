@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
 
+import { WORKFLOW_IDS } from "../packages/piagent-core/runtime/workflows/webui-workflow.ts";
 import { buildSessionCatalog } from "../packages/piagent-webui/gateway/session-catalog.ts";
 import { SessionMetadataStore } from "../packages/piagent-webui/gateway/session-metadata-store.ts";
 
@@ -75,15 +76,17 @@ describe("Piagent Gateway session metadata overlay", () => {
   });
 
   it("keeps fresh-session routing commands out of titles and previews", async () => {
-    const key = Buffer.alloc(32, 13), command = "/fresh task Read task intake from .pi/task-inbox/2026-08-17-task.md. "
-      + "Current session is near context limits; use a fresh governed session.";
-    const catalog = await buildSessionCatalog({ gatewayInstanceRef: "gateway_fresh_title", key, listSessions: async () => [{
-      path: "/private/fresh-session.jsonl", id: "fresh", cwd: "/private/pi-company-platform", name: `pi:task:${command}`,
-      created: new Date("2026-08-17T12:33:38.000Z"), modified: new Date("2026-08-17T12:33:40.000Z"), messageCount: 1,
-      firstMessage: command, allMessagesText: command
-    }] });
-    assert.equal(catalog.sessions[0].title, "Continued task");
-    assert.equal(catalog.sessions[0].preview, "Continued in a fresh session");
+    const key = Buffer.alloc(32, 13), infos = WORKFLOW_IDS.map((workflow, index) => {
+      const command = `/fresh ${workflow} Read task intake from .pi/task-inbox/2026-08-17-${workflow}.md. `
+        + "Current session is near context limits; use a fresh governed session.";
+      return { path: `/private/fresh-session-${index}.jsonl`, id: `fresh-${index}`, cwd: "/private/pi-company-platform",
+        name: `pi:${workflow}:${command}`, created: new Date("2026-08-17T12:33:38.000Z"),
+        modified: new Date(1_776_600_820_000 + index), messageCount: 1, firstMessage: command, allMessagesText: command };
+    });
+    const catalog = await buildSessionCatalog({ gatewayInstanceRef: "gateway_fresh_title", key, listSessions: async () => infos });
+    assert.equal(catalog.sessions.length, WORKFLOW_IDS.length);
+    assert.equal(catalog.sessions.every((session) => session.title === "Continued task"), true);
+    assert.equal(catalog.sessions.every((session) => session.preview === "Continued in a fresh session"), true);
     assert.equal(JSON.stringify(catalog).includes(".pi/task-inbox"), false);
   });
 

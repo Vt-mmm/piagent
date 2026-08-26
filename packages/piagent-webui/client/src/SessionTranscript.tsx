@@ -19,8 +19,8 @@ import { readSessionTranscript } from "./api.ts";
 import { mergeOlderTranscriptPage } from "./chat-view-model.ts";
 import { attachmentDetail } from "./attachment-intake.ts";
 import { liveProgressStatus, type LiveConversation } from "./live-state-view-model.ts";
-import { conversationTranscriptItems, persistedConversationHasFinal, persistedConversationMatches, persistedUserTextMatches,
-  successfulAssistantText } from "./transcript-view-model.ts";
+import { conversationTranscriptItems, durableTranscriptRefreshIdentity, persistedLiveConversationHasFinal,
+  persistedLiveConversationMatches, persistedLiveUserExists, successfulAssistantText } from "./transcript-view-model.ts";
 import { localize, type UiLocale } from "./ui-preferences.tsx";
 
 const MarkdownMessage = lazy(async () => ({ default: (await import("./MarkdownMessage.tsx")).MarkdownMessage }));
@@ -85,28 +85,37 @@ export function SessionTranscript({ sessionRef, sessionRevision, live, approvals
   const [transcript, setTranscript] = useState<PiagentWebUIBoundedTranscriptProjectionV1>();
   const [loading, setLoading] = useState(true), [loadingOlder, setLoadingOlder] = useState(false);
   const [error, setError] = useState(false), [syncedOperation, setSyncedOperation] = useState<string | null>(null);
-  const completionKey = live?.complete ? `${live.operationRef ?? "unknown"}:${live.user}:${live.assistant.length}` : null;
+  const refreshIdentity = durableTranscriptRefreshIdentity(sessionRef, sessionRevision, live);
+  const { completionKey, user: completedUser, assistant: completedAssistant,
+    operationRef: completedOperationRef, messageRequestId: completedMessageRequestId, startedAt: completedStartedAt } = refreshIdentity;
   useEffect(() => {
     const controller = new AbortController(); setLoading(true); setError(false); setSyncedOperation(null);
     const timer = window.setTimeout(() => {
       void readSessionTranscript(sessionRef, null, 50, controller.signal).then((value) => {
         setTranscript(value);
-        if (completionKey && live) {
-          if (persistedConversationMatches(value.items, live.user, live.assistant)) setSyncedOperation(completionKey);
+        if (completionKey) {
+          if (persistedLiveConversationMatches(value.items, completedUser, completedAssistant,
+            { operationRef: completedOperationRef, messageRequestId: completedMessageRequestId,
+              startedAt: completedStartedAt })) setSyncedOperation(completionKey);
         }
       }).catch(() => { if (!controller.signal.aborted) setError(true); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     }, completionKey ? 100 : 0);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [sessionRef, sessionRevision, completionKey, live]);
+    // Live tool and text deltas can arrive many times per second. Depending on
+    // the whole live object here used to abort and restart this durable read on
+    // every delta, which delayed the user's persisted bubble until activity
+    // became quiet. CompletionKey captures the one terminal reconciliation we
+    // need without turning progress into a transcript refresh loop.
+  }, [refreshIdentity.key]);
   const items = transcript?.state === "ready" ? transcript.items : [];
   const visibleItems = useMemo(() => conversationTranscriptItems(items), [items]);
-  const durableFinalVisible = useMemo(() => Boolean(live?.user && persistedConversationHasFinal(items, live.user)), [items, live?.user]);
+  const durableFinalVisible = useMemo(() => Boolean(live?.user && persistedLiveConversationHasFinal(items, live.user,
+    { operationRef: live.operationRef, messageRequestId: live.messageRequestId,
+      startedAt: live.startedAt })), [items, live?.user, live?.operationRef, live?.messageRequestId, live?.startedAt]);
   const liveVisible = Boolean(live && !durableFinalVisible && (!live.complete || syncedOperation !== completionKey));
-  const liveUserDuplicated = useMemo(() => {
-    if (!live?.user || !items.length) return false;
-    const lastUser = [...items].reverse().find((item) => item.role === "user");
-    return persistedUserTextMatches(lastUser?.content.text, live.user);
-  }, [items, live?.user]);
+  const liveUserDuplicated = useMemo(() => Boolean(live?.user && persistedLiveUserExists(items, live.user,
+    { operationRef: live.operationRef, messageRequestId: live.messageRequestId,
+      startedAt: live.startedAt })), [items, live?.user, live?.operationRef, live?.messageRequestId, live?.startedAt]);
   const loadOlder = async () => {
     const before = transcript?.page.nextBeforeCursor; if (!before || loadingOlder) return;
     setLoadingOlder(true);

@@ -17,6 +17,7 @@ export type GatewayProtocolEvent = {
 export type GatewayTerminalSettlement = {
   sessionRef: string;
   operationRef: string;
+  messageRequestId?: string;
   settlement: "blocked" | "aborted" | "error" | "unknown";
   reasonCode: string;
   settledAt: string;
@@ -101,7 +102,10 @@ export class GatewayEventStore {
     this.#settlementDecisions.set(key, { settledAt: event.generatedAt,
       settlement: settlement as GatewaySettlementDecision["settlement"],
       reasonCode: settlement === "completed" ? null : String(event.payload.reasonCode) });
-    const retained = { sessionRef, operationRef, settledAt: event.generatedAt, sequence: event.sequence };
+    const messageRequestId = typeof event.payload.messageRequestId === "string" && OPAQUE_REF_PATTERN.test(event.payload.messageRequestId)
+      ? event.payload.messageRequestId : undefined;
+    const retained = { sessionRef, operationRef, ...(messageRequestId ? { messageRequestId } : {}),
+      settledAt: event.generatedAt, sequence: event.sequence };
     if (settlement !== "completed") {
       const outcome = settlement as GatewayTerminalSettlement["settlement"];
       this.#settlements.push({ ...retained, settlement: outcome, reasonCode: settlementReason(outcome, event.payload.reasonCode) });

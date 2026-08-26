@@ -2,6 +2,11 @@ import { StringDecoder } from "node:string_decoder";
 
 const CODEX_NON_TOOL_ITEMS = new Set(["agent_message", "reasoning", "plan", "user_message"]);
 const TOKEN_FIELDS = Object.freeze(["input", "output", "cacheRead", "cacheWrite", "reasoning", "fresh", "total"]);
+const EXECUTION_COUNTER_FIELDS = Object.freeze([
+  "providerStartedAttempts", "toolCalls", "toolResults", "toolFailures", "blockedToolCalls",
+  "declinedToolCalls", "explicitRetries", "retryFailures", "compactions", "abortedCompactions",
+  "summarizationRetries", "repeatedToolCalls", "subagentAttempts", "subagentFailures"
+]);
 
 export const BENCHMARK_TOKEN_DEFINITIONS = Object.freeze({
   unit: "provider-reported-tokens",
@@ -16,6 +21,40 @@ export const BENCHMARK_TOKEN_DEFINITIONS = Object.freeze({
 
 function plainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function emptyExecutionAggregate(source) {
+  return {
+    schemaVersion: 1,
+    source,
+    completeness: { tools: "unavailable", retries: "unavailable", compactions: "unavailable", subagents: "unavailable" },
+    ...Object.fromEntries(EXECUTION_COUNTER_FIELDS.map((field) => [field, 0]))
+  };
+}
+
+function stableValue(value) {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (!plainObject(value)) return value;
+  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stableValue(value[key])]));
+}
+
+function codexToolFingerprint(item) {
+  const identity = item.type === "command_execution" ? item.command
+    : item.type === "mcp_tool_call" ? [item.server, item.tool, stableValue(item.arguments)]
+      : item.type === "collab_tool_call" ? [item.tool, item.prompt]
+        : item.type === "web_search" ? stableValue(item.action ?? item.query)
+          : item.type;
+  try { return JSON.stringify([item.type, identity]); }
+  catch { return item.type; }
+}
+
+function executionCompleteness(sessions, field) {
+  const rank = { exact: 0, partial: 1, unverified: 2, unavailable: 3 };
+  if (sessions.length === 0) return "unavailable";
+  return sessions.reduce((worst, session) => {
+    const value = session.execution?.completeness?.[field] ?? "unavailable";
+    return rank[value] > rank[worst] ? value : worst;
+  }, "exact");
 }
 
 export function exactBenchmarkMeasuredUsage(usage) {
@@ -116,6 +155,8 @@ export function aggregateSessionUsage(sessions) {
   let toolCalls = 0;
   let messages = 0;
   const contextSnapshots = [];
+  const execution = emptyExecutionAggregate("pi-session-jsonl");
+  const pricingRequests = [];
   for (const session of sessions) {
     for (const key of Object.keys(totals)) totals[key] += Number(session.tokens?.[key] ?? 0);
     if (session.isSubagent) {
@@ -136,6 +177,11 @@ export function aggregateSessionUsage(sessions) {
     for (const [name, count] of Object.entries(session.toolNames ?? {})) {
       toolNames[name] = (toolNames[name] ?? 0) + Number(count ?? 0);
     }
+    for (const field of EXECUTION_COUNTER_FIELDS) execution[field] += Number(session.execution?.[field] ?? 0);
+    if (Array.isArray(session.pricingBuckets?.requests)) pricingRequests.push(...session.pricingBuckets.requests);
+  }
+  for (const field of ["tools", "retries", "compactions", "subagents"]) {
+    execution.completeness[field] = executionCompleteness(sessions, field);
   }
   return {
     ...totals,
@@ -153,6 +199,14 @@ export function aggregateSessionUsage(sessions) {
     thinkingLevel: thinkingLevels.size === 1 ? [...thinkingLevels][0] : thinkingLevels.size === 0 ? "unknown" : "mixed",
     usageSource: sessions.length > 0 ? "pi-session-jsonl" : "unavailable",
     usageCompleteness: sessions.length > 0 && sessions.every((session) => session.usageIntegrity?.exact === true) ? "exact" : "unverified",
+    pricingBuckets: {
+      schemaVersion: 1,
+      source: "provider-request-usage",
+      completeness: sessions.length > 0 && sessions.every((session) => session.pricingBuckets?.completeness === "exact")
+        ? "exact" : "unverified",
+      requests: pricingRequests
+    },
+    execution,
     contextUsage: contextSnapshots.length > 0 ? {
       source: "session-reported",
       observations: contextSnapshots.length,
@@ -182,6 +236,112 @@ function requiredCodexToken(value, field) {
   return value;
 }
 
+/** Aggregate every provider-reported Codex turn, preserving exact token categories. */
+function aggregateCodexProviderTurnTokens(turnUsages) {
+  if (!Array.isArray(turnUsages) || turnUsages.length === 0) {
+    throw new Error("Codex JSONL is missing turn.completed usage");
+  }
+  const totals = { providerInput: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, total: 0, fresh: 0 };
+  for (const [index, usage] of turnUsages.entries()) {
+    if (!plainObject(usage)) throw new Error(`Codex JSONL turn.completed usage ${index + 1} is not an object`);
+    const providerInput = requiredCodexToken(usage.input_tokens, "input_tokens");
+    const cacheRead = requiredCodexToken(usage.cached_input_tokens ?? 0, "cached_input_tokens");
+    const cacheWrite = requiredCodexToken(usage.cache_write_input_tokens ?? 0, "cache_write_input_tokens");
+    const output = requiredCodexToken(usage.output_tokens, "output_tokens");
+    const reasoning = requiredCodexToken(usage.reasoning_output_tokens ?? 0, "reasoning_output_tokens");
+    if (cacheRead + cacheWrite > providerInput) throw new Error("Codex JSONL cached and cache-write input tokens exceed input_tokens");
+    if (reasoning > output) throw new Error("Codex JSONL reasoning_output_tokens exceeds output_tokens");
+    const input = providerInput - cacheRead - cacheWrite;
+    totals.providerInput += providerInput;
+    totals.input += input;
+    totals.output += output;
+    totals.cacheRead += cacheRead;
+    totals.cacheWrite += cacheWrite;
+    totals.reasoning += reasoning;
+    totals.total += providerInput + output;
+    totals.fresh += input + output;
+  }
+  return totals;
+}
+
+/**
+ * Combine exact usage captured from multiple invocations of one resumed Codex
+ * thread. Identity mismatches and incomplete turns fail closed instead of being
+ * silently presented as one comparable session.
+ */
+export function aggregateCodexTurnUsage(turnUsages) {
+  if (!Array.isArray(turnUsages) || turnUsages.length === 0) {
+    throw new Error("Codex turn usage must contain at least one turn");
+  }
+  for (const [index, usage] of turnUsages.entries()) {
+    if (!exactBenchmarkMeasuredUsage(usage)) throw new Error(`Codex turn usage ${index + 1} is incomplete`);
+    for (const field of ["providerSessionId", "model", "thinkingLevel"]) {
+      if (typeof usage[field] !== "string" || !usage[field]) throw new Error(`Codex turn usage ${index + 1} is missing ${field}`);
+    }
+  }
+  const first = turnUsages[0];
+  for (const [index, usage] of turnUsages.slice(1).entries()) {
+    for (const field of ["providerSessionId", "model", "thinkingLevel"]) {
+      if (usage[field] !== first[field]) throw new Error(`Codex turn usage ${index + 2} has mismatched ${field}`);
+    }
+  }
+
+  const totals = Object.fromEntries(TOKEN_FIELDS.map((field) => [field, 0]));
+  const subagentTokens = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, fresh: 0, total: 0 };
+  const toolNames = {};
+  const execution = emptyExecutionAggregate("codex-resumed-thread-aggregate");
+  const pricingRequests = [];
+  let messages = 0;
+  let cost = 0;
+  let exactCost = true;
+  for (const usage of turnUsages) {
+    for (const field of TOKEN_FIELDS) totals[field] += usage[field];
+    for (const field of Object.keys(subagentTokens)) subagentTokens[field] += Number(usage.subagentTokens?.[field] ?? 0);
+    for (const [name, count] of Object.entries(usage.toolNames ?? {})) toolNames[name] = (toolNames[name] ?? 0) + Number(count ?? 0);
+    for (const field of EXECUTION_COUNTER_FIELDS) execution[field] += Number(usage.execution?.[field] ?? 0);
+    if (Array.isArray(usage.pricingBuckets?.requests)) pricingRequests.push(...usage.pricingBuckets.requests);
+    messages += Number(usage.messages ?? 0);
+    if (Number.isFinite(usage.cost)) cost += usage.cost;
+    else exactCost = false;
+  }
+  for (const field of ["tools", "retries", "compactions", "subagents"]) {
+    execution.completeness[field] = executionCompleteness(turnUsages, field);
+  }
+  const pricingExact = turnUsages.every((usage) => usage.pricingBuckets?.completeness === "exact");
+  return {
+    ...totals,
+    providerInput: totals.input + totals.cacheRead + totals.cacheWrite,
+    cost: exactCost ? cost : null,
+    costSource: exactCost ? "summed-provider-reported" : "unavailable",
+    usageSource: "codex-resumed-thread-aggregate",
+    usageCompleteness: "exact",
+    sessions: 1,
+    turns: turnUsages.length,
+    subagentSessions: turnUsages.reduce((sum, usage) => sum + Number(usage.subagentSessions ?? 0), 0),
+    subagentTokens,
+    toolCalls: Object.values(toolNames).reduce((sum, count) => sum + count, 0),
+    toolNames: Object.fromEntries(Object.entries(toolNames).sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))),
+    messages,
+    model: first.model,
+    thinkingLevel: first.thinkingLevel,
+    pricingBuckets: {
+      schemaVersion: 1,
+      source: pricingExact ? "provider-request-usage" : "codex-turn-aggregate-usage",
+      completeness: pricingExact ? "exact" : "unverified",
+      requests: pricingRequests
+    },
+    execution,
+    contextUsage: {
+      source: "unavailable",
+      observations: 0,
+      peakTokens: null,
+      contextWindow: null,
+      peakPercent: null
+    },
+    providerSessionId: first.providerSessionId
+  };
+}
+
 function consumeCodexEvent(state, event, lineNumber) {
   if (!plainObject(event) || typeof event.type !== "string") {
     throw new Error(`Codex JSONL line ${lineNumber} is not an event object`);
@@ -203,29 +363,37 @@ function consumeCodexEvent(state, event, lineNumber) {
     if (type === "agent_message") state.messages += 1;
     else if (typeof type === "string" && type && !CODEX_NON_TOOL_ITEMS.has(type)) {
       state.toolNames[type] = (state.toolNames[type] ?? 0) + 1;
+      state.execution.toolCalls += 1;
+      state.execution.toolResults += 1;
+      const status = typeof event.item.status === "string" ? event.item.status.toLowerCase() : "";
+      const failed = status === "failed" || type === "command_execution" && Number.isInteger(event.item.exit_code) && event.item.exit_code !== 0;
+      if (failed) state.execution.toolFailures += 1;
+      if (status === "blocked") state.execution.blockedToolCalls += 1;
+      if (status === "declined") state.execution.declinedToolCalls += 1;
+      const fingerprint = codexToolFingerprint(event.item);
+      if (state.toolFingerprints.has(fingerprint)) state.execution.repeatedToolCalls += 1;
+      else state.toolFingerprints.add(fingerprint);
+      if (type === "collab_tool_call" && event.item.tool === "spawn_agent") {
+        state.execution.subagentAttempts += 1;
+        if (failed) state.execution.subagentFailures += 1;
+      }
     }
     return;
   }
   if (event.type === "turn.completed") {
     state.completedTurns += 1;
-    if (state.completedTurns > 1) throw new Error("Codex JSONL contains more than one completed root turn");
     if (!plainObject(event.usage)) throw new Error("Codex JSONL turn.completed is missing usage");
-    state.completedUsage = event.usage;
+    state.completedUsages.push(event.usage);
+    state.execution.providerStartedAttempts += 1;
   }
 }
 
 function finishCodexUsage(state) {
   if (!state.threadId) throw new Error("Codex JSONL is missing thread.started");
-  if (!state.completedUsage) throw new Error("Codex JSONL is missing turn.completed usage");
-  const providerInput = requiredCodexToken(state.completedUsage.input_tokens, "input_tokens");
-  const cacheRead = requiredCodexToken(state.completedUsage.cached_input_tokens ?? 0, "cached_input_tokens");
-  const cacheWrite = requiredCodexToken(state.completedUsage.cache_write_input_tokens ?? 0, "cache_write_input_tokens");
-  const output = requiredCodexToken(state.completedUsage.output_tokens, "output_tokens");
-  const reasoning = requiredCodexToken(state.completedUsage.reasoning_output_tokens ?? 0, "reasoning_output_tokens");
-  if (cacheRead + cacheWrite > providerInput) throw new Error("Codex JSONL cached and cache-write input tokens exceed input_tokens");
-  if (reasoning > output) throw new Error("Codex JSONL reasoning_output_tokens exceeds output_tokens");
-  const input = providerInput - cacheRead - cacheWrite;
+  const { providerInput, input, output, cacheRead, cacheWrite, reasoning, total, fresh } = aggregateCodexProviderTurnTokens(state.completedUsages);
   const sortedTools = Object.fromEntries(Object.entries(state.toolNames).sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0])));
+  state.execution.completeness.tools = "exact";
+  state.execution.completeness.subagents = "exact";
   return {
     input,
     providerInput,
@@ -233,13 +401,21 @@ function finishCodexUsage(state) {
     cacheRead,
     cacheWrite,
     reasoning,
-    total: providerInput + output,
-    fresh: input + output,
+    total,
+    fresh,
     cost: null,
     costSource: "unavailable",
     usageSource: "codex-turn-completed",
     usageCompleteness: "exact",
+    pricingBuckets: {
+      schemaVersion: 1,
+      source: "codex-turn-aggregate-usage",
+      completeness: "unverified",
+      requests: []
+    },
+    execution: state.execution,
     sessions: 1,
+    turns: state.completedTurns,
     subagentSessions: 0,
     subagentTokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, fresh: 0, total: 0 },
     toolCalls: Object.values(sortedTools).reduce((sum, value) => sum + value, 0),
@@ -264,10 +440,12 @@ export function createCodexExecJsonlCollector(options = {}) {
     thinkingLevel: options.thinkingLevel,
     onEvent: typeof options.onEvent === "function" ? options.onEvent : undefined,
     threadId: undefined,
-    completedUsage: undefined,
+    completedUsages: [],
     completedTurns: 0,
     messages: 0,
     toolNames: {},
+    toolFingerprints: new Set(),
+    execution: emptyExecutionAggregate("codex-exec-jsonl"),
     diagnostics: []
   };
   let buffer = "";

@@ -1,5 +1,6 @@
 export type ToolFailureReasonCode =
   | "target-not-found"
+  | "target-is-directory"
   | "search-target-missing"
   | "edit-anchor-not-unique"
   | "edit-anchor-stale"
@@ -28,6 +29,36 @@ function commandFromInput(input: unknown): string {
     ? (args as { command: string }).command : "";
 }
 
+const CONFLICTING_FAILURE = /\b(?:EACCES|EPERM|ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENETUNREACH|EAI_AGAIN|ENOSPC|EMFILE|ENOMEM)\b|permission denied|operation not permitted|timed? out|authentication (?:failed|required)|unauthorized|rate limit|invalid (?:regular expression|regex|pattern|option)|regex parse error|syntax error|unterminated|unclosed|unknown option|^usage:/im;
+const MISSING_TARGET = /\b(?:ENOENT|ENOTDIR)\b|no such file or directory|(?:file|path) (?:does not exist|not found)|not a directory|cannot find the (?:file|path)|no valid search paths given|\bos error 2\b/i;
+
+function standaloneSearchWithPartialEvidence(command: string, text: string): boolean {
+  const source = command.trim();
+  if (!/^(?:rg|grep|git\s+grep)\b/.test(source)) return false;
+  // A compound shell can fail for a second reason after a useful search. Do
+  // not neutralize its whole result from one missing-path diagnostic.
+  if (/[\r\n;<>]|&&|\|\||\$\(|`|(?<!\|)\|(?!\|)/.test(source)) return false;
+  if (CONFLICTING_FAILURE.test(text)) return false;
+
+  let usefulMatches = false;
+  let missingTarget = false;
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    if (!/^\s*(?:rg|grep):/i.test(line) && /^.+?:\d+:/.test(line)) {
+      usefulMatches = true;
+      continue;
+    }
+    if (MISSING_TARGET.test(line)) {
+      missingTarget = true;
+      continue;
+    }
+    if (/^(?:command|process) exited with (?:code|status) [12]$/i.test(line)) continue;
+    return false;
+  }
+  return usefulMatches && missingTarget;
+}
+
 export function classifyToolFailure(toolName: string, isError: boolean, content: unknown, input?: unknown): ToolFailureReasonCode | null {
   const text = boundedText(content);
   const subagent = /(?:^|[._-])subagents?(?:$|[._-])/i.test(toolName);
@@ -53,18 +84,28 @@ export function classifyToolFailure(toolName: string, isError: boolean, content:
       return "edit-anchor-stale";
     }
   }
-  const readLike = /(?:^|[._-])(?:read|document[_-]?read)(?:$|[._-])/i.test(toolName);
-  if (readLike && /\bENOENT\b|no such file or directory|file (?:does not exist|not found)|cannot find the (?:file|path)/i.test(text)) {
+  const trustedRead = /^(?:read|piagent_document_read)$/i.test(toolName);
+  const conflictingFailure = CONFLICTING_FAILURE.test(text);
+  if (trustedRead && !conflictingFailure && /\bEISDIR\b|illegal operation on a directory|is a directory/i.test(text)) {
+    return "target-is-directory";
+  }
+  if (trustedRead && !conflictingFailure && /\bENOENT\b|no such file or directory|(?:file|path) (?:does not exist|not found)|cannot find the (?:file|path)/i.test(text)) {
     return "target-not-found";
   }
+  const structuredSearch = /^(?:grep|find|ls)$/i.test(toolName);
+  if (structuredSearch && !conflictingFailure && MISSING_TARGET.test(text)) {
+    return "search-target-missing";
+  }
   const shellLike = /^(?:bash|shell|exec|command)$/i.test(toolName);
-  const searchCommand = /^\s*(?:rg|grep|git\s+grep)\b/.test(commandFromInput(input));
-  const missingTarget = /no such file or directory|cannot find the (?:file|path)|\bos error 2\b/i.test(text);
-  const usefulMatches = text.split(/\r?\n/).some((line) => !/^\s*(?:rg|grep):/i.test(line) && /^.+?:\d+:/.test(line));
-  if (shellLike && searchCommand && missingTarget && usefulMatches) return "search-target-missing";
+  if (shellLike && standaloneSearchWithPartialEvidence(commandFromInput(input), text)) return "search-target-missing";
   return "tool-result-failed";
 }
 
-export function handledToolFailure(reasonCode: unknown): boolean {
-  return reasonCode === "search-target-missing";
+export function handledToolFailure(reasonCode: unknown, toolName: unknown): boolean {
+  const trustedTool = String(toolName ?? "").toLowerCase();
+  if (reasonCode === "target-not-found" || reasonCode === "target-is-directory") {
+    return trustedTool === "read" || trustedTool === "piagent_document_read";
+  }
+  return reasonCode === "search-target-missing"
+    && ["grep", "find", "ls", "bash", "shell", "exec", "command"].includes(trustedTool);
 }

@@ -2,6 +2,7 @@ import { createHmac } from "node:crypto";
 import path from "node:path";
 
 import { redactSensitiveText } from "../../piagent-core/security/sensitive-data.js";
+import { workflowCommandPattern } from "../../piagent-core/runtime/workflows/webui-workflow.ts";
 import type { Catalog, SessionRow } from "../contracts/generated/session-catalog-v1.ts";
 import type { MetadataSnapshot, SessionMetadata } from "./session-metadata-store.ts";
 import { projectRefForCwd, sessionRefForPath } from "../ownership/session-refs.ts";
@@ -54,7 +55,12 @@ function display(value: unknown, maximum: number, fallback: string): string {
   return (clean || fallback).slice(0, maximum);
 }
 
-const INTERNAL_FRESH_TRANSITION = /(?:^|\b)(?:\/fresh\s+(?:task|scout|be-to-fe)|(?:task|scout|be-to-fe):)\b[\s\S]{0,180}\bRead task intake from \.pi\/task-inbox\//i;
+const WORKFLOW_PATTERN = workflowCommandPattern({ aliases: false });
+const INTERNAL_FRESH_TRANSITION = new RegExp(
+  `(?:^|\\b)(?:\\/fresh\\s+(?:${WORKFLOW_PATTERN})|(?:${WORKFLOW_PATTERN}):)\\b[\\s\\S]{0,180}\\bRead task intake from \\.pi\\/task-inbox\\/`, "i"
+);
+const LEADING_WORKFLOW = new RegExp(`^\\/(?:fresh\\s+)?(?:${WORKFLOW_PATTERN})\\s+`, "i");
+const LEADING_WORKFLOW_LABEL = new RegExp(`^(?:${WORKFLOW_PATTERN}):\\s*`, "i");
 
 function atWordBoundary(value: string, maximum: number): string {
   if (value.length <= maximum) return value;
@@ -78,8 +84,8 @@ export function projectedSessionTitle(info: Pick<PiSessionInfo, "name" | "firstM
   const internal = INTERNAL_FRESH_TRANSITION.test(source) || INTERNAL_FRESH_TRANSITION.test(first)
     || /\.pi\/task-inbox\//i.test(source);
   const cleaned = display(source, 500, "")
-    .replace(/^\/(?:fresh\s+)?(?:task|scout|be-to-fe)\s+/i, "")
-    .replace(/^(?:task|scout|be-to-fe):\s*/i, "")
+    .replace(LEADING_WORKFLOW, "")
+    .replace(LEADING_WORKFLOW_LABEL, "")
     .replace(/^[-#*>\s]+/, "")
     // Keep underscores: the shared redactor deliberately emits
     // [REDACTED_SECRET], and title cleanup must not mutate that proof marker.

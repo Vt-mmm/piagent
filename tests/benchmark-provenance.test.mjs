@@ -251,6 +251,29 @@ test("execution assets are checked again at the report prepublish boundary", (t)
   assert.equal(error.executionAsset.stage, "prepublish");
 });
 
+test("execution guard rejects a frozen WebUI production bundle changed after bootstrap", (t) => {
+  const suite = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-webui-asset-suite-"));
+  const assets = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-webui-assets-"));
+  t.after(() => { fs.rmSync(suite, { recursive: true, force: true }); fs.rmSync(assets, { recursive: true, force: true }); });
+  fs.writeFileSync(path.join(suite, "suite.json"), "{}\n");
+  fs.writeFileSync(path.join(assets, "index.html"), "<html>frozen</html>\n");
+  const provenance = { contentDigest: "a".repeat(64) };
+  const candidateGuard = { provenance, check: () => undefined, stamp: (stage) => ({ stage, matched: true }) };
+  const guard = createBenchmarkExecutionGuard({
+    candidateGuard,
+    suiteRoot: suite,
+    suiteIdentity: benchmarkTreeIdentity(suite),
+    webUiAssets: { root: assets, sourceCandidateDigest: provenance.contentDigest, tree: benchmarkTreeIdentity(assets) },
+    commands: {}
+  });
+  assert.equal(guard.check("before-session"), undefined);
+  fs.writeFileSync(path.join(assets, "index.html"), "<html>changed</html>\n");
+  const error = guard.check("after-session");
+  assert.equal(error.code, "BENCHMARK_EXECUTION_ASSET_MISMATCH");
+  assert.equal(error.executionAsset.asset, "webui-assets");
+  assert.equal(error.executionAsset.stage, "after-session");
+});
+
 test("an execution receipt preserves the first causal mismatch without observing twice", (t) => {
   const suite = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-single-receipt-suite-"));
   t.after(() => fs.rmSync(suite, { recursive: true, force: true }));

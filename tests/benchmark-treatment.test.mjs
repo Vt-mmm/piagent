@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { parseBenchmarkArgs } from "../packages/piagent-core/benchmark/benchmark-cli.js";
-import { codexThinkingEffort } from "../packages/piagent-core/benchmark/benchmark-codex.js";
+import { codexExecArgs, codexExecResumeArgs, codexThinkingEffort } from "../packages/piagent-core/benchmark/benchmark-codex.js";
 import {
   benchmarkEnvironment,
   piagentProcessEnvironment,
@@ -26,6 +26,18 @@ test("maps host thinking names to the exact Codex provider effort", () => {
   assert.equal(codexThinkingEffort("off"), "none");
   assert.equal(codexThinkingEffort("minimal"), "low");
   assert.equal(codexThinkingEffort("medium"), "medium");
+});
+
+test("keeps one Codex thread for production user journeys", () => {
+  const options = { model: "openai-codex/gpt-5.6-luna", thinking: "medium", codexMode: "controlled" };
+  const initial = codexExecArgs({ workspace: "/tmp/fixture", options, disabledFeatures: ["multi_agent"], persistent: true });
+  assert.equal(initial.includes("--ephemeral"), false);
+  assert.deepEqual(initial.slice(0, 4), ["exec", "--json", "--color", "never"]);
+  assert.ok(initial.includes("--ignore-user-config"));
+  assert.ok(initial.includes("--ignore-rules"));
+  assert.deepEqual(codexExecResumeArgs({ threadId: "019abcde-1234-7000-8000-0123456789ab", options,
+    disabledFeatures: ["multi_agent"] }).slice(0, 3), ["exec", "resume", "--json"]);
+  assert.throws(() => codexExecResumeArgs({ threadId: "bad thread id", options }), /valid thread id/);
 });
 
 test("applies candidate treatment after stripping inherited Piagent overrides", () => {

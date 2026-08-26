@@ -57,7 +57,7 @@ function commandProjection(events: ActivityInspectorEvent[]) {
     const decision = decisions.get(call.toolCallId), result = results.get(call.toolCallId);
     const blocked = decision?.decision === "blocked";
     const recovered = Boolean(call.toolCallId && recoveries.has(call.toolCallId));
-    const failed = !blocked && !recovered && !handledToolFailure(result?.reasonCode) && Boolean(result && failedToolResult(result));
+    const failed = !blocked && !recovered && !handledToolFailure(result?.reasonCode, result?.toolName ?? call.toolName) && Boolean(result && failedToolResult(result));
     return { toolCallId: call.toolCallId ?? "unknown", command: call.command ?? "[redacted or unavailable]",
       status: blocked ? "blocked" : !result ? "running" : failed ? "failed" : "passed",
       exitCode: result?.exitCode ?? null, exitCodeExact: result?.exitCodeExact === true,
@@ -114,9 +114,12 @@ export async function buildActivityInspector(input: {
   eventCursor?: string;
   resyncRequired?: boolean;
   eventReplay?: { eventRetentionCount: number; eventRetentionSeconds: number };
+  operationLiveness?: "idle" | "running" | "unknown";
 }) {
   const projection = await buildWebUiInspectionProjection(input);
   const events = projection.scopedEvents, snapshot = projection.snapshot;
+  const current = snapshot.activity.running.length > 0 ? input.current ?? []
+    : (input.current ?? []).filter((activity) => (activity.status ?? "running") !== "running");
   const calls = events.filter((event) => event.event === "tool_call"), results = events.filter((event) => event.event === "tool_result");
   const byName = Object.fromEntries([...new Set(calls.map((event) => event.toolName ?? "unknown"))].sort().map((name) => [name, calls.filter((event) => (event.toolName ?? "unknown") === name).length]));
   const commands = commandProjection(events), files = sourceFiles(projection, input.task), safety = safetyProjection(events);
@@ -124,9 +127,9 @@ export async function buildActivityInspector(input: {
     schemaVersion: 2, version: ACTIVITY_INSPECTOR_VERSION, snapshot,
     state: { taskId: snapshot.identity.taskId, taskRunId: snapshot.identity.taskRunId,
       phase: snapshot.session.operation.hostPhase.state === "known" && snapshot.session.operation.hostPhase.value !== "idle" ? snapshot.session.operation.hostPhase.value : null,
-      outcome: snapshot.task?.outcome ?? "idle", running: snapshot.activity.running.length, current: input.current ?? [] },
+      outcome: snapshot.task?.outcome ?? "idle", running: snapshot.activity.running.length, current },
     criteria: snapshot.task?.criteria ?? [], sourceChanges: snapshot.sourceChanges, files,
-    tools: { calls: calls.length, results: results.length, failed: results.filter((event) => failedToolResult(event) && !handledToolFailure(event.reasonCode)).length,
+    tools: { calls: calls.length, results: results.length, failed: results.filter((event) => failedToolResult(event) && !handledToolFailure(event.reasonCode, event.toolName)).length,
       blocked: events.filter((event) => event.event === "tool_decision" && event.decision === "blocked").length, byName,
       perToolTokens: null, perToolTokensReason: "Pi reports model usage by response/turn; built-in tool calls do not carry attributable model-token totals." },
     commands, safety,

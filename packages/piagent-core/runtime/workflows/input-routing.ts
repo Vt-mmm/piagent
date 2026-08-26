@@ -3,8 +3,17 @@ import path from "node:path";
 
 import { redactSensitiveText } from "../../extensions/redaction-core.js";
 import { LONG_INPUT_CHARS, MAX_INLINE_COLLAPSED_TASK_CHARS } from "../runtime-limits.ts";
+import {
+  type WorkflowId,
+  stripWorkflowCommand,
+  workflowIdFromCommand
+} from "./webui-workflow.ts";
 
-export type FreshWorkflow = "task" | "scout" | "be-to-fe";
+export type FreshWorkflow = WorkflowId;
+
+export function workflowIdFromInput(input: string): WorkflowId | null {
+  return workflowIdFromCommand(input);
+}
 
 export function looksLikeGovernedBoilerplate(text: string): boolean {
   const lower = text.toLowerCase();
@@ -29,10 +38,7 @@ function extractFencedBlockAfter(label: RegExp, text: string): string | undefine
 }
 
 export function stripLeadingWorkflowCommand(input: string): string {
-  return input
-    .replace(/^\/(?:piagent-workflow|workflow)\s+(?:task|scout|be-to-fe|review|plan|platform-improve|discuss|commit|pr)\b\s*/i, "")
-    .replace(/^\/(?:task|scout|be-to-fe|review|plan|platform-improve|discuss|commit|pr)\b\s*/i, "")
-    .trim();
+  return stripWorkflowCommand(input);
 }
 
 export function extractTaskRequest(text: string): string {
@@ -55,13 +61,8 @@ export function trimTaskForInline(input: string): string {
 
 export function chooseFreshWorkflow(original: string, task: string): FreshWorkflow {
   const semantic = stripLeadingWorkflowCommand(task || original).toLowerCase();
-  const starts = original.trim().toLowerCase();
-  const workflowStart = starts.match(/^\/(?:piagent-workflow|workflow)\s+(task|scout|be-to-fe)\b/);
-  if (workflowStart?.[1] === "be-to-fe") return "be-to-fe";
-  if (workflowStart?.[1] === "scout") return "scout";
-  if (workflowStart?.[1] === "task") return "task";
-  if (starts.startsWith("/be-to-fe")) return "be-to-fe";
-  if (starts.startsWith("/scout")) return "scout";
+  const explicit = workflowIdFromInput(original);
+  if (explicit) return explicit;
   const asksForWrite = /\b(implement|support|surface|consume|write|change|fix)\b/.test(semantic);
   if (/\b(scout|read-only|read only|audit|mapping|mapping matrix|map contract)\b/.test(semantic) && !asksForWrite) {
     return "scout";
@@ -73,7 +74,7 @@ export function chooseFreshWorkflow(original: string, task: string): FreshWorkfl
 }
 
 export function isPiagentWorkflowInput(text: string): boolean {
-  return /^\/(?:piagent-workflow|workflow|task|be-to-fe|scout|review|plan|platform-improve)\b/i.test(text.trim());
+  return workflowIdFromInput(text) !== null;
 }
 
 export function isFreshOrUtilityInput(text: string): boolean {
@@ -104,7 +105,8 @@ export function buildFreshCommand(cwd: string, workflow: FreshWorkflow, original
     // never becomes task instructions or provider-visible document content.
     return `/fresh ${workflow} --session-title "${shortTaskLabel(task)}" Read task intake from ${intakePath}. ${reason}`;
   }
-  return `/fresh ${workflow} ${trimTaskForInline(task)}`;
+  const inline = trimTaskForInline(task);
+  return [`/fresh ${workflow}`, inline].filter(Boolean).join(" ");
 }
 
 export function shortTaskLabel(text: string): string {

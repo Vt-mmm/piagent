@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 import {
   buildContextPack,
@@ -13,25 +13,23 @@ import {
 } from "../../extensions/criterion-context-pack.js";
 import { matchesProtectedPath } from "../../extensions/policy-core.js";
 import { selectRepositoryMemoryFacts } from "../../extensions/repository-memory.js";
-import type { TaskContract } from "../../extensions/guard-types.js";
 import {
   contextPlanAcceptsConfidence,
   planAdaptiveContext
 } from "../context/adaptive-planner.ts";
 import { stageContextDelivery } from "../context/context-delivery.ts";
-import { measureContextDeltaShadow, type ContextDeltaShadowMode } from "../context/context-delta-shadow.ts";
+import { measureContextDeltaShadow } from "../context/context-delta-shadow.ts";
 import { buildPrefixTelemetry } from "../context/prefix-telemetry.ts";
 import { formatRepositoryMemoryHints } from "../context/repository-memory-hints.ts";
 import { modelCapabilityFromContext } from "../model/capabilities.ts";
-import type { RuntimeModelSnapshot } from "../model/runtime-snapshot.ts";
 import type { ModelRouteEvaluation } from "../model/model-route-runtime.ts";
+import type { RuntimeModelSnapshot } from "../model/runtime-snapshot.ts";
 import { buildTaskResumeContext } from "../recovery/resume-state.ts";
 import { planRetrievalRoute } from "../context/retrieval-route-policy.ts";
-import type { SolverShadowEvaluation } from "../solver/solver-shadow.ts";
 import { observeTrajectorySync } from "../trajectory/trajectory-observability.ts";
-import type { TrajectorySyncOptions, TrajectorySyncResult } from "../trajectory/trajectory-runtime.ts";
+import type { SolverShadowEvaluation } from "../solver/solver-shadow.ts";
 import { trajectoryRecommendationRef } from "../trajectory/trajectory-runtime.ts";
-import { RuntimeSessionState, type ContextInjectionItem } from "../session/runtime-state.ts";
+import type { ContextInjectionItem } from "../session/runtime-state.ts";
 import {
   compactManagedProjectInstructions,
   rewriteLegacyProjectInstructions
@@ -40,53 +38,26 @@ import { PIAGENT_TOOL_NAMES } from "../tools/tool-groups.ts";
 import { extractTaskRequest, looksLikeGovernedBoilerplate } from "../workflows/input-routing.ts";
 import {
   AUTO_INTAKE_SNAPSHOT_PATTERNS,
-  automaticTaskIntakeMode
+  automaticTaskIntakeMode,
+  isLightweightNonAuthorizingChangeContinuation,
+  isNonAuthorizingChangeClarification
 } from "../workflows/task-intake.ts";
 import { CONTEXT_PACK_MAX_TOKENS } from "../runtime-limits.ts";
 import { modelRouteTelemetry, runtimeSnapshotTelemetry, solverShadowTelemetry } from "./agent-prompt-telemetry.ts";
-
-type RuntimeIntakeResult = {
-  started: boolean;
-  text: string;
-  task?: TaskContract;
-  plannedContext?: Array<{ path: string; reason: string }>;
-  plannedContextComplete?: boolean;
-};
-
-type AgentStartHookDependencies = {
-  state: RuntimeSessionState;
-  autoContextEnabled: boolean;
-  contextDeltaShadowMode: ContextDeltaShadowMode;
-  activeTask: (ctx: ExtensionContext) => TaskContract | undefined;
-  readProtectedPaths: (ctx: ExtensionContext) => string[];
-  contextExcludePatterns: (ctx: ExtensionContext) => string[];
-  promptPackKey: (ctx: ExtensionContext, promptHash: string) => string;
-  retrievalKey: (ctx: ExtensionContext, query: string) => string;
-  startAutomaticTask: (query: string, ctx: ExtensionContext) => Promise<RuntimeIntakeResult | undefined>;
-  runtimeSnapshot?: (ctx: ExtensionContext) => RuntimeModelSnapshot | undefined;
-  persistRuntimeSnapshot?: (ctx: ExtensionContext, snapshot: RuntimeModelSnapshot) => unknown;
-  shadowSolver?: (input: {
-    request: string;
-    ctx: ExtensionContext;
-    activeTask?: TaskContract;
-    runtimeSnapshot?: RuntimeModelSnapshot;
-    protectedTarget: boolean;
-  }) => SolverShadowEvaluation;
-  modelRoute?: (input: {
-    ctx: ExtensionContext;
-    features: NonNullable<Extract<SolverShadowEvaluation, { status: "ok" }>["features"]>;
-    runtimeSnapshot?: RuntimeModelSnapshot;
-  }) => Promise<ModelRouteEvaluation>;
-  syncTrajectory?: (ctx: ExtensionContext, task: TaskContract, options: TrajectorySyncOptions) => TrajectorySyncResult;
-  telemetry: (ctx: ExtensionContext, payload: Record<string, unknown>) => void;
-};
+import type { AgentStartHookDependencies } from "./agent-start-types.ts";
 
 export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStartHookDependencies): void {
   pi.on("before_agent_start", async (event, ctx) => {
     const projectInstructions = rewriteLegacyProjectInstructions(event.systemPrompt);
     const query = looksLikeGovernedBoilerplate(event.prompt) ? extractTaskRequest(event.prompt) : event.prompt.trim();
     const signal = classifyContextTask(query);
-    const turn = dependencies.state.currentTurn(ctx, signal.promptHash) ?? dependencies.state.beginTurn(ctx, signal.promptHash);
+    // A mutation clarification still goes to the provider unchanged and never
+    // creates a task. Only a lightweight decision also skips repository retrieval.
+    const nonAuthorizingClarification = isNonAuthorizingChangeClarification(query);
+    const lightweightChangeContinuation = isLightweightNonAuthorizingChangeContinuation(query);
+    const turn = dependencies.state.classifyTurn(ctx, signal.promptHash, {
+      lightweightNonAuthorizingChange: lightweightChangeContinuation
+    });
     const readProtectedPaths = dependencies.readProtectedPaths(ctx);
     const protectedTarget = signal.paths.some((candidate) => matchesProtectedPath(candidate, readProtectedPaths));
     const protectedOnlyTarget = signal.paths.length > 0
@@ -119,7 +90,8 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
     const prefix = buildPrefixTelemetry(effectiveSystemPrompt, toolMetadata);
     const toolSchemaTokens = estimateContextTokens(prefix.canonicalToolSurface);
     const systemPromptTokens = estimateContextTokens(effectiveSystemPrompt);
-    const autoPackUseful = activeTask?.trace.outcome !== "pending"
+    const autoPackUseful = !lightweightChangeContinuation
+      && activeTask?.trace.outcome !== "pending"
       && (runtimeIntake || signal.paths.length === 0);
     let runtimeSnapshot: RuntimeModelSnapshot | undefined;
     try {
@@ -172,10 +144,12 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
       content: string;
       details: Record<string, unknown>;
     }) => {
-      const resumed = activeTask ? dependencies.state.takeResumeContextState(ctx, activeTask.taskRunId) : undefined;
+      const resumed = activeTask && !lightweightChangeContinuation
+        ? dependencies.state.takeResumeContextState(ctx, activeTask.taskRunId)
+        : undefined;
       const durableResume = activeTask && resumed ? buildTaskResumeContext(activeTask, resumed) : undefined;
       const selectedContext = contextMessage ?? durableResume;
-      const intake = await dependencies.startAutomaticTask(query, ctx);
+      const intake = nonAuthorizingClarification ? undefined : await dependencies.startAutomaticTask(query, ctx);
       if (intake?.task) observeTrajectorySync(ctx, dependencies.syncTrajectory?.(ctx, intake.task, { sourceHook: "agent-start", recommendationRef }), dependencies.telemetry);
       if (!selectedContext && !intake) return systemPromptUpdate;
       const discoveryItems = selectedContext?.customType === "piagent-context-pack-v2" && Array.isArray(selectedContext.details.selectedItems)
@@ -313,7 +287,7 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
     };
 
     const packKey = dependencies.promptPackKey(ctx, signal.promptHash);
-    if (!autoPackUseful && activeTask?.trace.outcome === "pending" && query.length >= 20 && signal.workflow !== "usage" && dependencies.autoContextEnabled) {
+    if (!lightweightChangeContinuation && !autoPackUseful && activeTask?.trace.outcome === "pending" && query.length >= 20 && signal.workflow !== "usage" && dependencies.autoContextEnabled) {
       await measureContextDeltaShadow({ ctx, query, turnId: turn.turnId, task: activeTask, mode: dependencies.contextDeltaShadowMode, protectedTarget, excludePatterns: dependencies.contextExcludePatterns(ctx), telemetry: dependencies.telemetry });
     }
     if (
@@ -329,7 +303,7 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
     dependencies.state.rememberAutoPackedPrompt(packKey);
     try {
       const excludePatterns = dependencies.contextExcludePatterns(ctx);
-      const ensured = await ensureContextIndexV2(ctx.cwd, {
+      const ensured = await (dependencies.ensureContextIndex ?? ensureContextIndexV2)(ctx.cwd, {
         excludePatterns,
         rebuildMissing: false
       });

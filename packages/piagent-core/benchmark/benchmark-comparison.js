@@ -1,4 +1,5 @@
 import { PIAGENT_BENCHMARK_TREATMENTS } from "./benchmark-runtime.js";
+import { normalizeBenchmarkUsageCost } from "./benchmark-normalized-cost.js";
 import { geometricMean, geometricMeanConfidence95, geometricMeanConfidence95Raw, median, rounded } from "./benchmark-statistics.js";
 import { exactBenchmarkAttemptUsage } from "./benchmark-usage.js";
 
@@ -46,9 +47,100 @@ export function completePairedScenarioCount(allPairs, repeats) {
 export function completeCategoryCoverage(suite, completeScenarioFreshRatios) {
   const scenarioById = new Map(suite.scenarios.map((scenario) => [scenario.id, scenario]));
   const required = new Set(suite.scenarios.map((scenario) => scenario.category ?? "unspecified"));
-  const observed = new Set(completeScenarioFreshRatios.map((item) => scenarioById.get(item.scenarioId)?.category ?? "unspecified"));
+  const observedScenarioIds = completeScenarioFreshRatios.flatMap((item) => (
+    Array.isArray(item.scenarioIds) ? item.scenarioIds : typeof item.scenarioId === "string" ? [item.scenarioId] : []
+  ));
+  const observed = new Set(observedScenarioIds.flatMap((scenarioId) => {
+    const scenario = scenarioById.get(scenarioId);
+    return scenario ? [scenario.category ?? "unspecified"] : [];
+  }));
   const missing = [...required].filter((category) => !observed.has(category)).sort();
   return { passed: missing.length === 0, required: [...required].sort(), observed: [...observed].sort(), missing };
+}
+
+/**
+ * Convert repeat-clustered scenario/variant ratios into the task-family sample
+ * declared by a matrix suite. A task family contributes exactly one ratio only
+ * after every declared structural variant has complete positive evidence.
+ * Suites without a matrix contract retain their existing scenario sample.
+ */
+export function hierarchicalMatrixRatioSample(suite, variantRatios) {
+  if (!plainObject(suite?.matrixContract)) {
+    const samples = Array.isArray(variantRatios) ? variantRatios : [];
+    return {
+      matrix: false,
+      complete: samples.length > 0,
+      sampleUnit: "scenario-family",
+      samples,
+      families: samples,
+      expectedSampleCount: suite?.scenarios?.length ?? 0,
+      usableSampleCount: samples.length,
+      expectedVariantCount: suite?.scenarios?.length ?? 0,
+      usableVariantCount: samples.length,
+      familyIds: [],
+      scenarioIds: samples.flatMap((item) => typeof item?.scenarioId === "string" ? [item.scenarioId] : [])
+    };
+  }
+  const rowsByScenario = new Map();
+  for (const row of Array.isArray(variantRatios) ? variantRatios : []) {
+    if (typeof row?.scenarioId !== "string") continue;
+    const rows = rowsByScenario.get(row.scenarioId) ?? [];
+    rows.push(row);
+    rowsByScenario.set(row.scenarioId, rows);
+  }
+  const definitionsByFamily = new Map();
+  for (const scenario of suite.scenarios ?? []) {
+    if (typeof scenario?.familyId !== "string") continue;
+    const definitions = definitionsByFamily.get(scenario.familyId) ?? [];
+    definitions.push(scenario);
+    definitionsByFamily.set(scenario.familyId, definitions);
+  }
+  const families = [...definitionsByFamily.entries()].map(([familyId, definitions]) => {
+    const issues = [];
+    if (definitions.length !== suite.matrixContract.variantsPerFamily) issues.push("matrix-variant-cardinality-mismatch");
+    const variants = definitions.map((scenario) => {
+      const observed = rowsByScenario.get(scenario.id) ?? [];
+      if (observed.length !== 1) issues.push(observed.length === 0
+        ? `missing-variant:${scenario.variantId ?? scenario.id}`
+        : `duplicate-variant:${scenario.variantId ?? scenario.id}`);
+      const row = observed.length === 1 ? observed[0] : null;
+      if (!Number.isFinite(row?.ratio) || row.ratio <= 0) issues.push(`unusable-variant:${scenario.variantId ?? scenario.id}`);
+      return {
+        ...(row ?? { scenarioId: scenario.id, ratio: null }),
+        scenarioId: scenario.id,
+        variantId: scenario.variantId ?? scenario.id,
+        variantRole: scenario.variantRole ?? null
+      };
+    });
+    const usableVariants = variants.filter((item) => Number.isFinite(item.ratio) && item.ratio > 0);
+    const complete = issues.length === 0 && usableVariants.length === definitions.length;
+    return {
+      familyId,
+      ratio: complete ? geometricMean(usableVariants.map((item) => item.ratio)) : null,
+      expectedVariants: definitions.length,
+      usableVariants: usableVariants.length,
+      scenarioIds: definitions.map((scenario) => scenario.id),
+      variantIds: definitions.map((scenario) => scenario.variantId ?? scenario.id),
+      variants,
+      issues: [...new Set(issues)]
+    };
+  });
+  const usableFamilies = families.filter((item) => Number.isFinite(item.ratio) && item.ratio > 0);
+  const complete = definitionsByFamily.size === suite.matrixContract.familyCount
+    && usableFamilies.length === suite.matrixContract.familyCount;
+  return {
+    matrix: true,
+    complete,
+    sampleUnit: suite.matrixContract.confidenceSampleUnit,
+    samples: usableFamilies,
+    families,
+    expectedSampleCount: suite.matrixContract.familyCount,
+    usableSampleCount: usableFamilies.length,
+    expectedVariantCount: suite.scenarios?.length ?? 0,
+    usableVariantCount: usableFamilies.reduce((sum, family) => sum + family.usableVariants, 0),
+    familyIds: usableFamilies.map((item) => item.familyId),
+    scenarioIds: usableFamilies.flatMap((item) => item.scenarioIds)
+  };
 }
 
 export function selectPrimaryEfficiencyEstimate(estimand, successfulPair, failureAware, fixedWorkload) {
@@ -122,6 +214,99 @@ export function tokensPerResolvedOutcome(pairs, side) {
     total += pair[side].usage.fresh + failedAttemptFreshByPair.get(pair);
   }
   return total / resolved;
+}
+
+function effectiveAttemptRecords(pairs, side) {
+  return pairs.flatMap((pair) => {
+    const run = pair?.[side];
+    if (!run) return [{ kind: "accepted", status: "unknown-after-provider-start", usage: null, missingRun: true }];
+    const accepted = [{ kind: "accepted", status: run.usageStatus ?? "measured", usage: run.usage }];
+    const ledgerIssues = [];
+    if (!Number.isSafeInteger(run.infrastructureRetries) || run.infrastructureRetries < 0) ledgerIssues.push("invalid-infrastructure-retry-count");
+    if (!Array.isArray(run.infrastructureFailures)) ledgerIssues.push("missing-infrastructure-failure-ledger");
+    else if (Number.isSafeInteger(run.infrastructureRetries) && run.infrastructureFailures.length !== run.infrastructureRetries) {
+      ledgerIssues.push("retry-ledger-count-mismatch");
+    }
+    if (!Number.isSafeInteger(run.infrastructureAttempts)
+      || run.infrastructureAttempts !== (Number.isSafeInteger(run.infrastructureRetries) ? run.infrastructureRetries + 1 : -1)) {
+      ledgerIssues.push("attempt-ledger-count-mismatch");
+    }
+    if (ledgerIssues.length > 0) return [...accepted, { kind: "failure-ledger", ledgerIssues }];
+    return [...accepted, ...run.infrastructureFailures.map((failure) => ({
+      kind: "infrastructure-failure",
+      status: failure?.usageStatus ?? "unknown-after-provider-start",
+      usage: failure?.usage
+    }))];
+  });
+}
+
+/**
+ * Exact effort per resolved outcome. The numerator charges every accepted run
+ * plus every provider-started infrastructure attempt, including failed ones.
+ */
+export function effectiveResourcesPerResolvedOutcome(pairs, side, pricingSnapshot) {
+  if (!Array.isArray(pairs) || !["baseline", "candidate"].includes(side)) {
+    return { status: "unavailable", issues: ["invalid-effective-resource-input"] };
+  }
+  const records = effectiveAttemptRecords(pairs, side);
+  const usageIssues = [];
+  const costIssues = [];
+  let totalTokens = 0;
+  let normalizedApiCostUsd = 0;
+  let providerStartedAttempts = 0;
+  let providerAttemptCompleteness = "exact";
+  for (const [index, record] of records.entries()) {
+    if (record.missingRun) { usageIssues.push(`attempt-${index + 1}:missing-run`); continue; }
+    if (record.ledgerIssues) { usageIssues.push(...record.ledgerIssues); continue; }
+    const status = record.status ?? "unknown-after-provider-start";
+    if (!exactBenchmarkAttemptUsage(record.usage, status)) {
+      usageIssues.push(`attempt-${index + 1}:${status === "unknown-after-provider-start" ? "usage-unknown-after-provider-start" : "usage-not-exact"}`);
+      continue;
+    }
+    totalTokens += Number(record.usage?.total ?? 0);
+    if (status !== "known-pre-provider-zero") {
+      const observed = record.usage?.execution?.providerStartedAttempts;
+      if (Number.isSafeInteger(observed) && observed > 0) providerStartedAttempts += observed;
+      else {
+        providerStartedAttempts += 1;
+        providerAttemptCompleteness = "lower-bound";
+      }
+      if (pricingSnapshot === undefined) costIssues.push("pricing-snapshot-required");
+      else {
+        const normalized = normalizeBenchmarkUsageCost(record.usage, pricingSnapshot);
+        if (normalized.status === "measured") normalizedApiCostUsd += normalized.amount;
+        else costIssues.push(`attempt-${index + 1}:normalized-cost-${normalized.reason}`);
+      }
+    }
+  }
+  const resolvedOutcomes = pairs.filter((pair) => pair?.[side]?.resolved === true).length;
+  if (resolvedOutcomes === 0) usageIssues.push("zero-resolved-outcomes");
+  const uniqueUsageIssues = [...new Set(usageIssues)];
+  const uniqueCostIssues = [...new Set([...usageIssues, ...costIssues])];
+  const tokenExact = uniqueUsageIssues.length === 0;
+  const costExact = uniqueCostIssues.length === 0;
+  return {
+    status: tokenExact && costExact ? "measured" : tokenExact ? "partial" : "unavailable",
+    issues: uniqueCostIssues,
+    tokenStatus: tokenExact ? "measured" : "unavailable",
+    costStatus: costExact ? "measured" : "unavailable",
+    attemptRecords: records.filter((record) => !record.ledgerIssues && !record.missingRun).length,
+    providerStartedAttempts: tokenExact ? providerStartedAttempts : null,
+    providerAttemptCompleteness: tokenExact ? providerAttemptCompleteness : "unavailable",
+    resolvedOutcomes,
+    totalTokens: tokenExact ? totalTokens : null,
+    totalTokensPerResolvedOutcome: tokenExact ? totalTokens / resolvedOutcomes : null,
+    normalizedApiCostUsd: costExact ? rounded(normalizedApiCostUsd, 9) : null,
+    normalizedApiCostPerResolvedOutcomeUsd: costExact ? rounded(normalizedApiCostUsd / resolvedOutcomes, 9) : null
+  };
+}
+
+export function totalTokensPerResolvedOutcome(pairs, side, pricingSnapshot) {
+  return effectiveResourcesPerResolvedOutcome(pairs, side, pricingSnapshot).totalTokensPerResolvedOutcome;
+}
+
+export function normalizedApiCostPerResolvedOutcome(pairs, side, pricingSnapshot) {
+  return effectiveResourcesPerResolvedOutcome(pairs, side, pricingSnapshot).normalizedApiCostPerResolvedOutcomeUsd;
 }
 
 export function pairedUsageBands(tokenPairs, field) {
@@ -247,6 +432,27 @@ export function familyClusteredFailureAwareUsage(suite, allPairs, repeats) {
       issues
     };
   });
+  if (plainObject(suite.matrixContract)) {
+    const hierarchy = hierarchicalMatrixRatioSample(suite, familyRatios);
+    const ratios = hierarchy.complete ? hierarchy.samples.map((item) => item.ratio) : [];
+    return {
+      complete: hierarchy.complete,
+      expectedScenarioFamilies: hierarchy.expectedSampleCount,
+      usableScenarioFamilies: hierarchy.usableSampleCount,
+      expectedTaskFamilies: hierarchy.expectedSampleCount,
+      usableTaskFamilies: hierarchy.usableSampleCount,
+      expectedVariants: hierarchy.expectedVariantCount,
+      usableVariants: hierarchy.usableVariantCount,
+      sampleUnit: hierarchy.sampleUnit,
+      familyIds: hierarchy.complete ? hierarchy.familyIds : [],
+      scenarioIds: hierarchy.complete ? hierarchy.scenarioIds : [],
+      ratio: hierarchy.complete ? geometricMean(ratios) : null,
+      confidence95: hierarchy.complete ? geometricMeanConfidence95(ratios) : null,
+      confidence95Raw: hierarchy.complete ? geometricMeanConfidence95Raw(ratios) : null,
+      families: hierarchy.families,
+      variants: familyRatios
+    };
+  }
   const usableRatios = familyRatios.filter((item) => Number.isFinite(item.ratio));
   const complete = usableRatios.length === familyRatios.length && familyRatios.length > 0;
   const values = complete ? usableRatios.map((item) => item.ratio) : [];
@@ -332,6 +538,74 @@ export function familyClusteredFixedWorkloadUsage(suite, allPairs, repeats) {
       issues
     };
   });
+  if (plainObject(suite.matrixContract)) {
+    const hierarchy = hierarchicalMatrixRatioSample(suite, families);
+    const usableFamilies = hierarchy.samples;
+    const ratios = hierarchy.complete ? usableFamilies.map((item) => item.ratio) : [];
+    const usableVariants = families.filter((item) => Number.isFinite(item.ratio) && item.ratio > 0);
+    const aggregateBaselineFreshTokens = hierarchy.complete
+      ? usableVariants.reduce((sum, item) => sum + item.baselineFreshTokens, 0)
+      : null;
+    const aggregateCandidateFreshTokens = hierarchy.complete
+      ? usableVariants.reduce((sum, item) => sum + item.candidateFreshTokens, 0)
+      : null;
+    const expectedAttemptsPerVariant = expectedAttempts;
+    const expectedAttemptsPerFamily = Number.isInteger(expectedAttempts)
+      ? expectedAttempts * suite.matrixContract.variantsPerFamily
+      : null;
+    const taskFamilies = hierarchy.families.map((family) => {
+      const variants = family.variants;
+      const baselineResolvedOutcomes = variants.reduce((sum, item) => sum + (item.baselineResolvedOutcomes ?? 0), 0);
+      const candidateResolvedOutcomes = variants.reduce((sum, item) => sum + (item.candidateResolvedOutcomes ?? 0), 0);
+      const baselineFreshTokens = variants.every((item) => Number.isFinite(item.baselineFreshTokens))
+        ? variants.reduce((sum, item) => sum + item.baselineFreshTokens, 0)
+        : null;
+      const candidateFreshTokens = variants.every((item) => Number.isFinite(item.candidateFreshTokens))
+        ? variants.reduce((sum, item) => sum + item.candidateFreshTokens, 0)
+        : null;
+      return {
+        ...family,
+        baselineResolvedOutcomes,
+        candidateResolvedOutcomes,
+        baselineFreshTokens: rounded(baselineFreshTokens, 2),
+        candidateFreshTokens: rounded(candidateFreshTokens, 2),
+        expectedAttempts: expectedAttemptsPerFamily,
+        pairedAttempts: variants.reduce((sum, item) => sum + (item.pairedAttempts ?? 0), 0),
+        exactComparableAttempts: variants.reduce((sum, item) => sum + (item.exactComparableAttempts ?? 0), 0),
+        exactCoverage: family.issues.length === 0,
+        outcomeRelation: fixedWorkloadOutcomeRelation(
+          baselineResolvedOutcomes,
+          candidateResolvedOutcomes,
+          expectedAttemptsPerFamily
+        )
+      };
+    });
+    return {
+      complete: hierarchy.complete,
+      expectedScenarioFamilies: hierarchy.expectedSampleCount,
+      usableScenarioFamilies: hierarchy.usableSampleCount,
+      expectedTaskFamilies: hierarchy.expectedSampleCount,
+      usableTaskFamilies: hierarchy.usableSampleCount,
+      expectedVariants: hierarchy.expectedVariantCount,
+      usableVariants: hierarchy.usableVariantCount,
+      expectedAttemptsPerFamily,
+      expectedAttemptsPerVariant,
+      sampleUnit: hierarchy.sampleUnit,
+      outcomeConditioning: "none",
+      aggregation: "geometric-mean-of-task-family-geometric-mean-variant-total-ratios",
+      attemptPolicy: "accepted-plus-exact-provider-started-failed-attempts",
+      familyIds: hierarchy.complete ? hierarchy.familyIds : [],
+      scenarioIds: hierarchy.complete ? hierarchy.scenarioIds : [],
+      ratio: hierarchy.complete ? geometricMean(ratios) : null,
+      confidence95: hierarchy.complete ? geometricMeanConfidence95(ratios) : null,
+      confidence95Raw: hierarchy.complete ? geometricMeanConfidence95Raw(ratios) : null,
+      aggregateFreshTokenRatio: hierarchy.complete && aggregateBaselineFreshTokens > 0
+        ? aggregateCandidateFreshTokens / aggregateBaselineFreshTokens
+        : null,
+      families: taskFamilies,
+      variants: families
+    };
+  }
   const usableFamilies = families.filter((item) => Number.isFinite(item.ratio) && item.ratio > 0);
   const complete = usableFamilies.length === families.length && families.length > 0;
   const ratios = complete ? usableFamilies.map((item) => item.ratio) : [];

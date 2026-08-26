@@ -210,6 +210,59 @@ describe("Pi usage history", () => {
     assert.throws(() => summarizeSession(target, { strictUsage: true }), /line 3 is not valid JSON/);
   });
 
+  it("emits privacy-safe request pricing and execution accounting", () => {
+    const fixture = makeFixture();
+    const target = path.join(fixture.root, "telemetry.jsonl");
+    writeJsonl(target, [
+      { type: "session", id: "telemetry", cwd: fixture.project },
+      { type: "auto_retry_start", attempt: 1 },
+      { type: "auto_retry_end", attempt: 1, success: false },
+      { type: "compaction_start", reason: "threshold" },
+      { type: "compaction_end", reason: "threshold", aborted: true },
+      { type: "summarization_retry_scheduled", attempt: 1 },
+      { type: "message", message: { role: "assistant", content: [
+        { type: "toolCall", id: "r1", name: "read", arguments: { path: "/private/secret.ts" } }
+      ], usage: usage(10, 2, 3, 0, 1, 15, 0.01) } },
+      { type: "message", message: { role: "toolResult", toolCallId: "r1", toolName: "read", isError: true, details: { status: "blocked" } } },
+      { type: "message", message: { role: "assistant", content: [
+        { type: "toolCall", id: "r2", name: "read", arguments: { path: "/private/secret.ts" } }
+      ], usage: usage(20, 3, 4, 0, 1, 27, 0.02) } },
+      { type: "message", message: { role: "toolResult", toolCallId: "r2", toolName: "read", details: { status: "declined" } } },
+      { type: "message", message: { role: "assistant", content: [
+        { type: "toolCall", id: "s1", name: "subagent", arguments: { action: "spawn", task: "private task" } }
+      ], usage: usage(30, 4, 5, 1, 2, 40, 0.03) } },
+      { type: "message", message: { role: "toolResult", toolCallId: "s1", toolName: "subagent", isError: true } }
+    ]);
+    const summary = summarizeSession(target, { strictUsage: true });
+    assert.equal(summary.pricingBuckets.completeness, "exact");
+    assert.equal(summary.pricingBuckets.requests.length, 3);
+    assert.deepEqual(summary.pricingBuckets.requests[0], {
+      input: 10, output: 2, cacheRead: 3, cacheWrite: 0, reasoning: 1, total: 15, promptTokens: 13
+    });
+    assert.deepEqual(summary.execution, {
+      schemaVersion: 1,
+      source: "pi-session-jsonl",
+      completeness: { tools: "exact", retries: "unavailable", compactions: "partial", subagents: "exact" },
+      providerStartedAttempts: 3,
+      toolCalls: 3,
+      toolResults: 3,
+      toolFailures: 2,
+      blockedToolCalls: 1,
+      declinedToolCalls: 1,
+      explicitRetries: 1,
+      retryFailures: 1,
+      compactions: 1,
+      abortedCompactions: 1,
+      summarizationRetries: 1,
+      repeatedToolCalls: 1,
+      subagentAttempts: 1,
+      subagentFailures: 1
+    });
+    const serialized = JSON.stringify({ execution: summary.execution, pricingBuckets: summary.pricingBuckets });
+    assert.equal(serialized.includes("/private/secret.ts"), false);
+    assert.equal(serialized.includes("private task"), false);
+  });
+
   // docs/usage-observability.md documents the --json shape as a table of
   // top-level keys. That table went four keys stale because nothing tied it to
   // the emitted object. Compare the two directly so a new key has to be

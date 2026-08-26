@@ -11,6 +11,16 @@ const SOURCE_DESTINATION_COMMANDS = new Set(["cp", "install", "ln", "mv"]);
 const SHELL_INTERPRETERS = new Set(["bash", "sh", "zsh"]);
 const FIND_FILE_OUTPUT_ACTIONS = new Set(["-fprint", "-fprint0", "-fprintf", "-fls"]);
 
+// A redirect to the operating system's null device discards bytes; it does not
+// mutate the workspace. Keep this deliberately exact. Treating aliases,
+// variables, or lookalike paths as the null device would let an expansion such
+// as `${SINK:-/dev/null}` hide a real file target from the guard.
+function isNullDeviceRedirectionTarget(value) {
+  const candidate = String(value ?? "");
+  if (process.platform !== "win32") return candidate === "/dev/null";
+  return candidate.replace(/\\/g, "/").toLowerCase() === "//./nul";
+}
+
 function commandName(value) {
   return String(value ?? "").split("/").at(-1)?.toLowerCase() ?? "";
 }
@@ -32,24 +42,12 @@ function executableWords(words) {
   return words.slice(index);
 }
 
-function redirectionTargets(words) {
-  const targets = [];
-  for (let index = 0; index < words.length; index += 1) {
-    const token = words[index];
-    const match = token.match(/^\d*(>>?|>\|)(.*)$/);
-    if (!match || /^\d+$/.test(match[2])) continue;
-    const target = match[2] || words[index + 1];
-    if (target && !/^&?\d+$/.test(target)) targets.push(target);
-  }
-  return targets;
-}
-
 export function shellHasFileWriteRedirection(command) {
   return splitShellSegments(String(command ?? "")).some((segment) => (
     extractAttachedRedirectionPaths(segment)
       .filter((redirect) => redirect.writesFile)
       .flatMap(redirectionTargetWords)
-      .length > 0
+      .some((target) => !isNullDeviceRedirectionTarget(target.value))
   ));
 }
 
@@ -60,6 +58,7 @@ export function extractShellWritePathCandidates(command) {
   const assignments = new Map();
   const pending = splitShellSegments(String(command ?? "")).map((segment) => ({ segment, depth: 0 }));
   const add = (value) => {
+    if (isNullDeviceRedirectionTarget(value)) return;
     const normalized = normalizePathCandidate(expandAssignments(value, assignments));
     if (normalized) candidates.push(normalized);
   };
@@ -75,7 +74,9 @@ export function extractShellWritePathCandidates(command) {
       const assignment = word.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
       if (assignment) assignments.set(assignment[1], expandAssignments(assignment[2], assignments));
     }
-    for (const target of redirectionTargets(words)) add(target);
+    for (const target of extractAttachedRedirectionPaths(segment)
+      .filter((redirect) => redirect.writesFile)
+      .flatMap(redirectionTargetWords)) add(target.value);
     const executable = executableWords(words);
     const name = commandName(executable[0]);
     const operands = executable.slice(1).filter((word) => word && !word.startsWith("-") && !/^[<>]/.test(word));

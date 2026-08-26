@@ -80,6 +80,7 @@ export async function startPiagentGateway(options: {
   packageRoot: string;
   expectedPiVersion: string;
   agentDir?: string;
+  staticRoot?: string;
 }): Promise<{ descriptor: GatewayDescriptor; wait(): Promise<void>; close(): Promise<void> }> {
   const state = gatewayProfileState(options.agentDir);
   process.env.PI_CODING_AGENT_DIR = state.agentDir;
@@ -87,7 +88,7 @@ export async function startPiagentGateway(options: {
   const metadata = new SessionMetadataStore(state.root, key);
   const projects = new ProjectRegistry(state.root, key);
   const gatewayInstanceRef = `gateway_${process.pid}_${randomBytes(24).toString("base64url")}`;
-  const staticRoot = path.join(options.packageRoot, "packages", "piagent-webui", "dist", "client");
+  const staticRoot = options.staticRoot ?? path.join(options.packageRoot, "packages", "piagent-webui", "dist", "client");
   if (!fs.existsSync(path.join(staticRoot, "index.html"))) throw new Error("gateway-webui-build-missing");
 
   let descriptor: GatewayDescriptor | null = null;
@@ -182,7 +183,8 @@ export async function startPiagentGateway(options: {
       events, command: commands });
     const inspections = new SessionInspectionRegistry({ gatewayInstanceRef, host, key, packageRoot: options.packageRoot, agentDir: state.agentDir,
       models: inspectionModels, projects, mcpAuth, listSessions: () => runtimes!.listSessions(),
-      openLiveSession: (sessionRef) => runtimes!.liveSessionManager(sessionRef) });
+      openLiveSession: (sessionRef) => runtimes!.liveSessionManager(sessionRef),
+      operationLiveness: (sessionRef) => runtimes!.currentOperation(sessionRef) ? "running" : "idle" });
     // Staged bytes live beside the inspection projection they were checked
     // against, so both read the same session through the same registry.
     attachments = new SessionAttachmentRegistry({

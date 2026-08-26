@@ -102,6 +102,42 @@ describe("Piagent WebUI Activity canonical result reconciliation", () => {
     assert.equal(projection.snapshot.session.operation.liveness, "idle");
   });
 
+  it("never carries an unresolved tool row across a host settlement or exact idle projection", async (t) => {
+    const cwd = repository();
+    t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+    const events = [
+      call("missing-result-before-settle", "read", "2026-08-24T14:25:00.000Z", { targetPath: "docs/compacted-away.md" }),
+      { activityId: "agent-settled:1", event: "agent_settled", sessionId,
+        recordedAt: "2026-08-24T14:25:01.000Z" },
+      call("current-operation", "grep", "2026-08-24T14:25:02.000Z", { targetPath: "src" })
+    ];
+    const running = await buildWebUiInspectionProjection({ cwd, sessionId, events,
+      generatedAt: "2026-08-24T14:25:03.000Z", operationLiveness: "running" });
+    assert.deepEqual(running.snapshot.activity.running.map((item) => item.preview), ["src"]);
+    const ended = running.snapshot.activity.recent.find((item) => item.preview === "docs/compacted-away.md");
+    assert.equal(ended?.state, "unknown");
+    assert.equal(ended?.finishedAt, "2026-08-24T14:25:01.000Z");
+    assert.match(ended?.label ?? "", /result unavailable/);
+
+    const idle = await buildWebUiInspectionProjection({ cwd, sessionId, events,
+      current: [{ toolCallId: "current-operation", toolName: "grep", label: "reading", target: "src",
+        startedAt: "2026-08-24T14:25:02.000Z", status: "running" }],
+      generatedAt: "2026-08-24T14:25:04.000Z", operationLiveness: "idle" });
+    assert.equal(idle.snapshot.activity.running.length, 0);
+    assert.equal(idle.snapshot.activity.recent.find((item) => item.preview === "src")?.state, "unknown");
+    assert.equal(idle.snapshot.session.operation.liveness, "idle");
+    assert.notEqual(idle.snapshot.revision.runtimeRevision, running.snapshot.revision.runtimeRevision,
+      "the exact liveness transition must advance the canonical runtime revision");
+    const idleAgain = await buildWebUiInspectionProjection({ cwd, sessionId, events,
+      generatedAt: "2026-08-24T14:25:05.000Z", operationLiveness: "idle" });
+    assert.equal(idleAgain.snapshot.revision.runtimeRevision, idle.snapshot.revision.runtimeRevision);
+    assert.equal(idleAgain.snapshot.activity.recent.find((item) => item.preview === "src")?.finishedAt,
+      idle.snapshot.activity.recent.find((item) => item.preview === "src")?.finishedAt,
+      "refresh time must not keep moving an already-ended row");
+    const validation = validateFixture(registry, "snapshot-v1", idle.snapshot);
+    assert.equal(validation.valid, true, validation.errors);
+  });
+
   it("keeps a handled search warning non-failing after canonical refresh and reconciliation", async (t) => {
     const cwd = repository();
     t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));

@@ -5,6 +5,8 @@ import { applyOperationSettlement, canonicalLiveStateSequence, connectionStateAf
   liveProgressStatus, mergeTerminalOperationActivities, parseGatewayCursor,
   reconcileSessionLiveState, reconcileTerminalOperationActivities,
   terminalOperationActivity } from "../packages/piagent-webui/client/src/use-session-hub.ts";
+import { conversationAfterRejectedSend, pendingUserConversation,
+  safeLiveFileLabel } from "../packages/piagent-webui/client/src/live-state-view-model.ts";
 
 function running() {
   return { user: "Check the plan.", assistant: "Unconfirmed streamed draft.", attachments: [], activities: [],
@@ -25,6 +27,19 @@ describe("Piagent WebUI live conversation settlement", () => {
     });
   });
 
+  it("shows only the current file basename in chat progress and rejects unsafe labels", () => {
+    const live = { ...running(), startedAt: "2026-08-24T14:00:00.000Z", lastEventAt: "2026-08-24T14:00:05.000Z",
+      activities: [{ toolCallRef: "tool_read", toolLabel: "read", fileLabel: "use-auth-refresh.ts", state: "running",
+        startedAt: "2026-08-24T14:00:05.000Z", finishedAt: null }] };
+    assert.deepEqual(liveProgressStatus(live, "vi", Date.parse("2026-08-24T14:00:12.000Z")), {
+      label: "Piagent đang đọc mã nguồn…", detail: "use-auth-refresh.ts · Tiến trình vừa cập nhật"
+    });
+    assert.equal(safeLiveFileLabel("/private/project/use-auth-refresh.ts"), "use-auth-refresh.ts");
+    assert.equal(safeLiveFileLabel("sk-proj-abcdefghijklmnopqrstuvwxyz.ts"), null);
+    assert.equal(safeLiveFileLabel("[REDACTED_SECRET].ts"), null);
+    assert.equal(safeLiveFileLabel(".."), null);
+  });
+
   it("exits loading for every canonical terminal outcome and keeps prose only for success", () => {
     for (const settlement of ["completed", "blocked", "aborted", "error", "unknown"]) {
       const value = applyOperationSettlement(running(), { operationRef: "operation_live_settlement", settlement,
@@ -36,6 +51,14 @@ describe("Piagent WebUI live conversation settlement", () => {
     }
   });
 
+  it("drops volatile tool rows when their operation reaches a terminal settlement", () => {
+    const existing = { ...running(), activities: [{ toolCallRef: "tool_stale", toolLabel: "read", state: "running",
+      startedAt: "2026-08-24T14:00:01.000Z", finishedAt: null }] };
+    const settled = applyOperationSettlement(existing, { operationRef: "operation_live_settlement", settlement: "completed" });
+    assert.equal(settled.complete, true);
+    assert.deepEqual(settled.activities, []);
+  });
+
   it("fails an unrecognized settlement closed instead of leaving the composer loading", () => {
     const value = applyOperationSettlement(running(), { operationRef: "operation_live_settlement", settlement: "future-state" });
     assert.equal(value.complete, true);
@@ -44,7 +67,7 @@ describe("Piagent WebUI live conversation settlement", () => {
     assert.equal(value.error, "operation-settlement-unknown");
   });
 
-  it("seeds Stop/loading from canonical live state and reconciles a finished operation without a false error", () => {
+  it("seeds Stop/loading from canonical live state and reconciles a finished operation without losing admitted input", () => {
     const projection = {
       schemaVersion: 1, version: "piagent-session-live-state-v1", generatedAt: "2026-08-21T08:00:00.000Z",
       gatewayInstanceRef: "gateway_live_reload", eventSequence: 17, state: "ready",
@@ -72,10 +95,46 @@ describe("Piagent WebUI live conversation settlement", () => {
     const cleared = reconcileSessionLiveState(settling, settledSnapshot);
     assert.equal(cleared.session_live_reload.complete, true);
     assert.equal(cleared.session_live_reload.operationRef, null);
-    assert.equal(cleared.session_live_reload.user, "");
+    assert.equal(cleared.session_live_reload.user, "Admitted input");
     assert.equal(cleared.session_live_reload.assistant, "");
     assert.equal(cleared.session_live_reload.settlement, "unknown");
     assert.equal(cleared.session_live_reload.error, "operation-settlement-unavailable");
+  });
+
+  it("shows one pending user bubble immediately and rolls it back only for the same definitive rejection", () => {
+    const previous = { ...running(), user: "Previous request", operationRef: "operation_previous", complete: true };
+    const pending = pendingUserConversation(previous, { message: "Implement the fix now.", attachments: [],
+      messageRequestId: "message-request.pending-01", submittedAt: "2026-08-26T08:53:11.000Z" });
+    assert.equal(pending.user, "Implement the fix now.");
+    assert.equal(pending.delivery, "submitting");
+    assert.equal(pending.complete, false);
+    assert.equal(conversationAfterRejectedSend(pending, previous, "message-request.pending-01"), previous);
+    assert.equal(conversationAfterRejectedSend(pending, previous, "message-request.other"), pending);
+    assert.equal(conversationAfterRejectedSend({ ...pending, delivery: "admitted" }, previous,
+      "message-request.pending-01").user, "Implement the fix now.");
+  });
+
+  it("keeps an unconfirmed bubble across an empty refresh and admits it when the canonical operation appears", () => {
+    const pending = { ...pendingUserConversation(undefined, { message: "Continue safely.", attachments: [],
+      messageRequestId: "message-request.uncertain-01", submittedAt: "2026-08-26T08:53:11.000Z" }),
+      delivery: "unconfirmed", complete: true };
+    const empty = { schemaVersion: 1, version: "piagent-session-live-state-v1", generatedAt: "2026-08-26T08:53:12.000Z",
+      gatewayInstanceRef: "gateway_uncertain", eventSequence: 1, state: "ready", operations: [], settlements: [], reasonCode: null };
+    const preserved = reconcileSessionLiveState({ session_uncertain: pending }, empty);
+    assert.equal(preserved.session_uncertain.user, "Continue safely.");
+    const admitted = reconcileSessionLiveState(preserved, { ...empty, eventSequence: 2,
+      operations: [{ sessionRef: "session_uncertain", operationRef: "operation_uncertain",
+        messageRequestId: "message-request.uncertain-01", state: "running", abortable: true }] });
+    assert.equal(admitted.session_uncertain.delivery, "admitted");
+    assert.equal(admitted.session_uncertain.operationRef, "operation_uncertain");
+    assert.equal(admitted.session_uncertain.messageRequestId, "message-request.uncertain-01");
+    assert.equal(admitted.session_uncertain.complete, false);
+
+    const other = reconcileSessionLiveState(preserved, { ...empty, eventSequence: 3,
+      operations: [{ sessionRef: "session_uncertain", operationRef: "operation_other",
+        messageRequestId: "message-request.other", state: "running", abortable: true }] });
+    assert.equal(other.session_uncertain.user, "", "a reconnect must not bind an optimistic bubble to another request");
+    assert.equal(other.session_uncertain.messageRequestId, "message-request.other");
   });
 
   it("binds a persisted event cursor to one exact Gateway epoch", () => {

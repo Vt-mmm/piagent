@@ -16,6 +16,10 @@ export function liveChatState(events: RuntimeStreamEvent[]): { assistants: LiveA
   const assistants = new Map<string, LiveAssistant>(), tools = new Map<string, LiveTool>();
   for (const event of events.slice(-500)) {
     const kind = event.kind, payload = event.payload ?? {}, messageRef = event.messageRef;
+    if (["agent-operation.settled", "session.replacement-pending", "session.replacement-committed", "session.shutdown"].includes(String(kind))) {
+      assistants.clear(); tools.clear();
+      continue;
+    }
     if (kind === "message.started" && payload.role === "assistant" && typeof messageRef === "string") {
       assistants.set(messageRef, { messageRef, text: "", thinking: false, truncated: false });
     } else if (kind === "message.text-delta" && typeof messageRef === "string" && typeof payload.delta === "string") {

@@ -43,6 +43,11 @@ test("attributes the official Pi 0.84 JSON stdout lifecycle without retaining pa
   writeEvent(collector, { type: "session", version: 3, id: "private-session", timestamp: "2026-08-23T00:00:00.000Z", cwd: "/private/project" }, 0.1);
   writeEvent(collector, { type: "agent_start" }, 0.15);
   writeEvent(collector, { type: "queue_update", steering: ["private queued prompt"], followUp: [] }, 0.16);
+  writeEvent(collector, { type: "auto_retry_start", attempt: 1, maxAttempts: 2, delayMs: 10, errorMessage: "private error" }, 0.17);
+  writeEvent(collector, { type: "auto_retry_end", success: false, attempt: 1, finalError: "private error" }, 0.17);
+  writeEvent(collector, { type: "compaction_start", reason: "threshold" }, 0.18);
+  writeEvent(collector, { type: "compaction_end", reason: "threshold", aborted: false, willRetry: false, result: {} }, 0.18);
+  writeEvent(collector, { type: "summarization_retry_scheduled", attempt: 1, maxAttempts: 2, delayMs: 10, errorMessage: "private error" }, 0.19);
   writeEvent(collector, { type: "turn_start" }, 0.2);
   writeEvent(collector, { type: "message_start", message: { role: "user", content: "private prompt" } }, 0.2);
   writeEvent(collector, { type: "message_end", message: { role: "user", content: "private prompt" } }, 0.2);
@@ -50,7 +55,7 @@ test("attributes the official Pi 0.84 JSON stdout lifecycle without retaining pa
   writeEvent(collector, { type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "private answer" } }, 0.65);
   writeEvent(collector, { type: "message_end", message: { role: "assistant", content: [{ type: "toolCall", id: "secret-id", name: "bash", arguments: { command: "private command" } }] } }, 0.7);
   writeEvent(collector, { type: "tool_execution_start", toolCallId: "secret-id", toolName: "bash", args: { command: "private command" } }, 0.7);
-  writeEvent(collector, { type: "tool_execution_end", toolCallId: "secret-id", toolName: "bash", result: { content: "private path" }, isError: false }, 1.7);
+  writeEvent(collector, { type: "tool_execution_end", toolCallId: "secret-id", toolName: "bash", result: { content: "private path", status: "blocked" }, isError: true }, 1.7);
   writeEvent(collector, { type: "message_start", message: { role: "toolResult", toolCallId: "secret-id", toolName: "bash", content: "private path" } }, 1.7);
   writeEvent(collector, { type: "message_end", message: { role: "toolResult", toolCallId: "secret-id", toolName: "bash", content: "private path" } }, 1.7);
   writeEvent(collector, { type: "turn_end", message: { role: "assistant" }, toolResults: [{ role: "toolResult", toolCallId: "secret-id", toolName: "bash" }] }, 1.8);
@@ -68,6 +73,25 @@ test("attributes the official Pi 0.84 JSON stdout lifecycle without retaining pa
   assert.equal(value.phases.toolExecution.seconds, 1);
   assert.equal(value.phases.other.seconds, 0.8);
   assert.equal(value.gateImpact, "none");
+  assert.deepEqual(value.execution, {
+    schemaVersion: 1,
+    source: "stdout-jsonl-lifecycle",
+    completeness: { providerAttempts: "exact", tools: "exact", retries: "exact", compactions: "exact", subagents: "exact" },
+    providerStartedAttempts: 2,
+    toolCalls: 1,
+    toolResults: 1,
+    toolFailures: 1,
+    blockedToolCalls: 1,
+    declinedToolCalls: 0,
+    explicitRetries: 1,
+    retryFailures: 1,
+    compactions: 1,
+    abortedCompactions: 0,
+    summarizationRetries: 1,
+    repeatedToolCalls: 0,
+    subagentAttempts: 0,
+    subagentFailures: 0
+  });
   assert.deepEqual(value.privacy, {
     rawPayloadStored: false, promptsStored: false, commandsStored: false, pathsStored: false, identifiersStored: false
   });
@@ -116,9 +140,55 @@ test("attributes observed Codex lifecycle gaps with the same phase contract", ()
   assert.equal(value.phases.modelTurnWait.seconds, 1.3);
   assert.equal(value.phases.toolExecution.seconds, 1);
   assert.equal(value.phases.other.seconds, 0.5);
+  assert.equal(value.execution.providerStartedAttempts, 1);
+  assert.equal(value.execution.toolCalls, 1);
+  assert.equal(value.execution.toolResults, 1);
+  assert.equal(value.execution.completeness.providerAttempts, "lower-bound");
+  assert.equal(value.execution.completeness.tools, "exact");
   assert.equal(validBenchmarkTimingDiagnostics(value, "codex-cli", 3), true);
   const serialized = JSON.stringify(value);
   for (const secret of ["private-thread", "private-reasoning", "private chain", "private-tool", "private output", "private answer"]) {
+    assert.equal(serialized.includes(secret), false);
+  }
+});
+
+test("counts Codex failures, declines, repeated calls, and subagent attempts without retaining payloads", () => {
+  const collector = createBenchmarkTimingCollector({ surface: "codex-cli" });
+  writeEvent(collector, { type: "thread.started", thread_id: "private-thread" }, 0.05);
+  writeEvent(collector, { type: "turn.started" }, 0.1);
+  for (const id of ["a", "b"]) {
+    writeEvent(collector, { type: "item.started", item: {
+      id, type: "command_execution", command: "private repeated command", aggregated_output: "", exit_code: null, status: "in_progress"
+    } }, 0.2);
+  }
+  writeEvent(collector, { type: "item.started", item: {
+    id: "c", type: "collab_tool_call", tool: "spawn_agent", sender_thread_id: "private-sender",
+    receiver_thread_ids: ["private-child"], prompt: "private prompt", status: "in_progress"
+  } }, 0.2);
+  writeEvent(collector, { type: "item.completed", item: {
+    id: "a", type: "command_execution", command: "private repeated command", aggregated_output: "", exit_code: null, status: "declined"
+  } }, 0.3);
+  writeEvent(collector, { type: "item.completed", item: {
+    id: "b", type: "command_execution", command: "private repeated command", aggregated_output: "", exit_code: 0, status: "completed"
+  } }, 0.4);
+  writeEvent(collector, { type: "item.completed", item: {
+    id: "c", type: "collab_tool_call", tool: "spawn_agent", sender_thread_id: "private-sender",
+    receiver_thread_ids: ["private-child"], prompt: "private prompt", status: "failed",
+    agents_states: { "private-child": { status: "errored", message: "private error" } }
+  } }, 0.5);
+  writeEvent(collector, { type: "item.completed", item: { id: "m", type: "agent_message", text: "private answer" } }, 0.8);
+  writeEvent(collector, { type: "turn.completed", usage: codexUsage() }, 0.9);
+  const value = collector.finish(1);
+  assert.equal(validBenchmarkTimingDiagnostics(value, "codex-cli", 1), true);
+  assert.equal(value.execution.toolCalls, 3);
+  assert.equal(value.execution.toolResults, 3);
+  assert.equal(value.execution.toolFailures, 1);
+  assert.equal(value.execution.declinedToolCalls, 1);
+  assert.equal(value.execution.repeatedToolCalls, 1);
+  assert.equal(value.execution.subagentAttempts, 1);
+  assert.equal(value.execution.subagentFailures, 1);
+  const serialized = JSON.stringify(value);
+  for (const secret of ["private repeated command", "private prompt", "private-child", "private error"]) {
     assert.equal(serialized.includes(secret), false);
   }
 });
@@ -746,6 +816,8 @@ test("session wiring clears deferred stdout on command rejection and before late
   assert.match(wiring, /catch \(error\) \{\s*timingCollector\.discard\(\);\s*throw error;\s*\}/);
   const finish = wiring.indexOf("timingCollector.finish(agent.durationSeconds)");
   assert.ok(finish > wiring.indexOf("await runCommand"));
-  assert.ok(finish < wiring.indexOf("walkJsonl(sessions)"));
+  const sessionTraversal = wiring.indexOf("walkJsonl(sessionRoot)");
+  assert.ok(sessionTraversal > 0);
+  assert.ok(finish < sessionTraversal);
   assert.ok(finish < wiring.indexOf("codexCollector.finish()"));
 });

@@ -72,6 +72,7 @@ export type CoreInspectionInput = {
   chatControl?: () => { state: "unbound" | "ready" | "replacement-pending" | "shutdown"; liveness: "idle" | "running" | "unknown";
     taskState: "none" | "active" | "pause-requested" | "paused" | "terminal" | "unknown"; identity: Record<string, any> | null; revisions: Record<string, any> | null;
     heldCount: number; queueRevision: string | null };
+  operationLiveness?: () => "idle" | "running" | "unknown";
 };
 
 export class CoreInspectionProvider implements WebUiReadModelProvider {
@@ -97,12 +98,15 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
     const projectionEpoch = this.#invalidationEpoch;
     const { buildWebUiInspectionProjection } = await loadCoreInspection();
     const retention = this.#input.eventStore.retention();
+    const control = this.#input.chatControl?.();
+    const operationLiveness = control?.state === "ready" ? control.liveness : this.#input.operationLiveness?.();
     const value = await buildWebUiInspectionProjection({
       cwd: this.#input.cwd, sessionId: this.#input.sessionId, runtimeInstanceId: this.#input.runtimeInstanceId,
       task: this.#input.task?.(), events: this.#input.activityEvents?.() ?? [], current: this.#input.currentActivity?.() ?? [],
       sessionEntries: this.#input.sessionEntries?.() ?? [], protectedPaths: this.#input.protectedPaths?.() ?? [],
       contextUsage: this.#input.contextUsage?.(), model: this.#input.model?.(), thinkingLevel: this.#input.thinkingLevel?.(),
-      eventCursor: this.#input.eventStore.currentCursor(), resyncRequired: this.#input.eventStore.resyncRequired(), eventReplay: retention
+      eventCursor: this.#input.eventStore.currentCursor(), resyncRequired: this.#input.eventStore.resyncRequired(), eventReplay: retention,
+      operationLiveness
     });
     // What the host will accept as an attachment is a property of the machine and
     // the model, not of chat control. The Gateway drives sessions without a chat
@@ -115,7 +119,6 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
       Object.assign(value.snapshot.capabilities.limits, { maxRequestBodyBytes: 11_250_000, maxAttachmentCount: 4,
         maxAttachmentFileBytes: 8_388_608, maxAttachmentTotalBytes: 16_777_216 });
     }
-    const control = this.#input.chatControl?.();
     if (control?.state === "ready" && control.identity && control.revisions && !this.#input.eventStore.resyncRequired()) {
       const available = { available: true, reasonCode: null }, disabled = (reasonCode: string) => ({ available: false, reasonCode });
       const lifecycle = this.#input.lifecycleControl?.(), terminal = control.taskState === "terminal";

@@ -65,7 +65,7 @@ export type PendingContextDelivery = {
   pack?: InjectedContextPack & { retrievalKey: string };
   injection?: ContextInjectionTelemetry;
 };
-export type RuntimeTurn = { turnId: string; promptHash: string };
+export type RuntimeTurn = { turnId: string; promptHash: string; lightweightNonAuthorizingChange: boolean };
 
 function evictOldest<K, V>(map: Map<K, V>, maximum: number): void {
   while (map.size > maximum) map.delete(map.keys().next().value as K);
@@ -91,13 +91,9 @@ export class RuntimeSessionState {
   readonly #shellMutationSnapshots = new Map<string, Record<string, string>>();
   readonly #sourceCheckoutReadGrants = new SourceCheckoutReadGrants();
 
-  constructor(options: { maxObservedContext: number }) {
-    this.#maxObservedContext = options.maxObservedContext;
-  }
+  constructor(options: { maxObservedContext: number }) { this.#maxObservedContext = options.maxObservedContext; }
 
-  sessionKey(ctx: ExtensionContext): string {
-    return `${ctx.cwd}\u0000${ctx.sessionManager.getSessionId()}`;
-  }
+  sessionKey(ctx: ExtensionContext): string { return `${ctx.cwd}\u0000${ctx.sessionManager.getSessionId()}`; }
 
   cacheTaskIdentity(ctx: ExtensionContext, task: TaskContract | undefined): void {
     const key = this.sessionKey(ctx);
@@ -107,11 +103,10 @@ export class RuntimeSessionState {
   }
 
   taskIdentity(ctx: ExtensionContext): { taskId: string; taskRunId: string } | undefined {
-    return this.#taskIdentityBySession.get(this.sessionKey(ctx));
-  }
+    return this.#taskIdentityBySession.get(this.sessionKey(ctx)); }
 
-  beginTurn(ctx: ExtensionContext, promptHash: string): RuntimeTurn {
-    const turn = { turnId: crypto.randomUUID(), promptHash };
+  beginTurn(ctx: ExtensionContext, promptHash: string, classification: { lightweightNonAuthorizingChange?: boolean } = {}): RuntimeTurn {
+    const turn = { turnId: crypto.randomUUID(), promptHash, lightweightNonAuthorizingChange: classification.lightweightNonAuthorizingChange === true };
     const sessionKey = this.sessionKey(ctx);
     this.#turnBySession.set(sessionKey, turn);
     this.#preTaskContextBySession.set(sessionKey, { turnId: turn.turnId, entries: new Map() });
@@ -125,9 +120,15 @@ export class RuntimeSessionState {
     return turn && (!promptHash || turn.promptHash === promptHash) ? { ...turn } : undefined;
   }
 
-  hasAdvisedTool(ctx: ExtensionContext, toolName: string): boolean {
-    return this.#advisedTools.has(`${this.sessionKey(ctx)}\u0000${toolName}`);
+  classifyTurn(ctx: ExtensionContext, promptHash: string, classification: { lightweightNonAuthorizingChange: boolean }): RuntimeTurn {
+    const turn = this.currentTurn(ctx, promptHash);
+    if (!turn) return this.beginTurn(ctx, promptHash, classification);
+    turn.lightweightNonAuthorizingChange = classification.lightweightNonAuthorizingChange;
+    this.#turnBySession.set(this.sessionKey(ctx), turn); return { ...turn };
   }
+
+  hasAdvisedTool(ctx: ExtensionContext, toolName: string): boolean {
+    return this.#advisedTools.has(`${this.sessionKey(ctx)}\u0000${toolName}`); }
 
   rememberAdvisedTool(ctx: ExtensionContext, toolName: string): void {
     this.#advisedTools.add(`${this.sessionKey(ctx)}\u0000${toolName}`);
@@ -156,9 +157,7 @@ export class RuntimeSessionState {
     return this.#sourceCheckoutReadGrants.grant(this.sessionKey(ctx), checkoutPath);
   }
 
-  sourceCheckoutReadRoots(ctx: ExtensionContext): string[] {
-    return this.#sourceCheckoutReadGrants.roots(this.sessionKey(ctx));
-  }
+  sourceCheckoutReadRoots(ctx: ExtensionContext): string[] { return this.#sourceCheckoutReadGrants.roots(this.sessionKey(ctx)); }
 
   rememberPreTaskContext(ctx: ExtensionContext, entry: ObservedTaskContext): void {
     const turn = this.currentTurn(ctx);

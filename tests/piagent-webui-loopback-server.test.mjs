@@ -324,9 +324,9 @@ describe("Piagent WebUI loopback server", () => {
     assert.equal((await request(server.origin, "/api/v1/bootstrap", {
       method: "POST", headers: { Origin: server.origin, "Content-Type": "application/json" }, body: oversized
     })).status, 413);
-    for (let attempt = 0; attempt < 6; attempt += 1) await request(server.origin, "/api/v1/bootstrap", {
+    for (let attempt = 0; attempt < 8; attempt += 1) assert.equal((await request(server.origin, "/api/v1/bootstrap", {
       method: "POST", headers: { Origin: server.origin, "Content-Type": "application/json" }, body: "{}"
-    });
+    })).status, 403);
     assert.equal((await request(server.origin, "/api/v1/bootstrap", {
       method: "POST", headers: { Origin: server.origin, "Content-Type": "application/json" }, body: "{}"
     })).status, 429);
@@ -337,6 +337,28 @@ describe("Piagent WebUI loopback server", () => {
       method: "POST", headers: { Origin: expired.origin, "Content-Type": "application/json" },
       body: JSON.stringify({ capability: bootstrapValue(expired.launchUrl) })
     })).status, 403);
+  });
+
+  it("exchanges more than eight issued capabilities while rate-limiting only rejected bootstrap guesses", async () => {
+    const valid = await start({ bootstrapTtlMs: 60_000 });
+    let capability = bootstrapValue(valid.launchUrl);
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      if (attempt > 0) capability = bootstrapValue(valid.issueLaunchUrl());
+      const exchange = await request(valid.origin, "/api/v1/bootstrap", { method: "POST",
+        headers: { Origin: valid.origin, "Content-Type": "application/json" }, body: JSON.stringify({ capability }) });
+      assert.equal(exchange.status, 200, exchange.body.toString());
+    }
+    assert.equal((await request(valid.origin, "/api/v1/bootstrap", { method: "POST",
+      headers: { Origin: valid.origin, "Content-Type": "application/json" },
+      body: JSON.stringify({ capability }) })).status, 403, "a valid capability remains one-shot");
+
+    const attacked = await start({ bootstrapTtlMs: 60_000 });
+    const invalid = JSON.stringify({ capability: "A".repeat(43) });
+    for (let attempt = 0; attempt < 8; attempt += 1) assert.equal((await request(attacked.origin, "/api/v1/bootstrap", {
+      method: "POST", headers: { Origin: attacked.origin, "Content-Type": "application/json" }, body: invalid
+    })).status, 403);
+    assert.equal((await request(attacked.origin, "/api/v1/bootstrap", { method: "POST",
+      headers: { Origin: attacked.origin, "Content-Type": "application/json" }, body: invalid })).status, 429);
   });
 
   it("rate-limits controls per authenticated browser session instead of locking every localhost client", async () => {

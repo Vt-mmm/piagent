@@ -26,6 +26,7 @@ export type CurrentOperation = {
 } & {
   sessionRef: string;
   operationRef: string;
+  messageRequestId?: string;
   state: "running" | "waiting-approval" | "settling";
   abortable: boolean;
 };
@@ -33,6 +34,7 @@ export type CurrentOperation = {
 export interface TerminalSettlement {
   sessionRef: string;
   operationRef: string;
+  messageRequestId?: string;
   settlement: "blocked" | "aborted" | "error" | "unknown";
   reasonCode: string;
   settledAt: string;

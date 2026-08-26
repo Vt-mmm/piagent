@@ -213,6 +213,9 @@ describe("package distribution", () => {
     assert.ok(entries.includes("benchmarks/e2-framework-v1/project/vendor/hono/dist/index.js"));
     assert.ok(entries.includes("benchmarks/production-v1/suite.json"));
     assert.ok(entries.includes("benchmarks/production-v1/variant.mjs"));
+    assert.ok(entries.includes("benchmarks/production-v2/suite.json"));
+    assert.ok(entries.includes("benchmarks/production-v2/variant.mjs"));
+    assert.ok(entries.includes("benchmarks/production-v2/spend-control.v1.json"));
     assert.ok(entries.includes("benchmarks/deep-logic-v1/suite.json"));
     assert.ok(entries.includes("benchmarks/deep-logic-v1/grade.mjs"));
     assert.ok(entries.includes("benchmarks/deep-logic-v1/project/benchmark-contract/public-smoke.test.js"));
@@ -405,6 +408,10 @@ describe("package distribution", () => {
     assert.equal(files.has("benchmarks/production-v1/suite.json"), true);
     assert.equal(files.has("benchmarks/production-v1/grade.mjs"), true);
     assert.equal(files.has("benchmarks/production-v1/project/package.json"), true);
+    assert.equal(files.has("benchmarks/production-v2/suite.json"), true);
+    assert.equal(files.has("benchmarks/production-v2/grade.mjs"), true);
+    assert.equal(files.has("benchmarks/production-v2/project/package.json"), true);
+    assert.equal(files.has("benchmarks/production-v2/spend-control.v1.json"), true);
     assert.equal(files.has("benchmarks/deep-logic-v1/project/benchmark-contract/public-smoke.test.js"), true);
     assert.equal(files.has("scripts/verify-vercel-link.mjs"), true);
     assert.equal(files.has("templates/project/.pi/gitignore.template"), true);

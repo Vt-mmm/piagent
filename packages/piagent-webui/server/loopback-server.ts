@@ -13,13 +13,13 @@ const MAX_BOOTSTRAP_BODY_BYTES = 4_096;
 const MAX_CONTROL_BODY_BYTES = 70_000;
 const MAX_ATTACHMENT_BODY_BYTES = 11_250_000;
 const REQUESTS_PER_MINUTE = 120;
-const BOOTSTRAPS_PER_MINUTE = 8;
+const BOOTSTRAP_FAILURES_PER_MINUTE = 8;
 const CONTROLS_PER_MINUTE = 60;
 const MAX_JSON_RESPONSE_BYTES = 16 * 1024 * 1024;
 const CURSOR = /^[A-Za-z0-9][A-Za-z0-9._~-]{0,159}$/;
 
 type ReadCapabilities = () => unknown | Promise<unknown>;
-type RateState = { windowStart: number; requests: number; bootstraps: number };
+type RateState = { windowStart: number; requests: number; bootstrapFailures: number };
 type ControlRateState = { windowStart: number; controls: number };
 
 export type LoopbackServer = {
@@ -109,8 +109,8 @@ export async function startLoopbackServer(options: {
     const browserSession = auth.authenticate(request, now);
     const rateKey = browserSession ? `${remote}:${browserSession.id}` : `remote:${remote}`;
     for (const [key, value] of rates) if (now - value.windowStart >= 60_000) rates.delete(key);
-    const rate = rates.get(rateKey) ?? { windowStart: now, requests: 0, bootstraps: 0 };
-    if (now - rate.windowStart >= 60_000) Object.assign(rate, { windowStart: now, requests: 0, bootstraps: 0 });
+    const rate = rates.get(rateKey) ?? { windowStart: now, requests: 0, bootstrapFailures: 0 };
+    if (now - rate.windowStart >= 60_000) Object.assign(rate, { windowStart: now, requests: 0, bootstrapFailures: 0 });
     rate.requests += 1; rates.set(rateKey, rate);
     while (rates.size > 128) rates.delete(rates.keys().next().value as string);
     if (rate.requests > REQUESTS_PER_MINUTE) return errorResponse(response, 429, "rate-limit");
@@ -120,8 +120,6 @@ export async function startLoopbackServer(options: {
     if (url.hash || url.username || url.password || url.origin !== origin) return errorResponse(response, 400, "invalid-url");
 
     if (request.method === "POST" && url.pathname === "/api/v1/bootstrap") {
-      rate.bootstraps += 1;
-      if (rate.bootstraps > BOOTSTRAPS_PER_MINUTE) return errorResponse(response, 429, "bootstrap-rate-limit");
       if (requestOrigin !== origin) return errorResponse(response, 403, "origin-required");
       if (!String(request.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) return errorResponse(response, 415, "content-type");
       let value: unknown;
@@ -129,7 +127,11 @@ export async function startLoopbackServer(options: {
       catch (error) { return errorResponse(response, (error as Error).message === "body-limit" ? 413 : 400, "invalid-bootstrap"); }
       const capability = value && typeof value === "object" ? (value as Record<string, unknown>).capability : null;
       const session = typeof capability === "string" ? auth.exchange(capability) : null;
-      if (!session) return errorResponse(response, 403, "bootstrap-rejected");
+      if (!session) {
+        rate.bootstrapFailures += 1;
+        if (rate.bootstrapFailures > BOOTSTRAP_FAILURES_PER_MINUTE) return errorResponse(response, 429, "bootstrap-rate-limit");
+        return errorResponse(response, 403, "bootstrap-rejected");
+      }
       response.setHeader("Set-Cookie", auth.cookieHeader(session));
       return jsonResponse(response, 200, { authenticated: true, csrfToken: session.csrf, expiresAt: new Date(session.expiresAt).toISOString() });
     }

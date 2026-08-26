@@ -33,35 +33,14 @@ import { ServiceIcon } from "./ServiceIcon.tsx";
 import { ActionConfirmationDialog } from "./ActionConfirmationDialog.tsx";
 import { label } from "./view-model.ts";
 import { localize, useUiPreferences } from "./ui-preferences.tsx";
+import { workflowLabel } from "./workflow-view-model.ts";
 
 type CreateValue = { projectRef: string; placeRef: string; modelRef: string | null; thinkingLevel: string; permissionMode: PermissionMode | null;
   workflow: Workflow; message: string; files: readonly File[] };
 type MenuKind = "project" | "model" | "thinking" | "workflow" | "permission" | null;
 
-const FALLBACK_WORKFLOWS: Array<{ id: Workflow; changeMode: "source-change" | "read-only" | "plan-only" | "clarification" | "git" | "onboarding" | "platform";
-  modelUse: "required"; recommendedFreshSession: boolean }> = [
-  { id: "task", changeMode: "source-change", modelUse: "required", recommendedFreshSession: true },
-  { id: "scout", changeMode: "read-only", modelUse: "required", recommendedFreshSession: true },
-  { id: "be-to-fe", changeMode: "source-change", modelUse: "required", recommendedFreshSession: true },
-  { id: "discuss", changeMode: "clarification", modelUse: "required", recommendedFreshSession: false },
-  { id: "plan", changeMode: "plan-only", modelUse: "required", recommendedFreshSession: false },
-  { id: "review", changeMode: "read-only", modelUse: "required", recommendedFreshSession: false },
-  { id: "commit", changeMode: "git", modelUse: "required", recommendedFreshSession: false },
-  { id: "pr", changeMode: "git", modelUse: "required", recommendedFreshSession: false },
-  { id: "onboard", changeMode: "onboarding", modelUse: "required", recommendedFreshSession: true },
-  { id: "platform-improve", changeMode: "platform", modelUse: "required", recommendedFreshSession: true }
-];
-
 function workflowCopy(value: Workflow, locale: "vi" | "en"): [string, string] {
-  const copy: Record<Workflow, [string, string]> = {
-    task: ["Thực hiện task", "Implement task"], scout: ["Khảo sát chỉ đọc", "Read-only scout"],
-    "be-to-fe": ["Backend → Frontend", "Backend → Frontend"], discuss: ["Làm rõ ý tưởng", "Clarify idea"],
-    plan: ["Lập kế hoạch", "Plan"], review: ["Review thay đổi", "Review changes"], commit: ["Chuẩn bị commit", "Prepare commit"],
-    pr: ["Chuẩn bị pull request", "Prepare pull request"], onboard: ["Onboard project", "Onboard project"],
-    "platform-improve": ["Cải tiến Piagent", "Improve Piagent"]
-  };
-  const selected = copy[value];
-  return [selected[locale === "vi" ? 0 : 1], value];
+  return [workflowLabel(value, locale), value];
 }
 
 export function NewSessionPage({ active, defaultProjectRef, busy, error, onCancel, onCreate }: { active: boolean;
@@ -104,7 +83,7 @@ export function NewSessionPage({ active, defaultProjectRef, busy, error, onCance
   const project = options?.projects.find((value) => value.projectRef === projectRef);
   const model = options?.models.find((value) => value.modelRef === modelRef);
   const defaultModel = options?.models.find((value) => value.modelRef === options.defaultModelRef);
-  const workflows = options?.workflows?.length ? options.workflows : FALLBACK_WORKFLOWS;
+  const workflows = options?.workflows ?? [];
   const thinkingLevels = useMemo(() => model?.thinkingLevels ?? ["off", "minimal", "low", "medium", "high", "xhigh", "max"], [model]);
   useEffect(() => {
     if (!thinkingLevels.includes(thinking)) setThinking(thinkingLevels.includes("high") ? "high" : thinkingLevels[0] ?? "off");

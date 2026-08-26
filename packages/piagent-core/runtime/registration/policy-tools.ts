@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { stageContextDelivery } from "../context/context-delivery.ts";
 import { formatContextEfficiencyReport } from "../context/context-efficiency-format.ts";
+import { WORKFLOW_IDS } from "../workflows/webui-workflow.ts";
 
 type PiagentToolGroup = any;
 type TechStackManifest = any;
@@ -481,7 +482,7 @@ export function registerPolicyTools(pi: ExtensionAPI, deps: Record<string, any>)
       "Do not paste mandatory-flow boilerplate into the task request; use platform workflow commands instead."
     ],
     parameters: Type.Object({
-      workflow: Type.Optional(StringEnum(["task", "scout", "be-to-fe", "review", "plan", "platform-improve"] as const)),
+      workflow: Type.Optional(StringEnum(WORKFLOW_IDS)),
       inputChars: Type.Optional(Type.Number({ minimum: 0 }))
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {

@@ -2973,7 +2973,13 @@
               {
                 "properties": {
                   "isError": { "const": false },
-                  "reasonCode": { "const": "search-target-missing" }
+                  "reasonCode": {
+                    "enum": [
+                      "target-not-found",
+                      "target-is-directory",
+                      "search-target-missing"
+                    ]
+                  }
                 }
               }
             ]

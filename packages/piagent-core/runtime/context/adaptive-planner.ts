@@ -13,7 +13,7 @@ type ContextUsage = {
 
 export type AdaptiveContextPlan = {
   schemaVersion: 1;
-  phase: "utility" | "protected" | "intake" | "scout" | "execute" | "review" | "release";
+  phase: "utility" | "protected" | "intake" | "scout" | "discuss" | "plan" | "execute" | "review" | "release";
   lane: "tiny" | "normal" | "high-risk";
   shouldInject: boolean;
   budgetTokens: number;
@@ -64,6 +64,8 @@ function phaseFor(signal: ReturnType<typeof classifyContextTask>, input: Planner
   if (signal.workflow === "usage") return "utility";
   if (signal.workflow === "review") return "review";
   if (signal.workflow === "scout" || signal.workflow === "onboard") return "scout";
+  if (signal.workflow === "discuss") return "discuss";
+  if (signal.workflow === "plan") return "plan";
   if (signal.workflow === "release") return "release";
   if (input.runtimeIntake) return "intake";
   return "execute";
@@ -74,6 +76,8 @@ function baseBudget(phase: AdaptiveContextPlan["phase"], lane: AdaptiveContextPl
   if (phase === "review") return lane === "high-risk" ? 720 : 520;
   if (phase === "release") return 620;
   if (phase === "scout") return lane === "high-risk" ? 820 : 640;
+  if (phase === "plan") return lane === "high-risk" ? 680 : 520;
+  if (phase === "discuss") return lane === "high-risk" ? 480 : 360;
   if (phase === "intake") {
     if (explicitPaths > 0) return lane === "high-risk" ? 560 : 420;
     return lane === "high-risk" ? 780 : lane === "tiny" ? 360 : 540;
@@ -130,13 +134,13 @@ export function planAdaptiveContext(input: PlannerInput): AdaptiveContextPlan {
   const limit = explicitPathCount > 0
     ? 4
     : lane === "high-risk" ? 8 : lane === "tiny" ? 4 : 6;
-  const includeCode = phase === "intake" || phase === "review" || explicitPathCount > 0;
+  const includeCode = phase === "intake" || phase === "plan" || phase === "review" || explicitPathCount > 0;
   const includePatterns = phase === "intake" ? DEFAULT_INTAKE_PATTERNS : undefined;
   const reranker = "off" as const;
   if (process.env.PIAGENT_LOCAL_RERANKER === "on") reasons.push("local-reranker:unavailable");
   const minConfidence = explicitPathCount > 0 || lane === "tiny"
     ? "medium"
-    : phase === "review" || phase === "release" || lane === "high-risk"
+    : phase === "plan" || phase === "review" || phase === "release" || lane === "high-risk"
       ? "high"
       : "medium";
   return {

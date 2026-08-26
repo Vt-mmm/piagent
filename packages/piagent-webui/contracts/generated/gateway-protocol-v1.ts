@@ -391,6 +391,7 @@ export type MessageDeltaEvent = EventBase & {
   payload?: {
     sessionRef: string;
     operationRef: string;
+    messageRequestId?: string;
     messageRef: string;
     messageSequence: StateVersion;
     delta: string;
@@ -402,6 +403,7 @@ export type MessageCompletedEvent = EventBase & {
   payload?: {
     sessionRef: string;
     operationRef: string;
+    messageRequestId?: string;
     messageRef: string;
     sessionRevision: string;
     truncated: boolean;
@@ -527,6 +529,7 @@ export interface EventBase {
 export interface OperationCompletedPayload {
   sessionRef: string;
   operationRef: string;
+  messageRequestId?: string;
   messageRef: string;
   sessionRevision: string;
   settlement: "completed";
@@ -535,6 +538,7 @@ export interface OperationCompletedPayload {
 export interface OperationIncompletePayload {
   sessionRef: string;
   operationRef: string;
+  messageRequestId?: string;
   messageRef: string | null;
   sessionRevision: string | null;
   settlement: "blocked" | "aborted" | "error" | "unknown";

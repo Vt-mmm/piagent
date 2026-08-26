@@ -54,7 +54,7 @@ export function adaptActivityTelemetryEvent(input: ActivityEventAdapterInput): R
   const toolCallRef = hasOperation ? opaque("tool", rawToolCall) : null;
   const activityType = hasOperation ? "tool" : ["bash", "shell", "exec"].includes(toolName) ? "command" : "other";
   const resultFailure = eventName === "tool_result" && (event.isError === true || typeof event.exitCode === "number" && event.exitCode !== 0);
-  const failed = resultFailure && !handledToolFailure(event.reasonCode);
+  const failed = resultFailure && !handledToolFailure(event.reasonCode, toolName);
   const blocked = eventName === "tool_decision";
   // `tool_call` is emitted before policy authorization. Calling it "started"
   // made the Dashboard claim a command was running while it was still waiting

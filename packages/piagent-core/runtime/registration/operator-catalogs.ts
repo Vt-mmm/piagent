@@ -1,3 +1,5 @@
+import { WORKFLOW_IDS, WORKFLOW_OPTIONS } from "../workflows/webui-workflow.ts";
+
 export const WORKFLOW_COMMAND_EXCLUSIONS = Object.freeze([
   "implement",
   "audit",
@@ -15,16 +17,9 @@ export const ONBOARDING_COMMAND_ACTIONS = Object.freeze([
   "help"
 ]);
 
-export const FRESH_COMMAND_ACTIONS = Object.freeze([
-  "task",
-  "scout",
-  "be-to-fe",
-  "help"
-]);
+export const FRESH_COMMAND_ACTIONS = Object.freeze([...WORKFLOW_IDS, "help"]);
 
 export const FRESH_COMMAND_HELP = Object.freeze([
   "namespace: /fresh",
-  "/fresh task <request>",
-  "/fresh scout <read-only request>",
-  "/fresh be-to-fe <BE spec/change + FE outcome>"
+  ...WORKFLOW_OPTIONS.map((option) => `/fresh ${option.id} ${option.argumentHint}`)
 ]);

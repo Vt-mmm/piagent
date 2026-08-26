@@ -8,6 +8,7 @@ import {
   completePairedScenarioCount,
   familyClusteredFailureAwareUsage,
   familyClusteredFixedWorkloadUsage,
+  hierarchicalMatrixRatioSample,
   pairedDurationBands,
   pairedUsageBands,
   selectPrimaryEfficiencyEstimate,
@@ -47,8 +48,9 @@ export { renderBenchmarkHtml, renderBenchmarkText } from "./benchmark-report.js"
 export { benchmarkAssuranceEvidenceValidationErrors, benchmarkClaimEligibility } from "./benchmark-assurance.js";
 export { median } from "./benchmark-statistics.js";
 export { benchmarkSuiteValidationErrors, validateBenchmarkSuite } from "./benchmark-suite.js";
-export { aggregateSessionUsage, benchmarkTokenAccounting, createCodexExecJsonlCollector, parseCodexExecJsonl } from "./benchmark-usage.js";
+export { aggregateCodexTurnUsage, aggregateSessionUsage, benchmarkTokenAccounting, createCodexExecJsonlCollector, parseCodexExecJsonl } from "./benchmark-usage.js";
 export { benchmarkPricingSnapshotValidationErrors, normalizeBenchmarkUsageCost } from "./benchmark-normalized-cost.js";
+export { effectiveResourcesPerResolvedOutcome, normalizedApiCostPerResolvedOutcome, totalTokensPerResolvedOutcome } from "./benchmark-comparison.js";
 export { CODEX_RELATIVE_EFFICIENCY_POLICY, PRODUCTION_SUBAGENT_BUDGET_POLICY, evaluateCodexRelativeEfficiency, summarizeBenchmarkSubagentBudget } from "./benchmark-codex-relative-efficiency.js";
 export { evaluateWorkflowEvidence } from "./benchmark-workflow.js";
 const SURFACE_LABELS = Object.freeze({
@@ -57,6 +59,7 @@ const SURFACE_LABELS = Object.freeze({
   "codex-cli": "Codex CLI"
 });
 export const BENCHMARK_MEASUREMENT_SCHEMA_VERSION = 2;
+const CANONICAL_PRODUCTION_SUITE_IDS = new Set(["production-v1", "production-v2"]);
 
 export function benchmarkSurfaceLabel(surface) {
   return SURFACE_LABELS[surface] ?? surface;
@@ -75,8 +78,8 @@ export function summarizeBenchmark({
   candidateSurface = "piagent"
 }) {
   if (baselineSurface === candidateSurface) throw new Error("Benchmark surfaces must be different");
-  if (canonicalProductionSuite && suite.id !== "production-v1") {
-    throw new Error("Canonical production gate requires the built-in production-v1 suite identity");
+  if (canonicalProductionSuite && !CANONICAL_PRODUCTION_SUITE_IDS.has(suite.id)) {
+    throw new Error("Canonical production gate requires a built-in production suite identity");
   }
   const baselineRuns = runs.filter((run) => run.surface === baselineSurface);
   const candidateRuns = runs.filter((run) => run.surface === candidateSurface);
@@ -152,14 +155,22 @@ export function summarizeBenchmark({
   ));
   const costRatios = costPairs.map((pair) => pair.candidate.usage.cost / pair.baseline.usage.cost);
   const allSuccessfulPairsFreshRatio = geometricMean(freshRatios);
-  const confidenceScenarioRatios = suite.schemaVersion === 2 ? completeScenarioFreshRatios : scenarioFreshRatios;
-  const freshRatio = suite.schemaVersion === 2
+  const hierarchicalFreshRatioSample = hierarchicalMatrixRatioSample(suite, completeScenarioFreshRatios);
+  const confidenceScenarioRatios = hierarchicalFreshRatioSample.matrix
+    ? hierarchicalFreshRatioSample.samples
+    : suite.schemaVersion === 2 ? completeScenarioFreshRatios : scenarioFreshRatios;
+  const freshRatio = hierarchicalFreshRatioSample.matrix || suite.schemaVersion === 2
     ? geometricMean(confidenceScenarioRatios.map((item) => item.ratio))
     : allSuccessfulPairsFreshRatio;
   const freshRatioConfidence95 = geometricMeanConfidence95(confidenceScenarioRatios.map((item) => item.ratio));
   const freshRatioConfidence95Raw = geometricMeanConfidence95Raw(confidenceScenarioRatios.map((item) => item.ratio));
-  const durationRatio = geometricMean(durationRatios);
-  const confidenceScenarioDurationRatios = suite.schemaVersion === 2 ? completeScenarioDurationRatios : scenarioDurationRatios;
+  const hierarchicalDurationRatioSample = hierarchicalMatrixRatioSample(suite, completeScenarioDurationRatios);
+  const confidenceScenarioDurationRatios = hierarchicalDurationRatioSample.matrix
+    ? hierarchicalDurationRatioSample.samples
+    : suite.schemaVersion === 2 ? completeScenarioDurationRatios : scenarioDurationRatios;
+  const durationRatio = hierarchicalDurationRatioSample.matrix
+    ? geometricMean(confidenceScenarioDurationRatios.map((item) => item.ratio))
+    : geometricMean(durationRatios);
   const durationRatioConfidence95 = geometricMeanConfidence95(confidenceScenarioDurationRatios.map((item) => item.ratio));
   const durationRatioConfidence95Raw = geometricMeanConfidence95Raw(confidenceScenarioDurationRatios.map((item) => item.ratio));
   const costRatio = geometricMean(costRatios);
@@ -225,9 +236,19 @@ export function summarizeBenchmark({
     ratio: freshRatio,
     confidence95: freshRatioConfidence95,
     confidence95Raw: freshRatioConfidence95Raw,
-    scenarioRatios: completeScenarioFreshRatios
+    scenarioRatios: hierarchicalFreshRatioSample.matrix ? confidenceScenarioRatios : completeScenarioFreshRatios
   }, familyClusteredFailureAware, familyClusteredFixedWorkload);
-  const primaryEfficiencyCompleteScenarios = primaryEfficiencyScenarioRatios.length;
+  const matrixHierarchy = hierarchicalFreshRatioSample.matrix;
+  const primaryEfficiencyScenarioIds = matrixHierarchy
+    ? [...new Set(primaryEfficiencyScenarioRatios.flatMap((item) => item.scenarioIds ?? []))]
+    : primaryEfficiencyScenarioRatios.map((item) => item.scenarioId);
+  const primaryEfficiencyFamilyIds = matrixHierarchy
+    ? primaryEfficiencyScenarioRatios.flatMap((item) => typeof item.familyId === "string" ? [item.familyId] : [])
+    : [];
+  const primaryEfficiencyCompleteScenarios = primaryEfficiencyScenarioIds.length;
+  const primaryEfficiencyCompleteSamples = matrixHierarchy
+    ? primaryEfficiencyFamilyIds.length
+    : primaryEfficiencyCompleteScenarios;
   const primaryEfficiencyCategoryCoverage = completeCategoryCoverage(suite, primaryEfficiencyScenarioRatios);
   const requiresConfidenceEfficiency = Number.isFinite(maximumFreshTokenRatioUpper95) || releaseGate.requireEfficiencyClaim === true;
   const requiresBandEfficiency = Number.isFinite(maximumBandFreshTokenRatio);
@@ -255,7 +276,7 @@ export function summarizeBenchmark({
   const requestsTokenSavingClaim = releaseGate.requireEfficiencyClaim === true;
   const requestsNormalizedCostClaim = releaseGate.requireNormalizedCostClaim === true;
   const requiresHostReadiness = releaseGate.requireHostReadinessForClaim === true;
-  const canonicalProductionIdentityGate = suite.id !== "production-v1" || canonicalProductionSuite;
+  const canonicalProductionIdentityGate = !CANONICAL_PRODUCTION_SUITE_IDS.has(suite.id) || canonicalProductionSuite;
   const releaseClaimConfigurationGate = requestsTokenSavingClaim
     ? suite.schemaVersion === 2 && Number.isFinite(maximumFreshTokenRatioUpper95)
       && maximumFreshTokenRatioUpper95 <= 0.8 && requiresFullSuite && requiresProviderWireSurface
@@ -359,8 +380,8 @@ export function summarizeBenchmark({
   const efficiencyCategoryCoverage = completeCategoryCoverage(suite, completeScenarioFreshRatios);
   const efficiencyBandCoverageGate = suite.schemaVersion === 2 ? efficiencyCategoryCoverage.passed : true;
   const primaryEfficiencyEvidenceGate = Number.isInteger(minimumComparableEfficiencyScenarios)
-    ? primaryEfficiencyCompleteScenarios >= minimumComparableEfficiencyScenarios
-    : primaryEfficiencyCompleteScenarios >= 3;
+    ? primaryEfficiencyCompleteSamples >= minimumComparableEfficiencyScenarios
+    : primaryEfficiencyCompleteSamples >= 3;
   const primaryEfficiencyBandCoverageGate = suite.schemaVersion === 2
     ? primaryEfficiencyCategoryCoverage.passed
     : true;
@@ -681,7 +702,7 @@ export function summarizeBenchmark({
       requireFullSuite: requiresFullSuite,
       stableProviderWireSurface: requiresProviderWireSurface,
       causalContextReceipt: requiresCausalContextReceipt,
-      canonicalProductionIdentityRequired: suite.id === "production-v1"
+      canonicalProductionIdentityRequired: CANONICAL_PRODUCTION_SUITE_IDS.has(suite.id)
     },
     observed: {
       completeOutcomeScenarios,
@@ -703,6 +724,8 @@ export function summarizeBenchmark({
       normalizedCostFamilyFailures: normalizedCostGates.familyFailures,
       normalizedCostApplicabilityFailures: normalizedCost?.applicabilityFailures ?? [],
       primaryEfficiencyCompleteScenarios,
+      primaryEfficiencyCompleteSamples,
+      primaryEfficiencySampleUnit: matrixHierarchy ? suite.matrixContract.confidenceSampleUnit : "scenario-family",
       primaryEfficiencyRatio: rounded(primaryEfficiencyRatio, 4),
       primaryEfficiencyRatioUpper95: primaryEfficiencyRatioConfidence95Raw?.upper ?? null,
       durationRatio: rounded(durationRatio, 4),
@@ -742,7 +765,13 @@ export function summarizeBenchmark({
     schemaVersion: 2,
     measurementSchemaVersion: BENCHMARK_MEASUREMENT_SCHEMA_VERSION,
     runId,
-    suite: { id: suite.id, title: suite.title, schemaVersion: suite.schemaVersion, assurance: suite.assurance ?? null },
+    suite: {
+      id: suite.id,
+      title: suite.title,
+      schemaVersion: suite.schemaVersion,
+      assurance: suite.assurance ?? null,
+      ...(matrixHierarchy ? { matrixContract: suite.matrixContract } : {})
+    },
     startedAt,
     completedAt,
     repeats,
@@ -762,12 +791,16 @@ export function summarizeBenchmark({
       baselineSurface,
       candidateSurface,
       purpose: claimEligibility.comparisonPurpose,
-      usageEstimator: "paired-geometric-mean-ratio",
-      durationEstimator: "paired-geometric-mean-ratio-clustered-by-scenario-family",
+      usageEstimator: matrixHierarchy
+        ? "paired-geometric-mean-ratio-clustered-by-repeat-variant-task-family"
+        : "paired-geometric-mean-ratio",
+      durationEstimator: matrixHierarchy
+        ? "paired-geometric-mean-ratio-clustered-by-repeat-variant-task-family"
+        : "paired-geometric-mean-ratio-clustered-by-scenario-family",
       failureAwareUsageEstimator: "total-comparable-attempt-fresh-tokens-per-resolved-outcome",
       failureAwareFamilyUsageEstimator: "geometric-mean-of-family-total-comparable-attempt-fresh-tokens-per-resolved-outcome-ratios",
       fixedWorkloadUsageEstimator: "geometric-mean-of-family-total-exact-scheduled-workload-ratios",
-      fixedWorkloadEstimatorVersion: 1,
+      fixedWorkloadEstimatorVersion: matrixHierarchy ? 2 : 1,
       pairedOutcomeScenarios: completeOutcomeScenarios,
       pairedSuccessfulRuns: pairs.length,
       pairedUsageRuns: tokenPairs.length,
@@ -813,7 +846,14 @@ export function summarizeBenchmark({
         expectedScenarioFamilies: familyClusteredFailureAware.expectedScenarioFamilies,
         usableScenarioFamilies: familyClusteredFailureAware.usableScenarioFamilies,
         sampleUnit: familyClusteredFailureAware.sampleUnit,
-        scenarioIds: familyClusteredFailureAware.scenarioIds
+        scenarioIds: familyClusteredFailureAware.scenarioIds,
+        ...(matrixHierarchy ? {
+          expectedTaskFamilies: familyClusteredFailureAware.expectedTaskFamilies,
+          usableTaskFamilies: familyClusteredFailureAware.usableTaskFamilies,
+          expectedVariants: familyClusteredFailureAware.expectedVariants,
+          usableVariants: familyClusteredFailureAware.usableVariants,
+          familyIds: familyClusteredFailureAware.familyIds
+        } : {})
       },
       failureAwareFamilyRatios: familyClusteredFailureAware.families,
       fixedWorkloadFamilyFreshTokenRatio: rounded(familyClusteredFixedWorkload.ratio, 4),
@@ -830,7 +870,15 @@ export function summarizeBenchmark({
         outcomeConditioning: familyClusteredFixedWorkload.outcomeConditioning,
         aggregation: familyClusteredFixedWorkload.aggregation,
         attemptPolicy: familyClusteredFixedWorkload.attemptPolicy,
-        scenarioIds: familyClusteredFixedWorkload.scenarioIds
+        scenarioIds: familyClusteredFixedWorkload.scenarioIds,
+        ...(matrixHierarchy ? {
+          expectedTaskFamilies: familyClusteredFixedWorkload.expectedTaskFamilies,
+          usableTaskFamilies: familyClusteredFixedWorkload.usableTaskFamilies,
+          expectedVariants: familyClusteredFixedWorkload.expectedVariants,
+          usableVariants: familyClusteredFixedWorkload.usableVariants,
+          expectedAttemptsPerVariant: familyClusteredFixedWorkload.expectedAttemptsPerVariant,
+          familyIds: familyClusteredFixedWorkload.familyIds
+        } : {})
       },
       fixedWorkloadFamilyRatios: familyClusteredFixedWorkload.families,
       allSuccessfulPairsFreshTokenRatio: rounded(allSuccessfulPairsFreshRatio, 4),
@@ -838,7 +886,15 @@ export function summarizeBenchmark({
       freshTokenRatioRaw: freshRatio,
       freshTokenRatioConfidence95: freshRatioConfidence95,
       freshTokenRatioConfidence95Raw: freshRatioConfidence95Raw,
-      freshTokenRatioSample: {
+      freshTokenRatioSample: matrixHierarchy ? {
+        sampleUnit: hierarchicalFreshRatioSample.sampleUnit,
+        sampleCount: confidenceScenarioRatios.length,
+        taskFamilyCount: confidenceScenarioRatios.length,
+        variantCount: hierarchicalFreshRatioSample.scenarioIds.length,
+        scenarioCount: hierarchicalFreshRatioSample.scenarioIds.length,
+        familyIds: hierarchicalFreshRatioSample.familyIds,
+        scenarioIds: hierarchicalFreshRatioSample.scenarioIds
+      } : {
         sampleUnit: "scenario-family",
         scenarioCount: confidenceScenarioRatios.length,
         scenarioIds: confidenceScenarioRatios.map((item) => item.scenarioId)
@@ -848,10 +904,19 @@ export function summarizeBenchmark({
       primaryEfficiencyRatioRaw: primaryEfficiencyRatio,
       primaryEfficiencyRatioConfidence95,
       primaryEfficiencyRatioConfidence95Raw,
-      primaryEfficiencySample: {
+      primaryEfficiencySample: matrixHierarchy ? {
+        sampleUnit: suite.matrixContract.confidenceSampleUnit,
+        sampleCount: primaryEfficiencyScenarioRatios.length,
+        taskFamilyCount: primaryEfficiencyScenarioRatios.length,
+        variantCount: primaryEfficiencyCompleteScenarios,
+        scenarioCount: primaryEfficiencyCompleteScenarios,
+        familyIds: primaryEfficiencyFamilyIds,
+        scenarioIds: primaryEfficiencyScenarioIds,
+        outcomeConditioning: primaryUsesFixedWorkload ? "none" : "resolved-outcome-conditioned"
+      } : {
         sampleUnit: "scenario-family",
         scenarioCount: primaryEfficiencyCompleteScenarios,
-        scenarioIds: primaryEfficiencyScenarioRatios.map((item) => item.scenarioId),
+        scenarioIds: primaryEfficiencyScenarioIds,
         outcomeConditioning: primaryUsesFixedWorkload ? "none" : "resolved-outcome-conditioned"
       },
       primaryEfficiencyDeltaPercent: Number.isFinite(primaryEfficiencyRatio)
@@ -862,6 +927,17 @@ export function summarizeBenchmark({
       durationRatioRaw: durationRatio,
       durationRatioConfidence95,
       durationRatioConfidence95Raw,
+      ...(matrixHierarchy ? {
+        durationRatioSample: {
+          sampleUnit: hierarchicalDurationRatioSample.sampleUnit,
+          sampleCount: confidenceScenarioDurationRatios.length,
+          taskFamilyCount: confidenceScenarioDurationRatios.length,
+          variantCount: hierarchicalDurationRatioSample.scenarioIds.length,
+          scenarioCount: hierarchicalDurationRatioSample.scenarioIds.length,
+          familyIds: hierarchicalDurationRatioSample.familyIds,
+          scenarioIds: hierarchicalDurationRatioSample.scenarioIds
+        }
+      } : {}),
       durationDeltaPercent: Number.isFinite(durationRatio) ? rounded((durationRatio - 1) * 100, 2) : null,
       costRatio: rounded(costRatio, 4),
       costDeltaPercent: Number.isFinite(costRatio) ? rounded((costRatio - 1) * 100, 2) : null,

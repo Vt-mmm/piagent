@@ -12,6 +12,7 @@ import {
 import { modelCapabilityFromContext } from "../packages/piagent-core/runtime/model/capabilities.ts";
 import { CONTEXT_PACK_MAX_TOKENS } from "../packages/piagent-core/runtime/runtime-limits.ts";
 import { automaticAcceptanceCriteria } from "../packages/piagent-core/runtime/workflows/task-intake.ts";
+import { WORKFLOW_OPTIONS } from "../packages/piagent-core/runtime/workflows/webui-workflow.ts";
 import {
   evaluateExactFinalOutputContract,
   exactFinalOutputGuidance
@@ -907,6 +908,32 @@ test("adaptive planner contracts budget by phase, pressure, and thinking capabil
   } finally {
     if (previousReranker === undefined) delete process.env.PIAGENT_LOCAL_RERANKER;
     else process.env.PIAGENT_LOCAL_RERANKER = previousReranker;
+  }
+});
+
+test("adaptive planner preserves all canonical workflow phases without treating plan or discuss as execute", () => {
+  const capability = modelCapabilityFromContext(extensionContext(), "high");
+  const expectedPhase = {
+    task: "execute", scout: "scout", "be-to-fe": "execute", discuss: "discuss", plan: "plan",
+    review: "review", commit: "release", pr: "release", onboard: "scout", "platform-improve": "execute"
+  };
+  for (const option of WORKFLOW_OPTIONS) {
+    const plan = planAdaptiveContext({
+      prompt: `/${option.id} inspect src/example.ts and determine the next operation safely`,
+      runtimeIntake: false,
+      modelCapability: capability
+    });
+    assert.equal(plan.phase, expectedPhase[option.id], option.id);
+    assert.equal(plan.shouldInject, true, option.id);
+  }
+  for (const workflow of ["plan", "discuss"]) {
+    const plan = planAdaptiveContext({
+      prompt: `/${workflow} implement src/example.ts and run tests after we decide`,
+      runtimeIntake: true,
+      modelCapability: capability
+    });
+    assert.equal(plan.phase, workflow, `${workflow} must win over runtime intake`);
+    assert.notEqual(plan.phase, "execute");
   }
 });
 
@@ -2658,6 +2685,7 @@ test("execution backend contract keeps OAuth with Pi host and gates experimental
 
 test("benchmark trust helpers pick production for release-sensitive changes", () => {
   assert.equal(BENCHMARK_SCOPE_BANDS.find((band) => band.id === "production").scenarios, 18);
+  assert.equal(BENCHMARK_SCOPE_BANDS.find((band) => band.id === "production-user-journey").scenarios, 27);
   assert.equal(BENCHMARK_SCOPE_BANDS.find((band) => band.id === "deep-logic").scenarios, 7);
   const longHorizon = BENCHMARK_SCOPE_BANDS.find((band) => band.id === "long-horizon");
   assert.equal(longHorizon.availability, "runnable-provider-free");

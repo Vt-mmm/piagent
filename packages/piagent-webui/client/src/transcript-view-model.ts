@@ -1,9 +1,24 @@
 import type { ToolCall, TranscriptItem } from "../../contracts/generated/transcript-v1.ts";
 import { hasVisibleText } from "../../shared/text-visibility.ts";
+import type { LiveConversation } from "./live-state-view-model.ts";
 
 export type ActivityKind = "read" | "image" | "command" | "edit" | "search" | "context" | "verify" | "generic";
 export type ActivityState = ToolCall["state"] | "running" | "recovered";
 export type CompletionGateState = "continuing" | "not-approved";
+export type LiveTranscriptIdentity = { operationRef: string | null; messageRequestId?: string | null;
+  startedAt: string | null | undefined };
+
+export function durableTranscriptRefreshIdentity(sessionRef: string, sessionRevision: string,
+  live: LiveConversation | undefined): { key: string; completionKey: string | null; user: string; assistant: string;
+    operationRef: string | null; messageRequestId: string | null; startedAt: string | null } {
+  if (!live?.complete) return { key: `${sessionRef}:${sessionRevision}:active`, completionKey: null, user: "", assistant: "",
+    operationRef: null, messageRequestId: null, startedAt: null };
+  const startedAt = live.startedAt ?? null;
+  const messageRequestId = live.messageRequestId ?? null;
+  const completionKey = `${messageRequestId ?? "unknown"}:${live.operationRef ?? "unknown"}:${startedAt ?? "unknown"}:${live.user}:${live.assistant.length}`;
+  return { key: `${sessionRef}:${sessionRevision}:complete:${completionKey}`, completionKey,
+    user: live.user, assistant: live.assistant, operationRef: live.operationRef, messageRequestId, startedAt };
+}
 
 export function toolActivityKind(toolName: string): ActivityKind {
   const value = toolName.toLowerCase();
@@ -33,6 +48,62 @@ export function successfulAssistantText(text: string): string | null {
 export function persistedUserTextMatches(persisted: string | null | undefined, optimistic: string): boolean {
   const actual = persisted?.trim(), expected = optimistic.trim();
   return Boolean(actual && expected && (actual === expected || actual.startsWith("/") && actual.endsWith(` ${expected}`)));
+}
+
+function persistedUserMatchesLiveIdentity(item: TranscriptItem, identity: LiveTranscriptIdentity): boolean {
+  if (item.messageRequestId && identity.messageRequestId) return item.messageRequestId === identity.messageRequestId;
+  if (item.agentOperationId && identity.operationRef) return item.agentOperationId === identity.operationRef;
+  const recordedAt = Date.parse(item.recordedAt), startedAt = Date.parse(identity.startedAt ?? "");
+  return Number.isFinite(recordedAt) && Number.isFinite(startedAt) && recordedAt >= startedAt;
+}
+
+function persistedLiveUserIndex(items: readonly TranscriptItem[], optimisticUser: string,
+  identity: LiveTranscriptIdentity): number {
+  const expectedUser = optimisticUser.trim();
+  if (!expectedUser) return -1;
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const candidate = items[index];
+    if (candidate?.role === "user" && persistedUserTextMatches(candidate.content.text, expectedUser)
+      && persistedUserMatchesLiveIdentity(candidate, identity)) return index;
+  }
+  return -1;
+}
+
+export function persistedLiveUserExists(items: readonly TranscriptItem[], optimisticUser: string,
+  identity: LiveTranscriptIdentity): boolean {
+  return persistedLiveUserIndex(items, optimisticUser, identity) >= 0;
+}
+
+export function persistedLiveConversationMatches(items: readonly TranscriptItem[], optimisticUser: string,
+  optimisticAssistant: string, identity: LiveTranscriptIdentity): boolean {
+  const userIndex = persistedLiveUserIndex(items, optimisticUser, identity);
+  if (userIndex < 0) return false;
+  const expectedAssistant = successfulAssistantText(optimisticAssistant)?.trim() ?? "";
+  if (!expectedAssistant) return true;
+  const userRef = items[userIndex]?.messageRef ?? null;
+  for (let index = userIndex + 1; index < items.length; index += 1) {
+    const candidate = items[index];
+    if (candidate?.role === "user") return false;
+    if (candidate?.role !== "assistant" || candidate.toolCalls.length > 0) continue;
+    if (userRef && candidate.parentMessageRef && candidate.parentMessageRef !== userRef) continue;
+    if (successfulAssistantText(candidate.content.text ?? "")?.trim() === expectedAssistant) return true;
+  }
+  return false;
+}
+
+export function persistedLiveConversationHasFinal(items: readonly TranscriptItem[], optimisticUser: string,
+  identity: LiveTranscriptIdentity): boolean {
+  const userIndex = persistedLiveUserIndex(items, optimisticUser, identity);
+  if (userIndex < 0) return false;
+  const userRef = items[userIndex]?.messageRef ?? null;
+  for (let index = userIndex + 1; index < items.length; index += 1) {
+    const candidate = items[index];
+    if (candidate?.role === "user") return false;
+    if (candidate?.role !== "assistant" || candidate.toolCalls.length > 0) continue;
+    if (userRef && candidate.parentMessageRef && candidate.parentMessageRef !== userRef) continue;
+    if (successfulAssistantText(candidate.content.text ?? "")) return true;
+  }
+  return false;
 }
 
 export function persistedConversationMatches(

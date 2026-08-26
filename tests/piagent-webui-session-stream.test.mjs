@@ -111,6 +111,26 @@ describe("Piagent WebUI Pi-native session streaming adapter", () => {
     assert.equal(JSON.stringify(events).includes("rg -n match"), false, "tool input must remain transient");
   });
 
+  it("keeps trusted navigation misses neutral but exposes permission failures in the live UI", () => {
+    const adapter = new PiSessionStreamAdapter({ now: () => now });
+    adapter.turnStarted({ turnIndex: 0, timestamp: now.getTime() }, snapshot);
+    const events = persist([
+      ...adapter.toolStarted({ toolCallId: "missing-read", toolName: "read", args: { path: "src/missing.ts" } }, snapshot),
+      ...adapter.toolEnded({ toolCallId: "missing-read", toolName: "read", isError: true,
+        result: [{ type: "text", text: "ENOENT: no such file or directory" }] }, snapshot),
+      ...adapter.toolStarted({ toolCallId: "denied-read", toolName: "read", args: { path: "src/private.ts" } }, snapshot),
+      ...adapter.toolEnded({ toolCallId: "denied-read", toolName: "read", isError: true,
+        result: [{ type: "text", text: "EACCES: permission denied" }] }, snapshot)
+    ]);
+    assert.deepEqual(events.map((event) => event.kind), [
+      "activity.started", "activity.finished", "activity.started", "activity.failed"
+    ]);
+    assert.equal(events[1].payload.reasonCode, "target-not-found");
+    assert.equal(events[1].payload.isError, false);
+    assert.equal(events[3].payload.reasonCode, "tool-result-failed");
+    assert.equal(events[3].payload.isError, true);
+  });
+
   it("marks a soft subagent spawn rejection failed without persisting its raw output", () => {
     const adapter = new PiSessionStreamAdapter({ now: () => now });
     adapter.turnStarted({ turnIndex: 0, timestamp: now.getTime() }, snapshot);
@@ -191,6 +211,31 @@ describe("Piagent WebUI Pi-native session streaming adapter", () => {
     const [settled] = persist(adapter.agentSettled(snapshot, false));
     assert.equal(settled.kind, "agent-operation.settled");
     assert.equal(settled.payload.settlement, "completed");
+  });
+
+  it("closes dangling tool activity at turn, operation, and replacement boundaries", () => {
+    const turn = new PiSessionStreamAdapter({ now: () => now });
+    turn.turnStarted({ turnIndex: 0, timestamp: now.getTime() }, snapshot);
+    const turnEvents = persist([
+      ...turn.toolStarted({ toolCallId: "dangling-turn", toolName: "read" }, snapshot),
+      ...turn.turnEnded({ message: { role: "assistant", stopReason: "stop" }, toolResults: [] }, snapshot)
+    ]);
+    assert.deepEqual(turnEvents.map((event) => event.kind), ["activity.started", "activity.aborted", "turn.ended"]);
+    assert.equal(turnEvents[1].payload.reasonCode, "turn-ended-before-tool-result");
+
+    const settled = new PiSessionStreamAdapter({ now: () => now });
+    settled.toolStarted({ toolCallId: "dangling-operation", toolName: "grep" }, snapshot);
+    const settledEvents = persist(settled.agentSettled(snapshot, false));
+    assert.deepEqual(settledEvents.map((event) => event.kind), ["activity.aborted", "agent-operation.settled"]);
+    assert.equal(settledEvents[0].payload.reasonCode, "operation-settled-before-tool-result");
+
+    const replaced = new PiSessionStreamAdapter({ now: () => now });
+    replaced.toolStarted({ toolCallId: "dangling-replacement", toolName: "find" }, snapshot);
+    const replacementEvents = persist(replaced.operationInterrupted(snapshot));
+    assert.deepEqual(replacementEvents.map((event) => event.kind), ["activity.aborted"]);
+    assert.equal(replacementEvents[0].payload.reasonCode, "session-replaced-before-tool-result");
+    assert.deepEqual(replaced.toolEnded({ toolCallId: "dangling-replacement", toolName: "find", isError: false }, snapshot), [],
+      "a late result from the replaced operation must not resurrect activity");
   });
 
   it("wires Pi-native events into the exact session's durable replay stream", async () => {

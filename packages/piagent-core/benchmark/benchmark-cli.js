@@ -16,7 +16,7 @@ With no options it uses the built-in core-v1 suite, GPT-5.6 Luna at medium
 thinking on both surfaces, and the suite's repeat count.
 
 Options:
-  --suite <id|path>            core-v1, capability-v1, e2-framework-v1, deep-logic-v1, production-v1, or suite.json path.
+  --suite <id|path>            core-v1, capability-v1, e2-framework-v1, deep-logic-v1, production-v1, production-v2, or suite.json path.
   --deep                       Alias for --suite deep-logic-v1 (7 large scenarios, locked to Luna/medium).
   --capability                 Alias for --suite capability-v1.
   --production                 Alias for --suite production-v1.

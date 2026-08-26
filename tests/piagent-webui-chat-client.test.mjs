@@ -26,6 +26,7 @@ describe("Piagent WebUI bounded chat client", () => {
     assert.deepEqual(state.assistants, [{ messageRef: "message.1", text: "Hello world", thinking: true, truncated: false }]);
     assert.deepEqual(state.tools, [{ toolCallId: "tool.1", activityRef: "activity.1", toolName: "read", state: "progress" }]);
     assert.deepEqual(liveChatState([...events, { kind: "message.completed", messageRef: "message.1", payload: {} }]).assistants, []);
+    assert.deepEqual(liveChatState([...events, { kind: "agent-operation.settled", payload: {} }]), { assistants: [], tools: [] });
   });
 
   it("caps live text and presents transcript as escaped React text with an authority-gated composer", () => {

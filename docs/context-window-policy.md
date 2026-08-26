@@ -38,9 +38,9 @@ Trước task lớn/risk cao trong Pi TUI:
 
 Với task/phase tiếp theo trong cùng phiên hiển thị, runtime tự tạo working set
 gọn trước mỗi provider call; người dùng không phải mở session mới chỉ để đổi từ
-scout sang plan, implement hay verify. `/fresh task`, `/fresh scout` và
-`/fresh be-to-fe` vẫn là đường phục hồi tường minh khi preflight xác định input
-quá lớn hoặc working set không thể rút gọn an toàn.
+scout sang plan, implement hay verify. `/fresh <workflow>` vẫn là đường phục hồi
+tường minh cho mọi workflow canonical khi preflight xác định input quá lớn hoặc
+working set không thể rút gọn an toàn; `/fresh help` liệt kê catalog hiện hành.
 
 ## Context manifest
 

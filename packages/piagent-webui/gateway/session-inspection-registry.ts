@@ -108,11 +108,13 @@ export class SessionInspectionRegistry {
   readonly #models?: ModelRuntime;
   readonly #projects?: ProjectSource;
   readonly #mcpAuth?: McpAuthBroker;
+  readonly #operationLiveness: ((sessionRef: string) => "idle" | "running" | "unknown") | null;
   readonly #providers = new Map<string, { modifiedAt: string; provider: CoreInspectionProvider }>();
 
   constructor(options: { gatewayInstanceRef: string; host: PiHost; key: Buffer; packageRoot: string; agentDir?: string; models?: ModelRuntime; projects?: ProjectSource;
     mcpAuth?: McpAuthBroker; listSessions?: () => Promise<PiSessionInfo[]>;
-    openLiveSession?: (sessionRef: string) => ReturnType<PiHost["SessionManager"]["open"]> | null }) {
+    openLiveSession?: (sessionRef: string) => ReturnType<PiHost["SessionManager"]["open"]> | null;
+    operationLiveness?: (sessionRef: string) => "idle" | "running" | "unknown" }) {
     this.#gatewayInstanceRef = options.gatewayInstanceRef;
     this.#host = options.host;
     this.#listSessions = options.listSessions ?? (() => options.host.SessionManager.listAll());
@@ -123,6 +125,7 @@ export class SessionInspectionRegistry {
     this.#models = options.models;
     this.#projects = options.projects;
     this.#mcpAuth = options.mcpAuth;
+    this.#operationLiveness = options.operationLiveness ?? null;
   }
 
   #connectionRef(server: { scope: string; origin: string; name: string }): string {
@@ -269,6 +272,7 @@ export class SessionInspectionRegistry {
       contextUsage: () => contextUsage,
       model: () => model,
       thinkingLevel: () => context.thinkingLevel,
+      operationLiveness: () => this.#operationLiveness?.(sessionRef) ?? "unknown",
       approvalProjection: () => piApprovalBroker.projection(info.cwd, info.id),
       approvalDetail: (approvalRef) => piApprovalBroker.detail(info.cwd, info.id, approvalRef)
     });

@@ -291,6 +291,89 @@ function runtimeDependencies(candidateRoot, resolutionRoot) {
   };
 }
 
+function fileDigest(file) {
+  return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+}
+
+function suiteNeedsWebUiAssets(manifest) {
+  const suite = jsonFile(manifest, "benchmark suite manifest");
+  return Array.isArray(suite?.scenarios) && suite.scenarios.some((scenario) => scenario?.userJourney);
+}
+
+function snapshotWebUiAssets(candidateRoot, liveRoot, temporaryRoot, candidateProvenance) {
+  const sourcePackage = path.join(candidateRoot, "packages", "piagent-webui");
+  const sourceManifest = jsonFile(path.join(sourcePackage, "package.json"), "candidate WebUI package manifest");
+  const nodeModules = fs.realpathSync(path.join(liveRoot, "node_modules"));
+  const installed = (name) => jsonFile(path.join(nodeModules, ...name.split("/"), "package.json"), `WebUI build dependency ${name}`);
+  const vite = installed("vite"), reactPlugin = installed("@vitejs/plugin-react");
+  if (sourceManifest.devDependencies?.vite !== vite.version
+    || sourceManifest.devDependencies?.["@vitejs/plugin-react"] !== reactPlugin.version) {
+    fail("Cannot build frozen WebUI assets: installed Vite toolchain does not match the candidate manifest");
+  }
+  const buildRoot = path.join(temporaryRoot, "webui-build-source");
+  const buildPackage = path.join(buildRoot, "packages", "piagent-webui");
+  const assetRoot = path.join(temporaryRoot, "webui-assets");
+  fs.mkdirSync(path.dirname(buildPackage), { recursive: true, mode: 0o700 });
+  copyTree(sourcePackage, buildPackage);
+  chmodTree(buildRoot, true);
+  fs.symlinkSync(nodeModules, path.join(buildRoot, "node_modules"), "dir");
+  try {
+    const viteCli = path.join(nodeModules, "vite", String(vite.bin?.vite ?? "bin/vite.js"));
+    execFileSync(process.execPath, [viteCli, "build", "--config", path.join(buildPackage, "vite.config.ts"),
+      "--outDir", assetRoot, "--emptyOutDir"], {
+      cwd: buildRoot,
+      env: benchmarkHostEnvironment({ ...process.env, NO_COLOR: "1" }),
+      stdio: ["ignore", "pipe", "pipe"],
+      maxBuffer: 32 * 1024 * 1024
+    });
+  } catch (error) {
+    fail(`Cannot build frozen WebUI assets: ${String(error?.stderr ?? error?.message ?? error).trim()}`);
+  } finally {
+    chmodTree(buildRoot, true);
+    fs.rmSync(buildRoot, { recursive: true, force: true });
+  }
+  if (!fs.existsSync(path.join(assetRoot, "index.html"))) fail("Frozen WebUI build did not produce index.html");
+  chmodTree(assetRoot, false);
+  const identity = {
+    schemaVersion: 1,
+    sourceCandidateDigest: candidateProvenance.contentDigest,
+    lockfileDigest: fileDigest(path.join(candidateRoot, "package-lock.json")),
+    pipeline: "vite-production-build-v1",
+    node: process.version,
+    tools: { vite: vite.version, reactPlugin: reactPlugin.version },
+    tree: benchmarkTreeIdentity(assetRoot, { rejectSymlinks: true })
+  };
+  return {
+    ...identity,
+    digest: crypto.createHash("sha256").update(JSON.stringify(identity)).digest("hex"),
+    root: assetRoot
+  };
+}
+
+function validWebUiAssets(value, candidateProvenance) {
+  if (value === null) return true;
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || value.schemaVersion !== 1 || typeof value.root !== "string" || !path.isAbsolute(value.root)
+    || value.sourceCandidateDigest !== candidateProvenance?.contentDigest
+    || !/^[a-f0-9]{64}$/.test(String(value.lockfileDigest ?? ""))
+    || value.pipeline !== "vite-production-build-v1" || value.node !== process.version
+    || typeof value.tools?.vite !== "string" || typeof value.tools?.reactPlugin !== "string"
+    || value.tree?.schemaVersion !== 1 || typeof value.tree?.algorithm !== "string"
+    || !/^[a-f0-9]{64}$/.test(String(value.tree?.contentDigest ?? ""))
+    || !Number.isInteger(value.tree?.entryCount) || value.tree.entryCount < 1
+    || !/^[a-f0-9]{64}$/.test(String(value.digest ?? ""))) return false;
+  const identity = {
+    schemaVersion: value.schemaVersion,
+    sourceCandidateDigest: value.sourceCandidateDigest,
+    lockfileDigest: value.lockfileDigest,
+    pipeline: value.pipeline,
+    node: value.node,
+    tools: value.tools,
+    tree: value.tree
+  };
+  return crypto.createHash("sha256").update(JSON.stringify(identity)).digest("hex") === value.digest;
+}
+
 function writeBoundJson(file, value) {
   const bytes = Buffer.from(`${JSON.stringify(value)}\n`, "utf8");
   fs.writeFileSync(file, bytes, { mode: 0o400 });
@@ -487,6 +570,10 @@ export function createBenchmarkExecutionSnapshot({ liveRoot, argv, cwd }) {
     } else {
       suiteRoot = path.join(candidateRoot, "benchmarks", suite.origin);
     }
+    const frozenSuiteManifest = suiteSnapshot ?? path.join(suiteRoot, "suite.json");
+    const webUiAssets = suiteNeedsWebUiAssets(frozenSuiteManifest)
+      ? snapshotWebUiAssets(candidateRoot, root, temporaryRoot, candidate.provenance)
+      : null;
     const metadata = {
       schemaVersion: 1,
       liveRoot: root,
@@ -497,6 +584,7 @@ export function createBenchmarkExecutionSnapshot({ liveRoot, argv, cwd }) {
       candidateProvenance: candidate.provenance,
       candidateIndex,
       runtimeDependencies: runtimeDependencies(candidateRoot, root),
+      webUiAssets,
       providerFreeFinalization,
       piAgentHome,
       codexCredential,
@@ -563,6 +651,7 @@ export function benchmarkBootstrapMetadata(env = process.env) {
     || typeof value.candidateIndex?.path !== "string"
     || !/^[a-f0-9]{64}$/.test(String(value.candidateIndex?.digest ?? ""))
     || typeof value.runtimeDependencies?.digest !== "string"
+    || !validWebUiAssets(value.webUiAssets, value.candidateProvenance)
     || typeof value.providerFreeFinalization !== "boolean"
     || typeof value.piAgentHome?.configRoot !== "string"
     || typeof value.piAgentHome?.runtimeParent !== "string"

@@ -157,6 +157,9 @@ Adaptive model routing cho fresh task dùng `piagent-route --prompt "<task>" --j
 Chỉ `--execute --yes` mới mở provider-backed Pi process; `/model`/CLI pin luôn
 được giữ và extension không đổi model giữa conversation.
 
+Khi session đã nặng, `/fresh <workflow> <request>` mở session mới cho bất kỳ
+workflow canonical nào và replay prompt gọn; `/fresh help` liệt kê catalog hiện hành.
+
 ## Verification
 
 ```bash

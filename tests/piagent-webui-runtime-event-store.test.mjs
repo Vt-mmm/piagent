@@ -50,8 +50,16 @@ describe("Piagent WebUI runtime event store", () => {
     assert.match(native.toolCallId, /^tool\./);
     assert.equal(failed.kind, "activity.failed");
     assert.equal(failed.payload.reasonCode, "tool-result-failed");
-    const missing = events.append(activity(5, "tool_result", { isError: true, reasonCode: "target-not-found" }, true), at(5)).event;
+    const missing = events.append(activity(5, "tool_result", { toolName: "read", isError: true, reasonCode: "target-not-found" }, true), at(5)).event;
+    expectSchema(missing);
+    assert.equal(missing.kind, "activity.finished");
+    assert.equal(missing.payload.isError, false);
     assert.equal(missing.payload.reasonCode, "target-not-found");
+    const directory = events.append(activity(6, "tool_result", { isError: true, reasonCode: "target-is-directory" }, true), at(6)).event;
+    expectSchema(directory);
+    assert.equal(directory.kind, "activity.finished");
+    assert.equal(directory.payload.isError, false);
+    assert.equal(directory.payload.reasonCode, "target-is-directory");
     const warning = events.append(activity(7, "tool_result", { isError: true, exitCode: 2, exitCodeExact: true,
       reasonCode: "search-target-missing" }, true), at(7)).event;
     expectSchema(warning);
@@ -60,6 +68,12 @@ describe("Piagent WebUI runtime event store", () => {
     assert.equal(warning.payload.exitCode, 2);
     assert.equal(warning.payload.reasonCode, "search-target-missing");
     assert.equal(events.replay(null, 100).events.at(-1).eventId, warning.eventId);
+    const externalMissing = events.append(activity(8, "tool_result", {
+      toolName: "vendor_read_file", isError: true, reasonCode: "target-not-found"
+    }, true), at(8)).event;
+    expectSchema(externalMissing);
+    assert.equal(externalMissing.kind, "activity.failed",
+      "an external tool cannot borrow Piagent's trusted read-miss neutralization");
     const unrelatedFinishedReason = validateFixture(registry, "runtime-event-v2", {
       ...warning, payload: { ...warning.payload, reasonCode: "tool-result-failed" }
     });

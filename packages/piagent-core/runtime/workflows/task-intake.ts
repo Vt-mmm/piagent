@@ -1,14 +1,22 @@
 import { classifyContextTask } from "../../extensions/context-engine.js";
-import { matchesAnyPath, matchesProtectedPath, normalizePathCandidate } from "../../extensions/policy-core.js";
+import { matchesProtectedPath, normalizePathCandidate } from "../../extensions/policy-core.js";
 import type { ReviewLens } from "../../extensions/guard-types.js";
 import { LONG_INPUT_CHARS } from "../runtime-limits.ts";
+import {
+  foldChangeIntent,
+  hasChangeIntent,
+  isExplicitChangeRequest,
+  isLightweightNonAuthorizingChangeLanguage,
+  isNonAuthorizingChangeLanguage
+} from "./change-clarification.ts";
 export { boundedRuntimeIntakeMessage } from "./runtime-intake-compaction.ts";
+export { resolveTaskScopePatterns } from "./task-scope-resolution.ts";
+export type { TaskScopeResolution } from "./task-scope-resolution.ts";
 
 const AUTO_INTAKE_MAX_PROMPT_CHARS = LONG_INPUT_CHARS;
 const AUTO_TASK_SUMMARY_CHARS = 700;
 const AUTO_ACCEPTANCE_CRITERION_CHARS = 600;
 const AUTO_ACCEPTANCE_CRITERIA_MAX = 12;
-const AUTO_INTAKE_CHANGE_INTENT = /\b(?:add|build|change|correct|create|fix|implement|modify|mutate|refactor|remove|rename|repair|replace|update|write|sua|them|doi|cap nhat|xoa|tao)\b/i;
 const AUTO_INTAKE_READ_ONLY_LEAD = /^\s*\/?(?:analy[sz]e|audit|check|discuss|explain|inspect|plan|research|review|scout|summari[sz]e|why|how|can\s+(?:you|we)|kiem tra|nghien cuu|giai thich|danh gia)\b/i;
 const AUTO_INTAKE_MANUAL_RISK = /\b(?:credential|database|deploy|destructive|encryption|external provider|payment|permission|production|publish|secret|token rotation)\b/i;
 const AUTO_READ_ONLY_INTENT = /\b(?:analy[sz]e|audit|check|diagnos(?:e|is)|explain|inspect|investigate|plan|research|review|scout|summari[sz]e|triage|kiem tra|nghien cuu|giai thich|danh gia)\b/i;
@@ -37,6 +45,26 @@ const AUTO_GLOBAL_READ_ONLY_PATTERNS = [
   /\b(?:keep\s+)?(?:this\s+|the\s+)?(?:task|run|session|workspace|project|repo|repository)\s+(?:(?:is|must|should)\s+(?:be\s+|remain\s+)?|remain\s+)?read-only\b/i
 ];
 const AUTO_EXECUTION_INTENT = /(?:\b(?:run|execute|execution|rerun|re-run|chay)\b.{0,80}\b(?:tests?|build|checks?|gates?|lint|typecheck|package|pack|verify|verification)\b|\b(?:npm|pnpm|yarn|bun)\s+(?:test|pack|run\s+(?:build|check|lint|typecheck|verify))\b)/i;
+
+function explicitSourceWorkflow(text: string): boolean {
+  const signal = classifyContextTask(text);
+  return Boolean(signal.workflowId && signal.changeMode === "source-change");
+}
+
+/** A question about whether to mutate is conversational context, not mutation authority. */
+export function isNonAuthorizingChangeClarification(prompt: string): boolean {
+  const text = String(prompt ?? "").trim();
+  if (!text) return false;
+  if (explicitSourceWorkflow(text)) return false;
+  return isNonAuthorizingChangeLanguage(text);
+}
+
+/** Only a short yes/no-or-choice continuation may bypass repository retrieval. */
+export function isLightweightNonAuthorizingChangeContinuation(prompt: string): boolean {
+  const text = String(prompt ?? "").trim();
+  if (!text || explicitSourceWorkflow(text)) return false;
+  return isLightweightNonAuthorizingChangeLanguage(text);
+}
 
 export const AUTO_INTAKE_SNAPSHOT_PATTERNS = [
   "src/**", "app/**", "lib/**", "packages/**", "test/**", "tests/**", "spec/**", "__tests__/**"
@@ -79,21 +107,26 @@ function plausibleTaskScopePath(value: string): boolean {
 }
 
 export function automaticTaskSummary(prompt: string): string {
-  return String(prompt ?? "").replace(/\s+/g, " ").trim().slice(0, AUTO_TASK_SUMMARY_CHARS);
-}
+  return String(prompt ?? "").replace(/\s+/g, " ").trim().slice(0, AUTO_TASK_SUMMARY_CHARS); }
 
 export function automaticTaskIntakeEligible(prompt: string, readProtectedPaths: string[]): boolean {
   const text = String(prompt ?? "").trim();
   if (!text || text.length > AUTO_INTAKE_MAX_PROMPT_CHARS) return false;
+  const folded = foldChangeIntent(text);
+  const explicitChange = isExplicitChangeRequest(folded);
+  if (isNonAuthorizingChangeClarification(text)) return false;
   const noMutationBoundary = noMutationBoundarySignals(text);
   if (noMutationBoundary.temporary && !noMutationBoundary.taskWide) return false;
   const signal = classifyContextTask(text);
-  if (AUTO_EXECUTION_INTENT.test(text)) {
+  // Explicit non-execution workflows own their operation semantics; an implementation verb inside
+  // /plan, /discuss, /review, or a git workflow must not create a source-change task early.
+  if (signal.workflow !== "task") return false;
+  if (AUTO_EXECUTION_INTENT.test(folded)) {
     if (/\bpiagent_task_start\b/i.test(text)) return false;
     return !signal.paths.some((candidate) => matchesProtectedPath(candidate, readProtectedPaths));
   }
-  if (signal.workflow !== "task" || !AUTO_INTAKE_CHANGE_INTENT.test(text)) return false;
-  if (AUTO_INTAKE_READ_ONLY_LEAD.test(text) || AUTO_INTAKE_MANUAL_RISK.test(text)) return false;
+  if (!hasChangeIntent(folded) && !explicitChange) return false;
+  if ((AUTO_INTAKE_READ_ONLY_LEAD.test(folded) && !explicitChange) || AUTO_INTAKE_MANUAL_RISK.test(folded)) return false;
   if (/\bpiagent_task_start\b/i.test(text)) return false;
   return !signal.paths.some((candidate) => matchesProtectedPath(candidate, readProtectedPaths));
 }
@@ -101,19 +134,20 @@ export function automaticTaskIntakeEligible(prompt: string, readProtectedPaths: 
 export function automaticReadOnlyTaskIntakeEligible(prompt: string, readProtectedPaths: string[]): boolean {
   const text = String(prompt ?? "").trim();
   if (!text || text.length > AUTO_INTAKE_MAX_PROMPT_CHARS) return false;
+  const folded = foldChangeIntent(text);
+  if (isNonAuthorizingChangeClarification(text)) return false;
   const signal = classifyContextTask(text);
-  if (signal.workflow === "usage" || signal.workflow === "permission" || signal.workflow === "context") return false;
+  if (["usage", "permission", "context", "discuss", "plan", "release", "onboard"].includes(signal.workflow)) return false;
   const readOnlyBoundary = noMutationBoundarySignals(text).taskWide || hasGlobalReadOnlyBoundary(text);
-  if (!AUTO_READ_ONLY_INTENT.test(text) && !readOnlyBoundary) return false;
-  if (AUTO_INTAKE_CHANGE_INTENT.test(text) && !readOnlyBoundary) return false;
+  if (!AUTO_READ_ONLY_INTENT.test(folded) && !readOnlyBoundary) return false;
+  if (hasChangeIntent(folded) && !readOnlyBoundary) return false;
   if (/\bpiagent_task_start\b/i.test(text)) return false;
   return !signal.paths.some((candidate) => matchesProtectedPath(candidate, readProtectedPaths));
 }
 
 export function automaticTaskIntakeMode(prompt: string, readProtectedPaths: string[]): "source-change" | "read-only" | undefined {
   if (automaticTaskIntakeEligible(prompt, readProtectedPaths)) return "source-change";
-  if (automaticReadOnlyTaskIntakeEligible(prompt, readProtectedPaths)) return "read-only";
-  return undefined;
+  return automaticReadOnlyTaskIntakeEligible(prompt, readProtectedPaths) ? "read-only" : undefined;
 }
 
 export function automaticTaskMutationPolicy(
@@ -317,9 +351,12 @@ export function automaticAcceptanceCriteria(prompt: string, changeMode: "source-
 export function manualTaskIntakeEligible(prompt: string, readProtectedPaths: string[]): boolean {
   const text = String(prompt ?? "").trim();
   if (!text || text.length > LONG_INPUT_CHARS) return false;
+  const folded = foldChangeIntent(text);
+  const explicitChange = isExplicitChangeRequest(folded);
+  if (isNonAuthorizingChangeClarification(text)) return false;
   const signal = classifyContextTask(text);
-  if (signal.workflow !== "task" || !AUTO_INTAKE_CHANGE_INTENT.test(text)) return false;
-  if (AUTO_INTAKE_READ_ONLY_LEAD.test(text) || /\bpiagent_task_start\b/i.test(text)) return false;
+  if (signal.workflow !== "task" || (!hasChangeIntent(folded) && !explicitChange)) return false;
+  if ((AUTO_INTAKE_READ_ONLY_LEAD.test(folded) && !explicitChange) || /\bpiagent_task_start\b/i.test(text)) return false;
   if (signal.paths.length === 0) return true;
   return signal.paths.some((candidate) => !matchesProtectedPath(candidate, readProtectedPaths));
 }
@@ -362,84 +399,6 @@ function inferredProjectScope(prompt: string, projectFiles: string[]): string[] 
     .sort((left, right) => right.score - left.score || left.path.localeCompare(right.path))
     .slice(0, 8)
     .map((item) => item.path);
-}
-
-export type TaskScopeResolution = {
-  scope: string[];
-  mappings: Array<{ from: string; to: string }>;
-  ambiguous: Array<{ input: string; candidates: string[] }>;
-  unmatched: string[];
-};
-
-const STANDARD_SCOPE_ROOT = /^(?:\.github|app|apps|bin|config|docs|examples|lib|logs|packages|pages|plans|public|scripts|services|spec|src|test|tests|vendor|__tests__)(?:\/|$)/i;
-
-function wildcardPrefix(value: string): string {
-  const index = value.search(/[*?{}\[\]]/);
-  return (index < 0 ? value : value.slice(0, index)).replace(/\/+$/, "");
-}
-
-function nestedDirectoryMatches(prefix: string, projectFiles: string[]): string[] {
-  if (!prefix) return [];
-  const segments = prefix.split("/").filter(Boolean);
-  const matches = new Set<string>();
-  for (const file of projectFiles) {
-    const parts = normalizePathCandidate(file).split("/");
-    for (let index = 0; index <= parts.length - 1 - segments.length; index += 1) {
-      if (segments.every((segment, offset) => parts[index + offset] === segment)) {
-        matches.add(parts.slice(0, index + segments.length).join("/"));
-      }
-    }
-  }
-  return [...matches].sort();
-}
-
-export function resolveTaskScopePatterns(scope: string[], projectFiles: string[]): TaskScopeResolution {
-  const files = uniqueStrings(projectFiles.map(normalizePathCandidate).filter(Boolean));
-  const resolved: string[] = [];
-  const mappings: Array<{ from: string; to: string }> = [];
-  const ambiguous: Array<{ input: string; candidates: string[] }> = [];
-  const unmatched: string[] = [];
-  for (const raw of scope) {
-    const candidate = normalizePathCandidate(raw);
-    if (!candidate) continue;
-    if (files.includes(candidate) || files.some((file) => matchesAnyPath(file, [candidate]))) {
-      resolved.push(candidate);
-      continue;
-    }
-    const hasWildcard = /[*?{}\[\]]/.test(candidate);
-    if (hasWildcard) {
-      const prefix = wildcardPrefix(candidate);
-      const directories = nestedDirectoryMatches(prefix, files);
-      if (directories.length === 1) {
-        const suffix = candidate.slice(prefix.length).replace(/^\/+/, "");
-        const canonical = suffix ? `${directories[0]}/${suffix}` : directories[0];
-        resolved.push(canonical);
-        mappings.push({ from: candidate, to: canonical });
-      } else if (directories.length > 1 && prefix && !STANDARD_SCOPE_ROOT.test(prefix)) {
-        ambiguous.push({ input: candidate, candidates: directories.slice(0, 12).map((directory) => {
-          const suffix = candidate.slice(prefix.length).replace(/^\/+/, "");
-          return suffix ? `${directory}/${suffix}` : directory;
-        }) });
-      } else if (directories.length === 0 && prefix && !prefix.includes("/") && !STANDARD_SCOPE_ROOT.test(prefix) && !raw.startsWith("./")) {
-        unmatched.push(candidate);
-      } else {
-        resolved.push(candidate);
-      }
-      continue;
-    }
-    const suffixMatches = files.filter((file) => file === candidate || file.endsWith(`/${candidate}`));
-    if (suffixMatches.length === 1) {
-      resolved.push(suffixMatches[0]);
-      mappings.push({ from: candidate, to: suffixMatches[0] });
-    } else if (suffixMatches.length > 1) {
-      ambiguous.push({ input: candidate, candidates: suffixMatches.slice(0, 12) });
-    } else if (!candidate.includes("/") && !raw.startsWith("./")) {
-      unmatched.push(candidate);
-    } else {
-      resolved.push(candidate);
-    }
-  }
-  return { scope: uniqueStrings(resolved), mappings, ambiguous, unmatched: uniqueStrings(unmatched) };
 }
 
 export function automaticTaskScope(prompt: string, context: Array<{ path: string }>, projectFiles: string[] = []): string[] {

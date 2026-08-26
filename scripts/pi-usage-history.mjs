@@ -202,6 +202,76 @@ function emptyTotals() {
   };
 }
 
+function emptyExecutionAggregate(source = "pi-session-jsonl") {
+  return {
+    schemaVersion: 1,
+    source,
+    completeness: {
+      tools: "unverified",
+      retries: "unavailable",
+      compactions: "partial",
+      subagents: "unverified"
+    },
+    providerStartedAttempts: 0,
+    toolCalls: 0,
+    toolResults: 0,
+    toolFailures: 0,
+    blockedToolCalls: 0,
+    declinedToolCalls: 0,
+    explicitRetries: 0,
+    retryFailures: 0,
+    compactions: 0,
+    abortedCompactions: 0,
+    summarizationRetries: 0,
+    repeatedToolCalls: 0,
+    subagentAttempts: 0,
+    subagentFailures: 0
+  };
+}
+
+function stableValue(value) {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stableValue(value[key])]));
+}
+
+function toolFingerprint(block) {
+  let args = block?.arguments ?? null;
+  if (typeof args === "string") {
+    try { args = JSON.parse(args); } catch { /* The opaque string remains useful for equality. */ }
+  }
+  try { return JSON.stringify([String(block?.name ?? "tool"), stableValue(args)]); }
+  catch { return String(block?.name ?? "tool"); }
+}
+
+function isSubagentAttempt(block) {
+  const name = String(block?.name ?? "").toLowerCase();
+  if (["spawn_agent", "create_agent", "delegate_task", "subagent"].includes(name)) return true;
+  return false;
+}
+
+function structuredToolStatus(message) {
+  const candidates = [message?.status, message?.details?.status, message?.result?.status];
+  return candidates.find((value) => typeof value === "string")?.toLowerCase() ?? "";
+}
+
+function exactPricingRequest(usage) {
+  const fields = ["input", "output", "cacheRead", "cacheWrite", "reasoning"];
+  if (!usage || fields.some((field) => !Number.isSafeInteger(usage[field]) || usage[field] < 0)) return null;
+  const total = usage.totalTokens;
+  if (!Number.isSafeInteger(total) || total !== usage.input + usage.output + usage.cacheRead + usage.cacheWrite
+    || usage.reasoning > usage.output) return null;
+  return {
+    input: usage.input,
+    output: usage.output,
+    cacheRead: usage.cacheRead,
+    cacheWrite: usage.cacheWrite,
+    reasoning: usage.reasoning,
+    total,
+    promptTokens: usage.input + usage.cacheRead + usage.cacheWrite
+  };
+}
+
 function exactToken(raw, label) {
   if (!Number.isSafeInteger(raw) || raw < 0) throw new Error(`${label} must be a non-negative safe integer`);
   return raw;
@@ -253,6 +323,7 @@ function summarizeSession(file, options) {
     return undefined;
   }
 
+  const execution = emptyExecutionAggregate();
   const summary = {
     id: path.basename(file, ".jsonl"),
     name: "",
@@ -270,12 +341,17 @@ function summarizeSession(file, options) {
     promptChars: 0,
     tokens: emptyTotals(),
     usageIntegrity: { exact: options.strictUsage === true, source: "pi-session-jsonl", assistantMessages: 0, usageMessages: 0 },
+    pricingBuckets: { schemaVersion: 1, source: "provider-request-usage", completeness: "unverified", requests: [] },
+    execution,
     toolNames: {},
     sizeBytes: stat.size,
     mtime: stat.mtime
   };
 
   let hasCountedActivity = false;
+  const toolCallsById = new Map();
+  const toolResultIds = new Set();
+  const toolCallFingerprints = new Set();
   const lines = fs.readFileSync(file, "utf8").split(/\n/);
   for (const [lineIndex, line] of lines.entries()) {
     if (!line) continue;
@@ -311,6 +387,13 @@ function summarizeSession(file, options) {
       summary.name = String(entry.name);
       continue;
     }
+
+    const countedControl = inRange(ts ?? stat.mtime, options);
+    if (countedControl && entry.type === "auto_retry_start") execution.explicitRetries += 1;
+    else if (countedControl && entry.type === "auto_retry_end" && entry.success === false) execution.retryFailures += 1;
+    else if (countedControl && entry.type === "compaction_start") execution.compactions += 1;
+    else if (countedControl && entry.type === "compaction_end" && entry.aborted === true) execution.abortedCompactions += 1;
+    else if (countedControl && entry.type === "summarization_retry_scheduled") execution.summarizationRetries += 1;
     if (entry.type !== "message" || !entry.message) continue;
 
     const counted = inRange(ts ?? stat.mtime, options);
@@ -337,19 +420,41 @@ function summarizeSession(file, options) {
       if (message.usage) {
         addTotals(summary.tokens, message.usage, { strict: options.strictUsage === true, label: `Pi session JSONL line ${lineIndex + 1} usage` });
         summary.usageIntegrity.usageMessages += 1;
+        execution.providerStartedAttempts += 1;
+        const request = exactPricingRequest(message.usage);
+        if (request) summary.pricingBuckets.requests.push(request);
       }
       if (Array.isArray(message.content)) {
         for (const block of message.content) {
           if (block?.type !== "toolCall") continue;
           summary.messages.toolCalls += 1;
+          execution.toolCalls += 1;
           const name = String(block.name ?? "tool");
           summary.toolNames[name] = (summary.toolNames[name] ?? 0) + 1;
+          const id = typeof block.id === "string" && block.id ? block.id : null;
+          const subagentAttempt = isSubagentAttempt(block);
+          if (id) toolCallsById.set(id, { name, subagentAttempt });
+          if (subagentAttempt) execution.subagentAttempts += 1;
+          const fingerprint = toolFingerprint(block);
+          if (toolCallFingerprints.has(fingerprint)) execution.repeatedToolCalls += 1;
+          else toolCallFingerprints.add(fingerprint);
         }
       }
     } else if (role === "toolResult") {
       summary.messages.toolResults += 1;
+      execution.toolResults += 1;
       const name = String(message.toolName ?? "tool");
       summary.toolNames[name] = summary.toolNames[name] ?? 0;
+      const status = structuredToolStatus(message);
+      const failed = message.isError === true || status === "failed" || status === "error";
+      if (failed) execution.toolFailures += 1;
+      if (status === "blocked") execution.blockedToolCalls += 1;
+      if (status === "declined") execution.declinedToolCalls += 1;
+      const call = typeof message.toolCallId === "string" ? toolCallsById.get(message.toolCallId) : undefined;
+      if (typeof message.toolCallId === "string") toolResultIds.add(message.toolCallId);
+      if (call?.subagentAttempt && (failed || status === "blocked" || status === "declined")) execution.subagentFailures += 1;
+      const compacted = message.details?.piagentCompactedToolResults;
+      if (Number.isSafeInteger(compacted) && compacted > 0) execution.compactions += compacted;
     }
   }
 
@@ -363,6 +468,15 @@ function summarizeSession(file, options) {
   if (options.strictUsage && summary.usageIntegrity.assistantMessages !== summary.usageIntegrity.usageMessages) {
     throw new Error("Pi session JSONL usage coverage is incomplete");
   }
+  summary.pricingBuckets.completeness = summary.usageIntegrity.assistantMessages > 0
+    && summary.pricingBuckets.requests.length === summary.usageIntegrity.assistantMessages
+    ? "exact"
+    : "unverified";
+  const identifiedToolResults = [...toolCallsById.keys()].filter((id) => toolResultIds.has(id)).length;
+  execution.completeness.tools = execution.toolCalls === execution.toolResults && identifiedToolResults === execution.toolCalls
+    ? "exact"
+    : "partial";
+  execution.completeness.subagents = execution.completeness.tools;
   return summary;
 }
 
@@ -388,7 +502,9 @@ function buildReport(options, sessions) {
     subagentSessions: sessions.filter((s) => s.isSubagent).length,
     messages: { user: 0, assistant: 0, toolCalls: 0, toolResults: 0, total: 0 },
     promptChars: 0,
-    tokens: emptyTotals()
+    tokens: emptyTotals(),
+    execution: emptyExecutionAggregate(),
+    pricingBuckets: { schemaVersion: 1, source: "provider-request-usage", completeness: "exact", requests: [] }
   };
   const projects = new Map();
   const tools = {};
@@ -396,6 +512,12 @@ function buildReport(options, sessions) {
     for (const key of Object.keys(totals.messages)) totals.messages[key] += session.messages[key];
     totals.promptChars += session.promptChars;
     for (const key of Object.keys(totals.tokens)) totals.tokens[key] += session.tokens[key];
+    for (const key of ["providerStartedAttempts", "toolCalls", "toolResults", "toolFailures", "blockedToolCalls",
+      "declinedToolCalls", "explicitRetries", "retryFailures", "compactions", "abortedCompactions",
+      "summarizationRetries", "repeatedToolCalls", "subagentAttempts", "subagentFailures"]) {
+      totals.execution[key] += Number(session.execution?.[key] ?? 0);
+    }
+    totals.pricingBuckets.requests.push(...(session.pricingBuckets?.requests ?? []));
     const project = projects.get(session.cwd) ?? {
       cwd: session.cwd,
       sessions: 0,
@@ -419,6 +541,16 @@ function buildReport(options, sessions) {
   const toolRows = Object.entries(tools)
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+
+  const completenessRank = { exact: 0, partial: 1, unverified: 2, unavailable: 3 };
+  for (const field of ["tools", "retries", "compactions", "subagents"]) {
+    totals.execution.completeness[field] = sessions.reduce((worst, session) => {
+      const value = session.execution?.completeness?.[field] ?? "unavailable";
+      return completenessRank[value] > completenessRank[worst] ? value : worst;
+    }, "exact");
+  }
+  totals.pricingBuckets.completeness = sessions.length > 0
+    && sessions.every((session) => session.pricingBuckets?.completeness === "exact") ? "exact" : "unverified";
 
   return {
     generatedAt: new Date().toISOString(),

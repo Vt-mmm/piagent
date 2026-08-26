@@ -26,6 +26,66 @@ function safeTool(value: unknown): string {
   if (safe.redacted) return "redacted-tool";
   return safe.text.replace(/[^A-Za-z0-9._:-]/g, "-").replace(/^[^A-Za-z0-9]+/, "").slice(0, 160) || "tool";
 }
+
+const DIRECT_FILE_KEYS = ["file", "filePath", "file_path", "filename", "targetFile", "target_file"] as const;
+const PATH_KEYS = ["path", "targetPath", "target_path"] as const;
+const FILE_MUTATION_OR_READ_TOOL = /(?:^|[._:-])(read|write|edit|patch|apply)(?:[._:-]|$)/i;
+const FILE_SEARCH_TOOL = /(?:^|[._:-])(grep|search|find|glob|list|ls)(?:[._:-]|$)/i;
+const FILE_LIKE_BASENAME = /(?:^\.[^./\\]+$)|(?:\.[A-Za-z0-9][A-Za-z0-9+_-]{0,15}$)|^(?:Dockerfile|Containerfile|Makefile|README|LICENSE|CHANGELOG)$/i;
+const PATCH_FILE_HEADER = /^\*\*\* (?:Update|Add|Delete) File:\s*(.+)$/m;
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function firstString(records: readonly Record<string, unknown>[], keys: readonly string[]): string | null {
+  for (const source of records) for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "string" && value.trim()) return value;
+    if (Array.isArray(value)) {
+      const first = value.find((item) => typeof item === "string" && item.trim());
+      if (typeof first === "string") return first;
+    }
+  }
+  return null;
+}
+
+function safeBasename(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const source = clean(value).trim();
+  if (!source || source.includes("\n") || source.includes("\r") || /(?:^|\s)(?:https?|data):\/\//i.test(source)) return null;
+  const parts = source.replace(/\\/g, "/").replace(/\/+$/, "").split("/");
+  const basename = (parts.at(-1) ?? "").trim().replace(/^["']|["']$/g, "");
+  if (!basename || basename === "." || basename === "..") return null;
+  const projected = redactSensitiveText(basename);
+  if (projected.redacted || projected.text !== basename || /[\u0000-\u001f\u007f/\\]/.test(basename)) return null;
+  return basename.slice(0, 160);
+}
+
+/**
+ * Returns only a redaction-checked basename suitable for the compact chat
+ * progress row. Raw arguments and full paths remain confined to the runtime;
+ * the Activity inspector keeps its independent, richer projection.
+ */
+export function safeToolFileLabel(toolName: unknown, args: unknown): string | null {
+  const tool = safeTool(toolName), direct = record(args); if (!direct) return null;
+  const nested = record(direct.args), input = record(direct.input);
+  const records = [direct, ...(nested ? [nested] : []), ...(input ? [input] : [])];
+  const explicitFile = firstString(records, DIRECT_FILE_KEYS);
+  if (explicitFile) return safeBasename(explicitFile);
+  const path = firstString(records, PATH_KEYS);
+  if (path) {
+    const basename = safeBasename(path);
+    if (basename && (FILE_MUTATION_OR_READ_TOOL.test(tool)
+      || FILE_SEARCH_TOOL.test(tool) && FILE_LIKE_BASENAME.test(basename))) return basename;
+  }
+  if (FILE_MUTATION_OR_READ_TOOL.test(tool)) {
+    const patch = firstString(records, ["patch"]);
+    const headerPath = typeof patch === "string" ? PATCH_FILE_HEADER.exec(patch)?.[1] : null;
+    if (headerPath) return safeBasename(headerPath);
+  }
+  return null;
+}
 function ref(prefix: string): string { return `${prefix}_${randomBytes(18).toString("base64url")}`; }
 function messageText(message: any): string {
   if (typeof message?.content === "string") return message.content;
@@ -69,6 +129,7 @@ export function runtimeRestartReasonCode(event: unknown): "runtime-restart-requi
 export class GatewaySessionStream {
   readonly sessionRef: string;
   readonly operationRef: string;
+  readonly messageRequestId: string | null;
   readonly #events: GatewayEventStore;
   #messageRef: string | null = null;
   #messageSequence = 0;
@@ -83,6 +144,8 @@ export class GatewaySessionStream {
   #lifecycleTerminationReasonCode: string | null = null;
   #settleListeners: Array<() => void> = [];
   readonly #toolRefs = new Map<string, string>();
+  readonly #toolLabels = new Map<string, string>();
+  readonly #toolFileLabels = new Map<string, string | null>();
   readonly #lifecycle: SessionOperationLifecycle;
 
   get runtimeRestartRequired(): boolean { return this.#runtimeRestartRequired; }
@@ -102,10 +165,15 @@ export class GatewaySessionStream {
     if (!wasSettled) for (const resolve of this.#settleListeners.splice(0)) resolve();
   }
 
-  constructor(options: { sessionRef: string; operationRef: string; events: GatewayEventStore;
+  constructor(options: { sessionRef: string; operationRef: string; messageRequestId?: string | null; events: GatewayEventStore;
     retryPolicy?: SessionOperationRetryPolicyOptions }) {
-    this.sessionRef = options.sessionRef; this.operationRef = options.operationRef; this.#events = options.events;
+    this.sessionRef = options.sessionRef; this.operationRef = options.operationRef;
+    this.messageRequestId = options.messageRequestId ?? null; this.#events = options.events;
     this.#lifecycle = new SessionOperationLifecycle({ operationRef: options.operationRef, retryPolicy: options.retryPolicy });
+  }
+
+  #correlation(): { messageRequestId?: string } {
+    return this.messageRequestId ? { messageRequestId: this.messageRequestId } : {};
   }
 
   started(): Promise<void> {
@@ -129,6 +197,7 @@ export class GatewaySessionStream {
       return observation;
     }
     if (event?.type === "agent_settled") {
+      this.#settleActiveTools("operation-settled-before-tool-result");
       return observation;
     }
     if (event?.type === "message_start" && event.message?.role === "assistant") {
@@ -146,20 +215,33 @@ export class GatewaySessionStream {
       this.#flush(true); this.#lastMessageRef = this.#messageRef; this.#settlement = assistantSettlement(event.message); return observation;
     }
     if (event?.type === "tool_execution_start" && typeof event.toolCallId === "string") {
-      const toolCallRef = ref("tool"); this.#toolRefs.set(event.toolCallId, toolCallRef);
-      this.#events.publish("tool.started", { sessionRef: this.sessionRef, operationRef: this.operationRef, toolCallRef,
-        toolLabel: safeTool(event.toolName), isError: null, reasonCode: null });
+      const toolCallRef = ref("tool"), toolLabel = safeTool(event.toolName), fileLabel = safeToolFileLabel(event.toolName, event.args);
+      this.#toolRefs.set(event.toolCallId, toolCallRef); this.#toolLabels.set(event.toolCallId, toolLabel);
+      this.#toolFileLabels.set(event.toolCallId, fileLabel);
+      this.#events.publish("tool.started", { sessionRef: this.sessionRef, operationRef: this.operationRef, ...this.#correlation(), toolCallRef,
+        toolLabel, fileLabel, isError: null, reasonCode: null });
       return observation;
     }
     if (event?.type === "tool_execution_end" && typeof event.toolCallId === "string") {
       const toolCallRef = this.#toolRefs.get(event.toolCallId); if (!toolCallRef) return observation;
       const reasonCode = runtimeRestartReasonCode(event);
       if (reasonCode) this.#runtimeRestartRequired = true;
-      this.#events.publish("tool.completed", { sessionRef: this.sessionRef, operationRef: this.operationRef, toolCallRef,
-        toolLabel: safeTool(event.toolName), isError: event.isError === true, reasonCode });
-      this.#toolRefs.delete(event.toolCallId);
+      this.#events.publish("tool.completed", { sessionRef: this.sessionRef, operationRef: this.operationRef, ...this.#correlation(), toolCallRef,
+        toolLabel: safeTool(event.toolName), fileLabel: this.#toolFileLabels.get(event.toolCallId) ?? null,
+        isError: event.isError === true, reasonCode });
+      this.#toolRefs.delete(event.toolCallId); this.#toolLabels.delete(event.toolCallId); this.#toolFileLabels.delete(event.toolCallId);
     }
+    if (event?.type === "turn_end") this.#settleActiveTools("turn-ended-before-tool-result");
     return observation;
+  }
+
+  #settleActiveTools(reasonCode: string): void {
+    for (const [toolCallId, toolCallRef] of this.#toolRefs) {
+      this.#events.publish("tool.completed", { sessionRef: this.sessionRef, operationRef: this.operationRef, ...this.#correlation(), toolCallRef,
+        toolLabel: this.#toolLabels.get(toolCallId) ?? "tool", fileLabel: this.#toolFileLabels.get(toolCallId) ?? null,
+        isError: true, reasonCode });
+    }
+    this.#toolRefs.clear(); this.#toolLabels.clear(); this.#toolFileLabels.clear();
   }
 
   #flush(final: boolean): void {
@@ -186,7 +268,7 @@ export class GatewaySessionStream {
   #emit(value: string): void {
     for (let offset = 0; offset < value.length; offset += MAX_DELTA) {
       if (this.#eventCount >= MAX_EVENTS) { this.#truncated = true; break; }
-      this.#events.publish("message.delta", { sessionRef: this.sessionRef, operationRef: this.operationRef,
+      this.#events.publish("message.delta", { sessionRef: this.sessionRef, operationRef: this.operationRef, ...this.#correlation(),
         messageRef: this.#messageRef!, messageSequence: this.#messageSequence++, delta: value.slice(offset, offset + MAX_DELTA) });
       this.#eventCount += 1;
     }
@@ -195,6 +277,7 @@ export class GatewaySessionStream {
   complete(sessionRevision: string | null, taskOutcome: string | null = null): void {
     if (!this.#lifecycle.markTerminal()) return;
     this.#flush(true);
+    this.#settleActiveTools("operation-settled-before-tool-result");
     let settlement = this.#forcedSettlement ?? (this.#runtimeRestartRequired
       ? { outcome: "unknown" as const, reasonCode: "runtime-restart-required" }
       : this.#settlement);
@@ -212,10 +295,10 @@ export class GatewaySessionStream {
       settlement = { outcome: "unknown", reasonCode: "session-projection-unavailable" };
     }
     if (settlement.outcome === "completed" && messageRef && sessionRevision) {
-      this.#events.publish("message.completed", { sessionRef: this.sessionRef, operationRef: this.operationRef,
+      this.#events.publish("message.completed", { sessionRef: this.sessionRef, operationRef: this.operationRef, ...this.#correlation(),
         messageRef, sessionRevision, truncated: this.#truncated });
     }
-    this.#events.publish("operation.settled", { sessionRef: this.sessionRef, operationRef: this.operationRef,
+    this.#events.publish("operation.settled", { sessionRef: this.sessionRef, operationRef: this.operationRef, ...this.#correlation(),
       messageRef, sessionRevision, settlement: settlement.outcome,
       reasonCode: settlement.outcome === "completed" ? null : settlement.reasonCode ?? "operation-settlement-unknown" });
   }

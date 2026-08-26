@@ -1,80 +1,42 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-
 import type { PiagentGatewayCapabilityHandshakeV1 } from "../../contracts/generated/gateway-capabilities-v1.ts";
-import type { Attachment } from "../../contracts/generated/attachment-v1.ts";
 import type { Catalog, SessionRow } from "../../contracts/generated/session-catalog-v1.ts";
-import type { PermissionMode, Receipt, Workflow } from "../../contracts/generated/session-command-v1.ts";
-import { readSessionCatalog, readSessionLiveState } from "./api.ts";
+import type { Receipt } from "../../contracts/generated/session-command-v1.ts";
+import { readSessionCatalog, readSessionLiveState, readSessionTranscript } from "./api.ts";
 import { bootstrapBrowserSession } from "./bootstrap.ts";
 import { applyOperationSettlement, canonicalLiveStateSequence, connectionStateAfterCatalogRefresh, liveStateConfirmsAbort,
   liveProgressStatus, mergeTerminalOperationActivities, reconcileSessionLiveState,
-  reconcileTerminalOperationActivities, terminalOperationActivity, type LiveActivity, type LiveConversation,
+  reconcileTerminalOperationActivities, conversationAfterRejectedSend, markUserMessageDelivery, pendingUserConversation, terminalOperationActivity,
+  type LiveActivity, type LiveConversation,
   type TerminalOperationActivity } from "./live-state-view-model.ts";
-import type { ConnectionState } from "./use-inspection.ts";
-
+import { persistedLiveConversationHasFinal, persistedUserTextMatches } from "./transcript-view-model.ts";
+import { canonicalOperationAfter, GatewayCommandTransportError, gatewayCommandMayHaveEffect, newerOperationObservation,
+  sessionSendDisposition, type OperationObservation } from "./session-send-state.ts";
+import { CANONICAL_RESYNC_CLOSE_CODE, COMMAND_RESPONSE_TIMEOUT_MS, GATEWAY_CURSOR_KEY, opaque,
+  parseGatewayCursor, persistGatewayCursor, revisionStale, SessionSendRejectedError,
+  type SessionHub, type SessionHubCreateOptions, type SessionHubSendAttachment,
+  type SessionSendResult } from "./session-hub-contract.ts";
 export { applyOperationSettlement, canonicalLiveStateSequence, connectionStateAfterCatalogRefresh, liveStateConfirmsAbort,
   liveProgressStatus, mergeTerminalOperationActivities, reconcileSessionLiveState,
   reconcileTerminalOperationActivities, terminalOperationActivity };
 export type { LiveActivity, LiveConversation, TerminalOperationActivity };
-
-type GatewayCursor = { gatewayInstanceRef: string; sequence: number };
-const GATEWAY_CURSOR_KEY = "piagent-gateway-event-cursor-v1";
-const COMMAND_RESPONSE_TIMEOUT_MS = 30_000;
-const CANONICAL_RESYNC_CLOSE_CODE = 4_001;
-
-export function parseGatewayCursor(raw: string | null, gatewayInstanceRef: string): number | null {
-  if (!raw) return null;
-  try {
-    const value = JSON.parse(raw) as Partial<GatewayCursor>;
-    return value.gatewayInstanceRef === gatewayInstanceRef && Number.isSafeInteger(value.sequence) && Number(value.sequence) >= 0
-      ? Number(value.sequence) : null;
-  } catch { return null; }
-}
-
-function opaque(prefix: string): string { return `${prefix}_${crypto.randomUUID().replaceAll("-", "")}`; }
-
-function revisionStale(receipt: Receipt): boolean {
-  return receipt.phase === "rejected" && receipt.resultCode === "stale-revision"
-    && receipt.error?.code === "session-revision-stale";
-}
-
-export function useSessionHub(): {
-  catalog?: Catalog;
-  capabilities?: PiagentGatewayCapabilityHandshakeV1;
-  connection: ConnectionState;
-  live: Readonly<Record<string, LiveConversation>>;
-  terminalActivities: Readonly<Record<string, TerminalOperationActivity[]>>;
-  refresh(): Promise<Catalog | undefined>;
-  create(options: { projectRef: string; placeRef: string; modelRef: string | null; thinkingLevel: string; message: string;
-    workflow: Workflow; permissionMode: PermissionMode | null; messageRequestId?: string; deferInitialMessage?: boolean }): Promise<Receipt>;
-  send(session: SessionRow, message: string, attachment?: { messageRequestId: string; attachmentRefs: string[]; attachments?: Attachment[];
-    workflow?: Workflow }): Promise<Receipt>;
-  abort(session: SessionRow): Promise<Receipt>;
-  restart(session: SessionRow): Promise<Receipt>;
-  setModel(session: SessionRow, modelRef: string): Promise<Receipt>;
-  setThinking(session: SessionRow, thinkingLevel: string): Promise<Receipt>;
-  setPermission(session: SessionRow, permissionMode: "read-only" | "workspace-write" | "trusted-full-access"): Promise<Receipt>;
-  rename(session: SessionRow, title: string): Promise<Receipt>;
-  pin(session: SessionRow, pinned: boolean): Promise<Receipt>;
-  archive(session: SessionRow): Promise<Receipt>;
-  unarchive(session: SessionRow): Promise<Receipt>;
-  fork(session: SessionRow, title: string | null): Promise<Receipt>;
-} {
+export { parseGatewayCursor, SessionSendRejectedError } from "./session-hub-contract.ts";
+export type { SessionSendResult } from "./session-hub-contract.ts";
+export function useSessionHub(): SessionHub {
   const [catalog, setCatalog] = useState<Catalog>();
   const [capabilities, setCapabilities] = useState<PiagentGatewayCapabilityHandshakeV1>();
-  const [connection, setConnection] = useState<ConnectionState>("connecting");
+  const [connection, setConnection] = useState<SessionHub["connection"]>("connecting");
   const [live, setLive] = useState<Record<string, LiveConversation>>({});
   const [terminalActivities, setTerminalActivities] = useState<Record<string, TerminalOperationActivity[]>>({});
   const catalogRef = useRef<Catalog | undefined>(undefined), socketRef = useRef<WebSocket | null>(null), sequenceRef = useRef<number | null>(null);
+  const liveRef = useRef<Record<string, LiveConversation>>({}); liveRef.current = live;
+  const operationObservationSerialRef = useRef(0);
+  const operationObservationRef = useRef(new Map<string, OperationObservation>());
   const gatewayInstanceRef = useRef<string | null>(null);
   const canonicalRefreshRequiredRef = useRef(true);
   const refreshStartedRef = useRef(0), refreshAppliedRef = useRef(0);
   const pendingRef = useRef(new Map<string, { resolve(value: Receipt): void; reject(error: Error): void; timeout: number }>());
-  const persistCursor = useCallback((gatewayRef: string, sequence: number | null) => {
-    if (sequence === null) return;
-    try { window.sessionStorage.setItem(GATEWAY_CURSOR_KEY, JSON.stringify({ gatewayInstanceRef: gatewayRef, sequence })); }
-    catch { /* Cursor persistence is an optimization; live-state remains canonical. */ }
-  }, []);
+  const persistCursor = useCallback(persistGatewayCursor, []);
   const refresh = useCallback(async (options: { requireLiveState?: boolean } = {}) => {
     const refreshSequence = ++refreshStartedRef.current;
     try {
@@ -117,12 +79,12 @@ export function useSessionHub(): {
 
   const request = useCallback((command: unknown): Promise<Receipt> => {
     const socket = socketRef.current;
-    if (!socket || socket.readyState !== WebSocket.OPEN) return Promise.reject(new Error("gateway-not-connected"));
+    if (!socket || socket.readyState !== WebSocket.OPEN) return Promise.reject(new GatewayCommandTransportError("gateway-not-connected", false));
     const requestId = opaque("request");
     return new Promise((resolve, reject) => {
       const timeout = window.setTimeout(() => {
         if (!pendingRef.current.delete(requestId)) return;
-        reject(new Error("gateway-command-response-timeout"));
+        reject(new GatewayCommandTransportError("gateway-command-response-timeout", true));
       }, COMMAND_RESPONSE_TIMEOUT_MS);
       pendingRef.current.set(requestId, { resolve, reject, timeout });
       try {
@@ -130,13 +92,41 @@ export function useSessionHub(): {
           requestId, method: "sessions.command", params: { command } }));
       } catch (error) {
         window.clearTimeout(timeout); pendingRef.current.delete(requestId);
-        reject(error instanceof Error ? error : new Error("gateway-request-failed"));
+        reject(new GatewayCommandTransportError(error instanceof Error ? error.message : "gateway-request-failed", false));
       }
     });
   }, []);
 
-  const create = useCallback(async (options: { projectRef: string; placeRef: string; modelRef: string | null;
-    thinkingLevel: string; workflow: Workflow; permissionMode: PermissionMode | null; message: string; messageRequestId?: string; deferInitialMessage?: boolean }) => {
+  const observeSendEffect = useCallback(async (sessionRef: string, message: string, requestedAt: string,
+    afterSerial: number, priorOperationRef: string | null,
+    messageRequestId: string): Promise<{ operationRef: string | null; complete: boolean } | null> => {
+    const local = newerOperationObservation(operationObservationRef.current.get(sessionRef), afterSerial, priorOperationRef,
+      messageRequestId);
+    if (local) return { operationRef: local.operationRef, complete: local.complete };
+    const [canonical, transcript] = await Promise.all([
+      readSessionLiveState().catch(() => undefined),
+      readSessionTranscript(sessionRef, null, 50).catch(() => undefined)
+    ]);
+    const operation = canonical?.state === "ready"
+      ? canonical.operations.find((item) => item.sessionRef === sessionRef) : undefined;
+    const canonicalEvidence = canonicalOperationAfter(operation, priorOperationRef, messageRequestId);
+    if (canonicalEvidence) return canonicalEvidence;
+    if (transcript?.state !== "ready") return null;
+    const exact = [...transcript.items].reverse().find((item) => item.role === "user"
+      && item.messageRequestId === messageRequestId);
+    if (exact) return { operationRef: exact.agentOperationId,
+      complete: persistedLiveConversationHasFinal(transcript.items, message,
+        { operationRef: exact.agentOperationId, messageRequestId, startedAt: null }) };
+    const requested = Date.parse(requestedAt);
+    const persisted = [...transcript.items].reverse().find((item) => item.role === "user"
+      && !item.messageRequestId && persistedUserTextMatches(item.content.text, message) && Date.parse(item.recordedAt) >= requested);
+    if (!persisted) return null;
+    return { operationRef: persisted.agentOperationId,
+      complete: persistedLiveConversationHasFinal(transcript.items, message,
+        { operationRef: persisted.agentOperationId, messageRequestId: null, startedAt: requestedAt }) };
+  }, []);
+
+  const create = useCallback(async (options: SessionHubCreateOptions) => {
     const current = catalogRef.current, message = options.message.trim(), messageRequestId = options.messageRequestId ?? opaque("message");
     if (!current?.catalogRevision) throw new Error("catalog-unavailable");
     if (!message) throw new Error("message-empty");
@@ -164,7 +154,7 @@ export function useSessionHub(): {
       const existing = value[receipt.sessionRef!];
       return { ...value, [receipt.sessionRef!]: { ...(existing
         ?? { assistant: "", attachments: [], activities: [], complete: false, error: null }), user: message,
-        operationRef: receipt.operationRef, abortable: existing?.complete ? false : Boolean(receipt.operationRef),
+        operationRef: receipt.operationRef, messageRequestId, abortable: existing?.complete ? false : Boolean(receipt.operationRef),
         startedAt: existing?.startedAt ?? receiptAt, lastEventAt: existing?.lastEventAt ?? receiptAt } };
     });
     await refresh(); return receipt;
@@ -174,44 +164,88 @@ export function useSessionHub(): {
   // because the bytes were staged against that exact id before the message
   // existed. Without attachments a fresh id per send is still correct.
   const send = useCallback(async (session: SessionRow, message: string,
-    attachment?: { messageRequestId: string; attachmentRefs: string[]; attachments?: Attachment[]; workflow?: Workflow }) => {
+    attachment?: SessionHubSendAttachment): Promise<SessionSendResult> => {
     const current = catalogRef.current;
     if (!current?.catalogRevision) throw new Error("catalog-unavailable");
     const text = message.trim(); if (!text) throw new Error("message-empty");
     const messageRequestId = attachment?.messageRequestId ?? opaque("message");
     const attachmentRefs = attachment?.attachmentRefs ?? [];
+    const priorLive = liveRef.current[session.sessionRef], observationSerial = operationObservationSerialRef.current;
+    const priorOperationRef = operationObservationRef.current.get(session.sessionRef)?.operationRef ?? priorLive?.operationRef ?? null;
+    const submittedAt = new Date().toISOString();
+    setLive((value) => ({ ...value, [session.sessionRef]: pendingUserConversation(value[session.sessionRef], {
+      message: text, attachments: attachment?.attachments ?? [], messageRequestId, submittedAt
+    }) }));
+    const restoreRejectedInput = () => setLive((value) => {
+      const existing = value[session.sessionRef];
+      const restored = conversationAfterRejectedSend(existing, priorLive, messageRequestId);
+      if (restored === existing) return value;
+      const next = { ...value };
+      if (restored) next[session.sessionRef] = restored; else delete next[session.sessionRef];
+      return next;
+    });
+    const markObserved = (evidence: { operationRef: string | null; complete: boolean }, delivery: "admitted" | "unconfirmed") => {
+      setLive((value) => {
+        const existing = value[session.sessionRef];
+        if (!existing || existing.messageRequestId !== messageRequestId) return value;
+        const marked = markUserMessageDelivery(existing, delivery, evidence.operationRef, new Date().toISOString());
+        const complete = delivery === "unconfirmed" || evidence.complete
+          || Boolean(evidence.operationRef && existing.operationRef === evidence.operationRef && existing.complete);
+        return { ...value, [session.sessionRef]: { ...marked, complete,
+          abortable: delivery === "admitted" && !complete && Boolean(evidence.operationRef) } };
+      });
+    };
+    let requestedAt = submittedAt, commandSubmitted = false;
     try {
-      const submit = (snapshot: Catalog) => {
+      const command = (snapshot: Catalog) => {
         const exact = snapshot.sessions.find((item) => item.sessionRef === session.sessionRef);
         if (!snapshot.catalogRevision || !exact) throw new Error("session-unavailable");
         const now = new Date();
-        return request({ schemaVersion: 1, version: "piagent-session-command-v1", messageType: "command",
+        requestedAt = now.toISOString();
+        return { schemaVersion: 1, version: "piagent-session-command-v1", messageType: "command",
           commandId: opaque("command"), idempotencyKey: opaque("idempotency"), action: "session.send", requestedAt: now.toISOString(),
           expiresAt: new Date(now.getTime() + 5 * 60_000).toISOString(), sessionRef: session.sessionRef,
           expectedCatalogRevision: snapshot.catalogRevision, expectedSessionRevision: exact.sessionRevision,
           payload: { delivery: "new-operation", message: text, messageRequestId, expectedOperationRef: null, attachmentRefs,
-            ...(attachment?.workflow ? { workflow: attachment.workflow } : {}) } });
+            ...(attachment?.workflow ? { workflow: attachment.workflow } : {}) } };
       };
-      let receipt = await submit(current);
+      let nextCommand = command(current); commandSubmitted = true;
+      let receipt = await request(nextCommand);
       if (revisionStale(receipt)) {
         const latest = await refresh();
-        if (latest?.catalogRevision) receipt = await submit(latest);
+        if (latest?.catalogRevision) { nextCommand = command(latest); receipt = await request(nextCommand); }
       }
-      if (receipt.phase !== "settled") throw new Error(receipt.error?.code ?? receipt.resultCode);
-      const receiptAt = receipt.settledAt ?? receipt.requestedAt;
-      // Only an admitted operation may enter the transcript. Runtime events can
-      // arrive before the receipt; merge the user message into that exact live
-      // operation without showing rejected/unsent input optimistically.
-      setLive((value) => {
-        const existing = value[session.sessionRef];
-        return { ...value, [session.sessionRef]: { ...(existing ?? { assistant: "", activities: [], complete: false,
-          error: null }), user: text, attachments: attachment?.attachments ?? [], operationRef: receipt.operationRef,
-          abortable: existing?.complete ? false : Boolean(receipt.operationRef),
-          startedAt: existing?.startedAt ?? receiptAt, lastEventAt: existing?.lastEventAt ?? receiptAt } };
-      });
-      void refresh(); return receipt;
-    } catch (error) { throw error; }
-  }, [refresh, request]);
+      const immediateDisposition = sessionSendDisposition(receipt, null);
+      if (immediateDisposition === "confirmed") {
+        markObserved({ operationRef: receipt.operationRef, complete: false }, "admitted");
+        void refresh(); return { state: "confirmed", receipt };
+      }
+      const observed = await observeSendEffect(session.sessionRef, text, requestedAt, observationSerial, priorOperationRef,
+        messageRequestId);
+      const disposition = sessionSendDisposition(receipt, observed);
+      if (disposition === "observed" && observed) {
+        markObserved(observed, "admitted"); void refresh(); return { state: "observed", receipt };
+      }
+      if (disposition === "unconfirmed") {
+        markObserved({ operationRef: null, complete: true }, "unconfirmed");
+        void refresh(); return { state: "unconfirmed", receipt };
+      }
+      restoreRejectedInput();
+      throw new SessionSendRejectedError(receipt.error?.code ?? receipt.resultCode);
+    } catch (error) {
+      if (error instanceof SessionSendRejectedError) throw error;
+      if (gatewayCommandMayHaveEffect(error, commandSubmitted)) {
+        const observed = await observeSendEffect(session.sessionRef, text, requestedAt, observationSerial, priorOperationRef,
+          messageRequestId);
+        if (sessionSendDisposition(null, observed) === "observed" && observed) {
+          markObserved(observed, "admitted"); void refresh(); return { state: "observed", receipt: null };
+        }
+        markObserved({ operationRef: null, complete: true }, "unconfirmed");
+        void refresh(); return { state: "unconfirmed", receipt: null };
+      }
+      restoreRejectedInput(); throw error;
+    }
+  }, [observeSendEffect, refresh, request]);
 
   const abort = useCallback(async (session: SessionRow) => {
     const current = catalogRef.current, operationRef = live[session.sessionRef]?.operationRef;
@@ -337,12 +371,17 @@ export function useSessionHub(): {
           const pending = pendingRef.current.get(String(frame.requestId)); if (!pending) return;
           pendingRef.current.delete(String(frame.requestId)); window.clearTimeout(pending.timeout);
           if (frame.ok === true && frame.result) pending.resolve(frame.result as Receipt);
-          else pending.reject(new Error(String(frame.error?.code ?? "gateway-request-failed")));
+          else pending.reject(new GatewayCommandTransportError(String(frame.error?.code ?? "gateway-request-failed"), false));
           return;
         }
         if (frame.messageType !== "event" || !Number.isSafeInteger(frame.sequence)) return;
         const payload = frame.payload as Record<string, any>;
         const eventAt = typeof frame.generatedAt === "string" ? frame.generatedAt : new Date().toISOString();
+        const eventMessageRequestId = typeof payload.messageRequestId === "string" ? payload.messageRequestId : null;
+        const correlatedLive = (candidate: LiveConversation | undefined): LiveConversation | undefined => (
+          candidate && eventMessageRequestId && candidate.messageRequestId
+            && candidate.messageRequestId !== eventMessageRequestId ? undefined : candidate
+        );
         if (frame.kind === "resync.required") {
           canonicalRefreshRequiredRef.current = true;
           canonicalResync = true; socket.close(CANONICAL_RESYNC_CLOSE_CODE, "canonical-resync-required"); return;
@@ -355,34 +394,50 @@ export function useSessionHub(): {
         }
         sequenceRef.current = incoming;
         if (gatewayInstanceRef.current) persistCursor(gatewayInstanceRef.current, incoming);
+        if (typeof payload?.sessionRef === "string" && typeof payload.operationRef === "string"
+          && ["runtime.changed", "message.delta", "tool.started", "tool.completed", "message.completed", "operation.settled"].includes(String(frame.kind))) {
+          operationObservationSerialRef.current += 1;
+          operationObservationRef.current.set(payload.sessionRef, { serial: operationObservationSerialRef.current,
+            operationRef: payload.operationRef, messageRequestId: eventMessageRequestId,
+            complete: ["message.completed", "operation.settled"].includes(String(frame.kind)) });
+        }
         if (frame.kind === "message.delta" && typeof payload?.sessionRef === "string" && typeof payload.delta === "string") {
-          setLive((current) => ({ ...current, [payload.sessionRef]: { ...(current[payload.sessionRef]
-            ?? { user: "", assistant: "", attachments: [], activities: [], complete: false, error: null }), operationRef: payload.operationRef,
-            abortable: true,
-            assistant: `${current[payload.sessionRef]?.assistant ?? ""}${payload.delta}`,
-            startedAt: current[payload.sessionRef]?.startedAt ?? eventAt, lastEventAt: eventAt } }));
+          setLive((current) => {
+            const existing = correlatedLive(current[payload.sessionRef]);
+            return { ...current, [payload.sessionRef]: { ...(existing
+              ?? { user: "", assistant: "", attachments: [], activities: [], complete: false, error: null }), operationRef: payload.operationRef,
+              messageRequestId: eventMessageRequestId ?? existing?.messageRequestId, abortable: true, complete: false,
+              delivery: existing?.user ? "admitted" : existing?.delivery,
+              assistant: `${existing?.assistant ?? ""}${payload.delta}`,
+              startedAt: existing?.startedAt ?? eventAt, lastEventAt: eventAt } };
+          });
         }
         if (["tool.started", "tool.completed"].includes(String(frame.kind)) && typeof payload?.sessionRef === "string"
           && typeof payload.toolCallRef === "string" && typeof payload.toolLabel === "string") {
           setLive((current) => {
-            const existing: LiveConversation = current[payload.sessionRef] ?? { user: "", assistant: "", attachments: [], activities: [],
+            const existing: LiveConversation = correlatedLive(current[payload.sessionRef])
+              ?? { user: "", assistant: "", attachments: [], activities: [],
               operationRef: payload.operationRef ?? null, abortable: true, complete: false, error: null, runtimeRecovery: null };
             const state: LiveActivity["state"] = frame.kind === "tool.started" ? "running" : payload.isError === true ? "failed" : "completed";
             const previousActivity = existing.activities.find((item) => item.toolCallRef === payload.toolCallRef);
             const activities = [...existing.activities.filter((item) => item.toolCallRef !== payload.toolCallRef),
-              { toolCallRef: payload.toolCallRef, toolLabel: payload.toolLabel, state, reasonCode: payload.reasonCode ?? null,
+              { toolCallRef: payload.toolCallRef, toolLabel: payload.toolLabel,
+                fileLabel: typeof payload.fileLabel === "string" ? payload.fileLabel : previousActivity?.fileLabel ?? null, state, reasonCode: payload.reasonCode ?? null,
                 startedAt: previousActivity?.startedAt ?? eventAt, finishedAt: state === "running" ? null : eventAt }].slice(-16);
             const runtimeRecovery = payload.reasonCode === "runtime-restart-required" ? "required" : existing.runtimeRecovery;
             return { ...current, [payload.sessionRef]: { ...existing, operationRef: payload.operationRef ?? existing.operationRef,
-              activities, runtimeRecovery, startedAt: existing.startedAt ?? eventAt, lastEventAt: eventAt } };
+              messageRequestId: eventMessageRequestId ?? existing.messageRequestId,
+              activities, complete: false, delivery: existing.user ? "admitted" : existing.delivery,
+              runtimeRecovery, startedAt: existing.startedAt ?? eventAt, lastEventAt: eventAt } };
           });
         }
         if (frame.kind === "runtime.changed" && typeof payload?.sessionRef === "string") {
           setLive((current) => {
             const active = ["running", "paused", "waiting-approval"].includes(String(payload.liveState));
-            const existing: LiveConversation | null = current[payload.sessionRef] ?? (active && typeof payload.operationRef === "string"
+            const currentLive = correlatedLive(current[payload.sessionRef]);
+            const existing: LiveConversation | null = currentLive ?? (active && typeof payload.operationRef === "string"
               ? { user: "", assistant: "", attachments: [], activities: [], operationRef: payload.operationRef,
-                abortable: true, complete: false, settlement: null, error: null, runtimeRecovery: null }
+                messageRequestId: eventMessageRequestId, abortable: true, complete: false, settlement: null, error: null, runtimeRecovery: null }
               : null);
             if (!existing) return current;
             const runtimeRecovery = payload.reasonCode === "runtime-restart-required" ? "restarting"
@@ -391,11 +446,13 @@ export function useSessionHub(): {
                   : existing.runtimeRecovery;
             if (active) {
               return { ...current, [payload.sessionRef]: { ...existing, operationRef: payload.operationRef ?? existing.operationRef,
-                abortable: true, complete: false, settlement: null, runtimeRecovery,
+                messageRequestId: eventMessageRequestId ?? existing.messageRequestId,
+                abortable: true, complete: false, settlement: null, delivery: existing.user ? "admitted" : existing.delivery, runtimeRecovery,
                 startedAt: existing.startedAt ?? eventAt, lastEventAt: eventAt } };
             }
             if (!existing.complete && payload.operationRef === null) {
-              return { ...current, [payload.sessionRef]: { ...existing, assistant: "", abortable: false, complete: true, settlement: "unknown",
+              return { ...current, [payload.sessionRef]: { ...existing, assistant: "", activities: [], abortable: false, complete: true, settlement: "unknown",
+                messageRequestId: eventMessageRequestId ?? existing.messageRequestId,
                 error: payload.reasonCode ?? "operation-settlement-unknown", runtimeRecovery, lastEventAt: eventAt } };
             }
             return runtimeRecovery === existing.runtimeRecovery ? current
@@ -403,20 +460,25 @@ export function useSessionHub(): {
           });
         }
         if (frame.kind === "message.completed" && typeof payload?.sessionRef === "string") {
-          setLive((current) => ({ ...current, [payload.sessionRef]: { ...(current[payload.sessionRef]
-            ?? { user: "", assistant: "", attachments: [], activities: [], operationRef: payload.operationRef, error: null }),
-            operationRef: payload.operationRef, abortable: false, complete: true, settlement: "completed", error: null,
-            lastEventAt: eventAt } }));
+          setLive((current) => {
+            const existing = correlatedLive(current[payload.sessionRef]);
+            return { ...current, [payload.sessionRef]: { ...(existing
+              ?? { user: "", assistant: "", attachments: [], activities: [], operationRef: payload.operationRef, error: null }),
+              operationRef: payload.operationRef, messageRequestId: eventMessageRequestId ?? existing?.messageRequestId,
+              abortable: false, complete: true, settlement: "completed",
+              delivery: existing?.user ? "admitted" : existing?.delivery, error: null, lastEventAt: eventAt } };
+          });
         }
         if (frame.kind === "operation.settled" && typeof payload?.sessionRef === "string"
           && typeof payload.operationRef === "string") {
           setLive((current) => {
-            const existing = current[payload.sessionRef] ?? { user: "", assistant: "", attachments: [], activities: [],
+            const existing: LiveConversation = correlatedLive(current[payload.sessionRef])
+              ?? { user: "", assistant: "", attachments: [], activities: [],
               operationRef: payload.operationRef, complete: false, error: null, runtimeRecovery: null };
             if (existing.operationRef && existing.operationRef !== payload.operationRef) return current;
             return { ...current, [payload.sessionRef]: { ...applyOperationSettlement(existing, {
               operationRef: payload.operationRef, settlement: payload.settlement, reasonCode: payload.reasonCode
-            }), lastEventAt: eventAt } };
+            }), messageRequestId: eventMessageRequestId ?? existing.messageRequestId, lastEventAt: eventAt } };
           });
           const terminal = terminalOperationActivity({ operationRef: payload.operationRef, settlement: payload.settlement,
             reasonCode: payload.reasonCode, settledAt: frame.generatedAt, sequence: incoming });
@@ -427,7 +489,8 @@ export function useSessionHub(): {
       });
       socket.addEventListener("close", () => {
         window.clearTimeout(helloTimeout);
-        for (const pending of pendingRef.current.values()) { window.clearTimeout(pending.timeout); pending.reject(new Error("gateway-connection-lost")); }
+        for (const pending of pendingRef.current.values()) { window.clearTimeout(pending.timeout);
+          pending.reject(new GatewayCommandTransportError("gateway-connection-lost", true)); }
         pendingRef.current.clear();
         if (stopped) return; setConnection("reconnecting");
         if (canonicalResync) {
@@ -455,7 +518,8 @@ export function useSessionHub(): {
     const visible = () => { if (!stopped && document.visibilityState === "visible") void refresh(); };
     document.addEventListener("visibilitychange", visible);
     return () => { stopped = true; if (reconnectTimer) window.clearTimeout(reconnectTimer);
-      for (const pending of pendingRef.current.values()) { window.clearTimeout(pending.timeout); pending.reject(new Error("gateway-client-unmounted")); }
+      for (const pending of pendingRef.current.values()) { window.clearTimeout(pending.timeout);
+        pending.reject(new GatewayCommandTransportError("gateway-client-unmounted", true)); }
       pendingRef.current.clear(); socketRef.current?.close(1000, "client-unmount");
       document.removeEventListener("visibilitychange", visible); };
   }, [persistCursor, refresh]);

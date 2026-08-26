@@ -6,6 +6,7 @@ import {
   CONTEXT_WATCH_PERCENT,
   LONG_INPUT_CHARS
 } from "../runtime-limits.ts";
+import type { WorkflowId } from "../workflows/webui-workflow.ts";
 import { modelLabel } from "./message-signals.ts";
 
 export type UsageSnapshot = {
@@ -32,7 +33,7 @@ export type UsageSnapshot = {
 };
 
 export type ContextPreflight = {
-  workflow: string;
+  workflow: WorkflowId;
   inputChars: number;
   inputTokenEstimate: number;
   liveContext?: UsageSnapshot["contextUsage"];
@@ -107,7 +108,7 @@ function estimateTokensFromChars(chars: number): number {
   return Math.max(0, Math.ceil(chars / 4));
 }
 
-export function buildContextPreflight(snapshot: UsageSnapshot, workflow = "task", inputChars = 0): ContextPreflight {
+export function buildContextPreflight(snapshot: UsageSnapshot, workflow: WorkflowId = "task", inputChars = 0): ContextPreflight {
   const inputTokenEstimate = estimateTokensFromChars(inputChars);
   const live = snapshot.contextUsage;
   let projectedContext: ContextPreflight["projectedContext"];
@@ -151,7 +152,7 @@ export function buildContextPreflight(snapshot: UsageSnapshot, workflow = "task"
     commands: [
       "/task-preflight",
       "/task-preflight compact",
-      `/fresh ${workflow === "be-to-fe" ? "be-to-fe" : workflow === "scout" ? "scout" : "task"} <request>`,
+      `/fresh ${workflow} <request>`,
       "/usage",
       "/session"
     ]

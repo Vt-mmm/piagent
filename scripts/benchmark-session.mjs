@@ -4,11 +4,12 @@ import os from "node:os";
 import path from "node:path";
 
 import {
+  aggregateCodexTurnUsage,
   aggregateSessionUsage,
   createCodexExecJsonlCollector,
   evaluateWorkflowEvidence
 } from "../packages/piagent-core/benchmark/benchmark-core.js";
-import { codexExecArgs } from "../packages/piagent-core/benchmark/benchmark-codex.js";
+import { codexExecArgs, codexExecResumeArgs } from "../packages/piagent-core/benchmark/benchmark-codex.js";
 import {
   benchmarkEnvironment,
   benchmarkGitEnvironment,
@@ -33,6 +34,7 @@ import { benchmarkTreeIdentity } from "../packages/piagent-core/benchmark/benchm
 import { buildBenchmarkProviderWireEvidence } from "../packages/piagent-core/benchmark/benchmark-provider-wire.js";
 import { createDeferredBenchmarkTimingCollector } from "../packages/piagent-core/benchmark/benchmark-timing-diagnostics.js";
 import { summarizeSession, walkJsonl } from "./pi-usage-history.mjs";
+import { runPiagentWebUiJourney } from "./benchmark-webui-journey.mjs";
 
 const coldStartRuntimeManagedPaths = [
   ".pi/project-context.md",
@@ -311,6 +313,196 @@ function sessionSummaries(sessionDir) {
   return walkJsonl(sessionDir).map((file) => summarizeSession(file, { strictUsage: true })).filter(Boolean);
 }
 
+function resolvedJourneyTurns(scenario, suiteRoot, resolveSuiteEntry) {
+  if (!scenario.userJourney) return null;
+  return scenario.userJourney.turns.map((turn) => ({
+    id: turn.id,
+    message: fs.readFileSync(resolveSuiteEntry(suiteRoot, turn.prompt, `journey prompt ${scenario.id}/${turn.id}`), "utf8").trim(),
+    reconnectBefore: turn.reconnectBefore === true,
+    receiptUncertain: turn.receiptUncertain === true,
+    ...(turn.workflow ? { workflow: turn.workflow } : {})
+  }));
+}
+
+function observedSubstrings(value, candidates) {
+  const text = String(value ?? "");
+  return candidates.filter((candidate) => text.includes(candidate));
+}
+
+export function persistedJourneyReceipt(receipt) {
+  if (!receipt || typeof receipt !== "object") return null;
+  const digest = (value) => typeof value === "string" && value
+    ? crypto.createHash("sha256").update(value).digest("hex")
+    : null;
+  return {
+    schemaVersion: 1,
+    channel: receipt.channel ?? "unknown",
+    completed: receipt.completed === true,
+    reconnects: Number.isSafeInteger(receipt.reconnects) ? receipt.reconnects : 0,
+    sessionDigest: digest(receipt.sessionRef ?? receipt.threadId),
+    turns: Array.isArray(receipt.turns) ? receipt.turns.map((turn) => ({
+      index: turn.index,
+      id: turn.id ?? null,
+      promptHash: turn.promptHash ?? null,
+      messageRequestDigest: digest(turn.messageRequestId),
+      operationDigest: digest(turn.operationRef),
+      resumed: turn.resumed === true,
+      receiptPhase: turn.receiptPhase ?? null,
+      receiptResult: turn.receiptResult ?? null,
+      receiptUncertain: turn.receiptUncertain === true,
+      ...(turn.recovery && typeof turn.recovery === "object" ? { recovery: {
+        responseObserved: turn.recovery.responseObserved === true,
+        responseDiscarded: turn.recovery.responseDiscarded === true,
+        connectionDropped: turn.recovery.connectionDropped === true,
+        replayCursor: Number.isSafeInteger(turn.recovery.replayCursor) ? turn.recovery.replayCursor : null,
+        recoveredFromKind: ["runtime.changed", "operation.settled"].includes(turn.recovery.recoveredFromKind)
+          ? turn.recovery.recoveredFromKind : null,
+        recoveredAtSequence: Number.isSafeInteger(turn.recovery.recoveredAtSequence)
+          ? turn.recovery.recoveredAtSequence : null,
+        correlatedByMessageRequestId: turn.recovery.correlatedByMessageRequestId === true,
+        sendAttempts: turn.recovery.sendAttempts === 1 ? 1 : null,
+        durableUserCopies: turn.recovery.durableUserCopies === 1 ? 1 : null
+      } } : {}),
+      settlement: turn.settlement ?? null,
+      exitCode: Number.isInteger(turn.exitCode) ? turn.exitCode : null,
+      timedOut: turn.timedOut === true,
+      durationSeconds: Number.isFinite(turn.durationSeconds) ? turn.durationSeconds : null,
+      usageExact: turn.usageExact === true,
+      durableUserIndex: Number.isInteger(turn.durableUserIndex) ? turn.durableUserIndex : null,
+      durableAssistantIndex: Number.isInteger(turn.durableAssistantIndex) ? turn.durableAssistantIndex : null,
+      firstSequence: Number.isSafeInteger(turn.firstSequence) ? turn.firstSequence : null,
+      lastSequence: Number.isSafeInteger(turn.lastSequence) ? turn.lastSequence : null,
+      kinds: Array.isArray(turn.kinds) ? turn.kinds : [],
+      fileLabels: Array.isArray(turn.fileLabels) ? turn.fileLabels : [],
+      toolCalls: Number.isSafeInteger(turn.toolCalls) ? turn.toolCalls : null,
+      failedToolCalls: Number.isSafeInteger(turn.failedToolCalls) ? turn.failedToolCalls : null,
+      ...(turn.timingDiagnostics ? { timingDiagnostics: turn.timingDiagnostics } : {})
+    })) : []
+  };
+}
+
+export async function runCodexUserJourney({
+  runCommand,
+  codexCommand,
+  workspace,
+  turns,
+  options,
+  disabledFeatures,
+  environment,
+  timeoutMs,
+  forbiddenOutputSubstrings
+}) {
+  const started = Date.now();
+  const deadline = started + timeoutMs;
+  const outputs = [];
+  const errors = [];
+  const usages = [];
+  const diagnostics = [];
+  const forbiddenHits = new Set();
+  const turnReceipts = [];
+  let threadId = null;
+  let code = 0;
+  let signal = null;
+  let timedOut = false;
+
+  for (const [index, turn] of turns.entries()) {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) {
+      code = 1;
+      timedOut = true;
+      errors.push(`journey-timeout-before-turn-${index + 1}`);
+      break;
+    }
+    const collector = createCodexExecJsonlCollector({
+      model: options.model,
+      thinkingLevel: options.thinking,
+      onEvent: (event) => inspectForbiddenValue(event, forbiddenOutputSubstrings, forbiddenHits)
+    });
+    const timing = createDeferredBenchmarkTimingCollector({ surface: "codex-cli" });
+    const args = threadId
+      ? codexExecResumeArgs({ threadId, options, disabledFeatures })
+      : codexExecArgs({ workspace, options, disabledFeatures, persistent: true });
+    const result = await runCommand(codexCommand, args, {
+      cwd: workspace,
+      input: turn.message,
+      timeoutMs: remainingMs,
+      forbiddenSubstrings: forbiddenOutputSubstrings,
+      onStdoutChunk: (chunk, observation) => {
+        timing.write(chunk, observation?.observedAtSeconds);
+        collector.write(chunk);
+      },
+      env: environment
+    });
+    outputs.push(result.stdout ?? "");
+    errors.push(result.stderr ?? "");
+    for (const value of result.forbiddenHits ?? []) forbiddenHits.add(value);
+    let turnUsage = null;
+    try {
+      turnUsage = collector.finish();
+      if (threadId && turnUsage.providerSessionId !== threadId) {
+        throw new Error("Codex CLI resumed journey changed thread identity");
+      }
+      threadId ??= turnUsage.providerSessionId;
+      usages.push(turnUsage);
+    } catch (error) {
+      diagnostics.push({ type: "journey-usage", message: error instanceof Error ? error.message : String(error) });
+      turnUsage = null;
+    }
+    diagnostics.push(...collector.diagnostics());
+    turnReceipts.push({
+      index: index + 1,
+      id: turn.id,
+      promptHash: crypto.createHash("sha256").update(turn.message).digest("hex"),
+      resumed: index > 0,
+      exitCode: result.code,
+      timedOut: result.timedOut,
+      durationSeconds: result.durationSeconds,
+      usageExact: Boolean(turnUsage),
+      timingDiagnostics: timing.finish(result.durationSeconds)
+    });
+    if (result.code !== 0 || result.timedOut || !turnUsage) {
+      code = result.code || 1;
+      signal = result.signal ?? null;
+      timedOut = result.timedOut === true;
+      break;
+    }
+  }
+
+  let usage;
+  try {
+    if (usages.length !== turnReceipts.length) throw new Error("Codex journey started-attempt usage is incomplete");
+    usage = aggregateCodexTurnUsage(usages);
+    if (turnReceipts.length !== turns.length) {
+      diagnostics.push({ type: "journey-lifecycle", message: "Codex journey stopped before every requested turn started" });
+    }
+  } catch (error) {
+    diagnostics.push({ type: "journey-usage", message: error instanceof Error ? error.message : String(error) });
+    usage = aggregateSessionUsage([]);
+    code ||= 1;
+  }
+  return {
+    agent: {
+      code,
+      signal,
+      timedOut,
+      stdout: outputs.join("\n"),
+      stderr: errors.filter(Boolean).join("\n"),
+      durationSeconds: (Date.now() - started) / 1000,
+      forbiddenHits: [...forbiddenHits],
+      requiredHits: []
+    },
+    usage,
+    diagnostics,
+    journeyReceipt: {
+      schemaVersion: 1,
+      channel: "codex-cli-resume",
+      threadId,
+      turns: turnReceipts,
+      completed: code === 0 && turnReceipts.length === turns.length
+    }
+  };
+}
+
 export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuiteEntry, interrupted, persistCompletedRecord, suite, suiteRoot, scenario, surface, repeat, orderIndex, infrastructureAttempt = 1, runId, runRoot, options, piCommand, codexCommand, codexDisabledFeatures, codexRuntime, piRuntimeHome, systemCommands, suiteDigest, configurationDigest, rootSeed }) {
   if (surface !== "codex-cli" && !piRuntimeHome?.path) fail("Pi benchmark session is missing its controlled writable runtime home");
   const attemptSuffix = infrastructureAttempt > 1 ? `-infra-${infrastructureAttempt}` : "";
@@ -343,8 +535,9 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
   }
   await initializeGit(runCommand, systemCommands.git, workspace, scenario.setupFiles);
   const prompt = fs.readFileSync(resolveSuiteEntry(suiteRoot, scenario.prompt, "prompt"), "utf8").trim();
+  const journeyTurns = resolvedJourneyTurns(scenario, suiteRoot, resolveSuiteEntry);
   const graderPath = resolveSuiteEntry(suiteRoot, scenario.grader, "grader");
-  const sessionId = crypto.randomUUID();
+  let sessionId = crypto.randomUUID();
   const attemptId = crypto.randomUUID();
   const piArgs = ["--print", "--mode", "json", "--session-dir", sessions, "--session-id", sessionId, "--name", `BENCH ${scenario.id} ${surface} r${repeat}`, "--approve", "--no-skills", "--no-prompt-templates", "--no-extensions", "--no-context-files"];
   if (surface === "piagent") {
@@ -368,29 +561,78 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
   const inflightPath = path.join(workspaceRoot, "inflight.json");
   writePrivateAtomic(inflightPath, `${JSON.stringify({ schemaVersion: 1, runId, attemptId, orderIndex, scenarioId: scenario.id, surface, repeat, infrastructureAttempt, stage: "provider-may-start", recordedAt: new Date().toISOString() }, null, 2)}\n`);
   let agent;
+  let usageOverride;
+  let journeyReceipt = null;
+  let codexDiagnostics = [];
+  const processEnvironment = surface === "codex-cli"
+    ? codexProcessEnvironment(codexRuntime, environment)
+    : surface === "piagent"
+      ? piagentProcessEnvironment(options.piagentTreatment, { ...environment, PI_CODING_AGENT_DIR: piRuntimeHome.path })
+      : benchmarkEnvironment({ ...environment, PI_CODING_AGENT_DIR: piRuntimeHome.path });
   try {
-    agent = await runCommand(command, args, {
-      cwd: workspace, input: surface === "codex-cli" ? prompt : undefined, timeoutMs: options.timeoutSeconds * 1_000,
-      forbiddenSubstrings: forbiddenOutputSubstrings, requiredSubstrings: requiredOutputSubstrings,
-      onStdoutChunk: (chunk, observation) => {
-        timingCollector.write(chunk, observation?.observedAtSeconds);
-        codexCollector?.write(chunk);
-      },
-      env: surface === "codex-cli" ? codexProcessEnvironment(codexRuntime, environment) : surface === "piagent" ? piagentProcessEnvironment(options.piagentTreatment, { ...environment, PI_CODING_AGENT_DIR: piRuntimeHome.path }) : benchmarkEnvironment({ ...environment, PI_CODING_AGENT_DIR: piRuntimeHome.path })
-    });
+    if (journeyTurns && surface === "piagent") {
+      agent = await runPiagentWebUiJourney({
+        packageRoot,
+        agentDir: piRuntimeHome.path,
+        workspace,
+        model: options.model,
+        thinking: options.thinking,
+        turns: journeyTurns,
+        expectedTerminalSettlement: scenario.userJourney.expectedTerminalSettlement,
+        timeoutMs: options.timeoutSeconds * 1_000,
+        environment: processEnvironment
+      });
+      journeyReceipt = agent.journeyReceipt;
+      agent.forbiddenHits = observedSubstrings(agent.stdout, forbiddenOutputSubstrings);
+      agent.requiredHits = observedSubstrings(agent.stdout, requiredOutputSubstrings);
+    } else if (journeyTurns && surface === "codex-cli") {
+      const journey = await runCodexUserJourney({
+        runCommand,
+        codexCommand,
+        workspace,
+        turns: journeyTurns,
+        options,
+        disabledFeatures: codexDisabledFeatures,
+        environment: processEnvironment,
+        timeoutMs: options.timeoutSeconds * 1_000,
+        forbiddenOutputSubstrings
+      });
+      agent = journey.agent;
+      usageOverride = journey.usage;
+      codexDiagnostics = journey.diagnostics;
+      journeyReceipt = journey.journeyReceipt;
+      agent.requiredHits = observedSubstrings(agent.stdout, requiredOutputSubstrings);
+    } else {
+      agent = await runCommand(command, args, {
+        cwd: workspace, input: surface === "codex-cli" ? prompt : undefined, timeoutMs: options.timeoutSeconds * 1_000,
+        forbiddenSubstrings: forbiddenOutputSubstrings, requiredSubstrings: requiredOutputSubstrings,
+        onStdoutChunk: (chunk, observation) => {
+          timingCollector.write(chunk, observation?.observedAtSeconds);
+          codexCollector?.write(chunk);
+        },
+        env: processEnvironment
+      });
+    }
   } catch (error) {
     timingCollector.discard();
     throw error;
   }
   const timingDiagnostics = timingCollector.finish(agent.durationSeconds);
-  const sessionFiles = surface === "codex-cli" ? [] : walkJsonl(sessions);
+  const sessionRoot = journeyTurns && surface === "piagent" ? piRuntimeHome.path : sessions;
+  const sessionFiles = surface === "codex-cli" ? [] : walkJsonl(sessionRoot);
+  const piSummaries = surface === "codex-cli" ? [] : sessionSummaries(sessionRoot);
+  if (journeyTurns && surface === "piagent") {
+    const main = piSummaries.find((summary) => !summary.isSubagent && summary.cwd === workspace)
+      ?? piSummaries.find((summary) => !summary.isSubagent);
+    if (main?.id) sessionId = main.id;
+  }
   let usage;
-  let codexDiagnostics = [];
-  if (surface === "codex-cli") {
+  if (usageOverride) usage = usageOverride;
+  else if (surface === "codex-cli") {
     try { usage = codexCollector.finish(); }
     catch (error) { if (agent.code === 0 && !agent.timedOut) throw error; usage = aggregateSessionUsage([]); }
     codexDiagnostics = codexCollector.diagnostics();
-  } else usage = aggregateSessionUsage(sessionSummaries(sessions));
+  } else usage = aggregateSessionUsage(piSummaries);
   const piTerminalError = surface === "codex-cli" ? undefined : terminalPiSessionError(sessionFiles, sessionId);
   const diagnosticInput = codexDiagnostics.length > 0
     ? JSON.stringify(codexDiagnostics)
@@ -444,9 +686,15 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
   const outputEvidence = { passed: missingRequired.length === 0, requiredCount: requiredOutputSubstrings.length, observedCount: requiredOutputSubstrings.length - missingRequired.length, missingHashes: missingRequired.map((value) => crypto.createHash("sha256").update(value).digest("hex")) };
   const resolved = agent.code === 0 && !agent.timedOut && grade.passed && graderIntegrity.passed && scope.passed && outputSafety.passed && outputEvidence.passed;
   const abortSuite = Boolean(preUsageFailure);
+  const promptBinding = journeyTurns
+    ? JSON.stringify(journeyTurns.map((turn) => ({ id: turn.id, message: turn.message, reconnectBefore: turn.reconnectBefore,
+      receiptUncertain: turn.receiptUncertain, workflow: turn.workflow ?? null })))
+    : prompt;
   const record = {
     schemaVersion: 1, runId, attemptId, configurationDigest, orderIndex, scenarioId: scenario.id, scenarioTitle: scenario.title, scenarioKind: scenario.kind,
     category: scenario.category ?? "unspecified", difficulty: scenario.difficulty ?? "unspecified", profile, lifecycle,
+    ...(scenario.familyId ? { familyId: scenario.familyId, variantId: scenario.variantId, variantRole: scenario.variantRole } : {}),
+    ingress: journeyTurns ? (surface === "piagent" ? "webui-gateway" : surface === "codex-cli" ? "codex-cli-resume" : "terminal") : "terminal",
     surface, repeat, infrastructureAttempt, sessionId, providerSessionId: usage.providerSessionId ?? null, abortSuite,
     infrastructureFailure: preUsageFailure?.failure, infrastructureClass: preUsageFailure?.class,
     infrastructureRetryable: preUsageFailure?.retryable,
@@ -457,7 +705,8 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
     agent: { exitCode: agent.code, signal: agent.signal, timedOut: agent.timedOut, stdoutHash: agent.stdoutHash ?? crypto.createHash("sha256").update(agent.stdout).digest("hex"), stderrHash: crypto.createHash("sha256").update(agent.stderr ?? "").digest("hex") },
     grade, graderIntegrity, scope, outputSafety, outputEvidence, workflow, providerWireEvidence, causalContextReceipt, usage,
     durationSeconds: agent.durationSeconds, timingDiagnostics,
-    promptHash: crypto.createHash("sha256").update(prompt).digest("hex"),
+    promptHash: crypto.createHash("sha256").update(promptBinding).digest("hex"),
+    ...(journeyReceipt ? { journeyReceipt: persistedJourneyReceipt(journeyReceipt) } : {}),
     variant: scenario.variantGenerator ? { generated: true, seedDigest: variant.seedDigest, oracleDigest: variant.oracleDigest, fixtureDigest } : { generated: false, fixtureDigest }
   };
   const workflowFailed = surface === "piagent" && (workflow?.checks ?? []).some((check) => check.passed === false);

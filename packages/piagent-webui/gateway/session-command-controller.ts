@@ -6,6 +6,7 @@ import { buildWebUiWorkflowCommand, isWebUiWorkflowId, type WebUiWorkflowId } fr
 import { GatewayEventStore } from "./gateway-events.ts";
 import { SessionCommandStore, type SessionAction, type SessionCommandIdentity } from "./session-command-store.ts";
 import { SessionRuntimeSupervisor } from "./session-runtime-supervisor.ts";
+import type { SessionSendResult } from "./session-prompt-dispatch.ts";
 import { SessionMetadataStore } from "./session-metadata-store.ts";
 
 const REF = /^[A-Za-z0-9][A-Za-z0-9._~-]{0,159}$/;
@@ -125,9 +126,9 @@ export class SessionCommandController {
   }
 
   async #execute(command: SessionCommand): Promise<Receipt> {
-    const current = await this.#readyCatalog(), row = command.sessionRef ? current.sessions.find((item) => item.sessionRef === command.sessionRef) : null;
     const replay = this.#store.lookup(command);
     if (replay.state === "settled") return { ...replay.receipt!, deduplicated: true };
+    const current = await this.#readyCatalog(), row = command.sessionRef ? current.sessions.find((item) => item.sessionRef === command.sessionRef) : null;
     if (replay.state === "conflict") return this.#rejected(command, current, row, "invalid-command", "idempotency-payload-mismatch");
     if (replay.state === "unavailable") return this.#rejected(command, current, row, "unavailable", "session-command-journal-unavailable");
     if (replay.state === "pending") {
@@ -148,7 +149,9 @@ export class SessionCommandController {
     catch { return this.#rejected(command, current, row, "unavailable", "session-command-admission-failed"); }
     let targetSessionRef = command.sessionRef;
     let attachmentReservation: { commit(): void; release(): void } | null = null;
-    let sendAttempted = false;
+    let sendAttempted = false, dispatchCommitted = false;
+    let deferredDispatch: Pick<SessionSendResult, "dispatch" | "cancel"> | null = null;
+    let observedCatalog = current, observedRow = row;
     try {
       let resultCode: "created" | "acquired" | "released" | "started" | "queued" | "steered" | "aborted" | "model-changed" | "thinking-changed" | "permission-changed"
         | "renamed" | "pinned" | "unpinned" | "archived" | "unarchived" | "forked" | "no-change",
@@ -172,12 +175,15 @@ export class SessionCommandController {
         }
         const created = await this.#readyCatalog(), createdRow = created.sessions.find((item) => item.sessionRef === targetSessionRef);
         if (!createdRow) throw new Error("session-catalog-refresh-failed");
+        observedCatalog = created; observedRow = createdRow;
         if (command.payload.deferInitialMessage === true) resultCode = "created";
         else {
           const message = buildWebUiWorkflowCommand((command.payload.workflow as WebUiWorkflowId | undefined) ?? null,
             String(command.payload.message));
           const sent = await this.#runtimes.send(targetSessionRef, { delivery: "new-operation", message,
-            expectedOperationRef: null }, createdRow.sessionRevision);
+            messageRequestId: String(command.payload.messageRequestId), expectedOperationRef: null },
+          createdRow.sessionRevision, { deferDispatch: true });
+          deferredDispatch = sent;
           resultCode = sent.resultCode === "started" ? "started" : sent.resultCode; operationRef = sent.operationRef;
         }
       } else if (command.action === "session.acquire") { await this.#runtimes.acquire(command.sessionRef!); resultCode = "acquired"; }
@@ -186,6 +192,7 @@ export class SessionCommandController {
         await this.#runtimes.acquire(command.sessionRef!);
         const acquired = await this.#readyCatalog(), acquiredRow = acquired.sessions.find((item) => item.sessionRef === command.sessionRef);
         if (!acquiredRow) throw new Error("session-catalog-refresh-failed");
+        observedCatalog = acquired; observedRow = acquiredRow;
         const payload = command.payload as { delivery: "new-operation" | "follow-up" | "steer"; message: string;
           expectedOperationRef: string | null; messageRequestId: string; attachmentRefs: string[]; workflow?: WebUiWorkflowId };
         // Staged refs are claimed once, here, before the runtime is asked to
@@ -198,9 +205,10 @@ export class SessionCommandController {
         if (!this.#prepareAttachments && payload.attachmentRefs.length > 0) throw new Error("session-attachment-unavailable");
         sendAttempted = true;
         const message = buildWebUiWorkflowCommand(payload.workflow ?? null, prepared.text);
-        const sent = await this.#runtimes.send(command.sessionRef!, { ...payload, message, images: prepared.images },
-          acquiredRow.sessionRevision);
-        prepared.commit();
+        const sent = await this.#runtimes.send(command.sessionRef!, { ...payload, message,
+          messageRequestId: payload.messageRequestId, images: prepared.images },
+          acquiredRow.sessionRevision, { deferDispatch: true });
+        deferredDispatch = sent;
         resultCode = sent.resultCode; operationRef = sent.operationRef;
       } else if (command.action === "session.abort") {
         operationRef = String(command.payload.operationRef);
@@ -239,15 +247,27 @@ export class SessionCommandController {
       }
       const after = await this.#readyCatalog(), afterRow = after.sessions.find((item) => item.sessionRef === targetSessionRef);
       if (!afterRow) throw new Error("session-catalog-refresh-failed");
+      observedCatalog = after; observedRow = afterRow;
       const receipt = this.#settled(command, after, afterRow, resultCode, operationRef);
       try { this.#store.settle(command, receipt, this.#now()); }
-      catch { return this.#uncertain(command, after, afterRow, "session-command-settlement-not-durable"); }
+      catch {
+        deferredDispatch?.cancel?.(); try { attachmentReservation?.release(); } catch { /* staged refs remain unavailable to this command */ }
+        return this.#uncertain(command, after, afterRow, "session-command-settlement-not-durable");
+      }
+      if (attachmentReservation) {
+        try { attachmentReservation.commit(); } catch { /* prepared bytes remain dispatchable; the one-shot registry fails closed */ }
+        attachmentReservation = null;
+      }
       this.#events.publish("session.changed", { catalogRevision: after.catalogRevision, session: afterRow });
+      dispatchCommitted = true; deferredDispatch?.dispatch?.();
       return receipt;
     } catch (cause) {
-      const after = await this.#readyCatalog(), afterRow = after.sessions.find((item) => item.sessionRef === targetSessionRef) ?? row;
+      if (!dispatchCommitted) deferredDispatch?.cancel?.();
+      let after = observedCatalog;
+      try { after = await this.#readyCatalog(); } catch { /* the last proven catalog remains authoritative */ }
+      const afterRow = after.sessions.find((item) => item.sessionRef === targetSessionRef) ?? observedRow;
       const message = cause instanceof Error ? cause.message : "session-command-failed";
-      const noDispatchEffect = command.action === "session.send" && (!sendAttempted
+      const noDispatchEffect = command.action === "session.send" && (!sendAttempted || Boolean(deferredDispatch && !dispatchCommitted)
         || /^(session-runtime-unavailable|session-operation-conflict|session-owner-conflict|session-runtime-busy)$/.test(message));
       if (attachmentReservation) {
         try { if (noDispatchEffect) attachmentReservation.release(); else attachmentReservation.commit(); }

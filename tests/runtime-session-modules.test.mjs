@@ -78,6 +78,8 @@ import {
   readChatImage
 } from "../packages/piagent-core/runtime/input/chat-images.ts";
 import { registerSessionHooks } from "../packages/piagent-core/runtime/hooks/session-hooks.ts";
+import { registerAgentStartHook } from "../packages/piagent-core/runtime/hooks/agent-start-hook.ts";
+import { registerCompletionHook } from "../packages/piagent-core/runtime/hooks/completion-hook.ts";
 import { stageContextDelivery } from "../packages/piagent-core/runtime/context/context-delivery.ts";
 import { registerInputHook } from "../packages/piagent-core/runtime/hooks/input-hook.ts";
 import { taskDeltaFilesFromSnapshot } from "../packages/piagent-core/extensions/task-contract-view.js";
@@ -249,6 +251,10 @@ describe("runtime session modules", () => {
     assert.equal(looksLikeIncompleteHandoff("Các ứng dụng đáng làm cho Piagent"), false);
     assert.equal(looksLikeIncompleteHandoff("Cac ung dung dang lam cho Piagent"), false);
     assert.equal(looksLikeCompletionClaim("Đã hoàn tất đánh giá. Các ứng dụng đáng làm được liệt kê bên dưới."), true);
+    assert.equal(looksLikeCompletionClaim("Everything is ready for you to test."), true);
+    assert.equal(looksLikeCompletionClaim("Mọi thứ đã sẵn sàng, anh có thể test."), true);
+    assert.equal(looksLikeCompletionClaim("Everything is ready.\nYou can test now."), true);
+    assert.equal(looksLikeCompletionClaim("Mọi thứ đã sẵn sàng.\nAnh có thể test."), true);
 
     const withTool = { role: "assistant", content: [{ type: "toolCall", name: "read" }] };
     assert.equal(assistantMessageHasToolCall(withTool), true);
@@ -275,6 +281,8 @@ describe("runtime session modules", () => {
     assert.match(rewritten.systemPrompt, /parent model reasons and implements directly/);
     assert.match(rewritten.systemPrompt, /at least 30% projected net token saving/);
     assert.match(rewritten.systemPrompt, /report unresolved risk/);
+    assert.match(rewritten.systemPrompt, /Report only paths and line references actually returned by tools/);
+    assert.match(rewritten.systemPrompt, /batch multiple pattern calls against an unconfirmed target/);
     assert.doesNotMatch(rewritten.systemPrompt, /legacy steps/);
 
     const compacted = compactManagedProjectInstructions(
@@ -288,6 +296,8 @@ describe("runtime session modules", () => {
     assert.match(compacted.systemPrompt, /parent reasons and implements directly/);
     assert.match(compacted.systemPrompt, /never delegate writes, inherit parent history, fan out, or retry a deterministic helper failure/);
     assert.match(compacted.systemPrompt, /scope is an initial retrieval\/review focus, not a mutation boundary/);
+    assert.match(compacted.systemPrompt, /Report only tool-observed paths and line references/);
+    assert.match(compacted.systemPrompt, /batch pattern calls against an unconfirmed target/);
     assert.doesNotMatch(compacted.systemPrompt, /long text/);
   });
 
@@ -1113,6 +1123,88 @@ describe("runtime session modules", () => {
     assert.notEqual(workingTreeEvidenceDigest(workingTreeSnapshot(cwd)), observations[0].digest, "a later mutation belongs to the next event, not this one");
   });
 
+  it("turns deterministic navigation misses into bounded negative evidence without hiding real failures", async () => {
+    const cwd = temporaryProject();
+    const handlers = new Map();
+    const telemetry = [];
+    const state = new RuntimeSessionState({ maxObservedContext: 2 });
+    const pi = { on: (name, handler) => handlers.set(name, handler) };
+    const ctx = { ...extensionContext(cwd), ui: { notify() {} } };
+    state.beginTurn(ctx, "navigation-turn");
+    registerToolResultHook(pi, {
+      state,
+      activeTask: () => undefined,
+      maxManifestFiles: 2,
+      flushObservedTaskContext: () => undefined,
+      readProtectedPaths: () => [],
+      recordObservedBash() {},
+      observedBashLedgerPath: () => "",
+      redactText: (value) => value,
+      observedTaskContext: () => undefined,
+      recordObservedTaskChanges() {},
+      recordObservedTaskVerification() {},
+      extractLikelyPath: (_cwd, input) => input.path,
+      mutationTargets: () => [],
+      isShellTool: () => false,
+      telemetry: (_ctx, payload) => telemetry.push(payload),
+      now: () => "2026-08-26T00:00:00.000Z"
+    });
+
+    let handled;
+    let saturated;
+    for (let index = 0; index < 8; index += 1) {
+      const targetPath = index === 0 ? `src/${"x".repeat(5_000)}.ts` : `src/missing-${index}.ts`;
+      handled = await handlers.get("tool_result")({
+        toolCallId: `missing-${index}`,
+        toolName: "read",
+        input: { path: targetPath },
+        content: [{ type: "text", text: "ENOENT: no such file or directory" }],
+        isError: true
+      }, ctx);
+      assert.equal(handled.isError, false);
+      assert.equal(handled.details.piagentNavigation.reasonCode, "target-not-found");
+      assert.ok(handled.details.piagentNavigation.targetPath.length <= 1_024,
+        "negative-evidence guidance must not echo an unbounded model-supplied path");
+      assert.match(handled.content[0].text, /handled negative evidence, not a runtime failure/);
+      if (handled.details.piagentRetrievalCheckpoint) saturated = handled;
+    }
+    assert.equal(saturated.details.piagentRetrievalCheckpoint.reason, "evidence-saturated");
+    assert.match(saturated.content.at(-1).text, /stop broad scouting and synthesize now/);
+    assert.equal(telemetry.find((entry) => entry.event === "retrieval_evidence_checkpoint")?.calls, 4);
+    assert.equal(telemetry.find((entry) => entry.event === "tool_result")?.isError, true,
+      "activity preserves the original fact while its handled reason keeps the UI neutral");
+
+    const permissionFailure = await handlers.get("tool_result")({
+      toolCallId: "permission-failure",
+      toolName: "read",
+      input: { path: "src/private.ts" },
+      content: [{ type: "text", text: "EACCES: permission denied" }],
+      isError: true
+    }, ctx);
+    assert.equal(permissionFailure, undefined, "unhandled failures retain the host's original error envelope");
+    assert.equal(telemetry.find((entry) => entry.toolCallId === "permission-failure")?.reasonCode, "tool-result-failed");
+
+    state.beginTurn(ctx, "hard-failure-turn");
+    let hardFailureCheckpoint;
+    for (let index = 0; index < 4; index += 1) {
+      const result = await handlers.get("tool_result")({
+        toolCallId: `permission-${index}`,
+        toolName: "read",
+        input: { path: `src/private-${index}.ts` },
+        content: [{ type: "text", text: "EACCES: permission denied" }],
+        isError: true
+      }, ctx);
+      if (index < 3) assert.equal(result, undefined);
+      else hardFailureCheckpoint = result;
+    }
+    assert.equal(Object.hasOwn(hardFailureCheckpoint, "isError"), false,
+      "a soft retrieval checkpoint must not neutralize the fourth real failure");
+    assert.equal(hardFailureCheckpoint.details.piagentRetrievalCheckpoint.reason, "evidence-saturated");
+    const fourthFailure = telemetry.find((entry) => entry.toolCallId === "permission-3");
+    assert.equal(fourthFailure?.isError, true);
+    assert.equal(fourthFailure?.reasonCode, "tool-result-failed");
+  });
+
   it("delivers a small current-file recovery snapshot once after an edit anchor mismatch", async () => {
     const cwd = temporaryProject();
     fs.mkdirSync(path.join(cwd, "src"), { recursive: true });
@@ -1303,6 +1395,164 @@ describe("runtime session modules", () => {
     assert.equal(telemetry[0].taskRunId, undefined, "a missing durable task cannot inherit cached task attribution");
     assert.equal(state.taskIdentity(ctx), undefined);
     assert.equal(state.previousToolResult(ctx, "stale-read"), undefined, "stale task tool-result state is cleared before intake");
+  });
+
+  it("skips heavy automatic context only for a non-authorizing change choice", async () => {
+    const handlers = new Map();
+    const telemetry = [];
+    const indexedPrompts = [];
+    const intakePrompts = [];
+    const state = new RuntimeSessionState({ maxObservedContext: 2 });
+    const pi = {
+      on: (name, handler) => handlers.set(name, handler),
+      getThinkingLevel: () => "medium",
+      getActiveTools: () => [],
+      getAllTools: () => []
+    };
+    registerAgentStartHook(pi, {
+      state,
+      autoContextEnabled: true,
+      contextDeltaShadowMode: "off",
+      activeTask: () => undefined,
+      readProtectedPaths: () => [],
+      contextExcludePatterns: () => [],
+      ensureContextIndex: async (_cwd, options) => {
+        indexedPrompts.push(options);
+        return { status: { exists: false, stale: false } };
+      },
+      promptPackKey: (_ctx, promptHash) => promptHash,
+      retrievalKey: (_ctx, query) => query,
+      startAutomaticTask: async (query) => {
+        intakePrompts.push(query);
+        return undefined;
+      },
+      telemetry: (_ctx, payload) => telemetry.push(payload)
+    });
+    const ctx = extensionContext();
+    const start = handlers.get("before_agent_start");
+    const event = (prompt) => ({ prompt, systemPrompt: "stable system prompt", systemPromptOptions: { cwd: ctx.cwd, selectedTools: [] } });
+
+    const clarification = "Vậy bây giờ a cần test hay em có thể fix ngay";
+    assert.equal(await start(event(clarification), ctx), undefined,
+      "the host keeps the original conversational prompt when Piagent injects nothing");
+    assert.deepEqual(indexedPrompts, [], "a non-authorizing choice does not open or refresh the repository index");
+    assert.deepEqual(intakePrompts, [], "a non-authorizing choice does not attempt durable task creation");
+
+    const substantivePlanning = "How should we implement this safely?";
+    assert.equal(await start(event(substantivePlanning), ctx), undefined);
+    assert.equal(indexedPrompts.length, 1,
+      "a substantive implementation question keeps repository context for model intelligence");
+    assert.deepEqual(intakePrompts, [], "a substantive question still does not authorize a mutation task");
+
+    assert.equal(await start(event("fix đi"), ctx), undefined);
+    assert.deepEqual(intakePrompts, ["fix đi"], "a direct Vietnamese imperative still reaches runtime intake");
+
+    const implementation = "Please implement the approved checkout fix and run the focused tests.";
+    assert.equal(await start(event(implementation), ctx), undefined);
+    assert.equal(indexedPrompts.length, 2, "a substantive implementation request keeps normal automatic context planning");
+    assert.deepEqual(intakePrompts, ["fix đi", implementation]);
+    assert.equal(telemetry.filter((entry) => entry.event === "context_pack").length, 2);
+  });
+
+  it("preserves an active task resume for a later authorized turn after a lightweight Vietnamese choice", async () => {
+    const handlers = new Map();
+    const state = new RuntimeSessionState({ maxObservedContext: 2 });
+    const task = { taskId: "TASK-ACTIVE", taskRunId: "run-active", trace: { outcome: "pending" } };
+    const resume = {
+      taskId: task.taskId,
+      taskRunId: task.taskRunId,
+      enforcementSafe: true,
+      decision: "retry",
+      reason: "resume must remain available for the next substantive turn"
+    };
+    state.rememberResumeState(resume);
+    const pi = {
+      on: (name, handler) => handlers.set(name, handler),
+      getThinkingLevel: () => "medium",
+      getActiveTools: () => [],
+      getAllTools: () => []
+    };
+    registerAgentStartHook(pi, {
+      state,
+      autoContextEnabled: true,
+      contextDeltaShadowMode: "off",
+      activeTask: () => task,
+      readProtectedPaths: () => [],
+      contextExcludePatterns: () => [],
+      ensureContextIndex: async () => assert.fail("a lightweight choice must not inspect the repository index"),
+      promptPackKey: (_ctx, promptHash) => promptHash,
+      retrievalKey: (_ctx, query) => query,
+      startAutomaticTask: async () => assert.fail("a lightweight choice must not start another durable task"),
+      telemetry: () => undefined
+    });
+    const ctx = extensionContext();
+    const result = await handlers.get("before_agent_start")({
+      prompt: "Vậy bây giờ a cần test hay em có thể fix ngay",
+      systemPrompt: "stable system prompt",
+      systemPromptOptions: { cwd: ctx.cwd, selectedTools: [] }
+    }, ctx);
+
+    assert.equal(result, undefined, "the lightweight choice reaches the model without a durable resume injection");
+    assert.equal(state.currentTurn(ctx)?.lightweightNonAuthorizingChange, true,
+      "before_agent_start carries the lightweight classification into the runtime turn");
+    assert.equal(state.takeResumeContextState(ctx, task.taskRunId)?.reason, resume.reason,
+      "the lightweight choice must not consume the one-shot durable resume context");
+    assert.equal(state.takeResumeContextState(ctx, task.taskRunId), undefined,
+      "the later substantive turn still receives that resume at most once");
+  });
+
+  it("does not run completion, recovery, or handoff for a lightweight choice on an active evidenced task", async () => {
+    const handlers = new Map();
+    const calls = [];
+    const state = new RuntimeSessionState({ maxObservedContext: 2 });
+    const task = {
+      taskId: "TASK-EVIDENCED", taskRunId: "run-evidenced", sessionId: "session-choice",
+      intakeMode: "runtime", changeMode: "source-change", mutationPolicy: "required",
+      observedChangedFiles: ["src/fix.ts"], verifyEvidence: [{ exitCode: 0, matchedProfileCommand: true }],
+      trace: { outcome: "pending" }
+    };
+    const pi = {
+      on: (name, handler) => handlers.set(name, handler),
+      getThinkingLevel: () => "medium",
+      getActiveTools: () => [],
+      getAllTools: () => []
+    };
+    registerInputHook(pi, {
+      state,
+      boilerplateCollapseChars: 300,
+      activeTask: () => task,
+      authorityPolicy: () => ({ disposition: "resume-current" }),
+      readProtectedPaths: () => [],
+      imageAccess: () => assert.fail("a text-only choice must not request image access"),
+      activateToolGroups: () => undefined,
+      telemetry: () => undefined
+    });
+    registerCompletionHook(pi, {
+      state,
+      maxManifestFiles: 4,
+      semanticReviewAllowed: () => true,
+      activeTask: () => { calls.push("active-task"); return task; },
+      flushObservedTaskContext: () => { calls.push("flush"); return task; },
+      completionProjection: () => { calls.push("projection"); return task; },
+      evaluateGate: () => { calls.push("gate"); return { decision: "pass", missing: [], missingVerifyCommands: [] }; },
+      writeTask: () => { calls.push("write-task"); return task; },
+      activateBaseTools: () => calls.push("activate-tools"),
+      appendTrace: () => calls.push("trace"),
+      appendSessionTrace: () => calls.push("session-trace"),
+      telemetry: () => calls.push("telemetry"),
+      finalGateMode: () => "enforce",
+      verifierInstructions: () => [],
+      recoveryDecision: () => { calls.push("recovery"); return { action: "handoff", reason: "must not run" }; }
+    });
+    const ctx = extensionContext(temporaryProject(), "session-choice");
+    await handlers.get("input")({ text: "Anh nên test trước hay em sửa luôn?", source: "interactive", images: [] }, ctx);
+    assert.equal(state.currentTurn(ctx)?.lightweightNonAuthorizingChange, true,
+      "the input hook carries the classification into the shared turn state");
+
+    const result = await handlers.get("message_end")({ message: { role: "assistant", stopReason: "stop",
+      content: [{ type: "text", text: "Em có thể sửa ngay và phần kiểm tra hiện tại đã hoàn tất." }] } }, ctx);
+    assert.equal(result, undefined);
+    assert.deepEqual(calls, [], "a final-looking answer to the choice cannot trigger completion, recovery, or handoff");
   });
 
   it("keeps tool activation and task intake policy deterministic", () => {

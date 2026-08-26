@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { WORKFLOW_IDS } from "../packages/piagent-core/runtime/workflows/webui-workflow.ts";
+import { WEBUI_MESSAGE_CORRELATION_ENTRY_TYPE } from "../packages/piagent-webui/shared/message-correlation.ts";
 import { projectTranscript } from "../packages/piagent-webui/server/transcript-projection.ts";
 import { createWebUiSchemaRegistry, validateFixture } from "./helpers/piagent-webui-schema-registry.mjs";
 
@@ -13,6 +15,10 @@ const generatedAt = "2026-08-13T14:00:10.000Z";
 
 function entry(id, role, content, overrides = {}) {
   return { id, type: "message", timestamp: `2026-08-13T14:00:0${id.slice(-1)}.000Z`, message: { role, content, ...overrides } };
+}
+function correlation(id, messageRequestId, operationRef) {
+  return { id, type: "custom", timestamp: "2026-08-13T14:00:00.000Z", customType: WEBUI_MESSAGE_CORRELATION_ENTRY_TYPE,
+    data: { schemaVersion: 1, messageRequestId, operationRef } };
 }
 function project(entries, options = {}) {
   return projectTranscript({ identity, revision, eventCursor: "cursor.transcript", entries, generatedAt, ...options });
@@ -153,6 +159,57 @@ describe("Piagent WebUI bounded transcript projection", () => {
     assert.deepEqual(completed.items.map((value) => value.content.text), ["Assess the repository", "Assessment complete."]);
   });
 
+  it("keeps valid clarification responses visible and ordered after an identical user message is repeated", () => {
+    const prompt = "Vậy bây giờ a cần test hay em có thể fix ngay";
+    const value = project([
+      entry("entry_1", "user", prompt),
+      entry("entry_2", "assistant", "Em có thể fix ngay; anh không cần test thủ công trước.", { stopReason: "stop" }),
+      entry("entry_3", "user", prompt),
+      entry("entry_4", "assistant", "Phần audit đã hoàn tất; anh chưa cần test và em có thể fix ngay.", { stopReason: "stop" })
+    ], { taskOutcome: "pending" });
+    expectValid(value);
+    assert.deepEqual(value.items.map((item) => item.role), ["user", "assistant", "user", "assistant"]);
+    assert.deepEqual(value.items.map((item) => item.content.text), [
+      prompt,
+      "Em có thể fix ngay; anh không cần test thủ công trước.",
+      prompt,
+      "Phần audit đã hoàn tất; anh chưa cần test và em có thể fix ngay."
+    ]);
+    assert.equal(value.items[1].parentMessageRef, value.items[0].messageRef);
+    assert.equal(value.items[3].parentMessageRef, value.items[2].messageRef);
+  });
+
+  it("durably correlates repeated prompts to their exact browser request and operation", () => {
+    const prompt = "Vậy bây giờ a cần test hay em có thể fix ngay";
+    const value = project([
+      correlation("correlation_1", "message-request.turn-1", "operation.turn-1"),
+      entry("entry_1", "user", prompt),
+      entry("entry_2", "assistant", "First answer.", { stopReason: "stop" }),
+      correlation("correlation_2", "message-request.turn-2", "operation.turn-2"),
+      entry("entry_3", "user", prompt),
+      entry("entry_4", "assistant", "Second answer.", { stopReason: "stop" })
+    ]);
+    expectValid(value);
+    assert.deepEqual(value.items.map((item) => item.messageRequestId), [
+      "message-request.turn-1", "message-request.turn-1", "message-request.turn-2", "message-request.turn-2"
+    ]);
+    assert.deepEqual(value.items.map((item) => item.agentOperationId), [
+      "operation.turn-1", "operation.turn-1", "operation.turn-2", "operation.turn-2"
+    ]);
+    assert.equal(value.items[1].parentMessageRef, value.items[0].messageRef);
+    assert.equal(value.items[3].parentMessageRef, value.items[2].messageRef);
+  });
+
+  it("withholds readiness prose for a substantive pending task turn", () => {
+    const value = project([
+      entry("entry_1", "user", "Implement the approved refresh-token fix and verify it."),
+      entry("entry_2", "assistant", "Mọi thứ đã sẵn sàng.\nAnh có thể test.", { stopReason: "stop" })
+    ], { taskOutcome: "pending" });
+    expectValid(value);
+    assert.equal(value.items[1].content.state, "unavailable");
+    assert.equal(value.items[1].content.reasonCode, "assistant-task-pending");
+  });
+
   it("projects attachments as file cards without dumping document bodies into chat", () => {
     const body = "PRIVATE DOCUMENT BODY THAT MUST STAY OUT OF THE CHAT BUBBLE";
     const wrapper = [
@@ -170,9 +227,11 @@ describe("Piagent WebUI bounded transcript projection", () => {
   });
 
   it("omits internal fresh-session transition commands from the user transcript", () => {
-    const command = "/fresh task Read task intake from .pi/task-inbox/2026-08-17-task.md. "
-      + "Current session is near context limits; use a fresh governed session.";
-    const value = project([entry("entry_4", "user", command), entry("entry_5", "user", "Continue reviewing the UI")]);
+    const transitions = WORKFLOW_IDS.map((workflow, index) => entry(`entry_internal_${index}`, "user",
+      `/fresh ${workflow} ${index % 2 ? `--session-title "Continue ${workflow}" ` : ""}`
+      + `Read task intake from .pi/task-inbox/2026-08-17-${workflow}.md. `
+      + "Current session is near context limits; use a fresh governed session."));
+    const value = project([...transitions, entry("entry_visible_1", "user", "Continue reviewing the UI")]);
     expectValid(value);
     assert.deepEqual(value.items.map((message) => message.content.text), ["Continue reviewing the UI"]);
     assert.equal(JSON.stringify(value).includes("task-inbox"), false);

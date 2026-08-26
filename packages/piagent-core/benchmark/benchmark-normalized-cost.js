@@ -15,6 +15,7 @@ const CACHE_WRITE_FIELDS = new Set(["basis", "multiplier"]);
 const LONG_CONTEXT_FIELDS = new Set(["thresholdInputTokens", "condition", "inputMultiplier", "outputMultiplier"]);
 const SOURCE_FIELDS = new Set(["url", "retrievedAt"]);
 const USAGE_BUCKETS = Object.freeze(["input", "output", "cacheRead", "cacheWrite"]);
+const REQUEST_USAGE_BUCKETS = Object.freeze(["input", "output", "cacheRead", "cacheWrite", "reasoning", "total", "promptTokens"]);
 const BAND_DIMENSIONS = Object.freeze({
   categories: "category",
   profiles: "profile",
@@ -109,6 +110,44 @@ function exactUsageIssue(usage, snapshot) {
   return null;
 }
 
+function exactPricingBuckets(usage) {
+  const buckets = usage?.pricingBuckets;
+  if (buckets?.completeness !== "exact") return { status: "unavailable" };
+  if (!plainObject(buckets) || buckets.schemaVersion !== 1 || buckets.source !== "provider-request-usage"
+    || !Array.isArray(buckets.requests) || buckets.requests.length === 0) {
+    return { status: "invalid", issue: "pricing-buckets-invalid" };
+  }
+  const totals = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, total: 0 };
+  for (const request of buckets.requests) {
+    if (!plainObject(request) || REQUEST_USAGE_BUCKETS.some((field) => !Number.isSafeInteger(request[field]) || request[field] < 0)
+      || request.reasoning > request.output
+      || request.total !== request.input + request.cacheRead + request.cacheWrite + request.output
+      || request.promptTokens !== request.input + request.cacheRead + request.cacheWrite) {
+      return { status: "invalid", issue: "pricing-buckets-invalid" };
+    }
+    for (const field of Object.keys(totals)) totals[field] += request[field];
+  }
+  if (USAGE_BUCKETS.some((field) => totals[field] !== usage[field]) || totals.total !== usage.total
+    || Number.isSafeInteger(usage.reasoning) && totals.reasoning !== usage.reasoning) {
+    return { status: "invalid", issue: "pricing-buckets-aggregate-mismatch" };
+  }
+  return { status: "exact", requests: buckets.requests };
+}
+
+function requestPrice(request, snapshot) {
+  const longContext = request.promptTokens > snapshot.longContext.thresholdInputTokens;
+  const inputMultiplier = longContext ? snapshot.longContext.inputMultiplier : 1;
+  const outputMultiplier = longContext ? snapshot.longContext.outputMultiplier : 1;
+  const cacheWriteRate = snapshot.rates.freshInput * snapshot.cacheWrite.multiplier;
+  const amount = (
+    (request.input * snapshot.rates.freshInput * inputMultiplier)
+    + (request.cacheRead * snapshot.rates.cachedInput * inputMultiplier)
+    + (request.cacheWrite * cacheWriteRate * inputMultiplier)
+    + (request.output * snapshot.rates.output * outputMultiplier)
+  ) / snapshot.unitTokens;
+  return { amount, longContext };
+}
+
 /**
  * Convert exact token buckets to an API-equivalent amount without treating it as
  * OAuth/provider-billed cost. Aggregate prompt usage at or below the threshold
@@ -123,6 +162,29 @@ export function normalizeBenchmarkUsageCost(usage, snapshot) {
   const usageIssue = exactUsageIssue(usage, snapshot);
   if (usageIssue) return { status: "unavailable", reason: usageIssue, errors: [] };
   const aggregatePromptTokens = usage.input + usage.cacheRead + usage.cacheWrite;
+  const pricingBuckets = exactPricingBuckets(usage);
+  if (pricingBuckets.status === "invalid") {
+    return { status: "unavailable", reason: pricingBuckets.issue, errors: [] };
+  }
+  if (pricingBuckets.status === "exact") {
+    const requestPrices = pricingBuckets.requests.map((request) => requestPrice(request, snapshot));
+    const amount = requestPrices.reduce((sum, item) => sum + item.amount, 0);
+    return {
+      status: "measured",
+      source: "versioned-api-equivalent-text-token-pricing",
+      pricingSnapshotId: snapshot.id,
+      pricingApplicability: "per-request-exact",
+      currency: snapshot.currency,
+      amount,
+      amountUsd: rounded(amount, 9),
+      aggregatePromptTokens,
+      thresholdInputTokens: snapshot.longContext.thresholdInputTokens,
+      requests: pricingBuckets.requests.length,
+      standardContextRequests: requestPrices.filter((item) => !item.longContext).length,
+      longContextRequests: requestPrices.filter((item) => item.longContext).length,
+      buckets: Object.fromEntries(USAGE_BUCKETS.map((field) => [field, usage[field]]))
+    };
+  }
   if (aggregatePromptTokens > snapshot.longContext.thresholdInputTokens) {
     return {
       status: "unavailable",

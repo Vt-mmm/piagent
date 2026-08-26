@@ -113,7 +113,7 @@ groups load only when requested.
 - `/workflow`: one launcher for task, scout, BE-to-FE, discuss, plan, review, commit, PR, platform-improve, and onboarding workflows.
 - `/usage`: runtime usage namespace for live snapshot, history hint, preflight, compact, compact-log captures, and context efficiency.
 - Pi native `/name`: set the current session name for Agent Watch/report mapping; Piagent observes the native rename event and keeps `/setname` as a compatibility alias.
-- `/fresh`: open a fresh governed session for `task`, `scout`, or `be-to-fe`.
+- `/fresh`: open a fresh governed session for any canonical `/workflow` option; `/fresh help` lists the current catalog.
 - `/context`: runtime context namespace for index/rebuild/search/pack/test-impact/efficiency, task preflight, and semantic compact.
 - `/permission`: runtime permission namespace for status/read-only/workspace-write/full-access.
 - `/onboard`: runtime onboarding namespace; `run` launches the first-read onboarding workflow.

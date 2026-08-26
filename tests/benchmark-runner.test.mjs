@@ -639,7 +639,12 @@ test("production claim execution rejects a dirty release source before command o
   const snapshot = createBenchmarkExecutionSnapshot({ liveRoot: root, argv, cwd: root });
   try {
     snapshot.metadata.sourceIdentity = { ...snapshot.metadata.sourceIdentity, dirty: true };
-    const result = spawnSync(process.execPath, [path.join(snapshot.candidateRoot, "scripts", "benchmark-runner-core.mjs"), ...argv], {
+    const result = spawnSync(process.execPath, [
+      "--disable-warning=ExperimentalWarning",
+      "--import", path.join(snapshot.candidateRoot, "scripts", "register-typescript-loader.mjs"),
+      path.join(snapshot.candidateRoot, "scripts", "benchmark-runner-core.mjs"),
+      ...argv
+    ], {
       cwd: root,
       encoding: "utf8",
       env: {
@@ -1797,6 +1802,78 @@ test("production partial stages hard-stop catastrophic fresh spend and exact sub
   assert.equal(withFailedAttempt.spendFutilityReview.partialStageCatastrophicFreshSpend.candidateFresh, 620,
     "the catastrophic ratio includes exact usage from failed started attempts");
   assert.equal(withFailedAttempt.spendFutilityReview.subagentBudget.attempts, 7);
+});
+
+test("production-v2 partial spend aggregates structural variants by task family and fails closed on unresolved families", () => {
+  const scenarios = [
+    { id: "shared-boundary", familyId: "shared-family" },
+    { id: "shared-interaction", familyId: "shared-family" },
+    { id: "family-b", familyId: "family-b" },
+    { id: "family-c", familyId: "family-c" },
+    { id: "family-d", familyId: "family-d" },
+    { id: "family-e", familyId: "family-e" },
+    { id: "future-family", familyId: "future-family" }
+  ];
+  const fullOrder = scenarios.flatMap((scenario) => ["piagent", "codex-cli"]
+    .map((surface) => ({ scenario, surface, repeat: 1 })));
+  const exact = (scenario, surface) => {
+    const run = stageDiagnosticRecord({ scenarioId: scenario.id, surface });
+    run.usage.input = 90;
+    run.usage.output = 10;
+    run.usage.fresh = 100;
+    run.usage.total = 100;
+    return run;
+  };
+  const runs = scenarios.slice(0, 6).flatMap((scenario) => [exact(scenario, "piagent"), exact(scenario, "codex-cli")]);
+  const sharedBoundary = runs.find((run) => run.surface === "piagent" && run.scenarioId === "shared-boundary");
+  sharedBoundary.usage.input = 120;
+  sharedBoundary.usage.fresh = 130;
+  sharedBoundary.usage.total = 130;
+  const sharedInteraction = runs.find((run) => run.surface === "piagent" && run.scenarioId === "shared-interaction");
+  sharedInteraction.usage.input = 60;
+  sharedInteraction.usage.fresh = 70;
+  sharedInteraction.usage.total = 70;
+  const guards = {
+    subagents: { required: true, maximumSessionsPerAttempt: 1, maximumTrafficShare: 0.05,
+      requireExactAllAttemptEvidence: true, requireExplainedSessionCount: true },
+    partialFreshSpend: { requiredFromCumulativeSessions: 12, maximumPooledFreshRatio: 1.1,
+      maximumObservedFamilyFreshRatio: 1.25, includeExactFailedAttempts: true },
+    providerFreeEvidence: { requiredBeforeFirstPaidSession: false }
+  };
+  const suite = {
+    matrixContract: { confidenceSampleUnit: "task-family" },
+    scenarios,
+    releaseGate: { minimumOutcomeScoreExclusive: 9.5, requireCausalContextReceipt: true }
+  };
+  const input = { runId: "matrix-partial-spend", fullOrder, candidateSurface: "piagent", baselineSurface: "codex-cli",
+    requestedModel: "openai-codex/gpt-5.6-luna", requestedThinking: "medium", suite,
+    manifest: { stopAfterFailedPair: true, infrastructureRetries: 0, productionGuards: guards },
+    generatedAt: "2026-08-26T00:00:00.000Z", reason: "max-sessions:12", runs };
+
+  const diagnostic = buildBenchmarkStageDiagnostic(input);
+  const spend = diagnostic.spendFutilityReview.partialStageCatastrophicFreshSpend;
+  assert.equal(diagnostic.stageAdvanceAllowed, true);
+  assert.equal(spend.sampleUnit, "task-family");
+  assert.equal(spend.familyResolutionPassed, true);
+  assert.equal(spend.families.length, 5);
+  assert.deepEqual(spend.families.find((family) => family.familyId === "shared-family"), {
+    familyId: "shared-family",
+    scenarioIds: ["shared-boundary", "shared-interaction"],
+    observedPairs: 2,
+    exact: true,
+    ratio: 1
+  });
+  assert.equal(spend.familyFailures.length, 0,
+    "a hot structural variant is evaluated inside its declared task family, not as a standalone family");
+
+  const unresolved = buildBenchmarkStageDiagnostic({
+    ...input,
+    suite: { ...suite, scenarios: scenarios.filter((scenario) => scenario.id !== "shared-boundary") }
+  });
+  const unresolvedSpend = unresolved.spendFutilityReview.partialStageCatastrophicFreshSpend;
+  assert.ok(unresolved.blockingReasons.includes("partial-stage-catastrophic-fresh-spend"));
+  assert.equal(unresolvedSpend.familyResolutionPassed, false);
+  assert.ok(unresolvedSpend.familyResolutionIssues.includes("unresolved-family:shared-boundary"));
 });
 
 test("production resume guard binding rejects removed or weakened frozen guards", () => {

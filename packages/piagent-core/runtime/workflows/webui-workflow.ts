@@ -1,40 +1,47 @@
-export const WEBUI_WORKFLOW_IDS = [
-  "task",
-  "scout",
-  "be-to-fe",
-  "discuss",
-  "plan",
-  "review",
-  "commit",
-  "pr",
-  "onboard",
-  "platform-improve"
-] as const;
+import {
+  WORKFLOW_IDS,
+  WORKFLOW_OPTIONS,
+  type WorkflowId,
+  type WorkflowOption
+} from "../../extensions/workflow-catalog.ts";
 
-export type WebUiWorkflowId = typeof WEBUI_WORKFLOW_IDS[number];
+/**
+ * Runtime/WebUI adapter over the surface-neutral workflow catalog.
+ *
+ * Keep aliases here rather than in an individual surface. A workflow selection
+ * is a property of one message/operation; it never pins the rest of a session.
+ */
+export {
+  WORKFLOW_ALIASES,
+  WORKFLOW_IDS,
+  WORKFLOW_OPTIONS,
+  resolveWorkflowId,
+  stripWorkflowCommand,
+  workflowCommandNames,
+  workflowCommandPattern,
+  workflowHelpLines,
+  workflowIdFromCommand,
+  workflowOption
+} from "../../extensions/workflow-catalog.ts";
+export type { ContextWorkflow, WorkflowId, WorkflowOption } from "../../extensions/workflow-catalog.ts";
 
-export type WebUiWorkflowOption = {
-  id: WebUiWorkflowId;
-  changeMode: "source-change" | "read-only" | "plan-only" | "clarification" | "git" | "onboarding" | "platform";
-  modelUse: "required";
-  recommendedFreshSession: boolean;
-};
+// Compatibility exports keep the public WebUI contract stable while its data
+// now comes from the surface-neutral catalog above.
+export const WEBUI_WORKFLOW_IDS = WORKFLOW_IDS;
+export type WebUiWorkflowId = WorkflowId;
 
-export const WEBUI_WORKFLOW_OPTIONS: readonly WebUiWorkflowOption[] = [
-  { id: "task", changeMode: "source-change", modelUse: "required", recommendedFreshSession: true },
-  { id: "scout", changeMode: "read-only", modelUse: "required", recommendedFreshSession: true },
-  { id: "be-to-fe", changeMode: "source-change", modelUse: "required", recommendedFreshSession: true },
-  { id: "discuss", changeMode: "clarification", modelUse: "required", recommendedFreshSession: false },
-  { id: "plan", changeMode: "plan-only", modelUse: "required", recommendedFreshSession: false },
-  { id: "review", changeMode: "read-only", modelUse: "required", recommendedFreshSession: false },
-  { id: "commit", changeMode: "git", modelUse: "required", recommendedFreshSession: false },
-  { id: "pr", changeMode: "git", modelUse: "required", recommendedFreshSession: false },
-  { id: "onboard", changeMode: "onboarding", modelUse: "required", recommendedFreshSession: true },
-  { id: "platform-improve", changeMode: "platform", modelUse: "required", recommendedFreshSession: true }
-] as const;
+export type WebUiWorkflowOption = Pick<WorkflowOption,
+  "id" | "label" | "changeMode" | "modelUse" | "recommendedFreshSession">;
+export const WEBUI_WORKFLOW_OPTIONS: readonly WebUiWorkflowOption[] = WORKFLOW_OPTIONS.map((option) => ({
+  id: option.id,
+  label: option.label,
+  changeMode: option.changeMode,
+  modelUse: option.modelUse,
+  recommendedFreshSession: option.recommendedFreshSession
+}));
 
 export function isWebUiWorkflowId(value: unknown): value is WebUiWorkflowId {
-  return typeof value === "string" && (WEBUI_WORKFLOW_IDS as readonly string[]).includes(value);
+  return typeof value === "string" && (WORKFLOW_IDS as readonly string[]).includes(value);
 }
 
 /**

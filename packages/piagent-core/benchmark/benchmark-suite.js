@@ -3,13 +3,21 @@ import { benchmarkPricingSnapshotValidationErrors } from "./benchmark-normalized
 
 const SUITE_FIELDS = new Set([
   "schemaVersion", "id", "title", "description", "profile", "defaultRepeats", "timeoutSeconds",
-  "assurance", "releaseGate", "executionContract", "pricingSnapshot", "scenarios"
+  "assurance", "releaseGate", "executionContract", "pricingSnapshot", "matrixContract", "scenarios"
 ]);
 const SCENARIO_FIELDS = new Set([
   "id", "title", "description", "kind", "fixture", "prompt", "grader", "allowedChanges",
   "setupFiles", "forbiddenOutputSubstrings", "requiredOutputSubstrings", "category", "difficulty",
-  "profile", "lifecycle", "variantGenerator"
+  "profile", "lifecycle", "variantGenerator", "familyId", "variantId", "variantRole", "userJourney"
 ]);
+const MATRIX_CONTRACT_FIELDS = new Set([
+  "schemaVersion", "familyCount", "variantsPerFamily", "variantRoles", "surfaces",
+  "repeatsPerVariant", "expectedPairs", "expectedSessions", "confidenceSampleUnit"
+]);
+const USER_JOURNEY_FIELDS = new Set(["turns", "expectedTerminalSettlement"]);
+const USER_JOURNEY_TURN_FIELDS = new Set(["id", "prompt", "workflow", "reconnectBefore", "receiptUncertain"]);
+const MATRIX_VARIANT_ROLES = new Set(["boundary", "interaction", "adversarial-recovery"]);
+const TERMINAL_SETTLEMENTS = new Set(["completed", "refused"]);
 const RELEASE_GATE_FIELDS = new Set([
   "minimumQualityScore", "minimumSafetyScore", "minimumReliabilityScore", "minimumWorkflowScore",
   "minimumCategoryScore", "minimumOutcomeScoreExclusive", "minimumPairedScenarios", "minimumRepeats",
@@ -213,6 +221,41 @@ export function benchmarkSuiteValidationErrors(input) {
       if (contract.codexMode !== "controlled") errors.push("executionContract.codexMode must be controlled");
     }
   }
+  if (input.matrixContract !== undefined) {
+    const matrix = input.matrixContract;
+    if (input.schemaVersion !== 2) errors.push("matrixContract requires suite schemaVersion 2");
+    if (!plainObject(matrix)) errors.push("matrixContract must be an object");
+    else {
+      for (const field of Object.keys(matrix)) {
+        if (!MATRIX_CONTRACT_FIELDS.has(field)) errors.push(`matrixContract has unsupported field ${field}`);
+      }
+      if (matrix.schemaVersion !== 1) errors.push("matrixContract.schemaVersion must be 1");
+      for (const [field, maximum] of [["familyCount", 50], ["variantsPerFamily", 10], ["repeatsPerVariant", 10], ["expectedPairs", 500], ["expectedSessions", 1_000]]) {
+        if (!Number.isSafeInteger(matrix[field]) || matrix[field] < 1 || matrix[field] > maximum) {
+          errors.push(`matrixContract.${field} must be between 1 and ${maximum}`);
+        }
+      }
+      if (!Array.isArray(matrix.variantRoles)
+        || matrix.variantRoles.length !== matrix.variantsPerFamily
+        || new Set(matrix.variantRoles).size !== matrix.variantRoles.length
+        || matrix.variantRoles.some((role) => !MATRIX_VARIANT_ROLES.has(role))) {
+        errors.push("matrixContract.variantRoles must contain one supported unique role per variant");
+      }
+      if (!Array.isArray(matrix.surfaces)
+        || !plainObject(input.executionContract)
+        || JSON.stringify(matrix.surfaces) !== JSON.stringify(input.executionContract.surfaces)) {
+        errors.push("matrixContract.surfaces must match executionContract.surfaces");
+      }
+      if (matrix.repeatsPerVariant !== input.defaultRepeats) {
+        errors.push("matrixContract.repeatsPerVariant must match defaultRepeats");
+      }
+      const expectedPairs = matrix.familyCount * matrix.variantsPerFamily * matrix.repeatsPerVariant;
+      const expectedSessions = expectedPairs * (Array.isArray(matrix.surfaces) ? matrix.surfaces.length : 0);
+      if (matrix.expectedPairs !== expectedPairs) errors.push("matrixContract.expectedPairs does not match the declared matrix");
+      if (matrix.expectedSessions !== expectedSessions) errors.push("matrixContract.expectedSessions does not match the declared matrix");
+      if (matrix.confidenceSampleUnit !== "task-family") errors.push("matrixContract.confidenceSampleUnit must be task-family");
+    }
+  }
   if (input.schemaVersion === 2 && (!plainObject(input.assurance) || !plainObject(input.releaseGate))) {
     errors.push("schemaVersion 2 requires assurance and releaseGate objects");
   }
@@ -254,6 +297,7 @@ export function benchmarkSuiteValidationErrors(input) {
   }
 
   const ids = new Set();
+  const matrixFamilies = new Map();
   for (const [index, scenario] of input.scenarios.entries()) {
     const label = `scenarios[${index}]`;
     if (!plainObject(scenario)) {
@@ -310,6 +354,94 @@ export function benchmarkSuiteValidationErrors(input) {
       !Array.isArray(scenario.requiredOutputSubstrings)
       || scenario.requiredOutputSubstrings.some((item) => typeof item !== "string" || !item)
     )) errors.push(`${label}.requiredOutputSubstrings must contain non-empty strings`);
+    if (input.matrixContract === undefined
+      && [scenario.familyId, scenario.variantId, scenario.variantRole, scenario.userJourney].some((value) => value !== undefined)) {
+      errors.push(`${label} matrix metadata requires matrixContract`);
+    }
+    if (plainObject(input.matrixContract)) {
+      requiredString(scenario.familyId, `${label}.familyId`, errors);
+      if (typeof scenario.familyId === "string" && !ID_PATTERN.test(scenario.familyId)) errors.push(`${label}.familyId must use lowercase kebab-case`);
+      requiredString(scenario.variantId, `${label}.variantId`, errors);
+      if (typeof scenario.variantId === "string" && !ID_PATTERN.test(scenario.variantId)) errors.push(`${label}.variantId must use lowercase kebab-case`);
+      if (!MATRIX_VARIANT_ROLES.has(scenario.variantRole)
+        || !Array.isArray(input.matrixContract.variantRoles)
+        || !input.matrixContract.variantRoles.includes(scenario.variantRole)) errors.push(`${label}.variantRole is invalid`);
+      if (!plainObject(scenario.userJourney)) errors.push(`${label}.userJourney must be an object`);
+      else {
+        for (const field of Object.keys(scenario.userJourney)) {
+          if (!USER_JOURNEY_FIELDS.has(field)) errors.push(`${label}.userJourney has unsupported field ${field}`);
+        }
+        const turns = scenario.userJourney.turns;
+        if (!Array.isArray(turns) || turns.length < 1 || turns.length > 10) errors.push(`${label}.userJourney.turns must contain between 1 and 10 turns`);
+        else {
+          const turnIds = new Set();
+          for (const [turnIndex, turn] of turns.entries()) {
+            const turnLabel = `${label}.userJourney.turns[${turnIndex}]`;
+            if (!plainObject(turn)) {
+              errors.push(`${turnLabel} must be an object`);
+              continue;
+            }
+            for (const field of Object.keys(turn)) {
+              if (!USER_JOURNEY_TURN_FIELDS.has(field)) errors.push(`${turnLabel} has unsupported field ${field}`);
+            }
+            requiredString(turn.id, `${turnLabel}.id`, errors);
+            if (typeof turn.id === "string" && !ID_PATTERN.test(turn.id)) errors.push(`${turnLabel}.id must use lowercase kebab-case`);
+            if (turnIds.has(turn.id)) errors.push(`${label}.userJourney has duplicate turn id ${turn.id}`);
+            turnIds.add(turn.id);
+            if (!safeRelativePath(turn.prompt)) errors.push(`${turnLabel}.prompt must stay inside the suite directory`);
+            if (turn.workflow !== undefined
+              && (typeof turn.workflow !== "string" || !ID_PATTERN.test(turn.workflow) || turn.workflow.length > 64)) {
+              errors.push(`${turnLabel}.workflow must be a bounded lowercase kebab-case id`);
+            }
+            if (turn.reconnectBefore !== undefined && typeof turn.reconnectBefore !== "boolean") errors.push(`${turnLabel}.reconnectBefore must be a boolean`);
+            if (turn.receiptUncertain !== undefined && typeof turn.receiptUncertain !== "boolean") {
+              errors.push(`${turnLabel}.receiptUncertain must be a boolean`);
+            }
+            if (turn.receiptUncertain === true && (turnIndex === 0 || turn.reconnectBefore !== true)) {
+              errors.push(`${turnLabel}.receiptUncertain requires an existing-session turn with reconnectBefore`);
+            }
+          }
+          if (scenario.variantRole === "boundary" && (turns.length !== 1 || turns[0]?.id !== "request")) {
+            errors.push(`${label}.boundary journey must contain one request turn`);
+          }
+          if (scenario.variantRole === "interaction"
+            && JSON.stringify(turns.map((turn) => turn?.id)) !== JSON.stringify(["scout", "implement", "verify"])) {
+            errors.push(`${label}.interaction journey must contain scout, implement, verify turns`);
+          }
+          if (scenario.variantRole === "adversarial-recovery"
+            && (turns.length < 2 || !turns.slice(1).some((turn) => turn?.reconnectBefore === true))) {
+            errors.push(`${label}.adversarial-recovery journey must exercise reconnect recovery`);
+          }
+        }
+        if (!TERMINAL_SETTLEMENTS.has(scenario.userJourney.expectedTerminalSettlement)) {
+          errors.push(`${label}.userJourney.expectedTerminalSettlement is invalid`);
+        } else if (scenario.kind === "safety-refusal" && scenario.userJourney.expectedTerminalSettlement !== "refused") {
+          errors.push(`${label}.safety-refusal journey must settle as refused`);
+        } else if (scenario.kind !== "safety-refusal" && scenario.userJourney.expectedTerminalSettlement !== "completed") {
+          errors.push(`${label}.non-refusal journey must settle as completed`);
+        }
+      }
+      if (typeof scenario.familyId === "string" && typeof scenario.variantId === "string") {
+        const family = matrixFamilies.get(scenario.familyId) ?? { variants: new Set(), roles: new Set() };
+        if (family.variants.has(scenario.variantId)) errors.push(`duplicate matrix variant ${scenario.familyId}/${scenario.variantId}`);
+        family.variants.add(scenario.variantId);
+        if (typeof scenario.variantRole === "string") family.roles.add(scenario.variantRole);
+        matrixFamilies.set(scenario.familyId, family);
+      }
+    }
+  }
+  if (plainObject(input.matrixContract)) {
+    if (matrixFamilies.size !== input.matrixContract.familyCount) errors.push("matrixContract.familyCount does not match scenarios");
+    for (const [familyId, family] of matrixFamilies) {
+      if (family.variants.size !== input.matrixContract.variantsPerFamily) errors.push(`matrix family ${familyId} must contain ${input.matrixContract.variantsPerFamily} variants`);
+      const expectedRoles = new Set(Array.isArray(input.matrixContract.variantRoles) ? input.matrixContract.variantRoles : []);
+      if (family.roles.size !== expectedRoles.size || [...expectedRoles].some((role) => !family.roles.has(role))) {
+        errors.push(`matrix family ${familyId} must contain every declared variant role`);
+      }
+    }
+    if (input.scenarios.length !== input.matrixContract.familyCount * input.matrixContract.variantsPerFamily) {
+      errors.push("matrixContract scenario cardinality does not match scenarios");
+    }
   }
   return errors;
 }

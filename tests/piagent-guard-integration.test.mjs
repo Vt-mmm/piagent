@@ -4183,6 +4183,7 @@ describe("piagent guard integration", () => {
   it("requires a task before mutation while preserving bounded pre-task inspection", async () => {
     const { root, piagentGuard } = await loadGuardFixture();
     const cwd = createProject(root);
+    fs.writeFileSync(path.join(cwd, "package.json"), '{"name":"fixture","scripts":{}}\n');
     const ctx = createContext(cwd, { sessionId: "pre-task", sessionName: "PRE-1" });
     const harness = createPiHarness();
     piagentGuard(harness.pi);
@@ -4190,14 +4191,34 @@ describe("piagent guard integration", () => {
 
     const toolCall = harness.handlers.get("tool_call");
     const inspect = await callToolCall(toolCall, ctx, "bash", { command: "rg -n lifecycle src" });
+    const inspectWithDiscardedDiagnostics = await callToolCall(toolCall, ctx, "bash", {
+      command: "rg -n lifecycle src 2>/dev/null"
+    });
+    const inspectJsonWithNode = await callToolCall(toolCall, ctx, "bash", {
+      command: "node -e \"const p=require('./package.json'); console.log(JSON.stringify(p.scripts,null,2))\" >/dev/null"
+    });
     const write = await callToolCall(toolCall, ctx, "write", { path: "src/pre-task.ts", content: "x\n" });
     const shellWrite = await callToolCall(toolCall, ctx, "bash", { command: "printf x > src/pre-task.ts" });
+    const nodeWrite = await callToolCall(toolCall, ctx, "bash", {
+      command: "node -e \"require('fs').writeFileSync('src/pre-task.ts','x')\""
+    });
+    const pythonWrite = await callToolCall(toolCall, ctx, "bash", {
+      command: "python3 -c \"open('src/pre-task.ts','w').write('x')\""
+    });
+    const nodeLoop = await callToolCall(toolCall, ctx, "bash", { command: "node -e \"while(true){}\"" });
+    const pythonLoop = await callToolCall(toolCall, ctx, "bash", { command: "python3 -c \"while True: pass\"" });
 
     assert.notEqual(inspect.block, true);
+    assert.notEqual(inspectWithDiscardedDiagnostics.block, true, inspectWithDiscardedDiagnostics.reason);
+    assert.notEqual(inspectJsonWithNode.block, true, inspectJsonWithNode.reason);
     assert.equal(write.block, true);
     assert.match(write.reason, /Task Implementation Contract is required/);
     assert.equal(shellWrite.block, true);
     assert.match(shellWrite.reason, /Task Implementation Contract is required/);
+    for (const decision of [nodeWrite, pythonWrite, nodeLoop, pythonLoop]) {
+      assert.equal(decision.block, true, decision.reason);
+      assert.match(decision.reason, /Task Implementation Contract is required/);
+    }
 
     // The standalone explainer sees the same static shell facts but cannot own
     // this live session's Task Contract. It must therefore refuse to turn its
@@ -4208,6 +4229,15 @@ describe("piagent guard integration", () => {
     assert.equal(explained.result.staticDecision, "allow");
     assert.equal(explained.result.confidence, "runtime-required");
     assert.ok(explained.result.remainingGates.includes("task-contract"));
+
+    const explainedInspection = explainCommand(
+      "node -e \"const p=require('./package.json'); console.log(p.name)\" 2>/dev/null",
+      cwd
+    );
+    assert.equal(explainedInspection.status, 2);
+    assert.equal(explainedInspection.result.decision, "indeterminate");
+    assert.equal(explainedInspection.result.staticDecision, "allow");
+    assert.ok(explainedInspection.result.remainingGates.includes("task-contract"));
   });
 
   it("fails closed for source tasks outside Git while preserving read-only scouting", async () => {
@@ -4485,7 +4515,12 @@ describe("piagent guard integration", () => {
   it("allows bounded inspection but blocks mutation in a read-only task", async () => {
     const { root, piagentGuard } = await loadGuardFixture();
     const cwd = createProject(root);
+    fs.writeFileSync(path.join(cwd, "package.json"), '{"name":"fixture","scripts":{}}\n');
     fs.writeFileSync(path.join(cwd, "src", "auth.ts"), "export const auth = true;\n");
+    fs.symlinkSync("package.json", path.join(cwd, "linked-package.json"));
+    fs.mkdirSync(path.join(cwd, "src", "data"), { recursive: true });
+    fs.writeFileSync(path.join(cwd, "src", "data", "value.txt"), "bounded\n");
+    fs.symlinkSync(path.join(cwd, "src", "data"), path.join(cwd, "linked-data"), "dir");
     const ctx = createContext(cwd, { sessionId: "session-readonly", sessionName: "SCOUT-1" });
     const harness = createPiHarness();
     piagentGuard(harness.pi);
@@ -4504,6 +4539,21 @@ describe("piagent guard integration", () => {
     assert.deepEqual(started.details.workPlan.map((step) => step.id), ["scout", "review"]);
 
     const inspect = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", { command: "rg -n auth src" });
+    const inspectWithNullRedirect = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", {
+      command: "rg -n auth src 2>/dev/null"
+    });
+    const inspectPackageJson = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", {
+      command: "node -e \"const p=require('./package.json'); console.log(JSON.stringify(p.scripts,null,2))\" 2>/dev/null"
+    });
+    const inspectFileWithNode = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", {
+      command: "node -e \"const fs=require('node:fs'); const p=fs.readFileSync('README.md','utf8'); console.log(p.length)\""
+    });
+    const inspectJsonWithPython = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", {
+      command: "python3 -c \"import json; print(json.load(open('package.json')))\""
+    });
+    const inspectPathWithPython = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", {
+      command: "python3 -c \"from pathlib import Path; print(Path('README.md').read_text())\""
+    });
     const mutate = await callToolCall(harness.handlers.get("tool_call"), ctx, "write", { path: "src/auth.ts", content: "x" });
     const patchMutation = await callToolCall(harness.handlers.get("tool_call"), ctx, "apply_patch", {
       patch: [
@@ -4515,7 +4565,71 @@ describe("piagent guard integration", () => {
       patch: ["*** Begin Patch", "*** End Patch"].join("\n")
     });
     const sneakyFind = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", { command: "find src -delete" });
+    const nodeWrite = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", {
+      command: "node -e \"const fs=require('fs'); fs.writeFileSync('src/auth.ts','x')\""
+    });
+    const nodeComputedWrite = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", {
+      command: "node -e \"const fs=require('fs'); fs['writeFileSync']('src/auth.ts','x')\""
+    });
+    const nodeLocalCodeLoad = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", {
+      command: "node -e \"require('./src/auth.ts')\""
+    });
+    const nodeBuiltinEscape = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", {
+      command: "node -e \"process.getBuiltinModule('fs').writeFileSync('src/auth.ts','x')\""
+    });
+    const nodeUnicodeEscape = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", {
+      command: "node -e \"global\\\\u0054his.process.getBuiltinModule('fs').writeFileSync('src/auth.ts','x')\""
+    });
+    const pythonWrite = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", {
+      command: "python3 -c \"open('src/auth.ts','w').write('x')\""
+    });
+    const pythonPathWrite = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", {
+      command: "python3 -c \"from pathlib import Path; Path('src/auth.ts').write_text('x')\""
+    });
+    const redirectedWrite = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", {
+      command: "node -p \"JSON.stringify({ok:true})\" > src/auth.ts"
+    });
+    const lookalikeNullWrite = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", {
+      command: "rg -n auth src 2>dev/null"
+    });
+    const protectedNodeRead = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", {
+      command: "node -e \"const fs=require('fs'); console.log(fs.readFileSync('.env','utf8'))\""
+    });
+    const symlinkedJsonRead = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", {
+      command: "node -e \"const p=require('./linked-package.json'); console.log(p.name)\""
+    });
+    const symlinkedParentRead = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", {
+      command: "node -e \"const fs=require('fs'); console.log(fs.readFileSync('linked-data/value.txt','utf8'))\""
+    });
+    const pythonSymlinkRead = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", {
+      command: "python3 -c \"from pathlib import Path; print(Path('linked-package.json').read_text())\""
+    });
+    const unboundedInterpreterCommands = [
+      "node -e \"while(true){}\"",
+      "node -e \"function recurse(){ return recurse() }; recurse()\"",
+      "node -e \"setInterval(() => {}, 1000)\"",
+      "node -e \"console.log('x'.repeat(1000000000))\"",
+      "node -e \"Buffer.alloc(1000000000)\"",
+      "node -e \"console.log(2n ** 1000000000n)\"",
+      "node -e \"const a={f(){return a.f()}}; a.f()\"",
+      "node -e \"fetch('https://example.invalid')\"",
+      "node -e \"new Worker('worker.js')\"",
+      "python3 -c \"while True: pass\"",
+      "python3 -c \"f=lambda: f(); f()\"",
+      "python3 -c \"print('x' * 1000000000)\"",
+      "python3 -c \"bytearray(1000000000)\"",
+      "python3 -c \"pow(2, 1000000000)\"",
+      "python3 -c \"import time; time.sleep(999)\"",
+      "python3 -c \"import subprocess; subprocess.run(['true'])\""
+    ];
+    const unboundedInterpreterDecisions = [];
+    for (const command of unboundedInterpreterCommands) {
+      unboundedInterpreterDecisions.push(await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", { command }));
+    }
     assert.notEqual(inspect.block, true);
+    for (const decision of [inspectWithNullRedirect, inspectPackageJson, inspectFileWithNode, inspectJsonWithPython, inspectPathWithPython]) {
+      assert.notEqual(decision.block, true, decision.reason);
+    }
     assert.equal(mutate.block, true);
     assert.match(mutate.reason, /read-only/);
     assert.equal(patchMutation.block, true);
@@ -4524,6 +4638,16 @@ describe("piagent guard integration", () => {
     assert.match(emptyPatch.reason, /no Add File or Update File/i);
     assert.equal(sneakyFind.block, true);
     assert.match(sneakyFind.reason, /read-only inspection allowlist/);
+    for (const decision of [
+      nodeWrite, nodeComputedWrite, nodeLocalCodeLoad, nodeBuiltinEscape, nodeUnicodeEscape,
+      pythonWrite, pythonPathWrite, redirectedWrite, lookalikeNullWrite,
+      symlinkedJsonRead, symlinkedParentRead, pythonSymlinkRead, ...unboundedInterpreterDecisions
+    ]) {
+      assert.equal(decision.block, true, decision.reason);
+      assert.match(decision.reason, /read-only inspection allowlist/);
+    }
+    assert.equal(protectedNodeRead.block, true);
+    assert.match(protectedNodeRead.reason, /protected path/);
 
     await harness.handlers.get("tool_result")({
       toolName: "read",

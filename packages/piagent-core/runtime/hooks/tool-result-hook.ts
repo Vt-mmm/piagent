@@ -11,19 +11,22 @@ import { workingTreeObservation } from "../../extensions/working-tree-digest.js"
 import { recordObservedContextEvidence } from "../context/context-evidence-qualification.ts";
 import { confirmContextDeliveryFromToolResult, type ContextDeliveryConfirmationDependencies } from "../context/context-delivery.ts";
 import { recordMutationResult } from "../inspection/mutation-provenance-recorder.ts";
-import { classifyToolFailure } from "../inspection/tool-failure-classification.ts";
+import { classifyToolFailure, handledToolFailure } from "../inspection/tool-failure-classification.ts";
 import { classifyDirectSubagentResult, type DirectSubagentResult } from "../orchestration/subagent-tool-policy.ts";
 import { boundedGitDiffReview } from "../quality/performance-assurance.ts";
 import { currentFileContentDigests } from "../quality/model-mutation-proof.ts";
 import { boundedPerformanceReviewResultText } from "../quality/performance-review-evidence.ts";
 import { buildEditRecoveryContext, type EditRecoveryContext } from "../recovery/edit-recovery-context.ts";
 import { EditRecoveryDeliveryState } from "../recovery/edit-recovery-delivery.ts";
+import { RetrievalEvidenceRuntime } from "../session/retrieval-evidence-runtime.ts";
 import { attachToolResultCompactionDetails, compactToolResultDetails, compactToolResultTextContent, type ToolResultCaptureSummary } from "../session/tool-result-compaction.ts";
 import type { ObservedTaskContext } from "../session/runtime-state.ts";
 import { observeTrajectorySync } from "../trajectory/trajectory-observability.ts";
 import type { TrajectorySyncResult } from "../trajectory/trajectory-runtime.ts";
 import { filterGrepProtectedContent, filterProtectedPathListContent } from "./tool-result-content-guards.ts";
 import { patchLineStats } from "./tool-result-metadata.ts";
+import { handledNavigationToolResult } from "./tool-result-navigation.ts";
+import { attachRetrievalCheckpoint, observeRetrievalResult } from "./tool-result-retrieval.ts";
 import { appendToolResultText, boundedToolResultText, countChangedStringLeaves, isPlainRecord, numericExitCode, redactToolResultTextContent, successfulToolResult } from "./tool-result-value-helpers.ts";
 
 export { filterGrepProtectedContent, filterProtectedPathListContent };
@@ -31,7 +34,6 @@ type ToolResultEvent = { toolCallId?: string; toolName: string; input?: unknown;
 type ObservedBashResult = NonNullable<ReturnType<typeof observedBashResultFromToolResultEvent>>;
 type ObservedVerificationResult = ObservedBashResult & { outputText?: string };
 type WorkingTreeObservation = ReturnType<typeof workingTreeObservation>;
-
 type ToolResultHookDependencies = ContextDeliveryConfirmationDependencies & {
   readProtectedPaths: (ctx: ExtensionContext) => string[];
   recordObservedBash: (observed: ObservedBashResult) => void;
@@ -91,10 +93,15 @@ type ToolResultHookDependencies = ContextDeliveryConfirmationDependencies & {
 
 export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResultHookDependencies): void {
   const editRecoveryDelivery = new EditRecoveryDeliveryState();
+  const retrievalEvidence = new RetrievalEvidenceRuntime();
   pi.on("session_compact", async (_event, ctx) => editRecoveryDelivery.advanceEpoch(ctx));
-  pi.on("session_shutdown", async (_event, ctx) => editRecoveryDelivery.clearSession(ctx));
+  pi.on("session_shutdown", async (_event, ctx) => {
+    editRecoveryDelivery.clearSession(ctx);
+    retrievalEvidence.clearSession(ctx);
+  });
   pi.on("tool_result", async (event, ctx) => {
     confirmContextDeliveryFromToolResult(pi, ctx, event, dependencies);
+    const currentTurnId = dependencies.state.currentTurn?.(ctx)?.turnId;
     const taskIdentity = dependencies.state.taskIdentity(ctx);
     const resultToolCallId = event.toolCallId ?? toolResultFingerprint(event.toolName, event.input, []).key;
     const readProtectedPaths = dependencies.readProtectedPaths(ctx);
@@ -239,6 +246,7 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
     const successfulDirectMutation = successfulToolResult(event)
       && directMutationTool;
     const shellTreeChanged = shellChangedPaths.length > 0;
+    if (successfulDirectMutation || shellTreeChanged) retrievalEvidence.invalidateAfterMutation(ctx, currentTurnId);
     if (taskIdentity && currentTreeDigest && (reviewCandidate || existingCredit || successfulDirectMutation || shellSnapshotBefore)) {
       if (shellTreeChanged || directMutationResult.changedPaths.length > 0) {
         dependencies.state.invalidatePerformanceReviewCredit(taskIdentity.taskRunId);
@@ -294,6 +302,20 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
       resultChanged = true;
     }
     const resultTarget = dependencies.extractLikelyPath(ctx.cwd, isPlainRecord(event.input) ? event.input : {});
+    const handledNavigationFailure = effectiveToolError && handledToolFailure(toolFailureReasonCode, normalizedToolName);
+    if (handledNavigationFailure) {
+      const navigation = handledNavigationToolResult({
+        toolName: normalizedToolName,
+        reasonCode: String(toolFailureReasonCode),
+        targetPath: resultTarget,
+        content: resultContent,
+        details: resultDetails,
+        redactText: dependencies.redactText
+      });
+      resultContent = navigation.content;
+      resultDetails = navigation.details;
+      resultChanged = true;
+    }
     dependencies.observeEditFreshness?.(ctx, event, {
       taskRunId: taskIdentity?.taskRunId,
       successful: successfulToolResult(event),
@@ -377,6 +399,9 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
       outputHash: fingerprint.outputHash,
       recordedAt: dependencies.now()
     });
+    const retrievalCheckpoint = observeRetrievalResult({ runtime: retrievalEvidence, ctx, turnId: currentTurnId,
+      observation: { toolName: normalizedToolName, callFingerprint: fingerprint.key, outputHash: fingerprint.outputHash,
+        target: resultTarget, deterministicMiss: handledNavigationFailure, nonEvidenceFailure: effectiveToolError } });
     if (repeated && ["read", "grep", "find", "ls", "subagent"].includes(event.toolName) && fingerprint.outputChars > 0) {
       resultContent = [{
         type: "text",
@@ -394,7 +419,6 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
         : { value: resultDetails, piagentDelta: delta };
       resultChanged = true;
     }
-
     const captureCache = new Map<string, ToolResultCaptureSummary>();
     const compactedContent = compactToolResultTextContent(ctx.cwd, event, ctx, resultContent, captureCache);
     const compactionCaptures = [...compactedContent.captures];
@@ -417,6 +441,13 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
     // be compacted into a preview and cease to be a complete one-shot recovery.
     if (editRecovery) {
       resultContent = appendToolResultText(resultContent, editRecovery.text);
+      resultChanged = true;
+    }
+    const checkpointResult = attachRetrievalCheckpoint({ checkpoint: retrievalCheckpoint, content: resultContent,
+      details: resultDetails, ctx, turnId: currentTurnId, telemetry: dependencies.telemetry });
+    if (checkpointResult.changed) {
+      resultContent = checkpointResult.content;
+      resultDetails = checkpointResult.details;
       resultChanged = true;
     }
 
@@ -446,6 +477,8 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
       sensitiveValuesRedacted,
       isError: effectiveToolError,
       reasonCode: failureReasonCode,
+      handledFailure: handledNavigationFailure || undefined,
+      retrievalCheckpoint: retrievalCheckpoint?.reason,
       // An explicit false is evidence too: it proves that every classified
       // edit-anchor failure passed through the recovery policy even when the
       // target was too large, private, protected, or otherwise ineligible.
@@ -460,8 +493,8 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
 
     if (resultChanged) {
       return resultDetails === undefined
-        ? { content: resultContent }
-        : { content: resultContent, details: resultDetails };
+        ? { content: resultContent, ...(handledNavigationFailure ? { isError: false } : {}) }
+        : { content: resultContent, details: resultDetails, ...(handledNavigationFailure ? { isError: false } : {}) };
     }
   });
 }

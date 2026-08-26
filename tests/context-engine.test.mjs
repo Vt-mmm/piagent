@@ -26,6 +26,7 @@ import {
   composeCriterionContextEntries
 } from "../packages/piagent-core/extensions/criterion-context-pack.js";
 import { extractJavaScriptModuleImports } from "../packages/piagent-core/extensions/context-import-links.js";
+import { WORKFLOW_OPTIONS } from "../packages/piagent-core/runtime/workflows/webui-workflow.ts";
 import { buildPrefixTelemetry } from "../packages/piagent-core/runtime/context/prefix-telemetry.ts";
 import { injectionEfficiencyMetrics, readEfficiencyMetrics } from "../packages/piagent-core/extensions/context-efficiency-metrics.js";
 import { measureContextDeltaShadow } from "../packages/piagent-core/runtime/context/context-delta-shadow.ts";
@@ -126,6 +127,23 @@ test("classifies task signals without calling a model", () => {
   assert.deepEqual(vietnamese.paths, ["src/xác-thực.ts"]);
   assert.ok(vietnamese.terms.includes("phân"));
   assert.ok(estimateContextTokens("phân quyền bảo mật") > estimateContextTokens("plain ascii text"));
+});
+
+test("maps every canonical workflow to its explicit context intent", () => {
+  for (const option of WORKFLOW_OPTIONS) {
+    for (const command of [`/${option.id}`, `/workflow ${option.id}`]) {
+      const signal = classifyContextTask(`${command} implement src/example.ts, run tests, then report token usage`);
+      assert.equal(signal.workflowId, option.id, command);
+      assert.equal(signal.workflow, option.contextWorkflow, command);
+      assert.equal(signal.changeMode, option.changeMode, command);
+    }
+  }
+  assert.equal(WORKFLOW_OPTIONS.find((option) => option.id === "commit")?.contextWorkflow, "release");
+  assert.equal(WORKFLOW_OPTIONS.find((option) => option.id === "pr")?.contextWorkflow, "release");
+  assert.equal(classifyContextTask("/be-to-fe implement the frontend contract").workflow, "task");
+  assert.equal(classifyContextTask("/platform-improve reduce context overhead").workflow, "task");
+  assert.equal(classifyContextTask("/plan implement later and report token usage").workflow, "plan",
+    "explicit workflow must beat incidental release/usage terms");
 });
 
 test("retains explicit safe project globs without accepting traversal or surrounding prose", () => {

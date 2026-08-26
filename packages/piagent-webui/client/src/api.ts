@@ -56,7 +56,7 @@ export type SessionCreationOptions = {
   defaultModelRef?: string | null;
   defaultThinkingLevel?: string | null;
   profiles?: Array<{ id: string; displayName: string; permissionMode: string | null }>;
-  workflows?: Array<{ id: Workflow; changeMode: "source-change" | "read-only" | "plan-only" | "clarification" | "git" | "onboarding" | "platform";
+  workflows: Array<{ id: Workflow; label: string; changeMode: "source-change" | "read-only" | "plan-only" | "clarification" | "git" | "onboarding" | "platform";
     modelUse: "required"; recommendedFreshSession: boolean }>;
   runtimeActions?: Array<{ id: RuntimeCommand["action"]; category: "runtime" | "usage" | "onboarding" | "profile" | "context" | "memory" | "mcp";
     effect: "read-only" | "workspace-write" | "model-assisted"; argument: "none" | "optional-text" | "required-text" | "profile" | "connection";

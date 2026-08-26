@@ -58,7 +58,7 @@ function publicCommandIdentity(value) {
 
 export function benchmarkPreflightReceipt({
   packageVersion, source, candidateProvenance, suite, suiteDigest,
-  runtimeDependencies, runtimeCommands, environmentPolicy, configurationDigest,
+  runtimeDependencies, webUiAssets, runtimeCommands, environmentPolicy, configurationDigest,
   rootSeedDigest, options, runtime, hostReadinessPolicyDigest = null, hostReadiness = null,
   providerFreeEvidence = null
 }) {
@@ -75,6 +75,7 @@ export function benchmarkPreflightReceipt({
       contentDigest: configurationDigest,
       ...(hostReadinessPolicyDigest ? { hostReadinessPolicyDigest } : {}),
       runtimeDependencyDigest: runtimeDependencies?.digest ?? null,
+      ...(webUiAssets ? { webUiAssetDigest: webUiAssets.digest } : {}),
       environmentPolicyDigest: environmentPolicy.digest,
       rootSeedDigest,
       surfaces: options.surfaces,

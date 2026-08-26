@@ -80,6 +80,9 @@ const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 const packageManifest = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"));
 const bootstrapMetadata = benchmarkBootstrapMetadata();
 const bootstrapCandidateIndex = bootstrapMetadata ? benchmarkBootstrapCandidateIndex(bootstrapMetadata) : undefined;
+const webUiAssetIdentity = bootstrapMetadata?.webUiAssets
+  ? Object.fromEntries(Object.entries(bootstrapMetadata.webUiAssets).filter(([key]) => key !== "root"))
+  : null;
 let interruptedSignal;
 const processController = createBenchmarkProcessController(() => Boolean(interruptedSignal));
 const runCommand = processController.run;
@@ -167,7 +170,7 @@ async function main() {
   if (bootstrapMetadata && bootstrapMetadata.suite.builtInId !== builtInId) {
     fail("Frozen benchmark suite origin no longer matches its canonical built-in identity", 1);
   }
-  const canonicalProductionSuite = builtInId === "production-v1";
+  const canonicalProductionSuite = builtInId === "production-v1" || builtInId === "production-v2";
   const productionSpendControlPath = path.join(suiteRoot, "spend-control.v1.json");
   const productionSpendControl = canonicalProductionSuite || fs.existsSync(productionSpendControlPath)
     ? readJsonFile(productionSpendControlPath, "production spend-control contract")
@@ -181,6 +184,7 @@ async function main() {
       ? productionSpendControlValidationErrors(productionSpendControl, {
           suiteId: suite.id,
           expectedSessions: productionExpectedSessions,
+          suite,
           requireHostReadiness: canonicalProductionSuite
             && suite.releaseGate?.requireHostReadinessForClaim === true
         })
@@ -509,6 +513,7 @@ async function main() {
     candidateDigest: candidateGuard.provenance.contentDigest,
     suiteDigest,
     runtimeDependencyDigest: bootstrapMetadata.runtimeDependencies?.digest ?? null,
+    webUiAssetDigest: bootstrapMetadata.webUiAssets?.digest ?? null,
     runtimeCommands,
     environmentPolicy,
     ...(productionHostReadinessRequired ? { hostReadinessPolicyDigest: productionHostReadinessPolicyDigest } : {}),
@@ -577,6 +582,7 @@ async function main() {
     piAgentHome: productionFinalizationOnly ? null : bootstrapMetadata?.piAgentHome,
     codexCredential: productionFinalizationOnly ? null : bootstrapMetadata?.codexCredential,
     runtimeDependencies: bootstrapMetadata?.runtimeDependencies,
+    webUiAssets: bootstrapMetadata?.webUiAssets,
     commands: runtimeCommands,
     verifyCommandAssets: !productionFinalizationOnly
   });
@@ -616,7 +622,7 @@ async function main() {
   }
   assertHostReadinessStartReady();
   if (options.preflightOnly) {
-    const receipt = benchmarkPreflightReceipt({ packageVersion: packageManifest.version, source, candidateProvenance: candidateGuard.report(), suite, suiteDigest, runtimeDependencies: bootstrapMetadata.runtimeDependencies, runtimeCommands, environmentPolicy, configurationDigest, rootSeedDigest, options, runtime, hostReadinessPolicyDigest: productionHostReadinessPolicyDigest, hostReadiness: hostReadinessReceipt, providerFreeEvidence });
+    const receipt = benchmarkPreflightReceipt({ packageVersion: packageManifest.version, source, candidateProvenance: candidateGuard.report(), suite, suiteDigest, runtimeDependencies: bootstrapMetadata.runtimeDependencies, webUiAssets: bootstrapMetadata.webUiAssets, runtimeCommands, environmentPolicy, configurationDigest, rootSeedDigest, options, runtime, hostReadinessPolicyDigest: productionHostReadinessPolicyDigest, hostReadiness: hostReadinessReceipt, providerFreeEvidence });
     process.stdout.write(options.json ? `${JSON.stringify(receipt, null, 2)}\n` : `${plan}${codexPlan}\nPREFLIGHT READY: no model session started.\n${JSON.stringify(receipt, null, 2)}\n`);
     return;
   }
@@ -647,6 +653,7 @@ async function main() {
     suiteIdentity,
     candidateProvenance: candidateGuard.provenance,
     runtimeDependencies: bootstrapMetadata?.runtimeDependencies ?? null,
+    webUiAssets: webUiAssetIdentity,
     runtimeCommands,
     preflightRuntime: runtime,
     codexCredentialIdentity: bootstrapMetadata.codexCredential?.identity ?? null,

@@ -455,8 +455,14 @@ export default function piagentWebUiExtension(pi: ExtensionAPI): void {
   pi.on("session_info_changed", (_event, ctx) => { currentContext = ctx; bridgeSoft(() => bridge.refresh(ctx)); });
   pi.on("model_select", (_event, ctx) => { currentContext = ctx; bridgeSoft(() => sessionOptions.observeHostOptionChange(ctx)); currentManager(ctx)?.provider.invalidate(); });
   pi.on("thinking_level_select", (_event, ctx) => { currentContext = ctx; bridgeSoft(() => sessionOptions.observeHostOptionChange(ctx)); currentManager(ctx)?.provider.invalidate(); });
-  pi.on("session_before_switch", () => { lifecycle.replacementPending(); bridgeSoft(() => bridge.replacementPending()); });
-  pi.on("session_before_fork", () => { lifecycle.replacementPending(); bridgeSoft(() => bridge.replacementPending()); });
+  pi.on("session_before_switch", (_event, ctx) => {
+    publishDrafts(ctx, stream.operationInterrupted(bridge.snapshot(), "session-replaced-before-tool-result"));
+    lifecycle.replacementPending(); bridgeSoft(() => bridge.replacementPending());
+  });
+  pi.on("session_before_fork", (_event, ctx) => {
+    publishDrafts(ctx, stream.operationInterrupted(bridge.snapshot(), "session-forked-before-tool-result"));
+    lifecycle.replacementPending(); bridgeSoft(() => bridge.replacementPending());
+  });
   pi.on("session_start", async (_event, ctx) => {
     currentContext = ctx; stream.reset(); queue.reset(); sessionOptions.reset(); attachments?.reset();
     if (!isGatewayRuntimeContext(ctx)) {
@@ -473,6 +479,7 @@ export default function piagentWebUiExtension(pi: ExtensionAPI): void {
     catch (error) { ctx.ui.notify(error instanceof Error ? error.message : "Piagent WebUI could not start", "error"); }
   });
   pi.on("session_shutdown", async (_event, ctx) => {
+    publishDrafts(ctx, stream.operationInterrupted(bridge.snapshot(), "session-shutdown-before-tool-result"));
     stream.reset(); queue.reset(); sessionOptions.reset(); attachments?.close(); eventReaders.delete(key(ctx));
     if (approvalBinding?.key === key(ctx)) { approvalBinding.unsubscribe(); approvalBinding.unbind(); approvalBinding = null; }
     lifecycle.shutdown();

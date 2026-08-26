@@ -236,7 +236,7 @@ Everything below is typed inside a Pi session. `/commands` lists the full set; [
 | `/workflow pr <title>` | Governed pull request: confirms before any `git push` or GitHub write. Draft by default. |
 | `/workflow be-to-fe <request>` | Backend or spec is read-only and the implementation target is frontend. Pair with `/profile be-readonly-fe`. |
 | `/workflow platform-improve <request>` | Package-level work: setup, MCP, model scope, memory, runtime policy, prompts, skills, subagents. |
-| `/fresh task|scout|be-to-fe <request>` | The current session is already heavy. Opens a new governed session and replays the compact workflow prompt. |
+| `/fresh <workflow> <request>` | The current session is already heavy. Opens a new governed session for any canonical workflow (`/fresh help` lists them) and replays the compact workflow prompt. |
 | `/piagent-inspector` | Open one read-only menu for task files and line diff, commands and failures, safety warnings, and context budget. A four-row panel is always shown beside Pi's native footer and can be hidden for the session with `toggle`. |
 
 Short workflow aliases such as `/task`, `/scout`, `/be-to-fe`, `/commit`, and `/pr` still work for power users, but docs and onboarding teach `/workflow` as the default.

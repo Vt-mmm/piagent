@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { after, describe, it } from "node:test";
 
-import { PINNED_EXTERNAL_TRANSFORM, load } from "../scripts/typescript-loader.mjs";
+import { PINNED_EXTERNAL_TRANSFORM, load, resolve } from "../scripts/typescript-loader.mjs";
 
 const temporaryRoots = new Set();
 
@@ -15,6 +16,7 @@ after(() => {
     fs.rmSync(root, { recursive: true, force: true });
   }
   delete process.env.PIAGENT_PINNED_TS_TRANSFORM_ROOT;
+  delete process.env.PIAGENT_BENCHMARK_BOOTSTRAP_METADATA;
 });
 
 function scratch() {
@@ -38,6 +40,101 @@ function adapterRoot({ name = PINNED_EXTERNAL_TRANSFORM.packageName, version = P
 async function loadFile(file) {
   return load(pathToFileURL(file).href, {}, () => { throw new Error("nextLoad should not run for .ts"); });
 }
+
+function runtimeBinding({ snapshotRoot, resolutionRoot, packages }) {
+  const runtimeDependencies = {
+    schemaVersion: 2,
+    node: process.version,
+    platform: `${os.platform()}-${os.arch()}`,
+    packages,
+    resolutionRoot,
+    resolutionTree: null,
+    isolation: "outside-repo-snapshot; suite-static-import-graph-bound; provider-host-closure-bound"
+  };
+  runtimeDependencies.digest = crypto.createHash("sha256")
+    .update(JSON.stringify(runtimeDependencies)).digest("hex");
+  return Buffer.from(JSON.stringify({ schemaVersion: 1, snapshotRoot, runtimeDependencies }), "utf8").toString("base64url");
+}
+
+function resolutionFixture() {
+  const root = scratch();
+  const snapshotRoot = path.join(root, "candidate");
+  const importer = path.join(snapshotRoot, "scripts", "entry.mjs");
+  const resolutionRoot = path.join(root, "runtime", "node_modules");
+  const packageRoot = path.join(resolutionRoot, "fixture-runtime");
+  const exported = path.join(packageRoot, "index.mjs");
+  fs.mkdirSync(path.dirname(importer), { recursive: true });
+  fs.mkdirSync(packageRoot, { recursive: true });
+  fs.writeFileSync(importer, "export {};\n");
+  fs.writeFileSync(path.join(packageRoot, "package.json"), JSON.stringify({
+    name: "fixture-runtime", version: "1.2.3", type: "module", exports: "./index.mjs"
+  }));
+  fs.writeFileSync(exported, "export const ready = true;\n");
+  return { root, snapshotRoot, importer, resolutionRoot, packageRoot, exported };
+}
+
+describe("benchmark runtime dependency resolution", () => {
+  it("redirects an exactly declared package to its bound resolution root", async () => {
+    const fixture = resolutionFixture();
+    process.env.PIAGENT_BENCHMARK_BOOTSTRAP_METADATA = runtimeBinding({
+      snapshotRoot: fixture.snapshotRoot,
+      resolutionRoot: fixture.resolutionRoot,
+      packages: { "fixture-runtime": "1.2.3" }
+    });
+    let delegatedParent = null;
+    const result = await resolve("fixture-runtime", { parentURL: pathToFileURL(fixture.importer).href },
+      async (_specifier, context) => {
+        delegatedParent = context.parentURL;
+        return { url: pathToFileURL(fixture.exported).href, format: "module" };
+      });
+    assert.equal(result.url, pathToFileURL(fixture.exported).href);
+    assert.equal(fs.realpathSync(path.dirname(fileURLToPath(delegatedParent))),
+      fs.realpathSync(path.dirname(fixture.resolutionRoot)));
+  });
+
+  it("rejects undeclared, version-drifted and escaping package exports", async () => {
+    const fixture = resolutionFixture();
+    const parentURL = pathToFileURL(fixture.importer).href;
+    const next = async () => ({ url: pathToFileURL(fixture.exported).href, format: "module" });
+
+    process.env.PIAGENT_BENCHMARK_BOOTSTRAP_METADATA = runtimeBinding({
+      snapshotRoot: fixture.snapshotRoot,
+      resolutionRoot: fixture.resolutionRoot,
+      packages: { "different-runtime": "1.2.3" }
+    });
+    await assert.rejects(() => resolve("fixture-runtime", { parentURL }, next), /package-not-declared:fixture-runtime/);
+
+    process.env.PIAGENT_BENCHMARK_BOOTSTRAP_METADATA = runtimeBinding({
+      snapshotRoot: fixture.snapshotRoot,
+      resolutionRoot: fixture.resolutionRoot,
+      packages: { "fixture-runtime": "9.9.9" }
+    });
+    await assert.rejects(() => resolve("fixture-runtime", { parentURL }, next), /package-identity-mismatch:fixture-runtime/);
+
+    process.env.PIAGENT_BENCHMARK_BOOTSTRAP_METADATA = runtimeBinding({
+      snapshotRoot: fixture.snapshotRoot,
+      resolutionRoot: fixture.resolutionRoot,
+      packages: { "fixture-runtime": "1.2.3" }
+    });
+    const escaped = path.join(fixture.resolutionRoot, "outside.mjs");
+    fs.writeFileSync(escaped, "export {};\n");
+    await assert.rejects(() => resolve("fixture-runtime", { parentURL }, async () => ({
+      url: pathToFileURL(escaped).href, format: "module"
+    })), /package-export-escaped:fixture-runtime/);
+  });
+
+  it("rejects tampered bootstrap dependency metadata before resolution", async () => {
+    const fixture = resolutionFixture();
+    const encoded = runtimeBinding({ snapshotRoot: fixture.snapshotRoot, resolutionRoot: fixture.resolutionRoot,
+      packages: { "fixture-runtime": "1.2.3" } });
+    const metadata = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
+    metadata.runtimeDependencies.packages["fixture-runtime"] = "1.2.4";
+    process.env.PIAGENT_BENCHMARK_BOOTSTRAP_METADATA = Buffer.from(JSON.stringify(metadata), "utf8").toString("base64url");
+    await assert.rejects(() => resolve("fixture-runtime", { parentURL: pathToFileURL(fixture.importer).href }, async () => ({
+      url: pathToFileURL(fixture.exported).href, format: "module"
+    })), /metadata-digest-mismatch/);
+  });
+});
 
 describe("pinned TypeScript transform", () => {
   // The bug this file was written for. `pinnedTransformRoot` answers one

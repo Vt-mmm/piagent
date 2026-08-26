@@ -1,8 +1,15 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { stageContextDelivery } from "../context/context-delivery.ts";
 import { semanticCompactionCancelled } from "../session/system-prompt.ts";
+import { WORKFLOW_IDS, resolveWorkflowId, type WorkflowId } from "../workflows/webui-workflow.ts";
 
 type ExtensionContext = any;
+const WORKFLOW_USAGE = WORKFLOW_IDS.join("|");
+
+export function parsePreflightWorkflow(raw: string): WorkflowId {
+  const first = String(raw ?? "").trim().split(/\s+/)[0];
+  return resolveWorkflowId(first) ?? "task";
+}
 
 export function registerContextCommands(pi: ExtensionAPI, deps: Record<string, any>): any {
   const {
@@ -230,10 +237,6 @@ export function registerContextCommands(pi: ExtensionAPI, deps: Record<string, a
     ].join("\n"), { ...report, taskEfficiency });
   }
 
-  function parsePreflightWorkflow(raw: string): string {
-    return raw.match(/\b(?:scout|be-to-fe|review|plan|platform-improve|task)\b/i)?.[0]?.toLowerCase() ?? "task";
-  }
-
   function compactCurrentSession(ctx: ExtensionContext): void {
     const sessionId = ctx.sessionManager.getSessionId();
     const instructions = semanticCompactionInstructions(ctx.cwd, sessionId);
@@ -328,8 +331,8 @@ export function registerContextCommands(pi: ExtensionAPI, deps: Record<string, a
         "pack: /context pack <task or symbol>",
         "impact: /context impact [changed files]",
         "efficiency: /context efficiency",
-        "preflight: /context preflight [task|scout|be-to-fe|review|plan]",
-        "compact: /context compact [task|scout|be-to-fe]",
+        `preflight: /context preflight [${WORKFLOW_USAGE}]`,
+        `compact: /context compact [${WORKFLOW_USAGE}]`,
         "legacy: /piagent-context | /context-index | /task-preflight"
       ].join("\n"));
       return;
@@ -380,8 +383,8 @@ export function registerContextCommands(pi: ExtensionAPI, deps: Record<string, a
         "pack: /context pack <task or symbol>",
         "impact: /context impact [changed files]",
         "efficiency: /context efficiency",
-        "preflight: /context preflight [task|scout|be-to-fe|review|plan]",
-        "compact: /context compact [task|scout|be-to-fe]",
+        `preflight: /context preflight [${WORKFLOW_USAGE}]`,
+        `compact: /context compact [${WORKFLOW_USAGE}]`,
         "legacy: /piagent-context | /context-index | /task-preflight"
       ].join("\n"));
       return;

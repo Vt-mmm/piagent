@@ -31,6 +31,20 @@ import type { ResumeState } from "../recovery/resume-state.ts";
 
 type SessionTaskReference = { taskId?: string; taskRunId?: string };
 
+type SessionStartIdentity = { cwd: string; sessionId: string };
+
+function sessionContextMatches(ctx: ExtensionContext, identity: SessionStartIdentity): boolean {
+  try {
+    return ctx.cwd === identity.cwd && ctx.sessionManager.getSessionId() === identity.sessionId;
+  } catch {
+    // Pi invalidates every session-bound ctx getter after a replacement or
+    // reload. A stale startup hook belongs to the outgoing runtime; the new
+    // runtime receives its own session_start event and must be the only one to
+    // publish startup telemetry or bind post-start surfaces.
+    return false;
+  }
+}
+
 type SessionStartHookDependencies = {
   state: RuntimeSessionState;
   loadProfile: (ctx: ExtensionContext) => ProjectProfile;
@@ -66,6 +80,7 @@ export function registerSessionStartHook(pi: ExtensionAPI, dependencies: Session
     if (!hasOperatorSessionName(operatorSessionName)) pi.setSessionName(`pi:${name}`);
 
     const sessionId = ctx.sessionManager.getSessionId();
+    const sessionIdentity = { cwd: ctx.cwd, sessionId };
     const sessionName = currentSessionName(ctx);
     const taskReference = dependencies.taskReference(ctx);
     const activeTaskRunId = readSessionTaskBinding(ctx.cwd, sessionId)?.activeTaskRunId ?? taskReference?.taskRunId;
@@ -283,7 +298,7 @@ export function registerSessionStartHook(pi: ExtensionAPI, dependencies: Session
     const permissionProfile = dependencies.permissionProfile(ctx, profile);
     const executionBackend = resolveExecutionBackend();
     const contextHint = preflight.recommendation === "fresh-session"
-      ? " Context is high; use /fresh task or /fresh scout for new work."
+      ? " Context is high; use /fresh <workflow> for new work (/fresh help lists every workflow)."
       : preflight.recommendation === "compact"
         ? " Context is warm; run /task-preflight before large work."
         : "";
@@ -308,6 +323,11 @@ export function registerSessionStartHook(pi: ExtensionAPI, dependencies: Session
     if (updateNotice) ctx.ui.notify(updateNotice, "info");
 
     let engineStatus: unknown;
+    // Capture ExtensionAPI state before the first await. Pi invalidates the
+    // captured `pi` object as soon as a concurrent session replacement/reload
+    // wins; consulting it after context-index I/O would then surface a noisy
+    // extension failure even though the replacement session is healthy.
+    const activeToolCount = pi.getActiveTools().length;
     try {
       engineStatus = await contextIndexV2Status(ctx.cwd, {
         excludePatterns: dependencies.contextExcludePatterns(profile)
@@ -315,22 +335,34 @@ export function registerSessionStartHook(pi: ExtensionAPI, dependencies: Session
     } catch (error) {
       engineStatus = { exists: false, error: error instanceof Error ? error.message : String(error) };
     }
-    dependencies.telemetry(ctx, {
-      event: "session_start",
-      // Benchmark and efficiency projections must be able to distinguish a
-      // genuine zero-recovery session from telemetry produced before this
-      // receipt/result protocol existed.
-      editRecoveryContextTelemetryVersion: 1,
-      activeTools: pi.getActiveTools().length,
-      index: engineStatus,
-      taskMigration: migration,
-      taskId: resumedTask?.taskId,
-      taskRunId: resumedTask?.taskRunId,
-      captureRetention,
-      taskJournalRetention,
-      taskRecovery,
-      executionBackend
-    });
-    await dependencies.afterStart?.(ctx);
+    if (!sessionContextMatches(ctx, sessionIdentity)) return;
+    try {
+      dependencies.telemetry(ctx, {
+        event: "session_start",
+        // Benchmark and efficiency projections must be able to distinguish a
+        // genuine zero-recovery session from telemetry produced before this
+        // receipt/result protocol existed.
+        editRecoveryContextTelemetryVersion: 1,
+        activeTools: activeToolCount,
+        index: engineStatus,
+        taskMigration: migration,
+        taskId: resumedTask?.taskId,
+        taskRunId: resumedTask?.taskRunId,
+        captureRetention,
+        taskJournalRetention,
+        taskRecovery,
+        executionBackend
+      });
+    } catch (error) {
+      if (!sessionContextMatches(ctx, sessionIdentity)) return;
+      throw error;
+    }
+    if (!sessionContextMatches(ctx, sessionIdentity)) return;
+    try {
+      await dependencies.afterStart?.(ctx);
+    } catch (error) {
+      if (!sessionContextMatches(ctx, sessionIdentity)) return;
+      throw error;
+    }
   });
 }

@@ -361,12 +361,33 @@ describe("protected path extraction from shell", () => {
   });
 
   it("distinguishes filesystem-writing redirects from reads, heredocs, and descriptor duplication", () => {
-    for (const command of ["printf x > out.txt", "printf x >>out.txt", "exec <> state.db", "echo x >& output.txt"]) {
+    for (const command of [
+      "printf x > out.txt", "printf x >>out.txt", "exec <> state.db", "echo x >& output.txt",
+      "printf x >/dev/null 2> errors.log", "printf x >${SINK:-/dev/null}",
+      String.raw`printf x > \\dev\\null`, String.raw`printf x > /dev\\null`
+    ]) {
       assert.equal(shellHasFileWriteRedirection(command), true, command);
     }
-    for (const command of ["cat < input.txt", "cat <<EOF", "cat <<< text", "echo x >&2", "echo x 2>&1", "printf x > {a,b}"]) {
+    for (const command of [
+      "cat < input.txt", "cat <<EOF", "cat <<< text", "echo x >&2", "echo x 2>&1", "printf x > {a,b}",
+      "printf x >/dev/null", "rg -n auth src 2>/dev/null", "printf x >& /dev/null", "printf x >/dev/null 2>&1"
+    ]) {
       assert.equal(shellHasFileWriteRedirection(command), false, command);
     }
+  });
+
+  it("omits only the exact OS null device from static shell write targets", () => {
+    assert.deepEqual(extractShellWritePathCandidates("printf x >/dev/null"), []);
+    assert.deepEqual(extractShellWritePathCandidates("printf x >& /dev/null"), []);
+    assert.deepEqual(extractShellWritePathCandidates("printf x >/dev/null 2> errors.log"), ["errors.log"]);
+    assert.deepEqual(extractShellWritePathCandidates("printf x >& errors.log"), ["errors.log"]);
+    assert.deepEqual(
+      extractShellWritePathCandidates("SINK=/dev/null; printf x >$SINK"),
+      ["/dev/null"],
+      "an expansion remains fail closed even when its current assignment resembles the null device"
+    );
+    assert.deepEqual(extractShellWritePathCandidates("printf x > dev/null"), ["dev/null"]);
+    assert.deepEqual(extractShellWritePathCandidates(String.raw`printf x > \\dev\\null`), ["/dev/null"]);
   });
 
   // A redirection can precede the command it applies to. Reading it as the

@@ -10,12 +10,14 @@ import { GatewayEventStore } from "./gateway-events.ts";
 import { GatewaySessionStream } from "./gateway-session-stream.ts";
 import { executePermissionCommand, executeRuntimeCommand } from "./runtime-session-controls.ts";
 import { configureSessionOptions, effectiveModelRef, effectiveThinkingLevel, type EffectiveSessionOptions } from "./session-effective-options.ts";
-import { waitForOperationStart } from "./session-operation-start.ts";
+import { launchSessionPrompt, type LaunchedSessionPrompt, type SessionSendResult } from "./session-prompt-dispatch.ts";
+import { WEBUI_MESSAGE_CORRELATION_ENTRY_TYPE } from "../shared/message-correlation.ts";
 import { armSessionOperationWatchdog, bestEffortUnsubscribe, boundedResult, sessionOperationDeadlinePolicy, SessionOperationWatchdog, terminateWatchedSessionOperation,
   type SessionOperationDeadlinePolicy, type SessionOperationWatchdogOptions } from "./session-operation-watchdog.ts";
 import { createProductionRuntimeFactory, type RuntimeFactory, type RuntimeHandle } from "./session-runtime-factory.ts";
 const MAX_WARM_RUNTIMES = 10;
 type ActiveRuntime = { runtime: RuntimeHandle; lease: SessionLeaseSnapshot; info: PiSessionInfo; operationRef: string | null;
+  messageRequestId: string | null;
   stream: GatewaySessionStream | null; unsubscribe: (() => void) | null; completion: Promise<void> | null; settling: boolean; approvalWaiting: boolean;
   unbindApproval: (() => void) | null; unsubscribeApproval: (() => void) | null; sessionManager: any | null;
   watchdog: SessionOperationWatchdog | null; lastSessionRevision: string | null };
@@ -24,7 +26,7 @@ type RuntimeCommandResult = Awaited<ReturnType<typeof executeRuntimeCommand>>;
 export type { EffectiveSessionOptions } from "./session-effective-options.ts";
 export type SessionCreateResult = { sessionRef: string; effectiveOptions: EffectiveSessionOptions };
 export type CurrentOperationProjection = { operationRef: string; state: "running" | "waiting-approval" | "settling";
-  abortable: boolean };
+  abortable: boolean; messageRequestId?: string };
 export class SessionRuntimeSupervisor {
   readonly #gatewayInstanceRef: string;
   readonly #key: Buffer;
@@ -144,7 +146,8 @@ export class SessionRuntimeSupervisor {
         await runtime.dispose().catch(() => undefined);
         throw new Error("session-owner-continuity-lost");
       }
-      const active: ActiveRuntime = { runtime, lease: current, info, operationRef: null, stream: null, unsubscribe: null, completion: null,
+      const active: ActiveRuntime = { runtime, lease: current, info, operationRef: null, messageRequestId: null,
+        stream: null, unsubscribe: null, completion: null,
         settling: false, approvalWaiting: false, unbindApproval: null, unsubscribeApproval: null,
         sessionManager: sessionManager ?? runtime.session?.sessionManager ?? null, watchdog: null, lastSessionRevision: null };
       this.#active.set(sessionRef, active);
@@ -191,7 +194,7 @@ export class SessionRuntimeSupervisor {
     if (!active?.operationRef) return null;
     return { operationRef: active.operationRef,
       state: active.settling ? "settling" : active.approvalWaiting ? "waiting-approval" : "running",
-      abortable: !active.settling };
+      abortable: !active.settling, ...(active.messageRequestId ? { messageRequestId: active.messageRequestId } : {}) };
   }
   currentOperations(): Array<CurrentOperationProjection & { sessionRef: string }> {
     const result: Array<CurrentOperationProjection & { sessionRef: string }> = [];
@@ -236,8 +239,8 @@ export class SessionRuntimeSupervisor {
     };
   }
   async send(sessionRef: string, payload: { delivery: "new-operation" | "follow-up" | "steer"; message: string;
-    expectedOperationRef: string | null; images?: unknown[] }, sessionRevision: string):
-  Promise<{ resultCode: "started" | "queued" | "steered"; operationRef: string }> {
+    expectedOperationRef: string | null; messageRequestId?: string; images?: unknown[] }, sessionRevision: string, options: { deferDispatch?: boolean } = {}):
+  Promise<SessionSendResult> {
     await this.acquire(sessionRef);
     const active = this.#active.get(sessionRef), session = active?.runtime.session;
     if (!active || !session) throw new Error("session-runtime-unavailable");
@@ -249,33 +252,42 @@ export class SessionRuntimeSupervisor {
     }
     if (payload.expectedOperationRef !== null || active.operationRef || active.settling || !session.isIdle) throw new Error("session-operation-conflict");
     const operationRef = `operation_${randomBytes(24).toString("base64url")}`;
-    const stream = new GatewaySessionStream({ sessionRef, operationRef, events: this.#events });
+    const messageRequestId = payload.messageRequestId ?? null;
+    const stream = new GatewaySessionStream({ sessionRef, operationRef, messageRequestId, events: this.#events });
     const watchdog = new SessionOperationWatchdog(this.#operationDeadlinePolicy);
-    active.operationRef = operationRef; active.stream = stream; active.watchdog = watchdog; active.lastSessionRevision = sessionRevision;
+    active.operationRef = operationRef; active.messageRequestId = messageRequestId;
+    active.stream = stream; active.watchdog = watchdog; active.lastSessionRevision = sessionRevision;
     try {
       active.unsubscribe = armSessionOperationWatchdog({ watchdog, subscribe: (listener) => session.subscribe(listener), retrySession: session,
         observe: (event) => stream.observe(event), expire: (reasonCode) => { void this.#terminateOperation(sessionRef,
           operationRef, "error", reasonCode, reasonCode, true).catch(() => undefined); } });
     } catch (error) { stream.markError("session-operation-start-failed");
       await this.#quarantineRuntime(sessionRef, operationRef, active, stream, "session-operation-start-failed"); throw error; }
-    this.#events.publish("runtime.changed", { sessionRef, sessionRevision, liveState: "running", operationRef, reasonCode: null });
-    const created = this.#created.get(sessionRef);
-    if (created && created.firstMessage === "(no messages)") {
-      created.firstMessage = payload.message; created.allMessagesText = payload.message; created.messageCount = 1; created.modified = new Date();
-    }
-    let prompt: Promise<void>;
-    try { prompt = session.prompt(payload.message, payload.images?.length ? { images: payload.images } : undefined); }
-    catch (error) { stream.markError(); await this.#finishOperation(sessionRef, operationRef, stream); throw error; }
-    const started = waitForOperationStart(stream, prompt);
-    // `agent_settled` is canonical even when a workflow's outer prompt resolves first.
-    const lifecycle = started.then(async (mode) => {
-      if (mode === "deferred") await stream.settled();
-      else await Promise.race([stream.settled(), prompt]);
-    });
-    active.completion = lifecycle.then(() => this.#finishOperation(sessionRef, operationRef, stream),
-      () => { stream.markError(); return this.#finishOperation(sessionRef, operationRef, stream); });
-    try { await started; }
-    catch (error) { await active.completion; throw error; }
+    let launched: LaunchedSessionPrompt | null = null, cancelled = false;
+    const dispatch = () => {
+      if (launched || cancelled) return;
+      this.#events.publish("runtime.changed", { sessionRef, sessionRevision, liveState: "running", operationRef,
+        ...(messageRequestId ? { messageRequestId } : {}), reasonCode: null });
+      const created = this.#created.get(sessionRef); if (created && created.firstMessage === "(no messages)") { created.firstMessage = payload.message;
+        created.allMessagesText = payload.message; created.messageCount = 1; created.modified = new Date(); }
+      launched = launchSessionPrompt({ stream, canInvoke: () => !cancelled && this.#active.get(sessionRef) === active
+        && active.operationRef === operationRef, invoke: () => {
+          const manager = active.sessionManager ?? session.sessionManager;
+          if (messageRequestId && typeof manager?.appendCustomEntry === "function") {
+            manager.appendCustomEntry(WEBUI_MESSAGE_CORRELATION_ENTRY_TYPE,
+              { schemaVersion: 1, messageRequestId, operationRef });
+          }
+          return session.prompt(payload.message, payload.images?.length ? { images: payload.images } : undefined);
+        }, finish: () => this.#finishOperation(sessionRef, operationRef, stream) }); active.completion = launched.completion;
+    };
+    const cancel = () => {
+      if (launched || cancelled || this.#active.get(sessionRef) !== active || active.operationRef !== operationRef) return false;
+      cancelled = true; bestEffortUnsubscribe(active.unsubscribe); active.unsubscribe = null; watchdog.close();
+      active.operationRef = null; active.messageRequestId = null;
+      active.stream = null; active.watchdog = null; active.settling = false; return true;
+    };
+    if (options.deferDispatch) return { resultCode: "started", operationRef, dispatch, cancel };
+    dispatch(); try { await launched!.started; } catch (error) { await launched!.completion; throw error; }
     return { resultCode: "started", operationRef };
   }
   async abort(sessionRef: string, operationRef: string, clearQueued: boolean): Promise<void> {
@@ -301,13 +313,15 @@ export class SessionRuntimeSupervisor {
     stream: GatewaySessionStream, reasonCode: string): Promise<void> {
     if (this.#active.get(sessionRef) !== active) return;
     bestEffortUnsubscribe(active.unsubscribe); active.unsubscribe = null; active.watchdog?.close(); active.watchdog = null;
-    if (active.operationRef === operationRef) { active.operationRef = null; stream.complete(null); }
+    const messageRequestId = active.messageRequestId;
+    if (active.operationRef === operationRef) { active.operationRef = null; active.messageRequestId = null; stream.complete(null); }
     active.stream = null; active.completion = null; active.settling = false; active.approvalWaiting = false;
     this.#active.delete(sessionRef); bestEffortUnsubscribe(active.unsubscribeApproval); bestEffortUnsubscribe(active.unbindApproval);
     try { this.#leases.requireRecovery(sessionRef, active.lease.ownerEpoch!, this.#gatewayInstanceRef,
       active.lease.runtimeInstanceRef!, reasonCode); } catch { /* continuity remains fail closed */ }
     if (active.lastSessionRevision) this.#events.publish("runtime.changed", { sessionRef,
-      sessionRevision: active.lastSessionRevision, liveState: "uncertain", operationRef: null, reasonCode });
+      sessionRevision: active.lastSessionRevision, liveState: "uncertain", operationRef: null,
+      ...(messageRequestId ? { messageRequestId } : {}), reasonCode });
     await boundedResult(Promise.resolve().then(() => active.runtime.dispose()), this.#operationDeadlinePolicy.terminationTimeoutMs);
   }
   #bindApproval(sessionRef: string, active: ActiveRuntime): void {
@@ -347,7 +361,8 @@ export class SessionRuntimeSupervisor {
       active.lastSessionRevision = projection.sessionRevision;
       this.#events.publish("runtime.changed", { sessionRef, sessionRevision: projection.sessionRevision,
         liveState: active.approvalWaiting ? "waiting-approval" : active.operationRef ? "running" : projection.liveState,
-        operationRef: active.operationRef, reasonCode: `approval-${event.kind}` });
+        operationRef: active.operationRef, ...(active.messageRequestId ? { messageRequestId: active.messageRequestId } : {}),
+        reasonCode: `approval-${event.kind}` });
     } catch { /* approval truth remains available through the canonical inspection route */ }
   }
   async setModel(sessionRef: string, modelRef: string): Promise<"model-changed" | "no-change"> {
@@ -456,7 +471,7 @@ export class SessionRuntimeSupervisor {
   async #finishOperation(sessionRef: string, operationRef: string, stream: GatewaySessionStream): Promise<void> {
     const active = this.#active.get(sessionRef);
     if (!active || active.operationRef !== operationRef) return;
-    const restartRequired = stream.runtimeRestartRequired; let projection: Projection | null = null;
+    const restartRequired = stream.runtimeRestartRequired, messageRequestId = active.messageRequestId; let projection: Projection | null = null;
     bestEffortUnsubscribe(active.unsubscribe); active.unsubscribe = null; active.watchdog?.close(); active.settling = true;
     try {
       if (this.#readProjection) {
@@ -468,13 +483,13 @@ export class SessionRuntimeSupervisor {
     if (this.#active.get(sessionRef) !== active || active.operationRef !== operationRef) return;
     if (this.ownership(sessionRef).state !== "gateway-owned") { stream.markError("session-owner-continuity-lost"); await this.#quarantineRuntime(sessionRef, operationRef, active, stream, "session-owner-continuity-lost"); return; }
     // The pre-clear projection is stale; derive post-settlement liveness from exact ownership.
-    active.operationRef = null; const settledLiveState = this.ownership(sessionRef).liveState;
+    active.operationRef = null; active.messageRequestId = null; const settledLiveState = this.ownership(sessionRef).liveState;
     if (projection) active.lastSessionRevision = projection.sessionRevision;
     const taskOutcome = activeSessionTask(active.info.cwd, active.info.id)?.trace?.outcome ?? null;
     stream.complete(projection?.sessionRevision ?? null, taskOutcome);
     if (projection) this.#events.publish("runtime.changed", { sessionRef, sessionRevision: projection.sessionRevision,
       liveState: restartRequired ? "uncertain" : settledLiveState, operationRef: null,
-      reasonCode: restartRequired ? "runtime-restart-required" : null });
+      ...(messageRequestId ? { messageRequestId } : {}), reasonCode: restartRequired ? "runtime-restart-required" : null });
     if (this.#active.get(sessionRef) === active) { active.completion = null;
       if (!active.watchdog?.terminating) { active.stream = null; active.watchdog = null; active.settling = false; } }
     if (!restartRequired || !projection || this.#active.get(sessionRef) !== active) return;
@@ -483,10 +498,12 @@ export class SessionRuntimeSupervisor {
       await this.restart(sessionRef); restartAuthority = this.#active.get(sessionRef) ?? null;
       const projection = await this.#readProjection?.(sessionRef);
       if (!projection || !restartAuthority || this.#active.get(sessionRef) !== restartAuthority || this.ownership(sessionRef).state !== "gateway-owned") return;
-      this.#events.publish("runtime.changed", { sessionRef, sessionRevision: projection.sessionRevision, liveState: projection.liveState, operationRef: null, reasonCode: null });
+      this.#events.publish("runtime.changed", { sessionRef, sessionRevision: projection.sessionRevision, liveState: projection.liveState,
+        operationRef: null, ...(messageRequestId ? { messageRequestId } : {}), reasonCode: null });
     } catch {
       if (!restartAuthority || this.#active.get(sessionRef) !== restartAuthority || this.ownership(sessionRef).state !== "gateway-owned") return;
-      this.#events.publish("runtime.changed", { sessionRef, sessionRevision: projection.sessionRevision, liveState: "uncertain", operationRef: null, reasonCode: "runtime-restart-failed" });
+      this.#events.publish("runtime.changed", { sessionRef, sessionRevision: projection.sessionRevision, liveState: "uncertain",
+        operationRef: null, ...(messageRequestId ? { messageRequestId } : {}), reasonCode: "runtime-restart-failed" });
     }
   }
   async close(): Promise<void> {

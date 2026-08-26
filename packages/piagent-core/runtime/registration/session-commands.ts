@@ -1,7 +1,9 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { WORKFLOW_IDS, resolveWorkflowId } from "../workflows/webui-workflow.ts";
 
 type ExtensionContext = any;
 type TaskContract = any;
+const WORKFLOW_USAGE = WORKFLOW_IDS.join("|");
 
 export function registerSessionCommands(pi: ExtensionAPI, deps: Record<string, any>): any {
   const {
@@ -89,8 +91,8 @@ export function registerSessionCommands(pi: ExtensionAPI, deps: Record<string, a
         "namespace: /usage",
         "live: /usage live",
         "history: /usage history",
-        "preflight: /usage preflight [task|scout|be-to-fe]",
-        "compact: /usage compact [task|scout|be-to-fe]",
+        `preflight: /usage preflight [${WORKFLOW_USAGE}]`,
+        `compact: /usage compact [${WORKFLOW_USAGE}]`,
         "logs: /usage logs",
         "efficiency: /usage efficiency",
         "native exact session: /session",
@@ -186,8 +188,7 @@ export function registerSessionCommands(pi: ExtensionAPI, deps: Record<string, a
         { value: "current", label: "Current session", description: "Name, id, file, model", recommended: true },
         { value: "name", label: "Set name", description: "Use Pi native /name <task name>" },
         { value: "resume", label: "Resume help", description: "Commands for continuing old sessions" },
-        { value: "fresh-task", label: "Fresh task", description: "Use /fresh task <request>" },
-        { value: "fresh-scout", label: "Fresh scout", description: "Use /fresh scout <request>" },
+        { value: "fresh", label: "Fresh workflow", description: "Use /fresh <workflow> <request>" },
         { value: "usage", label: "Usage", description: "Current context/session usage" },
         { value: "help", label: "Help", description: "Show typed forms" }
       ], "current");
@@ -207,7 +208,7 @@ export function registerSessionCommands(pi: ExtensionAPI, deps: Record<string, a
         "session helpers:",
         "current: /usage live or Pi native /session",
         "name: Pi native /name <task/session name>",
-        "fresh: /fresh task|scout|be-to-fe <request>",
+        `fresh: /fresh ${WORKFLOW_USAGE} <request>`,
         "resume: Pi native /resume or /session",
         "legacy: /piagent-session | /setname | /fresh-task | /fresh-scout | /fresh-be-to-fe"
       ].join("\n"));
@@ -231,8 +232,9 @@ export function registerSessionCommands(pi: ExtensionAPI, deps: Record<string, a
     }
     if (["fresh", "new"].includes(action)) {
       const next = commandArgs(rest);
-      const workflow = next.action === "be-to-fe" ? "be-to-fe" : next.action === "scout" ? "scout" : "task";
-      await startFreshWorkflow(workflow, next.rest, ctx);
+      const workflow = resolveWorkflowId(next.action);
+      const request = workflow ? next.rest : [next.action, next.rest].filter(Boolean).join(" ");
+      await startFreshWorkflow(workflow ?? "task", request, ctx);
       return;
     }
     if (["fresh-task", "task"].includes(action)) {

@@ -174,6 +174,7 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
 
   pi.on("message_end", async (event, ctx) => {
     if (!event.message || event.message.role !== "assistant" || assistantMessageHasToolCall(event.message)) return;
+    if (state.currentTurn(ctx)?.lightweightNonAuthorizingChange) return;
     let task = flushObservedTaskContext(
       pi,
       ctx,
@@ -494,7 +495,6 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
         recovery: finalRecovery
       }
     });
-    persistHandoff(ctx, task, gate, currentDigests, finalRecovery);
-    return { message: { ...event.message, content } };
+    persistHandoff(ctx, task, gate, currentDigests, finalRecovery); return { message: { ...event.message, content } };
   });
 }

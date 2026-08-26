@@ -14,14 +14,8 @@ export function codexThinkingEffort(thinking) {
   return thinking;
 }
 
-export function codexExecArgs({ workspace, options, disabledFeatures = [] }) {
+function controlledArgs(options, disabledFeatures) {
   const args = [
-    "exec",
-    "--json",
-    "--ephemeral",
-    "--color", "never",
-    "-C", workspace,
-    "-s", "workspace-write",
     "-m", codexModelName(options.model),
     "-c", `model_reasoning_effort=${JSON.stringify(codexThinkingEffort(options.thinking))}`
   ];
@@ -29,6 +23,33 @@ export function codexExecArgs({ workspace, options, disabledFeatures = [] }) {
     args.push("--ignore-user-config", "--ignore-rules");
     for (const feature of disabledFeatures) args.push("--disable", feature);
   }
+  return args;
+}
+
+export function codexExecArgs({ workspace, options, disabledFeatures = [], persistent = false }) {
+  const args = [
+    "exec",
+    "--json",
+    ...(persistent ? [] : ["--ephemeral"]),
+    "--color", "never",
+    "-C", workspace,
+    "-s", "workspace-write",
+    ...controlledArgs(options, disabledFeatures)
+  ];
   args.push("-");
   return args;
+}
+
+export function codexExecResumeArgs({ threadId, options, disabledFeatures = [] }) {
+  if (typeof threadId !== "string" || !/^[A-Za-z0-9._:-]{1,200}$/.test(threadId)) {
+    throw Object.assign(new Error("Codex CLI journey resume requires a valid thread id"), { exitCode: 1 });
+  }
+  return [
+    "exec",
+    "resume",
+    "--json",
+    ...controlledArgs(options, disabledFeatures),
+    threadId,
+    "-"
+  ];
 }

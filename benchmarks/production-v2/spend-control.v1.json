@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "production-v2",
+  "purpose": "Bound provider spend for the 108-session production user-journey comparison before a claim is allowed.",
+  "rootSeed": "production-v2-user-journey-v1-789",
+  "execution": {
+    "surfaces": ["piagent", "codex-cli"],
+    "model": "openai-codex/gpt-5.6-luna",
+    "thinking": "medium",
+    "repeats": 2,
+    "infrastructureRetries": 0,
+    "stopAfterFailedPair": true
+  },
+  "stages": [
+    { "id": "S0", "cumulativeSessions": 0, "newSessions": 0, "mode": "preflight-only", "claimEligible": false },
+    { "id": "S12", "cumulativeSessions": 12, "newSessions": 12, "mode": "execute-and-pause", "claimEligible": false },
+    { "id": "S18", "cumulativeSessions": 18, "newSessions": 6, "mode": "resume-and-pause", "claimEligible": false },
+    { "id": "S54", "cumulativeSessions": 54, "newSessions": 36, "mode": "resume-and-pause", "claimEligible": false },
+    { "id": "S108", "cumulativeSessions": 108, "newSessions": 54, "mode": "resume-and-finalize", "claimEligible": true }
+  ],
+  "earlyDetection": {
+    "smokeDiversityStageId": "S12",
+    "fullFamilyCoverageStageId": "S18",
+    "fullCategoryCoverageStageId": "S54",
+    "expectedFirstRepeatScenarioIds": [
+      "config-precedence",
+      "protected-env-refusal",
+      "expiry-boundary",
+      "chunked-record-boundary",
+      "pagination-boundary",
+      "bounded-retry"
+    ],
+    "firstFullFamilyCoverageScenarioIds": [
+      "config-precedence",
+      "protected-env-refusal",
+      "expiry-boundary",
+      "chunked-record-boundary",
+      "pagination-boundary",
+      "bounded-retry",
+      "idempotent-replay-conflict",
+      "workflow-switch-same-session",
+      "tenant-cache-isolation"
+    ],
+    "requiredCategoryCoverage": ["backend", "frontend", "data", "platform", "reliability", "security", "fullstack"],
+    "requiredLifecycleCoverage": ["steady-state", "cold-start"],
+    "requiredDifficultyCoverage": ["small", "medium", "large"],
+    "requiredVariantRoleCoverage": ["boundary", "interaction", "adversarial-recovery"]
+  },
+  "productionGuards": {
+    "subagents": {
+      "required": true,
+      "maximumSessionsPerAttempt": 1,
+      "maximumTrafficShare": 0.05,
+      "requireExactAllAttemptEvidence": true,
+      "requireExplainedSessionCount": true
+    },
+    "partialFreshSpend": {
+      "requiredFromCumulativeSessions": 12,
+      "maximumPooledFreshRatio": 1.1,
+      "maximumObservedFamilyFreshRatio": 1.25,
+      "includeExactFailedAttempts": true
+    },
+    "providerFreeEvidence": {
+      "requiredBeforeFirstPaidSession": true,
+      "requiredLaneIds": ["runtime-conformance-v1", "long-horizon-v1", "webui-parity-v1"],
+      "requireCleanCommitAndTreeBinding": true,
+      "requireProductionConfigurationBinding": true,
+      "requireRunnerAndLaneConfigurationDigests": true
+    }
+  },
+  "enforcement": {
+    "runnerConsumesThisArtifact": true,
+    "runnerBindsFrozenSeedAndExecution": true,
+    "runnerWritesAtomicPrivateStageDiagnostic": true,
+    "runnerBlocksProductionResumeWhenStageDiagnosticFails": true,
+    "durableStageStateSurvivesMissingPauseMarker": true,
+    "completeLedgerFinalizesWithoutProviderPreflight": true,
+    "stageDiagnosticArtifact": "stage-diagnostic.json",
+    "automaticTerminalOrAbortRules": [
+      "dirty-release-source-before-auth-tool-or-provider-preflight",
+      "piagent-unresolved-or-outcome-score-at-or-below-floor-via-stop-after-failed-pair",
+      "infrastructure-error-or-unknown-provider-attempt-usage-via-runner-abort",
+      "candidate-provenance-drift-via-execution-guard"
+    ],
+    "stageAdvanceRules": [
+      "clean-release-source",
+      "no-baseline-pass-piagent-fail",
+      "no-observed-paired-grade-regression",
+      "all-observed-piagent-outcomes-remain-above-the-release-floor",
+      "no-model-thinking-or-provider-wire-parity-drift",
+      "complete-privacy-safe-causal-context-receipt-with-closed-session-lifecycle",
+      "source-bound-provider-free-runtime-long-horizon-and-webui-parity-receipts",
+      "exact-subagent-budget-at-most-one-session-per-attempt-and-five-percent-traffic",
+      "partial-stage-pooled-fresh-ratio-at-most-1.10-and-every-observed-family-at-most-1.25",
+      "no-accepted-usage-completeness-failure",
+      "no-infrastructure-retry",
+      "no-unknown-provider-attempt-usage"
+    ],
+    "nonBlockingDiagnostics": [
+      "normalized-api-equivalent-text-token-cost",
+      "duration",
+      "host-load"
+    ],
+    "operatorRule": "S12 is a six-pair smoke gate. S18 adds complete nine-family coverage. S54 is the halfway stability gate. Only S108 can decide the 0.60 upper-95 family-level fresh-token claim."
+  },
+  "claimBoundary": "Only the complete S108 ledger may establish the production-v2 fresh-token claim. Earlier stages detect correctness, continuity, accounting, retry, subagent, and catastrophic token regressions only."
+}

@@ -73,7 +73,13 @@ if ! command -v pi >/dev/null 2>&1; then
 fi
 
 if [[ "$PERMISSION_PROFILE" == "read-only" ]]; then
-  exec env PIAGENT_PERMISSION_PROFILE="$PERMISSION_PROFILE" pi "$APPROVE_FLAG" --exclude-tools bash,write,edit "${ARGS[@]}"
+  # Grep, find, and ls are built-in read tools but Pi leaves them disabled by
+  # default. Use an allowlist so a read-only scout can discover paths before
+  # reading them instead of guessing with `read`. Keep this option before the
+  # caller's arguments: an explicit --tools/--exclude-tools/--no-tools choice
+  # remains authoritative for that invocation, while Piagent's guard still
+  # enforces the read-only permission profile independently.
+  exec env PIAGENT_PERMISSION_PROFILE="$PERMISSION_PROFILE" pi "$APPROVE_FLAG" --tools read,grep,find,ls "${ARGS[@]}"
 fi
 
 exec env PIAGENT_PERMISSION_PROFILE="$PERMISSION_PROFILE" pi "$APPROVE_FLAG" "${ARGS[@]}"

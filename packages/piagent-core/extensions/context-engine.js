@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import { resolveWorkflowId, workflowIdFromCommand, workflowOption } from "./workflow-catalog.ts";
 import {
   contextIndexExcludeDigest,
   contextIndexExcludePolicyVersion,
@@ -515,20 +516,24 @@ export function classifyContextTask(prompt) {
   const folded = foldSearchSignal(text);
   const paths = queryPathCandidates(text);
   const terms = tokenizeQuery(text);
-  let workflow = "task";
-  if (/^\/?(?:scout|review|plan|discuss)\b/.test(lower)) workflow = lower.match(/^\/?([a-z-]+)/)?.[1] ?? "task";
-  if (/\b(onboard|profile setup|first-read|cau hinh profile|khoi tao project)\b/.test(folded)) workflow = "onboard";
-  if (/^\/?(?:commit|release|publish|deploy)\b/.test(folded) || /\b(?:pull request|publish|deploy|phat hanh|trien khai)\b/.test(folded)
-    || /\b(?:after|before|create|cut|merge|open|prepare|push|run|ship|tag|version)\b.{0,40}\b(?:commit|pr|release)\b/.test(folded)) workflow = "release";
+  const leadingWorkflow = resolveWorkflowId(lower.match(/^\/?([a-z][a-z-]*)\b/)?.[1]);
+  const workflowId = workflowIdFromCommand(text) ?? leadingWorkflow;
+  const explicitWorkflow = workflowOption(workflowId);
+  let workflow = explicitWorkflow?.contextWorkflow ?? "task";
+  if (!explicitWorkflow && /\b(onboard|profile setup|first-read|cau hinh profile|khoi tao project)\b/.test(folded)) workflow = "onboard";
+  if (!explicitWorkflow && (/^\/?(?:release|publish|deploy)\b/.test(folded) || /\b(?:pull request|publish|deploy|phat hanh|trien khai)\b/.test(folded)
+    || /\b(?:after|before|create|cut|merge|open|prepare|push|run|ship|tag|version)\b.{0,40}\b(?:commit|pr|release)\b/.test(folded))) workflow = "release";
   const usageIntent = /^\/?(?:usage|session)\b/.test(lower)
     || /\b(?:show|check|view|report|current|session|how many)\b.{0,48}\b(?:usage|tokens?|cost|context stats|efficiency)\b/.test(lower)
     || /\b(?:usage|tokens?|cost|context stats|efficiency)\b.{0,48}\b(?:show|check|view|report|current|session)\b/.test(lower)
     || /\b(?:xem|kiem tra|bao cao|hien tai|phien)\b.{0,48}\b(?:usage|token|chi phi|context)\b/.test(folded);
-  if (usageIntent) workflow = "usage";
+  if (!explicitWorkflow && usageIntent) workflow = "usage";
   const highRisk = /\b(auth|authorization|credential|database|deploy|encryption|migration|payment|permission|production|release|secret|security|token|bao mat|phan quyen|xac thuc|du lieu|co so du lieu|thanh toan|ma hoa|trien khai|phat hanh)\b/.test(folded);
   const tiny = text.length < 220 && (paths.length > 0 || /\b(rename|typo|label|copy|one line|small|doi ten|sua chu|nhan|mot dong|nho)\b/.test(folded));
   return {
     workflow,
+    workflowId,
+    changeMode: explicitWorkflow?.changeMode ?? "unknown",
     lane: highRisk ? "high-risk" : tiny ? "tiny" : "normal",
     terms,
     paths,

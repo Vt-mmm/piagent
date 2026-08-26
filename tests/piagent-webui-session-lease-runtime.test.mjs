@@ -152,6 +152,26 @@ describe("Piagent Session Hub owner lease and lazy runtime supervisor", () => {
     }
   });
 
+  it("terminalizes dangling Gateway tool rows before the operation settlement and ignores their late end", () => {
+    const events = new GatewayEventStore(), observed = [];
+    events.subscribe((event) => observed.push(event));
+    const stream = new GatewaySessionStream({ sessionRef: "session_dangling_tool",
+      operationRef: "operation_dangling_tool", events });
+    stream.observe({ type: "tool_execution_start", toolCallId: "raw-dangling", toolName: "read" });
+    stream.observe({ type: "agent_settled" });
+    stream.complete(null);
+    stream.observe({ type: "tool_execution_end", toolCallId: "raw-dangling", toolName: "read", isError: false });
+
+    assert.deepEqual(observed.map((event) => event.kind), ["tool.started", "tool.completed", "operation.settled"]);
+    assert.equal(observed[1].payload.isError, true);
+    assert.equal(observed[1].payload.reasonCode, "operation-settled-before-tool-result");
+    assert.equal(observed.filter((event) => event.kind === "tool.completed").length, 1);
+    for (const event of observed) {
+      const validation = validateFixture(registry, "gateway-protocol-v1", event);
+      assert.equal(validation.valid, true, validation.errors);
+    }
+  });
+
   it("freezes the durable assistant result at agent_settled and ignores post-settlement compaction events", async () => {
     const events = new GatewayEventStore(), observed = [];
     events.subscribe((event) => observed.push(event));

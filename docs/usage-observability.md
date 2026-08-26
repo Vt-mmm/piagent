@@ -278,7 +278,7 @@ Xem `contextUsage.percent`:
 - `< 50%`: bình thường.
 - `50–70%`: bắt đầu tránh đọc file lớn không cần thiết.
 - `70–82%`: chạy `/context compact` trước task dài tiếp theo.
-- `> 82%`: dùng `/fresh task`, `/fresh scout`, hoặc `/fresh be-to-fe` cho work mới.
+- `> 82%`: dùng `/fresh <workflow>` cho work mới; `/fresh help` liệt kê mọi workflow canonical.
 - Sau compaction, `contextUsage.tokens` có thể là `null` cho đến khi có assistant response mới.
 
 Nếu user paste full mandatory-flow boilerplate, platform input guard sẽ collapse về workflow command ngắn. Nếu prompt quá dài thật, platform có thể lưu intake vào `.pi/task-inbox/` local gitignored rồi replay bằng fresh workflow command.

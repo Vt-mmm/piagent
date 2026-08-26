@@ -36,6 +36,7 @@ export type TranscriptItem = {
   role: "user" | "assistant" | "tool-result";
   recordedAt: string;
   agentOperationId: string | null;
+  messageRequestId?: string | null;
   turnIndex: NullableCount;
   content: Content;
   /**

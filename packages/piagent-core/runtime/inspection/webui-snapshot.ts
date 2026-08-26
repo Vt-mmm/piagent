@@ -129,7 +129,7 @@ function reconciledToolResults(events: ActivityInspectorEvent[], evidence: Retur
     const raw = evidence.results.get(call.toolCallId);
     if (!raw) continue;
     const reasonCode = classifyToolFailure(raw.toolName || call.toolName, raw.isError, raw.content, evidence.inputs.get(call.toolCallId));
-    const effectiveError = raw.isError || Boolean(reasonCode && !handledToolFailure(reasonCode));
+    const effectiveError = raw.isError || Boolean(reasonCode && !handledToolFailure(reasonCode, raw.toolName || call.toolName));
     reconciled.push({ activityId: `canonical-result:${call.toolCallId}`, event: "tool_result",
       recordedAt: raw.recordedAt ?? call.recordedAt, sessionId: call.sessionId, taskRunId: call.taskRunId,
       toolCallId: call.toolCallId, toolName: raw.toolName || call.toolName, isError: effectiveError,
@@ -162,29 +162,49 @@ function sourceSummary(document: SourceChangeDocument | null, view: "task" | "wo
   };
 }
 
-function activityProjection(events: ActivityInspectorEvent[], current: CurrentActivity[]) {
+function activityProjection(events: ActivityInspectorEvent[], current: CurrentActivity[], generatedAt: string,
+  operationLiveness?: "idle" | "running" | "unknown") {
   const results = new Map(events.filter((event) => event.event === "tool_result").map((event) => [event.toolCallId, event]));
   const decisions = new Map(events.filter((event) => event.event === "tool_decision").map((event) => [event.toolCallId, event]));
   const recoveries = recoveredToolCalls(events);
+  // Tool-call telemetry is deliberately written before execution. A missing
+  // result therefore cannot remain authoritative forever: compaction, abrupt
+  // host replacement, or an older runtime may have lost the matching result.
+  // A later host lifecycle boundary proves only that the call is no longer
+  // running, not that it passed or failed, so project it as terminal/unknown.
+  let lastLifecycleBoundary = -1;
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    if (!["turn_end", "agent_settled", "session_shutdown"].includes(String(events[index]?.event))) continue;
+    lastLifecycleBoundary = index;
+    break;
+  }
   const calls = events.filter((event) => event.event === "tool_call").slice(-200);
   const projected = calls.map((call) => {
     const result = results.get(call.toolCallId), decision = decisions.get(call.toolCallId);
     const blocked = decision?.decision === "blocked";
-    const handled = Boolean(result && handledToolFailure(result.reasonCode));
+    const handled = Boolean(result && handledToolFailure(result.reasonCode, result.toolName ?? call.toolName));
     const failed = !blocked && !handled && Boolean(result && (result.isError === true || (typeof result.exitCode === "number" && result.exitCode !== 0)));
     const recovery = call.toolCallId ? recoveries.get(call.toolCallId) : undefined;
-    const state = blocked ? "blocked" : !result ? "running" : failed && !recovery ? "failed" : "passed";
+    const lifecycleSettled = !result && !blocked && (operationLiveness === "idle"
+      || lastLifecycleBoundary > events.indexOf(call));
+    const state = blocked ? "blocked" : lifecycleSettled ? "unknown" : !result ? "running" : failed && !recovery ? "failed" : "passed";
     const toolName = display(call.toolName ?? "unknown", 80).replace(/[^A-Za-z0-9._:@~-]/g, "-") || "unknown";
     const rawId = String(call.toolCallId ?? call.activityId ?? `${call.recordedAt}:${toolName}`);
     const command = display(call.command ?? call.targetPath ?? toolName, 65_536);
+    const boundaryAt = lastLifecycleBoundary > events.indexOf(call)
+      ? timestamp(events[lastLifecycleBoundary]?.recordedAt, timestamp(call.recordedAt, generatedAt))
+      : timestamp(events.at(-1)?.recordedAt, timestamp(call.recordedAt, generatedAt));
     return {
       activityRef: token("activity", [rawId, call.recordedAt]), kind: ["bash", "shell", "exec"].includes(toolName) ? "command" : "tool", state,
-      label: display(recovery ? `${toolName} recovered` : handled ? `${toolName} warning` : state === "running" ? `${toolName} running` : `${toolName} ${state}`, 500), preview: command,
+      label: display(recovery ? `${toolName} recovered` : handled ? `${toolName} warning`
+        : state === "unknown" ? `${toolName} ended · result unavailable`
+          : state === "running" ? `${toolName} running` : `${toolName} ${state}`, 500), preview: command,
       toolCallId: token("tool", rawId), toolName, commandDigest: call.command ? `sha256:${hash(call.command)}` : null,
       logRef: null, exitCode: recovery?.exitCode ?? (typeof result?.exitCode === "number" ? result.exitCode : null),
       exitCodeExact: recovery?.exitCodeExact ?? (result?.exitCodeExact === true),
       startedAt: timestamp(call.recordedAt), finishedAt: recovery ? timestamp(recovery.recoveredAt, timestamp(call.recordedAt))
-        : result || blocked ? timestamp(result?.recordedAt ?? decision?.recordedAt, timestamp(call.recordedAt)) : null
+        : result || blocked ? timestamp(result?.recordedAt ?? decision?.recordedAt, timestamp(call.recordedAt))
+          : lifecycleSettled ? boundaryAt : null
     };
   });
   const callIds = new Set(calls.map((call) => String(call.toolCallId ?? "")));
@@ -324,6 +344,7 @@ export async function buildWebUiInspectionProjection(input: {
   eventReplay?: { eventRetentionCount: number; eventRetentionSeconds: number };
   model?: WebUiRuntimeModel;
   thinkingLevel?: unknown;
+  operationLiveness?: "idle" | "running" | "unknown";
 }): Promise<WebUiInspectionProjection> {
   const generatedAt = timestamp(input.generatedAt);
   const identity: WebUiIdentity = { projectRef: webUiProjectRef(input.cwd), runtimeInstanceId: input.runtimeInstanceId ?? WEBUI_RUNTIME_INSTANCE_REF,
@@ -341,12 +362,14 @@ export async function buildWebUiInspectionProjection(input: {
     protectedPaths: input.protectedPaths, events, at: new Date(generatedAt) });
   const sourceChanges = { task: sourceSummary(linked.sourceViews.task, "task"), workingTree: sourceSummary(linked.sourceViews.workingTree, "working-tree"), staged: sourceSummary(linked.sourceViews.staged, "staged") };
   const currentDigest = workingTreeSnapshotUsesCurrentAlgorithm(currentSnapshot) ? workingTreeEvidenceDigest(currentSnapshot) : null;
-  const current = (input.current ?? []).filter((item) => (item.status ?? "running") !== "running" || !canonicalEvidence.results.has(item.toolCallId));
+  const current = (input.current ?? []).filter((item) => ((item.status ?? "running") !== "running" || input.operationLiveness !== "idle")
+    && ((item.status ?? "running") !== "running" || !canonicalEvidence.results.has(item.toolCallId)));
   const runningCurrent = current.find((item) => (item.status ?? "running") === "running");
   const controlState = input.task?.trace.outcome === "pending" ? "active" as const : "terminal" as const;
   const context = contextProjection(input.contextUsage, generatedAt), usageFacts = usage(input.sessionEntries ?? []);
   const eventCursor = input.eventCursor ?? token("event-cursor", events.map((event) => event.activityId ?? [event.event, event.toolCallId, event.recordedAt]));
-  const runtimeRevision = token("runtime-rev", [taskRevision, sourceChanges.workingTree.revision, sourceChanges.staged.revision, eventCursor, current]);
+  const runtimeRevision = token("runtime-rev", [taskRevision, sourceChanges.workingTree.revision, sourceChanges.staged.revision,
+    eventCursor, current, input.operationLiveness ?? null]);
   const approvals = { state: "unknown", pending: [], recent: [], health: { state: "unavailable", reasonCode: "approval-projection-unavailable", message: "Current host approval state is not exposed to the read-only projector" } };
   const task = input.task ? taskProjection(input.task, linked.criteria, controlState) : null;
   const issues = [
@@ -364,8 +387,8 @@ export async function buildWebUiInspectionProjection(input: {
     capabilities: capabilities(identity, generatedAt, input.resyncRequired === true, input.eventReplay),
     session: {
       connectionState: input.resyncRequired ? "resync-required" : "connected", connectionReason: input.resyncRequired ? "event-replay-gap" : null, displayName: input.task?.sessionName ?? null,
-      operation: runningCurrent
-        ? { liveness: "running", operationRef: null, hostPhase: { state: "known", value: "tool", evidence: "derived", reasonCode: null }, startedAt: timestamp(runningCurrent.startedAt, generatedAt), settledAt: null, reasonCode: null }
+      operation: input.operationLiveness === "running" || runningCurrent
+        ? { liveness: "running", operationRef: null, hostPhase: { state: "known", value: runningCurrent ? "tool" : "other", evidence: "derived", reasonCode: null }, startedAt: runningCurrent ? timestamp(runningCurrent.startedAt, generatedAt) : null, settledAt: null, reasonCode: null }
         : { liveness: "idle", operationRef: null, hostPhase: { state: "known", value: "idle", evidence: "derived", reasonCode: null }, startedAt: null, settledAt: null, reasonCode: null },
       controlState: input.task ? controlState : "active", taskOutcome: input.task?.trace.outcome ?? null, approvalState: approvals.state,
       verificationState: linked.verification.state, permissionProfile: { state: "unavailable", value: null, evidence: null, reasonCode: "permission-profile-not-projected" },
@@ -373,7 +396,7 @@ export async function buildWebUiInspectionProjection(input: {
       thinking: thinkingFact(input.thinkingLevel),
       queue: { state: "unavailable", hasPending: null, heldCount: null, revision: null, reasonCode: "host-queue-api-unavailable" }, context
     },
-    task, sourceChanges, activity: activityProjection(events, current), approvals, verification: linked.verification,
+    task, sourceChanges, activity: activityProjection(events, current, generatedAt, input.operationLiveness), approvals, verification: linked.verification,
     usage: { context, latestTurn: usageCounter(usageFacts.latest, "no-assistant-turn"), sessionTotal: usageCounter(usageFacts.observed ? usageFacts.totals : null, "host-total-usage-unavailable"),
       taskTotal: usageCounter(null, input.task ? "task-usage-boundary-unavailable" : "no-active-task"), capturedAt: generatedAt,
       health: { state: "degraded", reasonCode: "partial-usage-only", message: "Task-attributed usage is not available" } },

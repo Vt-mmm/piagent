@@ -42,7 +42,8 @@ import type { PiagentWebUICanonicalSnapshotV1 } from "../../contracts/generated/
 import type { Catalog, SessionRow } from "../../contracts/generated/session-catalog-v1.ts";
 import type { PermissionMode, Receipt, Workflow } from "../../contracts/generated/session-command-v1.ts";
 import type { PiagentGatewayCapabilityHandshakeV1 } from "../../contracts/generated/gateway-capabilities-v1.ts";
-import { readSessionConnections, readSessionInspectionSnapshot, stageSessionAttachment, type SessionConnections } from "./api.ts";
+import { readSessionConnections, readSessionCreationOptions, readSessionInspectionSnapshot, stageSessionAttachment,
+  type SessionConnections, type SessionCreationOptions } from "./api.ts";
 import type { Attachment } from "../../contracts/generated/attachment-v1.ts";
 import { acceptAttribute, attachmentDetail, discardAttachment, dragCarriesFiles, MAX_ATTACHMENTS,
   stageFiles } from "./attachment-intake.ts";
@@ -54,6 +55,7 @@ import type { SessionWorkspaceId } from "./SessionAgentWorkspace.tsx";
 import { SettingsPage, type SettingsSection } from "./SettingsPage.tsx";
 import type { ConnectionState } from "./use-inspection.ts";
 import type { LiveConversation, TerminalOperationActivity } from "./live-state-view-model.ts";
+import type { SessionSendResult } from "./use-session-hub.ts";
 import { localize, useUiPreferences, type UiLocale } from "./ui-preferences.tsx";
 
 const SIDEBAR_WIDTH = 288;
@@ -106,7 +108,7 @@ function StateChip({ session, locale }: { session: SessionRow; locale: UiLocale 
 
 function Conversation({ session, snapshot, locale, live, canSend, canRestart, send, abort, restart, onInspector }: { session: SessionRow;
   snapshot?: PiagentWebUICanonicalSnapshotV1; locale: UiLocale; live?: LiveConversation; canSend: boolean;
-  send(message: string, attachment?: { messageRequestId: string; attachmentRefs: string[]; attachments?: Attachment[]; workflow?: Workflow }): Promise<unknown>;
+  send(message: string, attachment?: { messageRequestId: string; attachmentRefs: string[]; attachments?: Attachment[]; workflow?: Workflow }): Promise<SessionSendResult>;
   abort(): Promise<unknown>; restart(): Promise<unknown>; canRestart: boolean; onInspector(value: SessionWorkspaceId): void }) {
   const [draft, setDraft] = useState(""), [submitting, setSubmitting] = useState(false), [connections, setConnections] = useState<SessionConnections>();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -114,15 +116,25 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [messageRequestId, setMessageRequestId] = useState(() => `message-request.${crypto.randomUUID()}`);
   const [uploading, setUploading] = useState(false), [attachError, setAttachError] = useState<string | null>(null);
-  const [sendError, setSendError] = useState<string | null>(null);
+  const [sendNotice, setSendNotice] = useState<{ tone: "warning" | "error"; text: string } | null>(null);
+  const [sendUnconfirmed, setSendUnconfirmed] = useState(false);
   const [restartingRuntime, setRestartingRuntime] = useState(false);
+  const [workflowOptions, setWorkflowOptions] = useState<NonNullable<SessionCreationOptions["workflows"]>>([]);
   const [dragging, setDragging] = useState(false);
   // dragenter and dragleave fire again for every child the pointer crosses, so a
   // boolean set on leave clears the highlight while the file is still over the
   // composer. Counting entries against leaves tracks the region as a whole.
   const dragDepth = useRef(0);
-  useEffect(() => { setDraft(""); setWorkflow("continue"); setAdvancedOpen(false); setAttachments([]); setAttachError(null); setSendError(null);
+  useEffect(() => { setDraft(""); setWorkflow("continue"); setAdvancedOpen(false); setAttachments([]); setAttachError(null); setSendNotice(null);
+    setSendUnconfirmed(false);
     setMessageRequestId(`message-request.${crypto.randomUUID()}`); }, [session.sessionRef]);
+  useEffect(() => {
+    const controller = new AbortController();
+    void readSessionCreationOptions(controller.signal).then((value) => {
+      if (!controller.signal.aborted) setWorkflowOptions(value.workflows ?? []);
+    }).catch(() => { if (!controller.signal.aborted) setWorkflowOptions([]); });
+    return () => controller.abort();
+  }, []);
 
   // A file dropped anywhere the composer does not cover is navigated to by the
   // browser, which replaces the running session with the file.
@@ -136,7 +148,7 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
   const allowedMimeTypes = useMemo(() => new Set<string>(attachmentsCapability?.status === "available" ? attachmentsCapability.mimeTypes : []),
     [attachmentsCapability]);
   const acceptTypes = useMemo(() => acceptAttribute(allowedMimeTypes), [allowedMimeTypes]);
-  const canAttach = Boolean(snapshot) && attachmentsCapability?.status === "available" && canSend && !submitting && !uploading
+  const canAttach = Boolean(snapshot) && attachmentsCapability?.status === "available" && canSend && !submitting && !sendUnconfirmed && !uploading
     && attachments.length < MAX_ATTACHMENTS;
 
   const takeFiles = async (files: FileList | null) => {
@@ -166,25 +178,37 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
     return () => controller.abort();
   }, [session.sessionRef, session.sessionRevision]);
   const submit = async () => {
-    const message = draft.trim(); if (!message || submitting) return;
-    setSubmitting(true); setSendError(null);
+    const message = draft.trim(); if (!message || submitting || sendUnconfirmed) return;
+    setSubmitting(true); setSendNotice(null);
     const staged = attachments.map((item) => item.attachmentRef);
     try {
-      await send(message, staged.length > 0 || workflow !== "continue"
+      const result = await send(message, staged.length > 0 || workflow !== "continue"
         ? { messageRequestId, attachmentRefs: staged, attachments, ...(workflow === "continue" ? {} : { workflow }) } : undefined);
+      if (result.state === "unconfirmed") {
+        setSendUnconfirmed(true);
+        setSendNotice({ tone: "warning", text: localize(locale,
+          "Piagent đang xác nhận lần gửi này. Nội dung và file vẫn được giữ; đừng gửi lại để tránh chạy trùng.",
+          "Piagent is confirming this send. Your message and files remain preserved; do not resend, to avoid a duplicate run.") });
+        return;
+      }
       // Refs are one-shot: the dispatch consumed them, so the next message starts
       // from a fresh request id rather than reusing refs that no longer exist.
       setDraft(""); setWorkflow("continue"); setAttachments([]); setAttachError(null); setMessageRequestId(`message-request.${crypto.randomUUID()}`);
     } catch {
-      // Keep both text and one-shot staged refs in the composer. A missing or
-      // rejected admission receipt must never consume the operator's draft or
-      // appear as a failed chat message.
-      setSendError(localize(locale,
-        "Chưa xác nhận gửi được. Nội dung và file vẫn được giữ; hãy kiểm tra trạng thái session trước khi gửi lại.",
-        "Send was not confirmed. Your message and files are preserved; check the session state before sending again."));
+      // A thrown send is a deterministic pre-admission rejection. Transport or
+      // effect uncertainty resolves through the non-error branch above so the
+      // UI never describes an already-running operation as failed.
+      setSendNotice({ tone: "error", text: localize(locale,
+        "Tin nhắn chưa được gửi. Nội dung và file vẫn được giữ; anh có thể thử lại khi session sẵn sàng.",
+        "The message was not sent. Your message and files are preserved; retry when the session is ready.") });
     }
     finally { setSubmitting(false); }
   };
+  useEffect(() => {
+    if (!sendUnconfirmed || live?.messageRequestId !== messageRequestId || live.delivery !== "admitted") return;
+    setDraft(""); setWorkflow("continue"); setAttachments([]); setAttachError(null); setSendNotice(null); setSendUnconfirmed(false);
+    setMessageRequestId(`message-request.${crypto.randomUUID()}`);
+  }, [live?.delivery, live?.messageRequestId, messageRequestId, sendUnconfirmed]);
   const refreshConnections = async (value?: SessionConnections) => {
     if (value) { setConnections(value); return; }
     setConnections(await readSessionConnections(session.sessionRef).catch(() => connections));
@@ -243,10 +267,10 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
           {attachments.map((item) => <Chip key={item.attachmentRef} size="small" variant="outlined"
             color={item.kind === "document" ? "success" : "default"}
             label={`${item.displayName} · ${attachmentDetail(item, locale)}`}
-            onDelete={submitting || uploading ? undefined : () => void removeAttachment(item.attachmentRef)}
+            onDelete={submitting || sendUnconfirmed || uploading ? undefined : () => void removeAttachment(item.attachmentRef)}
             deleteIcon={<CancelRounded aria-label={`${localize(locale, "Bỏ", "Remove")} ${item.displayName}`} role="button" />} />)}
         </Stack>}
-        <TextField fullWidth multiline minRows={2} disabled={!canSend || submitting} value={draft} onChange={(event) => { setDraft(event.target.value); setSendError(null); }}
+        <TextField fullWidth multiline minRows={2} disabled={!canSend || submitting || sendUnconfirmed} value={draft} onChange={(event) => { setDraft(event.target.value); setSendNotice(null); }}
           onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void submit(); } }}
           onPaste={(event) => {
             // Only a clipboard actually carrying files is intercepted, so pasting
@@ -261,16 +285,13 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
             <SessionComposerControls session={session} snapshot={snapshot} connections={connections} locale={locale}
               onOpenChanges={() => onInspector("source")} onConnectionsChanged={refreshConnections} />
             <Stack direction="row" sx={{ minWidth: 0, alignItems: "center", gap: .75, flexWrap: "wrap" }}>
-              <Select size="small" value={workflow} disabled={!canSend || submitting}
+              <Select size="small" value={workflow} disabled={!canSend || submitting || sendUnconfirmed}
                 onChange={(event) => setWorkflow(event.target.value as Workflow | "continue")}
                 aria-label={localize(locale, "Workflow cho tin nhắn này", "Workflow for this message")}
                 startAdornment={<AccountTreeRounded sx={{ mr: .75, fontSize: 18 }} />}
                 sx={{ minWidth: { xs: 150, sm: 190 }, height: 34, fontSize: 12.5 }}>
                 <MenuItem value="continue">{localize(locale, "Tự do · không workflow", "Freeform · no workflow")}</MenuItem>
-                <MenuItem value="task">Task</MenuItem><MenuItem value="scout">Scout</MenuItem><MenuItem value="be-to-fe">BE → FE</MenuItem>
-                <MenuItem value="discuss">Discuss</MenuItem><MenuItem value="plan">Plan</MenuItem><MenuItem value="review">Review</MenuItem>
-                <MenuItem value="commit">Commit</MenuItem><MenuItem value="pr">PR</MenuItem><MenuItem value="onboard">Onboard</MenuItem>
-                <MenuItem value="platform-improve">Platform improve</MenuItem>
+                {workflowOptions.map((option) => <MenuItem key={option.id} value={option.id}>{option.label}</MenuItem>)}
               </Select>
               {attachmentsCapability?.status === "available" && <Tooltip title={localize(locale,
                 "Chọn file, hoặc kéo thả / dán thẳng vào khung chat", "Pick a file, or drag and drop / paste straight into the chat")}>
@@ -299,9 +320,10 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
             </Tooltip>
             {workflow !== "continue" && <Chip size="small" variant="outlined" icon={<AccountTreeRounded />}
               label={`${workflow.toUpperCase()} · ${localize(locale, "tin nhắn này", "this message")}`} />}
-            <Typography variant="caption" color={attachError || sendError ? "error" : "text.disabled"} noWrap={!sendError}
-              sx={{ display: { xs: attachError || sendError || uploading ? "block" : "none", sm: "block" } }}>
-              {sendError ?? attachError ?? (uploading ? localize(locale, "Đang đọc tài liệu…", "Reading documents…")
+            <Typography variant="caption" color={attachError || sendNotice?.tone === "error" ? "error"
+              : sendNotice ? "warning.main" : "text.disabled"} noWrap={!sendNotice}
+              sx={{ display: { xs: attachError || sendNotice || uploading ? "block" : "none", sm: "block" } }}>
+              {sendNotice?.text ?? attachError ?? (uploading ? localize(locale, "Đang đọc tài liệu…", "Reading documents…")
                 : live && !live.complete
                   ? localize(locale, "Piagent đang xử lý; anh có thể gửi việc tiếp theo khi hoàn tất.",
                     "Piagent is working; you can send the next task when it finishes.")
@@ -310,7 +332,7 @@ function Conversation({ session, snapshot, locale, live, canSend, canRestart, se
           </Stack>
           {live?.operationRef && !live.complete && live.abortable !== false
             ? <Button color="error" startIcon={<StopCircleRounded />} onClick={() => void abort()}>{localize(locale, "Dừng", "Stop")}</Button>
-            : <IconButton aria-label={localize(locale, "Gửi", "Send")} disabled={!canSend || submitting || !draft.trim()} color="primary" onClick={() => void submit()}
+            : <IconButton aria-label={localize(locale, "Gửi", "Send")} disabled={!canSend || submitting || sendUnconfirmed || !draft.trim()} color="primary" onClick={() => void submit()}
               sx={{ bgcolor: "primary.main", color: "primary.contrastText", "&:hover": { bgcolor: "primary.dark" }, "&.Mui-disabled": { bgcolor: "action.disabledBackground" } }}><SendRounded fontSize="small" /></IconButton>}
         </Stack>
       </Box>
@@ -336,7 +358,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
   refresh(): Promise<Catalog | undefined>; create(value: { projectRef: string; placeRef: string; modelRef: string | null;
     thinkingLevel: string; workflow: Workflow; permissionMode: PermissionMode | null; message: string; messageRequestId?: string; deferInitialMessage?: boolean }): Promise<Receipt>;
   send(session: SessionRow, message: string, attachment?: { messageRequestId: string; attachmentRefs: string[]; attachments?: Attachment[];
-    workflow?: Workflow }): Promise<unknown>;
+    workflow?: Workflow }): Promise<SessionSendResult>;
   abort(session: SessionRow): Promise<unknown>;
     restart(session: SessionRow): Promise<unknown>;
     setModel(session: SessionRow, modelRef: string): Promise<unknown>; setThinking(session: SessionRow, thinkingLevel: string): Promise<unknown>;

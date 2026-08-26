@@ -9,6 +9,7 @@ import { expect, test } from "@playwright/test";
 import { GatewayProtocolService } from "../packages/piagent-webui/gateway/gateway-protocol-service.ts";
 import { SessionAttachmentRegistry } from "../packages/piagent-webui/gateway/session-attachment-registry.ts";
 import { startLoopbackServer } from "../packages/piagent-webui/server/loopback-server.ts";
+import { WEBUI_WORKFLOW_OPTIONS } from "../packages/piagent-core/runtime/workflows/webui-workflow.ts";
 import { DOCX_MIME, docx } from "./helpers/piagent-docx-fixture.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
@@ -16,7 +17,7 @@ let server, protocol;
 let persistedBrowserConversation = false;
 let sessionCreateAttempts = 0, sessionCreateEffects = 0, createdSessionCounter = 0;
 let sessionSendAttempts = 0, sessionSendEffects = 0;
-let nextCreateUncertain = false, nextSendRejected = false;
+let nextCreateUncertain = false, nextSendRejected = false, nextSendUnconfirmed = false;
 let liveStateUnavailable = false, liveStateReadCount = 0;
 let attachments, lastSendPayload = null, dispatchedContent = null;
 let lastCreatePayload = null;
@@ -90,6 +91,15 @@ test.beforeAll(async () => {
           catalogRevisionAfter: catalog.catalogRevision, sessionRevisionAfter: currentRow?.sessionRevision ?? null, deduplicated: false,
           evidenceRef: null, error: { code: "fixture-send-rejected", message: "The session command was rejected." } };
       }
+      if (nextSendUnconfirmed) {
+        nextSendUnconfirmed = false;
+        return { schemaVersion: 1, version: "piagent-session-receipt-v1", messageType: "receipt", commandId: value.commandId,
+          idempotencyKeyDigest: `sha256:${"a".repeat(64)}`, action: value.action, phase: "uncertain", resultCode: "effect-unknown",
+          requestedAt: value.requestedAt, settledAt: new Date().toISOString(), sessionRef: value.sessionRef, operationRef: null,
+          catalogRevisionAfter: catalog.catalogRevision, sessionRevisionAfter: currentRow?.sessionRevision ?? null, deduplicated: false,
+          evidenceRef: null, error: { code: "session-command-effect-unknown",
+            message: "The command effect cannot be proven. It will not be replayed automatically." } };
+      }
       // Claim exactly as the runtime supervisor does, so what the assertions see
       // is what a real session would have been prompted with.
       dispatchedContent = value.payload.attachmentRefs?.length
@@ -130,10 +140,12 @@ test.beforeAll(async () => {
       protocol.events.publish("runtime.changed", { sessionRef: value.sessionRef, sessionRevision: value.expectedSessionRevision,
         liveState: "running", operationRef, reasonCode: null });
       protocol.events.publish("tool.started", { sessionRef: value.sessionRef, operationRef,
-        toolCallRef: "tool_browser_read_01", toolLabel: "read_file", isError: null, reasonCode: null });
+        toolCallRef: "tool_browser_read_01", toolLabel: "read_file", fileLabel: "use-auth-refresh.ts",
+        isError: null, reasonCode: null });
       await new Promise((resolve) => setTimeout(resolve, 700));
       protocol.events.publish("tool.completed", { sessionRef: value.sessionRef, operationRef,
-        toolCallRef: "tool_browser_read_01", toolLabel: "read_file", isError: false, reasonCode: null });
+        toolCallRef: "tool_browser_read_01", toolLabel: "read_file", fileLabel: "use-auth-refresh.ts",
+        isError: false, reasonCode: null });
       protocol.events.publish("message.delta", { sessionRef: value.sessionRef, operationRef, messageRef, messageSequence: 0,
         delta: "A streamed Gateway reply." });
       protocol.events.publish("message.completed", { sessionRef: value.sessionRef, operationRef, messageRef,
@@ -197,9 +209,11 @@ test.beforeAll(async () => {
         recordedAt: "2026-08-13T14:00:02.000Z", content: { ...transcriptFixture.items[0].content, state: "unavailable", text: null,
           textChars: null, digest: null, truncated: false, redacted: false, imageCount: 0, reasonCode: "provider-auth-expired" }, toolCalls: [] }
     ].concat(persistedBrowserConversation ? [
-      { ...transcriptFixture.items[0], messageRef: "message_browser_user", role: "user", recordedAt: "2026-08-14T05:00:00.000Z",
+      { ...transcriptFixture.items[0], messageRef: "message_browser_user", role: "user", agentOperationId: "operation_browser_send_01",
+        recordedAt: "2026-08-14T05:00:00.000Z",
         content: { ...transcriptFixture.items[0].content, text: "Continue from the browser", textChars: 25 }, toolCalls: [] },
       { ...transcriptFixture.items[0], messageRef: "message_browser_assistant", parentMessageRef: "message_browser_user", role: "assistant",
+        agentOperationId: "operation_browser_send_01",
         recordedAt: "2026-08-14T05:00:01.000Z", content: { ...transcriptFixture.items[0].content,
           text: "A streamed Gateway reply.", textChars: 25 }, toolCalls: [] }
     ] : []) }),
@@ -225,6 +239,7 @@ test.beforeAll(async () => {
         displayName: "Fixture Reasoning", reasoning: true, imageInput: true, thinkingLevels: ["off", "medium", "high"] }],
       defaultModelRef: "model_openai_codex_sol", defaultThinkingLevel: "high",
       profiles: [{ id: "node-typescript", displayName: "Node TypeScript Project", permissionMode: "workspace-write" }],
+      workflows: WEBUI_WORKFLOW_OPTIONS,
       webSearch: { state: "configured", route: "codex-first", provider: "openai-codex", fallbackProvider: "exa",
         integration: { name: "pi-web-access", version: "0.17.0" }, reasonCode: null },
       projectImport: { status: "available", reasonCode: null }, reasonCode: null }),
@@ -390,9 +405,9 @@ test("renders the session-first hub, compact New chat, popovers, modal Settings,
   await page.getByRole("option", { name: "Review", exact: true }).click();
   await page.getByPlaceholder("Nhắn cho Piagent…").fill("Continue from the browser");
   await page.getByRole("button", { name: "Gửi" }).click();
-  await expect(page.getByText("Continue from the browser", { exact: true })).toBeVisible();
+  await expect(page.locator("p").filter({ hasText: /^Continue from the browser$/ })).toBeVisible();
   await expect(page.getByText("Piagent đang đọc mã nguồn…", { exact: true })).toBeVisible();
-  await expect(page.getByText("Tiến trình vừa cập nhật", { exact: true })).toBeVisible();
+  await expect(page.getByText(/use-auth-refresh\.ts · (Tiến trình vừa cập nhật|Cập nhật \d+ giây trước)/)).toBeVisible();
   await expect(page.getByRole("button", { name: /Đang đọc file/ })).toHaveCount(0);
   await expect(page.getByText("A streamed Gateway reply.", { exact: true })).toBeVisible();
   assert.equal(lastSendPayload?.workflow, "review");
@@ -401,7 +416,7 @@ test("renders the session-first hub, compact New chat, popovers, modal Settings,
   await expect(page.getByRole("combobox", { name: "Workflow cho tin nhắn này" })).toHaveText(/Tự do · không workflow/);
   await page.getByPlaceholder("Nhắn cho Piagent…").fill("Start a different piece of work in this session");
   await page.getByRole("button", { name: "Gửi" }).click();
-  await expect(page.getByText("Start a different piece of work in this session", { exact: true })).toBeVisible();
+  await expect(page.locator("p").filter({ hasText: /^Start a different piece of work in this session$/ })).toBeVisible();
   await expect.poll(() => lastSendPayload?.message).toBe("Start a different piece of work in this session");
   assert.equal(Object.hasOwn(lastSendPayload, "workflow"), false);
   await page.getByRole("button", { name: "Mở Source Changes Inspector" }).click();
@@ -573,6 +588,41 @@ test("preserves the composer draft and staged file when send admission is reject
   await expect(page.getByText(/retry-brief\.md · /)).toBeVisible();
   await expect(page.getByText(/Nội dung và file vẫn được giữ/)).toBeVisible();
   await expect(page.locator("p").filter({ hasText: /^Preserve this rejected draft$/ })).toHaveCount(0);
+});
+
+test("keeps an unconfirmed send visible, never resends it, and consumes one-shot attachments only after operation evidence", async ({ page }) => {
+  await page.goto(server.issueLaunchUrl());
+  await page.getByRole("button", { name: /Release prep/ }).first().click();
+  await page.getByRole("button", { name: "Thêm tùy chọn" }).click();
+  await page.getByRole("button", { name: /Đính kèm/ }).locator('input[type="file"]').setInputFiles({
+    name: "uncertain-brief.md", mimeType: "text/markdown", buffer: Buffer.from("# One-shot\n\nDo not dispatch twice.\n")
+  });
+  const composer = page.getByPlaceholder("Nhắn cho Piagent…"), attemptsBefore = sessionSendAttempts;
+  await composer.fill("Keep this single uncertain dispatch"); nextSendUnconfirmed = true;
+  await page.getByRole("button", { name: "Gửi" }).click();
+  await expect(page.locator("p").filter({ hasText: /^Keep this single uncertain dispatch$/ })).toBeVisible();
+  await expect(composer).toHaveValue("Keep this single uncertain dispatch");
+  await expect(composer).toBeDisabled();
+  await expect(page.getByText(/đừng gửi lại để tránh chạy trùng/)).toBeVisible();
+  assert.equal(sessionSendAttempts - attemptsBefore, 1);
+  const firstRequestId = lastSendPayload.messageRequestId;
+
+  const operationRef = "operation_late_confirmation";
+  protocol.events.publish("runtime.changed", { sessionRef: "session_release_prep",
+    sessionRevision: "revision_session_release_prep", liveState: "running", operationRef, reasonCode: null });
+  await expect(composer).toHaveValue("");
+  await expect(page.getByText(/đừng gửi lại để tránh chạy trùng/)).toHaveCount(0);
+  await expect(page.getByText(/uncertain-brief\.md · /)).toHaveCount(0);
+  assert.equal(sessionSendAttempts - attemptsBefore, 1, "live confirmation must not replay the command");
+
+  protocol.events.publish("message.completed", { sessionRef: "session_release_prep", operationRef,
+    messageRef: "message_late_confirmation", sessionRevision: "revision_session_release_prep", truncated: false });
+  protocol.events.publish("operation.settled", { sessionRef: "session_release_prep", operationRef,
+    messageRef: "message_late_confirmation", sessionRevision: "revision_session_release_prep", settlement: "completed", reasonCode: null });
+  await composer.fill("Fresh message after reconciliation");
+  await page.getByRole("button", { name: "Gửi" }).click();
+  await expect.poll(() => lastSendPayload?.message).toBe("Fresh message after reconciliation");
+  assert.notEqual(lastSendPayload.messageRequestId, firstRequestId, "a consumed attachment request id must never be reused");
 });
 
 test("keeps the session sidebar usable on a phone viewport", async ({ page }) => {

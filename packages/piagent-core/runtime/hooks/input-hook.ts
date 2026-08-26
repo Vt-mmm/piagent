@@ -24,6 +24,7 @@ import {
 } from "../workflows/input-routing.ts";
 import {
   automaticTaskIntakeMode,
+  isLightweightNonAuthorizingChangeContinuation,
   manualTaskIntakeEligible
 } from "../workflows/task-intake.ts";
 
@@ -59,7 +60,9 @@ export function registerInputHook(pi: ExtensionAPI, dependencies: InputHookDepen
       if (cachedTask) dependencies.state.clearTaskBoundary(ctx, cachedTask.taskRunId);
     }
     const activeTask = sessionTask?.trace.outcome === "pending" ? sessionTask : undefined;
-    const turn = dependencies.state.beginTurn(ctx, taskSignal.promptHash);
+    const turn = dependencies.state.beginTurn(ctx, taskSignal.promptHash, {
+      lightweightNonAuthorizingChange: isLightweightNonAuthorizingChangeContinuation(text)
+    });
     const authorityPolicy = activeTask?.trace.outcome === "pending" ? dependencies.authorityPolicy(ctx, activeTask) : undefined;
     let authorityHandoffReady = false;
     if (activeTask && authorityPolicy?.disposition === "new-attempt-required") {

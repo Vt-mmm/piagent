@@ -5,12 +5,14 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  aggregateCodexTurnUsage,
   aggregateSessionUsage,
   benchmarkAssuranceEvidenceValidationErrors,
   benchmarkClaimEligibility,
   benchmarkSuiteValidationErrors,
   createCodexExecJsonlCollector,
   evaluateWorkflowEvidence,
+  effectiveResourcesPerResolvedOutcome,
   normalizeBenchmarkUsageCost,
   parseCodexExecJsonl,
   renderBenchmarkHtml,
@@ -22,12 +24,14 @@ import { applyBenchmarkClaimRestrictions } from "../packages/piagent-core/benchm
 import { taskWorkingTreeEvidenceDigest } from "../packages/piagent-core/benchmark/benchmark-tree-identity.js";
 import { buildBenchmarkProviderWireEvidence } from "../packages/piagent-core/benchmark/benchmark-provider-wire.js";
 import { productionProviderFreeEvidenceBinding } from "../packages/piagent-core/benchmark/benchmark-provider-free-evidence.js";
+import { geometricMeanConfidence95Raw } from "../packages/piagent-core/benchmark/benchmark-statistics.js";
 import { versionWorkingTreeHash } from "../packages/piagent-core/extensions/working-tree-digest.js";
 import { workingTreeEvidenceDigest } from "../packages/piagent-core/extensions/task-lifecycle.js";
 import { createBoundTaskAuthority } from "../packages/piagent-core/runtime/policy/task-authority-runtime.ts";
 
 const suite = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, "../benchmarks/core-v1/suite.json"), "utf8"));
 const productionSuite = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, "../benchmarks/production-v1/suite.json"), "utf8"));
+const productionV2Suite = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, "../benchmarks/production-v2/suite.json"), "utf8"));
 const privateAssuranceEvidence = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, "../evals/fixtures/benchmark-assurance-evidence.valid.json"), "utf8"));
 const treeDigest = (value) => versionWorkingTreeHash(value.repeat(64));
 const productionSource = { kind: "git-working-tree", commit: "a".repeat(40), dirty: false };
@@ -286,6 +290,40 @@ test("fails normalized cost closed when aggregate usage cannot determine the lon
   assert.equal(inexact.reason, "usage-not-exact");
 });
 
+test("uses exact privacy-safe request buckets for mixed standard and long-context pricing", () => {
+  const threshold = productionSuite.pricingSnapshot.longContext.thresholdInputTokens;
+  const requests = [
+    { input: 10, output: 2, cacheRead: 0, cacheWrite: 0, reasoning: 1, total: 12, promptTokens: 10 },
+    { input: threshold + 1, output: 4, cacheRead: 0, cacheWrite: 0, reasoning: 2, total: threshold + 5, promptTokens: threshold + 1 }
+  ];
+  const usage = {
+    input: threshold + 11,
+    output: 6,
+    cacheRead: 0,
+    cacheWrite: 0,
+    reasoning: 3,
+    fresh: threshold + 17,
+    total: threshold + 17,
+    sessions: 1,
+    model: productionSuite.pricingSnapshot.model,
+    thinkingLevel: "medium",
+    usageCompleteness: "exact",
+    pricingBuckets: { schemaVersion: 1, source: "provider-request-usage", completeness: "exact", requests }
+  };
+  const normalized = normalizeBenchmarkUsageCost(usage, productionSuite.pricingSnapshot);
+  assert.equal(normalized.status, "measured");
+  assert.equal(normalized.pricingApplicability, "per-request-exact");
+  assert.equal(normalized.requests, 2);
+  assert.equal(normalized.standardContextRequests, 1);
+  assert.equal(normalized.longContextRequests, 1);
+
+  const mismatch = structuredClone(usage);
+  mismatch.pricingBuckets.requests[0].input += 1;
+  mismatch.pricingBuckets.requests[0].total += 1;
+  mismatch.pricingBuckets.requests[0].promptTokens += 1;
+  assert.equal(normalizeBenchmarkUsageCost(mismatch, productionSuite.pricingSnapshot).reason, "pricing-buckets-aggregate-mismatch");
+});
+
 test("parses Codex exec JSONL with cache-exclusive fresh tokens and completed tool events", () => {
   const stdout = [
     { type: "thread.started", thread_id: "codex-thread" },
@@ -313,6 +351,80 @@ test("parses Codex exec JSONL with cache-exclusive fresh tokens and completed to
   assert.equal(usage.contextUsage.source, "unavailable");
   assert.equal(usage.toolCalls, 2);
   assert.deepEqual(usage.toolNames, { command_execution: 1, file_change: 1 });
+  assert.equal(usage.turns, 1);
+  assert.equal(usage.execution.toolCalls, 2);
+  assert.equal(usage.execution.toolResults, 2);
+  assert.equal(usage.execution.completeness.tools, "exact");
+});
+
+test("aggregates exact resumed Codex turns once and rejects identity or completeness drift", () => {
+  const makeTurn = (overrides = {}) => ({
+    input: 10, output: 3, cacheRead: 4, cacheWrite: 1, reasoning: 1, fresh: 13, total: 18,
+    sessions: 1, turns: 1, usageCompleteness: "exact", cost: null,
+    providerSessionId: "thread-1", model: "openai-codex/gpt-test", thinkingLevel: "high",
+    subagentSessions: 0,
+    subagentTokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, fresh: 0, total: 0 },
+    toolNames: { read: 1 }, toolCalls: 1, messages: 1,
+    pricingBuckets: { schemaVersion: 1, source: "codex-turn-aggregate-usage", completeness: "unverified", requests: [] },
+    execution: {
+      schemaVersion: 1, source: "codex-exec-jsonl",
+      completeness: { tools: "exact", retries: "unavailable", compactions: "unavailable", subagents: "exact" },
+      providerStartedAttempts: 1, toolCalls: 1, toolResults: 1, toolFailures: 0, blockedToolCalls: 0,
+      declinedToolCalls: 0, explicitRetries: 0, retryFailures: 0, compactions: 0, abortedCompactions: 0,
+      summarizationRetries: 0, repeatedToolCalls: 0, subagentAttempts: 0, subagentFailures: 0
+    },
+    ...overrides
+  });
+  const aggregate = aggregateCodexTurnUsage([makeTurn(), makeTurn({ input: 20, fresh: 23, total: 28, toolNames: { bash: 2 }, toolCalls: 2 })]);
+  assert.equal(aggregate.sessions, 1);
+  assert.equal(aggregate.turns, 2);
+  assert.equal(aggregate.input, 30);
+  assert.equal(aggregate.total, 46);
+  assert.equal(aggregate.toolCalls, 3);
+  assert.deepEqual(aggregate.toolNames, { bash: 2, read: 1 });
+  assert.equal(aggregate.execution.providerStartedAttempts, 2);
+  assert.throws(() => aggregateCodexTurnUsage([makeTurn(), makeTurn({ providerSessionId: "thread-2" })]), /mismatched providerSessionId/);
+  assert.throws(() => aggregateCodexTurnUsage([makeTurn({ usageCompleteness: "unverified" })]), /incomplete/);
+});
+
+test("charges accepted and failed provider attempts in effective tokens and normalized cost", () => {
+  const exactUsage = (input, output) => ({
+    input, output, cacheRead: 0, cacheWrite: 0, reasoning: 0,
+    fresh: input + output, total: input + output, sessions: 1,
+    usageCompleteness: "exact", model: productionSuite.pricingSnapshot.model, thinkingLevel: "medium",
+    pricingBuckets: { schemaVersion: 1, source: "provider-request-usage", completeness: "exact", requests: [
+      { input, output, cacheRead: 0, cacheWrite: 0, reasoning: 0, total: input + output, promptTokens: input }
+    ] },
+    execution: { providerStartedAttempts: 1 }
+  });
+  const pairs = [{
+    baseline: {
+      resolved: true, usageStatus: "measured", usage: exactUsage(100, 20),
+      infrastructureRetries: 0, infrastructureAttempts: 1, infrastructureFailures: []
+    },
+    candidate: {
+      resolved: true,
+      usageStatus: "measured",
+      usage: exactUsage(50, 10),
+      infrastructureRetries: 1,
+      infrastructureAttempts: 2,
+      infrastructureFailures: [{ usageStatus: "measured", usage: exactUsage(30, 5) }]
+    }
+  }];
+  const effective = effectiveResourcesPerResolvedOutcome(pairs, "candidate", productionSuite.pricingSnapshot);
+  assert.equal(effective.status, "measured");
+  assert.equal(effective.attemptRecords, 2);
+  assert.equal(effective.providerStartedAttempts, 2);
+  assert.equal(effective.totalTokens, 95);
+  assert.equal(effective.totalTokensPerResolvedOutcome, 95);
+  assert.ok(effective.normalizedApiCostUsd > 0);
+
+  const unknown = structuredClone(pairs);
+  unknown[0].candidate.infrastructureFailures[0] = { usageStatus: "unknown-after-provider-start", usage: null };
+  const unavailable = effectiveResourcesPerResolvedOutcome(unknown, "candidate", productionSuite.pricingSnapshot);
+  assert.equal(unavailable.status, "unavailable");
+  assert.equal(unavailable.totalTokens, null);
+  assert.match(unavailable.issues.join(";"), /usage-unknown-after-provider-start/);
 });
 
 test("fails closed when Codex JSONL usage is missing, malformed, or internally inconsistent", () => {
@@ -987,6 +1099,109 @@ test("uses the same complete family sample for schema-v2 successful-pair point a
   });
   assert.equal(report.comparison.allSuccessfulPairsFreshTokenRatio, 0.8434);
   assert.notEqual(report.comparison.freshTokenRatio, report.comparison.allSuccessfulPairsFreshTokenRatio);
+});
+
+test("production-v2 gives each task family one confidence-interval observation after repeat and variant aggregation", () => {
+  const familyIds = [...new Set(productionV2Suite.scenarios.map((scenario) => scenario.familyId))];
+  const affectedFamilyId = familyIds[0];
+  const runs = [];
+  for (let repeat = 1; repeat <= 2; repeat += 1) {
+    for (const scenario of productionV2Suite.scenarios) {
+      runs.push(runRecord(scenario, "codex-cli", repeat, 100));
+      runs.push(runRecord(scenario, "piagent", repeat, scenario.familyId === affectedFamilyId ? 25 : 100));
+    }
+  }
+  const report = summarizeBenchmark({
+    suite: productionV2Suite,
+    canonicalProductionSuite: true,
+    runId: "production-v2-hierarchical-sample",
+    startedAt: "2026-08-26T00:00:00.000Z",
+    completedAt: "2026-08-26T00:01:00.000Z",
+    repeats: 2,
+    environment: productionEnvironment({
+      suiteCoverage: { declaredScenarios: 27, selectedScenarios: 27, fullSuite: true }
+    }),
+    baselineSurface: "codex-cli",
+    candidateSurface: "piagent",
+    runs
+  });
+  const familyRatios = familyIds.map((familyId) => familyId === affectedFamilyId ? 0.25 : 1);
+  const incorrectlyTripleWeightedVariantRatios = productionV2Suite.scenarios.map((scenario) => (
+    scenario.familyId === affectedFamilyId ? 0.25 : 1
+  ));
+  const expectedFamilyConfidence = geometricMeanConfidence95Raw(familyRatios);
+  const incorrectlyTripleWeightedConfidence = geometricMeanConfidence95Raw(incorrectlyTripleWeightedVariantRatios);
+
+  assert.equal(report.comparison.freshTokenRatioConfidence95Raw.scenarioCount, 9);
+  assert.deepEqual(report.comparison.freshTokenRatioConfidence95Raw, expectedFamilyConfidence);
+  assert.notEqual(report.comparison.freshTokenRatioConfidence95Raw.upper, incorrectlyTripleWeightedConfidence.upper);
+  assert.deepEqual(report.comparison.freshTokenRatioSample, {
+    sampleUnit: "task-family",
+    sampleCount: 9,
+    taskFamilyCount: 9,
+    variantCount: 27,
+    scenarioCount: 27,
+    familyIds,
+    scenarioIds: productionV2Suite.scenarios.map((scenario) => scenario.id)
+  });
+  assert.equal(report.comparison.fixedWorkloadFamilyFreshTokenRatioConfidence95Raw.scenarioCount, 9);
+  assert.equal(report.comparison.failureAwareFamilyFreshTokenRatioConfidence95Raw.scenarioCount, 9);
+  assert.deepEqual(report.comparison.failureAwareFamilyFreshTokenRatioConfidence95Raw, expectedFamilyConfidence);
+  assert.equal(report.comparison.fixedWorkloadFamilyRatios.length, 9);
+  assert.ok(report.comparison.fixedWorkloadFamilyRatios.every((family) => family.variants.length === 3));
+  assert.deepEqual(report.comparison.fixedWorkloadFamilyCoverage, {
+    complete: true,
+    expectedScenarioFamilies: 9,
+    usableScenarioFamilies: 9,
+    expectedAttemptsPerFamily: 6,
+    sampleUnit: "task-family",
+    outcomeConditioning: "none",
+    aggregation: "geometric-mean-of-task-family-geometric-mean-variant-total-ratios",
+    attemptPolicy: "accepted-plus-exact-provider-started-failed-attempts",
+    scenarioIds: productionV2Suite.scenarios.map((scenario) => scenario.id),
+    expectedTaskFamilies: 9,
+    usableTaskFamilies: 9,
+    expectedVariants: 27,
+    usableVariants: 27,
+    expectedAttemptsPerVariant: 2,
+    familyIds
+  });
+  assert.deepEqual(report.comparison.primaryEfficiencySample, {
+    sampleUnit: "task-family",
+    sampleCount: 9,
+    taskFamilyCount: 9,
+    variantCount: 27,
+    scenarioCount: 27,
+    familyIds,
+    scenarioIds: productionV2Suite.scenarios.map((scenario) => scenario.id),
+    outcomeConditioning: "none"
+  });
+  assert.equal(report.comparison.suiteGate.observed.primaryEfficiencyCompleteSamples, 9);
+  assert.equal(report.comparison.suiteGate.observed.primaryEfficiencySampleUnit, "task-family");
+  assert.equal(report.comparison.primaryEfficiencyEvidenceGate, true, "nine complete task families satisfy the predeclared sample count");
+  assert.equal(report.comparison.primaryEfficiencyBandCoverageGate, true);
+  assert.equal(report.comparison.canonicalProductionIdentityGate, true);
+
+  const incompleteRuns = runs.filter((run) => !(run.scenarioId === productionV2Suite.scenarios[0].id
+    && run.surface === "piagent" && run.repeat === 2));
+  const incomplete = summarizeBenchmark({
+    suite: productionV2Suite,
+    canonicalProductionSuite: true,
+    runId: "production-v2-incomplete-family",
+    startedAt: "2026-08-26T00:00:00.000Z",
+    completedAt: "2026-08-26T00:01:00.000Z",
+    repeats: 2,
+    environment: productionEnvironment({
+      suiteCoverage: { declaredScenarios: 27, selectedScenarios: 27, fullSuite: true }
+    }),
+    baselineSurface: "codex-cli",
+    candidateSurface: "piagent",
+    runs: incompleteRuns
+  });
+  assert.equal(incomplete.comparison.suiteGate.observed.primaryEfficiencyCompleteSamples, 8);
+  assert.equal(incomplete.comparison.primaryEfficiencyEvidenceGate, false,
+    "one incomplete variant removes its entire task family from the confidence sample");
+  assert.equal(incomplete.comparison.fixedWorkloadFamilyCoverage.complete, false);
 });
 
 test("clusters failure-aware effort by family for baseline and candidate failures", () => {

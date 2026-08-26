@@ -90,7 +90,7 @@ Nếu chỉ scout/audit read-only:
 /workflow scout Scout payment FE mapping vs BE. Do not edit source.
 ```
 
-Nếu session đang nặng hoặc Pi báo context overflow, dùng fresh workflow:
+Nếu session đang nặng hoặc Pi báo context overflow, dùng fresh workflow. Ba lệnh dưới đây là ví dụ phổ biến; `/fresh help` liệt kê toàn bộ workflow canonical:
 
 ```text
 /fresh scout <read-only request>
@@ -112,7 +112,7 @@ Pi Agent dùng ít namespace nhưng mỗi namespace có subcommand/menu rõ:
 - `/workflow` là cửa chính cho task/scout/review/git/onboard workflow. Workflow cần agent turn là cố ý và được nói rõ.
 - `/usage` gom live usage, history/report hint, preflight, compact, logs, efficiency.
 - Pi native `/name` đặt tên session theo task; Piagent nhận rename event để Agent Watch/report map đúng việc.
-- `/fresh` mở session mới cho `task`, `scout`, hoặc `be-to-fe` khi phiên hiện tại đã nặng.
+- `/fresh` mở session mới cho mọi workflow canonical khi phiên hiện tại đã nặng; chạy `/fresh help` để xem catalog hiện hành.
 - `/context` gom architecture map, code index, search, context pack, test impact, efficiency, preflight và semantic compact.
 - `/permission` gom permission status/read-only/workspace-write/full-access.
 - `/profile` là namespace duy nhất cho profile và tech stack.
@@ -145,7 +145,7 @@ Các command này đến từ package `piagent-core`.
 | `/task-preflight` | Xem product preflight deterministic. | Intent/risk/scope/runtime/solver/phases/tools/helpers/backend/approval có schema/version. |
 | `/piagent-status` | Xem product live status deterministic. | Task/phase/checkpoint/resume/recovery/helper/terminal receipt từ persisted evidence. |
 | `/piagent-inspector` | Muốn xem Piagent đang làm gì, sửa file nào, diff bao nhiêu dòng, command nào fail/block và context còn bao nhiêu. | Mở menu `summary/files/commands/security/context/toggle`; read-only, không gọi model. |
-| `/fresh task|scout|be-to-fe <request>` | Phiên hiện tại đã nặng hoặc muốn tách việc. | Mở session mới có tên và replay workflow prompt gọn. |
+| `/fresh <workflow> <request>` | Phiên hiện tại đã nặng hoặc muốn tách việc; nhận mọi workflow canonical. | Mở session mới có tên và replay workflow prompt gọn; `/fresh help` liệt kê lựa chọn. |
 | `/context` | Xem index/search/pack/impact/efficiency/preflight/compact. | Menu context, không gọi model. |
 | `/permission` | Xem/đổi quyền runtime. | Menu status/read-only/workspace-write/full-access. |
 | `/memory` hoặc `/memory-policy` | Xem memory policy. | Chạy ngay, không gọi model. |

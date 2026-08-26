@@ -186,6 +186,7 @@
         "role": { "enum": ["user", "assistant", "tool-result"] },
         "recordedAt": { "$ref": "common-v1.schema.json#/$defs/timestamp" },
         "agentOperationId": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
+        "messageRequestId": { "$ref": "common-v1.schema.json#/$defs/nullableOpaqueRef" },
         "turnIndex": { "$ref": "#/$defs/nullableCount" },
         "content": { "$ref": "#/$defs/content" },
         "attachments": {
