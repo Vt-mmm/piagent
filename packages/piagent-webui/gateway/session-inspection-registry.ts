@@ -258,7 +258,11 @@ export class SessionInspectionRegistry {
       eventStore,
       task: () => safeRead(() => activeSessionTask(info.cwd, info.id), undefined),
       activityEvents: () => safeRead(() => readContextTelemetry(info.cwd, { limit: 5_000 }), []),
-      sessionEntries: () => entries,
+      // A provider can outlive the turn that created it (notably while a new
+      // session has not reached the host index yet). Read the branch at request
+      // time so transcript/activity projection cannot freeze at the pre-turn
+      // snapshot while the live manager continues appending entries.
+      sessionEntries: () => safeRead(() => manager.getBranch(), []),
       protectedPaths: () => runtimeProtectedPaths(this.#packageRoot, info.cwd),
       // The document workspace lists the project plus whatever the operator
       // granted in the profile. Without this it silently shows the project only,

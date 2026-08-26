@@ -152,7 +152,9 @@ describe("Piagent local Session Hub Gateway", () => {
     const transient = { path: sessionPath, id: "new-session", cwd: temporary, name: "New conversation",
       created: new Date(), modified: new Date(), messageCount: 0, firstMessage: "(no messages)", allMessagesText: "" };
     let liveOpened = 0;
-    const liveManager = { getBranch: () => [], buildSessionContext: () => ({ model: null, thinkingLevel: "high", messages: [] }) };
+    const entries = [];
+    const liveManager = { getBranch: () => structuredClone(entries), buildSessionContext: () => ({ model: null, thinkingLevel: "high",
+      messages: entries.filter((entry) => entry.type === "message").map((entry) => entry.message) }) };
     const inspection = new SessionInspectionRegistry({ gatewayInstanceRef: "gateway_new_session_inspection", key, packageRoot: root,
       listSessions: async () => [transient],
       openLiveSession(value) { liveOpened += 1; assert.equal(value, sessionRefForPath(key, sessionPath)); return liveManager; },
@@ -165,6 +167,54 @@ describe("Piagent local Session Hub Gateway", () => {
     assert.equal(snapshot.version, "piagent-webui-snapshot-v1");
     assert.match(snapshot.identity.sessionRef, /^session\./);
     assert.equal(liveOpened, 1);
+    const before = await provider.transcript(null, 100);
+    assert.deepEqual(before.items, []);
+    entries.push(
+      { type: "custom", customType: "piagent-webui-message-correlation", data: { schemaVersion: 1,
+        messageRequestId: "message-request.live-transcript", operationRef: "operation.live-transcript" } },
+      { type: "message", id: "live-user", timestamp: new Date().toISOString(),
+        message: { role: "user", content: [{ type: "text", text: "/scout Inspect the current implementation." }] } },
+      { type: "message", id: "live-assistant", timestamp: new Date().toISOString(),
+        message: assistantMessage("The live inspection is complete.") }
+    );
+    const after = await provider.transcript(null, 100);
+    assert.deepEqual(after.items.map((item) => item.role), ["user", "assistant"]);
+    assert.equal(after.items[0].messageRequestId, "message-request.live-transcript");
+    assert.equal(after.items[1].messageRequestId, "message-request.live-transcript");
+    assert.equal(after.items[1].content.text, "The live inspection is complete.");
+    entries.push(
+      { type: "custom", customType: "piagent-webui-message-correlation", data: { schemaVersion: 1,
+        messageRequestId: "message-request.live-implementation", operationRef: "operation.live-implementation" } },
+      { type: "message", id: "live-user-2", timestamp: new Date().toISOString(),
+        message: { role: "user", content: [{ type: "text", text: "/platform-improve Implement the approved changes.\n\nKeep the same session." }] } },
+      { type: "message", id: "live-assistant-2", timestamp: new Date().toISOString(),
+        message: assistantMessage("The implementation and verification are complete.") }
+    );
+    const continued = await provider.transcript(null, 100);
+    assert.deepEqual(continued.items.map((item) => item.role), ["user", "assistant", "user", "assistant"]);
+    assert.deepEqual(continued.items.map((item) => item.messageRequestId), [
+      "message-request.live-transcript", "message-request.live-transcript",
+      "message-request.live-implementation", "message-request.live-implementation"
+    ]);
+    assert.equal(continued.items[2].content.text,
+      "/platform-improve Implement the approved changes.\n\nKeep the same session.");
+    assert.equal(continued.items[3].content.text, "The implementation and verification are complete.");
+    entries.push(
+      { type: "custom", customType: "piagent-webui-message-correlation", data: { schemaVersion: 1,
+        messageRequestId: "message-request.live-review", operationRef: "operation.live-review" } },
+      { type: "message", id: "live-user-3", timestamp: new Date().toISOString(),
+        message: { role: "user", content: [{ type: "text", text: "/review Re-check the result.\n\nReport only remaining gaps." }] } },
+      { type: "message", id: "live-assistant-3", timestamp: new Date().toISOString(),
+        message: assistantMessage("No remaining blocker was found.") }
+    );
+    const reviewed = await provider.transcript(null, 100);
+    assert.deepEqual(reviewed.items.map((item) => item.messageRequestId), [
+      "message-request.live-transcript", "message-request.live-transcript",
+      "message-request.live-implementation", "message-request.live-implementation",
+      "message-request.live-review", "message-request.live-review"
+    ]);
+    assert.equal(reviewed.items.filter((item) => item.role === "user").length, 3);
+    assert.equal(reviewed.items.at(-1).content.text, "No remaining blocker was found.");
     const attachments = new SessionAttachmentRegistry({ inspect: async () => await provider.snapshot(), tempRoot: temporary });
     t.after(() => attachments.close());
     const command = await createAttachmentCommand(snapshot, "message-request.new-session-docx", {

@@ -2708,12 +2708,21 @@ describe("piagent guard integration", () => {
     assert.equal(rewritten.text, "/workflow scout Map auth flow read-only");
 
     await harness.commands.get("workflow").handler("scout Map auth flow read-only", ctx);
+    const multilineRequest = [
+      "Inspect the workflow boundary.",
+      "",
+      "Constraints:",
+      "- preserve paragraphs",
+      "- preserve list layout"
+    ].join("\n");
+    await harness.commands.get("workflow").handler(`scout ${multilineRequest}`, ctx);
     await harness.commands.get("workflow").handler("onboard backend API", ctx);
 
     const messages = harness.entries.filter((entry) => entry.type === "user-message").map((entry) => entry.payload.message);
-    assert.match(messages[0], /^\/scout Map auth flow read-only/);
-    assert.match(messages[1], /first-read onboarding workflow/);
-    assert.match(messages[1], /backend API/);
+    assert.equal(messages[0], "/scout Map auth flow read-only");
+    assert.equal(messages[1], `/scout ${multilineRequest}`);
+    assert.match(messages[2], /first-read onboarding workflow/);
+    assert.match(messages[2], /backend API/);
   });
 
   it("reports solo-first orchestration policy and records task work plans", async () => {

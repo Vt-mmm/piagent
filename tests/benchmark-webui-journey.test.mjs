@@ -112,6 +112,26 @@ test("uncertain send requires exactly one durable user message before its assist
   }), /uncertain-send-was-resent/);
 });
 
+test("correlation cannot hide a whitespace-damaged multiline workflow prompt", () => {
+  const message = "Inspect the workflow boundary.\n\nConstraints:\n- preserve paragraphs\n- preserve lists";
+  const assistant = { role: "assistant", messageRequestId: "message-multiline", agentOperationId: "operation-multiline",
+    content: { text: "Inspection complete." } };
+  const exact = [
+    { role: "user", messageRequestId: "message-multiline", content: { text: `/scout ${message}` } },
+    assistant
+  ];
+  assert.deepEqual(durableTurnPosition(exact, message, "operation-multiline", "message-multiline", {
+    requireExactCorrelation: true, requireUniqueUser: true
+  }), { userIndex: 0, assistantIndex: 1, durableUserCount: 1, assistantText: "Inspection complete." });
+  const damaged = [
+    { role: "user", messageRequestId: "message-multiline", content: { text: `/scout ${message.replace(/\s+/g, " ")}` } },
+    assistant
+  ];
+  assert.equal(durableTurnPosition(damaged, message, "operation-multiline", "message-multiline", {
+    requireExactCorrelation: true, requireUniqueUser: true
+  }), null);
+});
+
 test("terminal settlement mismatch is a bounded candidate outcome, not a parsed transport string", () => {
   const outcome = terminalSettlementOutcome("completed", "blocked", 2);
   assert.deepEqual(outcome, { schemaVersion: 1, kind: "terminal-settlement-mismatch",

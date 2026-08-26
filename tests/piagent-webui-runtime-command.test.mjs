@@ -36,6 +36,8 @@ describe("WebUI runtime command parity", () => {
     for (const workflow of WEBUI_WORKFLOW_IDS) {
       assert.equal(buildWebUiWorkflowCommand(workflow, "deep logic request"), `/workflow ${workflow} deep logic request`);
     }
+    const multiline = "Inspect the boundary.\n\nConstraints:\n- preserve paragraphs\n- preserve lists";
+    assert.equal(buildWebUiWorkflowCommand("scout", multiline), `/workflow scout ${multiline}`);
     assert.equal(buildWebUiWorkflowCommand(null, "plain request"), "plain request");
   });
 

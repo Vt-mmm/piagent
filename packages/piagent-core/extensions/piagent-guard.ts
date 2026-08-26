@@ -4874,9 +4874,10 @@ export default function piagentGuard(pi: ExtensionAPI) {
 
   function commandArgs(raw: string): { action: string; rest: string; tokens: string[] } {
     const trimmed = String(raw ?? "").trim();
-    const tokens = trimmed.split(/\s+/).filter(Boolean);
-    const action = (tokens.shift() ?? "").toLowerCase();
-    return { action, rest: tokens.join(" "), tokens };
+    const match = /^(\S+)(?:\s+([\s\S]*))?$/.exec(trimmed);
+    const action = (match?.[1] ?? "").toLowerCase();
+    const rest = match?.[2] ?? "";
+    return { action, rest, tokens: rest.split(/\s+/).filter(Boolean) };
   }
 
   function shellArg(value: string): string {
