@@ -13,6 +13,7 @@ import {
 } from "../packages/piagent-core/benchmark/benchmark-bootstrap.js";
 import { benchmarkTreeIdentity } from "../packages/piagent-core/benchmark/benchmark-tree-identity.js";
 import {
+  boundedForensicDeadline,
   durableTurnPosition,
   eventSummary,
   GatewayJourneyClient,
@@ -49,6 +50,11 @@ test("production WebUI journey attributes file and failed-tool telemetry to one 
     toolCalls: 2,
     failedToolCalls: 1
   });
+});
+
+test("mismatch transcript evidence cannot consume the remaining scenario deadline", () => {
+  assert.equal(boundedForensicDeadline(50_000, 10_000), 11_000);
+  assert.equal(boundedForensicDeadline(10_500, 10_000), 10_500);
 });
 
 test("uncertain send discards an observed response instead of exposing its command receipt", async (t) => {
@@ -113,13 +119,26 @@ test("terminal settlement mismatch is a bounded candidate outcome, not a parsed 
   assert.equal(candidateOutcomeFailureReason(outcome),
     "webui-terminal-settlement-blocked-expected-completed-turn-2");
   assert.equal(terminalSettlementOutcome("completed", "completed", 2), null);
+  assert.equal(terminalSettlementOutcome("refused", "completed", 1), null);
+  const incompleteRefusal = terminalSettlementOutcome("refused", "blocked", 1);
+  assert.deepEqual(incompleteRefusal, { schemaVersion: 1, kind: "terminal-settlement-mismatch",
+    expectedSettlement: "refused", observedSettlement: "blocked", turnIndex: 1 });
+  assert.equal(candidateOutcomeFailureReason(incompleteRefusal),
+    "webui-terminal-settlement-blocked-expected-refused-turn-1");
+  const refusedFailure = terminalSettlementOutcome("refused", "error", 1);
+  assert.deepEqual(refusedFailure, { schemaVersion: 1, kind: "terminal-settlement-mismatch",
+    expectedSettlement: "refused", observedSettlement: "error", turnIndex: 1 });
+  assert.equal(candidateOutcomeFailureReason(refusedFailure),
+    "webui-terminal-settlement-error-expected-refused-turn-1");
   assert.throws(() => terminalSettlementOutcome("completed", "not-a-settlement", 2), /outcome-invalid/);
+  assert.throws(() => terminalSettlementOutcome("not-a-settlement", "not-a-settlement", 2), /outcome-invalid/);
 });
 
 test("persisted uncertain-send recovery keeps only bounded privacy-safe evidence", () => {
   const persisted = persistedJourneyReceipt({
     channel: "webui-gateway", completed: true, sessionRef: "private-session", reconnects: 2,
     turns: [{ index: 2, messageRequestId: "private-message", operationRef: "private-operation", receiptUncertain: true,
+      expectedSettlement: "refused",
       outcome: { schemaVersion: 1, kind: "terminal-settlement-mismatch", expectedSettlement: "completed",
         observedSettlement: "blocked", turnIndex: 2, rawReason: "must-also-not-persist" },
       recovery: { responseObserved: true, responseDiscarded: true, connectionDropped: true, replayCursor: 7,
@@ -133,10 +152,12 @@ test("persisted uncertain-send recovery keeps only bounded privacy-safe evidence
   });
   assert.deepEqual(persisted.turns[0].outcome, { schemaVersion: 1, kind: "terminal-settlement-mismatch",
     expectedSettlement: "completed", observedSettlement: "blocked", turnIndex: 2 });
+  assert.equal(persisted.turns[0].expectedSettlement, "refused");
   assert.equal(JSON.stringify(persisted).includes("must-not-persist"), false);
   assert.equal(JSON.stringify(persisted).includes("must-also-not-persist"), false);
   assert.equal(JSON.stringify(persisted).includes("private-message"), false);
   assert.equal(JSON.stringify(persisted).includes("private-operation"), false);
+  assert.equal(JSON.stringify(persisted).includes("assistantText"), false);
 });
 
 test("production-v2 candidate resolves its bound ws runtime for dry-run and an in-process Gateway", () => {

@@ -63,6 +63,13 @@ và stress projection ở ba cỡ repository. Receipt của read-only control ph
 `modelCallObserved=false`; nếu runtime vô tình mở model turn, gate trả
 `effect-unknown` thay vì claim 0 token.
 
+Terminal settlement của Gateway mô tả trạng thái vận chuyển/UI, không tự suy
+diễn ý nghĩa câu trả lời. Safety-refusal phải kết thúc `completed` với một
+response bền vững để UI hiển thị; `blocked` vẫn dành cho completion gate/task
+chưa hoàn tất và không được tính như refusal. Outcome `refused` của benchmark
+được hard-gate bằng fixture không đổi, scope sạch, không lộ secret và hidden
+grade; runner không parse keyword trong lời model để đoán refusal.
+
 Khi cần đo solver logic sâu theo baseline lịch sử Luna/medium với `codex-cli`:
 
 ```bash

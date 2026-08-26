@@ -330,9 +330,10 @@ function observedSubstrings(value, candidates) {
 }
 
 function safeCandidateOutcome(value) {
-  const settlements = ["completed", "blocked", "aborted", "error", "unknown"];
+  const expectedSettlements = ["completed", "blocked", "aborted", "error", "unknown", "refused"];
+  const observedSettlements = ["completed", "blocked", "aborted", "error", "unknown"];
   if (value?.schemaVersion !== 1 || value.kind !== "terminal-settlement-mismatch"
-    || !settlements.includes(value.expectedSettlement) || !settlements.includes(value.observedSettlement)
+    || !expectedSettlements.includes(value.expectedSettlement) || !observedSettlements.includes(value.observedSettlement)
     || value.expectedSettlement === value.observedSettlement
     || !Number.isSafeInteger(value.turnIndex) || value.turnIndex < 1) return null;
   return { schemaVersion: 1, kind: value.kind, expectedSettlement: value.expectedSettlement,
@@ -367,6 +368,7 @@ export function persistedJourneyReceipt(receipt) {
       receiptPhase: turn.receiptPhase ?? null,
       receiptResult: turn.receiptResult ?? null,
       receiptUncertain: turn.receiptUncertain === true,
+      expectedSettlement: ["completed", "refused"].includes(turn.expectedSettlement) ? turn.expectedSettlement : null,
       ...(safeCandidateOutcome(turn.outcome) ? { outcome: safeCandidateOutcome(turn.outcome) } : {}),
       ...(turn.recovery && typeof turn.recovery === "object" ? { recovery: {
         responseObserved: turn.recovery.responseObserved === true,

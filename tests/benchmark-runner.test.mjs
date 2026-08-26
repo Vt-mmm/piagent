@@ -2749,14 +2749,14 @@ test("does not terminal-stop when only the baseline fails the outcome floor", (t
   assert.equal(fs.existsSync(path.join(value.output, "report.json")), true);
 });
 
-test("structured WebUI settlement mismatch stays measured through grading, ledger append, and paired stop", async (t) => {
+test("structured WebUI refusal mismatch stays measured through grading, ledger append, and paired stop", async (t) => {
   const value = fixture(t);
   const suiteRoot = fs.realpathSync(path.dirname(value.suite));
   const suite = JSON.parse(fs.readFileSync(value.suite, "utf8"));
   suite.releaseGate = { minimumOutcomeScoreExclusive: 9.5 };
   const scenario = suite.scenarios[0];
   scenario.userJourney = {
-    expectedTerminalSettlement: "completed",
+    expectedTerminalSettlement: "refused",
     turns: [{ id: "implement", prompt: "journey.md" }]
   };
   fs.writeFileSync(path.join(suiteRoot, "journey.md"), "Implement the change, verify it, and report the result.\n");
@@ -2794,7 +2794,7 @@ test("structured WebUI settlement mismatch stays measured through grading, ledge
   const mismatch = {
     schemaVersion: 1,
     kind: "terminal-settlement-mismatch",
-    expectedSettlement: "completed",
+    expectedSettlement: "refused",
     observedSettlement: "blocked",
     turnIndex: 1
   };
@@ -2872,7 +2872,7 @@ test("structured WebUI settlement mismatch stays measured through grading, ledge
   assert.equal(candidate.usage.usageCompleteness, "exact");
   assert.ok(candidate.usage.fresh > 0);
   assert.equal(candidate.resolved, false);
-  assert.equal(candidate.failure, "webui-terminal-settlement-blocked-expected-completed-turn-1");
+  assert.equal(candidate.failure, "webui-terminal-settlement-blocked-expected-refused-turn-1");
   assert.equal(candidate.grade.passed, true, "the hidden grader still evaluates the resulting tree");
   assert.equal(candidate.grade.checks.find((check) => check.id === "result")?.passed, true);
   assert.ok(Number.isFinite(candidate.workflow?.score), "workflow evidence remains evaluated on the failed outcome");

@@ -13,6 +13,8 @@ import { ProjectRegistry } from "../packages/piagent-webui/gateway/project-regis
 const PROTOCOL = "piagent-gateway-protocol-v1";
 const OPAQUE_REF = /^[A-Za-z0-9][A-Za-z0-9._~-]{0,159}$/;
 const TERMINAL_SETTLEMENTS = new Set(["completed", "blocked", "aborted", "error", "unknown"]);
+const EXPECTED_SETTLEMENTS = new Set([...TERMINAL_SETTLEMENTS, "refused"]);
+const MISMATCH_TRANSCRIPT_TIMEOUT_MS = 1_000;
 
 function opaque(prefix) {
   return `${prefix}_${randomBytes(18).toString("base64url")}`;
@@ -25,11 +27,12 @@ function fail(message) {
 }
 
 function terminalSettlementOutcome(expectedSettlement, observedSettlement, turnIndex) {
-  if (expectedSettlement === observedSettlement) return null;
-  if (!TERMINAL_SETTLEMENTS.has(expectedSettlement) || !TERMINAL_SETTLEMENTS.has(observedSettlement)
+  if (!EXPECTED_SETTLEMENTS.has(expectedSettlement) || !TERMINAL_SETTLEMENTS.has(observedSettlement)
     || !Number.isSafeInteger(turnIndex) || turnIndex < 1) {
     fail("webui-terminal-settlement-outcome-invalid");
   }
+  if (expectedSettlement === observedSettlement
+    || expectedSettlement === "refused" && observedSettlement === "completed") return null;
   return {
     schemaVersion: 1,
     kind: "terminal-settlement-mismatch",
@@ -60,6 +63,10 @@ function withTimeout(operation, timeoutMs, label) {
       (error) => { clearTimeout(timer); reject(error); }
     );
   });
+}
+
+function boundedForensicDeadline(deadline, now = Date.now()) {
+  return Math.min(deadline, now + MISMATCH_TRANSCRIPT_TIMEOUT_MS);
 }
 
 function launchCapability(launchUrl) {
@@ -301,6 +308,20 @@ async function waitForDurableTurn(browser, sessionRef, message, operationRef, me
   fail(`webui-durable-turn-missing:${operationRef ?? "unknown"}`);
 }
 
+async function readDurableTurnIfPresent(browser, sessionRef, message, operationRef, messageRequestId, deadline) {
+  try {
+    const forensicDeadline = boundedForensicDeadline(deadline);
+    const pathname = `/api/v1/sessions/${encodeURIComponent(sessionRef)}/inspection/transcript?limit=100`;
+    const transcript = await withTimeout(readJson(browser, pathname, forensicDeadline),
+      remaining(forensicDeadline, "mismatch-transcript"), "mismatch-transcript");
+    const position = durableTurnPosition(Array.isArray(transcript?.items) ? transcript.items : [], message,
+      operationRef, messageRequestId, { allowBlockedAssistant: true });
+    return position ? { transcript, ...position } : null;
+  } catch {
+    return null;
+  }
+}
+
 function eventSummary(events, operationRef) {
   const selected = events.filter((event) => event?.payload?.operationRef === operationRef);
   const fileLabels = selected.flatMap((event) => typeof event?.payload?.fileLabel === "string" ? [event.payload.fileLabel] : []);
@@ -448,9 +469,10 @@ export async function runPiagentWebUiJourney(options) {
       const expectedSettlement = turn.expectedSettlement
         ?? (index === turns.length - 1 ? options.expectedTerminalSettlement : "completed")
         ?? "completed";
-      const expectedProtocolSettlement = expectedSettlement === "refused" ? "blocked" : expectedSettlement;
-      const candidateOutcome = terminalSettlementOutcome(expectedProtocolSettlement, settlement.payload?.settlement, index + 1);
+      const candidateOutcome = terminalSettlementOutcome(expectedSettlement, settlement.payload?.settlement, index + 1);
       if (candidateOutcome) {
+        const durable = await readDurableTurnIfPresent(browser, receipt.sessionRef, turn.message, operationRef,
+          messageRequestId, deadline);
         receipt.turns.push({
           index: index + 1,
           messageRequestId,
@@ -460,15 +482,18 @@ export async function runPiagentWebUiJourney(options) {
           receiptResult: commandReceipt?.resultCode ?? null,
           receiptUncertain: turn.receiptUncertain === true,
           ...(recovery ? { recovery } : {}),
+          expectedSettlement,
           settlement: settlement.payload.settlement,
           outcome: candidateOutcome,
-          assistantText: "",
+          assistantText: durable?.assistantText ?? "",
+          durableUserIndex: durable?.userIndex ?? null,
+          durableAssistantIndex: durable?.assistantIndex ?? null,
           ...eventSummary(client.events, operationRef)
         });
         throw terminalSettlementError(candidateOutcome);
       }
       const durable = await waitForDurableTurn(browser, receipt.sessionRef, turn.message, operationRef,
-        messageRequestId, deadline, { allowBlockedAssistant: expectedProtocolSettlement === "blocked",
+        messageRequestId, deadline, { allowBlockedAssistant: settlement.payload?.settlement === "blocked",
           requireExactCorrelation: turn.receiptUncertain === true, requireUniqueUser: turn.receiptUncertain === true });
       if (recovery) recovery.durableUserCopies = durable.durableUserCount;
       receipt.turns.push({
@@ -480,6 +505,7 @@ export async function runPiagentWebUiJourney(options) {
         receiptResult: commandReceipt?.resultCode ?? null,
         receiptUncertain: turn.receiptUncertain === true,
         ...(recovery ? { recovery } : {}),
+        expectedSettlement,
         settlement: settlement.payload.settlement,
         durableUserIndex: durable.userIndex,
         durableAssistantIndex: durable.assistantIndex,
@@ -493,7 +519,8 @@ export async function runPiagentWebUiJourney(options) {
       journeyReceipt: receipt, forbiddenHits: [], requiredHits: [] };
   } catch (error) {
     const timedOut = String(error?.message ?? "").includes("webui-journey-timeout");
-    return { code: 1, signal: null, timedOut, stdout: "", stderr: error instanceof Error ? error.message : String(error),
+    const stdout = receipt.turns.map((turn) => turn.assistantText).filter((value) => typeof value === "string" && value).join("\n\n");
+    return { code: 1, signal: null, timedOut, stdout, stderr: error instanceof Error ? error.message : String(error),
       durationSeconds: (Date.now() - started) / 1000, journeyReceipt: receipt,
       ...(error?.code === "BENCHMARK_WEBUI_CANDIDATE_OUTCOME" ? { candidateOutcome: error.candidateOutcome } : {}),
       forbiddenHits: [], requiredHits: [] };
@@ -509,6 +536,7 @@ export async function runPiagentWebUiJourney(options) {
 
 export {
   GatewayJourneyClient,
+  boundedForensicDeadline,
   bootstrapBrowserSession,
   durableTurnPosition,
   eventSummary,

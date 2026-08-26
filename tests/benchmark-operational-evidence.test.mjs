@@ -164,6 +164,9 @@ test("accepts only an exact positive-usage structured settlement mismatch as a c
   const candidateOutcome = { schemaVersion: 1, kind: "terminal-settlement-mismatch",
     expectedSettlement: "completed", observedSettlement: "blocked", turnIndex: 2 };
   assert.equal(classifyPreUsageFailure({ code: 1, timedOut: false }, usage, "webui blocked", { candidateOutcome }), undefined);
+  assert.equal(classifyPreUsageFailure({ code: 1, timedOut: false }, usage, "webui refusal incomplete", {
+    candidateOutcome: { ...candidateOutcome, expectedSettlement: "refused", turnIndex: 1 }
+  }), undefined);
   assert.deepEqual(classifyPreUsageFailure({ code: 1, timedOut: false },
     { ...usage, usageCompleteness: "unverified" }, "webui blocked", { candidateOutcome }), {
     failure: "agent-exit-1-with-usage-unavailable",

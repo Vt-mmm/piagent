@@ -933,7 +933,7 @@ export function classifyPreUsageFailure(agent, usage, diagnosticInput,
   }
   const validCandidateOutcome = candidateOutcome?.schemaVersion === 1
     && candidateOutcome.kind === "terminal-settlement-mismatch"
-    && ["completed", "blocked", "aborted", "error", "unknown"].includes(candidateOutcome.expectedSettlement)
+    && ["completed", "blocked", "aborted", "error", "unknown", "refused"].includes(candidateOutcome.expectedSettlement)
     && ["completed", "blocked", "aborted", "error", "unknown"].includes(candidateOutcome.observedSettlement)
     && candidateOutcome.expectedSettlement !== candidateOutcome.observedSettlement
     && Number.isSafeInteger(candidateOutcome.turnIndex) && candidateOutcome.turnIndex > 0;

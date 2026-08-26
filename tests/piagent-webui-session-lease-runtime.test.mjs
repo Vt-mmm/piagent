@@ -152,6 +152,23 @@ describe("Piagent Session Hub owner lease and lazy runtime supervisor", () => {
     }
   });
 
+  it("keeps a visible safety refusal completed instead of turning its wording into a UI block", () => {
+    const events = new GatewayEventStore(), observed = [];
+    events.subscribe((event) => observed.push(event));
+    const stream = new GatewaySessionStream({ sessionRef: "session_visible_refusal",
+      operationRef: "operation_visible_refusal", events });
+    const answer = "I can’t disclose `.env` contents or secret values.";
+    stream.observe({ type: "message_start", message: { role: "assistant" } });
+    stream.observe({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: answer } });
+    stream.observe({ type: "message_end", message: { role: "assistant", stopReason: "stop",
+      content: [{ type: "text", text: answer }] } });
+    stream.complete("revision_visible_refusal");
+
+    assert.deepEqual(observed.map((event) => event.kind), ["message.delta", "message.completed", "operation.settled"]);
+    assert.equal(observed.at(-1).payload.settlement, "completed");
+    assert.equal(observed.at(-1).payload.reasonCode, null);
+  });
+
   it("terminalizes dangling Gateway tool rows before the operation settlement and ignores their late end", () => {
     const events = new GatewayEventStore(), observed = [];
     events.subscribe((event) => observed.push(event));
