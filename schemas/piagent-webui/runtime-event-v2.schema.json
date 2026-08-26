@@ -2962,11 +2962,21 @@
           },
           "then": {
             "type": "object",
-            "properties": {
-              "isError": { "const": false },
-              "exitCode": { "anyOf": [{ "const": 0 }, { "type": "null" }] },
-              "reasonCode": { "type": "null" }
-            }
+            "oneOf": [
+              {
+                "properties": {
+                  "isError": { "const": false },
+                  "exitCode": { "anyOf": [{ "const": 0 }, { "type": "null" }] },
+                  "reasonCode": { "type": "null" }
+                }
+              },
+              {
+                "properties": {
+                  "isError": { "const": false },
+                  "reasonCode": { "const": "search-target-missing" }
+                }
+              }
+            ]
           }
         },
         {

@@ -11,7 +11,8 @@ import {
   assistantMessageText,
   cleanSessionNameInput,
   hasOperatorSessionName,
-  looksLikeCompletionClaim
+  looksLikeCompletionClaim,
+  looksLikeIncompleteHandoff
 } from "../packages/piagent-core/runtime/session/message-signals.ts";
 import {
   buildContextPreflight,
@@ -136,6 +137,21 @@ function extensionContext(cwd = temporaryProject(), sessionId = "session-1") {
 }
 
 describe("runtime session modules", () => {
+  it("keeps external source checkout grants canonical, bounded, and session-scoped", () => {
+    const project = temporaryProject();
+    const checkout = temporaryProject();
+    fs.mkdirSync(path.join(checkout, ".git"));
+    const state = new RuntimeSessionState({ maxObservedContext: 2 });
+    const first = extensionContext(project, "source-session-1");
+    const second = extensionContext(project, "source-session-2");
+
+    assert.equal(state.grantSourceCheckoutReadRoot(first, checkout), fs.realpathSync.native(checkout));
+    assert.deepEqual(state.sourceCheckoutReadRoots(first), [fs.realpathSync.native(checkout)]);
+    assert.deepEqual(state.sourceCheckoutReadRoots(second), []);
+    state.clearSession(first);
+    assert.deepEqual(state.sourceCheckoutReadRoots(first), []);
+  });
+
   it("registers tools and commands through the bounded composition adapter", () => {
     const registered = { commands: [], tools: [] };
     const pi = {
@@ -151,6 +167,7 @@ describe("runtime session modules", () => {
     assert.deepEqual(registered.commands, [{ name: "status", definition: command }]);
     assert.deepEqual(registered.tools, [{ ...tool, executionMode: "parallel" }]);
     assert.equal(piagentToolExecutionMode("piagent_context_index_search"), "parallel");
+    assert.equal(piagentToolExecutionMode("piagent_source_checkout"), "sequential");
     assert.equal(piagentToolExecutionMode("piagent_context_index_record"), "sequential");
     assert.equal(piagentToolBatchMode(["piagent_context_index_search", "piagent_memory_search"]), "parallel");
     assert.equal(piagentToolBatchMode(["piagent_memory_search", "piagent_memory_note"]), "sequential");
@@ -226,6 +243,12 @@ describe("runtime session modules", () => {
     assert.equal(assistantMessageHasToolCall(message), false);
     assert.equal(looksLikeCompletionClaim(assistantMessageText(message)), true);
     assert.equal(looksLikeCompletionClaim("Chua hoan thanh, test failed."), false);
+    assert.equal(looksLikeIncompleteHandoff("Piagent vẫn đang làm và chưa hoàn tất."), true);
+    assert.equal(looksLikeIncompleteHandoff("Piagent dang lam."), true);
+    assert.equal(looksLikeIncompleteHandoff("Van dang xu ly."), true);
+    assert.equal(looksLikeIncompleteHandoff("Các ứng dụng đáng làm cho Piagent"), false);
+    assert.equal(looksLikeIncompleteHandoff("Cac ung dung dang lam cho Piagent"), false);
+    assert.equal(looksLikeCompletionClaim("Đã hoàn tất đánh giá. Các ứng dụng đáng làm được liệt kê bên dưới."), true);
 
     const withTool = { role: "assistant", content: [{ type: "toolCall", name: "read" }] };
     assert.equal(assistantMessageHasToolCall(withTool), true);
@@ -1288,6 +1311,13 @@ describe("runtime session modules", () => {
       toolGroupsForPrompt("/onboard"),
       ["governance", "policy", "retrieval", "knowledge", "onboarding"]
     );
+    assert.deepEqual(
+      toolGroupsForPrompt("/platform-improve Review https://github.com/can1357/oh-my-pi for reusable ideas"),
+      ["intake", "task", "source"]
+    );
+    assert.ok(toolGroupsForPrompt("Review [source](https://gitlab.com/acme/reference.git)").includes("source"));
+    assert.ok(toolGroupsForPrompt("Review git@bitbucket.org:acme/reference.git").includes("source"));
+    assert.equal(toolGroupsForPrompt("Review https://github.com.evil.example/acme/reference").includes("source"), false);
     assert.equal(PIAGENT_TOOL_NAMES.has("piagent_task_start"), true);
     assert.deepEqual(activeTaskToolGroups({
       changeMode: "source-change",

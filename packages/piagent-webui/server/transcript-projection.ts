@@ -32,6 +32,7 @@ export type TranscriptProjectionInput = {
   beforeCursor?: string | null;
   limit?: number;
   generatedAt?: string;
+  taskOutcome?: string | null;
 };
 
 function hash(value: string): string { return createHash("sha256").update(value).digest("hex"); }
@@ -179,6 +180,20 @@ function linkTranscriptTurns(values: ProjectedTranscriptItem[]): ProjectedTransc
   });
 }
 
+function suppressOpenTaskHandoff(values: ProjectedTranscriptItem[], taskOutcome: string | null | undefined): ProjectedTranscriptItem[] {
+  if (taskOutcome !== "pending") return values;
+  let latestUser = -1;
+  for (let index = values.length - 1; index >= 0; index -= 1) {
+    if (values[index]?.item.role === "user") { latestUser = index; break; }
+  }
+  if (latestUser < 0) return values;
+  return values.map((value, index) => {
+    if (index <= latestUser || value.item.role !== "assistant" || value.item.toolCalls.length > 0
+      || !["available", "redacted"].includes(value.item.content.state)) return value;
+    return { ...value, item: { ...value.item, content: unavailableContent("assistant-task-pending") } };
+  });
+}
+
 function durableAssistant(item: TranscriptItem): boolean {
   return item.role === "assistant" && item.toolCalls.length === 0
     && (item.content.state === "available" || item.content.state === "redacted")
@@ -237,9 +252,9 @@ function unavailable(input: TranscriptProjectionInput, reasonCode: string, limit
 export function projectTranscript(input: TranscriptProjectionInput): TranscriptDocument {
   const limit = Math.max(1, Math.min(MAX_ITEMS, Number.isInteger(input.limit) ? Number(input.limit) : 50));
   if (!Array.isArray(input.entries) || input.entries.length > MAX_ENTRIES) return unavailable(input, "transcript-history-unavailable", limit);
-  const projected = linkTranscriptTurns(input.entries.map((entry) => ({ entry, item: item(entry, input.identity),
+  const projected = suppressOpenTaskHandoff(linkTranscriptTurns(input.entries.map((entry) => ({ entry, item: item(entry, input.identity),
     cursor: opaque("transcript", [input.identity.sessionRef, (entry as any)?.id]) }))
-    .filter((value): value is ProjectedTranscriptItem => Boolean(value.item)));
+    .filter((value): value is ProjectedTranscriptItem => Boolean(value.item))), input.taskOutcome);
   const cursors = projected.map((value) => value.cursor);
   let end = projected.length;
   if (input.beforeCursor) {

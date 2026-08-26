@@ -162,6 +162,7 @@ import { inspectTaskResumeState } from "../runtime/recovery/resume-state.ts";
 import { SemanticRepairRuntime } from "../runtime/recovery/semantic-repair-runtime.ts";
 import { defaultRolePolicy } from "../runtime/orchestration/role-policy.ts";
 import { helpersMode } from "../runtime/orchestration/helper-lifecycle.ts";
+import { evaluateDirectSubagentDispatch, recordDirectSubagentResult, reserveDirectSubagentDispatch, taskHelperUsageMode } from "../runtime/orchestration/subagent-tool-policy.ts";
 import { buildLiveTaskStatus, formatLiveTaskStatus } from "../runtime/product/operator-projections.ts";
 import { buildTaskEfficiencyMetrics } from "../runtime/product/efficiency-metrics.ts";
 import { performanceReviewToolDecision, performanceReviewToolKind } from "../runtime/quality/performance-assurance.ts";
@@ -850,7 +851,12 @@ function inspectPathInputsFromInput(
   const seen = new Set<string>();
   const walked = walkStringInputs(input, [], 0, includeFilesystemContentFields);
   for (const item of walked.items) {
-    const normalized = normalizeRelative(cwd, item.value);
+    const relative = normalizeRelative(cwd, item.value);
+    // `path.relative(root, root)` is the empty string. Treat that canonical
+    // project-root spelling as `.` so a capability such as `**/*` admits
+    // `ls .` and an absolute path equal to cwd. The empty candidate matched no
+    // scope and made fresh helpers unable to inspect even their own project.
+    const normalized = relative === "" ? "." : relative;
     if (normalized === undefined) continue;
     const key = `${item.field}\0${normalized}`;
     if (seen.has(key)) continue;
@@ -960,6 +966,7 @@ function evaluatePathLikeToolAccess(
     forceScopeAware?: boolean;
     forceWrite?: boolean;
     allowAmbiguousFilesystemContentFields?: boolean;
+    sourceCheckoutReadRoots?: string[];
   } = {}
 ): { block: boolean; reason?: string } {
   const scopeAwareTool = options.forceScopeAware === true || ["read", "write", "edit", "grep", "find", "ls"].includes(toolName)
@@ -1001,9 +1008,13 @@ function evaluatePathLikeToolAccess(
   }
 
   for (const item of inspectedPaths) {
+    const fieldAccessMode = filesystemFieldAccessMode(toolName, item.field, writesFilesystem);
+    const sourceCheckoutReadRoot = fieldAccessMode === "read"
+      ? grantedSourceCheckoutRootForPath(cwd, item.path, options.sourceCheckoutReadRoots ?? [])
+      : undefined;
     if (scopeAwareTool && isFilesystemScopeField(item.field)) {
       const boundary = inspectRepositoryPathBoundary(cwd, item.path);
-      if (boundary.reason) return { block: true, reason: `Blocked ${toolName}: ${boundary.reason}` };
+      if (boundary.reason && !sourceCheckoutReadRoot) return { block: true, reason: `Blocked ${toolName}: ${boundary.reason}` };
     }
     const resolvedPath = resolveRepositoryPathCandidate(cwd, item.path);
     const readMatched = matchesProtectedPath(item.path, readProtectedPaths)
@@ -1015,7 +1026,6 @@ function evaluatePathLikeToolAccess(
       };
     }
 
-    const fieldAccessMode = filesystemFieldAccessMode(toolName, item.field, writesFilesystem);
     if (fieldAccessMode === "write") {
       const readOnlyMatched = matchesProtectedPath(item.path, readOnlyPaths)
         ?? (resolvedPath ? matchesProtectedPath(resolvedPath, readOnlyPaths) : undefined);
@@ -1039,7 +1049,8 @@ function evaluatePathLikeToolAccess(
           reason: `Blocked ${toolName} write outside resolved filesystem scope from ${item.field}: ${item.path}`
         };
       }
-    } else if (scopeAwareTool && filesystemRead && isFilesystemScopeField(item.field) && !matchesAnyPath(item.path, filesystemRead)) {
+    } else if (scopeAwareTool && filesystemRead && isFilesystemScopeField(item.field)
+      && !sourceCheckoutReadRoot && !matchesAnyPath(item.path, filesystemRead)) {
       return {
         block: true,
         reason: `Blocked ${toolName} read outside resolved filesystem scope from ${item.field}: ${item.path}`
@@ -1068,6 +1079,21 @@ function evaluatePathLikeToolAccess(
   }
 
   return { block: false };
+}
+
+function grantedSourceCheckoutRootForPath(cwd: string, candidate: string, roots: string[]): string | undefined {
+  if (roots.length === 0) return undefined;
+  const absolute = path.resolve(cwd, normalizePathCandidate(candidate));
+  let canonical: string;
+  try {
+    canonical = fs.realpathSync.native(absolute);
+  } catch {
+    return undefined;
+  }
+  return roots.find((root) => {
+    const relative = path.relative(root, canonical);
+    return relative === "" || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+  });
 }
 
 function stateRoot(cwd: string): string {
@@ -1680,18 +1706,33 @@ function isReadOnlyTaskShellCommand(
   if (/[<>]|`|\$\(/.test(command)) {
     return false;
   }
-  const safeCommands = new Set(["pwd", "ls", "find", "rg", "grep", "cat", "sed", "head", "tail", "wc", "stat", "file", "test", "[", "which"]);
+  const safeCommands = new Set(["pwd", "ls", "find", "rg", "grep", "cat", "sed", "head", "tail", "wc", "stat", "file", "test", "[", "which", "printf", "sort"]);
   const safeGitSubcommands = new Set(["status", "diff", "log", "show", "ls-files", "rev-parse"]);
   return segments.length > 0 && segments.every((segment) => {
     const words = segment.words.filter(Boolean);
     const executable = path.basename(words[0] ?? "");
     if (executable === "sed" && words.some((word) => /^-.*i/.test(word))) return false;
     if (executable === "find" && words.some((word) => ["-delete", "-exec", "-execdir", "-ok", "-okdir", "-fprint", "-fprint0", "-fprintf", "-fls"].includes(word))) return false;
+    if (executable === "sort" && words.slice(1).some((word) => (
+      word === "--output"
+      || word.startsWith("--output=")
+      || /^-[^-]*o/.test(word)
+    ))) return false;
     if (safeCommands.has(executable)) return true;
     if (executable === "git") return safeGitSubcommands.has(words[1] ?? "");
     if (executable === "command") return words[1] === "-v";
     return false;
   });
+}
+
+function shellTouchesGrantedSourceCheckout(cwd: string, command: string, roots: string[]): boolean {
+  if (roots.length === 0) return false;
+  for (const root of roots) {
+    const relative = path.relative(cwd, root).split(path.sep).join("/");
+    if (command.includes(root) || (relative && command.includes(relative))) return true;
+  }
+  return extractShellPathCandidates(command)
+    .some((candidate) => Boolean(grantedSourceCheckoutRootForPath(cwd, normalizeRelative(cwd, candidate) ?? candidate, roots)));
 }
 
 const PROJECT_MUTATING_EXECUTABLES = new Set([
@@ -4185,6 +4226,27 @@ export default function piagentGuard(pi: ExtensionAPI) {
     telemetry,
     activity: recordActivity,
     now: nowIso,
+    recordSubagentResult: (ctx, event, result) => {
+      const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
+      const written = recordDirectSubagentResult(task, event, result, {
+        now: nowIso,
+        persist: (candidate) => writeTask(ctx.cwd, candidate),
+        trace: (payload) => appendTrace(ctx.cwd, payload),
+        sessionTrace: (payload) => appendSessionTrace(pi, payload)
+      });
+      telemetry(ctx, {
+        event: "helper_result_classified",
+        recordedAt: nowIso(),
+        taskRunId: written?.taskRunId,
+        toolCallId: event.toolCallId,
+        spawned: result.spawned,
+        failed: result.failed,
+        disposition: result.disposition,
+        reasonCode: result.reasonCode,
+        calls: result.calls,
+        tokens: result.tokens
+      });
+    },
     observeEditFreshness: (ctx, event, metadata) => {
       if (!metadata.successful || !metadata.taskRunId) return;
       const protectedPaths = effectiveProtectedPaths(policy, loadProfileFromContext(ctx)).readProtectedPaths;
@@ -4215,6 +4277,27 @@ export default function piagentGuard(pi: ExtensionAPI) {
     beforeAuthorize: (event, ctx) => {
       const toolInput = isPlainRecord(event.input) ? event.input : {};
       const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
+      const helperPreflight = evaluateDirectSubagentDispatch({
+        toolName: event.toolName,
+        toolInput,
+        cwd: ctx.cwd,
+        helpersMode: task ? taskHelperUsageMode(task) : helpersMode(),
+        taskPending: task?.trace.outcome === "pending",
+        dispatchAuthority: Boolean(task && taskAuthorityDecision(task, "CAP-14", "dispatch").allowed),
+        durableSubagentState: task?.orchestration?.subagents
+      });
+      if (helperPreflight.applicable && helperPreflight.dispatch && !helperPreflight.allowed) {
+        telemetry(ctx, {
+          event: "helper_dispatch_blocked",
+          recordedAt: nowIso(),
+          taskRunId: task?.taskRunId,
+          toolCallId: event.toolCallId,
+          reasonCode: helperPreflight.reasonCode,
+          role: helperPreflight.role,
+          requestCount: helperPreflight.requestCount
+        });
+        return { block: true, reason: `Blocked ${event.toolName}: ${helperPreflight.reason} Do not retry this helper; continue in the parent.` };
+      }
       const verifierReuse = reuseCurrentTreeExactVerifier({ cwd: ctx.cwd, task, toolName: event.toolName, toolInput, sessionEntries: ctx.sessionManager.getEntries() as unknown[] });
       if (verifierReuse.reused) {
         telemetry(ctx, { event: "verifier_evidence_reused", recordedAt: nowIso(), taskRunId: task?.taskRunId, toolCallId: event.toolCallId, reasonCode: verifierReuse.reasonCode, commandDigest: verifierReuse.commandDigest, workingTreeDigest: verifierReuse.workingTreeDigest }); return;
@@ -4360,6 +4443,30 @@ export default function piagentGuard(pi: ExtensionAPI) {
     },
     afterAuthorized: (event, ctx, metadata) => {
       const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
+      const helperPreflight = evaluateDirectSubagentDispatch({
+        toolName: event.toolName,
+        toolInput: event.input,
+        cwd: ctx.cwd,
+        helpersMode: task ? taskHelperUsageMode(task) : helpersMode(),
+        taskPending: task?.trace.outcome === "pending",
+        dispatchAuthority: Boolean(task && taskAuthorityDecision(task, "CAP-14", "dispatch").allowed),
+        durableSubagentState: task?.orchestration?.subagents
+      });
+      if (helperPreflight.applicable && helperPreflight.dispatch && helperPreflight.allowed) {
+        const reserved = reserveDirectSubagentDispatch(task, metadata.toolCallId, {
+          now: nowIso,
+          persist: (candidate) => writeTask(ctx.cwd, candidate),
+          trace: (payload) => appendTrace(ctx.cwd, payload)
+        });
+        telemetry(ctx, {
+          event: "helper_dispatch_reserved",
+          recordedAt: nowIso(),
+          taskRunId: reserved?.taskRunId,
+          toolCallId: metadata.toolCallId,
+          role: helperPreflight.role,
+          requestCount: helperPreflight.requestCount
+        });
+      }
       if (task?.trace.outcome === "pending") {
         const snapshot = workingTreeSnapshot(ctx.cwd) as Record<string, string>;
         const currentDigest = workingTreeEvidenceDigest(snapshot);
@@ -4507,6 +4614,12 @@ export default function piagentGuard(pi: ExtensionAPI) {
       const execDecision = evaluateExecPolicy(command, profile, policy);
       authorizedShellCommand = command;
       authorizedShellSegments = execDecision.segments;
+      if (shellTouchesGrantedSourceCheckout(ctx.cwd, command, runtimeState.sourceCheckoutReadRoots(ctx))) {
+        return {
+          block: true,
+          reason: "Shared source checkouts are shell-inaccessible. Inspect the exact session-granted checkout with read, grep, find, or ls; cache mutation is never authorized."
+        };
+      }
       shellProjectMutation = isProjectMutatingShellCommand(command, execDecision.segments);
       configuredVerifierShell = Boolean(sessionTask && commandMatchesVerifyPlan(command, sessionTask.verifyCommands));
       const shellWriteCandidates = extractShellWritePathCandidates(command);
@@ -4598,7 +4711,8 @@ export default function piagentGuard(pi: ExtensionAPI) {
       {
         forceScopeAware: authorizationTargetInspection.patchCarrier || Boolean(preparedInput.proxyToolName),
         forceWrite: authorizationTargetInspection.patchCarrier || preparedInput.proxyAction?.decision === "confirm",
-        allowAmbiguousFilesystemContentFields: !usesKnownExternalProvider && !isPiagentTool(event.toolName)
+        allowAmbiguousFilesystemContentFields: !usesKnownExternalProvider && !isPiagentTool(event.toolName),
+        sourceCheckoutReadRoots: runtimeState.sourceCheckoutReadRoots(ctx)
       }
     );
     if (pathDecision.block) {

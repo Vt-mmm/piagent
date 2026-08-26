@@ -192,7 +192,7 @@ export class GatewaySessionStream {
     }
   }
 
-  complete(sessionRevision: string | null): void {
+  complete(sessionRevision: string | null, taskOutcome: string | null = null): void {
     if (!this.#lifecycle.markTerminal()) return;
     this.#flush(true);
     let settlement = this.#forcedSettlement ?? (this.#runtimeRestartRequired
@@ -201,6 +201,11 @@ export class GatewaySessionStream {
     const messageRef = this.#lastMessageRef ?? this.#messageRef;
     if (settlement.outcome === "completed" && !messageRef) {
       settlement = { outcome: "unknown", reasonCode: "assistant-message-unavailable" };
+    } else if (settlement.outcome === "completed" && taskOutcome === "pending") {
+      // Provider completion is not governed-task completion. The durable task
+      // contract is authoritative, so withhold both success settlement and the
+      // durable assistant-success event until that contract becomes terminal.
+      settlement = { outcome: "unknown", reasonCode: "task-completion-pending" };
     } else if (settlement.outcome === "completed" && sessionRevision === null) {
       // Streaming text is not durable success until the canonical session
       // projection confirms it. Still terminate the UI, but do not show draft.

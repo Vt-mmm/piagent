@@ -4,6 +4,55 @@ This file records release-facing changes for Pi Agent Platform. Copy the relevan
 
 ## Unreleased
 
+## v1.6.1 - 2026-08-26
+
+### Runtime continuity and truthful WebUI state
+
+- Kept queued same-session work under one operation identity and prevented a
+  pending durable task from emitting a completed message or a success bubble.
+  Final-looking drafts remain hidden until the task reaches a terminal state,
+  preserving user-message then assistant-response ordering without a stale
+  processing indicator.
+- Reconciled Activity from canonical tool evidence. Handled multi-target search
+  warnings finish normally, nested result envelopes are classified correctly,
+  and rejected or evidence-free helper calls remain visible as failures instead
+  of later replaying as passed.
+- Captured the latest real operator request for model-owned task startup while
+  bounding and redacting the durable copy, so attachments and workflow wrappers
+  no longer replace the user's actual intent.
+
+### Safe external source review
+
+- Detects GitHub, GitLab and Bitbucket references and activates only the minimal
+  source-checkout surface needed for a review. A successful checkout grants
+  session-scoped read access to that exact canonical tree, with an eight-source
+  bound and automatic cleanup at session end.
+- Preserved protections around shared caches, sibling paths, symlink escape,
+  credentials, `.env`, `.git` and all mutation paths. Read-only inspection may
+  use bounded `read`, `grep`, `find` and `ls` flows without widening the project
+  mutation contract.
+
+### Solo-first cost and context controls
+
+- Added direct subagent preflight with a one-helper ceiling, bounded calls,
+  turns and runtime, read-only role enforcement, no automatic retry/fork/worker
+  expansion, and truthful durable helper usage. Repeated helper results are
+  compacted without changing the model or thinking level.
+- Hardened adaptive context accounting, exact verifier reuse, task-evidence
+  refresh and bounded runtime emission so token-saving decisions fail closed
+  when evidence is incomplete and cannot be relabeled as a Codex-relative cost
+  claim.
+
+### Benchmark assurance
+
+- Added provider-free runtime-conformance and Codex-relative efficiency gates,
+  bound token/cost evidence to exact workload and provider attempts, and kept
+  the historical v1.6.0 production result explicitly separate from any new
+  subscription-spend or 30–40% cost claim.
+- Preserved the 108-session production gate as an operator-authorized quota
+  step; this release ships runtime and benchmark safeguards without claiming a
+  new provider-backed result.
+
 ## v1.6.0 - 2026-08-24
 
 ### Context efficiency and source safety

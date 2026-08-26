@@ -27,12 +27,12 @@ export const PIAGENT_TOOL_GROUPS = {
     "piagent_context_index_status",
     "piagent_context_index_search"
   ],
+  source: ["piagent_source_checkout"],
   knowledge: [
     "piagent_memory_status",
     "piagent_memory_search",
     "piagent_memory_citation_record",
     "piagent_document_read",
-    "piagent_source_checkout",
     "piagent_orchestration_policy"
   ],
   onboarding: [
@@ -53,6 +53,13 @@ export type PiagentToolGroup = keyof typeof PIAGENT_TOOL_GROUPS;
 export const PIAGENT_TOOL_ORDER = Object.values(PIAGENT_TOOL_GROUPS).flat();
 export const PIAGENT_TOOL_NAMES = new Set<string>(PIAGENT_TOOL_ORDER);
 
+const SUPPORTED_GIT_REPOSITORY_URL = /(?:^|[\s("'\[])https?:\/\/(?:www\.)?(?:github\.com|gitlab\.com|bitbucket\.org)\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+(?:\.git)?(?:[\/?#][^\s)"'\]]*)?/i;
+const SUPPORTED_GIT_SSH_REFERENCE = /(?:^|[\s("'\[])git@(?:github\.com|gitlab\.com|bitbucket\.org):[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+(?:\.git)?(?:$|[\s)"'\]])/i;
+
+export function hasSupportedGitRepositoryReference(prompt: string): boolean {
+  return SUPPORTED_GIT_REPOSITORY_URL.test(prompt) || SUPPORTED_GIT_SSH_REFERENCE.test(prompt);
+}
+
 export function toolGroupsForPrompt(prompt: string): PiagentToolGroup[] {
   const signal = classifyContextTask(prompt);
   const lower = prompt.toLowerCase();
@@ -68,7 +75,10 @@ export function toolGroupsForPrompt(prompt: string): PiagentToolGroup[] {
   if (/\b(context (?:engine|index|search|diagnostic)|source checkout|vendor checkout)\b/.test(lower)) {
     groups.add("retrieval");
   }
-  if (/\b(document intake|project memory|orchestration policy|source checkout|subagent policy|vendor checkout)\b/.test(lower)) {
+  if (/\b(source checkout|vendor checkout)\b/.test(lower) || hasSupportedGitRepositoryReference(prompt)) {
+    groups.add("source");
+  }
+  if (/\b(document intake|project memory|orchestration policy|subagent policy)\b/.test(lower)) {
     groups.add("knowledge");
   }
   if (/\b(permission|capability|exec policy|tool policy)\b/.test(lower)) groups.add("policy");

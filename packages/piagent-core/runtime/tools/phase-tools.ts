@@ -45,11 +45,11 @@ export const PIAGENT_DIAGNOSTIC_TOOLS = new Set<string>([
   "piagent_context_budget", "piagent_context_index_status", "piagent_memory_status", "piagent_usage_snapshot"
 ]);
 export const PIAGENT_MUTATION_CAPABLE_TOOLS = new Set<string>([
-  "piagent_context_engine", "piagent_source_checkout", "piagent_profile_apply", "piagent_profile_tech_apply",
+  "piagent_context_engine", "piagent_profile_apply", "piagent_profile_tech_apply",
   "piagent_profile_tech_context_record", "piagent_project_onboarding_record", "piagent_context_index_record", "piagent_memory_note"
 ]);
 export const PIAGENT_SEQUENTIAL_TOOLS = new Set<string>([
-  ...PIAGENT_MUTATION_CAPABLE_TOOLS, "piagent_tools", "piagent_task_start", "piagent_task_progress", "piagent_context_record",
+  ...PIAGENT_MUTATION_CAPABLE_TOOLS, "piagent_source_checkout", "piagent_tools", "piagent_task_start", "piagent_task_progress", "piagent_context_record",
   "piagent_verify_record", "piagent_trace_record", "piagent_memory_citation_record"
 ]);
 
@@ -83,15 +83,15 @@ const REQUIRED_HOST_TOOLS: Record<TrajectoryPhase, string[]> = {
 
 const PHASE_TOOL_ALLOW: Record<TrajectoryPhase, string[]> = {
   intake: [],
-  scout: ["piagent_task_progress", "piagent_context_index_search", "piagent_document_read"],
-  plan: ["piagent_task_progress", "piagent_orchestration_policy"],
-  execute: ["piagent_task_progress"],
+  scout: ["piagent_task_progress", "piagent_context_index_search", "piagent_document_read", "piagent_source_checkout"],
+  plan: ["piagent_task_progress", "piagent_orchestration_policy", "piagent_source_checkout"],
+  execute: ["piagent_task_progress", "piagent_source_checkout"],
   // Runtime hooks own context, verifier, gate, and handoff evidence. Keeping
   // their record tools model-visible duplicates work and creates false manual
   // choreography in otherwise automatic tasks.
-  verify: [],
-  repair: ["piagent_task_progress", "piagent_context_index_search"],
-  review: ["piagent_task_progress"],
+  verify: ["piagent_source_checkout"],
+  repair: ["piagent_task_progress", "piagent_context_index_search", "piagent_source_checkout"],
+  review: ["piagent_task_progress", "piagent_source_checkout"],
   handoff: [],
   terminal: []
 };

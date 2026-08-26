@@ -446,7 +446,9 @@ export default function piagentWebUiExtension(pi: ExtensionAPI): void {
   pi.on("tool_execution_end", (event, ctx) => { publishDrafts(ctx, stream.toolEnded(event, bridge.snapshot())); bridgeSoft(() => lifecycle.observeToolEnd(ctx)); });
   pi.on("turn_end", (event, ctx) => publishDrafts(ctx, stream.turnEnded(event, bridge.snapshot())));
   pi.on("agent_settled", (_event, ctx) => {
-    publishDrafts(ctx, stream.agentSettled(bridge.snapshot(), typeof ctx.hasPendingMessages === "function" ? ctx.hasPendingMessages() : null));
+    const hasPendingMessages = typeof ctx.hasPendingMessages === "function" ? ctx.hasPendingMessages() : null;
+    publishDrafts(ctx, stream.agentSettled(bridge.snapshot(), hasPendingMessages));
+    if (hasPendingMessages === true) { publishPersisted(ctx); return; }
     const operationId = bridge.snapshot().identity?.agentOperationId ?? null;
     bridgeSoft(() => bridge.observeAgentSettled(ctx)); bridgeSoft(() => lifecycle.observeAgentSettled(ctx, operationId)); publishPersisted(ctx);
   });

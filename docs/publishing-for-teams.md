@@ -98,6 +98,11 @@ pi install /path/to/piagent
   Inspector; projection Task Changes / Working Tree / Staged có bounded diff,
   provenance và enforce protected path; session lease bền, recovery khi restart
   hoặc owner cũ treo, doctor có repair tường minh.
+- `1.6.1`: patch ổn định runtime và chi phí — transcript chỉ hiện response khi
+  durable task đã terminal, Activity phân loại đúng retry/helper failure, review
+  repo ngoài chỉ nhận read grant session-scoped cho checkout chính xác, và direct
+  subagent bị khóa solo-first với một helper read-only có budget hữu hạn. Benchmark
+  thêm gate provider-free/Codex-relative nhưng không đưa ra claim chi phí mới.
 - `1.6.0`: context evidence khóa đúng turn/session/task run; WebUI có canonical
   live state, watchdog và Stop an toàn qua reload/multi-tab; chat chỉ hiện kết
   quả thành công còn retry/lỗi nằm trong Activity; deep-logic benchmark có bài

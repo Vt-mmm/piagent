@@ -12,7 +12,7 @@ export function registerTaskEvidenceTools(pi: ExtensionAPI, deps: Record<string,
     compactTaskDetails, effectiveProtectedPaths, extensionDir, extractDocument, loadProfileFromContext,
     matchesAnyPath, matchesProtectedPath, nowIso, path, permissionOverrideFromContext,
     policy, readTask, recordTaskProgressCheckpoints, redactText, registerPiagentTool,
-    resolveDocumentPath, resolveDocumentRoots, resolvePermissionProfile, safeTaskId, verifyProjectCapabilityState,
+    resolveDocumentPath, resolveDocumentRoots, resolvePermissionProfile, runtimeState, safeTaskId, verifyProjectCapabilityState,
     writeTask
   } = deps;
   registerPiagentTool(pi, {
@@ -259,7 +259,7 @@ export function registerTaskEvidenceTools(pi: ExtensionAPI, deps: Record<string,
   registerPiagentTool(pi, {
     name: "piagent_source_checkout",
     label: "Piagent Source Checkout",
-    description: "Cache and refresh an external Git repository for targeted local inspection.",
+    description: "Prepare an external Git repository for bounded, read-only local inspection.",
     promptSnippet: "Use this before reading a user-provided external source repository.",
     promptGuidelines: [
       "Use for GitHub/GitLab/Bitbucket source repositories supplied by the user.",
@@ -269,15 +269,19 @@ export function registerTaskEvidenceTools(pi: ExtensionAPI, deps: Record<string,
       repoRef: Type.String({ minLength: 3, description: "owner/repo, host/owner/repo, https URL, or git@host:owner/repo.git" }),
       forceUpdate: Type.Optional(Type.Boolean({ description: "Fetch immediately even if the cache was refreshed recently." }))
     }),
-    async execute(_toolCallId, params) {
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       try {
         const repo = checkoutReferenceRepo(params.repoRef, params.forceUpdate === true);
+        const grantedPath = runtimeState.grantSourceCheckoutReadRoot(ctx, repo.checkoutPath);
+        repo.checkoutPath = grantedPath;
         const text = [
           "Source cache ready:",
           `path: ${repo.checkoutPath}`,
           `url: ${repo.cloneUrl}`,
           `commit: ${repo.commit ?? "unknown"}`,
-          `fetched: ${repo.fetched ? "yes" : "no"}`
+          `fetched: ${repo.fetched ? "yes" : "no"}`,
+          "access: read-only for this session via read, grep, find, or ls",
+          "Do not run a checkout script or use shell mutation against this shared cache."
         ].join("\n");
         return {
           content: [{ type: "text", text }],

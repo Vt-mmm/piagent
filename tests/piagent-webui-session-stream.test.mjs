@@ -28,8 +28,11 @@ function persist(drafts) {
     const validation = validateFixture(registry, "runtime-event-v2", event);
     assert.equal(validation.valid, true, `${event.kind}: ${validation.errors}`);
   }
+  const replay = store.replay(null, 1_000);
+  assert.equal(replay.state, "current");
+  assert.deepEqual(replay.events, events);
   fs.rmSync(root, { recursive: true, force: true });
-  return events;
+  return replay.events;
 }
 
 describe("Piagent WebUI Pi-native session streaming adapter", () => {
@@ -90,6 +93,39 @@ describe("Piagent WebUI Pi-native session streaming adapter", () => {
     assert.equal(events.every((event) => event.payload.preview === null), true);
   });
 
+  it("keeps a handled search warning stable from live ingestion through durable replay", () => {
+    const adapter = new PiSessionStreamAdapter({ now: () => now });
+    adapter.turnStarted({ turnIndex: 0, timestamp: now.getTime() }, snapshot);
+    const output = "rg: missing.ts: No such file or directory (os error 2)\nsrc/found.ts:12:match\nCommand exited with code 2";
+    const events = persist([
+      ...adapter.toolStarted({ toolCallId: "search-warning", toolName: "bash",
+        args: { command: "rg -n match missing.ts src" } }, snapshot),
+      ...adapter.toolEnded({ toolCallId: "search-warning", toolName: "bash", isError: true,
+        result: { content: [{ type: "text", text: output }] } }, snapshot)
+    ]);
+    assert.deepEqual(events.map((event) => event.kind), ["activity.started", "activity.finished"]);
+    assert.equal(events[1].payload.state, "finished");
+    assert.equal(events[1].payload.isError, false);
+    assert.equal(events[1].payload.reasonCode, "search-target-missing");
+    assert.equal(JSON.stringify(events).includes(output), false, "classification evidence must not leak into durable Activity replay");
+    assert.equal(JSON.stringify(events).includes("rg -n match"), false, "tool input must remain transient");
+  });
+
+  it("marks a soft subagent spawn rejection failed without persisting its raw output", () => {
+    const adapter = new PiSessionStreamAdapter({ now: () => now });
+    adapter.turnStarted({ turnIndex: 0, timestamp: now.getTime() }, snapshot);
+    const output = "Subagent spawn limit reached; no children were started.";
+    const events = persist([
+      ...adapter.toolStarted({ toolCallId: "helper-rejected", toolName: "subagent",
+        args: { agent: "piagent-scout" } }, snapshot),
+      ...adapter.toolEnded({ toolCallId: "helper-rejected", toolName: "subagent", isError: false,
+        result: { content: [{ type: "text", text: output }] } }, snapshot)
+    ]);
+    assert.deepEqual(events.map((event) => event.kind), ["activity.started", "activity.failed"]);
+    assert.equal(events[1].payload.reasonCode, "helper-dispatch-rejected");
+    assert.equal(JSON.stringify(events).includes(output), false);
+  });
+
   it("redacts secret-bearing tool names and bounds newline event amplification", () => {
     const secret = "sk-proj-abcdefghijklmnopqrstuvwxyz";
     const adapter = new PiSessionStreamAdapter({ now: () => now });
@@ -140,6 +176,23 @@ describe("Piagent WebUI Pi-native session streaming adapter", () => {
     assert.deepEqual(event.payload.hasPendingMessages, { state: "unknown", value: null, reasonCode: "queue-fact-unavailable" });
   });
 
+  it("never settles a governed operation as completed while its durable task is still open", () => {
+    const adapter = new PiSessionStreamAdapter({ now: () => now });
+    const governed = { ...snapshot, taskState: "active", identity: { ...identity, taskId: "task-open", taskRunId: "run-open" } };
+    const terminal = { ...governed, taskState: "terminal" };
+    assert.equal(persist(adapter.agentSettled(governed, false))[0].payload.settlement, "unknown");
+    assert.equal(persist(adapter.agentSettled(terminal, false))[0].payload.settlement, "completed");
+  });
+
+  it("keeps one operation open across a queued continuation and settles only after the queue drains", () => {
+    const adapter = new PiSessionStreamAdapter({ now: () => now });
+    adapter.agentStarted(snapshot);
+    assert.deepEqual(adapter.agentSettled(snapshot, true), []);
+    const [settled] = persist(adapter.agentSettled(snapshot, false));
+    assert.equal(settled.kind, "agent-operation.settled");
+    assert.equal(settled.payload.settlement, "completed");
+  });
+
   it("wires Pi-native events into the exact session's durable replay stream", async () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-session-stream-wiring-")), sessionId = "session-stream-wiring";
     const handlers = new Map(), entries = [];
@@ -151,7 +204,8 @@ describe("Piagent WebUI Pi-native session streaming adapter", () => {
       getThinkingLevel() { return "off"; }
     };
     webUiExtension(pi);
-    const ctx = { cwd, isIdle: () => false, hasPendingMessages: () => false, getContextUsage: () => undefined,
+    let pendingMessages = false;
+    const ctx = { cwd, isIdle: () => false, hasPendingMessages: () => pendingMessages, getContextUsage: () => undefined,
       sessionManager: { getSessionId: () => sessionId, getBranch: () => structuredClone(entries), getLeafId: () => entries.at(-1)?.id ?? null,
         getLeafEntry: () => structuredClone(entries.at(-1) ?? null) }, ui: { notify() {} } };
     const emit = async (name, event = {}) => {
@@ -166,6 +220,10 @@ describe("Piagent WebUI Pi-native session streaming adapter", () => {
     await emit("tool_execution_end", { toolCallId: "raw_tool_wiring", toolName: "read", result: "PRIVATE OUTPUT", isError: false });
     await emit("message_end", { message: { role: "assistant", content: [{ type: "text", text: "Streamed safely.\n" }], stopReason: "stop", timestamp: Date.now() } });
     await emit("turn_end", { message: { role: "assistant", stopReason: "stop" }, toolResults: [] });
+    pendingMessages = true;
+    await emit("agent_settled");
+    await emit("agent_start");
+    pendingMessages = false;
     await emit("agent_settled");
 
     const eventRoot = path.join(cwd, ".pi", "piagent-state", "webui-events");
@@ -179,6 +237,7 @@ describe("Piagent WebUI Pi-native session streaming adapter", () => {
     assert.equal(replay.state, "current");
     assert.deepEqual(replay.events.map((event) => event.kind), ["agent-operation.started", "turn.started", "message.started", "message.text-delta",
       "activity.started", "activity.finished", "message.completed", "turn.ended", "agent-operation.settled"]);
+    assert.equal(replay.events[0].agentOperationId, replay.events.at(-1).agentOperationId);
     for (const event of replay.events) {
       const validation = validateFixture(registry, "runtime-event-v2", event);
       assert.equal(validation.valid, true, `${event.kind}: ${validation.errors}`);

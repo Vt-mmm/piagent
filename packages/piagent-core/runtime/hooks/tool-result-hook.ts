@@ -4,7 +4,7 @@ import { estimateContextTokens, toolResultFingerprint } from "../../extensions/c
 import { matchesProtectedPath } from "../../extensions/policy-core.js";
 import { changedSnapshotFiles, taskDeltaFilesFromSnapshot } from "../../extensions/task-contract-view.js";
 import { classifyVerificationFailure } from "../../extensions/verification-intelligence.js";
-import { redactForStorage, redactSensitiveText } from "../../extensions/redaction-core.js";
+import { redactForStorage } from "../../extensions/redaction-core.js";
 import { appendObservedBashResult, hashEvidenceCommand, observedBashResultFromToolResultEvent } from "../../extensions/runtime-evidence.js";
 import { workingTreeSnapshot, workingTreeSnapshotHasUnavailableEvidence } from "../../extensions/task-state.js";
 import { workingTreeObservation } from "../../extensions/working-tree-digest.js";
@@ -12,6 +12,7 @@ import { recordObservedContextEvidence } from "../context/context-evidence-quali
 import { confirmContextDeliveryFromToolResult, type ContextDeliveryConfirmationDependencies } from "../context/context-delivery.ts";
 import { recordMutationResult } from "../inspection/mutation-provenance-recorder.ts";
 import { classifyToolFailure } from "../inspection/tool-failure-classification.ts";
+import { classifyDirectSubagentResult, type DirectSubagentResult } from "../orchestration/subagent-tool-policy.ts";
 import { boundedGitDiffReview } from "../quality/performance-assurance.ts";
 import { currentFileContentDigests } from "../quality/model-mutation-proof.ts";
 import { boundedPerformanceReviewResultText } from "../quality/performance-review-evidence.ts";
@@ -23,6 +24,7 @@ import { observeTrajectorySync } from "../trajectory/trajectory-observability.ts
 import type { TrajectorySyncResult } from "../trajectory/trajectory-runtime.ts";
 import { filterGrepProtectedContent, filterProtectedPathListContent } from "./tool-result-content-guards.ts";
 import { patchLineStats } from "./tool-result-metadata.ts";
+import { appendToolResultText, boundedToolResultText, countChangedStringLeaves, isPlainRecord, numericExitCode, redactToolResultTextContent, successfulToolResult } from "./tool-result-value-helpers.ts";
 
 export { filterGrepProtectedContent, filterProtectedPathListContent };
 type ToolResultEvent = { toolCallId?: string; toolName: string; input?: unknown; content?: unknown; details?: unknown; isError?: boolean; usage?: unknown };
@@ -80,72 +82,12 @@ type ToolResultHookDependencies = ContextDeliveryConfirmationDependencies & {
     }
   ) => TrajectorySyncResult | undefined;
   syncTrajectory?: (ctx: ExtensionContext, contextObserved: boolean) => TrajectorySyncResult | undefined;
+  recordSubagentResult?: (
+    ctx: ExtensionContext,
+    event: ToolResultEvent,
+    result: DirectSubagentResult
+  ) => void;
 };
-
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
-}
-
-function numericExitCode(value: unknown): number | undefined {
-  if (typeof value === "number" && Number.isInteger(value)) return value;
-  if (typeof value === "string" && /^-?\d+$/.test(value.trim())) return Number.parseInt(value, 10);
-  return undefined;
-}
-
-function successfulToolResult(event: ToolResultEvent): boolean {
-  if (event.isError === true) return false;
-  const details = isPlainRecord(event.details) ? event.details : {};
-  const exitCode = numericExitCode(details.exitCode ?? details.status);
-  return exitCode === undefined || exitCode === 0;
-}
-
-function boundedToolResultText(content: unknown): string {
-  const text = typeof content === "string"
-    ? content
-    : Array.isArray(content)
-      ? content
-          .filter((block) => block && typeof block === "object" && (block as { type?: unknown }).type === "text")
-          .map((block) => String((block as { text?: unknown }).text ?? ""))
-          .join("\n")
-      : "";
-  return text.slice(-20_000);
-}
-
-function countChangedStringLeaves(before: unknown, after: unknown): number {
-  if (typeof before === "string" && typeof after === "string") return before === after ? 0 : 1;
-  if (Array.isArray(before) && Array.isArray(after)) {
-    return before.reduce((total, item, index) => total + countChangedStringLeaves(item, after[index]), 0);
-  }
-  if (!before || !after || typeof before !== "object" || typeof after !== "object") return 0;
-  return Object.entries(before as Record<string, unknown>).reduce(
-    (total, [key, value]) => total + countChangedStringLeaves(value, (after as Record<string, unknown>)[key]),
-    0
-  );
-}
-
-function redactToolResultTextContent(content: unknown): { content: unknown; redacted: number } {
-  if (!Array.isArray(content)) return { content, redacted: 0 };
-  let redacted = 0;
-  const safeContent = content.map((block) => {
-    if (!block || typeof block !== "object") return block;
-    const typed = block as { type?: unknown; text?: unknown };
-    if (typed.type !== "text" || typeof typed.text !== "string") return block;
-    const safeText = redactSensitiveText(typed.text);
-    if (!safeText.redacted) return block;
-    redacted += 1;
-    return { ...block, text: safeText.text };
-  });
-  return { content: safeContent, redacted };
-}
-
-function appendToolResultText(content: unknown, text: string): unknown[] {
-  const block = { type: "text", text };
-  if (Array.isArray(content)) return [...content, block];
-  if (typeof content === "string" && content) return [{ type: "text", text: content }, block];
-  return [block];
-}
 
 export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResultHookDependencies): void {
   const editRecoveryDelivery = new EditRecoveryDeliveryState();
@@ -177,6 +119,15 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
       ? dependencies.state.consumeShellMutationSnapshot(ctx, event.toolName, event.input)
       : undefined;
     const currentTask = dependencies.activeTask(ctx);
+    const subagentResult = classifyDirectSubagentResult({
+      toolName: event.toolName,
+      toolInput: event.input,
+      content: event.content,
+      details: event.details,
+      isError: event.isError
+    });
+    if (subagentResult) dependencies.recordSubagentResult?.(ctx, event, subagentResult);
+    const effectiveToolError = event.isError === true || subagentResult?.failed === true;
     const eventTree = currentTask
       ? workingTreeObservation(workingTreeSnapshot(ctx.cwd) as Record<string, string>)
       : undefined;
@@ -229,11 +180,12 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
       }
     }
     const outputText = boundedToolResultText(event.content);
-    const failureReasonCode = classifyToolFailure(event.toolName, event.isError === true, event.content, event.input);
+    const toolFailureReasonCode = classifyToolFailure(event.toolName, effectiveToolError, event.content, event.input);
+    const failureReasonCode = subagentResult?.reasonCode ?? toolFailureReasonCode;
     const performanceReviewOutputText = boundedPerformanceReviewResultText(event.content);
     const observedExitCode = observed?.exitCode
       ?? numericExitCode(isPlainRecord(event.details) ? event.details.exitCode ?? event.details.status : undefined)
-      ?? (event.isError === true ? 1 : 0);
+      ?? (effectiveToolError ? 1 : 0);
     const failure = observedExitCode === 0
       ? undefined
       : classifyVerificationFailure(outputText, observedExitCode);
@@ -318,6 +270,29 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
     let resultDetails: unknown = event.details;
     let resultChanged = false;
     let editRecovery: EditRecoveryContext | undefined;
+    if (subagentResult) {
+      const classification = {
+        schemaVersion: 1,
+        spawned: subagentResult.spawned,
+        failed: subagentResult.failed,
+        reasonCode: subagentResult.reasonCode,
+        disposition: subagentResult.disposition,
+        role: subagentResult.role,
+        requestRef: subagentResult.requestRef,
+        calls: subagentResult.calls,
+        tokens: subagentResult.tokens
+      };
+      resultDetails = isPlainRecord(resultDetails)
+        ? { ...resultDetails, piagentSubagentOutcome: classification }
+        : { ...(resultDetails === undefined ? {} : { value: resultDetails }), piagentSubagentOutcome: classification };
+      if (subagentResult.failed) {
+        resultContent = appendToolResultText(
+          resultContent,
+          `[Piagent helper outcome: failed (${subagentResult.reasonCode ?? "helper-run-failed"}). Treat this result as insufficient evidence; continue in the parent and do not retry the helper.]`
+        );
+      }
+      resultChanged = true;
+    }
     const resultTarget = dependencies.extractLikelyPath(ctx.cwd, isPlainRecord(event.input) ? event.input : {});
     dependencies.observeEditFreshness?.(ctx, event, {
       taskRunId: taskIdentity?.taskRunId,
@@ -351,7 +326,7 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
     const recovery = buildEditRecoveryContext({
       cwd: ctx.cwd,
       targetPath: resultTarget,
-      reasonCode: failureReasonCode,
+      reasonCode: toolFailureReasonCode,
       protectedPaths: readProtectedPaths
     });
     if (recovery) {
@@ -402,7 +377,7 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
       outputHash: fingerprint.outputHash,
       recordedAt: dependencies.now()
     });
-    if (repeated && ["read", "grep", "find", "ls"].includes(event.toolName) && fingerprint.outputChars > 0) {
+    if (repeated && ["read", "grep", "find", "ls", "subagent"].includes(event.toolName) && fingerprint.outputChars > 0) {
       resultContent = [{
         type: "text",
         text: `[Piagent delta: unchanged ${event.toolName} result; ${fingerprint.outputChars} chars / ${fingerprint.outputLines} lines match the previous identical call.]`
@@ -452,7 +427,7 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
       .map((filePath) => dependencies.redactText(filePath))
       .sort();
     const lineStats = patchLineStats(event.details);
-    const editRecoveryFailure = ["edit-anchor-not-unique", "edit-anchor-stale"].includes(String(failureReasonCode));
+    const editRecoveryFailure = ["edit-anchor-not-unique", "edit-anchor-stale"].includes(String(toolFailureReasonCode));
     record(ctx, {
       activityId: `result:${resultFingerprintId}`,
       event: "tool_result",
@@ -469,7 +444,7 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
       compacted: compactionCaptures.length > 0,
       compactedCaptures: compactionCaptures.length,
       sensitiveValuesRedacted,
-      isError: event.isError,
+      isError: effectiveToolError,
       reasonCode: failureReasonCode,
       // An explicit false is evidence too: it proves that every classified
       // edit-anchor failure passed through the recovery policy even when the

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { redactSensitiveText } from "../../piagent-core/extensions/redaction-core.js";
+import { classifyToolFailure, handledToolFailure } from "../../piagent-core/runtime/inspection/tool-failure-classification.ts";
 import type { RuntimeEventDraft, RuntimeEventRevision } from "../../piagent-core/runtime/inspection/runtime-event-store.ts";
 import type { BridgeIdentity, BridgeSnapshot } from "./same-session-bridge.ts";
 
@@ -35,6 +36,13 @@ function safeToolName(value: unknown): string {
   if (projected.redacted) return "redacted-tool";
   return projected.text.replace(/[^A-Za-z0-9._:-]/g, "-").replace(/^[^A-Za-z0-9]+/, "").slice(0, 128) || "tool";
 }
+function toolClassificationInput(value: unknown): { command: string } | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const direct = (value as { command?: unknown }).command;
+  const nested = (value as { args?: { command?: unknown } }).args?.command;
+  const command = typeof direct === "string" ? direct : typeof nested === "string" ? nested : null;
+  return command === null ? undefined : { command: command.slice(0, 8_192) };
+}
 function role(message: any): MessageRole | null {
   return message?.role === "user" ? "user" : message?.role === "assistant" ? "assistant" : message?.role === "toolResult" ? "tool-result" : null;
 }
@@ -68,10 +76,11 @@ function redaction(applied = false, truncated = false) { return { applied, value
 function identityReady(identity: BridgeIdentity | null): identity is BridgeIdentity & { agentOperationId: string } {
   return Boolean(identity?.agentOperationId);
 }
-function activityPayload(state: "started" | "progress" | "finished" | "failed", activityRef: string, toolName: string) {
+function activityPayload(state: "started" | "progress" | "finished" | "failed", activityRef: string, toolName: string,
+  reasonCode: string | null = null) {
   return { state, activityType: "tool", activityRef, toolName, inputDigest: null, outputDigest: null, preview: null, previewKind: "none",
     outputBytes: null, outputLines: null, exitCode: null, isError: state === "finished" ? false : state === "failed" ? true : null,
-    affectedFileRefs: [], criterionIds: [], verifierAttemptIds: [], reasonCode: state === "failed" ? "tool-execution-failed" : null };
+    affectedFileRefs: [], criterionIds: [], verifierAttemptIds: [], reasonCode };
 }
 
 export class PiSessionStreamAdapter {
@@ -81,12 +90,13 @@ export class PiSessionStreamAdapter {
   #activeByRole = new Map<MessageRole, ActiveMessage>();
   #lastMessageRef: string | null = null;
   #toolRefs = new Map<string, string>();
+  #toolInputs = new Map<string, { command: string } | undefined>();
   #lastToolProgress = new Map<string, number>();
 
   constructor(options: { now?: () => Date } = {}) { this.#now = options.now ?? (() => new Date()); }
   reset(): void {
     this.#turnIndex = null; this.#messageCounter = 0; this.#activeByRole.clear(); this.#lastMessageRef = null;
-    this.#toolRefs.clear(); this.#lastToolProgress.clear();
+    this.#toolRefs.clear(); this.#toolInputs.clear(); this.#lastToolProgress.clear();
   }
 
   #base(snapshot: BridgeSnapshot, sourceObservedAt?: unknown): Omit<RuntimeEventDraft, "kind" | "payload" | "evidence" | "redaction"> | null {
@@ -210,13 +220,14 @@ export class PiSessionStreamAdapter {
     const draft = this.#draft(snapshot, "turn.ended", { phase: "ended", finalMessageRef: this.#lastMessageRef, toolResultCount: count, stopReason: reason });
     return draft ? [draft] : [];
   }
-  toolStarted(event: { toolCallId?: unknown; toolName?: unknown }, snapshot: BridgeSnapshot): RuntimeEventDraft[] {
+  toolStarted(event: { toolCallId?: unknown; toolName?: unknown; args?: unknown }, snapshot: BridgeSnapshot): RuntimeEventDraft[] {
     if (typeof event.toolCallId !== "string" || !event.toolCallId) return [];
     const drafts = this.#activeByRole.get("assistant")
       ? this.#drainLines(snapshot, this.#activeByRole.get("assistant") as ActiveMessage, false) : [];
     const name = safeToolName(event.toolName);
     const ref = opaque("tool", [snapshot.identity?.sessionRef, event.toolCallId]), activityRef = opaque("activity", [snapshot.identity?.sessionRef, event.toolCallId]);
-    this.#toolRefs.set(event.toolCallId, ref); this.#lastToolProgress.set(event.toolCallId, 0);
+    this.#toolRefs.set(event.toolCallId, ref); this.#toolInputs.set(event.toolCallId, toolClassificationInput(event.args));
+    this.#lastToolProgress.set(event.toolCallId, 0);
     const draft = this.#draft(snapshot, "activity.started", activityPayload("started", activityRef, name), { toolCallId: ref });
     if (draft) drafts.push(draft);
     return drafts;
@@ -231,19 +242,31 @@ export class PiSessionStreamAdapter {
     const draft = this.#draft(snapshot, "activity.progress", activityPayload("progress", activityRef, name), { toolCallId: ref });
     return draft ? [draft] : [];
   }
-  toolEnded(event: { toolCallId?: unknown; toolName?: unknown; isError?: unknown }, snapshot: BridgeSnapshot): RuntimeEventDraft[] {
+  toolEnded(event: { toolCallId?: unknown; toolName?: unknown; result?: unknown; isError?: unknown }, snapshot: BridgeSnapshot): RuntimeEventDraft[] {
     if (typeof event.toolCallId !== "string") return [];
     const ref = this.#toolRefs.get(event.toolCallId); if (!ref) return [];
     const name = safeToolName(event.toolName);
-    const activityRef = opaque("activity", [snapshot.identity?.sessionRef, event.toolCallId]), state = event.isError === true ? "failed" : "finished";
-    this.#toolRefs.delete(event.toolCallId); this.#lastToolProgress.delete(event.toolCallId);
-    const draft = this.#draft(snapshot, `activity.${state}`, activityPayload(state, activityRef, name), { toolCallId: ref });
+    const reasonCode = classifyToolFailure(name, event.isError === true, event.result, this.#toolInputs.get(event.toolCallId));
+    const state = (event.isError === true || reasonCode !== null) && !handledToolFailure(reasonCode) ? "failed" : "finished";
+    const activityRef = opaque("activity", [snapshot.identity?.sessionRef, event.toolCallId]);
+    this.#toolRefs.delete(event.toolCallId); this.#toolInputs.delete(event.toolCallId); this.#lastToolProgress.delete(event.toolCallId);
+    const draft = this.#draft(snapshot, `activity.${state}`, activityPayload(state, activityRef, name, reasonCode), { toolCallId: ref });
     return draft ? [draft] : [];
   }
   agentSettled(snapshot: BridgeSnapshot, hasPendingMessages: boolean | null): RuntimeEventDraft[] {
+    // A queued follow-up belongs to the same logical operation. Do not emit a
+    // terminal edge or clear stream identity between recovery turns.
+    if (hasPendingMessages === true) return [];
     const value = hasPendingMessages === null ? { state: "unknown", value: null, reasonCode: "queue-fact-unavailable" }
       : { state: "known", value: hasPendingMessages, reasonCode: null };
-    const draft = this.#draft(snapshot, "agent-operation.settled", { settlement: "completed", lastStopReason: null, hasPendingMessages: value });
+    // Host-idle only proves that this agent operation stopped producing turns.
+    // A governed task is successful only after its durable contract is terminal.
+    // Fail closed here so a missed/late completion hook cannot paint an open
+    // task as completed in the WebUI.
+    const governedTaskOpen = Boolean(snapshot.identity?.taskRunId) && snapshot.taskState !== "terminal";
+    const draft = this.#draft(snapshot, "agent-operation.settled", {
+      settlement: governedTaskOpen ? "unknown" : "completed", lastStopReason: null, hasPendingMessages: value
+    });
     this.reset(); return draft ? [draft] : [];
   }
 }

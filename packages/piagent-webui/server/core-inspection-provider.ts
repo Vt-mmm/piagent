@@ -236,6 +236,7 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
   }
   async transcript(beforeCursor: string | null, limit: number): Promise<unknown> {
     const snapshot = await this.snapshot() as any;
+    const activeTask = this.#input.task?.() as any;
     return projectTranscript({ identity: { projectRef: snapshot.identity.projectRef, runtimeInstanceId: snapshot.identity.runtimeInstanceId,
       sessionRef: snapshot.identity.sessionRef, taskId: snapshot.identity.taskId, taskRunId: snapshot.identity.taskRunId, agentOperationId: null, toolCallId: null },
       revision: { runtimeRevision: snapshot.revision.runtimeRevision, taskRevision: snapshot.revision.taskRevision,
@@ -243,7 +244,7 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
         indexRevision: snapshot.revision.indexRevision, approvalRevision: snapshot.revision.approvalRevision,
         sessionOptionRevision: snapshot.revision.sessionOptionRevision, queueRevision: snapshot.revision.queueRevision },
       eventCursor: snapshot.revision.eventCursor, entries: this.#input.sessionEntries?.() ?? [], beforeCursor, limit,
-      generatedAt: snapshot.generatedAt });
+      generatedAt: snapshot.generatedAt, taskOutcome: typeof activeTask?.trace?.outcome === "string" ? activeTask.trace.outcome : null });
   }
   async queue(): Promise<unknown> {
     if (!this.#input.queueProjection) throw new ReadModelNotFound();

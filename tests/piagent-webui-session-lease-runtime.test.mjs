@@ -125,9 +125,14 @@ describe("Piagent Session Hub owner lease and lazy runtime supervisor", () => {
     const aborted = make("aborted"); aborted.markAborted(); aborted.complete("revision_settlement_aborted");
     const failed = make("error"); failed.markError(); failed.complete(null);
     const unknown = make("unknown"); unknown.complete(null);
+    const taskPending = make("task-pending");
+    taskPending.observe({ type: "message_start", message: { role: "assistant" } });
+    taskPending.observe({ type: "message_end", message: { role: "assistant", stopReason: "stop",
+      content: [{ type: "text", text: "Final-looking answer while the task remains open." }] } });
+    taskPending.complete("revision_task_pending", "pending");
 
     const settlements = observed.filter((event) => event.kind === "operation.settled");
-    assert.deepEqual(settlements.map((event) => event.payload.settlement), ["completed", "blocked", "aborted", "error", "unknown"]);
+    assert.deepEqual(settlements.map((event) => event.payload.settlement), ["completed", "blocked", "aborted", "error", "unknown", "unknown"]);
     assert.equal(settlements.filter((event) => event.payload.operationRef === "operation_settlement_completed").length, 1);
     assert.deepEqual(observed.filter((event) => event.kind === "message.completed")
       .map((event) => event.payload.operationRef), ["operation_settlement_completed"]);
@@ -137,6 +142,10 @@ describe("Piagent Session Hub owner lease and lazy runtime supervisor", () => {
     assert.equal(settlements.find((event) => event.payload.settlement === "error")?.payload.reasonCode, "operation-failed");
     assert.equal(settlements.find((event) => event.payload.settlement === "unknown")?.payload.reasonCode,
       "operation-settlement-unknown");
+    assert.equal(settlements.find((event) => event.payload.operationRef === "operation_settlement_task-pending")?.payload.reasonCode,
+      "task-completion-pending");
+    assert.equal(observed.some((event) => event.kind === "message.completed"
+      && event.payload.operationRef === "operation_settlement_task-pending"), false);
     for (const event of observed) {
       const validation = validateFixture(registry, "gateway-protocol-v1", event);
       assert.equal(validation.valid, true, validation.errors);

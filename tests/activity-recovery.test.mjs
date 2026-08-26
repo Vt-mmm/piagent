@@ -74,6 +74,8 @@ describe("Piagent logical activity recovery", () => {
   it("classifies a multi-target search with useful matches and one missing target as handled", () => {
     const content = [{ type: "text", text: "rg: missing.ts: No such file or directory (os error 2)\nsrc/found.ts:12:match\nCommand exited with code 2" }];
     assert.equal(classifyToolFailure("bash", true, content, { command: "rg -n match missing.ts src" }), "search-target-missing");
+    assert.equal(classifyToolFailure("bash", true, { content }, { command: "rg -n match missing.ts src" }), "search-target-missing",
+      "the live tool_execution_end result envelope must classify like canonical toolResult content");
     assert.equal(classifyToolFailure("bash", true, [{ type: "text", text: "rg: missing.ts: No such file or directory" }],
       { command: "rg -n match missing.ts" }), "tool-result-failed");
   });
@@ -83,5 +85,15 @@ describe("Piagent logical activity recovery", () => {
     assert.equal(classifyToolFailure("edit", true, [{ type: "text", text: "Could not find the exact text. The old text must match exactly." }]), "edit-anchor-stale");
     assert.equal(classifyToolFailure("replace", true, [{ type: "text", text: "Could not find exact text; oldText mismatch." }]), "tool-result-failed");
     assert.equal(classifyToolFailure("edit", true, [{ type: "text", text: "permission denied" }]), "tool-result-failed");
+  });
+
+  it("does not call a zero-error subagent envelope successful when no useful child ran", () => {
+    assert.equal(classifyToolFailure("subagent", false,
+      [{ type: "text", text: "Subagent spawn limit reached; no children were started." }]), "helper-dispatch-rejected");
+    assert.equal(classifyToolFailure("subagent", false,
+      [{ type: "text", text: "## Scout Summary\n- **Scope inspected:** None.\nStopped under the insufficient-evidence rule." }]),
+    "helper-insufficient-evidence");
+    assert.equal(classifyToolFailure("subagent", false,
+      [{ type: "text", text: "## Scout Summary\n- Scope inspected: packages/runtime\n- Result: complete" }]), null);
   });
 });

@@ -9,8 +9,7 @@ import { SessionLeaseStore, type SessionLeaseSnapshot } from "./session-lease-st
 import { GatewayEventStore } from "./gateway-events.ts";
 import { GatewaySessionStream } from "./gateway-session-stream.ts";
 import { executePermissionCommand, executeRuntimeCommand } from "./runtime-session-controls.ts";
-import { configureSessionOptions, effectiveModelRef, effectiveThinkingLevel,
-  type EffectiveSessionOptions } from "./session-effective-options.ts";
+import { configureSessionOptions, effectiveModelRef, effectiveThinkingLevel, type EffectiveSessionOptions } from "./session-effective-options.ts";
 import { waitForOperationStart } from "./session-operation-start.ts";
 import { armSessionOperationWatchdog, bestEffortUnsubscribe, boundedResult, sessionOperationDeadlinePolicy, SessionOperationWatchdog, terminateWatchedSessionOperation,
   type SessionOperationDeadlinePolicy, type SessionOperationWatchdogOptions } from "./session-operation-watchdog.ts";
@@ -471,7 +470,8 @@ export class SessionRuntimeSupervisor {
     // The pre-clear projection is stale; derive post-settlement liveness from exact ownership.
     active.operationRef = null; const settledLiveState = this.ownership(sessionRef).liveState;
     if (projection) active.lastSessionRevision = projection.sessionRevision;
-    stream.complete(projection?.sessionRevision ?? null);
+    const taskOutcome = activeSessionTask(active.info.cwd, active.info.id)?.trace?.outcome ?? null;
+    stream.complete(projection?.sessionRevision ?? null, taskOutcome);
     if (projection) this.#events.publish("runtime.changed", { sessionRef, sessionRevision: projection.sessionRevision,
       liveState: restartRequired ? "uncertain" : settledLiveState, operationRef: null,
       reasonCode: restartRequired ? "runtime-restart-required" : null });

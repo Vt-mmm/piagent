@@ -317,7 +317,7 @@ export class SameSessionPiBridge {
   }
   observeAgentStart(ctx: ExtensionContext): void {
     if (!this.refresh(ctx) || !this.#binding || this.#binding.state !== "ready") return;
-    const pending = this.#pending;
+    const pending = this.#pending; if (this.#binding.identity.agentOperationId && !pending) return;
     const operationId = pending?.operationId ?? this.#revision("operation", ++this.#operationCounter, "external");
     this.#binding.identity.agentOperationId = operationId; this.#refresh(); this.#event("operation.started", { operationRef: operationId, commandId: pending?.command.commandId });
     const observedEntry = pending ? dispatchEntry(pending, ctx) : null;

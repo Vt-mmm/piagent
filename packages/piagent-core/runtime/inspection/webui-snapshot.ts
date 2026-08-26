@@ -110,21 +110,29 @@ function canonicalToolEvidence(sessionEntries: unknown[]): {
 function reconciledToolResults(events: ActivityInspectorEvent[], evidence: ReturnType<typeof canonicalToolEvidence>): ActivityInspectorEvent[] {
   const resultIds = new Set(events.filter((event) => event.event === "tool_result" && event.toolCallId).map((event) => event.toolCallId as string));
   const reconciled = events.map((event) => {
-    if (event.event !== "tool_result" || !event.toolCallId || !event.isError) return event;
+    if (event.event !== "tool_result" || !event.toolCallId) return event;
     const raw = evidence.results.get(event.toolCallId);
     if (!raw) return event;
     const reasonCode = classifyToolFailure(raw.toolName || event.toolName, raw.isError, raw.content, evidence.inputs.get(event.toolCallId));
+    if (!event.isError) {
+      // A newer explicit success remains authoritative over an older canonical
+      // hard error. The exception is a provider-level helper soft failure:
+      // legacy telemetry could only see `isError=false`, while the canonical
+      // result proves that no useful child actually ran.
+      if (raw.isError || !["helper-dispatch-rejected", "helper-insufficient-evidence"].includes(String(reasonCode))) return event;
+      return { ...event, isError: true, reasonCode };
+    }
     return reasonCode ? { ...event, reasonCode } : event;
   });
   for (const call of events) {
     if (call.event !== "tool_call" || !call.toolCallId || resultIds.has(call.toolCallId)) continue;
     const raw = evidence.results.get(call.toolCallId);
     if (!raw) continue;
-    const reasonCode = raw.isError
-      ? classifyToolFailure(raw.toolName || call.toolName, raw.isError, raw.content, evidence.inputs.get(call.toolCallId)) : undefined;
+    const reasonCode = classifyToolFailure(raw.toolName || call.toolName, raw.isError, raw.content, evidence.inputs.get(call.toolCallId));
+    const effectiveError = raw.isError || Boolean(reasonCode && !handledToolFailure(reasonCode));
     reconciled.push({ activityId: `canonical-result:${call.toolCallId}`, event: "tool_result",
       recordedAt: raw.recordedAt ?? call.recordedAt, sessionId: call.sessionId, taskRunId: call.taskRunId,
-      toolCallId: call.toolCallId, toolName: raw.toolName || call.toolName, isError: raw.isError,
+      toolCallId: call.toolCallId, toolName: raw.toolName || call.toolName, isError: effectiveError,
       ...(reasonCode ? { reasonCode } : {}) });
   }
   return reconciled.sort((left, right) => String(left.recordedAt ?? "").localeCompare(String(right.recordedAt ?? "")));

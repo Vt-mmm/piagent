@@ -139,6 +139,20 @@ describe("Piagent WebUI bounded transcript projection", () => {
     assert.equal(JSON.stringify(value).includes("Unclassified assistant draft"), false);
   });
 
+  it("withholds a final-looking latest response while the durable task remains pending", () => {
+    const entries = [
+      entry("entry_1", "user", "Assess the repository"),
+      entry("entry_2", "assistant", "Assessment complete.", { stopReason: "stop" })
+    ];
+    const pending = project(entries, { taskOutcome: "pending" });
+    expectValid(pending);
+    assert.deepEqual(pending.items.map((value) => value.content.reasonCode), [null, "assistant-task-pending"]);
+    assert.equal(pending.items[1].content.text, null);
+    const completed = project(entries, { taskOutcome: "completed" });
+    expectValid(completed);
+    assert.deepEqual(completed.items.map((value) => value.content.text), ["Assess the repository", "Assessment complete."]);
+  });
+
   it("projects attachments as file cards without dumping document bodies into chat", () => {
     const body = "PRIVATE DOCUMENT BODY THAT MUST STAY OUT OF THE CHAT BUBBLE";
     const wrapper = [

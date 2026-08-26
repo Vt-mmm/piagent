@@ -30,7 +30,7 @@ export function registerPolicyTools(pi: ExtensionAPI, deps: Record<string, any>)
       "When recovery is necessary, load only the smallest group that resolves the reported missing evidence."
     ],
     parameters: Type.Object({
-      groups: Type.Array(StringEnum(["intake", "governance", "task", "recovery", "policy", "retrieval", "knowledge", "onboarding", "usage"] as const), { minItems: 1 })
+      groups: Type.Array(StringEnum(["intake", "governance", "task", "recovery", "policy", "retrieval", "source", "knowledge", "onboarding", "usage"] as const), { minItems: 1 })
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const groups = [...new Set(params.groups)] as PiagentToolGroup[];

@@ -101,4 +101,63 @@ describe("Piagent WebUI Activity canonical result reconciliation", () => {
     assert.equal(projection.snapshot.activity.running.length, 0);
     assert.equal(projection.snapshot.session.operation.liveness, "idle");
   });
+
+  it("keeps a handled search warning non-failing after canonical refresh and reconciliation", async (t) => {
+    const cwd = repository();
+    t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+    const command = "rg -n match missing.ts src";
+    const content = "rg: missing.ts: No such file or directory (os error 2)\nsrc/found.ts:12:match\nCommand exited with code 2";
+    const events = [
+      call("search-warning", "bash", "2026-08-24T14:30:00.000Z", { command }),
+      { activityId: "result:search-warning", event: "tool_result", sessionId, toolCallId: "search-warning", toolName: "bash",
+        recordedAt: "2026-08-24T14:30:01.000Z", isError: true, exitCode: 2, exitCodeExact: true,
+        reasonCode: "tool-result-failed" }
+    ];
+    const sessionEntries = [
+      { type: "message", timestamp: "2026-08-24T14:30:00.000Z", message: { role: "assistant",
+        content: [{ type: "toolCall", id: "search-warning", name: "bash", arguments: { command } }] } },
+      result("search-warning", "bash", "2026-08-24T14:30:01.000Z", true, content)
+    ];
+
+    const projection = await buildWebUiInspectionProjection({ cwd, sessionId, events, sessionEntries,
+      generatedAt: "2026-08-24T14:30:02.000Z" });
+    const row = projection.snapshot.activity.recent.find((item) => item.preview === command);
+    const reconciled = projection.scopedEvents.find((event) => event.event === "tool_result"
+      && event.toolCallId === "search-warning");
+
+    assert.equal(row?.state, "passed");
+    assert.equal(row?.label, "bash warning");
+    assert.equal(reconciled?.reasonCode, "search-target-missing");
+    assert.equal(projection.snapshot.activity.running.length, 0);
+    const validation = validateFixture(registry, "snapshot-v1", projection.snapshot);
+    assert.equal(validation.valid, true, validation.errors);
+  });
+
+  it("replays a provider-level subagent rejection as failed instead of passed", async (t) => {
+    const cwd = repository();
+    t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+    const events = [
+      call("helper-rejected", "subagent", "2026-08-24T14:40:00.000Z"),
+      { activityId: "result:helper-rejected", event: "tool_result", sessionId, toolCallId: "helper-rejected",
+        toolName: "subagent", recordedAt: "2026-08-24T14:40:01.000Z", isError: false }
+    ];
+    const sessionEntries = [
+      { type: "message", timestamp: "2026-08-24T14:40:00.000Z", message: { role: "assistant",
+        content: [{ type: "toolCall", id: "helper-rejected", name: "subagent", arguments: { agent: "piagent-scout" } }] } },
+      result("helper-rejected", "subagent", "2026-08-24T14:40:01.000Z", false,
+        "Subagent spawn limit reached; no children were started.")
+    ];
+
+    const projection = await buildWebUiInspectionProjection({ cwd, sessionId, events, sessionEntries,
+      generatedAt: "2026-08-24T14:40:02.000Z" });
+    const row = projection.snapshot.activity.recent.find((item) => item.toolName === "subagent");
+    const reconciled = projection.scopedEvents.find((event) => event.event === "tool_result"
+      && event.toolCallId === "helper-rejected");
+
+    assert.equal(row?.state, "failed");
+    assert.equal(row?.label, "subagent failed");
+    assert.equal(reconciled?.isError, true);
+    assert.equal(reconciled?.reasonCode, "helper-dispatch-rejected");
+    assert.equal(projection.snapshot.activity.running.length, 0);
+  });
 });

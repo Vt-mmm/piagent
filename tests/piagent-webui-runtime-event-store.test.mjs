@@ -52,6 +52,18 @@ describe("Piagent WebUI runtime event store", () => {
     assert.equal(failed.payload.reasonCode, "tool-result-failed");
     const missing = events.append(activity(5, "tool_result", { isError: true, reasonCode: "target-not-found" }, true), at(5)).event;
     assert.equal(missing.payload.reasonCode, "target-not-found");
+    const warning = events.append(activity(7, "tool_result", { isError: true, exitCode: 2, exitCodeExact: true,
+      reasonCode: "search-target-missing" }, true), at(7)).event;
+    expectSchema(warning);
+    assert.equal(warning.kind, "activity.finished");
+    assert.equal(warning.payload.isError, false);
+    assert.equal(warning.payload.exitCode, 2);
+    assert.equal(warning.payload.reasonCode, "search-target-missing");
+    assert.equal(events.replay(null, 100).events.at(-1).eventId, warning.eventId);
+    const unrelatedFinishedReason = validateFixture(registry, "runtime-event-v2", {
+      ...warning, payload: { ...warning.payload, reasonCode: "tool-result-failed" }
+    });
+    assert.equal(unrelatedFinishedReason.valid, false, "only the explicitly handled warning may accompany activity.finished");
     assert.equal(blocked.kind, "activity.blocked");
   });
 

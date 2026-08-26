@@ -193,7 +193,7 @@ Xem [bằng chứng benchmark](https://piagent.io.vn/benchmark) và
 
 Gate này chạy architecture check, test, typecheck, capability validation, runtime smoke và docs consistency trước khi release.
 
-Bản phát hành hiện tại là `v1.6.0`. Với team hoặc production, hãy pin tag này
+Bản phát hành hiện tại là `v1.6.1`. Với team hoặc production, hãy pin tag này
 hoặc một commit đã review thay vì dựa vào nguồn package không cố định.
 
 ## Security

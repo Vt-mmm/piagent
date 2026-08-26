@@ -21,9 +21,11 @@ task
 
 ## P0: runtime context controls
 
-- Piagent tools được chia thành `governance`, `policy`, `retrieval`,
-  `knowledge`, `onboarding`, và `usage`. Code retrieval không tự kéo theo
-  memory, document intake, source checkout hoặc orchestration.
+- Piagent tools được chia thành `governance`, `policy`, `retrieval`, `source`,
+  `knowledge`, `onboarding`, và `usage`. URL GitHub/GitLab/Bitbucket do operator
+  cung cấp chỉ bật schema `source`; code retrieval không tự kéo theo memory,
+  document intake hoặc orchestration. Checkout được cấp quyền đọc đúng session
+  qua `read`/`grep`/`find`/`ls`, còn shared cache không mở cho shell hay mutation.
 - Session bắt đầu không mang schema quản trị Piagent. Input hook bật thẳng nhóm
   tối thiểu cần cho task trước khi system prompt được tạo.
 - `piagent_tools` chỉ xuất hiện khi operator yêu cầu rõ tool loader; runtime

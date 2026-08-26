@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-
 import { isRuntimeOwnedContextEvidenceEntry } from "../../extensions/context-evidence.js";
 import { toolResultFingerprint } from "../../extensions/context-engine.js";
 import { workingTreeSnapshot } from "../../extensions/task-state.js";
@@ -11,6 +10,7 @@ import { ModelAuthorshipState } from "./model-authorship-state.ts";
 import type { ModelMutationEvidenceCompletion, ModelMutationIdentity } from "./model-authorship-state.ts";
 import type { ModelMutationProof } from "../quality/model-mutation-proof.ts";
 import { PerformanceReviewState } from "./performance-review-state.ts";
+import { SourceCheckoutReadGrants } from "./source-checkout-read-grants.ts";
 import type {
   PerformanceReviewCheckpoint,
   PerformanceReviewCredit,
@@ -30,16 +30,13 @@ export type {
   PerformanceReviewToolKind,
   PerformanceReviewVerifierState
 } from "./performance-review-state.ts";
-
 export type ObservedTaskContext = { path: string; reason: string };
-
 export type InjectedContextPack = {
   queryHash: string;
   confidence: string;
   estimatedTokens: number;
   paths: string[];
 };
-
 export type ContextInjectionItem = {
   path: string;
   estimatedTokens: number;
@@ -53,7 +50,6 @@ export type ContextInjectionItem = {
   generation?: number;
   sensitiveContentRedacted?: boolean;
 };
-
 export type ContextInjectionTelemetry = {
   source: string;
   queryHash: string;
@@ -61,7 +57,6 @@ export type ContextInjectionTelemetry = {
   estimatedTokens: number;
   selectedItems: ContextInjectionItem[];
 };
-
 export type PendingContextDelivery = {
   deliveryId: string;
   taskRunId: string;
@@ -70,7 +65,6 @@ export type PendingContextDelivery = {
   pack?: InjectedContextPack & { retrievalKey: string };
   injection?: ContextInjectionTelemetry;
 };
-
 export type RuntimeTurn = { turnId: string; promptHash: string };
 
 function evictOldest<K, V>(map: Map<K, V>, maximum: number): void {
@@ -95,6 +89,7 @@ export class RuntimeSessionState {
   readonly #preTaskContextBySession = new Map<string, { turnId: string; entries: Map<string, ObservedTaskContext> }>();
   readonly #qualifiedContextEvidenceByTask = new Map<string, Map<string, ObservedTaskContext>>();
   readonly #shellMutationSnapshots = new Map<string, Record<string, string>>();
+  readonly #sourceCheckoutReadGrants = new SourceCheckoutReadGrants();
 
   constructor(options: { maxObservedContext: number }) {
     this.#maxObservedContext = options.maxObservedContext;
@@ -155,6 +150,14 @@ export class RuntimeSessionState {
 
   observedContext(ctx: ExtensionContext): ObservedTaskContext[] {
     return [...(this.#observedContextBySession.get(this.sessionKey(ctx))?.values() ?? [])];
+  }
+
+  grantSourceCheckoutReadRoot(ctx: ExtensionContext, checkoutPath: string): string {
+    return this.#sourceCheckoutReadGrants.grant(this.sessionKey(ctx), checkoutPath);
+  }
+
+  sourceCheckoutReadRoots(ctx: ExtensionContext): string[] {
+    return this.#sourceCheckoutReadGrants.roots(this.sessionKey(ctx));
   }
 
   rememberPreTaskContext(ctx: ExtensionContext, entry: ObservedTaskContext): void {
@@ -477,6 +480,7 @@ export class RuntimeSessionState {
     this.#turnBySession.delete(sessionKey);
     this.#observedContextBySession.delete(sessionKey);
     this.#preTaskContextBySession.delete(sessionKey);
+    this.#sourceCheckoutReadGrants.clear(sessionKey);
     this.clearShellMutationSnapshots(ctx);
     if (taskIdentity) {
       this.#performanceReview.clearTask(taskIdentity.taskRunId);

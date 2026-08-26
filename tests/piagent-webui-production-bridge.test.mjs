@@ -67,6 +67,18 @@ function assertValidReceipt(receipt) {
 }
 
 describe("Piagent WebUI production same-session bridge", () => {
+  it("preserves one operation identity across a queued continuation agent start", () => {
+    const surface = context("session_continuation_identity");
+    const bridge = new SameSessionPiBridge({ appendEntry() {}, sendUserMessage() {} }, {
+      runtimeInstanceId: "runtime_continuation_identity", now: () => new Date("2026-08-13T12:00:01.000Z")
+    });
+    bridge.bind(surface.ctx); surface.setIdle(false); bridge.observeAgentStart(surface.ctx);
+    const operationId = bridge.snapshot().identity.agentOperationId;
+    bridge.observeAgentStart(surface.ctx);
+    assert.equal(bridge.snapshot().identity.agentOperationId, operationId);
+    assert.equal(bridge.events().events.filter((event) => event.kind === "operation.started").length, 1);
+  });
+
   it("allows one new operation after a terminal task so the session can establish its successor", async () => {
     const surface = context(); let sends = 0;
     let bridge;

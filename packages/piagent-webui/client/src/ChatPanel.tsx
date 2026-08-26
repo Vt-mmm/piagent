@@ -6,6 +6,7 @@ import type { PiagentWebUIBoundedTranscriptProjectionV1, TranscriptItem } from "
 import type { PiagentWebUIHeldMessageQueueProjectionV1 } from "../../contracts/generated/queue-v1.ts";
 import { readHeldQueue, readTranscript, sendResumeAndContinueCommand, stageAttachment } from "./api.ts";
 import { liveChatState, mergeOlderTranscriptPage, type RuntimeStreamEvent } from "./chat-view-model.ts";
+import { conversationTranscriptItems } from "./transcript-view-model.ts";
 import { label } from "./view-model.ts";
 import { createAttachmentCommand, createAttachmentDiscardCommand, createChatCommand, createQueueCommand,
   createResumeAndContinueCommand, queueUpdatePayload } from "./chat-command.ts";
@@ -81,7 +82,7 @@ export function ChatPanel({ snapshot, events, refreshSnapshot }: { snapshot: Pia
     } catch { /* retain the current bounded page */ }
   };
 
-  const items = transcript?.state === "ready" ? transcript.items : [];
+  const items = useMemo(() => transcript?.state === "ready" ? conversationTranscriptItems(transcript.items) : [], [transcript]);
   const chatCapability = snapshot.capabilities.capabilities["control.chat"];
   const chatActions = chatCapability.status === "available" ? chatCapability.actions : null;
   const chatAvailable = Boolean(chatActions?.send.available);

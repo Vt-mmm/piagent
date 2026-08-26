@@ -1,6 +1,4 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { exactFinalOutputGuidance } from "../quality/exact-output-contract.ts";
-import { taskPerformanceAssurance } from "../quality/performance-assurance.ts";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"; import { exactFinalOutputGuidance } from "../quality/exact-output-contract.ts"; import { taskPerformanceAssurance } from "../quality/performance-assurance.ts";
 import { automaticTaskSummary, boundedRuntimeIntakeMessage } from "../workflows/task-intake.ts";
 import { WORKING_TREE_DIGEST_ALGORITHM } from "../../extensions/working-tree-digest.js";
 import { TASK_ACCEPTANCE_CRITERIA_MAX, TASK_ACCEPTANCE_CRITERION_MAX_CHARS, TASK_EXPECTED_OUTPUT_MAX_CHARS, TASK_SUMMARY_MAX_CHARS, operatorRequestDigest } from "../../extensions/task-state.js";
@@ -8,9 +6,8 @@ import { createEnvironmentBoundTaskAuthority } from "../policy/task-authority-ru
 import { authorityReplacementState } from "../policy/authority-resume-policy.ts";
 import { compileCriterionGraph, criterionGraphContextSelection, criterionGraphContextSelectionDetails, criterionGraphGuidance, criterionGraphMode } from "../../extensions/criterion-graph.js";
 import { captureTaskStartBaseline } from "../inspection/task-baseline-start-capture.ts";
-import { sameStringRecord, satisfiesAuthorityReplacement } from "./task-start-retry-helpers.ts";
-import { automaticTaskExecutionGuidance, EXACT_VERIFIER_EXECUTION_GUIDANCE, RUNTIME_SOURCE_REUSE_GUIDANCE, taskCriticalProofSection } from "./task-start-guidance.ts";
-import { resolveTaskStartRepositoryManifestProvider } from "./task-start-manifest.ts";
+import { sameStringRecord, satisfiesAuthorityReplacement } from "./task-start-retry-helpers.ts"; import { automaticTaskExecutionGuidance, EXACT_VERIFIER_EXECUTION_GUIDANCE, RUNTIME_SOURCE_REUSE_GUIDANCE, taskCriticalProofSection } from "./task-start-guidance.ts";
+import { resolveTaskStartRepositoryManifestProvider } from "./task-start-manifest.ts"; import { boundedOperatorRequest, latestOperatorRequest } from "./operator-request-intake.ts";
 type ExtensionContext = any; type TaskContract = any; type TaskStartParameters = Record<string, any> & { operatorRequest?: string }; function taskReferenceDetails(task: TaskContract, reasonCode: string): Record<string, unknown> { const scope = Array.isArray(task.scope) ? task.scope.slice(0, 50) : []; return { reasonCode, taskId: task.taskId, taskRunId: task.taskRunId, outcome: task.trace?.outcome, attempt: task.attempt, ...(reasonCode === "task-already-active" ? { scope, scopeTruncated: scope.length < task.scope.length } : {}) }; }
 export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any>): any {
   const {
@@ -75,7 +72,10 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
       ctx: ExtensionContext
     ) {
       const profile = loadProfileFromContext(ctx), createdAt = nowIso();
-      const safeSummary = redactText(params.summary), safeOperatorRequest = params.intakeMode === "runtime" && typeof params.operatorRequest === "string" ? redactText(params.operatorRequest) : undefined;
+      const operatorRequest = typeof params.operatorRequest === "string"
+        ? params.operatorRequest
+        : latestOperatorRequest(ctx);
+      const safeSummary = redactText(params.summary), safeOperatorRequest = boundedOperatorRequest(operatorRequest, redactText);
       const taskId = safeTaskId(redactText(params.taskId ?? params.summary));
       const sessionId = ctx.sessionManager.getSessionId(), sessionName = currentSessionName(ctx);
       const active = activeSessionTask(ctx.cwd, sessionId) as TaskContract | undefined;

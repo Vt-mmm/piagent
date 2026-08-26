@@ -3,13 +3,19 @@ export type ToolFailureReasonCode =
   | "search-target-missing"
   | "edit-anchor-not-unique"
   | "edit-anchor-stale"
+  | "helper-dispatch-rejected"
+  | "helper-insufficient-evidence"
   | "tool-result-failed";
 
-function boundedText(content: unknown): string {
+function boundedText(content: unknown, depth = 0): string {
+  if (depth > 2) return "";
+  const nested = content && typeof content === "object" && !Array.isArray(content)
+    ? (content as { content?: unknown }).content
+    : undefined;
   const text = typeof content === "string" ? content : Array.isArray(content)
     ? content.filter((item) => item && typeof item === "object" && (item as { type?: unknown }).type === "text")
       .map((item) => String((item as { text?: unknown }).text ?? "")).join("\n")
-    : "";
+    : nested !== undefined ? boundedText(nested, depth + 1) : "";
   return text.slice(0, 8_192);
 }
 
@@ -23,8 +29,19 @@ function commandFromInput(input: unknown): string {
 }
 
 export function classifyToolFailure(toolName: string, isError: boolean, content: unknown, input?: unknown): ToolFailureReasonCode | null {
-  if (!isError) return null;
   const text = boundedText(content);
+  const subagent = /(?:^|[._-])subagents?(?:$|[._-])/i.test(toolName);
+  // Some subagent providers return a successful tool envelope even though no
+  // child was launched, or a zero-exit child explicitly reports that it could
+  // inspect no evidence. Canonical replay must not turn either outcome into a
+  // green "passed" Activity row merely because `isError` is false.
+  if (subagent && /spawn limit reached|no children were started|declared run cannot fit/i.test(text)) {
+    return "helper-dispatch-rejected";
+  }
+  if (subagent && /scope inspected:[^\n]{0,16}\bnone\b|insufficient-evidence rule|no source (?:content|evidence)[^\n]{0,80}(?:accessible|collected)/i.test(text)) {
+    return "helper-insufficient-evidence";
+  }
+  if (!isError) return null;
   // Only the registered, policy-governed `edit` tool may receive an automatic
   // current-file recovery snapshot. A similarly named third-party `replace`
   // tool is not necessarily covered by Piagent's mutation guard.

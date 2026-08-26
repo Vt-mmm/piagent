@@ -30,7 +30,7 @@
         <span>Pi Agent Platform</span>
       </a>
       <div class="top-actions">
-        <span class="pill"><span class="pill-dot"></span>v1.6.0 docs · VI</span>
+        <span class="pill"><span class="pill-dot"></span>v1.6.1 docs · VI</span>
         <nav class="language-switch" aria-label="Ngôn ngữ">
           <a class="language-option current" href="/whats-new" hreflang="vi" lang="vi" aria-current="true">VI</a>
           <a class="language-option" href="/en/whats-new" hreflang="en" lang="en">EN</a>
@@ -102,6 +102,17 @@
               <h1>Luồng task an toàn hơn, ít thao tác tay hơn</h1>
               <p>Product stabilization bổ sung runtime truth, trajectory, recovery, helper policy, activity inspector và completion receipt fail-closed mà không phá workflow cũ.</p>
             </div>
+<section class="section">
+  <p class="section-kicker">v1.6.1 · Reliability patch</p>
+  <h2 id="v1-6-1">UI đúng trạng thái, review repo ngoài an toàn, helper ít tốn hơn</h2>
+  <p class="section-lead">Bản vá này giữ nguyên model và thinking level, nhưng siết chặt lifecycle để response chỉ hiện khi task thật sự hoàn tất, đồng thời giới hạn helper và quyền đọc source ngoài theo đúng session.</p>
+  <div class="grid cols-3">
+    <article class="card"><h3 id="conversation-truth">Conversation truth</h3><p>Draft, retry và completion còn pending ở trong Activity. Chat giữ đúng thứ tự user rồi assistant và không tiếp tục hiện processing sau terminal.</p></article>
+    <article class="card"><h3 id="external-review">External review</h3><p>URL GitHub, GitLab và Bitbucket chỉ bật source checkout tối thiểu; runtime cấp quyền đọc chính xác checkout đó và vẫn chặn cache, credential, symlink escape cùng mọi mutation.</p></article>
+    <article class="card"><h3 id="solo-first">Solo-first</h3><p>Direct subagent có trần một helper read-only, không auto retry/fork/worker và có giới hạn call, turn, thời gian. Kết quả thiếu bằng chứng được ghi là failure thật.</p></article>
+  </div>
+</section>
+
 <section class="section">
   <p class="section-kicker">Product stabilization</p>
   <h2 id="thay-doi-chinh">Sáu thay đổi người dùng sẽ thấy</h2>

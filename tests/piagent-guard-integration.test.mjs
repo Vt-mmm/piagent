@@ -555,7 +555,7 @@ describe("piagent guard integration", () => {
       ctx
     );
     assert.equal(harness.activeTools.has("piagent_memory_search"), true);
-    assert.equal(harness.activeTools.size, 13);
+    assert.equal(harness.activeTools.size, 12, "knowledge loading no longer pays for the separate source-checkout schema");
 
     await harness.tools.get("piagent_tools").execute(
       "load-onboarding",
@@ -566,7 +566,7 @@ describe("piagent guard integration", () => {
     );
     assert.equal(harness.activeTools.has("piagent_profile_apply"), true);
     assert.equal(harness.activeTools.has("piagent_context_engine"), false);
-    assert.equal(harness.activeTools.size, 21, "usage, policy, retrieval, and recovery schemas remain unloaded until needed");
+    assert.equal(harness.activeTools.size, 20, "usage, policy, retrieval, source, and recovery schemas remain unloaded until needed");
   });
 
   it("starts bounded source tasks in runtime without model management tools", async () => {
@@ -3149,6 +3149,47 @@ describe("piagent guard integration", () => {
     assert.ok(publicSurface.length < 12_000, `public error/activity surface was ${publicSurface.length} chars`);
   });
 
+  it("preserves the current operator request when model-owned intake starts the durable task", async () => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const operatorRequest = "/platform-improve Đánh giá repository tham chiếu và giữ nguyên mọi ràng buộc người dùng.";
+    const ctx = createContext(cwd, {
+      sessionId: "model-intake-operator-request",
+      entries: [{
+        type: "message",
+        message: {
+          role: "user",
+          content: [
+            { type: "text", text: operatorRequest },
+            { type: "text", text: "attached file: \"private-reference.md\"\nformat: text/markdown\nPRIVATE_ATTACHMENT_BODY" }
+          ]
+        }
+      }]
+    });
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+
+    const started = await harness.tools.get("piagent_task_start").execute("model-intake-start", {
+      taskId: "MODEL-INTAKE-REQUEST",
+      summary: "Assess the bounded model-owned intake fixture",
+      riskLane: "normal",
+      changeMode: "read-only",
+      mutationPolicy: "forbidden",
+      expectedOutput: "A substantive assessment grounded in the exact operator request.",
+      acceptanceCriteria: ["The durable task retains the current operator request"],
+      scope: ["README.md"]
+    }, undefined, undefined, ctx);
+
+    assert.equal(started.isError, undefined);
+    const durable = JSON.parse(fs.readFileSync(path.join(cwd, ".pi", "piagent-state", "tasks", `${started.details.taskRunId}.json`), "utf8"));
+    assert.equal(durable.intakeMode, "model");
+    assert.equal(durable.operatorRequest, operatorRequest);
+    assert.match(durable.operatorRequestDigest, /^operator-request-v1:[a-f0-9]{64}$/);
+    assert.equal(JSON.stringify(durable).includes("PRIVATE_ATTACHMENT_BODY"), false, "attachment bodies are not operator prose");
+    assert.equal(Object.hasOwn(started.details, "operatorRequest"), false, "public task details keep the request private");
+  });
+
   it("binds pre-task read evidence to the exact intake turn and session", async () => {
     const { root, piagentGuard } = await loadGuardFixture();
     const params = (taskId, scope) => ({
@@ -4491,6 +4532,7 @@ describe("piagent guard integration", () => {
       isError: false
     }, ctx);
     const substantiveResponse = [
+      "### Các ứng dụng đáng làm",
       "Authentication evidence mapped with no source changes.",
       "Evidence: `src/auth.ts` exports the observed authentication flag.",
       "Limitation: this bounded review did not exercise a live identity provider."
@@ -4510,6 +4552,83 @@ describe("piagent guard integration", () => {
     assert.equal(task.trace.outcome, "completed");
     assert.deepEqual(task.changedFiles, []);
     assert.deepEqual(task.workPlan.map((step) => step.status), ["done", "done"]);
+  });
+
+  it("grants one external source checkout read-only to its session without exposing cache mutation or private paths", async (t) => {
+    const { root, piagentGuard } = await loadGuardFixture();
+    const cwd = createProject(root);
+    const cacheRoot = path.join(root, "source-cache");
+    const checkout = path.join(cacheRoot, "github.com", "acme", "reference");
+    createChildGitRepo(checkout, {
+      "README.md": "# External reference\n",
+      ".env": "PRIVATE_SOURCE_TOKEN=fixture\n"
+    });
+    fs.writeFileSync(path.join(checkout, ".piagent-last-fetch"), `${Math.floor(Date.now() / 1000)}\n`);
+    const outsideSecret = path.join(root, "outside-secret.txt");
+    fs.writeFileSync(outsideSecret, "outside\n");
+    fs.symlinkSync(outsideSecret, path.join(checkout, "linked-secret.txt"));
+    const previousCache = process.env.PIAGENT_CHECKOUT_CACHE;
+    process.env.PIAGENT_CHECKOUT_CACHE = cacheRoot;
+    t.after(() => {
+      if (previousCache === undefined) delete process.env.PIAGENT_CHECKOUT_CACHE;
+      else process.env.PIAGENT_CHECKOUT_CACHE = previousCache;
+    });
+
+    const ctx = createContext(cwd, { sessionId: "session-source-checkout", sessionName: "SOURCE-REVIEW" });
+    const harness = createPiHarness();
+    piagentGuard(harness.pi);
+    await harness.handlers.get("session_start")({}, ctx);
+    await harness.tools.get("piagent_task_start").execute("start-source-review", {
+      taskId: "SOURCE-REVIEW",
+      summary: "Review one user-provided external source repository",
+      riskLane: "normal",
+      changeMode: "read-only",
+      expectedOutput: "A targeted external source assessment.",
+      acceptanceCriteria: ["The external source remains unchanged"],
+      scope: ["README.md"]
+    }, undefined, undefined, ctx);
+
+    const authorize = harness.handlers.get("tool_call");
+    const checkoutAuthorization = await callToolCall(authorize, ctx, "piagent_source_checkout", { repoRef: "https://github.com/acme/reference" });
+    assert.notEqual(checkoutAuthorization.block, true);
+    const prepared = await harness.tools.get("piagent_source_checkout").execute(
+      "checkout-source", { repoRef: "https://github.com/acme/reference" }, undefined, undefined, ctx
+    );
+    assert.equal(prepared.isError, undefined);
+    assert.equal(prepared.details.checkoutPath, fs.realpathSync.native(checkout));
+    assert.match(prepared.content[0].text, /read-only for this session via read, grep, find, or ls/);
+
+    const externalRead = await callToolCall(authorize, ctx, "read", { path: path.join(checkout, "README.md") });
+    assert.notEqual(externalRead.block, true);
+    const siblingRead = await callToolCall(authorize, ctx, "read", { path: outsideSecret });
+    assert.equal(siblingRead.block, true);
+    assert.match(siblingRead.reason, /outside the project/);
+    const symlinkEscape = await callToolCall(authorize, ctx, "read", { path: path.join(checkout, "linked-secret.txt") });
+    assert.equal(symlinkEscape.block, true);
+    assert.match(symlinkEscape.reason, /outside the project/);
+    const privateRead = await callToolCall(authorize, ctx, "read", { path: path.join(checkout, ".env") });
+    assert.equal(privateRead.block, true);
+    assert.match(privateRead.reason, /protected path/);
+    const gitMetadataRead = await callToolCall(authorize, ctx, "read", { path: path.join(checkout, ".git", "config") });
+    assert.equal(gitMetadataRead.block, true);
+    assert.match(gitMetadataRead.reason, /protected path/);
+
+    const cacheShell = await callToolCall(authorize, ctx, "bash", { command: `rg -n External ${JSON.stringify(checkout)}` });
+    assert.equal(cacheShell.block, true);
+    assert.match(cacheShell.reason, /Shared source checkouts are shell-inaccessible/);
+    const compoundInspection = await callToolCall(authorize, ctx, "bash", {
+      command: "printf '%s\\n' '--- source ---'; find src -maxdepth 2 -type f | sort | head -20"
+    });
+    assert.notEqual(compoundInspection.block, true);
+    const sortMutation = await callToolCall(authorize, ctx, "bash", { command: "sort README.md -o src/sorted.txt" });
+    assert.equal(sortMutation.block, true);
+    assert.match(sortMutation.reason, /read-only inspection allowlist/);
+    const attachedSortMutation = await callToolCall(authorize, ctx, "bash", { command: "sort README.md -osrc/sorted.txt" });
+    assert.equal(attachedSortMutation.block, true);
+    assert.match(attachedSortMutation.reason, /read-only inspection allowlist/);
+    const combinedSortMutation = await callToolCall(authorize, ctx, "bash", { command: "sort -uo src/sorted.txt README.md" });
+    assert.equal(combinedSortMutation.block, true);
+    assert.match(combinedSortMutation.reason, /read-only inspection allowlist/);
   });
 
   it("runs exact verification without inventing changed files when source mutation is forbidden", async () => {

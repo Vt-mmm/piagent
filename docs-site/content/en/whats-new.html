@@ -1,4 +1,15 @@
 <section class="section">
+  <p class="section-kicker">v1.6.1 · Reliability patch</p>
+  <h2 id="v1-6-1">Truthful UI state, safe external review, and lower helper overhead</h2>
+  <p class="section-lead">This patch keeps the selected model and thinking level unchanged while tightening lifecycle truth, limiting helper expansion, and granting external-source reads only to the exact checkout for the current session.</p>
+  <div class="grid cols-3">
+    <article class="card"><h3 id="conversation-truth">Conversation truth</h3><p>Drafts, retries, and pending completion stay in Activity. Chat preserves user-then-assistant order and clears processing only at the real terminal boundary.</p></article>
+    <article class="card"><h3 id="external-review">External review</h3><p>GitHub, GitLab, and Bitbucket references activate only minimal source checkout. The runtime grants reads to that exact tree while blocking caches, credentials, symlink escape, and every mutation path.</p></article>
+    <article class="card"><h3 id="solo-first">Solo-first</h3><p>Direct subagent use is capped at one read-only helper with call, turn, and runtime budgets, no automatic retry/fork/worker expansion, and truthful failure state when evidence is missing.</p></article>
+  </div>
+</section>
+
+<section class="section">
   <p class="section-kicker">Product stabilization</p>
   <h2 id="main-changes">Six changes users will notice</h2>
   <p class="section-lead">Existing workflows continue to work. This update adds runtime evidence and fail-closed gates behind them, plus compact projections that users can inspect when needed.</p>

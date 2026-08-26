@@ -127,8 +127,10 @@ describe("phase tool activation runtime", () => {
     }
     const readOnly = intendedPhaseTools([...hostTools, ...PIAGENT_TOOL_ORDER], available, state("scout", "read-only"));
     const review = intendedPhaseTools([...hostTools, ...PIAGENT_TOOL_ORDER], available, state("review", "source-change", "high-risk"));
-    assert.equal(readOnly.some((tool) => ["edit", "write", "apply_patch", "bash", "piagent_source_checkout", "piagent_context_engine"].includes(tool)), false);
-    assert.equal(review.some((tool) => ["edit", "write", "apply_patch", "piagent_source_checkout", "piagent_context_engine"].includes(tool)), false);
+    assert.equal(readOnly.some((tool) => ["edit", "write", "apply_patch", "bash", "piagent_context_engine"].includes(tool)), false);
+    assert.equal(review.some((tool) => ["edit", "write", "apply_patch", "piagent_context_engine"].includes(tool)), false);
+    assert.ok(readOnly.includes("piagent_source_checkout"), "read-only scout can prepare one guarded external source checkout");
+    assert.ok(review.includes("piagent_source_checkout"), "review can prepare one guarded external source checkout");
     assert.ok(review.includes("bash"), "review retains read-only shell inspection while carrier authorization blocks writes");
     const intake = intendedPhaseTools([...hostTools, ...PIAGENT_TOOL_ORDER], available, state("intake"));
     const plan = intendedPhaseTools([...hostTools, ...PIAGENT_TOOL_ORDER], available, state("plan", "source-change", "high-risk"));
@@ -142,7 +144,7 @@ describe("phase tool activation runtime", () => {
     }
     const verify = intendedPhaseTools(hostTools, available, state("verify"));
     assert.ok(verify.includes("bash"));
-    assert.equal(verify.some((tool) => tool.startsWith("piagent_")), false);
+    assert.deepEqual(verify.filter((tool) => tool.startsWith("piagent_")), ["piagent_source_checkout"]);
   });
 
   it("authorizes a runtime-owned normal task into execute before its first mutation with an audited plan skip", (t) => {

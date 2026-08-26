@@ -41,7 +41,7 @@ describe("phase-aware tool policy", () => {
 
   it("keeps runtime-owned evidence tools hidden while retaining host verification", () => {
     const verify = phaseToolPolicy("verify", "source-change");
-    assert.deepEqual(verify.modelVisiblePiagentTools, []);
+    assert.deepEqual(verify.modelVisiblePiagentTools, ["piagent_source_checkout"]);
     assert.deepEqual(verify.requiredHostTools, ["read", "bash"]);
     for (const phase of ["verify", "repair", "review", "handoff"]) {
       const visible = phaseToolPolicy(phase, "source-change").modelVisiblePiagentTools;
