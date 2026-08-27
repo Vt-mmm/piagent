@@ -43,6 +43,7 @@ test("registers one sequential guarded apply_patch tool and applies multi-file A
   assert.equal(registered[0].name, "apply_patch");
   assert.equal(registered[0].executionMode, "sequential");
   assert.match(registered[0].promptSnippet, /Prefer one coherent apply_patch call.*source-and-test.*exact old context for every target.*otherwise use one bounded writer per file/);
+  assert.match(registered[0].promptGuidelines.join("\n"), /For each \*\*\* Update File hunk, put @@ on its own line.*never write @@ -old or @@ \+new/);
   const input = {
     patch: patch(
       "*** Update File: src/value.js",
@@ -103,6 +104,18 @@ test("validates every target and hunk before writing any file", () => {
     "+changed"
   )), errorCode("ambiguous-hunk"));
   assert.equal(fs.readFileSync(first, "utf8"), "export const first = 1;\n", "an earlier valid section is not partially written");
+  assert.equal(fs.readFileSync(repeated, "utf8"), "repeat\nseparator\nrepeat\n");
+
+  assert.throws(() => applyValidatedPatch(root, patch(
+    "*** Update File: src/first.js",
+    "@@",
+    "-export const first = 1;",
+    "+export const first = 2;",
+    "*** Update File: src/repeated.js",
+    "@@ -repeat",
+    "+changed"
+  )), errorCode("malformed-hunk"));
+  assert.equal(fs.readFileSync(first, "utf8"), "export const first = 1;\n", "a later malformed header cannot partially apply an earlier file");
   assert.equal(fs.readFileSync(repeated, "utf8"), "repeat\nseparator\nrepeat\n");
 
   assert.throws(() => applyValidatedPatch(root, patch(
@@ -211,6 +224,19 @@ test("fails closed on absolute, traversal, symlink, and malformed targets withou
   assert.equal(fs.readFileSync(path.join(outside, "outside.js"), "utf8"), "outside\n");
   assert.equal(fs.existsSync(path.join(outside, "added.js")), false);
   assert.deepEqual(fs.readdirSync(root).sort(), ["linked", "src"]);
+});
+
+test("explains how to recover a change accidentally placed in the hunk header", () => {
+  const root = project();
+  fs.mkdirSync(path.join(root, "src"));
+  fs.writeFileSync(path.join(root, "src", "plain.js"), "old\n");
+  assert.throws(
+    () => applyValidatedPatch(root, patch("*** Update File: src/plain.js", "@@ -old", "+new")),
+    (error) => error instanceof ApplyPatchError
+      && error.code === "malformed-hunk"
+      && /Keep @@ on its own line.*separate - lines.*no file was changed/.test(error.message)
+  );
+  assert.equal(fs.readFileSync(path.join(root, "src", "plain.js"), "utf8"), "old\n");
 });
 
 test("honors cancellation before creating parents or changing content", () => {

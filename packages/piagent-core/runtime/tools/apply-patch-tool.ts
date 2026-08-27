@@ -163,7 +163,7 @@ function parseUpdateHunks(section: string[], repoPath: string): UpdateHunk[] {
       if (line[0] === "+" || line[0] === "-") changed = true;
     }
     if (!bodyLines || !changed || oldLines.length === 0) {
-      fail("malformed-hunk", `Hunk must contain a change with stable old-side context: ${repoPath}`);
+      fail("malformed-hunk", `Hunk must contain a change with stable old-side context: ${repoPath}. Keep @@ on its own line, put removed lines on separate - lines, and include exact unchanged context when available; no file was changed.`);
     }
     hunks.push({ oldLines, newLines });
   }
@@ -483,7 +483,7 @@ export function registerApplyPatchTool(
     description: "Apply one validated OpenAI-style patch across multiple project files in a single guarded tool call.",
     promptSnippet: "Prefer one coherent apply_patch call for a bounded source-and-test or other multi-file change only when exact old context for every target is available; otherwise use one bounded writer per file.",
     promptGuidelines: [
-      "Wrap the patch in exact *** Begin Patch and *** End Patch delimiters.",
+      "Wrap the patch in exact *** Begin Patch and *** End Patch delimiters. For each *** Update File hunk, put @@ on its own line. Put every old, new, or unchanged body line below it with a leading -, +, or space; never write @@ -old or @@ +new.",
       "Use each project-relative target once and include enough unchanged context for every update hunk to match exactly once."
     ],
     parameters: Type.Object({ patch: Type.String({ minLength: 1, maxLength: MAX_PATCH_BYTES }) }, { additionalProperties: false }),
