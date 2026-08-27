@@ -57,6 +57,7 @@ import type { ConnectionState } from "./use-inspection.ts";
 import type { LiveConversation, TerminalOperationActivity } from "./live-state-view-model.ts";
 import type { SessionSendResult } from "./use-session-hub.ts";
 import { localize, useUiPreferences, type UiLocale } from "./ui-preferences.tsx";
+import { LatestRequestWins } from "./latest-request.ts";
 
 const SIDEBAR_WIDTH = 288;
 const INSPECTOR_WIDTH = "min(44vw, 860px)";
@@ -372,8 +373,14 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
   const [view, setView] = useState<HubView>("chat"), [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
   const [inspectorOpen, setInspectorOpen] = useState(false), [activeInspector, setActiveInspector] = useState<SessionWorkspaceId>("task");
+  const activityInspectorOpenRef = useRef(false);
+  activityInspectorOpenRef.current = inspectorOpen && activeInspector === "activity";
   const [inspection, setInspection] = useState<PiagentWebUICanonicalSnapshotV1>();
+  const inspectionRef = useRef<{ sessionRef: string; snapshot: PiagentWebUICanonicalSnapshotV1 } | null>(null);
   const [inspectionState, setInspectionState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const inspectionStateSessionRef = useRef<string | null>(null);
+  const inspectionRequests = useRef<LatestRequestWins<PiagentWebUICanonicalSnapshotV1> | null>(null);
+  inspectionRequests.current ??= new LatestRequestWins<PiagentWebUICanonicalSnapshotV1>();
   const [creatingSession, setCreatingSession] = useState(false), [createError, setCreateError] = useState<string | null>(null);
   const [sessionAction, setSessionAction] = useState<{ kind: Exclude<SessionMenuAction, "pin" | "unarchive">; session: SessionRow } | null>(null);
   const [actionTitle, setActionTitle] = useState(""), [actionBusy, setActionBusy] = useState(false), [actionError, setActionError] = useState<string | null>(null);
@@ -394,38 +401,79 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
   const archivedCount = catalog?.sessions.filter((item) => item.archived).length ?? 0;
   useEffect(() => { if (!selectedRef || !(catalog?.sessions ?? []).some((item) => item.sessionRef === selectedRef)) setSelectedRef((catalog?.sessions ?? []).find((item) => !item.archived)?.sessionRef); }, [selectedRef, catalog]);
   const selected = (catalog?.sessions ?? []).find((item) => item.sessionRef === selectedRef);
+  const selectedSessionRef = selected?.sessionRef;
+  const selectedSessionRefRef = useRef<string | undefined>(selectedSessionRef);
+  selectedSessionRefRef.current = selectedSessionRef;
+  const currentInspection = inspectionRef.current && inspectionRef.current.sessionRef === selectedSessionRef
+    && inspectionRef.current.snapshot === inspection ? inspection : undefined;
+  const currentInspectionState = inspectionStateSessionRef.current === selectedSessionRef
+    ? inspectionState : selectedSessionRef ? "loading" : "idle";
   const selectedLive = selected ? live[selected.sessionRef] : undefined;
   const choose = (value: string) => { setSelectedRef(value); setView("chat"); setMobileOpen(false); };
   const openSettings = (section: SettingsSection) => { setSettingsSection(section); setSettingsOpen(true); };
   const openInspector = (active: SessionWorkspaceId) => { setActiveInspector(active); setInspectorOpen(true); };
   const refreshInspection = async () => {
-    if (!selected) return undefined;
-    setInspectionState("loading");
-    try { const value = await readSessionInspectionSnapshot(selected.sessionRef); setInspection(value); setInspectionState("ready"); return value; }
-    catch { setInspectionState("error"); return undefined; }
+    const requestedSessionRef = selectedSessionRefRef.current;
+    if (!requestedSessionRef) return undefined;
+    if (inspectionRef.current?.sessionRef !== requestedSessionRef) {
+      inspectionStateSessionRef.current = requestedSessionRef;
+      setInspectionState("loading");
+    }
+    const next = await inspectionRequests.current!.run(() => readSessionInspectionSnapshot(requestedSessionRef),
+      (value) => {
+        if (selectedSessionRefRef.current !== requestedSessionRef) return;
+        inspectionRef.current = { sessionRef: requestedSessionRef, snapshot: value };
+        inspectionStateSessionRef.current = requestedSessionRef;
+        setInspection(value); setInspectionState("ready");
+      }, () => {
+        if (selectedSessionRefRef.current !== requestedSessionRef) return;
+        inspectionStateSessionRef.current = requestedSessionRef;
+        setInspectionState(inspectionRef.current?.sessionRef === requestedSessionRef ? "ready" : "error");
+      });
+    return selectedSessionRefRef.current === requestedSessionRef ? next : undefined;
   };
   useEffect(() => {
-    if (!selected) { setInspection(undefined); setInspectionState("idle"); return; }
-    const controller = new AbortController(); setInspection(undefined); setInspectionState("loading");
-    void readSessionInspectionSnapshot(selected.sessionRef, controller.signal).then((value) => {
-      if (!controller.signal.aborted) { setInspection(value); setInspectionState("ready"); }
-    }).catch(() => { if (!controller.signal.aborted) setInspectionState("error"); });
+    if (!selectedSessionRef) {
+      inspectionRequests.current!.invalidate();
+      inspectionRef.current = null; inspectionStateSessionRef.current = null;
+      setInspection(undefined); setInspectionState("idle"); return;
+    }
+    const requestedSessionRef = selectedSessionRef, controller = new AbortController();
+    inspectionStateSessionRef.current = requestedSessionRef;
+    if (inspectionRef.current?.sessionRef !== requestedSessionRef) {
+      inspectionRef.current = null; setInspection(undefined); setInspectionState("loading");
+    }
+    void inspectionRequests.current!.run(() => readSessionInspectionSnapshot(requestedSessionRef, controller.signal),
+      (value) => {
+        if (controller.signal.aborted || selectedSessionRefRef.current !== requestedSessionRef) return;
+        inspectionRef.current = { sessionRef: requestedSessionRef, snapshot: value };
+        inspectionStateSessionRef.current = requestedSessionRef;
+        setInspection(value); setInspectionState("ready");
+      }, () => {
+        if (controller.signal.aborted || selectedSessionRefRef.current !== requestedSessionRef) return;
+        inspectionStateSessionRef.current = requestedSessionRef;
+        setInspectionState(inspectionRef.current?.sessionRef === requestedSessionRef ? "ready" : "error");
+      });
     return () => controller.abort();
-  }, [selected?.sessionRef, selected?.sessionRevision]);
+  }, [selectedSessionRef, selected?.sessionRevision]);
   useEffect(() => {
-    if (!inspectorOpen || activeInspector !== "activity" || !selected || !selectedLive?.operationRef || selectedLive.complete) return;
+    if (!inspectorOpen || activeInspector !== "activity" || !selectedSessionRef || !currentInspection
+      || !selectedLive?.operationRef || selectedLive.complete) return;
+    const requestedSessionRef = selectedSessionRef;
     let stopped = false, timer: number | undefined;
-    const controller = new AbortController();
     const tick = async () => {
-      try {
-        const value = await readSessionInspectionSnapshot(selected.sessionRef, controller.signal);
-        if (!stopped) { setInspection(value); setInspectionState("ready"); }
-      } catch { /* Keep the last canonical snapshot; the next bounded tick may recover. */ }
+      await inspectionRequests.current!.run(() => readSessionInspectionSnapshot(requestedSessionRef),
+        (value) => {
+          if (stopped || !activityInspectorOpenRef.current || selectedSessionRefRef.current !== requestedSessionRef) return;
+          inspectionRef.current = { sessionRef: requestedSessionRef, snapshot: value };
+          inspectionStateSessionRef.current = requestedSessionRef;
+          setInspection(value); setInspectionState("ready");
+        }, () => undefined);
       if (!stopped) timer = window.setTimeout(() => void tick(), 2_000);
     };
     timer = window.setTimeout(() => void tick(), 2_000);
-    return () => { stopped = true; if (timer !== undefined) window.clearTimeout(timer); controller.abort(); };
-  }, [inspectorOpen, activeInspector, selected?.sessionRef, selectedLive?.operationRef, selectedLive?.complete]);
+    return () => { stopped = true; if (timer !== undefined) window.clearTimeout(timer); };
+  }, [inspectorOpen, activeInspector, selectedSessionRef, Boolean(currentInspection), selectedLive?.operationRef, selectedLive?.complete]);
   const canCreate = connection === "connected" && capabilities?.capabilities.sessionActions.create.status === "available";
   const createNewSession = async (value: { projectRef: string; placeRef: string; modelRef: string | null;
     thinkingLevel: string; workflow: Workflow; permissionMode: PermissionMode | null; message: string; files: readonly File[] }) => {
@@ -544,7 +592,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
       <IconButton aria-label={localize(locale, "Mở điều hướng", "Open navigation")} onClick={() => setMobileOpen(true)} sx={{ display: { md: "none" } }}><MenuRounded /></IconButton>
       <Box sx={{ flex: 1, minWidth: 0 }}><Typography component="h1" noWrap sx={{ fontWeight: 600, fontSize: "inherit" }}>{title}</Typography>
         {view === "chat" && selected && <Typography variant="caption" color="text.secondary" noWrap>{selected.projectLabel}</Typography>}</Box>
-      {view === "chat" && selected && <><SessionComposerControls placement="header" session={selected} snapshot={inspection} locale={locale}
+      {view === "chat" && selected && <><SessionComposerControls placement="header" session={selected} snapshot={currentInspection} locale={locale}
         onOpenChanges={() => openInspector("source")}
         canSetModel={connection === "connected" && capabilities?.capabilities.sessionActions.setModel.status === "available"}
         canSetThinking={connection === "connected" && capabilities?.capabilities.sessionActions.setThinking.status === "available"}
@@ -562,7 +610,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
       transition: "margin-right .2s ease" }}>
       {view === "new" ? <NewSessionPage active defaultProjectRef={selected?.projectRef} busy={creatingSession} error={createError} onCancel={() => setView("chat")}
         onCreate={(value) => { void createNewSession(value); }} />
-        : selected ? <Conversation session={selected} snapshot={inspection} locale={locale} live={live[selected.sessionRef]}
+        : selected ? <Conversation session={selected} snapshot={currentInspection} locale={locale} live={live[selected.sessionRef]}
             canSend={connection === "connected" && selected.composerAvailable && capabilities?.capabilities.sessionActions.send.status === "available"
               && (!selectedLive || selectedLive.complete)
               && !["required", "restarting", "failed"].includes(String(live[selected.sessionRef]?.runtimeRecovery))}
@@ -571,7 +619,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
             send={(message, attachment) => send(selected, message, attachment)} abort={() => abort(selected)} restart={() => restart(selected)} onInspector={openInspector} />
             : <EmptyHub locale={locale} canCreate={canCreate} onNew={() => setView("new")} />}
     </Box>
-    <SessionInspectorDrawer open={inspectorOpen} active={activeInspector} snapshot={inspection} state={inspectionState} sessionRef={selected?.sessionRef}
+    <SessionInspectorDrawer open={inspectorOpen} active={activeInspector} snapshot={currentInspection} state={currentInspectionState} sessionRef={selectedSessionRef}
       terminalActivities={selected ? terminalActivities[selected.sessionRef] : undefined}
       liveActivities={selectedLive && !selectedLive.complete ? selectedLive.activities : undefined}
       onClose={() => setInspectorOpen(false)} onActive={setActiveInspector} refresh={refreshInspection} />
@@ -579,7 +627,7 @@ export function SessionHubApp({ catalog, capabilities, connection, live, termina
       slotProps={{ paper: { sx: { m: { xs: 0, sm: 2 }, width: { xs: "100%", sm: "calc(100% - 32px)" },
         height: { xs: "100%", sm: "min(86vh, 840px)" }, maxHeight: { xs: "100%", sm: "86vh" }, borderRadius: { xs: 0, sm: 2.5 }, overflow: "hidden" } } }}>
       <SettingsPage section={settingsSection} onSection={setSettingsSection} onBack={() => setSettingsOpen(false)} session={selected}
-        snapshot={inspection} capabilities={capabilities} connection={connection}
+        snapshot={currentInspection} capabilities={capabilities} connection={connection}
         onSetModel={selected ? (modelRef) => setModel(selected, modelRef) : undefined}
         onSetThinking={selected ? (value) => setThinking(selected, value) : undefined}
         onSetPermission={selected ? (value) => setPermission(selected, value) : undefined}

@@ -15,6 +15,7 @@ import { collectSourceMutationPreview } from "../packages/piagent-core/runtime/i
 import { PiSourceMutationGuard } from "../packages/piagent-core/runtime/policy/source-mutation-guard.ts";
 import { digestZeroTurnFact, providerVisibleToolSchemaDigest, runZeroTurnConformance } from "../packages/piagent-core/runtime/inspection/zero-turn-conformance.ts";
 import { SourceMutationController } from "../packages/piagent-webui/extension/source-mutation-controller.ts";
+import { controlActionDigest } from "../packages/piagent-webui/extension/same-session-bridge.ts";
 import { createSourceMutationCommand } from "../packages/piagent-webui/client/src/source-mutation-command.ts";
 import { createWebUiSchemaRegistry, validateFixture } from "./helpers/piagent-webui-schema-registry.mjs";
 
@@ -254,7 +255,8 @@ test("source mutation controller binds browser intent, persists receipt and dedu
   fs.writeFileSync(path.join(cwd, "a.txt"), "A THROUGH CONTROLLER\n");
   const preview = await selected(cwd, "source.stage", "a.txt"); assert.ok(preview.authority);
   const bridgeRevisions = { ...revisions, workspaceRevision: preview.authority.target.workspaceRevision, indexRevision: preview.authority.target.indexRevision };
-  const bridge = { snapshot: () => ({ state: "ready", identity, revisions: bridgeRevisions, taskState: "active", liveness: "idle" }) };
+  let bridgeIdentity = identity;
+  const bridge = { snapshot: () => ({ state: "ready", identity: bridgeIdentity, revisions: bridgeRevisions, taskState: "active", liveness: "idle" }) };
   let resolves = 0;
   const controller = new SourceMutationController({ bridge, projectRoot: cwd,
     resolve: async (action, fileRef) => { resolves += 1; const current = await selected(cwd, action, "a.txt");
@@ -269,6 +271,18 @@ test("source mutation controller binds browser intent, persists receipt and dedu
     [preview.projection.target.hunkRefs[0], preview.projection.target.hunkRefs[0]]), /hunk-unavailable/);
   const command = await createSourceMutationCommand(snapshot, preview.projection, [preview.projection.target.hunkRefs[0]]);
   assert.equal(validateFixture(registry, "control-command-v1", command).valid, true);
+  for (const [field, value] of [["controlRevision", null], ["approvalRevision", { invalid: true }],
+    ["sessionOptionRevision", { invalid: true }], ["queueRevision", { invalid: true }]]) {
+    const malformed = structuredClone(command);
+    malformed.commandId = `mutation-command.invalid-${field}`;
+    malformed.idempotencyKey = `mutation-controller-invalid-${field}-00000000000000000000`;
+    malformed.expectedRevisions[field] = value;
+    malformed.actionDigest = controlActionDigest(malformed);
+    const rejected = await controller.execute(malformed);
+    assert.equal(rejected.phase, "rejected"); assert.equal(rejected.resultCode, "invalid-command");
+    assert.equal(rejected.error?.code, "invalid-mutation-authority");
+  }
+  assert.equal(resolves, 0, "malformed revisions must fail before preview resolution");
   const zeroTurnState = { providerRequests: 0, userMessages: 0, assistantMessages: 0,
     usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costMicros: 0 },
     continuationConsumed: 0, turnTriggers: 0, sessionRef: identity.sessionRef, leafMessageRef: "message.mutation",
@@ -287,6 +301,40 @@ test("source mutation controller binds browser intent, persists receipt and dedu
   const records = readSourceMutationEvidence(cwd, identity.taskRunId).records;
   assert.equal(records.length, 2); assert.deepEqual(records.map((record) => record.selectedHunkRefs), [command.payload.hunkRefs, command.payload.hunkRefs]);
   assert.equal(JSON.stringify(records).includes("A THROUGH CONTROLLER"), false);
+  bridgeIdentity = { ...identity, projectRef: "project.mutation-replaced" };
+  const projectReplay = await controller.execute(command);
+  assert.equal(projectReplay.resultCode, "identity-mismatch"); assert.equal(projectReplay.error?.code, "runtime-or-session-replaced");
+  bridgeIdentity = { ...identity, taskId: "task-mutation-replaced" };
+  const taskReplay = await controller.execute(command);
+  assert.equal(taskReplay.resultCode, "identity-mismatch"); assert.equal(taskReplay.error?.code, "task-identity-mismatch");
+});
+
+test("source mutation controller rejects a task transition while resolving the preview", async (t) => {
+  const cwd = repository(t); fs.writeFileSync(path.join(cwd, "a.txt"), "A TASK TRANSITION\n");
+  const preview = await selected(cwd, "source.stage", "a.txt"); assert.ok(preview.authority);
+  const bridgeRevisions = { ...revisions, workspaceRevision: preview.authority.target.workspaceRevision,
+    indexRevision: preview.authority.target.indexRevision };
+  let bridgeSnapshot = { state: "ready", identity, revisions: bridgeRevisions, taskState: "active", liveness: "idle" };
+  let signalResolveStarted, releaseResolve;
+  const resolveStarted = new Promise((resolve) => { signalResolveStarted = resolve; });
+  const resolveRelease = new Promise((resolve) => { releaseResolve = resolve; });
+  let mutations = 0;
+  const controller = new SourceMutationController({ bridge: { snapshot: () => bridgeSnapshot }, projectRoot: cwd,
+    resolve: async () => { signalResolveStarted(); await resolveRelease; return preview; }, revisions: async () => bridgeRevisions,
+    mutate: async () => { mutations += 1; throw new Error("mutation must not run after task transition"); } });
+  const command = await createSourceMutationCommand({ identity, revision: { ...bridgeRevisions, eventCursor: null } }, preview.projection);
+  const pending = controller.execute(command); await resolveStarted;
+  const successorIdentity = { ...identity, taskId: "task-mutation-next", taskRunId: "task-mutation-run-next" };
+  bridgeSnapshot = { ...bridgeSnapshot, identity: successorIdentity,
+    revisions: { ...bridgeRevisions, runtimeRevision: "runtime-revision.mutation-next",
+      taskRevision: "task-revision.mutation-next", controlRevision: "control-revision.mutation-next" } };
+  releaseResolve();
+  const receipt = await pending;
+  assert.equal(receipt.phase, "rejected"); assert.equal(receipt.resultCode, "identity-mismatch");
+  assert.equal(receipt.error?.code, "task-identity-mismatch"); assert.equal(mutations, 0);
+  assert.equal(readSourceMutationEvidence(cwd, identity.taskRunId).records.length, 0);
+  assert.equal(readSourceMutationEvidence(cwd, successorIdentity.taskRunId).records.length, 0);
+  assert.equal(execFileSync("git", ["-C", cwd, "diff", "--cached", "--", "a.txt"]).length, 0);
 });
 
 test("controller durably rejects a selected hunk under a foreign index lock and deduplicates retry", async (t) => {

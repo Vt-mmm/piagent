@@ -9,7 +9,7 @@ import { workingTreeSnapshot } from "../packages/piagent-core/extensions/task-st
 import { workingTreeEvidenceDigest } from "../packages/piagent-core/extensions/working-tree-digest.js";
 import { collectSourceChangeViews } from "../packages/piagent-core/runtime/inspection/source-change-projection.ts";
 import { captureTaskBaselineManifest } from "../packages/piagent-core/runtime/inspection/source-evidence-store.ts";
-import { appendSourceHandoffEvidence } from "../packages/piagent-core/runtime/inspection/source-handoff-store.ts";
+import { appendSourceHandoffEvidence, readSourceHandoffEvidence } from "../packages/piagent-core/runtime/inspection/source-handoff-store.ts";
 import { resolveSourceOpenTarget } from "../packages/piagent-core/runtime/inspection/source-open-target.ts";
 import { digestZeroTurnFact, providerVisibleToolSchemaDigest, runZeroTurnConformance } from "../packages/piagent-core/runtime/inspection/zero-turn-conformance.ts";
 import { createSourceOpenCommand } from "../packages/piagent-webui/client/src/source-open-command.ts";
@@ -78,7 +78,8 @@ test("controller binds current revisions, persists path-free evidence, deduplica
   fs.writeFileSync(path.join(cwd, "safe.txt"), "TOP SECRET SOURCE THAT MUST NOT ENTER EVIDENCE\n");
   const selected = await authority(cwd); assert.ok(selected.result);
   const currentRevisions = { ...revisions, workspaceRevision: selected.result.target.workspaceRevision };
-  const bridge = { snapshot: () => ({ state: "ready", identity, revisions: currentRevisions, taskState: "active", liveness: "idle" }) };
+  let bridgeIdentity = identity;
+  const bridge = { snapshot: () => ({ state: "ready", identity: bridgeIdentity, revisions: currentRevisions, taskState: "active", liveness: "idle" }) };
   let opens = 0;
   const controller = new SourceOpenController({ bridge, projectRoot: cwd, resolve: async (fileRef) => fileRef === selected.file.fileRef ? selected.result : null,
     open: async (absolutePath, line, column) => { opens += 1; assert.equal(absolutePath, selected.result.absolutePath);
@@ -104,6 +105,39 @@ test("controller binds current revisions, persists path-free evidence, deduplica
     .filter((entry) => String(entry).endsWith(".json")).map((entry) => fs.readFileSync(path.join(cwd, ".pi", "piagent-state", "source-evidence", String(entry)), "utf8")).join("\n");
   assert.equal(evidence.includes(cwd), false); assert.equal(evidence.includes("safe.txt"), false);
   assert.equal(evidence.includes("TOP SECRET SOURCE"), false); assert.equal(evidence.includes("--goto"), false);
+  bridgeIdentity = { ...identity, projectRef: "project.open-replaced" };
+  const projectReplay = await controller.execute(command);
+  assert.equal(projectReplay.resultCode, "identity-mismatch"); assert.equal(projectReplay.error?.code, "runtime-or-session-replaced");
+  bridgeIdentity = { ...identity, taskId: "task-open-replaced" };
+  const taskReplay = await controller.execute(command);
+  assert.equal(taskReplay.resultCode, "identity-mismatch"); assert.equal(taskReplay.error?.code, "task-identity-mismatch");
+});
+
+test("source open rejects a runtime replacement while resolving the target", async (t) => {
+  const cwd = repository(t);
+  await captureTaskBaselineManifest({ projectRoot: cwd, taskId: identity.taskId, taskRunId: identity.taskRunId,
+    sessionId: "raw-open-transition", capturedAt: new Date().toISOString(), baselineTreeDigest: workingTreeEvidenceDigest(workingTreeSnapshot(cwd)) });
+  fs.writeFileSync(path.join(cwd, "safe.txt"), "CURRENT\n");
+  const selected = await authority(cwd); assert.ok(selected.result);
+  const currentRevisions = { ...revisions, workspaceRevision: selected.result.target.workspaceRevision };
+  let bridgeSnapshot = { state: "ready", identity, revisions: currentRevisions, taskState: "active", liveness: "idle" };
+  let signalResolveStarted, releaseResolve;
+  const resolveStarted = new Promise((resolve) => { signalResolveStarted = resolve; });
+  const resolveRelease = new Promise((resolve) => { releaseResolve = resolve; });
+  let opens = 0;
+  const controller = new SourceOpenController({ bridge: { snapshot: () => bridgeSnapshot }, projectRoot: cwd,
+    resolve: async () => { signalResolveStarted(); await resolveRelease; return selected.result; },
+    open: async () => { opens += 1; throw new Error("open must not run after runtime replacement"); } });
+  const command = await createSourceOpenCommand({ identity, revision: { ...currentRevisions, eventCursor: null } }, selected.file.fileRef);
+  const pending = controller.execute(command); await resolveStarted;
+  bridgeSnapshot = { ...bridgeSnapshot,
+    identity: { ...identity, runtimeInstanceId: "runtime.open-next", sessionRef: "session.open-next" },
+    revisions: { ...currentRevisions, runtimeRevision: "runtime-revision.open-next", controlRevision: "control-revision.open-next" } };
+  releaseResolve();
+  const receipt = await pending;
+  assert.equal(receipt.phase, "rejected"); assert.equal(receipt.resultCode, "identity-mismatch");
+  assert.equal(receipt.error?.code, "runtime-or-session-replaced"); assert.equal(opens, 0);
+  assert.equal(readSourceHandoffEvidence(cwd, identity.taskRunId).records.length, 0);
 });
 
 test("a crash after requested evidence becomes durable effect-unknown and never reopens", async (t) => {

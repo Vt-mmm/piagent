@@ -326,6 +326,105 @@ test("waits for canonical live state on bootstrap and after a replay gap", async
   } finally { liveStateUnavailable = false; }
 });
 
+test("keeps session B authoritative when a delayed session A snapshot resolves last", async ({ page }) => {
+  await page.addInitScript(() => {
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, window.location.href);
+      if (!url.pathname.endsWith("/inspection/snapshot") || !init?.signal) return nativeFetch(input, init);
+      const { signal: _signal, ...withoutSignal } = init;
+      return nativeFetch(input, withoutSignal);
+    };
+  });
+  const boundSnapshot = (sessionRef, suffix, percent, sourceFiles, permission) => {
+    const value = structuredClone(inspectionSnapshot);
+    value.identity = { ...value.identity, projectRef: `project_${sessionRef}`, runtimeInstanceId: `runtime_${suffix}`, sessionRef };
+    value.session.displayName = `Inspection ${suffix}`;
+    value.session.permissionProfile = { state: "known", value: permission, evidence: "observed", reasonCode: null };
+    value.session.context = { ...value.session.context, tokens: percent * 1_000, contextWindow: 100_000, percent };
+    value.usage.context = { ...value.usage.context, tokens: percent * 1_000, contextWindow: 100_000, percent };
+    value.revision.runtimeRevision = `runtime_rev_${suffix}`;
+    value.revision.workspaceRevision = `workspace_rev_${suffix}`;
+    value.revision.indexRevision = `index_rev_${suffix}`;
+    value.sourceChanges.workingTree.revision = value.revision.workspaceRevision;
+    value.sourceChanges.staged.revision = value.revision.indexRevision;
+    Object.assign(value.sourceChanges.workingTree.counts, { files: sourceFiles, added: 0, modified: sourceFiles,
+      deleted: 0, renamed: 0, untracked: 0, conflicted: 0, additions: sourceFiles, deletions: 0 });
+    return value;
+  };
+  const snapshotA = boundSnapshot("session_release_prep", "A", 11, 11, "trusted-full-access");
+  const snapshotB = boundSnapshot("session_source_review", "B", 22, 22, "read-only");
+  const sourceB = (view) => {
+    const value = structuredClone(sourceFixture);
+    value.identity = structuredClone(snapshotB.identity); value.view = view;
+    if (view === "task") {
+      value.viewRevision = "task_unavailable_B"; value.files = [];
+      value.page = { ...value.page, total: 0, returned: 0 };
+      value.availability = { state: "unavailable", reasonCode: "no-active-task", message: "No active task baseline exists." };
+      value.bases = { taskBaselineDigest: `sha256:${"a".repeat(64)}`, headOid: null, indexDigest: null, workingTreeDigest: null };
+      return value;
+    }
+    value.viewRevision = view === "working-tree" ? snapshotB.revision.workspaceRevision : snapshotB.revision.indexRevision;
+    value.files[0] = { ...value.files[0], fileRef: "file_session_B", fileRevision: "file_rev_session_B",
+      path: "src/b-session-only.ts" };
+    return value;
+  };
+  let signalAStarted, releaseA, signalAReleased;
+  const aStarted = new Promise((resolve) => { signalAStarted = resolve; });
+  const aRelease = new Promise((resolve) => { releaseA = resolve; });
+  const aReleased = new Promise((resolve) => { signalAReleased = resolve; });
+  const snapshotRoute = async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname.includes("/sessions/session_release_prep/")) {
+      signalAStarted(); await aRelease;
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(snapshotA) });
+      signalAReleased(); return;
+    }
+    if (pathname.includes("/sessions/session_source_review/")) {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(snapshotB) }); return;
+    }
+    await route.continue();
+  };
+  const sourceRoute = async (route) => {
+    const url = new URL(route.request().url());
+    if (!url.pathname.includes("/sessions/session_source_review/")) return route.continue();
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(sourceB(url.searchParams.get("view"))) });
+  };
+  const isSnapshotRoute = (url) => url.pathname.endsWith("/inspection/snapshot");
+  const isSourceRoute = (url) => url.pathname.endsWith("/inspection/source-changes");
+  await page.route(isSnapshotRoute, snapshotRoute);
+  await page.route(isSourceRoute, sourceRoute);
+  try {
+    await page.goto(server.issueLaunchUrl()); await aStarted;
+    await page.getByText("Review source changes", { exact: true }).filter({ visible: true }).click();
+    await expect(page.getByRole("heading", { name: "Review source changes" })).toBeVisible();
+    await page.getByRole("button", { name: "Thêm tùy chọn" }).click();
+    await expect(page.getByRole("button", { name: "Context · 22%" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Source Changes · 22" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Đổi quyền truy cập" })).toContainText("Chỉ đọc");
+    await page.getByRole("button", { name: "Mở Source Changes Inspector" }).click();
+    await page.getByRole("tab", { name: /Toàn bộ working tree/ }).click();
+    await expect(page.getByRole("button", { name: /b-session-only\.ts/ })).toBeVisible();
+    await page.getByRole("button", { name: "Đóng Inspector" }).click();
+
+    releaseA(); await aReleased; await page.waitForTimeout(150);
+    await expect(page.getByRole("heading", { name: "Review source changes" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Release preparation" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Context · 22%" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Context · 11%" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Source Changes · 22" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Source Changes · 11" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Đổi quyền truy cập" })).toContainText("Chỉ đọc");
+    await page.getByRole("button", { name: "Mở Source Changes Inspector" }).click();
+    await page.getByRole("tab", { name: /Toàn bộ working tree/ }).click();
+    await expect(page.getByRole("button", { name: /b-session-only\.ts/ })).toBeVisible();
+  } finally {
+    releaseA?.();
+    await page.unroute(isSnapshotRoute, snapshotRoute);
+    await page.unroute(isSourceRoute, sourceRoute);
+  }
+});
+
 test("renders the session-first hub, compact New chat, popovers, modal Settings, and a split Agent Inspector", async ({ page }) => {
   persistedBrowserConversation = false;
   observedSessionActions.length = 0;

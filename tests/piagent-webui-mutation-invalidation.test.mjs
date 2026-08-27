@@ -12,6 +12,7 @@ import { appendMutationProvenance } from "../packages/piagent-core/runtime/inspe
 import { captureTaskBaselineManifest } from "../packages/piagent-core/runtime/inspection/source-evidence-store.ts";
 import { readSourceMutationEvidence } from "../packages/piagent-core/runtime/inspection/source-mutation-store.ts";
 import { captureVerifierFileSnapshot, inspectVerifierStaleness } from "../packages/piagent-core/runtime/inspection/verifier-snapshot-store.ts";
+import { webUiProjectRef, webUiSessionRef, webUiTaskRevision } from "../packages/piagent-core/runtime/inspection/webui-snapshot.ts";
 import { createBoundTaskAuthority } from "../packages/piagent-core/runtime/policy/task-authority-runtime.ts";
 import { PiSourceMutationGuard } from "../packages/piagent-core/runtime/policy/source-mutation-guard.ts";
 import { createReviewCommand } from "../packages/piagent-webui/client/src/review-command.ts";
@@ -43,9 +44,9 @@ test("mutation audit chains and review/verifier invalidation follow exact index 
     afterSnapshot: afterTask, changedPaths: ["a.txt"], recordedDigests: { "a.txt": afterTask["a.txt"] },
     recordedContentDigests: { "a.txt": createHash("sha256").update("AFTER TASK\n").digest("hex") },
     proofModes: { "a.txt": "full-content" }, protectedPaths: [] }));
-  const runtimeInstanceId = "runtime.audit", identity = { projectRef: "project.audit", runtimeInstanceId, sessionRef: "session.audit",
+  const runtimeInstanceId = "runtime.audit", identity = { projectRef: webUiProjectRef(cwd), runtimeInstanceId, sessionRef: webUiSessionRef(task.sessionId),
     taskId: task.taskId, taskRunId: task.taskRunId, agentOperationId: null, toolCallId: null };
-  const bridgeRevisions = { runtimeRevision: "runtime-revision.audit", taskRevision: `task-revision.audit`, controlRevision: "control-revision.audit",
+  const bridgeRevisions = { runtimeRevision: "runtime-revision.audit", taskRevision: webUiTaskRevision(task), controlRevision: "control-revision.audit",
     workspaceRevision: null, indexRevision: null, approvalRevision: null, sessionOptionRevision: null, queueRevision: "queue-revision.audit" };
   const bridge = { snapshot: () => ({ state: "ready", identity, revisions: bridgeRevisions, liveness: "idle", taskState: "active" }) };
   const guard = new PiSourceMutationGuard(), unbind = guard.bind({ cwd, rawSessionId: task.sessionId, guardInstanceId: "guard.audit",

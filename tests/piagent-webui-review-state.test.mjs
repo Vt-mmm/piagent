@@ -116,7 +116,8 @@ test("corrupt review evidence fails closed instead of trusting a partial ledger"
 test("review controller revalidates current target, deduplicates and never mutates source", async (t) => {
   const current = await evidenceFixture(t), sourceBefore = fs.readFileSync(path.join(current.cwd, "review.txt"), "utf8");
   let target = current.target, resolves = 0;
-  const bridge = { snapshot: () => ({ state: "ready", identity, revisions, taskState: "active", liveness: "idle" }) };
+  let bridgeIdentity = identity;
+  const bridge = { snapshot: () => ({ state: "ready", identity: bridgeIdentity, revisions, taskState: "active", liveness: "idle" }) };
   const controller = new ReviewController({ bridge, projectRoot: current.cwd, now: () => new Date(current.at.getTime() + 2_000),
     resolve: async () => { resolves += 1; return projectReviewState({ identity, target, records: readReviewEvidence(current.cwd, identity.taskRunId).records }); } });
   const command = { schemaVersion: 1, version: "piagent-webui-control-v1", messageType: "command", commandId: "review-command.controller",
@@ -125,6 +126,17 @@ test("review controller revalidates current target, deduplicates and never mutat
     identity, expectedRevisions: { ...revisions, workspacePreimage: null, indexPreimage: null, patchPreimage: target.patchPreimage },
     payload: { view: target.view, fileRef: target.fileRef, diffRef: target.diffRef, reviewState: "reviewed", contentDigest: target.contentDigest } };
   command.actionDigest = controlActionDigest(command);
+  for (const field of ["approvalRevision", "sessionOptionRevision", "queueRevision"]) {
+    const malformed = structuredClone(command);
+    malformed.commandId = `review-command.invalid-${field}`;
+    malformed.idempotencyKey = `review-controller-invalid-${field}-00000000000000000000`;
+    malformed.expectedRevisions[field] = { invalid: true };
+    malformed.actionDigest = controlActionDigest(malformed);
+    const rejected = await controller.execute(malformed);
+    assert.equal(rejected.phase, "rejected"); assert.equal(rejected.resultCode, "invalid-command");
+    assert.equal(rejected.error?.code, "invalid-review-authority");
+  }
+  assert.equal(resolves, 0, "malformed nullable revisions must fail before target resolution");
   const observe = () => ({
     providerRequests: 0, userMessages: 0, assistantMessages: 0,
     usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costMicros: 0 },
@@ -157,4 +169,33 @@ test("review controller revalidates current target, deduplicates and never mutat
   staleCommand.actionDigest = controlActionDigest(staleCommand);
   const stale = await controller.execute(staleCommand); assert.equal(stale.phase, "rejected"); assert.equal(stale.resultCode, "stale-revision");
   assert.equal(readReviewEvidence(current.cwd, identity.taskRunId).records.length, 2);
+
+  bridgeIdentity = { ...identity, projectRef: "project.review-replaced" };
+  const projectReplay = await controller.execute(command);
+  assert.equal(projectReplay.resultCode, "identity-mismatch"); assert.equal(projectReplay.error?.code, "runtime-or-session-replaced");
+  bridgeIdentity = { ...identity, taskId: "task-review-replaced" };
+  const taskReplay = await controller.execute(command);
+  assert.equal(taskReplay.resultCode, "identity-mismatch"); assert.equal(taskReplay.error?.code, "task-identity-mismatch");
+});
+
+test("review controller rejects a task transition while resolving the target", async (t) => {
+  const current = await evidenceFixture(t);
+  const projection = projectReviewState({ identity, target: current.target, records: [] });
+  const command = await createReviewCommand({ identity, revision: { ...revisions, eventCursor: null } }, projection, "reviewed");
+  let bridgeSnapshot = { state: "ready", identity, revisions, taskState: "active", liveness: "idle" };
+  let signalResolveStarted, releaseResolve;
+  const resolveStarted = new Promise((resolve) => { signalResolveStarted = resolve; });
+  const resolveRelease = new Promise((resolve) => { releaseResolve = resolve; });
+  const controller = new ReviewController({ bridge: { snapshot: () => bridgeSnapshot }, projectRoot: current.cwd,
+    resolve: async () => { signalResolveStarted(); await resolveRelease; return projection; } });
+  const pending = controller.execute(command); await resolveStarted;
+  const successorIdentity = { ...identity, taskId: "task-review-next", taskRunId: "task-review-run-next" };
+  bridgeSnapshot = { ...bridgeSnapshot, identity: successorIdentity,
+    revisions: { ...revisions, taskRevision: "task-rev.review-next", controlRevision: "control-rev.review-next" } };
+  releaseResolve();
+  const receipt = await pending;
+  assert.equal(receipt.phase, "rejected"); assert.equal(receipt.resultCode, "identity-mismatch");
+  assert.equal(receipt.error?.code, "task-identity-mismatch");
+  assert.equal(readReviewEvidence(current.cwd, identity.taskRunId).records.length, 0);
+  assert.equal(readReviewEvidence(current.cwd, successorIdentity.taskRunId).records.length, 0);
 });

@@ -1651,6 +1651,9 @@
         "staged"
       ],
       "properties": {
+        "projectionRevision": {
+          "$ref": "common-v1.schema.json#/$defs/revisionToken"
+        },
         "task": {
           "allOf": [
             { "$ref": "#/$defs/sourceViewSummary" },

@@ -38,6 +38,13 @@ function wireIdentity(value: BridgeIdentity): BridgeIdentity { return { projectR
 function wireRevisions(value: Record<string, any>): BridgeRevisions { return { runtimeRevision: value.runtimeRevision, taskRevision: value.taskRevision,
   controlRevision: value.controlRevision, workspaceRevision: value.workspaceRevision, indexRevision: value.indexRevision,
   approvalRevision: value.approvalRevision, sessionOptionRevision: value.sessionOptionRevision, queueRevision: value.queueRevision }; }
+function replayIdentityDisposition(record: Pick<SourceMutationEvidenceRecord, "projectRef" | "runtimeInstanceId" | "sessionRef" | "taskId" | "taskRunId">,
+  identity: BridgeIdentity): "task-identity-mismatch" | "runtime-or-session-replaced" | null {
+  if (record.taskId !== identity.taskId || record.taskRunId !== identity.taskRunId) return "task-identity-mismatch";
+  if (record.projectRef !== identity.projectRef || record.runtimeInstanceId !== identity.runtimeInstanceId || record.sessionRef !== identity.sessionRef)
+    return "runtime-or-session-replaced";
+  return null;
+}
 function receipt(record: SourceMutationEvidenceRecord, deduplicated: boolean): SourceRevertReceipt {
   const identity = { projectRef: record.projectRef, runtimeInstanceId: record.runtimeInstanceId, sessionRef: record.sessionRef,
     taskId: record.taskId, taskRunId: record.taskRunId, agentOperationId: null, toolCallId: null } as BridgeIdentity;
@@ -90,8 +97,9 @@ export class SourceRevertController {
     if (prior.length) {
       if (prior.some((record) => record.commandId !== command.commandId || record.idempotencyKeyDigest !== keyDigest || record.actionDigest !== command.actionDigest
         || record.action !== command.action)) return this.#reject(command, "idempotency-payload-mismatch", "idempotency-payload-mismatch", false);
-      if (prior.some((record) => record.runtimeInstanceId !== identity.runtimeInstanceId || record.sessionRef !== identity.sessionRef))
-        return this.#reject(command, "identity-mismatch", "runtime-or-session-replaced", false);
+      const dispositions = prior.map((record) => replayIdentityDisposition(record, identity)).filter(Boolean);
+      if (dispositions.length) return this.#reject(command, "identity-mismatch",
+        dispositions.includes("task-identity-mismatch") ? "task-identity-mismatch" : "runtime-or-session-replaced", false);
       return receipt(prior.at(-1)!, true);
     }
     const now = this.#now().getTime();
@@ -103,10 +111,25 @@ export class SourceRevertController {
     let resolved: { projection: SourceRevertProjection; authority: SourceRevertAuthority | null };
     try { resolved = await this.#resolve(command.payload.fileRef, command.payload.hunkRefs); }
     catch { return this.#reject(command, "capability-unavailable", "revert-preview-unavailable", true); }
+    const rebound = this.#bridge.snapshot();
+    if (rebound.state !== "ready" || !rebound.identity || !rebound.revisions)
+      return this.#reject(command, "resync-required", "revert-binding-unavailable-after-preview", true);
+    const reboundIdentity = wireIdentity(rebound.identity), reboundRevisions = wireRevisions(rebound.revisions);
+    if (!same(reboundIdentity, identity)) {
+      const taskChanged = reboundIdentity.taskId !== identity.taskId || reboundIdentity.taskRunId !== identity.taskRunId;
+      return this.#reject(command, "identity-mismatch", taskChanged ? "task-identity-mismatch" : "runtime-or-session-replaced", false);
+    }
+    if (rebound.taskState === "terminal") return this.#reject(command, "terminal-task", "task-terminal-after-preview", false);
+    if (rebound.liveness !== "idle") return this.#reject(command, "capability-unavailable", "agent-not-idle-after-preview", true);
+    if (command.expectedRevisions.runtimeRevision !== reboundRevisions.runtimeRevision
+      || command.expectedRevisions.taskRevision !== reboundRevisions.taskRevision
+      || command.expectedRevisions.controlRevision !== reboundRevisions.controlRevision)
+      return this.#reject(command, "stale-revision", "stale-task-control-revision-after-preview", true);
     if (!resolved.authority || resolved.projection.state !== "ready" || !resolved.projection.target)
       return this.#reject(command, "capability-unavailable", resolved.projection.reasonCode ?? "revert-preview-unavailable", true);
     const target = resolved.projection.target;
-    if (!this.#matches(command, target) || now > Date.parse(target.expiresAt)) return this.#reject(command, "stale-revision", "revert-preview-stale", true);
+    if (!this.#matches(command, target) || this.#now().getTime() > Date.parse(target.expiresAt))
+      return this.#reject(command, "stale-revision", "revert-preview-stale", true);
     const before = { ...bridgeRevisions, workspaceRevision: target.workspaceRevision, indexRevision: target.indexRevision };
     let requested: SourceMutationEvidenceRecord;
     try { requested = appendSourceMutationEvidence({ projectRoot: this.#projectRoot, projectRef: identity.projectRef, runtimeInstanceId: identity.runtimeInstanceId,

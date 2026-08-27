@@ -35,11 +35,19 @@ function timestamp(value: unknown): value is string {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) return false;
   const parsed = Date.parse(value); return Number.isFinite(parsed) && new Date(parsed).toISOString() === value;
 }
+function nullableRevision(value: unknown): value is string | null { return value === null || typeof value === "string" && REVISION.test(value); }
 function wireIdentity(value: BridgeIdentity): BridgeIdentity { return { projectRef: value.projectRef, runtimeInstanceId: value.runtimeInstanceId,
   sessionRef: value.sessionRef, taskId: value.taskId, taskRunId: value.taskRunId, agentOperationId: null, toolCallId: null }; }
 function wireRevisions(value: Record<string, any>): BridgeRevisions { return { runtimeRevision: value.runtimeRevision, taskRevision: value.taskRevision,
   controlRevision: value.controlRevision, workspaceRevision: value.workspaceRevision, indexRevision: value.indexRevision,
   approvalRevision: value.approvalRevision, sessionOptionRevision: value.sessionOptionRevision, queueRevision: value.queueRevision }; }
+function replayIdentityDisposition(record: Pick<SourceMutationEvidenceRecord, "projectRef" | "runtimeInstanceId" | "sessionRef" | "taskId" | "taskRunId">,
+  identity: BridgeIdentity): "task-identity-mismatch" | "runtime-or-session-replaced" | null {
+  if (record.taskId !== identity.taskId || record.taskRunId !== identity.taskRunId) return "task-identity-mismatch";
+  if (record.projectRef !== identity.projectRef || record.runtimeInstanceId !== identity.runtimeInstanceId || record.sessionRef !== identity.sessionRef)
+    return "runtime-or-session-replaced";
+  return null;
+}
 
 function receiptFromRecord(record: SourceMutationEvidenceRecord, deduplicated: boolean): SourceMutationReceipt {
   if (record.action === "source.revert") throw new Error("source-mutation-evidence-action-mismatch");
@@ -109,8 +117,9 @@ export class SourceMutationController {
     if (prior.length) {
       if (prior.some((record) => record.commandId !== command.commandId || record.idempotencyKeyDigest !== keyDigest || record.actionDigest !== command.actionDigest
         || record.action !== command.action)) return this.#reject(command, "idempotency-payload-mismatch", "idempotency-payload-mismatch", false);
-      if (prior.some((record) => record.runtimeInstanceId !== identity.runtimeInstanceId || record.sessionRef !== identity.sessionRef))
-        return this.#reject(command, "identity-mismatch", "runtime-or-session-replaced", false);
+      const dispositions = prior.map((record) => replayIdentityDisposition(record, identity)).filter(Boolean);
+      if (dispositions.length) return this.#reject(command, "identity-mismatch",
+        dispositions.includes("task-identity-mismatch") ? "task-identity-mismatch" : "runtime-or-session-replaced", false);
       return receiptFromRecord(prior.at(-1)!, true);
     }
     const now = this.#now().getTime();
@@ -122,6 +131,20 @@ export class SourceMutationController {
     let resolved: { projection: SourceMutationProjection; authority: SourceMutationAuthority | null };
     try { resolved = await this.#resolve(command.action, command.payload.fileRef); }
     catch { return this.#reject(command, "capability-unavailable", "mutation-preview-unavailable", true); }
+    const rebound = this.#bridge.snapshot();
+    if (rebound.state !== "ready" || !rebound.identity || !rebound.revisions)
+      return this.#reject(command, "resync-required", "mutation-binding-unavailable-after-preview", true);
+    const reboundIdentity = wireIdentity(rebound.identity), reboundRevisions = wireRevisions(rebound.revisions);
+    if (!same(reboundIdentity, identity)) {
+      const taskChanged = reboundIdentity.taskId !== identity.taskId || reboundIdentity.taskRunId !== identity.taskRunId;
+      return this.#reject(command, "identity-mismatch", taskChanged ? "task-identity-mismatch" : "runtime-or-session-replaced", false);
+    }
+    if (rebound.taskState === "terminal") return this.#reject(command, "terminal-task", "task-terminal-after-preview", false);
+    if (rebound.liveness !== "idle") return this.#reject(command, "capability-unavailable", "agent-not-idle-after-preview", true);
+    if (command.expectedRevisions.runtimeRevision !== reboundRevisions.runtimeRevision
+      || command.expectedRevisions.taskRevision !== reboundRevisions.taskRevision
+      || command.expectedRevisions.controlRevision !== reboundRevisions.controlRevision)
+      return this.#reject(command, "stale-revision", "stale-task-control-revision-after-preview", true);
     if (!resolved.authority || resolved.projection.state !== "ready" || !resolved.projection.target)
       return this.#reject(command, "capability-unavailable", resolved.projection.reasonCode ?? "mutation-preview-unavailable", true);
     const target = resolved.projection.target;
@@ -185,8 +208,11 @@ export class SourceMutationController {
       || command.identity.agentOperationId !== null || command.identity.toolCallId !== null) return "invalid-command-identity";
     const preimageKeys = [...REVISION_KEYS, "workspacePreimage", "indexPreimage", "patchPreimage"];
     if (!exactKeys(command.expectedRevisions, preimageKeys) || !REVISION.test(command.expectedRevisions.runtimeRevision)
-      || !REVISION.test(command.expectedRevisions.taskRevision ?? "") || !REVISION.test(command.expectedRevisions.workspaceRevision ?? "")
+      || !REVISION.test(command.expectedRevisions.taskRevision ?? "") || !REVISION.test(command.expectedRevisions.controlRevision ?? "")
+      || !REVISION.test(command.expectedRevisions.workspaceRevision ?? "")
       || !REVISION.test(command.expectedRevisions.indexRevision ?? "") || !WORKSPACE.test(command.expectedRevisions.workspacePreimage)
+      || ![command.expectedRevisions.approvalRevision, command.expectedRevisions.sessionOptionRevision,
+        command.expectedRevisions.queueRevision].every(nullableRevision)
       || !DIGEST.test(command.expectedRevisions.indexPreimage) || !DIGEST.test(command.expectedRevisions.patchPreimage)) return "invalid-mutation-authority";
     if (!exactKeys(command.payload, ["fileRef", "hunkRefs", "contentDigest"]) || !REF.test(command.payload.fileRef)
       || !Array.isArray(command.payload.hunkRefs) || command.payload.hunkRefs.length > 128

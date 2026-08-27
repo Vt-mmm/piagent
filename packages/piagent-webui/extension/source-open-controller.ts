@@ -33,6 +33,13 @@ function revisions(value: Record<string, any>, record?: SourceHandoffRecord): Br
   taskRevision: record?.taskRevision ?? value.taskRevision, controlRevision: value.controlRevision,
   workspaceRevision: record?.workspaceRevision ?? value.workspaceRevision, indexRevision: value.indexRevision,
   approvalRevision: value.approvalRevision, sessionOptionRevision: value.sessionOptionRevision, queueRevision: value.queueRevision }; }
+function replayIdentityDisposition(record: Pick<SourceHandoffRecord, "projectRef" | "runtimeInstanceId" | "sessionRef" | "taskId" | "taskRunId">,
+  current: BridgeIdentity): "task-identity-mismatch" | "runtime-or-session-replaced" | null {
+  if (record.taskId !== current.taskId || record.taskRunId !== current.taskRunId) return "task-identity-mismatch";
+  if (record.projectRef !== current.projectRef || record.runtimeInstanceId !== current.runtimeInstanceId || record.sessionRef !== current.sessionRef)
+    return "runtime-or-session-replaced";
+  return null;
+}
 
 export class SourceOpenController {
   readonly #bridge: SameSessionPiBridge; readonly #root: string; readonly #resolve: (fileRef: string) => Promise<SourceOpenAuthority | null>;
@@ -55,8 +62,9 @@ export class SourceOpenController {
     if (prior.length) {
       if (prior.some((record) => record.commandId !== command.commandId || record.idempotencyKeyDigest !== keyDigest || record.actionDigest !== command.actionDigest))
         return this.#reject(command, "idempotency-payload-mismatch", "idempotency-payload-mismatch", false);
-      if (prior.some((record) => record.runtimeInstanceId !== currentIdentity.runtimeInstanceId || record.sessionRef !== currentIdentity.sessionRef))
-        return this.#reject(command, "identity-mismatch", "runtime-or-session-replaced", false);
+      const dispositions = prior.map((record) => replayIdentityDisposition(record, currentIdentity)).filter(Boolean);
+      if (dispositions.length) return this.#reject(command, "identity-mismatch",
+        dispositions.includes("task-identity-mismatch") ? "task-identity-mismatch" : "runtime-or-session-replaced", false);
       const last = prior.at(-1)!; if (last.phase !== "requested") return this.#receipt(last, currentRevisions, true);
       const uncertain = this.#append(command, currentIdentity, keyDigest, last, "uncertain", "effect-unknown", "source-open-outcome-unknown");
       return this.#receipt(uncertain, currentRevisions, true);
@@ -64,9 +72,22 @@ export class SourceOpenController {
     const now = this.#now().getTime(); if (Date.parse(command.requestedAt) > now + 30_000) return this.#reject(command, "invalid-command", "requested-at-in-future", false);
     if (now > Date.parse(command.expiresAt)) return this.#reject(command, "expired", "command-expired", false);
     if (!same(command.identity, currentIdentity)) return this.#reject(command, "identity-mismatch", "identity-mismatch", false);
-    if (command.expectedRevisions.runtimeRevision !== currentRevisions.runtimeRevision || command.expectedRevisions.taskRevision !== currentRevisions.taskRevision)
-      return this.#reject(command, "stale-revision", "stale-source-open-revision", true);
+    if (command.expectedRevisions.runtimeRevision !== currentRevisions.runtimeRevision || command.expectedRevisions.taskRevision !== currentRevisions.taskRevision
+      || command.expectedRevisions.controlRevision !== currentRevisions.controlRevision)
+      return this.#reject(command, "stale-revision", "stale-task-control-revision", true);
     let authority: SourceOpenAuthority | null; try { authority = await this.#resolve(command.payload.fileRef); } catch { authority = null; }
+    const rebound = this.#bridge.snapshot();
+    if (rebound.state !== "ready" || !rebound.identity || !rebound.revisions)
+      return this.#reject(command, "resync-required", "source-open-binding-unavailable-after-target-resolution", true);
+    const reboundIdentity = identity(rebound.identity), reboundRevisions = revisions(rebound.revisions);
+    if (!same(reboundIdentity, currentIdentity)) {
+      const taskChanged = reboundIdentity.taskId !== currentIdentity.taskId || reboundIdentity.taskRunId !== currentIdentity.taskRunId;
+      return this.#reject(command, "identity-mismatch", taskChanged ? "task-identity-mismatch" : "runtime-or-session-replaced", false);
+    }
+    if (command.expectedRevisions.runtimeRevision !== reboundRevisions.runtimeRevision
+      || command.expectedRevisions.taskRevision !== reboundRevisions.taskRevision
+      || command.expectedRevisions.controlRevision !== reboundRevisions.controlRevision)
+      return this.#reject(command, "stale-revision", "stale-task-control-revision-after-target-resolution", true);
     if (!authority) return this.#reject(command, "capability-unavailable", "source-open-target-unavailable", true);
     if (authority.target.taskRevision !== command.expectedRevisions.taskRevision || authority.target.workspaceRevision !== command.expectedRevisions.workspaceRevision)
       return this.#reject(command, "stale-revision", "source-open-target-stale", true);
@@ -110,9 +131,10 @@ export class SourceOpenController {
       || command.identity.agentOperationId !== null || command.identity.toolCallId !== null) return "invalid-command-identity";
     if (!exact(command.expectedRevisions, [...REVISION_KEYS, "workspacePreimage", "indexPreimage", "patchPreimage"])
       || !REVISION.test(command.expectedRevisions.runtimeRevision) || !REVISION.test(command.expectedRevisions.taskRevision ?? "")
-      || !REVISION.test(command.expectedRevisions.workspaceRevision ?? "") || command.expectedRevisions.workspacePreimage !== null
-      || ![command.expectedRevisions.controlRevision, command.expectedRevisions.indexRevision, command.expectedRevisions.approvalRevision,
-        command.expectedRevisions.sessionOptionRevision, command.expectedRevisions.queueRevision].every(nullableRevision)
+      || !REVISION.test(command.expectedRevisions.controlRevision ?? "") || !REVISION.test(command.expectedRevisions.workspaceRevision ?? "")
+      || command.expectedRevisions.workspacePreimage !== null
+      || ![command.expectedRevisions.indexRevision, command.expectedRevisions.approvalRevision, command.expectedRevisions.sessionOptionRevision,
+        command.expectedRevisions.queueRevision].every(nullableRevision)
       || command.expectedRevisions.indexPreimage !== null || command.expectedRevisions.patchPreimage !== null) return "invalid-source-open-authority";
     if (!exact(command.payload, ["fileRef", "line", "column"]) || !REF.test(command.payload.fileRef)
       || command.payload.line !== null && (!Number.isInteger(command.payload.line) || command.payload.line < 1 || command.payload.line > 100_000_000)

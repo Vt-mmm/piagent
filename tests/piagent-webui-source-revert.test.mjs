@@ -10,8 +10,10 @@ import { workingTreeEvidenceDigest } from "../packages/piagent-core/extensions/w
 import { collectFileDiff } from "../packages/piagent-core/runtime/inspection/diff-projection.ts";
 import { collectSourceChangeViews } from "../packages/piagent-core/runtime/inspection/source-change-projection.ts";
 import { captureTaskBaselineManifest } from "../packages/piagent-core/runtime/inspection/source-evidence-store.ts";
+import { readSourceMutationEvidence } from "../packages/piagent-core/runtime/inspection/source-mutation-store.ts";
 import { collectSourceRevertPreview } from "../packages/piagent-core/runtime/inspection/source-revert-projection.ts";
 import { PiSourceMutationGuard } from "../packages/piagent-core/runtime/policy/source-mutation-guard.ts";
+import { executeGuardedSourceWorktreeRevert } from "../packages/piagent-core/runtime/policy/source-worktree-transaction.ts";
 import { digestZeroTurnFact, providerVisibleToolSchemaDigest, runZeroTurnConformance } from "../packages/piagent-core/runtime/inspection/zero-turn-conformance.ts";
 import { createSourceRevertCommand } from "../packages/piagent-webui/client/src/source-revert-command.ts";
 import { SourceRevertController } from "../packages/piagent-webui/extension/source-revert-controller.ts";
@@ -94,6 +96,35 @@ test("selected-hunk revert leaves the other unstaged hunk and index untouched", 
   assert.equal(remaining.includes("line 2 changed"), false); assert.equal(remaining.includes("line 21 changed"), true);
 });
 
+test("selected-hunk revert rechecks authority after async preparation and before atomic replacement", async (t) => {
+  const { cwd, lines } = repository(t), changed = [...lines];
+  changed[1] = "line 2 changed"; changed[20] = "line 21 changed";
+  fs.writeFileSync(path.join(cwd, "a.txt"), `${changed.join("\n")}\n`);
+  const whole = await preview(cwd); assert.ok(whole.authority); assert.equal(whole.authority.patchAuthority.hunks.length, 2);
+  const selected = await preview(cwd, [whole.authority.patchAuthority.hunks[0].hunkRef]); assert.ok(selected.authority);
+  const worktreeBefore = fs.readFileSync(path.join(cwd, "a.txt")), indexBefore = execFileSync("git", ["-C", cwd, "show", ":a.txt"]);
+  let authorityChecks = 0, sawPreparedStaging = false, authorityCurrent = true;
+  const effect = await executeGuardedSourceWorktreeRevert({ authority: selected.authority,
+    expectedIndexPreimage: selected.authority.target.indexPreimage,
+    expectedWorkspacePreimage: selected.authority.target.workspacePreimage,
+    recheck: () => {
+      authorityChecks += 1;
+      if (authorityChecks === 2) {
+        sawPreparedStaging = fs.readdirSync(cwd).some((name) => name.includes(".piagent-revert."));
+        if (sawPreparedStaging) authorityCurrent = false;
+        return true;
+      }
+      return authorityCurrent;
+    } });
+  assert.equal(sawPreparedStaging, true, "the authority transition must occur after candidate preparation");
+  assert.equal(authorityChecks, 3, "authority must be sampled again after the asynchronous index observation");
+  assert.equal(effect.state, "rejected"); assert.equal(effect.reasonCode, "mutation-preimage-stale");
+  assert.deepEqual(fs.readFileSync(path.join(cwd, "a.txt")), worktreeBefore);
+  assert.deepEqual(execFileSync("git", ["-C", cwd, "show", ":a.txt"]), indexBefore);
+  assert.equal(fs.readdirSync(cwd).some((name) => name.includes(".piagent-revert.")), false,
+    "rejected candidates must not leave target-parent staging files behind");
+});
+
 test("stale preview and non-exact provenance fail before source mutation", async (t) => {
   const { cwd, lines } = repository(t), guard = bindGuard(t, cwd), changed = [...lines]; changed[1] = "line 2 changed";
   fs.writeFileSync(path.join(cwd, "a.txt"), `${changed.join("\n")}\n`);
@@ -147,7 +178,8 @@ test("controller binds the confirmed digest, persists evidence, and deduplicates
     sessionId: "raw-baseline-session", capturedAt: new Date().toISOString(), baselineTreeDigest: workingTreeEvidenceDigest(workingTreeSnapshot(cwd)) });
   fs.writeFileSync(path.join(cwd, "a.txt"), `${changed.join("\n")}\n`);
   const resolved = await preview(cwd); assert.ok(resolved.authority);
-  const bridge = { snapshot: () => ({ state: "ready", identity, revisions, taskState: "active", liveness: "idle" }) };
+  let bridgeIdentity = identity;
+  const bridge = { snapshot: () => ({ state: "ready", identity: bridgeIdentity, revisions, taskState: "active", liveness: "idle" }) };
   const controller = new SourceRevertController({ bridge, projectRoot: cwd, resolve: async () => resolved,
     revisions: async () => revisions, mutate: async (input) => guard.execute(input.authority) });
   const snapshot = { identity, revision: { ...revisions, eventCursor: null } };
@@ -175,4 +207,47 @@ test("controller binds the confirmed digest, persists evidence, and deduplicates
   tampered.payload.confirmedPreviewDigest = `sha256:${"f".repeat(64)}`;
   const denied = await controller.execute(tampered); assert.equal(denied.phase, "rejected"); assert.equal(denied.resultCode, "invalid-command");
   assert.equal(validateFixture(registry, "control-command-v1", denied).valid, true);
+  bridgeIdentity = { ...identity, projectRef: "project.revert-replaced" };
+  const projectReplay = await controller.execute(command);
+  assert.equal(projectReplay.resultCode, "identity-mismatch"); assert.equal(projectReplay.error?.code, "runtime-or-session-replaced");
+  bridgeIdentity = { ...identity, taskId: "task-revert-replaced" };
+  const taskReplay = await controller.execute(command);
+  assert.equal(taskReplay.resultCode, "identity-mismatch"); assert.equal(taskReplay.error?.code, "task-identity-mismatch");
+});
+
+test("source revert rejects revision and liveness transitions while resolving the preview", async (t) => {
+  const scenarios = [
+    { name: "control revision", transition: (snapshot) => ({ ...snapshot,
+      revisions: { ...snapshot.revisions, controlRevision: "control-revision.revert-next" } }),
+    resultCode: "stale-revision", errorCode: "stale-task-control-revision-after-preview" },
+    { name: "terminal task", transition: (snapshot) => ({ ...snapshot, taskState: "terminal" }),
+      resultCode: "terminal-task", errorCode: "task-terminal-after-preview" },
+    { name: "running agent", transition: (snapshot) => ({ ...snapshot, liveness: "running" }),
+      resultCode: "capability-unavailable", errorCode: "agent-not-idle-after-preview" }
+  ];
+  for (const scenario of scenarios) await t.test(scenario.name, async (t) => {
+    const { cwd, lines } = repository(t), changed = [...lines]; changed[1] = `line 2 ${scenario.name}`;
+    await captureTaskBaselineManifest({ projectRoot: cwd, taskId: identity.taskId, taskRunId: identity.taskRunId,
+      sessionId: `raw-revert-${scenario.name.replaceAll(" ", "-")}`, capturedAt: new Date().toISOString(),
+      baselineTreeDigest: workingTreeEvidenceDigest(workingTreeSnapshot(cwd)) });
+    fs.writeFileSync(path.join(cwd, "a.txt"), `${changed.join("\n")}\n`);
+    const resolved = await preview(cwd); assert.ok(resolved.authority);
+    const bridgeRevisions = { ...revisions, workspaceRevision: resolved.projection.target.workspaceRevision,
+      indexRevision: resolved.projection.target.indexRevision };
+    let bridgeSnapshot = { state: "ready", identity, revisions: bridgeRevisions, taskState: "active", liveness: "idle" };
+    let signalResolveStarted, releaseResolve;
+    const resolveStarted = new Promise((resolve) => { signalResolveStarted = resolve; });
+    const resolveRelease = new Promise((resolve) => { releaseResolve = resolve; });
+    let mutations = 0;
+    const controller = new SourceRevertController({ bridge: { snapshot: () => bridgeSnapshot }, projectRoot: cwd,
+      resolve: async () => { signalResolveStarted(); await resolveRelease; return resolved; }, revisions: async () => bridgeRevisions,
+      mutate: async () => { mutations += 1; throw new Error("revert must not run after authority transition"); } });
+    const command = await createSourceRevertCommand({ identity, revision: { ...bridgeRevisions, eventCursor: null } }, resolved.projection);
+    const pending = controller.execute(command); await resolveStarted;
+    bridgeSnapshot = scenario.transition(bridgeSnapshot); releaseResolve();
+    const receipt = await pending;
+    assert.equal(receipt.phase, "rejected"); assert.equal(receipt.resultCode, scenario.resultCode);
+    assert.equal(receipt.error?.code, scenario.errorCode); assert.equal(mutations, 0);
+    assert.equal(readSourceMutationEvidence(cwd, identity.taskRunId).records.length, 0);
+  });
 });

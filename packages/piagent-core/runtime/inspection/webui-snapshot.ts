@@ -162,6 +162,21 @@ function sourceSummary(document: SourceChangeDocument | null, view: "task" | "wo
   };
 }
 
+function sourceProjectionRevision(views: CriteriaLinkProjection["sourceViews"]): string {
+  const content = (["task", "workingTree", "staged"] as const).map((key) => {
+    const document = views[key];
+    if (!document) return null;
+    const { generatedAt: _generatedAt, identity: _identity, snapshotBinding: _snapshotBinding, ...stable } = document;
+    const bases = Array.isArray(stable.bases) ? stable.bases.map((value) => {
+      if (!value || typeof value !== "object") return value;
+      const { taskRevision: _taskRevision, ...sourceBasis } = value as Record<string, unknown>;
+      return sourceBasis;
+    }) : stable.bases;
+    return { ...stable, bases };
+  });
+  return token("source-projection-rev", content);
+}
+
 function activityProjection(events: ActivityInspectorEvent[], current: CurrentActivity[], generatedAt: string,
   operationLiveness?: "idle" | "running" | "unknown") {
   const results = new Map(events.filter((event) => event.event === "tool_result").map((event) => [event.toolCallId, event]));
@@ -360,7 +375,9 @@ export async function buildWebUiInspectionProjection(input: {
   const events = reconciledToolResults(scopedEvents(input.events ?? [], input.sessionId, input.task), canonicalEvidence);
   const linked = projectCriteriaFileVerifier({ cwd: input.cwd, task: input.task, sourceViews: views, currentSnapshot,
     protectedPaths: input.protectedPaths, events, at: new Date(generatedAt) });
-  const sourceChanges = { task: sourceSummary(linked.sourceViews.task, "task"), workingTree: sourceSummary(linked.sourceViews.workingTree, "working-tree"), staged: sourceSummary(linked.sourceViews.staged, "staged") };
+  const sourceChanges = { projectionRevision: sourceProjectionRevision(linked.sourceViews),
+    task: sourceSummary(linked.sourceViews.task, "task"), workingTree: sourceSummary(linked.sourceViews.workingTree, "working-tree"),
+    staged: sourceSummary(linked.sourceViews.staged, "staged") };
   const currentDigest = workingTreeSnapshotUsesCurrentAlgorithm(currentSnapshot) ? workingTreeEvidenceDigest(currentSnapshot) : null;
   const current = (input.current ?? []).filter((item) => ((item.status ?? "running") !== "running" || input.operationLiveness !== "idle")
     && ((item.status ?? "running") !== "running" || !canonicalEvidence.results.has(item.toolCallId)));
@@ -403,5 +420,11 @@ export async function buildWebUiInspectionProjection(input: {
     continuation: continuation(input.cwd, input.task), handoff: handoff(input.cwd, input.task, currentDigest),
     health: { state: issues.length ? "degraded" : "ok", issues, resyncRequired: input.resyncRequired === true, generatedFromRevision: runtimeRevision }
   };
+  const snapshotBinding = { sourceProjectionRevision: snapshot.sourceChanges.projectionRevision,
+    taskViewRevision: snapshot.sourceChanges.task.revision, workspaceRevision: snapshot.sourceChanges.workingTree.revision,
+    indexRevision: snapshot.sourceChanges.staged.revision };
+  for (const document of Object.values(linked.sourceViews)) {
+    if (document) (document as SourceChangeDocument & { snapshotBinding: typeof snapshotBinding }).snapshotBinding = snapshotBinding;
+  }
   return { snapshot, sourceViews: linked.sourceViews, relations: linked.relations, verifierAttempts: linked.verifierAttempts, scopedEvents: events };
 }

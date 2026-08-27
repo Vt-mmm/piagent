@@ -1085,6 +1085,7 @@ export interface WorkPlanStep {
     | [string, string, string, string, string, string, string, string, string, string, string, string];
 }
 export interface SourceChanges {
+  projectionRevision?: string;
   task: SourceViewSummary & {
     view?: "task";
     [k: string]: any;

@@ -6,25 +6,26 @@ import path from "node:path";
 
 import { collectExactGitPatchAuthority } from "../inspection/diff-projection.ts";
 import { collectGitStatusForPaths, runReadOnlyGit } from "../inspection/git-status-adapter.ts";
-import { localFilterDisableArgs } from "../inspection/git-filter-safety.ts";
 import { collectIndexPreimage, collectSelectedWorkspacePreimage } from "../inspection/source-mutation-projection.ts";
+import { readWorkspaceFile } from "../inspection/workspace-file-reader.ts";
 import type { SourceRevertAuthority } from "../inspection/source-revert-projection.ts";
 import type { SourceIndexTransactionResult } from "./source-index-transaction.ts";
 
 function result(value: Omit<SourceIndexTransactionResult, "executor" | "directExecution">): SourceIndexTransactionResult {
   return { ...value, executor: "pi-guard", directExecution: false };
 }
-function environment(): NodeJS.ProcessEnv {
+function environment(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   return { PATH: process.env.PATH, LC_ALL: "C", LANG: "C", GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: os.devNull,
     GIT_OPTIONAL_LOCKS: "0", GIT_PAGER: "cat", PAGER: "cat", GIT_TERMINAL_PROMPT: "0", GIT_ASKPASS: "",
-    ...(process.platform === "win32" ? { SystemRoot: process.env.SystemRoot, ComSpec: process.env.ComSpec } : {}) };
+    ...(process.platform === "win32" ? { SystemRoot: process.env.SystemRoot, ComSpec: process.env.ComSpec } : {}), ...extra };
 }
-async function runGit(repoRoot: string, args: string[], input: Buffer, timeoutMs: number): Promise<void> {
-  const filterArgs = await localFilterDisableArgs(repoRoot, timeoutMs);
+async function runGitInTemporaryTree(treeRoot: string, args: string[], input: Buffer, timeoutMs: number): Promise<void> {
   const argv = ["--no-pager", "--literal-pathspecs", "-c", "color.ui=false", "-c", "core.fsmonitor=false", "-c", `core.hooksPath=${os.devNull}`,
-    "-c", "diff.external=", "-c", "submodule.recurse=false", ...filterArgs, "-C", repoRoot, ...args];
+    "-c", "diff.external=", "-c", "submodule.recurse=false", "-C", treeRoot, ...args];
   await new Promise<void>((resolve, reject) => {
-    const child = spawn("git", argv, { cwd: repoRoot, env: environment(), shell: false, stdio: ["pipe", "ignore", "pipe"], windowsHide: true });
+    const child = spawn("git", argv, { cwd: treeRoot,
+      env: environment({ GIT_CEILING_DIRECTORIES: path.dirname(treeRoot), GIT_ATTR_NOSYSTEM: "1" }),
+      shell: false, stdio: ["pipe", "ignore", "pipe"], windowsHide: true });
     let stderr = 0, settled = false; child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.length; if (stderr > 64 * 1024) child.kill("SIGKILL"); });
     child.stdin.on("error", () => undefined); child.stdin.end(input);
     const timer = setTimeout(() => child.kill("SIGKILL"), timeoutMs); timer.unref?.();
@@ -52,12 +53,59 @@ async function restoreWholeFile(authority: SourceRevertAuthority, recheck: () =>
   finally { fs.rmSync(temporary, { force: true }); }
   const actual = fs.readFileSync(target); if (!actual.equals(bytes)) throw new Error("revert-postcondition-failed");
 }
-async function restoreSelectedHunk(authority: SourceRevertAuthority, hunkRef: string, timeoutMs: number): Promise<void> {
+type PreparedSelectedHunk = { stagingPath: string; target: string; initialMode: number };
+function inside(root: string, candidate: string): boolean {
+  const relative = path.relative(root, candidate);
+  return relative === "" || relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
+function cleanupScratchRoot(scratchRoot: string): void {
+  try { fs.rmSync(scratchRoot, { recursive: true, force: true }); } catch {}
+}
+function cleanupStagingFile(stagingPath: string | null): void {
+  if (stagingPath) try { fs.rmSync(stagingPath, { force: true }); } catch {}
+}
+async function prepareSelectedHunk(authority: SourceRevertAuthority, hunkRef: string, timeoutMs: number): Promise<PreparedSelectedHunk | null> {
   const block = authority.patchAuthority.hunks.find((hunk) => hunk.hunkRef === hunkRef);
   if (!block) throw new Error("revert-hunk-stale");
   const patch = Buffer.concat([authority.patchAuthority.header, block.bytes]);
   if (patch.length > 2 * 1024 * 1024) throw new Error("revert-patch-oversized");
-  await runGit(authority.repoRoot, ["apply", "--reverse", "--recount", "--whitespace=nowarn", "-"], patch, timeoutMs);
+  const repoRoot = fs.realpathSync.native(authority.repoRoot), target = path.resolve(repoRoot, authority.repoPath);
+  const parent = fs.realpathSync.native(path.dirname(target));
+  if (parent !== path.dirname(target) || !inside(repoRoot, target)) throw new Error("revert-target-unsafe");
+  const current = fs.lstatSync(target);
+  if (!current.isFile() || current.isSymbolicLink() || fs.realpathSync.native(target) !== target) throw new Error("revert-target-unsafe");
+  const scratchRoot = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), `piagent-revert-tree.${process.pid}.`)));
+  fs.chmodSync(scratchRoot, 0o700);
+  const scratchTarget = path.resolve(scratchRoot, ...authority.repoPath.split("/"));
+  let stagingPath: string | null = null;
+  try {
+    if (!inside(scratchRoot, scratchTarget)) throw new Error("revert-target-unsafe");
+    fs.mkdirSync(path.dirname(scratchTarget), { recursive: true, mode: 0o700 });
+    const descriptor = fs.openSync(scratchTarget,
+      fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW ?? 0), 0o600);
+    try {
+      fs.writeFileSync(descriptor, readWorkspaceFile(repoRoot, authority.repoPath, 16 * 1024 * 1024));
+      fs.fchmodSync(descriptor, current.mode & 0o777); fs.fsyncSync(descriptor);
+    } finally { fs.closeSync(descriptor); }
+    if (collectSelectedWorkspacePreimage(scratchRoot, [authority.repoPath]) !== authority.target.workspacePreimage) return null;
+    await runGitInTemporaryTree(scratchRoot, ["apply", "--reverse", "--recount", "--whitespace=nowarn", "-"], patch, timeoutMs);
+    const result = fs.lstatSync(scratchTarget);
+    if (!result.isFile() || result.isSymbolicLink() || fs.realpathSync.native(scratchTarget) !== scratchTarget)
+      throw new Error("revert-target-unsafe");
+    const candidate = readWorkspaceFile(scratchRoot, authority.repoPath, 16 * 1024 * 1024);
+    stagingPath = path.join(parent, `.${path.basename(target)}.piagent-revert.${process.pid}.${randomBytes(8).toString("hex")}`);
+    const stagingDescriptor = fs.openSync(stagingPath,
+      fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW ?? 0), 0o600);
+    try {
+      fs.writeFileSync(stagingDescriptor, candidate);
+      fs.fchmodSync(stagingDescriptor, result.mode & 0o777);
+      fs.fsyncSync(stagingDescriptor);
+    } finally { fs.closeSync(stagingDescriptor); }
+    return { stagingPath, target, initialMode: current.mode & 0o777 };
+  } catch (error) {
+    cleanupStagingFile(stagingPath);
+    throw error;
+  } finally { cleanupScratchRoot(scratchRoot); }
 }
 
 export async function executeGuardedSourceWorktreeRevert(options: { authority: SourceRevertAuthority; expectedIndexPreimage: string;
@@ -74,13 +122,26 @@ export async function executeGuardedSourceWorktreeRevert(options: { authority: S
     if (!options.recheck() || lockedIndex !== options.expectedIndexPreimage || lockedWorkspace !== options.expectedWorkspacePreimage)
       return result({ state: "rejected", reasonCode: "mutation-preimage-stale", ...before,
         afterIndexPreimage: lockedIndex, afterWorkspacePreimage: lockedWorkspace });
-    const finalRecheck = async () => options.recheck()
-      && await collectIndexPreimage(options.authority.repoRoot) === options.expectedIndexPreimage
-      && collectSelectedWorkspacePreimage(options.authority.repoRoot, [options.authority.repoPath]) === options.expectedWorkspacePreimage;
+    const finalRecheck = async () => {
+      if (!options.recheck()) return false;
+      const index = await collectIndexPreimage(options.authority.repoRoot);
+      const workspace = collectSelectedWorkspacePreimage(options.authority.repoRoot, [options.authority.repoPath]);
+      return index === options.expectedIndexPreimage && workspace === options.expectedWorkspacePreimage && options.recheck();
+    };
     if (options.authority.target.hunkRefs.length) {
-      if (!await finalRecheck()) return result({ state: "rejected", reasonCode: "mutation-preimage-stale", ...before,
+      const prepared = await prepareSelectedHunk(options.authority, options.authority.target.hunkRefs[0],
+        Math.max(100, Math.min(60_000, options.timeoutMs ?? 5_000)));
+      if (!prepared) return result({ state: "rejected", reasonCode: "mutation-preimage-stale", ...before,
         afterIndexPreimage: null, afterWorkspacePreimage: null });
-      await restoreSelectedHunk(options.authority, options.authority.target.hunkRefs[0], Math.max(100, Math.min(60_000, options.timeoutMs ?? 5_000)));
+      try {
+        if (!await finalRecheck()) return result({ state: "rejected", reasonCode: "mutation-preimage-stale", ...before,
+          afterIndexPreimage: null, afterWorkspacePreimage: null });
+        const current = fs.lstatSync(prepared.target);
+        if (!current.isFile() || current.isSymbolicLink() || (current.mode & 0o777) !== prepared.initialMode)
+          return result({ state: "rejected", reasonCode: "mutation-preimage-stale", ...before,
+            afterIndexPreimage: null, afterWorkspacePreimage: null });
+        fs.renameSync(prepared.stagingPath, prepared.target);
+      } finally { cleanupStagingFile(prepared.stagingPath); }
     } else await restoreWholeFile(options.authority, finalRecheck);
     committed = true;
     const afterIndexPreimage = await collectIndexPreimage(options.authority.repoRoot);

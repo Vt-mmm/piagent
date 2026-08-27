@@ -31,7 +31,7 @@ import { ReviewController } from "../packages/piagent-webui/extension/review-con
 import { SourceMutationController } from "../packages/piagent-webui/extension/source-mutation-controller.ts";
 import { SourceRevertController } from "../packages/piagent-webui/extension/source-revert-controller.ts";
 import { SourceOpenController } from "../packages/piagent-webui/extension/source-open-controller.ts";
-import { webUiTaskRevision } from "../packages/piagent-core/runtime/inspection/webui-snapshot.ts";
+import { webUiProjectRef, webUiSessionRef, webUiTaskRevision } from "../packages/piagent-core/runtime/inspection/webui-snapshot.ts";
 import { PiSourceMutationGuard } from "../packages/piagent-core/runtime/policy/source-mutation-guard.ts";
 import { createWebUiSchemaRegistry, validateFixture } from "./helpers/piagent-webui-schema-registry.mjs";
 
@@ -140,7 +140,30 @@ test.afterAll(async () => {
 });
 
 test("renders the authenticated read-only cockpit, keeps tab diff authority, and reconnects after resync", async ({ page, context }) => {
+  test.setTimeout(45_000);
   const pageErrors = [], diffRequests = [], timelineRequests = [], recoveryHistoryRequests = [], handoffHistoryRequests = [], subagentTreeRequests = [], releaseMonitorRequests = [];
+  let snapshotReads = 0, initialSnapshotFailuresRemaining = 1, initialSnapshotSucceeded = false,
+    resyncSnapshotFailuresRemaining = 6, failNextLiveSnapshot = false;
+  await page.route("**/api/v1/snapshot", async (route) => {
+    snapshotReads += 1;
+    if (initialSnapshotFailuresRemaining > 0) {
+      initialSnapshotFailuresRemaining -= 1;
+      await route.fulfill({ status: 503, contentType: "application/json", body: '{"error":"transient-initial-read"}' });
+      return;
+    }
+    if (!initialSnapshotSucceeded) {
+      initialSnapshotSucceeded = true;
+      await route.continue();
+      return;
+    }
+    if (resyncSnapshotFailuresRemaining > 0 || failNextLiveSnapshot) {
+      if (resyncSnapshotFailuresRemaining > 0) resyncSnapshotFailuresRemaining -= 1;
+      else failNextLiveSnapshot = false;
+      await route.fulfill({ status: 503, contentType: "application/json", body: '{"error":"transient-resync-read"}' });
+      return;
+    }
+    await route.continue();
+  });
   page.on("pageerror", (error) => pageErrors.push(error.message));
   page.on("request", (request) => { if (request.url().includes("/api/v1/diffs/")) diffRequests.push(request.url());
     if (request.url().includes("/api/v1/tasks/") && request.url().endsWith("/timeline")) timelineRequests.push(request.url());
@@ -148,6 +171,13 @@ test("renders the authenticated read-only cockpit, keeps tab diff authority, and
   page.on("request", (request) => { if (request.url().includes("/api/v1/tasks/") && request.url().endsWith("/handoff-history")) handoffHistoryRequests.push(request.url()); });
   page.on("request", (request) => { if (request.url().includes("/api/v1/tasks/") && request.url().endsWith("/subagent-tree")) subagentTreeRequests.push(request.url()); });
   page.on("request", (request) => { if (new URL(request.url()).pathname === "/api/v1/monitoring/release") releaseMonitorRequests.push(request.url()); });
+  await page.addInitScript(() => {
+    const NativeEventSource = window.EventSource;
+    window.__piagentInspectionEventSources = [];
+    window.EventSource = class extends NativeEventSource {
+      constructor(...args) { super(...args); window.__piagentInspectionEventSources.push(this); }
+    };
+  });
   await page.goto(server.issueLaunchUrl());
   await expect(page.getByRole("heading", { name: currentTask.summary })).toBeVisible();
   await openWorkspace(page, "Chat & Task");
@@ -184,9 +214,12 @@ test("renders the authenticated read-only cockpit, keeps tab diff authority, and
   const monitorReads = releaseMonitorRequests.length; await page.getByRole("button", { name: "Làm mới" }).click();
   await expect.poll(() => releaseMonitorRequests.length).toBeGreaterThan(monitorReads);
   await expect(page.getByText("Chỉ xem", { exact: true })).toBeVisible();
-  await expect.poll(() => eventStore.replayCalls.length).toBeGreaterThanOrEqual(2);
+  await expect.poll(() => snapshotReads, { timeout: 20_000 }).toBeGreaterThanOrEqual(9);
+  await expect.poll(() => eventStore.replayCalls.length, { timeout: 20_000 }).toBeGreaterThanOrEqual(2);
   assert.equal(eventStore.replayCalls[0], "event-cursor.browser-initial");
   assert.equal(eventStore.replayCalls[1], "event-cursor.browser-resynced");
+  assert.equal(eventStore.replayCalls.filter((cursor) => cursor === "event-cursor.browser-resynced").length, 1,
+    "resync recovery must create exactly one replacement EventSource");
   await expect(page.getByText("Live", { exact: true })).toBeVisible();
   await expect.poll(() => new URL(page.url()).hash).toBe("");
   const cookies = await context.cookies(server.origin);
@@ -210,11 +243,182 @@ test("renders the authenticated read-only cockpit, keeps tab diff authority, and
   assert.equal(diffRequests.some((url) => new URL(url).searchParams.get("view") === "task"), true);
   assert.equal(diffRequests.some((url) => new URL(url).searchParams.get("view") === "working-tree"), true);
 
+  const readsBeforeLiveFailure = snapshotReads;
+  failNextLiveSnapshot = true;
+  currentTask = { ...currentTask, sessionName: "WebUI recovered one failed live refresh", updatedAt: "2026-08-13T13:00:00.500Z" };
+  eventStore.cursor = "event-cursor.browser-live-snapshot-failure";
+  provider.publishObserved({ eventCursor: eventStore.cursor, kind: "runtime.phase-changed" });
+  await expect.poll(() => snapshotReads, { timeout: 10_000 }).toBeGreaterThanOrEqual(readsBeforeLiveFailure + 2);
+  await expect(page.getByText("WebUI recovered one failed live refresh", { exact: true }).filter({ visible: true })).toBeVisible();
+  await expect(page.getByText("Live", { exact: true })).toBeVisible();
+  assert.equal(eventStore.replayCalls.filter((cursor) => cursor === "event-cursor.browser-resynced").length, 1,
+    "a retried live snapshot failure must not replace the healthy EventSource");
+
   currentTask = { ...currentTask, sessionName: "WebUI live update received", updatedAt: "2026-08-13T13:00:01.000Z" };
   eventStore.cursor = "event-cursor.browser-live";
   provider.publishObserved({ eventCursor: eventStore.cursor, kind: "runtime.phase-changed" });
   await expect(page.getByText("WebUI live update received", { exact: true }).filter({ visible: true })).toBeVisible();
+
+  const replayCallsBeforeTransportDrop = eventStore.replayCalls.length;
+  const eventSourcesBeforeTransportDrop = await page.evaluate(() => window.__piagentInspectionEventSources.length);
+  await page.evaluate(() => window.__piagentInspectionEventSources.at(-1).dispatchEvent(new Event("error")));
+  await expect.poll(() => eventStore.replayCalls.length, { timeout: 15_000 }).toBeGreaterThan(replayCallsBeforeTransportDrop);
+  await expect.poll(() => page.evaluate(() => window.__piagentInspectionEventSources.length), { timeout: 15_000 })
+    .toBeGreaterThan(eventSourcesBeforeTransportDrop);
+  assert.equal(eventStore.replayCalls.at(-1), eventStore.cursor,
+    "the rebuilt EventSource starts from the latest client-accepted canonical cursor");
+  await expect(page.getByText("Live", { exact: true })).toBeVisible();
   assert.deepEqual(pageErrors, []);
+});
+
+test("bounds a stale Source Changes response to one canonical resync", async ({ page }) => {
+  const sourcePattern = "**/api/v1/source-changes?view=working-tree", snapshotPattern = "**/api/v1/snapshot";
+  let sourceReads = 0, snapshotReads = 0, countSnapshots = false;
+  const snapshotHandler = async (route) => {
+    if (countSnapshots) snapshotReads += 1;
+    await route.continue();
+  };
+  const recoverHandler = async (route) => {
+    sourceReads += 1;
+    const response = await route.fetch(), value = await response.json();
+    if (sourceReads === 1) value.availability = {
+      state: "stale", reasonCode: "git-race", message: "Workspace changed while source changes were projected"
+    };
+    await route.fulfill({ response, json: value });
+  };
+  await page.route(snapshotPattern, snapshotHandler); await page.route(sourcePattern, recoverHandler);
+  await page.goto(server.issueLaunchUrl());
+  await page.locator('[data-contract="snapshot-v1"]').waitFor({ state: "visible" }); countSnapshots = true;
+  await openWorkspace(page, "Source Changes");
+  await page.getByRole("tab", { name: /Toàn bộ working tree/ }).click();
+  await expect(page.getByRole("button", { name: /src\/example\.ts/ })).toBeVisible();
+  await expect(page.locator(".diff-toolbar strong")).toHaveText("src/example.ts");
+  await expect.poll(() => sourceReads).toBe(2); await expect.poll(() => snapshotReads).toBe(1);
+
+  await page.unroute(sourcePattern, recoverHandler); await page.unroute(snapshotPattern, snapshotHandler);
+  sourceReads = 0; snapshotReads = 0; countSnapshots = false;
+  const exhaustedSnapshotHandler = async (route) => {
+    if (!countSnapshots) { await route.continue(); return; }
+    snapshotReads += 1;
+    const response = await route.fetch(), value = await response.json();
+    value.sourceChanges.projectionRevision = `source-projection-rev.rotated-${snapshotReads}`;
+    value.revision.runtimeRevision = `runtime-rev.rotated-${snapshotReads}`;
+    value.health.generatedFromRevision = value.revision.runtimeRevision;
+    await route.fulfill({ response, json: value });
+  };
+  const exhaustedSourceHandler = async (route) => {
+    sourceReads += 1;
+    const response = await route.fetch(), value = await response.json();
+    value.viewRevision = `workspace-view.stale-response-${sourceReads}`;
+    await route.fulfill({ response, json: value });
+  };
+  await page.route(snapshotPattern, exhaustedSnapshotHandler); await page.route(sourcePattern, exhaustedSourceHandler);
+  await page.reload();
+  await page.locator('[data-contract="snapshot-v1"]').waitFor({ state: "visible" }); countSnapshots = true;
+  await openWorkspace(page, "Source Changes");
+  await page.getByRole("tab", { name: /Toàn bộ working tree/ }).click();
+  await expect(page.getByText("Không thể tải danh sách file", { exact: true })).toBeVisible();
+  await expect.poll(() => sourceReads).toBe(2); await expect.poll(() => snapshotReads).toBe(1);
+  await page.waitForTimeout(250);
+  assert.equal(sourceReads, 2, "a persistent mismatch must not start a third source read");
+  const sourceReadsBeforeRetry = sourceReads, snapshotReadsBeforeRetry = snapshotReads;
+  await page.getByRole("button", { name: "Thử tải lại" }).click();
+  await expect.poll(() => snapshotReads).toBe(snapshotReadsBeforeRetry + 1);
+  await expect.poll(() => sourceReads).toBe(sourceReadsBeforeRetry + 1);
+  await expect(page.getByText("Không thể tải danh sách file", { exact: true })).toBeVisible();
+  await page.waitForTimeout(250);
+  assert.equal(snapshotReads, snapshotReadsBeforeRetry + 1, "an explicit source retry performs one canonical refresh");
+  assert.equal(sourceReads, sourceReadsBeforeRetry + 1, "an explicit source retry performs one bounded source read");
+});
+
+test("bounds stale selected-file detail recovery and keeps the retry budget stable across projection rotation", async ({ page }) => {
+  test.setTimeout(60_000);
+  const diffPattern = "**/api/v1/diffs/**", snapshotPattern = "**/api/v1/snapshot";
+  let diffReads = 0, snapshotReads = 0, countSnapshots = false;
+  const snapshotHandler = async (route) => {
+    if (countSnapshots) snapshotReads += 1;
+    await route.continue();
+  };
+  const recoverHandler = async (route) => {
+    if (new URL(route.request().url()).searchParams.get("view") !== "working-tree") { await route.continue(); return; }
+    diffReads += 1;
+    const response = await route.fetch(), value = await response.json();
+    if (diffReads === 1) value.observed.fileRevision = "file-rev.changed-during-read";
+    await route.fulfill({ response, json: value });
+  };
+  await page.route(snapshotPattern, snapshotHandler); await page.route(diffPattern, recoverHandler);
+  await page.goto(server.issueLaunchUrl());
+  await page.locator('[data-contract="snapshot-v1"]').waitFor({ state: "visible" }); countSnapshots = true;
+  await page.evaluate(() => {
+    window.__piagentDetailErrorHistory = [];
+    window.__piagentDetailErrorObserver = new MutationObserver((records) => {
+      for (const record of records) for (const node of record.addedNodes) {
+        if (node.textContent?.includes("Diff chưa thể đồng bộ với revision hiện tại."))
+          window.__piagentDetailErrorHistory.push(node.textContent);
+      }
+    });
+    window.__piagentDetailErrorObserver.observe(document.body, { childList: true, subtree: true });
+  });
+  await openWorkspace(page, "Source Changes");
+  await page.getByRole("tab", { name: /Toàn bộ working tree/ }).click();
+  await expect(page.locator(".diff-toolbar strong")).toHaveText("src/example.ts");
+  await expect(page.getByText("Diff chưa thể đồng bộ với revision hiện tại.", { exact: true })).toHaveCount(0);
+  assert.deepEqual(await page.evaluate(() => window.__piagentDetailErrorHistory), [],
+    "the first bounded recovery must never commit a false error frame");
+  await expect.poll(() => diffReads).toBe(2); await expect.poll(() => snapshotReads).toBe(1);
+
+  await page.unroute(diffPattern, recoverHandler); await page.unroute(snapshotPattern, snapshotHandler);
+  const sourcePattern = "**/api/v1/source-changes?view=working-tree";
+  diffReads = 0; snapshotReads = 0; countSnapshots = false;
+  let rotatedProjection = null;
+  const exhaustedSnapshotHandler = async (route) => {
+    if (!countSnapshots) { await route.continue(); return; }
+    snapshotReads += 1;
+    const response = await route.fetch(), value = await response.json();
+    rotatedProjection = `source-projection-rev.detail-${snapshotReads}`;
+    value.sourceChanges.projectionRevision = rotatedProjection;
+    await route.fulfill({ response, json: value });
+  };
+  const reboundSourceHandler = async (route) => {
+    const response = await route.fetch(), value = await response.json();
+    if (rotatedProjection && value.snapshotBinding) value.snapshotBinding.sourceProjectionRevision = rotatedProjection;
+    await route.fulfill({ response, json: value });
+  };
+  const exhaustedDiffHandler = async (route) => {
+    if (new URL(route.request().url()).searchParams.get("view") !== "working-tree") { await route.continue(); return; }
+    diffReads += 1;
+    const response = await route.fetch(), value = await response.json();
+    value.observed.fileRevision = `file-rev.persistent-stale-detail-${diffReads}`;
+    await route.fulfill({ response, json: value });
+  };
+  await page.route(snapshotPattern, exhaustedSnapshotHandler); await page.route(sourcePattern, reboundSourceHandler);
+  await page.route(diffPattern, exhaustedDiffHandler);
+  await page.reload();
+  await page.locator('[data-contract="snapshot-v1"]').waitFor({ state: "visible" }); countSnapshots = true;
+  await openWorkspace(page, "Source Changes");
+  await page.getByRole("tab", { name: /Toàn bộ working tree/ }).click();
+  await expect(page.getByText("Diff chưa thể đồng bộ với revision hiện tại.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Thử đồng bộ lại" })).toBeVisible();
+  await expect.poll(() => diffReads).toBe(2); await expect.poll(() => snapshotReads).toBe(1);
+  await page.waitForTimeout(250);
+  assert.equal(diffReads, 2, "a persistent detail mismatch must not start a third detail read");
+  assert.equal(snapshotReads, 1, "projection rotation must not reset the detail resync budget");
+
+  await page.getByRole("tab", { name: /Thay đổi của task/ }).click();
+  await page.getByRole("tab", { name: /Toàn bộ working tree/ }).click();
+  await expect(page.getByText("Diff chưa thể đồng bộ với revision hiện tại.", { exact: true })).toBeVisible();
+  await page.waitForTimeout(250);
+  const readsBeforeExplicitRetry = diffReads;
+  assert.ok(readsBeforeExplicitRetry >= 3, "returning to A must perform a bounded detail read");
+  assert.equal(snapshotReads, 1, "A → B → A must not grant A another automatic recovery attempt");
+
+  await page.getByRole("button", { name: "Thử đồng bộ lại" }).click();
+  await expect.poll(() => snapshotReads).toBe(2);
+  await expect.poll(() => diffReads).toBeGreaterThan(readsBeforeExplicitRetry);
+  await expect(page.getByText("Diff chưa thể đồng bộ với revision hiện tại.", { exact: true })).toBeVisible();
+
+  await page.unroute(diffPattern, exhaustedDiffHandler); await page.unroute(sourcePattern, reboundSourceHandler);
+  await page.unroute(snapshotPattern, exhaustedSnapshotHandler);
 });
 
 test("switches and persists English plus the docs-style light theme", async ({ page }) => {
@@ -248,8 +452,9 @@ test("switches and persists English plus the docs-style light theme", async ({ p
 });
 
 test("marks, unmarks and stales an exact selected-file review without changing Git", async ({ page, browser }) => {
-  const runtimeInstanceId = "runtime.browser-review", identity = { projectRef: "project.browser-review", runtimeInstanceId,
-    sessionRef: "session.browser-review", taskId: currentTask.taskId, taskRunId: currentTask.taskRunId, agentOperationId: null, toolCallId: null };
+  test.setTimeout(90_000);
+  const runtimeInstanceId = "runtime.browser-review", identity = { projectRef: webUiProjectRef(cwd), runtimeInstanceId,
+    sessionRef: webUiSessionRef(currentTask.sessionId), taskId: currentTask.taskId, taskRunId: currentTask.taskRunId, agentOperationId: null, toolCallId: null };
   const revisions = { runtimeRevision: "runtime-rev.browser-review", taskRevision: webUiTaskRevision(currentTask),
     controlRevision: "control-rev.browser-review", workspaceRevision: null, indexRevision: null, approvalRevision: null,
     sessionOptionRevision: "session-option-rev.browser-review", queueRevision: "queue-rev.browser-review" };
@@ -265,6 +470,104 @@ test("marks, unmarks and stales an exact selected-file review without changing G
   const secondPath = path.join(cwd, "src", "second-review.ts"); let otherContext, otherPage;
   try {
     fs.writeFileSync(secondPath, "export const second = 'UNTRACKED REVIEW TARGET';\n"); reviewProvider.invalidate();
+    const detailReviewPattern = "**/api/v1/reviews/**", snapshotPattern = "**/api/v1/snapshot";
+    let reviewReads = 0, snapshotReads = 0, countSnapshots = false;
+    const snapshotHandler = async (route) => { if (countSnapshots) snapshotReads += 1; await route.continue(); };
+    const transientReviewHandler = async (route) => {
+      if (route.request().method() !== "GET" || new URL(route.request().url()).searchParams.get("view") !== "working-tree") {
+        await route.continue(); return;
+      }
+      reviewReads += 1;
+      const response = await route.fetch(), value = await response.json();
+      if (reviewReads === 1) {
+        value.state = "unavailable"; value.target = null; value.recordedState = null; value.recordedAt = null;
+        value.evidenceRef = null; value.reasonCode = "review-target-unavailable";
+        value.health = { state: "degraded", reasonCode: "review-target-unavailable", message: "Review target changed during projection" };
+      }
+      await route.fulfill({ response, json: value });
+    };
+    await page.route(snapshotPattern, snapshotHandler); await page.route(detailReviewPattern, transientReviewHandler);
+    await page.goto(reviewServer.issueLaunchUrl());
+    await page.locator('[data-contract="snapshot-v1"]').waitFor({ state: "visible" }); countSnapshots = true;
+    await openWorkspace(page, "Source Changes");
+    await page.getByRole("tab", { name: /Toàn bộ working tree/ }).click();
+    await page.getByRole("button", { name: /src\/example\.ts/ }).click();
+    await expect.poll(() => reviewReads).toBe(2); await expect.poll(() => snapshotReads).toBe(1);
+    await expect(page.locator(".review-state")).toBeVisible();
+    await page.unroute(detailReviewPattern, transientReviewHandler); await page.unroute(snapshotPattern, snapshotHandler);
+
+    reviewReads = 0; snapshotReads = 0; countSnapshots = false;
+    const transientReadFailureHandler = async (route) => {
+      if (route.request().method() !== "GET" || new URL(route.request().url()).searchParams.get("view") !== "working-tree") {
+        await route.continue(); return;
+      }
+      reviewReads += 1;
+      if (reviewReads === 1) {
+        await route.fulfill({ status: 503, contentType: "application/json", body: '{"error":"transient-review-read"}' }); return;
+      }
+      await route.continue();
+    };
+    await page.route(snapshotPattern, snapshotHandler); await page.route(detailReviewPattern, transientReadFailureHandler);
+    await page.reload();
+    await page.locator('[data-contract="snapshot-v1"]').waitFor({ state: "visible" }); countSnapshots = true;
+    await openWorkspace(page, "Source Changes");
+    await page.getByRole("tab", { name: /Toàn bộ working tree/ }).click();
+    await page.getByRole("button", { name: /src\/example\.ts/ }).click();
+    await expect.poll(() => reviewReads).toBe(2); await expect.poll(() => snapshotReads).toBe(1);
+    await expect(page.locator(".diff-toolbar strong")).toHaveText("src/example.ts");
+    await expect(page.locator(".review-state")).toBeVisible();
+    await expect(page.getByText("Một thao tác source chưa đồng bộ; diff hiện tại vẫn chính xác.", { exact: true })).toHaveCount(0);
+    await page.unroute(detailReviewPattern, transientReadFailureHandler); await page.unroute(snapshotPattern, snapshotHandler);
+
+    reviewReads = 0; snapshotReads = 0; countSnapshots = false;
+    const persistentReadFailureHandler = async (route) => {
+      if (route.request().method() !== "GET" || new URL(route.request().url()).searchParams.get("view") !== "working-tree") {
+        await route.continue(); return;
+      }
+      reviewReads += 1;
+      await route.fulfill({ status: 503, contentType: "application/json", body: '{"error":"persistent-review-read"}' });
+    };
+    await page.route(snapshotPattern, snapshotHandler); await page.route(detailReviewPattern, persistentReadFailureHandler);
+    await page.reload();
+    await page.locator('[data-contract="snapshot-v1"]').waitFor({ state: "visible" }); countSnapshots = true;
+    await openWorkspace(page, "Source Changes");
+    await page.getByRole("tab", { name: /Toàn bộ working tree/ }).click();
+    await page.getByRole("button", { name: /src\/example\.ts/ }).click();
+    await expect(page.locator(".diff-toolbar strong")).toHaveText("src/example.ts");
+    await expect(page.getByText("Một thao tác source chưa đồng bộ; diff hiện tại vẫn chính xác.", { exact: true })).toBeVisible();
+    await expect.poll(() => reviewReads).toBe(2); await expect.poll(() => snapshotReads).toBe(1);
+    await page.waitForTimeout(250);
+    assert.equal(reviewReads, 2, "a persistent detail read failure gets one automatic bounded recovery");
+    const readsBeforeExplicitRetry = reviewReads, snapshotsBeforeExplicitRetry = snapshotReads;
+    await page.getByRole("button", { name: "Thử đồng bộ lại" }).click();
+    await expect.poll(() => reviewReads).toBe(readsBeforeExplicitRetry + 1);
+    await expect.poll(() => snapshotReads).toBe(snapshotsBeforeExplicitRetry + 1);
+    await expect(page.getByText("Một thao tác source chưa đồng bộ; diff hiện tại vẫn chính xác.", { exact: true })).toBeVisible();
+    await page.waitForTimeout(250);
+    assert.equal(reviewReads, readsBeforeExplicitRetry + 1, "an explicit detail retry performs one bounded detail read");
+    await page.unroute(detailReviewPattern, persistentReadFailureHandler); await page.unroute(snapshotPattern, snapshotHandler);
+
+    reviewReads = 0; snapshotReads = 0; countSnapshots = false;
+    const staleReviewHandler = async (route) => {
+      if (route.request().method() !== "GET" || new URL(route.request().url()).searchParams.get("view") !== "working-tree") {
+        await route.continue(); return;
+      }
+      reviewReads += 1;
+      const response = await route.fetch(), value = await response.json();
+      if (value.target) value.target.fileRevision = `file-rev.stale-review-${reviewReads}`;
+      await route.fulfill({ response, json: value });
+    };
+    await page.route(snapshotPattern, snapshotHandler); await page.route(detailReviewPattern, staleReviewHandler);
+    await page.reload();
+    await page.locator('[data-contract="snapshot-v1"]').waitFor({ state: "visible" }); countSnapshots = true;
+    await openWorkspace(page, "Source Changes");
+    await page.getByRole("tab", { name: /Toàn bộ working tree/ }).click();
+    await page.getByRole("button", { name: /src\/example\.ts/ }).click();
+    await expect(page.locator(".diff-toolbar strong")).toHaveText("src/example.ts");
+    await expect(page.getByText("Một thao tác source chưa đồng bộ; diff hiện tại vẫn chính xác.", { exact: true })).toBeVisible();
+    await expect.poll(() => reviewReads).toBe(2); await expect.poll(() => snapshotReads).toBe(1);
+    await page.unroute(detailReviewPattern, staleReviewHandler); await page.unroute(snapshotPattern, snapshotHandler);
+
     let releaseFirstReview, observeFirstReview; const firstReviewStarted = new Promise((resolve) => { observeFirstReview = resolve; });
     const firstReviewRelease = new Promise((resolve) => { releaseFirstReview = resolve; }); let reviewPosts = 0;
     await page.route("**/api/v1/reviews", async (route) => {
@@ -276,14 +579,17 @@ test("marks, unmarks and stales an exact selected-file review without changing G
         }
         if (reviewPosts === 2) {
           const receipt = await response.json();
-          await route.fulfill({ response, json: { ...receipt, resultCode: "unreviewed" } }); return;
+          await route.fulfill({ response, json: { ...receipt, phase: "uncertain", resultCode: "effect-unknown",
+            settledAt: null, settlementEvidenceRef: null,
+            error: { code: "review-command-effect-unknown", message: "The durable effect is unknown." } } }); return;
         }
         await route.fulfill({ response }); return;
       }
       await route.continue();
     });
     const before = fs.readFileSync(path.join(cwd, "src", "example.ts"), "utf8"), indexBefore = git("diff", "--cached", "--", "src/example.ts");
-    await page.goto(reviewServer.issueLaunchUrl());
+    await page.reload();
+    await page.locator('[data-contract="snapshot-v1"]').waitFor({ state: "visible" });
     await openWorkspace(page, "Source Changes");
     await page.getByRole("tab", { name: /Toàn bộ working tree/ }).click();
     await page.getByRole("button", { name: /src\/example\.ts/ }).click();
@@ -305,8 +611,11 @@ test("marks, unmarks and stales an exact selected-file review without changing G
     await expect(page.getByText("Chưa review", { exact: true })).toBeVisible();
     await expect(page.getByText("Đã review", { exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: "Đánh dấu đã review" }).click();
-    await expect(page.getByText("Không xác nhận được trạng thái review chính xác; hãy tải lại diff.", { exact: true })).toBeVisible();
-    await expect(page.getByText("Chưa review", { exact: true })).toBeVisible();
+    await expect(page.getByText(/Chưa xác nhận được receipt review.*không tự gửi lại lệnh/)).toBeVisible();
+    await expect(page.getByText("Đã review", { exact: true })).toBeVisible();
+    await expect(page.getByText("Không xác nhận được trạng thái review chính xác; hãy tải lại diff.", { exact: true })).toHaveCount(0);
+    await page.waitForTimeout(250);
+    assert.equal(reviewPosts, 2, "an uncertain review must never be resent automatically");
     await page.reload(); await openWorkspace(page, "Source Changes");
     await page.getByRole("tab", { name: /Toàn bộ working tree/ }).click();
     await page.getByRole("button", { name: /src\/example\.ts/ }).click();
@@ -328,8 +637,11 @@ test("marks, unmarks and stales an exact selected-file review without changing G
 
 test("stages and unstages one exact file while preserving worktree content", async ({ page }) => {
   test.setTimeout(60_000);
-  let snapshotReads = 0;
+  let snapshotReads = 0, mutationPosts = 0;
   page.on("request", (request) => { if (new URL(request.url()).pathname === "/api/v1/snapshot") snapshotReads += 1; });
+  page.on("request", (request) => {
+    if (request.method() === "POST" && new URL(request.url()).pathname === "/api/v1/source-mutations") mutationPosts += 1;
+  });
   const mutationCwd = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-webui-browser-mutation-"));
   const runGit = (...args) => execFileSync("git", ["-C", mutationCwd, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   execFileSync("git", ["init", "-q", mutationCwd]); runGit("config", "user.email", "test@example.com"); runGit("config", "user.name", "Piagent Browser Test");
@@ -349,8 +661,8 @@ test("stages and unstages one exact file while preserving worktree content", asy
     recordedDigests: { "selected.txt": changedSnapshot["selected.txt"] },
     recordedContentDigests: { "selected.txt": createHash("sha256").update(expected).digest("hex") },
     proofModes: { "selected.txt": "full-content" }, protectedPaths: [] }));
-  const runtimeInstanceId = "runtime.browser-mutation", identity = { projectRef: "project.browser-mutation", runtimeInstanceId,
-    sessionRef: "session.browser-mutation", taskId: task.taskId, taskRunId: task.taskRunId, agentOperationId: null, toolCallId: null };
+  const runtimeInstanceId = "runtime.browser-mutation", identity = { projectRef: webUiProjectRef(mutationCwd), runtimeInstanceId,
+    sessionRef: webUiSessionRef(task.sessionId), taskId: task.taskId, taskRunId: task.taskRunId, agentOperationId: null, toolCallId: null };
   const revisions = { runtimeRevision: "runtime-rev.browser-mutation", taskRevision: webUiTaskRevision(task),
     controlRevision: "control-rev.browser-mutation", workspaceRevision: null, indexRevision: null, approvalRevision: null,
     sessionOptionRevision: null, queueRevision: "queue-rev.browser-mutation" };
@@ -383,6 +695,14 @@ test("stages and unstages one exact file while preserving worktree content", asy
         : command?.action === "chat.send" ? (modelSummaryPrompts.push(command.payload.text), { phase: "settled", resultCode: "dispatch-observed", error: null })
           : await controller.execute(command);
       mutationProvider.invalidate(); return receipt; } });
+  const mutationPattern = "**/api/v1/source-mutations";
+  const reportMutationAsUncertain = async (route) => {
+    const response = await route.fetch(), receipt = await response.json();
+    receipt.phase = "uncertain"; receipt.resultCode = "effect-unknown"; receipt.settledAt = null;
+    receipt.settlementEvidenceRef = null;
+    receipt.error = { code: "source-command-effect-unknown", message: "The durable effect is unknown." };
+    await route.fulfill({ response, json: receipt });
+  };
   try {
     await page.goto(mutationServer.issueLaunchUrl());
     await openWorkspace(page, "Source Changes");
@@ -394,11 +714,17 @@ test("stages and unstages one exact file while preserving worktree content", asy
     assert.equal((await (await openResponse).json()).resultCode, "opened");
     await expect(page.getByText("VS Code đã nhận yêu cầu mở file.", { exact: true })).toBeVisible();
     assert.equal(openedInVSCode, 1);
-    const snapshotsBeforeStage = snapshotReads;
+    const snapshotsBeforeStage = snapshotReads, postsBeforeStage = mutationPosts;
+    await page.route(mutationPattern, reportMutationAsUncertain);
     const stageResponse = page.waitForResponse((response) => response.url().endsWith("/api/v1/source-mutations") && response.request().method() === "POST");
     await page.getByRole("button", { name: "Stage file" }).click();
-    assert.equal((await (await stageResponse).json()).resultCode, "staged");
+    const stageReceipt = await (await stageResponse).json();
+    await page.unroute(mutationPattern, reportMutationAsUncertain);
+    assert.equal(stageReceipt.phase, "uncertain"); assert.equal(stageReceipt.resultCode, "effect-unknown");
     await expect.poll(() => snapshotReads).toBeGreaterThan(snapshotsBeforeStage);
+    await expect(page.getByText(/Chưa xác nhận được trạng thái Git.*không tự gửi lại lệnh/)).toBeVisible();
+    await page.waitForTimeout(250);
+    assert.equal(mutationPosts - postsBeforeStage, 1, "an uncertain stage must never be resent automatically");
     await page.getByRole("button", { name: /selected\.txt/ }).click();
     await expect(page.getByRole("button", { name: "Stage file" })).toHaveCount(0);
     assert.equal(fs.readFileSync(path.join(mutationCwd, "selected.txt"), "utf8"), expected);
@@ -436,12 +762,18 @@ test("stages and unstages one exact file while preserving worktree content", asy
     await expect(dialog.getByText(/OPERATOR PREVIEWED THIS/)).toBeVisible();
     await expect(dialog.getByText(/BASE/)).toBeVisible();
     await expect(dialog.getByText("Phần đã stage được giữ nguyên.", { exact: true })).toBeVisible();
-    const snapshotsBeforeRevert = snapshotReads;
+    const snapshotsBeforeRevert = snapshotReads, postsBeforeRevert = mutationPosts;
+    await page.route(mutationPattern, reportMutationAsUncertain);
     const revertResponse = page.waitForResponse((response) => response.url().endsWith("/api/v1/source-mutations") && response.request().method() === "POST");
     await dialog.getByRole("button", { name: "Xác nhận revert" }).click();
     const revertReceipt = await (await revertResponse).json();
-    assert.equal(revertReceipt.resultCode, "reverted", JSON.stringify(revertReceipt));
+    await page.unroute(mutationPattern, reportMutationAsUncertain);
+    assert.equal(revertReceipt.phase, "uncertain", JSON.stringify(revertReceipt));
+    assert.equal(revertReceipt.resultCode, "effect-unknown", JSON.stringify(revertReceipt));
     await expect.poll(() => snapshotReads).toBeGreaterThan(snapshotsBeforeRevert);
+    await expect(page.getByText(/Chưa xác nhận được kết quả revert.*không tự gửi lại lệnh/)).toBeVisible();
+    await page.waitForTimeout(250);
+    assert.equal(mutationPosts - postsBeforeRevert, 1, "an uncertain revert must never be resent automatically");
     assert.equal(fs.readFileSync(path.join(mutationCwd, "selected.txt"), "utf8"), "BASE\n");
     assert.equal(runGit("show", ":selected.txt"), "BASE\n");
   } finally { await mutationServer.close(); unbindMutationGuard(); fs.rmSync(mutationCwd, { recursive: true, force: true }); }
@@ -462,8 +794,8 @@ test("stages and unstages one selected hunk through the guarded WebUI", async ({
     capturedAt: task.createdAt, baselineTreeDigest: workingTreeEvidenceDigest(baseline) });
   changedLines[1] = "line 2 changed"; changedLines[20] = "line 21 changed";
   const worktree = `${changedLines.join("\n")}\n`; fs.writeFileSync(path.join(hunkCwd, "selected.txt"), worktree);
-  const runtimeInstanceId = "runtime.browser-hunk", identity = { projectRef: "project.browser-hunk", runtimeInstanceId,
-    sessionRef: "session.browser-hunk", taskId: task.taskId, taskRunId: task.taskRunId, agentOperationId: null, toolCallId: null };
+  const runtimeInstanceId = "runtime.browser-hunk", identity = { projectRef: webUiProjectRef(hunkCwd), runtimeInstanceId,
+    sessionRef: webUiSessionRef(task.sessionId), taskId: task.taskId, taskRunId: task.taskRunId, agentOperationId: null, toolCallId: null };
   const revisions = { runtimeRevision: "runtime-rev.browser-hunk", taskRevision: webUiTaskRevision(task),
     controlRevision: "control-rev.browser-hunk", workspaceRevision: null, indexRevision: null, approvalRevision: null,
     sessionOptionRevision: null, queueRevision: "queue-rev.browser-hunk" };
@@ -486,10 +818,9 @@ test("stages and unstages one selected hunk through the guarded WebUI", async ({
     await page.getByRole("button", { name: /selected\.txt/ }).click(); await expect(page.getByRole("button", { name: "Stage hunk" })).toHaveCount(2);
     const firstStageResponse = page.waitForResponse((response) => response.url().endsWith("/api/v1/source-mutations") && response.request().method() === "POST");
     await page.getByRole("button", { name: "Stage hunk" }).first().click(); assert.equal((await (await firstStageResponse).json()).resultCode, "staged");
-    await expect(page.getByRole("button", { name: "Stage hunk" })).toHaveCount(0);
-    await page.getByRole("button", { name: /selected\.txt/ }).click(); await expect(page.getByRole("button", { name: "Stage hunk" })).toHaveCount(1);
     const firstOnly = [...baseLines]; firstOnly[1] = changedLines[1];
     assert.equal(runGit("show", ":selected.txt"), `${firstOnly.join("\n")}\n`); assert.equal(fs.readFileSync(path.join(hunkCwd, "selected.txt"), "utf8"), worktree);
+    await expect(page.getByRole("button", { name: "Stage hunk" })).toHaveCount(1);
     const secondStageResponse = page.waitForResponse((response) => response.url().endsWith("/api/v1/source-mutations") && response.request().method() === "POST");
     await page.getByRole("button", { name: "Stage hunk" }).click(); assert.equal((await (await secondStageResponse).json()).resultCode, "staged");
     await page.getByRole("tab", { name: /Đã chuẩn bị commit/ }).click();
@@ -575,7 +906,7 @@ test("opens markdown, tabular and .docx documents from the project as a read-onl
 
 test("renders and resolves the exact Pi-owned approval card without direct execution", async ({ page }) => {
   const broker = new PiApprovalBroker(), runtimeInstanceId = "runtime.browser-approval", sessionId = currentTask.sessionId;
-  const identity = { projectRef: "project.browser-approval", runtimeInstanceId, sessionRef: "session.browser-approval",
+  const identity = { projectRef: webUiProjectRef(cwd), runtimeInstanceId, sessionRef: webUiSessionRef(sessionId),
     taskId: currentTask.taskId, taskRunId: currentTask.taskRunId, agentOperationId: "operation.browser-approval" };
   const revisions = { runtimeRevision: "runtime-rev.browser-approval", taskRevision: "task-rev.browser-approval", controlRevision: "control-rev.browser-approval" };
   broker.bind({ cwd, rawSessionId: sessionId, runtimeInstanceId, authority: () => ({ identity, revisions, taskState: "active" }) });

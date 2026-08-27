@@ -5,6 +5,24 @@ import { ReadModelNotFound, type SourceView, type StreamEvent, type WebUiReadMod
 import { projectTranscript } from "./transcript-projection.ts";
 
 const CORE_ROOT = "../../piagent-core";
+const SOURCE_AUTHORITY_ALIGNED = Symbol("piagent-source-authority-aligned");
+const STABLE_IDENTITY_FIELDS = ["projectRef", "runtimeInstanceId", "sessionRef", "taskId", "taskRunId"] as const;
+
+function stableIdentityMatches(left: Record<string, any> | null | undefined, right: Record<string, any> | null | undefined): boolean {
+  return Boolean(left && right && STABLE_IDENTITY_FIELDS.every((field) => left[field] === right[field]));
+}
+
+function sourceBinding(snapshot: Record<string, any>) {
+  return { sourceProjectionRevision: snapshot.sourceChanges.projectionRevision,
+    taskViewRevision: snapshot.sourceChanges.task.revision, workspaceRevision: snapshot.sourceChanges.workingTree.revision,
+    indexRevision: snapshot.sourceChanges.staged.revision };
+}
+
+function sourceDocumentMatches(document: Record<string, any> | null | undefined, snapshot: Record<string, any>): boolean {
+  const binding = sourceBinding(snapshot);
+  return Boolean(document && stableIdentityMatches(document.identity, snapshot.identity)
+    && Object.entries(binding).every(([field, value]) => document.snapshotBinding?.[field] === value));
+}
 
 type RuntimeEvent = { eventCursor: string; [key: string]: unknown };
 type EventReplay = {
@@ -119,10 +137,15 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
       Object.assign(value.snapshot.capabilities.limits, { maxRequestBodyBytes: 11_250_000, maxAttachmentCount: 4,
         maxAttachmentFileBytes: 8_388_608, maxAttachmentTotalBytes: 16_777_216 });
     }
+    const projectedIdentity = value.snapshot.identity, projectedTaskRevision = value.snapshot.revision.taskRevision;
+    let sourceIdentityAligned = !this.#input.eventStore.resyncRequired()
+      && Object.values(value.sourceViews).every((document) => document === null || sourceDocumentMatches(document as Record<string, any>, value.snapshot));
     if (control?.state === "ready" && control.identity && control.revisions && !this.#input.eventStore.resyncRequired()) {
       const available = { available: true, reasonCode: null }, disabled = (reasonCode: string) => ({ available: false, reasonCode });
       const lifecycle = this.#input.lifecycleControl?.(), terminal = control.taskState === "terminal";
       const dispatchBlocked = lifecycle?.dispatchBlocked === true && lifecycle.state !== "terminal";
+      sourceIdentityAligned = sourceIdentityAligned && stableIdentityMatches(projectedIdentity, control.identity)
+        && (projectedIdentity.taskId === null || projectedTaskRevision === control.revisions.taskRevision);
       value.snapshot.identity = structuredClone(control.identity);
       value.snapshot.capabilities.identity = structuredClone(control.identity);
       for (const name of ["runtimeRevision", "taskRevision", "controlRevision", "sessionOptionRevision", "queueRevision"])
@@ -176,7 +199,12 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
         value.snapshot.capabilities.capabilities.approve = { status: "available", version: 1, reason: null,
           decisions: ["allow", "deny"], arbitration: "first-valid-cas" };
       }
-      if (control.identity.taskId && control.identity.taskRunId && control.revisions.taskRevision && value.snapshot.revision.workspaceRevision) {
+      if (control.identity.taskId && control.identity.taskRunId && control.revisions.taskRevision && value.snapshot.revision.workspaceRevision
+        && !sourceIdentityAligned) {
+        value.snapshot.capabilities.capabilities.reviewActions = { status: "unavailable", version: null,
+          reason: { code: "source-binding-resync-required",
+            message: "Source actions require a source projection bound to the current project, session and task." } };
+      } else if (control.identity.taskId && control.identity.taskRunId && control.revisions.taskRevision && value.snapshot.revision.workspaceRevision) {
         const mutationGuardAvailable = this.#input.sourceMutationGuardAvailable?.() === true;
         const chatSend = value.snapshot.capabilities.capabilities["control.chat"]?.status === "available"
           && value.snapshot.capabilities.capabilities["control.chat"].actions.send.available;
@@ -195,6 +223,16 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
         } };
       }
     }
+    if (sourceIdentityAligned) {
+      const binding = sourceBinding(value.snapshot);
+      for (const document of Object.values(value.sourceViews)) {
+        if (document && typeof document === "object") Object.assign(document as Record<string, any>, {
+          identity: structuredClone(value.snapshot.identity), snapshotBinding: structuredClone(binding)
+        });
+      }
+    }
+    Object.defineProperty(value, SOURCE_AUTHORITY_ALIGNED, { value: sourceIdentityAligned
+      && Object.values(value.sourceViews).every((document) => document === null || sourceDocumentMatches(document as Record<string, any>, value.snapshot)) });
     if (projectionEpoch === this.#invalidationEpoch) this.#cachedProjection = { at: Date.now(), value };
     return value;
   }
@@ -261,15 +299,18 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
     const value = this.#input.approvalDetail?.(approvalRef); if (!value) throw new ReadModelNotFound(); return value;
   }
   async diff(view: SourceView, fileRef: string): Promise<unknown> {
-    const cacheKey = `${view}:${fileRef}`;
-    const cached = this.#diffCache.get(cacheKey);
-    if (cached && Date.now() - cached.at <= 200) return cached.value;
-    const { collectFileDiff, matchesProtectedPath } = await loadCoreInspection();
+    const requestEpoch = this.#invalidationEpoch;
     const projection = await this.#projection();
+    this.#requireSourceAuthority(projection, [view]);
     const source = view === "working-tree" ? projection.sourceViews.workingTree : projection.sourceViews[view];
     const file = source?.files.find((candidate: any) => candidate.fileRef === fileRef) as Record<string, any> | undefined;
     if (!source || !file) throw new ReadModelNotFound();
     const identity = projection.snapshot.identity;
+    const cacheKey = [...STABLE_IDENTITY_FIELDS.map((field) => identity[field]), projection.snapshot.revision.taskRevision,
+      projection.snapshot.sourceChanges.projectionRevision, view, source.viewRevision, file.fileRevision, fileRef].join("\0");
+    const cached = this.#diffCache.get(cacheKey);
+    if (cached && Date.now() - cached.at <= 200) return cached.value;
+    const { collectFileDiff, matchesProtectedPath } = await loadCoreInspection();
     const protectedPaths = this.#input.protectedPaths?.() ?? [];
     const value = await collectFileDiff({
       cwd: this.#input.cwd, identity, sourceView: source, fileRef,
@@ -281,8 +322,10 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
       selectedRepoPaths: file.pathDisplay === "exact-safe" ? [file.oldPath, file.path].filter((value: unknown): value is string => typeof value === "string") : undefined,
       isProtectedPath: (_root: string, repoPath: string) => Boolean(matchesProtectedPath(repoPath, protectedPaths))
     });
-    this.#diffCache.set(cacheKey, { at: Date.now(), value });
-    if (this.#diffCache.size > 128) this.#diffCache.delete(this.#diffCache.keys().next().value as string);
+    if (requestEpoch === this.#invalidationEpoch) {
+      this.#diffCache.set(cacheKey, { at: Date.now(), value });
+      if (this.#diffCache.size > 128) this.#diffCache.delete(this.#diffCache.keys().next().value as string);
+    }
     return value;
   }
 
@@ -291,6 +334,7 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
     // cache when deriving its exact Git/task preimage.
     this.invalidate();
     const projection = await this.#projection(), snapshot = projection.snapshot;
+    this.#requireSourceAuthority(projection, [view]);
     const identity = { ...snapshot.identity, agentOperationId: null, toolCallId: null };
     if (!identity.taskId || !identity.taskRunId || !snapshot.revision.taskRevision || !snapshot.revision.workspaceRevision) throw new ReadModelNotFound();
     const diff = await this.diff(view, fileRef) as any;
@@ -306,10 +350,11 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
   async #sourceMutation(action: "source.stage" | "source.unstage", fileRef: string) {
     this.invalidate();
     const projection = await this.#projection(), snapshot = projection.snapshot;
+    const view: SourceView = action === "source.stage" ? "working-tree" : "staged";
+    this.#requireSourceAuthority(projection, [view]);
     const identity = { ...snapshot.identity, agentOperationId: null, toolCallId: null };
     if (!identity.taskId || !identity.taskRunId || !snapshot.revision.taskRevision || !snapshot.revision.workspaceRevision || !snapshot.revision.indexRevision)
       throw new ReadModelNotFound();
-    const view: SourceView = action === "source.stage" ? "working-tree" : "staged";
     const source = view === "working-tree" ? projection.sourceViews.workingTree : projection.sourceViews.staged;
     if (!source?.files.some((file: any) => file.fileRef === fileRef)) throw new ReadModelNotFound();
     const diff = await this.diff(view, fileRef) as any;
@@ -333,6 +378,7 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
   async #sourceRevert(fileRef: string, hunkRef: string | null) {
     this.invalidate();
     const projection = await this.#projection(), snapshot = projection.snapshot;
+    this.#requireSourceAuthority(projection, ["working-tree", ...(projection.sourceViews.task ? ["task" as const] : [])]);
     const identity = { ...snapshot.identity, agentOperationId: null, toolCallId: null };
     if (!identity.taskId || !identity.taskRunId || !snapshot.revision.taskRevision || !snapshot.revision.workspaceRevision || !snapshot.revision.indexRevision)
       throw new ReadModelNotFound();
@@ -360,6 +406,7 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
 
   async sourceOpenAuthority(fileRef: string) {
     this.invalidate(); const projection = await this.#projection(), snapshot = projection.snapshot;
+    this.#requireSourceAuthority(projection, ["working-tree"]);
     const identity = { ...snapshot.identity, agentOperationId: null, toolCallId: null };
     if (!identity.taskId || !identity.taskRunId || !snapshot.revision.taskRevision || !snapshot.revision.workspaceRevision) return null;
     const { resolveSourceOpenTarget, matchesProtectedPath } = await loadCoreInspection(), protectedPaths = this.#input.protectedPaths?.() ?? [];
@@ -370,6 +417,7 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
 
   async commitSummary(): Promise<unknown> {
     this.invalidate(); const projection = await this.#projection(), snapshot = projection.snapshot;
+    this.#requireSourceAuthority(projection, ["staged"]);
     const identity = { ...snapshot.identity, agentOperationId: null, toolCallId: null };
     if (!identity.taskId || !identity.taskRunId || !snapshot.revision.taskRevision || !snapshot.revision.indexRevision) throw new ReadModelNotFound();
     const { projectDeterministicCommitSummary } = await loadCoreInspection();
@@ -427,12 +475,16 @@ export class CoreInspectionProvider implements WebUiReadModelProvider {
     this.invalidate(); return structuredClone((await this.#projection()).snapshot.revision);
   }
 
+  #requireSourceAuthority(projection: any, views: SourceView[]): void {
+    if (projection[SOURCE_AUTHORITY_ALIGNED] !== true || views.some((view) => {
+      const document = view === "working-tree" ? projection.sourceViews.workingTree : projection.sourceViews[view];
+      return !sourceDocumentMatches(document, projection.snapshot);
+    })) throw new ReadModelNotFound();
+  }
+
   replay(after: string | null, limit: number) {
     const replay = this.#input.eventStore.replay(after, limit);
-    if (replay.state !== "current") {
-      this.#cachedProjection = null;
-      this.#diffCache.clear();
-    }
+    if (replay.state !== "current") this.invalidate();
     return { ...replay, events: replay.events.map((event) => ({ cursor: event.eventCursor, value: event })) };
   }
   subscribe(listener: (event: StreamEvent) => void): () => void { this.#listeners.add(listener); return () => this.#listeners.delete(listener); }

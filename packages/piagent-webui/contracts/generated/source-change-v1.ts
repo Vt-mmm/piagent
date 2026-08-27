@@ -9,6 +9,7 @@ export type PiagentWebUISourceChangeViewV1 = {
   identity: Identity;
   view: View;
   viewRevision: string;
+  snapshotBinding?: SnapshotBinding;
   /**
    * @minItems 1
    * @maxItems 32
@@ -165,6 +166,12 @@ export type Redaction = {
   truncated: boolean;
 };
 
+export interface SnapshotBinding {
+  sourceProjectionRevision: string;
+  taskViewRevision: string | null;
+  workspaceRevision: string | null;
+  indexRevision: string | null;
+}
 export interface GitState {
   indexStatus: RawGitStatus;
   worktreeStatus: RawGitStatus;

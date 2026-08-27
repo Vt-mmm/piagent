@@ -33,11 +33,19 @@ function exactKeys(value: unknown, keys: string[]): boolean { return Boolean(val
   && same(Object.keys(value as object).sort(), [...keys].sort())); }
 function timestamp(value: unknown): value is string { if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) return false;
   const parsed = Date.parse(value); return Number.isFinite(parsed) && new Date(parsed).toISOString() === value; }
+function nullableRevision(value: unknown): value is string | null { return value === null || typeof value === "string" && REVISION.test(value); }
 function wireIdentity(value: BridgeIdentity): BridgeIdentity { return { projectRef: value.projectRef, runtimeInstanceId: value.runtimeInstanceId,
   sessionRef: value.sessionRef, taskId: value.taskId, taskRunId: value.taskRunId, agentOperationId: null, toolCallId: null }; }
 function wireRevisions(value: BridgeRevisions): BridgeRevisions { return { runtimeRevision: value.runtimeRevision, taskRevision: value.taskRevision,
   controlRevision: value.controlRevision, workspaceRevision: value.workspaceRevision, indexRevision: value.indexRevision,
   approvalRevision: value.approvalRevision, sessionOptionRevision: value.sessionOptionRevision, queueRevision: value.queueRevision }; }
+function replayIdentityDisposition(record: Pick<ReviewEvidenceRecord, "projectRef" | "runtimeInstanceId" | "sessionRef" | "taskId" | "taskRunId">,
+  identity: BridgeIdentity): "task-identity-mismatch" | "runtime-or-session-replaced" | null {
+  if (record.taskId !== identity.taskId || record.taskRunId !== identity.taskRunId) return "task-identity-mismatch";
+  if (record.projectRef !== identity.projectRef || record.runtimeInstanceId !== identity.runtimeInstanceId || record.sessionRef !== identity.sessionRef)
+    return "runtime-or-session-replaced";
+  return null;
+}
 
 function receiptFromRecord(record: ReviewEvidenceRecord, deduplicated: boolean): ReviewReceipt {
   return { schemaVersion: 1, version: "piagent-webui-control-v1", messageType: "receipt", commandId: record.commandId,
@@ -82,19 +90,32 @@ export class ReviewController {
     if (old) {
       if (old.commandId !== command.commandId || old.idempotencyKeyDigest !== keyDigest || old.actionDigest !== command.actionDigest)
         return this.#reject(command, "idempotency-payload-mismatch", "idempotency-payload-mismatch", false);
-      if (old.runtimeInstanceId !== identity.runtimeInstanceId || old.sessionRef !== identity.sessionRef || old.taskId !== identity.taskId || old.taskRunId !== identity.taskRunId)
-        return this.#reject(command, "identity-mismatch", "runtime-or-session-replaced", false);
+      const disposition = replayIdentityDisposition(old, identity);
+      if (disposition) return this.#reject(command, "identity-mismatch", disposition, false);
       return receiptFromRecord(old, true);
     }
     const now = this.#now().getTime();
     if (Date.parse(command.requestedAt) > now + 30_000) return this.#reject(command, "invalid-command", "requested-at-in-future", false);
     if (now > Date.parse(command.expiresAt)) return this.#reject(command, "expired", "command-expired", false);
     if (!same(command.identity, identity)) return this.#reject(command, "identity-mismatch", "identity-mismatch", false);
-    if (command.expectedRevisions.runtimeRevision !== revisions.runtimeRevision || command.expectedRevisions.taskRevision !== revisions.taskRevision)
-      return this.#reject(command, "stale-revision", "stale-source-revision", true);
+    if (command.expectedRevisions.runtimeRevision !== revisions.runtimeRevision || command.expectedRevisions.taskRevision !== revisions.taskRevision
+      || command.expectedRevisions.controlRevision !== revisions.controlRevision)
+      return this.#reject(command, "stale-revision", "stale-task-control-revision", true);
     let projection: ReviewStateProjection;
     try { projection = await this.#resolve(command.payload.view, command.payload.fileRef); }
     catch { return this.#reject(command, "capability-unavailable", "review-target-unavailable", true); }
+    const rebound = this.#bridge.snapshot();
+    if (rebound.state !== "ready" || !rebound.identity || !rebound.revisions)
+      return this.#reject(command, "resync-required", "review-binding-unavailable-after-target-resolution", true);
+    const reboundIdentity = wireIdentity(rebound.identity), reboundRevisions = wireRevisions(rebound.revisions);
+    if (!same(reboundIdentity, identity)) {
+      const taskChanged = reboundIdentity.taskId !== identity.taskId || reboundIdentity.taskRunId !== identity.taskRunId;
+      return this.#reject(command, "identity-mismatch", taskChanged ? "task-identity-mismatch" : "runtime-or-session-replaced", false);
+    }
+    if (command.expectedRevisions.runtimeRevision !== reboundRevisions.runtimeRevision
+      || command.expectedRevisions.taskRevision !== reboundRevisions.taskRevision
+      || command.expectedRevisions.controlRevision !== reboundRevisions.controlRevision)
+      return this.#reject(command, "stale-revision", "stale-task-control-revision-after-target-resolution", true);
     const target = projection.target;
     if (!target || projection.state === "unavailable") return this.#reject(command, "capability-unavailable", projection.reasonCode ?? "review-target-unavailable", true);
     if (!this.#matchesTarget(command, target)) return this.#reject(command, "stale-revision", "review-target-changed", true);
@@ -130,8 +151,10 @@ export class ReviewController {
     const revisionKeys = ["runtimeRevision", "taskRevision", "controlRevision", "workspaceRevision", "indexRevision", "approvalRevision",
       "sessionOptionRevision", "queueRevision", "workspacePreimage", "indexPreimage", "patchPreimage"];
     if (!exactKeys(command.expectedRevisions, revisionKeys) || !REVISION.test(command.expectedRevisions.runtimeRevision)
-      || !REVISION.test(command.expectedRevisions.taskRevision ?? "") || !REVISION.test(command.expectedRevisions.workspaceRevision ?? "")
-      || command.expectedRevisions.indexRevision !== null && !REVISION.test(command.expectedRevisions.indexRevision)
+      || !REVISION.test(command.expectedRevisions.taskRevision ?? "") || !REVISION.test(command.expectedRevisions.controlRevision ?? "")
+      || !REVISION.test(command.expectedRevisions.workspaceRevision ?? "")
+      || ![command.expectedRevisions.indexRevision, command.expectedRevisions.approvalRevision,
+        command.expectedRevisions.sessionOptionRevision, command.expectedRevisions.queueRevision].every(nullableRevision)
       || command.expectedRevisions.workspacePreimage !== null || command.expectedRevisions.indexPreimage !== null
       || !DIGEST.test(command.expectedRevisions.patchPreimage)) return "invalid-review-authority";
     if (!exactKeys(command.payload, ["view", "fileRef", "diffRef", "reviewState", "contentDigest"])
