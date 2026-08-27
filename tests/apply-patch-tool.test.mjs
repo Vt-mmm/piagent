@@ -43,6 +43,7 @@ test("registers one sequential guarded apply_patch tool and applies multi-file A
   assert.equal(registered[0].name, "apply_patch");
   assert.equal(registered[0].executionMode, "sequential");
   assert.match(registered[0].promptSnippet, /Prefer one coherent apply_patch call.*source-and-test.*exact old context for every target.*old-side anchor.*plus-only insertions are invalid.*Otherwise use one bounded writer per file/);
+  assert.match(registered[0].promptGuidelines.join("\n"), /patch value must contain only the raw patch.*first line.*Begin Patch.*last line.*End Patch.*no prose, JSON, code fence.*before or after/);
   assert.match(registered[0].promptGuidelines.join("\n"), /For each \*\*\* Update File hunk, put @@ on its own line.*never write @@ -old or @@ \+new/);
   assert.match(registered[0].promptGuidelines.join("\n"), /Every Update File hunk must include at least one exact old-side line.*append\/insert.*anchor before or after the \+ lines/);
   const input = {
@@ -271,6 +272,22 @@ test("distinguishes empty, unchanged-only, and plus-only update hunks", () => {
     (error) => error instanceof ApplyPatchError && error.code === "malformed-hunk" && /plus-only Update File hunk is invalid/.test(error.message)
   );
   assert.equal(fs.readFileSync(path.join(root, "plain.js"), "utf8"), "old\n");
+});
+
+test("rejects content outside exact patch delimiters without writing", () => {
+  const root = project();
+  const target = path.join(root, "plain.js");
+  fs.writeFileSync(target, "old\n");
+  const valid = patch("*** Update File: plain.js", "@@", "-old", "+new");
+  for (const malformed of [
+    `prose\n${valid}`,
+    `${valid}\ntrailing prose`,
+    `${valid}\n{\"unexpected\":true}`,
+    `\`\`\`diff\n${valid}\n\`\`\``
+  ]) {
+    assert.throws(() => applyValidatedPatch(root, malformed), errorCode("invalid-patch"));
+    assert.equal(fs.readFileSync(target, "utf8"), "old\n");
+  }
 });
 
 test("honors cancellation before creating parents or changing content", () => {

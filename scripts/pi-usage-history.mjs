@@ -423,6 +423,10 @@ function summarizeSession(file, options) {
     const role = message.role;
     summary.messages.total += 1;
     if (role === "user") {
+      // A repeated call means duplicate work inside one operator turn. The
+      // same verifier or read requested again by a later user turn is fresh
+      // work, not a retry loop, even when the session itself is preserved.
+      toolCallFingerprints.clear();
       summary.messages.user += 1;
       summary.promptChars += extractTextLength(message.content);
     } else if (role === "assistant") {

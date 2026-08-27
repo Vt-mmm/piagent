@@ -279,6 +279,38 @@ describe("Pi usage history", () => {
     assert.equal(serialized.includes("private task"), false);
   });
 
+  it("counts repeated tool calls within a user turn but not across distinct turns", () => {
+    const fixture = makeFixture();
+    const target = path.join(fixture.root, "turn-repeats.jsonl");
+    const assistant = (id) => ({ type: "message", message: {
+      role: "assistant",
+      content: [{ type: "toolCall", id, name: "bash", arguments: { command: "npm test" } }],
+      usage: usage(1, 1, 0, 0, 0, 2, 0)
+    } });
+    const result = (id) => ({ type: "message", message: {
+      role: "toolResult", toolCallId: id, toolName: "bash", content: [{ type: "text", text: "ok" }]
+    } });
+    writeJsonl(target, [
+      { type: "session", id: "turn-repeats", cwd: fixture.project },
+      { type: "message", message: { role: "user", content: [{ type: "text", text: "implement" }] } },
+      assistant("a"), result("a"), assistant("b"), result("b"),
+      { type: "message", message: { role: "user", content: [{ type: "text", text: "verify again" }] } },
+      assistant("c"), result("c")
+    ]);
+    const summary = summarizeSession(target, { strictUsage: true });
+    assert.equal(summary.execution.toolCalls, 3);
+    assert.equal(summary.execution.repeatedToolCalls, 1);
+
+    writeJsonl(target, [
+      { type: "session", id: "cross-turn-only", cwd: fixture.project },
+      { type: "message", message: { role: "user", content: [{ type: "text", text: "implement" }] } },
+      assistant("a"), result("a"),
+      { type: "message", message: { role: "user", content: [{ type: "text", text: "verify again" }] } },
+      assistant("b"), result("b")
+    ]);
+    assert.equal(summarizeSession(target, { strictUsage: true }).execution.repeatedToolCalls, 0);
+  });
+
   // docs/usage-observability.md documents the --json shape as a table of
   // top-level keys. That table went four keys stale because nothing tied it to
   // the emitted object. Compare the two directly so a new key has to be

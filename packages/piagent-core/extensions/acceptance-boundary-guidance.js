@@ -49,10 +49,13 @@ function contractClauses(raw) {
     .replace(/\n[ \t]*\n+/g, "\u0000")
     .replace(/\n+/g, " ")
     .replace(/\u0000/g, "\n");
-  return source.split(/(?<=[.!?;])\s+|\n+/).map((clause) => clause.trim()).filter(Boolean);
+  return source.split(/(?<=[.!?;])\s+|\n+/)
+    .map((clause) => clause.trim().replace(/^(?:[-*+]|\d+[.)])\s+/, ""))
+    .filter(Boolean);
 }
 
 function isExplicitRejectionClause(clause) {
+  if (/\bwithout\s+throwing\b|\b(?:do|must|shall|should)\s+not\s+throw\b|\bnever\s+throw\b/i.test(clause)) return false;
   return /\b(?:invalid|malformed|reject(?:s|ed|ing|ion)?)\b/i.test(clause)
     || /\b(?:must|should|shall)\s+throw\s+(?:an?\s+)?TypeError\b/i.test(clause)
     || /\bthrow\s+(?:an?\s+)?TypeError\s+(?:for|on|when)\b/i.test(clause);
@@ -68,6 +71,87 @@ function malformedShapeSubjects(clause) {
     if (!["data", "input", "value", "values"].includes(match[1])) subjects.push(match[1]);
   }
   return uniqueStrings(subjects);
+}
+
+function taggedFieldList(raw) {
+  const source = String(raw ?? "").trim().replace(/^(?:the\s+)?(?:required\s+)?fields?\s+/i, "");
+  const fields = [...source.matchAll(/`([A-Za-z_$][A-Za-z0-9_$]*)`/g)].map((match) => match[1]);
+  if (fields.length === 0 || fields.length > 6) return [];
+  const shape = source.replace(/`[A-Za-z_$][A-Za-z0-9_$]*`/g, "@").replace(/\s+/g, " ").trim();
+  return /^@(?:\s*,\s*@)*(?:\s*,?\s+and\s+@)?$/i.test(shape) ? uniqueStrings(fields) : [];
+}
+
+function unsupportedTaggedRequirement() {
+  return [{ variant: "__unsupported_tagged_event_contract__", field: null, partitions: [] }];
+}
+
+function explicitTaggedEventRequirements(clauses) {
+  const taggedClauses = clauses.filter((clause) => /\btagged[- ]event\s+variant\b/i.test(clause));
+  if (taggedClauses.length === 0) return [];
+  const declarations = [], optionals = [];
+  let foreignConstraint = false, unsupportedDeclaration = false;
+  for (const clause of taggedClauses) {
+    const declaration = clause.match(/^(?:the\s+)?tagged[- ]event\s+variant\s+`([^`\r\n]{1,64})`\s+requires\s+(.+?)\s+to\s+be\s+(?:a\s+)?non-empty\s+strings?\.?$/i);
+    if (declaration) {
+      const fields = taggedFieldList(declaration[2]);
+      if (fields.length === 0) unsupportedDeclaration = true;
+      else declarations.push({ variant: declaration[1], fields });
+      continue;
+    }
+    const optional = clause.match(/^for\s+(?:the\s+)?tagged[- ]event\s+variant\s+`([^`\r\n]{1,64})`,?\s+(?:its\s+|the\s+)?optional\s+(?:field\s+|override\s+)?`([A-Za-z_$][A-Za-z0-9_$]*)`(?:\s+(?:field|override))?,?\s+when\s+supplied,?\s+must\s+be\s+(?:a\s+)?non-empty\s+string\.?$/i);
+    if (optional) optionals.push({ variant: optional[1], field: optional[2] });
+    else if (/^(?:the\s+)?tagged[- ]event\s+variant\s+`[^`\r\n]{1,64}`\s+requires\b/i.test(clause)
+      && !/\bnon-empty\s+strings?\b/i.test(clause)) foreignConstraint = true;
+    else unsupportedDeclaration = true;
+  }
+  const unparsedEventConstraint = clauses.some((clause) => !taggedClauses.includes(clause)
+    && !isExplicitRejectionClause(clause)
+    && declarations.some((item) => clause.includes(`\`${item.variant}\``))
+    && /\b(?:event|field|override|tagged|variant)\b/i.test(clause)
+    && /\b(?:field|override|required|requires?|must)\b/i.test(clause));
+  const productionSequencingClause = (clause) => /^validate\s+the\s+required\s+fields?\s+and\s+any\s+supplied\s+override\s+before\s+applying\s+duplicate\s+handling\.?$/i.test(clause)
+    || /^for\s+a\s+non-duplicate\s+message\s+with\s+no\s+own\s+`[^`]+`\s+override,\s+`[^`]+`\s+must\s+be\s+a\s+non-empty\s+string\s+or\s+the\s+reducer\s+throws\s+`typeerror`\.?$/i.test(clause);
+  const genericFieldConstraint = clauses.some((clause) => !taggedClauses.includes(clause)
+    && !isExplicitRejectionClause(clause)
+    && !productionSequencingClause(clause)
+    && /\b(?:events?|tagged|variants?|fields?|overrides?|propert(?:y|ies))\b/i.test(clause)
+    && /\b(?:must|shall|should|required|requires?|validation|validates?|validated|validating)\b/i.test(clause));
+  const rejectionWithExtraConstraint = clauses.some((clause) => {
+    if (!isExplicitRejectionClause(clause)) return false;
+    const rejection = clause.search(/\b(?:malformed|reject(?:s|ed|ing|ion)?|throw(?:s|ing)?\s+(?:an?\s+)?typeerror)\b/i);
+    const tail = rejection === -1 ? "" : clause.slice(rejection);
+    return /\b(?:and|but|plus)\b[\s\S]*\b(?:events?|tagged|variants?|fields?|overrides?|propert(?:y|ies))\b/i.test(tail)
+      && /\b(?:requires?|required|validation|validates?|validated|validating|must\s+(?!throw\b))\b/i.test(tail);
+  });
+  if (unparsedEventConstraint || genericFieldConstraint || rejectionWithExtraConstraint) unsupportedDeclaration = true;
+  const variants = uniqueStrings(declarations.map((item) => item.variant));
+  if (foreignConstraint) return declarations.length > 0 ? unsupportedTaggedRequirement() : [];
+  if (unsupportedDeclaration) return unsupportedTaggedRequirement();
+  if (variants.length < 2) return [];
+  if (!clauses.some((clause) => isExplicitRejectionClause(clause)
+    && /\b(?:tagged[- ]event|named\s+event\s+variants?)\b/i.test(clause))) return [];
+  if (optionals.some((item) => !variants.includes(item.variant))) return unsupportedTaggedRequirement();
+  const requirements = declarations.flatMap((item) => item.fields.map((field) => ({
+    variant: item.variant, field, optional: false,
+    partitions: ["missing", "non-string", "empty-string"]
+  })));
+  requirements.push(...optionals.map((item) => ({
+    ...item, optional: true, partitions: ["non-string", "empty-string"]
+  })));
+  const keys = requirements.map((item) => `${item.variant}\u0000${item.field}`);
+  const foldedKeys = requirements.map((item) => `${item.variant}\u0000${item.field.toLowerCase()}`);
+  return requirements.length <= 16 && keys.length === new Set(keys).size && foldedKeys.length === new Set(foldedKeys).size
+    ? requirements : unsupportedTaggedRequirement();
+}
+
+/**
+ * Return a closed, bounded proof matrix only for explicit multi-variant malformed
+ * tagged-event contracts. Ordinary invalid-input prose deliberately returns no
+ * matrix and keeps the established flat proof path unchanged.
+ */
+export function malformedTaggedEventRequirements(raw) {
+  const clauses = contractClauses(raw);
+  return hasExplicitInputRejection(raw) ? explicitTaggedEventRequirements(clauses) : [];
 }
 
 export function malformedIdentifierContractText(raw) {
@@ -105,6 +189,9 @@ export function acceptanceBoundaryProofGuidance(raw) {
   const replayContract = /\b(?:replay(?:ed|s)?|idempot(?:ent|ency))\b/.test(value);
   if (malformedIdentifierContract(raw)) {
     guidance.push("For malformed identifier input, exercise missing, wrong-type, and empty-string values separately; add whitespace-only when the contract requires non-whitespace.");
+  }
+  if (malformedTaggedEventRequirements(raw).length > 0) {
+    guidance.push("For every malformed tagged-event variant, use fresh literal non-event inputs, one valid control per variant, and vary one constrained field at a time; evidence for one variant or field does not cover another.");
   }
 
   if (

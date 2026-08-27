@@ -483,7 +483,7 @@ export function registerApplyPatchTool(
     description: "Apply one validated OpenAI-style patch across multiple project files in a single guarded tool call.",
     promptSnippet: "Prefer one coherent apply_patch call for a bounded source-and-test or other multi-file change only when exact old context for every target is available. Update hunks require an exact old-side anchor; plus-only insertions are invalid. Otherwise use one bounded writer per file.",
     promptGuidelines: [
-      "Wrap the patch in exact *** Begin Patch and *** End Patch delimiters. For each *** Update File hunk, put @@ on its own line. Put every old, new, or unchanged body line below it with a leading -, +, or space; never write @@ -old or @@ +new.",
+      "The patch value must contain only the raw patch: its first line is exactly *** Begin Patch, its last line is exactly *** End Patch, and no prose, JSON, code fence, or other content may appear before or after those delimiters. For each *** Update File hunk, put @@ on its own line. Put every old, new, or unchanged body line below it with a leading -, +, or space; never write @@ -old or @@ +new.",
       "Use each project-relative target once. Every Update File hunk must include at least one exact old-side line prefixed by space or -; for append/insert, put an adjacent existing space-prefixed anchor before or after the + lines to preserve the intended position. Include enough context to match exactly once."
     ],
     parameters: Type.Object({ patch: Type.String({ minLength: 1, maxLength: MAX_PATCH_BYTES }) }, { additionalProperties: false }),

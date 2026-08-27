@@ -48,6 +48,7 @@ import {
 } from "../packages/piagent-core/extensions/acceptance-receipt.js";
 import { verifierCommandsCoverTests } from "../packages/piagent-core/extensions/acceptance-behavior-proof.js";
 import { acceptanceInvalidInputEvidence } from "../packages/piagent-core/extensions/acceptance-contract-semantics.js";
+import { malformedTaggedEventRequirements } from "../packages/piagent-core/extensions/acceptance-boundary-guidance.js";
 import { requestedErrorClasses } from "../packages/piagent-core/extensions/acceptance-error-classes.js";
 import { versionWorkingTreeHash, workingTreeCarrierDigest, workingTreeEvidenceDigest } from "../packages/piagent-core/extensions/working-tree-digest.js";
 import { operatorRequestDigest } from "../packages/piagent-core/extensions/task-state.js";
@@ -2102,6 +2103,716 @@ test("acceptance receipt derives critical auth and validation obligations withou
     currentWorkingTreeDigest: currentDigest
   });
   assert.deepEqual(retryReceipt.criticalMissing.map((criterion) => criterion.obligation), []);
+});
+
+test("malformed tagged-event proof stays qualified by variant, field, and partition", (t) => {
+  const taskText = [
+    "Tagged event variant `queue/select` requires field `queue` to be a non-empty string.",
+    "Tagged event variant `item/accepted` requires fields `id` and `text` to be non-empty strings.",
+    "For tagged event variant `item/accepted`, its optional `queue` override, when supplied, must be a non-empty string.",
+    "Throw TypeError for malformed tagged-event required fields or supplied overrides on both named event variants."
+  ].join("\n");
+  assert.deepEqual(malformedTaggedEventRequirements(taskText), [
+    { variant: "queue/select", field: "queue", optional: false, partitions: ["missing", "non-string", "empty-string"] },
+    { variant: "item/accepted", field: "id", optional: false, partitions: ["missing", "non-string", "empty-string"] },
+    { variant: "item/accepted", field: "text", optional: false, partitions: ["missing", "non-string", "empty-string"] },
+    { variant: "item/accepted", field: "queue", optional: true, partitions: ["non-string", "empty-string"] }
+  ]);
+  assert.ok(acceptanceProofGuidance(taskText).some((item) => /fresh literal non-event inputs.*vary one constrained field/.test(item)));
+
+  const completeSource = [
+    "function nonEmpty(value) { return typeof value === 'string' && value.length > 0; }",
+    "export function reduceInbox(state, event) {",
+    "  if (!state || !event || typeof event !== 'object') throw new TypeError('invalid event');",
+    "  if (event.type === 'queue/select') {",
+    "    if (!nonEmpty(event.queue)) throw new TypeError('invalid queue');",
+    "    return { ...state, queue: event.queue };",
+    "  }",
+    "  if (event.type === 'item/accepted') {",
+    "    if (!nonEmpty(event.id) || !nonEmpty(event.text)) throw new TypeError('invalid item');",
+    "    const hasQueue = Object.hasOwn(event, 'queue');",
+    "    if (hasQueue && !nonEmpty(event.queue)) throw new TypeError('invalid queue');",
+    "    const selectedQueue = hasQueue ? event.queue : state.queue;",
+    "    if (!nonEmpty(selectedQueue)) throw new TypeError('missing queue');",
+    "    return state;",
+    "  }",
+    "  return state;",
+    "}",
+    ""
+  ].join("\n");
+  const testSource = ({ selectEmpty = true, itemText = true } = {}) => [
+    "import assert from 'node:assert/strict';",
+    "import { reduceInbox } from '../src/reducer.js';",
+    "",
+    "assert.doesNotThrow(() => reduceInbox(state, { type: 'queue/select', queue: 'main' }));",
+    "assert.doesNotThrow(() => reduceInbox(state, { type: 'item/accepted', id: 'x', text: 'x' }));",
+    "assert.doesNotThrow(() => reduceInbox(state, { type: 'item/accepted', id: 'x', text: 'x', queue: 'main' }));",
+    "assert.throws(() => reduceInbox(state, { type: 'queue/select' }), TypeError);",
+    "assert.throws(() => reduceInbox(state, { type: 'queue/select', queue: 42 }), TypeError);",
+    selectEmpty ? "assert.throws(() => reduceInbox(state, { type: 'queue/select', queue: '' }), TypeError);" : "",
+    "assert.throws(() => reduceInbox(state, { type: 'item/accepted', text: 'x' }), TypeError);",
+    "assert.throws(() => reduceInbox(state, { type: 'item/accepted', id: 'x' }), TypeError);",
+    "assert.throws(() => reduceInbox(state, { type: 'item/accepted', id: 42, text: 'x' }), TypeError);",
+    "assert.throws(() => reduceInbox(state, { type: 'item/accepted', id: '', text: 'x' }), TypeError);",
+    itemText ? "assert.throws(() => reduceInbox(state, { type: 'item/accepted', id: 'x', text: 42 }), TypeError);" : "",
+    itemText ? "assert.throws(() => reduceInbox(state, { type: 'item/accepted', id: 'x', text: '' }), TypeError);" : "",
+    "assert.throws(() => reduceInbox(state, { type: 'item/accepted', id: 'x', text: 'x', queue: 42 }), TypeError);",
+    "assert.throws(() => reduceInbox(state, { type: 'item/accepted', id: 'x', text: 'x', queue: '' }), TypeError);",
+    "assert.throws(() => reduceInbox(state, { type: 'item/accepted', id: 'x', text: 'x', queue: null }), TypeError);",
+    "assert.throws(() => reduceInbox(state, { type: 'item/accepted', id: 'x', text: 'x', queue: undefined }), TypeError);",
+    ""
+  ].join("\n").replaceAll("reduceInbox(state,", "reduceInbox({ queue: 'main' },");
+  const evidence = (source, testText, contractText = taskText, extraSourceEntries = [], extraTestEntries = []) => acceptanceInvalidInputEvidence({
+    taskText: contractText, sourceText: source, testText,
+    sourceEntries: [{ path: "src/reducer.js", text: source }, ...extraSourceEntries],
+    testEntries: [{ path: "test/reducer.test.js", text: testText }, ...extraTestEntries],
+    namedTargets: ["reduceInbox"], provenanceTargets: ["reduceInbox"]
+  });
+  assert.deepEqual(evidence(completeSource, testSource({ selectEmpty: false })), { sourceOk: true, testOk: false },
+    "message-field evidence must not satisfy select.queue empty-string");
+  assert.deepEqual(evidence(completeSource, testSource({ itemText: false })), { sourceOk: true, testOk: false },
+    "one message field must not satisfy its sibling field");
+  assert.deepEqual(evidence(completeSource, testSource()), { sourceOk: true, testOk: true });
+  const objectFreezeSource = `export const initialInbox = Object.freeze({ queue: null, messages: [] });\n${completeSource}`;
+  assert.deepEqual(evidence(objectFreezeSource, testSource()), { sourceOk: true, testOk: true },
+    "safe intrinsic Object calls beside Object.hasOwn do not invalidate production evidence");
+  const legacyOwnPropertySource = completeSource.replace(
+    "Object.hasOwn(event, 'queue')",
+    "Object.prototype.hasOwnProperty.call(event, 'queue')"
+  );
+  assert.deepEqual(evidence(legacyOwnPropertySource, testSource()), { sourceOk: true, testOk: true },
+    "the intrinsic hasOwnProperty.call form proves the same own-property semantics");
+  const directSuccessControlTest = testSource().replaceAll("assert.doesNotThrow(() => reduceInbox", "assert.ok(reduceInbox");
+  assert.deepEqual(evidence(completeSource, directSuccessControlTest), { sourceOk: true, testOk: true },
+    "a live direct success assertion is a valid causal control without requiring doesNotThrow syntax");
+  const inertSuccessCallbackTest = testSource().replaceAll("assert.doesNotThrow", "assert.ok");
+  assert.deepEqual(evidence(completeSource, inertSuccessCallbackTest), { sourceOk: true, testOk: false },
+    "an equality or truthiness assertion over a callback does not execute a valid control");
+  const shortCircuitedTest = testSource().split("\n")
+    .map((line) => line.startsWith("assert.") ? `true || ${line}` : line).join("\n");
+  assert.deepEqual(evidence(completeSource, shortCircuitedTest), { sourceOk: true, testOk: false },
+    "truthy OR short-circuiting cannot turn inert assertions into executable proof");
+  const registeredLines = testSource().split("\n");
+  const registeredTest = [
+    registeredLines[0],
+    "import test from 'node:test';",
+    registeredLines[1],
+    "test('live tagged proof', () => {",
+    ...registeredLines.slice(2).filter(Boolean).map((line) => `  ${line}`),
+    "});",
+    ""
+  ].join("\n");
+  assert.deepEqual(evidence(completeSource, registeredTest), { sourceOk: true, testOk: true },
+    "a stable node:test binding keeps registered assertions live");
+  const returnedRegistration = registeredTest.replace(
+    "test('live tagged proof', () => {",
+    "test('live tagged proof', () => {\n  if (true) return;"
+  );
+  assert.deepEqual(evidence(completeSource, returnedRegistration), { sourceOk: true, testOk: false },
+    "an unconditional conditional return makes the remainder of a registered test unreachable");
+  const throwBeforeRegistration = registeredTest.replace(
+    "test('live tagged proof'",
+    "throw new Error('stop before registration');\ntest('live tagged proof'"
+  );
+  assert.deepEqual(evidence(completeSource, throwBeforeRegistration), { sourceOk: true, testOk: false },
+    "a top-level throw prevents a later test registration from becoming executable proof");
+  for (const harmlessPrefix of [
+    "function helper() { return 1; }\n  helper();",
+    "[1].map(() => { return 1; });",
+    "if (false) { return; }"
+  ]) {
+    const nestedReturnRegistration = registeredTest.replace(
+      "test('live tagged proof', () => {",
+      `test('live tagged proof', () => {\n  ${harmlessPrefix}`
+    );
+    assert.deepEqual(evidence(completeSource, nestedReturnRegistration), { sourceOk: true, testOk: true },
+      `a nested or disabled return does not exit the registered callback: ${harmlessPrefix}`);
+  }
+  const disabledTopLevelThrow = registeredTest.replace(
+    "test('live tagged proof'",
+    "if (false) throw new Error('disabled');\ntest('live tagged proof'"
+  );
+  assert.deepEqual(evidence(completeSource, disabledTopLevelThrow), { sourceOk: true, testOk: true },
+    "a statically false top-level throw does not prevent registration");
+  for (const disabledRegistration of [
+    registeredTest
+      .replace("import { reduceInbox } from '../src/reducer.js';", "import { reduceInbox } from '../src/reducer.js';\nconst skip = true;")
+      .replace("test('live tagged proof', () =>", "test('live tagged proof', { skip }, () =>"),
+    registeredTest.replace("test('live tagged proof', () =>", "test('live tagged proof', { ['skip']: true }, () =>"),
+    registeredTest
+      .replace("import { reduceInbox } from '../src/reducer.js';", "import { reduceInbox } from '../src/reducer.js';\nconst todo = true;")
+      .replace("test('live tagged proof', () =>", "test('live tagged proof', { todo }, () =>")
+  ]) {
+    assert.deepEqual(evidence(completeSource, disabledRegistration), { sourceOk: true, testOk: false },
+      "shorthand or computed skip/todo options cannot register executable proof");
+  }
+  const embeddedCallbackRegistration = registeredTest
+    .replace("test('live tagged proof', () => {", "test('live tagged proof', false && (() => {")
+    .replace(/\n\}\);\n$/, "\n}));\n");
+  assert.deepEqual(evidence(completeSource, embeddedCallbackRegistration), { sourceOk: true, testOk: false },
+    "an arrow embedded in a disabled expression is not the registration callback");
+  const unmodeledSideEffectImport = registeredTest.replace(
+    "import { reduceInbox } from '../src/reducer.js';",
+    "import './tamper.js';\nimport { reduceInbox } from '../src/reducer.js';"
+  );
+  assert.deepEqual(evidence(completeSource, unmodeledSideEffectImport), { sourceOk: true, testOk: false },
+    "an unmodeled relative side-effect import cannot precede executable proof");
+  const aliasedItTest = registeredTest
+    .replace("import test from 'node:test';", "import { it as verify } from 'node:test';")
+    .replace("test('live tagged proof'", "verify('live tagged proof'");
+  assert.deepEqual(evidence(completeSource, aliasedItTest), { sourceOk: true, testOk: true },
+    "an untampered named node:test alias is an authenticated registration");
+  const commonJsTest = registeredTest.replace(
+    "import test from 'node:test';",
+    "const test = require('node:test');"
+  );
+  assert.deepEqual(evidence(completeSource, commonJsTest), { sourceOk: true, testOk: true },
+    "the supported CommonJS node:test binding remains live");
+  const fakeRegisteredTest = registeredTest.replace(
+    "import test from 'node:test';",
+    "const test = (_name, _callback) => {};"
+  );
+  assert.deepEqual(evidence(completeSource, fakeRegisteredTest), { sourceOk: true, testOk: false },
+    "a same-name local no-op cannot make dormant assertions live");
+  const tamperedRegisteredTest = registeredTest.replace(
+    "import { reduceInbox } from '../src/reducer.js';",
+    "import { reduceInbox } from '../src/reducer.js';\ntest.only = () => {};"
+  );
+  assert.deepEqual(evidence(completeSource, tamperedRegisteredTest), { sourceOk: true, testOk: false },
+    "a mutated test-runner binding cannot register proof");
+  for (const tamper of [
+    {
+      label: "source-side ESM assert default mutation",
+      path: "src/assert-esm-tamper.js",
+      text: "import assert from 'node:assert/strict';\nassert.ok = assert.throws = () => {};"
+    },
+    {
+      label: "source-side ESM node:test default mutation",
+      path: "src/test-esm-tamper.js",
+      text: "import test from 'node:test';\ntest.only = () => {};"
+    },
+    {
+      label: "source-side named-default assert mutation",
+      path: "src/assert-named-default-tamper.js",
+      text: "import { default as assertionApi } from 'node:assert/strict';\nassertionApi.ok = assertionApi.throws = () => {};"
+    },
+    {
+      label: "source-side named-default node:test mutation",
+      path: "src/test-named-default-tamper.js",
+      text: "import { default as register } from 'node:test';\nregister.only = () => {};"
+    },
+    {
+      label: "source-side dynamic assert mutation",
+      path: "src/assert-dynamic-tamper.js",
+      text: "const assertionModule = await import('node:assert/strict');\nassertionModule.default.ok = assertionModule.default.throws = () => {};"
+    },
+    {
+      label: "source-side static runner wrapper escape",
+      path: "src/test-wrapper-tamper.js",
+      text: "import test from 'node:test';\nconst key = 'runner';\nconst wrapper = { [key]: test };\nwrapper[key].only = () => {};"
+    },
+    {
+      label: "source-side tagged-template assertion escape",
+      path: "src/assert-template-tamper.js",
+      text: "import assert from 'node:assert/strict';\nfunction poison(_parts, carrier) { carrier.ok = carrier.throws = () => {}; }\npoison`x${assert}`;"
+    },
+    {
+      label: "source-side constructed assert specifier",
+      path: "src/assert-constructed-tamper.js",
+      text: "const assertionApi = require('node:' + 'assert/strict');\nassertionApi.throws = () => {};"
+    }
+  ]) {
+    assert.deepEqual(evidence(completeSource, registeredTest, taskText, [tamper]),
+      { sourceOk: true, testOk: false }, `${tamper.label} invalidates proof across the source corpus`);
+  }
+  for (const tamper of [
+    {
+      label: "direct assert require mutation",
+      path: "test/assert-direct-tamper.js",
+      text: "require('node:assert/strict').throws = () => {};"
+    },
+    {
+      label: "bound assert module mutation",
+      path: "test/assert-bound-tamper.js",
+      text: "const assertApi = require('node:assert/strict');\nassertApi.ok = () => {};"
+    },
+    {
+      label: "computed node:test require mutation",
+      path: "test/test-computed-tamper.js",
+      text: "const key = 'test';\nrequire('node:test')[key] = () => {};"
+    },
+    {
+      label: "aliased node:test module mutation",
+      path: "test/test-alias-tamper.js",
+      text: "const testApi = require('node:test');\nconst runnerApi = testApi;\nrunnerApi.test = () => {};"
+    },
+    {
+      label: "dynamic node:test mutation",
+      path: "test/test-dynamic-tamper.js",
+      text: "const runnerModule = await import('node:test');\nrunnerModule.default.only = () => {};"
+    },
+    {
+      label: "static assertion array escape",
+      path: "test/assert-wrapper-tamper.js",
+      text: "import assert from 'node:assert/strict';\nconst carriers = [assert];\ncarriers[0].throws = () => {};"
+    },
+    {
+      label: "constructed node:test specifier",
+      path: "test/test-constructed-tamper.js",
+      text: "const runnerApi = require('node:' + 'test');\nrunnerApi.test = () => {};"
+    }
+  ]) {
+    assert.deepEqual(evidence(completeSource, registeredTest, taskText, [], [tamper]),
+      { sourceOk: true, testOk: false }, `${tamper.label} invalidates proof across the test corpus`);
+  }
+  for (const tamper of [
+    { path: "src/early-exit.js", text: "import { exit as terminate } from 'node:process';\nterminate(0);" },
+    { path: "test/early-exit.js", text: "import { exit } from 'node:process';\nexit(0);", testSide: true },
+    { path: "test/bare-process-exit.js", text: "import { exit as terminate } from 'process';\nterminate(0);", testSide: true }
+  ]) {
+    assert.deepEqual(evidence(completeSource, testSource(), taskText,
+      tamper.testSide ? [] : [tamper], tamper.testSide ? [tamper] : []),
+    { sourceOk: true, testOk: false }, "node:process early termination cannot coexist with executable proof");
+  }
+  const tableDrivenRejections = [
+    "import assert from 'node:assert/strict';",
+    "import { reduceInbox } from '../src/reducer.js';",
+    "assert.ok(reduceInbox({ queue: 'main' }, { type: 'queue/select', queue: 'main' }));",
+    "assert.ok(reduceInbox({ queue: 'main' }, { type: 'item/accepted', id: 'x', text: 'x' }));",
+    "assert.ok(reduceInbox({ queue: 'main' }, { type: 'item/accepted', id: 'x', text: 'x', queue: 'main' }));",
+    "for (const event of [",
+    "  { type: 'queue/select' },",
+    "  { type: 'queue/select', queue: 42 },",
+    "  { type: 'queue/select', queue: '' },",
+    "  { type: 'item/accepted', text: 'x' },",
+    "  { type: 'item/accepted', id: 42, text: 'x' },",
+    "  { type: 'item/accepted', id: '', text: 'x' },",
+    "  { type: 'item/accepted', id: 'x' },",
+    "  { type: 'item/accepted', id: 'x', text: 42 },",
+    "  { type: 'item/accepted', id: 'x', text: '' },",
+    "  { type: 'item/accepted', id: 'x', text: 'x', queue: 42 },",
+    "  { type: 'item/accepted', id: 'x', text: 'x', queue: '' }",
+    "]) assert.throws(() => reduceInbox({ queue: 'main' }, event), TypeError);",
+    ""
+  ].join("\n");
+  assert.deepEqual(evidence(completeSource, tableDrivenRejections), { sourceOk: true, testOk: true },
+    "bounded literal invalid-event tables retain variant and field identities");
+  const iteratorTamperedTable = [
+    "import assert from 'node:assert/strict';",
+    "import test from 'node:test';",
+    "import { reduceInbox } from '../src/reducer.js';",
+    "test('tampered table', () => {",
+    "  const savedIterator = Array.prototype[Symbol.iterator];",
+    "  Array.prototype[Symbol.iterator] = () => ({ next: () => ({ done: true }) });",
+    "  for (const event of [",
+    "    { type: 'queue/select', queue: 'main' },",
+    "    { type: 'item/accepted', id: 'x', text: 'x' },",
+    "    { type: 'item/accepted', id: 'x', text: 'x', queue: 'main' }",
+    "  ]) assert.doesNotThrow(() => reduceInbox({ queue: 'main' }, event));",
+    "  for (const event of [",
+    "    { type: 'queue/select' },",
+    "    { type: 'queue/select', queue: 42 },",
+    "    { type: 'queue/select', queue: '' },",
+    "    { type: 'item/accepted', text: 'x' },",
+    "    { type: 'item/accepted', id: 42, text: 'x' },",
+    "    { type: 'item/accepted', id: '', text: 'x' },",
+    "    { type: 'item/accepted', id: 'x' },",
+    "    { type: 'item/accepted', id: 'x', text: 42 },",
+    "    { type: 'item/accepted', id: 'x', text: '' },",
+    "    { type: 'item/accepted', id: 'x', text: 'x', queue: 42 },",
+    "    { type: 'item/accepted', id: 'x', text: 'x', queue: '' }",
+    "  ]) assert.throws(() => reduceInbox({ queue: 'main' }, event), TypeError);",
+    "  Array.prototype[Symbol.iterator] = savedIterator;",
+    "});",
+    ""
+  ].join("\n");
+  assert.deepEqual(evidence(completeSource, iteratorTamperedTable), { sourceOk: true, testOk: false },
+    "literal tables are not expanded when their Array iterator can be replaced");
+  const iteratorTamperEntry = {
+    path: "test/iterator-tamper.js",
+    text: "Array.prototype[Symbol.iterator] = () => ({ next: () => ({ done: true }) });"
+  };
+  assert.deepEqual(evidence(completeSource, tableDrivenRejections, taskText, [], [iteratorTamperEntry]),
+    { sourceOk: true, testOk: false },
+    "cross-file Array iterator tampering invalidates table expansion across the supplied test corpus");
+  const sourceIteratorTamperEntry = {
+    path: "src/iterator-tamper.js",
+    text: "Array.prototype[Symbol.iterator] = () => ({ next: () => ({ done: true }) });"
+  };
+  assert.deepEqual(evidence(completeSource, tableDrivenRejections, taskText, [sourceIteratorTamperEntry]),
+    { sourceOk: true, testOk: false },
+    "cross-file Array iterator tampering invalidates table expansion across the supplied source corpus");
+  assert.deepEqual(evidence(completeSource, testSource(), taskText, [], [iteratorTamperEntry]),
+    { sourceOk: true, testOk: true },
+    "Array iteration stability does not regress direct executable assertions");
+  const upperCaseTagsSource = completeSource
+    .replaceAll("'queue/select'", "'QUEUE/SELECT'")
+    .replaceAll("'item/accepted'", "'ITEM/ACCEPTED'");
+  const upperCaseTagsTest = testSource()
+    .replaceAll("'queue/select'", "'QUEUE/SELECT'")
+    .replaceAll("'item/accepted'", "'ITEM/ACCEPTED'");
+  assert.deepEqual(evidence(upperCaseTagsSource, upperCaseTagsTest), { sourceOk: false, testOk: false },
+    "runtime event tags retain exact case and cannot satisfy a differently cased contract");
+  const upperCaseContract = taskText
+    .replaceAll("`queue/select`", "`QUEUE/SELECT`")
+    .replaceAll("`item/accepted`", "`ITEM/ACCEPTED`");
+  assert.deepEqual(evidence(completeSource, testSource(), upperCaseContract), { sourceOk: false, testOk: false },
+    "contract tag identity is not folded to the implementation's case");
+  const upperCaseFieldContract = taskText
+    .replace("field `queue`", "field `Queue`")
+    .replace("optional `queue` override", "optional `Queue` override");
+  assert.deepEqual(evidence(completeSource, testSource(), upperCaseFieldContract), { sourceOk: false, testOk: false },
+    "contract field identity is not folded to the implementation's case");
+  const caseDistinctContract = [
+    "Tagged event variant `one` requires field `foo` to be a non-empty string.",
+    "Tagged event variant `ONE` requires field `bar` to be a non-empty string.",
+    "Throw TypeError for malformed tagged-event fields on both named event variants."
+  ].join("\n");
+  assert.deepEqual(malformedTaggedEventRequirements(caseDistinctContract).map(({ variant, field }) => ({ variant, field })), [
+    { variant: "one", field: "foo" }, { variant: "ONE", field: "bar" }
+  ], "case-distinct runtime variants remain distinct requirements");
+  assert.deepEqual(evidence(completeSource.replace("typeof value === 'string'", "typeof value === 'STRING'"), testSource()), { sourceOk: false, testOk: true },
+    "typeof string evidence retains exact literal case");
+  assert.deepEqual(evidence(completeSource, testSource().replaceAll("assert.doesNotThrow", "assert.throws")), { sourceOk: true, testOk: false },
+    "rejections without a live valid control cannot establish causal field evidence");
+  assert.deepEqual(evidence(completeSource, testSource().replace(
+    "{ type: 'queue/select' }), TypeError);",
+    "{ type: 'queue/select', queue: undefined }), TypeError);"
+  )), { sourceOk: true, testOk: false }, "an own undefined property is non-string evidence, not missing-field evidence");
+  assert.deepEqual(evidence(completeSource, testSource().replaceAll("assert.throws(() => reduceInbox({ queue: 'main' },", "assert.throws(() => reduceInbox(null,")), { sourceOk: true, testOk: false },
+    "a throw caused by a different non-event argument cannot prove the event field");
+  const boundStateTest = testSource()
+    .replace("import { reduceInbox } from '../src/reducer.js';", "import { reduceInbox } from '../src/reducer.js';\nconst state = { queue: 'main' };")
+    .replaceAll("{ queue: 'main' }", "state");
+  assert.deepEqual(evidence(completeSource, boundStateTest), { sourceOk: true, testOk: false },
+    "mutable or shadowable non-event bindings cannot establish causal controls");
+  const whitespaceStateTest = testSource()
+    .replaceAll("assert.doesNotThrow(() => reduceInbox({ queue: 'main' },", "assert.doesNotThrow(() => reduceInbox({ queue: 'main', mode: ' ' },")
+    .replaceAll("assert.throws(() => reduceInbox({ queue: 'main' },", "assert.throws(() => reduceInbox({ queue: 'main', mode: '\\t' },");
+  assert.deepEqual(evidence(completeSource, whitespaceStateTest), { sourceOk: true, testOk: false },
+    "different whitespace-only non-event literals cannot be pooled as the same causal state");
+  const caseStateTest = testSource()
+    .replaceAll("assert.doesNotThrow(() => reduceInbox({ queue: 'main' },", "assert.doesNotThrow(() => reduceInbox({ queue: 'main', mode: 'A' },")
+    .replaceAll("assert.throws(() => reduceInbox({ queue: 'main' },", "assert.throws(() => reduceInbox({ queue: 'main', mode: 'a' },");
+  assert.deepEqual(evidence(completeSource, caseStateTest), { sourceOk: true, testOk: false },
+    "case-distinct non-event literals cannot be pooled as the same causal state");
+  const caseKeyStateTest = testSource()
+    .replaceAll("assert.doesNotThrow(() => reduceInbox({ queue: 'main' },", "assert.doesNotThrow(() => reduceInbox({ queue: 'main', ready: true },")
+    .replaceAll("assert.throws(() => reduceInbox({ queue: 'main' },", "assert.throws(() => reduceInbox({ queue: 'main', READY: true },");
+  assert.deepEqual(evidence(completeSource, caseKeyStateTest), { sourceOk: true, testOk: false },
+    "case-distinct object keys cannot collide in causal input canonicalization");
+  const sparseStateTest = testSource()
+    .replaceAll("assert.doesNotThrow(() => reduceInbox({ queue: 'main' },", "assert.doesNotThrow(() => reduceInbox([1, 2],")
+    .replaceAll("assert.throws(() => reduceInbox({ queue: 'main' },", "assert.throws(() => reduceInbox([1,, 2],");
+  assert.deepEqual(evidence(completeSource, sparseStateTest), { sourceOk: true, testOk: false },
+    "sparse arrays are not silently canonicalized into dense causal inputs");
+  const executableEventPropertyTest = `const probe = () => 'x';\n${testSource()
+    .replaceAll(" }));", ", aux: probe() }));")
+    .replaceAll(" }), TypeError);", ", aux: probe() }), TypeError);")}`;
+  assert.deepEqual(evidence(completeSource, executableEventPropertyTest), { sourceOk: true, testOk: false },
+    "event facts containing executable expressions are not accepted as literal controls");
+
+  for (const invalidHelper of [
+    "function nonEmpty(value) { return typeof value === 'string' && value.length === 1; }",
+    "function nonEmpty(value) { return typeof value === 'string' && value.length < 0; }",
+    "function nonEmpty(value) { return typeof value === 'string' || value.length > 0; }",
+    "function nonEmpty(value) { return typeof value === 'string' && value.trim(); }"
+  ]) {
+    assert.deepEqual(evidence(completeSource.replace(completeSource.split("\n")[0], invalidHelper), testSource()), { sourceOk: false, testOk: true }, invalidHelper);
+  }
+  assert.deepEqual(evidence(`${completeSource}\nnonEmpty = () => true;\n`, testSource()), { sourceOk: false, testOk: true },
+    "a reassigned validation helper cannot remain executable source evidence");
+  assert.deepEqual(evidence(completeSource.replace("function nonEmpty", "async function nonEmpty"), testSource()),
+    { sourceOk: false, testOk: true }, "an async predicate cannot synchronously prove a rejection guard");
+  for (const helperWrite of [
+    "[nonEmpty] = [() => true];",
+    "({ nonEmpty } = { nonEmpty: () => true });",
+    "for (nonEmpty of [() => true]) {}"
+  ]) {
+    assert.deepEqual(evidence(`${completeSource}\n${helperWrite}\n`, testSource()), { sourceOk: false, testOk: true },
+      `a destructuring or loop write invalidates the helper binding: ${helperWrite}`);
+  }
+  const falseConjoinedSource = completeSource.replace(
+    "if (!nonEmpty(event.queue)) throw new TypeError('invalid queue');",
+    "if (!nonEmpty(event.queue) && false) throw new TypeError('invalid queue');"
+  );
+  assert.deepEqual(evidence(falseConjoinedSource, testSource()), { sourceOk: false, testOk: true },
+    "an invalid predicate conjoined with false does not imply a rejection");
+  for (const invalidThrow of [
+    "throw TypeError;",
+    "throw TypeError.name;",
+    "throw TypeError.prototype;",
+    "throw TypeError.bind(null);",
+    "throw TypeError && new Error();"
+  ]) {
+    const invalidThrowSource = completeSource.replace(
+      "throw new TypeError('invalid queue');", invalidThrow
+    );
+    assert.deepEqual(evidence(invalidThrowSource, testSource()), { sourceOk: false, testOk: true },
+      `only an invoked exact error constructor is throw evidence: ${invalidThrow}`);
+  }
+  const callableErrorConstructorSource = completeSource.replaceAll("throw new TypeError(", "throw TypeError(");
+  assert.deepEqual(evidence(callableErrorConstructorSource, testSource()), { sourceOk: true, testOk: true },
+    "calling TypeError directly still constructs and throws the requested error class");
+  const trueDisjoinedSource = completeSource.replace(
+    "if (!nonEmpty(event.queue)) throw new TypeError('invalid queue');",
+    "if (!nonEmpty(event.queue) || true) throw new TypeError('invalid queue');"
+  );
+  assert.deepEqual(evidence(trueDisjoinedSource, testSource()), { sourceOk: false, testOk: true },
+    "an unknown or always-true disjunct cannot be ignored beside a recognized field predicate");
+  const unreachableSource = completeSource.replace(
+    "    if (!nonEmpty(event.queue)) throw new TypeError('invalid queue');",
+    "    return state;\n    if (!nonEmpty(event.queue)) throw new TypeError('invalid queue');"
+  );
+  assert.deepEqual(evidence(unreachableSource, testSource()), { sourceOk: false, testOk: true },
+    "a guard after an unconditional exit is not executable evidence");
+  const unreachableTaggedBranches = completeSource.replace(
+    "  if (event.type === 'queue/select') {",
+    "  return state;\n  if (event.type === 'queue/select') {"
+  );
+  assert.deepEqual(evidence(unreachableTaggedBranches, testSource()), { sourceOk: false, testOk: false },
+    "tagged branches after a callable-level exit cannot provide source proof");
+  const overbroadEventGuard = completeSource.replace(
+    "  if (event.type === 'queue/select') {",
+    "  if (event) throw new TypeError('reject every event');\n  if (event.type === 'queue/select') {"
+  );
+  assert.deepEqual(evidence(overbroadEventGuard, testSource()), { sourceOk: false, testOk: false },
+    "a pre-branch guard that rejects every event cannot make later tagged guards reachable proof");
+  for (const unknownClause of ["ALWAYS", "state.blocked"]) {
+    const unknownDisjunctGuard = completeSource.replace(
+      "if (!state || !event || typeof event !== 'object')",
+      `if (!state || ${unknownClause} || !event || typeof event !== 'object')`
+    );
+    assert.deepEqual(evidence(unknownDisjunctGuard, testSource()), { sourceOk: false, testOk: false },
+      `an unknown pre-branch disjunct (${unknownClause}) cannot be treated as an invalid-container guard`);
+  }
+  const narrowCombinedContainerGuard = completeSource.replace(
+    "if (!state || !event || typeof event !== 'object')",
+    "if (!state || Array.isArray(state) || !event || typeof event !== 'object')"
+  );
+  assert.deepEqual(evidence(narrowCombinedContainerGuard, testSource()), { sourceOk: true, testOk: true },
+    "narrow invalid-container checks for another reducer parameter remain supported");
+  const dominatedTaggedGuard = completeSource.replace(
+    "  if (event.type === 'queue/select') {",
+    "  if (event.type === 'queue/select') {\n    if (event.type === 'queue/select') throw new TypeError('blocked tag');"
+  );
+  assert.deepEqual(evidence(dominatedTaggedGuard, testSource()), { sourceOk: false, testOk: true },
+    "a same-tag throw cannot dominate and then prove later field guards");
+  const semicolonlessUnreachableSource = completeSource.replace(
+    "    if (!nonEmpty(event.queue)) throw new TypeError('invalid queue');",
+    "    return state\n    if (!nonEmpty(event.queue)) throw new TypeError('invalid queue');"
+  );
+  assert.deepEqual(evidence(semicolonlessUnreachableSource, testSource()), { sourceOk: false, testOk: true },
+    "semicolonless exits before a guard remain unreachable");
+  const conditionalUnreachableSource = completeSource.replace(
+    "    if (!nonEmpty(event.queue)) throw new TypeError('invalid queue');",
+    "    if (true) return state;\n    if (!nonEmpty(event.queue)) throw new TypeError('invalid queue');"
+  );
+  assert.deepEqual(evidence(conditionalUnreachableSource, testSource()), { sourceOk: false, testOk: true },
+    "an unconditional conditional exit cannot make a later guard executable");
+  const blockedUnreachableSource = completeSource.replace(
+    "    if (!nonEmpty(event.queue)) throw new TypeError('invalid queue');",
+    "    { return state; }\n    if (!nonEmpty(event.queue)) throw new TypeError('invalid queue');"
+  );
+  assert.deepEqual(evidence(blockedUnreachableSource, testSource()), { sourceOk: false, testOk: true },
+    "a standalone exiting block cannot make a later guard executable");
+  const prefixFieldSource = completeSource.replace(
+    "if (!nonEmpty(event.id) || !nonEmpty(event.text)) throw new TypeError('invalid item');",
+    "if (typeof event.id !== 'string' || !nonEmpty(event.text)) throw new TypeError('invalid item');\n    if (!event.identifier) throw new TypeError('invalid id');"
+  );
+  assert.deepEqual(evidence(prefixFieldSource, testSource()), { sourceOk: false, testOk: true },
+    "a longer member name cannot prove the empty-string partition of a prefix field");
+
+  const nullishOverrideSource = completeSource
+    .replace("    const hasQueue = Object.hasOwn(event, 'queue');\n    if (hasQueue && !nonEmpty(event.queue)) throw new TypeError('invalid queue');\n    const selectedQueue = hasQueue ? event.queue : state.queue;",
+      "    const selectedQueue = event.queue ?? state.queue;");
+  assert.deepEqual(evidence(nullishOverrideSource, testSource()), { sourceOk: false, testOk: true },
+    "a nullish fallback does not prove rejection of a supplied null override");
+  const shadowedObjectSource = completeSource.replace(
+    completeSource.split("\n")[0],
+    `${completeSource.split("\n")[0]}\nconst Object = { hasOwn(target, key) { return key in target; } };`
+  );
+  assert.deepEqual(evidence(shadowedObjectSource, testSource()), { sourceOk: false, testOk: true },
+    "a shadowed Object.hasOwn cannot prove own-property override semantics");
+  assert.deepEqual(evidence(completeSource, testSource(), taskText, [{
+    path: "src/tamper.js", text: "Object.hasOwn = () => true;"
+  }]), { sourceOk: false, testOk: true },
+  "cross-file intrinsic tampering in the supplied source corpus invalidates own-property proof");
+  for (const tamper of [
+    { path: "test/object-direct-tamper.js", text: "Object.hasOwn = () => false;" },
+    { path: "test/object-alias-tamper.js", text: "const ObjectAlias = Object;\nObjectAlias['hasOwn'] = () => false;" }
+  ]) {
+    assert.deepEqual(evidence(completeSource, testSource(), taskText, [], [tamper]),
+      { sourceOk: false, testOk: true },
+      "test-side direct, alias, or computed Object.hasOwn mutation invalidates optional-override source proof");
+  }
+  const mandatoryOptionalSource = completeSource.replace(
+    "    const hasQueue = Object.hasOwn(event, 'queue');",
+    "    if (!event.queue) throw new TypeError('queue required');\n    const hasQueue = Object.hasOwn(event, 'queue');"
+  );
+  assert.deepEqual(evidence(mandatoryOptionalSource, testSource()), { sourceOk: false, testOk: true },
+    "a preceding missing-value rejection cannot turn an optional override into a required field");
+  const deadAssertionTest = [
+    "import test from 'node:test';",
+    ...testSource().split("\n").flatMap((line, index) => line.startsWith("assert.")
+      ? [`test('dead-${index}', () => {`, "  return", `  ${line}`, "});"] : [line])
+  ].join("\n");
+  assert.deepEqual(evidence(completeSource, deadAssertionTest), { sourceOk: true, testOk: false },
+    "ASI returns make later controls and rejections unreachable");
+
+  const switchSource = completeSource
+    .replace("if (event.type === 'queue/select') {", "switch (event.type) {\n  case 'queue/select': {")
+    .replace("  if (event.type === 'item/accepted') {", "  case 'item/accepted': {")
+    .replace("  return state;\n}", "  default: return state;\n  }\n}");
+  assert.deepEqual(evidence(switchSource, testSource()), { sourceOk: true, testOk: true },
+    "exact switch discriminants retain the same qualified proof");
+  const fallthroughSwitchSource = switchSource.replace(
+    "    return { ...state, queue: event.queue };",
+    "    ({ ...state, queue: event.queue });"
+  );
+  assert.deepEqual(evidence(fallthroughSwitchSource, testSource()), { sourceOk: false, testOk: false },
+    "a non-final switch case must terminate instead of falling through into another event variant");
+  const looseTagSource = completeSource
+    .replace("event.type === 'queue/select'", "event.type == 'queue/select'")
+    .replace("event.type === 'item/accepted'", "event.type == 'item/accepted'");
+  assert.deepEqual(evidence(looseTagSource, testSource()), { sourceOk: false, testOk: false },
+    "loose tag equality cannot establish an exact tagged-event branch");
+  const elseIfSource = completeSource.replace(
+    "  if (event.type === 'item/accepted') {",
+    "  else if (event.type === 'item/accepted') {"
+  );
+  assert.deepEqual(evidence(elseIfSource, testSource()), { sourceOk: true, testOk: true },
+    "a disjoint exact else-if branch remains reachable for its own tag");
+
+  const incompleteSource = completeSource
+    .replace("if (!nonEmpty(event.queue)) throw new TypeError('invalid queue');", "if (event.queue == null) throw new TypeError('invalid queue');")
+    .replace("if (hasQueue && !nonEmpty(event.queue)) throw new TypeError('invalid queue');", "if (hasQueue && event.queue == null) throw new TypeError('invalid queue');");
+  assert.deepEqual(evidence(incompleteSource, testSource()), { sourceOk: false, testOk: true },
+    "live tests cannot make an incomplete source guard look complete");
+
+  const cwd = temporaryProject(t, "piagent-tagged-event-proof-");
+  fs.mkdirSync(path.join(cwd, "src"));
+  fs.mkdirSync(path.join(cwd, "test"));
+  fs.writeFileSync(path.join(cwd, "src", "reducer.js"), completeSource);
+  const built = buildAcceptanceReceipt({
+    summary: taskText,
+    expectedOutput: "The reducer enforces every tagged-event field contract.",
+    changeMode: "source-change",
+    source: "runtime",
+    generatedAt: "2026-08-27T00:00:00.000Z"
+  });
+  const refreshed = (testText, marker) => {
+    fs.writeFileSync(path.join(cwd, "test", "reducer.test.js"), testText);
+    const digest = treeDigest(marker);
+    const candidate = contract({
+      summary: taskText,
+      expectedOutput: "The reducer enforces every tagged-event field contract.",
+      acceptanceCriteria: built.acceptanceCriteria,
+      acceptanceReceipt: structuredClone(built.receipt),
+      changedFiles: ["src/reducer.js", "test/reducer.test.js"],
+      observedChangedFiles: ["src/reducer.js", "test/reducer.test.js"],
+      verifyEvidence: [{
+        command: "npm test", exitCode: 0, observed: true, matchedProfileCommand: true,
+        preWorkingTreeDigest: digest, workingTreeDigest: digest,
+        summary: "pass", recordedAt: "2026-08-27T00:00:01.000Z"
+      }],
+      trace: { outcome: "completed", recordedAt: "2026-08-27T00:00:01.000Z" }
+    });
+    return refreshAcceptanceReceipt(candidate, {
+      cwd, changedFiles: candidate.changedFiles, currentWorkingTreeDigest: digest,
+      recordedAt: "2026-08-27T00:00:02.000Z"
+    });
+  };
+  assert.ok(refreshed(testSource({ selectEmpty: false }), "d").criticalMissing
+    .some((item) => item.obligation === "invalid-input-rejection"));
+  assert.equal(refreshed(testSource(), "e").criticalMissing
+    .some((item) => item.obligation === "invalid-input-rejection"), false);
+
+  for (const holdout of [
+    "Render malformed event telemetry in the UI without throwing.",
+    "When a dependency event throws TypeError, retry once.",
+    "Reject a malformed event with TypeError.",
+    "Allow an empty workflow enum value and leave unknown events unchanged.",
+    "Reject malformed start or stop events with TypeError.",
+    "`cache-key` requires `ttl` to be a positive integer. `retry-policy` requires `attempts` to be a positive integer. Reject malformed config with TypeError.",
+    "Tagged event variant `counter/set` requires field `value` to be a non-negative integer. Tagged event variant `counter/reset` requires field `hard` to be a boolean. Throw TypeError for malformed tagged-event values.",
+    "Tagged event variant `ticket/set` requires field `status` to be one of `open` or `closed`. Tagged event variant `ticket/reset` requires field `hard` to be a boolean. Throw TypeError for malformed tagged-event values."
+  ]) {
+    assert.deepEqual(malformedTaggedEventRequirements(holdout), [], holdout);
+    assert.equal(acceptanceProofGuidance(holdout).some((item) => /tagged-event variant/.test(item)), false, holdout);
+  }
+  for (const unsupported of [
+    `${taskText}\nFor tagged event variant \`item/accepted\`, validation remains strict.`,
+    `${taskText}\nFor the \`item/accepted\` event variant, required field \`note\` must be a non-empty string.`,
+    `${taskText}\nFor events tagged \`item/accepted\`, field \`note\` must be a non-empty string.`,
+    `${taskText}\nTagged event variant \`counter/set\` requires field \`value\` to be a non-negative integer.`,
+    `${taskText}\nThrow TypeError for malformed events, and require field \`audit\` to be validated.`,
+    ...[
+      "Every event field must satisfy production validation.",
+      "All event fields must satisfy production validation.",
+      "Each required field must satisfy production validation.",
+      "Every tagged field must satisfy production validation.",
+      "Production validation is required for every event field.",
+      "Additional validation must apply to all event fields.",
+      "All named event variants must also satisfy production validation.",
+      "Every event property must also satisfy production validation.",
+      "Fields on every event must also satisfy production validation."
+    ].map((clause) => `${taskText}\n${clause}`),
+    [
+      "Tagged event variant `one/set` requires fields `a`, `b`, `c`, `d`, `e`, `f`, and `g` to be non-empty strings.",
+      "Tagged event variant `two/set` requires field `h` to be a non-empty string.",
+      "Throw TypeError for malformed tagged-event fields on all named event variants."
+    ].join("\n"),
+    [
+      "Tagged event variant `one/set` requires fields `a`, `b`, `c`, `d`, `e`, and `f` to be non-empty strings.",
+      "Tagged event variant `two/set` requires fields `g`, `h`, `i`, `j`, `k`, and `l` to be non-empty strings.",
+      "Tagged event variant `three/set` requires fields `m`, `n`, `o`, `p`, `q`, and `r` to be non-empty strings.",
+      "Throw TypeError for malformed tagged-event fields on all named event variants."
+    ].join("\n")
+  ]) {
+    const requirements = malformedTaggedEventRequirements(unsupported);
+    assert.equal(requirements.length, 1);
+    assert.equal(requirements[0].field, null, "recognized unsupported or overflowing contracts must fail closed");
+  }
+
+  const markdownBulletContract = taskText.split("\n").map((clause) => `- ${clause}`).join("\n");
+  assert.deepEqual(malformedTaggedEventRequirements(markdownBulletContract),
+    malformedTaggedEventRequirements(taskText), "Markdown list markers do not change supported declarations");
+  const nonThrowingContract = taskText.replace(
+    "Throw TypeError for malformed tagged-event required fields or supplied overrides on both named event variants.",
+    "Handle malformed tagged-event required fields or supplied overrides without throwing."
+  );
+  assert.deepEqual(malformedTaggedEventRequirements(nonThrowingContract), [],
+    "a negated without-throwing clause cannot activate the rejection proof matrix");
+
+  const productionPrompt = fs.readFileSync(new URL("../benchmarks/production-v2/prompts/workflow-switch-same-session.md", import.meta.url), "utf8");
+  assert.deepEqual(malformedTaggedEventRequirements(productionPrompt).map(({ variant, field, optional }) => ({ variant, field, optional })), [
+    { variant: "workflow/select", field: "workflow", optional: false },
+    { variant: "message/accepted", field: "id", optional: false },
+    { variant: "message/accepted", field: "text", optional: false },
+    { variant: "message/accepted", field: "workflow", optional: true }
+  ]);
+  const productionSource = `export const initialWorkflowSession = Object.freeze({ currentWorkflow: null, messages: [] });\n${completeSource}`
+    .replaceAll("reduceInbox", "reduceWorkflowSession")
+    .replaceAll("queue/select", "workflow/select")
+    .replaceAll("item/accepted", "message/accepted")
+    .replaceAll("Queue", "Workflow")
+    .replaceAll("queue", "workflow");
+  const productionTest = testSource()
+    .replaceAll("reduceInbox", "reduceWorkflowSession")
+    .replace("../src/reducer.js", "../src/platform/workflow-session.js")
+    .replaceAll("queue/select", "workflow/select")
+    .replaceAll("item/accepted", "message/accepted")
+    .replaceAll("queue", "workflow");
+  assert.deepEqual(acceptanceInvalidInputEvidence({
+    taskText: productionPrompt,
+    sourceText: productionSource,
+    testText: productionTest,
+    sourceEntries: [{ path: "src/platform/workflow-session.js", text: productionSource }],
+    testEntries: [{ path: "test/workflow-session.test.js", text: productionTest }],
+    namedTargets: ["reduceWorkflowSession"],
+    provenanceTargets: ["reduceWorkflowSession"]
+  }), { sourceOk: true, testOk: true }, "the exact production prompt keeps qualified source and test proof");
 });
 
 test("mixed error-class acceptance proves the exact executable partition mapping", () => {

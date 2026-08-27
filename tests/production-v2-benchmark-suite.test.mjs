@@ -166,8 +166,10 @@ export function reduceWorkflowSession(state = initialWorkflowSession, event) {
   }
   if (event.type === "message/accepted") {
     if (!id(event.id) || !id(event.text)) throw new TypeError("invalid message");
+    const hasWorkflowOverride = Object.hasOwn(event, "workflow");
+    if (hasWorkflowOverride && !id(event.workflow)) throw new TypeError("invalid workflow override");
     if (state.messages.some((message) => message.id === event.id)) return state;
-    const workflow = event.workflow ?? state.currentWorkflow;
+    const workflow = hasWorkflowOverride ? event.workflow : state.currentWorkflow;
     if (!id(workflow)) throw new TypeError("missing workflow");
     return { currentWorkflow: workflow, messages: [...state.messages, { id: event.id, text: event.text, workflow }] };
   }
@@ -316,7 +318,7 @@ test("every journey prompt exists, stays public, and records settlement plus wor
     ["idempotent-replay-conflict", /idempotent[\s\S]*version conflict/],
     ["resumable-checkpoint-partial-failure", /never process an earlier item\s+again/],
     ["backend-frontend-contract-sync", /missingStatuses[\s\S]*versionMismatch/],
-    ["workflow-switch-same-session", /must never clear prior\s+messages/],
+    ["workflow-switch-same-session", /workflow\/select[\s\S]*non-empty string[\s\S]*own `workflow` property[\s\S]*validate[\s\S]*duplicate/i],
     ["reconnect-chat-event-order", /prefer the confirmed copy[\s\S]*old start cannot/]
   ]) assert.match(fs.readFileSync(path.join(suiteRoot, `prompts/${id}.md`), "utf8"), pattern);
 });
@@ -348,5 +350,254 @@ test("every new deep variant rejects its regression and accepts an independent r
     fs.writeFileSync(path.join(workspace, relativePath), source.trimStart());
     const result = grade(workspace, scenario, oraclePath);
     assert.equal(result.passed, true, `${scenario.id} reference failed: ${JSON.stringify(result)}`);
+  }
+});
+
+test("workflow-switch grader rejects nullish, precedence, identity, and mutation regressions", (t) => {
+  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-production-v2-workflow-mutants-"));
+  t.after(() => fs.rmSync(temporaryRoot, { recursive: true, force: true }));
+  const scenario = suite.scenarios.find((item) => item.id === "workflow-switch-same-session");
+  const [relativePath, reference] = references[scenario.id];
+  const overrideValidation = [
+    '    const hasWorkflowOverride = Object.hasOwn(event, "workflow");',
+    '    if (hasWorkflowOverride && !id(event.workflow)) throw new TypeError("invalid workflow override");'
+  ].join("\n");
+  const duplicateCheck = "    if (state.messages.some((message) => message.id === event.id)) return state;";
+  const mutants = {
+    "nullish-fallback": reference
+      .replace(`${overrideValidation}\n`, "")
+      .replace("const workflow = hasWorkflowOverride ? event.workflow : state.currentWorkflow;", "const workflow = event.workflow ?? state.currentWorkflow;"),
+    "duplicate-before-validation": reference.replace(
+      `${overrideValidation}\n${duplicateCheck}`,
+      `${duplicateCheck}\n${overrideValidation}`
+    ),
+    "payload-only-duplicate": reference.replace(
+      "message.id === event.id)",
+      "message.id === event.id && message.text === event.text)"
+    ),
+    "differing-workflow-duplicate": reference.replace(
+      "message.id === event.id)",
+      "message.id === event.id && (!Object.hasOwn(event, 'workflow') || event.workflow === message.workflow))"
+    ),
+    "partial-duplicate-validation": reference
+      .replace(
+        'if (!id(event.id) || !id(event.text)) throw new TypeError("invalid message");',
+        'if (!id(event.id) || event.text === "") throw new TypeError("invalid message");'
+      )
+      .replace(
+        'if (hasWorkflowOverride && !id(event.workflow)) throw new TypeError("invalid workflow override");',
+        'if (hasWorkflowOverride && (event.workflow === null || event.workflow === undefined)) throw new TypeError("invalid workflow override");'
+      )
+      .replace(
+        duplicateCheck,
+        `${duplicateCheck}\n    if (!id(event.text)) throw new TypeError("invalid message");\n    if (hasWorkflowOverride && !id(event.workflow)) throw new TypeError("invalid workflow override");`
+      ),
+    "message-id-non-string": reference.replace(
+      'if (!id(event.id) || !id(event.text)) throw new TypeError("invalid message");',
+      'if (!Object.hasOwn(event, "id") || event.id === "" || typeof event.id === "number" || !id(event.text)) throw new TypeError("invalid message");'
+    ),
+    "duplicate-before-nullish-text-validation": reference
+      .replace(
+        'if (!id(event.id) || !id(event.text)) throw new TypeError("invalid message");',
+        'if (!id(event.id) || !Object.hasOwn(event, "text") || event.text === "" || typeof event.text === "number" || (typeof event.text === "object" && event.text !== null)) throw new TypeError("invalid message");'
+      )
+      .replace(
+        duplicateCheck,
+        `${duplicateCheck}\n    if (!id(event.text)) throw new TypeError("invalid message");`
+      ),
+    "invalid-clones-messages-before-throw": reference.replace(
+      'if (!id(event.workflow)) throw new TypeError("invalid workflow");',
+      'if (!id(event.workflow)) { state.messages = [...state.messages]; throw new TypeError("invalid workflow"); }'
+    ),
+    "missing-active-workflow-check": reference.replace(
+      '    if (!id(workflow)) throw new TypeError("missing workflow");\n',
+      ""
+    ),
+    "active-workflow-before-duplicate": reference.replace(
+      `${duplicateCheck}\n    const workflow = hasWorkflowOverride ? event.workflow : state.currentWorkflow;\n    if (!id(workflow)) throw new TypeError("missing workflow");`,
+      `    const workflow = hasWorkflowOverride ? event.workflow : state.currentWorkflow;\n    if (!id(workflow)) throw new TypeError("missing workflow");\n${duplicateCheck}`
+    ),
+    "workflow-select-drops-metadata": reference.replace(
+      'return { ...state, currentWorkflow: event.workflow };',
+      'return { currentWorkflow: event.workflow, messages: state.messages };'
+    ),
+    "workflow-select-clones-messages": reference.replace(
+      'return { ...state, currentWorkflow: event.workflow };',
+      'return { ...state, currentWorkflow: event.workflow, messages: [...state.messages] };'
+    ),
+    "workflow-select-clones-only-empty-messages": reference.replace(
+      'return { ...state, currentWorkflow: event.workflow };',
+      'return { ...state, currentWorkflow: event.workflow, messages: state.messages.length === 0 ? [...state.messages] : state.messages };'
+    ),
+    "workflow-select-drops-empty-state-metadata": reference.replace(
+      'return { ...state, currentWorkflow: event.workflow };',
+      'return state.messages.length === 0 ? { currentWorkflow: event.workflow, messages: state.messages } : { ...state, currentWorkflow: event.workflow };'
+    ),
+    "deduplicates-only-first-message": reference.replace(
+      'state.messages.some((message) => message.id === event.id)',
+      'state.messages[0]?.id === event.id'
+    ),
+    "deduplicates-only-first-or-last-message": reference.replace(
+      'state.messages.some((message) => message.id === event.id)',
+      'state.messages[0]?.id === event.id || state.messages.at(-1)?.id === event.id'
+    ),
+    "deduplicates-only-edge-and-middle-message": reference.replace(
+      'state.messages.some((message) => message.id === event.id)',
+      'state.messages[0]?.id === event.id || state.messages[Math.floor(state.messages.length / 2)]?.id === event.id || state.messages.at(-1)?.id === event.id'
+    ),
+    "case-insensitive-message-id": reference.replace(
+      'message.id === event.id',
+      'message.id.toLowerCase() === event.id.toLowerCase()'
+    ),
+    "duplicate-boolean-override-before-validation": reference
+      .replace(
+        'if (hasWorkflowOverride && !id(event.workflow)) throw new TypeError("invalid workflow override");',
+        'if (hasWorkflowOverride && (event.workflow === null || event.workflow === undefined || typeof event.workflow === "number" || typeof event.workflow === "object")) throw new TypeError("invalid workflow override");'
+      )
+      .replace(
+        duplicateCheck,
+        `${duplicateCheck}\n    if (hasWorkflowOverride && !id(event.workflow)) throw new TypeError("invalid workflow override");`
+      ),
+    "late-exotic-text-validation": reference
+      .replace(
+        'if (!id(event.id) || !id(event.text)) throw new TypeError("invalid message");',
+        'const deferTextValidation = ["bigint", "symbol", "function"].includes(typeof event.text) || (event.text && typeof event.text === "object" && event.text.length === 1);\n    if (!id(event.id) || (!id(event.text) && !deferTextValidation)) throw new TypeError("invalid message");'
+      )
+      .replace(
+        duplicateCheck,
+        `${duplicateCheck}\n    if (!id(event.text)) throw new TypeError("invalid message");`
+      ),
+    "late-exotic-override-validation": reference
+      .replace(
+        'if (hasWorkflowOverride && !id(event.workflow)) throw new TypeError("invalid workflow override");',
+        'const deferWorkflowValidation = hasWorkflowOverride && (["bigint", "symbol", "function"].includes(typeof event.workflow) || (event.workflow && typeof event.workflow === "object" && event.workflow.length === 1));\n    if (hasWorkflowOverride && !id(event.workflow) && !deferWorkflowValidation) throw new TypeError("invalid workflow override");'
+      )
+      .replace(
+        duplicateCheck,
+        `${duplicateCheck}\n    if (hasWorkflowOverride && !id(event.workflow)) throw new TypeError("invalid workflow override");`
+      ),
+    "length-based-string-validator": reference.replace(
+      'function id(value) { return typeof value === "string" && value.length > 0; }',
+      'function id(value) { return value != null && value.length > 0; }'
+    ),
+    "direct-event-has-own-property": reference.replace(
+      'const hasWorkflowOverride = Object.hasOwn(event, "workflow");',
+      'const hasWorkflowOverride = event.hasOwnProperty("workflow");'
+    ),
+    "enumerable-only-workflow-override": reference.replace(
+      'const hasWorkflowOverride = Object.hasOwn(event, "workflow");',
+      'const hasWorkflowOverride = Object.keys(event).includes("workflow");'
+    ),
+    "mutates-inherited-workflow-prototype": reference.replace(
+      `${overrideValidation}\n`,
+      `${overrideValidation}\n    if (!hasWorkflowOverride && "workflow" in event) delete Object.getPrototypeOf(event).workflow;\n`
+    ),
+    "active-workflow-nullish-only": reference.replace(
+      'if (!id(workflow)) throw new TypeError("missing workflow");',
+      'if (workflow == null) throw new TypeError("missing workflow");'
+    ),
+    "missing-active-mutates-and-returns": reference.replace(
+      'if (!id(workflow)) throw new TypeError("missing workflow");',
+      'if (!id(workflow)) { state.messages.push({ id: event.id, text: event.text, workflow }); return state; }'
+    ),
+    "freezes-valid-events": reference
+      .replace(
+        'if (!id(event.workflow)) throw new TypeError("invalid workflow");',
+        'if (!id(event.workflow)) throw new TypeError("invalid workflow");\n    Object.freeze(event);'
+      )
+      .replace(
+        'if (hasWorkflowOverride && !id(event.workflow)) throw new TypeError("invalid workflow override");',
+        'if (hasWorkflowOverride && !id(event.workflow)) throw new TypeError("invalid workflow override");\n    Object.freeze(event);'
+      ),
+    "global-current-workflow-validation": reference.replace(
+      'if (!state || typeof state !== "object" || !Array.isArray(state.messages) || !event || typeof event !== "object") throw new TypeError("invalid workflow state");',
+      'if (!state || typeof state !== "object" || !Array.isArray(state.messages) || !event || typeof event !== "object") throw new TypeError("invalid workflow state");\n  if (state.currentWorkflow !== null && !id(state.currentWorkflow)) throw new TypeError("invalid current workflow");'
+    ),
+    "drops-default-initial-state": reference.replace(
+      'reduceWorkflowSession(state = initialWorkflowSession, event)',
+      'reduceWorkflowSession(state, event)'
+    ),
+    "defaults-only-workflow-select": reference
+      .replace(
+        'reduceWorkflowSession(state = initialWorkflowSession, event)',
+        'reduceWorkflowSession(state, event)'
+      )
+      .replace(
+        'if (!state || typeof state !== "object" || !Array.isArray(state.messages) || !event || typeof event !== "object") throw new TypeError("invalid workflow state");',
+        'state = state ?? (event?.type === "workflow/select" ? initialWorkflowSession : state);\n  if (!state || typeof state !== "object" || !Array.isArray(state.messages) || !event || typeof event !== "object") throw new TypeError("invalid workflow state");'
+      ),
+    "workflow-select-validates-prior-current": reference.replace(
+      'if (event.type === "workflow/select") {',
+      'if (event.type === "workflow/select") {\n    if (state.currentWorkflow !== null && !id(state.currentWorkflow)) throw new TypeError("invalid current workflow");'
+    ),
+    "mutating-append": reference.replace(
+      "return { currentWorkflow: workflow, messages: [...state.messages, { id: event.id, text: event.text, workflow }] };",
+      "state.currentWorkflow = workflow; state.messages.push({ id: event.id, text: event.text, workflow }); return state;"
+    ),
+    "mutation-on-invalid": reference
+      .replace(
+        'if (!id(event.workflow)) throw new TypeError("invalid workflow");',
+        "if (!id(event.workflow)) { state.currentWorkflow = event.workflow; return state; }"
+      )
+      .replace(
+        'if (!id(event.id) || !id(event.text)) throw new TypeError("invalid message");',
+        "if (!id(event.id) || !id(event.text)) { state.currentWorkflow = event.workflow; return state; }"
+      )
+      .replace(
+        'if (hasWorkflowOverride && !id(event.workflow)) throw new TypeError("invalid workflow override");',
+        "if (hasWorkflowOverride && !id(event.workflow)) { state.currentWorkflow = event.workflow; return state; }"
+      ),
+    "trim-non-empty": reference.replace(
+      'function id(value) { return typeof value === "string" && value.length > 0; }',
+      'function id(value) { return typeof value === "string" && value.trim().length > 0; }'
+    )
+  };
+  const expectedFailedCheck = {
+    "nullish-fallback": "message-event-validation",
+    "duplicate-before-validation": "message-event-validation",
+    "payload-only-duplicate": "workflow-switch-preserves-and-attributes-messages",
+    "differing-workflow-duplicate": "workflow-switch-preserves-and-attributes-messages",
+    "partial-duplicate-validation": "message-event-validation",
+    "message-id-non-string": "message-event-validation",
+    "duplicate-before-nullish-text-validation": "message-event-validation",
+    "invalid-clones-messages-before-throw": "workflow-select-validation",
+    "missing-active-workflow-check": "duplicate-precedes-active-workflow-validation",
+    "active-workflow-before-duplicate": "duplicate-precedes-active-workflow-validation",
+    "workflow-select-drops-metadata": "workflow-select-validation",
+    "workflow-select-clones-messages": "workflow-select-validation",
+    "workflow-select-clones-only-empty-messages": "workflow-switch-preserves-and-attributes-messages",
+    "workflow-select-drops-empty-state-metadata": "workflow-select-validation",
+    "deduplicates-only-first-message": "workflow-switch-preserves-and-attributes-messages",
+    "deduplicates-only-first-or-last-message": "workflow-switch-preserves-and-attributes-messages",
+    "deduplicates-only-edge-and-middle-message": "workflow-switch-preserves-and-attributes-messages",
+    "case-insensitive-message-id": "workflow-switch-preserves-and-attributes-messages",
+    "duplicate-boolean-override-before-validation": "message-event-validation",
+    "late-exotic-text-validation": "message-event-validation",
+    "late-exotic-override-validation": "message-event-validation",
+    "length-based-string-validator": "workflow-select-validation",
+    "direct-event-has-own-property": "workflow-switch-preserves-and-attributes-messages",
+    "enumerable-only-workflow-override": "workflow-switch-preserves-and-attributes-messages",
+    "mutates-inherited-workflow-prototype": "workflow-switch-preserves-and-attributes-messages",
+    "active-workflow-nullish-only": "duplicate-precedes-active-workflow-validation",
+    "missing-active-mutates-and-returns": "duplicate-precedes-active-workflow-validation",
+    "freezes-valid-events": "workflow-switch-preserves-and-attributes-messages",
+    "global-current-workflow-validation": "duplicate-precedes-active-workflow-validation",
+    "drops-default-initial-state": "workflow-switch-preserves-and-attributes-messages",
+    "defaults-only-workflow-select": "workflow-switch-preserves-and-attributes-messages",
+    "workflow-select-validates-prior-current": "workflow-select-validation",
+    "mutating-append": "workflow-switch-preserves-and-attributes-messages",
+    "mutation-on-invalid": "workflow-select-validation",
+    "trim-non-empty": "whitespace-only-values-remain-non-empty"
+  };
+  for (const [name, source] of Object.entries(mutants)) {
+    assert.notEqual(source, reference, `${name} mutant did not change the reference`);
+    const workspace = path.join(temporaryRoot, name); const oraclePath = `${workspace}.oracle.json`;
+    fs.cpSync(path.join(suiteRoot, scenario.fixture), workspace, { recursive: true });
+    generate(workspace, scenario, oraclePath, `workflow-mutant-${name}`);
+    fs.writeFileSync(path.join(workspace, relativePath), source.trimStart());
+    const result = grade(workspace, scenario, oraclePath);
+    assert.equal(result.passed, false, `${name} escaped workflow grader: ${JSON.stringify(result)}`);
+    assert.equal(result.checks.find((item) => item.id === expectedFailedCheck[name])?.passed, false,
+      `${name} did not fail its intended contract check: ${JSON.stringify(result)}`);
   }
 });

@@ -386,22 +386,437 @@ switch (scenario) {
   }
   case "workflow-switch-same-session": {
     const { initialWorkflowSession, reduceWorkflowSession } = await load("src/platform/workflow-session.js");
+    const captureObjectGraph = (root) => {
+      const records = [];
+      const seen = new WeakSet();
+      const visit = (value) => {
+        if ((!value || typeof value !== "object") && typeof value !== "function") return;
+        if (seen.has(value)) return;
+        seen.add(value);
+        const keys = Reflect.ownKeys(value);
+        const descriptors = keys.map((key) => [key, Object.getOwnPropertyDescriptor(value, key)]);
+        records.push({
+          value,
+          prototype: Object.getPrototypeOf(value),
+          keys,
+          descriptors,
+          extensible: Object.isExtensible(value),
+          sealed: Object.isSealed(value),
+          frozen: Object.isFrozen(value)
+        });
+        for (const [, descriptor] of descriptors) {
+          if (descriptor && Object.hasOwn(descriptor, "value")) visit(descriptor.value);
+        }
+      };
+      visit(root);
+      return () => {
+        for (const record of records) {
+          assert.equal(Object.getPrototypeOf(record.value), record.prototype);
+          assert.deepEqual(Reflect.ownKeys(record.value), record.keys);
+          assert.equal(Object.isExtensible(record.value), record.extensible);
+          assert.equal(Object.isSealed(record.value), record.sealed);
+          assert.equal(Object.isFrozen(record.value), record.frozen);
+          for (const [key, prior] of record.descriptors) {
+            const current = Object.getOwnPropertyDescriptor(record.value, key);
+            assert.ok(current);
+            assert.equal(current.configurable, prior.configurable);
+            assert.equal(current.enumerable, prior.enumerable);
+            if (Object.hasOwn(prior, "value")) {
+              assert.ok(Object.hasOwn(current, "value"));
+              assert.equal(current.writable, prior.writable);
+              if (prior.value && (typeof prior.value === "object" || typeof prior.value === "function")) {
+                assert.equal(current.value, prior.value);
+              } else {
+                assert.ok(Object.is(current.value, prior.value));
+              }
+            } else {
+              assert.equal(current.get, prior.get);
+              assert.equal(current.set, prior.set);
+            }
+          }
+        }
+      };
+    };
+    const callWithoutMutation = (state, event, operation) => {
+      const verifyStateIdentity = captureObjectGraph(state);
+      const verifyEventIdentity = captureObjectGraph(event);
+      const output = operation();
+      verifyStateIdentity();
+      verifyEventIdentity();
+      return output;
+    };
+    const rejectWithoutMutation = (state, event) => {
+      const cloneSnapshot = (value) => {
+        try { return { available: true, value: structuredClone(value) }; }
+        catch { return { available: false }; }
+      };
+      const stateSnapshot = cloneSnapshot(state);
+      const eventSnapshot = cloneSnapshot(event);
+      const verifyStateIdentity = captureObjectGraph(state);
+      const verifyEventIdentity = captureObjectGraph(event);
+      let observedError;
+      try { reduceWorkflowSession(state, event); } catch (error) { observedError = error; }
+      if (stateSnapshot.available) assert.deepEqual(state, stateSnapshot.value);
+      if (eventSnapshot.available) assert.deepEqual(event, eventSnapshot.value);
+      verifyStateIdentity();
+      verifyEventIdentity();
+      assert.ok(observedError instanceof TypeError);
+    };
+    const invalidStringValueFactories = [
+      () => undefined,
+      () => null,
+      () => "",
+      () => 42,
+      () => true,
+      () => 1n,
+      () => Symbol("invalid-string"),
+      () => function invalidString() {},
+      () => ({}),
+      () => [],
+      () => ["string-like"],
+      () => ({ length: 1 }),
+      () => new String("boxed-string")
+    ];
+    const invalidStringValues = () => invalidStringValueFactories.map((create) => create());
     await check("workflow-switch-preserves-and-attributes-messages", () => {
-      const selectedA = reduceWorkflowSession(initialWorkflowSession, { type: "workflow/select", workflow: data.workflowA });
-      const first = reduceWorkflowSession(selectedA, { type: "message/accepted", ...data.messageA });
-      const selectedB = reduceWorkflowSession(first, { type: "workflow/select", workflow: data.workflowB });
+      const defaultSelectionEvent = { type: "workflow/select", workflow: data.workflowA };
+      const defaultSelection = callWithoutMutation(undefined, defaultSelectionEvent,
+        () => reduceWorkflowSession(undefined, defaultSelectionEvent));
+      assert.deepEqual(defaultSelection, { currentWorkflow: data.workflowA, messages: [] });
+      assert.equal(defaultSelection.messages, initialWorkflowSession.messages);
+      const defaultExplicitEvent = {
+        type: "message/accepted",
+        id: `${data.messageA.id}-default-explicit`,
+        text: "default state explicit workflow",
+        workflow: data.workflowB
+      };
+      const defaultExplicit = callWithoutMutation(undefined, defaultExplicitEvent,
+        () => reduceWorkflowSession(undefined, defaultExplicitEvent));
+      assert.deepEqual(defaultExplicit, {
+        currentWorkflow: data.workflowB,
+        messages: [{
+          id: defaultExplicitEvent.id,
+          text: defaultExplicitEvent.text,
+          workflow: data.workflowB
+        }]
+      });
+
+      const selectedAEvent = { type: "workflow/select", workflow: data.workflowA };
+      const selectedA = callWithoutMutation(initialWorkflowSession, selectedAEvent,
+        () => reduceWorkflowSession(initialWorkflowSession, selectedAEvent));
+      assert.notEqual(selectedA, initialWorkflowSession);
+      assert.equal(selectedA.messages, initialWorkflowSession.messages);
+      assert.deepEqual(selectedA, { currentWorkflow: data.workflowA, messages: [] });
+
+      const firstEvent = { type: "message/accepted", ...data.messageA };
+      const first = callWithoutMutation(selectedA, firstEvent, () => reduceWorkflowSession(selectedA, firstEvent));
+      assert.notEqual(first, selectedA);
+      assert.notEqual(first.messages, selectedA.messages);
+      assert.deepEqual(first, { currentWorkflow: data.workflowA, messages: [{ ...data.messageA, workflow: data.workflowA }] });
+
+      const selectedBEvent = { type: "workflow/select", workflow: data.workflowB };
+      const selectedB = callWithoutMutation(first, selectedBEvent, () => reduceWorkflowSession(first, selectedBEvent));
+      assert.notEqual(selectedB, first);
       assert.deepEqual(selectedB.messages, [{ ...data.messageA, workflow: data.workflowA }]);
-      const second = reduceWorkflowSession(selectedB, { type: "message/accepted", ...data.messageB });
+      assert.deepEqual(selectedB, { ...first, currentWorkflow: data.workflowB });
+
+      const secondEvent = { type: "message/accepted", ...data.messageB };
+      const second = callWithoutMutation(selectedB, secondEvent, () => reduceWorkflowSession(selectedB, secondEvent));
+      assert.notEqual(second, selectedB);
+      assert.notEqual(second.messages, selectedB.messages);
       assert.deepEqual(second, { currentWorkflow: data.workflowB, messages: [{ ...data.messageA, workflow: data.workflowA }, { ...data.messageB, workflow: data.workflowB }] });
-      assert.equal(reduceWorkflowSession(second, { type: "message/accepted", ...data.messageA }), second);
-      const explicit = reduceWorkflowSession(second, { type: "message/accepted", id: "explicit", text: "pivot", workflow: data.workflowA });
-      assert.equal(explicit.currentWorkflow, data.workflowA);
-      assert.equal(explicit.messages.at(-1).workflow, data.workflowA);
+
+      for (const duplicateEvent of [
+        { type: "message/accepted", ...data.messageA },
+        { type: "message/accepted", id: data.messageA.id, text: `${data.messageA.text}-changed`, workflow: `${data.workflowB}-duplicate-override` },
+        { type: "message/accepted", id: data.messageB.id, text: `${data.messageB.text}-changed`, workflow: `${data.workflowA}-later-duplicate` }
+      ]) {
+        assert.equal(callWithoutMutation(second, duplicateEvent,
+          () => reduceWorkflowSession(second, duplicateEvent)), second);
+      }
+
+      const thirdEvent = {
+        type: "message/accepted",
+        id: `${data.messageB.id}-third`,
+        text: "third message"
+      };
+      const threeMessages = callWithoutMutation(second, thirdEvent,
+        () => reduceWorkflowSession(second, thirdEvent));
+      const middleDuplicate = {
+        type: "message/accepted",
+        id: data.messageB.id,
+        text: `${data.messageB.text}-middle-duplicate`,
+        workflow: data.workflowA
+      };
+      assert.equal(callWithoutMutation(threeMessages, middleDuplicate,
+        () => reduceWorkflowSession(threeMessages, middleDuplicate)), threeMessages);
+
+      const positionalMessages = Array.from({ length: 5 }, (_, index) => ({
+        id: `${data.messageA.id}-position-${index}`,
+        text: `position ${index}`,
+        workflow: index % 2 === 0 ? data.workflowA : data.workflowB
+      }));
+      const positionalState = { currentWorkflow: data.workflowB, messages: positionalMessages };
+      for (const message of positionalMessages) {
+        const positionalDuplicate = {
+          type: "message/accepted",
+          id: message.id,
+          text: `${message.text}-changed`,
+          workflow: message.workflow === data.workflowA ? data.workflowB : data.workflowA
+        };
+        assert.equal(callWithoutMutation(positionalState, positionalDuplicate,
+          () => reduceWorkflowSession(positionalState, positionalDuplicate)), positionalState);
+      }
+
+      const caseState = {
+        currentWorkflow: data.workflowA,
+        messages: [{ id: "Case-Sensitive-ID", text: "upper", workflow: data.workflowA }]
+      };
+      const caseDistinctEvent = { type: "message/accepted", id: "case-sensitive-id", text: "lower" };
+      const caseDistinct = callWithoutMutation(caseState, caseDistinctEvent,
+        () => reduceWorkflowSession(caseState, caseDistinctEvent));
+      assert.notEqual(caseDistinct, caseState);
+      assert.deepEqual(caseDistinct.messages, [
+        ...caseState.messages,
+        { id: caseDistinctEvent.id, text: caseDistinctEvent.text, workflow: data.workflowA }
+      ]);
+
+      const explicitEvent = { type: "message/accepted", id: `${data.messageB.id}-explicit`, text: "pivot", workflow: data.workflowA };
+      const explicit = callWithoutMutation(second, explicitEvent, () => reduceWorkflowSession(second, explicitEvent));
+      assert.notEqual(explicit, second);
+      assert.notEqual(explicit.messages, second.messages);
+      assert.deepEqual(explicit, {
+        currentWorkflow: data.workflowA,
+        messages: [...second.messages, { id: explicitEvent.id, text: explicitEvent.text, workflow: data.workflowA }]
+      });
+
+      const inheritedPrototype = { workflow: data.workflowB };
+      const inheritedEvent = Object.assign(Object.create(inheritedPrototype), {
+        type: "message/accepted", id: `${data.messageB.id}-inherited`, text: "inherited"
+      });
+      const verifyInheritedPrototype = captureObjectGraph(inheritedPrototype);
+      const inherited = callWithoutMutation(explicit, inheritedEvent,
+        () => reduceWorkflowSession(explicit, inheritedEvent));
+      verifyInheritedPrototype();
+      assert.equal(Object.getPrototypeOf(inheritedEvent), inheritedPrototype);
+      assert.notEqual(inherited, explicit);
+      assert.notEqual(inherited.messages, explicit.messages);
+      assert.deepEqual(inherited, {
+        currentWorkflow: data.workflowA,
+        messages: [...explicit.messages, { id: inheritedEvent.id, text: inheritedEvent.text, workflow: data.workflowA }]
+      });
+
+      const shadowedEvent = {
+        type: "message/accepted",
+        id: `${data.messageB.id}-shadowed-own-check`,
+        text: "shadowed own check",
+        workflow: data.workflowB,
+        hasOwnProperty: "shadowed"
+      };
+      const shadowed = callWithoutMutation(explicit, shadowedEvent,
+        () => reduceWorkflowSession(explicit, shadowedEvent));
+      assert.equal(shadowed.currentWorkflow, data.workflowB);
+      assert.equal(shadowed.messages.at(-1).workflow, data.workflowB);
+
+      const nullPrototypeEvent = Object.assign(Object.create(null), {
+        type: "message/accepted",
+        id: `${data.messageB.id}-null-prototype`,
+        text: "null prototype",
+        workflow: data.workflowB
+      });
+      const nullPrototype = callWithoutMutation(explicit, nullPrototypeEvent,
+        () => reduceWorkflowSession(explicit, nullPrototypeEvent));
+      assert.equal(nullPrototype.currentWorkflow, data.workflowB);
+      assert.equal(nullPrototype.messages.at(-1).workflow, data.workflowB);
+
+      const nonEnumerableEvent = {
+        type: "message/accepted",
+        id: `${data.messageB.id}-non-enumerable`,
+        text: "non enumerable override"
+      };
+      Object.defineProperty(nonEnumerableEvent, "workflow", {
+        value: data.workflowB,
+        enumerable: false,
+        configurable: true,
+        writable: true
+      });
+      const nonEnumerable = callWithoutMutation(explicit, nonEnumerableEvent,
+        () => reduceWorkflowSession(explicit, nonEnumerableEvent));
+      assert.equal(nonEnumerable.currentWorkflow, data.workflowB);
+      assert.equal(nonEnumerable.messages.at(-1).workflow, data.workflowB);
+
+      const followUpEvent = { type: "message/accepted", id: `${data.messageB.id}-follow-up`, text: "continue" };
+      const followUp = callWithoutMutation(explicit, followUpEvent, () => reduceWorkflowSession(explicit, followUpEvent));
+      assert.notEqual(followUp, explicit);
+      assert.notEqual(followUp.messages, explicit.messages);
+      assert.deepEqual(followUp, {
+        currentWorkflow: data.workflowA,
+        messages: [...explicit.messages, { id: followUpEvent.id, text: followUpEvent.text, workflow: data.workflowA }]
+      });
       assert.deepEqual(initialWorkflowSession, { currentWorkflow: null, messages: [] });
     });
-    await check("workflow-event-validation", () => {
-      assert.throws(() => reduceWorkflowSession(initialWorkflowSession, { type: "workflow/select", workflow: "" }), TypeError);
-      assert.throws(() => reduceWorkflowSession(initialWorkflowSession, { type: "message/accepted", id: "", text: "x" }), TypeError);
+    await check("duplicate-precedes-active-workflow-validation", () => {
+      const stateWithoutActiveWorkflow = {
+        currentWorkflow: null,
+        messages: [{ ...data.messageA, workflow: data.workflowA }]
+      };
+      const duplicateEvent = { type: "message/accepted", ...data.messageA };
+      assert.equal(callWithoutMutation(stateWithoutActiveWorkflow, duplicateEvent,
+        () => reduceWorkflowSession(stateWithoutActiveWorkflow, duplicateEvent)), stateWithoutActiveWorkflow);
+
+      const explicitEvent = {
+        type: "message/accepted",
+        id: `${data.messageB.id}-initial-explicit`,
+        text: "start explicitly",
+        workflow: data.workflowB
+      };
+      const explicit = callWithoutMutation(initialWorkflowSession, explicitEvent,
+        () => reduceWorkflowSession(initialWorkflowSession, explicitEvent));
+      assert.deepEqual(explicit, {
+        currentWorkflow: data.workflowB,
+        messages: [{ id: explicitEvent.id, text: explicitEvent.text, workflow: data.workflowB }]
+      });
+
+      for (const currentWorkflow of invalidStringValues()) {
+        rejectWithoutMutation({ currentWorkflow, messages: [] }, {
+          type: "message/accepted",
+          id: `${data.messageB.id}-missing-active`,
+          text: "no active workflow"
+        });
+
+        const duplicateState = {
+          currentWorkflow,
+          messages: [{ ...data.messageA, workflow: data.workflowA }]
+        };
+        const validDuplicate = { type: "message/accepted", ...data.messageA };
+        assert.equal(callWithoutMutation(duplicateState, validDuplicate,
+          () => reduceWorkflowSession(duplicateState, validDuplicate)), duplicateState);
+
+        const explicitState = {
+          currentWorkflow,
+          messages: [{ ...data.messageA, workflow: data.workflowA }]
+        };
+        const validExplicit = {
+          type: "message/accepted",
+          id: `${data.messageB.id}-invalid-current-explicit`,
+          text: "replace malformed current workflow",
+          workflow: data.workflowB
+        };
+        const explicitOutput = callWithoutMutation(explicitState, validExplicit,
+          () => reduceWorkflowSession(explicitState, validExplicit));
+        assert.deepEqual(explicitOutput, {
+          currentWorkflow: data.workflowB,
+          messages: [...explicitState.messages, {
+            id: validExplicit.id,
+            text: validExplicit.text,
+            workflow: data.workflowB
+          }]
+        });
+      }
+    });
+    await check("whitespace-only-values-remain-non-empty", () => {
+      const whitespaceSelectEvent = { type: "workflow/select", workflow: " \t" };
+      const selected = callWithoutMutation(initialWorkflowSession, whitespaceSelectEvent,
+        () => reduceWorkflowSession(initialWorkflowSession, whitespaceSelectEvent));
+      assert.notEqual(selected, initialWorkflowSession);
+      assert.deepEqual(selected, { currentWorkflow: " \t", messages: [] });
+
+      const whitespaceMessageEvent = { type: "message/accepted", id: " ", text: "\t" };
+      const accepted = callWithoutMutation(selected, whitespaceMessageEvent,
+        () => reduceWorkflowSession(selected, whitespaceMessageEvent));
+      assert.notEqual(accepted, selected);
+      assert.notEqual(accepted.messages, selected.messages);
+      assert.deepEqual(accepted, {
+        currentWorkflow: " \t",
+        messages: [{ id: " ", text: "\t", workflow: " \t" }]
+      });
+
+      const whitespaceOverrideEvent = { type: "message/accepted", id: "\n", text: "  ", workflow: "\n\t" };
+      const overridden = callWithoutMutation(accepted, whitespaceOverrideEvent,
+        () => reduceWorkflowSession(accepted, whitespaceOverrideEvent));
+      assert.notEqual(overridden, accepted);
+      assert.notEqual(overridden.messages, accepted.messages);
+      assert.deepEqual(overridden, {
+        currentWorkflow: "\n\t",
+        messages: [...accepted.messages, { id: "\n", text: "  ", workflow: "\n\t" }]
+      });
+    });
+    await check("workflow-select-validation", () => {
+      const metadata = { trace: ["preserve"] };
+      const selected = {
+        currentWorkflow: data.workflowA,
+        messages: [{ ...data.messageA, workflow: data.workflowA }],
+        metadata
+      };
+      const validSelection = { type: "workflow/select", workflow: data.workflowB };
+      const switched = callWithoutMutation(selected, validSelection,
+        () => reduceWorkflowSession(selected, validSelection));
+      assert.deepEqual(switched, { ...selected, currentWorkflow: data.workflowB });
+      assert.equal(switched.messages, selected.messages);
+      assert.equal(switched.metadata, metadata);
+      const emptyMetadata = { trace: ["preserve-empty"] };
+      const emptySelected = { currentWorkflow: data.workflowA, messages: [], metadata: emptyMetadata };
+      const emptySwitched = callWithoutMutation(emptySelected, validSelection,
+        () => reduceWorkflowSession(emptySelected, validSelection));
+      assert.deepEqual(emptySwitched, { ...emptySelected, currentWorkflow: data.workflowB });
+      assert.equal(emptySwitched.messages, emptySelected.messages);
+      assert.equal(emptySwitched.metadata, emptyMetadata);
+      for (const currentWorkflow of invalidStringValues()) {
+        const recoverable = {
+          currentWorkflow,
+          messages: [{ ...data.messageA, workflow: data.workflowA }],
+          metadata: { trace: ["replace-invalid-current"] }
+        };
+        const recovered = callWithoutMutation(recoverable, validSelection,
+          () => reduceWorkflowSession(recoverable, validSelection));
+        assert.deepEqual(recovered, { ...recoverable, currentWorkflow: data.workflowB });
+        assert.equal(recovered.messages, recoverable.messages);
+        assert.equal(recovered.metadata, recoverable.metadata);
+      }
+      const invalidSelected = {
+        currentWorkflow: data.workflowA,
+        messages: [{ ...data.messageA, workflow: data.workflowA }],
+        metadata: { trace: ["invalid-input"] }
+      };
+      for (const workflow of invalidStringValues()) {
+        rejectWithoutMutation(invalidSelected, { type: "workflow/select", workflow });
+      }
+      rejectWithoutMutation(invalidSelected, { type: "workflow/select" });
+    });
+    await check("message-event-validation", () => {
+      const selected = { currentWorkflow: data.workflowA, messages: [{ ...data.messageA, workflow: data.workflowA }] };
+      const invalidEvents = [
+        { type: "message/accepted", text: "x" },
+        { type: "message/accepted", id: "x" }
+      ];
+      for (const value of invalidStringValues()) {
+        invalidEvents.push(
+          { type: "message/accepted", id: value, text: "valid text" },
+          { type: "message/accepted", id: "valid-id", text: value },
+          { type: "message/accepted", id: "valid-id", text: "valid text", workflow: value },
+          { type: "message/accepted", id: data.messageA.id, text: value, workflow: data.workflowA },
+          { type: "message/accepted", id: data.messageA.id, text: data.messageA.text, workflow: value }
+        );
+      }
+      for (const event of invalidEvents) rejectWithoutMutation(selected, event);
+
+      for (const { stored, invalid } of [
+        { stored: "42", invalid: 42 },
+        { stored: "1", invalid: 1n },
+        { stored: "true", invalid: true },
+        { stored: "string-like", invalid: ["string-like"] },
+        { stored: "boxed-string", invalid: new String("boxed-string") }
+      ]) {
+        rejectWithoutMutation({
+          currentWorkflow: data.workflowA,
+          messages: [{ id: stored, text: "stored", workflow: data.workflowA }]
+        }, {
+          type: "message/accepted",
+          id: invalid,
+          text: "coercive duplicate",
+          workflow: data.workflowA
+        });
+      }
     });
     break;
   }

@@ -1,9 +1,9 @@
 import path from "node:path";
-import { acceptanceBoundaryProofGuidance, malformedIdentifierContract } from "./acceptance-boundary-guidance.js";
+import { acceptanceBoundaryProofGuidance, malformedIdentifierContract, malformedTaggedEventRequirements } from "./acceptance-boundary-guidance.js";
 import { evidenceTopLevelArguments, executableRejectionAssertions } from "./acceptance-executable-evidence.js";
-import { ERROR_CONSTRUCTORS, ERROR_CONSTRUCTOR_DISPLAY_NAMES, errorMappingsProveContract,
-  hasAmbiguousErrorClassIntent, rejectionStatementErrorClass, requestedErrorClasses, requestedErrorPartitionMapping } from "./acceptance-error-classes.js";
+import { ERROR_CONSTRUCTORS, ERROR_CONSTRUCTOR_DISPLAY_NAMES, errorMappingsProveContract, hasAmbiguousErrorClassIntent, rejectionStatementErrorClass, requestedErrorClasses, requestedErrorPartitionMapping } from "./acceptance-error-classes.js";
 import { statefulTerminalRejectionEvidence } from "./acceptance-state-machine-evidence.js";
+import { malformedTaggedEventEvidence } from "./acceptance-tagged-event-evidence.js";
 import { boundRejectionTestEvidence, callableAssertionMode } from "./acceptance-test-binding-evidence.js";
 import { regexCanStartAfterLexicalChunks } from "./javascript-regex-evidence.js";
 const INTEGER_TARGET_STOPWORDS = new Set([
@@ -25,9 +25,8 @@ function stringLiteralSentinel(value) {
   if (value.length === 0) return "__pi_empty_string_literal__";
   if (value === '"') return "__pi_double_quote_string_literal__";
   if (/^(?:\s|\\[nrtvf0])+$/u.test(value)) return "__pi_whitespace_string_literal__";
-  if (["assert", "assert/strict", "node:assert", "node:assert/strict"].includes(value.trim().toLowerCase())) {
-    return "__pi_node_assert_module_literal__";
-  }
+  if (["assert", "assert/strict", "node:assert", "node:assert/strict"].includes(value.trim().toLowerCase())) return "__pi_node_assert_module_literal__";
+  if (value.trim().toLowerCase() === "node:test") return "__pi_node_test_module_literal__";
   if (["node:vm", "vm"].includes(value.trim().toLowerCase())) return "__pi_code_generation_module_literal__";
   if (["module", "node:module"].includes(value.trim().toLowerCase())) return "__pi_module_loader_module_literal__";
   const errorName = value.trim().toLowerCase().match(/^(typeerror|rangeerror|syntaxerror|referenceerror|urierror|evalerror|aggregateerror|error)$/)?.[1];
@@ -781,17 +780,6 @@ function sourceCallableProves(bodies, name, requestedErrors, requestedPartitions
   return proof.generic && requestedPartitions.every((partition) => partitionCovered(partition, proof.partitions));
 }
 
-function evidenceCallableNames(sourceText) {
-  const names = new Set();
-  const ignored = new Set(["catch", "for", "if", "switch", "while", "with"]);
-  for (const match of sourceText.matchAll(/\bfunction\s+([a-z_$][a-z0-9_$]*)\s*\(/gi)) names.add(match[1].toLowerCase());
-  for (const match of sourceText.matchAll(/^\s*(?:async\s+)?([a-z_$][a-z0-9_$]*)\s*\([^)]*\)\s*\{/gim)) {
-    if (!ignored.has(match[1].toLowerCase())) names.add(match[1].toLowerCase());
-  }
-  for (const match of sourceText.matchAll(/\b(?:const|let|var)\s+([a-z_$][a-z0-9_$]*)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[a-z_$][a-z0-9_$]*)\s*=>/gi)) names.add(match[1].toLowerCase());
-  return names;
-}
-
 function requestedInvalidPartitions(text) {
   const invalid = normalizedText(text)
     .split(/(?<=[.!?;])\s+|\n+/)
@@ -893,6 +881,7 @@ export function acceptanceInvalidInputEvidence(input = {}) {
   const requestedErrors = requestedErrorClasses(taskText);
   const ambiguousErrorIntent = hasAmbiguousErrorClassIntent(taskText);
   const requestedPartitions = requestedInvalidPartitions(taskText);
+  const taggedRequirements = malformedTaggedEventRequirements(taskText);
   // A constructor set alone cannot prove a mapping. Mixed-class evidence uses a narrow grammar;
   // ambiguous prose or indirect source/test proof abstains fail-closed.
   const requestedErrorMapping = requestedErrors.length > 1
@@ -954,8 +943,19 @@ export function acceptanceInvalidInputEvidence(input = {}) {
       ));
   const partitions = new Set(assertions.flatMap((assertion) => [...assertion.partitions]));
   const partitionOk = requestedPartitions.every((partition) => partitionCovered(partition, partitions));
-  return { sourceOk: sourceOk && !ambiguousErrorIntent,
-    testOk: testLexicalOk && testConstructorOk && targetOk && partitionOk && mappingTestOk && assertionModeOk && !ambiguousErrorIntent };
+  const sourceByPath = new Map(sourceEntries.map((entry) => [entryPath(entry.path), entry.text])), testByPath = new Map(testEntries.map((entry) => [entryPath(entry.path), entry.text]));
+  const sourceGroups = namedTargets.length > 0
+    ? [...bindings.map((item) => ({ raw: sourceByPath.get(item.sourcePath), name: item.sourceName })), ...structuralTargets.map((name) => {
+        const matches = [...bodyMaps.entries()].filter(([, bodies]) => bodies.has(name));
+        return { raw: matches.length === 1 ? sourceByPath.get(matches[0][0]) : undefined, name: matches.length === 1 ? name : undefined };
+      })] : inferred.map((item) => ({ raw: sourceByPath.get(item.sourcePath), name: item.sourceName }));
+  const testGroups = namedTargets.length > 0
+    ? [...bindings.map((item) => (item.testBindings ?? []).map((binding) => ({ raw: testByPath.get(binding.testPath), names: new Set([binding.testName]) }))),
+        ...structuralTargets.map((target) => testEntries.map((entry) => ({ raw: entry.text, names: new Set([`*.${target}`]) })))]
+    : inferred.map((item) => [{ raw: testByPath.get(item.testPath), names: new Set([item.testName]) }]);
+  const tagged = malformedTaggedEventEvidence({ requirements: taggedRequirements, requestedErrors, sourceGroups, testGroups,
+    sourceCorpus: sourceEntries.map((entry) => entry.text).join("\n"), testCorpus: testEntries.map((entry) => entry.text).join("\n") });
+  return { sourceOk: sourceOk && tagged.sourceOk && !ambiguousErrorIntent, testOk: testLexicalOk && testConstructorOk && targetOk && partitionOk && mappingTestOk && assertionModeOk && tagged.testOk && !ambiguousErrorIntent };
 }
 
 export function acceptanceContractProofGuidance(raw) {

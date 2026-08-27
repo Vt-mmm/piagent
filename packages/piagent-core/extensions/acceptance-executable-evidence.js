@@ -34,10 +34,43 @@ function assertionCarrierBindings(testText) {
   return bindings.slice(0, 8);
 }
 
-function assertionCarrierIsStable(testText, binding) {
+const TEST_RUNNER_EXPORT_KINDS = new Map([
+  ["test", "test"], ["it", "test"], ["describe", "suite"], ["suite", "suite"]
+]);
+
+function testRunnerBindings(testText) {
+  const bindings = [];
+  const add = (name, kind, start, end) => {
+    if (name && kind) bindings.push({ name: name.toLowerCase(), kind, start, end });
+  };
+  for (const match of testText.matchAll(/\bimport\s+([a-z_$][a-z0-9_$]*)(?:\s*,\s*\{[^}]{1,500}\})?\s+from\s+__pi_node_test_module_literal__\s*;?/gi)) {
+    add(match[1], "test", match.index, match.index + match[0].length);
+  }
+  for (const match of testText.matchAll(/\bimport\s+(?:[a-z_$][a-z0-9_$]*\s*,\s*)?\{([^}]{1,500})\}\s+from\s+__pi_node_test_module_literal__\s*;?/gi)) {
+    for (const raw of match[1].split(",")) {
+      const item = raw.trim().match(/^(test|it|describe|suite)(?:\s+as\s+([a-z_$][a-z0-9_$]*))?$/i);
+      if (item) add(item[2] ?? item[1], TEST_RUNNER_EXPORT_KINDS.get(item[1].toLowerCase()), match.index, match.index + match[0].length);
+    }
+  }
+  for (const match of testText.matchAll(/\bconst\s+([a-z_$][a-z0-9_$]*)\s*=\s*require\s*\(\s*__pi_node_test_module_literal__\s*\)\s*;?/gi)) {
+    add(match[1], "test", match.index, match.index + match[0].length);
+  }
+  for (const match of testText.matchAll(/\bconst\s+([a-z_$][a-z0-9_$]*)\s*=\s*require\s*\(\s*__pi_node_test_module_literal__\s*\)\s*\.\s*(test|it|describe|suite)\s*;?/gi)) {
+    add(match[1], TEST_RUNNER_EXPORT_KINDS.get(match[2].toLowerCase()), match.index, match.index + match[0].length);
+  }
+  for (const match of testText.matchAll(/\bconst\s*\{([^}]{1,500})\}\s*=\s*require\s*\(\s*__pi_node_test_module_literal__\s*\)\s*;?/gi)) {
+    for (const raw of match[1].split(",")) {
+      const item = raw.trim().match(/^(test|it|describe|suite)(?:\s*:\s*([a-z_$][a-z0-9_$]*))?$/i);
+      if (item) add(item[2] ?? item[1], TEST_RUNNER_EXPORT_KINDS.get(item[1].toLowerCase()), match.index, match.index + match[0].length);
+    }
+  }
+  return bindings.slice(0, 16);
+}
+
+function importedCallableBindingIsStable(testText, binding, bindings) {
   const escaped = escapeRegex(binding.name);
   const withoutDeclaration = `${testText.slice(0, binding.start)}${" ".repeat(binding.end - binding.start)}${testText.slice(binding.end)}`;
-  if (assertionCarrierBindings(testText).filter((candidate) => candidate.name === binding.name).length !== 1) return false;
+  if (bindings.filter((candidate) => candidate.name === binding.name).length !== 1) return false;
   if (new RegExp(`\\b(?:const|let|var|function|class)\\s+${escaped}\\b|\\bfunction\\b[^({]{0,200}\\([^)]*\\b${escaped}\\b|\\bcatch\\s*\\([^)]*\\b${escaped}\\b|(?:\\([^)]*\\b${escaped}\\b[^)]*\\)|\\b${escaped})\\s*=>`, "i").test(withoutDeclaration)) return false;
   if (new RegExp(`(?<![.$a-z0-9_])${escaped}\\b\\s*(?:(?<![=!<>])=(?!=|>)|\\+\\+|--|[+*/%&|^-]=)|(?:\\+\\+|--)\\s*\\b${escaped}\\b`, "i").test(withoutDeclaration)) return false;
   if (new RegExp(`\\b(?:const|let|var)\\s+[a-z_$][a-z0-9_$]*\\s*=\\s*${escaped}\\b|\\b(?:const|let|var)\\s*\\{[^}\\n]{0,500}\\}\\s*=\\s*${escaped}\\b`, "i").test(withoutDeclaration)) return false;
@@ -54,6 +87,10 @@ function assertionCarrierIsStable(testText, binding) {
   return true;
 }
 
+function assertionCarrierIsStable(testText, binding) {
+  return importedCallableBindingIsStable(testText, binding, assertionCarrierBindings(testText));
+}
+
 function assertionEvidenceFileSupported(testText) {
   if (/\\|__pi_(?:code_generation|module_loader)_module_literal__|\b(?:eval|createrequire)\b|\b(?:process|globalthis|global|window|self|this)\b|\bmodule\s*\.\s*(?:require|constructor|_load)\b|\.\s*constructor\b|\bfunction\s*\(|(?:=|[,([])\s*function\b(?!\s+[a-z_$][a-z0-9_$]*\s*\()/i.test(testText)) return false;
   if (/\brequire\b(?!\s*\()/i.test(testText)) return false;
@@ -61,13 +98,108 @@ function assertionEvidenceFileSupported(testText) {
     const open = testText.indexOf("(", match.index);
     const end = balancedEnd(testText, open);
     const argument = end === -1 ? "" : testText.slice(open + 1, end - 1).trim();
-    if (!/^__pi_(?:bound_string_\d+|string|node_assert_module)_literal__$/.test(argument)) return false;
+    if (!/^__pi_(?:bound_string_\d+|string|node_assert_module|node_test_module)_literal__$/.test(argument)) return false;
   }
   return true;
 }
 
 function nodeAssertModuleReferenceCount(testText) {
   return [...testText.matchAll(/__pi_node_assert_module_literal__/g)].length;
+}
+
+export function literalArrayIterationEnvironmentIsStable(testText) {
+  const code = String(testText ?? "");
+  if (/\barray\s*\.\s*prototype\b|\bsymbol\b|\breflect\b|__proto__|\bobject\s*\.\s*(?:get|set|define|assign)/i.test(code)) return false;
+  const intrinsic = "(?:array|symbol)";
+  if (new RegExp(`\\b(?:const|let|var|function|class)\\s+${intrinsic}\\b|\\bimport\\s+(?:\\*\\s+as\\s+)?${intrinsic}\\b|\\bimport\\s*\\{[^}\\n]{0,500}\\bas\\s+${intrinsic}\\b`, "i").test(code)) return false;
+  if (new RegExp(`\\b(?:const|let|var)\\s+(?:\\{[^}\\n]{0,500}\\b${intrinsic}\\b|\\[[^\\]\\n]{0,500}\\b${intrinsic}\\b)|\\b(?:function|catch)\\b[^({]{0,200}\\([^)]*\\b${intrinsic}\\b`, "i").test(code)) return false;
+  if (new RegExp(`(?:\\([^)]*\\b${intrinsic}\\b[^)]*\\)|\\b${intrinsic})\\s*=>|(?<![.$a-z0-9_])${intrinsic}\\s*(?:(?<![=!<>])=(?!=|>)|\\+\\+|--|[+*/%&|^-]=)`, "i").test(code)) return false;
+  return true;
+}
+
+function moduleBackedBindings(code, moduleToken, exportedNames = []) {
+  const names = new Set(), token = escapeRegex(moduleToken);
+  const add = (name) => { if (/^[a-z_$][a-z0-9_$]*$/i.test(name ?? "")) names.add(name.toLowerCase()); };
+  for (const match of code.matchAll(new RegExp(`\\bimport\\s+([a-z_$][a-z0-9_$]*)(?:\\s*,\\s*\\{[^}]{1,500}\\})?\\s+from\\s+${token}\\b`, "gi"))) add(match[1]);
+  for (const match of code.matchAll(new RegExp(`\\bimport\\s+\\*\\s+as\\s+([a-z_$][a-z0-9_$]*)\\s+from\\s+${token}\\b`, "gi"))) add(match[1]);
+  for (const match of code.matchAll(new RegExp(`\\bimport\\s+(?:[a-z_$][a-z0-9_$]*\\s*,\\s*)?\\{([^}]{1,500})\\}\\s*from\\s+${token}\\b`, "gi"))) {
+    for (const raw of match[1].split(",")) {
+      const item = raw.trim().match(/^([a-z_$][a-z0-9_$]*)(?:\s+as\s+([a-z_$][a-z0-9_$]*))?$/i);
+      if (item && exportedNames.includes(item[1].toLowerCase())) add(item[2] ?? item[1]);
+    }
+  }
+  for (const match of code.matchAll(new RegExp(`\\b(?:const|let|var)\\s+([a-z_$][a-z0-9_$]*)\\s*=\\s*require\\s*\\(\\s*${token}\\s*\\)(?:\\s*\\.\\s*(?:strict|${exportedNames.join("|")}))?\\s*;?`, "gi"))) add(match[1]);
+  for (const match of code.matchAll(new RegExp(`\\b(?:const|let|var)\\s*\\{([^}]{1,500})\\}\\s*=\\s*require\\s*\\(\\s*${token}\\s*\\)`, "gi"))) {
+    for (const raw of match[1].split(",")) {
+      const item = raw.trim().match(/^([a-z_$][a-z0-9_$]*)(?:\s*:\s*([a-z_$][a-z0-9_$]*))?$/i);
+      if (item && exportedNames.includes(item[1].toLowerCase())) add(item[2] ?? item[1]);
+    }
+  }
+  for (let pass = 0; pass < 4; pass += 1) {
+    const priorSize = names.size;
+    for (const name of [...names]) {
+      const backed = `${escapeRegex(name)}(?:\\s*\\.\\s*[a-z_$][a-z0-9_$]*|\\s*\\[[^\\]\\n]{1,300}\\])?`;
+      for (const match of code.matchAll(new RegExp(`\\b(?:const|let|var)\\s+([a-z_$][a-z0-9_$]*)\\s*=\\s*${backed}\\s*(?:;|\\n|$)`, "gi"))) add(match[1]);
+      for (const match of code.matchAll(new RegExp(`(?<![.$a-z0-9_])([a-z_$][a-z0-9_$]*)\\s*=\\s*${backed}\\s*(?:;|\\n|$)`, "gi"))) add(match[1]);
+      for (const match of code.matchAll(new RegExp(`\\b(?:const|let|var)\\s*\\{([^}]{1,500})\\}\\s*=\\s*${escapeRegex(name)}\\b`, "gi"))) {
+        for (const raw of match[1].split(",")) add(raw.trim().match(/^(?:[a-z_$][a-z0-9_$]*\s*:\s*)?([a-z_$][a-z0-9_$]*)$/i)?.[1]);
+      }
+    }
+    if (names.size === priorSize) break;
+  }
+  return [...names];
+}
+
+function withoutModuleBindingDeclarations(code, moduleToken) {
+  const token = escapeRegex(moduleToken), blank = (match) => " ".repeat(match.length);
+  return String(code ?? "")
+    .replace(new RegExp(`\\bimport\\s+[^;\\n]{1,800}?\\s+from\\s+${token}\\s*;?`, "gi"), blank)
+    .replace(new RegExp(`\\b(?:const|let|var)\\s+[^;\\n]{1,800}?=\\s*require\\s*\\(\\s*${token}\\s*\\)[^;\\n]*;?`, "gi"), blank);
+}
+
+function moduleBindingEscapes(code, binding) {
+  const name = `(?<![.$a-z0-9_])${escapeRegex(binding)}\\b`;
+  if (new RegExp(`\\b(?:const|let|var)\\s+[a-z_$][a-z0-9_$]*\\s*=\\s*(?:${name}|\\{[^}\\n]{0,500}${name}|\\[[^\\]\\n]{0,500}${name})`, "i").test(code)) return true;
+  if (new RegExp(`(?<![=!<>])=(?!=|>)\\s*${name}|\\breturn\\s+${name}|=>\\s*${name}|\\.\\.\\.\\s*${name}`, "i").test(code)) return true;
+  if (new RegExp(`(?:\\(|\\{|\\[|,|:)\\s*(?:[a-z_$][a-z0-9_$]*\\s*:\\s*)?${name}\\s*(?:,|\\)|\\}|\\])`, "i").test(code)) return true;
+  return new RegExp(`(?:\\(|,)\\s*${name}\\s*(?:,|\\))`, "i").test(code);
+}
+
+function moduleTargetIsMutated(code, target) {
+  const member = "(?:\\s*\\.\\s*[a-z_$][a-z0-9_$]*|\\s*\\[[^\\]\\n]{1,300}\\])";
+  const lvalue = `(?:${target})(?:${member}){1,4}`;
+  if (new RegExp(`${lvalue}\\s*(?:=(?!=|>)|\\+\\+|--|[+*/%&|^-]=|(?:&&|\\|\\||\\?\\?)=)|(?:\\+\\+|--)\\s*${lvalue}|\\bdelete\\s+${lvalue}`, "i").test(code)) return true;
+  if (new RegExp(`\\b(?:object\\s*\\.\\s*(?:assign|defineproperties|defineproperty|setprototypeof)|reflect\\s*\\.\\s*(?:defineproperty|set|setprototypeof))\\s*\\(\\s*(?:${target})\\s*[,)]`, "i").test(code)) return true;
+  return new RegExp(`(?:${target})\\s*\\.\\s*__(?:definegetter|definesetter)__\\s*\\(`, "i").test(code);
+}
+
+/** Reject corpus-wide mutation of assertion carriers or test registration APIs. */
+export function testProofIntrinsicsAreStable(testText) {
+  const code = String(testText ?? "");
+  if (/__pi_node_process_module_literal__|\bprocess\s*(?:\.|\[)/i.test(code)) return false;
+  if (/\bimport\s+(?:__pi_bound_string_\d+__|__pi_template_literal__)\s*(?=;|\b(?:assert|with)\b|[\r\n]|$)/i.test(code)) return false;
+  if (/__pi_template_literal__/.test(code)
+    && /__pi_node_(?:assert|test)_module_literal__/.test(code)) return false;
+  for (const match of code.matchAll(/\b(?:import|require)\s*\(/gi)) {
+    const open = code.indexOf("(", match.index), end = balancedEnd(code, open);
+    const argument = end === -1 ? "" : code.slice(open + 1, end - 1).trim();
+    if (!/^__pi_(?:bound_string_\d+|node_assert_module|node_process_module|node_test_module)_literal__$/.test(argument)) return false;
+    if (/^__pi_node_(?:assert|test)_module_literal__$/.test(argument) && /^import/i.test(match[0])) return false;
+  }
+  const modules = [
+    { token: "__pi_node_assert_module_literal__", exports: ["default", "strict"] },
+    { token: "__pi_node_test_module_literal__", exports: ["default", ...TEST_RUNNER_EXPORT_KINDS.keys()] }
+  ];
+  for (const module of modules) {
+    const direct = `require\\s*\\(\\s*${module.token}\\s*\\)(?:\\s*\\.\\s*strict)?`;
+    if (moduleTargetIsMutated(code, direct)) return false;
+    const declarationFree = withoutModuleBindingDeclarations(code, module.token);
+    for (const binding of moduleBackedBindings(code, module.token, module.exports)) {
+      if (moduleBindingEscapes(declarationFree, binding)) return false;
+      if (moduleTargetIsMutated(code, `(?<![.$a-z0-9_])${escapeRegex(binding)}\\b`)) return false;
+    }
+  }
+  return true;
 }
 
 function balancedEnd(text, openIndex, opening = "(", closing = ")", ceiling = 8_000) {
@@ -265,56 +397,81 @@ function rejectionAssertionHelpers(testText, assertionCarriers) {
 function registrationArgumentsEnabled(argumentsList) {
   if (argumentsList.length <= 2) return true;
   if (argumentsList.length !== 3 || !/^\{[\s\S]{0,800}\}$/.test(argumentsList[1].text)) return false;
-  for (const match of argumentsList[1].text.matchAll(/\b(?:skip|todo)\s*:\s*([^,}]{1,200})/g)) {
-    if (simpleConstantValue(match[1]) !== false) return false;
-  }
-  return true;
+  const options = argumentsList[1].text;
+  if (/\.\.\.|\[[^\]]+\]\s*:|__pi_(?:bound_string_\d+__|string_literal__)\s*:/.test(options)) return false;
+  const withoutDisabledFlags = options.replace(/\b(?:skip|todo)\s*:\s*false\b/g, "");
+  return !/\b(?:skip|todo)\b/.test(withoutDisabledFlags);
 }
 
 function callbackBodyRange(text, argument) {
-  const value = text.slice(argument.start, argument.end);
-  const arrow = value.indexOf("=>");
-  const functionBody = arrow === -1 ? value.indexOf("{") : -1;
-  let bodyStart = argument.start + (arrow === -1 ? functionBody : arrow + 2);
-  if (bodyStart < argument.start) return undefined;
+  let expressionStart = argument.start, expressionEnd = argument.end;
+  while (/\s/.test(text[expressionStart] ?? "")) expressionStart += 1;
+  while (/\s/.test(text[expressionEnd - 1] ?? "")) expressionEnd -= 1;
+  while (text[expressionStart] === "(" && balancedEnd(text, expressionStart) === expressionEnd) {
+    expressionStart += 1; expressionEnd -= 1;
+    while (/\s/.test(text[expressionStart] ?? "")) expressionStart += 1;
+    while (/\s/.test(text[expressionEnd - 1] ?? "")) expressionEnd -= 1;
+  }
+  const value = text.slice(expressionStart, expressionEnd);
+  const arrow = value.match(/^(?:async\s+)?(?:\([^)]*\)|[a-z_$][a-z0-9_$]*)\s*=>\s*/i);
+  const callable = arrow ?? value.match(/^(?:async\s+)?function(?:\s+[a-z_$][a-z0-9_$]*)?\s*\([^)]*\)\s*/i);
+  if (!callable) return undefined;
+  let bodyStart = expressionStart + callable[0].length;
   while (/\s/.test(text[bodyStart] ?? "")) bodyStart += 1;
-  if (text[bodyStart] !== "{") return arrow === -1 ? undefined : { start: bodyStart, end: argument.end, braced: false };
+  if (text[bodyStart] !== "{") return arrow ? { start: bodyStart, end: expressionEnd, braced: false } : undefined;
   const end = balancedEnd(text, bodyStart, "{", "}");
-  return end === -1 || end > argument.end + 1 ? undefined : { start: bodyStart + 1, end: end - 1, braced: true };
+  return end !== expressionEnd ? undefined : { start: bodyStart + 1, end: end - 1, braced: true };
 }
 
-export function executableRejectionAssertions(testText, callableNames, modeHintsOnly = false) {
+export function executableRejectionAssertions(testText, callableNames, modeHintsOnly = false, includeSuccess = false,
+  literalIterationEnvironmentStable = true) {
   const assertions = [];
   const carrierBindings = assertionCarrierBindings(testText);
   const assertionCarriers = new Set((assertionEvidenceFileSupported(testText)
     && carrierBindings.length === 1 && nodeAssertModuleReferenceCount(testText) === 1 ? carrierBindings : [])
     .filter((binding) => assertionCarrierIsStable(testText, binding))
     .map((binding) => binding.name));
+  const runnerBindings = testRunnerBindings(testText);
+  const liveRunnerBindings = new Map(runnerBindings
+    .filter((binding) => importedCallableBindingIsStable(testText, binding, runnerBindings))
+    .map((binding) => [binding.name, binding.kind]));
+  const literalIterationStable = literalIterationEnvironmentStable
+    && literalArrayIterationEnvironmentIsStable(testText);
+  const registrationNames = (kind, fallbacks) => uniqueStrings([
+    ...fallbacks, ...runnerBindings.filter((binding) => binding.kind === kind).map((binding) => binding.name)
+  ]);
+  const registrationPattern = (names, suffix) => new RegExp(
+    `\\b(${names.map(escapeRegex).join("|")})${suffix}\\s*\\(`, "gi"
+  );
+  const suiteNames = registrationNames("suite", ["context", "describe", "suite"]);
+  const testNames = registrationNames("test", ["it", "specify", "test"]);
   const declarationRanges = assertionHelperDeclarations(testText).map(({ start, end }) => ({ start, end }));
   const skippedRanges = [];
   const suiteRanges = [];
   const registeredRanges = [];
-  for (const match of testText.matchAll(/\b(?:context|describe|it|specify|suite|test)\.(?:skip|todo)\s*\(/g)) {
+  for (const match of testText.matchAll(registrationPattern([...suiteNames, ...testNames], "\\.(?:skip|todo)"))) {
     const open = testText.indexOf("(", match.index);
     const end = balancedEnd(testText, open);
     if (end !== -1) skippedRanges.push({ start: match.index, end });
   }
-  for (const match of testText.matchAll(/\b(?:context|describe|suite)(?:\.only)?\s*\(/g)) {
+  for (const match of testText.matchAll(registrationPattern(suiteNames, "(?:\\.only)?"))) {
     const open = testText.indexOf("(", match.index);
     const end = balancedEnd(testText, open);
     if (end === -1) continue;
     const argumentsList = topLevelArgumentRanges(testText, open, end);
     const callback = callbackBodyRange(testText, argumentsList.at(-1));
-    if (!registrationArgumentsEnabled(argumentsList) || !callback) skippedRanges.push({ start: match.index, end });
+    if (liveRunnerBindings.get(match[1].toLowerCase()) !== "suite"
+      || !registrationArgumentsEnabled(argumentsList) || !callback) skippedRanges.push({ start: match.index, end });
     else suiteRanges.push({ ...callback, callStart: match.index });
   }
-  for (const match of testText.matchAll(/\b(?:it|specify|test)(?:\.(?:concurrent|only))?\s*\(/g)) {
+  for (const match of testText.matchAll(registrationPattern(testNames, "(?:\\.(?:concurrent|only))?"))) {
     const open = testText.indexOf("(", match.index);
     const end = balancedEnd(testText, open);
     if (end === -1) continue;
     const argumentsList = topLevelArgumentRanges(testText, open, end);
     const callback = callbackBodyRange(testText, argumentsList.at(-1));
-    if (!registrationArgumentsEnabled(argumentsList) || !callback) skippedRanges.push({ start: match.index, end });
+    if (liveRunnerBindings.get(match[1].toLowerCase()) !== "test"
+      || !registrationArgumentsEnabled(argumentsList) || !callback) skippedRanges.push({ start: match.index, end });
     else registeredRanges.push({ ...callback, callStart: match.index });
   }
   const bracedDepthAt = (offset) => {
@@ -335,16 +492,8 @@ export function executableRejectionAssertions(testText, callableNames, modeHints
   const topLevelCall = (start) => {
     if (bracedDepthAt(start) !== 0) return false;
     const prefix = testText.slice(Math.max(testText.lastIndexOf(";", start - 1) + 1, 0), start);
-    return !/=>|\bfunction\b|\?|&&/.test(prefix);
+    return !/=>|\bfunction\b|\?|&&|\|\|/.test(prefix);
   };
-  const liveSuites = [];
-  for (const suite of suiteRanges) {
-    if (topLevelCall(suite.callStart) || liveSuites.some((range) => rangeDirectlyContains(range, suite.callStart))) liveSuites.push(suite);
-  }
-  suiteRanges.splice(0, suiteRanges.length, ...liveSuites);
-  const liveRegistrations = registeredRanges.filter((range) => topLevelCall(range.callStart)
-    || suiteRanges.some((suite) => rangeDirectlyContains(suite, range.callStart)));
-  registeredRanges.splice(0, registeredRanges.length, ...liveRegistrations);
   const statementRange = (start) => {
     let bodyStart = start;
     while (/\s/.test(testText[bodyStart] ?? "")) bodyStart += 1;
@@ -352,6 +501,53 @@ export function executableRejectionAssertions(testText, callableNames, modeHints
     const semicolon = testText.indexOf(";", bodyStart);
     return { start: bodyStart, end: semicolon === -1 ? testText.length : semicolon + 1 };
   };
+  const statementAbruptlyExits = (raw) => {
+    let body = String(raw ?? "").trim();
+    if (body.startsWith("{") && balancedEnd(body, 0, "{", "}") === body.length) body = body.slice(1, -1).trim();
+    return /^(?:(?:break|continue)\s*;?|return(?:[ \t]+[^;{}\r\n]*)?\s*;?|throw\s+[^;{}]+\s*;?|process\.exit\s*\([^;{}]*\)\s*;?)$/.test(body);
+  };
+  const directStatementAtDepth = (containerStart, offset, baseDepth) => {
+    let boundary = containerStart, braces = baseDepth, brackets = 0, parentheses = 0;
+    for (let index = containerStart; index < offset; index += 1) {
+      const character = testText[index];
+      if (character === "{") braces += 1;
+      else if (character === "}") { braces = Math.max(0, braces - 1); if (braces === baseDepth) boundary = index + 1; }
+      else if (braces === baseDepth && character === "[") brackets += 1;
+      else if (braces === baseDepth && character === "]") brackets -= 1;
+      else if (braces === baseDepth && character === "(") parentheses += 1;
+      else if (braces === baseDepth && character === ")") parentheses -= 1;
+      else if (braces === baseDepth && !brackets && !parentheses && character === ";") boundary = index + 1;
+    }
+    return !testText.slice(boundary, offset).trim();
+  };
+  const abruptBefore = (containerStart, start, baseDepth) => {
+    const prefix = testText.slice(containerStart, start);
+    for (const match of prefix.matchAll(/\b(?:break|continue|return|throw)\b|\bprocess\s*\.\s*exit\s*\(/g)) {
+      const absolute = containerStart + match.index;
+      if (bracedDepthAt(absolute) === baseDepth && directStatementAtDepth(containerStart, absolute, baseDepth)) return true;
+    }
+    for (const match of prefix.matchAll(/\bif\s*\(/g)) {
+      const absolute = containerStart + match.index;
+      if (bracedDepthAt(absolute) !== baseDepth || !directStatementAtDepth(containerStart, absolute, baseDepth)) continue;
+      const open = testText.indexOf("(", absolute), conditionEnd = balancedEnd(testText, open);
+      if (conditionEnd === -1 || conditionEnd > start
+        || simpleConstantValue(testText.slice(open + 1, conditionEnd - 1)) === false) continue;
+      const consequent = statementRange(conditionEnd);
+      if (consequent.end !== -1 && consequent.end <= start
+        && statementAbruptlyExits(testText.slice(consequent.start, consequent.end))) return true;
+    }
+    return false;
+  };
+  const topLevelAbruptBefore = (start) => abruptBefore(0, start, 0);
+  const liveSuites = [];
+  for (const suite of suiteRanges) {
+    if (!topLevelAbruptBefore(suite.callStart)
+      && (topLevelCall(suite.callStart) || liveSuites.some((range) => rangeDirectlyContains(range, suite.callStart)))) liveSuites.push(suite);
+  }
+  suiteRanges.splice(0, suiteRanges.length, ...liveSuites);
+  const liveRegistrations = registeredRanges.filter((range) => !topLevelAbruptBefore(range.callStart)
+    && (topLevelCall(range.callStart) || suiteRanges.some((suite) => rangeDirectlyContains(suite, range.callStart))));
+  registeredRanges.splice(0, registeredRanges.length, ...liveRegistrations);
   const conditionalRanges = [];
   for (const match of testText.matchAll(/\bif\s*\(/g)) {
     const open = testText.indexOf("(", match.index);
@@ -369,7 +565,7 @@ export function executableRejectionAssertions(testText, callableNames, modeHints
   }
   const triviallyDisabled = (start) => {
     const prefix = testText.slice(Math.max(0, start - 600), start);
-    if (prefix.match(/(?:^|[;{])\s*(?:\(([^()]{1,160})\)|([^;{}()]{1,160}))\s*&&[\s\S]{0,400}$/)) return true;
+    if (prefix.match(/(?:^|[;{])\s*(?:\(([^()]{1,160})\)|([^;{}()]{1,160}))\s*(?:&&|\|\|)[\s\S]{0,400}$/)) return true;
     return Boolean(prefix.match(/(?:^|[;{])\s*(?:\(([^()]{1,160})\)|([^;{}()]{1,160}))\s*\?[\s\S]{0,400}$/));
   };
   const directlyInside = rangeDirectlyContains;
@@ -418,7 +614,7 @@ export function executableRejectionAssertions(testText, callableNames, modeHints
     const header = testText.slice(open + 1, headerEnd - 1);
     const iterationBody = testText[body.start] === "{" ? { start: body.start + 1, end: body.end - 1, braced: true } : { ...body, braced: false };
     const forOf = header.match(/^\s*(?:const|let)\s+([a-z_$][a-z0-9_$]*)\s+of\s+([\s\S]+?)\s*$/i);
-    const iterable = forOf && iterationLiteral(forOf[2], match.index);
+    const iterable = forOf && literalIterationStable && iterationLiteral(forOf[2], match.index);
     if (iterable) iterationRanges.push({ ...iterationBody, ...iterable, kind: "for-of", variable: forOf[1] });
     else if (modeHintsOnly && forOf) iterationRanges.push({ ...iterationBody, kind: "for-of", variable: forOf[1] });
     else unsupportedControlRanges.push(body);
@@ -436,7 +632,7 @@ export function executableRejectionAssertions(testText, callableNames, modeHints
       receiverStart = receiver ? receiverStart - receiver[1].length : -1;
     }
     const receiverText = receiverStart < 0 ? "" : testText.slice(receiverStart, match.index).trim();
-    const iterable = receiverStart < 0 ? undefined : iterationLiteral(receiverText, receiverStart);
+    const iterable = receiverStart < 0 || !literalIterationStable ? undefined : iterationLiteral(receiverText, receiverStart);
     const argumentsList = topLevelArgumentRanges(testText, open, end);
     const callback = callbackBodyRange(testText, argumentsList.at(-1));
     const callbackText = argumentsList.at(-1)?.text ?? "";
@@ -453,8 +649,8 @@ export function executableRejectionAssertions(testText, callableNames, modeHints
     const containers = [...registeredRanges, ...iterationRanges]
       .filter((range) => start >= range.start && start < range.end)
       .sort((left, right) => right.start - left.start);
-    const prefix = testText.slice(containers[0]?.start ?? 0, start);
-    return /(?:^|[;{}])\s*(?:break|continue|return(?:\s+[^;{}]*)?|throw\s+[^;{}]+|process\.exit\s*\([^;{}]*\));[\s\S]*$/.test(prefix);
+    const containerStart = containers[0]?.start ?? 0;
+    return abruptBefore(containerStart, start, bracedDepthAt(containerStart));
   };
   const iterationVariableIsLive = (range, start) => {
     const escaped = escapeRegex(range.variable);
@@ -498,7 +694,10 @@ export function executableRejectionAssertions(testText, callableNames, modeHints
     for (const range of referencedIterations) {
       if (range.literal) for (const signal of literalArrayPartitionSignals(range.literal)) partitions.add(signal);
     }
-    assertions.push({ targets, errorClasses, partitions, mode });
+    assertions.push({
+      targets, errorClasses, partitions, mode, operation,
+      iterationLiterals: referencedIterations.map((range) => range.literal).filter(Boolean).slice(0, 8)
+    });
   };
   for (const match of testText.matchAll(/\b([a-z_$][a-z0-9_$]*)\.(?:throws|rejects)\s*\(/gi)) {
     if (!assertionCarriers.has(match[1].toLowerCase())) continue;
@@ -507,6 +706,14 @@ export function executableRejectionAssertions(testText, callableNames, modeHints
     const argumentsList = end === -1 ? [] : topLevelArgumentRanges(testText, open, end);
     record(match.index, end, evidenceErrorClasses(end === -1 ? "" : testText.slice(match.index, end)), argumentsList[0]?.text,
       /\.rejects\s*\(/i.test(match[0]) ? "rejects" : "throws");
+  }
+  if (includeSuccess) for (const match of testText.matchAll(/\b([a-z_$][a-z0-9_$]*)\.(doesnotthrow|deepequal|deepstrictequal|equal|strictequal|notequal|notstrictequal|ok)\s*\(/gi)) {
+    if (!assertionCarriers.has(match[1].toLowerCase())) continue;
+    const open = testText.indexOf("(", match.index);
+    const end = balancedEnd(testText, open);
+    const argumentsList = end === -1 ? [] : topLevelArgumentRanges(testText, open, end);
+    if (match[2].toLowerCase() !== "doesnotthrow" && /^(?:async\s*)?(?:function\b|(?:\([^)]*\)|[a-z_$][a-z0-9_$]*)\s*=>)/i.test(argumentsList[0]?.text ?? "")) continue;
+    record(match.index, end, [], argumentsList[0]?.text, "does-not-throw");
   }
   for (const helper of rejectionAssertionHelpers(testText, assertionCarriers)) {
     for (const match of testText.matchAll(new RegExp(`\\b${escapeRegex(helper.name)}\\s*\\(`, "g"))) {
