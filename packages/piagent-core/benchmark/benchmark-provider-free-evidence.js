@@ -361,6 +361,11 @@ export function productionProviderFreeLaneDefinitions() {
   return LANE_DEFINITIONS.map((lane) => ({ ...lane }));
 }
 
+export function productionProviderFreeEvidenceRequired({ productionSpendControlled, spendControl } = {}) {
+  return productionSpendControlled === true
+    && spendControl?.productionGuards?.providerFreeEvidence?.requiredBeforeFirstPaidSession === true;
+}
+
 export async function prepareProductionProviderFreeEvidence({
   required,
   packageRoot,

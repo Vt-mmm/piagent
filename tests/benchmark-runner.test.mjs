@@ -636,6 +636,74 @@ test("production paid execution binds seed, retries, terminal stop, and exempts 
   assert.match(preflight.stderr, /must start through scripts\/benchmark-runner\.mjs/);
 });
 
+test("a spend-controlled scenario subset skips full-matrix provider-free evidence and finalizes normally", (t) => {
+  const value = fixture(t);
+  const suite = JSON.parse(fs.readFileSync(value.suite, "utf8"));
+  suite.id = "test-provider-free-subset-v1";
+  suite.defaultRepeats = 1;
+  suite.releaseGate = { minimumOutcomeScoreExclusive: 9.5 };
+  suite.scenarios.push({ ...suite.scenarios[0], id: "write-result-second", title: "Write second result" });
+  fs.writeFileSync(value.suite, `${JSON.stringify(suite, null, 2)}\n`);
+  fs.writeFileSync(path.join(path.dirname(value.suite), "spend-control.v1.json"), `${JSON.stringify({
+    schemaVersion: 1,
+    suiteId: suite.id,
+    rootSeed: "test-provider-free-subset-seed",
+    execution: {
+      surfaces: ["piagent", "codex-cli"], model: "test/fake-model", thinking: "high",
+      repeats: 1, infrastructureRetries: 0, stopAfterFailedPair: true
+    },
+    stages: [
+      { id: "S0", cumulativeSessions: 0, newSessions: 0, claimEligible: false },
+      { id: "S4", cumulativeSessions: 4, newSessions: 4, claimEligible: true }
+    ],
+    productionGuards: {
+      subagents: { required: true, maximumSessionsPerAttempt: 1, maximumTrafficShare: 0.05,
+        requireExactAllAttemptEvidence: true, requireExplainedSessionCount: true },
+      partialFreshSpend: { requiredFromCumulativeSessions: 12, maximumPooledFreshRatio: 1.1,
+        maximumObservedFamilyFreshRatio: 1.25, includeExactFailedAttempts: true },
+      providerFreeEvidence: { requiredBeforeFirstPaidSession: true,
+        requiredLaneIds: ["architecture-conformance-v1", "runtime-conformance-v1", "long-horizon-v1", "webui-parity-v1"],
+        requireCleanCommitAndTreeBinding: true, requireProductionConfigurationBinding: true,
+        requireRunnerAndLaneConfigurationDigests: true }
+    }
+  }, null, 2)}\n`);
+  const result = spawnSync(process.execPath, [
+    runner,
+    "--suite", value.suite,
+    "--scenarios", "write-result",
+    "--surfaces", "piagent,codex-cli",
+    "--model", "test/fake-model",
+    "--thinking", "high",
+    "--repeats", "1",
+    "--stop-after-failed-pair",
+    "--yes",
+    "--output", value.output
+  ], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: 60_000,
+    env: {
+      ...process.env,
+      CODEX_HOME: value.operatorCodexHome,
+      PIAGENT_BENCHMARK_PI_COMMAND: value.fakePi,
+      PIAGENT_BENCHMARK_CODEX_COMMAND: value.fakeCodex,
+      PIAGENT_BENCHMARK_TASK_FIXTURE: path.join(root, "evals", "fixtures", "task-contract.valid.json"),
+      BENCHMARK_FAKE_PROVIDER_WIRE: "1"
+    }
+  });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const manifest = JSON.parse(fs.readFileSync(path.join(value.output, "run-manifest.json"), "utf8"));
+  assert.deepEqual(manifest.scenarioIds, ["write-result"]);
+  assert.equal(manifest.productionGuards, undefined);
+  assert.equal(manifest.providerFreeEvidence, undefined);
+  assert.equal(manifest.stageControl, undefined);
+  const report = JSON.parse(fs.readFileSync(path.join(value.output, "report.json"), "utf8"));
+  assert.equal(report.runCount, 2);
+  assert.deepEqual(report.environment.scenarioSelection, ["write-result"]);
+  assert.equal(report.environment.providerFreeEvidence, null);
+  assert.equal(fs.existsSync(path.join(value.output, "aborted.json")), false);
+});
+
 test("production claim execution rejects a dirty release source before command or provider preflight", (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-production-dirty-source-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));

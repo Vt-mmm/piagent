@@ -11,6 +11,7 @@ import {
   prepareProductionProviderFreeEvidence,
   productionProviderFreeEvidenceBinding,
   productionProviderFreeEvidenceContextValidationErrors,
+  productionProviderFreeEvidenceRequired,
   productionProviderFreeEvidenceValidationErrors
 } from "../packages/piagent-core/benchmark/benchmark-provider-free-evidence.js";
 
@@ -27,6 +28,16 @@ function signedReceipt(value) {
   delete copy.digest;
   return { ...value, digest: crypto.createHash("sha256").update(JSON.stringify(copy)).digest("hex") };
 }
+
+test("provider-free production lanes are required only for the full spend-controlled matrix", () => {
+  const spendControl = {
+    productionGuards: { providerFreeEvidence: { requiredBeforeFirstPaidSession: true } }
+  };
+  assert.equal(productionProviderFreeEvidenceRequired({ productionSpendControlled: true, spendControl }), true);
+  assert.equal(productionProviderFreeEvidenceRequired({ productionSpendControlled: false, spendControl }), false,
+    "a selected diagnostic scenario must not run or finalize against the full-matrix S0 receipt");
+  assert.equal(productionProviderFreeEvidenceRequired({ productionSpendControlled: true, spendControl: null }), false);
+});
 
 test("S0 executes, binds, caches, and revalidates all same-source provider-free lanes", async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-provider-free-test-"));

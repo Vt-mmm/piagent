@@ -10,7 +10,7 @@ import { codexModelName, codexThinkingEffort } from "../packages/piagent-core/be
 import { benchmarkEnvironment, benchmarkEnvironmentPolicy, comparisonSurfaces, createCodexRuntime, piagentTreatment } from "../packages/piagent-core/benchmark/benchmark-runtime.js";
 import { assertBenchmarkPiCredentialReady, assertBenchmarkPiCredentialWritebackPolicy, cleanupBenchmarkPiRuntimeHome, createBenchmarkPiRuntimeHome, resetBenchmarkPiRuntimeEphemeralState, withBenchmarkPiCredentialWriteback } from "../packages/piagent-core/benchmark/benchmark-pi-home.js";
 import { benchmarkPreflight, benchmarkPreflightReceipt } from "../packages/piagent-core/benchmark/benchmark-preflight.js";
-import { prepareProductionProviderFreeEvidence, productionProviderFreeEvidenceError } from "../packages/piagent-core/benchmark/benchmark-provider-free-evidence.js";
+import { prepareProductionProviderFreeEvidence, productionProviderFreeEvidenceError, productionProviderFreeEvidenceRequired } from "../packages/piagent-core/benchmark/benchmark-provider-free-evidence.js";
 import { applyBenchmarkExecutionDefaults } from "../packages/piagent-core/benchmark/benchmark-runner-policy.js";
 import {
   appendPrivateJsonl,
@@ -243,6 +243,8 @@ async function main() {
       }))
     : executionOrder(suite, options.repeats, options.surfaces, rootSeed);
   const productionSpendControlled = productionFullMatrixRequested;
+  const providerFreeEvidenceRequired = productionProviderFreeEvidenceRequired({ productionSpendControlled,
+    spendControl: productionSpendControl });
   const productionHostReadinessRequired = productionSpendControlled
     && canonicalProductionSuite
     && suite.releaseGate?.requireHostReadinessForClaim === true;
@@ -528,7 +530,7 @@ async function main() {
   const source = bootstrapMetadata?.sourceIdentity;
   if (!source) fail("Modern benchmark is missing its frozen Git source identity", 1);
   const { receipt: providerFreeEvidence, binding: providerFreeEvidenceBinding } = await prepareProductionProviderFreeEvidence({
-    required: productionSpendControl?.productionGuards?.providerFreeEvidence?.requiredBeforeFirstPaidSession === true, packageRoot, bootstrapMetadata, candidateProvenance: candidateGuard.provenance, configurationDigest, runCommand, resumedReceipt: resumeState ? resumeState.manifest.providerFreeEvidence ?? null : undefined });
+    required: providerFreeEvidenceRequired, packageRoot, bootstrapMetadata, candidateProvenance: candidateGuard.provenance, configurationDigest, runCommand, resumedReceipt: resumeState ? resumeState.manifest.providerFreeEvidence ?? null : undefined });
   piCommand = runtimeCommands.pi.resolvedPath;
   if (runtimeCommands.codex) codexCommand = runtimeCommands.codex.resolvedPath;
   if (resumeState && JSON.stringify(resumeState.manifest.runtimeCommands ?? null) !== JSON.stringify(runtimeCommands)) {
@@ -915,7 +917,7 @@ async function main() {
   }
   let finalizationReceipt;
   if (!interruptedSignal && !fatalRunError) {
-    if (productionSpendControl?.productionGuards?.providerFreeEvidence?.requiredBeforeFirstPaidSession === true) {
+    if (providerFreeEvidenceRequired) {
       fatalRunError ??= productionProviderFreeEvidenceError(manifest.providerFreeEvidence, providerFreeEvidenceBinding, "final production provider-free evidence");
     }
     finalizationReceipt = executionGuard.receipt("finalization", [piRuntimeHome]);
