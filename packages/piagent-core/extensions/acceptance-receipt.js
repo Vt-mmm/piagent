@@ -12,6 +12,7 @@ import {
   acceptanceContractSemanticConflicts,
   acceptanceInvalidInputEvidence
 } from "./acceptance-contract-semantics.js";
+import { malformedIdentifierCriterionText } from "./acceptance-identifier-criteria.js";
 import { isCurrentWorkingTreeDigest, WORKING_TREE_DIGEST_ALGORITHM } from "./working-tree-digest.js";
 
 export const ACCEPTANCE_RECEIPT_SCHEMA_VERSION = 1;
@@ -222,7 +223,7 @@ function acceptanceCriterionText(task, criterion) {
     ? matched
     : acceptanceTaskText(task);
 }
-
+function invalidInputCriterionText(task, criterion) { return malformedIdentifierCriterionText(acceptanceCriterionText(task, criterion), task, GENERATED_ACCEPTANCE_TEXTS); }
 /**
  * Produce bounded, task-derived proof guidance without a second model call.
  * These hints remain generic: they describe semantic partitions from the
@@ -603,10 +604,10 @@ function declaredCallableNames(sourceText) {
   return names;
 }
 
-function contractCallableTargets(task, criterion, sourceText = "") {
+function contractCallableTargets(task, criterion, sourceText = "", criterionText) {
   const ignored = new Set(["api", "boolean", "date", "error", "false", "null", "string", "true", "typeerror", "undefined"]);
   const explicit = [];
-  const text = acceptanceCriterionText(task, criterion);
+  const text = criterionText ?? acceptanceCriterionText(task, criterion);
   let previousEnd = 0;
   let roleGroup = false;
   for (const match of text.matchAll(/`([A-Za-z_$][A-Za-z0-9_$]*)\s*\([^`]*\)`/g)) {
@@ -628,12 +629,12 @@ function contractCallableTargets(task, criterion, sourceText = "") {
   return uniqueStrings([primary.name, ...productEntrypoints.map(({ name }) => name)]).slice(0, 8);
 }
 
-function namedCodeTargets(task, criterion, sourceText = "") {
-  const text = acceptanceCriterionText(task, criterion);
+function namedCodeTargets(task, criterion, sourceText = "", criterionText) {
+  const text = criterionText ?? acceptanceCriterionText(task, criterion);
   const ignored = new Set([
     "api", "boolean", "date", "error", "false", "null", "string", "true", "typeerror", "undefined"
   ]);
-  const targets = contractCallableTargets(task, criterion, sourceText);
+  const targets = contractCallableTargets(task, criterion, sourceText, text);
   const callables = declaredCallableNames(sourceText);
   for (const sentence of text.split(/(?<=[.!?])\s+/)) {
     if (!/\b(?:validat(?:e|es|ed|ion)|invalid|reject(?:s|ed|ion)?|throw(?:s|ing)?|malformed)\b/i.test(sentence)) continue;
@@ -643,10 +644,7 @@ function namedCodeTargets(task, criterion, sourceText = "") {
   }
   return uniqueStrings(targets).slice(0, 8);
 }
-
-function explicitlyCallableTargets(task, criterion, sourceText = "") {
-  return contractCallableTargets(task, criterion, sourceText);
-}
+function explicitlyCallableTargets(task, criterion, sourceText = "", criterionText) { return contractCallableTargets(task, criterion, sourceText, criterionText); }
 
 function booleanAssertionSignals(testText) {
   const text = String(testText ?? "");
@@ -791,14 +789,15 @@ function evidenceForObligation(obligation, task, corpus, currentWorkingTreeDiges
   }
 
   if (obligation === "invalid-input-rejection") {
+    const criterionText = invalidInputCriterionText(task, criterion);
     const { sourceOk, testOk } = acceptanceInvalidInputEvidence({
-      taskText: acceptanceCriterionText(task, criterion),
+      taskText: criterionText,
       sourceText: corpus.sourceText,
       testText: corpus.testText,
       sourceEntries: corpus.sourceEntries,
       testEntries: corpus.testEntries,
-      namedTargets: namedCodeTargets(task, criterion, corpus.sourceText),
-      provenanceTargets: explicitlyCallableTargets(task, criterion, corpus.sourceText)
+      namedTargets: namedCodeTargets(task, criterion, corpus.sourceText, criterionText),
+      provenanceTargets: explicitlyCallableTargets(task, criterion, corpus.sourceText, criterionText)
     });
     if (passingVerifier && corpus.sourceFiles.length > 0 && verifierCommandsCoverTests(task, corpus.testFiles, cwd) && sourceOk && testOk) {
       return {
@@ -894,21 +893,22 @@ export function acceptanceCriticalRecoveryProjection(task, options = {}) {
     if (!criterionText) continue;
     if (disposition === "unknown") { projections.push({ criterionId: criterion.id, criterionHash: criterion.hash, criterionText: criterionText.slice(0, 700), targets: [], missingDimensions: ["adapter-linkage"], proofHints: ["Add a focused executable test with a direct relative import to the changed source, or configure a deterministic language adapter that resolves this helper/barrel path; then rerun the exact verifier."] }); continue; }
     if (evidenceForObligation(criterion.obligation, task, corpus, currentWorkingTreeDigest, criterion, cwd)) continue;
-    const targets = namedCodeTargets(task, criterion, corpus.sourceText);
+    const evidenceCriterionText = criterion.obligation === "invalid-input-rejection" ? invalidInputCriterionText(task, criterion) : criterionText;
+    const targets = namedCodeTargets(task, criterion, corpus.sourceText, evidenceCriterionText);
     const missingDimensions = [];
     if (!verifierCurrent) missingDimensions.push("current-verifier");
     if (criterion.obligation === "invalid-input-rejection") {
       if (corpus.sourceFiles.length === 0 || corpus.testFiles.length === 0) continue;
       const proof = acceptanceInvalidInputEvidence({
-        taskText: criterionText, sourceText: corpus.sourceText, testText: corpus.testText,
+        taskText: evidenceCriterionText, sourceText: corpus.sourceText, testText: corpus.testText,
         sourceEntries: corpus.sourceEntries, testEntries: corpus.testEntries,
-        namedTargets: targets, provenanceTargets: explicitlyCallableTargets(task, criterion, corpus.sourceText)
+        namedTargets: targets, provenanceTargets: explicitlyCallableTargets(task, criterion, corpus.sourceText, evidenceCriterionText)
       });
       if (!proof.sourceOk) missingDimensions.push("source-rejection");
       if (!proof.testOk) missingDimensions.push("executable-focused-test");
     }
     if (missingDimensions.length === 0) missingDimensions.push("focused-evidence");
-    const proofHints = acceptanceContractProofGuidance(criterionText);
+    const proofHints = acceptanceContractProofGuidance(evidenceCriterionText);
     if (missingDimensions.includes("source-rejection")) proofHints.push("Add a reachable entrypoint-bound rejection guard for every explicitly invalid partition and requested error class.");
     if (missingDimensions.includes("executable-focused-test")) proofHints.push("Add live entrypoint-bound rejection assertions; dynamic, skipped, dead, mutable, or unresolved proof remains pending.");
     if (missingDimensions.includes("current-verifier")) proofHints.push("Run the exact configured verifier against one unchanged current working-tree snapshot.");

@@ -1481,6 +1481,191 @@ test("acceptance receipt derives critical auth and validation obligations withou
   assert.ok(transitionGuidance.some((item) => /exact prior object/.test(item)));
   assert.ok(transitionGuidance.some((item) => /whitespace-only/.test(item)));
 
+  const identifierGuidance = acceptanceProofGuidance([
+    "Each event has a unique",
+    "`eventId`, an `entityId`, an integer `expectedVersion`, and `nextValue`.",
+    "Reject malformed",
+    "state or event shapes with TypeError."
+  ].join("\n"));
+  assert.ok(identifierGuidance.some((item) => /identifier input/.test(item)));
+  assert.ok(identifierGuidance.some((item) => /missing, wrong-type, and empty-string/.test(item)));
+  assert.deepEqual(
+    acceptanceProofGuidance("Return the configured identifier unchanged."),
+    [],
+    "identifier wording alone must not invent a rejection contract"
+  );
+  assert.deepEqual(
+    acceptanceProofGuidance("When the dependency id lookup throws TypeError, retry once."),
+    [],
+    "a dependency error observation is not an input-rejection contract"
+  );
+  assert.deepEqual(
+    acceptanceProofGuidance("`findId()` rejects malformed payload shapes with TypeError."),
+    ["Assert TypeError for every rejected partition named by the request; a different error class is not equivalent."],
+    "a callable name ending in Id is not an identifier field"
+  );
+  assert.deepEqual(
+    acceptanceProofGuidance("`findId` rejects malformed payload shapes with TypeError."),
+    ["Assert TypeError for every rejected partition named by the request; a different error class is not equivalent."],
+    "a callable reference without a signature is not an identifier field"
+  );
+  for (const request of [
+    "The `findId` callable must throw TypeError for malformed payload shapes.",
+    "A callable named `findId` must throw TypeError for malformed payload shapes.",
+    "Reject malformed `valid` values with TypeError.",
+    "Reject malformed `solid` values with TypeError."
+  ]) {
+    assert.equal(
+      acceptanceProofGuidance(request).some((item) => /identifier input|empty-string/.test(item)),
+      false,
+      request
+    );
+  }
+  const unrelatedShape = acceptanceProofGuidance(
+    "Each request has a `requestId`. Reject malformed payload shapes with TypeError."
+  );
+  assert.ok(unrelatedShape.some((item) => /Assert TypeError/.test(item)));
+  assert.equal(unrelatedShape.some((item) => /identifier input|empty-string/.test(item)), false);
+  const identifierCollection = acceptanceProofGuidance(
+    "Require checkpoint.write(completedIds), then reject malformed or unordered step arrays and unknown checkpoint ids with TypeError."
+  );
+  assert.ok(identifierCollection.some((item) => /Assert TypeError/.test(item)));
+  assert.equal(identifierCollection.some((item) => /identifier input|empty-string/.test(item)), false);
+  assert.ok(acceptanceProofGuidance(
+    "Reject malformed `eventId` values with TypeError."
+  ).some((item) => /empty-string/.test(item)));
+  for (const identifier of ["eventId", "eventID", "event_id", "event-id"]) {
+    assert.ok(
+      acceptanceProofGuidance(`Reject malformed \`${identifier}\` values with TypeError.`).some((item) => /empty-string/.test(item)),
+      identifier
+    );
+  }
+  const identifierSource = [
+    "export function acceptId(eventId) {",
+    "  if (eventId == null) throw new TypeError('missing eventId');",
+    "  if (typeof eventId !== 'string') throw new TypeError('eventId type');",
+    "  if (!eventId) throw new TypeError('empty eventId');",
+    "  return eventId;",
+    "}",
+    ""
+  ].join("\n");
+  const identifierTest = (includeEmpty) => [
+    "import assert from 'node:assert/strict';",
+    "import { acceptId } from '../src/id.js';",
+    `for (const value of [undefined, 42${includeEmpty ? ", ''" : ""}]) assert.throws(() => acceptId(value), TypeError);`,
+    ""
+  ].join("\n");
+  const identifierEvidence = (includeEmpty) => acceptanceInvalidInputEvidence({
+    taskText: "`acceptId(eventId)` rejects malformed identifier input with TypeError.",
+    sourceText: identifierSource,
+    testText: identifierTest(includeEmpty),
+    sourceEntries: [{ path: "src/id.js", text: identifierSource }],
+    testEntries: [{ path: "test/id.test.js", text: identifierTest(includeEmpty) }],
+    namedTargets: ["acceptId"],
+    provenanceTargets: ["acceptId"]
+  });
+  assert.deepEqual(identifierEvidence(false), { sourceOk: true, testOk: false });
+  assert.deepEqual(identifierEvidence(true), { sourceOk: true, testOk: true });
+
+  const identifierCwd = temporaryProject(t, "piagent-identifier-proof-");
+  fs.mkdirSync(path.join(identifierCwd, "src"), { recursive: true });
+  fs.mkdirSync(path.join(identifierCwd, "test"), { recursive: true });
+  fs.writeFileSync(path.join(identifierCwd, "src", "id.js"), identifierSource);
+  const identifierCriteria = [
+    "`acceptId(eventId)` receives an identifier field named eventId.",
+    "`acceptId` rejects malformed identifier shapes with TypeError."
+  ];
+  const identifierReceipt = buildAcceptanceReceipt({
+    summary: identifierCriteria.join(" "),
+    expectedOutput: "Identifier validation is complete.",
+    acceptanceCriteria: identifierCriteria,
+    changeMode: "source-change",
+    source: "runtime",
+    generatedAt: "2026-08-27T00:00:00.000Z"
+  });
+  const refreshedIdentifierReceipt = (includeEmpty, digestMarker) => {
+    const currentDigest = treeDigest(digestMarker);
+    fs.writeFileSync(path.join(identifierCwd, "test", "id.test.js"), identifierTest(includeEmpty));
+    const candidate = contract({
+      summary: identifierCriteria.join(" "),
+      expectedOutput: "Identifier validation is complete.",
+      acceptanceCriteria: identifierReceipt.acceptanceCriteria,
+      acceptanceReceipt: structuredClone(identifierReceipt.receipt),
+      changedFiles: ["src/id.js", "test/id.test.js"],
+      observedChangedFiles: ["src/id.js", "test/id.test.js"],
+      verifyEvidence: [{
+        command: "npm test", exitCode: 0, observed: true, matchedProfileCommand: true,
+        preWorkingTreeDigest: currentDigest, workingTreeDigest: currentDigest,
+        summary: "pass", recordedAt: "2026-08-27T00:00:01.000Z"
+      }],
+      trace: { outcome: "completed", recordedAt: "2026-08-27T00:00:01.000Z" }
+    });
+    return refreshAcceptanceReceipt(candidate, {
+      cwd: identifierCwd,
+      changedFiles: candidate.changedFiles,
+      currentWorkingTreeDigest: currentDigest,
+      recordedAt: "2026-08-27T00:00:02.000Z"
+    });
+  };
+  const incompleteIdentifierReceipt = refreshedIdentifierReceipt(false, "a");
+  assert.ok(incompleteIdentifierReceipt.criticalMissing.some((item) => item.obligation === "invalid-input-rejection"));
+  const identifierRecovery = acceptanceCriticalRecoveryProjection(incompleteIdentifierReceipt.task, {
+    cwd: identifierCwd,
+    changedFiles: incompleteIdentifierReceipt.task.changedFiles,
+    currentWorkingTreeDigest: treeDigest("a")
+  });
+  assert.ok(identifierRecovery.some((item) => item.proofHints.some((hint) => /empty-string/.test(hint))));
+
+  const mixedIdentifierCriteria = [
+    "`acceptId(eventId)` rejects malformed identifier input with TypeError.",
+    "`parseCount(value)` rejects negative values with RangeError."
+  ];
+  const mixedIdentifierReceipt = buildAcceptanceReceipt({
+    summary: mixedIdentifierCriteria.join(" "),
+    expectedOutput: "Both validators satisfy their independent contracts.",
+    acceptanceCriteria: mixedIdentifierCriteria,
+    changeMode: "source-change",
+    source: "runtime",
+    generatedAt: "2026-08-27T00:00:00.000Z"
+  });
+  const mixedDigest = treeDigest("c");
+  const mixedCandidate = contract({
+    summary: mixedIdentifierCriteria.join(" "),
+    expectedOutput: "Both validators satisfy their independent contracts.",
+    acceptanceCriteria: mixedIdentifierReceipt.acceptanceCriteria,
+    acceptanceReceipt: structuredClone(mixedIdentifierReceipt.receipt),
+    changedFiles: ["src/id.js", "test/id.test.js"],
+    observedChangedFiles: ["src/id.js", "test/id.test.js"],
+    verifyEvidence: [{
+      command: "npm test", exitCode: 0, observed: true, matchedProfileCommand: true,
+      preWorkingTreeDigest: mixedDigest, workingTreeDigest: mixedDigest,
+      summary: "pass", recordedAt: "2026-08-27T00:00:01.000Z"
+    }],
+    trace: { outcome: "completed", recordedAt: "2026-08-27T00:00:01.000Z" }
+  });
+  fs.writeFileSync(path.join(identifierCwd, "test", "id.test.js"), identifierTest(false));
+  const mixedRefresh = refreshAcceptanceReceipt(mixedCandidate, {
+    cwd: identifierCwd,
+    changedFiles: mixedCandidate.changedFiles,
+    currentWorkingTreeDigest: mixedDigest,
+    recordedAt: "2026-08-27T00:00:02.000Z"
+  });
+  const identifierCriterionId = mixedIdentifierReceipt.receipt.criteria[0].id;
+  const mixedRecovery = acceptanceCriticalRecoveryProjection(mixedRefresh.task, {
+    cwd: identifierCwd,
+    changedFiles: mixedCandidate.changedFiles,
+    currentWorkingTreeDigest: mixedDigest
+  }).find((item) => item.criterionId === identifierCriterionId);
+  assert.ok(mixedRecovery?.proofHints.some((hint) => /empty-string/.test(hint)));
+  assert.equal(mixedRecovery?.proofHints.some((hint) => /RangeError|negative/.test(hint)), false);
+
+  const completeIdentifierReceipt = refreshedIdentifierReceipt(true, "b");
+  assert.equal(
+    completeIdentifierReceipt.criticalMissing.some((item) => item.obligation === "invalid-input-rejection"),
+    false,
+    JSON.stringify(completeIdentifierReceipt.criticalMissing, null, 2)
+  );
+
   const orderingGuidance = acceptanceProofGuidance([
     "Report replay ids once in first-observed order.",
     "A maxChars capacity allows equality; stop atomically before an item would exceed it, leave state unchanged, and buffer the remainder."

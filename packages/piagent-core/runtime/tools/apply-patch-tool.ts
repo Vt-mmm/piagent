@@ -162,9 +162,9 @@ function parseUpdateHunks(section: string[], repoPath: string): UpdateHunk[] {
       if (line[0] !== "-") newLines.push(line.slice(1));
       if (line[0] === "+" || line[0] === "-") changed = true;
     }
-    if (!bodyLines || !changed || oldLines.length === 0) {
-      fail("malformed-hunk", `Hunk must contain a change with stable old-side context: ${repoPath}. Keep @@ on its own line, put removed lines on separate - lines, and include exact unchanged context when available; no file was changed.`);
-    }
+    if (!bodyLines) fail("malformed-hunk", `Hunk body is empty: ${repoPath}. Put @@ on its own line, then add body lines prefixed by space, +, or -; no file was changed.`);
+    if (!changed) fail("malformed-hunk", `Hunk contains no change line: ${repoPath}. Include at least one + or - body line in addition to any exact unchanged context; no file was changed.`);
+    if (oldLines.length === 0) fail("malformed-hunk", `Hunk must contain a change and at least one exact old-side line: ${repoPath}. A plus-only Update File hunk is invalid; for an insertion or append, place an adjacent existing anchor line (prefixed by one space) before or after the new + lines according to the intended position. Keep @@ on its own line and put removed lines on separate - lines; no file was changed.`);
     hunks.push({ oldLines, newLines });
   }
   if (!hunkCount) fail("malformed-hunk", `Update contains no hunks: ${repoPath}`);
@@ -481,10 +481,10 @@ export function registerApplyPatchTool(
     name: "apply_patch",
     label: "Apply Patch",
     description: "Apply one validated OpenAI-style patch across multiple project files in a single guarded tool call.",
-    promptSnippet: "Prefer one coherent apply_patch call for a bounded source-and-test or other multi-file change only when exact old context for every target is available; otherwise use one bounded writer per file.",
+    promptSnippet: "Prefer one coherent apply_patch call for a bounded source-and-test or other multi-file change only when exact old context for every target is available. Update hunks require an exact old-side anchor; plus-only insertions are invalid. Otherwise use one bounded writer per file.",
     promptGuidelines: [
       "Wrap the patch in exact *** Begin Patch and *** End Patch delimiters. For each *** Update File hunk, put @@ on its own line. Put every old, new, or unchanged body line below it with a leading -, +, or space; never write @@ -old or @@ +new.",
-      "Use each project-relative target once and include enough unchanged context for every update hunk to match exactly once."
+      "Use each project-relative target once. Every Update File hunk must include at least one exact old-side line prefixed by space or -; for append/insert, put an adjacent existing space-prefixed anchor before or after the + lines to preserve the intended position. Include enough context to match exactly once."
     ],
     parameters: Type.Object({ patch: Type.String({ minLength: 1, maxLength: MAX_PATCH_BYTES }) }, { additionalProperties: false }),
     executionMode: "sequential",

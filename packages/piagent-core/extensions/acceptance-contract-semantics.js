@@ -1,5 +1,5 @@
 import path from "node:path";
-import { acceptanceBoundaryProofGuidance } from "./acceptance-boundary-guidance.js";
+import { acceptanceBoundaryProofGuidance, malformedIdentifierContract } from "./acceptance-boundary-guidance.js";
 import { evidenceTopLevelArguments, executableRejectionAssertions } from "./acceptance-executable-evidence.js";
 import { ERROR_CONSTRUCTORS, ERROR_CONSTRUCTOR_DISPLAY_NAMES, errorMappingsProveContract,
   hasAmbiguousErrorClassIntent, rejectionStatementErrorClass, requestedErrorClasses, requestedErrorPartitionMapping } from "./acceptance-error-classes.js";
@@ -812,9 +812,9 @@ function requestedInvalidPartitions(text) {
   if (/\breject(?:s|ed|ing)?\s+(?:an?\s+)?arrays?\b|\barrays?\s+(?:values?\s+)?(?:are|is|must be)\s+(?:invalid|rejected|disallowed|not allowed)\b/.test(invalid)) partitions.add("array");
   if (/\breject(?:s|ed|ing)?\s+(?:an?\s+)?plain[- ]objects?\b|\bplain[- ]objects?\s+(?:values?\s+)?(?:are|is|must be)\s+(?:invalid|rejected|disallowed|not allowed)\b/.test(invalid)) partitions.add("plain-object");
   if (/\breject(?:s|ed|ing)?\s+(?:an?\s+)?primitives?\b|\bprimitives?\s+(?:values?\s+)?(?:are|is|must be)\s+(?:invalid|rejected|disallowed|not allowed)\b/.test(invalid)) partitions.add("primitive");
+  if (malformedIdentifierContract(text)) for (const partition of ["missing", "non-string", "empty-string"]) partitions.add(partition);
   return [...partitions];
 }
-
 function moduleBindingFreeCode(entry) {
   return normalizedText(sanitizeJavaScriptEvidence(entry?.text ?? ""))
     .replace(/\bimport\s+[\s\S]{1,800}?\s+from\s+__pi_(?:string|node_assert_module|code_generation_module|module_loader_module)_literal__\s*;?/g, " ")

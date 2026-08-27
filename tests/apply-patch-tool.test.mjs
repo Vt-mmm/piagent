@@ -42,8 +42,9 @@ test("registers one sequential guarded apply_patch tool and applies multi-file A
   assert.equal(registered.length, 1);
   assert.equal(registered[0].name, "apply_patch");
   assert.equal(registered[0].executionMode, "sequential");
-  assert.match(registered[0].promptSnippet, /Prefer one coherent apply_patch call.*source-and-test.*exact old context for every target.*otherwise use one bounded writer per file/);
+  assert.match(registered[0].promptSnippet, /Prefer one coherent apply_patch call.*source-and-test.*exact old context for every target.*old-side anchor.*plus-only insertions are invalid.*Otherwise use one bounded writer per file/);
   assert.match(registered[0].promptGuidelines.join("\n"), /For each \*\*\* Update File hunk, put @@ on its own line.*never write @@ -old or @@ \+new/);
+  assert.match(registered[0].promptGuidelines.join("\n"), /Every Update File hunk must include at least one exact old-side line.*append\/insert.*anchor before or after the \+ lines/);
   const input = {
     patch: patch(
       "*** Update File: src/value.js",
@@ -67,6 +68,21 @@ test("registers one sequential guarded apply_patch tool and applies multi-file A
   assert.equal(fs.statSync(path.join(root, "src", "value.js")).mode & 0o777, 0o755, "updates preserve file mode");
   assert.equal(fs.readFileSync(path.join(root, "test", "value.test.js"), "utf8"), "import assert from 'node:assert/strict';\nassert.equal(2, 2);\n");
   assert.deepEqual(fs.readdirSync(path.join(root, "src")), ["value.js"], "transaction artifacts are removed");
+
+  fs.writeFileSync(path.join(root, "src", "prepend.js"), "export const existing = true;\n");
+  await registered[0].execute("patch-prepend", {
+    patch: patch(
+      "*** Update File: src/prepend.js",
+      "@@",
+      "+import './setup.js';",
+      " export const existing = true;"
+    )
+  }, undefined, undefined, { cwd: root });
+  assert.equal(
+    fs.readFileSync(path.join(root, "src", "prepend.js"), "utf8"),
+    "import './setup.js';\nexport const existing = true;\n",
+    "a space-prefixed anchor after + lines preserves prepend position"
+  );
 });
 
 test("registers the intentional override without calling pre-bind host actions", () => {
@@ -234,9 +250,27 @@ test("explains how to recover a change accidentally placed in the hunk header", 
     () => applyValidatedPatch(root, patch("*** Update File: src/plain.js", "@@ -old", "+new")),
     (error) => error instanceof ApplyPatchError
       && error.code === "malformed-hunk"
-      && /Keep @@ on its own line.*separate - lines.*no file was changed/.test(error.message)
+      && /plus-only Update File hunk is invalid.*anchor line.*before or after.*Keep @@ on its own line.*separate - lines.*no file was changed/.test(error.message)
   );
   assert.equal(fs.readFileSync(path.join(root, "src", "plain.js"), "utf8"), "old\n");
+});
+
+test("distinguishes empty, unchanged-only, and plus-only update hunks", () => {
+  const root = project();
+  fs.writeFileSync(path.join(root, "plain.js"), "old\n");
+  assert.throws(
+    () => applyValidatedPatch(root, patch("*** Update File: plain.js", "@@")),
+    (error) => error instanceof ApplyPatchError && error.code === "malformed-hunk" && /Hunk body is empty/.test(error.message)
+  );
+  assert.throws(
+    () => applyValidatedPatch(root, patch("*** Update File: plain.js", "@@", " old")),
+    (error) => error instanceof ApplyPatchError && error.code === "malformed-hunk" && /no change line/.test(error.message)
+  );
+  assert.throws(
+    () => applyValidatedPatch(root, patch("*** Update File: plain.js", "@@", "+new")),
+    (error) => error instanceof ApplyPatchError && error.code === "malformed-hunk" && /plus-only Update File hunk is invalid/.test(error.message)
+  );
+  assert.equal(fs.readFileSync(path.join(root, "plain.js"), "utf8"), "old\n");
 });
 
 test("honors cancellation before creating parents or changing content", () => {
