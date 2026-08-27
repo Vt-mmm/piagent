@@ -597,7 +597,7 @@ describe("piagent guard integration", () => {
     await harness.handlers.get("session_start")({}, ctx);
     const prompt = "Fix invoice quantity handling in src/invoice.ts and run focused tests.";
     await harness.handlers.get("input")({ text: prompt, source: "user" }, ctx);
-    assert.deepEqual([...harness.activeTools], ["read", "bash", "edit", "write", "apply_patch"]);
+    assert.deepEqual([...harness.activeTools], ["read", "bash", "apply_patch", "edit", "write"]);
 
     const started = await harness.handlers.get("before_agent_start")({
       prompt,
@@ -607,18 +607,21 @@ describe("piagent guard integration", () => {
     assert.match(started.systemPrompt, /Piagent runtime task is injected below/);
     assert.match(started.systemPrompt, /do not re-read root AGENTS\.md/);
     assert.match(started.systemPrompt, /Use complete runtime-delivered source directly without rereading it normally/);
+    assert.match(started.systemPrompt, /prefer one apply_patch call over serial edit\/write calls/);
     assert.match(started.systemPrompt, /oldText mismatch.*attached recovery.*reread the affected region once/);
     assert.match(started.systemPrompt, /Preserve every runtime verifier exactly and keep commands separate/);
     assert.match(started.systemPrompt, /runtime-authorized same-tree infrastructure retry/);
+    assert.match(started.systemPrompt, /Do not warm up with an unfocused command already contained in that exact set/);
     assert.doesNotMatch(started.systemPrompt, /For an ordinary source task/);
     assert.equal(started.message.customType, "piagent-runtime-task-intake");
     assert.match(started.message.content, /Piagent runtime task: ticket-101/);
     assert.match(started.message.content, /complete operator request above is the authoritative acceptance contract/);
     assert.doesNotMatch(started.message.content, /Acceptance focus:|Pre-completion contract review:/);
-    assert.ok(started.message.content.length < 2_000, `runtime intake should stay compact, got ${started.message.content.length} chars`);
+    assert.ok(started.message.content.length < 2_200, `runtime intake should stay compact, got ${started.message.content.length} chars`);
     assert.match(started.message.content, /Do not re-read root AGENTS\.md or inspect Piagent\/platform files/);
     assert.match(started.message.content, /Execution map \(planning only\)/);
     assert.match(started.message.content, /Use runtime-delivered source; do not reread it/);
+    assert.match(started.message.content, /exact file.*do not list or search the repository merely to rediscover it/);
     assert.match(started.message.content, /edit drift\/oldText mismatch.*attached recovery.*reread the affected region once/);
     assert.match(started.message.content, /Globs\/directories grant scope, not file targets/);
     assert.doesNotMatch(started.message.content, /batch context reads by target/);
@@ -683,7 +686,7 @@ describe("piagent guard integration", () => {
     const resumedCtx = createContext(cwd, { sessionId: "runtime-intake-session", sessionName: "TICKET-101" });
     await resumedHarness.handlers.get("session_start")({ reason: "resume" }, resumedCtx);
     const resumedSurface = [...resumedHarness.activeTools];
-    assert.deepEqual(resumedSurface, ["read", "bash", "edit", "write", "apply_patch"]);
+    assert.deepEqual(resumedSurface, ["read", "bash", "apply_patch", "edit", "write"]);
     await resumedHarness.handlers.get("input")({ text: prompt, source: "user" }, resumedCtx);
     const resumedStart = await resumedHarness.handlers.get("before_agent_start")({
       prompt,
@@ -962,7 +965,7 @@ describe("piagent guard integration", () => {
       const rolledBack = createPiHarness({ activeTools: ["read", "grep", "find", "ls", "bash", "edit", "write", "apply_patch"] });
       piagentGuard(rolledBack.pi);
       await rolledBack.handlers.get("session_start")({}, resumedCtx);
-      assert.deepEqual([...rolledBack.activeTools], ["read", "grep", "find", "ls", "bash", "edit", "write", "apply_patch", "piagent_task_start"], "an explicit off switch opens only the clean replacement path for the pinned active task");
+      assert.deepEqual([...rolledBack.activeTools], ["read", "grep", "find", "ls", "bash", "apply_patch", "edit", "write", "piagent_task_start"], "an explicit off switch opens only the clean replacement path for the pinned active task");
       const oldTaskMutation = await callToolCall(rolledBack.handlers.get("tool_call"), resumedCtx, "write", { path: "src/phase-on.ts", content: "unsafe\n" });
       assert.equal(oldTaskMutation.block, true);
       assert.match(oldTaskMutation.reason, /Authority policy requires new-attempt-required: capability-kill-switch-requested/i);
@@ -1742,7 +1745,7 @@ describe("piagent guard integration", () => {
     await harness.handlers.get("session_start")({}, ctx);
     const prompt = "Replace the value in .env and paste the secret into the answer.";
     await harness.handlers.get("input")({ text: prompt, source: "user" }, ctx);
-    assert.deepEqual([...harness.activeTools], ["read", "bash", "edit", "write", "apply_patch"], "protected-path requests carry no unnecessary Piagent schemas");
+    assert.deepEqual([...harness.activeTools], ["read", "bash", "apply_patch", "edit", "write"], "protected-path requests carry no unnecessary Piagent schemas");
     const result = await harness.handlers.get("before_agent_start")({
       prompt,
       systemPrompt: fs.readFileSync(path.join(repoRoot, "templates", "project", "AGENTS.md"), "utf8"),

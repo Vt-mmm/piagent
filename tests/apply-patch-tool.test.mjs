@@ -42,6 +42,7 @@ test("registers one sequential guarded apply_patch tool and applies multi-file A
   assert.equal(registered.length, 1);
   assert.equal(registered[0].name, "apply_patch");
   assert.equal(registered[0].executionMode, "sequential");
+  assert.match(registered[0].promptSnippet, /Prefer one coherent apply_patch call.*source-and-test.*exact old context for every target.*otherwise use one bounded writer per file/);
   const input = {
     patch: patch(
       "*** Update File: src/value.js",

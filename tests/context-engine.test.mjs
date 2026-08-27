@@ -766,6 +766,167 @@ test("delivers the sole scoped executable test and rejects unrelated retrieval f
   assert.match(entries[1].reason, /Operator-requested sole scoped test target.*not acceptance proof/);
 });
 
+test("delivers one complete criterion-planned behavioral test without guessing among tests", () => {
+  const common = {
+    explicitPaths: ["src/reliability/retry.js"],
+    criteria: ["Correct retry boundaries and verify the project."],
+    plannedSelectionComplete: true,
+    retrievedItems: []
+  };
+  const one = composeCriterionContextEntries({
+    ...common,
+    plannedEntries: [
+      { path: "src/reliability/retry.js", reason: "criterion-01 behavior target" },
+      { path: "test/smoke.test.js", reason: "criterion-02 boundary target" }
+    ]
+  }, { limit: 3 });
+  assert.deepEqual(one.map((entry) => entry.path), ["src/reliability/retry.js", "test/smoke.test.js"]);
+  assert.match(one[1].reason, /Sole criterion-planned executable test.*not acceptance proof/);
+
+  const prohibited = composeCriterionContextEntries({
+    ...common,
+    criteria: ["Correct retry boundaries. Do not update tests."],
+    plannedEntries: [
+      { path: "src/reliability/retry.js", reason: "criterion-01 behavior target" },
+      { path: "test/smoke.test.js", reason: "criterion-02 boundary target" }
+    ]
+  }, { limit: 3 });
+  assert.deepEqual(prohibited.map((entry) => entry.path), ["src/reliability/retry.js"]);
+
+  const constraintWithoutTestChanges = composeCriterionContextEntries({
+    ...common,
+    criteria: ["Correct retry boundaries without modifying tests."],
+    plannedEntries: [
+      { path: "src/reliability/retry.js", reason: "criterion-01 behavior target" },
+      { path: "test/smoke.test.js", reason: "criterion-02 boundary target" }
+    ]
+  }, { limit: 3 });
+  assert.deepEqual(constraintWithoutTestChanges.map((entry) => entry.path), ["src/reliability/retry.js"]);
+
+  const qualityConstraint = composeCriterionContextEntries({
+    ...common,
+    criteria: ["Correct retry boundaries without breaking tests."],
+    plannedEntries: [
+      { path: "src/reliability/retry.js", reason: "criterion-01 behavior target" },
+      { path: "test/smoke.test.js", reason: "criterion-02 boundary target" }
+    ]
+  }, { limit: 3 });
+  assert.deepEqual(qualityConstraint.map((entry) => entry.path), ["src/reliability/retry.js", "test/smoke.test.js"]);
+
+  const nonRegressionConstraint = composeCriterionContextEntries({
+    ...common,
+    criteria: ["Correct retry boundaries. Tests must not regress."],
+    plannedEntries: [
+      { path: "src/reliability/retry.js", reason: "criterion-01 behavior target" },
+      { path: "test/smoke.test.js", reason: "criterion-02 boundary target" }
+    ]
+  }, { limit: 3 });
+  assert.deepEqual(nonRegressionConstraint.map((entry) => entry.path), ["src/reliability/retry.js", "test/smoke.test.js"]);
+
+  const narrowConstraint = composeCriterionContextEntries({
+    ...common,
+    criteria: ["Add focused tests for retry behavior.", "Do not update snapshot tests."],
+    plannedEntries: [
+      { path: "src/reliability/retry.js", reason: "criterion-01 behavior target" },
+      { path: "test/smoke.test.js", reason: "criterion-02 boundary target" }
+    ]
+  }, { limit: 3 });
+  assert.deepEqual(narrowConstraint.map((entry) => entry.path), ["src/reliability/retry.js", "test/smoke.test.js"]);
+
+  const matchingNarrowConstraint = composeCriterionContextEntries({
+    ...common,
+    criteria: ["Add focused tests for retry behavior.", "Do not update snapshot tests."],
+    plannedEntries: [
+      { path: "src/reliability/retry.js", reason: "criterion-01 behavior target" },
+      { path: "test/snapshot.test.js", reason: "criterion-02 boundary target" }
+    ]
+  }, { limit: 3 });
+  assert.deepEqual(matchingNarrowConstraint.map((entry) => entry.path), ["src/reliability/retry.js"]);
+
+  const contradictoryBroadConstraint = composeCriterionContextEntries({
+    ...common,
+    criteria: ["Add focused tests for retry behavior.", "Do not update tests."],
+    plannedEntries: [
+      { path: "src/reliability/retry.js", reason: "criterion-01 behavior target" },
+      { path: "test/smoke.test.js", reason: "criterion-02 boundary target" }
+    ]
+  }, { limit: 3 });
+  assert.deepEqual(contradictoryBroadConstraint.map((entry) => entry.path), ["src/reliability/retry.js"]);
+
+  for (const criteria of [
+    ["Correct retry boundaries.", "Never finish without running tests."],
+    ["Correct retry boundaries.", "Do not ship without running tests."]
+  ]) {
+    const requiredTestExecution = composeCriterionContextEntries({
+      ...common,
+      criteria,
+      plannedEntries: [
+        { path: "src/reliability/retry.js", reason: "criterion-01 behavior target" },
+        { path: "test/smoke.test.js", reason: "criterion-02 boundary target" }
+      ]
+    }, { limit: 3 });
+    assert.deepEqual(requiredTestExecution.map((entry) => entry.path), ["src/reliability/retry.js", "test/smoke.test.js"]);
+  }
+
+  const alternativeConstraint = composeCriterionContextEntries({
+    ...common,
+    criteria: ["Correct retry boundaries. Do not update unit or integration tests."],
+    plannedEntries: [
+      { path: "src/reliability/retry.js", reason: "criterion-01 behavior target" },
+      { path: "test/integration/retry.test.js", reason: "criterion-02 boundary target" }
+    ]
+  }, { limit: 3 });
+  assert.deepEqual(alternativeConstraint.map((entry) => entry.path), ["src/reliability/retry.js"]);
+
+  const boundedStateConstraint = composeCriterionContextEntries({
+    ...common,
+    criteria: ["For retry correctness, snapshot tests must remain unchanged."],
+    plannedEntries: [
+      { path: "src/reliability/retry.js", reason: "criterion-01 behavior target" },
+      { path: "test/snapshot.test.js", reason: "criterion-02 boundary target" }
+    ]
+  }, { limit: 3 });
+  assert.deepEqual(boundedStateConstraint.map((entry) => entry.path), ["src/reliability/retry.js"]);
+
+  for (const criteria of [
+    ["Do not regress public behavior, but fix retry without modifying tests."],
+    ["Do not alter the API while fixing retry without updating tests."],
+    ["Fix retry without test changes."],
+    ["Fix retry. Must not update tests."],
+    ["Fix retry. No changes to tests."]
+  ]) {
+    const broadMutationConstraint = composeCriterionContextEntries({
+      ...common,
+      criteria,
+      plannedEntries: [
+        { path: "src/reliability/retry.js", reason: "criterion-01 behavior target" },
+        { path: "test/smoke.test.js", reason: "criterion-02 boundary target" }
+      ]
+    }, { limit: 3 });
+    assert.deepEqual(broadMutationConstraint.map((entry) => entry.path), ["src/reliability/retry.js"]);
+  }
+
+  const ambiguous = composeCriterionContextEntries({
+    ...common,
+    plannedEntries: [
+      { path: "src/reliability/retry.js", reason: "criterion-01 behavior target" },
+      { path: "test/a.test.js", reason: "criterion-02 behavior target" },
+      { path: "test/b.test.js", reason: "criterion-03 boundary target" }
+    ]
+  }, { limit: 4 });
+  assert.deepEqual(ambiguous.map((entry) => entry.path), ["src/reliability/retry.js"]);
+
+  const incomplete = composeCriterionContextEntries({
+    ...common,
+    plannedSelectionComplete: false,
+    plannedEntries: [
+      { path: "src/reliability/retry.js", reason: "criterion-01 behavior target" },
+      { path: "test/smoke.test.js", reason: "criterion-02 boundary target" }
+    ]
+  }, { limit: 3 });
+  assert.deepEqual(incomplete.map((entry) => entry.path), ["src/reliability/retry.js"]);
+});
+
 test("recognizes explicit specs and assertions wording without enabling a broad test fallback", () => {
   for (const criteria of [
     "Add deterministic lifecycle specs for the expiry behavior.",

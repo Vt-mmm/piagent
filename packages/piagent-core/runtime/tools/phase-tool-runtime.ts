@@ -12,7 +12,7 @@ export type PhaseMutationInput = {
   verificationCarrier?: boolean;
 };
 
-const MANAGED_HOST_TOOL_ORDER = Object.freeze(["read", "grep", "find", "ls", "edit", "write", "apply_patch", "bash", "shell", "exec"]);
+const MANAGED_HOST_TOOL_ORDER = Object.freeze(["read", "grep", "find", "ls", "apply_patch", "edit", "write", "bash", "shell", "exec"]);
 
 function phaseHostToolName(toolName: string): string {
   return toolName === "shell" || toolName === "exec" ? "bash" : toolName;

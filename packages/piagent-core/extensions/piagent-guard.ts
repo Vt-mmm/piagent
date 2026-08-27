@@ -3919,6 +3919,15 @@ export default function piagentGuard(pi: ExtensionAPI) {
     }
   }
 
+  function preferApplyPatchBeforeWriters(toolNames: string[]): string[] {
+    if (!toolNames.includes("apply_patch")) return [...toolNames];
+    const withoutPatch = toolNames.filter((toolName) => toolName !== "apply_patch");
+    const firstWriter = withoutPatch.findIndex((toolName) => toolName === "edit" || toolName === "write");
+    if (firstWriter < 0) return [...toolNames];
+    withoutPatch.splice(firstWriter, 0, "apply_patch");
+    return withoutPatch;
+  }
+
   function activateToolGroups(ctx: ExtensionContext, groups: PiagentToolGroup[], additive = false): string[] {
     const current = pi.getActiveTools();
     if (!dynamicToolsEnabled) return current;
@@ -3937,7 +3946,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
       }
     }
     const ordered = [
-      ...current.filter((toolName) => selected.has(toolName) && !PIAGENT_TOOL_NAMES.has(toolName)),
+      ...preferApplyPatchBeforeWriters(current.filter((toolName) => selected.has(toolName) && !PIAGENT_TOOL_NAMES.has(toolName))),
       ...PIAGENT_TOOL_ORDER.filter((toolName) => selected.has(toolName))
     ];
     const unchanged = ordered.length === current.length && ordered.every((toolName, index) => toolName === current[index]);

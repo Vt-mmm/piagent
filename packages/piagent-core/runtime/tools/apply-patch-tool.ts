@@ -481,7 +481,7 @@ export function registerApplyPatchTool(
     name: "apply_patch",
     label: "Apply Patch",
     description: "Apply one validated OpenAI-style patch across multiple project files in a single guarded tool call.",
-    promptSnippet: "Use apply_patch for bounded multi-file Add File and Update File changes when exact old context is available.",
+    promptSnippet: "Prefer one coherent apply_patch call for a bounded source-and-test or other multi-file change only when exact old context for every target is available; otherwise use one bounded writer per file.",
     promptGuidelines: [
       "Wrap the patch in exact *** Begin Patch and *** End Patch delimiters.",
       "Use each project-relative target once and include enough unchanged context for every update hunk to match exactly once."

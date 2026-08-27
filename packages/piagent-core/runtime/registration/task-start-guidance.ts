@@ -24,9 +24,9 @@ type ProofTask = {
   criterionGraph?: CriterionGraph;
 };
 
-export const RUNTIME_SOURCE_REUSE_GUIDANCE = "Use runtime-delivered source; do not reread it. On edit drift/oldText mismatch, use attached recovery; otherwise reread the affected region once. Never retry guessed anchors. Otherwise read only missing source or a named criterion-focused test. Globs/directories grant scope, not file targets.";
+export const RUNTIME_SOURCE_REUSE_GUIDANCE = "Use runtime-delivered source; do not reread it. When the operator names an exact file, work from its delivered/current contents; do not list or search the repository merely to rediscover it. On edit drift/oldText mismatch, use attached recovery; otherwise reread the affected region once. Never retry guessed anchors. Otherwise read only missing source or a named criterion-focused test. Globs/directories grant scope, not file targets.";
 
-export const EXACT_VERIFIER_EXECUTION_GUIDANCE = "Keep each exact verifier command separate and unmodified. Run the set once on the final tree; rerun only after a later mutation or a runtime-authorized same-tree infrastructure retry.";
+export const EXACT_VERIFIER_EXECUTION_GUIDANCE = "Keep each exact verifier command separate and unmodified. Run the set once on the final tree; rerun only after a later mutation or a runtime-authorized same-tree infrastructure retry. Do not warm up with an unfocused command already contained in that exact set; use a genuinely criterion-focused test or run the exact set directly.";
 
 function normalizedPath(value: string): string {
   return value.trim().replaceAll("\\", "/");

@@ -141,6 +141,8 @@ describe("phase tool activation runtime", () => {
     for (const phase of ["execute", "repair"]) {
       const surface = intendedPhaseTools([...hostTools, ...PIAGENT_TOOL_ORDER], available, state(phase));
       for (const tool of ["read", "grep", "find", "ls", "edit", "write", "apply_patch", "bash", "shell", "exec"]) assert.ok(surface.includes(tool));
+      assert.ok(surface.indexOf("apply_patch") < surface.indexOf("edit"));
+      assert.ok(surface.indexOf("apply_patch") < surface.indexOf("write"));
     }
     const verify = intendedPhaseTools(hostTools, available, state("verify"));
     assert.ok(verify.includes("bash"));

@@ -52,6 +52,83 @@ function explicitFocusedTestNavigation(text) {
   });
 }
 
+const GENERIC_TEST_CONSTRAINT_TERMS = new Set([
+  "all", "any", "assertion", "assertions", "change", "changing", "coverage", "current", "do", "dont", "edit", "editing",
+  "existing", "inspect", "inspecting", "keep", "leave", "modify", "modifying", "never", "not", "our", "please", "read", "reading",
+  "run", "running", "spec", "specs", "test", "tests", "the", "these", "those", "touch", "touching", "update", "updating", "without",
+  "write", "writing"
+]);
+
+function normalizedConstraintTerm(value) {
+  const term = String(value ?? "").toLowerCase();
+  if (term.endsWith("ies") && term.length > 4) return `${term.slice(0, -3)}y`;
+  if (term.endsWith("s") && term.length > 4) return term.slice(0, -1);
+  return term;
+}
+
+function testConstraintAppliesToPath(scope, filePath) {
+  if (textExplicitlyReferencesPath(scope, filePath)) return true;
+  const qualifierGroups = String(scope ?? "").split(/\b(?:or|and)\b/iu).map((group) => (
+    group.match(/[\p{L}\p{N}_-]+/gu)?.map(normalizedConstraintTerm)
+      .filter((term) => term && !GENERIC_TEST_CONSTRAINT_TERMS.has(term)) ?? []
+  ));
+  if (qualifierGroups.some((qualifiers) => qualifiers.length === 0)) return true;
+  const targetTerms = new Set(String(filePath ?? "").match(/[\p{L}\p{N}_-]+/gu)?.flatMap((part) => (
+    part.split(/[_-]+/).map(normalizedConstraintTerm)
+  )) ?? []);
+  return qualifierGroups.some((qualifiers) => qualifiers.every((term) => targetTerms.has(term)));
+}
+
+function immediateTestStateScope(clause, nounIndex) {
+  const prefix = clause.slice(0, nounIndex);
+  const segment = prefix.split(/[,;:.!?]/u).at(-1)?.trim() ?? "";
+  const afterControl = segment.match(/\b(?:keep|leave)\b(?<scope>.*)$/iu)?.groups?.scope?.trim() ?? segment;
+  const connectorTail = afterControl.match(/(?<scope>[\p{L}\p{N}_-]+(?:\s+(?:or|and)\s+[\p{L}\p{N}_-]+)+)\s*$/iu)?.groups?.scope;
+  if (connectorTail) return connectorTail;
+  return afterControl.match(/([\p{L}\p{N}_-]+)\s*$/u)?.[1] ?? "";
+}
+
+function explicitTestNavigationProhibited(text, filePath) {
+  const clauses = String(text ?? "").split(/(?:[;\n]+|(?<=[.!?])\s+)/).map((clause) => clause.trim()).filter(Boolean);
+  return clauses.some((clause) => {
+    const negativeAction = /\b(?:do\s+not|don't|dont|never|must\s+not|cannot|can't)\s+(?:(?:also|directly|ever|just)\s+){0,2}(?:change|edit|inspect|modify|read|run|touch|update|write)\w*\b(?<scope>.{0,50}?)\b(?:assertions?|coverage|specs?|tests?)\b/giu;
+    for (const match of clause.matchAll(negativeAction)) {
+      if (testConstraintAppliesToPath(match.groups?.scope ?? "", filePath)) return true;
+    }
+    const withoutAction = /\bwithout\s+(?:(?:also|directly|ever|just)\s+){0,2}(?:changing|editing|inspecting|modifying|reading|running|touching|updating|writing)\b(?<scope>.{0,50}?)\b(?:assertions?|coverage|specs?|tests?)\b/giu;
+    for (const match of clause.matchAll(withoutAction)) {
+      const localPrefix = clause.slice(0, match.index).split(/[,;:]|\b(?:but|while|whereas|and\s+then)\b/iu).at(-1) ?? "";
+      if (/\b(?:do\s+not|don't|dont|never|must\s+not|cannot|can't)\b/iu.test(localPrefix)) continue;
+      if (testConstraintAppliesToPath(match.groups?.scope ?? "", filePath)) return true;
+    }
+    const withoutTestChanges = /\bwithout\s+(?:any\s+)?(?<scope>.{0,40}?)\b(?:assertion|coverage|spec|test)s?\s+changes?\b/giu;
+    for (const match of clause.matchAll(withoutTestChanges)) {
+      const localPrefix = clause.slice(0, match.index).split(/[,;:]|\b(?:but|while|whereas|and\s+then)\b/iu).at(-1) ?? "";
+      if (/\b(?:do\s+not|don't|dont|never|must\s+not|cannot|can't)\b/iu.test(localPrefix)) continue;
+      if (testConstraintAppliesToPath(match.groups?.scope ?? "", filePath)) return true;
+    }
+    const noTestChanges = [
+      /\bno\s+changes?\s+to\s+(?<scope>.{0,40}?)\b(?:assertion|coverage|spec|test)s?\b/giu,
+      /\bno\s+(?<scope>.{0,40}?)\b(?:assertion|coverage|spec|test)s?\s+changes?\b/giu
+    ];
+    for (const pattern of noTestChanges) {
+      for (const match of clause.matchAll(pattern)) {
+        if (testConstraintAppliesToPath(match.groups?.scope ?? "", filePath)) return true;
+      }
+    }
+    const testStatePatterns = [
+      /\b(?:assertions?|coverage|specs?|tests?)\b.{0,30}\b(?:unchanged|untouched)\b/giu,
+      /\b(?:assertions?|coverage|specs?|tests?)\b.{0,30}\b(?:not|never)\b.{0,15}\b(?:change|edit|inspect|modify|read|run|touch|update|write)\w*\b/giu
+    ];
+    for (const pattern of testStatePatterns) {
+      for (const match of clause.matchAll(pattern)) {
+        if (testConstraintAppliesToPath(immediateTestStateScope(clause, match.index), filePath)) return true;
+      }
+    }
+    return false;
+  });
+}
+
 const DIRECT_EXPLICIT_LINK_KINDS = new Set(["explicit-imports-candidate", "candidate-imports-explicit"]);
 
 function normalizedLinks(value) {
@@ -157,14 +234,19 @@ export function composeCriterionContextEntries(input = {}, options = {}) {
   const limit = integer(options.limit, 6, 1, 12);
   const criteriaText = uniqueStrings(input.criteria, 20).join("\n");
   const explicitPaths = uniqueStrings(input.explicitPaths, 20).map(relativePath).filter(Boolean);
-  const plannedPaths = new Set((Array.isArray(input.plannedEntries) ? input.plannedEntries : [])
+  const plannedEntries = Array.isArray(input.plannedEntries) ? input.plannedEntries : [];
+  const plannedPaths = new Set(plannedEntries
     .map((entry) => relativePath(entry?.path)).filter(Boolean));
+  const plannedReasons = new Map(plannedEntries.map((entry) => [
+    relativePath(entry?.path),
+    typeof entry?.reason === "string" ? entry.reason.trim() : ""
+  ]).filter(([filePath]) => Boolean(filePath)));
   const candidates = [];
   (Array.isArray(input.retrievedItems) ? input.retrievedItems : []).forEach((entry, order) => {
     const normalized = normalizedCandidate(entry, "retrieval", order);
     if (normalized) candidates.push(normalized);
   });
-  (Array.isArray(input.plannedEntries) ? input.plannedEntries : []).forEach((entry, order) => {
+  plannedEntries.forEach((entry, order) => {
     const normalized = normalizedCandidate(entry, "criterion", order);
     if (normalized) candidates.push(normalized);
   });
@@ -294,9 +376,19 @@ export function composeCriterionContextEntries(input = {}, options = {}) {
   // establish singleton cardinality, and only a test-shaped JS/TS filename is
   // eligible. This remains navigation context; acceptance still depends on a
   // changed live assertion and final verification.
-  if (!selected.some((entry) => testPath(entry.path)) && explicitFocusedTestNavigation(criteriaText)) {
+  if (!selected.some((entry) => testPath(entry.path))) {
     const scopedTests = values.filter((candidate) => executablePlannedTest(candidate, plannedPaths, input.plannedSelectionComplete === true));
-    if (scopedTests.length === 1) add(scopedTests[0], "Operator-requested sole scoped test target (navigation context; not acceptance proof)");
+    const testNavigationProhibited = scopedTests.length === 1
+      && explicitTestNavigationProhibited(criteriaText, scopedTests[0].path);
+    const soleCriterionPlannedTest = scopedTests.length === 1
+      && /^criterion-\d+ (?:behavior|boundary) target$/i.test(plannedReasons.get(scopedTests[0].path) ?? "")
+      && !testNavigationProhibited;
+    if (scopedTests.length === 1 && !testNavigationProhibited
+      && (explicitFocusedTestNavigation(criteriaText) || soleCriterionPlannedTest)) {
+      add(scopedTests[0], soleCriterionPlannedTest
+        ? "Sole criterion-planned executable test (navigation context; not acceptance proof)"
+        : "Operator-requested sole scoped test target (navigation context; not acceptance proof)");
+    }
   }
 
   relatedTests
