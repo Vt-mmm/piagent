@@ -1,12 +1,13 @@
 {
   "schemaVersion": 1,
   "suiteId": "production-v2",
-  "purpose": "Bound provider spend for the 108-session production user-journey comparison before a claim is allowed.",
+  "purpose": "Bound provider spend for the 108-session Luna-medium Fast-vs-Fast production user-journey comparison before a claim is allowed.",
   "rootSeed": "production-v2-user-journey-v1-789",
   "execution": {
     "surfaces": ["piagent", "codex-cli"],
     "model": "openai-codex/gpt-5.6-luna",
     "thinking": "medium",
+    "serviceTier": "fast",
     "repeats": 2,
     "infrastructureRetries": 0,
     "stopAfterFailedPair": true
@@ -66,6 +67,12 @@
       "requireCleanCommitAndTreeBinding": true,
       "requireProductionConfigurationBinding": true,
       "requireRunnerAndLaneConfigurationDigests": true
+    },
+    "campaignAccounting": {
+      "requiredBeforeFirstPaidSession": true,
+      "requireSingleOutputResumeLineage": true,
+      "includeEveryProviderStartedAttempt": true,
+      "unknownUsageFailsClosed": true
     }
   },
   "enforcement": {
@@ -88,6 +95,7 @@
       "no-observed-paired-grade-regression",
       "all-observed-piagent-outcomes-remain-above-the-release-floor",
       "no-model-thinking-or-provider-wire-parity-drift",
+      "fast-execution-configuration-parity-from-piagent-outbound-telemetry-and-codex-identity-bound-effective-thread-settings-with-no-default-fallback",
       "complete-privacy-safe-causal-context-receipt-with-closed-session-lifecycle",
       "source-bound-provider-free-architecture-runtime-long-horizon-and-webui-parity-receipts",
       "exact-subagent-budget-at-most-one-session-per-attempt-and-five-percent-traffic",
@@ -101,7 +109,7 @@
       "duration",
       "host-load"
     ],
-    "operatorRule": "S12 is a six-pair smoke gate. S18 adds complete nine-family coverage. S54 is the halfway stability gate. Only S108 can decide the 0.60 upper-95 family-level fresh-token claim."
+    "operatorRule": "S12 is a six-pair smoke gate. S18 adds complete nine-family coverage. S54 is the halfway stability gate. Only S108 can decide both the 0.60 upper-95 family-level guard and the 0.65 pooled all-attempt net fresh-token gate."
   },
-  "claimBoundary": "Only the complete S108 ledger may establish the production-v2 fresh-token claim. Earlier stages detect correctness, continuity, accounting, retry, subagent, and catastrophic token regressions only."
+  "claimBoundary": "Only the complete S108 ledger may establish the production-v2 Fast execution configuration parity and fresh-token claim. This parity combines Piagent outbound telemetry with Codex identity-bound effective thread settings; it does not establish actual provider processing tier. The net-35 ratio includes accepted plus exact failed/retry fresh tokens. Provider response tier and subscription credits are reported separately and are not inferred from execution configuration."
 }

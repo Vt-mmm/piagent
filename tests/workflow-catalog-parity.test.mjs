@@ -239,6 +239,12 @@ describe("canonical workflow catalog parity", () => {
 
   it("resolves help and fresh-session commands from the same catalog", async () => {
     const harness = commandHarness();
+    await harness.commands.get("commands").handler("overview", harness.ctx);
+    assert.match(harness.messages.at(-1).content, /\/fast/);
+    await harness.commands.get("commands").handler("fast", harness.ctx);
+    assert.match(harness.messages.at(-1).content, /\/fast status/);
+    assert.match(harness.messages.at(-1).content, /zero-model-turn/);
+
     await harness.commands.get("workflow").handler("help", harness.ctx);
     assert.equal(harness.messages.at(-1).customType, "piagent-workflow-help");
     for (const id of WORKFLOW_IDS) assert.match(harness.messages.at(-1).content, new RegExp(`/workflow ${id.replace(/-/g, "\\-")} `));

@@ -6,6 +6,7 @@ import path from "node:path";
 import { describe, it } from "node:test";
 
 import { taskJournalPaths } from "../packages/piagent-core/extensions/task-journal.js";
+import { recordCompletionAudit } from "../packages/piagent-core/extensions/task-runtime-audit.js";
 import { operatorRequestDigest } from "../packages/piagent-core/extensions/task-state.js";
 import { workingTreeEvidenceDigest } from "../packages/piagent-core/extensions/working-tree-digest.js";
 import { buildTaskEfficiencyMetrics } from "../packages/piagent-core/runtime/product/efficiency-metrics.ts";
@@ -173,6 +174,24 @@ describe("operator product UX", () => {
     assert.match(terminal.receipt.remainingRisk.join(" "), /operator approval required/);
   });
 
+  it("projects a safe blocked resume as handoff inspection instead of continued execution", () => {
+    const cwd = workspace();
+    const current = task();
+    current.attempt = current.maxAttempts;
+    current.workPlan.forEach((step) => { step.status = "done"; });
+    writeTrajectory(cwd, current);
+    recordCompletionAudit({ cwd, ui: { notify() {} } }, current, {
+      outcome: "failed",
+      evidence: { missing: ["bounded recovery exhausted"] }
+    });
+
+    const blocked = buildLiveTaskStatus(cwd, current, current.sessionId);
+    assert.equal(blocked.resume.safe, true);
+    assert.equal(blocked.resume.decision, "blocked");
+    assert.equal(blocked.nextSafeAction, "inspect-handoff-and-recover");
+    assert.match(formatLiveTaskStatus(blocked), /next: inspect-handoff-and-recover/);
+  });
+
   it("fails closed when a completed-looking receipt has no current hard-gate result", () => {
     const cwd = workspace();
     const incomplete = buildCompletionReceiptView(task({ trace: { outcome: "completed" }, acceptanceReceipt: receipt("pending") }));
@@ -217,6 +236,22 @@ describe("operator product UX", () => {
     assert.equal(completed.tree.evidenceCurrent, true);
     assert.equal(completed.assurance, "same-runtime-operational-evidence");
     assert.doesNotMatch(JSON.stringify(completed), /independent audit/i);
+
+    const zeroDelta = task({
+      trace: { outcome: "completed" },
+      acceptanceReceipt: receipt("pending"),
+      changedFiles: []
+    });
+    const zeroDeltaDigest = workingTreeEvidenceDigest(zeroDelta.finalFileDigests ?? {});
+    const zeroDeltaReceipt = buildCompletionReceiptView(zeroDelta, { gate: {
+      decision: "pass",
+      missing: [],
+      warnings: [],
+      currentWorkingTreeDigest: zeroDeltaDigest
+    } });
+    assert.equal(zeroDeltaReceipt.completionApproved, true,
+      "a verified zero-delta task does not require source-change acceptance proof");
+    assert.equal(zeroDeltaReceipt.remainingRisk.includes("acceptance-criteria-pending"), false);
 
     const legacy = buildCompletionReceiptView(task({
       trace: { outcome: "completed" },

@@ -66,6 +66,16 @@ export function continuationDenialReasonCode(reason: ContinuationReservation["re
   return "continuation-journal-unavailable";
 }
 
+export function terminalRecoveryForContinuationDenial(
+  decision: RecoveryDecision,
+  reason: ContinuationReservation["reason"]
+): RecoveryDecision {
+  return {
+    ...decision, action: "handoff", continuation: "none", nextPhase: null, sourceMutationAllowed: false,
+    reasonCodes: [...new Set([...decision.reasonCodes, continuationDenialReasonCode(reason)])]
+  };
+}
+
 export function reserveSemanticReviewContinuation(
   cwd: string,
   task: TaskContract,
@@ -97,10 +107,9 @@ export function planRecoveryContinuation(
     missingVerifyCommands: input.missingVerifyCommands, evidenceDigest: decision.evidenceDigest, reasonCodes: decision.reasonCodes
   });
   if (reservation?.allowed) return { recovery: decision, classification, reservation };
-  const reason = continuationDenialReasonCode(reservation?.reason ?? "journal-unavailable");
   return {
     classification, reservation,
-    recovery: { ...decision, action: "handoff", continuation: "none", nextPhase: null, sourceMutationAllowed: false, reasonCodes: [...decision.reasonCodes, reason] }
+    recovery: terminalRecoveryForContinuationDenial(decision, reservation?.reason ?? "journal-unavailable")
   };
 }
 

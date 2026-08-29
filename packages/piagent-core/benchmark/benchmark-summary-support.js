@@ -40,6 +40,8 @@ export const RELEASE_FAILURE_MESSAGES = Object.freeze({
   "efficiency-family-ratio": "At least one comparable scenario family uses more fresh tokens than the suite family guardrail permits.",
   "accepted-usage-completeness": "Every accepted benchmark attempt must have exact terminal token buckets.",
   "all-attempt-usage-completeness": "Every accepted or failed provider attempt must have exact invariant-checked token buckets.",
+  "all-attempt-net-efficiency": "All accepted plus exact failed/retry fresh tokens must remain at or below the predeclared pooled Piagent/Codex CLI ratio.",
+  "fast-execution-configuration-parity": "Fast execution configuration must be verified on every run: exact Piagent outbound telemetry plus identity-bound effective Codex CLI thread settings; missing or default evidence blocks the claim.",
   "normalized-cost-configuration": "Normalized-cost claims require a valid versioned pricing snapshot and all predeclared ratio thresholds.",
   "normalized-cost-evidence": "Normalized API-equivalent text-token cost evidence is incomplete for at least one declared scenario family.",
   "normalized-cost-pricing-applicability": "Exact usage or per-request pricing applicability is unavailable for at least one accepted run.",

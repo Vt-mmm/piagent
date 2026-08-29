@@ -15,6 +15,7 @@ export type RuntimeIntakeResult = {
   task?: TaskContract;
   plannedContext?: Array<{ path: string; reason: string }>;
   plannedContextComplete?: boolean;
+  continuation?: "terminal-uncertain-send";
 };
 
 export type AgentStartHookDependencies = {

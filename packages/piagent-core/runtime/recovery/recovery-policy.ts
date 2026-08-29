@@ -1,46 +1,15 @@
 import type { FailureClassification } from "../../extensions/failure-types.ts";
 import { failureClassificationValidationErrors } from "../../extensions/failure-types.ts";
+import {
+  RECOVERY_ACTIONS, RECOVERY_CEILINGS, RECOVERY_POLICY_VERSION, RECOVERY_REASON_CODES, recoveryDecisionValidationErrors
+} from "../../extensions/recovery-decision-validation.ts";
 import type { TrajectoryPhase } from "../trajectory/trajectory-types.ts";
 
-export const RECOVERY_POLICY_VERSION = "recovery-v1" as const;
-export const RECOVERY_ACTIONS = Object.freeze(["repair", "retry", "fresh-session", "ask-operator", "handoff", "blocked"] as const);
-export const RECOVERY_CEILINGS = Object.freeze({
-  sourceRepairPasses: 1,
-  transientVerifierRetries: 1,
-  unknownDiagnosticPasses: 1,
-  providerRetries: 1
-} as const);
+export { RECOVERY_ACTIONS, RECOVERY_CEILINGS, RECOVERY_POLICY_VERSION, RECOVERY_REASON_CODES, recoveryDecisionValidationErrors };
 
 export type RecoveryAction = typeof RECOVERY_ACTIONS[number];
 export type RecoveryDisposition = "scheduled" | "failed" | "succeeded" | "declined";
-export type RecoveryReasonCode =
-  | "feature-disabled"
-  | "invalid-input"
-  | "terminal-phase"
-  | "handoff-already-observed"
-  | "no-failure"
-  | "stale-verifier-evidence"
-  | "source-repair-eligible"
-  | "dependency-mutation-not-authorized"
-  | "read-only-task"
-  | "repair-ceiling-reached"
-  | "repeated-hypothesis"
-  | "operator-environment-action"
-  | "provider-transient-retry"
-  | "provider-retry-exhausted"
-  | "permission-expansion-forbidden"
-  | "protected-path-forbidden"
-  // Legacy persisted recovery records may still carry this value. New runtime
-  // decisions never emit it because task scope is advisory.
-  | "scope-replan-required"
-  | "transient-verifier-retry"
-  | "transient-retry-unavailable"
-  | "unknown-diagnostic-pass"
-  | "unknown-diagnostic-exhausted"
-  | "global-continuation-budget-exhausted"
-  | "repeated-progress-signature"
-  | "continuation-journal-unavailable"
-  | "manual-lifecycle-handoff";
+export type RecoveryReasonCode = typeof RECOVERY_REASON_CODES[number];
 
 export type RecoveryHistoryEntry = {
   taskId: string;
@@ -96,7 +65,6 @@ export type RecoveryDecision = {
   hypothesisRef: string | null;
 };
 
-const HASH = /^[a-f0-9]{64}$/;
 const REF = /^[a-z0-9][a-z0-9:._-]{0,255}$/i;
 const COUNTED_DISPOSITIONS = new Set<RecoveryDisposition>(["scheduled", "failed", "succeeded"]);
 
@@ -181,8 +149,7 @@ function repairDecision(input: RecoveryPolicyInput): RecoveryDecision {
 }
 
 export function selectRecoveryDecision(input: RecoveryPolicyInput): RecoveryDecision {
-  const invalidClassification = failureClassificationValidationErrors(input.classification).length > 0
-    || !HASH.test(String(input.classification?.evidenceDigest ?? ""));
+  const invalidClassification = failureClassificationValidationErrors(input.classification).length > 0;
   if (!validIdentity(input) || invalidClassification) return decision(input, "blocked", ["invalid-input"]);
   if (!input.featureEnabled) return decision(input, "handoff", ["feature-disabled"]);
   if (input.currentPhase === "terminal") return decision(input, "blocked", ["terminal-phase"]);

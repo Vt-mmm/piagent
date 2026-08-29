@@ -553,7 +553,7 @@ function productionRuntimeCoverage(report, suite) {
     ? productionProviderFreeEvidenceContextValidationErrors(receipt, {
       source: report.environment?.source,
       candidateProvenance: report.environment?.candidateProvenance,
-      configurationDigest: report.environment?.configurationDigest
+      providerFreeConfigurationDigest: report.environment?.providerFreeConfigurationDigest
     })
     : [];
   const providerFreePassed = !required || providerFreeErrors.length === 0;

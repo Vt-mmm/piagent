@@ -48,7 +48,7 @@ function task() {
   };
 }
 
-describe("durable handoff projection v1", () => {
+describe("durable handoff projection v2", () => {
   it("reconstructs bounded task, tree, verifier, failure, recovery, and authority state", () => {
     const cwd = workspace();
     fs.writeFileSync(path.join(cwd, "src", "a.ts"), "export const a = 1;\n");
@@ -98,6 +98,24 @@ describe("durable handoff projection v1", () => {
     assert.equal(serialized.includes("[REDACTED_SECRET]"), true);
     assert.equal(serialized.includes("private-session-id"), false);
     assert.equal(serialized.includes("PRIVATE_OPERATOR_REQUEST_SENTINEL"), false, "handoff projection must omit the private operator request");
+
+    const staleRepair = structuredClone(projection);
+    staleRepair.failure.recovery.taskAttempt = 999;
+    assert.throws(() => validateHandoffProjection(staleRepair), /recovery decision is invalid/);
+
+    const malformedRepair = structuredClone(projection);
+    malformedRepair.failure.recovery.sourceMutationAllowed = false;
+    assert.throws(() => validateHandoffProjection(malformedRepair), /recovery decision is invalid/);
+
+    const staleHandoff = structuredClone(projection);
+    Object.assign(staleHandoff.failure.recovery, {
+      action: "handoff", continuation: "none", nextPhase: null, sourceMutationAllowed: false
+    });
+    assert.throws(() => validateHandoffProjection(staleHandoff), /recovery decision is invalid/);
+
+    const forgedAuthority = structuredClone(projection);
+    forgedAuthority.requiredAuthority = { required: true, kind: "operator", reasonCodes: ["source-repair-eligible"] };
+    assert.throws(() => validateHandoffProjection(forgedAuthority), /required authority conflicts with recovery decision/);
   });
 
   it("writes owner-only state and reads it back", () => {
@@ -206,6 +224,117 @@ describe("durable handoff projection v1", () => {
     assert.ok(projection.state.missing.includes("working-tree-evidence-not-current"));
   });
 
+  it("never projects completion approval while acceptance criteria remain pending", () => {
+    const cwd = workspace();
+    fs.writeFileSync(path.join(cwd, "src", "a.ts"), "export const a = 1;\n");
+    const current = task();
+    const digests = { "src/a.ts": versionWorkingTreeHash("a".repeat(64)) };
+    const treeDigest = workingTreeEvidenceDigest(digests);
+    current.trace = { outcome: "completed", recordedAt: "2026-08-08T00:00:01.000Z" };
+    current.changedFiles = ["src/a.ts"];
+    current.finalWorkingTreeFiles = ["src/a.ts"];
+    current.finalFileDigests = digests;
+    current.acceptanceReceipt = {
+      source: "runtime",
+      schemaVersion: 1,
+      criteria: [{ id: "criterion-1", hash: "a".repeat(64), obligation: "requested-behavior", priority: "critical", status: "pending", evidence: [] }]
+    };
+    const projection = buildHandoffProjection(cwd, current, {
+      gate: { decision: "pass", missing: [], missingVerifyCommands: [], currentWorkingTreeDigest: treeDigest },
+      currentDigests: digests
+    });
+    assert.equal(projection.state.completionApproved, false);
+    assert.deepEqual(projection.acceptance, {
+      required: true,
+      satisfied: false,
+      criteriaCount: 1,
+      dispositionDigest: projection.acceptance.dispositionDigest
+    });
+    assert.match(projection.acceptance.dispositionDigest, /^[a-f0-9]{64}$/);
+    assert.ok(projection.state.missing.includes("acceptance-criteria-pending"));
+    assert.equal(projection.nextSafeAction.action, "handoff");
+
+    const forgedAcceptance = structuredClone(projection);
+    forgedAcceptance.state = { ...forgedAcceptance.state, completionApproved: true, missing: [] };
+    forgedAcceptance.tree = {
+      ...forgedAcceptance.tree,
+      baselineDigest: workingTreeEvidenceDigest({}),
+      currentDigest: treeDigest,
+      evidenceCurrent: true
+    };
+    forgedAcceptance.nextSafeAction = { action: "completed", continuation: "none", sourceMutationAllowed: false, exactCommands: [] };
+    assert.throws(() => validateHandoffProjection(forgedAcceptance), /requires satisfied acceptance/);
+
+    const forgedMissing = structuredClone(forgedAcceptance);
+    forgedMissing.acceptance.satisfied = true;
+    forgedMissing.state.missing = ["acceptance-criteria-pending"];
+    assert.throws(() => validateHandoffProjection(forgedMissing), /cannot retain missing completion evidence/);
+
+    const forgedAction = structuredClone(forgedMissing);
+    forgedAction.state.missing = [];
+    forgedAction.nextSafeAction.action = "handoff";
+    assert.throws(() => validateHandoffProjection(forgedAction), /requires a completed next safe action/);
+
+    const forgedVerifier = structuredClone(forgedAction);
+    forgedVerifier.nextSafeAction.action = "completed";
+    forgedVerifier.verification.missingCommands = [current.verifyCommands[0]];
+    assert.throws(() => validateHandoffProjection(forgedVerifier), /cannot retain missing verifier commands/);
+
+    const missingVerifierField = structuredClone(forgedAction);
+    missingVerifierField.nextSafeAction.action = "completed";
+    delete missingVerifierField.verification.missingCommands;
+    assert.throws(() => validateHandoffProjection(missingVerifierField), /verification is invalid/);
+
+    const scalarVerifierField = structuredClone(forgedAction);
+    scalarVerifierField.nextSafeAction.action = "completed";
+    scalarVerifierField.verification.missingCommands = "npm test";
+    assert.throws(() => validateHandoffProjection(scalarVerifierField), /verification is invalid/);
+
+    const missingCurrentVerifier = structuredClone(forgedAction);
+    missingCurrentVerifier.nextSafeAction.action = "completed";
+    assert.throws(() => validateHandoffProjection(missingCurrentVerifier), /requires current exact verifier evidence/);
+  });
+
+  it("writes a valid unapproved handoff when required acceptance evidence is absent", () => {
+    const cwd = workspace();
+    const current = task();
+    current.trace = { outcome: "completed", recordedAt: "2026-08-08T00:00:01.000Z" };
+    current.acceptanceReceipt = null;
+    const projection = buildHandoffProjection(cwd, current, {
+      gate: { decision: "pass", missing: [], missingVerifyCommands: [], currentWorkingTreeDigest: workingTreeEvidenceDigest({}) },
+      currentDigests: {}
+    });
+    assert.deepEqual(projection.acceptance, {
+      required: true,
+      satisfied: false,
+      criteriaCount: 0,
+      dispositionDigest: projection.acceptance.dispositionDigest
+    });
+    assert.equal(projection.state.completionApproved, false);
+    assert.ok(projection.state.missing.includes("acceptance-criteria-pending"));
+    assert.doesNotThrow(() => validateHandoffProjection(projection));
+  });
+
+  it("does not approve a pass-gate projection without current exact verifier evidence", () => {
+    const cwd = workspace();
+    const current = task();
+    current.trace = { outcome: "completed", recordedAt: "2026-08-08T00:00:01.000Z" };
+    current.changedFiles = [];
+    current.observedChangedFiles = [];
+    current.finalWorkingTreeFiles = [];
+    current.finalFileDigests = {};
+    current.verifyEvidence = [];
+    const treeDigest = workingTreeEvidenceDigest({});
+    const projection = buildHandoffProjection(cwd, current, {
+      gate: { decision: "pass", missing: [], missingVerifyCommands: [], currentWorkingTreeDigest: treeDigest },
+      currentDigests: {}
+    });
+    assert.equal(projection.acceptance.satisfied, true);
+    assert.equal(projection.tree.evidenceCurrent, true);
+    assert.equal(projection.state.completionApproved, false);
+    assert.ok(projection.state.missing.includes("current exact verifier evidence"));
+  });
+
   it("does not overstate a partial refreshed migration descriptor", () => {
     const cwd = workspace();
     const current = task();
@@ -240,6 +369,18 @@ describe("durable handoff projection v1", () => {
       gate: { decision: "fail", missing: [], missingVerifyCommands: [] }, currentDigests: {}
     });
     assert.equal(stable.tree.latestVerifierMatchesCurrentTree, true);
+
+    const newerDigests = { "src/a.ts": versionWorkingTreeHash("a".repeat(64)) };
+    const newerDigest = workingTreeEvidenceDigest(newerDigests);
+    current.verifyEvidence[0].preWorkingTreeDigest = newerDigest;
+    current.verifyEvidence[0].workingTreeDigest = newerDigest;
+    const currentVerifierWithoutFinalSnapshot = buildHandoffProjection(cwd, current, {
+      gate: { decision: "fail", missing: ["acceptance evidence"], missingVerifyCommands: [] },
+      currentDigests: newerDigests
+    });
+    assert.equal(currentVerifierWithoutFinalSnapshot.tree.evidenceCurrent, false);
+    assert.equal(currentVerifierWithoutFinalSnapshot.tree.latestVerifierMatchesCurrentTree, true);
+    assert.doesNotThrow(() => validateHandoffProjection(currentVerifierWithoutFinalSnapshot));
 
     current.verifyEvidence.push({
       ...current.verifyEvidence[0], exitCode: 1, summary: "newer failure",

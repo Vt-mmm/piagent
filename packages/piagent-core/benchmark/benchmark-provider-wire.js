@@ -20,6 +20,61 @@ function sortedUnique(values) {
   return [...new Set(values)].sort();
 }
 
+function serviceTierValue(value) {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return ["default", "fast", "priority"].includes(normalized) ? normalized : null;
+}
+
+function serviceTierEvidence(events) {
+  const tierEvents = (Array.isArray(events) ? events : [])
+    .filter((event) => event?.event === "provider_request_service_tier");
+  const requestedTiers = sortedUnique(tierEvents.map((event) => serviceTierValue(event.requestedServiceTier)).filter(Boolean));
+  const observedRequestTiers = sortedUnique(tierEvents
+    .map((event) => serviceTierValue(event.observedRequestServiceTier ?? event.observedServiceTier))
+    .filter(Boolean));
+  const providerResponseTiers = sortedUnique(tierEvents
+    .map((event) => serviceTierValue(event.providerResponseServiceTier))
+    .filter(Boolean));
+  const responseEvidence = sortedUnique(tierEvents
+    .map((event) => typeof event.providerResponseEvidence === "string"
+      ? event.providerResponseEvidence
+      : typeof event.responseEvidence === "string" ? event.responseEvidence : null)
+    .filter(Boolean));
+  const requestedFastEvents = tierEvents.filter((event) => (
+    serviceTierValue(event.requestedServiceTier) === "fast"
+  )).length;
+  const observedFastRequestEvents = tierEvents.filter((event) => (
+    serviceTierValue(event.observedRequestServiceTier ?? event.observedServiceTier) === "priority"
+  )).length;
+  const fastModeEvents = tierEvents.filter((event) => event.fastMode === true || event.fastMode === "fast").length;
+  const appliedEvents = tierEvents.filter((event) => event.applied === true).length;
+  const appliedFastEvents = tierEvents.filter((event) => (
+    (event.fastMode === true || event.fastMode === "fast")
+    && serviceTierValue(event.requestedServiceTier) === "fast"
+    && serviceTierValue(event.observedRequestServiceTier ?? event.observedServiceTier) === "priority"
+    && event.applied === true
+  )).length;
+  return {
+    schemaVersion: 1,
+    source: "piagent-provider-request-telemetry",
+    events: tierEvents.length,
+    requestedTiers,
+    observedRequestTiers,
+    providerResponseTiers,
+    responseEvidence,
+    requestedFastEvents,
+    observedFastRequestEvents,
+    fastModeEvents,
+    appliedEvents,
+    appliedFastEvents,
+    defaultFallbackEvents: tierEvents.filter((event) => [
+      serviceTierValue(event.requestedServiceTier),
+      serviceTierValue(event.observedRequestServiceTier ?? event.observedServiceTier),
+      serviceTierValue(event.providerResponseServiceTier)
+    ].includes("default")).length
+  };
+}
+
 /**
  * Reduces privacy-safe provider request fingerprints into per-run release
  * evidence. Deferred tool-search batches are observed separately: changes to
@@ -86,6 +141,7 @@ export function buildBenchmarkProviderWireEvidence({
     missingBaseHashEvents,
     modelMismatchEvents,
     reasoningMismatchEvents,
+    serviceTier: serviceTierEvidence(events),
     instructionHashes,
     baseInstructionHashes,
     orderedToolSurfaceHashes,

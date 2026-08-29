@@ -11,9 +11,15 @@ import {
 import { assertBenchmarkLedgerBinding, inspectBenchmarkLedger } from "./benchmark-ledger.js";
 import { benchmarkPhaseAttribution } from "./benchmark-phase-attribution.js";
 import { causalRuntimeEvidence } from "./benchmark-runtime-causal.js";
-import { exactBenchmarkMeasuredUsage } from "./benchmark-usage.js";
 
 export { materializeBenchmarkCandidate } from "./benchmark-candidate.js";
+export {
+  BENCHMARK_TRANSPORT_CIRCUIT_POLICY,
+  classifyPreUsageFailure,
+  createBenchmarkTransportCircuit,
+  observeBenchmarkTransportFailure,
+  validBenchmarkTransportCircuit
+} from "./benchmark-transport-evidence.js";
 
 const benchmarkSurfaces = new Set(["raw-pi", "piagent", "codex-cli"]);
 function fail(message, code = 1) {
@@ -842,6 +848,7 @@ export function loadReplayFailurePlan(reportPath) {
     surfaces,
     model: report?.environment?.requestedModel ?? undefined,
     thinking: report?.environment?.requestedThinking ?? undefined,
+    serviceTier: report?.environment?.requestedServiceTier ?? undefined,
     piagentTreatment: report?.environment?.piagentTreatment?.id ?? "release-defaults",
     replayRuns,
     source: {
@@ -893,57 +900,4 @@ export function terminalPiSessionError(sessionFiles, sessionId) {
     }
   }
   return undefined;
-}
-
-export function classifyPreUsageFailure(agent, usage, diagnosticInput,
-  { terminalProviderError = false, candidateOutcome = null } = {}) {
-  const diagnostic = String(diagnosticInput ?? "").toLowerCase();
-  const measuredUsage = exactBenchmarkMeasuredUsage(usage);
-  const measuredZeroUsage = measuredUsage
-    && ["input", "output", "cacheRead", "cacheWrite", "reasoning", "total", "fresh"]
-      .every((field) => Number(usage[field]) === 0);
-  if (agent.timedOut) {
-    return {
-      failure: "agent-timeout-with-terminal-usage-unknown",
-      class: "transport-timeout",
-      usageStatus: "unknown-after-provider-start",
-      retryable: false
-    };
-  }
-  const providerUnavailable = /\b(?:server(?:s)? (?:are )?(?:currently )?overloaded|temporarily unavailable|service unavailable|try again later)\b/.test(diagnostic);
-  if ((terminalProviderError || agent.code !== 0) && measuredUsage && providerUnavailable) {
-    const afterUsage = Number(usage.fresh) > 0;
-    return {
-      failure: afterUsage
-        ? "provider-temporarily-unavailable-after-measured-usage"
-        : "provider-temporarily-unavailable-with-zero-measured-usage",
-      class: "provider-infrastructure",
-      usageStatus: "measured-but-unaccepted",
-      retryable: !afterUsage
-    };
-  }
-  if (agent.code === 0 && measuredZeroUsage
-    && /\b(?:server(?:s)? (?:are )?(?:currently )?overloaded|temporarily unavailable|service unavailable|try again later)\b/.test(diagnostic)) {
-    return {
-      failure: "provider-temporarily-unavailable-with-zero-measured-usage",
-      class: "provider-infrastructure",
-      usageStatus: "measured-but-unaccepted",
-      retryable: true
-    };
-  }
-  const validCandidateOutcome = candidateOutcome?.schemaVersion === 1
-    && candidateOutcome.kind === "terminal-settlement-mismatch"
-    && ["completed", "blocked", "aborted", "error", "unknown", "refused"].includes(candidateOutcome.expectedSettlement)
-    && ["completed", "blocked", "aborted", "error", "unknown"].includes(candidateOutcome.observedSettlement)
-    && candidateOutcome.expectedSettlement !== candidateOutcome.observedSettlement
-    && Number.isSafeInteger(candidateOutcome.turnIndex) && candidateOutcome.turnIndex > 0;
-  if (agent.code !== 0 && validCandidateOutcome && measuredUsage && usage.fresh > 0) return undefined;
-  if (agent.code === 0) return undefined;
-  if (/\b(?:provider|safety|policy|refus(?:al|ed|e)|disallowed|not allowed|cannot assist|can't assist|cyber safety)\b/.test(diagnostic)) {
-    return measuredUsage
-      ? { failure: "provider-policy-refusal-after-measured-usage", class: "provider-policy", usageStatus: "measured-but-unaccepted", retryable: false }
-      : { failure: "provider-policy-refusal-with-usage-unavailable", class: "provider-policy", usageStatus: "unknown-after-provider-start", retryable: false };
-  }
-  if (measuredUsage) return { failure: `agent-exit-${agent.code}-after-measured-usage`, class: "agent-process", usageStatus: "measured-but-unaccepted", retryable: false };
-  return { failure: `agent-exit-${agent.code}-with-usage-unavailable`, class: "unknown-cost", usageStatus: "unknown-after-provider-start", retryable: true };
 }

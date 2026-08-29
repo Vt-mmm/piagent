@@ -7,7 +7,7 @@ import { taskDigestMigrationArchiveStatus, workingTreeSnapshot, workingTreeSnaps
 import { workingTreeEvidenceDigest } from "../../extensions/task-lifecycle.js";
 import { hashEvidenceCommand } from "../../extensions/runtime-evidence.js";
 import { WORKING_TREE_DIGEST_ALGORITHM, isCurrentWorkingTreeDigest, workingTreeSnapshotUsesCurrentAlgorithm } from "../../extensions/working-tree-digest.js";
-import { handoffProjectionPath, readHandoffProjection } from "./handoff-projection.ts";
+import { handoffIdentityMatchesTask, handoffProjectionPath, readHandoffProjection } from "./handoff-projection.ts";
 import { inspectTaskAuthorityResumePolicy, type AuthorityResumeDecision } from "../policy/authority-resume-policy.ts";
 import { presentedAcceptanceCriteria, presentedCriterionGraphGuidance } from "../session/task-contract-presentation.ts";
 import { operatorRequestCarryLines } from "../session/operator-request-carry.ts";
@@ -328,7 +328,7 @@ export function inspectTaskResumeState(
   try {
     const handoff = readHandoffProjection(cwd, task.taskRunId);
     handoffExists = Boolean(handoff);
-    if (handoff && (handoff.identity.taskId !== task.taskId || handoff.identity.taskRunId !== task.taskRunId)) {
+    if (handoff && !handoffIdentityMatchesTask(handoff.identity, task)) {
       handoffValid = false;
       warnings.push("handoff identity conflicts with the task contract");
     }

@@ -5,6 +5,10 @@ import path from "node:path";
 
 const HASH = /^[a-f0-9]{64}$/;
 const COMMIT = /^[a-f0-9]{40,64}$/;
+const PROVIDER_FREE_EXCLUDED_RUN_SCOPED_FIELDS = Object.freeze([
+  "dryRun", "json", "keepWorkspaces", "maxRuntimeMinutes", "maxSessions", "output",
+  "piCredentialVaultId", "preflightOnly", "resume", "runId", "yes"
+]);
 const LANE_DEFINITIONS = Object.freeze([
   Object.freeze({
     id: "architecture-conformance-v1",
@@ -46,6 +50,19 @@ function receiptDigest(value) {
   return digestBytes(JSON.stringify(copy));
 }
 
+export function productionProviderFreeConfigurationDigest(configuration) {
+  if (!configuration || typeof configuration !== "object" || Array.isArray(configuration)) {
+    throw new Error("Production provider-free configuration must be an object");
+  }
+  const stableConfiguration = Object.fromEntries(Object.entries(configuration)
+    .filter(([key]) => !PROVIDER_FREE_EXCLUDED_RUN_SCOPED_FIELDS.includes(key)));
+  return digestBytes(JSON.stringify({
+    schemaVersion: 1,
+    excludedRunScopedFields: PROVIDER_FREE_EXCLUDED_RUN_SCOPED_FIELDS,
+    configuration: stableConfiguration
+  }));
+}
+
 function validCompletionTime(value) {
   const milliseconds = typeof value === "string" ? Date.parse(value) : Number.NaN;
   return Number.isFinite(milliseconds)
@@ -67,7 +84,7 @@ export function productionProviderFreeEvidenceBinding({
   packageRoot,
   source,
   candidateProvenance,
-  configurationDigest
+  providerFreeConfigurationDigest
 }) {
   if (source?.kind !== "git-working-tree" || source.dirty !== false || !COMMIT.test(String(source.commit ?? ""))) {
     throw new Error("Production provider-free evidence requires an exact clean Git commit");
@@ -75,11 +92,11 @@ export function productionProviderFreeEvidenceBinding({
   if (!HASH.test(String(candidateProvenance?.contentDigest ?? ""))) {
     throw new Error("Production provider-free evidence requires an exact candidate tree digest");
   }
-  if (!HASH.test(String(configurationDigest ?? ""))) {
-    throw new Error("Production provider-free evidence requires the frozen production configuration digest");
+  if (!HASH.test(String(providerFreeConfigurationDigest ?? ""))) {
+    throw new Error("Production provider-free evidence requires the frozen provider-free configuration digest");
   }
   const binding = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     source: {
       kind: source.kind,
       commit: source.commit,
@@ -87,7 +104,7 @@ export function productionProviderFreeEvidenceBinding({
       treeDigest: candidateProvenance.contentDigest,
       treeAlgorithm: candidateProvenance.algorithm
     },
-    productionConfigurationDigest: configurationDigest,
+    providerFreeConfigurationDigest,
     lanes: expectedLaneBindings(packageRoot)
   };
   return { ...binding, digest: receiptDigest(binding) };
@@ -210,16 +227,16 @@ function privateWrite(file, value) {
 
 export function productionProviderFreeEvidenceValidationErrors(receipt, expectedBinding) {
   const errors = [];
-  if (receipt?.schemaVersion !== 1 || receipt?.kind !== "production-provider-free-evidence-v1") {
+  if (receipt?.schemaVersion !== 2 || receipt?.kind !== "production-provider-free-evidence-v2") {
     return ["missing-or-unsupported-provider-free-evidence"];
   }
   if (!validCompletionTime(receipt.completedAt)) errors.push("provider-free-completion-time-invalid-or-future");
-  const validExpectedBinding = expectedBinding?.schemaVersion === 1
+  const validExpectedBinding = expectedBinding?.schemaVersion === 2
     && expectedBinding?.source?.kind === "git-working-tree"
     && expectedBinding.source.clean === true
     && COMMIT.test(String(expectedBinding.source.commit ?? ""))
     && HASH.test(String(expectedBinding.source.treeDigest ?? ""))
-    && HASH.test(String(expectedBinding.productionConfigurationDigest ?? ""))
+    && HASH.test(String(expectedBinding.providerFreeConfigurationDigest ?? ""))
     && Array.isArray(expectedBinding.lanes)
     && expectedBinding.lanes.length === LANE_DEFINITIONS.length
     && LANE_DEFINITIONS.every((definition, index) => {
@@ -256,7 +273,7 @@ export function productionProviderFreeEvidenceValidationErrors(receipt, expected
 export function productionProviderFreeEvidenceContextValidationErrors(receipt, {
   source,
   candidateProvenance,
-  configurationDigest
+  providerFreeConfigurationDigest
 } = {}) {
   const errors = productionProviderFreeEvidenceValidationErrors(receipt, receipt?.binding);
   const binding = receipt?.binding;
@@ -265,7 +282,7 @@ export function productionProviderFreeEvidenceContextValidationErrors(receipt, {
     || binding?.source?.clean !== (source?.dirty === false)) errors.push("provider-free-source-binding-mismatch");
   if (binding?.source?.treeDigest !== candidateProvenance?.contentDigest
     || binding?.source?.treeAlgorithm !== candidateProvenance?.algorithm) errors.push("provider-free-tree-binding-mismatch");
-  if (binding?.productionConfigurationDigest !== configurationDigest) errors.push("provider-free-production-configuration-binding-mismatch");
+  if (binding?.providerFreeConfigurationDigest !== providerFreeConfigurationDigest) errors.push("provider-free-configuration-binding-mismatch");
   return [...new Set(errors)];
 }
 
@@ -281,9 +298,9 @@ export async function collectProductionProviderFreeEvidence({
   runCommand,
   source,
   candidateProvenance,
-  configurationDigest
+  providerFreeConfigurationDigest
 }) {
-  const binding = productionProviderFreeEvidenceBinding({ packageRoot, source, candidateProvenance, configurationDigest });
+  const binding = productionProviderFreeEvidenceBinding({ packageRoot, source, candidateProvenance, providerFreeConfigurationDigest });
   const cacheRoot = path.join(liveRoot, ".pi", "benchmarks", "provider-free-evidence", binding.digest);
   const cachePath = path.join(cacheRoot, "receipt.json");
   if (fs.existsSync(cachePath)) {
@@ -342,8 +359,8 @@ export async function collectProductionProviderFreeEvidence({
       await assertLiveSource(`after-${definition.id}`);
     }
     const receipt = {
-      schemaVersion: 1,
-      kind: "production-provider-free-evidence-v1",
+      schemaVersion: 2,
+      kind: "production-provider-free-evidence-v2",
       completedAt: new Date().toISOString(),
       binding,
       lanes
@@ -371,7 +388,7 @@ export async function prepareProductionProviderFreeEvidence({
   packageRoot,
   bootstrapMetadata,
   candidateProvenance,
-  configurationDigest,
+  providerFreeConfigurationDigest,
   runCommand,
   resumedReceipt = undefined
 }) {
@@ -380,7 +397,7 @@ export async function prepareProductionProviderFreeEvidence({
     packageRoot,
     source: bootstrapMetadata.sourceIdentity,
     candidateProvenance,
-    configurationDigest
+    providerFreeConfigurationDigest
   });
   const receipt = resumedReceipt !== undefined
     ? assertProductionProviderFreeEvidence(resumedReceipt, binding, "resumed production provider-free evidence")
@@ -390,7 +407,7 @@ export async function prepareProductionProviderFreeEvidence({
       runCommand,
       source: bootstrapMetadata.sourceIdentity,
       candidateProvenance,
-      configurationDigest
+      providerFreeConfigurationDigest
     });
   return { receipt, binding };
 }

@@ -7,6 +7,9 @@ import test from "node:test";
 import {
   benchmarkOperationalEvidence,
   classifyPreUsageFailure,
+  createBenchmarkTransportCircuit,
+  observeBenchmarkTransportFailure,
+  validBenchmarkTransportCircuit,
   terminalPiSessionError
 } from "../packages/piagent-core/benchmark/benchmark-forensics.js";
 
@@ -169,10 +172,10 @@ test("accepts only an exact positive-usage structured settlement mismatch as a c
   }), undefined);
   assert.deepEqual(classifyPreUsageFailure({ code: 1, timedOut: false },
     { ...usage, usageCompleteness: "unverified" }, "webui blocked", { candidateOutcome }), {
-    failure: "agent-exit-1-with-usage-unavailable",
-    class: "unknown-cost",
-    usageStatus: "unknown-after-provider-start",
-    retryable: true
+    failure: "agent-exit-1-after-measured-usage",
+    class: "agent-process",
+    usageStatus: "measured-lower-bound",
+    retryable: false
   });
   assert.deepEqual(classifyPreUsageFailure({ code: 1, timedOut: false }, usage, "transport closed"), {
     failure: "agent-exit-1-after-measured-usage",
@@ -182,16 +185,114 @@ test("accepts only an exact positive-usage structured settlement mismatch as a c
   });
 });
 
-test("keeps every timeout infrastructure fail-closed even when earlier usage is exact", () => {
+test("classifies fetch failures without erasing exact or lower-bound provider usage", () => {
+  const exact = { sessions: 1, input: 60, output: 15, cacheRead: 20, cacheWrite: 5, reasoning: 0, total: 100,
+    fresh: 75, usageCompleteness: "exact", reasoningCompleteness: "lower-bound", cost: null };
+  assert.deepEqual(classifyPreUsageFailure(
+    { code: 0, timedOut: false }, exact, "TypeError: fetch failed", { terminalProviderError: true }
+  ), {
+    failure: "provider-fetch-failed-after-measured-usage",
+    class: "provider-transport",
+    usageStatus: "measured-but-unaccepted",
+    retryable: false
+  });
+
+  const partial = { ...exact, usageCompleteness: "unverified" };
+  assert.deepEqual(classifyPreUsageFailure(
+    { code: 1, timedOut: false }, partial, "cause: ECONNRESET"
+  ), {
+    failure: "provider-fetch-failed-after-measured-usage",
+    class: "provider-transport",
+    usageStatus: "measured-lower-bound",
+    retryable: false
+  });
+
+  const zero = { ...exact, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, total: 0, fresh: 0 };
+  assert.deepEqual(classifyPreUsageFailure(
+    { code: 0, timedOut: false }, zero, "fetch failed", { terminalProviderError: true }
+  ), {
+    failure: "provider-fetch-failed-with-zero-measured-usage",
+    class: "provider-transport",
+    usageStatus: "unknown-after-provider-start",
+    retryable: false
+  });
+
+  assert.deepEqual(classifyPreUsageFailure(
+    { code: 1, timedOut: false }, { sessions: 0, usageCompleteness: "unavailable" }, "fetch failed"
+  ), {
+    failure: "provider-fetch-failed-with-usage-unavailable",
+    class: "provider-transport",
+    usageStatus: "unknown-after-provider-start",
+    retryable: false
+  });
+});
+
+test("retains readable token lower bounds when strict Pi session parsing fails", () => {
+  const partial = { sessions: 1, input: 60, output: 15, cacheRead: 20, cacheWrite: 5, reasoning: 0, total: 100,
+    fresh: 75, usageCompleteness: "unverified", cost: null };
+  assert.deepEqual(classifyPreUsageFailure(
+    { code: 0, timedOut: false }, partial, "usage.cacheWrite missing", { usageParsingError: true }
+  ), {
+    failure: "pi-session-usage-incomplete-after-provider-start",
+    class: "usage-accounting",
+    usageStatus: "measured-lower-bound",
+    retryable: false
+  });
+});
+
+test("opens the run-wide transport circuit after two incidents and preserves it across reload", () => {
+  const first = observeBenchmarkTransportFailure(createBenchmarkTransportCircuit(), {
+    infrastructureClass: "provider-transport",
+    orderIndex: 1,
+    scenarioId: "first",
+    surface: "piagent",
+    repeat: 1,
+    infrastructureAttempt: 1,
+    infrastructureFailure: "provider-fetch-failed-with-zero-measured-usage"
+  });
+  assert.equal(first.state, "closed");
+  assert.equal(first.failures, 1);
+
+  const reloaded = JSON.parse(JSON.stringify(first));
+  assert.equal(validBenchmarkTransportCircuit(reloaded), true);
+  const second = observeBenchmarkTransportFailure(reloaded, {
+    infrastructureClass: "provider-infrastructure",
+    orderIndex: 4,
+    scenarioId: "second",
+    surface: "codex-cli",
+    repeat: 1,
+    infrastructureAttempt: 1,
+    infrastructureFailure: "provider-temporarily-unavailable-with-zero-measured-usage"
+  });
+  assert.equal(second.state, "open");
+  assert.equal(second.failures, 2);
+  assert.equal(validBenchmarkTransportCircuit(JSON.parse(JSON.stringify(second))), true);
+  assert.deepEqual(second.lastFailure, {
+    orderIndex: 4,
+    scenarioId: "second",
+    surface: "codex-cli",
+    repeat: 1,
+    infrastructureAttempt: 1,
+    failure: "provider-temporarily-unavailable-with-zero-measured-usage"
+  });
+
+  assert.equal(observeBenchmarkTransportFailure(second, {
+    infrastructureClass: "provider-policy",
+    orderIndex: 5
+  }), second, "non-transport failures do not consume the circuit budget");
+  assert.equal(validBenchmarkTransportCircuit({ ...second, failures: 1 }), false, "open state cannot be rolled back by malformed persistence");
+});
+
+test("keeps timeout usage as a lower bound and never treats it as exact", () => {
   const usage = { sessions: 1, input: 60, output: 15, cacheRead: 20, cacheWrite: 5, reasoning: 4, total: 100,
     fresh: 75, usageCompleteness: "exact", cost: null };
   assert.deepEqual(classifyPreUsageFailure({ code: 1, timedOut: true }, usage, "webui-journey-timeout", {
     candidateOutcome: { schemaVersion: 1, kind: "terminal-settlement-mismatch",
       expectedSettlement: "completed", observedSettlement: "blocked", turnIndex: 2 }
   }), {
-    failure: "agent-timeout-with-terminal-usage-unknown",
+    failure: "agent-timeout-after-observed-usage",
     class: "transport-timeout",
-    usageStatus: "unknown-after-provider-start",
+    usageStatus: "measured-lower-bound",
     retryable: false
   });
 });

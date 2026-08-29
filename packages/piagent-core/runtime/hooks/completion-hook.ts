@@ -24,7 +24,7 @@ import type { RecoveryDecision } from "../recovery/recovery-policy.ts";
 import { buildHandoffProjection, handoffProjectionPath, writeHandoffProjection } from "../recovery/handoff-projection.ts";
 import { evaluateExactFinalOutputContract } from "../quality/exact-output-contract.ts";
 import { performanceReviewGuidance, taskPerformanceAssurance } from "../quality/performance-assurance.ts";
-import { planRecoveryContinuation, reserveSemanticReviewContinuation } from "../recovery/continuation-budget.ts";
+import { planRecoveryContinuation, reserveSemanticReviewContinuation, terminalRecoveryForContinuationDenial } from "../recovery/continuation-budget.ts";
 import { semanticRepairProvenance } from "../recovery/semantic-repair-handshake.ts";
 import { observeTrajectorySync } from "../trajectory/trajectory-observability.ts";
 import type { TrajectorySyncOptions, TrajectorySyncResult } from "../trajectory/trajectory-runtime.ts";
@@ -248,7 +248,8 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
           telemetry(ctx, trace);
         }
         if (semanticReviewAllowed(task) && assurance.requiresReview && !reviewReady) {
-          task = writeTask(ctx.cwd, { ...task, changedFiles: projected.changedFiles, acceptanceReceipt: projected.acceptanceReceipt });
+          task = writeTask(ctx.cwd, { ...task, changedFiles: projected.changedFiles, finalWorkingTreeFiles: projected.finalWorkingTreeFiles,
+            finalFileDigests: projected.finalFileDigests, acceptanceReceipt: projected.acceptanceReceipt });
           const reservation = reserveSemanticReviewContinuation(ctx.cwd, task, {
             currentWorkingTreeDigest: currentDigest, expectedPaths: expectedReviewPaths, reasonCodes: assurance.reasonCodes
           });
@@ -276,15 +277,16 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
             return { message: { ...event.message, content } };
           }
           const reviewGate: CompletionGate = { decision: "fail", missing: [`semantic review handoff: ${reservation.reason}`], missingVerifyCommands: [] };
+          const reviewRecovery = terminalRecoveryForContinuationDenial(recoveryDecision(ctx, task, reviewGate, currentDigest), reservation.reason);
           observeTrajectorySync(ctx, syncTrajectory?.(ctx, task, { sourceHook: "completion", handoffObserved: true }), telemetry);
-          persistHandoff(ctx, task, reviewGate, currentDigests, null);
+          persistHandoff(ctx, task, reviewGate, currentDigests, reviewRecovery);
           const handoffTrace = {
             event: "performance_review_handed_off", taskId: task.taskId, taskRunId: task.taskRunId, sessionId: task.sessionId,
             reason: reservation.reason, progressSignature: reservation.progressSignature,
             globalContinuationConsumed: reservation.consumed, globalContinuationMaximum: reservation.maximum
           };
           appendTrace(ctx.cwd, handoffTrace); appendSessionTrace(pi, handoffTrace); telemetry(ctx, handoffTrace);
-          recordCompletionAudit(ctx, task, { outcome: "blocked", evidence: handoffTrace });
+          recordCompletionAudit(ctx, task, { outcome: "blocked", evidence: { ...handoffTrace, recovery: reviewRecovery } });
           const notice = [
             "[Piagent completion gate: NOT APPROVED]",
             `Task ${task.taskId} cannot schedule another semantic review: ${reservation.reason}; ${review?.activityObserved ? "current-tree review activity was observed but did not produce complete credit" : "no current-tree review activity was observed"}.`,
@@ -324,11 +326,8 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
         telemetry(ctx, trace);
         return;
       }
-      task = writeTask(ctx.cwd, {
-        ...task,
-        changedFiles: projected.changedFiles,
-        acceptanceReceipt: projected.acceptanceReceipt
-      });
+      task = writeTask(ctx.cwd, { ...task, changedFiles: projected.changedFiles, finalWorkingTreeFiles: projected.finalWorkingTreeFiles,
+        finalFileDigests: projected.finalFileDigests, acceptanceReceipt: projected.acceptanceReceipt });
       state.cacheTaskIdentity(ctx, task);
     }
     if (!handoffAttempt || finalGateMode(ctx) !== "enforce") return;

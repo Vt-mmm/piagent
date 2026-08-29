@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import CheckCircleOutlineRounded from "@mui/icons-material/CheckCircleOutlineRounded";
+import BoltRounded from "@mui/icons-material/BoltRounded";
 import DataObjectRounded from "@mui/icons-material/DataObjectRounded";
 import HubRounded from "@mui/icons-material/HubRounded";
 import MemoryRounded from "@mui/icons-material/MemoryRounded";
@@ -47,6 +48,7 @@ export function RuntimeControlsPanel({ session, options, connections, onComplete
   const disabled = busy || !session || !revision || session.liveState === "running" || session.liveState === "waiting-approval";
   const profileOptions = options?.profiles ?? [];
   const connectionOptions = useMemo(() => (connections?.connections ?? []).filter((item) => /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/.test(item.name)), [connections]);
+  const serviceTier = receipt?.outputs.find((output) => output.customType === "piagent-service-tier-receipt")?.details;
 
   const run = async (action: Action, argument: string | null = null, confirmed = false) => {
     if (!session || !revision) return;
@@ -82,6 +84,21 @@ export function RuntimeControlsPanel({ session, options, connections, onComplete
         <Stack direction={{ xs: "column", sm: "row" }} sx={{ mt: 1, gap: .75 }}><TextField size="small" fullWidth label={localize(locale, "Mô tả tác vụ sắp chạy", "Upcoming task")}
           value={preflight} onChange={(event) => setPreflight(event.target.value)} slotProps={{ htmlInput: { maxLength: 2048 } }} />
           <Button {...small} sx={{ whiteSpace: "nowrap" }} onClick={() => void run("usage.preflight", preflight.trim() || null)}>Preflight</Button></Stack>
+      </ControlGroup>
+
+      <ControlGroup icon={<BoltRounded color="primary" />} title={localize(locale, "Fast mode", "Fast mode")}
+        detail={localize(locale,
+          "Giữ nguyên model/thinking và yêu cầu OpenAI Codex dùng service tier Fast. Session trống mặc định tắt; cấu hình môi trường hoặc trạng thái đã lưu khi resume có thể ghi đè.",
+          "Keeps model/thinking unchanged and requests the OpenAI Codex Fast service tier. Blank sessions default to off; an environment override or restored resume state can take precedence.")}>
+        <ControlButtons><Button {...small} onClick={() => void run("runtime.fast-status")}>{localize(locale, "Trạng thái", "Status")}</Button>
+          <Button {...small} color="primary" onClick={() => confirm("runtime.fast-on", null,
+            localize(locale, "Bật Fast mode?", "Enable Fast mode?"), localize(locale,
+              "Các lượt model tiếp theo sẽ yêu cầu service tier Fast và có thể dùng quota hoặc chi phí provider khác. Model và thinking không đổi.",
+              "Future model turns will request the Fast service tier and may use provider quota or pricing differently. Model and thinking remain unchanged."))}>{localize(locale, "Bật Fast", "Enable Fast")}</Button>
+          <Button {...small} onClick={() => confirm("runtime.fast-off", null,
+            localize(locale, "Tắt Fast mode?", "Disable Fast mode?"), localize(locale,
+              "Piagent sẽ ngừng ép Fast từ lượt model tiếp theo; cấu hình tier của host/provider vẫn được giữ nguyên.",
+              "Piagent will stop forcing Fast on the next model turn; host/provider tier configuration still applies."))}>{localize(locale, "Tắt Fast", "Disable Fast")}</Button></ControlButtons>
       </ControlGroup>
 
       <ControlGroup icon={<PersonSearchRounded color="primary" />} title={localize(locale, "Onboarding & profile", "Onboarding & profile")}
@@ -143,8 +160,11 @@ export function RuntimeControlsPanel({ session, options, connections, onComplete
         : <><Stack direction="row" sx={{ alignItems: "center", gap: 1, flexWrap: "wrap" }}><CheckCircleOutlineRounded color={receipt?.state === "settled" ? "success" : "warning"} />
           <Typography sx={{ fontWeight: 800 }}>{receipt ? receipt.action : localize(locale, "Không hoàn tất", "Not completed")}</Typography>
           {receipt && <Chip size="small" color={receipt.state === "settled" ? "success" : "warning"} variant="outlined" label={receipt.resultCode} />}
-          {receipt?.effect === "read-only" && <Chip size="small" color={receipt.modelCallObserved ? "warning" : "success"} variant="outlined"
+          {(receipt?.effect === "read-only" || receipt?.effect === "session-setting") && <Chip size="small" color={receipt.modelCallObserved ? "warning" : "success"} variant="outlined"
             label={receipt.modelCallObserved ? localize(locale, "Đã phát hiện model call", "Model call detected") : "0 model token"} />}</Stack>
+          {serviceTier && <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>{localize(locale,
+            `Fast: ${serviceTier.mode} · provider: ${serviceTier.provider ?? "unknown"} · ${serviceTier.reasonCode}`,
+            `Fast: ${serviceTier.mode} · provider: ${serviceTier.provider ?? "unknown"} · ${serviceTier.reasonCode}`)}</Typography>}
           {error && <Typography color="error" variant="body2" sx={{ mt: 1 }}>{error}</Typography>}
           {receipt?.outputs.map((output, index) => <Box component="pre" key={`${output.customType}-${index}`} sx={{ m: 0, mt: 1, p: 1.25,
             borderRadius: 1.5, bgcolor: "action.hover", whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: 12.5, maxHeight: 260, overflow: "auto" }}>{output.content}</Box>)}</>}

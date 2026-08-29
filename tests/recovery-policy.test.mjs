@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { classifyVerificationFailure } from "../packages/piagent-core/extensions/verification-intelligence.js";
-import { RECOVERY_CEILINGS, selectRecoveryDecision } from "../packages/piagent-core/runtime/recovery/recovery-policy.ts";
+import { RECOVERY_CEILINGS, recoveryDecisionValidationErrors, selectRecoveryDecision } from "../packages/piagent-core/runtime/recovery/recovery-policy.ts";
 
 function classification(category) {
   const samples = {
@@ -53,6 +53,30 @@ function history(inputValue, action, disposition = "failed", overrides = {}) {
 }
 
 describe("bounded recovery policy v1", () => {
+  it("emits validator-clean decisions for every reachable valid-input policy branch", () => {
+    const compile = input("compile-typecheck", { proposedHypothesisRef: "hypothesis:compile" });
+    const flaky = input("flaky-infrastructure");
+    const unknown = input("unknown");
+    const cases = [
+      input("compile-typecheck", { featureEnabled: false }),
+      input("unknown", { currentPhase: "terminal" }), input("unknown", { currentPhase: "handoff" }), input("passed"),
+      input("scope-protected-path"), input("compile-typecheck", { currentTreeMatchesEvidence: false }),
+      input("environment", { currentTreeMatchesEvidence: false }), input("provider-network", { currentTreeMatchesEvidence: false }),
+      input("permission-policy", { currentTreeMatchesEvidence: false }), compile,
+      { ...compile, history: [history(compile, "repair")] },
+      { ...compile, history: [history(compile, "repair", "failed", { hypothesisRef: "hypothesis:compile" })] },
+      input("dependency-config"), input("dependency-config", { dependencyMutationAuthorized: true }), input("environment"),
+      input("provider-network"), { ...input("provider-network"), history: [history(input("provider-network"), "retry")] },
+      input("permission-policy"), flaky, { ...flaky, exactVerifierAvailable: false },
+      { ...flaky, history: [history(flaky, "retry")] }, unknown, { ...unknown, history: [history(unknown, "retry")] },
+      input("lint-format", { task: { ...input("lint-format").task, changeMode: "read-only" } })
+    ];
+    for (const candidate of cases) {
+      const decision = selectRecoveryDecision(candidate);
+      assert.deepEqual(recoveryDecisionValidationErrors(decision), [], JSON.stringify(decision));
+    }
+  });
+
   it("keeps the feature-off path observational and non-mutating", () => {
     const result = selectRecoveryDecision(input("compile-typecheck", { featureEnabled: false }));
     assert.equal(result.action, "handoff");

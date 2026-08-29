@@ -1,5 +1,5 @@
 export const WEBUI_RUNTIME_ACTION_IDS = [
-  "runtime.status", "runtime.inspector", "runtime.commands", "orchestration.status",
+  "runtime.status", "runtime.inspector", "runtime.commands", "runtime.fast-status", "runtime.fast-on", "runtime.fast-off", "orchestration.status",
   "usage.live", "usage.history", "usage.logs", "usage.efficiency", "usage.preflight",
   "onboarding.status", "onboarding.profile", "onboarding.tech",
   "profile.status", "profile.options", "profile.tech-options", "profile.apply", "profile.auto",
@@ -9,7 +9,7 @@ export const WEBUI_RUNTIME_ACTION_IDS = [
 ] as const;
 
 export type WebUiRuntimeActionId = typeof WEBUI_RUNTIME_ACTION_IDS[number];
-export type WebUiRuntimeEffect = "read-only" | "workspace-write" | "model-assisted";
+export type WebUiRuntimeEffect = "read-only" | "workspace-write" | "model-assisted" | "session-setting";
 export type WebUiRuntimeArgument = "none" | "optional-text" | "required-text" | "profile" | "connection";
 
 export type WebUiRuntimeAction = {
@@ -27,6 +27,8 @@ const action = (id: WebUiRuntimeActionId, category: WebUiRuntimeAction["category
 
 export const WEBUI_RUNTIME_ACTIONS: readonly WebUiRuntimeAction[] = [
   action("runtime.status", "runtime"), action("runtime.inspector", "runtime"), action("runtime.commands", "runtime"),
+  action("runtime.fast-status", "runtime"), action("runtime.fast-on", "runtime", "session-setting"),
+  action("runtime.fast-off", "runtime", "session-setting"),
   action("orchestration.status", "runtime"),
   action("usage.live", "usage"), action("usage.history", "usage"), action("usage.logs", "usage"),
   action("usage.efficiency", "usage"), action("usage.preflight", "usage", "read-only", "optional-text"),
@@ -71,6 +73,7 @@ export function buildWebUiRuntimeCommand(input: {
   const suffix = argument ? ` ${argument}` : "";
   const commands: Record<WebUiRuntimeActionId, string> = {
     "runtime.status": "/piagent-status", "runtime.inspector": "/piagent-inspector", "runtime.commands": "/commands",
+    "runtime.fast-status": "/fast status", "runtime.fast-on": "/fast on", "runtime.fast-off": "/fast off",
     "orchestration.status": "/piagent-orchestration",
     "usage.live": "/usage live", "usage.history": "/usage history", "usage.logs": "/usage logs",
     "usage.efficiency": "/usage efficiency", "usage.preflight": `/usage preflight${suffix}`,

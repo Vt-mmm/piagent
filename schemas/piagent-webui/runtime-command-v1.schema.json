@@ -9,7 +9,7 @@
   "$defs": {
     "action": {
       "enum": [
-        "runtime.status", "runtime.inspector", "runtime.commands", "orchestration.status",
+        "runtime.status", "runtime.inspector", "runtime.commands", "runtime.fast-status", "runtime.fast-on", "runtime.fast-off", "orchestration.status",
         "usage.live", "usage.history", "usage.logs", "usage.efficiency", "usage.preflight",
         "onboarding.status", "onboarding.profile", "onboarding.tech",
         "profile.status", "profile.options", "profile.tech-options", "profile.apply", "profile.auto",
@@ -18,7 +18,29 @@
         "mcp.status", "mcp.doctor", "mcp.detail", "mcp.approve", "mcp.reject", "mcp.reset"
       ]
     },
-    "effect": { "enum": ["read-only", "workspace-write", "model-assisted"] },
+    "effect": { "enum": ["read-only", "workspace-write", "model-assisted", "session-setting"] },
+    "serviceTierReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion", "enabled", "mode", "source", "requestedServiceTier", "observedRequestServiceTier",
+        "providerResponseServiceTier", "providerResponseEvidence", "provider", "modelId", "applied", "reasonCode"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "enabled": { "type": "boolean" },
+        "mode": { "enum": ["standard", "fast"] },
+        "source": { "enum": ["default", "environment", "session-command", "session-state"] },
+        "requestedServiceTier": { "enum": ["fast", null] },
+        "observedRequestServiceTier": { "enum": ["priority", null] },
+        "providerResponseServiceTier": { "type": "null" },
+        "providerResponseEvidence": { "const": "unavailable-host-api" },
+        "provider": { "type": ["string", "null"], "maxLength": 512, "pattern": "^[^\\u0000]*$" },
+        "modelId": { "type": ["string", "null"], "maxLength": 512, "pattern": "^[^\\u0000]*$" },
+        "applied": { "type": "boolean" },
+        "reasonCode": { "enum": ["fast-mode-disabled", "provider-not-supported", "fast-request-pending", "fast-request-observed"] }
+      }
+    },
     "output": {
       "type": "object",
       "additionalProperties": false,
@@ -27,7 +49,8 @@
         "customType": { "type": "string", "minLength": 1, "maxLength": 120, "pattern": "^[A-Za-z0-9._-]+$" },
         "content": { "type": "string", "maxLength": 12000, "pattern": "^[^\\u0000]*$" },
         "truncated": { "type": "boolean" },
-        "redacted": { "type": "boolean" }
+        "redacted": { "type": "boolean" },
+        "details": { "$ref": "#/$defs/serviceTierReceipt" }
       }
     },
     "command": {

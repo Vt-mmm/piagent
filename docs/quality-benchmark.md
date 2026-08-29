@@ -136,8 +136,91 @@ mỗi family và 2 surface, tổng cộng 108 model session. Bộ này dùng đ�
 regression của harness/model policy, không tự chứng minh generalization hoặc độ
 ổn định production.
 
-Contract hiện tại chỉ xét efficiency claim ở **S108**, sau khi có đủ 18 family ×
-3 repeat × 2 surface. Claim phải qua hai trục độc lập. Primary fresh-token
+### Production-v2: Luna medium Fast và net-35 all-in
+
+Track mới chạy bằng `npm run benchmark:production-v2 -- --dry-run` rồi theo các
+mốc S12/S18/S54/S108. Ma trận vẫn là 108 session: 9 task family × 3 structural
+variant × 2 repeat × 2 surface. Suite khóa cùng
+`openai-codex/gpt-5.6-luna`, `medium` và Fast mode cho cả hai surface. Ở wire
+OpenAI, Fast được ánh xạ thành `service_tier=priority`; literal `fast` không phải
+giá trị hợp lệ của Responses API và benchmark phải fail closed nếu quan sát thấy nó.
+Piagent lẫn controlled `codex-cli`; resume/replay, spend-control và configuration
+digest đều giữ nguyên ba giá trị này. Cổng tổng hợp là **Fast execution
+configuration parity**: Piagent phải có outbound telemetry ánh xạ ý định Fast
+sang wire tier `priority` đầy đủ cho mọi provider start/wire event. Surface
+controlled `codex-cli`
+phải có receipt của argv thực tế cho lượt đầu, gồm `--strict-config`,
+`service_tier="fast"`, feature `fast_mode`, executable identity, isolated
+`CODEX_HOME`, stdout `thread.started`, exact usage và rollout
+`session_meta`/`turn_context` khớp thread, workspace, model, thinking. Mỗi lượt
+resume tiếp theo phải có cùng invocation receipt và đúng một effective
+`thread_settings_applied` tier `priority`; tổng coverage bắt buộc là một initial
+receipt cộng `providerStartedAttempts - 1` resume-settings event. Thiếu hoặc
+mâu thuẫn một bằng chứng, hay thấy `default`, đều làm claim fail closed. Rollout
+Codex không phát `thread_settings_applied` cho initial `exec`, vì vậy benchmark
+không được nhầm một session chỉ có một lượt thành Fast failure, cũng không được
+dùng command binding đơn lẻ nếu thiếu các identity/outcome binding nói trên.
+
+Hai cổng token độc lập cùng phải pass ở S108:
+
+- cận trên 95% của primary fixed-workload family ratio vẫn `<= 0.60`;
+- pooled fresh token của **mọi accepted attempt cộng mọi exact failed/retry
+  attempt** phải `<= 0.65` so với `codex-cli`, tương ứng net reduction ít nhất
+  35%. Unknown attempt usage không được trừ hao hay bỏ khỏi mẫu; nó làm gate
+  fail-closed.
+
+Chuỗi chạy chính thức của track này là S0 rồi mở đúng từng cửa sổ mới
+`12/6/36/54`; không chạy lại session đã có và chỉ S108 mới có quyền claim:
+
+```bash
+npm run benchmark:production-v2 -- --preflight-only
+npm run benchmark:production-v2 -- --max-sessions 12 --stop-after-failed-pair --output /path/to/report-dir --yes
+npm run benchmark:production-v2 -- --resume /path/to/report-dir --max-sessions 6 --yes
+npm run benchmark:production-v2 -- --resume /path/to/report-dir --max-sessions 36 --yes
+npm run benchmark:production-v2 -- --resume /path/to/report-dir --max-sessions 54 --yes
+```
+
+S0 dùng `providerFreeConfigurationDigest` riêng: nó vẫn bind source/tree,
+suite, model, thinking, Fast tier, seed/order, runtime, timeout và retry policy,
+nhưng loại các trường chỉ thuộc invocation như private credential-vault ID,
+output, resume và kích thước stage window. Vì vậy S12/S18/S54/S108 reuse nguyên
+receipt S0; thay đổi semantic, source hoặc lane bytes vẫn làm cache miss
+fail-closed. Measurement `configurationDigest` đầy đủ vẫn giữ private vault ID
+để khóa ledger, campaign và resume lineage, nên tối ưu cache này không nới
+quyền hay trộn hai paid run.
+
+Production-v2 bind một paid campaign vào exact suite, candidate, configuration
+và output directory. Nếu campaign đã khởi động provider nhưng dừng giữa chừng,
+fail gate hoặc kết thúc `no-claim`, cùng lineage chỉ được resume đúng output đó;
+không được mở output mới để chọn lại mẫu đẹp hơn. Candidate/configuration thực
+sự đổi mới được mở campaign mới, nhưng campaign cũ được giữ nguyên ledger và
+đóng bằng disposition `superseded-changed-lineage-no-claim`. Report tách rõ
+all-attempt ledger của campaign hiện tại dùng cho net-35 với lịch sử chi tiêu
+campaign trước; lịch sử cũ không bị cộng vào tỷ lệ candidate hiện tại và cũng
+không bị xóa. Known exact token được cộng thành subtotal riêng, còn chỉ một
+prior/current attempt thiếu exact usage cũng phải hiện tổng usage là
+`unavailable`; runner không tự retry unknown-cost attempt. Reservation chưa hề
+khởi động provider vẫn có thể được supersede mà không tạo paid-history giả.
+
+Pi host hiện chứng minh được outbound request Fast; surface controlled
+`codex-cli` chứng minh strict
+initial invocation cộng effective settings của toàn bộ lượt resume. Hai nguồn đó
+chỉ cho phép claim execution-configuration parity, không cho phép suy ra actual
+provider processing tier.
+Pi host hiện chưa expose trường `response.service_tier`, nên report giữ provider
+processing tier ở `unavailable`. Nếu response tier được host expose về sau, chỉ
+`fast|priority` được chấp nhận; `default` là downgrade.
+Fast của GPT-5.6 được report bằng hai mức **tham chiếu** riêng: ChatGPT
+subscription credits `2.5x` và API Fast token pricing `2x`. Billing mode và
+multiplier thực áp dụng cho run vẫn là `unverified` nếu chưa có bằng chứng độc
+lập; cả hai reference đều non-blocking và tuyệt đối không nhân/chia vào
+provider-reported token ratio.
+
+### Production-v1 legacy: fixed-workload 40%
+
+Phần contract dưới đây chỉ áp dụng cho `production-v1`: efficiency claim được
+xét ở **S108**, sau khi có đủ 18 family × 3 repeat × 2 surface. Claim phải qua
+hai trục độc lập. Primary fresh-token
 estimand được khai báo trước là
 `fixed-workload-family-ratio`: trong từng family, cộng fresh token chính xác của
 đủ ba attempt đã định trước ở mỗi surface, gồm cả usage của failed attempt đã
@@ -254,7 +337,7 @@ piagent-benchmark --resume /path/to/report-dir --max-sessions 36 --yes
 Trước provider preflight đầu tiên, S0 tự chạy bốn lane provider-free trên đúng
 candidate hiện tại: `architecture-conformance-v1` chạy fail-fast cho dependency
 boundary và line budget, `runtime-conformance-v1`, `long-horizon-v1` (tối thiểu
-30 phút wall-clock) và `webui-parity-v1` gồm tám deterministic UI-stability suite.
+30 phút wall-clock) và `webui-parity-v1` gồm chín deterministic UI-stability suite.
 Receipt có completion time và bind exact clean Git commit, candidate tree,
 production configuration, cùng digest của từng lane config/runner. Receipt được
 cache riêng tư theo toàn bộ binding; resume/S12 chỉ reuse khi mọi digest vẫn
@@ -855,7 +938,7 @@ Runner chỉ cho phép kết luận tiết kiệm token khi:
   report vẫn phải công khai mọi workflow check bị hụt;
 - mọi Piagent session resolved, không timeout/orphan/unknown terminal state và
   có complete causal context receipt;
-- S0 có đủ ba provider-free receipt cùng exact clean source/tree/config/runner
+- S0 có đủ bốn provider-free lane receipt cùng exact clean source/tree/config/runner
   binding và completion time hợp lệ; adaptive-context `partial` luôn fail;
 - mỗi Piagent provider attempt có tối đa một subagent, tổng subagent token
   traffic không quá `5%`, và không có session/failed-attempt usage không giải thích;

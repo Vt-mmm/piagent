@@ -8,7 +8,7 @@ import { pathToFileURL } from "node:url";
 import test from "node:test";
 
 import { workingTreeEvidenceDigest } from "../packages/piagent-core/extensions/working-tree-digest.js";
-import { operatorRequestDigest } from "../packages/piagent-core/extensions/task-state.js";
+import { operatorRequestDigest, workingTreeSnapshot } from "../packages/piagent-core/extensions/task-state.js";
 
 const require = createRequire(import.meta.url);
 const repoRoot = path.resolve(import.meta.dirname, "..");
@@ -866,8 +866,9 @@ test("the pinned Pi host executes Piagent runtime tasks end to end without a pro
     const task = taskForSession(cwd, "runtime-recovery-guidance");
     assert.ok(task);
     assert.equal(task.trace.outcome, "pending");
-    assert.deepEqual(task.finalWorkingTreeFiles, [], "a pending recovery must not persist a final snapshot");
-    assert.deepEqual(task.finalFileDigests, {}, "a pending recovery must not persist final digest evidence");
+    const pendingSnapshot = workingTreeSnapshot(cwd);
+    assert.deepEqual(task.finalWorkingTreeFiles, Object.keys(pendingSnapshot).sort(), "a pending recovery persists the exact attempted handoff snapshot");
+    assert.equal(workingTreeEvidenceDigest(task.finalFileDigests), workingTreeEvidenceDigest(pendingSnapshot), "pending final evidence remains bound to the attempted handoff tree");
     const observedVerifier = task.verifyEvidence.find((entry) => entry.command === "node --test test/count.test.js" && entry.exitCode === 0);
     assert.ok(observedVerifier, "the completed verifier observation remains durable audit evidence");
     assert.equal(observedVerifier.preWorkingTreeDigest, observedVerifier.workingTreeDigest);

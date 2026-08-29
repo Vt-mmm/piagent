@@ -256,19 +256,23 @@ function structuredToolStatus(message) {
 }
 
 function exactPricingRequest(usage) {
-  const fields = ["input", "output", "cacheRead", "cacheWrite", "reasoning"];
+  const fields = ["input", "output", "cacheRead", "cacheWrite"];
   if (!usage || fields.some((field) => !Number.isSafeInteger(usage[field]) || usage[field] < 0)) return null;
+  const reasoningReported = Object.hasOwn(usage, "reasoning") && usage.reasoning !== undefined;
+  const reasoning = reasoningReported ? usage.reasoning : 0;
+  if (!Number.isSafeInteger(reasoning) || reasoning < 0) return null;
   const total = usage.totalTokens;
   if (!Number.isSafeInteger(total) || total !== usage.input + usage.output + usage.cacheRead + usage.cacheWrite
-    || usage.reasoning > usage.output) return null;
+    || reasoning > usage.output) return null;
   return {
     input: usage.input,
     output: usage.output,
     cacheRead: usage.cacheRead,
     cacheWrite: usage.cacheWrite,
-    reasoning: usage.reasoning,
+    reasoning,
     total,
-    promptTokens: usage.input + usage.cacheRead + usage.cacheWrite
+    promptTokens: usage.input + usage.cacheRead + usage.cacheWrite,
+    ...(!reasoningReported && usage.output > 0 ? { reasoningCompleteness: "lower-bound" } : {})
   };
 }
 
@@ -278,14 +282,22 @@ function exactToken(raw, label) {
 }
 
 function addTotals(target, usage, { strict = false, label = "usage" } = {}) {
-  const values = strict ? {
-    input: exactToken(usage?.input, `${label}.input`),
-    output: exactToken(usage?.output, `${label}.output`),
-    cacheRead: exactToken(usage?.cacheRead, `${label}.cacheRead`),
-    cacheWrite: exactToken(usage?.cacheWrite, `${label}.cacheWrite`),
-    reasoning: exactToken(usage?.reasoning, `${label}.reasoning`),
-    total: exactToken(usage?.totalTokens, `${label}.totalTokens`)
-  } : {
+  const reasoningReported = Boolean(usage && Object.hasOwn(usage, "reasoning") && usage.reasoning !== undefined);
+  const values = strict ? (() => {
+    const output = exactToken(usage?.output, `${label}.output`);
+    return {
+      input: exactToken(usage?.input, `${label}.input`),
+      output,
+      cacheRead: exactToken(usage?.cacheRead, `${label}.cacheRead`),
+      cacheWrite: exactToken(usage?.cacheWrite, `${label}.cacheWrite`),
+      // Pi's upstream usage shape makes reasoning optional. Its absence does
+      // not make the additive input/output totals unknown: reasoning is a
+      // subset of output. A zero-output response proves zero reasoning; for a
+      // non-zero output we retain zero only as an explicit lower bound.
+      reasoning: reasoningReported ? exactToken(usage.reasoning, `${label}.reasoning`) : 0,
+      total: exactToken(usage?.totalTokens, `${label}.totalTokens`)
+    };
+  })() : {
     input: numberValue(usage.input), output: numberValue(usage.output), cacheRead: numberValue(usage.cacheRead),
     cacheWrite: numberValue(usage.cacheWrite), reasoning: numberValue(usage.reasoning),
     total: numberValue(usage.totalTokens) || numberValue(usage.input) + numberValue(usage.output) + numberValue(usage.cacheRead) + numberValue(usage.cacheWrite)
@@ -299,6 +311,11 @@ function addTotals(target, usage, { strict = false, label = "usage" } = {}) {
   target.cost += typeof cost === "object" && cost !== null
     ? numberValue(cost.total)
     : numberValue(cost);
+  return {
+    reasoningReported,
+    reasoningCompleteness: reasoningReported || values.output === 0 ? "exact" : "lower-bound",
+    reasoningInferredZero: !reasoningReported && values.output === 0
+  };
 }
 
 function numberValue(raw) {
@@ -340,7 +357,16 @@ function summarizeSession(file, options) {
     messages: { user: 0, assistant: 0, toolCalls: 0, toolResults: 0, total: 0 },
     promptChars: 0,
     tokens: emptyTotals(),
-    usageIntegrity: { exact: options.strictUsage === true, source: "pi-session-jsonl", assistantMessages: 0, usageMessages: 0 },
+    usageIntegrity: {
+      exact: options.strictUsage === true,
+      source: "pi-session-jsonl",
+      assistantMessages: 0,
+      usageMessages: 0,
+      reasoningMessages: 0,
+      reasoningInferredZeroMessages: 0,
+      reasoningLowerBoundMessages: 0,
+      reasoningCompleteness: "exact"
+    },
     pricingBuckets: { schemaVersion: 1, source: "provider-request-usage", completeness: "unverified", requests: [] },
     execution,
     toolNames: {},
@@ -438,8 +464,17 @@ function summarizeSession(file, options) {
         throw new Error(`Pi assistant message at line ${lineIndex + 1} is missing usage`);
       }
       if (message.usage) {
-        addTotals(summary.tokens, message.usage, { strict: options.strictUsage === true, label: `Pi session JSONL line ${lineIndex + 1} usage` });
+        const usageReceipt = addTotals(summary.tokens, message.usage, {
+          strict: options.strictUsage === true,
+          label: `Pi session JSONL line ${lineIndex + 1} usage`
+        });
         summary.usageIntegrity.usageMessages += 1;
+        if (usageReceipt.reasoningReported) summary.usageIntegrity.reasoningMessages += 1;
+        if (usageReceipt.reasoningInferredZero) summary.usageIntegrity.reasoningInferredZeroMessages += 1;
+        if (usageReceipt.reasoningCompleteness === "lower-bound") {
+          summary.usageIntegrity.reasoningLowerBoundMessages += 1;
+          summary.usageIntegrity.reasoningCompleteness = "lower-bound";
+        }
         execution.providerStartedAttempts += 1;
         const request = exactPricingRequest(message.usage);
         if (request) summary.pricingBuckets.requests.push(request);

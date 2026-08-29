@@ -42,6 +42,7 @@ Command ngắn của PiAgent dùng cho workflow và guard local:
 | `/usage` | Usage live/history/preflight/compact/logs/efficiency. |
 | `/context` | Smart index/rebuild/search/pack/impact/efficiency/preflight/compact. |
 | `/permission` | Permission mode của session. |
+| `/fast` | Xem/bật/tắt OpenAI Codex Fast service tier cho session; không đổi model/thinking và không gọi model khi chạy command. |
 | `/profile` | Profile và tech stack. |
 | `/memory` | Project memory policy. |
 | `/onboard` | Project onboarding/status/setup. |
@@ -148,6 +149,7 @@ Các command này đến từ package `piagent-core`.
 | `/fresh <workflow> <request>` | Phiên hiện tại đã nặng hoặc muốn tách việc; nhận mọi workflow canonical. | Mở session mới có tên và replay workflow prompt gọn; `/fresh help` liệt kê lựa chọn. |
 | `/context` | Xem index/search/pack/impact/efficiency/preflight/compact. | Menu context, không gọi model. |
 | `/permission` | Xem/đổi quyền runtime. | Menu status/read-only/workspace-write/full-access. |
+| `/fast status\|on\|off` | Xem/bật/tắt Fast service tier cho session OpenAI Codex. | Chạy ngay, 0 model token; giữ nguyên model/thinking. Session trống mặc định tắt, environment override hoặc state đã lưu khi resume có thể được ưu tiên. |
 | `/memory` hoặc `/memory-policy` | Xem memory policy. | Chạy ngay, không gọi model. |
 | `/model-options` | Xem hướng dẫn model/thinking. | Chạy ngay; chọn model vẫn dùng `/model` hoặc `Ctrl+L`. |
 | `/piagent-mcp` | Xem/quản trị MCP trong Pi. | Menu MCP, không gọi model. |
@@ -543,7 +545,8 @@ Các lệnh này chạy ngoài Pi.
 | `npm run benchmark:deep -- --dry-run` | Validate `deep-logic-v1`: 7 family difficulty large × 3 repeat × Piagent/`codex-cli` = 42 session, khóa Luna/medium và chưa dùng quota. |
 | `npm run benchmark:deep` | Chạy paired deep-logic benchmark Luna/medium cho event/state, scheduler, policy, context graph, stream recovery, transactional config và temporal usage billing chính xác. |
 | `piagent-benchmark --production --dry-run` | Xem ma trận production 18 family x 3 variant x 2 surface = 108 session, chưa dùng quota. |
-| `piagent-benchmark --production --preflight-only` | Trước lượt trả phí, tự chạy/cache ba lane provider-free cùng exact source/tree/config/runner binding; lần đầu có long-horizon tối thiểu 30 phút, 0 provider call/model token. |
+| `piagent-benchmark --production --preflight-only` | Trước lượt trả phí, tự chạy/cache bốn lane provider-free cùng exact source/tree/config/runner binding; lần đầu có long-horizon tối thiểu 30 phút, 0 provider call/model token. Digest S0 loại private vault/stage-window identity nên lượt paid và mọi resume dùng lại đúng receipt khi semantic không đổi. |
+| `npm run benchmark:production-v2 -- --dry-run` | Validate ma trận 108 session Luna/medium Fast-vs-Fast; khóa Fast execution configuration bằng Piagent outbound telemetry và Codex identity-bound effective thread settings, upper-95 family `<=0.60` và pooled all-attempt net ratio `<=0.65`, chưa dùng model token. |
 | `piagent-benchmark --production --surfaces piagent,codex-cli --model openai-codex/gpt-5.6-luna --thinking medium --piagent-treatment candidate` | Chạy production release gate đa domain/profile/lifecycle với controlled Codex; S12/S36/S72 chặn pooled fresh ratio >1.10, observed family >1.25 hoặc subagent vượt 1 attempt/5% traffic; S108 dùng upper-95 <=0.60. |
 | `piagent-benchmark --piagent-treatment release-defaults\|local-safe\|candidate\|feature-off ...` | Pin treatment Piagent; chỉ surface `piagent` nhận feature env, manifest/resume/replay/report giữ nguyên treatment. |
 | `piagent-benchmark --codex-mode native ...` | Đo UX Codex theo cấu hình operator; protocol gate fail closed nên report không được claim tiết kiệm token. |

@@ -5,8 +5,12 @@ import {
   buildWebUiRuntimeCommand,
   isWebUiRuntimeActionId
 } from "../../piagent-core/runtime/workflows/webui-runtime-command.ts";
+import {
+  PIAGENT_SERVICE_TIER_RECEIPT_ENTRY_TYPE,
+  parseServiceTierReceipt
+} from "../../piagent-core/runtime/model/service-tier-runtime.ts";
 import type { Catalog } from "../contracts/generated/session-catalog-v1.ts";
-import type { Action, Command, Receipt } from "../contracts/generated/runtime-command-v1.ts";
+import type { Action, Command, Output, Receipt } from "../contracts/generated/runtime-command-v1.ts";
 import { GatewayEventStore } from "./gateway-events.ts";
 import { SessionRuntimeSupervisor } from "./session-runtime-supervisor.ts";
 
@@ -15,6 +19,9 @@ const REVISION = /^[A-Za-z0-9][A-Za-z0-9._:~-]{0,159}$/;
 const MAX_REPLAYS = 200;
 
 type Replay = { digest: string; receipt: Receipt };
+type FastControlAssessment = Pick<Receipt, "state" | "resultCode" | "reasonCode">;
+
+const FAST_ACTIONS = new Set<Action>(["runtime.fast-status", "runtime.fast-on", "runtime.fast-off"]);
 
 function record(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -39,6 +46,33 @@ function commandDigest(command: Command): string {
   return createHash("sha256").update(JSON.stringify({ sessionRef: command.sessionRef,
     expectedSessionRevision: command.expectedSessionRevision, action: command.action,
     argument: command.argument, confirmed: command.confirmed })).digest("hex");
+}
+
+function normalizedOutputs(value: unknown): Receipt["outputs"] {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 8).map((item) => {
+    if (!record(item)) return item;
+    const { details: _details, ...base } = item;
+    if (item.customType !== PIAGENT_SERVICE_TIER_RECEIPT_ENTRY_TYPE) return base;
+    const details = parseServiceTierReceipt(item.details);
+    return details ? { ...base, details } : base;
+  }) as Receipt["outputs"];
+}
+
+function assessFastControl(action: Action, outputs: readonly Output[]): FastControlAssessment | null {
+  if (!FAST_ACTIONS.has(action)) return null;
+  const candidates = outputs.filter((output) => output.customType === PIAGENT_SERVICE_TIER_RECEIPT_ENTRY_TYPE);
+  if (candidates.length === 0) return { state: "uncertain", resultCode: "effect-unknown", reasonCode: "fast-service-tier-receipt-missing" };
+  if (candidates.length !== 1) return { state: "uncertain", resultCode: "effect-unknown", reasonCode: "fast-service-tier-receipt-ambiguous" };
+  const details = parseServiceTierReceipt(candidates[0]?.details);
+  if (!details) return { state: "uncertain", resultCode: "effect-unknown", reasonCode: "fast-service-tier-receipt-invalid" };
+  if (action === "runtime.fast-on" && !details.enabled || action === "runtime.fast-off" && details.enabled) {
+    return { state: "uncertain", resultCode: "effect-unknown", reasonCode: "fast-service-tier-receipt-state-mismatch" };
+  }
+  if (details.reasonCode === "provider-not-supported") {
+    return { state: "rejected", resultCode: "unavailable", reasonCode: "provider-not-supported" };
+  }
+  return { state: "settled", resultCode: "completed", reasonCode: null };
 }
 
 export class RuntimeCommandController {
@@ -89,11 +123,17 @@ export class RuntimeCommandController {
       const result = await this.#runtimes.runRuntimeCommand(command.sessionRef, built.command);
       const after = await this.#readyCatalog();
       const afterRow = after.sessions.find((session) => session.sessionRef === command.sessionRef);
-      const zeroTurnViolation = built.spec.effect === "read-only" && result.modelCallObserved;
-      const receipt = this.#receipt(command, zeroTurnViolation ? "uncertain" : "settled",
-        zeroTurnViolation ? "effect-unknown" : "completed",
-        zeroTurnViolation ? "read-only-command-started-model-call" : null,
-        afterRow?.sessionRevision ?? null, result.modelCallObserved, result.outputs as Receipt["outputs"]);
+      const outputs = normalizedOutputs(result.outputs);
+      const fastControl = assessFastControl(command.action, outputs);
+      const zeroTurnExpected = built.spec.effect === "read-only" || built.spec.effect === "session-setting";
+      const zeroTurnViolation = zeroTurnExpected && result.modelCallObserved;
+      const zeroTurnReason = built.spec.effect === "session-setting"
+        ? "session-setting-command-started-model-call"
+        : "read-only-command-started-model-call";
+      const receipt = this.#receipt(command, zeroTurnViolation ? "uncertain" : fastControl?.state ?? "settled",
+        zeroTurnViolation ? "effect-unknown" : fastControl?.resultCode ?? "completed",
+        zeroTurnViolation ? zeroTurnReason : fastControl?.reasonCode ?? null,
+        afterRow?.sessionRevision ?? null, result.modelCallObserved, outputs);
       this.#events.publish("session.changed", { catalogRevision: after.catalogRevision, session: afterRow ?? row });
       return this.#settle(command, digest, receipt);
     } catch (error) {

@@ -5,6 +5,9 @@ export type Action =
   | "runtime.status"
   | "runtime.inspector"
   | "runtime.commands"
+  | "runtime.fast-status"
+  | "runtime.fast-on"
+  | "runtime.fast-off"
   | "orchestration.status"
   | "usage.live"
   | "usage.history"
@@ -34,7 +37,7 @@ export type Action =
   | "mcp.approve"
   | "mcp.reject"
   | "mcp.reset";
-export type Effect = "read-only" | "workspace-write" | "model-assisted";
+export type Effect = "read-only" | "workspace-write" | "model-assisted" | "session-setting";
 
 export interface Command {
   schemaVersion: 1;
@@ -86,4 +89,19 @@ export interface Output {
   content: string;
   truncated: boolean;
   redacted: boolean;
+  details?: ServiceTierReceipt;
+}
+export interface ServiceTierReceipt {
+  schemaVersion: 1;
+  enabled: boolean;
+  mode: "standard" | "fast";
+  source: "default" | "environment" | "session-command" | "session-state";
+  requestedServiceTier: "fast" | null;
+  observedRequestServiceTier: "priority" | null;
+  providerResponseServiceTier: null;
+  providerResponseEvidence: "unavailable-host-api";
+  provider: string | null;
+  modelId: string | null;
+  applied: boolean;
+  reasonCode: "fast-mode-disabled" | "provider-not-supported" | "fast-request-pending" | "fast-request-observed";
 }

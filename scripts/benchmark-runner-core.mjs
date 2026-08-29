@@ -3,21 +3,22 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-
-import { aggregateSessionUsage, benchmarkSurfaceLabel } from "../packages/piagent-core/benchmark/benchmark-core.js";
 import { benchmarkUsage, parseBenchmarkArgs } from "../packages/piagent-core/benchmark/benchmark-cli.js";
 import { codexModelName, codexThinkingEffort } from "../packages/piagent-core/benchmark/benchmark-codex.js";
 import { benchmarkEnvironment, benchmarkEnvironmentPolicy, comparisonSurfaces, createCodexRuntime, piagentTreatment } from "../packages/piagent-core/benchmark/benchmark-runtime.js";
 import { assertBenchmarkPiCredentialReady, assertBenchmarkPiCredentialWritebackPolicy, cleanupBenchmarkPiRuntimeHome, createBenchmarkPiRuntimeHome, resetBenchmarkPiRuntimeEphemeralState, withBenchmarkPiCredentialWriteback } from "../packages/piagent-core/benchmark/benchmark-pi-home.js";
 import { benchmarkPreflight, benchmarkPreflightReceipt } from "../packages/piagent-core/benchmark/benchmark-preflight.js";
-import { prepareProductionProviderFreeEvidence, productionProviderFreeEvidenceError, productionProviderFreeEvidenceRequired } from "../packages/piagent-core/benchmark/benchmark-provider-free-evidence.js";
-import { applyBenchmarkExecutionDefaults } from "../packages/piagent-core/benchmark/benchmark-runner-policy.js";
+import { prepareProductionProviderFreeEvidence, productionProviderFreeConfigurationDigest, productionProviderFreeEvidenceError, productionProviderFreeEvidenceRequired } from "../packages/piagent-core/benchmark/benchmark-provider-free-evidence.js";
+import { applyBenchmarkExecutionDefaults, benchmarkInfrastructureFailureDisposition, benchmarkRunnerErrorRecord, recoveredBenchmarkAttemptDisposition } from "../packages/piagent-core/benchmark/benchmark-runner-policy.js";
 import {
+  BENCHMARK_TRANSPORT_CIRCUIT_POLICY,
   appendPrivateJsonl,
+  createBenchmarkTransportCircuit,
   createBenchmarkCandidateGuard,
   loadReplayFailurePlan,
   retainWorkspaceForensics,
   safeInfrastructureDiagnostic,
+  validBenchmarkTransportCircuit,
   writeBenchmarkAbort,
   writeBenchmarkRunManifest,
   writePrivateAtomic
@@ -25,17 +26,12 @@ import {
 import { benchmarkBootstrapCandidateIndex, benchmarkBootstrapMetadata } from "../packages/piagent-core/benchmark/benchmark-bootstrap.js";
 import { createBenchmarkExecutionGuard } from "../packages/piagent-core/benchmark/benchmark-execution-guard.js";
 import { benchmarkCommandIdentity } from "../packages/piagent-core/benchmark/benchmark-runtime-identity.js";
+import { openProductionBenchmarkCampaign } from "../packages/piagent-core/benchmark/benchmark-campaign.js";
 import { benchmarkTreeIdentity } from "../packages/piagent-core/benchmark/benchmark-tree-identity.js";
 import { completedBenchmarkRecord, expectedBenchmarkRecord } from "../packages/piagent-core/benchmark/benchmark-record-validation.js";
 import { pairedOutcomeFloorStop } from "../packages/piagent-core/benchmark/benchmark-stop-policy.js";
-import {
-  approveProductionStageControl,
-  buildBenchmarkStageDiagnostic,
-  createProductionStageControl,
-  durablePairedOutcomeFloorStop,
-  productionGuardBindingMatches, productionSpendControlValidationErrors,
-  productionStageResumeDisposition
-} from "../packages/piagent-core/benchmark/benchmark-stage-diagnostic.js";
+import { approveProductionStageControl, buildBenchmarkStageDiagnostic, createProductionStageControl, durablePairedOutcomeFloorStop,
+  productionGuardBindingMatches, productionSpendControlValidationErrors, productionStageResumeDisposition } from "../packages/piagent-core/benchmark/benchmark-stage-diagnostic.js";
 import { loadBenchmarkAssuranceEvidence, loadBenchmarkSuite, resolveBenchmarkSuiteEntry, validateBenchmarkSuiteFiles } from "../packages/piagent-core/benchmark/benchmark-suite-runtime.js";
 import { appendBenchmarkLedger, assertBenchmarkLedgerBinding, emptyBenchmarkLedgerBinding, inspectBenchmarkLedger, validateBenchmarkLedgerPrefix } from "../packages/piagent-core/benchmark/benchmark-ledger.js";
 import { acquireBenchmarkRunLock } from "../packages/piagent-core/benchmark/benchmark-run-lock.js";
@@ -51,6 +47,7 @@ import {
 import { finalizeBenchmarkRun } from "./benchmark-runner-finalization.mjs";
 import {
   bindBenchmarkTerminationSignals,
+  benchmarkExecutionPlan,
   benchmarkRunKey,
   confirmPlan,
   createRunId,
@@ -70,12 +67,7 @@ import {
   sameStringList
 } from "./benchmark-runner-support.mjs";
 import { runBenchmarkSession } from "./benchmark-session.mjs";
-import {
-  assertBenchmarkHostReadinessStartReady,
-  assertExistingBenchmarkHostReadiness,
-  benchmarkHostReadinessPolicyDigest,
-  collectReadyBenchmarkHostReadiness
-} from "./benchmark-runner-host-readiness.mjs";
+import { assertBenchmarkHostReadinessStartReady, assertExistingBenchmarkHostReadiness, benchmarkHostReadinessPolicyDigest, collectReadyBenchmarkHostReadiness } from "./benchmark-runner-host-readiness.mjs";
 export { parseBenchmarkArgs };
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const packageManifest = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"));
@@ -110,7 +102,7 @@ async function main() {
   if (options.resume && options.output) fail("--resume uses the original report directory; do not pass --output", 1);
   const resumeState = options.resume ? loadResumeState(options.resume) : undefined;
   let releaseRunLock = resumeState?.releaseRunLock;
-  let codexRuntime;
+  let codexRuntime, productionCampaign;
   let piRuntimeHome;
   let preservePiRuntime = false;
   try {
@@ -120,6 +112,7 @@ async function main() {
     options.surfaces = manifest.surfaces;
     options.model = manifest.model ?? undefined;
     options.thinking = manifest.thinking ?? undefined;
+    options.serviceTier = manifest.serviceTier ?? undefined;
     options.codexMode = manifest.codexMode ?? "controlled";
     options.piagentTreatment = manifest.piagentTreatment ?? "release-defaults";
     options.allowPiAuthWriteback = manifest.allowPiAuthWriteback === true;
@@ -140,6 +133,7 @@ async function main() {
     options.surfaces = replay.surfaces;
     options.model = options.model ?? replay.model;
     options.thinking = options.thinking ?? replay.thinking;
+    options.serviceTier = options.serviceTier ?? replay.serviceTier;
     options.piagentTreatment = replay.piagentTreatment ?? options.piagentTreatment;
     options.replayRuns = replay.replayRuns;
     options.replaySource = {
@@ -212,6 +206,8 @@ async function main() {
     if (!sameStringList(options.surfaces, spendExecution.surfaces)) fail("Production spend control requires its frozen surface order", 1);
     if ((options.model ?? null) !== spendExecution.model) fail("Production spend control requires its frozen model", 1);
     if ((options.thinking ?? null) !== spendExecution.thinking) fail("Production spend control requires its frozen thinking level", 1);
+    if (spendExecution.serviceTier !== undefined
+      && (options.serviceTier ?? null) !== spendExecution.serviceTier) fail("Production spend control requires its frozen service tier", 1);
     if (options.repeats !== spendExecution.repeats) fail("Production spend control requires its frozen repeat count", 1);
     if (options.infrastructureRetries !== spendExecution.infrastructureRetries) fail("Production spend control requires zero infrastructure retries", 1);
   }
@@ -243,6 +239,7 @@ async function main() {
       }))
     : executionOrder(suite, options.repeats, options.surfaces, rootSeed);
   const productionSpendControlled = productionFullMatrixRequested;
+  const productionCampaignRequired = productionSpendControlled && suite.releaseGate?.requireCampaignAccounting === true;
   const providerFreeEvidenceRequired = productionProviderFreeEvidenceRequired({ productionSpendControlled,
     spendControl: productionSpendControl });
   const productionHostReadinessRequired = productionSpendControlled
@@ -370,6 +367,7 @@ async function main() {
           baselineSurface: comparison.baselineSurface,
           requestedModel: options.model,
           requestedThinking: options.thinking,
+          requestedServiceTier: options.serviceTier,
           suite,
           manifest,
           hostReadinessPolicy: productionHostReadinessPolicy,
@@ -414,37 +412,20 @@ async function main() {
   let recoveredAttemptsByKey = new Map();
   const order = pairedChunk(pendingOrder, options.maxSessions);
   const lifecycles = [...new Set(suite.scenarios.map((scenario) => scenario.lifecycle ?? "steady-state"))];
-  const plan = [
-    "Piagent automatic benchmark",
-    `  platform:  v${packageManifest.version}`,
-    `  suite:     ${suite.id} (${suite.scenarios.length}${suite.scenarios.length !== declaredScenarioCount ? `/${declaredScenarioCount}` : ""} scenarios)`,
-    `  digest:    ${suiteDigest.slice(0, 16)}`,
-    `  surfaces:  ${options.surfaces.join(", ")}`,
-    `  compare:   ${benchmarkSurfaceLabel(comparison.candidateSurface)} vs ${benchmarkSurfaceLabel(comparison.baselineSurface)}`,
-    `  repeats:   ${options.repeats}`,
-    `  retries:   ${options.infrastructureRetries} infrastructure-only · ${options.retryDelaySeconds}s backoff`,
-    `  sessions:  ${fullOrder.length}`,
-    ...(resumeState ? [`  completed: ${resumeState.completedRuns.length}`, `  remaining: ${pendingOrder.length}`] : []),
-    ...(options.maxSessions !== undefined ? [`  chunk:    up to ${order.length}/${pendingOrder.length} remaining sessions`] : []),
-    ...(options.maxRuntimeMinutes !== undefined ? [`  budget:   ${options.maxRuntimeMinutes} minute runtime chunk`] : []),
-    ...(options.stopAfterFailedPair ? ["  stop:     terminal after a completed pair falls below the outcome floor"] : []),
-    `  model:     ${options.model ?? "Pi default"}`,
-    `  thinking:  ${options.thinking ?? "Pi default"}`,
-    `  treatment: ${options.piagentTreatment}`,
-    `  lifecycle: ${lifecycles.join(", ")}`,
-    ...(options.replaySource ? [`  replay:    ${options.replaySource.runId ?? "prior-report"} · ${options.replayRuns.length} sessions`] : []),
-    ...(resumeState ? [`  resume:    ${resumeState.manifest.runId}`] : []),
-    `  variants:  ${suite.scenarios.some((scenario) => scenario.variantGenerator) ? `generated · seed ${rootSeedDigest.slice(0, 16)}` : "static"}`,
-    `  ordering:  ${suite.schemaVersion === 2 ? "seeded paired blocks" : "paired alternating"}`,
-    `  timeout:   ${options.timeoutSeconds}s per session`,
-    "  grading:   hidden verifier + scope + output safety + Pi task evidence"
-  ].join("\n");
-  const codexPlan = options.surfaces.includes("codex-cli")
-    ? `\n  codex:     ${options.codexMode} mode · model ${codexModelName(options.model)} · effort ${codexThinkingEffort(options.thinking)}${options.codexMode === "controlled" ? " · isolated home" : ""}`
-    : "";
-  const nativeWarning = options.surfaces.includes("codex-cli") && options.codexMode === "native"
-    ? "\nNative Codex mode loads the operator's global AGENTS.md, configuration, rules, hooks, MCP servers, and plugins."
-    : "";
+  const { plan, codexPlan, nativeWarning } = benchmarkExecutionPlan({
+    packageVersion: packageManifest.version,
+    suite,
+    declaredScenarioCount,
+    suiteDigest,
+    options,
+    comparison,
+    fullOrder,
+    resumeState,
+    pendingOrder,
+    order,
+    lifecycles,
+    rootSeedDigest
+  });
   if (options.dryRun) {
     process.stdout.write(`${plan}${codexPlan}\n  manifest:  ${manifestPath}\nDRY RUN: no model session started.\n`);
     return;
@@ -516,6 +497,7 @@ async function main() {
     surfaces: options.surfaces,
     model: options.model ?? null,
     thinking: options.thinking ?? null,
+    serviceTier: options.serviceTier ?? null,
     codexMode: options.codexMode,
     piagentTreatment: options.piagentTreatment,
     allowPiAuthWriteback: options.allowPiAuthWriteback,
@@ -523,14 +505,16 @@ async function main() {
     timeoutSeconds: options.timeoutSeconds,
     infrastructureRetries: options.infrastructureRetries,
     retryDelaySeconds: options.retryDelaySeconds,
+    transportCircuitBreaker: BENCHMARK_TRANSPORT_CIRCUIT_POLICY,
     stopAfterFailedPair: options.stopAfterFailedPair,
     order: fullOrder.map((item) => ({ scenarioId: item.scenario.id, surface: item.surface, repeat: item.repeat }))
   };
   const configurationDigest = crypto.createHash("sha256").update(JSON.stringify(configuration)).digest("hex");
-  const source = bootstrapMetadata?.sourceIdentity;
-  if (!source) fail("Modern benchmark is missing its frozen Git source identity", 1);
+  const providerFreeConfigurationDigest = providerFreeEvidenceRequired ? productionProviderFreeConfigurationDigest(configuration) : null;
+  const source = bootstrapMetadata?.sourceIdentity; if (!source) fail("Modern benchmark is missing its frozen Git source identity", 1);
+  if (resumeState && providerFreeEvidenceRequired && resumeState.manifest.providerFreeConfigurationDigest !== providerFreeConfigurationDigest) fail("Cannot resume benchmark: provider-free configuration changed since the original run", 1);
   const { receipt: providerFreeEvidence, binding: providerFreeEvidenceBinding } = await prepareProductionProviderFreeEvidence({
-    required: providerFreeEvidenceRequired, packageRoot, bootstrapMetadata, candidateProvenance: candidateGuard.provenance, configurationDigest, runCommand, resumedReceipt: resumeState ? resumeState.manifest.providerFreeEvidence ?? null : undefined });
+    required: providerFreeEvidenceRequired, packageRoot, bootstrapMetadata, candidateProvenance: candidateGuard.provenance, providerFreeConfigurationDigest, runCommand, resumedReceipt: resumeState ? resumeState.manifest.providerFreeEvidence ?? null : undefined });
   piCommand = runtimeCommands.pi.resolvedPath;
   if (runtimeCommands.codex) codexCommand = runtimeCommands.codex.resolvedPath;
   if (resumeState && JSON.stringify(resumeState.manifest.runtimeCommands ?? null) !== JSON.stringify(runtimeCommands)) {
@@ -598,7 +582,7 @@ async function main() {
     const preflightAssetError = executionGuard.check("before-preflight", [piRuntimeHome]);
     if (preflightAssetError) throw preflightAssetError;
     codexRuntime = createCodexRuntime(options);
-    try { runtime = await withBenchmarkPiCredentialWriteback(bootstrapMetadata.piAgentHome, piRuntimeHome, () => benchmarkPreflight({ runCommand, packageRoot, piCommand, piEnvironment: benchmarkEnvironment({ PI_CODING_AGENT_DIR: piRuntimeHome.path }), codexCommand, gitCommand: runtimeCommands.git.resolvedPath, surfaces: options.surfaces, codexMode: options.codexMode, codexRuntime })); }
+    try { runtime = await withBenchmarkPiCredentialWriteback(bootstrapMetadata.piAgentHome, piRuntimeHome, () => benchmarkPreflight({ runCommand, packageRoot, piCommand, piEnvironment: benchmarkEnvironment({ PI_CODING_AGENT_DIR: piRuntimeHome.path, PIAGENT_FAST_MODE: options.serviceTier === "fast" ? "1" : "0" }), codexCommand, gitCommand: runtimeCommands.git.resolvedPath, surfaces: options.surfaces, codexMode: options.codexMode, codexRuntime, serviceTier: options.serviceTier })); }
     catch (error) { preservePiRuntime ||= error.code === "BENCHMARK_PI_CREDENTIAL_RECONCILIATION_FAILED"; throw error; }
     const postPreflightAssetError = executionGuard.check("after-preflight", [piRuntimeHome]);
     if (postPreflightAssetError) throw postPreflightAssetError;
@@ -615,7 +599,7 @@ async function main() {
   }
   assertHostReadinessStartReady();
   if (options.preflightOnly) {
-    const receipt = benchmarkPreflightReceipt({ packageVersion: packageManifest.version, source, candidateProvenance: candidateGuard.report(), suite, suiteDigest, runtimeDependencies: bootstrapMetadata.runtimeDependencies, webUiAssets: bootstrapMetadata.webUiAssets, runtimeCommands, environmentPolicy, configurationDigest, rootSeedDigest, options, runtime, hostReadinessPolicyDigest: productionHostReadinessPolicyDigest, hostReadiness: hostReadinessReceipt, providerFreeEvidence });
+    const receipt = benchmarkPreflightReceipt({ packageVersion: packageManifest.version, source, candidateProvenance: candidateGuard.report(), suite, suiteDigest, runtimeDependencies: bootstrapMetadata.runtimeDependencies, webUiAssets: bootstrapMetadata.webUiAssets, runtimeCommands, environmentPolicy, configurationDigest, providerFreeConfigurationDigest, rootSeedDigest, options, runtime, hostReadinessPolicyDigest: productionHostReadinessPolicyDigest, hostReadiness: hostReadinessReceipt, providerFreeEvidence });
     process.stdout.write(options.json ? `${JSON.stringify(receipt, null, 2)}\n` : `${plan}${codexPlan}\nPREFLIGHT READY: no model session started.\n${JSON.stringify(receipt, null, 2)}\n`);
     return;
   }
@@ -670,16 +654,19 @@ async function main() {
     repeats: options.repeats,
     model: options.model ?? null,
     thinking: options.thinking ?? null,
+    serviceTier: options.serviceTier ?? null,
     codexMode: options.codexMode,
     piagentTreatment: options.piagentTreatment,
     allowPiAuthWriteback: options.allowPiAuthWriteback,
     timeoutSeconds: options.timeoutSeconds,
     infrastructureRetries: options.infrastructureRetries,
     retryDelaySeconds: options.retryDelaySeconds,
+    transportCircuitBreaker: createBenchmarkTransportCircuit(),
     stopAfterFailedPair: options.stopAfterFailedPair,
     scenarioIds: options.scenarioIds ?? null,
     ...(productionSpendControlled ? {
       productionGuards: productionSpendControl.productionGuards,
+      providerFreeConfigurationDigest,
       providerFreeEvidence,
       stageControl: createProductionStageControl({
         authorizedThroughRuns: productionStageBoundaries[0],
@@ -696,6 +683,16 @@ async function main() {
       repeat: item.repeat
     }))
   };
+  if (productionCampaignRequired) {
+    productionCampaign = openProductionBenchmarkCampaign({
+      registryBase: path.join(bootstrapMetadata.defaultOutputRoot, ".production-campaigns"), suiteId: suite.id,
+      runId, runRoot, configurationDigest, candidateDigest: candidateGuard.provenance.contentDigest, suiteDigest, existingBinding: resumeState?.manifest.campaign
+    });
+    manifest.campaign = productionCampaign.binding;
+  }
+  if (!validBenchmarkTransportCircuit(manifest.transportCircuitBreaker)) {
+    fail("Cannot run benchmark: transport circuit-breaker state is missing or malformed", 1);
+  }
   assertHostReadinessStartReady();
   if (productionSpendControlled && deferredProductionStageApproval) {
     manifest.stageControl = approveProductionStageControl(manifest.stageControl, deferredProductionStageApproval);
@@ -719,6 +716,10 @@ async function main() {
   let newRuns = 0;
   try {
     for (const [index, item] of order.entries()) {
+      if (manifest.transportCircuitBreaker.state === "open") {
+        fatalRunError = new Error(`Transport circuit breaker is open after ${manifest.transportCircuitBreaker.failures} failures; start a new run only after provider health is re-established`);
+        break;
+      }
       if (interruptedSignal) break;
       if (runtimeDeadline !== undefined && newRuns > 0 && !samePairedBlock(order[index - 1], item) && Date.now() >= runtimeDeadline) {
         pauseReason = `max-runtime-minutes:${options.maxRuntimeMinutes}`;
@@ -733,11 +734,17 @@ async function main() {
       let record;
       let sessionEvidence;
       const infrastructureFailures = [...(recoveredAttemptsByKey.get(benchmarkRunKey(item)) ?? [])];
-      const firstInfrastructureAttempt = infrastructureFailures.reduce((maximum, attempt) => Math.max(maximum, attempt.attempt ?? 0), 0) + 1;
-      if (firstInfrastructureAttempt > options.infrastructureRetries + 1) {
-        fatalRunError = new Error(`No infrastructure retry remains after recovering an interrupted provider attempt for ${item.scenario.id}/${item.surface}/r${item.repeat}`);
+      const recoveredDisposition = recoveredBenchmarkAttemptDisposition(infrastructureFailures, {
+        scenarioId: item.scenario.id,
+        surface: item.surface,
+        repeat: item.repeat,
+        retryLimit: options.infrastructureRetries
+      });
+      if (!recoveredDisposition.passed) {
+        fatalRunError = new Error(recoveredDisposition.error);
         break;
       }
+      const firstInfrastructureAttempt = recoveredDisposition.firstAttempt;
       for (let infrastructureAttempt = firstInfrastructureAttempt; infrastructureAttempt <= options.infrastructureRetries + 1; infrastructureAttempt += 1) {
         record = undefined;
         fatalRunError = executionGuard.check(`before-session:${item.scenario.id}:${item.surface}:r${item.repeat}:attempt${infrastructureAttempt}`, [piRuntimeHome]);
@@ -771,6 +778,8 @@ async function main() {
             },
             suiteDigest,
             configurationDigest,
+            onProviderAttemptStart: (attempt) => productionCampaign?.providerStarted(attempt),
+            onProviderAttemptReturned: (attempt) => productionCampaign?.providerReturned(attempt),
             persistCompletedRecord: (candidate) => stageMeasuredBenchmarkRecord({ runRoot, manifest, ledgerBinding, record: candidate, infrastructureFailures, index: fullIndex - 1, expected: item, runId, suite, configurationDigest, runs }),
             rootSeed
           }));
@@ -779,33 +788,14 @@ async function main() {
           preservePiRuntime ||= error.code === "BENCHMARK_PI_CREDENTIAL_RECONCILIATION_FAILED";
           attemptError = error;
           const safeError = safeInfrastructureDiagnostic(error.message, [piRuntimeHome?.path, bootstrapMetadata.piAgentHome.configRoot, bootstrapMetadata.piAgentHome.runtimeParent].filter(Boolean));
-          record = {
-            schemaVersion: 1,
+          record = benchmarkRunnerErrorRecord({
+            safeError,
             runId,
             orderIndex: fullIndex,
-            scenarioId: item.scenario.id,
-            scenarioTitle: item.scenario.title,
-            scenarioKind: item.scenario.kind,
-            category: item.scenario.category ?? "unspecified",
-            difficulty: item.scenario.difficulty ?? "unspecified",
-            profile: item.scenario.profile ?? suite.profile,
-            lifecycle: item.scenario.lifecycle ?? "steady-state",
-            surface: item.surface,
-            repeat: item.repeat,
-            infrastructureAttempt,
-            abortSuite: true,
-            infrastructureFailure: `runner-error:${safeError}`,
-            resolved: false,
-            failure: `runner-error:${safeError}`,
-            grade: { passed: false, score: 0, checks: [] },
-            graderIntegrity: { passed: false },
-            scope: { passed: false, changedFiles: [], outsideScope: [] },
-            outputSafety: { passed: false, forbiddenHits: [] },
-            outputEvidence: { passed: false, requiredCount: 0, observedCount: 0, missingHashes: [] },
-            workflow: null,
-            usage: aggregateSessionUsage([]),
-            durationSeconds: 0
-          };
+            item,
+            suiteProfile: suite.profile,
+            infrastructureAttempt
+          });
         } finally {
           if (attemptCodexRuntime !== codexRuntime) attemptCodexRuntime.cleanup();
         }
@@ -839,20 +829,24 @@ async function main() {
           fs.rmSync(sessionEvidence.inflightPath, { force: true });
         }
         if (!record.abortSuite || interruptedSignal) break;
-        const retryAvailable = record.infrastructureRetryable === true && infrastructureAttempt <= options.infrastructureRetries;
-        infrastructureFailures.push({
-          attempt: infrastructureAttempt,
-          failure: record.infrastructureFailure ?? record.failure,
-          class: record.infrastructureClass ?? "infrastructure",
-          agent: record.agent,
-          usage: record.usage,
-          usageStatus: record.usageStatus,
-          durationSeconds: record.durationSeconds
+        const failureDisposition = benchmarkInfrastructureFailureDisposition({
+          circuit: manifest.transportCircuitBreaker,
+          record,
+          infrastructureAttempt,
+          retryLimit: options.infrastructureRetries,
+          orderIndex: fullIndex,
+          scenarioId: item.scenario.id,
+          surface: item.surface,
+          repeat: item.repeat
         });
-        if (record.usageStatus === "unknown-after-provider-start") {
+        manifest.transportCircuitBreaker = failureDisposition.circuit;
+        const retryAvailable = failureDisposition.retryAvailable;
+        infrastructureFailures.push(failureDisposition.failure);
+        if (failureDisposition.unknownCost) {
           manifest.unknownCostAttempts = Number(manifest.unknownCostAttempts ?? 0) + 1;
           manifest.tokenClaimsUnavailableReason = "one-or-more-provider-attempts-have-unknown-usage";
         }
+        writeBenchmarkRunManifest(runRoot, manifest);
         // A runner error before runBenchmarkSession creates its durable in-flight
         // marker is positively pre-provider. Post-provider throws leave that
         // marker behind and terminal recovery persists them fail-closed.
@@ -863,6 +857,9 @@ async function main() {
           fs.rmSync(sessionEvidence.inflightPath, { force: true });
         }
         if (!retryAvailable) {
+          if (manifest.transportCircuitBreaker.state === "open") {
+            fatalRunError = new Error(`Transport circuit breaker opened after ${manifest.transportCircuitBreaker.failures} failures`);
+          }
           if (attemptError) fatalRunError = new Error(record.infrastructureFailure ?? "benchmark runner infrastructure error");
           break;
         }
@@ -915,6 +912,7 @@ async function main() {
   } catch (error) {
     fatalRunError ??= error;
   }
+  if (productionCampaign) { manifest.campaignEvidence = productionCampaign.snapshot(); writeBenchmarkRunManifest(runRoot, manifest); }
   let finalizationReceipt;
   if (!interruptedSignal && !fatalRunError) {
     if (providerFreeEvidenceRequired) {
@@ -932,11 +930,13 @@ async function main() {
     lifecycles, manifest, options, packageVersion: packageManifest.version,
     pauseReason, piRuntimeHome, preservePiRuntime,
     productionAllStageBoundaries, productionHostReadinessPolicy, productionSpendControlled, rootSeed, rootSeedDigest,
+    productionCampaign,
     runId, runRoot, runs, runtime, runtimeCommands, source, startedAt, suite,
     suiteDigest, suiteIdentity, terminalStop
   });
   } finally {
     releaseRunLock?.();
+    productionCampaign?.close();
     codexRuntime?.cleanup();
     if (!preservePiRuntime) cleanupBenchmarkPiRuntimeHome(bootstrapMetadata?.piAgentHome, piRuntimeHome);
   }

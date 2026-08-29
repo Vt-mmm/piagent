@@ -145,6 +145,7 @@ import { recordRuntimeSnapshotTelemetry } from "../runtime/model/snapshot-teleme
 import { captureAuthenticatedModelCatalogFromContext } from "../runtime/model/authenticated-catalog.ts";
 import { normalizeOpenAiCodexReasoningPayload } from "../runtime/model/openai-codex-reasoning.ts";
 import { buildOpenAiCodexWireFingerprint } from "../runtime/model/provider-wire-fingerprint.ts";
+import { registerFastModeCommand, ServiceTierRuntime } from "../runtime/model/service-tier-runtime.ts";
 import { ModelRouteRuntime, readModelRouteEvents } from "../runtime/model/model-route-runtime.ts";
 import { parentRoutingModeFromEnvironment, routingObjectiveFromEnvironment } from "../runtime/model/model-route-policy.ts";
 import { ModelSelectionProvenanceTracker } from "../runtime/model/model-selection-provenance.ts";
@@ -3564,10 +3565,18 @@ function evaluateTaskGate(
     currentWorkingTreeDigest
   });
   const semanticEnforcement = taskAuthorityDecision(task, "CAP-13", "block").allowed;
+  // Runtime-compiled source tasks already carry operator-derived atomic
+  // criteria and a deterministic language adapter disposition.  A known,
+  // evidence-linkable critical obligation is therefore completion truth, not
+  // optional semantic-review policy.  Keep adapter-unknown obligations under
+  // CAP-13 so broad-default never invents proof or blocks unsupported stacks.
+  const runtimeCriticalProofEnforcement = task.changeMode === "source-change"
+    && task.acceptanceReceipt?.source === "runtime"
+    && task.changedFiles.length > 0;
   const abstainedIds = new Set(acceptance.adapterAbstained.map((criterion) => criterion.id));
   const adapterCritical = acceptance.criticalMissing.filter((criterion) => abstainedIds.has(criterion.id));
   const linkedCritical = acceptance.criticalMissing.filter((criterion) => !abstainedIds.has(criterion.id));
-  if (semanticEnforcement && linkedCritical.length > 0) missing.push(`critical acceptance evidence (${linkedCritical.map((criterion) => `${criterion.id}:${criterion.obligation}`).join(", ")})`);
+  if ((semanticEnforcement || runtimeCriticalProofEnforcement) && linkedCritical.length > 0) missing.push(`critical acceptance evidence (${linkedCritical.map((criterion) => `${criterion.id}:${criterion.obligation}`).join(", ")})`);
   if (semanticEnforcement && adapterCritical.length > 0) missing.push(`critical acceptance evidence adapter-unresolved (${adapterCritical.map((criterion) => `${criterion.id}:${criterion.obligation}`).join(", ")}); remedy: add a direct-relative focused test or configure a deterministic adapter`);
   const acceptanceConflicts = acceptanceSemanticConflicts(task, {
     cwd,
@@ -3581,7 +3590,7 @@ function evaluateTaskGate(
   if (semanticEnforcement && acceptance.adapterAbstained.length > 0) {
     warnings.push(`Acceptance proof adapter abstained; rigorous criteria remain pending and hand off without an automatic model retry: ${acceptance.adapterAbstained.map((criterion) => `${criterion.id}:${criterion.obligation}`).join(", ")}`);
   }
-  if (!semanticEnforcement && (acceptance.criticalMissing.length > 0 || acceptanceConflicts.length > 0)) warnings.push("Acceptance projection is advisory under the pinned task authority and cannot block completion.");
+  if (!semanticEnforcement && (adapterCritical.length > 0 || acceptanceConflicts.length > 0)) warnings.push("Adapter-unknown acceptance proof and semantic conflicts remain advisory under the pinned task authority; known runtime-linked critical proof still gates source-task completion.");
   if (normalMissing.length > 0) {
     warnings.push(`Acceptance criteria pending evidence: ${normalMissing.map((criterion) => `${criterion.id}:${criterion.obligation}`).join(", ")}`);
   }
@@ -3766,6 +3775,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
   const solverShadow = solverMode === "off" ? undefined : new SolverShadowRuntime(solverMode);
   const modelRouteRuntime = new ModelRouteRuntime(parentRoutingMode, routingObjective);
   const modelSelectionProvenance = new ModelSelectionProvenanceTracker();
+  const serviceTierRuntime = new ServiceTierRuntime({ environmentValue: process.env.PIAGENT_FAST_MODE });
   const trajectoryRuntime = new TrajectoryRuntime(), phaseToolRuntime = new PhaseToolRuntime(pi, dynamicToolsEnabled ? phaseToolModeFromEnvironment(process.env.PIAGENT_PHASE_TOOLS) : "off", telemetry, (ctx) => {
     const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined; return task && authorityReplacementState(ctx.cwd, task).required ? "new-attempt-required" : task?.workingTreeDigestMigration?.status;
   }, (ctx) => {
@@ -3809,8 +3819,25 @@ export default function piagentGuard(pi: ExtensionAPI) {
         providerReasoningReasonCode: normalized.reasonCode
       });
     }
+    const serviceTier = serviceTierRuntime.applyProviderRequest(
+      pi,
+      ctx,
+      normalized.changed ? normalized.payload : event.payload
+    );
+    if (serviceTier.receipt.enabled || serviceTier.observationChanged) {
+      telemetry(ctx, {
+        event: "provider_request_service_tier",
+        fastMode: serviceTier.receipt.mode,
+        requestedServiceTier: serviceTier.receipt.requestedServiceTier,
+        observedRequestServiceTier: serviceTier.receipt.observedRequestServiceTier,
+        providerResponseServiceTier: serviceTier.receipt.providerResponseServiceTier,
+        providerResponseEvidence: serviceTier.receipt.providerResponseEvidence,
+        applied: serviceTier.receipt.applied,
+        reasonCode: serviceTier.receipt.reasonCode
+      });
+    }
     const wire = buildOpenAiCodexWireFingerprint({
-      payload: normalized.changed ? normalized.payload : event.payload,
+      payload: serviceTier.payload,
       provider: ctx.model?.provider,
       modelId: ctx.model?.id,
       workingDirectory: ctx.cwd,
@@ -3838,7 +3865,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
         requestPrefixFingerprint: wire.requestPrefixFingerprint
       });
     }
-    return normalized.changed ? normalized.payload : undefined;
+    return normalized.changed || serviceTier.changed ? serviceTier.payload : undefined;
   });
 
   function freshModelRouteBoundary(ctx: ExtensionContext): boolean {
@@ -4016,7 +4043,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
       dependencyMutationAuthorized
     });
     return gate?.missing.some((item) => /^critical acceptance evidence adapter-unresolved\b/i.test(item))
-      ? { ...selected, action: "handoff", continuation: "none", nextPhase: null, sourceMutationAllowed: false, reasonCodes: ["unknown-diagnostic-exhausted"] }
+      ? { ...selected, action: "handoff", continuation: "none", nextPhase: null, sourceMutationAllowed: false, reasonCodes: ["deterministic-adapter-proof-required"] }
       : selected;
   }
 
@@ -4083,7 +4110,14 @@ export default function piagentGuard(pi: ExtensionAPI) {
       })));
     },
     telemetry,
-    afterStart: async (ctx) => { sourceMutationGuardBindings.bind(ctx); await activityInspector.refresh(ctx); }
+    afterStart: async (ctx) => {
+      const serviceTier = serviceTierRuntime.restore(ctx);
+      if (serviceTier.enabled && serviceTier.reasonCode === "provider-not-supported") {
+        ctx.ui.notify("Piagent Fast mode is enabled, but the active provider is not OpenAI Codex; no service tier was changed.", "warning");
+      }
+      sourceMutationGuardBindings.bind(ctx);
+      await activityInspector.refresh(ctx);
+    }
   });
 
   registerSessionHooks(pi, {
@@ -4098,6 +4132,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
     onTurnEnd: activityInspector.refresh,
     onAgentSettled: activityInspector.refresh,
     beforeShutdown: (ctx) => {
+      serviceTierRuntime.forget(ctx);
       sourceMutationGuardBindings.unbind(ctx);
       editFreshnessGuard.clear(ctx);
       activityInspector.dispose(ctx);
@@ -4918,6 +4953,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
   }
 
   registerPermissionCommands(pi, registrationDeps);
+  registerFastModeCommand(pi, serviceTierRuntime);
   const profileCommandApi = registerProfileCommands(pi, registrationDeps);
   registerMemoryMcpCommands(pi, registrationDeps);
   const contextCommandApi = registerContextCommands(pi, registrationDeps);

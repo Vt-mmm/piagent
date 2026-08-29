@@ -59,7 +59,7 @@ export type SessionCreationOptions = {
   workflows: Array<{ id: Workflow; label: string; changeMode: "source-change" | "read-only" | "plan-only" | "clarification" | "git" | "onboarding" | "platform";
     modelUse: "required"; recommendedFreshSession: boolean }>;
   runtimeActions?: Array<{ id: RuntimeCommand["action"]; category: "runtime" | "usage" | "onboarding" | "profile" | "context" | "memory" | "mcp";
-    effect: "read-only" | "workspace-write" | "model-assisted"; argument: "none" | "optional-text" | "required-text" | "profile" | "connection";
+    effect: "read-only" | "workspace-write" | "model-assisted" | "session-setting"; argument: "none" | "optional-text" | "required-text" | "profile" | "connection";
     requiresConfirmation: boolean }>;
   webSearch?: { state: "configured" | "unavailable"; route: "codex-first" | "automatic" | null; provider: "openai-codex" | null;
     fallbackProvider: "exa" | null; integration: { name: "pi-web-access"; version: string } | null; reasonCode: string | null };

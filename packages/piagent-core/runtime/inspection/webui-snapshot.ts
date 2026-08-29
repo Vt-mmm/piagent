@@ -6,7 +6,7 @@ import { redactSensitiveText } from "../../extensions/redaction-core.js";
 import { workingTreeSnapshot } from "../../extensions/task-state.js";
 import { workingTreeEvidenceDigest, workingTreeSnapshotUsesCurrentAlgorithm } from "../../extensions/working-tree-digest.js";
 import { inspectTaskContinuationBudget } from "../recovery/continuation-budget.ts";
-import { readHandoffProjection } from "../recovery/handoff-projection.ts";
+import { handoffIdentityMatchesTask, readHandoffProjection } from "../recovery/handoff-projection.ts";
 import type { ActivityInspectorEvent, CurrentActivity } from "../product/activity-inspector.ts";
 import { recoveredToolCalls } from "./activity-recovery.ts";
 import { classifyToolFailure, handledToolFailure } from "./tool-failure-classification.ts";
@@ -334,7 +334,7 @@ function handoff(cwd: string, task: TaskContract | undefined, currentDigest: str
   if (!task) return null;
   let value;
   try { value = readHandoffProjection(cwd, task.taskRunId); } catch { return null; }
-  if (!value) return null;
+  if (!value || !handoffIdentityMatchesTask(value.identity, task)) return null;
   const stale = Boolean(currentDigest && value.tree.currentDigest && currentDigest !== value.tree.currentDigest);
   return { handoffRef: token("handoff", task.taskRunId), state: stale ? "stale" : "ready", summary: display(value.goal.summary, 500),
     blocker: value.failure.warnings[0] ? display(value.failure.warnings[0], 500) : null,

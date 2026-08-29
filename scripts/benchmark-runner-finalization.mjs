@@ -7,6 +7,7 @@ import {
   summarizeBenchmark
 } from "../packages/piagent-core/benchmark/benchmark-core.js";
 import { codexModelName } from "../packages/piagent-core/benchmark/benchmark-codex.js";
+import { publicProductionBenchmarkCampaignEvidence } from "../packages/piagent-core/benchmark/benchmark-campaign.js";
 import { benchmarkTrustChecklist } from "../packages/piagent-core/benchmark/benchmark-matrix.js";
 import { applyBenchmarkClaimRestrictions } from "../packages/piagent-core/benchmark/benchmark-claim-restrictions.js";
 import { piagentTreatment } from "../packages/piagent-core/benchmark/benchmark-runtime.js";
@@ -39,6 +40,33 @@ import {
 import { recoverOrphanedBenchmarkAttempts } from "../packages/piagent-core/benchmark/benchmark-resume-recovery.js";
 import { benchmarkResumeCommand, benchmarkRunKey } from "./benchmark-runner-support.mjs";
 
+export function finalizeProductionCampaignClaimOutcome({ productionCampaign, manifest, report, runRoot }) {
+  if (!productionCampaign) return null;
+  const allowed = report.comparison?.tokenClaimAllowed === true;
+  const verdict = /^[a-z0-9._-]{1,120}$/i.test(String(report.verdict?.status ?? ""))
+    ? report.verdict.status
+    : "unavailable";
+  manifest.campaignEvidence = productionCampaign.finalizeClaim({
+    allowed,
+    reason: allowed ? "release-token-claim-allowed" : `release-token-claim-not-allowed:${verdict}`
+  });
+  writeBenchmarkRunManifest(runRoot, manifest);
+  const publicEvidence = publicProductionBenchmarkCampaignEvidence(manifest.campaignEvidence);
+  report.environment.campaignEvidence = publicEvidence;
+  report.comparison.campaignEvidence = publicEvidence;
+  return publicEvidence;
+}
+
+export function finalizeProductionCampaignTerminalNoClaim({ productionCampaign, manifest, runRoot, terminalStop, runs }) {
+  if (!productionCampaign) return null;
+  manifest.campaignEvidence = productionCampaign.finalizeTerminalNoClaim({
+    reason: `terminal-stop:${terminalStop.reason}`,
+    runs
+  });
+  writeBenchmarkRunManifest(runRoot, manifest);
+  return manifest.campaignEvidence;
+}
+
 export function finalizeBenchmarkRun(context) {
   const {
     assuranceEvidence,
@@ -68,6 +96,7 @@ export function finalizeBenchmarkRun(context) {
     preservePiRuntime,
     productionAllStageBoundaries,
     productionHostReadinessPolicy,
+    productionCampaign,
     productionSpendControlled,
     rootSeed,
     rootSeedDigest,
@@ -119,6 +148,13 @@ export function finalizeBenchmarkRun(context) {
     return;
   }
   if (terminalStop) {
+    finalizeProductionCampaignTerminalNoClaim({
+      productionCampaign,
+      manifest,
+      runRoot,
+      terminalStop,
+      runs: runs.filter(completedBenchmarkRecord)
+    });
     cleanupBenchmarkPiRuntimeHome(bootstrapMetadata.piAgentHome, piRuntimeHome);
     detachPiRuntimeHome();
     cleanupUnretainedWorkspaces(runRoot, options.keepWorkspaces);
@@ -182,6 +218,7 @@ export function finalizeBenchmarkRun(context) {
       baselineSurface: comparison.baselineSurface,
       requestedModel: options.model,
       requestedThinking: options.thinking,
+      requestedServiceTier: options.serviceTier,
       suite,
       manifest,
       hostReadinessPolicy: productionHostReadinessPolicy,
@@ -211,6 +248,11 @@ export function finalizeBenchmarkRun(context) {
 
   cleanupBenchmarkPiRuntimeHome(bootstrapMetadata.piAgentHome, piRuntimeHome);
   detachPiRuntimeHome();
+  if (productionCampaign) {
+    manifest.campaignEvidence = productionCampaign.sealForClaim(completedRuns);
+    writeBenchmarkRunManifest(runRoot, manifest);
+  }
+  const publicCampaignEvidence = publicProductionBenchmarkCampaignEvidence(manifest.campaignEvidence ?? null);
   const report = summarizeBenchmark({
     suite,
     canonicalProductionSuite,
@@ -219,6 +261,7 @@ export function finalizeBenchmarkRun(context) {
     completedAt: new Date().toISOString(),
     repeats: options.repeats,
     environment: {
+      runId,
       platformVersion: packageVersion,
       suiteDigest,
       variantRootSeed: suite.scenarios.some((scenario) => scenario.variantGenerator) ? rootSeed : null,
@@ -228,6 +271,7 @@ export function finalizeBenchmarkRun(context) {
       profile: suite.profile,
       requestedModel: options.model ?? null,
       requestedThinking: options.thinking ?? null,
+      requestedServiceTier: options.serviceTier ?? null,
       piagentTreatment: piagentTreatment(options.piagentTreatment),
       treatmentBaseline: lifecycles.length === 1 && lifecycles[0] === "steady-state"
         ? options.surfaces.includes("codex-cli")
@@ -268,25 +312,24 @@ export function finalizeBenchmarkRun(context) {
       suiteIdentity,
       runtimeCommands,
       configurationDigest,
+      providerFreeConfigurationDigest: manifest.providerFreeConfigurationDigest ?? null,
       hostReadinessHistory,
       environmentPolicy,
       runtimeDependencies: bootstrapMetadata?.runtimeDependencies ?? null,
       webUiAssets: manifest.webUiAssets ?? null,
       providerFreeEvidence: manifest.providerFreeEvidence ?? null,
+      campaignEvidence: publicCampaignEvidence,
       assuranceEvidence
     },
+    allAttemptTokenAccounting: manifest.campaignEvidence?.allAttempts,
     runs: completedRuns,
     ...comparison
   });
   report.ledger = ledgerBinding;
   applyBenchmarkClaimRestrictions(report, { tokenReason: manifest.tokenClaimsUnavailableReason, replaySource: options.replaySource, codexMode: options.codexMode, surfaces: options.surfaces });
-  report.trustChecklist = benchmarkTrustChecklist(report);
-  const text = renderBenchmarkText(report);
   const reportLedger = inspectBenchmarkLedger(ledgerPath);
   assertBenchmarkLedgerBinding(ledgerBinding, reportLedger.binding, "benchmark report ledger");
   validateBenchmarkLedgerPrefix(reportLedger.records, fullOrder, (record, index, expected) => expectedBenchmarkRecord(record, index, expected, runId, suite, configurationDigest));
-  writePrivate(path.join(runRoot, "report.html"), renderBenchmarkHtml(report));
-  writePrivate(path.join(runRoot, "summary.txt"), text);
   cleanupUnretainedWorkspaces(runRoot, options.keepWorkspaces);
   const prepublishReceipt = executionGuard.receipt("prepublish");
   const prepublishError = prepublishReceipt.error;
@@ -294,6 +337,11 @@ export function finalizeBenchmarkRun(context) {
     writeBenchmarkAbort(runRoot, { runId, completedRuns: completedRuns.length, expectedRuns: fullOrder.length }, prepublishError, { ledger: ledgerBinding, provenanceStamp: prepublishReceipt.stamp });
     throw prepublishError;
   }
+  finalizeProductionCampaignClaimOutcome({ productionCampaign, manifest, report, runRoot });
+  report.trustChecklist = benchmarkTrustChecklist(report);
+  const text = renderBenchmarkText(report);
+  writePrivate(path.join(runRoot, "report.html"), renderBenchmarkHtml(report));
+  writePrivate(path.join(runRoot, "summary.txt"), text);
   for (const marker of ["paused.json", "stage-diagnostic.json", "interrupted.json", "aborted.json", "stopped.json"]) fs.rmSync(path.join(runRoot, marker), { force: true });
   writePrivateAtomic(path.join(runRoot, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
   process.stdout.write(options.json ? `${JSON.stringify(report, null, 2)}\n` : text);

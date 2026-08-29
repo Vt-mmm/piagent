@@ -39,6 +39,9 @@ const { appendTaskJournalEvent, replayTaskCheckpoints } = await import(
 const { readTaskBaselineManifest } = await import(
   pathToFileURL(path.join(repoRoot, "packages", "piagent-core", "runtime", "inspection", "source-evidence-store.ts")).href
 );
+const { inspectTaskResumeState } = await import(
+  pathToFileURL(path.join(repoRoot, "packages", "piagent-core", "runtime", "recovery", "resume-state.ts")).href
+);
 const { readMutationProvenance } = await import(
   pathToFileURL(path.join(repoRoot, "packages", "piagent-core", "runtime", "inspection", "mutation-provenance-store.ts")).href
 );
@@ -226,7 +229,7 @@ describe("piagent guard integration", () => {
     assert.equal(harness.tools.has("piagent_context_engine"), true);
     assert.equal(harness.tools.has("piagent_document_read"), true);
     assert.equal(harness.tools.has("piagent_task_progress"), true);
-    assert.equal(harness.commands.size, 35);
+    assert.equal(harness.commands.size, 36);
     assert.equal(harness.commands.has("profile"), true);
     assert.equal(harness.commands.has("context-index"), true);
     assert.equal(harness.commands.has("piagent-mcp"), true);
@@ -235,6 +238,7 @@ describe("piagent guard integration", () => {
     assert.equal(harness.commands.has("logs"), true);
     assert.equal(harness.commands.has("context"), true);
     assert.equal(harness.commands.has("permission"), true);
+    assert.equal(harness.commands.has("fast"), true);
     assert.equal(harness.commands.has("memory"), true);
     assert.equal(harness.commands.has("onboard"), true);
     assert.equal(harness.commands.has("piagent-inspector"), true);
@@ -477,6 +481,39 @@ describe("piagent guard integration", () => {
 
     ctx.model = { provider: "anthropic", id: "claude-sonnet-5" };
     assert.equal(await harness.handlers.get("before_provider_request")({ payload: { model: "claude-sonnet-5" } }, ctx), undefined);
+  });
+
+  it("requests Fast service tier only after explicit opt-in without changing model or thinking", async () => {
+    const previous = process.env.PIAGENT_FAST_MODE;
+    process.env.PIAGENT_FAST_MODE = "fast";
+    try {
+      const { root, piagentGuard } = await loadGuardFixture();
+      const cwd = createProject(root), ctx = createContext(cwd);
+      ctx.model = { provider: "openai-codex", id: "gpt-5.6-luna" };
+      const harness = createPiHarness();
+      harness.pi.getThinkingLevel = () => "medium";
+      piagentGuard(harness.pi);
+
+      const payload = { model: "gpt-5.6-luna", reasoning: { effort: "medium", summary: "auto" } };
+      const observed = await harness.handlers.get("before_provider_request")({ payload }, ctx);
+      assert.equal(observed.service_tier, "priority");
+      assert.deepEqual(observed.reasoning, payload.reasoning);
+      assert.equal(payload.service_tier, undefined);
+      assert.deepEqual(ctx.model, { provider: "openai-codex", id: "gpt-5.6-luna" });
+      assert.equal(harness.pi.getThinkingLevel(), "medium");
+      const tierEvent = readJsonl(path.join(cwd, ".pi", "piagent-state", "context-engine", "events.jsonl"))
+        .find((event) => event.event === "provider_request_service_tier");
+      assert.equal(tierEvent.requestedServiceTier, "fast");
+      assert.equal(tierEvent.observedRequestServiceTier, "priority");
+      assert.equal(tierEvent.providerResponseServiceTier, null);
+      assert.equal(tierEvent.providerResponseEvidence, "unavailable-host-api");
+      assert.equal(tierEvent.applied, true);
+      assert.ok(harness.entries.some((entry) => entry.type === "piagent-service-tier-receipt"
+        && entry.payload.observedRequestServiceTier === "priority"));
+    } finally {
+      if (previous === undefined) delete process.env.PIAGENT_FAST_MODE;
+      else process.env.PIAGENT_FAST_MODE = previous;
+    }
   });
 
   it("keeps a small stable tool surface and activates workflow groups on demand", async () => {
@@ -3644,6 +3681,11 @@ describe("piagent guard integration", () => {
     assert.equal(deniedTask.trace.outcome, "pending");
     const deniedHandoff = JSON.parse(fs.readFileSync(path.join(denied.cwd, ".pi", "piagent-state", "handoffs", `${denied.started.details.taskRunId}.json`), "utf8"));
     assert.equal(deniedHandoff.state.completionApproved, false);
+    assert.equal(deniedHandoff.failure.recovery.policyVersion, "recovery-v1");
+    const deniedResume = inspectTaskResumeState(denied.cwd, deniedTask, deniedTask.sessionId);
+    assert.equal(deniedResume.decision, "blocked");
+    assert.equal(deniedResume.reconstruction.nextAction.action, "inspect-handoff");
+    assert.deepEqual(deniedResume.reconstruction.nextAction.exactCommands, []);
     assert.equal(denied.harness.entries.filter((entry) => entry.type === "message" && entry.payload.customType === "piagent-performance-review").length, 1);
   });
 
@@ -3775,8 +3817,8 @@ describe("piagent guard integration", () => {
     assert.equal(pending.trace.outcome, "pending");
     assert.deepEqual(pending.changedFiles, ["src/order.js", "test/order.test.js"]);
     assert.ok(pending.acceptanceReceipt.criteria.every((criterion) => criterion.status === "satisfied"));
-    assert.deepEqual(pending.finalWorkingTreeFiles, []);
-    assert.deepEqual(pending.finalFileDigests, {});
+    assert.deepEqual(pending.finalWorkingTreeFiles, Object.keys(workingTreeSnapshot(cwd)).sort());
+    assert.equal(workingTreeEvidenceDigest(pending.finalFileDigests), workingTreeEvidenceDigest(workingTreeSnapshot(cwd)));
 
     const sourceBeforeReviewMutation = fs.readFileSync(path.join(cwd, sourceInput.path));
     const rejectedReviewMutation = await harness.handlers.get("tool_call")({
@@ -3858,9 +3900,15 @@ describe("piagent guard integration", () => {
       content: [{ type: "text", text: "Wrote src/backend/auth.js" }],
       isError: false
     }, ctx);
+    const verifyInput = { command: "npm test" };
+    const verifyDecision = await harness.handlers.get("tool_call")({
+      toolCallId: "critical-proof-verify", toolName: "bash", input: verifyInput
+    }, ctx) ?? {};
+    assert.equal(verifyDecision.block, undefined, verifyDecision.reason);
     await harness.handlers.get("tool_result")({
+      toolCallId: "critical-proof-verify",
       toolName: "bash",
-      input: { command: "npm test" },
+      input: verifyInput,
       content: [{ type: "text", text: "pass" }],
       details: { exitCode: 0 },
       isError: false,
@@ -3880,7 +3928,13 @@ describe("piagent guard integration", () => {
     const taskPath = path.join(cwd, ".pi", "piagent-state", "tasks", `${started.details.taskRunId}.json`);
     let task = JSON.parse(fs.readFileSync(taskPath, "utf8"));
     assert.equal(task.trace.outcome, "pending");
+    assert.deepEqual(task.finalWorkingTreeFiles, Object.keys(workingTreeSnapshot(cwd)).sort());
+    assert.equal(workingTreeEvidenceDigest(task.finalFileDigests), workingTreeEvidenceDigest(workingTreeSnapshot(cwd)));
     assert.ok(task.acceptanceReceipt.criteria.some((criterion) => criterion.obligation === "tenant-boundary" && criterion.status === "pending"));
+    const firstHandoff = JSON.parse(fs.readFileSync(path.join(cwd, ".pi", "piagent-state", "handoffs", `${task.taskRunId}.json`), "utf8"));
+    assert.equal(firstHandoff.state.completionApproved, false);
+    assert.equal(firstHandoff.tree.evidenceCurrent, true);
+    assert.equal(firstHandoff.tree.latestVerifierMatchesCurrentTree, true);
 
     const repairedSource = {
       path: "src/backend/auth.js",
@@ -3930,9 +3984,16 @@ describe("piagent guard integration", () => {
     task = JSON.parse(fs.readFileSync(taskPath, "utf8"));
     assert.equal(task.trace.outcome, "pending");
     assert.deepEqual(task.changedFiles, ["src/backend/auth.js", "test/auth.test.js"]);
+    assert.deepEqual(task.finalWorkingTreeFiles, Object.keys(workingTreeSnapshot(cwd)).sort());
+    assert.equal(workingTreeEvidenceDigest(task.finalFileDigests), workingTreeEvidenceDigest(workingTreeSnapshot(cwd)));
     assert.equal(task.acceptanceReceipt.criteria.filter((criterion) => criterion.priority === "critical").every((criterion) => criterion.status === "pending"), true);
-    const handoff = JSON.parse(fs.readFileSync(path.join(cwd, ".pi", "piagent-state", "handoffs", `${task.taskRunId}.json`), "utf8"));
+    const handoffPath = path.join(cwd, ".pi", "piagent-state", "handoffs", `${task.taskRunId}.json`);
+    assert.equal(fs.existsSync(handoffPath), true, JSON.stringify(ctx.ui.notices));
+    const handoff = JSON.parse(fs.readFileSync(handoffPath, "utf8"));
     assert.equal(handoff.nextSafeAction.action, "handoff");
+    assert.equal(handoff.state.completionApproved, false);
+    assert.equal(handoff.tree.evidenceCurrent, true);
+    assert.equal(handoff.tree.latestVerifierMatchesCurrentTree, false, "the repair changed the tree after the prior verifier");
     assert.match(handoff.failure.recovery.reasonCodes.join("; "), /global-continuation-budget-exhausted/);
   });
 
@@ -3997,12 +4058,14 @@ describe("piagent guard integration", () => {
     const task = JSON.parse(fs.readFileSync(path.join(cwd, ".pi", "piagent-state", "tasks", `${started.details.taskRunId}.json`), "utf8"));
     assert.equal(task.trace.outcome, "pending");
     assert.ok(task.acceptanceReceipt.criteria.some((criterion) => criterion.priority === "critical" && criterion.status === "pending"));
-    const handoff = JSON.parse(fs.readFileSync(path.join(cwd, ".pi", "piagent-state", "handoffs", `${task.taskRunId}.json`), "utf8"));
+    const handoffPath = path.join(cwd, ".pi", "piagent-state", "handoffs", `${task.taskRunId}.json`);
+    assert.equal(fs.existsSync(handoffPath), true, JSON.stringify(ctx.ui.notices));
+    const handoff = JSON.parse(fs.readFileSync(handoffPath, "utf8"));
     assert.equal(handoff.nextSafeAction.action, "handoff");
-    assert.deepEqual(handoff.failure.recovery.reasonCodes, ["unknown-diagnostic-exhausted"]);
+    assert.deepEqual(handoff.failure.recovery.reasonCodes, ["deterministic-adapter-proof-required"]);
   });
 
-  it("keeps broad-default semantic evidence advisory while exact current-tree verification remains a hard completion invariant", async () => {
+  it("keeps broad-default mutation authority broad while known runtime critical proof gates completion once", async () => {
     async function runCase(label, mutateAfterVerifier, benchmarkBound = false) {
       const { root, piagentGuard } = await loadGuardFixture();
       const cwd = createProject(root);
@@ -4020,6 +4083,7 @@ describe("piagent guard integration", () => {
         taskId: `BROAD-${label}`,
         summary: "Change the authorization implementation while retaining advisory semantic evidence.",
         riskLane: "tiny",
+        intakeMode: "runtime",
         expectedOutput: "The source change passes the exact configured verifier on the current tree.",
         acceptanceCriteria: ["Active administrators must belong to the same non-empty tenant."],
         scope: ["src/backend/auth.js", "test/**"]
@@ -4053,24 +4117,26 @@ describe("piagent guard integration", () => {
       return { claim, harness, task };
     }
     const current = await runCase("CURRENT", false);
-    assert.equal(current.claim, undefined, JSON.stringify(current.harness.entries.filter((entry) => entry.payload?.customType === "piagent-completion-recovery").map((entry) => entry.payload.details), null, 2));
-    assert.equal(current.task.trace.outcome, "completed");
+    assert.match(current.claim.message.content[0].text, /CONTINUING/);
+    assert.equal(current.task.trace.outcome, "pending");
     assert.equal(current.task.authoritySnapshot.profile, "broad-default");
     assert.equal(current.harness.entries.some((entry) => entry.payload?.customType === "piagent-performance-review"), false);
+    assert.equal(current.harness.entries.filter((entry) => entry.payload?.customType === "piagent-completion-recovery").length, 1);
     assert.ok(current.task.acceptanceReceipt.criteria.some((criterion) => criterion.priority === "critical" && criterion.status === "pending"));
     const stale = await runCase("STALE", true);
     assert.match(stale.claim.message.content[0].text, /CONTINUING/);
     assert.equal(stale.task.trace.outcome, "pending");
     const recovery = stale.harness.entries.filter((entry) => entry.payload?.customType === "piagent-completion-recovery").at(-1);
     assert.ok(recovery.payload.details.missing.some((item) => /observed passing verify evidence/.test(item)));
-    assert.equal(recovery.payload.details.missing.some((item) => /critical acceptance evidence/.test(item)), false);
+    assert.equal(recovery.payload.details.missing.some((item) => /critical acceptance evidence/.test(item)), true);
 
     const benchmark = await runCase("BENCHMARK", false, true);
-    assert.equal(benchmark.claim, undefined);
-    assert.equal(benchmark.task.trace.outcome, "completed");
+    assert.match(benchmark.claim.message.content[0].text, /CONTINUING/);
+    assert.equal(benchmark.task.trace.outcome, "pending");
     assert.equal(benchmark.task.authoritySnapshot.profile, "broad-default");
     assert.ok(benchmark.task.acceptanceReceipt.criteria.some((criterion) => criterion.priority === "critical" && criterion.status === "pending"));
-    assert.equal(benchmark.harness.entries.some((entry) => entry.payload?.customType === "piagent-completion-recovery"), false);
+    assert.equal(benchmark.harness.entries.filter((entry) => entry.payload?.customType === "piagent-completion-recovery").length, 1,
+      "benchmark binding must not disable the same production completion truth");
   });
 
   it("binds read-only diagnostic prompts to automatic task evidence", async () => {

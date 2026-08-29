@@ -138,6 +138,7 @@ function stageDiagnosticRecord({ scenarioId = "first", surface, repeat = 1, reso
     workflow: surface === "piagent"
       ? { score: resolved ? 10 : 0, checks: [{ id: "terminal-completion", passed: resolved }] }
       : null,
+    infrastructureAttempt: 1,
     infrastructureRetries: 0,
     infrastructureAttempts: 1,
     infrastructureFailures: [],
@@ -157,7 +158,8 @@ function stageDiagnosticRecord({ scenarioId = "first", surface, repeat = 1, reso
       subagentTokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, fresh: 0, total: 0 },
       usageCompleteness: "exact",
       model: "openai-codex/gpt-5.6-luna",
-      thinkingLevel: "medium"
+      thinkingLevel: "medium",
+      execution: { providerStartedAttempts: 1 }
     },
     ...overrides
   };
@@ -338,6 +340,51 @@ if (process.env.BENCHMARK_FAKE_PROVIDER_OVERLOAD_AFTER_USAGE === "1") {
     { type: "message", timestamp: now, message: { role: "assistant", content: [{ type: "toolCall", id: "call-read", name: "read", arguments: { path: "src/retry.js" } }], stopReason: "toolUse", usage: { input: 20, output: 5, cacheRead: 0, cacheWrite: 0, reasoning: 1, totalTokens: 25, cost: { input: 0.001, output: 0.001, cacheRead: 0, cacheWrite: 0, total: 0.002 } } } },
     { type: "message", timestamp: now, message: { role: "toolResult", toolCallId: "call-read", toolName: "read", content: [{ type: "text", text: "fixture" }], isError: false } },
     { type: "message", timestamp: now, message: { role: "assistant", content: [], stopReason: "error", errorMessage, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } } }
+  ];
+  fs.writeFileSync(path.join(sessionDir, "session.jsonl"), entries.map((entry) => JSON.stringify(entry)).join("\\n") + "\\n");
+  for (const entry of entries) console.log(JSON.stringify(entry));
+  process.exit(0);
+}
+if (process.env.BENCHMARK_FAKE_FETCH_CIRCUIT_MARKER) {
+  const marker = process.env.BENCHMARK_FAKE_FETCH_CIRCUIT_MARKER;
+  const invocation = fs.existsSync(marker) ? Number(fs.readFileSync(marker, "utf8")) + 1 : 1;
+  fs.writeFileSync(marker, String(invocation));
+  if (invocation === 1 || invocation === 3) {
+    fs.mkdirSync(sessionDir, { recursive: true });
+    const errorMessage = "TypeError: fetch failed";
+    const entries = [
+      { type: "session", id: sessionId, cwd: process.cwd(), timestamp: now },
+      { type: "model_change", provider: "test", modelId: "fake-model", timestamp: now },
+      { type: "thinking_level_change", thinkingLevel: "high", timestamp: now },
+      { type: "message", timestamp: now, message: { role: "assistant", content: [], stopReason: "error", errorMessage, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { total: 0 } } } }
+    ];
+    fs.writeFileSync(path.join(sessionDir, "session.jsonl"), entries.map((entry) => JSON.stringify(entry)).join("\\n") + "\\n");
+    for (const entry of entries) console.log(JSON.stringify(entry));
+    process.exit(0);
+  }
+}
+if (process.env.BENCHMARK_FAKE_FETCH_FAILED_AFTER_USAGE === "1") {
+  fs.mkdirSync(sessionDir, { recursive: true });
+  const errorMessage = "TypeError: fetch failed (cause: ECONNRESET)";
+  const entries = [
+    { type: "session", id: sessionId, cwd: process.cwd(), timestamp: now },
+    { type: "model_change", provider: "test", modelId: "fake-model", timestamp: now },
+    { type: "thinking_level_change", thinkingLevel: "high", timestamp: now },
+    { type: "message", timestamp: now, message: { role: "assistant", content: [{ type: "toolCall", id: "call-read", name: "read", arguments: { path: "src/retry.js" } }], stopReason: "toolUse", usage: { input: 20, output: 5, cacheRead: 0, cacheWrite: 0, totalTokens: 25, cost: { input: 0.001, output: 0.001, cacheRead: 0, cacheWrite: 0, total: 0.002 } } } },
+    { type: "message", timestamp: now, message: { role: "toolResult", toolCallId: "call-read", toolName: "read", content: [{ type: "text", text: "fixture" }], isError: false } },
+    { type: "message", timestamp: now, message: { role: "assistant", content: [], stopReason: "error", errorMessage, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } } }
+  ];
+  fs.writeFileSync(path.join(sessionDir, "session.jsonl"), entries.map((entry) => JSON.stringify(entry)).join("\\n") + "\\n");
+  for (const entry of entries) console.log(JSON.stringify(entry));
+  process.exit(0);
+}
+if (process.env.BENCHMARK_FAKE_MALFORMED_USAGE_AFTER_USAGE === "1") {
+  fs.mkdirSync(sessionDir, { recursive: true });
+  const entries = [
+    { type: "session", id: sessionId, cwd: process.cwd(), timestamp: now },
+    { type: "model_change", provider: "test", modelId: "fake-model", timestamp: now },
+    { type: "thinking_level_change", thinkingLevel: "high", timestamp: now },
+    { type: "message", timestamp: now, message: { role: "assistant", content: [{ type: "text", text: "partial" }], stopReason: "stop", usage: { input: 20, output: 5, cacheRead: 0, reasoning: 1, totalTokens: 25, cost: { total: 0.002 } } } }
   ];
   fs.writeFileSync(path.join(sessionDir, "session.jsonl"), entries.map((entry) => JSON.stringify(entry)).join("\\n") + "\\n");
   for (const entry of entries) console.log(JSON.stringify(entry));
@@ -641,7 +688,7 @@ test("a spend-controlled scenario subset skips full-matrix provider-free evidenc
   const suite = JSON.parse(fs.readFileSync(value.suite, "utf8"));
   suite.id = "test-provider-free-subset-v1";
   suite.defaultRepeats = 1;
-  suite.releaseGate = { minimumOutcomeScoreExclusive: 9.5 };
+  suite.releaseGate = { minimumOutcomeScoreExclusive: 9.5, requireCampaignAccounting: true };
   suite.scenarios.push({ ...suite.scenarios[0], id: "write-result-second", title: "Write second result" });
   fs.writeFileSync(value.suite, `${JSON.stringify(suite, null, 2)}\n`);
   fs.writeFileSync(path.join(path.dirname(value.suite), "spend-control.v1.json"), `${JSON.stringify({
@@ -1630,6 +1677,7 @@ test("provider-free pause diagnostic blocks quality and continuity while keeping
     stageDiagnosticRecord({ surface: "piagent" }),
     stageDiagnosticRecord({ surface: "codex-cli" })
   ];
+  cleanRuns.forEach((run, index) => { run.attemptId = `attempt-${index + 1}`; run.orderIndex = index + 1; });
   const input = {
     runId: "stage-test",
     reason: "max-sessions:2",
@@ -1661,11 +1709,121 @@ test("provider-free pause diagnostic blocks quality and continuity while keeping
   assert.equal(clean.timingDiagnostics.gateImpact, "none");
   assert.equal(clean.timingDiagnostics.surfaces.piagent.validDiagnostics, 0);
   assert.equal(clean.spendFutilityReview.passed, true);
+
+  const campaignManifest = {
+    ...manifest,
+    runId: input.runId,
+    configurationDigest: "d".repeat(64),
+    productionGuards: { campaignAccounting: { requiredBeforeFirstPaidSession: true } },
+    campaignEvidence: {
+      schemaVersion: 1,
+      required: true,
+      campaignId: "production-v2-campaign",
+      runId: input.runId,
+      runRoot: "/private/operator/benchmark-output",
+      campaignRoot: "/private/operator/benchmark-registry/campaign",
+      configurationDigest: "d".repeat(64),
+      status: "active",
+      exactOutputLineage: true,
+      providerStartedAttempts: 2,
+      settledAttempts: 2,
+      unknownAttempts: 0,
+      attempts: cleanRuns.map((run) => ({
+        attemptId: run.attemptId, orderIndex: run.orderIndex, scenarioId: run.scenarioId, surface: run.surface,
+        repeat: run.repeat, infrastructureAttempt: run.infrastructureAttempt, returned: true, exactUsage: true
+      })),
+      complete: true,
+      passed: true,
+      allAttempts: { complete: true }
+    }
+  };
+  const campaignBound = buildBenchmarkStageDiagnostic({ ...input, manifest: campaignManifest });
+  assert.equal(campaignBound.stageAdvanceAllowed, true, campaignBound.blockingReasons.join(", "));
+  assert.equal(JSON.stringify(campaignBound).includes("/private/operator"), false);
+  const campaignUnknown = structuredClone(campaignManifest);
+  campaignUnknown.campaignEvidence.unknownAttempts = 1;
+  campaignUnknown.campaignEvidence.complete = false;
+  campaignUnknown.campaignEvidence.passed = false;
+  campaignUnknown.campaignEvidence.allAttempts.complete = false;
+  const campaignBlocked = buildBenchmarkStageDiagnostic({ ...input, manifest: campaignUnknown });
+  assert.equal(campaignBlocked.stageAdvanceAllowed, false);
+  assert.ok(campaignBlocked.blockingReasons.includes("durable-campaign-all-attempt-accounting"));
   assert.deepEqual(clean.decisionContract, {
-    blocking: "quality-model-parity-task-continuity-exact-usage-subagent-budget-and-partial-stage-catastrophic-fresh-spend",
-    finalOnly: ["0.60-upper95-fresh-token-reduction"],
+    blocking: "quality-model-thinking-fast-execution-configuration-parity-task-continuity-exact-usage-subagent-budget-and-partial-stage-catastrophic-fresh-spend",
+    finalOnly: [
+      "0.60-upper95-family-fresh-token-ratio",
+      "0.65-pooled-all-attempt-net-fresh-token-ratio",
+      "fast-execution-configuration-parity-when-required"
+    ],
     observational: ["normalized-api-equivalent-text-token-cost", "duration", "host-load"]
   });
+
+  const fastSuite = structuredClone(suite);
+  fastSuite.releaseGate.requireFastServiceTier = true;
+  const fastRuns = structuredClone(cleanRuns);
+  fastRuns.find((run) => run.surface === "piagent").providerWireEvidence.serviceTier = {
+    schemaVersion: 1,
+    source: "piagent-provider-request-telemetry",
+    events: 1,
+    requestedTiers: ["fast"],
+    observedRequestTiers: ["priority"],
+    providerResponseTiers: [],
+    responseEvidence: ["unavailable-host-api"],
+    requestedFastEvents: 1,
+    observedFastRequestEvents: 1,
+    fastModeEvents: 1,
+    appliedEvents: 1,
+    appliedFastEvents: 1,
+    defaultFallbackEvents: 0
+  };
+  fastRuns.find((run) => run.surface === "codex-cli").usage.serviceTierEvidence = {
+    schemaVersion: 1,
+    source: "codex-controlled-invocation-rollout-settings",
+    events: 1,
+    requestedTiers: ["fast"],
+    observedRequestTiers: ["priority"],
+    providerResponseTiers: [],
+    responseEvidence: ["unavailable-codex-rollout-thread-settings"],
+    defaultFallbackEvents: 0,
+    identityBound: true,
+    invocationBound: true,
+    coverageBound: true,
+    settingsBound: true,
+    providerStartedEvents: 1,
+    invocationEvents: 1,
+    initialInvocationEvents: 1,
+    resumeInvocationEvents: 0,
+    resumeSettingsEvents: 0,
+    turnContextEvents: 1,
+    diagnostics: []
+  };
+  const fast = buildBenchmarkStageDiagnostic({
+    ...input,
+    runs: fastRuns,
+    suite: fastSuite,
+    requestedServiceTier: "fast"
+  });
+  assert.equal(fast.stageAdvanceAllowed, true, fast.blockingReasons.join(", "));
+  assert.equal(fast.checks.find((check) => check.id === "fast-execution-configuration-parity").passed, true);
+  const missingFast = buildBenchmarkStageDiagnostic({
+    ...input,
+    suite: fastSuite,
+    requestedServiceTier: "fast"
+  });
+  assert.equal(missingFast.stageAdvanceAllowed, false);
+  assert.ok(missingFast.blockingReasons.includes("fast-execution-configuration-parity"));
+  const defaultFastRuns = structuredClone(fastRuns);
+  const defaultCodexEvidence = defaultFastRuns.find((run) => run.surface === "codex-cli").usage.serviceTierEvidence;
+  defaultCodexEvidence.observedRequestTiers = ["default"];
+  defaultCodexEvidence.defaultFallbackEvents = 1;
+  const defaultFast = buildBenchmarkStageDiagnostic({
+    ...input,
+    runs: defaultFastRuns,
+    suite: fastSuite,
+    requestedServiceTier: "fast"
+  });
+  assert.equal(defaultFast.stageAdvanceAllowed, false);
+  assert.ok(defaultFast.blockingReasons.includes("fast-execution-configuration-parity"));
 
   const inefficientRuns = structuredClone(cleanRuns);
   const inefficientCandidate = inefficientRuns.find((run) => run.surface === "piagent");
@@ -1872,14 +2030,26 @@ test("production partial stages hard-stop catastrophic fresh spend and exact sub
 
   const failedAttemptRuns = structuredClone(s12Runs);
   const retried = failedAttemptRuns.find((run) => run.surface === "piagent");
-  retried.infrastructureRetries = 1; retried.infrastructureAttempts = 2;
-  retried.infrastructureFailures = [{ usageStatus: "measured", usage: { ...retried.usage, input: 20, output: 0,
+  retried.infrastructureRetries = 1; retried.infrastructureAttempt = 2; retried.infrastructureAttempts = 2;
+  retried.infrastructureFailures = [{ attempt: 1, usageStatus: "measured", usage: { ...retried.usage, input: 20, output: 0,
     fresh: 20, total: 20, sessions: 1, subagentSessions: 0,
     subagentTokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, fresh: 0, total: 0 } } }];
   const withFailedAttempt = buildBenchmarkStageDiagnostic({ ...input, reason: "max-sessions:12", runs: failedAttemptRuns });
   assert.equal(withFailedAttempt.spendFutilityReview.partialStageCatastrophicFreshSpend.candidateFresh, 620,
     "the catastrophic ratio includes exact usage from failed started attempts");
   assert.equal(withFailedAttempt.spendFutilityReview.subagentBudget.attempts, 7);
+
+  const malformedAttemptBindingRuns = structuredClone(s12Runs);
+  malformedAttemptBindingRuns.find((run) => run.surface === "piagent").infrastructureAttempt = 2;
+  const malformedAttemptBinding = buildBenchmarkStageDiagnostic({
+    ...input,
+    reason: "max-sessions:12",
+    runs: malformedAttemptBindingRuns
+  });
+  assert.ok(malformedAttemptBinding.blockingReasons.includes("no-infrastructure-retry"));
+  assert.equal(malformedAttemptBinding.spendFutilityReview.partialStageCatastrophicFreshSpend.exactUsageIncludingFailedAttempts, false);
+  assert.ok(malformedAttemptBinding.infrastructure.retryEvidenceFailures[0].issues
+    .includes("accepted-infrastructure-attempt-mismatch"));
 });
 
 test("production-v2 partial spend aggregates structural variants by task family and fails closed on unresolved families", () => {
@@ -2365,7 +2535,7 @@ test("a passing production stage advertises the exact resume chunk and rejects a
   const suite = JSON.parse(fs.readFileSync(value.suite, "utf8"));
   suite.id = "test-spend-controlled-v1";
   suite.defaultRepeats = 2;
-  suite.releaseGate = { minimumOutcomeScoreExclusive: 9.5 };
+  suite.releaseGate = { minimumOutcomeScoreExclusive: 9.5, requireCampaignAccounting: true };
   suite.pricingSnapshot = {
     schemaVersion: 1,
     id: "test-fake-model-pricing",
@@ -2425,6 +2595,8 @@ test("a passing production stage advertises the exact resume chunk and rejects a
   assert.equal(first.status, 0, `${first.stdout}\n${first.stderr}`);
   const pendingManifest = JSON.parse(fs.readFileSync(path.join(value.output, "run-manifest.json"), "utf8"));
   assert.equal(pendingManifest.stageControl.state, "review-pending");
+  assert.equal(pendingManifest.campaignEvidence.providerStartedAttempts, 2);
+  assert.equal(pendingManifest.campaignEvidence.status, "active");
   const paused = JSON.parse(fs.readFileSync(path.join(value.output, "paused.json"), "utf8"));
   assert.match(paused.resumeCommand, /--max-sessions 2 --yes$/);
 
@@ -2440,7 +2612,17 @@ test("a passing production stage advertises the exact resume chunk and rejects a
     cwd: root, encoding: "utf8", timeout: 60_000, env
   });
   assert.equal(resumed.status, 0, `${resumed.stdout}\n${resumed.stderr}`);
-  assert.equal(JSON.parse(fs.readFileSync(path.join(value.output, "report.json"), "utf8")).runCount, 4);
+  const report = JSON.parse(fs.readFileSync(path.join(value.output, "report.json"), "utf8"));
+  assert.equal(report.runCount, 4);
+  assert.equal(report.comparison.campaignAccountingGate, true);
+  assert.equal(report.comparison.campaignEvidence.campaignId, pendingManifest.campaign.campaignId);
+  assert.equal(report.comparison.campaignEvidence.status, report.comparison.tokenClaimAllowed ? "claim-passed" : "no-claim");
+  assert.equal(report.comparison.campaignEvidence.claimOutcome.allowed, report.comparison.tokenClaimAllowed);
+  const finalizedManifest = JSON.parse(fs.readFileSync(path.join(value.output, "run-manifest.json"), "utf8"));
+  assert.equal(finalizedManifest.campaignEvidence.status, report.comparison.campaignEvidence.status);
+  assert.equal(finalizedManifest.campaignEvidence.claimOutcome.allowed, report.comparison.tokenClaimAllowed);
+  assert.equal(JSON.stringify(report).includes(pendingManifest.campaignEvidence.runRoot), false);
+  assert.equal(JSON.stringify(report).includes(pendingManifest.campaignEvidence.campaignRoot), false);
 });
 
 test("a final post-guard WAL finalizes after a crash without provider auth or tool preflight", (t) => {
@@ -3283,7 +3465,7 @@ test("aborts when Pi exits before recording usage", (t) => {
   assert.equal(fs.existsSync(path.join(value.output, "aborted.json")), true);
 });
 
-test("retries one zero-usage infrastructure failure without counting it as a measured run", (t) => {
+test("never retries an infrastructure failure whose provider-started usage is unknown", (t) => {
   const value = fixture(t);
   const failureMarker = path.join(value.dir, "startup-failed-once");
   const result = spawnSync(process.execPath, [
@@ -3305,30 +3487,20 @@ test("retries one zero-usage infrastructure failure without counting it as a mea
       PIAGENT_BENCHMARK_TASK_FIXTURE: path.join(root, "evals", "fixtures", "task-contract.valid.json")
     }
   });
-  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
-  assert.match(result.stdout, /RETRY 1\/1 \(agent-exit-2-with-usage-unavailable\)/);
-  const report = JSON.parse(fs.readFileSync(path.join(value.output, "report.json"), "utf8"));
-  assert.equal(report.runCount, 2);
-  const retried = report.runs.find((run) => run.infrastructureRetries === 1);
-  assert.equal(retried.infrastructureAttempts, 2);
-  assert.equal(retried.infrastructureFailures.length, 1);
-  assert.equal(retried.infrastructureFailures[0].failure, "agent-exit-2-with-usage-unavailable");
-  assert.deepEqual(report.infrastructure, {
-    attempts: 3,
-    retries: 1,
-    retriedRuns: 1,
-    failureCounts: { "agent-exit-2-with-usage-unavailable": 1 },
-    classCounts: { "unknown-cost": 1 }
-  });
+  assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`);
+  assert.doesNotMatch(result.stdout, /RETRY 1\/1/);
+  assert.equal(fs.existsSync(path.join(value.output, "report.json")), false);
   const attempts = fs.readFileSync(path.join(value.output, "infrastructure-attempts.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
   assert.equal(attempts.length, 1);
   assert.equal(attempts[0].accepted, false);
-  assert.equal(attempts[0].retryAvailable, true);
+  assert.equal(attempts[0].failure, "agent-exit-2-with-usage-unavailable");
+  assert.equal(attempts[0].usageStatus, "unknown-after-provider-start");
+  assert.equal(attempts[0].retryAvailable, false);
   assert.match(attempts[0].infrastructureDiagnostic, /^redacted-diagnostic-sha256:[a-f0-9]{64}$/);
   assert.equal(JSON.stringify(attempts).includes("PIAGENT_BENCHMARK_STREAM_SECRET"), false);
 });
 
-test("retries one measured-zero provider overload instead of misclassifying it as a completed record", (t) => {
+test("never retries a provider overload whose zero-shaped local usage cannot prove provider cost", (t) => {
   const value = fixture(t);
   const overloadMarker = path.join(value.dir, "provider-overloaded-once");
   const result = spawnSync(process.execPath, [
@@ -3351,30 +3523,14 @@ test("retries one measured-zero provider overload instead of misclassifying it a
       PIAGENT_BENCHMARK_TASK_FIXTURE: path.join(root, "evals", "fixtures", "task-contract.valid.json")
     }
   });
-  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
-  assert.match(result.stdout, /RETRY 1\/1 \(provider-temporarily-unavailable-with-zero-measured-usage\)/);
-  const report = JSON.parse(fs.readFileSync(path.join(value.output, "report.json"), "utf8"));
-  const retried = report.runs.find((run) => run.infrastructureRetries === 1);
-  assert.equal(retried.infrastructureAttempts, 2);
-  assert.deepEqual(retried.infrastructureFailures.map((failure) => ({
-    failure: failure.failure,
-    class: failure.class,
-    usageStatus: failure.usageStatus,
-    fresh: failure.usage.fresh
-  })), [{
-    failure: "provider-temporarily-unavailable-with-zero-measured-usage",
-    class: "provider-infrastructure",
-    usageStatus: "measured-but-unaccepted",
-    fresh: 0
-  }]);
-  assert.equal(report.comparison.failureAwareEfficiencyGate, true);
-  assert.equal(report.comparison.failureAwareFreshTokenRatio, 0.5455);
-  assert.equal(report.comparison.tokenClaimAllowed, false, "the small fake suite is diagnostic-only");
+  assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`);
+  assert.doesNotMatch(result.stdout, /RETRY 1\/1/);
+  assert.equal(fs.existsSync(path.join(value.output, "report.json")), false);
   const attempts = fs.readFileSync(path.join(value.output, "infrastructure-attempts.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
   assert.equal(attempts.length, 1);
   assert.equal(attempts[0].accepted, false);
-  assert.equal(attempts[0].retryAvailable, true);
-  assert.equal(attempts[0].usageStatus, "measured-but-unaccepted");
+  assert.equal(attempts[0].retryAvailable, false);
+  assert.equal(attempts[0].usageStatus, "unknown-after-provider-start");
   assert.equal(attempts[0].usage.fresh, 0);
 });
 
@@ -3413,6 +3569,129 @@ test("aborts a terminal provider overload after measured usage instead of gradin
   assert.match(attempts[0].infrastructureDiagnostic, /^redacted-diagnostic-sha256:[a-f0-9]{64}$/);
   assert.equal(fs.existsSync(path.join(value.output, "runs.jsonl")), false, "partial provider work is never accepted as a measured outcome");
   assert.equal(fs.existsSync(path.join(value.output, "aborted.json")), true);
+});
+
+test("accounts a terminal fetch failure with optional reasoning without synthetic zero usage or duration", (t) => {
+  const value = fixture(t);
+  const result = spawnSync(process.execPath, [
+    runner,
+    "--suite", value.suite,
+    ...rawDiagnosticSurfaces,
+    "--repeats", "1",
+    "--infrastructure-retries", "1",
+    "--retry-delay", "0",
+    "--yes",
+    "--output", value.output
+  ], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: 60_000,
+    env: {
+      ...process.env,
+      BENCHMARK_FAKE_FETCH_FAILED_AFTER_USAGE: "1",
+      PIAGENT_BENCHMARK_PI_COMMAND: value.fakePi,
+      PIAGENT_BENCHMARK_TASK_FIXTURE: path.join(root, "evals", "fixtures", "task-contract.valid.json")
+    }
+  });
+  assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`);
+  assert.doesNotMatch(result.stdout + result.stderr, /reasoning must be a non-negative safe integer/);
+  const attempts = fs.readFileSync(path.join(value.output, "infrastructure-attempts.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
+  assert.equal(attempts.length, 1, "a paid transport failure is retained once and is not replayed blindly");
+  assert.equal(attempts[0].failure, "provider-fetch-failed-after-measured-usage");
+  assert.equal(attempts[0].infrastructureClass, "provider-transport");
+  assert.equal(attempts[0].usageStatus, "measured-but-unaccepted");
+  assert.equal(attempts[0].usage.fresh, 25);
+  assert.equal(attempts[0].usage.total, 25);
+  assert.equal(attempts[0].usage.reasoning, 0);
+  assert.equal(attempts[0].usage.reasoningCompleteness, "lower-bound");
+  assert.equal(attempts[0].usage.usageCompleteness, "exact");
+  assert.equal(attempts[0].infrastructureRetryable, false);
+  assert.ok(Number.isFinite(attempts[0].durationSeconds) && attempts[0].durationSeconds > 0);
+  const manifest = JSON.parse(fs.readFileSync(path.join(value.output, "run-manifest.json"), "utf8"));
+  assert.equal(manifest.recoveredProviderAttempts[0].usage.fresh, 25);
+  assert.equal(manifest.recoveredProviderAttempts[0].durationSeconds, attempts[0].durationSeconds);
+  assert.equal(manifest.tokenClaimsUnavailableReason, undefined, "fresh and total usage remain exact despite optional reasoning");
+});
+
+test("records a durable transport incident and does not retry unknown usage", (t) => {
+  const value = fixture(t);
+  const marker = path.join(value.dir, "fetch-circuit-count");
+  const environment = {
+    ...process.env,
+    BENCHMARK_FAKE_FETCH_CIRCUIT_MARKER: marker,
+    PIAGENT_BENCHMARK_PI_COMMAND: value.fakePi,
+    PIAGENT_BENCHMARK_TASK_FIXTURE: path.join(root, "evals", "fixtures", "task-contract.valid.json")
+  };
+  const result = spawnSync(process.execPath, [
+    runner,
+    "--suite", value.suite,
+    ...rawDiagnosticSurfaces,
+    "--repeats", "1",
+    "--infrastructure-retries", "1",
+    "--retry-delay", "0",
+    "--yes",
+    "--output", value.output
+  ], { cwd: root, encoding: "utf8", timeout: 60_000, env: environment });
+  assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`);
+  assert.match(JSON.parse(fs.readFileSync(path.join(value.output, "aborted.json"), "utf8")).reason,
+    /provider-fetch-failed-with-zero-measured-usage/);
+  assert.equal(Number(fs.readFileSync(marker, "utf8")), 1, "the unknown-cost transport incident must not receive another provider attempt");
+  const attempts = fs.readFileSync(path.join(value.output, "infrastructure-attempts.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
+  assert.equal(attempts.length, 1);
+  assert.equal(attempts[0].retryAvailable, false, "zero-shaped local usage does not prove zero provider cost");
+  assert.ok(attempts.every((attempt) => attempt.infrastructureClass === "provider-transport"));
+  const manifest = JSON.parse(fs.readFileSync(path.join(value.output, "run-manifest.json"), "utf8"));
+  assert.deepEqual(manifest.transportCircuitBreaker, {
+    schemaVersion: 1,
+    maximumFailures: 2,
+    failures: 1,
+    state: "closed",
+    lastFailure: {
+      orderIndex: attempts[0].orderIndex,
+      scenarioId: attempts[0].scenarioId,
+      surface: attempts[0].surface,
+      repeat: attempts[0].repeat,
+      infrastructureAttempt: attempts[0].infrastructureAttempt,
+      failure: "provider-fetch-failed-with-zero-measured-usage"
+    }
+  });
+
+});
+
+test("retains a non-zero usage and duration floor when strict session accounting is malformed", (t) => {
+  const value = fixture(t);
+  const result = spawnSync(process.execPath, [
+    runner,
+    "--suite", value.suite,
+    ...rawDiagnosticSurfaces,
+    "--repeats", "1",
+    "--infrastructure-retries", "0",
+    "--yes",
+    "--output", value.output
+  ], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: 60_000,
+    env: {
+      ...process.env,
+      BENCHMARK_FAKE_MALFORMED_USAGE_AFTER_USAGE: "1",
+      PIAGENT_BENCHMARK_PI_COMMAND: value.fakePi,
+      PIAGENT_BENCHMARK_TASK_FIXTURE: path.join(root, "evals", "fixtures", "task-contract.valid.json")
+    }
+  });
+  assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`);
+  const attempts = fs.readFileSync(path.join(value.output, "infrastructure-attempts.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
+  assert.equal(attempts.length, 1);
+  assert.equal(attempts[0].failure, "pi-session-usage-incomplete-after-provider-start");
+  assert.equal(attempts[0].infrastructureClass, "usage-accounting");
+  assert.equal(attempts[0].usageStatus, "measured-lower-bound");
+  assert.equal(attempts[0].usage.fresh, 25);
+  assert.equal(attempts[0].usage.total, 25);
+  assert.ok(Number.isFinite(attempts[0].durationSeconds) && attempts[0].durationSeconds > 0);
+  const manifest = JSON.parse(fs.readFileSync(path.join(value.output, "run-manifest.json"), "utf8"));
+  assert.equal(manifest.recoveredProviderAttempts[0].usage.fresh, 25);
+  assert.equal(manifest.recoveredProviderAttempts[0].usageStatus, "measured-lower-bound");
+  assert.match(manifest.tokenClaimsUnavailableReason, /unaccepted-or-unknown-usage/);
 });
 
 test("classifies provider policy refusal before usage separately from local infrastructure", (t) => {
@@ -3507,10 +3786,8 @@ test("forwards interruption and durably retains the unaccepted paid attempt", as
       PIAGENT_BENCHMARK_TASK_FIXTURE: path.join(root, "evals", "fixtures", "task-contract.valid.json")
     }
   });
-  assert.equal(resumed.status, 0, `${resumed.stdout}\n${resumed.stderr}`);
-  assert.equal(fs.existsSync(path.join(value.output, "interrupted.json")), false);
-  const report = JSON.parse(fs.readFileSync(path.join(value.output, "report.json"), "utf8"));
-  assert.equal(report.comparison.tokenClaimAllowed, false);
-  assert.equal(report.runs[0].infrastructureAttempts, 2);
-  assert.equal(report.runs[0].infrastructureFailures[0].usageStatus, "unknown-after-provider-start");
+  assert.equal(resumed.status, 1, `${resumed.stdout}\n${resumed.stderr}`);
+  assert.match(JSON.parse(fs.readFileSync(path.join(value.output, "aborted.json"), "utf8")).reason,
+    /cannot be replayed safely \(unknown-after-provider-start\)/);
+  assert.equal(fs.existsSync(path.join(value.output, "report.json")), false);
 });

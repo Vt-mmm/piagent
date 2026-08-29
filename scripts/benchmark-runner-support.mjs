@@ -8,6 +8,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { productionStageResumeWindow } from "../packages/piagent-core/benchmark/benchmark-stage-diagnostic.js";
 import { benchmarkLedgerCheckpoint, inspectBenchmarkLedger } from "../packages/piagent-core/benchmark/benchmark-ledger.js";
 import { acquireBenchmarkRunLock } from "../packages/piagent-core/benchmark/benchmark-run-lock.js";
+import { benchmarkSurfaceLabel } from "../packages/piagent-core/benchmark/benchmark-core.js";
+import { codexModelName, codexThinkingEffort } from "../packages/piagent-core/benchmark/benchmark-codex.js";
 
 export function fail(message, code = 2) {
   const error = new Error(message);
@@ -161,6 +163,45 @@ export function formatDuration(ms) {
   if (hours > 0) return `${hours}h${String(minutes).padStart(2, "0")}m`;
   if (minutes > 0) return `${minutes}m${String(seconds).padStart(2, "0")}s`;
   return `${seconds}s`;
+}
+
+export function benchmarkExecutionPlan({
+  packageVersion, suite, declaredScenarioCount, suiteDigest, options, comparison,
+  fullOrder, resumeState, pendingOrder, order, lifecycles, rootSeedDigest
+}) {
+  const plan = [
+    "Piagent automatic benchmark",
+    `  platform:  v${packageVersion}`,
+    `  suite:     ${suite.id} (${suite.scenarios.length}${suite.scenarios.length !== declaredScenarioCount ? `/${declaredScenarioCount}` : ""} scenarios)`,
+    `  digest:    ${suiteDigest.slice(0, 16)}`,
+    `  surfaces:  ${options.surfaces.join(", ")}`,
+    `  compare:   ${benchmarkSurfaceLabel(comparison.candidateSurface)} vs ${benchmarkSurfaceLabel(comparison.baselineSurface)}`,
+    `  repeats:   ${options.repeats}`,
+    `  retries:   ${options.infrastructureRetries} infrastructure-only · ${options.retryDelaySeconds}s backoff`,
+    `  sessions:  ${fullOrder.length}`,
+    ...(resumeState ? [`  completed: ${resumeState.completedRuns.length}`, `  remaining: ${pendingOrder.length}`] : []),
+    ...(options.maxSessions !== undefined ? [`  chunk:    up to ${order.length}/${pendingOrder.length} remaining sessions`] : []),
+    ...(options.maxRuntimeMinutes !== undefined ? [`  budget:   ${options.maxRuntimeMinutes} minute runtime chunk`] : []),
+    ...(options.stopAfterFailedPair ? ["  stop:     terminal after a completed pair falls below the outcome floor"] : []),
+    `  model:     ${options.model ?? "Pi default"}`,
+    `  thinking:  ${options.thinking ?? "Pi default"}`,
+    `  tier:      ${options.serviceTier ?? "default"}`,
+    `  treatment: ${options.piagentTreatment}`,
+    `  lifecycle: ${lifecycles.join(", ")}`,
+    ...(options.replaySource ? [`  replay:    ${options.replaySource.runId ?? "prior-report"} · ${options.replayRuns.length} sessions`] : []),
+    ...(resumeState ? [`  resume:    ${resumeState.manifest.runId}`] : []),
+    `  variants:  ${suite.scenarios.some((scenario) => scenario.variantGenerator) ? `generated · seed ${rootSeedDigest.slice(0, 16)}` : "static"}`,
+    `  ordering:  ${suite.schemaVersion === 2 ? "seeded paired blocks" : "paired alternating"}`,
+    `  timeout:   ${options.timeoutSeconds}s per session`,
+    "  grading:   hidden verifier + scope + output safety + Pi task evidence"
+  ].join("\n");
+  const codexPlan = options.surfaces.includes("codex-cli")
+    ? `\n  codex:     ${options.codexMode} mode · model ${codexModelName(options.model)} · effort ${codexThinkingEffort(options.thinking)} · tier ${options.serviceTier ?? "default"}${options.codexMode === "controlled" ? " · isolated home" : ""}`
+    : "";
+  const nativeWarning = options.surfaces.includes("codex-cli") && options.codexMode === "native"
+    ? "\nNative Codex mode loads the operator's global AGENTS.md, configuration, rules, hooks, MCP servers, and plugins."
+    : "";
+  return { plan, codexPlan, nativeWarning };
 }
 
 export function bindBenchmarkTerminationSignals({ interrupted, interrupt, terminateAll }) {

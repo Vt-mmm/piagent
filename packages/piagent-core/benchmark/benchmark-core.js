@@ -1,32 +1,14 @@
 import { benchmarkClaimEligibility } from "./benchmark-assurance.js";
 import { integrateCodexRelativeEfficiencyReport } from "./benchmark-codex-relative-efficiency.js";
-import {
-  comparableAttemptUsage,
-  comparableDuration,
-  comparisonProtocol,
-  completeCategoryCoverage,
-  completePairedScenarioCount,
-  familyClusteredFailureAwareUsage,
-  familyClusteredFixedWorkloadUsage,
-  pairedDurationBands,
-  pairedUsageBands,
-  selectPrimaryEfficiencyEstimate,
-  tokensPerResolvedOutcome
-} from "./benchmark-comparison.js";
+import { comparableAttemptUsage, comparableDuration, comparisonProtocol, completeCategoryCoverage, completePairedScenarioCount,
+  familyClusteredFailureAwareUsage, familyClusteredFixedWorkloadUsage, pairedDurationBands, pairedUsageBands,
+  selectPrimaryEfficiencyEstimate, tokensPerResolvedOutcome } from "./benchmark-comparison.js";
 import { benchmarkProviderWireEvidenceMatchesRequest } from "./benchmark-provider-wire.js";
+import { canonicalProductionSuiteId, summarizeBenchmarkReleaseClaimControls } from "./benchmark-release-claim-controls.js";
 import { canonicalBenchmarkTimingDiagnostics, summarizeBenchmarkTimingDiagnostics } from "./benchmark-timing-diagnostics.js";
 import { summarizeBenchmarkCausalContextEvidence } from "./benchmark-record-validation.js";
-import {
-  benchmarkPricingSnapshotValidationErrors,
-  normalizedCostComparison,
-  normalizedCostGate
-} from "./benchmark-normalized-cost.js";
-import {
-  atMostWithinFloatingPrecision,
-  geometricMean,
-  median,
-  rounded
-} from "./benchmark-statistics.js";
+import { benchmarkPricingSnapshotValidationErrors, normalizedCostComparison, normalizedCostGate } from "./benchmark-normalized-cost.js";
+import { atMostWithinFloatingPrecision, geometricMean, median, rounded } from "./benchmark-statistics.js";
 import { hierarchicalMatrixRatioSummary, hierarchicalMatrixReportSummary, primaryEfficiencyMatrixSummary } from "./benchmark-matrix-summary.js";
 import { benchmarkInfrastructureFailureLedgerIssues, benchmarkTokenAccounting as buildBenchmarkTokenAccounting } from "./benchmark-usage.js";
 import {
@@ -48,6 +30,9 @@ export { median } from "./benchmark-statistics.js";
 export { benchmarkSuiteValidationErrors, validateBenchmarkSuite } from "./benchmark-suite.js";
 export { aggregateCodexTurnUsage, aggregateSessionUsage, benchmarkTokenAccounting, createCodexExecJsonlCollector, parseCodexExecJsonl } from "./benchmark-usage.js";
 export { benchmarkPricingSnapshotValidationErrors, normalizeBenchmarkUsageCost } from "./benchmark-normalized-cost.js";
+export { evaluateAllAttemptPooledFreshEfficiency } from "./benchmark-all-attempt-efficiency.js";
+export { inspectCodexRolloutServiceTierEvidence } from "./benchmark-codex-rollout.js";
+export { summarizeBenchmarkServiceTierEvidence } from "./benchmark-service-tier.js";
 export { effectiveResourcesPerResolvedOutcome, normalizedApiCostPerResolvedOutcome, totalTokensPerResolvedOutcome } from "./benchmark-comparison.js";
 export { CODEX_RELATIVE_EFFICIENCY_POLICY, PRODUCTION_SUBAGENT_BUDGET_POLICY, evaluateCodexRelativeEfficiency, summarizeBenchmarkSubagentBudget } from "./benchmark-codex-relative-efficiency.js";
 export { evaluateWorkflowEvidence } from "./benchmark-workflow.js";
@@ -57,7 +42,6 @@ const SURFACE_LABELS = Object.freeze({
   "codex-cli": "Codex CLI"
 });
 export const BENCHMARK_MEASUREMENT_SCHEMA_VERSION = 2;
-const CANONICAL_PRODUCTION_SUITE_IDS = new Set(["production-v1", "production-v2"]);
 
 export function benchmarkSurfaceLabel(surface) {
   return SURFACE_LABELS[surface] ?? surface;
@@ -71,12 +55,13 @@ export function summarizeBenchmark({
   completedAt,
   repeats,
   environment = {},
+  allAttemptTokenAccounting,
   runs,
   baselineSurface = "raw-pi",
   candidateSurface = "piagent"
 }) {
   if (baselineSurface === candidateSurface) throw new Error("Benchmark surfaces must be different");
-  if (canonicalProductionSuite && !CANONICAL_PRODUCTION_SUITE_IDS.has(suite.id)) {
+  if (canonicalProductionSuite && !canonicalProductionSuiteId(suite.id)) {
     throw new Error("Canonical production gate requires a built-in production suite identity");
   }
   const baselineRuns = runs.filter((run) => run.surface === baselineSurface);
@@ -86,7 +71,10 @@ export function summarizeBenchmark({
   }
   const baseline = surfaceSummary(baselineSurface, baselineRuns);
   const candidate = surfaceSummary(candidateSurface, candidateRuns);
-  const tokenAccounting = buildBenchmarkTokenAccounting(runs);
+  const measuredTokenAccounting = buildBenchmarkTokenAccounting(runs);
+  const tokenAccounting = allAttemptTokenAccounting
+    ? { ...measuredTokenAccounting, allAttempts: allAttemptTokenAccounting }
+    : measuredTokenAccounting;
   const timingDiagnostics = summarizeBenchmarkTimingDiagnostics(runs);
   const reportRuns = runs.map((run) => {
     const timing = canonicalBenchmarkTimingDiagnostics(run.timingDiagnostics, run.surface, run.durationSeconds);
@@ -245,21 +233,21 @@ export function summarizeBenchmark({
   const requiresSuiteEfficiency = requiresConfidenceEfficiency;
   const requiresPerformance = Number.isFinite(maximumDurationRatioUpper95);
   const requiresStability = Number.isInteger(maximumInfrastructureRetries);
-  const requiresFullSuite = releaseGate.requireFullSuiteForClaim === true;
-  const requiresProviderWireSurface = releaseGate.requireStableProviderWireSurface === true;
-  const requiresCausalContextReceipt = releaseGate.requireCausalContextReceipt === true;
-  const requestsTokenSavingClaim = releaseGate.requireEfficiencyClaim === true;
-  const requestsNormalizedCostClaim = releaseGate.requireNormalizedCostClaim === true;
-  const requiresHostReadiness = releaseGate.requireHostReadinessForClaim === true;
-  const canonicalProductionIdentityGate = !CANONICAL_PRODUCTION_SUITE_IDS.has(suite.id) || canonicalProductionSuite;
-  const releaseClaimConfigurationGate = requestsTokenSavingClaim
-    ? suite.schemaVersion === 2 && Number.isFinite(maximumFreshTokenRatioUpper95)
-      && maximumFreshTokenRatioUpper95 <= 0.8 && requiresFullSuite && requiresProviderWireSurface
-      && requiresCausalContextReceipt
-      && ["successful-pair-family-ratio", "failure-aware-family-ratio", "fixed-workload-family-ratio"].includes(primaryEfficiencyEstimand)
-      && (!primaryUsesFixedWorkload
-        || (!Number.isFinite(maximumBandFreshTokenRatio) && !Number.isFinite(maximumFamilyFreshTokenRatio)))
-    : null;
+  const {
+    maximumAllAttemptPooledFreshTokenRatio,
+    requiresFullSuite, requiresProviderWireSurface, requiresCausalContextReceipt, requiresFastServiceTier, requiresCampaignAccounting,
+    requestsTokenSavingClaim, requestsNormalizedCostClaim, requiresHostReadiness,
+    canonicalProductionIdentityGate, releaseClaimConfigurationGate,
+    acceptedUsageCompletenessGate, failedUsageCompletenessGate, allAttemptUsageCompletenessGate,
+    infrastructureFailureLedgerGate, codexBaselineGate,
+    allAttemptPooledEfficiency, allAttemptPooledEfficiencyGate,
+    serviceTierEvidence, fastServiceTierGate,
+    cleanReleaseSourceGate, hostReadinessHistory, hostReadinessGate, campaignEvidence, campaignAccountingGate
+  } = summarizeBenchmarkReleaseClaimControls({
+    suite, canonicalProductionSuite, tokenAccounting, infrastructureFailureLedgerIssues, runs, environment,
+    baselineSurface, candidateSurface, maximumFreshTokenRatioUpper95, maximumBandFreshTokenRatio,
+    maximumFamilyFreshTokenRatio, primaryEfficiencyEstimand, primaryUsesFixedWorkload
+  });
   const normalizedCostClaimConfigurationGate = requestsNormalizedCostClaim
     ? requestsTokenSavingClaim
       && suite.schemaVersion === 2
@@ -287,30 +275,6 @@ export function summarizeBenchmark({
     familyFailures: [],
     passed: null
   };
-  const acceptedUsageCompletenessGate = requestsTokenSavingClaim
-    ? tokenAccounting.acceptedAttempts.complete === true
-    : null;
-  const failedUsageCompletenessGate = requestsTokenSavingClaim
-    ? tokenAccounting.failedAttempts.complete === true
-    : null;
-  const allAttemptUsageCompletenessGate = requestsTokenSavingClaim
-    ? tokenAccounting.allAttempts.complete === true
-    : null;
-  const infrastructureFailureLedgerGate = requestsTokenSavingClaim
-    ? infrastructureFailureLedgerIssues.length === 0
-    : null;
-  const codexBaselineGate = requestsTokenSavingClaim ? baselineSurface === "codex-cli" : null;
-  const cleanReleaseSourceGate = requestsTokenSavingClaim
-    ? environment.source?.kind === "git-working-tree"
-      && environment.source.dirty === false
-      && /^[a-f0-9]{40,64}$/.test(environment.source.commit ?? "")
-    : null;
-  const hostReadinessHistory = environment.hostReadinessHistory ?? null;
-  const hostReadinessGate = requiresHostReadiness
-    ? hostReadinessHistory?.valid === true
-      && hostReadinessHistory?.ready === true
-      && hostReadinessHistory?.windowCoverage === "complete"
-    : null;
   const qualityNonInferior = candidate.scores.quality >= baseline.scores.quality;
   const pairedQualityEvidence = pairedQualityNoninferiorityEvidence({
     suite,
@@ -545,6 +509,9 @@ export function summarizeBenchmark({
     && stabilityGate !== false
     && acceptedUsageCompletenessGate !== false
     && allAttemptUsageCompletenessGate !== false
+    && allAttemptPooledEfficiencyGate !== false
+    && campaignAccountingGate !== false
+    && fastServiceTierGate !== false
     && normalizedCostClaimConfigurationGate !== false
     && normalizedCostGates.passed !== false
     && outcomeEvidenceGate
@@ -588,6 +555,9 @@ export function summarizeBenchmark({
     && stabilityGate !== false
     && acceptedUsageCompletenessGate !== false
     && allAttemptUsageCompletenessGate !== false
+    && allAttemptPooledEfficiencyGate !== false
+    && campaignAccountingGate !== false
+    && fastServiceTierGate !== false
     && normalizedCostClaimConfigurationGate !== false
     && normalizedCostGates.passed !== false
     && outcomeEvidenceGate
@@ -623,6 +593,9 @@ export function summarizeBenchmark({
     requiresStability && !unknownInfrastructureUsageGate ? "unknown-infrastructure-usage" : null,
     requestsTokenSavingClaim && !acceptedUsageCompletenessGate ? "accepted-usage-completeness" : null,
     requestsTokenSavingClaim && !allAttemptUsageCompletenessGate ? "all-attempt-usage-completeness" : null,
+    requiresCampaignAccounting && !campaignAccountingGate ? "campaign-all-attempt-accounting" : null,
+    Number.isFinite(maximumAllAttemptPooledFreshTokenRatio) && !allAttemptPooledEfficiencyGate ? "all-attempt-net-efficiency" : null,
+    requiresFastServiceTier && !fastServiceTierGate ? "fast-execution-configuration-parity" : null,
     requestsTokenSavingClaim && !infrastructureFailureLedgerGate ? "infrastructure-failure-ledger" : null,
     requestsNormalizedCostClaim && !normalizedCostGates.evidenceGate ? "normalized-cost-evidence" : null,
     requestsNormalizedCostClaim && !normalizedCostGates.applicabilityGate ? "normalized-cost-pricing-applicability" : null,
@@ -660,6 +633,7 @@ export function summarizeBenchmark({
       primaryEfficiencyEstimand,
       repeats: minimumRepeats ?? null,
       freshTokenRatioUpper95: maximumFreshTokenRatioUpper95 ?? null,
+      allAttemptPooledFreshTokenRatio: maximumAllAttemptPooledFreshTokenRatio ?? null,
       bandFreshTokenRatio: maximumBandFreshTokenRatio ?? null,
       familyFreshTokenRatio: maximumFamilyFreshTokenRatio ?? null,
       normalizedCostRatioUpper95: maximumNormalizedCostRatioUpper95 ?? null,
@@ -676,8 +650,10 @@ export function summarizeBenchmark({
       hostReadinessHistory: requiresHostReadiness,
       requireFullSuite: requiresFullSuite,
       stableProviderWireSurface: requiresProviderWireSurface,
+      fastServiceTier: requiresFastServiceTier,
+      campaignAccounting: requiresCampaignAccounting,
       causalContextReceipt: requiresCausalContextReceipt,
-      canonicalProductionIdentityRequired: CANONICAL_PRODUCTION_SUITE_IDS.has(suite.id)
+      canonicalProductionIdentityRequired: canonicalProductionSuiteId(suite.id)
     },
     observed: {
       completeOutcomeScenarios,
@@ -689,6 +665,8 @@ export function summarizeBenchmark({
       pairedQualityFailures: pairedQualityEvidence.failures,
       repeats,
       freshTokenRatioUpper95: freshRatioConfidence95Raw?.upper ?? null,
+      allAttemptPooledFreshTokenRatio: allAttemptPooledEfficiency.ratio,
+      allAttemptPooledFreshTokenReductionPercent: allAttemptPooledEfficiency.reductionPercent,
       bandFreshTokenRatioFailures: freshTokenBandGate.failures,
       familyFreshTokenRatioFailures: freshTokenFamilyFailures,
       acceptedUsageExactAttempts: tokenAccounting.acceptedAttempts.exactAttempts,
@@ -722,9 +700,13 @@ export function summarizeBenchmark({
       providerWireRuns: candidateRuns.length,
       providerWireGroups: providerWireGroups.length,
       providerWireDriftGroups: providerWireDriftGroups.length,
+      fastExecutionConfigurationParity: serviceTierEvidence.executionConfigurationParityGate,
+      providerResponseServiceTierEvidence: serviceTierEvidence.providerResponseEvidenceGate,
       causalContextAvailableRuns: causalContextEvidence.currentAvailableRuns,
       causalContextRuns: causalContextEvidence.runs,
-      causalContextRequiredSchemaVersion: causalContextEvidence.requiredSchemaVersion
+      causalContextRequiredSchemaVersion: causalContextEvidence.requiredSchemaVersion,
+      campaignId: campaignEvidence?.campaignId ?? null,
+      campaignAccountingPassed: campaignAccountingGate
     }
   } : null;
   const baselineKey = surfaceReportKey(baselineSurface);
@@ -811,6 +793,10 @@ export function summarizeBenchmark({
         [candidateKey]: rounded(candidateFreshPerResolvedOutcome, 2)
       },
       failureAwareFreshTokenRatio: rounded(failureAwareFreshTokenRatio, 4),
+      allAttemptPooledEfficiency,
+      allAttemptPooledEfficiencyGate,
+      campaignEvidence,
+      campaignAccountingGate,
       failureAwareFamilyFreshTokenRatio: rounded(familyClusteredFailureAware.ratio, 4),
       failureAwareFamilyFreshTokenRatioConfidence95: familyClusteredFailureAware.confidence95,
       failureAwareFamilyFreshTokenRatioConfidence95Raw: familyClusteredFailureAware.confidence95Raw,
@@ -881,6 +867,8 @@ export function summarizeBenchmark({
       candidateContinuityFailures,
       comparisonProtocolGate: protocol,
       providerWireSurfaceGate,
+      fastServiceTierGate,
+      serviceTierEvidence,
       causalContextEvidenceGate,
       causalContextEvidence,
       providerWireEvidence: {
@@ -988,6 +976,10 @@ export function summarizeBenchmark({
                                         ? "accepted-usage-completeness-gate-failed"
                                         : requestsTokenSavingClaim && allAttemptUsageCompletenessGate === false
                                           ? "all-attempt-usage-completeness-gate-failed"
+                                        : Number.isFinite(maximumAllAttemptPooledFreshTokenRatio) && allAttemptPooledEfficiencyGate === false
+                                          ? "all-attempt-net-efficiency-gate-failed"
+                                        : requiresFastServiceTier && fastServiceTierGate === false
+                                          ? "fast-execution-configuration-parity-gate-failed"
                                         : requestsNormalizedCostClaim && normalizedCostClaimConfigurationGate === false
                                           ? "normalized-cost-configuration-gate-failed"
                                           : requestsNormalizedCostClaim && normalizedCostGates.applicabilityGate === false

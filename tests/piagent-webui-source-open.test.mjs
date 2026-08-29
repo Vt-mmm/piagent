@@ -60,12 +60,12 @@ test("opaque source target resolves only an exact safe ordinary working-tree fil
 });
 
 test("VS Code handoff uses fixed argv with no shell and has no editor fallback", async (t) => {
-  const cwd = repository(t), capture = path.join(cwd, "argv.json"), cli = path.join(cwd, "fake-code.cjs"), sentinel = path.join(cwd, "shell-ran");
-  fs.writeFileSync(cli, `#!/usr/bin/env node\nrequire("node:fs").writeFileSync(${JSON.stringify(capture)},JSON.stringify(process.argv.slice(2)));\n`);
+  const cwd = repository(t), capture = path.join(cwd, "argv.txt"), cli = path.join(cwd, "fake-code.sh"), sentinel = path.join(cwd, "shell-ran");
+  fs.writeFileSync(cli, '#!/bin/sh\ncapture="${0%/*}/argv.txt"\nprintf \'%s\\n\' "$@" > "$capture"\n');
   fs.chmodSync(cli, 0o755);
-  const target = path.join(cwd, `unsafe;touch ${path.basename(sentinel)}.txt`), handoff = new VSCodeHandoff({ cli, timeoutMs: 2_000 });
+  const target = path.join(cwd, `unsafe;touch ${path.basename(sentinel)}.txt`), handoff = new VSCodeHandoff({ cli });
   const result = await handoff.open(target, 12, 4); assert.deepEqual(result, { state: "settled", reasonCode: null });
-  assert.deepEqual(JSON.parse(fs.readFileSync(capture, "utf8")), ["--reuse-window", "--goto", `${target}:12:4`]);
+  assert.deepEqual(fs.readFileSync(capture, "utf8").trimEnd().split("\n"), ["--reuse-window", "--goto", `${target}:12:4`]);
   assert.equal(fs.existsSync(sentinel), false); assert.equal(new VSCodeHandoff({ cli: null }).available(), false);
   assert.deepEqual(await new VSCodeHandoff({ cli: null }).open(target, null, null),
     { state: "rejected", reasonCode: "vscode-cli-unavailable" });

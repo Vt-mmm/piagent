@@ -15,12 +15,11 @@ import {
   WORKING_TREE_DIGEST_ALGORITHM,
   workingTreeEvidenceDigest
 } from "../../extensions/working-tree-digest.js";
-import type { RecoveryDecision } from "./recovery-policy.ts";
-import { RECOVERY_ACTIONS } from "./recovery-policy.ts";
+import { recoveryDecisionValidationErrors, type RecoveryDecision } from "./recovery-policy.ts";
 import { readTrajectoryStore, trajectoryStatePath } from "../trajectory/trajectory-store.ts";
 
 export const HANDOFF_SCHEMA_VERSION = 1 as const;
-export const HANDOFF_PROJECTION_VERSION = "handoff-v1" as const;
+export const HANDOFF_PROJECTION_VERSION = "handoff-v2" as const;
 
 type CompletionGate = { decision: "pass" | "fail"; missing: string[]; missingVerifyCommands: string[]; currentWorkingTreeDigest?: string };
 type DigestRef = { sha256: string; chars: number };
@@ -42,6 +41,7 @@ export type HandoffProjection = {
   identity: { taskId: string; taskRunId: string; sessionHash: string; sessionName: string | null; attempt: number; maxAttempts: number };
   goal: { summary: string; expectedOutput: string; acceptanceCriteria: string[]; scope: string[]; outOfScope: string[] };
   state: { phase: string | null; taskOutcome: TaskContract["trace"]["outcome"]; gateDecision: "pass" | "fail"; completionApproved: boolean; missing: string[] };
+  acceptance: { required: boolean; satisfied: boolean; criteriaCount: number; dispositionDigest: string };
   decisionsAndInvariants: string[];
   contextReferences: { required: string[]; observed: Array<{ path: string; reason: string }>; memory: Array<{ path: string; reason: string }> };
   tree: {
@@ -68,10 +68,15 @@ export type HandoffProjection = {
   };
 };
 
-const TOP_LEVEL_FIELDS = new Set(["schemaVersion", "projectionVersion", "generatedAt", "identity", "goal", "state", "decisionsAndInvariants", "contextReferences", "tree", "changedFiles", "verification", "failure", "ruledOutHypotheses", "requiredAuthority", "nextSafeAction", "references"]);
+const TOP_LEVEL_FIELDS = new Set(["schemaVersion", "projectionVersion", "generatedAt", "identity", "goal", "state", "acceptance", "decisionsAndInvariants", "contextReferences", "tree", "changedFiles", "verification", "failure", "ruledOutHypotheses", "requiredAuthority", "nextSafeAction", "references"]);
+const IDENTITY_FIELDS = new Set(["taskId", "taskRunId", "sessionHash", "sessionName", "attempt", "maxAttempts"]);
+const ACCEPTANCE_FIELDS = new Set(["required", "satisfied", "criteriaCount", "dispositionDigest"]);
 const TREE_FIELDS = new Set(["algorithm", "migration", "baselineDigest", "currentDigest", "evidenceCurrent", "latestVerifierMatchesCurrentTree"]);
 const TREE_MIGRATION_FIELDS = new Set(["status", "reasonCode", "requiredAction"]);
+const VERIFICATION_FIELDS = new Set(["exactCommands", "missingCommands", "latestObserved"]);
 const LATEST_VERIFIER_FIELDS = new Set(["command", "exitCode", "observedAt", "matchedProfileCommand", "isError", "preWorkingTreeDigest", "workingTreeDigest", "summaryRef"]);
+const SUMMARY_REF_FIELDS = new Set(["sha256", "chars"]);
+const AUTHORITY_FIELDS = new Set(["required", "kind", "reasonCodes"]);
 const HASH = /^[a-f0-9]{64}$/;
 const MIGRATION_STATUSES = new Set(["verification-refresh-required", "refreshed", "new-attempt-required", "historical-unverifiable"]);
 const MIGRATION_ACTIONS: Record<string, string> = {
@@ -98,10 +103,32 @@ export function handoffProjectionValidationErrors(input: unknown): string[] {
   ];
   if (value.schemaVersion !== HANDOFF_SCHEMA_VERSION || value.projectionVersion !== HANDOFF_PROJECTION_VERSION) errors.push("handoff projection version is invalid");
   if (typeof value.generatedAt !== "string" || !Number.isFinite(Date.parse(value.generatedAt))) errors.push("generatedAt is invalid");
-  const identity = record(value.identity), state = record(value.state), tree = record(value.tree);
-  if (!identity || typeof identity.taskId !== "string" || typeof identity.taskRunId !== "string" || !HASH.test(String(identity.sessionHash)) || !Number.isInteger(identity.attempt) || !Number.isInteger(identity.maxAttempts)) errors.push("identity is invalid");
+  const identity = record(value.identity), state = record(value.state), acceptance = record(value.acceptance), tree = record(value.tree);
+  if (!identity
+    || Object.keys(identity).some((field) => !IDENTITY_FIELDS.has(field))
+    || [...IDENTITY_FIELDS].some((field) => !(field in identity))
+    || typeof identity.taskId !== "string"
+    || typeof identity.taskRunId !== "string"
+    || !HASH.test(String(identity.sessionHash))
+    || (identity.sessionName !== null && typeof identity.sessionName !== "string")
+    || !Number.isInteger(identity.attempt)
+    || !Number.isInteger(identity.maxAttempts)
+    || identity.attempt < 1
+    || identity.maxAttempts < 1
+    || identity.attempt > identity.maxAttempts) errors.push("identity is invalid");
   if (!state || !["pending", "completed", "blocked", "partial", "failed"].includes(String(state.taskOutcome)) || !["pass", "fail"].includes(String(state.gateDecision)) || typeof state.completionApproved !== "boolean" || !Array.isArray(state.missing)) errors.push("state is invalid");
   if (state?.completionApproved === true && (state.gateDecision !== "pass" || state.taskOutcome !== "completed")) errors.push("completionApproved conflicts with operational truth");
+  if (!acceptance
+    || Object.keys(acceptance).some((field) => !ACCEPTANCE_FIELDS.has(field))
+    || [...ACCEPTANCE_FIELDS].some((field) => !(field in acceptance))
+    || typeof acceptance.required !== "boolean"
+    || typeof acceptance.satisfied !== "boolean"
+    || !Number.isInteger(acceptance.criteriaCount)
+    || acceptance.criteriaCount < 0
+    || acceptance.criteriaCount > 12
+    || !HASH.test(String(acceptance.dispositionDigest))) errors.push("acceptance disposition is invalid");
+  if (state?.completionApproved === true && acceptance?.satisfied !== true) errors.push("completionApproved requires satisfied acceptance");
+  if (state?.completionApproved === true && Array.isArray(state.missing) && state.missing.length > 0) errors.push("completionApproved cannot retain missing completion evidence");
   const migration = record(tree?.migration);
   const migrationValid = tree?.migration === null || Boolean(
     migration
@@ -132,14 +159,36 @@ export function handoffProjectionValidationErrors(input: unknown): string[] {
   if (tree?.algorithm === "legacy-untrusted" && (!migration || !["new-attempt-required", "historical-unverifiable"].includes(String(migration.status)) || tree.baselineDigest !== null || tree.currentDigest !== null || tree.evidenceCurrent !== false)) errors.push("legacy tree evidence must remain historical");
   if (tree?.algorithm === WORKING_TREE_DIGEST_ALGORITHM && ["new-attempt-required", "historical-unverifiable"].includes(String(migration?.status))) errors.push("current tree algorithm conflicts with terminal legacy migration");
   if (tree?.evidenceCurrent === true && (tree.algorithm !== WORKING_TREE_DIGEST_ALGORITHM || !isCurrentWorkingTreeDigest(tree.baselineDigest) || !isCurrentWorkingTreeDigest(tree.currentDigest) || migration?.status === "verification-refresh-required")) errors.push("tree current-evidence claim is invalid");
-  const latestVerifier = record(value.verification?.latestObserved);
-  if (value.verification?.latestObserved !== null && (!latestVerifier
+  const verification = record(value.verification);
+  if (!verification
+    || Object.keys(verification).some((field) => !VERIFICATION_FIELDS.has(field))
+    || [...VERIFICATION_FIELDS].some((field) => !(field in verification))
+    || !Array.isArray(verification.exactCommands)
+    || verification.exactCommands.length > 50
+    || verification.exactCommands.some((command: unknown) => typeof command !== "string" || command.length > 1000)
+    || !Array.isArray(verification.missingCommands)
+    || verification.missingCommands.length > 50
+    || verification.missingCommands.some((command: unknown) => typeof command !== "string" || command.length > 1000)
+    || (Array.isArray(verification.exactCommands) && Array.isArray(verification.missingCommands)
+      && verification.missingCommands.some((command: string) => !verification.exactCommands.includes(command)))) errors.push("verification is invalid");
+  const latestVerifier = record(verification?.latestObserved);
+  const summary = record(latestVerifier?.summaryRef);
+  if (verification?.latestObserved !== null && (!latestVerifier
     || Object.keys(latestVerifier).some((field) => !LATEST_VERIFIER_FIELDS.has(field))
     || [...LATEST_VERIFIER_FIELDS].some((field) => !(field in latestVerifier))
-    || typeof latestVerifier.command !== "string" || !Number.isInteger(latestVerifier.exitCode)
-    || typeof latestVerifier.matchedProfileCommand !== "boolean" || typeof latestVerifier.isError !== "boolean")) errors.push("latest verifier is invalid");
-  if (tree?.latestVerifierMatchesCurrentTree === true && (!tree.evidenceCurrent
-    || latestVerifier?.exitCode !== 0 || latestVerifier?.matchedProfileCommand !== true
+    || typeof latestVerifier.command !== "string" || latestVerifier.command.length > 1000
+    || !Number.isInteger(latestVerifier.exitCode)
+    || (latestVerifier.observedAt !== null && (typeof latestVerifier.observedAt !== "string" || !Number.isFinite(Date.parse(latestVerifier.observedAt))))
+    || typeof latestVerifier.matchedProfileCommand !== "boolean"
+    || typeof latestVerifier.isError !== "boolean"
+    || !summary
+    || Object.keys(summary).some((field) => !SUMMARY_REF_FIELDS.has(field))
+    || [...SUMMARY_REF_FIELDS].some((field) => !(field in summary))
+    || !HASH.test(String(summary.sha256))
+    || !Number.isInteger(summary.chars)
+    || summary.chars < 0
+    || summary.chars > 20_000)) errors.push("latest verifier is invalid");
+  if (tree?.latestVerifierMatchesCurrentTree === true && (latestVerifier?.exitCode !== 0 || latestVerifier?.matchedProfileCommand !== true
     || !isCurrentWorkingTreeDigest(latestVerifier?.preWorkingTreeDigest)
     || latestVerifier?.preWorkingTreeDigest !== tree.currentDigest
     || latestVerifier?.workingTreeDigest !== tree.currentDigest)) errors.push("latest verifier tree claim is invalid");
@@ -153,8 +202,49 @@ export function handoffProjectionValidationErrors(input: unknown): string[] {
   const classification = value.failure?.classification;
   if (classification !== null && failureClassificationValidationErrors(classification).length > 0) errors.push("failure classification is invalid");
   const recovery = value.failure?.recovery;
-  if (recovery !== null && (!record(recovery) || recovery.policyVersion !== "recovery-v1" || !RECOVERY_ACTIONS.includes(recovery.action) || recovery.taskId !== identity?.taskId || recovery.taskRunId !== identity?.taskRunId)) errors.push("recovery decision is invalid");
-  if (value.nextSafeAction?.sourceMutationAllowed === true && value.nextSafeAction?.action !== "repair") errors.push("only repair may project source mutation");
+  const recoveryErrors = recovery === null ? [] : recoveryDecisionValidationErrors(recovery);
+  if (recoveryErrors.length > 0) errors.push(`recovery decision is invalid: ${recoveryErrors.join(", ")}`);
+  if (recovery !== null && (recovery.taskId !== identity?.taskId || recovery.taskRunId !== identity?.taskRunId || recovery.taskAttempt !== identity?.attempt)) errors.push("recovery decision is invalid: identity conflict");
+  const requiredAuthority = record(value.requiredAuthority);
+  if (!requiredAuthority
+    || !Object.keys(requiredAuthority).every((field) => AUTHORITY_FIELDS.has(field))
+    || ![...AUTHORITY_FIELDS].every((field) => field in requiredAuthority)
+    || typeof requiredAuthority.required !== "boolean"
+    || !["none", "operator", "permission", "scope", "fresh-session"].includes(String(requiredAuthority.kind))
+    || !Array.isArray(requiredAuthority.reasonCodes)
+    || requiredAuthority.reasonCodes.some((reason: unknown) => typeof reason !== "string")) errors.push("required authority is invalid");
+  const nextSafeAction = record(value.nextSafeAction);
+  if (!nextSafeAction
+    || typeof nextSafeAction.action !== "string"
+    || typeof nextSafeAction.continuation !== "string"
+    || typeof nextSafeAction.sourceMutationAllowed !== "boolean"
+    || !Array.isArray(nextSafeAction.exactCommands)
+    || nextSafeAction.exactCommands.some((command: unknown) => typeof command !== "string")) errors.push("next safe action is invalid");
+  if (nextSafeAction?.sourceMutationAllowed === true && nextSafeAction.action !== "repair") errors.push("only repair may project source mutation");
+  if (state?.completionApproved === true && (nextSafeAction?.action !== "completed"
+    || nextSafeAction.continuation !== "none"
+    || nextSafeAction.sourceMutationAllowed !== false
+    || !Array.isArray(nextSafeAction.exactCommands)
+    || nextSafeAction.exactCommands.length !== 0)) errors.push("completionApproved requires a completed next safe action");
+  if (state?.completionApproved === true && (!Array.isArray(verification?.missingCommands) || verification.missingCommands.length > 0)) errors.push("completionApproved cannot retain missing verifier commands");
+  if (state?.completionApproved === true && Array.isArray(verification?.exactCommands) && verification.exactCommands.length > 0
+    && (tree?.latestVerifierMatchesCurrentTree !== true
+      || !latestVerifier
+      || !verification.exactCommands.includes(latestVerifier.command))) errors.push("completionApproved requires current exact verifier evidence");
+  if (recovery === null) {
+    const expectedAction = state?.completionApproved === true ? "completed" : "handoff";
+    if (nextSafeAction?.action !== expectedAction || nextSafeAction?.continuation !== "none"
+      || nextSafeAction?.sourceMutationAllowed !== false || nextSafeAction?.exactCommands?.length !== 0) errors.push("next safe action conflicts with recovery state");
+    if (requiredAuthority?.required !== false || requiredAuthority?.kind !== "none" || requiredAuthority?.reasonCodes?.length !== 0) errors.push("required authority conflicts with recovery state");
+  } else if (recoveryErrors.length === 0) {
+    const expectedAuthority = authority(recovery as RecoveryDecision);
+    const expectedCommands = ["repair", "retry"].includes(recovery.action) ? verification?.exactCommands : [];
+    if (nextSafeAction?.action !== recovery.action || nextSafeAction?.continuation !== recovery.continuation
+      || nextSafeAction?.sourceMutationAllowed !== recovery.sourceMutationAllowed
+      || JSON.stringify(nextSafeAction?.exactCommands) !== JSON.stringify(expectedCommands)) errors.push("next safe action conflicts with recovery decision");
+    if (requiredAuthority?.required !== expectedAuthority.required || requiredAuthority?.kind !== expectedAuthority.kind
+      || JSON.stringify(requiredAuthority?.reasonCodes) !== JSON.stringify(expectedAuthority.reasonCodes)) errors.push("required authority conflicts with recovery decision");
+  }
   for (const reference of [value.references?.taskContract, value.references?.journal, value.references?.trajectory]) {
     if (typeof reference !== "string" || path.isAbsolute(reference) || reference.split(/[\\/]/).includes("..")) errors.push("state reference is invalid");
   }
@@ -169,16 +259,54 @@ export function validateHandoffProjection(input: unknown, source = "handoff proj
   return input as HandoffProjection;
 }
 
-function digest(value: unknown): string {
-  return crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex");
-}
+function digest(value: unknown): string { return crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex"); }
 
-function text(value: unknown, maximum = 1000): string {
-  return redactSensitiveText(String(value ?? "")).text.replace(/\s+/g, " ").trim().slice(0, maximum);
-}
+function text(value: unknown, maximum = 1000): string { return redactSensitiveText(String(value ?? "")).text.replace(/\s+/g, " ").trim().slice(0, maximum); }
 
 function strings(values: unknown, maximum = 100, itemMaximum = 1000): string[] {
   return [...new Set((Array.isArray(values) ? values : []).map((item) => text(item, itemMaximum)).filter(Boolean))].slice(0, maximum);
+}
+
+export function taskAcceptanceDisposition(task: Pick<TaskContract, "changeMode" | "changedFiles" | "acceptanceReceipt">): HandoffProjection["acceptance"] {
+  const required = task.changeMode === "source-change" && task.changedFiles.length > 0;
+  const criteria = task.acceptanceReceipt?.criteria ?? [];
+  return {
+    required,
+    satisfied: !required || (criteria.length > 0 && criteria.every((criterion) => criterion.status === "satisfied")),
+    criteriaCount: criteria.length,
+    dispositionDigest: digest(criteria.map((criterion) => ({
+      id: criterion.id,
+      hash: criterion.hash,
+      status: criterion.status
+    })))
+  };
+}
+
+export function taskHandoffIdentity(task: Pick<TaskContract, "taskId" | "taskRunId" | "sessionId" | "sessionName" | "attempt" | "maxAttempts">): HandoffProjection["identity"] {
+  return {
+    taskId: text(task.taskId, 160),
+    taskRunId: text(task.taskRunId, 160),
+    sessionHash: digest(task.sessionId),
+    sessionName: task.sessionName ? text(task.sessionName, 240) : null,
+    attempt: task.attempt,
+    maxAttempts: task.maxAttempts
+  };
+}
+
+export function handoffIdentityMatchesTask(
+  identity: HandoffProjection["identity"] | undefined,
+  task: Pick<TaskContract, "taskId" | "taskRunId" | "sessionId" | "sessionName" | "attempt" | "maxAttempts">
+): boolean {
+  if (!identity) return false;
+  const authoritative = taskHandoffIdentity(task);
+  return identity.taskId === authoritative.taskId
+    && identity.taskRunId === authoritative.taskRunId
+    && identity.sessionHash === authoritative.sessionHash
+    // A session title is mutable display metadata. The hashed stable session id
+    // above carries authority; renaming a live session must not invalidate its
+    // otherwise identity-bound handoff.
+    && identity.attempt === authoritative.attempt
+    && identity.maxAttempts === authoritative.maxAttempts;
 }
 
 function summaryRef(value: unknown): DigestRef {
@@ -257,11 +385,23 @@ export function buildHandoffProjection(
     && isCurrentWorkingTreeDigest(currentDigest);
   const gateDigestCurrent = isCurrentWorkingTreeDigest(options.gate.currentWorkingTreeDigest)
     && options.gate.currentWorkingTreeDigest === currentDigest;
-  const completionApproved = options.gate.decision === "pass" && task.trace.outcome === "completed" && evidenceCurrent && gateDigestCurrent;
+  const exactCommands = strings(task.verifyCommands, 50, 1000);
+  const currentExactVerifier = exactCommands.length === 0 || (verificationEvidenceProvesStableTree(observed, currentDigest)
+    && exactCommands.includes(text(observed?.command, 1000)));
+  const acceptanceDisposition = taskAcceptanceDisposition(task);
+  const acceptanceSatisfied = acceptanceDisposition.satisfied;
+  const completionApproved = options.gate.decision === "pass"
+    && task.trace.outcome === "completed"
+    && acceptanceSatisfied
+    && evidenceCurrent
+    && gateDigestCurrent
+    && currentExactVerifier;
   const completionMissing = strings([
     ...options.gate.missing,
+    ...(options.gate.decision === "pass" && !acceptanceSatisfied ? ["acceptance-criteria-pending"] : []),
     ...(options.gate.decision === "pass" && !evidenceCurrent ? ["working-tree-evidence-not-current"] : []),
-    ...(options.gate.decision === "pass" && !gateDigestCurrent ? ["completion-gate-tree-digest-untrusted-or-mismatched"] : [])
+    ...(options.gate.decision === "pass" && !gateDigestCurrent ? ["completion-gate-tree-digest-untrusted-or-mismatched"] : []),
+    ...(options.gate.decision === "pass" && !currentExactVerifier ? ["current exact verifier evidence"] : [])
   ], 50, 500);
   const ruledOut = task.ruledOut ? [{ ref: digest(text(task.ruledOut, 1000)), summary: text(task.ruledOut, 300) }] : [];
   const latestVerifier: LatestVerifier | null = observed ? {
@@ -278,11 +418,7 @@ export function buildHandoffProjection(
     schemaVersion: HANDOFF_SCHEMA_VERSION,
     projectionVersion: HANDOFF_PROJECTION_VERSION,
     generatedAt: options.generatedAt ?? new Date().toISOString(),
-    identity: {
-      taskId: text(task.taskId, 160), taskRunId: text(task.taskRunId, 160),
-      sessionHash: digest(task.sessionId), sessionName: task.sessionName ? text(task.sessionName, 240) : null,
-      attempt: task.attempt, maxAttempts: task.maxAttempts
-    },
+    identity: taskHandoffIdentity(task),
     goal: {
       summary: text(task.summary, 1000), expectedOutput: text(task.expectedOutput, 1000),
       acceptanceCriteria: strings(task.acceptanceCriteria, 50, 1000), scope: strings(task.scope, 100, 500), outOfScope: strings(task.outOfScope, 100, 500)
@@ -292,6 +428,7 @@ export function buildHandoffProjection(
       taskOutcome: task.trace.outcome, gateDecision: options.gate.decision, completionApproved,
       missing: completionMissing
     },
+    acceptance: acceptanceDisposition,
     decisionsAndInvariants: [
       "Task Contract v2 is authoritative for task outcome.",
       "Failure classification never authorizes source mutation by itself.",
@@ -309,14 +446,13 @@ export function buildHandoffProjection(
       baselineDigest: task.workingTreeDigestAlgorithm === WORKING_TREE_DIGEST_ALGORITHM && isCurrentWorkingTreeDigest(baselineDigest) ? baselineDigest : null,
       currentDigest: task.workingTreeDigestAlgorithm === WORKING_TREE_DIGEST_ALGORITHM && isCurrentWorkingTreeDigest(currentDigest) ? currentDigest : null,
       evidenceCurrent,
-      latestVerifierMatchesCurrentTree: evidenceCurrent
-        && verificationEvidenceProvesStableTree(observed, currentDigest)
+      latestVerifierMatchesCurrentTree: verificationEvidenceProvesStableTree(observed, currentDigest)
     },
     changedFiles: {
       baseline: strings(task.baselineChangedFiles, 500, 500), observed: strings(task.observedChangedFiles, 500, 500),
       current: strings(relevant, 500, 500), claimed: strings(task.changedFiles, 500, 500)
     },
-    verification: { exactCommands: strings(task.verifyCommands, 50, 1000), missingCommands: strings(options.gate.missingVerifyCommands, 50, 1000), latestObserved: latestVerifier },
+    verification: { exactCommands, missingCommands: strings(options.gate.missingVerifyCommands, 50, 1000), latestObserved: latestVerifier },
     failure: { classification: journal.classification, recovery, journalIntegrity: journal.integrity, warnings: journal.warnings },
     ruledOutHypotheses: ruledOut,
     requiredAuthority: authority(recovery),
@@ -359,6 +495,6 @@ export function writeHandoffProjection(cwd: string, projectionInput: HandoffProj
 
 export function readHandoffProjection(cwd: string, taskRunId: string): HandoffProjection | undefined {
   const target = resolveLocalStatePath(cwd, handoffProjectionPath(cwd, taskRunId), { label: "Handoff projection" });
-  try { return validateHandoffProjection(JSON.parse(fs.readFileSync(target, "utf8")), "persisted handoff projection"); }
+  try { const value = JSON.parse(fs.readFileSync(target, "utf8")); if (value?.schemaVersion === 1 && value?.projectionVersion === "handoff-v1") return undefined; return validateHandoffProjection(value, "persisted handoff projection"); }
   catch (error) { if ((error as { code?: string }).code === "ENOENT") return undefined; throw error; }
 }

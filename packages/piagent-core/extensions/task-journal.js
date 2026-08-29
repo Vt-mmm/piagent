@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { redactForStorage } from "./redaction-core.js";
 import { ensurePrivateStateDirectory, resolveLocalStatePath } from "./local-state-path.js";
+import { recoveryDecisionValidationErrors } from "./recovery-decision-validation.ts";
 import { isCurrentWorkingTreeDigest } from "./working-tree-digest.js";
 
 export const TASK_JOURNAL_SCHEMA_VERSION = 1;
@@ -45,6 +46,30 @@ function compactId(value, fallback = "unknown") {
     .replace(/[^a-z0-9_.:-]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 160) || fallback;
+}
+
+function checkpointMatchesTask(event, task) {
+  return typeof task?.taskId === "string" && task.taskId.length > 0
+    && typeof task?.taskRunId === "string" && task.taskRunId.length > 0
+    && typeof task?.sessionId === "string" && task.sessionId.length > 0
+    && event.taskRunId === compactId(task.taskRunId)
+    && event.taskId === compactId(task?.taskId)
+    && event.sessionId === String(task?.sessionId)
+    && event.data?.attempt === task?.attempt;
+}
+
+function terminalHandoffCheckpoint(checkpoint, task) {
+  const recovery = checkpoint?.evidence?.recovery;
+  return checkpoint?.checkpointId === "completion"
+    && ["failed", "blocked"].includes(String(checkpoint.status))
+    && recoveryDecisionValidationErrors(recovery).length === 0
+    && recovery.taskId === task?.taskId
+    && recovery.taskRunId === task?.taskRunId
+    && recovery.taskAttempt === task?.attempt
+    && recovery.action === "handoff"
+    && recovery.continuation === "none"
+    && recovery.nextPhase === null
+    && recovery.sourceMutationAllowed === false;
 }
 
 function safeData(value) {
@@ -411,6 +436,9 @@ export function replayTaskCheckpoints(cwd, taskRunId, task) {
   const checkpoints = new Map();
   const idempotency = new Set();
   const corruptions = [...journal.corruptions];
+  if (task && compactId(taskRunId) !== compactId(task.taskRunId)) {
+    corruptions.push("checkpoint replay taskRunId does not match the Task Contract");
+  }
   const migrationEvents = journal.events.filter((event) => event.eventType === "digest-migrated");
   const invalidMigration = migrationEvents.find((event) => !validDigestMigrationBarrier(event));
   if (invalidMigration) corruptions.push(`digest migration sequence ${invalidMigration.sequence}: marker is invalid`);
@@ -422,8 +450,12 @@ export function replayTaskCheckpoints(cwd, taskRunId, task) {
     ? undefined
     : [...migrationEvents].reverse().find((event) => digestMigrationBarrierMatchesTask(event, task));
   for (const event of journal.events) {
-    if (migrationBarrier && event.sequence <= migrationBarrier.sequence) continue;
     if (event.eventType !== "checkpoint") continue;
+    if (task && !checkpointMatchesTask(event, task)) {
+      corruptions.push(`checkpoint sequence ${event.sequence}: identity does not match the Task Contract`);
+      continue;
+    }
+    if (migrationBarrier && event.sequence <= migrationBarrier.sequence) continue;
     const treeErrors = checkpointTreeDigestValidationErrors(event.data?.evidence);
     if (treeErrors.length > 0) {
       corruptions.push(`checkpoint sequence ${event.sequence}: ${treeErrors[0]}`);
@@ -432,14 +464,18 @@ export function replayTaskCheckpoints(cwd, taskRunId, task) {
     if (event.idempotencyKey && idempotency.has(event.idempotencyKey)) continue;
     if (event.idempotencyKey) idempotency.add(event.idempotencyKey);
     const checkpointId = event.checkpointId ?? "checkpoint";
-    checkpoints.set(checkpointId, {
+    const checkpoint = {
       checkpointId,
       taskRunId: event.taskRunId,
       sessionId: event.sessionId,
       sequence: event.sequence,
       recordedAt: event.recordedAt,
       ...event.data
-    });
+    };
+    const existing = checkpoints.get(checkpointId);
+    if (!terminalHandoffCheckpoint(existing, task) || terminalHandoffCheckpoint(checkpoint, task)) {
+      checkpoints.set(checkpointId, checkpoint);
+    }
   }
   return {
     taskRunId,
@@ -470,6 +506,15 @@ export function taskRecoveryDecision(task, replay = { checkpoints: [], corruptio
     };
   }
   const checkpoints = Array.isArray(replay.checkpoints) ? replay.checkpoints : [];
+  const terminalHandoff = checkpoints.findLast((checkpoint) => terminalHandoffCheckpoint(checkpoint, task));
+  if (terminalHandoff) {
+    return {
+      decision: "blocked",
+      retryAllowed: false,
+      checkpointId: terminalHandoff.checkpointId,
+      reason: `Checkpoint ${terminalHandoff.checkpointId} recorded a terminal recovery handoff; inspect that handoff before any retry.`
+    };
+  }
   const contractSteps = Array.isArray(task?.workPlan) ? task.workPlan : [];
   const contractOpen = contractSteps.findLast((step) => ["in-progress", "failed"].includes(String(step?.status)));
   const latestOpen = contractOpen

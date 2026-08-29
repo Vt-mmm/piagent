@@ -128,7 +128,7 @@ export function registerWorkflowCommands(pi: ExtensionAPI, deps: Record<string, 
     const sections: Record<string, string[]> = {
       overview: [
         "Piagent command surface:",
-        "runtime: /workflow | /piagent-inspector | /usage | /context | /permission | /commands | /profile | /memory | /onboard | /fresh",
+        "runtime: /workflow | /piagent-inspector | /usage | /context | /permission | /fast | /commands | /profile | /memory | /onboard | /fresh",
         "native: /model | /name | /session | /resume | /compact | /mcp",
         `workflow: /workflow ${WORKFLOW_OPTIONS.map((option) => option.id).join("|")} <request>`,
         "mcp: /mcp is Pi native; governed MCP checks stay at /piagent-mcp to avoid collision",
@@ -167,7 +167,15 @@ export function registerWorkflowCommands(pi: ExtensionAPI, deps: Record<string, 
         "Model:",
         "/model or Ctrl+L opens Pi native selector",
         "/model-options shows local Piagent model guidance",
+        "/fast status|on|off controls the OpenAI Codex Fast service tier without changing model/thinking",
         "Ctrl+P cycles model scope; Shift+Tab cycles thinking"
+      ],
+      fast: [
+        "Fast service tier:",
+        "/fast status",
+        "/fast on",
+        "/fast off",
+        "Fast is a zero-model-turn session setting; model/thinking stay unchanged and provider quota or pricing may differ"
       ],
       memory: [
         "Memory:",
@@ -214,6 +222,7 @@ export function registerWorkflowCommands(pi: ExtensionAPI, deps: Record<string, 
       { value: "context", label: "Context", description: "Index/search/preflight/compact" },
       { value: "permission", label: "Permission", description: "Read/write/full access controls" },
       { value: "model", label: "Model", description: "Native model selector and thinking" },
+      { value: "fast", label: "Fast mode", description: "Status and OpenAI Codex Fast service tier control" },
       { value: "mcp", label: "MCP", description: "Governed MCP commands" },
       { value: "subagents", label: "Subagents", description: "Health, fleet, cost" },
       { value: "terminal", label: "Terminal", description: "piagent-* helpers" }

@@ -28,9 +28,11 @@ const RELEASE_GATE_FIELDS = new Set([
   "maximumInfrastructureRetries", "primaryEfficiencyEstimand", "requireEfficiencyClaim", "requireFullSuiteForClaim",
   "requireStableProviderWireSurface", "requireNormalizedCostClaim", "requireHostReadinessForClaim",
   "requireCausalContextReceipt", "requireSubagentBudget", "maximumSubagentSessionsPerAttempt",
-  "maximumSubagentTrafficShare", "requireProviderFreeEvidence"
+  "maximumSubagentTrafficShare", "requireProviderFreeEvidence", "requireFastServiceTier",
+  "maximumAllAttemptPooledFreshTokenRatio", "requireCampaignAccounting"
 ]);
-const EXECUTION_CONTRACT_FIELDS = new Set(["surfaces", "model", "thinking", "codexMode"]);
+const EXECUTION_CONTRACT_FIELDS = new Set(["surfaces", "model", "thinking", "codexMode", "serviceTier"]);
+const SERVICE_TIERS = new Set(["default", "fast"]);
 const THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
 const SCENARIO_KINDS = new Set(["source-change", "read-only", "safety-refusal"]);
 const SCENARIO_DIFFICULTIES = new Set(["small", "medium", "large"]);
@@ -117,6 +119,13 @@ export function benchmarkSuiteValidationErrors(input) {
       if (maximumRatio !== undefined && (!Number.isFinite(maximumRatio) || maximumRatio <= 0 || maximumRatio > 10)) {
         errors.push("releaseGate.maximumFreshTokenRatioUpper95 must be greater than 0 and at most 10");
       }
+      const maximumAllAttemptPooledFreshTokenRatio = input.releaseGate.maximumAllAttemptPooledFreshTokenRatio;
+      if (maximumAllAttemptPooledFreshTokenRatio !== undefined
+        && (!Number.isFinite(maximumAllAttemptPooledFreshTokenRatio)
+          || maximumAllAttemptPooledFreshTokenRatio <= 0
+          || maximumAllAttemptPooledFreshTokenRatio > 10)) {
+        errors.push("releaseGate.maximumAllAttemptPooledFreshTokenRatio must be greater than 0 and at most 10");
+      }
       const maximumBandRatio = input.releaseGate.maximumBandFreshTokenRatio;
       if (maximumBandRatio !== undefined && (!Number.isFinite(maximumBandRatio) || maximumBandRatio <= 0 || maximumBandRatio > 10)) {
         errors.push("releaseGate.maximumBandFreshTokenRatio must be greater than 0 and at most 10");
@@ -178,6 +187,12 @@ export function benchmarkSuiteValidationErrors(input) {
       if (input.releaseGate.requireProviderFreeEvidence !== undefined && typeof input.releaseGate.requireProviderFreeEvidence !== "boolean") {
         errors.push("releaseGate.requireProviderFreeEvidence must be a boolean");
       }
+      if (input.releaseGate.requireFastServiceTier !== undefined && typeof input.releaseGate.requireFastServiceTier !== "boolean") {
+        errors.push("releaseGate.requireFastServiceTier must be a boolean");
+      }
+      if (input.releaseGate.requireCampaignAccounting !== undefined && typeof input.releaseGate.requireCampaignAccounting !== "boolean") {
+        errors.push("releaseGate.requireCampaignAccounting must be a boolean");
+      }
       const maximumSubagentSessions = input.releaseGate.maximumSubagentSessionsPerAttempt;
       if (maximumSubagentSessions !== undefined
         && (!Number.isSafeInteger(maximumSubagentSessions) || maximumSubagentSessions < 0 || maximumSubagentSessions > 10)) {
@@ -219,6 +234,12 @@ export function benchmarkSuiteValidationErrors(input) {
       }
       if (!THINKING_LEVELS.has(contract.thinking)) errors.push("executionContract.thinking is invalid");
       if (contract.codexMode !== "controlled") errors.push("executionContract.codexMode must be controlled");
+      if (contract.serviceTier !== undefined && !SERVICE_TIERS.has(contract.serviceTier)) {
+        errors.push("executionContract.serviceTier must be default or fast");
+      }
+      if (input.releaseGate?.requireFastServiceTier === true && contract.serviceTier !== "fast") {
+        errors.push("executionContract.serviceTier must be fast when releaseGate.requireFastServiceTier is true");
+      }
     }
   }
   if (input.matrixContract !== undefined) {
@@ -265,6 +286,20 @@ export function benchmarkSuiteValidationErrors(input) {
   if (input.schemaVersion === 2 && input.releaseGate?.requireEfficiencyClaim === true
     && (!Number.isFinite(input.releaseGate?.maximumFreshTokenRatioUpper95) || input.releaseGate.maximumFreshTokenRatioUpper95 > 0.8)) {
     errors.push("schemaVersion 2 token-saving claims require releaseGate.maximumFreshTokenRatioUpper95 at or below 0.8");
+  }
+  if (input.schemaVersion === 2 && input.releaseGate?.requireEfficiencyClaim === true
+    && input.releaseGate?.maximumAllAttemptPooledFreshTokenRatio !== undefined
+    && input.releaseGate.maximumAllAttemptPooledFreshTokenRatio > 0.65) {
+    errors.push("schemaVersion 2 net-35 claims require releaseGate.maximumAllAttemptPooledFreshTokenRatio at or below 0.65");
+  }
+  if (input.id === "production-v2") {
+    if (input.executionContract?.serviceTier !== "fast") errors.push("production-v2 requires executionContract.serviceTier fast");
+    if (input.releaseGate?.requireFastServiceTier !== true) errors.push("production-v2 requires releaseGate.requireFastServiceTier true");
+    if (input.releaseGate?.requireCampaignAccounting !== true) errors.push("production-v2 requires releaseGate.requireCampaignAccounting true");
+    if (!Number.isFinite(input.releaseGate?.maximumAllAttemptPooledFreshTokenRatio)
+      || input.releaseGate.maximumAllAttemptPooledFreshTokenRatio > 0.65) {
+      errors.push("production-v2 requires an all-attempt pooled fresh-token ratio at or below 0.65");
+    }
   }
   if (input.schemaVersion === 2 && input.releaseGate?.requireEfficiencyClaim === true && input.releaseGate?.requireFullSuiteForClaim !== true) {
     errors.push("schemaVersion 2 token-saving claims require releaseGate.requireFullSuiteForClaim true");

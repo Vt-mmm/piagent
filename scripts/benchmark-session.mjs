@@ -32,8 +32,10 @@ import { matchesAnyPath } from "../packages/piagent-core/extensions/policy-core.
 import { listTaskContracts, workingTreeFiles, workingTreeSnapshot } from "../packages/piagent-core/extensions/task-state.js";
 import { benchmarkTreeIdentity } from "../packages/piagent-core/benchmark/benchmark-tree-identity.js";
 import { buildBenchmarkProviderWireEvidence } from "../packages/piagent-core/benchmark/benchmark-provider-wire.js";
+import { buildCodexInvocationReceipt, inspectCodexRolloutServiceTierEvidence } from "../packages/piagent-core/benchmark/benchmark-codex-rollout.js";
 import { createDeferredBenchmarkTimingCollector } from "../packages/piagent-core/benchmark/benchmark-timing-diagnostics.js";
-import { summarizeSession, walkJsonl } from "./pi-usage-history.mjs";
+import { walkJsonl } from "./pi-usage-history.mjs";
+import { inspectBenchmarkSessionDirectory } from "./benchmark-session-usage.mjs";
 import { runPiagentWebUiJourney } from "./benchmark-webui-journey.mjs";
 
 const coldStartRuntimeManagedPaths = [
@@ -309,10 +311,6 @@ async function gradeWorkspace(runCommand, nodeCommand, grader, workspace, scenar
   }
 }
 
-function sessionSummaries(sessionDir) {
-  return walkJsonl(sessionDir).map((file) => summarizeSession(file, { strictUsage: true })).filter(Boolean);
-}
-
 function resolvedJourneyTurns(scenario, suiteRoot, resolveSuiteEntry) {
   if (!scenario.userJourney) return null;
   return scenario.userJourney.turns.map((turn) => ({
@@ -407,7 +405,7 @@ export async function runCodexUserJourney({
   workspace,
   turns,
   options,
-  disabledFeatures,
+  disabledFeatures, codexRuntime,
   environment,
   timeoutMs,
   forbiddenOutputSubstrings
@@ -436,6 +434,7 @@ export async function runCodexUserJourney({
     const collector = createCodexExecJsonlCollector({
       model: options.model,
       thinkingLevel: options.thinking,
+      requestedServiceTier: options.serviceTier,
       onEvent: (event) => inspectForbiddenValue(event, forbiddenOutputSubstrings, forbiddenHits)
     });
     const timing = createDeferredBenchmarkTimingCollector({ surface: "codex-cli" });
@@ -458,7 +457,14 @@ export async function runCodexUserJourney({
     for (const value of result.forbiddenHits ?? []) forbiddenHits.add(value);
     let turnUsage = null;
     try {
-      turnUsage = collector.finish();
+      const parsedUsage = collector.finish();
+      turnUsage = {
+        ...parsedUsage,
+        codexInvocationReceipt: buildCodexInvocationReceipt({
+          command: codexCommand, args, runtime: codexRuntime, environment, workspace, requestedModel: options.model,
+          requestedThinking: options.thinking, requestedServiceTier: options.serviceTier, resumed: index > 0, result, usage: parsedUsage
+        })
+      };
       if (threadId && turnUsage.providerSessionId !== threadId) {
         throw new Error("Codex CLI resumed journey changed thread identity");
       }
@@ -523,7 +529,7 @@ export async function runCodexUserJourney({
   };
 }
 
-export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuiteEntry, interrupted, persistCompletedRecord, suite, suiteRoot, scenario, surface, repeat, orderIndex, infrastructureAttempt = 1, runId, runRoot, options, piCommand, codexCommand, codexDisabledFeatures, codexRuntime, piRuntimeHome, systemCommands, suiteDigest, configurationDigest, rootSeed, piagentWebUiJourney = runPiagentWebUiJourney }) {
+export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuiteEntry, interrupted, persistCompletedRecord, onProviderAttemptStart = () => {}, onProviderAttemptReturned = () => {}, suite, suiteRoot, scenario, surface, repeat, orderIndex, infrastructureAttempt = 1, runId, runRoot, options, piCommand, codexCommand, codexDisabledFeatures, codexRuntime, piRuntimeHome, systemCommands, suiteDigest, configurationDigest, rootSeed, piagentWebUiJourney = runPiagentWebUiJourney }) {
   if (surface !== "codex-cli" && !piRuntimeHome?.path) fail("Pi benchmark session is missing its controlled writable runtime home");
   const attemptSuffix = infrastructureAttempt > 1 ? `-infra-${infrastructureAttempt}` : "";
   const key = `${String(repeat).padStart(2, "0")}-${scenario.id}-${surface}${attemptSuffix}`;
@@ -569,17 +575,31 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
   if (options.thinking) piArgs.push("--thinking", options.thinking);
   piArgs.push(prompt);
   const command = surface === "codex-cli" ? codexCommand : piCommand;
-  const args = surface === "codex-cli" ? codexExecArgs({ workspace, options, disabledFeatures: codexDisabledFeatures }) : piArgs;
+  const args = surface === "codex-cli" ? codexExecArgs({
+    workspace,
+    options,
+    disabledFeatures: codexDisabledFeatures,
+    persistent: options.serviceTier === "fast"
+  }) : piArgs;
   const codexForbiddenHits = new Set();
-  const codexCollector = surface === "codex-cli" ? createCodexExecJsonlCollector({ model: options.model, thinkingLevel: options.thinking, onEvent: (event) => inspectForbiddenValue(event, forbiddenOutputSubstrings, codexForbiddenHits) }) : undefined;
+  const codexCollector = surface === "codex-cli" ? createCodexExecJsonlCollector({
+    model: options.model,
+    thinkingLevel: options.thinking,
+    requestedServiceTier: options.serviceTier,
+    onEvent: (event) => inspectForbiddenValue(event, forbiddenOutputSubstrings, codexForbiddenHits)
+  }) : undefined;
   const timingCollector = createDeferredBenchmarkTimingCollector({ surface });
   const environment = {
     PIAGENT_NO_UPDATE_CHECK: "1", PIAGENT_BENCHMARK_RUN_ID: runId, PIAGENT_BENCHMARK_SCENARIO: scenario.id,
     PIAGENT_BENCHMARK_SURFACE: surface, PIAGENT_BENCHMARK_SESSION_ID: sessionId, PIAGENT_BENCHMARK_PROFILE: profile,
-    PIAGENT_BENCHMARK_LIFECYCLE: lifecycle, NO_COLOR: "1"
+    PIAGENT_BENCHMARK_LIFECYCLE: lifecycle,
+    PIAGENT_FAST_MODE: options.serviceTier === "fast" ? "1" : "0",
+    NO_COLOR: "1"
   };
   const inflightPath = path.join(workspaceRoot, "inflight.json");
-  writePrivateAtomic(inflightPath, `${JSON.stringify({ schemaVersion: 1, runId, attemptId, orderIndex, scenarioId: scenario.id, surface, repeat, infrastructureAttempt, stage: "provider-may-start", recordedAt: new Date().toISOString() }, null, 2)}\n`);
+  const attemptIdentity = { attemptId, orderIndex, scenarioId: scenario.id, surface, repeat, infrastructureAttempt };
+  writePrivateAtomic(inflightPath, `${JSON.stringify({ schemaVersion: 1, runId, ...attemptIdentity, stage: "provider-may-start", recordedAt: new Date().toISOString() }, null, 2)}\n`);
+  onProviderAttemptStart(attemptIdentity);
   let agent;
   let usageOverride;
   let journeyReceipt = null;
@@ -612,7 +632,7 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
         workspace,
         turns: journeyTurns,
         options,
-        disabledFeatures: codexDisabledFeatures,
+        disabledFeatures: codexDisabledFeatures, codexRuntime,
         environment: processEnvironment,
         timeoutMs: options.timeoutSeconds * 1_000,
         forbiddenOutputSubstrings
@@ -640,7 +660,10 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
   const timingDiagnostics = timingCollector.finish(agent.durationSeconds);
   const sessionRoot = journeyTurns && surface === "piagent" ? path.join(piRuntimeHome.path, "sessions") : sessions;
   const sessionFiles = surface === "codex-cli" ? [] : walkJsonl(sessionRoot);
-  const piSummaries = surface === "codex-cli" ? [] : sessionSummaries(sessionRoot);
+  const piSessionInspection = surface === "codex-cli"
+    ? { summaries: [], diagnostics: [] }
+    : inspectBenchmarkSessionDirectory(sessionRoot);
+  const piSummaries = piSessionInspection.summaries;
   if (journeyTurns && surface === "piagent") {
     const main = piSummaries.find((summary) => !summary.isSubagent && summary.cwd === workspace)
       ?? piSummaries.find((summary) => !summary.isSubagent);
@@ -649,19 +672,53 @@ export async function runBenchmarkSession({ packageRoot, runCommand, resolveSuit
   let usage;
   if (usageOverride) usage = usageOverride;
   else if (surface === "codex-cli") {
-    try { usage = codexCollector.finish(); }
+    try {
+      const parsedUsage = codexCollector.finish();
+      usage = {
+        ...parsedUsage,
+        codexInvocationReceipts: [buildCodexInvocationReceipt({
+          command, args, runtime: codexRuntime, environment: processEnvironment, workspace, requestedModel: options.model,
+          requestedThinking: options.thinking, requestedServiceTier: options.serviceTier, resumed: false, result: agent, usage: parsedUsage
+        })]
+      };
+    }
     catch (error) { if (agent.code === 0 && !agent.timedOut) throw error; usage = aggregateSessionUsage([]); }
     codexDiagnostics = codexCollector.diagnostics();
   } else usage = aggregateSessionUsage(piSummaries);
+  if (surface === "codex-cli" && options.serviceTier !== undefined) {
+    usage = {
+      ...usage,
+      serviceTierEvidence: inspectCodexRolloutServiceTierEvidence({
+        codexHome: codexRuntime?.mode === "controlled" ? codexRuntime.home : null, threadId: usage.providerSessionId, workspace,
+        requestedModel: options.model, requestedThinking: options.thinking, requestedServiceTier: options.serviceTier,
+        providerStartedAttempts: usage.execution?.providerStartedAttempts, invocationReceipts: usage.codexInvocationReceipts
+      })
+    };
+  }
   const piTerminalError = surface === "codex-cli" ? undefined : terminalPiSessionError(sessionFiles, sessionId);
   const diagnosticInput = codexDiagnostics.length > 0
     ? JSON.stringify(codexDiagnostics)
-    : piTerminalError ?? `${agent.stderr ?? ""}\n${agent.stdout ?? ""}`;
+    : [piTerminalError, ...piSessionInspection.diagnostics, agent.stderr, agent.stdout].filter(Boolean).join("\n");
   const preUsageFailure = classifyPreUsageFailure(agent, usage, diagnosticInput, {
-    terminalProviderError: Boolean(piTerminalError), candidateOutcome: agent.candidateOutcome ?? null
+    terminalProviderError: Boolean(piTerminalError),
+    usageParsingError: piSessionInspection.diagnostics.length > 0,
+    candidateOutcome: agent.candidateOutcome ?? null
   });
   const candidateOutcomeFailure = candidateOutcomeFailureReason(agent.candidateOutcome);
-  writePrivateAtomic(inflightPath, `${JSON.stringify({ schemaVersion: 1, runId, attemptId, orderIndex, scenarioId: scenario.id, surface, repeat, infrastructureAttempt, stage: "provider-returned", usage, recordedAt: new Date().toISOString() }, null, 2)}\n`);
+  writePrivateAtomic(inflightPath, `${JSON.stringify({
+    schemaVersion: 1,
+    runId,
+    ...attemptIdentity,
+    stage: "provider-returned",
+    usage,
+    usageStatus: preUsageFailure?.usageStatus ?? "measured",
+    infrastructureFailure: preUsageFailure?.failure ?? null,
+    infrastructureClass: preUsageFailure?.class ?? null,
+    infrastructureRetryable: preUsageFailure?.retryable === true,
+    durationSeconds: agent.durationSeconds,
+    recordedAt: new Date().toISOString()
+  }, null, 2)}\n`);
+  onProviderAttemptReturned({ ...attemptIdentity, usage, usageStatus: preUsageFailure?.usageStatus ?? "measured" });
   const forbiddenHits = [...new Set([...(agent.forbiddenHits ?? []), ...(surface === "codex-cli" ? [...codexForbiddenHits] : forbiddenSessionHits(sessionFiles, forbiddenOutputSubstrings))])];
   const requiredHits = new Set(agent.requiredHits ?? []);
   if (surface !== "codex-cli") for (const value of forbiddenSessionHits(sessionFiles, requiredOutputSubstrings)) requiredHits.add(value);

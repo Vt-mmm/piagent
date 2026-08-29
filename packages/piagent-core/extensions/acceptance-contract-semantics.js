@@ -1,39 +1,28 @@
 import path from "node:path";
+import { callableBodies } from "./acceptance-callable-scanner.js";
 import { acceptanceBoundaryProofGuidance, malformedIdentifierContract, malformedTaggedEventRequirements } from "./acceptance-boundary-guidance.js";
-import { evidenceTopLevelArguments, executableRejectionAssertions } from "./acceptance-executable-evidence.js";
+import { executableRejectionAssertions } from "./acceptance-executable-evidence.js";
 import { ERROR_CONSTRUCTORS, ERROR_CONSTRUCTOR_DISPLAY_NAMES, errorMappingsProveContract, hasAmbiguousErrorClassIntent, rejectionStatementErrorClass, requestedErrorClasses, requestedErrorPartitionMapping } from "./acceptance-error-classes.js";
+import { inputDerivedNames } from "./acceptance-input-provenance.js";
+import { regexLiteralSentinel, stringLiteralSentinel } from "./acceptance-lexical-sentinels.js";
+import { exactNormalizerInvocation, synchronousNormalizerProof } from "./acceptance-normalizer-evidence.js";
+import { casePreservingCallableBodies } from "./acceptance-expiry-calendar-proof.js";
+import { invalidSentinelRejectionProof } from "./acceptance-invalid-sentinel-proof.js";
 import { statefulTerminalRejectionEvidence } from "./acceptance-state-machine-evidence.js";
 import { malformedTaggedEventEvidence } from "./acceptance-tagged-event-evidence.js";
 import { boundRejectionTestEvidence, callableAssertionMode } from "./acceptance-test-binding-evidence.js";
+import { temporalContractEvidence, temporalInputRequirements } from "./acceptance-temporal-contract.js";
 import { regexCanStartAfterLexicalChunks } from "./javascript-regex-evidence.js";
-const INTEGER_TARGET_STOPWORDS = new Set([
-  "and", "basis", "cents", "input", "inputs", "items", "money", "number", "numbers", "or", "points", "typeerror", "value", "values"
-]);
-
+const INTEGER_TARGET_STOPWORDS = new Set(["and", "basis", "cents", "input", "inputs", "items", "money", "number", "numbers", "or", "points", "typeerror", "value", "values"]);
 function normalizedText(value) {
   return String(value ?? "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
 }
-
 function erasedLexeme(value) {
   return String(value ?? "").replace(/[^\r\n]/g, " ");
 }
-
-function stringLiteralSentinel(value) {
-  if (value.length === 0) return "__pi_empty_string_literal__";
-  if (value === '"') return "__pi_double_quote_string_literal__";
-  if (/^(?:\s|\\[nrtvf0])+$/u.test(value)) return "__pi_whitespace_string_literal__";
-  if (["assert", "assert/strict", "node:assert", "node:assert/strict"].includes(value.trim().toLowerCase())) return "__pi_node_assert_module_literal__";
-  if (value.trim().toLowerCase() === "node:test") return "__pi_node_test_module_literal__";
-  if (["node:vm", "vm"].includes(value.trim().toLowerCase())) return "__pi_code_generation_module_literal__";
-  if (["module", "node:module"].includes(value.trim().toLowerCase())) return "__pi_module_loader_module_literal__";
-  const errorName = value.trim().toLowerCase().match(/^(typeerror|rangeerror|syntaxerror|referenceerror|urierror|evalerror|aggregateerror|error)$/)?.[1];
-  if (errorName) return `__pi_error_name_${errorName}_literal__`;
-  return "__pi_string_literal__";
-}
-
 /**
  * Return a bounded lexical evidence view of JavaScript/TypeScript source.
  *
@@ -52,7 +41,6 @@ function lexJavaScriptEvidence(value, bindStrings = false) {
   while (index < source.length) {
     const current = source[index];
     const next = source[index + 1];
-
     if (current === "/" && next === "/") {
       let end = index + 2;
       while (end < source.length && source[end] !== "\n" && source[end] !== "\r") end += 1;
@@ -116,11 +104,13 @@ function lexJavaScriptEvidence(value, bindStrings = false) {
     }
     if (current === "/" && next !== "=" && regexCanStartAfterLexicalChunks(output)) {
       let end = index + 1;
+      let payload = "";
       let inClass = false;
       let closed = false;
       while (end < source.length) {
         const character = source[end];
         if (character === "\\") {
+          payload += source.slice(end, Math.min(source.length, end + 2));
           end += 2;
           continue;
         }
@@ -128,16 +118,19 @@ function lexJavaScriptEvidence(value, bindStrings = false) {
         else if (character === "]") inClass = false;
         else if (character === "/" && !inClass) {
           end += 1;
+          const flagsStart = end;
           while (/[a-z]/iu.test(source[end] ?? "")) end += 1;
+          const flags = source.slice(flagsStart, end);
           closed = true;
+          output.push(regexLiteralSentinel(payload, flags));
           break;
         } else if (character === "\n" || character === "\r") {
           break;
         }
+        payload += character;
         end += 1;
       }
       if (closed) {
-        output.push("__pi_regex_literal__");
         index = end;
         continue;
       }
@@ -148,16 +141,13 @@ function lexJavaScriptEvidence(value, bindStrings = false) {
   const code = output.join("");
   return bindStrings ? { code, strings } : code;
 }
-
 export function sanitizeJavaScriptEvidence(value) {
   return lexJavaScriptEvidence(value, false);
 }
-
 function uniqueStrings(values) {
   return [...new Set((Array.isArray(values) ? values : []).filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim()))];
 }
 function hasReservedEvidenceIdentifier(value) { return /\b__pi_[a-z0-9_]*\b/i.test(String(value ?? "")); }
-
 function escapeRegex(value) {
   return String(value ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -432,81 +422,6 @@ function namedTargetBindings(sourceEntries, testEntries, namedTargets) {
   });
 }
 
-function formalParameterNames(parameters) {
-  const wrapped = `(${String(parameters ?? "")})`;
-  const names = [];
-  for (const raw of evidenceTopLevelArguments(wrapped, 0, wrapped.length)) {
-    const value = raw.trim().replace(/^(?:public|private|protected|readonly)\s+/, "").replace(/^\.\.\./, "");
-    const direct = value.match(/^([a-z_$][a-z0-9_$]*)\s*(?:[?:=]|$)/i);
-    if (direct) {
-      names.push(direct[1]);
-      continue;
-    }
-    const object = value.match(/^\{([^}]*)\}/)?.[1];
-    if (object) {
-      for (const item of object.split(",")) {
-        const binding = item.trim().match(/^(?:[a-z_$][a-z0-9_$]*\s*:\s*)?([a-z_$][a-z0-9_$]*)/i);
-        if (binding) names.push(binding[1]);
-      }
-      continue;
-    }
-    const array = value.match(/^\[([^\]]*)\]/)?.[1];
-    if (array) names.push(...(array.match(/[a-z_$][a-z0-9_$]*/gi) ?? []));
-  }
-  return uniqueStrings(names).map((item) => item.toLowerCase()).slice(0, 16);
-}
-
-function callableBodies(code) {
-  const bodies = new Map();
-  const addBraced = (name, parameters, open, asynchronous = false) => {
-    const end = evidenceBalancedEnd(code, open, "{", "}");
-    if (end !== -1 && !bodies.has(name)) bodies.set(name, {
-      body: code.slice(open + 1, end - 1),
-      parameters: formalParameterNames(parameters), sourceCode: code, asynchronous
-    });
-  };
-  for (const match of code.matchAll(/\b(?:async\s+)?function\s+([a-z_$][a-z0-9_$]*)\s*\(([^)]*)\)\s*\{/gi)) addBraced(match[1].toLowerCase(), match[2], match.index + match[0].lastIndexOf("{"), /^async\b/i.test(match[0]));
-  for (const match of code.matchAll(/^\s*(?:async\s+)?([a-z_$][a-z0-9_$]*)\s*\(([^)]*)\)\s*\{/gim)) {
-    if (!["catch", "for", "if", "switch", "while", "with"].includes(match[1].toLowerCase())) addBraced(match[1].toLowerCase(), match[2], match.index + match[0].lastIndexOf("{"), /^\s*async\b/i.test(match[0]));
-  }
-  for (const match of code.matchAll(/\b(?:const|let|var)\s+([a-z_$][a-z0-9_$]*)\s*=\s*(?:async\s*)?(?:\(([^)]*)\)|([a-z_$][a-z0-9_$]*))\s*=>\s*/gi)) {
-    const start = match.index + match[0].length;
-    if (code[start] === "{") addBraced(match[1].toLowerCase(), match[2] ?? match[3], start, /=\s*async\b/i.test(match[0]));
-    else bodies.set(match[1].toLowerCase(), {
-      body: code.slice(start, [code.indexOf(";", start), code.indexOf("\n", start)].filter((item) => item >= 0).sort((a, b) => a - b)[0] ?? code.length),
-      parameters: formalParameterNames(match[2] ?? match[3]), sourceCode: code, asynchronous: /=\s*async\b/i.test(match[0])
-    });
-  }
-  return bodies;
-}
-
-function inputDerivedNames(callable) {
-  const derived = new Set(callable.parameters);
-  const declarations = [...callable.body.matchAll(/\bconst\s+([a-z_$][a-z0-9_$]*|\{[^}\n]{1,300}\}|\[[^\]\n]{1,300}\])\s*=\s*([^;\n]{1,1000})/gi)];
-  for (let pass = 0; pass < 4; pass += 1) {
-    let changed = false;
-    for (const match of declarations) {
-      const initializer = match[2];
-      if (/\b(?:process|globalthis)\b|\bimport\.meta\b|\bdate\.now\s*\(|\bmath\.random\s*\(/.test(initializer)) continue;
-      if (![...derived].some((name) => new RegExp(`\\b${escapeRegex(name)}\\b`).test(initializer))) continue;
-      const bindings = match[1].startsWith("{")
-        ? match[1].slice(1, -1).split(",").map((item) => item.trim().match(/^(?:[a-z_$][a-z0-9_$]*\s*:\s*)?([a-z_$][a-z0-9_$]*)/i)?.[1])
-        : match[1].startsWith("[")
-          ? (match[1].match(/[a-z_$][a-z0-9_$]*/gi) ?? [])
-          : [match[1]];
-      for (const binding of bindings.filter(Boolean)) {
-        const normalized = binding.toLowerCase();
-        if (!derived.has(normalized)) {
-          derived.add(normalized);
-          changed = true;
-        }
-      }
-    }
-    if (!changed) break;
-  }
-  return [...derived].slice(0, 24);
-}
-
 function mergeValidationProof(target, candidate) {
   target.generic ||= candidate.generic;
   for (const partition of candidate.partitions) target.partitions.add(partition);
@@ -525,11 +440,18 @@ function positiveValidationConditionProof(condition, names, bodies, visited = ne
       proof.generic = true;
       proof.partitions.add("fractional");
       proof.partitions.add("non-finite");
+      proof.partitions.add("non-finite-number");
       if (integer[1] === "safeinteger") proof.partitions.add("unsafe-integer");
     }
     if (new RegExp(`number\\.isfinite\\s*\\(\\s*${escaped}\\b`).test(condition)) {
       proof.generic = true;
       proof.partitions.add("non-finite");
+      proof.partitions.add("non-finite-number");
+      proof.partitions.add("missing");
+    }
+    if (new RegExp(`typeof\\s+${escaped}\\b\\s*={2,3}\\s*__pi_typeof_(?!undefined_)[a-z]+_literal__`).test(condition)) {
+      proof.generic = true;
+      proof.partitions.add("missing");
     }
     if (new RegExp(`array\\.isarray\\s*\\(\\s*${escaped}\\b`).test(condition)) {
       proof.generic = true;
@@ -601,12 +523,23 @@ function validationConditionProof(condition, names, bodies) {
       || comparison.test(condition);
     if (!validationShape) continue;
     proof.generic = true;
+    if (new RegExp(`number\\.is(?:finite|integer|safeinteger)\\s*\\(\\s*${escaped}\\b`).test(condition)) {
+      proof.partitions.add("non-finite");
+      proof.partitions.add("non-finite-number");
+    }
     if (new RegExp(`!\\s*number\\.is(?:safe)?integer\\s*\\(\\s*${escaped}\\b|number\\.is(?:safe)?integer\\s*\\(\\s*${escaped}[^)]*\\)\\s*(?:===|==)\\s*false|\\b${escaped}\\b\\s*%\\s*1`).test(condition)) {
       proof.partitions.add("fractional");
       proof.partitions.add("non-finite");
+      proof.partitions.add("non-finite-number");
     }
     if (new RegExp(`!\\s*number\\.issafeinteger\\s*\\(\\s*${escaped}\\b`).test(condition)) proof.partitions.add("unsafe-integer");
-    if (new RegExp(`!\\s*number\\.isfinite\\s*\\(\\s*${escaped}\\b`).test(condition)) proof.partitions.add("non-finite");
+    if (new RegExp(`!\\s*number\\.isfinite\\s*\\(\\s*${escaped}\\b`).test(condition)) {
+      proof.partitions.add("non-finite");
+      proof.partitions.add("non-finite-number");
+    }
+    if (new RegExp(`typeof\\s+${escaped}\\b\\s*!={1,2}\\s*__pi_typeof_(?!undefined_)[a-z]+_literal__`).test(condition)) {
+      proof.partitions.add("missing");
+    }
     if (new RegExp(`\\b${escaped}\\b\\s*(?:<\\s*[01]|<=\\s*0)|0\\s*>\\s*\\b${escaped}\\b|\\b${escaped}\\b\\s*<=\\s*-\\d|!\\s*\\(?\\s*\\b${escaped}\\b\\s*>=\\s*0`).test(condition)) proof.partitions.add("negative");
     if (new RegExp(`\\b${escaped}\\b\\s*(?:===|==|<=)\\s*0|\\b${escaped}\\b\\s*<\\s*1|!\\s*\\b${escaped}\\b`).test(condition)) proof.partitions.add("zero");
     if (new RegExp(`\\b${escaped}\\b\\s*(?:===|==)\\s*null|null\\s*(?:===|==)\\s*\\b${escaped}\\b|!\\s*\\b${escaped}\\b`).test(condition)) proof.partitions.add("null");
@@ -710,9 +643,10 @@ function inputNameWrittenBefore(callable, name, offset) {
   return new RegExp(`(?:\\+\\+|--)\\s*\\b${escaped}\\b`, "i").test(prefix);
 }
 
-function conditionalRejection(callable, requestedErrors, bodies, contractText = "", contractTarget = "") {
+function conditionalRejection(callable, requestedErrors, bodies, contractText = "", contractTarget = "", requiredInputNames = null) {
   const proof = { generic: false, partitions: new Set(), errorMappings: [] };
-  const names = inputDerivedNames(callable);
+  const seeds = Array.isArray(requiredInputNames) && requiredInputNames.length > 0 ? requiredInputNames : callable.parameters;
+  const names = inputDerivedNames(callable, seeds);
   for (const match of callable.body.matchAll(/\bif\s*\(/g)) {
     if (sourceBraceDepthAt(callable.body, match.index) !== 0 || priorUnconditionalExit(callable.body, match.index)) continue;
     const conditionOpen = callable.body.indexOf("(", match.index);
@@ -748,38 +682,83 @@ function conditionalRejection(callable, requestedErrors, bodies, contractText = 
       for (const partition of validation.partitions) proof.errorMappings.push({ partition, errorClass: followingError });
     }
   }
-  proof.generic ||= statefulTerminalRejectionEvidence(callable.body, callable.parameters, requestedErrors, contractText, contractTarget, callable.sourceCode);
+  proof.generic ||= statefulTerminalRejectionEvidence(callable.body, seeds, requestedErrors, contractText, contractTarget, callable.sourceCode);
   return { ...proof, names };
 }
 function sourceCallableProvesErrorMapping(bodies, name, mapping) {
   const observed = sourceCallableProof(bodies, name, []).errorMappings ?? [];
   return errorMappingsProveContract(observed, mapping);
 }
-function sourceCallableProof(bodies, name, requestedErrors, visited = new Set(), contractText = "", contractTarget = name) {
+function sourceCallableProof(bodies, name, requestedErrors, visited = new Set(), contractText = "", contractTarget = name, requiredInputNames = null, omissionSensitiveInputNames = [], requestedPartitions = []) {
   if (visited.has(name) || visited.size >= 12) return { generic: false, partitions: new Set() };
   const callable = bodies.get(name);
   if (!callable) return { generic: false, partitions: new Set() };
-  const proof = conditionalRejection(callable, requestedErrors, bodies, contractText, contractTarget);
+  const proof = conditionalRejection(callable, requestedErrors, bodies, contractText, contractTarget, requiredInputNames);
+  mergeValidationProof(proof, synchronousNormalizerProof({
+    bodies, name, requestedErrors, requiredInputNames,
+    inputDerivedNames, sourceCallableBindingIsStable, validationConditionProof
+  }));
+  const invalidSentinelProof = invalidSentinelRejectionProof({ bodies, name, requestedErrors, requestedPartitions, requiredInputNames }); mergeValidationProof(proof, invalidSentinelProof);
+  if (invalidSentinelProof.generic) return proof;
+  if (invalidSentinelProof.candidate) return { generic: false, partitions: new Set(), errorMappings: [], names: proof.names };
   const nextVisited = new Set(visited).add(name);
   for (const match of callable.body.matchAll(/\b([a-z_$][a-z0-9_$]*)\s*\(/gi)) {
     const helper = match[1].toLowerCase();
-    if (!bodies.has(helper) || !directSourceCall(callable.body, match.index)) continue;
+    if (!bodies.has(helper)) continue;
     const open = callable.body.indexOf("(", match.index);
     const end = evidenceBalancedEnd(callable.body, open);
     const argumentsText = end === -1 ? "" : callable.body.slice(open + 1, end - 1);
-    if (!proof.names.some((candidate) => !inputNameWrittenBefore(callable, candidate, match.index)
-      && new RegExp(`\\b${escapeRegex(candidate)}\\b`).test(argumentsText))) continue;
-    const helperProof = sourceCallableProof(bodies, helper, requestedErrors, nextVisited, contractText, contractTarget);
+    const relevantArguments = proof.names.some((candidate) => !inputNameWrittenBefore(callable, candidate, match.index)
+      && new RegExp(`\\b${escapeRegex(candidate)}\\b`).test(argumentsText));
+    if (!relevantArguments) continue;
+    const directCall = directSourceCall(callable.body, match.index);
+    const invocationInputNames = Array.isArray(requiredInputNames) && requiredInputNames.length > 0 ? requiredInputNames : null;
+    const normalizerInvocation = end === -1 ? { accepted: false, derivedParameters: [] } : exactNormalizerInvocation({
+      callable, matchIndex: match.index, callEnd: end, argumentsText, helper,
+      helperParameters: bodies.get(helper)?.parameters ?? [],
+      inputDerivedNames: invocationInputNames ? (candidate) => inputDerivedNames(candidate, invocationInputNames) : inputDerivedNames,
+      helperBindingIsShadowedInCallable, omissionSensitiveInputNames
+    });
+    const helperParameters = bodies.get(helper)?.parameters ?? [];
+    const candidateProof = synchronousNormalizerProof({
+      bodies, name: helper, requestedErrors, requiredInputNames: normalizerInvocation.derivedParameters,
+      inputDerivedNames, sourceCallableBindingIsStable, validationConditionProof
+    });
+    const normalizerProof = normalizerInvocation.accepted ? candidateProof : { generic: false, partitions: new Set(), candidate: candidateProof.candidate };
+    const normalizerCall = normalizerProof.generic;
+    if (invocationInputNames && candidateProof.candidate && !normalizerCall) {
+      return { generic: false, partitions: new Set(), errorMappings: [], names: proof.names };
+    }
+    const modeledInvocation = directCall || normalizerInvocation.accepted;
+    if (candidateProof.candidate && !normalizerCall && modeledInvocation) {
+      return { generic: false, partitions: new Set(), errorMappings: [], names: proof.names };
+    }
+    if (!modeledInvocation && !normalizerCall) continue;
+    const helperProof = normalizerCall ? normalizerProof
+      : sourceCallableProof(bodies, helper, requestedErrors, nextVisited, contractText, contractTarget,
+        normalizerInvocation.accepted ? normalizerInvocation.derivedParameters : helperParameters, [], requestedPartitions);
+    if (!helperProof.generic) {
+      return { generic: false, partitions: new Set(), errorMappings: [], names: proof.names };
+    }
     proof.generic ||= helperProof.generic;
     for (const partition of helperProof.partitions) proof.partitions.add(partition);
   }
   return proof;
 }
-function sourceCallableProves(bodies, name, requestedErrors, requestedPartitions, contractText = "") {
-  const proof = sourceCallableProof(bodies, name, requestedErrors, new Set(), contractText, name);
-  return proof.generic && requestedPartitions.every((partition) => partitionCovered(partition, proof.partitions));
+function sourceCallableProves(bodies, name, requestedErrors, requestedPartitions, contractText = "", requiredInputNames = null) {
+  const required = Array.isArray(requiredInputNames)
+    ? requiredInputNames.map((item) => typeof item === "string" ? { name: item, partitions: [] } : item).filter((item) => item?.name) : [];
+  const proofs = required.length > 0
+    ? required.map((item) => ({
+      proof: sourceCallableProof(bodies, name, requestedErrors, new Set(), contractText, name, [item.name], item.omissionSensitive ? [item.name] : [], [...new Set([...requestedPartitions, ...(item.partitions ?? [])])]),
+      partitions: [...new Set([...requestedPartitions, ...(item.partitions ?? [])])], inputName: item.name
+    }))
+    : [{ proof: sourceCallableProof(bodies, name, requestedErrors, new Set(), contractText, name, null, [], requestedPartitions), partitions: requestedPartitions, inputName: null }];
+  const callable = bodies.get(name);
+  return proofs.every(({ proof, partitions, inputName }) => proof.generic
+    && !(inputName && partitions.includes("missing") && callable?.defaultedParameters?.includes(inputName))
+    && partitions.every((partition) => partitionCovered(partition, proof.partitions)));
 }
-
 function requestedInvalidPartitions(text) {
   const invalid = normalizedText(text)
     .split(/(?<=[.!?;])\s+|\n+/)
@@ -892,8 +871,8 @@ export function acceptanceInvalidInputEvidence(input = {}) {
     .filter((entry) => entry && typeof entry.path === "string" && typeof entry.text === "string");
   const testEntries = (Array.isArray(input.testEntries) ? input.testEntries : [])
     .filter((entry) => entry && typeof entry.path === "string" && typeof entry.text === "string");
-  const bodyMaps = new Map(sourceEntries.map((entry) => [entryPath(entry.path), callableBodies(normalizedText(sanitizeJavaScriptEvidence(entry.text)))]));
-  if (sourceEntries.length === 0) bodyMaps.set("", callableBodies(sourceText));
+  const bodyMaps = new Map(sourceEntries.map((entry) => [entryPath(entry.path), casePreservingCallableBodies(sanitizeJavaScriptEvidence(entry.text), normalizedText(sanitizeJavaScriptEvidence(entry.text)))]));
+  if (sourceEntries.length === 0) bodyMaps.set("", casePreservingCallableBodies(sanitizeJavaScriptEvidence(input.sourceText), sourceText));
   const sourceLexicalOk = sourceEntries.length > 0 ? sourceEntries.every((entry) => !hasReservedEvidenceIdentifier(entry.text) && lexicalEvidenceIsNonReflective(normalizedText(sanitizeJavaScriptEvidence(entry.text)))) : !hasReservedEvidenceIdentifier(input.sourceText) && lexicalEvidenceIsNonReflective(sourceText);
   const testLexicalOk = testEntries.length > 0 ? testEntries.every((entry) => !hasReservedEvidenceIdentifier(entry.text) && lexicalEvidenceIsNonReflective(normalizedText(sanitizeJavaScriptEvidence(entry.text)))) : !hasReservedEvidenceIdentifier(input.testText) && lexicalEvidenceIsNonReflective(testText);
   const sourceConstructorOk = requestedErrors.length === 0 || (sourceEntries.length > 0
@@ -921,12 +900,31 @@ export function acceptanceInvalidInputEvidence(input = {}) {
     testCodeEntries: testEntries.map((entry) => ({ path: entryPath(entry.path), code: normalizedText(sanitizeJavaScriptEvidence(entry.text)) })),
     fallbackTestCode: testText, bodyMaps
   });
+  const temporal = temporalContractEvidence({ taskText, bindings, bodyMaps,
+    testRequirements: boundTestEvidence.bindingArgumentRequirements ?? [] });
   const assertions = namedTargets.length > 0 ? boundTestEvidence.assertions : inferredAssertions.map((item) => item.assertion);
   const mappingTestOk = namedTargets.length > 0 ? boundTestEvidence.mappingOk : requestedErrors.length <= 1;
   const targetOk = namedTargets.length > 0 ? boundTestEvidence.targetOk : assertions.length > 0;
+  const requiredInputsForBinding = (binding) => {
+    const requirement = (boundTestEvidence.bindingArgumentRequirements ?? [])
+      .find((item) => item.sourcePath === binding.sourcePath && item.sourceName === binding.sourceName);
+    const callable = (bodyMaps.get(binding.sourcePath) ?? new Map()).get(binding.sourceName);
+    const required = temporalInputRequirements({ binding, observed: requirement, parameters: callable?.parameters,
+      requestedPartitions, temporalBindings: temporal.bindings });
+    const temporalInputs = temporal.bindings
+      .find((item) => item.sourcePath === binding.sourcePath && item.sourceName === binding.sourceName)?.inputs ?? [];
+    return required?.map((item) => ({
+      ...item,
+      omissionSensitive: temporalInputs.some((temporalInput) => temporalInput.name === item.name
+        && temporalInput.partitions.includes("missing"))
+    })) ?? required;
+  };
   const sourceOk = sourceLexicalOk && sourceConstructorOk && (namedTargets.length > 0
     ? bindings.length === strictTargets.length
-      && bindings.every((binding) => Boolean(binding.sourcePath) && Boolean(binding.sourceName) && sourceCallableProves(bodyMaps.get(binding.sourcePath) ?? new Map(), binding.sourceName, requestedErrors, requestedPartitions, taskText))
+      && bindings.every((binding) => Boolean(binding.sourcePath) && Boolean(binding.sourceName) && sourceCallableProves(
+        bodyMaps.get(binding.sourcePath) ?? new Map(), binding.sourceName, requestedErrors, requestedPartitions, taskText,
+        requiredInputsForBinding(binding)
+      ))
       && structuralTargets.every((target) => [...bodyMaps.values()].filter((bodies) => bodies.has(target)).length === 1
         && [...bodyMaps.values()].some((bodies) => sourceCallableProves(bodies, target, requestedErrors, requestedPartitions, taskText)))
     : inferredAssertions.length > 0 && inferredAssertions.every(({ binding }) => (
@@ -955,7 +953,7 @@ export function acceptanceInvalidInputEvidence(input = {}) {
     : inferred.map((item) => [{ raw: testByPath.get(item.testPath), names: new Set([item.testName]) }]);
   const tagged = malformedTaggedEventEvidence({ requirements: taggedRequirements, requestedErrors, sourceGroups, testGroups,
     sourceCorpus: sourceEntries.map((entry) => entry.text).join("\n"), testCorpus: testEntries.map((entry) => entry.text).join("\n") });
-  return { sourceOk: sourceOk && tagged.sourceOk && !ambiguousErrorIntent, testOk: testLexicalOk && testConstructorOk && targetOk && partitionOk && mappingTestOk && assertionModeOk && tagged.testOk && !ambiguousErrorIntent };
+  return { sourceOk: sourceOk && tagged.sourceOk && !ambiguousErrorIntent, testOk: testLexicalOk && testConstructorOk && targetOk && partitionOk && mappingTestOk && assertionModeOk && temporal.testOk && tagged.testOk && !ambiguousErrorIntent };
 }
 
 export function acceptanceContractProofGuidance(raw) {

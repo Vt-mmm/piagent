@@ -117,6 +117,10 @@ export function renderBenchmarkText(report) {
   const causalContext = report.comparison.causalContextEvidence;
   const causalAggregates = causalContext?.aggregates;
   const hostReadiness = report.environment.hostReadinessHistory;
+  const allAttemptEfficiency = report.comparison.allAttemptPooledEfficiency;
+  const serviceTier = report.comparison.serviceTierEvidence;
+  const campaignEvidence = report.environment.campaignEvidence;
+  const priorCampaignHistory = campaignEvidence?.priorCampaignHistory;
   const suiteFailureReasons = (report.comparison.suiteGate?.failureReasons ?? [])
     .map((failure) => `${failure.id}: ${failure.message}`)
     .join("; ");
@@ -152,6 +156,14 @@ export function renderBenchmarkText(report) {
     `Piagent workflow gaps: ${workflowGapSummary(report.runs.filter((run) => run.surface === "piagent"))}`,
     `Token accounting: input=fresh input; reasoning is included in output; fresh=input+output; total=input+cache read+cache write+output`,
     `Attempt completeness: accepted ${report.tokenAccounting?.acceptedAttempts.exactAttempts ?? 0}/${report.tokenAccounting?.acceptedAttempts.attempts ?? 0} exact | failed ${report.tokenAccounting?.failedAttempts.exactAttempts ?? 0}/${report.tokenAccounting?.failedAttempts.attempts ?? 0} exact | failed fresh ${display(report.tokenAccounting?.failedAttempts.tokens.fresh, 0)}`,
+    `All-attempt net fresh tokens: ${candidateLabel} ${display(allAttemptEfficiency?.candidate?.freshTokens, 0)} | ${baselineLabel} ${display(allAttemptEfficiency?.baseline?.freshTokens, 0)} | ratio ${display(allAttemptEfficiency?.ratio, 4)} | reduction ${displayPercent(allAttemptEfficiency?.reductionPercent)} | gate ${allAttemptEfficiency?.passed === null ? "n/a" : allAttemptEfficiency?.passed ? "pass" : "fail"}`,
+    ...(campaignEvidence ? [
+      `Current paid campaign: ${campaignEvidence.status} | exact ${campaignEvidence.allAttempts?.exactAttempts ?? 0}/${campaignEvidence.providerStartedAttempts ?? 0} | unknown ${campaignEvidence.unknownAttempts ?? 0} | claim ${campaignEvidence.claimOutcome?.allowed === true ? "allowed" : campaignEvidence.claimOutcome?.allowed === false ? "not allowed" : "pending"}`,
+      `Prior paid campaigns (excluded from current net ratio): ${priorCampaignHistory?.paidCampaigns ?? 0} | provider attempts ${priorCampaignHistory?.providerStartedAttempts ?? 0} | exact ${priorCampaignHistory?.exactAttempts ?? 0} | unknown ${priorCampaignHistory?.unknownAttempts ?? 0} | ${priorCampaignHistory?.exactUsageComplete === true ? `exact known fresh ${display(priorCampaignHistory?.knownExactTokens?.fresh, 0)}` : `total usage unavailable; known-exact fresh subtotal ${display(priorCampaignHistory?.knownExactTokens?.fresh, 0)}`}`
+    ] : []),
+    `Fast execution configuration parity: ${serviceTier?.executionConfigurationParityGate === null ? "n/a" : serviceTier?.executionConfigurationParityGate ? "pass" : "fail"} | claim boundary ${serviceTier?.claimBoundary ?? "unavailable"}`,
+    `Provider response tier: ${serviceTier?.providerResponseEvidenceGate === null ? "not exposed by host" : serviceTier?.providerResponseEvidenceGate ? "verified fast/priority" : "default/invalid observed"} | actual provider-tier claim ${serviceTier?.actualProviderProcessingTierClaimAllowed ? "allowed" : "not allowed"}`,
+    `Fast billing references: ChatGPT credits ${display(serviceTier?.subscriptionCreditAccounting?.referenceRates?.chatgptSubscriptionCredits?.multiplier, 1)}x | API token price ${display(serviceTier?.subscriptionCreditAccounting?.referenceRates?.apiFastTokenPricing?.multiplier, 1)}x | actual billing mode/multiplier unverified | non-blocking | excluded from token ratio`,
     "",
     `Paired successful runs: ${report.comparison.pairedSuccessfulRuns}`,
     `Paired runs with comparable usage: ${report.comparison.pairedUsageRuns}`,
@@ -278,6 +290,10 @@ export function renderBenchmarkHtml(report) {
   const causalContext = report.comparison.causalContextEvidence;
   const causalAggregates = causalContext?.aggregates;
   const hostReadiness = report.environment.hostReadinessHistory;
+  const allAttemptEfficiency = report.comparison.allAttemptPooledEfficiency;
+  const serviceTier = report.comparison.serviceTierEvidence;
+  const campaignEvidence = report.environment.campaignEvidence;
+  const priorCampaignHistory = campaignEvidence?.priorCampaignHistory;
   const suiteFailureReasons = (report.comparison.suiteGate?.failureReasons ?? [])
     .map((failure) => `${failure.id}: ${failure.message}`)
     .join("; ");
@@ -289,7 +305,10 @@ export function renderBenchmarkHtml(report) {
 <p class="metric"><strong>Observational timing (${htmlEscape(baselineLabel)}):</strong> ${htmlEscape(timingSummary(report.timingDiagnostics, baselineSurface))}</p><p class="metric"><strong>Observational timing (${htmlEscape(candidateLabel)}):</strong> ${htmlEscape(timingSummary(report.timingDiagnostics, candidateSurface))}</p>
 <p class="note">Timing uses privacy-safe monotonic JSONL receipt boundaries only. Missing boundaries remain unavailable; these diagnostics do not alter authoritative duration or any release/spend gate.</p>
 <p class="metric"><strong>Edit-recovery failures:</strong> ${causalAggregates?.editRecoveryContext?.failuresObserved ?? "n/a"} observed · ${causalAggregates?.editRecoveryContext?.suppressedFailures ?? "n/a"} safely suppressed</p>
-<p class="metric"><strong>Exact attempts:</strong> accepted ${report.tokenAccounting?.acceptedAttempts.exactAttempts ?? 0}/${report.tokenAccounting?.acceptedAttempts.attempts ?? 0} · failed ${report.tokenAccounting?.failedAttempts.exactAttempts ?? 0}/${report.tokenAccounting?.failedAttempts.attempts ?? 0}</p><p class="metric"><strong>Failed-attempt fresh:</strong> ${display(report.tokenAccounting?.failedAttempts.tokens.fresh, 0)}</p>
+	<p class="metric"><strong>Exact attempts:</strong> accepted ${report.tokenAccounting?.acceptedAttempts.exactAttempts ?? 0}/${report.tokenAccounting?.acceptedAttempts.attempts ?? 0} · failed ${report.tokenAccounting?.failedAttempts.exactAttempts ?? 0}/${report.tokenAccounting?.failedAttempts.attempts ?? 0}</p><p class="metric"><strong>Failed-attempt fresh:</strong> ${display(report.tokenAccounting?.failedAttempts.tokens.fresh, 0)}</p>
+	<p class="metric"><strong>All-attempt net fresh:</strong> ${htmlEscape(candidateLabel)} ${display(allAttemptEfficiency?.candidate?.freshTokens, 0)} · ${htmlEscape(baselineLabel)} ${display(allAttemptEfficiency?.baseline?.freshTokens, 0)} · ratio ${display(allAttemptEfficiency?.ratio, 4)} · reduction ${displayPercent(allAttemptEfficiency?.reductionPercent)} · ${allAttemptEfficiency?.passed === null ? "n/a" : allAttemptEfficiency?.passed ? "PASS" : "FAIL"}</p>
+	${campaignEvidence ? `<p class="metric"><strong>Current paid campaign:</strong> ${htmlEscape(campaignEvidence.status)} · exact ${campaignEvidence.allAttempts?.exactAttempts ?? 0}/${campaignEvidence.providerStartedAttempts ?? 0} · unknown ${campaignEvidence.unknownAttempts ?? 0} · claim ${campaignEvidence.claimOutcome?.allowed === true ? "allowed" : campaignEvidence.claimOutcome?.allowed === false ? "not allowed" : "pending"}</p><p class="metric"><strong>Prior paid campaigns (excluded from current net ratio):</strong> ${priorCampaignHistory?.paidCampaigns ?? 0} · provider attempts ${priorCampaignHistory?.providerStartedAttempts ?? 0} · exact ${priorCampaignHistory?.exactAttempts ?? 0} · unknown ${priorCampaignHistory?.unknownAttempts ?? 0} · ${priorCampaignHistory?.exactUsageComplete === true ? `exact known fresh ${display(priorCampaignHistory?.knownExactTokens?.fresh, 0)}` : `total usage unavailable; known-exact fresh subtotal ${display(priorCampaignHistory?.knownExactTokens?.fresh, 0)}`}</p>` : ""}
+	<p class="metric"><strong>Fast execution configuration parity:</strong> ${serviceTier?.executionConfigurationParityGate === null ? "n/a" : serviceTier?.executionConfigurationParityGate ? "PASS" : "FAIL"} · boundary ${htmlEscape(serviceTier?.claimBoundary ?? "unavailable")}</p><p class="metric"><strong>Provider response tier:</strong> ${serviceTier?.providerResponseEvidenceGate === null ? "not exposed by host" : serviceTier?.providerResponseEvidenceGate ? "verified fast/priority" : "default/invalid observed"}</p><p class="metric"><strong>Fast billing references:</strong> ChatGPT credits ${display(serviceTier?.subscriptionCreditAccounting?.referenceRates?.chatgptSubscriptionCredits?.multiplier, 1)}x · API token price ${display(serviceTier?.subscriptionCreditAccounting?.referenceRates?.apiFastTokenPricing?.multiplier, 1)}x · actual billing mode/multiplier unverified · non-blocking · excluded from token ratio</p>
 <p class="note"><strong>Token definitions:</strong> Input is fresh input only. Reasoning is already included in output. Fresh = input + output. Total = input + cache read + cache write + output. Normalized API-equivalent cost uses the versioned suite pricing snapshot and is not OAuth/provider-billed cost.</p>
 ${suiteFailureReasons ? `<p><strong>Suite gate failures:</strong> ${htmlEscape(suiteFailureReasons)}</p>` : ""}
 <h2>Score bands</h2><div class="table-wrap"><table><thead><tr><th>Surface</th><th>Resolved</th><th>Task grader</th><th>Scope</th><th>Quality</th><th>Safety</th><th>Reliability</th><th>Workflow</th><th>Efficiency</th><th>Overall</th></tr></thead><tbody>${scoreRows}</tbody></table></div>

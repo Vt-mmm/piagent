@@ -23,7 +23,7 @@ function key(value) {
 
 function exactUsage(usage, usageStatus) {
   const nonnegative = (value) => Number.isFinite(value) && value >= 0;
-  return usageStatus !== "unknown-after-provider-start"
+  return !["unknown-after-provider-start", "measured-lower-bound"].includes(usageStatus)
     && Number.isInteger(usage?.sessions) && usage.sessions > 0
     && ["fresh", "input", "output", "cacheRead", "cacheWrite", "reasoning", "total"].every((field) => nonnegative(usage?.[field]))
     && usage.fresh === usage.input + usage.output
@@ -52,6 +52,7 @@ export function persistUnacceptedBenchmarkAttempt({ runRoot, manifest, record, r
     class: record.infrastructureClass ?? "infrastructure",
     usage: record.usage,
     usageStatus: record.usageStatus ?? "unknown-after-provider-start",
+    retryable: record.infrastructureRetryable === true,
     durationSeconds: record.durationSeconds ?? 0,
     recoveredFromInFlight: false
   };
@@ -229,11 +230,20 @@ export function recoverOrphanedBenchmarkAttempts({ runRoot, manifest, fullOrder,
       surface: attempt.surface,
       repeat: attempt.repeat,
       attempt: attempt.infrastructureAttempt,
-      failure: "orphaned-provider-attempt-after-process-exit",
-      class: "infrastructure",
+      failure: attempt.stage === "provider-returned" && typeof attempt.infrastructureFailure === "string"
+        ? attempt.infrastructureFailure
+        : "orphaned-provider-attempt-after-process-exit",
+      class: attempt.stage === "provider-returned" && typeof attempt.infrastructureClass === "string"
+        ? attempt.infrastructureClass
+        : "infrastructure",
+      retryable: attempt.stage === "provider-returned" && attempt.infrastructureRetryable === true,
       usage: attempt.stage === "provider-returned" ? attempt.usage : undefined,
-      usageStatus: attempt.stage === "provider-returned" && exactUsage(attempt.usage, "measured-but-unaccepted") ? "measured-but-unaccepted" : "unknown-after-provider-start",
-      durationSeconds: 0,
+      usageStatus: attempt.stage === "provider-returned" && exactUsage(attempt.usage, attempt.usageStatus ?? "measured-but-unaccepted")
+        ? (attempt.usageStatus ?? "measured-but-unaccepted")
+        : "unknown-after-provider-start",
+      durationSeconds: Number.isFinite(attempt.durationSeconds) && attempt.durationSeconds >= 0
+        ? attempt.durationSeconds
+        : null,
       recoveredFromInFlight: true
     };
     const prior = seenAttempts.get(attemptKey);

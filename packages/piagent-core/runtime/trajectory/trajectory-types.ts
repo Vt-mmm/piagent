@@ -1,13 +1,14 @@
 import crypto from "node:crypto";
 import { isCurrentWorkingTreeDigest } from "../../extensions/working-tree-digest.js";
+import { TRAJECTORY_PHASES, type TrajectoryPhase } from "../../extensions/trajectory-contract.ts";
+
+export { TRAJECTORY_PHASES, type TrajectoryPhase } from "../../extensions/trajectory-contract.ts";
 
 export const TRAJECTORY_SCHEMA_VERSION = 1 as const;
 export const TRAJECTORY_POLICY_VERSION = "trajectory-v1" as const;
-export const TRAJECTORY_PHASES = Object.freeze(["intake", "scout", "plan", "execute", "verify", "repair", "review", "handoff", "terminal"] as const);
 export const TRAJECTORY_CAUSES = Object.freeze(["task-started", "context-observed", "plan-observed", "execution-authorized", "mutation-observed", "verification-started", "verification-passed", "verification-failed", "review-observed", "handoff-observed", "task-terminal", "recovery-requested", "explicit-skip"] as const);
 export const TRAJECTORY_SOURCE_HOOKS = Object.freeze(["input", "agent-start", "tool-call", "tool-result", "completion", "session-start", "task-state", "operator"] as const);
 
-export type TrajectoryPhase = typeof TRAJECTORY_PHASES[number];
 export type TrajectoryCause = typeof TRAJECTORY_CAUSES[number];
 export type TrajectorySourceHook = typeof TRAJECTORY_SOURCE_HOOKS[number];
 export type TerminalTaskOutcomeRef = { taskRunId: string; taskUpdatedAt: string; taskDigest: string };

@@ -9,6 +9,7 @@ import test from "node:test";
 import {
   collectProductionProviderFreeEvidence,
   prepareProductionProviderFreeEvidence,
+  productionProviderFreeConfigurationDigest,
   productionProviderFreeEvidenceBinding,
   productionProviderFreeEvidenceContextValidationErrors,
   productionProviderFreeEvidenceRequired,
@@ -39,6 +40,38 @@ test("provider-free production lanes are required only for the full spend-contro
   assert.equal(productionProviderFreeEvidenceRequired({ productionSpendControlled: true, spendControl: null }), false);
 });
 
+test("provider-free configuration binding ignores stage invocation identity but not measurement semantics", () => {
+  const semantic = {
+    schemaVersion: 1,
+    suiteDigest: "a".repeat(64),
+    model: "openai-codex/gpt-5.6-luna",
+    thinking: "medium",
+    serviceTier: "fast",
+    surfaces: ["piagent", "codex-cli"],
+    order: [{ scenarioId: "first", surface: "piagent", repeat: 1 }]
+  };
+  const s0 = productionProviderFreeConfigurationDigest({
+    ...semantic,
+    piCredentialVaultId: "1".repeat(32),
+    preflightOnly: true,
+    maxSessions: null,
+    output: null
+  });
+  const s12 = productionProviderFreeConfigurationDigest({
+    ...semantic,
+    piCredentialVaultId: "2".repeat(32),
+    preflightOnly: false,
+    maxSessions: 12,
+    output: "/private/operator/run"
+  });
+  assert.equal(s12, s0, "fresh S0 and S12 invocations must share provider-free evidence despite a new private vault and stage window");
+  assert.notEqual(productionProviderFreeConfigurationDigest({ ...semantic, model: "openai-codex/changed" }), s0);
+  assert.notEqual(productionProviderFreeConfigurationDigest({ ...semantic, thinking: "high" }), s0);
+  assert.notEqual(productionProviderFreeConfigurationDigest({ ...semantic, serviceTier: "default" }), s0);
+  assert.notEqual(productionProviderFreeConfigurationDigest({ ...semantic, order: [] }), s0);
+  assert.throws(() => productionProviderFreeConfigurationDigest(null), /must be an object/);
+});
+
 test("S0 executes, binds, caches, and revalidates all same-source provider-free lanes", async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-provider-free-test-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -60,7 +93,7 @@ test("S0 executes, binds, caches, and revalidates all same-source provider-free 
   const commit = execFileSync("git", ["-C", root, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
   const source = { kind: "git-working-tree", commit, dirty: false };
   const candidateProvenance = { contentDigest: "a".repeat(64), algorithm: "test-tree-v1" };
-  const configurationDigest = "b".repeat(64);
+  const providerFreeConfigurationDigest = "b".repeat(64);
   let laneCalls = 0;
   let failArchitecture = false;
   const runCommand = async (command, args) => {
@@ -93,20 +126,20 @@ test("S0 executes, binds, caches, and revalidates all same-source provider-free 
   };
 
   const receipt = await collectProductionProviderFreeEvidence({ packageRoot: root, liveRoot: root, runCommand,
-    source, candidateProvenance, configurationDigest });
+    source, candidateProvenance, providerFreeConfigurationDigest });
   assert.equal(laneCalls, 4);
   assert.deepEqual(receipt.lanes.map((lane) => lane.id), ["architecture-conformance-v1", "runtime-conformance-v1", "long-horizon-v1", "webui-parity-v1"]);
   assert.deepEqual(productionProviderFreeEvidenceValidationErrors(receipt, receipt.binding), []);
   assert.deepEqual(productionProviderFreeEvidenceContextValidationErrors(receipt, {
-    source, candidateProvenance, configurationDigest
+    source, candidateProvenance, providerFreeConfigurationDigest
   }), []);
   assert.equal(receipt.binding.source.commit, commit);
   assert.equal(receipt.binding.source.treeDigest, candidateProvenance.contentDigest);
-  assert.equal(receipt.binding.productionConfigurationDigest, configurationDigest);
+  assert.equal(receipt.binding.providerFreeConfigurationDigest, providerFreeConfigurationDigest);
   assert.match(receipt.completedAt, /^\d{4}-\d{2}-\d{2}T/);
 
   const cached = await collectProductionProviderFreeEvidence({ packageRoot: root, liveRoot: root, runCommand,
-    source, candidateProvenance, configurationDigest });
+    source, candidateProvenance, providerFreeConfigurationDigest });
   assert.equal(laneCalls, 4, "an exact same-binding S12 invocation reuses the S0 receipt without rerunning the lanes");
   assert.deepEqual(cached, receipt);
 
@@ -118,22 +151,30 @@ test("S0 executes, binds, caches, and revalidates all same-source provider-free 
     .includes("provider-free-lane-summary-invalid:architecture-conformance-v1"));
   fs.writeFileSync(cachePath, `${JSON.stringify(corruptedCache)}\n`);
   const recovered = await collectProductionProviderFreeEvidence({ packageRoot: root, liveRoot: root, runCommand,
-    source, candidateProvenance, configurationDigest });
+    source, candidateProvenance, providerFreeConfigurationDigest });
   assert.equal(laneCalls, 8, "a tampered architecture receipt reruns the full source-bound S0 lane set");
   assert.deepEqual(productionProviderFreeEvidenceValidationErrors(recovered, recovered.binding), []);
 
   fs.writeFileSync(cachePath, "{not-json\n");
   const recoveredFromMalformedCache = await collectProductionProviderFreeEvidence({ packageRoot: root, liveRoot: root,
-    runCommand, source, candidateProvenance, configurationDigest });
+    runCommand, source, candidateProvenance, providerFreeConfigurationDigest });
   assert.equal(laneCalls, 12, "malformed local cache bytes cannot abort or bypass the frozen S0 lanes");
   assert.deepEqual(productionProviderFreeEvidenceValidationErrors(recoveredFromMalformedCache,
     recoveredFromMalformedCache.binding), []);
+
+  let resumedLaneCalls = 0;
+  const resumed = await prepareProductionProviderFreeEvidence({ required: true, packageRoot: root,
+    bootstrapMetadata: { sourceIdentity: source, liveRoot: root }, candidateProvenance, providerFreeConfigurationDigest,
+    runCommand: async () => { resumedLaneCalls += 1; throw new Error("resumed evidence must not execute a lane"); },
+    resumedReceipt: recoveredFromMalformedCache });
+  assert.equal(resumedLaneCalls, 0);
+  assert.deepEqual(resumed.receipt, recoveredFromMalformedCache);
 
   let incompleteResume = structuredClone(recoveredFromMalformedCache);
   incompleteResume.lanes = incompleteResume.lanes.filter((lane) => lane.id !== "architecture-conformance-v1");
   incompleteResume = signedReceipt(incompleteResume);
   await assert.rejects(() => prepareProductionProviderFreeEvidence({ required: true, packageRoot: root,
-    bootstrapMetadata: { sourceIdentity: source, liveRoot: root }, candidateProvenance, configurationDigest,
+    bootstrapMetadata: { sourceIdentity: source, liveRoot: root }, candidateProvenance, providerFreeConfigurationDigest,
     runCommand, resumedReceipt: incompleteResume }), /resumed production provider-free evidence is missing or changed/);
 
   const tampered = structuredClone(recoveredFromMalformedCache);
@@ -146,16 +187,16 @@ test("S0 executes, binds, caches, and revalidates all same-source provider-free 
   futureTime.completedAt = new Date(Date.now() + 3_600_000).toISOString();
   assert.ok(productionProviderFreeEvidenceValidationErrors(futureTime, recoveredFromMalformedCache.binding).includes("provider-free-completion-time-invalid-or-future"));
   assert.ok(productionProviderFreeEvidenceContextValidationErrors(recoveredFromMalformedCache, {
-    source, candidateProvenance: { ...candidateProvenance, contentDigest: "c".repeat(64) }, configurationDigest
+    source, candidateProvenance: { ...candidateProvenance, contentDigest: "c".repeat(64) }, providerFreeConfigurationDigest
   }).includes("provider-free-tree-binding-mismatch"));
   assert.throws(() => productionProviderFreeEvidenceBinding({ packageRoot: root,
-    source: { ...source, dirty: true }, candidateProvenance, configurationDigest }), /exact clean Git commit/);
+    source: { ...source, dirty: true }, candidateProvenance, providerFreeConfigurationDigest }), /exact clean Git commit/);
 
   fs.writeFileSync(cachePath, "{force-cache-miss\n");
   failArchitecture = true;
   const callsBeforeFailure = laneCalls;
   await assert.rejects(() => collectProductionProviderFreeEvidence({ packageRoot: root, liveRoot: root, runCommand,
-    source, candidateProvenance, configurationDigest }), /Required provider-free lane failed: architecture-conformance-v1/);
+    source, candidateProvenance, providerFreeConfigurationDigest }), /Required provider-free lane failed: architecture-conformance-v1/);
   assert.equal(laneCalls, callsBeforeFailure + 1, "architecture failure stops S0 before any slower lane starts");
 });
 

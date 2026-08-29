@@ -1,3 +1,5 @@
+import { explicitUndefinedTemporalContract } from "./acceptance-temporal-contract.js";
+
 function normalizedText(value) {
   return String(value ?? "")
     .normalize("NFD")
@@ -187,6 +189,17 @@ export function acceptanceBoundaryProofGuidance(raw) {
   const value = normalizedText(raw);
   const guidance = [];
   const replayContract = /\b(?:replay(?:ed|s)?|idempot(?:ent|ency))\b/.test(value);
+
+  if (
+    /\biso(?:[-\s]+8601)?(?:[-\s]+timestamp)?(?:[-\s]+strings?)?\b/.test(value)
+    && /\b(?:invalid|malformed)\s+(?:date|dates|timestamp|timestamps)\b|\b(?:date|dates|timestamp|timestamps)\b[^.\n]{0,80}\b(?:throw|reject)/.test(value)
+  ) {
+    guidance.push("For an ISO date-string contract, separately reject a parseable non-ISO string, a syntactically ISO but impossible calendar date, and an invalid Date object; a finite Date.parse result alone does not prove ISO validity.");
+  }
+
+  if (explicitUndefinedTemporalContract(value)) {
+    guidance.push("Distinguish an omitted time argument from explicitly supplied undefined, null, false, and zero; a default parameter conflates omission with explicit undefined and cannot prove this contract.");
+  }
   if (malformedIdentifierContract(raw)) {
     guidance.push("For malformed identifier input, exercise missing, wrong-type, and empty-string values separately; add whitespace-only when the contract requires non-whitespace.");
   }

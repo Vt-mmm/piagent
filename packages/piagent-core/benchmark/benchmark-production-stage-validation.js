@@ -1,7 +1,10 @@
 import crypto from "node:crypto";
 
 import { atMostWithinFloatingPrecision } from "./benchmark-statistics.js";
-import { exactBenchmarkAttemptUsage } from "./benchmark-usage.js";
+import {
+  benchmarkInfrastructureFailureLedgerIssues,
+  exactBenchmarkAttemptUsage
+} from "./benchmark-usage.js";
 
 function nonEmptyString(value) {
   return typeof value === "string" && value.trim().length > 0;
@@ -69,10 +72,7 @@ export function productionV2EarlyDetectionValidationErrors(control, { suiteId, s
 
 function allAttemptFreshTokens(run) {
   const failures = Array.isArray(run?.infrastructureFailures) ? run.infrastructureFailures : [];
-  const ledgerExact = Number.isSafeInteger(run?.infrastructureRetries)
-    && Number.isSafeInteger(run?.infrastructureAttempts)
-    && failures.length === run.infrastructureRetries
-    && run.infrastructureAttempts === run.infrastructureRetries + 1;
+  const ledgerExact = benchmarkInfrastructureFailureLedgerIssues([run]).length === 0;
   const attempts = [
     { usage: run?.usage, status: run?.usageStatus ?? "measured" },
     ...failures.map((failure) => ({

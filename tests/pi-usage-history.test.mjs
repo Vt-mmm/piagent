@@ -226,6 +226,48 @@ describe("Pi usage history", () => {
     assert.throws(() => summarizeSession(target, { strictUsage: true }), /non-empty id and cwd strings/);
   });
 
+  it("accepts upstream-optional reasoning without discarding exact additive token totals", () => {
+    const fixture = makeFixture();
+    const target = path.join(fixture.root, "optional-reasoning.jsonl");
+    const zeroOutput = usage(3, 0, 1, 0, 0, 4, 0);
+    const nonzeroOutput = usage(10, 5, 2, 0, 0, 17, 0.01);
+    delete zeroOutput.reasoning;
+    delete nonzeroOutput.reasoning;
+    writeJsonl(target, [
+      { type: "session", id: "optional-reasoning", cwd: fixture.project },
+      { type: "message", message: { role: "assistant", content: [], stopReason: "error", usage: zeroOutput } },
+      { type: "message", message: { role: "assistant", content: [{ type: "text", text: "partial" }], usage: nonzeroOutput } }
+    ]);
+
+    const summary = summarizeSession(target, { strictUsage: true });
+    assert.equal(summary.usageIntegrity.exact, true, "input/output/cache/total remain exact");
+    assert.equal(summary.usageIntegrity.reasoningInferredZeroMessages, 1);
+    assert.equal(summary.usageIntegrity.reasoningLowerBoundMessages, 1);
+    assert.equal(summary.usageIntegrity.reasoningCompleteness, "lower-bound");
+    assert.deepEqual(summary.tokens, {
+      input: 13,
+      output: 5,
+      cacheRead: 3,
+      cacheWrite: 0,
+      reasoning: 0,
+      total: 21,
+      cost: 0.01
+    });
+    assert.equal(summary.pricingBuckets.completeness, "exact");
+    assert.equal(summary.pricingBuckets.requests[0].reasoning, 0);
+    assert.equal(summary.pricingBuckets.requests[0].reasoningCompleteness, undefined);
+    assert.equal(summary.pricingBuckets.requests[1].reasoning, 0);
+    assert.equal(summary.pricingBuckets.requests[1].reasoningCompleteness, "lower-bound");
+
+    const invalid = usage(1, 1, 0, 0, 0, 2, 0);
+    invalid.reasoning = null;
+    writeJsonl(target, [
+      { type: "session", id: "invalid-reasoning", cwd: fixture.project },
+      { type: "message", message: { role: "assistant", content: [], usage: invalid } }
+    ]);
+    assert.throws(() => summarizeSession(target, { strictUsage: true }), /reasoning must be a non-negative safe integer/);
+  });
+
   it("emits privacy-safe request pricing and execution accounting", () => {
     const fixture = makeFixture();
     const target = path.join(fixture.root, "telemetry.jsonl");

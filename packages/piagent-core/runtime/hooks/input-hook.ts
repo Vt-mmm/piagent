@@ -8,6 +8,10 @@ import type { ChatImageAccessPolicy } from "../input/chat-images.ts";
 import { LONG_INPUT_CHARS } from "../runtime-limits.ts";
 import type { AuthorityResumeDecision } from "../policy/authority-resume-policy.ts";
 import { buildHandoffProjection, writeHandoffProjection } from "../recovery/handoff-projection.ts";
+import {
+  isUncertainSendContinuation,
+  terminalUncertainSendReceipt
+} from "../session/uncertain-send-continuation.ts";
 import { buildContextPreflight, buildUsageSnapshot } from "../session/usage.ts";
 import { registerAdaptiveContextGovernor } from "../session/adaptive-context-governor.ts";
 import { activeTaskToolGroups, toolGroupsForPrompt } from "../tools/tool-groups.ts";
@@ -54,10 +58,41 @@ export function registerInputHook(pi: ExtensionAPI, dependencies: InputHookDepen
 
     const taskSignal = classifyContextTask(text);
     const sessionTask = dependencies.activeTask(ctx);
-    if (sessionTask && sessionTask.trace.outcome !== "pending") dependencies.state.clearTaskBoundary(ctx, sessionTask.taskRunId);
-    else if (!sessionTask) {
-      const cachedTask = dependencies.state.taskIdentity(ctx);
-      if (cachedTask) dependencies.state.clearTaskBoundary(ctx, cachedTask.taskRunId);
+    const uncertainSendContinuation = (!Array.isArray(event.images) || event.images.length === 0)
+      && isUncertainSendContinuation(text);
+    const terminalReceipt = uncertainSendContinuation
+      ? terminalUncertainSendReceipt(ctx.cwd, sessionTask)
+      : undefined;
+    if (terminalReceipt && event.source !== "extension") {
+      dependencies.telemetry(ctx, {
+        event: "uncertain_send_terminal_receipt_reemitted",
+        source: event.source,
+        promptHash: taskSignal.promptHash,
+        taskId: terminalReceipt.details.taskId,
+        taskRunId: terminalReceipt.details.taskRunId,
+        outcome: terminalReceipt.details.outcome,
+        completionApproved: terminalReceipt.details.completionApproved,
+        replacementTaskStarted: false,
+        replayed: false,
+        modelTurnStarted: false
+      });
+      pi.sendMessage(
+        {
+          customType: terminalReceipt.customType,
+          content: terminalReceipt.content,
+          display: true,
+          details: terminalReceipt.details
+        },
+        { triggerTurn: false }
+      );
+      return { action: "handled" };
+    }
+    if (!uncertainSendContinuation) {
+      if (sessionTask && sessionTask.trace.outcome !== "pending") dependencies.state.clearTaskBoundary(ctx, sessionTask.taskRunId);
+      else if (!sessionTask) {
+        const cachedTask = dependencies.state.taskIdentity(ctx);
+        if (cachedTask) dependencies.state.clearTaskBoundary(ctx, cachedTask.taskRunId);
+      }
     }
     const activeTask = sessionTask?.trace.outcome === "pending" ? sessionTask : undefined;
     const turn = dependencies.state.beginTurn(ctx, taskSignal.promptHash, {

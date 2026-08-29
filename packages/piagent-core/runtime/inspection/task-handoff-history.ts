@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { redactSensitiveText } from "../../extensions/redaction-core.js";
-import { readHandoffProjection } from "../recovery/handoff-projection.ts";
+import { handoffIdentityMatchesTask, readHandoffProjection } from "../recovery/handoff-projection.ts";
 import { inspectTaskResumeState } from "../recovery/resume-state.ts";
 import { inspectBoundedContextTelemetry } from "./context-telemetry-inspection.ts";
 import { taskRunOpaqueRef } from "./task-run-index.ts";
@@ -34,7 +34,7 @@ function nextAction(cwd: string, task: Task) {
 
 function currentHandoff(cwd: string, task: Task) {
   const handoff = readHandoffProjection(cwd, task.taskRunId); if (!handoff) return null;
-  if (handoff.identity.taskId !== task.taskId || handoff.identity.taskRunId !== task.taskRunId) throw new Error("handoff-identity-conflict");
+  if (!handoffIdentityMatchesTask(handoff.identity, task as any)) throw new Error("handoff-identity-conflict");
   return { handoffRef: opaque("handoff", `${task.taskRunId}\0${handoff.generatedAt}\0${handoff.tree.currentDigest ?? "none"}`),
     generatedAt: handoff.generatedAt, phase: display(handoff.state.phase, 64) || null, taskOutcome: handoff.state.taskOutcome,
     gateDecision: handoff.state.gateDecision, completionApproved: handoff.state.completionApproved,

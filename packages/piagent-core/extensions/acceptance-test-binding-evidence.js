@@ -23,7 +23,13 @@ export function boundRejectionTestEvidence(input) {
     || input.requestedErrors.some((name) => assertion.errorClasses.includes(name));
   const bindingGroups = input.bindings.map((binding) => {
     const allAssertions = (binding.testBindings ?? []).flatMap(assertionsForBinding);
-    return { binding, allAssertions, assertions: allAssertions.filter(requestedError) };
+    const assertions = allAssertions.filter(requestedError);
+    return {
+      binding, allAssertions, assertions,
+      invalidArgumentIndices: [...new Set(assertions.flatMap((item) => item.invalidArgumentIndices ?? []))]
+        .sort((left, right) => left - right),
+      invalidArgumentPartitions: assertions.flatMap((item) => item.invalidArgumentPartitions ?? [])
+    };
   });
   const testCodes = input.testCodeEntries.length > 0
     ? input.testCodeEntries.map((entry) => entry.code) : [input.fallbackTestCode];
@@ -56,5 +62,17 @@ export function boundRejectionTestEvidence(input) {
     const matches = [...input.bodyMaps.values()].filter((bodies) => bodies.has(target));
     return assertionModesMatch(items, [`*.${target}`], matches.length === 1 ? callableAssertionMode(matches[0], target) : undefined);
   });
-  return { assertions, mappingOk, modeOk, targetOk };
+  return {
+    assertions, mappingOk, modeOk, targetOk,
+    bindingArgumentRequirements: bindingGroups.map(({ binding, invalidArgumentIndices, invalidArgumentPartitions }) => ({
+      sourcePath: binding.sourcePath,
+      sourceName: binding.sourceName,
+      invalidArgumentIndices,
+      invalidArgumentPartitions: [...new Set(invalidArgumentPartitions.map((item) => item.index))].map((index) => ({
+        index,
+        partitions: [...new Set(invalidArgumentPartitions.filter((item) => item.index === index)
+          .flatMap((item) => item.partitions ?? []))].sort()
+      }))
+    }))
+  };
 }

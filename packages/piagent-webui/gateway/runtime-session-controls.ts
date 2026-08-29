@@ -1,4 +1,17 @@
 import { redactSensitiveText } from "../../piagent-core/security/sensitive-data.js";
+import {
+  PIAGENT_SERVICE_TIER_RECEIPT_ENTRY_TYPE,
+  parseServiceTierReceipt,
+  type ServiceTierReceipt
+} from "../../piagent-core/runtime/model/service-tier-runtime.ts";
+
+type RuntimeCommandOutput = {
+  customType: string;
+  content: string;
+  truncated: boolean;
+  redacted: boolean;
+  details?: ServiceTierReceipt;
+};
 
 export async function executePermissionCommand(session: any,
   permissionMode: "read-only" | "workspace-write" | "trusted-full-access"): Promise<void> {
@@ -12,7 +25,7 @@ export async function executePermissionCommand(session: any,
 }
 
 export async function executeRuntimeCommand(session: any, command: string): Promise<{
-  outputs: Array<{ customType: string; content: string; truncated: boolean; redacted: boolean }>;
+  outputs: RuntimeCommandOutput[];
   modelCallObserved: boolean;
 }> {
   const before = Array.isArray(session.messages) ? session.messages.length : 0;
@@ -22,8 +35,10 @@ export async function executeRuntimeCommand(session: any, command: string): Prom
     const source = typeof message.content === "string" ? message.content : JSON.stringify(message.content ?? "");
     const bounded = source.slice(0, 12_000), redacted = redactSensitiveText(bounded);
     const rawType = String(message.customType ?? "runtime-output");
+    const details = rawType === PIAGENT_SERVICE_TIER_RECEIPT_ENTRY_TYPE
+      ? parseServiceTierReceipt(message.details) : null;
     return { customType: /^[A-Za-z0-9._-]{1,120}$/.test(rawType) ? rawType : "runtime-output", content: redacted.text,
-      truncated: source.length > bounded.length, redacted: redacted.redacted };
+      truncated: source.length > bounded.length, redacted: redacted.redacted, ...(details ? { details } : {}) };
   });
   return { outputs, modelCallObserved: added.some((message: any) => message?.role === "assistant") };
 }

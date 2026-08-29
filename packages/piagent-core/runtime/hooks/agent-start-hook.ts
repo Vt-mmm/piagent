@@ -30,6 +30,7 @@ import { observeTrajectorySync } from "../trajectory/trajectory-observability.ts
 import type { SolverShadowEvaluation } from "../solver/solver-shadow.ts";
 import { trajectoryRecommendationRef } from "../trajectory/trajectory-runtime.ts";
 import type { ContextInjectionItem } from "../session/runtime-state.ts";
+import { isUncertainSendContinuation } from "../session/uncertain-send-continuation.ts";
 import {
   compactManagedProjectInstructions,
   rewriteLegacyProjectInstructions
@@ -51,6 +52,7 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
     const projectInstructions = rewriteLegacyProjectInstructions(event.systemPrompt);
     const query = looksLikeGovernedBoilerplate(event.prompt) ? extractTaskRequest(event.prompt) : event.prompt.trim();
     const signal = classifyContextTask(query);
+    const uncertainSendContinuation = isUncertainSendContinuation(query);
     // A mutation clarification still goes to the provider unchanged and never
     // creates a task. Only a lightweight decision also skips repository retrieval.
     const nonAuthorizingClarification = isNonAuthorizingChangeClarification(query);
@@ -91,6 +93,7 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
     const toolSchemaTokens = estimateContextTokens(prefix.canonicalToolSurface);
     const systemPromptTokens = estimateContextTokens(effectiveSystemPrompt);
     const autoPackUseful = !lightweightChangeContinuation
+      && !uncertainSendContinuation
       && activeTask?.trace.outcome !== "pending"
       && (runtimeIntake || signal.paths.length === 0);
     let runtimeSnapshot: RuntimeModelSnapshot | undefined;
@@ -166,8 +169,11 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
       const criterionLimit = Number.isFinite(Number(discoveryPlan?.limit))
         ? Math.max(1, Math.min(6, Math.trunc(Number(discoveryPlan?.limit))))
         : signal.paths.length > 0 ? 3 : 4;
-      const criterionMode = dependencies.autoContextEnabled && intake?.task?.criterionGraph?.mode === "criterion-graph";
-      const criterionEntries = intake?.task?.criterionGraph?.mode === "criterion-graph"
+      const terminalUncertainSend = intake?.continuation === "terminal-uncertain-send";
+      const criterionMode = dependencies.autoContextEnabled
+        && !terminalUncertainSend
+        && intake?.task?.criterionGraph?.mode === "criterion-graph";
+      const criterionEntries = !terminalUncertainSend && intake?.task?.criterionGraph?.mode === "criterion-graph"
         ? composeCriterionContextEntries({
             explicitPaths: signal.paths,
             criteria: intake.task.acceptanceCriteria,
@@ -275,6 +281,13 @@ export function registerAgentStartHook(pi: ExtensionAPI, dependencies: AgentStar
                   verifyCommands: intake.task.verifyCommands,
                   criterionGraph: intake.task.criterionGraph ? { mode: intake.task.criterionGraph.mode, graphDigest: intake.task.criterionGraph.graphDigest, nodes: intake.task.criterionGraph.nodes.length } : null,
                   intakeMode: intake.task.intakeMode
+                }
+              : undefined,
+            uncertainSendContinuation: terminalUncertainSend
+              ? {
+                  taskId: intake?.task?.taskId ?? null,
+                  taskRunId: intake?.task?.taskRunId ?? null,
+                  replacementTaskStarted: false
                 }
               : undefined,
             criterionContext: composedContext ? {

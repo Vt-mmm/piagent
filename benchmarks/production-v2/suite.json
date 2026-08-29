@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "production-v2",
   "title": "Piagent Public Regression V2",
-  "description": "Paired public regression matrix with nine task families, three structural variants per family, two model-backed repeats, and explicit multi-turn user journeys.",
+  "description": "Paired public regression matrix with nine task families, three structural variants per family, two model-backed repeats, explicit multi-turn user journeys, Fast execution configuration parity, and all-attempt net token accounting.",
   "profile": "node-typescript",
   "defaultRepeats": 2,
   "timeoutSeconds": 900,
@@ -13,7 +13,8 @@
     ],
     "model": "openai-codex/gpt-5.6-luna",
     "thinking": "medium",
-    "codexMode": "controlled"
+    "codexMode": "controlled",
+    "serviceTier": "fast"
   },
   "pricingSnapshot": {
     "schemaVersion": 1,
@@ -63,11 +64,14 @@
     "maximumInfrastructureRetries": 0,
     "primaryEfficiencyEstimand": "fixed-workload-family-ratio",
     "maximumFreshTokenRatioUpper95": 0.6,
+    "maximumAllAttemptPooledFreshTokenRatio": 0.65,
     "requireEfficiencyClaim": true,
     "requireNormalizedCostClaim": false,
     "requireHostReadinessForClaim": false,
     "requireFullSuiteForClaim": true,
     "requireStableProviderWireSurface": true,
+    "requireFastServiceTier": true,
+    "requireCampaignAccounting": true,
     "requireCausalContextReceipt": true,
     "requireProviderFreeEvidence": true,
     "requireSubagentBudget": true,

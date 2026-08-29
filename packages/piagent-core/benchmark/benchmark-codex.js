@@ -19,8 +19,17 @@ function controlledArgs(options, disabledFeatures) {
     "-m", codexModelName(options.model),
     "-c", `model_reasoning_effort=${JSON.stringify(codexThinkingEffort(options.thinking))}`
   ];
+  if (options.serviceTier === "fast") {
+    args.push("-c", "service_tier=\"fast\"", "--enable", "fast_mode");
+  } else if (options.serviceTier === "default") {
+    args.push("-c", "service_tier=\"default\"", "--disable", "fast_mode");
+  }
   if (options.codexMode === "controlled") {
-    args.push("--ignore-user-config", "--ignore-rules");
+    // A controlled benchmark must fail before provider execution when an
+    // override is unknown to the pinned Codex executable. This makes the
+    // actual argv a usable configuration receipt instead of silently allowing
+    // a misspelled or removed service-tier option to fall back to defaults.
+    args.push("--strict-config", "--ignore-user-config", "--ignore-rules");
     for (const feature of disabledFeatures) args.push("--disable", feature);
   }
   return args;

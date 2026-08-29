@@ -1069,6 +1069,103 @@ describe("acceptance evidence lexical truth", () => {
     }
   });
 
+  it("keeps a temporal receipt pending when local tests omit strict ISO, calendar, and explicit-undefined partitions", () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-temporal-receipt-"));
+    try {
+      fs.mkdirSync(path.join(cwd, "src", "reliability"), { recursive: true });
+      fs.mkdirSync(path.join(cwd, "test"), { recursive: true });
+      const operatorContract = [
+        "Fix `isExpired(expiresAt, now)` in `src/reliability/expiry.js`.",
+        "Accept an ISO timestamp string or `Date` for `expiresAt`, and a millisecond number or `Date` for `now`.",
+        "Invalid dates must throw `TypeError`",
+        "Do not use the machine's current time when an explicit falsey value is provided."
+      ];
+      const summary = operatorContract.join(" ");
+      const criteria = ["Invalid dates must throw `TypeError`"]; // temporal context is intentionally summary-only
+      const built = buildAcceptanceReceipt({
+        summary,
+        expectedOutput: "Strict temporal behavior is proved by focused tests.",
+        acceptanceCriteria: criteria,
+        changeMode: "source-change",
+        source: "runtime",
+        generatedAt: "2026-08-08T01:00:00.000Z"
+      });
+      const source = [
+        "export function isExpired(expiresAt, now = Date.now()) {",
+        "  const expiry = expiresAt instanceof Date ? expiresAt.getTime() : Date.parse(expiresAt);",
+        "  if (!Number.isFinite(expiry)) throw new TypeError('expiry');",
+        "  const current = now instanceof Date ? now.getTime() : now;",
+        "  if (!Number.isFinite(current)) throw new TypeError('now');",
+        "  return current >= expiry;",
+        "}",
+        ""
+      ].join("\n");
+      const testText = [
+        "import assert from 'node:assert/strict';",
+        "import { isExpired } from '../src/reliability/expiry.js';",
+        "assert.throws(() => isExpired('not a date', 0), TypeError);",
+        "assert.throws(() => isExpired(new Date('invalid'), 0), TypeError);",
+        "assert.throws(() => isExpired('2026-01-01T00:00:00.000Z', NaN), TypeError);",
+        ""
+      ].join("\n");
+      fs.writeFileSync(path.join(cwd, "src", "reliability", "expiry.js"), source);
+      fs.writeFileSync(path.join(cwd, "test", "contract.test.js"), testText);
+      const digest = treeDigest("e");
+      const candidate = {
+        ...task("pending"),
+        summary,
+        expectedOutput: "Strict temporal behavior is proved by focused tests.",
+        acceptanceCriteria: built.acceptanceCriteria,
+        acceptanceReceipt: built.receipt,
+        changedFiles: ["src/reliability/expiry.js", "test/contract.test.js"],
+        observedChangedFiles: ["src/reliability/expiry.js", "test/contract.test.js"],
+        verifyCommands: ["node --test test/contract.test.js"],
+        verifyEvidence: [{
+          command: "node --test test/contract.test.js", exitCode: 0, summary: "pass",
+          recordedAt: "2026-08-08T01:00:01.000Z", observed: true, matchedProfileCommand: true,
+          preWorkingTreeDigest: digest, workingTreeDigest: digest
+        }]
+      };
+      const refreshed = refreshAcceptanceReceipt(candidate, {
+        cwd, changedFiles: candidate.changedFiles, currentWorkingTreeDigest: digest
+      });
+      assert.ok(refreshed.criticalMissing.some((item) => item.obligation === "invalid-input-rejection"));
+      const projection = acceptanceCriticalRecoveryProjection(candidate, {
+        cwd, changedFiles: candidate.changedFiles, currentWorkingTreeDigest: digest
+      });
+      assert.ok(projection.some((item) => item.proofHints.some((hint) => /parseable non-ISO string/i.test(hint))));
+      assert.ok(projection.some((item) => item.proofHints.some((hint) => /explicitly supplied undefined/i.test(hint))));
+
+      const correctSource = [
+        "function parse(value, allowNumber) {",
+        "  if (value instanceof Date) { const result = value.getTime(); if (!Number.isFinite(result)) throw new TypeError('date'); return result; }",
+        "  if (allowNumber && typeof value === 'number' && Number.isFinite(value)) return value;",
+        "  if (!allowNumber && typeof value === 'string') {",
+        "    const match = /^(\\d{4})-(\\d{2})-(\\d{2})T/.exec(value); const result = Date.parse(value);",
+        "    if (match) { const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]); const days = new Date(Date.UTC(year, month, 0)).getUTCDate(); if (month >= 1 && month <= 12 && day >= 1 && day <= days && Number.isFinite(result)) return result; }",
+        "  }",
+        "  throw new TypeError('date');",
+        "}",
+        "export function isExpired(expiresAt, now) { return parse(arguments.length < 2 ? Date.now() : now, true) >= parse(expiresAt, false); }",
+        ""
+      ].join("\n");
+      const completeTest = [
+        "import assert from 'node:assert/strict'; import { isExpired } from '../src/reliability/expiry.js';",
+        "for (const value of ['not a date', '01/01/2026', '2026-02-30T00:00:00.000Z', new Date('invalid')]) assert.throws(() => isExpired(value, 0), TypeError);",
+        "for (const value of [NaN, Infinity, '0', null, false, undefined, new Date('invalid')]) assert.throws(() => isExpired('2026-01-01T00:00:00.000Z', value), TypeError);",
+        ""
+      ].join("\n");
+      fs.writeFileSync(path.join(cwd, "src", "reliability", "expiry.js"), correctSource);
+      fs.writeFileSync(path.join(cwd, "test", "contract.test.js"), completeTest);
+      const closed = refreshAcceptanceReceipt(candidate, {
+        cwd, changedFiles: candidate.changedFiles, currentWorkingTreeDigest: digest
+      });
+      assert.equal(closed.criticalMissing.some((item) => item.obligation === "invalid-input-rejection"), false);
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("does not infer rejected array evidence from valid array nouns or qualified unordered arrays", () => {
     const source = "export function parseSteps(value) { if (!Array.isArray(value)) throw new TypeError('value'); return value; }";
     const testText = "import assert from 'node:assert/strict'; import { parseSteps } from '../src/count.js'; assert.throws(() => parseSteps(null), TypeError);";

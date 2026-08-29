@@ -196,7 +196,27 @@ switch (scenario) {
     });
     await check("invalid-date-rejected", () => {
       assert.throws(() => isExpired("not-a-date", 0), TypeError);
+      assert.throws(() => isExpired("01/01/2026", 0), TypeError);
+      assert.throws(() => isExpired("2026-02-30T00:00:00.000Z", 0), TypeError);
+      assert.throws(() => isExpired(new Date(Number.NaN), 0), TypeError);
+      assert.throws(() => isExpired(null, 0), TypeError);
+      assert.throws(() => isExpired(0, 0), TypeError);
+      assert.throws(() => isExpired(false, 0), TypeError);
+      assert.throws(() => isExpired(undefined, 0), TypeError);
+      assert.throws(() => isExpired(data.iso, new Date(Number.NaN)), TypeError);
       assert.throws(() => isExpired(data.iso, Number.NaN), TypeError);
+      assert.throws(() => isExpired(data.iso, Number.POSITIVE_INFINITY), TypeError);
+      assert.throws(() => isExpired(data.iso, null), TypeError);
+      assert.throws(() => isExpired(data.iso, false), TypeError);
+      assert.throws(() => isExpired(data.iso, "0"), TypeError);
+      assert.throws(() => isExpired(data.iso, undefined), TypeError);
+    });
+    await check("explicit-falsey-now-and-input-stability", () => {
+      assert.equal(isExpired("1970-01-01T00:00:01.000Z", 0), false);
+      const expiry = new Date(data.timestamp), now = new Date(data.timestamp);
+      assert.equal(isExpired(expiry, now), true);
+      assert.equal(expiry.getTime(), data.timestamp);
+      assert.equal(now.getTime(), data.timestamp);
     });
     break;
   }

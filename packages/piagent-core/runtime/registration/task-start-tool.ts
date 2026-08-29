@@ -4,6 +4,7 @@ import { WORKING_TREE_DIGEST_ALGORITHM } from "../../extensions/working-tree-dig
 import { TASK_ACCEPTANCE_CRITERIA_MAX, TASK_ACCEPTANCE_CRITERION_MAX_CHARS, TASK_EXPECTED_OUTPUT_MAX_CHARS, TASK_SUMMARY_MAX_CHARS, operatorRequestDigest } from "../../extensions/task-state.js";
 import { createEnvironmentBoundTaskAuthority } from "../policy/task-authority-runtime.ts";
 import { authorityReplacementState } from "../policy/authority-resume-policy.ts";
+import { uncertainSendRuntimeIntake } from "../session/uncertain-send-continuation.ts";
 import { compileCriterionGraph, criterionGraphContextSelection, criterionGraphContextSelectionDetails, criterionGraphGuidance, criterionGraphMode } from "../../extensions/criterion-graph.js";
 import { captureTaskStartBaseline } from "../inspection/task-baseline-start-capture.ts";
 import { sameStringRecord, satisfiesAuthorityReplacement } from "./task-start-retry-helpers.ts"; import { automaticTaskExecutionGuidance, EXACT_VERIFIER_EXECUTION_GUIDANCE, RUNTIME_SOURCE_REUSE_GUIDANCE, taskCriticalProofSection } from "./task-start-guidance.ts";
@@ -407,12 +408,18 @@ export function registerTaskStartTool(pi: ExtensionAPI, deps: Record<string, any
     }
   };
   registerRuntimeTool(pi, taskStartTool);
-  async function maybeStartAutomaticTask(prompt: string, ctx: ExtensionContext): Promise<{ started: boolean; text: string; task?: TaskContract; plannedContext?: Array<{ path: string; reason: string }>; plannedContextComplete?: boolean } | undefined> {
+  async function maybeStartAutomaticTask(prompt: string, ctx: ExtensionContext): Promise<{ started: boolean; text: string; task?: TaskContract; plannedContext?: Array<{ path: string; reason: string }>; plannedContextComplete?: boolean; continuation?: "terminal-uncertain-send" } | undefined> {
+    const active = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined,
+      uncertainSend = uncertainSendRuntimeIntake(ctx.cwd, active, prompt, ctx.sessionManager.getSessionId());
+    if (uncertainSend) {
+      if (uncertainSend.task) { appendTrace(ctx.cwd, uncertainSend.trace); appendSessionTrace(pi, uncertainSend.trace); }
+      telemetry(ctx, uncertainSend.trace); return uncertainSend.intake;
+    }
     const profile = loadProfileFromContext(ctx);
     const readProtectedPaths = effectiveProtectedPaths(policy, profile).readProtectedPaths;
     const intakeMode = automaticTaskIntakeMode(prompt, readProtectedPaths);
     if (!intakeMode) return undefined;
-    const mutationPolicy = automaticTaskMutationPolicy(prompt, intakeMode), active = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
+    const mutationPolicy = automaticTaskMutationPolicy(prompt, intakeMode);
     if (active?.trace.outcome === "pending") return undefined;
     const summary = redactText(automaticTaskSummary(prompt));
     const sessionName = currentSessionName(ctx);

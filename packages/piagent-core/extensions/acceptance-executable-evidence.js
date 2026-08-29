@@ -239,6 +239,137 @@ export function evidenceTopLevelArguments(text, openIndex, endIndex) {
   return topLevelArgumentRanges(text, openIndex, endIndex).map((argument) => argument.text);
 }
 
+function operationArguments(operation, target) {
+  const callable = String(target ?? "").replace(/^\*\./, "");
+  if (!callable) return [];
+  const text = String(operation ?? "");
+  const pattern = new RegExp(`(?:^|[^a-z0-9_$])${escapeRegex(callable)}\\s*\\(`, "gi");
+  for (const match of text.matchAll(pattern)) {
+    const open = text.indexOf("(", match.index + match[0].length - 1);
+    const end = balancedEnd(text, open);
+    if (end !== -1) return topLevelArgumentRanges(text, open, end).map((item) => item.text.trim());
+  }
+  return [];
+}
+
+function literalBooleanTernarySelection(raw) {
+  let value = String(raw ?? "").trim();
+  while (value.startsWith("(") && balancedEnd(value, 0) === value.length) value = value.slice(1, -1).trim();
+  let question = -1, colon = -1, parentheses = 0, brackets = 0, braces = 0, ternaries = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    if (value[index] === "(") parentheses += 1;
+    else if (value[index] === ")") parentheses -= 1;
+    else if (value[index] === "[") brackets += 1;
+    else if (value[index] === "]") brackets -= 1;
+    else if (value[index] === "{") braces += 1;
+    else if (value[index] === "}") braces -= 1;
+    else if (parentheses === 0 && brackets === 0 && braces === 0 && value[index] === "?") {
+      if (question === -1) question = index;
+      ternaries += 1;
+    } else if (parentheses === 0 && brackets === 0 && braces === 0 && value[index] === ":" && ternaries > 0) {
+      ternaries -= 1;
+      if (ternaries === 0) { colon = index; break; }
+    }
+    if (parentheses < 0 || brackets < 0 || braces < 0) return { kind: "unknown" };
+  }
+  if (question === -1) return { kind: "plain", value };
+  if (colon === -1 || ternaries !== 0) return { kind: "unknown" };
+  const condition = value.slice(0, question).trim();
+  const conditionValue = simpleConstantValue(condition);
+  if (conditionValue === undefined) return { kind: "unknown" };
+  return {
+    kind: "selected",
+    value: conditionValue ? value.slice(question + 1, colon).trim() : value.slice(colon + 1).trim()
+  };
+}
+
+function annotateInvalidArgumentCoverage(assertions) {
+  const proofPartitions = new Set(["fractional", "invalid-calendar-date-string", "invalid-date-object", "invalid-date-string", "missing", "negative", "non-finite-number", "unsafe-integer"]);
+  const directInvalidPartitions = new Set(["invalid-calendar-date-string", "invalid-date-object", "invalid-date-string", "missing", "non-finite-number"]);
+  const argumentPartitions = (raw) => {
+    let selected = literalBooleanTernarySelection(raw);
+    if (selected.kind === "unknown") return new Set();
+    while (selected.kind === "selected") {
+      selected = literalBooleanTernarySelection(selected.value);
+      if (selected.kind === "unknown") return new Set();
+    }
+    const value = selected.value;
+    const values = value.startsWith("[") && balancedEnd(value, 0, "[", "]") === value.length
+      ? topLevelArgumentRanges(value, 0, value.length).map((item) => item.text.trim()) : [value];
+    const partitions = new Set([...evidencePartitionSignals(value)].filter((item) => proofPartitions.has(item)));
+    if (values.some((item) => /^new\s+date\s*\(\s*(?:undefined|(?:number\.)?(?:nan|positive_infinity|negative_infinity|infinity)|__pi_(?:empty|whitespace)_string_literal__|__pi_invalid_(?:calendar_)?date_string_literal__)\s*\)$/i.test(item))) partitions.add("invalid-date-object");
+    if (values.some((item) => /^__pi_invalid_(?:calendar_)?date_string_literal__$/.test(item))) partitions.add("invalid-date-string");
+    if (values.some((item) => item === "__pi_invalid_calendar_date_string_literal__")) partitions.add("invalid-calendar-date-string");
+    if (values.some((item) => /^(?:number\.)?(?:nan|positive_infinity|negative_infinity|infinity)$/i.test(item))) {
+      partitions.add("non-finite-number");
+    }
+    return partitions;
+  };
+  const groups = new Map();
+  for (const assertion of assertions) {
+    if (!new Set(["rejects", "throws"]).has(assertion.mode)) continue;
+    for (const target of assertion.targets) {
+      const argumentsList = operationArguments(assertion.operation, target);
+      if (argumentsList.length === 0) continue;
+      const key = `${target}\u0000${assertion.mode}\u0000${[...assertion.errorClasses].sort().join(",")}`;
+      const entries = groups.get(key) ?? [];
+      entries.push({ assertion, argumentsList });
+      groups.set(key, entries);
+    }
+  }
+  for (const entries of groups.values()) {
+    const required = new Set();
+    const partitionsByIndex = new Map();
+    const addPartitions = (index, values) => {
+      const partitions = partitionsByIndex.get(index) ?? new Set();
+      for (const value of values) if (proofPartitions.has(value)) partitions.add(value);
+      partitionsByIndex.set(index, partitions);
+    };
+    for (const { assertion, argumentsList } of entries) {
+      if (argumentsList.length === 1) required.add(0);
+      for (let index = 0; index < argumentsList.length; index += 1) {
+        const directPartitions = argumentPartitions(argumentsList[index]);
+        if ([...directPartitions].some((partition) => directInvalidPartitions.has(partition))) {
+          required.add(index);
+          addPartitions(index, directPartitions);
+        }
+        for (const binding of assertion.iterationBindings ?? []) {
+          if (!new RegExp(`\\b${escapeRegex(binding.variable)}\\b`, "i").test(argumentsList[index])) continue;
+          required.add(index);
+          addPartitions(index, argumentPartitions(binding.literal));
+        }
+      }
+    }
+    const maximumArity = Math.max(0, ...entries.map((entry) => entry.argumentsList.length));
+    for (let index = 0; index < maximumArity; index += 1) {
+      const corpora = new Map();
+      for (const { argumentsList } of entries) {
+        if (argumentsList.length !== maximumArity) continue;
+        const fixed = argumentsList.map((value, argumentIndex) => argumentIndex === index ? "__varying__" : value).join("\u0000");
+        const values = corpora.get(fixed) ?? new Set();
+        values.add(argumentsList[index]);
+        corpora.set(fixed, values);
+      }
+      // Three independently asserted values with every other argument fixed
+      // form a bounded invalid-input corpus rather than incidental variation.
+      for (const values of corpora.values()) {
+        if (values.size < 3) continue;
+        required.add(index);
+        for (const value of values) addPartitions(index, argumentPartitions(value));
+      }
+    }
+    for (const { assertion } of entries) {
+      assertion.invalidArgumentIndices = [...new Set([...(assertion.invalidArgumentIndices ?? []), ...required])]
+        .sort((left, right) => left - right);
+      assertion.invalidArgumentPartitions = [...required].sort((left, right) => left - right).map((index) => ({
+        index,
+        partitions: [...(partitionsByIndex.get(index) ?? [])].sort()
+      }));
+    }
+  }
+  return assertions;
+}
+
 function evidenceErrorClasses(text) {
   return ERROR_CONSTRUCTORS.filter((name) => (
     new RegExp(`\\b${name}\\b`).test(text)
@@ -696,7 +827,10 @@ export function executableRejectionAssertions(testText, callableNames, modeHints
     }
     assertions.push({
       targets, errorClasses, partitions, mode, operation,
-      iterationLiterals: referencedIterations.map((range) => range.literal).filter(Boolean).slice(0, 8)
+      iterationLiterals: referencedIterations.map((range) => range.literal).filter(Boolean).slice(0, 8),
+      iterationVariables: referencedIterations.map((range) => range.variable).filter(Boolean).slice(0, 8),
+      iterationBindings: referencedIterations.map((range) => ({ variable: range.variable, literal: range.literal }))
+        .filter((item) => item.variable && item.literal).slice(0, 8)
     });
   };
   for (const match of testText.matchAll(/\b([a-z_$][a-z0-9_$]*)\.(?:throws|rejects)\s*\(/gi)) {
@@ -737,5 +871,5 @@ export function executableRejectionAssertions(testText, callableNames, modeHints
     record(match.index, end, evidenceErrorClasses(end === -1 ? "" : testText.slice(match.index, end)), argumentsList[0]?.text,
       /\.rejects/i.test(chain[0]) ? "rejects" : "throws");
   }
-  return assertions.slice(0, 64);
+  return annotateInvalidArgumentCoverage(assertions).slice(0, 64);
 }

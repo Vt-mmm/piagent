@@ -9,6 +9,7 @@ import { bindSessionTask, workingTreeSnapshot, writeTaskContract } from "../pack
 import { workingTreeEvidenceDigest } from "../packages/piagent-core/extensions/working-tree-digest.js";
 import { buildHandoffProjection, handoffProjectionPath, writeHandoffProjection } from "../packages/piagent-core/runtime/recovery/handoff-projection.ts";
 import { projectTaskHandoffHistory } from "../packages/piagent-core/runtime/inspection/task-handoff-history.ts";
+import { buildWebUiInspectionProjection } from "../packages/piagent-core/runtime/inspection/webui-snapshot.ts";
 import { digestZeroTurnFact, providerVisibleToolSchemaDigest, runZeroTurnConformance } from "../packages/piagent-core/runtime/inspection/zero-turn-conformance.ts";
 import { routeReadOnlyRequest } from "../packages/piagent-webui/server/read-only-router.ts";
 import { createWebUiSchemaRegistry, validateFixture } from "./helpers/piagent-webui-schema-registry.mjs";
@@ -68,6 +69,41 @@ test("missing history is explicit and a corrupt current handoff removes handoff 
   const validation = validateFixture(registry, "handoff-history-v1", corrupt); assert.equal(validation.valid, true, validation.errors);
   assert.equal(corrupt.state, "unavailable"); assert.equal(corrupt.historyRevision, null); assert.deepEqual(corrupt.events, []);
   assert.equal(corrupt.nextAction.action, "unknown"); assert.equal(corrupt.nextAction.dispatchable, false);
+});
+
+test("identity-mismatched sidecars are unavailable to history and absent from the WebUI snapshot", async (t) => {
+  const { cwd, task, identity } = setup(t), digests = workingTreeSnapshot(cwd), tree = workingTreeEvidenceDigest(digests);
+  const projection = buildHandoffProjection(cwd, task, { currentDigests: digests,
+    gate: { decision: "fail", missing: ["operator review"], missingVerifyCommands: task.verifyCommands, currentWorkingTreeDigest: tree }, recovery: null });
+  projection.identity.sessionHash = "f".repeat(64);
+  writeHandoffProjection(cwd, projection);
+
+  const history = projectTaskHandoffHistory({ cwd, task, identity });
+  assert.equal(history.state, "unavailable");
+  assert.equal(history.health.reasonCode, "handoff-history-invalid");
+  assert.equal(history.current, null);
+
+  const webui = await buildWebUiInspectionProjection({ cwd, sessionId: task.sessionId, task });
+  assert.equal(webui.snapshot.handoff, null);
+});
+
+test("legacy v1 sidecars provide no WebUI or history authority", async (t) => {
+  const { cwd, task, identity } = setup(t), digests = workingTreeSnapshot(cwd), tree = workingTreeEvidenceDigest(digests);
+  const legacy = buildHandoffProjection(cwd, task, { currentDigests: digests,
+    gate: { decision: "fail", missing: ["operator review"], missingVerifyCommands: task.verifyCommands, currentWorkingTreeDigest: tree }, recovery: null });
+  writeHandoffProjection(cwd, legacy);
+  legacy.projectionVersion = "handoff-v1";
+  delete legacy.acceptance;
+  legacy.state.completionApproved = true;
+  fs.writeFileSync(handoffProjectionPath(cwd, task.taskRunId), `${JSON.stringify(legacy)}\n`);
+
+  const history = projectTaskHandoffHistory({ cwd, task, identity });
+  assert.equal(history.state, "ready");
+  assert.equal(history.completeness, "missing");
+  assert.equal(history.current, null);
+  assert.ok(history.warnings.some((warning) => warning.code === "current-handoff-missing"));
+  const webui = await buildWebUiInspectionProjection({ cwd, sessionId: task.sessionId, task });
+  assert.equal(webui.snapshot.handoff, null);
 });
 
 test("handoff history route accepts one opaque run ref and rejects path or query authority", async () => {

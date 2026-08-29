@@ -146,8 +146,17 @@ export function resolveConfig(cli = {}, environment = {}, file = {}, defaults = 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) { try { return await operation(attempt); } catch (error) { if (attempt === maxAttempts) throw error; await sleep(baseDelayMs * (2 ** (attempt - 1))); } }
 }
 `],
-    "expiry-boundary": ["src/reliability/expiry.js", `function time(value) { const result = value instanceof Date ? value.getTime() : typeof value === "string" ? Date.parse(value) : Number(value); if (!Number.isFinite(result)) throw new TypeError("invalid date"); return result; }
-export function isExpired(expiresAt, now = Date.now()) { return time(now) >= time(expiresAt); }
+    "expiry-boundary": ["src/reliability/expiry.js", `function expiryTime(value) {
+  if (value instanceof Date) { const result = value.getTime(); if (!Number.isFinite(result)) throw new TypeError("invalid expiry"); return result; }
+  if (typeof value !== "string") throw new TypeError("invalid expiry");
+  const match = /^(\\d{4})-(\\d{2})-(\\d{2})T/.exec(value); const result = Date.parse(value);
+  if (!match || !Number.isFinite(result)) throw new TypeError("invalid expiry");
+  const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+  if (month < 1 || month > 12 || day < 1 || day > new Date(Date.UTC(year, month, 0)).getUTCDate()) throw new TypeError("invalid expiry");
+  return result;
+}
+function nowTime(value) { if (value instanceof Date) { const result = value.getTime(); if (!Number.isFinite(result)) throw new TypeError("invalid now"); return result; } if (typeof value === "number" && Number.isFinite(value)) return value; throw new TypeError("invalid now"); }
+export function isExpired(expiresAt, now) { return nowTime(arguments.length < 2 ? Date.now() : now) >= expiryTime(expiresAt); }
 `]
   };
   if (solutions[scenarioId]) write(workspace, ...solutions[scenarioId]);

@@ -22,6 +22,7 @@ test("production-v2 freezes the exact 108-session Luna medium comparison", () =>
     surfaces: ["piagent", "codex-cli"],
     model: "openai-codex/gpt-5.6-luna",
     thinking: "medium",
+    serviceTier: "fast",
     repeats: 2,
     infrastructureRetries: 0,
     stopAfterFailedPair: true

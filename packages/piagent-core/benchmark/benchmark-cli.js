@@ -23,6 +23,8 @@ Options:
   --surfaces <a,b>             piagent,codex-cli (default); raw-pi is diagnostic ablation only.
   --model <provider/model>     Pin one model identity for both surfaces.
   --thinking <level>           off|minimal|low|medium|high|xhigh|max.
+  --service-tier <tier>        default|fast. Fast is pinned on both Piagent and Codex CLI.
+  --fast                       Alias for --service-tier fast.
   --codex-mode <mode>          controlled isolated home (default) or native user configuration.
   --piagent-treatment <id>     release-defaults, local-safe, mechanical-core, intelligence-engine, causal-phase-enforce, candidate, or feature-off.
   --allow-pi-auth-writeback    Allow same-account OAuth refresh CAS writeback under Pi's auth lock.
@@ -75,6 +77,7 @@ export function parseBenchmarkArgs(argv) {
     surfaces: ["piagent", "codex-cli"],
     model: undefined,
     thinking: undefined,
+    serviceTier: undefined,
     codexMode: "controlled",
     piagentTreatment: "release-defaults",
     allowPiAuthWriteback: false,
@@ -137,6 +140,14 @@ export function parseBenchmarkArgs(argv) {
         options.thinking = requireValue(argv, index, arg);
         if (!thinkingLevels.has(options.thinking)) fail(`--thinking must be one of ${[...thinkingLevels].join(", ")}`);
         index += 1;
+        break;
+      case "--service-tier":
+        options.serviceTier = requireValue(argv, index, arg);
+        if (!["default", "fast"].includes(options.serviceTier)) fail("--service-tier must be default or fast");
+        index += 1;
+        break;
+      case "--fast":
+        options.serviceTier = "fast";
         break;
       case "--codex-mode":
         options.codexMode = requireValue(argv, index, arg);

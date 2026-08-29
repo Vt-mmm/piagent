@@ -75,7 +75,7 @@ function knownPreProviderZero(usage, status) {
 }
 
 export function exactBenchmarkAttemptUsage(usage, status) {
-  return status !== "unknown-after-provider-start"
+  return !["unknown-after-provider-start", "measured-lower-bound"].includes(status)
     && (exactBenchmarkMeasuredUsage(usage) || knownPreProviderZero(usage, status));
 }
 
@@ -113,29 +113,63 @@ export function benchmarkTokenAccounting(runs) {
     status: attempt.usageStatus ?? "unknown-after-provider-start",
     usage: attempt.usage
   })));
+  const infrastructureFailureLedgerIssues = benchmarkInfrastructureFailureLedgerIssues(runs);
+  const allAttempts = tokenBucket([...accepted, ...failed]);
+  allAttempts.ledgerExact = infrastructureFailureLedgerIssues.length === 0;
+  allAttempts.ledgerIssues = infrastructureFailureLedgerIssues;
+  allAttempts.complete = allAttempts.complete && allAttempts.ledgerExact;
   return {
     schemaVersion: 1,
     definitions: BENCHMARK_TOKEN_DEFINITIONS,
     acceptedAttempts: tokenBucket(accepted),
     failedAttempts: tokenBucket(failed),
-    allAttempts: tokenBucket([...accepted, ...failed])
+    allAttempts
   };
 }
 
 export function benchmarkInfrastructureFailureLedgerIssues(runs) {
   return runs.flatMap((run) => {
     const issues = [];
-    if (!Number.isInteger(run.infrastructureRetries) || run.infrastructureRetries < 0) {
+    const addIssue = (issue) => {
+      if (!issues.includes(issue)) issues.push(issue);
+    };
+    const retriesExact = Number.isSafeInteger(run.infrastructureRetries) && run.infrastructureRetries >= 0;
+    const attemptsExact = Number.isSafeInteger(run.infrastructureAttempts) && run.infrastructureAttempts >= 1;
+    if (!retriesExact) {
       issues.push("invalid-infrastructure-retry-count");
     }
     if (!Array.isArray(run.infrastructureFailures)) {
       issues.push("missing-infrastructure-failure-ledger");
-    } else if (Number.isInteger(run.infrastructureRetries) && run.infrastructureFailures.length !== run.infrastructureRetries) {
-      issues.push("retry-ledger-count-mismatch");
+    } else {
+      if (retriesExact && run.infrastructureFailures.length !== run.infrastructureRetries) {
+        issues.push("retry-ledger-count-mismatch");
+      }
+      const seenAttempts = new Set();
+      for (const [index, failure] of run.infrastructureFailures.entries()) {
+        const attempt = failure?.attempt;
+        if (!Number.isSafeInteger(attempt) || attempt < 1) {
+          addIssue("invalid-infrastructure-failure-attempt");
+          continue;
+        }
+        if (seenAttempts.has(attempt)) addIssue("duplicate-infrastructure-failure-attempt");
+        seenAttempts.add(attempt);
+        if (retriesExact && attempt > run.infrastructureRetries) {
+          addIssue("out-of-range-infrastructure-failure-attempt");
+          continue;
+        }
+        if (retriesExact && attempt !== index + 1) {
+          addIssue("infrastructure-failure-attempt-order-mismatch");
+        }
+      }
     }
-    if (!Number.isInteger(run.infrastructureAttempts)
-      || run.infrastructureAttempts !== (Number.isInteger(run.infrastructureRetries) ? run.infrastructureRetries + 1 : -1)) {
+    if (!attemptsExact
+      || run.infrastructureAttempts !== (retriesExact ? run.infrastructureRetries + 1 : -1)) {
       issues.push("attempt-ledger-count-mismatch");
+    }
+    if (!Number.isSafeInteger(run.infrastructureAttempt) || run.infrastructureAttempt < 1) {
+      issues.push("invalid-accepted-infrastructure-attempt");
+    } else if (!attemptsExact || run.infrastructureAttempt !== run.infrastructureAttempts) {
+      issues.push("accepted-infrastructure-attempt-mismatch");
     }
     return issues.length > 0 ? [{
       scenarioId: run.scenarioId ?? null,
@@ -199,6 +233,12 @@ export function aggregateSessionUsage(sessions) {
     thinkingLevel: thinkingLevels.size === 1 ? [...thinkingLevels][0] : thinkingLevels.size === 0 ? "unknown" : "mixed",
     usageSource: sessions.length > 0 ? "pi-session-jsonl" : "unavailable",
     usageCompleteness: sessions.length > 0 && sessions.every((session) => session.usageIntegrity?.exact === true) ? "exact" : "unverified",
+    // Reasoning is a non-additive subset of output and is optional in Pi's
+    // upstream usage record. Keep the fresh/total accounting exact while
+    // making an omitted non-zero reasoning split visibly lower-bound.
+    reasoningCompleteness: sessions.some((session) => session.usageIntegrity?.reasoningCompleteness === "lower-bound")
+      ? "lower-bound"
+      : sessions.length > 0 ? "exact" : "unavailable",
     pricingBuckets: {
       schemaVersion: 1,
       source: "provider-request-usage",
@@ -308,6 +348,10 @@ export function aggregateCodexTurnUsage(turnUsages) {
     execution.completeness[field] = executionCompleteness(turnUsages, field);
   }
   const pricingExact = turnUsages.every((usage) => usage.pricingBuckets?.completeness === "exact");
+  const serviceTierEvidence = turnUsages.map((usage) => usage.serviceTierEvidence).filter(Boolean);
+  const aggregateTierValues = (field) => [...new Set(serviceTierEvidence.flatMap((evidence) => (
+    Array.isArray(evidence?.[field]) ? evidence[field] : []
+  )))].sort();
   return {
     ...totals,
     providerInput: totals.input + totals.cacheRead + totals.cacheWrite,
@@ -324,6 +368,16 @@ export function aggregateCodexTurnUsage(turnUsages) {
     messages,
     model: first.model,
     thinkingLevel: first.thinkingLevel,
+    serviceTierEvidence: {
+      schemaVersion: 1,
+      source: "codex-resumed-thread-settings-aggregate",
+      events: serviceTierEvidence.reduce((sum, evidence) => sum + Number(evidence.events ?? 0), 0),
+      requestedTiers: aggregateTierValues("requestedTiers"),
+      observedRequestTiers: aggregateTierValues("observedRequestTiers"),
+      providerResponseTiers: aggregateTierValues("providerResponseTiers"),
+      responseEvidence: aggregateTierValues("responseEvidence"),
+      defaultFallbackEvents: serviceTierEvidence.reduce((sum, evidence) => sum + Number(evidence.defaultFallbackEvents ?? 0), 0)
+    },
     pricingBuckets: {
       schemaVersion: 1,
       source: pricingExact ? "provider-request-usage" : "codex-turn-aggregate-usage",
@@ -338,7 +392,8 @@ export function aggregateCodexTurnUsage(turnUsages) {
       contextWindow: null,
       peakPercent: null
     },
-    providerSessionId: first.providerSessionId
+    providerSessionId: first.providerSessionId,
+    codexInvocationReceipts: turnUsages.map((usage) => usage.codexInvocationReceipt).filter(Boolean)
   };
 }
 
@@ -347,6 +402,19 @@ function consumeCodexEvent(state, event, lineNumber) {
     throw new Error(`Codex JSONL line ${lineNumber} is not an event object`);
   }
   state.onEvent?.(event);
+  const threadSettings = event.type === "thread_settings_applied" && plainObject(event.thread_settings)
+    ? event.thread_settings
+    : event.type === "event_msg"
+      && event.payload?.type === "thread_settings_applied"
+      && plainObject(event.payload.thread_settings)
+        ? event.payload.thread_settings
+        : null;
+  if (threadSettings) {
+    const tier = typeof threadSettings.service_tier === "string"
+      ? threadSettings.service_tier.trim().toLowerCase()
+      : "";
+    if (["default", "fast", "priority"].includes(tier)) state.serviceTiers.push(tier);
+  }
   if (event.type === "error" || event.type === "turn.failed") {
     const nested = plainObject(event.error) ? event.error : {};
     const message = [event.message, nested.message, nested.additional_details]
@@ -355,7 +423,8 @@ function consumeCodexEvent(state, event, lineNumber) {
     return;
   }
   if (event.type === "thread.started" && typeof event.thread_id === "string" && event.thread_id) {
-    state.threadId = event.thread_id;
+    state.threadIds.push(event.thread_id);
+    state.threadId ??= event.thread_id;
     return;
   }
   if (event.type === "item.completed" && plainObject(event.item)) {
@@ -390,10 +459,18 @@ function consumeCodexEvent(state, event, lineNumber) {
 
 function finishCodexUsage(state) {
   if (!state.threadId) throw new Error("Codex JSONL is missing thread.started");
+  const uniqueThreadIds = [...new Set(state.threadIds)];
+  if (state.threadIds.length !== 1 || uniqueThreadIds.length !== 1 || uniqueThreadIds[0] !== state.threadId) {
+    throw new Error("Codex JSONL thread.started identity is missing, duplicated, or conflicting");
+  }
   const { providerInput, input, output, cacheRead, cacheWrite, reasoning, total, fresh } = aggregateCodexProviderTurnTokens(state.completedUsages);
   const sortedTools = Object.fromEntries(Object.entries(state.toolNames).sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0])));
   state.execution.completeness.tools = "exact";
   state.execution.completeness.subagents = "exact";
+  const configuredServiceTier = ["default", "fast", "priority"].includes(state.requestedServiceTier)
+    ? state.requestedServiceTier
+    : null;
+  const observedServiceTiers = [...new Set(state.serviceTiers)].sort();
   return {
     input,
     providerInput,
@@ -423,6 +500,18 @@ function finishCodexUsage(state) {
     messages: state.messages,
     model: typeof state.model === "string" && state.model ? state.model : "unknown",
     thinkingLevel: typeof state.thinkingLevel === "string" && state.thinkingLevel ? state.thinkingLevel : "unknown",
+    serviceTierEvidence: {
+      schemaVersion: 1,
+      source: state.serviceTiers.length > 0 ? "codex-jsonl-thread-settings" : "unavailable",
+      events: state.serviceTiers.length,
+      requestedTiers: configuredServiceTier ? [configuredServiceTier] : observedServiceTiers,
+      observedRequestTiers: observedServiceTiers,
+      providerResponseTiers: [],
+      responseEvidence: ["unavailable-codex-jsonl"],
+      defaultFallbackEvents: state.serviceTiers.filter((tier) => tier === "default").length
+        + (configuredServiceTier === "default" ? 1 : 0),
+      commandBindings: configuredServiceTier ? 1 : 0
+    },
     contextUsage: {
       source: "unavailable",
       observations: 0,
@@ -430,7 +519,13 @@ function finishCodexUsage(state) {
       contextWindow: null,
       peakPercent: null
     },
-    providerSessionId: state.threadId
+    providerSessionId: state.threadId,
+    threadStartedEvidence: {
+      schemaVersion: 1,
+      source: "codex-exec-jsonl-thread-started",
+      events: state.threadIds.length,
+      threadIds: uniqueThreadIds
+    }
   };
 }
 
@@ -438,15 +533,20 @@ export function createCodexExecJsonlCollector(options = {}) {
   const state = {
     model: options.model,
     thinkingLevel: options.thinkingLevel,
+    requestedServiceTier: typeof options.requestedServiceTier === "string"
+      ? options.requestedServiceTier.trim().toLowerCase()
+      : null,
     onEvent: typeof options.onEvent === "function" ? options.onEvent : undefined,
     threadId: undefined,
+    threadIds: [],
     completedUsages: [],
     completedTurns: 0,
     messages: 0,
     toolNames: {},
     toolFingerprints: new Set(),
     execution: emptyExecutionAggregate("codex-exec-jsonl"),
-    diagnostics: []
+    diagnostics: [],
+    serviceTiers: []
   };
   let buffer = "";
   let lineNumber = 0;

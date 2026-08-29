@@ -13,12 +13,12 @@ import {
   acceptanceInvalidInputEvidence
 } from "./acceptance-contract-semantics.js";
 import { malformedIdentifierCriterionText } from "./acceptance-identifier-criteria.js";
+import { contextualTemporalCriterion } from "./acceptance-temporal-contract.js";
+import { acceptancePrecedenceContractGuidance, acceptancePrecedenceReceiptEvidence } from "./acceptance-precedence-contract.js";
 import { isCurrentWorkingTreeDigest, WORKING_TREE_DIGEST_ALGORITHM } from "./working-tree-digest.js";
-
 export const ACCEPTANCE_RECEIPT_SCHEMA_VERSION = 1;
 export const ACCEPTANCE_STATUSES = new Set(["pending", "satisfied", "blocked"]);
 export const ACCEPTANCE_PRIORITIES = new Set(["normal", "critical"]);
-
 const CRITICAL_OBLIGATIONS = new Set([
   "authorization-deny-case",
   "tenant-boundary",
@@ -27,7 +27,6 @@ const CRITICAL_OBLIGATIONS = new Set([
   "boundary-case",
   "read-only-evidence"
 ]);
-
 const MAX_CRITERIA = 12;
 const MAX_EVIDENCE_PER_CRITERION = 8;
 const RECEIPT_FIELDS = new Set(["schemaVersion", "source", "promptHash", "generatedAt", "criteria", "provenance", "helperUsage"]);
@@ -46,11 +45,9 @@ const FAILURE_CATEGORIES = new Set(["passed", "compile-typecheck", "test-asserti
 const HASH = /^[a-f0-9]{64}$/;
 const SAFE_REF = /^[a-z0-9.][a-z0-9:._/-]{0,511}$/i;
 const READ_ONLY_BOUNDARY = /\b(?:read-only|no\s+(?:code|source|project|file|workspace|repo(?:sitory)?)?\s*(?:edits?|changes?|mutations?)|do not\s+(?:edit|change|modify|mutate|touch)(?: files?| source| project| repo| workspace)?|leave\s+(?:the\s+)?(?:source|project|repo|workspace)\s+(?:unchanged|unmodified)|khong\s+(?:sua|edit|thay\s+doi)(?: file| source| project)?)\b/;
-
 function sha256(value) {
   return crypto.createHash("sha256").update(String(value ?? "")).digest("hex");
 }
-
 function compactId(value, fallback = "criterion") {
   return String(value ?? fallback)
     .trim()
@@ -223,7 +220,7 @@ function acceptanceCriterionText(task, criterion) {
     ? matched
     : acceptanceTaskText(task);
 }
-function invalidInputCriterionText(task, criterion) { return malformedIdentifierCriterionText(acceptanceCriterionText(task, criterion), task, GENERATED_ACCEPTANCE_TEXTS); }
+function invalidInputCriterionText(task, criterion) { const selected = acceptanceCriterionText(task, criterion), identifierContext = malformedIdentifierCriterionText(selected, task, GENERATED_ACCEPTANCE_TEXTS); return contextualTemporalCriterion(identifierContext, selected, task, GENERATED_ACCEPTANCE_TEXTS); }
 /**
  * Produce bounded, task-derived proof guidance without a second model call.
  * These hints remain generic: they describe semantic partitions from the
@@ -252,7 +249,7 @@ export function acceptanceBaselineGuidance(task, options = {}) {
     ...(Array.isArray(task?.changedFiles) ? task.changedFiles : []),
     ...(Array.isArray(task?.observedChangedFiles) ? task.observedChangedFiles : [])
   ]).filter((file) => !/[?*\[\]{}]/.test(file) && !isAcceptanceTestPath(file));
-  return returnRepresentationGuidance(acceptanceTaskText(task), options.cwd, files);
+  return uniqueStrings([...returnRepresentationGuidance(acceptanceTaskText(task), options.cwd, files), ...acceptancePrecedenceContractGuidance({ taskText: acceptanceTaskText(task), sourceEntries: changedFileAcceptanceCorpus(options.cwd, files).sourceEntries })]);
 }
 
 export function acceptanceSemanticConflicts(task, options = {}) {
@@ -770,6 +767,8 @@ function evidenceForObligation(obligation, task, corpus, currentWorkingTreeDiges
     }
     return undefined;
   }
+
+  const precedence = acceptancePrecedenceReceiptEvidence({ obligation, taskText: acceptanceCriterionText(task, criterion), sourceEntries: corpus.sourceEntries, testEntries: corpus.testEntries, namedTargets: namedCodeTargets(task, criterion, corpus.sourceText), passingVerifier, verifierEvidence, sourceFiles: corpus.sourceFiles, testFiles: corpus.testFiles, verifierCoversTests: verifierCommandsCoverTests(task, corpus.testFiles, cwd) }); if (precedence.handled) return precedence.evidence;
 
   const generic = genericCriterionEvidence({ obligation, task, criterion, taskText: acceptanceTaskText(task), corpus, verifierEvidence, passingVerifier, cwd });
   if (generic.handled) return generic.evidence;

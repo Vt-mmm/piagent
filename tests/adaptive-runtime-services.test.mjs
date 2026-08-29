@@ -1056,6 +1056,8 @@ test("task journal treats pre-migration tree evidence as historical and enforces
   appendTaskJournalEvent(cwd, {
     eventType: "checkpoint",
     taskRunId: "TASK-DIGEST",
+    taskId: migrationTask.taskId,
+    sessionId: migrationTask.sessionId,
     checkpointId: "legacy-verify",
     data: { phase: "verify", status: "done", evidence: { workingTreeDigest: "a".repeat(64) } }
   });
@@ -1083,7 +1085,7 @@ test("task journal treats pre-migration tree evidence as historical and enforces
     evidence: { workingTreeDigest: "b".repeat(64) }
   }), /current working-tree digest namespace/);
   recordTaskCheckpoint(cwd, {
-    taskRunId: "TASK-DIGEST",
+    taskRunId: "TASK-DIGEST", taskId: migrationTask.taskId, sessionId: migrationTask.sessionId,
     checkpointId: "current-verify",
     phase: "verify",
     status: "done",
@@ -1259,7 +1261,7 @@ test("task journal retention preserves a task-bound digest migration barrier", (
     }
   };
   appendTaskJournalEvent(cwd, {
-    eventType: "checkpoint", taskRunId: task.taskRunId, checkpointId: "legacy",
+    eventType: "checkpoint", taskRunId: task.taskRunId, taskId: task.taskId, sessionId: task.sessionId, checkpointId: "legacy",
     data: { status: "done", evidence: { workingTreeDigest: "a".repeat(64) } }
   });
   appendTaskJournalEvent(cwd, {
@@ -1272,7 +1274,8 @@ test("task journal retention preserves a task-bound digest migration barrier", (
   });
   for (let index = 0; index < 4; index += 1) {
     recordTaskCheckpoint(cwd, {
-      taskRunId: task.taskRunId, checkpointId: `current-${index}`, phase: "verify", status: "done",
+      taskRunId: task.taskRunId, taskId: task.taskId, sessionId: task.sessionId,
+      checkpointId: `current-${index}`, phase: "verify", status: "done",
       evidence: { workingTreeDigest: treeDigest(String(index + 1)) }
     });
   }

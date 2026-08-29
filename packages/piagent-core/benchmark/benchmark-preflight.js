@@ -17,12 +17,13 @@ async function checkedVersion(runCommand, packageRoot, command, args, label, env
   return result.stdout.trim();
 }
 
-export async function benchmarkPreflight({ runCommand, packageRoot, piCommand, piEnvironment, codexCommand, gitCommand, surfaces, codexMode, codexRuntime }) {
+export async function benchmarkPreflight({ runCommand, packageRoot, piCommand, piEnvironment, codexCommand, gitCommand, surfaces, codexMode, codexRuntime, serviceTier }) {
   const gitVersion = await checkedVersion(runCommand, packageRoot, gitCommand, ["--version"], "git");
   const piVersion = await checkedVersion(runCommand, packageRoot, piCommand, ["--version"], "pi", piEnvironment);
   let codexVersion;
   let codexAuth;
   let codexDisabledFeatures = [];
+  let codexFastModeFeature = null;
   if (surfaces.includes("codex-cli")) {
     const codexEnv = codexProcessEnvironment(codexRuntime);
     codexVersion = await checkedVersion(runCommand, packageRoot, codexCommand, ["--version"], "codex", codexEnv);
@@ -37,9 +38,13 @@ export async function benchmarkPreflight({ runCommand, packageRoot, piCommand, p
       if (features.code !== 0) fail("Codex CLI cannot list features required by controlled benchmark mode; update Codex CLI or use --codex-mode native");
       const available = new Set(features.stdout.split("\n").map((line) => line.trim().split(/\s+/)[0]).filter(Boolean));
       codexDisabledFeatures = controlledCodexFeatures.filter((feature) => available.has(feature));
+      codexFastModeFeature = available.has("fast_mode");
+      if (serviceTier === "fast" && !codexFastModeFeature) {
+        fail("Codex CLI does not expose the fast_mode feature required by this benchmark; update Codex CLI");
+      }
     }
   }
-  return { gitVersion, piVersion, codexVersion, codexAuth, codexDisabledFeatures };
+  return { gitVersion, piVersion, codexVersion, codexAuth, codexDisabledFeatures, codexFastModeFeature };
 }
 
 function publicCommandIdentity(value) {
@@ -59,7 +64,8 @@ function publicCommandIdentity(value) {
 export function benchmarkPreflightReceipt({
   packageVersion, source, candidateProvenance, suite, suiteDigest,
   runtimeDependencies, webUiAssets, runtimeCommands, environmentPolicy, configurationDigest,
-  rootSeedDigest, options, runtime, hostReadinessPolicyDigest = null, hostReadiness = null,
+  providerFreeConfigurationDigest = null, rootSeedDigest, options, runtime,
+  hostReadinessPolicyDigest = null, hostReadiness = null,
   providerFreeEvidence = null
 }) {
   return {
@@ -73,6 +79,7 @@ export function benchmarkPreflightReceipt({
     suite: { id: suite.id, contentDigest: suiteDigest, scenarioCount: suite.scenarios.length },
     configuration: {
       contentDigest: configurationDigest,
+      ...(providerFreeConfigurationDigest ? { providerFreeContentDigest: providerFreeConfigurationDigest } : {}),
       ...(hostReadinessPolicyDigest ? { hostReadinessPolicyDigest } : {}),
       runtimeDependencyDigest: runtimeDependencies?.digest ?? null,
       ...(webUiAssets ? { webUiAssetDigest: webUiAssets.digest } : {}),
@@ -81,6 +88,7 @@ export function benchmarkPreflightReceipt({
       surfaces: options.surfaces,
       model: options.model ?? null,
       thinking: options.thinking ?? null,
+      serviceTier: options.serviceTier ?? null,
       codexMode: options.codexMode,
       piagentTreatment: options.piagentTreatment,
       repeats: options.repeats,
@@ -98,6 +106,7 @@ export function benchmarkPreflightReceipt({
       codexVersion: runtime.codexVersion ?? null,
       codexAuth: runtime.codexAuth ?? null,
       codexDisabledFeatures: runtime.codexDisabledFeatures,
+      codexFastModeFeature: runtime.codexFastModeFeature ?? null,
       commands: Object.fromEntries(Object.entries(runtimeCommands).map(([name, value]) => [name, publicCommandIdentity(value)]))
     },
     usageContract: {

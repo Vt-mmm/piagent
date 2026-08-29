@@ -5,9 +5,9 @@ import os from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
 
-import { recordVerificationCheckpoint } from "../packages/piagent-core/extensions/task-runtime-audit.js";
+import { recordCompletionAudit, recordVerificationCheckpoint } from "../packages/piagent-core/extensions/task-runtime-audit.js";
 import { hashEvidenceCommand } from "../packages/piagent-core/extensions/runtime-evidence.js";
-import { readTaskJournal, replayTaskCheckpoints, taskJournalPaths } from "../packages/piagent-core/extensions/task-journal.js";
+import { readTaskJournal, recordTaskCheckpoint, replayTaskCheckpoints, taskJournalPaths, taskRecoveryDecision } from "../packages/piagent-core/extensions/task-journal.js";
 import { operatorRequestDigest, workingTreeSnapshot } from "../packages/piagent-core/extensions/task-state.js";
 import { compileCriterionGraph } from "../packages/piagent-core/extensions/criterion-graph.js";
 import { workingTreeEvidenceDigest } from "../packages/piagent-core/extensions/task-lifecycle.js";
@@ -20,6 +20,7 @@ import {
   inspectTaskResumeState,
   legacyTaskResumeTruthChars
 } from "../packages/piagent-core/runtime/recovery/resume-state.ts";
+import { buildHandoffProjection, handoffProjectionPath, writeHandoffProjection } from "../packages/piagent-core/runtime/recovery/handoff-projection.ts";
 import { createBoundTaskAuthority } from "../packages/piagent-core/runtime/policy/task-authority-runtime.ts";
 import { createTrajectoryState, createTrajectoryTransition, reduceTrajectory } from "../packages/piagent-core/runtime/trajectory/trajectory-state.ts";
 import { writeTrajectoryState } from "../packages/piagent-core/runtime/trajectory/trajectory-store.ts";
@@ -66,6 +67,18 @@ function writeVerifyTrajectory(cwd, current) {
   state = reduceTrajectory(state, createTrajectoryTransition(state, { to: "execute", cause: "mutation-observed", sourceHook: "task-state", observedAt: "2026-08-08T00:00:03.000Z" }));
   state = reduceTrajectory(state, createTrajectoryTransition(state, { to: "verify", cause: "verification-started", sourceHook: "tool-call", observedAt: "2026-08-08T00:00:04.000Z" }));
   writeTrajectoryState(cwd, state);
+}
+
+function terminalHandoffRecovery(current, overrides = {}) {
+  return {
+    policyVersion: "recovery-v1", taskId: current.taskId, taskRunId: current.taskRunId, taskAttempt: current.attempt,
+    evidenceDigest: "a".repeat(64), failureCategory: "test-assertion", currentPhase: "review",
+    action: "handoff", continuation: "none", nextPhase: null, sourceMutationAllowed: false,
+    reasonCodes: ["repair-ceiling-reached"],
+    counts: { sourceRepairPasses: 1, transientVerifierRetries: 0, unknownDiagnosticPasses: 0, providerRetries: 0 },
+    ceilings: { sourceRepairPasses: 1, transientVerifierRetries: 1, unknownDiagnosticPasses: 1, providerRetries: 1 },
+    hypothesisRef: null, ...overrides
+  };
 }
 
 describe("safe task resume state", () => {
@@ -347,6 +360,135 @@ describe("safe task resume state", () => {
     assert.deepEqual(resume.reconstruction.nextAction.exactCommands, ["npm test"]);
   });
 
+  it("does not retry a verifier after durable recovery records a terminal handoff", () => {
+    const cwd = workspace();
+    const current = task();
+    current.workPlan[0].status = "done";
+    current.workPlan[1].status = "in-progress";
+    const currentDigest = workingTreeEvidenceDigest(workingTreeSnapshot(cwd));
+    current.verifyEvidence = [{
+      command: "npm test", exitCode: 0, summary: "pass", recordedAt: "2026-08-08T00:00:05.000Z",
+      observed: true, observedAt: "2026-08-08T00:00:05.000Z", matchedProfileCommand: true,
+      preWorkingTreeDigest: currentDigest, workingTreeDigest: currentDigest
+    }];
+    writeVerifyTrajectory(cwd, current);
+    recordCompletionAudit({ cwd, ui: { notify() {} } }, current, {
+      outcome: "blocked",
+      evidence: {
+        recovery: terminalHandoffRecovery(current)
+      }
+    });
+
+    const resume = inspectTaskResumeState(cwd, current, current.sessionId);
+    assert.equal(resume.enforcementSafe, true);
+    assert.equal(resume.verifierEvidenceCurrent, true);
+    assert.equal(resume.staleVerifierEvidence, false);
+    assert.equal(resume.decision, "blocked");
+    assert.equal(resume.reconstruction.nextAction.action, "inspect-handoff");
+    assert.deepEqual(resume.reconstruction.nextAction.exactCommands, []);
+    assert.match(resume.reason, /terminal recovery handoff/);
+  });
+
+  it("preserves a terminal handoff across a later generic completion audit", () => {
+    const cwd = workspace();
+    const current = task();
+    current.workPlan[1].status = "in-progress";
+    recordCompletionAudit({ cwd, ui: { notify() {} } }, current, {
+      outcome: "blocked", evidence: { recovery: terminalHandoffRecovery(current) }
+    });
+    recordCompletionAudit({ cwd, ui: { notify() {} } }, current, {
+      outcome: "failed", evidence: { missing: ["generic-later-audit"] }
+    });
+
+    const replay = replayTaskCheckpoints(cwd, current.taskRunId, current);
+    assert.equal(replay.corruptions.length, 0);
+    assert.equal(replay.checkpoints.length, 1);
+    assert.equal(replay.checkpoints[0].evidence.recovery.policyVersion, "recovery-v1");
+    const decision = taskRecoveryDecision(current, replay);
+    assert.equal(decision.decision, "blocked");
+    assert.equal(decision.retryAllowed, false);
+    assert.match(decision.reason, /terminal recovery handoff/);
+  });
+
+  it("does not make incomplete or incoherent recovery evidence terminal or monotonic", () => {
+    const invalidRecoveries = [
+      (value) => { delete value.policyVersion; },
+      (value) => { value.policyVersion = "recovery-v0"; },
+      (value) => { delete value.evidenceDigest; },
+      (value) => { value.reasonCodes = ["not-a-recovery-reason"]; },
+      (value) => { value.failureCategory = "environment"; },
+      (value) => { value.failureCategory = "environment"; value.reasonCodes = ["operator-environment-action"]; },
+      (value) => { value.currentPhase = "verify"; value.reasonCodes = ["handoff-already-observed"]; },
+      (value) => { value.counts = { ...value.counts, sourceRepairPasses: 0 }; },
+      (value) => { value.ceilings = { ...value.ceilings, sourceRepairPasses: 0 }; }
+    ];
+    for (const invalidate of invalidRecoveries) {
+      const cwd = workspace();
+      const current = task();
+      current.workPlan.forEach((step) => { step.status = "done"; });
+      const recovery = terminalHandoffRecovery(current);
+      invalidate(recovery);
+      recordCompletionAudit({ cwd, ui: { notify() {} } }, current, { outcome: "blocked", evidence: { recovery } });
+      recordCompletionAudit({ cwd, ui: { notify() {} } }, current, { outcome: "failed", evidence: { missing: ["generic-later-audit"] } });
+
+      const replay = replayTaskCheckpoints(cwd, current.taskRunId, current);
+      assert.equal(replay.corruptions.length, 0);
+      const decision = taskRecoveryDecision(current, replay);
+      assert.equal(decision.decision, "retry");
+      assert.equal(decision.retryAllowed, true);
+    }
+  });
+
+  it("skips a checkpoint whose journal identity does not match the Task Contract", () => {
+    const cwd = workspace();
+    const current = task();
+    recordTaskCheckpoint(cwd, {
+      taskRunId: current.taskRunId, taskId: "foreign-task", sessionId: "foreign-session",
+      checkpointId: "completion", phase: "review", status: "blocked", attempt: current.attempt,
+      evidence: { recovery: terminalHandoffRecovery(current) }
+    });
+
+    const replay = replayTaskCheckpoints(cwd, current.taskRunId, current);
+    assert.match(replay.corruptions.join("; "), /identity does not match the Task Contract/);
+    assert.deepEqual(replay.checkpoints, []);
+    const decision = taskRecoveryDecision(current, replay);
+    assert.equal(decision.decision, "blocked");
+    assert.match(decision.reason, /journal corruption/);
+    const wrongRunReplay = replayTaskCheckpoints(cwd, "foreign-run", current);
+    assert.match(wrongRunReplay.corruptions.join("; "), /taskRunId does not match the Task Contract/);
+    assert.deepEqual(wrongRunReplay.checkpoints, []);
+  });
+
+  it("skips a checkpoint from a different task attempt", () => {
+    const cwd = workspace();
+    const current = task();
+    recordTaskCheckpoint(cwd, {
+      taskRunId: current.taskRunId, taskId: current.taskId, sessionId: current.sessionId,
+      checkpointId: "completion", phase: "review", status: "blocked", attempt: current.attempt + 1,
+      evidence: { recovery: terminalHandoffRecovery(current) }
+    });
+
+    const replay = replayTaskCheckpoints(cwd, current.taskRunId, current);
+    assert.match(replay.corruptions.join("; "), /identity does not match the Task Contract/);
+    assert.deepEqual(replay.checkpoints, []);
+  });
+
+  it("still retries an identity-bound generic failed checkpoint", () => {
+    const cwd = workspace();
+    const current = task();
+    current.workPlan.forEach((step) => { step.status = "done"; });
+    recordTaskCheckpoint(cwd, {
+      taskRunId: current.taskRunId, taskId: current.taskId, sessionId: current.sessionId,
+      checkpointId: "verify", phase: "verify", status: "failed", attempt: current.attempt
+    });
+
+    const replay = replayTaskCheckpoints(cwd, current.taskRunId, current);
+    assert.equal(replay.corruptions.length, 0);
+    const decision = taskRecoveryDecision(current, replay);
+    assert.equal(decision.decision, "retry");
+    assert.equal(decision.retryAllowed, true);
+  });
+
   it("refuses a task/session identity conflict", () => {
     const cwd = workspace();
     const resume = inspectTaskResumeState(cwd, task(), "another-session");
@@ -354,6 +496,80 @@ describe("safe task resume state", () => {
     assert.equal(resume.enforcementSafe, false);
     assert.match(resume.reason, /belongs to session/);
     assert.equal(resume.reconstruction.nextAction.action, "inspect-handoff");
+  });
+
+  it("binds every security-relevant handoff identity field to the authoritative task contract", () => {
+    const mutations = [
+      ["sessionHash", () => "f".repeat(64)],
+      ["attempt", (current) => current.attempt + 1],
+      ["maxAttempts", (current) => current.maxAttempts + 1]
+    ];
+    for (const [field, mutate] of mutations) {
+      const cwd = workspace();
+      const current = task();
+      writeVerifyTrajectory(cwd, current);
+      const currentDigests = workingTreeSnapshot(cwd);
+      const projection = buildHandoffProjection(cwd, current, {
+        gate: { decision: "fail", missing: ["completion pending"], missingVerifyCommands: current.verifyCommands },
+        currentDigests
+      });
+      writeHandoffProjection(cwd, projection);
+      const valid = inspectTaskResumeState(cwd, current, current.sessionId, currentDigests);
+      assert.equal(valid.enforcementSafe, true, `${field}: canonical handoff remains valid`);
+
+      projection.identity[field] = mutate(current);
+      writeHandoffProjection(cwd, projection);
+      const forged = inspectTaskResumeState(cwd, current, current.sessionId, currentDigests);
+      assert.equal(forged.enforcementSafe, false, `${field}: forged identity must fail closed`);
+      assert.equal(forged.decision, "blocked", `${field}: forged identity must block resume`);
+      assert.match(forged.warnings.join("; "), /handoff identity conflicts with the task contract/);
+      assert.equal(forged.reconstruction.nextAction.action, "inspect-handoff");
+    }
+  });
+
+  it("keeps a pending handoff valid when the operator renames the same session", () => {
+    const cwd = workspace();
+    const current = task();
+    writeVerifyTrajectory(cwd, current);
+    const currentDigests = workingTreeSnapshot(cwd);
+    const projection = buildHandoffProjection(cwd, current, {
+      gate: { decision: "fail", missing: ["completion pending"], missingVerifyCommands: current.verifyCommands },
+      currentDigests
+    });
+    writeHandoffProjection(cwd, projection);
+
+    const renamed = { ...current, sessionName: `${current.sessionName}-RENAMED` };
+    const resume = inspectTaskResumeState(cwd, renamed, renamed.sessionId, currentDigests);
+    assert.equal(resume.enforcementSafe, true);
+    assert.equal(resume.handoff.exists, true);
+    assert.equal(resume.handoff.valid, true);
+    assert.doesNotMatch(resume.warnings.join("; "), /handoff identity conflicts/);
+  });
+
+  it("quarantines a legacy v1 sidecar without blocking its authoritative active task", () => {
+    const cwd = workspace();
+    const current = task();
+    writeVerifyTrajectory(cwd, current);
+    const currentDigests = workingTreeSnapshot(cwd);
+    const legacy = buildHandoffProjection(cwd, current, {
+      gate: { decision: "fail", missing: ["completion pending"], missingVerifyCommands: current.verifyCommands },
+      currentDigests
+    });
+    writeHandoffProjection(cwd, legacy);
+    legacy.projectionVersion = "handoff-v1";
+    delete legacy.acceptance;
+    legacy.state.completionApproved = true;
+    fs.writeFileSync(handoffProjectionPath(cwd, current.taskRunId), `${JSON.stringify(legacy)}\n`);
+
+    const active = inspectTaskResumeState(cwd, current, current.sessionId, currentDigests);
+    assert.equal(active.enforcementSafe, true);
+    assert.equal(active.decision, "resume");
+    assert.deepEqual(active.handoff, { path: `.pi/piagent-state/handoffs/${current.taskRunId}.json`, exists: false, valid: true });
+
+    current.trace = { outcome: "completed", recordedAt: "2026-08-08T00:00:06.000Z" };
+    const terminal = inspectTaskResumeState(cwd, current, current.sessionId, currentDigests);
+    assert.equal(terminal.decision, "terminal", "only the Task Contract, never legacy completionApproved, settles the task");
+    assert.equal(terminal.handoff.exists, false);
   });
 
   it("blocks an active task whose authority snapshot is missing instead of resuming legacy advanced state", () => {

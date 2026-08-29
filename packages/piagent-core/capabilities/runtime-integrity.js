@@ -140,6 +140,7 @@ export const CORE_RUNTIME_INTEGRITY_FILES = Object.freeze([
   "packages/piagent-core/runtime/session/runtime-state.ts",
   "packages/piagent-core/runtime/session/system-prompt.ts",
   "packages/piagent-core/runtime/session/tool-result-compaction.ts",
+  "packages/piagent-core/runtime/session/uncertain-send-continuation.ts",
   "packages/piagent-core/runtime/session/usage.ts",
   "packages/piagent-core/runtime/solver/solver-types.ts",
   "packages/piagent-core/runtime/solver/task-features.ts",
