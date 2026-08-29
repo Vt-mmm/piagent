@@ -1,5 +1,6 @@
 import { evidenceTopLevelArguments, executableRejectionAssertions,
   literalArrayIterationEnvironmentIsStable, testProofIntrinsicsAreStable } from "./acceptance-executable-evidence.js";
+import { consumeJavaScriptStringEscape } from "./acceptance-lexical-sentinels.js";
 import { regexCanStartAfterLexicalChunks } from "./javascript-regex-evidence.js";
 
 const ERROR_NAMES = new Set(["aggregateerror", "error", "evalerror", "rangeerror", "referenceerror", "syntaxerror", "typeerror", "urierror"]);
@@ -29,11 +30,11 @@ function normalize(value) {
 
 function stringToken(value, index) {
   if (value.length === 0) return "__pi_empty_string_literal__";
-  const lower = value.trim().toLowerCase();
-  if (["assert", "assert/strict", "node:assert", "node:assert/strict"].includes(lower)) return "__pi_node_assert_module_literal__";
-  if (lower === "node:test") return "__pi_node_test_module_literal__";
-  if (["node:process", "process"].includes(lower)) return "__pi_node_process_module_literal__";
-  if (ERROR_NAMES.has(lower)) return `__pi_error_name_${lower}_literal__`;
+  if (["assert", "assert/strict", "node:assert", "node:assert/strict"].includes(value)) return "__pi_node_assert_module_literal__";
+  if (value === "node:test") return "__pi_node_test_module_literal__";
+  if (["node:process", "process"].includes(value)) return "__pi_node_process_module_literal__";
+  const errorName = value.match(/^(AggregateError|Error|EvalError|RangeError|ReferenceError|SyntaxError|TypeError|URIError)$/)?.[1]?.toLowerCase();
+  if (errorName && ERROR_NAMES.has(errorName)) return `__pi_error_name_${errorName}_literal__`;
   return `__pi_bound_string_${index}__`;
 }
 
@@ -52,14 +53,18 @@ function lexicalEvidence(value) {
       output.push(" ".repeat(end - index)); index = end; continue;
     }
     if (current === "'" || current === '"') {
-      const quote = current; let end = index + 1, payload = "", closed = false;
+      const quote = current; let end = index + 1, cooked = "", closed = false, invalidEscape = false;
       while (end < source.length) {
-        if (source[end] === "\\") { payload += source.slice(end, end + 2); end += 2; continue; }
+        if (source[end] === "\\") {
+          const consumed = consumeJavaScriptStringEscape(source, end);
+          invalidEscape ||= !consumed.valid; cooked += consumed.cooked; end = consumed.nextIndex; continue;
+        }
+        if (source[end] === "\n" || source[end] === "\r") break;
         if (source[end] === quote) { end += 1; closed = true; break; }
-        payload += source[end++];
+        cooked += source[end++];
       }
-      if (!closed) output.push(" ".repeat(end - index));
-      else { const slot = strings.push(payload) - 1; output.push(stringToken(payload, slot)); }
+      if (!closed || invalidEscape) output.push("__pi_invalid_string_lexeme__");
+      else { const slot = strings.push(cooked) - 1; output.push(stringToken(cooked, slot)); }
       index = end; continue;
     }
     if (current === "`") {

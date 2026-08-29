@@ -4,7 +4,7 @@ import { acceptanceBoundaryProofGuidance, malformedIdentifierContract, malformed
 import { executableRejectionAssertions } from "./acceptance-executable-evidence.js";
 import { ERROR_CONSTRUCTORS, ERROR_CONSTRUCTOR_DISPLAY_NAMES, errorMappingsProveContract, hasAmbiguousErrorClassIntent, rejectionStatementErrorClass, requestedErrorClasses, requestedErrorPartitionMapping } from "./acceptance-error-classes.js";
 import { inputDerivedNames } from "./acceptance-input-provenance.js";
-import { regexLiteralSentinel, stringLiteralSentinel } from "./acceptance-lexical-sentinels.js";
+import { consumeJavaScriptStringEscape, eraseJavaScriptLexeme as erasedLexeme, isJavaScriptLineTerminator, normalizedJavaScriptLineTerminator, regexLiteralSentinel, stringLiteralSentinel, validJavaScriptRegexLiteral } from "./acceptance-lexical-sentinels.js";
 import { exactNormalizerInvocation, synchronousNormalizerProof } from "./acceptance-normalizer-evidence.js";
 import { casePreservingCallableBodies } from "./acceptance-expiry-calendar-proof.js";
 import { invalidSentinelRejectionProof } from "./acceptance-invalid-sentinel-proof.js";
@@ -19,9 +19,6 @@ function normalizedText(value) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
-}
-function erasedLexeme(value) {
-  return String(value ?? "").replace(/[^\r\n]/g, " ");
 }
 /**
  * Return a bounded lexical evidence view of JavaScript/TypeScript source.
@@ -41,15 +38,17 @@ function lexJavaScriptEvidence(value, bindStrings = false) {
   while (index < source.length) {
     const current = source[index];
     const next = source[index + 1];
+    if (isJavaScriptLineTerminator(current)) { output.push(normalizedJavaScriptLineTerminator(current)); index += 1; continue; }
     if (current === "/" && next === "/") {
       let end = index + 2;
-      while (end < source.length && source[end] !== "\n" && source[end] !== "\r") end += 1;
+      while (end < source.length && !isJavaScriptLineTerminator(source[end])) end += 1;
       output.push(erasedLexeme(source.slice(index, end)));
       index = end;
       continue;
     }
     if (current === "/" && next === "*") {
       const closing = source.indexOf("*/", index + 2);
+      if (closing === -1) { output.push("__pi_invalid_comment_lexeme__"); index = source.length; continue; }
       const end = closing === -1 ? source.length : closing + 2;
       output.push(erasedLexeme(source.slice(index, end)));
       index = end;
@@ -58,37 +57,42 @@ function lexJavaScriptEvidence(value, bindStrings = false) {
     if (current === "'" || current === '"') {
       const quote = current;
       let end = index + 1;
-      let payload = "";
-      let closed = false;
+      let cooked = "";
+      let closed = false, invalidEscape = false;
       while (end < source.length) {
         const character = source[end];
         if (character === "\\") {
-          payload += source.slice(end, Math.min(source.length, end + 2));
-          end += 2;
+          const consumed = consumeJavaScriptStringEscape(source, end);
+          invalidEscape ||= !consumed.valid;
+          cooked += consumed.cooked;
+          end = consumed.nextIndex;
           continue;
         }
+        if (character === "\n" || character === "\r") break;
         if (character === quote) {
           end += 1;
           closed = true;
           break;
         }
-        payload += character;
+        cooked += character;
         end += 1;
       }
-      if (!closed) output.push(erasedLexeme(source.slice(index, end)));
+      if (!closed) output.push("__pi_invalid_string_lexeme__");
+      else if (invalidEscape) output.push("__pi_invalid_escape_lexeme__");
       else if (bindStrings) {
         output.push(`__pi_bound_string_${strings.length}__`);
-        strings.push(payload);
-      } else output.push(stringLiteralSentinel(payload));
+        strings.push(cooked);
+      } else output.push(stringLiteralSentinel(cooked));
       index = end;
       continue;
     }
     if (current === "`") {
-      let end = index + 1;
-      let closed = false;
+      let end = index + 1, closed = false, invalidEscape = false;
       while (end < source.length) {
         if (source[end] === "\\") {
-          end += 2;
+          const consumed = consumeJavaScriptStringEscape(source, end);
+          invalidEscape ||= !consumed.valid;
+          end = consumed.nextIndex;
           continue;
         }
         if (source[end] === "`") {
@@ -98,13 +102,12 @@ function lexJavaScriptEvidence(value, bindStrings = false) {
         }
         end += 1;
       }
-      output.push(closed ? "__pi_template_literal__" : erasedLexeme(source.slice(index, end)));
+      output.push(closed && !invalidEscape ? "__pi_template_literal__" : "__pi_invalid_template_lexeme__");
       index = end;
       continue;
     }
     if (current === "/" && next !== "=" && regexCanStartAfterLexicalChunks(output)) {
-      let end = index + 1;
-      let payload = "";
+      let end = index + 1, payload = "";
       let inClass = false;
       let closed = false;
       while (end < source.length) {
@@ -122,18 +125,17 @@ function lexJavaScriptEvidence(value, bindStrings = false) {
           while (/[a-z]/iu.test(source[end] ?? "")) end += 1;
           const flags = source.slice(flagsStart, end);
           closed = true;
-          output.push(regexLiteralSentinel(payload, flags));
+          output.push(validJavaScriptRegexLiteral(payload, flags) ? regexLiteralSentinel(payload, flags) : "__pi_invalid_regex_lexeme__");
           break;
-        } else if (character === "\n" || character === "\r") {
+        } else if (isJavaScriptLineTerminator(character)) {
           break;
         }
         payload += character;
         end += 1;
       }
-      if (closed) {
-        index = end;
-        continue;
-      }
+      if (!closed) output.push("__pi_invalid_regex_lexeme__");
+      index = end;
+      continue;
     }
     output.push(current);
     index += 1;
@@ -373,7 +375,7 @@ function intrinsicErrorBindingsUntampered(code, errorNames) {
 }
 
 function lexicalEvidenceIsNonReflective(code) {
-  return !/\\|__pi_(?:code_generation|module_loader)_module_literal__|\b(?:eval|createrequire)\b|\b(?:process|globalthis|global|window|self|this)\b|\.\s*constructor\b|\bfunction\s*\(|(?:=|[,([])\s*function\b(?!\s+[a-z_$][a-z0-9_$]*\s*\()/i.test(code);
+  return !/__pi_invalid_[a-z0-9_]*lexeme__|\\|__pi_(?:code_generation|module_loader)_module_literal__|\b(?:eval|createrequire)\b|\b(?:process|globalthis|global|window|self|this)\b|\.\s*constructor\b|\bfunction\s*\(|(?:=|[,([])\s*function\b(?!\s+[a-z_$][a-z0-9_$]*\s*\()/i.test(code);
 }
 
 function resolvedExportTestBindings(sourceEntries, testEntries) {
@@ -814,8 +816,8 @@ export function acceptanceExecutableTestBinding(input = {}) {
     || typeof testEntry.path !== "string" || typeof testEntry.text !== "string") {
     return { linked: false, sourceNames: [], testNames: [] };
   }
-  const sourceCode = normalizedText(sanitizeJavaScriptEvidence(sourceEntry.text));
-  const testCode = normalizedText(sanitizeJavaScriptEvidence(testEntry.text));
+  const sourceCode = normalizedText(sanitizeJavaScriptEvidence(sourceEntry.text)), testCode = normalizedText(sanitizeJavaScriptEvidence(testEntry.text));
+  if ([sourceEntry.text, testEntry.text].some(hasReservedEvidenceIdentifier) || !lexicalEvidenceIsNonReflective(sourceCode) || !lexicalEvidenceIsNonReflective(testCode)) return { linked: false, sourceNames: [], testNames: [] };
   const bodies = callableBodies(sourceCode);
   const imports = staticModuleBindings(testEntry);
   const linkedSourceNames = [];
