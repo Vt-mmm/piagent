@@ -218,6 +218,18 @@ switch (scenario) {
       assert.equal(expiry.getTime(), data.timestamp);
       assert.equal(now.getTime(), data.timestamp);
     });
+    await check("valid-iso-shapes-and-proleptic-calendar", () => {
+      for (const value of [
+        "2026-01-01T00:00Z",
+        "2026-01-01T00:00:00Z",
+        "2026-01-01T00:00:00.999Z",
+        "2026-01-01T07:00:00+07:00",
+        "2026-01-01T07:00:00.999+07:00",
+        "0000-02-29T00:00:00Z",
+        "0099-12-31T23:59:59Z"
+      ]) assert.equal(isExpired(value, Date.parse(value)), true, value);
+      assert.throws(() => isExpired("0001-02-29T00:00:00Z", 0), TypeError);
+    });
     break;
   }
   case "incident-diagnosis": await check("incident-evidence-intact", () => assert.match(fs.readFileSync(path.join(workspace, "logs/incident.log"), "utf8"), new RegExp(data.code))); break;

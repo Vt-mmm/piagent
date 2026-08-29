@@ -102,6 +102,7 @@ export function regexLiteralSentinel(value, flags = "") {
   const expiryCalendar = String.raw`^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})$`;
   const strictTimestamp = String.raw`^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d+)?(Z|[+-]\d{2}:\d{2})$`;
   const strictTimestampNoncapturingFraction = String.raw`^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:\d{2})$`;
+  const strictTimestampOptionalSecondsCapturingFraction = String.raw`^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(Z|[+-]\d{2}:\d{2})$`;
   const isoCalendarCaptures = new Set([
     String.raw`^(\d{4})-(\d{2})-(\d{2})t`,
     String.raw`^(\d{4})-(\d{2})-(\d{2})(?:t|$)`,
@@ -112,6 +113,9 @@ export function regexLiteralSentinel(value, flags = "") {
   if (exactPattern === strictTimestamp) return "__pi_strict_iso_timestamp_regex_literal__";
   if (exactPattern === strictTimestampNoncapturingFraction) {
     return "__pi_strict_iso_timestamp_noncapturing_fraction_regex_literal__";
+  }
+  if (exactPattern === strictTimestampOptionalSecondsCapturingFraction) {
+    return "__pi_strict_iso_timestamp_optional_seconds_capturing_fraction_regex_literal__";
   }
   return isoCalendarCaptures.has(pattern)
     ? "__pi_iso_calendar_capture_regex_literal__" : "__pi_regex_literal__";

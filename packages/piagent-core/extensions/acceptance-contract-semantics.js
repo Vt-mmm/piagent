@@ -965,14 +965,14 @@ export function acceptanceContractProofGuidance(raw) {
   const requestedSpecificErrors = hasAmbiguousErrorClassIntent(raw) ? [] : requestedErrorClasses(raw).map((errorClass) => ERROR_CONSTRUCTOR_DISPLAY_NAMES[errorClass]).filter(Boolean);
   if (requestedSpecificErrors.length === 1) guidance.push(`Assert ${requestedSpecificErrors[0]} for every rejected partition named by the request; a different error class is not equivalent.`);
   if (requestedSpecificErrors.length > 1) guidance.push(`Preserve the request's partition-to-error mapping: assert each rejected partition with its explicitly named class (${requestedSpecificErrors.join(", ")}); do not apply one class to every partition.`);
-  const integerTargets = integerConstraintTargets(raw);
-  if (integerTargets.length > 0) guidance.push(`Reject fractional values for every integer-constrained argument (${integerTargets.join(", ")}).`);
+  const integerTargets = integerConstraintTargets(raw); if (integerTargets.length > 0) guidance.push(`Reject fractional values for every integer-constrained argument (${integerTargets.join(", ")}).`);
   const nullRejectingTargets = nullRejectingDefaultTargets(raw);
   if (nullRejectingTargets.length > 0) guidance.push(`Prove omitted or undefined defaults separately from supplied null for: ${nullRejectingTargets.join(", ")}.`);
   if (/\bpositive integer\b/.test(value)) guidance.push("Exercise zero and a negative value for every positive-integer constraint.");
   if (/\bnon-negative\b/.test(value)) guidance.push("Exercise zero as valid and a negative value as invalid for every non-negative constraint.");
   if (/\binclusive\b|\bthrough\b|\bfrom\b[^.\n]{0,80}\bto\b/.test(value)) guidance.push("Exercise both inclusive endpoints and the nearest value outside each endpoint.");
   if (/\bround(?:ing)?\b|\bceil(?:ing)?\b|\bclamp\b/.test(value)) guidance.push("Exercise zero, exact, partial/rounding, below-minimum, and above-maximum behavior where applicable.");
+  if (/\biso\b[^.\n]{0,80}\btimestamp\b|\btimestamp\b[^.\n]{0,80}\biso\b/.test(value)) guidance.push("For ISO timestamps, prove valid shapes with and without fractional seconds, numeric UTC offsets, and any contract-supported omitted-seconds form; optional capturing groups shift later match indexes, so bind/test the zone capture explicitly. Prove leap-day validity for proleptic years 0000 through 0099: Date.UTC(year, ...) remaps years 0 through 99 unless handled explicitly.");
   return uniqueStrings(guidance).slice(0, 8);
 }
 

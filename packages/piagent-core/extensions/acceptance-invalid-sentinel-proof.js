@@ -10,6 +10,7 @@ const INTRINSICS = ["NaN", "Date", "Number", "RegExp", "TypeError"];
 const STATIC_TYPE_ERROR = String.raw`thrownewTypeError\((?:__pi_[a-z0-9_]*string_literal__)?\);`;
 const SENTINEL_KEYWORDS = { const: 13, function: 4, export: 1, if: 8, return: 10, throw: 2, new: 3, typeof: 2, instanceof: 2, else: 0, arguments: 1 };
 const DIRECT_THROW_KEYWORDS = { const: 18, function: 3, export: 1, if: 9, return: 5, throw: 6, new: 6, typeof: 2, instanceof: 2, else: 1, arguments: 1 };
+const INLINE_DIRECT_THROW_KEYWORDS = { ...DIRECT_THROW_KEYWORDS, const: 17 };
 
 function compact(value) { return String(value ?? "").replace(/\s+/g, ""); }
 function escaped(value) { return String(value ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
@@ -301,6 +302,100 @@ function directThrowExpiryProof(bodies, expiryName, regexName) {
     : null;
 }
 
+function inlineDirectThrowExpiryProof(bodies, expiryName) {
+  const callable = exactCallable(bodies, expiryName);
+  if (!exactFunction(callable, 1)) return null;
+  const [input] = exactParameters(callable);
+  let body = compact(exactBody(callable));
+
+  const dateBranch = body.match(new RegExp(
+    `^if\\(${escaped(input)}instanceofDate\\)\\{const(${ID})=${escaped(input)}\\.getTime\\(\\);`
+    + `if\\(Number\\.isFinite\\(\\1\\)\\)return\\1;${STATIC_TYPE_ERROR}\\}`
+  ));
+  if (!dateBranch) return null;
+  const dateTimestamp = dateBranch[1];
+  body = body.slice(dateBranch[0].length);
+
+  const typeGuard = body.match(new RegExp(
+    `^if\\(typeof${escaped(input)}!==__pi_typeof_string_literal__\\)${STATIC_TYPE_ERROR}`
+  ));
+  if (!typeGuard) return null;
+  body = body.slice(typeGuard[0].length);
+
+  const matchGuard = body.match(new RegExp(
+    `^const(${ID})=__pi_strict_iso_timestamp_optional_seconds_capturing_fraction_regex_literal__\\.exec\\(${escaped(input)}\\);`
+    + `if\\(!\\1\\)${STATIC_TYPE_ERROR}`
+  ));
+  if (!matchGuard) return null;
+  const matchName = matchGuard[1];
+  body = body.slice(matchGuard[0].length);
+
+  const numericParts = [];
+  for (let slot = 1; slot <= 5; slot += 1) {
+    const declaration = body.match(new RegExp(`^const(${ID})=Number\\(${escaped(matchName)}\\[${slot}\\]\\);`));
+    if (!declaration) return null;
+    numericParts.push(declaration[1]);
+    body = body.slice(declaration[0].length);
+  }
+  const [year, month, day, hour, minute] = numericParts;
+  const second = body.match(new RegExp(
+    `^const(${ID})=${escaped(matchName)}\\[6\\]===undefined\\?0:Number\\(${escaped(matchName)}\\[6\\]\\);`
+  ));
+  if (!second) return null;
+  const secondName = second[1];
+  body = body.slice(second[0].length);
+
+  const offset = body.match(new RegExp(`^const(${ID})=${escaped(matchName)}\\[8\\];`));
+  if (!offset) return null;
+  const offsetName = offset[1];
+  body = body.slice(offset[0].length);
+  const offsetHour = body.match(new RegExp(
+    `^const(${ID})=${escaped(offsetName)}===__pi_utc_z_string_literal__\\?0:Number\\(${escaped(offsetName)}\\.slice\\(1,3\\)\\);`
+  ));
+  if (!offsetHour) return null;
+  body = body.slice(offsetHour[0].length);
+  const offsetMinute = body.match(new RegExp(
+    `^const(${ID})=${escaped(offsetName)}===__pi_utc_z_string_literal__\\?0:Number\\(${escaped(offsetName)}\\.slice\\(4,6\\)\\);`
+  ));
+  if (!offsetMinute) return null;
+  body = body.slice(offsetMinute[0].length);
+
+  const leap = body.match(new RegExp(
+    `^const(${ID})=${escaped(year)}%4===0&&\\(${escaped(year)}%100!==0\\|\\|${escaped(year)}%400===0\\);`
+  ));
+  if (!leap) return null;
+  const leapName = leap[1];
+  body = body.slice(leap[0].length);
+  const days = body.match(new RegExp(
+    `^const(${ID})=\\[31,${escaped(leapName)}\\?29:28,31,30,31,30,31,31,30,31,30,31\\];`
+  ));
+  if (!days) return null;
+  const daysName = days[1];
+  body = body.slice(days[0].length);
+
+  const rejection = body.match(new RegExp(
+    `^if\\(${escaped(month)}<1\\|\\|${escaped(month)}>12\\|\\|${escaped(day)}<1\\|\\|${escaped(day)}>${escaped(daysName)}\\[${escaped(month)}-1\\]`
+    + `\\|\\|${escaped(hour)}>23\\|\\|${escaped(minute)}>59\\|\\|${escaped(secondName)}>59`
+    + `\\|\\|${escaped(offsetHour[1])}>23\\|\\|${escaped(offsetMinute[1])}>59\\)${STATIC_TYPE_ERROR}`
+  ));
+  if (!rejection) return null;
+  body = body.slice(rejection[0].length);
+
+  const parsed = body.match(new RegExp(
+    `^const(${ID})=Date\\.parse\\(${escaped(input)}\\);`
+    + `if\\(!Number\\.isFinite\\(\\1\\)\\)${STATIC_TYPE_ERROR}return\\1;$`
+  ));
+  if (!parsed) return null;
+
+  const localNames = [...new Set([
+    expiryName, input, dateTimestamp, matchName, ...numericParts, secondName, offsetName,
+    offsetHour[1], offsetMinute[1], leapName, daysName, parsed[1]
+  ])];
+  return uniqueCaseFolded(localNames)
+    ? { callable, input, partitions: STRICT_DATE_PARTITIONS }
+    : null;
+}
+
 function directThrowNowProof(bodies, nowName) {
   const callable = exactCallable(bodies, nowName);
   if (!exactFunction(callable, 1)) return null;
@@ -385,6 +480,56 @@ function closedDirectThrowModuleProof(bodies, publicName) {
   return { candidate: true, proof: { publicChain, expiry, now } };
 }
 
+function inlineDirectThrowModuleCandidate(bodies, publicName) {
+  const callable = exactCallable(bodies, publicName);
+  if (!exactFunction(callable, 2)) return false;
+  const declarations = bodies.exactDeclarations ?? bodies.declarations ?? [];
+  const hasInlineStrictRegex = declarations.some((item) => {
+    const candidate = exactCallable(bodies, item.name);
+    return candidate && exactBody(candidate)
+      .includes("__pi_strict_iso_timestamp_optional_seconds_capturing_fraction_regex_literal__");
+  });
+  const body = compact(exactBody(callable));
+  return hasInlineStrictRegex
+    && declarations.filter((item) => item.braceDepth === 0 && item.kind === "function-declaration").length >= 3
+    && body.includes("arguments.length") && body.includes("Date.now()") && body.includes(">=");
+}
+
+function closedInlineDirectThrowModuleProof(bodies, publicName) {
+  const candidate = inlineDirectThrowModuleCandidate(bodies, publicName);
+  if (!candidate) return { candidate: false, proof: null };
+  const exactStatements = bodies.exactTopLevelStatements ?? bodies.topLevelStatements ?? [];
+  const exactDeclarations = bodies.exactDeclarations ?? bodies.declarations ?? [];
+  const scanComplete = bodies.exactScanComplete ?? bodies.scanComplete;
+  const collisions = bodies.exactCaseFoldCollisions ?? bodies.caseFoldCollisions ?? new Set();
+  if (!scanComplete || bodies.exactMappingComplete === false || collisions.size > 0
+    || exactStatements.length !== 3 || exactDeclarations.length !== 3
+    || exactDeclarations.some((item) => item.braceDepth !== 0 || item.kind !== "function-declaration")) {
+    return { candidate: true, proof: null };
+  }
+
+  const publicChain = directThrowPublicProof(bodies, publicName);
+  if (!publicChain || !exactClosedModuleParses(publicChain.callable)) return { candidate: true, proof: null };
+  const expiry = inlineDirectThrowExpiryProof(bodies, publicChain.expiryHelper);
+  const now = directThrowNowProof(bodies, publicChain.nowHelper);
+  if (!expiry || !now) return { candidate: true, proof: null };
+
+  const orderedNames = [publicChain.expiryHelper, publicChain.nowHelper, publicName];
+  if (!uniqueCaseFolded(orderedNames)
+    || !orderedNames.every((name, index) => exactStatements[index]?.declarationName === name)
+    || !exactStatements.slice(0, 2).every((statement, index) => compact(statement.source).startsWith(`function${orderedNames[index]}(`))
+    || !compact(exactStatements[2].source).startsWith(`exportfunction${publicName}(`)) {
+    return { candidate: true, proof: null };
+  }
+
+  const source = exactSource(publicChain.callable);
+  const allNames = [...orderedNames, ...exactParameters(expiry.callable),
+    ...exactParameters(now.callable), ...exactParameters(publicChain.callable)];
+  if (!intrinsicEnvironmentIsClosed(source, allNames)
+    || !closedKeywordTokensMatch(source, INLINE_DIRECT_THROW_KEYWORDS)) return { candidate: true, proof: null };
+  return { candidate: true, proof: { publicChain, expiry, now } };
+}
+
 /**
  * Prove only the retained closed sentinel module. The proof is intentionally
  * whole-module: a valid-looking leaf or guard cannot survive an extra binding,
@@ -399,8 +544,10 @@ export function invalidSentinelRejectionProof({
   if (!publicCallable || !publicName) return failedProof();
   const sentinel = closedModuleProof(bodies, publicName);
   const directThrow = sentinel ? { candidate: false, proof: null } : closedDirectThrowModuleProof(bodies, publicName);
-  const closed = sentinel ?? directThrow.proof;
-  if (!closed) return failedProof(directThrow.candidate);
+  const inlineDirectThrow = sentinel || directThrow.proof
+    ? { candidate: false, proof: null } : closedInlineDirectThrowModuleProof(bodies, publicName);
+  const closed = sentinel ?? directThrow.proof ?? inlineDirectThrow.proof;
+  if (!closed) return failedProof(directThrow.candidate || inlineDirectThrow.candidate);
   if (requestedPartitions.some((partition) => ["non-array", "non-string"].includes(partition))) return failedProof(true);
 
   const requested = Array.isArray(requiredInputNames) && requiredInputNames.length > 0

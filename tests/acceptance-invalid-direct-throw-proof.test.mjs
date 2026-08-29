@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  acceptanceContractProofGuidance,
   acceptanceExecutableTestBinding,
   acceptanceInvalidInputEvidence,
   sanitizeJavaScriptEvidence
@@ -89,6 +90,62 @@ const contract = [
   "do not use the machine's current time when an explicit falsey value is provided."
 ].join(" ");
 
+const robustInlineSource = `function expiryTimestamp(value) {
+  if (value instanceof Date) {
+    const timestamp = value.getTime();
+    if (Number.isFinite(timestamp)) return timestamp;
+    throw new TypeError("expiresAt must be a valid date");
+  }
+
+  if (typeof value !== "string") throw new TypeError("expiresAt must be an ISO timestamp or Date");
+  const match = /^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2})(?::(\\d{2})(?:\\.(\\d+))?)?(Z|[+-]\\d{2}:\\d{2})$/.exec(value);
+  if (!match) throw new TypeError("expiresAt must be an ISO timestamp or Date");
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = match[6] === undefined ? 0 : Number(match[6]);
+  const offset = match[8];
+  const offsetHour = offset === "Z" ? 0 : Number(offset.slice(1, 3));
+  const offsetMinute = offset === "Z" ? 0 : Number(offset.slice(4, 6));
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+  if (month < 1 || month > 12 || day < 1 || day > daysInMonth[month - 1] || hour > 23 || minute > 59 || second > 59 || offsetHour > 23 || offsetMinute > 59) throw new TypeError("expiresAt must be a valid date");
+
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) throw new TypeError("expiresAt must be a valid date");
+  return timestamp;
+}
+
+function nowTimestamp(value) {
+  if (value instanceof Date) {
+    const timestamp = value.getTime();
+    if (Number.isFinite(timestamp)) return timestamp;
+  } else if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  throw new TypeError("now must be a millisecond number or Date");
+}
+
+export function isExpired(expiresAt, now) {
+  const timestamp = expiryTimestamp(expiresAt);
+  const current = arguments.length < 2 ? Date.now() : nowTimestamp(now);
+  return current >= timestamp;
+}
+`;
+
+const dateUtcYearZeroBugSource = robustInlineSource
+  .replace(
+    "  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);\n  const daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];",
+    "  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();"
+  )
+  .replace("daysInMonth[month - 1]", "daysInMonth");
+
+const retainedInlineBugSource = dateUtcYearZeroBugSource.replace("const offset = match[8]", "const offset = match[7]");
+
 function evidence(candidate = source, taskText = contract, testText = focusedTests) {
   return acceptanceInvalidInputEvidence({
     taskText,
@@ -118,6 +175,43 @@ test("recognizes the distinct zone-at-capture-seven strict timestamp literal", (
 
 test("proves the retained direct-TypeError helper module", () => {
   assert.deepEqual(evidence(), { sourceOk: true, testOk: true });
+});
+
+test("proves the corrected closed inline ISO parser and rejects the retained capture/calendar bugs", () => {
+  assert.match(
+    sanitizeJavaScriptEvidence(robustInlineSource),
+    /__pi_strict_iso_timestamp_optional_seconds_capturing_fraction_regex_literal__/
+  );
+  assert.deepEqual(evidence(robustInlineSource), { sourceOk: true, testOk: true });
+  assert.deepEqual(evidence(retainedInlineBugSource), { sourceOk: false, testOk: true });
+  assert.deepEqual(evidence(dateUtcYearZeroBugSource), { sourceOk: false, testOk: true });
+  assert.equal(evidence(robustInlineSource.replace("const offset = match[8]", "const offset = match[7]")).sourceOk, false);
+});
+
+test("inline ISO parser proof remains fail-closed across capture, calendar, and module poisons", () => {
+  const inlinePoisonCases = [
+    ["zone reads optional fraction capture", robustInlineSource.replace("const offset = match[8]", "const offset = match[7]")],
+    ["Date.UTC remaps years zero through 99", dateUtcYearZeroBugSource],
+    ["wrong leap-century divisor", robustInlineSource.replace("year % 400", "year % 300")],
+    ["seconds read from fraction capture", robustInlineSource.replace(
+      "match[6] === undefined ? 0 : Number(match[6])",
+      "match[7] === undefined ? 0 : Number(match[7])"
+    )],
+    ["missing offset-minute bound", robustInlineSource.replace(" || offsetMinute > 59", "")],
+    ["extra top-level statement", `const unrelated = 1;\n${robustInlineSource}`]
+  ];
+  for (const [name, candidate] of inlinePoisonCases) {
+    assert.notEqual(candidate, robustInlineSource, `${name}: mutation must alter source`);
+    assert.equal(evidence(candidate).sourceOk, false, name);
+  }
+});
+
+test("ISO recovery guidance identifies optional captures and proleptic calendar hazards", () => {
+  const guidance = acceptanceContractProofGuidance(contract).join("\n");
+  assert.match(guidance, /with and without fractional seconds/i);
+  assert.match(guidance, /optional capturing groups shift later match indexes/i);
+  assert.match(guidance, /years 0000 through 0099/i);
+  assert.match(guidance, /Date\.UTC\(year/i);
 });
 
 const poisonCases = [

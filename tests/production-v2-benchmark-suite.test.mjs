@@ -34,6 +34,47 @@ function grade(workspace, scenario, oraclePath) {
 }
 
 const references = {
+  "expiry-boundary": ["src/reliability/expiry.js", `
+function expiryTimestamp(value) {
+  if (value instanceof Date) {
+    const timestamp = value.getTime();
+    if (Number.isFinite(timestamp)) return timestamp;
+    throw new TypeError("expiresAt must be a valid date");
+  }
+  if (typeof value !== "string") throw new TypeError("expiresAt must be an ISO timestamp or Date");
+  const match = /^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2})(?::(\\d{2})(?:\\.(\\d+))?)?(Z|[+-]\\d{2}:\\d{2})$/.exec(value);
+  if (!match) throw new TypeError("expiresAt must be an ISO timestamp or Date");
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = match[6] === undefined ? 0 : Number(match[6]);
+  const offset = match[8];
+  const offsetHour = offset === "Z" ? 0 : Number(offset.slice(1, 3));
+  const offsetMinute = offset === "Z" ? 0 : Number(offset.slice(4, 6));
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  if (month < 1 || month > 12 || day < 1 || day > daysInMonth[month - 1] || hour > 23 || minute > 59 || second > 59 || offsetHour > 23 || offsetMinute > 59) throw new TypeError("expiresAt must be a valid date");
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) throw new TypeError("expiresAt must be a valid date");
+  return timestamp;
+}
+function nowTimestamp(value) {
+  if (value instanceof Date) {
+    const timestamp = value.getTime();
+    if (Number.isFinite(timestamp)) return timestamp;
+  } else if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  throw new TypeError("now must be a millisecond number or Date");
+}
+export function isExpired(expiresAt, now) {
+  const timestamp = expiryTimestamp(expiresAt);
+  const current = arguments.length < 2 ? Date.now() : nowTimestamp(now);
+  return current >= timestamp;
+}
+`],
   "revoked-session-cache": ["src/backend/revocation-cache.js", `
 function object(value) { return value && typeof value === "object" && !Array.isArray(value); }
 function id(value) { return typeof value === "string" && value.length > 0; }
@@ -350,6 +391,35 @@ test("every new deep variant rejects its regression and accepts an independent r
     fs.writeFileSync(path.join(workspace, relativePath), source.trimStart());
     const result = grade(workspace, scenario, oraclePath);
     assert.equal(result.passed, true, `${scenario.id} reference failed: ${JSON.stringify(result)}`);
+  }
+});
+
+test("expiry grader accepts the robust ISO parser and rejects capture-index and year-zero mutants", (t) => {
+  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "piagent-production-v2-expiry-mutants-"));
+  t.after(() => fs.rmSync(temporaryRoot, { recursive: true, force: true }));
+  const scenario = suite.scenarios.find((item) => item.id === "expiry-boundary");
+  const [relativePath, reference] = references[scenario.id];
+  const mutants = {
+    "optional-fraction-read-as-zone": reference.replace("const offset = match[8]", "const offset = match[7]"),
+    "Date.UTC-year-zero-remap": reference
+      .replace(
+        "  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);\n  const daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];",
+        "  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();"
+      )
+      .replace("daysInMonth[month - 1]", "daysInMonth")
+  };
+
+  for (const [name, source] of [["reference", reference], ...Object.entries(mutants)]) {
+    const workspace = path.join(temporaryRoot, name); const oraclePath = `${workspace}.oracle.json`;
+    fs.cpSync(path.join(suiteRoot, scenario.fixture), workspace, { recursive: true });
+    generate(workspace, scenario, oraclePath, `expiry-${name}`);
+    fs.writeFileSync(path.join(workspace, relativePath), source.trimStart());
+    const result = grade(workspace, scenario, oraclePath);
+    assert.equal(result.passed, name === "reference", `${name}: ${JSON.stringify(result)}`);
+    if (name !== "reference") {
+      assert.equal(result.checks.find((item) => item.id === "valid-iso-shapes-and-proleptic-calendar")?.passed, false,
+        `${name} did not fail the valid-shape/calendar proof: ${JSON.stringify(result)}`);
+    }
   }
 });
 
