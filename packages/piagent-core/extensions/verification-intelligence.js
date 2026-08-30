@@ -125,7 +125,8 @@ const STRUCTURED_SIGNALS = {
   environment: "structured-environment",
   "flaky-infrastructure": "structured-flaky-infrastructure",
   "stale-verifier": "structured-stale-verifier",
-  "missing-verifier": "structured-missing-verifier"
+  "missing-verifier": "structured-missing-verifier",
+  "verification-gap": "structured-verification-gap"
 };
 
 function parsedSignals(text, exitCode, structuredEvents) {
@@ -189,6 +190,7 @@ function categoryForEvidence(evidence) {
   if (signals.has("structured-provider") || signals.has("provider-rate-limit") || signals.has("provider-transport")) return "provider-network";
   if (signals.has("structured-environment") || signals.has("environment-diagnostic")) return "environment";
   if (signals.has("structured-flaky-infrastructure") || signals.has("local-port-conflict") || signals.has("transient-infrastructure")) return "flaky-infrastructure";
+  if (signals.has("structured-verification-gap")) return "unknown";
   if (signals.has("structured-stale-verifier") || signals.has("structured-missing-verifier") || signals.has("dependency-config-diagnostic")) return "dependency-config";
   if (["typescript-diagnostic", "python-type-diagnostic", "go-compile-diagnostic", "rust-compile-diagnostic", "generic-compile-diagnostic"].some((signal) => signals.has(signal))) return "compile-typecheck";
   if (signals.has("test-assertion-diagnostic")) return "test-assertion";
@@ -250,16 +252,38 @@ export function classifyCompletionGateFailure(missing = [], summary = "", exitCo
     });
   }
   if (missingItems.some((item) => /^critical acceptance evidence\b/i.test(item))) {
-    return classifyVerificationFailure("AssertionError: critical acceptance behavioral proof is missing", 1);
+    // A missing proof is not an observed assertion failure. In particular,
+    // analyzer abstention cannot fabricate source-repair eligibility.
+    return classifyVerificationFailure("Completion gate lacks required behavioral verification evidence.", 1, {
+      structuredEvents: ["verification-gap"]
+    });
   }
   return classifyRecordedVerificationFailure(summary, exitCode);
 }
 
 export function selectCompletionRecoveryClassification(recordedClassification, missing = [], summary = "", exitCode = 1) {
   const gateClassification = classifyCompletionGateFailure(missing, summary, exitCode);
-  return gateClassification.category === "scope-protected-path"
-    ? gateClassification
-    : recordedClassification ?? gateClassification;
+  if (gateClassification.category === "scope-protected-path" || exitCode === 0) return gateClassification;
+  try { return recordedClassification ? validateFailureClassification(recordedClassification) : gateClassification; }
+  catch { return gateClassification; }
+}
+
+/** Reuse a checkpoint classification only for the exact current failed run. */
+export function recordedFailureForObservation(checkpoints, observed, currentTreeDigest) {
+  if (observed?.observed !== true || observed.matchedProfileCommand !== true || observed.exitCode === 0
+    || !isCurrentWorkingTreeDigest(observed.preWorkingTreeDigest) || observed.preWorkingTreeDigest !== observed.workingTreeDigest
+    || (currentTreeDigest !== undefined && currentTreeDigest !== observed.workingTreeDigest)) return undefined;
+  const observedAt = observed.observedAt ?? observed.recordedAt;
+  if (typeof observedAt !== "string" || !Number.isFinite(Date.parse(observedAt))) return undefined;
+  const checkpoint = (Array.isArray(checkpoints) ? checkpoints : []).filter((item) => {
+    const binding = item?.evidence?.verificationObservation;
+    return item?.phase === "verify" && item.status === "failed" && binding
+      && binding.command === observed.command?.trim() && binding.observedAt === observedAt
+      && binding.exitCode === observed.exitCode && binding.preWorkingTreeDigest === observed.preWorkingTreeDigest
+      && binding.workingTreeDigest === observed.workingTreeDigest;
+  }).at(-1);
+  try { return checkpoint ? validateFailureClassification(checkpoint.evidence.failureClassification) : undefined; }
+  catch { return undefined; }
 }
 
 export function chooseVerificationScope(profileVerifyCommands = {}, changedFiles = []) {

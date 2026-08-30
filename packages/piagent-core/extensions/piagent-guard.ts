@@ -71,7 +71,7 @@ import {
   priorTaskAttempts, repositoryFileManifest, repositoryFileManifestDetails, resolveTaskContract, safeTaskId, summarizeAttempt, taskContractValidationErrors, taskDigestMigrationArchiveStatus,
   workPlanDependencyError, workingTreeSnapshot, workingTreeSnapshotHasUnavailableEvidence, writeTaskContract
 } from "./task-state.js";
-import { classifyRecordedVerificationFailure, classifyVerificationFailure, latestObservedVerification, meaningfulVerificationCommands, selectCompletionRecoveryClassification, selectVerificationPlan } from "./verification-intelligence.js";
+import { classifyRecordedVerificationFailure, classifyVerificationFailure, latestObservedVerification, meaningfulVerificationCommands, recordedFailureForObservation, selectCompletionRecoveryClassification, selectVerificationPlan } from "./verification-intelligence.js";
 import { executionBackendToolDecision } from "./execution-backend.js";
 import { replayTaskCheckpoints } from "./task-journal.js";
 import type { FailureClassification } from "./failure-types.ts";
@@ -4002,12 +4002,9 @@ export default function piagentGuard(pi: ExtensionAPI) {
     let recordedClassification: FailureClassification | undefined;
     try {
       const replay = replayTaskCheckpoints(ctx.cwd, task.taskRunId, task);
-      if (replay.corruptions.length === 0) {
-        const checkpoint = replay.checkpoints
-          .filter((item) => item.phase === "verify" && item.status === "failed")
-          .at(-1) as any;
-        recordedClassification = checkpoint?.evidence?.failureClassification as FailureClassification | undefined;
-      }
+      if (replay.corruptions.length === 0 && failed) recordedClassification = recordedFailureForObservation(
+        replay.checkpoints, failed, currentTreeDigest
+      ) as FailureClassification | undefined;
     } catch {
       // A missing/corrupt journal cannot grant recovery mutation; the fallback
       // classifier remains fail-closed for unknown evidence.

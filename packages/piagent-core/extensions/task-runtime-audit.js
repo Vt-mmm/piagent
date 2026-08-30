@@ -45,7 +45,11 @@ export function recordVerificationCheckpoint(ctx, task, verification = {}) {
     phase: "verify",
     status: verification.exitCode === 0 ? "done" : "failed",
     attempt: task.attempt,
-    evidence: verification.evidence
+    evidence: { ...verification.evidence, verificationObservation: {
+      command: String(verification.evidence?.command ?? "").trim(), observedAt: observation, exitCode: verification.exitCode,
+      ...(preTree ? { preWorkingTreeDigest: preTree } : {}),
+      ...(verification.workingTreeDigest ? { workingTreeDigest: verification.workingTreeDigest } : {})
+    } }
   });
 }
 

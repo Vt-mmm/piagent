@@ -472,7 +472,7 @@ describe("acceptance evidence lexical truth", () => {
       assert.equal(rejected.criticalMissing.some((item) => item.obligation === "invalid-input-rejection"), true);
       assert.deepEqual(acceptanceCriticalRecoveryProjection(rejectedTask, {
         cwd, changedFiles, currentWorkingTreeDigest: treeDigest("d")
-      })[0]?.missingDimensions, ["source-rejection"]);
+      })[0]?.missingDimensions, ["source-proof-unknown"]);
     } finally {
       fs.rmSync(cwd, { recursive: true, force: true });
     }

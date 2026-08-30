@@ -3935,6 +3935,8 @@ describe("piagent guard integration", () => {
     assert.equal(firstHandoff.state.completionApproved, false);
     assert.equal(firstHandoff.tree.evidenceCurrent, true);
     assert.equal(firstHandoff.tree.latestVerifierMatchesCurrentTree, true);
+    assert.equal(recovery.payload.details.recovery.failureCategory, "unknown");
+    assert.equal(recovery.payload.details.recovery.sourceMutationAllowed, false);
 
     const repairedSource = {
       path: "src/backend/auth.js",
@@ -3963,27 +3965,22 @@ describe("piagent guard integration", () => {
       ].join("\n")
     };
     for (const input of [repairedSource, focusedTest]) {
-      assert.equal((await callToolCall(harness.handlers.get("tool_call"), ctx, "write", input)).block, undefined);
-      fs.mkdirSync(path.dirname(path.join(cwd, input.path)), { recursive: true });
-      fs.writeFileSync(path.join(cwd, input.path), input.content);
-      await harness.handlers.get("tool_result")({
-        toolName: "write",
-        input,
-        content: [{ type: "text", text: `Wrote ${input.path}` }],
-        isError: false
-      }, ctx);
+      assert.equal((await callToolCall(harness.handlers.get("tool_call"), ctx, "write", input)).block, true,
+        "a missing-proof diagnostic must not grant mutation of source or test expectations");
     }
 
     const secondClaim = await harness.handlers.get("message_end")({
-      message: { role: "assistant", content: [{ type: "text", text: "Task completed with focused tenant tests." }] }
+      message: { role: "assistant", content: [{ type: "text", text: "Task completed after the bounded proof diagnostic." }] }
     }, ctx);
     assert.match(secondClaim.message.content[0].text, /NOT APPROVED/);
-    assert.match(secondClaim.message.content[0].text, /global-continuation-budget-exhausted/);
+    assert.match(secondClaim.message.content[0].text, /unknown-diagnostic-exhausted/);
     const recoveryMessages = harness.entries.filter((entry) => entry.type === "message");
-    assert.equal(recoveryMessages.length, 1, "the first semantic repair consumes the one global continuation");
+    assert.equal(recoveryMessages.length, 1, "the diagnostic consumes the one global continuation without enabling blind repair");
     task = JSON.parse(fs.readFileSync(taskPath, "utf8"));
     assert.equal(task.trace.outcome, "pending");
-    assert.deepEqual(task.changedFiles, ["src/backend/auth.js", "test/auth.test.js"]);
+    assert.deepEqual(task.changedFiles, ["src/backend/auth.js"]);
+    assert.equal(fs.existsSync(path.join(cwd, "test/auth.test.js")), false);
+    assert.equal(fs.readFileSync(path.join(cwd, "src/backend/auth.js"), "utf8"), writeInput.content);
     assert.deepEqual(task.finalWorkingTreeFiles, Object.keys(workingTreeSnapshot(cwd)).sort());
     assert.equal(workingTreeEvidenceDigest(task.finalFileDigests), workingTreeEvidenceDigest(workingTreeSnapshot(cwd)));
     assert.equal(task.acceptanceReceipt.criteria.filter((criterion) => criterion.priority === "critical").every((criterion) => criterion.status === "pending"), true);
@@ -3993,8 +3990,8 @@ describe("piagent guard integration", () => {
     assert.equal(handoff.nextSafeAction.action, "handoff");
     assert.equal(handoff.state.completionApproved, false);
     assert.equal(handoff.tree.evidenceCurrent, true);
-    assert.equal(handoff.tree.latestVerifierMatchesCurrentTree, false, "the repair changed the tree after the prior verifier");
-    assert.match(handoff.failure.recovery.reasonCodes.join("; "), /global-continuation-budget-exhausted/);
+    assert.equal(handoff.tree.latestVerifierMatchesCurrentTree, true, "the non-mutating diagnostic retained the current verifier but did not satisfy missing behavior");
+    assert.match(handoff.failure.recovery.reasonCodes.join("; "), /unknown-diagnostic-exhausted/);
   });
 
   it("hands off unresolved critical adapter proof once without scheduling a model retry", async () => {
@@ -4066,7 +4063,7 @@ describe("piagent guard integration", () => {
   });
 
   it("keeps broad-default mutation authority broad while known runtime critical proof gates completion once", async () => {
-    async function runCase(label, mutateAfterVerifier, benchmarkBound = false) {
+    async function runCase(label, mutateAfterVerifier, benchmarkBound = false, failedBeforePass = false) {
       const { root, piagentGuard } = await loadGuardFixture();
       const cwd = createProject(root);
       fs.mkdirSync(path.join(cwd, "src", "backend"), { recursive: true });
@@ -4093,8 +4090,12 @@ describe("piagent guard integration", () => {
       assert.equal((await callToolCall(harness.handlers.get("tool_call"), ctx, "write", writeInput)).block, undefined);
       fs.writeFileSync(path.join(cwd, writeInput.path), writeInput.content);
       await harness.handlers.get("tool_result")({ toolName: "write", input: writeInput, content: [{ type: "text", text: "written" }], isError: false }, ctx);
-      assert.equal((await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", { command: "npm test" })).block, undefined);
-      await harness.handlers.get("tool_result")({ toolName: "bash", input: { command: "npm test" }, content: [{ type: "text", text: "pass" }], details: { exitCode: 0 }, isError: false, timestamp: Date.now() }, ctx);
+      for (const exitCode of failedBeforePass ? [1, 0] : [0]) {
+        assert.equal((await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", { command: "npm test" })).block, undefined);
+        await harness.handlers.get("tool_result")({ toolName: "bash", input: { command: "npm test" },
+          content: [{ type: "text", text: exitCode ? "AssertionError: earlier failing test" : "pass" }], details: { exitCode },
+          isError: exitCode !== 0, timestamp: Date.now() }, ctx);
+      }
       if (mutateAfterVerifier) fs.appendFileSync(path.join(cwd, writeInput.path), "// changed after verification\n");
       const benchmarkEnvironment = {
         PIAGENT_BENCHMARK_RUN_ID: `run-${label}`,
@@ -4123,6 +4124,14 @@ describe("piagent guard integration", () => {
     assert.equal(current.harness.entries.some((entry) => entry.payload?.customType === "piagent-performance-review"), false);
     assert.equal(current.harness.entries.filter((entry) => entry.payload?.customType === "piagent-completion-recovery").length, 1);
     assert.ok(current.task.acceptanceReceipt.criteria.some((criterion) => criterion.priority === "critical" && criterion.status === "pending"));
+    const currentRecovery = current.harness.entries.filter((entry) => entry.payload?.customType === "piagent-completion-recovery").at(-1);
+    assert.equal(currentRecovery.payload.details.recovery.failureCategory, "unknown");
+    assert.equal(currentRecovery.payload.details.recovery.sourceMutationAllowed, false);
+    assert.doesNotMatch(currentRecovery.payload.content, /acceptance-proof repair pass|targeted evidence-backed source repair/);
+    const previouslyFailed = await runCase("OLD-FAILURE", false, false, true);
+    const afterPassingRecovery = previouslyFailed.harness.entries.filter((entry) => entry.payload?.customType === "piagent-completion-recovery").at(-1);
+    assert.equal(afterPassingRecovery.payload.details.recovery.failureCategory, "unknown");
+    assert.equal(afterPassingRecovery.payload.details.recovery.sourceMutationAllowed, false);
     const stale = await runCase("STALE", true);
     assert.match(stale.claim.message.content[0].text, /CONTINUING/);
     assert.equal(stale.task.trace.outcome, "pending");

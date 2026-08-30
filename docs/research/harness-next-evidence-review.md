@@ -51,6 +51,10 @@ The selected [QuickJS core variant interface](https://github.com/justjake/quickj
 
 ## Chosen research hypotheses
 
+Persistence follow-up: [SQLite's atomic-commit design](https://sqlite.org/atomiccommit.html) documents journal-based all-or-none transactions, including recovery after interruption, with explicit filesystem/locking/flush assumptions. [Node 22.19.0's SQLite API](https://nodejs.org/download/release/v22.19.0/docs/api/sqlite.html) is available but experimental in that minimum supported runtime, so using it for verifier storage requires a compatibility and packaging decision. Transactional durability alone does not authenticate a receipt, establish an approved oracle, or protect against compromise of a same-user host authority. No SQLite verifier store has been added at this checkpoint.
+
+Local source inspection also established that the existing working-tree digest covers changes relative to HEAD. The new execution bridge therefore separately binds source bytes and repository revision. This evidence changes the persistence requirement: a cache must not key solely on the old dirty-tree digest, nor treat a public hash as authentication.
+
 - H1: Separating verifier abstention from concrete behavioral failure prevents unnecessary source rewrites while preserving rejection of known-bad programs.
 - H2: Independent contract probes accept implementation-equivalent solutions that the v6 recognizer rejects, without accepting the retained mutation corpus.
 - H3: Durable, exact-snapshot receipts eliminate repeated completed provider-free work; replay never drops or repeats paid attempts silently.

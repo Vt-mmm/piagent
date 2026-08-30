@@ -3,13 +3,18 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, it } from "node:test";
 
-import { validateFailureClassification, validateFailureEvidence } from "../packages/piagent-core/extensions/failure-types.ts";
-import { classifyCompletionGateFailure, classifyFailureEvidence, classifyRecordedVerificationFailure, classifyVerificationFailure, parseVerificationFailureEvidence, selectCompletionRecoveryClassification } from "../packages/piagent-core/extensions/verification-intelligence.js";
+import { FAILURE_REASON_CODES, FAILURE_STRUCTURED_EVENTS, validateFailureClassification, validateFailureEvidence } from "../packages/piagent-core/extensions/failure-types.ts";
+import { classifyCompletionGateFailure, classifyFailureEvidence, classifyRecordedVerificationFailure, classifyVerificationFailure, parseVerificationFailureEvidence, recordedFailureForObservation, selectCompletionRecoveryClassification } from "../packages/piagent-core/extensions/verification-intelligence.js";
 
 const root = path.resolve(import.meta.dirname, "..");
 const corpus = JSON.parse(fs.readFileSync(path.join(root, "benchmarks", "failure-v1", "classification-corpus.json"), "utf8"));
 
 describe("failure intelligence v1", () => {
+  it("keeps public parser evidence schema aligned with structured verification gaps", () => {
+    const schema = JSON.parse(fs.readFileSync(path.join(root, "schemas/failure-evidence.schema.json"), "utf8"));
+    assert.deepEqual(schema.properties.structuredEvents.items.enum, [...FAILURE_STRUCTURED_EVENTS]);
+    assert.deepEqual(schema.$defs.reason.enum, [...FAILURE_REASON_CODES]);
+  });
   it("separates bounded parser evidence from policy classification", () => {
     const secret = "OPENAI_API_KEY=not-stored";
     const evidence = parseVerificationFailureEvidence(`TS2322: ${secret}`, 2, { captureRef: "capture:abc123", truncated: true });
@@ -55,12 +60,45 @@ describe("failure intelligence v1", () => {
     }
   });
 
-  it("routes missing critical acceptance proof through the bounded test repair policy", () => {
+  it("keeps missing critical proof unknown without fabricating a source defect", () => {
     const result = classifyCompletionGateFailure([
       "critical acceptance evidence (ac-01-invalid-input-rejection:invalid-input-rejection)"
     ], "configured verifier passed", 0);
-    assert.equal(result.category, "test-assertion");
-    assert.equal(result.sourceMutationPermission, "eligible-in-scope");
+    assert.equal(result.category, "unknown");
+    assert.equal(result.sourceMutationPermission, "forbidden");
+    assert.deepEqual(result.reasonCodes, ["structured-verification-gap"]);
+    assert.equal(result.authorizesSourceMutation, false);
+  });
+
+  it("does not revive a recorded failure after the observed verifier passes", () => {
+    const recorded = classifyVerificationFailure("AssertionError: old failing test", 1);
+    const missing = ["critical acceptance evidence (invalid-input-rejection)"];
+    const result = selectCompletionRecoveryClassification(recorded, missing, "configured verifier passed", 0);
+    assert.equal(result.category, "unknown");
+    assert.equal(result.sourceMutationPermission, "forbidden");
+    assert.equal(selectCompletionRecoveryClassification(recorded, missing, "current failing test", 1).category, "test-assertion");
+    assert.equal(selectCompletionRecoveryClassification({ category: "test-assertion" }, missing).category, "unknown");
+  });
+
+  it("reuses a journal classification only for an exact current stable failed observation", () => {
+    const tree = `wt-content-v2:${"a".repeat(64)}`;
+    const observed = { command: "npm test", observed: true, matchedProfileCommand: true, exitCode: 1,
+      observedAt: "2026-08-30T00:00:00.000Z", preWorkingTreeDigest: tree, workingTreeDigest: tree };
+    const classification = classifyVerificationFailure("AssertionError: expected true, received false", 1);
+    const checkpoint = { phase: "verify", status: "failed", evidence: { failureClassification: classification,
+      verificationObservation: { command: observed.command, observedAt: observed.observedAt, exitCode: observed.exitCode,
+        preWorkingTreeDigest: tree, workingTreeDigest: tree } } };
+    assert.deepEqual(recordedFailureForObservation([checkpoint], observed, tree), classification);
+    for (const [key, value] of [["command", "npm run lint"], ["exitCode", 2], ["observedAt", "2026-08-29T00:00:00.000Z"],
+      ["preWorkingTreeDigest", `wt-content-v2:${"b".repeat(64)}`], ["workingTreeDigest", `wt-content-v2:${"b".repeat(64)}`]]) {
+      const changed = structuredClone(checkpoint);
+      changed.evidence.verificationObservation[key] = value;
+      assert.equal(recordedFailureForObservation([changed], observed, tree), undefined, key);
+    }
+    assert.equal(recordedFailureForObservation([checkpoint], { ...observed, exitCode: 0 }, tree), undefined);
+    assert.equal(recordedFailureForObservation([checkpoint], observed, `wt-content-v2:${"b".repeat(64)}`), undefined);
+    assert.equal(recordedFailureForObservation([{ ...checkpoint, evidence: { failureClassification: classification } }], observed, tree), undefined);
+    assert.equal(recordedFailureForObservation([checkpoint], { ...observed, observedAt: "invalid" }, tree), undefined);
   });
 
   it("classifies protected and mutation-forbidden boundaries as terminal policy failures even after a passing verifier", () => {
