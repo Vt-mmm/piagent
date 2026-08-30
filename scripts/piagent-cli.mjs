@@ -42,6 +42,9 @@ if (invokedAs === "piagent") {
   } else if (subcommand === "explain") {
     script = "scripts/explain-command.mjs";
     forwardedArgs = forwardedArgs.slice(1);
+  } else if (subcommand === "approve-verification") {
+    script = "scripts/approve-independent-verification.mjs";
+    forwardedArgs = forwardedArgs.slice(1);
   } else if ([undefined, "help", "--help", "-h"].includes(subcommand)) {
     // Subcommands are listed, their flags are not. Restating them here meant a
     // second copy that drifts: this line still advertised the dashboard without
@@ -51,6 +54,7 @@ if (invokedAs === "piagent") {
     console.log("Commands:");
     console.log("  dashboard   Open and manage the local session hub");
     console.log("  explain     Say why the guard would allow or block a shell command");
+    console.log("  approve-verification  Preview or approve an independent verification plan");
     console.log("");
     console.log("Run `piagent <command> --help` for that command's options.");
     process.exit(0);

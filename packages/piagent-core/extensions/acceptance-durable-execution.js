@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { compileIndependentContract, INDEPENDENT_CONTRACT_VERSION } from "./acceptance-independent-contract.js";
 import { captureExecutionSnapshot, EXECUTION_SNAPSHOT_VERSION, runSnapshotBoundContract } from "./acceptance-execution-snapshot.js";
+import { createAuthenticatedAdmission, unavailableAuthenticatedAssessment } from "./acceptance-authenticated-admission.js";
 
 export const DURABLE_EXECUTION_VERSION = "durable-closed-contract-v1";
 const HASH = /^[a-f0-9]{64}$/;
@@ -37,6 +38,8 @@ export function createDurableContractRunner({ store, projectRoot, sourcePath, au
   const template = compileIndependentContract(JSON.stringify({ schemaVersion: 1, source: "export const placeholder = 0;", exportName, checks }));
   const approvedChecks = template.plan.checks;
   const snapshotRequest = { projectRoot, sourcePath, authorizeSourceRead };
+  const admission = createAuthenticatedAdmission({ store, snapshotRequest, verifierDigest, imageId });
+  const completed = new WeakMap();
   const backendDigest = hash(JSON.stringify([DURABLE_EXECUTION_VERSION, INDEPENDENT_CONTRACT_VERSION,
     EXECUTION_SNAPSHOT_VERSION, imageId, dockerSocket, timeoutMs]));
 
@@ -64,6 +67,13 @@ export function createDurableContractRunner({ store, projectRoot, sourcePath, au
           && await getProjectVerificationDigest({ ...identity, snapshot: after.binding, snapshotDigest: after.snapshotDigest }) === verificationDigest;
       } catch { return false; }
     }
+    function diagnostic(evidence, event, reused) {
+      const result = freeze({ version: DURABLE_EXECUTION_VERSION, verdict: evidence.verdict, completionAllowed: false,
+        reused, attemptId: event.attemptId, evidence });
+      completed.set(result, { scope: exactScope, binding, event, stillCurrent,
+        expectedChecks: compiled.plan.checks.map((check) => ({ id: check.id, caseCount: check.cases.length })) });
+      return result;
+    }
     if (reserved.status === "current") {
       if (!await stillCurrent()) return unavailable("cached-evidence-binding-drift", reserved.event.attemptId);
       const evidence = JSON.parse(reserved.event.evidenceText);
@@ -71,8 +81,7 @@ export function createDurableContractRunner({ store, projectRoot, sourcePath, au
         || evidence.planDigest !== compiled.planDigest || !["pass", "fail", "unknown", "error"].includes(evidence.verdict)) {
         throw new Error("Authenticated evidence is incompatible with this verifier");
       }
-      return freeze({ version: DURABLE_EXECUTION_VERSION, verdict: evidence.verdict, completionAllowed: false,
-        reused: true, attemptId: reserved.event.attemptId, evidence });
+      return diagnostic(evidence, reserved.event, true);
     }
 
     let observed;
@@ -89,9 +98,16 @@ export function createDurableContractRunner({ store, projectRoot, sourcePath, au
       verdict, ...(!current || (!bound && observed.verdict !== "error") ? { reason: "execution-or-project-verifier-binding-drift" } : {}), observed };
     // A failed settlement remains pending: there is no fallback to unsigned
     // receipt files or a second execution. The host must reconcile explicitly.
-    store.settle(reserved.reservation, JSON.stringify(evidence));
-    return freeze({ version: DURABLE_EXECUTION_VERSION, verdict, completionAllowed: false,
-      reused: false, attemptId: reserved.event.attemptId, evidence });
+    const settled = store.settle(reserved.reservation, JSON.stringify(evidence));
+    return diagnostic(evidence, settled, false);
   }
-  return Object.freeze({ version: DURABLE_EXECUTION_VERSION, run });
+  async function assess(result, { policy = "unknown" } = {}) {
+    if (policy !== "allow") return unavailableAuthenticatedAssessment("policy-unestablished-or-denied");
+    const observed = result && typeof result === "object" ? completed.get(result) : undefined;
+    if (!observed) return unavailableAuthenticatedAssessment("untrusted-durable-result");
+    if (!await observed.stillCurrent()) return unavailableAuthenticatedAssessment("current-project-or-source-binding-changed");
+    try { return admission.issue(observed); }
+    catch { return unavailableAuthenticatedAssessment("authenticated-admission-unavailable"); }
+  }
+  return Object.freeze({ version: DURABLE_EXECUTION_VERSION, run, assess });
 }

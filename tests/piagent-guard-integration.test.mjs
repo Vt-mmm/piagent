@@ -5000,6 +5000,103 @@ describe("piagent guard integration", () => {
     assert.deepEqual(task.workPlan.map((step) => step.status), ["done", "done"]);
   });
 
+  for (const scenario of ["valid", "counterexample", "repair"]) it(`uses authenticated independent execution in the actual completion hook (${scenario})`, {
+    skip: !process.env.PIAGENT_CONTRACT_EXECUTOR_IMAGE_ID || !process.env.PIAGENT_CONTRACT_EXECUTOR_SOCKET, timeout: 120000
+  }, async (t) => {
+    const { root, piagentGuard } = await loadGuardFixture(), cwd = createProject(root);
+    const valid = scenario === "valid";
+    const validSource = "export function sum(a,b) { if(typeof a !== 'number' || typeof b !== 'number') throw Reflect.construct(TypeError, ['invalid']); return a+b; }\n";
+    const source = valid
+      ? validSource
+      : "export function sum(a,b) { return a+b; }\n";
+    fs.writeFileSync(path.join(cwd, "src", "math.js"), source);
+    fs.writeFileSync(path.join(cwd, ".gitignore"), ".env\n.pi/\nscreenshots/\nREADME.md\n");
+    fs.writeFileSync(path.join(cwd, "package.json"), JSON.stringify({ type: "module", scripts: { test: "node test.mjs" } }));
+    fs.writeFileSync(path.join(cwd, "test.mjs"), "import assert from 'node:assert/strict'; import {sum} from './src/math.js'; assert.equal(sum(2,3),5); console.log('ACTUAL_PROJECT_TEST_PASSED');\n");
+    execFileSync("git", ["-C", cwd, "config", "user.name", "Test"]); execFileSync("git", ["-C", cwd, "config", "user.email", "test@example.com"]);
+    execFileSync("git", ["-C", cwd, "add", "src/math.js", "package.json", "test.mjs", ".gitignore"]); execFileSync("git", ["-C", cwd, "commit", "-qm", "fixture"]);
+    const prior = process.env.PIAGENT_INDEPENDENT_VERIFICATION_CONFIG;
+    const directory = path.join(fs.realpathSync.native(root), "host-approval");
+    process.env.PIAGENT_INDEPENDENT_VERIFICATION_CONFIG = path.join(directory, "approval.json");
+    const ctx = createContext(cwd, { sessionId: "independent-completion" }), harness = createPiHarness({ activeTools: ["read", "bash"] });
+    piagentGuard(harness.pi);
+    t.after(async () => {
+      await harness.handlers.get("session_shutdown")?.({}, ctx);
+      if (prior === undefined) delete process.env.PIAGENT_INDEPENDENT_VERIFICATION_CONFIG; else process.env.PIAGENT_INDEPENDENT_VERIFICATION_CONFIG = prior;
+    });
+    await harness.handlers.get("session_start")({}, ctx);
+    const prompt = "Verify src/math.js: sum(a,b) must return a+b for numbers and reject non-number arguments with TypeError. Fix a defect only if verification exposes one.";
+    await harness.handlers.get("input")({ text: prompt, source: "user" }, ctx);
+    const started = await harness.handlers.get("before_agent_start")({ prompt, systemPrompt: "stable", systemPromptOptions: { cwd, selectedTools: [...harness.activeTools] } }, ctx);
+    const task = activeSessionTask(cwd, "independent-completion");
+    assert.equal(task.mutationPolicy, "allowed");
+    const { writeHostContractApproval } = await import("../packages/piagent-core/extensions/acceptance-host-configuration.js");
+    const checks = [{ id: "arithmetic-and-rejection", cases: [
+      { id: "sum", args: [{ type: "number", value: 2 }, { type: "number", value: 3 }], expected: { outcome: "return", value: { type: "number", value: 5 } } },
+      { id: "bad-left", args: [{ type: "string", value: "2" }, { type: "number", value: 3 }], expected: { outcome: "throw", errorClass: "TypeError" } },
+      { id: "bad-right", args: [{ type: "number", value: 2 }, { type: "null" }], expected: { outcome: "throw", errorClass: "TypeError" } }
+    ] }];
+    writeHostContractApproval({ directory, projectRoot: cwd, installedRoot: root, operatorRequestDigest: task.operatorRequestDigest, approved: true,
+      backend: { imageId: process.env.PIAGENT_CONTRACT_EXECUTOR_IMAGE_ID, dockerSocket: process.env.PIAGENT_CONTRACT_EXECUTOR_SOCKET, timeoutMs: 10000 },
+      contracts: task.acceptanceReceipt.criteria.map((criterion) => ({ criterionId: criterion.id, criterionHash: criterion.hash,
+        sourcePath: "src/math.js", exportName: "sum", maxAttempts: 2, checks })) });
+    await harness.handlers.get("tool_result")({ toolName: "read", input: { path: "src/math.js" }, content: [{ type: "text", text: source }], isError: false }, ctx);
+    async function verifyProject(suffix) {
+      for (const [index, command] of started.message.details.runtimeTask.verifyCommands.entries()) {
+        const id = `independent-project-test-${suffix}-${index}`;
+        const allowed = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", { command }, id);
+        assert.notEqual(allowed.block, true, allowed.reason);
+        const env = { ...process.env }; delete env.NODE_TEST_CONTEXT;
+        const output = execFileSync("/bin/sh", ["-c", command], { cwd, env, encoding: "utf8", timeout: 10000 });
+        assert.match(output, /ACTUAL_PROJECT_TEST_PASSED/);
+        await harness.handlers.get("tool_result")({ toolCallId: id, toolName: "bash", input: { command }, content: [{ type: "text", text: output }], details: { exitCode: 0 }, isError: false }, ctx);
+      }
+    }
+    await verifyProject("initial");
+    const final = await harness.handlers.get("message_end")({ message: { role: "assistant", content: [{ type: "text", text: "Verification complete: the configured project tests passed." }] } }, ctx);
+    const after = activeSessionTask(cwd, "independent-completion");
+    const { independentAcceptanceState } = await import(pathToFileURL(path.join(root, "packages/piagent-core/extensions/acceptance-independent-registry.js")).href);
+    const observedAdmission = independentAcceptanceState(cwd, after, workingTreeEvidenceDigest(workingTreeSnapshot(cwd)));
+    const diagnostic = JSON.stringify({ final, block: observedAdmission.block, assessments: [...observedAdmission.assessments], criteria: after.acceptanceReceipt.criteria });
+    if (valid) {
+      assert.equal(after.trace.outcome, "completed", diagnostic);
+      assert.ok([...observedAdmission.assessments.values()].every((assessment) => assessment.verdict === "pass"), "completion does not erase the current authenticated projection");
+      assert.ok(after.acceptanceReceipt.criteria.every((criterion) => criterion.status === "satisfied"));
+      assert.ok(after.acceptanceReceipt.criteria.some((criterion) => criterion.evidence.some((entry) => entry.kind === "independent-contract")));
+    } else {
+      assert.notEqual(after.trace.outcome, "completed", JSON.stringify(final));
+      assert.ok([...observedAdmission.assessments.values()].some((assessment) => assessment.verdict === "fail"), diagnostic);
+      const recovery = harness.entries.filter((entry) => entry.payload?.customType === "piagent-completion-recovery").at(-1);
+      assert.equal(recovery?.payload.details.recovery.action, "repair", JSON.stringify(recovery));
+      assert.equal(recovery.payload.details.recovery.failureCategory, "test-assertion");
+      assert.match(recovery.payload.details.recovery.hypothesisRef, /^counterexample:[a-f0-9]{64}$/);
+      assert.match(recovery.payload.content, /bad-left/);
+      assert.match(recovery.payload.content, /TypeError/);
+    }
+    assert.equal(fs.readFileSync(path.join(cwd, "src", "math.js"), "utf8"), source, "verification never rewrites the source");
+    if (scenario === "repair") {
+      const input = { path: "src/math.js", content: validSource };
+      const allowed = await callToolCall(harness.handlers.get("tool_call"), ctx, "write", input, "repair-observed-counterexample");
+      assert.notEqual(allowed.block, true, allowed.reason);
+      fs.writeFileSync(path.join(cwd, input.path), input.content);
+      await harness.handlers.get("tool_result")({ toolCallId: "repair-observed-counterexample", toolName: "write", input,
+        content: [{ type: "text", text: "written" }], isError: false }, ctx);
+      await verifyProject("after-repair");
+      const result = await harness.handlers.get("message_end")({ message: { role: "assistant", content: [{ type: "text", text: "Implemented the counterexample-backed fix and verified the result." }] } }, ctx);
+      assert.equal(activeSessionTask(cwd, "independent-completion").trace.outcome, "completed", JSON.stringify(result));
+    } else if (scenario === "counterexample") {
+      await harness.handlers.get("message_end")({ message: { role: "assistant", content: [{ type: "text", text: "Verification complete." }] } }, ctx);
+      assert.notEqual(activeSessionTask(cwd, "independent-completion").trace.outcome, "completed");
+      assert.equal(harness.entries.filter((entry) => entry.payload?.customType === "piagent-completion-recovery").length, 1, "the repair budget is not renewed by another completion claim");
+    }
+    const { openHostContractConfiguration } = await import("../packages/piagent-core/extensions/acceptance-host-configuration.js");
+    const authority = openHostContractConfiguration({ configPath: path.join(directory, "approval.json"), projectRoot: cwd, installedRoot: root });
+    try {
+      for (const criterion of task.acceptanceReceipt.criteria) assert.equal(authority.store.latest({ taskRunId: task.taskRunId, criterionId: criterion.id }).attempt,
+        scenario === "repair" ? 2 : 1, "unchanged checks reuse evidence; a real repair consumes one new finite attempt");
+    } finally { authority.close(); }
+  });
+
   it("binds a zero-delta verification receipt only to the adjacent completed implementation", async () => {
     const { root, piagentGuard } = await loadGuardFixture();
     const cwd = createProject(root);

@@ -17,6 +17,7 @@ import { contextualTemporalCriterion } from "./acceptance-temporal-contract.js";
 import { acceptancePrecedenceContractGuidance, acceptancePrecedenceReceiptEvidence } from "./acceptance-precedence-contract.js";
 import { isCurrentWorkingTreeDigest, WORKING_TREE_DIGEST_ALGORITHM } from "./working-tree-digest.js";
 import { currentWorkspaceRevisionDigest } from "./workspace-revision.js";
+import { independentAcceptanceState, applyIndependentCriterionAssessment } from "./acceptance-independent-registry.js";
 export const ACCEPTANCE_RECEIPT_SCHEMA_VERSION = 1;
 export const ACCEPTANCE_STATUSES = new Set(["pending", "satisfied", "blocked"]);
 export const ACCEPTANCE_PRIORITIES = new Set(["normal", "critical"]);
@@ -833,8 +834,10 @@ export function refreshAcceptanceReceipt(task, options = {}) {
       ? currentWorkspaceRevisionDigest(cwd) : undefined;
   const recordedAt = options.recordedAt ?? new Date().toISOString();
   const corpus = cwd ? changedFileAcceptanceCorpus(cwd, changedFiles) : emptyAcceptanceCorpus(changedFiles);
+  const independent = independentAcceptanceState(cwd, task, currentWorkingTreeDigest).assessments;
   let changed = false;
   for (const criterion of receipt.criteria) {
+    if (independent.has(criterion.id)) { changed = applyIndependentCriterionAssessment(criterion, independent.get(criterion.id), currentWorkingTreeDigest, recordedAt) || changed; continue; }
     if (task?.changeMode === "source-change" && cwd) {
       const previousStatus = criterion.status;
       const previousEvidence = (criterion.evidence ?? []).map(evidenceKey);

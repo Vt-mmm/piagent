@@ -114,6 +114,9 @@ import {
 import { RuntimeSessionState } from "../runtime/session/runtime-state.ts";
 import type { ObservedTaskContext } from "../runtime/session/runtime-state.ts";
 import { reuseCurrentTreeExactVerifier } from "../runtime/verification/exact-verifier-reuse.ts";
+import { IndependentAcceptanceRuntime } from "../runtime/verification/independent-acceptance-runtime.ts";
+import { independentAcceptanceState } from "./acceptance-independent-registry.js";
+import { independentCounterexampleRecovery } from "../runtime/recovery/independent-counterexample-recovery.ts";
 import {
   PIAGENT_TOOL_GROUPS,
   PIAGENT_TOOL_NAMES,
@@ -3520,6 +3523,9 @@ function evaluateTaskGate(
   }
   const currentDigests = options.currentDigests ?? workingTreeSnapshot(cwd) as Record<string, string>;
   const currentWorkingTreeDigest = options.currentWorkingTreeDigest ?? workingTreeEvidenceDigest(currentDigests);
+  const independentState = independentAcceptanceState(cwd, task, currentWorkingTreeDigest);
+  if (independentState.block) missing.push(independentState.block);
+  for (const [id, assessment] of independentState.assessments) if (assessment.verdict !== "pass") missing.push(`independent contract evidence (${id}:${assessment.verdict})`);
   if (task.workingTreeDigestAlgorithm !== WORKING_TREE_DIGEST_ALGORITHM || task.workingTreeDigestMigration?.status === "verification-refresh-required" || !workingTreeSnapshotUsesCurrentAlgorithm(currentDigests) || !isCurrentWorkingTreeDigest(currentWorkingTreeDigest) || currentWorkingTreeDigest !== workingTreeEvidenceDigest(currentDigests) || Object.values(task.baselineFileDigests).some((digest) => !isCurrentWorkingTreeDigest(digest)) || (task.workingTreeDigestMigration && (!taskDigestMigrationArchiveStatus(cwd, task).valid || replayTaskCheckpoints(cwd, task.taskRunId, task).corruptions.length > 0))) missing.push("current working-tree digest evidence");
   if (workingTreeSnapshotHasUnavailableEvidence(currentDigests)) missing.push("complete working-tree content evidence");
   if (taskContractValidationErrors(task).length > 0) missing.push("valid session-bound task contract v2");
@@ -3775,6 +3781,18 @@ export default function piagentGuard(pi: ExtensionAPI) {
   const runtimeState = new RuntimeSessionState({
     maxObservedContext: contextBudgetConfig(policy).maxManifestFiles
   });
+  const independentAcceptance = new IndependentAcceptanceRuntime({ state: runtimeState, installedRoot: PLATFORM_ROOT,
+    configPath: process.env.PIAGENT_INDEPENDENT_VERIFICATION_CONFIG,
+    activeTask: (ctx) => activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined,
+    authorizeSourceRead: (ctx, sourcePath) => {
+      if (!ctx.isProjectTrusted()) return false;
+      const profile = loadProfileFromContext(ctx), paths = effectiveProtectedPaths(policy, profile);
+      const capabilities = verifyProjectCapabilityState(extensionDir, ctx.cwd, true, { sessionId: ctx.sessionManager.getSessionId() });
+      if (!capabilities.ok) return false;
+      const permission = resolvePermissionProfile(profile, policy, permissionOverrideFromContext(ctx));
+      return !evaluatePathLikeToolAccess(ctx.cwd, "read", { path: sourcePath }, paths.writeProtectedPaths, paths.readProtectedPaths,
+        paths.readOnlyPaths, permission.mode === "trusted-full-access" ? undefined : capabilities.filesystemRead).block;
+    } });
   const editFreshnessGuard = new EditFreshnessGuard(editFreshnessModeFromEnvironment(process.env.PIAGENT_EDIT_FRESHNESS));
   const sourceMutationGuardBindings = createSourceMutationGuardBindings(policy, loadProfileFromContext);
   const runtimeSnapshotCapture = new RuntimeSnapshotCapture(), runtimeVersions = readRuntimeVersionMetadata(PLATFORM_ROOT);
@@ -4015,12 +4033,15 @@ export default function piagentGuard(pi: ExtensionAPI) {
       // A missing/corrupt journal cannot grant recovery mutation; the fallback
       // classifier remains fail-closed for unknown evidence.
     }
-    const classification = selectCompletionRecoveryClassification(
+    const gateClassification = selectCompletionRecoveryClassification(
       recordedClassification,
       gate?.missing,
       summary,
       failed?.exitCode ?? 1
     );
+    const independentRecovery = independentCounterexampleRecovery(ctx.cwd, task, currentTreeDigest ?? workingTreeEvidenceDigest(workingTreeSnapshot(ctx.cwd)));
+    const classification = gateClassification.category === "scope-protected-path"
+      ? gateClassification : independentRecovery?.classification ?? gateClassification;
     const trajectory = trajectoryRuntime.status(ctx.cwd, task.taskRunId);
     // Task scope is a retrieval/review hint, not filesystem authority. Recovery
     // may update a dependency or config file when repository evidence requires
@@ -4038,7 +4059,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
       classification,
       currentPhase: trajectory.enforcementSafe ? trajectory.phase ?? "verify" : "handoff",
       history: runtimeState.recoveryHistory(task.taskId),
-      proposedHypothesisRef: classification.reasonCodes[0] ? `reason:${classification.reasonCodes[0]}` : null,
+      proposedHypothesisRef: independentRecovery?.hypothesisRef ?? (classification.reasonCodes[0] ? `reason:${classification.reasonCodes[0]}` : null),
       exactVerifierAvailable: (gate?.missingVerifyCommands.length ?? task.verifyCommands.length) > 0,
       currentTreeMatchesEvidence: currentTreeDigest && latestExactVerifier?.workingTreeDigest
         ? currentTreeDigest === latestExactVerifier.workingTreeDigest && latestExactVerifier.preWorkspaceRevisionDigest === currentWorkspaceRevisionDigest(ctx.cwd)
@@ -4136,6 +4157,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
     onTurnEnd: activityInspector.refresh,
     onAgentSettled: activityInspector.refresh,
     beforeShutdown: (ctx) => {
+      independentAcceptance.clear(ctx);
       serviceTierRuntime.forget(ctx);
       sourceMutationGuardBindings.unbind(ctx);
       editFreshnessGuard.clear(ctx);
@@ -4194,6 +4216,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
 
   registerCompletionHook(pi, {
     state: runtimeState,
+    prepareIndependentAcceptance: (ctx, task) => independentAcceptance.prepare(ctx, task),
     maxManifestFiles: contextBudgetConfig(policy).maxManifestFiles,
     activeTask: (ctx) => activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined,
     flushObservedTaskContext,
@@ -4875,6 +4898,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
     createTaskRunId, crypto, currentSessionName, defaultRolePolicy, defaultWorkPlan, digestJson,
     dynamicToolsEnabled, effectiveProtectedPaths, emitRuntimeMessage, ensureContextIndexV2, estimateContextTokens,
     evaluateExecPolicy, evaluateModelRoute, evaluateRetrievalRoute, evaluateRuntimeSolver, evaluateTaskGate, evaluateToolPolicy, execPolicyConfig,
+    prepareIndependentAcceptance: (ctx: ExtensionContext, task: TaskContract) => independentAcceptance.prepare(ctx, task),
     extensionDir, externalActionPolicyConfig, extractDocument, finalGateConfig, findMatchingObservedBashResult,
     formatContextPreflight, formatCount, formatLiveTaskStatus, formatPercent, formatTechOptionsText, formatTechSelectionSummary,
     formatToolResultCaptureStatus, formatUsageSnapshot, fs, hasGitEvidenceRoot, hasOperatorSessionName, helpersMode,

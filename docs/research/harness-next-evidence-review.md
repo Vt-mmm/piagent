@@ -51,7 +51,7 @@ The selected [QuickJS core variant interface](https://github.com/justjake/quickj
 
 ## Chosen research hypotheses
 
-Persistence follow-up: [SQLite's atomic-commit design](https://sqlite.org/atomiccommit.html) documents journal-based all-or-none transactions, including recovery after interruption, with explicit filesystem/locking/flush assumptions. [Node 22.19.0's SQLite API](https://nodejs.org/download/release/v22.19.0/docs/api/sqlite.html) is available but experimental in that minimum supported runtime, so using it for verifier storage requires a compatibility and packaging decision. Transactional durability alone does not authenticate a receipt, establish an approved oracle, or protect against compromise of a same-user host authority. No SQLite verifier store has been added at this checkpoint.
+Persistence follow-up: [SQLite's atomic-commit design](https://sqlite.org/atomiccommit.html) documents journal-based all-or-none transactions, including recovery after interruption, with explicit filesystem/locking/flush assumptions. [Node 22.19.0's SQLite API](https://nodejs.org/download/release/v22.19.0/docs/api/sqlite.html) is available but experimental in that minimum supported runtime, so using it for verifier storage requires a compatibility and packaging decision. Transactional durability alone does not authenticate a receipt, establish an approved oracle, or protect against compromise of a same-user host authority. The subsequent [durable evidence checkpoint](../decisions/harness-next-durable-evidence-checkpoint.md) records the implemented store; the [admission checkpoint](../decisions/harness-next-authenticated-admission-checkpoint.md) records its later runtime integration and remaining limits.
 
 Local source inspection also established that the existing working-tree digest covers changes relative to HEAD. The new execution bridge therefore separately binds source bytes and repository revision. This evidence changes the persistence requirement: a cache must not key solely on the old dirty-tree digest, nor treat a public hash as authentication.
 
@@ -61,3 +61,21 @@ Local source inspection also established that the existing working-tree digest c
 - H4: A leaner recovery interface reduces repair attempts and fresh tokens at equal outcome quality. Test separately after correctness, not bundled with the acceptance experiment.
 
 The accompanying architecture decision and evaluation protocol define how these hypotheses can be falsified. No paper or passing finite suite supports a claim of zero possible edge cases. The release must instead state tested input partitions, remaining unsupported contracts, repeated-run reliability, and unresolved risks.
+
+## Follow-up: stateful recovery and replay after admission integration
+
+Primary documentation was rechecked on 2026-08-30. The current [LangGraph checkpointer guide](https://docs.langchain.com/oss/javascript/langgraph/checkpointers) distinguishes full step checkpoints from completed per-node writes, and explicitly states that replay after a selected checkpoint re-executes later model/API calls. It also distinguishes exit-only, asynchronous, and synchronous durability. Piagent therefore cannot infer “exactly once” from the presence of a checkpoint: completed evidence reuse, pending-attempt reconciliation, and paid-attempt accounting need separate tests. The former durable-execution documentation URL now redirects to the persistence overview; the detailed checkpoint URL above is the relevant source for these claims.
+
+The [fault-tolerance guide](https://docs.langchain.com/oss/javascript/langgraph/fault-tolerance) separates retry policy, per-attempt timeout, and exhausted-error handling. This supports keeping worker failure distinct from a source counterexample. It does not justify importing that library's default retry behavior or raising Piagent's existing ceilings. Our next recovery work must retain the actual executor/unsupported reason instead of collapsing every unavailable admission into a generic missing-proof diagnostic.
+
+[fast-check's model-based guide](https://fast-check.dev/docs/advanced/model-based-testing/) compares command histories against a simplified model and warns against reproducing the implementation as the oracle. It provides shrinking plus seed/path/replay-path reproduction. The transferable test design is a small abstract authority/attempt model exercised by histories such as reserve → host death → reopen → reconcile → retry, not merely isolated method assertions. No fast-check dependency or general stateful adapter was installed by this checkpoint.
+
+Piagent-specific next evidence requirements (design decisions, not claims from the sources):
+
+- A completed observation survives restart without another independent attempt, after actual current project verification is refreshed.
+- A pending attempt never launches a duplicate solely because the host restarted or a timeout elapsed.
+- Late completion, cancellation, shutdown, policy revocation, contract drift, and source drift are tested in different orders; the latest valid authority state wins.
+- Counterexamples drive bounded source repair; executor errors and unsupported domains drive diagnosis/unknown, with no invented source defect.
+- Stateful application adapters need a simpler independent behavioral model and held-out command histories. Passing the evidence-store protocol tests alone does not satisfy the required stateful-recovery domain.
+
+These requirements extend the existing evaluation protocol; they do not replace the full frozen release campaign or import any external project's performance numbers as Piagent results.

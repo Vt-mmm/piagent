@@ -110,6 +110,20 @@ test("all exact commands and the current task contract must have actual passing 
   }
 });
 
+test("completed projections retain existing live observations but cannot mint new verification authority", async (context) => {
+  const { task, verify, digest, ctx, state, runner } = fixture(context);
+  await verify(); const observed = digest(); assert.ok(observed);
+  task.trace.outcome = "completed";
+  const projection = () => state.projectVerification.currentDigest(ctx, task, captureWorkspaceVerificationSnapshot(ctx.cwd), undefined, { completedProjection: true });
+  assert.equal(digest(), null, "normal execution/reuse still requires a pending task");
+  assert.equal(projection(), observed);
+  assert.equal((await runner().run(request)).reason, "current-project-verifier-missing");
+  await verify();
+  assert.equal(projection(), null, "even a successful new result after completion invalidates the old observation");
+  assert.equal(new RuntimeSessionState({ maxObservedContext: 10 }).projectVerification.currentDigest(ctx, task,
+    captureWorkspaceVerificationSnapshot(ctx.cwd), undefined, { completedProjection: true }), null);
+});
+
 test("copied before-snapshots, duplicate results, contradictory success, and absent status invalidate old passes", async (context) => {
   const { state, ctx, task, verify, digest, begin, handlers } = fixture(context);
   await verify(); assert.ok(digest());

@@ -1,0 +1,71 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://piagent.dev/schemas/approved-host-contracts.schema.json",
+  "title": "Host-approved independent contract payload (not a receipt)",
+  "description": "Payload inside a private authenticated approval envelope. JSON schema conformance alone grants no authority. Runtime also checks signature, permissions, canonical project, installed verifier, unique IDs, total case count, dependent Date state, and size limits.",
+  "type": "object", "additionalProperties": false,
+  "required": ["version", "projectId", "operatorRequestDigest", "verifierDigest", "backend", "contracts"],
+  "properties": {
+    "version": { "const": "approved-host-contracts-v1" },
+    "projectId": { "$ref": "#/$defs/hash" },
+    "operatorRequestDigest": { "type": "string", "pattern": "^operator-request-v1:[a-f0-9]{64}$" },
+    "verifierDigest": { "$ref": "#/$defs/hash" },
+    "backend": { "$ref": "#/$defs/backend" },
+    "contracts": { "$ref": "#/$defs/contracts" }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "id": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,159}$" },
+    "numeric": { "oneOf": [{ "type": "number" }, { "enum": ["NaN", "Infinity", "-Infinity", "-0"] }] },
+    "primitive": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["type"], "properties": { "type": { "enum": ["undefined", "null"] } } },
+        { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": { "type": { "const": "number" }, "value": { "$ref": "#/$defs/numeric" } } },
+        { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": { "type": { "const": "boolean" }, "value": { "type": "boolean" } } },
+        { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": { "type": { "const": "string" }, "value": { "type": "string", "maxLength": 4096 } } }
+      ]
+    },
+    "argument": { "oneOf": [
+      { "$ref": "#/$defs/primitive" },
+      { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": { "type": { "const": "date" }, "value": { "$ref": "#/$defs/numeric" } } }
+    ] },
+    "expected": {
+      "type": "object", "additionalProperties": false, "required": ["outcome"],
+      "properties": {
+        "outcome": { "enum": ["return", "throw"] }, "value": { "$ref": "#/$defs/primitive" },
+        "errorClass": { "enum": ["TypeError", "RangeError", "SyntaxError", "ReferenceError", "EvalError", "URIError", "Error", "non-error"] },
+        "clockReads": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "dateArgsAfter": { "type": "array", "maxItems": 16, "items": {
+          "type": "object", "additionalProperties": false, "required": ["index", "value"],
+          "properties": { "index": { "type": "integer", "minimum": 0, "maximum": 15 }, "value": { "$ref": "#/$defs/numeric" } }
+        } }
+      },
+      "oneOf": [
+        { "properties": { "outcome": { "const": "return" } }, "required": ["value"], "not": { "required": ["errorClass"] } },
+        { "properties": { "outcome": { "const": "throw" } }, "required": ["errorClass"], "not": { "required": ["value"] } }
+      ]
+    },
+    "case": {
+      "type": "object", "additionalProperties": false, "required": ["id", "args", "expected"],
+      "properties": { "id": { "$ref": "#/$defs/id" }, "args": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/argument" } },
+        "clock": { "type": "integer", "minimum": -8640000000000000, "maximum": 8640000000000000 }, "expected": { "$ref": "#/$defs/expected" } }
+    },
+    "backend": {
+      "type": "object", "additionalProperties": false, "required": ["imageId", "dockerSocket", "timeoutMs"],
+      "properties": { "imageId": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "dockerSocket": { "type": "string", "pattern": "^/[^\u0000]*$" }, "timeoutMs": { "type": "integer", "minimum": 25, "maximum": 30000 } }
+    },
+    "contracts": { "type": "array", "minItems": 1, "maxItems": 12, "items": {
+      "type": "object", "additionalProperties": false, "required": ["criterionId", "criterionHash", "sourcePath", "exportName", "maxAttempts", "checks"],
+      "properties": {
+        "criterionId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9:._-]{0,79}$" }, "criterionHash": { "$ref": "#/$defs/hash" },
+        "sourcePath": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*//)(?!.*/$)(?!.*(?:^|/)(?:\\.{1,2}|\\.git|\\.pi|node_modules)(?:/|$))[^\\\\\u0000]+$" },
+        "exportName": { "type": "string", "pattern": "^[a-zA-Z_$][a-zA-Z0-9_$]{0,127}$" }, "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 8 },
+        "checks": { "type": "array", "minItems": 1, "maxItems": 256, "items": {
+          "type": "object", "additionalProperties": false, "required": ["id", "cases"],
+          "properties": { "id": { "$ref": "#/$defs/id" }, "cases": { "type": "array", "minItems": 1, "maxItems": 256, "items": { "$ref": "#/$defs/case" } } }
+        } }
+      }
+    } }
+  }
+}

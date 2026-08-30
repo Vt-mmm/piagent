@@ -8,6 +8,8 @@ const HASH = /^[a-f0-9]{64}$/;
 const ID = /^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,159}$/;
 const BINDINGS = ["criterionHash", "snapshotDigest", "verifierDigest", "projectVerificationDigest", "planDigest", "backendDigest"];
 const MAX_EVIDENCE_BYTES = 2 * 1024 * 1024;
+const hostStores = new WeakSet();
+export const isAcceptanceEvidenceStore = (store) => Boolean(store && hostStores.has(store));
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const frozenCopy = (value) => {
   if (value && typeof value === "object") { for (const child of Object.values(value)) frozenCopy(child); Object.freeze(value); }
@@ -203,6 +205,8 @@ export function openAcceptanceEvidenceStore({ filePath, projectRoot, key } = {})
         maxAttempts: prior.maxAttempts, binding: prior.binding }));
     });
   }
-  return Object.freeze({ version: EVIDENCE_STORE_VERSION, projectId, latest, reserve, settle, recordStoppedAttempt,
+  const store = Object.freeze({ version: EVIDENCE_STORE_VERSION, projectId, latest, reserve, settle, recordStoppedAttempt,
     close() { if (!closed) { database.close(); closed = true; } } });
+  hostStores.add(store);
+  return store;
 }

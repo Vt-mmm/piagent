@@ -8,6 +8,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { openAcceptanceEvidenceStore } from "../packages/piagent-core/extensions/acceptance-evidence-store.js";
 import { createDurableContractRunner } from "../packages/piagent-core/extensions/acceptance-durable-execution.js";
+import { createAuthenticatedAdmission, currentAuthenticatedAssessment } from "../packages/piagent-core/extensions/acceptance-authenticated-admission.js";
 
 const imageId = process.env.PIAGENT_CONTRACT_EXECUTOR_IMAGE_ID;
 const dockerSocket = process.env.PIAGENT_CONTRACT_EXECUTOR_SOCKET;
@@ -66,27 +67,91 @@ test("real execution can be authenticated and reused after reopening the host st
   const first = await runner.run(request);
   assert.equal(first.verdict, "pass", JSON.stringify(first));
   assert.equal(first.reused, false); assert.equal(first.completionAllowed, false);
+  assert.equal((await runner.assess(first)).completionAllowed, false, "policy must be explicit");
+  const accepted = await runner.assess(first, { policy: "allow" });
+  assert.equal(accepted.verdict, "pass", JSON.stringify(accepted)); assert.equal(accepted.completionAllowed, true);
+  assert.equal(accepted.assurance, "bounded-contract-tested"); assert.equal(accepted.sourceMutationAllowed, false);
+  const admissionContext = { ...scope, criterionHash: request.criterionHash, workingTreeDigest: first.evidence.observed.binding.workingTreeDigest,
+    projectVerificationDigest: "d".repeat(64), policy: "allow" };
+  assert.equal(currentAuthenticatedAssessment(accepted, admissionContext), accepted);
+  assert.equal(currentAuthenticatedAssessment(structuredClone(accepted), admissionContext), null);
+  for (const field of ["taskRunId", "criterionId", "criterionHash", "workingTreeDigest", "projectVerificationDigest", "policy"]) {
+    assert.equal(currentAuthenticatedAssessment(accepted, { ...admissionContext, [field]: "wrong" }), null, field);
+  }
+  assert.equal((await runner.assess(structuredClone(first), { policy: "allow" })).completionAllowed, false);
   const runId = first.evidence.observed.result.execution.runId;
   assert.equal(runId, first.attemptId);
   store.close();
+  assert.equal(currentAuthenticatedAssessment(accepted, admissionContext), null, "closed authority cannot certify completion");
   const reopened = open(), resumed = createDurableContractRunner({ ...options, checks: checks(), store: reopened });
   const cached = await resumed.run(request);
   assert.equal(cached.verdict, "pass", JSON.stringify(cached)); assert.equal(cached.reused, true);
   assert.equal(cached.evidence.observed.result.execution.runId, runId);
   assert.equal(cached.attemptId, first.attemptId); assert.equal(reopened.latest(scope).sequence, 2);
+  assert.equal((await resumed.assess(first, { policy: "allow" })).completionAllowed, false, "another runner cannot admit the old result object");
+  const restored = await resumed.assess(cached, { policy: "allow" });
+  assert.equal(currentAuthenticatedAssessment(restored, admissionContext).verdict, "pass");
 });
 
 test("a changed clean commit runs again and its captured counterexample replaces the cached pass", integration, async (context) => {
   const { options, projectRoot, sourceFile, store } = fixture(context), runner = createDurableContractRunner(options);
   const first = await runner.run(request); assert.equal(first.verdict, "pass");
+  const accepted = await runner.assess(first, { policy: "allow" });
+  const admissionContext = { ...scope, criterionHash: request.criterionHash, workingTreeDigest: accepted.workingTreeDigest,
+    projectVerificationDigest: "d".repeat(64), policy: "allow" };
   fs.writeFileSync(sourceFile, "export const sum = (a, b) => a - b;\n");
+  assert.equal(currentAuthenticatedAssessment(accepted, admissionContext), null, "source drift immediately invalidates admission");
   git(projectRoot, "add", "sum.mjs"); git(projectRoot, "commit", "-qm", "invalid new baseline");
   const changed = await runner.run(request);
   assert.equal(changed.verdict, "fail", JSON.stringify(changed)); assert.equal(changed.reused, false);
   assert.equal(changed.evidence.observed.result.counterexamples.length, 1);
+  const rejected = await runner.assess(changed, { policy: "allow" });
+  assert.equal(rejected.verdict, "fail"); assert.equal(rejected.repairEligible, true); assert.equal(rejected.sourceMutationAllowed, false);
+  assert.equal(currentAuthenticatedAssessment(accepted, admissionContext), null, "newer failure never selects an older pass");
   const cachedFailure = await runner.run(request);
   assert.equal(cachedFailure.verdict, "fail"); assert.equal(cachedFailure.reused, true);
   assert.equal(store.latest(scope).attempt, 2);
+});
+
+test("authenticated admission rejects malformed signed observations and newer pending work", integration, async (context) => {
+  const { options, store } = fixture(context), runner = createDurableContractRunner(options);
+  const actual = await runner.run(request), accepted = await runner.assess(actual, { policy: "allow" });
+  assert.equal(accepted.verdict, "pass");
+  const original = store.latest(scope), snapshotRequest = { projectRoot: options.projectRoot, sourcePath: options.sourcePath, authorizeSourceRead: () => true };
+  const admission = createAuthenticatedAdmission({ store, snapshotRequest, verifierDigest: options.verifierDigest, imageId: options.imageId });
+  const expectedChecks = [{ id: "sum", caseCount: 1 }];
+  const unbranded = createAuthenticatedAdmission({ store: { ...store }, snapshotRequest, verifierDigest: options.verifierDigest, imageId: options.imageId });
+  assert.equal(unbranded.issue({ scope, binding: original.binding, event: original, expectedChecks }).completionAllowed, false);
+  for (const [index, mutate] of [
+    (e) => { e.observed.result.checks = []; },
+    (e) => { e.observed.result.checks.push(e.observed.result.checks[0]); },
+    (e) => { e.observed.result.checks[0].caseCount = 0; },
+    (e) => { e.observed.result.checks[0].caseCount = 2; },
+    (e) => { e.observed.result.checks[0].id = "unapproved"; },
+    (e) => { e.observed.result.execution.cleanupConfirmed = false; },
+    (e) => { e.observed.result.execution.runId = "another-run"; },
+    (e) => { e.observed.result.execution.sourceDigest = "0".repeat(64); },
+    (e) => { e.observed.result.execution.imageId = `sha256:${"0".repeat(64)}`; },
+    (e) => { e.observed.result.planDigest = "0".repeat(64); },
+    (e) => { e.verdict = "fail"; },
+    (e) => { e.verdict = e.observed.verdict = e.observed.result.verdict = "fail";
+      Object.assign(e.observed.result.checks[0], { status: "fail", counterexampleRef: "0".repeat(64) }); }
+  ].entries()) {
+    const testScope = { ...scope, taskRunId: `malformed-${index}` };
+    const reserved = store.reserve({ scope: testScope, binding: original.binding, maxAttempts: 1 });
+    const evidence = structuredClone(actual.evidence); evidence.observed.result.execution.runId = reserved.event.attemptId;
+    mutate(evidence);
+    const event = store.settle(reserved.reservation, JSON.stringify(evidence));
+    let result;
+    try { result = admission.issue({ scope: testScope, binding: original.binding, event, expectedChecks }); } catch { result = null; }
+    assert.notEqual(result?.completionAllowed, true, `signed malformed observation ${index}`);
+    assert.notEqual(result?.repairEligible, true, `signed malformed observation ${index} cannot authorize repair eligibility`);
+  }
+  const pending = store.reserve({ scope, binding: original.binding, maxAttempts: request.maxAttempts, retry: true });
+  assert.equal(pending.status, "reserved");
+  assert.equal(currentAuthenticatedAssessment(accepted, { ...scope, criterionHash: request.criterionHash,
+    workingTreeDigest: accepted.workingTreeDigest, projectVerificationDigest: "d".repeat(64), policy: "allow" }), null);
+  assert.equal((await runner.assess(actual, { policy: "allow" })).completionAllowed, false);
 });
 
 test("project-verifier drift during execution or cache admission never reuses a passing verdict", integration, async (context) => {

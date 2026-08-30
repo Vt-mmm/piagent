@@ -1,5 +1,6 @@
 import type { openAcceptanceEvidenceStore } from "./acceptance-evidence-store.js";
 import type { captureExecutionSnapshot } from "./acceptance-execution-snapshot.js";
+import type { AuthenticatedAssessment } from "./acceptance-authenticated-admission.js";
 
 export const DURABLE_EXECUTION_VERSION: "durable-closed-contract-v1";
 export type DurableContractScope = { taskRunId: string; criterionId: string };
@@ -46,4 +47,5 @@ export function createDurableContractRunner(configuration: DurableContractConfig
     retry?: boolean;
     signal?: AbortSignal;
   }): Promise<DurableContractResult>;
+  assess(result: unknown, options?: { policy?: string }): Promise<AuthenticatedAssessment>;
 }>;

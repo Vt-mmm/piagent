@@ -1,7 +1,6 @@
 import crypto from "node:crypto";
 import path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-
 import {
   acceptanceCriticalRecoveryProjection,
   applyAcceptanceRecoveryProvenance
@@ -22,6 +21,7 @@ import {
 } from "../session/message-signals.ts";
 import { RuntimeSessionState, type ObservedTaskContext } from "../session/runtime-state.ts";
 import type { RecoveryDecision } from "../recovery/recovery-policy.ts";
+import { independentCounterexampleRecovery } from "../recovery/independent-counterexample-recovery.ts";
 import { buildHandoffProjection, handoffProjectionPath, writeHandoffProjection } from "../recovery/handoff-projection.ts";
 import { evaluateExactFinalOutputContract } from "../quality/exact-output-contract.ts";
 import { performanceReviewGuidance, taskPerformanceAssurance } from "../quality/performance-assurance.ts";
@@ -30,9 +30,7 @@ import { semanticRepairProvenance } from "../recovery/semantic-repair-handshake.
 import { observeTrajectorySync } from "../trajectory/trajectory-observability.ts";
 import type { TrajectorySyncOptions, TrajectorySyncResult } from "../trajectory/trajectory-runtime.ts";
 import { readTrajectoryStore } from "../trajectory/trajectory-store.ts";
-
 type CompletionGate = { decision: "pass" | "fail"; missing: string[]; missingVerifyCommands: string[] };
-
 type CriticalRecoveryProjection = {
   criterionText: string;
   targets: string[];
@@ -70,6 +68,7 @@ function criticalAcceptanceRecoveryGuidance(projections: CriticalRecoveryProject
 
 type CompletionHookDependencies = {
   state: RuntimeSessionState;
+  prepareIndependentAcceptance?: (ctx: ExtensionContext, task: TaskContract) => Promise<void>;
   maxManifestFiles: number; semanticReviewAllowed: (task: TaskContract) => boolean;
   activeTask: (ctx: ExtensionContext) => TaskContract | undefined;
   flushObservedTaskContext: (
@@ -196,6 +195,7 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
       || readOnlyEvidenceObserved;
     if (!completionClaim && (incompleteHandoff || !potentiallyFinalEvidence)) return;
 
+    await dependencies.prepareIndependentAcceptance?.(ctx, task);
     const currentDigests = workingTreeSnapshot(ctx.cwd) as Record<string, string>;
     const currentDigest = workingTreeEvidenceDigest(currentDigests);
     const currentPassingVerifierObserved = verificationEvidenceProvesStableTree(latestExactVerifier, currentDigest, currentWorkspaceRevisionDigest(ctx.cwd));
@@ -334,7 +334,6 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
     if (!handoffAttempt || finalGateMode(ctx) !== "enforce") return;
     const gate = completionGate ?? evaluateGate(ctx.cwd, task, currentDigests, currentDigest);
     if (gate.decision === "pass") return;
-
     const selectedRecovery = recoveryDecision(ctx, task, gate, currentDigest);
     const missingAcceptanceProof = gate.missing.some((item) => /^critical acceptance evidence\b/i.test(item));
     const lifecycleMode = runtimeLifecycleMode(task);
@@ -411,6 +410,7 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
         "[Piagent continuation required]",
         `Task ${task.taskId} cannot finish yet. Missing: ${missingSummary}.`,
         `Recovery: ${selectedRecovery.action}; class: ${selectedRecovery.failureCategory}; reasons: ${selectedRecovery.reasonCodes.join(", ")}.`,
+        ...(independentCounterexampleRecovery(ctx.cwd, task, currentDigest)?.guidance ?? []),
         ...recoveryGuidance
       ].join("\n");
       pi.sendMessage(

@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://piagent.dev/schemas/host-contract-plan.schema.json",
+  "title": "Operator-reviewed independent verification plan",
+  "description": "Input to piagent approve-verification. Expected results must be reviewed independently of the candidate; this file is not itself authority or evidence.",
+  "type": "object", "additionalProperties": false,
+  "required": ["schemaVersion", "operatorRequestDigest", "backend", "contracts"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "operatorRequestDigest": { "type": "string", "pattern": "^operator-request-v1:[a-f0-9]{64}$" },
+    "backend": { "$ref": "approved-host-contracts.schema.json#/$defs/backend" },
+    "contracts": { "$ref": "approved-host-contracts.schema.json#/$defs/contracts" }
+  }
+}

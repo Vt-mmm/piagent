@@ -27,7 +27,7 @@ export class HostProjectVerification {
   #key(ctx: ExtensionContext, task: TaskContract, commandHash: string): string { return `${this.#prefix(ctx)}${task.taskRunId}\0${commandHash}`; }
 
   observe(ctx: ExtensionContext, task: TaskContract | undefined, event: ToolEvent, before: Snapshot | undefined, after: Snapshot | undefined): void {
-    if (!task || task.trace.outcome !== "pending" || task.sessionId !== ctx.sessionManager.getSessionId()) return;
+    if (!task || !["pending", "completed"].includes(task.trace.outcome) || task.sessionId !== ctx.sessionManager.getSessionId()) return;
     const observed = observedBashResultFromToolResultEvent(event, ctx.cwd);
     if (!observed?.commandHash || !meaningfulVerificationCommands(task.verifyCommands).some((command) => hashEvidenceCommand(command) === observed.commandHash)) return;
     const callId = event.toolCallId ?? toolResultFingerprint(event.toolName, event.input, []).key;
@@ -35,15 +35,19 @@ export class HostProjectVerification {
     const key = this.#key(ctx, task, observed.commandHash);
     // Every new result replaces the previous result, including unavailable,
     // unmatched, contradictory, or failed observations. No timestamp selection.
-    this.#latest.set(key, issued && before?.proofCapable && after?.proofCapable
+    this.#latest.set(key, task.trace.outcome === "pending" && issued && before?.proofCapable && after?.proofCapable
       && before.digest === after.digest && before.workspaceRevisionDigest === after.workspaceRevisionDigest
       && claimedExitMatchesObserved(0, { ...observed, isError: event.isError }) && event.isError !== true
       ? { taskBinding: taskBinding(task), digest: after.digest, revision: after.workspaceRevisionDigest! } : null);
     while (this.#latest.size > 500) this.#latest.delete(this.#latest.keys().next().value as string);
   }
 
-  currentDigest(ctx: ExtensionContext, task: TaskContract, current: Snapshot, exactCommand?: string): string | null {
-    if (task.trace.outcome !== "pending" || task.sessionId !== ctx.sessionManager.getSessionId() || !current.proofCapable) return null;
+  currentDigest(ctx: ExtensionContext, task: TaskContract, current: Snapshot, exactCommand?: string, { completedProjection = false } = {}): string | null {
+    // A completed task may display an existing live observation, but cannot
+    // create one or reserve a new independent execution. New tool results
+    // invalidate it even after completion; JSON alone never restores it.
+    if ((task.trace.outcome !== "pending" && !(completedProjection && task.trace.outcome === "completed"))
+      || task.sessionId !== ctx.sessionManager.getSessionId() || !current.proofCapable) return null;
     if (this.#invocations.hasPending(ctx, task.taskRunId)) return null;
     const commands = meaningfulVerificationCommands(task.verifyCommands);
     if (commands.length === 0 || commands.length !== task.verifyCommands.length) return null;

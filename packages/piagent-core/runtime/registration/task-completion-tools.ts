@@ -306,6 +306,7 @@ export function registerTaskCompletionTools(pi: ExtensionAPI, deps: Record<strin
           isError: true
         };
       }
+      if (params.outcome === "completed") await deps.prepareIndependentAcceptance?.(ctx, task);
       const finalFileDigests = workingTreeSnapshot(ctx.cwd) as Record<string, string>;
       let nextTask: TaskContract = {
         ...task,
