@@ -22,9 +22,28 @@ for (const interruptedUnit of [2, 5, 8]) test(`long-horizon resumes after coordi
   const output = path.join(directory, "report.json");
   const privateRoot = path.join(execution, "project/.pi/piagent-state/long-horizon");
   const workerCheckpoint = path.join(privateRoot, "checkpoint.json");
+  const pauseMarker = path.join(directory, "paused-worker.json"), preload = path.join(directory, "pause-at-checkpoint.mjs");
+  // Freeze the actual worker at the requested durable boundary. Polling a
+  // checkpoint, then awaiting a competing process, lets the worker advance
+  // under load before SIGKILL and does not test the advertised restart unit.
+  // Injection remains outside production source and runs only once.
+  fs.writeFileSync(preload, `import fs from 'node:fs';
+const rename = fs.renameSync;
+fs.renameSync = function(from, to) {
+  const result = rename(from, to);
+  if (String(to) === ${JSON.stringify(workerCheckpoint)} && !fs.existsSync(${JSON.stringify(pauseMarker)})) {
+    const value = JSON.parse(fs.readFileSync(to, 'utf8'));
+    if (value.data?.state?.currentUnit === ${interruptedUnit}) {
+      fs.writeFileSync(${JSON.stringify(pauseMarker)}, JSON.stringify({ pid: process.pid, unit: ${interruptedUnit} }));
+      process.kill(process.pid, 'SIGSTOP');
+    }
+  }
+  return result;
+};\n`);
   const children = [];
   const start = (...extra) => {
     const env = { ...process.env }; delete env.NODE_TEST_CONTEXT;
+    env.NODE_OPTIONS = `${env.NODE_OPTIONS ?? ""} --import=${preload}`;
     const child = spawn(process.execPath, [runner, "--calibration-fast", "--tick-ms", "300", "--state-directory", execution, "--output", output, ...extra], { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "", stderr = "";
     child.stdout.on("data", (chunk) => { stdout += chunk; });
@@ -36,26 +55,32 @@ for (const interruptedUnit of [2, 5, 8]) test(`long-horizon resumes after coordi
   t.after(async () => {
     for (const { child, result } of children) { if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); await result; }
     const owner = read(path.join(privateRoot, ".benchmark-run.lock"));
-    if (owner?.pid) await until(() => !alive(owner.pid), "owned orphan exit");
+    if (owner?.pid) {
+      if (alive(owner.pid)) process.kill(owner.pid, "SIGCONT");
+      await until(() => !alive(owner.pid), "owned orphan exit");
+    }
     fs.rmSync(directory, { recursive: true, force: true });
   });
   const initial = start();
-  await until(() => read(workerCheckpoint)?.data?.state?.currentUnit === interruptedUnit, "durable unit checkpoint");
+  await until(() => read(pauseMarker)?.unit === interruptedUnit, "worker stopped at durable unit checkpoint");
   const before = read(workerCheckpoint);
+  assert.equal(before.data.state.currentUnit, interruptedUnit);
   const artifact = path.join(execution, "project/artifacts/long-horizon/units", `${String(interruptedUnit).padStart(3, "0")}.json`);
   const artifactBytes = fs.readFileSync(artifact);
   const artifactTime = fs.statSync(artifact).mtimeMs;
   const workerPid = read(path.join(privateRoot, ".benchmark-run.lock")).pid;
+  assert.equal(read(pauseMarker).pid, workerPid);
   const competitor = start();
   const rejected = await competitor.result;
   assert.notEqual(rejected.code, 0);
   assert.match(rejected.stderr, /locked by another process/);
   initial.child.kill("SIGKILL");
   assert.equal((await initial.result).signal, "SIGKILL");
+  process.kill(workerPid, "SIGCONT");
   await until(() => !alive(workerPid), "IPC orphan shutdown");
   assert.equal(fs.existsSync(output), false, "partial progress is not a completed lane receipt");
   const retained = read(workerCheckpoint);
-  assert.ok(retained.data.state.currentUnit >= interruptedUnit);
+  assert.equal(retained.data.state.currentUnit, interruptedUnit, "the injected crash occurs at the exact advertised unit");
   // A changed configuration cannot reuse the same progress directory.
   const changed = start("--binding", "changed-binding");
   assert.notEqual((await changed.result).code, 0);
