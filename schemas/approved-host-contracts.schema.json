@@ -44,6 +44,7 @@
     },
     "inputValue": { "oneOf": [
       { "$ref": "#/$defs/primitive" },
+      { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": { "type": { "const": "callback" }, "value": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$" } } },
       { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": { "type": { "const": "date" }, "value": { "$ref": "#/$defs/numeric" } } },
       { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": {
         "type": { "const": "array" }, "value": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/inputValue" } }
@@ -55,6 +56,61 @@
         } }
       } }
     ] },
+    "dataValue": { "oneOf": [
+      { "$ref": "#/$defs/primitive" },
+      { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": { "type": { "const": "date" }, "value": { "$ref": "#/$defs/numeric" } } },
+      { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": {
+        "type": { "const": "array" }, "value": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/dataValue" } }
+      } },
+      { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": {
+        "type": { "const": "record" }, "value": { "type": "array", "maxItems": 64, "items": {
+          "type": "object", "additionalProperties": false, "required": ["key", "value"],
+          "properties": { "key": { "type": "string", "maxLength": 4096 }, "value": { "$ref": "#/$defs/dataValue" } }
+        } }
+      } }
+    ] },
+    "callbackInput": {
+      "type": "object", "additionalProperties": false, "required": ["id", "mode", "repeatLast", "steps"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$" },
+        "mode": { "enum": ["sync", "promise"] }, "repeatLast": { "type": "boolean" },
+        "settleAfterJobs": { "type": "integer", "minimum": 1, "maximum": 32 },
+        "steps": { "type": "array", "minItems": 1, "maxItems": 64, "items": { "oneOf": [
+          { "type": "object", "additionalProperties": false, "required": ["outcome", "value"],
+            "properties": { "outcome": { "const": "return" }, "value": { "$ref": "#/$defs/dataValue" } } },
+          { "type": "object", "additionalProperties": false, "required": ["outcome", "error"],
+            "properties": { "outcome": { "const": "throw" }, "error": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$" } } }
+        ] } }
+      },
+      "allOf": [{ "if": { "required": ["settleAfterJobs"] }, "then": { "properties": { "mode": { "const": "promise" } } } }]
+    },
+    "errorInput": {
+      "type": "object", "additionalProperties": false, "required": ["id", "errorClass", "message"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$" },
+        "errorClass": { "enum": ["TypeError", "RangeError", "SyntaxError", "ReferenceError", "EvalError", "URIError", "Error"] },
+        "message": { "type": "string", "maxLength": 4096 },
+        "properties": { "allOf": [{ "$ref": "#/$defs/dataValue" }, { "properties": { "type": { "const": "record" } } }] }
+      }
+    },
+    "callbackTrace": { "type": "array", "maxItems": 128, "items": {
+      "type": "object", "additionalProperties": false, "required": ["callback", "call", "event"],
+      "properties": { "callback": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$" },
+        "call": { "type": "integer", "minimum": 0, "maximum": 63 }, "event": { "enum": ["call", "settle"] },
+        "outcome": { "enum": ["return", "throw"] },
+        "args": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/inputValue" } } },
+      "oneOf": [
+        { "properties": { "event": { "const": "call" } }, "required": ["args"], "not": { "required": ["outcome"] } },
+        { "properties": { "event": { "const": "settle" } }, "required": ["outcome"], "not": { "required": ["args"] } }
+      ]
+    } },
+    "errorObservation": {
+      "type": "object", "additionalProperties": false, "required": ["identity", "properties"],
+      "properties": {
+        "identity": { "oneOf": [{ "type": "null" }, { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$" }] },
+        "properties": { "allOf": [{ "$ref": "#/$defs/inputValue" }, { "properties": { "type": { "const": "record" } } }] }
+      }
+    },
     "outputValue": { "oneOf": [
       { "$ref": "#/$defs/primitive" },
       { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": {
@@ -70,7 +126,9 @@
     "argument": { "oneOf": [
       { "$ref": "#/$defs/inputValue" },
       { "type": "object", "additionalProperties": false, "required": ["type", "value"],
-        "properties": { "type": { "const": "result" }, "value": { "$ref": "#/$defs/id" } } }
+        "properties": { "type": { "const": "result" }, "value": { "$ref": "#/$defs/id" } } },
+      { "type": "object", "additionalProperties": false, "required": ["type", "value", "key"],
+        "properties": { "type": { "const": "error-property" }, "value": { "$ref": "#/$defs/id" }, "key": { "type": "string", "maxLength": 128 } } }
     ] },
     "expected": {
       "type": "object", "additionalProperties": false, "required": ["outcome"],
@@ -78,6 +136,9 @@
         "outcome": { "enum": ["return", "throw"] }, "value": { "$ref": "#/$defs/outputValue" },
         "errorClass": { "enum": ["TypeError", "RangeError", "SyntaxError", "ReferenceError", "EvalError", "URIError", "Error", "non-error"] },
         "clockReads": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "callbackTrace": { "$ref": "#/$defs/callbackTrace" },
+        "returnIdentity": { "type": "array", "maxItems": 16, "uniqueItems": true, "items": { "type": "integer", "minimum": 0, "maximum": 15 } },
+        "errorObservation": { "$ref": "#/$defs/errorObservation" },
         "argsAfter": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/inputValue" } },
         "dateArgsAfter": { "type": "array", "maxItems": 16, "items": {
           "type": "object", "additionalProperties": false, "required": ["index", "value"],
@@ -85,16 +146,26 @@
         } }
       },
       "oneOf": [
-        { "properties": { "outcome": { "const": "return" } }, "required": ["value"], "not": { "required": ["errorClass"] } },
-        { "properties": { "outcome": { "const": "throw" } }, "required": ["errorClass"], "not": { "required": ["value"] } }
+        { "properties": { "outcome": { "const": "return" } }, "required": ["value"], "not": { "anyOf": [{ "required": ["errorClass"] }, { "required": ["errorObservation"] }] } },
+        { "properties": { "outcome": { "const": "throw" } }, "required": ["errorClass"], "not": { "anyOf": [{ "required": ["value"] }, { "required": ["returnIdentity"] }] } }
       ]
     },
     "case": {
       "type": "object", "additionalProperties": false, "required": ["id", "args", "expected"],
       "properties": { "id": { "$ref": "#/$defs/id" }, "args": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/argument" } },
         "sequence": { "$ref": "#/$defs/id" }, "reset": { "const": true }, "observeArgs": { "type": "boolean" },
+        "awaitResult": { "const": true }, "observeIdentity": { "const": true }, "observeError": { "const": true },
+        "callbacks": { "type": "array", "minItems": 1, "maxItems": 8, "items": { "$ref": "#/$defs/callbackInput" } },
+        "errors": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "$ref": "#/$defs/errorInput" } },
         "exportName": { "type": "string", "pattern": "^[a-zA-Z_$][a-zA-Z0-9_$]{0,127}$" },
-        "clock": { "type": "integer", "minimum": -8640000000000000, "maximum": 8640000000000000 }, "expected": { "$ref": "#/$defs/expected" } }
+        "clock": { "type": "integer", "minimum": -8640000000000000, "maximum": 8640000000000000 }, "expected": { "$ref": "#/$defs/expected" } },
+      "allOf": [
+        { "if": { "required": ["callbacks"] }, "then": { "properties": { "expected": { "required": ["callbackTrace"] } } } },
+        { "if": { "required": ["observeIdentity"], "properties": { "expected": { "properties": { "outcome": { "const": "return" } } } } },
+          "then": { "properties": { "expected": { "required": ["returnIdentity"] } } } },
+        { "if": { "required": ["observeError"], "properties": { "expected": { "properties": { "outcome": { "const": "throw" } } } } },
+          "then": { "properties": { "expected": { "required": ["errorObservation"] } } } }
+      ]
     },
     "backend": {
       "type": "object", "additionalProperties": false, "required": ["imageId", "dockerSocket", "timeoutMs"],

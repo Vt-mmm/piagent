@@ -13,6 +13,7 @@ import { registerIndependentAcceptanceProvider } from "../packages/piagent-core/
 import { independentVerificationRecovery } from "../packages/piagent-core/runtime/recovery/independent-verification-recovery.ts";
 import { selectRecoveryDecision, recoveryDecisionValidationErrors } from "../packages/piagent-core/runtime/recovery/recovery-policy.ts";
 import { compileIndependentContract, compareIndependentExecution } from "../packages/piagent-core/extensions/acceptance-independent-contract.js";
+import { checkpointSources, checkpointCases } from "./helpers/async-production-cases.mjs";
 
 const imageId = process.env.PIAGENT_CONTRACT_EXECUTOR_IMAGE_ID;
 const dockerSocket = process.env.PIAGENT_CONTRACT_EXECUTOR_SOCKET;
@@ -22,6 +23,30 @@ const scope = { taskRunId: "task-1", criterionId: "sum" };
 const request = { scope, criterionHash: "a".repeat(64), maxAttempts: 3 };
 const checks = () => [{ id: "sum", cases: [{ id: "sum-1", args: [{ type: "number", value: 2 }, { type: "number", value: 3 }],
   expected: { outcome: "return", value: { type: "number", value: 5 } } }] }];
+
+test("async checkpoint observations survive authenticated persistence, reopening and exact-plan invalidation", integration, async context => {
+  const f = fixture(context);
+  fs.writeFileSync(f.sourceFile, checkpointSources[0]);
+  const cases = checkpointCases(), options = { ...f.options, exportName: "resumeWork", checks: [{ id: "checkpoint", cases }] };
+  const runner = createDurableContractRunner(options);
+  // Caller mutation cannot grant more callback behavior after approval.
+  cases[0].callbacks[0].repeatLast = false;
+  const first = await runner.run(request), receipt = await runner.assess(first, { policy: "allow" });
+  assert.equal(receipt.verdict, "pass", JSON.stringify(receipt));
+  assert.equal(receipt.completionAllowed, true);
+  assert.equal(first.evidence.observed.result.execution.observation.cases[0].errorObservation.identity, "failed");
+  const attemptId = first.attemptId;
+  f.store.close();
+  const reopened = f.open(), currentOptions = { ...options, store: reopened, checks: [{ id: "checkpoint", cases: checkpointCases() }] };
+  const restored = createDurableContractRunner(currentOptions), cached = await restored.run(request);
+  assert.equal(cached.reused, true); assert.equal(cached.attemptId, attemptId);
+  assert.equal((await restored.assess(cached, { policy: "allow" })).completionAllowed, true);
+  const altered = checkpointCases(); altered[0].callbacks[0].settleAfterJobs = 2;
+  const changed = await createDurableContractRunner({ ...currentOptions, checks: [{ id: "checkpoint", cases: altered }] }).run(request);
+  assert.equal(changed.reused, false); assert.notEqual(changed.attemptId, attemptId);
+  assert.equal(reopened.latest(scope).attempt, 2);
+  assert.equal((await restored.assess(cached, { policy: "allow" })).completionAllowed, false);
+});
 
 function fixture(context) {
   const directory = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "piagent-durable-execution-")));

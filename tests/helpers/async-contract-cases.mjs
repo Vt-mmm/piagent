@@ -1,0 +1,14 @@
+import { data } from "../../evals/harness-next/development-corpus.mjs";
+export { data };
+export const callback = value => ({ type: "callback", value });
+export const record = value => ({ type: "record", value: Object.entries(value).map(([key, value]) => ({ key, value })) });
+export const returns = (value, extra = {}) => ({ outcome: "return", value: data(value), ...extra });
+export const throws = (errorClass = "TypeError", extra = {}) => ({ outcome: "throw", errorClass, ...extra });
+export const callbackPlan = (id, steps, extra = {}) => ({ id, mode: "promise", repeatLast: false, steps, ...extra });
+export const stepReturn = value => ({ outcome: "return", value: data(value) });
+export const stepThrow = error => ({ outcome: "throw", error });
+export const callEvent = (callback, call, ...args) => ({ callback, call, event: "call", args: args.map(data) });
+export const settleEvent = (callback, call, outcome = "return") => ({ callback, call, event: "settle", outcome });
+export const errorInput = (id, errorClass = "Error", properties = {}) => ({ id, errorClass, message: `approved ${id}`, properties: data(properties) });
+export const errorObserved = (identity, properties = {}) => ({ identity, properties: data(properties) });
+export const plan = (source, cases) => ({ schemaVersion: 1, source, exportName: "run", checks: [{ id: "behavior", cases }] });

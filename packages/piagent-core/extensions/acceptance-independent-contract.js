@@ -3,8 +3,9 @@ import { isDeepStrictEqual } from "node:util";
 import { runIsolatedContract } from "./acceptance-isolated-executor.js";
 import { parseRequest, validateValue } from "./acceptance-executor/protocol.mjs";
 import { canonicalValue } from "./acceptance-executor/values.mjs";
+import { CASE_CAPABILITY_FIELDS, OBSERVATION_CAPABILITY_FIELDS, callbackIds, validateCallbackTrace, validateReturnIdentity, validateErrorObservation } from "./acceptance-executor/capabilities.mjs";
 
-export const INDEPENDENT_CONTRACT_VERSION = "bounded-module-contract-comparison-v3";
+export const INDEPENDENT_CONTRACT_VERSION = "bounded-module-contract-comparison-v4";
 const ID = /^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,159}$/;
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const ERROR_CLASSES = ["TypeError", "RangeError", "SyntaxError", "ReferenceError", "EvalError", "URIError", "Error", "non-error"];
@@ -26,7 +27,7 @@ function freeze(value) {
 
 function validateExpected(expected, item) {
   const { args } = item;
-  shape(expected, ["outcome", "value", "errorClass", "clockReads", "dateArgsAfter", "argsAfter"], ["outcome"]);
+  shape(expected, ["outcome", "value", "errorClass", "clockReads", "dateArgsAfter", "argsAfter", ...OBSERVATION_CAPABILITY_FIELDS], ["outcome"]);
   if (expected.outcome === "return") {
     validateValue(expected.value, false);
     if (Object.hasOwn(expected, "errorClass")) throw new TypeError("Conflicting expected result");
@@ -47,7 +48,17 @@ function validateExpected(expected, item) {
   }
   if (Object.hasOwn(expected, "argsAfter")) {
     if (!item.observeArgs || !Array.isArray(expected.argsAfter) || expected.argsAfter.length !== args.length) throw new TypeError("Incomplete expected argument state");
-    expected.argsAfter.forEach((arg) => validateValue(arg));
+    expected.argsAfter.forEach((arg) => validateValue(arg, true, callbackIds(item)));
+  }
+  if (item.callbacks) validateCallbackTrace(expected.callbackTrace, item);
+  else if (Object.hasOwn(expected, "callbackTrace")) throw new TypeError("Unexpected expected callback trace");
+  if (item.observeIdentity && expected.outcome === "return" || Object.hasOwn(expected, "returnIdentity")) {
+    if (expected.outcome !== "return") throw new TypeError("Return identity on an exception");
+    validateReturnIdentity(expected.returnIdentity, item);
+  }
+  if (item.observeError && expected.outcome === "throw" || Object.hasOwn(expected, "errorObservation")) {
+    if (expected.outcome !== "throw") throw new TypeError("Error observation on a return");
+    validateErrorObservation(expected.errorObservation, item);
   }
 }
 
@@ -67,7 +78,7 @@ export function compileIndependentContract(planText) {
       || check.cases.length < 1 || check.cases.length > 256) throw new TypeError("Invalid independent check");
     ids.add(check.id);
     for (const item of check.cases) {
-      shape(item, ["id", "args", "clock", "expected", "sequence", "exportName", "reset", "observeArgs"], ["id", "args", "expected"]);
+      shape(item, ["id", "args", "clock", "expected", "sequence", "exportName", "reset", "observeArgs", ...CASE_CAPABILITY_FIELDS], ["id", "args", "expected"]);
       const { expected, ...input } = item;
       cases.push(input);
       if (cases.length > 256) throw new TypeError("Too many independent cases");
@@ -98,6 +109,11 @@ function matches(expected, observed) {
   if (Object.hasOwn(expected, "clockReads") && expected.clockReads !== observed.clockReads) return false;
   if (Object.hasOwn(expected, "dateArgsAfter") && !isDeepStrictEqual(expected.dateArgsAfter, observed.dateArgsAfter)) return false;
   if (Object.hasOwn(expected, "argsAfter") && !isDeepStrictEqual(expected.argsAfter.map(canonicalValue), observed.argsAfter?.map(canonicalValue))) return false;
+  const canonicalTrace = trace => trace?.map(call => call.event === "call" ? { ...call, args: call.args.map(canonicalValue) } : call);
+  if (Object.hasOwn(expected, "callbackTrace") && !isDeepStrictEqual(canonicalTrace(expected.callbackTrace), canonicalTrace(observed.callbackTrace))) return false;
+  if (Object.hasOwn(expected, "returnIdentity") && !isDeepStrictEqual(expected.returnIdentity, observed.returnIdentity)) return false;
+  if (Object.hasOwn(expected, "errorObservation") && (expected.errorObservation.identity !== observed.errorObservation?.identity
+    || !observed.errorObservation || !isDeepStrictEqual(canonicalValue(expected.errorObservation.properties), canonicalValue(observed.errorObservation.properties)))) return false;
   return true;
 }
 

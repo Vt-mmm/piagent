@@ -12,12 +12,37 @@ import { RuntimeSessionState } from "../packages/piagent-core/runtime/session/ru
 import { registerToolResultHook } from "../packages/piagent-core/runtime/hooks/tool-result-hook.ts";
 import { createRuntimeContractRunner } from "../packages/piagent-core/runtime/verification/runtime-contract-runner.ts";
 import { reuseCurrentTreeExactVerifier } from "../packages/piagent-core/runtime/verification/exact-verifier-reuse.ts";
+import { data, callback, returns, callbackPlan, stepReturn, callEvent, settleEvent } from "./helpers/async-contract-cases.mjs";
 
 const git = (cwd, ...args) => execFileSync("git", ["-C", cwd, ...args], { stdio: "pipe" });
 const imageId = process.env.PIAGENT_CONTRACT_EXECUTOR_IMAGE_ID;
 const dockerSocket = process.env.PIAGENT_CONTRACT_EXECUTOR_SOCKET;
 const integration = { skip: !imageId || !dockerSocket, timeout: 60000 };
 const request = { scope: { taskRunId: "sum-run", criterionId: "sum" }, criterionHash: "a".repeat(64), maxAttempts: 3 };
+
+test("async callback and identity evidence still requires actual current project-verifier hooks", integration, async context => {
+  const f = fixture(context), sourceFile = path.join(f.projectRoot, "sum.mjs");
+  fs.writeFileSync(sourceFile, "export async function sum(op,state){await op();return state}\n");
+  fs.writeFileSync(path.join(f.projectRoot, "sum.test.mjs"), "import assert from 'node:assert/strict';import {sum} from './sum.mjs';console.log('PIAGENT_PROJECT_VERIFIER_RAN');assert.equal(typeof sum,'function');\n");
+  const args = [callback("operation"), data({ x: 7 })];
+  f.approved.checks = [{ id: "async-identity", cases: [{ id: "one", args, awaitResult: true, observeIdentity: true, observeArgs: true,
+    callbacks: [callbackPlan("operation", [stepReturn(undefined)])], expected: returns({ x: 7 }, { returnIdentity: [1], argsAfter: args,
+      callbackTrace: [callEvent("operation", 0), settleEvent("operation", 0)] }) }] }];
+  const runner = f.runner();
+  assert.equal((await runner.run(request)).reason, "current-project-verifier-missing");
+  assert.equal(f.store.latest(request.scope), null);
+  assert.equal(await f.verify(), 0);
+  const passed = await runner.run(request);
+  assert.equal((await runner.assess(passed, { policy: "allow" })).completionAllowed, true);
+  fs.writeFileSync(sourceFile, "export async function sum(op,state){await op();return {...state}}\n");
+  assert.equal((await runner.assess(passed, { policy: "allow" })).completionAllowed, false);
+  assert.equal((await runner.run(request)).reason, "current-project-verifier-missing");
+  assert.equal(await f.verify(), 0, "the deliberately shallow project verifier alone does not detect identity defects");
+  const failed = await runner.run(request), receipt = await runner.assess(failed, { policy: "allow" });
+  assert.equal(receipt.verdict, "fail", JSON.stringify(receipt));
+  assert.equal(receipt.completionAllowed, false); assert.equal(receipt.repairEligible, true);
+  assert.deepEqual(receipt.counterexamples[0].evidence.observed.returnIdentity, []);
+});
 
 function fixture(context) {
   const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "piagent-runtime-contract-")));

@@ -4,6 +4,10 @@
 !worker.mjs
 !protocol.mjs
 !values.mjs
+!capabilities.mjs
+!callback-intrinsics.mjs
+!jobs.mjs
+!references.mjs
 !intrinsics.mjs
 !module-graph.mjs
 !guest.mjs

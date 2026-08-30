@@ -1,4 +1,5 @@
 import { MAX_COLLECTION_LENGTH, MAX_STRING_LENGTH, MAX_VALUE_DEPTH, MAX_VALUE_NODES, MAX_VALUE_TEXT } from "./values.mjs";
+import { CALLBACK_INTRINSICS } from "./callback-intrinsics.mjs";
 
 // This closure is evaluated before the candidate. Only the worker retains its
 // handle; it installs no host callback, oracle, serializer or receipt writer.
@@ -38,7 +39,7 @@ export const INTRINSICS = `(() => {
   };
   const numeric = value => same(value, -0) ? '"-0"' : finite(value) ? apply(numberString, value, [])
     : value !== value ? '"NaN"' : value < 0 ? '"-Infinity"' : '"Infinity"';
-  function observeValue(root, allowDate) {
+  function observeValue(root, allowDate, allowCallbacks) {
     let nodes = 0, text = 0;
     const active = new WS();
     function quote(value) {
@@ -54,6 +55,8 @@ export const INTRINSICS = `(() => {
       if (type === 'boolean') return '{"type":"boolean","value":' + (value ? 'true' : 'false') + '}';
       if (type === 'number') return '{"type":"number","value":' + numeric(value) + '}';
       if (type === 'string') return '{"type":"string","value":' + quote(value) + '}';
+      const callback = allowCallbacks ? callbackId(value) : undefined;
+      if (callback !== undefined) return '{"type":"callback","value":' + quote(callback) + '}';
       if (type !== 'object' || apply(has, proxies, [value])) throw 'return-type-unsupported';
       let timestamp, date = false;
       try { timestamp = apply(getTime, value, []); date = true; } catch {}
@@ -92,10 +95,15 @@ export const INTRINSICS = `(() => {
       return '{"reason":' + stringify(code) + '}';
     }
   }
+  ${CALLBACK_INTRINSICS}
   return {
     makeDate: value => new D(value), dateTime: value => apply(getTime, value, []),
     defineData: (object, key, value) => { define(object, key, dataDescriptor(value, true)); },
     typeOf: value => typeof value, observeValue, clockReads: () => reads,
+    beginCapabilities, makeError, makeCallback, callback: id => callbacks[id],
+    callbackFault: () => callbackFault, callbackTrace: () => '[' + trace + ']', errorObservation,
+    awaitValue: value => apply(promiseResolve, NativePromise, [value]),
+    sameReference: (left, right) => left !== null && typeof left === 'object' && same(left, right),
     beginCall: (mock, value) => {
       reads = 0; clockEnabled = mock; clockValue = value;
       define(D, 'now', dataDescriptor(observedNow, false));

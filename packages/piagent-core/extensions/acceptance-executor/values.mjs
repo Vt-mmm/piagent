@@ -13,13 +13,15 @@ export function protocolShape(value, keys, required = keys) {
 }
 
 /** Typed data trees only: no executable values, references, sparse arrays or cycles. */
-export function validateValue(value, allowDate = true) {
+export function validateValue(value, allowDate = true, callbackIds = new Set()) {
   let nodes = 0, text = 0;
   function visit(item, depth) {
     if (++nodes > MAX_VALUE_NODES || depth > MAX_VALUE_DEPTH) throw new TypeError("Value tree limit exceeded");
     protocolShape(item, ["type", "value"], ["type"]);
     if (["undefined", "null"].includes(item.type)) {
       if (Object.hasOwn(item, "value")) throw new TypeError("Unexpected primitive payload");
+    } else if (item.type === "callback" && callbackIds.has(item.value)) {
+      if (typeof item.value !== "string") throw new TypeError("Invalid callback reference");
     } else if (item.type === "number" || allowDate && item.type === "date") {
       if (!(typeof item.value === "number" && Number.isFinite(item.value)) && !SPECIAL_NUMBERS.has(item.value)) {
         throw new TypeError("Invalid numeric payload");

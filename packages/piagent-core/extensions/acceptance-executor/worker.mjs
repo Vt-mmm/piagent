@@ -4,6 +4,7 @@ import variant from "@jitl/quickjs-wasmfile-release-sync";
 import { MAX_REQUEST_BYTES, MAX_RESPONSE_BYTES, WORKER_VERSION, parseRequest } from "./protocol.mjs";
 import { createGuestSession } from "./guest.mjs";
 import { CPU_EXHAUSTED, WALL_EXHAUSTED, REQUEST_WALL_MS } from "./budget.mjs";
+import { resolveArguments } from "./references.mjs";
 
 // This executable belongs inside the constrained container, never the agent's
 // process. stdout is the trusted runner's channel; QuickJS has no stdout binding.
@@ -23,7 +24,7 @@ try {
   const cases = [];
   let status = "completed";
   let timeoutReason;
-  const results = new Map();
+  const observations = new Map();
   let session, sequence;
   try {
     for (const item of request.cases) {
@@ -31,12 +32,12 @@ try {
       if (!session || !item.sequence || sequence !== item.sequence || item.reset) {
         session?.dispose(); session = createGuestSession(QuickJS, request, deadline); sequence = item.sequence;
       }
-      const args = item.args.map((arg) => arg.type === "result" ? results.get(arg.value) : arg);
+      const args = resolveArguments(item.args, observations);
       const observation = args.some((arg) => arg === undefined)
         ? { id: item.id, outcome: "unsupported", reason: "referenced-result-unavailable" }
         : session.execute({ ...item, args });
       cases.push(observation);
-      if (observation.outcome === "return") results.set(item.id, observation.value);
+      observations.set(item.id, observation);
       if (observation.outcome === "error") {
         timeoutReason = [CPU_EXHAUSTED, WALL_EXHAUSTED].includes(observation.reason) ? observation.reason : undefined;
         status = timeoutReason ? "timeout" : "error";

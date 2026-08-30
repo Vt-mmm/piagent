@@ -93,7 +93,8 @@ test("versioned timeout causes cannot hide error cases or masquerade as a comple
   const wall = { ...good, timeoutReason: "guest-wall-deadline", cases: [] };
   assert.deepEqual(parseResponse(JSON.stringify(wall), request, digest), wall);
   for (const invalid of [
-    { ...good, workerVersion: "quickjs-contract-worker-v4" }, { ...good, workerVersion: "quickjs-contract-worker-v5" }, { ...good, timeoutReason: undefined },
+    { ...good, workerVersion: "quickjs-contract-worker-v4" }, { ...good, workerVersion: "quickjs-contract-worker-v5" },
+    { ...good, workerVersion: "quickjs-contract-worker-v6" }, { ...good, timeoutReason: undefined },
     { ...good, timeoutReason: "guest-wall-deadline" }, { ...good, status: "completed" },
     { ...good, status: "error" }, { ...good, cases: [] }, { ...wall, status: "error", timeoutReason: undefined },
     { ...good, status: "completed", timeoutReason: undefined }

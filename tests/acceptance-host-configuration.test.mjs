@@ -7,8 +7,27 @@ import test from "node:test";
 import Ajv from "ajv";
 import { HOST_CONTRACT_SET_VERSION, installedContractVerifierDigest, openHostContractConfiguration, prepareHostContractApproval, validateHostContractPlan, writeHostContractApproval } from "../packages/piagent-core/extensions/acceptance-host-configuration.js";
 import { discoverRuntimeIntegrityFiles } from "../packages/piagent-core/capabilities/runtime-integrity.js";
+import { checkpointCases } from "./helpers/async-production-cases.mjs";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
+
+test("signed host approval preserves async observations and revokes modified callback plans", t => {
+  const f = fixture(t); f.options.contracts[0].exportName = "resumeWork";
+  f.options.contracts[0].checks = [{ id: "checkpoint", cases: checkpointCases() }];
+  const preview = prepareHostContractApproval(f.options);
+  assert.deepEqual(preview.contracts[0].checks, f.options.contracts[0].checks);
+  const schema = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "schemas/approved-host-contracts.schema.json")));
+  const ajv = new Ajv({ allErrors: true, strict: false });
+  assert.equal(ajv.validate(schema, preview), true, JSON.stringify(ajv.errors));
+  writeHostContractApproval(f.options); const configuration = f.open();
+  const selected = configuration.forRequest(f.options.operatorRequestDigest);
+  assert.equal(selected.contracts[0].checks[0].cases[1].args[1].type, "error-property");
+  assert.ok(Object.isFrozen(selected.contracts[0].checks[0].cases[0].callbacks[0].steps));
+  const stored = JSON.parse(fs.readFileSync(f.configPath));
+  stored.payload.contracts[0].checks[0].cases[0].callbacks[0].settleAfterJobs = 2;
+  fs.writeFileSync(f.configPath, JSON.stringify(stored));
+  assert.equal(configuration.isCurrent(), false); assert.throws(() => f.open(), /unauthenticated/);
+});
 
 function fixture(t) {
   const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "piagent-host-approval-")));
