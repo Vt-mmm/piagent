@@ -5,6 +5,7 @@
 !protocol.mjs
 !values.mjs
 !intrinsics.mjs
+!module-graph.mjs
 !guest.mjs
 !node_modules/
 !node_modules/**

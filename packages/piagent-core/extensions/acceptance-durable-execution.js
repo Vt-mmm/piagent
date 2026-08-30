@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
 import { compileIndependentContract, INDEPENDENT_CONTRACT_VERSION } from "./acceptance-independent-contract.js";
-import { captureExecutionSnapshot, EXECUTION_SNAPSHOT_VERSION, runSnapshotBoundContract } from "./acceptance-execution-snapshot.js";
+import { captureExecutionSnapshot, EXECUTION_SNAPSHOT_VERSION, runSnapshotBoundContract, snapshotPlanSource } from "./acceptance-execution-snapshot.js";
+import { validateModulePaths } from "./acceptance-executor/module-graph.mjs";
 import { createAuthenticatedAdmission, unavailableAuthenticatedAssessment } from "./acceptance-authenticated-admission.js";
 
-export const DURABLE_EXECUTION_VERSION = "durable-closed-contract-v1";
+export const DURABLE_EXECUTION_VERSION = "durable-module-contract-v2";
 const HASH = /^[a-f0-9]{64}$/;
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const freeze = (value) => {
@@ -27,7 +28,7 @@ const unavailable = (reason, attemptId) => Object.freeze({ version: DURABLE_EXEC
  * attempt budget. Interruption reconciliation must establish worker termination
  * before the store's recordStoppedAttempt capability can be used.
  */
-export function createDurableContractRunner({ store, projectRoot, sourcePath, authorizeSourceRead,
+export function createDurableContractRunner({ store, projectRoot, sourcePath, modulePaths, authorizeSourceRead,
   exportName, checks, imageId, dockerSocket, verifierDigest, getProjectVerificationDigest, timeoutMs = 10000 } = {}) {
   if (!store || typeof store.reserve !== "function" || typeof store.settle !== "function"
     || typeof verifierDigest !== "string" || !HASH.test(verifierDigest) || typeof getProjectVerificationDigest !== "function"
@@ -37,7 +38,8 @@ export function createDurableContractRunner({ store, projectRoot, sourcePath, au
   // Compile before retaining the plan to detach it from later caller mutations.
   const template = compileIndependentContract(JSON.stringify({ schemaVersion: 1, source: "export const placeholder = 0;", exportName, checks }));
   const approvedChecks = template.plan.checks;
-  const snapshotRequest = { projectRoot, sourcePath, authorizeSourceRead };
+  const snapshotRequest = { projectRoot, sourcePath, authorizeSourceRead,
+    ...(modulePaths === undefined ? {} : { modulePaths: Object.freeze(validateModulePaths(sourcePath, modulePaths)) }) };
   const admission = createAuthenticatedAdmission({ store, snapshotRequest, verifierDigest, imageId, exportName, checks: approvedChecks });
   const completed = new WeakMap();
   const backendDigest = hash(JSON.stringify([DURABLE_EXECUTION_VERSION, INDEPENDENT_CONTRACT_VERSION,
@@ -53,7 +55,7 @@ export function createDurableContractRunner({ store, projectRoot, sourcePath, au
     if (before.binding.projectId !== store.projectId) throw new Error("Evidence store belongs to another project");
     const verificationDigest = await getProjectVerificationDigest({ ...identity, snapshot: before.binding, snapshotDigest: before.snapshotDigest });
     if (typeof verificationDigest !== "string" || !HASH.test(verificationDigest)) return unavailable("current-project-verifier-missing");
-    const compiled = compileIndependentContract(JSON.stringify({ schemaVersion: 1, source: before.source, exportName, checks: approvedChecks }));
+    const compiled = compileIndependentContract(JSON.stringify({ schemaVersion: 1, ...snapshotPlanSource(before), exportName, checks: approvedChecks }));
     const binding = { criterionHash, snapshotDigest: before.snapshotDigest, verifierDigest,
       projectVerificationDigest: verificationDigest, planDigest: compiled.planDigest, backendDigest };
     if (signal?.aborted) return unavailable("cancelled-before-reservation");

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { createAcceptanceAssessmentSession } from "./acceptance-assessment.js";
 import { isAcceptanceEvidenceStore } from "./acceptance-evidence-store.js";
-import { captureExecutionSnapshot } from "./acceptance-execution-snapshot.js";
+import { captureExecutionSnapshot, snapshotPlanSource } from "./acceptance-execution-snapshot.js";
 import { compileIndependentContract, compareIndependentExecution, INDEPENDENT_CONTRACT_VERSION } from "./acceptance-independent-contract.js";
 import { parseRequest, parseResponse } from "./acceptance-executor/protocol.mjs";
 import { executionDiagnostics } from "./acceptance-execution-diagnostics.js";
@@ -30,7 +30,7 @@ export function createAuthenticatedAdmission({ store, snapshotRequest, verifierD
     // Read authenticated bytes, never the caller's diagnostic result object.
     const evidence = JSON.parse(current.evidenceText), observed = evidence.observed, result = observed?.result;
     const snapshot = captureExecutionSnapshot(snapshotRequest);
-    const compiled = compileIndependentContract(JSON.stringify({ schemaVersion: 1, source: snapshot.source, exportName, checks: approved.plan.checks }));
+    const compiled = compileIndependentContract(JSON.stringify({ schemaVersion: 1, ...snapshotPlanSource(snapshot), exportName, checks: approved.plan.checks }));
     if (snapshot.snapshotDigest !== binding.snapshotDigest || evidence.snapshotDigest !== binding.snapshotDigest
       || evidence.planDigest !== binding.planDigest || observed?.snapshotDigest !== binding.snapshotDigest
       || result?.version !== INDEPENDENT_CONTRACT_VERSION || result.planDigest !== binding.planDigest
@@ -82,6 +82,7 @@ export function createAuthenticatedAdmission({ store, snapshotRequest, verifierD
       executionDiagnostics: diagnostic, version: AUTHENTICATED_ADMISSION_VERSION, attemptId: current.attemptId,
       criterionId: scope.criterionId, taskRunId: scope.taskRunId, criterionHash: binding.criterionHash,
       sourcePath: snapshot.binding.sourcePath, workingTreeDigest: snapshot.binding.workingTreeDigest,
+      ...(snapshot.binding.moduleFiles ? { sourcePaths: snapshot.binding.moduleFiles.map((file) => file.sourcePath) } : {}),
       snapshotDigest: binding.snapshotDigest, projectVerificationDigest: binding.projectVerificationDigest,
       counterexamples: result.checks.filter((check) => assessment.verdict === "fail" && check.status === "fail").map((check) => ({
         digest: check.counterexampleRef, evidence: counterexamples.get(check.counterexampleRef)

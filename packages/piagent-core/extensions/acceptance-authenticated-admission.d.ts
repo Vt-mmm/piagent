@@ -14,6 +14,7 @@ export type AuthenticatedAssessment = Readonly<{
   taskRunId?: string;
   criterionHash?: string;
   sourcePath?: string;
+  sourcePaths?: readonly string[];
   workingTreeDigest?: string;
   snapshotDigest?: string;
   projectVerificationDigest?: string;

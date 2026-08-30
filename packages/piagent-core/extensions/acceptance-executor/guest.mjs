@@ -1,5 +1,6 @@
 import { numberValue, validateValue } from "./values.mjs";
 import { INTRINSICS } from "./intrinsics.mjs";
+import { approvedModuleLoader } from "./module-graph.mjs";
 
 /** A request-owned realm. Only explicitly contiguous sequence cases share it. */
 export function createGuestSession(QuickJS, request, overallDeadline) {
@@ -8,7 +9,8 @@ export function createGuestSession(QuickJS, request, overallDeadline) {
   runtime.setMaxStackSize(512 * 1024);
   let deadline = overallDeadline, interrupted = false, importDenied = false;
   runtime.setInterruptHandler(() => { interrupted ||= performance.now() >= deadline; return interrupted; });
-  runtime.setModuleLoader(() => { importDenied = true; throw new Error("Closed module imports are unsupported"); });
+  const loader = approvedModuleLoader(request, () => { importDenied = true; });
+  runtime.setModuleLoader(loader.load, loader.normalize);
   const context = runtime.newContext(), persistent = [], temporary = [];
   const keep = (handle) => { temporary.push(handle); return handle; };
   const retain = (handle) => { persistent.push(handle); return handle; };
@@ -59,7 +61,7 @@ export function createGuestSession(QuickJS, request, overallDeadline) {
         keep(context.newNumber(item.clock ?? 0))));
       const args = item.args.map(input);
       if (!namespace) {
-        const moduleResult = context.evalCode(request.source, "candidate.mjs", { type: "module" });
+        const moduleResult = context.evalCode(request.source, request.moduleGraph?.entry ?? "candidate.mjs", { type: "module" });
         if (moduleResult.error) {
           keep(moduleResult.error);
           initializationFailure = { outcome: importDenied && !interrupted ? "unsupported" : "error",
@@ -75,6 +77,7 @@ export function createGuestSession(QuickJS, request, overallDeadline) {
           return { id: item.id, ...initializationFailure };
         }
       }
+      if (runtime.hasPendingJob()) return incomplete("async-job-unsupported", "unsupported");
       const target = keep(context.getProp(namespace, item.exportName ?? request.exportName));
       if (context.getString(take(context.callFunction(methods.typeOf, context.undefined, target))) !== "function") {
         return incomplete("callable-export-missing", "unsupported");
@@ -82,6 +85,7 @@ export function createGuestSession(QuickJS, request, overallDeadline) {
       const called = context.callFunction(target, context.undefined, args), returned = keep(called.error ?? called.value);
       if (interrupted) return incomplete("guest-timeout");
       if (importDenied) return incomplete("module-import-unsupported", "unsupported");
+      if (runtime.hasPendingJob()) return incomplete("async-job-unsupported", "unsupported");
       let observation;
       if (called.error) {
         const errorClass = context.getString(take(context.callFunction(methods.errorClass, context.undefined, returned)));
@@ -107,6 +111,7 @@ export function createGuestSession(QuickJS, request, overallDeadline) {
       }
       const clockReads = context.getNumber(take(context.callFunction(methods.clockReads, context.undefined)));
       if (interrupted) return incomplete("guest-timeout");
+      if (runtime.hasPendingJob()) return incomplete("async-job-unsupported", "unsupported");
       return { ...observation, dateArgsAfter, clockReads };
     } catch { return incomplete(interrupted ? "guest-timeout" : "guest-observation-failed"); }
     finally { disposeTemporary(); }

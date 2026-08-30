@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { isAbsolute } from "node:path";
 import { stat } from "node:fs/promises";
 import { MAX_RESPONSE_BYTES, parseRequest, parseResponse } from "./acceptance-executor/protocol.mjs";
+import { executionSourceText } from "./acceptance-executor/module-graph.mjs";
 
 const IMAGE_ID = /^sha256:[a-f0-9]{64}$/;
 const CONTAINER_ID = /^[a-f0-9]{64}$/;
@@ -88,7 +89,7 @@ export async function runIsolatedContract({ requestText, imageId, dockerSocket, 
     || (executionRunId !== undefined && (typeof executionRunId !== "string"
       || !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(executionRunId)))) throw new TypeError("Invalid isolated executor configuration");
   const requestDigest = hash(requestText);
-  const sourceDigest = hash(request.source);
+  const sourceDigest = hash(executionSourceText(request));
   // A durable host reservation can provide its freshly generated UUID so a
   // restarted host can locate exactly its worker, never by a broad name scan.
   const runId = executionRunId ?? randomUUID();

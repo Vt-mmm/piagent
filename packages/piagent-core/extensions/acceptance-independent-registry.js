@@ -43,7 +43,7 @@ export function applyIndependentCriterionAssessment(criterion, assessment, worki
   if (!assessment) return false;
   const previous = JSON.stringify([criterion.status, criterion.evidence]);
   criterion.status = assessment.verdict === "pass" ? "satisfied" : assessment.verdict === "fail" ? "blocked" : "pending";
-  const evidence = assessment.sourcePath ? [{ kind: "independent-contract", paths: [assessment.sourcePath], workingTreeDigest,
+  const evidence = assessment.sourcePath ? [{ kind: "independent-contract", paths: assessment.sourcePaths ?? [assessment.sourcePath], workingTreeDigest,
     summary: assessment.verdict === "pass" ? "Authenticated current independent checks passed; bounded contract-tested assurance."
       : assessment.verdict === "fail" ? `Authenticated independent counterexample: ${assessment.failedChecks.join(", ")}`.slice(0, 240)
         : `Independent verification ${assessment.verdict}: ${assessment.reasons.join(", ")}`.slice(0, 240) }] : [];

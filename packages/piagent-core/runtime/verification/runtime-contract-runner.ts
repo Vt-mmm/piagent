@@ -4,6 +4,7 @@ import type { TaskContract } from "../../extensions/guard-types.ts";
 import { createDurableContractRunner } from "../../extensions/acceptance-durable-execution.js";
 import { captureExecutionSnapshot } from "../../extensions/acceptance-execution-snapshot.js";
 import { captureWorkspaceVerificationSnapshot } from "../../extensions/workspace-verification-snapshot.js";
+import { validateModulePaths } from "../../extensions/acceptance-executor/module-graph.mjs";
 import type { RuntimeSessionState } from "../session/runtime-state.ts";
 
 type ApprovedConfiguration = Omit<Parameters<typeof createDurableContractRunner>[0], "projectRoot" | "getProjectVerificationDigest">;
@@ -20,6 +21,8 @@ export function createRuntimeContractRunner({ state, context, getTask, approved 
   if (!state?.projectVerification || typeof getTask !== "function") throw new TypeError("Actual runtime verification state is required");
   const cwd = context.cwd, sessionId = context.sessionManager.getSessionId();
   const sourcePath = approved.sourcePath, authorizeSourceRead = approved.authorizeSourceRead;
+  const modulePaths = approved.modulePaths === undefined ? undefined : Object.freeze(validateModulePaths(sourcePath, approved.modulePaths));
+  const sourcePaths = [sourcePath, ...(modulePaths ?? [])];
   return createDurableContractRunner({ ...approved, projectRoot: cwd,
     getProjectVerificationDigest(request) {
       try {
@@ -31,11 +34,12 @@ export function createRuntimeContractRunner({ state, context, getTask, approved 
         // Until approved targets are captured at tool start, do not claim they
         // were tested just because an independent execution captured them now.
         const covered = execFileSync("git", ["-c", "core.fsmonitor=false", "--no-optional-locks", "-C", cwd,
-          "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", sourcePath],
-        { encoding: "utf8", timeout: 3000, maxBuffer: 8192, stdio: ["ignore", "pipe", "pipe"] });
-        if (!covered.split("\0").includes(sourcePath)) return null;
+          "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", ...sourcePaths],
+        { encoding: "utf8", timeout: 3000, maxBuffer: 65536, stdio: ["ignore", "pipe", "pipe"] });
+        const coveredPaths = new Set(covered.split("\0"));
+        if (!sourcePaths.every((candidate) => coveredPaths.has(candidate))) return null;
         const before = captureWorkspaceVerificationSnapshot(cwd);
-        const source = captureExecutionSnapshot({ projectRoot: cwd, sourcePath, authorizeSourceRead });
+        const source = captureExecutionSnapshot({ projectRoot: cwd, sourcePath, modulePaths, authorizeSourceRead });
         const current = captureWorkspaceVerificationSnapshot(cwd);
         if (!before.proofCapable || !current.proofCapable || before.digest !== current.digest
           || before.workspaceRevisionDigest !== current.workspaceRevisionDigest

@@ -29,7 +29,13 @@ export const INTRINSICS = `(() => {
   const prototypes = [TypeError.prototype, RangeError.prototype, SyntaxError.prototype,
     ReferenceError.prototype, EvalError.prototype, URIError.prototype, Error.prototype];
   const names = ['TypeError', 'RangeError', 'SyntaxError', 'ReferenceError', 'EvalError', 'URIError', 'Error'];
-  let reads = 0;
+  let reads = 0, clockEnabled = false, clockValue = 0;
+  // A module may capture Date.now once. Keep that callable live across the
+  // complete history, including transitions back to the real clock.
+  const observedNow = () => {
+    if (!clockEnabled) return apply(originalNow, D, []);
+    reads += 1; return clockValue;
+  };
   const numeric = value => same(value, -0) ? '"-0"' : finite(value) ? apply(numberString, value, [])
     : value !== value ? '"NaN"' : value < 0 ? '"-Infinity"' : '"Infinity"';
   function observeValue(root, allowDate) {
@@ -91,8 +97,8 @@ export const INTRINSICS = `(() => {
     defineData: (object, key, value) => { define(object, key, dataDescriptor(value, true)); },
     typeOf: value => typeof value, observeValue, clockReads: () => reads,
     beginCall: (mock, value) => {
-      reads = 0;
-      define(D, 'now', dataDescriptor(mock ? () => { reads += 1; return value; } : originalNow, false));
+      reads = 0; clockEnabled = mock; clockValue = value;
+      define(D, 'now', dataDescriptor(observedNow, false));
     },
     errorClass: value => {
       if (value === null || (typeof value !== 'object' && typeof value !== 'function')) return 'non-error';

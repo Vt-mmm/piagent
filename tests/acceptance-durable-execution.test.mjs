@@ -106,6 +106,29 @@ test("unavailable backend errors are durably settled without implicit retries", 
   assert.equal(store.latest(scope).attempt, 2);
 });
 
+test("authenticated module execution invalidates dependency-only drift and detaches the approved allowlist", integration, async (context) => {
+  const f = fixture(context), modulePaths = ["arithmetic.mjs"];
+  fs.writeFileSync(f.sourceFile, "export {sum} from './arithmetic.mjs';\n");
+  const dependency = path.join(f.projectRoot, modulePaths[0]);
+  fs.writeFileSync(dependency, "export const sum=(a,b)=>a+b;\n");
+  const runner = createDurableContractRunner({ ...f.options, modulePaths });
+  modulePaths.push("not-approved.mjs");
+  const first = await runner.run(request), receipt = await runner.assess(first, { policy: "allow" });
+  assert.equal(receipt.verdict, "pass", JSON.stringify(receipt));
+  assert.equal(receipt.completionAllowed, true);
+  assert.deepEqual(receipt.sourcePaths, ["sum.mjs", "arithmetic.mjs"]);
+  assert.equal((await runner.run(request)).reused, true);
+  assert.equal(f.store.latest(scope).attempt, 1);
+  fs.writeFileSync(dependency, "export const sum=(a,b)=>a-b;\n");
+  assert.equal((await runner.assess(first, { policy: "allow" })).completionAllowed, false);
+  const failed = await runner.run(request), rejected = await runner.assess(failed, { policy: "allow" });
+  assert.equal(rejected.verdict, "fail", JSON.stringify(rejected));
+  assert.equal(rejected.repairEligible, true);
+  assert.equal(rejected.sourceMutationAllowed, false);
+  assert.equal(f.store.latest(scope).attempt, 2);
+  assert.notEqual(first.evidence.observed.result.execution.sourceDigest, failed.evidence.observed.result.execution.sourceDigest);
+});
+
 for (const [name, source, verdict, reason, action] of [
   ["unsupported return type", "export const sum = (a,b) => Promise.resolve(a+b);", "unknown", "return-type-unsupported", "handoff"],
   ["unsupported import", "import {x} from './other.mjs'; export const sum = (a,b) => a+b;", "unknown", "module-import-unsupported", "handoff"],

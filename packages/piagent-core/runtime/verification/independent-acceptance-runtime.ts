@@ -98,10 +98,11 @@ export class IndependentAcceptanceRuntime {
           if (!task.acceptanceReceipt?.criteria.some((criterion) => criterion.id === contract.criterionId && criterion.hash === contract.criterionHash)) {
             throw new Error("Approved criterion mismatch");
           }
+          const sourcePaths = new Set([contract.sourcePath, ...(contract.modulePaths ?? [])]);
           const runner = createRuntimeContractRunner({ state: options.state, context: ctx, getTask: () => options.activeTask(ctx),
-            approved: { store: configuration.store, sourcePath: contract.sourcePath, exportName: contract.exportName, checks: contract.checks,
+            approved: { store: configuration.store, sourcePath: contract.sourcePath, modulePaths: contract.modulePaths, exportName: contract.exportName, checks: contract.checks,
               ...configuration.payload.backend, verifierDigest: configuration.payload.verifierDigest,
-              authorizeSourceRead: ({ sourcePath }) => (sourcePath !== contract.sourcePath || configuration.isCurrent()) && options.authorizeSourceRead(ctx, sourcePath) } });
+              authorizeSourceRead: ({ sourcePath }) => (!sourcePaths.has(sourcePath) || configuration.isCurrent()) && options.authorizeSourceRead(ctx, sourcePath) } });
           owned.runners.push({ contract, runner });
         }
       } catch { owned.block = "independent host approval is unavailable or does not match the task"; }

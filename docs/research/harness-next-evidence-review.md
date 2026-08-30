@@ -79,3 +79,11 @@ Piagent-specific next evidence requirements (design decisions, not claims from t
 - Stateful application adapters need a simpler independent behavioral model and held-out command histories. Passing the evidence-store protocol tests alone does not satisfy the required stateful-recovery domain.
 
 These requirements extend the existing evaluation protocol; they do not replace the full frozen release campaign or import any external project's performance numbers as Piagent results.
+
+## Follow-up: project source graphs and differential diagnostics
+
+[Wang, Pradel and Liu's PatchDiff study, v2 (2025-09-09)](https://arxiv.org/abs/2503.15223v2) reports that 7.8% of examined patches counted as correct nevertheless failed developer-written tests. Differential testing exposed behavioral differences in 29.6% of plausible patches; a difference from the reference was not automatically a proven defect. The transfer to Piagent is to combine independently declared obligations, project tests and targeted divergent variants, not require textual similarity to a reference or import these rates as Piagent measurements.
+
+Source inspection showed that the experimental backend could not execute an unchanged multi-file implementation because all imports were refused. [QuickJS's runtime interface](https://github.com/justjake/quickjs-emscripten/blob/main/doc/quickjs-emscripten/classes/QuickJSRuntime.md) exposes a module loader plus normalizer, and a pending-job query distinct from synchronous execution. The installed 0.32.0 declarations were inspected as well. The resulting design loads only pre-captured, explicitly approved relative modules; it neither discovers permissions from candidate imports nor supplies host IO. Async execution remains a separate unsupported backend capability.
+
+The [module integration checkpoint](../decisions/harness-next-module-checkpoint.md) records actual unchanged production-source execution, dependency-only mutations, authenticated completion/repair and a reproduced observation-time microtask gap. These are development integration diagnostics. They are not independently held-out calibration, exhaustive redactor correctness, a general JavaScript equivalence result or a release campaign.

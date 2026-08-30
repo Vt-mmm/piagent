@@ -89,6 +89,10 @@
       "properties": {
         "criterionId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9:._-]{0,79}$" }, "criterionHash": { "$ref": "#/$defs/hash" },
         "sourcePath": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*//)(?!.*/$)(?!.*(?:^|/)(?:\\.{1,2}|\\.git|\\.pi|node_modules)(?:/|$))[^\\\\\u0000]+$" },
+        "modulePaths": { "type": "array", "maxItems": 31, "uniqueItems": true, "items": {
+          "type": "string", "minLength": 1, "maxLength": 1024,
+          "pattern": "^(?!/)(?!.*//)(?!.*/$)(?!.*(?:^|/)(?:\\.{1,2}|\\.git|\\.pi|node_modules)(?:/|$))[^\\\\\u0000-\u001f\u007f:%?#]+$"
+        } },
         "exportName": { "type": "string", "pattern": "^[a-zA-Z_$][a-zA-Z0-9_$]{0,127}$" }, "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 8 },
         "checks": { "type": "array", "minItems": 1, "maxItems": 256, "items": {
           "type": "object", "additionalProperties": false, "required": ["id", "cases"],

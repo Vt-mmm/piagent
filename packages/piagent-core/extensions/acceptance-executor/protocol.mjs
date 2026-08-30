@@ -1,7 +1,8 @@
 import { protocolShape as shape, validateValue } from "./values.mjs";
+import { MAX_SOURCE_BYTES, validateModuleGraph } from "./module-graph.mjs";
 export { MAX_STRING_LENGTH, numberValue, validateValue } from "./values.mjs";
 
-export const WORKER_VERSION = "quickjs-contract-worker-v2";
+export const WORKER_VERSION = "quickjs-contract-worker-v3";
 export const MAX_REQUEST_BYTES = 512 * 1024;
 export const MAX_RESPONSE_BYTES = 1024 * 1024;
 const ID = /^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,159}$/;
@@ -10,10 +11,11 @@ const EXPORT = /^[a-zA-Z_$][\w$]{0,127}$/;
 export function parseRequest(text) {
   if (typeof text !== "string" || Buffer.byteLength(text) > MAX_REQUEST_BYTES) throw new TypeError("Request size exceeded");
   const request = JSON.parse(text);
-  shape(request, ["schemaVersion", "source", "exportName", "cases"]);
-  if (request.schemaVersion !== 1 || typeof request.source !== "string" || Buffer.byteLength(request.source) > 128 * 1024
+  shape(request, ["schemaVersion", "source", "exportName", "cases", "moduleGraph"], ["schemaVersion", "source", "exportName", "cases"]);
+  if (request.schemaVersion !== 1 || typeof request.source !== "string" || Buffer.byteLength(request.source) > MAX_SOURCE_BYTES
     || typeof request.exportName !== "string" || !EXPORT.test(request.exportName)
     || !Array.isArray(request.cases) || request.cases.length < 1 || request.cases.length > 256) throw new TypeError("Invalid execution request");
+  if (Object.hasOwn(request, "moduleGraph")) validateModuleGraph(request.source, request.moduleGraph);
   const ids = new Map(), closedSequences = new Set();
   let sequence;
   for (const item of request.cases) {

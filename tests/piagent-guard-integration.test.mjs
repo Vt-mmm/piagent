@@ -5002,24 +5002,26 @@ describe("piagent guard integration", () => {
     assert.deepEqual(task.workPlan.map((step) => step.status), ["done", "done"]);
   });
 
-  for (const scenario of ["valid", "counterexample", "repair", "backend-unavailable", "unsupported", "timeout", "shutdown", "pending", "exhausted"]) it(`uses authenticated independent execution in the actual completion hook (${scenario})`, {
+  for (const scenario of ["valid", "counterexample", "repair", "modular-valid", "modular-counterexample", "modular-repair", "backend-unavailable", "unsupported", "timeout", "shutdown", "pending", "exhausted"]) it(`uses authenticated independent execution in the actual completion hook (${scenario})`, {
     skip: !process.env.PIAGENT_CONTRACT_EXECUTOR_IMAGE_ID || !process.env.PIAGENT_CONTRACT_EXECUTOR_SOCKET, timeout: 120000
   }, async (t) => {
     const { root, piagentGuard } = await loadGuardFixture(), cwd = createProject(root);
-    const valid = scenario === "valid";
+    const modular = scenario.startsWith("modular-"), scenarioKind = scenario.replace(/^modular-/, ""), valid = scenarioKind === "valid";
     const validSource = "export function sum(a,b) { if(typeof a !== 'number' || typeof b !== 'number') throw Reflect.construct(TypeError, ['invalid']); return a+b; }\n";
-    const source = ({
+    const implementation = ({
       valid: validSource, "backend-unavailable": validSource, pending: validSource, exhausted: validSource,
       unsupported: "export function sum(a,b) { if(typeof a !== 'number' || typeof b !== 'number') return Promise.resolve(0); return a+b; }\n",
       timeout: "export function sum(a,b) { if(typeof a !== 'number' || typeof b !== 'number') { while(true) {} } return a+b; }\n",
       shutdown: validSource.replace("return a+b;", "const deadline=Date.now()+50; while(Date.now()<deadline) {} return a+b;")
-    })[scenario] ?? "export function sum(a,b) { return a+b; }\n";
+    })[scenarioKind] ?? "export function sum(a,b) { return a+b; }\n";
+    const source = modular ? "export {sum} from './sum-implementation.js';\n" : implementation;
     fs.writeFileSync(path.join(cwd, "src", "math.js"), source);
+    if (modular) fs.writeFileSync(path.join(cwd, "src", "sum-implementation.js"), implementation);
     fs.writeFileSync(path.join(cwd, ".gitignore"), ".env\n.pi/\nscreenshots/\nREADME.md\n");
     fs.writeFileSync(path.join(cwd, "package.json"), JSON.stringify({ type: "module", scripts: { test: "node test.mjs" } }));
     fs.writeFileSync(path.join(cwd, "test.mjs"), "import assert from 'node:assert/strict'; import {sum} from './src/math.js'; assert.equal(sum(2,3),5); console.log('ACTUAL_PROJECT_TEST_PASSED');\n");
     execFileSync("git", ["-C", cwd, "config", "user.name", "Test"]); execFileSync("git", ["-C", cwd, "config", "user.email", "test@example.com"]);
-    execFileSync("git", ["-C", cwd, "add", "src/math.js", "package.json", "test.mjs", ".gitignore"]); execFileSync("git", ["-C", cwd, "commit", "-qm", "fixture"]);
+    execFileSync("git", ["-C", cwd, "add", "src/math.js", ...(modular ? ["src/sum-implementation.js"] : []), "package.json", "test.mjs", ".gitignore"]); execFileSync("git", ["-C", cwd, "commit", "-qm", "fixture"]);
     const prior = process.env.PIAGENT_INDEPENDENT_VERIFICATION_CONFIG;
     const directory = path.join(fs.realpathSync.native(root), "host-approval");
     process.env.PIAGENT_INDEPENDENT_VERIFICATION_CONFIG = path.join(directory, "approval.json");
@@ -5048,8 +5050,9 @@ describe("piagent guard integration", () => {
       backend: { imageId: process.env.PIAGENT_CONTRACT_EXECUTOR_IMAGE_ID,
         dockerSocket: scenario === "backend-unavailable" ? "/piagent-test-unavailable.sock" : process.env.PIAGENT_CONTRACT_EXECUTOR_SOCKET, timeoutMs: 10000 },
       contracts: task.acceptanceReceipt.criteria.map((criterion) => ({ criterionId: criterion.id, criterionHash: criterion.hash,
-        sourcePath: "src/math.js", exportName: "sum", maxAttempts: 2, checks })) });
+        sourcePath: "src/math.js", ...(modular ? { modulePaths: ["src/sum-implementation.js"] } : {}), exportName: "sum", maxAttempts: 2, checks })) });
     await harness.handlers.get("tool_result")({ toolName: "read", input: { path: "src/math.js" }, content: [{ type: "text", text: source }], isError: false }, ctx);
+    if (modular) await harness.handlers.get("tool_result")({ toolName: "read", input: { path: "src/sum-implementation.js" }, content: [{ type: "text", text: implementation }], isError: false }, ctx);
     async function verifyProject(suffix) {
       for (const [index, command] of started.message.details.runtimeTask.verifyCommands.entries()) {
         const id = `independent-project-test-${suffix}-${index}`;
@@ -5139,6 +5142,7 @@ describe("piagent guard integration", () => {
       assert.ok([...observedAdmission.assessments.values()].every((assessment) => assessment.verdict === "pass"), "completion does not erase the current authenticated projection");
       assert.ok(after.acceptanceReceipt.criteria.every((criterion) => criterion.status === "satisfied"));
       assert.ok(after.acceptanceReceipt.criteria.some((criterion) => criterion.evidence.some((entry) => entry.kind === "independent-contract")));
+      if (modular) assert.ok(after.acceptanceReceipt.criteria.some((criterion) => criterion.evidence.some((entry) => entry.paths.includes("src/sum-implementation.js"))), "projection includes the verified dependency");
     } else if (["pending", "exhausted"].includes(scenario)) {
       assert.notEqual(after.trace.outcome, "completed", diagnostic);
       assert.equal(observedAdmission.stopReason, scenario, diagnostic);
@@ -5174,8 +5178,8 @@ describe("piagent guard integration", () => {
       assert.match(recovery.payload.content, /TypeError/);
     }
     assert.equal(fs.readFileSync(path.join(cwd, "src", "math.js"), "utf8"), source, "verification never rewrites the source");
-    if (scenario === "repair") {
-      const input = { path: "src/math.js", content: validSource };
+    if (scenarioKind === "repair") {
+      const input = { path: modular ? "src/sum-implementation.js" : "src/math.js", content: validSource };
       const allowed = await callToolCall(harness.handlers.get("tool_call"), ctx, "write", input, "repair-observed-counterexample");
       assert.notEqual(allowed.block, true, allowed.reason);
       fs.writeFileSync(path.join(cwd, input.path), input.content);
@@ -5184,7 +5188,7 @@ describe("piagent guard integration", () => {
       await verifyProject("after-repair");
       const result = await harness.handlers.get("message_end")({ message: { role: "assistant", content: [{ type: "text", text: "Implemented the counterexample-backed fix and verified the result." }] } }, ctx);
       assert.equal(activeSessionTask(cwd, "independent-completion").trace.outcome, "completed", JSON.stringify(result));
-    } else if (scenario === "counterexample") {
+    } else if (scenarioKind === "counterexample") {
       await harness.handlers.get("message_end")({ message: { role: "assistant", content: [{ type: "text", text: "Verification complete." }] } }, ctx);
       assert.notEqual(activeSessionTask(cwd, "independent-completion").trace.outcome, "completed");
       assert.equal(harness.entries.filter((entry) => entry.payload?.customType === "piagent-completion-recovery").length, 1, "the repair budget is not renewed by another completion claim");
@@ -5195,7 +5199,7 @@ describe("piagent guard integration", () => {
       for (const [index, criterion] of task.acceptanceReceipt.criteria.entries()) {
         const latest = authority.store.latest({ taskRunId: task.taskRunId, criterionId: criterion.id });
         if (["pending", "exhausted"].includes(scenario) && index > 0) assert.equal(latest, null, "a host-state stop does not start later checks");
-        else assert.equal(latest.attempt, ["repair", "exhausted"].includes(scenario) ? 2 : 1, "unchanged checks reuse evidence; a real repair consumes one new finite attempt");
+        else assert.equal(latest.attempt, ["repair", "exhausted"].includes(scenarioKind) ? 2 : 1, "unchanged checks reuse evidence; a real repair consumes one new finite attempt");
       }
     } finally { authority.close(); }
   });

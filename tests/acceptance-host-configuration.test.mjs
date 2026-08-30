@@ -139,6 +139,25 @@ test("host approval binds structured histories and rejects references or snapsho
   assert.deepEqual(f.open().payload.contracts[0].checks[0].cases, payload.contracts[0].checks[0].cases);
 });
 
+test("host module allowlists are explicit schema-bound approval data, not inferred imports", (t) => {
+  const f = fixture(t);
+  f.options.contracts[0].modulePaths = ["src/lib/math.js", "shared/types.js"];
+  const payload = prepareHostContractApproval(f.options);
+  const schema = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "schemas/approved-host-contracts.schema.json")));
+  const ajv = new Ajv({ allErrors: true, strict: false });
+  assert.equal(ajv.validate(schema, payload), true, JSON.stringify(ajv.errors));
+  for (const modulePaths of [["src/sum.js"], ["src/lib.js", "src/lib.js"], ["../outside.js"], [".pi/auth.json"], ["src/lib.js?other"]]) {
+    const wrong = structuredClone(f.options); wrong.contracts[0].modulePaths = modulePaths;
+    assert.throws(() => prepareHostContractApproval(wrong));
+    assert.equal(fs.existsSync(f.directory), false);
+  }
+  writeHostContractApproval(f.options);
+  assert.deepEqual(f.open().payload.contracts[0].modulePaths, f.options.contracts[0].modulePaths);
+  const envelope = JSON.parse(fs.readFileSync(f.configPath)); envelope.payload.contracts[0].modulePaths.push("src/new.js");
+  fs.writeFileSync(f.configPath, JSON.stringify(envelope));
+  assert.throws(() => f.open(), /unauthenticated/);
+});
+
 test("the installed dispatcher previews approval without writes, then creates authority only with --approve", (t) => {
   const f = fixture(t), executable = path.join(f.root, "piagent"), planPath = path.join(f.root, "plan.json");
   fs.symlinkSync(path.join(repositoryRoot, "scripts/piagent-cli.mjs"), executable);

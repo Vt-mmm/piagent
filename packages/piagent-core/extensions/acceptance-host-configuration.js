@@ -4,6 +4,7 @@ import path from "node:path";
 import { discoverRuntimeIntegrityFiles } from "../capabilities/runtime-integrity.js";
 import { compileIndependentContract } from "./acceptance-independent-contract.js";
 import { openAcceptanceEvidenceStore } from "./acceptance-evidence-store.js";
+import { validateModulePaths } from "./acceptance-executor/module-graph.mjs";
 
 export const HOST_CONTRACT_CONFIGURATION_VERSION = "approved-host-contracts-v1";
 const HASH = /^[a-f0-9]{64}$/;
@@ -37,13 +38,15 @@ function validate(payload) {
     || !Array.isArray(payload.contracts) || payload.contracts.length < 1 || payload.contracts.length > 12) throw new TypeError("Invalid host contract approval");
   const ids = new Set();
   for (const contract of payload.contracts) {
-    if (!exact(contract, ["criterionId", "criterionHash", "sourcePath", "exportName", "maxAttempts", "checks"])
+    if (!exact(contract, ["criterionId", "criterionHash", "sourcePath", "exportName", "maxAttempts", "checks",
+      ...(Object.hasOwn(contract, "modulePaths") ? ["modulePaths"] : [])])
       || typeof contract.criterionId !== "string" || !/^[a-z0-9][a-z0-9:._-]{0,79}$/.test(contract.criterionId)
       || ids.has(contract.criterionId) || !HASH.test(contract.criterionHash) || typeof contract.sourcePath !== "string"
       || !contract.sourcePath || path.isAbsolute(contract.sourcePath) || contract.sourcePath.includes("\\") || contract.sourcePath.includes("\0")
       || contract.sourcePath.split("/").some((part) => ["", ".", "..", ".git", ".pi", "node_modules"].includes(part))
       || !Number.isSafeInteger(contract.maxAttempts) || contract.maxAttempts < 1 || contract.maxAttempts > 8) throw new TypeError("Invalid approved criterion contract");
     ids.add(contract.criterionId);
+    if (Object.hasOwn(contract, "modulePaths")) validateModulePaths(contract.sourcePath, contract.modulePaths);
     compileIndependentContract(JSON.stringify({ schemaVersion: 1, source: "export const placeholder = 0;", exportName: contract.exportName, checks: contract.checks }));
   }
 }

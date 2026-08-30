@@ -6,10 +6,10 @@ import { resolveLocalStatePath } from "./local-state-path.js";
 import { workingTreeSnapshot } from "./task-state.js";
 import { workingTreeObservation } from "./working-tree-digest.js";
 import { runIndependentContract } from "./acceptance-independent-contract.js";
+import { MAX_SOURCE_BYTES, executionSourceText, validateModulePaths } from "./acceptance-executor/module-graph.mjs";
 
-export const EXECUTION_SNAPSHOT_VERSION = "closed-module-snapshot-v1";
+export const EXECUTION_SNAPSHOT_VERSION = "approved-module-snapshot-v2";
 const hash = (value) => createHash("sha256").update(value).digest("hex");
-const MAX_SOURCE_BYTES = 128 * 1024;
 
 function git(root, args) {
   return execFileSync("git", ["-c", "core.fsmonitor=false", "--no-optional-locks", "-C", root, ...args], {
@@ -59,24 +59,47 @@ function sourceBytes(root, sourcePath) {
   } finally { fs.closeSync(descriptor); }
 }
 
-/** Read only an explicitly host-authorized, non-symlink, closed module. */
-export function captureExecutionSnapshot({ projectRoot, sourcePath, authorizeSourceRead } = {}) {
+/** Read only explicitly host-authorized regular source files; never discover imports through IO. */
+export function captureExecutionSnapshot({ projectRoot, sourcePath, modulePaths, authorizeSourceRead } = {}) {
   if (typeof projectRoot !== "string" || !path.isAbsolute(projectRoot) || typeof sourcePath !== "string"
     || sourcePath.length > 1024 || sourcePath.includes("\0") || sourcePath.includes("\\") || path.isAbsolute(sourcePath)
     || sourcePath.split("/").some((part) => !part || [".", "..", ".git", ".pi", "node_modules"].includes(part))
     || typeof authorizeSourceRead !== "function") throw new TypeError("Invalid execution snapshot request");
-  const root = fs.realpathSync.native(projectRoot);
-  if (authorizeSourceRead({ projectRoot: root, sourcePath }) !== true) throw new Error("Execution source read is not authorized");
+  const dependencies = modulePaths === undefined ? undefined : validateModulePaths(sourcePath, modulePaths);
+  const paths = [sourcePath, ...(dependencies ?? [])], root = fs.realpathSync.native(projectRoot);
+  const authorize = (candidate) => {
+    if (authorizeSourceRead({ projectRoot: root, sourcePath: candidate }) !== true) throw new Error("Execution source read is not authorized");
+  };
+  paths.forEach(authorize);
   const head = repositoryHead(root);
-  const captured = sourceBytes(root, sourcePath);
+  const captured = paths.map((candidate) => { if (dependencies) authorize(candidate); return { path: candidate, ...sourceBytes(root, candidate) }; });
+  const size = captured.reduce((bytes, file) => bytes + file.sourceBytes, 0);
+  if (size > MAX_SOURCE_BYTES) throw new Error("Module source budget exceeded");
   const observation = workingTreeObservation(workingTreeSnapshot(root, {
     isProtectedProjectPath: (candidate) => authorizeSourceRead({ projectRoot: root, sourcePath: candidate }) !== true
   }));
+  // Dependencies can be ignored by Git. Re-read each approved member as well as
+  // binding the ordinary tree, so an already changed member cannot be captured
+  // only in its earlier state. Admission repeats the entire capture after work.
+  if (dependencies) for (const file of captured) {
+    authorize(file.path);
+    const current = sourceBytes(root, file.path);
+    if (current.sourceDigest !== file.sourceDigest || current.sourceMode !== file.sourceMode) throw new Error("Execution source graph changed during capture");
+  }
   if (!observation.proofCapable || repositoryHead(root) !== head) throw new Error("Repository snapshot is incomplete or changed");
+  const moduleGraph = dependencies && Object.freeze({ entry: sourcePath,
+    dependencies: Object.freeze(captured.slice(1).map((file) => Object.freeze({ path: file.path, source: file.source }))) });
+  const source = captured[0].source;
   const binding = Object.freeze({ version: EXECUTION_SNAPSHOT_VERSION, projectId: hash(root), head,
-    workingTreeDigest: observation.digest, sourcePath, sourceDigest: captured.sourceDigest,
-    sourceBytes: captured.sourceBytes, sourceMode: captured.sourceMode });
-  return Object.freeze({ binding, snapshotDigest: hash(JSON.stringify(binding)), source: captured.source });
+    workingTreeDigest: observation.digest, sourcePath, sourceDigest: hash(executionSourceText({ source, moduleGraph })),
+    sourceBytes: size, sourceMode: captured[0].sourceMode,
+    ...(moduleGraph ? { moduleFiles: Object.freeze(captured.map((file) => Object.freeze({ sourcePath: file.path,
+      sourceDigest: file.sourceDigest, sourceBytes: file.sourceBytes, sourceMode: file.sourceMode }))) } : {}) });
+  return Object.freeze({ binding, snapshotDigest: hash(JSON.stringify(binding)), source, ...(moduleGraph ? { moduleGraph } : {}) });
+}
+
+export function snapshotPlanSource(snapshot) {
+  return { source: snapshot.source, ...(snapshot.moduleGraph ? { moduleGraph: snapshot.moduleGraph } : {}) };
 }
 
 /**
@@ -85,12 +108,12 @@ export function captureExecutionSnapshot({ projectRoot, sourcePath, authorizeSou
  * The legacy dirty-tree digest alone cannot bind a clean checkout's HEAD or
  * ignored source bytes, so both are bound independently here.
  */
-export async function runSnapshotBoundContract({ projectRoot, sourcePath, authorizeSourceRead, exportName, checks,
+export async function runSnapshotBoundContract({ projectRoot, sourcePath, modulePaths, authorizeSourceRead, exportName, checks,
   imageId, dockerSocket, timeoutMs, signal, executionRunId } = {}) {
-  const request = { projectRoot, sourcePath, authorizeSourceRead };
+  const request = { projectRoot, sourcePath, modulePaths, authorizeSourceRead };
   const before = captureExecutionSnapshot(request);
   const result = await runIndependentContract({
-    planText: JSON.stringify({ schemaVersion: 1, source: before.source, exportName, checks }), imageId, dockerSocket, timeoutMs, signal, executionRunId
+    planText: JSON.stringify({ schemaVersion: 1, ...snapshotPlanSource(before), exportName, checks }), imageId, dockerSocket, timeoutMs, signal, executionRunId
   });
   let after;
   try { after = captureExecutionSnapshot(request); }

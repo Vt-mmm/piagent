@@ -4,7 +4,7 @@ import { runIsolatedContract } from "./acceptance-isolated-executor.js";
 import { parseRequest, validateValue } from "./acceptance-executor/protocol.mjs";
 import { canonicalValue } from "./acceptance-executor/values.mjs";
 
-export const INDEPENDENT_CONTRACT_VERSION = "bounded-data-contract-comparison-v2";
+export const INDEPENDENT_CONTRACT_VERSION = "bounded-module-contract-comparison-v3";
 const ID = /^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,159}$/;
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const ERROR_CLASSES = ["TypeError", "RangeError", "SyntaxError", "ReferenceError", "EvalError", "URIError", "Error", "non-error"];
@@ -55,7 +55,7 @@ function validateExpected(expected, item) {
 export function compileIndependentContract(planText) {
   if (typeof planText !== "string" || Buffer.byteLength(planText) > 1024 * 1024) throw new TypeError("Contract plan size exceeded");
   const plan = JSON.parse(planText);
-  shape(plan, ["schemaVersion", "source", "exportName", "checks"]);
+  shape(plan, ["schemaVersion", "source", "exportName", "checks", "moduleGraph"], ["schemaVersion", "source", "exportName", "checks"]);
   if (plan.schemaVersion !== 1 || !Array.isArray(plan.checks) || plan.checks.length < 1 || plan.checks.length > 256) {
     throw new TypeError("Invalid contract checks");
   }
@@ -73,7 +73,8 @@ export function compileIndependentContract(planText) {
       if (cases.length > 256) throw new TypeError("Too many independent cases");
     }
   }
-  const requestText = JSON.stringify({ schemaVersion: 1, source: plan.source, exportName: plan.exportName, cases });
+  const requestText = JSON.stringify({ schemaVersion: 1, source: plan.source, exportName: plan.exportName, cases,
+    ...(Object.hasOwn(plan, "moduleGraph") ? { moduleGraph: plan.moduleGraph } : {}) });
   parseRequest(requestText); // Validate all guest inputs before validating dependent expected state.
   // Every failing step can retain its full replay prefix. Bound the worst-case
   // repeated input bytes before execution, not after a large receipt is built.

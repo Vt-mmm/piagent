@@ -223,3 +223,27 @@ test("actual runtime project tests feed independent execution; a shallow test pa
   assert.equal((await restarted.run(request)).reason, "current-project-verifier-missing");
   assert.equal(store.latest(request.scope).attempt, 2, "a lost live observation cannot consume another execution implicitly");
 });
+
+test("runtime module contracts require real current verification of every nonignored dependency", integration, async (context) => {
+  const { verify, runner, approved, projectRoot, store } = fixture(context);
+  fs.writeFileSync(path.join(projectRoot, "sum.mjs"), "export {sum} from './arithmetic.mjs';\n");
+  const dependency = path.join(projectRoot, "arithmetic.mjs");
+  fs.writeFileSync(dependency, "export const sum=(a,b)=>a+b;\n");
+  const active = runner({ approved: { ...approved, modulePaths: ["arithmetic.mjs"] } });
+  assert.equal(await verify(), 0);
+  const first = await active.run(request);
+  assert.equal((await active.assess(first, { policy: "allow" })).verdict, "pass");
+  fs.writeFileSync(dependency, "export const sum=(a,b)=>a-b;\n");
+  assert.equal((await active.run(request)).reason, "current-project-verifier-missing");
+  assert.equal(store.latest(request.scope).attempt, 1);
+  assert.equal(await verify(), 0, "the shallow project test still only checks the result type");
+  const failed = await active.run(request);
+  assert.equal((await active.assess(failed, { policy: "allow" })).verdict, "fail");
+  assert.equal(store.latest(request.scope).attempt, 2);
+  fs.writeFileSync(path.join(projectRoot, "ignored.mjs"), "export const value=0;\n");
+  const ignored = runner({ approved: { ...approved, modulePaths: ["arithmetic.mjs", "ignored.mjs"] } });
+  assert.equal((await ignored.run(request)).reason, "current-project-verifier-missing");
+  const denied = runner({ approved: { ...approved, modulePaths: ["arithmetic.mjs"], authorizeSourceRead: ({ sourcePath }) => sourcePath !== "arithmetic.mjs" } });
+  await assert.rejects(denied.run(request), /not authorized/);
+  assert.equal(store.latest(request.scope).attempt, 2, "missing coverage or authorization does not reserve another worker");
+});
