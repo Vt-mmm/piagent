@@ -188,7 +188,7 @@
     {
       "path": "benchmarks",
       "fileCount": 840,
-      "sha256": "904de2bb7d00a6651ee59f0d48e75cd9b0e11533ec46c30af7179b71e2975148"
+      "sha256": "05dfe684421495997b2e30b62a50450c4e4065a4fad36cdd1c780731f04d02a4"
     },
     {
       "path": "evals/architecture-conformance-v1",
@@ -223,7 +223,7 @@
     {
       "path": "tests",
       "fileCount": 301,
-      "sha256": "5b7a0cfd47a5c615c3d96912915f2b7616978b29ac5a1699c28880ddbfcf2bb4"
+      "sha256": "02b754fb8a9087258acb6a1177be46c3b012f62acd164ec64d2161c948f16319"
     }
   ],
   "custodianComparisonRules": {
@@ -235,5 +235,5 @@
     "externalExposure": "The custodian must independently account for author-visible material outside these public roots, including prior local diagnostics and retained campaigns; this inventory is not a complete record of author knowledge.",
     "publicOutput": "Export only the closed schema-v2 assurance receipt and independent custody attestation."
   },
-  "claimBoundary": "Current public-input inventory only, not independent evaluation, approval, generalization or release evidence. Public-tree digests bind sorted [relative path, file SHA-256] pairs; no private artifacts are loaded."
+  "claimBoundary": "Current public-input inventory only, not independent evaluation, approval, generalization or release evidence. Public-tree digests bind [relative path, file SHA-256] pairs globally sorted by the slash-separated path's UTF-16 code units, serialized as compact JSON and hashed as UTF-8; no private artifacts are loaded."
 }

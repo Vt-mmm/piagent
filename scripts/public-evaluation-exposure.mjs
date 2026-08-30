@@ -63,7 +63,7 @@ function reader(root) {
 export function buildPublicExposure(root = DEFAULT_ROOT) {
   const read = reader(root), allFiles = new Map();
   const visibleTrees = PUBLIC_TREES.map((relative) => {
-    const entries = read.files(relative).map((file) => {
+    const entries = read.files(relative).sort().map((file) => {
       const bytes = read.bytes(file), digest = sha256(bytes);
       allFiles.set(file, bytes);
       return [file, digest];
@@ -103,7 +103,7 @@ export function buildPublicExposure(root = DEFAULT_ROOT) {
       externalExposure: "The custodian must independently account for author-visible material outside these public roots, including prior local diagnostics and retained campaigns; this inventory is not a complete record of author knowledge.",
       publicOutput: "Export only the closed schema-v2 assurance receipt and independent custody attestation."
     },
-    claimBoundary: "Current public-input inventory only, not independent evaluation, approval, generalization or release evidence. Public-tree digests bind sorted [relative path, file SHA-256] pairs; no private artifacts are loaded."
+    claimBoundary: "Current public-input inventory only, not independent evaluation, approval, generalization or release evidence. Public-tree digests bind [relative path, file SHA-256] pairs globally sorted by the slash-separated path's UTF-16 code units, serialized as compact JSON and hashed as UTF-8; no private artifacts are loaded."
   };
 }
 

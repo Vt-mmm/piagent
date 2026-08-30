@@ -36,6 +36,17 @@ guard now compares real file identities. Direct and symlinked invocations must
 emit a checked inventory on success and refuse later drift; exit zero alone is
 not accepted. The installed-package refusal assertion remains unchanged.
 
+Read-only cross-review then found that the tree walker sorted each directory,
+not the complete flattened filename list described by the public format.
+The existing `request.js` and `request/constants.js` files in the public Hono
+fixture reproduce different digests under these two orderings. Two new tests
+failed before the correction: a literal `a.js`/`a/leaf.js` vector and an
+independent recursive inventory of all current public roots. Flattened paths
+are now globally sorted by UTF-16 code units before compact JSON/UTF-8 hashing;
+the exact encoding is documented and the v2 inventory is regenerated. No
+existing custody receipt is rewritten. This cross-review is development
+evidence, not independent private-holdout evaluation.
+
 The runtime package intentionally omits development tests. It must refuse a
 complete-source freshness check rather than omit those author-visible examples.
 An independent custodian needs the frozen full-source artifact. Source-only

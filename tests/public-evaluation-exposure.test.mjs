@@ -148,3 +148,28 @@ for (const alias of [false, true]) test(`public inventory CLI actually checks in
   assert.equal(second.stdout, "");
   assert.match(second.stderr, /stale or incomplete/);
 });
+
+test("public tree digest uses globally sorted paths, not directory traversal order", (t) => {
+  const f = fixture(t);
+  f.write("tests/a.js", "root file\n");
+  f.write("tests/a/leaf.js", "nested file\n");
+  // Literal ordered entries are independent of the production tree walker.
+  const expected = hash(JSON.stringify([
+    ["tests/a.js", hash("root file\n")],
+    ["tests/a/leaf.js", hash("nested file\n")],
+    ["tests/sample.mjs", hash("// Public development example\n")]
+  ]));
+  assert.equal(buildPublicExposure(f.directory).visibleTrees.find(({ path: file }) => file === "tests").sha256, expected);
+});
+
+test("public tree digest agrees with an independent flattened inventory of all current roots", () => {
+  for (const tree of buildPublicExposure(root).visibleTrees) {
+    const files = fs.readdirSync(path.join(root, tree.path), { recursive: true, withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => path.relative(root, path.join(entry.parentPath, entry.name)).split(path.sep).join("/"))
+      .sort();
+    const expected = hash(JSON.stringify(files.map((file) => [file, hash(fs.readFileSync(path.join(root, file)))])));
+    assert.equal(tree.sha256, expected, tree.path);
+    assert.equal(tree.fileCount, files.length, tree.path);
+  }
+});

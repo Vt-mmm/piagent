@@ -28,8 +28,12 @@ custody receipt to substitute the new digest. The current readiness CLI and
 FS4 evaluator refuse stale or incomplete inventories. Old v1-bound receipts
 remain historical metadata, not current readiness.
 
-Tree digests cover sorted pairs of repository-relative filename and file
-SHA-256. Changing a fixture without changing its suite manifest, adding a
+Tree digests cover pairs of repository-relative filename and file SHA-256.
+Flatten every regular file in the tree first, using slash-separated relative
+paths. Globally sort those paths by UTF-16 code units (not locale or directory
+traversal order), serialize the ordered pair array as compact JSON without a
+trailing newline, then hash its UTF-8 bytes. Do not normalize filenames.
+Changing a fixture without changing its suite manifest, adding a
 public test or altering a contract library invalidates the inventory. Symlinked
 and oversized inputs are refused. These are local filesystem checks, not a
 security sandbox against another actor with the same OS privileges; freeze
