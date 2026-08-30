@@ -6,6 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import Ajv from "ajv";
 import { installedContractVerifierDigest, openHostContractConfiguration, prepareHostContractApproval, writeHostContractApproval } from "../packages/piagent-core/extensions/acceptance-host-configuration.js";
+import { discoverRuntimeIntegrityFiles } from "../packages/piagent-core/capabilities/runtime-integrity.js";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 
@@ -103,6 +104,25 @@ test("installed reusable family data is part of verifier identity and revokes ol
   assert.equal(configuration.isCurrent(), true);
   fs.writeFileSync(file, JSON.stringify({ fixture: 2 }));
   assert.equal(configuration.isCurrent(), false);
+  assert.throws(() => f.open(), /verifier changed/);
+});
+
+test("declared worker source, budget and dependency identities revoke approval on resource-policy drift", (t) => {
+  const f = fixture(t), directory = "packages/piagent-core/extensions/acceptance-executor";
+  const { piagent } = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "package.json"), "utf8"));
+  fs.writeFileSync(path.join(f.installedRoot, "package.json"), JSON.stringify({ piagent }));
+  fs.cpSync(path.join(repositoryRoot, directory), path.join(f.installedRoot, directory), {
+    recursive: true, filter: (source) => !source.split(path.sep).includes("node_modules")
+  });
+  const files = discoverRuntimeIntegrityFiles(f.installedRoot);
+  for (const name of ["worker.mjs", "guest.mjs", "budget.mjs", "protocol.mjs", "intrinsics.mjs", "values.mjs",
+    "module-graph.mjs", "package.json", "package-lock.json"]) assert.ok(files.includes(directory + "/" + name), name);
+  writeHostContractApproval(f.options); const config = f.open();
+  assert.equal(config.isCurrent(), true);
+  const budgetPath = path.join(f.installedRoot, directory, "budget.mjs"), original = fs.readFileSync(budgetPath, "utf8");
+  const changed = original.replace("300000", "1"); assert.notEqual(changed, original);
+  fs.writeFileSync(budgetPath, changed);
+  assert.equal(config.isCurrent(), false);
   assert.throws(() => f.open(), /verifier changed/);
 });
 

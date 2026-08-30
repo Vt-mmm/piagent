@@ -5223,14 +5223,14 @@ describe("piagent guard integration", () => {
       assert.notEqual(after.trace.outcome, "completed", diagnostic);
       const expectedVerdict = scenario === "unsupported" ? "unknown" : "error";
       assert.ok([...observedAdmission.assessments.values()].every((assessment) => assessment.verdict === expectedVerdict && !assessment.repairEligible), diagnostic);
-      const reason = { "backend-unavailable": "local-backend-unavailable", unsupported: "return-type-unsupported", timeout: "guest-timeout" }[scenario];
+      const reason = { "backend-unavailable": "local-backend-unavailable", unsupported: "return-type-unsupported", timeout: "guest-cpu-budget" }[scenario];
       assert.ok([...observedAdmission.assessments.values()].every((assessment) => assessment.reasons.includes(reason)), diagnostic);
       const recoveries = harness.entries.filter((entry) => entry.payload?.customType === "piagent-completion-recovery");
       if (scenario === "timeout") {
         assert.equal(recoveries.length, 1);
         assert.equal(recoveries[0].payload.details.recovery.action, "retry");
         assert.equal(recoveries[0].payload.details.recovery.sourceMutationAllowed, false);
-        assert.match(recoveries[0].payload.content, /guest-timeout/);
+        assert.match(recoveries[0].payload.content, /guest-cpu-budget/);
       } else {
         assert.equal(recoveries.length, 0, "environment and unsupported results do not start model continuations");
         assert.match(JSON.stringify(final), new RegExp(reason));

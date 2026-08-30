@@ -2,7 +2,7 @@ import { protocolShape as shape, validateValue } from "./values.mjs";
 import { MAX_SOURCE_BYTES, validateModuleGraph } from "./module-graph.mjs";
 export { MAX_STRING_LENGTH, numberValue, validateValue } from "./values.mjs";
 
-export const WORKER_VERSION = "quickjs-contract-worker-v3";
+export const WORKER_VERSION = "quickjs-contract-worker-v4";
 export const MAX_REQUEST_BYTES = 512 * 1024;
 export const MAX_RESPONSE_BYTES = 1024 * 1024;
 const ID = /^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,159}$/;
@@ -49,7 +49,8 @@ export function parseRequest(text) {
 export function parseResponse(text, request, requestDigest) {
   if (typeof text !== "string" || Buffer.byteLength(text) > MAX_RESPONSE_BYTES) throw new TypeError("Response size exceeded");
   const response = JSON.parse(text);
-  shape(response, ["schemaVersion", "workerVersion", "requestDigest", "status", "cases"]);
+  shape(response, ["schemaVersion", "workerVersion", "requestDigest", "status", "cases", "timeoutReason"],
+    ["schemaVersion", "workerVersion", "requestDigest", "status", "cases"]);
   if (response.schemaVersion !== 1 || response.workerVersion !== WORKER_VERSION || response.requestDigest !== requestDigest
     || !["completed", "timeout", "error"].includes(response.status) || !Array.isArray(response.cases)
     || response.cases.length > request.cases.length
@@ -79,6 +80,17 @@ export function parseResponse(text, request, requestDigest) {
         item.argsAfter.forEach((arg) => validateValue(arg));
       } else if (Object.hasOwn(item, "argsAfter")) throw new TypeError("Unexpected argument snapshots");
     } else if (Object.hasOwn(item, "dateArgsAfter") || Object.hasOwn(item, "clockReads") || Object.hasOwn(item, "argsAfter")) throw new TypeError("Unexpected side-effect observation");
+  }
+  const timeouts = ["guest-cpu-budget", "guest-wall-deadline"];
+  const errors = response.cases.filter((item) => item.outcome === "error");
+  if (errors.length > 1 || (errors.length && response.cases.at(-1) !== errors[0])) throw new TypeError("Nonterminal worker error");
+  if (response.status === "timeout") {
+    if (!timeouts.includes(response.timeoutReason)
+      || (errors.length && errors[0].reason !== response.timeoutReason)
+      || (response.timeoutReason === "guest-cpu-budget" && errors.length !== 1)) throw new TypeError("Invalid timeout cause");
+  } else if (Object.hasOwn(response, "timeoutReason") || errors.some((item) => timeouts.includes(item.reason))
+    || (response.status === "completed" && errors.length) || (response.status === "error" && errors.length !== 1)) {
+    throw new TypeError("Conflicting worker status");
   }
   return response;
 }

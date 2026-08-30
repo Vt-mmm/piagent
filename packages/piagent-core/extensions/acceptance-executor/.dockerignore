@@ -7,5 +7,6 @@
 !intrinsics.mjs
 !module-graph.mjs
 !guest.mjs
+!budget.mjs
 !node_modules/
 !node_modules/**

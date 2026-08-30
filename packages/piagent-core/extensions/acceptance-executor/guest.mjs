@@ -1,14 +1,17 @@
 import { numberValue, validateValue } from "./values.mjs";
 import { INTRINSICS } from "./intrinsics.mjs";
 import { approvedModuleLoader } from "./module-graph.mjs";
+import { createExecutionBudget } from "./budget.mjs";
 
 /** A request-owned realm. Only explicitly contiguous sequence cases share it. */
 export function createGuestSession(QuickJS, request, overallDeadline) {
   const runtime = QuickJS.newRuntime();
   runtime.setMemoryLimit(32 * 1024 * 1024);
   runtime.setMaxStackSize(512 * 1024);
-  let deadline = overallDeadline, interrupted = false, importDenied = false;
-  runtime.setInterruptHandler(() => { interrupted ||= performance.now() >= deadline; return interrupted; });
+  const budget = createExecutionBudget(overallDeadline);
+  let interruption = null, importDenied = false;
+  const interrupted = () => Boolean(interruption ??= budget.poll());
+  runtime.setInterruptHandler(interrupted);
   const loader = approvedModuleLoader(request, () => { importDenied = true; });
   runtime.setModuleLoader(loader.load, loader.normalize);
   const context = runtime.newContext(), persistent = [], temporary = [];
@@ -52,9 +55,10 @@ export function createGuestSession(QuickJS, request, overallDeadline) {
     return result;
   }
   function execute(item) {
-    interrupted = false; deadline = Math.min(overallDeadline, performance.now() + 300);
+    interruption = null; budget.beginCase();
     const incomplete = (reason, outcome = "error") => ({ id: item.id, outcome, reason });
     try {
+      if (interrupted()) return incomplete(interruption);
       if (initializationFailure) return { id: item.id, ...initializationFailure };
       if (!methods) initializeIntrinsics();
       take(context.callFunction(methods.beginCall, context.undefined, Object.hasOwn(item, "clock") ? context.true : context.false,
@@ -64,8 +68,9 @@ export function createGuestSession(QuickJS, request, overallDeadline) {
         const moduleResult = context.evalCode(request.source, request.moduleGraph?.entry ?? "candidate.mjs", { type: "module" });
         if (moduleResult.error) {
           keep(moduleResult.error);
-          initializationFailure = { outcome: importDenied && !interrupted ? "unsupported" : "error",
-            reason: interrupted ? "guest-timeout" : importDenied ? "module-import-unsupported" : "module-initialization-failed" };
+          const timedOut = interrupted();
+          initializationFailure = { outcome: importDenied && !timedOut ? "unsupported" : "error",
+            reason: timedOut ? interruption : importDenied ? "module-import-unsupported" : "module-initialization-failed" };
           return { id: item.id, ...initializationFailure };
         }
         namespace = retain(moduleResult.value);
@@ -83,7 +88,7 @@ export function createGuestSession(QuickJS, request, overallDeadline) {
         return incomplete("callable-export-missing", "unsupported");
       }
       const called = context.callFunction(target, context.undefined, args), returned = keep(called.error ?? called.value);
-      if (interrupted) return incomplete("guest-timeout");
+      if (interrupted()) return incomplete(interruption);
       if (importDenied) return incomplete("module-import-unsupported", "unsupported");
       if (runtime.hasPendingJob()) return incomplete("async-job-unsupported", "unsupported");
       let observation;
@@ -110,10 +115,10 @@ export function createGuestSession(QuickJS, request, overallDeadline) {
         }
       }
       const clockReads = context.getNumber(take(context.callFunction(methods.clockReads, context.undefined)));
-      if (interrupted) return incomplete("guest-timeout");
+      if (interrupted()) return incomplete(interruption);
       if (runtime.hasPendingJob()) return incomplete("async-job-unsupported", "unsupported");
       return { ...observation, dateArgsAfter, clockReads };
-    } catch { return incomplete(interrupted ? "guest-timeout" : "guest-observation-failed"); }
+    } catch { return incomplete(interrupted() ? interruption : "guest-observation-failed"); }
     finally { disposeTemporary(); }
   }
   return { execute, dispose() {

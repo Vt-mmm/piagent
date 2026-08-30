@@ -4,7 +4,7 @@ const EXECUTOR_REASONS = new Set([
   "container-memory-limit", "worker-exit-failed", "invalid-worker-observation", "container-cleanup-unconfirmed"
 ]);
 const CASE_REASONS = new Set([
-  "guest-timeout", "module-import-unsupported", "module-initialization-failed", "async-module-unsupported",
+  "guest-timeout", "guest-cpu-budget", "guest-wall-deadline", "module-import-unsupported", "module-initialization-failed", "async-module-unsupported",
   "callable-export-missing", "guest-resource-error", "returned-string-limit", "return-type-unsupported", "guest-observation-failed",
   "structured-value-unsupported", "value-observation-limit", "referenced-result-unavailable", "async-job-unsupported"
 ]);
@@ -16,6 +16,9 @@ export function executionDiagnostics(result) {
     || typeof execution.cleanupConfirmed !== "boolean") throw new TypeError("Invalid executor diagnostic identity");
   const reasons = new Set();
   if (execution.status !== "completed") reasons.add(`executor-${execution.status}`);
+  if (execution.observation?.timeoutReason !== undefined) reasons.add(
+    ["guest-cpu-budget", "guest-wall-deadline"].includes(execution.observation.timeoutReason)
+      ? execution.observation.timeoutReason : "unrecognized-timeout-reason");
   if (!execution.cleanupConfirmed) reasons.add("container-cleanup-unconfirmed");
   if (execution.reason !== undefined) reasons.add(EXECUTOR_REASONS.has(execution.reason) ? execution.reason : "unrecognized-executor-reason");
   let unsupportedCaseCount = 0, errorCaseCount = 0;

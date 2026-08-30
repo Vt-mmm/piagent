@@ -132,7 +132,7 @@ test("authenticated module execution invalidates dependency-only drift and detac
 for (const [name, source, verdict, reason, action] of [
   ["unsupported return type", "export const sum = (a,b) => Promise.resolve(a+b);", "unknown", "return-type-unsupported", "handoff"],
   ["unsupported import", "import {x} from './other.mjs'; export const sum = (a,b) => a+b;", "unknown", "module-import-unsupported", "handoff"],
-  ["guest deadline", "export const sum = () => { while(true) {} };", "error", "guest-timeout", "retry"]
+  ["guest CPU budget", "export const sum = () => { while(true) {} };", "error", "guest-cpu-budget", "retry"]
 ]) test(`authenticated ${name} diagnostics never authorize source repair`, integration, async (context) => {
   const { options, sourceFile, store } = fixture(context);
   fs.writeFileSync(sourceFile, source);

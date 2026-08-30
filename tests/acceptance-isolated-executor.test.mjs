@@ -83,6 +83,21 @@ test("unavailable backend never falls back to host evaluation", async () => {
   }
 });
 
+test("versioned timeout causes cannot hide error cases or masquerade as a completed worker", () => {
+  const text = sourceRequest("export const run = () => true"), request = parseRequest(text), digest = "diagnostic";
+  const good = { schemaVersion: 1, workerVersion: WORKER_VERSION, requestDigest: digest, status: "timeout",
+    timeoutReason: "guest-cpu-budget", cases: [{ id: "one", outcome: "error", reason: "guest-cpu-budget" }] };
+  assert.deepEqual(parseResponse(JSON.stringify(good), request, digest), good);
+  const wall = { ...good, timeoutReason: "guest-wall-deadline", cases: [] };
+  assert.deepEqual(parseResponse(JSON.stringify(wall), request, digest), wall);
+  for (const invalid of [
+    { ...good, workerVersion: "quickjs-contract-worker-v3" }, { ...good, timeoutReason: undefined },
+    { ...good, timeoutReason: "guest-wall-deadline" }, { ...good, status: "completed" },
+    { ...good, status: "error" }, { ...good, cases: [] }, { ...wall, status: "error", timeoutReason: undefined },
+    { ...good, status: "completed", timeoutReason: undefined }
+  ]) assert.throws(() => parseResponse(JSON.stringify(invalid), request, digest));
+});
+
 test("a reused durable execution identity cannot start or remove an existing worker", integration, async (context) => {
   const executionRunId = randomUUID();
   const docker = (...args) => execFileSync("docker", ["--host", `unix://${dockerSocket}`, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 5000 }).trim();
@@ -152,10 +167,14 @@ test("real isolated worker captures original Date state and clock use despite ta
 test("real isolated worker reports timeout and memory faults without success", integration, async () => {
   const infinite = await run("export function run() { while (true) {} }");
   assert.equal(infinite.status, "timeout", JSON.stringify(infinite));
+  assert.equal(infinite.observation.timeoutReason, "guest-cpu-budget");
   assert.equal(infinite.cleanupConfirmed, true);
   const memory = await run("export function run() { return new ArrayBuffer(128 * 1024 * 1024); }");
   assert.equal(memory.status, "error", JSON.stringify(memory));
   assert.equal(memory.cleanupConfirmed, true);
+  const fakeClock = await run("Date.now=()=>0; globalThis.performance={now:()=>0}; export function run(){ while(true){} }");
+  assert.equal(fakeClock.status, "timeout", JSON.stringify(fakeClock));
+  assert.equal(fakeClock.observation.timeoutReason, "guest-cpu-budget");
 });
 
 test("outer deadline and cancellation remove only the run-owned container", integration, async () => {

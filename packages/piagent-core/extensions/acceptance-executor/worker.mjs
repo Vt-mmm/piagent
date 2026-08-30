@@ -3,6 +3,7 @@ import { newQuickJSWASMModuleFromVariant } from "quickjs-emscripten-core";
 import variant from "@jitl/quickjs-wasmfile-release-sync";
 import { MAX_REQUEST_BYTES, MAX_RESPONSE_BYTES, WORKER_VERSION, parseRequest } from "./protocol.mjs";
 import { createGuestSession } from "./guest.mjs";
+import { CPU_EXHAUSTED, WALL_EXHAUSTED, REQUEST_WALL_MS } from "./budget.mjs";
 
 // This executable belongs inside the constrained container, never the agent's
 // process. stdout is the trusted runner's channel; QuickJS has no stdout binding.
@@ -18,14 +19,15 @@ try {
   const request = parseRequest(text);
   const requestDigest = createHash("sha256").update(text).digest("hex");
   const QuickJS = await newQuickJSWASMModuleFromVariant(variant);
-  const deadline = performance.now() + 5000;
+  const deadline = performance.now() + REQUEST_WALL_MS;
   const cases = [];
   let status = "completed";
+  let timeoutReason;
   const results = new Map();
   let session, sequence;
   try {
     for (const item of request.cases) {
-      if (performance.now() >= deadline) { status = "timeout"; break; }
+      if (performance.now() >= deadline) { status = "timeout"; timeoutReason = WALL_EXHAUSTED; break; }
       if (!session || !item.sequence || sequence !== item.sequence || item.reset) {
         session?.dispose(); session = createGuestSession(QuickJS, request, deadline); sequence = item.sequence;
       }
@@ -36,12 +38,15 @@ try {
       cases.push(observation);
       if (observation.outcome === "return") results.set(item.id, observation.value);
       if (observation.outcome === "error") {
-        status = observation.reason === "guest-timeout" ? "timeout" : "error";
+        timeoutReason = [CPU_EXHAUSTED, WALL_EXHAUSTED].includes(observation.reason) ? observation.reason : undefined;
+        status = timeoutReason ? "timeout" : "error";
         break;
       }
     }
   } finally { session?.dispose(); }
-  const output = JSON.stringify({ schemaVersion: 1, workerVersion: WORKER_VERSION, requestDigest, status, cases });
+  if (status === "completed" && performance.now() >= deadline) { status = "timeout"; timeoutReason = WALL_EXHAUSTED; }
+  const output = JSON.stringify({ schemaVersion: 1, workerVersion: WORKER_VERSION, requestDigest, status, cases,
+    ...(timeoutReason ? { timeoutReason } : {}) });
   if (Buffer.byteLength(output) > MAX_RESPONSE_BYTES) throw new Error("Response size exceeded");
   process.stdout.write(output);
 } catch {
