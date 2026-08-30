@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import test from "node:test";
-import { CASE_CPU_MICROS, createExecutionBudget } from "../packages/piagent-core/extensions/acceptance-executor/budget.mjs";
+import { CASE_THREAD_CPU_MICROS, createExecutionBudget } from "../packages/piagent-core/extensions/acceptance-executor/budget.mjs";
 import { executionDiagnostics } from "../packages/piagent-core/extensions/acceptance-execution-diagnostics.js";
 
 function fixture(deadline = 5000) {
@@ -24,11 +24,12 @@ test("scheduler waiting is not charged as case CPU while the request wall deadli
   assert.equal(budget.poll(), "guest-wall-deadline", "a new case cannot renew the request wall budget");
 });
 
-test("both user and system CPU count, with an inclusive fixed per-case boundary", () => {
+test("both executing-thread user and system CPU count, with an inclusive fixed per-case boundary", () => {
   const { state, budget } = fixture();
-  state.user = CASE_CPU_MICROS - 1000; state.system = 999;
+  state.user = CASE_THREAD_CPU_MICROS + 100000;
+  state.threadUser = CASE_THREAD_CPU_MICROS - 1000; state.threadSystem = 999;
   assert.equal(budget.poll(), null);
-  state.system++;
+  state.threadSystem++;
   assert.equal(budget.poll(), "guest-cpu-budget");
   state.now = 6000;
   assert.equal(budget.poll(), "guest-cpu-budget", "the observed first stop reason is stable");
@@ -36,12 +37,12 @@ test("both user and system CPU count, with an inclusive fixed per-case boundary"
 
 test("case CPU resets without refunding elapsed request time or earlier process CPU", () => {
   const { state, budget } = fixture();
-  state.user = 250000; state.now = 1000;
+  state.user = 350000; state.threadUser = 250000; state.now = 1000;
   budget.beginCase();
   assert.equal(budget.poll(), null);
-  state.user = 549999; state.now = 2000;
+  state.user = 650000; state.threadUser = 549999; state.now = 2000;
   assert.equal(budget.poll(), null);
-  state.user++;
+  state.threadUser++;
   assert.equal(budget.poll(), "guest-cpu-budget");
   budget.beginCase(); state.now = 5000;
   assert.equal(budget.poll(), "guest-wall-deadline");
@@ -64,27 +65,40 @@ test("a wall timeout between cases remains a visible authenticated diagnostic", 
   assert.deepEqual(diagnostic.reasons, ["executor-timeout", "guest-wall-deadline"]);
 });
 
-test("resource diagnostics capture the first stopping sample without changing the process CPU policy", () => {
+test("support-thread CPU does not exhaust a case; diagnostics retain both counters at the first real stop", () => {
   const { state, budget } = fixture();
   assert.equal(budget.diagnostics(), null);
-  Object.assign(state, { now: 25, user: CASE_CPU_MICROS, threadUser: 3000, threadSystem: 400 });
-  assert.equal(budget.poll(), "guest-cpu-budget", "background CPU is still charged by the current policy");
+  // Exact failing v5 full-run sample: about 210 ms was outside the case thread.
+  Object.assign(state, { now: 244.051, user: 310014, threadUser: 100256 });
+  assert.equal(budget.poll(), null);
+  assert.equal(budget.diagnostics(), null);
+  Object.assign(state, { now: 600, user: 650000, threadUser: CASE_THREAD_CPU_MICROS - 400, threadSystem: 400 });
+  assert.equal(budget.poll(), "guest-cpu-budget");
   const sample = budget.diagnostics();
-  assert.deepEqual(sample, { caseCpuMicros: CASE_CPU_MICROS, caseThreadCpuMicros: 3400, caseWallMicros: 25000 });
+  assert.deepEqual(sample, { caseCpuMicros: 650000, caseThreadCpuMicros: CASE_THREAD_CPU_MICROS, caseWallMicros: 600000 });
   assert.ok(Object.isFrozen(sample));
-  Object.assign(state, { now: 100, user: CASE_CPU_MICROS + 10000, threadUser: 4000 });
+  Object.assign(state, { now: 700, user: 700000, threadUser: 400000 });
   assert.equal(budget.poll(), "guest-cpu-budget"); assert.equal(budget.diagnostics(), sample);
   budget.beginCase(); assert.equal(budget.diagnostics(), null);
   state.now = 5000;
   assert.equal(budget.poll(), "guest-wall-deadline");
-  assert.deepEqual(budget.diagnostics(), { caseCpuMicros: 0, caseThreadCpuMicros: 0, caseWallMicros: 4900000 });
+  assert.deepEqual(budget.diagnostics(), { caseCpuMicros: 0, caseThreadCpuMicros: 0, caseWallMicros: 4300000 });
 });
 
 test("invalid thread samples or reversed case elapsed time cannot become resource diagnostics", () => {
   for (const change of [{ threadUser: -1 }, { threadSystem: Infinity }, { threadUser: 0.5 }, { now: -1 }]) {
-    const { state, budget } = fixture(); Object.assign(state, { user: CASE_CPU_MICROS }, change);
+    const { state, budget } = fixture(); Object.assign(state, { user: CASE_THREAD_CPU_MICROS }, change);
     assert.throws(() => budget.poll(), /Invalid resource observation/);
     assert.equal(budget.diagnostics(), null);
+  }
+});
+
+test("a regressing thread clock cannot refund CPU within a case or at a case boundary", () => {
+  for (const boundary of [false, true]) {
+    const { state, budget } = fixture(); state.threadUser = 100;
+    assert.equal(budget.poll(), null);
+    state.threadUser = 50;
+    assert.throws(() => boundary ? budget.beginCase() : budget.poll(), /Invalid resource observation/);
   }
 });
 
@@ -96,12 +110,12 @@ test("real isolated resource probes distinguish idle waiting, CPU exhaustion, an
   const rows = output.trim().split("\n").map((line) => JSON.parse(line));
   assert.equal(rows.length, 7);
   for (const row of rows) {
-    assert.equal(row.workerVersion, "quickjs-contract-worker-v5");
+    assert.equal(row.workerVersion, "quickjs-contract-worker-v6");
     if (row.stallMs) assert.equal(row.stalled, true);
     if (row.stallMs === 5200) assert.equal(row.observation.reason, "guest-wall-deadline");
     else if (row.name === "infinite") {
       assert.equal(row.observation.reason, "guest-cpu-budget");
-      assert.ok(row.cpuMicros >= CASE_CPU_MICROS);
+      assert.ok(row.observation.resources.caseThreadCpuMicros >= CASE_THREAD_CPU_MICROS);
     } else {
       assert.equal(row.observation.outcome, "return", JSON.stringify(row));
       assert.deepEqual(row.observation.value, { type: "number", value: row.name === "correct-sum" ? 5 : -1 });

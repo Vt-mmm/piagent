@@ -1,9 +1,9 @@
 import { protocolShape as shape, validateValue } from "./values.mjs";
 import { MAX_SOURCE_BYTES, validateModuleGraph } from "./module-graph.mjs";
-import { CASE_CPU_MICROS } from "./budget.mjs";
+import { CASE_THREAD_CPU_MICROS } from "./budget.mjs";
 export { MAX_STRING_LENGTH, numberValue, validateValue } from "./values.mjs";
 
-export const WORKER_VERSION = "quickjs-contract-worker-v5";
+export const WORKER_VERSION = "quickjs-contract-worker-v6";
 export const MAX_REQUEST_BYTES = 512 * 1024;
 export const MAX_RESPONSE_BYTES = 1024 * 1024;
 const ID = /^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,159}$/;
@@ -71,7 +71,7 @@ export function parseResponse(text, request, requestDigest) {
     if (resourceStop) {
       shape(item.resources, ["caseCpuMicros", "caseThreadCpuMicros", "caseWallMicros"]);
       if (!Object.values(item.resources).every(value => Number.isSafeInteger(value) && value >= 0)
-        || (item.reason === "guest-cpu-budget" && item.resources.caseCpuMicros < CASE_CPU_MICROS)) {
+        || (item.reason === "guest-cpu-budget" && item.resources.caseThreadCpuMicros < CASE_THREAD_CPU_MICROS)) {
         throw new TypeError("Invalid resource stop observation");
       }
     } else if (Object.hasOwn(item, "resources")) throw new TypeError("Unexpected resource stop observation");

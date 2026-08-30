@@ -88,12 +88,12 @@ test("versioned timeout causes cannot hide error cases or masquerade as a comple
   const text = sourceRequest("export const run = () => true"), request = parseRequest(text), digest = "diagnostic";
   const good = { schemaVersion: 1, workerVersion: WORKER_VERSION, requestDigest: digest, status: "timeout",
     timeoutReason: "guest-cpu-budget", cases: [{ id: "one", outcome: "error", reason: "guest-cpu-budget",
-      resources: { caseCpuMicros: 300000, caseThreadCpuMicros: 1000, caseWallMicros: 50000 } }] };
+      resources: { caseCpuMicros: 350000, caseThreadCpuMicros: 300000, caseWallMicros: 350000 } }] };
   assert.deepEqual(parseResponse(JSON.stringify(good), request, digest), good);
   const wall = { ...good, timeoutReason: "guest-wall-deadline", cases: [] };
   assert.deepEqual(parseResponse(JSON.stringify(wall), request, digest), wall);
   for (const invalid of [
-    { ...good, workerVersion: "quickjs-contract-worker-v4" }, { ...good, timeoutReason: undefined },
+    { ...good, workerVersion: "quickjs-contract-worker-v4" }, { ...good, workerVersion: "quickjs-contract-worker-v5" }, { ...good, timeoutReason: undefined },
     { ...good, timeoutReason: "guest-wall-deadline" }, { ...good, status: "completed" },
     { ...good, status: "error" }, { ...good, cases: [] }, { ...wall, status: "error", timeoutReason: undefined },
     { ...good, status: "completed", timeoutReason: undefined }
@@ -178,8 +178,8 @@ test("real isolated worker reports timeout and memory faults without success", i
   assert.equal(infinite.status, "timeout", JSON.stringify(infinite));
   assert.equal(infinite.observation.timeoutReason, "guest-cpu-budget");
   const resources = infinite.observation.cases.at(-1).resources;
-  assert.ok(resources.caseCpuMicros >= 300000);
-  assert.ok(resources.caseThreadCpuMicros > 0); assert.ok(resources.caseWallMicros > 0);
+  assert.ok(resources.caseCpuMicros > 0);
+  assert.ok(resources.caseThreadCpuMicros >= 300000); assert.ok(resources.caseWallMicros > 0);
   assert.equal(infinite.cleanupConfirmed, true);
   const memory = await run("export function run() { return new ArrayBuffer(128 * 1024 * 1024); }");
   assert.equal(memory.status, "error", JSON.stringify(memory));
@@ -189,7 +189,7 @@ test("real isolated worker reports timeout and memory faults without success", i
   assert.equal(fakeClock.observation.timeoutReason, "guest-cpu-budget");
   const initialization = await run("while (true) {} export function run() { return true; }");
   assert.equal(initialization.status, "timeout", JSON.stringify(initialization));
-  assert.ok(initialization.observation.cases.at(-1).resources.caseCpuMicros >= 300000);
+  assert.ok(initialization.observation.cases.at(-1).resources.caseThreadCpuMicros >= 300000);
   assert.equal(initialization.cleanupConfirmed, true);
 });
 
