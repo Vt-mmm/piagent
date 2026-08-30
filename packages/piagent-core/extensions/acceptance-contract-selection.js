@@ -60,6 +60,11 @@ export function parseContractFamilyLibrary(text) {
       if (!PARAMETER.test(name) || !["export", "string", "number", "value"].includes(type)) throw new TypeError("Invalid family parameter definition");
     }
     shape(family.template, ["exportName", "checks"]);
+    if (!(typeof family.template.exportName === "string" && EXPORT.test(family.template.exportName))
+      && !(record(family.template.exportName) && typeof family.template.exportName.$parameter === "string"
+        && PARAMETER.test(family.template.exportName.$parameter))) throw new TypeError("Invalid family export template");
+    if (!Array.isArray(family.template.checks) || family.template.checks.length < 1 || family.template.checks.length > 256
+      || !family.template.checks.every(record)) throw new TypeError("Invalid family check templates");
     const used = new Set();
     substitute(family.template, family.parameters, (name) => { used.add(name); return null; });
     if (used.size !== Object.keys(family.parameters).length) throw new TypeError("Unused family parameter");
@@ -92,16 +97,33 @@ export function validateContractSelection(selection, criterionHash) {
     || hash(selection.criterionText) !== criterionHash) throw new TypeError("Contract selection does not bind the criterion");
 }
 
-/** Pure preview compiler. It cannot read source, execute a worker or approve anything. */
-export function compileContractSelection({ libraryText, taskText, recipeText }) {
-  const library = parseContractFamilyLibrary(libraryText), task = parse(taskText, 2 * 1024 * 1024), recipe = parse(recipeText, 512 * 1024);
+export function parseContractSelectionRecipe(text) {
+  const recipe = parse(text, 512 * 1024);
   shape(recipe, ["schemaVersion", "backend", "selections"]);
   shape(recipe.backend, ["imageId", "dockerSocket", "timeoutMs"]);
   if (typeof recipe.backend.imageId !== "string" || !/^sha256:[a-f0-9]{64}$/.test(recipe.backend.imageId)
     || typeof recipe.backend.dockerSocket !== "string" || !path.isAbsolute(recipe.backend.dockerSocket) || recipe.backend.dockerSocket.includes("\0")
     || !Number.isSafeInteger(recipe.backend.timeoutMs) || recipe.backend.timeoutMs < 25 || recipe.backend.timeoutMs > 30000) throw new TypeError("Invalid selection backend");
-  if (recipe.schemaVersion !== 1 || !Array.isArray(recipe.selections) || recipe.selections.length < 1 || recipe.selections.length > 12
-    || !record(task) || !/^operator-request-v1:[a-f0-9]{64}$/.test(task.operatorRequestDigest)
+  if (recipe.schemaVersion !== 1 || !Array.isArray(recipe.selections) || recipe.selections.length < 1 || recipe.selections.length > 12) {
+    throw new TypeError("Invalid selection recipe");
+  }
+  for (const item of recipe.selections) {
+    shape(item, ["criterion", "family", "parameters", "sourcePath", "maxAttempts"], ["modulePaths"]);
+    shape(item.criterion, ["text", "obligation"]); shape(item.family, ["id", "version"], ["digest"]);
+    if (typeof item.criterion.text !== "string" || !item.criterion.text.trim() || item.criterion.text.length > 4000
+      || !identifier(item.criterion.obligation) || !identifier(item.family.id) || !Number.isSafeInteger(item.family.version) || item.family.version < 1 || item.family.version > 1000000
+      || Object.hasOwn(item.family, "digest") && !HASH.test(item.family.digest)
+      || !record(item.parameters) || Object.keys(item.parameters).length > 32
+      || !Number.isInteger(item.maxAttempts) || item.maxAttempts < 1 || item.maxAttempts > 8) throw new TypeError("Invalid criterion selection");
+    validateModulePaths(item.sourcePath, Object.hasOwn(item, "modulePaths") ? item.modulePaths : []);
+  }
+  return freeze(recipe);
+}
+
+/** Pure preview compiler. It cannot read source, execute a worker or approve anything. */
+export function compileContractSelection({ libraryText, taskText, recipeText }) {
+  const library = parseContractFamilyLibrary(libraryText), task = parse(taskText, 2 * 1024 * 1024), recipe = parseContractSelectionRecipe(recipeText);
+  if (!record(task) || !/^operator-request-v1:[a-f0-9]{64}$/.test(task.operatorRequestDigest)
     || !Array.isArray(task.acceptanceCriteria) || task.acceptanceCriteria.length < 1 || task.acceptanceCriteria.length > 12
     || !Array.isArray(task.acceptanceReceipt?.criteria) || task.acceptanceReceipt.criteria.length !== task.acceptanceCriteria.length) {
     throw new TypeError("Invalid selection recipe or task criterion snapshot");
@@ -114,13 +136,6 @@ export function compileContractSelection({ libraryText, taskText, recipeText }) 
   });
   const contracts = [], selected = [], issues = [], chosen = new Set();
   for (const [index, item] of recipe.selections.entries()) {
-    shape(item, ["criterion", "family", "parameters", "sourcePath", "maxAttempts"], ["modulePaths"]);
-    shape(item.criterion, ["text", "obligation"]); shape(item.family, ["id", "version"], ["digest"]);
-    if (typeof item.criterion.text !== "string" || !item.criterion.text.trim() || item.criterion.text.length > 4000
-      || !identifier(item.criterion.obligation) || !identifier(item.family.id) || !Number.isSafeInteger(item.family.version) || item.family.version < 1 || item.family.version > 1000000
-      || Object.hasOwn(item.family, "digest") && !HASH.test(item.family.digest)
-      || !Number.isInteger(item.maxAttempts) || item.maxAttempts < 1 || item.maxAttempts > 8) throw new TypeError("Invalid criterion selection");
-    validateModulePaths(item.sourcePath, Object.hasOwn(item, "modulePaths") ? item.modulePaths : []);
     const matches = criteria.filter((criterion) => criterion.text === item.criterion.text && criterion.obligation === item.criterion.obligation);
     const family = library.families.find((candidate) => candidate.id === item.family.id && candidate.version === item.family.version);
     const familyDigest = family && hash(JSON.stringify(family));

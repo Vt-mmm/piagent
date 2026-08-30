@@ -31,10 +31,27 @@ export function installedContractVerifierDigest(root) {
   return digest.digest("hex");
 }
 
-function validate(payload) {
+/** Structural/semantic validation only; a payload is not authenticated authority. */
+export function validateHostContractPayload(payload) {
   if (!exact(payload, ["version", "projectId", "operatorRequestDigest", "verifierDigest", "backend", "contracts"])
-    || payload.version !== HOST_CONTRACT_CONFIGURATION_VERSION || !HASH.test(payload.projectId) || !/^operator-request-v1:[a-f0-9]{64}$/.test(payload.operatorRequestDigest)
-    || !HASH.test(payload.verifierDigest) || !exact(payload.backend, ["imageId", "dockerSocket", "timeoutMs"])
+    || payload.version !== HOST_CONTRACT_CONFIGURATION_VERSION || !HASH.test(payload.projectId)
+    || !HASH.test(payload.verifierDigest)) throw new TypeError("Invalid host contract approval");
+  validateContractBody(payload);
+  return payload;
+}
+
+/** The same plan validation used by the operator CLI, without filesystem writes. */
+export function validateHostContractPlan(plan) {
+  if (!exact(plan, ["schemaVersion", "operatorRequestDigest", "backend", "contracts"]) || plan.schemaVersion !== 1) {
+    throw new TypeError("Invalid host contract plan");
+  }
+  validateContractBody(plan);
+  return plan;
+}
+
+function validateContractBody(payload) {
+  if (!/^operator-request-v1:[a-f0-9]{64}$/.test(payload.operatorRequestDigest)
+    || !exact(payload.backend, ["imageId", "dockerSocket", "timeoutMs"])
     || !/^sha256:[a-f0-9]{64}$/.test(payload.backend.imageId) || typeof payload.backend.dockerSocket !== "string"
     || !path.isAbsolute(payload.backend.dockerSocket) || payload.backend.dockerSocket.includes("\0")
     || !Number.isSafeInteger(payload.backend.timeoutMs) || payload.backend.timeoutMs < 25 || payload.backend.timeoutMs > 30000
@@ -84,7 +101,7 @@ export function prepareHostContractApproval({ projectRoot, installedRoot, operat
   const payload = JSON.parse(JSON.stringify({ version: HOST_CONTRACT_CONFIGURATION_VERSION,
     projectId: hash(fs.realpathSync.native(projectRoot)), operatorRequestDigest,
     verifierDigest: installedContractVerifierDigest(installedRoot), backend, contracts }));
-  validate(payload);
+  validateHostContractPayload(payload);
   return freeze(payload);
 }
 
@@ -121,7 +138,7 @@ export function openHostContractConfiguration({ configPath, projectRoot, install
   const text = readPrivate(configPath, 2 * 1024 * 1024).toString("utf8"), envelope = JSON.parse(text);
   if (!exact(envelope, ["payload", "signature"]) || !HASH.test(envelope.signature)
     || !timingSafeEqual(Buffer.from(signature(key, configPath, envelope.payload), "hex"), Buffer.from(envelope.signature, "hex"))) throw new Error("Host approval is unauthenticated");
-  validate(envelope.payload);
+  validateHostContractPayload(envelope.payload);
   if (envelope.payload.projectId !== hash(fs.realpathSync.native(projectRoot)) || envelope.payload.verifierDigest !== installedContractVerifierDigest(installedRoot)) {
     throw new Error("Host approval project or installed verifier changed");
   }

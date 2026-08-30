@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
-import { prepareHostContractApproval, writeHostContractApproval } from "../packages/piagent-core/extensions/acceptance-host-configuration.js";
+import { prepareHostContractApproval, validateHostContractPlan, writeHostContractApproval } from "../packages/piagent-core/extensions/acceptance-host-configuration.js";
 
 const help = `Usage: piagent approve-verification --project PATH --plan FILE --directory NEW_PRIVATE_PATH [--approve]
 
@@ -36,9 +36,7 @@ try {
     if (!stat.isFile() || stat.size < 1 || stat.size > 2 * 1024 * 1024) throw new Error("Invalid plan file size or type");
     plan = JSON.parse(fs.readFileSync(fd, "utf8"));
   } finally { fs.closeSync(fd); }
-  const fields = ["schemaVersion", "operatorRequestDigest", "backend", "contracts"];
-  if (!plan || typeof plan !== "object" || Array.isArray(plan) || plan.schemaVersion !== 1
-    || Object.keys(plan).length !== fields.length || fields.some((field) => !Object.hasOwn(plan, field))) throw new Error("Invalid host contract plan");
+  validateHostContractPlan(plan);
   const projectRoot = fs.realpathSync.native(options.project), installedRoot = path.resolve(import.meta.dirname, "..");
   const directory = path.resolve(options.directory), parent = fs.realpathSync.native(path.dirname(directory));
   if (parent !== path.dirname(directory)) throw new Error("Authority parent must be canonical");

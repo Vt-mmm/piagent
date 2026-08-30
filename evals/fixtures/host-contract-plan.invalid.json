@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "operatorRequestDigest": "operator-request-v1:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "backend": {
+    "imageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "dockerSocket": "/fixture-only/engine.sock",
+    "timeoutMs": 1000
+  },
+  "contracts": [
+    {
+      "criterionId": "identity-contract",
+      "criterionHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "sourcePath": "src/identity.js",
+      "exportName": "identity",
+      "maxAttempts": 2,
+      "checks": [
+        {
+          "id": "identity",
+          "cases": [
+            {
+              "id": "positive-number",
+              "args": [
+                {
+                  "type": "number",
+                  "value": 7
+                }
+              ],
+              "expected": {
+                "outcome": "return",
+                "value": {
+                  "type": "number",
+                  "value": 7
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "approved": true
+}

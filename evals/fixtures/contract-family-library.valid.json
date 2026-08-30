@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "families": [
+    {
+      "id": "literal-identity",
+      "version": 1,
+      "domain": "pure-function",
+      "description": "Return the declared bounded argument unchanged.",
+      "parameters": {
+        "call": "export",
+        "argument": "value"
+      },
+      "template": {
+        "exportName": {
+          "$parameter": "call"
+        },
+        "checks": [
+          {
+            "id": "identity",
+            "cases": [
+              {
+                "id": "literal",
+                "args": [
+                  {
+                    "$parameter": "argument"
+                  }
+                ],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "$parameter": "argument"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

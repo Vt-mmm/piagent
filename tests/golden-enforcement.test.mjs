@@ -29,6 +29,9 @@ import { benchmarkAssuranceEvidenceValidationErrors } from "../packages/piagent-
 import { validateTaskBaselineManifest } from "../packages/piagent-core/runtime/inspection/source-evidence-contract.ts";
 import { validateMutationProvenanceRecord } from "../packages/piagent-core/runtime/inspection/mutation-provenance-contract.ts";
 import { validateVerifierFileSnapshot } from "../packages/piagent-core/runtime/inspection/verifier-snapshot-contract.ts";
+import { validateHostContractPayload, validateHostContractPlan } from "../packages/piagent-core/extensions/acceptance-host-configuration.js";
+import { parseContractFamilyLibrary, parseContractSelectionRecipe } from "../packages/piagent-core/extensions/acceptance-contract-selection.js";
+import { createRootSchemaRegistry } from "./helpers/root-schema-registry.mjs";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const golden = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "evals", "golden", "enforcement-decisions.json"), "utf8"));
@@ -76,6 +79,39 @@ function validateBenchmarkAssuranceEvidence(input, sourceName) {
 function validateTaskAuthoritySnapshotFixture(input) {
   return validateTaskAuthoritySnapshot(input);
 }
+
+const runtimeValidators = {
+  "capability-pack": validateCapabilityPack,
+  "capability-recipe": validateCapabilityRecipe,
+  "eval-scenario": validateEvalScenario,
+  "action-proposal": validateExternalActionProposal,
+  "task-contract": validateTaskContract,
+  "runtime-model-snapshot": validateRuntimeModelSnapshot,
+  "model-route-decision": validateModelRouteDecision,
+  "task-features": validateTaskFeatures,
+  "solver-decision": validateSolverDecision,
+  "trajectory-state": validateTrajectoryState,
+  "trajectory-transition-event": validateTrajectoryTransition,
+  "failure-evidence": validateFailureEvidence,
+  "failure-classification": validateFailureClassification,
+  "role-policy": validateRolePolicy,
+  "helper-request": validateHelperRequest,
+  "authority-manifest": validateAuthorityManifest,
+  "task-authority-snapshot": validateTaskAuthoritySnapshotFixture,
+  "benchmark-assurance-evidence": validateBenchmarkAssuranceEvidence,
+  "task-baseline-manifest": validateTaskBaselineManifest,
+  "mutation-provenance-record": validateMutationProvenanceRecord,
+  "verifier-file-snapshot": validateVerifierFileSnapshot,
+  "approved-host-contracts": validateHostContractPayload,
+  "host-contract-plan": validateHostContractPlan,
+  "contract-family-library": (input) => parseContractFamilyLibrary(JSON.stringify(input)),
+  "contract-selection-recipe": (input) => parseContractSelectionRecipe(JSON.stringify(input))
+};
+// These existing document formats have producers/resolvers rather than a
+// standalone refusing parser. Keep that distinction explicit, not implicit
+// coverage from a fixture filename. Their structural fixtures run below.
+const schemaOnlyFixtures = new Set(["codex-relative-efficiency-v1", "context-index", "project-profile"]);
+const schemaValidators = createRootSchemaRegistry(repositoryRoot);
 
 // These cases exist to make a refactor argue with the rule rather than with a
 // recorded output, so each one is named by the invariant it protects. Cases
@@ -198,31 +234,7 @@ describe("golden enforcement decisions", () => {
     // Only the accepting half is cheap to get right. The rejecting half is what
     // actually matters: a validator that quietly stops refusing bad input reads
     // as a green suite.
-    const validators = {
-      "capability-pack": validateCapabilityPack,
-      "capability-recipe": validateCapabilityRecipe,
-      "eval-scenario": validateEvalScenario,
-      "action-proposal": validateExternalActionProposal,
-      "task-contract": validateTaskContract,
-      "runtime-model-snapshot": validateRuntimeModelSnapshot,
-      "model-route-decision": validateModelRouteDecision,
-      "task-features": validateTaskFeatures,
-      "solver-decision": validateSolverDecision,
-      "trajectory-state": validateTrajectoryState,
-      "trajectory-transition-event": validateTrajectoryTransition,
-      "failure-evidence": validateFailureEvidence,
-      "failure-classification": validateFailureClassification,
-      "role-policy": validateRolePolicy,
-      "helper-request": validateHelperRequest,
-      "authority-manifest": validateAuthorityManifest,
-      "task-authority-snapshot": validateTaskAuthoritySnapshotFixture,
-      "benchmark-assurance-evidence": validateBenchmarkAssuranceEvidence,
-      "task-baseline-manifest": validateTaskBaselineManifest,
-      "mutation-provenance-record": validateMutationProvenanceRecord,
-      "verifier-file-snapshot": validateVerifierFileSnapshot
-    };
-
-    for (const [name, validate] of Object.entries(validators)) {
+    for (const [name, validate] of Object.entries(runtimeValidators)) {
       it(`accepts a valid ${name}`, () => {
         assert.doesNotThrow(() => validate(loadFixture(`${name}.valid.json`), `${name}.valid.json`));
       });
@@ -233,7 +245,21 @@ describe("golden enforcement decisions", () => {
     }
   });
 
-  it("covers every schema the repository ships", () => {
+  describe("published schema conformance", () => {
+    for (const [name, validate] of schemaValidators) {
+      it(`the valid ${name} fixture conforms to its published schema`, () => {
+        assert.equal(validate(loadFixture(`${name}.valid.json`)), true, JSON.stringify(validate.errors));
+      });
+      it(`the invalid ${name} fixture is refused structurally or semantically`, () => {
+        const invalid = loadFixture(`${name}.invalid.json`);
+        if (!validate(invalid)) return;
+        assert.ok(runtimeValidators[name], "a structurally valid negative requires a real semantic validator");
+        assert.throws(() => runtimeValidators[name](invalid, `${name}.invalid.json`));
+      });
+    }
+  });
+
+  it("covers every top-level schema the repository ships", () => {
     // A schema with no fixture is a contract nothing checks. This fails when a
     // schema is added without one, which is the moment it is cheapest to write.
     const schemaDir = path.join(repositoryRoot, "schemas");
@@ -241,10 +267,9 @@ describe("golden enforcement decisions", () => {
     const schemas = fs.readdirSync(schemaDir)
       .filter((name) => name.endsWith(".schema.json"))
       .map((name) => name.replace(".schema.json", ""));
-    const covered = fs.existsSync(fixtureDir)
-      ? new Set(fs.readdirSync(fixtureDir).map((name) => name.replace(/\.(valid|invalid)\.json$/, "")))
-      : new Set();
-    const missing = schemas.filter((name) => !covered.has(name));
+    const covered = new Set(fs.existsSync(fixtureDir) ? fs.readdirSync(fixtureDir) : []);
+    const missing = schemas.filter((name) => !covered.has(`${name}.valid.json`) || !covered.has(`${name}.invalid.json`)
+      || !schemaValidators.has(name) || (!runtimeValidators[name] && !schemaOnlyFixtures.has(name)));
     assert.deepEqual(missing, [], `schemas without a fixture: ${missing.join(", ")}`);
   });
 });

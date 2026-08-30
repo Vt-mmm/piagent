@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "backend": {
+    "imageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "dockerSocket": "/fixture-only/engine.sock",
+    "timeoutMs": 1000
+  },
+  "selections": [
+    {
+      "criterion": {
+        "text": "Return the declared bounded argument unchanged.",
+        "obligation": "requested-behavior"
+      },
+      "family": {
+        "id": "literal-identity",
+        "version": 1
+      },
+      "parameters": {
+        "call": "identity",
+        "argument": {
+          "type": "number",
+          "value": 7
+        }
+      },
+      "sourcePath": "../escape.js",
+      "maxAttempts": 2
+    }
+  ]
+}
