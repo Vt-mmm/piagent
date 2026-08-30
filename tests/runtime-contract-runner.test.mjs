@@ -44,6 +44,26 @@ test("async callback and identity evidence still requires actual current project
   assert.deepEqual(receipt.counterexamples[0].evidence.observed.returnIdentity, []);
 });
 
+test("nested identity cannot borrow a shallow project-verifier pass or a previous valid receipt", integration, async context => {
+  const f = fixture(context), sourceFile = path.join(f.projectRoot, "sum.mjs");
+  fs.writeFileSync(sourceFile, "export async function sum(op,state){await op();return {x:{...state.x}}}\n");
+  fs.writeFileSync(path.join(f.projectRoot, "sum.test.mjs"), "import assert from 'node:assert/strict';import {sum} from './sum.mjs';console.log('PIAGENT_PROJECT_VERIFIER_RAN');assert.equal(typeof sum,'function');\n");
+  const args = [callback("operation"), data({ x: { value: 7 } })];
+  f.approved.checks = [{ id: "nested-identity", cases: [{ id: "one", args, awaitResult: true, observeArgs: true,
+    referencePairs: [{ id: "fresh-x", left: { root: "return", path: ["x"] }, right: { root: "argument", index: 1, path: ["x"] } }],
+    callbacks: [callbackPlan("operation", [stepReturn(undefined)])], expected: returns({ x: { value: 7 } }, { argsAfter: args,
+      referenceIdentity: [{ id: "fresh-x", same: false }], callbackTrace: [callEvent("operation", 0), settleEvent("operation", 0)] }) }] }];
+  const runner = f.runner(); assert.equal((await runner.run(request)).reason, "current-project-verifier-missing");
+  assert.equal(await f.verify(), 0); const passed = await runner.run(request);
+  assert.equal((await runner.assess(passed, { policy: "allow" })).completionAllowed, true);
+  fs.writeFileSync(sourceFile, "export async function sum(op,state){await op();return {x:state.x}}\n");
+  assert.equal((await runner.assess(passed, { policy: "allow" })).completionAllowed, false);
+  assert.equal(await f.verify(), 0);
+  const receipt = await runner.assess(await runner.run(request), { policy: "allow" });
+  assert.equal(receipt.verdict, "fail", JSON.stringify(receipt)); assert.equal(receipt.completionAllowed, false);
+  assert.deepEqual(receipt.counterexamples[0].evidence.observed.referenceIdentity, [{ id: "fresh-x", same: true }]);
+});
+
 function fixture(context) {
   const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "piagent-runtime-contract-")));
   const projectRoot = path.join(root, "project"), privateRoot = path.join(root, "authority");

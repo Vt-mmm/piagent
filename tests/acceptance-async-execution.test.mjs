@@ -103,7 +103,8 @@ test("a later sequence step cannot reuse an earlier callback under new approved 
 });
 
 test("error observation refuses executable getters and proxies rather than calling serializers", integration, async () => {
-  for (const expression of ["Object.defineProperty(new Error(), 'checkpoint', {enumerable:true,get(){while(true){}}})", "new Proxy(new Error(),{})"]) {
+  for (const expression of ["Object.defineProperty(new Error(), 'checkpoint', {enumerable:true,get(){while(true){}}})",
+    "Object.defineProperty(new Error(), 'checkpoint', {get(){while(true){}}})", "new Proxy(new Error(),{})"]) {
     const item = asyncCase({ observeError: true, expected: throws("Error", { errorObservation: errorObserved(null) }) });
     check(await run(`export async function run(){throw ${expression}}`, [item]), "unknown");
   }

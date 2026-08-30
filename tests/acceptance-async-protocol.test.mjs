@@ -55,7 +55,7 @@ test("return identity requires actual object argument indices and an explicit ex
   assert.throws(() => compile({ ...item, observeIdentity: undefined }));
 });
 
-test("async worker responses require complete capability coverage and exact v7 binding", () => {
+test("async worker responses require complete capability coverage and exact current-worker binding", () => {
   const item = one(), request = JSON.parse(compile(item).requestText);
   const response = { schemaVersion: 1, workerVersion: WORKER_VERSION, requestDigest: "digest", status: "completed",
     cases: [{ id: "one", ...item.expected, clockReads: 0, dateArgsAfter: [] }] };

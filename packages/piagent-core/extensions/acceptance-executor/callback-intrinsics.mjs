@@ -92,8 +92,10 @@ export const CALLBACK_INTRINSICS = `
       const keys = ownKeys(value);
       for (let i = 0; i < keys.length; i += 1) {
         const key = keys[i], property = descriptor(value, key);
-        if (!property?.enumerable) continue;
-        if (typeof key !== 'string' || !own(property, 'value')) return '{"reason":"error-properties-unsupported"}';
+        // Native Error message/stack are diagnostic metadata. Custom own data
+        // (notably checkpoint) exists even when defined as non-enumerable.
+        if (property && !property.enumerable && (key === 'message' || key === 'stack')) continue;
+        if (!property || typeof key !== 'string' || !own(property, 'value')) return '{"reason":"error-properties-unsupported"}';
         define(properties, key, dataDescriptor(property.value, true));
       }
     }

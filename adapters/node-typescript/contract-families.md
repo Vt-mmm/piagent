@@ -4,15 +4,21 @@ These declarative families provide reusable, bounded JavaScript behavioral check
 
 ## Available families
 
-| Family, version 1 | Declared boundary |
+| Family and version | Declared boundary |
 | --- | --- |
-| `finite-scalar-sum` | Sum two finite numbers; reject nonnumeric/nonfinite arguments with TypeError |
-| `finite-list-sum` | Sum a dense finite-number array; empty, signed, fractional and invalid-element partitions |
-| `deadline-status` | Numeric/Date expiry and numeric now; inclusive expiry, clamped remaining duration, input validity and Date stability |
-| `iso-expiry-millisecond-profile` | Boolean inclusive expiry for a strict, explicitly selected Gregorian timestamp/Date profile; invalid-input rejection, millisecond fractions, offsets, literal small years and lazy default clock |
-| `defined-config-precedence` | Three records, three configurable keys; first non-undefined wins, preserving explicit falsy/null values |
-| `idempotent-accumulator-checkpoint` | Explicit event deduplication and public checkpoint schema; restore after fresh-realm reset |
-| `secret-redaction-literals` | Four literal text/storage/source-text observations; not an exhaustive security audit |
+| `finite-scalar-sum@1` | Sum two finite numbers; reject nonnumeric/nonfinite arguments with TypeError |
+| `finite-list-sum@1` | Sum a dense finite-number array; empty, signed, fractional and invalid-element partitions |
+| `deadline-status@1` | Numeric/Date expiry and numeric now; inclusive expiry, clamped remaining duration, input validity and Date stability |
+| `iso-expiry-millisecond-profile@1` | Boolean inclusive expiry for a strict, explicitly selected Gregorian timestamp/Date profile; invalid-input rejection, millisecond fractions, offsets, literal small years and lazy default clock |
+| `defined-config-precedence@1` | Three records, three configurable keys; first non-undefined wins, preserving explicit falsy/null values |
+| `idempotent-accumulator-checkpoint@1` | Explicit event deduplication and public checkpoint schema; restore after fresh-realm reset |
+| `secret-redaction-literals@1` | Four literal text/storage/source-text observations; not an exhaustive security audit |
+| `bounded-retry-injected-sleep@1` | 25 cases: attempt bounds, exponential awaited delays, same final error, sync/Promise callbacks, defaults and invalid options; no real timer certification |
+| `partial-checkpoint-resume@1` | 18 cases: partial failure, same error, new attached checkpoint, actual observed recovery data, no replay/mutation, empty/completed/invalid inputs |
+| `defined-config-precedence@2` | 25 cases: **four** layers in CLI/environment/file/default order, configurable distinct keys and defined falsy/null/NaN values in every layer |
+| `workflow-message-reducer@1` | 35 cases: tagged validation before duplicate handling, own override presence, exact duplicate identity, workflow switching, default state and replay history |
+| `stale-search-reducer@1` | 13 cases: matching/stale completions, exact stale identity, failure retains results, defaults and overlapping-request history |
+| `epoch-request-lifecycle@1` | 21 cases: request plus epoch matching, cancellation on reconnect, duplicate settlement, new result array, defaults and replay history |
 
 Read the selected family's complete `description` and checks in `contract-families.json`. For example, `deadline-status` does not specify ISO parsing or a default wall clock. The checkpoint family specifies a public data format; do not impose it on an API that permits other checkpoint representations. Its reset tests component behavior, not filesystem durability.
 
@@ -29,6 +35,10 @@ The 209 literal cases comprise 129 boundary observations over 43 valid timestamp
 This is finite development coverage. It does not specify named time zones, daylight-saving rules, arbitrary object coercion, Date subclasses, proxies, asynchronous functions, arbitrary timestamp length or sub-millisecond ordering. Existing source and equivalent implementations must be calibrated before approving a new API mapping. Passing this family cannot discharge unrelated verification, compatibility or safety obligations.
 
 ## Selection and approval
+
+The six production-API additions provide 137 exposed development cases, not 137 independent benchmark sessions. Except for the configuration keys, their only parameter is the callable export name (`call`); state/event field names and semantics remain exactly as described. The retry family validates defined null numeric options as invalid and tests omitted sleep only when the first operation succeeds, so no timer is reached. The checkpoint family cannot be replaced by the older accumulator family. Similarly, four-layer configuration requires explicit version 2; version 1 retains its original semantics and digest.
+
+The checkpoint and epoch families require worker v8 nested-reference observations. Value equality cannot establish a new `error.checkpoint` or copied `results` array. Selected paths are own data fields at the end of the invocation, and accompanying value/error-property expectations establish their contents. Getters/proxies on observed paths abstain. A realm reset copies actual observed data, not live object handles, and is not a process-crash test. These bounded families do not certify general async runtimes, network protocols or all possible event sequences. See the [production-family design and qualification boundary](../../docs/decisions/harness-next-production-families.md).
 
 1. Obtain a task JSON snapshot containing its `operatorRequestDigest`, `acceptanceCriteria` text array and corresponding `acceptanceReceipt.criteria`. This snapshot is input for selection, never trusted execution evidence.
 2. Write a recipe conforming to `schemas/contract-selection-recipe.schema.json`. Each selection names the exact criterion text and obligation, family ID/version, typed parameters, source entry, optional explicit dependencies and finite attempt limit. Optional `family.digest` pins the exact library definition.

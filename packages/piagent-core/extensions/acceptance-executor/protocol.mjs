@@ -5,7 +5,7 @@ import { CASE_CAPABILITY_FIELDS, OBSERVATION_CAPABILITY_FIELDS, callbackIds, val
 import { resolveArguments } from "./references.mjs";
 export { MAX_STRING_LENGTH, numberValue, validateValue } from "./values.mjs";
 
-export const WORKER_VERSION = "quickjs-contract-worker-v7";
+export const WORKER_VERSION = "quickjs-contract-worker-v8";
 export const MAX_REQUEST_BYTES = 512 * 1024;
 export const MAX_RESPONSE_BYTES = 1024 * 1024;
 const ID = /^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,159}$/;

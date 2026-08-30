@@ -8,6 +8,7 @@
 !callback-intrinsics.mjs
 !jobs.mjs
 !references.mjs
+!reference-identity.mjs
 !intrinsics.mjs
 !module-graph.mjs
 !guest.mjs

@@ -4,8 +4,9 @@ import { runIsolatedContract } from "./acceptance-isolated-executor.js";
 import { parseRequest, validateValue } from "./acceptance-executor/protocol.mjs";
 import { canonicalValue } from "./acceptance-executor/values.mjs";
 import { CASE_CAPABILITY_FIELDS, OBSERVATION_CAPABILITY_FIELDS, callbackIds, validateCallbackTrace, validateReturnIdentity, validateErrorObservation } from "./acceptance-executor/capabilities.mjs";
+import { validateReferenceIdentity } from "./acceptance-executor/reference-identity.mjs";
 
-export const INDEPENDENT_CONTRACT_VERSION = "bounded-module-contract-comparison-v4";
+export const INDEPENDENT_CONTRACT_VERSION = "bounded-module-contract-comparison-v5";
 const ID = /^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,159}$/;
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const ERROR_CLASSES = ["TypeError", "RangeError", "SyntaxError", "ReferenceError", "EvalError", "URIError", "Error", "non-error"];
@@ -52,6 +53,7 @@ function validateExpected(expected, item) {
   }
   if (item.callbacks) validateCallbackTrace(expected.callbackTrace, item);
   else if (Object.hasOwn(expected, "callbackTrace")) throw new TypeError("Unexpected expected callback trace");
+  if (item.referencePairs || Object.hasOwn(expected, "referenceIdentity")) validateReferenceIdentity(expected.referenceIdentity, item);
   if (item.observeIdentity && expected.outcome === "return" || Object.hasOwn(expected, "returnIdentity")) {
     if (expected.outcome !== "return") throw new TypeError("Return identity on an exception");
     validateReturnIdentity(expected.returnIdentity, item);
@@ -112,6 +114,7 @@ function matches(expected, observed) {
   const canonicalTrace = trace => trace?.map(call => call.event === "call" ? { ...call, args: call.args.map(canonicalValue) } : call);
   if (Object.hasOwn(expected, "callbackTrace") && !isDeepStrictEqual(canonicalTrace(expected.callbackTrace), canonicalTrace(observed.callbackTrace))) return false;
   if (Object.hasOwn(expected, "returnIdentity") && !isDeepStrictEqual(expected.returnIdentity, observed.returnIdentity)) return false;
+  if (Object.hasOwn(expected, "referenceIdentity") && !isDeepStrictEqual(expected.referenceIdentity, observed.referenceIdentity)) return false;
   if (Object.hasOwn(expected, "errorObservation") && (expected.errorObservation.identity !== observed.errorObservation?.identity
     || !observed.errorObservation || !isDeepStrictEqual(canonicalValue(expected.errorObservation.properties), canonicalValue(observed.errorObservation.properties)))) return false;
   return true;

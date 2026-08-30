@@ -110,7 +110,7 @@ test("real isolated resource probes distinguish idle waiting, CPU exhaustion, an
   const rows = output.trim().split("\n").map((line) => JSON.parse(line));
   assert.equal(rows.length, 7);
   for (const row of rows) {
-    assert.equal(row.workerVersion, "quickjs-contract-worker-v7");
+    assert.equal(row.workerVersion, "quickjs-contract-worker-v8");
     if (row.stallMs) assert.equal(row.stalled, true);
     if (row.stallMs === 5200) assert.equal(row.observation.reason, "guest-wall-deadline");
     else if (row.name === "infinite") {

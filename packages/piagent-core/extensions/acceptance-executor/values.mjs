@@ -12,7 +12,7 @@ export function protocolShape(value, keys, required = keys) {
     || required.some((key) => !Object.hasOwn(value, key))) throw new TypeError("Invalid protocol object");
 }
 
-/** Typed data trees only: no executable values, references, sparse arrays or cycles. */
+/** Typed trees with optional approved callback IDs, never executable code or history references. */
 export function validateValue(value, allowDate = true, callbackIds = new Set()) {
   let nodes = 0, text = 0;
   function visit(item, depth) {

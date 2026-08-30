@@ -30,7 +30,7 @@ export function createGuestSession(QuickJS, request, overallDeadline) {
     if (result.error) { keep(result.error); throw new Error("Intrinsic initialization failed"); }
     const intrinsics = retain(result.value);
     methods = Object.fromEntries(["makeDate", "dateTime", "typeOf", "errorClass", "clockReads", "beginCall", "observeValue", "defineData",
-      "beginCapabilities", "makeError", "makeCallback", "callback", "callbackFault", "callbackTrace", "errorObservation", "awaitValue", "sameReference"]
+      "beginCapabilities", "makeError", "makeCallback", "callback", "callbackFault", "callbackTrace", "errorObservation", "awaitValue", "sameReference", "referenceIdentity"]
       .map((name) => [name, retain(context.getProp(intrinsics, name))]));
   }
   function input(value) {
@@ -164,6 +164,18 @@ export function createGuestSession(QuickJS, request, overallDeadline) {
         }
       }
       if (item.callbacks) observation.callbackTrace = JSON.parse(context.getString(take(context.callFunction(methods.callbackTrace, context.undefined))));
+      if (item.referencePairs) {
+        observation.referenceIdentity = [];
+        const root = selector => selector.root === "argument" ? args[selector.index]
+          : selector.root === (threw ? "error" : "return") ? returned : context.undefined;
+        const path = selector => input({ type: "array", value: selector.path.map(value => ({ type: "string", value })) });
+        for (const pair of item.referencePairs) {
+          const result = JSON.parse(context.getString(take(context.callFunction(methods.referenceIdentity, context.undefined,
+            root(pair.left), path(pair.left), root(pair.right), path(pair.right)))));
+          if (result.reason) return incomplete(result.reason, "unsupported");
+          observation.referenceIdentity.push({ id: pair.id, same: result.same });
+        }
+      }
       const dateArgsAfter = [];
       for (let index = 0; index < item.args.length; index += 1) if (item.args[index].type === "date") {
         const value = take(context.callFunction(methods.dateTime, context.undefined, args[index]));

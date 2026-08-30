@@ -1,5 +1,6 @@
 import { MAX_COLLECTION_LENGTH, MAX_STRING_LENGTH, MAX_VALUE_DEPTH, MAX_VALUE_NODES, MAX_VALUE_TEXT } from "./values.mjs";
 import { CALLBACK_INTRINSICS } from "./callback-intrinsics.mjs";
+import { REFERENCE_INTRINSICS } from "./reference-identity.mjs";
 
 // This closure is evaluated before the candidate. Only the worker retains its
 // handle; it installs no host callback, oracle, serializer or receipt writer.
@@ -96,10 +97,11 @@ export const INTRINSICS = `(() => {
     }
   }
   ${CALLBACK_INTRINSICS}
+  ${REFERENCE_INTRINSICS}
   return {
     makeDate: value => new D(value), dateTime: value => apply(getTime, value, []),
     defineData: (object, key, value) => { define(object, key, dataDescriptor(value, true)); },
-    typeOf: value => typeof value, observeValue, clockReads: () => reads,
+    typeOf: value => typeof value, observeValue, referenceIdentity, clockReads: () => reads,
     beginCapabilities, makeError, makeCallback, callback: id => callbacks[id],
     callbackFault: () => callbackFault, callbackTrace: () => '[' + trace + ']', errorObservation,
     awaitValue: value => apply(promiseResolve, NativePromise, [value]),

@@ -13,7 +13,8 @@ import { registerIndependentAcceptanceProvider } from "../packages/piagent-core/
 import { independentVerificationRecovery } from "../packages/piagent-core/runtime/recovery/independent-verification-recovery.ts";
 import { selectRecoveryDecision, recoveryDecisionValidationErrors } from "../packages/piagent-core/runtime/recovery/recovery-policy.ts";
 import { compileIndependentContract, compareIndependentExecution } from "../packages/piagent-core/extensions/acceptance-independent-contract.js";
-import { checkpointSources, checkpointCases } from "./helpers/async-production-cases.mjs";
+import { checkpointSources } from "./helpers/async-production-cases.mjs";
+import { checkpointFamilyCases as checkpointCases } from "./helpers/production-family-cases.mjs";
 
 const imageId = process.env.PIAGENT_CONTRACT_EXECUTOR_IMAGE_ID;
 const dockerSocket = process.env.PIAGENT_CONTRACT_EXECUTOR_SOCKET;
@@ -35,13 +36,14 @@ test("async checkpoint observations survive authenticated persistence, reopening
   assert.equal(receipt.verdict, "pass", JSON.stringify(receipt));
   assert.equal(receipt.completionAllowed, true);
   assert.equal(first.evidence.observed.result.execution.observation.cases[0].errorObservation.identity, "failed");
+  assert.deepEqual(first.evidence.observed.result.execution.observation.cases[0].referenceIdentity, [{ id: "fresh-checkpoint", same: false }]);
   const attemptId = first.attemptId;
   f.store.close();
   const reopened = f.open(), currentOptions = { ...options, store: reopened, checks: [{ id: "checkpoint", cases: checkpointCases() }] };
   const restored = createDurableContractRunner(currentOptions), cached = await restored.run(request);
   assert.equal(cached.reused, true); assert.equal(cached.attemptId, attemptId);
   assert.equal((await restored.assess(cached, { policy: "allow" })).completionAllowed, true);
-  const altered = checkpointCases(); altered[0].callbacks[0].settleAfterJobs = 2;
+  const altered = checkpointCases(); altered[0].referencePairs[0].right.path = ["results"];
   const changed = await createDurableContractRunner({ ...currentOptions, checks: [{ id: "checkpoint", cases: altered }] }).run(request);
   assert.equal(changed.reused, false); assert.notEqual(changed.attemptId, attemptId);
   assert.equal(reopened.latest(scope).attempt, 2);

@@ -111,6 +111,24 @@
         "properties": { "allOf": [{ "$ref": "#/$defs/inputValue" }, { "properties": { "type": { "const": "record" } } }] }
       }
     },
+    "referenceSelector": {
+      "type": "object", "additionalProperties": false, "required": ["root", "path"],
+      "properties": { "root": { "enum": ["argument", "return", "error"] }, "index": { "type": "integer", "minimum": 0, "maximum": 15 },
+        "path": { "type": "array", "maxItems": 8, "items": { "type": "string", "maxLength": 128 } } },
+      "oneOf": [
+        { "properties": { "root": { "const": "argument" } }, "required": ["index"] },
+        { "properties": { "root": { "enum": ["return", "error"] } }, "not": { "required": ["index"] } }
+      ]
+    },
+    "referencePairs": { "type": "array", "minItems": 1, "maxItems": 16, "items": {
+      "type": "object", "additionalProperties": false, "required": ["id", "left", "right"],
+      "properties": { "id": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$" },
+        "left": { "$ref": "#/$defs/referenceSelector" }, "right": { "$ref": "#/$defs/referenceSelector" } }
+    } },
+    "referenceIdentity": { "type": "array", "minItems": 1, "maxItems": 16, "items": {
+      "type": "object", "additionalProperties": false, "required": ["id", "same"],
+      "properties": { "id": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$" }, "same": { "type": "boolean" } }
+    } },
     "outputValue": { "oneOf": [
       { "$ref": "#/$defs/primitive" },
       { "type": "object", "additionalProperties": false, "required": ["type", "value"], "properties": {
@@ -139,6 +157,7 @@
         "callbackTrace": { "$ref": "#/$defs/callbackTrace" },
         "returnIdentity": { "type": "array", "maxItems": 16, "uniqueItems": true, "items": { "type": "integer", "minimum": 0, "maximum": 15 } },
         "errorObservation": { "$ref": "#/$defs/errorObservation" },
+        "referenceIdentity": { "$ref": "#/$defs/referenceIdentity" },
         "argsAfter": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/inputValue" } },
         "dateArgsAfter": { "type": "array", "maxItems": 16, "items": {
           "type": "object", "additionalProperties": false, "required": ["index", "value"],
@@ -157,9 +176,11 @@
         "awaitResult": { "const": true }, "observeIdentity": { "const": true }, "observeError": { "const": true },
         "callbacks": { "type": "array", "minItems": 1, "maxItems": 8, "items": { "$ref": "#/$defs/callbackInput" } },
         "errors": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "$ref": "#/$defs/errorInput" } },
+        "referencePairs": { "$ref": "#/$defs/referencePairs" },
         "exportName": { "type": "string", "pattern": "^[a-zA-Z_$][a-zA-Z0-9_$]{0,127}$" },
         "clock": { "type": "integer", "minimum": -8640000000000000, "maximum": 8640000000000000 }, "expected": { "$ref": "#/$defs/expected" } },
       "allOf": [
+        { "if": { "required": ["referencePairs"] }, "then": { "properties": { "expected": { "required": ["referenceIdentity"] } } } },
         { "if": { "required": ["callbacks"] }, "then": { "properties": { "expected": { "required": ["callbackTrace"] } } } },
         { "if": { "required": ["observeIdentity"], "properties": { "expected": { "properties": { "outcome": { "const": "return" } } } } },
           "then": { "properties": { "expected": { "required": ["returnIdentity"] } } } },

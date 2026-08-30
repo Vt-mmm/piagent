@@ -1,4 +1,5 @@
 import { protocolShape as shape, validateValue, MAX_STRING_LENGTH } from "./values.mjs";
+import { validateReferencePairs, validateReferenceIdentity } from "./reference-identity.mjs";
 
 export const MAX_CALLBACKS = 8;
 export const MAX_CALLBACK_STEPS = 64;
@@ -7,11 +8,12 @@ export const MAX_CALLBACK_DELAY_JOBS = 32;
 export const MAX_CALLBACK_TRACE_CHARS = 32768;
 const ID = /^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$/;
 export const ERROR_CLASSES = ["TypeError", "RangeError", "SyntaxError", "ReferenceError", "EvalError", "URIError", "Error"];
-export const CASE_CAPABILITY_FIELDS = ["awaitResult", "observeIdentity", "observeError", "callbacks", "errors"];
-export const OBSERVATION_CAPABILITY_FIELDS = ["callbackTrace", "returnIdentity", "errorObservation"];
+export const CASE_CAPABILITY_FIELDS = ["awaitResult", "observeIdentity", "observeError", "callbacks", "errors", "referencePairs"];
+export const OBSERVATION_CAPABILITY_FIELDS = ["callbackTrace", "returnIdentity", "errorObservation", "referenceIdentity"];
 export const callbackIds = item => new Set((item.callbacks ?? []).map(callback => callback.id));
 
 export function validateCaseCapabilities(item) {
+  validateReferencePairs(item);
   for (const key of ["awaitResult", "observeIdentity", "observeError"]) {
     if (Object.hasOwn(item, key) && item[key] !== true) throw new TypeError("Invalid case capability");
   }
@@ -107,7 +109,8 @@ export function validateObservedCapabilities(observation, item) {
   for (const [field, required, validate] of [
     ["callbackTrace", settled && Boolean(item.callbacks), validateCallbackTrace],
     ["returnIdentity", observation.outcome === "return" && item.observeIdentity, validateReturnIdentity],
-    ["errorObservation", observation.outcome === "throw" && item.observeError, validateErrorObservation]
+    ["errorObservation", observation.outcome === "throw" && item.observeError, validateErrorObservation],
+    ["referenceIdentity", settled && Boolean(item.referencePairs), validateReferenceIdentity]
   ]) {
     if (required) validate(observation[field], item);
     else if (Object.hasOwn(observation, field)) throw new TypeError("Unexpected capability observation");
