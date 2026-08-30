@@ -160,6 +160,13 @@ after(() => {
 });
 
 describe("package distribution", () => {
+  it("ships reusable contract selection, its data library, schemas and operator guide", () => {
+    const files = dryRunPackageFiles();
+    for (const file of ["scripts/select-independent-verification.mjs", "packages/piagent-core/extensions/acceptance-contract-selection.js",
+      "adapters/node-typescript/contract-families.json", "adapters/node-typescript/contract-families.md",
+      "schemas/contract-family-library.schema.json", "schemas/contract-selection-recipe.schema.json"]) assert.ok(files.has(file), file);
+  });
+
   it("keeps maintainer working notes out of the published tarball", () => {
     // npm packs from the working directory, so these stay on disk even though
     // they are untracked. The files allowlist takes precedence over .npmignore

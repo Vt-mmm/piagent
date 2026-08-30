@@ -5,6 +5,7 @@ import { discoverRuntimeIntegrityFiles } from "../capabilities/runtime-integrity
 import { compileIndependentContract } from "./acceptance-independent-contract.js";
 import { openAcceptanceEvidenceStore } from "./acceptance-evidence-store.js";
 import { validateModulePaths } from "./acceptance-executor/module-graph.mjs";
+import { validateContractSelection } from "./acceptance-contract-selection.js";
 
 export const HOST_CONTRACT_CONFIGURATION_VERSION = "approved-host-contracts-v1";
 const HASH = /^[a-f0-9]{64}$/;
@@ -17,6 +18,8 @@ export function installedContractVerifierDigest(root) {
   const canonical = fs.realpathSync.native(root), digest = createHash("sha256");
   digest.update(HOST_CONTRACT_CONFIGURATION_VERSION);
   const files = discoverRuntimeIntegrityFiles(canonical);
+  const familyLibrary = "adapters/node-typescript/contract-families.json";
+  if (fs.existsSync(path.join(canonical, familyLibrary)) && !files.includes(familyLibrary)) files.push(familyLibrary);
   for (const required of ["packages/piagent-core/extensions/acceptance-authenticated-admission.js", "packages/piagent-core/extensions/acceptance-durable-execution.js",
     "packages/piagent-core/extensions/acceptance-host-configuration.js"]) if (!files.includes(required)) files.push(required);
   for (const relative of files.sort()) {
@@ -39,13 +42,14 @@ function validate(payload) {
   const ids = new Set();
   for (const contract of payload.contracts) {
     if (!exact(contract, ["criterionId", "criterionHash", "sourcePath", "exportName", "maxAttempts", "checks",
-      ...(Object.hasOwn(contract, "modulePaths") ? ["modulePaths"] : [])])
+      ...(Object.hasOwn(contract, "modulePaths") ? ["modulePaths"] : []), ...(Object.hasOwn(contract, "selection") ? ["selection"] : [])])
       || typeof contract.criterionId !== "string" || !/^[a-z0-9][a-z0-9:._-]{0,79}$/.test(contract.criterionId)
       || ids.has(contract.criterionId) || !HASH.test(contract.criterionHash) || typeof contract.sourcePath !== "string"
       || !contract.sourcePath || path.isAbsolute(contract.sourcePath) || contract.sourcePath.includes("\\") || contract.sourcePath.includes("\0")
       || contract.sourcePath.split("/").some((part) => ["", ".", "..", ".git", ".pi", "node_modules"].includes(part))
       || !Number.isSafeInteger(contract.maxAttempts) || contract.maxAttempts < 1 || contract.maxAttempts > 8) throw new TypeError("Invalid approved criterion contract");
     ids.add(contract.criterionId);
+    if (Object.hasOwn(contract, "selection")) validateContractSelection(contract.selection, contract.criterionHash);
     if (Object.hasOwn(contract, "modulePaths")) validateModulePaths(contract.sourcePath, contract.modulePaths);
     compileIndependentContract(JSON.stringify({ schemaVersion: 1, source: "export const placeholder = 0;", exportName: contract.exportName, checks: contract.checks }));
   }

@@ -1,0 +1,2393 @@
+{
+  "schemaVersion": 1,
+  "families": [
+    {
+      "id": "finite-scalar-sum",
+      "version": 1,
+      "domain": "pure-function",
+      "description": "Two finite numeric arguments produce their sum; non-numbers and nonfinite arguments throw TypeError. These literal input partitions are bounded tests, not a universal arithmetic proof.",
+      "parameters": {
+        "call": "export"
+      },
+      "template": {
+        "exportName": {
+          "$parameter": "call"
+        },
+        "checks": [
+          {
+            "id": "declared-behavior",
+            "cases": [
+              {
+                "id": "signed",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": 7
+                  },
+                  {
+                    "type": "number",
+                    "value": -3
+                  }
+                ],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "number",
+                    "value": 4
+                  }
+                }
+              },
+              {
+                "id": "zero",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": 0
+                  },
+                  {
+                    "type": "number",
+                    "value": 0
+                  }
+                ],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "number",
+                    "value": 0
+                  }
+                }
+              },
+              {
+                "id": "fraction",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": 0.5
+                  },
+                  {
+                    "type": "number",
+                    "value": 0.25
+                  }
+                ],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "number",
+                    "value": 0.75
+                  }
+                }
+              },
+              {
+                "id": "text-left",
+                "args": [
+                  {
+                    "type": "string",
+                    "value": "1"
+                  },
+                  {
+                    "type": "number",
+                    "value": 2
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "text-right",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": 1
+                  },
+                  {
+                    "type": "string",
+                    "value": "2"
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "nan",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": "NaN"
+                  },
+                  {
+                    "type": "number",
+                    "value": 0
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "infinite",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": 0
+                  },
+                  {
+                    "type": "number",
+                    "value": "Infinity"
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-0-undefined",
+                "args": [
+                  {
+                    "type": "undefined"
+                  },
+                  {
+                    "type": "number",
+                    "value": 2
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-1-undefined",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": 1
+                  },
+                  {
+                    "type": "undefined"
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-0-null",
+                "args": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "number",
+                    "value": 2
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-1-null",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-0-boolean",
+                "args": [
+                  {
+                    "type": "boolean",
+                    "value": false
+                  },
+                  {
+                    "type": "number",
+                    "value": 2
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-1-boolean",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": 1
+                  },
+                  {
+                    "type": "boolean",
+                    "value": false
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-0-record",
+                "args": [
+                  {
+                    "type": "record",
+                    "value": []
+                  },
+                  {
+                    "type": "number",
+                    "value": 2
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-1-record",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": 1
+                  },
+                  {
+                    "type": "record",
+                    "value": []
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-0-array",
+                "args": [
+                  {
+                    "type": "array",
+                    "value": []
+                  },
+                  {
+                    "type": "number",
+                    "value": 2
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-1-array",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": 1
+                  },
+                  {
+                    "type": "array",
+                    "value": []
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-0-negative-infinity",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": "-Infinity"
+                  },
+                  {
+                    "type": "number",
+                    "value": 2
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-1-negative-infinity",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": 1
+                  },
+                  {
+                    "type": "number",
+                    "value": "-Infinity"
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-0-nan",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": "NaN"
+                  },
+                  {
+                    "type": "number",
+                    "value": 2
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-1-nan",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": 1
+                  },
+                  {
+                    "type": "number",
+                    "value": "NaN"
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-0-positive-infinity",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": "Infinity"
+                  },
+                  {
+                    "type": "number",
+                    "value": 2
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-1-positive-infinity",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": 1
+                  },
+                  {
+                    "type": "number",
+                    "value": "Infinity"
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "finite-list-sum",
+      "version": 1,
+      "domain": "pure-function",
+      "description": "A dense array of finite numbers produces its sum, including empty, signed and fractional lists. Invalid elements throw TypeError.",
+      "parameters": {
+        "call": "export"
+      },
+      "template": {
+        "exportName": {
+          "$parameter": "call"
+        },
+        "checks": [
+          {
+            "id": "declared-behavior",
+            "cases": [
+              {
+                "id": "empty",
+                "args": [
+                  {
+                    "type": "array",
+                    "value": []
+                  }
+                ],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "number",
+                    "value": 0
+                  }
+                }
+              },
+              {
+                "id": "signed",
+                "args": [
+                  {
+                    "type": "array",
+                    "value": [
+                      {
+                        "type": "number",
+                        "value": 7
+                      },
+                      {
+                        "type": "number",
+                        "value": -3
+                      },
+                      {
+                        "type": "number",
+                        "value": 0
+                      },
+                      {
+                        "type": "number",
+                        "value": 2
+                      }
+                    ]
+                  }
+                ],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "number",
+                    "value": 6
+                  }
+                }
+              },
+              {
+                "id": "fraction",
+                "args": [
+                  {
+                    "type": "array",
+                    "value": [
+                      {
+                        "type": "number",
+                        "value": 0.5
+                      },
+                      {
+                        "type": "number",
+                        "value": 0.25
+                      }
+                    ]
+                  }
+                ],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "number",
+                    "value": 0.75
+                  }
+                }
+              },
+              {
+                "id": "text",
+                "args": [
+                  {
+                    "type": "array",
+                    "value": [
+                      {
+                        "type": "number",
+                        "value": 1
+                      },
+                      {
+                        "type": "string",
+                        "value": "2"
+                      }
+                    ]
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "nan",
+                "args": [
+                  {
+                    "type": "array",
+                    "value": [
+                      {
+                        "type": "number",
+                        "value": "NaN"
+                      }
+                    ]
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "infinite",
+                "args": [
+                  {
+                    "type": "array",
+                    "value": [
+                      {
+                        "type": "number",
+                        "value": "Infinity"
+                      }
+                    ]
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-undefined",
+                "args": [
+                  {
+                    "type": "array",
+                    "value": [
+                      {
+                        "type": "number",
+                        "value": 1
+                      },
+                      {
+                        "type": "undefined"
+                      },
+                      {
+                        "type": "number",
+                        "value": 2
+                      }
+                    ]
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-null",
+                "args": [
+                  {
+                    "type": "array",
+                    "value": [
+                      {
+                        "type": "number",
+                        "value": 1
+                      },
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "type": "number",
+                        "value": 2
+                      }
+                    ]
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-boolean",
+                "args": [
+                  {
+                    "type": "array",
+                    "value": [
+                      {
+                        "type": "number",
+                        "value": 1
+                      },
+                      {
+                        "type": "boolean",
+                        "value": false
+                      },
+                      {
+                        "type": "number",
+                        "value": 2
+                      }
+                    ]
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-record",
+                "args": [
+                  {
+                    "type": "array",
+                    "value": [
+                      {
+                        "type": "number",
+                        "value": 1
+                      },
+                      {
+                        "type": "record",
+                        "value": []
+                      },
+                      {
+                        "type": "number",
+                        "value": 2
+                      }
+                    ]
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-array",
+                "args": [
+                  {
+                    "type": "array",
+                    "value": [
+                      {
+                        "type": "number",
+                        "value": 1
+                      },
+                      {
+                        "type": "array",
+                        "value": []
+                      },
+                      {
+                        "type": "number",
+                        "value": 2
+                      }
+                    ]
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-negative-infinity",
+                "args": [
+                  {
+                    "type": "array",
+                    "value": [
+                      {
+                        "type": "number",
+                        "value": 1
+                      },
+                      {
+                        "type": "number",
+                        "value": "-Infinity"
+                      },
+                      {
+                        "type": "number",
+                        "value": 2
+                      }
+                    ]
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "deadline-status",
+      "version": 1,
+      "domain": "temporal-input",
+      "description": "A finite numeric timestamp or valid Date expiry and finite numeric now produce {expired: now >= expiry, remaining: max(0, expiry-now)}. Invalid inputs throw TypeError; Date input is not mutated. String parsing and wall-clock defaults are outside this family's contract.",
+      "parameters": {
+        "call": "export"
+      },
+      "template": {
+        "exportName": {
+          "$parameter": "call"
+        },
+        "checks": [
+          {
+            "id": "declared-behavior",
+            "cases": [
+              {
+                "id": "before",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": 100
+                  },
+                  {
+                    "type": "number",
+                    "value": 99
+                  }
+                ],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "record",
+                    "value": [
+                      {
+                        "key": "expired",
+                        "value": {
+                          "type": "boolean",
+                          "value": false
+                        }
+                      },
+                      {
+                        "key": "remaining",
+                        "value": {
+                          "type": "number",
+                          "value": 1
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "id": "equal",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": 100
+                  },
+                  {
+                    "type": "number",
+                    "value": 100
+                  }
+                ],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "record",
+                    "value": [
+                      {
+                        "key": "expired",
+                        "value": {
+                          "type": "boolean",
+                          "value": true
+                        }
+                      },
+                      {
+                        "key": "remaining",
+                        "value": {
+                          "type": "number",
+                          "value": 0
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "id": "after",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": 100
+                  },
+                  {
+                    "type": "number",
+                    "value": 101
+                  }
+                ],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "record",
+                    "value": [
+                      {
+                        "key": "expired",
+                        "value": {
+                          "type": "boolean",
+                          "value": true
+                        }
+                      },
+                      {
+                        "key": "remaining",
+                        "value": {
+                          "type": "number",
+                          "value": 0
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "id": "negative",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": -100
+                  },
+                  {
+                    "type": "number",
+                    "value": -101
+                  }
+                ],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "record",
+                    "value": [
+                      {
+                        "key": "expired",
+                        "value": {
+                          "type": "boolean",
+                          "value": false
+                        }
+                      },
+                      {
+                        "key": "remaining",
+                        "value": {
+                          "type": "number",
+                          "value": 1
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "id": "date",
+                "args": [
+                  {
+                    "type": "date",
+                    "value": 100
+                  },
+                  {
+                    "type": "number",
+                    "value": 99
+                  }
+                ],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "record",
+                    "value": [
+                      {
+                        "key": "expired",
+                        "value": {
+                          "type": "boolean",
+                          "value": false
+                        }
+                      },
+                      {
+                        "key": "remaining",
+                        "value": {
+                          "type": "number",
+                          "value": 1
+                        }
+                      }
+                    ]
+                  },
+                  "dateArgsAfter": [
+                    {
+                      "index": 0,
+                      "value": 100
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "invalid-date",
+                "args": [
+                  {
+                    "type": "date",
+                    "value": "NaN"
+                  },
+                  {
+                    "type": "number",
+                    "value": 0
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError",
+                  "dateArgsAfter": [
+                    {
+                      "index": 0,
+                      "value": "NaN"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "invalid-now",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": 100
+                  },
+                  {
+                    "type": "number",
+                    "value": "NaN"
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "text",
+                "args": [
+                  {
+                    "type": "string",
+                    "value": "100"
+                  },
+                  {
+                    "type": "number",
+                    "value": 99
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-0-undefined",
+                "args": [
+                  {
+                    "type": "undefined"
+                  },
+                  {
+                    "type": "number",
+                    "value": 99
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-1-undefined",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": 100
+                  },
+                  {
+                    "type": "undefined"
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-0-null",
+                "args": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "number",
+                    "value": 99
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-1-null",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": 100
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-0-boolean",
+                "args": [
+                  {
+                    "type": "boolean",
+                    "value": false
+                  },
+                  {
+                    "type": "number",
+                    "value": 99
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-1-boolean",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": 100
+                  },
+                  {
+                    "type": "boolean",
+                    "value": false
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-0-record",
+                "args": [
+                  {
+                    "type": "record",
+                    "value": []
+                  },
+                  {
+                    "type": "number",
+                    "value": 99
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-1-record",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": 100
+                  },
+                  {
+                    "type": "record",
+                    "value": []
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-0-array",
+                "args": [
+                  {
+                    "type": "array",
+                    "value": []
+                  },
+                  {
+                    "type": "number",
+                    "value": 99
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-1-array",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": 100
+                  },
+                  {
+                    "type": "array",
+                    "value": []
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-0-negative-infinity",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": "-Infinity"
+                  },
+                  {
+                    "type": "number",
+                    "value": 99
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-1-negative-infinity",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": 100
+                  },
+                  {
+                    "type": "number",
+                    "value": "-Infinity"
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-0-nan",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": "NaN"
+                  },
+                  {
+                    "type": "number",
+                    "value": 99
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-1-nan",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": 100
+                  },
+                  {
+                    "type": "number",
+                    "value": "NaN"
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-0-positive-infinity",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": "Infinity"
+                  },
+                  {
+                    "type": "number",
+                    "value": 99
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              },
+              {
+                "id": "invalid-1-positive-infinity",
+                "args": [
+                  {
+                    "type": "number",
+                    "value": 100
+                  },
+                  {
+                    "type": "number",
+                    "value": "Infinity"
+                  }
+                ],
+                "expected": {
+                  "outcome": "throw",
+                  "errorClass": "TypeError"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "defined-config-precedence",
+      "version": 1,
+      "domain": "configuration-precedence",
+      "description": "Three records in priority order: first non-undefined value wins for each of three selected keys. Preserve explicit null, false, zero and empty string. The result contains every selected key, including undefined when all inputs omit it. Key parameters must be distinct.",
+      "parameters": {
+        "call": "export",
+        "numericKey": "string",
+        "booleanKey": "string",
+        "textKey": "string"
+      },
+      "template": {
+        "exportName": {
+          "$parameter": "call"
+        },
+        "checks": [
+          {
+            "id": "declared-behavior",
+            "cases": [
+              {
+                "id": "defaults",
+                "args": [
+                  {
+                    "type": "record",
+                    "value": []
+                  },
+                  {
+                    "type": "record",
+                    "value": []
+                  },
+                  {
+                    "type": "record",
+                    "value": [
+                      {
+                        "key": {
+                          "$parameter": "numericKey"
+                        },
+                        "value": {
+                          "type": "number",
+                          "value": 9
+                        }
+                      },
+                      {
+                        "key": {
+                          "$parameter": "booleanKey"
+                        },
+                        "value": {
+                          "type": "boolean",
+                          "value": true
+                        }
+                      },
+                      {
+                        "key": {
+                          "$parameter": "textKey"
+                        },
+                        "value": {
+                          "type": "string",
+                          "value": "default"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "record",
+                    "value": [
+                      {
+                        "key": {
+                          "$parameter": "numericKey"
+                        },
+                        "value": {
+                          "type": "number",
+                          "value": 9
+                        }
+                      },
+                      {
+                        "key": {
+                          "$parameter": "booleanKey"
+                        },
+                        "value": {
+                          "type": "boolean",
+                          "value": true
+                        }
+                      },
+                      {
+                        "key": {
+                          "$parameter": "textKey"
+                        },
+                        "value": {
+                          "type": "string",
+                          "value": "default"
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "id": "explicit-false",
+                "args": [
+                  {
+                    "type": "record",
+                    "value": [
+                      {
+                        "key": {
+                          "$parameter": "numericKey"
+                        },
+                        "value": {
+                          "type": "number",
+                          "value": 0
+                        }
+                      },
+                      {
+                        "key": {
+                          "$parameter": "booleanKey"
+                        },
+                        "value": {
+                          "type": "boolean",
+                          "value": false
+                        }
+                      },
+                      {
+                        "key": {
+                          "$parameter": "textKey"
+                        },
+                        "value": {
+                          "type": "string",
+                          "value": ""
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "type": "record",
+                    "value": []
+                  },
+                  {
+                    "type": "record",
+                    "value": [
+                      {
+                        "key": {
+                          "$parameter": "numericKey"
+                        },
+                        "value": {
+                          "type": "number",
+                          "value": 9
+                        }
+                      },
+                      {
+                        "key": {
+                          "$parameter": "booleanKey"
+                        },
+                        "value": {
+                          "type": "boolean",
+                          "value": true
+                        }
+                      },
+                      {
+                        "key": {
+                          "$parameter": "textKey"
+                        },
+                        "value": {
+                          "type": "string",
+                          "value": "default"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "record",
+                    "value": [
+                      {
+                        "key": {
+                          "$parameter": "numericKey"
+                        },
+                        "value": {
+                          "type": "number",
+                          "value": 0
+                        }
+                      },
+                      {
+                        "key": {
+                          "$parameter": "booleanKey"
+                        },
+                        "value": {
+                          "type": "boolean",
+                          "value": false
+                        }
+                      },
+                      {
+                        "key": {
+                          "$parameter": "textKey"
+                        },
+                        "value": {
+                          "type": "string",
+                          "value": ""
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "id": "environment",
+                "args": [
+                  {
+                    "type": "record",
+                    "value": [
+                      {
+                        "key": {
+                          "$parameter": "numericKey"
+                        },
+                        "value": {
+                          "type": "undefined"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "type": "record",
+                    "value": [
+                      {
+                        "key": {
+                          "$parameter": "numericKey"
+                        },
+                        "value": {
+                          "type": "number",
+                          "value": 3
+                        }
+                      },
+                      {
+                        "key": {
+                          "$parameter": "textKey"
+                        },
+                        "value": {
+                          "type": "string",
+                          "value": "environment"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "type": "record",
+                    "value": [
+                      {
+                        "key": {
+                          "$parameter": "numericKey"
+                        },
+                        "value": {
+                          "type": "number",
+                          "value": 9
+                        }
+                      },
+                      {
+                        "key": {
+                          "$parameter": "booleanKey"
+                        },
+                        "value": {
+                          "type": "boolean",
+                          "value": true
+                        }
+                      },
+                      {
+                        "key": {
+                          "$parameter": "textKey"
+                        },
+                        "value": {
+                          "type": "string",
+                          "value": "default"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "record",
+                    "value": [
+                      {
+                        "key": {
+                          "$parameter": "numericKey"
+                        },
+                        "value": {
+                          "type": "number",
+                          "value": 3
+                        }
+                      },
+                      {
+                        "key": {
+                          "$parameter": "booleanKey"
+                        },
+                        "value": {
+                          "type": "boolean",
+                          "value": true
+                        }
+                      },
+                      {
+                        "key": {
+                          "$parameter": "textKey"
+                        },
+                        "value": {
+                          "type": "string",
+                          "value": "environment"
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "id": "null",
+                "args": [
+                  {
+                    "type": "record",
+                    "value": [
+                      {
+                        "key": {
+                          "$parameter": "booleanKey"
+                        },
+                        "value": {
+                          "type": "null"
+                        }
+                      },
+                      {
+                        "key": {
+                          "$parameter": "textKey"
+                        },
+                        "value": {
+                          "type": "null"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "type": "record",
+                    "value": [
+                      {
+                        "key": {
+                          "$parameter": "numericKey"
+                        },
+                        "value": {
+                          "type": "number",
+                          "value": 4
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "type": "record",
+                    "value": [
+                      {
+                        "key": {
+                          "$parameter": "numericKey"
+                        },
+                        "value": {
+                          "type": "number",
+                          "value": 9
+                        }
+                      },
+                      {
+                        "key": {
+                          "$parameter": "booleanKey"
+                        },
+                        "value": {
+                          "type": "boolean",
+                          "value": true
+                        }
+                      },
+                      {
+                        "key": {
+                          "$parameter": "textKey"
+                        },
+                        "value": {
+                          "type": "string",
+                          "value": "default"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "record",
+                    "value": [
+                      {
+                        "key": {
+                          "$parameter": "numericKey"
+                        },
+                        "value": {
+                          "type": "number",
+                          "value": 4
+                        }
+                      },
+                      {
+                        "key": {
+                          "$parameter": "booleanKey"
+                        },
+                        "value": {
+                          "type": "null"
+                        }
+                      },
+                      {
+                        "key": {
+                          "$parameter": "textKey"
+                        },
+                        "value": {
+                          "type": "null"
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "id": "missing",
+                "args": [
+                  {
+                    "type": "record",
+                    "value": []
+                  },
+                  {
+                    "type": "record",
+                    "value": []
+                  },
+                  {
+                    "type": "record",
+                    "value": []
+                  }
+                ],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "record",
+                    "value": [
+                      {
+                        "key": {
+                          "$parameter": "numericKey"
+                        },
+                        "value": {
+                          "type": "undefined"
+                        }
+                      },
+                      {
+                        "key": {
+                          "$parameter": "booleanKey"
+                        },
+                        "value": {
+                          "type": "undefined"
+                        }
+                      },
+                      {
+                        "key": {
+                          "$parameter": "textKey"
+                        },
+                        "value": {
+                          "type": "undefined"
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "idempotent-accumulator-checkpoint",
+      "version": 1,
+      "domain": "stateful-recovery",
+      "description": "An accumulator applies each event ID once. Public snapshot schema is {version:1, entries:[[id,delta],...], total}, preserving first-application order. restore returns saved total without mutating snapshot. Reset discards unsaved work; restore preserves deduplication. This specifies component state, not OS-crash or disk durability.",
+      "parameters": {
+        "apply": "export",
+        "snapshot": "export",
+        "restore": "export",
+        "read": "export"
+      },
+      "template": {
+        "exportName": {
+          "$parameter": "read"
+        },
+        "checks": [
+          {
+            "id": "declared-behavior",
+            "cases": [
+              {
+                "id": "add",
+                "args": [
+                  {
+                    "type": "string",
+                    "value": "x"
+                  },
+                  {
+                    "type": "number",
+                    "value": 7
+                  }
+                ],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "number",
+                    "value": 7
+                  }
+                },
+                "sequence": "checkpoint-history",
+                "exportName": {
+                  "$parameter": "apply"
+                }
+              },
+              {
+                "id": "saved",
+                "args": [],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "record",
+                    "value": [
+                      {
+                        "key": "version",
+                        "value": {
+                          "type": "number",
+                          "value": 1
+                        }
+                      },
+                      {
+                        "key": "entries",
+                        "value": {
+                          "type": "array",
+                          "value": [
+                            {
+                              "type": "array",
+                              "value": [
+                                {
+                                  "type": "string",
+                                  "value": "x"
+                                },
+                                {
+                                  "type": "number",
+                                  "value": 7
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "key": "total",
+                        "value": {
+                          "type": "number",
+                          "value": 7
+                        }
+                      }
+                    ]
+                  }
+                },
+                "sequence": "checkpoint-history",
+                "exportName": {
+                  "$parameter": "snapshot"
+                }
+              },
+              {
+                "id": "unsaved",
+                "args": [
+                  {
+                    "type": "string",
+                    "value": "y"
+                  },
+                  {
+                    "type": "number",
+                    "value": -3
+                  }
+                ],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "number",
+                    "value": 4
+                  }
+                },
+                "sequence": "checkpoint-history",
+                "exportName": {
+                  "$parameter": "apply"
+                }
+              },
+              {
+                "id": "restart",
+                "args": [],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "number",
+                    "value": 0
+                  }
+                },
+                "sequence": "checkpoint-history",
+                "exportName": {
+                  "$parameter": "read"
+                },
+                "reset": true
+              },
+              {
+                "id": "restore",
+                "args": [
+                  {
+                    "type": "result",
+                    "value": "saved"
+                  }
+                ],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "number",
+                    "value": 7
+                  },
+                  "argsAfter": [
+                    {
+                      "type": "record",
+                      "value": [
+                        {
+                          "key": "version",
+                          "value": {
+                            "type": "number",
+                            "value": 1
+                          }
+                        },
+                        {
+                          "key": "entries",
+                          "value": {
+                            "type": "array",
+                            "value": [
+                              {
+                                "type": "array",
+                                "value": [
+                                  {
+                                    "type": "string",
+                                    "value": "x"
+                                  },
+                                  {
+                                    "type": "number",
+                                    "value": 7
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "key": "total",
+                          "value": {
+                            "type": "number",
+                            "value": 7
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "sequence": "checkpoint-history",
+                "exportName": {
+                  "$parameter": "restore"
+                },
+                "observeArgs": true
+              },
+              {
+                "id": "conflicting-replay",
+                "args": [
+                  {
+                    "type": "string",
+                    "value": "x"
+                  },
+                  {
+                    "type": "number",
+                    "value": 500
+                  }
+                ],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "number",
+                    "value": 7
+                  }
+                },
+                "sequence": "checkpoint-history",
+                "exportName": {
+                  "$parameter": "apply"
+                }
+              },
+              {
+                "id": "replay",
+                "args": [
+                  {
+                    "type": "string",
+                    "value": "x"
+                  },
+                  {
+                    "type": "number",
+                    "value": 7
+                  }
+                ],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "number",
+                    "value": 7
+                  }
+                },
+                "sequence": "checkpoint-history",
+                "exportName": {
+                  "$parameter": "apply"
+                }
+              },
+              {
+                "id": "new",
+                "args": [
+                  {
+                    "type": "string",
+                    "value": "z"
+                  },
+                  {
+                    "type": "number",
+                    "value": -2
+                  }
+                ],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "number",
+                    "value": 5
+                  }
+                },
+                "sequence": "checkpoint-history",
+                "exportName": {
+                  "$parameter": "apply"
+                }
+              },
+              {
+                "id": "final",
+                "args": [],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "record",
+                    "value": [
+                      {
+                        "key": "version",
+                        "value": {
+                          "type": "number",
+                          "value": 1
+                        }
+                      },
+                      {
+                        "key": "entries",
+                        "value": {
+                          "type": "array",
+                          "value": [
+                            {
+                              "type": "array",
+                              "value": [
+                                {
+                                  "type": "string",
+                                  "value": "x"
+                                },
+                                {
+                                  "type": "number",
+                                  "value": 7
+                                }
+                              ]
+                            },
+                            {
+                              "type": "array",
+                              "value": [
+                                {
+                                  "type": "string",
+                                  "value": "z"
+                                },
+                                {
+                                  "type": "number",
+                                  "value": -2
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "key": "total",
+                        "value": {
+                          "type": "number",
+                          "value": 5
+                        }
+                      }
+                    ]
+                  }
+                },
+                "sequence": "checkpoint-history",
+                "exportName": {
+                  "$parameter": "snapshot"
+                }
+              },
+              {
+                "id": "out-of-order-id",
+                "args": [
+                  {
+                    "type": "string",
+                    "value": "a"
+                  },
+                  {
+                    "type": "number",
+                    "value": 1
+                  }
+                ],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "number",
+                    "value": 6
+                  }
+                },
+                "sequence": "checkpoint-history",
+                "exportName": {
+                  "$parameter": "apply"
+                }
+              },
+              {
+                "id": "insertion-order",
+                "args": [],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "record",
+                    "value": [
+                      {
+                        "key": "version",
+                        "value": {
+                          "type": "number",
+                          "value": 1
+                        }
+                      },
+                      {
+                        "key": "entries",
+                        "value": {
+                          "type": "array",
+                          "value": [
+                            {
+                              "type": "array",
+                              "value": [
+                                {
+                                  "type": "string",
+                                  "value": "x"
+                                },
+                                {
+                                  "type": "number",
+                                  "value": 7
+                                }
+                              ]
+                            },
+                            {
+                              "type": "array",
+                              "value": [
+                                {
+                                  "type": "string",
+                                  "value": "z"
+                                },
+                                {
+                                  "type": "number",
+                                  "value": -2
+                                }
+                              ]
+                            },
+                            {
+                              "type": "array",
+                              "value": [
+                                {
+                                  "type": "string",
+                                  "value": "a"
+                                },
+                                {
+                                  "type": "number",
+                                  "value": 1
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "key": "total",
+                        "value": {
+                          "type": "number",
+                          "value": 6
+                        }
+                      }
+                    ]
+                  }
+                },
+                "sequence": "checkpoint-history",
+                "exportName": {
+                  "$parameter": "snapshot"
+                }
+              },
+              {
+                "id": "fresh",
+                "args": [],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "number",
+                    "value": 0
+                  }
+                },
+                "sequence": "independent",
+                "exportName": {
+                  "$parameter": "read"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "secret-redaction-literals",
+      "version": 1,
+      "domain": "pure-function",
+      "description": "Literal public redaction obligations: preserve ordinary text; redact an opaque Authorization Token value; redact a nested password while preserving unrelated fields; preserve source-text line count. These four observations are diagnostic coverage, not a complete redaction or security audit.",
+      "parameters": {
+        "text": "export",
+        "storage": "export",
+        "source": "export"
+      },
+      "template": {
+        "exportName": {
+          "$parameter": "text"
+        },
+        "checks": [
+          {
+            "id": "declared-behavior",
+            "cases": [
+              {
+                "id": "plain",
+                "args": [
+                  {
+                    "type": "string",
+                    "value": "ordinary status message"
+                  }
+                ],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "record",
+                    "value": [
+                      {
+                        "key": "text",
+                        "value": {
+                          "type": "string",
+                          "value": "ordinary status message"
+                        }
+                      },
+                      {
+                        "key": "redacted",
+                        "value": {
+                          "type": "boolean",
+                          "value": false
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "id": "opaque",
+                "args": [
+                  {
+                    "type": "string",
+                    "value": "Authorization: Token unit-test-value"
+                  }
+                ],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "record",
+                    "value": [
+                      {
+                        "key": "text",
+                        "value": {
+                          "type": "string",
+                          "value": "Authorization: Token [REDACTED_SECRET]"
+                        }
+                      },
+                      {
+                        "key": "redacted",
+                        "value": {
+                          "type": "boolean",
+                          "value": true
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "id": "structured",
+                "args": [
+                  {
+                    "type": "record",
+                    "value": [
+                      {
+                        "key": "nested",
+                        "value": {
+                          "type": "record",
+                          "value": [
+                            {
+                              "key": "password",
+                              "value": {
+                                "type": "string",
+                                "value": "literal-value-42"
+                              }
+                            },
+                            {
+                              "key": "label",
+                              "value": {
+                                "type": "string",
+                                "value": "status"
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "key": "count",
+                        "value": {
+                          "type": "number",
+                          "value": 0
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "record",
+                    "value": [
+                      {
+                        "key": "nested",
+                        "value": {
+                          "type": "record",
+                          "value": [
+                            {
+                              "key": "password",
+                              "value": {
+                                "type": "string",
+                                "value": "[REDACTED_SECRET]"
+                              }
+                            },
+                            {
+                              "key": "label",
+                              "value": {
+                                "type": "string",
+                                "value": "status"
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "key": "count",
+                        "value": {
+                          "type": "number",
+                          "value": 0
+                        }
+                      }
+                    ]
+                  }
+                },
+                "exportName": {
+                  "$parameter": "storage"
+                }
+              },
+              {
+                "id": "source",
+                "args": [
+                  {
+                    "type": "string",
+                    "value": "config.json"
+                  },
+                  {
+                    "type": "string",
+                    "value": "Authorization: Token unit-test-value\n"
+                  }
+                ],
+                "expected": {
+                  "outcome": "return",
+                  "value": {
+                    "type": "record",
+                    "value": [
+                      {
+                        "key": "text",
+                        "value": {
+                          "type": "string",
+                          "value": "Authorization: Token [REDACTED_SECRET]\n"
+                        }
+                      },
+                      {
+                        "key": "redacted",
+                        "value": {
+                          "type": "boolean",
+                          "value": true
+                        }
+                      },
+                      {
+                        "key": "lineCountPreserved",
+                        "value": {
+                          "type": "boolean",
+                          "value": true
+                        }
+                      }
+                    ]
+                  }
+                },
+                "exportName": {
+                  "$parameter": "source"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,8 +1,25 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import fs from "node:fs";
+import path from "node:path";
 import { developmentCorpus } from "../evals/harness-next/development-corpus.mjs";
+import { selectedDevelopmentCorpus } from "../evals/harness-next/selected-development-corpus.mjs";
 import { calibrate } from "../evals/harness-next/run-calibration.mjs";
 import { compileIndependentContract } from "../packages/piagent-core/extensions/acceptance-independent-contract.js";
+
+test("selected-family calibration retains development labels and records each compiled family identity", () => {
+  const library = fs.readFileSync(path.resolve(import.meta.dirname, "../adapters/node-typescript/contract-families.json"), "utf8");
+  const corpus = selectedDevelopmentCorpus(library, { imageId: `sha256:${"a".repeat(64)}`, dockerSocket: "/unavailable.sock", timeoutMs: 10000 });
+  assert.equal(corpus.id, "harness-next-selected-development-v1");
+  assert.equal(corpus.heldOut, false); assert.equal(corpus.claimEligible, false);
+  assert.deepEqual(corpus.rows.map((row) => [row.id, row.expectedVerdict, row.plan.source]),
+    developmentCorpus().rows.map((row) => [row.id, row.expectedVerdict, row.plan.source]));
+  for (const row of corpus.rows) {
+    assert.equal(row.selection.domain, row.domain);
+    assert.match(row.selection.familyDigest, /^[a-f0-9]{64}$/);
+    compileIndependentContract(JSON.stringify(row.plan));
+  }
+});
 
 test("development calibration contains all required domains and independently declared valid, defective and unsupported programs", () => {
   const corpus = developmentCorpus();

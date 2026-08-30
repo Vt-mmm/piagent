@@ -5002,12 +5002,13 @@ describe("piagent guard integration", () => {
     assert.deepEqual(task.workPlan.map((step) => step.status), ["done", "done"]);
   });
 
-  for (const scenario of ["valid", "counterexample", "repair", "modular-valid", "modular-counterexample", "modular-repair", "backend-unavailable", "unsupported", "timeout", "shutdown", "pending", "exhausted"]) it(`uses authenticated independent execution in the actual completion hook (${scenario})`, {
+  for (const scenario of ["valid", "counterexample", "repair", "modular-valid", "modular-counterexample", "modular-repair", "family-valid", "family-counterexample", "family-repair", "backend-unavailable", "unsupported", "timeout", "shutdown", "pending", "exhausted"]) it(`uses authenticated independent execution in the actual completion hook (${scenario})`, {
     skip: !process.env.PIAGENT_CONTRACT_EXECUTOR_IMAGE_ID || !process.env.PIAGENT_CONTRACT_EXECUTOR_SOCKET, timeout: 120000
   }, async (t) => {
     const { root, piagentGuard } = await loadGuardFixture(), cwd = createProject(root);
-    const modular = scenario.startsWith("modular-"), scenarioKind = scenario.replace(/^modular-/, ""), valid = scenarioKind === "valid";
-    const validSource = "export function sum(a,b) { if(typeof a !== 'number' || typeof b !== 'number') throw Reflect.construct(TypeError, ['invalid']); return a+b; }\n";
+    const modular = scenario.startsWith("modular-"), familySelection = scenario.startsWith("family-");
+    const scenarioKind = scenario.replace(/^(?:modular-|family-)/, ""), valid = scenarioKind === "valid";
+    const validSource = `export function sum(a,b) { if(typeof a !== 'number' || typeof b !== 'number'${familySelection ? " || !Number.isFinite(a) || !Number.isFinite(b)" : ""}) throw Reflect.construct(TypeError, ['invalid']); return a+b; }\n`;
     const implementation = ({
       valid: validSource, "backend-unavailable": validSource, pending: validSource, exhausted: validSource,
       unsupported: "export function sum(a,b) { if(typeof a !== 'number' || typeof b !== 'number') return Promise.resolve(0); return a+b; }\n",
@@ -5032,7 +5033,9 @@ describe("piagent guard integration", () => {
       if (prior === undefined) delete process.env.PIAGENT_INDEPENDENT_VERIFICATION_CONFIG; else process.env.PIAGENT_INDEPENDENT_VERIFICATION_CONFIG = prior;
     });
     await harness.handlers.get("session_start")({}, ctx);
-    const prompt = "Verify src/math.js: sum(a,b) must return a+b for numbers and reject non-number arguments with TypeError. Fix a defect only if verification exposes one.";
+    const prompt = familySelection
+      ? "Verify src/math.js: sum(a,b) must return a+b for two finite numbers and reject non-number or nonfinite arguments with TypeError. Fix a defect only if verification exposes one."
+      : "Verify src/math.js: sum(a,b) must return a+b for numbers and reject non-number arguments with TypeError. Fix a defect only if verification exposes one.";
     await harness.handlers.get("input")({ text: prompt, source: "user" }, ctx);
     const started = await harness.handlers.get("before_agent_start")({ prompt, systemPrompt: "stable", systemPromptOptions: { cwd, selectedTools: [...harness.activeTools] } }, ctx);
     const task = activeSessionTask(cwd, "independent-completion");
@@ -5046,11 +5049,26 @@ describe("piagent guard integration", () => {
     if (scenario === "shutdown") for (let index = 0; index < 64; index += 1) {
       checks[0].cases.push({ ...checks[0].cases[0], id: `slow-${index}` });
     }
-    writeHostContractApproval({ directory, projectRoot: cwd, installedRoot: root, operatorRequestDigest: task.operatorRequestDigest, approved: true,
-      backend: { imageId: process.env.PIAGENT_CONTRACT_EXECUTOR_IMAGE_ID,
-        dockerSocket: scenario === "backend-unavailable" ? "/piagent-test-unavailable.sock" : process.env.PIAGENT_CONTRACT_EXECUTOR_SOCKET, timeoutMs: 10000 },
-      contracts: task.acceptanceReceipt.criteria.map((criterion) => ({ criterionId: criterion.id, criterionHash: criterion.hash,
-        sourcePath: "src/math.js", ...(modular ? { modulePaths: ["src/sum-implementation.js"] } : {}), exportName: "sum", maxAttempts: 2, checks })) });
+    const backend = { imageId: process.env.PIAGENT_CONTRACT_EXECUTOR_IMAGE_ID,
+      dockerSocket: scenario === "backend-unavailable" ? "/piagent-test-unavailable.sock" : process.env.PIAGENT_CONTRACT_EXECUTOR_SOCKET, timeoutMs: 10000 };
+    let contracts = task.acceptanceReceipt.criteria.map((criterion) => ({ criterionId: criterion.id, criterionHash: criterion.hash,
+      sourcePath: "src/math.js", ...(modular ? { modulePaths: ["src/sum-implementation.js"] } : {}), exportName: "sum", maxAttempts: 2, checks }));
+    if (familySelection) {
+      const { compileContractSelection } = await import("../packages/piagent-core/extensions/acceptance-contract-selection.js");
+      const selections = task.acceptanceReceipt.criteria.flatMap((criterion, index) =>
+        ["verification-evidence", "backward-compatibility"].includes(criterion.obligation) ? [] : [{
+          criterion: { text: task.acceptanceCriteria[index], obligation: criterion.obligation },
+          family: { id: "finite-scalar-sum", version: 1 }, parameters: { call: "sum" }, sourcePath: "src/math.js", maxAttempts: 2
+        }]);
+      const preview = compileContractSelection({ taskText: JSON.stringify(task),
+        recipeText: JSON.stringify({ schemaVersion: 1, backend, selections }),
+        libraryText: fs.readFileSync(path.join(root, "adapters/node-typescript/contract-families.json"), "utf8") });
+      assert.equal(preview.status, "preview-only", JSON.stringify(preview));
+      assert.equal(preview.completionAllowed, false);
+      assert.ok(preview.unselectedCriteria.every((criterion) => ["verification-evidence", "backward-compatibility"].includes(criterion.obligation)));
+      contracts = preview.plan.contracts;
+    }
+    writeHostContractApproval({ directory, projectRoot: cwd, installedRoot: root, operatorRequestDigest: task.operatorRequestDigest, approved: true, backend, contracts });
     await harness.handlers.get("tool_result")({ toolName: "read", input: { path: "src/math.js" }, content: [{ type: "text", text: source }], isError: false }, ctx);
     if (modular) await harness.handlers.get("tool_result")({ toolName: "read", input: { path: "src/sum-implementation.js" }, content: [{ type: "text", text: implementation }], isError: false }, ctx);
     async function verifyProject(suffix) {
@@ -5174,7 +5192,7 @@ describe("piagent guard integration", () => {
       assert.equal(recovery?.payload.details.recovery.action, "repair", JSON.stringify(recovery));
       assert.equal(recovery.payload.details.recovery.failureCategory, "test-assertion");
       assert.match(recovery.payload.details.recovery.hypothesisRef, /^counterexample:[a-f0-9]{64}$/);
-      assert.match(recovery.payload.content, /bad-left/);
+      assert.match(recovery.payload.content, familySelection ? /text-left/ : /bad-left/);
       assert.match(recovery.payload.content, /TypeError/);
     }
     assert.equal(fs.readFileSync(path.join(cwd, "src", "math.js"), "utf8"), source, "verification never rewrites the source");
@@ -5198,7 +5216,8 @@ describe("piagent guard integration", () => {
     try {
       for (const [index, criterion] of task.acceptanceReceipt.criteria.entries()) {
         const latest = authority.store.latest({ taskRunId: task.taskRunId, criterionId: criterion.id });
-        if (["pending", "exhausted"].includes(scenario) && index > 0) assert.equal(latest, null, "a host-state stop does not start later checks");
+        if (familySelection && !contracts.some((contract) => contract.criterionId === criterion.id)) assert.equal(latest, null, "unselected obligations do not borrow a family assessment");
+        else if (["pending", "exhausted"].includes(scenario) && index > 0) assert.equal(latest, null, "a host-state stop does not start later checks");
         else assert.equal(latest.attempt, ["repair", "exhausted"].includes(scenarioKind) ? 2 : 1, "unchanged checks reuse evidence; a real repair consumes one new finite attempt");
       }
     } finally { authority.close(); }

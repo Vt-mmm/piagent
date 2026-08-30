@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { developmentCorpus } from "./development-corpus.mjs";
+import { selectedDevelopmentCorpus } from "./selected-development-corpus.mjs";
 import { compileIndependentContract, runIndependentContract } from "../../packages/piagent-core/extensions/acceptance-independent-contract.js";
 import { installedContractVerifierDigest } from "../../packages/piagent-core/extensions/acceptance-host-configuration.js";
 
@@ -27,7 +28,8 @@ export async function calibrate({ imageId, dockerSocket, corpus = developmentCor
     catch { result = { verdict: "error", reason: "calibration-execution-threw", checks: [], counterexamples: [] }; }
     const matched = result.verdict === item.expectedVerdict && result.execution?.status === "completed" && result.execution.cleanupConfirmed === true
       && (item.expectedVerdict !== "fail" || result.counterexamples?.length > 0);
-    rows.push({ id: item.id, domain: item.domain, expectedVerdict: item.expectedVerdict, rationale: item.rationale, matched, result });
+    rows.push({ id: item.id, domain: item.domain, expectedVerdict: item.expectedVerdict, rationale: item.rationale,
+      ...(item.selection ? { selection: item.selection } : {}), matched, result });
   }
   const count = (predicate) => rows.filter(predicate).length;
   const summary = { total: rows.length, matched: count((r) => r.matched),
@@ -45,17 +47,31 @@ export async function calibrate({ imageId, dockerSocket, corpus = developmentCor
 async function main(argv) {
   const options = {};
   for (let index = 0; index < argv.length; index += 2) {
-    const key = { "--image-id": "imageId", "--docker-socket": "dockerSocket", "--output": "output" }[argv[index]];
-    if (!key || options[key] || !argv[index + 1] || argv[index + 1].startsWith("--")) throw new Error("Expected unique --image-id, --docker-socket and --output arguments");
+    const key = { "--image-id": "imageId", "--docker-socket": "dockerSocket", "--output": "output", "--families": "families" }[argv[index]];
+    if (!key || options[key] || !argv[index + 1] || argv[index + 1].startsWith("--")) throw new Error("Expected unique --image-id, --docker-socket, --output and optional --families arguments");
     options[key] = argv[index + 1];
   }
-  if (!/^sha256:[a-f0-9]{64}$/.test(options.imageId ?? "") || !path.isAbsolute(options.dockerSocket ?? "") || !path.isAbsolute(options.output ?? "")) {
+  if (!/^sha256:[a-f0-9]{64}$/.test(options.imageId ?? "") || !path.isAbsolute(options.dockerSocket ?? "") || !path.isAbsolute(options.output ?? "")
+    || options.families && !path.isAbsolute(options.families)) {
     throw new Error("Pinned local image, absolute socket and new absolute output path are required");
   }
   // Reserve output before execution; reruns never overwrite diagnostic history.
   const fd = fs.openSync(options.output, "wx", 0o600);
   try {
-    const report = await calibrate(options);
+    let libraryText;
+    if (options.families) {
+      const input = fs.openSync(options.families, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+      try {
+        const stat = fs.fstatSync(input);
+        if (!stat.isFile() || stat.size < 1 || stat.size > 2 * 1024 * 1024) throw new Error("Invalid calibration family library");
+        const bytes = fs.readFileSync(input); libraryText = bytes.toString("utf8");
+        if (bytes.length !== stat.size || !Buffer.from(libraryText).equals(bytes)) throw new Error("Invalid calibration family bytes");
+      } finally { fs.closeSync(input); }
+    }
+    const corpus = options.families ? selectedDevelopmentCorpus(libraryText, {
+      imageId: options.imageId, dockerSocket: options.dockerSocket, timeoutMs: 10000
+    }) : undefined;
+    const report = await calibrate({ ...options, ...(corpus ? { corpus } : {}) });
     fs.writeFileSync(fd, `${JSON.stringify(report, null, 2)}\n`); fs.fsyncSync(fd);
     process.stdout.write(`${JSON.stringify({ output: options.output, expectationsMatched: report.expectationsMatched, summary: report.summary, heldOut: false, claimEligible: false })}\n`);
     if (!report.expectationsMatched) process.exitCode = 1;

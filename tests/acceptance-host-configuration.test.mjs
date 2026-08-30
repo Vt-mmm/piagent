@@ -96,6 +96,16 @@ test("approval cannot be transplanted to another project or another authority pa
   assert.throws(() => f.open({ configPath: path.join(copied, "approval.json") }), /unauthenticated/);
 });
 
+test("installed reusable family data is part of verifier identity and revokes old approvals on drift", (t) => {
+  const f = fixture(t), file = path.join(f.installedRoot, "adapters/node-typescript/contract-families.json");
+  fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, JSON.stringify({ fixture: 1 }));
+  writeHostContractApproval(f.options); const configuration = f.open();
+  assert.equal(configuration.isCurrent(), true);
+  fs.writeFileSync(file, JSON.stringify({ fixture: 2 }));
+  assert.equal(configuration.isCurrent(), false);
+  assert.throws(() => f.open(), /verifier changed/);
+});
+
 test("published schemas describe the host plan and approval without treating JSON as authority", (t) => {
   const f = fixture(t), payload = prepareHostContractApproval(f.options);
   const ajv = new Ajv({ allErrors: true, strict: false });

@@ -84,10 +84,23 @@
       "properties": { "imageId": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
         "dockerSocket": { "type": "string", "pattern": "^/[^\u0000]*$" }, "timeoutMs": { "type": "integer", "minimum": 25, "maximum": 30000 } }
     },
+    "selection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["version", "familyId", "familyVersion", "familyDigest", "parametersDigest", "domain", "criterionText"],
+      "properties": {
+        "version": { "const": "contract-family-selection-v1" },
+        "familyId": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$" },
+        "familyVersion": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+        "familyDigest": { "$ref": "#/$defs/hash" }, "parametersDigest": { "$ref": "#/$defs/hash" },
+        "domain": { "enum": ["pure-function", "temporal-input", "configuration-precedence", "stateful-recovery"] },
+        "criterionText": { "type": "string", "minLength": 1, "maxLength": 4000 }
+      }
+    },
     "contracts": { "type": "array", "minItems": 1, "maxItems": 12, "items": {
       "type": "object", "additionalProperties": false, "required": ["criterionId", "criterionHash", "sourcePath", "exportName", "maxAttempts", "checks"],
       "properties": {
         "criterionId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9:._-]{0,79}$" }, "criterionHash": { "$ref": "#/$defs/hash" },
+        "selection": { "$ref": "#/$defs/selection" },
         "sourcePath": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*//)(?!.*/$)(?!.*(?:^|/)(?:\\.{1,2}|\\.git|\\.pi|node_modules)(?:/|$))[^\\\\\u0000]+$" },
         "modulePaths": { "type": "array", "maxItems": 31, "uniqueItems": true, "items": {
           "type": "string", "minLength": 1, "maxLength": 1024,

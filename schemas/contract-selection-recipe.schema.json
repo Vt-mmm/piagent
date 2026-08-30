@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://piagent.dev/schemas/contract-selection-recipe.schema.json",
+  "title": "Reusable contract selection recipe (not authority or evidence)",
+  "description": "Exact criterion text/obligation matching against a task snapshot. No fuzzy source matching. Parameters substitute complete data nodes; the compiler validates the fully expanded independent plan. Unknown or ambiguous requested selections produce no plan.",
+  "type": "object", "additionalProperties": false,
+  "required": ["schemaVersion", "backend", "selections"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "backend": { "$ref": "approved-host-contracts.schema.json#/$defs/backend" },
+    "selections": { "type": "array", "minItems": 1, "maxItems": 12, "items": {
+      "type": "object", "additionalProperties": false,
+      "required": ["criterion", "family", "parameters", "sourcePath", "maxAttempts"],
+      "properties": {
+        "criterion": { "type": "object", "additionalProperties": false, "required": ["text", "obligation"], "properties": {
+          "text": { "type": "string", "minLength": 1, "maxLength": 4000 },
+          "obligation": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$" }
+        } },
+        "family": { "type": "object", "additionalProperties": false, "required": ["id", "version"], "properties": {
+          "id": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,79}$" },
+          "version": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+          "digest": { "$ref": "approved-host-contracts.schema.json#/$defs/hash" }
+        } },
+        "parameters": { "type": "object", "maxProperties": 32 },
+        "sourcePath": { "$ref": "approved-host-contracts.schema.json#/$defs/contracts/items/properties/sourcePath" },
+        "modulePaths": { "$ref": "approved-host-contracts.schema.json#/$defs/contracts/items/properties/modulePaths" },
+        "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 8 }
+      }
+    } }
+  }
+}
