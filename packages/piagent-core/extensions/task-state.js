@@ -21,6 +21,7 @@ import {
 export { taskDigestMigrationArchiveStatus } from "./task-digest-state.js";
 import { acceptanceReceiptWithoutWorkingTreeProof, normalizedTaskDigestFields, taskDigestContractValidationErrors } from "./task-digest-contract.js";
 import { unicodeCodePointLength } from "./verification-intelligence.js";
+import { isWorkspaceRevisionDigest } from "./workspace-revision.js";
 import {
   WORKING_TREE_DIGEST_ALGORITHM,
   isCurrentWorkingTreeDigest,
@@ -63,7 +64,7 @@ const CITATION_FIELDS = new Set(["path", "reason"]);
 const WORK_PLAN_FIELDS = new Set(["id", "title", "role", "mode", "status", "dependsOn", "note", "updatedAt"]);
 const ORCHESTRATION_FIELDS = new Set(["mode", "subagents", "reason", "fieldGuidePath", "modelRoles"]);
 const MODEL_ROLE_FIELDS = new Set(["planner", "worker", "reviewer", "watchdog"]);
-const VERIFY_EVIDENCE_FIELDS = new Set(["command", "exitCode", "summary", "recordedAt", "observed", "observedAt", "isError", "matchedProfileCommand", "preWorkingTreeDigest", "workingTreeDigest"]);
+const VERIFY_EVIDENCE_FIELDS = new Set(["command", "exitCode", "summary", "recordedAt", "observed", "observedAt", "isError", "matchedProfileCommand", "preWorkingTreeDigest", "workingTreeDigest", "preWorkspaceRevisionDigest", "workspaceRevisionDigest"]);
 const TRACE_FIELDS = new Set(["outcome", "friction", "notes", "recordedAt"]);
 export function safeTaskId(value) {
   const normalized = String(value ?? "")
@@ -329,6 +330,8 @@ export function taskContractValidationErrors(input) {
     || (item.matchedProfileCommand !== undefined && typeof item.matchedProfileCommand !== "boolean")
     || (item.preWorkingTreeDigest !== undefined && !isCurrentWorkingTreeDigest(item.preWorkingTreeDigest))
     || (item.workingTreeDigest !== undefined && !isCurrentWorkingTreeDigest(item.workingTreeDigest))
+    || (item.preWorkspaceRevisionDigest !== undefined && !isWorkspaceRevisionDigest(item.preWorkspaceRevisionDigest))
+    || (item.workspaceRevisionDigest !== undefined && !isWorkspaceRevisionDigest(item.workspaceRevisionDigest))
   ))) {
     errors.push("verifyEvidence entries are invalid");
   }
@@ -411,7 +414,9 @@ export function normalizeTaskContract(input, options = {}) {
         isError: item.isError,
         matchedProfileCommand: item.matchedProfileCommand,
         preWorkingTreeDigest: item.preWorkingTreeDigest,
-        workingTreeDigest: item.workingTreeDigest
+        workingTreeDigest: item.workingTreeDigest,
+        preWorkspaceRevisionDigest: item.preWorkspaceRevisionDigest,
+        workspaceRevisionDigest: item.workspaceRevisionDigest
       } : item)
     : [];
   const normalized = {

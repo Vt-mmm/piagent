@@ -123,11 +123,11 @@ export function planUnversionedTaskDigestMigration(raw, options) {
   return { task, disposition: "refresh" };
 }
 
-export function completeTaskDigestRefresh(task, currentWorkingTreeDigest) {
+export function completeTaskDigestRefresh(task, currentWorkingTreeDigest, workspaceRevisionDigest) {
   if (task?.workingTreeDigestAlgorithm !== WORKING_TREE_DIGEST_ALGORITHM || !isCurrentWorkingTreeDigest(currentWorkingTreeDigest) || task?.workingTreeDigestMigration?.status !== "verification-refresh-required") return task;
   const commands = [...new Set((task.verifyCommands ?? []).map((value) => String(value).trim()).filter(Boolean))];
   const currentPassing = new Set([...latestObservedVerificationEvidence(task.verifyEvidence).values()]
-    .filter((entry) => verificationEvidenceProvesStableTree(entry, currentWorkingTreeDigest))
+    .filter((entry) => verificationEvidenceProvesStableTree(entry, currentWorkingTreeDigest, workspaceRevisionDigest))
     .map((entry) => String(entry.command).trim()));
   if (commands.length === 0 || commands.some((command) => !currentPassing.has(command))) return task;
   return {

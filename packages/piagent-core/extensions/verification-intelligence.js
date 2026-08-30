@@ -11,7 +11,8 @@ import {
   validateFailureClassification,
   validateFailureEvidence
 } from "./failure-types.ts";
-import { isCurrentWorkingTreeDigest } from "./working-tree-digest.js";
+import { isCurrentWorkingTreeDigest, WORKING_TREE_DIGEST_ALGORITHM } from "./working-tree-digest.js";
+import { currentWorkspaceRevisionDigest, isWorkspaceRevisionDigest } from "./workspace-revision.js";
 
 export const MAX_VERIFY_COMMANDS = 2;
 export const MAX_VERIFY_COMMAND_CHARS = 900;
@@ -96,13 +97,18 @@ export function latestObservedVerification(evidence = []) {
   return latest;
 }
 
-export function verificationEvidenceProvesStableTree(entry, digest) {
+export function verificationEvidenceProvesStableTree(entry, digest, workspaceRevisionDigest) {
+  const revisionRequired = workspaceRevisionDigest !== undefined
+    || entry?.preWorkspaceRevisionDigest !== undefined || entry?.workspaceRevisionDigest !== undefined;
   return isCurrentWorkingTreeDigest(digest)
     && entry?.observed === true
     && entry.matchedProfileCommand === true
     && entry.exitCode === 0
+    && entry.isError !== true
     && entry.preWorkingTreeDigest === digest
-    && entry.workingTreeDigest === digest;
+    && entry.workingTreeDigest === digest
+    && (!revisionRequired || (isWorkspaceRevisionDigest(workspaceRevisionDigest)
+      && entry.preWorkspaceRevisionDigest === workspaceRevisionDigest && entry.workspaceRevisionDigest === workspaceRevisionDigest));
 }
 
 export function verificationRunIdentity(cwd, command, changedFiles = []) {
@@ -114,6 +120,17 @@ export function verificationRunIdentity(cwd, command, changedFiles = []) {
       changedFiles: normalizedFiles
     }))
     .digest("hex");
+}
+
+export function verificationEvidenceProvesCurrentWorkspace(entry, digest, cwd) {
+  return verificationEvidenceProvesStableTree(entry, digest, currentWorkspaceRevisionDigest(cwd));
+}
+
+export function allConfiguredVerifierEvidenceCurrent(task, digest, workspaceRevisionDigest) {
+  if (task?.workingTreeDigestAlgorithm !== WORKING_TREE_DIGEST_ALGORITHM || !isCurrentWorkingTreeDigest(digest)) return false;
+  const commands = meaningfulVerificationCommands(task?.verifyCommands ?? []);
+  const latest = latestObservedVerificationEvidence(task?.verifyEvidence);
+  return commands.length > 0 && commands.every((command) => verificationEvidenceProvesStableTree(latest.get(command.trim()), digest, workspaceRevisionDigest));
 }
 
 const STRUCTURED_SIGNALS = {
@@ -269,10 +286,13 @@ export function selectCompletionRecoveryClassification(recordedClassification, m
 }
 
 /** Reuse a checkpoint classification only for the exact current failed run. */
-export function recordedFailureForObservation(checkpoints, observed, currentTreeDigest) {
+export function recordedFailureForObservation(checkpoints, observed, currentTreeDigest, workspaceRevisionDigest) {
   if (observed?.observed !== true || observed.matchedProfileCommand !== true || observed.exitCode === 0
     || !isCurrentWorkingTreeDigest(observed.preWorkingTreeDigest) || observed.preWorkingTreeDigest !== observed.workingTreeDigest
     || (currentTreeDigest !== undefined && currentTreeDigest !== observed.workingTreeDigest)) return undefined;
+  const revisionRequired = workspaceRevisionDigest !== undefined || observed.preWorkspaceRevisionDigest !== undefined || observed.workspaceRevisionDigest !== undefined;
+  if (revisionRequired && (!isWorkspaceRevisionDigest(workspaceRevisionDigest)
+    || observed.preWorkspaceRevisionDigest !== workspaceRevisionDigest || observed.workspaceRevisionDigest !== workspaceRevisionDigest)) return undefined;
   const observedAt = observed.observedAt ?? observed.recordedAt;
   if (typeof observedAt !== "string" || !Number.isFinite(Date.parse(observedAt))) return undefined;
   const checkpoint = (Array.isArray(checkpoints) ? checkpoints : []).filter((item) => {
@@ -280,7 +300,8 @@ export function recordedFailureForObservation(checkpoints, observed, currentTree
     return item?.phase === "verify" && item.status === "failed" && binding
       && binding.command === observed.command?.trim() && binding.observedAt === observedAt
       && binding.exitCode === observed.exitCode && binding.preWorkingTreeDigest === observed.preWorkingTreeDigest
-      && binding.workingTreeDigest === observed.workingTreeDigest;
+      && binding.workingTreeDigest === observed.workingTreeDigest
+      && (!revisionRequired || (binding.preWorkspaceRevisionDigest === workspaceRevisionDigest && binding.workspaceRevisionDigest === workspaceRevisionDigest));
   }).at(-1);
   try { return checkpoint ? validateFailureClassification(checkpoint.evidence.failureClassification) : undefined; }
   catch { return undefined; }

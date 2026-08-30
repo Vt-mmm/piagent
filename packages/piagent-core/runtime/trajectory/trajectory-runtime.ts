@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { currentWorkspaceRevisionDigest } from "../../extensions/workspace-revision.js";
 
 import { hasDurableContextEvidence } from "../../extensions/context-evidence.js";
 import type { TaskContract } from "../../extensions/guard-types.ts";
@@ -57,7 +58,8 @@ function phaseObservation(
   task: TaskContract,
   phase: string,
   options: TrajectorySyncOptions,
-  currentTreeDigest?: string | null
+  currentTreeDigest?: string | null,
+  workspaceRevisionDigest?: string | null
 ): TrajectoryTransitionEvent["cause"] | undefined {
   const latest = latestVerification(task);
   if (phase === "scout" && (options.contextObserved === true || hasDurableContextEvidence(task) || stepObserved(task, ["scope", "challenge", "scout"]))) return "context-observed";
@@ -68,7 +70,7 @@ function phaseObservation(
   }
   if (phase === "verify") {
     if (options.verificationStarted === true) return "verification-started";
-    if (verificationEvidenceProvesStableTree(latest, currentTreeDigest)) return "verification-passed";
+    if (verificationEvidenceProvesStableTree(latest, currentTreeDigest, workspaceRevisionDigest)) return "verification-passed";
   }
   if (phase === "review" && stepObserved(task, ["review"])) return "review-observed";
   if (phase === "handoff" && options.handoffObserved === true) return "handoff-observed";
@@ -123,6 +125,7 @@ export class TrajectoryRuntime {
     const transitions: TrajectoryTransitionEvent[] = [];
     const observedAt = options.observedAt ?? new Date().toISOString();
     const taskDigest = digest(task), currentTreeDigest = treeDigest(task);
+    const workspaceRevisionDigest = currentWorkspaceRevisionDigest(cwd);
     const latest = latestVerification(task);
     if (state.currentPhase === "intake" && sourcePlanningAuthorized(task)) {
       const path = trajectoryPath(state.changeMode, state.riskLane);
@@ -184,7 +187,7 @@ export class TrajectoryRuntime {
       state = recordTransition(cwd, state, event);
       transitions.push(event);
     }
-    const passingVerifierAfterRepair = verificationEvidenceProvesStableTree(latest, currentTreeDigest)
+    const passingVerifierAfterRepair = verificationEvidenceProvesStableTree(latest, currentTreeDigest, workspaceRevisionDigest)
       && Date.parse(String(latest?.observedAt ?? latest?.recordedAt)) >= Date.parse(state.updatedAt);
     if (state.currentPhase === "repair" && (options.verificationStarted || passingVerifierAfterRepair)) {
       const event = createTrajectoryTransition(state, { to: "verify", cause: "verification-started", sourceHook: options.sourceHook, taskDigest, treeDigest: currentTreeDigest, observedAt });
@@ -195,7 +198,7 @@ export class TrajectoryRuntime {
     while (state.currentPhase !== "terminal") {
       const currentIndex = path.indexOf(state.currentPhase);
       const next = currentIndex >= 0 ? path[currentIndex + 1] : undefined;
-      const cause = next && next !== "terminal" ? phaseObservation(task, next, options, currentTreeDigest) : undefined;
+      const cause = next && next !== "terminal" ? phaseObservation(task, next, options, currentTreeDigest, workspaceRevisionDigest) : undefined;
       if (!next || next === "terminal" || !cause) break;
       const event = createTrajectoryTransition(state, { to: next, cause, sourceHook: options.sourceHook, taskDigest, treeDigest: currentTreeDigest, observedAt });
       state = recordTransition(cwd, state, event);

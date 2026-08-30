@@ -4,11 +4,7 @@ import type { TaskContract } from "../../extensions/guard-types.ts";
 import { extractShellCommandInput, normalizeShellCommandForPolicy } from "../../extensions/guard-shell-analysis.ts";
 import { commandMatchesVerifyPlan } from "../../extensions/runtime-evidence.js";
 import { passingVerifyCommandsForDigest } from "../../extensions/task-contract-view.js";
-import {
-  workingTreeSnapshot,
-  workingTreeSnapshotHasUnavailableEvidence
-} from "../../extensions/task-state.js";
-import { workingTreeEvidenceDigest } from "../../extensions/task-lifecycle.js";
+import { captureWorkspaceVerificationSnapshot } from "../../extensions/workspace-verification-snapshot.js";
 
 const SHELL_TOOLS = new Set(["bash", "shell", "exec"]);
 const REUSE_COMMAND = "printf '%s\\n' 'Piagent reused exact verifier evidence for the unchanged working tree; the verifier was not rerun.'";
@@ -49,6 +45,7 @@ export function evaluateExactVerifierReuse(input: {
   toolName: string;
   toolInput: Record<string, unknown>;
   workingTreeDigest: string | null;
+  workspaceRevisionDigest?: string | null;
   sessionEntries?: unknown[];
 }): ExactVerifierReuseDecision {
   const no = (reasonCode: string): ExactVerifierReuseDecision => ({ reused: false, reasonCode, commandDigest: null, workingTreeDigest: input.workingTreeDigest });
@@ -61,7 +58,7 @@ export function evaluateExactVerifierReuse(input: {
   if (!extracted.command || extracted.reason) return no("shell-command-unavailable");
   const command = normalizeShellCommandForPolicy(extracted.command);
   if (!commandMatchesVerifyPlan(command, task.verifyCommands)) return no("not-exact-verifier");
-  const passing = passingVerifyCommandsForDigest(task, input.workingTreeDigest);
+  const passing = passingVerifyCommandsForDigest(task, input.workingTreeDigest, input.workspaceRevisionDigest);
   const exactVerifier = task.verifyCommands.find((candidate) => (
     passing.has(candidate.trim())
     && commandMatchesVerifyPlan(command, [candidate])
@@ -93,9 +90,7 @@ export function reuseCurrentTreeExactVerifier(input: {
   if (!command || !commandMatchesVerifyPlan(command, input.task.verifyCommands)) {
     return { reused: false, reasonCode: "not-exact-verifier", commandDigest: null, workingTreeDigest: null };
   }
-  const snapshot = workingTreeSnapshot(input.cwd) as Record<string, string>;
-  const workingTreeDigest = workingTreeSnapshotHasUnavailableEvidence(snapshot)
-    ? null
-    : workingTreeEvidenceDigest(snapshot);
-  return evaluateExactVerifierReuse({ ...input, workingTreeDigest });
+  const snapshot = captureWorkspaceVerificationSnapshot(input.cwd);
+  return evaluateExactVerifierReuse({ ...input, workingTreeDigest: snapshot.proofCapable ? snapshot.digest : null,
+    workspaceRevisionDigest: snapshot.workspaceRevisionDigest });
 }

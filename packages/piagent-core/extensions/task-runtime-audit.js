@@ -34,7 +34,8 @@ export function recordMutationCheckpoint(ctx, task, evidence = {}) {
 export function recordVerificationCheckpoint(ctx, task, verification = {}) {
   const observation = verification.observedAt ?? task.updatedAt;
   const preTree = verification.preWorkingTreeDigest ?? verification.evidence?.preWorkingTreeDigest;
-  const identity = crypto.createHash("sha256").update(JSON.stringify([verification.commandHash, preTree, verification.workingTreeDigest, verification.exitCode, observation])).digest("hex");
+  const preRevision = verification.evidence?.preWorkspaceRevisionDigest, revision = verification.evidence?.workspaceRevisionDigest;
+  const identity = crypto.createHash("sha256").update(JSON.stringify([verification.commandHash, preTree, verification.workingTreeDigest, verification.exitCode, observation, preRevision, revision])).digest("hex");
   return recordRuntimeTaskCheckpoint(ctx, {
     taskRunId: task.taskRunId,
     taskId: task.taskId,
@@ -48,6 +49,7 @@ export function recordVerificationCheckpoint(ctx, task, verification = {}) {
     evidence: { ...verification.evidence, verificationObservation: {
       command: String(verification.evidence?.command ?? "").trim(), observedAt: observation, exitCode: verification.exitCode,
       ...(preTree ? { preWorkingTreeDigest: preTree } : {}),
+      ...(preRevision ? { preWorkspaceRevisionDigest: preRevision } : {}), ...(revision ? { workspaceRevisionDigest: revision } : {}),
       ...(verification.workingTreeDigest ? { workingTreeDigest: verification.workingTreeDigest } : {})
     } }
   });

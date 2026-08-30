@@ -4,17 +4,17 @@ import { runtimeLifecycleMode } from "./task-lifecycle.js";
 import { latestObservedVerificationEvidence, meaningfulVerificationCommands, verificationEvidenceProvesStableTree } from "./verification-intelligence.js";
 import { isCurrentWorkingTreeDigest, WORKING_TREE_DIGEST_ALGORITHM } from "./working-tree-digest.js";
 
-export function passingVerifyCommandsForDigest(task, digest) {
+export function passingVerifyCommandsForDigest(task, digest, workspaceRevisionDigest) {
   if (task?.workingTreeDigestAlgorithm !== WORKING_TREE_DIGEST_ALGORITHM || !isCurrentWorkingTreeDigest(digest)) return new Set();
   return new Set([...latestObservedVerificationEvidence(task?.verifyEvidence).values()]
-    .filter((evidence) => verificationEvidenceProvesStableTree(evidence, digest))
+    .filter((evidence) => verificationEvidenceProvesStableTree(evidence, digest, workspaceRevisionDigest))
     .map((evidence) => String(evidence.command ?? "").trim()));
 }
 
-export function allVerifyCommandsPassCurrentTree(task, digest) {
+export function allVerifyCommandsPassCurrentTree(task, digest, workspaceRevisionDigest) {
   const planned = meaningfulVerificationCommands(task?.verifyCommands ?? []);
   if (planned.length === 0) return false;
-  const passing = passingVerifyCommandsForDigest(task, digest);
+  const passing = passingVerifyCommandsForDigest(task, digest, workspaceRevisionDigest);
   return planned.every((command) => passing.has(command.trim()));
 }
 

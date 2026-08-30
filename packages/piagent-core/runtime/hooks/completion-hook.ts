@@ -11,6 +11,7 @@ import type { TaskContract } from "../../extensions/guard-types.js";
 import { applyAssistedReadOnlyFinalHandoff, runtimeLifecycleMode, workingTreeEvidenceDigest } from "../../extensions/task-lifecycle.js";
 import { recordCompletionAudit } from "../../extensions/task-runtime-audit.js";
 import { workingTreeSnapshot } from "../../extensions/task-state.js";
+import { currentWorkspaceRevisionDigest } from "../../extensions/workspace-revision.js";
 import { taskDeltaFilesFromSnapshot } from "../../extensions/task-contract-view.js";
 import { latestObservedVerification, verificationEvidenceProvesStableTree } from "../../extensions/verification-intelligence.js";
 import {
@@ -197,7 +198,7 @@ export function registerCompletionHook(pi: ExtensionAPI, dependencies: Completio
 
     const currentDigests = workingTreeSnapshot(ctx.cwd) as Record<string, string>;
     const currentDigest = workingTreeEvidenceDigest(currentDigests);
-    const currentPassingVerifierObserved = verificationEvidenceProvesStableTree(latestExactVerifier, currentDigest);
+    const currentPassingVerifierObserved = verificationEvidenceProvesStableTree(latestExactVerifier, currentDigest, currentWorkspaceRevisionDigest(ctx.cwd));
     const handoffAttempt = completionClaim || (
       !incompleteHandoff
       && (task.observedChangedFiles.length > 0 || currentPassingVerifierObserved || readOnlyEvidenceObserved)

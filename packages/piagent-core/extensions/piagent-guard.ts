@@ -90,6 +90,8 @@ import { allVerifyCommandsPassCurrentTree, changedSnapshotFiles, compactTaskDeta
 import { applyRuntimeLifecycleObservation, runtimeLifecycleMode, workingTreeEvidenceDigest } from "./task-lifecycle.js";
 import { completeTaskDigestRefresh } from "./task-digest-migration.js";
 import { WORKING_TREE_DIGEST_ALGORITHM, isCurrentWorkingTreeDigest, workingTreeObservation, workingTreeSnapshotUsesCurrentAlgorithm } from "./working-tree-digest.js";
+import { currentWorkspaceRevisionDigest } from "./workspace-revision.js";
+import { captureWorkspaceVerificationSnapshot } from "./workspace-verification-snapshot.js";
 import { appendJsonlBounded } from "./state-retention.js";
 import { ensurePrivateStateDirectory, resolveLocalStatePath } from "./local-state-path.js";
 import { hasDurableContextEvidence } from "./context-evidence.js";
@@ -1883,8 +1885,8 @@ function recordObservedTaskVerification(
   },
   pendingContext: ObservedTaskContext[],
   maxManifestFiles: number, shellSnapshotBefore?: Record<string, string>,
-  eventTree?: ReturnType<typeof workingTreeObservation>,
-  readProtectedPaths: string[] = []
+  eventTree?: ReturnType<typeof captureWorkspaceVerificationSnapshot>,
+  readProtectedPaths: string[] = [], preWorkspaceRevisionDigest?: string
 ): TaskContract | undefined {
   const task = activeSessionTask(ctx.cwd, ctx.sessionManager.getSessionId()) as TaskContract | undefined;
   if (!task || task.trace.outcome !== "pending") return;
@@ -1903,6 +1905,7 @@ function recordObservedTaskVerification(
   if (!eventTree?.proofCapable) return;
   const currentDigests = eventTree.snapshot as Record<string, string>;
   const currentDigest = eventTree.digest;
+  const workspaceRevisionDigest = eventTree.workspaceRevisionDigest ?? undefined;
   const preWorkingTreeDigest = shellSnapshotBefore && workingTreeSnapshotUsesCurrentAlgorithm(shellSnapshotBefore) ? workingTreeEvidenceDigest(shellSnapshotBefore) : undefined;
   const exitCode = Number.isInteger(observed.exitCode) ? observed.exitCode as number : observed.isError ? 1 : 0;
   const classification = classifyVerificationFailure(observed.outputText, exitCode);
@@ -1910,6 +1913,7 @@ function recordObservedTaskVerification(
     evidence.command.trim() === command
     && evidence.exitCode === exitCode
     && evidence.workingTreeDigest === currentDigest && evidence.observedAt === observed.recordedAt
+    && evidence.workspaceRevisionDigest === workspaceRevisionDigest && evidence.preWorkspaceRevisionDigest === preWorkspaceRevisionDigest
   ));
   const contextAdded = mergeObservedTaskContext(task, pendingContext, maxManifestFiles, redactText);
   if (!duplicate) {
@@ -1925,7 +1929,8 @@ function recordObservedTaskVerification(
       isError: observed.isError === true,
       matchedProfileCommand: true,
       preWorkingTreeDigest,
-      workingTreeDigest: currentDigest
+      workingTreeDigest: currentDigest,
+      preWorkspaceRevisionDigest, workspaceRevisionDigest
     });
     task.verifyEvidence = task.verifyEvidence.slice(-100);
     try {
@@ -1943,7 +1948,7 @@ function recordObservedTaskVerification(
   const taskLocalDelta = taskChangedFileEvidence(ctx.cwd, task, currentDigests).expected;
   const hasChanges = taskLocalDelta.length > 0;
   const verificationCanSettleSourceTask = hasChanges || task.mutationPolicy === "allowed";
-  const allPassing = verificationCanSettleSourceTask && allVerifyCommandsPassCurrentTree(task, currentDigest);
+  const allPassing = verificationCanSettleSourceTask && allVerifyCommandsPassCurrentTree(task, currentDigest, workspaceRevisionDigest ?? null);
   const lifecycle = verificationCanSettleSourceTask
     ? applyRuntimeLifecycleObservation(task, allPassing ? "verification-complete" : "verification-pending", nowIso())
     : { changed: false, mode: runtimeLifecycleMode(task) };
@@ -1953,7 +1958,7 @@ function recordObservedTaskVerification(
     currentWorkingTreeDigest: currentDigest
   });
   task.acceptanceReceipt = acceptance.task.acceptanceReceipt;
-  if (!task.workingTreeDigestMigration || (shellSnapshotBefore && changedSnapshotFiles(shellSnapshotBefore, currentDigests).length === 0)) Object.assign(task, completeTaskDigestRefresh(task, currentDigest));
+  if (!task.workingTreeDigestMigration || (shellSnapshotBefore && changedSnapshotFiles(shellSnapshotBefore, currentDigests).length === 0)) Object.assign(task, completeTaskDigestRefresh(task, currentDigest, workspaceRevisionDigest ?? null));
   if (duplicate && contextAdded.length === 0 && !lifecycle.changed) return task;
 
   const written = writeTask(ctx.cwd, task);
@@ -1983,7 +1988,8 @@ function recordObservedTaskVerification(
       retryable: classification.retryable,
       failureClassification: classification,
       preWorkingTreeDigest,
-      workingTreeDigest: currentDigest
+      workingTreeDigest: currentDigest,
+      preWorkspaceRevisionDigest, workspaceRevisionDigest
     }
   });
   return written;
@@ -3537,7 +3543,7 @@ function evaluateTaskGate(
   }
   let missingVerifyCommands: string[] = [];
   if (task.changeMode === "source-change" && finalGate.requirePassingVerify && plannedVerifyCommands.length > 0) {
-    const passingCommands = passingVerifyCommandsForDigest(task, currentWorkingTreeDigest);
+    const passingCommands = passingVerifyCommandsForDigest(task, currentWorkingTreeDigest, currentWorkspaceRevisionDigest(cwd));
     missingVerifyCommands = plannedVerifyCommands.filter((command) => !passingCommands.has(command.trim()));
     if (missingVerifyCommands.length > 0) missing.push(`observed passing verify evidence for every configured command (${missingVerifyCommands.length} missing)`);
   }
@@ -4003,7 +4009,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
     try {
       const replay = replayTaskCheckpoints(ctx.cwd, task.taskRunId, task);
       if (replay.corruptions.length === 0 && failed) recordedClassification = recordedFailureForObservation(
-        replay.checkpoints, failed, currentTreeDigest
+        replay.checkpoints, failed, currentTreeDigest, currentWorkspaceRevisionDigest(ctx.cwd)
       ) as FailureClassification | undefined;
     } catch {
       // A missing/corrupt journal cannot grant recovery mutation; the fallback
@@ -4035,7 +4041,8 @@ export default function piagentGuard(pi: ExtensionAPI) {
       proposedHypothesisRef: classification.reasonCodes[0] ? `reason:${classification.reasonCodes[0]}` : null,
       exactVerifierAvailable: (gate?.missingVerifyCommands.length ?? task.verifyCommands.length) > 0,
       currentTreeMatchesEvidence: currentTreeDigest && latestExactVerifier?.workingTreeDigest
-        ? currentTreeDigest === latestExactVerifier.workingTreeDigest
+        ? currentTreeDigest === latestExactVerifier.workingTreeDigest && latestExactVerifier.preWorkspaceRevisionDigest === currentWorkspaceRevisionDigest(ctx.cwd)
+          && latestExactVerifier.workspaceRevisionDigest === latestExactVerifier.preWorkspaceRevisionDigest
         : true,
       dependencyMutationAuthorized
     });
@@ -4333,7 +4340,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
       const expectedReviewPaths = taskDeltaFilesFromSnapshot(task, currentSnapshot);
       const targets = targetInspection.targets;
       const boundedTargetMutation = targets.length > 0;
-      const verifierCurrent = allVerifyCommandsPassCurrentTree(task, currentDigest);
+      const verifierCurrent = allVerifyCommandsPassCurrentTree(task, currentDigest, currentWorkspaceRevisionDigest(ctx.cwd));
 
       if (phase.phase === "verify" && boundedTargetMutation && semanticRepairEnabled && semanticRepairRuntime.prepare({
         ctx, task, event, currentDigest, currentDeltaPaths: expectedReviewPaths, targetPaths: targets,
@@ -4845,7 +4852,7 @@ export default function piagentGuard(pi: ExtensionAPI) {
       && sessionTask.changeMode === "source-change"
       && (shellProjectMutation || configuredVerifierShell)
     ) {
-      runtimeState.rememberShellMutationSnapshot(ctx, event.toolName, event.input);
+      runtimeState.rememberShellMutationSnapshot(ctx, event.toolName, event.input, event.toolCallId);
     }
     }
   });

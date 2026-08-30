@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { currentWorkspaceRevisionDigest } from "../packages/piagent-core/extensions/workspace-revision.js";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -350,6 +352,7 @@ describe("durable handoff projection v2", () => {
 
   it("requires the latest verifier to pass without mutating the current tree", () => {
     const cwd = workspace();
+    execFileSync("git", ["init", "-q", cwd]);
     const current = task();
     const currentDigest = workingTreeEvidenceDigest({});
     current.verifyEvidence = [{
@@ -365,6 +368,10 @@ describe("durable handoff projection v2", () => {
     forged.tree.latestVerifierMatchesCurrentTree = true;
     assert.throws(() => validateHandoffProjection(forged), /latest verifier tree claim is invalid/);
     current.verifyEvidence[0].preWorkingTreeDigest = currentDigest;
+    const unbound = buildHandoffProjection(cwd, current, { gate: { decision: "fail", missing: [], missingVerifyCommands: [] }, currentDigests: {} });
+    assert.equal(unbound.tree.latestVerifierMatchesCurrentTree, false, "legacy evidence cannot claim a current baseline");
+    current.verifyEvidence[0].preWorkspaceRevisionDigest = currentWorkspaceRevisionDigest(cwd);
+    current.verifyEvidence[0].workspaceRevisionDigest = currentWorkspaceRevisionDigest(cwd);
     const stable = buildHandoffProjection(cwd, current, {
       gate: { decision: "fail", missing: [], missingVerifyCommands: [] }, currentDigests: {}
     });

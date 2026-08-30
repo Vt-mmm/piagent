@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { currentWorkspaceRevisionDigest } from "../../extensions/workspace-revision.js";
+import { handoffVerifierBindingErrors, type HandoffVerifierBinding } from "./handoff-verifier-binding.ts";
 
 import type { TaskContract } from "../../extensions/guard-types.ts";
 import { failureClassificationValidationErrors, type FailureClassification } from "../../extensions/failure-types.ts";
@@ -9,7 +11,7 @@ import { redactSensitiveText } from "../../extensions/redaction-core.js";
 import { changedSnapshotFiles } from "../../extensions/task-contract-view.js";
 import { replayTaskCheckpoints, taskJournalPaths } from "../../extensions/task-journal.js";
 import { safeTaskId, taskContractValidationErrors, taskDigestMigrationArchiveStatus, workingTreeSnapshot } from "../../extensions/task-state.js";
-import { latestObservedVerification, verificationEvidenceProvesStableTree } from "../../extensions/verification-intelligence.js";
+import { latestObservedVerification, verificationEvidenceProvesCurrentWorkspace } from "../../extensions/verification-intelligence.js";
 import {
   isCurrentWorkingTreeDigest,
   WORKING_TREE_DIGEST_ALGORITHM,
@@ -23,14 +25,12 @@ export const HANDOFF_PROJECTION_VERSION = "handoff-v2" as const;
 
 type CompletionGate = { decision: "pass" | "fail"; missing: string[]; missingVerifyCommands: string[]; currentWorkingTreeDigest?: string };
 type DigestRef = { sha256: string; chars: number };
-type LatestVerifier = {
+type LatestVerifier = HandoffVerifierBinding & {
   command: string;
   exitCode: number;
   observedAt: string | null;
   matchedProfileCommand: boolean;
   isError: boolean;
-  preWorkingTreeDigest: string | null;
-  workingTreeDigest: string | null;
   summaryRef: DigestRef;
 };
 
@@ -49,6 +49,7 @@ export type HandoffProjection = {
     migration: Pick<NonNullable<TaskContract["workingTreeDigestMigration"]>, "status" | "reasonCode" | "requiredAction"> | null;
     baselineDigest: string | null;
     currentDigest: string | null;
+    workspaceRevisionDigest: string | null;
     evidenceCurrent: boolean;
     latestVerifierMatchesCurrentTree: boolean;
   };
@@ -71,10 +72,10 @@ export type HandoffProjection = {
 const TOP_LEVEL_FIELDS = new Set(["schemaVersion", "projectionVersion", "generatedAt", "identity", "goal", "state", "acceptance", "decisionsAndInvariants", "contextReferences", "tree", "changedFiles", "verification", "failure", "ruledOutHypotheses", "requiredAuthority", "nextSafeAction", "references"]);
 const IDENTITY_FIELDS = new Set(["taskId", "taskRunId", "sessionHash", "sessionName", "attempt", "maxAttempts"]);
 const ACCEPTANCE_FIELDS = new Set(["required", "satisfied", "criteriaCount", "dispositionDigest"]);
-const TREE_FIELDS = new Set(["algorithm", "migration", "baselineDigest", "currentDigest", "evidenceCurrent", "latestVerifierMatchesCurrentTree"]);
+const TREE_FIELDS = new Set(["algorithm", "migration", "baselineDigest", "currentDigest", "evidenceCurrent", "latestVerifierMatchesCurrentTree", "workspaceRevisionDigest"]);
 const TREE_MIGRATION_FIELDS = new Set(["status", "reasonCode", "requiredAction"]);
 const VERIFICATION_FIELDS = new Set(["exactCommands", "missingCommands", "latestObserved"]);
-const LATEST_VERIFIER_FIELDS = new Set(["command", "exitCode", "observedAt", "matchedProfileCommand", "isError", "preWorkingTreeDigest", "workingTreeDigest", "summaryRef"]);
+const LATEST_VERIFIER_FIELDS = new Set(["command", "exitCode", "observedAt", "matchedProfileCommand", "isError", "preWorkingTreeDigest", "workingTreeDigest", "summaryRef", "preWorkspaceRevisionDigest", "workspaceRevisionDigest"]);
 const SUMMARY_REF_FIELDS = new Set(["sha256", "chars"]);
 const AUTHORITY_FIELDS = new Set(["required", "kind", "reasonCodes"]);
 const HASH = /^[a-f0-9]{64}$/;
@@ -141,7 +142,7 @@ export function handoffProjectionValidationErrors(input: unknown): string[] {
   if (
     !tree
     || Object.keys(tree).some((field) => !TREE_FIELDS.has(field))
-    || [...TREE_FIELDS].some((field) => !(field in tree))
+    || [...TREE_FIELDS].some((field) => field !== "workspaceRevisionDigest" && !(field in tree))
     || ![WORKING_TREE_DIGEST_ALGORITHM, "legacy-untrusted"].includes(String(tree.algorithm))
     || !migrationValid
     || (tree.baselineDigest !== null && !isCurrentWorkingTreeDigest(tree.baselineDigest))
@@ -175,7 +176,7 @@ export function handoffProjectionValidationErrors(input: unknown): string[] {
   const summary = record(latestVerifier?.summaryRef);
   if (verification?.latestObserved !== null && (!latestVerifier
     || Object.keys(latestVerifier).some((field) => !LATEST_VERIFIER_FIELDS.has(field))
-    || [...LATEST_VERIFIER_FIELDS].some((field) => !(field in latestVerifier))
+    || [...LATEST_VERIFIER_FIELDS].some((field) => !["preWorkspaceRevisionDigest", "workspaceRevisionDigest"].includes(field) && !(field in latestVerifier))
     || typeof latestVerifier.command !== "string" || latestVerifier.command.length > 1000
     || !Number.isInteger(latestVerifier.exitCode)
     || (latestVerifier.observedAt !== null && (typeof latestVerifier.observedAt !== "string" || !Number.isFinite(Date.parse(latestVerifier.observedAt))))
@@ -188,14 +189,7 @@ export function handoffProjectionValidationErrors(input: unknown): string[] {
     || !Number.isInteger(summary.chars)
     || summary.chars < 0
     || summary.chars > 20_000)) errors.push("latest verifier is invalid");
-  if (tree?.latestVerifierMatchesCurrentTree === true && (latestVerifier?.exitCode !== 0 || latestVerifier?.matchedProfileCommand !== true
-    || !isCurrentWorkingTreeDigest(latestVerifier?.preWorkingTreeDigest)
-    || latestVerifier?.preWorkingTreeDigest !== tree.currentDigest
-    || latestVerifier?.workingTreeDigest !== tree.currentDigest)) errors.push("latest verifier tree claim is invalid");
-  const latestVerifierDigest = latestVerifier?.workingTreeDigest;
-  if (latestVerifierDigest !== undefined && latestVerifierDigest !== null && !isCurrentWorkingTreeDigest(latestVerifierDigest)) errors.push("latest verifier workingTreeDigest is invalid");
-  const preVerifierDigest = latestVerifier?.preWorkingTreeDigest;
-  if (preVerifierDigest !== undefined && preVerifierDigest !== null && !isCurrentWorkingTreeDigest(preVerifierDigest)) errors.push("latest verifier preWorkingTreeDigest is invalid");
+  errors.push(...handoffVerifierBindingErrors(tree, latestVerifier));
   if (state?.completionApproved === true && tree?.evidenceCurrent !== true) errors.push("completionApproved requires current tree evidence");
   const requiredArrays = [value.decisionsAndInvariants, value.goal?.acceptanceCriteria, value.goal?.scope, value.contextReferences?.observed, value.changedFiles?.current, value.verification?.exactCommands, value.failure?.warnings, value.ruledOutHypotheses];
   if (requiredArrays.some((entry) => !Array.isArray(entry))) errors.push("projection collections are invalid");
@@ -386,7 +380,7 @@ export function buildHandoffProjection(
   const gateDigestCurrent = isCurrentWorkingTreeDigest(options.gate.currentWorkingTreeDigest)
     && options.gate.currentWorkingTreeDigest === currentDigest;
   const exactCommands = strings(task.verifyCommands, 50, 1000);
-  const currentExactVerifier = exactCommands.length === 0 || (verificationEvidenceProvesStableTree(observed, currentDigest)
+  const currentExactVerifier = exactCommands.length === 0 || (verificationEvidenceProvesCurrentWorkspace(observed, currentDigest, cwd)
     && exactCommands.includes(text(observed?.command, 1000)));
   const acceptanceDisposition = taskAcceptanceDisposition(task);
   const acceptanceSatisfied = acceptanceDisposition.satisfied;
@@ -412,6 +406,8 @@ export function buildHandoffProjection(
     isError: observed.isError === true,
     preWorkingTreeDigest: observed.preWorkingTreeDigest ?? null,
     workingTreeDigest: observed.workingTreeDigest ?? null,
+    preWorkspaceRevisionDigest: observed.preWorkspaceRevisionDigest ?? null,
+    workspaceRevisionDigest: observed.workspaceRevisionDigest ?? null,
     summaryRef: summaryRef(observed.summary)
   } : null;
   const projection: HandoffProjection = {
@@ -433,7 +429,7 @@ export function buildHandoffProjection(
       "Task Contract v2 is authoritative for task outcome.",
       "Failure classification never authorizes source mutation by itself.",
       "Source mutation still requires hook authorization; task scope is an advisory retrieval/review focus.",
-      "Verifier evidence is current only when its namespaced working-tree digest matches the current tree."
+      "Verifier evidence is current only when both working-tree content and workspace baseline identities match before, after, and now."
     ],
     contextReferences: {
       required: strings(task.requiredContext, 100, 500),
@@ -442,11 +438,12 @@ export function buildHandoffProjection(
     },
     tree: {
       algorithm: task.workingTreeDigestAlgorithm,
+      workspaceRevisionDigest: currentWorkspaceRevisionDigest(cwd),
       migration: projectedMigration(task),
       baselineDigest: task.workingTreeDigestAlgorithm === WORKING_TREE_DIGEST_ALGORITHM && isCurrentWorkingTreeDigest(baselineDigest) ? baselineDigest : null,
       currentDigest: task.workingTreeDigestAlgorithm === WORKING_TREE_DIGEST_ALGORITHM && isCurrentWorkingTreeDigest(currentDigest) ? currentDigest : null,
       evidenceCurrent,
-      latestVerifierMatchesCurrentTree: verificationEvidenceProvesStableTree(observed, currentDigest)
+      latestVerifierMatchesCurrentTree: verificationEvidenceProvesCurrentWorkspace(observed, currentDigest, cwd)
     },
     changedFiles: {
       baseline: strings(task.baselineChangedFiles, 500, 500), observed: strings(task.observedChangedFiles, 500, 500),

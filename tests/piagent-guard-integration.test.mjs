@@ -4913,6 +4913,10 @@ describe("piagent guard integration", () => {
     const cwd = createProject(root);
     fs.mkdirSync(path.join(cwd, "src", "platform"), { recursive: true });
     fs.writeFileSync(path.join(cwd, "src", "platform", "config.js"), "export const enabled = true;\n");
+    execFileSync("git", ["-C", cwd, "config", "user.email", "test@example.com"]);
+    execFileSync("git", ["-C", cwd, "config", "user.name", "Piagent Test"]);
+    execFileSync("git", ["-C", cwd, "add", "src/platform/config.js"]);
+    execFileSync("git", ["-C", cwd, "commit", "-qm", "clean baseline"]);
     const ctx = createContext(cwd, { sessionId: "session-conditional-verify", sessionName: "CONDITIONAL-VERIFY" });
     const harness = createPiHarness({ activeTools: ["read", "bash", "edit", "write"] });
     piagentGuard(harness.pi);
@@ -4935,6 +4939,18 @@ describe("piagent guard integration", () => {
       content: [{ type: "text", text: "export const enabled = true;" }],
       isError: false
     }, ctx);
+    const interruptedVerifier = started.message.details.runtimeTask.verifyCommands[0];
+    const interruptedAllowed = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", { command: interruptedVerifier }, "verify-drifting-head");
+    assert.notEqual(interruptedAllowed.block, true, interruptedAllowed.reason);
+    fs.writeFileSync(path.join(cwd, "src", "platform", "config.js"), "export const enabled = 'changed-during-verifier';\n");
+    execFileSync("git", ["-C", cwd, "add", "src/platform/config.js"]);
+    execFileSync("git", ["-C", cwd, "commit", "-qm", "baseline changed during verifier"]);
+    await harness.handlers.get("tool_result")({ toolCallId: "verify-drifting-head", toolName: "bash", input: { command: interruptedVerifier },
+      content: [{ type: "text", text: "pass" }], details: { exitCode: 0 }, isError: false, timestamp: Date.now() }, ctx);
+    const drifted = activeSessionTask(cwd, "session-conditional-verify");
+    assert.equal(drifted.verifyEvidence.at(-1).preWorkingTreeDigest, drifted.verifyEvidence.at(-1).workingTreeDigest);
+    assert.notEqual(drifted.verifyEvidence.at(-1).preWorkspaceRevisionDigest, drifted.verifyEvidence.at(-1).workspaceRevisionDigest);
+    assert.equal(drifted.workPlan.some((step) => step.status !== "done"), true, "a verifier that straddles clean commits cannot complete the work plan");
     for (const verifier of started.message.details.runtimeTask.verifyCommands) {
       const allowed = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", { command: verifier });
       assert.notEqual(allowed.block, true, allowed.reason);
@@ -4951,6 +4967,28 @@ describe("piagent guard integration", () => {
     const evidenced = activeSessionTask(cwd, "session-conditional-verify");
     assert.deepEqual(evidenced.workPlan.map((step) => step.status), ["done", "done"]);
     assert.deepEqual(evidenced.changedFiles, []);
+    assert.equal(evidenced.verifyEvidence.at(-1).preWorkspaceRevisionDigest, evidenced.verifyEvidence.at(-1).workspaceRevisionDigest);
+    const passedRevision = evidenced.verifyEvidence.at(-1).workspaceRevisionDigest;
+    const passedDirtyTree = evidenced.verifyEvidence.at(-1).workingTreeDigest;
+    fs.writeFileSync(path.join(cwd, "src", "platform", "config.js"), "export const enabled = 'new-clean-baseline';\n");
+    execFileSync("git", ["-C", cwd, "add", "src/platform/config.js"]);
+    execFileSync("git", ["-C", cwd, "commit", "-qm", "different clean baseline"]);
+    assert.equal(workingTreeEvidenceDigest(workingTreeSnapshot(cwd)), passedDirtyTree, "the legacy dirty-tree digest deliberately remains unchanged");
+    await harness.handlers.get("message_end")({
+      message: { role: "assistant", content: [{ type: "text", text: "Verification complete: the previous configured verifier passed." }] }
+    }, ctx);
+    assert.equal(activeSessionTask(cwd, "session-conditional-verify").trace.outcome, "pending", "a clean HEAD change invalidates the old pass");
+    for (const [index, verifier] of started.message.details.runtimeTask.verifyCommands.entries()) {
+      const id = `verify-new-baseline-${index}`;
+      const allowed = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", { command: verifier }, id);
+      assert.notEqual(allowed.block, true, allowed.reason);
+      assert.match(verifier, /npm test/);
+      await harness.handlers.get("tool_result")({ toolCallId: id, toolName: "bash", input: { command: verifier },
+        content: [{ type: "text", text: "pass" }], details: { exitCode: 0 }, isError: false, timestamp: Date.now() }, ctx);
+    }
+    const refreshed = activeSessionTask(cwd, "session-conditional-verify");
+    assert.notEqual(refreshed.verifyEvidence.at(-1).workspaceRevisionDigest, passedRevision);
+    assert.equal(refreshed.verifyEvidence.at(-1).workingTreeDigest, passedDirtyTree);
     const final = await harness.handlers.get("message_end")({
       message: { role: "assistant", content: [{ type: "text", text: "Verification complete: every configured verifier passed and no repair was needed." }] }
     }, ctx);
@@ -5041,7 +5079,7 @@ describe("piagent guard integration", () => {
       }, ctx);
     }
     for (const verifier of implementation.details.verifyCommands) {
-      const allowed = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", { command: verifier });
+      const allowed = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", { command: verifier }, "verify-implementation");
       assert.notEqual(allowed.block, true, allowed.reason);
       await harness.handlers.get("tool_result")({
         toolCallId: "verify-implementation",
@@ -5079,7 +5117,7 @@ describe("piagent guard integration", () => {
       isError: false
     }, ctx);
     for (const verifier of runtimeTask.verifyCommands) {
-      const allowed = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", { command: verifier });
+      const allowed = await callToolCall(harness.handlers.get("tool_call"), ctx, "bash", { command: verifier }, "verify-followup");
       assert.notEqual(allowed.block, true, allowed.reason);
       await harness.handlers.get("tool_result")({
         toolCallId: "verify-followup",

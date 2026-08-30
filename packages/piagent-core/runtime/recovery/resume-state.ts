@@ -1,4 +1,5 @@
 import path from "node:path";
+import { currentWorkspaceRevisionDigest } from "../../extensions/workspace-revision.js";
 
 import type { TaskContract } from "../../extensions/guard-types.ts";
 import { allVerifyCommandsPassCurrentTree } from "../../extensions/task-contract-view.js";
@@ -312,6 +313,7 @@ export function inspectTaskResumeState(
   options: { protectedPaths?: string[] } = {}
 ): ResumeState {
   const currentTreeDigest = workingTreeEvidenceDigest(currentDigests);
+  const workspaceRevisionDigest = currentWorkspaceRevisionDigest(cwd);
   const authorityPolicy = inspectTaskAuthorityResumePolicy(cwd, task);
   const archive = taskDigestMigrationArchiveStatus(cwd, task);
   const legacyTruthOverflow = task.trace.outcome === "pending" && legacyTaskTruthOverflowsAutomaticResume(task);
@@ -337,13 +339,14 @@ export function inspectTaskResumeState(
     warnings.push(`handoff projection is invalid: ${error instanceof Error ? error.message : String(error)}`);
   }
   const passingEvidence = task.verifyEvidence.filter((evidence) => evidence.observed === true && evidence.matchedProfileCommand === true && evidence.exitCode === 0);
-  const invalidatedVerifierCommands = strings(passingEvidence.filter((evidence) => !isCurrentWorkingTreeDigest(evidence.workingTreeDigest) || evidence.workingTreeDigest !== currentTreeDigest).map((evidence) => evidence.command), 50);
-  const verifierEvidenceCurrent = algorithmReady && !refreshRequired && (task.changeMode === "read-only" || allVerifyCommandsPassCurrentTree(task, currentTreeDigest));
+  const invalidatedVerifierCommands = strings(passingEvidence.filter((evidence) => !isCurrentWorkingTreeDigest(evidence.workingTreeDigest) || evidence.workingTreeDigest !== currentTreeDigest
+    || !workspaceRevisionDigest || evidence.preWorkspaceRevisionDigest !== workspaceRevisionDigest || evidence.workspaceRevisionDigest !== workspaceRevisionDigest).map((evidence) => evidence.command), 50);
+  const verifierEvidenceCurrent = algorithmReady && !refreshRequired && (task.changeMode === "read-only" || allVerifyCommandsPassCurrentTree(task, currentTreeDigest, workspaceRevisionDigest));
   const staleVerifierEvidence = refreshRequired || (invalidatedVerifierCommands.length > 0 && !verifierEvidenceCurrent);
   const invalidatedFiles = staleVerifierEvidence
     ? staleVerifierFiles(cwd, task, passingEvidence, currentDigests, currentTreeDigest, options.protectedPaths ?? null)
     : { files: [], known: true };
-  if (staleVerifierEvidence) warnings.push("working tree changed after the latest passing verifier; prior evidence is stale");
+  if (staleVerifierEvidence) warnings.push("working tree or workspace baseline changed, or the prior verifier lacks baseline binding; prior evidence is stale");
   const latest = journal.checkpoints.at(-1);
   const latestCheckpoint = latest ? {
     checkpointId: String(latest.checkpointId ?? "checkpoint"),

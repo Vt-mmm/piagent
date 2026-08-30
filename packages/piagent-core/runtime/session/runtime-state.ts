@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { isRuntimeOwnedContextEvidenceEntry } from "../../extensions/context-evidence.js";
 import { toolResultFingerprint } from "../../extensions/context-engine.js";
-import { workingTreeSnapshot } from "../../extensions/task-state.js";
+import { ShellVerificationSnapshots } from "../verification/shell-verification-snapshots.ts";
 import type { TaskContract } from "../../extensions/guard-types.ts";
 import type { RecoveryHistoryEntry } from "../recovery/recovery-policy.ts";
 import type { ResumeState } from "../recovery/resume-state.ts";
@@ -88,7 +88,7 @@ export class RuntimeSessionState {
   readonly #observedContextBySession = new Map<string, Map<string, ObservedTaskContext>>();
   readonly #preTaskContextBySession = new Map<string, { turnId: string; entries: Map<string, ObservedTaskContext> }>();
   readonly #qualifiedContextEvidenceByTask = new Map<string, Map<string, ObservedTaskContext>>();
-  readonly #shellMutationSnapshots = new Map<string, Record<string, string>>();
+  readonly #shellMutationSnapshots = new ShellVerificationSnapshots();
   readonly #sourceCheckoutReadGrants = new SourceCheckoutReadGrants();
 
   constructor(options: { maxObservedContext: number }) { this.#maxObservedContext = options.maxObservedContext; }
@@ -221,30 +221,20 @@ export class RuntimeSessionState {
     return [...(this.#qualifiedContextEvidenceByTask.get(key)?.values() ?? [])].map((entry) => structuredClone(entry));
   }
 
-  #shellMutationSnapshotKey(ctx: ExtensionContext, toolName: string, input: unknown): string {
-    return `${this.sessionKey(ctx)}\u0000${toolResultFingerprint(toolName, input, []).key}`;
-  }
-
-  rememberShellMutationSnapshot(ctx: ExtensionContext, toolName: string, input: unknown): void {
-    this.#shellMutationSnapshots.set(
-      this.#shellMutationSnapshotKey(ctx, toolName, input),
-      workingTreeSnapshot(ctx.cwd) as Record<string, string>
-    );
-    evictOldest(this.#shellMutationSnapshots, 100);
+  rememberShellMutationSnapshot(ctx: ExtensionContext, toolName: string, input: unknown, toolCallId?: string): void {
+    this.#shellMutationSnapshots.remember(ctx, toolName, input, toolCallId, this.taskIdentity(ctx)?.taskRunId);
   }
 
   consumeShellMutationSnapshot(ctx: ExtensionContext, toolName: string, input: unknown): Record<string, string> | undefined {
-    const key = this.#shellMutationSnapshotKey(ctx, toolName, input);
-    const snapshot = this.#shellMutationSnapshots.get(key);
-    this.#shellMutationSnapshots.delete(key);
-    return snapshot;
+    return this.consumeShellVerificationSnapshot(ctx, toolName, input)?.snapshot as Record<string, string> | undefined;
+  }
+
+  consumeShellVerificationSnapshot(ctx: ExtensionContext, toolName: string, input: unknown, toolCallId?: string) {
+    return this.#shellMutationSnapshots.consume(ctx, toolName, input, toolCallId, this.taskIdentity(ctx)?.taskRunId);
   }
 
   clearShellMutationSnapshots(ctx: ExtensionContext): void {
-    const prefix = `${this.sessionKey(ctx)}\u0000`;
-    for (const key of this.#shellMutationSnapshots.keys()) {
-      if (key.startsWith(prefix)) this.#shellMutationSnapshots.delete(key);
-    }
+    this.#shellMutationSnapshots.clear(ctx);
   }
 
   hasAutoPackedPrompt(key: string): boolean {

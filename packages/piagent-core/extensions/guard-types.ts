@@ -417,6 +417,8 @@ export type TaskContract = {
     matchedProfileCommand?: boolean;
     preWorkingTreeDigest?: string;
     workingTreeDigest?: string;
+    preWorkspaceRevisionDigest?: string;
+    workspaceRevisionDigest?: string;
   }>;
   trace: {
     outcome: "pending" | "completed" | "blocked" | "partial" | "failed";

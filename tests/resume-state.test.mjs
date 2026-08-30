@@ -11,6 +11,7 @@ import { readTaskJournal, recordTaskCheckpoint, replayTaskCheckpoints, taskJourn
 import { operatorRequestDigest, workingTreeSnapshot } from "../packages/piagent-core/extensions/task-state.js";
 import { compileCriterionGraph } from "../packages/piagent-core/extensions/criterion-graph.js";
 import { workingTreeEvidenceDigest } from "../packages/piagent-core/extensions/task-lifecycle.js";
+import { currentWorkspaceRevisionDigest } from "../packages/piagent-core/extensions/workspace-revision.js";
 import {
   LEGACY_TASK_TRUTH_OVERFLOW_MARKER,
   RESUME_CONTEXT_LOSSLESS_MAX_CHARS,
@@ -369,7 +370,8 @@ describe("safe task resume state", () => {
     current.verifyEvidence = [{
       command: "npm test", exitCode: 0, summary: "pass", recordedAt: "2026-08-08T00:00:05.000Z",
       observed: true, observedAt: "2026-08-08T00:00:05.000Z", matchedProfileCommand: true,
-      preWorkingTreeDigest: currentDigest, workingTreeDigest: currentDigest
+      preWorkingTreeDigest: currentDigest, workingTreeDigest: currentDigest,
+      preWorkspaceRevisionDigest: currentWorkspaceRevisionDigest(cwd), workspaceRevisionDigest: currentWorkspaceRevisionDigest(cwd)
     }];
     writeVerifyTrajectory(cwd, current);
     recordCompletionAudit({ cwd, ui: { notify() {} } }, current, {
@@ -608,7 +610,7 @@ describe("safe task resume state", () => {
   it("surfaces a corrupt journal tail with a handoff recovery path", () => {
     const cwd = workspace();
     const current = task();
-    recordVerificationCheckpoint({ cwd, ui: { notify() {} } }, current, { commandHash: "c".repeat(64), workingTreeDigest: "d".repeat(64), exitCode: 1 });
+    recordVerificationCheckpoint({ cwd, ui: { notify() {} } }, current, { commandHash: "c".repeat(64), workingTreeDigest: workingTreeEvidenceDigest(workingTreeSnapshot(cwd)), exitCode: 1 });
     fs.appendFileSync(taskJournalPaths(cwd).events, "{truncated\n");
     const resume = inspectTaskResumeState(cwd, current, current.sessionId);
     assert.equal(resume.decision, "blocked");

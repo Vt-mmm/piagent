@@ -9,6 +9,7 @@ import { taskJournalPaths } from "../packages/piagent-core/extensions/task-journ
 import { recordCompletionAudit } from "../packages/piagent-core/extensions/task-runtime-audit.js";
 import { operatorRequestDigest } from "../packages/piagent-core/extensions/task-state.js";
 import { workingTreeEvidenceDigest } from "../packages/piagent-core/extensions/working-tree-digest.js";
+import { currentWorkspaceRevisionDigest } from "../packages/piagent-core/extensions/workspace-revision.js";
 import { buildTaskEfficiencyMetrics } from "../packages/piagent-core/runtime/product/efficiency-metrics.ts";
 import { createBoundTaskAuthority } from "../packages/piagent-core/runtime/policy/task-authority-runtime.ts";
 import {
@@ -147,10 +148,12 @@ describe("operator product UX", () => {
     assert.equal(JSON.stringify(active).includes("PRIVATE_OPERATOR_REQUEST_SENTINEL"), false, "WebUI live status must omit the private operator request");
     assert.match(formatLiveTaskStatus(active), /next:/);
     const currentDigest = workingTreeEvidenceDigest({});
+    const revisionDigest = currentWorkspaceRevisionDigest(cwd);
     const observed = (exitCode, observedAt) => ({
       command: current.verifyCommands[0], exitCode, summary: exitCode === 0 ? "pass" : "fail",
       recordedAt: observedAt, observed: true, observedAt, matchedProfileCommand: true,
-      preWorkingTreeDigest: currentDigest, workingTreeDigest: currentDigest
+      preWorkingTreeDigest: currentDigest, workingTreeDigest: currentDigest,
+      preWorkspaceRevisionDigest: revisionDigest, workspaceRevisionDigest: revisionDigest
     });
     current.verifyEvidence = [
       observed(0, "2026-08-08T00:00:01.000Z"),
@@ -160,6 +163,11 @@ describe("operator product UX", () => {
     assert.ok(buildLiveTaskStatus(cwd, current, current.sessionId).task.pendingVerifiers.includes(current.verifyCommands[0]));
     current.verifyEvidence.push(observed(0, "2026-08-08T00:00:04.000Z"));
     assert.equal(buildLiveTaskStatus(cwd, current, current.sessionId).task.pendingVerifiers.length, 0);
+    fs.writeFileSync(path.join(cwd, "src", "a.ts"), "export const a = 2;\n");
+    execFileSync("git", ["-C", cwd, "add", "src/a.ts"]);
+    execFileSync("git", ["-C", cwd, "commit", "-qm", "different clean source"]);
+    assert.ok(buildLiveTaskStatus(cwd, current, current.sessionId).task.pendingVerifiers.includes(current.verifyCommands[0]),
+      "the UI must not advertise an old clean-commit pass as current");
 
     const journal = taskJournalPaths(cwd);
     fs.mkdirSync(path.dirname(journal.events), { recursive: true });

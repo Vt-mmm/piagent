@@ -6,8 +6,8 @@ import { changedSnapshotFiles, taskDeltaFilesFromSnapshot } from "../../extensio
 import { classifyVerificationFailure } from "../../extensions/verification-intelligence.js";
 import { redactForStorage } from "../../extensions/redaction-core.js";
 import { appendObservedBashResult, hashEvidenceCommand, observedBashResultFromToolResultEvent } from "../../extensions/runtime-evidence.js";
-import { workingTreeSnapshot, workingTreeSnapshotHasUnavailableEvidence } from "../../extensions/task-state.js";
-import { workingTreeObservation } from "../../extensions/working-tree-digest.js";
+import { workingTreeSnapshotHasUnavailableEvidence } from "../../extensions/task-state.js";
+import { captureWorkspaceVerificationSnapshot } from "../../extensions/workspace-verification-snapshot.js";
 import { recordObservedContextEvidence } from "../context/context-evidence-qualification.ts";
 import { confirmContextDeliveryFromToolResult, type ContextDeliveryConfirmationDependencies } from "../context/context-delivery.ts";
 import { recordMutationResult } from "../inspection/mutation-provenance-recorder.ts";
@@ -33,7 +33,6 @@ export { filterGrepProtectedContent, filterProtectedPathListContent };
 type ToolResultEvent = { toolCallId?: string; toolName: string; input?: unknown; content?: unknown; details?: unknown; isError?: boolean; usage?: unknown };
 type ObservedBashResult = NonNullable<ReturnType<typeof observedBashResultFromToolResultEvent>>;
 type ObservedVerificationResult = ObservedBashResult & { outputText?: string };
-type WorkingTreeObservation = ReturnType<typeof workingTreeObservation>;
 type ToolResultHookDependencies = ContextDeliveryConfirmationDependencies & {
   readProtectedPaths: (ctx: ExtensionContext) => string[];
   recordObservedBash: (observed: ObservedBashResult) => void;
@@ -50,15 +49,15 @@ type ToolResultHookDependencies = ContextDeliveryConfirmationDependencies & {
     event: ToolResultEvent,
     pendingContext: ObservedTaskContext[],
     maxManifestFiles: number,
-    shellSnapshotBefore?: Record<string, string>, eventTree?: WorkingTreeObservation
+    shellSnapshotBefore?: Record<string, string>, eventTree?: ReturnType<typeof captureWorkspaceVerificationSnapshot>
   ) => unknown;
   recordObservedTaskVerification: (
     pi: ExtensionAPI,
     ctx: ExtensionContext,
     observed: ObservedVerificationResult,
     pendingContext: ObservedTaskContext[],
-    maxManifestFiles: number, shellSnapshotBefore?: Record<string, string>, eventTree?: WorkingTreeObservation,
-    readProtectedPaths?: string[]
+    maxManifestFiles: number, shellSnapshotBefore?: Record<string, string>, eventTree?: ReturnType<typeof captureWorkspaceVerificationSnapshot>,
+    readProtectedPaths?: string[], preWorkspaceRevisionDigest?: string
   ) => unknown;
   extractLikelyPath: (cwd: string, input: Record<string, unknown>) => string | undefined;
   mutationTargets: (cwd: string, toolName: string, input: Record<string, unknown>) => string[];
@@ -122,9 +121,10 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
     const observedContextEntry = dependencies.observedTaskContext(ctx.cwd, event, readProtectedPaths);
     recordObservedContextEvidence(ctx, observedContextEntry, taskIdentity, dependencies);
     const pendingContext = dependencies.state.qualifiedTaskContext(ctx);
-    const shellSnapshotBefore = dependencies.isShellTool(event.toolName)
-      ? dependencies.state.consumeShellMutationSnapshot(ctx, event.toolName, event.input)
+    const shellVerificationBefore = dependencies.isShellTool(event.toolName)
+      ? dependencies.state.consumeShellVerificationSnapshot(ctx, event.toolName, event.input, resultToolCallId)
       : undefined;
+    const shellSnapshotBefore = shellVerificationBefore?.snapshot as Record<string, string> | undefined;
     const currentTask = dependencies.activeTask(ctx);
     const subagentResult = classifyDirectSubagentResult({
       toolName: event.toolName,
@@ -136,7 +136,7 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
     if (subagentResult) dependencies.recordSubagentResult?.(ctx, event, subagentResult);
     const effectiveToolError = event.isError === true || subagentResult?.failed === true;
     const eventTree = currentTask
-      ? workingTreeObservation(workingTreeSnapshot(ctx.cwd) as Record<string, string>)
+      ? captureWorkspaceVerificationSnapshot(ctx.cwd)
       : undefined;
     dependencies.recordObservedTaskChanges(pi, ctx, event, pendingContext, dependencies.maxManifestFiles, shellSnapshotBefore, eventTree);
     if (observed) {
@@ -145,7 +145,7 @@ export function registerToolResultHook(pi: ExtensionAPI, dependencies: ToolResul
         ctx,
         { ...observed, toolCallId: observed.toolCallId ?? resultToolCallId, outputText: boundedToolResultText(event.content) },
         pendingContext,
-        dependencies.maxManifestFiles, shellSnapshotBefore, eventTree, readProtectedPaths
+        dependencies.maxManifestFiles, shellSnapshotBefore, eventTree, readProtectedPaths, shellVerificationBefore?.workspaceRevisionDigest ?? undefined
       );
     }
 

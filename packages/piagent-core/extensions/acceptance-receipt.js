@@ -6,7 +6,7 @@ import { matchesAnyPath, normalizePathCandidate } from "./policy-core.js";
 import { baselineReturnRepresentationConflicts, returnRepresentationGuidance } from "./return-contract.js";
 import { hasLengthPrefixedIdentityKey, tenantAssertionSignals } from "./tenant-contract.js";
 import { criterionBehaviorProofDisposition, criterionRequiresBehavioralProof, durableBehaviorProofRequired, genericCriterionEvidence, genericFallbackEvidence, isVerificationOnlyCriterion, verifierCommandsCoverTests } from "./acceptance-behavior-proof.js";
-import { latestObservedVerificationEvidence, meaningfulVerificationCommands, verificationEvidenceProvesStableTree } from "./verification-intelligence.js";
+import { allConfiguredVerifierEvidenceCurrent as hasCurrentPassingVerifier, latestObservedVerificationEvidence, meaningfulVerificationCommands, verificationEvidenceProvesStableTree } from "./verification-intelligence.js";
 import {
   acceptanceContractProofGuidance,
   acceptanceContractSemanticConflicts,
@@ -16,6 +16,7 @@ import { malformedIdentifierCriterionText } from "./acceptance-identifier-criter
 import { contextualTemporalCriterion } from "./acceptance-temporal-contract.js";
 import { acceptancePrecedenceContractGuidance, acceptancePrecedenceReceiptEvidence } from "./acceptance-precedence-contract.js";
 import { isCurrentWorkingTreeDigest, WORKING_TREE_DIGEST_ALGORITHM } from "./working-tree-digest.js";
+import { currentWorkspaceRevisionDigest } from "./workspace-revision.js";
 export const ACCEPTANCE_RECEIPT_SCHEMA_VERSION = 1;
 export const ACCEPTANCE_STATUSES = new Set(["pending", "satisfied", "blocked"]);
 export const ACCEPTANCE_PRIORITIES = new Set(["normal", "critical"]);
@@ -706,23 +707,12 @@ function focusedContractEvidence(obligation, task, corpus, verifierEvidence, cri
   };
 }
 
-function hasCurrentPassingVerifier(task, currentWorkingTreeDigest) {
-  if (task?.workingTreeDigestAlgorithm !== WORKING_TREE_DIGEST_ALGORITHM
-    || !isCurrentWorkingTreeDigest(currentWorkingTreeDigest)) return false;
-  const planned = meaningfulVerificationCommands(task?.verifyCommands ?? []);
-  const latest = latestObservedVerificationEvidence(task?.verifyEvidence);
-  return planned.length > 0 && planned.every((command) => {
-    const evidence = latest.get(command.trim());
-    return verificationEvidenceProvesStableTree(evidence, currentWorkingTreeDigest);
-  });
-}
-
-function evidenceForObligation(obligation, task, corpus, currentWorkingTreeDigest, criterion, cwd) {
-  const passingVerifier = hasCurrentPassingVerifier(task, currentWorkingTreeDigest);
+function evidenceForObligation(obligation, task, corpus, currentWorkingTreeDigest, criterion, cwd, workspaceRevisionDigest) {
+  const passingVerifier = hasCurrentPassingVerifier(task, currentWorkingTreeDigest, workspaceRevisionDigest);
   const latestVerifyEvidence = latestObservedVerificationEvidence(task?.verifyEvidence);
   const verifyEvidence = meaningfulVerificationCommands(task?.verifyCommands ?? [])
     .map((command) => latestVerifyEvidence.get(command.trim()))
-    .filter((evidence) => verificationEvidenceProvesStableTree(evidence, currentWorkingTreeDigest));
+    .filter((evidence) => verificationEvidenceProvesStableTree(evidence, currentWorkingTreeDigest, workspaceRevisionDigest));
   const verifier = verifyEvidence[0];
   const verifierEvidence = verifier ? {
     kind: "verify-command",
@@ -836,6 +826,11 @@ export function refreshAcceptanceReceipt(task, options = {}) {
   const cwd = options.cwd;
   const changedFiles = uniqueStrings(options.changedFiles ?? task.changedFiles ?? task.observedChangedFiles ?? []);
   const currentWorkingTreeDigest = options.currentWorkingTreeDigest;
+  // Historical unbound records remain readable by this projection. Runtime
+  // completion/reuse requires a fresh baseline-bound verifier independently.
+  const workspaceRevisionDigest = options.workspaceRevisionDigest !== undefined ? options.workspaceRevisionDigest
+    : task?.verifyEvidence?.some((entry) => entry.preWorkspaceRevisionDigest !== undefined || entry.workspaceRevisionDigest !== undefined)
+      ? currentWorkspaceRevisionDigest(cwd) : undefined;
   const recordedAt = options.recordedAt ?? new Date().toISOString();
   const corpus = cwd ? changedFileAcceptanceCorpus(cwd, changedFiles) : emptyAcceptanceCorpus(changedFiles);
   let changed = false;
@@ -847,7 +842,7 @@ export function refreshAcceptanceReceipt(task, options = {}) {
       criterion.evidence = [];
       const evidence = task?.workingTreeDigestAlgorithm === WORKING_TREE_DIGEST_ALGORITHM
         && isCurrentWorkingTreeDigest(currentWorkingTreeDigest)
-        ? evidenceForObligation(criterion.obligation, task, corpus, currentWorkingTreeDigest, criterion, cwd)
+        ? evidenceForObligation(criterion.obligation, task, corpus, currentWorkingTreeDigest, criterion, cwd, workspaceRevisionDigest)
         : undefined;
       if (evidence) addEvidence(criterion, evidence, recordedAt);
       const nextEvidence = (criterion.evidence ?? []).map(evidenceKey);
@@ -855,11 +850,11 @@ export function refreshAcceptanceReceipt(task, options = {}) {
       continue;
     }
     if (criterion.status === "satisfied") continue;
-    const evidence = evidenceForObligation(criterion.obligation, task, corpus, currentWorkingTreeDigest, criterion, cwd);
+    const evidence = evidenceForObligation(criterion.obligation, task, corpus, currentWorkingTreeDigest, criterion, cwd, workspaceRevisionDigest);
     if (evidence) changed = addEvidence(criterion, evidence, recordedAt) || changed;
   }
   const missing = receipt.criteria.filter((criterion) => criterion.status !== "satisfied");
-  const passingVerifier = hasCurrentPassingVerifier(task, currentWorkingTreeDigest);
+  const passingVerifier = hasCurrentPassingVerifier(task, currentWorkingTreeDigest, workspaceRevisionDigest);
   const adapterAbstained = missing.filter((criterion) => criterionBehaviorProofDisposition({ obligation: criterion.obligation, task, criterion, taskText: acceptanceTaskText(task), corpus, passingVerifier }) === "unknown");
   const criticalMissing = missing.filter((criterion) => (criterion.priority === "critical" || criterionRequiresBehavioralProof(task, criterion, acceptanceTaskText(task))
   ));

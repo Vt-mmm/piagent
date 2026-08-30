@@ -820,6 +820,14 @@
           "workingTreeDigest": {
             "type": "string",
             "pattern": "^wt-content-v2:[a-f0-9]{64}$"
+          },
+          "preWorkspaceRevisionDigest": {
+            "type": "string",
+            "pattern": "^workspace-revision-v1:[a-f0-9]{64}$"
+          },
+          "workspaceRevisionDigest": {
+            "type": "string",
+            "pattern": "^workspace-revision-v1:[a-f0-9]{64}$"
           }
         },
         "additionalProperties": false

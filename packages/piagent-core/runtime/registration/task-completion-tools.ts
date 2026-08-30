@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { currentWorkspaceRevisionDigest } from "../../extensions/workspace-revision.js";
 import { durableContextEvidenceEntries, isRuntimeOwnedContextEvidenceEntry } from "../../extensions/context-evidence.js";
 import { mergeObservedTaskContext } from "../../extensions/task-contract-view.js";
 import { buildHandoffProjection, writeHandoffProjection } from "../recovery/handoff-projection.ts";
@@ -178,7 +179,7 @@ export function registerTaskCompletionTools(pi: ExtensionAPI, deps: Record<strin
       }
       const taskLocalDelta = taskChangedFileEvidence(ctx.cwd, task, currentDigests).expected;
       const verificationCanSettleSourceTask = taskLocalDelta.length > 0 || task.mutationPolicy === "allowed";
-      const allPassing = matchedProfileCommand && verificationCanSettleSourceTask && allVerifyCommandsPassCurrentTree(task, workingTreeDigest);
+      const allPassing = matchedProfileCommand && verificationCanSettleSourceTask && allVerifyCommandsPassCurrentTree(task, workingTreeDigest, currentWorkspaceRevisionDigest(ctx.cwd));
       if (matchedProfileCommand && verificationCanSettleSourceTask) {
         applyRuntimeLifecycleObservation(task, allPassing ? "verification-complete" : "verification-pending", nowIso());
       }

@@ -159,8 +159,8 @@ export function createContext(cwd, options = {}) {
   };
 }
 
-export async function callToolCall(handler, ctx, toolName, input) {
-  return await handler({ toolName, input }, ctx) ?? {};
+export async function callToolCall(handler, ctx, toolName, input, toolCallId) {
+  return await handler({ toolName, input, ...(toolCallId ? { toolCallId } : {}) }, ctx) ?? {};
 }
 
 export async function callToolResult(handler, ctx, toolName, input, content) {
