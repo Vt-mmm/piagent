@@ -17,6 +17,27 @@ export function fail(message, code = 2) {
   throw error;
 }
 
+export function applyBenchmarkResumeOptions(options, resumeState) {
+  if (!resumeState) return;
+  const manifest = resumeState.manifest;
+  options.suite = manifest.suite?.source ?? manifest.suite?.manifestPath ?? manifest.suite?.id ?? options.suite;
+  options.surfaces = manifest.surfaces;
+  options.model = manifest.model ?? undefined;
+  options.thinking = manifest.thinking ?? undefined;
+  options.serviceTier = manifest.serviceTier ?? undefined;
+  options.codexMode = manifest.codexMode ?? "controlled";
+  options.piagentTreatment = manifest.piagentTreatment ?? "release-defaults";
+  options.allowPiAuthWriteback = manifest.allowPiAuthWriteback === true;
+  options.seed = manifest.rootSeed;
+  options.repeats = manifest.repeats;
+  options.scenarioIds = manifest.scenarioIds ?? undefined;
+  options.timeoutSeconds = manifest.timeoutSeconds;
+  options.infrastructureRetries = manifest.infrastructureRetries;
+  options.retryDelaySeconds = manifest.retryDelaySeconds;
+  options.stopAfterFailedPair = manifest.stopAfterFailedPair === true;
+  options.output = resumeState.runRoot;
+}
+
 export function frozenRuntimeCommandsForFinalization(manifest, surfaces) {
   const commands = manifest?.runtimeCommands;
   const validIdentity = (identity) => identity?.schemaVersion === 1
@@ -81,8 +102,8 @@ function shellCommandArgument(value) {
   return `'${text.replaceAll("'", `'"'"'`)}'`;
 }
 
-export function benchmarkResumeCommand({ runRoot, productionSpendControlled, completedRuns, stageControl, stageBoundaries }) {
-  const base = `piagent-benchmark --resume ${shellCommandArgument(runRoot)}`;
+export function benchmarkResumeCommand({ runRoot, productionSpendControlled, completedRuns, stageControl, stageBoundaries, verificationRequired = false }) {
+  const base = `piagent-benchmark --resume ${shellCommandArgument(runRoot)}${verificationRequired ? " --approve-verification" : ""}`;
   if (!productionSpendControlled) return `${base} --yes`;
   const window = productionStageResumeWindow(stageControl, { completedRuns, stageBoundaries });
   return window?.remainingSessions > 0

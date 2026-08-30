@@ -1,3 +1,5 @@
+import { benchmarkVerificationFailure, benchmarkVerificationRecordMatches, validBenchmarkVerificationObservation } from "./benchmark-independent-verification-observation.js";
+
 const benchmarkSurfaces = new Set(["raw-pi", "piagent", "codex-cli"]);
 const causalCoverageLanesV1 = new Set([
   "telemetry-window", "session-lifecycle", "criterion-initial-pack", "pack-lifecycle", "direct-fallback-rereads", "managed-prefix"
@@ -268,6 +270,8 @@ export function completedBenchmarkRecord(record) {
     && typeof record.profile === "string"
     && typeof record.lifecycle === "string"
     && benchmarkSurfaces.has(record.surface)
+    && (!Object.hasOwn(record, "independentVerification") || (record.surface === "piagent" && validBenchmarkVerificationObservation(record.independentVerification)
+      && (!benchmarkVerificationFailure(record.independentVerification) || record.resolved === false)))
     && validBenchmarkCausalContextReceipt(record.causalContextReceipt, record.surface)
     && Number.isInteger(record.repeat) && record.repeat > 0
     && Number.isInteger(record.infrastructureAttempt) && record.infrastructureAttempt > 0
@@ -306,9 +310,10 @@ export function pairedBenchmarkVariantMatched(record, runs) {
     && pair.variant?.oracleDigest === record.variant?.oracleDigest;
 }
 
-export function expectedBenchmarkRecord(record, index, expected, runId, suite, configurationDigest) {
+export function expectedBenchmarkRecord(record, index, expected, runId, suite, configurationDigest, verificationIdentity) {
   const scenario = expected?.scenario;
   return completedBenchmarkRecord(record)
+    && benchmarkVerificationRecordMatches(record, verificationIdentity)
     && record.runId === runId
     && record.configurationDigest === configurationDigest
     && record.orderIndex === index + 1

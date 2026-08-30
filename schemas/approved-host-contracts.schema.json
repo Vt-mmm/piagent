@@ -3,17 +3,34 @@
   "$id": "https://piagent.dev/schemas/approved-host-contracts.schema.json",
   "title": "Host-approved independent contract payload (not a receipt)",
   "description": "Payload inside a private authenticated approval envelope. JSON schema conformance alone grants no authority. Runtime also checks signature, permissions, canonical project, installed verifier, unique IDs, total case count, dependent Date state, and size limits.",
-  "type": "object", "additionalProperties": false,
-  "required": ["version", "projectId", "operatorRequestDigest", "verifierDigest", "backend", "contracts"],
-  "properties": {
-    "version": { "const": "approved-host-contracts-v1" },
-    "projectId": { "$ref": "#/$defs/hash" },
-    "operatorRequestDigest": { "type": "string", "pattern": "^operator-request-v1:[a-f0-9]{64}$" },
-    "verifierDigest": { "$ref": "#/$defs/hash" },
-    "backend": { "$ref": "#/$defs/backend" },
-    "contracts": { "$ref": "#/$defs/contracts" }
-  },
+  "oneOf": [
+    { "type": "object", "additionalProperties": false,
+      "required": ["version", "projectId", "operatorRequestDigest", "verifierDigest", "backend", "contracts"],
+      "properties": {
+        "version": { "const": "approved-host-contracts-v1" },
+        "projectId": { "$ref": "#/$defs/hash" },
+        "operatorRequestDigest": { "type": "string", "pattern": "^operator-request-v1:[a-f0-9]{64}$" },
+        "verifierDigest": { "$ref": "#/$defs/hash" },
+        "backend": { "$ref": "#/$defs/backend" }, "contracts": { "$ref": "#/$defs/contracts" }
+      }
+    },
+    { "type": "object", "additionalProperties": false, "required": ["version", "projectId", "verifierDigest", "plans"],
+      "properties": {
+        "version": { "const": "approved-host-contract-set-v1" }, "projectId": { "$ref": "#/$defs/hash" },
+        "verifierDigest": { "$ref": "#/$defs/hash" },
+        "plans": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "$ref": "#/$defs/plan" } }
+      }
+    }
+  ],
   "$defs": {
+    "plan": { "type": "object", "additionalProperties": false,
+      "required": ["schemaVersion", "operatorRequestDigest", "backend", "contracts"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "operatorRequestDigest": { "type": "string", "pattern": "^operator-request-v1:[a-f0-9]{64}$" },
+        "backend": { "$ref": "#/$defs/backend" }, "contracts": { "$ref": "#/$defs/contracts" }
+      }
+    },
     "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "id": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,159}$" },
     "numeric": { "oneOf": [{ "type": "number" }, { "enum": ["NaN", "Infinity", "-Infinity", "-0"] }] },

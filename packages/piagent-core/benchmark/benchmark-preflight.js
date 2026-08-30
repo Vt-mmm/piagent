@@ -66,7 +66,7 @@ export function benchmarkPreflightReceipt({
   runtimeDependencies, webUiAssets, runtimeCommands, environmentPolicy, configurationDigest,
   providerFreeConfigurationDigest = null, rootSeedDigest, options, runtime,
   hostReadinessPolicyDigest = null, hostReadiness = null,
-  providerFreeEvidence = null
+  providerFreeEvidence = null, independentVerification
 }) {
   return {
     schemaVersion: 1,
@@ -79,6 +79,7 @@ export function benchmarkPreflightReceipt({
     suite: { id: suite.id, contentDigest: suiteDigest, scenarioCount: suite.scenarios.length },
     configuration: {
       contentDigest: configurationDigest,
+      ...(independentVerification ? { independentVerification } : {}),
       ...(providerFreeConfigurationDigest ? { providerFreeContentDigest: providerFreeConfigurationDigest } : {}),
       ...(hostReadinessPolicyDigest ? { hostReadinessPolicyDigest } : {}),
       runtimeDependencyDigest: runtimeDependencies?.digest ?? null,

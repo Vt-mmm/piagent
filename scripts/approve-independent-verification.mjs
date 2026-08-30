@@ -9,7 +9,9 @@ Without --approve, validate and preview a host-owned verification plan only.
 With --approve, create a new private authority outside the project. Never overwrite it.
 No command here executes project code, starts a worker, or calls a model provider.
 
-Plan schema: schemas/host-contract-plan.schema.json
+Plan schema: schemas/host-contract-plan.schema.json (one request, or a schemaVersion 2 set).
+Every request in a set is exact and independently reviewed; duplicate request
+digests are rejected. A set does not authorize unlisted requests or new oracles.
 The operator must review the expected results independently of the candidate.
 Enable the approved plan by setting PIAGENT_INDEPENDENT_VERIFICATION_CONFIG to
 the returned approval.json path before starting the Pi runtime.
@@ -42,7 +44,8 @@ try {
   if (parent !== path.dirname(directory)) throw new Error("Authority parent must be canonical");
   const relative = path.relative(projectRoot, directory);
   if (!relative || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative))) throw new Error("Authority must be outside the candidate project");
-  const request = { projectRoot, installedRoot, operatorRequestDigest: plan.operatorRequestDigest, backend: plan.backend, contracts: plan.contracts };
+  const request = { projectRoot, installedRoot, ...(plan.schemaVersion === 2 ? { plans: plan.plans }
+    : { operatorRequestDigest: plan.operatorRequestDigest, backend: plan.backend, contracts: plan.contracts }) };
   const preview = prepareHostContractApproval(request);
   const result = options.approved
     ? { status: "approved", ...writeHostContractApproval({ ...request, directory, approved: true }) }

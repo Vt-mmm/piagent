@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "kind": "benchmark-independent-verification-plan-v1",
+  "suiteDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "verifierDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "scenarios": [{
+    "scenarioId": "identity",
+    "plans": [{
+      "schemaVersion": 1,
+      "operatorRequestDigest": "operator-request-v1:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "backend": { "imageId": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "dockerSocket": "/fixture-only/engine.sock", "timeoutMs": 1000 },
+      "contracts": [{
+        "criterionId": "identity-contract",
+        "criterionHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sourcePath": "src/identity.js", "exportName": "identity", "maxAttempts": 2,
+        "checks": [{ "id": "identity", "cases": [{ "id": "one", "args": [{ "type": "number", "value": 1 }],
+          "expected": { "outcome": "return", "value": { "type": "number", "value": 1 } } }] }]
+      }]
+    }]
+  }]
+}

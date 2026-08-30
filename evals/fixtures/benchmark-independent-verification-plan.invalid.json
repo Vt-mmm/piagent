@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "kind": "benchmark-independent-verification-plan-v1",
+  "suiteDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "verifierDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "scenarios": []
+}

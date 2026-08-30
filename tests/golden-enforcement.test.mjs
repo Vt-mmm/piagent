@@ -30,6 +30,7 @@ import { validateTaskBaselineManifest } from "../packages/piagent-core/runtime/i
 import { validateMutationProvenanceRecord } from "../packages/piagent-core/runtime/inspection/mutation-provenance-contract.ts";
 import { validateVerifierFileSnapshot } from "../packages/piagent-core/runtime/inspection/verifier-snapshot-contract.ts";
 import { validateHostContractPayload, validateHostContractPlan } from "../packages/piagent-core/extensions/acceptance-host-configuration.js";
+import { validateBenchmarkVerificationPlan } from "../scripts/benchmark-independent-verification.mjs";
 import { parseContractFamilyLibrary, parseContractSelectionRecipe } from "../packages/piagent-core/extensions/acceptance-contract-selection.js";
 import { createRootSchemaRegistry } from "./helpers/root-schema-registry.mjs";
 
@@ -104,6 +105,7 @@ const runtimeValidators = {
   "verifier-file-snapshot": validateVerifierFileSnapshot,
   "approved-host-contracts": validateHostContractPayload,
   "host-contract-plan": validateHostContractPlan,
+  "benchmark-independent-verification-plan": validateBenchmarkVerificationPlan,
   "contract-family-library": (input) => parseContractFamilyLibrary(JSON.stringify(input)),
   "contract-selection-recipe": (input) => parseContractSelectionRecipe(JSON.stringify(input))
 };

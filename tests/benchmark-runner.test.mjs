@@ -37,6 +37,9 @@ import {
 } from "../packages/piagent-core/benchmark/benchmark-stage-diagnostic.js";
 import { pairedOutcomeFloorStop } from "../packages/piagent-core/benchmark/benchmark-stop-policy.js";
 import { runBenchmarkSession } from "../scripts/benchmark-session.mjs";
+import { installedContractVerifierDigest } from "../packages/piagent-core/extensions/acceptance-host-configuration.js";
+import { operatorRequestDigest } from "../packages/piagent-core/extensions/task-state.js";
+import { benchmarkTreeIdentity } from "../packages/piagent-core/benchmark/benchmark-tree-identity.js";
 
 const root = path.resolve(import.meta.dirname, "..");
 const runner = path.join(root, "scripts", "benchmark-runner.mjs");
@@ -2982,6 +2985,64 @@ test("one command compares Piagent with controlled Codex CLI using strict JSONL 
   const codexHomes = fs.readFileSync(codexHomeLog, "utf8").trim().split("\n");
   assert.equal(codexHomes.length, 3);
   assert.equal(new Set(codexHomes).size, 3, "every measured Codex session must receive a clean CODEX_HOME");
+});
+
+test("frozen benchmark mounts only explicit verification and preserves measured-but-unverified sessions across resume", (t) => {
+  const value = fixture(t), directory = fs.realpathSync.native(value.dir), suiteRoot = fs.realpathSync.native(path.dirname(value.suite));
+  const file = path.join(directory, "verification-plan.json"), probe = path.join(directory, "verification-probe.jsonl");
+  for (const [tool, target] of [["pi", value.fakePi], ["codex", value.fakeCodex]]) {
+    const source = fs.readFileSync(target, "utf8");
+    fs.writeFileSync(target, source.replace("#!/usr/bin/env node\n", `#!/usr/bin/env node\nimport probeFs from 'node:fs';
+probeFs.appendFileSync(${JSON.stringify(probe)}, JSON.stringify({tool:${JSON.stringify(tool)}, surface:process.env.PIAGENT_BENCHMARK_SURFACE??null, configured:Boolean(process.env.PIAGENT_INDEPENDENT_VERIFICATION_CONFIG)})+'\\n');\n`));
+  }
+  const catalog = JSON.parse(fs.readFileSync(path.join(root, "evals/fixtures/benchmark-independent-verification-plan.valid.json")));
+  catalog.suiteDigest = benchmarkTreeIdentity(suiteRoot, { rejectSymlinks: true }).contentDigest;
+  catalog.verifierDigest = installedContractVerifierDigest(root);
+  catalog.scenarios[0].scenarioId = "write-result";
+  catalog.scenarios[0].plans[0].operatorRequestDigest = operatorRequestDigest(fs.readFileSync(path.join(suiteRoot, "prompt.md"), "utf8").trim());
+  fs.writeFileSync(file, JSON.stringify(catalog), { mode: 0o600 });
+  const env = { ...process.env, PIAGENT_BENCHMARK_PI_COMMAND: value.fakePi, PIAGENT_BENCHMARK_CODEX_COMMAND: value.fakeCodex,
+    PIAGENT_BENCHMARK_TASK_FIXTURE: path.join(root, "evals/fixtures/task-contract.valid.json"),
+    PIAGENT_INDEPENDENT_VERIFICATION_CONFIG: "/untrusted-inherited-approval.json" };
+  const run = (args) => spawnSync(process.execPath, [runner, ...args], { cwd: root, encoding: "utf8", timeout: 60000, env });
+  const args = ["--suite", value.suite, "--surfaces", "piagent,codex-cli", "--model", "test/fake-model", "--thinking", "high",
+    "--repeats", "2", "--verification-plan", file, "--yes", "--output", value.output, "--max-sessions", "2"];
+  const refused = run(args);
+  assert.notEqual(refused.status, 0); assert.match(refused.stderr, /explicit --approve-verification/);
+  assert.equal(fs.existsSync(probe), false, "no provider executable is started before verification approval");
+  const first = run([...args, "--approve-verification"]);
+  assert.equal(first.status, 0, `${first.stdout}\n${first.stderr}`);
+  const ledgerPath = path.join(value.output, "runs.jsonl"), initialBytes = fs.readFileSync(ledgerPath, "utf8");
+  const initial = initialBytes.trim().split("\n").map(JSON.parse);
+  assert.equal(initial.length, 2);
+  const measured = initial.find(record => record.surface === "piagent");
+  assert.equal(measured.usageStatus, "measured"); assert.ok(measured.usage.fresh > 0);
+  assert.equal(measured.grade.passed, true); assert.equal(measured.resolved, false);
+  assert.equal(measured.independentVerification.status, "partial");
+  assert.equal(measured.independentVerification.workersObserved, 0);
+  assert.equal(measured.failure, "independent-verification-coverage-incomplete");
+  assert.equal(Object.hasOwn(initial.find(record => record.surface === "codex-cli"), "independentVerification"), false);
+  const manifest = JSON.parse(fs.readFileSync(path.join(value.output, "run-manifest.json")));
+  assert.equal(manifest.verificationPlan.file, file);
+  const paused = JSON.parse(fs.readFileSync(path.join(value.output, "paused.json")));
+  assert.match(paused.resumeCommand, /--approve-verification/);
+  assert.equal(fs.readdirSync(path.join(value.output, "workspaces")).length, 2, "configured workspaces remain available for audit");
+  assert.equal(fs.readdirSync(path.join(value.output, "independent-verification")).length, 1);
+  const resume = ["--resume", value.output, "--yes", "--max-sessions", "2"];
+  const noApproval = run(resume);
+  assert.notEqual(noApproval.status, 0); assert.match(noApproval.stderr, /explicit --approve-verification/);
+  assert.equal(fs.readFileSync(ledgerPath, "utf8"), initialBytes);
+  const second = run([...resume, "--approve-verification"]);
+  assert.equal(second.status, 1, "a complete measurement with unverified candidate outcomes must fail its reliability gate");
+  assert.equal(fs.existsSync(path.join(value.output, "report.json")), true, `${second.stdout}\n${second.stderr}\n${terminalArtifact(value.output)}`);
+  const report = JSON.parse(fs.readFileSync(path.join(value.output, "report.json")));
+  assert.equal(report.runCount, 4);
+  assert.deepEqual(report.environment.independentVerification, manifest.verificationPlan.identity);
+  assert.ok(fs.readFileSync(ledgerPath, "utf8").startsWith(initialBytes), "resume preserves the original measured ledger prefix");
+  const observed = fs.readFileSync(probe, "utf8").trim().split("\n").map(JSON.parse);
+  assert.equal(observed.filter(entry => entry.surface === "piagent").length, 2);
+  assert.ok(observed.filter(entry => entry.surface === "piagent").every(entry => entry.configured));
+  assert.ok(observed.filter(entry => entry.surface !== "piagent").every(entry => !entry.configured), "inherited approval does not leak to baseline or preflight");
 });
 
 test("does not terminal-stop when only the baseline fails the outcome floor", (t) => {

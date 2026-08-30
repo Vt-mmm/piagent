@@ -93,15 +93,16 @@ export class IndependentAcceptanceRuntime {
       try {
         const configuration = openHostContractConfiguration({ configPath: options.configPath, projectRoot: ctx.cwd, installedRoot: options.installedRoot });
         owned.configuration = configuration;
-        if (configuration.payload.operatorRequestDigest !== task.operatorRequestDigest) return preparation;
-        for (const contract of configuration.payload.contracts) {
+        const approvedRequest = configuration.forRequest(task.operatorRequestDigest);
+        if (!approvedRequest) return preparation;
+        for (const contract of approvedRequest.contracts) {
           if (!task.acceptanceReceipt?.criteria.some((criterion) => criterion.id === contract.criterionId && criterion.hash === contract.criterionHash)) {
             throw new Error("Approved criterion mismatch");
           }
           const sourcePaths = new Set([contract.sourcePath, ...(contract.modulePaths ?? [])]);
           const runner = createRuntimeContractRunner({ state: options.state, context: ctx, getTask: () => options.activeTask(ctx),
             approved: { store: configuration.store, sourcePath: contract.sourcePath, modulePaths: contract.modulePaths, exportName: contract.exportName, checks: contract.checks,
-              ...configuration.payload.backend, verifierDigest: configuration.payload.verifierDigest,
+              ...approvedRequest.backend, verifierDigest: approvedRequest.verifierDigest,
               authorizeSourceRead: ({ sourcePath }) => (!sourcePaths.has(sourcePath) || configuration.isCurrent()) && options.authorizeSourceRead(ctx, sourcePath) } });
           owned.runners.push({ contract, runner });
         }

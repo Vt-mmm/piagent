@@ -123,6 +123,7 @@ export function finalizeBenchmarkRun(context) {
       runRoot,
       productionSpendControlled,
       completedRuns: interruptedCompletedRuns,
+      verificationRequired: Boolean(manifest.verificationPlan),
       stageControl: manifest.stageControl,
       stageBoundaries: productionAllStageBoundaries
     });
@@ -195,6 +196,7 @@ export function finalizeBenchmarkRun(context) {
       productionSpendControlled,
       completedRuns: completedRuns.length,
       stageControl: manifest.stageControl,
+      verificationRequired: Boolean(manifest.verificationPlan),
       stageBoundaries: productionAllStageBoundaries
     });
     const paused = {
@@ -272,6 +274,7 @@ export function finalizeBenchmarkRun(context) {
       requestedModel: options.model ?? null,
       requestedThinking: options.thinking ?? null,
       requestedServiceTier: options.serviceTier ?? null,
+      ...(manifest.verificationPlan ? { independentVerification: manifest.verificationPlan.identity } : {}),
       piagentTreatment: piagentTreatment(options.piagentTreatment),
       treatmentBaseline: lifecycles.length === 1 && lifecycles[0] === "steady-state"
         ? options.surfaces.includes("codex-cli")
@@ -329,7 +332,7 @@ export function finalizeBenchmarkRun(context) {
   applyBenchmarkClaimRestrictions(report, { tokenReason: manifest.tokenClaimsUnavailableReason, replaySource: options.replaySource, codexMode: options.codexMode, surfaces: options.surfaces });
   const reportLedger = inspectBenchmarkLedger(ledgerPath);
   assertBenchmarkLedgerBinding(ledgerBinding, reportLedger.binding, "benchmark report ledger");
-  validateBenchmarkLedgerPrefix(reportLedger.records, fullOrder, (record, index, expected) => expectedBenchmarkRecord(record, index, expected, runId, suite, configurationDigest));
+  validateBenchmarkLedgerPrefix(reportLedger.records, fullOrder, (record, index, expected) => expectedBenchmarkRecord(record, index, expected, runId, suite, configurationDigest, manifest.verificationPlan?.identity));
   cleanupUnretainedWorkspaces(runRoot, options.keepWorkspaces);
   const prepublishReceipt = executionGuard.receipt("prepublish");
   const prepublishError = prepublishReceipt.error;

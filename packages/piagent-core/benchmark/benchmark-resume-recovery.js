@@ -77,7 +77,7 @@ export function stageMeasuredBenchmarkRecord({ runRoot, manifest, ledgerBinding,
   record.infrastructureAttempts = record.infrastructureAttempt ?? 1;
   record.infrastructureRetries = Math.max(0, record.infrastructureAttempts - 1);
   record.infrastructureFailures = infrastructureFailures;
-  if (!expectedBenchmarkRecord(record, index, expected, runId, suite, configurationDigest) || !pairedBenchmarkVariantMatched(record, runs)) {
+  if (!expectedBenchmarkRecord(record, index, expected, runId, suite, configurationDigest, manifest.verificationPlan?.identity) || !pairedBenchmarkVariantMatched(record, runs)) {
     persistUnacceptedBenchmarkAttempt({ runRoot, manifest, record, reason: "measured-record-identity-or-paired-fixture-mismatch", forceTokenUnavailable: true });
     fail(`Runner produced an incomplete, identity-mismatched, or unpaired-fixture record for ${record.scenarioId}/${record.surface}/r${record.repeat}`);
   }
@@ -107,7 +107,7 @@ export function recoverPendingBenchmarkRecord({ runRoot, manifest, ledgerBinding
     if (pending.schemaVersion !== 2 || !pending.previousLedger || !pending.record || pending.postSessionGuard?.matched !== true
       || !String(pending.postSessionGuard.stage ?? "").startsWith("after-session:")) fail("Benchmark pending record is missing its post-session execution guard receipt");
     const expectedIndex = pending.record.orderIndex - 1;
-    if (!expectedBenchmarkRecord(pending.record, expectedIndex, fullOrder[expectedIndex], manifest.runId, suite, manifest.configurationDigest)) {
+    if (!expectedBenchmarkRecord(pending.record, expectedIndex, fullOrder[expectedIndex], manifest.runId, suite, manifest.configurationDigest, manifest.verificationPlan?.identity)) {
       fail("Benchmark pending record does not match the frozen execution order");
     }
     if (binding.records === pending.previousLedger.records) {
@@ -133,7 +133,7 @@ export function recoverPendingBenchmarkRecord({ runRoot, manifest, ledgerBinding
   if (measuredReady) {
     if (measuredReady.schemaVersion !== 1 || !measuredReady.previousLedger || !measuredReady.record) fail("Measured benchmark record WAL is malformed");
     const expectedIndex = measuredReady.record.orderIndex - 1;
-    if (!expectedBenchmarkRecord(measuredReady.record, expectedIndex, fullOrder[expectedIndex], manifest.runId, suite, manifest.configurationDigest)) {
+    if (!expectedBenchmarkRecord(measuredReady.record, expectedIndex, fullOrder[expectedIndex], manifest.runId, suite, manifest.configurationDigest, manifest.verificationPlan?.identity)) {
       fail("Measured benchmark record WAL does not match the frozen execution order");
     }
     if (pending) {
@@ -152,7 +152,7 @@ export function recoverPendingBenchmarkRecord({ runRoot, manifest, ledgerBinding
   const completedKeys = validateBenchmarkLedgerPrefix(
     runs,
     fullOrder,
-    (record, index, expected) => expectedBenchmarkRecord(record, index, expected, manifest.runId, suite, manifest.configurationDigest)
+    (record, index, expected) => expectedBenchmarkRecord(record, index, expected, manifest.runId, suite, manifest.configurationDigest, manifest.verificationPlan?.identity)
   );
   return { ledgerBinding: binding, completedRuns: runs, completedKeys, recoveredPending: Boolean(pending) };
 }

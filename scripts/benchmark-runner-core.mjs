@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { benchmarkUsage, parseBenchmarkArgs } from "../packages/piagent-core/benchmark/benchmark-cli.js";
+import { prepareBenchmarkVerification } from "./benchmark-independent-verification.mjs";
 import { codexModelName, codexThinkingEffort } from "../packages/piagent-core/benchmark/benchmark-codex.js";
 import { benchmarkEnvironment, benchmarkEnvironmentPolicy, comparisonSurfaces, createCodexRuntime, piagentTreatment } from "../packages/piagent-core/benchmark/benchmark-runtime.js";
 import { assertBenchmarkPiCredentialReady, assertBenchmarkPiCredentialWritebackPolicy, cleanupBenchmarkPiRuntimeHome, createBenchmarkPiRuntimeHome, resetBenchmarkPiRuntimeEphemeralState, withBenchmarkPiCredentialWriteback } from "../packages/piagent-core/benchmark/benchmark-pi-home.js";
@@ -46,6 +47,7 @@ import {
 } from "../packages/piagent-core/benchmark/benchmark-resume-recovery.js";
 import { finalizeBenchmarkRun } from "./benchmark-runner-finalization.mjs";
 import {
+  applyBenchmarkResumeOptions,
   bindBenchmarkTerminationSignals,
   benchmarkExecutionPlan,
   benchmarkRunKey,
@@ -106,25 +108,7 @@ async function main() {
   let piRuntimeHome;
   let preservePiRuntime = false;
   try {
-  if (resumeState) {
-    const manifest = resumeState.manifest;
-    options.suite = manifest.suite?.source ?? manifest.suite?.manifestPath ?? manifest.suite?.id ?? options.suite;
-    options.surfaces = manifest.surfaces;
-    options.model = manifest.model ?? undefined;
-    options.thinking = manifest.thinking ?? undefined;
-    options.serviceTier = manifest.serviceTier ?? undefined;
-    options.codexMode = manifest.codexMode ?? "controlled";
-    options.piagentTreatment = manifest.piagentTreatment ?? "release-defaults";
-    options.allowPiAuthWriteback = manifest.allowPiAuthWriteback === true;
-    options.seed = manifest.rootSeed;
-    options.repeats = manifest.repeats;
-    options.scenarioIds = manifest.scenarioIds ?? undefined;
-    options.timeoutSeconds = manifest.timeoutSeconds;
-    options.infrastructureRetries = manifest.infrastructureRetries;
-    options.retryDelaySeconds = manifest.retryDelaySeconds;
-    options.stopAfterFailedPair = manifest.stopAfterFailedPair === true;
-    options.output = resumeState.runRoot;
-  }
+  applyBenchmarkResumeOptions(options, resumeState);
   if (options.replayFailures) {
     const replay = loadReplayFailurePlan(options.replayFailures);
     if (bootstrapMetadata?.replay && replay.source.reportDigest !== bootstrapMetadata.replay.digest) fail("Frozen replay report digest does not match bootstrap metadata", 1);
@@ -183,6 +167,7 @@ async function main() {
   const productionStageBoundaries = productionAllStageBoundaries.slice(1);
   const assuranceEvidence = loadBenchmarkAssuranceEvidence(suite, suiteRoot);
   const declaredScenarioCount = suite.scenarios.length;
+  const declaredScenarios = [...suite.scenarios];
   if (options.scenarioIds) {
     const byId = new Map(suite.scenarios.map((scenario) => [scenario.id, scenario]));
     const missing = options.scenarioIds.filter((id) => !byId.has(id));
@@ -223,6 +208,8 @@ async function main() {
   let codexCommand = process.env.PIAGENT_BENCHMARK_CODEX_COMMAND || "codex";
   const suiteIdentity = benchmarkTreeIdentity(suiteRoot, { rejectSymlinks: true });
   const suiteDigest = suiteIdentity.contentDigest;
+  const verificationPlan = prepareBenchmarkVerification({ options, resumeState, installedRoot: packageRoot, suiteDigest,
+    scenarios: declaredScenarios, suiteRoot, resolveSuiteEntry: resolveBenchmarkSuiteEntry });
   const rootSeed = options.seed ?? crypto.randomBytes(32).toString("hex");
   const rootSeedDigest = crypto.createHash("sha256").update(rootSeed).digest("hex");
   const candidateGuard = createBenchmarkCandidateGuard(packageRoot, resumeState?.manifest.candidateProvenance, {
@@ -427,6 +414,7 @@ async function main() {
     rootSeedDigest
   });
   if (options.dryRun) {
+    if (verificationPlan) process.stdout.write(`Independent verification: ${JSON.stringify(verificationPlan.identity)} (preview only)\n`);
     process.stdout.write(`${plan}${codexPlan}\n  manifest:  ${manifestPath}\nDRY RUN: no model session started.\n`);
     return;
   }
@@ -490,6 +478,7 @@ async function main() {
     webUiAssetDigest: bootstrapMetadata.webUiAssets?.digest ?? null,
     runtimeCommands,
     environmentPolicy,
+    ...(verificationPlan ? { independentVerification: verificationPlan.identity } : {}),
     ...(productionHostReadinessRequired ? { hostReadinessPolicyDigest: productionHostReadinessPolicyDigest } : {}),
     piAgentHome: configurationPiAgentHome,
     codexCredential: configurationCodexCredential,
@@ -599,7 +588,7 @@ async function main() {
   }
   assertHostReadinessStartReady();
   if (options.preflightOnly) {
-    const receipt = benchmarkPreflightReceipt({ packageVersion: packageManifest.version, source, candidateProvenance: candidateGuard.report(), suite, suiteDigest, runtimeDependencies: bootstrapMetadata.runtimeDependencies, webUiAssets: bootstrapMetadata.webUiAssets, runtimeCommands, environmentPolicy, configurationDigest, providerFreeConfigurationDigest, rootSeedDigest, options, runtime, hostReadinessPolicyDigest: productionHostReadinessPolicyDigest, hostReadiness: hostReadinessReceipt, providerFreeEvidence });
+    const receipt = benchmarkPreflightReceipt({ packageVersion: packageManifest.version, source, candidateProvenance: candidateGuard.report(), suite, suiteDigest, runtimeDependencies: bootstrapMetadata.runtimeDependencies, webUiAssets: bootstrapMetadata.webUiAssets, runtimeCommands, environmentPolicy, configurationDigest, providerFreeConfigurationDigest, rootSeedDigest, options, runtime, hostReadinessPolicyDigest: productionHostReadinessPolicyDigest, hostReadiness: hostReadinessReceipt, providerFreeEvidence, independentVerification: verificationPlan?.identity });
     process.stdout.write(options.json ? `${JSON.stringify(receipt, null, 2)}\n` : `${plan}${codexPlan}\nPREFLIGHT READY: no model session started.\n${JSON.stringify(receipt, null, 2)}\n`);
     return;
   }
@@ -637,6 +626,7 @@ async function main() {
     codexCredentialBridge,
     configurationDigest,
     environmentPolicy,
+    ...(verificationPlan ? { verificationPlan: { file: options.verificationPlan, identity: verificationPlan.identity } } : {}),
     piAgentHome: {
       copied: bootstrapMetadata.piAgentHome.copied,
       globalInstructions: bootstrapMetadata.piAgentHome.globalInstructions,
@@ -766,6 +756,7 @@ async function main() {
             runId,
             runRoot,
             options,
+            verificationPlan,
             piCommand,
             codexCommand,
             codexDisabledFeatures: runtime.codexDisabledFeatures,
@@ -908,7 +899,7 @@ async function main() {
   try {
     const finalLedger = inspectBenchmarkLedger(ledgerPath);
     assertBenchmarkLedgerBinding(ledgerBinding, finalLedger.binding, "benchmark terminal ledger");
-    validateBenchmarkLedgerPrefix(finalLedger.records, fullOrder, (record, index, expected) => expectedBenchmarkRecord(record, index, expected, runId, suite, configurationDigest));
+    validateBenchmarkLedgerPrefix(finalLedger.records, fullOrder, (record, index, expected) => expectedBenchmarkRecord(record, index, expected, runId, suite, configurationDigest, verificationPlan?.identity));
   } catch (error) {
     fatalRunError ??= error;
   }

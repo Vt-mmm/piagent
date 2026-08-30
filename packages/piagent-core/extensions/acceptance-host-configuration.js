@@ -8,6 +8,7 @@ import { validateModulePaths } from "./acceptance-executor/module-graph.mjs";
 import { validateContractSelection } from "./acceptance-contract-selection.js";
 
 export const HOST_CONTRACT_CONFIGURATION_VERSION = "approved-host-contracts-v1";
+export const HOST_CONTRACT_SET_VERSION = "approved-host-contract-set-v1";
 const HASH = /^[a-f0-9]{64}$/;
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const freeze = (value) => { if (value && typeof value === "object") { Object.values(value).forEach(freeze); Object.freeze(value); } return value; };
@@ -33,6 +34,12 @@ export function installedContractVerifierDigest(root) {
 
 /** Structural/semantic validation only; a payload is not authenticated authority. */
 export function validateHostContractPayload(payload) {
+  if (payload?.version === HOST_CONTRACT_SET_VERSION) {
+    if (!exact(payload, ["version", "projectId", "verifierDigest", "plans"])
+      || !HASH.test(payload.projectId) || !HASH.test(payload.verifierDigest)) throw new TypeError("Invalid host contract set");
+    validatePlanList(payload.plans);
+    return payload;
+  }
   if (!exact(payload, ["version", "projectId", "operatorRequestDigest", "verifierDigest", "backend", "contracts"])
     || payload.version !== HOST_CONTRACT_CONFIGURATION_VERSION || !HASH.test(payload.projectId)
     || !HASH.test(payload.verifierDigest)) throw new TypeError("Invalid host contract approval");
@@ -42,11 +49,30 @@ export function validateHostContractPayload(payload) {
 
 /** The same plan validation used by the operator CLI, without filesystem writes. */
 export function validateHostContractPlan(plan) {
+  if (plan?.schemaVersion === 2) {
+    if (!exact(plan, ["schemaVersion", "plans"])) throw new TypeError("Invalid host contract plan set");
+    validatePlanList(plan.plans);
+    return plan;
+  }
+  validateSinglePlan(plan);
+  return plan;
+}
+
+function validateSinglePlan(plan) {
   if (!exact(plan, ["schemaVersion", "operatorRequestDigest", "backend", "contracts"]) || plan.schemaVersion !== 1) {
     throw new TypeError("Invalid host contract plan");
   }
   validateContractBody(plan);
-  return plan;
+}
+
+function validatePlanList(plans) {
+  if (!Array.isArray(plans) || plans.length < 1 || plans.length > 32) throw new TypeError("Invalid host contract plan count");
+  const requests = new Set();
+  for (const plan of plans) {
+    validateSinglePlan(plan);
+    if (requests.has(plan.operatorRequestDigest)) throw new TypeError("Ambiguous approved operator request");
+    requests.add(plan.operatorRequestDigest);
+  }
 }
 
 function validateContractBody(payload) {
@@ -97,21 +123,27 @@ const signature = (key, configPath, payload) => createHmac("sha256", key)
   .update(`${HOST_CONTRACT_CONFIGURATION_VERSION}\0${configPath}\0${JSON.stringify(payload)}`).digest("hex");
 
 /** Read-only preview; validation creates no key, receipt, or execution. */
-export function prepareHostContractApproval({ projectRoot, installedRoot, operatorRequestDigest, backend, contracts }) {
-  const payload = JSON.parse(JSON.stringify({ version: HOST_CONTRACT_CONFIGURATION_VERSION,
-    projectId: hash(fs.realpathSync.native(projectRoot)), operatorRequestDigest,
-    verifierDigest: installedContractVerifierDigest(installedRoot), backend, contracts }));
+export function prepareHostContractApproval({ projectRoot, installedRoot, operatorRequestDigest, backend, contracts, plans }) {
+  if (plans !== undefined && [operatorRequestDigest, backend, contracts].some(value => value !== undefined)) {
+    throw new TypeError("Cannot mix a single approved request with a plan set");
+  }
+  const identity = { projectId: hash(fs.realpathSync.native(projectRoot)), verifierDigest: installedContractVerifierDigest(installedRoot) };
+  const text = JSON.stringify(plans === undefined
+    ? { version: HOST_CONTRACT_CONFIGURATION_VERSION, ...identity, operatorRequestDigest, backend, contracts }
+    : { version: HOST_CONTRACT_SET_VERSION, ...identity, plans });
+  if (Buffer.byteLength(text) > 2 * 1024 * 1024) throw new TypeError("Host approval is too large");
+  const payload = JSON.parse(text);
   validateHostContractPayload(payload);
   return freeze(payload);
 }
 
 /** Explicit operator setup only. A new directory is required; nothing is overwritten. */
-export function writeHostContractApproval({ directory, projectRoot, installedRoot, operatorRequestDigest, backend, contracts, approved = false }) {
+export function writeHostContractApproval({ directory, projectRoot, installedRoot, operatorRequestDigest, backend, contracts, plans, approved = false }) {
   if (approved !== true || typeof directory !== "string" || !path.isAbsolute(directory)
     || path.resolve(directory) !== directory || fs.realpathSync.native(path.dirname(directory)) !== path.dirname(directory)) throw new Error("Explicit canonical host approval is required");
   const root = fs.realpathSync.native(projectRoot), relative = path.relative(root, directory);
   if (!relative || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative))) throw new Error("Authority must be outside the candidate project");
-  const payload = prepareHostContractApproval({ projectRoot, installedRoot, operatorRequestDigest, backend, contracts });
+  const payload = prepareHostContractApproval({ projectRoot, installedRoot, operatorRequestDigest, backend, contracts, plans });
   const configPath = path.join(directory, "approval.json"), bytes = randomBytes(32), key = createSecretKey(bytes);
   const envelope = JSON.stringify({ payload, signature: signature(key, configPath, payload) });
   if (Buffer.byteLength(envelope) > 2 * 1024 * 1024) throw new Error("Host approval is too large");
@@ -143,7 +175,13 @@ export function openHostContractConfiguration({ configPath, projectRoot, install
     throw new Error("Host approval project or installed verifier changed");
   }
   const store = openAcceptanceEvidenceStore({ filePath: path.join(directory, "evidence.sqlite"), projectRoot, key });
-  return Object.freeze({ payload: freeze(envelope.payload), store,
+  const payload = freeze(envelope.payload);
+  const requests = payload.version === HOST_CONTRACT_SET_VERSION ? payload.plans.map(plan => freeze({
+    version: HOST_CONTRACT_CONFIGURATION_VERSION, projectId: payload.projectId, verifierDigest: payload.verifierDigest,
+    operatorRequestDigest: plan.operatorRequestDigest, backend: plan.backend, contracts: plan.contracts
+  })) : [payload];
+  return Object.freeze({ payload, store,
+    forRequest(operatorRequestDigest) { return requests.find(request => request.operatorRequestDigest === operatorRequestDigest) ?? null; },
     isCurrent() {
       try {
         privateDirectory(directory, projectRoot);

@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import Ajv from "ajv";
-import { installedContractVerifierDigest, openHostContractConfiguration, prepareHostContractApproval, writeHostContractApproval } from "../packages/piagent-core/extensions/acceptance-host-configuration.js";
+import { HOST_CONTRACT_SET_VERSION, installedContractVerifierDigest, openHostContractConfiguration, prepareHostContractApproval, validateHostContractPlan, writeHostContractApproval } from "../packages/piagent-core/extensions/acceptance-host-configuration.js";
 import { discoverRuntimeIntegrityFiles } from "../packages/piagent-core/capabilities/runtime-integrity.js";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
@@ -32,6 +32,102 @@ function fixture(t) {
   const open = (overrides = {}) => { const config = openHostContractConfiguration({ configPath, projectRoot, installedRoot, ...overrides }); opened.push(config); return config; };
   return { root, options, directory, projectRoot, installedRoot, configPath, keyPath, open };
 }
+
+function requestSet(options) {
+  const { operatorRequestDigest, backend, contracts, ...host } = options;
+  const first = { schemaVersion: 1, operatorRequestDigest, backend, contracts };
+  const second = structuredClone(first);
+  second.operatorRequestDigest = `operator-request-v1:${"d".repeat(64)}`;
+  // The same criterion ID on another request is not the same authority.
+  second.contracts[0].criterionHash = "e".repeat(64);
+  second.contracts[0].checks[0].cases[0].expected.value.value = 4;
+  return { ...host, plans: [first, second] };
+}
+
+test("a host-owned request set selects only exact requests with isolated immutable contracts", (t) => {
+  const f = fixture(t), options = requestSet(f.options);
+  const preview = prepareHostContractApproval(options);
+  assert.equal(preview.version, HOST_CONTRACT_SET_VERSION);
+  assert.equal(fs.existsSync(f.directory), false);
+  writeHostContractApproval(options);
+  const config = f.open();
+  for (const plan of options.plans) {
+    const selected = config.forRequest(plan.operatorRequestDigest);
+    assert.equal(selected.projectId, preview.projectId);
+    assert.equal(selected.verifierDigest, preview.verifierDigest);
+    assert.deepEqual(selected.contracts, plan.contracts);
+    assert.deepEqual(selected.backend, plan.backend);
+    assert.throws(() => { selected.contracts[0].maxAttempts = 8; }, TypeError);
+  }
+  for (const request of [undefined, null, "", "a".repeat(64), `operator-request-v1:${"f".repeat(64)}`]) {
+    assert.equal(config.forRequest(request), null, "unapproved requests never borrow the first plan");
+  }
+  options.plans[0].contracts[0].maxAttempts = 8;
+  assert.equal(config.forRequest(options.plans[0].operatorRequestDigest).contracts[0].maxAttempts, 2);
+  assert.equal(config.isCurrent(), true);
+});
+
+test("legacy single-request authority uses the same exact selector without changing its payload", (t) => {
+  const f = fixture(t); writeHostContractApproval(f.options); const config = f.open();
+  assert.equal(config.forRequest(f.options.operatorRequestDigest), config.payload);
+  assert.equal(config.forRequest(`operator-request-v1:${"d".repeat(64)}`), null);
+});
+
+for (const [name, mutate] of [
+  ["empty sets", (o) => { o.plans = []; }],
+  ["oversized sets", (o) => { o.plans = Array.from({ length: 33 }, (_, n) => ({ ...o.plans[0], operatorRequestDigest: `operator-request-v1:${n.toString(16).padStart(64, "0")}` })); }],
+  ["duplicate requests", (o) => { o.plans[1].operatorRequestDigest = o.plans[0].operatorRequestDigest; }],
+  ["nested sets", (o) => { o.plans = [{ schemaVersion: 2, plans: o.plans }]; }],
+  ["mixed single and set authority", (o) => { o.operatorRequestDigest = o.plans[0].operatorRequestDigest; }],
+  ["unknown request fields", (o) => { o.plans[0].modelApproved = true; }],
+  ["an invalid later request", (o) => { o.plans[1].contracts[0].sourcePath = "../outside.js"; }]
+]) test(`host request sets reject ${name} atomically before creating authority`, (t) => {
+  const f = fixture(t), options = requestSet(f.options); mutate(options);
+  assert.throws(() => writeHostContractApproval(options));
+  assert.equal(fs.existsSync(f.directory), false);
+});
+
+test("changing any approved request invalidates the entire signed set", (t) => {
+  const f = fixture(t), options = requestSet(f.options); writeHostContractApproval(options);
+  const config = f.open(), doc = JSON.parse(fs.readFileSync(f.configPath));
+  doc.payload.plans[1].contracts[0].maxAttempts = 3;
+  fs.writeFileSync(f.configPath, JSON.stringify(doc));
+  assert.equal(config.isCurrent(), false);
+  assert.throws(() => f.open(), /unauthenticated/);
+});
+
+test("schema v2 sets match runtime validation without allowing nested or mixed plans", (t) => {
+  const f = fixture(t), options = requestSet(f.options), payload = prepareHostContractApproval(options);
+  const ajv = new Ajv({ allErrors: true, strict: false });
+  const approval = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "schemas/approved-host-contracts.schema.json")));
+  ajv.addSchema(approval);
+  const validate = ajv.compile(JSON.parse(fs.readFileSync(path.join(repositoryRoot, "schemas/host-contract-plan.schema.json"))));
+  const plan = { schemaVersion: 2, plans: options.plans };
+  assert.equal(validate(plan), true, JSON.stringify(validate.errors));
+  assert.equal(validateHostContractPlan(plan), plan);
+  assert.equal(ajv.validate(approval.$id, payload), true, JSON.stringify(ajv.errors));
+  for (const bad of [{ ...plan, contracts: [] }, { schemaVersion: 2, plans: [plan] }, { schemaVersion: 2, plans: [] }]) {
+    assert.equal(validate(bad), false);
+    assert.throws(() => validateHostContractPlan(bad));
+  }
+  const duplicate = { schemaVersion: 2, plans: [options.plans[0], options.plans[0]] };
+  assert.equal(validate(duplicate), true, "request uniqueness is a semantic runtime check");
+  assert.throws(() => validateHostContractPlan(duplicate), /Ambiguous/);
+});
+
+test("operator CLI previews a request set and requires separate explicit approval before writing", (t) => {
+  const f = fixture(t), options = requestSet(f.options), planPath = path.join(f.root, "plan.json");
+  fs.writeFileSync(planPath, JSON.stringify({ schemaVersion: 2, plans: options.plans }), { mode: 0o600 });
+  const command = [path.join(repositoryRoot, "scripts/approve-independent-verification.mjs"), "--project", f.projectRoot,
+    "--plan", planPath, "--directory", f.directory];
+  const run = (extra = []) => spawnSync(process.execPath, [...command, ...extra], { encoding: "utf8", timeout: 15000 });
+  const preview = run(); assert.equal(preview.status, 0, preview.stderr);
+  assert.equal(JSON.parse(preview.stdout).payload.version, HOST_CONTRACT_SET_VERSION);
+  assert.equal(fs.existsSync(f.directory), false);
+  const approved = run(["--approve"]); assert.equal(approved.status, 0, approved.stderr);
+  const config = f.open({ installedRoot: repositoryRoot });
+  assert.equal(config.forRequest(options.plans[1].operatorRequestDigest).contracts[0].criterionHash, "e".repeat(64));
+});
 
 test("host approval is explicit, private, immutable to callers, and never overwrites authority", (t) => {
   const f = fixture(t);

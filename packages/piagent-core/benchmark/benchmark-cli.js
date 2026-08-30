@@ -28,6 +28,8 @@ Options:
   --codex-mode <mode>          controlled isolated home (default) or native user configuration.
   --piagent-treatment <id>     release-defaults, local-safe, mechanical-core, intelligence-engine, causal-phase-enforce, candidate, or feature-off.
   --allow-pi-auth-writeback    Allow same-account OAuth refresh CAS writeback under Pi's auth lock.
+  --verification-plan <file>  Private operator-reviewed independent verification catalog.
+  --approve-verification      Explicitly authorize that catalog for this run/resume; --yes does not imply it.
   --repeats <1-10>             Override the suite repeat count.
   --infrastructure-retries <n> Retry 0-3 startup failures with zero recorded usage.
   --retry-delay <seconds>      Backoff before infrastructure retry, 0-120 seconds.
@@ -81,6 +83,8 @@ export function parseBenchmarkArgs(argv) {
     codexMode: "controlled",
     piagentTreatment: "release-defaults",
     allowPiAuthWriteback: false,
+    verificationPlan: undefined,
+    approveVerification: false,
     seed: undefined,
     repeats: undefined,
     infrastructureRetries: undefined,
@@ -163,6 +167,15 @@ export function parseBenchmarkArgs(argv) {
         break;
       case "--allow-pi-auth-writeback":
         options.allowPiAuthWriteback = true;
+        break;
+      case "--verification-plan":
+        if (options.verificationPlan) fail("--verification-plan may only be supplied once");
+        options.verificationPlan = path.resolve(requireValue(argv, index, arg));
+        index += 1;
+        break;
+      case "--approve-verification":
+        if (options.approveVerification) fail("--approve-verification may only be supplied once");
+        options.approveVerification = true;
         break;
       case "--repeats":
         options.repeats = positiveInteger(requireValue(argv, index, arg), arg, 1, 10);
