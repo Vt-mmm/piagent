@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { after, describe, it } from "node:test";
+import { seedOfflinePackageCache } from "./helpers/offline-package-cache.mjs";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const temporaryRoots = new Set();
@@ -33,7 +34,7 @@ function sha256(value) {
 
 function pack(cwd, destination) {
   fs.mkdirSync(destination, { recursive: true });
-  const result = spawnSync("npm", ["pack", "--json", "--pack-destination", destination], {
+  const result = spawnSync("npm", ["pack", "--offline", "--ignore-scripts", "--json", "--pack-destination", destination], {
     cwd,
     encoding: "utf8",
     env: { ...process.env, npm_config_audit: "false", npm_config_fund: "false" }
@@ -123,9 +124,9 @@ function treeIdentity(root) {
   return `sha256:${sha256(JSON.stringify(entries))}`;
 }
 
-function installArtifact(artifact, prefix, operatorHome, cache) {
+function installArtifact(artifact, prefix, operatorHome, cache, registry) {
   const result = spawnSync("npm", [
-    "install", "--global", "--ignore-scripts", "--no-audit", "--no-fund", "--prefix", prefix, artifact
+    "install", "--global", "--offline", "--ignore-scripts", "--no-audit", "--no-fund", "--registry", registry, "--prefix", prefix, artifact
   ], {
     encoding: "utf8",
     env: {
@@ -165,12 +166,13 @@ function runInstalledHelp(prefix, operatorHome, command) {
 }
 
 describe("full-source package install, upgrade, and rollback", () => {
-  it("installs the real packed baseline, upgrades to the current full source, and rolls back without touching operator state", () => {
+  it("installs the real packed baseline, upgrades to the current full source, and rolls back without touching operator state", async () => {
     const root = scratch();
-    const { baseline, candidate } = buildArtifacts(root);
     const prefix = path.join(root, "npm-prefix");
     const operatorHome = path.join(root, "operator-home");
     const cache = path.join(root, "npm-cache");
+    const offline = await seedOfflinePackageCache(repositoryRoot, path.join(root, "dependency-archives"), cache);
+    const { baseline, candidate } = buildArtifacts(root);
     const agent = writePrivateOperatorState(operatorHome);
     const operatorBefore = treeIdentity(agent);
 
@@ -186,19 +188,24 @@ describe("full-source package install, upgrade, and rollback", () => {
     ];
     assert.deepEqual(candidateFiles.filter((relative) => forbidden.some((pattern) => pattern.test(relative))), []);
 
-    installArtifact(baseline.artifact, prefix, operatorHome, cache);
+    installArtifact(baseline.artifact, prefix, operatorHome, cache, offline.registry);
     assert.equal(installedVersion(prefix), baselineVersion);
     assert.equal(fs.existsSync(path.join(installedRoot(prefix), candidateOnlyModule)), false);
     runInstalledHelp(prefix, operatorHome, "piagent-install");
 
-    installArtifact(candidate.artifact, prefix, operatorHome, cache);
+    installArtifact(candidate.artifact, prefix, operatorHome, cache, offline.registry);
     assert.equal(installedVersion(prefix), candidateVersion);
     const installedCandidateModule = path.join(installedRoot(prefix), candidateOnlyModule);
     assert.equal(fs.existsSync(installedCandidateModule), true);
     assert.equal(sha256(fs.readFileSync(installedCandidateModule)), sha256(fs.readFileSync(path.join(repositoryRoot, candidateOnlyModule))));
+    for (const dependency of offline.dependencies) {
+      const installedManifest = fs.readFileSync(path.join(installedRoot(prefix), "node_modules", dependency.name, "package.json"));
+      assert.equal(JSON.parse(installedManifest).version, dependency.version);
+      assert.equal(sha256(installedManifest), dependency.packageSha256);
+    }
     runInstalledHelp(prefix, operatorHome, "piagent-doctor");
 
-    installArtifact(baseline.artifact, prefix, operatorHome, cache);
+    installArtifact(baseline.artifact, prefix, operatorHome, cache, offline.registry);
     assert.equal(installedVersion(prefix), baselineVersion);
     assert.equal(fs.existsSync(path.join(installedRoot(prefix), candidateOnlyModule)), false, "rollback must remove candidate-only production modules");
     runInstalledHelp(prefix, operatorHome, "piagent-install");
